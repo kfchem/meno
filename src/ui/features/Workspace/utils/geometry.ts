@@ -159,3 +159,22 @@ export function calculateNewBondPosition(
 
   return { x: nx, y: ny };
 }
+
+/**
+ * Where one bond out of atom `id` ends, drawn where there is room - as a double-click on the atom draws it
+ * (`calculateNewBondPosition`, from its neighbours, `toward` the pointer where it has none), as long as the bonds of its
+ * structure are shown (`length`). Null where there is no such atom.
+ */
+export function newBondFrom(
+  atoms: readonly { id: number; x: number; y: number }[],
+  bonds: readonly { a: number; b: number }[],
+  id: number,
+  toward: { x: number; y: number },
+  length: number,
+): { x: number; y: number } | null {
+  const base = atoms.find((a) => a.id === id);
+  if (!base) return null;
+  const at = new Map(atoms.map((a) => [a.id, a]));
+  const neighbors = bonds.flatMap((b) => (b.a === id ? [at.get(b.b)] : b.b === id ? [at.get(b.a)] : [])).filter((p): p is (typeof atoms)[number] => !!p);
+  return calculateNewBondPosition(base, neighbors, [...atoms], toward, length);
+}

@@ -40,6 +40,8 @@ const KNOWN: readonly (readonly [RegExp, (m: RegExpExecArray) => string])[] = [
   [/^the SMILES is drawn as the plugin laid it out$/, (m) => m[0]],
   // (render3d withSolidsImage: how many atom numbers a picture left out, a count only)
   [/^Meno: a picture of molecules in 3D left out \d+ of their atom numbers, too small to read in it or with no room on their balls\.$/, (m) => m[0]],
+  // (main.tsx: the plugins in place not read as Meno starts)
+  [/^Meno: the plugins in place could not be read\.$/, (m) => m[0]],
   // (installLog's own)
   [/^not caught(, in a promise)?:$/, (m) => m[0]],
   // (where in React's tree a part stopped: components' names, a line each)

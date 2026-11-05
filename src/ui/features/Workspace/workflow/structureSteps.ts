@@ -21,7 +21,8 @@ import { speciesNeeds, speciesTyped, withSpecies } from "../../../../lib/steps/s
 import { restraintsOf, TORSION_STEP, torsionsRestrained } from "../../../../lib/steps/restraints";
 import type { OptionValues } from "../../../../lib/options";
 import { atomMapNeeds, restraintsTyped, torsionsNeeds } from "./kinds";
-import { bondChangesTable, MAPPED_ENTRY, renumberedEntry } from "../../../../lib/steps/reaction";
+import { bondChangesTable, CHANGE, CHANGE_WORDS, MAPPED_ENTRY, renumberedEntry } from "../../../../lib/steps/reaction";
+import { MODE_NAMES, modeOnAtomsEntry } from "../../../../lib/steps/modeOnAtoms";
 import { mapOnto, type BondChangeRow } from "../../../../lib/chem/reactionMap";
 import type { Molecule } from "../../../../lib/chem/molecule";
 import { atomsOfRows, type Table } from "../../../../lib/table";
@@ -212,6 +213,12 @@ export function rebondedSet(geometry: readonly SetEntry[], bonding: readonly Set
   if (pairs === "property" && !name) return { ok: false, said: "Name the property to pair them on" };
   const gs = geometry.map((e, i) => entryOfSet(e, String(i)));
   const bs = bonding.map((e, i) => entryOfSet(e, String(i)));
+  // (each re-bonded without where it stood and how it ended - its number, state, failure - which are of the set it came from,
+  //  and which Meno gives the re-bonded entry anew: none of them a value of a structure to mark. Its group names the new one)
+  const bare = (e: Entry): Entry => {
+    const { number: _n, state: _s, failure: _f, ...properties } = e.properties;
+    return { ...e, properties };
+  };
   // (the pairs: each with each, or each geometry with the one bonding entry of its value)
   const matched = pairs === "property" ? matchedOn(gs, bs, name, "Bonding") : null;
   const kept: SetEntry[] = [];
@@ -225,7 +232,7 @@ export function rebondedSet(geometry: readonly SetEntry[], bonding: readonly Set
       return;
     }
     for (const k of onto) {
-      const r = rebonded(gs[i], bs[k], `${i}:${k}`);
+      const r = rebonded(bare(gs[i]), bare(bs[k]), `${i}:${k}`);
       if ("failed" in r) {
         aside.push(withSaid(g, SET_ASIDE, `onto ${named(bonding[k])}: ${r.failed}`));
         continue;
@@ -604,4 +611,58 @@ export function displacedSet(entries: readonly SetEntry[], holds: Holds3D, o: { 
   const line = [`${holds === "conformers" ? plural(kept.length, "frame") : plural(kept.length, "entry", "entries")} displaced`];
   if (aside.length) line.push(`${aside.length} not displaced`);
   return { ok: true, holds, kept, aside, said: [line.join(" \u00b7 "), ...notes].join(". ") };
+}
+
+/**
+ * *Mode on atoms* (lib/steps `modeOnAtomsEntry`): on each entry, where its
+ * lowest vibration ranks the reacting atoms - the window, each one's rank,
+ * and how many fall outside it - for a Filter to choose on; every entry
+ * kept. The atoms typed, the same for all; or from the table wired into
+ * Atoms, read as its columns count them (`atomsOfRows`) - the rows of bonds
+ * formed or broken (an Atom map's *Change*), or every row - on every entry,
+ * or those whose value in the column named is the entry's value of the
+ * property of that name. Mode on atoms' own names an entry carried
+ * already are replaced, and said.
+ */
+export function modeOnAtomsSet(
+  entries: readonly SetEntry[],
+  holds: Holds3D,
+  o: { reach: number; atoms?: number[]; table?: Table | null; which?: "made" | "every"; rows?: string },
+): Outcome3D {
+  let each: (e: SetEntry) => number[];
+  if (o.atoms) each = () => o.atoms!;
+  else {
+    if (!o.table) return { ok: false, said: "Nothing comes into Atoms" };
+    const read = atomsOfRows(o.table);
+    if ("why" in read) return { ok: false, said: read.why };
+    const change = o.table.columns.findIndex((c) => c.name === CHANGE);
+    if (o.which !== "every" && change < 0) return { ok: false, said: `The table has no column ${CHANGE} to tell bonds formed or broken by` };
+    const made = new Set([CHANGE_WORDS.formed, CHANGE_WORDS.broken]);
+    const name = (o.rows ?? "").trim();
+    const column = name ? o.table.columns.findIndex((c) => c.name === name) : -1;
+    if (name && column < 0) return { ok: false, said: `The table has no column ${name}` };
+    const rows = o.table.rows;
+    each = (e) => {
+      const value = e.properties?.[name]?.value;
+      return read.rows.flatMap((atoms, k) =>
+        (o.which === "every" || made.has(String(rows[k][change]))) && (!name || (value != null && String(rows[k][column]) === String(value))) ? atoms : [],
+      );
+    };
+  }
+  const notes = new Set<string>();
+  let replaced = 0;
+  let outside = 0;
+  let notWorked = 0;
+  const made = entries.map((e, i) => {
+    if (MODE_NAMES.some((k) => e.properties?.[k])) replaced++;
+    const r = modeOnAtomsEntry(entryOfSet(e, String(i)), each(e), o.reach);
+    if (r.said) notes.add(r.said);
+    if (r.outside?.length) outside++;
+    if (!r.outside) notWorked++;
+    return r.entry;
+  });
+  const line = [`${plural(entries.length, "entry", "entries")}, ${outside} with reacting atoms outside the window`];
+  if (notWorked) line.push(`${notWorked} not worked out`);
+  if (replaced) line.push(`the mode's values ${replaced === 1 ? "an entry" : `${replaced} entries`} carried replaced`);
+  return { ok: true, holds, kept: backEach(entries, made), aside: [], said: [line.join(" · "), ...notes].join(". ") };
 }

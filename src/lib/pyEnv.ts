@@ -219,8 +219,9 @@ type EnvOptions = {
 /** Where a profile's environment stands, and whether it needs setting up. */
 async function envState(profile: PyProfile, opts?: EnvOptions) {
   const plugin = pluginFor(profile);
+  // (its lock in the folder of its version in use, in Meno's local data folder: lib/plugins/known)
   const useDefault = await exists(plugin.lock, {
-    baseDir: BaseDirectory.Resource,
+    baseDir: BaseDirectory.AppLocalData,
   });
   // (a plugin's environment from its own lock, or none: never from another's)
   if (!useDefault && !opts?.lockPath) throw new Error(`${plugin.name}'s lock is not in its folder.`);
@@ -229,7 +230,7 @@ async function envState(profile: PyProfile, opts?: EnvOptions) {
   const info = await baseInfo(profile, lockPath, opts?.pythonVersion ?? "3.12");
 
   const lockText = await readTextFile(info.lockPath, {
-    baseDir: BaseDirectory.Resource,
+    baseDir: BaseDirectory.AppLocalData,
   });
   const lockSha = await sha256(lockText);
 

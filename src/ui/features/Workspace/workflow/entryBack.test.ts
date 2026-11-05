@@ -29,13 +29,13 @@ const held = (extra: Partial<SetEntry> = {}): SetEntry =>
     ...extra,
   }) as SetEntry;
 
-const tagged = (e: Entry): Entry => ({ ...e, properties: { ...e.properties, start: { value: "start-1", unit: "none", status: "computed" } } });
+const tagged = (e: Entry): Entry => ({ ...e, properties: { ...e.properties, start: { value: "start-1", unit: "none", label: true, status: "computed" } } });
 
 describe("an entry record as a step's entry again", () => {
   it("keeps all a step's entry held where it is that entry still - only a label added, as a Tag adds one", () => {
     const was = held();
     const back = setEntryOfEntry(tagged(entryOfSet(was, "x")), { compound: 0, number: 1 }, was)!;
-    expect(back).toEqual({ ...was, properties: { start: { value: "start-1", unit: "none", status: "computed" } } });
+    expect(back).toEqual({ ...was, properties: { start: { value: "start-1", unit: "none", label: true, status: "computed" } } });
   });
 
   it("drops what was worked out at the old structure - calculation, energy, marks - and keeps its molecule; its properties as the step left them", () => {
@@ -54,7 +54,7 @@ describe("an entry record as a step's entry again", () => {
     expect([back.from, back.frame, back.compound]).toEqual([7, 1, 3]);
     // (a value of a geometry naming it; a label; a value of the structure before, marked - and none of Meno's own carried as properties)
     expect(back.properties?.dipole.at?.geometry).toBe(geometryKey(was.xyz));
-    expect(back.properties?.start.value).toBe("start-1");
+    expect(back.properties?.start).toEqual({ value: "start-1", unit: "none", label: true, status: "computed" });
     expect(back.properties?.mw.status).toEqual({ notApplicable: "worked out on the structure before Re-bond" });
     expect(Object.keys(back.properties ?? {}).sort()).toEqual(["dipole", "mw", "start"]);
   });

@@ -56,32 +56,48 @@ function tagOf(line: string): [string, boolean] | null {
 
 type Sections = Map<string, string[]>;
 
+/** The sections whose lines are words a program or a person wrote, not the format's: a `<` and `>` in them are theirs, and only the section's own closing tag ends it. */
+const WORDS = new Set(["title", "keywords", "model"]);
+
 /**
  * The file's sections at its top level, by their tags' names: each its
  * lines, a section within one kept among its lines. A tag is read wherever
  * it stands on a line: on a line of its own, as the specification's
  * example has it, or after the last of its section's values, spaces after
  * it, as real files have it too - unambiguous, a tag being the only text
- * between `<` and `>`. The rest of the line is its section's.
+ * between `<` and `>` there. The rest of the line is its section's. In a
+ * section of words (`WORDS`: a title, its keywords, its model) a `<...>`
+ * is part of them - "water <test>" - and only its closing tag ends it.
  */
 function sectionsOf(text: string, name: string): Sections {
   const out: Sections = new Map();
   const open: [string, string[]][] = [];
-  for (const line of text.replace(/<\/?[^<>\r\n]+>/g, "\n$&\n").split(/\r?\n/)) {
-    const tag = tagOf(line);
-    if (tag && !tag[1]) {
-      open.push([tag[0], []]);
-      continue;
+  const close = () => {
+    const top = open.pop()!;
+    if (open.length) open[open.length - 1][1].push(`<${top[0]}>`, ...top[1], `</${top[0]}>`);
+    else if (out.has(top[0])) throw new Error(`${name} has <${top[0]}> twice.`);
+    else out.set(top[0], top[1]);
+  };
+  for (const whole of text.split(/\r?\n/)) {
+    let line = whole;
+    for (;;) {
+      const top = open[open.length - 1];
+      const words = top && WORDS.has(top[0]);
+      // (in words: only their own closing tag; else the first tag on the line)
+      const m = words ? new RegExp(`<\\/\\s*${top[0].split(" ").join("\\s+")}\\s*>`, "i").exec(line) : /<\/?[^<>]+>/.exec(line);
+      if (!m) {
+        if (top) top[1].push(line);
+        break;
+      }
+      const before = line.slice(0, m.index);
+      line = line.slice(m.index + m[0].length);
+      if (top && before.trim()) top[1].push(before);
+      const tag = tagOf(m[0])!;
+      if (!tag[1]) open.push([tag[0], []]);
+      else if (!top || top[0] !== tag[0]) throw new Error(`${name}: its <${tag[0]}> is closed where none is open.`);
+      else close();
+      if (!line.trim()) break;
     }
-    if (tag) {
-      const top = open.pop();
-      if (!top || top[0] !== tag[0]) throw new Error(`${name}: its <${tag[0]}> is closed where none is open.`);
-      if (open.length) open[open.length - 1][1].push(`<${top[0]}>`, ...top[1], `</${top[0]}>`);
-      else if (out.has(top[0])) throw new Error(`${name} has <${top[0]}> twice.`);
-      else out.set(top[0], top[1]);
-      continue;
-    }
-    if (open.length) open[open.length - 1][1].push(line);
   }
   if (open.length) throw new Error(`${name}: its <${open[open.length - 1][0]}> is never closed.`);
   return out;
@@ -189,7 +205,7 @@ function orbitalsOf(s: Sections, name: string): ReaderOutput["orbitals"] {
   return spins.map((v, i) => ({ spin: SPINS[v], energy: energies[i], occupation: occupations[i], ...(drawn ? { surface: { ask: `orbital:${i}` } } : {}) }));
 }
 
-type Wavefunction = { nuclei: number[]; centres: number[]; powers: [number, number, number][]; exponents: number[]; coefficients: number[][] };
+export type Wavefunction = { nuclei: number[]; centres: number[]; powers: [number, number, number][]; exponents: number[]; coefficients: number[][] };
 
 /** Its nuclei (bohr) and its primitives - each one's centre, by the nucleus's place from 0, its powers and its exponent - and each orbital's coefficients of them, in order. */
 function wavefunctionOf(s: Sections, name: string): Wavefunction {

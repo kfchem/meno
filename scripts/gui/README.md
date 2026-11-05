@@ -154,6 +154,7 @@ available:
 | `Invoke-MenoSwipe -X -Y [-DX] [-DY] [-Steps] [-Held]` | two fingers on a trackpad: moves the view; positive DY scrolls down; `-Held` swipes where the pointer is without moving it there first - in a drag's `-AtStep`, with the button down |
 | `Send-MenoText`, `Send-MenoKey` | typing (`Send-MenoKey Enter -Shift` for Shift+Enter) |
 | `Send-MenoShortcut -Key [-Shift]` | Ctrl (Windows) or Cmd (Mac) with a key: `Z` is undo, `1` fits the drawing to the view |
+| `Set-MenoHeldKeys -Hold [-Up]` | presses `Shortcut`, `Shift` or `Alt` and keeps it down - what the pointer shows with a key held, Option over an atom - until `-Up` lets it go; a scenario lets it go before it ends |
 | `Close-MenoQuestion [-TimeoutSec]` | a question Meno asks as it starts (keeping it up to date, from an emptied `settings.json` that is not set offline) waited for in shots, however late it comes, and answered "Not now" with Escape; true where there was one |
 | `Get-ClientSize`, `Wait-MenoSettled` | |
 

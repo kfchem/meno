@@ -58,6 +58,7 @@ vi.mock("../../../../lib/calc/workers", async (actual) => ({
 vi.mock("../../../../lib/roles/worker", async (actual) => ({
   ...(await actual<typeof import("../../../../lib/roles/worker")>()),
   pluginWorker: async () => chem,
+  chemWorker: async () => chem,
 }));
 
 import { connectStoreToDocument, createEditorStore } from ".";
@@ -391,12 +392,12 @@ const drawnAsked: string[] = [];
  * atoms, in the order they came, each its element and charge - as RDKit's
  * answer has them - its bonds, and two conformers with their energies; for
  * its `configurations` role, each molecule one with no stereo; and for its
- * `open_stereo`, each structure one that leaves none open.
+ * `stereo_elements`, each structure one with none that could be stereogenic.
  */
 const chem = {
   request: async (op: string, payload: { molblock: string; molblocks?: string[] }) => {
     if (op === "configurations") return { molecules: (payload.molblocks ?? []).map(() => ({ elements: [], key: "none" })) };
-    if (op === "open_stereo") return { atoms: [], bonds: [], isomers: 1 };
+    if (op === "stereo_elements") return { read: true, elements: [] };
     if (op !== "conformers") throw new Error(`no ${op} here`);
     drawnAsked.push(payload.molblock);
     const mol = readMolfile(payload.molblock)!;
@@ -435,7 +436,7 @@ const chem = {
 const DOERS: readonly [StepKind, string][] = [
   ...PLUGINS.flatMap((p) => p.steps.map((s): [StepKind, string] => [s.kind, p.id])),
   ...MENO_DOES.map((k): [StepKind, string] => [k, "meno"]),
-].filter(([kind]) => kindInfo(kind).gives !== "pictures" && kindInfo(kind).gives !== "chart" && !takesNothing(kind) && kindInfo(kind).takes.some((h) => h !== "structures") && kind !== "species" && kind !== "displace" && kind !== "combine" && !PAIRED.includes(kind) && kind !== "path-search" && kind !== "reaction-path" && kind !== "add" && kind !== "ensemble");
+].filter(([kind]) => kindInfo(kind).gives !== "pictures" && kindInfo(kind).gives !== "chart" && !takesNothing(kind) && kindInfo(kind).takes.some((h) => h !== "structures") && kind !== "species" && kind !== "mode-on-atoms" && kind !== "displace" && kind !== "combine" && !PAIRED.includes(kind) && kind !== "path-search" && kind !== "reaction-path" && kind !== "add" && kind !== "ensemble");
 
 /** The kind of set a step gives, for what it took. */
 const givesFor = (kind: StepKind, holds: SetKind): SetKind => {
@@ -523,7 +524,7 @@ describe("a step keeps each entry's charge and multiplicity", () => {
   it("for every kind of step the catalogue has, and every plugin that fills one - and Meno's own", () => {
     // (each kind Meno defines filled by something - left out here Render, Chart and Energy diagram, which give pictures and charts, Generate, given nothing, and those that take structures drawn alone, whose atoms are as drawn; Species and Combine change them by design, each tested on its own; the kinds of two inputs - Merge, Re-bond, Compare bonding, Join, Barrier - by their own tests; Number, given nothing; Add and Ensemble energy, which need values named, by their own tests, and change no atom; Reaction, which takes a reaction's two ends, tested on its own too; Displace, which needs vibrations, tested on its own too)
     const kinds = new Set(DOERS.map(([k]) => k));
-    expect(KINDS.filter((k) => !kinds.has(k.kind)).map((k) => k.kind)).toEqual(["generate", "path-search", "reaction-path", "render", "check-structures", "stereoisomers", "descriptors", "enumerate", "chart", "energy-diagram", "species", "combine", "merge", "rebond", "compare-bonding", "join", "barrier", "torsion-restraints", "number", "add", "atom-map", "displace", "ensemble"]);
+    expect(KINDS.filter((k) => !kinds.has(k.kind)).map((k) => k.kind)).toEqual(["generate", "path-search", "reaction-path", "render", "check-structures", "stereoisomers", "descriptors", "enumerate", "chart", "energy-diagram", "species", "combine", "mode-on-atoms", "merge", "rebond", "compare-bonding", "join", "barrier", "torsion-restraints", "number", "add", "atom-map", "displace", "ensemble"]);
     expect(DOERS.length).toBeGreaterThanOrEqual(19);
   });
 

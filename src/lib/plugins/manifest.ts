@@ -236,12 +236,39 @@ export type UnsureDecl = { below: number; basis: string };
  * and, of a kind that takes nothing in (Generate), whether it makes its
  * molecules from seeds wired in (`seeds`); and, of a kind a lone
  * atom passes through (steps `LONE_ATOM_PASSES`), whether its program
- * takes none (`noLoneAtom`).
+ * takes none (`noLoneAtom`); and how its options ask for a solvation, as
+ * its program says one it ran in (`solvation`: `SolvationDecl`).
  * A manifest may say several kinds in one, with the same programs and
  * options.
  */
 /** `roleOptions`: its options are its role's, the step having said none of its own (Settings' choices for the role its defaults: workflow/doers `optionsFor`). */
-export type StepDecl = { kind: StepKind; programs: string[]; options: Option[]; roleOptions?: true; takes?: ValueKind[]; files?: string[]; seeds?: true; noLoneAtom?: true };
+export type StepDecl = { kind: StepKind; programs: string[]; options: Option[]; roleOptions?: true; takes?: ValueKind[]; files?: string[]; seeds?: true; noLoneAtom?: true; solvation?: SolvationDecl };
+
+/**
+ * How a step's options ask for a solvation, in the words its program says
+ * one it ran in (docs/WORKFLOWS.md, *Solvation as asked*): `says`, those
+ * words with each option's value put in where its id stands in braces -
+ * CREST's "ALPB({solvent})", its solvent asked "water" said "ALPB(water)";
+ * and the option and value that ask for none (`none`), the gas phase. Each
+ * option it names is a choice of the step's own. Meno holds what each job
+ * says it ran in to that (workflow/programs `notAsAsked`).
+ */
+export type SolvationDecl = { says: string; none: { id: string; is: string } };
+
+/** The option ids `says` names, each in braces. */
+const SAYS_ID = /\{([^{}]*)\}/g;
+
+/** A step's solvation, as its manifest says it - none where any part is not as `SolvationDecl` has it. */
+function solvationOf(v: unknown, options: readonly Option[]): SolvationDecl | undefined {
+  const r = v as Record<string, unknown> | null;
+  const none = r?.none as Record<string, unknown> | null | undefined;
+  if (typeof r?.says !== "string" || !r.says.trim() || r.says.length > 80 || typeof none?.id !== "string" || typeof none.is !== "string") return undefined;
+  const choice = (id: string) => options.find((o) => o.id === id && o.type === "choice");
+  const named = [...r.says.matchAll(SAYS_ID)].map((m) => m[1]);
+  const asNone = choice(none.id);
+  if (!named.length || !named.every((id) => choice(id)) || asNone?.type !== "choice" || !asNone.choices.some((c) => c.value === none.is)) return undefined;
+  return { says: r.says.trim(), none: { id: none.id, is: none.is } };
+}
 
 /** The systems Meno runs on, as a plugin names those it can be added on. */
 export const SYSTEMS = ["macos", "windows", "linux"] as const;
@@ -339,10 +366,19 @@ export const WORKER = "worker.py";
 /** A program or library a plugin wraps, and the version its lock or pin fixes (a test checks it against them). */
 export type UsesDecl = { name: string; version: string };
 
+/**
+ * The plugin contracts this Meno speaks: a manifest says which it is written to (`contract`, unsaid: 1, the contract
+ * as docs/PLUGINS.md has it); one of a contract Meno does not speak is refused, as a catalogue's entry of one is not
+ * offered.
+ */
+export const CONTRACTS: readonly number[] = [1];
+
 /** A plugin's manifest, as Meno reads it. */
 export type Manifest = {
   id: string;
   name: string;
+  /** The plugin contract it is written to (`CONTRACTS`). */
+  contract: number;
   /** Its own version, semver, bumped whenever its files change (docs/PLUGINS.md, *Versions*). What it uses is `uses`, never this. */
   version: string;
   /** The programs and libraries it wraps, each with the version its lock or pin fixes: said beside its own version. */
@@ -672,17 +708,21 @@ function stepsOf(v: unknown, roles: readonly RoleDecl[]): StepDecl[] {
   // (none said, and it fills the role of the kind's name: the role's - the same work, asked as a step)
   const roleOf = (kind: StepKind) => (s?.options === undefined ? roles.find((r) => r.role === kind && r.options.length) : undefined);
   const optionsFor = (kind: StepKind) => (s?.options !== undefined ? options : (roleOf(kind)?.options ?? []));
-  return kinds.map((kind) => ({
-    kind,
-    programs,
-    options: optionsFor(kind),
-    ...(roleOf(kind) ? { roleOptions: true as const } : {}),
-    ...(takes.length ? { takes: [...takes] } : {}),
-    ...(files.length ? { files: [...files] } : {}),
-    ...(s?.seeds === true ? { seeds: true as const } : {}),
-    // (said only of a kind a lone atom passes through: of any other, what its program cannot take is its to refuse)
-    ...(s?.noLoneAtom === true && LONE_ATOM_PASSES.includes(kind) ? { noLoneAtom: true as const } : {}),
-  }));
+  return kinds.map((kind) => {
+    const solvation = solvationOf(s?.solvation, optionsFor(kind));
+    return {
+      kind,
+      programs,
+      options: optionsFor(kind),
+      ...(roleOf(kind) ? { roleOptions: true as const } : {}),
+      ...(takes.length ? { takes: [...takes] } : {}),
+      ...(files.length ? { files: [...files] } : {}),
+      ...(s?.seeds === true ? { seeds: true as const } : {}),
+      // (said only of a kind a lone atom passes through: of any other, what its program cannot take is its to refuse)
+      ...(s?.noLoneAtom === true && LONE_ATOM_PASSES.includes(kind) ? { noLoneAtom: true as const } : {}),
+      ...(solvation ? { solvation } : {}),
+    };
+  });
 }
 
 /** A program's file, as a system has it: a name, not a path. */
@@ -985,6 +1025,9 @@ export function acceptManifest(raw: unknown): Manifest | null {
   const name = text(m.name, 60);
   const version = text(m.version, 40);
   if (!id || !name || !version) return null;
+  // (the contract it is written to: one Meno speaks, or none)
+  const contract = m.contract === undefined ? 1 : m.contract;
+  if (typeof contract !== "number" || !CONTRACTS.includes(contract)) return null;
   if (m.environment !== undefined && m.environment !== "uv" && m.environment !== "pixi") return null;
   const environment = m.environment as Maker | undefined;
   const kinds = read(m.kinds, kindOf, (k) => k.id);
@@ -1059,6 +1102,7 @@ export function acceptManifest(raw: unknown): Manifest | null {
     id,
     name,
     version,
+    contract,
     uses: acceptUses(m.uses),
     description: text(m.description, 300) ?? "",
     licence: text(m.licence, 60) ?? "",

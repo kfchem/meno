@@ -155,7 +155,39 @@ describe("a Filter step", () => {
       { id: "maxcore", label: "Memory for each core", type: "number", default: 0, unset: 0, unit: "MB" },
     ]);
     expect(howOf(options, { method: "NATIVE-XTB2" })).toBe("NATIVE-XTB2");
-    expect(howOf(options, { method: "B3LYP", solvation: "SMD", maxcore: 3000 })).toBe("B3LYP \u00b7 SMD \u00b7 Water \u00b7 3000 MB");
+    expect(howOf(options, { method: "B3LYP", solvation: "SMD", maxcore: 3000 })).toBe("B3LYP \u00b7 Solvation: SMD \u00b7 Solvent: Water \u00b7 3000 MB");
+    // (a switch on is its own label, as before - never "name: on"; off, nothing)
+    const switched = acceptOptions([{ id: "tight", label: "Tight convergence", type: "switch", default: false }]);
+    expect(howOf(switched, { tight: true })).toBe("Tight convergence");
+    expect(howOf(switched, { tight: false })).toBe("");
+  });
+
+  it("takes a brief of forty letters at most from a manifest - a longer one is not read, the label said instead", () => {
+    const of = (brief: string) => acceptOptions([{ id: "o", label: "Radicals (one unpaired electron or more)", brief, type: "choice", choices: [{ value: "keep", label: "Keep" }], default: "keep" }]);
+    expect(of("x".repeat(40))[0].brief).toBe("x".repeat(40));
+    expect(of("x".repeat(41))[0].brief).toBeUndefined();
+    expect(howOf(of("x".repeat(41)), {})).toBe("Radicals: Keep");
+  });
+
+  it("says each choice by its name and what is chosen - and several choices with one value once, the options after it", () => {
+    const four = acceptOptions(
+      ["Radicals", "More than one part (a salt, a mixture)", "An atom with more bonds than it can have", "SMILES left open"].map((label, i) => ({
+        id: `o${i}`,
+        label,
+        ...(i === 2 ? { brief: "Too many bonds" } : {}),
+        type: "choice",
+        choices: [
+          { value: "aside", label: "Set aside" },
+          { value: "keep", label: "Keep" },
+        ],
+        default: "aside",
+      })),
+    );
+    // (never "Set aside" four times over: once, the options after it - each by its brief, or its label without what it says in brackets)
+    expect(howOf(four, {})).toBe("Set aside: radicals, more than one part, too many bonds, SMILES left open");
+    expect(howOf(four, { o0: "keep" })).toBe("Radicals: Keep \u00b7 Set aside: more than one part, too many bonds, SMILES left open");
+    // (the one that differs read first, wherever it stands among them: a card cuts its line short)
+    expect(howOf(four, { o3: "keep" })).toBe("SMILES left open: Keep \u00b7 Set aside: radicals, more than one part, too many bonds");
   });
 
   it("is run again when the properties of what comes in change", () => {
