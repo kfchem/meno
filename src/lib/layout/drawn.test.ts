@@ -474,3 +474,38 @@ describe("a centre with a lone pair for its fourth group", () => {
     }
   });
 });
+
+describe("an axis inside a ring, drawn", () => {
+  /** A biphenyl bridged at 2 and 2' (`smiles`, its biaryl bond between atoms `i` and `j`), drawn by the engine with its axis given: the axis read back, or none. */
+  const readBack = (smiles: string, [i, j]: [number, number]) => {
+    const g = fromSmiles(smiles);
+    const around: number[][] = g.atoms.map(() => []);
+    for (const b of g.bonds) {
+      around[b.a].push(b.b);
+      around[b.b].push(b.a);
+    }
+    expect(around[i]).toContain(j);
+    const refs = [Math.min(...around[i].filter((n) => n !== j)), Math.min(...around[j].filter((n) => n !== i))] as const;
+    const given = { atoms: [i, j] as const, refs, sense: 1 as const };
+    const { atoms, bonds } = drawing({ ...g, axes: [given] });
+    // (a wedge at an end, as the engine draws one; one put there where it does not, so that each case has one to read)
+    if (!bonds.some((b) => b.wedge && (b.wedge.narrow === i || b.wedge.narrow === j))) {
+      const out = bonds.find((b) => b.order === 1 && (b.a === i || b.b === i) && b.a !== j && b.b !== j)!;
+      out.wedge = { narrow: i, stereo: "up" };
+    }
+    return { given, read: readStereo(atoms, bonds).axes };
+  };
+
+  it("reads one in a ring of seven atoms or more - a 2,2'-bridged biphenyl, a dibenzocycloheptanone - as drawn", () => {
+    const { given, read } = readBack("O=C1Cc2ccccc2-c2ccccc2C1", [8, 9]);
+    expect(read).toHaveLength(1);
+    // (the same axis: from either end, against the same two groups, the same sense)
+    expect(new Set(read[0].atoms)).toEqual(new Set(given.atoms));
+    expect(read[0].sense).toBe(given.sense);
+  });
+
+  it("reads none in a ring of five or six: fluorene and 9,10-dihydrophenanthrene are held all but flat, or turn over fast", () => {
+    expect(readBack("C1c2ccccc2-c2ccccc12", [6, 7]).read).toEqual([]);
+    expect(readBack("C1Cc2ccccc2-c2ccccc12", [7, 8]).read).toEqual([]);
+  });
+});

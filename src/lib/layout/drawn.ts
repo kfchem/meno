@@ -274,7 +274,9 @@ export function readStereo(
       const orders = neighbours[i].reduce((sum, n) => sum + (bondOf.get(key(i, n))!.order === 4 ? 1.5 : bondOf.get(key(i, n))!.order), 0);
       if (keepsPyramid(i) || pyramidal(atoms[i].el ?? "C", atoms[i].charge ?? 0, 3, orders, atoms[i].hs)) continue;
       const lifted = near.find((n) => lift(i, n) !== 0);
-      if (lifted == null || inRing(neighbours, i, j, (k) => isMetal(atoms[k].el ?? "C"))) continue;
+      // (an axis in a ring only where the ring is of seven atoms or more - a 2,2'-bridged biphenyl's, a BINOL phosphoric
+      // acid's: in five or six the rings are held all but flat, or turn over fast - fluorene, 9,10-dihydrophenanthrene)
+      if (lifted == null || ringThrough(neighbours, i, j, (k) => isMetal(atoms[k].el ?? "C")) < AXIS_RING) continue;
       const refs: [number, number] = [Math.min(...near), Math.min(...far)];
       const sense = drawnAxisSense((k) => atoms[k], { atoms: [i, j], refs }, lifted, lift(i, lifted) as 1 | -1);
       if (sense) axes.push({ atoms: [i, j], refs, sense });
@@ -630,22 +632,25 @@ function inSmallRing(neighbours: readonly number[][], i: number, j: number): boo
   return level.includes(j);
 }
 
+/** The smallest ring a drawn axis may be in: seven atoms. */
+const AXIS_RING = 7;
+
 /**
- * Whether the bond i-j is in a ring: j reached from i some other way - not
- * through a metal (BINAP's axis in its chelate's ring is still an axis).
+ * The size of the smallest ring through the bond i-j, in atoms - j reached
+ * from i some other way, not through a metal (BINAP's axis in its chelate's
+ * ring is in none) - or Infinity where it is in none.
  */
-function inRing(neighbours: readonly number[][], i: number, j: number, metal: (k: number) => boolean): boolean {
-  const seen = new Set([i]);
-  const todo = neighbours[i].filter((n) => n !== j && !metal(n));
-  for (const n of todo) seen.add(n);
-  while (todo.length) {
-    const u = todo.pop()!;
-    if (u === j) return true;
+function ringThrough(neighbours: readonly number[][], i: number, j: number, metal: (k: number) => boolean): number {
+  const far = new Map<number, number>([[i, 0]]);
+  const queue = [i];
+  while (queue.length) {
+    const u = queue.shift()!;
     for (const v of neighbours[u]) {
-      if (seen.has(v) || metal(v)) continue;
-      seen.add(v);
-      todo.push(v);
+      if ((u === i && v === j) || far.has(v) || metal(v)) continue;
+      far.set(v, far.get(u)! + 1);
+      if (v === j) return far.get(v)! + 1;
+      queue.push(v);
     }
   }
-  return false;
+  return Infinity;
 }
