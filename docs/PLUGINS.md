@@ -96,6 +96,29 @@ embed both.
   never taken for one another. An element left open, or a molecule not
   perceived, matches nothing. CIP labels (R and S, E and Z) are the
   checks' role, for showing, and are never part of it.
+- **A centre of three bonds the plugin leaves unspecified is Meno's to
+  read** (`lib/chem/lonePairsIn3d`). Of every element the plugin gives as a
+  centre with no configuration, those of three bonds, a lone pair the
+  fourth group - a phosphine's P, an arsine's As, an N-chloro aziridine's
+  N, which the toolkit does not fix from a geometry - are taken by Meno's
+  rule on lone pairs (docs/EDITOR-2D.md, *Centres by a lone pair*), as a
+  drawing and a SMILES are:
+  - one the rule keeps is read from where its atoms are, by the sign of
+    the volume its three neighbours span. It is specified, and the key is
+    the plugin's, then Meno's for those centres, so that two P-epimers are
+    two stereoisomers, and a phosphine is not taken for one whose
+    configuration is unspecified;
+  - but only where its three bond angles add up to 350 degrees or less.
+    A pyramid inverts through the planar form, its three angles then 360
+    (Rauk, Allen and Mislow, Angew. Chem. Int. Ed. Engl. 9, 400, 1970,
+    Sec. 1): one within 10 degrees of flat is too close to it to have a
+    configuration. The bound is Meno's own, wider than a geometry's noise
+    or an N's conjugation flattening it short of 360, far narrower than any
+    pyramid that keeps its configuration. Such a centre stays unspecified,
+    as before, so *Populations* refuses its entry, naming the centre;
+  - one whose lone pair keeps no configuration - a plain N-alkyl
+    aziridine's N - is no centre: it goes from the elements, and its two
+    invertomers are one stereoisomer, as conformers are.
 - **Not perceived is not "no stereo".** Where nothing fills the role, or
   the plugin fails, the entry says so and why; a step that needs it does
   not go on as if there were none.
@@ -956,8 +979,10 @@ The same for every plugin and for Meno's own parts:
     structure that could be stereogenic, as the toolkit perceives it - its
     `kind`, the atom or bond it is `at` and its `state`: `specified`,
     `unspecified`, or `unknown`, drawn as not known - none left out; what
-    is left open, which C=N bonds are never enumerated and which open
-    double bonds are cumulated are Meno's: lib/chem/stereoOpen);
+    is left open, which atoms of three neighbours are centres by their
+    lone pair (lib/chem/lonePairCentres), which C=N bonds are never
+    enumerated and which open double bonds are cumulated are Meno's:
+    lib/chem/stereoOpen);
     `stereoisomers {molblocks, open, configured?, notEnumerated, most,
     whole?, withinMs?, inThreeD, drawings?}` (the stereoisomers of what is
     unassigned once `configured` is made - each tried in 3D, with

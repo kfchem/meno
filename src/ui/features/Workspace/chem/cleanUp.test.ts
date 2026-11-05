@@ -512,24 +512,26 @@ describe("cleanUp", () => {
   });
 
   it("refuses, rather than lose it, a configuration it cannot carry", async () => {
-    // a selenoxide's Se, wedged: a centre with a lone pair that a wedge
-    // states to no reader, so none that Clean-up can lay out and keep
-    const selenoxide: Model = {
-      atoms: [atom(1, 0, 0, "Se"), atom(2, 0, 1, "O"), atom(3, -1, -0.5), atom(4, 1, -0.5)],
+    // an amine's N, wedged: its lone pair keeps no configuration
+    // (lib/chem/lonePairCentres), so the wedge states none that Clean-up
+    // can lay out and keep
+    const amine: Model = {
+      atoms: [atom(1, 0, 0, "N"), atom(2, 0, 1), atom(3, -1, -0.5), atom(4, 1, -0.5)],
       bonds: [
-        { id: 5, a: 1, b: 2, order: 2 },
+        { id: 5, a: 1, b: 2, order: 1 },
         { id: 6, a: 1, b: 3, order: 1, stereo: "up" },
         { id: 7, a: 1, b: 4, order: 1 },
       ],
     };
-    const { store } = canvas(selenoxide);
+    const { store } = canvas(amine);
     await expect(cleanUp(store)).rejects.toThrow(/nothing was moved/);
-    expect(store.getState().model).toEqual(selenoxide);
+    expect(store.getState().model).toEqual(amine);
   });
 
   it("lays out a centre with a lone pair for its fourth group, keeping its configuration on one wedge", async () => {
-    // methyl ethyl sulfoxide's S, a phosphine's P, a sulfonium's S: each
-    // wedged, each the other way round too
+    // methyl ethyl sulfoxide's S, a phosphine's P, a sulfonium's S, a
+    // selenoxide's Se, a stibine's Sb, a telluroxide's Te, a bismuthine's
+    // Bi: each wedged, each the other way round too
     const centre = (el: string, stereo: "up" | "down", charge?: number, doubled = true): Model => ({
       atoms: [{ ...atom(1, 0, 0, el), ...(charge ? { charge } : {}) }, atom(2, 0, 1, doubled ? "O" : "C"), atom(3, -1, -0.5), atom(4, 1, -0.5), atom(5, 2, 0)],
       bonds: [
@@ -539,7 +541,7 @@ describe("cleanUp", () => {
         { id: 9, a: 4, b: 5, order: 1 },
       ],
     });
-    for (const [el, charge, doubled] of [["S", 0, true], ["P", 0, false], ["S", 1, false]] as const) {
+    for (const [el, charge, doubled] of [["S", 0, true], ["P", 0, false], ["S", 1, false], ["Se", 0, true], ["Sb", 0, false], ["Te", 0, true], ["Bi", 0, false]] as const) {
       for (const stereo of ["up", "down"] as const) {
         const before = centre(el, stereo, charge, doubled);
         const { store } = canvas(before);

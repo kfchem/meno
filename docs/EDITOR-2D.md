@@ -1596,11 +1596,13 @@ lipids each have their own way of being drawn, which it should know.
    - The new drawing is read back before anything moves: if it would not
      say the stereochemistry the old one said, Clean-up refuses. So it does
      for a wedge it cannot carry - wedge and hashes drawn opposite each
-     other, or at an N, B, Se, Te or Sb atom with three bonds, where a wedge
-     states no configuration - rather than lose it. A centre whose fourth group is a lone pair - a
-     sulfoxide's or a sulfonium's S, a phosphine's P, an arsine's As - is
-     read from its wedge and laid out like any other, on one wedge
-     (2026-10-29). A wedge
+     other, or at an atom of three bonds that keeps no configuration of its
+     own (an amine's N, a plain N-alkyl aziridine's, a B), where a wedge
+     states none - rather than lose it. A centre whose fourth group is a
+     lone pair that keeps its configuration (*Centres by a lone pair*) - a
+     sulfoxide's or a sulfonium's S, a phosphine's P, an oxaziridine's N -
+     is read from its wedge and laid out like any other, on one wedge. A
+     wedge
      that says nothing (on a CH2) goes, and a double bond in a ring of
      seven atoms or fewer says nothing either: its ring has it cis, however
      the ring is drawn. Nor does a double bond cumulated with another - an
@@ -1624,6 +1626,40 @@ lipids each have their own way of being drawn, which it should know.
      atoms all on one point, as a SMILES's are before it is laid out - is
      not held to this: it is laid out as before, a double bond whose
      configuration the SMILES does not give drawn one way or the other.
+   - **Centres by a lone pair** (the maintainer, 2026-11-04 and 11-05).
+     An atom of three neighbours and a lone pair is a pyramid that its
+     lone pair can turn into its mirror image, through the plane of the
+     three. It keeps a configuration of its own only where that is slow at
+     room temperature, on the barriers Rauk, Allen and Mislow review
+     (Angew. Chem. Int. Ed. Engl. 9, 400, 1970):
+     - P, As and S, measured there: a phosphine's P (Table 2), an arsine's
+       As (Sec. 4.4.2), a sulfoxide's, a sulfinamide's, a sulfonium's S
+       (Sec. 4.4.2). Not a P or an As whose planar form would close an
+       aromatic ring with its lone pair (a phosphole's, an arsole's): a
+       phosphole's is about 16 kcal/mol, lower than a plain N-alkyl
+       aziridine's (Sec. 4.2);
+     - Sb, Bi, Se and Te, by the review's trend - barriers rise down a group
+       (Sec. 4) - none of them measured there;
+     - an N in a three-membered ring with a halogen, an O or an N on it or
+       next to it in the ring (an N-chloro or N-alkoxy aziridine, an
+       oxaziridine, a diaziridine), bonded to no pi system: the ring and
+       the heteroatom together hold it (Sec. 4.1, 4.4.1). A plain N-alkyl
+       aziridine's N is lower, 17.7-20.5 kcal/mol (Sec. 4.3), an N-aryl's
+       or N-acyl's lower still: its invertomers are the conformer search's
+       to find;
+     - an N at a bridgehead of a small bridged ring system, every bridge of
+       three atoms or fewer (Tröger's base, a quinuclidine, bicyclo[3.3.3]
+       at most): it cannot turn over without breaking a bond. A larger cage
+       can turn it in and out, and is left free.
+     An amine's N keeps none. One rule (`lib/chem/lonePairCentres.ts`)
+     says which such atoms a drawing's wedge is read at, which a SMILES's @
+     is read at, which centres a structure leaves open, and which a
+     molecule in 3D has read from its geometry (docs/PLUGINS.md,
+     *Configurations*). A wedge at a
+     pyramid of three that keeps none - an O+ - is read as no axis's end
+     either: Clean-up refuses it rather than lose it. An N's wedge may
+     still be an axis's, where its lone pair lies in a ring or a carbonyl
+     beside it (an N-aryl pyrrole, an anilide).
    - A SMILES is still read by RDKit, whose drawing says what it means;
      the engine then draws it (RDKit's drawing stands, should the engine
      fail).
