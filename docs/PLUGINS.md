@@ -519,14 +519,22 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
     one bond with a ring of its own size or smaller, since against a
     larger ring it is no bridge but the way round it, as each sugar of a
     cyclodextrin lies on its macrocycle. A ring is held flat where every
-    atom of it gives the ring pi electrons, 4n + 2 of them (Hückel's
-    rule): one from a double bond in the ring or a Hückel ring's bond (a
-    fused ring's, however drawn), none from a carbon with a C=O, C=N or
-    C=S out of the ring or a carbocation, two from a lone pair (pyrrole's
-    N, furan's O, a carbanion); a ring every atom of which lies on a
-    Hückel ring is held flat (azulene's), and so is one bound to a metal
-    through all its atoms (a metallocene's). Cyclopentadiene's CH2 and
-    cyclooctatetraene's eight pi electrons leave theirs free to pucker.
+    atom of it is aromatic under Meno's rule (`lib/chem/aromaticity.ts`):
+    Hückel's 4n + 2, n from 0 to 5 (22 at most, as far as the rule is
+    generally held to go), of each ring of the smallest set and of each
+    pair of rings fused at a bond - a benzene's 6, azulene's 10 round its
+    two rings, each six-ring of pyrene or coronene, not [26]annulene -
+    each atom giving one from a double bond within its ring system
+    (however drawn), none from a
+    carbon with a C=O, C=N, C=S, C=Se or C=Te out of it or a carbocation,
+    two from a lone pair (pyrrole's N, furan's O, a carbanion), and a ring
+    with any other atom (a CH2, a fulvene's C=CH2) none. So a
+    fluoranthene's five-ring, aromatic in none of its own, is held flat,
+    every atom of it lying on an aromatic six-ring; and so, whatever its
+    count, is a ring drawn with aromatic bonds or bound to a metal through
+    all its atoms (a metallocene's). Cyclopentadiene's
+    CH2 and cyclooctatetraene's eight pi electrons leave theirs free to
+    pucker.
   - **a molecule that cannot change shape is worth ten**, the number
     RDKit's embedding takes when given none: nothing in it turns and no
     ring of it can flip, so each try gives the same shape back (benzene,
