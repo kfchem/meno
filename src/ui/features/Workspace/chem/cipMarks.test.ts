@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Model } from "../store/types";
 import { cipMarksFrom, cipMarksOf, cipSaid, turnsSaid, type CipJob } from "./cipMarks";
+import { drawnFromSmiles } from "./testdata/identityCases";
 
 /** Butan-2-ol drawn: C1-C2(-O5)-C3-C4, its O on a wedge out of C2, up or down; C2 asked for its R or S. */
 const butanol = (stereo?: "up" | "down", shown = true): Model => ({
@@ -98,5 +99,33 @@ describe("R and S, E and Z on the drawing, Meno's own", () => {
     expect(m.centres.size + m.doubleBonds.size).toBe(0);
     expect(m.said.get("centre-7")).toBe(cipSaid("large", "centre"));
     expect(m.said.get("bond-30")).toBe(cipSaid("large", "bond"));
+  });
+});
+
+describe("an allene's Ra or Sa and an odd cumulene's E or Z on the drawing", () => {
+  /** A SMILES drawn by Meno, its first double bond asked for. */
+  const asked = (smiles: string): { model: Model; id: number } => {
+    const model = drawnFromSmiles(smiles);
+    const bond = model.bonds.find((b) => b.order === 2)!;
+    return { model: { ...model, bonds: model.bonds.map((b) => (b === bond ? { ...b, stereoShown: true as const } : b)) }, id: bond.id };
+  };
+
+  it("gives an allene asked for at a bond of it its axis's, Ra or Sa - its mirror image, the other", () => {
+    const one = asked("CC=[C@]=CC");
+    const other = asked("CC=[C@@]=CC");
+    expect(cipMarksOf(one.model).doubleBonds.get(one.id)).toBe("Ra");
+    expect(cipMarksOf(other.model).doubleBonds.get(other.id)).toBe("Sa");
+  });
+
+  it("gives an odd cumulene asked for at a bond of it its E or Z", () => {
+    const e = asked("F/C=C=C=C/F");
+    const z = asked("F/C=C=C=C\\F");
+    expect(cipMarksOf(e.model).doubleBonds.get(e.id)).toBe("E");
+    expect(cipMarksOf(z.model).doubleBonds.get(z.id)).toBe("Z");
+  });
+
+  it("says an allene with none drawn has no Ra or Sa", () => {
+    const none = asked("CC=C=CC");
+    expect(cipMarksOf(none.model).said.get(`bond-${none.id}`)).toBe(cipSaid("undrawn", "axis"));
   });
 });

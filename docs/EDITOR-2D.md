@@ -1047,7 +1047,9 @@ All hover-based, as above.
     amine's N (R3NH+) has none: it gives its H up and takes one back,
     turning over as it does - but where its amine's N keeps its
     configuration, a small cage's bridgehead (lib/chem/lonePairCentres).
-    An axis's Ra or Sa is still the plugin's, until Meno names axes.
+    An axis's Ra or Sa - a biaryl's, an allene's, asked for on a bond of
+    it - and an odd cumulene's E or Z are Meno's too (docs/CIP.md, *Axes
+    and odd cumulenes*).
   - **Shown on what they are asked for on** (the maintainer, 2026-10-15;
     before, one switch showed them all). Hidden unless asked for. The
     right-click menu of an atom that can be a stereocentre says *Show

@@ -12,9 +12,9 @@ rules, with no plugin added: the rules' own texts, read here, never a
 toolkit's code.
 
 `src/lib/chem/cip/` holds it, pure (no DOM, Tauri or network). The labels
-on the page and on molecules in 3D are its own (*Where it is used*); rule
-6, axes and cumulenes come in steps of their own (*What it does not do
-yet*).
+on the page and on molecules in 3D are its own (*Where it is used*): R and
+S, E and Z, and an axis's Ra or Sa - a biaryl's, an allene's - and an odd
+cumulene's E or Z (*Axes and odd cumulenes*).
 
 ## The rules it follows
 
@@ -198,12 +198,47 @@ tells the two apart (VS097, a centre beside an amidinate), the blend gives
 the opposite descriptor to the suite's, while every usual structure taken
 alone gives the suite's.
 
+### Axes and odd cumulenes
+
+An **axis** is a biaryl's single bond between two ends with two other
+groups each (BINAP's C1-C1'), or an **allene's** run of an even number of
+cumulated double bonds (C=C=C), its two ends not bonded to each other: it
+is stored by its ends, a group of each, and the sign of the torsion
+between those two (lib/layout/stereo `Axial`). An **odd cumulene's** run
+(C=C=C=C) has its ends' groups in one plane: it is stored by its ends, a
+group of each, and whether the two are on one side (`Cumulated`).
+
+- **M or P** (CIP 1966 pp. 395-396; Hanson 2018 pp. 1760-1761): each end's
+  two groups ranked by the rules on a digraph rooted at the ends, the
+  atom the axis runs on through left out, and the turn from the near
+  end's higher group to the far end's - P where it is clockwise looking
+  along the axis. Rule 5 having decided it, m or p where the mirror image
+  reads it the same. **Shown as Ra (M) or Sa (P)**, ra or sa, as the axis
+  of (R)-BINAP is written.
+- **An odd cumulene's E or Z** (Hanson 2018 p. 1760): as a double bond's,
+  each end's higher group against the other's, the cumulated run between
+  them.
+- **In a ligand**, each is read by rules 3 to 5 as a double bond's or a
+  centre's is, carried by its end nearer the root: an odd cumulene's
+  seqcis or seqtrans by rule 3, an axis's M or P by rules 4a to 5, M with
+  R and P with S - "R, M or seqCis has priority over its enantiomorph"
+  (Hanson 2018 p. 1761) - and m before p by rule 4c.
+- **From SMILES**, as OpenSMILES writes them: an allene's @ or @@ on its
+  middle atom, the run "collapsed" into one tetrahedral centre whose four
+  neighbours are its ends' groups (*Tetrahedral Allene-like Systems*); an
+  odd cumulene's / and \ on its ends' bonds (*Cis/Trans configuration of
+  double bonds*). An @ not on the middle of an even run, or at an end with
+  two hydrogens, is refused with the reason.
+
 ## Where it is used
 
 - **On the drawing** (Workspace/chem/cipMarks, cipRun, cipWorker): each
   structure holding an atom or a bond whose R or S, E or Z is asked for
   (`stereoShown`) is read as identity reads it - its configuration from
-  its wedges and its double bonds' sides (lib/layout/drawn `readStereo`),
+  its wedges and its double bonds' sides (lib/layout/drawn `readStereo`):
+  an allene's axis from a wedge out of one end with the other end's groups
+  in the page, as a biaryl's; an odd cumulene's from its ends' groups on
+  either side of the line through its run -
   its labels drawn out - and only the units asked for are worked out, in
   a worker, the last structures' answers kept. A unit asked for with none
   says why while the pointer is on it (*No label, and why*); a Z or E that
@@ -214,15 +249,18 @@ alone gives the suite's.
   Meno's rule on lone pairs (lib/chem/lonePairsIn3d) - never the toolkit's
   list of centres, and the CIP's own ranking deciding which have a
   descriptor. A double bond in a ring of seven atoms or fewer has none of
-  its own. A stereoisomer made as its mirror image's reflection is read
-  after it is reflected.
+  its own, and a cumulated double bond none: an allene's axis is read from
+  the turn between its ends' groups, an odd cumulene's E or Z from their
+  sides, each shown on the first double bond of its run. A biaryl's axis
+  is not read in 3D: every biaryl is twisted there, whether or not its
+  turn is held. A stereoisomer made as its mirror image's reflection is
+  read after it is reflected.
 - **A protonated amine's N (R3NH+)** has none, on the drawing or in 3D:
   in solution it gives its H up and takes one back, turning over as it
   does - but where its amine's N keeps its configuration by Meno's rule on
   lone pairs (a small cage's bridgehead), it keeps it too
   (lib/chem/lonePairCentres `protonatedAmineHeld`).
-- **The plugin's labels are never read**, but an axis's Ra or Sa, until
-  Meno names axes.
+- **The plugin's labels are never read.**
 
 ## No label, and why
 
@@ -240,11 +278,8 @@ a protonated amine's N (*Where it is used*).
 
 ## What it does not do yet
 
-- **An allene's axis and an odd cumulene's cis or trans read from a
-  drawing or a molecule in 3D.** They are read from SMILES (OpenSMILES,
-  *Tetrahedral Allene-like Systems* and *Cis/Trans configuration of double
-  bonds*) and named, and read as auxiliary descriptors in a ligand; the
-  drawing, identity and 3D follow in this same part.
+- **A biaryl's axis in 3D** (*Where it is used*), and an axis inside a
+  ring, which the drawing does not read as one.
 
 ## How it is checked
 

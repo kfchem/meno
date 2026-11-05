@@ -65,3 +65,45 @@ describe("R and S, E and Z of a molecule in 3D, read from its places", () => {
     expect(Object.keys(cipIn3d({ atoms: atoms.map((a, i) => (i === 0 ? { el: "C" } : a)), bonds, xyz }).atoms)).toEqual(["0"]);
   });
 });
+
+describe("an allene's axis and an odd cumulene's cis or trans in 3D, read from its places", () => {
+  // (1-chloro-3-fluoroallene along x: F 0, C1, C2, C3, Cl 4, the ends' H 5 and 6 - its near end's groups in the plane z = 0, its far end's in y = 0)
+  const allene = (far: 1 | -1) => ({
+    atoms: [{ el: "F" }, { el: "C" }, { el: "C" }, { el: "C" }, { el: "Cl" }, { el: "H" }, { el: "H" }],
+    bonds: [
+      { a1: 0, a2: 1, order: 1 },
+      { a1: 1, a2: 2, order: 2 },
+      { a1: 2, a2: 3, order: 2 },
+      { a1: 3, a2: 4, order: 1 },
+      { a1: 1, a2: 5, order: 1 },
+      { a1: 3, a2: 6, order: 1 },
+    ],
+    xyz: [-0.8, 1.2, 0, 0, 0, 0, 1.3, 0, 0, 2.6, 0, 0, 3.4, 0, 1.2 * far, -0.6, -0.9, 0, 3.2, 0, -0.9 * far],
+  });
+  // (1,4-difluorobutatriene in the plane z = 0, its far F on one side or the other)
+  const butatriene = (far: 1 | -1) => ({
+    atoms: [{ el: "F" }, { el: "C" }, { el: "C" }, { el: "C" }, { el: "C" }, { el: "F" }, { el: "H" }, { el: "H" }],
+    bonds: [
+      { a1: 0, a2: 1, order: 1 },
+      { a1: 1, a2: 2, order: 2 },
+      { a1: 2, a2: 3, order: 2 },
+      { a1: 3, a2: 4, order: 2 },
+      { a1: 4, a2: 5, order: 1 },
+      { a1: 1, a2: 6, order: 1 },
+      { a1: 4, a2: 7, order: 1 },
+    ],
+    xyz: [-0.7, 1.1, 0, 0, 0, 0, 1.3, 0, 0, 2.6, 0, 0, 3.9, 0, 0, 4.6, 1.1 * far, 0, -0.6, -0.9, 0, 4.5, -0.9 * far, 0],
+  });
+
+  it("reads an allene's Ra or Sa from the turn between its ends' groups, on the first double bond of its run - the other turn, the other", () => {
+    const one = cipIn3d(allene(1)).bonds;
+    const other = cipIn3d(allene(-1)).bonds;
+    expect(Object.keys(one)).toEqual(["1"]);
+    expect(new Set([one["1"], other["1"]])).toEqual(new Set(["Ra", "Sa"]));
+  });
+
+  it("reads an odd cumulene's E or Z from its ends' groups on one side of it or the two, and no cumulated C=C's own", () => {
+    expect(cipIn3d(butatriene(1)).bonds).toEqual({ "1": "Z" });
+    expect(cipIn3d(butatriene(-1)).bonds).toEqual({ "1": "E" });
+  });
+});

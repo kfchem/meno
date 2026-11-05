@@ -15,10 +15,10 @@ const SETTLE_MS = 150;
  * The marks on a structure, as far as they are asked for, brought up to
  * date a moment after it stops changing: each R or S and E or Z by its atom
  * or bond (`stereoShown`), Meno's own, worked out off the drawing's thread
- * (chem/cipRun) - and, by the plugin that does the checks (lib/plugins/
- * roles), valence warnings by the settings and an axis's Ra or Sa, only
- * while the plugin can be had without asking: a structure being drawn never
- * sets it up by itself. Marks for an earlier version stay up until the new
+ * (chem/cipRun), an axis's Ra or Sa with them - and, by the plugin that
+ * does the checks (lib/plugins/roles), valence warnings by the settings,
+ * only while the plugin can be had without asking: a structure being drawn
+ * never sets it up by itself. Marks for an earlier version stay up until the new
  * ones come, so nothing flickers - but only those shown already: R and S,
  * E and Z asked for since are shown from them only where they were worked
  * out for the structure as it is, and otherwise come with the marks worked
@@ -36,7 +36,7 @@ export function useChemMarks(model: Model, active: boolean): ChemMarks | null {
   // (Meno's R and S, E and Z, likewise)
   const [cip, setCip] = useState<{ marks: CipMarks; asked: StereoAsked; model: Model } | null>(null);
   const some = active && model.atoms.length > 0;
-  const wanted = some && (valenceWarnings || stereoAsked);
+  const wanted = some && valenceWarnings;
   const cipWanted = some && stereoAsked;
   const ready = chem.state === "ready";
   const failed = chem.state === "failed";
@@ -105,14 +105,12 @@ export function useChemMarks(model: Model, active: boolean): ChemMarks | null {
     if (!plugin && !own) return null;
     const none = { centres: NO_MARKS.centres, doubleBonds: NO_MARKS.doubleBonds };
     // (each as asked for now, and fresh where asked for since: shownMarks)
-    const axes = plugin && stereoAsked ? shownMarks(plugin.marks, model, plugin.asked, () => chemMolblock(forFlatReaders(model)) === plugin.molblock).doubleBonds : none.doubleBonds;
     const ours = own ? shownMarks({ ...NO_MARKS, ...own.marks }, model, own.asked, () => own.model === model) : none;
     return {
       valence: plugin && valenceWarnings ? plugin.marks.valence : NO_MARKS.valence,
       centres: ours.centres,
-      // (an axis Meno names itself - a biaryl's - its own; one it does not yet, the plugin's)
-      doubleBonds: new Map([...axes, ...ours.doubleBonds]),
+      doubleBonds: ours.doubleBonds,
       ...(own ? { said: own.marks.said } : {}),
     };
-  }, [wanted, got, cipWanted, cip, valenceWarnings, stereoAsked, model]);
+  }, [wanted, got, cipWanted, cip, valenceWarnings, model]);
 }

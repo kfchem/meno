@@ -474,3 +474,61 @@ describe("a centre with a lone pair for its fourth group", () => {
     }
   });
 });
+
+describe("an allene's axis and an odd cumulene's cis or trans, drawn", () => {
+  // (penta-2,3-diene drawn straight through: CH3 0 - C1 = C2 = C3 - CH3 4, its middle C2; a wedge out of C1 to its methyl, or none)
+  const allene = (wedge?: "up" | "down") => {
+    const atoms: DrawnAtom[] = [
+      { x: -1.3, y: 0.75, hs: 3 },
+      { x: 0, y: 0, hs: 1 },
+      { x: 1.3, y: 0, hs: 0 },
+      { x: 2.6, y: 0, hs: 1 },
+      { x: 3.9, y: 0.75, hs: 3 },
+    ];
+    const bonds: DrawnBond[] = [
+      { a: 1, b: 0, order: 1, ...(wedge ? { wedge: { narrow: 1, stereo: wedge } } : {}) },
+      { a: 1, b: 2, order: 2 },
+      { a: 2, b: 3, order: 2 },
+      { a: 3, b: 4, order: 1 },
+    ];
+    return readStereo(atoms, bonds);
+  };
+  // (1,4-difluorobutatriene drawn straight through: F 0 - C1 = C2 = C3 = C4 - F 5, the far F at `y`; its bond to C4 wavy, or not)
+  const butatriene = (y: number, wavy = false) => {
+    const atoms: DrawnAtom[] = [
+      { x: -1.3, y: 0.75, hs: 0, el: "F" },
+      { x: 0, y: 0, hs: 1 },
+      { x: 1.3, y: 0, hs: 0 },
+      { x: 2.6, y: 0, hs: 0 },
+      { x: 3.9, y: 0, hs: 1 },
+      { x: 5.2, y, hs: 0, el: "F" },
+    ];
+    const bonds: DrawnBond[] = [
+      { a: 1, b: 0, order: 1 },
+      { a: 1, b: 2, order: 2 },
+      { a: 2, b: 3, order: 2 },
+      { a: 3, b: 4, order: 2 },
+      { a: 4, b: 5, order: 1, ...(wavy ? { either: true } : {}) },
+    ];
+    return readStereo(atoms, bonds);
+  };
+
+  it("reads an allene's axis from a wedge at one end, the other end's groups in the page, as a biaryl's: the other wedge, the other sense", () => {
+    const up = allene("up").axes;
+    const down = allene("down").axes;
+    expect(up).toHaveLength(1);
+    expect(up[0]).toMatchObject({ atoms: [1, 3], refs: [0, 4] });
+    expect(down[0].sense).toBe(-up[0].sense);
+    // (none drawn: open; and no double bond of it has a cis or trans of its own)
+    expect(allene().axes).toEqual([]);
+    expect(allene("up").cisTrans.size).toBe(0);
+  });
+
+  it("reads an odd cumulene's cis or trans from its ends' groups across the line through it, and none where an end is straight on or wavy", () => {
+    expect(butatriene(0.75).cumulated).toEqual([{ atoms: [1, 4], refs: [0, 5], cis: true }]);
+    expect(butatriene(-0.75).cumulated).toEqual([{ atoms: [1, 4], refs: [0, 5], cis: false }]);
+    expect(butatriene(0).cumulated).toEqual([]);
+    expect(butatriene(0.75, true).cumulated).toEqual([]);
+    expect(butatriene(0.75).cisTrans.size).toBe(0);
+  });
+});

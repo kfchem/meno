@@ -42,7 +42,7 @@ const butene: Model = {
 };
 
 describe("marksOf", () => {
-  it("puts RDKit's valence warnings and an axis's M or P on the atoms and bonds they are about, by id - its R, S, E and Z never: Meno's own are", () => {
+  it("puts RDKit's valence warnings on the atoms they are about, by id - its R, S, E and Z and an axis's M or P never: Meno's own are", () => {
     const marks = marksOf(butene, {
       atoms: [
         { index: 0, hydrogens: 3 },
@@ -57,7 +57,7 @@ describe("marksOf", () => {
     });
     expect([...marks.centres]).toEqual([]);
     expect([...marks.valence]).toEqual([[12, { valence: 5, most: 4 }]]);
-    expect([...marks.doubleBonds]).toEqual([[22, "Ra"]]);
+    expect([...marks.doubleBonds]).toEqual([]);
   });
 
   it("leaves a halogen bridging metals unmarked - μ-Cl in [Pd(allyl)Cl]2 drawn with plain bonds - and marks a real overload", () => {
@@ -108,12 +108,6 @@ describe("marksOf", () => {
     expect([...marksOf(adduct([bond(2, 2, 3)]), at(5)).valence]).toEqual([[2, { valence: 5, most: 3 }]]);
     const outOf: Model = { ...adduct(), bonds: [{ ...bond(1, 2, 1), dative: true }] };
     expect([...marksOf(outOf, at(4)).valence]).toEqual([[2, { valence: 4, most: 3 }]]);
-  });
-
-  it("says an axis of chirality's M or P as Ra or Sa, as a label says (R)-BINAP", () => {
-    const axis = (cip: "M" | "P") => marksOf(butene, { atoms: [], bonds: [{ index: 0, cip }] }).doubleBonds.get(20);
-    expect(axis("M")).toBe("Ra");
-    expect(axis("P")).toBe("Sa");
   });
 });
 

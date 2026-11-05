@@ -32,8 +32,8 @@ export type CipMarks = {
 
 /** Why a unit has none: the CIP's reasons, a protonated amine's N that keeps no configuration (`exchanges`), or a unit with none drawn (`undrawn`). */
 export type CipNone = CipWhy | "exchanges" | "undrawn";
-/** A unit's answer: its descriptor, or why it has none. */
-export type CipAnswer = CipResult | { why: CipNone };
+/** A unit's answer: its descriptor, or why it has none (`axis` where the unit is an allene's axis, not a double bond's E or Z). */
+export type CipAnswer = CipResult | { why: CipNone; axis?: true };
 
 /** The structures of `model` that hold a unit asked for, each read for the CIP. */
 export function cipJobsOf(model: Model): CipJob[] {
@@ -70,16 +70,43 @@ export function cipJobsOf(model: Model): CipJob[] {
 export function cipAnswersOf(job: CipJob): CipAnswer[] {
   const held = protonatedAmineHeld(job.input.atoms, job.input.bonds);
   const exchanges = new Set(job.centres.filter((c) => held(c.at) === false).map((c) => c.at));
-  // (a bond that is an axis - a biaryl's - asked for as its axis)
-  const axisOf = (at: number) => {
-    const { a, b } = job.input.bonds[at];
-    return (job.input.axes ?? []).findIndex((x) => (x.atoms[0] === a && x.atoms[1] === b) || (x.atoms[0] === b && x.atoms[1] === a));
+  // (a bond that is an axis - a biaryl's - or one of a run of cumulated double bonds - an allene's, a butatriene's -
+  // asked for as its axis or its cis or trans: the run's ends)
+  // (the run a bond is in: its two ends, and how many double bonds it has - a plain bond's run itself, one)
+  const runOf = (at: number): { ends: [number, number]; doubles: number } => {
+    const { a, b, order } = job.input.bonds[at];
+    if (order !== 2) return { ends: [a, b], doubles: 1 };
+    const doubles = (x: number) => job.input.bonds.filter((d) => d.order === 2 && (d.a === x || d.b === x));
+    const walk = (from: number, x: number): [number, number] => {
+      let steps = 0;
+      for (; doubles(x).length === 2 && steps < job.input.atoms.length; steps++) {
+        const next = doubles(x).map((d) => (d.a === x ? d.b : d.a)).find((y) => y !== from)!;
+        [from, x] = [x, next];
+      }
+      return [x, steps];
+    };
+    const [[p, s], [q, t]] = [walk(b, a), walk(a, b)];
+    return { ends: [p, q], doubles: s + t + 1 };
   };
-  const axes = job.bonds.map((b) => axisOf(b.at));
-  const r = cipLabels(job.input, { centres: job.centres.map((c) => c.at).filter((at) => !exchanges.has(at)), bonds: job.bonds.map((b) => b.at), axes: axes.filter((k) => k >= 0) });
+  const ends = (at: number) => runOf(at).ends;
+  // (an even run of cumulated double bonds - an allene's - is an axis, whether or not one is drawn)
+  const allene = (at: number) => runOf(at).doubles % 2 === 0;
+  const unit = (units: readonly { atoms: readonly [number, number] }[] | undefined, [p, q]: [number, number]) =>
+    (units ?? []).findIndex((x) => (x.atoms[0] === p && x.atoms[1] === q) || (x.atoms[0] === q && x.atoms[1] === p));
+  const axes = job.bonds.map((b) => unit(job.input.axes, ends(b.at)));
+  const runs = job.bonds.map((b) => unit(job.input.cumulated, ends(b.at)));
+  const r = cipLabels(job.input, {
+    centres: job.centres.map((c) => c.at).filter((at) => !exchanges.has(at)),
+    bonds: job.bonds.map((b) => b.at),
+    axes: axes.filter((k) => k >= 0),
+    cumulated: runs.filter((k) => k >= 0),
+  });
   return [
     ...job.centres.map((c): CipAnswer => (exchanges.has(c.at) ? { why: "exchanges" } : (r.centres.get(c.at) ?? { why: "undrawn" }))),
-    ...job.bonds.map((b, k): CipAnswer => r.bonds.get(b.at) ?? (axes[k] >= 0 ? r.axes.get(axes[k]) : undefined) ?? { why: "undrawn" }),
+    ...job.bonds.map((b, k): CipAnswer => {
+      const said = r.bonds.get(b.at) ?? (axes[k] >= 0 ? r.axes.get(axes[k]) : runs[k] >= 0 ? r.cumulated.get(runs[k]) : undefined) ?? { why: "undrawn" as const };
+      return "why" in said && allene(b.at) ? { ...said, axis: true } : said;
+    }),
   ];
 }
 
@@ -108,7 +135,7 @@ export function cipMarksFrom(jobs: readonly CipJob[], answers: readonly (readonl
         if (r.label !== "E" && r.label !== "Z") return;
         out.doubleBonds.set(b.id, r.label);
         if (r.turns) out.said.set(`bond-${b.id}`, turnsSaid(r.label));
-      } else out.said.set(`bond-${b.id}`, cipSaid(r.why, "bond"));
+      } else out.said.set(`bond-${b.id}`, cipSaid(r.why, "axis" in r && r.axis ? "axis" : "bond"));
     });
   });
   return out;
@@ -121,11 +148,11 @@ export function cipMarksOf(model: Model): CipMarks {
 }
 
 /** Why a unit has no descriptor, as its tip says it. */
-export function cipSaid(why: CipNone, unit: "centre" | "bond"): string {
-  const what = unit === "centre" ? "R or S" : "E or Z";
+export function cipSaid(why: CipNone, unit: "centre" | "bond" | "axis"): string {
+  const what = unit === "centre" ? "R or S" : unit === "axis" ? "Ra or Sa" : "E or Z";
   switch (why) {
     case "alike":
-      return unit === "centre" ? "No R or S: two of its groups are the same." : "No E or Z: the two groups at one of its ends are the same.";
+      return unit === "centre" ? "No R or S: two of its groups are the same." : `No ${what}: the two groups at one of its ends are the same.`;
     case "open":
       return `No ${what} until the double bond it depends on is drawn E or Z.`;
     case "unsure":
@@ -135,7 +162,7 @@ export function cipSaid(why: CipNone, unit: "centre" | "bond"): string {
     case "exchanges":
       return "No R or S: this N gives up its H and takes one back, turning over as it does.";
     case "undrawn":
-      return unit === "centre" ? "No R or S: no configuration is drawn here." : "No E or Z: none is drawn here.";
+      return unit === "centre" ? "No R or S: no configuration is drawn here." : `No ${what}: none is drawn here.`;
   }
 }
 
