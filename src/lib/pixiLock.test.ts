@@ -1,6 +1,24 @@
 import { describe, expect, it } from "vitest";
 import { pixiDownload, pixiPlatform } from "./pixiLock";
-import lock from "../../src-tauri/resources/plugins/pyscf/pixi.lock?raw";
+
+/** A lock as pixi writes one, by hand: conda packages alone, for three platforms - none for Windows on Arm. */
+const lock = [
+  "version: 6",
+  "environments:",
+  "  default:",
+  "    packages:",
+  ...["osx-arm64", "win-64", "linux-64"].flatMap((p) => [`      ${p}:`, `      - conda: https://c/${p}/python.conda`, `      - conda: https://c/${p}/numpy.conda`]),
+  "packages:",
+  ...["osx-arm64", "win-64", "linux-64"].flatMap((p) => [
+    `- conda: https://c/${p}/python.conda`,
+    "  sha256: aa",
+    "  size: 30000000",
+    `- conda: https://c/${p}/numpy.conda`,
+    "  sha256: bb",
+    "  size: 8000000",
+  ]),
+  "",
+].join("\n");
 
 describe("a pixi lock", () => {
   it("names the platform as pixi does", () => {
@@ -13,8 +31,8 @@ describe("a pixi lock", () => {
   it("says what an environment downloads on each platform: its packages, their size, and whether PyPI is among them (here, not)", () => {
     for (const platform of ["osx-arm64", "win-64", "linux-64"]) {
       const d = pixiDownload(lock, platform);
-      expect(d.packages).toBeGreaterThan(30);
-      expect(d.bytes).toBeGreaterThan(50e6);
+      expect(d.packages).toBe(2);
+      expect(d.bytes).toBe(38e6);
       expect(d.pypi).toBe(false);
     }
     expect(pixiDownload(lock, "win-arm64").packages).toBe(0);

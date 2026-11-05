@@ -962,6 +962,11 @@ function held<T>(
   /** The grid its values are laid on, where it is a surface's (./grids `gridAbout`). */
   grid?: () => GridPlace,
 ): { value?: T; state?: "asking" | "given" | AskError } {
+  // (the orbitals the list offers, where its rows are orbitals of a wavefunction its reader gives whole: checked together before one is drawn)
+  const block = list.rows.flatMap((r) => {
+    const m = isAsk(r.surface) ? /^expansion:(\d+)$/.exec(r.surface.ask) : null;
+    return m ? [Number(m[1])] : [];
+  });
   if (!isAsk(v)) return { value: read(v) };
   if (!calc) return {};
   const key = askKey(calc.source, list.from, v.ask);
@@ -971,7 +976,7 @@ function held<T>(
     return value === undefined ? { state: { error: "The reader gave nothing that can be shown." } } : { value, state };
   }
   // (asked for once: an answer, or a failure, stands)
-  if (state === undefined) toAsk.push(() => void askFor(calc, list.from, v.ask, undefined, undefined, grid?.()).catch(() => {}));
+  if (state === undefined) toAsk.push(() => void askFor(calc, list.from, v.ask, undefined, undefined, grid?.(), block.length ? block : undefined).catch(() => {}));
   return { state: state ?? "asking" };
 }
 /** What a list opened under a molecule is kept clear of the canvas's edges by, and the molecule too, in pixels. */

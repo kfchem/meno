@@ -16,7 +16,7 @@ import type { StructureRead } from "../io/structures";
 /** The form of a plugin's answer this Meno reads. */
 export const OUTPUT_SCHEMA = 1;
 
-/** A reader's answer, as its worker writes it (resources/plugins/<id>/worker.py). */
+/** A reader's answer, as its worker writes it (plugins/<id>/<version>/worker.py). */
 export type ReaderOutput = {
   /** The form it is in: `OUTPUT_SCHEMA`, or unsaid. */
   schema?: number;
@@ -137,7 +137,7 @@ export function imaginaryOf(v: unknown): number[] | undefined {
   return Array.isArray(v) && v.length <= 300 && v.every((f) => isNum(f) && f < 0) ? [...(v as number[])] : undefined;
 }
 
-/** Imaginary frequencies in plain words, as a molecule is marked with them: "1 imaginary frequency, 382.6i cm⁻¹". */
+/** Imaginary frequencies in plain words, as a molecule is marked with them: "1 imaginary frequency, 391.3i cm⁻¹". */
 export function imaginaryWords(cm: readonly number[]): string {
   return `${cm.length} imaginary frequenc${cm.length === 1 ? "y" : "ies"}, ${cm.map((f) => `${Math.abs(f).toFixed(1)}i`).join(", ")} cm⁻¹`;
 }

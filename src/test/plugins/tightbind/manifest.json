@@ -1,0 +1,224 @@
+{
+  "id": "tightbind",
+  "name": "Tightbind",
+  "version": "0.2.0",
+  "description": "Optimises molecules in 3D, and works out their energies and vibrations, by a made-up tight-binding method.",
+  "licence": "MIT",
+  "homepage": "https://example.org/tightbind",
+  "environment": "pixi",
+  "kinds": [
+    {
+      "id": "tightbind",
+      "name": "Tightbind output",
+      "program": "Tightbind",
+      "writtenBy": "tightbind",
+      "extensions": [
+        ".out",
+        ".log"
+      ],
+      "marks": [
+        {
+          "text": "== T I G H T B I N D =="
+        },
+        {
+          "text": "tightbind release",
+          "at": "line-start"
+        }
+      ],
+      "grammar": {
+        "file": "tightbind-output.grammar",
+        "tones": {
+          "Heading": "landmark",
+          "Done": "success",
+          "Fault": "error",
+          "Number": "value"
+        }
+      }
+    },
+    {
+      "id": "tightbind-freq",
+      "name": "Tightbind vibrations",
+      "program": "Tightbind",
+      "writtenBy": "tightbind",
+      "extensions": [
+        ".out"
+      ],
+      "marks": [
+        {
+          "text": "vibrations as tightbind writes them"
+        }
+      ]
+    }
+  ],
+  "reads": [
+    "tightbind",
+    "tightbind-freq"
+  ],
+  "xyzEnergies": [
+    {
+      "id": "tightbind",
+      "pattern": "(?:^|\\s)energy:\\s*(-?\\d+\\.\\d+(?:[eE][-+]?\\d+)?)",
+      "unit": "hartree"
+    }
+  ],
+  "xyzSteps": [
+    {
+      "id": "tightbind-opt",
+      "file": "tbopt.log",
+      "comment": "^\\s*energy:\\s*-?\\d+\\.\\d+\\s+gradient:"
+    }
+  ],
+  "steps": [
+    {
+      "kinds": [
+        "optimise"
+      ],
+      "programs": [
+        "tightbind"
+      ],
+      "options": [
+        {
+          "id": "method",
+          "label": "Method",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "tb2",
+              "label": "TB-2"
+            },
+            {
+              "value": "tb1",
+              "label": "TB-1"
+            },
+            {
+              "value": "tbff",
+              "label": "TB force field"
+            }
+          ],
+          "default": "tb2"
+        },
+        {
+          "id": "solvent",
+          "label": "Solvent",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "none",
+              "label": "None"
+            },
+            {
+              "value": "water",
+              "label": "Water"
+            },
+            {
+              "value": "methanol",
+              "label": "Methanol"
+            },
+            {
+              "value": "toluene",
+              "label": "Toluene"
+            },
+            {
+              "value": "thf",
+              "label": "THF"
+            }
+          ],
+          "default": "none"
+        },
+        {
+          "id": "level",
+          "label": "Converged to",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "loose",
+              "label": "Loose"
+            },
+            {
+              "value": "normal",
+              "label": "Normal"
+            },
+            {
+              "value": "tight",
+              "label": "Tight"
+            }
+          ],
+          "default": "normal"
+        }
+      ],
+      "solvation": {
+        "says": "CONT({solvent})",
+        "none": {
+          "id": "solvent",
+          "is": "none"
+        }
+      }
+    },
+    {
+      "kinds": [
+        "energy",
+        "frequencies"
+      ],
+      "programs": [
+        "tightbind"
+      ],
+      "options": [
+        {
+          "id": "method",
+          "label": "Method",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "tb2",
+              "label": "TB-2"
+            },
+            {
+              "value": "tb1",
+              "label": "TB-1"
+            },
+            {
+              "value": "tbff",
+              "label": "TB force field"
+            }
+          ],
+          "default": "tb2"
+        },
+        {
+          "id": "solvent",
+          "label": "Solvent",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "none",
+              "label": "None"
+            },
+            {
+              "value": "water",
+              "label": "Water"
+            },
+            {
+              "value": "methanol",
+              "label": "Methanol"
+            },
+            {
+              "value": "toluene",
+              "label": "Toluene"
+            },
+            {
+              "value": "thf",
+              "label": "THF"
+            }
+          ],
+          "default": "none"
+        }
+      ],
+      "solvation": {
+        "says": "CONT({solvent})",
+        "none": {
+          "id": "solvent",
+          "is": "none"
+        }
+      }
+    }
+  ]
+}

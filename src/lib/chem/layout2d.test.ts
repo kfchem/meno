@@ -566,7 +566,7 @@ describe("joinStyle", () => {
     { id: 5, x: 2.6, y: 0, el: "C" },
   ];
   const bonds: Bond[] = [
-    { a1: 0, a2: 1, order: 1, stereo: "up", stereoOrient: "reverse" },
+    { a1: 0, a2: 1, order: 1, stereo: "up", narrow: 0 },
     { a1: 1, a2: 2, order: 1, stereo: "none" },
     { a1: 1, a2: 3, order: 1, stereo: "none" },
     { a1: 2, a2: 4, order: 1, stereo: "none" },
@@ -790,7 +790,7 @@ describe("a wedge and a bond of more than one line", () => {
     { id: 4, x: -1.3, y: -0.75, el: "C" },
   ];
   const bonds: Bond[] = [
-    { a1: 0, a2: 1, order: 1, stereo: "up", stereoOrient: "reverse" },
+    { a1: 0, a2: 1, order: 1, stereo: "up", narrow: 0 },
     { a1: 1, a2: 2, order: 2, stereo: "none" },
     { a1: 1, a2: 3, order: 1, stereo: "none" },
   ];
@@ -826,7 +826,7 @@ describe("a wedge and a bond of more than one line", () => {
     // the wedge's wide end on atom 1, where only a double bond carries on,
     // its second line on the side of the wedge's narrow end (+y)
     const alone: Bond[] = [
-      { a1: 0, a2: 1, order: 1, stereo: "up", stereoOrient: "reverse" },
+      { a1: 0, a2: 1, order: 1, stereo: "up", narrow: 0 },
       { a1: 1, a2: 2, order: 2, stereo: "none", doubleMode: "left" },
     ];
     const o = opts();
@@ -976,11 +976,16 @@ describe("a label must not change how a bond is drawn", () => {
     expect(hashesOf(buildBondPrimitives(pair("O"), bond, tight, ZOOM, deg).polys).length).toBeLessThan(3);
   });
 
-  it("stops a hashed wedge's widest hash short of a bare atom at its wide end, where the style asks", () => {
+  it("stops a hashed wedge's widest hash short of a bare atom at its wide end that bonds go on from, where the style asks", () => {
     const bond: Bond = { a1: 0, a2: 1, order: 1, stereo: "down" };
     const o = opts();
-    const at = hashesOf(buildBondPrimitives(pair("C"), bond, o, ZOOM, deg).polys);
-    const short = hashesOf(buildBondPrimitives(pair("C"), bond, opts({ hashedWedgeShort: true }), ZOOM, deg).polys);
+    // (its wide end a chain's or a ring's atom: two more bonds go on from it)
+    const onward = new Map([
+      [0, 3],
+      [1, 3],
+    ]);
+    const at = hashesOf(buildBondPrimitives(pair("C"), bond, o, ZOOM, onward).polys);
+    const short = hashesOf(buildBondPrimitives(pair("C"), bond, opts({ hashedWedgeShort: true }), ZOOM, onward).polys);
     const far = (h: { far: number }[]) => Math.max(...h.map((x) => x.far));
     // (reaching the atom, as ever; short of it by a hash's clear gap - the widest hash as wide)
     expect(far(at)).toBeCloseTo(pair("C")[1].x, 9);
@@ -988,7 +993,45 @@ describe("a label must not change how a bond is drawn", () => {
     const widest = (h: { farWidth: number; far: number }[]) => h.reduce((p, q) => (q.far > p.far ? q : p)).farWidth;
     expect(widest(short)).toBeCloseTo(widest(at), 9);
     // (at a label it stops at the label, as ever)
-    expect(hashesOf(buildBondPrimitives(pair("O"), bond, opts({ hashedWedgeShort: true }), ZOOM, deg).polys)).toEqual(hashesOf(buildBondPrimitives(pair("O"), bond, o, ZOOM, deg).polys));
+    expect(hashesOf(buildBondPrimitives(pair("O"), bond, opts({ hashedWedgeShort: true }), ZOOM, onward).polys)).toEqual(hashesOf(buildBondPrimitives(pair("O"), bond, o, ZOOM, onward).polys));
+  });
+
+  it("stops short at a wide end that one bond goes on from - a chain's carbon - as at one with more", () => {
+    const bond: Bond = { a1: 0, a2: 1, order: 1, stereo: "down" };
+    const two = new Map([
+      [0, 3],
+      [1, 2],
+    ]);
+    const far = (h: { far: number }[]) => Math.max(...h.map((x) => x.far));
+    const o = opts();
+    const at = hashesOf(buildBondPrimitives(pair("C"), bond, o, ZOOM, two).polys);
+    const short = hashesOf(buildBondPrimitives(pair("C"), bond, opts({ hashedWedgeShort: true }), ZOOM, two).polys);
+    expect(far(at) - far(short)).toBeCloseTo(o.hashSpacingPx - o.lineWidthPx, 9);
+  });
+
+  it("counts the wide end's bonds from those bonded at each atom where no count is given, and stops short where neither is", () => {
+    const bond: Bond = { a1: 0, a2: 1, order: 1, stereo: "down" };
+    const on: Bond = { a1: 1, a2: 2, order: 1 };
+    const short = opts({ hashedWedgeShort: true });
+    const far = (h: { far: number }[]) => Math.max(...h.map((x) => x.far));
+    const drawn = (adj?: Map<number, Bond[]>) => far(hashesOf(buildBondPrimitives(pair("C"), bond, short, ZOOM, undefined, undefined, undefined, adj).polys));
+    // (no count given - the wide end the second atom, as the first is the narrow one on a tie: its bonds, this one alone, then one more)
+    expect(drawn(new Map([[1, [bond]]]))).toBeCloseTo(pair("C")[1].x, 9);
+    expect(drawn(new Map([[1, [bond, on]]]))).toBeLessThan(pair("C")[1].x - 1e-6);
+    // (nothing known of the wide end's bonds: as bonds going on, as it was drawn before)
+    expect(drawn()).toBeCloseTo(drawn(new Map([[1, [bond, on]]])), 9);
+  });
+
+  it("reaches a bare wide end that no bond goes on from, whatever the style asks: the widest hash is the bond's end", () => {
+    const bond: Bond = { a1: 0, a2: 1, order: 1, stereo: "down" };
+    const far = (h: { far: number }[]) => Math.max(...h.map((x) => x.far));
+    // (its wide end bonded to nothing else: `deg` has it at one bond)
+    for (const fewest of [undefined, FEWEST_HASHES]) {
+      const at = hashesOf(buildBondPrimitives(pair("C"), bond, opts({ fewestHashes: fewest }), ZOOM, deg).polys);
+      const asked = hashesOf(buildBondPrimitives(pair("C"), bond, opts({ fewestHashes: fewest, hashedWedgeShort: true }), ZOOM, deg).polys);
+      expect(asked).toEqual(at);
+      expect(far(asked)).toBeCloseTo(pair("C")[1].x, 9);
+    }
   });
 
   it("never stops short below what the style asks: three where it asks for three (or as many as reaching gives), and never none", () => {
@@ -1356,7 +1399,7 @@ describe("a wedge with a bond carrying straight on", () => {
     { id: 4, x: 2.2, y: -1.3, el: "C" },
   ];
   const bonds: Bond[] = [
-    { a1: 0, a2: 1, order: 1, stereo: "up", stereoOrient: "reverse" },
+    { a1: 0, a2: 1, order: 1, stereo: "up", narrow: 0 },
     { a1: 1, a2: 2, order: 1, stereo: "none" },
     { a1: 1, a2: 3, order: 1, stereo: "none" },
   ];
@@ -1457,7 +1500,7 @@ describe("bold, hashed, dashed and dative bonds", () => {
     expect(bondKind(one({ display: "plain" }))).toBe("lines");
   });
 
-  it("draws a ring's bond toward the viewer as a wedge, narrow where stereoOrient says, saying no configuration", () => {
+  it("draws a ring's bond toward the viewer as a wedge, narrow where it is said to be, saying no configuration", () => {
     expect(bondKind(one({ display: "wedge" }))).toBe("wedge");
     const { lines, polys } = buildBondPrimitives(pair, one({ display: "wedge" }), opts(), ZOOM, deg);
     expect(lines).toHaveLength(0);
@@ -1683,13 +1726,9 @@ describe("a ring's bonds in perspective", () => {
       { id: 2, x: L, y: 0, el: "C" },
       { id: 3, x: -0.5 * L, y: 0.8 * L, el: "C" },
     ];
-    const deg = new Map([[0, 2], [1, 1], [2, 1]]);
-    const wedge: Bond = { a1: 2, a2: 0, order: 1, display: "wedge" };
-    // (narrow at 2: as stereoOrient puts it)
-    const narrow = wedgeNarrowAtom({ ...wedge, stereoOrient: "principle" }, deg);
     const bonds: Bond[] = [
       { a1: 0, a2: 1, order: 1, display: "bold" },
-      narrow === 2 ? wedge : { ...wedge, stereoOrient: "reverse" },
+      { a1: 2, a2: 0, order: 1, display: "wedge", narrow: 2 },
     ];
     const { polys } = buildAllPrimitives(atoms, bonds, opts(), 40);
     // the corner: four points, the first the atom itself, the third out past both shapes
@@ -2006,7 +2045,7 @@ describe("angles and lines that reach an atom", () => {
       { id: 4, x: 1.5, y: -1.5, el: "C" },
     ];
     const bonds: Bond[] = [
-      { a1: 0, a2: 1, order: 1, stereo: "up", stereoOrient: "reverse" },
+      { a1: 0, a2: 1, order: 1, stereo: "up", narrow: 0 },
       { a1: 1, a2: 2, order: 1, stereo: "none" },
       { a1: 1, a2: 3, order: 1, stereo: "none" },
     ];

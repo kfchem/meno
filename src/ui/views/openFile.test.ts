@@ -1,5 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { openable, openedAs, openedTexts, textsOf } from "./openFile";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { openable, openedAs, openedTexts, sayNoneTold, textsOf } from "./openFile";
+import { useNotices } from "../notices";
+import { useOnline } from "../../lib/plugins/online";
+import type { CatalogueEntry } from "../../lib/plugins/catalogue";
 import { registerKinds } from "../../lib/io/kinds";
 import { MANIFESTS } from "../../lib/plugins/known";
 
@@ -63,14 +66,14 @@ describe("openedAs", () => {
     for (const ext of [".meno", ".mol", ".sdf", ".rxn", ".xyz", ".pdb", ".cube", ".log", ".txt", ".py"]) expect(openable()).toContain(ext);
     // (nothing added or offered that reads or writes them: no calculation's files)
     expect(openable()).not.toContain(".out");
-    expect(openable()).not.toContain(".gjf");
+    expect(openable()).not.toContain(".orb");
     // (none added, all offered: what they read, to name one to add)
     registerKinds([], MANIFESTS);
-    expect(openable()).toEqual(expect.arrayContaining([".out", ".fchk", ".molden"]));
+    expect(openable()).toEqual(expect.arrayContaining([".out", ".ock", ".molden"]));
     // (what a plugin added writes, a calculation's input, as text to change)
-    registerKinds(MANIFESTS.filter((m) => m.id === "gaussian"));
-    expect(openable()).toEqual(expect.arrayContaining([".gjf", ".com"]));
-    expect(textsOf(openedAs("job.gjf", "# B3LYP/6-31G(d) Opt\n"))).toHaveLength(1);
+    registerKinds(MANIFESTS.filter((m) => m.id === "orbitron"));
+    expect(openable()).toEqual(expect.arrayContaining([".orb"]));
+    expect(textsOf(openedAs("job.orb", "> M2/B-mid opt\n"))).toHaveLength(1);
     registerKinds(MANIFESTS);
     expect(openable()).not.toContain(".ket");
     // (each once)
@@ -82,13 +85,71 @@ describe("openedAs", () => {
     afterEach(() => registerKinds([]));
 
     it("opens a calculation's output on a workspace, a log of something else as text", () => {
-      expect(openedAs("job.out", "\n                                 * O   R   C   A *\n")).toMatchObject({ kind: "workspace", label: "job.out" });
-      expect(openedAs("run.log", " Entering Gaussian System, Link 0=g16\n")).toMatchObject({ kind: "workspace" });
+      expect(openedAs("job.out", "\n                                 ~ Q   U   A   N   T   A ~\n")).toMatchObject({ kind: "workspace", label: "job.out" });
+      expect(openedAs("run.log", "Orbitron run begins, stage 0=orb26\n")).toMatchObject({ kind: "workspace" });
       expect(textsOf(openedAs("build.log", "compiled in 3 s\n"))).toHaveLength(1);
     });
   });
 
   it("opens a calculation's output as text where no plugin added reads it: Meno knows no program", () => {
-    expect(textsOf(openedAs("run.log", " Entering Gaussian System, Link 0=g16\n"))).toHaveLength(1);
+    expect(textsOf(openedAs("run.log", "Orbitron run begins, stage 0=orb26\n"))).toHaveLength(1);
+  });
+});
+
+describe("texts nothing told, opened while the plugins online are not listed", () => {
+  afterEach(() => {
+    useNotices.setState({ notices: [] });
+    useOnline.setState({ state: "unlisted", catalogue: undefined });
+    vi.restoreAllMocks();
+  });
+  const none = async () => null;
+
+  it("are said once, with the button that lists them - a plain text not - and nothing at all once they are listed", () => {
+    sayNoneTold(["water.out", "notes.txt", "run.log"], () => {}, none);
+    const [n] = useNotices.getState().notices;
+    expect([n.title, n.text, n.action?.label, n.stays]).toEqual(["Opened as text", "No plugin added reads water.out, run.log.", "List the plugins online", true]);
+    useNotices.setState({ notices: [] });
+    sayNoneTold(["notes.txt", "table.csv"], () => {}, none);
+    expect(useNotices.getState().notices).toEqual([]);
+    useOnline.setState({ state: "listed", catalogue: { schema: 1, issued: "", plugins: [] } });
+    sayNoneTold(["water.out"], () => {}, none);
+    expect(useNotices.getState().notices).toEqual([]);
+  });
+
+  it("listed, say in the notice's place what each is and the plugin that reads it, with Add - added, the file read again", async () => {
+    const online = await import("../../lib/plugins/online");
+    const workers = await import("../../lib/calc/addOnline");
+    const far = { id: "far", name: "Far" } as CatalogueEntry;
+    vi.spyOn(online, "listOnline").mockImplementation(async () => void useOnline.setState({ state: "listed", catalogue: { schema: 1, issued: "", plugins: [far] } }));
+    const added = vi.spyOn(workers, "addOnline").mockResolvedValue();
+    const again = vi.fn();
+    const kind = { id: "far-out", name: "Far output", extensions: [".far"], suggest: ["far"] };
+    useNotices.getState().show({ id: "other", title: "Other", text: "Before it." });
+    sayNoneTold(["water.out", "other.out"], again, async (name) => (name === "water.out" ? kind : null));
+    useNotices.getState().notices[1].action!.run();
+    await vi.waitFor(() => expect(useNotices.getState().notices[1].action?.label).toBe("Add Far"));
+    // (in its place: after the one before it)
+    expect(useNotices.getState().notices.map((n) => [n.id, n.text])).toEqual([
+      ["other", "Before it."],
+      ["none-told", "water.out is Far output: the Far plugin reads it."],
+    ]);
+    useNotices.getState().notices[1].action!.run();
+    await vi.waitFor(() => expect(again).toHaveBeenCalledWith(["water.out"]));
+    expect(added).toHaveBeenCalledWith(far);
+    expect(useNotices.getState().notices.map((n) => n.id)).toEqual(["other"]);
+  });
+
+  it("listed, say so where none of them is read by a plugin online - or why the list is not here", async () => {
+    const online = await import("../../lib/plugins/online");
+    const listing = vi.spyOn(online, "listOnline").mockImplementation(async () => void useOnline.setState({ state: "listed", catalogue: { schema: 1, issued: "", plugins: [] } }));
+    sayNoneTold(["water.out"], () => {}, none);
+    useNotices.getState().notices[0].action!.run();
+    await vi.waitFor(() => expect(useNotices.getState().notices[0].text).toBe("No plugin online reads water.out."));
+    listing.mockImplementation(async () => void useOnline.setState({ state: "failed", problem: "Listing them needs the network." }));
+    useOnline.setState({ state: "unlisted", catalogue: undefined });
+    useNotices.setState({ notices: [] });
+    sayNoneTold(["water.out"], () => {}, none);
+    useNotices.getState().notices[0].action!.run();
+    await vi.waitFor(() => expect(useNotices.getState().notices[0].text).toBe("Listing them needs the network."));
   });
 });

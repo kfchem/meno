@@ -11,7 +11,7 @@ import { atomsTogether, bondsByDistance } from "../../../../utils/structureParse
 import { rememberOutput } from "../../../../lib/calc/asks";
 import { readOutput, readStructureFile } from "../../../../lib/calc/read";
 import type { StructureRead } from "../../../../lib/io/structures";
-import { stackedRecords } from "./stacks";
+import { alignedRecords, stackedRecords } from "./stacks";
 import { useNotices } from "../../../notices";
 import { STYLE_3D, type Style3D } from "../../../../lib/chem/style3d";
 
@@ -135,7 +135,8 @@ export function openedPlace(
  */
 export function stackedRead({ records, ...read }: StructureRead): ProcessedFileResult {
   if (!records || records.length < 2) return read;
-  const model = stackedRecords(read.model, records);
+  // (each record that is the structure before it lined up on that one: lib/layout/morph)
+  const model = alignedRecords(stackedRecords(read.model, records), records);
   const first = new Set(records[0].atoms);
   const atoms = model.atoms.filter((a) => first.has(a.id));
   const centroid = atoms.length ? { x: atoms.reduce((t, a) => t + a.x, 0) / atoms.length, y: atoms.reduce((t, a) => t + a.y, 0) / atoms.length } : read.centroid;
@@ -153,7 +154,7 @@ export function editorModelOf(mdl: { atoms: any[]; bonds: any[] }): Model {
       b: b.b,
       order: (b.order as 1 | 2 | 3) ?? 1,
       stereo: b.stereo ?? "none",
-      stereoOrient: b.stereoOrient ?? "principle",
+      ...(typeof b.narrow === "number" ? { narrow: b.narrow } : {}),
       ...(b.doubleMode ? { doubleMode: b.doubleMode } : {}),
       ...(b.display ? { display: b.display } : {}),
       ...(b.dative ? { dative: true } : {}),

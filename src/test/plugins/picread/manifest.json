@@ -1,0 +1,32 @@
+{
+  "id": "picread",
+  "name": "Picread",
+  "version": "0.2.0",
+  "description": "Reads structures from pictures with Picread's made-up model.",
+  "licence": "MIT",
+  "homepage": "https://example.org/picread",
+  "environment": "uv",
+  "systems": [
+    "macos",
+    "windows"
+  ],
+  "roles": [
+    {
+      "role": "pictures",
+      "unsure": {
+        "below": 0.7,
+        "basis": "Made up for the tests."
+      }
+    }
+  ],
+  "downloads": [
+    {
+      "file": "picread.pth",
+      "name": "Picread's trained model",
+      "licence": "MIT",
+      "url": "https://huggingface.co/example/picread/resolve/0123456789abcdef0123456789abcdef01234567/picread.pth",
+      "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "bytes": 900000000
+    }
+  ]
+}

@@ -658,3 +658,18 @@ describe("conventions the rules give", () => {
     expect(layoutMetrics(turned(g, 180)).ringOrder).toBeGreaterThan(0);
   });
 });
+
+describe("an atom asked to sit in a line (`straight`)", () => {
+  // C=C-C, its middle atom 1 at 180 degrees or at 120
+  const chain = (deg: number, straight?: boolean[]) => {
+    const t = (deg * Math.PI) / 180;
+    return layoutMetrics({ x: [-1, 0, -Math.cos(t)], y: [0, 0, Math.sin(t)], edges: [[0, 1], [1, 2]], orders: [2, 1], ...(straight ? { straight } : {}) });
+  };
+
+  it("measures it against a straight line: no worse straight than bent, and the other way without", () => {
+    const asked = [false, true, false];
+    expect(chain(180, asked).angleError).toBeLessThan(chain(120, asked).angleError);
+    expect(chain(180, asked).score).toBeLessThan(chain(120, asked).score);
+    expect(chain(120).angleError).toBeLessThan(chain(180).angleError);
+  });
+});

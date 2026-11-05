@@ -29,6 +29,7 @@ import { isMetal, METAL_BOND, orderOf, perceive, type LayoutInput, type Molecule
 import { extendRingSystem, metalHub, misshapen, narrowGap, placeRingSystem, regularize, ringSystemVariants } from "./ringSystem";
 import { bridgeAcross } from "./bridge";
 import { drawnRingSets, keptFlat } from "./ringSets";
+import { schlegel, schlegelFaces } from "./schlegel";
 import { affineFit, axialOut, cageCore, flatCost, isCage, keepsConfigurations, projectCage, solidOf, templateOnBond, tiedViews, type CageView } from "./cage";
 import { ringShape } from "./conformation";
 import { readStereo, sameConfiguration, type DrawnAtom, type DrawnBond } from "./drawn";
@@ -273,6 +274,7 @@ function measureDrawing(input: LayoutInput, mol: Molecule, out: Layout2D): Layou
     y,
     edges,
     orders,
+    straight: input.atoms.map((a) => !!a.linear),
     wedged,
     labelled,
     elements,
@@ -960,6 +962,7 @@ function byAHair(
     y: y[i],
     el: a.el,
     hs: a.tetra ? Number(a.tetra.neighbours.includes(-1)) : mol.hs[i],
+    ...(a.charge ? { charge: a.charge } : {}),
     ...(depth[i] != null ? { z: depth[i]! } : {}),
     ...(a.tetra && centres.includes(i) ? { centre: true } : {}),
   }));
@@ -1003,6 +1006,7 @@ function misread(input: LayoutInput, mol: Molecule, out: Layout2D): Set<number> 
     el: a.el,
     // (a centre's H as its configuration has it, however many the input gives)
     hs: a.tetra ? Number(a.tetra.neighbours.includes(-1)) : mol.hs[i],
+    ...(a.charge ? { charge: a.charge } : {}),
     ...(out.depth[i] != null ? { z: out.depth[i]! } : {}),
     ...(out.solid[i] && a.tetra ? { centre: true } : {}),
   }));
@@ -1134,6 +1138,9 @@ function layoutSystem(mol: Molecule, i: number, asSolid = false, asWhole = false
     const views = [cage, ...[1, 2].flatMap((rank) => projectCage(mol, sys, rank) ?? [])];
     return { ...cage, solid: true, views };
   }
+  // a closed surface too large for a cage - C60 - seen through one face (schlegel.ts)
+  const faces = schlegelFaces(mol, sys);
+  if (faces) return { pos: schlegel(mol, sys, faces) };
   const flat = layoutFlat(mol, sys);
   // (the room the system's bonds out of it have counted: a flat drawing that leaves a substituent none is not one without a fault)
   const flatFaults = flatCost(mol, sys, flat.pos, flat.depth, true);
@@ -2032,7 +2039,11 @@ function stereoScore(
     }),
     ...stereo.hydrogens.map(() => undefined),
   ];
-  return layoutMetrics({ x, y, edges, orders, wedged, elements, hydrogens, labelled, perspective, depth: depths, tetra, hydrogenRoom: 1 }).score;
+  // (a straight end measured as `scorer` measures it: the drawings put to this are
+  // tied by `scorer`, the straight end counted alike in each, so it keeps the
+  // measure the same rather than deciding between them - no test can tell it apart)
+  const straight = piece.map((a) => mol.straight.has(a));
+  return layoutMetrics({ x, y, edges, orders, straight, wedged, elements, hydrogens, labelled, perspective, depth: depths, tetra, hydrogenRoom: 1 }).score;
 }
 
 /** The measures a piece is drawn by, as it has its depth: blades turned as a propeller's (`lift`) or none. */
@@ -2546,6 +2557,7 @@ export function scorer(
       y: piece.map((a) => pos.get(a)!.y),
       edges,
       orders,
+      straight: piece.map((a) => mol.straight.has(a)),
       elements,
       hydrogens,
       labelled,

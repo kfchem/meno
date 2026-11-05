@@ -183,7 +183,8 @@ export type Shortest = { film?: number; loop?: number; change?: number };
  * the plugin it is for (`presets/<id>/`), and never runs one.
  */
 export type PresetLook = LookDecl & { file: string };
-export type PresetStudio = { id: string; label: string; description?: string; file: string };
+/** A studio a preset plugin brings: its id, label and description, the file that makes it, and what it fixes while chosen (`fixed`: the background it is itself, say), as a motion fixes what it is made with. */
+export type PresetStudio = { id: string; label: string; description?: string; file: string; fixed?: FixedChoice[] };
 export type PresetMotion = MotionDecl & { file: string };
 export type PresetsDecl = {
   /** The interface it brings them through: one its `depends` uses, of the plugin that interface is that one's. */
@@ -236,12 +237,39 @@ export type UnsureDecl = { below: number; basis: string };
  * and, of a kind that takes nothing in (Generate), whether it makes its
  * molecules from seeds wired in (`seeds`); and, of a kind a lone
  * atom passes through (steps `LONE_ATOM_PASSES`), whether its program
- * takes none (`noLoneAtom`).
+ * takes none (`noLoneAtom`); and how its options ask for a solvation, as
+ * its program says one it ran in (`solvation`: `SolvationDecl`).
  * A manifest may say several kinds in one, with the same programs and
  * options.
  */
 /** `roleOptions`: its options are its role's, the step having said none of its own (Settings' choices for the role its defaults: workflow/doers `optionsFor`). */
-export type StepDecl = { kind: StepKind; programs: string[]; options: Option[]; roleOptions?: true; takes?: ValueKind[]; files?: string[]; seeds?: true; noLoneAtom?: true };
+export type StepDecl = { kind: StepKind; programs: string[]; options: Option[]; roleOptions?: true; takes?: ValueKind[]; files?: string[]; seeds?: true; noLoneAtom?: true; solvation?: SolvationDecl };
+
+/**
+ * How a step's options ask for a solvation, in the words its program says
+ * one it ran in (docs/WORKFLOWS.md, *Solvation as asked*): `says`, those
+ * words with each option's value put in where its id stands in braces -
+ * CREST's "ALPB({solvent})", its solvent asked "water" said "ALPB(water)";
+ * and the option and value that ask for none (`none`), the gas phase. Each
+ * option it names is a choice of the step's own. Meno holds what each job
+ * says it ran in to that (workflow/programs `notAsAsked`).
+ */
+export type SolvationDecl = { says: string; none: { id: string; is: string } };
+
+/** The option ids `says` names, each in braces. */
+const SAYS_ID = /\{([^{}]*)\}/g;
+
+/** A step's solvation, as its manifest says it - none where any part is not as `SolvationDecl` has it. */
+function solvationOf(v: unknown, options: readonly Option[]): SolvationDecl | undefined {
+  const r = v as Record<string, unknown> | null;
+  const none = r?.none as Record<string, unknown> | null | undefined;
+  if (typeof r?.says !== "string" || !r.says.trim() || r.says.length > 80 || typeof none?.id !== "string" || typeof none.is !== "string") return undefined;
+  const choice = (id: string) => options.find((o) => o.id === id && o.type === "choice");
+  const named = [...r.says.matchAll(SAYS_ID)].map((m) => m[1]);
+  const asNone = choice(none.id);
+  if (!named.length || !named.every((id) => choice(id)) || asNone?.type !== "choice" || !asNone.choices.some((c) => c.value === none.is)) return undefined;
+  return { says: r.says.trim(), none: { id: none.id, is: none.is } };
+}
 
 /** The systems Meno runs on, as a plugin names those it can be added on. */
 export const SYSTEMS = ["macos", "windows", "linux"] as const;
@@ -339,10 +367,19 @@ export const WORKER = "worker.py";
 /** A program or library a plugin wraps, and the version its lock or pin fixes (a test checks it against them). */
 export type UsesDecl = { name: string; version: string };
 
+/**
+ * The plugin contracts this Meno speaks: a manifest says which it is written to (`contract`, unsaid: 1, the contract
+ * as docs/PLUGINS.md has it); one of a contract Meno does not speak is refused, as a catalogue's entry of one is not
+ * offered.
+ */
+export const CONTRACTS: readonly number[] = [1];
+
 /** A plugin's manifest, as Meno reads it. */
 export type Manifest = {
   id: string;
   name: string;
+  /** The plugin contract it is written to (`CONTRACTS`). */
+  contract: number;
   /** Its own version, semver, bumped whenever its files change (docs/PLUGINS.md, *Versions*). What it uses is `uses`, never this. */
   version: string;
   /** The programs and libraries it wraps, each with the version its lock or pin fixes: said beside its own version. */
@@ -388,7 +425,8 @@ export type Manifest = {
 };
 
 const ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
-const EXTENSION = /^\.[a-z0-9]{1,12}$/;
+/** A file name's end, as a kind says its files go by: lower case, with its dot. */
+export const EXTENSION = /^\.[a-z0-9]{1,12}$/;
 /** A mark shorter than this would claim too much. */
 const MARK_LEAST = 6;
 const MARK_MOST = 200;
@@ -401,7 +439,8 @@ const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 const ids = (v: unknown): string[] => [...new Set(list(v).filter(isId))];
 const extensionsOf = (v: unknown): string[] => list(v).filter((e): e is string => typeof e === "string" && EXTENSION.test(e));
 
-function markOf(v: unknown): Mark | null {
+/** A mark, as a manifest says it; none, where it is not one Meno takes. */
+export function markOf(v: unknown): Mark | null {
   const m = v as Record<string, unknown> | null;
   const t = text(m?.text, MARK_MOST);
   if (!t || folded(t).length < MARK_LEAST) return null;
@@ -527,21 +566,28 @@ function acceptQuotedEnergies(v: unknown): QuotedEnergyDecl[] {
   return out;
 }
 
-/** A plugin's tables of atoms, as papers quote its program's, each checked: an id, at least one heading, columns of the vocabulary - each once, x, y and z among them, and the atom's atomic number or its symbol; what is not understood left out. */
+/** How many tables of atoms a plugin declares at most, and lines heading one or its columns. */
+export const QUOTED_TABLES_MOST = 4;
+const QUOTED_LINES_MOST = 8;
+
+/** A table of atoms, as papers quote its program's, checked: an id, at least one heading, columns of the vocabulary - each once, x, y and z among them, and the atom's atomic number or its symbol; none, where it is not that. */
+export function quotedTableOf(raw: unknown): QuotedTableDecl | null {
+  const lines = (x: unknown) => list(x).flatMap((l) => (typeof l === "string" && l.trim() && l.length <= 80 ? [l.trim()] : [])).slice(0, QUOTED_LINES_MOST);
+  const r = raw as Record<string, unknown> | null;
+  if (typeof r?.id !== "string" || !/^[a-z][a-z0-9-]{0,39}$/.test(r.id)) return null;
+  const headings = lines(r.headings);
+  const columns = list(r.columns).filter((c): c is QuotedColumn => typeof c === "string" && (QUOTED_COLUMNS as readonly string[]).includes(c));
+  if (!headings.length || columns.length !== list(r.columns).length || new Set(columns).size !== columns.length) return null;
+  if (!["x", "y", "z"].every((c) => columns.includes(c as QuotedColumn)) || columns.includes("atomic-number") === columns.includes("element")) return null;
+  return { id: r.id, headings, heads: lines(r.heads), columns };
+}
+
+/** A plugin's tables of atoms, as papers quote its program's, each checked (`quotedTableOf`); what is not understood left out. */
 function acceptQuotedTables(v: unknown): QuotedTableDecl[] {
-  const out: QuotedTableDecl[] = [];
-  const lines = (x: unknown) => list(x).flatMap((l) => (typeof l === "string" && l.trim() && l.length <= 80 ? [l.trim()] : [])).slice(0, 8);
-  for (const raw of list(v)) {
-    const r = raw as Record<string, unknown> | null;
-    if (typeof r?.id !== "string" || !/^[a-z][a-z0-9-]{0,39}$/.test(r.id)) continue;
-    const headings = lines(r.headings);
-    const columns = list(r.columns).filter((c): c is QuotedColumn => typeof c === "string" && (QUOTED_COLUMNS as readonly string[]).includes(c));
-    if (!headings.length || columns.length !== list(r.columns).length || new Set(columns).size !== columns.length) continue;
-    if (!["x", "y", "z"].every((c) => columns.includes(c as QuotedColumn)) || columns.includes("atomic-number") === columns.includes("element")) continue;
-    out.push({ id: r.id, headings, heads: lines(r.heads), columns });
-    if (out.length >= 4) break;
-  }
-  return out;
+  return list(v)
+    .map(quotedTableOf)
+    .filter((t): t is QuotedTableDecl => t != null)
+    .slice(0, QUOTED_TABLES_MOST);
 }
 
 const LOOK_ID = /^[a-z][a-z0-9-]{0,39}$/;
@@ -658,7 +704,8 @@ function acceptUses(v: unknown): UsesDecl[] {
   return out;
 }
 
-const PROGRAM = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,39}$/;
+/** A program's name, as a plugin runs it. */
+export const PROGRAM = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,39}$/;
 
 /** The kinds of step a manifest's step says - each one Meno defines - with what they share. */
 function stepsOf(v: unknown, roles: readonly RoleDecl[]): StepDecl[] {
@@ -672,17 +719,21 @@ function stepsOf(v: unknown, roles: readonly RoleDecl[]): StepDecl[] {
   // (none said, and it fills the role of the kind's name: the role's - the same work, asked as a step)
   const roleOf = (kind: StepKind) => (s?.options === undefined ? roles.find((r) => r.role === kind && r.options.length) : undefined);
   const optionsFor = (kind: StepKind) => (s?.options !== undefined ? options : (roleOf(kind)?.options ?? []));
-  return kinds.map((kind) => ({
-    kind,
-    programs,
-    options: optionsFor(kind),
-    ...(roleOf(kind) ? { roleOptions: true as const } : {}),
-    ...(takes.length ? { takes: [...takes] } : {}),
-    ...(files.length ? { files: [...files] } : {}),
-    ...(s?.seeds === true ? { seeds: true as const } : {}),
-    // (said only of a kind a lone atom passes through: of any other, what its program cannot take is its to refuse)
-    ...(s?.noLoneAtom === true && LONE_ATOM_PASSES.includes(kind) ? { noLoneAtom: true as const } : {}),
-  }));
+  return kinds.map((kind) => {
+    const solvation = solvationOf(s?.solvation, optionsFor(kind));
+    return {
+      kind,
+      programs,
+      options: optionsFor(kind),
+      ...(roleOf(kind) ? { roleOptions: true as const } : {}),
+      ...(takes.length ? { takes: [...takes] } : {}),
+      ...(files.length ? { files: [...files] } : {}),
+      ...(s?.seeds === true ? { seeds: true as const } : {}),
+      // (said only of a kind a lone atom passes through: of any other, what its program cannot take is its to refuse)
+      ...(s?.noLoneAtom === true && LONE_ATOM_PASSES.includes(kind) ? { noLoneAtom: true as const } : {}),
+      ...(solvation ? { solvation } : {}),
+    };
+  });
 }
 
 /** A program's file, as a system has it: a name, not a path. */
@@ -810,12 +861,13 @@ function presetsOf(v: unknown, depends: readonly DependDecl[]): PresetsDecl | nu
   const motions = withFile(r.motions, acceptMotions(r.motions));
   const studios = withFile(
     r.studios,
-    list(r.studios).flatMap((raw): { id: string; label: string; description?: string }[] => {
+    list(r.studios).flatMap((raw): { id: string; label: string; description?: string; fixed?: FixedChoice[] }[] => {
       const x = raw as Record<string, unknown> | null;
       const label = typeof x?.label === "string" ? x.label.trim().slice(0, 80) : "";
       if (typeof x?.id !== "string" || !LOOK_ID.test(x.id) || x.id === PLAIN_STUDIO || !label) return [];
       const description = typeof x.description === "string" && x.description.trim() ? x.description.trim().slice(0, 200) : undefined;
-      return [{ id: x.id, label, ...(description ? { description } : {}) }];
+      const fixed = fixedOf(x.fixed);
+      return [{ id: x.id, label, ...(description ? { description } : {}), ...(fixed.length ? { fixed } : {}) }];
     }),
   );
   if (!looks || !motions || !studios || new Set(studios.map((x) => x.id)).size !== studios.length) return null;
@@ -985,6 +1037,9 @@ export function acceptManifest(raw: unknown): Manifest | null {
   const name = text(m.name, 60);
   const version = text(m.version, 40);
   if (!id || !name || !version) return null;
+  // (the contract it is written to: one Meno speaks, or none)
+  const contract = m.contract === undefined ? 1 : m.contract;
+  if (typeof contract !== "number" || !CONTRACTS.includes(contract)) return null;
   if (m.environment !== undefined && m.environment !== "uv" && m.environment !== "pixi") return null;
   const environment = m.environment as Maker | undefined;
   const kinds = read(m.kinds, kindOf, (k) => k.id);
@@ -1059,6 +1114,7 @@ export function acceptManifest(raw: unknown): Manifest | null {
     id,
     name,
     version,
+    contract,
     uses: acceptUses(m.uses),
     description: text(m.description, 300) ?? "",
     licence: text(m.licence, 60) ?? "",

@@ -24,11 +24,6 @@
   },
   "bundle": {
     "resources": [
-      "resources/plugins/*/manifest.json",
-      "resources/plugins/*/*.py",
-      "resources/plugins/*/*.lock",
-      "resources/plugins/*/pixi.toml",
-      "resources/plugins/*/LICENSE",
       "resources/licenses/*"
     ],
     "macOS": {
