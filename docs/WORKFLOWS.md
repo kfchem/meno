@@ -661,7 +661,11 @@ one of the kinds of calculation it does (decided: 16):
   it was wired, at its run.
 - **A wire let go on empty space** opens Quick Add already at
   *Calculations*, showing only the kinds that take what the wire
-  carries - and a plugin only where it does one of them.
+  carries - and a plugin only where it does one of them. From a
+  Generate's exit, or Conformers' *Failed* - where structures that leave
+  their stereo open come out - it offers *Stereoisomers* first: Meno's
+  line first, and it first in it, the rest as they are (workflow/offered
+  `offeredFirst`, 2026-11-06).
 
 ### Wires
 
@@ -2027,7 +2031,8 @@ Built, as the maintainer chose from pictures (decided: 18, 19):
   stereoisomers RDKit does not count. The canvas's *3D structure* asks
   which is meant; a step cannot ask, and never chooses. The others are
   made, and the step's line names those not made by their places
-  (*structure 3 of 4 leaves stereo open: draw it, wedges and all*). Each
+  (*structure 3 of 4 leaves stereo open: put Stereoisomers before
+  Conformers*, as each one's record says it, 2026-11-06). Each
   structure drawn that is not made - its stereo left open, one atom alone,
   or one that could not be made - goes to the step's *Failed* exit as it
   came, its record with it, failed - no result to stand on, so a table

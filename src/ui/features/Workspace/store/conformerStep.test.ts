@@ -364,7 +364,7 @@ describe("Sketchkit's conformer search as a step, on structures drawn", () => {
     // (methanol never asked for conformers: only water, and ethane, which Sketchkit cannot make here)
     expect(asked.map((a) => readMolfile(a.molblock)!.atoms.length)).toEqual([3, 2]);
     expect(step.ran?.ok).toBe(true);
-    expect(step.ran?.said).toMatch(/ · 1 conformer · structure 2 of 3 could not be made in 3D · structure 3 of 3 leaves stereo open: draw it, wedges and all$/);
+    expect(step.ran?.said).toMatch(/ · 1 conformer · structure 2 of 3 could not be made in 3D · structure 3 of 3 leaves stereo open: put Stereoisomers before Conformers$/);
   });
 
   it("makes one whose open stereo can go one way only in 3D - a bridgehead its rings fix: no choice was made", async () => {
@@ -388,14 +388,14 @@ describe("Sketchkit's conformer search as a step, on structures drawn", () => {
     worker.openAs = { atoms: [], bonds: [0, 1], isomers: 1 };
     const { step } = await searched(undefined, [], "allene");
     expect(asked.map((a) => readMolfile(a.molblock)!.atoms.length)).toEqual([3, 2]);
-    expect(step.ran?.said).toMatch(/ · structure 3 of 3 leaves stereo open: draw it, wedges and all$/);
+    expect(step.ran?.said).toMatch(/ · structure 3 of 3 leaves stereo open: put Stereoisomers before Conformers$/);
   });
 
   it("makes none where every structure leaves stereo open - no conformer asked for - each in its Failed exit as it came, saying what to put before it", async () => {
     worker.open = "all";
     const { step, st } = await searched();
     expect(asked).toHaveLength(0);
-    expect(step.ran).toMatchObject({ ok: true, said: expect.stringMatching(/0 conformers · structures 1, 2 and 3 of 3 leave stereo open: draw it, wedges and all$/) });
+    expect(step.ran).toMatchObject({ ok: true, said: expect.stringMatching(/0 conformers · structures 1, 2 and 3 of 3 leave stereo open: put Stereoisomers before Conformers$/) });
     const failed = st().sets.find((b) => b.made?.step === step.id && b.made.exit === "failed")!;
     expect(failed.made?.holds).toBe("structures");
     expect((failed.members ?? []).map((m) => ("structure" in m ? m.record?.status : null))).toEqual(Array(3).fill({ failed: "1 stereocentre not specified: put Stereoisomers before Conformers" }));
@@ -459,8 +459,8 @@ describe("Sketchkit's conformer search as a step, on structures drawn", () => {
   it("says the structures not made, one or several", () => {
     expect(notMade([3], 4)).toBe("structure 3 of 4 could not be made in 3D");
     expect(notMade([1, 2, 4], 5)).toBe("structures 1, 2 and 4 of 5 could not be made in 3D");
-    expect(stereoOpen([2], 3)).toBe("structure 2 of 3 leaves stereo open: draw it, wedges and all");
-    expect(stereoOpen([1, 3], 3)).toBe("structures 1 and 3 of 3 leave stereo open: draw it, wedges and all");
+    expect(stereoOpen([2], 3)).toBe("structure 2 of 3 leaves stereo open: put Stereoisomers before Conformers");
+    expect(stereoOpen([1, 3], 3)).toBe("structures 1 and 3 of 3 leave stereo open: put Stereoisomers before Conformers");
     expect(stereoFree([2], 3)).toBe("structure 2 of 3 made with its stereo free: no stereoisomer of it holds in 3D");
     expect(stereoFree([1, 2], 3)).toBe("structures 1 and 2 of 3 made with their stereo free: no stereoisomer of them holds in 3D");
     expect(bareLeft([2, 4], 5)).toBe("structures 2 and 4 of 5 left out: one atom alone has no 3D structure");
