@@ -57,7 +57,6 @@ describe("Plugins in Settings, with the list online", () => {
       catalogue: {
         schema: 1,
         issued: "2026-11-10T00:00:00Z",
-        serial: 4,
         plugins: [entry({ id: "sketch", name: "Sketch interface", description: "Draws a structure from its name.", roles: ["smiles"], terms: "Free for academic use.", cite: "A. Author, J. Chem. 1 (2020) 1." })] as never,
       },
     });
@@ -79,7 +78,6 @@ describe("Plugins in Settings, with the list online", () => {
       catalogue: {
         schema: 1,
         issued: "2026-11-10T00:00:00Z",
-        serial: 4,
         plugins: [entry({ id: HERE.id, name: HERE.name, version: "99.0.0" }), entry({ id: "winonly", name: "Windows thing", systems: ["windows"] }), entry({ id: "future", name: "Future thing", contract: 2 })] as never,
       },
     });
@@ -106,7 +104,7 @@ describe("Plugins in Settings, with the list online", () => {
 
   it("says why there is no list, in Meno's warning colour, and how it is the one from before where it is", () => {
     expect(drawn({ state: "failed", problem: "The plugins online could not be listed: Its signature is not Meno's." })).toMatch(/text-accel-accent"[^>]*>The plugins online could not be listed: Its signature is not Meno&#x27;s\.</);
-    const kept = drawn({ state: "listed", kept: "offline", fetchedAt: "2026-11-09T09:30:00Z", catalogue: { schema: 1, issued: "2026-11-09T00:00:00Z", serial: 3, plugins: [] } });
+    const kept = drawn({ state: "listed", kept: "offline", fetchedAt: "2026-11-09T09:30:00Z", catalogue: { schema: 1, issued: "2026-11-09T00:00:00Z", plugins: [] } });
     expect(kept).toMatch(/The list as it was on .+?: a newer one could not be fetched \(offline\)\./);
     expect(kept).toMatch(/>Look again</);
   });

@@ -335,7 +335,7 @@ picture for other programs.
 
 ## The Blender plugin
 
-`src-tauri/resources/plugins/blender/`: a worker in Python alone (made by
+`meno-plugins/plugins/blender/`: a worker in Python alone (made by
 uv, no package), and the script Blender runs, `render.py`.
 
 - **Meno's own Blender** (the maintainer, 2026-10-12): the plugin always
@@ -387,8 +387,8 @@ uv, no package), and the script Blender runs, `render.py`.
   the molecule however its shapes overlap. Meno's looks keep the picture's place
   and size.
 - **Looks, studios and motions of Blender's own** come from preset plugins
-  that use the renderer through its interface `preset` (docs/plugins/
-  blender-presets.md); the renderer itself has none. Meno carries one,
+  that use the renderer through its interface `preset` (meno-plugins/docs/
+  blender-presets.md); the renderer itself has none. The plugins online have one,
   **Film looks and motions** (`blender-presets`), described below. The
   renderer runs a preset's chosen file inside its Blender, after it has
   built Meno's scene, against what the interface hands it: the request,

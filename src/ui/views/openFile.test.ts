@@ -66,14 +66,14 @@ describe("openedAs", () => {
     for (const ext of [".meno", ".mol", ".sdf", ".rxn", ".xyz", ".pdb", ".cube", ".log", ".txt", ".py"]) expect(openable()).toContain(ext);
     // (nothing added or offered that reads or writes them: no calculation's files)
     expect(openable()).not.toContain(".out");
-    expect(openable()).not.toContain(".gjf");
+    expect(openable()).not.toContain(".orb");
     // (none added, all offered: what they read, to name one to add)
     registerKinds([], MANIFESTS);
-    expect(openable()).toEqual(expect.arrayContaining([".out", ".fchk", ".molden"]));
+    expect(openable()).toEqual(expect.arrayContaining([".out", ".ock", ".molden"]));
     // (what a plugin added writes, a calculation's input, as text to change)
-    registerKinds(MANIFESTS.filter((m) => m.id === "gaussian"));
-    expect(openable()).toEqual(expect.arrayContaining([".gjf", ".com"]));
-    expect(textsOf(openedAs("job.gjf", "# B3LYP/6-31G(d) Opt\n"))).toHaveLength(1);
+    registerKinds(MANIFESTS.filter((m) => m.id === "orbitron"));
+    expect(openable()).toEqual(expect.arrayContaining([".orb"]));
+    expect(textsOf(openedAs("job.orb", "> M2/B-mid opt\n"))).toHaveLength(1);
     registerKinds(MANIFESTS);
     expect(openable()).not.toContain(".ket");
     // (each once)
@@ -85,14 +85,14 @@ describe("openedAs", () => {
     afterEach(() => registerKinds([]));
 
     it("opens a calculation's output on a workspace, a log of something else as text", () => {
-      expect(openedAs("job.out", "\n                                 * O   R   C   A *\n")).toMatchObject({ kind: "workspace", label: "job.out" });
-      expect(openedAs("run.log", " Entering Gaussian System, Link 0=g16\n")).toMatchObject({ kind: "workspace" });
+      expect(openedAs("job.out", "\n                                 ~ Q   U   A   N   T   A ~\n")).toMatchObject({ kind: "workspace", label: "job.out" });
+      expect(openedAs("run.log", "Orbitron run begins, stage 0=orb26\n")).toMatchObject({ kind: "workspace" });
       expect(textsOf(openedAs("build.log", "compiled in 3 s\n"))).toHaveLength(1);
     });
   });
 
   it("opens a calculation's output as text where no plugin added reads it: Meno knows no program", () => {
-    expect(textsOf(openedAs("run.log", " Entering Gaussian System, Link 0=g16\n"))).toHaveLength(1);
+    expect(textsOf(openedAs("run.log", "Orbitron run begins, stage 0=orb26\n"))).toHaveLength(1);
   });
 });
 
@@ -111,7 +111,7 @@ describe("texts nothing told, opened while the plugins online are not listed", (
     useNotices.setState({ notices: [] });
     sayNoneTold(["notes.txt", "table.csv"], () => {}, none);
     expect(useNotices.getState().notices).toEqual([]);
-    useOnline.setState({ state: "listed", catalogue: { schema: 1, issued: "", serial: 1, plugins: [] } });
+    useOnline.setState({ state: "listed", catalogue: { schema: 1, issued: "", plugins: [] } });
     sayNoneTold(["water.out"], () => {}, none);
     expect(useNotices.getState().notices).toEqual([]);
   });
@@ -120,7 +120,7 @@ describe("texts nothing told, opened while the plugins online are not listed", (
     const online = await import("../../lib/plugins/online");
     const workers = await import("../../lib/calc/addOnline");
     const far = { id: "far", name: "Far" } as CatalogueEntry;
-    vi.spyOn(online, "listOnline").mockImplementation(async () => void useOnline.setState({ state: "listed", catalogue: { schema: 1, issued: "", serial: 1, plugins: [far] } }));
+    vi.spyOn(online, "listOnline").mockImplementation(async () => void useOnline.setState({ state: "listed", catalogue: { schema: 1, issued: "", plugins: [far] } }));
     const added = vi.spyOn(workers, "addOnline").mockResolvedValue();
     const again = vi.fn();
     const kind = { id: "far-out", name: "Far output", extensions: [".far"], suggest: ["far"] };
@@ -141,7 +141,7 @@ describe("texts nothing told, opened while the plugins online are not listed", (
 
   it("listed, say so where none of them is read by a plugin online - or why the list is not here", async () => {
     const online = await import("../../lib/plugins/online");
-    const listing = vi.spyOn(online, "listOnline").mockImplementation(async () => void useOnline.setState({ state: "listed", catalogue: { schema: 1, issued: "", serial: 1, plugins: [] } }));
+    const listing = vi.spyOn(online, "listOnline").mockImplementation(async () => void useOnline.setState({ state: "listed", catalogue: { schema: 1, issued: "", plugins: [] } }));
     sayNoneTold(["water.out"], () => {}, none);
     useNotices.getState().notices[0].action!.run();
     await vi.waitFor(() => expect(useNotices.getState().notices[0].text).toBe("No plugin online reads water.out."));

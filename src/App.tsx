@@ -58,7 +58,8 @@ import {
   startNetwork,
   useNetwork,
 } from "./lib/net/network";
-import { sayFailedSetUps } from "./ui/setUpSaid";
+import { sayFailedSetUps, sayUsedBefore } from "./ui/setUpSaid";
+import { getUsedBefore } from "./lib/plugins/usedBefore";
 import ConsentDialog from "./ui/network/ConsentDialog";
 import NetworkToasts from "./ui/network/NetworkToasts";
 import UpdateNotice from "./ui/network/UpdateNotice";
@@ -160,6 +161,8 @@ export default function App() {
       await applyNetworkSettings(useAppSettings.getState().network);
       // keeping Meno up to date, as the network now allows (lib/update)
       if (!gone) stopUpdates = startUpdates();
+      // the plugins set up here before they came online, asked about once (lib/plugins/usedBefore)
+      if (!gone && isTauri()) void getUsedBefore(sayUsedBefore);
     })();
     const unwatch = useNetwork.subscribe((s, prev) => {
       if (!useAppSettings.getState().loaded) return;

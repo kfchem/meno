@@ -133,7 +133,7 @@ are held on cases worked out by hand -
 cis- and trans-1,4- and cis-1,3-dimethylcyclohexane (each ring carbon a
 centre), methylcyclohexane, 1,1-dimethylcyclohexane, propene and
 1,4-dichlorobenzene (none), meso-2,3-butanediol (two), (E)-2-butene (one
-double bond) - in `scripts/calc/test_plugin_rdkit.py`, *Configurations*,
+double bond) - in `meno-plugins/tests/test_plugin_rdkit.py`, *Configurations*,
 which CI's plugins job runs on every push, in an environment installed
 from the plugin's lock. A test in Meno's own suite fails when the plugin's
 lock moves to another RDKit (`workflow/configurations.test.ts`), until the
@@ -215,18 +215,14 @@ alone.
   (`plugins_installed`; `lib/plugins/known.ts`), and checks every path a
   job or a worker names against the version in use: a lock, a worker, a
   job's plugin. No code of Meno's names one.
-- **Meno carries some for now**, in `src-tauri/resources/plugins/`, and
-  puts each in place as it starts, marked as from Meno (`.from-bundle`):
-  one with none in place, or whose version in use came from Meno and is
-  not what Meno now carries - another version, or the same changed. Never
-  over one put in place otherwise, nor replacing one while a job of it
-  runs. As Meno starts, each version's folder its plugin's `current` does
-  not name - one an update replaced, one half put in place - is taken
-  away, but none of a plugin a job of which is waiting or running
-  (`tidy`; `plugin_jobs_running` asks the same). Plugins fetched from
-  a signed catalogue later are put in place beside them, as folders of the
-  same kind (`.staging/` and `catalogue*` in `plugins/` are the
-  catalogue's).
+- **Meno carries none.** Each is got from the plugins online (*Plugins
+  online*) and put in place there; their source is the plugins' own
+  repository, kfchem/meno-plugins - a path `meno-plugins/...` in these
+  documents is one there. As Meno starts, each version's folder its
+  plugin's `current` does not name - one an update replaced, one half put
+  in place - is taken away, but none of a plugin a job of which is waiting
+  or running (`tidy`; `plugin_jobs_running` asks the same). `.staging/` and
+  `catalogue*` in `plugins/` are the catalogue's.
 - **Kinds are shared by id, not by code.** Two plugins that read Gaussian's
   output each bring the kind `gaussian`, with its name and marks, and Meno
   puts them together. A plugin reads only the kinds it brings and Meno's
@@ -314,17 +310,17 @@ worked out from its geometry.
 
 A plugin brings no guide, suggests no plugin and names no other plugin's kinds of file: it runs its program and converts what it wrote, and nothing else (the maintainer, 2026-10-31). The Getting started plugin, which brought Meno's first steps and a catalogue of plugins to suggest, is gone: the first steps are Meno's own (WORKSPACE.md, *First steps*), shown from Settings, *General*.
 
-Which plugins to suggest for a file no plugin added reads is worked out from what each plugin Meno carries says it reads - its kinds, each told by its own marks, as a kind of a plugin added is (`lib/io/kinds` `offeredKinds`). Such a file is told as that kind, and Meno says which plugins would read it ("water.out (ORCA output): ORCA interface or cclib would read it."), each with Add, the file read again once one is added. The plugin whose program writes the kind (its `writtenBy`) is named first, the others in Meno's order. None of them is started or asked: only what its manifest says is looked at.
+Which plugins to suggest for a file no plugin added reads is worked out from what each plugin Meno knows of says it reads - its kinds, each told by its own marks, as a kind of a plugin added is (`lib/io/kinds` `offeredKinds`). Such a file is told as that kind, and Meno says which plugins would read it ("water.out (ORCA output): ORCA interface or cclib would read it."), each with Add, the file read again once one is added. The plugin whose program writes the kind (its `writtenBy`) is named first, the others in Meno's order. None of them is started or asked: only what its manifest says is looked at.
 
 The plugins on offer online that are not here count too (*Plugins online*), by the kinds their catalogue entries say they read (`fileKinds`) - only those made for this system and this Meno, the plugins here first. Add then gets one first, asking first, and adds it as any plugin is (`lib/calc/workers` `addOnline`). The list kept from before is read as Meno starts, nothing fetched, so these are told from the start. Where no list is here at all - the network never allowed for it - a file nothing tells opens as text, as it would; unless it is a plain text (a note, a table, code), Meno says in the corner that no plugin added reads it, with *List the plugins online*. Nothing is fetched until the chemist clicks it. Once the list is here, the same notice says, in its place, what the file is and which plugin reads it ("water.out is xTB output: the xTB plugin reads it."), with Add: the plugin got and added, and the file then read as what it is.
 
-The plugins Meno carries come in its own folder, as trusted as Meno itself, so their manifests are read whether added or not (the maintainer, 2026-10-31); this replaces the rule of 2026-10-10 that only the catalogues of the plugins added were looked at. A plugin from anywhere else, once there is such a thing, is looked at only as it is added.
+The plugins Meno knows of are those in place - got from the signed list of plugins online - so their manifests are read whether added or not (the maintainer, 2026-10-31, when Meno carried them in its own folder); this replaces the rule of 2026-10-10 that only the catalogues of the plugins added were looked at.
 
 ## Licences
 
-Meno is Apache-2.0, and so is what the folders of the plugins it carries
-hold - their workers, manifests, locks and grammars - but for the plugins
-below. A plugin's `licence`, as its `version` and `homepage`, is that of
+Meno is Apache-2.0, and so is what the folders of the plugins online
+(kfchem/meno-plugins) hold - their workers, manifests, locks and grammars - but
+for the plugins below. A plugin's `licence`, as its `version` and `homepage`, is that of
 what it brings: the program or package its environment is made with
 (cclib's BSD-3-Clause, xTB's LGPL-3.0-or-later, MolScribe's MIT), or,
 where it brings only its own code - an interface to a program installed
@@ -361,13 +357,13 @@ worthwhile):
 - Meno's code and other plugins never take anything from it, and it
   speaks to Meno only through files and arguments - a separate program,
   not a part of Meno;
-- it is listed with its licence wherever Meno lists the licences of what
-  it carries: README, and Settings, *Plugins*.
+- it is listed with its licence wherever Meno lists the plugins'
+  licences: README, and Settings, *Plugins*.
 
-Two such plugins come with Meno, both GPL-3.0-or-later: the Blender plugin
-(`resources/plugins/blender`, RENDER.md), and the Film looks and motions
-plugin (`resources/plugins/blender-presets`), whose looks, studios and film
-motions are scripts for Blender too.
+Two such plugins are among the plugins online, both GPL-3.0-or-later: the
+Blender plugin (`meno-plugins/plugins/blender`, RENDER.md), and the Film looks
+and motions plugin (`meno-plugins/plugins/blender-presets`), whose looks,
+studios and film motions are scripts for Blender too.
 
 A plugin Meno stops carrying leaves its files behind on Windows unless the
 installer's hook deletes them (`src-tauri/windows/hooks.nsh`,
@@ -606,8 +602,10 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
   *Duplicates* step does.
 - **Minimise with restraints, and a search that holds them.** The RDKit
   plugin fills *Minimise with restraints*: each entry minimised in MMFF94
-  (or MMFF94s, or UFF, as the step asks; UFF where MMFF has no
-  parameters; refused, said, where neither has), its restraints held by
+  (or MMFF94s, or UFF, as the step asks; where MMFF has no parameters,
+  UFF in its place, or the entry refused, as the step's *Where MMFF has no
+  parameters* says - UFF unless chosen otherwise; refused, said, where
+  neither has), its restraints held by
   RDKit's own constraints as the entry record states them:
   - a distance by RDKit's distance constraint, ½ k d², the record's k as
     it is (kcal mol⁻¹ Å⁻²);
@@ -625,7 +623,7 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
   degrees - comes back as results on the molecule (*Restraints*), so a
   strength set too weak shows rather than passing in silence. Each energy
   law is tested against energies worked by hand, across ±180° for a
-  dihedral (`scripts/calc/test_plugin_rdkit.py`). Asked to start *where its restraints were
+  dihedral (`meno-plugins/tests/test_plugin_rdkit.py`). Asked to start *where its restraints were
   first held*, it starts from the entry's `start`, which Meno writes on its
   result from where the entry stood as it came, the first time (case F's
   rounds each start from the geometry before the first, WORKFLOWS-FOUNDATION.md
@@ -810,8 +808,9 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
   other's conformers are its reflections, each checked to have the
   configuration asked for (one that has not is asked for itself). So a
   molecule with one shape can come back as many frames of it: [OsCl6]2-,
-  ten embeddings sought, gives nine, its octahedron and eight relabellings
-  of it (the tenth is dropped below the floor); the page keeps one, and a
+  ten embeddings sought, gives ten, its octahedron and eight relabellings
+  of it, and one with two ligands under the floor, which Meno sets aside
+  (lib/chem/metalHolds `keptMade`); the page keeps one, and a
   *Duplicates* step after a workflow's *Conformers* keeps one. Where it
   embedded from random coordinates (an η complex, or a crowded cage that
   would not embed otherwise), its *Embedded* row says so.
@@ -841,7 +840,7 @@ A plugin may use other plugins, as a library uses libraries (the maintainer, 202
 
 ## Interfaces
 
-A plugin may declare interfaces (2026-11-01), for other plugins to use it through: its manifest's `interfaces`, each an id and a version (`{"id": "preset", "version": "1.0.0"}`) - semver, a field added a minor, a meaning changed a major. Another uses one in the `depends` entry of that plugin, with the versions of it it works with (`"interfaces": [{"id": "preset", "versions": ">=1.0.0 <2.0.0"}]`), as it says the versions of the plugin itself; an entry may use interfaces alone, and no program. What an interface is - what is handed through it, and how the plugin that declares it takes it - is that plugin's, written down beside it (Blender's: docs/plugins/blender-presets.md); Meno checks only that both say the same id, and that the versions meet (*Depends*: refused, stopped), and hands over what is to be handed, unread. Core names no interface.
+A plugin may declare interfaces (2026-11-01), for other plugins to use it through: its manifest's `interfaces`, each an id and a version (`{"id": "preset", "version": "1.0.0"}`) - semver, a field added a minor, a meaning changed a major. Another uses one in the `depends` entry of that plugin, with the versions of it it works with (`"interfaces": [{"id": "preset", "versions": ">=1.0.0 <2.0.0"}]`), as it says the versions of the plugin itself; an entry may use interfaces alone, and no program. What an interface is - what is handed through it, and how the plugin that declares it takes it - is that plugin's, written down beside it (Blender's: meno-plugins/docs/blender-presets.md); Meno checks only that both say the same id, and that the versions meet (*Depends*: refused, stopped), and hands over what is to be handed, unread. Core names no interface.
 
 ## Presets
 
@@ -911,7 +910,7 @@ Not yet within its reach, and so kept by review alone: text of a program's outpu
 ## When plugins run
 
 **As built** (step 6, `lib/roles/worker.ts`): RDKit is a plugin, a folder
-of its own (`resources/plugins/rdkit/`), its manifest saying the roles it
+of its own (`meno-plugins/plugins/rdkit/`), its manifest saying the roles it
 fills.
 
 - **Setting it up.** Its environment (`plugin-rdkit`, from its lock, made
@@ -1581,7 +1580,7 @@ Each entry in `prepare`, `collect` and `run` is one molecule, as JSON:
 
 ## Plugins online (2026-11-04)
 
-Plugins are to leave Meno's repository and its installer, and to be got
+Plugins have left Meno's repository and its installer, and are got
 from a list online: a catalogue, signed, that names every plugin Meno may
 get. Meno names none of them; the catalogue does. Built so far: the
 catalogue read, and Settings' side of it (`lib/plugins/catalogue`,
@@ -1590,8 +1589,11 @@ its signature, and fetching, checking and unpacking a plugin's files -
 comes in its own pull request.
 
 - **The catalogue.** One file, its signature beside it: its form
-  (`schema`, 1), when it was issued, a serial that only grows, and its
-  plugins. Each plugin on offer gives:
+  (`schema`, 1), when it was issued (`issued`), and its plugins - no
+  counter (the maintainer, 2026-11-05). `issued` is UTC, to the second,
+  in one form alone - `2026-11-05T13:04:09Z` - and a real time, so that
+  its order as text is its order in time; each list released is issued
+  later than the last. Each plugin on offer gives:
   - its id, version (three numbers), name, licence, and - where its program asks - its terms and what to cite; a description and home page where it has them;
   - the plugin contract it is made for (`contract`): Meno lists one made for a contract it does not speak as *for a newer Meno*, and never gets it;
   - the systems it is made for, the roles it fills, the kinds of step it adds and the kinds of file it reads: what an offer of it is made for;
@@ -1599,9 +1601,11 @@ comes in its own pull request.
   - the tables of atoms its program prints, as papers quote them (`quotedTables`), as its manifest keeps them - four at most, each one a manifest's could be, exactly - so that such a table is said to be its to read before it is got (FILE-IO.md, *Coordinates in a text*). None said, none;
   - its files: one archive, where it is - on https, at the hosts the plugins' releases are at, and nowhere else - its fingerprint (SHA-256) and size; and its manifest's fingerprint.
 - **Read strictly, whole.** The backend checks the signature before
-  anything of it is read, and its serial against the one kept: one lower
-  is refused, and the one kept stays, so that an older list replayed
-  never undoes a plugin taken off it. What comes to Settings is read again
+  anything of it is read, and when it was issued against the one kept:
+  one issued earlier is refused, and one issued the same second is taken
+  only where it is that very list, byte for byte (its SHA-256 kept with
+  it); the one kept stays, so that an older list replayed never undoes a
+  plugin taken off it. A list that still carries a serial is refused. What comes to Settings is read again
   as data (`acceptCatalogue`). One entry Meno cannot read, or a plugin
   offered twice, refuses the whole of it, as it is signed whole, and says
   why. A list is not refused for its age: Settings shows the day it was
@@ -1654,6 +1658,35 @@ comes in its own pull request.
   itself. Each entry says the roles it fills
   (`roles`), which is what it is offered for (`offeredFor`).
 
+### Plugins used before
+
+A Meno that carried its plugins set each up where it was asked for, and
+kept its environment's stamp (`uv/stamps/plugin-<id>.json`,
+`pixi/stamps/plugin-<id>.json`: `lib/pyEnv`). A Meno that carries none
+starts with none in place. As it first starts, it offers to get those again
+(`lib/plugins/usedBefore`):
+
+- **Which.** Each with a stamp (installed.rs `set_up_before`), none the
+  chemist took away in Settings, none in place already, and of those only
+  the ones the list online offers for this system and this Meno. A plugin
+  that sets up no environment of its own has no stamp, and is not among
+  them.
+- **Two questions at most.**
+  - Where the network is not allowed for the list yet: whether to look
+    them up online, naming them as they were set up. A no is said in the
+    corner of the window, and asked again as Meno next starts, unless the
+    chemist chooses *Don't ask again* there.
+  - With the list fetched: whether to get them, each by its name and the
+    size of its files. A no is kept.
+- **Got as Settings gets them**, one after another. An environment whose
+  lock is the one its stamp was made for is kept, and nothing of it is
+  fetched again. One whose lock changed is set up as any plugin's is,
+  asking first.
+- **Never asked again** once all are got, after a no to getting them, or
+  where there is nothing to get. Offline, where the list could not be
+  fetched, or where one could not be got, it says so and asks again as
+  Meno next starts, for those not in place.
+
 ## Decided
 
 By the maintainer, 2026-10-06:
@@ -1700,7 +1733,7 @@ By the maintainer, 2026-10-10:
 11. **The plugins to suggest are worked out from what each plugin says it
     reads** (2026-10-31; before, from Getting started's catalogue): what a
     file is, where no plugin added reads it, is told by the kinds the
-    plugins Meno carries but not added read, by their own marks - none
+    plugins Meno knows of but not added read, by their own marks - none
     started or asked (*A plugin to suggest for a file*). The suggestion
     offers Add, and the file is read again once a plugin is added.
 12. **A plugin may carry its own licence**; one that must be GPL - for

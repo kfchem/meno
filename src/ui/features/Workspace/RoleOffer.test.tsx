@@ -27,7 +27,7 @@ const entry = (over: Record<string, unknown>) => ({
   manifestSha256: HEX,
   ...over,
 });
-const listed = (plugins: unknown[]): Online => ({ state: "listed", catalogue: { schema: 1, issued: "2026-11-10T00:00:00Z", serial: 1, plugins: plugins as never } });
+const listed = (plugins: unknown[]): Online => ({ state: "listed", catalogue: { schema: 1, issued: "2026-11-10T00:00:00Z", plugins: plugins as never } });
 
 const drawn = (online: Online) => {
   shown.online = online;

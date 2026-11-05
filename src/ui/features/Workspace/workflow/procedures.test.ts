@@ -6,7 +6,7 @@ import { createWorkspaceDocument } from "../document";
 import { partsBounds, type FlowParts } from "./parts";
 import { centredParts, procedureFileName, procedureLine, procedureNeeds, procedureOf, proceduresSaved, removeProcedure, renameProcedure, saveProcedure, suggestedName } from "./procedures";
 
-/** A procedure's parts: an empty input set wired into an optimisation by xTB, whose exit's set (6) goes into Meno's energy window - its exits' sets 7 and 8. */
+/** A procedure's parts: an empty input set wired into an optimisation by Tightbind, whose exit's set (6) goes into Meno's energy window - its exits' sets 7 and 8. */
 const PARTS: FlowParts = {
   sets: [
     { id: 1, x0: 0, y0: -4, x1: 4, y1: 0 },
@@ -17,7 +17,7 @@ const PARTS: FlowParts = {
   ],
   steps: [
     { id: 5, kind: "energy-window", x: 18, y: 0, by: "meno", options: { window: 3 } },
-    { id: 2, kind: "optimise", x: 6, y: 0, by: "xtb", options: { method: "gfn2", solvent: "none", level: "normal" } },
+    { id: 2, kind: "optimise", x: 6, y: 0, by: "tightbind", options: { method: "tb2", solvent: "none", level: "normal" } },
   ],
   wires: [
     { id: 3, from: { set: 1 }, to: { step: 2, port: "in" } },
@@ -54,10 +54,10 @@ describe("a procedure", () => {
   });
 
   it("says what it does in order, what it needs that is not added, and a name until it is given one", () => {
-    expect(procedureLine(PARTS)).toBe("Optimise · xTB → Energy window · Meno");
+    expect(procedureLine(PARTS)).toBe("Optimise · Tightbind → Energy window · Meno");
     expect(suggestedName(PARTS)).toBe("Optimise, Energy window");
-    expect(procedureNeeds(PARTS)).toEqual(["xTB"]);
-    useReaders.setState({ state: { xtb: "added" }, problem: {} });
+    expect(procedureNeeds(PARTS)).toEqual(["Tightbind"]);
+    useReaders.setState({ state: { tightbind: "added" }, problem: {} });
     expect(procedureNeeds(PARTS)).toEqual([]);
   });
 

@@ -1,0 +1,619 @@
+{
+  "id": "quanta",
+  "name": "Quanta interface",
+  "version": "0.4.0",
+  "description": "Runs Quanta, a made-up quantum chemistry program installed separately: optimisations, energies, vibrations, paths and saddle points.",
+  "licence": "Apache-2.0",
+  "homepage": "https://example.org/quanta",
+  "environment": "uv",
+  "kinds": [
+    {
+      "id": "quanta-input",
+      "name": "Quanta input",
+      "extensions": [
+        ".qin"
+      ],
+      "lines": [
+        "#",
+        "@"
+      ],
+      "grammar": {
+        "file": "quanta-input.grammar",
+        "tones": {
+          "Keyword": "keyword",
+          "SectionName": "keyword",
+          "Close": "keyword",
+          "Name": "property",
+          "Element": "tag",
+          "Value": "value",
+          "Comment": "comment"
+        }
+      }
+    },
+    {
+      "id": "quanta",
+      "name": "Quanta output",
+      "program": "Quanta",
+      "writtenBy": "quanta",
+      "extensions": [
+        ".out",
+        ".log"
+      ],
+      "marks": [
+        {
+          "text": "~ Q U A N T A ~"
+        }
+      ],
+      "grammar": {
+        "file": "quanta-output.grammar",
+        "tones": {
+          "Heading": "landmark",
+          "Done": "success",
+          "Fault": "error",
+          "Number": "value"
+        }
+      }
+    }
+  ],
+  "reads": [
+    "quanta"
+  ],
+  "installed": [
+    {
+      "name": "quanta",
+      "label": "Quanta",
+      "files": {
+        "macos": "quanta",
+        "linux": "quanta",
+        "windows": "quanta.exe"
+      },
+      "path": [
+        "{folder}"
+      ],
+      "parallel": "processes"
+    }
+  ],
+  "depends": [
+    {
+      "plugin": "tightbind",
+      "versions": ">=0.2.0 <0.3.0",
+      "optional": true,
+      "programs": [
+        {
+          "program": "tightbind",
+          "env": "TBEXE"
+        }
+      ]
+    }
+  ],
+  "xyzEnergies": [
+    {
+      "id": "quanta",
+      "pattern": "(?:^|\\s)E\\s*[:=]?\\s*(-?\\d+\\.\\d+(?:[eE][-+]?\\d+)?)",
+      "unit": "hartree"
+    }
+  ],
+  "quotedEnergies": [
+    {
+      "id": "total-energy",
+      "pattern": "^\\s*TOTAL ENERGY\\s+(?<value>[-+]?\\d+\\.\\d+(?:[eE][-+]?\\d+)?)\\s*$",
+      "name": "Total energy",
+      "unit": "hartree"
+    }
+  ],
+  "xyzSteps": [
+    {
+      "id": "quanta-opt",
+      "file": "*_path.xyz",
+      "comment": "^Quanta step \\S+ E\\s+-?\\d"
+    }
+  ],
+  "steps": [
+    {
+      "kinds": [
+        "optimise",
+        "energy"
+      ],
+      "programs": [
+        "quanta"
+      ],
+      "options": [
+        {
+          "id": "method",
+          "label": "Method",
+          "type": "text",
+          "default": "M1"
+        },
+        {
+          "id": "basis",
+          "label": "Basis set",
+          "type": "text",
+          "default": "B-small"
+        },
+        {
+          "id": "dispersion",
+          "label": "Dispersion correction",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "none",
+              "label": "None"
+            },
+            {
+              "value": "DSP",
+              "label": "DSP"
+            }
+          ],
+          "default": "DSP"
+        },
+        {
+          "id": "solvation",
+          "label": "Solvation",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "none",
+              "label": "None"
+            },
+            {
+              "value": "CONT",
+              "label": "Continuum"
+            }
+          ],
+          "default": "none"
+        },
+        {
+          "id": "solvent",
+          "label": "Solvent",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "water",
+              "label": "Water"
+            },
+            {
+              "value": "methanol",
+              "label": "Methanol"
+            },
+            {
+              "value": "toluene",
+              "label": "Toluene"
+            },
+            {
+              "value": "thf",
+              "label": "THF"
+            }
+          ],
+          "default": "water",
+          "when": {
+            "id": "solvation",
+            "in": [
+              "CONT"
+            ]
+          }
+        },
+        {
+          "id": "keywords",
+          "label": "More keywords",
+          "type": "text",
+          "default": ""
+        },
+        {
+          "id": "memory",
+          "label": "Memory for each core (MB; 0 leaves it to Quanta)",
+          "type": "number",
+          "default": 0,
+          "min": 0,
+          "step": 500
+        },
+        {
+          "id": "wavefunction",
+          "label": "Keep the wavefunction",
+          "type": "switch",
+          "default": true
+        }
+      ]
+    },
+    {
+      "kinds": [
+        "frequencies"
+      ],
+      "programs": [
+        "quanta"
+      ],
+      "options": [
+        {
+          "id": "method",
+          "label": "Method",
+          "type": "text",
+          "default": "M1"
+        },
+        {
+          "id": "basis",
+          "label": "Basis set",
+          "type": "text",
+          "default": "B-small"
+        },
+        {
+          "id": "dispersion",
+          "label": "Dispersion correction",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "none",
+              "label": "None"
+            },
+            {
+              "value": "DSP",
+              "label": "DSP"
+            }
+          ],
+          "default": "DSP"
+        },
+        {
+          "id": "solvation",
+          "label": "Solvation",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "none",
+              "label": "None"
+            },
+            {
+              "value": "CONT",
+              "label": "Continuum"
+            }
+          ],
+          "default": "none"
+        },
+        {
+          "id": "solvent",
+          "label": "Solvent",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "water",
+              "label": "Water"
+            },
+            {
+              "value": "methanol",
+              "label": "Methanol"
+            },
+            {
+              "value": "toluene",
+              "label": "Toluene"
+            },
+            {
+              "value": "thf",
+              "label": "THF"
+            }
+          ],
+          "default": "water",
+          "when": {
+            "id": "solvation",
+            "in": [
+              "CONT"
+            ]
+          }
+        },
+        {
+          "id": "keywords",
+          "label": "More keywords",
+          "type": "text",
+          "default": ""
+        },
+        {
+          "id": "memory",
+          "label": "Memory for each core (MB; 0 leaves it to Quanta)",
+          "type": "number",
+          "default": 0,
+          "min": 0,
+          "step": 500
+        },
+        {
+          "id": "vibrations",
+          "label": "Vibrations kept, at most",
+          "type": "number",
+          "default": 0,
+          "min": 0,
+          "step": 1
+        },
+        {
+          "id": "wavefunction",
+          "label": "Keep the wavefunction",
+          "type": "switch",
+          "default": true
+        }
+      ]
+    },
+    {
+      "kinds": [
+        "path-search"
+      ],
+      "programs": [
+        "quanta"
+      ],
+      "options": [
+        {
+          "id": "method",
+          "label": "Method",
+          "type": "text",
+          "default": "M1"
+        },
+        {
+          "id": "basis",
+          "label": "Basis set",
+          "type": "text",
+          "default": "B-small"
+        },
+        {
+          "id": "run",
+          "label": "Run",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "path",
+              "label": "The path"
+            },
+            {
+              "value": "path-saddle",
+              "label": "The path, then its saddle point"
+            }
+          ],
+          "default": "path"
+        },
+        {
+          "id": "images",
+          "label": "Images",
+          "type": "number",
+          "default": 8,
+          "min": 3,
+          "max": 64,
+          "step": 1
+        },
+        {
+          "id": "maxiter",
+          "label": "Iterations, at most",
+          "type": "number",
+          "default": 500,
+          "min": 1,
+          "step": 1
+        },
+        {
+          "id": "keywords",
+          "label": "More keywords",
+          "type": "text",
+          "default": ""
+        },
+        {
+          "id": "memory",
+          "label": "Memory for each core (MB; 0 leaves it to Quanta)",
+          "type": "number",
+          "default": 0,
+          "min": 0,
+          "step": 500
+        }
+      ]
+    },
+    {
+      "kinds": [
+        "reaction-path"
+      ],
+      "programs": [
+        "quanta"
+      ],
+      "options": [
+        {
+          "id": "method",
+          "label": "Method",
+          "type": "text",
+          "default": "M1"
+        },
+        {
+          "id": "basis",
+          "label": "Basis set",
+          "type": "text",
+          "default": "B-small"
+        },
+        {
+          "id": "dispersion",
+          "label": "Dispersion correction",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "none",
+              "label": "None"
+            },
+            {
+              "value": "DSP",
+              "label": "DSP"
+            }
+          ],
+          "default": "DSP"
+        },
+        {
+          "id": "solvation",
+          "label": "Solvation",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "none",
+              "label": "None"
+            },
+            {
+              "value": "CONT",
+              "label": "Continuum"
+            }
+          ],
+          "default": "none"
+        },
+        {
+          "id": "solvent",
+          "label": "Solvent",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "water",
+              "label": "Water"
+            },
+            {
+              "value": "methanol",
+              "label": "Methanol"
+            },
+            {
+              "value": "toluene",
+              "label": "Toluene"
+            },
+            {
+              "value": "thf",
+              "label": "THF"
+            }
+          ],
+          "default": "water",
+          "when": {
+            "id": "solvation",
+            "in": [
+              "CONT"
+            ]
+          }
+        },
+        {
+          "id": "keywords",
+          "label": "More keywords",
+          "type": "text",
+          "default": ""
+        },
+        {
+          "id": "maxiter",
+          "label": "Points each way, at most",
+          "type": "number",
+          "default": 100,
+          "min": 1,
+          "step": 1
+        },
+        {
+          "id": "memory",
+          "label": "Memory for each core (MB; 0 leaves it to Quanta)",
+          "type": "number",
+          "default": 0,
+          "min": 0,
+          "step": 500
+        }
+      ]
+    },
+    {
+      "kinds": [
+        "saddle-point"
+      ],
+      "programs": [
+        "quanta"
+      ],
+      "options": [
+        {
+          "id": "method",
+          "label": "Method",
+          "type": "text",
+          "default": "M1"
+        },
+        {
+          "id": "basis",
+          "label": "Basis set",
+          "type": "text",
+          "default": "B-small"
+        },
+        {
+          "id": "dispersion",
+          "label": "Dispersion correction",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "none",
+              "label": "None"
+            },
+            {
+              "value": "DSP",
+              "label": "DSP"
+            }
+          ],
+          "default": "DSP"
+        },
+        {
+          "id": "solvation",
+          "label": "Solvation",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "none",
+              "label": "None"
+            },
+            {
+              "value": "CONT",
+              "label": "Continuum"
+            }
+          ],
+          "default": "none"
+        },
+        {
+          "id": "solvent",
+          "label": "Solvent",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "water",
+              "label": "Water"
+            },
+            {
+              "value": "methanol",
+              "label": "Methanol"
+            },
+            {
+              "value": "toluene",
+              "label": "Toluene"
+            },
+            {
+              "value": "thf",
+              "label": "THF"
+            }
+          ],
+          "default": "water",
+          "when": {
+            "id": "solvation",
+            "in": [
+              "CONT"
+            ]
+          }
+        },
+        {
+          "id": "keywords",
+          "label": "More keywords",
+          "type": "text",
+          "default": ""
+        },
+        {
+          "id": "hessian",
+          "label": "Hessian",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "first",
+              "label": "Worked out first"
+            },
+            {
+              "value": "guess",
+              "label": "Guessed"
+            }
+          ],
+          "default": "first"
+        },
+        {
+          "id": "memory",
+          "label": "Memory for each core (MB; 0 leaves it to Quanta)",
+          "type": "number",
+          "default": 0,
+          "min": 0,
+          "step": 500
+        }
+      ]
+    }
+  ]
+}

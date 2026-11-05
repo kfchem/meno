@@ -2,9 +2,9 @@
  * The plugins Meno knows of: those in place in Meno's local data folder -
  * each `plugins/<id>/<version>/`, the version in use named by
  * `plugins/<id>/current` (src-tauri/src/installed.rs) - each read as data
- * (./manifest). Only Meno's backend puts them there: for now from the
- * plugins Meno carries, as it starts; later from a catalogue, whose
- * plugins are folders of the same kind. Meno names none of them.
+ * (./manifest). Only Meno's backend puts them there, from the plugins
+ * online (lib/plugins/online; catalogue.rs). Meno carries none, and names
+ * none of them.
  *
  * The page is given them as it starts, before anything reads them
  * (`refreshPlugins`, main.tsx), and again after one is put in place or
