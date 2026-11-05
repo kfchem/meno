@@ -8,7 +8,7 @@ import type { Atom, Bond, Model, Molecule3D } from "../store/types";
 import { signatureOf } from "../utils/drawnLink";
 import { readWorkspace, workspaceText } from "../utils/workspace";
 import { keptMap, mapMarks, mapShows, mapStanding, unpairedSaid } from "./atomMap";
-import { readStructureMaps, sideMolecules, sideNumbers } from "./structureMaps";
+import { numbers3d, readStructureMaps, sideMolecules, sideNumbers } from "./structureMaps";
 
 /**
  * A Diels-Alder pair drawn with no arrow - butadiene and ethylene, and the
@@ -125,6 +125,10 @@ describe("an atom map between structures on the page", () => {
     expect(store.getState().structureMaps!.length).toBe(1);
     store.undo();
     expect(numbered(store.getState())).toEqual(before);
+    // (and redone: off again)
+    store.redo();
+    expect(numbered(store.getState())).toEqual({ drawn: 0, centres: 0, in3d: [0, 0], shown: [null, null] });
+    store.undo();
     // (an edit elsewhere on the page leaves it as it is)
     store.edit("atom", (d) => ({ ...d, model: { ...d.model, atoms: [...d.model.atoms, { id: 99, el: "C", x: 0, y: 9, r: 0 } as Atom] } }));
     expect(numbered(store.getState())).toEqual(before);
@@ -183,5 +187,85 @@ describe("an atom map between structures on the page", () => {
     const read = readStructureMaps([{ map: kept }, { map: { ...kept, maps: [[999]] } }, null]);
     expect(read.maps.map((m) => m.id)).toEqual([1]);
     expect(read.left).toBe(2);
+  });
+});
+
+describe("the guards of an atom map between structures", () => {
+  /** A map as a workspace's file holds it, made plain - JSON - and changed by `change`. */
+  const saved = (change: (m: Record<string, unknown> & { reactant: { atoms: Record<string, unknown>[]; bonds: Record<string, unknown>[]; drawnFrom: unknown[] }; product: { atoms: unknown[] }; maps: number[][] }) => void) => {
+    const m = JSON.parse(JSON.stringify(page().kept));
+    change(m);
+    return { map: m };
+  };
+
+  it("reads a saved map only within its bounds: each one broken leaves that map out, and a good one reads", () => {
+    const { kept } = page();
+    const nR = kept.reactant.atoms.length;
+    const bad = [
+      saved((m) => (m.chosen = m.maps.length)),
+      saved((m) => (m.chosen = -1)),
+      saved((m) => m.maps[0].pop()),
+      saved((m) => (m.maps[0][0] = nR)),
+      saved((m) => (m.maps[0][0] = -1)),
+      saved((m) => (m.reactant.bonds[0].a1 = nR)),
+      saved((m) => m.reactant.drawnFrom.pop()),
+      saved((m) => (m.reactant.atoms[0].x = "far")),
+      saved((m) => (m.reactant.atoms[0].charge = 0.5)),
+      saved((m) => delete m.drawnAs),
+    ];
+    for (const b of bad) expect(readStructureMaps([b]).left, JSON.stringify(b).slice(0, 0)).toBe(1);
+    const good = readStructureMaps([saved(() => {}), saved((m) => (m.shown = false)), saved((m) => delete m.shown)]);
+    expect(good.left).toBe(0);
+    expect(good.maps.map((m) => m.map.shown)).toEqual([true, false, true]);
+    expect(good.maps.map((m) => m.id)).toEqual([1, 2, 3]);
+  });
+
+  it("numbers by the map chosen, not the first", () => {
+    const { kept } = page();
+    // (a second map, the first with two of the product's hydrogens' reactant atoms swapped)
+    const hs = kept.product.atoms.flatMap((a, j) => (a.el === "H" ? [j] : []));
+    const other = [...kept.maps[0]];
+    [other[hs[0]], other[hs[1]]] = [other[hs[1]], other[hs[0]]];
+    const two = { ...kept, maps: [kept.maps[0], other], chosen: 1 };
+    const n = sideNumbers(two);
+    two.product.atoms.forEach((_, j) => expect(n.after[j]).toBe(n.before[other[j]]));
+    expect(n.after[hs[0]]).not.toBe(sideNumbers(kept).after[hs[0]]);
+  });
+
+  it("takes a map's numbers off the drawing and its molecules once it is gone", () => {
+    const { doc, kept } = page();
+    const shown = ops.addStructureMaps(doc, [kept]).doc;
+    const gone = ops.setStructureMaps(shown, []);
+    expect(gone.model.atoms.every((a) => a.map == null)).toBe(true);
+    expect(gone.model.bonds.every((b) => b.reactingCentre == null)).toBe(true);
+    expect(gone.molecules3d!.every((m) => m.atoms.every((a) => a.map == null))).toBe(true);
+  });
+
+  it("finds a side's molecule only where both its elements and its drawn atoms are the side's, in order", () => {
+    const { doc, kept } = page();
+    const [m1] = doc.molecules3d!;
+    const otherElement = { ...m1, atoms: m1.atoms.map((a, i) => (i === 4 ? { ...a, el: "D" } : a)) };
+    // (C3 and C4 told by each other's drawn atoms: the same elements in order, the side's first atom where it was - only the drawn atoms differ)
+    const swapped = [...m1.drawnFrom!];
+    [swapped[2], swapped[3]] = [swapped[3], swapped[2]];
+    const otherAtoms = { ...m1, drawnFrom: swapped };
+    expect(sideMolecules(kept.reactant, [otherElement], doc.model).size).toBe(0);
+    expect(sideMolecules(kept.reactant, [otherAtoms], doc.model).size).toBe(0);
+    expect(sideMolecules(kept.reactant, [m1], doc.model).size).toBe(1);
+  });
+
+  it("puts no numbers on a molecule no longer its drawing's, and takes off those it had", () => {
+    const { doc, kept } = page();
+    const shown = ops.addStructureMaps(doc, [kept]).doc;
+    // (the product's molecule tied to a drawing as it was before, not as it is: no longer its)
+    const untied = { ...shown, molecules3d: shown.molecules3d!.map((m) => (m.id === 2 ? { ...m, drawnAs: "another drawing" } : m)) };
+    const { numbers, touched } = numbers3d(untied.structureMaps!, untied.molecules3d!, untied.model);
+    expect(numbers.has(2)).toBe(false);
+    expect(touched.has(2)).toBe(true);
+    const again = ops.setStructureMaps(untied, untied.structureMaps!);
+    const m2 = again.molecules3d!.find((m) => m.id === 2)!;
+    expect(m2.atoms.every((a) => a.map == null)).toBe(true);
+    expect(m2.atomNumbers).toBeUndefined();
+    expect(again.molecules3d!.find((m) => m.id === 1)!.atoms.every((a) => (a.map ?? 0) > 0)).toBe(true);
   });
 });
