@@ -232,7 +232,6 @@ A unit with no label always says why; none is ever guessed.
 |---|---|
 | alike | Two of its ligands are alike by every rule, rule 6 with them: no centre, or no E/Z. |
 | open | Telling two ligands apart needs a double bond the drawing leaves open. |
-| later | Only an axis's M or P could tell two ligands apart. Not worked out yet. |
 | unsure | A ligand it would have to look past cannot be told from the drawing - a charged or radical system whose usual structures give different labels, or more of them than the cap, a metal, a star - or it is no centre the rules can complement (three bonds and no lone pair). |
 | large | Its digraph grows past 400,000 nodes, or its ranking past a million comparisons. |
 
@@ -241,8 +240,11 @@ a protonated amine's N (*Where it is used*).
 
 ## What it does not do yet
 
-- **Axes and odd cumulenes** (Ra and Sa, M and P); a tie only one could
-  break says `later`.
+- **An allene's axis and an odd cumulene's cis or trans read from a
+  drawing or a molecule in 3D.** They are read from SMILES (OpenSMILES,
+  *Tetrahedral Allene-like Systems* and *Cis/Trans configuration of double
+  bonds*) and named, and read as auxiliary descriptors in a ligand; the
+  drawing, identity and 3D follow in this same part.
 
 ## How it is checked
 

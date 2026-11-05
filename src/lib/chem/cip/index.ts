@@ -23,7 +23,6 @@ import { parity, Ranker, RULE_5, Unknown } from "./rank";
  * Why a unit has no descriptor:
  * - `alike`: two of its ligands are alike, by every rule (no centre);
  * - `open`: it hangs on a double bond the drawing leaves open (`bond`);
- * - `later`: only an axis's M or P could tell two ligands apart - not worked out yet;
  * - `unsure`: a ligand it would have to look past cannot be told from the
  *   drawing - a charged or radical mesomeric system whose usual structures
  *   give different labels, or more of them than `MOST_VARIANTS`, a metal, a
@@ -31,7 +30,7 @@ import { parity, Ranker, RULE_5, Unknown } from "./rank";
  *   lone pair);
  * - `large`: its digraph grows past what is worked out.
  */
-export type CipWhy = "alike" | "open" | "later" | "unsure" | "large";
+export type CipWhy = "alike" | "open" | "unsure" | "large";
 /**
  * A unit's descriptor: R or S, or r or s for a pseudoasymmetric centre; E or
  * Z, `turns` where it turns in the mirror image (seqCis or seqTrans, Hanson
@@ -63,7 +62,7 @@ function inOrder(rank: Ranker, ligands: readonly CipNode[], root: readonly numbe
     for (let j = i; j > 0; j--) {
       const d = rank.decided(ligands[order[j - 1]], ligands[order[j]]);
       if (d instanceof Unknown) return fromUnknown(d);
-      if (d.c === 0) return tied(rank, ligands, [order[j - 1], order[j]], root);
+      if (d.c === 0) return tied(rank, ligands, root);
       rule = Math.max(rule, d.rule);
       if (d.c > 0) break;
       [order[j - 1], order[j]] = [order[j], order[j - 1]];
@@ -72,13 +71,9 @@ function inOrder(rank: Ranker, ligands: readonly CipNode[], root: readonly numbe
   return { order, rule };
 }
 
-/** Why two ligands alike by every rule leave no descriptor: alike, or for an axis or rule 6, not worked out yet. */
-function tied(rank: Ranker, ligands: readonly CipNode[], two: readonly number[], root: readonly number[]): Said {
+/** Why two ligands alike by every rule leave no descriptor: alike, or for rule 6 to try. */
+function tied(rank: Ranker, ligands: readonly CipNode[], root: readonly number[]): Said {
   const blocked = new Set(root);
-  const atoms = two.map((i) => ligands[i].atom);
-  const around = rank.region(atoms, blocked);
-  // (an axis or a cumulene configured in them: its M or P might tell them apart)
-  if (rank.configured(around)) return no("later");
   // (three paths or more back to the root: the proposed rule 6 might - Hanson et al. 2018 p. 1762)
   const back = ligands.filter((l) => l.atom >= 0 && ligands.some((m) => m !== l && m.atom >= 0 && rank.region([l.atom], blocked).has(m.atom)));
   return back.length >= 3 ? RULE_6_ASKED : no("alike");

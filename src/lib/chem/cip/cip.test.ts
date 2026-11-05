@@ -149,15 +149,18 @@ describe("what gives no label, and why", () => {
     });
   });
 
-  it("says a tie only an axis could break is not worked out yet: an axis drawn in two alike ligands - and calls them alike where none is", () => {
+  it("reads an axis in a ligand as its M or P: two alike ligands but for their axes' senses, a pseudoasymmetric centre; their axes alike, no centre", () => {
     // (two 2'-methylbiphenyl-2-yl groups, each with its axis between its rings: bonds 7-8 and 20-21)
     const input = cipInput("O[C@H](c1ccccc1-c1ccccc1C)c1ccccc1-c1ccccc1C");
     expect(cipSaid(input)).toEqual(["C1:alike"]);
-    const axes = [
-      { atoms: [7, 8] as const, refs: [6, 13] as const, sense: 1 as const },
-      { atoms: [20, 21] as const, refs: [19, 26] as const, sense: -1 as const },
+    const axes = (a: 1 | -1, b: 1 | -1) => [
+      { atoms: [7, 8] as const, refs: [6, 13] as const, sense: a },
+      { atoms: [20, 21] as const, refs: [19, 26] as const, sense: b },
     ];
-    expect(cipSaid({ ...input, axes })).toEqual(["C1:later", "C7~C8:M", "C20~C21:P"]);
+    // (M precedes P, as R precedes S: rule 5, Hanson et al. 2018 p. 1761; the axes the other way round, the other)
+    expect(cipSaid({ ...input, axes: axes(1, -1) })).toEqual(["C1:s", "C7~C8:M", "C20~C21:P"]);
+    expect(cipSaid({ ...input, axes: axes(-1, 1) })).toEqual(["C1:r", "C7~C8:P", "C20~C21:M"]);
+    expect(cipSaid({ ...input, axes: axes(1, 1) })).toEqual(["C1:alike", "C7~C8:M", "C20~C21:M"]);
   });
 
   it("says a ligand it would have to look past cannot be told from the drawing: a metal's, a star's", () => {

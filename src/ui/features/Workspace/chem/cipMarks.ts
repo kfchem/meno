@@ -128,8 +128,6 @@ export function cipSaid(why: CipNone, unit: "centre" | "bond"): string {
       return unit === "centre" ? "No R or S: two of its groups are the same." : "No E or Z: the two groups at one of its ends are the same.";
     case "open":
       return `No ${what} until the double bond it depends on is drawn E or Z.`;
-    case "later":
-      return `No ${what} yet: it depends on an axis of chirality, which Meno does not name yet.`;
     case "unsure":
       return `No ${what}: a group it depends on cannot be told from the drawing.`;
     case "large":

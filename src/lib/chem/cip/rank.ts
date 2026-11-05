@@ -76,7 +76,7 @@ export const RULE_6 = 8;
 /** Why a comparison cannot be made: a double bond left open in the drawing (`bond`), an unsure atom to be looked past, or a tie an axis could break. */
 export class Unknown {
   constructor(
-    readonly why: "open" | "unsure" | "later",
+    readonly why: "open" | "unsure",
     readonly bond?: number,
     /** An unsure atom it would have had to look past, where it is one. */
     readonly at?: number,
@@ -93,10 +93,10 @@ export type Decided = { c: number; rule: number } | Unknown;
  * pseudoasymmetric (r, s, seqcis, seqtrans). None where the node is no
  * stereogenic unit.
  */
-export type Aux = { kind: "centre" | "double"; up: boolean; chiral: boolean } | null;
+export type Aux = { kind: "centre" | "double" | "axis"; up: boolean; chiral: boolean } | null;
 
 /** A unit's descriptor before it is told chiral or not: its sense, and the last rule its ligands needed. */
-type Letter = { kind: "centre" | "double"; up: boolean; rule: number } | null;
+type Letter = { kind: "centre" | "double" | "axis"; up: boolean; rule: number } | null;
 
 /** The smallest ring a double bond in which has no cis or trans to be told: one of seven atoms or fewer is held cis. */
 const OPEN_RING = 8;
@@ -199,9 +199,9 @@ export class Ranker {
         const d = this.descriptorOf(n);
         if (d instanceof Unknown) return d;
         if (!d) return 0;
-        // (4a: chiral 2, pseudoasymmetric 1; 4c: r 2, s 1; 5: R or seqCis 2, S or seqTrans 1)
+        // (4a: chiral 2, pseudoasymmetric 1; 4c: r or m 2, s or p 1; 5: R, M or seqCis 2, S, P or seqTrans 1 - Hanson p. 1761)
         if (r === RULE_4A) return d.chiral ? 2 : 1;
-        if (r === RULE_4C) return d.kind === "centre" && !d.chiral ? (d.up ? 2 : 1) : 0;
+        if (r === RULE_4C) return d.kind !== "double" && !d.chiral ? (d.up ? 2 : 1) : 0;
         return d.chiral ? (d.up ? 2 : 1) : 0;
       }
     }
@@ -391,17 +391,6 @@ export class Ranker {
     return seen;
   }
 
-  /**
-   * Whether a configuration these rules do not read yet is drawn in
-   * `atoms`, but at `but`: an axis, or a cumulene's cis or trans - whose M
-   * and P rules 4 and 5 would read (docs/CIP.md, *What it does not do yet*).
-   */
-  configured(atoms: ReadonlySet<number>, but: { bond?: number } = {}): boolean {
-    const input = this.p.input;
-    if ([...(input.axes ?? []), ...(input.cumulated ?? [])].some((x) => x.atoms.some((a) => atoms.has(a)))) return true;
-    return input.bonds.some((b, i) => !!b.stereo && i !== but.bond && (atoms.has(b.a) || atoms.has(b.b)) && (this.cumulated(b.a) || this.cumulated(b.b)));
-  }
-
   /** The size of the smallest ring through a bond, or Infinity. */
   private ringThrough(a: number, b: number): number {
     const k = pair(a, b);
@@ -438,6 +427,8 @@ export class Ranker {
     const partners = p.around[n.atom].filter((c) => p.order.get(pair(n.atom, c)) === 2);
     if (partners.length !== 1) return null;
     const c = partners[0];
+    // (a cumulated double bond is no unit of its own: its run's, `runAt`)
+    if (this.cumulated(c)) return null;
     if (c === n.parent.atom) return n.parent.sphere === 0 ? null : { near: n.parent, far: n };
     const kid = n.graph.children(n).find((k) => !k.dup && k.atom === c);
     if (kid) return { near: n, far: kid };
@@ -454,20 +445,46 @@ export class Ranker {
    * seqTrans).
    */
   private rule3(n: CipNode): number | Unknown {
-    const at = this.doubleAt(n);
+    const at = this.runAt(n, "cumulated") ?? this.doubleAt(n);
     if (!at || at instanceof Unknown) return at ?? 0;
     const d = this.aux(at.near);
     if (d instanceof Unknown) return d;
     return !d || d.chiral ? 0 : d.up ? 2 : 1;
   }
 
-  /** The descriptor a node carries for rules 4a to 5: its centre's, or its double bond's where it is the near end. */
+  /** The descriptor a node carries for rules 4a to 5: its centre's, or its double bond's, axis's or odd cumulene's where it is the near end. */
   private descriptorOf(n: CipNode): Aux | Unknown {
     if (n.dup || n.atom < 0 || !n.parent) return null;
     if (this.p.input.atoms[n.atom].tetra) return this.aux(n);
-    const at = this.doubleAt(n);
+    const at = this.runAt(n, "axis") ?? this.runAt(n, "cumulated") ?? this.doubleAt(n);
     if (at instanceof Unknown) return at;
     return at && at.near === n ? this.aux(n) : null;
+  }
+
+  /**
+   * A node's axis or odd cumulene in this digraph, where it is the end of
+   * one nearer the root: that end and the far one - a biaryl's other end, a
+   * child of it; an allene's or a cumulene's, down the run of cumulated
+   * double bonds from it. None where it is no such end, or the far end; and
+   * a run's end with groups but no configuration drawn says the run is open.
+   */
+  private runAt(n: CipNode, kind: "axis" | "cumulated"): { near: CipNode; far: CipNode; unit: number } | null {
+    if (n.dup || n.atom < 0 || !n.parent) return null;
+    const p = this.p;
+    const units = (kind === "axis" ? p.input.axes : p.input.cumulated) ?? [];
+    for (let k = 0; k < units.length; k++) {
+      const [i, j] = units[k].atoms;
+      if (n.atom !== i && n.atom !== j) continue;
+      const other = n.atom === i ? j : i;
+      // (a biaryl's: the bond to the other end; a run's: each cumulated double bond in turn)
+      let at: CipNode | undefined = n;
+      for (let guard = 0; at && at.atom !== other && guard < p.input.atoms.length; guard++) {
+        const from: CipNode = at;
+        at = from.graph.children(from).find((c) => !c.dup && c.atom >= 0 && (c.atom === other || ((p.order.get(pair(from.atom, c.atom)) ?? 1) >= 2 && this.cumulated(c.atom))));
+      }
+      if (at && at.atom === other) return { near: n, far: at, unit: k };
+    }
+    return null;
   }
 
   /** A node's auxiliary descriptor: its sense (`letter`), told chiral where it turns in the mirror image. */
@@ -478,7 +495,7 @@ export class Ranker {
     const l = this.letter(n);
     let out: Aux | Unknown;
     if (!l || l instanceof Unknown) out = l;
-    else if (l.rule < RULE_5) out = { kind: l.kind, up: l.up, chiral: l.kind === "centre" };
+    else if (l.rule < RULE_5) out = { kind: l.kind, up: l.up, chiral: l.kind !== "double" };
     else {
       // (decided by rule 5: chiral where the mirror image reads it the other way - Hanson p. 1761)
       const m = this.mirror.letter(n);
@@ -499,8 +516,13 @@ export class Ranker {
     let out: Letter | Unknown;
     if (this.p.input.atoms[n.atom].tetra) out = this.centreLetter(n);
     else {
-      const at = this.doubleAt(n);
-      out = !at || at instanceof Unknown ? at : this.doubleLetter(at.near, at.far);
+      // (an axis's or a cumulene's end before a double bond's: a biaryl's end is on a ring's double bond too)
+      const axis = this.runAt(n, "axis");
+      const run = axis ? null : this.runAt(n, "cumulated");
+      const at = axis || run ? null : this.doubleAt(n);
+      if (axis) out = this.runLetter(axis.near, axis.far, "axis", axis.unit);
+      else if (run) out = this.runLetter(run.near, run.far, "cumulated", run.unit);
+      else out = !at || at instanceof Unknown ? at : this.doubleLetter(at.near, at.far);
     }
     this.letterOf.set(n, out);
     return out;
@@ -525,7 +547,6 @@ export class Ranker {
         if (c === 0) alike.add(i).add(j);
       }
     const tied = [...alike].map((i) => kids[i].atom).filter((x) => x >= 0);
-    if (this.configured(this.region(tied, new Set([a])))) return new Unknown("later");
     const ends = [...kids.map((k) => k.atom).filter((x) => x >= 0), n.parent!.atom];
     const back = ends.filter((x) => ends.some((y) => y !== x && this.region([x], new Set([a])).has(y)));
     if (back.length < 3) return null;
@@ -602,13 +623,7 @@ export class Ranker {
     if (mate < 0 || farSubs.length !== 2) return new Unknown("unsure");
     const tie = this.decided(farSubs[0], farSubs[1]);
     if (tie instanceof Unknown) return tie;
-    if (tie.c === 0) {
-      const around = this.region(
-        farSubs.map((k) => k.atom),
-        new Set([v]),
-      );
-      return this.configured(around, { bond }) ? new Unknown("later") : null;
-    }
+    if (tie.c === 0) return null;
     const highFar = (tie.c > 0 ? farSubs[0] : farSubs[1]).atom;
     // at the near end: the root-ward ligand against the other, by rule 1a, on a digraph rooted at the near end
     const others = near.graph.children(near).filter((k) => k !== far && !(k.dup && k.atom === v));
@@ -624,6 +639,43 @@ export class Ranker {
     const [refU, refV] = b.a === u ? stereo.refs : [stereo.refs[1], stereo.refs[0]];
     const cis = (stereo.cis !== (highNear !== refU)) !== (highFar !== refV);
     return { kind: "double", up: cis, rule: tie.rule };
+  }
+
+  /**
+   * The sense of an axis (M up, as R: Hanson p. 1761) or an odd cumulene
+   * (seqcis up) from its end `near` to its end `far` on their digraph, as
+   * `doubleLetter` reads a double bond's: at the far end its two groups by
+   * every rule, at the near end the root-ward one against the other by
+   * rule 1a; none where the far end's two are alike.
+   */
+  private runLetter(near: CipNode, far: CipNode, kind: "axis" | "cumulated", k: number): Letter | Unknown {
+    const p = this.p;
+    const unit = kind === "axis" ? p.input.axes![k] : p.input.cumulated![k];
+    const toFar = far.parent!.atom;
+    const atFar = this.sorted(far, LAST_RULE);
+    if (atFar instanceof Unknown) return atFar;
+    const farSubs = atFar.kids.filter((c) => !(c.dup && c.atom === toFar) && c.atom !== PHANTOM);
+    if (farSubs.length !== 2) return new Unknown("unsure");
+    const tie = this.decided(farSubs[0], farSubs[1]);
+    if (tie instanceof Unknown) return tie;
+    if (tie.c === 0) return null;
+    const highFar = (tie.c > 0 ? farSubs[0] : farSubs[1]).atom;
+    const run = near.graph.children(near).find((c) => !c.dup && (c === far || c.atom === far.atom || (c.atom >= 0 && this.cumulated(c.atom))));
+    const others = near.graph.children(near).filter((c) => c !== run && !(run && c.dup && c.atom === run.atom) && c.atom !== PHANTOM);
+    if (others.length !== 1) return new Unknown("unsure");
+    const back = near.parent!.atom;
+    const c = this.ranked(rootwardOf(near, this.budget), others[0], 0);
+    if (c instanceof Unknown) return c;
+    if (c === 0) return new Unknown("unsure");
+    const highNear = c > 0 ? back : others[0].atom;
+    // (each end's higher group against its reference, the unit's ends as it lists them)
+    const nearFirst = unit.atoms[0] === near.atom;
+    const [highU, highV] = nearFirst ? [highNear, highFar] : [highFar, highNear];
+    const turned = (highU !== unit.refs[0]) !== (highV !== unit.refs[1]);
+    if (kind === "cumulated") return { kind: "double", up: (unit as { cis: boolean }).cis !== turned, rule: tie.rule };
+    // (P where the higher groups turn clockwise, as `axis` has it; M up)
+    const plus = ((unit as { sense: 1 | -1 }).sense > 0) !== turned !== this.mirrored;
+    return { kind: "axis", up: !plus, rule: tie.rule };
   }
 }
 

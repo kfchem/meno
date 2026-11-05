@@ -306,6 +306,10 @@ const CASES: Case[] = [
   { vs: "VS283", cite: "Fig. 12", smiles: String.raw`C2C=1[C@H]3C(CCC=1)=CCCC3=CC2`, said: ["C2:S"] },
   // (rule 6 deciding the auxiliary descriptors, two C3 centres, and rule 5 the root's: p. 1762)
   { vs: "VS300", cite: "p. 1762", smiles: String.raw`C1=C3CCC=C2CCC=C(CC1)[C@@]23C[C@@H](C[C@@]56C=4CCC=C6CCC=C5CCC=4)O`, said: ["C12:S", "C14:s", "C16:R"] },
+  // an odd cumulene's cis or trans, read at its ends (rule 1a at each end: p. 1760)
+  { vs: "VS118", cite: "p. 1760", smiles: String.raw`Cl/C=C=C=C/Br`, said: ["C1=..=C4:E"] },
+  // an allene's axis with a ring at one end, pseudoasymmetric with the ring's CH, each the other's auxiliary descriptor (rules 4c and 5: p. 1761)
+  { vs: "VS231", cite: "p. 1761", smiles: String.raw`CC[C@H]1CCC(=[C@@]=CC)CC1`, said: ["C2:s", "C5~C7:p"] },
 ];
 
 describe("the validation suite's cases, redrawn", () => {
