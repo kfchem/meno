@@ -93,22 +93,34 @@ export function heldOff(doc: WorkspaceDocument, id: number): WorkspaceDocument {
   return { ...out, sets: (out.sets ?? []).map((b) => (b.id === id ? held : b)) };
 }
 
-/** What is on a page, by id: its atoms, molecules in 3D and pictures - worked out once for an edit, where it is asked. */
-type OnPage = { atoms: ReadonlySet<number>; molecules: ReadonlySet<number>; pictures: ReadonlySet<number> };
-
 /**
  * Whether any of a set's members is on the page still - an atom of one of
  * its structures, one of its molecules or pictures - or, its members not
- * known yet, anything lies in its frame (entries `setMembers`).
+ * known yet, anything lies in its frame (entries `setMembers`). The page
+ * looked through from its end, where what a step put is drawn: one found
+ * there soon, as an edit that moves them leaves them all - only an edit
+ * that took them all away is looked through whole.
  */
-function showsAny(doc: WorkspaceDocument, set: WorkflowSet, on: () => OnPage): boolean {
+function showsAny(doc: WorkspaceDocument, set: WorkflowSet): boolean {
   if (!set.members) {
     const own = setMembers(doc, set);
     return own.structures.length + own.molecules.length + own.pictures.length > 0;
   }
   if (!set.members.length) return false;
-  const page = on();
-  return set.members.some((m) => ("structure" in m ? m.structure.some((a) => page.atoms.has(a)) : "molecule" in m ? page.molecules.has(m.molecule) : page.pictures.has(m.picture)));
+  const atoms = new Set<number>();
+  const molecules = new Set<number>();
+  const pictures = new Set<number>();
+  for (const m of set.members) {
+    if ("structure" in m) for (const a of m.structure) atoms.add(a);
+    else if ("molecule" in m) molecules.add(m.molecule);
+    else pictures.add(m.picture);
+  }
+  const lastFound = <T extends { id: number }>(xs: readonly T[] | undefined, ids: ReadonlySet<number>) => {
+    if (!xs || !ids.size) return false;
+    for (let i = xs.length - 1; i >= 0; i--) if (ids.has(xs[i].id)) return true;
+    return false;
+  };
+  return lastFound(doc.model.atoms, atoms) || lastFound(doc.molecules3d, molecules) || lastFound(doc.pictures, pictures);
 }
 
 /**
@@ -120,9 +132,9 @@ function showsAny(doc: WorkspaceDocument, set: WorkflowSet, on: () => OnPage): b
  * out in that edit's own step of the history; a set not held lays them
  * out, as a run does.
  */
-function laysOut(doc: WorkspaceDocument, set: WorkflowSet, on: () => OnPage): boolean {
+function laysOut(doc: WorkspaceDocument, set: WorkflowSet): boolean {
   if (set.table || set.number || set.chart || !(set.collection?.length || set.drawnCollection?.length)) return false;
-  if (showsAny(doc, set, on)) return false;
+  if (showsAny(doc, set)) return false;
   return set.collection?.length ? set.collection.reduce((n, m) => n + entriesIn(m), 0) <= LARGE_SET : true;
 }
 
@@ -143,14 +155,6 @@ export function heldSettled(doc: WorkspaceDocument, before: WorkspaceDocument | 
   const page = !before || doc.model !== before.model || doc.molecules3d !== before.molecules3d || doc.pictures !== before.pictures;
   if (!wiring && !page) return doc;
   const held = heldSets(doc);
-  // (what is on the page, by id: worked out once, where a set asks)
-  let seen: OnPage | undefined;
-  const on = () =>
-    (seen ??= {
-      atoms: new Set(doc.model.atoms.map((a) => a.id)),
-      molecules: new Set((doc.molecules3d ?? []).map((m) => m.id)),
-      pictures: new Set((doc.pictures ?? []).map((p) => p.id)),
-    });
   let out = doc;
   for (const set of doc.sets) {
     // (an edit of what is on the page alone: only a set showing some and holding the rest can have been emptied by it)
@@ -158,7 +162,7 @@ export function heldSettled(doc: WorkspaceDocument, before: WorkspaceDocument | 
     const now = out.sets === doc.sets ? set : out.sets?.find((b) => b.id === set.id);
     if (!now) continue;
     if (held.has(set.id)) out = heldOff(out, set.id);
-    else if (laysOut(doc, now, on) && (!now.collection || extentOf)) out = laidOutAgain(out, set.id, extentOf);
+    else if (laysOut(doc, now) && (!now.collection || extentOf)) out = laidOutAgain(out, set.id, extentOf);
   }
   return out;
 }
