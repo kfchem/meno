@@ -111,7 +111,7 @@ describe("texts nothing told, opened while the plugins online are not listed", (
     useNotices.setState({ notices: [] });
     sayNoneTold(["notes.txt", "table.csv"], () => {}, none);
     expect(useNotices.getState().notices).toEqual([]);
-    useOnline.setState({ state: "listed", catalogue: { schema: 1, issued: "", serial: 1, plugins: [] } });
+    useOnline.setState({ state: "listed", catalogue: { schema: 1, issued: "", plugins: [] } });
     sayNoneTold(["water.out"], () => {}, none);
     expect(useNotices.getState().notices).toEqual([]);
   });
@@ -120,7 +120,7 @@ describe("texts nothing told, opened while the plugins online are not listed", (
     const online = await import("../../lib/plugins/online");
     const workers = await import("../../lib/calc/addOnline");
     const far = { id: "far", name: "Far" } as CatalogueEntry;
-    vi.spyOn(online, "listOnline").mockImplementation(async () => void useOnline.setState({ state: "listed", catalogue: { schema: 1, issued: "", serial: 1, plugins: [far] } }));
+    vi.spyOn(online, "listOnline").mockImplementation(async () => void useOnline.setState({ state: "listed", catalogue: { schema: 1, issued: "", plugins: [far] } }));
     const added = vi.spyOn(workers, "addOnline").mockResolvedValue();
     const again = vi.fn();
     const kind = { id: "far-out", name: "Far output", extensions: [".far"], suggest: ["far"] };
@@ -141,7 +141,7 @@ describe("texts nothing told, opened while the plugins online are not listed", (
 
   it("listed, say so where none of them is read by a plugin online - or why the list is not here", async () => {
     const online = await import("../../lib/plugins/online");
-    const listing = vi.spyOn(online, "listOnline").mockImplementation(async () => void useOnline.setState({ state: "listed", catalogue: { schema: 1, issued: "", serial: 1, plugins: [] } }));
+    const listing = vi.spyOn(online, "listOnline").mockImplementation(async () => void useOnline.setState({ state: "listed", catalogue: { schema: 1, issued: "", plugins: [] } }));
     sayNoneTold(["water.out"], () => {}, none);
     useNotices.getState().notices[0].action!.run();
     await vi.waitFor(() => expect(useNotices.getState().notices[0].text).toBe("No plugin online reads water.out."));
