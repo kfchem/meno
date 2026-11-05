@@ -755,11 +755,13 @@ quarter of a bond: with less, taxol's AcO sat on its OBz.
   hashes, behind it), both rings drawn flat: the only wedge that goes on a
   ring bond, as it must (`axisWedge`). Read back, a wedge narrow at an atom
   with three groups at the end of a single bond in no ring, or in none
-  smaller than seven atoms (a ring through a metal aside), is such an
-  axis's (`readStereo`) - a 2,2'-bridged biphenyl's, a BINOL phosphoric
-  acid's C1-C1' in its seven-membered ring through O-P-O. In a ring of five
-  or six the two rings are held all but flat, or turn over fast (fluorene,
-  9,10-dihydrophenanthrene), and no axis is read. An atom with three
+  smaller than seven atoms, is such an axis's (`readStereo`) - a
+  2,2'-bridged biphenyl's, a BINOL phosphoric acid's C1-C1' in its
+  seven-membered ring through O-P-O, BINAP's in its chelate ring of seven
+  through a metal, a metal counted as any atom of the ring. In a ring of
+  five or six the two rings are held all but flat, or turn over fast
+  (fluorene, 9,10-dihydrophenanthrene, 2,2'-bipyridine on a metal), and no
+  axis is read. An atom with three
   groups and a wedge is a stereocentre instead for an S, Se, Te, P, As or
   Sb, its fourth group a lone pair (a sulfoxide's S, a phosphine's P).
 - A stereocentre whose fourth group is a lone pair - a sulfoxide's or a

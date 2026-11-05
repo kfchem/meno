@@ -487,7 +487,10 @@ describe("an axis inside a ring, drawn", () => {
     expect(around[i]).toContain(j);
     const refs = [Math.min(...around[i].filter((n) => n !== j)), Math.min(...around[j].filter((n) => n !== i))] as const;
     const given = { atoms: [i, j] as const, refs, sense: 1 as const };
-    const { atoms, bonds } = drawing({ ...g, axes: [given] });
+    const drawn = drawing({ ...g, axes: [given] });
+    // (each atom its element, as a drawing's are: a metal in a ring known for one)
+    const atoms = drawn.atoms.map((a, k) => (k < g.atoms.length ? { ...a, el: g.atoms[k].el } : { ...a, el: "H" }));
+    const bonds = drawn.bonds;
     // (a wedge at an end, as the engine draws one; one put there where it does not, so that each case has one to read)
     if (!bonds.some((b) => b.wedge && (b.wedge.narrow === i || b.wedge.narrow === j))) {
       const out = bonds.find((b) => b.order === 1 && (b.a === i || b.b === i) && b.a !== j && b.b !== j)!;
@@ -502,6 +505,16 @@ describe("an axis inside a ring, drawn", () => {
     // (the same axis: from either end, against the same two groups, the same sense)
     expect(new Set(read[0].atoms)).toEqual(new Set(given.atoms));
     expect(read[0].sense).toBe(given.sense);
+  });
+
+  it("counts a metal as any atom of the ring: BINAP's chelate ring on Pd, of seven, read; 2,2'-bipyridine's on Pd, of five, held flat, none", () => {
+    // (BINAP-PdCl2, its C1-C1' atoms 25 and 26 as the SMILES is written)
+    const binap = "Cl[Pd]1(Cl)P(c2ccccc2)(c2ccccc2)c2ccc3ccccc3c2-c2c(P1(c1ccccc1)c1ccccc1)ccc1ccccc21";
+    const { given, read } = readBack(binap, [25, 26]);
+    expect(read).toHaveLength(1);
+    expect(read[0].sense).toBe(given.sense);
+    // (2,2'-bipyridine-PdCl2, its N bound to Pd written as N+, Pd as 2-, so that its rings are aromatic as drawn)
+    expect(readBack("Cl[Pd-2]1(Cl)[n+]2ccccc2-c2cccc[n+]21", [8, 9]).read).toEqual([]);
   });
 
   it("reads none in a ring of five or six: fluorene and 9,10-dihydrophenanthrene are held all but flat, or turn over fast", () => {
