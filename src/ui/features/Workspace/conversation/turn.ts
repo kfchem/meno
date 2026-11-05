@@ -87,7 +87,8 @@ function answer(d: () => WorkspaceDocument, c: Conversation, call: ToolCall, cal
     if (a.ok && call.tool === "list") gave = listed(d(), inScope(d(), scope)).map((t) => ({ id: t.id, chars: t.line.length }));
     return { ok: a.ok, answer: value, gave, changed: false };
   }
-  const made = act(() => changeTool(d, calls, scope, call.tool, call.args));
+  // (its frame grown round what it puts down, in the same change set: Discard takes that back too)
+  const made = act(() => changeTool(d, calls, scope, call.tool, call.args, (frame) => calls.updateConversation(c.id, { frame })));
   return { ok: made.ok, answer: made.ok ? made.value : made.why, gave: [], changed: made.ok };
 }
 

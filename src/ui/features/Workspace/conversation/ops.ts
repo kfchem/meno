@@ -9,6 +9,9 @@ import { NEW_RIGHTS, type Conversation, type Rights, type Said, type Sent } from
 
 const finite = (...xs: number[]) => xs.every(Number.isFinite);
 
+/** How large a conversation's frame is put down, in bonds: room for a scheme and a few steps. */
+export const CONVERSATION_FRAME = { w: 24, h: 14 };
+
 /** `doc` with a conversation put down in `frame` - or of the whole page - numbered `nextConversationId`: it may read, and proposes nothing yet. */
 export function addConversation(doc: WorkspaceDocument, frame: { x0: number; y0: number; x1: number; y1: number }, wholePage = false): WorkspaceDocument {
   const { x0, y0, x1, y1 } = frame;

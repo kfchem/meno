@@ -392,3 +392,24 @@ and takes the model's replies in turn (`conversation/turn`):
 A connection that plays back replies written beforehand and keeps every
 request it was sent (`conversation/scripted`). The tests drive whole
 turns with it; it sends nothing anywhere.
+
+### Talked to from the page (2026-11-05)
+
+The page's side of a conversation (`store/slices/conversationsSlice`), on
+which its card and its column are built:
+
+- **Put down, changed and taken away**, each a step to undo - not taken
+  away while it talks.
+- **Sent to** (`sendToConversation`): a turn run with what it talks
+  through (`conversation/connections`: none in Meno itself, so nothing is
+  sent, and why is kept to say), the person's words and the replies kept
+  outside the page's history. While it talks it is marked so, and *Stop*
+  ends the turn at its next reply.
+- **A turn's changes** are one step, marked: *Keep* lets the mark go;
+  *Discard* undoes that step - refused, and why, where a step it added is
+  running, or where the page has changed since: then undo is the
+  person's, step by step. The steps done before whose options it changed
+  are named, as those that will run again when next run.
+- **What was said, as rows** (`conversation/said`): each person's and
+  model's words, each tool called with what came of it on its line - what
+  a column shows, as words, never drawn as a page.

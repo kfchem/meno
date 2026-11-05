@@ -13,7 +13,7 @@ export function scriptedModel(replies: readonly ModelReply[] | ((request: ModelR
   const asked: ModelRequest[] = [];
   return {
     id,
-    to: "a scripted test model, on this computer",
+    to: "this computer",
     asked,
     send: async (request) => {
       asked.push(request);

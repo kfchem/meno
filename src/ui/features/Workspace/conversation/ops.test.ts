@@ -63,7 +63,9 @@ describe("what a conversation's tools may set", () => {
   ]);
 
   it("a choice, and a number within its bounds - never free text, a switch, an unbounded number, nor one its plugin leaves to the person", () => {
-    expect(opts.filter(settable).map((o: Option) => o.id)).toEqual(["method", "window"]);
+    expect(opts.filter((o) => settable(o)).map((o: Option) => o.id)).toEqual(["method", "window"]);
+    // (Meno's own options, which Meno knows: a number bounded one way or none too)
+    expect(opts.filter((o) => settable(o, true)).map((o: Option) => o.id)).toEqual(["method", "window", "cores"]);
     expect(opts.find((o) => o.id === "level")?.person).toBe(true);
   });
 
