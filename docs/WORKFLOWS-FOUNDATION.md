@@ -417,7 +417,10 @@ alone. The ideal is that taking the .meno out takes everything out."
   says so, names the largest steps, and offers *Don't keep raw outputs* on
   them. It never drops anything by itself.
 
-**What a set shows** depends on its size:
+**What a set shows** depends on its size - and on whether its exit is
+wired on: a step's result set wired on to another step is held, shown
+nowhere, what it holds kept as a large set keeps it (WORKFLOWS.md,
+*Held results*, 2026-11-05). Otherwise, by its size:
 - **up to 50 entries, on the page**, as today (question 15, answered). An
   entry with frames shows its frames chip;
 - **more, as a summary in its frame**: its count with nouns, a grid of a

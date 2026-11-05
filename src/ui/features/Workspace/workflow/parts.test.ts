@@ -73,10 +73,12 @@ describe("a workflow's parts taken together", () => {
 
   it("are taken by a box or a lasso where their middles are inside it", () => {
     const d = flow();
-    expect(flowIn(d, "box", [{ x: -1, y: -1 }, { x: 10, y: 5 }])).toEqual({ sets: [1], steps: [2] });
+    // (and a step's exit's set held off the page - set 3, wired on to step 6: workflow/held - with its step, lying nowhere itself)
+    expect(flowIn(d, "box", [{ x: -1, y: -1 }, { x: 10, y: 5 }])).toEqual({ sets: [1, 3], steps: [2] });
     const lasso = [{ x: 10, y: -5 }, { x: 40, y: -5 }, { x: 40, y: 40 }, { x: 10, y: 40 }];
     // (sets 11 and 12, step 10's exits, stand to the right of the lasso)
-    expect(flowIn(d, "lasso", lasso)).toEqual({ sets: [3, 4, 7, 8], steps: [6, 10] });
+    // (set 3 held - lying nowhere - and its step, 2, not taken)
+    expect(flowIn(d, "lasso", lasso)).toEqual({ sets: [4, 7, 8], steps: [6, 10] });
     expect(partsBounds(partsOf(d, new Set([1]), new Set([2])))).toEqual({ x0: 0, y0: Math.min(0, 3 - CARD_H), x1: 6 + CARD_W, y1: 4 });
     expect(partsBounds(partsOf(d, new Set(), new Set([10])))).toEqual({ x0: 30, y0: 30 - CARD_H, x1: 30 + CARD_W, y1: 30 });
   });

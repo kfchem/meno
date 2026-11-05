@@ -53,7 +53,7 @@ export function addTableSet(doc: WorkspaceDocument, at: { x: number; y: number }
 
 /** A set's members, as given: a step's result set holding what the step made, in its order - on the page, so no collection of its own; and how many of them did not read, where some did not (`WorkflowSet.unread`). */
 export function holdMembers(doc: WorkspaceDocument, id: number, members: Member[], unread?: number): WorkspaceDocument {
-  return withSet(doc, id, ({ collection: _c, drawnCollection: _d, unread: _u, ...b }) => ({ ...b, members, ...(unread ? { unread } : {}) }));
+  return withSet(doc, id, ({ collection: _c, drawnCollection: _d, unread: _u, heldIds: _h, ...b }) => ({ ...b, members, ...(unread ? { unread } : {}) }));
 }
 
 /**
@@ -77,7 +77,7 @@ export function holdCollection(
   held: { collection: NonNullable<WorkflowSet["collection"]> } | { drawnCollection: NonNullable<WorkflowSet["drawnCollection"]> },
   unread?: number,
 ): WorkspaceDocument {
-  return withSet(doc, id, ({ unread: _u, collection: _c, drawnCollection: _d, ...b }) => ({ ...b, members: [], ...held, ...(unread ? { unread } : {}) }));
+  return withSet(doc, id, ({ unread: _u, collection: _c, drawnCollection: _d, heldIds: _h, ...b }) => ({ ...b, members: [], ...held, ...(unread ? { unread } : {}) }));
 }
 
 /** How large a set holding a chart is made, on the page: its axes, labels and points. */

@@ -5,6 +5,9 @@ import { useAppSettings } from "../../../lib/settings/appSettings";
 import { DURATION } from "../../theme/motion";
 import { useEditor } from "./store";
 import type { EditorState } from "./store/types";
+import type { WorkspaceDocument } from "./document";
+import type { RunWith } from "./workflow/run";
+import { reachOverFrames } from "./utils/molecule3d";
 
 /**
  * How a workspace's molecules in 3D look and turn: its styles in 3D (its
@@ -15,6 +18,17 @@ export function style3dOf(st: Partial<Pick<EditorState, "docStyle3d">>): Style3D
   // (a page that is no workspace's - an abbreviation's picture: Meno's own)
   return style3dIn(st.docStyle3d ?? DEFAULT_WORKSPACE_3D, useAppSettings.getState().style3d);
 }
+
+/**
+ * How far a molecule in 3D reaches on the page about its middle, in a
+ * document's styles in 3D with Settings' (utils/molecule3d
+ * `reachOverFrames`): what a set held off the page needs to be laid out on
+ * it again (document `createWorkspaceDocument`, workflow/held).
+ */
+export const extentIn =
+  (doc: Pick<WorkspaceDocument, "style3d">): RunWith["extentOf"] =>
+  (m, turn) =>
+    reachOverFrames({ ...m, id: 0 }, style3dOf({ docStyle3d: doc.style3d }), turn);
 
 /** The same, for a component: it draws again as the workspace's styles, or Settings', change. */
 export function useStyle3D(): Style3D {

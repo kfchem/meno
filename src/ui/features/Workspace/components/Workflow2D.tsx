@@ -16,6 +16,7 @@ import { countOf, countSaid, numberedOn, recordHow, recordNumber, recordWhy, typ
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { lookEvery } from "../workflow/lookEvery";
 import { labelReach, selectionFrame, selectionInSet } from "../workflow/selectionSet";
+import { setsOnPage } from "../workflow/held";
 import { useDrawnLayout } from "./drawnLayoutContext";
 import { useShownFrames } from "./useShownFrames";
 import { useMemberMarks } from "./useMemberMarks";
@@ -396,6 +397,8 @@ export default function Workflow2D() {
   const sets = useEditor((s) => s.sets);
   const steps = useEditor((s) => s.steps);
   const wires = useEditor((s) => s.wires);
+  // (the sets that lie on the page: all but those held off it - their exits wired on, workflow/held - whose frames are drawn nowhere)
+  const onPage = useMemo(() => setsOnPage({ sets, wires }, sets), [sets, wires]);
   const model = useEditor((s) => s.model);
   const molecules3d = useEditor((s) => s.molecules3d);
   const pictures = useEditor((s) => s.pictures);
@@ -433,9 +436,9 @@ export default function Workflow2D() {
     store.getState().fitResultSets();
   }, [store, style3d]);
   // (each set's frame as it is drawn: on its way to where the document has it)
-  const shownSets = useShownFrames(sets);
+  const shownSets = useShownFrames(onPage);
   // (what has just joined a set or left it, marked a moment)
-  const memberMarks = useMemberMarks(sets, { model, molecules3d, pictures }, (m) => reachOverFrames(m, style3d, turns3d[m.id]));
+  const memberMarks = useMemberMarks(onPage, { model, molecules3d, pictures }, (m) => reachOverFrames(m, style3d, turns3d[m.id]));
   const shownOf = (b: WorkflowSet): Frame => shownSets.get(b.id) ?? b;
   // (each structure a step numbered - Enumerate's - its number under it, how it was made on pointing at it)
   const numbered = useMemo(() => numberedOn({ model }, sets), [model, sets]);
@@ -603,16 +606,15 @@ export default function Workflow2D() {
     else st.connect(from, step, port);
   };
 
-  /** A wire drawn out of a set - from its own port, or its step's for that exit (`card`): into a step's input, or - let go on empty space - Quick Add there, at the steps that take it. */
-  const drawFrom = (e: ReactPointerEvent, from: WireEnd, card = false) => {
+  /** A wire drawn out of a set - a step's result set's from its exit's port on the card (held `wireStart`): into a step's input, or - let go on empty space - Quick Add there, at the steps that take it. */
+  const drawFrom = (e: ReactPointerEvent, from: WireEnd) => {
     if (e.button !== 0) return;
     // (pictures - a Render step's - no step takes: no wire is drawn out of them)
     if (givesOf(store.getState(), from) === "pictures") return;
-    const out = card ? { card: true as const } : {};
-    store.getState().setWorkflowView({ wireDrag: { from, at: worldOf(e.clientX, e.clientY), ...out }, wireRefused: null });
+    store.getState().setWorkflowView({ wireDrag: { from, at: worldOf(e.clientX, e.clientY) }, wireRefused: null });
     follow(
       e,
-      (at) => store.getState().setWorkflowView({ wireDrag: { from, at, ...out } }),
+      (at) => store.getState().setWorkflowView({ wireDrag: { from, at } }),
       (moved, ev) => {
         const st = store.getState();
         st.setWorkflowView({ wireDrag: null });
@@ -791,14 +793,15 @@ export default function Workflow2D() {
   const setById = useMemo(() => new Map(sets.map((b) => [b.id, b])), [sets]);
   // (each step's exits' sets, by step and exit: a port drawn for each)
   const exitSets = useMemo(() => new Map(sets.flatMap((b) => (b.made ? [[`${b.made.step}:${b.made.exit}`, b] as const] : []))), [sets]);
-  const gives = (end: WireEnd): Pt | null => {
-    const b = setById.get(end.set);
-    return b ? setGives(shownOf(b)) : null;
-  };
-  /** Where a step's result set's exit gives on its card (look `stepGives`): the port the line to the set leaves from. */
+  /** Where a step's result set's exit gives on its card (look `stepGives`): the port its wires, and the line to the set where it is on the page, leave from. */
   const exitGives = (b: WorkflowSet): Pt | null => {
     const s = b.made ? stepById.get(b.made.step) : undefined;
     return s && b.made ? stepGives(s, exitPlace(s.kind, b.made.exit)) : null;
+  };
+  /** Where a wire out of a set starts (held `wireStart`): a step's result set's at its exit's port on the card, held or not; a set the chemist made, at its frame's right side, as it is drawn. */
+  const gives = (end: WireEnd): Pt | null => {
+    const b = setById.get(end.set);
+    return b ? (exitGives(b) ?? setGives(shownOf(b))) : null;
   };
   // (a step whose options are its role's starts from Settings' choices for it: those changed, its card and state follow)
   const settingsOptions = useAppSettings((s) => s.options);
@@ -878,7 +881,7 @@ export default function Workflow2D() {
   const drawing = useDrawnLayout();
   const labels = useMemo(() => labelReach(drawing.layout, drawing.atoms, drawing.opts), [drawing.layout, drawing.atoms, drawing.opts]);
   const asSet = useMemo(
-    () => (selectionInSet({ model, molecules3d, pictures }, sel.atoms, sel3d, sets) ? null : selectionFrame(model, sel.atoms, molecules3d, sel3d, style3d, turns3d, frames3d, labels)),
+    () => (selectionInSet({ model, molecules3d, pictures }, sel.atoms, sel3d, onPage) ? null : selectionFrame(model, sel.atoms, molecules3d, sel3d, style3d, turns3d, frames3d, labels)),
     [sel, sel3d, model, molecules3d, pictures, sets, style3d, turns3d, frames3d, labels],
   );
 
@@ -909,8 +912,7 @@ export default function Workflow2D() {
   const drawn = (() => {
     if (!wireDrag) return null;
     if (wireDrag.from) {
-      const b = wireDrag.card ? setById.get(wireDrag.from.set) : undefined;
-      const p = (b && exitGives(b)) ?? gives(wireDrag.from);
+      const p = gives(wireDrag.from);
       return p ? { p, q: wireDrag.at } : null;
     }
     const s = wireDrag.to != null ? stepById.get(wireDrag.to.step) : undefined;
@@ -919,7 +921,7 @@ export default function Workflow2D() {
 
   // sets and steps, each drawn as it is - and those just gone, as they last were, fading out
   const parts = [
-    ...sets.map((b) => {
+    ...onPage.map((b) => {
       const info = setInfo.get(b.id)!;
       const f = shownOf(b);
       return (
@@ -995,7 +997,7 @@ export default function Workflow2D() {
   const portR = 4.5 / zoom;
   // the wires: each drawn, and each step's to the set it made - each going round what it leaves and comes into, where it comes back (a step's card as it stands shut: where wires join it, look `wireCurve`)
   const cardFrame = (s: WorkflowStep): Frame => ({ x0: s.x, x1: s.x + CARD_W, y0: s.y - CARD_H, y1: s.y });
-  const around = [...sets.map(shownOf), ...steps.map(cardFrame)];
+  const around = [...onPage.map(shownOf), ...steps.map(cardFrame)];
 
   // (each wire with the sets and cards near it, which it may go round, and those as one number: worked out again only where it or they moved - look `nearWire`, `wireKey`)
   const endsNear = (p: Pt, q: Pt, e: Ends): Ends => {
@@ -1016,19 +1018,21 @@ export default function Workflow2D() {
       if (!p || !s) return [];
       const failed = states.get(s.id) === "failed";
       const from = setById.get(w.from.set);
+      // (leaving a card - a step's result set's, from its exit's port - or a set's frame)
+      const by = from?.made ? stepById.get(from.made.step) : undefined;
       return [
         {
           key: `w${w.id}`,
           p,
           q: stepTakes(s, w.to.port),
-          ends: endsNear(p, stepTakes(s, w.to.port), { ...(from ? { from: shownOf(from) } : {}), to: cardFrame(s), ...leadInto(s, w.to.port) }),
+          ends: endsNear(p, stepTakes(s, w.to.port), { ...(by ? { from: cardFrame(by) } : from ? { from: shownOf(from) } : {}), to: cardFrame(s), ...leadInto(s, w.to.port) }),
           moving: !!s.running && hoveredWire !== w.id,
           color: hoveredWire === w.id ? COLORS.highlight : failed ? ATTENTION : WIRE,
           onHover: (on: boolean) => (on ? hover({ hoveredWire: w.id }) : unhover("hoveredWire", w.id)),
         },
       ];
     }),
-    ...sets.flatMap((b) => {
+    ...onPage.flatMap((b) => {
       const s = b.made ? stepById.get(b.made.step) : undefined;
       const p = exitGives(b);
       return s && p ? [{ key: `m${b.id}`, p, q: setTakes(shownOf(b)), ends: endsNear(p, setTakes(shownOf(b)), { from: cardFrame(s), to: shownOf(b) }), moving: false, color: WIRE, onHover: undefined }] : [];
@@ -1100,10 +1104,11 @@ export default function Workflow2D() {
       {/* (but those under a step's card opened over the rest: it is over them, and takes the press) */}
       <PageHtml transform distanceFactor={HTML_DISTANCE} position={[0, 0, 0]} zIndexRange={[PORTS_Z, PORTS_Z]} pointerEvents="none">
         <div ref={portsLayer} style={{ position: "relative", width: 0, height: 0 }}>
-          {sets.map((b) => {
+          {/* (a set's own port: a set the chemist made's - a step's result set gives from its exit's port on the card, below) */}
+          {onPage.map((b) => {
             const f = shownOf(b);
             const info = setInfo.get(b.id)!;
-            if (underCard({ x: f.x1, y: (f.y0 + f.y1) / 2 }, coverFrame, portR)) return null;
+            if (b.made || underCard({ x: f.x1, y: (f.y0 + f.y1) / 2 }, coverFrame, portR)) return null;
             return (
               <div key={`b${b.id}`} className="meno-fade-in" style={{ ...onLayer(f.x1, (f.y0 + f.y1) / 2), width: 0, height: 0 }}>
                 <Port look={portLook("give", { set: b.id })} label={`Out of ${info.name}`} data={{ "data-give-set": String(b.id) }} onPointerDown={(e) => drawFrom(e, { set: b.id })} style={{ left: 0, top: 0 }} of={(f.y1 - f.y0) / PX} />
@@ -1139,7 +1144,7 @@ export default function Workflow2D() {
                       look={portLook("give", { set: b.id })}
                       label={exits.length > 1 ? `${setInfo.get(b.id)?.name ?? x.name} out of ${name}` : `Out of ${name}`}
                       data={{ "data-give-set": String(b.id) }}
-                      onPointerDown={(e) => drawFrom(e, { set: b.id }, true)}
+                      onPointerDown={(e) => drawFrom(e, { set: b.id })}
                       style={{ left: CARD_W / PX, top: portDown(k) / PX }}
                       of={CARD_H / PX}
                     />

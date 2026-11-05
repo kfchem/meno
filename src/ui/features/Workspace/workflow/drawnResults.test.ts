@@ -4,7 +4,7 @@ import type { DrawnModel, DrawnRecord, Model, WorkflowSet } from "../store/types
 import { BEFORE_THE_EDIT, countOf, countSaid, heldOwn, drawnHash, holdsOf, numberedRecord, readDrawnRecord, recordNumber, setMembers } from "./entries";
 import { canWire, givesOf, inputKey, inputOf, resultOf, stateOf } from "./flow";
 import { runMenoDrawn } from "./meno";
-import { addSet, addStep, connect, membersSettled, removeStep } from "./model";
+import { addSet, addStep, connect, membersSettled, removeStep, removeWire } from "./model";
 import { drawnEntries, inputEntries, keepRun, placeResults, resultsNow, runStep, showRun, type RunResults, type RunWith } from "./run";
 import { DRAWN_ON_PAGE, PX } from "./look";
 import { boxOf } from "../chem/make3d";
@@ -400,7 +400,8 @@ describe("structures drawn, each with its record", () => {
     doc = connect(doc, { set: out.id }, doc.steps![1].id);
     const input = inputOf(doc, doc.steps![1].id)!;
     expect(bare(drawnEntries(doc.model, input.structures, input.records).map((e) => e.record))).toEqual([numbered, undefined]);
-    // (a run kept keeps them, and gives them back when shown again)
+    // (a run kept keeps them, and gives them back when shown again - on the page: its exit not wired on, so not held off it, workflow/held)
+    doc = removeWire(doc, doc.wires![doc.wires!.length - 1]!.id);
     doc = { ...doc, steps: doc.steps!.map((s) => ({ ...s, ran: { at: 1, ok: true, said: "first", input: "k", kind: s.kind } })) };
     expect(bare(resultsNow(doc, step())!.drawn!.made.map((m) => m.record))).toEqual([numbered, undefined]);
     doc = keepRun(doc, step());

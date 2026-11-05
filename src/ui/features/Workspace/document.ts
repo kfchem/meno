@@ -38,6 +38,8 @@ import { readResults } from "../../../lib/calc/results";
 import { inMenosForm, type CalcInfo } from "../../../lib/calc/output";
 import { newTextName } from "./utils/texts";
 import { fitSets, membersSettled } from "./workflow/model";
+import { heldSettled } from "./workflow/held";
+import type { RunWith } from "./workflow/run";
 
 export type WorkspaceDocument = {
   model: Model;
@@ -167,9 +169,17 @@ export function emptyWorkspaceDocument(style: StyleChoice = DEFAULT_STYLE_CHOICE
  * Settings' as it is made, given by whoever makes it (views/registry):
  * this module reads no settings. The tab's data may carry a file to import (`payload`), which
  * the view parses and applies, so the document starts empty here - or
- * files opened as text (`texts`), which it starts holding.
+ * files opened as text (`texts`), which it starts holding. `extentIn`:
+ * how far a molecule in 3D reaches on the page in a document's styles in
+ * 3D, with Settings' - what a set held off the page needs to be laid out
+ * on it again (workflow/held); none, its molecules stay held.
  */
-export function createWorkspaceDocument(data?: unknown, style: StyleChoice = DEFAULT_STYLE_CHOICE, style3d: Workspace3D = DEFAULT_WORKSPACE_3D): DocumentStore<WorkspaceDocument> {
+export function createWorkspaceDocument(
+  data?: unknown,
+  style: StyleChoice = DEFAULT_STYLE_CHOICE,
+  style3d: Workspace3D = DEFAULT_WORKSPACE_3D,
+  extentIn?: (doc: WorkspaceDocument) => RunWith["extentOf"],
+): DocumentStore<WorkspaceDocument> {
   const opened = (data as { texts?: unknown } | null | undefined)?.texts;
   const texts = (Array.isArray(opened) ? (opened as Partial<WorkspaceText>[]) : []).flatMap((t) =>
     typeof t?.name === "string" && typeof t.text === "string"
@@ -183,11 +193,19 @@ export function createWorkspaceDocument(data?: unknown, style: StyleChoice = DEF
   const pictures = (data as { pictures?: unknown } | null | undefined)?.pictures;
   for (const p of picturesInRow(Array.isArray(pictures) ? (pictures as PictureToAdd[]) : [], { x: 0, y: 0 })) doc = addPicture(doc, p);
   // (each edit's sets grown to keep what is drawn on in them inside them, as
-  // part of it - and its stacks of drawings kept whole: utils/stacks)
+  // part of it - and its stacks of drawings kept whole: utils/stacks; its
+  // result sets held off the page or laid out on it as it wires them,
+  // workflow/held, in the same step)
   // (its history held to about 100 MB: what a step costs is the atoms and
   // bonds it copies - the lists a drawing's edit makes anew, not those it
   // shares with the step before; the maintainer, 2026-10-13)
-  return createDocument<WorkspaceDocument>(doc, { settle: (next, before) => withRecordsSettled(membersSettled(fitSets(withOneMagnification(next, before), before), before), before), cost: stepCost });
+  return createDocument<WorkspaceDocument>(doc, {
+    settle: (next, before) => {
+      const held = heldSettled(next, before, extentIn?.(next));
+      return withRecordsSettled(membersSettled(fitSets(withOneMagnification(held, before), before), before), before);
+    },
+    cost: stepCost,
+  });
 }
 
 /** What keeping a workspace's state in its history costs beyond the one before it: the atom and bond lists it does not share with it. */
@@ -985,19 +1003,39 @@ export function replaceModel(
   };
 }
 
-/** Adds another structure alongside the current one, renumbering its ids. */
+/** Every id a drawing's atoms, their Sgroups (each once, however many atoms share it) and its bonds are known by. */
+function idsOf(m: Model): number[] {
+  const groups = new Set(m.atoms.flatMap((a) => (a.sgroups ?? []).map((g) => g.id)));
+  return [...m.atoms.map((a) => a.id), ...groups, ...m.bonds.map((b) => b.id)];
+}
+
+/** Whether none of `next`'s ids is one of `model`'s already, and none twice in it: it may be added on them. */
+function ownIdsFree(model: Model, next: Model): boolean {
+  const used = new Set(idsOf(model));
+  const mine = idsOf(next);
+  return new Set(mine).size === mine.length && mine.every((id) => !used.has(id));
+}
+
+/**
+ * Adds another structure alongside the current one, renumbering its ids -
+ * or, `keep`, on its own ids where none of them is the document's already
+ * (a structure held off the page laid out again, workflow/held: what was
+ * worked out from it names its atoms by them), renumbered where any is.
+ */
 export function appendModel(
   doc: WorkspaceDocument,
   next: Model & { pushes?: readonly PushArrow[]; ringFills?: RingFills },
+  keep = false,
 ): WorkspaceDocument {
   if (next.atoms.length === 0 && next.bonds.length === 0) return doc;
+  const own = keep && ownIdsFree(doc.model, next);
   const idMap = new Map<number, number>();
   let cursor = doc.nextId;
-  for (const a of next.atoms) idMap.set(a.id, cursor++);
+  for (const a of next.atoms) idMap.set(a.id, own ? a.id : cursor++);
   // its Sgroups made its own, apart from any of the same id already here
   const groups = new Map<number, number>();
   const groupId = (g: number) => {
-    if (!groups.has(g)) groups.set(g, cursor++);
+    if (!groups.has(g)) groups.set(g, own ? g : cursor++);
     return groups.get(g)!;
   };
   // (a stack of drawings it brings numbered after the document's own; one record copied out of its stack, that record alone)
@@ -1028,7 +1066,7 @@ export function appendModel(
     const a = idMap.get(b.a) ?? b.a;
     const z = idMap.get(b.b) ?? b.b;
     if (starless.has(a) || starless.has(z)) return [];
-    const id = cursor++;
+    const id = own ? b.id : cursor++;
     bondMap.set(b.id, id);
     return [
       {
@@ -1059,7 +1097,7 @@ export function appendModel(
   });
   return {
     ...doc,
-    nextId: cursor,
+    nextId: own ? Math.max(cursor, 1 + Math.max(0, ...idsOf(next))) : cursor,
     model: {
       atoms: [...doc.model.atoms, ...(starless.size ? atoms.filter((a) => !starless.has(a.id)) : atoms)],
       bonds: [...doc.model.bonds, ...bonds],

@@ -590,7 +590,9 @@ describe("running", () => {
     // (its result sets' entries replaced, not added to: all five within it now, none outside)
     expect(held(doc, resultOf(doc, WINDOW)!.id).molecules[0].numbers).toEqual([1, 2, 3, 4, 5]);
     expect(countOf(doc, resultOf(doc, WINDOW, "rest")!).entries).toBe(0);
-    expect(doc.molecules3d!.filter((m) => m.conformerSet)).toHaveLength(2);
+    // (on the page, the window's conformer set alone: As conformers', wired on into it, held in its set - workflow/held)
+    expect(doc.molecules3d!.filter((m) => m.conformerSet)).toHaveLength(1);
+    expect(resultOf(doc, CONVERT)!.collection!.filter((m) => m.conformerSet)).toHaveLength(1);
   });
 
   it("runs first a step changed however far back, and every step from it on - each on what the one before it gave anew", () => {

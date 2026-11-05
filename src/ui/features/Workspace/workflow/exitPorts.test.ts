@@ -45,6 +45,6 @@ describe("a step's exits' ports (docs/WORKFLOWS.md, *Exit ports*)", () => {
 
   it("are drawn on the ports layer, one for each exit with a set, its set's - a wire drawn out of it drawn out of that set, from the card", () => {
     const layer = readFileSync(join(__dirname, "../components/Workflow2D.tsx"), "utf8");
-    expect(layer).toMatch(/exits\.map\(\(x, k\) =>[\s\S]*data-give-set[\s\S]*drawFrom\(e, \{ set: b\.id \}, true\)[\s\S]*left: CARD_W \/ PX, top: portDown\(k\) \/ PX/);
+    expect(layer).toMatch(/exits\.map\(\(x, k\) =>[\s\S]*data-give-set[\s\S]*drawFrom\(e, \{ set: b\.id \}\)[\s\S]*left: CARD_W \/ PX, top: portDown\(k\) \/ PX/);
   });
 });

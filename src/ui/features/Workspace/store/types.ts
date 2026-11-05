@@ -768,6 +768,21 @@ export type WorkflowSet = {
    * on no page. The steps after it take them from here.
    */
   drawnCollection?: DrawnModel[];
+  /**
+   * A step's result set whose exit is wired on, opened by the chemist to
+   * be seen on the page (docs/WORKFLOWS.md, *Held results*): laid out as
+   * one not wired on is, until they close it. Not opened, such a set is
+   * held - what it holds kept in the set itself, off the page, its frame
+   * drawn nowhere (workflow/held `heldSets`).
+   */
+  opened?: true;
+  /**
+   * A held set's molecules in 3D: the ids they had on the page, by their
+   * place in its collection (workflow/held) - given back as it is laid out
+   * again, so that what names them (a text shown from one, a chart's
+   * point) finds them again. This session's only: never in a file.
+   */
+  heldIds?: number[];
   /** A result set opened from a file, or an earlier run's shown again: how many of its molecules or structures did not read, and were left out - said with its count until the step runs again. */
   unread?: number;
   /** A table it holds (lib/table, docs/WORKFLOWS.md *Tables*): read from a file and put on the page, or a step's; no members then. */
@@ -1624,12 +1639,11 @@ export type EditorState = {
   /** A set's tab or a step's card right-clicked: its menu asked for, there (Workspace opens it). */
   workflowMenu: { kind: "set" | "step"; id: number; clientX: number; clientY: number } | null;
   /**
-   * A wire being drawn, to where the pointer is: from what gives - drawn
-   * out of its step's port for that exit, where it was pressed there
-   * (`card`) - or back from a step that takes (`to`); picked up off the
-   * step it went into, the wire it was (`was`).
+   * A wire being drawn, to where the pointer is: from what gives, or back
+   * from a step that takes (`to`); picked up off the step it went into,
+   * the wire it was (`was`).
    */
-  wireDrag: { from?: WireEnd; to?: WireTo; at: { x: number; y: number }; was?: number; card?: true } | null;
+  wireDrag: { from?: WireEnd; to?: WireTo; at: { x: number; y: number }; was?: number } | null;
   /** A wire let go on a step's input that does not take it: the step, and why (flow `wireRefusal`) - said on its card until a wire is drawn again. */
   wireRefused: { step: number; said: string } | null;
   setWorkflowView: (patch: Partial<Pick<EditorState, WorkflowView>>) => void;
