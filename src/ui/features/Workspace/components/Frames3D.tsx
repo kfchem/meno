@@ -10,9 +10,9 @@ import { barsAbove, NO_LOWEST, NOT_FINISHED } from "../utils/barsAbove";
 import { chipShiftOf, chipWidthOf } from "../utils/chipWidth";
 import { greatest } from "../../../../lib/chem/lists";
 import { FAILURE_WORDS, WARNING_WORDS, type Failure, type Warning } from "../workflow/failures";
-import { imaginaryWords } from "../../../../lib/calc/output";
 import { PORTS_Z } from "../workflow/look";
 import { FRAMES_CHIP_GAP } from "../utils/molecule3d";
+import { chipMarks, share } from "../utils/chipSaid";
 
 /** The bars' and the slider's width, the bars' height, and the room either side, in pixels. */
 const WIDTH = 196;
@@ -31,10 +31,6 @@ const GAP = FRAMES_CHIP_GAP;
 /** How long it stays over the rest once shut, while its lines go and it shrinks back: the length of its own easing, and a little more. */
 const SHUTTING_MS = SHOW_MS + GROW_MS + 100;
 
-/** A conformer's share of its set, as it is written: "62%", "<1%" - and ">99%" where others share the rest. */
-function share(p: number): string {
-  return p < 0.005 ? "<1%" : p > 0.995 && p < 1 ? ">99%" : `${Math.round(p * 100)}%`;
-}
 
 /** An energy above the lowest, as it is written: "1.23 kcal/mol" (lib/calc/results). */
 const relative = aboveText;
@@ -131,6 +127,7 @@ export function FramesChip({
   imaginary,
   fromStart,
   onOpened,
+  onActive,
 }: {
   count: number;
   frame: number;
@@ -178,6 +175,8 @@ export function FramesChip({
   fromStart?: boolean;
   /** Told as it is opened by a click, and as it shuts: its molecule takes it clear of its set (Molecule3DView), and it goes above the rest. */
   onOpened?: (opened: boolean) => void;
+  /** Told whether it is in use - pointed at, opened, or still shutting - and not as the page draws it shut by WebGL (Molecule3DView). */
+  onActive?: (active: boolean) => void;
 }) {
   const [hovered, setHovered] = useState(false);
   // (what it says pointed at: the details above it - not its bars or its
@@ -286,7 +285,20 @@ export function FramesChip({
     const t = window.setTimeout(() => setLingering(false), LINGER_MS);
     return () => window.clearTimeout(t);
   }, [open]);
-  const shown = !single || !!title || open || hovered || lingering || pinned;
+  // (a single geometry's chip, made as its molecule is pointed at - Molecule3DView makes it only then - shown a frame
+  //  after it is made, so that it fades in as it did when it was there all along)
+  const [ready, setReady] = useState(!single);
+  useEffect(() => {
+    if (ready) return;
+    const id = requestAnimationFrame(() => setReady(true));
+    return () => cancelAnimationFrame(id);
+  }, [ready]);
+  const shown = (!single || !!title || open || hovered || lingering || pinned) && ready;
+  // (in use while pointed at, opened, or its lines still going as it shuts - a single geometry's while it lingers too)
+  const active = hovered || opened || read.grown > 0 || (count < 2 && !conformers && lingering);
+  useEffect(() => {
+    onActive?.(active);
+  }, [active, onActive]);
   // what the calculation found of the molecule, and of the frame told
   const details: CardGroups = cardGroupsOf([...resultsOn(results, "molecule"), ...resultsOn(results, "frames")], (r) => {
     const v = r.on === "molecule" ? r.value : (r.values[told] ?? null);
@@ -300,14 +312,7 @@ export function FramesChip({
   if (noShares) details.push({ group: "Shares", rows: [{ label: "None", text: noShares }] });
   // (why the one told failed, and what its calculation warned of: said on it, and in full, opened - in the program's own words)
   const failure = failed?.[told] ?? undefined;
-  const saddle = imaginary?.[told];
-  const marks = [
-    failure ? FAILURE_WORDS[failure.kind] : "",
-    saddle?.length ? imaginaryWords(saddle) : "",
-    warnings?.length ? `${warnings.length} warning${warnings.length === 1 ? "" : "s"}` : "",
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const marks = chipMarks({ failed, imaginary, warnings }, told);
   if (failure) details.unshift({ group: "Failed", rows: [{ label: upper(FAILURE_WORDS[failure.kind]), text: failure.why }] });
   if (warnings?.length) details.push({ group: "Warnings", rows: warnings.map((w) => ({ label: upper(WARNING_WORDS[w.kind]), text: w.text })) });
   const line = (energy?: number) => unitsHeld(chipLine([about ?? "", energy != null ? absolute(energy) : ""], results));

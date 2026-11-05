@@ -14,7 +14,7 @@ import type { Look3D, Measure3D, Molecule3D, Rising3D, Turn3D } from "../store/t
 import { menoShader } from "../utils/menoShader";
 import { NOTES_SCALE, pageScale } from "../utils/pageScale";
 import { bentStickGeometry, stickBends, withStickBend } from "../utils/stickBend";
-import { imaginaryShown, withCentres, fadeStep, bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, plainNoteOf, frameOf, framesChipAt, labelSpot, linesOf, magnifiedOf, seenShare, sharesOf, sharesWithheld, solidOf, spotFollowed, valueSpots, widestWay, WORLD_PER_ANGSTROM, type BondLine, type DrawnBond, type LabelBox, type LabelFade, type SpotAbout, type Stick, type ValueAt } from "../utils/molecule3d";
+import { FRAMES_CHIP_GAP, imaginaryShown, withCentres, fadeStep, bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, plainNoteOf, frameOf, framesChipAt, labelSpot, linesOf, magnifiedOf, seenShare, sharesOf, sharesWithheld, solidOf, spotFollowed, valueSpots, widestWay, WORLD_PER_ANGSTROM, type BondLine, type DrawnBond, type LabelBox, type LabelFade, type SpotAbout, type Stick, type ValueAt } from "../utils/molecule3d";
 import { MARK_MIN_PX, MARK_SCALE, marksReadAt, stereoTextEms } from "../chem/marks";
 import { switchFade, switchStep } from "../utils/zoomSwitch";
 import { LONG_PRESS_SHOW_MS } from "../constants";
@@ -46,6 +46,9 @@ import { typedValue } from "../utils/typedValue";
 import { raycastCylinders, raycastSpheres } from "./raycast3d";
 import { commitInstanceMatrices } from "./instances";
 import { named3d } from "../workflow/selectionSet";
+import { usePlaced } from "../pageGl/PagePlaced";
+import { CHIP_HEIGHT, shutChip } from "../pageGl/chips";
+import { setChipRuns } from "../utils/chipSaid";
 import { refinedFrame } from "../workflow/takeFrames";
 import MagnifiedMark from "./MagnifiedMark";
 
@@ -338,6 +341,15 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   const pieces = useRef<THREE.InstancedMesh>(null!);
   const fans = useRef<THREE.Mesh>(null!);
   const pill = useRef<THREE.Group>(null!);
+  // (its frames chip shut drawn by WebGL with every other one - pageGl/chips - and its HTML only while it is in use:
+  //  pointed at, which the WebGL chip says, or opened, or shutting, which the HTML one says)
+  const [chipPointed, setChipPointed] = useState(false);
+  const [chipActive, setChipActive] = useState(false);
+  // (its chip's anchor there once it is mounted: drawn again then, so that the chip is placed - pageGl/PagePlaced)
+  const [pillThere, setPillThere] = useState(false);
+  useEffect(() => {
+    if (!pillThere && pill.current) setPillThere(true);
+  });
   // (its frames chip opened by a click: Frames3D says so - and kept over the rest until it is back where it hangs shut)
   const framesOpened = useRef(false);
   const [chipRaised, setChipRaised] = useState(false);
@@ -1669,6 +1681,50 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     });
   };
 
+  // its frames chip, shut, drawn by WebGL with every other one where it is a set's and carries no controls below it
+  // (pageGl/chips): a single geometry's, said over lines of its own, and one with Make again or a list under it, stay HTML
+  const count = solid.frames.length;
+  const chipByGl = (count > 1 || !!m.conformerSet) && !props.stacked && !props.rising;
+  const chipKey = `chip:${m.id}`;
+  // (a single geometry's chip, untitled, seen only while its molecule is pointed at: not made at all otherwise - hidden, it
+  //  was some fifty elements a molecule for nothing)
+  const chipUnseen = count < 2 && !m.conformerSet && !named3d(m) && !props.framesOpen && !chipActive;
+  usePlaced(
+    chipByGl && !chipPointed && !chipActive && pillThere && pill.current
+      ? {
+          key: chipKey,
+          anchor: pill.current,
+          words: true,
+          draw: (at) =>
+            shutChip(
+              chipKey,
+              setChipRuns({
+                count,
+                frame: frameOf(solid, frame),
+                energies: m.energies?.length === count ? m.energies : undefined,
+                numbers: m.numbers?.length === count ? m.numbers : undefined,
+                title: named3d(m) ? m.title : undefined,
+                populations: shares,
+                failed: m.failed?.length === count ? m.failed : undefined,
+                marksUnread: m.marksUnread,
+                warnings: m.calc?.warnings,
+                imaginary: imaginaryShown(m, count) || undefined,
+                fromStart: refinedFrame(m) != null,
+              }),
+              at,
+            ),
+          on: { hover: (_k, _p, on) => on && setChipPointed(true) },
+        }
+      : null,
+  );
+  // (the pointer gone from the HTML chip taken up in its place, and that one no longer in use: drawn by WebGL again)
+  useEffect(() => {
+    if (chipPointed && !chipActive) {
+      const t = window.setTimeout(() => setChipPointed(false), 250);
+      return () => window.clearTimeout(t);
+    }
+  }, [chipPointed, chipActive]);
+
   return (
     <group ref={dolly} matrixAutoUpdate={false}>
     <group ref={placed}>
@@ -1995,7 +2051,22 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
         <group ref={pill}>
           {/* (one of a stack: its stack's chip says which, not its own - StackChip3D; one called by a name of its own says it) */}
           {(solid.frames.length > 1 || m.conformerSet || m.calc || named3d(m) || m.failed?.some(Boolean)) && !props.stacked ? (
+            (chipByGl && !chipPointed && !chipActive) || chipUnseen ? (
+              // (what goes under the chip - Make again, a list of results - in HTML of its own, below the chip WebGL draws:
+              //  its controls not yet drawn by WebGL)
+              (props.onRemake || props.list) && (
+                <PageHtml zIndexRange={[30, 20]}>
+                  <div className="flex flex-col items-center" style={{ transform: `translate(-50%, calc(${FRAMES_CHIP_GAP + CHIP_HEIGHT}px * var(--page, 1)))` }}>
+                    <div className="flex flex-col items-center" style={{ ...PAGE_SIZED, pointerEvents: "auto" }}>
+                      {props.onRemake && <Changed onRemake={props.onRemake} />}
+                      {props.list}
+                    </div>
+                  </div>
+                </PageHtml>
+              )
+            ) : (
             <Frames3D
+              onActive={setChipActive}
               onOpened={(o) => {
                 framesOpened.current = o;
                 if (o && !chipRaisedNow.current) {
@@ -2034,6 +2105,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
               {...(imaginaryShown(m, solid.frames.length) ? { imaginary: imaginaryShown(m, solid.frames.length) } : {})}
               {...(refinedFrame(m) != null ? { fromStart: true } : {})}
             />
+            )
           ) : (
             <PageHtml zIndexRange={[30, 20]}>
               <div
