@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NOTES_SCALE, PAGE_PX, pageScale, pageSized, pageTold, notesSized, WORDS_LEAST, wordsReadAt, ZOOM_WRITTEN_STEP, zoomWritten } from "./pageScale";
+import { NOTES_SCALE, PAGE_PX, pageLayerStep, pagePx, pageScale, pageSized, pageTold, notesSized, WORDS_LEAST, wordsReadAt, ZOOM_WRITTEN_STEP, zoomWritten, type PageLayerState } from "./pageScale";
 import { SWITCH_BAND } from "./zoomSwitch";
 
 /** The zoom at which a page pixel is `scale` screen pixels. */
@@ -112,5 +112,54 @@ describe("the page's chips as the zoom moves", () => {
     expect(pageSized("middle").transformOrigin).toBe("50% 50%");
     expect(notesSized("foot")).toMatchObject({ transform: "scale(var(--notes-k, 1))", transformOrigin: "50% 100%" });
     expect(notesSized("foot").zoom).toBe(`clamp(${NOTES_SCALE.least}, var(--page, 1), ${NOTES_SCALE.most})`);
+  });
+});
+
+describe("the page's HTML layer, told at each frame", () => {
+  const names = (w: [string, string][]) => w.map(([n]) => n);
+
+  it("is told all first; while the zoom moves, only how far it is scaled, a frame more asked for each time; where it stops, laid out there, scaled no more, no frame more", () => {
+    const first = pageLayerStep(null, zoomAt(1), false);
+    expect(names(first.writes)).toEqual(["--page", "--page-k", "--notes-k", "--words", "--stand-in"]);
+    expect(first.again).toBe(false);
+    // (moving: scaled, laid out where it was)
+    const moving = pageLayerStep(first.now, zoomAt(1.2), false);
+    expect(names(moving.writes)).toEqual(["--page-k", "--notes-k"]);
+    expect(moving.writes[0][1]).toBe("1.2000");
+    expect(moving.again).toBe(true);
+    // (still moving, a step further: scaled again, a frame more again)
+    const further = pageLayerStep(moving.now, zoomAt(1.4), false);
+    expect(names(further.writes)).toEqual(["--page-k", "--notes-k"]);
+    expect(further.again).toBe(true);
+    // (standing still where it stopped: laid out there, scaled no more, the canvas left to rest)
+    const stood = pageLayerStep(further.now, zoomAt(1.4), true);
+    expect(names(stood.writes)).toEqual(["--page", "--page-k", "--notes-k"]);
+    expect(stood.writes).toContainEqual(["--page", pageScale(zoomAt(1.4)).toFixed(4)]);
+    expect(stood.writes).toContainEqual(["--page-k", "1.0000"]);
+    expect(stood.again).toBe(false);
+    // (and nothing more as it stays)
+    expect(pageLayerStep(stood.now, zoomAt(1.4), true).writes).toEqual([]);
+  });
+
+  it("tells the notes their own scale while it moves, held between their two scales", () => {
+    const at = pageLayerStep(null, zoomAt(1), true).now;
+    // (to three times: notes no larger than half as large again)
+    const step = pageLayerStep(at, zoomAt(3), false);
+    expect(step.writes).toContainEqual(["--notes-k", (NOTES_SCALE.most / 1).toFixed(4)]);
+  });
+
+  it("switches its words where they are too small to read, and back - told so, the attribute too", () => {
+    const at: PageLayerState = pageLayerStep(null, zoomAt(1), true).now;
+    const small = pageLayerStep(at, zoomAt(0.3), false);
+    expect(small.writes).toContainEqual(["--words", "0"]);
+    expect(small.wordsSmall).toBe(true);
+    expect(pageLayerStep(small.now, zoomAt(0.3), true).wordsSmall).toBeUndefined();
+    const back = pageLayerStep(pageLayerStep(small.now, zoomAt(0.3), true).now, zoomAt(1), false);
+    expect(back.writes).toContainEqual(["--words", "1"]);
+    expect(back.wordsSmall).toBe(false);
+  });
+
+  it("gives a length on its chips at the scale they are laid out at and scaled by as the zoom moves", () => {
+    expect(pagePx(10)).toBe("calc(10px * var(--page, 1) * var(--page-k, 1))");
   });
 });

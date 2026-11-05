@@ -1,7 +1,7 @@
 import { useContext, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { PageHtmlLayer } from "./coverLayer";
-import { pageScale, pageTold, wordsReadAt, WORDS_LEAST } from "../utils/pageScale";
+import { pageLayerStep, type PageLayerState } from "../utils/pageScale";
 
 /**
  * The page's scale, told to what is drawn on it in HTML (utils/pageScale):
@@ -19,33 +19,21 @@ export default function PageScale() {
   const layer = useContext(PageHtmlLayer);
   const camera = useThree((s) => s.camera);
   const invalidate = useThree((s) => s.invalidate);
-  // (what the layer was last told: the layer, the zoom its chips are laid out at, and how far they are scaled from it)
-  const told = useRef<{ layer: HTMLElement | null; laid: number; k: number; notesK: number }>({ layer: null, laid: NaN, k: 1, notesK: 1 });
-  // (whether the words are read now: switched past their threshold, as the zoom goes)
-  const read = useRef(pageScale(camera.zoom || 1) >= WORDS_LEAST);
-  // (the zoom the frame before: standing as it was, its chips are laid out at it - utils/pageScale `pageTold`)
+  // (what the layer was last told, and which layer: utils/pageScale `pageLayerStep`)
+  const told = useRef<{ layer: HTMLElement | null; state: PageLayerState | null }>({ layer: null, state: null });
+  // (the zoom the frame before: standing as it was, its chips are laid out at it)
   const before = useRef(NaN);
   useFrame(() => {
     if (!layer) return;
     const zoom = camera.zoom || 1;
     const still = zoom === before.current;
     before.current = zoom;
-    const t = told.current;
-    const fresh = t.layer !== layer;
-    const now = pageTold(fresh ? NaN : t.laid, zoom, still);
-    if (fresh || now.laid !== t.laid) layer.style.setProperty("--page", now.page.toFixed(4));
-    if (fresh || now.k !== t.k) layer.style.setProperty("--page-k", now.k.toFixed(4));
-    if (fresh || now.notesK !== t.notesK) layer.style.setProperty("--notes-k", now.notesK.toFixed(4));
-    told.current = { layer, laid: now.laid, k: now.k, notesK: now.notesK };
+    const step = pageLayerStep(told.current.layer === layer ? told.current.state : null, zoom, still);
+    for (const [name, value] of step.writes) layer.style.setProperty(name, value);
+    if (step.wordsSmall != null) layer.toggleAttribute("data-words-small", step.wordsSmall);
+    told.current = { layer, state: step.now };
     // (a frame more asked for while they are scaled: the canvas draws only when asked, and standing still they are then laid out as it is)
-    if (now.k !== 1) invalidate();
-    const words = wordsReadAt(zoom, read.current);
-    if (fresh || words !== read.current) {
-      read.current = words;
-      layer.style.setProperty("--words", words ? "1" : "0");
-      layer.style.setProperty("--stand-in", words ? "0" : "1");
-      layer.toggleAttribute("data-words-small", !words);
-    }
+    if (step.again) invalidate();
   });
   return null;
 }
