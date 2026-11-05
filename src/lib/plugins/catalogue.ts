@@ -76,7 +76,10 @@ export function issuedOk(v: unknown): v is string {
   const m = typeof v === "string" ? ISSUED.exec(v) : null;
   if (!m) return false;
   const [y, mo, d, h, mi, s] = m.slice(1).map(Number);
-  const t = new Date(Date.UTC(y, mo - 1, d, h, mi, s));
+  // (set as given - Date.UTC takes a year under 100 as 19xx - so that it reads as Meno's backend reads it)
+  const t = new Date(0);
+  t.setUTCFullYear(y, mo - 1, d);
+  t.setUTCHours(h, mi, s);
   return t.getUTCFullYear() === y && t.getUTCMonth() === mo - 1 && t.getUTCDate() === d && t.getUTCHours() === h && t.getUTCMinutes() === mi && t.getUTCSeconds() === s;
 }
 

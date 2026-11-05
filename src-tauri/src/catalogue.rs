@@ -831,10 +831,13 @@ mod tests {
     fn a_list_is_read_only_of_the_form_meno_reads_saying_when_it_was_issued_as_meno_takes_it_and_with_no_serial() {
         let list = |schema: u64, issued: &str| format!(r#"{{"schema":{schema},"issued":"{issued}","plugins":[]}}"#).into_bytes();
         assert_eq!(form_of(&list(1, "2026-11-05T13:04:09Z"), None).unwrap().1, "2026-11-05T13:04:09Z");
-        assert_eq!(form_of(&list(1, "2028-02-29T23:59:59Z"), None).unwrap().1, "2028-02-29T23:59:59Z");
+        // (leap years as the calendar has them: every fourth, not every hundredth, every four hundredth; each month's own last day)
+        for real in ["2028-02-29T23:59:59Z", "2000-02-29T00:00:00Z", "2026-12-31T00:00:00Z", "2026-04-30T00:00:00Z", "0001-01-01T00:00:00Z"] {
+            assert_eq!(form_of(&list(1, real), None).unwrap().1, real);
+        }
         assert_eq!(form_of(&list(2, "2026-11-05T13:04:09Z"), None).unwrap_err(), "the list is of a form this Meno does not read: a newer Meno may");
         // (to the second, in UTC, as `Z`, and a real time: nothing else)
-        for odd in ["2026-11-05T13:04:09.5Z", "2026-11-05T13:04Z", "2026-11-05T13:04:09+00:00", "2026-11-05T13:04:09", "2026-11-05 13:04:09Z", "2026-11-05", "2026-13-05T13:04:09Z", "2026-02-29T00:00:00Z", "2026-11-31T00:00:00Z", "2026-11-05T24:00:00Z", "2026-11-05T13:60:00Z", "2026-11-05T13:04:60Z", "+026-11-05T13:04:09Z", "2026-11-05t13:04:09z"] {
+        for odd in ["2026-11-05T13:04:09.5Z", "2026-11-05T13:04Z", "2026-11-05T13:04:09+00:00", "2026-11-05T13:04:09", "2026-11-05 13:04:09Z", "2026-11-05", "2026-13-05T13:04:09Z", "2026-02-29T00:00:00Z", "2026-11-31T00:00:00Z", "2026-11-05T24:00:00Z", "2026-11-05T13:60:00Z", "2026-11-05T13:04:60Z", "+026-11-05T13:04:09Z", "2026-11-05t13:04:09z", "1900-02-29T00:00:00Z", "2026-11-00T00:00:00Z", "2026-00-05T00:00:00Z", "2026-04-31T00:00:00Z", "2026-11-05T13:04:éZ"] {
             assert_eq!(form_of(&list(1, odd), None).unwrap_err(), "the list does not say when it was issued as Meno takes it", "{odd}");
         }
         assert_eq!(form_of(br#"{"schema":1,"plugins":[]}"#, None).unwrap_err(), "the list does not say when it was issued as Meno takes it");
