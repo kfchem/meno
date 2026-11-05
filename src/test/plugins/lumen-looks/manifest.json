@@ -1,0 +1,146 @@
+{
+  "id": "lumen-looks",
+  "name": "Lumen looks and motions",
+  "version": "1.0.0",
+  "description": "Looks, studios and motions for the Lumen renderer.",
+  "licence": "GPL-3.0-or-later",
+  "homepage": "https://example.org/lumen-looks",
+  "depends": [
+    {
+      "plugin": "lumen",
+      "versions": ">=0.5.0 <0.6.0",
+      "interfaces": [
+        {
+          "id": "preset",
+          "versions": ">=1.0.0 <2.0.0"
+        }
+      ]
+    }
+  ],
+  "presets": {
+    "interface": "preset",
+    "looks": [
+      {
+        "id": "clay",
+        "label": "Clay: matte, one colour",
+        "description": "A made-up look: clay: matte, one colour.",
+        "own": true,
+        "parts": {
+          "molecules": "clay",
+          "surfaces": "matte"
+        },
+        "file": "look_clay.py"
+      },
+      {
+        "id": "gold",
+        "label": "Gold: polished",
+        "description": "A made-up look: gold: polished.",
+        "own": true,
+        "file": "look_gold.py"
+      },
+      {
+        "id": "silver",
+        "label": "Silver: mirror or satin",
+        "description": "A made-up look: silver: mirror or satin.",
+        "own": true,
+        "file": "look_silver.py"
+      },
+      {
+        "id": "copper",
+        "label": "Copper: brushed",
+        "description": "A made-up look: copper: brushed.",
+        "own": true,
+        "file": "look_copper.py"
+      },
+      {
+        "id": "neon",
+        "label": "Neon: lit tubes",
+        "description": "A made-up look: neon: lit tubes.",
+        "own": true,
+        "file": "look_neon.py"
+      },
+      {
+        "id": "glass",
+        "label": "Glass: see-through",
+        "description": "A made-up look: glass: see-through.",
+        "own": true,
+        "parts": {
+          "sticks": "stopped"
+        },
+        "seeThrough": true,
+        "file": "look_glass.py"
+      }
+    ],
+    "studios": [
+      {
+        "id": "sweep",
+        "label": "Paper sweep",
+        "description": "A made-up studio.",
+        "file": "studio_sweep.py"
+      }
+    ],
+    "motions": [
+      {
+        "id": "rise",
+        "label": "Rise: out of the dark",
+        "description": "A made-up motion.",
+        "shortest": {
+          "film": 4,
+          "loop": 6
+        },
+        "fixed": [
+          {
+            "id": "engine",
+            "value": "traced",
+            "why": "This motion is made with light traced"
+          }
+        ],
+        "file": "motion_rise.py"
+      },
+      {
+        "id": "change-fade",
+        "label": "Change: fade across",
+        "description": "A made-up change.",
+        "shortest": {
+          "change": 3
+        },
+        "fixed": [
+          {
+            "id": "engine",
+            "value": "traced",
+            "why": "This motion is made with light traced"
+          }
+        ],
+        "file": "motion_change.py"
+      }
+    ],
+    "files": [
+      "shared.py"
+    ],
+    "options": [
+      {
+        "id": "silver-finish",
+        "label": "Silver's finish",
+        "type": "choice",
+        "choices": [
+          {
+            "value": "mirror",
+            "label": "Mirror"
+          },
+          {
+            "value": "satin",
+            "label": "Satin"
+          }
+        ],
+        "default": "mirror",
+        "section": "look",
+        "when": {
+          "id": "look",
+          "in": [
+            "silver"
+          ]
+        }
+      }
+    ]
+  }
+}

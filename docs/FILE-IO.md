@@ -1475,7 +1475,7 @@ Each step is a pull request from main.
    - kinds registered: Meno's own, and each added plugin's from its
      manifest while it is added; marks as data, tried on Meno's samples;
      `probe`; a file no plugin added reads naming the plugin that would
-     (from what each plugin Meno carries says it reads: PLUGINS.md);
+     (from what each plugin Meno knows of says it reads: PLUGINS.md);
    - each plugin a folder of its own, found by Meno and named by none of
      its code;
    - ids, and the kind sent with each request;
@@ -1644,7 +1644,7 @@ As step 7's writer was built - decided with the maintainer on
 
 As step 3 was built:
 
-- **Each plugin is a folder of its own**, `src-tauri/resources/plugins/<id>/`:
+- **Each plugin is a folder of its own**, `meno-plugins/plugins/<id>/`:
   its manifest, its worker and its lock (uv's `requirements.lock`, or
   pixi's `pixi.toml` and `pixi.lock`). Meno finds the folders it carries
   and reads each manifest as data, by the same check a fetched one would
@@ -1668,7 +1668,7 @@ As step 3 was built:
   own program's (`writtenBy`), and its `reader.py`, beside its worker,
   reads it - a job's output, which its `collect` hands Meno to read, and a
   file opened by hand alike. Written from the ORCA 6.1 manual and the
-  program's printed forms (`scripts/calc/test_reader_orca.py`), it gives:
+  program's printed forms (`meno-plugins/tests/test_reader_orca.py`), it gives:
   - **each geometry** ORCA wrote (*CARTESIAN COORDINATES (ANGSTROEM)*),
     point charges (`Q`) and ghost atoms (no nuclear charge or mass in the
     block in atomic units after it) left out; where a run of one geometry

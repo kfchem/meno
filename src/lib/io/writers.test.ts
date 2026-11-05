@@ -6,8 +6,8 @@ describe("the writers", () => {
   it("are Meno's own, given the page, and the plugins', each kind a plugin writes a writer of its own", () => {
     expect(Object.values(WRITERS).every((w) => w.by === "meno" && w.takes === "page")).toBe(true);
     expect(extensionOf(WRITERS.sdf)).toBe("sdf");
-    const theirs = pluginWriters(MANIFESTS.filter((m) => m.id === "gaussian"));
-    expect(theirs.map((w) => [w.id, w.by, w.takes, extensionOf(w)])).toEqual([["gaussian-input", "gaussian", "molecule", "gjf"]]);
+    const theirs = pluginWriters(MANIFESTS.filter((m) => m.id === "orbitron"));
+    expect(theirs.map((w) => [w.id, w.by, w.takes, extensionOf(w)])).toEqual([["orbitron-input", "orbitron", "molecule", "orb"]]);
   });
 });
 

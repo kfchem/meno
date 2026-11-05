@@ -9,7 +9,7 @@ import samplePdb from "../../samples/cholesterol.pdb?raw";
 const WATER = "3\nwater\nO 0 0 0\nH 0.76 0.59 0\nH -0.76 0.59 0\n";
 
 // (XYZ energies are read by the patterns of the plugins added: those of the programs that write them)
-beforeAll(() => registerKinds(MANIFESTS.filter((m) => ["xtb", "crest", "orca"].includes(m.id))));
+beforeAll(() => registerKinds(MANIFESTS.filter((m) => ["tightbind", "confsweep", "quanta"].includes(m.id))));
 afterAll(() => registerKinds([]));
 
 describe("a structure's file, as Meno's own reader gives it", () => {
@@ -21,8 +21,8 @@ describe("a structure's file, as Meno's own reader gives it", () => {
   });
 
   it("opens a trajectory the file ends in the middle of with its whole frames, each with its energy", () => {
-    const frame = (e: number, z: number) => `3\n energy: ${e} gnorm: 0.01 xtb: 6.7.1\nO 0 0 ${z}\nH 0.76 0.59 0\nH -0.76 0.59 0\n`;
-    const read = readStructures("xyz", "md.xyz", frame(-5.07, 0) + frame(-5.08, 0.01) + "3\n energy: -5.09 gnorm: 0.01\nO 0 0 0.02\n");
+    const frame = (e: number, z: number) => `3\n energy: ${e} gradient: 0.01 tightbind: 1.0.0\nO 0 0 ${z}\nH 0.76 0.59 0\nH -0.76 0.59 0\n`;
+    const read = readStructures("xyz", "md.xyz", frame(-5.07, 0) + frame(-5.08, 0.01) + "3\n energy: -5.09 gradient: 0.01\nO 0 0 0.02\n");
     expect(checkedStructures(read, "md.xyz")).toBe(read);
     expect(read.molecules3d![0]).toMatchObject({ frames: [[0, 0, 0.01, 0.76, 0.59, 0, -0.76, 0.59, 0]], energies: [-5.07, -5.08], framesLeftOut: 1 });
   });
