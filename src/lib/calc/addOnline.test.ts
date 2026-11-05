@@ -44,4 +44,14 @@ describe("a plugin added from the list online", () => {
       expect(did).toEqual(did0);
     }
   });
+
+  it("never gets one the list says is a newer Meno's; and says so of one whose manifest is, once got - not that it could not be read", async () => {
+    const listed = steps();
+    await expect(addOnline({ ...entry, newer: "It says a role this Meno does not know" }, listed.s)).rejects.toThrow("Far interface is for a newer Meno: update Meno, then add it.");
+    expect(listed.did).toEqual([]);
+    const got = steps(undefined, true);
+    await expect(addOnline(entry, got.s, (id) => (id === "far" ? { why: "It says a role this Meno does not know" } : undefined))).rejects.toThrow("Far interface is for a newer Meno: update Meno, then add it.");
+    expect(got.did).toEqual(["get far", "find far"]);
+  });
 });
+

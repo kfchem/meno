@@ -1030,6 +1030,25 @@ function read<T>(raw: unknown, one: (v: unknown) => T | null, key: (t: T) => str
 }
 
 /** A manifest as Meno reads it, or null where it does not read as one: what reads wrong in it is left out, what it cannot do without makes it none. */
+/**
+ * Whether a manifest is a newer Meno's - written to a contract this Meno
+ * does not speak, its environment of a kind it does not make, or filling a
+ * role or adding a kind of step it does not know - and what, in words; none,
+ * where it is not. Such a plugin is not taken (`acceptManifest`): it is said
+ * to be for a newer Meno, never added half-read (./known `setInstalled`).
+ */
+export function newerOf(raw: unknown): string | null {
+  const m = raw as Record<string, unknown> | null;
+  if (!m || typeof m !== "object") return null;
+  const said: string[] = [];
+  if (m.contract !== undefined && (typeof m.contract !== "number" || !CONTRACTS.includes(m.contract))) said.push("a contract");
+  if (m.environment !== undefined && m.environment !== "uv" && m.environment !== "pixi") said.push("an environment");
+  if (list(m.roles).some((r) => typeof (r as Record<string, unknown> | null)?.role === "string" && !isRole((r as Record<string, string>).role))) said.push("a role");
+  if (list(m.steps).some((st) => list((st as Record<string, unknown> | null)?.kinds).some((k) => typeof k === "string" && !isStepKind(k)))) said.push("a kind of step");
+  if (!said.length) return null;
+  return `It says ${said.length < 2 ? said[0] : `${said.slice(0, -1).join(", ")} and ${said[said.length - 1]}`} this Meno does not know`;
+}
+
 export function acceptManifest(raw: unknown): Manifest | null {
   const m = raw as Record<string, unknown> | null;
   if (!m || typeof m !== "object") return null;
