@@ -82,4 +82,29 @@ describe("a PDF's compounds by their numbers", () => {
     expect(indexWhole("pdf")).toBe(true);
     expect(labelPlaces("pdf", "3")).toHaveLength(1);
   });
+
+  it("leaves nothing behind: a PDF hurried while none goes waits for idle when it does go, and a run after a hurried one is hurried only if asked again", async () => {
+    const read: PageLabels = async (p) => [{ figure: fig(0), labels: [label(`${p + 1}`)] }];
+    const idles: (() => void)[] = [];
+    const idle = (go: () => void) => idles.push(go);
+    const now = (go: () => void) => go();
+    // (hurried before any reading: nothing kept, so its first page still waits for idle)
+    hurryIndex("pdf");
+    const first = indexPdf("pdf", 1, read, idle, now);
+    await Promise.resolve();
+    expect(idles).toHaveLength(1);
+    // (hurried now: read at once, and the run ends)
+    hurryIndex("pdf");
+    await first;
+    // (a later run of it - its pages to read again - waits for idle, as no one has hurried it)
+    forgetIndex("pdf");
+    idles.length = 0;
+    const second = indexPdf("pdf", 1, read, idle, now);
+    await Promise.resolve();
+    expect(idles).toHaveLength(1);
+    idles.shift()!();
+    await second;
+    expect(indexWhole("pdf")).toBe(true);
+  });
 });
+

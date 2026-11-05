@@ -113,7 +113,6 @@ export function indexPdf(
   })().finally(() => {
     going.delete(sha256);
     hurried.delete(sha256);
-    waking.delete(sha256);
   });
   going.set(sha256, run);
   return run;
