@@ -49,7 +49,7 @@ const NOUNS = {
   member: ["set member", "set members"],
   // (of a molecule in 3D, a frame's - Molecule3D.properties - or of a structure a step gave a set, its record's: one kind, as they are one record)
   property: ["property of a molecule or a structure", "properties of molecules or structures"],
-  madeFrom: ["tie of a structure in a set to what it was made from", "ties of structures in sets to what they were made from"],
+  madeFrom: ["tie of a structure or molecule to what it was made from", "ties of structures or molecules to what they were made from"],
   made: ["tie of a result set to its step", "ties of result sets to their steps"],
   step: ["step", "steps"],
   wire: ["wire", "wires"],

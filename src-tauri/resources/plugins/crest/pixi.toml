@@ -3,10 +3,8 @@
 # Settings, Plugins (docs/PLUGINS.md, docs/WORKFLOWS.md). CREST, the xtb
 # it runs, and Python come from conda-forge, which has CREST for macOS and
 # Linux only: on Windows the plugin cannot be added (its manifest's
-# `systems`). CREST 2.12, not 3.0.2: conda-forge's 3.0.2 for macOS keeps
-# only the lowest conformer whatever energy window it is given
-# (github.com/crest-lab/crest/issues/431), and one version on both systems
-# finds the same conformers.
+# `systems`). CREST and xtb are pinned to one version each, the same on
+# every system, so that a search finds the same conformers on each.
 [workspace]
 name = "meno-plugin-crest"
 channels = ["conda-forge"]

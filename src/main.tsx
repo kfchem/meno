@@ -5,6 +5,8 @@ import "./ui/fonts/textRenderer";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import { isTauri } from "@tauri-apps/api/core";
+import { refreshPlugins } from "./lib/plugins/known";
 import { installCursors } from "./ui/theme/cursors";
 
 // Meno's own pointers, for whatever asks for one (ui/theme/cursors)
@@ -21,8 +23,15 @@ window.addEventListener(
   { passive: false },
 );
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+// The plugins Meno knows of, taken from its backend before anything reads them (lib/plugins/known): where that
+// fails, Meno starts knowing of none, and says so in its log (lib/log: the reason given only as what it is, as it
+// may name a folder).
+void (isTauri() ? refreshPlugins() : Promise.resolve())
+  .catch((e) => console.error("Meno: the plugins in place could not be read.", e))
+  .then(() =>
+    ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+      <React.StrictMode>
+        <App />
+      </React.StrictMode>,
+    ),
+  );

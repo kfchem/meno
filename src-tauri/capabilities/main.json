@@ -40,6 +40,10 @@
     },
     {
       "identifier": "fs:allow-mkdir",
+      "deny": [
+        { "path": "$APPLOCALDATA/plugins" },
+        { "path": "$APPLOCALDATA/plugins/**/*" }
+      ],
       "allow": [
         { "path": "$APPDATA" },
         { "path": "$APPDATA/**/*" },
@@ -49,6 +53,10 @@
     },
     {
       "identifier": "fs:allow-write-text-file",
+      "deny": [
+        { "path": "$APPLOCALDATA/plugins" },
+        { "path": "$APPLOCALDATA/plugins/**/*" }
+      ],
       "allow": [
         { "path": "$APPDATA" },
         { "path": "$APPDATA/**/*" },
@@ -58,6 +66,10 @@
     },
     {
       "identifier": "fs:allow-write-file",
+      "deny": [
+        { "path": "$APPLOCALDATA/plugins" },
+        { "path": "$APPLOCALDATA/plugins/**/*" }
+      ],
       "allow": [
         { "path": "$APPDATA" },
         { "path": "$APPDATA/**/*" },
