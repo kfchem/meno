@@ -26,6 +26,15 @@ const manifests = import.meta.glob<string>("/src/test/plugins/*/manifest.json", 
 const CHAIN: Record<string, string> = {
   "chain-top": JSON.stringify({ id: "chain-top", name: "Chain top", version: "1.0.0", depends: [{ plugin: "chain-mid", versions: ">=1.0.0 <2.0.0" }], kinds: [{ id: "chain-top-notes", name: "Top notes", extensions: [".ctn"], grammar: { file: "notes.grammar", tones: { Keyword: "keyword" } } }] }),
   "chain-mid": JSON.stringify({ id: "chain-mid", name: "Chain middle", version: "1.0.0", depends: [{ plugin: "lumen-looks", versions: ">=1.0.0 <2.0.0" }], kinds: [{ id: "chain-mid-notes", name: "Middle notes", extensions: [".cmn"], grammar: { file: "notes.grammar", tones: { Keyword: "keyword" } } }] }),
+  // (and three more: circle-top needs circle-one, which needs circle-two, which needs circle-one - a circle, as only a mistake
+  //  in the plugins online could make)
+  ...Object.fromEntries(
+    [
+      ["circle-top", "circle-one"],
+      ["circle-one", "circle-two"],
+      ["circle-two", "circle-one"],
+    ].map(([id, needs]) => [id, JSON.stringify({ id, name: id, version: "1.0.0", depends: [{ plugin: needs, versions: ">=1.0.0 <2.0.0" }], kinds: [{ id: `${id}-notes`, name: `${id} notes`, extensions: [`.${id.slice(-3)}`], grammar: { file: "notes.grammar", tones: { Keyword: "keyword" } } }] })]),
+  ),
 };
 const text = (id: string) => CHAIN[id] ?? manifests[`/src/test/plugins/${id}/manifest.json`];
 vi.mock("../plugins/online", async (importOriginal) => {
@@ -36,6 +45,8 @@ vi.mock("../plugins/online", async (importOriginal) => {
     // (its files got: the plugins in place read again, that one among them)
     getPlugin: async (entry: { id: string; name: string }) => {
       if (gettingFails) throw new Error(`${entry.name} was not got: ${gettingFails}`);
+      // (got again and again - a circle not caught: stopped here, said)
+      if (got.length >= 10) throw new Error("got again and again");
       got.push(entry.id);
       inPlace(...ids(), entry.id);
     },
@@ -102,6 +113,14 @@ describe("a plugin added whose needed plugin is not got yet", () => {
     await addPlugin(anyPluginById("chain-top")!);
     expect(got).toEqual(["chain-mid", "lumen-looks", "lumen"]);
     expect(useReaders.getState().state).toMatchObject({ "chain-top": "added", "chain-mid": "added", "lumen-looks": "added", lumen: "added" });
+  });
+
+  it("gets each plugin of a chain once, a circle in it too - and, those of the circle refused, is not added, saying why", async () => {
+    inPlace("circle-top");
+    offered = ["circle-one", "circle-two"].map((id) => ({ id, name: id, version: "1.0.0" }));
+    await expect(addPlugin(anyPluginById("circle-top")!)).rejects.toThrow(/circle-top was not added: it needs circle-one, which Meno does not take: .*circle/);
+    expect(got).toEqual(["circle-one", "circle-two"]);
+    expect(setUp).toEqual([]);
   });
 
   it("gets none where it uses that one only for some of its work: Quanta added alone, before Tightbind", async () => {

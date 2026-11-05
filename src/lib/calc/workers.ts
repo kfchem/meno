@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { ensurePyEnv, pyEnvReady, removePyEnv, setUpQuestions } from "../pyEnv";
-import { ALL_PLUGINS, anyPluginById, manifestOf, pluginName, pluginsUsedBy, pluginsUsing, READERS, runs, type Plugin, type PythonPlugin, type ReaderPlugin } from "./catalog";
+import { ALL_PLUGINS, anyPluginById, DEPENDS_REFUSED, manifestOf, pluginName, pluginsUsedBy, pluginsUsing, READERS, runs, type Plugin, type PythonPlugin, type ReaderPlugin } from "./catalog";
 import { askToConnectAll, type ConsentRequest } from "../net/network";
 import { registerKinds } from "../io/kinds";
 import type { Manifest } from "../plugins/manifest";
@@ -128,8 +128,12 @@ export async function addPlugin(p: Plugin): Promise<void> {
   //  those that one needs in turn)
   const needed = (id: string) => (manifestOf(id)?.depends ?? []).filter((d) => !d.optional && !anyPluginById(d.plugin));
   const toGet = needed(p.id);
+  // (each got once in this add, whatever the chain: plugins that need each other in a circle are refused once got, and
+  //  would otherwise be asked for again, and got again, for ever)
+  const got = new Set<string>();
   for (let d = toGet.shift(); d; d = toGet.shift()) {
-    if (anyPluginById(d.plugin)) continue;
+    if (anyPluginById(d.plugin) || got.has(d.plugin)) continue;
+    got.add(d.plugin);
     const entry = onlineEntry(d.plugin);
     const why = !entry
       ? `${p.name} was not added: it needs ${pluginName(d.plugin)}, which is neither here nor among the plugins online.`
@@ -148,6 +152,13 @@ export async function addPlugin(p: Plugin): Promise<void> {
       throw e;
     }
     toGet.push(...needed(d.plugin));
+  }
+  // (one it needs still not one Meno takes, got though it is - refused, as plugins in a circle are: not added, saying why)
+  const unread = got.size ? (manifestOf(p.id)?.depends ?? []).find((d) => !d.optional && !anyPluginById(d.plugin)) : undefined;
+  if (unread) {
+    const why = `${p.name} was not added: it needs ${pluginName(unread.plugin)}, which Meno does not take: ${DEPENDS_REFUSED.get(unread.plugin) ?? "it could not be read"}.`;
+    setState(p.id, "absent", why);
+    throw new Error(why);
   }
   // (one that runs nothing uses others too: a preset plugin, the plugin that runs its files)
   const first = pluginsUsedBy(p.id).filter((q) => useReaders.getState().state[q.id] !== "added");
