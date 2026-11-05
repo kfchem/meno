@@ -103,8 +103,9 @@ const isMeno = (c: string): c is CursorName => c in CURSORS;
 /**
  * The page's regions (`usePageHits`), asked before anything else on the
  * canvas - the molecules, the drawing, the view's pan - as the page's HTML
- * was over them: a press, a move, a click or a double-click on one is its,
- * and goes no further. The
+ * was over them: a press, a move, a click or a double-click on one is
+ * its, and goes no further - heard above the canvas, before the selection's
+ * own listeners on its wrapper hear it. The
  * pointer over one shows its cursor; leaving it, or another coming over it,
  * says so (`hover`).
  */
