@@ -372,3 +372,48 @@ describe("a structure's identity, as found", () => {
     expect(found.text.match(/(^|;)C\|0\|4\|0\|/g)).toHaveLength(40);
   });
 });
+
+describe("a configuration that makes no stereo unit, in a structure's identity", () => {
+  /** Whether the SMILES are one structure, as identity has them. */
+  const one = (...smiles: string[]) => new Set(smiles.map((s) => identityText(fromSmiles(s)))).size === 1;
+
+  it("is ignored: a wedge on an isopropyl's CH, a prenyl's C=C(CH3)2 drawn either way, an exocyclic C=C on a ring alike both ways", () => {
+    expect(one("C[C@H](C)O", "C[C@@H](C)O", "CC(C)O")).toBe(true);
+    expect(one("C/C(C)=C/CO", "C/C(C)=C\\CO", "C\\C(C)=C/CO", "CC(C)=CCO")).toBe(true);
+    expect(one("C/C=C1/CCCCC1", "C/C=C1\\CCCCC1", "CC=C1CCCCC1")).toBe(true);
+    expect(one("C/C=C1/CCC(C)CC1", "CC=C1CCC(C)CC1", "C[C@H]1CCC(=CC)CC1")).toBe(true);
+  });
+
+  it("keeps every stereo unit: a centre's two alike arms set apart by another configuration, a pseudoasymmetric centre, E and Z", () => {
+    // (cis and trans: each centre's ring arms alike until the other centre is counted)
+    expect(one("C[C@H]1CC[C@@H](C)CC1", "C[C@H]1CC[C@H](C)CC1")).toBe(false);
+    expect(one("C[C@H]1CC[C@@H](C)CC1", "CC1CCC(C)CC1")).toBe(false);
+    expect(one("C[C@H]1C[C@@H](C)C1", "C[C@H]1C[C@H](C)C1")).toBe(false);
+    // (meso and (R,R)-tartaric acid; (R)- and (S)-butan-2-ol; (E)- and (Z)-but-2-ene)
+    expect(one("O=C(O)[C@H](O)[C@@H](O)C(=O)O", "O=C(O)[C@@H](O)[C@@H](O)C(=O)O")).toBe(false);
+    expect(one("CC[C@@H](C)O", "CC[C@H](C)O")).toBe(false);
+    expect(one("C/C=C/C", "C/C=C\\C")).toBe(false);
+    // (an exocyclic C=C whose ring arms are alike by constitution only: (4-methylcyclohexylidene)ethane's two forms, mirror images)
+    expect(one("C/C=C1/CC[C@@H](C)CC1", "C/C=C1\\CC[C@@H](C)CC1")).toBe(false);
+    expect(one("C/C=C1/CC[C@@H](C)CC1", "CC=C1CC[C@@H](C)CC1")).toBe(false);
+    // (2,3,4-trihydroxyglutaric acid: its two meso forms, C3 r and s, apart; in the chiral form C3 sets nothing)
+    expect(one("O=C(O)[C@@H](O)[C@H](O)[C@@H](O)C(=O)O", "O=C(O)[C@@H](O)[C@@H](O)[C@@H](O)C(=O)O")).toBe(false);
+    expect(one("O=C(O)[C@@H](O)[C@H](O)[C@@H](O)C(=O)O", "O=C(O)[C@@H](O)C(O)[C@@H](O)C(=O)O")).toBe(false);
+    expect(one("O=C(O)[C@H](O)[C@H](O)[C@@H](O)C(=O)O", "O=C(O)[C@H](O)[C@@H](O)[C@@H](O)C(=O)O", "O=C(O)[C@H](O)C(O)[C@@H](O)C(=O)O")).toBe(true);
+  });
+
+  it("is kept, and the identity says it may not be the only one, where the search for alike groups ran out of steps", () => {
+    // (forty methanes beside the isopropanol: the search cannot finish)
+    const methanes = Array(40).fill("C").join(".");
+    const found = identity(fromSmiles(`${methanes}.C[C@H](C)O`));
+    expect(found.complete).toBe(false);
+    expect(found.text).not.toBe(identity(fromSmiles(`${methanes}.CC(C)O`)).text);
+  });
+
+  it("does not depend on the order of the atoms", () => {
+    for (const smiles of ["C[C@H](C)O", "C/C(C)=C/CO", "C[C@H]1CC[C@@H](C)CC1", "O=C(O)[C@@H](O)[C@H](O)[C@@H](O)C(=O)O", "C/C=C1/CC[C@@H](C)CC1"]) {
+      const g = fromSmiles(smiles);
+      for (const seed of SHUFFLE_SEEDS) expect(identityText(shuffled(g, seed)), smiles).toBe(identityText(g));
+    }
+  });
+});
