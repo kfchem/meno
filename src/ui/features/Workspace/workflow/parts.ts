@@ -9,7 +9,7 @@ import type { Wire, WorkflowSet, WorkflowStep } from "../store/types";
 import { insidePolygon } from "../utils/selection";
 import { CARD_H, CARD_W } from "./look";
 import { removeSet, removeStep, withExits } from "./model";
-import { heldSets } from "./held";
+import { heldSets } from "./onPage";
 import { greatest, least } from "../../../../lib/chem/lists";
 
 type Pt = { x: number; y: number };

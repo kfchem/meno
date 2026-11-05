@@ -16,7 +16,7 @@ import { countOf, countSaid, numberedOn, recordHow, recordNumber, recordWhy, typ
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { lookEvery } from "../workflow/lookEvery";
 import { labelReach, selectionFrame, selectionInSet } from "../workflow/selectionSet";
-import { setsOnPage } from "../workflow/held";
+import { setsOnPage } from "../workflow/onPage";
 import { useDrawnLayout } from "./drawnLayoutContext";
 import { useShownFrames } from "./useShownFrames";
 import { useMemberMarks } from "./useMemberMarks";
@@ -607,7 +607,7 @@ export default function Workflow2D() {
     else st.connect(from, step, port);
   };
 
-  /** A wire drawn out of a set - a step's result set's from its exit's port on the card (held `wireStart`): into a step's input, or - let go on empty space - Quick Add there, at the steps that take it. */
+  /** A wire drawn out of a set - a step's result set's from its exit's port on the card (place `wireStart`): into a step's input, or - let go on empty space - Quick Add there, at the steps that take it. */
   const drawFrom = (e: ReactPointerEvent, from: WireEnd) => {
     if (e.button !== 0) return;
     // (pictures - a Render step's - no step takes: no wire is drawn out of them)
@@ -799,7 +799,7 @@ export default function Workflow2D() {
     const s = b.made ? stepById.get(b.made.step) : undefined;
     return s && b.made ? exitStart(s, b.made.exit) : null;
   };
-  /** Where a wire out of a set starts (held `wireStart`): a step's result set's at its exit's port on the card, held or not; a set the chemist made, at its frame's right side, as it is drawn. */
+  /** Where a wire out of a set starts (place `wireStart`): a step's result set's at its exit's port on the card, held or not; a set the chemist made, at its frame's right side, as it is drawn. */
   const gives = (end: WireEnd): Pt | null => {
     const b = setById.get(end.set);
     return b ? (exitGives(b) ?? setGives(shownOf(b))) : null;
@@ -883,7 +883,7 @@ export default function Workflow2D() {
   const labels = useMemo(() => labelReach(drawing.layout, drawing.atoms, drawing.opts), [drawing.layout, drawing.atoms, drawing.opts]);
   const asSet = useMemo(
     () => (selectionInSet({ model, molecules3d, pictures }, sel.atoms, sel3d, onPage) ? null : selectionFrame(model, sel.atoms, molecules3d, sel3d, style3d, turns3d, frames3d, labels)),
-    [sel, sel3d, model, molecules3d, pictures, sets, style3d, turns3d, frames3d, labels],
+    [sel, sel3d, model, molecules3d, pictures, onPage, style3d, turns3d, frames3d, labels],
   );
 
   /** The selection made a set, an input, and a wire drawn out of it. */

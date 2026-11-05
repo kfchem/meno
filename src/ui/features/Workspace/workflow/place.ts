@@ -7,11 +7,12 @@
  * (`placeCard`).
  */
 import type { WorkspaceDocument } from "../document";
+import type { WorkflowSet, WorkflowStep } from "../store/types";
 import { inside, setMembers, structuresOf, type Frame } from "./entries";
 import { boxOf } from "../chem/make3d";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { exitPlace, exitsOf, inputsOf, ONE_EXIT, type StepKind } from "./kinds";
-import { heldSets, wireStart } from "./held";
+import { heldSets } from "./onPage";
 import { BETWEEN, CARD_H, CARD_W, GAP, inputLead, nearWire, setGives, setTakes, stepGives, stepTakes, wirePath } from "./look";
 
 /** A frame `w` by `h`, its top left at (x, y). */
@@ -64,6 +65,17 @@ export function lineFrom(doc: Pick<WorkspaceDocument, "sets" | "steps">, self?: 
   return exitStart(step, (made?.step === step.id ? made.exit : undefined) ?? self?.exit ?? exitsOf(step.kind)[0].id);
 }
 
+/**
+ * Where a wire out of a set starts: a step's result set's at its exit's
+ * port on the step's card (look `stepGives`), held or not - its frame,
+ * where it has one on the page, gives from no port of its own; a set the
+ * chemist made, at its frame's right side.
+ */
+export function wireStart(steps: readonly Pick<WorkflowStep, "id" | "x" | "y" | "kind">[] | ReadonlyMap<number, Pick<WorkflowStep, "id" | "x" | "y" | "kind">>, set: Frame & Pick<WorkflowSet, "made">): Pt {
+  const s = set.made ? ("get" in steps ? steps.get(set.made.step) : steps.find((x) => x.id === set.made!.step)) : undefined;
+  return s && set.made ? exitStart(s, set.made.exit) : setGives(set);
+}
+
 /** A step's card, shut: where it stands on the page. */
 const cardOf = (s: { x: number; y: number }): Frame => frameAt(s.x, s.y, CARD_W, CARD_H);
 
@@ -108,7 +120,7 @@ function takenOn(doc: WorkspaceDocument, self?: Self, along?: { x0: number; x1: 
   const points: Pt[] = [...doc.model.atoms.map((a) => ({ x: a.x, y: a.y })), ...(doc.molecules3d ?? []).filter((m) => !self?.molecules?.has(m.id)).map((m) => m.at)];
   const to: Taken["to"] = [];
   // (each wire from a set into a step's input - a step's result set's from its exit's port on the card, which a frame placed does
-  //  not move: held/`wireStart` - and each line from a step to its result set on the page)
+  //  not move: `wireStart` - and each line from a step to its result set on the page)
   for (const w of doc.wires ?? []) {
     const b = sets.get(w.from.set);
     const s = steps.get(w.to.step);

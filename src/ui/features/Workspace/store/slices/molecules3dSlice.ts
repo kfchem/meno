@@ -1,5 +1,5 @@
 import type { StoreApi } from "zustand";
-import { setsOnPage } from "../../workflow/held";
+import { setsOnPage } from "../../workflow/onPage";
 import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
