@@ -996,6 +996,32 @@ describe("a label must not change how a bond is drawn", () => {
     expect(hashesOf(buildBondPrimitives(pair("O"), bond, opts({ hashedWedgeShort: true }), ZOOM, onward).polys)).toEqual(hashesOf(buildBondPrimitives(pair("O"), bond, o, ZOOM, onward).polys));
   });
 
+  it("stops short at a wide end that one bond goes on from - a chain's carbon - as at one with more", () => {
+    const bond: Bond = { a1: 0, a2: 1, order: 1, stereo: "down" };
+    const two = new Map([
+      [0, 3],
+      [1, 2],
+    ]);
+    const far = (h: { far: number }[]) => Math.max(...h.map((x) => x.far));
+    const o = opts();
+    const at = hashesOf(buildBondPrimitives(pair("C"), bond, o, ZOOM, two).polys);
+    const short = hashesOf(buildBondPrimitives(pair("C"), bond, opts({ hashedWedgeShort: true }), ZOOM, two).polys);
+    expect(far(at) - far(short)).toBeCloseTo(o.hashSpacingPx - o.lineWidthPx, 9);
+  });
+
+  it("counts the wide end's bonds from those bonded at each atom where no count is given, and stops short where neither is", () => {
+    const bond: Bond = { a1: 0, a2: 1, order: 1, stereo: "down" };
+    const on: Bond = { a1: 1, a2: 2, order: 1 };
+    const short = opts({ hashedWedgeShort: true });
+    const far = (h: { far: number }[]) => Math.max(...h.map((x) => x.far));
+    const drawn = (adj?: Map<number, Bond[]>) => far(hashesOf(buildBondPrimitives(pair("C"), bond, short, ZOOM, undefined, undefined, undefined, adj).polys));
+    // (no count given - the wide end the second atom, as the first is the narrow one on a tie: its bonds, this one alone, then one more)
+    expect(drawn(new Map([[1, [bond]]]))).toBeCloseTo(pair("C")[1].x, 9);
+    expect(drawn(new Map([[1, [bond, on]]]))).toBeLessThan(pair("C")[1].x - 1e-6);
+    // (nothing known of the wide end's bonds: as bonds going on, as it was drawn before)
+    expect(drawn()).toBeCloseTo(drawn(new Map([[1, [bond, on]]])), 9);
+  });
+
   it("reaches a bare wide end that no bond goes on from, whatever the style asks: the widest hash is the bond's end", () => {
     const bond: Bond = { a1: 0, a2: 1, order: 1, stereo: "down" };
     const far = (h: { far: number }[]) => Math.max(...h.map((x) => x.far));
