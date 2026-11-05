@@ -155,7 +155,7 @@ export function hydrogensFolded(input: IdentityInput): IdentityInput {
     around[b.b].push({ to: b.a, order: b.order });
   }
   const inPi = new Set(input.atoms.flatMap((a) => a.pi ?? []));
-  const onAxis = new Set((input.axes ?? []).flatMap((x) => x.atoms));
+  const onAxis = new Set([...(input.axes ?? []), ...(input.cumulated ?? [])].flatMap((x) => x.atoms));
   const plain = (i: number): boolean => {
     const a = input.atoms[i];
     if (a.el !== "H" || a.charge || a.isotope || a.radical || a.mapped || a.hs || a.tetra || a.pi || inPi.has(i) || onAxis.has(i)) return false;
@@ -214,19 +214,36 @@ export function hydrogensFolded(input: IdentityInput): IdentityInput {
     }
     return [{ ...bond, stereo: { refs: [at.get(p)!, at.get(q)!], cis } }];
   });
+  // (the atom an axis's or a cumulene's end runs on through: its cumulated double bond's)
+  const runsOn = (end: number) => around[end].find((e) => e.order >= 2)?.to ?? -1;
   const axes = (input.axes ?? []).flatMap((x): Axial[] => {
     const refs = [...x.refs];
     let sense = x.sense;
     for (const k of [0, 1] as const) {
       if (!folded[refs[k]]) continue;
-      const by = instead(x.atoms[k], refs[k], x.atoms[1 - k]);
+      // (the other end, a biaryl's; an allene's end runs on through its cumulated double bond)
+      const end = x.atoms[k];
+      const by = instead(end, refs[k], around[end].some((e) => e.to === x.atoms[1 - k]) ? x.atoms[1 - k] : runsOn(end));
       if (by == null) return [];
       refs[k] = by;
       sense = -sense as 1 | -1;
     }
     return [{ atoms: [at.get(x.atoms[0])!, at.get(x.atoms[1])!], refs: [at.get(refs[0])!, at.get(refs[1])!], sense }];
   });
-  return { atoms, bonds, ...(input.axes ? { axes } : {}) };
+  // (an odd cumulene's, as a double bond's)
+  const cumulated = (input.cumulated ?? []).flatMap((x): Cumulated[] => {
+    const refs = [...x.refs];
+    let cis = x.cis;
+    for (const k of [0, 1] as const) {
+      if (!folded[refs[k]]) continue;
+      const by = instead(x.atoms[k], refs[k], runsOn(x.atoms[k]));
+      if (by == null) return [];
+      refs[k] = by;
+      cis = !cis;
+    }
+    return [{ atoms: [at.get(x.atoms[0])!, at.get(x.atoms[1])!], refs: [at.get(refs[0])!, at.get(refs[1])!], cis }];
+  });
+  return { atoms, bonds, ...(input.axes ? { axes } : {}), ...(input.cumulated ? { cumulated } : {}) };
 }
 
 /**

@@ -479,3 +479,32 @@ describe("a double bond's cis or trans and an axis's sense, in a structure's ide
     }
   });
 });
+
+describe("an allene's axis and an odd cumulene's cis or trans, in a structure's identity", () => {
+  /** Whether the SMILES are one structure, as identity has them. */
+  const one = (...smiles: string[]) => new Set(smiles.map((s) => identityText(fromSmiles(s)))).size === 1;
+
+  it("is the same however it is written: from either end, against either group at an end, its H drawn or not", () => {
+    // (penta-2,3-diene; the other end first, the collapsed centre's four an odd turn apart, the mark turned)
+    expect(one("CC=[C@]=CC", "C(C)=[C@@]=CC", "[H]C(C)=[C@@]=CC")).toBe(true);
+    // ((Z)-1,4-difluorobutatriene, by its F or by its H at an end)
+    expect(one("F/C=C=C=C\\F", "C(/F)=C=C=C/F", "[H]/C(F)=C=C=C/F")).toBe(true);
+    // (an allene with a ring at one end, alike in its mirror image: its axis and the ring's CH pseudoasymmetric)
+    expect(one("CC=[C@]=C1CC[C@H](CC1)CC", "CC[C@H]1CCC(=[C@@]=CC)CC1", "CC[C@@H]1CCC(=[C@]=CC)CC1")).toBe(true);
+  });
+
+  it("tells an allene from its mirror image, E from Z, and either from none drawn", () => {
+    expect(one("CC=[C@]=CC", "CC=[C@@]=CC")).toBe(false);
+    expect(one("CC=[C@]=CC", "CC=C=CC")).toBe(false);
+    expect(one("F/C=C=C=C/F", "F/C=C=C=C\\F")).toBe(false);
+    expect(one("F/C=C=C=C/F", "FC=C=C=CF")).toBe(false);
+    expect(one("CC=[C@]=C1CC[C@H](CC1)CC", "CC=[C@@]=C1CC[C@H](CC1)CC")).toBe(false);
+  });
+
+  it("does not depend on the order of the atoms", () => {
+    for (const smiles of ["CC=[C@]=CC", "F/C=C=C=C\\F", "CC=[C@]=C1CC[C@H](CC1)CC"]) {
+      const g = fromSmiles(smiles);
+      for (const seed of SHUFFLE_SEEDS) expect(identityText(shuffled(g, seed)), smiles).toBe(identityText(g));
+    }
+  });
+});

@@ -53,6 +53,15 @@ const endSet = (adj: ReturnType<typeof adjacency>, r: readonly number[], at: num
   return Math.sign(r[other] - r[ref]) || 0;
 };
 
+/**
+ * The atom an axis's or a cumulene's end runs on through to its other end:
+ * that end, a biaryl's, bonded to it; else its cumulated double bond's
+ * other atom, an allene's or a butatriene's - so that its own groups are
+ * the rest of its neighbours.
+ */
+const across = (adj: ReturnType<typeof adjacency>, end: number, other: number): number =>
+  adj[end].some((e) => e.to === other) ? other : (adj[end].find((e) => e.order >= 2)?.to ?? other);
+
 /** Each star's pi system and each atom's stars (`LayoutAtom.pi`), both ways: what tells a haptic ring's atoms from others. */
 const piLinks = (input: LayoutInput) => {
   const links: number[][] = input.atoms.map(() => []);
@@ -72,16 +81,21 @@ function classed(input: LayoutInput): { rank: number[]; first: string[]; withSte
   // (which atoms are an axis of chirality's, and which its ends' other
   // neighbours - each of them, not only the one taken for its reference:
   // which that was is no part of what the atoms are)
+  // (an odd cumulene's ends and theirs likewise, set apart from an axis's)
   const onAxis = input.atoms.map(() => "");
-  for (const x of input.axes ?? []) {
-    for (const a of x.atoms) onAxis[a] += "a";
-    const [u, v] = x.atoms;
-    for (const [end, across] of [
-      [u, v],
-      [v, u],
-    ])
-      for (const e of adj[end]) if (e.to !== across) onAxis[e.to] += "r";
-  }
+  for (const [mark, units] of [
+    ["a", input.axes ?? []],
+    ["c", input.cumulated ?? []],
+  ] as const)
+    for (const x of units) {
+      for (const a of x.atoms) onAxis[a] += mark;
+      const [u, v] = x.atoms;
+      for (const [end, far] of [
+        [u, v],
+        [v, u],
+      ])
+        for (const e of adj[end]) if (e.to !== across(adj, end, far)) onAxis[e.to] += "r";
+    }
   // what each atom is: everything the layout reads of it - its element (or
   // the label it stands for), charge, H count, bonds and their orders, a
   // star's pi system, a part in an axis of chirality - and nothing else
@@ -124,7 +138,14 @@ function classed(input: LayoutInput): { rank: number[]; first: string[]; withSte
         if (!x.atoms.includes(i)) continue;
         const [p, q] = x.refs;
         const [u, v] = x.atoms;
-        parts.push(x.sense * endSet(adj, r, u, v, p) * endSet(adj, r, v, u, q));
+        parts.push(x.sense * endSet(adj, r, u, across(adj, u, v), p) * endSet(adj, r, v, across(adj, v, u), q));
+      }
+      // (and an odd cumulene's cis or trans, as a double bond's, at its ends)
+      for (const x of input.cumulated ?? []) {
+        if (!x.atoms.includes(i)) continue;
+        const [p, q] = x.refs;
+        const [u, v] = x.atoms;
+        parts.push((x.cis ? 1 : -1) * endSet(adj, r, u, across(adj, u, v), p) * endSet(adj, r, v, across(adj, v, u), q));
       }
       return parts.join(",");
     });
@@ -357,10 +378,19 @@ function written(input: LayoutInput, what: readonly string[], r: readonly number
     .map((x) => {
       const [u, v] = x.atoms;
       const [a, b] = r[u] < r[v] ? [u, v] : [v, u];
-      return `${pad(r[a])}${pad(r[b])}:${x.sense * endSet(adj, r, u, v, x.refs[0]) * endSet(adj, r, v, u, x.refs[1])}`;
+      return `${pad(r[a])}${pad(r[b])}:${x.sense * endSet(adj, r, u, across(adj, u, v), x.refs[0]) * endSet(adj, r, v, across(adj, v, u), x.refs[1])}`;
     })
     .sort();
-  return `${atoms.join(";")}|${bonds.join(" ")}|${pis}|${axes.join(" ")}`;
+  // (an odd cumulene's cis or trans likewise, by its ends)
+  const cumulated = (input.cumulated ?? [])
+    .map((x) => {
+      const [u, v] = x.atoms;
+      const [a, b] = r[u] < r[v] ? [u, v] : [v, u];
+      const set = (x.cis ? 1 : -1) * endSet(adj, r, u, across(adj, u, v), x.refs[0]) * endSet(adj, r, v, across(adj, v, u), x.refs[1]);
+      return `${pad(r[a])}${pad(r[b])}:${set > 0 ? "c" : "t"}`;
+    })
+    .sort();
+  return `${atoms.join(";")}|${bonds.join(" ")}|${pis}|${axes.join(" ")}${cumulated.length ? `|${cumulated.join(" ")}` : ""}`;
 }
 
 /** The input with its atoms in the given order (old index to new), its bonds sorted by their atoms there. */
@@ -385,7 +415,8 @@ export function reordered(input: LayoutInput, to: readonly number[]): LayoutInpu
     })
     .sort((p, q) => p.a - q.a || p.b - q.b);
   const axes = input.axes?.map((x) => ({ ...x, atoms: [to[x.atoms[0]], to[x.atoms[1]]] as const, refs: [to[x.refs[0]], to[x.refs[1]]] as const }));
-  return { atoms, bonds, ...(axes ? { axes } : {}) };
+  const cumulated = input.cumulated?.map((x) => ({ ...x, atoms: [to[x.atoms[0]], to[x.atoms[1]]] as const, refs: [to[x.refs[0]], to[x.refs[1]]] as const }));
+  return { atoms, bonds, ...(axes ? { axes } : {}), ...(cumulated ? { cumulated } : {}) };
 }
 
 /** A drawing of the reordered input handed back in the order of the input itself (`to`: old index to new). */
