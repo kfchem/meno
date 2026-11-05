@@ -657,6 +657,7 @@ export const KINDS: readonly KindInfo[] = [
     kind: "mode-on-atoms",
     name: "Mode on atoms",
     icon: "modeOn",
+    family: "paths",
     takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
