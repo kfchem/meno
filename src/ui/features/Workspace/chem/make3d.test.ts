@@ -293,8 +293,8 @@ describe("takenOnPage", () => {
     const model = {
       atoms: [atom(1, 0, 0), atom(2, 1.5, 0), atom(3, 10, 0), atom(4, 11.5, 0), atom(5, 20, 0)],
       bonds: [
-        { id: 6, a: 1, b: 2, order: 1 as const, stereo: "none" as const, stereoOrient: "principle" as const },
-        { id: 7, a: 3, b: 4, order: 1 as const, stereo: "none" as const, stereoOrient: "principle" as const },
+        { id: 6, a: 1, b: 2, order: 1 as const, stereo: "none" as const },
+        { id: 7, a: 3, b: 4, order: 1 as const, stereo: "none" as const },
       ],
     };
     const solid = { x0: 30, x1: 35, y0: -2, y1: 2 };

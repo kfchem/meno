@@ -320,15 +320,15 @@ function readPrinted(_name: string, text: string) {
 
 const jobEntry = (e: PluginEntry): JobEntry => ({ elements: e.atoms.map((a) => a.el), xyz: e.atoms.flatMap((a) => [a.x, a.y, a.z]), charge: e.charge, multiplicity: e.multiplicity });
 
-/** How a plugin's collect answers, as its worker does: its own outputs (xtb's, CREST's, RDKit's), an output for Meno's readers (ORCA's, Gaussian's), or surfaces in cube files (NCI's). */
-const ANSWERS: Record<string, "outputs" | "read" | "surfaces"> = { xtb: "outputs", crest: "outputs", rdkit: "outputs", orca: "read", gaussian: "read", nciplot: "surfaces", multiwfn: "surfaces" };
+/** How a plugin's collect answers, as its worker does: its own outputs (Tightbind's, Confsweep's, Sketchkit's), an output for Meno's readers (Quanta's, Orbitron's), or surfaces in cube files (the NCI programs'). */
+const ANSWERS: Record<string, "outputs" | "read" | "surfaces"> = { tightbind: "outputs", confsweep: "outputs", sketchkit: "outputs", quanta: "read", orbitron: "read", ncigrid: "surfaces", densitool: "surfaces" };
 
 /**
  * A plugin's worker, as a stand-in that keeps its contract: one job for each
- * entry - but CREST's optimisation, one for the entries of each molecule
+ * entry - but Confsweep's optimisation, one for the entries of each molecule
  * (the same atoms, charge and multiplicity) - its input the entries as it
  * was given them; read back, its outputs say the charge and multiplicity of
- * the entries it is given (as xTB's and CREST's do; RDKit's never do).
+ * the entries it is given (as Tightbind's and Confsweep's do; Sketchkit's never do).
  */
 function worker(plugin: string) {
   const programOf = (step: string) => pluginById(plugin)!.steps.find((s) => s.kind === step)!.programs[0];
@@ -337,7 +337,7 @@ function worker(plugin: string) {
     prepare: async (step: string, entries: PluginEntry[]) => {
       asked.prepared.push({ plugin, step, entries });
       const groups: number[][] = [];
-      if (plugin === "crest" && step === "optimise") {
+      if (plugin === "confsweep" && step === "optimise") {
         const by = new Map<string, number[]>();
         entries.forEach((e, i) => {
           const key = `${e.atoms.map((a) => a.el).join(" ")}|${e.charge}|${e.multiplicity}`;
@@ -351,7 +351,7 @@ function worker(plugin: string) {
           program: programOf(step),
           args: [],
           files: [{ name: INPUT, text: JSON.stringify({ step, entries: g.map((i) => jobEntry(entries[i])) }) }],
-          ...(plugin === "gaussian" ? { stdin: INPUT } : {}),
+          ...(plugin === "orbitron" ? { stdin: INPUT } : {}),
           reads: [OUTPUT],
         })),
       };
@@ -372,7 +372,7 @@ function worker(plugin: string) {
           frames: made[i].frames,
           energies: made[i].energies,
           optimised: true,
-          ...(saying && plugin !== "rdkit" ? { charge: e.charge, multiplicity: e.multiplicity } : {}),
+          ...(saying && plugin !== "sketchkit" ? { charge: e.charge, multiplicity: e.multiplicity } : {}),
         })),
       };
     },
@@ -388,8 +388,8 @@ function worker(plugin: string) {
 /** The molblocks a conformer search on structures drawn was given. */
 const drawnAsked: string[] = [];
 /**
- * RDKit's worker, as a stand-in for its `conformers` role: the structure's
- * atoms, in the order they came, each its element and charge - as RDKit's
+ * Sketchkit's worker, as a stand-in for its `conformers` role: the structure's
+ * atoms, in the order they came, each its element and charge - as Sketchkit's
  * answer has them - its bonds, and two conformers with their energies; for
  * its `configurations` role, each molecule one with no stereo; and for its
  * `stereo_elements`, each structure one with none that could be stereogenic.
@@ -409,7 +409,7 @@ const chem = {
           bonds: mol.bonds.map((b) => ({ a1: b.a1, a2: b.a2, order: b.type })),
           frames: [moved(xyz, 1), moved(xyz, 2)],
           energies: [-0.01, -0.009],
-          field: "MMFF94",
+          field: "KF1",
           cip: { atoms: {}, bonds: {} },
           chosen: { atoms: {}, bonds: {} },
           smiles: "",
@@ -548,7 +548,7 @@ describe("a step keeps each entry's charge and multiplicity", () => {
     expect(problems).toEqual([]);
     // (the plugin asked, with entries - and what said their charge and multiplicity back looked at)
     if (by !== "meno") expect(asked.prepared.length + asked.ran.length).toBeGreaterThan(was.prepared + was.ran);
-    if (["xtb", "crest", "orca", "gaussian"].includes(by)) expect(calcsSaid).toBeGreaterThan(was.calcs);
+    if (["tightbind", "confsweep", "quanta", "orbitron"].includes(by)) expect(calcsSaid).toBeGreaterThan(was.calcs);
   });
 
   it("through chains of steps, whoever does each", async () => {
@@ -585,7 +585,7 @@ function drawn(s: Species, x: number, y: number, id: number): { atoms: Atom[]; b
 }
 
 describe("a conformer search on structures drawn keeps each one's charge and multiplicity", () => {
-  it("in what RDKit is given, and in the conformers it gives", async () => {
+  it("in what Sketchkit is given, and in the conformers it gives", async () => {
     const problems: string[] = [];
     const cases = [...HARD, ...Array.from({ length: SEEDS }, (_, k) => {
       const rng = random(31 * (k + 1));
@@ -607,7 +607,7 @@ describe("a conformer search on structures drawn keeps each one's charge and mul
       });
       const { st } = storeOf(doc);
       const set = st().addSet({ x0: -500, y0: -50, x1: -10, y1: 50 });
-      const step = st().addStep("conformers", "rdkit", 0, 0);
+      const step = st().addStep("conformers", "sketchkit", 0, 0);
       st().connect({ set }, step);
       await st().runStep(step);
       const tag = `[${names.join(", ")}]`;
@@ -615,14 +615,14 @@ describe("a conformer search on structures drawn keeps each one's charge and mul
       if (!ran?.ok) problems.push(`it did not run: ${ran?.said} ${tag}`);
       // what it was given: each structure's atoms in its molblock, their charges and radicals the drawing's - so its charge and multiplicity
       const marks = (atoms: readonly { el: string; charge?: number; radical?: Radical }[]) => atoms.map((a) => `${a.el}${a.charge ?? 0}${a.radical ?? ""}`).join(" ");
-      if (drawnAsked.length !== names.length) problems.push(`RDKit was asked about ${drawnAsked.length} of ${names.length} structures ${tag}`);
+      if (drawnAsked.length !== names.length) problems.push(`Sketchkit was asked about ${drawnAsked.length} of ${names.length} structures ${tag}`);
       for (const block of drawnAsked) {
         const mol = readMolfile(block)!;
         const atoms = mol.atoms.map((a) => ({ el: a.symbol, x: a.x, y: a.y, z: a.z, ...(a.charge ? { charge: a.charge } : {}), ...(a.radical ? { radical: a.radical } : {}) }));
         const s = names.map(species).find((x) => marks(x.atoms) === marks(atoms));
         const known = knownOf({ atoms, bonds: [] });
-        if (!s) problems.push(`RDKit was given a structure unlike any drawn: ${marks(atoms)} ${tag}`);
-        else if (known.charge !== s.charge || known.multiplicity !== s.multiplicity) problems.push(`RDKit was given ${s.name} with charge ${known.charge}, multiplicity ${known.multiplicity} ${tag}`);
+        if (!s) problems.push(`Sketchkit was given a structure unlike any drawn: ${marks(atoms)} ${tag}`);
+        else if (known.charge !== s.charge || known.multiplicity !== s.multiplicity) problems.push(`Sketchkit was given ${s.name} with charge ${known.charge}, multiplicity ${known.multiplicity} ${tag}`);
       }
       // what it gave: each structure's conformers, a molecule in 3D of the drawing it was made from
       const made = resultOf(st(), step);

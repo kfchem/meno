@@ -487,7 +487,9 @@ Taken on 2026-10-13:
   drawn without a configuration is ringed on the drawing while Meno asks
   what to make: every stereoisomer it gives, one, or none for now. Each is
   made as a conformer set (RDKit's ETKDG, then MMFF94, MMFF94s or UFF as
-  chosen - UFF where MMFF has no parameters for the molecule) and comes
+  chosen - where MMFF has no parameters for the molecule, UFF in its place,
+  said in how it was made, or the molecule refused, as Settings' *Where
+  MMFF has no parameters* says: UFF unless chosen otherwise) and comes
   onto the page as a molecule in 3D, its frames the conformers, each once,
   lowest first (*The page's conformers*, below). Of two enantiomers, one is
   made as the other's mirror image, so the two have the same conformers and

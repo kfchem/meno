@@ -7,7 +7,6 @@ use std::{
     process::{Child, ChildStdin, Command, Stdio},
     sync::{Arc, Mutex, MutexGuard, PoisonError},
 };
-use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
 use uuid::Uuid;
 
@@ -92,9 +91,9 @@ fn setup_purpose(info: &PyEnvInfo) -> Result<String, String> {
 }
 
 // The webview supplies every path these commands use, so each one is checked
-// here: lock files must be bundled resources, venvs must live under the app
-// data dir, and sidecars may only run a venv's Python on a bundled worker
-// script. uv is none of the webview's to name: it is the one pinned in
+// here: lock files must be a plugin's, of its version in use, venvs must live
+// under the app data dir, and sidecars may only run a venv's Python on a
+// plugin's worker script. uv is none of the webview's to name: it is the one pinned in
 // tools.rs, fetched when first needed. See docs/ARCHITECTURE.md.
 /// Python interpreter file names a sidecar may be started with.
 const PYTHON_NAMES: &[&str] = &["python", "python3", "python.exe"];
@@ -299,12 +298,6 @@ fn validate_sidecar(
         .ok_or_else(|| "sidecar script has no parent directory".into())
 }
 
-fn resource_path(app: &AppHandle, rel: &Path) -> Result<PathBuf, String> {
-    app.path()
-        .resolve(rel, BaseDirectory::Resource)
-        .map_err(|e| format!("resolve resource {}: {e}", rel.display()))
-}
-
 /// Where Meno keeps what is large and of this computer alone: the Python
 /// environments uv and pixi make, their caches and the Pythons uv fetches,
 /// the tools that make them (tools.rs), jobs (jobs.rs) and what plugins
@@ -395,6 +388,13 @@ async fn py_env_remove(app: AppHandle, payload: PyEnvInfo) -> Result<(), String>
 #[tauri::command]
 fn plugins_installed(app: AppHandle) -> Result<Vec<installed::InstalledPlugin>, String> {
     Ok(installed::described(&installed::root(&local_data_dir(&app)?)))
+}
+
+/// The plugins whose environments were set up on this computer (installed.rs `set_up_before`), by id: those a
+/// Meno that carried its plugins had set up, asked about once as one that does not first starts (lib/plugins/usedBefore).
+#[tauri::command]
+fn plugins_set_up_before(app: AppHandle) -> Result<Vec<String>, String> {
+    Ok(installed::set_up_before(&local_data_dir(&app)?))
 }
 
 /// Whether a job of plugin `id` is waiting or running, in any of the jobs' folders - asked before a version of it
@@ -1118,14 +1118,7 @@ pub fn run() {
             if let Ok(data) = app.path().app_data_dir() {
                 logfile::start(&data.join("logs"), &app.package_info().version.to_string());
             }
-            // the plugins Meno carries put in place, for now, before anything reads them (installed.rs)
-            if let (Ok(bundle), Ok(data)) = (resource_path(app.handle(), Path::new("resources/plugins")), local_data_dir(app.handle())) {
-                let running = |id: &str| jobs::plugin_running(&data, id);
-                for said in installed::seed(&bundle, &installed::root(&data), &running) {
-                    logfile::line("meno", &format!("plugins: {said}"));
-                }
-            }
-            // (and the versions no plugin uses taken away, however they came there: installed.rs)
+            // the versions no plugin uses taken away, however they came there (installed.rs)
             if let Ok(data) = local_data_dir(app.handle()) {
                 let running = |id: &str| jobs::plugin_running(&data, id);
                 for said in installed::tidy(&installed::root(&data), &running) {
@@ -1218,6 +1211,7 @@ pub fn run() {
             ccd::ccd_components,
             plugfiles::plugin_files,
             plugins_installed,
+            plugins_set_up_before,
             plugin_jobs_running,
             // the window given over to a talk
             present::present_window,
@@ -1469,24 +1463,12 @@ mod tests {
     }
 
     #[test]
-    fn every_lock_meno_takes_pins_its_packages_by_hash() {
-        // (Meno's own environments' locks, unhashed, went with the console)
+    fn meno_carries_no_environment_s_lock_nor_any_plugin() {
+        // (Meno's own environments' locks, unhashed, went with the console; the plugins, each with its lock, are got
+        // online, and their locks checked where they are made)
         let resources = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources");
         assert!(!resources.join("py").exists());
-        let package = |l: &str| {
-            let name = l.split_once("==").or_else(|| l.split_once(" @ ")).map(|(n, _)| n).unwrap_or_default();
-            !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || "_.-".contains(c))
-        };
-        let mut seen = 0;
-        for entry in fs::read_dir(resources.join("plugins")).unwrap().flatten() {
-            let Ok(text) = fs::read_to_string(entry.path().join("requirements.lock")) else { continue };
-            // (one that names none - a plugin that needs Python alone - has none to pin)
-            if text.lines().any(package) {
-                assert!(lock_is_hashed(&text), "{}", entry.path().display());
-                seen += 1;
-            }
-        }
-        assert!(seen > 0);
+        assert!(!resources.join(installed::ROOT).exists());
     }
 
     #[test]

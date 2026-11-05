@@ -433,7 +433,8 @@ export type Manifest = {
 };
 
 const ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
-const EXTENSION = /^\.[a-z0-9]{1,12}$/;
+/** A file name's end, as a kind says its files go by: lower case, with its dot. */
+export const EXTENSION = /^\.[a-z0-9]{1,12}$/;
 /** A mark shorter than this would claim too much. */
 const MARK_LEAST = 6;
 const MARK_MOST = 200;
@@ -446,7 +447,8 @@ const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 const ids = (v: unknown): string[] => [...new Set(list(v).filter(isId))];
 const extensionsOf = (v: unknown): string[] => list(v).filter((e): e is string => typeof e === "string" && EXTENSION.test(e));
 
-function markOf(v: unknown): Mark | null {
+/** A mark, as a manifest says it; none, where it is not one Meno takes. */
+export function markOf(v: unknown): Mark | null {
   const m = v as Record<string, unknown> | null;
   const t = text(m?.text, MARK_MOST);
   if (!t || folded(t).length < MARK_LEAST) return null;
@@ -572,21 +574,28 @@ function acceptQuotedEnergies(v: unknown): QuotedEnergyDecl[] {
   return out;
 }
 
-/** A plugin's tables of atoms, as papers quote its program's, each checked: an id, at least one heading, columns of the vocabulary - each once, x, y and z among them, and the atom's atomic number or its symbol; what is not understood left out. */
+/** How many tables of atoms a plugin declares at most, and lines heading one or its columns. */
+export const QUOTED_TABLES_MOST = 4;
+const QUOTED_LINES_MOST = 8;
+
+/** A table of atoms, as papers quote its program's, checked: an id, at least one heading, columns of the vocabulary - each once, x, y and z among them, and the atom's atomic number or its symbol; none, where it is not that. */
+export function quotedTableOf(raw: unknown): QuotedTableDecl | null {
+  const lines = (x: unknown) => list(x).flatMap((l) => (typeof l === "string" && l.trim() && l.length <= 80 ? [l.trim()] : [])).slice(0, QUOTED_LINES_MOST);
+  const r = raw as Record<string, unknown> | null;
+  if (typeof r?.id !== "string" || !/^[a-z][a-z0-9-]{0,39}$/.test(r.id)) return null;
+  const headings = lines(r.headings);
+  const columns = list(r.columns).filter((c): c is QuotedColumn => typeof c === "string" && (QUOTED_COLUMNS as readonly string[]).includes(c));
+  if (!headings.length || columns.length !== list(r.columns).length || new Set(columns).size !== columns.length) return null;
+  if (!["x", "y", "z"].every((c) => columns.includes(c as QuotedColumn)) || columns.includes("atomic-number") === columns.includes("element")) return null;
+  return { id: r.id, headings, heads: lines(r.heads), columns };
+}
+
+/** A plugin's tables of atoms, as papers quote its program's, each checked (`quotedTableOf`); what is not understood left out. */
 function acceptQuotedTables(v: unknown): QuotedTableDecl[] {
-  const out: QuotedTableDecl[] = [];
-  const lines = (x: unknown) => list(x).flatMap((l) => (typeof l === "string" && l.trim() && l.length <= 80 ? [l.trim()] : [])).slice(0, 8);
-  for (const raw of list(v)) {
-    const r = raw as Record<string, unknown> | null;
-    if (typeof r?.id !== "string" || !/^[a-z][a-z0-9-]{0,39}$/.test(r.id)) continue;
-    const headings = lines(r.headings);
-    const columns = list(r.columns).filter((c): c is QuotedColumn => typeof c === "string" && (QUOTED_COLUMNS as readonly string[]).includes(c));
-    if (!headings.length || columns.length !== list(r.columns).length || new Set(columns).size !== columns.length) continue;
-    if (!["x", "y", "z"].every((c) => columns.includes(c as QuotedColumn)) || columns.includes("atomic-number") === columns.includes("element")) continue;
-    out.push({ id: r.id, headings, heads: lines(r.heads), columns });
-    if (out.length >= 4) break;
-  }
-  return out;
+  return list(v)
+    .map(quotedTableOf)
+    .filter((t): t is QuotedTableDecl => t != null)
+    .slice(0, QUOTED_TABLES_MOST);
 }
 
 const LOOK_ID = /^[a-z][a-z0-9-]{0,39}$/;
@@ -703,7 +712,8 @@ function acceptUses(v: unknown): UsesDecl[] {
   return out;
 }
 
-const PROGRAM = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,39}$/;
+/** A program's name, as a plugin runs it. */
+export const PROGRAM = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,39}$/;
 
 /** The kinds of step a manifest's step says - each one Meno defines - with what they share. */
 function stepsOf(v: unknown, roles: readonly RoleDecl[]): StepDecl[] {

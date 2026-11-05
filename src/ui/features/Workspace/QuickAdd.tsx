@@ -1,3 +1,5 @@
+import RoleOffer from "./RoleOffer";
+import type { RoleId } from "../../../lib/plugins/roles";
 import { motion } from "motion/react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { RISE } from "../../theme/motion";
@@ -9,9 +11,11 @@ import { guideNotice } from "../../../lib/guide/guide";
 import type { StepKind } from "./workflow/kinds";
 import type { QuickGroup } from "./workflow/offered";
 import { SHAPE_KINDS, SHAPE_NAMES, type ShapeKind } from "../../../lib/chem/shapes";
-import { swallowPress, togglesOn } from "./utils/press";
+import { togglesOn } from "./utils/press";
+import { quickAddLeaves } from "./quickAddLeave";
 import type { CoordinateStructure } from "../../../lib/io/coordinates";
 import { pastedAs } from "./quickAddPaste";
+import { afterAdded, readSmiles } from "./quickAddSmiles";
 import { toggledPanel, type QuickPanel } from "./quickAddPanel";
 import { resolve, sameFormula, type Reading } from "./chem/resolve";
 import { FormulaText } from "../../abbreviations/FormulaText";
@@ -235,18 +239,8 @@ export default function QuickAdd({
   useEffect(() => guideNotice("quick-add"), []);
   useEffect(() => {
     if (leaving) return;
-    // (a press elsewhere only closes it - utils/press#swallowPress; a turn of the wheel closes it and zooms)
-    const outside = (e: Event) => {
-      if (ref.current?.contains(e.target as Node)) return;
-      if (e.type === "pointerdown") swallowPress(e);
-      onClose();
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      e.stopPropagation();
-      onClose();
-    };
+    // (a press elsewhere only closes it; a turn of the wheel closes it and zooms; Escape closes it - none while a question is asked: ./quickAddLeave)
+    const { outside, key: onKey } = quickAddLeaves((t) => !!ref.current?.contains(t as Node), onClose);
     window.addEventListener("pointerdown", outside, true);
     window.addEventListener("wheel", outside, true);
     window.addEventListener("keydown", onKey, true);
@@ -476,6 +470,8 @@ function SmilesField({
 }) {
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // (a SMILES no plugin here reads: the plugins online that do, each to add - RoleOffer)
+  const [needs, setNeeds] = useState<RoleId | null>(null);
   const [busy, setBusy] = useState(false);
   // (what the text reads as - offered only where the dictionary has it: a SMILES alone is drawn as it was - and which is chosen)
   const named = onNamed != null;
@@ -489,6 +485,23 @@ function SmilesField({
   useEffect(() => {
     if (open) input.current?.focus();
   }, [open]);
+  /** The SMILES read and drawn; or why not, and the plugins online that read it (./quickAddSmiles). */
+  const read = (smiles: string) => {
+    reading.current = true;
+    setBusy(true);
+    setError(null);
+    setNeeds(null);
+    void readSmiles(smiles, onSmiles)
+      .then((r) => {
+        if (!r) return;
+        setError(r.error);
+        setNeeds(r.needs);
+      })
+      .finally(() => {
+        reading.current = false;
+        setBusy(false);
+      });
+  };
   return (
     <form
       className="mt-1 pt-1 pb-0.5 border-t border-gh-line"
@@ -501,15 +514,7 @@ function SmilesField({
           onNamed!(chosen.label);
           return;
         }
-        reading.current = true;
-        setBusy(true);
-        setError(null);
-        onSmiles(smiles)
-          .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
-          .finally(() => {
-            reading.current = false;
-            setBusy(false);
-          });
+        read(smiles);
       }}
     >
       <input
@@ -519,6 +524,7 @@ function SmilesField({
           setText(e.target.value);
           setChoice(0);
           setError(null);
+          setNeeds(null);
         }}
         onKeyDown={(e) => {
           if (offered.length < 2 || (e.key !== "ArrowDown" && e.key !== "ArrowUp")) return;
@@ -543,6 +549,20 @@ function SmilesField({
       />
       {offered.length > 0 && <DrawAs offered={offered} chosen={chosen} onChoose={setChoice} />}
       {error && <div className="px-0.5 pt-1 text-[11px] leading-snug text-accel-accent break-words">{error}</div>}
+      {needs && (
+        <div className="flex flex-wrap items-center gap-1.5 px-0.5 pt-1 text-[11px]">
+          <RoleOffer
+            role={needs}
+            // (added: what was typed is read again, and drawn - not typed again)
+            done={() =>
+              afterAdded(text, reading.current, read, () => {
+                setError(null);
+                setNeeds(null);
+              })
+            }
+          />
+        </div>
+      )}
     </form>
   );
 }

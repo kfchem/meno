@@ -7,12 +7,17 @@ import { acceptManifest } from "../plugins/manifest";
 import { MANIFESTS } from "../plugins/known";
 import { measured } from "../../testing/timeouts";
 
-/** The plugins Meno carries, all added. */
-const carried = registered(MANIFESTS);
+/** The made-up test plugins, all added. */
+const known = registered(MANIFESTS);
+
+/**
+ * The made-up programs' inputs' grammars, as these tests read them: each word a token of its own kind by what it begins
+ * with, so that none takes another's place (a keyword, a setting's name, an element; a route's word, an element).
+ */
 
 /** A text's colouring, its grammar made: none where there is none. */
 async function coloured(name: string, text: string): Promise<Colouring | null> {
-  const c = colouringFor(name, text, carried.kinds, carried.texts);
+  const c = colouringFor(name, text, known.kinds, known.texts);
   await c?.ready;
   return c;
 }
@@ -109,126 +114,97 @@ describe("a text's colours, by Lezer's grammars", () => {
 });
 
 describe("a calculation's input, by its plugin's grammar", () => {
-  const orca = [
-    "# water, optimised",
-    "! B3LYP D3BJ def2-SVP Opt Freq",
-    "%maxcore 3000",
-    "%pal nprocs 4 end",
-    "%scf",
-    "  MaxIter 200",
-    "  SOSCF",
-    "    start 0.002",
-    "  end",
-    "end",
-    "* xyz 0 1",
-    "O   0.000000   0.000000   0.000000",
-    "H   0.000000   0.757000   0.587000",
-    "*",
+  // (the made-up Quanta's input: src/test/plugins/quanta/quanta-input.grammar)
+  const quanta = [
+    "; water, optimised",
+    "# M1 DSP B-small Opt Vib",
+    "@memory",
+    "  cores 4",
+    "  permb 3000",
+    "@close",
+    "@atoms",
+    "  O   0.000000   0.000000   0.000000",
+    "  H   0.000000   0.757000   0.587000",
+    "@close",
     "",
   ].join("\n");
 
-  it("is an ORCA input's: keywords, blocks and their options, the geometry's atoms and numbers", async () => {
-    const c = await coloured("water.inp", orca);
-    expect(toned(c, orca, 0)).toEqual([["# water, optimised", "comment"]]);
-    expect(toned(c, orca, 1).map((p) => p[1])).toEqual(["keyword", "keyword", "keyword", "keyword", "keyword"]);
-    expect(toned(c, orca, 2)).toEqual([
-      ["%maxcore", "keyword"],
-      ["3000", "number"],
+  it("is a program's input: keywords, sections and their settings, the atoms and their numbers", async () => {
+    const c = await coloured("water.qin", quanta);
+    expect(toned(c, quanta, 0)).toEqual([["; water, optimised", "comment"]]);
+    expect(toned(c, quanta, 1).map((p) => p[1])).toEqual(["keyword", "keyword", "keyword", "keyword", "keyword"]);
+    expect(toned(c, quanta, 2)).toEqual([["@memory", "keyword"]]);
+    expect(toned(c, quanta, 3)).toEqual([
+      ["cores", "property"],
+      ["4", "number"],
     ]);
-    expect(toned(c, orca, 5)).toEqual([
-      ["MaxIter", "property"],
-      ["200", "number"],
-    ]);
-    expect(toned(c, orca, 11)).toEqual([
+    expect(toned(c, quanta, 7)).toEqual([
       ["O", "tag"],
       ["0.000000", "number"],
       ["0.000000", "number"],
       ["0.000000", "number"],
     ]);
-    expect(wrongs(c, orca)).toEqual([]);
+    expect(wrongs(c, quanta)).toEqual([]);
   });
 
-  it("marks an ORCA input's block left open, and its geometry left unclosed", async () => {
-    const open = orca.replace("    start 0.002\n  end\nend\n", "    start 0.002\n  end\n");
-    expect(wrongs(await coloured("water.inp", open), open).map(([line]) => line)).toContain(9);
-    const unclosed = orca.replace(/\*\n$/, "");
-    expect(wrongs(await coloured("water.inp", unclosed), unclosed).length).toBeGreaterThan(0);
-    // (an .inp that begins nothing as ORCA's does - another program's: not coloured as ORCA's)
-    expect(colouringFor("other.inp", " $CONTRL SCFTYP=RHF $END\n", carried.kinds, carried.texts)).toBeNull();
+  it("marks a section left open", async () => {
+    const open = quanta.replace("@close\n@atoms", "@atoms");
+    expect(wrongs(await coloured("water.qin", open), open).length).toBeGreaterThan(0);
+    const unclosed = quanta.replace(/@close\n$/, "");
+    expect(wrongs(await coloured("water.qin", unclosed), unclosed).length).toBeGreaterThan(0);
+    // (a .qin that begins nothing as the program's does - another program's: not coloured as its)
+    expect(colouringFor("other.qin", " $SETUP KIND=RHF $END\n", known.kinds, known.texts)).toBeNull();
   });
 
-  it("is a Gaussian input's: Link 0, the route, the charge and multiplicity, the atoms - and marks one with no charge", async () => {
-    const gjf = "%Chk=water.chk\n#p B3LYP/6-31G(d) Opt ! tighter later\n\nwater\n\n0 1\nO 0.0 0.0 0.0\nH 0.0 0.757 0.587\n\n";
-    const c = await coloured("water.gjf", gjf);
-    expect(toned(c, gjf, 0)).toEqual([["%Chk", "keyword"]]);
-    expect(toned(c, gjf, 1)).toEqual([
-      ["#p", "keyword"],
-      ["B3LYP/6-31G(d)", "keyword"],
-      ["Opt", "keyword"],
-      ["! tighter later", "comment"],
-    ]);
-    expect(toned(c, gjf, 5)).toEqual([
+  it("is another's: its directives, the route, the title, the charge and multiplicity, the atoms - and marks one with no charge", async () => {
+    // (the made-up Orbitron's input: src/test/plugins/orbitron/orbitron-input.grammar)
+    const orb = '!checkpoint=water.ock\n> M2/B-mid Opt // tighter later\n"water"\n0 1\nO 0.0 0.0 0.0\nH 0.0 0.757 0.587\n\n';
+    const c = await coloured("water.orb", orb);
+    expect(toned(c, orb, 0)).toEqual([["!checkpoint=water.ock", "keyword"]]);
+    expect(toned(c, orb, 1).map((p) => p[1])).toContain("comment");
+    expect(toned(c, orb, 2)).toEqual([['"water"', "string"]]);
+    expect(toned(c, orb, 3)).toEqual([
       ["0", "number"],
       ["1", "number"],
     ]);
-    expect(toned(c, gjf, 7)).toEqual([
+    expect(toned(c, orb, 5)).toEqual([
       ["H", "tag"],
       ["0.0", "number"],
       ["0.757", "number"],
       ["0.587", "number"],
     ]);
-    expect(wrongs(c, gjf)).toEqual([]);
-    const noCharge = "#p HF/6-31G(d)\n\nwater\n\nO 0.0 0.0 0.0\n\n";
-    expect(wrongs(await coloured("water.gjf", noCharge), noCharge).map(([line]) => line)).toContain(4);
+    expect(wrongs(c, orb)).toEqual([]);
+    const noCharge = '> M1/B-small\n"water"\nO 0.0 0.0 0.0\n\n';
+    expect(wrongs(await coloured("water.orb", noCharge), noCharge).map(([line]) => line)).toContain(2);
   });
 });
 
 describe("a calculation's output, by its plugin's grammar", () => {
-  it("is Gaussian's: what a reader looks for, a run gone well, a warning - nothing marked", async () => {
-    const log = [
-      " Entering Gaussian System, Link 0=g16",
-      " Warning -- explicit consideration of degrees of freedom",
-      " SCF Done:  E(RB3LYP) =  -115.717496310     A.U. after   10 cycles",
-      " Maximum Force            0.000012     0.000450     YES",
-      "    -- Stationary point found.",
-      " Normal termination of Gaussian 16",
-    ].join("\n");
+  it("is a program's: its headings, a run gone well, numbers - nothing marked", async () => {
+    // (the made-up Orbitron's output: src/test/plugins/orbitron/orbitron-output.grammar)
+    const log = [" Orbitron run begins, stage 0=orb26", " == Optimisation ==", " SCF Final:  E(M2) =  -115.717496310 after 10 cycles", " Orbitron run ends well"].join("\n");
     const c = await coloured("methanol.log", log);
-    expect(toned(c, log, 1)).toEqual([["Warning -- explicit consideration of degrees of freedom", "warning"]]);
+    expect(toned(c, log, 1)).toEqual([["== Optimisation ==", "landmark"]]);
     expect(toned(c, log, 2)).toEqual([
-      ["SCF Done:", "landmark"],
       ["-115.717496310", "number"],
       ["10", "number"],
     ]);
-    expect(toned(c, log, 3).slice(-1)).toEqual([["YES", "success"]]);
-    expect(toned(c, log, 4)).toEqual([
-      ["--", "comment"],
-      ["Stationary point found.", "success"],
-    ]);
-    expect(toned(c, log, 5)).toEqual([
-      ["Normal termination of Gaussian", "success"],
-      ["16", "number"],
-    ]);
+    expect(toned(c, log, 3)).toEqual([["Orbitron run ends well", "success"]]);
     expect(wrongs(c, log)).toEqual([]);
   });
 
-  it("is ORCA's and xTB's: their errors, warnings and landmarks", async () => {
-    const out = " * O R C A *\nFINAL SINGLE POINT ENERGY       -76.408922\nORCA finished by error termination in SCF\n";
-    const orca = await coloured("water.out", out);
-    expect(toned(orca, out, 1)).toEqual([
-      ["FINAL SINGLE POINT ENERGY", "landmark"],
-      ["-76.408922", "number"],
-    ]);
-    expect(toned(orca, out, 2)).toEqual([["ORCA finished by error termination in SCF", "error"]]);
-    const xtb = "      | x T B |\n          | TOTAL ENERGY             -5.070 Eh   |\n[WARNING] Runtime exception occurred\nERROR STOP\n";
-    const x = await coloured("xtb.out", xtb);
-    expect(toned(x, xtb, 1).slice(0, 2)).toEqual([
-      ["TOTAL ENERGY", "landmark"],
-      ["-5.070", "number"],
-    ]);
-    expect(toned(x, xtb, 2)).toEqual([["[WARNING] Runtime exception occurred", "warning"]]);
-    expect(toned(x, xtb, 3)).toEqual([["ERROR STOP", "error"]]);
-    expect(wrongs(x, xtb)).toEqual([]);
+  it("is others': their faults, landmarks and numbers", async () => {
+    const out = " ~ Q U A N T A ~\n== Energies ==\nTOTAL ENERGY       -76.408922\nFAULT: stopped in the SCF\n";
+    const quanta = await coloured("water.out", out);
+    expect(toned(quanta, out, 1)).toEqual([["== Energies ==", "landmark"]]);
+    expect(toned(quanta, out, 2)).toEqual([["-76.408922", "number"]]);
+    expect(toned(quanta, out, 3)).toEqual([["FAULT: stopped in the SCF", "error"]]);
+    const tb = "      == T I G H T B I N D ==\n   energy:  -5.070 Eh\nFAULT: no convergence\ntightbind is done\n";
+    const t = await coloured("tb.out", tb);
+    expect(toned(t, tb, 1)).toEqual([["-5.070", "number"]]);
+    expect(toned(t, tb, 2)).toEqual([["FAULT: no convergence", "error"]]);
+    expect(toned(t, tb, 3)).toEqual([["tightbind is done", "success"]]);
+    expect(wrongs(t, tb)).toEqual([]);
   });
 });
 
@@ -278,12 +254,12 @@ describe("a plugin's grammar", () => {
   });
 
   it("is the plugin's whose own program writes the kind", () => {
-    // (ORCA's output and Gaussian's: each its own program's plugin's, which says its program writes it)
-    expect(carried.kinds.find((k) => k.id === "orca")?.grammar).toMatchObject({ plugin: "orca", decl: { file: "orca-output.grammar" } });
-    expect(carried.kinds.find((k) => k.id === "gaussian")?.grammar).toMatchObject({ plugin: "gaussian", decl: { file: "gaussian-output.grammar" } });
-    expect(carried.texts.map((t) => [t.id, t.grammar.plugin])).toEqual([
-      ["gaussian-input", "gaussian"],
-      ["orca-input", "orca"],
+    // (two programs' outputs, read by a reader of many as well: each its own program's plugin's, which says its program writes it)
+    expect(known.kinds.find((k) => k.id === "quanta")?.grammar).toMatchObject({ plugin: "quanta", decl: { file: "quanta-output.grammar" } });
+    expect(known.kinds.find((k) => k.id === "orbitron")?.grammar).toMatchObject({ plugin: "orbitron", decl: { file: "orbitron-output.grammar" } });
+    expect(known.texts.map((t) => [t.id, t.grammar.plugin])).toEqual([
+      ["orbitron-input", "orbitron"],
+      ["quanta-input", "quanta"],
     ]);
   });
 });

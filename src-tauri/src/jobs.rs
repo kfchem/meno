@@ -4470,33 +4470,33 @@ mod tests {
 
     #[test]
     fn reads_what_a_plugin_declares_its_jobs_need_of_another_plugins_program_and_refuses_what_cannot_be_given() {
-        // (ORCA's, as Meno carries it: the xTB plugin's xtb, told in XTBEXE)
-        let orca: serde_json::Value = serde_json::from_str(&fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/plugins/orca/manifest.json")).unwrap()).unwrap();
-        assert_eq!(needs_declared(&orca, "orca").unwrap(), vec![Need { plugin: "xtb".into(), versions: ">=0.1.4 <0.2.0".into(), program: "xtb".into(), env: "XTBEXE".into() }]);
-        assert_eq!(needs_declared(&serde_json::json!({}), "orca").unwrap(), vec![]);
+        // (another plugin's program, told in a variable: the tightbind plugin's tightbind, in TBEXE)
+        let quanta = serde_json::json!({"depends": [{"plugin": "tightbind", "versions": ">=0.1.4 <0.2.0", "programs": [{"program": "tightbind", "env": "TBEXE"}]}]});
+        assert_eq!(needs_declared(&quanta, "quanta").unwrap(), vec![Need { plugin: "tightbind".into(), versions: ">=0.1.4 <0.2.0".into(), program: "tightbind".into(), env: "TBEXE".into() }]);
+        assert_eq!(needs_declared(&serde_json::json!({}), "quanta").unwrap(), vec![]);
         // (one used only for some of its work: its programs needed by the jobs that say so, as any)
-        assert_eq!(needs_declared(&serde_json::json!({"depends": [{"plugin": "xtb", "versions": ">=1.0.0 <2.0.0", "optional": true, "programs": [{"program": "xtb", "env": "X"}]}]}), "orca").unwrap().len(), 1);
+        assert_eq!(needs_declared(&serde_json::json!({"depends": [{"plugin": "tightbind", "versions": ">=1.0.0 <2.0.0", "optional": true, "programs": [{"program": "tightbind", "env": "X"}]}]}), "quanta").unwrap().len(), 1);
         // (a plugin used for no program: none of its programs needed)
-        assert_eq!(needs_declared(&serde_json::json!({"depends": [{"plugin": "xtb", "versions": ">=1.0.0 <2.0.0"}]}), "orca").unwrap(), vec![]);
-        let uses = |program: &str, env: &str| serde_json::json!({"plugin": "xtb", "versions": ">=0.1.0 <0.2.0", "programs": [{"program": program, "env": env}]});
+        assert_eq!(needs_declared(&serde_json::json!({"depends": [{"plugin": "tightbind", "versions": ">=1.0.0 <2.0.0"}]}), "quanta").unwrap(), vec![]);
+        let uses = |program: &str, env: &str| serde_json::json!({"plugin": "tightbind", "versions": ">=0.1.0 <0.2.0", "programs": [{"program": program, "env": env}]});
         // (itself, versions not as they must be, a shell, a path, a variable that finds or loads programs, one plugin twice, one variable twice: none of them)
         for bad in [
-            serde_json::json!([{"plugin": "orca", "versions": ">=0.1.0", "programs": [{"program": "orca", "env": "X"}]}]),
-            serde_json::json!([{"plugin": "xtb", "versions": "^0.1.0", "programs": [{"program": "xtb", "env": "X"}]}]),
-            serde_json::json!([{"plugin": "xtb", "versions": ">=0.2.0 <0.1.0", "programs": [{"program": "xtb", "env": "X"}]}]),
-            serde_json::json!([{"plugin": "xtb", "programs": [{"program": "xtb", "env": "X"}]}]),
+            serde_json::json!([{"plugin": "quanta", "versions": ">=0.1.0", "programs": [{"program": "quanta", "env": "X"}]}]),
+            serde_json::json!([{"plugin": "tightbind", "versions": "^0.1.0", "programs": [{"program": "tightbind", "env": "X"}]}]),
+            serde_json::json!([{"plugin": "tightbind", "versions": ">=0.2.0 <0.1.0", "programs": [{"program": "tightbind", "env": "X"}]}]),
+            serde_json::json!([{"plugin": "tightbind", "programs": [{"program": "tightbind", "env": "X"}]}]),
             serde_json::json!([uses("sh", "X")]),
-            serde_json::json!([uses("bin/xtb", "X")]),
-            serde_json::json!([uses("xtb", "PATH")]),
-            serde_json::json!([uses("xtb", "DYLD_INSERT_LIBRARIES")]),
-            serde_json::json!([uses("xtb", "A"), uses("xtb", "B")]),
-            serde_json::json!([{"plugin": "xtb", "versions": ">=0.1.0", "programs": [{"program": "xtb", "env": "A"}, {"program": "other", "env": "A"}]}]),
-            serde_json::json!([{"plugin": "xtb", "versions": ">=0.1.0", "optional": "yes"}]),
-            serde_json::json!({"plugin": "xtb"}),
+            serde_json::json!([uses("bin/tightbind", "X")]),
+            serde_json::json!([uses("tightbind", "PATH")]),
+            serde_json::json!([uses("tightbind", "DYLD_INSERT_LIBRARIES")]),
+            serde_json::json!([uses("tightbind", "A"), uses("tightbind", "B")]),
+            serde_json::json!([{"plugin": "tightbind", "versions": ">=0.1.0", "programs": [{"program": "tightbind", "env": "A"}, {"program": "other", "env": "A"}]}]),
+            serde_json::json!([{"plugin": "tightbind", "versions": ">=0.1.0", "optional": "yes"}]),
+            serde_json::json!({"plugin": "tightbind"}),
             // (versions with no bound above)
-            serde_json::json!([{"plugin": "xtb", "versions": ">=1.0.0"}]),
+            serde_json::json!([{"plugin": "tightbind", "versions": ">=1.0.0"}]),
         ] {
-            assert!(needs_declared(&serde_json::json!({ "depends": bad }), "orca").is_err(), "{bad}");
+            assert!(needs_declared(&serde_json::json!({ "depends": bad }), "quanta").is_err(), "{bad}");
         }
     }
 

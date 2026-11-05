@@ -68,21 +68,20 @@ export type ChemRequests = {
    * stereoisomer `isomers` names - its configuration of what the drawing
    * leaves open, which Meno chose (Workspace/chem/openStereo) - or, none
    * named, of the structure as drawn; a molecule with metals held as `holds`
-   * says (lib/chem/metalHolds). On the page, of two enantiomers one is made
-   * as the other's mirror image.
+   * says (lib/chem/metalHolds). Of two enantiomers, which one the page asks
+   * for and gives the other as its mirror image is Meno's
+   * (Workspace/chem/pageMirror): the plugin makes each as it is asked.
    */
   conformers: {
     /**
      * `options`: those the plugin declares for the role (its manifest's
-     * roleOptions), as chosen in Settings. `onPage`: made for Meno's own page
-     * (of two enantiomers, one made as the other's mirror image -
-     * docs/PLUGINS.md), sent by the page alone, never by a workflow's step.
-     * `draw`: which set of `count` tries, where the search is asked in
-     * rounds (chem/conformerRounds) - each draw another set, the same draw
-     * and options the same set; sent only to a plugin whose role says it
-     * takes draws (lib/plugins/manifest `draws`).
+     * roleOptions), as chosen in Settings. `draw`: which set of `count`
+     * tries, where the search is asked in rounds (chem/conformerRounds) -
+     * each draw another set, the same draw and options the same set; sent
+     * only to a plugin whose role says it takes draws (lib/plugins/manifest
+     * `draws`).
      */
-    args: { molblock: string; isomers?: Configuration[]; count?: number; draw?: number; holds?: MetalHolds; options?: OptionValues; onPage?: true };
+    args: { molblock: string; isomers?: Configuration[]; count?: number; draw?: number; holds?: MetalHolds; options?: OptionValues };
     result: { isomers: Omit<Conformers, "chosen">[] };
   };
   /**

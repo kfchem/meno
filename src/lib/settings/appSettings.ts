@@ -133,12 +133,15 @@ export type PictureSettings = { dpi: (typeof PICTURE_DPIS)[number] };
  * which are not set up again of themselves when a role they fill is
  * needed; who fills each role, where the chemist chose (lib/plugins/roles);
  * where the chemist located each program installed separately that a
- * plugin's steps run, by "plugin:program" (lib/plugins/installed).
+ * plugin's steps run, by "plugin:program" (lib/plugins/installed); and
+ * whether the plugins set up here before they came online were asked about,
+ * and answered (lib/plugins/usedBefore).
  */
 export type PluginSettings = {
   removed: string[];
   roles: Record<string, string>;
   programs: Record<string, string>;
+  usedBeforeAsked?: true;
 };
 
 /** Who reads each kind of file, by the kind's id: its reader - unset, Meno where Meno reads it, or else the first added that reads it - and the readers that read it as well. */
@@ -324,7 +327,7 @@ function acceptFiles(raw: unknown, before: unknown): FileSettings {
 
 /** The plugins taken away, the roles' choices and the programs located, that read: ids only. */
 function acceptPlugins(raw: unknown): PluginSettings {
-  const r = (raw ?? {}) as { removed?: unknown; roles?: unknown; programs?: unknown };
+  const r = (raw ?? {}) as { removed?: unknown; roles?: unknown; programs?: unknown; usedBeforeAsked?: unknown };
   const id = (v: unknown): v is string => typeof v === "string" && /^[a-z0-9][a-z0-9-]{0,39}$/.test(v);
   const removed = Array.isArray(r.removed) ? [...new Set(r.removed.filter(id))] : [];
   const roles: Record<string, string> = {};
@@ -340,7 +343,7 @@ function acceptPlugins(raw: unknown): PluginSettings {
       if (id(plugin) && /^[A-Za-z0-9][A-Za-z0-9._+-]{0,39}$/.test(program ?? "") && typeof path === "string" && path.length <= 1024 && /^(\/|[A-Za-z]:[\\/]|\\\\[^\\/])/.test(path)) programs[key] = path;
     }
   }
-  return { removed, roles, programs };
+  return { removed, roles, programs, ...(r.usedBeforeAsked === true ? { usedBeforeAsked: true as const } : {}) };
 }
 
 /** The options remembered that read: by a role's name, each a value that is a string, a number or a switch. Whether each still fits its option is asked when it is drawn (lib/options `valuesOf`). */

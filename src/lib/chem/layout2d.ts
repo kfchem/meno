@@ -71,8 +71,12 @@ export type Bond = BondChem & {
   stereo?: "up" | "down" | "wavy" | "either" | "none";
   // Double-bond offset layout modes
   doubleMode?: "auto" | "center" | "left" | "right";
-  // Wedge orientation principle vs. reverse principle
-  stereoOrient?: "principle" | "reverse";
+  /**
+   * The atom (`a1` or `a2`) a wedge is narrow at: a stereo wedge's centre, a
+   * perspective wedge's far end. None given, the end with more bonds (`a1`
+   * on a tie).
+   */
+  narrow?: number;
   /**
    * How a single bond with no stereo is drawn: as a plain line (the
    * default), as a bold bar, as hashes across it, or dashed along it.
@@ -90,7 +94,7 @@ export type Vec2 = { x: number; y: number };
 /**
  * How a bond is drawn where it says nothing of stereochemistry. "wedge" is
  * a ring's bond in perspective running toward the viewer, narrow at its far
- * end (as a stereo wedge is narrow at its centre: `stereoOrient`); on a
+ * end (as a stereo wedge is narrow at its centre: `narrow`); on a
  * double bond it, or "bold", takes the place of the line the second one is
  * drawn beside.
  */
@@ -2598,16 +2602,12 @@ export function buildTextLabels(
 }
 
 /**
- * Which end of a wedge carries the wide base. By the usual principle the thin
- * end points at the stereocentre, i.e. the atom of higher degree; the reverse
- * orientation swaps the ends.
+ * Which end of a wedge carries the wide base: the end it is not narrow at
+ * (`Bond.narrow`). None given, the thin end points at the stereocentre by the
+ * usual principle, the atom of higher degree.
  */
 function wedgeBaseAtom(bond: Bond, deg?: Map<number, number>): number {
-  const degA = deg?.get(bond.a1) || 0;
-  const degB = deg?.get(bond.a2) || 0;
-  const thinAtA = degA >= degB; // tie: thin end at a1
-  const baseAtA = bond.stereoOrient === "reverse" ? thinAtA : !thinAtA;
-  return baseAtA ? bond.a1 : bond.a2;
+  return wedgeNarrowAtom(bond, deg) === bond.a1 ? bond.a2 : bond.a1;
 }
 
 /**
@@ -2615,10 +2615,13 @@ function wedgeBaseAtom(bond: Bond, deg?: Map<number, number>): number {
  * lists first.
  */
 export function wedgeNarrowAtom(
-  bond: Bond,
+  bond: Pick<Bond, "a1" | "a2" | "narrow">,
   deg?: Map<number, number>,
 ): number {
-  return wedgeBaseAtom(bond, deg) === bond.a1 ? bond.a2 : bond.a1;
+  if (bond.narrow === bond.a1 || bond.narrow === bond.a2) return bond.narrow;
+  const degA = deg?.get(bond.a1) || 0;
+  const degB = deg?.get(bond.a2) || 0;
+  return degA >= degB ? bond.a1 : bond.a2; // tie: thin end at a1
 }
 
 function degreeMap(bonds: Bond[]): Map<number, number> {
@@ -2998,7 +3001,10 @@ export function buildBondPrimitives(
       // hash spacing out from a bare atom, and run to the wide end or the
       // label there - or, where the style asks (`hashedWedgeShort`), stop
       // short of a bare atom there by a hash's own clear gap, the bonds on
-      // from it starting at the atom on their own.
+      // from it starting at the atom on their own. Only where bonds go on
+      // from it: at a bare end with none, the widest hash is the bond's
+      // end, or the wedge would have none and look short (the maintainer,
+      // 2026-11-05).
       const spacing = toWorld(opts.hashSpacingPx, zoom, units);
       const lw = pxToWorld(lwPx, zoom);
       const hashesTo = (end: number) =>
@@ -3018,7 +3024,11 @@ export function buildBondPrimitives(
       const reaching = hashesTo(L0 - trimWide);
       // (never below what the style asks for: where stopping short would leave fewer than its three - or than
       // reaching the atom gives, if that is fewer - or none at all on the very shortest, the hashes reach the atom)
-      const shortBy = opts.hashedWedgeShort && !(trimWide > 0) ? Math.max(lw, spacing - lw) : 0;
+      const wideIdx = baseAtP1 ? bond.a1 : bond.a2;
+      const bondsAtWide = deg?.get(wideIdx) ?? adjBonds?.get(wideIdx)?.length;
+      // (not known - no bonds told - as bonds going on, as it was)
+      const goesOn = bondsAtWide == null || bondsAtWide > 1;
+      const shortBy = opts.hashedWedgeShort && goesOn && !(trimWide > 0) ? Math.max(lw, spacing - lw) : 0;
       const stopped = shortBy > 0 ? hashesTo(L0 - trimWide - shortBy) : reaching;
       const count = (h: { lines: unknown[]; polys: unknown[] }) => h.lines.length + h.polys.length;
       const least = Math.max(1, Math.min(count(reaching), opts.fewestHashes ?? 1));

@@ -30,13 +30,26 @@ describe("the plugins one uses", () => {
     expect([...declaredPrograms(used)].sort()).toEqual(["a", "b", "c", "d", "e"]);
   });
 
-  it("refuses one that uses a plugin Meno does not know, or a program that plugin does not declare - and, in turn, one that uses it", () => {
-    const refused = dependsRefused([plugin("tool"), plugin("asks", [["tool", ">=1.0.0", ["other"]]]), plugin("lost", [["nowhere", ">=1.0.0"]]), plugin("after", [["lost", ">=1.0.0"]]), plugin("fine", [["tool", ">=1.0.0", ["tool"]]])]);
+  it("refuses one that uses a program a plugin it uses does not declare - and, in turn, one that uses it", () => {
+    const refused = dependsRefused([plugin("tool"), plugin("asks", [["tool", ">=1.0.0", ["other"]]]), plugin("after", [["asks", ">=1.0.0"]]), plugin("fine", [["tool", ">=1.0.0", ["tool"]]])]);
     expect(Object.fromEntries(refused)).toEqual({
       asks: "it uses TOOL's program other, which TOOL does not declare",
-      lost: "it uses nowhere, a plugin Meno does not know",
-      after: "it uses LOST, which is refused",
+      after: "it uses ASKS, which is refused",
     });
+  });
+
+  it("takes one that uses a plugin Meno does not know yet - not got - as using one missing: stopped where it needs it, not where it uses it for some of its work", () => {
+    const needs = plugin("needs", [["later", ">=1.0.0 <2.0.0", ["later"]]]);
+    const some = plugin("some", [["later?", ">=1.0.0 <2.0.0", ["later"]]]);
+    expect(dependsRefused([needs, some, plugin("after", [["needs", ">=1.0.0"]])])).toEqual(new Map());
+    const none = () => undefined;
+    const name = (id: string) => id;
+    expect(stoppedWhy(needs, none, name)).toBe("Needs later, which is not added");
+    expect(stoppedWhy(some, none, name)).toBeNull();
+    // (got, and declaring what is used of it: as any plugin used; not declaring it: refused, now that it can be checked)
+    expect(dependsRefused([needs, some, plugin("later")])).toEqual(new Map());
+    expect(stoppedWhy(needs, (id) => (id === "later" ? "1.2.0" : undefined), name)).toBeNull();
+    expect(Object.fromEntries(dependsRefused([needs, plugin("later", [], ["else"])]))).toEqual({ needs: "it uses LATER's program later, which LATER does not declare" });
   });
 
   it("refuses every plugin of a circle, naming it - none could be set up first - and none outside it", () => {
