@@ -1670,7 +1670,12 @@ mention a number, and the card.
   (`pdfPageLabels`), never holding up what is shown; a page that could not
   be read is gone through again the next time. It starts the first time
   the pointer moves over the PDF's words, in the column or on the page
-  (`utils/compoundLens` `indexOnce`).
+  (`utils/compoundLens` `indexOnce`). Once the pointer rests on a number
+  the index has not placed yet, it is hurried (`hurryIndex`): someone is
+  waiting, so it no longer waits for idle moments - on Windows, whose
+  webview is seldom idle while the pointer moves, a page could wait half a
+  second - but still reads one page at a time, the window's next turn
+  between them, so a long PDF never holds the pointer up.
 - **A number mentioned** (`utils/compoundMentions`): the word under the
   pointer, of a compound number's shape, set as a compound's number is -
   bold, as most journals set one in their text, or after a word that names
@@ -1685,7 +1690,11 @@ mention a number, and the card.
   only where there is no room above - holds Meno's own drawing of the structure, its number, its page,
   and the pages it is drawn on again ("12  p. 1 · also on p. 4"). It fades
   in and out (`DURATION.base`), lingering a moment so the pointer can come
-  onto it. Its drawing dragged onto the canvas puts the structure there as
+  onto it. While the PDF is still being gone through for numbers, or the
+  number's figure is still being read, it says so ("12  Reading this PDF's
+  figures…") and grows into the drawing once it comes, its size and place
+  eased, never a jump (`cardHolds`); gone through whole and the number
+  drawn nowhere, no card. Its drawing dragged onto the canvas puts the structure there as
   one dragged out of its figure is (*Structures picked from a PDF*: the same
   reading, its note and unsure marks). Its page clicked shows the figure in
   the column, the structure marked a moment. A number no structure is set
