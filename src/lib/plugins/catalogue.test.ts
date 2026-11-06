@@ -189,4 +189,26 @@ describe("what is offered for a role no plugin here fills", () => {
     // (one here already: nothing offered for it)
     expect(offeredFor("smiles", offersOf(listed, new Map([["sketch", "0.2.0"]]), "macos"))).toEqual([]);
   });
+
+  it("reads what brings presets for another, and the plugins no longer offered - each as Meno takes it, or the catalogue is refused", () => {
+    const ok = read(catalogue([entry(), entry({ id: "rdkit-presets", presetsFor: "rdkit" })], { retired: [{ id: "wfx", name: "WFX reader", why: "Meno reads these files itself now" }] })) as { catalogue: Catalogue };
+    expect(ok.catalogue.plugins[1].presetsFor).toBe("rdkit");
+    expect(ok.catalogue.retired).toEqual([{ id: "wfx", name: "WFX reader", why: "Meno reads these files itself now" }]);
+    expect((read(catalogue([entry()])) as { catalogue: Catalogue }).catalogue.retired).toBeUndefined();
+    for (const bad of ["", "Not An Id", 3]) expect(why(catalogue([entry({ presetsFor: bad })])), String(bad)).toContain("the plugin it brings presets for");
+    expect(why(catalogue([entry({ presetsFor: entry().id })]))).toContain("the plugin it brings presets for");
+    for (const bad of [{}, [{ id: "wfx", name: "WFX" }], [{ id: "wfx", name: "WFX", why: "w" }, { id: "wfx", name: "WFX", why: "w" }], [{ id: "Bad Id", name: "n", why: "w" }]])
+      expect(why(catalogue([entry()], { retired: bad })), JSON.stringify(bad)).toBe("Its plugins no longer offered are not as Meno takes them");
+    expect(why(catalogue([entry()], { retired: [{ id: entry().id, name: "n", why: "w" }] }))).toBe("It offers a plugin it says is no longer offered");
+  });
+
+  it("takes a retired plugin's name up to 60 letters and its why up to 160, as the list's builder writes them; and never one on offer, so that a plugin is said either not made for here or no longer offered, never both", () => {
+    const retired = (name: string, why: string) => catalogue([entry()], { retired: [{ id: "wfx", name, why }] });
+    expect("catalogue" in read(retired("n".repeat(60), "w".repeat(160)))).toBe(true);
+    expect(why(retired("n".repeat(61), "w"))).toBe("Its plugins no longer offered are not as Meno takes them");
+    expect(why(retired("n", "w".repeat(161)))).toBe("Its plugins no longer offered are not as Meno takes them");
+    // (one made for another system and said retired too: the list is refused - its why would be two)
+    expect(why(catalogue([entry({ systems: ["windows"] })], { retired: [{ id: entry().id, name: "n", why: "w" }] }))).toBe("It offers a plugin it says is no longer offered");
+  });
 });
+

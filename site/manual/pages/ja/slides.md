@@ -32,7 +32,7 @@
 - 化学式は打つそばから整います。K2CO3 の数字は下付きに、NH4+ のプラスは上付きに、t-BuOK の t は斜体になります。
 - 設定の「General」にある「Write words on the page as they are meant」がオンなら、略記がその意味の形になります。たとえば 60dc は 60 °C になります。
 - 矢印のそばに置いた言葉は、矢印の上か下に並び、矢印が言葉に合わせて伸びます。
-- 言葉を右クリックすると、「Edit text」、「Font…」（大きさの「Label」「Text」「Heading」「Title」、行間、書体）、「Bold」、「Italic」、「Bullets」、「Colour…」、「Align left」「Align centre」「Align right」「Justify」、「Superscript」「Subscript」があります。
+- 言葉を右クリックすると、「Edit text」、「Bold」、「Italic」、「Bullets」、「Colour…」、「Align left」「Align centre」「Align right」「Justify」、「Superscript」「Subscript」があります。メニューのアイコンの下では、大きさ（ポイントで 8、10、12、14、18、24。ほかの大きさは 4〜288 を入力して Enter）、行間（1、1.15、1.5、2。ほかは 0.5〜4）、書体を選べます。選ぶとすぐに反映され、メニューは開いたままなので、続けてほかのものも試せます。
 
 ## 矢印とサイクル {#arrows}
 

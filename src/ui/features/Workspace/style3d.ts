@@ -34,11 +34,18 @@ export function useStyleNames3D(): Record<Role3D, string> {
  * to - each number and colour of its looks and its light eased from what
  * it was to what it is (the rest at once), as a change of the drawing
  * style eases its bond (docs/WORKSPACE.md, *Styles in 3D*); `atOnce`, a
- * very large drawing's, without easing.
+ * very large drawing's, without easing; and, where nothing was `drawn` in
+ * 3D before it came - a workspace opened, its style coming with its
+ * molecules - at once, in the very render it comes in (`styleGoesOver`):
+ * there is nothing to go over from, and each step would make every
+ * molecule again.
  */
-export function useEasedStyle3D(style: Style3D, atOnce = false): Style3D {
+export function useEasedStyle3D(style: Style3D, atOnce = false, drawn = true): Style3D {
   const [shown, setShown] = useState(style);
   const now = useRef(style);
+  const drawnBefore = useRef(drawn);
+  if (styleGoesOver(style, now.current, drawnBefore.current) === "at once") now.current = style;
+  drawnBefore.current = drawn;
   useEffect(() => {
     if (style === now.current) return;
     // (a very large drawing: at once - each step would make every molecule again)
@@ -62,4 +69,14 @@ export function useEasedStyle3D(style: Style3D, atOnce = false): Style3D {
     return () => cancelAnimationFrame(frame);
   }, [style, atOnce]);
   return style === now.current ? style : shown;
+}
+
+/**
+ * How a canvas takes a style that has come (`style`) for the one it draws
+ * (`was`): not at all, the same; at once, where nothing was drawn in 3D
+ * before it came; else eased (`useEasedStyle3D`).
+ */
+export function styleGoesOver(style: Style3D, was: Style3D, drawnBefore: boolean): "same" | "at once" | "eased" {
+  if (style === was) return "same";
+  return drawnBefore ? "eased" : "at once";
 }

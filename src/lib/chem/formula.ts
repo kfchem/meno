@@ -1,5 +1,6 @@
 import type { GroupStructure, StructureBond } from "./ligands";
 import type { SmilesAtom } from "./smiles";
+import { movedBond } from "./structureBonds";
 
 /**
  * A formula's parts - groups and elements, each as often as its count - and
@@ -147,7 +148,8 @@ export function anionOf(parts: readonly Part[], charge: number): GroupStructure 
         bonds.push({ a1: 0, a2: at, order: 1 });
       } else {
         atoms.push(...p.s.atoms.map((a) => ({ ...a })));
-        bonds.push(...p.s.bonds.map((b) => ({ ...b, a1: b.a1 + at, a2: b.a2 + at })), { a1: 0, a2: p.s.attach[0] + at, order: 1 });
+        // (attached to the first atom: a ref to the atom outside, that one)
+        bonds.push(...p.s.bonds.map((b) => movedBond(b, (i) => i + at, 0)), { a1: 0, a2: p.s.attach[0] + at, order: 1 });
       }
     }
     for (const o of oxygens) {
