@@ -1489,12 +1489,20 @@ page reads anything of them (`catalogue.rs`):
   (`HOSTS`); the proxy follows it to those alone. It is checked against
   Meno's own public keys (minisign, `minisign-verify`) - the one in use and
   the next, so that a key is changed by a Meno that carries both first -
-  before it is parsed at all. Then its form, and its serial against the one
-  kept: a lower one is refused and the one kept stays, so that an older list
-  replayed never undoes a plugin taken off it. None but a list checked is
-  kept: `catalogue.json`, its `.minisig` and `catalogue-state.json` (its
-  serial, and when it was fetched), each written whole. The one kept is
-  checked again each time it is read. Until a key is carried, no list is
+  before it is parsed at all. Then its form, and when it was issued against
+  the one kept: an earlier one is refused, and one of the same second only
+  taken where it is that very list, so that an older list replayed never
+  undoes a plugin taken off it. None but a list checked is kept:
+  `catalogue-2.json`, its `.minisig` and `catalogue-2-state.json` (when it
+  was issued, its SHA-256, and when it was fetched), each written whole. The
+  one kept is checked again each time it is read. This Meno fetches
+  `catalogue-2.json`, the whole list; an earlier Meno fetched
+  `catalogue.json`, the plugins every Meno in use reads whole (PLUGINS.md,
+  *Plugins online*). Until this Meno's is first fetched, the one an earlier
+  Meno kept is shown, and holds a fetched one to when it was issued, and
+  that alone: the two of one release are issued the same second, as
+  different files, and an older list, signed, served in this Meno's place
+  is still refused. Until a key is carried, no list is
   taken. Only minisign's own signatures, made over the list's hash, are
   taken - never its older form, made over the list itself.
 - **A plugin's files** (`plugin_stage`) are found by their id and version in

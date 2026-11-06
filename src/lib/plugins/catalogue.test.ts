@@ -64,9 +64,6 @@ describe("a catalogue of plugins online, read", () => {
       entry({ version: "latest" }),
       entry({ contract: "1" }),
       entry({ contract: 0 }),
-      entry({ systems: ["amiga"] }),
-      entry({ roles: ["anything"] }),
-      entry({ kinds: ["Energy Window"] }),
       entry({ manifestSha256: "abc" }),
       entry({ terms: "" }),
       entry({ homepage: "http://example.org" }),
@@ -76,7 +73,25 @@ describe("a catalogue of plugins online, read", () => {
     expect(why(catalogue([good, { ...good }]))).toBe("It offers sketch twice");
   });
 
-  it("reads the kinds of file an entry reads as its manifest says them - their marks strictly - or refuses the whole list", () => {
+  it("lists one that says what this Meno does not know - a system, a role, a kind - as a newer Meno's, never refusing the list for it", () => {
+    const newer = (over: Record<string, unknown>) => (read(catalogue([entry(), entry({ id: "other", ...over })])) as { catalogue: Catalogue }).catalogue.plugins[1];
+    expect(newer({ systems: ["amiga"] }).newer).toBe("It says a system this Meno does not know");
+    expect(newer({ roles: ["language-model-9"] }).newer).toBe("It says a role this Meno does not know");
+    expect(newer({ kinds: ["Energy Window"] }).newer).toBe("It says a kind this Meno does not know");
+    expect(newer({ roles: ["anything"], systems: ["amiga"] }).newer).toBe("It says a system and a role this Meno does not know");
+    // (nothing of what it says taken: no role, kind or file to offer it by - those it says as this Meno knows them too)
+    const e = newer({ roles: ["anything"], reads: ["sketch-out"], fileKinds: [{ id: "sketch-out", name: "Sketch output", extensions: [".out"], marks: [{ text: "SKETCH" }] }] });
+    expect([e.roles, e.reads, e.fileKinds]).toEqual([[], [], []]);
+    const bySystem = newer({ systems: ["amiga"], roles: ["smiles"], kinds: ["conformers"], reads: ["sketch-out"] });
+    expect(bySystem.newer).toBe("It says a system this Meno does not know");
+    expect([bySystem.roles, bySystem.kinds, bySystem.reads]).toEqual([[], [], []]);
+    // (offered as not here: a newer Meno's - beside one here too)
+    const listed = (read(catalogue([entry({ roles: ["anything"] })])) as { catalogue: Catalogue }).catalogue;
+    expect(offersOf(listed, new Map(), null)).toEqual([{ entry: listed.plugins[0], offer: "not-here", why: "It is for a newer Meno" }]);
+    expect(offersOf(listed, new Map([["sketch", "0.0.1"]]), null)[0]).toMatchObject({ offer: "not-here", why: "Its newer versions are for a newer Meno" });
+  });
+
+  it("reads the kinds of file an entry reads as its manifest says them - their marks strictly - or lists it as a newer Meno's", () => {
     const kind = { id: "sketch-out", name: "Sketch output", extensions: [".out", ".log"], marks: [{ text: "* S K E T C H *" }, { text: "Sketch version", at: "line-start", anyCase: true }], writtenBy: "sketch" };
     const got = read(catalogue([entry({ reads: ["sketch-out"], fileKinds: [kind] })])) as { catalogue: Catalogue };
     expect(got.catalogue.plugins[0].fileKinds).toEqual([kind]);
@@ -99,11 +114,12 @@ describe("a catalogue of plugins online, read", () => {
       [{ ...kind, writtenBy: "a program" }],
       [kind, kind],
     ]) {
-      expect(why(catalogue([entry(), entry({ id: "other", fileKinds: bad })])), JSON.stringify(bad)).toMatch(/^It holds other: a kind of file/);
+      const listed = read(catalogue([entry(), entry({ id: "other", fileKinds: bad })])) as { catalogue: Catalogue };
+      expect(listed.catalogue.plugins[1], JSON.stringify(bad)).toMatchObject({ newer: "It says a kind of file this Meno does not know", fileKinds: [] });
     }
   });
 
-  it("reads the tables of atoms an entry's program prints as its manifest keeps them - or refuses the whole list", () => {
+  it("reads the tables of atoms an entry's program prints as its manifest keeps them - or lists it as a newer Meno's", () => {
     const table = { id: "orientation", headings: ["Standard orientation:"], heads: ["Center Atomic"], columns: ["centre", "atomic-number", "type", "x", "y", "z"] };
     expect((read(catalogue([entry({ quotedTables: [table] })])) as { catalogue: Catalogue }).catalogue.plugins[0].quotedTables).toEqual([table]);
     expect((read(catalogue([entry()])) as { catalogue: Catalogue }).catalogue.plugins[0].quotedTables).toEqual([]);
@@ -121,7 +137,8 @@ describe("a catalogue of plugins online, read", () => {
       [table, table],
       [1, 2, 3, 4, 5].map((k) => ({ ...table, id: `t${k}` })),
     ]) {
-      expect(why(catalogue([entry(), entry({ id: "other", quotedTables: bad })])), JSON.stringify(bad).slice(0, 80)).toMatch(/^It holds other: a table of atoms/);
+      const listed = read(catalogue([entry(), entry({ id: "other", quotedTables: bad })])) as { catalogue: Catalogue };
+      expect(listed.catalogue.plugins[1], JSON.stringify(bad).slice(0, 80)).toMatchObject({ newer: "It says a table of atoms this Meno does not know", quotedTables: [] });
     }
   });
 
@@ -190,13 +207,23 @@ describe("what is offered for a role no plugin here fills", () => {
     expect(offeredFor("smiles", offersOf(listed, new Map([["sketch", "0.2.0"]]), "macos"))).toEqual([]);
   });
 
-  it("reads what brings presets for another, and the plugins no longer offered - each as Meno takes it, or the catalogue is refused", () => {
+  it("reads what brings presets for another, and the plugins no longer offered - each as Meno takes it; one that brings presets as this Meno does not take them listed as a newer Meno's, the list read whole", () => {
     const ok = read(catalogue([entry(), entry({ id: "rdkit-presets", presetsFor: "rdkit" })], { retired: [{ id: "wfx", name: "WFX reader", why: "Meno reads these files itself now" }] })) as { catalogue: Catalogue };
     expect(ok.catalogue.plugins[1].presetsFor).toBe("rdkit");
     expect(ok.catalogue.retired).toEqual([{ id: "wfx", name: "WFX reader", why: "Meno reads these files itself now" }]);
     expect((read(catalogue([entry()])) as { catalogue: Catalogue }).catalogue.retired).toBeUndefined();
-    for (const bad of ["", "Not An Id", 3]) expect(why(catalogue([entry({ presetsFor: bad })])), String(bad)).toContain("the plugin it brings presets for");
-    expect(why(catalogue([entry({ presetsFor: entry().id })]))).toContain("the plugin it brings presets for");
+    // (presets for no plugin's id, or for its own: a newer Meno's - listed so, its presets offered with none, the rest of the list read)
+    for (const bad of ["", "Not An Id", 3, entry({ id: "self" }).id]) {
+      const listed = read(catalogue([entry(), entry({ id: "self", presetsFor: bad })])) as { catalogue: Catalogue };
+      expect(listed.catalogue.plugins.map((p) => p.id), String(bad)).toEqual([entry().id, "self"]);
+      expect(listed.catalogue.plugins[1], String(bad)).toMatchObject({ newer: "It says the plugin it brings presets for this Meno does not know", roles: [] });
+      expect(listed.catalogue.plugins[1].presetsFor, String(bad)).toBeUndefined();
+      expect(listed.catalogue.plugins[0].newer).toBeUndefined();
+    }
+    // (one that brings presets for another, but says a role this Meno does not know: a newer Meno's, its presets offered with none)
+    const unknownRole = (read(catalogue([entry(), entry({ id: "other-presets", presetsFor: "rdkit", roles: ["anything"] })])) as { catalogue: Catalogue }).catalogue.plugins[1];
+    expect(unknownRole.newer).toBe("It says a role this Meno does not know");
+    expect(unknownRole.presetsFor).toBeUndefined();
     for (const bad of [{}, [{ id: "wfx", name: "WFX" }], [{ id: "wfx", name: "WFX", why: "w" }, { id: "wfx", name: "WFX", why: "w" }], [{ id: "Bad Id", name: "n", why: "w" }]])
       expect(why(catalogue([entry()], { retired: bad })), JSON.stringify(bad)).toBe("Its plugins no longer offered are not as Meno takes them");
     expect(why(catalogue([entry()], { retired: [{ id: entry().id, name: "n", why: "w" }] }))).toBe("It offers a plugin it says is no longer offered");
