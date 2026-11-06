@@ -816,8 +816,15 @@ export type WorkflowSet = {
  * of how it is drawn (workflow/entries `drawnHash`): edited since, the
  * structure is another, and its properties and status are taken away,
  * `stale` saying why.
+ *
+ * `id` is the structure's lasting id, which what is made of it names it by
+ * (its conformers in 3D: workflow/entries `SetEntry.madeOf`): given as it
+ * is first put in a set - a structure the chemist drew as much as one a step
+ * gave - and kept however it moves, is saved and opened; edited into
+ * another structure, it is another's (workflow/entries `memberRecord`,
+ * `placedRecord`).
  */
-export type DrawnRecord = { from?: string[]; properties?: Record<string, Property>; status?: EntryStatus; of?: string; stale?: string };
+export type DrawnRecord = { id?: string; from?: string[]; properties?: Record<string, Property>; status?: EntryStatus; of?: string; stale?: string };
 /** A structure drawn as a step gave it: the drawing, and its record where it has one. */
 export type DrawnModel = Model & { record?: DrawnRecord };
 /** One of a set's members: a structure drawn, by its atoms' ids, with its record, where a step gave it one; a molecule in 3D, or a picture, by id. */
