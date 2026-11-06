@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { ABOVE_GUIDE_LAYER, GUIDE_LAYER, QUESTION_LAYER } from "./layers";
 
 describe("the guide among the window's layers", () => {
@@ -38,14 +38,15 @@ describe("the guide among the window's layers", () => {
     const ui = join(process.cwd(), "src/ui");
     const files = (readdirSync(ui, { recursive: true }) as string[]).filter((f) => f.endsWith(".tsx") && !/\.test\./.test(f)).map((f) => ({ f, text: readFileSync(join(ui, f), "utf8") }));
     // (each question: a box that holds the keys while it asks)
-    const questions = files.filter((x) => x.text.includes('aria-modal="true"')).map((x) => x.f.replace(/^.*\//, "").replace(/\.tsx$/, ""));
+    // (each file by its name alone, whatever the system's separator: Windows gives "features\\StyleEditor\\StyleFileAsk.tsx")
+    const questions = files.filter((x) => x.text.includes('aria-modal="true"')).map((x) => basename(x.f, ".tsx"));
     expect(questions.sort()).toEqual(["ConfirmDiscard", "ConsentDialog", "HideHydrogensAsk", "NameDialog", "StyleFileAsk"]);
     // (asked in the window's layer by themselves)
     for (const q of ["ConsentDialog", "HideHydrogensAsk", "StyleFileAsk"]) expect(files.find((x) => x.f.endsWith(`${q}.tsx`))!.text, q).toContain("<QuestionLayer>");
     // (the boxes others ask in - wherever one is put, it is in a layer: the window's, or - only on a canvas - the canvas's (above))
     for (const q of ["ConfirmDiscard", "NameDialog"]) {
       for (const x of files.filter((y) => y.text.includes(`<${q}`))) {
-        const where = x.f.replace(/^.*\//, "");
+        const where = basename(x.f);
         // (Workspace: in its canvas's layer, as above; pluginFiles: its question handed to Plugins, which asks it in the window's)
         if (where === "Workspace.tsx" || where === "pluginFiles.tsx") continue;
         expect(x.text, `${q} in ${where}`).toContain("<QuestionLayer");
