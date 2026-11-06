@@ -1319,25 +1319,50 @@ it where it lies out of view.
   bond it is set.
 - **Marked as unsure**, rather than guessed silently:
   - a label nothing reads ("Xq" was not read as an element or a group);
-  - **a repeat unit in brackets, counted** (2026-11-05): a pair of
-    brackets drawn across bonds - square, a line and its ticks, or round,
-    a curve - with a count at the foot of one: digits, as (CH2)6 drawn
-    out, or a small letter, a polymer's n. Meno does not read the count
-    yet. So that the unit, drawn once, is never taken for the whole, its
-    brackets are read as no bonds and its count as no word, and the atoms
-    of each bond a bracket crosses are marked ("A repeat unit in brackets,
-    counted 6, is not read: it is drawn here once.";
-    lib/figure/read `repeatBrackets`). A bracket is a line or a curve half
-    a bond to two and a half long that crosses a line of the figure
-    square enough, away from both their ends, its own ends free - at no
-    other line's end but its ticks', and into no label - with its count
-    by its lower end (a count in reach of two brackets' lower ends is the
-    nearer's); its partner is the nearest other such line or curve,
-    uncounted. A line across a bond with no count is read as before, and a
-    number by no bracket - a compound's - is left as it was. A label
-    written as one word, (CH2)6, is not read either (above). A picture
-    read by a model (part B) comes with no brackets nor counts: there,
-    nothing tells one yet;
+  - **a repeat unit in brackets, counted** (2026-11-05), where it is not
+    read: a pair of brackets drawn across bonds - square, a line and its
+    ticks, or round, a curve - with a count at the foot of one: digits, as
+    (CH2)6 drawn out, or a small letter, a polymer's n. Its brackets are
+    read as no bonds and its count as no word (lib/figure/read
+    `repeatBrackets`). A bracket is a line or a curve half a bond to two
+    and a half long that crosses a line of the figure square enough, away
+    from both their ends, its own ends free - at no other line's end but
+    its ticks', and into no label - with its count by its lower end (a
+    count in reach of two brackets' lower ends is the nearer's); its
+    partner is the nearest other such line or curve, uncounted. A line
+    that crosses brackets alone is none: a double bond's second line, a
+    bracket drawn over it. A line across a bond with no count is read as
+    before, and a number by no bracket - a compound's - is left as it
+    was. A label written as one word, (CH2)6, is not read either (above).
+    A picture read by a model (part B) comes with no brackets nor counts:
+    there, nothing tells one.
+    - **A whole count is read** (2026-11-06; `repeatsRead`, then
+      lib/figure/structure). Where each bracket crosses one bond (a double
+      bond's two lines one bond), the two bonds are other bonds of one
+      order, and what lies between them is joined to the rest by those two
+      alone, the unit is read that many times: (CH2)6 as six CH2. Its
+      copies follow it head to tail, each joined to the next by the second
+      bracket's bond, the last to what that bond joined. The structure is
+      the molecule drawn out in full, its formula and identity the same.
+      The copies are set on from it back and forth, as a chain is drawn,
+      and what lies past them is moved on with them; in a ring it is left
+      where it is. An odd number of atoms put in leaves one bend straight
+      where they meet what lies past: turning it would draw its mirror
+      image. Each copy is tied to where the figure draws the unit. It is
+      kept a multiple group (CTfile MUL: its count, its first unit the
+      paradigm), so a file written of it says so. Counted 1, the unit is
+      read once, as drawn.
+    - **Not read, saying why**, where it cannot be, the atoms of each bond
+      a bracket crosses marked: a count that is a letter, a polymer's n
+      ("A repeat unit in brackets, counted n, is not read: it is drawn
+      here once."); or a whole count whose shape breaks a rule above - one
+      bracket with no partner, a bracket across more than one bond or
+      across a line that is no bond, both across one bond, the two bonds
+      of two orders (or a ring's drawn with its circle), what lies between
+      not cut off by them, a count of 0, a unit within another or holding
+      one, two units whose brackets cross one bond - each saying which ("A repeat
+      unit in brackets, counted 6, is not read: its two brackets cross the
+      same bond. It is drawn here once.");
   - a label that writes more or fewer hydrogens than its atom's bonds leave
     it;
   - hashes as wide at both ends, where both ends could be a stereocentre or

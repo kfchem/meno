@@ -275,8 +275,16 @@ export function modelOf(read: FigureRead, spot: (x: number, y: number) => Figure
     ...(a.charge ? { charge: a.charge } : {}),
     ...(a.isotope ? { isotope: a.isotope } : {}),
     ...(a.radical ? { radical: a.radical } : {}),
-    seen: spot(read.atoms[i].x, read.atoms[i].y),
+    // (a repeat unit's copy where the figure draws the unit it copies)
+    seen: spot(read.atoms[a.of ?? i].x, read.atoms[a.of ?? i].y),
   }));
+  // (a repeat unit read so many times kept a multiple group: its count, its first unit the paradigm - written so to a file)
+  const groups = [...new Set(s.atoms.flatMap((a) => (a.multiple ? [a.multiple.group] : [])))];
+  s.atoms.forEach((a, i) => {
+    if (!a.multiple) return;
+    const id = s.atoms.length + s.bonds.length + groups.indexOf(a.multiple.group) + 1;
+    atoms[i].sgroups = [{ id, type: "MUL", multiplier: a.multiple.n, ...(a.multiple.paradigm ? { paradigm: true } : {}) }];
+  });
   const bonds: Bond[] = s.bonds.map((b, i) => ({
     id: atoms.length + i + 1,
     a: b.a + 1,
