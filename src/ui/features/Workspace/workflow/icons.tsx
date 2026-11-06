@@ -311,6 +311,9 @@ const ICONS: Record<StepIcon, Icon | ReactNode> = {
   ),
 };
 
+/** Every kind of step's icon, by name: what the page draws in WebGL draws them too (pageGl/icons). */
+export const STEP_ICONS = Object.keys(ICONS) as StepIcon[];
+
 /** A kind of step's icon, `size` px square; `stroke`, its lines' weight, as Heroicons' 24-unit square has them (one drawn here on 20 units as heavy). */
 export function StepGlyph({ icon, size = 16, stroke = 1.5 }: { icon: StepIcon; size?: number; stroke?: number }) {
   const I = ICONS[icon];

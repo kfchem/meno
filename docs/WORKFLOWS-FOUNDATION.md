@@ -464,7 +464,8 @@ pairing based on those IDs"):
 
 **Every exit is a result set** (question 1, answered; refining decision 9),
 made with the step, empty until it runs, to the right of the card. The
-card's own give port goes.
+card's own give port goes. (Each exit came to have a port of its own on
+the card, its set's, 2026-11-05: WORKFLOWS.md, *Exit ports*.)
 
 **Second exits.** A node that can fail entries, or set entries aside, has a
 second exit for them (revisiting question 19, question B below):
@@ -771,7 +772,10 @@ Each option is read in one of three ways:
 - **an element's symbol** is that atom: `Cl`, `F`, `H`;
 - **a line with a `*` is SMILES**, read as a chemist's own abbreviation is
   (`structureProblem`): exactly one `*`, bonded by one single bond to the
-  atom the group is attached by.
+  atom the group is attached by. A double bond's cis or trans written in it
+  (`/` and `\`, `*/C=C/C` for (E)-prop-1-enyl) is kept in each product, its
+  side against the `*` taken as the atom it is attached to (`smilesGroup`):
+  so are a centre's `@` and `@@`.
 
 A line without a `*` is never read as SMILES, so `CO` is a label, and its
 reading is shown. Beside each line the step shows what it was read as: the
@@ -863,6 +867,16 @@ The texts are compared, not their hashed keys. The set states the method:
 drawn, aromatic rings as one form.* What that means, plainly:
 - **a chiral product and its mirror image are two structures.** So are two
   diastereomers, and E and Z;
+- **a configuration drawn where there is no stereo unit counts for
+  nothing.** That is a wedge on a centre two of whose groups are alike (an
+  isopropyl's CH), or a double bond drawn bent whose one end carries two
+  alike groups (a prenyl's C=C(CH3)2). The structure is the same whether
+  it was drawn so or not. "Alike" counts every other configuration in the
+  structure: the two ring arms at each centre of 1,4-dimethylcyclohexane
+  are alike only until the other centre is counted, so its cis and trans
+  stay two structures, and a pseudoasymmetric centre keeps its r or s
+  (`stereoUnitsOnly`). The drawing keeps its wedges; only identity sets
+  them aside;
 - **two Kekulé structures of one ring are one structure.** So are
   bond-shift isomers such as a 1,2-disubstituted cyclooctatetraene (the
   `aromaticForm` rule, as it is written there);

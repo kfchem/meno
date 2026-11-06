@@ -12,10 +12,12 @@ const none = () => {};
 const slider = (html: string) => /grid-template-rows:\s*1fr/.test(html);
 
 describe("a frames chip - a molecule's frames, or a stack's", () => {
-  it("is as large as the page draws it by its layout (zoom), never by a scale after, which the Mac's WebView magnifies soft", () => {
+  it("is as large as the page draws it by its layout (zoom) - scaled after, which the Mac's WebView magnifies soft, only while the zoom moves", () => {
     const html = renderToString(<FramesChip count={2} frame={0} energies={[0, 0.001]} open={false} onFrame={none} conformers />);
     expect(html).toContain("zoom:var(--page, 1)");
-    expect(html).not.toMatch(/scale\(var\(--page/);
+    // (by `--page-k` alone, 1 once the zoom stands still - utils/pageScale `pageTold` - never by the page's scale itself)
+    expect(html).toContain("scale(var(--page-k, 1))");
+    expect(html).not.toMatch(/scale\(var\(--page[,)]/);
   });
 
   it("names its bars, draws their edges on whole device pixels, and lets the page show through it only shut", () => {

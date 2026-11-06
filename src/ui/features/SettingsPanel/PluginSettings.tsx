@@ -14,6 +14,7 @@ import { ROLES } from "../../../lib/plugins/roles";
 import { forThisSystem, systemHere, SYSTEM_NAMES } from "../../../lib/plugins/here";
 import { locate, lookForAll, programKey, useInstalled } from "../../../lib/plugins/installed";
 import { SYSTEMS, type InstalledDecl } from "../../../lib/plugins/manifest";
+import { usePluginsHere } from "../../../lib/plugins/known";
 import { KINDS } from "../Workspace/workflow/kinds";
 import { actOnFiles, filesCanGo, filesView, type FilesAsked } from "./pluginFiles";
 import { kindById } from "../../../lib/io/kinds";
@@ -39,6 +40,8 @@ const when = (iso: string) => new Date(iso).toLocaleString(undefined, { year: "n
  * itself is not among them: what it reads and writes is in Files.
  */
 export default function PluginSettings() {
+  // (drawn again each time the plugins in place are taken anew: one whose files were taken away leaves the list at once, offered online again)
+  usePluginsHere((s) => s.taken);
   const states = useReaders((s) => s.state);
   const problems = useReaders((s) => s.problem);
   const online = useOnline();

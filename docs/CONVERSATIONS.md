@@ -179,7 +179,9 @@ turn that reaches the limit stops and says so.
   together.
 - The card lists it. It says plainly that what was sent cannot be recalled,
   and that a thing moved out of the frame is not sent again but is not
-  unsent.
+  unsent. Not sent again means the exchange too: a tool's answer that gave
+  a thing now outside the frame is sent, from then on, as withheld (*A
+  turn*, as built).
 - A key is never in it.
 
 ## Saved with the workspace
@@ -326,3 +328,105 @@ A tool Meno does not have is said to be none: *There is no tool called
 
 The tests play a scripted test model's calls on a page and check each
 answer.
+
+### The conversation, kept and saved (2026-11-05)
+
+A conversation is kept with the page (`conversation/types`,
+`conversation/ops`): its frame, or the whole page; its rights - a new one
+may read and proposes nothing until the person lets it; the plugin it
+talks through, by its id; what was said; and what was sent where. Put
+down, changed and taken away, it is a step of the page's history. What is
+said and sent is not: undo takes none of it back, and *Clear* empties both.
+A workspace's file saves it all (`conversations`), and opening one reads it
+back strictly (`conversation/saved`): one not as Meno writes it is left out
+and said, as is a thing said that is not.
+
+### Search (2026-11-05)
+
+`search` finds, among the structures drawn in scope, those that are the
+compound a SMILES names (by Meno's identity) or that hold it (by Meno's own
+matcher). A structure the matcher could not finish is said to be one it
+could not tell (`couldNotTell`), never one that does not hold it. A SMILES
+Meno does not read is said to be one.
+
+### The tools that change (2026-11-05)
+
+Given only where the person has let the conversation propose changes
+(`conversation/change`):
+
+- `put_structure` draws a SMILES by Meno's own reader and layout engine
+  and puts it down after the scheme's last piece, on its line, where that
+  lies wholly inside the frame; else clear of what is there (`clearSpot`);
+  else - the frame full - nothing: it is refused, saying the frame has no
+  room left (`NO_ROOM`). Nothing is ever put over what lies there (a piece
+  over another reads as a mistake), nor outside the frame;
+- `put_arrow`, `put_plus` and `put_text` likewise;
+- `add_step` adds a step, with Settings' defaults, of a kind its doer fills,
+  in the frame's room, or is refused likewise;
+- `wire` wires a set to a step, both in scope;
+- `set_options` sets a step's options, checked as its card checks them.
+
+A tool never sets an option its plugin leaves to the person (`person` in
+its manifest), nor - until every plugin marks those - one of free text or
+atoms, a switch, or a number with no bounds: those are "left to you to
+set". Every id a change tool is given must lie in scope.
+
+**The frame is the person's.** No tool moves it or grows it, and nothing
+is put down past it: what a conversation sees is never something it can
+widen by what it does (found in review, 2026-11-05 - a frame grown round
+what was put down let a model sweep a strip of the page into its scope).
+
+### A turn (2026-11-05)
+
+`runTurn` sends the person's words through the conversation's connection,
+and takes the model's replies in turn (`conversation/turn`):
+
+- **No connection, nothing sent.** Core makes none: a turn with none sends
+  nothing and says why, and nothing is kept.
+- **Each go** sends what Meno tells the model, all that was said, and the
+  tools its rights give it. Tool answers go as answers, apart from what
+  Meno says, and the model is told they are data. A tool's answer that
+  gave a thing of the page no longer in scope - moved out of the frame,
+  taken away - is sent as withheld: each answer keeps the ids of what it
+  gave (`things`) for that. The person's own rows keep it whole.
+- **The model's words** are kept as plain text, whatever they hold.
+- **Each tool it calls** is answered within the scope and rights, and the
+  answer kept. A change is made at once, as its reply comes - and all the
+  changes of the turn are one change set: one step to undo, said to be the
+  conversation's, gone on with reply by reply (lib/doc `goneOn`), never
+  joined to the person's. *Discard* drops it by its key.
+- **It stops** when the model calls no tool, when the person asks, or at
+  its limit of replies or of tool calls after one message, saying which -
+  or where it fails part way (a tool that throws, a reply not as one is),
+  saying why: its changes so far kept to keep or discard, and it is never
+  left talking.
+- **The send log** has an entry for each go: what of the page it carried
+  - each thing by its id and characters - how many characters in all, and
+  where it went.
+
+### The scripted test model (2026-11-05)
+
+A connection that plays back replies written beforehand and keeps every
+request it was sent (`conversation/scripted`). The tests drive whole
+turns with it; it sends nothing anywhere.
+
+### Talked to from the page (2026-11-05)
+
+The page's side of a conversation (`store/slices/conversationsSlice`), on
+which its card and its column are built:
+
+- **Put down, changed and taken away**, each a step to undo - not taken
+  away while it talks.
+- **Sent to** (`sendToConversation`): a turn run with what it talks
+  through (`conversation/connections`: none in Meno itself, so nothing is
+  sent, and why is kept to say), the person's words and the replies kept
+  outside the page's history. While it talks it is marked so, and *Stop*
+  ends the turn at its next reply.
+- **A turn's changes** are one step, marked: *Keep* lets the mark go;
+  *Discard* undoes that step - refused, and why, where a step it added is
+  running, or where the page has changed since: then undo is the
+  person's, step by step. The steps done before whose options it changed
+  are named, as those that will run again when next run.
+- **What was said, as rows** (`conversation/said`): each person's and
+  model's words, each tool called with what came of it on its line - what
+  a column shows, as words, never drawn as a page.

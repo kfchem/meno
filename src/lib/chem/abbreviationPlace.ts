@@ -6,6 +6,7 @@ import type { GroupStructure, StructureBond } from "./ligands";
 import { kekuleOrders } from "./kekulize";
 import { implicitHydrogens, valenceOrder, type AbbreviationStructure, type AtomChem } from "./molecule";
 import { readSmiles, type SmilesAtom } from "./smiles";
+import { movedBond } from "./structureBonds";
 
 type P = { x: number; y: number };
 
@@ -51,9 +52,11 @@ export function picturedStructure(given: GroupStructure, bondLength: number): Ab
   // (a ligand's own picture has a star where it is bound)
   const bound = given.atoms.some((a, i) => a.el === "*" && !given.haptic?.some((h) => h.star === i));
   if (given.attach.length || bound) return placedStructure(given, null, bondLength);
+  // (a double bond's ends and refs too, as an axis's: its cis or trans never folded into a label)
   const keep = new Set([
     ...given.atoms.flatMap((a, i) => (a.tetra || a.isotope ? [i] : [])),
     ...(given.axes ?? []).flatMap((ax) => [...ax.atoms, ...ax.refs]),
+    ...given.bonds.flatMap((b) => (b.cisTrans ? [b.a1, b.a2, ...b.cisTrans.refs.filter((r) => r >= 0)] : [])),
   ]);
   const trials = contractionTrials(contractGraph(given.atoms, given.bonds), keep);
   let best: { given: GroupStructure; s: ReturnType<typeof drawnAsSaid>; laid: Layout2D; hidden: number } | null = null;
@@ -86,7 +89,7 @@ function writtenShort(given: GroupStructure, cs: readonly Contraction[]): GroupS
     }),
     bonds: given.bonds
       .filter((b) => !(groupOf.has(b.a1) && groupOf.get(b.a1) === groupOf.get(b.a2)))
-      .map((b) => ({ ...b, a1: to(b.a1), a2: to(b.a2), ...(b.endpoints ? { endpoints: b.endpoints.map(to) } : {}) })),
+      .map((b) => movedBond(b, (i) => at.get(i))),
     attach: given.attach.map(to),
     ...(given.haptic ? { haptic: given.haptic.map((h) => ({ star: to(h.star), atoms: h.atoms.map(to) })) } : {}),
     ...(given.lends ? { lends: given.lends } : {}),
@@ -125,7 +128,12 @@ function inputFor(s: ReturnType<typeof drawnAsSaid>): LayoutInput {
       { el: "C" },
     ],
     bonds: [
-      ...s.bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.coordination ? 1 : b.order })),
+      // (a double bond's cis or trans, as the engine places a drawing's: a ref to the atom outside, the carbon for its bond out)
+      ...s.bonds.map((b) => {
+        const refs = b.cisTrans?.refs.map((r) => (r === -1 ? (s.attach.length ? from : null) : r));
+        const stereo = b.cisTrans && refs && refs[0] != null && refs[1] != null ? { refs: [refs[0], refs[1]] as [number, number], cis: b.cisTrans.cis } : null;
+        return { a: b.a1, b: b.a2, order: b.coordination ? 1 : b.order, ...(stereo ? { stereo } : {}) };
+      }),
       ...(s.attach.length ? [{ a: from, b: head, order: 1 }] : []),
     ],
     ...(s.axes?.length ? { axes: s.axes } : {}),

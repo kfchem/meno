@@ -49,6 +49,17 @@ shots, and is checked against this page (*The look check*, below).
    while it is pointed at. The valence and "either way" boxes and R/S, in
    2D and beside a molecule in 3D, are drawn so (`MarkBoxes2D`, `Texts2D`,
    `StereoInk3D`); the rest of the page's HTML moves over in turn.
+   Since 2026-11-05 (the maintainer) every object PLACED on the page is
+   WebGL first - its chips, notes, frames, ports, wires and cards - and
+   HTML only where WebGL truly cannot draw it or would badly harm what a
+   person does with it, its pull request saying why; an opened step card
+   is the one so kept. Words typed on a placed object are drawn as the
+   page's text is, keys going through a field kept out of sight at the
+   caret (CaptionTyping2D). What is not placed - a right-click menu, the
+   hover tip, the PDF lens card, a dialog - comes and goes over the page
+   and may be HTML. The look check flags a new placed object in HTML
+   without its reason. What it is drawn with: WORKSPACE.md, *Drawn by
+   WebGL*.
 
 ## Colours
 
