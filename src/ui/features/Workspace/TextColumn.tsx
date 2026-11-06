@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import clsx from "clsx";
-import { ArrowsPointingInIcon, ArrowsPointingOutIcon, ArrowUpTrayIcon, ChevronDoubleRightIcon, ChevronDownIcon, ChevronUpIcon, CodeBracketIcon, ExclamationTriangleIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { ArrowsPointingInIcon, ArrowsPointingOutIcon, ArrowUpTrayIcon, ChevronDoubleRightIcon, ChevronDownIcon, ChevronUpIcon, CodeBracketIcon, ExclamationTriangleIcon, MagnifyingGlassIcon, StopCircleIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { exists } from "@tauri-apps/plugin-fs";
 import { writeDocument } from "../../../lib/io/writeDocument";
@@ -233,6 +233,9 @@ function Column({
   // (how each job stands: as last looked at - or, none looked at, as the step's run said they ended, a workspace reopened)
   const logRan = useEditor((st) => (logOf ? st.steps.find((x) => x.id === logOf.step)?.ran : undefined));
   const jobState = (id: string) => jobStateSaid(id, jobsSeen, logRan);
+  // (the job shown, where it waits or runs: one that may be stopped alone - its step going on without it)
+  const shownJob = logJobs ? logJobs.jobs[logJobs.job] : undefined;
+  const stoppable = !!shownJob && (jobsSeen[shownJob]?.state === "waiting" || jobsSeen[shownJob]?.state === "running");
   const markdown = !!shown && isMarkdown(shown.name);
   const source = useShowsSource(store, shown?.id ?? null);
   const exportText = async (t: WorkspaceText) => {
@@ -277,6 +280,17 @@ function Column({
             className="shrink-0 max-w-[11rem]"
             variant="quiet"
           />
+        )}
+        {/* (that job alone stopped: failed, "stopped by you" - the step brings in what its other jobs gave, where its Stop would bring in none) */}
+        {shown && stoppable && (
+          <button
+            onClick={() => store.getState().stopJobAlone(shownJob!)}
+            aria-label="Stop this job"
+            title="Stop this job"
+            className="h-7 w-7 shrink-0 rounded-md flex items-center justify-center hover:bg-gh-base"
+          >
+            <StopCircleIcon className="h-4 w-4" />
+          </button>
         )}
         {shown && markdown && (
           <button

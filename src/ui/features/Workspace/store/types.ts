@@ -1754,6 +1754,8 @@ export type EditorState = {
   runAll: () => Promise<void>;
   /** A step's jobs asked to stop: those waiting never start, those running are stopped with what they started. */
   stopStep: (id: number) => void;
+  /** One of a running step's jobs asked to stop alone (*Stop this job*): recorded failed, its entries said stopped - its step goes on, bringing in what its other jobs gave. */
+  stopJobAlone: (job: string) => void;
   /** Every step's jobs asked to stop. */
   stopAll: () => void;
   /** A step's run kept, or no longer (docs/WORKFLOWS.md, *Earlier runs*): the one it shows at -1, an earlier one by its place among them - one step to undo. */
