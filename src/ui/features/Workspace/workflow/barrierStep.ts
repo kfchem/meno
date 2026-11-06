@@ -26,7 +26,7 @@ import { geometryKey, type Property } from "../../../../lib/entry";
 import { partValue, workedOutDiffer } from "../../../../lib/nodes/base";
 import { R_GAS } from "../../../../lib/nodes/standardState";
 import { convert, isUnit, sameDimension, type Unit } from "../../../../lib/units";
-import { convergedOf } from "./converged";
+import { convergedOf, heldWhy } from "./converged";
 import { compoundLetter, entryOfSet, imaginaryOf, THERMO_PROPERTIES, type SetEntry } from "./entries";
 import type { Holds3D } from "./kinds";
 import type { Outcome3D } from "./meno";
@@ -143,6 +143,9 @@ function barrierOf(saddle: SetEntry, start: SetEntry, o: BarrierOptions): Proper
   if (species(saddle) !== species(start)) return `${s} and its start ${t} are not of one charge and spin`;
   // (each a converged result, of its geometry: the saddle point optimised to one, or a path's point refined; the start optimised)
   const sc = convergedOf(saddle);
+  // (one optimised with atoms held where they stood: a stationary point of neither kind)
+  const held = heldWhy(sc) ?? heldWhy(convergedOf(start));
+  if (held) return `${heldWhy(sc) ? s : `its start ${t}`}: ${held.charAt(0).toLowerCase()}${held.slice(1)}`;
   if (!sc || !SADDLE_HOW.includes(sc.how)) return `${s} is no converged saddle point: optimise it to a saddle point, or take Path search's point refined, then Frequencies on it`;
   const tc = convergedOf(start);
   if (!tc || tc.how !== "optimisation") return `its start ${t} is no converged optimisation: optimise it, then Frequencies on it`;

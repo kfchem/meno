@@ -30,6 +30,7 @@ import { factor } from "../../../../lib/units";
 import { imaginaryWords, levelOf, type CalcInfo } from "../../../../lib/calc/output";
 import { numberText } from "../../../../lib/calc/results";
 import { FAILURE_WORDS } from "./failures";
+import { convergedOf, heldWhy } from "./converged";
 
 /** Kilocalories per mole in a hartree (Meno's units table). */
 const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");
@@ -871,6 +872,12 @@ export function notAllMinima(entries: readonly SetEntry[]): string | null {
   const name = (e: SetEntry) => `${compoundLetter(e.compound)} #${e.number}`;
   const failed = notResults(entries, (k) => compoundLetter(entries[k].compound));
   if (failed) return failed;
+  // (one optimised with atoms held where they stood: no minimum, whatever its frequencies)
+  const held = entries.flatMap((e) => {
+    const why = heldWhy(convergedOf(e));
+    return why ? [`${name(e)}: ${why.charAt(0).toLowerCase()}${why.slice(1)}`] : [];
+  });
+  if (held.length) return held.join("; ");
   const saddles = entries.filter((x) => x.imaginary?.length).map((e) => `${name(e)} has ${imaginaryWords(e.imaginary!)}`);
   if (!saddles.length) return null;
   return saddles.length === 1 ? `${saddles[0]}: it is no minimum - take it out first` : `${saddles.join("; ")}: they are no minima - take them out first`;
