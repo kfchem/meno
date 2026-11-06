@@ -59,12 +59,16 @@ describe("placeQuickAdd", () => {
     const panel = { width: 380, height: 200 };
     // (to the right, its far edge 4 px from the canvas's: x + 14 + 380 = 996 = 1000 - 4 - held for, at the point)
     expect(placeQuickAdd(602, 500, canvas, row, [row, panel])).toMatchObject({ left: 616, origin: "bottom left" });
-    // (a pixel more to the right: it no longer fits there - nor to the left (602 + 1 - 14 - 380 >= 4 does): held for to the left)
+    // (a pixel more to the right: it no longer fits there, but does to the left (603 - 14 - 380 >= 4) - held for there)
     expect(placeQuickAdd(603, 500, canvas, row, [row, panel])).toMatchObject({ left: 603 - 14 - 380, origin: "bottom right" });
     // (to the left, its near edge 4 px from the canvas's: x - 14 - 380 = 4 - held for there, where the right has no room)
     expect(placeQuickAdd(398, 500, { width: 600, height: 800 }, row, [row, panel])).toMatchObject({ left: 4, origin: "bottom right" });
     // (a pixel less: it fits on neither side - not held for: placed by its row alone, which has no room to the right either - to the left by its own width)
     expect(placeQuickAdd(397, 500, { width: 600, height: 800 }, row, [row, panel])).toMatchObject({ left: 397 - 14 - 200, origin: "bottom right" });
+    // (where only the right could take it: its far edge 4 px from the canvas's, 394 + 14 + 380 = 788 = 792 - 4 - held for, at the point)
+    expect(placeQuickAdd(394, 500, { width: 792, height: 800 }, row, [row, panel])).toMatchObject({ left: 408, origin: "bottom left" });
+    // (two pixels more: 790 - past the margin, and the left has no room (396 - 14 - 380 = 2) - not held for: at the point, by its row)
+    expect(placeQuickAdd(396, 500, { width: 792, height: 800 }, row, [row, panel])).toMatchObject({ left: 410, origin: "bottom left" });
   });
 });
 
