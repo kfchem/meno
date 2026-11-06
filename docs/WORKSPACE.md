@@ -1631,13 +1631,20 @@ slowing it - and in the pictures made of it.
   ribbons stand for (the maintainer's choice, 2026-10-13), so a large
   protein in ribbons is drawn lighter as it would be as atoms; those a
   look leaves out otherwise (hydrogens on carbon, water) are not.
-  Its balls are drawn with as many segments as their size on the screen
-  wants (the maintainer, 2026-10-13): the style's 32 from about 40 pixels
-  across, down to 8 under about 8 - within about 0.3 of a pixel of a
-  circle at each, so that the change is not seen; more at once as balls
-  grow, fewer once the zoom has settled (`utils/largeDrawing`
-  `ballSegmentsFor`). A box of 33 000 waters (100 000 atoms) turned at
-  183 ms a frame with 32, and turns at 33 ms.
+- **Balls as fine as their size on the screen needs**, on every canvas,
+  not only a very large drawing (the maintainer, 2026-10-13, for very
+  large drawings; every canvas since 2026-11-05): a molecule's balls are
+  drawn with as many segments as its largest ball's size on the screen
+  wants - the style's 32 from about 40 pixels across, down to 8 under
+  about 8, never more than the style's own - within about 0.3 of a pixel
+  of a circle at each, so that the change is not seen; more at once as
+  balls grow, fewer once the zoom has settled (`utils/largeDrawing`
+  `ballSegmentsFor`). The line round them follows them. What each ball
+  carries - its number, whether it is lined - goes with it to the new
+  number (`carriedSphere`). A box of 33 000 waters (100 000 atoms) turned
+  at 183 ms a frame with 32, and turns at 33 ms; a large workflow page,
+  283 molecules in 3D, drew about 17.8 million triangles a frame at Fit,
+  and draws 1.3 million.
 - **In pictures too.** A picture of molecules in 3D shades their hollows
   and casts their shadows as the canvas does, with every ball and stick,
   in a finer shadow map, however many atoms; shaded on the screen, at the
