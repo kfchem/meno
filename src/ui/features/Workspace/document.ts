@@ -39,6 +39,7 @@ import { readResults } from "../../../lib/calc/results";
 import { inMenosForm, type CalcInfo } from "../../../lib/calc/output";
 import { newTextName } from "./utils/texts";
 import { fitSets, membersSettled } from "./workflow/model";
+import type { Conversation } from "./conversation/types";
 
 export type WorkspaceDocument = {
   model: Model;
@@ -118,6 +119,9 @@ export type WorkspaceDocument = {
   /** Catalytic cycles on the page (lib/chem/cycle; docs/EDITOR-2D.md, *Catalytic cycles*). */
   cycles?: Cycle[];
   nextCycleId?: number;
+  /** Conversations on the page, each in its frame (conversation/types; docs/CONVERSATIONS.md). */
+  conversations?: Conversation[];
+  nextConversationId?: number;
 };
 
 /** Whether it holds nothing: no structure, arrow, "+" sign or words drawn, no molecule in 3D, no text, no workflow. */
@@ -136,6 +140,7 @@ export function isBlankDocument(doc: WorkspaceDocument): boolean {
     !doc.shapes?.length &&
     !doc.inks?.length &&
     !doc.cycles?.length &&
+    !doc.conversations?.length &&
     !doc.sets?.length &&
     !doc.steps?.length
   );

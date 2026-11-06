@@ -76,6 +76,9 @@
       "programs": [
         "tightbind"
       ],
+      "restraints": [
+        "fixed"
+      ],
       "options": [
         {
           "id": "method",

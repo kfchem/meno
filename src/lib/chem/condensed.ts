@@ -1,6 +1,7 @@
 import { anionOf, partsOf, VALENCE, type Part } from "./formula";
 import { structureFormula, type GroupStructure, type StructureBond } from "./ligands";
 import type { SmilesAtom } from "./smiles";
+import { movedBond } from "./structureBonds";
 
 /**
  * Simple formulas, read by rule as the molecules they are: Et3N, i-Pr2NEt,
@@ -76,7 +77,7 @@ function moleculeOf(parts: Part[]): (GroupStructure & { name: string }) | null {
     }
     const at = atoms.length;
     atoms.push(...p.s.atoms.map((a) => ({ ...a })));
-    bonds.push(...p.s.bonds.map((b) => ({ ...b, a1: b.a1 + at, a2: b.a2 + at })));
+    bonds.push(...p.s.bonds.map((b) => movedBond(b, (i) => i + at)));
     return p.s.attach[0] + at;
   };
   const isH = (p: Part) => p.kind === "element" && p.el === "H";
@@ -110,7 +111,7 @@ function saltOf(parts: Part[]): (GroupStructure & { name: string }) | null {
   const ion = metals.length ? anionOf(parts.filter((p) => !isMetal(p)), metals.length) : null;
   if (!ion) return null;
   const atoms: SmilesAtom[] = [...metals.map((p) => ({ el: p.el, hs: 0, charge: 1 })), ...ion.atoms];
-  const bonds = ion.bonds.map((b) => ({ ...b, a1: b.a1 + metals.length, a2: b.a2 + metals.length }));
+  const bonds = ion.bonds.map((b) => movedBond(b, (i) => i + metals.length));
   const s: GroupStructure = { atoms, bonds, attach: [] };
   return { ...s, name: structureFormula(s) };
 }
