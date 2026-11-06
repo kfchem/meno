@@ -1582,7 +1582,15 @@ comes in its own pull request.
   - the systems it is made for, the roles it fills, the kinds of step it adds and the kinds of file it reads: what an offer of it is made for;
   - the kinds of file it reads that marks tell (`fileKinds`), as its manifest says them - each one's id, name, file names and marks, and, where its own program writes it, that program (`writtenBy`) - so that a file only it would read is told before it is got (*A plugin to suggest for a file*). None said, none. Read as strictly as the rest: a mark with any key but its text, `at` (`line-start`) and `anyCase` (true), or one a manifest's mark could not be, refuses the whole;
   - the tables of atoms its program prints, as papers quote them (`quotedTables`), as its manifest keeps them - four at most, each one a manifest's could be, exactly - so that such a table is said to be its to read before it is got (FILE-IO.md, *Coordinates in a text*). None said, none;
-  - its files: one archive, where it is - on https, at the hosts the plugins' releases are at, and nowhere else - its fingerprint (SHA-256) and size; and its manifest's fingerprint.
+  - its files: one archive, where it is - on https, at the hosts the plugins' releases are at, and nowhere else - its fingerprint (SHA-256) and size; and its manifest's fingerprint;
+  - where it brings presets for another plugin, that one's id (`presetsFor`, its manifest's `presets.for`): offered with it where that one is got again (*Plugins used before*).
+
+  Beside its plugins, the list may name those no longer offered
+  (`retired`), each by its id, its name (at most 60 letters) and why, in
+  words, at most 160 ("Meno reads these files itself now"), so that one
+  set up before is said not to be got again, and why. None on offer may be
+  among them: a plugin is said either not made for here or no longer
+  offered, never both.
 - **Read strictly, whole.** The backend checks the signature before
   anything of it is read, and when it was issued against the one kept:
   one issued earlier is refused, and one issued the same second is taken
@@ -1657,11 +1665,20 @@ starts with none in place. As it first starts, it offers to get those again
   them.
 - **Two questions at most.**
   - Where the network is not allowed for the list yet: whether to look
-    them up online, naming them as they were set up. A no is said in the
-    corner of the window, and asked again as Meno next starts, unless the
-    chemist chooses *Don't ask again* there.
+    them up online, naming them as they were set up - by their names where
+    a list kept from before has them, else by their ids, and none that list
+    says is no longer offered (`retired`); where only such are left, nothing
+    is asked, and why is said once. A no is said in the corner of the
+    window, and asked again as Meno next starts, unless the chemist chooses
+    *Don't ask again* there.
   - With the list fetched: whether to get them, each by its name and the
-    size of its files. A no is kept.
+    size of its files. Those not got again are said in it, each with why:
+    another system's or a newer Meno's, no longer offered as the list says
+    (`retired`), or not on it at all; where none is got, that is said
+    once. With them is offered what the list says brings presets for one
+    of them (`presetsFor`) - presets that came inside a plugin before, and
+    apart from it now - unless it is here already or the chemist took it
+    away. A no is kept.
 - **Got as Settings gets them**, one after another. An environment whose
   lock is the one its stamp was made for is kept, and nothing of it is
   fetched again. One whose lock changed is set up as any plugin's is,
