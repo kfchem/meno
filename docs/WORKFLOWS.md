@@ -1551,7 +1551,7 @@ Decided while building it, for the maintainer to confirm:
   such jobs never share a physical core - and the processes are as many as
   fit in the job's cores so counted (2026-11-06): 28 cores there are 14
   processes, never 16, which the queue counts as 32, past the 28 Settings
-  allows (found on a Windows run). Settings, *Calculations*, says so under its cores,
+  allows. Settings, *Calculations*, says so under its cores,
   where the computer runs more than one thread on each: they are counted
   in logical cores, and such a program takes that many for each process. Its physical cores are what its
   system says: on macOS `hw.physicalcpu`; on Linux the distinct cores in
