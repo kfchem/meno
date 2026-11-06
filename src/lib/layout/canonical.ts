@@ -66,7 +66,22 @@ const piLinks = (input: LayoutInput) => {
  * they part no further - atoms alike left alike - with what each atom is
  * (`first`) and the refinement, for `canonicalRanks` to part them on.
  */
-function classed(input: LayoutInput): { rank: number[]; first: string[]; withStereo: (r: number[]) => number[] } {
+function classed(input: LayoutInput): Classed {
+  const known = classedOnce.get(input) ?? classedNow(input);
+  classedOnce.set(input, known);
+  return { ...known, rank: [...known.rank] };
+}
+
+type Classed = { rank: number[]; first: string[]; withStereo: (r: number[]) => number[] };
+
+/**
+ * `classed` worked out once for each input, as it is (inputs are not
+ * changed in place): identity asks for a structure's classes before its
+ * order (lib/chem/identity `stereoUnitsOnly`), and both come from them.
+ */
+const classedOnce = new WeakMap<LayoutInput, Classed>();
+
+function classedNow(input: LayoutInput): Classed {
   const adj = adjacency(input);
   const pis = piLinks(input);
   // (which atoms are an axis of chirality's, and which its ends' other
