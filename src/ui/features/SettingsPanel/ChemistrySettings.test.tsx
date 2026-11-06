@@ -5,7 +5,7 @@ import { MOST_CONFORMERS, RING_CONFORMERS, soughtOptions, WITHIN_GUIDE } from ".
 import type { ChemistrySettings } from "../../../lib/settings/appSettings";
 import type { ReactElement } from "react";
 import { clearOf } from "./CalculationSettings";
-import { soughtChosen, soughtValues } from "./ChemistrySettings";
+import { soughtChosen, soughtValues } from "./soughtSettings";
 
 // Settings, Chemistry, 3D: how many conformers the page's 3D structure tries - as many as the molecule needs asked in
 // rounds, where its search takes draws (lib/chem/conformersSought, chem/conformerRounds).
