@@ -2007,6 +2007,9 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           {(solid.frames.length > 1 || m.conformerSet || m.calc || named3d(m) || m.failed?.some(Boolean)) && !props.stacked ? (
             <Frames3D
               onOpened={(o) => {
+                // (said again as it mounts, or as its molecule draws again, with nothing changed: no frame drawn for it -
+                //  a large page's chips, mounting one after another, kept it drawing for seconds)
+                if (o === framesOpened.current) return;
                 framesOpened.current = o;
                 if (o && !chipRaisedNow.current) {
                   chipRaisedNow.current = true;
