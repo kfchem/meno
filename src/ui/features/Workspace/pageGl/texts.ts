@@ -96,3 +96,29 @@ export function placed(t: PageText): { text: string; x: number; y: number; size:
   const y = t.baseline === "middle" ? t.y - (pagePx(t.sizePx) * CAP) / 2 : t.y;
   return { text, x, y, size: pagePx(t.sizePx) };
 }
+
+/** A run of words in one line, its own colour and weight (`lineOf`). */
+export type Run = { text: string; color: string; weight?: Weight };
+
+/**
+ * One line of runs, each its own colour and weight - a chip's "1 / 5 · Failed",
+ * its count grey and its mark in the attention colour - as words on the page,
+ * one after another from `x` by their widths, about `anchor`: keyed `key:0`,
+ * `key:1`, ... Empty runs are left out.
+ */
+export function lineOf(key: string, x: number, y: number, anchor: PageText["anchor"], runs: readonly Run[], sizePx: number, more?: Pick<PageText, "baseline" | "z" | "opacity">): PageText[] {
+  const shown = runs.filter((r) => r.text.length > 0);
+  const widths = shown.map((r) => pagePx(textWidth(r.text, sizePx, r.weight ?? 400)));
+  const whole = widths.reduce((a, w) => a + w, 0);
+  let at = anchor === "start" ? x : anchor === "middle" ? x - whole / 2 : x - whole;
+  return shown.map((r, i) => {
+    const t: PageText = { key: `${key}:${i}`, x: at, y, anchor: "start", text: r.text, sizePx, color: r.color, ...(r.weight ? { weight: r.weight } : {}), ...more };
+    at += widths[i];
+    return t;
+  });
+}
+
+/** How wide a line of runs is, in page pixels (`lineOf`). */
+export function widthOfRuns(runs: readonly Run[], sizePx: number): number {
+  return runs.reduce((a, r) => a + textWidth(r.text, sizePx, r.weight ?? 400), 0);
+}

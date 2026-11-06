@@ -22,6 +22,7 @@ attribute vec4 aFill;
 attribute vec4 aStroke;
 attribute vec2 aDash;
 attribute vec2 aKindOpacity;
+attribute vec3 aShadow;
 uniform float uScreen;
 uniform float uDevice;
 varying vec2 vP;
@@ -32,6 +33,7 @@ varying vec4 vFill;
 varying vec4 vStroke;
 varying vec2 vDash;
 varying float vOpacity;
+varying vec3 vShadow;
 void main() {
   vec2 hs = aHalf;
   float radius = aRadiusLine.x;
@@ -46,8 +48,8 @@ void main() {
   }
   if (aKindOpacity.x > 0.5) radius = min(hs.x, hs.y);
   radius = min(radius, min(hs.x, hs.y));
-  // (room for the edge's smoothing past the shape)
-  vec2 ext = hs + vec2(2.0 * uDevice);
+  // (room for the edge's smoothing past the shape, and for its shadow)
+  vec2 ext = hs + vec2(2.0 * uDevice + aShadow.x + abs(aShadow.y));
   vec2 p = position.xy * 2.0 * ext;
   vP = p;
   vHalf = hs;
@@ -57,6 +59,7 @@ void main() {
   vStroke = aStroke;
   vDash = aDash;
   vOpacity = aKindOpacity.y;
+  vShadow = aShadow;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(aCentre + p, 0.0, 1.0);
 }
 `;
@@ -72,6 +75,7 @@ varying vec4 vFill;
 varying vec4 vStroke;
 varying vec2 vDash;
 varying float vOpacity;
+varying vec3 vShadow;
 const float HALF_PI = 1.5707963;
 float roundBox(vec2 p, vec2 b, float r) {
   vec2 q = abs(p) - b + r;
@@ -103,8 +107,15 @@ void main() {
   float fill = vFill.a * within;
   // (the line over the fill)
   float a = ink + fill * (1.0 - ink);
+  vec3 rgb = a > 0.0 ? (vStroke.rgb * ink + vFill.rgb * fill * (1.0 - ink)) / a : vec3(0.0);
+  // (its shadow under both, black, outside the box as CSS's box-shadow is drawn: never through it)
+  if (vShadow.z > 0.0) {
+    float ds = roundBox(vP + vec2(0.0, vShadow.y), vHalf, vRadius);
+    float shade = vShadow.z * (1.0 - smoothstep(-vShadow.x, vShadow.x, ds)) * (1.0 - inside);
+    rgb = a + shade * (1.0 - a) > 0.0 ? rgb * a / (a + shade * (1.0 - a)) : rgb;
+    a = a + shade * (1.0 - a);
+  }
   if (a * vOpacity <= 0.0) discard;
-  vec3 rgb = (vStroke.rgb * ink + vFill.rgb * fill * (1.0 - ink)) / a;
   gl_FragColor = vec4(rgb, a * vOpacity);
   #include <colorspace_fragment>
 }
@@ -119,6 +130,7 @@ const ATTRIBUTES: [keyof typeof PER, string][] = [
   ["stroke", "aStroke"],
   ["dash", "aDash"],
   ["kindOpacity", "aKindOpacity"],
+  ["shadow", "aShadow"],
 ];
 
 /**
