@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { Fragment, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import PageHtml from "./PageHtml";
 import { useEditor, useEditorStore } from "../store";
@@ -20,17 +20,18 @@ import { useDrawnLayout } from "./drawnLayoutContext";
 import { useShownFrames } from "./useShownFrames";
 import { useMemberMarks } from "./useMemberMarks";
 import { reachOverFrames } from "../utils/molecule3d";
-import { wordsReadAt, zoomWritten } from "../utils/pageScale";
+import { hairWritten, wordsReadAt, zoomWritten } from "../utils/pageScale";
 import { usePresence } from "../../../theme/presence";
 import { DURATION, EASE, eased } from "../../../theme/motion";
 import { canWire, entryOnPage, givesOf, stateOf, stepsRun, wireInto, wireRefusal } from "../workflow/flow";
 import { addHow } from "../workflow/addStep";
 import { droppedBy, namesOf } from "../workflow/earlierRuns";
-import { howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
+import { exitsOf, howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
+import { exitStart } from "../workflow/place";
 import { useReaders } from "../../../../lib/calc/workers";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { finished } from "../../../../lib/jobs";
-import { CARD_H, CARD_W, framesHash, HTML_DISTANCE, inputLead, nearWire, onLayer, PORTS_Z, portDown, PX, setGives, setTakes, shuttingCard, stepGives, stepTakes as portTakes, underCard, byTurn, FrameBudget, pointsFor, roundedWay, WIRE_LANE, WireEasing, wireLanes, wireRoute, wireKey, type WireRouted } from "../workflow/look";
+import { CARD_H, CARD_W, framesHash, HTML_DISTANCE, inputLead, nearWire, onLayer, PORTS_Z, portDown, PX, setGives, setTakes, shuttingCard, stepTakes as portTakes, underCard, byTurn, FrameBudget, pointsFor, roundedWay, WIRE_LANE, WireEasing, wireLanes, wireRoute, wireKey, type WireRouted } from "../workflow/look";
 import { byOf, doerOf, inputsFor, installedFor, kindsOf, notReadyFor, optionsFor, setName, stepOptions } from "../workflow/doers";
 import { diagramKept, diagramNeeds, diagramOptions, diagramValues } from "../workflow/diagramOptions";
 import { lookFor, useInstalled } from "../../../../lib/plugins/installed";
@@ -51,6 +52,7 @@ const WIRE = "rgb(89, 99, 110)";
 const ACCENT = "rgb(49, 118, 137)";
 const ATTENTION = "rgb(205, 69, 96)";
 /** A wire's width on the screen, in px, at any zoom; and the band round it the pointer takes. */
+/** A wire's width in page pixels (`wireWidth`); how wide it takes the pointer, in screen pixels. */
 const WIRE_PX = 1.25;
 const WIRE_HIT_PX = 10;
 /** The wire into a running step, dashed - its dashes and gaps, in px on the screen - and how fast they move along it, in px a second: slowly. */
@@ -234,9 +236,15 @@ function useWirePoints(items: readonly WireItem[], frames: readonly Frame[], zoo
 /** A zoom as the points a wire is drawn through are worked out at: by quarter steps of doubling, so that a wire is not worked out again for every frame of a zoom. */
 const zoomStep = (zoom: number) => 2 ** (Math.round(Math.log2(zoom) * 4) / 4);
 
-/** A wire through `pts` as a ribbon `width` wide. */
-function ribbon(pts: readonly Pt[], width: number): THREE.BufferGeometry {
+/**
+ * A wire through `pts` as a ribbon on its line: each point twice, one to
+ * either side of it by a unit normal (`normal`, signed), the ribbon's width
+ * given when it is drawn (`widened`) - so that a zoom, which changes how wide
+ * it is in the page's units, makes no geometry again.
+ */
+function ribbon(pts: readonly Pt[]): THREE.BufferGeometry {
   const positions: number[] = [];
+  const normals: number[] = [];
   const index: number[] = [];
   // (how far along it each point is, for a dash)
   const along: number[] = [];
@@ -247,24 +255,48 @@ function ribbon(pts: readonly Pt[], width: number): THREE.BufferGeometry {
     const a = pts[Math.max(0, i - 1)];
     const b = pts[Math.min(pts.length - 1, i + 1)];
     const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
-    const nx = (-(b.y - a.y) / len) * (width / 2);
-    const ny = ((b.x - a.x) / len) * (width / 2);
-    positions.push(pt.x + nx, pt.y + ny, 0, pt.x - nx, pt.y - ny, 0);
+    const nx = -(b.y - a.y) / len;
+    const ny = (b.x - a.x) / len;
+    positions.push(pt.x, pt.y, 0, pt.x, pt.y, 0);
+    normals.push(nx, ny, -nx, -ny);
     if (i < pts.length - 1) index.push(2 * i, 2 * i + 1, 2 * i + 2, 2 * i + 1, 2 * i + 3, 2 * i + 2);
   });
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  g.setAttribute("ribbonNormal", new THREE.Float32BufferAttribute(normals, 2));
   g.setAttribute("along", new THREE.Float32BufferAttribute(along, 1));
   g.setIndex(index);
   return g;
 }
 
+/** A ribbon's material widened in its vertex shader by half its width (`half.value`, world units), set as it is drawn. */
+function widened(material: THREE.Material, half: { value: number }): void {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.ribbonHalf = half;
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nattribute vec2 ribbonNormal;\nuniform float ribbonHalf;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\ntransformed.xy += ribbonNormal * ribbonHalf;");
+  };
+  material.customProgramCacheKey = () => "ribbon";
+}
+
+/**
+ * How wide a wire is, in world units, at `zoom` on a screen of `dpr`: a page
+ * pixel and a quarter, as wide as the page draws it, never thinner than a
+ * device pixel (the maintainer, 2026-11-05: page units, floored).
+ */
+export const wireWidth = (zoom: number, dpr: number) => Math.max(WIRE_PX * PX, 1 / (Math.max(zoom, 1e-9) * Math.max(dpr, 1)));
+
 const DASH_VERTEX = `
 attribute float along;
+attribute vec2 ribbonNormal;
+uniform float ribbonHalf;
 varying float vAlong;
 void main() {
   vAlong = along;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  vec3 p = position;
+  p.xy += ribbonNormal * ribbonHalf;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 }`;
 const DASH_FRAGMENT = `
 uniform vec3 color;
@@ -280,12 +312,12 @@ void main() {
 /** The wire into a running step: dashed, its dashes moving slowly towards the step - a frame drawn for each step they move. */
 function MovingWire({ target, color, zoom }: { target: Pt[]; color: string; zoom: number }) {
   const pts = useEasedPoints(target, zoom);
-  const line = useMemo(() => ribbon(pts, WIRE_PX / zoom), [pts, zoom]);
+  const line = useMemo(() => ribbon(pts), [pts]);
   useEffect(() => () => line.dispose(), [line]);
   const material = useMemo(
     () =>
       new THREE.ShaderMaterial({
-        uniforms: { color: { value: new THREE.Color(color) }, offset: { value: 0 }, dash: { value: 1 }, gap: { value: 1 } },
+        uniforms: { color: { value: new THREE.Color(color) }, offset: { value: 0 }, dash: { value: 1 }, gap: { value: 1 }, ribbonHalf: { value: 0 } },
         vertexShader: DASH_VERTEX,
         fragmentShader: DASH_FRAGMENT,
         depthTest: false,
@@ -294,9 +326,10 @@ function MovingWire({ target, color, zoom }: { target: Pt[]; color: string; zoom
     [color],
   );
   useEffect(() => () => material.dispose(), [material]);
-  const { invalidate } = useThree();
+  const { invalidate, camera, gl } = useThree();
   useFrame((_, dt) => {
     const u = material.uniforms;
+    u.ribbonHalf.value = wireWidth((camera as THREE.OrthographicCamera).zoom || 1, gl.getPixelRatio()) / 2;
     u.dash.value = DASH_PX / zoom;
     u.gap.value = GAP_PX / zoom;
     u.offset.value = (u.offset.value + (Math.min(dt, 0.1) * DASH_SPEED) / zoom) % ((DASH_PX + GAP_PX) / zoom);
@@ -336,30 +369,54 @@ function useFade(material: React.RefObject<THREE.Material | null>, leaving: bool
 
 /** A wire drawn from `p` to `q`; where it can be pointed at, a wider band round it that the pointer takes. It fades in as it comes, and out as it goes (`leaving`). */
 function WireLine({ target, color, zoom, onHover, leaving = false }: { target: Pt[]; color: string; zoom: number; onHover?: (on: boolean) => void; leaving?: boolean }) {
-  // (as wide on the screen at any zoom: a hair, as the frames' lines are)
+  // (as wide as the page draws it, never thinner than a device pixel - `wireWidth`; taken by the pointer as wide on the screen at any zoom)
   const pts = useEasedPoints(target, zoom);
-  const line = useMemo(() => ribbon(pts, WIRE_PX / zoom), [pts, zoom]);
-  const hit = useMemo(() => (onHover && !leaving ? ribbon(pts, WIRE_HIT_PX / zoom) : null), [pts, zoom, !!onHover, leaving]); // eslint-disable-line react-hooks/exhaustive-deps
+  const line = useMemo(() => ribbon(pts), [pts]);
+  const hit = useMemo(() => (onHover && !leaving ? ribbon(pts) : null), [pts, !!onHover, leaving]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => line.dispose(), [line]);
   useEffect(() => () => hit?.dispose(), [hit]);
-  const material = useRef<THREE.MeshBasicMaterial>(null);
+  const half = useMemo(() => ({ value: 0 }), []);
+  const hitHalf = useMemo(() => ({ value: 0 }), []);
+  const drawn = useMemo(() => {
+    const m = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthTest: false, depthWrite: false, toneMapped: false });
+    widened(m, half);
+    return m;
+  }, [half]);
+  const taken = useMemo(() => {
+    const m = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthTest: false, depthWrite: false });
+    widened(m, hitHalf);
+    return m;
+  }, [hitHalf]);
+  useEffect(() => void drawn.color.set(color), [drawn, color]);
+  useEffect(
+    () => () => {
+      drawn.dispose();
+      taken.dispose();
+    },
+    [drawn, taken],
+  );
+  const material = useRef<THREE.MeshBasicMaterial>(drawn);
+  material.current = drawn;
   useFade(material, leaving);
+  const { camera, gl } = useThree();
+  useFrame(() => {
+    const z = (camera as THREE.OrthographicCamera).zoom || 1;
+    half.value = wireWidth(z, gl.getPixelRatio()) / 2;
+    hitHalf.value = WIRE_HIT_PX / z / 2;
+  });
   return (
     <group position={[0, 0, 0.012]}>
-      <mesh geometry={line} renderOrder={4}>
-        <meshBasicMaterial ref={material} color={color} transparent opacity={0} depthTest={false} depthWrite={false} toneMapped={false} />
-      </mesh>
+      <mesh geometry={line} material={drawn} renderOrder={4} />
       {hit && (
         <mesh
           geometry={hit}
+          material={taken}
           onPointerOver={(e) => {
             e.stopPropagation();
             onHover!(true);
           }}
           onPointerOut={() => onHover!(false)}
-        >
-          <meshBasicMaterial transparent opacity={0} depthTest={false} depthWrite={false} />
-        </mesh>
+        />
       )}
     </group>
   );
@@ -482,7 +539,7 @@ export default function Workflow2D() {
   const read = useRef(true);
   const [zoom, setZoom] = useState((camera as THREE.OrthographicCamera).zoom || 1);
   // (what a hair was last written as, on which layers, and the zoom the frame before)
-  const hair = useRef<{ layer: HTMLDivElement | null; ports: HTMLDivElement | null; zoom: number; before: number }>({ layer: null, ports: null, zoom: NaN, before: NaN });
+  const hair = useRef<{ layer: HTMLDivElement | null; ports: HTMLDivElement | null; zoom: number; before: number; hair: number }>({ layer: null, ports: null, zoom: NaN, before: NaN, hair: NaN });
   const layer = useRef<HTMLDivElement>(null);
   const portsLayer = useRef<HTMLDivElement>(null);
   // the card opened over the rest - or shutting - as tall as it is now, in the page's units: the ports under it are not drawn
@@ -498,6 +555,11 @@ export default function Workflow2D() {
     watch.observe(el);
     return () => watch.disconnect();
   }, [over]);
+  // (a port drawn among the cards, made after the scale was last told - a result set's Into, as its step finishes: told it too)
+  useLayoutEffect(() => {
+    const z = hair.current.zoom;
+    if (z > 0) layer.current?.querySelectorAll<HTMLElement>(".meno-port").forEach((el) => el.style.setProperty("--scale", `${z * PX}`));
+  });
   useFrame(() => {
     const z = (camera as THREE.OrthographicCamera).zoom || 1;
     // (its words read, or too small: switched past their threshold - utils/pageScale `wordsReadAt` - and faded over a short time by CSS)
@@ -509,13 +571,21 @@ export default function Workflow2D() {
     const still = z === hair.current.before;
     hair.current.before = z;
     const h = hair.current;
-    if (h.layer !== layer.current || h.ports !== portsLayer.current || zoomWritten(h.zoom, z, still)) {
-      hair.current = { layer: layer.current, ports: portsLayer.current, zoom: z, before: z };
-      for (const el of [layer.current, portsLayer.current]) {
-        el?.style.setProperty("--hair", `${1 / (z * PX)}px`);
-        el?.style.setProperty("--scale", `${z * PX}`);
-      }
-    } else if (h.zoom !== z) invalidate();
+    // (a card's and a set's lines a page pixel, never thinner than a device pixel: written only while that floor holds,
+    //  in steps - utils/pageScale `hairWritten` - so that zoomed in the cards are never laid out again for them)
+    const fresh = h.layer !== layer.current || h.ports !== portsLayer.current;
+    const hairPx = hairWritten(fresh ? NaN : h.hair, z, gl.getPixelRatio());
+    if (hairPx != null) for (const el of [layer.current, portsLayer.current]) el?.style.setProperty("--hair", `${hairPx}px`);
+    // (the ports, laid out in the screen's pixels, their layer's scale undone on them: told it on their own layer only)
+    if (fresh || zoomWritten(h.zoom, z, still)) {
+      hair.current = { layer: layer.current, ports: portsLayer.current, zoom: z, before: z, hair: hairPx ?? h.hair };
+      portsLayer.current?.style.setProperty("--scale", `${z * PX}`);
+      // (and the ports drawn among the cards - a result set's Into - each on itself: the cards' layer told it would restyle them all)
+      layer.current?.querySelectorAll<HTMLElement>(".meno-port").forEach((el) => el.style.setProperty("--scale", `${z * PX}`));
+    } else {
+      if (hairPx != null) hair.current = { ...h, hair: hairPx };
+      if (h.zoom !== z) invalidate();
+    }
     layer.current?.style.setProperty("--words", read.current ? "1" : "0");
     layer.current?.style.setProperty("--stand-in", read.current ? "0" : "1");
   });
@@ -603,15 +673,16 @@ export default function Workflow2D() {
     else st.connect(from, step, port);
   };
 
-  /** A wire drawn out of a set: into a step's input, or - let go on empty space - Quick Add there, at the steps that take it. */
-  const drawFrom = (e: ReactPointerEvent, from: WireEnd) => {
+  /** A wire drawn out of a set - from its own port, or its step's for that exit (`card`): into a step's input, or - let go on empty space - Quick Add there, at the steps that take it. */
+  const drawFrom = (e: ReactPointerEvent, from: WireEnd, card = false) => {
     if (e.button !== 0) return;
     // (pictures - a Render step's - no step takes: no wire is drawn out of them)
     if (givesOf(store.getState(), from) === "pictures") return;
-    store.getState().setWorkflowView({ wireDrag: { from, at: worldOf(e.clientX, e.clientY) }, wireRefused: null });
+    const out = card ? { card: true as const } : {};
+    store.getState().setWorkflowView({ wireDrag: { from, at: worldOf(e.clientX, e.clientY), ...out }, wireRefused: null });
     follow(
       e,
-      (at) => store.getState().setWorkflowView({ wireDrag: { from, at } }),
+      (at) => store.getState().setWorkflowView({ wireDrag: { from, at, ...out } }),
       (moved, ev) => {
         const st = store.getState();
         st.setWorkflowView({ wireDrag: null });
@@ -788,9 +859,16 @@ export default function Workflow2D() {
   const flow = useMemo(() => ({ model, molecules3d, sets, steps, wires, pictures }), [model, molecules3d, sets, steps, wires, pictures]);
   const stepById = useMemo(() => new Map(steps.map((s) => [s.id, s])), [steps]);
   const setById = useMemo(() => new Map(sets.map((b) => [b.id, b])), [sets]);
+  // (each step's exits' sets, by step and exit: a port drawn for each)
+  const exitSets = useMemo(() => new Map(sets.flatMap((b) => (b.made ? [[`${b.made.step}:${b.made.exit}`, b] as const] : []))), [sets]);
   const gives = (end: WireEnd): Pt | null => {
     const b = setById.get(end.set);
     return b ? setGives(shownOf(b)) : null;
+  };
+  /** Where a step's result set's exit gives on its card (place `exitStart`): the port the line to the set leaves from. */
+  const exitGives = (b: WorkflowSet): Pt | null => {
+    const s = b.made ? stepById.get(b.made.step) : undefined;
+    return s && b.made ? exitStart(s, b.made.exit) : null;
   };
   // (a step whose options are its role's starts from Settings' choices for it: those changed, its card and state follow)
   const settingsOptions = useAppSettings((s) => s.options);
@@ -901,7 +979,8 @@ export default function Workflow2D() {
   const drawn = (() => {
     if (!wireDrag) return null;
     if (wireDrag.from) {
-      const p = gives(wireDrag.from);
+      const b = wireDrag.card ? setById.get(wireDrag.from.set) : undefined;
+      const p = (b && exitGives(b)) ?? gives(wireDrag.from);
       return p ? { p, q: wireDrag.at } : null;
     }
     const s = wireDrag.to != null ? stepById.get(wireDrag.to.step) : undefined;
@@ -1021,7 +1100,8 @@ export default function Workflow2D() {
     }),
     ...sets.flatMap((b) => {
       const s = b.made ? stepById.get(b.made.step) : undefined;
-      return s ? [{ key: `m${b.id}`, p: stepGives(s), q: setTakes(shownOf(b)), ends: endsNear(stepGives(s), setTakes(shownOf(b)), { from: cardFrame(s), to: shownOf(b) }), moving: false, color: WIRE, onHover: undefined }] : [];
+      const p = exitGives(b);
+      return s && p ? [{ key: `m${b.id}`, p, q: setTakes(shownOf(b)), ends: endsNear(p, setTakes(shownOf(b)), { from: cardFrame(s), to: shownOf(b) }), moving: false, color: WIRE, onHover: undefined }] : [];
     }),
   ];
   const shownWires = usePresence(wireParts, (w) => w.key);
@@ -1103,6 +1183,7 @@ export default function Workflow2D() {
           {steps.map((s) => {
             const ports = inputsFor(s.kind, byOf(s));
             const name = kindInfo(s.kind).name;
+            const exits = exitsOf(s.kind);
             return (
               <div key={`s${s.id}`} className="meno-fade-in" style={{ ...onLayer(s.x, s.y), width: 0, height: 0 }}>
                 {ports.map((p, k) =>
@@ -1118,6 +1199,22 @@ export default function Workflow2D() {
                   />
                   ),
                 )}
+                {/* (each exit a port of its own down the card's right side, as its inputs are down its left: a wire drawn out of it is drawn out of that exit's set) */}
+                {exits.map((x, k) => {
+                  const b = exitSets.get(`${s.id}:${x.id}`);
+                  if (!b || (s.id !== cover?.step && underCard({ x: s.x + CARD_W, y: s.y - portDown(k) }, coverFrame, portR))) return null;
+                  return (
+                    <Port
+                      key={`x${x.id}`}
+                      look={portLook("give", { set: b.id })}
+                      label={exits.length > 1 ? `${setInfo.get(b.id)?.name ?? x.name} out of ${name}` : `Out of ${name}`}
+                      data={{ "data-give-set": String(b.id) }}
+                      onPointerDown={(e) => drawFrom(e, { set: b.id }, true)}
+                      style={{ left: CARD_W / PX, top: portDown(k) / PX }}
+                      of={CARD_H / PX}
+                    />
+                  );
+                })}
               </div>
             );
           })}

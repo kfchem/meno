@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import clsx from "clsx";
-import { ArrowsPointingInIcon, ArrowsPointingOutIcon, ArrowUpTrayIcon, ChevronDoubleRightIcon, ChevronDownIcon, ChevronUpIcon, CodeBracketIcon, ExclamationTriangleIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { ArrowsPointingInIcon, ArrowsPointingOutIcon, ArrowUpTrayIcon, ChevronDoubleRightIcon, ChevronDownIcon, ChevronUpIcon, CodeBracketIcon, ExclamationTriangleIcon, MagnifyingGlassIcon, StopCircleIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { exists } from "@tauri-apps/plugin-fs";
 import { writeDocument } from "../../../lib/io/writeDocument";
@@ -11,7 +11,7 @@ import MarkdownBody from "../TextEditor/MarkdownBody";
 import { isMarkdown } from "../../../lib/text/markdown";
 import { DURATION, EASE_SLIDE, FADE } from "../../theme/motion";
 import { useEditor, useEditorStore } from "./store";
-import type { LostText, PdfFind, PdfItem, PdfStructurePick, WordPlace, WorkflowSet, WorkspaceText } from "./store/types";
+import type { LostText, PdfFind, PdfItem, PdfLens, PdfStructurePick, WordPlace, WorkflowSet, WorkspaceText } from "./store/types";
 import SetTableBody from "./workflow/SetTableBody";
 import Select from "../../controls/Select";
 import StructuresTableBody from "./workflow/StructuresTableBody";
@@ -24,6 +24,7 @@ import { isPinch, wheelReader } from "../../../lib/input/wheel";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import { pageUnder, pointOn } from "../../../lib/pdf/column";
 import { figureStructuresHad } from "./utils/pdfStructures";
+import { indexOnce, mentionUnder } from "./utils/compoundLens";
 import { PRESS_WIDENED, structureAt, type PageStructure } from "./utils/pageStructures";
 import { dragStructure, picksAfter, sayWhy, togglesPick } from "./components/structureDrag";
 import { letterAt, letterInBand, letterNear, lineAt, placeAt, textHad, wordAt, wordsBetween } from "../../../lib/pdf/text";
@@ -38,6 +39,7 @@ import { linkAt, linksOf, type PdfLink } from "../../../lib/pdf/reader";
 import { followLink, followsLink, goBack, isBackKey, linkHint, readerOf } from "./components/pdfColumnReader";
 import { DOUBLE_CLICK_MS } from "./constants";
 import { atomAtSpot } from "./utils/figures";
+
 
 /** How far a pinch's step zooms the column, by ratio, per px of it, and how far a notch of the wheel with Ctrl or ⌘ does: as on the canvas (PanZoom2D). */
 const PINCH_PER_PX = 0.01;
@@ -231,6 +233,9 @@ function Column({
   // (how each job stands: as last looked at - or, none looked at, as the step's run said they ended, a workspace reopened)
   const logRan = useEditor((st) => (logOf ? st.steps.find((x) => x.id === logOf.step)?.ran : undefined));
   const jobState = (id: string) => jobStateSaid(id, jobsSeen, logRan);
+  // (the job shown, where it waits or runs: one that may be stopped alone - its step going on without it)
+  const shownJob = logJobs ? logJobs.jobs[logJobs.job] : undefined;
+  const stoppable = !!shownJob && (jobsSeen[shownJob]?.state === "waiting" || jobsSeen[shownJob]?.state === "running");
   const markdown = !!shown && isMarkdown(shown.name);
   const source = useShowsSource(store, shown?.id ?? null);
   const exportText = async (t: WorkspaceText) => {
@@ -275,6 +280,17 @@ function Column({
             className="shrink-0 max-w-[11rem]"
             variant="quiet"
           />
+        )}
+        {/* (that job alone stopped: failed, "stopped by you" - the step brings in what its other jobs gave, where its Stop would bring in none) */}
+        {shown && stoppable && (
+          <button
+            onClick={() => store.getState().stopJobAlone(shownJob!)}
+            aria-label="Stop this job"
+            title="Stop this job"
+            className="h-7 w-7 shrink-0 rounded-md flex items-center justify-center hover:bg-gh-base"
+          >
+            <StopCircleIcon className="h-4 w-4" />
+          </button>
         )}
         {shown && markdown && (
           <button
@@ -694,6 +710,16 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
       const s = read ? structureAt(read.structures, x, y, read.marks, widened) : null;
       return s ? { pick: { id, page, figure: figs[k], key: s.key }, s } : null;
     };
+    /** The compound's number mentioned under a point of a page, where its letters have come (utils/compoundMentions): every number of that shape with ⌥ (Alt) held. */
+    const lensAt = (sha: string, page: number, x: number, y: number, any: boolean): PdfLens | null => {
+      const t = lettersOf(page);
+      const m = t ? mentionUnder(t, x, y, any) : null;
+      if (!m) return null;
+      const { box } = m;
+      const s = onScreen();
+      const [p, q] = [s.at(page, box[0], box[1]), s.at(page, box[2], box[3])];
+      return { id, sha256: sha, label: m.label, word: { left: p.x, top: p.y, right: q.x, bottom: q.y }, since: performance.now() };
+    };
     // a box being drawn, from where it was pressed - in a figure, its box were it let go there
     let boxing: { page: number; x: number; y: number; fig: Box | null; cx: number; cy: number; moved: boolean } | null = null;
     // a box drawn, pressed: carried out once the pointer moves (components/boxDrag)
@@ -782,10 +808,20 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
       const sha = st.pdfs.find((x) => x.id === id)?.sha256;
       st.setFigureLit(q.on && sha ? atomAtSpot(st.model, sha, q.page, q.x, q.y) : null);
       // (over a structure of a figure: it lit whole, as a word is)
-      st.setPdfStructureLit(q.on ? (structureUnder(q.page, q.x, q.y)?.pick ?? null) : null);
+      const structure = q.on ? structureUnder(q.page, q.x, q.y) : null;
+      st.setPdfStructureLit(structure?.pick ?? null);
+      // (over a compound's number in the text: its structure's card - docs/PDF.md, *A compound's number*; the PDF's numbers read
+      //  through in idle time from the first move over it)
+      if (q.on && sha) indexOnce(sha, reader.sizes.length);
+      lensOver(e, sha, !!structure);
       // (over a link, what ⌘- or Ctrl-click does - the system's hand only with the key held; over words, the text cursor)
       hovered = e;
       pointerOver(e);
+    };
+    // (the card where the pointer is: again as ⌥ is pressed or let go, which widens it to any number in the index)
+    const lensOver = (e: { clientX: number; clientY: number; altKey: boolean }, sha: string | undefined, onStructure: boolean) => {
+      const q = inPdf(e);
+      store.getState().setPdfLens(q.on && sha && !onStructure ? lensAt(sha, q.page, q.x, q.y, e.altKey) : null);
     };
     // (the cursor and the hint where the pointer is: again as ⌘ or Ctrl is pressed or let go)
     let hovered: PointerEvent | null = null;
@@ -799,6 +835,10 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
     };
     const onModifier = (e: KeyboardEvent) => {
       if (over && hovered && (e.key === "Meta" || e.key === "Control")) pointerOver({ clientX: hovered.clientX, clientY: hovered.clientY, metaKey: e.metaKey, ctrlKey: e.ctrlKey });
+      if (over && hovered && e.key === "Alt") {
+        const st = store.getState();
+        lensOver({ clientX: hovered.clientX, clientY: hovered.clientY, altKey: e.altKey }, st.pdfs.find((x) => x.id === id)?.sha256, !!st.pdfStructureLit);
+      }
     };
     const onLeave = () => {
       over = false;
@@ -806,6 +846,7 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
       lit(false);
       store.getState().setFigureLit(null);
       store.getState().setPdfStructureLit(null);
+      store.getState().setPdfLens(null);
     };
     let press: { x: number; y: number } | null = null;
     const onDown = (e: PointerEvent) => {

@@ -18,7 +18,6 @@ import { execFileSync } from "node:child_process";
 import {
   createSVG,
   layoutMolecule,
-  wedgeNarrowAtom,
   type Atom,
   type Bond,
 } from "../../src/lib/chem/layout2d";
@@ -86,19 +85,13 @@ function draw(g: Graph, laid: Laid): string {
     el: a.el,
     ...(laid.depth?.[i] != null ? { z: laid.depth[i]! * k } : {}),
   }));
-  const degree = new Map<number, number>();
-  for (const { a, b } of g.bonds) {
-    degree.set(a, (degree.get(a) ?? 0) + 1);
-    degree.set(b, (degree.get(b) ?? 0) + 1);
-  }
   const wedge = new Map(laid.wedges.map((w) => [w.bond, w]));
   const bonds: Bond[] = g.bonds.map(({ a, b, order }, i) => {
     const bond: Bond = { a1: a, a2: b, order: order as 1 | 2 | 3, stereo: "none" };
     const w = wedge.get(i);
     if (w) {
       bond.stereo = w.stereo;
-      const usual = wedgeNarrowAtom({ ...bond, stereoOrient: "principle" }, degree);
-      bond.stereoOrient = usual === w.narrow ? "principle" : "reverse";
+      bond.narrow = w.narrow;
     }
     return bond;
   });

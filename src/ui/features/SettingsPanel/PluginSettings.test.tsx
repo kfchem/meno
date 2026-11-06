@@ -5,10 +5,10 @@ import type { Online } from "../../../lib/plugins/online";
 import PluginSettings from "./PluginSettings";
 
 // (the list online, as the test has it: the server's renderer reads a store as it began, so the store is stood in for)
-const shown = vi.hoisted(() => ({ online: { state: "unlisted" } as Online }));
+const shown = vi.hoisted(() => ({ online: { state: "unlisted" } as Online, usedBy: {} as Record<string, { id: string }[]> }));
 vi.mock("../../../lib/plugins/online", async (actual) => {
   const real = await actual<typeof import("../../../lib/plugins/online")>();
-  const hook = Object.assign(<T,>(pick?: (s: Online) => T) => (pick ? pick(shown.online) : shown.online), { setState: () => {}, getState: () => shown.online });
+  const hook = Object.assign(<T,>(pick?: (s: Online) => T) => (pick ? pick(shown.online) : shown.online), { setState: () => {}, getState: () => shown.online, subscribe: () => () => {} });
   return { ...real, useOnline: hook, listOnline: async () => {} };
 });
 // (each plugin here as not added: what the readers' store says once it has looked)
@@ -16,7 +16,7 @@ vi.mock("../../../lib/calc/workers", async (actual) => {
   const real = await actual<typeof import("../../../lib/calc/workers")>();
   const { ALL_PLUGINS: all } = await import("../../../lib/calc/catalog");
   const now = { state: Object.fromEntries(all.map((p) => [p.id, "absent"])), problem: {} };
-  return { ...real, useReaders: <T,>(pick: (s: typeof now) => T) => pick(now), addedReaders: async () => new Set() };
+  return { ...real, useReaders: <T,>(pick: (s: typeof now) => T) => pick(now), addedReaders: async () => new Set(), addedUsing: (id: string) => shown.usedBy[id] ?? [] };
 });
 vi.mock("../../../lib/plugins/here", async (actual) => ({ ...(await actual<typeof import("../../../lib/plugins/here")>()), systemHere: () => "macos" }));
 
@@ -57,7 +57,6 @@ describe("Plugins in Settings, with the list online", () => {
       catalogue: {
         schema: 1,
         issued: "2026-11-10T00:00:00Z",
-        serial: 4,
         plugins: [entry({ id: "sketch", name: "Sketch interface", description: "Draws a structure from its name.", roles: ["smiles"], terms: "Free for academic use.", cite: "A. Author, J. Chem. 1 (2020) 1." })] as never,
       },
     });
@@ -79,7 +78,6 @@ describe("Plugins in Settings, with the list online", () => {
       catalogue: {
         schema: 1,
         issued: "2026-11-10T00:00:00Z",
-        serial: 4,
         plugins: [entry({ id: HERE.id, name: HERE.name, version: "99.0.0" }), entry({ id: "winonly", name: "Windows thing", systems: ["windows"] }), entry({ id: "future", name: "Future thing", contract: 2 })] as never,
       },
     });
@@ -93,9 +91,20 @@ describe("Plugins in Settings, with the list online", () => {
     expect(html.split(`${HERE.name} <span`).length).toBe(2);
   });
 
+  it("offers to take the files of a plugin here, and not added, away - asking first - and not where a plugin added uses it", () => {
+    const cardOf = (html: string) => {
+      const card = html.slice(html.indexOf(`${HERE.name} <span`));
+      return card.slice(0, card.indexOf('<div class="rounded-lg border'));
+    };
+    expect(cardOf(drawn({ state: "unlisted" }))).toMatch(/>Remove its files</);
+    shown.usedBy = { [HERE.id]: [{ id: "uses-it" }] };
+    expect(cardOf(drawn({ state: "unlisted" }))).not.toMatch(/Remove its files/);
+    shown.usedBy = {};
+  });
+
   it("says why there is no list, in Meno's warning colour, and how it is the one from before where it is", () => {
     expect(drawn({ state: "failed", problem: "The plugins online could not be listed: Its signature is not Meno's." })).toMatch(/text-accel-accent"[^>]*>The plugins online could not be listed: Its signature is not Meno&#x27;s\.</);
-    const kept = drawn({ state: "listed", kept: "offline", fetchedAt: "2026-11-09T09:30:00Z", catalogue: { schema: 1, issued: "2026-11-09T00:00:00Z", serial: 3, plugins: [] } });
+    const kept = drawn({ state: "listed", kept: "offline", fetchedAt: "2026-11-09T09:30:00Z", catalogue: { schema: 1, issued: "2026-11-09T00:00:00Z", plugins: [] } });
     expect(kept).toMatch(/The list as it was on .+?: a newer one could not be fetched \(offline\)\./);
     expect(kept).toMatch(/>Look again</);
   });

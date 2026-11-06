@@ -13,6 +13,9 @@ import { plusMeasures, plusOutline } from "../../../../lib/chem/reactionScheme";
 import { DEFAULT_STYLE_CHOICE, styleOf } from "../../../../lib/chem/style";
 import { atomAs, atomAtSpot, bondAs, figureFrom, lettersAsShapes, placedBeside, readMarks, regionOf, wholeLabel, type FigureResult, type Unread } from "./figures";
 import { measured } from "../../../../testing/timeouts";
+import { readMolfile } from "../../../../lib/chem/ctfile";
+import { identityOfDrawn } from "../chem/identityOf";
+import { partFormula } from "../chem/cleanUp";
 
 /** What a figure as drawn reads as: its structure, or why there is none. */
 const structureFrom = (drawn: FigureDrawn, sha: string, page: number): Model | Unread => {
@@ -57,10 +60,10 @@ describe("a figure read as a structure for the page", () => {
     const [p, q] = [m.atoms[0], m.atoms[1]];
     const bond = m.bonds.find((x) => (x.a === p.id && x.b === q.id) || (x.a === q.id && x.b === p.id));
     if (bond) expect(Math.hypot(p.x - q.x, p.y - q.y)).toBeCloseTo(NOMINAL_BOND_LENGTH, 1);
-    // (the wedge narrow at its stereocentre: drawn so without being told, it having more bonds)
+    // (the wedge narrow at its stereocentre, the end the figure has it narrow at)
     const w = m.bonds.find((x) => x.stereo === "up")!;
     expect(m.bonds.filter((x) => x.a === w.a || x.b === w.a)).toHaveLength(3);
-    expect(w.stereoOrient).toBeUndefined();
+    expect(w.narrow).toBe(w.a);
   });
 
   it("reads a mass number set high before an element as its isotope, and a count set low before it as no one's", () => {
@@ -139,7 +142,7 @@ describe("a figure read as a structure for the page", () => {
   it("knows a part by its chemistry: element, charge and bonds; order and stereo", () => {
     const bonds = [{ id: 3, a: 1, b: 2, order: 1 as const, stereo: "up" as const }];
     expect(atomAs({ id: 1, el: "C" }, bonds)).not.toBe(atomAs({ id: 2, el: "C" }, bonds));
-    expect(bondAs({ order: 1, stereo: "up" })).not.toBe(bondAs({ order: 1, stereo: "down" }));
+    expect(bondAs({ a: 1, b: 2, order: 1, stereo: "up" })).not.toBe(bondAs({ a: 1, b: 2, order: 1, stereo: "down" }));
   });
 
   it("finds the atom drawn near a point of its page, and none further than a third of a bond", () => {
@@ -643,5 +646,57 @@ describe("a ring atom's label with a group on it", () => {
     expect(els).toBe("CCCCCCCCCNOO");
     const toN = mol.slice(4 + n).filter((l) => /^\s*\d+\s+\d+\s+\d/.test(l)).filter((l) => [Number(l.slice(0, 3)), Number(l.slice(3, 6))].some((i) => mol[3 + i]?.slice(31, 34).trim() === "N"));
     expect(toN).toHaveLength(3);
+  });
+});
+
+describe("a repeat unit in brackets, counted, read that many times (docs/PDF.md, *A repeat unit in brackets*)", () => {
+  /** HO-C-[C]-C-OH zigzag, its middle carbon in brackets counted `count` - or the same chain with `n` carbons drawn out. */
+  function chain(carbons: number, count?: string): FigureDrawn {
+    const pts: P[] = [[100, 200]];
+    for (let k = 0; k <= carbons; k++) pts.push(step(pts[k], k % 2 ? 30 : -30));
+    const short = (p: P, q: P): P => [p[0] + (q[0] - p[0]) * 0.55, p[1] + (q[1] - p[1]) * 0.55];
+    const paths = [stroke(short(pts[1], pts[0]), ...pts.slice(1, -1), short(pts[pts.length - 2], pts[pts.length - 1]))];
+    const words = [...letters("HO", [pts[0][0] - 6.8, pts[0][1]]), ...letters("OH", pts[pts.length - 1])];
+    if (count) {
+      const h = 0.55 * L;
+      const line = ([x, y]: P) => stroke([x, y - h], [x, y + h]);
+      const [x1, x2] = [[(pts[1][0] + pts[2][0]) / 2, (pts[1][1] + pts[2][1]) / 2] as P, [(pts[2][0] + pts[3][0]) / 2, (pts[2][1] + pts[3][1]) / 2] as P];
+      paths.push(line(x1), line(x2));
+      words.push({ c: count, box: [x2[0] + 0.2 * L, x2[1] + h + 1, x2[0] + 0.2 * L + 4.8, x2[1] + h + 6], at: [x2[0] + 0.2 * L, x2[1] + h + 6], size: 7 });
+    }
+    return { paths, letters: words, pictures: [] };
+  }
+
+  it("is the molecule drawn out in full: its identity and its formula", () => {
+    // (HO-CH2-[CH2]6-CH2-OH: octane-1,8-diol, as its eight carbons drawn out are)
+    const read = structureFrom(chain(3, "6"), SHA, 0) as Model;
+    const whole = structureFrom(chain(8), SHA, 0) as Model;
+    expect(read.atoms.filter((a) => a.el === "C")).toHaveLength(8);
+    expect(identityOfDrawn(read).text).toBe(identityOfDrawn(whole).text);
+    expect(partFormula(read)).toBe(partFormula(whole));
+    expect(partFormula(read)).toBe("C8H18O2");
+  });
+
+  it("is written to a file as a multiple group of its count, its first unit the paradigm - and read back so", () => {
+    const m = structureFrom(chain(3, "6"), SHA, 0) as Model;
+    const groups = m.atoms.flatMap((a) => a.sgroups ?? []);
+    expect(groups).toHaveLength(6);
+    expect(groups.every((g) => g.type === "MUL" && g.multiplier === 6 && g.id === groups[0].id)).toBe(true);
+    expect(groups.filter((g) => g.paradigm)).toHaveLength(1);
+    // (its id none of an atom's or a bond's)
+    expect([...m.atoms, ...m.bonds].some((x) => x.id === groups[0].id)).toBe(false);
+    const back = readMolfile(structureFileText({ atoms: m.atoms, bonds: m.bonds }, "x.mol"))!;
+    const mul = back.sgroups.filter((g) => g.type === "MUL");
+    expect(mul).toHaveLength(1);
+    expect(mul[0].multiplier).toBe(6);
+    expect(mul[0].atoms).toHaveLength(6);
+    expect(mul[0].patoms).toHaveLength(1);
+  });
+
+  it("ties each copy to where the figure draws the unit it copies", () => {
+    const m = structureFrom(chain(3, "6"), SHA, 0) as Model;
+    const unit = m.atoms.filter((a) => a.sgroups?.length);
+    const paradigm = unit.find((a) => a.sgroups![0].paradigm)!;
+    expect(unit.every((a) => a.seen && a.seen.x === paradigm.seen!.x && a.seen.y === paradigm.seen!.y)).toBe(true);
   });
 });

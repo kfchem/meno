@@ -112,6 +112,16 @@ describe("Enumerate's known answers", () => {
     expect(r.said[1]).toBe("Duplicates judged by Meno's identity: constitution and configurations as drawn, aromatic rings as one form");
   });
 
+  it("keeps an option's double bond E or Z as its SMILES says: (E)- and (Z)-propenyl on benzene, two products, each the compound it is", () => {
+    const r = ok(enumerated(template("*c1ccccc1"), "R1: */C=C/C\n*/C=C\\C"));
+    expect(r.aside).toEqual([]);
+    const ids = r.made.map((m) => identityOfDrawn(m.drawn).text);
+    expect(ids).toHaveLength(2);
+    expect(ids[0]).not.toBe(ids[1]);
+    expect(ids[0]).toBe(identityOfDrawn(drawnFromSmiles("c1ccccc1/C=C/C")).text);
+    expect(ids[1]).toBe(identityOfDrawn(drawnFromSmiles("c1ccccc1/C=C\\C")).text);
+  });
+
   it("3 x 2 = 6, in the fixed order, R1 outermost", () => {
     const r = ok(enumerated(template("*c1ccc(O*)cc1"), "R1: Me\nEt\nCl\nR2: Me\nAc"));
     expect(r.made.map((m) => [m.number, m.how])).toEqual([
@@ -221,7 +231,7 @@ describe("what stops Enumerate before it runs, each said", () => {
   it("a wedge whose narrow end is at an R atom", () => {
     const t = template("*C(F)(Cl)Br");
     const r = t.atoms.find((a) => a.el === "R#")!.id;
-    const wedged = { ...t, bonds: t.bonds.map((b) => (b.a === r || b.b === r ? { ...b, a: r, b: b.a === r ? b.b : b.a, stereo: "up" as const, stereoOrient: "reverse" as const } : b)) };
+    const wedged = { ...t, bonds: t.bonds.map((b) => (b.a === r || b.b === r ? { ...b, a: r, b: b.a === r ? b.b : b.a, stereo: "up" as const, narrow: r } : b)) };
     expect(problems(enumerated(wedged, "R1: Me"))).toContain("A wedge starts at an R1: it would say nothing of the group put there");
   });
   it("a drawing with no R, and lists that are not lists", () => {
@@ -267,7 +277,7 @@ describe("Enumerate as a step", () => {
     // (each as an entry keeps it: its number and how it was made its properties, its status done or set aside)
     const first = resultOf(ran, step, "out")!.members![0];
     // (and of the structure it was made as: `of`, which the page gives each record put on it)
-    expect("structure" in first && first.record).toEqual({ ...numberedRecord(1, "R1 = Me, R2 = Me"), of: expect.any(String) });
+    expect("structure" in first && first.record).toEqual({ ...numberedRecord(1, "R1 = Me, R2 = Me"), id: expect.any(String), of: expect.any(String) });
     expect(numberedRecord(3, "R1 = Cl, R2 = Me", "Same as 2")).toEqual({
       properties: { number: { value: 3, unit: "none", status: "computed" }, "made.how": { value: "R1 = Cl, R2 = Me", unit: "none", status: "computed" } },
       status: { aside: "Same as 2" },

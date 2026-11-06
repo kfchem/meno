@@ -9,19 +9,13 @@
  * of its plugins: the catalogue does.
  */
 import { compareVersions, versionParts } from "./depends";
-import { SYSTEMS, type System } from "./manifest";
+import { CONTRACTS, EXTENSION, markOf, PROGRAM, QUOTED_TABLES_MOST, quotedTableOf, SYSTEMS, type Mark, type QuotedTableDecl, type System } from "./manifest";
 import { SYSTEM_NAMES } from "./here";
 import { isRole, type RoleId } from "./roles";
 
 /** The form of catalogue Meno reads. */
 export const CATALOGUE_SCHEMA = 1;
 
-/**
- * The plugin contracts Meno speaks: a plugin made for another is listed
- * as not for this Meno, and never got. (The manifest's own `contract`
- * comes with plugins read from a folder; until then, the same numbers.)
- */
-export const CONTRACTS_SPOKEN: readonly number[] = [1];
 
 /** What the catalogue is fetched under, asked once as any first use of the network is (lib/net/network). */
 export const CATALOGUE_PURPOSE = "plugin-catalogue";
@@ -47,7 +41,7 @@ export type CatalogueEntry = {
   terms?: string;
   /** What to cite, where its program asks to be. */
   cite?: string;
-  /** The plugin contract it is made for (`CONTRACTS_SPOKEN`). */
+  /** The plugin contract it is made for: one Meno speaks (lib/plugins/manifest `CONTRACTS`), or it is listed as not for this Meno, and never got. */
   contract: number;
   /** The systems it is made for; none said, all. */
   systems: System[];
@@ -55,20 +49,101 @@ export type CatalogueEntry = {
   roles: RoleId[];
   kinds: string[];
   reads: string[];
+  /** The kinds of file it reads that their marks tell, as its manifest says them: how a file only it would read is told, before it is got. */
+  fileKinds: FileKind[];
+  /** The tables of atoms its program prints, as papers quote them, as its manifest declares them: so that one is said to be its to read, before it is got. */
+  quotedTables: QuotedTableDecl[];
   /** Its files: one archive, its fingerprint and its size. */
   source: { url: string; sha256: string; bytes: number };
   /** Its manifest's fingerprint, checked once its files are unpacked. */
   manifestSha256: string;
+  /** The plugin it brings presets for, by id, as its manifest's `presets.for` says (lib/plugins/manifest `PresetsDecl`): offered with that one where it is got again (./usedBefore). */
+  presetsFor?: string;
 };
 
-/** A catalogue, as it was signed: when, its serial - which only grows - and its plugins. */
-export type Catalogue = { schema: number; issued: string; serial: number; plugins: CatalogueEntry[] };
+/** A plugin no longer offered online, by its id and name, and why, in words: "Meno reads these files itself now". Said where one set up before is not got again (./usedBefore). */
+export type Retired = { id: string; name: string; why: string };
+
+/**
+ * A kind of file a plugin on offer reads, as its manifest says it: what it
+ * is called, the names its files go by, the marks that tell one, and - where
+ * the plugin's own program writes it - that program, so that the plugin is
+ * named first for it.
+ */
+export type FileKind = { id: string; name: string; extensions: string[]; marks: Mark[]; writtenBy?: string };
+
+/**
+ * A catalogue, as it was signed: when it was issued - UTC, to the second
+ * (`issuedOk`), which only grows: Meno's backend takes none issued before
+ * the one taken, nor another issued the same second - and its plugins.
+ */
+export type Catalogue = { schema: number; issued: string; plugins: CatalogueEntry[]; retired?: Retired[] };
+
+/** When a catalogue was issued, as Meno takes it: `2026-11-05T13:04:09Z` - UTC, to the second, nothing else - and a real time. */
+const ISSUED = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})Z$/;
+
+/** Whether `v` says when a catalogue was issued as Meno takes it (`ISSUED`): a real date and time, never one a calendar rolls over. */
+export function issuedOk(v: unknown): v is string {
+  const m = typeof v === "string" ? ISSUED.exec(v) : null;
+  if (!m) return false;
+  const [y, mo, d, h, mi, s] = m.slice(1).map(Number);
+  // (set as given - Date.UTC takes a year under 100 as 19xx - so that it reads as Meno's backend reads it)
+  const t = new Date(0);
+  t.setUTCFullYear(y, mo - 1, d);
+  t.setUTCHours(h, mi, s);
+  return t.getUTCFullYear() === y && t.getUTCMonth() === mo - 1 && t.getUTCDate() === d && t.getUTCHours() === h && t.getUTCMinutes() === mi && t.getUTCSeconds() === s;
+}
 
 const ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const HEX64 = /^[0-9a-f]{64}$/;
 const KIND = /^[a-z][a-z0-9-]{0,39}$/;
 
 const text = (v: unknown, most: number): string | null => (typeof v === "string" && v.trim() && v.length <= most ? v.trim() : null);
+
+/** A mark, as a manifest says it, and nothing else: no key of it but its text unless it says something. */
+function markIn(v: unknown): Mark | null {
+  const m = v as Record<string, unknown> | null;
+  if (!m || typeof m !== "object" || Object.keys(m).some((k) => !["text", "at", "anyCase"].includes(k))) return null;
+  if (("at" in m && m.at !== "line-start") || ("anyCase" in m && m.anyCase !== true)) return null;
+  return markOf(m);
+}
+
+/** An entry's tables of atoms, read strictly: each exactly as a manifest's is kept - nothing of it dropped or trimmed - or null. */
+function quotedTablesOf(v: unknown): QuotedTableDecl[] | null {
+  if (v == null) return [];
+  if (!Array.isArray(v) || v.length > QUOTED_TABLES_MOST) return null;
+  const out: QuotedTableDecl[] = [];
+  for (const raw of v) {
+    const t = quotedTableOf(raw);
+    const r = raw as Record<string, unknown>;
+    const same = (a: readonly string[], b: unknown) => Array.isArray(b) && b.length === a.length && a.every((x, k) => x === b[k]);
+    if (!t || out.some((o) => o.id === t.id) || Object.keys(r).some((k) => !["id", "headings", "heads", "columns"].includes(k))) return null;
+    if (!same(t.headings, r.headings) || !same(t.heads, r.heads ?? [])) return null;
+    out.push(t);
+  }
+  return out;
+}
+
+/** The kinds of file an entry reads that marks tell, read strictly; null, where one is not as Meno takes it. */
+function fileKindsOf(v: unknown): FileKind[] | null {
+  if (v == null) return [];
+  if (!Array.isArray(v)) return null;
+  const out: FileKind[] = [];
+  for (const raw of v) {
+    const k = raw as Record<string, unknown> | null;
+    const id = typeof k?.id === "string" && KIND.test(k.id) ? k.id : null;
+    const name = text(k?.name, 80);
+    const extensions = k?.extensions ?? [];
+    const marks = Array.isArray(k?.marks) ? k.marks.map(markIn) : null;
+    const writtenBy = k?.writtenBy;
+    if (!id || !name || out.some((o) => o.id === id)) return null;
+    if (!Array.isArray(extensions) || !extensions.every((e) => typeof e === "string" && EXTENSION.test(e))) return null;
+    if (!marks?.length || marks.some((m) => m == null)) return null;
+    if (writtenBy !== undefined && !(typeof writtenBy === "string" && PROGRAM.test(writtenBy))) return null;
+    out.push({ id, name, extensions: [...new Set(extensions as string[])], marks: marks as Mark[], ...(writtenBy ? { writtenBy } : {}) });
+  }
+  return out;
+}
 
 /** A plugin's files' place: on https, at a host the catalogue's files come from, and nothing else. */
 function sourceUrl(v: unknown): string | null {
@@ -100,6 +175,10 @@ function entryOf(raw: unknown): CatalogueEntry | string {
   const kinds = list(e.kinds, (k) => KIND.test(k));
   const reads = list(e.reads, (k) => KIND.test(k));
   if (!roles || !kinds || !reads) return `${id}: a role or kind Meno does not take`;
+  const fileKinds = fileKindsOf(e.fileKinds);
+  if (!fileKinds) return `${id}: a kind of file it reads not as Meno takes it`;
+  const quotedTables = quotedTablesOf(e.quotedTables);
+  if (!quotedTables) return `${id}: a table of atoms not as Meno takes it`;
   const s = e.source as Record<string, unknown> | null;
   const url = sourceUrl(s?.url);
   const sha256 = typeof s?.sha256 === "string" && HEX64.test(s.sha256) ? s.sha256 : null;
@@ -113,6 +192,9 @@ function entryOf(raw: unknown): CatalogueEntry | string {
   const cite = said("cite", 2000);
   const homepage = e.homepage == null ? undefined : typeof e.homepage === "string" && /^https:\/\/[^\s]{1,300}$/.test(e.homepage) ? e.homepage : null;
   if (description === null || terms === null || cite === null || homepage === null) return `${id}: a description, terms, cite or home page not as Meno takes them`;
+  // (the plugin it brings presets for: another's id)
+  const presetsFor = e.presetsFor == null ? undefined : typeof e.presetsFor === "string" && ID.test(e.presetsFor) && e.presetsFor !== id ? e.presetsFor : null;
+  if (presetsFor === null) return `${id}: the plugin it brings presets for not as Meno takes it`;
   return {
     id,
     version,
@@ -123,13 +205,32 @@ function entryOf(raw: unknown): CatalogueEntry | string {
     roles: roles as RoleId[],
     kinds,
     reads,
+    fileKinds,
+    quotedTables,
     source: { url, sha256, bytes },
     manifestSha256,
     ...(description ? { description } : {}),
     ...(homepage ? { homepage } : {}),
     ...(terms ? { terms } : {}),
     ...(cite ? { cite } : {}),
+    ...(presetsFor ? { presetsFor } : {}),
   };
+}
+
+/** The plugins no longer offered, as a catalogue lists them: each by its id, name and why - all as Meno takes them, each once, or the list is not one. */
+function retiredOf(v: unknown): Retired[] | null {
+  if (v == null) return [];
+  if (!Array.isArray(v)) return null;
+  const out: Retired[] = [];
+  for (const raw of v) {
+    const r = raw as Record<string, unknown> | null;
+    const id = typeof r?.id === "string" && ID.test(r.id) ? r.id : null;
+    const name = text(r?.name, 60);
+    const why = text(r?.why, 160);
+    if (!id || !name || !why || out.some((o) => o.id === id)) return null;
+    out.push({ id, name, why });
+  }
+  return out;
 }
 
 /**
@@ -141,9 +242,9 @@ export function acceptCatalogue(raw: unknown): { catalogue: Catalogue } | { why:
   const c = raw as Record<string, unknown> | null;
   if (!c || typeof c !== "object") return { why: "It is not a catalogue" };
   if (c.schema !== CATALOGUE_SCHEMA) return { why: "It is of a form this Meno does not read: a newer Meno may" };
-  const serial = typeof c.serial === "number" && Number.isSafeInteger(c.serial) && c.serial > 0 ? c.serial : null;
-  const issued = typeof c.issued === "string" && !Number.isNaN(Date.parse(c.issued)) ? c.issued : null;
-  if (serial == null || !issued || !Array.isArray(c.plugins)) return { why: "Its serial, its date or its plugins are missing" };
+  if ("serial" in c) return { why: "It carries a serial, which this Meno does not read" };
+  if (!issuedOk(c.issued) || !Array.isArray(c.plugins)) return { why: "When it was issued, or its plugins, are not as Meno takes them" };
+  const issued = c.issued;
   const plugins: CatalogueEntry[] = [];
   for (const raw of c.plugins) {
     const e = entryOf(raw);
@@ -151,7 +252,10 @@ export function acceptCatalogue(raw: unknown): { catalogue: Catalogue } | { why:
     if (plugins.some((p) => p.id === e.id)) return { why: `It offers ${e.id} twice` };
     plugins.push(e);
   }
-  return { catalogue: { schema: CATALOGUE_SCHEMA, issued, serial, plugins } };
+  const retired = retiredOf(c.retired);
+  if (!retired) return { why: "Its plugins no longer offered are not as Meno takes them" };
+  if (retired.some((r) => plugins.some((p) => p.id === r.id))) return { why: "It offers a plugin it says is no longer offered" };
+  return { catalogue: { schema: CATALOGUE_SCHEMA, issued, plugins, ...(retired.length ? { retired } : {}) } };
 }
 
 /**
@@ -165,7 +269,7 @@ export function acceptCatalogue(raw: unknown): { catalogue: Catalogue } | { why:
 export type Offer = { entry: CatalogueEntry; offer: "add" | "update" | "here" } | { entry: CatalogueEntry; offer: "not-here"; why: string };
 
 /** What each plugin on offer is, beside what is here (`here`, each plugin's version by its id), on this system, for this Meno. */
-export function offersOf(catalogue: Catalogue, here: ReadonlyMap<string, string>, system: System | null, contracts: readonly number[] = CONTRACTS_SPOKEN): Offer[] {
+export function offersOf(catalogue: Catalogue, here: ReadonlyMap<string, string>, system: System | null, contracts: readonly number[] = CONTRACTS): Offer[] {
   return catalogue.plugins.map((entry): Offer => {
     const mine = here.get(entry.id);
     if (!contracts.includes(entry.contract)) return { entry, offer: "not-here", why: mine ? "Its newer versions are for a newer Meno" : "It is for a newer Meno" };
@@ -173,4 +277,9 @@ export function offersOf(catalogue: Catalogue, here: ReadonlyMap<string, string>
     if (mine == null) return { entry, offer: "add" };
     return { entry, offer: compareVersions(mine, entry.version) < 0 ? "update" : "here" };
   });
+}
+
+/** The plugins on offer that fill a role, for this system and this Meno, not here yet: what Meno offers where a role is asked of and no plugin here fills it. */
+export function offeredFor(role: RoleId, offers: readonly Offer[]): CatalogueEntry[] {
+  return offers.filter((o) => o.offer === "add" && o.entry.roles.includes(role)).map((o) => o.entry);
 }

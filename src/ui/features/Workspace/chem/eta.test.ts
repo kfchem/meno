@@ -24,7 +24,7 @@ function drawing() {
   const atoms: Model["atoms"] = [];
   const bonds: Bond[] = [];
   const atom = (el: string, x: number, y: number) => (atoms.push({ id, x: x * L, y: y * L, r: 0.9, el }), id++);
-  const bond = (a: number, b: number, order: 1 | 2 | 3 = 1) => bonds.push({ id: id++, a, b, order, stereo: "none", stereoOrient: "principle" });
+  const bond = (a: number, b: number, order: 1 | 2 | 3 = 1) => bonds.push({ id: id++, a, b, order, stereo: "none" });
   const ring = (n: number, cx: number, cy: number, r: number) => {
     const ids = Array.from({ length: n }, (_, i) => atom("C", cx + r * Math.cos(Math.PI / 2 + (2 * Math.PI * i) / n), cy + r * Math.sin(Math.PI / 2 + (2 * Math.PI * i) / n)));
     ids.forEach((a, i) => bond(a, ids[(i + 1) % n], i % 2 === 0 && i < n - 1 ? 2 : 1));

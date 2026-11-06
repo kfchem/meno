@@ -2,9 +2,10 @@
  * The line between core and plugins, kept by a test (docs/PLUGINS.md, *The boundary, kept by a test*).
  *
  * Core knows no program and no plugin by name: what a plugin makes, reads or does it says in its manifest, and Meno learns it
- * from there. This test reads the manifest of every bundled plugin (src-tauri/resources/plugins/<id>/manifest.json) and its
- * worker, collects what the plugins declare and say, and fails on any of it in core's source (src/ and src-tauri/src, without
- * tests) - in a string literal, a regular expression, or the text of a page (JSX). Comments may say anything.
+ * from there. This test reads the manifest of every plugin in a folder of plugins, and their workers, collects what the plugins
+ * declare and say, and fails on any of it in core's source (src/ and src-tauri/src, without tests) - in a string literal, a
+ * regular expression, or the text of a page (JSX). Comments may say anything. The folder is Meno's made-up test plugins
+ * (src/test/plugins); the plugins' own repository runs this same test on its plugins (MENO_PLUGINS_DIR, its plugins/).
  *
  * Two ways of finding one:
  * - a word a plugin declares - its id, its programs and what they provide, its looks and motions, the kinds of a step it
@@ -13,7 +14,7 @@
  * - an option a plugin declares, by its id - found where core's code asks for an option of that id (`o.id === "grain"`,
  *   `options.grain`) that is none of Meno's own;
  * - a name - a plugin's, a program's as it is shown, what a plugin uses, the marks its kinds of file are told by - found
- *   anywhere in a literal, as a word, whatever its case ("ORCA's %maxcore" is found by "ORCA").
+ *   anywhere in a literal, as a word, whatever its case ("Quanta's %memory" is found by "Quanta").
  *
  * What core legitimately owns - the words Meno itself defines, which a plugin only names to say it fills them (the roles
  * and kinds of step Meno has) - is in ALLOWED, each with its reason; a word a worker says
@@ -23,20 +24,21 @@
 import { describe, expect, it } from "vitest";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { basename, join, relative, sep } from "node:path";
+import { basename, join, relative, resolve, sep } from "node:path";
 
 const ROOT = join(__dirname, "../../..");
-const PLUGINS = join(ROOT, "src-tauri/resources/plugins");
+const PLUGINS = process.env.MENO_PLUGINS_DIR ? resolve(process.env.MENO_PLUGINS_DIR) : join(ROOT, "src/test/plugins");
 
 /**
  * Words core owns, though a plugin names them too: each with why, and - where the word is core's only in some files - which.
  * A new entry is a decision, made in a review.
  */
-const ALLOWED: { word: string; why: string; files?: string[] }[] = [
+const ALLOWED: { word: string; why: string; files?: string[]; meno?: true }[] = [
   // (the kinds of step are Meno's: workflow/kinds; a plugin's manifest only says which it fills)
   ...["conformers", "descriptors", "energy", "frequencies", "generate", "minimise", "nci", "optimise", "path-search", "reaction-path", "render", "saddle-point"].map((word) => ({ word, why: "a kind of step: Meno defines it (workflow/kinds), a plugin only names it to say it fills it" })),
   // (the materials of Meno's scene file, the vocabulary a look's parts are made of - lib/plugins/manifest `LookParts`)
-  ...["clay"].map((word) => ({ word, why: "a material of the scene Meno writes (render/renderScene), which a look's parts name" })),
+  // (Meno's whether or not a plugin names one: `meno`)
+  ...["clay", "glass"].map((word) => ({ word, why: "a material of the scene Meno writes (render/renderScene), which a look's parts name", meno: true as const })),
   // (the kinds of file Meno knows itself, which programs of every kind write - lib/io/kinds `MENO_KINDS`; a plugin names one to read it or to take it)
   ...["wfx", "molden"].map((word) => ({ word, why: "a kind of file Meno knows itself (lib/io/kinds), which a plugin only names to read it or take it", files: ["src/lib/io/kinds.ts", "src/lib/calc/menoReads.ts"] })),
   { word: "python", why: "the kind of environment Meno runs a plugin's worker in, and a language its text colouring knows" },
@@ -54,7 +56,7 @@ const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 const str = (v: unknown): string[] => (typeof v === "string" ? [v] : []);
 const keys = (v: unknown): string[] => (v && typeof v === "object" && !Array.isArray(v) ? Object.keys(v) : []);
 
-/** The manifests of the bundled plugins, each with its id. */
+/** The manifests of the plugins online, as the tests take them, each with its id. */
 function manifests(): { who: string; m: Json }[] {
   const out: { who: string; m: Json }[] = [];
   for (const dir of readdirSync(PLUGINS)) {
@@ -166,7 +168,7 @@ function named(): Map<string, string[]> {
   return out;
 }
 
-/** The words the bundled plugins' workers say that look like a result's key - "thermo.zpve", "not-converged" - each with who says it. */
+/** The words the plugins' workers say that look like a result's key - "thermo.zpve", "not-converged" - each with who says it. */
 function workerWords(): Map<string, string[]> {
   const out = new Map<string, string[]>();
   for (const dir of readdirSync(PLUGINS)) {
@@ -271,7 +273,7 @@ export function literalsIn(text: string, lang: "ts" | "tsx" | "rs"): Literal[] {
         }
       }
     }
-    // (a quote just after a letter is an apostrophe, in a page's text - "ORCA's" - never a string's start)
+    // (a quote just after a letter is an apostrophe, in a page's text - "Quanta's" - never a string's start)
     if (c === '"' || (ts && c === "`") || (ts && c === "'" && !/[A-Za-z0-9]/.test(text[i - 1] ?? ""))) {
       let j = i + 1;
       let s = "";
@@ -484,8 +486,8 @@ function coreLiterals(): { where: string; lit: Literal }[] {
 describe("the boundary between core and plugins", { timeout: 30_000 }, () => {
   it("reads strings, regular expressions and a page's text, but not comments", () => {
     expect(literalsOf(`const a = "gold"; // "silver"\n/* "copper" */ const b = 'x' + \`y\${"z"}\`;`, "ts")).toEqual(["gold", "x", "z", "y\u0000"]);
-    expect(literalsOf('let a = "orca"; // "xtb"\nlet r = r#"crest"#;', "rs")).toEqual(["orca", "crest"]);
-    expect(literalsIn("const r = /^scf done/i; const q = a / b / c;", "ts")).toEqual([{ text: "^scf done", as: "regex" }]);
+    expect(literalsOf('let a = "quanta"; // "tightbind"\nlet r = r#"confsweep"#;', "rs")).toEqual(["quanta", "confsweep"]);
+    expect(literalsIn("const r = /^scf final/i; const q = a / b / c;", "ts")).toEqual([{ text: "^scf final", as: "regex" }]);
     expect(literalsIn('const s = x.match(/"[a-z]+"/); const t = "after";', "ts")).toEqual([
       { text: '"[a-z]+"', as: "regex" },
       { text: "after", as: "string" },
@@ -494,9 +496,9 @@ describe("the boundary between core and plugins", { timeout: 30_000 }, () => {
       { text: "after", as: "string" },
       { text: "The plugin's own words", as: "jsx" },
     ]);
-    expect(literalsIn('const p = <p className="mt-1">Uses its %maxcore here</p>;', "tsx")).toEqual([
+    expect(literalsIn('const p = <p className="mt-1">Uses its %memory here</p>;', "tsx")).toEqual([
       { text: "mt-1", as: "string" },
-      { text: "Uses its %maxcore here", as: "jsx" },
+      { text: "Uses its %memory here", as: "jsx" },
     ]);
   });
 
@@ -505,13 +507,14 @@ describe("the boundary between core and plugins", { timeout: 30_000 }, () => {
     expect(literalsOf(withoutTests(rs), "rs")).toEqual(["a", "c", "e"]);
   });
 
-  it("takes each word a plugin declares, those it gives the plugins it uses among them", () => {
-    // (ORCA's, as Meno carries it: the variable a job is told the xTB plugin's xtb in)
-    expect(declared().get("XTBEXE")).toEqual(["orca: variable"]);
+  // (of the made-up test plugins: run on them alone, not on a folder of others - MENO_PLUGINS_DIR)
+  it.skipIf(!!process.env.MENO_PLUGINS_DIR)("takes each word a plugin declares, those it gives the plugins it uses among them", () => {
+    // (the made-up Quanta's: the variable a job is told the Tightbind plugin's program in)
+    expect(declared().get("TBEXE")).toEqual(["quanta: variable"]);
   });
 
   it("takes the words of what a plugin brings another through its interface: the interface, its presets' ids, files and options", () => {
-    // (a made-up preset plugin, as no plugin Meno carries yet)
+    // (a made-up preset plugin, as no plugin online yet)
     const m = {
       id: "tool-looks",
       interfaces: [{ id: "styling", version: "1.0.0" }],
@@ -575,7 +578,8 @@ describe("the boundary between core and plugins", { timeout: 30_000 }, () => {
     const names = named();
     const said = workerWords();
     const options = pluginOptions();
-    for (const { word, why } of ALLOWED) {
+    for (const { word, why, meno } of ALLOWED) {
+      if (meno) continue;
       expect(why.length).toBeGreaterThan(10);
       expect(words.has(word) || names.has(word) || said.has(word) || options.has(word), `${word} is no longer declared by a plugin: take it off the list`).toBe(true);
     }

@@ -115,6 +115,47 @@ function twoInLine(at: { x: number; y: number }, around: readonly { x: number; y
   return t.some((u, i) => t.some((w, j) => j > i && (apart(u, w) < IN_LINE || apart(u, w) > Math.PI - IN_LINE)));
 }
 
+/**
+ * The ends of the double bonds a drawing draws straight - an end's one group
+ * straight on from it, within `IN_LINE` - so that it states neither cis nor
+ * trans though the bond could have either (IUPAC 2006, ST-4.4: the linear
+ * depiction of a double bond of unspecified configuration): each such end,
+ * by atom index. Not a double bond with nothing on an end, in a ring of
+ * seven atoms or fewer, cumulated, or with a wavy bond at an end - none of
+ * those has a cis or trans to leave unsaid - nor an end with two groups,
+ * whose other group states it. Clean-up keeps these ends straight
+ * (`LayoutAtom.linear`), so that what it lays out leaves the bond unsaid too.
+ */
+export function straightEnds(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): Set<number> {
+  const neighbours: number[][] = atoms.map(() => []);
+  const bondOf = new Map<string, DrawnBond>();
+  bonds.forEach((b) => {
+    if (b.a === b.b || bondOf.has(key(b.a, b.b))) return;
+    neighbours[b.a].push(b.b);
+    neighbours[b.b].push(b.a);
+    bondOf.set(key(b.a, b.b), b);
+  });
+  const out = new Set<number>();
+  const cumulated = (end: number, other: number) => neighbours[end].some((n) => n !== other && bondOf.get(key(end, n))!.order >= 2);
+  const straightOn = (end: number, other: number, n: number) =>
+    apart(Math.atan2(atoms[n].y - atoms[end].y, atoms[n].x - atoms[end].x), Math.atan2(atoms[end].y - atoms[other].y, atoms[end].x - atoms[other].x)) < IN_LINE;
+  for (const bond of bonds) {
+    if (bond.order !== 2 || bondOf.get(key(bond.a, bond.b)) !== bond) continue;
+    const { a, b } = bond;
+    const groups = (end: number, other: number) => neighbours[end].filter((n) => n !== other);
+    if (!groups(a, b).length || !groups(b, a).length || inSmallRing(neighbours, a, b) || cumulated(a, b) || cumulated(b, a)) continue;
+    if ([a, b].some((x) => neighbours[x].some((n) => bondOf.get(key(x, n))!.either))) continue;
+    for (const [end, other] of [
+      [a, b],
+      [b, a],
+    ]) {
+      const g = groups(end, other);
+      if (g.length === 1 && straightOn(end, other, g[0])) out.add(end);
+    }
+  }
+  return out;
+}
+
 export function readStereo(
   atoms: readonly DrawnAtom[],
   bonds: readonly DrawnBond[],
@@ -251,6 +292,29 @@ const turned = (p: { x: number; y: number }, c: { x: number; y: number }, t: num
   x: c.x + (p.x - c.x) * Math.cos(t) - (p.y - c.y) * Math.sin(t),
   y: c.y + (p.x - c.x) * Math.sin(t) + (p.y - c.y) * Math.cos(t),
 });
+
+/**
+ * Why the wedges at atom `c` - three bonds or more, an H at most, read as
+ * no centre (`readStereo`) - say no configuration, in words that follow
+ * "the wedges at C do not say its configuration (...)": a wavy bond at it,
+ * saying either; more groups round it than a tetrahedral centre's four; an
+ * atom with three bonds that keeps no configuration of its own, where a
+ * wedge states none (an amine's N, a plain N-alkyl aziridine's, a B: Meno's
+ * rule, lib/chem/lonePairCentres); two of its bonds in line or on top of each other (a T, ST-1.2.12);
+ * or else wedges and hashes that cancel, saying neither way round.
+ */
+export function unreadWhy(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], c: number): string {
+  const mine = bonds.filter((b) => b.a !== b.b && (b.a === c || b.b === c));
+  const around = [...new Set(mine.map((b) => (b.a === c ? b.b : b.a)))];
+  const atom = atoms[c];
+  if (mine.some((b) => b.either)) return "a wavy bond at it says it is either";
+  const groups = around.length + atom.hs;
+  if (groups > 4) return `it has ${groups} groups round it, more than the four of a tetrahedral centre`;
+  if (around.length === 3 && atom.hs === 0 && !lonePairCentres(atoms, bonds)(c)) return "it has three bonds and keeps no configuration of its own, so a wedge at it states none";
+  // (as readStereo has it: a centre drawn with three bonds - its H, or its lone pair, left out)
+  if (around.length === 3 && twoInLine(atom, around.map((n) => atoms[n]))) return "two of its bonds in line or on top of each other";
+  return "they are drawn crossed, saying neither way round";
+}
 
 /**
  * What the drawing says of its stereochemistry only by luck, by index: the

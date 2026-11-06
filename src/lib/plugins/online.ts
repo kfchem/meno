@@ -11,6 +11,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
 import { askToConnect, useNetwork, type ConsentRequest } from "../net/network";
 import { acceptCatalogue, CATALOGUE_HOSTS, CATALOGUE_PURPOSE, type Catalogue, type CatalogueEntry } from "./catalogue";
+import { refreshPlugins, setListedNames } from "./known";
 import { acceptManifest } from "./manifest";
 
 /**
@@ -31,6 +32,9 @@ export type Online = {
 };
 
 export const useOnline = create<Online>(() => ({ state: "unlisted" }));
+
+/** A plugin on offer in the list here, by its id; none, where none is listed or it is not in it. */
+export const onlineEntry = (id: string): CatalogueEntry | undefined => useOnline.getState().catalogue?.plugins.find((e) => e.id === id);
 
 /** What listing the plugins online asks, as any first use of the network is asked. */
 export const CATALOGUE_REQUEST: ConsentRequest = {
@@ -79,7 +83,23 @@ export async function listOnline(again = false, ask: typeof invoke = invoke): Pr
   if (!got) return useOnline.setState(offline ? { state: "failed", problem: `Listing them needs the network: ${offline}.` } : { state: "unlisted" });
   const read = acceptCatalogue(got.catalogue);
   if ("why" in read) return useOnline.setState({ state: "failed", catalogue: undefined, problem: `The list of plugins online could not be read: ${read.why}.` });
+  setListedNames(read.catalogue.plugins);
   useOnline.setState({ state: "listed", catalogue: read.catalogue, fetchedAt: got.fetchedAt, kept: got.kept ?? offline, problem: undefined });
+}
+
+/**
+ * The list kept from before, read as Meno starts - nothing fetched, nothing
+ * asked - so that the kinds of file its plugins read are told from the
+ * start, not only once Settings is opened (lib/io/kinds `offeredKinds`).
+ * None kept, or one listed already: nothing.
+ */
+export async function keptOnline(ask: typeof invoke = invoke): Promise<void> {
+  if (useOnline.getState().state !== "unlisted") return;
+  const got = (await (ask("catalogue_get", { fetch: false }) as Promise<Got | null>).catch(() => null)) ?? null;
+  const read = got ? acceptCatalogue(got.catalogue) : null;
+  if (!read || "why" in read || useOnline.getState().state !== "unlisted") return;
+  setListedNames(read.catalogue.plugins);
+  useOnline.setState({ state: "listed", catalogue: read.catalogue, fetchedAt: got!.fetchedAt, kept: got!.kept });
 }
 
 /**
@@ -100,8 +120,8 @@ export const PLUGIN_FILES: PluginFiles = {
   stage: (id, version) => invoke("plugin_stage", { id, version }),
   commit: (stage) => invoke("plugin_commit", { stage }),
   discard: (stage) => invoke("plugin_discard", { stage }),
-  // (the plugins in use read again: Meno's own list of them, once it is read from their folders)
-  reload: async () => {},
+  // (the plugins in place read again, so that the one got is known at once: lib/plugins/known)
+  reload: () => refreshPlugins(),
 };
 
 /** The SHA-256 of a text's UTF-8 bytes, in hex. */
@@ -134,4 +154,15 @@ export async function getPlugin(entry: CatalogueEntry, files: PluginFiles = PLUG
   }
   await files.commit(stage);
   await files.reload();
+}
+
+/**
+ * A plugin's files taken away, where it is here and not added (Meno's
+ * backend, `plugin_files_remove`: the version in use unnamed first, then
+ * its folder) - then the plugins in place read again, so that it is gone at
+ * once. It can be got again from the list, as any plugin is.
+ */
+export async function removeFiles(id: string, remove = (id: string) => invoke<void>("plugin_files_remove", { id }), reload: () => Promise<void> = refreshPlugins): Promise<void> {
+  await remove(id);
+  await reload();
 }

@@ -108,6 +108,22 @@ describe("the right-click menu", () => {
     expect(menu({ ...here, kind: "atom", id: 1 }).icons).not.toContain("Paste");
   });
 
+  it("offers an atom map between the structures selected on the one right-clicked - and, on a structure in maps, what they do", () => {
+    const here = { ...target({ selection: "here", drawing: true }), kind: "atom" as const, id: 1 };
+    expect(menu(here, { pageMap: { onMake: none } }).listed).toEqual(["Atom map", "Copy as SMILES", "Turn over left to right", "Turn over top to bottom", "Save as abbreviation…"]);
+    const held = { standing: "ready" as const, shown: true, maps: 3, chosen: 0, onShow: none, onOther: none, onExport: none };
+    expect(menu(target({ kind: "atom", id: 1 }), { pageMap: { held } }).listed).toEqual(["Unpaired electron", "Hide atom map", "Other map", "Export reaction in 3D…", "Select this structure"]);
+    expect(menu(target({ kind: "atom", id: 1 }), { pageMap: { held: { ...held, shown: false, maps: 1 } } }).listed).toEqual(["Unpaired electron", "Show atom map", "Export reaction in 3D…", "Select this structure"]);
+    // (partial: shown, the atoms not paired named, its export said to need them all; of a structure edited since: said, and made again)
+    expect(menu(target({ kind: "bond", id: 2 }), { pageMap: { held: { ...held, standing: "incomplete", maps: 1, unpaired: "Not mapped: O of Before" } } }).listed).toEqual([
+      "Hide atom map",
+      "Not mapped: O of Before",
+      "Export reaction in 3D… (needs every atom mapped)",
+      "Select this structure",
+    ]);
+    expect(menu(target({ kind: "bond", id: 2 }), { pageMap: { held: { ...held, standing: "changed", onAgain: none } } }).listed).toEqual(["Atom map of the structure before its edit", "Map again", "Select this structure"]);
+  });
+
   it("offers a record of a stack of drawings its stack laid out as a grid - or, laid out, stacked again", () => {
     expect(menu(target({ kind: "atom", id: 1 }), { records: { spread: false, run: none } }).listed).toEqual(["Unpaired electron", "Select this structure", "Lay out as a grid"]);
     expect(menu(target({ kind: "bond", id: 2 }), { records: { spread: true, run: none } }).listed).toEqual(["Select this structure", "Stack again"]);
@@ -144,10 +160,15 @@ describe("the right-click menu", () => {
     expect(two.listed.slice(two.listed.indexOf("Page numbers…"))).toEqual(["Page numbers…", "Pages…", "Combine into one PDF", "Save as PDF…"]);
   });
 
-  it("offers words' size, bold, italic and a list among their icons - ticked as they are - and how their lines lie listed", () => {
-    const words = { onFont: none, bold: true, italic: false, list: false, onBold: none, onItalic: none, onList: none, onSup: none, onSub: none };
+  it("offers words' bold, italic and a list among their icons - ticked as they are - their size, line spacing and typeface under them, and how their lines lie listed", () => {
+    const font = <div aria-label="Font rows">rows</div>;
+    const words = { font, bold: true, italic: false, list: false, onBold: none, onItalic: none, onList: none, onSup: none, onSub: none };
     const { icons, listed, html } = menu(target({ kind: "caption", id: 1 }), { captionAlign: { now: "right", set: none }, words, onColour: none });
-    expect(icons).toEqual(["Edit text", "Font…", "Bold", "Italic", "Bullets", "Colour…", "Delete text"]);
+    expect(icons).toEqual(["Edit text", "Bold", "Italic", "Bullets", "Colour…", "Delete text"]);
+    // (the font in the menu itself, under the icons and above the list: no card to open first)
+    const at = (s: string) => html.indexOf(s);
+    expect(at('aria-label="Font rows"')).toBeGreaterThan(at('aria-label="Frequent"'));
+    expect(at('aria-label="Font rows"')).toBeLessThan(at("Align left"));
     expect(listed).toEqual(["Align left", "Align centre", "Align right", "Justify", "Superscript", "Subscript"]);
     // (their keys named by what they give - + and = - not where they lie, which a keyboard decides)
     expect(html).toMatch(/Superscript<\/span>[\s\S]*?<kbd[^>]*>(Ctrl\+\+|⌘\+)<\/kbd>/);

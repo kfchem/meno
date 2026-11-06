@@ -2,11 +2,11 @@ import { layout2D, type Layout2D } from "../layout/engine";
 import type { LayoutInput } from "../layout/perceive";
 import { abbreviationStructure } from "./abbreviations";
 import { contractGraph, contractionTrials, hiddenIn, type Contraction } from "./contract";
-import { wedgeNarrowAtom } from "./layout2d";
 import type { GroupStructure, StructureBond } from "./ligands";
 import { kekuleOrders } from "./kekulize";
 import { implicitHydrogens, valenceOrder, type AbbreviationStructure, type AtomChem } from "./molecule";
 import { readSmiles, type SmilesAtom } from "./smiles";
+import { movedBond } from "./structureBonds";
 
 type P = { x: number; y: number };
 
@@ -52,9 +52,11 @@ export function picturedStructure(given: GroupStructure, bondLength: number): Ab
   // (a ligand's own picture has a star where it is bound)
   const bound = given.atoms.some((a, i) => a.el === "*" && !given.haptic?.some((h) => h.star === i));
   if (given.attach.length || bound) return placedStructure(given, null, bondLength);
+  // (a double bond's ends and refs too, as an axis's: its cis or trans never folded into a label)
   const keep = new Set([
     ...given.atoms.flatMap((a, i) => (a.tetra || a.isotope ? [i] : [])),
     ...(given.axes ?? []).flatMap((ax) => [...ax.atoms, ...ax.refs]),
+    ...given.bonds.flatMap((b) => (b.cisTrans ? [b.a1, b.a2, ...b.cisTrans.refs.filter((r) => r >= 0)] : [])),
   ]);
   const trials = contractionTrials(contractGraph(given.atoms, given.bonds), keep);
   let best: { given: GroupStructure; s: ReturnType<typeof drawnAsSaid>; laid: Layout2D; hidden: number } | null = null;
@@ -87,7 +89,7 @@ function writtenShort(given: GroupStructure, cs: readonly Contraction[]): GroupS
     }),
     bonds: given.bonds
       .filter((b) => !(groupOf.has(b.a1) && groupOf.get(b.a1) === groupOf.get(b.a2)))
-      .map((b) => ({ ...b, a1: to(b.a1), a2: to(b.a2), ...(b.endpoints ? { endpoints: b.endpoints.map(to) } : {}) })),
+      .map((b) => movedBond(b, (i) => at.get(i))),
     attach: given.attach.map(to),
     ...(given.haptic ? { haptic: given.haptic.map((h) => ({ star: to(h.star), atoms: h.atoms.map(to) })) } : {}),
     ...(given.lends ? { lends: given.lends } : {}),
@@ -126,7 +128,12 @@ function inputFor(s: ReturnType<typeof drawnAsSaid>): LayoutInput {
       { el: "C" },
     ],
     bonds: [
-      ...s.bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.coordination ? 1 : b.order })),
+      // (a double bond's cis or trans, as the engine places a drawing's: a ref to the atom outside, the carbon for its bond out)
+      ...s.bonds.map((b) => {
+        const refs = b.cisTrans?.refs.map((r) => (r === -1 ? (s.attach.length ? from : null) : r));
+        const stereo = b.cisTrans && refs && refs[0] != null && refs[1] != null ? { refs: [refs[0], refs[1]] as [number, number], cis: b.cisTrans.cis } : null;
+        return { a: b.a1, b: b.a2, order: b.coordination ? 1 : b.order, ...(stereo ? { stereo } : {}) };
+      }),
       ...(s.attach.length ? [{ a: from, b: head, order: 1 }] : []),
     ],
     ...(s.axes?.length ? { axes: s.axes } : {}),
@@ -184,20 +191,12 @@ function placedFrom(
     bonds.push({ a1: h.on, a2: atoms.length - 1, order: 1 });
   }
   // each wedge on its bond, its narrow end at its centre
-  const degree = new Map<number, number>();
-  const count = (i: number) => degree.set(i, (degree.get(i) ?? 0) + 1);
-  for (const b of bonds) {
-    count(b.a1);
-    count(b.a2);
-  }
-  for (const at of s.attach) count(at);
   for (const w of laid.wedges) {
     const to = w.to === -1 ? hydrogenOn.get(w.from) : w.to;
     const b = bonds.find((x) => !x.endpoints && ((x.a1 === w.from && x.a2 === to) || (x.a1 === to && x.a2 === w.from)));
     if (!b) continue;
     b.stereo = w.stereo;
-    const usual = wedgeNarrowAtom({ a1: b.a1, a2: b.a2, order: b.order, stereoOrient: "principle" }, degree);
-    if (usual !== w.from) b.stereoOrient = "reverse";
+    b.narrow = w.from;
   }
   // and a ring's bond toward the viewer, a wedge narrow at its far end
   // a cluster's metals in contact, dashed
@@ -209,8 +208,7 @@ function placedFrom(
     const b = bonds.find((x) => (x.a1 === far && x.a2 === nearer) || (x.a1 === nearer && x.a2 === far));
     if (!b) continue;
     b.display = "wedge";
-    const usual = wedgeNarrowAtom({ a1: b.a1, a2: b.a2, order: b.order, stereoOrient: "principle" }, degree);
-    if (usual !== far) b.stereoOrient = "reverse";
+    b.narrow = far;
   }
 
   const into = { x: laid.x[head] - laid.x[from], y: laid.y[head] - laid.y[from] };

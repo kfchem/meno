@@ -150,9 +150,14 @@ type Side = { x0: number; x1: number; y0: number; y1: number };
 /** Where a set gives - its right side, half way down; where a result set takes - its left. */
 export const setGives = (b: Side): Pt => ({ x: b.x1, y: (b.y0 + b.y1) / 2 });
 export const setTakes = (b: Side): Pt => ({ x: b.x0, y: (b.y0 + b.y1) / 2 });
-/** Where a step's `k`th input takes, from 0; and where its card meets the lines to its exits' sets. */
+/**
+ * Where a step's `k`th input takes, from 0; and where its `k`th exit gives
+ * (kinds `exitPlace`): each exit a port of its own down the card's right
+ * side, as its inputs are down its left - the line to that exit's set
+ * leaves from it.
+ */
 export const stepTakes = (s: { x: number; y: number }, k: number): Pt => ({ x: s.x, y: s.y - portDown(k) });
-export const stepGives = (s: { x: number; y: number }): Pt => ({ x: s.x + CARD_W, y: s.y - PORT_DOWN });
+export const stepGives = (s: { x: number; y: number }, k = 0): Pt => ({ x: s.x + CARD_W, y: s.y - portDown(k) });
 
 /**
  * The least run across - from where a wire leaves to its input, to the

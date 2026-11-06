@@ -1,6 +1,6 @@
 /**
  * Steps on structures drawn: a plugin's at once in its worker - *Descriptors*,
- * RDKit's (docs/PLUGINS.md, *Steps on structures drawn*) - *Check structures*,
+ * Sketchkit's (docs/PLUGINS.md, *Steps on structures drawn*) - *Check structures*,
  * Meno's on the facts the plugin that does the checks gives
  * (workflow/checkStructures), and *Stereoisomers*, Meno's on what the plugin
  * that finds stereoisomers perceives and makes, one at a time
@@ -43,7 +43,7 @@ vi.mock("../workflow/stereoisomers", async (actual) => ({
 
 vi.mock("../../../../lib/roles/worker", async (actual) => ({
   ...(await actual<typeof import("../../../../lib/roles/worker")>()),
-  rolePlugin: () => ({ id: "rdkit", name: "RDKit", version: "0.1.21", uses: [{ name: "RDKit", version: "1" }] }),
+  rolePlugin: () => ({ id: "sketchkit", name: "Sketchkit", version: "0.3.0", uses: [{ name: "Sketchkit", version: "1" }] }),
   chemAtHand: async () => true,
   chemWorker: async () => ({
     request: async (op: string, args: { structures: { molblocks: string[] }[] }, ms?: number) => {
@@ -95,7 +95,7 @@ function drawn() {
   return doc;
 }
 
-/** A step of `kind` on the three - RDKit's, or Meno's Check structures - its set's members given `records` where any; run. */
+/** A step of `kind` on the three - Sketchkit's, or Meno's Check structures - its set's members given `records` where any; run. */
 async function ran(kind: "stereoisomers" | "check-structures" | "descriptors", records: (DrawnRecord | undefined)[] = []) {
   const doc = drawn();
   const store = createEditorStore(doc);
@@ -108,19 +108,20 @@ async function ran(kind: "stereoisomers" | "check-structures" | "descriptors", r
       sets: d.sets!.map((b) => (b.id === set ? { ...b, members: b.members!.map((m, i) => ("structure" in m && records[i] ? { ...m, record: records[i] } : m)) } : b)),
     }));
   }
-  // (Check structures and Stereoisomers Meno's, on the plugins' facts; Descriptors RDKit's)
+  // (Check structures and Stereoisomers Meno's, on the plugins' facts; Descriptors Sketchkit's)
   stereoAsked.length = 0;
-  const step = st().addStep(kind, kind === "descriptors" ? "rdkit" : "meno", 0, 0);
+  const step = st().addStep(kind, kind === "descriptors" ? "sketchkit" : "meno", 0, 0);
   st().connect({ set }, step);
   await st().runStep(step);
   const d = doc.getState();
-  // (each record as compared: without what it is of - each one placed is of its own structure, which its key says)
+  // (each record as compared: without what it is of - each one placed is of its own structure, which its key says - nor its lasting id, each one
+  //  given one: workflow/lasting.test)
   const exit = (id: string) => {
     const b = resultOf(d, step, id);
     if (!b) return null;
     const held = setMembers(d, b);
-    for (const [i, r] of held.records.entries()) if (r) expect(r.of).toBe(drawnHash(d.model, held.structures[i]));
-    return { ...held, records: held.records.map((r) => r && (({ of: _of, ...rest }) => rest)(r)) };
+    for (const [i, r] of held.records.entries()) if (r) expect([r.of, typeof r.id]).toEqual([drawnHash(d.model, held.structures[i]), "string"]);
+    return { ...held, records: held.records.map((r) => r && (({ of: _of, id: _id, ...rest }) => (Object.keys(rest).length ? rest : undefined))(r)) };
   };
   return { step: d.steps!.find((s) => s.id === step)!, out: exit("out"), rest: exit("rest"), model: d.model };
 }
@@ -176,7 +177,7 @@ describe("a plugin's step on structures drawn", () => {
     expect(stereoAsked.map((a) => a.molblocks.length)).toEqual([1, 1, 1]);
     expect(stereoAsked[1].molblocks[0]).toMatch(/V3000|V2000/);
     // (Meno's options, at their defaults; the toolkit the plugin runs, named where it alone failed)
-    expect(stereoAsked[0]).toMatchObject({ options: { open: "every", most: 32, within: 30 }, program: "RDKit" });
+    expect(stereoAsked[0]).toMatchObject({ options: { open: "every", most: 32, within: 30 }, program: "Sketchkit" });
     expect(step.ran).toMatchObject({ ok: true, said: "3 in · 3 out · 2 made from 1 · 1 set aside (1: axis)" });
     // (ethanol as drawn, then 2-butanol's two drawings in its place; propanol in the second exit's set)
     const labels = (ids: number[]) => ids.map((id) => model.atoms.find((a) => a.id === id)! as { label?: string; el: string }).map((a) => a.label ?? a.el);
@@ -190,7 +191,7 @@ describe("a plugin's step on structures drawn", () => {
     const old: DrawnRecord = { ...NLL, status: { aside: "an earlier step's word" } };
     const parent: DrawnRecord = { from: ["seed-1"], properties: { ...NLL.properties, smiles: { value: "CC(O)CC", unit: "none", status: "computed" } } };
     const { out, rest } = await ran("stereoisomers", [NLL, parent, old]);
-    const by = { plugin: "rdkit", version: "0.1.21", program: "RDKit 1", method: "Stereoisomers: 2 made of one" };
+    const by = { plugin: "sketchkit", version: "0.3.0", program: "Sketchkit 1", method: "Stereoisomers: 2 made of one" };
     const own = (k: string, smiles: string) => ({
       from: ["seed-1"],
       properties: {
@@ -223,7 +224,7 @@ describe("a plugin's step on structures drawn", () => {
       structures: [{ as: "drawn", properties: { stereo_not_enumerated: note } }, { made: ["iso-1", "iso-2"], properties: { stereo_not_enumerated: note } }, { as: "drawn" }],
     });
     const { out } = await ran("stereoisomers", [undefined, NLL]);
-    const said = { value: note.value, unit: "none", status: "computed", by: { plugin: "rdkit", version: "0.1.21", program: "RDKit 1", method: note.method } };
+    const said = { value: note.value, unit: "none", status: "computed", by: { plugin: "sketchkit", version: "0.3.0", program: "Sketchkit 1", method: note.method } };
     expect(out!.records[0]).toEqual({ properties: { stereo_not_enumerated: said } });
     for (const k of [1, 2]) {
       expect(out!.records[k]!.properties).toEqual({
@@ -255,7 +256,7 @@ describe("a plugin's step on structures drawn", () => {
     expect(found.rest!.records).toEqual([{ status: { aside: "a radical: unpaired electrons on C" } }, { status: { aside: "an atom with more bonds than it can have (C)" } }]);
     // (one the toolkit could not read at all: said in its name)
     facts = () => [FINE, FINE, { read: false }];
-    expect((await ran("check-structures")).rest!.records).toEqual([{ status: { aside: "RDKit could not read it" } }]);
+    expect((await ran("check-structures")).rest!.records).toEqual([{ status: { aside: "Sketchkit could not read it" } }]);
   });
 
   it("keeps what a step worked out of each structure on its record, beside what it had, saying what worked it out", async () => {
@@ -263,12 +264,12 @@ describe("a plugin's step on structures drawn", () => {
       structures: [
         { as: "drawn", properties: { mw: { value: 46.069, unit: "g/mol", method: "average molecular weight" }, hbd: { value: 1, unit: "none" } } },
         { as: "drawn", properties: { mw: { value: 74.123, unit: "g/mol" } } },
-        { aside: "RDKit cannot make sense of it", kind: "valence" },
+        { aside: "Sketchkit cannot make sense of it", kind: "valence" },
       ],
     });
     const { step, out, rest } = await ran("descriptors", [NLL]);
     expect(step.ran).toMatchObject({ ok: true, said: "2 of 3 kept · 1 set aside (1: valence)" });
-    const by = { plugin: "rdkit", version: expect.any(String), program: expect.stringMatching(/^RDKit /) };
+    const by = { plugin: "sketchkit", version: expect.any(String), program: expect.stringMatching(/^Sketchkit /) };
     expect(out!.records[0]).toEqual({
       from: ["seed-1"],
       properties: {
@@ -278,7 +279,7 @@ describe("a plugin's step on structures drawn", () => {
       },
     });
     expect(out!.records[1]).toEqual({ properties: { mw: { value: 74.123, unit: "g/mol", status: "computed", by } } });
-    expect(rest!.records).toEqual([{ status: { aside: "RDKit cannot make sense of it" } }]);
+    expect(rest!.records).toEqual([{ status: { aside: "Sketchkit cannot make sense of it" } }]);
     // (a value in a unit Meno does not know: none of it taken)
     answer = () => ({ structures: [{ as: "drawn", properties: { mw: { value: 1, unit: "Da" } } }, { as: "drawn" }, { as: "drawn" }] });
     expect((await ran("descriptors")).step.ran).toMatchObject({ ok: false, said: "It said nothing Meno can take" });

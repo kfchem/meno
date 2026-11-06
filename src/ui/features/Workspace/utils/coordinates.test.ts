@@ -11,7 +11,7 @@ import { coordinateMolecules, energyNoted, energyOf } from "./coordinates";
 import { energiesFrom } from "../workflow/setTable";
 import { MANIFESTS } from "../../../../lib/plugins/known";
 
-/** The energy lines the plugins Meno carries declare (lib/plugins/manifest `quotedEnergies`): read where those plugins are added. */
+/** The energy lines the made-up test plugins declare (lib/plugins/manifest `quotedEnergies`): read where those plugins are added. */
 const QUOTED = MANIFESTS.flatMap((m) => m.quotedEnergies ?? []);
 
 // (made up for the test: a water and a methane, each under its name)
@@ -47,7 +47,7 @@ describe("structures read from coordinates, placed", () => {
   });
 
   it("take an energy a note gives in hartrees, and none in other units", () => {
-    expect(energyOf(["E(RB3LYP) =  -154.987654321     A.U. after 12 cycles"])).toBe(-154.987654321);
+    expect(energyOf(["E(RM2) =  -154.987654321     A.U. after 12 cycles"])).toBe(-154.987654321);
     expect(energyOf(["G = -12.3 kcal/mol", "Imaginary frequencies: 0"])).toBeUndefined();
   });
 
@@ -126,15 +126,15 @@ describe("the charge and multiplicity a text gives a structure read from its coo
 describe("the energy a structure's notes give it", () => {
   it("is an electronic energy a note names as one - in hartrees, after its value or in brackets after its name", () => {
     expect(energyOf(["E = -76.4 Hartree"])).toBe(-76.4);
-    expect(energyOf(["SCF Done: E(RB3LYP) = -76.40 A.U."])).toBe(-76.4);
+    expect(energyOf(["SCF Done: E(RM2) = -76.40 A.U."])).toBe(-76.4);
     expect(energyOf(["SCF energy (a.u.) = -154.987654"])).toBe(-154.987654);
-    expect(energyOf(["FINAL SINGLE POINT ENERGY = -93.312345678901 Eh"])).toBe(-93.312345678901);
+    expect(energyOf(["TOTAL ENERGY = -93.312345678901 Eh"])).toBe(-93.312345678901);
     expect(energyOf(["Electronic energy = -76.4 Hartree", "E = -76.4 Hartree"])).toBe(-76.4);
   });
 
   it("is never another quantity in its place, whichever comes first: a zero-point energy, a correction, a free energy, an enthalpy, a sum", () => {
     expect(energyOf(["ZPE = 0.021 Hartree", "E = -76.4 Hartree"])).toBe(-76.4);
-    expect(energyOf(["Zero-point correction= 0.021234 (Hartree/Particle)", "E(RB3LYP) = -76.40 A.U."])).toBe(-76.4);
+    expect(energyOf(["Zero-point correction= 0.021234 (Hartree/Particle)", "E(RM2) = -76.40 A.U."])).toBe(-76.4);
     expect(energyOf(["G = -76.38 Hartree", "E = -76.40 Hartree"])).toBe(-76.4);
     for (const note of ["ZPE = 0.021 Hartree", "Thermal correction to Gibbs Free Energy= 0.003 Hartree", "Sum of electronic and thermal Free Energies= -76.38 Hartree", "G = -76.38 Hartree", "H = -76.37 Eh", "Free energy = -76.38 Hartree"]) {
       expect(energyOf([note]), note).toBeUndefined();
@@ -172,17 +172,17 @@ describe("the energy a structure's notes give it", () => {
 describe("the energy a note names, among the ways notes write it", () => {
   // (each note, and whether it gives a geometry's electronic energy: a false refusal costs an energy not shown; a false taking, one that is wrong)
   const NOTES: [string, boolean][] = [
-    ["E = -154.987654 Hartree", true], ["E(RB3LYP) = -154.98765 A.U.", true], ["SCF Done:  E(RB3LYP) =  -154.98765432     A.U. after   12 cycles", true],
+    ["E = -154.987654 Hartree", true], ["E(RM2) = -154.98765 A.U.", true], ["SCF Done:  E(RM2) =  -154.98765432     A.U. after   12 cycles", true],
     ["SCF energy (a.u.) = -154.98", true], ["Electronic energy = -154.98 Eh", true], ["Total energy = -154.98 Hartree", true], ["Final single point energy = -154.98 Eh", true],
-    ["E(RB3LYP/6-31G(d)) = -154.98 Eh", true], ["E(CCSD(T)) = -154.98 Eh", true], ["E(B3LYP-D3(BJ)/def2-TZVP) = -154.98 Eh", true], ["E(wB97X-D/def2-TZVP) = -154.98 Eh", true],
-    ["E(RB3LYP) = -154.98", true], ["E: -154.98 Eh", true], ["Total energy: -154.98 Eh", true], ["E_SCF = -154.98 Eh", true], ["Etot = -154.98 Eh", true], ["E_tot = -154.98 Eh", true], ["E(SCF) = -154.98 Eh", true],
-    ["FINAL SINGLE POINT ENERGY -154.987654321", true], ["E = -1.5498765E+02 Eh", true], ["E = -154.987654 Eh; G = -154.90 Eh", true], ["Energy = -154.98 Eh", true], ["E (Hartree) = -154.98", true],
+    ["E(RM2/B-mid(d)) = -154.98 Eh", true], ["E(CCSD(T)) = -154.98 Eh", true], ["E(M2-DSP(BJ)/B-large) = -154.98 Eh", true], ["E(wM9X-D/B-large) = -154.98 Eh", true],
+    ["E(RM2) = -154.98", true], ["E: -154.98 Eh", true], ["Total energy: -154.98 Eh", true], ["E_SCF = -154.98 Eh", true], ["Etot = -154.98 Eh", true], ["E_tot = -154.98 Eh", true], ["E(SCF) = -154.98 Eh", true],
+    ["TOTAL ENERGY -154.987654321", true], ["E = -1.5498765E+02 Eh", true], ["E = -154.987654 Eh; G = -154.90 Eh", true], ["Energy = -154.98 Eh", true], ["E (Hartree) = -154.98", true],
     ["E(MP2) = -155.123 Eh and E(HF) = -154.98 Eh", false],
     ["ZPE = 0.12345 Hartree", false], ["G = -154.90 Hartree", false], ["H = -154.91 Eh", false], ["E0 = -154.88 Eh", false], ["Zero-point energy = 0.1234 Eh", false], ["Thermal correction to Gibbs free energy = 0.0987 Hartree", false],
     ["Sum of electronic and zero-point Energies = -154.86 Hartree", false], ["Free energy = -154.90 Eh", false], ["Gibbs free energy = -154.90 Eh", false], ["Enthalpy = -154.91 Eh", false],
     ["E(corr) = -0.2345 Eh", false], ["E(T) = -0.0123 Eh", false], ["E(ZPE) = 0.1234 Eh", false], ["E(thermal) = 0.1345 Eh", false], ["E(ZPE-corrected) = -154.86 Eh", false], ["Total energy (E+ZPE) = -154.86 Eh", false], ["Energy (incl. ZPE) = -154.86 Eh", false],
     ["Total energy (free energy) = -154.90 Eh", false], ["E(rel) = 0.0123 Eh", false], ["E(dispersion) = -0.0123 Eh", false], ["E(D3) = -0.0123 Eh", false], ["E(solv) = -0.0123 Eh", false], ["E(vib) = 0.0123 Eh", false], ["E(int) = -0.0123 Eh", false],
-    ["SCF Done: E(RB3LYP) = -154.9 A.U. ZPE = 0.12 Hartree", true],
+    ["SCF Done: E(RM2) = -154.9 A.U. ZPE = 0.12 Hartree", true],
   ];
 
   it("is taken from each that names one, and from none that names another quantity - a correction, a part of one, a sum", () => {
@@ -201,16 +201,16 @@ describe("the energy a note names, among the ways notes write it", () => {
     expect(energyNoted(["E = -1.5498765E+02 Eh"])).toEqual({ energy: -154.98765, name: "E" });
     expect(energyNoted(["Total energy: -154.98 Eh"])).toEqual({ energy: -154.98, name: "Total energy" });
     // (a method's energy, its name and value as any note gives them, though the line is a program's)
-    expect(energyNoted(["SCF Done:  E(RB3LYP) =  -154.98765432     A.U. after   12 cycles"])).toEqual({ energy: -154.98765432, name: "E(RB3LYP)" });
+    expect(energyNoted(["SCF Done:  E(RM2) =  -154.98765432     A.U. after   12 cycles"])).toEqual({ energy: -154.98765432, name: "E(RM2)" });
   });
 
   it("is read from a program's own line - with no \"=\" - only as the plugin added declares it, and named as it says", () => {
-    const orca = "FINAL SINGLE POINT ENERGY      -154.987654321";
-    expect(energyNoted([orca])).toBeNull();
-    expect(energyNoted([orca], QUOTED)).toEqual({ energy: -154.987654321, name: "Final single point energy" });
-    expect(energyNoted(["SCF Done:  E(RB3LYP) =  -154.98765432     A.U. after   12 cycles"], QUOTED)).toEqual({ energy: -154.98765432, name: "E(RB3LYP)" });
-    // (the declarations of the plugins Meno carries, each from its program's printout)
-    expect(QUOTED.map((q) => q.id).sort()).toEqual(["final-single-point", "scf-done"]);
+    const own = "TOTAL ENERGY      -154.987654321";
+    expect(energyNoted([own])).toBeNull();
+    expect(energyNoted([own], QUOTED)).toEqual({ energy: -154.987654321, name: "Total energy" });
+    expect(energyNoted(["SCF Done:  E(RM2) =  -154.98765432     A.U. after   12 cycles"], QUOTED)).toEqual({ energy: -154.98765432, name: "E(RM2)" });
+    // (the declarations of the made-up plugins, each from its program's printout)
+    expect(QUOTED.map((q) => q.id).sort()).toEqual(["scf-final", "total-energy"]);
   });
 
   it("is none of a bracket naming a part of an energy, a correction or a counterpoise, though it reads like a method", () => {

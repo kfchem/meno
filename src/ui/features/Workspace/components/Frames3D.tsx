@@ -1,5 +1,5 @@
 import PageHtml from "./PageHtml";
-import { PAGE_SIZED } from "../utils/pageScale";
+import { pagePx, pageSized } from "../utils/pageScale";
 import { useCallback, useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { aboveText, chipLine, isMarked, resultsOn, unitsHeld, valueText, type Result } from "../../../../lib/calc/results";
 import { cardGroupsOf, readerNameOf } from "../../../../lib/calc/sources";
@@ -14,6 +14,8 @@ import { PORTS_Z } from "../workflow/look";
 import { FRAMES_CHIP_GAP } from "../utils/molecule3d";
 import { chipMarks, share } from "../utils/chipSaid";
 
+/** A chip as large as the page draws it, hung from its top (utils/pageScale `pageSized`). */
+const HUNG_FROM_TOP = pageSized("top");
 /** The bars' and the slider's width, the bars' height, and the room either side, in pixels. */
 const WIDTH = 196;
 const BARS = 30;
@@ -369,7 +371,7 @@ export function FramesChip({
       ref={root}
       className={`meno-page-chip meno-control-chip flex flex-col items-center select-none ${(!single && !expanded) || (single && (about || madeRows.length || fromText?.length)) ? "cursor-pointer" : ""}`}
       // (the pointer goes through it but for what it shows: a chip hidden keeps its size, and would hide what lies under it - a set's port, a step's card)
-      style={{ transform: `translate(-50%, calc(${GAP}px * var(--page, 1)))`, pointerEvents: "none" }}
+      style={{ transform: `translate(-50%, ${pagePx(GAP)})`, pointerEvents: "none" }}
       onClick={() => {
         if (!single && !expanded) setExpanded(true);
         else if (single && (about || madeRows.length || fromText?.length)) setPinned((v) => !v);
@@ -380,7 +382,7 @@ export function FramesChip({
         setPointed(null);
       }}
     >
-      <div className="flex flex-col items-center" style={PAGE_SIZED}>
+      <div className="flex flex-col items-center" style={HUNG_FROM_TOP}>
       {(!single || about || title) && (
         <div className="relative">
           <div

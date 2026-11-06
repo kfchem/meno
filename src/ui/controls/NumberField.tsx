@@ -23,6 +23,7 @@ export default function NumberField({
   min,
   max,
   step,
+  whole,
   className,
 }: {
   value: number;
@@ -31,9 +32,11 @@ export default function NumberField({
   min?: number;
   max?: number;
   step?: number;
+  /** A whole number alone, one with a fraction refused as one out of range is. */
+  whole?: boolean;
   className?: string;
 }) {
-  const range = { min, max, step };
+  const range = { min, max, step, whole };
   const [draft, setDraft] = useState(() => numberDraft(value));
   const typing = useRef(false);
   const field = useRef<HTMLInputElement>(null);

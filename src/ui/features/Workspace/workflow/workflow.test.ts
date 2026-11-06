@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 //  like - has no stereo, which a run asks before As conformers and Populations; workflow/configurations)
 vi.mock("./configurations", async (actual) => ({
   ...(await actual<typeof import("./configurations")>()),
-  stereoKnown: () => ({ perceived: true, elements: [], key: "none", by: { plugin: "rdkit", version: "0.1.7" } }),
+  stereoKnown: () => ({ perceived: true, elements: [], key: "none", by: { plugin: "sketchkit", version: "0.3.0" } }),
 }));
 import { useReaders } from "../../../../lib/calc/workers";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
@@ -23,7 +23,7 @@ import { rmsd } from "./rmsd";
 import { addSet, addStep, connect, fitSets, moveSet, removeSet, removeStep, removeWire, resizeSet, updateStep } from "./model";
 import { energiesBy, laidOver, placeResults, resultsOf, runStep, type RunWith } from "./run";
 import { offeredSteps } from "./offered";
-import { inputsOf } from "./kinds";
+import { inputsOf, needsOf } from "./kinds";
 import { doerOf } from "./doers";
 import { pluginById } from "../../../../lib/calc/catalog";
 import { populations } from "../utils/molecule3d";
@@ -360,20 +360,26 @@ describe("Meno's own steps", () => {
 
   it("need energies for a window and for populations", () => {
     const set = entries(bent({ x: 0, y: 0 }, 2), "conformers");
-    expect(runMeno("energy-window", set, "conformers")).toEqual({ ok: false, said: "Not every entry has an energy" });
+    expect(runMeno("energy-window", set, "conformers", { window: 3 })).toEqual({ ok: false, said: "Not every entry has an energy" });
     expect(runMeno("populations", set, "conformers").ok).toBe(false);
   });
 
   it("refuse a window they cannot keep by, saying why, as Populations does a temperature", () => {
     const set = entries(bent({ x: 0, y: 0 }, 2, [0, kcal(1)]), "conformers");
-    for (const window of [-1, Number.NaN, Number.POSITIVE_INFINITY]) expect(runMeno("energy-window", set, "conformers", { window })).toEqual({ ok: false, said: "The window must be 0 kcal/mol or more" });
+    for (const window of [-1, Number.POSITIVE_INFINITY]) expect(runMeno("energy-window", set, "conformers", { window })).toEqual({ ok: false, said: "The window must be 0 kcal/mol or more" });
+    // (none given - no default stands in for it - or one that is no number: the window asked for, as its card asks)
+    for (const options of [undefined, { window: Number.NaN }, { window: "" }, { window: "a" }]) expect(runMeno("energy-window", set, "conformers", options)).toEqual({ ok: false, said: "Give the window, in kcal/mol" });
+    // (the same from the lowest in each value of a property: its own check, as its own words)
+    const byValue = { within: "each value", groupBy: "product" };
+    for (const window of [undefined, Number.NaN, ""]) expect(runMeno("energy-window", set, "conformers", { ...byValue, ...(window !== undefined ? { window } : {}) })).toEqual({ ok: false, said: "Give the window, in kcal/mol" });
+    for (const window of [-1, Number.POSITIVE_INFINITY]) expect(runMeno("energy-window", set, "conformers", { ...byValue, window })).toEqual({ ok: false, said: "The window must be 0 kcal/mol or more" });
     // (0: the lowest of each compound alone)
     const none = runMeno("energy-window", set, "conformers", { window: 0 });
     expect(none.ok && none.kept.map((e) => e.number)).toEqual([1]);
   });
 
   it("give no populations where one conformer is no minimum - its calculation judged it has an imaginary frequency - naming it and its frequency", () => {
-    // (a methanol saddle point, made up: xtb, -391.27 cm-1, one significant)
+    // (a methanol saddle point, made up: -391.27 cm-1, one significant)
     const set = entries(bent({ x: 0, y: 0 }, 3, [0, kcal(1), kcal(2)]), "conformers").map((e, i) => (i === 1 ? { ...e, imaginary: [-391.27] } : e));
     expect(runMeno("populations", set, "conformers", { temperature: 298.15 })).toEqual({ ok: false, said: "a #2 has 1 imaginary frequency, 391.3i cm⁻¹: it is no minimum - take it out first" });
     expect(notAllMinima(set)).toBe("a #2 has 1 imaginary frequency, 391.3i cm⁻¹: it is no minimum - take it out first");
@@ -428,12 +434,12 @@ describe("Meno's own steps", () => {
   it("carry each conformer's imaginary frequencies, frame by frame - a single geometry's its calculation's, of its last", () => {
     const m = { ...bent({ x: 0, y: 0 }, 3, [0, kcal(1), kcal(2)]), imaginary: [null, [-391.27], null] };
     expect(entries(m, "conformers").map((e) => e.imaginary)).toEqual([undefined, [-391.27], undefined]);
-    const one = { ...bent({ x: 0, y: 0 }), calc: { readers: ["xtb 6.7.1"], imaginary: [-391.27] } };
+    const one = { ...bent({ x: 0, y: 0 }), calc: { readers: ["tightbind 1.0"], imaginary: [-391.27] } };
     expect(entries(one, "molecules").map((e) => e.imaginary)).toEqual([[-391.27]]);
     // (an earlier frame of a path: not the geometry the frequencies are of)
-    const path = { ...bent({ x: 0, y: 0 }, 2), calc: { readers: ["xtb 6.7.1"], imaginary: [-391.27] }, path: true as const };
+    const path = { ...bent({ x: 0, y: 0 }, 2), calc: { readers: ["tightbind 1.0"], imaginary: [-391.27] }, path: true as const };
     expect(entries(path, "molecules").map((e) => e.imaginary)).toEqual([[-391.27]]);
-    expect(setEntries([{ ...bent({ x: 0, y: 0 }, 2), calc: { readers: ["xtb 6.7.1"], imaginary: [-391.27] }, id: 1 }], "molecules").map((e) => e.imaginary)).toEqual([undefined, [-391.27]]);
+    expect(setEntries([{ ...bent({ x: 0, y: 0 }, 2), calc: { readers: ["tightbind 1.0"], imaginary: [-391.27] }, id: 1 }], "molecules").map((e) => e.imaginary)).toEqual([undefined, [-391.27]]);
   });
 
   it("take an energy that is no number - NaN, or infinite - for none: in a window, in populations, in choosing the lowest and in Duplicates' order", () => {
@@ -488,12 +494,12 @@ describe("Meno's own steps", () => {
 
   it("choose one conformer of each compound on purpose - its lowest, or one by its number - and set the rest aside", () => {
     const set = entries(bent({ x: 0, y: 0 }, 3, [kcal(2), 0, kcal(1)]), "conformers");
-    const lowest = runMeno("choose", set, "conformers", undefined, "RDKit · MMFF94");
+    const lowest = runMeno("choose", set, "conformers", undefined, "Sketchkit · KF1");
     expect(lowest.ok && lowest.holds).toBe("molecules");
     expect(lowest.ok && lowest.kept.map((e) => [e.compound, e.number])).toEqual([[0, 2]]);
     expect(lowest.ok && lowest.aside.map((e) => e.number)).toEqual([1, 3]);
     // (it says which, of how many, and what the energies it ranked by are)
-    expect(lowest.said).toBe("#2 of 3, lowest · RDKit · MMFF94");
+    expect(lowest.said).toBe("#2 of 3, lowest · Sketchkit · KF1");
     const third = runMeno("choose", set, "conformers", { which: "number", number: 3 });
     expect(third.ok && third.kept.map((e) => e.number)).toEqual([3]);
     expect(third.said).toBe("#3 of 3, chosen");
@@ -502,8 +508,8 @@ describe("Meno's own steps", () => {
   });
 
   it("say what the energies they rank by are: the calculation that worked them out", () => {
-    expect(energiesBy([{ energies: [-1], calc: { readers: [], program: "xtb", method: "GFN2-xTB" } }])).toBe("xtb · GFN2-xTB");
-    expect(energiesBy([{ energies: [-1], calc: { readers: [], program: "ORCA", method: "B3LYP", basis: "def2-SVP" } }])).toBe("ORCA · B3LYP/def2-SVP");
+    expect(energiesBy([{ energies: [-1], calc: { readers: [], program: "tightbind", method: "TB-2" } }])).toBe("tightbind · TB-2");
+    expect(energiesBy([{ energies: [-1], calc: { readers: [], program: "Quanta", method: "M1", basis: "B-small" } }])).toBe("Quanta · M1/B-small");
     expect(energiesBy([{ energies: [-1] }])).toBeUndefined();
   });
 
@@ -518,15 +524,15 @@ describe("Meno's own steps", () => {
     expect(hot[1]).toBeGreaterThan(out.shares![1]);
   });
 
-  it("count each conformer's rotamers in, where its search said how many - as CREST's own weights do", () => {
-    // (n-butane by GFN-FF, as CREST 2.12 found it: anti, and gauche 0.4527 kcal/mol above, found twice alike; CREGEN's weights 0.51759 and 0.48241)
-    const crest = [0.51759, 0.48241];
-    // (to 3e-4: the energies here are CREST's own, rounded as it prints them)
-    const near = (got: number[]) => got.forEach((p, i) => expect(Math.abs(p - crest[i])).toBeLessThan(3e-4));
+  it("count each conformer's rotamers in, where its search said how many - as a search's own weights do", () => {
+    // (n-butane, made up: anti, and gauche 0.4527 kcal/mol above, found twice alike; the weights a search that counts rotamers gives them, 0.51759 and 0.48241)
+    const search = [0.51759, 0.48241];
+    // (to 3e-4: the weights as such a search rounds them)
+    const near = (got: number[]) => got.forEach((p, i) => expect(Math.abs(p - search[i])).toBeLessThan(3e-4));
     near(boltzmann([0, kcal(0.4527)], 298.15, [1, 2]));
     // (counted once each, the gauche form's share is half as much)
     expect(boltzmann([0, kcal(0.4527)], 298.15)[1]).toBeCloseTo(0.318, 3);
-    // a Populations step over CREST's conformers counts them in too: its shares, CREST's
+    // a Populations step over the search's conformers counts them in too: its shares, the search's
     const m = { ...bent({ x: 0, y: 0 }, 2, [0, kcal(0.4527)]), conformerSet: true, degeneracies: [1, 2] };
     const out = runMeno("populations", entries(m, "conformers"), "conformers", { temperature: 298.15 });
     if (!out.ok) throw new Error(out.said);
@@ -707,8 +713,8 @@ describe("what a step on entries alone gives back", () => {
       ...bent({ x: 0, y: 0 }, 5, [4, 0, 0.5, 2, 0.5].map((k) => -76 + kcal(k))),
       conformerSet: true as const,
       numbers: [1, 2, 3, 4, 5],
-      calc: { readers: [], program: "RDKit", method: "MMFF94", results: [{ id: "x", on: "molecule" as const, group: "G", label: "Last", value: 1 }] },
-      made: { method: "ETKDG v3 + MMFF94", how: [{ label: "Made", text: "ETKDG v3" }], energies: "MMFF94" },
+      calc: { readers: [], program: "Sketchkit", method: "KF1", results: [{ id: "x", on: "molecule" as const, group: "G", label: "Last", value: 1 }] },
+      made: { method: "SK embed 2 + KF1", how: [{ label: "Made", text: "SK embed 2" }], energies: "KF1" },
       stereo: { atoms: { 0: "R" }, bonds: {} },
     };
     return addSet(addMolecule3d(emptyWorkspaceDocument(), m), { x0: -3, y0: -3, x1: 3, y1: 3 });
@@ -722,8 +728,8 @@ describe("what a step on entries alone gives back", () => {
     const m = doc.molecules3d!.find((x) => setMembers(doc, out).molecules.includes(x.id))!;
     // (conformers 2, 3 and 5 within the window - 1, which carried them before, not among them)
     expect(m.numbers).toEqual([2, 3, 5]);
-    expect(m.made).toEqual({ method: "ETKDG v3 + MMFF94", how: [{ label: "Made", text: "ETKDG v3" }], energies: "MMFF94" });
-    expect(m.calc).toMatchObject({ program: "RDKit", method: "MMFF94" });
+    expect(m.made).toEqual({ method: "SK embed 2 + KF1", how: [{ label: "Made", text: "SK embed 2" }], energies: "KF1" });
+    expect(m.calc).toMatchObject({ program: "Sketchkit", method: "KF1" });
     expect(m.stereo).toEqual({ atoms: { 0: "R" }, bonds: {} });
   });
 
@@ -735,7 +741,7 @@ describe("what a step on entries alone gives back", () => {
           ...bent({ x: 0, y: 0 }, 1, [energy]),
           id,
           calc: { readers: [], program, method },
-          made: { how: [{ label: "Made", text: "ETKDG v3" }], energies: method },
+          made: { how: [{ label: "Made", text: "SK embed 2" }], energies: method },
           drawnFrom: drawn,
           stereo: { atoms: labels, bonds: {} },
         },
@@ -744,25 +750,25 @@ describe("what a step on entries alone gives back", () => {
     ).map((e) => ({ ...e, compound: id }));
 
   it("will not make one compound of entries worked out by different calculations", () => {
-    // (the desk's case: water by MMFF94 at -76 Eh and by GFN2-xTB at -75.9 - one list of their energies means nothing)
-    const out = runMeno("as-conformers", [...water(1, "RDKit", "MMFF94", -76, [1, 2, 3]), ...water(2, "xtb", "GFN2-xTB", -75.9, [1, 2, 3])], "molecules");
-    expect(out).toEqual({ ok: false, said: "Compound a: its entries come from different calculations (RDKit MMFF94; xtb GFN2-xTB)" });
+    // (water by KF1 at -76 Eh and by TB-2 at -75.9 - one list of their energies means nothing)
+    const out = runMeno("as-conformers", [...water(1, "Sketchkit", "KF1", -76, [1, 2, 3]), ...water(2, "tightbind", "TB-2", -75.9, [1, 2, 3])], "molecules");
+    expect(out).toEqual({ ok: false, said: "Compound a: its entries come from different calculations (Sketchkit KF1; tightbind TB-2)" });
   });
 
   it("will not make one compound of entries labelled as different stereoisomers", () => {
-    const out = runMeno("as-conformers", [...water(1, "RDKit", "MMFF94", -76, [1, 2, 3], { 0: "R" }), ...water(2, "RDKit", "MMFF94", -76.001, [1, 2, 3], { 0: "S" })], "molecules");
+    const out = runMeno("as-conformers", [...water(1, "Sketchkit", "KF1", -76, [1, 2, 3], { 0: "R" }), ...water(2, "Sketchkit", "KF1", -76.001, [1, 2, 3], { 0: "S" })], "molecules");
     expect(out).toEqual({ ok: false, said: "Compound a: its entries' stereo labels differ: they may be different stereoisomers" });
   });
 
   /** Which stereoisomer an entry is, as the plugin that perceives configurations answers: `key`, or not perceived, and why. */
   const isomer = (key: string | { why: string }): EntryStereo =>
     typeof key === "string"
-      ? { perceived: true, elements: [{ kind: "centre", atoms: [0], specified: true }], key, by: { plugin: "rdkit", version: "0.1.7" } }
+      ? { perceived: true, elements: [{ kind: "centre", atoms: [0], specified: true }], key, by: { plugin: "sketchkit", version: "0.3.0" } }
       : { perceived: false, why: key.why };
 
   it("makes a compound of each stereoisomer, read from each entry's own geometry", () => {
     // (four conformers, two of them R and two S, read so from their geometry: two compounds of two - not one of four)
-    const all = [1, 2, 3, 4].flatMap((id) => water(id, "RDKit", "MMFF94", -76 - id / 1000, [1, 2, 3]));
+    const all = [1, 2, 3, 4].flatMap((id) => water(id, "Sketchkit", "KF1", -76 - id / 1000, [1, 2, 3]));
     const out = runMeno("as-conformers", all.map((e, i) => ({ ...e, stereo: isomer(i % 2 ? "S" : "R") })), "molecules");
     expect(out.ok && out.kept.map((e) => [e.compound, e.number, e.energy])).toEqual([[0, 1, -76.001], [0, 2, -76.003], [1, 1, -76.002], [1, 2, -76.004]]);
     expect(out.said).toBe("2 compounds · 4");
@@ -770,30 +776,30 @@ describe("what a step on entries alone gives back", () => {
 
   it("will not make a compound of entries none of which was asked which stereoisomer it is", () => {
     // (constitution alone would sum diastereomers: not asked is not known, and it fails closed)
-    const all = [...water(1, "RDKit", "MMFF94", -76, [1, 2, 3]), ...water(2, "RDKit", "MMFF94", -76.001, [1, 2, 3])].map((e) => ({ ...e, stereo: undefined }));
+    const all = [...water(1, "Sketchkit", "KF1", -76, [1, 2, 3]), ...water(2, "Sketchkit", "KF1", -76.001, [1, 2, 3])].map((e) => ({ ...e, stereo: undefined }));
     expect(runMeno("as-conformers", all, "molecules")).toEqual({ ok: false, said: "Which stereoisomer entry 1 is is not known: it has not been asked" });
   });
 
   it("will not make a compound of an entry whose stereoisomer is not known", () => {
-    const all = [...water(1, "RDKit", "MMFF94", -76, [1, 2, 3]), ...water(2, "RDKit", "MMFF94", -76.001, [1, 2, 3])];
+    const all = [...water(1, "Sketchkit", "KF1", -76, [1, 2, 3]), ...water(2, "Sketchkit", "KF1", -76.001, [1, 2, 3])];
     const out = runMeno("as-conformers", [{ ...all[0], stereo: isomer("R") }, { ...all[1], stereo: isomer({ why: "Nothing added tells stereoisomers apart" }) }], "molecules");
     expect(out).toEqual({ ok: false, said: "Which stereoisomer entry 2 is is not known: Nothing added tells stereoisomers apart" });
   });
 
   it("makes one compound of entries made alike, keeping only what all of them keep", () => {
     // (one calculation and one source of energies, drawn twice: the drawing each was made from is no one's to keep)
-    const out = runMeno("as-conformers", [...water(1, "RDKit", "MMFF94", -76, [1, 2, 3]), ...water(2, "RDKit", "MMFF94", -76.001, [4, 5, 6])], "molecules");
+    const out = runMeno("as-conformers", [...water(1, "Sketchkit", "KF1", -76, [1, 2, 3]), ...water(2, "Sketchkit", "KF1", -76.001, [4, 5, 6])], "molecules");
     expect(out.ok).toBe(true);
     const [m] = resultsOf(out as Extract<typeof out, { ok: true }>, "as-conformers").molecules;
     expect(m.energies).toEqual([-76, -76.001]);
-    expect(m.calc).toMatchObject({ program: "RDKit", method: "MMFF94" });
-    expect(m.made).toEqual({ how: [{ label: "Made", text: "ETKDG v3" }], energies: "MMFF94" });
+    expect(m.calc).toMatchObject({ program: "Sketchkit", method: "KF1" });
+    expect(m.made).toEqual({ how: [{ label: "Made", text: "SK embed 2" }], energies: "KF1" });
     expect(m.drawnFrom).toBeUndefined();
   });
 
   it("gives a compound of entries made unlike no calculation, and no energies in one list", () => {
     // (should a conformer set come with such a compound in it, past As conformers: the first's are not the compound's)
-    const kept = [...water(1, "RDKit", "MMFF94", -76, [1, 2, 3]), ...water(2, "xtb", "GFN2-xTB", -75.9, [1, 2, 3])].map((e, i) => ({ ...e, compound: 0, number: i + 1 }));
+    const kept = [...water(1, "Sketchkit", "KF1", -76, [1, 2, 3]), ...water(2, "tightbind", "TB-2", -75.9, [1, 2, 3])].map((e, i) => ({ ...e, compound: 0, number: i + 1 }));
     const [m] = resultsOf({ ok: true, holds: "conformers", kept, aside: [], said: "" }, "energy-window").molecules;
     expect(m.calc).toBeUndefined();
     expect(m.energies).toBeUndefined();
@@ -803,7 +809,7 @@ describe("what a step on entries alone gives back", () => {
   it("gives what a calculation read of one geometry only to that geometry: the last frame's", () => {
     const entries = setEntries(made().molecules3d!, "conformers");
     expect(entries.map((e) => e.calc?.results?.length ?? 0)).toEqual([0, 0, 0, 0, 1]);
-    expect(entries.every((e) => e.calc?.method === "MMFF94")).toBe(true);
+    expect(entries.every((e) => e.calc?.method === "KF1")).toBe(true);
   });
 });
 
@@ -834,7 +840,7 @@ describe("a step's key, on structures drawn", () => {
     doc = addStep(doc, "conformers", 12, 0);
     return connect(doc, { set: 1 }, 2);
   }
-  const keyOf = (doc: WorkspaceDocument) => inputKey(doc, doc.steps![0], "rdkit");
+  const keyOf = (doc: WorkspaceDocument) => inputKey(doc, doc.steps![0], "sketchkit");
   const moved = (doc: WorkspaceDocument, f: (a: Drawn) => Drawn) => ({ ...doc, model: { ...doc.model, atoms: (doc.model.atoms as unknown as Drawn[]).map(f) as never } });
 
   it("changes with an atom's element", () => {
@@ -900,9 +906,9 @@ describe("saving", () => {
           kind: "optimise",
           x: 0,
           y: 0,
-          by: "xtb",
+          by: "tightbind",
           runs: [
-            { at: 5, ok: true, said: "0:04", input: "k", kind: "optimise", options: { method: "gfn1" }, results: { molecules: [m, { atoms: "no" }], aside: [], holds: "molecules" } },
+            { at: 5, ok: true, said: "0:04", input: "k", kind: "optimise", options: { method: "tb1" }, results: { molecules: [m, { atoms: "no" }], aside: [], holds: "molecules" } },
             { at: 4, ok: false, said: "Stopped", input: "k", kind: "teleport" },
           ],
         },
@@ -910,7 +916,7 @@ describe("saving", () => {
     })!;
     const runs = saved.steps[0].runs!;
     expect(runs).toHaveLength(1);
-    expect(runs[0]).toMatchObject({ kind: "optimise", options: { method: "gfn1" }, results: { holds: "molecules" } });
+    expect(runs[0]).toMatchObject({ kind: "optimise", options: { method: "tb1" }, results: { holds: "molecules" } });
     expect(runs[0].results!.molecules).toHaveLength(1);
     expect(runs[0].results!.molecules[0]).not.toHaveProperty("at");
   });
@@ -933,6 +939,16 @@ describe("Quick Add's calculations", () => {
     }
   });
 
+  it("put down with no window of the chemist's own in Settings, an Energy window holds none - never a number that is none - and asks for one", () => {
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const id = store.getState().addStep("energy-window", "meno", 0, 0);
+    const step = store.getState().steps.find((s) => s.id === id)!;
+    expect(step.options).toEqual({ within: "each compound", groupBy: "" });
+    expect(needsOf(step)).toBe("Give the window, in kcal/mol");
+  });
+
   it("are by who does them - each plugin added, then Meno - each with the kinds it fills; As conformers only from a compound set's wire", () => {
     let doc = addStep(page(), "as-conformers", 5, 0);
     doc = connect(doc, { set: 1 }, 2);
@@ -943,36 +959,36 @@ describe("Quick Add's calculations", () => {
     // a conformer set's
     expect(offered(doc, exitSet(doc, 2))).toEqual([["Meno", ["energy-window", "duplicates", "populations", "filter", "rank", "choose", "chart", "energy-diagram", "tag", "species", "measure", "mode-on-atoms", "merge", "rebond", "compare-bonding", "join", "barrier", "restraints", "torsion-restraints", "add", "atom-map", "displace", "ensemble"]]]);
     // plugins added: theirs first, each under its name - and only those that take what a wire carries
-    useReaders.setState({ state: { rdkit: "added", xtb: "added" }, problem: {} });
+    useReaders.setState({ state: { sketchkit: "added", tightbind: "added" }, problem: {} });
     expect(offered(doc)).toEqual([
-      ["RDKit", ["conformers", "minimise", "descriptors"]],
-      ["xTB", ["optimise", "energy", "frequencies"]],
+      ["Sketchkit", ["conformers", "minimise", "descriptors"]],
+      ["Tightbind", ["optimise", "energy", "frequencies"]],
       ["Meno", ["energy-window", "duplicates", "populations", "filter", "rank", "take-frames", "choose", "check-structures", "stereoisomers", "enumerate", "chart", "energy-diagram", "tag", "species", "combine", "measure", "mode-on-atoms", "merge", "rebond", "compare-bonding", "join", "barrier", "restraints", "torsion-restraints", "number", "add", "atom-map", "displace", "ensemble"]],
     ]);
     expect(offered(doc, { set: 1 })).toEqual([
-      ["RDKit", ["conformers", "minimise"]],
-      ["xTB", ["optimise", "energy", "frequencies"]],
+      ["Sketchkit", ["conformers", "minimise"]],
+      ["Tightbind", ["optimise", "energy", "frequencies"]],
       ["Meno", ["energy-window", "duplicates", "filter", "rank", "take-frames", "as-conformers", "chart", "energy-diagram", "tag", "species", "combine", "measure", "mode-on-atoms", "merge", "rebond", "compare-bonding", "join", "barrier", "restraints", "torsion-restraints", "add", "atom-map", "displace", "ensemble"]],
     ]);
-    // a set of structures drawn: a conformer search made from them - RDKit's, not CREST's, which starts from 3D - and Filter, on their records, and Chart, of them seen as a table
+    // a set of structures drawn: a conformer search made from them - Sketchkit's, not Confsweep's, which starts from 3D - and Filter, on their records, and Chart, of them seen as a table
     doc = addSet({ ...doc, model: { atoms: [{ id: 1, x: 40, y: 0, r: 0.9, el: "C" }, { id: 2, x: 41.5, y: 0, r: 0.9, el: "O" }], bonds: [{ id: 1, a: 1, b: 2, order: 1 }] } }, { x0: 38, y0: -2, x1: 44, y1: 2 });
     const drawn = doc.sets![doc.sets!.length - 1].id;
-    useReaders.setState({ state: { rdkit: "added", crest: "added" }, problem: {} });
-    expect(offered(doc, { set: drawn }).map(([who, kinds]) => [who, kinds])).toEqual([["RDKit", ["conformers", "descriptors"]], ["Meno", ["filter", "check-structures", "stereoisomers", "enumerate", "chart"]]]);
+    useReaders.setState({ state: { sketchkit: "added", confsweep: "added" }, problem: {} });
+    expect(offered(doc, { set: drawn }).map(([who, kinds]) => [who, kinds])).toEqual([["Sketchkit", ["conformers", "descriptors"]], ["Meno", ["filter", "check-structures", "stereoisomers", "enumerate", "chart"]]]);
     // an interface to a program installed separately: under the program's name, not the interface's
-    useReaders.setState({ state: { orca: "added" }, problem: {} });
-    expect(offered(doc)[0]).toEqual(["ORCA", ["optimise", "energy", "frequencies", "path-search", "saddle-point", "reaction-path"]]);
-    expect(pluginById("orca")?.name).toBe("ORCA interface");
-    expect(doerOf({ kind: "energy", by: "orca" })).toEqual({ id: "orca", name: "ORCA" });
+    useReaders.setState({ state: { quanta: "added" }, problem: {} });
+    expect(offered(doc)[0]).toEqual(["Quanta", ["optimise", "energy", "frequencies", "path-search", "saddle-point", "reaction-path"]]);
+    expect(pluginById("quanta")?.name).toBe("Quanta interface");
+    expect(doerOf({ kind: "energy", by: "quanta" })).toEqual({ id: "quanta", name: "Quanta" });
   });
 
   it("offer a step that takes nothing in on empty space alone - never from a wire, which it has nowhere to take", () => {
     const doc = addStep(page(), "as-conformers", 5, 0);
-    useReaders.setState({ state: { reinvent: "added" }, problem: {} });
-    expect(offered(doc).find(([who]) => who === "REINVENT 4")).toEqual(["REINVENT 4", ["generate"]]);
-    expect(offered(doc, { set: 1 }).find(([who]) => who === "REINVENT 4")).toBeUndefined();
+    useReaders.setState({ state: { molgen: "added" }, problem: {} });
+    expect(offered(doc).find(([who]) => who === "Molgen")).toEqual(["Molgen", ["generate"]]);
+    expect(offered(doc, { set: 1 }).find(([who]) => who === "Molgen")).toBeUndefined();
     // (and nothing can be wired into one put down)
-    const gen = addStep(doc, "generate", 9, 0, undefined, "reinvent");
+    const gen = addStep(doc, "generate", 9, 0, undefined, "molgen");
     const id = gen.steps![gen.steps!.length - 1].id;
     expect(canWire(gen, { set: 1 }, id)).toBe(false);
     expect(connect(gen, { set: 1 }, id)).toBe(gen);
@@ -984,7 +1000,7 @@ describe("a workflow's parts in the selection", () => {
   /** A page with a molecule in a set (1), wired into an optimisation (2) whose exits are sets 3 and 4 (Failed) - and the store over it. */
   function selecting() {
     const doc = createWorkspaceDocument();
-    doc.edit("page", () => connect(addStep(page(), "optimise", 6, 3, { method: "gfn2" }, "xtb"), { set: 1 }, 2));
+    doc.edit("page", () => connect(addStep(page(), "optimise", 6, 3, { method: "tb2" }, "tightbind"), { set: 1 }, 2));
     const store = createEditorStore(doc);
     connectStoreToDocument(store, doc);
     return { doc, st: () => store.getState() };
@@ -1018,7 +1034,7 @@ describe("a workflow's parts in the selection", () => {
 
   it("are pasted numbered on, wired as they were, and selected", () => {
     const { st } = selecting();
-    const flow = { sets: [{ id: 1, x0: 0, y0: 0, x1: 4, y1: 4 }], steps: [{ id: 2, kind: "energy" as const, x: 6, y: 3, by: "xtb" }], wires: [{ id: 3, from: { set: 1 }, to: { step: 2, port: "in" } }] };
+    const flow = { sets: [{ id: 1, x0: 0, y0: 0, x1: 4, y1: 4 }], steps: [{ id: 2, kind: "energy" as const, x: 6, y: 3, by: "tightbind" }], wires: [{ id: 3, from: { set: 1 }, to: { step: 2, port: "in" } }] };
     st().pasteModel({ atoms: [], bonds: [], flow });
     const step = st().steps.find((s) => s.kind === "energy")!;
     // (the step put down given the set for its exit it came without: every step has its exits)

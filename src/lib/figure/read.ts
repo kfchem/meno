@@ -31,6 +31,8 @@ export type ReadAtom = {
   dots?: number;
   box?: Box;
   unsure?: string[];
+  /** An atom of a repeat unit drawn in brackets with a whole count - (CH2)6 - to be read that many times (lib/figure/structure): its pair of brackets, by number in the figure, and the count. */
+  repeat?: { group: number; n: number };
 };
 
 /** A bond read, between atoms by index, `a` at a wedge's or a hash's narrow end. */
@@ -47,6 +49,8 @@ export type ReadBond = {
   aromatic?: true;
   bold?: boolean;
   unsure?: string[];
+  /** A bond one of a repeat unit's brackets crosses, by the number of its pair of brackets (`ReadAtom.repeat`). */
+  repeat?: { group: number };
 };
 
 /** A figure read: its atoms and bonds, how long its bonds are drawn, in points, and the letters in it not read as labels. */
@@ -623,6 +627,207 @@ const ION_BY = 2.5;
 const BOND_PER_SIZE = 1.4;
 
 /**
+ * A repeat unit drawn in brackets with its count - (CH2)6 drawn out, a
+ * polymer's [ ]n (docs/PDF.md, *A repeat unit in brackets*): a pair of
+ * brackets, each a line or a curve across a bond, the count - digits, or
+ * one small letter - at the lower end of one. Its brackets are read as no
+ * bonds and its count as no word. Found where a line or a curve half a
+ * bond to two and a half long crosses a line of the figure square enough,
+ * away from both their ends, with a count by its lower end; its partner,
+ * where there is one, the nearest other such line or curve that crosses
+ * one, with no count (`pairs`). What the figure makes of each pair, as it
+ * reads its bonds (`repeatsRead`): a whole count's unit read that many
+ * times, where the brackets cut it off as one; else - a letter's, a
+ * polymer's n, or a shape no unit is cut off by - the unit drawn once, the
+ * atoms of each bond a bracket crosses marked, saying why.
+ */
+export type RepeatBrackets = { strokes: Set<Stroke>; curves: Set<Curve>; counts: Set<number>; pairs: { count: string; brackets: { ends: [Point, Point]; crosses: Stroke[] }[] }[] };
+
+/** What the atoms of a bond a polymer's bracket crosses are marked with: its count a letter (`repeatsRead`). */
+export const REPEAT_UNREAD = (count: string) => `A repeat unit in brackets, counted ${count}, is not read: it is drawn here once.`;
+
+/** What the atoms of a bond a bracket crosses are marked with, where its whole count's unit cannot be read so many times: why (`repeatsRead`). */
+export const REPEAT_REFUSED = (count: string, why: string) => `A repeat unit in brackets, counted ${count}, is not read: ${why}. It is drawn here once.`;
+
+/**
+ * Where two segments cross, as how far along each they meet - none where they do not, or meet at or near an end of either;
+ * `piece`: `s` a piece of a curve, taken anywhere along it from its start to short of its end - a curve's pieces end where
+ * the next begins, so that a crossing where two meet is its own.
+ */
+function crossing(s: { a: Point; b: Point }, t: { a: Point; b: Point }, piece = false): { u: number; v: number } | null {
+  const r = { x: s.b.x - s.a.x, y: s.b.y - s.a.y };
+  const q = { x: t.b.x - t.a.x, y: t.b.y - t.a.y };
+  const d = cross(r, q);
+  if (Math.abs(d) < 1e-9) return null;
+  const w = { x: t.a.x - s.a.x, y: t.a.y - s.a.y };
+  const u = cross(w, q) / d;
+  const v = cross(w, r) / d;
+  const along = piece ? u >= 0 && u < 1 : u > 0.1 && u < 0.9;
+  return along && v > 0.1 && v < 0.9 ? { u, v } : null;
+}
+
+export function repeatBrackets(shapes: Shapes, words: readonly Word[], bond: number): RepeatBrackets {
+  const out: RepeatBrackets = { strokes: new Set(), curves: new Set(), counts: new Set(), pairs: [] };
+  const bondLines = shapes.strokes.filter((t) => len(t) >= 0.3 * bond);
+  // (a bracket: a line, or a curve's chord, of half a bond to two and a half, across a bond line at more than 45 degrees)
+  type Bracket = { ends: [Point, Point]; stroke?: Stroke; curve?: Curve; crosses: Stroke[] };
+  const across = (seg: { a: Point; b: Point }, not?: Stroke, piece = false) =>
+    bondLines.filter((t) => t !== not && crossing(seg, t, piece) && Math.abs(cross(unit(seg.a, seg.b), unit(t.a, t.b))) > Math.SQRT1_2);
+  // (its ends free: at no other line's end but its own ticks', and into no label - a bond's meet others', or a label)
+  const counts = (w: Word) => /^(\d{1,3}|[a-z])$/.test(w.letters.map((l) => l.c).join(""));
+  const free = (p: Point, not?: Stroke) =>
+    !shapes.strokes.some((t) => t !== not && len(t) >= 0.45 * bond && Math.min(dist(p, t.a), dist(p, t.b)) < 0.1 * bond) &&
+    !shapes.wedges.some((w) => Math.min(dist(p, w.tip), dist(p, w.base)) < 0.1 * bond) &&
+    !words.some((w) => !counts(w) && fromBox(p, w.box) < 0.15 * bond);
+  const brackets: Bracket[] = [];
+  for (const s of shapes.strokes) {
+    if (len(s) < 0.5 * bond || len(s) > 2.5 * bond || !free(s.a, s) || !free(s.b, s)) continue;
+    const crosses = across(s, s);
+    if (crosses.length) brackets.push({ ends: [s.a, s.b], stroke: s, crosses });
+  }
+  for (const c of shapes.curves) {
+    if (c.closed || c.pts.length < 2) continue;
+    const ends: [Point, Point] = [c.pts[0], c.pts[c.pts.length - 1]];
+    const chord = dist(ends[0], ends[1]);
+    if (chord < 0.5 * bond || chord > 2.5 * bond || !free(ends[0]) || !free(ends[1])) continue;
+    const crosses = [...new Set(c.pts.slice(1).flatMap((p, i) => across({ a: c.pts[i], b: p }, undefined, true)))];
+    if (crosses.length) brackets.push({ ends, curve: c, crosses });
+  }
+  // (a line that crosses brackets alone is none: a double bond's second line, across a bracket over it - each bracket's
+  //  crossings its bonds, not another bracket)
+  const ofBrackets = new Set<Stroke>(brackets.flatMap((b) => (b.stroke ? [b.stroke] : [])));
+  const real = brackets.filter((b) => b.crosses.some((t) => !ofBrackets.has(t)));
+  const realLines = new Set<Stroke>(real.flatMap((b) => (b.stroke ? [b.stroke] : [])));
+  brackets.splice(0, brackets.length, ...real.map((b) => ({ ...b, crosses: b.crosses.filter((t) => !realLines.has(t)) })));
+  // (its count: digits, or one small letter, set by its lower end - the page's y running down - the nearest, where two
+  //  brackets' counts are set close)
+  const lowOf = (b: Bracket) => (b.ends[0].y > b.ends[1].y ? b.ends[0] : b.ends[1]);
+  const countAt = (b: Bracket) => {
+    const low = lowOf(b);
+    let best = -1;
+    words.forEach((w, k) => {
+      if (counts(w) && fromBox(low, w.box) < 0.6 * bond && centre(w.box).y > low.y - 0.25 * bond && (best < 0 || fromBox(low, w.box) < fromBox(low, words[best].box))) best = k;
+    });
+    return best;
+  };
+  const take = (b: Bracket) => {
+    if (b.stroke) out.strokes.add(b.stroke);
+    if (b.curve) out.curves.add(b.curve);
+    // (a square bracket's ticks: the short lines from its ends)
+    for (const t of shapes.strokes) if (len(t) < 0.45 * bond && b.ends.some((e) => Math.min(dist(e, t.a), dist(e, t.b)) < 0.1 * bond)) out.strokes.add(t);
+  };
+  const near = brackets.flatMap((b) => {
+    const k = countAt(b);
+    return k >= 0 ? [{ b, k, d: fromBox(lowOf(b), words[k].box) }] : [];
+  });
+  // (a count is the bracket's whose foot it is nearest: another that has it in reach is uncounted - its partner, where it is one)
+  const counted = near.filter((c) => !near.some((o) => o.k === c.k && o.d < c.d));
+  const mid = (b: Bracket) => ({ x: (b.ends[0].x + b.ends[1].x) / 2, y: (b.ends[0].y + b.ends[1].y) / 2 });
+  for (const { b, k } of counted) {
+    if (out.counts.has(k)) continue;
+    const count = words[k].letters.map((l) => l.c).join("");
+    out.counts.add(k);
+    // (its partner: the nearest other line or curve across a bond, uncounted)
+    const partner = brackets
+      .filter((o) => o !== b && !counted.some((c) => c.b === o) && !(o.stroke && out.strokes.has(o.stroke)) && !(o.curve && out.curves.has(o.curve)))
+      .sort((x, y) => dist(mid(x), mid(b)) - dist(mid(y), mid(b)))[0];
+    for (const one of partner ? [b, partner] : [b]) take(one);
+    out.pairs.push({ count, brackets: (partner ? [b, partner] : [b]).map((one) => ({ ends: one.ends, crosses: one.crosses })) });
+  }
+  return out;
+}
+
+/**
+ * Each pair of a repeat unit's brackets (`repeatBrackets`) as the figure's
+ * atoms and bonds read it: where its count is a whole number and its two
+ * brackets cut a unit off - each crossing one bond of the figure (a line
+ * of the figure, a wedge or hashes no bracket's), the two bonds other
+ * bonds, of one order, and what lies between them
+ * joined to the rest by those two bonds alone - the unit's atoms and the
+ * two bonds marked, to be read that many times (`ReadAtom.repeat`,
+ * `ReadBond.repeat`; lib/figure/structure); else the atoms of each bond a
+ * bracket crosses marked, saying why it is drawn once: a letter's, a
+ * polymer's n (`REPEAT_UNREAD`), or the rule its shape breaks
+ * (`REPEAT_REFUSED`) - among them a unit within another, or holding one,
+ * and two units whose brackets cross one bond.
+ */
+export function repeatsRead(pairs: RepeatBrackets["pairs"], atoms: ReadAtom[], bonds: ReadBond[], bond: number, near: (a: ReadAtom, p: Point) => number): void {
+  const atomAt = (p: Point) => {
+    let best = -1;
+    for (let i = 0; i < atoms.length; i++) if (near(atoms[i], p) < 0.3 * bond && (best < 0 || near(atoms[i], p) < near(atoms[best], p))) best = i;
+    return best;
+  };
+  const say = (lines: readonly Stroke[], said: string) => {
+    for (const line of lines)
+      for (const end of [line.a, line.b]) {
+        const i = atomAt(end);
+        if (i >= 0 && !atoms[i].unsure?.includes(said)) atoms[i] = { ...atoms[i], unsure: [...(atoms[i].unsure ?? []), said] };
+      }
+  };
+  // (each pair's unit, where it reads as one - marked only once none is found to hold, lie in, or share a crossed bond with another)
+  const found: { group: number; n: number; count: string; lines: Stroke[]; unit: number[]; cross: [number, number] }[] = [];
+  pairs.forEach(({ count, brackets }, group) => {
+    const lines = brackets.flatMap((b) => b.crosses);
+    if (!/^\d+$/.test(count)) return say(lines, REPEAT_UNREAD(count));
+    const n = Number.parseInt(count, 10);
+    const refuse = (why: string) => say(lines, REPEAT_REFUSED(count, why));
+    if (n < 1) return refuse("a count of 0 is no unit");
+    if (brackets.length < 2) return refuse("it has one bracket, and no other is found across a bond to close the unit");
+    // (the bonds each crosses: the one between the atoms at each line's ends - a double bond's two lines one bond)
+    const bondOf = (line: Stroke) => {
+      const [i, j] = [atomAt(line.a), atomAt(line.b)];
+      return i < 0 || j < 0 ? -1 : bonds.findIndex((b) => (b.a === i && b.b === j) || (b.a === j && b.b === i));
+    };
+    const crossing = brackets.map((b) => [...new Set(b.crosses.map(bondOf))]);
+    if (crossing.some((c) => c.includes(-1))) return refuse("a bracket crosses a line that is no bond");
+    if (crossing.some((c) => c.length !== 1)) return refuse("each of its two brackets must cross one bond, and one crosses more");
+    const [k1, k2] = crossing.map((c) => c[0]);
+    if (k1 === k2) return refuse("its two brackets cross the same bond");
+    if (bonds[k1].order !== bonds[k2].order || bonds[k1].aromatic || bonds[k2].aromatic) return refuse("the two bonds its brackets cross are not of one order");
+    // (what lies between them: the atoms joined to an end of each by other bonds, and to neither other end)
+    const up = atoms.map((_, i) => i);
+    const top = (i: number): number => (up[i] === i ? i : (up[i] = top(up[i])));
+    bonds.forEach((b, k) => {
+      if (k !== k1 && k !== k2) up[top(b.a)] = top(b.b);
+    });
+    const [e1, e2] = [k1, k2].map((k) => [bonds[k].a, bonds[k].b]);
+    // (each way the two bonds' ends can pair, the unit's on one side of both brackets: the other bracket's)
+    const side = (b: (typeof brackets)[number], p: Point) => Math.sign(cross(unit(b.ends[0], b.ends[1]), { x: p.x - b.ends[0].x, y: p.y - b.ends[0].y }));
+    const mid = (b: (typeof brackets)[number]) => ({ x: (b.ends[0].x + b.ends[1].x) / 2, y: (b.ends[0].y + b.ends[1].y) / 2 });
+    const between = (ids: number[]) => {
+      const c = { x: ids.reduce((t, i) => t + atoms[i].x, 0) / ids.length, y: ids.reduce((t, i) => t + atoms[i].y, 0) / ids.length };
+      return side(brackets[0], c) === side(brackets[0], mid(brackets[1])) && side(brackets[1], c) === side(brackets[1], mid(brackets[0]));
+    };
+    const units = e1.flatMap((h) =>
+      e2.flatMap((t) => {
+        const [outH, outT] = [e1.find((x) => x !== h)!, e2.find((x) => x !== t)!];
+        if (top(h) !== top(t) || top(outH) === top(h) || top(outT) === top(h)) return [];
+        const ids = atoms.flatMap((_, i) => (top(i) === top(h) ? [i] : []));
+        return between(ids) ? [ids] : [];
+      }),
+    );
+    if (units.length !== 1) return refuse("what lies between its brackets is not cut off from the rest by the two bonds they cross");
+    if (n === 1) return;
+    found.push({ group, n, count, lines, unit: units[0], cross: [k1, k2] });
+  });
+  // (brackets within brackets, or two units side by side across one bond: neither read - a copy of the one would not carry the
+  //  other's marks, and one bond cannot join two runs of copies)
+  for (const f of found) {
+    const others = found.filter((o) => o !== f);
+    if (others.some((o) => o.unit.some((i) => f.unit.includes(i)))) {
+      say(f.lines, REPEAT_REFUSED(f.count, "it lies within another repeat unit in brackets, or holds one"));
+      continue;
+    }
+    if (others.some((o) => o.cross.some((k) => f.cross.includes(k)))) {
+      say(f.lines, REPEAT_REFUSED(f.count, "a bond its brackets cross is crossed by another repeat unit's brackets too"));
+      continue;
+    }
+    for (const i of f.unit) atoms[i] = { ...atoms[i], repeat: { group: f.group, n: f.n } };
+    for (const k of f.cross) bonds[k] = { ...bonds[k], repeat: { group: f.group } };
+  }
+}
+
+/**
  * A figure read: the shapes its paths make (or `given`: those a scheme's
  * arrows and signs were taken out of) read as bonds, their ends where they
  * meet as atoms, the words beside their ends as those atoms' labels, and a
@@ -663,7 +868,10 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
       )
     : [];
   for (const l of fromShapes) for (const f of l.from) inLetters.add(f);
-  const words = wordsOf([...drawn.letters, ...fromShapes]);
+  const written = wordsOf([...drawn.letters, ...fromShapes]);
+  // (a repeat unit in brackets with its count: its brackets no bonds, its count no word - what is read of it, below)
+  const repeats = repeatBrackets(shapes, written, bond);
+  const words = written.filter((_, k) => !repeats.counts.has(k));
   // (two labels set touching, the first ending in its charge - Cl- HN+ - are two: a word that reads as nothing is cut after a
   // charge written before a capital, where both pieces read)
   const sign = (l: FigureLetter) => /^[+-]$/.test(labelText({ letters: [l], box: l.box, size: l.size }));
@@ -757,9 +965,9 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   const endAt = (s: Stroke, p: Point) => tipsOf.some((t) => t.of !== s && dist(t.p, p) < 0.1 * bond) || others.some((q) => dist(q, p) < 0.1 * bond);
   const toLabel = (s: Stroke) =>
     len(s) > 0.15 * bond && ((endAt(s, s.a) && labelled(s.b, unit(s.a, s.b))) || (endAt(s, s.b) && labelled(s.a, unit(s.b, s.a))));
-  const lines = shapes.strokes.filter((s) => !inHashes.has(s) && !inLetters.has(s) && !textSign(s) && !ruled(s) && !framing(s) && !table.has(s) && (len(s) >= 0.3 * bond || (len(s) > 0.04 * bond && dash(s)) || stub(s) || toLabel(s) || inner(s)));
+  const lines = shapes.strokes.filter((s) => !repeats.strokes.has(s) && !inHashes.has(s) && !inLetters.has(s) && !textSign(s) && !ruled(s) && !framing(s) && !table.has(s) && (len(s) >= 0.3 * bond || (len(s) > 0.04 * bond && dash(s)) || stub(s) || toLabel(s) || inner(s)));
   // (a line broken where another passes in front, one piece short - a cage's back edge - joined again too; a short piece joined to nothing stays out)
-  const loose = shapes.strokes.filter((s) => !inHashes.has(s) && !inLetters.has(s) && !lines.includes(s) && !ruled(s) && !table.has(s) && len(s) > 0.04 * bond);
+  const loose = shapes.strokes.filter((s) => !repeats.strokes.has(s) && !inHashes.has(s) && !inLetters.has(s) && !lines.includes(s) && !ruled(s) && !table.has(s) && len(s) > 0.04 * bond);
   const joined = joinedAcross([...lines, ...loose], bond);
   const whole = joined.filter((s) => !loose.includes(s));
   const used = loose.filter((s) => !joined.includes(s));
@@ -776,7 +984,7 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     ...shapes.wedges
       .filter((w) => dist(w.tip, w.base) > 0.3 * bond || (dist(w.tip, w.base) > 0.1 * bond && labelled(w.base, unit(w.tip, w.base))))
       .map((w: Wedge): Drawn => ({ a: w.tip, b: w.base, order: 1, stereo: "up" })),
-    ...shapes.curves.map((c) => wavy(c, bond)).filter((d): d is Drawn => !!d),
+    ...shapes.curves.filter((c) => !repeats.curves.has(c)).map((c) => wavy(c, bond)).filter((d): d is Drawn => !!d),
     ...dashes(bitsLeft(short, inHashes, [...lines, ...used]).filter((s) => !inLetters.has(blobOf.get(s) ?? s)), words, bond, (l) => reads(l)),
   ];
 
@@ -1123,6 +1331,8 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     for (let i = 0; i < atoms.length; i++) if (from(atoms[i], at) < 0.6 * bond && (best < 0 || from(atoms[i], at) < from(atoms[best], at))) best = i;
     if (best >= 0) atoms[best] = { ...atoms[best], dots: (atoms[best].dots ?? 0) + 1 };
   }
+  // (each repeat unit in brackets: a whole count's unit marked to be read so many times, else the atoms its brackets cross saying why not)
+  repeatsRead(repeats.pairs, atoms, bonds, bond, from);
   return { atoms, bonds, bond, left: { letters: left }, ...(tableCells.length ? { table: tableCells } : {}) };
 }
 

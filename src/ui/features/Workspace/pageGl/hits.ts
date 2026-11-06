@@ -107,3 +107,15 @@ export function hitAt(layers: readonly (readonly Region[])[], x: number, y: numb
   }
   return best ? { key: best.region.key, part: best.region.part, region: best.region } : null;
 }
+
+/**
+ * What the pointer going from the region `over` to `hit` does to the
+ * canvas's cursor: nothing - `null` - where it stays on the same one, or on
+ * none of the page's (the cursor is then whatever the rest of the canvas
+ * set: a molecule's turn, the drawing's crosshair); cleared where it leaves
+ * one that set its own; set where it comes onto one that has one.
+ */
+export function cursorChange(over: Hit | null, hit: Hit | null): { clear: boolean; set: string | null } | null {
+  if (over === hit || (over && hit && over.key === hit.key && over.part === hit.part)) return null;
+  return { clear: !!over?.region.cursor, set: hit?.region.cursor ?? null };
+}

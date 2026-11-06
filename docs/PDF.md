@@ -923,7 +923,7 @@ Step 5 comes in parts: the trial of typing alone, shown first; the column's text
   - A *value*, as a grammar's tones say, Meno colours as a number where it is one (a sign, a point, an exponent, a Fortran D's) and leaves as it is where it is not: 6-31G, def2-SVP.
   - Which grammar: a kind a plugin brings is told by what the text holds, as a file is (lib/io/kinds); a kind it writes, or knows besides, by the text's name and, where it says, what one of its first lines begins with (an ORCA input's `!`, `%` or `*`). Of two plugins that bring a kind, the first's grammar. A plugin not added colours nothing.
 - **What does not read as its grammar says is marked**: underlined in Meno's attention colour (#cd4560, `COLORS.attention`) - a part read wrongly, or where something is missing, a letter's width. Not on the line the caret is on while the text is typed in, until it is left. An output's grammar takes any text, so nothing in an output is marked.
-- **The grammars the plugins Meno carries bring**, each from the program's own words - its manual, or what it printed in runs made with Meno:
+- **The grammars the plugins Meno knows of bring**, each from the program's own words - its manual, or what it printed in runs made with Meno:
   - **ORCA's input** (the ORCA interface, `.inp`): simple keyword lines, blocks with their options and values and sub-blocks with their own `end`, `%maxcore` with its one value, the geometry and its atoms, a geometry read from a file, comments (ORCA's manual, *General Structure of the Input File* and *Input of Coordinates*). Marked: a block left open - at the next block or geometry - and a geometry with no closing `*`.
   - **Gaussian's input** (the Gaussian interface, `.gjf`, `.com`): Link 0 commands, the route section and its lines on, the title, the charge and multiplicity, the atoms (Cartesian or a Z-matrix), further sections, `--Link1--`, comments (Gaussian's *Input* page). Marked: no route section, and a molecule with no charge and multiplicity line.
   - **Gaussian's output** (the Gaussian interface): *SCF Done:*, the energies with thermal corrections, *Optimization completed.*, *Converged?* as what a reader looks for; *Stationary point found.*, *Normal termination of Gaussian* and a criterion's *YES* as a run gone well; a line from *Warning* on as a warning - as Gaussian 16 printed them.
@@ -1319,6 +1319,50 @@ it where it lies out of view.
   bond it is set.
 - **Marked as unsure**, rather than guessed silently:
   - a label nothing reads ("Xq" was not read as an element or a group);
+  - **a repeat unit in brackets, counted** (2026-11-05), where it is not
+    read: a pair of brackets drawn across bonds - square, a line and its
+    ticks, or round, a curve - with a count at the foot of one: digits, as
+    (CH2)6 drawn out, or a small letter, a polymer's n. Its brackets are
+    read as no bonds and its count as no word (lib/figure/read
+    `repeatBrackets`). A bracket is a line or a curve half a bond to two
+    and a half long that crosses a line of the figure square enough, away
+    from both their ends, its own ends free - at no other line's end but
+    its ticks', and into no label - with its count by its lower end (a
+    count in reach of two brackets' lower ends is the nearer's); its
+    partner is the nearest other such line or curve, uncounted. A line
+    that crosses brackets alone is none: a double bond's second line, a
+    bracket drawn over it. A line across a bond with no count is read as
+    before, and a number by no bracket - a compound's - is left as it
+    was. A label written as one word, (CH2)6, is not read either (above).
+    A picture read by a model (part B) comes with no brackets nor counts:
+    there, nothing tells one.
+    - **A whole count is read** (2026-11-06; `repeatsRead`, then
+      lib/figure/structure). Where each bracket crosses one bond (a double
+      bond's two lines one bond), the two bonds are other bonds of one
+      order, and what lies between them is joined to the rest by those two
+      alone, the unit is read that many times: (CH2)6 as six CH2. Its
+      copies follow it head to tail, each joined to the next by the second
+      bracket's bond, the last to what that bond joined. The structure is
+      the molecule drawn out in full, its formula and identity the same.
+      The copies are set on from it back and forth, as a chain is drawn,
+      and what lies past them is moved on with them; in a ring it is left
+      where it is. An odd number of atoms put in leaves one bend straight
+      where they meet what lies past: turning it would draw its mirror
+      image. Each copy is tied to where the figure draws the unit. It is
+      kept a multiple group (CTfile MUL: its count, its first unit the
+      paradigm), so a file written of it says so. Counted 1, the unit is
+      read once, as drawn.
+    - **Not read, saying why**, where it cannot be, the atoms of each bond
+      a bracket crosses marked: a count that is a letter, a polymer's n
+      ("A repeat unit in brackets, counted n, is not read: it is drawn
+      here once."); or a whole count whose shape breaks a rule above - one
+      bracket with no partner, a bracket across more than one bond or
+      across a line that is no bond, both across one bond, the two bonds
+      of two orders (or a ring's drawn with its circle), what lies between
+      not cut off by them, a count of 0, a unit within another or holding
+      one, two units whose brackets cross one bond - each saying which ("A repeat
+      unit in brackets, counted 6, is not read: its two brackets cross the
+      same bond. It is drawn here once.");
   - a label that writes more or fewer hydrogens than its atom's bonds leave
     it;
   - hashes as wide at both ends, where both ends could be a stereocentre or
@@ -1620,9 +1664,9 @@ words are: by itself, not by a box drawn round it.
 The pointer on a compound's number in a PDF's text - "12", "3a", "compound
 12" - is to bring up that compound's structure, read from the figure it is
 numbered in, wherever in the PDF that is: the compound-number lens, built in
-three parts. The first, built: which number names which structure, and each
-PDF's index of them. The words that mention a number, and the card, come
-next.
+three parts - which number names which structure, and each PDF's index of
+them; each letter's weight (*Each page's letters*); and the words that
+mention a number, and the card.
 
 - **A structure's number** (`utils/pageStructures` `compoundLabelsOf`): a
   word of a figure - drawn in it, or the page's own words within it - of a
@@ -1649,7 +1693,46 @@ next.
   whole PDF in idle time (`indexPdf`): a page, then the window's next idle
   moment, then the next, each page's figures read as the column reads them
   (`pdfPageLabels`), never holding up what is shown; a page that could not
-  be read is gone through again the next time.
+  be read is gone through again the next time. It starts the first time
+  the pointer moves over the PDF's words, in the column or on the page
+  (`utils/compoundLens` `indexOnce`). Once the pointer rests on a number
+  the index has not placed yet, it is hurried (`hurryIndex`): someone is
+  waiting, so it no longer waits for idle moments - on Windows, whose
+  webview is seldom idle while the pointer moves, a page could wait half a
+  second - but still reads one page at a time, the window's next turn
+  between them, so a long PDF never holds the pointer up.
+- **A number mentioned** (`utils/compoundMentions`): the word under the
+  pointer, of a compound number's shape, set as a compound's number is -
+  bold, as most journals set one in their text, or after a word that names
+  a compound ("compound 12", "products 3, 4 and 5": compound, product,
+  intermediate, substrate, adduct, derivative, past other numbers and "and",
+  "or", "to"). A plain "12" - hours, a year, a table, a reference - is none;
+  with ⌥ (Alt) held, every number of that shape is.
+- **The card** (`components/CompoundCard`): the pointer resting on a number
+  mentioned (350 ms) whose structure the PDF's figures number, a calm card
+  by its word - over its line, covering only what has been read, its left
+  edge on the word's and a little gap above the letters; under the line
+  only where there is no room above - holds Meno's own drawing of the structure, its number, its page,
+  and the pages it is drawn on again ("12  p. 1 · also on p. 4"). It fades
+  in and out (`DURATION.base`), lingering a moment so the pointer can come
+  onto it. While the PDF is still being gone through for numbers, or the
+  number's figure is still being read, it says so ("12  Reading this PDF's
+  figures…") and grows into the drawing once it comes, its size and place
+  eased, never a jump (`cardHolds`); gone through whole and the number
+  drawn nowhere, no card. Its drawing dragged onto the canvas puts the structure there as
+  one dragged out of its figure is (*Structures picked from a PDF*: the same
+  reading, its note and unsure marks). Its page clicked shows the figure in
+  the column, the structure marked a moment. A number no structure is set
+  by, or one of a structure not read, has no card.
+- **In the column and on the page alike** (`utils/compoundLens`
+  `mentionUnder`, read the same in both). On the page (`components/Pdfs2D`),
+  a PDF's words bring a card where they can be read - at the size a long
+  press there selects them (`READABLE_PX_PER_PT`), not as an icon or seen
+  too small - its word's box taken through the view to the window. Not on a
+  structure of a figure, which is the structure's own, as in the column. As
+  the view moves, the card goes - its word is no longer where it stood -
+  and comes again by the word's new place once the pointer rests there. ⌥
+  pressed or let go over a number reads it again, in both.
 
 ### A picture read (part B, built 2026-10-11)
 
@@ -1788,6 +1871,10 @@ drawn beside its figure and tied to it.
 - **Annotating a PDF** (highlights, notes on its pages). Notes go on the
   page beside it instead.
 - **Opening a PDF from the web**, by its address or its DOI.
+- **A repeat unit's count read** (2026-11-05): a unit in brackets,
+  counted, is marked as not read (*A figure read*, *Marked as unsure*),
+  never expanded. Reading it - the unit written out as many times as its
+  count says, or a polymer's held as one - comes after.
 
 ## Questions
 

@@ -34,7 +34,9 @@ title, its first line; the record's data items are not kept:
   ATTCHPT, ATTCHORD).
 - **Bonds**: types 1 to 10 (single, double, triple, aromatic, the four
   query types, coordination, hydrogen); stereo (a single bond's up, down,
-  either; a double bond's either - cis or trans, not known); topology;
+  either - a wedge or hashes narrow at the bond's first atom, as the file
+  lists it, and kept narrow at that atom as the drawing is edited; a
+  double bond's either - cis or trans, not known); topology;
   reacting centre; stereo care (as an atom's: read, not carried on nor
   written back); V3000's haptic endpoints (ENDPTS with
   ATTACH=ALL or ANY) and display (DISP: COORD, DATIVE, HBOND1, HBOND2).
@@ -99,7 +101,7 @@ holds whole: the file is read (before, either failed as it was read).
 
 | What | How | Why |
 |---|---|---|
-| A double bond of either configuration | The double bond as it is, and a wavy bond on a single substituent beside it: never on a bond to another stereocentre; on both substituents of an end that has two, where no end has one free; none where the drawing shows no configuration anyway (a substituent straight on, or an end with none). | IUPAC ST-4.4 prefers this; it does not accept a crossed double bond for general use. |
+| A double bond of either configuration | The double bond as it is, and a wavy bond on a single substituent beside it: never on a bond to another stereocentre; on both substituents of an end that has two, where no end has one free; none where the drawing shows no configuration anyway (a substituent straight on, or an end with none). Read so, it has no cis or trans, wherever its ends lie (V2000's 3, V3000's CFG=2, in a MOL file or a reaction's): identity, Clean-up and the rest read none from its drawing (until 2026-11-06 the drawing's shape was read as E or Z). | IUPAC ST-4.4 prefers this; it does not accept a crossed double bond for general use. |
 | A hydrogen bond (type 10) | Dotted: round dots a line and a half wide, three line widths apart, at least three. | GR-1.8: partial bonds dotted, at least three dots; GR-1.3: gaps of 2 to 4 line widths. |
 | A coordination bond shown as COORD | A plain line. | GR-1.7: coordination bonds plain; dashed not acceptable. |
 | A coordination bond otherwise (type 9, or DATIVE) | A dative arrow, from the first atom to the second, as before. | |
@@ -232,7 +234,9 @@ What is put together from them is read by rule, not listed:
   S(=O)2H; what parentheses hold, with its count, hangs on the
   atom before them - an O or an S alone in them an =O, as one unbracketed
   may be (C(O)NMe2, C(O)OMe, C(O)NiPr2), a group alone in them as it is
-  unbracketed (N(iPr)2). O's with H's written after them are an acid's:
+  unbracketed (N(iPr)2), a group with a hyphen in its own name too
+  (N(t-Bu)2, N(i-Pr)2: a hyphen between a letter and the rest of a name
+  is no charge). O's with H's written after them are an acid's:
   each H on an O of its own, the rest =O (CO2H, SO3H, SO2H S(=O)OH, PO3H2
   P(=O)(OH)2), never on the atom they hang on (the maintainer,
   2026-10-17). D is deuterium wherever an H could stand, an atom of its
@@ -365,7 +369,10 @@ Read by rule, besides, as whole molecules:
   own ion too ((Cl-)2, two chlorides; Cl- alone is read as an element
   with its charge is);
 - an adduct of known parts, a middle dot between them, each counted:
-  BF3·OEt2, CeCl3·7H2O, EDC·HCl;
+  BF3·OEt2, CeCl3·7H2O, EDC·HCl - or a full stop typed in its place,
+  between two parts of a formula (Na2SO4.10H2O, BF3.OEt2, and so the
+  dictionary's NaBO3·4H2O typed NaBO3.4H2O); a number's point (0.5) and
+  a SMILES's dot (CC.O) are none;
 - a Buchwald precatalyst named by its phosphine and generation - XPhos Pd
   G2, SPhos-Pd-G3, RuPhos Pd G4 - as its palladacycle: the phosphine, a
   2-aminobiphenyl's carbon and nitrogen, and a chloride (G2) or a mesylate

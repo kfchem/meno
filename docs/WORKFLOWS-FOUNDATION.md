@@ -464,7 +464,8 @@ pairing based on those IDs"):
 
 **Every exit is a result set** (question 1, answered; refining decision 9),
 made with the step, empty until it runs, to the right of the card. The
-card's own give port goes.
+card's own give port goes. (Each exit came to have a port of its own on
+the card, its set's, 2026-11-05: WORKFLOWS.md, *Exit ports*.)
 
 **Second exits.** A node that can fail entries, or set entries aside, has a
 second exit for them (revisiting question 19, question B below):
@@ -561,6 +562,14 @@ cores and memory fit what is free, and keeps the order they were asked
 for: a job never jumps ahead of an earlier one. A job's cores and memory
 are what its plugin declares; what the runner may use is capped in
 Settings, all cores and three quarters of the memory by default.
+It keeps the computer from sleeping for want of use while a job's
+program runs, so that a calculation left overnight is not cut short:
+each job's runner holds it from when its program starts until it and the
+programs after it end, whether Meno is open or not (macOS: the system's
+`caffeinate`; Windows: the runner's thread saying the system is needed;
+elsewhere nothing). The display may still turn off, and a lid closed or
+a sleep asked for is the person's. Settings, *Calculations*, can turn it
+off (`src-tauri/src/awake.rs`).
 
 **Cluster jobs are submit-and-return.** Meno submits, keeps the job's record
 (scheduler, its job id, the key), and returns. It takes the job up again
@@ -763,7 +772,10 @@ Each option is read in one of three ways:
 - **an element's symbol** is that atom: `Cl`, `F`, `H`;
 - **a line with a `*` is SMILES**, read as a chemist's own abbreviation is
   (`structureProblem`): exactly one `*`, bonded by one single bond to the
-  atom the group is attached by.
+  atom the group is attached by. A double bond's cis or trans written in it
+  (`/` and `\`, `*/C=C/C` for (E)-prop-1-enyl) is kept in each product, its
+  side against the `*` taken as the atom it is attached to (`smilesGroup`):
+  so are a centre's `@` and `@@`.
 
 A line without a `*` is never read as SMILES, so `CO` is a label, and its
 reading is shown. Beside each line the step shows what it was read as: the
@@ -855,6 +867,16 @@ The texts are compared, not their hashed keys. The set states the method:
 drawn, aromatic rings as one form.* What that means, plainly:
 - **a chiral product and its mirror image are two structures.** So are two
   diastereomers, and E and Z;
+- **a configuration drawn where there is no stereo unit counts for
+  nothing.** That is a wedge on a centre two of whose groups are alike (an
+  isopropyl's CH), or a double bond drawn bent whose one end carries two
+  alike groups (a prenyl's C=C(CH3)2). The structure is the same whether
+  it was drawn so or not. "Alike" counts every other configuration in the
+  structure: the two ring arms at each centre of 1,4-dimethylcyclohexane
+  are alike only until the other centre is counted, so its cis and trans
+  stay two structures, and a pseudoasymmetric centre keeps its r or s
+  (`stereoUnitsOnly`). The drawing keeps its wedges; only identity sets
+  them aside;
 - **two Kekulé structures of one ring are one structure.** So are
   bond-shift isomers such as a 1,2-disubstituted cyclooctatetraene (the
   `aromaticForm` rule, as it is written there);
@@ -1033,9 +1055,10 @@ space: the group goes where the hydrogen was.
   the configuration it had. A wedge with three bonds in the page reads
   otherwise than a wedge with the hydrogen left out, so the old wedge alone
   would invert it.
-- **Every wedge keeps its narrow end.** A bond added to an atom changes how
-  the drawing counts its bonds, and with them which end of a wedge reads as
-  narrow, so a wedge would move to the next atom.
+- **Every wedge keeps its narrow end.** A wedge is narrow at an atom, kept
+  by id (EDITOR-2D, *A wedge's narrow end is kept by atom*), so the group's
+  bond added to an atom does not move a wedge to the next atom; a product's
+  wedge without one is given the template's.
 - **A stereocentre the group makes** (one of a CH2's two hydrogens) is left
   open, with no configuration made up. *Stereoisomers* can enumerate it.
 - **The guard behind them.** Every product is read back as the canvas reads

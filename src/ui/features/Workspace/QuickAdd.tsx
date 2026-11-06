@@ -1,17 +1,22 @@
+import RoleOffer from "./RoleOffer";
+import type { RoleId } from "../../../lib/plugins/roles";
 import { motion } from "motion/react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { RISE } from "../../theme/motion";
 import { useLeaving } from "../../theme/leaving";
-import { CalculationsGlyph, ProcedureGlyph, StepGlyph } from "./workflow/icons";
+import { CalculationsGlyph } from "./workflow/icons";
 import { placeQuickAdd } from "./quickAddPlace";
-import { labelWidth } from "./quickAddLabel";
+import { calcHeight, listWidth } from "./quickAddLabel";
+import QuickAddCalculations from "./QuickAddCalculations";
 import { guideNotice } from "../../../lib/guide/guide";
 import type { StepKind } from "./workflow/kinds";
 import type { QuickGroup } from "./workflow/offered";
 import { SHAPE_KINDS, SHAPE_NAMES, type ShapeKind } from "../../../lib/chem/shapes";
-import { swallowPress, togglesOn } from "./utils/press";
+import { togglesOn } from "./utils/press";
+import { quickAddLeaves } from "./quickAddLeave";
 import type { CoordinateStructure } from "../../../lib/io/coordinates";
 import { pastedAs } from "./quickAddPaste";
+import { afterAdded, readSmiles } from "./quickAddSmiles";
 import { toggledPanel, type QuickPanel } from "./quickAddPanel";
 import { resolve, sameFormula, type Reading } from "./chem/resolve";
 import { FormulaText } from "../../abbreviations/FormulaText";
@@ -235,18 +240,8 @@ export default function QuickAdd({
   useEffect(() => guideNotice("quick-add"), []);
   useEffect(() => {
     if (leaving) return;
-    // (a press elsewhere only closes it - utils/press#swallowPress; a turn of the wheel closes it and zooms)
-    const outside = (e: Event) => {
-      if (ref.current?.contains(e.target as Node)) return;
-      if (e.type === "pointerdown") swallowPress(e);
-      onClose();
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      e.stopPropagation();
-      onClose();
-    };
+    // (a press elsewhere only closes it; a turn of the wheel closes it and zooms; Escape closes it - none while a question is asked: ./quickAddLeave)
+    const { outside, key: onKey } = quickAddLeaves((t) => !!ref.current?.contains(t as Node), onClose);
     window.addEventListener("pointerdown", outside, true);
     window.addEventListener("wheel", outside, true);
     window.addEventListener("keydown", onKey, true);
@@ -256,24 +251,22 @@ export default function QuickAdd({
       window.removeEventListener("keydown", onKey, true);
     };
   }, [onClose, leaving]);
-  // (a row for each who does steps: its name, then its kinds - and one for the procedures, after them)
+  // (a row for each who does steps, its steps under it - and one for the procedures, after them: as wide as their names need, whatever the row above holds)
   const offered = wired ? [] : procedures;
-  const most = Math.max(1, ...steps.map((g) => g.steps.length), offered.length);
-  const labelW = useMemo(() => labelWidth([...steps.map((g) => g.name), ...(offered.length ? ["Procedures"] : [])]), [steps, offered.length]);
-  const calcWidth = labelW + most * SIZE + 8;
+  const calcWidth = useMemo(() => listWidth([...steps.flatMap((g) => [g.name, ...g.steps.map((k) => k.name)]), ...(wired ? [] : procedures).map((p) => p.name)]), [steps, procedures, wired]);
+  const listHeight = calcHeight([...steps.map((g) => g.steps.length), ...(offered.length ? [offered.length] : [])]);
   // (its icons, the Calculations one among them, the gaps between them, the divider before Calculations, the card's padding: the rules and the field below span it whole)
   const rowWidth = (ROW.length + 1) * (SIZE + GAP) + 8 + 9;
   // (a wire's: as wide as its rows, or the words saying there are none)
-  const width = wired ? (steps.length ? calcWidth : 200) : calcOpen ? Math.max(rowWidth, calcWidth) : rowWidth;
-  const rows = Math.max(1, steps.length) + (offered.length ? 1 : 0);
+  const width = wired ? (steps.length ? calcWidth + 8 : 200) : calcOpen ? Math.max(rowWidth, calcWidth + 8) : rowWidth;
   // (its size with each panel open below its row - a wire's, its calculations alone - and where it stands, chosen once, as it opens)
   const sizeOf = (panel: QuickPanel): { width: number; height: number } => {
-    if (wired) return { width, height: Math.max(1, steps.length) * SIZE + 8 };
+    if (wired) return { width, height: Math.max(SIZE, listHeight) + 8 };
     switch (panel) {
       case "none":
         return { width: rowWidth, height: SIZE + 8 };
       case "calculations":
-        return { width: Math.max(rowWidth, calcWidth), height: SIZE + 8 + rows * SIZE + 9 };
+        return { width: Math.max(rowWidth, calcWidth + 8), height: SIZE + 8 + Math.max(SIZE, listHeight) + 9 };
       case "smiles":
         return { width: rowWidth, height: SIZE + 8 + SMILES_H };
       case "scheme":
@@ -397,49 +390,11 @@ export default function QuickAdd({
       {/* (opening below the row in a short ease, not at once) */}
       <div className="grid transition-[grid-template-rows,opacity] duration-200 ease-meno" style={{ gridTemplateRows: calcOpen ? "1fr" : "0fr", opacity: calcOpen ? 1 : 0 }}>
         <div className="overflow-hidden">
-          <div role="group" aria-label="Calculations" className={wired ? "" : "mt-1 pt-1 border-t border-gh-line"} style={{ width: wired ? undefined : width - 8 }}>
-            {steps.length ? (
-              steps.map((g) => (
-                <div key={g.by} role="group" aria-label={g.name} className="flex items-center">
-                  <span className="shrink-0 truncate px-1.5 text-xs text-gh-gray" style={{ width: labelW }} title={g.name}>
-                    {g.name}
-                  </span>
-                  {g.steps.map((k) => (
-                    <button
-                      key={k.kind}
-                      aria-label={`${k.name} \u00b7 ${g.name}`}
-                      title={k.name}
-                      onClick={() => onStep(k.kind, g.by)}
-                      className="rounded-md flex items-center justify-center text-gh-black hover:bg-gh-base"
-                      style={{ width: SIZE, height: SIZE }}
-                    >
-                      <StepGlyph icon={k.icon} size={20} stroke={2.1} />
-                    </button>
-                  ))}
-                </div>
-              ))
+          <div className={wired ? "" : "mt-1 pt-1 border-t border-gh-line"} style={{ width: width - 8 }}>
+            {steps.length || offered.length ? (
+              <QuickAddCalculations steps={steps} procedures={offered} width={width - 8} shown={calcOpen} onStep={onStep} onProcedure={onProcedure} />
             ) : (
               <div className="px-2 text-xs leading-9 text-gh-gray whitespace-nowrap">No step added takes this</div>
-            )}
-            {offered.length > 0 && (
-              <div role="group" aria-label="Procedures" className="flex items-center">
-                <span className="shrink-0 truncate px-1.5 text-xs text-gh-gray" style={{ width: labelW }}>
-                  Procedures
-                </span>
-                {offered.map((p) => (
-                  <button
-                    key={p.id}
-                    aria-label={`Procedure: ${p.name}`}
-                    title={p.needs.length ? `${p.name} - needs ${p.needs.join(" and ")}` : p.name}
-                    disabled={p.needs.length > 0}
-                    onClick={() => onProcedure?.(p.id)}
-                    className="rounded-md flex items-center justify-center text-gh-black hover:bg-gh-base disabled:opacity-35 disabled:hover:bg-transparent"
-                    style={{ width: SIZE, height: SIZE }}
-                  >
-                    <ProcedureGlyph size={20} stroke={2.1} />
-                  </button>
-                ))}
-              </div>
             )}
           </div>
         </div>
@@ -476,6 +431,8 @@ function SmilesField({
 }) {
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // (a SMILES no plugin here reads: the plugins online that do, each to add - RoleOffer)
+  const [needs, setNeeds] = useState<RoleId | null>(null);
   const [busy, setBusy] = useState(false);
   // (what the text reads as - offered only where the dictionary has it: a SMILES alone is drawn as it was - and which is chosen)
   const named = onNamed != null;
@@ -489,6 +446,23 @@ function SmilesField({
   useEffect(() => {
     if (open) input.current?.focus();
   }, [open]);
+  /** The SMILES read and drawn; or why not, and the plugins online that read it (./quickAddSmiles). */
+  const read = (smiles: string) => {
+    reading.current = true;
+    setBusy(true);
+    setError(null);
+    setNeeds(null);
+    void readSmiles(smiles, onSmiles)
+      .then((r) => {
+        if (!r) return;
+        setError(r.error);
+        setNeeds(r.needs);
+      })
+      .finally(() => {
+        reading.current = false;
+        setBusy(false);
+      });
+  };
   return (
     <form
       className="mt-1 pt-1 pb-0.5 border-t border-gh-line"
@@ -501,15 +475,7 @@ function SmilesField({
           onNamed!(chosen.label);
           return;
         }
-        reading.current = true;
-        setBusy(true);
-        setError(null);
-        onSmiles(smiles)
-          .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
-          .finally(() => {
-            reading.current = false;
-            setBusy(false);
-          });
+        read(smiles);
       }}
     >
       <input
@@ -519,6 +485,7 @@ function SmilesField({
           setText(e.target.value);
           setChoice(0);
           setError(null);
+          setNeeds(null);
         }}
         onKeyDown={(e) => {
           if (offered.length < 2 || (e.key !== "ArrowDown" && e.key !== "ArrowUp")) return;
@@ -543,6 +510,20 @@ function SmilesField({
       />
       {offered.length > 0 && <DrawAs offered={offered} chosen={chosen} onChoose={setChoice} />}
       {error && <div className="px-0.5 pt-1 text-[11px] leading-snug text-accel-accent break-words">{error}</div>}
+      {needs && (
+        <div className="flex flex-wrap items-center gap-1.5 px-0.5 pt-1 text-[11px]">
+          <RoleOffer
+            role={needs}
+            // (added: what was typed is read again, and drawn - not typed again)
+            done={() =>
+              afterAdded(text, reading.current, read, () => {
+                setError(null);
+                setNeeds(null);
+              })
+            }
+          />
+        </div>
+      )}
     </form>
   );
 }

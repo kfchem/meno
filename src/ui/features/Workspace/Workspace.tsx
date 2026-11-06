@@ -1,3 +1,5 @@
+import RoleOffer from "./RoleOffer";
+import { noPluginSaid, useRoleOffer } from "../../../lib/roles/worker";
 import { canvasAlerts } from "./utils/alerts";
 import { bondKindOf, type BondKindName } from "./utils/bondKinds";
 import type { ArrowKind, ArrowWeight } from "../../../lib/chem/reactionArrow";
@@ -75,6 +77,8 @@ import { procedureNeeds, proceduresSaved, saveProcedure, suggestedName } from ".
 import { pluginWriters, WRITERS, type Writer } from "../../../lib/io/writers";
 import { anyPluginById, WRITER_PLUGINS } from "../../../lib/calc/catalog";
 import { addPlugin, useReaders } from "../../../lib/calc/workers";
+import { addOnline } from "../../../lib/calc/addOnline";
+import { useOnline } from "../../../lib/plugins/online";
 import { knownOfMolecules } from "./utils/written";
 import { carriedOf } from "./utils/workspace";
 import { runAllNote, runNote } from "./workflow/earlierRuns";
@@ -85,14 +89,13 @@ import { hasLonePair, tailOf } from "./utils/pushes";
 import { unsureOf, type Unsure } from "./chem/drawing";
 import { structureValues } from "./utils/byStructure";
 import ColourCard, { type ColourTarget } from "./ColourCard";
-import WordsCard from "./WordsCard";
-import { cardBeside, WORDS_CARD } from "./utils/cardBeside";
 import CornersCard from "./CornersCard";
 import SettingsStyleAsk from "./SettingsStyleAsk";
 import LargeWorkspaceAsk from "./LargeWorkspaceAsk";
 import { PdfNumbersCard, PdfPagesCard } from "./PdfMakeCards";
 import { combined, putBeside, savePdfFile } from "./pdfMake";
 import { listItem, stylesOf, wordsSet } from "../../../lib/chem/captions";
+import WordsFont from "./WordsFont";
 import { WordsEditor } from "./utils/wordsEditor";
 import { ringAt, ringsAmong, ringsOf } from "./utils/rings";
 import { style3dOf, useEasedStyle3D, useStyle3D, useStyleNames3D } from "./style3d";
@@ -141,7 +144,7 @@ import { exportKindOf, exportKinds, holdsOfDrawn, useFileActions, type FileActio
 import { setSavedPathOf, setSaver } from "../../../lib/doc/savers";
 import { useReadings } from "../../../lib/calc/readings";
 import { useCanvasRatio } from "./canvasRatio";
-import { editorLayoutOptions, startingZoom } from "./layoutOptions";
+import { editorLayoutOptions, startingZoom, setDrawnRatio } from "./layoutOptions";
 import { labelSetOf } from "../../../lib/chem/layout2d";
 import { useDrawingStyle } from "./useDrawingStyle";
 import { DrawnLayoutProvider } from "./components/DrawnLayout";
@@ -197,6 +200,7 @@ import { branchPath, CYCLE_RADIUS, MARGIN as CYCLE_MARGIN } from "../../../lib/c
 import { inRow } from "./components/structureDrag";
 import { pickedStructure } from "./utils/pdfStructures";
 import StructureFlight from "./components/StructureFlight";
+import CompoundCard from "./components/CompoundCard";
 import { setStructureSay } from "./components/structureDrag";
 import CoordinatesCard from "./CoordinatesCard";
 import { readCoordinates, textOfPages, type CoordinateStructure, type PlacedPage } from "../../../lib/io/coordinates";
@@ -219,7 +223,8 @@ import { addedBox } from "./store/slices/modelSlice";
 import { viewPanning } from "./components/viewGoal";
 import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gesture";
 import { Remake3D } from "./components/remake3d";
-import { mapStanding, reactionOf } from "./chem/atomMap";
+import { mapAtoms, mapStanding, reactionOf, unpairedSaid } from "./chem/atomMap";
+import { structuresOf } from "./workflow/entries";
 import { useAtomMaps } from "./chem/useAtomMaps";
 import { turnOnto } from "./utils/align3d";
 import type { ArrowFormPatch, Caption, Drawn, Molecule3D, PictureFrom, WordsFrom } from "./store/types";
@@ -353,6 +358,8 @@ function WorkspaceContent({
   const store = useEditorStore();
   // (how finely the canvas is drawn, as Settings has it: a change shows at once)
   const canvasRatio = useCanvasRatio();
+  // (bonds never thinner than one of the canvas's device pixels: layoutOptions `minLinePx`)
+  setDrawnRatio(canvasRatio);
   // (no menu over a talk)
   const talking = useEditor((s) => s.presenting != null);
   // (a structure selected: a guide's step waiting for it goes on)
@@ -412,6 +419,8 @@ function WorkspaceContent({
   // (a plugin's kept files read through for their fingerprints, where that takes more than a moment: a model's weights - said, as setting up is)
   const checkingFiles = useCheckingFiles((s) => Object.values(s)[0]);
   const [chemError, setChemError] = useState<string | null>(null);
+  // (the role a chemistry asked of that no plugin here fills: what the line of its error offers plugins for)
+  const offerRole = useRoleOffer((s) => s.role);
   const cleaningNow = useRef(false); // one clean-up at a time, keys included
   const runCleanUp = useCallback(
     (aroundAtom: number | Iterable<number> | null) => {
@@ -699,7 +708,6 @@ function WorkspaceContent({
   const [pdfCard, setPdfCard] = useState<{ kind: "numbers" | "pages"; id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
   const [colourCard, setColourCard] = useState<{ target: ColourTarget; x: number; y: number; within: { width: number; height: number } } | null>(null);
   // the card of sizes for words on the page, where their menu was (docs/EDITOR-2D.md, *Text*)
-  const [wordsCard, setWordsCard] = useState<{ id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
   // the card of a rectangle's corners, where its menu was (docs/PRESENTING.md, *Shapes*)
   const [cornersCard, setCornersCard] = useState<{ id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
   // the field to look for words in the PDFs, opened at the column's top on
@@ -1007,7 +1015,6 @@ function WorkspaceContent({
     if (!talking) return;
     setMenu(null);
     setColourCard(null);
-    setWordsCard(null);
     setCornersCard(null);
     setNaming(null);
     setGivingOrders(null);
@@ -1067,10 +1074,10 @@ function WorkspaceContent({
   // a molecule in 3D right-clicked: what its menu does to it
   const molecules3d = useEditor((s) => s.molecules3d);
   const chosen3d = useEditor((s) => s.chosen3d);
-  // (its molecules going over to a change of the workspace's styles in 3D, not jumping - at once in a very large drawing)
+  // (its molecules going over to a change of the workspace's styles in 3D, not jumping - at once in a very large drawing, or where none was drawn before it came)
   const target3d = useStyle3D();
   const atoms3d = useEditor((s) => s.molecules3d.reduce((n, m) => n + m.atoms.length, 0));
-  const style3d = useEasedStyle3D(target3d, atoms3d > LARGE_ATOMS);
+  const style3d = useEasedStyle3D(target3d, atoms3d > LARGE_ATOMS, atoms3d > 0);
   const styleNames3d = useStyleNames3D();
   const menuMolecule = menu?.kind === "molecule3d" ? molecules3d.find((m) => m.id === menu.id) : undefined;
   // a molecule's output shown in the column of texts, held in the
@@ -1493,7 +1500,13 @@ function WorkspaceContent({
   const alerts = canvasAlerts({
     import: importError ? { text: importError.text, dismiss: dismissImportError } : null,
     files: { text: files.error, dismiss: files.dismissError },
-    chem: { text: chemError, dismiss: () => setChemError(null) },
+    chem: {
+      text: chemError,
+      dismiss: () => {
+        setChemError(null);
+        useRoleOffer.setState({ role: null });
+      },
+    },
   });
   // Where the view starts, before there is anything to fit
   const style = useDrawingStyle();
@@ -1510,17 +1523,6 @@ function WorkspaceContent({
     const st = store.getState();
     const c = st.captions.find((x) => x.id === id);
     if (c) st.updateCaption(id, { size: pt, ...keepTop(c, { size: pt ?? undefined }) });
-  };
-  // (the card of how words are set put beside them, clear of them, as they are seen on the canvas - from where the menu was, by the view's scale - so that what it changes is seen changing)
-  const wordsCardPlace = (c: Caption, menu: { x: number; y: number; at: { x: number; y: number }; within: { width: number; height: number } }) => {
-    const a = clientToWorld(0, 0);
-    const b = clientToWorld(100, 100);
-    if (!a || !b || b.x === a.x || b.y === a.y) return { x: menu.x, y: menu.y };
-    const kx = 100 / (b.x - a.x);
-    const ky = 100 / (a.y - b.y);
-    const w = wordsSet(c, layoutOpts, labelSetOf(layoutOpts));
-    const target = { left: menu.x + (c.x - w.halfW - menu.at.x) * kx, top: menu.y - (c.y + w.halfH - menu.at.y) * ky, width: 2 * w.halfW * kx, height: 2 * w.halfH * ky };
-    return cardBeside(target, WORDS_CARD, menu.within);
   };
   // (their lines as far apart as asked - single, none of their own)
   const spaceWords = (id: number, lines: number | null) => {
@@ -1662,6 +1664,16 @@ function WorkspaceContent({
           <ExclamationTriangleIcon className="h-4 w-4 shrink-0 text-accel-accent" />
           <span className="break-words">{a.text}</span>
           {a.key === "import" && importError?.suggest && importError.again && <AddToRead suggest={importError.suggest} again={importError.again} />}
+          {/* (a role no plugin here fills: the plugins online that fill it, each to add) */}
+          {a.key === "chem" && offerRole && chemError?.includes(noPluginSaid(offerRole)) && (
+            <RoleOffer
+              role={offerRole}
+              done={() => {
+                setChemError(null);
+                useRoleOffer.setState({ role: null });
+              }}
+            />
+          )}
           <button
             aria-label="Dismiss"
             title="Dismiss"
@@ -1737,7 +1749,7 @@ function WorkspaceContent({
           >
             <AnimatePresence mode="wait" initial={false}>
               <motion.span key={atomMaps.mapping.phase} {...FADE} className="block">
-                {atomMaps.mapping.phase === "3d" ? "Making the reaction's 3D structures…" : "Mapping the reaction's atoms…"}
+                {atomMaps.mapping.arrowId < 0 ? (atomMaps.mapping.phase === "3d" ? "Making the structures' 3D structures…" : "Mapping the structures' atoms…") : atomMaps.mapping.phase === "3d" ? "Making the reaction's 3D structures…" : "Mapping the reaction's atoms…"}
               </motion.span>
             </AnimatePresence>
             <Elapsed since={atomMaps.mapping.since} />
@@ -1752,6 +1764,8 @@ function WorkspaceContent({
       </AnimatePresence>
       {/* (a structure carried out of a PDF, over everything: components/StructureFlight) */}
       <StructureFlight />
+      {/* (a compound's structure by its number in a PDF's text: components/CompoundCard) */}
+      <CompoundCard />
       {/* (what the chemist opens over the canvas - its questions, cards and menus - above the first-run guide: ui/guide/layers) */}
       <AboveGuide over={dropRef} shown={active} measureKey={`${styleOpen}:${textsOpen}`}>
       <AnimatePresence>
@@ -2038,23 +2052,6 @@ function WorkspaceContent({
       </AnimatePresence>
       <AnimatePresence>{inkMode && <PenCard mode={inkMode} onMode={(m) => store.getState().setInkMode(m)} onDone={endInk} />}</AnimatePresence>
       <AnimatePresence>
-        {wordsCard && (
-          <WordsCard
-            key={`${wordsCard.x},${wordsCard.y}`}
-            id={wordsCard.id}
-            label={layoutOpts.pointPx ? layoutOpts.fontPx / layoutOpts.pointPx : 10}
-            drawing={style.fontFamily}
-            onSize={(pt) => sizeWords(wordsCard.id, pt)}
-            onLines={(lines) => spaceWords(wordsCard.id, lines)}
-            onFont={(font) => faceWords(wordsCard.id, font)}
-            x={wordsCard.x}
-            y={wordsCard.y}
-            within={wordsCard.within}
-            onClose={() => setWordsCard(null)}
-          />
-        )}
-      </AnimatePresence>
-      <AnimatePresence>
         {cornersCard &&
           (() => {
             const sh = store.getState().shapes.find((x) => x.id === cornersCard.id);
@@ -2213,7 +2210,16 @@ function WorkspaceContent({
             const styles = stylesOf(c.text.length, c.marks).filter((_, i) => /\S/.test(c.text[i]));
             const st = store.getState();
             return {
-              onFont: () => setWordsCard({ id: c.id, ...wordsCardPlace(c, menu), within: menu.within }),
+              font: (
+                <WordsFont
+                  id={c.id}
+                  label={layoutOpts.pointPx ? layoutOpts.fontPx / layoutOpts.pointPx : 10}
+                  drawing={style.fontFamily}
+                  onSize={(pt) => sizeWords(c.id, pt)}
+                  onLines={(lines) => spaceWords(c.id, lines)}
+                  onFont={(font) => faceWords(c.id, font)}
+                />
+              ),
               bold: styles.length > 0 && styles.every((x) => x?.bold),
               italic: styles.length > 0 && styles.every((x) => x?.italic),
               list: c.text.split("\n").every((l) => !l.trim() || listItem(l)),
@@ -2562,10 +2568,60 @@ function WorkspaceContent({
                     onMake: () => void atomMaps.makeAtomMap(a.id),
                     onShow: (shown: boolean) => store.getState().showAtomMap(a.id, shown),
                     onOther: () => store.getState().otherAtomMap(a.id),
-                    onExport: () => void files.exportReaction3d(a.id),
+                    onExport: () => void files.exportReaction3d({ arrow: a.id }),
+                    ...(a.atomMap ? { unpaired: unpairedSaid(a.atomMap, ["the reactants", "the products"]) ?? undefined } : {}),
                   },
                 };
               })()),
+            };
+          })()}
+          pageMap={(() => {
+            // (atom maps between structures on the page: made from the structures selected, the one right-clicked Before -
+            // chem/structureMaps; and those the structure right-clicked is in)
+            const st = store.getState();
+            const of3d = menu.kind === "molecule3d" ? st.molecules3d.find((m) => m.id === menu.id) : undefined;
+            const at = menu.kind === "atom" || menu.kind === "bond" ? structureAt(menu.kind, menu.id) : of3d && linkOf(of3d, st.model) === "live" ? of3d.drawnFrom!.find((id) => id != null) ?? null : null;
+            if (at == null) return undefined;
+            const before = fragmentOf(st.model, at);
+            // (the structures selected: drawn, or a molecule in 3D still its drawing's)
+            const picked = new Set<number>(st.sel.atoms);
+            for (const m of st.molecules3d) if (st.sel3d.has(m.id) && linkOf(m, st.model) === "live") for (const id of m.drawnFrom!) if (id != null) picked.add(id);
+            const structures = structuresOf(st.model).filter((s) => s.some((id) => picked.has(id)));
+            const afters = structures.filter((s) => !s.some((id) => before.has(id)));
+            const makes = menu.selection === "here" && picked.has(at) && afters.length > 0;
+            const maps = st.structureMaps.filter((m) => [...mapAtoms(m.map)].some((id) => before.has(id)));
+            const first = maps[0];
+            const standing = first ? mapStanding({ atomMap: first.map }, st.model) : "none";
+            if (!makes && (!first || standing === "none")) return undefined;
+            const ids = maps.map((m) => m.id);
+            return {
+              ...(makes ? { onMake: () => void atomMaps.makeStructureMaps([...before], afters, (atoms) => build3d(blocksOf(store.getState().model, atoms), "one")) } : {}),
+              ...(first && standing !== "none"
+                ? {
+                    held: {
+                      standing,
+                      shown: maps.some((m) => m.map.shown),
+                      maps: first.map.maps.length,
+                      chosen: first.map.chosen,
+                      onShow: (shown: boolean) => store.getState().showStructureMaps(ids, shown),
+                      onOther: () => store.getState().otherStructureMaps(ids),
+                      onExport: () => void files.exportReaction3d({ structureMap: first.id }),
+                      unpaired: unpairedSaid(first.map, ["Before", "After"]) ?? undefined,
+                      // (of the structures before an edit: made again between them as they are now, the old ones' place taken)
+                      onAgain: () => {
+                        const now = store.getState().model;
+                        const present = new Set(now.atoms.map((a) => a.id));
+                        const otherSide = (m: (typeof maps)[number]) => {
+                          const inBefore = m.map.reactant.drawnFrom.some((id) => id != null && before.has(id));
+                          const id = (inBefore ? m.map.product : m.map.reactant).drawnFrom.find((x) => x != null && present.has(x));
+                          return id == null ? null : [...fragmentOf(now, id)];
+                        };
+                        const afters = maps.map(otherSide).filter((s): s is number[] => !!s && !s.some((id) => before.has(id)));
+                        void atomMaps.makeStructureMaps([...fragmentOf(now, at)], afters, (atoms) => build3d(blocksOf(store.getState().model, atoms), "one"), ids);
+                      },
+                    },
+                  }
+                : {}),
             };
           })()}
           push={(() => {
@@ -3035,28 +3091,46 @@ function Elapsed({ since }: { since: number }) {
   );
 }
 
+/**
+ * What the import alert offers where no plugin added reads a file: each
+ * plugin that would - one here, added as any plugin is; one on offer
+ * online, got first, asking first (lib/calc/workers `addOnline`) - and the
+ * file read again once one is.
+ */
 function AddToRead({ suggest, again }: { suggest: readonly string[]; again: () => void }) {
   const states = useReaders((s) => s.state);
+  const catalogue = useOnline((s) => s.catalogue);
+  const [getting, setGetting] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
   return (
     <>
       {suggest.map((id) => {
         const p = anyPluginById(id);
-        if (!p) return null;
-        const adding = states[id] === "adding" || states[id] === "waiting";
+        const entry = p ? undefined : catalogue?.plugins.find((e) => e.id === id);
+        const name = p?.name ?? entry?.name;
+        if (!name) return null;
+        const adding = getting === id || states[id] === "adding" || states[id] === "waiting";
         return (
           <button
             key={id}
             disabled={adding}
             onClick={(e) => {
               e.stopPropagation();
-              void addPlugin(p).then(again, () => undefined);
+              if (p) return void addPlugin(p).then(again, () => undefined);
+              if (!entry) return;
+              setGetting(id);
+              setProblem(null);
+              void addOnline(entry)
+                .then(again, (err: unknown) => setProblem(err instanceof Error ? err.message : String(err)))
+                .finally(() => setGetting(null));
             }}
             className="shrink-0 rounded-md border border-gh-line px-2 py-0.5 transition-colors duration-150 ease-meno hover:bg-gh-base disabled:opacity-60"
           >
-            {adding ? `Adding ${p.name}…` : `Add ${p.name}`}
+            {adding ? `Adding ${name}…` : `Add ${name}`}
           </button>
         );
       })}
+      {problem && <span className="text-accel-accent">{problem}</span>}
     </>
   );
 }

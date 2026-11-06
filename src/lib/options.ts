@@ -22,6 +22,12 @@ type OptionBase = {
   section?: OptionSection;
   /** What bounds it or fixes it, said under it, where the label alone does not say it - Meno's own options' alone. */
   note?: string;
+  /**
+   * The person's alone to set: never set by a conversation's tools - cores
+   * and memory, a program's free keywords, what is kept on disk
+   * (docs/CONVERSATIONS.md, *Meno's tools*).
+   */
+  person?: true;
 };
 /** The parts of Render's card, in its order: what the molecules look like, how it is rendered, the scene round them, a film's motion. */
 export const OPTION_SECTIONS = ["look", "render", "scene", "motion"] as const;
@@ -40,13 +46,21 @@ export type ChoiceOption = OptionBase & {
   choices: readonly { value: string; label: string; sets?: Readonly<Record<string, string | number | boolean>> }[];
   default: string;
 };
-/** `unset`: the value that sets nothing - what is left to the program (0, say): not said on a step's line. */
+/**
+ * `unset`: the value that sets nothing - what is left to the program (0,
+ * say): not said on a step's line. A `default` that is no number (NaN) is
+ * none: the field is empty until the chemist gives one, and a step needs it
+ * before it runs (its kind's `needs`) - Meno's own kinds' alone, where no
+ * value has a basis to stand as a default.
+ * `whole`: a whole number alone - a count, a seed - one with a fraction refused, as one out of range is.
+ */
 export type NumberOption = OptionBase & {
   type: "number";
   default: number;
   min?: number;
   max?: number;
   step?: number;
+  whole?: true;
   unit?: string;
   from?: Known;
   unset?: number;
@@ -93,7 +107,7 @@ function fitting(o: Option, v: unknown): string | number | boolean | undefined {
     case "choice":
       return typeof v === "string" && o.choices.some((c) => c.value === v) ? v : undefined;
     case "number":
-      return typeof v === "number" && Number.isFinite(v) && (o.min == null || v >= o.min) && (o.max == null || v <= o.max) ? v : undefined;
+      return typeof v === "number" && Number.isFinite(v) && (o.min == null || v >= o.min) && (o.max == null || v <= o.max) && (!o.whole || Number.isInteger(v)) ? v : undefined;
     case "text":
     case "lines":
     case "atoms":
@@ -125,8 +139,16 @@ export function valuesOf(
 /** The values to remember of `values`: all but those that start from what is written (`Known`). */
 export function rememberable(options: readonly Option[], values: OptionValues): OptionValues {
   const fresh = new Set(options.filter((o) => ((o.type === "number" || o.type === "text") && o.from) || o.type === "atoms").map((o) => o.id));
-  return Object.fromEntries(Object.entries(values).filter(([id]) => !fresh.has(id)));
+  return Object.fromEntries(Object.entries(givenOnly(values)).filter(([id]) => !fresh.has(id)));
 }
+
+/** `values` without a number that is none (NaN, or infinite): an option left empty - one whose default is none - holds nothing, never a number that is none. */
+export function givenOnly(values: OptionValues): OptionValues {
+  return Object.fromEntries(Object.entries(values).filter(([, v]) => typeof v !== "number" || Number.isFinite(v)));
+}
+
+/** Whether an option's default is none: a number the chemist gives, no default standing for it (`NumberOption`). */
+export const noDefault = (o: Option): boolean => o.type === "number" && Number.isNaN(o.default);
 
 const OPTION_ID = /^[a-z][a-z0-9-]{0,39}$/;
 const KNOWN: readonly Known[] = ["charge", "multiplicity", "name"];
@@ -162,6 +184,7 @@ export function acceptOptions(raw: unknown): Option[] {
     const group = label(r.group, 60) ? { group: label(r.group, 60)! } : {};
     const section = (OPTION_SECTIONS as readonly unknown[]).includes(r.section) ? { section: r.section as OptionSection } : {};
     const brief = label(r.brief, 40) ? { brief: label(r.brief, 40)! } : {};
+    const person = r.person === true ? { person: true as const } : {};
     let o: Option | null = null;
     if (r.type === "choice" && Array.isArray(r.choices)) {
       const choices = (r.choices as Record<string, unknown>[])
@@ -170,7 +193,8 @@ export function acceptOptions(raw: unknown): Option[] {
         .filter((c): c is { value: string; label: string; sets: Record<string, string | number | boolean> | undefined } => c.value != null && c.label != null)
         .map(({ sets, ...c }) => (sets ? { ...c, sets } : c));
       if (choices.length) o = { id, label: name, type: "choice", choices, default: String(r.default) };
-    } else if (r.type === "number") {
+    } else if (r.type === "number" && !(r.whole === true && num(r.step) !== undefined && !Number.isInteger(num(r.step)))) {
+      // (a whole number alone with a step that is no whole number - its arrows would step onto numbers it refuses: none)
       o = {
         id,
         label: name,
@@ -179,6 +203,7 @@ export function acceptOptions(raw: unknown): Option[] {
         ...(num(r.min) !== undefined ? { min: num(r.min) } : {}),
         ...(num(r.max) !== undefined ? { max: num(r.max) } : {}),
         ...(num(r.step) !== undefined ? { step: num(r.step) } : {}),
+        ...(r.whole === true ? { whole: true as const } : {}),
         ...(label(r.unit, 20) ? { unit: label(r.unit, 20)! } : {}),
         ...(from ? { from } : {}),
         ...(num(r.unset) !== undefined ? { unset: num(r.unset) } : {}),
@@ -187,7 +212,7 @@ export function acceptOptions(raw: unknown): Option[] {
       o = { id, label: name, type: "text", default: typeof r.default === "string" ? r.default.slice(0, 200) : "", ...(from ? { from } : {}) };
     } else if (r.type === "switch") o = { id, label: name, type: "switch", default: r.default === true };
     // (its default, one it takes: else it is none)
-    if (o && fitting(o, o.default) !== undefined) out.push({ ...o, ...when, ...group, ...section, ...brief });
+    if (o && fitting(o, o.default) !== undefined) out.push({ ...o, ...when, ...group, ...section, ...brief, ...person });
   }
   return out;
 }

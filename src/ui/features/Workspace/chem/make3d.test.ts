@@ -293,8 +293,8 @@ describe("takenOnPage", () => {
     const model = {
       atoms: [atom(1, 0, 0), atom(2, 1.5, 0), atom(3, 10, 0), atom(4, 11.5, 0), atom(5, 20, 0)],
       bonds: [
-        { id: 6, a: 1, b: 2, order: 1 as const, stereo: "none" as const, stereoOrient: "principle" as const },
-        { id: 7, a: 3, b: 4, order: 1 as const, stereo: "none" as const, stereoOrient: "principle" as const },
+        { id: 6, a: 1, b: 2, order: 1 as const, stereo: "none" as const },
+        { id: 7, a: 3, b: 4, order: 1 as const, stereo: "none" as const },
       ],
     };
     const solid = { x0: 30, x1: 35, y0: -2, y1: 2 };
@@ -428,11 +428,11 @@ describe("conformers made for the page", () => {
     const [block] = blocksOf(ethanol, [12]);
     const none = { centres: [], doubles: [] };
     await conformersOf(chem, stereo, block, "one", { count: 3 });
-    expect(asked).toEqual([{ op: "conformers", args: { molblock: block.molblock, isomers: [none], options: { count: 3 }, onPage: true } }]);
+    expect(asked).toEqual([{ op: "conformers", args: { molblock: block.molblock, isomers: [none], options: { count: 3 } } }]);
     // (how many to try, as the page works it out, sent beside the plugin's options)
     asked.length = 0;
     await conformersOf(chem, stereo, block, "one", {}, 40);
-    expect(asked[0].args).toEqual({ molblock: block.molblock, isomers: [none], count: 40, options: {}, onPage: true });
+    expect(asked[0].args).toEqual({ molblock: block.molblock, isomers: [none], count: 40, options: {} });
   });
 
   it("sends a metal complex's holds, and sets aside what Meno's checks find in what came back, saying so after the plugin's rows", async () => {

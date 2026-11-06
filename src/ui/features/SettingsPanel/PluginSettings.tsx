@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { FADE } from "../../theme/motion";
 import ConfirmDiscard from "../../layouts/ConfirmDiscard";
+import QuestionLayer from "../../layouts/QuestionLayer";
 import { liveJobsOf, type Job } from "../../../lib/jobs";
-import { ALL_PLUGINS, anyPluginById, kindsNotTaken, manifestOf, PLUGINS, pluginsUsing, REFUSED, runs, stoppedOf, type Plugin as AnyPlugin } from "../../../lib/calc/catalog";
+import { ALL_PLUGINS, anyPluginById, kindsNotTaken, manifestOf, PLUGINS, pluginName, pluginsUsing, REFUSED, runs, stoppedOf, type Plugin as AnyPlugin } from "../../../lib/calc/catalog";
 import { rangeSaid } from "../../../lib/plugins/depends";
 import { presetsSaid } from "../../../lib/plugins/presets";
 import { addedReaders, addedUsing, addPlugin, removePlugin, skipSetUp, useReaders, waitingSaid } from "../../../lib/calc/workers";
@@ -14,7 +15,9 @@ import { ROLES } from "../../../lib/plugins/roles";
 import { forThisSystem, systemHere, SYSTEM_NAMES } from "../../../lib/plugins/here";
 import { locate, lookForAll, programKey, useInstalled } from "../../../lib/plugins/installed";
 import { SYSTEMS, type InstalledDecl } from "../../../lib/plugins/manifest";
+import { usePluginsHere } from "../../../lib/plugins/known";
 import { KINDS } from "../Workspace/workflow/kinds";
+import { actOnFiles, filesCanGo, filesView, type FilesAsked } from "./pluginFiles";
 import { kindById } from "../../../lib/io/kinds";
 import { useCheckingFiles, useDownloads } from "../../../lib/pyEnv";
 
@@ -38,6 +41,8 @@ const when = (iso: string) => new Date(iso).toLocaleString(undefined, { year: "n
  * itself is not among them: what it reads and writes is in Files.
  */
 export default function PluginSettings() {
+  // (drawn again each time the plugins in place are taken anew: one whose files were taken away leaves the list at once, offered online again)
+  usePluginsHere((s) => s.taken);
   const states = useReaders((s) => s.state);
   const problems = useReaders((s) => s.problem);
   const online = useOnline();
@@ -177,6 +182,8 @@ function Plugin({ plugin: p, state, problem, offer }: { plugin: AnyPlugin; state
   const [live, setLive] = useState<readonly Job[] | null>(null);
   // (the plugins added that use it, as taking it away was asked: taken away too, only once the chemist says so - never it alone)
   const [using, setUsing] = useState<readonly AnyPlugin[] | null>(null);
+  // (its files, as taking them away was asked - here and not added: taken away only once the chemist says so - and why not, where they were not)
+  const [filesAsked, setFilesAsked] = useState<FilesAsked>({ asking: false });
   // (why it is stopped, added: a plugin it uses not added, or not of a version it works with)
   const stopped = useReaders((s) => (s.state[p.id] === "added" ? stoppedOf(p, new Set(Object.keys(s.state).filter((id) => s.state[id] === "added"))) : null));
   // (a kind of file of another plugin's it uses, not taken now - that plugin of another version - each a line: as text, one value to compare)
@@ -207,6 +214,16 @@ function Plugin({ plugin: p, state, problem, offer }: { plugin: AnyPlugin; state
         } else run((q) => removePlugin(q, [], true));
       });
   };
+  const files = filesView(
+    filesAsked,
+    (act) => {
+      if (act.type === "remove") setBusy(true);
+      void actOnFiles(act, p.id, setFilesAsked).finally(() => act.type === "remove" && setBusy(false));
+    },
+    p.name,
+    busy,
+  );
+
   // (its files besides its packages, as they come - all come, and a program's build being unpacked: no share said)
   const share = useDownloads((s) => s[p.id]);
   // (its files read through for their fingerprints, where that takes more than a moment: a model's weights)
@@ -251,10 +268,10 @@ function Plugin({ plugin: p, state, problem, offer }: { plugin: AnyPlugin; state
             ))}
           </>
         )}
-        {p.presets && <p className="text-xs text-gh-gray mt-1 max-w-2xl">{presetsSaid(p.presets, anyPluginById(p.presets.for)?.name ?? p.presets.for)}</p>}
+        {p.presets && <p className="text-xs text-gh-gray mt-1 max-w-2xl">{presetsSaid(p.presets, pluginName(p.presets.for))}</p>}
         {(p.depends ?? []).length > 0 && (
           <p className="text-xs text-gh-gray mt-1 max-w-2xl">
-            Uses the plugin{p.depends!.length === 1 ? "" : "s"} {p.depends!.map((d) => `${anyPluginById(d.plugin)?.name ?? d.plugin}, ${rangeSaid(d.range)}${(d.interfaces ?? []).map((i) => `, its ${i.id} interface ${rangeSaid(i.range)}`).join("")}${(d.kinds ?? []).map((k) => `, its kind ${manifestOf(d.plugin)?.kinds.find((x) => x.id === k)?.name ?? k}`).join("")}${d.optional ? ", for some steps, where it is added" : ""}`).join("; ")}.
+            Uses the plugin{p.depends!.length === 1 ? "" : "s"} {p.depends!.map((d) => `${pluginName(d.plugin)}, ${rangeSaid(d.range)}${(d.interfaces ?? []).map((i) => `, its ${i.id} interface ${rangeSaid(i.range)}`).join("")}${(d.kinds ?? []).map((k) => `, its kind ${manifestOf(d.plugin)?.kinds.find((x) => x.id === k)?.name ?? k}`).join("")}${d.optional ? ", for some steps, where it is added" : ""}`).join("; ")}.
           </p>
         )}
         {pluginsUsing(p.id).length > 0 && (
@@ -264,7 +281,7 @@ function Plugin({ plugin: p, state, problem, offer }: { plugin: AnyPlugin; state
         )}
         <p className="text-xs text-gh-gray mt-1 max-w-2xl">
           {p.licence} · {p.homepage.replace(/^https?:\/\//, "")}
-          {!runs(p) && " · Comes with Meno: nothing to download."}
+          {!runs(p) && " · Nothing to set up: its files only."}
         </p>
         {offer && <TermsAndCite entry={offer.entry} />}
         {refused.length > 0 && (
@@ -281,7 +298,7 @@ function Plugin({ plugin: p, state, problem, offer }: { plugin: AnyPlugin; state
               {line}.
             </p>
           ))}
-        {problem && <p className="text-xs text-accel-accent mt-1 meno-fade-in">{problem}</p>}
+        {(problem ?? filesAsked.problem) && <p className="text-xs text-accel-accent mt-1 meno-fade-in">{problem ?? filesAsked.problem}</p>}
       </div>
       <div className="flex flex-col items-end gap-1.5">
         <span key={status} className="text-xs text-gh-gray meno-fade-in">
@@ -318,11 +335,13 @@ function Plugin({ plugin: p, state, problem, offer }: { plugin: AnyPlugin; state
             </button>
           </div>
         )}
+        {filesCanGo(state, addedUsing(p.id)) && files.button}
       </div>
+      <QuestionLayer>
       <AnimatePresence>
         {using && (
-          // (over the whole window, as a question about the app is)
-          <motion.div key="using" {...FADE} className="fixed inset-0 z-[100]">
+          // (over the whole window, as a question about the app is: in its own layer - layouts/QuestionLayer)
+          <motion.div key="using" {...FADE} className="absolute inset-0">
             <ConfirmDiscard
               title={`Remove ${p.name}?`}
               message={`${listOf(using.map((q) => q.name))} ${using.length === 1 ? "uses" : "use"} it. Removing ${p.name} removes ${using.length === 1 ? "it" : "them"} too.`}
@@ -335,9 +354,15 @@ function Plugin({ plugin: p, state, problem, offer }: { plugin: AnyPlugin; state
             />
           </motion.div>
         )}
+        {files.question && (
+          // (over the whole window, as a question about the app is: in its own layer - layouts/QuestionLayer)
+          <motion.div key="files" {...FADE} className="absolute inset-0">
+            {files.question}
+          </motion.div>
+        )}
         {live && (
-          // (over the whole window, as a question about the app is)
-          <motion.div key="remove" {...FADE} className="fixed inset-0 z-[100]">
+          // (over the whole window, as a question about the app is: in its own layer - layouts/QuestionLayer)
+          <motion.div key="remove" {...FADE} className="absolute inset-0">
             <ConfirmDiscard
               title={`Remove ${p.name}?`}
               message={`${live.length === 1 ? "One of its jobs is" : `${live.length} of its jobs are`} running or waiting. Removing it stops ${live.length === 1 ? "that job" : "them"}, and what ${live.length === 1 ? "it" : "they"} would have made is lost.`}
@@ -352,6 +377,7 @@ function Plugin({ plugin: p, state, problem, offer }: { plugin: AnyPlugin; state
           </motion.div>
         )}
       </AnimatePresence>
+      </QuestionLayer>
     </div>
   );
 }

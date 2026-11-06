@@ -84,7 +84,7 @@ describe("3D structures, on a text in the column", () => {
 
   it("reads a calculation's output by its reader, as one opened - told by its program's banner, its plugin added or not - never in part as coordinates", () => {
     // (made up: an output's banner, then a geometry as a text of coordinates would have it)
-    const output = ["", "                                 * O   R   C   A *", "", text].join("\n");
+    const output = ["", "                                 ~ Q   U   A   N   T   A ~", "", text].join("\n");
     const of = (selected: string): TextMenuTarget => ({ selected: () => selected, hasText: () => true, selectAll: () => {}, text: { whole: () => output, name: "job.out" } });
     for (const added of [MANIFESTS, []]) {
       registerKinds(added, MANIFESTS);

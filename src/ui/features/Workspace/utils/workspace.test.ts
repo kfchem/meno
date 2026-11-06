@@ -9,7 +9,7 @@ import { addSet, addStep } from "../workflow/model";
 import { placeResults } from "../workflow/run";
 import { collectionHash, countOf, numberedRecord, recordNumber, setMembers } from "../workflow/entries";
 import { DRAWN_ON_PAGE } from "../workflow/look";
-import type { WorkflowSet } from "../store/types";
+import type { DrawnModel, Member, WorkflowSet } from "../store/types";
 import { askFor, heldOutput, outputOf, rememberOutput } from "../../../../lib/calc/asks";
 import { readMenoFile } from "../../../../lib/doc/menoFile";
 import { workspaceOfFile } from "../../../views/openFile";
@@ -48,6 +48,10 @@ function canvas() {
   st().setDocumentStyle({ ...DEFAULT_STYLE_CHOICE, changes: { bondColor: "#204080" } } as never);
   return { doc, st };
 }
+
+
+/** A set's member as compared: a structure by its atoms alone - its record, with the lasting id each is given, left out (workflow/lasting.test). */
+const atomsOf = (m: Member) => ("structure" in m ? { structure: m.structure } : m);
 
 describe("a workspace file", () => {
   it("holds everything on the canvas, and reads back as it was", () => {
@@ -465,7 +469,8 @@ describe("a workspace's sets, saved (version 2)", () => {
     const text = workspaceText(st());
     const saved = JSON.parse(text);
     expect(saved.version).toBe(2);
-    expect(saved.sets[0].members).toEqual([{ structure: [1, 2, 3] }, { molecule: 1 }]);
+    expect(saved.sets[0].members.map(atomsOf)).toEqual([{ structure: [1, 2, 3] }, { molecule: 1 }]);
+    expect(saved.sets[0].members[0].record.id).toEqual(expect.any(String));
     expect(saved.sets[1].members).toEqual([{ molecule: 0 }]);
     const doc = createWorkspaceDocument();
     const store = createEditorStore(doc);
@@ -493,7 +498,7 @@ describe("a workspace's sets, saved (version 2)", () => {
     expect(saved.sets[1].members).toBeUndefined();
     expect(saved.sets[1].notKept).toEqual({ count: 1, hash });
     // (the other set's molecule by its place among those written)
-    expect(saved.sets[0].members).toEqual([{ structure: [1, 2, 3] }, { molecule: 0 }]);
+    expect(saved.sets[0].members.map(atomsOf)).toEqual([{ structure: [1, 2, 3] }, { molecule: 0 }]);
     const ws = readWorkspace(JSON.stringify(saved))!;
     expect(ws.workflow!.sets[1].notKept).toEqual({ count: 1, hash });
   });
@@ -545,7 +550,9 @@ describe("a workspace's sets, saved (version 2)", () => {
     // (those on the page among its atoms and its members; the rest written as the set holds them)
     expect(saved.atoms.filter((a: { el: string }) => a.el === "N")).toHaveLength(2 * shown);
     expect(saved.sets[at].members).toHaveLength(shown);
-    expect(saved.sets[at].drawnCollection).toEqual(made.slice(shown));
+    // (each written with the lasting id it was given as it was put in the set: workflow/lasting.test)
+    expect(saved.sets[at].drawnCollection.map((m: DrawnModel) => ({ ...m, record: (({ id: _id, ...r }) => r)(m.record!) }))).toEqual(made.slice(shown));
+    expect(saved.sets[at].drawnCollection.every((m: DrawnModel) => typeof m.record?.id === "string")).toBe(true);
     // (opened again: all 120 the set's still, in order - none trimmed by what the page shows)
     const opened = createWorkspaceDocument();
     const store = createEditorStore(opened);
@@ -575,6 +582,6 @@ describe("a workspace's sets, saved (version 2)", () => {
     const store = createEditorStore(doc);
     connectStoreToDocument(store, doc);
     store.getState().openWorkspace(readWorkspace(JSON.stringify(saved))!, true);
-    expect(store.getState().sets[0].members).toEqual([{ structure: [1, 2, 3] }]);
+    expect(store.getState().sets[0].members!.map(atomsOf)).toEqual([{ structure: [1, 2, 3] }]);
   });
 });

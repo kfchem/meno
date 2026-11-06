@@ -17,7 +17,7 @@ export function layoutBond(b: Bond, a1: number, a2: number): LBond {
     order: b.order,
     stereo: b.stereo ?? "none",
     doubleMode: b.doubleMode ?? "auto",
-    stereoOrient: b.stereoOrient ?? "principle",
+    ...(b.narrow === b.a ? { narrow: a1 } : b.narrow === b.b ? { narrow: a2 } : {}),
     ...(b.display ? { display: b.display } : {}),
     ...(b.dative ? { dative: true } : {}),
     ...(b.color ? { color: b.color } : {}),
@@ -65,11 +65,21 @@ export function layoutBonds(
 }
 
 /**
- * A line thinner than this on screen disappears into the background, so the
- * layout is told to keep bonds at least this wide however far out the camera
- * is.
+ * How many device pixels the canvas draws to each of the screen's (Settings,
+ * General, *Drawing resolution*; Workspace sets it as the canvas takes it).
  */
-export const MIN_LINE_PX = 1.25;
+let drawnRatio = 1;
+export function setDrawnRatio(ratio: number): void {
+  drawnRatio = Math.max(1, ratio);
+}
+
+/**
+ * The thinnest a bond is drawn on the screen, however far out the camera is,
+ * in CSS pixels: one device pixel - thinner, a line shimmers away (the
+ * maintainer, 2026-11-05: lines in page units, floored at a device pixel;
+ * it was 1.25 CSS pixels, two and a half device pixels on a screen of two).
+ */
+export const minLinePx = () => 1 / drawnRatio;
 
 /**
  * The options every part of the 2D editor draws with, in `style`, at the
@@ -85,7 +95,7 @@ export function editorLayoutOptions(
 ): LayoutOptions {
   return layoutOptionsFor(style, NOMINAL_BOND_LENGTH, {
     units: "world",
-    minLinePx: MIN_LINE_PX,
+    minLinePx: minLinePx(),
     ...over,
   });
 }

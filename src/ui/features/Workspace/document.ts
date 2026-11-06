@@ -20,8 +20,10 @@ import { magnifiedTo, oneMagnificationEach } from "../../../lib/chem/magnified2d
 import { DEFAULT_WORKSPACE_3D, type Workspace3D } from "../../../lib/chem/workspaceStyle3d";
 import { pathLength, pointAlong, type ArrowLook } from "../../../lib/chem/reactionArrow";
 import { arrowPoints } from "../../../lib/chem/reactionScheme";
-import { mapAtoms, mapMarks, mapStanding } from "./chem/atomMap";
+import { mapAtoms, mapMarks, mapShows, mapStanding } from "./chem/atomMap";
+import { numbers3d, type StructureMap } from "./chem/structureMaps";
 import { etaHeld } from "./chem/eta";
+import { wedgesHeld } from "./chem/drawing";
 import type { Arrow, ArrowAtomMap, ArrowFormPatch, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Ink, InkLook, Shape, ShapePatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText, LostText } from "./store/types";
 import { sha256Hex } from "../../../lib/binary/sha256";
 import { ringKeyOf, ringThere } from "./utils/rings";
@@ -38,6 +40,7 @@ import { readResults } from "../../../lib/calc/results";
 import { inMenosForm, type CalcInfo } from "../../../lib/calc/output";
 import { newTextName } from "./utils/texts";
 import { fitSets, membersSettled } from "./workflow/model";
+import type { Conversation } from "./conversation/types";
 
 export type WorkspaceDocument = {
   model: Model;
@@ -116,7 +119,13 @@ export type WorkspaceDocument = {
   nextInkId?: number;
   /** Catalytic cycles on the page (lib/chem/cycle; docs/EDITOR-2D.md, *Catalytic cycles*). */
   cycles?: Cycle[];
+  /** Atom maps between structures on the page, not on an arrow (chem/structureMaps), numbered from `nextStructureMapId`. */
+  structureMaps?: StructureMap[];
+  nextStructureMapId?: number;
   nextCycleId?: number;
+  /** Conversations on the page, each in its frame (conversation/types; docs/CONVERSATIONS.md). */
+  conversations?: Conversation[];
+  nextConversationId?: number;
 };
 
 /** Whether it holds nothing: no structure, arrow, "+" sign or words drawn, no molecule in 3D, no text, no workflow. */
@@ -135,6 +144,7 @@ export function isBlankDocument(doc: WorkspaceDocument): boolean {
     !doc.shapes?.length &&
     !doc.inks?.length &&
     !doc.cycles?.length &&
+    !doc.conversations?.length &&
     !doc.sets?.length &&
     !doc.steps?.length
   );
@@ -187,7 +197,7 @@ export function createWorkspaceDocument(data?: unknown, style: StyleChoice = DEF
   // (its history held to about 100 MB: what a step costs is the atoms and
   // bonds it copies - the lists a drawing's edit makes anew, not those it
   // shares with the step before; the maintainer, 2026-10-13)
-  return createDocument<WorkspaceDocument>(doc, { settle: (next, before) => withRecordsSettled(membersSettled(fitSets(withOneMagnification(next, before), before), before), before), cost: stepCost });
+  return createDocument<WorkspaceDocument>(doc, { settle: (next, before) => mapsSettled(withRecordsSettled(membersSettled(fitSets(withOneMagnification(next, before), before), before), before), before), cost: stepCost });
 }
 
 /** What keeping a workspace's state in its history costs beyond the one before it: the atom and bond lists it does not share with it. */
@@ -237,8 +247,9 @@ export function setFigureChecked(doc: WorkspaceDocument, ids: readonly number[],
 /** `doc` with its stacks of drawings kept whole as an edit leaves them (utils/stacks `settledRecords`). */
 export function withRecordsSettled(doc: WorkspaceDocument, before?: WorkspaceDocument): WorkspaceDocument {
   if (before && doc.model === before.model) return doc;
-  // (a haptic bond held to its ring, its star at the ring's centre: chem/eta)
-  const model = etaHeld(settledRecords(doc.model, before?.model), before?.model);
+  // (a haptic bond held to its ring, its star at the ring's centre: chem/eta;
+  // and each wedge held narrow at the atom it was: chem/drawing)
+  const model = wedgesHeld(etaHeld(settledRecords(doc.model, before?.model), before?.model), before?.model);
   return model === doc.model ? doc : { ...doc, model };
 }
 
@@ -275,7 +286,7 @@ export function bindRing(doc: WorkspaceDocument, metal: number, ring: readonly n
   const star = doc.nextId;
   const x = ring.reduce((s, id) => s + at.get(id)!.x, 0) / ring.length;
   const y = ring.reduce((s, id) => s + at.get(id)!.y, 0) / ring.length;
-  const bond: Bond = { id: star + 1, a: metal, b: star, order: 1, coordination: true, endpoints: [...ring], attach: "all", stereo: "none", stereoOrient: "principle" };
+  const bond: Bond = { id: star + 1, a: metal, b: star, order: 1, coordination: true, endpoints: [...ring], attach: "all", stereo: "none" };
   return {
     ...doc,
     nextId: star + 2,
@@ -343,7 +354,6 @@ export function addBond(
     b,
     order,
     stereo: "none",
-    stereoOrient: "principle",
   };
   return {
     ...doc,
@@ -546,14 +556,15 @@ export function withoutAtoms(doc: WorkspaceDocument, ids: Iterable<number>): Wor
  */
 export type Relayout = {
   atoms: { id: number; x: number; y: number; z?: number; stereoCentre?: boolean }[];
-  bonds: (Pick<Bond, "id" | "stereo" | "stereoOrient"> & { display?: Bond["display"] })[];
+  bonds: (Pick<Bond, "id" | "stereo" | "narrow"> & { display?: Bond["display"] })[];
   /** H atoms to add, each bonded to `on`, the bond wedged as given. */
   added?: {
     x: number;
     y: number;
     on: number;
     stereo: NonNullable<Bond["stereo"]>;
-    stereoOrient: NonNullable<Bond["stereoOrient"]>;
+    /** The atom its wedge is narrow at: `on`, or none for the H. */
+    narrow?: number;
   }[];
   /** Atoms to take away, with their bonds. */
   removed?: number[];
@@ -599,30 +610,31 @@ export function relayout(doc: WorkspaceDocument, change: Relayout): WorkspaceDoc
     const p = patch.get(b.id);
     const display = p && "display" in p ? p.display : b.display;
     const laid = to.has(b.a) && to.has(b.b);
-    if (laid && b.stereoAt && (!p || (p.stereo === b.stereo && p.stereoOrient === b.stereoOrient && display === b.display))) {
+    if (laid && b.stereoAt && (!p || (p.stereo === b.stereo && p.narrow === b.narrow && display === b.display))) {
       changed = true;
       const { stereoAt: _at, ...kept } = b;
       return [kept];
     }
-    if (!p || (p.stereo === b.stereo && p.stereoOrient === b.stereoOrient && display === b.display)) return [b];
+    if (!p || (p.stereo === b.stereo && p.narrow === b.narrow && display === b.display)) return [b];
     changed = true;
-    const { display: _display, stereoAt: _at, ...rest } = b;
+    const { display: _display, stereoAt: _at, narrow: _narrow, ...rest } = b;
     // (up, down and wavy on a single bond only: a double or triple bond keeps its own)
     const wedge = p.stereo === "up" || p.stereo === "down" || p.stereo === "wavy";
     const stereo = wedge && b.order !== 1 ? b.stereo : p.stereo;
-    return [{ ...rest, stereo, stereoOrient: stereo === p.stereo ? p.stereoOrient : b.stereoOrient, ...(display ? { display } : {}) }];
+    const narrow = stereo === p.stereo ? p.narrow : b.narrow;
+    return [{ ...rest, stereo, ...(narrow != null ? { narrow } : {}), ...(display ? { display } : {}) }];
   });
   if (!changed) return doc;
   let nextId = doc.nextId;
   for (const h of change.added ?? []) {
     const id = nextId++;
     atoms.push({ id, x: h.x, y: h.y, r: 0.9, el: "H" });
-    bonds.push({ id: nextId++, a: h.on, b: id, order: 1, stereo: h.stereo, stereoOrient: h.stereoOrient });
+    bonds.push({ id: nextId++, a: h.on, b: id, order: 1, stereo: h.stereo, ...(h.narrow != null ? { narrow: h.narrow } : {}) });
   }
   for (const e of change.eta ?? []) {
     const star = nextId++;
     atoms.push({ id: star, x: e.x, y: e.y, r: 0.9, el: "*" });
-    bonds.push({ id: nextId++, a: e.metal, b: star, order: 1, coordination: true, endpoints: [...e.atoms], attach: "all", stereo: "none", stereoOrient: "principle" });
+    bonds.push({ id: nextId++, a: e.metal, b: star, order: 1, coordination: true, endpoints: [...e.atoms], attach: "all", stereo: "none" });
   }
   // (electron-pushing arrows on what was laid out bent as Meno bends them again, as marks are put back)
   const pushes = (doc.pushes ?? []).map((p) => {
@@ -716,7 +728,7 @@ export function expandAbbreviation(doc: WorkspaceDocument, id: number, group?: G
     if (k == null) return b;
     const at = s.attach[k] ?? head;
     const to = ids[at];
-    const moved = b.a === id ? { ...b, a: to } : { ...b, b: to };
+    const moved = { ...(b.a === id ? { ...b, a: to } : { ...b, b: to }), ...(b.narrow === id ? { narrow: to } : {}) };
     // to a pi system's star: a haptic bond, to all its atoms; to a donor
     // that lends its pair, a coordination bond (drawn as it was)
     const pi = s.haptic?.find((h) => h.star === at);
@@ -730,7 +742,7 @@ export function expandAbbreviation(doc: WorkspaceDocument, id: number, group?: G
       b: ids[b.a2],
       order: b.order,
       stereo: b.stereo ?? "none",
-      ...(b.stereoOrient ? { stereoOrient: b.stereoOrient } : {}),
+      ...(b.narrow != null ? { narrow: ids[b.narrow] } : {}),
       ...(b.display ? { display: b.display } : {}),
       ...bondChem(b),
       ...(b.endpoints ? { endpoints: b.endpoints.map((e) => ids[e]) } : {}),
@@ -805,6 +817,7 @@ export function contractToAbbreviation(
       a2: index.get(b.b)!,
       order: b.order,
       ...(b.stereo && b.stereo !== "none" ? { stereo: b.stereo } : {}),
+      ...(b.narrow != null && index.has(b.narrow) ? { narrow: index.get(b.narrow)! } : {}),
       ...bondChem(b),
       // (a haptic bond's ends by index, as an abbreviation keeps them)
       ...(b.endpoints ? { endpoints: b.endpoints.map((e) => index.get(e)!).filter((e) => e != null) } : {}),
@@ -934,7 +947,8 @@ export function replaceDraggedAtomWith(
     );
     const alreadyInModel = hasBond(doc, targetId, other);
     if (exists || alreadyInModel) continue;
-    bonds.push(b.a === movingId ? { ...b, a: targetId } : { ...b, b: targetId });
+    // (a wedge narrow at the atom dragged, narrow at the one it was dropped on)
+    bonds.push({ ...(b.a === movingId ? { ...b, a: targetId } : { ...b, b: targetId }), ...(b.narrow === movingId ? { narrow: targetId } : {}) });
   }
   const atoms = doc.model.atoms.filter((a) => a.id !== movingId);
   // (its electron-pushing arrows with it: an end on the atom dragged now on
@@ -974,6 +988,8 @@ export function replaceModel(
     nextShapeId: 1,
     molecules3d: [],
     nextMolecule3dId: 1,
+    structureMaps: [],
+    nextStructureMapId: 1,
     sets: [],
     steps: [],
     wires: [],
@@ -1036,6 +1052,7 @@ export function appendModel(
         id,
         a,
         b: z,
+        ...(b.narrow != null ? { narrow: idMap.get(b.narrow) ?? b.narrow } : {}),
         ...(whole ? { endpoints: endpoints!.map((e) => idMap.get(e)!), ...(attach ? { attach } : {}) } : {}),
       },
     ];
@@ -1455,7 +1472,7 @@ export function setAtomMap(doc: WorkspaceDocument, arrowId: number, map: ArrowAt
   if (!arrow) return doc;
   const before = arrow.atomMap;
   const inside = new Set<number>([...(before ? mapAtoms(before) : []), ...(map ? mapAtoms(map) : [])]);
-  const marks = map && map.shown && mapStanding({ atomMap: map }, doc.model) === "ready" ? mapMarks(map, doc.model) : null;
+  const marks = map && map.shown && mapShows(mapStanding({ atomMap: map }, doc.model)) ? mapMarks(map, doc.model) : null;
   const atoms = doc.model.atoms.map((a) => {
     if (!inside.has(a.id)) return a;
     const n = marks?.numbers.get(a.id);
@@ -1476,6 +1493,92 @@ export function setAtomMap(doc: WorkspaceDocument, arrowId: number, map: ArrowAt
     return map ? { ...rest, atomMap: map } : rest;
   });
   return { ...doc, arrows, model: { ...doc.model, atoms, bonds } };
+}
+
+/**
+ * The page's maps between structures (chem/structureMaps) set to `maps`,
+ * with what they show put on the drawing and on their molecules in 3D, and
+ * taken off what the maps before showed it on: on the drawing, each heavy
+ * atom's map number and the reacting centres of the bonds a map makes,
+ * breaks or changes in order, as an arrow's map puts them (`setAtomMap`);
+ * on a side's molecules in 3D, every atom's number - its hydrogens' too -
+ * shown as their atom-map numbers. Only ready maps shown show anything; one
+ * step.
+ */
+export function setStructureMaps(doc: WorkspaceDocument, maps: readonly StructureMap[]): WorkspaceDocument {
+  const before = doc.structureMaps ?? [];
+  const inside = new Set<number>([...before, ...maps].flatMap((m) => [...mapAtoms(m.map)]));
+  const numbers = new Map<number, number>();
+  const centres = new Map<number, number>();
+  for (const { map } of maps) {
+    if (!map.shown || !mapShows(mapStanding({ atomMap: map }, doc.model))) continue;
+    const marks = mapMarks(map, doc.model);
+    for (const [id, n] of marks.numbers) numbers.set(id, n);
+    for (const [id, c] of marks.centres) centres.set(id, c);
+  }
+  const atoms = doc.model.atoms.map((a) => {
+    if (!inside.has(a.id)) return a;
+    const n = numbers.get(a.id);
+    if (n === a.map) return a;
+    const { map: _m, ...rest } = a;
+    return n ? { ...rest, map: n } : rest;
+  });
+  const bonds = doc.model.bonds.map((b) => {
+    if (!inside.has(b.a) || !inside.has(b.b)) return b;
+    const c = centres.get(b.id);
+    if (c === b.reactingCentre) return b;
+    const { reactingCentre: _c, ...rest } = b;
+    return c ? { ...rest, reactingCentre: c } : rest;
+  });
+  // (on the sides' molecules in 3D: every atom's number, shown as its map number - and off those the maps before showed them on)
+  const molecules = doc.molecules3d ?? [];
+  const now = numbers3d(maps, molecules, doc.model);
+  const touched = new Set([...numbers3d(before, molecules, doc.model).touched, ...now.touched]);
+  const molecules3d = molecules.map((m) => {
+    if (!touched.has(m.id)) return m;
+    const n = now.numbers.get(m.id);
+    const atoms3d = m.atoms.map((a, i) => {
+      const k = n?.[i] ?? 0;
+      if (k === (a.map ?? 0)) return a;
+      const { map: _m, ...rest } = a;
+      return k ? { ...rest, map: k } : rest;
+    });
+    const { atomNumbers: shownBefore, ...rest } = m;
+    const atomNumbers = n ? { kind: "map" as const } : shownBefore?.kind === "map" ? undefined : shownBefore;
+    return { ...rest, atoms: atoms3d, ...(atomNumbers ? { atomNumbers } : {}) };
+  });
+  const { structureMaps: _s, ...restDoc } = doc;
+  return {
+    ...restDoc,
+    ...(maps.length ? { structureMaps: [...maps] } : {}),
+    ...(doc.molecules3d ? { molecules3d } : {}),
+    model: { ...doc.model, atoms, bonds },
+  };
+}
+
+/** `doc` with maps between structures added - in the place of those `replacing`, by id - each numbered on from `nextStructureMapId`: their ids, in order. */
+export function addStructureMaps(doc: WorkspaceDocument, made: readonly StructureMap["map"][], replacing: readonly number[] = []): { doc: WorkspaceDocument; ids: number[] } {
+  let id = doc.nextStructureMapId ?? 1;
+  const added = made.map((map) => ({ id: id++, map }));
+  const kept = (doc.structureMaps ?? []).filter((m) => !replacing.includes(m.id));
+  return { doc: { ...setStructureMaps(doc, [...kept, ...added]), nextStructureMapId: id }, ids: added.map((m) => m.id) };
+}
+
+/**
+ * Atom maps kept true to the drawing after an edit (fail closed): a map -
+ * between structures, or an arrow's - whose drawing the edit changed shows
+ * nothing more, its numbers and reacting centres taken off the drawing and
+ * its molecules in 3D in the same step; undo of the edit gives them back. Its
+ * menu then says it is of the structure before, and offers it made again.
+ */
+function mapsSettled(next: WorkspaceDocument, before: WorkspaceDocument): WorkspaceDocument {
+  if (next.model === before.model) return next;
+  const turned = (map: ArrowAtomMap) => mapStanding({ atomMap: map }, next.model) !== mapStanding({ atomMap: map }, before.model);
+  let out = next;
+  const maps = next.structureMaps ?? [];
+  if (maps.some((m) => turned(m.map))) out = setStructureMaps(out, maps);
+  for (const a of next.arrows) if (a.atomMap && turned(a.atomMap)) out = setAtomMap(out, a.id, a.atomMap);
+  return out;
 }
 
 /** A measurement's atoms put in another order - the same measurement, the same value: which side setting it moves. */

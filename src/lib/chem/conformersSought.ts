@@ -18,7 +18,7 @@
  * heavy atoms: hydrogens, carried or not, change nothing.
  */
 import type { Option, OptionValues } from "../options";
-import { symmetryClasses } from "../layout/canonical";
+import { symmetryOrbits } from "../layout/canonical";
 import { smallestRings } from "../layout/rings";
 import { readMolfile } from "./ctfile";
 import { aromaticIn } from "./aromaticity";
@@ -159,13 +159,17 @@ export function turningBonds(atoms: readonly SoughtAtom[], bonds: readonly Sough
   };
   const lonePair = (i: number) => ["N", "O", "S"].includes(atoms[i].el) && (atoms[i].charge ?? 0) <= 0;
   const acyl = (i: number) => atoms[i].el === "C" && around[i].some(([j, o]) => o === 2 && ["O", "N", "S"].includes(atoms[j].el));
-  // (a lone pair's atom carrying two alike - by the molecule's symmetry classes, worked out only where asked)
-  let classes: number[] | null = null;
+  // (a lone pair's atom carrying two alike - in one orbit of the symmetries that keep the flat bond itself in place: one of
+  //  them swaps the two, so the bond's two forms are one shape. The bond's own atoms marked apart from every other atom, so
+  //  an automorphism that moves it onto another bond is not one of them. Not by symmetry classes, which can join two atoms
+  //  no automorphism takes onto each other - fewer conformers sought, the unsafe way - while orbits are never coarser than
+  //  the true ones, and finer at worst where the search is cut short: more sought. Worked out only where asked)
   const twoAlike = (i: number, other: number) => {
     const rest = heavyAround(i).filter(([j]) => j !== other);
     if (rest.length !== 2) return false;
-    classes ??= symmetryClasses({ atoms, bonds });
-    return classes[rest[0][0]] === classes[rest[1][0]];
+    const marked = atoms.map((a, k) => (k === i || k === other ? { ...a, el: `${a.el}*` } : a));
+    const { orbit } = symmetryOrbits({ atoms: marked, bonds });
+    return orbit[rest[0][0]] === orbit[rest[1][0]];
   };
   const flat = (i: number, j: number) => (acyl(i) && lonePair(j) && twoAlike(j, i)) || (acyl(j) && lonePair(i) && twoAlike(i, j));
   // (an end N, O or S's hydrogens - those bonded to it as atoms, or those its valence leaves - whose turn gives conformers of
@@ -312,7 +316,7 @@ export function soughtOptions(sought: "needed" | "fixed" = "needed", count = RIN
       ],
       default: sought,
     },
-    { id: "count", when: { id: "sought", in: ["fixed"] }, label: "How many", type: "number", default: count, min: 1, max: MOST_CONFORMERS, step: 1 },
+    { id: "count", when: { id: "sought", in: ["fixed"] }, label: "How many", type: "number", default: count, min: 1, max: MOST_CONFORMERS, step: 1, whole: true },
   ];
 }
 
