@@ -8,8 +8,8 @@ import {
   type ChemistrySettings as Settings,
 } from "../../../lib/settings/appSettings";
 import { Fragment } from "react";
-import { noDefault, shownOptions, type Option, type OptionValues } from "../../../lib/options";
-import { clearOf, OwnValues, partsOf } from "./CalculationSettings";
+import { notedParts, shownOptions, type Option, type OptionValues } from "../../../lib/options";
+import { clearOf } from "./CalculationSettings";
 import { MOST_CONFORMERS, RING_CONFORMERS, soughtOptions } from "../../../lib/chem/conformersSought";
 import OptionRows from "../../options/OptionRows";
 import Switch from "../../controls/Switch";
@@ -127,19 +127,20 @@ function Sought3D({ chemistry, setChemistry }: { chemistry: Settings; setChemist
   const shown = shownOptions(soughtOptions("needed", RING_CONFORMERS, rounds ? {} : undefined), values);
   return (
     <div className="mt-2 rounded-lg border border-gh-line bg-white">
-      {/* (the window with Clear just before its field and its guide under it, as one row: Settings, Calculations does the same) */}
-      {partsOf(shown).map((part, k) =>
-        part.some(noDefault) ? (
+      {/* (each option's note right under its row, as one row with it - the window's guide, with Clear just before its field, as
+           Settings, Calculations has it; the first round's, what 0 is) */}
+      {notedParts(shown).map((part, k) => {
+        const note = part[part.length - 1].note;
+        const rows = <OptionRows options={part} values={values} onChange={change} before={(o) => clearOf(o, { within: values.within }, () => change({ ...values, within: Number.NaN }))} />;
+        return note ? (
           <div key={k}>
-            <OptionRows options={part} values={values} onChange={change} before={(o) => clearOf(o, { within: values.within }, () => change({ ...values, within: Number.NaN }))} />
-            <OwnValues options={part} indent={false} />
+            {rows}
+            <p className="pr-3 pb-2.5 pl-3 max-w-2xl text-xs leading-snug text-gh-gray">{note}</p>
           </div>
         ) : (
-          <Fragment key={k}>
-            <OptionRows options={part} values={values} onChange={change} />
-          </Fragment>
-        ),
-      )}
+          <Fragment key={k}>{rows}</Fragment>
+        );
+      })}
       <p className="px-3 pb-2.5 text-xs leading-snug text-gh-gray max-w-2xl">
         How many conformers are tried of a structure made in 3D here. A workflow's Conformers step says its own, starting from this.
       </p>

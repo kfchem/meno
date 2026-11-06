@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
+import { notedParts, shownOptions } from "../../../lib/options";
 import { MOST_CONFORMERS, RING_CONFORMERS, soughtOptions, WITHIN_GUIDE } from "../../../lib/chem/conformersSought";
 import type { ChemistrySettings } from "../../../lib/settings/appSettings";
 import type { ReactElement } from "react";
-import { clearOf, OwnValues } from "./CalculationSettings";
+import { clearOf } from "./CalculationSettings";
 import { soughtChosen, soughtValues } from "./ChemistrySettings";
 
 // Settings, Chemistry, 3D: how many conformers the page's 3D structure tries - as many as the molecule needs asked in
@@ -30,12 +31,15 @@ describe("conformers sought on the page, in Settings", () => {
     expect(soughtChosen(plain, { ...base, sought: "fixed", count: 40 })).toEqual({ ...plain, sought3d: "fixed", count3d: 40 });
   });
 
-  it("shows the window's guide under it, set in as Settings' rows are here, and Clear just before its field where the chemist has given one", () => {
+  it("shows each note right under its own row - the window's guide, and what a first round of 0 is - and Clear just before the window's field where the chemist has given one", () => {
     const options = soughtOptions("needed", RING_CONFORMERS, {});
-    const guide = renderToString(OwnValues({ options, indent: false }));
-    // (as written into the page: its apostrophes as entities)
-    expect(guide).toContain(WITHIN_GUIDE.replace(/'/g, "&#x27;"));
-    expect(guide).toContain("pl-3");
+    // (as many as the molecule needs: the choice and the window, its guide under it; the first round, its note under it; the most)
+    const parts = notedParts(shownOptions(options, soughtValues(plain, true)));
+    expect(parts.map((p) => p.map((o) => o.id))).toEqual([["sought", "within"], ["first"], ["most"]]);
+    expect(parts[0][1].note).toBe(WITHIN_GUIDE);
+    expect(parts[1][0].note).toMatch(/^0: the molecule's own count/);
+    // (this many: the choice and its number, nothing under them)
+    expect(notedParts(shownOptions(options, { ...soughtValues(plain, true), sought: "fixed" })).map((p) => p.map((o) => o.id))).toEqual([["sought", "count"]]);
     const within = options.find((o) => o.id === "within")!;
     let kept: unknown = null;
     const clear = clearOf(within, { within: 2.5 }, () => (kept = "cleared")) as ReactElement<{ onClick: () => void }>;
