@@ -1242,6 +1242,7 @@ pub fn run() {
             jobs::job_read,
             jobs::job_folder,
             jobs::job_stop,
+            jobs::job_stop_alone,
             jobs::job_remove,
             jobs::jobs_clear_finished,
             jobs::computer_resources,

@@ -2,7 +2,7 @@ import type { Table } from "../../../../../lib/table";
 import { gestureStep } from "../../../../../lib/doc/document";
 import type { StoreApi } from "zustand";
 import type { DocumentStore } from "../../../../../lib/doc";
-import { valuesOf } from "../../../../../lib/options";
+import { givenOnly, valuesOf } from "../../../../../lib/options";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import type { WorkspaceDocument } from "../../document";
 import { style3dOf } from "../../style3d";
@@ -81,8 +81,8 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
       doc.edit("size set", (d) => wf.resizeSet(d, id, frame), coalesce("set-size", id, gesture)),
     moveSet: (id: number, dx: number, dy: number, gesture?: string) => doc.edit("move set", (d) => wf.moveSet(d, id, dx, dy), coalesce("set-move", id, gesture)),
     // (the one asked for shown in the column - a PDF read there before giving way, as a text asked for does)
-    readSetTable: (id: number) => set((prev: EditorState) => ({ ...prev, setsRead: prev.setsRead.includes(id) ? prev.setsRead : [...prev.setsRead, id], setTableShown: id, textsOpen: true, pdfShown: null })),
-    showSetTable: (id: number) => set({ setTableShown: id, textsOpen: true, pdfShown: null }),
+    readSetTable: (id: number) => set((prev: EditorState) => ({ ...prev, setsRead: prev.setsRead.includes(id) ? prev.setsRead : [...prev.setsRead, id], setTableShown: id, textsOpen: true, pdfShown: null, conversationShown: null })),
+    showSetTable: (id: number) => set({ setTableShown: id, textsOpen: true, pdfShown: null, conversationShown: null }),
     stopReadingSetTable: (id: number) =>
       set((prev: EditorState) => {
         const setsRead = prev.setsRead.filter((s) => s !== id);
@@ -108,8 +108,9 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
     },
     addStep: (kind: StepKind, by: string, x: number, y: number) => {
       const id = doc.getState().nextWorkflowId ?? 1;
-      // (with the defaults Settings has for its kind, done by it)
-      const options = valuesOf(optionsFor(kind, by), useAppSettings.getState().options[stepRole(kind, by)]);
+      // (with the defaults Settings has for its kind, done by it - and, of one with no default, the chemist's own value
+      // there, else none: an Energy window's window)
+      const options = givenOnly(valuesOf(optionsFor(kind, by), useAppSettings.getState().options[stepRole(kind, by)]));
       // (where it was put down, or lower where something is there: never over a set, a card or a wire)
       doc.edit("add step", (d) => {
         const at = placeCard(d, x, y);
@@ -126,7 +127,7 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
         // (another kind its plugin fills: with the defaults Settings has for that one - those it shares with the step's, as the step has them)
         const kind = patch.kind;
         if (!kindsOf(by).includes(kind)) return;
-        const options = valuesOf(optionsFor(kind, by), { ...useAppSettings.getState().options[stepRole(kind, by)], ...step.options });
+        const options = givenOnly(valuesOf(optionsFor(kind, by), { ...useAppSettings.getState().options[stepRole(kind, by)], ...step.options }));
         doc.edit("change calculation", (d) => wf.updateStep(d, id, { kind, options }));
         return;
       }

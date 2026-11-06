@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { ensurePyEnv, pyEnvReady, removePyEnv, setUpQuestions } from "../pyEnv";
-import { ALL_PLUGINS, anyPluginById, manifestOf, pluginsUsedBy, pluginsUsing, READERS, runs, type Plugin, type PythonPlugin, type ReaderPlugin } from "./catalog";
+import { ALL_PLUGINS, anyPluginById, DEPENDS_REFUSED, manifestOf, pluginName, pluginsUsedBy, pluginsUsing, READERS, runs, type Plugin, type PythonPlugin, type ReaderPlugin } from "./catalog";
 import { askToConnectAll, type ConsentRequest } from "../net/network";
 import { registerKinds } from "../io/kinds";
 import type { Manifest } from "../plugins/manifest";
@@ -9,8 +9,9 @@ import { menoReader } from "./builtin";
 import { stopWorker, workerOf } from "../plugins/process";
 import { useAppSettings } from "../settings/appSettings";
 import { forThisSystem, systemHere } from "../plugins/here";
+import { inRange, rangeSaid } from "../plugins/depends";
 import { offersOf } from "../plugins/catalogue";
-import { useOnline } from "../plugins/online";
+import { getPlugin, onlineEntry, useOnline } from "../plugins/online";
 import { onPluginsChanged } from "../plugins/known";
 import { stopJobsAndWait } from "../jobs";
 
@@ -122,6 +123,43 @@ const listSaid = (names: readonly string[]) => (names.length < 2 ? names.join(""
  */
 export async function addPlugin(p: Plugin): Promise<void> {
   if (!forThisSystem(p)) throw new Error(`${p.name} is not made for this system.`);
+  // (a plugin it needs that is not got yet - one the list of plugins online offers: got first, as Settings gets one, of a
+  //  version it works with; the plugins in place then read again, so that it is set up with it below - and so on, for
+  //  those that one needs in turn)
+  const needed = (id: string) => (manifestOf(id)?.depends ?? []).filter((d) => !d.optional && !anyPluginById(d.plugin));
+  const toGet = needed(p.id);
+  // (each got once in this add, whatever the chain: plugins that need each other in a circle are refused once got, and
+  //  would otherwise be asked for again, and got again, for ever)
+  const got = new Set<string>();
+  for (let d = toGet.shift(); d; d = toGet.shift()) {
+    if (anyPluginById(d.plugin) || got.has(d.plugin)) continue;
+    got.add(d.plugin);
+    const entry = onlineEntry(d.plugin);
+    const why = !entry
+      ? `${p.name} was not added: it needs ${pluginName(d.plugin)}, which is neither here nor among the plugins online.`
+      : !inRange(entry.version, d.range)
+        ? `${p.name} was not added: it needs ${entry.name} ${rangeSaid(d.range)}, and the plugins online offer ${entry.version}.`
+        : null;
+    if (why) {
+      setState(p.id, "absent", why);
+      throw new Error(why);
+    }
+    try {
+      await getPlugin(entry!);
+    } catch (e) {
+      const said = `${p.name} was not added: ${e instanceof Error ? e.message : String(e)}`;
+      setState(p.id, "absent", said);
+      throw e;
+    }
+    toGet.push(...needed(d.plugin));
+  }
+  // (one it needs still not one Meno takes, got though it is - refused, as plugins in a circle are: not added, saying why)
+  const unread = got.size ? (manifestOf(p.id)?.depends ?? []).find((d) => !d.optional && !anyPluginById(d.plugin)) : undefined;
+  if (unread) {
+    const why = `${p.name} was not added: it needs ${pluginName(unread.plugin)}, which Meno does not take: ${DEPENDS_REFUSED.get(unread.plugin) ?? "it could not be read"}.`;
+    setState(p.id, "absent", why);
+    throw new Error(why);
+  }
   // (one that runs nothing uses others too: a preset plugin, the plugin that runs its files)
   const first = pluginsUsedBy(p.id).filter((q) => useReaders.getState().state[q.id] !== "added");
   if (!first.length) return addOne(p);

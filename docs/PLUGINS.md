@@ -340,8 +340,8 @@ code is under another licence than Meno's. Such a plugin:
   (`licence: "GPL-3.0-or-later"`);
 - is never taken from by Meno's code or other plugins, and speaks to
   Meno only through files and arguments;
-- is listed with its licence wherever Meno lists the plugins'
-  licences: README, and Settings, *Plugins*.
+- has its licence shown in Settings, *Plugins*, as every plugin has, and
+  stated in its own folder of the plugins online (kfchem/meno-plugins).
 
 Two such plugins are among the plugins online, both GPL-3.0-or-later: the
 Blender plugin (`meno-plugins/plugins/blender`, RENDER.md), and the Film looks
@@ -811,9 +811,9 @@ On update: nothing keys on `version`. An environment is set up again only by its
 A plugin may use other plugins, as a library uses libraries (the maintainer, 2026-10-31): its manifest's `depends` says which, each by its id, with the versions of it it works with, and what of it is used - only what that plugin declares in its own manifest (its programs, and its interfaces), never its files. Meno keeps each one's presence and version, and never what it does: core names no plugin and no program (`lib/plugins/depends`).
 
 - **Versions** are written `>=A <B`, each of three numbers, B after A - always bounded above, an interface's too, so that a plugin's next major is never taken on trust (2026-11-01; before, `>=A` alone was taken too); nothing else is taken - no caret, no "or" - so that what a 0.x version takes is never misread. A plugin's version is compared by its numbers (0.1.10 after 0.1.9).
-- **Refused** - not offered at all - is a plugin that uses a program, an interface or a kind of file that a plugin it uses does not declare, or whose step takes a kind of file that is none of its own, none of Meno's, and none it says it uses; and every plugin of a circle (a uses b, b uses a), named, which could be set up in no order. One that uses a plugin refused is refused in turn. One that uses a plugin Meno does not know yet - not got from the plugins online - is not refused: that plugin is missing, as one not added is (*Optional*, *Stopped*, below), and what is used of it is checked once it is got (2026-11-05).
+- **Refused** - not offered at all - is a plugin that uses a program, an interface or a kind of file that a plugin it uses does not declare, or whose step takes a kind of file that is none of its own, none of Meno's, and none it says it uses; and every plugin of a circle (a uses b, b uses a), named, which could be set up in no order. One that uses a plugin refused is refused in turn. One that uses a plugin Meno does not know yet - not got from the plugins online - is not refused: that plugin is missing, as one not added is (*Optional*, *Stopped*, below), and what is used of it is checked once it is got (2026-11-05): one got later that does not declare what is used of it refuses the plugin then, as any is refused. A plugin not in place is named as the plugins online name it, or by its id where they do not list it - so an id written wrong in `depends` stays named so, the plugin stopped while it is needed, inert while it is used only for some of its work.
 - **Optional** is one only some of its work needs (`optional: true`): the ORCA interface's xTB, for its xTB methods alone. It is not set up with it, and missing it stops nothing: a job that needs its program is refused, saying so ("Needs xTB, which is not added."), and the plugin's other steps run as ever. There, it is kept as one it needs is: never taken away unasked while it is used, and of a version it does not work with, the plugin is stopped - unless it uses that one for no program and no interface, for its kinds of file alone (below).
-- **Adding** a plugin sets up first those it needs - not those it uses only for some of its work - that are not added, each before any that uses it, all asked of the network in one question - each one's own words under its name ("Set up the ORCA interface, with xTB?"); a yes allows each of them, a no sets none up. Where one it uses cannot be set up, neither is it, saying which. One it needs that is not got yet is not got with it: the plugin is added, stopped, saying which it needs (*Stopped*), until that one is added too.
+- **Adding** a plugin sets up first those it needs - not those it uses only for some of its work - that are not added, each before any that uses it, all asked of the network in one question - each one's own words under its name ("Set up the ORCA interface, with xTB?"); a yes allows each of them, a no sets none up. Where one it uses cannot be set up, neither is it, saying which. One it needs that is not in place yet is got first from the plugins online, of a version it works with - and so on, for each that one needs in turn - then set up with it (2026-11-06); where the plugins online offer none of it, or none of a version it works with, the plugin is not added, saying so. A plugin it uses only for some of its work is never got with it.
 - **Taking away** a plugin another added uses is never done alone: Settings asks ("Remove xTB?" - "ORCA interface uses it. Removing xTB removes it too." - *Remove both*), and those that use it go first, their jobs asked about as its own are; asked to take it away alone otherwise, Meno takes none away, saying why ("xTB was not removed: ORCA interface uses it.").
 - **Stopped** is a plugin added that a plugin it needs is not added for, or one it uses - optionally or not - added of a version it does not work with, or with an interface it uses of a version it does not work with ("Needs Blender's preset interface from 1.0.0 to before 2.0.0; 2.0.0 is added"): Settings says so on it ("Stopped: needs xTB, which is not added."), and its steps run nothing, saying the same ("ORCA interface is stopped. Needs xTB from 0.1.4 to before 0.2.0; 0.2.0 is added."); a job of it that would run that plugin's program is refused by the backend too, reading that plugin's version from its own folder, never from what the job's spec says ("orca needs xTB >=0.1.4 <0.2.0; 0.2.0 is here").
 - **A kind of file of another's** that a step takes (`kinds`: Multiwfn's NCI, the Gaussian interface's formatted checkpoint) is taken only while that plugin is added, of a version it works with; used for some of its work, as Multiwfn uses it, it stops nothing - not added, or of a version it does not work with: an entry read from such a file is given none, and Settings says why on the plugin ("Gaussian formatted checkpoint is not taken: Needs Gaussian interface from 0.4.0 to before 1.0.0; 1.2.0 is added.").
@@ -1582,7 +1582,15 @@ comes in its own pull request.
   - the systems it is made for, the roles it fills, the kinds of step it adds and the kinds of file it reads: what an offer of it is made for;
   - the kinds of file it reads that marks tell (`fileKinds`), as its manifest says them - each one's id, name, file names and marks, and, where its own program writes it, that program (`writtenBy`) - so that a file only it would read is told before it is got (*A plugin to suggest for a file*). None said, none. Read as strictly as the rest: a mark with any key but its text, `at` (`line-start`) and `anyCase` (true), or one a manifest's mark could not be, refuses the whole;
   - the tables of atoms its program prints, as papers quote them (`quotedTables`), as its manifest keeps them - four at most, each one a manifest's could be, exactly - so that such a table is said to be its to read before it is got (FILE-IO.md, *Coordinates in a text*). None said, none;
-  - its files: one archive, where it is - on https, at the hosts the plugins' releases are at, and nowhere else - its fingerprint (SHA-256) and size; and its manifest's fingerprint.
+  - its files: one archive, where it is - on https, at the hosts the plugins' releases are at, and nowhere else - its fingerprint (SHA-256) and size; and its manifest's fingerprint;
+  - where it brings presets for another plugin, that one's id (`presetsFor`, its manifest's `presets.for`): offered with it where that one is got again (*Plugins used before*).
+
+  Beside its plugins, the list may name those no longer offered
+  (`retired`), each by its id, its name (at most 60 letters) and why, in
+  words, at most 160 ("Meno reads these files itself now"), so that one
+  set up before is said not to be got again, and why. None on offer may be
+  among them: a plugin is said either not made for here or no longer
+  offered, never both.
 - **Read strictly, whole.** The backend checks the signature before
   anything of it is read, and when it was issued against the one kept:
   one issued earlier is refused, and one issued the same second is taken
@@ -1657,11 +1665,20 @@ starts with none in place. As it first starts, it offers to get those again
   them.
 - **Two questions at most.**
   - Where the network is not allowed for the list yet: whether to look
-    them up online, naming them as they were set up. A no is said in the
-    corner of the window, and asked again as Meno next starts, unless the
-    chemist chooses *Don't ask again* there.
+    them up online, naming them as they were set up - by their names where
+    a list kept from before has them, else by their ids, and none that list
+    says is no longer offered (`retired`); where only such are left, nothing
+    is asked, and why is said once. A no is said in the corner of the
+    window, and asked again as Meno next starts, unless the chemist chooses
+    *Don't ask again* there.
   - With the list fetched: whether to get them, each by its name and the
-    size of its files. A no is kept.
+    size of its files. Those not got again are said in it, each with why:
+    another system's or a newer Meno's, no longer offered as the list says
+    (`retired`), or not on it at all; where none is got, that is said
+    once. With them is offered what the list says brings presets for one
+    of them (`presetsFor`) - presets that came inside a plugin before, and
+    apart from it now - unless it is here already or the chemist took it
+    away. A no is kept.
 - **Got as Settings gets them**, one after another. An environment whose
   lock is the one its stamp was made for is kept, and nothing of it is
   fetched again. One whose lock changed is set up as any plugin's is,

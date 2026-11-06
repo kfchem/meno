@@ -33,7 +33,7 @@
 use crate::pixienv;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fs::{self, File, OpenOptions, TryLockError};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Component, Path, PathBuf};
@@ -446,6 +446,25 @@ fn stop_asked(dir: &Path) -> bool {
     GOING.load(Ordering::SeqCst) || dir.join(STOP).exists()
 }
 
+/// What its `stop` file says where the job alone is stopped, not its step (`ask_stop_alone`).
+const ALONE: &str = "alone";
+/// Why a job stopped alone is recorded failed (lib's `STOPPED_ALONE`).
+const STOPPED_ALONE: &str = "stopped by you";
+
+/// Whether the stop asked of a job was of it alone - its step to go on without it - and not of Meno going.
+fn stopped_alone(dir: &Path) -> bool {
+    !GOING.load(Ordering::SeqCst) && fs::read_to_string(dir.join(STOP)).is_ok_and(|t| t.trim() == ALONE)
+}
+
+/// How a job stopped ends: failed, saying why, where it alone was stopped - its step bringing in the rest - else stopped.
+fn stopped_as(dir: &Path) -> (JobState, Option<String>) {
+    if stopped_alone(dir) {
+        (JobState::Failed, Some(STOPPED_ALONE.into()))
+    } else {
+        (JobState::Stopped, None)
+    }
+}
+
 /// Set once the runner is asked to go (macOS, Linux: SIGTERM, SIGINT or
 /// SIGHUP - a logout, `kill`, Activity Monitor's Quit): it stops its job as
 /// a stop does, and goes.
@@ -494,6 +513,12 @@ fn sleep_watching(dir: &Path, long: Duration) {
 /// Ask a job to stop: its runner stops its program and everything it started - or, not started yet, lets it go.
 pub fn ask_stop(dir: &Path) -> std::io::Result<()> {
     fs::write(dir.join(STOP), b"")
+}
+
+/// Ask a job alone to stop, as `ask_stop` - recorded failed, "stopped by you" (`STOPPED_ALONE`), so that its step
+/// brings in what its other jobs gave. A stop of its step asked after it is a stop as ever.
+pub fn ask_stop_alone(dir: &Path) -> std::io::Result<()> {
+    fs::write(dir.join(STOP), ALONE)
 }
 
 /// Meno's executable started as a job's runner (`--job <folder>`): the job
@@ -571,16 +596,19 @@ pub fn run_job(dir: &Path, allowed: &dyn Fn(&JobSpec) -> Result<(), String>) -> 
     let mut at_head: Option<Instant> = None;
     let slots = dir.parent().map(|root| slots_for(limits_in(root), &spec)).unwrap_or(1);
     let mut unsure = 0;
+    // (the jobs this runner has seen finished: passed over on each look after)
+    let mut finished = HashSet::new();
     loop {
         if stop_asked(dir) {
-            end(JobState::Stopped, None, None, None);
+            let (state, why) = stopped_as(dir);
+            end(state, None, None, why);
             return 0;
         }
         // (its folder taken away, or its record ended by another - written gone, say: no turn to wait for)
         if waits_no_more(&mut unsure, dir.join(SPEC).is_file(), read_record(dir).as_ref()) {
             return 1;
         }
-        match take_turn(dir, &spec, &base) {
+        match take_turn(dir, &spec, &base, slots, &mut finished) {
             Ok(Turn::Taken) => break,
             Ok(Turn::Next) => sleep_watching(dir, step_at(at_head.get_or_insert_with(Instant::now).elapsed(), WAIT_STEP)),
             Ok(Turn::Behind(ahead)) => {
@@ -615,7 +643,8 @@ pub fn run_job(dir: &Path, allowed: &dyn Fn(&JobSpec) -> Result<(), String>) -> 
     let (status, stopped) = wait_program(dir, &mut program);
     let code = status.and_then(|s| s.code());
     if stopped {
-        end(JobState::Stopped, started, code, None);
+        let (state, why) = stopped_as(dir);
+        end(state, started, code, why);
     } else if !status.is_some_and(|s| s.success()) {
         end(JobState::Failed, started, code, None);
     } else {
@@ -631,7 +660,8 @@ pub fn run_job(dir: &Path, allowed: &dyn Fn(&JobSpec) -> Result<(), String>) -> 
                 }
             };
             if wait_program(dir, &mut after).1 {
-                end(JobState::Stopped, started, code, None);
+                let (state, why) = stopped_as(dir);
+                end(state, started, code, why);
                 drop(lock);
                 return 0;
             }
@@ -735,12 +765,103 @@ const NEAR_MORE: u32 = 4;
 const BEHIND_MOST: Duration = Duration::from_secs(10);
 const PLACE_STEP: Duration = Duration::from_millis(300);
 
+/// What a look at the queue saw: the jobs running and the cores and memory they take, the first waiting, and how many
+/// wait before this one.
+struct Seen {
+    running: u32,
+    used: (u32, u64),
+    first: Option<(u64, PathBuf)>,
+    ahead: u32,
+}
+
+/// The queue in `root` as it is, from the job `dir`'s place in it (`base`): each job's folder looked at but those
+/// `finished` names - jobs this runner saw finished before, which never wait or run again - and those it finds finished
+/// added to them, so that a long queue's runners do not read every finished job's record on every look.
+fn look(root: &Path, dir: &Path, base: &JobRecord, here: Resources, finished: &mut HashSet<std::ffi::OsString>) -> std::io::Result<Seen> {
+    let mut seen = Seen { running: 0, used: (0, 0), first: None, ahead: 0 };
+    // (those waiting before it: asked for before it, or at once and by name)
+    let mine_key = (base.created, dir.to_path_buf());
+    for entry in fs::read_dir(root)?.flatten() {
+        let name = entry.file_name();
+        if finished.contains(&name) {
+            continue;
+        }
+        let other = entry.path();
+        // (one being taken away is none of the queue's, whatever is left of it)
+        if !other.is_dir() || name.to_string_lossy().starts_with(TAKEN) {
+            continue;
+        }
+        // (a finished job - most, after a few runs - as its own record says: nothing more read of it, now or again)
+        if read_record(&other).is_some_and(|r| r.state.finished()) {
+            finished.insert(name);
+            continue;
+        }
+        let Some(record) = current_record(&other) else { continue };
+        match record.state {
+            JobState::Running => {
+                seen.running += 1;
+                // (one whose spec cannot be read counted as a core: what any job takes at least)
+                let (cores, memory) = read_spec(&other).map(|s| (taken(&s, here), s.memory)).unwrap_or((1, 0));
+                seen.used = (seen.used.0 + cores, seen.used.1 + memory);
+            }
+            JobState::Waiting => {
+                let key = (record.created, other);
+                if key < mine_key && key.1.file_name() != dir.file_name() {
+                    seen.ahead += 1;
+                }
+                if seen.first.as_ref().is_none_or(|f| key < *f) {
+                    seen.first = Some(key);
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(seen)
+}
+
+/// Where the job `dir` stands among those waiting in `root`, seen from their records alone - none written, nothing but
+/// a record read of each - for a runner far back to know it is far back: how many wait before it. A job with no record
+/// yet (its runner starting) is not counted: it is looked at again under the lock, if near. Nor is one whose runner is
+/// gone (`runner_there`: tried, never waited on) - a queue left by a Meno that was ended: so a live job is never held
+/// back for ever behind dead ones far ahead of it; near the head, the look under the lock (`current_record`) records
+/// them gone.
+fn glance(root: &Path, dir: &Path, base: &JobRecord, finished: &mut HashSet<std::ffi::OsString>) -> std::io::Result<u32> {
+    let mine_key = (base.created, dir.to_path_buf());
+    let mut ahead = 0u32;
+    for entry in fs::read_dir(root)?.flatten() {
+        let name = entry.file_name();
+        if finished.contains(&name) || name.to_string_lossy().starts_with(TAKEN) || name == dir.file_name().unwrap_or_default() {
+            continue;
+        }
+        let Some(record) = read_record(&entry.path()) else { continue };
+        if record.state.finished() {
+            finished.insert(name);
+        } else if record.state == JobState::Waiting && (record.created, entry.path()) < mine_key && runner_there(&entry.path()) {
+            ahead += 1;
+        }
+    }
+    Ok(ahead)
+}
+
 /// Whether it is this job's turn - the first waiting, and fitting beside
 /// those running within what jobs may use (`fits`): a job never starts
 /// ahead of one asked for before it, however small - and, where it is, the
-/// job recorded running. Asked by one runner at a time.
-fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord) -> std::io::Result<Turn> {
+/// job recorded running. Where it stands is looked at first without the
+/// queue's lock: one far back (not `near_head`, its queue running `slots`
+/// at once) is told so and waits on no lock - only those near the head
+/// look again under it, one at a time, and only the head takes its turn.
+/// So the head of a queue of hundreds never waits behind them all for the
+/// lock as one ends: on a computer whose files open slowly, each look at
+/// hundreds of folders under the one lock held it most of the time, and
+/// the next job started seconds after one ended.
+fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord, slots: u32, finished: &mut HashSet<std::ffi::OsString>) -> std::io::Result<Turn> {
     let root = dir.parent().ok_or_else(|| std::io::Error::other("a job's folder has no parent"))?;
+    // (this computer's cores and physical cores, asked once: what a job running as processes is counted by)
+    let here = computer();
+    let behind = glance(root, dir, base, finished)?;
+    if !near_head(behind, slots) {
+        return Ok(Turn::Behind(behind));
+    }
     let queue = OpenOptions::new().create(true).truncate(false).write(true).open(root.join(QUEUE_LOCK))?;
     // (a runner asked to go takes its wait up again of itself - its signals
     // are heard with SA_RESTART, `listen_for_going` - so Unix gives no
@@ -750,44 +871,7 @@ fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord) -> std::io::Result<Tu
             return Err(e);
         }
     }
-    let mut running = 0u32;
-    let mut used = (0u32, 0u64);
-    // (this computer's cores and physical cores, asked once: what a job running as processes is counted by)
-    let here = computer();
-    let mut first: Option<(u64, PathBuf)> = None;
-    // (those waiting before it: asked for before it, or at once and by name)
-    let mine_key = (base.created, dir.to_path_buf());
-    let mut ahead = 0u32;
-    for entry in fs::read_dir(root)?.flatten() {
-        let other = entry.path();
-        // (one being taken away is none of the queue's, whatever is left of it)
-        if !other.is_dir() || entry.file_name().to_string_lossy().starts_with(TAKEN) {
-            continue;
-        }
-        // (a finished job - most, after a few runs - as its own record says: nothing more read of it)
-        if read_record(&other).is_some_and(|r| r.state.finished()) {
-            continue;
-        }
-        let Some(record) = current_record(&other) else { continue };
-        match record.state {
-            JobState::Running => {
-                running += 1;
-                // (one whose spec cannot be read counted as a core: what any job takes at least)
-                let (cores, memory) = read_spec(&other).map(|s| (taken(&s, here), s.memory)).unwrap_or((1, 0));
-                used = (used.0 + cores, used.1 + memory);
-            }
-            JobState::Waiting => {
-                let key = (record.created, other);
-                if key < mine_key && key.1.file_name() != dir.file_name() {
-                    ahead += 1;
-                }
-                if first.as_ref().is_none_or(|f| key < *f) {
-                    first = Some(key);
-                }
-            }
-            _ => {}
-        }
-    }
+    let Seen { running, used, first, ahead } = look(root, dir, base, here, finished)?;
     let mine = first.is_some_and(|(_, p)| p.file_name() == dir.file_name());
     if !mine {
         return Ok(Turn::Behind(ahead));
@@ -2793,6 +2877,12 @@ pub async fn job_stop(app: AppHandle, id: String) -> Result<(), String> {
     ask_stop(&job_dir(&app, &id)?).map_err(|e| e.to_string())
 }
 
+/// A job alone stopped, its step going on without it (`ask_stop_alone`).
+#[tauri::command]
+pub async fn job_stop_alone(app: AppHandle, id: String) -> Result<(), String> {
+    ask_stop_alone(&job_dir(&app, &id)?).map_err(|e| e.to_string())
+}
+
 /// What a job's folder taken away is named first: no job's id.
 const TAKEN: &str = ".taken-";
 
@@ -3017,14 +3107,96 @@ mod tests {
         write_record(&head, &base(&head)).unwrap();
         write_record(&after, &base(&after)).unwrap();
         // (the one slot taken: the head of the queue next, the other behind it)
-        assert_eq!(take_turn(&head, &read_spec(&head).unwrap(), &base(&head)).unwrap(), Turn::Next);
-        assert_eq!(take_turn(&after, &read_spec(&after).unwrap(), &base(&after)).unwrap(), Turn::Behind(1));
+        assert_eq!(take_turn(&head, &read_spec(&head).unwrap(), &base(&head), 1, &mut HashSet::new()).unwrap(), Turn::Next);
+        assert_eq!(take_turn(&after, &read_spec(&after).unwrap(), &base(&after), 1, &mut HashSet::new()).unwrap(), Turn::Behind(1));
         // (the slot free: the head's turn taken, and it recorded running)
         write_record(&running, &JobRecord { state: JobState::Done, ..base(&running) }).unwrap();
-        assert_eq!(take_turn(&head, &read_spec(&head).unwrap(), &base(&head)).unwrap(), Turn::Taken);
+        assert_eq!(take_turn(&head, &read_spec(&head).unwrap(), &base(&head), 1, &mut HashSet::new()).unwrap(), Turn::Taken);
         assert_eq!(current_record(&head).unwrap().state, JobState::Running);
-        assert_eq!(take_turn(&after, &read_spec(&after).unwrap(), &base(&after)).unwrap(), Turn::Next);
+        assert_eq!(take_turn(&after, &read_spec(&after).unwrap(), &base(&after), 1, &mut HashSet::new()).unwrap(), Turn::Next);
         drop(held);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_job_far_back_in_the_queue_is_told_so_without_waiting_on_its_lock_and_reads_a_finished_one_once() {
+        let root = temp();
+        let mk = || {
+            std::thread::sleep(Duration::from_millis(3));
+            shell(&root, "true", 1)
+        };
+        let done = mk();
+        let waiting: Vec<PathBuf> = (0..4).map(|_| mk()).collect();
+        let base = |dir: &Path| JobRecord::new(JobState::Waiting, read_spec(dir).unwrap().created);
+        write_record(&done, &JobRecord { state: JobState::Done, ..base(&done) }).unwrap();
+        // (each with its runner there, holding its lock)
+        let runners: Vec<_> = waiting
+            .iter()
+            .map(|w| {
+                write_record(w, &base(w)).unwrap();
+                let lock = OpenOptions::new().create(true).truncate(false).write(true).open(w.join(RUNNER_LOCK)).unwrap();
+                lock.lock().unwrap();
+                lock
+            })
+            .collect();
+        // (the queue's lock held - by the head, say, as it takes its turn)
+        let lock = OpenOptions::new().create(true).truncate(false).write(true).open(root.join(QUEUE_LOCK)).unwrap();
+        lock.lock().unwrap();
+        // (one slot: the last of four waiting is 3 places back, past the head's 2 - told so at once, the lock still held)
+        let last = &waiting[3];
+        let mut finished = HashSet::new();
+        let (tx, rx) = std::sync::mpsc::channel();
+        {
+            let (last, spec, record) = (last.clone(), read_spec(last).unwrap(), base(last));
+            std::thread::spawn(move || {
+                let mut seen = HashSet::new();
+                let _ = tx.send((take_turn(&last, &spec, &record, 1, &mut seen).unwrap(), seen));
+            });
+        }
+        let (turn, seen) = rx.recv_timeout(Duration::from_secs(5)).expect("a job far back waited on the queue's lock");
+        assert_eq!(turn, Turn::Behind(3));
+        // (the finished one remembered, and not read again: its record gone now, it is still passed over)
+        assert!(seen.contains(done.file_name().unwrap()));
+        finished.extend(seen);
+        fs::remove_file(done.join(RECORD)).unwrap();
+        assert_eq!(glance(&root, last, &base(last), &mut finished).unwrap(), 3);
+        // (its record back: a folder with none is a job starting, to a look that has not seen it finished)
+        write_record(&done, &JobRecord { state: JobState::Done, ..base(&done) }).unwrap();
+        // (one near the head waits on the lock: it looks again under it)
+        let (tx, rx) = std::sync::mpsc::channel();
+        {
+            let (near, spec, record) = (waiting[1].clone(), read_spec(&waiting[1]).unwrap(), base(&waiting[1]));
+            std::thread::spawn(move || {
+                let _ = tx.send(take_turn(&near, &spec, &record, 1, &mut HashSet::new()).unwrap());
+            });
+        }
+        assert!(rx.recv_timeout(Duration::from_millis(300)).is_err());
+        drop(lock);
+        assert_eq!(rx.recv_timeout(Duration::from_secs(5)).unwrap(), Turn::Behind(1));
+        drop(runners);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_live_job_behind_waiting_ones_whose_runners_are_gone_takes_its_turn() {
+        let root = temp();
+        let mk = || {
+            std::thread::sleep(Duration::from_millis(3));
+            shell(&root, "true", 1)
+        };
+        // (five said waiting, asked for first - their runners gone with a Meno that was ended - and one live behind them)
+        let dead: Vec<PathBuf> = (0..5).map(|_| mk()).collect();
+        let live = mk();
+        let base = |dir: &Path| JobRecord::new(JobState::Waiting, read_spec(dir).unwrap().created);
+        for d in dead.iter().chain([&live]) {
+            write_record(d, &base(d)).unwrap();
+        }
+        let runner = OpenOptions::new().create(true).truncate(false).write(true).open(live.join(RUNNER_LOCK)).unwrap();
+        runner.lock().unwrap();
+        // (not told it is 5 back: its turn taken, the dead ones recorded gone as it looked under the lock)
+        assert_eq!(take_turn(&live, &read_spec(&live).unwrap(), &base(&live), 1, &mut HashSet::new()).unwrap(), Turn::Taken);
+        assert!(dead.iter().all(|d| current_record(d).unwrap().state == JobState::Gone));
+        drop(runner);
         let _ = fs::remove_dir_all(&root);
     }
 
@@ -3253,6 +3425,30 @@ mod tests {
     const PAUSE: &str = "sleep 1";
     #[cfg(windows)]
     const PAUSE: &str = "ping -n 2 127.0.0.1 > nul";
+
+    // (a long queue's gaps - run by hand, `--ignored`: MENO_QUEUE_N jobs (300) of a pause each, one at a time, every
+    //  runner waiting at once as a step's are; says the mean and largest gap from one's end to the next one's start)
+    #[test]
+    #[ignore]
+    fn a_long_queue_starts_the_next_job_as_one_ends() {
+        let n: usize = std::env::var("MENO_QUEUE_N").ok().and_then(|v| v.parse().ok()).unwrap_or(300);
+        let root = temp();
+        #[cfg(unix)]
+        let pause = "sleep 0.3";
+        #[cfg(windows)]
+        let pause = "ping -n 1 127.0.0.1 > nul";
+        let dirs: Vec<PathBuf> = (0..n).map(|_| shell(&root, pause, 1)).collect();
+        let runs: Vec<_> = dirs.iter().cloned().map(|d| std::thread::spawn(move || run_job(&d))).collect();
+        for r in runs {
+            r.join().unwrap();
+        }
+        let mut spans: Vec<(u64, u64)> = dirs.iter().map(|d| current_record(d).unwrap()).map(|r| (r.started.unwrap(), r.ended.unwrap())).collect();
+        spans.sort();
+        let gaps: Vec<u64> = spans.windows(2).map(|w| w[1].0.saturating_sub(w[0].1)).collect();
+        let mean = gaps.iter().sum::<u64>() as f64 / gaps.len().max(1) as f64;
+        println!("QUEUE {n} jobs: gap mean {mean:.0} ms, largest {} ms", gaps.iter().max().unwrap_or(&0));
+        let _ = fs::remove_dir_all(root);
+    }
 
     #[test]
     fn waits_its_turn_in_the_order_jobs_were_asked_for() {
@@ -3597,6 +3793,37 @@ mod tests {
     }
 
     #[test]
+    fn a_job_stopped_alone_ends_failed_saying_so_running_or_waiting_and_a_stop_of_its_step_after_is_a_stop() {
+        let root = temp();
+        // (running: its program stopped, and it recorded failed, "stopped by you")
+        let dir = shell(&root, LONG, 1);
+        let runner = {
+            let d = dir.clone();
+            std::thread::spawn(move || run_job(&d))
+        };
+        wait_for(|| current_record(&dir).is_some_and(|r| r.state == JobState::Running));
+        let t = Instant::now();
+        ask_stop_alone(&dir).unwrap();
+        runner.join().unwrap();
+        let r = current_record(&dir).unwrap();
+        assert_eq!((r.state, r.why.as_deref()), (JobState::Failed, Some(STOPPED_ALONE)));
+        assert!(r.started.is_some() && t.elapsed() < Duration::from_secs(10));
+        // (waiting: never started, failed so too)
+        let waiting = shell(&root, ECHO, 1);
+        ask_stop_alone(&waiting).unwrap();
+        run_job(&waiting);
+        let r = current_record(&waiting).unwrap();
+        assert_eq!((r.state, r.started, r.why.as_deref()), (JobState::Failed, None, Some(STOPPED_ALONE)));
+        // (its step stopped after: stopped, as ever)
+        let both = shell(&root, ECHO, 1);
+        ask_stop_alone(&both).unwrap();
+        ask_stop(&both).unwrap();
+        run_job(&both);
+        assert_eq!(current_record(&both).unwrap().state, JobState::Stopped);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn a_job_whose_runner_is_gone_is_gone() {
         let root = temp();
         let dir = shell(&root, ECHO, 1);
@@ -3863,7 +4090,7 @@ mod tests {
         let _ = fs::remove_file(taken.join(RECORD));
         assert_eq!(current_record(&taken).map(|r| r.state), Some(JobState::Waiting));
         let spec = read_spec(&mine).unwrap();
-        assert!(matches!(take_turn(&mine, &spec, &JobRecord::new(JobState::Waiting, spec.created)).unwrap(), Turn::Taken));
+        assert!(matches!(take_turn(&mine, &spec, &JobRecord::new(JobState::Waiting, spec.created), 1, &mut HashSet::new()).unwrap(), Turn::Taken));
         let _ = fs::remove_dir_all(root);
     }
 

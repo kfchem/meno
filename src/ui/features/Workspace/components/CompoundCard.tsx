@@ -8,7 +8,9 @@
  * there, as one dragged out of its figure is; its page clicked shows the
  * figure, the structure marked there a moment. It fades in once the pointer
  * has rested on the number, and out once the pointer has left both; never
- * over the word itself.
+ * over the word itself. While its PDF's figures are still being read for
+ * their numbers, it says so - and they are read on at once (`hurryIndex`) -
+ * then grows into the drawing, its size eased, never a jump.
  */
 import { useEffect, useRef, useState } from "react";
 import { styleOf } from "../../../../lib/chem/style";
@@ -16,12 +18,12 @@ import { DURATION } from "../../../theme/motion";
 import { useEditor, useEditorStore } from "../store";
 import type { PdfLens } from "../store/types";
 import { drawingSvg } from "../fileActions";
-import { indexWhole, labelPlaces } from "../utils/compoundIndex";
+import { hurryIndex, indexWhole, labelPlaces } from "../utils/compoundIndex";
 import { pickedStructure } from "../utils/pdfStructures";
 import type { PageStructure } from "../utils/pageStructures";
 import { dragStructure } from "./structureDrag";
 import { readerOf } from "./pdfColumnReader";
-import { cardPlace, restLeft } from "./compoundCardPlace";
+import { cardHolds, cardPlace, restLeft } from "./compoundCardPlace";
 
 /** How long it lingers once the pointer has left, in ms. */
 const LINGER_MS = 250;
@@ -45,10 +47,14 @@ export default function CompoundCard() {
   const [, again] = useState(0);
   const over = useRef(false);
   const card = useRef<HTMLDivElement>(null);
+  // (what it holds, measured: the card's own size, eased to it)
+  const inner = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
     if (lens) {
+      // (its PDF's figures still being read for their numbers: read on at once, someone waiting on them)
+      if (!indexWhole(lens.sha256)) hurryIndex(lens.sha256);
       // (a number rested on: its card, after a moment)
       const t = window.setTimeout(() => {
         setHeld(lens);
@@ -72,31 +78,59 @@ export default function CompoundCard() {
   const first = places[0];
   const s: PageStructure | null = held && first ? pickedStructure(held.sha256, { page: first.page, figure: first.figure, key: first.key }) : null;
   // (its PDF's figures still being read, or its figure: looked at again shortly)
-  const waiting = !!held && (!s || !("model" in s.read)) && (!indexWhole(held.sha256) || (first && !s));
+  const model = s && "model" in s.read ? s.read.model : null;
+  const holds = held ? cardHolds({ placed: !!first, read: !!s, drawn: !!model, whole: indexWhole(held.sha256) }) : null;
+  const waiting = holds === "reading";
   useEffect(() => {
     if (!waiting) return;
     const t = window.setInterval(() => again((n) => n + 1), AGAIN_MS);
     return () => window.clearInterval(t);
   }, [waiting]);
 
-  const model = s && "model" in s.read ? s.read.model : null;
   const svg = model ? drawingSvg(model, { aromaticEnabled, aromaticRings }, styleOf(docStyle)) : null;
   const w0 = svg ? Number(/width="([\d.e+-]+)"/.exec(svg)?.[1] ?? 0) : 0;
   const h0 = svg ? Number(/height="([\d.e+-]+)"/.exec(svg)?.[1] ?? 0) : 0;
   const k = w0 > 0 && h0 > 0 ? Math.min(1, MOST_W / w0, MOST_H / h0) : 1;
+  // (waiting on its PDF's figures, or its figure's structures: said so, until they come)
   useEffect(() => {
-    const el = card.current;
+    const el = inner.current;
     if (el) setSize({ width: el.offsetWidth, height: el.offsetHeight });
-  }, [svg, held?.label]);
-  if (!held || !first || !svg || !s) return null;
+  }, [svg, held?.label, holds]);
+  // (its drawing come after its words: the drawing and its pages faded in, the words kept a moment to fade out under the
+  // card's easing width - never cut mid-letter)
+  const before = useRef<typeof holds>(null);
+  const [fresh, setFresh] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  useEffect(() => {
+    const was = before.current;
+    before.current = holds;
+    if (was !== "reading" || holds !== "drawing") return;
+    setFresh(true);
+    setLeaving(true);
+    let next = 0;
+    const one = requestAnimationFrame(() => (next = requestAnimationFrame(() => setFresh(false))));
+    const t = window.setTimeout(() => setLeaving(false), DURATION.base * 1000);
+    return () => {
+      cancelAnimationFrame(one);
+      cancelAnimationFrame(next);
+      window.clearTimeout(t);
+      setFresh(false);
+      setLeaving(false);
+    };
+  }, [holds]);
+  if (!held || !holds) return null;
 
   const at = cardPlace(held.word, size, { width: window.innerWidth, height: window.innerHeight });
+  const ease = `${DURATION.base * 1000}ms`;
+  // (over its word, as it mostly is: held by its bottom-left corner, so that it grows upward and its number never moves)
+  const above = at.top + size.height <= held.word.top;
+  const fade = (on: boolean) => ({ opacity: on ? 1 : 0, transitionProperty: "opacity", transitionDuration: ease });
   const pdf = store.getState().pdfs.find((p) => p.id === held.id);
-  const others = [...new Set(places.slice(1).map((p) => p.page + 1))].filter((p) => p !== first.page + 1);
+  const others = first ? [...new Set(places.slice(1).map((p) => p.page + 1))].filter((p) => p !== first.page + 1) : [];
 
   /** A press on the drawing: carried out once the pointer moves, as a structure pressed in its figure is. */
   const onPress = (e: React.PointerEvent<HTMLImageElement>) => {
-    if (e.button !== 0 || !pdf) return;
+    if (e.button !== 0 || !pdf || !s || !first) return;
     e.preventDefault();
     const from = { x: e.clientX, y: e.clientY };
     const img = e.currentTarget.getBoundingClientRect();
@@ -134,29 +168,59 @@ export default function CompoundCard() {
       ref={card}
       role="dialog"
       aria-label={`Compound ${held.label}`}
-      className="fixed z-50 select-none rounded-xl border border-gh-line bg-white/90 backdrop-blur shadow-sm px-2.5 py-2 text-[11px] leading-[16px] transition-opacity ease-meno"
-      style={{ left: at.left, top: at.top, opacity: shown ? 1 : 0, transitionDuration: `${DURATION.base * 1000}ms`, pointerEvents: shown ? "auto" : "none" }}
+      className="fixed z-50 flex select-none flex-col overflow-hidden rounded-xl border border-gh-line bg-white/90 backdrop-blur shadow-sm text-[11px] leading-[16px] ease-meno"
+      style={{
+        left: at.left,
+        ...(above ? { bottom: window.innerHeight - (at.top + size.height + 2), justifyContent: "flex-end" } : { top: at.top }),
+        // (its size and place eased as what it holds grows - from its words while its figures are read to its drawing)
+        ...(size.width > 0 ? { width: size.width + 2, height: size.height + 2 } : {}),
+        opacity: shown ? 1 : 0,
+        transitionProperty: "opacity, width, height, left, top, bottom",
+        transitionDuration: ease,
+        pointerEvents: shown ? "auto" : "none",
+      }}
       onPointerEnter={() => (over.current = true)}
       onPointerLeave={() => {
         over.current = false;
         if (!store.getState().pdfLens) setShown(false);
       }}
     >
-      <img
-        alt={`Compound ${held.label}, as Meno draws it`}
-        src={`data:image/svg+xml;utf8,${encodeURIComponent(svg)}`}
-        draggable={false}
-        width={w0 * k}
-        height={h0 * k}
-        className="block cursor-grab"
-        onPointerDown={onPress}
-      />
-      <div className="mt-1 flex items-baseline gap-1.5 text-gh-gray">
-        <span className="font-semibold text-gh-black">{held.label}</span>
-        <button type="button" className="hover:text-gh-black transition-colors duration-150 ease-meno" onClick={() => show(first.page, s.box)}>
-          p. {first.page + 1}
-        </button>
-        {others.length > 0 && <span>· also on p. {others.join(", ")}</span>}
+      <div ref={inner} className="w-max shrink-0 px-2.5 py-2">
+        {holds === "drawing" && first && svg && s ? (
+          <>
+            <img
+              alt={`Compound ${held.label}, as Meno draws it`}
+              src={`data:image/svg+xml;utf8,${encodeURIComponent(svg)}`}
+              draggable={false}
+              width={w0 * k}
+              height={h0 * k}
+              className="block cursor-grab ease-meno"
+              style={fade(!fresh)}
+              onPointerDown={onPress}
+            />
+            <div className="mt-1 flex items-baseline gap-1.5 text-gh-gray">
+              <span className="font-semibold text-gh-black">{held.label}</span>
+              <span className="relative flex items-baseline gap-1.5">
+                <span className="flex items-baseline gap-1.5 ease-meno" style={fade(!fresh)}>
+                  <button type="button" className="hover:text-gh-black transition-colors duration-150 ease-meno" onClick={() => show(first.page, s.box)}>
+                    p. {first.page + 1}
+                  </button>
+                  {others.length > 0 && <span>· also on p. {others.join(", ")}</span>}
+                </span>
+                {leaving && (
+                  <span className="pointer-events-none absolute left-0 whitespace-nowrap ease-meno" style={fade(fresh)} aria-hidden>
+                    Reading this PDF&rsquo;s figures&hellip;
+                  </span>
+                )}
+              </span>
+            </div>
+          </>
+        ) : (
+          <div className="flex items-baseline gap-1.5 whitespace-nowrap text-gh-gray">
+            <span className="font-semibold text-gh-black">{held.label}</span>
+            <span>Reading this PDF&rsquo;s figures&hellip;</span>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -9,7 +9,7 @@ import type { CalcSource, ReaderOutput } from "../../../../../lib/calc/output";
 import { readOutput } from "../../../../../lib/calc/read";
 import { heldOutput, rememberOutput } from "../../../../../lib/calc/asks";
 import { addedNow, pluginClient } from "../../../../../lib/calc/workers";
-import { computerCores, computerResources, finished, jobDigest, jobFiles, jobFolder, jobOf, limitsOf, listJobs, overLimits, processesOf, programStamp, readJobFile, readJobLog, removeJob, runningOf, startJob, stopJob, writeJobBack, type Job } from "../../../../../lib/jobs";
+import { computerCores, computerResources, finished, jobDigest, jobFiles, jobFolder, jobOf, limitsOf, listJobs, overLimits, processesOf, programStamp, readJobFile, readJobLog, removeJob, runningOf, startJob, stopJob, stopJobAlone, STOPPED_ALONE, writeJobBack, type Job } from "../../../../../lib/jobs";
 import { heldJobFile, heldJobSource, keptLogOf, recordOf, showFilesSaid } from "../../workflow/keptJobs";
 import { valuesOf, type OptionValues } from "../../../../../lib/options";
 import { lookFor, programKey, tooOld, useInstalled } from "../../../../../lib/plugins/installed";
@@ -31,7 +31,7 @@ import { holdsGraphOf3d, keptMade, madeChecks, madeChecksOf, metalHolds, metalHo
 import { COORDINATION_BOND } from "../../../../../lib/chem/molecule";
 import { byOf, installedFor, optionsFor, programsFor, renderPresets, takesNothingBy } from "../../workflow/doers";
 import { partOf } from "../../chem/cleanUp";
-import { compoundLetter, frameXyz, framesOf, madeFrom, recordNumber, setEntries, TAKEN_AT_THE_EDIT, skeletonEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
+import { compoundLetter, frameXyz, framesOf, madeFrom, recordNumber, setEntries, structureLineage, TAKEN_AT_THE_EDIT, skeletonEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
 import { convergedOf, heldWhy } from "../../workflow/converged";
 import { skeletonWhy } from "../../../../../lib/chem/skeleton";
 import { conformersSought, conformersSoughtOf, soughtNumber } from "../../../../../lib/chem/conformersSought";
@@ -802,8 +802,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         // (what was worked out of the structure drawn - a model's values, its descriptors, its SMILES - is of each of its
         //  conformers too, the same structure: carried on with them, for a Filter or a table to read)
         const properties = record?.properties && Object.keys(record.properties).length ? record.properties : undefined;
-        // (and what it was made from, by id: the lineage of each of its conformers, the same structure)
-        const madeOf = record?.from?.length ? record.from : undefined;
+        // (and what it was made of, by id: the structure drawn itself, by its lasting id - the lineage of each of its conformers, that structure in 3D)
+        const madeOf = record?.id ? [structureLineage(record.id)] : undefined;
         for (let f = 0; f < framesOf(m); f++) {
           worked.push({
             compound: compounds,
@@ -1172,7 +1172,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     // (the cores it takes, as Settings says - a program running as processes, one to each physical core: never two on one)
     const { cores: settled } = runningOf(useAppSettings.getState().calculations);
     const asProcesses = installedFor(step.kind, plugin.id).some((d) => d.parallel === "processes");
-    const cores = asProcesses ? processesOf(settled, (await computerResources().catch(() => null))?.physical ?? settled) : settled;
+    const cores = asProcesses ? processesOf(settled, (await computerResources().catch(() => null)) ?? { cores: settled }) : settled;
     // (a program installed separately: where it is, looked for again - and found, or said not to be)
     const paths = new Map<string, string>();
     for (const decl of installedFor(step.kind, plugin.id)) {
@@ -1668,6 +1668,11 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           fails(mine.map(() => undefined), "failed", "What came into it changed while it ran");
           continue;
         }
+        // (stopped alone - Stop this job - its step going on: each of its entries failed, stopped, as the chemist asked)
+        if (record.state === "failed" && record.why === STOPPED_ALONE) {
+          fails(mine, "stopped", "Stopped by you");
+          continue;
+        }
         // (failed before its program could say: its runner's own words - "orca could not be started", say)
         if (record.state === "failed" && record.why) {
           fails(mine, "not-started", record.why);
@@ -1941,6 +1946,12 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       for (const j of stepOf(doc.getState(), id)?.running?.jobs ?? []) void stopJob(j.id).catch(() => {});
       void lookAtJobs();
     },
+    /** One of a running step's jobs stopped alone (*Stop this job*): recorded failed, its entries said stopped - the step going on, bringing in what its other jobs gave. */
+    stopJobAlone: (job: string) => {
+      void stopJobAlone(job)
+        .catch(() => {})
+        .then(() => lookAtJobs());
+    },
     stopAll: () => {
       for (const id of Object.keys(get().menoWorking)) menoStops.add(Number(id));
       menoKills.forEach((kill) => kill());
@@ -1983,7 +1994,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         if (step.running) shown.set(jobs[0], made.last);
       }
       // (rising out of its step into the column, where the column is not showing it already)
-      set({ textShown: last, textsOpen: true, pdfShown: null, setTableShown: null, ...(showing === last ? {} : { textFlight: { id: last, to: "column" as const, start: performance.now() } }) });
+      set({ textShown: last, textsOpen: true, pdfShown: null, setTableShown: null, conversationShown: null, ...(showing === last ? {} : { textFlight: { id: last, to: "column" as const, start: performance.now() } }) });
     },
     showStepLogJob: (text: number, k: number) => {
       const t = (doc.getState().texts ?? []).find((x) => x.id === text);

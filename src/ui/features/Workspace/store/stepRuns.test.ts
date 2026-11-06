@@ -1,12 +1,12 @@
 import { jobStateSaid } from "../utils/texts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Job, JobAsk } from "../../../../lib/jobs";
+import { STOPPED_ALONE, type Job, type JobAsk } from "../../../../lib/jobs";
 
 /** The jobs, as the test has them: each one's record, its log and its files; and what was asked. */
 const jobs = new Map<string, Job & { log: string; files: Record<string, string> }>();
 /** Where set, how long a job's log takes to read, in ms: a log read late. */
 const logDelay = new Map<string, number>();
-const asked = { started: [] as JobAsk[], stopped: [] as string[], removed: [] as string[] };
+const asked = { started: [] as JobAsk[], stopped: [] as string[], stoppedAlone: [] as string[], removed: [] as string[] };
 let next = 1;
 /** A file's text, as the test has it, that stands for one too large to read. */
 const TOO_LARGE = "(too large)";
@@ -54,6 +54,7 @@ vi.mock("../../../../lib/jobs", async (actual) => ({
     return text;
   },
   stopJob: async (id: string) => void asked.stopped.push(id),
+  stopJobAlone: async (id: string) => void asked.stoppedAlone.push(id),
   removeJob: async (id: string) => void asked.removed.push(id),
   jobFolder: async (id: string) => `/jobs/${id}`,
   // (a computer of 8 cores and 32 GB: jobs may use 24 GB of it, Settings unsaid - its physical cores as a test has them)
@@ -227,6 +228,7 @@ describe("a step that runs a plugin's program", () => {
     next = 1;
     asked.started = [];
     asked.stopped = [];
+    asked.stoppedAlone = [];
     asked.removed = [];
     keepFails.length = 0;
     worker.prepare.mockClear();
@@ -1430,6 +1432,24 @@ describe("a step that runs a plugin's program", () => {
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:01 \u00b7 1 of 3 \u00b7 2 of 3 failed (2: the program stopped with an error)" });
   });
 
+  it("goes on without a job stopped alone - Stop this job - bringing in what the others gave, its entry failed, stopped by you", async () => {
+    const { st, step } = waters(2);
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    st().stopJobAlone(idOf(2));
+    expect([asked.stoppedAlone, asked.stopped]).toEqual([[idOf(2)], []]);
+    // (its runner records it failed, saying so - jobs.rs STOPPED_ALONE)
+    end(1);
+    end(2, "failed", { why: STOPPED_ALONE });
+    await st().lookAtJobs();
+    await ran;
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:01 \u00b7 1 of 2 \u00b7 1 of 2 failed (1: stopped before it finished)" });
+    expect(st().steps.find((s) => s.id === step)!.ran?.stopped).toBeUndefined();
+    // (the two waters, the one optimised, and the one stopped on the Failed exit)
+    expect(st().molecules3d).toHaveLength(2 + 1 + 1);
+  });
+
   it("runs the jobs its plugin prepared, and sends an entry it refused out of its Failed exit, with why - kept with the workspace while it runs", async () => {
     const { st, step } = waters(3);
     const one = { program: "tightbind", args: [], files: [], reads: ["tbopt.log"] };
@@ -1766,6 +1786,7 @@ function chain() {
   const a = st().addStep("as-conformers", "meno", 10, 0);
   st().connect({ set }, a);
   const b = st().addStep("energy-window", "meno", 30, 0);
+  st().updateStep(b, { options: { window: 3 } });
   // (each step's exit, the set it makes, into the next)
   st().connect({ set: resultOf(st(), a)!.id }, b);
   const c = st().addStep("populations", "meno", 50, 0);
