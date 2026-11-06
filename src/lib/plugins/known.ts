@@ -29,6 +29,17 @@ export let MANIFESTS: readonly Manifest[] = [];
 
 const listeners = new Set<() => void>();
 
+/** The names the list of plugins online gives, by id (lib/plugins/online): a plugin's name where it is not here yet. */
+let listed = new Map<string, string>();
+
+/** The list of plugins online read: the names it gives taken (lib/plugins/online). */
+export function setListedNames(entries: readonly { id: string; name: string }[]): void {
+  listed = new Map(entries.map((e) => [e.id, e.name]));
+}
+
+/** A plugin's name as the list of plugins online gives it; none, where the list holds none of that id or is not here. */
+export const listedName = (id: string): string | undefined => listed.get(id);
+
 /**
  * How many times the plugins Meno knows of were taken anew: what a page
  * listing them draws again by (Settings, Plugins) - one whose files were

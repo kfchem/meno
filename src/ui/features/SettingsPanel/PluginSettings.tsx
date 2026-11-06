@@ -4,7 +4,7 @@ import { FADE } from "../../theme/motion";
 import ConfirmDiscard from "../../layouts/ConfirmDiscard";
 import QuestionLayer from "../../layouts/QuestionLayer";
 import { liveJobsOf, type Job } from "../../../lib/jobs";
-import { ALL_PLUGINS, anyPluginById, kindsNotTaken, manifestOf, PLUGINS, pluginsUsing, REFUSED, runs, stoppedOf, type Plugin as AnyPlugin } from "../../../lib/calc/catalog";
+import { ALL_PLUGINS, anyPluginById, kindsNotTaken, manifestOf, PLUGINS, pluginName, pluginsUsing, REFUSED, runs, stoppedOf, type Plugin as AnyPlugin } from "../../../lib/calc/catalog";
 import { rangeSaid } from "../../../lib/plugins/depends";
 import { presetsSaid } from "../../../lib/plugins/presets";
 import { addedReaders, addedUsing, addPlugin, removePlugin, skipSetUp, useReaders, waitingSaid } from "../../../lib/calc/workers";
@@ -268,10 +268,10 @@ function Plugin({ plugin: p, state, problem, offer }: { plugin: AnyPlugin; state
             ))}
           </>
         )}
-        {p.presets && <p className="text-xs text-gh-gray mt-1 max-w-2xl">{presetsSaid(p.presets, anyPluginById(p.presets.for)?.name ?? p.presets.for)}</p>}
+        {p.presets && <p className="text-xs text-gh-gray mt-1 max-w-2xl">{presetsSaid(p.presets, pluginName(p.presets.for))}</p>}
         {(p.depends ?? []).length > 0 && (
           <p className="text-xs text-gh-gray mt-1 max-w-2xl">
-            Uses the plugin{p.depends!.length === 1 ? "" : "s"} {p.depends!.map((d) => `${anyPluginById(d.plugin)?.name ?? d.plugin}, ${rangeSaid(d.range)}${(d.interfaces ?? []).map((i) => `, its ${i.id} interface ${rangeSaid(i.range)}`).join("")}${(d.kinds ?? []).map((k) => `, its kind ${manifestOf(d.plugin)?.kinds.find((x) => x.id === k)?.name ?? k}`).join("")}${d.optional ? ", for some steps, where it is added" : ""}`).join("; ")}.
+            Uses the plugin{p.depends!.length === 1 ? "" : "s"} {p.depends!.map((d) => `${pluginName(d.plugin)}, ${rangeSaid(d.range)}${(d.interfaces ?? []).map((i) => `, its ${i.id} interface ${rangeSaid(i.range)}`).join("")}${(d.kinds ?? []).map((k) => `, its kind ${manifestOf(d.plugin)?.kinds.find((x) => x.id === k)?.name ?? k}`).join("")}${d.optional ? ", for some steps, where it is added" : ""}`).join("; ")}.
           </p>
         )}
         {pluginsUsing(p.id).length > 0 && (
