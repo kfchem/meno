@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode }
 import * as THREE from "three";
 import { CURSORS, setCursor, type CursorName } from "../../../theme/cursors";
 import { pageAt } from "../utils/page";
-import { hitAt, type Hit, type Region } from "./hits";
+import { cursorChange, hitAt, type Hit, type Region } from "./hits";
 
 /** A press, a move or a menu on a region: where, on the screen and on the page, and the event itself. */
 export type PagePointer = { screen: { x: number; y: number }; page: { x: number; y: number }; event: PointerEvent | MouseEvent };
@@ -116,14 +116,16 @@ export default function PageHits({ children }: { children?: ReactNode }) {
       return { hit: all.at(page.x, page.y, (camera as THREE.OrthographicCamera).zoom || 1), at: { screen, page, event: e } };
     };
     const show = (hit: (Hit & { on: HitHandlers }) | null) => {
-      const same = hit && over && hit.key === over.key && hit.part === over.part;
-      if (same) return;
+      const change = cursorChange(over, hit);
+      if (!change) return;
       if (over) over.on.hover?.(over.key, over.part, false);
-      setCursor(dom, null);
-      dom.style.cursor = "";
+      if (change.clear) {
+        setCursor(dom, null);
+        dom.style.cursor = "";
+      }
       over = hit;
       if (!hit) return;
-      const c = hit.region.cursor;
+      const c = change.set;
       if (c && isMeno(c)) setCursor(dom, c);
       else if (c) dom.style.cursor = c;
       hit.on.hover?.(hit.key, hit.part, true);
