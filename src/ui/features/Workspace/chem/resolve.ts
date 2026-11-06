@@ -158,7 +158,7 @@ function smilesMolecule(text: string): GroupStructure | null {
   if (read.atoms.some((a, i) => a.aromatic && a.el === "C" && !a.charge && !doubled[i])) return null;
   return {
     atoms: read.atoms.map(({ aromatic: _aromatic, cls: _cls, ...atom }) => atom),
-    bonds: read.bonds.map((b, i) => ({ a1: b.a1, a2: b.a2, order: orders[i] })),
+    bonds: read.bonds.map((b, i) => ({ a1: b.a1, a2: b.a2, order: orders[i], ...(b.cisTrans ? { cisTrans: b.cisTrans } : {}) })),
     attach: [],
   };
 }

@@ -5,6 +5,7 @@ import { counterIonStructure, ligandPicture, namedLigand } from "./ligands";
 import { contractGraph, contractionTrials, contractions, type ContractGraph } from "./contract";
 import { kekuleOrders } from "./kekulize";
 import { readSmiles } from "./smiles";
+import { smilesStructure } from "./reagents";
 import { measured } from "../../testing/timeouts";
 
 const fromSmiles = (smiles: string): ContractGraph => {
@@ -168,6 +169,21 @@ describe("the dictionary's pictures", () => {
     ).toEqual([]);
     // (BINAP's picture is laid out here, 0.7 to 1.8 s alone: a busy machine passes the default 5 s)
   }, measured(1_900));
+
+  it("keep a double bond's E or Z with a group by it written by name: an (E)- and a (Z)-propenyl TBS ether, its TBS written so", () => {
+    // (the O and the far methyl across the C=C: on its two sides for E, one side for Z - the TBS a label either way)
+    const sides = (smiles: string) => {
+      const p = picturedStructure(smilesStructure(smiles), 1);
+      expect(p.atoms.map((a) => a.el)).toContain("TBS");
+      const d = p.bonds.find((b) => b.order === 2)!;
+      const [a, z] = [p.atoms[d.a1], p.atoms[d.a2]];
+      const other = (x: number, not: number) => p.bonds.flatMap((b) => (b.a1 === x && b.a2 !== not ? [b.a2] : b.a2 === x && b.a1 !== not ? [b.a1] : []))[0];
+      const side = (k: number) => Math.sign((z.x - a.x) * (p.atoms[k].y - a.y) - (z.y - a.y) * (p.atoms[k].x - a.x));
+      return side(other(d.a1, d.a2)) * side(other(d.a2, d.a1));
+    };
+    expect(sides("CC(C)(C)[Si](C)(C)O/C=C/C")).toBe(-1);
+    expect(sides("CC(C)(C)[Si](C)(C)O/C=C\\C")).toBe(1);
+  });
 
   it("write a counter-anion's CF3 by formula, as everywhere", () => {
     const placed = picturedStructure(counterIonStructure("BArF")!, 1);

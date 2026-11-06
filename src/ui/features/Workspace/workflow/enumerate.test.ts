@@ -112,6 +112,16 @@ describe("Enumerate's known answers", () => {
     expect(r.said[1]).toBe("Duplicates judged by Meno's identity: constitution and configurations as drawn, aromatic rings as one form");
   });
 
+  it("keeps an option's double bond E or Z as its SMILES says: (E)- and (Z)-propenyl on benzene, two products, each the compound it is", () => {
+    const r = ok(enumerated(template("*c1ccccc1"), "R1: */C=C/C\n*/C=C\\C"));
+    expect(r.aside).toEqual([]);
+    const ids = r.made.map((m) => identityOfDrawn(m.drawn).text);
+    expect(ids).toHaveLength(2);
+    expect(ids[0]).not.toBe(ids[1]);
+    expect(ids[0]).toBe(identityOfDrawn(drawnFromSmiles("c1ccccc1/C=C/C")).text);
+    expect(ids[1]).toBe(identityOfDrawn(drawnFromSmiles("c1ccccc1/C=C\\C")).text);
+  });
+
   it("3 x 2 = 6, in the fixed order, R1 outermost", () => {
     const r = ok(enumerated(template("*c1ccc(O*)cc1"), "R1: Me\nEt\nCl\nR2: Me\nAc"));
     expect(r.made.map((m) => [m.number, m.how])).toEqual([
