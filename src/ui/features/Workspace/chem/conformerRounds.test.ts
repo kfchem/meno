@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Conformers } from "../../../../lib/roles/client";
 import { factor } from "../../../../lib/units";
-import { inRounds, roundEnergies, roundSizes, RoundsSeen, roundsSaid, SEARCH_BUDGET_MS } from "./conformerRounds";
+import { inRounds, judgeHere, roundEnergies, roundSizes, RoundsSeen, roundsSaid, SEARCH_BUDGET_MS, type RoundsJudge } from "./conformerRounds";
 
 const KCAL = factor("Eh", "kcal/mol");
 const ATOMS = [
@@ -46,6 +46,36 @@ describe("what is new in a round", () => {
     expect(seen.add([4, 0].map(geo), [4, 0].map((k) => -76 + kcal(k) / KCAL))).toBe(1);
     // (a geometry moved by less than the same conformer's: not new)
     expect(seen.add([geo(0).map((v, i) => (i === 7 ? v + 0.001 : v))], [-76])).toBe(0);
+  });
+
+  it("is judged against the lowest this round brought too: one within the window of the lowest before, not of this round's, is not new", () => {
+    const seen = new RoundsSeen(ATOMS, BONDS, 2);
+    expect(seen.add([geo(0)], [-76])).toBe(1);
+    // (3 kcal/mol below, and 1 above the lowest before: 4 above the lowest now - not new)
+    expect(seen.add([1, 2].map(geo), [-76 - 3 / KCAL, -76 + 1 / KCAL])).toBe(1);
+  });
+
+  it("keeps a conformer's mirror image new - its distances all alike, it never laid over it by reflecting it", () => {
+    // (HOOH turned 110 degrees about its O-O bond, one way and the other: mirror images)
+    const atoms = [
+      { el: "O", charge: 0 },
+      { el: "O", charge: 0 },
+      { el: "H", charge: 0 },
+      { el: "H", charge: 0 },
+    ];
+    const bonds = [
+      { a1: 0, a2: 1, order: 1 as const },
+      { a1: 0, a2: 2, order: 1 as const },
+      { a1: 1, a2: 3, order: 1 as const },
+    ];
+    const turned = (deg: number) => {
+      const t = (deg * Math.PI) / 180;
+      return [0, 0, 0, 1.45, 0, 0, -0.3, 0.92, 0, 1.75, 0.92 * Math.cos(t), 0.92 * Math.sin(t)];
+    };
+    const seen = new RoundsSeen(atoms, bonds, 2);
+    expect(seen.add([turned(110)], [-151])).toBe(1);
+    expect(seen.add([turned(-110)], [-151])).toBe(1);
+    expect(seen.add([turned(110), turned(-110)], [-151, -151])).toBe(0);
   });
 
   it("is none where no energy is a number", () => {
@@ -110,6 +140,23 @@ describe("a search in rounds", () => {
     expect((await inRounds(once.ask, { first: 50, most: 5000, window: 3, draws: false })).run).toEqual({ tried: 50, rounds: 1, ended: "one" });
     const none = plugin([[0], [1]], () => 0, { energies: undefined });
     expect((await inRounds(none.ask, { first: 50, most: 5000, window: 3, draws: true })).run).toEqual({ tried: 50, rounds: 1, ended: "unjudged" });
+  });
+
+  it("lets its judge go when it ends - and when a round fails", async () => {
+    let ended = 0;
+    const judge = (c: Conformers): RoundsJudge => {
+      const j = judgeHere(c.atoms, c.bonds, 3);
+      return { add: j.add, end: () => void ended++ };
+    };
+    await inRounds(plugin([[0], [0]], () => 0).ask, { first: 10, most: 5000, window: 3, draws: true }, judge);
+    expect(ended).toBe(1);
+    const p = plugin([[0], [1]], () => 0);
+    const failing = async (count: number, draw: number) => {
+      if (draw > 0) throw new Error("the search gave nothing for a round");
+      return p.ask(count, draw);
+    };
+    await expect(inRounds(failing, { first: 10, most: 5000, window: 3, draws: true }, judge)).rejects.toThrow("gave nothing");
+    expect(ended).toBe(2);
   });
 
   it("says how it ended", () => {
