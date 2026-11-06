@@ -34,8 +34,8 @@ describe("the settings file", () => {
       updates: { asked: true, notice: false },
       options: { "write:sdf": { version: "V3000", frames: "all" }, export: { kind: "sdf" } },
       abbreviations: [{ label: "Mmt", name: "4-methoxytrityl", smiles: "*C(c1ccccc1)(c1ccccc1)c1ccc(OC)cc1", also: ["MMTr"] }],
-      files: { read: { orca: "cclib" }, also: { orca: ["pyscf"] } },
-      plugins: { removed: ["rdkit"], roles: { smiles: "rdkit" }, programs: { "orca:orca": "/Applications/orca_6_1_0/orca" } },
+      files: { read: { quanta: "manyread" }, also: { quanta: ["wavecalc"] } },
+      plugins: { removed: ["sketchkit"], roles: { smiles: "sketchkit" }, programs: { "quanta:quanta": "/Applications/quanta_6_1_0/quanta" } },
       pictures: { dpi: 1200 as const },
       pointer: { wheelUp: "out" as const },
       canvas: { resolution: "display" as const },
@@ -90,10 +90,10 @@ describe("the settings file", () => {
     // (the computer kept awake while jobs run unless turned off: only the off kept)
     expect(acceptAppSettings({ calculations: { sleepWhileJobsRun: true } }).calculations).toEqual({ sleepWhileJobsRun: true });
     for (const v of [false, "yes", 1]) expect(acceptAppSettings({ calculations: { sleepWhileJobsRun: v } }).calculations).toEqual({});
-    expect(acceptAppSettings({ calcReaders: { chosen: { orca: "cclib", gaussian: 3, "x y": "cclib" } } }).files).toEqual({ read: { orca: "cclib" }, also: {} });
+    expect(acceptAppSettings({ calcReaders: { chosen: { quanta: "manyread", orbitron: 3, "x y": "manyread" } } }).files).toEqual({ read: { quanta: "manyread" }, also: {} });
     expect(
-      acceptAppSettings({ calcReaders: { chosen: { orca: "cclib" } }, files: { read: { orca: "pyscf" }, also: { orca: ["cclib", "cclib", 4], xtb: [] } } }).files,
-    ).toEqual({ read: { orca: "pyscf" }, also: { orca: ["cclib"] } });
+      acceptAppSettings({ calcReaders: { chosen: { quanta: "manyread" } }, files: { read: { quanta: "wavecalc" }, also: { quanta: ["manyread", "manyread", 4], tightbind: [] } } }).files,
+    ).toEqual({ read: { quanta: "wavecalc" }, also: { quanta: ["manyread"] } });
     // a file from before molecules in 3D had a look of their own: Meno's
     expect(acceptAppSettings({ drawingStyle: { preset: "rsc", changes: {} } }).style3d).toEqual(DEFAULT_APP_SETTINGS.style3d);
     // the options remembered: by a role, each value a string, a number or a switch; whether it fits is asked when drawn
@@ -105,10 +105,10 @@ describe("the settings file", () => {
       acceptAppSettings({ options: { "write:mol": { version: "V3000", scale: 2, x: null, "a b": 1 }, "Bad Role": { a: 1 }, export: "sdf" } }).options,
     ).toEqual({ "write:mol": { version: "V3000", scale: 2 } });
     // the plugins taken away and the roles chosen - roles Meno defines: ids only; what no longer is kept (guides shown, before they were shown only when asked) dropped
-    const plugins = { removed: ["rdkit", "rdkit", "Not An Id", 3], roles: { smiles: "rdkit", checks: 4, "no-such-role": "rdkit" }, guided: ["getting-started"] };
+    const plugins = { removed: ["sketchkit", "sketchkit", "Not An Id", 3], roles: { smiles: "sketchkit", checks: 4, "no-such-role": "sketchkit" }, guided: ["getting-started"] };
     expect(acceptAppSettings({ plugins }).plugins).toEqual({
-      removed: ["rdkit"],
-      roles: { smiles: "rdkit" },
+      removed: ["sketchkit"],
+      roles: { smiles: "sketchkit" },
       programs: {},
     });
     expect(acceptAppSettings({}).plugins).toEqual({ removed: [], roles: {}, programs: {} });
@@ -116,13 +116,13 @@ describe("the settings file", () => {
     expect(acceptAppSettings({ plugins: { usedBeforeAsked: true } }).plugins.usedBeforeAsked).toBe(true);
     for (const v of [false, "yes", 1]) expect(acceptAppSettings({ plugins: { usedBeforeAsked: v } }).plugins).not.toHaveProperty("usedBeforeAsked");
     // the programs installed separately located: by plugin and program, each a full path
-    const programs = { "orca:orca": "/opt/orca/orca", "gaussian:g16": "C:\\G16W\\g16.exe", "orca:../x": "/x", "Bad:p": "/x", "orca:x": "orca", "orca:y": 3 };
-    expect(acceptAppSettings({ plugins: { programs } }).plugins.programs).toEqual({ "orca:orca": "/opt/orca/orca", "gaussian:g16": "C:\\G16W\\g16.exe" });
+    const programs = { "quanta:quanta": "/opt/quanta/quanta", "orbitron:orbitron": "C:\\ORBITRONW\\orbitron.exe", "quanta:../x": "/x", "Bad:p": "/x", "quanta:x": "quanta", "quanta:y": 3 };
+    expect(acceptAppSettings({ plugins: { programs } }).plugins.programs).toEqual({ "quanta:quanta": "/opt/quanta/quanta", "orbitron:orbitron": "C:\\ORBITRONW\\orbitron.exe" });
     // (on a share on the network, as Windows names one - kept for the app to look at; a share without a name, or a path from nowhere, not)
-    const shared = { "gaussian:g16": "\\\\fileserver\\apps\\g16w\\g16.exe", "orca:orca": "\\\\?\\UNC\\fileserver\\orca\\orca.exe", "xtb:xtb": "\\\\", "crest:crest": "apps\\crest.exe" };
+    const shared = { "orbitron:orbitron": "\\\\fileserver\\apps\\orbitronw\\orbitron.exe", "quanta:quanta": "\\\\?\\UNC\\fileserver\\quanta\\quanta.exe", "tightbind:tightbind": "\\\\", "confsweep:confsweep": "apps\\confsweep.exe" };
     expect(acceptAppSettings({ plugins: { programs: shared } }).plugins.programs).toEqual({
-      "gaussian:g16": "\\\\fileserver\\apps\\g16w\\g16.exe",
-      "orca:orca": "\\\\?\\UNC\\fileserver\\orca\\orca.exe",
+      "orbitron:orbitron": "\\\\fileserver\\apps\\orbitronw\\orbitron.exe",
+      "quanta:quanta": "\\\\?\\UNC\\fileserver\\quanta\\quanta.exe",
     });
     // the procedures saved: each with an id, a name and steps - the rest read as they are used
     const procedures = [

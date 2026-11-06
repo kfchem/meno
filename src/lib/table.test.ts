@@ -196,15 +196,15 @@ describe("a table read from a file, as programs write them", () => {
 describe("a property's ways of being worked out, named apart", () => {
   const p = (by: Property["by"], at: Property["at"]): Property => ({ value: 1, unit: "Eh", by, at, status: "computed" });
   it("by what tells them apart - geometry, step, run, plugin, conditions - numbered only where that is not enough", () => {
-    expect(variantNames("energy", [p({ program: "xtb", step: "3" }, { geometry: "aa" }), p({ program: "xtb", step: "4" }, { geometry: "aa" })])).toEqual(["energy \u00b7 step 3", "energy \u00b7 step 4"]);
-    expect(variantNames("energy", [p({ program: "xtb" }, { geometry: "aa" }), p({ program: "xtb" }, { geometry: "bb" }), p({ program: "xtb", plugin: "x" }, { geometry: "bb" })])).toEqual([
+    expect(variantNames("energy", [p({ program: "tightbind", step: "3" }, { geometry: "aa" }), p({ program: "tightbind", step: "4" }, { geometry: "aa" })])).toEqual(["energy \u00b7 step 3", "energy \u00b7 step 4"]);
+    expect(variantNames("energy", [p({ program: "tightbind" }, { geometry: "aa" }), p({ program: "tightbind" }, { geometry: "bb" }), p({ program: "tightbind", plugin: "x" }, { geometry: "bb" })])).toEqual([
       "energy \u00b7 plugin not stated geometry aa",
       "energy \u00b7 plugin not stated geometry bb",
       "energy \u00b7 plugin x geometry bb",
     ]);
-    expect(variantNames("G", [p({ program: "xtb", run: "r1" }, { geometry: "g", kelvin: 298.15 }), p({ program: "xtb", run: "r1" }, { geometry: "g", kelvin: 310 })])).toEqual(["G \u00b7 298.15 K", "G \u00b7 310 K"]);
+    expect(variantNames("G", [p({ program: "tightbind", run: "r1" }, { geometry: "g", kelvin: 298.15 }), p({ program: "tightbind", run: "r1" }, { geometry: "g", kelvin: 310 })])).toEqual(["G \u00b7 298.15 K", "G \u00b7 310 K"]);
     // (one way: its name alone)
-    expect(variantNames("energy", [p({ program: "xtb" }, { geometry: "g" })])).toEqual(["energy"]);
+    expect(variantNames("energy", [p({ program: "tightbind" }, { geometry: "g" })])).toEqual(["energy"]);
   });
 
   it("counts a property with no value as missing, never throwing", () => {

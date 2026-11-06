@@ -22,7 +22,7 @@ const entryOf = (number: number, out: ReaderOutput): SetEntry =>
 
 /** An output read, as a Frequencies step's entry becomes a molecule and the next step's entry is read of it. */
 function through(number: number, read: ReaderOutput): SetEntry {
-  const { output, readers } = combine([{ from: "cclib", version: "1.9rc1", output: read }]);
+  const { output, readers } = combine([{ from: "manyread", version: "1.9rc1", output: read }]);
   const w = workedOf("frequencies", entryOf(number, read), output, readers);
   if (isFailure(w)) throw new Error(w.why);
   const m = {

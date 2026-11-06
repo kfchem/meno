@@ -86,9 +86,9 @@ describe("a render's frame and its words", () => {
   });
 
   it("sets why a render failed inside a frame that holds it in two lines, else below it, wrapped, up to the box's widest", () => {
-    const short = "Blender stopped";
+    const short = "Lumen stopped";
     expect(frameWords(400, 200, [short], true).place).toBe("inside");
-    const long = "Blender stopped: the scene could not be read because a file it needs was not found in the job's folder";
+    const long = "Lumen stopped: the scene could not be read because a file it needs was not found in the job's folder";
     expect(frameWords(800, 450, [long], true).place).toBe("inside");
     const fw = frameWords(260, 150, [long], true);
     expect(fw.place).toBe("below");

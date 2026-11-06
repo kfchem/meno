@@ -8,7 +8,7 @@ import { measured } from "../../testing/timeouts";
 
 const sha = (b: Uint8Array) => createHash("sha256").update(b).digest("hex");
 const WORKSPACE = '{"format":"meno-workspace","version":1,"atoms":[],"bonds":[]}\n';
-const output = strToU8(" Entering Gaussian System\n".repeat(2000));
+const output = strToU8(" Entering Orbitron System\n".repeat(2000));
 const picture = Uint8Array.from({ length: 4096 }, (_, i) => (i * 7919) % 251);
 
 /** `zip` with what its central directory says `name` comes to, unpacked, made `size` - the bytes left as they are. */
@@ -36,7 +36,7 @@ function heldMoreBy(run: () => void): number {
 
 describe("a workspace file", () => {
   const bytes = menoFileBytes(WORKSPACE, [
-    { sha256: sha(output), name: "job.log", kind: "gaussian", media: "text/plain", data: output },
+    { sha256: sha(output), name: "job.log", kind: "orbitron", media: "text/plain", data: output },
     { sha256: sha(picture), name: "figure.png", media: "image/png", data: picture },
   ]);
 
@@ -61,7 +61,7 @@ describe("a workspace file", () => {
     const file = readMenoFile(bytes);
     expect(file.workspace).toBe(WORKSPACE);
     expect(file.files).toEqual([
-      { sha256: sha(output), name: "job.log", kind: "gaussian", media: "text/plain", size: output.length },
+      { sha256: sha(output), name: "job.log", kind: "orbitron", media: "text/plain", size: output.length },
       { sha256: sha(picture), name: "figure.png", media: "image/png", size: picture.length },
     ]);
     expect(file.data(sha(output))).toEqual(output);
@@ -114,7 +114,7 @@ describe("a workspace file", () => {
 
 describe("a workspace file that says other than it holds", () => {
   const kept = [
-    { sha256: sha(output), name: "job.log", kind: "gaussian", media: "text/plain", data: output },
+    { sha256: sha(output), name: "job.log", kind: "orbitron", media: "text/plain", data: output },
     { sha256: sha(picture), name: "figure.png", media: "image/png", data: picture },
   ];
   const bytes = menoFileBytes(WORKSPACE, kept);
@@ -158,7 +158,7 @@ describe("a workspace file that says other than it holds", () => {
     const pdf = strToU8("%PDF-1.7\n1 0 obj << /Type /Catalog >> endobj\n%%EOF\n");
     const other = strToU8("something else");
     const wrong = menoFileBytes(WORKSPACE, [
-      { sha256: sha(other), name: "job.log", kind: "gaussian", media: "text/plain", data: output },
+      { sha256: sha(other), name: "job.log", kind: "orbitron", media: "text/plain", data: output },
       { sha256: sha(strToU8("notes")), name: "notes.txt", media: "text/plain", data: strToU8("other notes") },
       { sha256: sha(strToU8("%PDF-")), name: "paper.pdf", media: "application/pdf", data: pdf },
       { sha256: sha(picture.subarray(1)), name: "figure.png", media: "image/png", data: picture },
@@ -226,7 +226,7 @@ describe("a workspace file changed on the disk after it was written", () => {
   // (a workspace that says "x":1 - read as "x":9, it would open as data, and nobody would know)
   const ws = '{"format":"meno-workspace","version":2,"atoms":[{"id":1,"el":"C","x":1,"y":0}],"bonds":[]}\n';
   const kept = [
-    { sha256: sha(output), name: "job.log", kind: "gaussian", media: "text/plain", data: output },
+    { sha256: sha(output), name: "job.log", kind: "orbitron", media: "text/plain", data: output },
     { sha256: sha(picture), name: "figure.png", media: "image/png", data: picture },
   ];
   const bytes = menoFileBytes(ws, kept);
@@ -275,13 +275,13 @@ describe("a workspace file changed on the disk after it was written", () => {
     const odd = changed(bytes, '"figure.png"', 6, "f");
     // (as the workspace names what it keeps: the open path reads that from the workspace - Workspace/utils/workspace)
     const named = () => [
-      { sha256: sha(output), name: "job.log", kind: "gaussian", media: "text/plain" },
+      { sha256: sha(output), name: "job.log", kind: "orbitron", media: "text/plain" },
       { sha256: sha(picture), name: "figure.png", media: "image/png" },
     ];
     const file = readMenoFile(odd, named);
     expect(file.listDamaged).toBe(true);
     expect(file.files).toEqual([
-      { sha256: sha(output), name: "job.log", kind: "gaussian", media: "text/plain", size: output.length },
+      { sha256: sha(output), name: "job.log", kind: "orbitron", media: "text/plain", size: output.length },
       { sha256: sha(picture), name: "figure.png", media: "image/png", size: picture.length },
     ]);
     expect(file.data(sha(output))).toEqual(output);

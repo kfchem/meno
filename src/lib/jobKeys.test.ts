@@ -2,10 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import { sha256Hex } from "./binary/sha256";
 import { isJobKey, jobKey, KEY_AT_ONCE, reusable, type Keyed } from "./jobKeys";
 
-const XTB: Keyed = {
-  plugin: "xtb",
+const TIGHTBIND: Keyed = {
+  plugin: "tightbind",
   pluginVersion: "0.1.3",
-  program: "xtb",
+  program: "tightbind",
   programVersion: "6.7.1",
   args: ["input.xyz", "--opt", "normal"],
   files: [
@@ -16,33 +16,33 @@ const XTB: Keyed = {
 
 describe("a job's key", () => {
   it("is the same for the same job, its files in any order - and another for any byte, argument or version changed", async () => {
-    const key = await jobKey(XTB);
+    const key = await jobKey(TIGHTBIND);
     expect(isJobKey(key)).toBe(true);
-    expect(await jobKey({ ...XTB, files: [...XTB.files].reverse() })).toBe(key);
+    expect(await jobKey({ ...TIGHTBIND, files: [...TIGHTBIND.files].reverse() })).toBe(key);
     const others: Keyed[] = [
-      { ...XTB, files: [{ ...XTB.files[0], text: XTB.files[0].text.replace("0.59", "0.58") }, XTB.files[1]] },
-      { ...XTB, args: ["input.xyz", "--opt", "tight"] },
-      { ...XTB, programVersion: "6.7.2" },
-      { ...XTB, pluginVersion: "0.1.4" },
+      { ...TIGHTBIND, files: [{ ...TIGHTBIND.files[0], text: TIGHTBIND.files[0].text.replace("0.59", "0.58") }, TIGHTBIND.files[1]] },
+      { ...TIGHTBIND, args: ["input.xyz", "--opt", "tight"] },
+      { ...TIGHTBIND, programVersion: "6.7.2" },
+      { ...TIGHTBIND, pluginVersion: "0.1.4" },
       // (a program installed separately, replaced - though it says the same version)
-      { ...XTB, stamps: ["/opt/xtb/bin/xtb\n1000\n2"] },
-      { ...XTB, plugin: "crest" },
-      { ...XTB, stdin: "input.xyz" },
-      { ...XTB, then: [{ program: "orca_2mkl", args: ["input"] }] },
-      { ...XTB, files: [...XTB.files, { name: "extra", text: "" }] },
+      { ...TIGHTBIND, stamps: ["/opt/tightbind/bin/tightbind\n1000\n2"] },
+      { ...TIGHTBIND, plugin: "confsweep" },
+      { ...TIGHTBIND, stdin: "input.xyz" },
+      { ...TIGHTBIND, then: [{ program: "quanta_2mkl", args: ["input"] }] },
+      { ...TIGHTBIND, files: [...TIGHTBIND.files, { name: "extra", text: "" }] },
     ];
     for (const o of others) expect(await jobKey(o)).not.toBe(key);
     // (a file's name and its text are not run together: a name ending as the next begins is another job)
-    expect(await jobKey({ ...XTB, files: [{ name: "ab", text: "c" }] })).not.toBe(await jobKey({ ...XTB, files: [{ name: "a", text: "bc" }] }));
+    expect(await jobKey({ ...TIGHTBIND, files: [{ name: "ab", text: "c" }] })).not.toBe(await jobKey({ ...TIGHTBIND, files: [{ name: "a", text: "bc" }] }));
     // (SHA-256 as FIPS 180-4 has it: the same as Meno's own, worked out at once)
-    expect(key).toBe(sha256Hex(new TextEncoder().encode(JSON.stringify([2, "xtb", "0.1.3", "xtb", "6.7.1", [], XTB.args, null, [], XTB.files.map((f) => [f.name, f.text])]))));
+    expect(key).toBe(sha256Hex(new TextEncoder().encode(JSON.stringify([2, "tightbind", "0.1.3", "tightbind", "6.7.1", [], TIGHTBIND.args, null, [], TIGHTBIND.files.map((f) => [f.name, f.text])]))));
     // (a large input - hashed off Meno's way - keyed the same as it would be at once)
-    const large = { ...XTB, files: [{ name: "wavefunction.molden", text: "0.123456789 ".repeat(KEY_AT_ONCE / 4) }] };
-    expect(await jobKey(large)).toBe(sha256Hex(new TextEncoder().encode(JSON.stringify([2, "xtb", "0.1.3", "xtb", "6.7.1", [], XTB.args, null, [], large.files.map((f) => [f.name, f.text])]))));
+    const large = { ...TIGHTBIND, files: [{ name: "wavefunction.molden", text: "0.123456789 ".repeat(KEY_AT_ONCE / 4) }] };
+    expect(await jobKey(large)).toBe(sha256Hex(new TextEncoder().encode(JSON.stringify([2, "tightbind", "0.1.3", "tightbind", "6.7.1", [], TIGHTBIND.args, null, [], large.files.map((f) => [f.name, f.text])]))));
     // (and where the browser has none of its own: Meno's, the same key - a step never stopped for want of it)
     vi.stubGlobal("crypto", {});
     try {
-      expect(await jobKey(large)).toBe(await (async () => sha256Hex(new TextEncoder().encode(JSON.stringify([2, "xtb", "0.1.3", "xtb", "6.7.1", [], XTB.args, null, [], large.files.map((f) => [f.name, f.text])]))))());
+      expect(await jobKey(large)).toBe(await (async () => sha256Hex(new TextEncoder().encode(JSON.stringify([2, "tightbind", "0.1.3", "tightbind", "6.7.1", [], TIGHTBIND.args, null, [], large.files.map((f) => [f.name, f.text])]))))());
     } finally {
       vi.unstubAllGlobals();
     }

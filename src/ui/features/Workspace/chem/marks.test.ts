@@ -42,7 +42,7 @@ const butene: Model = {
 };
 
 describe("marksOf", () => {
-  it("puts RDKit's answer on the atoms and bonds it is about, by id", () => {
+  it("puts Sketchkit's answer on the atoms and bonds it is about, by id", () => {
     const marks = marksOf(butene, {
       atoms: [
         { index: 0, hydrogens: 3 },

@@ -35,13 +35,13 @@ const water = (number: number, k: number): SetEntry => ({
   xyz: [0, 0, 0, 0.96, 0, 0, -0.24, 0.93 + k, 0],
 });
 
-/** What xtb's reader gives of a frequency job at `xyz`: its energy `e`, its free energy `g` (hartrees) at `kelvin`, and its vibrations - `imaginary` among them, as it judged them. */
-function xtbFrequencies(xyz: readonly number[], e: number, g: number, kelvin = 298.15, imaginary: number[] = []) {
+/** What tightbind's reader gives of a frequency job at `xyz`: its energy `e`, its free energy `g` (hartrees) at `kelvin`, and its vibrations - `imaginary` among them, as it judged them. */
+function tightbindFrequencies(xyz: readonly number[], e: number, g: number, kelvin = 298.15, imaginary: number[] = []) {
   const reading = (id: string, value: number | string, measure: Record<string, unknown> = { quantity: "energy" }) => ({ id, on: "molecule", group: "Thermochemistry", label: id, value, ...measure });
   return {
     schema: 1,
-    program: "xtb",
-    method: "GFN2-xTB",
+    program: "tightbind",
+    method: "TB2",
     solvation: "none",
     atoms: ["O", "H", "H"],
     frames: [[...xyz]],
@@ -67,14 +67,14 @@ function xtbFrequencies(xyz: readonly number[], e: number, g: number, kelvin = 2
 }
 
 /**
- * Three conformers of water, each one's frequencies worked out by xtb (a
+ * Three conformers of water, each one's frequencies worked out by tightbind (a
  * job each), as a Frequencies step on a conformer set keeps them - its
  * molecule - and its entries as the next step takes them. Their energies
  * E go up from the first; their free energies G the other way.
  */
 function frequencied(es = [-5.07, -5.069, -5.068], gs = [-5.05, -5.0505, -5.0508], kelvin = 298.15, imaginary: number[][] = []) {
   const conformers = es.map((_, k) => water(k + 1, 0.01 * k));
-  const done = conformers.map((c, k) => workedOf("frequencies", c, xtbFrequencies(c.xyz, es[k], gs[k], kelvin, imaginary[k]), ["xtb 6.7.1"]));
+  const done = conformers.map((c, k) => workedOf("frequencies", c, tightbindFrequencies(c.xyz, es[k], gs[k], kelvin, imaginary[k]), ["tightbind 1.0.0"]));
   if (done.some(isFailure)) throw new Error("not done");
   const [m] = resultsOf({ ok: true, holds: "conformers", kept: done as Worked[], aside: [], said: "" }, "frequencies").molecules;
   const molecule = { ...m, id: 2, at: { x: 0, y: 0 } } as Molecule3D;
@@ -90,7 +90,7 @@ describe("Frequencies on a conformer set", () => {
       const p = entryOfSet(e, `x${k}`).properties;
       expect(p["thermo.free-energy"]).toMatchObject({ value: [-5.05, -5.0505, -5.0508][k], unit: "Eh", status: "computed" });
       expect(p["thermo.free-energy"].at).toEqual({ geometry: geometryKey(conformers[k].xyz), kelvin: 298.15, solvent: "none" });
-      expect(p["thermo.free-energy"].by).toMatchObject({ plugin: "xtb", program: "xtb", method: "GFN2-xTB", treatment: "rotor cutoff 50 cm-1" });
+      expect(p["thermo.free-energy"].by).toMatchObject({ plugin: "tightbind", program: "tightbind", method: "TB2", treatment: "rotor cutoff 50 cm-1" });
       expect(p["thermo.enthalpy"].value).toBeCloseTo([-5.03, -5.0305, -5.0308][k], 9);
       expect(p["thermo.zpve"].value).toBe(0.021);
       expect(p["thermo.g-correction"].value).toBeCloseTo([0.02, 0.0185, 0.0172][k], 9);
@@ -135,14 +135,14 @@ describe("Frequencies on a conformer set", () => {
   });
 
   it("never reads a vibrations table that lists a negative frequency as none - where the program judged none imaginary", () => {
-    // (xtb lists -15 cm-1, under its own cutoff: judged none imaginary, but the table has it)
+    // (tightbind lists -15 cm-1, under its own cutoff: judged none imaginary, but the table has it)
     const { entries } = frequencied();
     const vibrations = entries[0].properties!.vibrations;
     const table = (vibrations.value as { table: { rows: number[][] } }).table;
     const soft: SetEntry = { ...entries[0], properties: { ...entries[0].properties, vibrations: { ...vibrations, value: { table: { ...table, rows: [[-15], ...table.rows] } } as typeof vibrations.value } } };
     expect(imaginaryOf(soft)).toEqual([-15]);
     // (the same, from a calculation's own list)
-    const done = workedOf("frequencies", water(1, 0), { ...xtbFrequencies(water(1, 0).xyz, -5.07, -5.05), imaginary: [] }, ["xtb 6.7.1"]);
+    const done = workedOf("frequencies", water(1, 0), { ...tightbindFrequencies(water(1, 0).xyz, -5.07, -5.05), imaginary: [] }, ["tightbind 1.0.0"]);
     if (isFailure(done)) throw new Error(done.why);
     const list = done.calc!.results!.find((r) => r.id === "vibrations")!;
     if (list.on !== "list") throw new Error("no list");
@@ -168,7 +168,7 @@ describe("Frequencies on a conformer set", () => {
     const { entries } = frequencied();
     const moved = [...entries[0].xyz];
     moved[3] += 0.05;
-    const again = workedOf("optimise", entries[0], { schema: 1, program: "xtb", atoms: ["O", "H", "H"], frames: [moved], energies: [-5.07] }, ["xtb 6.7.1"]);
+    const again = workedOf("optimise", entries[0], { schema: 1, program: "tightbind", atoms: ["O", "H", "H"], frames: [moved], energies: [-5.07] }, ["tightbind 1.0.0"]);
     if (isFailure(again)) throw new Error(again.why);
     expect(entryOfSet(again, "x").properties["thermo.free-energy"]).toBeUndefined();
     expect(imaginaryOf(again)).toBe("not computed");
@@ -177,10 +177,10 @@ describe("Frequencies on a conformer set", () => {
 
   it("keeps what a conformer carries through a single point at its geometry, at the level it was worked out at", () => {
     const { entries } = frequencied();
-    const sp = workedOf("energy", entries[0], { schema: 1, program: "ORCA", method: "B3LYP", atoms: ["O", "H", "H"], frames: [[...entries[0].xyz]], energies: [-76.4] }, ["cclib 1.9rc1"]);
+    const sp = workedOf("energy", entries[0], { schema: 1, program: "Quanta", method: "B3LYP", atoms: ["O", "H", "H"], frames: [[...entries[0].xyz]], energies: [-76.4] }, ["manyread 1.9rc1"]);
     if (isFailure(sp)) throw new Error(sp.why);
     const g = entryOfSet(sp, "x").properties["thermo.free-energy"];
-    expect([g?.value, g?.by?.method, sp.energy]).toEqual([entries[0].properties?.["thermo.free-energy"]?.value, "GFN2-xTB", -76.4]);
+    expect([g?.value, g?.by?.method, sp.energy]).toEqual([entries[0].properties?.["thermo.free-energy"]?.value, "TB2", -76.4]);
   });
 });
 
@@ -245,9 +245,9 @@ describe("Populations and Energy window on a conformer set with free energies", 
 
   it("falls back to E where the conformers' G were worked out unlike, saying how", () => {
     const { entries } = frequencied();
-    const other = { ...entries[2], properties: { ...entries[2].properties, "thermo.free-energy": { ...entries[2].properties!["thermo.free-energy"], by: { program: "xtb", method: "GFN1-xTB" } } } };
+    const other = { ...entries[2], properties: { ...entries[2].properties, "thermo.free-energy": { ...entries[2].properties!["thermo.free-energy"], by: { program: "tightbind", method: "TB1" } } } };
     const out = runMeno("populations", [entries[0], entries[1], other], "conformers", { temperature: 298.15 });
-    expect(out.ok && out.said).toBe("1 compound at 298.15 K, from electronic energies (not free energies: compound a's differ in method: GFN2-xTB (a #1) and GFN1-xTB (a #3))");
+    expect(out.ok && out.said).toBe("1 compound at 298.15 K, from electronic energies (not free energies: compound a's differ in method: TB2 (a #1) and TB1 (a #3))");
   });
 });
 

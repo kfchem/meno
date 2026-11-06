@@ -14,8 +14,8 @@ import { connectStoreToDocument, createEditorStore } from "../store";
 import { readWorkspace, workspaceText } from "../utils/workspace";
 
 /** An optimisation's calculation, at `method`, converged. */
-const optimisedAt = (method = "GFN2-xTB", more: Partial<CalcInfo> = {}): CalcInfo => ({ readers: ["cclib 1.9rc1"], program: "ORCA", method, optimised: true, ...more });
-/** H2 as a step's entry, its bond `d` Å long, optimised at GFN2-xTB - and as `extra` says. */
+const optimisedAt = (method = "TB2", more: Partial<CalcInfo> = {}): CalcInfo => ({ readers: ["manyread 1.9rc1"], program: "Quanta", method, optimised: true, ...more });
+/** H2 as a step's entry, its bond `d` Å long, optimised at TB2 - and as `extra` says. */
 const h2 = (number: number, d = 0.74, extra: Partial<SetEntry> = {}): SetEntry =>
   ({ compound: number - 1, number: 1, atoms: [{ el: "H" }, { el: "H" }], bonds: [{ a1: 0, a2: 1, order: 1 }], xyz: [0, 0, 0, d, 0, 0], calc: optimisedAt(), ...extra }) as unknown as SetEntry;
 const hf = (): SetEntry => ({ ...h2(9), atoms: [{ el: "H" }, { el: "F" }] }) as unknown as SetEntry;
@@ -62,12 +62,12 @@ describe("a path search's pairs", () => {
       const p = pairEntries([start], [end], "order");
       return "refused" in p ? p.refused[0]?.why : p.why;
     };
-    expect(why(h2(1, 0.74, { calc: optimisedAt("GFN2-xTB", { optimised: undefined }) }), h2(2, 1.1))).toBe("a #1 is no converged optimisation: optimise it first, at the path's level");
+    expect(why(h2(1, 0.74, { calc: optimisedAt("TB2", { optimised: undefined }) }), h2(2, 1.1))).toBe("a #1 is no converged optimisation: optimise it first, at the path's level");
     expect(why(h2(1), h2(2, 1.1, { failed: { kind: "not-converged", why: "The optimisation did not converge" } }))).toBe("its end b #1 is no converged optimisation: optimise it first, at the path's level");
     expect(why(h2(1, 0.74, { calc: undefined }), h2(2, 1.1, { calc: undefined }))).toBe("a #1 and its end b #1 are no converged optimisations: optimise them first, at the path's level");
-    expect(why(h2(1), h2(2, 1.1, { calc: optimisedAt("B3LYP", { basis: "def2-SVP" }) }))).toBe("a #1 (GFN2-xTB) and its end b #1 (B3LYP/def2-SVP) are not at one level: optimise both at the path's");
+    expect(why(h2(1), h2(2, 1.1, { calc: optimisedAt("B3LYP", { basis: "def2-SVP" }) }))).toBe("a #1 (TB2) and its end b #1 (B3LYP/def2-SVP) are not at one level: optimise both at the path's");
     // (one level, said in any case - its solvation none as none)
-    expect(why(h2(1), h2(2, 1.1, { calc: optimisedAt("gfn2-xtb", { solvation: "none" }) }))).toBeUndefined();
+    expect(why(h2(1), h2(2, 1.1, { calc: optimisedAt("TB2", { solvation: "none" }) }))).toBeUndefined();
   });
 
   it("refuses a pair of other atoms, or of another charge or spin: no path joins them", () => {
@@ -83,8 +83,8 @@ describe("a path search's molecule", () => {
   const energies = [-1.17, -1.1, -1.09, -1.12];
   const out = (frequencies?: number[]): ReaderOutput => ({
     schema: 1,
-    program: "ORCA",
-    method: "GFN2-xTB",
+    program: "Quanta",
+    method: "TB2",
     atoms: ["H", "H"],
     frames: [0.74, 0.9, 0.97, 1.1].map((d) => [0, 0, 0, d, 0, 0]),
     energies,
@@ -96,7 +96,7 @@ describe("a path search's molecule", () => {
     ],
   });
   const molecule = (frequencies?: number[]): Molecule3D => {
-    const w = workedOf("path-search", { ...h2(1), end: h2(2, 1.1) }, out(frequencies), ["orca"]);
+    const w = workedOf("path-search", { ...h2(1), end: h2(2, 1.1) }, out(frequencies), ["quanta"]);
     if (isFailure(w)) throw new Error(w.why);
     const [m] = resultsOf({ ok: true, holds: "molecules", kept: [w as Worked], aside: [], said: "" }, "path-search").molecules;
     return { ...m, id: 1, at: { x: 0, y: 0 } };
@@ -142,11 +142,11 @@ describe("a path search's molecule", () => {
     const p = entryOfSet(entry, "x").properties;
     expect(p["path.E-barrier"].value).toBeCloseTo((-1.09 + 1.17) * KCAL, 9);
     expect(p["path.E-reverse-barrier"].value).toBeCloseTo((-1.09 + 1.12) * KCAL, 9);
-    expect(p["path.E-barrier"]).toMatchObject({ unit: "kcal/mol", by: { program: "ORCA", treatment: "electronic, at GFN2-xTB: the energy of the highest point refined, less that of the path's start (its first image)" } });
-    expect(p["path.E-reverse-barrier"].by?.treatment).toBe("electronic, at GFN2-xTB: the energy of the highest point refined, less that of the path's end (its last image)");
+    expect(p["path.E-barrier"]).toMatchObject({ unit: "kcal/mol", by: { program: "Quanta", treatment: "electronic, at TB2: the energy of the highest point refined, less that of the path's start (its first image)" } });
+    expect(p["path.E-reverse-barrier"].by?.treatment).toBe("electronic, at TB2: the energy of the highest point refined, less that of the path's end (its last image)");
     // (how its start and end were paired, written on it where the pair said; none where it did not)
     expect(p).not.toHaveProperty("path.paired");
-    const w = workedOf("path-search", { ...h2(1), end: h2(2, 1.1), paired: "in order, by place: start a #1 with end b #1" }, out(), ["orca"]);
+    const w = workedOf("path-search", { ...h2(1), end: h2(2, 1.1), paired: "in order, by place: start a #1 with end b #1" }, out(), ["quanta"]);
     expect(!isFailure(w) && (w as Worked).properties?.["path.paired"]).toEqual({ value: "in order, by place: start a #1 with end b #1", unit: "none", status: "computed" });
     // (and kept with the molecule it makes, as its entry's)
     const [m] = resultsOf({ ok: true, holds: "molecules", kept: [w as Worked], aside: [], said: "" }, "path-search").molecules;
@@ -239,15 +239,15 @@ describe("a path search's molecule", () => {
   });
 
   it("fails a pair whose path is not at its ends' level, or says none - naming both", () => {
-    const at = (method?: string) => workedOf("path-search", { ...h2(1), end: h2(2, 1.1) }, { ...out(), method }, ["orca"]);
-    expect(at("B3LYP")).toEqual({ kind: "failed", why: "The path is at B3LYP, its ends were optimised at GFN2-xTB: optimise them at the path's level first" });
+    const at = (method?: string) => workedOf("path-search", { ...h2(1), end: h2(2, 1.1) }, { ...out(), method }, ["quanta"]);
+    expect(at("B3LYP")).toEqual({ kind: "failed", why: "The path is at B3LYP, its ends were optimised at TB2: optimise them at the path's level first" });
     expect(at(undefined)).toEqual({ kind: "failed", why: "It did not say the path's level: whether it is its ends' cannot be told" });
   });
 
   it("refuses an output with no point refined, or one at an end of its path", () => {
-    const none = workedOf("path-search", { ...h2(1), end: h2(2) }, { ...out(), converged: [false, false, false, false] }, ["orca"]);
+    const none = workedOf("path-search", { ...h2(1), end: h2(2) }, { ...out(), converged: [false, false, false, false] }, ["quanta"]);
     expect(none).toEqual({ kind: "no-geometry", why: "It read back no one point refined on its path" });
-    const atEnd = workedOf("path-search", { ...h2(1), end: h2(2) }, { ...out(), converged: [false, false, false, true] }, ["orca"]);
+    const atEnd = workedOf("path-search", { ...h2(1), end: h2(2) }, { ...out(), converged: [false, false, false, true] }, ["quanta"]);
     expect(atEnd).toEqual({ kind: "no-geometry", why: "It read back no path with energies, its point refined between its ends" });
   });
 });

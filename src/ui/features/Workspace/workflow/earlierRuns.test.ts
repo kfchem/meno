@@ -24,7 +24,7 @@ const optimised = (t: number, n: number, keep = false): StepRunKept => ({
 
 /** A step that has run (its last run at 15:00) with `runs` kept before it. */
 function stepWith(runs: StepRunKept[], doc: WorkspaceDocument = emptyWorkspaceDocument(), x = 0): WorkspaceDocument {
-  let d = addStep(doc, "optimise", x, 0, undefined, "xtb");
+  let d = addStep(doc, "optimise", x, 0, undefined, "tightbind");
   const id = d.steps![d.steps!.length - 1].id;
   d = setRan(d, id, { at: NOW, ok: true, said: "1 optimised", input: "k", kind: "optimise" });
   return withStepRuns(d, id, runs);

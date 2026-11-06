@@ -27,14 +27,14 @@ const none = { centres: [], doubles: [] };
 describe("Stereoisomers, Meno's", () => {
   it("keeps one as drawn where nothing is left open - asking for none of its stereoisomers", async () => {
     const { chem, asked } = plugin({ read: true, elements: [{ kind: "centre", at: 1, state: "specified" }] });
-    expect(await stereoisomersAnswer(chem, [BUTANOL], DEFAULTS, "RDKit")).toEqual({ as: "drawn" });
+    expect(await stereoisomersAnswer(chem, [BUTANOL], DEFAULTS, "Sketchkit")).toEqual({ as: "drawn" });
     expect(asked.map((a) => a.op)).toEqual(["stereo_elements"]);
   });
 
   it("asks for them whole, as many as its options allow, in their time - each as a drawing - and gives them in the order of their SMILES", async () => {
     const made = { isomers: [{ configured: none, smiles: "C[C@H](O)CC", molblock: "second" }, { configured: none, smiles: "C[C@@H](O)CC", molblock: "first" }], free: false };
     const { chem, asked } = plugin(CENTRE, made);
-    expect(await stereoisomersAnswer(chem, [BUTANOL], DEFAULTS, "RDKit")).toEqual({ made: ["first", "second"], smiles: ["C[C@@H](O)CC", "C[C@H](O)CC"] });
+    expect(await stereoisomersAnswer(chem, [BUTANOL], DEFAULTS, "Sketchkit")).toEqual({ made: ["first", "second"], smiles: ["C[C@@H](O)CC", "C[C@H](O)CC"] });
     expect(asked[1]).toEqual({
       op: "stereoisomers",
       args: { molblocks: [BUTANOL], open: { atoms: [1], bonds: [] }, configured: none, notEnumerated: [], most: 32, inThreeD: true, whole: true, withinMs: 30_000, drawings: true },
@@ -45,25 +45,25 @@ describe("Stereoisomers, Meno's", () => {
 
   it("keeps one as drawn where what it leaves open can go one way only in 3D", async () => {
     const { chem } = plugin(CENTRE, { isomers: [{ configured: none, smiles: "C1CC2CCC1C2", molblock: "one" }], free: false });
-    expect(await stereoisomersAnswer(chem, [BUTANOL], DEFAULTS, "RDKit")).toEqual({ as: "drawn" });
+    expect(await stereoisomersAnswer(chem, [BUTANOL], DEFAULTS, "Sketchkit")).toEqual({ as: "drawn" });
   });
 
   it("sets aside, saying why: too many, whole; too long, alone; left open, as its option says; one not drawn back, in the plugin's words", async () => {
-    expect(await stereoisomersAnswer(plugin(CENTRE, { tooMany: { counted: 33, bound: 64 } }).chem, [BUTANOL], DEFAULTS, "RDKit")).toEqual({ aside: "more than the 32 stereoisomers made of one (up to 64)", kind: "too many" });
-    expect(await stereoisomersAnswer(plugin(CENTRE, { tooLong: true }).chem, [BUTANOL], { ...DEFAULTS, within: 5 }, "RDKit")).toEqual({ aside: "took more than 5 s to examine", kind: "too long" });
+    expect(await stereoisomersAnswer(plugin(CENTRE, { tooMany: { counted: 33, bound: 64 } }).chem, [BUTANOL], DEFAULTS, "Sketchkit")).toEqual({ aside: "more than the 32 stereoisomers made of one (up to 64)", kind: "too many" });
+    expect(await stereoisomersAnswer(plugin(CENTRE, { tooLong: true }).chem, [BUTANOL], { ...DEFAULTS, within: 5 }, "Sketchkit")).toEqual({ aside: "took more than 5 s to examine", kind: "too long" });
     const two = { isomers: [{ configured: none, smiles: "a" }, { configured: none, smiles: "b" }], free: false };
     const aside = plugin(CENTRE, two);
-    expect(await stereoisomersAnswer(aside.chem, [BUTANOL], { ...DEFAULTS, open: "aside" }, "RDKit")).toEqual({ aside: "stereo left open: 2 stereoisomers", kind: "stereo open" });
+    expect(await stereoisomersAnswer(aside.chem, [BUTANOL], { ...DEFAULTS, open: "aside" }, "Sketchkit")).toEqual({ aside: "stereo left open: 2 stereoisomers", kind: "stereo open" });
     // (set aside: no drawing asked for)
     expect(aside.asked[1].args.drawings).toBeUndefined();
     const adduct = { isomers: [{ configured: none, smiles: "a", molblock: "x" }, { configured: none, smiles: "b", error: "its coordination bond from N could not be written back as drawn" }], free: false };
-    expect(await stereoisomersAnswer(plugin(CENTRE, adduct).chem, [BUTANOL], DEFAULTS, "RDKit")).toEqual({ aside: "its coordination bond from N could not be written back as drawn", kind: "drawing" });
+    expect(await stereoisomersAnswer(plugin(CENTRE, adduct).chem, [BUTANOL], DEFAULTS, "Sketchkit")).toEqual({ aside: "its coordination bond from N could not be written back as drawn", kind: "drawing" });
   });
 
   it("sets aside an allene's axis left open, its stereoisomers never asked for", async () => {
     const allene = v2000(["C", "C", "C", "C", "C"], [[0, 1, 1], [1, 2, 2], [2, 3, 2], [3, 4, 1]]);
     const { chem, asked } = plugin({ read: true, elements: [{ kind: "double", at: 1, state: "unspecified" }, { kind: "double", at: 2, state: "unspecified" }] });
-    expect(await stereoisomersAnswer(chem, [allene], DEFAULTS, "RDKit")).toEqual({ aside: "an allene's axis left open, which a drawing in 2D cannot give", kind: "axis" });
+    expect(await stereoisomersAnswer(chem, [allene], DEFAULTS, "Sketchkit")).toEqual({ aside: "an allene's axis left open, which a drawing in 2D cannot give", kind: "axis" });
     expect(asked.map((a) => a.op)).toEqual(["stereo_elements"]);
   });
 
@@ -80,15 +80,15 @@ describe("Stereoisomers, Meno's", () => {
         method: "C=N bonds whose E/Z moves by tautomerism (InChI Technical Manual v1.04)",
       },
     };
-    expect(await stereoisomersAnswer(chem, [guanidine], DEFAULTS, "RDKit")).toEqual({ made: ["A", "B"], smiles: ["a", "b"], properties: note });
+    expect(await stereoisomersAnswer(chem, [guanidine], DEFAULTS, "Sketchkit")).toEqual({ made: ["A", "B"], smiles: ["a", "b"], properties: note });
     expect(asked[1].args).toMatchObject({ open: { atoms: [6], bonds: [] }, notEnumerated: [1] });
     // (nothing else open: kept as drawn, said so)
     const alone = plugin({ read: true, elements: [elements.elements[0]] });
-    expect(await stereoisomersAnswer(alone.chem, [guanidine], DEFAULTS, "RDKit")).toEqual({ as: "drawn", properties: note });
+    expect(await stereoisomersAnswer(alone.chem, [guanidine], DEFAULTS, "Sketchkit")).toEqual({ as: "drawn", properties: note });
   });
 
   it("sets aside one the plugin cannot read, or make sense of, naming the toolkit", async () => {
-    expect(await stereoisomersAnswer(plugin({ read: false }).chem, [BUTANOL], DEFAULTS, "RDKit")).toEqual({ aside: "RDKit could not read it", kind: "unreadable" });
-    expect(await stereoisomersAnswer(plugin({ read: true, problem: "SANITIZE_PROPERTIES" }).chem, [BUTANOL], DEFAULTS, "RDKit")).toEqual({ aside: "RDKit could not read it (SANITIZE_PROPERTIES)", kind: "valence" });
+    expect(await stereoisomersAnswer(plugin({ read: false }).chem, [BUTANOL], DEFAULTS, "Sketchkit")).toEqual({ aside: "Sketchkit could not read it", kind: "unreadable" });
+    expect(await stereoisomersAnswer(plugin({ read: true, problem: "SANITIZE_PROPERTIES" }).chem, [BUTANOL], DEFAULTS, "Sketchkit")).toEqual({ aside: "Sketchkit could not read it (SANITIZE_PROPERTIES)", kind: "valence" });
   });
 });

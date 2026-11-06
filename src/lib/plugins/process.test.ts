@@ -54,7 +54,7 @@ import type { PythonPlugin } from "../calc/catalog";
 import { IDLE_MS } from "./idle";
 import { onWorkerStopped, stopWorker, workerOf, workerRunning } from "./process";
 
-const plugin = { id: "cclib", name: "cclib", profile: "plugin-cclib", worker: "plugins/cclib/0.2.1/worker.py" } as unknown as PythonPlugin;
+const plugin = { id: "manyread", name: "manyread", profile: "plugin-manyread", worker: "plugins/manyread/0.2.1/worker.py" } as unknown as PythonPlugin;
 
 describe("a plugin's worker gone unused", () => {
   beforeEach(() => {
@@ -80,7 +80,7 @@ describe("a plugin's worker gone unused", () => {
     await vi.advanceTimersByTimeAsync(1000);
     expect(backend.killed).toEqual(["w1"]);
     expect(workerRunning(plugin.id)).toBe(false);
-    expect(stopped).toEqual(["cclib"]);
+    expect(stopped).toEqual(["manyread"]);
     // (the next question: a worker started afresh, which answers it)
     const again = workerOf(plugin);
     await vi.advanceTimersByTimeAsync(20);
@@ -131,13 +131,13 @@ describe("a plugin's worker gone unused", () => {
   });
 
   it("is kept while a job of its plugin waits or runs, and stopped once none does", async () => {
-    backend.jobs = [{ id: "j1", plugin: "cclib", state: "running" }, { id: "j2", plugin: "xtb", state: "done" }];
+    backend.jobs = [{ id: "j1", plugin: "manyread", state: "running" }, { id: "j2", plugin: "tightbind", state: "done" }];
     const w = workerOf(plugin);
     await vi.advanceTimersByTimeAsync(20);
     await w;
     await vi.advanceTimersByTimeAsync(IDLE_MS * 2 + 1000);
     expect(backend.killed).toEqual([]);
-    backend.jobs = [{ id: "j1", plugin: "cclib", state: "done" }];
+    backend.jobs = [{ id: "j1", plugin: "manyread", state: "done" }];
     await vi.advanceTimersByTimeAsync(IDLE_MS);
     expect(backend.killed).toEqual(["w1"]);
   });

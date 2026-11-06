@@ -14,12 +14,12 @@ import { appendParts, flowIn, flowOf, partsBounds, partsOf, procedureParts, remo
  */
 function flow(): WorkspaceDocument {
   let d = addSet(emptyWorkspaceDocument(), { x0: 0, y0: 0, x1: 4, y1: 4 });
-  d = addStep(d, "optimise", 6, 3, { method: "gfn2" }, "xtb");
+  d = addStep(d, "optimise", 6, 3, { method: "TB2" }, "tightbind");
   d = connect(d, { set: 1 }, 2);
   d = setRan(d, 2, { at: 1, ok: true, said: "done", input: "x" });
-  d = addStep(d, "energy", 18, 3, { method: "gfn2" }, "xtb");
+  d = addStep(d, "energy", 18, 3, { method: "TB2" }, "tightbind");
   d = connect(d, { set: 3 }, 6);
-  d = addStep(d, "frequencies", 30, 30, {}, "xtb");
+  d = addStep(d, "frequencies", 30, 30, {}, "tightbind");
   // (the ids as the comment has them: every step's exit a set made with it)
   expect([resultOf(d, 2)!.id, resultOf(d, 6)!.id, resultOf(d, 10)!.id]).toEqual([3, 7, 11]);
   expect([resultOf(d, 2, "failed")!.id, resultOf(d, 6, "failed")!.id, resultOf(d, 10, "failed")!.id]).toEqual([4, 8, 12]);
@@ -34,7 +34,7 @@ describe("a workflow's parts taken together", () => {
     expect(parts.sets.map((b) => b.id)).toEqual([1, 3]);
     // (the set of step 2's exit, its exit still - empty, until that step runs where it is put down)
     expect(parts.sets[1].made).toEqual({ step: 2, exit: "out" });
-    expect(parts.steps).toEqual([{ id: 2, kind: "optimise", x: 6, y: 3, by: "xtb", options: { method: "gfn2" } }]);
+    expect(parts.steps).toEqual([{ id: 2, kind: "optimise", x: 6, y: 3, by: "tightbind", options: { method: "TB2" } }]);
     // (the wire from set 3 into step 6 is not among them)
     expect(parts.wires.map((w) => [w.from, w.to])).toEqual([[{ set: 1 }, { step: 2, port: "in" }]]);
     // a set whose step is not among them: a set the chemist drew
@@ -117,8 +117,8 @@ describe("a whole flow", () => {
     ]);
     expect(proc.sets[0]).toEqual({ id: 1, x0: 0, x1: 4, y0: -4, y1: 0 });
     expect(proc.steps.map((s) => [s.id, s.kind, s.x, s.y, s.by])).toEqual([
-      [2, "optimise", 6, -1, "xtb"],
-      [6, "energy", 18, -1, "xtb"],
+      [2, "optimise", 6, -1, "tightbind"],
+      [6, "energy", 18, -1, "tightbind"],
     ]);
     expect(proc.wires.map((w) => [w.from, w.to])).toEqual([
       [{ set: 1 }, { step: 2, port: "in" }],

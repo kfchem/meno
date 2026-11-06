@@ -8,22 +8,22 @@ describe("asking to use the network", () => {
   beforeEach(() => useNetwork.setState({ offline: false, granted: [], asking: null }));
 
   it("asks one question at a time: one asked while another is up waits its turn, never taken as a no", async () => {
-    const first = ask("python-env:plugin-rdkit");
-    const second = ask("python-env:plugin-cclib");
+    const first = ask("python-env:plugin-sketchkit");
+    const second = ask("python-env:plugin-manyread");
     await settle();
-    expect(useNetwork.getState().asking?.purpose).toBe("python-env:plugin-rdkit");
+    expect(useNetwork.getState().asking?.purpose).toBe("python-env:plugin-sketchkit");
     useNetwork.getState().asking!.answer(true);
     expect(await first).toBe(true);
     await settle();
-    expect(useNetwork.getState().asking?.purpose).toBe("python-env:plugin-cclib");
+    expect(useNetwork.getState().asking?.purpose).toBe("python-env:plugin-manyread");
     useNetwork.getState().asking!.answer(false);
     expect(await second).toBe(false);
     expect(useNetwork.getState().asking).toBeNull();
   });
 
   it("asks once for a purpose asked twice, both given its answer", async () => {
-    const a = ask("python-env:plugin-xtb");
-    const b = ask("python-env:plugin-xtb");
+    const a = ask("python-env:plugin-tightbind");
+    const b = ask("python-env:plugin-tightbind");
     await settle();
     useNetwork.getState().asking!.answer(true);
     expect(await Promise.all([a, b])).toEqual([true, true]);
@@ -33,9 +33,9 @@ describe("asking to use the network", () => {
 
   it("says no in offline mode without asking - and yes for a purpose allowed before", async () => {
     useNetwork.setState({ offline: true });
-    expect(await ask("python-env:plugin-rdkit")).toBe(false);
-    useNetwork.setState({ offline: false, granted: ["python-env:plugin-rdkit"] });
-    expect(await ask("python-env:plugin-rdkit")).toBe(true);
+    expect(await ask("python-env:plugin-sketchkit")).toBe(false);
+    useNetwork.setState({ offline: false, granted: ["python-env:plugin-sketchkit"] });
+    expect(await ask("python-env:plugin-sketchkit")).toBe(true);
     expect(useNetwork.getState().asking).toBeNull();
   });
 });

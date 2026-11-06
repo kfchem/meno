@@ -40,7 +40,7 @@ describe("the entry record", () => {
 });
 
 describe("which stereoisomer an entry is", () => {
-  const by = { plugin: "rdkit", version: "0.1.7" };
+  const by = { plugin: "sketchkit", version: "0.1.7" };
   const centre = (specified = true) => ({ kind: "centre" as const, atoms: [1], specified });
   const perceived = (key: string, elements = [centre()], at: By = by): EntryStereo => ({ perceived: true, elements, key, by: at });
 
@@ -54,7 +54,7 @@ describe("which stereoisomer an entry is", () => {
 
   it("is known for a molecule with no stereo - and not known where it was not perceived, or a configuration was left open", () => {
     // (methylcyclohexane: perceived, nothing stereogenic - an identity of its own)
-    expect(stereoIdentity(perceived("CC1CCCCC1", []))).toBe('["rdkit","0.1.7","CC1CCCCC1"]');
+    expect(stereoIdentity(perceived("CC1CCCCC1", []))).toBe('["sketchkit","0.1.7","CC1CCCCC1"]');
     // (not perceived is not "no stereo"; an open centre matches nothing, not even another open one)
     expect(stereoIdentity(undefined)).toBeNull();
     expect(stereoIdentity({ perceived: false, why: "Nothing added tells stereoisomers apart" })).toBeNull();
@@ -65,7 +65,7 @@ describe("which stereoisomer an entry is", () => {
     // (the desk's two cases: an empty `by` read as "?" and "?" equalled a plugin and version called "?";
     //  and a key or version with the separator in it made (a, b, "c:d") and (a, "b:c", d) one text)
     expect(stereoIdentity(perceived("K", [centre()], {}))).toBeNull();
-    expect(stereoIdentity(perceived("K", [centre()], { plugin: "rdkit" }))).toBeNull();
+    expect(stereoIdentity(perceived("K", [centre()], { plugin: "sketchkit" }))).toBeNull();
     expect(stereoIdentity(perceived("K", [centre()], { plugin: "", version: "0.1.7" }))).toBeNull();
     expect(stereoIdentity(perceived("K", [centre()], { plugin: "?", version: "?" }))).not.toBeNull();
     expect(stereoIdentity(perceived("c:d", [centre()], { plugin: "a", version: "b" }))).not.toBe(stereoIdentity(perceived("d", [centre()], { plugin: "a", version: "b:c" })));
@@ -179,7 +179,7 @@ describe("a sum's parts, as a file holds them", () => {
       by: { treatment: "sum: energy (...) + thermo.g-correction (...) + standard state (...)" },
       status: "computed",
       parts: [
-        { property: "energy", value: -500.1, unit: "Eh", at: { geometry: "g1", solvent: "SMD(chloroform)" }, by: { program: "Gaussian", method: "wB97X-D", basis: "6-311+G(d,p)" } },
+        { property: "energy", value: -500.1, unit: "Eh", at: { geometry: "g1", solvent: "SMD(chloroform)" }, by: { program: "Orbitron", method: "wB97X-D", basis: "6-311+G(d,p)" } },
         { property: "thermo.g-correction", value: 0.12, unit: "Eh", at: { geometry: "g1", kelvin: 298.15, atm: 1 }, by: { method: "wB97X-D", basis: "6-31G(d)", treatment: "quasi-RRHO" } },
         { property: "standard state", value: 1.894, unit: "kcal/mol", by: { treatment: "standard state 1 atm to 1 mol/L at 298.15 K" } },
       ],
@@ -214,7 +214,7 @@ describe("a property's structure, as a file holds it", () => {
   });
 
   it("reads back the symmetry a free energy was worked out with - its point group, and its symmetry number a whole number of 1 or more", () => {
-    const p = { value: -56.53, unit: "Eh", at: { geometry: "g1", kelvin: 298.15, atm: 1 }, by: { program: "ORCA", method: "B3LYP", treatment: "quasi-RRHO (Grimme), 100 cm-1", pointGroup: "C3v", symmetryNumber: 3 }, status: "computed" };
+    const p = { value: -56.53, unit: "Eh", at: { geometry: "g1", kelvin: 298.15, atm: 1 }, by: { program: "Quanta", method: "B3LYP", treatment: "quasi-RRHO (Grimme), 100 cm-1", pointGroup: "C3v", symmetryNumber: 3 }, status: "computed" };
     expect(propertyIn(JSON.parse(JSON.stringify(p)))).toEqual(p);
     for (const bad of [0, 1.5, "3", -3]) expect(propertyIn({ ...p, by: { ...p.by, symmetryNumber: bad } })).toBeUndefined();
     expect(propertyIn({ ...p, by: { ...p.by, pointGroup: 3 } })).toBeUndefined();

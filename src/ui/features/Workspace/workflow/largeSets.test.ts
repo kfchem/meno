@@ -30,7 +30,7 @@ const extentOf: RunWith["extentOf"] = () => ({ x0: -1, x1: 1, y0: -1, y1: 1 });
 const waters = (n: number) => Array.from({ length: n }, (_, k) => water(k));
 
 /** A step, and its result set holding `molecules` - a set of `holds`. */
-function ran(molecules: Omit<Molecule3D, "id" | "at">[], holds: "molecules" | "conformers" = "molecules", doc = addStep(emptyWorkspaceDocument(), "optimise", 0, 0, {}, "xtb")): WorkspaceDocument {
+function ran(molecules: Omit<Molecule3D, "id" | "at">[], holds: "molecules" | "conformers" = "molecules", doc = addStep(emptyWorkspaceDocument(), "optimise", 0, 0, {}, "tightbind")): WorkspaceDocument {
   return placeResults(doc, doc.steps![0], { molecules, rest: [], holds }, { extentOf });
 }
 
@@ -65,7 +65,7 @@ describe("a large result set (docs/WORKFLOWS-FOUNDATION.md, *What a set shows*)"
 
   it("gives the steps after it what it holds, each molecule with an id of its own within the set", () => {
     let d = ran(waters(60));
-    d = addStep(d, "energy", 20, 0, {}, "xtb");
+    d = addStep(d, "energy", 20, 0, {}, "tightbind");
     const set = resultOf(d, d.steps![0].id)!;
     d = { ...d, wires: [{ id: 99, from: { set: set.id }, to: { step: d.steps![1].id, port: "in" } }] };
     const input = inputOf(d, d.steps![1].id)!;
@@ -98,7 +98,7 @@ describe("a large result set (docs/WORKFLOWS-FOUNDATION.md, *What a set shows*)"
     const doc = createWorkspaceDocument();
     const store = createEditorStore(doc);
     connectStoreToDocument(store, doc);
-    doc.edit("run", (d) => ran(waters(52), "molecules", addStep(d, "optimise", 0, 0, {}, "xtb")));
+    doc.edit("run", (d) => ran(waters(52), "molecules", addStep(d, "optimise", 0, 0, {}, "tightbind")));
     const st = () => store.getState();
     const text = workspaceText(st());
     const saved = JSON.parse(text);
@@ -125,7 +125,7 @@ describe("a large result set (docs/WORKFLOWS-FOUNDATION.md, *What a set shows*)"
     const doc = createWorkspaceDocument();
     const store = createEditorStore(doc);
     connectStoreToDocument(store, doc);
-    doc.edit("run", (d) => ran(waters(53), "molecules", addStep(d, "optimise", 0, 0, {}, "xtb")));
+    doc.edit("run", (d) => ran(waters(53), "molecules", addStep(d, "optimise", 0, 0, {}, "tightbind")));
     const saved = JSON.parse(workspaceText(store.getState()));
     // (two of its molecules spoilt: one with no atoms, one not a molecule at all)
     saved.sets[0].collection[4] = { atoms: "none", bonds: [] };
@@ -159,20 +159,20 @@ describe("a large result set (docs/WORKFLOWS-FOUNDATION.md, *What a set shows*)"
 
   it("keeps in the workspace's file the outputs its collection's molecules were read from, said to be nowhere else", async () => {
     const text = "an output's text, opened from /data/large/run.out";
-    const source = await rememberOutput("run.out", text, "orca", "/data/large/run.out");
+    const source = await rememberOutput("run.out", text, "quanta", "/data/large/run.out");
     const wavefunction = await rememberOutput("run.molden", "a wavefunction's text", "molden", "/data/large/run.molden");
     const doc = createWorkspaceDocument();
     const store = createEditorStore(doc);
     connectStoreToDocument(store, doc);
     const read = waters(51).map((m, k) => (k === 30 ? { ...m, calc: { readers: ["meno"], source, wavefunction } } : m));
-    doc.edit("run", (d) => ran(read, "molecules", addStep(d, "optimise", 0, 0, {}, "xtb")));
+    doc.edit("run", (d) => ran(read, "molecules", addStep(d, "optimise", 0, 0, {}, "tightbind")));
     const { bytes, notKept } = await workspaceFile(store.getState());
     expect(notKept).toEqual([]);
     const file = readMenoFile(bytes);
     expect(file.files.map((f) => f.name).sort()).toEqual(["run.molden", "run.out"]);
     expect(file.workspace).not.toContain("/data/large/run.out");
     const ws = readWorkspace(workspaceOfFile(bytes)!)!;
-    expect(ws.workflow!.sets[0].collection![30].calc!.source).toEqual({ name: "run.out", sha256: source.sha256, kind: "orca" });
+    expect(ws.workflow!.sets[0].collection![30].calc!.source).toEqual({ name: "run.out", sha256: source.sha256, kind: "quanta" });
     // (kept out of the file, nor are its outputs)
     doc.edit("keep", (d) => keepSet(d, d.sets![0].id, false));
     expect(readMenoFile((await workspaceFile(store.getState())).bytes).files).toEqual([]);
@@ -183,9 +183,9 @@ describe("a large result set (docs/WORKFLOWS-FOUNDATION.md, *What a set shows*)"
     const store = createEditorStore(doc);
     connectStoreToDocument(store, doc);
     // (an output known by its SHA-256 alone: read from a file, held no more)
-    const source = { name: "gone.out", sha256: "0".repeat(64), kind: "orca" };
+    const source = { name: "gone.out", sha256: "0".repeat(64), kind: "quanta" };
     const read = waters(51).map((m, k) => (k === 7 ? { ...m, calc: { readers: ["meno"], source } } : m));
-    doc.edit("run", (d) => ran(read, "molecules", addStep(d, "optimise", 0, 0, {}, "xtb")));
+    doc.edit("run", (d) => ran(read, "molecules", addStep(d, "optimise", 0, 0, {}, "tightbind")));
     const { bytes, notKept } = await workspaceFile(store.getState());
     expect(notKept).toEqual(["gone.out"]);
     expect(readMenoFile(bytes).files).toEqual([]);

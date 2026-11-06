@@ -11,7 +11,7 @@ const stopped: string[] = [];
 vi.mock("../../../../lib/jobs", async (actual) => ({
   ...(await actual<typeof import("../../../../lib/jobs")>()),
   stopJob: async (id: string) => void stopped.push(id),
-  jobOf: async (id: string) => ({ id, plugin: "xtb", program: "xtb", state: "done", created: 1 }),
+  jobOf: async (id: string) => ({ id, plugin: "tightbind", program: "tightbind", state: "done", created: 1 }),
   removeJob: async (id: string) => void removed.push(id),
 }));
 
@@ -24,7 +24,7 @@ describe("a step deleted", () => {
     const store = createEditorStore(doc);
     connectStoreToDocument(store, doc);
     const st = () => store.getState();
-    const id = st().addStep("optimise", "xtb", 0, 0);
+    const id = st().addStep("optimise", "tightbind", 0, 0);
     const run = (at: number, jobs: string[]) => ({ at, ok: true, said: "done", input: "k", jobs, kind: "optimise" as const });
     doc.edit("ran", (d) => ({
       ...d,

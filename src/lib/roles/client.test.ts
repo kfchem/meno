@@ -48,7 +48,7 @@ describe("the chemistry client", () => {
     await expect(b).resolves.toEqual({ molblock: "B" });
   });
 
-  it("fails a request RDKit could not answer, saying why", async () => {
+  it("fails a request Sketchkit could not answer, saying why", async () => {
     const w = fakeWorker();
     const c = new ChemClient(w.transport);
     const r = c.request("from_smiles", { smiles: "C1CC" });
@@ -67,7 +67,7 @@ describe("the chemistry client", () => {
       vi.advanceTimersByTime(1001);
       await expect(caught).resolves.toMatch(/did not answer to_smiles in time/);
       // a late answer is ignored
-      w.say({ id: 1, ok: true, result: { rdkit: "x" } });
+      w.say({ id: 1, ok: true, result: { sketchkit: "x" } });
     } finally {
       vi.useRealTimers();
     }
@@ -88,7 +88,7 @@ describe("the chemistry client", () => {
       const w = fakeWorker();
       const heard: string[] = [];
       const watch = { sent: (id: number) => heard.push(`sent ${id}`), settled: (id: number) => heard.push(`settled ${id}`), overdue: (id: number) => heard.push(`overdue ${id}`) };
-      const c = new ChemClient(w.transport, 1000, "RDKit", undefined, watch);
+      const c = new ChemClient(w.transport, 1000, "Sketchkit", undefined, watch);
       const answered = c.request("to_smiles", { molblock: "A" });
       w.say({ id: w.sent[0].id, ok: true, result: { smiles: "C" } });
       await answered;
@@ -96,8 +96,8 @@ describe("the chemistry client", () => {
       vi.advanceTimersByTime(1001);
       expect(await late).toMatch(/did not answer from_smiles in time/);
       const waiting = c.request("to_smiles", { molblock: "B" }).catch((e: Error) => e.message);
-      c.close("RDKit was started again");
-      expect(await waiting).toBe("RDKit was started again");
+      c.close("Sketchkit was started again");
+      expect(await waiting).toBe("Sketchkit was started again");
       const [a, b, d] = w.sent.map((m) => m.id);
       expect(heard).toEqual([`sent ${a}`, `settled ${a}`, `sent ${b}`, `overdue ${b}`, `sent ${d}`, `settled ${d}`]);
     } finally {

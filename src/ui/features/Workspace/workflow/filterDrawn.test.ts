@@ -10,7 +10,7 @@ import { placeResults, runStep, type RunResults, type RunWith } from "./run";
 const W: RunWith = { extentOf: () => ({ x0: -1, x1: 1, y0: -1, y1: 1 }), byOf: () => "meno", now: 1000 };
 
 /** Descriptors' numbers of a structure drawn, as its plugin gives them: molecular weight in g/mol, polar surface area in Å². */
-const BY = { plugin: "rdkit", version: "1", program: "RDKit 2026.03.6" };
+const BY = { plugin: "sketchkit", version: "1", program: "Sketchkit 2026.03.6" };
 const mw = (v: number): Property => ({ value: v, unit: "g/mol", by: { ...BY, method: "molecular weight" }, status: "computed" });
 const tpsa = (v: number): Property => ({ value: v, unit: "Å2", by: { ...BY, method: "TPSA" }, status: "computed" });
 /** A generative model's NLL of a structure it made: no unit. */

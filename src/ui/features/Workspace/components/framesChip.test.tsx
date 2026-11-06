@@ -44,7 +44,7 @@ describe("a frames chip - a molecule's frames, or a stack's", () => {
   });
 
   it("holds each number to its unit in its line, never broken between them", () => {
-    expect(unitsHeld("CREST 2.12 · charge 0, singlet · −8.226118 Eh")).toBe("CREST 2.12 · charge 0, singlet · −8.226118\u00a0Eh");
+    expect(unitsHeld("Confsweep 2.12 · charge 0, singlet · −8.226118 Eh")).toBe("Confsweep 2.12 · charge 0, singlet · −8.226118\u00a0Eh");
     expect(unitsHeld("1.85 D · 120.5° · 2 Å")).toBe("1.85\u00a0D · 120.5° · 2\u00a0Å");
   });
 
@@ -56,13 +56,13 @@ describe("a frames chip - a molecule's frames, or a stack's", () => {
 
   it("holds what the calculation found in the chip itself, shut - none over the molecule - until it is clicked open (the maintainer, 2026-10-14)", () => {
     const results = [{ id: "dipole", on: "molecule" as const, group: "Properties", label: "Dipole moment", quantity: "dipole" as const, value: 1.85, rank: 2 }];
-    const html = renderToString(<FramesChip count={5} frame={2} open={false} onFrame={none} about="xtb" results={results} />);
+    const html = renderToString(<FramesChip count={5} frame={2} open={false} onFrame={none} about="tightbind" results={results} />);
     // (in the chip, its row shut: no box above it)
     expect(html).toContain("Dipole moment");
     expect(html).not.toContain("bottom-full");
     expect(html).toMatch(/grid-template-rows:\s*0fr;\s*opacity:\s*0/);
     // (pointing at it alone opens nothing: open is the molecule's pointer, not a click)
-    expect(renderToString(<FramesChip count={5} frame={2} open onFrame={none} about="xtb" results={results} />)).not.toMatch(/grid-template-rows:\s*1fr/);
+    expect(renderToString(<FramesChip count={5} frame={2} open onFrame={none} about="tightbind" results={results} />)).not.toMatch(/grid-template-rows:\s*1fr/);
   });
 
   it("says which of how many, and the record's title, shut", () => {
@@ -77,7 +77,7 @@ describe("a frames chip - a molecule's frames, or a stack's", () => {
       <ResultGroups
         groups={[
           { group: "Energies", rows: [{ label: "Total", text: "-1 Eh" }] },
-          { group: "How it was made", rows: [{ label: "Method", text: "ETKDG v3 + MMFF94" }], folded: true },
+          { group: "How it was made", rows: [{ label: "Method", text: "ETKDG v3 + KF1" }], folded: true },
         ]}
         most="12rem"
       />,
@@ -94,7 +94,7 @@ describe("a frames chip - a molecule's frames, or a stack's", () => {
   });
 
   it("grows and shrinks frame by frame as it opens (theme/opening) - no CSS transition of its width or its rows - and measures what its details say whole", () => {
-    const made = { method: "ETKDG v3 + MMFF94", how: [{ label: "Kept", text: "17 of 50 embedded" }] };
+    const made = { method: "ETKDG v3 + KF1", how: [{ label: "Kept", text: "17 of 50 embedded" }] };
     const html = renderToString(<FramesChip count={3} frame={0} energies={[0, 0.001, 0.002]} open={false} onFrame={none} made={made} conformers />);
     // (none of its width, its bars' rows, its details' rows or the fold is a CSS transition, which would chase what is still widening)
     expect(html).not.toMatch(/transition-\[[^\]]*(width|grid-template)/);
@@ -157,7 +157,7 @@ describe("a frames chip - a molecule's frames, or a stack's", () => {
   it("says why the frame told failed, and how many warnings its calculation gave - in full, opened, in the program's words", () => {
     const failed = [null, { kind: "not-converged" as const, why: "The optimisation did not converge" }];
     const warnings = [{ kind: "hessian-not-stationary" as const, text: "hessian_numhess: Hessian on incompletely optimized geometry!" }];
-    const at = (frame: number) => renderToString(<FramesChip count={2} frame={frame} open={false} onFrame={none} about="xtb" failed={failed} warnings={warnings} />);
+    const at = (frame: number) => renderToString(<FramesChip count={2} frame={frame} open={false} onFrame={none} about="tightbind" failed={failed} warnings={warnings} />);
     expect(at(1)).toContain("not converged");
     expect(at(1)).toContain("The optimisation did not converge");
     expect(at(1)).toContain("1 warning");
