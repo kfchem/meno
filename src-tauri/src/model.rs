@@ -249,7 +249,9 @@ impl Models {
     /// plugin's worker, only whole lines, each a JSON object - read as the
     /// worker reads it, line by line - that is no converse request; only
     /// `converse_line` sends one. A line split over two writes, or one that
-    /// is not read here as it would be there, never reaches it.
+    /// is not read here as it would be there, never reaches it. (Each part of
+    /// a split converse also fails as a JSON object on its own: the whole-line
+    /// rule is the second check, so that no part is ever judged as a line.)
     pub fn refuses(&self, sidecar: &str, data: &str) -> bool {
         let line_ok = |l: &str| {
             l.trim().is_empty()

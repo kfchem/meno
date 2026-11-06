@@ -101,6 +101,16 @@ describe("a conversation's connection through a model's plugin", () => {
     expect([...allowed]).toEqual(["model:talker@api.example.com,files.example.com", "model:talker@api.example.com,other.example.net"]);
   });
 
+  it("leaves a running worker as it is once its hosts are allowed - asked by the purpose that names them", async () => {
+    // (as Meno has it: allowed by the purpose its consent gives, its worker running)
+    const allowed = new Set([consentOf(plugin).purpose]);
+    const t = steps({ running: true });
+    const s: ModelSteps = { ...t.s, allowed: (purpose) => allowed.has(purpose) };
+    await modelConnection(plugin, s).send(request);
+    await modelConnection(plugin, s).send(request);
+    expect(t.done.filter((d) => d.startsWith("stop"))).toEqual([]);
+  });
+
   it("refuses an answer it does not read", async () => {
     await expect(modelConnection(plugin, steps({ before: true, answer: { words: "hi" } }).s).send(request)).rejects.toThrow(NOT_READ);
   });

@@ -885,6 +885,14 @@ async fn ext_spawn_sidecar(
     Ok(id)
 }
 
+/// A sidecar stopped: a model plugin's worker ended first - its network
+/// task finished, nothing more sent it, its keys still taken out of what it
+/// has yet to say (model.rs) - then the process. Whether it was running.
+fn stop_worker(models: &model::Models, state: &ProcState, id: &str) -> bool {
+    models.ended(id);
+    state.reap(id)
+}
+
 /// One of a sidecar's streams - its output (`main`), or its errors - read
 /// line by line to its end, each line given to `each` with a model plugin's
 /// key, should the worker say it, taken out (model.rs). Its output at an
@@ -977,8 +985,7 @@ fn model_hosts(data: &Path, id: &str) -> Option<Vec<String>> {
 
 #[tauri::command]
 async fn ext_kill(app: AppHandle, id: String, state: State<'_, ProcState>) -> Result<(), String> {
-    app.state::<model::Models>().ended(&id);
-    if state.reap(&id) {
+    if stop_worker(&app.state::<model::Models>(), &state, &id) {
         let _ = app.emit("ext:exit", serde_json::json!({"id": id}).to_string());
     }
     Ok(())
@@ -1905,6 +1912,40 @@ mod tests {
         let log = fs::read_to_string(dir.join("logs/meno.log")).unwrap();
         assert!(log.contains("[key]") && !log.contains(KEY), "{log}");
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_model_plugins_worker_ends_its_network_task_as_its_output_ends_or_it_is_stopped_its_keys_still_taken_out() {
+        const KEY: &str = "sk-test-key-0123456789abcdef";
+        let net = net::Net::default();
+        let hosts = vec!["api.example.com".to_string()];
+        net.allow(&model::purpose("talker", &hosts));
+        let models = || {
+            let keys = model::MemoryKeys(Mutex::new(HashMap::new()));
+            model::Keys::set(&keys, "talker", KEY).unwrap();
+            let m = model::Models::new(Box::new(keys));
+            m.started("w1", "talker", Some(net.begin(&model::purpose("talker", &hosts), "talker", Some(hosts.clone())).unwrap()));
+            m.converse_line("w1", r#"{"op":"converse"}"#).unwrap();
+            m
+        };
+        // (its output at an end, its errors still read: its task ended, its key still taken out)
+        let m = models();
+        read_worker_output(&m, "w1", std::io::empty(), true, |_| {});
+        assert_eq!(net.running(), 0);
+        assert_eq!(m.scrub("w1", KEY), "[key]");
+        // (its errors at an end first: its task goes on while its output is read)
+        let m = models();
+        read_worker_output(&m, "w1", std::io::empty(), false, |_| {});
+        assert_eq!(net.running(), 1);
+        read_worker_output(&m, "w1", std::io::empty(), true, |_| {});
+        assert_eq!(net.running(), 0);
+        // (stopped, as ext_kill stops it: its task ended, its key still taken out of what is still to be read)
+        let m = models();
+        let state = ProcState(Mutex::new(HashMap::new()));
+        assert!(!stop_worker(&m, &state, "w1"));
+        assert_eq!(net.running(), 0);
+        assert_eq!(m.scrub("w1", KEY), "[key]");
+        assert!(m.converse_line("w1", r#"{"op":"converse"}"#).is_err());
     }
 
     /// A Python here to run a worker with: `python3`, or `python` (Windows).
