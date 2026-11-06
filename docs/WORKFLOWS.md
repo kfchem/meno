@@ -891,8 +891,10 @@ rests.
 
 A program may go on running without writing anything more, and its step
 then never finishes. So a running job's runner says when its program last wrote
-anything - a line of its log, or any file of its work folder (`lastWritten`,
-src-tauri jobs.rs `last_written`) - and where that is longer ago than
+anything - a line of its log, or any file or folder of its work folder
+(`lastWritten`, src-tauri jobs.rs `last_written`; a work folder of more
+than 5000 entries is not walked past them, and then nothing is said, never
+a time older than a write it did not reach) - and where that is longer ago than
 *Settings, Calculations, Say a job is quiet after* (minutes; 30 unless set,
 `QUIET_AFTER_MIN`), the step's running line and its log's job chooser say
 so: *Running · 3 of 12 · no output for 47 min* (the quietest of its running
