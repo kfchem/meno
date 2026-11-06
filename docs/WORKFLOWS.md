@@ -3460,6 +3460,12 @@ in: a step, not a table's guess (the maintainer, 2026-10-29).
   finished.
 - Failed and unfinished conformers are never a minimum: they are left out
   of E min, G min and the shares, and counted in its state.
+- One optimised with atoms held where they stood (*Hold its restraints*)
+  is no stationary point either: it is left out of E min and G min, and
+  how many were is said in the step's line; where every finished
+  conformer of a structure was, its E min and G min say so, naming them.
+  The shares of its isomers are refused, naming it, as *Populations*
+  refuses them.
 
 ### Add and Number (2026-10-29)
 

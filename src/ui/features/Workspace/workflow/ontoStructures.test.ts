@@ -10,6 +10,7 @@ import { resultOf } from "./flow";
 import { addSet, addStep, connect } from "./model";
 import { runStep, type RunWith } from "./run";
 import { IN_3D, NO_3D, ontoStructures } from "./ontoStructures";
+import { convergedAt } from "./converged";
 
 // 3D results onto structures (docs/WORKFLOWS.md, *3D results onto structures*): each structure drawn given what the 3D set
 // holds made of it, by its lasting id alone.
@@ -160,6 +161,38 @@ describe("3D results onto structures", () => {
     const out = ontoStructures([row(0, "a"), row(1, "b")], [conformer("a", 0, 1, C3H8O, 0), conformer("b", 1, 1, C3H8O, 0, { imaginary: [-120] })], 298.15);
     expect(valueOf(out, 0, IN_3D.share)?.status).toMatchObject({ failed: expect.stringMatching(/no minimum/) });
     expect(valueOf(out, 1, IN_3D.share)?.status).toMatchObject({ failed: expect.stringMatching(/no minimum/) });
+  });
+
+  it("leaves one optimised with atoms held out of E min and G min, counted - every one held, why in their place - and refuses the shares, as Populations does", () => {
+    const held = (e: SetEntry): SetEntry => ({ ...e, converged: convergedAt("optimisation with atoms held", e.xyz, [0]) });
+    const free = (e: SetEntry): SetEntry => ({ ...e, converged: convergedAt("optimisation", e.xyz) });
+    const rows = [row(0, "a"), row(1, "b"), row(2, "c")];
+    const out = ontoStructures(
+      rows,
+      [
+        free(conformer("a", 0, 1, C3H8O, 1, g(1))),
+        // (held, lower in E than #1, with no G)
+        held(conformer("a", 0, 2, C3H8O, -3)),
+        held(conformer("b", 1, 1, C3H8O, 0, g(0))),
+        held(conformer("c", 2, 1, C3H8O, 2)),
+        held(conformer("c", 2, 2, C3H8O, 3)),
+      ],
+      298.15,
+    );
+    // (a's E min and G min its free conformer's - never the held one's lower E, nor "no free energy" for the held one)
+    expect(valueOf(out, 0, IN_3D.eMin)).toMatchObject({ value: -100 + 1 / KCAL, status: "computed" });
+    expect(valueOf(out, 0, IN_3D.gMin)).toMatchObject({ value: -100 + 1 / KCAL, status: "computed" });
+    // (counted and finished as they are)
+    expect(valueOf(out, 0, IN_3D.conformers)?.value).toBe(2);
+    expect(valueOf(out, 0, IN_3D.state)?.value).toBe("finished");
+    // (every one held: why, in their place - its G too)
+    const one = "its one finished conformer, #1, was optimised with atoms held where they stood: no stationary point - optimise it free first";
+    expect(valueOf(out, 1, IN_3D.eMin)).toMatchObject({ value: "", unit: "Eh", status: { failed: one } });
+    expect(valueOf(out, 1, IN_3D.gMin)).toMatchObject({ value: "", unit: "Eh", status: { failed: one } });
+    expect(valueOf(out, 2, IN_3D.eMin)?.status).toEqual({ failed: "its finished conformers, #1, #2, were all optimised with atoms held where they stood: no stationary point - optimise them free first" });
+    // (the isomers' shares refused, the held ones named)
+    for (const k of [0, 1, 2]) expect(valueOf(out, k, IN_3D.share)?.status).toMatchObject({ failed: expect.stringMatching(/^a #2: optimised with atom 1 held where it stood: .*; c #2: /) });
+    expect(out.ok && out.said).toContain("4 conformers optimised with atoms held left out of E min and G min");
   });
 
   it("gives nothing to a structure with no lasting id, nor to two that share one - and counts the conformers made of none of them", () => {

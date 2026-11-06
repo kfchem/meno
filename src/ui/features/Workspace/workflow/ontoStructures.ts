@@ -20,6 +20,11 @@
  *   conformer's energy is, where they come from one calculation;
  * - `G min` (Eh): the lowest free energy, where each finished one has one
  *   and all were worked out alike (lib/nodes `workedOutDiffer`);
+ *   of E min and G min, one optimised with atoms held where they stood is
+ *   none (converged `heldAt`): no stationary point - left out, and counted
+ *   in the step's line; where every one finished was, why, in their place.
+ *   The shares of its isomers are refused, as Populations refuses them
+ *   (meno `notAllMinima`);
  * - `state in 3D`: finished, or how many of its conformers did not finish,
  *   or none in the set.
  * A value that cannot be worked out says why in its place, never a number:
@@ -34,6 +39,7 @@ import { boltzmann } from "../../../../lib/boltzmann";
 import { geometryKey } from "../../../../lib/entry";
 import { calcLevel, entryOfSet, entryState, FINISHED, freeEnergyOf, madeWords, structureLineage, type DrawnEntry, type SetEntry } from "./entries";
 import { basisOf, hasEnergy, notAllMinima, type DrawnOutcome } from "./meno";
+import { convergedOf, heldAt } from "./converged";
 
 /** The names the values are written under, as a table's columns name them - in the order they are written. */
 export const IN_3D = { share: "share among isomers", conformers: "conformers in 3D", eMin: "E min", gMin: "G min", state: "state in 3D" } as const;
@@ -76,6 +82,17 @@ function gMinOf(done: readonly SetEntry[]): Property {
   return g.reduce((a, b) => ((b!.value as number) < (a!.value as number) ? b : a))!;
 }
 
+/** Why a structure has no E min or G min where every one of its conformers finished was optimised with atoms held: each named. */
+function allHeld(held: readonly SetEntry[]): Property {
+  const which = held.map((e) => `#${e.number}`).join(", ");
+  return notWorked(
+    held.length === 1
+      ? `its one finished conformer, ${which}, was optimised with atoms held where they stood: no stationary point - optimise it free first`
+      : `its finished conformers, ${which}, were all optimised with atoms held where they stood: no stationary point - optimise them free first`,
+    "Eh",
+  );
+}
+
 /**
  * `rows` - the structures drawn that came into *Structures* - each with its
  * 3D results from `entries`, the set wired into *3D results* (above); the
@@ -96,6 +113,9 @@ export function ontoStructures(rows: readonly DrawnEntry[], entries: readonly Se
     else mine[k].push(e);
   }
   const done = mine.map((m) => m.filter((e) => entryState(e) === FINISHED));
+  // (of E min and G min, those optimised with atoms held where they stood: none - no stationary point)
+  const free = done.map((d) => d.filter((e) => !heldAt(convergedOf(e))));
+  const heldOut = done.reduce((n, d, k) => n + d.length - free[k].length, 0);
   const properties = rows.map((_, k): Record<string, Property> => {
     const id = ids[k];
     if (!id) return { [IN_3D.state]: notApplicable("it has no lasting id to be found by") };
@@ -107,8 +127,8 @@ export function ontoStructures(rows: readonly DrawnEntry[], entries: readonly Se
     const none = notApplicable("none of its conformers finished", "Eh");
     return {
       [IN_3D.conformers]: value(n),
-      [IN_3D.eMin]: d ? eMinOf(done[k]) : none,
-      [IN_3D.gMin]: d ? gMinOf(done[k]) : none,
+      [IN_3D.eMin]: !d ? none : free[k].length ? eMinOf(free[k]) : allHeld(done[k]),
+      [IN_3D.gMin]: !d ? none : free[k].length ? gMinOf(free[k]) : allHeld(done[k]),
       [IN_3D.state]: value(state),
     };
   });
@@ -167,6 +187,7 @@ export function ontoStructures(rows: readonly DrawnEntry[], entries: readonly Se
   const said = [
     `${found} of ${plural(rows.length, "structure")} with 3D results`,
     ...(groups.size ? [`shares at ${kelvin} K among the isomers of each formula (${plural(groups.size, "formula", "formulas")}), from ${[...new Set(sharesSaid)].join("; ") || "no energies"}`] : []),
+    ...(heldOut ? [`${plural(heldOut, "conformer")} optimised with atoms held left out of E min and G min`] : []),
     ...(unmatched ? [`${plural(unmatched, "conformer")} made of none of them`] : []),
     ...(shared.size ? [`${plural(rows.filter((_, k) => ids[k] && shared.has(ids[k]!)).length, "structure")} sharing a lasting id given nothing`] : []),
   ];
