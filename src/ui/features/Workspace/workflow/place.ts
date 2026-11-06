@@ -10,7 +10,7 @@ import type { WorkspaceDocument } from "../document";
 import { inside, setMembers, structuresOf, type Frame } from "./entries";
 import { boxOf } from "../chem/make3d";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { inputsOf } from "./kinds";
+import { exitPlace, exitsOf, inputsOf, ONE_EXIT, type StepKind } from "./kinds";
 import { BETWEEN, CARD_H, CARD_W, GAP, inputLead, nearWire, setGives, setTakes, stepGives, stepTakes, wirePath } from "./look";
 
 /** A frame `w` by `h`, its top left at (x, y). */
@@ -20,23 +20,48 @@ export const frameAt = (x: number, y: number, w: number, h: number): Frame => ({
  * Where a step's result set goes (docs/WORKFLOWS.md, *Where a result set
  * goes*): to the right of the step, level with it - or, where something is
  * there already, lower, as far as it must to keep clear of the page's sets,
- * steps' cards, structures, molecules and wires, its own line from the step
- * crossing no card or set (`clearOf`). Below all of them is clear, so there
- * is always a place: it never lies over another. `self`: the set it is,
- * where it was made before, and what goes with it.
+ * steps' cards, structures, molecules and wires, its own line from its
+ * exit's port on the step's card crossing no card or set (`clearOf`).
+ * Below all of them is clear, so there is always a place: it never lies
+ * over another. `exit`: which of the step's exits it is the set of, its
+ * line leaving that exit's port (`lineFrom`) - said, never assumed, for a
+ * set not made yet. `self`: the set it is, where it was made before, and
+ * what goes with it.
  */
-export function placeFor(doc: WorkspaceDocument, step: { id: number; x: number; y: number }, width: number, height: number, self?: Self): Frame {
+export function placeFor(doc: WorkspaceDocument, step: { id: number; x: number; y: number }, exit: string, width: number, height: number, self?: Self): Frame {
   // (half a card at a time, down to below all that is on the page)
-  return placeBelow(doc, step.x + CARD_W + GAP, step.y, width, height, { ...self, step: step.id });
+  return placeBelow(doc, step.x + CARD_W + GAP, step.y, width, height, { ...self, step: step.id, exit });
 }
 
 /**
  * A set being placed: itself, the molecules it holds, and other sets that
  * go with it - none of them in its way; and the step whose result it is,
- * its line from that step's card to be clear too, as the wires from it to
- * the steps it goes into are.
+ * its line from its exit's port on the card to be clear too, as the wires
+ * from it to the steps it goes into are (`lineFrom`): the exit it was made
+ * by, where it is made - `exit`, where it is not yet.
  */
-export type Self = { set?: number; molecules?: ReadonlySet<number>; sets?: ReadonlySet<number>; step?: number };
+export type Self = { set?: number; molecules?: ReadonlySet<number>; sets?: ReadonlySet<number>; step?: number; exit?: string };
+
+/**
+ * Where a step's result set's line leaves the step's card: its exit's
+ * port (look `stepGives`, kinds `exitPlace`) - where Workflow2D draws it
+ * from, and what placing a set keeps clear.
+ */
+export const exitStart = (step: { x: number; y: number; kind: StepKind }, exit: string): Pt => stepGives(step, exitPlace(step.kind, exit));
+
+/**
+ * Where the line of a set being placed leaves its step's card
+ * (`exitStart`): from the exit the set was made by, where it is made
+ * already - whatever else is said - or from the exit `self` says, for one
+ * not made yet; from the first, where neither is known. None where it is
+ * no step's.
+ */
+export function lineFrom(doc: Pick<WorkspaceDocument, "sets" | "steps">, self?: Self): Pt | undefined {
+  const step = self?.step != null ? doc.steps?.find((s) => s.id === self.step) : undefined;
+  if (!step) return undefined;
+  const made = self?.set != null ? doc.sets?.find((b) => b.id === self.set)?.made : undefined;
+  return exitStart(step, (made?.step === step.id ? made.exit : undefined) ?? self?.exit ?? exitsOf(step.kind)[0].id);
+}
 
 /** A step's card, shut: where it stands on the page. */
 const cardOf = (s: { x: number; y: number }): Frame => frameAt(s.x, s.y, CARD_W, CARD_H);
@@ -95,11 +120,13 @@ function takenOn(doc: WorkspaceDocument, self?: Self, along?: { x0: number; x1: 
     const s = b.made ? steps.get(b.made.step) : undefined;
     if (s && !own(b.id)) {
       const e = { from: cardOf(s), to: b };
-      points.push(...wirePath(stepGives(s), setTakes(b), e, nearWire(stepGives(s), setTakes(b), e, round)));
+      const p = exitStart(s, b.made!.exit);
+      points.push(...wirePath(p, setTakes(b), e, nearWire(p, setTakes(b), e, round)));
     }
   }
   const step = self?.step != null ? steps.get(self.step) : undefined;
-  return { frames, round, points, ...(step ? { from: { step: step.id, at: stepGives(step), card: cardOf(step) } } : {}), to };
+  const at = lineFrom(doc, self);
+  return { frames, round, points, ...(step && at ? { from: { step: step.id, at, card: cardOf(step) } } : {}), to };
 }
 
 /**
@@ -158,9 +185,11 @@ export function clearOf(doc: WorkspaceDocument, f: Frame, self?: Self): boolean 
  */
 export function placeAgain(doc: WorkspaceDocument, step: { id: number; x: number; y: number }, was: Frame & { id: number }, width: number, height: number): Frame {
   const siblings = new Set((doc.sets ?? []).filter((b) => b.made?.step === step.id && b.id !== was.id).map((b) => b.id));
+  // (its line from the exit it was made by: `lineFrom`, by the set itself)
   const self: Self = { set: was.id, sets: siblings, step: step.id };
   const there = frameAt(was.x0, was.y1, width, height);
-  return clearOf(doc, there, self) ? there : placeFor(doc, step, width, height, self);
+  const made = doc.sets?.find((b) => b.id === was.id)?.made;
+  return clearOf(doc, there, self) ? there : placeFor(doc, step, made?.exit ?? ONE_EXIT, width, height, self);
 }
 
 /**

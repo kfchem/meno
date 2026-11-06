@@ -143,7 +143,7 @@ describe("a conformer that does not read", () => {
     const entries = setEntries([{ ...m2, id: 1 } as Molecule3D], "conformers");
     for (const e of entries) expect(entryOfSet(e, "e").status).toEqual({ failed: MARKS_UNREAD });
     for (const kind of ["populations", "energy-window"] as const) {
-      const out = runMeno(kind, entries, "conformers");
+      const out = runMeno(kind, entries, "conformers", kind === "energy-window" ? { window: 3 } : undefined);
       expect(out.ok, kind).toBe(false);
       expect(out.said, kind).toContain(MARKS_UNREAD);
     }

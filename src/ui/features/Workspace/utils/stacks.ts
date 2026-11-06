@@ -10,7 +10,7 @@
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import type { AtomStack, Molecule3D } from "../store/types";
 import { greatest, least, middleOfPoints } from "../../../../lib/chem/lists";
-import { fitOnto, fitted, sameAtoms, type MatchDrawing } from "../../../../lib/layout/morph";
+import { CORE_MOST_STEPS, fitOnto, fitted, matchedAtoms, type MatchDrawing } from "../../../../lib/layout/morph";
 
 type Stacked = Pick<Molecule3D, "id" | "stack">;
 
@@ -325,13 +325,20 @@ export function stackedRecords<A extends StackedAtom, M extends { atoms: A[] }>(
 type AlignAtom = StackedAtom & { id: number; el: string; charge?: number; x: number; y: number; chargeAt?: unknown; stereoAt?: unknown };
 type AlignBond = { a: number; b: number; order: number; stereo?: string; display?: string; doubleMode?: string; stereoAt?: unknown };
 
+/** The most steps lining a stack up as it opens takes, for all its records together, in looking for the cores they share. */
+export const ALIGN_MOST_STEPS = 50000;
+
+/** The steps each record of a stack of `records` is given to find the core it shares with the one before it: `ALIGN_MOST_STEPS` shared out among them, never more than one search takes. */
+export const alignSteps = (records: number): number => Math.min(CORE_MOST_STEPS, Math.floor(ALIGN_MOST_STEPS / Math.max(1, records - 1)));
+
 /**
  * A stack's records lined up as it is opened (docs/WORKSPACE.md, *Stacks of drawings*; the maintainer, 2026-11-04): each
- * record that is the same structure as the one before it, atom for atom (lib/layout/morph `sameAtoms`), turned about its
- * middle to lie as nearly as it can on that one as it now lies - and mirrored where that lies nearer, only where the record
- * has no mark a mirror would change (a wedge, a hash, a bold or dashed line, a double bond drawn to one side, a mark put by
- * hand). Each moved, not reshaped. A record of another structure keeps the file's orientation, and those after it line up
- * on it.
+ * record that shares a core with the one before it (lib/layout/morph `matchedAtoms`: the same structure, atom for atom, or
+ * analogues on the core they share) turned about the middle of what they share to lie as nearly as it can on that one as it
+ * now lies - and mirrored where that lies nearer, only where the record has no mark a mirror would change (a wedge, a hash,
+ * a bold or dashed line, a double bond drawn to one side, a mark put by hand). Each moved, not reshaped. A record sharing
+ * too little keeps the file's orientation, and those after it line up on it. The cores are looked for within
+ * `ALIGN_MOST_STEPS` steps for the whole stack, shared out among its records, so a file of many records opens as fast.
  */
 export function alignedRecords<A extends AlignAtom, B extends AlignBond, M extends { atoms: A[]; bonds: B[] }>(model: M, records: readonly { atoms: number[] }[]): M {
   if (records.length < 2) return model;
@@ -345,18 +352,21 @@ export function alignedRecords<A extends AlignAtom, B extends AlignBond, M exten
       bonds: model.bonds.flatMap((b) => (index.has(b.a) && index.has(b.b) ? [{ a: index.get(b.a)!, b: index.get(b.b)!, order: b.order }] : [])),
     };
   };
+  const steps = alignSteps(records.length);
   for (let k = 1; k < records.length; k++) {
     const was = records[k - 1].atoms.filter((id) => at.has(id));
     const now = records[k].atoms.filter((id) => at.has(id));
-    const match = sameAtoms(drawing(was), drawing(now));
+    const match = matchedAtoms(drawing(was), drawing(now), steps);
     if (!match) continue;
     const ids = new Set(now);
     const marked =
       model.bonds.some((b) => ids.has(b.a) && ((b.stereo && b.stereo !== "none") || (b.display && b.display !== "plain") || b.doubleMode === "left" || b.doubleMode === "right" || b.stereoAt)) ||
       now.some((id) => at.get(id)!.chargeAt || at.get(id)!.stereoAt);
+    // (fitted by what the two share; the rest of the record moved with it)
+    const pairs = now.flatMap((id, i) => (match[i] >= 0 ? [[id, was[match[i]]] as const] : []));
     const f = fitOnto(
-      now.map((id) => place(id)),
-      match.map((j) => place(was[j])),
+      pairs.map(([id]) => place(id)),
+      pairs.map(([, w]) => place(w)),
       !marked,
     );
     for (const id of now) moved.set(id, fitted(f, place(id)));

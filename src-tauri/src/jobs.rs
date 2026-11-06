@@ -33,7 +33,7 @@
 use crate::pixienv;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fs::{self, File, OpenOptions, TryLockError};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Component, Path, PathBuf};
@@ -226,11 +226,20 @@ fn is_false(b: &bool) -> bool {
 }
 
 /// What this computer's jobs may use at once (docs/WORKFLOWS-FOUNDATION.md,
-/// *This computer's runner knows its resources*): cores, and memory in MiB.
+/// *This computer's runner knows its resources*): cores, and memory in MiB;
+/// and whether the computer is kept awake while a job's program runs
+/// (awake.rs) - so unless Settings turned it off, as where nothing says.
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Limits {
     pub cores: u32,
     pub memory: u64,
+    #[serde(default = "kept_awake")]
+    pub awake: bool,
+}
+
+/// The computer kept awake while jobs run, unless Settings says otherwise.
+fn kept_awake() -> bool {
+    true
 }
 
 /// What this computer has: its cores - each a thread its system runs at once, two to a physical core where it
@@ -263,7 +272,7 @@ fn taken(spec: &JobSpec, here: Resources) -> u32 {
 /// What jobs may use, Settings unsaid: all the cores, and three quarters of the memory.
 fn default_limits() -> Limits {
     let here = computer();
-    Limits { cores: here.cores.max(1), memory: here.memory / 4 * 3 }
+    Limits { cores: here.cores.max(1), memory: here.memory / 4 * 3, awake: true }
 }
 
 /// What the jobs in `root` may use at once, as last written there; the defaults where nothing is.
@@ -562,6 +571,8 @@ pub fn run_job(dir: &Path, allowed: &dyn Fn(&JobSpec) -> Result<(), String>) -> 
     let mut at_head: Option<Instant> = None;
     let slots = dir.parent().map(|root| slots_for(limits_in(root), &spec)).unwrap_or(1);
     let mut unsure = 0;
+    // (the jobs this runner has seen finished: passed over on each look after)
+    let mut finished = HashSet::new();
     loop {
         if stop_asked(dir) {
             end(JobState::Stopped, None, None, None);
@@ -571,7 +582,7 @@ pub fn run_job(dir: &Path, allowed: &dyn Fn(&JobSpec) -> Result<(), String>) -> 
         if waits_no_more(&mut unsure, dir.join(SPEC).is_file(), read_record(dir).as_ref()) {
             return 1;
         }
-        match take_turn(dir, &spec, &base) {
+        match take_turn(dir, &spec, &base, slots, &mut finished) {
             Ok(Turn::Taken) => break,
             Ok(Turn::Next) => sleep_watching(dir, step_at(at_head.get_or_insert_with(Instant::now).elapsed(), WAIT_STEP)),
             Ok(Turn::Behind(ahead)) => {
@@ -591,6 +602,8 @@ pub fn run_job(dir: &Path, allowed: &dyn Fn(&JobSpec) -> Result<(), String>) -> 
         }
     }
     let started = Some(now_ms());
+    // (the computer kept awake from now until it and those after it have ended, unless Settings says not: awake.rs)
+    let _awake = dir.parent().filter(|root| limits_in(root).awake).map(|_| crate::awake::hold());
 
     // its program, in its work folder, what it says going into its log
     let input = spec.stdin.as_deref();
@@ -724,12 +737,103 @@ const NEAR_MORE: u32 = 4;
 const BEHIND_MOST: Duration = Duration::from_secs(10);
 const PLACE_STEP: Duration = Duration::from_millis(300);
 
+/// What a look at the queue saw: the jobs running and the cores and memory they take, the first waiting, and how many
+/// wait before this one.
+struct Seen {
+    running: u32,
+    used: (u32, u64),
+    first: Option<(u64, PathBuf)>,
+    ahead: u32,
+}
+
+/// The queue in `root` as it is, from the job `dir`'s place in it (`base`): each job's folder looked at but those
+/// `finished` names - jobs this runner saw finished before, which never wait or run again - and those it finds finished
+/// added to them, so that a long queue's runners do not read every finished job's record on every look.
+fn look(root: &Path, dir: &Path, base: &JobRecord, here: Resources, finished: &mut HashSet<std::ffi::OsString>) -> std::io::Result<Seen> {
+    let mut seen = Seen { running: 0, used: (0, 0), first: None, ahead: 0 };
+    // (those waiting before it: asked for before it, or at once and by name)
+    let mine_key = (base.created, dir.to_path_buf());
+    for entry in fs::read_dir(root)?.flatten() {
+        let name = entry.file_name();
+        if finished.contains(&name) {
+            continue;
+        }
+        let other = entry.path();
+        // (one being taken away is none of the queue's, whatever is left of it)
+        if !other.is_dir() || name.to_string_lossy().starts_with(TAKEN) {
+            continue;
+        }
+        // (a finished job - most, after a few runs - as its own record says: nothing more read of it, now or again)
+        if read_record(&other).is_some_and(|r| r.state.finished()) {
+            finished.insert(name);
+            continue;
+        }
+        let Some(record) = current_record(&other) else { continue };
+        match record.state {
+            JobState::Running => {
+                seen.running += 1;
+                // (one whose spec cannot be read counted as a core: what any job takes at least)
+                let (cores, memory) = read_spec(&other).map(|s| (taken(&s, here), s.memory)).unwrap_or((1, 0));
+                seen.used = (seen.used.0 + cores, seen.used.1 + memory);
+            }
+            JobState::Waiting => {
+                let key = (record.created, other);
+                if key < mine_key && key.1.file_name() != dir.file_name() {
+                    seen.ahead += 1;
+                }
+                if seen.first.as_ref().is_none_or(|f| key < *f) {
+                    seen.first = Some(key);
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(seen)
+}
+
+/// Where the job `dir` stands among those waiting in `root`, seen from their records alone - none written, nothing but
+/// a record read of each - for a runner far back to know it is far back: how many wait before it. A job with no record
+/// yet (its runner starting) is not counted: it is looked at again under the lock, if near. Nor is one whose runner is
+/// gone (`runner_there`: tried, never waited on) - a queue left by a Meno that was ended: so a live job is never held
+/// back for ever behind dead ones far ahead of it; near the head, the look under the lock (`current_record`) records
+/// them gone.
+fn glance(root: &Path, dir: &Path, base: &JobRecord, finished: &mut HashSet<std::ffi::OsString>) -> std::io::Result<u32> {
+    let mine_key = (base.created, dir.to_path_buf());
+    let mut ahead = 0u32;
+    for entry in fs::read_dir(root)?.flatten() {
+        let name = entry.file_name();
+        if finished.contains(&name) || name.to_string_lossy().starts_with(TAKEN) || name == dir.file_name().unwrap_or_default() {
+            continue;
+        }
+        let Some(record) = read_record(&entry.path()) else { continue };
+        if record.state.finished() {
+            finished.insert(name);
+        } else if record.state == JobState::Waiting && (record.created, entry.path()) < mine_key && runner_there(&entry.path()) {
+            ahead += 1;
+        }
+    }
+    Ok(ahead)
+}
+
 /// Whether it is this job's turn - the first waiting, and fitting beside
 /// those running within what jobs may use (`fits`): a job never starts
 /// ahead of one asked for before it, however small - and, where it is, the
-/// job recorded running. Asked by one runner at a time.
-fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord) -> std::io::Result<Turn> {
+/// job recorded running. Where it stands is looked at first without the
+/// queue's lock: one far back (not `near_head`, its queue running `slots`
+/// at once) is told so and waits on no lock - only those near the head
+/// look again under it, one at a time, and only the head takes its turn.
+/// So the head of a queue of hundreds never waits behind them all for the
+/// lock as one ends: on a computer whose files open slowly, each look at
+/// hundreds of folders under the one lock held it most of the time, and
+/// the next job started seconds after one ended.
+fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord, slots: u32, finished: &mut HashSet<std::ffi::OsString>) -> std::io::Result<Turn> {
     let root = dir.parent().ok_or_else(|| std::io::Error::other("a job's folder has no parent"))?;
+    // (this computer's cores and physical cores, asked once: what a job running as processes is counted by)
+    let here = computer();
+    let behind = glance(root, dir, base, finished)?;
+    if !near_head(behind, slots) {
+        return Ok(Turn::Behind(behind));
+    }
     let queue = OpenOptions::new().create(true).truncate(false).write(true).open(root.join(QUEUE_LOCK))?;
     // (a runner asked to go takes its wait up again of itself - its signals
     // are heard with SA_RESTART, `listen_for_going` - so Unix gives no
@@ -739,44 +843,7 @@ fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord) -> std::io::Result<Tu
             return Err(e);
         }
     }
-    let mut running = 0u32;
-    let mut used = (0u32, 0u64);
-    // (this computer's cores and physical cores, asked once: what a job running as processes is counted by)
-    let here = computer();
-    let mut first: Option<(u64, PathBuf)> = None;
-    // (those waiting before it: asked for before it, or at once and by name)
-    let mine_key = (base.created, dir.to_path_buf());
-    let mut ahead = 0u32;
-    for entry in fs::read_dir(root)?.flatten() {
-        let other = entry.path();
-        // (one being taken away is none of the queue's, whatever is left of it)
-        if !other.is_dir() || entry.file_name().to_string_lossy().starts_with(TAKEN) {
-            continue;
-        }
-        // (a finished job - most, after a few runs - as its own record says: nothing more read of it)
-        if read_record(&other).is_some_and(|r| r.state.finished()) {
-            continue;
-        }
-        let Some(record) = current_record(&other) else { continue };
-        match record.state {
-            JobState::Running => {
-                running += 1;
-                // (one whose spec cannot be read counted as a core: what any job takes at least)
-                let (cores, memory) = read_spec(&other).map(|s| (taken(&s, here), s.memory)).unwrap_or((1, 0));
-                used = (used.0 + cores, used.1 + memory);
-            }
-            JobState::Waiting => {
-                let key = (record.created, other);
-                if key < mine_key && key.1.file_name() != dir.file_name() {
-                    ahead += 1;
-                }
-                if first.as_ref().is_none_or(|f| key < *f) {
-                    first = Some(key);
-                }
-            }
-            _ => {}
-        }
-    }
+    let Seen { running, used, first, ahead } = look(root, dir, base, here, finished)?;
     let mine = first.is_some_and(|(_, p)| p.file_name() == dir.file_name());
     if !mine {
         return Ok(Turn::Behind(ahead));
@@ -2843,9 +2910,9 @@ pub fn computer_resources() -> Resources {
 /// runner reads it as it looks for its turn - those waiting take it up at once. At least a core; memory within what
 /// the computer has, nought counting none.
 #[tauri::command]
-pub fn jobs_limits(app: AppHandle, cores: u32, memory: u64) -> Result<(), String> {
+pub fn jobs_limits(app: AppHandle, cores: u32, memory: u64, awake: Option<bool>) -> Result<(), String> {
     let root = jobs_root(&app)?;
-    write_limits(&root, Limits { cores: cores.clamp(1, 1024), memory: memory.min(MEMORY_MOST) }).map_err(|e| e.to_string())
+    write_limits(&root, Limits { cores: cores.clamp(1, 1024), memory: memory.min(MEMORY_MOST), awake: awake.unwrap_or(true) }).map_err(|e| e.to_string())
 }
 
 /// Limits written whole: a runner never reads half of them.
@@ -2948,7 +3015,7 @@ mod tests {
     /// A job running a script of the system's shell, of a core, in a queue whose jobs may use `slots` cores in all:
     /// so many at once.
     fn shell(root: &Path, script: &str, slots: u32) -> PathBuf {
-        write_limits(root, Limits { cores: slots, memory: 0 }).unwrap();
+        write_limits(root, Limits { cores: slots, memory: 0, awake: true }).unwrap();
         sized(root, script, 1, 0)
     }
 
@@ -3006,14 +3073,96 @@ mod tests {
         write_record(&head, &base(&head)).unwrap();
         write_record(&after, &base(&after)).unwrap();
         // (the one slot taken: the head of the queue next, the other behind it)
-        assert_eq!(take_turn(&head, &read_spec(&head).unwrap(), &base(&head)).unwrap(), Turn::Next);
-        assert_eq!(take_turn(&after, &read_spec(&after).unwrap(), &base(&after)).unwrap(), Turn::Behind(1));
+        assert_eq!(take_turn(&head, &read_spec(&head).unwrap(), &base(&head), 1, &mut HashSet::new()).unwrap(), Turn::Next);
+        assert_eq!(take_turn(&after, &read_spec(&after).unwrap(), &base(&after), 1, &mut HashSet::new()).unwrap(), Turn::Behind(1));
         // (the slot free: the head's turn taken, and it recorded running)
         write_record(&running, &JobRecord { state: JobState::Done, ..base(&running) }).unwrap();
-        assert_eq!(take_turn(&head, &read_spec(&head).unwrap(), &base(&head)).unwrap(), Turn::Taken);
+        assert_eq!(take_turn(&head, &read_spec(&head).unwrap(), &base(&head), 1, &mut HashSet::new()).unwrap(), Turn::Taken);
         assert_eq!(current_record(&head).unwrap().state, JobState::Running);
-        assert_eq!(take_turn(&after, &read_spec(&after).unwrap(), &base(&after)).unwrap(), Turn::Next);
+        assert_eq!(take_turn(&after, &read_spec(&after).unwrap(), &base(&after), 1, &mut HashSet::new()).unwrap(), Turn::Next);
         drop(held);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_job_far_back_in_the_queue_is_told_so_without_waiting_on_its_lock_and_reads_a_finished_one_once() {
+        let root = temp();
+        let mk = || {
+            std::thread::sleep(Duration::from_millis(3));
+            shell(&root, "true", 1)
+        };
+        let done = mk();
+        let waiting: Vec<PathBuf> = (0..4).map(|_| mk()).collect();
+        let base = |dir: &Path| JobRecord::new(JobState::Waiting, read_spec(dir).unwrap().created);
+        write_record(&done, &JobRecord { state: JobState::Done, ..base(&done) }).unwrap();
+        // (each with its runner there, holding its lock)
+        let runners: Vec<_> = waiting
+            .iter()
+            .map(|w| {
+                write_record(w, &base(w)).unwrap();
+                let lock = OpenOptions::new().create(true).truncate(false).write(true).open(w.join(RUNNER_LOCK)).unwrap();
+                lock.lock().unwrap();
+                lock
+            })
+            .collect();
+        // (the queue's lock held - by the head, say, as it takes its turn)
+        let lock = OpenOptions::new().create(true).truncate(false).write(true).open(root.join(QUEUE_LOCK)).unwrap();
+        lock.lock().unwrap();
+        // (one slot: the last of four waiting is 3 places back, past the head's 2 - told so at once, the lock still held)
+        let last = &waiting[3];
+        let mut finished = HashSet::new();
+        let (tx, rx) = std::sync::mpsc::channel();
+        {
+            let (last, spec, record) = (last.clone(), read_spec(last).unwrap(), base(last));
+            std::thread::spawn(move || {
+                let mut seen = HashSet::new();
+                let _ = tx.send((take_turn(&last, &spec, &record, 1, &mut seen).unwrap(), seen));
+            });
+        }
+        let (turn, seen) = rx.recv_timeout(Duration::from_secs(5)).expect("a job far back waited on the queue's lock");
+        assert_eq!(turn, Turn::Behind(3));
+        // (the finished one remembered, and not read again: its record gone now, it is still passed over)
+        assert!(seen.contains(done.file_name().unwrap()));
+        finished.extend(seen);
+        fs::remove_file(done.join(RECORD)).unwrap();
+        assert_eq!(glance(&root, last, &base(last), &mut finished).unwrap(), 3);
+        // (its record back: a folder with none is a job starting, to a look that has not seen it finished)
+        write_record(&done, &JobRecord { state: JobState::Done, ..base(&done) }).unwrap();
+        // (one near the head waits on the lock: it looks again under it)
+        let (tx, rx) = std::sync::mpsc::channel();
+        {
+            let (near, spec, record) = (waiting[1].clone(), read_spec(&waiting[1]).unwrap(), base(&waiting[1]));
+            std::thread::spawn(move || {
+                let _ = tx.send(take_turn(&near, &spec, &record, 1, &mut HashSet::new()).unwrap());
+            });
+        }
+        assert!(rx.recv_timeout(Duration::from_millis(300)).is_err());
+        drop(lock);
+        assert_eq!(rx.recv_timeout(Duration::from_secs(5)).unwrap(), Turn::Behind(1));
+        drop(runners);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_live_job_behind_waiting_ones_whose_runners_are_gone_takes_its_turn() {
+        let root = temp();
+        let mk = || {
+            std::thread::sleep(Duration::from_millis(3));
+            shell(&root, "true", 1)
+        };
+        // (five said waiting, asked for first - their runners gone with a Meno that was ended - and one live behind them)
+        let dead: Vec<PathBuf> = (0..5).map(|_| mk()).collect();
+        let live = mk();
+        let base = |dir: &Path| JobRecord::new(JobState::Waiting, read_spec(dir).unwrap().created);
+        for d in dead.iter().chain([&live]) {
+            write_record(d, &base(d)).unwrap();
+        }
+        let runner = OpenOptions::new().create(true).truncate(false).write(true).open(live.join(RUNNER_LOCK)).unwrap();
+        runner.lock().unwrap();
+        // (not told it is 5 back: its turn taken, the dead ones recorded gone as it looked under the lock)
+        assert_eq!(take_turn(&live, &read_spec(&live).unwrap(), &base(&live), 1, &mut HashSet::new()).unwrap(), Turn::Taken);
+        assert!(dead.iter().all(|d| current_record(d).unwrap().state == JobState::Gone));
+        drop(runner);
         let _ = fs::remove_dir_all(&root);
     }
 
@@ -3243,6 +3392,30 @@ mod tests {
     #[cfg(windows)]
     const PAUSE: &str = "ping -n 2 127.0.0.1 > nul";
 
+    // (a long queue's gaps - run by hand, `--ignored`: MENO_QUEUE_N jobs (300) of a pause each, one at a time, every
+    //  runner waiting at once as a step's are; says the mean and largest gap from one's end to the next one's start)
+    #[test]
+    #[ignore]
+    fn a_long_queue_starts_the_next_job_as_one_ends() {
+        let n: usize = std::env::var("MENO_QUEUE_N").ok().and_then(|v| v.parse().ok()).unwrap_or(300);
+        let root = temp();
+        #[cfg(unix)]
+        let pause = "sleep 0.3";
+        #[cfg(windows)]
+        let pause = "ping -n 1 127.0.0.1 > nul";
+        let dirs: Vec<PathBuf> = (0..n).map(|_| shell(&root, pause, 1)).collect();
+        let runs: Vec<_> = dirs.iter().cloned().map(|d| std::thread::spawn(move || run_job(&d))).collect();
+        for r in runs {
+            r.join().unwrap();
+        }
+        let mut spans: Vec<(u64, u64)> = dirs.iter().map(|d| current_record(d).unwrap()).map(|r| (r.started.unwrap(), r.ended.unwrap())).collect();
+        spans.sort();
+        let gaps: Vec<u64> = spans.windows(2).map(|w| w[1].0.saturating_sub(w[0].1)).collect();
+        let mean = gaps.iter().sum::<u64>() as f64 / gaps.len().max(1) as f64;
+        println!("QUEUE {n} jobs: gap mean {mean:.0} ms, largest {} ms", gaps.iter().max().unwrap_or(&0));
+        let _ = fs::remove_dir_all(root);
+    }
+
     #[test]
     fn waits_its_turn_in_the_order_jobs_were_asked_for() {
         let root = temp();
@@ -3337,7 +3510,7 @@ mod tests {
 
     #[test]
     fn starts_a_job_where_its_cores_and_memory_fit_beside_those_running_and_never_one_ahead_of_its_turn() {
-        let l = Limits { cores: 8, memory: 16_000 };
+        let l = Limits { cores: 8, memory: 16_000, awake: true };
         // (nothing running: any job, a larger one than the limits included, runs alone)
         assert!(fits(l, (0, 0), 0, 32, 64_000));
         assert!(fits(l, (4, 8_000), 1, 4, 8_000));
@@ -3346,7 +3519,7 @@ mod tests {
         // (a job that declares no memory is counted by its cores alone; and limits with none - the computer's memory
         //  not told - count none)
         assert!(fits(l, (4, 16_000), 1, 4, 0));
-        assert!(fits(Limits { cores: 8, memory: 0 }, (4, 16_000), 1, 4, 8_000));
+        assert!(fits(Limits { cores: 8, memory: 0, awake: true }, (4, 16_000), 1, 4, 8_000));
         // (more than the computer has: refused, in plain words; within it, though over the limits, not)
         let here = Resources { cores: 10, physical: 10, memory: 32 * 1024 };
         assert_eq!(beyond(here, 12, 0).as_deref(), Some("it asks for 12 cores, and this computer has 10"));
@@ -3357,7 +3530,7 @@ mod tests {
 
         // in the queue: two of 4 cores in 6 - the second waits, though a core-sized job behind it would fit
         let root = temp();
-        write_limits(&root, Limits { cores: 6, memory: 0 }).unwrap();
+        write_limits(&root, Limits { cores: 6, memory: 0, awake: true }).unwrap();
         let first = sized(&root, PAUSE, 4, 0);
         std::thread::sleep(Duration::from_millis(5));
         let second = sized(&root, PAUSE, 4, 0);
@@ -3412,7 +3585,7 @@ mod tests {
         let data = temp();
         let scratch = temp();
         assert_eq!(jobs_roots(&data), vec![jobs_in(&data)]);
-        write_limits(&jobs_in(&data), Limits { cores: 3, memory: 4096 }).unwrap();
+        write_limits(&jobs_in(&data), Limits { cores: 3, memory: 4096, awake: true }).unwrap();
         // (one made in Meno's own before)
         let before = sized(&jobs_in(&data), ECHO, 1, 0);
         write_record(&before, &JobRecord { ended: Some(now_ms()), ..JobRecord::new(JobState::Done, now_ms()) }).unwrap();
@@ -3420,7 +3593,7 @@ mod tests {
         let chosen = scratch.join(IN_CHOSEN);
         assert_eq!(jobs_roots(&data), vec![chosen.clone(), jobs_in(&data)]);
         // (what jobs may use goes with it)
-        assert_eq!(limits_in(&chosen), Limits { cores: 3, memory: 4096 });
+        assert_eq!(limits_in(&chosen), Limits { cores: 3, memory: 4096, awake: true });
         // (a job made there: its runner takes it, as one in Meno's own; one elsewhere, never)
         let (_, dir) = make_job(&chosen, &read_spec(&before).unwrap(), &[]).unwrap();
         assert!(runner_folder(&data, &dir).is_ok());
@@ -3481,8 +3654,14 @@ mod tests {
         let root = temp();
         assert_eq!(limits_in(&root), default_limits());
         assert!(default_limits().cores >= 1);
-        write_limits(&root, Limits { cores: 3, memory: 2048 }).unwrap();
-        assert_eq!(limits_in(&root), Limits { cores: 3, memory: 2048 });
+        write_limits(&root, Limits { cores: 3, memory: 2048, awake: true }).unwrap();
+        assert_eq!(limits_in(&root), Limits { cores: 3, memory: 2048, awake: true });
+        // (the computer kept awake unless Settings turned it off - and so where limits written before it say nothing of it)
+        assert!(default_limits().awake);
+        write_limits(&root, Limits { cores: 3, memory: 2048, awake: false }).unwrap();
+        assert!(!limits_in(&root).awake);
+        fs::write(root.join(LIMITS), r#"{"cores": 2, "memory": 1024}"#).unwrap();
+        assert_eq!(limits_in(&root), Limits { cores: 2, memory: 1024, awake: true });
         // (the computer's memory told: three quarters of it, by default)
         let here = computer();
         assert!(here.memory > 0, "{here:?}");
@@ -3846,7 +4025,7 @@ mod tests {
         let _ = fs::remove_file(taken.join(RECORD));
         assert_eq!(current_record(&taken).map(|r| r.state), Some(JobState::Waiting));
         let spec = read_spec(&mine).unwrap();
-        assert!(matches!(take_turn(&mine, &spec, &JobRecord::new(JobState::Waiting, spec.created)).unwrap(), Turn::Taken));
+        assert!(matches!(take_turn(&mine, &spec, &JobRecord::new(JobState::Waiting, spec.created), 1, &mut HashSet::new()).unwrap(), Turn::Taken));
         let _ = fs::remove_dir_all(root);
     }
 
@@ -4470,33 +4649,33 @@ mod tests {
 
     #[test]
     fn reads_what_a_plugin_declares_its_jobs_need_of_another_plugins_program_and_refuses_what_cannot_be_given() {
-        // (another plugin's program, told in a variable: the xTB plugin's xtb, in XTBEXE)
-        let orca = serde_json::json!({"depends": [{"plugin": "xtb", "versions": ">=0.1.4 <0.2.0", "programs": [{"program": "xtb", "env": "XTBEXE"}]}]});
-        assert_eq!(needs_declared(&orca, "orca").unwrap(), vec![Need { plugin: "xtb".into(), versions: ">=0.1.4 <0.2.0".into(), program: "xtb".into(), env: "XTBEXE".into() }]);
-        assert_eq!(needs_declared(&serde_json::json!({}), "orca").unwrap(), vec![]);
+        // (another plugin's program, told in a variable: the tightbind plugin's tightbind, in TBEXE)
+        let quanta = serde_json::json!({"depends": [{"plugin": "tightbind", "versions": ">=0.1.4 <0.2.0", "programs": [{"program": "tightbind", "env": "TBEXE"}]}]});
+        assert_eq!(needs_declared(&quanta, "quanta").unwrap(), vec![Need { plugin: "tightbind".into(), versions: ">=0.1.4 <0.2.0".into(), program: "tightbind".into(), env: "TBEXE".into() }]);
+        assert_eq!(needs_declared(&serde_json::json!({}), "quanta").unwrap(), vec![]);
         // (one used only for some of its work: its programs needed by the jobs that say so, as any)
-        assert_eq!(needs_declared(&serde_json::json!({"depends": [{"plugin": "xtb", "versions": ">=1.0.0 <2.0.0", "optional": true, "programs": [{"program": "xtb", "env": "X"}]}]}), "orca").unwrap().len(), 1);
+        assert_eq!(needs_declared(&serde_json::json!({"depends": [{"plugin": "tightbind", "versions": ">=1.0.0 <2.0.0", "optional": true, "programs": [{"program": "tightbind", "env": "X"}]}]}), "quanta").unwrap().len(), 1);
         // (a plugin used for no program: none of its programs needed)
-        assert_eq!(needs_declared(&serde_json::json!({"depends": [{"plugin": "xtb", "versions": ">=1.0.0 <2.0.0"}]}), "orca").unwrap(), vec![]);
-        let uses = |program: &str, env: &str| serde_json::json!({"plugin": "xtb", "versions": ">=0.1.0 <0.2.0", "programs": [{"program": program, "env": env}]});
+        assert_eq!(needs_declared(&serde_json::json!({"depends": [{"plugin": "tightbind", "versions": ">=1.0.0 <2.0.0"}]}), "quanta").unwrap(), vec![]);
+        let uses = |program: &str, env: &str| serde_json::json!({"plugin": "tightbind", "versions": ">=0.1.0 <0.2.0", "programs": [{"program": program, "env": env}]});
         // (itself, versions not as they must be, a shell, a path, a variable that finds or loads programs, one plugin twice, one variable twice: none of them)
         for bad in [
-            serde_json::json!([{"plugin": "orca", "versions": ">=0.1.0", "programs": [{"program": "orca", "env": "X"}]}]),
-            serde_json::json!([{"plugin": "xtb", "versions": "^0.1.0", "programs": [{"program": "xtb", "env": "X"}]}]),
-            serde_json::json!([{"plugin": "xtb", "versions": ">=0.2.0 <0.1.0", "programs": [{"program": "xtb", "env": "X"}]}]),
-            serde_json::json!([{"plugin": "xtb", "programs": [{"program": "xtb", "env": "X"}]}]),
+            serde_json::json!([{"plugin": "quanta", "versions": ">=0.1.0", "programs": [{"program": "quanta", "env": "X"}]}]),
+            serde_json::json!([{"plugin": "tightbind", "versions": "^0.1.0", "programs": [{"program": "tightbind", "env": "X"}]}]),
+            serde_json::json!([{"plugin": "tightbind", "versions": ">=0.2.0 <0.1.0", "programs": [{"program": "tightbind", "env": "X"}]}]),
+            serde_json::json!([{"plugin": "tightbind", "programs": [{"program": "tightbind", "env": "X"}]}]),
             serde_json::json!([uses("sh", "X")]),
-            serde_json::json!([uses("bin/xtb", "X")]),
-            serde_json::json!([uses("xtb", "PATH")]),
-            serde_json::json!([uses("xtb", "DYLD_INSERT_LIBRARIES")]),
-            serde_json::json!([uses("xtb", "A"), uses("xtb", "B")]),
-            serde_json::json!([{"plugin": "xtb", "versions": ">=0.1.0", "programs": [{"program": "xtb", "env": "A"}, {"program": "other", "env": "A"}]}]),
-            serde_json::json!([{"plugin": "xtb", "versions": ">=0.1.0", "optional": "yes"}]),
-            serde_json::json!({"plugin": "xtb"}),
+            serde_json::json!([uses("bin/tightbind", "X")]),
+            serde_json::json!([uses("tightbind", "PATH")]),
+            serde_json::json!([uses("tightbind", "DYLD_INSERT_LIBRARIES")]),
+            serde_json::json!([uses("tightbind", "A"), uses("tightbind", "B")]),
+            serde_json::json!([{"plugin": "tightbind", "versions": ">=0.1.0", "programs": [{"program": "tightbind", "env": "A"}, {"program": "other", "env": "A"}]}]),
+            serde_json::json!([{"plugin": "tightbind", "versions": ">=0.1.0", "optional": "yes"}]),
+            serde_json::json!({"plugin": "tightbind"}),
             // (versions with no bound above)
-            serde_json::json!([{"plugin": "xtb", "versions": ">=1.0.0"}]),
+            serde_json::json!([{"plugin": "tightbind", "versions": ">=1.0.0"}]),
         ] {
-            assert!(needs_declared(&serde_json::json!({ "depends": bad }), "orca").is_err(), "{bad}");
+            assert!(needs_declared(&serde_json::json!({ "depends": bad }), "quanta").is_err(), "{bad}");
         }
     }
 
@@ -4534,7 +4713,7 @@ mod tests {
         let tool = away.join("tool");
         fs::write(&tool, "#!/bin/sh\necho needed program ran\n").unwrap();
         fs::set_permissions(&tool, fs::Permissions::from_mode(0o755)).unwrap();
-        write_limits(&root, Limits { cores: 1, memory: 0 }).unwrap();
+        write_limits(&root, Limits { cores: 1, memory: 0, awake: true }).unwrap();
         let spec = JobSpec {
             plugin: "test".into(),
             name: "shell".into(),
@@ -4680,7 +4859,7 @@ mod tests {
     fn a_runner_runs_a_job_needing_another_plugins_program_linked_in_its_folder_and_no_other_link() {
         let (base, data, plugins) = needing(true);
         let jobs = data.join("jobs");
-        write_limits(&jobs, Limits { cores: 1, memory: 0 }).unwrap();
+        write_limits(&jobs, Limits { cores: 1, memory: 0, awake: true }).unwrap();
         let found = plugin_program(&data, &crate::installed::dir(&plugins, "asker").unwrap(), "asker", "main", &[]).unwrap();
         let (env, needed) = needs_given(&data, &manifest_of(&crate::installed::dir(&plugins, "asker").unwrap(), "asker").unwrap(), "asker", &["helper".into()], &|p| crate::installed::dir(&plugins, p)).unwrap();
         assert_eq!(env, BTreeMap::from([("TOOLEXE".to_string(), "./tool".to_string())]));

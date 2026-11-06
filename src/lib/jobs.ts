@@ -194,12 +194,17 @@ export function coresCountedSaid(c: { cores: number; physical?: number }): strin
 
 /**
  * How many processes a job of a program running as processes takes (a
- * manifest's `installed[].parallel`: MPI): the cores Settings
- * gives it, one process to each - never more than the computer's physical
- * cores, each process a whole one.
+ * manifest's `installed[].parallel`: MPI), of the cores Settings gives it:
+ * each process a whole physical core - the threads the computer runs on
+ * one, as the queue counts it (jobs.rs `taken`) - so as many as fit in
+ * those cores, and never more than its physical cores. At least one, which
+ * takes a whole core however few it is given. Where its physical cores
+ * cannot be told, one process to each core.
  */
-export function processesOf(cores: number, physical: number): number {
-  return Math.max(1, Math.min(cores, physical));
+export function processesOf(cores: number, here: { cores: number; physical?: number }): number {
+  const physical = here.physical && here.physical >= 1 ? here.physical : here.cores;
+  const perProcess = Math.max(1, Math.ceil(here.cores / physical));
+  return Math.max(1, Math.min(Math.floor(cores / perProcess), physical));
 }
 
 /**
@@ -231,7 +236,7 @@ export function overLimits(jobs: readonly { memory?: number }[], limits: { memor
 }
 
 /** What jobs may use, told to this computer's runner: every job waiting takes it up at once. */
-export const writeJobLimits = (limits: { cores: number; memory: number }) => invoke<void>("jobs_limits", limits);
+export const writeJobLimits = (limits: { cores: number; memory: number; awake: boolean }) => invoke<void>("jobs_limits", limits);
 
 /** How often a job followed is looked at. */
 const FOLLOW_MS = 500;

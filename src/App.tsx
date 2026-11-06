@@ -16,6 +16,7 @@ import DocumentBridge from "./ui/views/DocumentBridge";
 import { openable, openedAs, openedTexts, sayNoneTold, stylesOfFile, textsOf, workspaceOfFile, type Opened, type OpenedStyles } from "./ui/views/openFile";
 import { keptOnline } from "./lib/plugins/online";
 import StyleFileAsk from "./ui/features/StyleEditor/StyleFileAsk";
+import QuestionLayer from "./ui/layouts/QuestionLayer";
 import { afterAnswer, withAsked } from "./ui/features/StyleEditor/styleAsks";
 import { ownChoice, withOwnStyle2d } from "./lib/chem/styleFields";
 import { withOwn3d, withRole } from "./lib/chem/style3d";
@@ -133,12 +134,14 @@ export default function App() {
 
   // What this computer's jobs may use, as Settings says, told to its runner
   // as Meno starts and whenever Settings changes it: those waiting take it
-  // up at once (lib/jobs `limitsOf`).
+  // up at once (lib/jobs `limitsOf`) - and whether it keeps the computer
+  // awake while their programs run (src-tauri/src/awake.rs).
   useEffect(() => {
     if (!isTauri()) return;
     let computer: { cores: number; memory: number } | null = null;
     const tell = () => {
-      if (computer) void writeJobLimits(limitsOf(useAppSettings.getState().calculations, computer)).catch(() => {});
+      const calculations = useAppSettings.getState().calculations;
+      if (computer) void writeJobLimits({ ...limitsOf(calculations, computer), awake: !calculations.sleepWhileJobsRun }).catch(() => {});
     };
     computerResources().then((c) => {
       computer = c;
@@ -895,8 +898,9 @@ export default function App() {
         />
       )}
       {pendingClose && (
+        // (a question about the whole window: asked in the window's own layer, over all else - layouts/QuestionLayer)
+        <QuestionLayer key="confirm-discard">
         <ConfirmDiscard
-          key="confirm-discard"
           title={
             pendingClose.kind === "tab"
               ? `Close "${state.tabsById[pendingClose.id]?.meta.label ?? "this tab"}"?`
@@ -919,6 +923,7 @@ export default function App() {
           }}
           onSave={savable(pendingClose) ? () => void saveThenClose(pendingClose) : undefined}
         />
+        </QuestionLayer>
       )}
       </AnimatePresence>
       {state.mountOrder.map((id) => {

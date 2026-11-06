@@ -23,7 +23,7 @@ import { rmsd } from "./rmsd";
 import { addSet, addStep, connect, fitSets, moveSet, removeSet, removeStep, removeWire, resizeSet, updateStep } from "./model";
 import { energiesBy, laidOver, placeResults, resultsOf, runStep, type RunWith } from "./run";
 import { offeredFirst, offeredSteps } from "./offered";
-import { inputsOf } from "./kinds";
+import { inputsOf, needsOf } from "./kinds";
 import { doerOf } from "./doers";
 import { pluginById } from "../../../../lib/calc/catalog";
 import { populations } from "../utils/molecule3d";
@@ -360,13 +360,19 @@ describe("Meno's own steps", () => {
 
   it("need energies for a window and for populations", () => {
     const set = entries(bent({ x: 0, y: 0 }, 2), "conformers");
-    expect(runMeno("energy-window", set, "conformers")).toEqual({ ok: false, said: "Not every entry has an energy" });
+    expect(runMeno("energy-window", set, "conformers", { window: 3 })).toEqual({ ok: false, said: "Not every entry has an energy" });
     expect(runMeno("populations", set, "conformers").ok).toBe(false);
   });
 
   it("refuse a window they cannot keep by, saying why, as Populations does a temperature", () => {
     const set = entries(bent({ x: 0, y: 0 }, 2, [0, kcal(1)]), "conformers");
-    for (const window of [-1, Number.NaN, Number.POSITIVE_INFINITY]) expect(runMeno("energy-window", set, "conformers", { window })).toEqual({ ok: false, said: "The window must be 0 kcal/mol or more" });
+    for (const window of [-1, Number.POSITIVE_INFINITY]) expect(runMeno("energy-window", set, "conformers", { window })).toEqual({ ok: false, said: "The window must be 0 kcal/mol or more" });
+    // (none given - no default stands in for it - or one that is no number: the window asked for, as its card asks)
+    for (const options of [undefined, { window: Number.NaN }, { window: "" }, { window: "a" }]) expect(runMeno("energy-window", set, "conformers", options)).toEqual({ ok: false, said: "Give the window, in kcal/mol" });
+    // (the same from the lowest in each value of a property: its own check, as its own words)
+    const byValue = { within: "each value", groupBy: "product" };
+    for (const window of [undefined, Number.NaN, ""]) expect(runMeno("energy-window", set, "conformers", { ...byValue, ...(window !== undefined ? { window } : {}) })).toEqual({ ok: false, said: "Give the window, in kcal/mol" });
+    for (const window of [-1, Number.POSITIVE_INFINITY]) expect(runMeno("energy-window", set, "conformers", { ...byValue, window })).toEqual({ ok: false, said: "The window must be 0 kcal/mol or more" });
     // (0: the lowest of each compound alone)
     const none = runMeno("energy-window", set, "conformers", { window: 0 });
     expect(none.ok && none.kept.map((e) => e.number)).toEqual([1]);
@@ -931,6 +937,16 @@ describe("Quick Add's calculations", () => {
     } finally {
       useAppSettings.setState({ options: {} });
     }
+  });
+
+  it("put down with no window of the chemist's own in Settings, an Energy window holds none - never a number that is none - and asks for one", () => {
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const id = store.getState().addStep("energy-window", "meno", 0, 0);
+    const step = store.getState().steps.find((s) => s.id === id)!;
+    expect(step.options).toEqual({ within: "each compound", groupBy: "" });
+    expect(needsOf(step)).toBe("Give the window, in kcal/mol");
   });
 
   it("are by who does them - each plugin added, then Meno - each with the kinds it fills; As conformers only from a compound set's wire", () => {

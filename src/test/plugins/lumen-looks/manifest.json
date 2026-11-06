@@ -40,8 +40,8 @@
       },
       {
         "id": "silver",
-        "label": "Silver: mirror or satin",
-        "description": "A made-up look: silver: mirror or satin.",
+        "label": "Silver: bright or dull",
+        "description": "A made-up look: silver: bright or dull.",
         "own": true,
         "file": "look_silver.py"
       },
@@ -54,8 +54,8 @@
       },
       {
         "id": "neon",
-        "label": "Neon: lit tubes",
-        "description": "A made-up look: neon: lit tubes.",
+        "label": "Neon: glowing rods",
+        "description": "A made-up look: neon: glowing rods.",
         "own": true,
         "file": "look_neon.py"
       },
@@ -74,7 +74,7 @@
     "studios": [
       {
         "id": "sweep",
-        "label": "Paper sweep",
+        "label": "Curved backdrop",
         "description": "A made-up studio.",
         "file": "studio_sweep.py"
       }
@@ -92,7 +92,7 @@
           {
             "id": "engine",
             "value": "traced",
-            "why": "This motion is made with light traced"
+            "why": "Lumen traces the light for this motion"
           }
         ],
         "file": "motion_rise.py"
@@ -108,7 +108,7 @@
           {
             "id": "engine",
             "value": "traced",
-            "why": "This motion is made with light traced"
+            "why": "Lumen traces the light for this motion"
           }
         ],
         "file": "motion_change.py"
@@ -120,16 +120,16 @@
     "options": [
       {
         "id": "silver-finish",
-        "label": "Silver's finish",
+        "label": "Silver surface",
         "type": "choice",
         "choices": [
           {
             "value": "mirror",
-            "label": "Mirror"
+            "label": "Bright"
           },
           {
             "value": "satin",
-            "label": "Satin"
+            "label": "Dull"
           }
         ],
         "default": "mirror",

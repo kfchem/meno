@@ -96,9 +96,12 @@ export function declaredPrograms(m: DependingManifest): Set<string> {
 
 /**
  * The plugins of `manifests` refused for what they use, each with why: one
- * that uses a plugin Meno does not know - or one refused - or a program that
- * plugin does not declare; and every one of a cycle, which can be set up in
- * no order. The others are as they are.
+ * that uses a program, an interface or a kind of file a plugin it uses does
+ * not declare - or one refused; and every one of a cycle, which can be set
+ * up in no order. The others are as they are. One that uses a plugin Meno
+ * does not know - not got yet - is not refused: that plugin is missing, as
+ * one not added is (`stoppedWhy`, `filesTaken`), and what it uses of it is
+ * checked once it is got.
  */
 export function dependsRefused<M extends DependingManifest>(manifests: readonly M[]): Map<string, string> {
   const refused = new Map<string, string>();
@@ -127,11 +130,12 @@ export function dependsRefused<M extends DependingManifest>(manifests: readonly 
     if (refused.has(m.id)) continue;
     for (const d of m.depends ?? []) {
       const used = byId.get(d.plugin);
-      const missing = d.programs.find((p) => used && !declaredPrograms(used).has(p.program));
-      const without = (d.interfaces ?? []).find((i) => used && !(used.interfaces ?? []).some((x) => x.id === i.id));
-      const kind = (d.kinds ?? []).find((k) => used && !(used.kinds ?? []).some((x) => x.id === k));
-      if (!used) refused.set(m.id, `it uses ${d.plugin}, a plugin Meno does not know`);
-      else if (missing) refused.set(m.id, `it uses ${used.name}'s program ${missing.program}, which ${used.name} does not declare`);
+      // (a plugin not known: not got yet, so missing - nothing of it to check)
+      if (!used) continue;
+      const missing = d.programs.find((p) => !declaredPrograms(used).has(p.program));
+      const without = (d.interfaces ?? []).find((i) => !(used.interfaces ?? []).some((x) => x.id === i.id));
+      const kind = (d.kinds ?? []).find((k) => !(used.kinds ?? []).some((x) => x.id === k));
+      if (missing) refused.set(m.id, `it uses ${used.name}'s program ${missing.program}, which ${used.name} does not declare`);
       else if (without) refused.set(m.id, `it uses ${used.name}'s ${without.id} interface, which ${used.name} does not declare`);
       else if (kind) refused.set(m.id, `it uses ${used.name}'s kind of file ${kind}, which ${used.name} does not declare`);
       if (refused.has(m.id)) break;

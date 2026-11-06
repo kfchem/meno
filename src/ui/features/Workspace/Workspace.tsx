@@ -11,6 +11,7 @@ import { useEditor, useEditorStore, EditorProvider } from "./store";
 import { selectedOf, selectionIsAtom } from "./store/slices/selectionSlice";
 import { useStructureEvents } from "./hooks/useStructureEvents";
 import { useCanvasSetup } from "./hooks/useCanvasSetup";
+import PageHits from "./pageGl/PageHits";
 import {
   Atoms2D,
   Bonds2D,
@@ -1070,10 +1071,10 @@ function WorkspaceContent({
   // a molecule in 3D right-clicked: what its menu does to it
   const molecules3d = useEditor((s) => s.molecules3d);
   const chosen3d = useEditor((s) => s.chosen3d);
-  // (its molecules going over to a change of the workspace's styles in 3D, not jumping - at once in a very large drawing)
+  // (its molecules going over to a change of the workspace's styles in 3D, not jumping - at once in a very large drawing, or where none was drawn before it came)
   const target3d = useStyle3D();
   const atoms3d = useEditor((s) => s.molecules3d.reduce((n, m) => n + m.atoms.length, 0));
-  const style3d = useEasedStyle3D(target3d, atoms3d > LARGE_ATOMS);
+  const style3d = useEasedStyle3D(target3d, atoms3d > LARGE_ATOMS, atoms3d > 0);
   const styleNames3d = useStyleNames3D();
   const menuMolecule = menu?.kind === "molecule3d" ? molecules3d.find((m) => m.id === menu.id) : undefined;
   // a molecule's output shown in the column of texts, held in the
@@ -2660,6 +2661,8 @@ function WorkspaceContent({
         onCreated={onCreated}
       >
         <color attach="background" args={["#ffffff"]} />
+        {/* What WebGL draws on the page takes the pointer before anything else on the canvas, as the page's HTML did (pageGl/PageHits) */}
+        <PageHits>
         <FitToContent2D trigger={fitNonce} />
         {/* The drawing, laid out once for every layer below to draw from */}
         <DrawnLayoutProvider>
@@ -2759,6 +2762,7 @@ function WorkspaceContent({
         {/* (the view following the column over the canvas's right side) */}
         <FollowCover />
         <FollowStyle />
+        </PageHits>
       </Canvas>
       </PageHtmlLayer.Provider>
       {/* the page's HTML, cut off where the column begins (coverLayer) */}
