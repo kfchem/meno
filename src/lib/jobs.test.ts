@@ -22,7 +22,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   },
 }));
 
-import { coresCountedSaid, finished, followJob, keptText, liveJobsOf, runningOf, limitsOf, overLimits, startJob, stopJobsAndWait, type Job } from "./jobs";
+import { coresCountedSaid, finished, processesOf, followJob, keptText, liveJobsOf, runningOf, limitsOf, overLimits, startJob, stopJobsAndWait, type Job } from "./jobs";
 
 describe("jobs", () => {
   beforeEach(() => {
@@ -53,6 +53,22 @@ describe("jobs", () => {
     expect(coresCountedSaid({ cores: 10, physical: 10 })).toBeNull();
     // (its physical cores not told: nothing said)
     expect(coresCountedSaid({ cores: 8 })).toBeNull();
+  });
+
+  it("gives a program running as processes as many as fit in its cores, two threads to a physical core where it runs two", () => {
+    // (16 physical cores, 32 threads: 28 cores are 14 processes - 28 as the queue counts them - never 16, which it counts as 32)
+    expect(processesOf(28, { cores: 32, physical: 16 })).toBe(14);
+    expect(processesOf(32, { cores: 32, physical: 16 })).toBe(16);
+    expect(processesOf(3, { cores: 32, physical: 16 })).toBe(1);
+    // (one, however few: a process takes a whole core)
+    expect(processesOf(1, { cores: 32, physical: 16 })).toBe(1);
+    // (one thread to each core: one process to each, never past the physical cores)
+    expect(processesOf(8, { cores: 10, physical: 10 })).toBe(8);
+    expect(processesOf(12, { cores: 10, physical: 10 })).toBe(10);
+    // (24 physical cores and 32 threads: two to each as the queue counts it)
+    expect(processesOf(28, { cores: 32, physical: 24 })).toBe(14);
+    // (physical cores not told: one to each core)
+    expect(processesOf(6, { cores: 8 })).toBe(6);
   });
 
   it("lets jobs use all the computer's cores and three quarters of its memory, unless Settings says otherwise - never more than it has", () => {

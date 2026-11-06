@@ -1172,7 +1172,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     // (the cores it takes, as Settings says - a program running as processes, one to each physical core: never two on one)
     const { cores: settled } = runningOf(useAppSettings.getState().calculations);
     const asProcesses = installedFor(step.kind, plugin.id).some((d) => d.parallel === "processes");
-    const cores = asProcesses ? processesOf(settled, (await computerResources().catch(() => null))?.physical ?? settled) : settled;
+    const cores = asProcesses ? processesOf(settled, (await computerResources().catch(() => null)) ?? { cores: settled }) : settled;
     // (a program installed separately: where it is, looked for again - and found, or said not to be)
     const paths = new Map<string, string>();
     for (const decl of installedFor(step.kind, plugin.id)) {
