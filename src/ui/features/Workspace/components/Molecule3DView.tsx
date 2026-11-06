@@ -2068,8 +2068,8 @@ function Molecule3DView(props: Molecule3DViewProps) {
               //  its controls not yet drawn by WebGL)
               (props.onRemake || props.list) && (
                 <PageHtml zIndexRange={[30, 20]}>
-                  <div className="flex flex-col items-center" style={{ transform: `translate(-50%, calc(${FRAMES_CHIP_GAP + CHIP_HEIGHT}px * var(--page, 1)))` }}>
-                    <div className="flex flex-col items-center" style={{ ...PAGE_SIZED, pointerEvents: "auto" }}>
+                  <div className="flex flex-col items-center" style={{ transform: `translate(-50%, ${pagePx(FRAMES_CHIP_GAP + CHIP_HEIGHT)})` }}>
+                    <div className="flex flex-col items-center" style={{ ...SIZED_TOP, pointerEvents: "auto" }}>
                       {props.onRemake && <Changed onRemake={props.onRemake} />}
                       {props.list}
                     </div>
