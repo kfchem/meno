@@ -133,12 +133,14 @@ export default function App() {
 
   // What this computer's jobs may use, as Settings says, told to its runner
   // as Meno starts and whenever Settings changes it: those waiting take it
-  // up at once (lib/jobs `limitsOf`).
+  // up at once (lib/jobs `limitsOf`) - and whether it keeps the computer
+  // awake while their programs run (src-tauri/src/awake.rs).
   useEffect(() => {
     if (!isTauri()) return;
     let computer: { cores: number; memory: number } | null = null;
     const tell = () => {
-      if (computer) void writeJobLimits(limitsOf(useAppSettings.getState().calculations, computer)).catch(() => {});
+      const calculations = useAppSettings.getState().calculations;
+      if (computer) void writeJobLimits({ ...limitsOf(calculations, computer), awake: !calculations.sleepWhileJobsRun }).catch(() => {});
     };
     computerResources().then((c) => {
       computer = c;

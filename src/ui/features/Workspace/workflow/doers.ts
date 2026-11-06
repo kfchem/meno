@@ -17,8 +17,9 @@ import { useAppSettings } from "../../../../lib/settings/appSettings";
 import type { InstalledDecl } from "../../../../lib/plugins/manifest";
 import { tooOld, whereIs } from "../../../../lib/plugins/installed";
 import { systemHere } from "../../../../lib/plugins/here";
+import { HOLDS_RESTRAINTS } from "../../../../lib/plugins/steps";
 import type { WorkflowSet, WorkflowStep } from "../store/types";
-import { exitOf, exitsOf, inputsOf, KINDS, kindInfo, madeName, MENO_DOES, needsOf, optionsOf, takenBy, takes, type StepKind, type StepPort, type ValueKind } from "./kinds";
+import { exitOf, exitsOf, HOLD_OPTION, inputsOf, KINDS, kindInfo, madeName, MENO_DOES, needsOf, optionsOf, takenBy, takes, type StepKind, type StepPort, type ValueKind } from "./kinds";
 
 export type Doer = { id: string; name: string };
 
@@ -137,7 +138,9 @@ export function optionsFor(kind: StepKind, by: string): readonly Option[] {
     : kind === "conformers" && plugin?.roleTries.includes("conformers")
       ? soughtOptions(settled.sought3d ?? "needed", settled.count3d ?? RING_CONFORMERS, plugin.roleDraws.includes("conformers") ? roundsChosen(settled) : undefined)
       : (kindInfo(kind).own ?? []);
-  return [...meno, ...own.map((o) => (o.id in chosen ? ({ ...o, default: chosen[o.id] } as Option) : o))];
+  // (whether it holds an entry's restraints as its program runs: offered where its plugin says its program can - Meno's)
+  const hold = decl?.restraints?.includes("fixed") && HOLDS_RESTRAINTS.includes(kind) ? [HOLD_OPTION] : [];
+  return [...meno, ...hold, ...own.map((o) => (o.id in chosen ? ({ ...o, default: chosen[o.id] } as Option) : o))];
 }
 
 /** What the plugins added bring the renderer `by` through its interface (render/presets): who brings what, and what is offered of it. */
