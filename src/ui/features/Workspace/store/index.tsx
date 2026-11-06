@@ -12,6 +12,7 @@ import { createWorkspaceDocument, type WorkspaceDocument } from "../document";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { DEFAULT_WORKSPACE_3D, workspace3dOf } from "../../../../lib/chem/workspaceStyle3d";
 import type { Caption, Cycle, EditorState, Model, PushArrow, PdfItem, PictureItem, RingFills, Sel, SelFlow, Shape, Ink, Slide, Wire, WireEnd, WorkflowSet, WorkflowStep, WorkspaceText, LostText } from "./types";
+import type { StructureMap } from "../chem/structureMaps";
 import { createModelSlice } from "./slices/modelSlice";
 import { createSelectionSlice } from "./slices/selectionSlice";
 import { createHoverSlice } from "./slices/hoverSlice";
@@ -54,6 +55,7 @@ function mirrorOf(doc: WorkspaceDocument, recordsShown: Readonly<Record<number, 
     arrows: doc.arrows,
     pluses: doc.pluses ?? [],
     pushes: doc.pushes ?? NO_PUSHES,
+    structureMaps: doc.structureMaps ?? NO_STRUCTURE_MAPS,
     aromaticEnabled: doc.aromaticEnabled,
     aromaticRings: doc.aromaticRings,
     ringFills: doc.ringFills ?? NO_FILLS,
@@ -129,6 +131,7 @@ function picturesHeld(sel: Set<number>, pictures: readonly { id: number }[]): Se
 }
 const NO_CAPTIONS: Caption[] = [];
 const NO_PUSHES: PushArrow[] = [];
+const NO_STRUCTURE_MAPS: StructureMap[] = [];
 const NO_FILLS: RingFills = {};
 const NO_SETS: WorkflowSet[] = [];
 const NO_STEPS: WorkflowStep[] = [];
