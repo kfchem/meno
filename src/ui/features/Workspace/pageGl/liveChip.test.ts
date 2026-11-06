@@ -151,19 +151,28 @@ describe("a frames chip opened", () => {
     expect(chipMeasures({ count: 1, frame: 0, energies: [-100] }, 0).single).toBe(true);
   });
 
-  it("keeps how it was made folded under its name, a chevron to open it: its rows come only as it opens, no wider than 300 px", () => {
+  it("keeps how it was made folded under a chevron alone in the chip's middle, its name in the tip while shut: its rows come only as it opens, no wider than 300 px", () => {
     const made = { method: "ETKDG v3 + MMFF94", how: [{ label: "Kept", text: "17 of 50 embedded, then pruned to those within a few kcal/mol of the lowest of them all" }] };
     const c: ChipFacts = { count: 3, frame: 0, energies: [0, 1e-3, 2e-3], made, conformers: true };
     const shut = liveChip(opened(c), { x: 0, y: 0 }, VIEW);
-    expect(shut.icons?.map((i) => [i.icon, i.turn])).toEqual([["chevron-right", 0]]);
-    expect(words(shut)).toContain("How it was made");
+    // (pointing down, shut, in the chip's middle - the maintainer, 2026-11-06 - and no words beside it)
+    expect(shut.icons?.map((i) => [i.icon, i.turn, i.x])).toEqual([["chevron-right", Math.PI / 2, 0]]);
+    expect(words(shut)).not.toContain("How it was made");
     expect(words(shut)).not.toContain("ETKDG");
-    expect(shut.regions?.some((r) => r.part === "fold")).toBe(true);
+    const fold = shut.regions!.find((r) => r.part === "fold")!;
+    expect("rect" in fold && (fold.rect.x0 + fold.rect.x1) / 2).toBeCloseTo(0, 9);
+    // (its name said in the page's tip as it is pointed at, and only then)
+    expect(shut.tip).toBeUndefined();
+    expect(liveChip(opened(c, { made: { grown: 0, shown: 0, turn: 0, pointed: true } }), { x: 0, y: 0 }, VIEW).tip).toMatchObject({ text: "How it was made", x: 0 });
+    // (opened, not: its rows say it, and the tip would lie over them)
+    expect(liveChip(opened(c, { made: { grown: 1, shown: 1, turn: 1, pointed: true } }), { x: 0, y: 0 }, VIEW).tip).toBeUndefined();
     const m = chipMeasures(c, 0);
     expect(m.details.made!.width).toBeLessThanOrEqual(LIVE.madeMost);
     const open = liveChip(opened(c, { made: { grown: 1, shown: 1, turn: 1, pointed: false } }), { x: 0, y: 0 }, VIEW);
     expect(words(open)).toContain("ETKDG v3 + MMFF94");
-    expect(open.icons![0].turn).toBeCloseTo(Math.PI / 2, 9);
+    // (turned up, opened; it stays where it was, the chip widened about it)
+    expect(open.icons![0].turn).toBeCloseTo((3 * Math.PI) / 2, 9);
+    expect(open.icons![0].x).toBe(shut.icons![0].x);
     expect(open.heightPx).toBeCloseTo(shut.heightPx + m.details.made!.height, 9);
     // (widened both ways about its middle as it opens, as the whole chip does - the maintainer, 2026-11-06)
     expect((open.box.x0 + open.box.x1) / 2).toBeCloseTo((shut.box.x0 + shut.box.x1) / 2, 9);

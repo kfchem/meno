@@ -31,7 +31,7 @@ import { pagePx } from "./units";
  * either side and their most, and how it was made's; a single geometry's
  * words' most; the rows' gap, line and size, a group's name's size, the bars'
  * name's line; the slider's track, its room above and below, and its thumb;
- * the fold's chevron and its gap.
+ * the fold's chevron and how wide a press on it is taken.
  */
 export const LIVE = {
   width: 196,
@@ -52,7 +52,7 @@ export const LIVE = {
   trackRoom: 6,
   thumb: 16,
   chevron: 10,
-  chevronGap: 2,
+  foldHit: 24,
 } as const;
 
 /** The bars' colours: the frame shown, the one pointed at, the rest - its HTML's. */
@@ -101,7 +101,8 @@ export function detailsLaid(groups: CardGroups): DetailsLaid {
   // (how wide they would be with all the room they want: the widest name or row - a folded group's rows not among them)
   let natural = 0;
   for (const g of groups) {
-    const nameW = g.folded ? LIVE.chevron + LIVE.chevronGap + textWidth(g.group, LIVE.groupSize) : textWidth(g.group, LIVE.groupSize);
+    // (how it was made: its chevron alone, centred - the maintainer, 2026-11-06)
+    const nameW = g.folded ? LIVE.foldHit : textWidth(g.group, LIVE.groupSize);
     natural = Math.max(natural, nameW, g.source ? textWidth(g.source, LIVE.groupSize, 500) : 0);
     if (!g.folded) natural = Math.max(natural, laidRows(g.rows, Infinity, 0).width);
   }
@@ -341,12 +342,17 @@ export function liveChip(s: ChipState, at: { x: number; y: number }, view: PageV
     for (const [k, g] of m.details.groups.entries()) {
       if (g.source) text(`g${k}:source`, left, y + g.source.top, LIVE.rowLine, g.source.text, LIVE.groupSize, COLORS.ink, shown, { weight: 500 });
       if (g.name.folded && made) {
-        // how it was made: its chevron and name, a toggle; its rows under it as far as it has opened, from the left at their own width
+        // how it was made: a chevron alone, a toggle, in the chip's middle - the chip grows both ways about it, so it stays
+        // under the pointer as it is pressed (the maintainer, 2026-11-06) - pointing down, turned up as it opens; its name in
+        // the page's tip as it is pointed at, shut; its rows under it as far as it has opened, from the left at their own width
         const tone = s.made.pointed ? COLORS.ink : COLORS.quiet;
         const ny = y + g.name.top;
-        icons.push({ key: `${s.key}:chevron`, icon: "chevron-right", x: cx + P(left + LIVE.chevron / 2), y: top - P(ny + LIVE.rowLine / 2), sizePx: LIVE.chevron, color: tone, turn: (s.made.turn * Math.PI) / 2, opacity: o * shown, z: zBase + 1 });
-        text(`g${k}:name`, left + LIVE.chevron + LIVE.chevronGap, ny, LIVE.rowLine, g.name.text, LIVE.groupSize, tone, shown);
-        if (shown > 0.5) regions.push({ key: s.key, part: "fold", rect: { x0: cx + P(left), x1: cx + P(left + LIVE.chevron + LIVE.chevronGap + textWidth(g.name.text, LIVE.groupSize)), y0: top - P(ny + LIVE.rowLine), y1: top - P(ny) }, z: zBase + 2, cursor: "pointer" });
+        const mid = top - P(ny + LIVE.rowLine / 2);
+        icons.push({ key: `${s.key}:chevron`, icon: "chevron-right", x: cx, y: mid, sizePx: LIVE.chevron, color: tone, turn: (Math.PI / 2) * (1 + 2 * s.made.turn), opacity: o * shown, z: zBase + 1 });
+        const hit = { x0: cx - P(LIVE.foldHit / 2), x1: cx + P(LIVE.foldHit / 2), y0: top - P(ny + LIVE.rowLine), y1: top - P(ny) };
+        if (shown > 0.5) regions.push({ key: s.key, part: "fold", rect: hit, z: zBase + 2, cursor: "pointer" });
+        // (said while it is shut: opened, its rows say it, and the tip would lie over them)
+        if (s.made.pointed && shown >= 1 && s.made.grown === 0 && !tip) tip = { key: `${s.key}:fold`, text: g.name.text, x: cx, y: mid, w: P(LIVE.chevron), h: P(LIVE.chevron) };
         const rowsTop = ny + LIVE.rowLine;
         const seen = shown * s.made.shown;
         // (cut at the bottom as it grows: a row shown only once the fold has grown past it)
