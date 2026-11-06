@@ -1,0 +1,70 @@
+{
+  "id": "ncigrid",
+  "name": "NCIgrid interface",
+  "version": "0.2.0",
+  "description": "Shows weak interactions from atoms' densities with NCIgrid, a made-up program installed separately.",
+  "licence": "Apache-2.0",
+  "homepage": "https://example.org/ncigrid",
+  "environment": "uv",
+  "installed": [
+    {
+      "name": "ncigrid",
+      "label": "NCIgrid",
+      "files": {
+        "macos": "ncigrid",
+        "linux": "ncigrid",
+        "windows": "ncigrid.exe"
+      },
+      "env": {
+        "NCIGRID_HOME": "{parent}"
+      }
+    }
+  ],
+  "steps": [
+    {
+      "kinds": [
+        "nci"
+      ],
+      "programs": [
+        "ncigrid"
+      ],
+      "options": [
+        {
+          "id": "grid",
+          "label": "Grid",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "coarse",
+              "label": "Coarse"
+            },
+            {
+              "value": "standard",
+              "label": "Standard"
+            },
+            {
+              "value": "fine",
+              "label": "Fine"
+            }
+          ],
+          "default": "standard"
+        },
+        {
+          "id": "between",
+          "label": "Between molecules only",
+          "type": "switch",
+          "default": false
+        },
+        {
+          "id": "isovalue",
+          "label": "Surface's value",
+          "type": "number",
+          "default": 0.3,
+          "min": 0.05,
+          "max": 1,
+          "step": 0.05
+        }
+      ]
+    }
+  ]
+}

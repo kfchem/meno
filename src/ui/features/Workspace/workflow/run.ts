@@ -357,7 +357,7 @@ function placeNumber(doc: WorkspaceDocument, step: WorkflowStep, number: NumberV
   const exit = exitsOf(step.kind)[0].id;
   const madeBy = { step: step.id, exit, holds: "number" as const };
   const was = resultOf(doc, step.id, exit);
-  const frame = was ? placeAgain(doc, step, was, NUMBER_SET.w, NUMBER_SET.h) : placeFor(doc, step, NUMBER_SET.w, NUMBER_SET.h);
+  const frame = was ? placeAgain(doc, step, was, NUMBER_SET.w, NUMBER_SET.h) : placeFor(doc, step, exit, NUMBER_SET.w, NUMBER_SET.h);
   if (was) return holdNumber(markMade(resizeSet(doc, was.id, frame), was.id, madeBy), was.id, number);
   const id = doc.nextWorkflowId ?? 1;
   return holdNumber(markMade(addSet(doc, frame, madeBy), id, madeBy), id, number);
@@ -369,7 +369,7 @@ function placeChart(doc: WorkspaceDocument, step: WorkflowStep, chart: ChartValu
   const was = resultOf(doc, step.id, exit);
   // (what it held before - a frame of a step not run yet holds nothing - gone; the frame as large as a chart is drawn)
   if (was) doc = removeMolecules3d(doc, setMembers(doc, was).molecules);
-  const frame = was ? placeAgain(doc, step, was, CHART_SET.w, CHART_SET.h) : placeFor(doc, step, CHART_SET.w, CHART_SET.h);
+  const frame = was ? placeAgain(doc, step, was, CHART_SET.w, CHART_SET.h) : placeFor(doc, step, exit, CHART_SET.w, CHART_SET.h);
   if (was) return holdChart(markMade(resizeSet(doc, was.id, frame), was.id, madeBy), was.id, chart);
   const id = doc.nextWorkflowId ?? 1;
   return holdChart(markMade(addSet(doc, frame, madeBy), id, madeBy), id, chart);
@@ -672,7 +672,7 @@ function fillTable(doc: WorkspaceDocument, step: WorkflowStep, exit: string, tab
   const madeBy = { step: step.id, exit, holds: "table" as const };
   const was = resultOf(doc, step.id, exit);
   if (was) doc = removeMolecules3d(doc, setMembers(doc, was).molecules);
-  const frame = was ? placeAgain(doc, step, was, TABLE_SET.w, TABLE_SET.h) : placeFor(doc, step, TABLE_SET.w, TABLE_SET.h);
+  const frame = was ? placeAgain(doc, step, was, TABLE_SET.w, TABLE_SET.h) : placeFor(doc, step, exit, TABLE_SET.w, TABLE_SET.h);
   if (was) return holdTable(markMade(resizeSet(doc, was.id, frame), was.id, madeBy), was.id, table);
   const id = doc.nextWorkflowId ?? 1;
   return holdTable(markMade(addSet(doc, frame, madeBy), id, madeBy), id, table);
@@ -799,7 +799,7 @@ function filled(
   if (was) doc = emptied(doc, was);
   const madeBy = { step: step.id, exit: of.exit, holds: of.holds };
   if (of.collection || of.drawnCollection) {
-    const frame = was ? placeAgain(doc, step, was, SUMMARY_W, SUMMARY_H) : placeFor(doc, step, SUMMARY_W, SUMMARY_H);
+    const frame = was ? placeAgain(doc, step, was, SUMMARY_W, SUMMARY_H) : placeFor(doc, step, of.exit, SUMMARY_W, SUMMARY_H);
     const id = was ? was.id : (doc.nextWorkflowId ?? 1);
     doc = was ? markMade(resizeSet(doc, id, frame), id, madeBy) : markMade(addSet(doc, frame, madeBy), id, madeBy);
     return withCore(holdCollection(doc, id, of.collection ? { collection: of.collection } : { drawnCollection: of.drawnCollection! }, of.unread), id, of.core);
@@ -812,7 +812,7 @@ function filled(
   // (in rows no wider than its step's column, where the next step's card is close: the set grows down, not over the steps after it)
   const room = columnWidth(doc, step) - 2 * SET_PAD;
   const lay = laidOut(rooms, LEAST_W, Math.max(...rooms.map((r) => r.x1 - r.x0), Math.min(rowMost(rooms), room)));
-  const frame = was ? placeAgain(doc, step, was, lay.width, lay.height) : placeFor(doc, step, lay.width, lay.height);
+  const frame = was ? placeAgain(doc, step, was, lay.width, lay.height) : placeFor(doc, step, of.exit, lay.width, lay.height);
   const put = place(doc, lay.at.map((p) => ({ x: frame.x0 + p.x, y: frame.y1 + p.y })));
   doc = put.doc;
   const id = was ? was.id : (doc.nextWorkflowId ?? 1);

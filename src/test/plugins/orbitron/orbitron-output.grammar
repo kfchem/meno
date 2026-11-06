@@ -1,0 +1,19 @@
+// Orbitron's output, a made-up program's, for Meno's tests: its headings (== ... ==), the line that says it is
+// done, a fault, and numbers among its words.
+@top Output { (line? nl)* line? }
+
+line { piece+ }
+piece { Fault | Heading | Done | Number | Word }
+
+@skip { space }
+
+@tokens {
+  space { $[ \t\r]+ }
+  nl { "\n" }
+  Fault { "FAULT:" ![\n]* }
+  Heading { "==" ![\n]* }
+  Done { "Orbitron run ends well" }
+  Number { "-"? $[0-9]+ ("." $[0-9]+)? }
+  Word { ![ \t\r\n]+ }
+  @precedence { Fault, Heading, Done, Number, Word }
+}

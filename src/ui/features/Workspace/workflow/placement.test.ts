@@ -4,7 +4,7 @@ import { emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
 import type { DrawnModel } from "../store/types";
 import { inside, type Frame } from "./entries";
 import { resultOf } from "./flow";
-import { inputsOf } from "./kinds";
+import { exitPlace, inputsOf } from "./kinds";
 import { BETWEEN, WIRE_ROOM, byTurn, CARD_H, CARD_W, framesHash, pointsFor, wirePath, wireRoute, type WireWay, GAP, inputLead, nearWire, PORT_DOWN, PORT_STEP, PX, setGives, setTakes, stepGives, stepTakes, WIRE_TURNS, wireCurve, wireToward, shapeMoved, FrameBudget, wireKey, doublesBack, WireEasing, wireLanes } from "./look";
 import { addStep, connect } from "./model";
 import { clearOf } from "./place";
@@ -55,10 +55,12 @@ function overlaps(doc: WorkspaceDocument): string[] {
       const q = stepTakes(to, Math.max(0, inputsOf(to.kind).findIndex((p) => p.id === w.to.port)));
       lines.push({ name: `wire ${w.id}`, pts: wirePath(setGives(from), q, e, nearWire(setGives(from), q, e, page)) });
     }
+    // (each line from its exit's own port: look `stepGives`)
     for (const o of sets) {
       const s = o.made && steps.find((x) => x.id === o.made!.step);
       const e = s && { from: cardOf(s), to: o as Frame };
-      if (s && e && o.id !== b.id) lines.push({ name: `line to set ${o.id}`, pts: wirePath(stepGives(s), setTakes(o), e, nearWire(stepGives(s), setTakes(o), e, page)) });
+      const p = s && stepGives(s, exitPlace(s.kind, o.made!.exit));
+      if (s && e && p && o.id !== b.id) lines.push({ name: `line to set ${o.id}`, pts: wirePath(p, setTakes(o), e, nearWire(p, setTakes(o), e, page)) });
     }
     for (const l of lines) if (l.pts.some((p) => inside(b, p))) said.push(`set ${b.id} over ${l.name}`);
     // (and its own wires and line, none turning back over it: in it, off its sides)
@@ -71,7 +73,8 @@ function overlaps(doc: WorkspaceDocument): string[] {
     }
     const by = steps.find((x) => x.id === b.made!.step);
     const own = by && { from: cardOf(by), to: b as Frame };
-    if (by && own && wirePath(stepGives(by), setTakes(b), own, nearWire(stepGives(by), setTakes(b), own, page)).some(within)) said.push(`set ${b.id} under its own line`);
+    const at = by && stepGives(by, exitPlace(by.kind, b.made!.exit));
+    if (by && own && at && wirePath(at, setTakes(b), own, nearWire(at, setTakes(b), own, page)).some(within)) said.push(`set ${b.id} under its own line`);
   }
   return said;
 }

@@ -81,8 +81,8 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
       doc.edit("size set", (d) => wf.resizeSet(d, id, frame), coalesce("set-size", id, gesture)),
     moveSet: (id: number, dx: number, dy: number, gesture?: string) => doc.edit("move set", (d) => wf.moveSet(d, id, dx, dy), coalesce("set-move", id, gesture)),
     // (the one asked for shown in the column - a PDF read there before giving way, as a text asked for does)
-    readSetTable: (id: number) => set((prev: EditorState) => ({ ...prev, setsRead: prev.setsRead.includes(id) ? prev.setsRead : [...prev.setsRead, id], setTableShown: id, textsOpen: true, pdfShown: null })),
-    showSetTable: (id: number) => set({ setTableShown: id, textsOpen: true, pdfShown: null }),
+    readSetTable: (id: number) => set((prev: EditorState) => ({ ...prev, setsRead: prev.setsRead.includes(id) ? prev.setsRead : [...prev.setsRead, id], setTableShown: id, textsOpen: true, pdfShown: null, conversationShown: null })),
+    showSetTable: (id: number) => set({ setTableShown: id, textsOpen: true, pdfShown: null, conversationShown: null }),
     stopReadingSetTable: (id: number) =>
       set((prev: EditorState) => {
         const setsRead = prev.setsRead.filter((s) => s !== id);

@@ -1,0 +1,311 @@
+{
+  "id": "orbitron",
+  "name": "Orbitron interface",
+  "version": "0.3.0",
+  "description": "Runs Orbitron, a made-up quantum chemistry program installed separately, and reads its outputs and checkpoints.",
+  "licence": "Apache-2.0",
+  "homepage": "https://example.org/orbitron",
+  "environment": "uv",
+  "kinds": [
+    {
+      "id": "orbitron",
+      "name": "Orbitron output",
+      "program": "Orbitron",
+      "writtenBy": "orb26",
+      "extensions": [
+        ".log",
+        ".out"
+      ],
+      "marks": [
+        {
+          "text": "Orbitron run begins, stage 0=",
+          "at": "line-start"
+        }
+      ],
+      "grammar": {
+        "file": "orbitron-output.grammar",
+        "tones": {
+          "Heading": "landmark",
+          "Done": "success",
+          "Fault": "error",
+          "Number": "value"
+        }
+      }
+    },
+    {
+      "id": "orbitron-checkpoint",
+      "name": "Orbitron checkpoint, as text",
+      "program": "Orbitron",
+      "writtenBy": "orb26",
+      "extensions": [
+        ".ock"
+      ],
+      "marks": [
+        {
+          "text": "Atom count       I",
+          "at": "line-start"
+        }
+      ]
+    },
+    {
+      "id": "orbitron-input",
+      "name": "Orbitron input",
+      "extensions": [
+        ".orb"
+      ],
+      "grammar": {
+        "file": "orbitron-input.grammar",
+        "tones": {
+          "Directive": "keyword",
+          "Route": "keyword",
+          "Title": "string",
+          "Element": "tag",
+          "Value": "value",
+          "Comment": "comment"
+        }
+      }
+    }
+  ],
+  "reads": [
+    "orbitron",
+    "orbitron-checkpoint"
+  ],
+  "quotedEnergies": [
+    {
+      "id": "scf-final",
+      "pattern": "^\\s*SCF Final:\\s*E\\((?<method>[^)]+)\\)\\s*=\\s*(?<value>[-+]?\\d+\\.\\d+(?:[DdEe][-+]?\\d+)?)",
+      "name": "E",
+      "unit": "hartree"
+    }
+  ],
+  "quotedTables": [
+    {
+      "id": "frame",
+      "headings": [
+        "Frame orientation:",
+        "Given orientation:"
+      ],
+      "heads": [
+        "Atom Element",
+        "Index Number"
+      ],
+      "columns": [
+        "centre",
+        "atomic-number",
+        "x",
+        "y",
+        "z"
+      ]
+    }
+  ],
+  "writes": [
+    {
+      "kind": "orbitron-input",
+      "options": [
+        {
+          "id": "job",
+          "label": "Job",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "opt vib",
+              "label": "Optimisation, then vibrations"
+            },
+            {
+              "value": "opt",
+              "label": "Optimisation"
+            },
+            {
+              "value": "vib",
+              "label": "Vibrations"
+            },
+            {
+              "value": "sp",
+              "label": "Single-point energy"
+            }
+          ],
+          "default": "opt vib"
+        },
+        {
+          "id": "method",
+          "label": "Method",
+          "type": "text",
+          "default": "M2"
+        },
+        {
+          "id": "basis",
+          "label": "Basis set",
+          "type": "text",
+          "default": "B-mid"
+        },
+        {
+          "id": "keywords",
+          "label": "More keywords for the route",
+          "type": "text",
+          "default": ""
+        },
+        {
+          "id": "charge",
+          "label": "Charge",
+          "type": "number",
+          "default": 0,
+          "step": 1,
+          "from": "charge"
+        },
+        {
+          "id": "multiplicity",
+          "label": "Spin multiplicity",
+          "type": "number",
+          "default": 1,
+          "min": 1,
+          "step": 1,
+          "from": "multiplicity"
+        },
+        {
+          "id": "title",
+          "label": "Title",
+          "type": "text",
+          "default": "",
+          "from": "name"
+        },
+        {
+          "id": "checkpoint",
+          "label": "A checkpoint named after the input",
+          "type": "switch",
+          "default": true
+        },
+        {
+          "id": "processors",
+          "label": "Processors (0 leaves it to Orbitron)",
+          "type": "number",
+          "default": 0,
+          "min": 0,
+          "step": 1
+        },
+        {
+          "id": "memory",
+          "label": "Memory (as 4GB; empty leaves it to Orbitron)",
+          "type": "text",
+          "default": ""
+        }
+      ]
+    }
+  ],
+  "installed": [
+    {
+      "name": "orb26",
+      "label": "Orbitron 26",
+      "files": {
+        "macos": "orb26",
+        "linux": "orb26",
+        "windows": "orb26.exe"
+      }
+    }
+  ],
+  "steps": [
+    {
+      "kinds": [
+        "optimise",
+        "energy",
+        "frequencies"
+      ],
+      "programs": [
+        "orb26"
+      ],
+      "options": [
+        {
+          "id": "method",
+          "label": "Method",
+          "type": "text",
+          "default": "M2"
+        },
+        {
+          "id": "basis",
+          "label": "Basis set",
+          "type": "text",
+          "default": "B-mid"
+        },
+        {
+          "id": "dispersion",
+          "label": "Dispersion",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "none",
+              "label": "None"
+            },
+            {
+              "value": "DSP2",
+              "label": "DSP2"
+            }
+          ],
+          "default": "DSP2"
+        },
+        {
+          "id": "solvation",
+          "label": "Solvation",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "none",
+              "label": "None"
+            },
+            {
+              "value": "CONT",
+              "label": "Continuum"
+            }
+          ],
+          "default": "none"
+        },
+        {
+          "id": "solvent",
+          "label": "Solvent",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "water",
+              "label": "Water"
+            },
+            {
+              "value": "methanol",
+              "label": "Methanol"
+            },
+            {
+              "value": "toluene",
+              "label": "Toluene"
+            },
+            {
+              "value": "thf",
+              "label": "THF"
+            }
+          ],
+          "default": "water",
+          "when": {
+            "id": "solvation",
+            "in": [
+              "CONT"
+            ]
+          }
+        },
+        {
+          "id": "keywords",
+          "label": "More keywords",
+          "type": "text",
+          "default": ""
+        },
+        {
+          "id": "memory",
+          "label": "Memory (as 4GB; empty leaves it to Orbitron)",
+          "type": "text",
+          "default": ""
+        },
+        {
+          "id": "wavefunction",
+          "label": "Keep the wavefunction",
+          "type": "switch",
+          "default": false
+        }
+      ]
+    }
+  ]
+}

@@ -923,7 +923,7 @@ Step 5 comes in parts: the trial of typing alone, shown first; the column's text
   - A *value*, as a grammar's tones say, Meno colours as a number where it is one (a sign, a point, an exponent, a Fortran D's) and leaves as it is where it is not: 6-31G, def2-SVP.
   - Which grammar: a kind a plugin brings is told by what the text holds, as a file is (lib/io/kinds); a kind it writes, or knows besides, by the text's name and, where it says, what one of its first lines begins with (an ORCA input's `!`, `%` or `*`). Of two plugins that bring a kind, the first's grammar. A plugin not added colours nothing.
 - **What does not read as its grammar says is marked**: underlined in Meno's attention colour (#cd4560, `COLORS.attention`) - a part read wrongly, or where something is missing, a letter's width. Not on the line the caret is on while the text is typed in, until it is left. An output's grammar takes any text, so nothing in an output is marked.
-- **The grammars the plugins Meno carries bring**, each from the program's own words - its manual, or what it printed in runs made with Meno:
+- **The grammars the plugins Meno knows of bring**, each from the program's own words - its manual, or what it printed in runs made with Meno:
   - **ORCA's input** (the ORCA interface, `.inp`): simple keyword lines, blocks with their options and values and sub-blocks with their own `end`, `%maxcore` with its one value, the geometry and its atoms, a geometry read from a file, comments (ORCA's manual, *General Structure of the Input File* and *Input of Coordinates*). Marked: a block left open - at the next block or geometry - and a geometry with no closing `*`.
   - **Gaussian's input** (the Gaussian interface, `.gjf`, `.com`): Link 0 commands, the route section and its lines on, the title, the charge and multiplicity, the atoms (Cartesian or a Z-matrix), further sections, `--Link1--`, comments (Gaussian's *Input* page). Marked: no route section, and a molecule with no charge and multiplicity line.
   - **Gaussian's output** (the Gaussian interface): *SCF Done:*, the energies with thermal corrections, *Optimization completed.*, *Converged?* as what a reader looks for; *Stationary point found.*, *Normal termination of Gaussian* and a criterion's *YES* as a run gone well; a line from *Warning* on as a warning - as Gaussian 16 printed them.
@@ -1670,7 +1670,12 @@ mention a number, and the card.
   (`pdfPageLabels`), never holding up what is shown; a page that could not
   be read is gone through again the next time. It starts the first time
   the pointer moves over the PDF's words, in the column or on the page
-  (`utils/compoundLens` `indexOnce`).
+  (`utils/compoundLens` `indexOnce`). Once the pointer rests on a number
+  the index has not placed yet, it is hurried (`hurryIndex`): someone is
+  waiting, so it no longer waits for idle moments - on Windows, whose
+  webview is seldom idle while the pointer moves, a page could wait half a
+  second - but still reads one page at a time, the window's next turn
+  between them, so a long PDF never holds the pointer up.
 - **A number mentioned** (`utils/compoundMentions`): the word under the
   pointer, of a compound number's shape, set as a compound's number is -
   bold, as most journals set one in their text, or after a word that names
@@ -1685,7 +1690,11 @@ mention a number, and the card.
   only where there is no room above - holds Meno's own drawing of the structure, its number, its page,
   and the pages it is drawn on again ("12  p. 1 · also on p. 4"). It fades
   in and out (`DURATION.base`), lingering a moment so the pointer can come
-  onto it. Its drawing dragged onto the canvas puts the structure there as
+  onto it. While the PDF is still being gone through for numbers, or the
+  number's figure is still being read, it says so ("12  Reading this PDF's
+  figures…") and grows into the drawing once it comes, its size and place
+  eased, never a jump (`cardHolds`); gone through whole and the number
+  drawn nowhere, no card. Its drawing dragged onto the canvas puts the structure there as
   one dragged out of its figure is (*Structures picked from a PDF*: the same
   reading, its note and unsure marks). Its page clicked shows the figure in
   the column, the structure marked a moment. A number no structure is set

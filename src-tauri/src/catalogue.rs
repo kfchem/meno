@@ -15,7 +15,7 @@
 //! `current` is taken away at launch, where no job of it waits or runs - never
 //! here.
 
-use crate::{net, tools};
+use crate::{installed, net, tools};
 use minisign_verify::{PublicKey, Signature};
 use serde::Serialize;
 use serde_json::Value;
@@ -50,10 +50,9 @@ const FILES_MOST: usize = 10_000;
 /// The form of catalogue this Meno reads.
 const SCHEMA: u64 = 1;
 
-/// The plugins' folder.
+/// The plugins' folder (installed.rs), where core reads the plugins in use from.
 fn root(app: &AppHandle) -> Result<PathBuf, String> {
-    // (until core reads the plugins in use from it, its own copy of where it is: the same folder)
-    app.path().app_local_data_dir().map(|d| d.join("plugins")).map_err(|e| format!("local app data dir: {e}"))
+    app.path().app_local_data_dir().map(|d| installed::root(&d)).map_err(|e| format!("local app data dir: {e}"))
 }
 
 /// A version as the catalogue gives one: three whole numbers.
@@ -394,11 +393,11 @@ fn stage_from(archive: &[u8], source: &Source, root: &Path) -> Result<Staged, St
     }
     tools::check(archive, &source.sha256).map_err(|_| "its files are not the ones the list gave the fingerprint of".to_string())?;
     let stage = uuid::Uuid::new_v4().simple().to_string();
-    let dir = root.join(".staging").join(&stage);
+    let dir = root.join(installed::STAGING).join(&stage);
     // (the entry it is staged for, beside it before anything of it is unpacked - so that a stage being made
     //  is never taken for one left by a Meno stopped mid-way - and what its manifest must say when it is
     //  taken into use)
-    std::fs::create_dir_all(root.join(".staging")).map_err(|e| format!("making the stage: {e}"))?;
+    std::fs::create_dir_all(root.join(installed::STAGING)).map_err(|e| format!("making the stage: {e}"))?;
     put(&for_of(&dir), format!("{}\n{}", source.id, source.version).as_bytes())?;
     if let Err(e) = unpack_into(archive, &dir) {
         throw_away(&dir);
@@ -433,7 +432,7 @@ const STAGE_STALE: std::time::Duration = std::time::Duration::from_secs(24 * 360
 /// Stages left by a Meno stopped mid-way - no plugin, never read as one - taken away as a plugin is next
 /// got: each whose entry beside it was written a day or more before `now`, or that has none.
 fn clear_stale(root: &Path, now: std::time::SystemTime) {
-    let Ok(stages) = std::fs::read_dir(root.join(".staging")) else { return };
+    let Ok(stages) = std::fs::read_dir(root.join(installed::STAGING)) else { return };
     for stage in stages.flatten() {
         let path = stage.path();
         if path.extension().is_some_and(|e| e == "for") || stage_dir(root, &stage.file_name().to_string_lossy()).is_err() {
@@ -494,13 +493,12 @@ fn stage_dir(root: &Path, stage: &str) -> Result<PathBuf, String> {
     if stage.len() != 32 || !stage.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
         return Err("not a stage".to_string());
     }
-    Ok(root.join(".staging").join(stage))
+    Ok(root.join(installed::STAGING).join(stage))
 }
 
-/// Puts `<id>/current` in place: the version in use, written whole.
+/// Puts `<id>/current` in place: the version in use, written whole, as core reads it (installed.rs).
 fn set_current(root: &Path, id: &str, version: &str) -> Result<(), String> {
-    // (until core reads the plugins in use, its own copy of the rule it reads them by)
-    put(&root.join(id).join("current"), version.as_bytes())
+    installed::put_in_use(root, id, version).map_err(|e| format!("putting {id} {version} in use: {e}"))
 }
 
 /// A stage taken into use: its folder made `<id>/<version>` - by its manifest's id and version, which must
@@ -545,14 +543,17 @@ pub fn plugin_discard(app: AppHandle, stage: String) -> Result<(), String> {
 
 /// A plugin's files taken away: `current` first - so that a folder left half taken is no plugin in use - then
 /// its folder (`remove_dir`). Asked only once its jobs are stopped: the page asks the person first, as it
-/// does before a plugin is removed (lib/calc/workers `removePlugin`). While Meno still carries plugins, one
-/// it carries is put back as it next starts.
-fn remove_files(root: &Path, id: &str, remove_dir: impl Fn(&Path) -> std::io::Result<()>) -> Result<(), String> {
+/// does before a plugin is removed (lib/calc/workers `removePlugin`).
+fn remove_files(root: &Path, id: &str, running: &dyn Fn(&str) -> bool, remove_dir: impl Fn(&Path) -> std::io::Result<()>) -> Result<(), String> {
     if !crate::plugin_id_ok(id) {
         return Err("not a plugin's id".to_string());
     }
+    // (refused of itself, whatever the page knows, while a job of it waits or runs)
+    if running(id) {
+        return Err(format!("a job of {id} waits or runs"));
+    }
     let dir = root.join(id);
-    let current = dir.join("current");
+    let current = dir.join(installed::CURRENT);
     if current.exists() {
         std::fs::remove_file(&current).map_err(|e| format!("taking {id} out of use: {e}"))?;
     }
@@ -564,7 +565,8 @@ fn remove_files(root: &Path, id: &str, remove_dir: impl Fn(&Path) -> std::io::Re
 
 #[tauri::command]
 pub fn plugin_files_remove(app: AppHandle, id: String) -> Result<(), String> {
-    remove_files(&root(&app)?, &id, |d| std::fs::remove_dir_all(d))
+    let data = app.path().app_local_data_dir().map_err(|e| format!("local app data dir: {e}"))?;
+    remove_files(&installed::root(&data), &id, &|p| crate::jobs::plugin_running(&data, p), |d| std::fs::remove_dir_all(d))
 }
 
 #[cfg(test)]
@@ -715,20 +717,27 @@ mod tests {
         let a = archive(&[("manifest.json", MANIFEST), ("./worker.py", b"print()"), ("data/x.txt", b"x")], None);
         let staged = stage_from(&a, &source(&a), &root).unwrap();
         assert_eq!(staged.manifest.as_bytes(), MANIFEST);
-        let dir = root.join(".staging").join(&staged.stage);
+        let dir = root.join(installed::STAGING).join(&staged.stage);
         assert_eq!(std::fs::read(dir.join("data/x.txt")).unwrap(), b"x");
         commit_stage(&root, &staged.stage).unwrap();
         assert_eq!(std::fs::read_to_string(root.join("sketch/current")).unwrap(), "0.3.0");
         assert_eq!(std::fs::read(root.join("sketch/0.3.0/worker.py")).unwrap(), b"print()");
         assert!(!dir.exists());
+        // (in place as core reads the plugins in place: installed.rs)
+        assert_eq!(installed::current(&root, "sketch").as_deref(), Some("0.3.0"));
+        assert_eq!(installed::dir(&root, "sketch").unwrap(), root.join("sketch/0.3.0"));
+        assert_eq!(installed::list(&root).iter().map(|p| p.id.as_str()).collect::<Vec<_>>(), ["sketch"]);
         // (the same version again: the one in place kept as it is, the stage thrown away)
         let again = stage_from(&a, &source(&a), &root).unwrap();
         commit_stage(&root, &again.stage).unwrap();
-        assert!(!root.join(".staging").join(&again.stage).exists());
+        assert!(!root.join(installed::STAGING).join(&again.stage).exists());
         // (taken away: current first, then its folder)
-        remove_files(&root, "sketch", |d| std::fs::remove_dir_all(d)).unwrap();
+        // (refused, nothing taken away, while a job of it waits or runs)
+        assert_eq!(remove_files(&root, "sketch", &|id| id == "sketch", |d| std::fs::remove_dir_all(d)).unwrap_err(), "a job of sketch waits or runs");
+        assert!(root.join("sketch/current").exists() && root.join("sketch/0.3.0").exists());
+        remove_files(&root, "sketch", &|_| false, |d| std::fs::remove_dir_all(d)).unwrap();
         assert!(!root.join("sketch").exists());
-        assert!(remove_files(&root, "../up", |d| std::fs::remove_dir_all(d)).is_err());
+        assert!(remove_files(&root, "../up", &|_| false, |d| std::fs::remove_dir_all(d)).is_err());
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -748,7 +757,7 @@ mod tests {
         assert!(stage_from(&a, &manifest, &root).unwrap_err().contains("manifest"));
         let none = archive(&[("worker.py", b"print()")], None);
         assert!(stage_from(&none, &source(&none), &root).unwrap_err().contains("manifest"));
-        assert_eq!(std::fs::read_dir(root.join(".staging")).map(|d| d.count()).unwrap_or(0), 0);
+        assert_eq!(std::fs::read_dir(root.join(installed::STAGING)).map(|d| d.count()).unwrap_or(0), 0);
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -787,18 +796,18 @@ mod tests {
         let now = std::time::SystemTime::now();
         let fresh = staged(&root, "{}", "sketch\n0.3.0");
         let old = staged(&root, "{}", "sketch\n0.3.0");
-        let old_dir = root.join(".staging").join(&old);
+        let old_dir = root.join(installed::STAGING).join(&old);
         std::fs::OpenOptions::new().write(true).open(for_of(&old_dir)).unwrap().set_modified(now - STAGE_STALE).unwrap();
         let bare = staged(&root, "{}", "");
-        std::fs::remove_file(for_of(&root.join(".staging").join(&bare))).unwrap();
+        std::fs::remove_file(for_of(&root.join(installed::STAGING).join(&bare))).unwrap();
         // (one being made: its entry written, nothing of it unpacked yet - kept)
         let making = staged(&root, "{}", "sketch\n0.3.0");
-        std::fs::remove_file(root.join(".staging").join(&making).join("manifest.json")).unwrap();
+        std::fs::remove_file(root.join(installed::STAGING).join(&making).join("manifest.json")).unwrap();
         clear_stale(&root, now);
-        assert!(root.join(".staging").join(&fresh).exists());
-        assert!(root.join(".staging").join(&making).exists() && for_of(&root.join(".staging").join(&making)).exists());
+        assert!(root.join(installed::STAGING).join(&fresh).exists());
+        assert!(root.join(installed::STAGING).join(&making).exists() && for_of(&root.join(installed::STAGING).join(&making)).exists());
         assert!(!old_dir.exists() && !for_of(&old_dir).exists());
-        assert!(!root.join(".staging").join(&bare).exists());
+        assert!(!root.join(installed::STAGING).join(&bare).exists());
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -976,7 +985,7 @@ mod tests {
     /// A stage as `plugin_stage` leaves one: its folder with `manifest`, and the entry it was staged for.
     fn staged(root: &Path, manifest: &str, staged_for: &str) -> String {
         let stage = uuid::Uuid::new_v4().simple().to_string();
-        let dir = root.join(".staging").join(&stage);
+        let dir = root.join(installed::STAGING).join(&stage);
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("manifest.json"), manifest).unwrap();
         std::fs::write(for_of(&dir), staged_for).unwrap();
@@ -994,18 +1003,18 @@ mod tests {
         // (its manifest another plugin than the entry it was got for - one in use, say: thrown away, nothing of it used)
         let stage = staged(&root, r#"{"id":"other","version":"0.3.0"}"#, "sketch\n0.3.0");
         assert_eq!(commit_stage(&root, &stage).unwrap_err(), "its manifest is not the plugin it was got as");
-        assert!(!root.join(".staging").join(&stage).exists() && !root.join("other").exists());
+        assert!(!root.join(installed::STAGING).join(&stage).exists() && !root.join("other").exists());
         // (not put in place - where its folder should go, a file: the stage thrown away whole, and said why)
         std::fs::write(root.join("blocked"), b"a file").unwrap();
         let stage = staged(&root, r#"{"id":"blocked","version":"0.3.0"}"#, "blocked\n0.3.0");
-        let dir = root.join(".staging").join(&stage);
+        let dir = root.join(installed::STAGING).join(&stage);
         assert!(commit_stage(&root, &stage).unwrap_err().starts_with("putting blocked 0.3.0 in place"));
         assert!(!dir.exists() && !for_of(&dir).exists());
         // (as it was got: taken in, and its entry beside it gone)
         let stage = staged(&root, r#"{"id":"sketch","version":"0.3.0"}"#, "sketch\n0.3.0");
         commit_stage(&root, &stage).unwrap();
         assert!(root.join("sketch/0.3.0/manifest.json").exists());
-        assert!(!for_of(&root.join(".staging").join(&stage)).exists());
+        assert!(!for_of(&root.join(installed::STAGING).join(&stage)).exists());
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -1015,7 +1024,7 @@ mod tests {
         std::fs::create_dir_all(root.join("sketch/0.3.0")).unwrap();
         set_current(&root, "sketch", "0.3.0").unwrap();
         // (its folder not taken away - say, a file in it held: `current` gone already, so it is no plugin in use)
-        let refused = remove_files(&root, "sketch", |d| {
+        let refused = remove_files(&root, "sketch", &|_| false, |d| {
             assert!(!d.join("current").exists(), "current taken away first");
             Err(std::io::Error::other("held"))
         });

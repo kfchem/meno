@@ -58,7 +58,8 @@ import {
   startNetwork,
   useNetwork,
 } from "./lib/net/network";
-import { sayFailedSetUps } from "./ui/setUpSaid";
+import { sayFailedSetUps, sayUsedBefore } from "./ui/setUpSaid";
+import { getUsedBefore } from "./lib/plugins/usedBefore";
 import ConsentDialog from "./ui/network/ConsentDialog";
 import NetworkToasts from "./ui/network/NetworkToasts";
 import UpdateNotice from "./ui/network/UpdateNotice";
@@ -132,12 +133,14 @@ export default function App() {
 
   // What this computer's jobs may use, as Settings says, told to its runner
   // as Meno starts and whenever Settings changes it: those waiting take it
-  // up at once (lib/jobs `limitsOf`).
+  // up at once (lib/jobs `limitsOf`) - and whether it keeps the computer
+  // awake while their programs run (src-tauri/src/awake.rs).
   useEffect(() => {
     if (!isTauri()) return;
     let computer: { cores: number; memory: number } | null = null;
     const tell = () => {
-      if (computer) void writeJobLimits(limitsOf(useAppSettings.getState().calculations, computer)).catch(() => {});
+      const calculations = useAppSettings.getState().calculations;
+      if (computer) void writeJobLimits({ ...limitsOf(calculations, computer), awake: !calculations.sleepWhileJobsRun }).catch(() => {});
     };
     computerResources().then((c) => {
       computer = c;
@@ -160,6 +163,8 @@ export default function App() {
       await applyNetworkSettings(useAppSettings.getState().network);
       // keeping Meno up to date, as the network now allows (lib/update)
       if (!gone) stopUpdates = startUpdates();
+      // the plugins set up here before they came online, asked about once (lib/plugins/usedBefore)
+      if (!gone && isTauri()) void getUsedBefore(sayUsedBefore);
     })();
     const unwatch = useNetwork.subscribe((s, prev) => {
       if (!useAppSettings.getState().loaded) return;
