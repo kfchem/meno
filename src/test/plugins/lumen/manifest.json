@@ -76,7 +76,7 @@
       "options": [
         {
           "id": "engine",
-          "label": "Renderer",
+          "label": "Way of lighting",
           "type": "choice",
           "choices": [
             {
@@ -99,7 +99,7 @@
         },
         {
           "id": "samples",
-          "label": "Samples for each pixel",
+          "label": "Rays for each dot",
           "type": "number",
           "default": 128,
           "min": 1,
@@ -109,7 +109,7 @@
         },
         {
           "id": "denoise",
-          "label": "Remove noise",
+          "label": "Smooth the grain",
           "type": "switch",
           "default": true,
           "section": "render",
@@ -122,7 +122,7 @@
         },
         {
           "id": "device",
-          "label": "Render on",
+          "label": "Run on",
           "type": "choice",
           "choices": [
             {
@@ -131,11 +131,11 @@
             },
             {
               "value": "gpu",
-              "label": "Graphics processor"
+              "label": "Graphics card"
             },
             {
               "value": "cpu",
-              "label": "Processor"
+              "label": "Main chip"
             }
           ],
           "default": "auto",
@@ -143,24 +143,24 @@
         },
         {
           "id": "background",
-          "label": "Background",
+          "label": "Backdrop",
           "type": "choice",
           "choices": [
             {
               "value": "transparent",
-              "label": "Transparent"
+              "label": "Clear"
             },
             {
               "value": "white",
-              "label": "White"
+              "label": "Snow"
             },
             {
               "value": "black",
-              "label": "Black"
+              "label": "Ink"
             },
             {
               "value": "grey",
-              "label": "Grey"
+              "label": "Slate"
             }
           ],
           "default": "transparent",
@@ -168,7 +168,7 @@
         },
         {
           "id": "colours",
-          "label": "Colours",
+          "label": "Tones",
           "type": "choice",
           "choices": [
             {
@@ -185,7 +185,7 @@
         },
         {
           "id": "key",
-          "label": "Key light, against the canvas's",
+          "label": "Main lamp, times the page's",
           "type": "number",
           "default": 1,
           "min": 0,
@@ -196,7 +196,7 @@
         },
         {
           "id": "ambient",
-          "label": "Light all round, against the canvas's",
+          "label": "Fill lamp, times the page's",
           "type": "number",
           "default": 1,
           "min": 0,
@@ -207,7 +207,7 @@
         },
         {
           "id": "softness",
-          "label": "Shadows' softness",
+          "label": "Shadow blur",
           "type": "number",
           "default": 10,
           "min": 0,
@@ -223,11 +223,11 @@
           "choices": [
             {
               "value": "high",
-              "label": "High"
+              "label": "Full"
             },
             {
               "value": "medium",
-              "label": "Medium: smaller"
+              "label": "Reduced: a lighter file"
             }
           ],
           "default": "high",

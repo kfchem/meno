@@ -87,6 +87,9 @@ describe("the settings file", () => {
     expect(acceptAppSettings({ calculations: { largeWorkspaceMB: 1024 } }).calculations).toEqual({ largeWorkspaceMB: 1024 });
     // (past the most a workspace's file may come to at all: not taken)
     expect(acceptAppSettings({ calculations: { largeWorkspaceMB: 2048 } }).calculations).toEqual({});
+    // (the computer kept awake while jobs run unless turned off: only the off kept)
+    expect(acceptAppSettings({ calculations: { sleepWhileJobsRun: true } }).calculations).toEqual({ sleepWhileJobsRun: true });
+    for (const v of [false, "yes", 1]) expect(acceptAppSettings({ calculations: { sleepWhileJobsRun: v } }).calculations).toEqual({});
     expect(acceptAppSettings({ calcReaders: { chosen: { orca: "cclib", gaussian: 3, "x y": "cclib" } } }).files).toEqual({ read: { orca: "cclib" }, also: {} });
     expect(
       acceptAppSettings({ calcReaders: { chosen: { orca: "cclib" } }, files: { read: { orca: "pyscf" }, also: { orca: ["cclib", "cclib", 4], xtb: [] } } }).files,
