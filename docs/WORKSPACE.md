@@ -609,7 +609,11 @@ Taken on 2026-10-13:
   first, the same way, and the card then shrinks back. It widens both
   ways about its middle as *How it was made* opens, and back, as it does
   opening at all (the maintainer, 2026-11-06; until then it widened to the
-  right only, the toggle at its left kept under the pointer).
+  right only, the toggle at its left kept under the pointer). Its toggle
+  is a chevron alone, in the middle (the maintainer, 2026-11-06): pointing
+  down, turned up as it opens, it stays under the pointer as the card
+  widens about it; its name, *How it was made*, is said in the page's tip
+  as it is pointed at, shut.
   A frames chip opens to its details the same way. Opened or shut again
   part way, it goes back from where it is (the maintainer, 2026-10-29;
   `theme/opening`). An eta complex's
@@ -1376,7 +1380,7 @@ it, in `features/Workspace/pageGl/`:
 - **The frames chip** (`liveChip`, components/useFramesChip): shut, pointed
   at and opened - a set's bars, on whole device pixels, or one profile
   through a long run of frames; its slider; what its calculation was and
-  found; how it was made, folded under its name - laid out as its HTML
+  found; how it was made, folded under a chevron - laid out as its HTML
   was, in page pixels, and opened the same way (theme/opening). A press on
   its bars or its slider shows the frame under it, a drag goes through
   them. Its words are copied from its menu (Copy, Copy energies), as no
