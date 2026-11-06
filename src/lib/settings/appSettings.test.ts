@@ -87,6 +87,9 @@ describe("the settings file", () => {
     expect(acceptAppSettings({ calculations: { largeWorkspaceMB: 1024 } }).calculations).toEqual({ largeWorkspaceMB: 1024 });
     // (past the most a workspace's file may come to at all: not taken)
     expect(acceptAppSettings({ calculations: { largeWorkspaceMB: 2048 } }).calculations).toEqual({});
+    // (the computer kept awake while jobs run unless turned off: only the off kept)
+    expect(acceptAppSettings({ calculations: { sleepWhileJobsRun: true } }).calculations).toEqual({ sleepWhileJobsRun: true });
+    for (const v of [false, "yes", 1]) expect(acceptAppSettings({ calculations: { sleepWhileJobsRun: v } }).calculations).toEqual({});
     expect(acceptAppSettings({ calcReaders: { chosen: { quanta: "manyread", orbitron: 3, "x y": "manyread" } } }).files).toEqual({ read: { quanta: "manyread" }, also: {} });
     expect(
       acceptAppSettings({ calcReaders: { chosen: { quanta: "manyread" } }, files: { read: { quanta: "wavecalc" }, also: { quanta: ["manyread", "manyread", 4], tightbind: [] } } }).files,
