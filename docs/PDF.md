@@ -1359,7 +1359,8 @@ it where it lies out of view.
       bracket with no partner, a bracket across more than one bond or
       across a line that is no bond, both across one bond, the two bonds
       of two orders (or a ring's drawn with its circle), what lies between
-      not cut off by them, a count of 0 - each saying which ("A repeat
+      not cut off by them, a count of 0, a unit within another or holding
+      one, two units whose brackets cross one bond - each saying which ("A repeat
       unit in brackets, counted 6, is not read: its two brackets cross the
       same bond. It is drawn here once.");
   - a label that writes more or fewer hydrogens than its atom's bonds leave

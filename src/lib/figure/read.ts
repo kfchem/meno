@@ -748,7 +748,8 @@ export function repeatBrackets(shapes: Shapes, words: readonly Word[], bond: num
  * `ReadBond.repeat`; lib/figure/structure); else the atoms of each bond a
  * bracket crosses marked, saying why it is drawn once: a letter's, a
  * polymer's n (`REPEAT_UNREAD`), or the rule its shape breaks
- * (`REPEAT_REFUSED`).
+ * (`REPEAT_REFUSED`) - among them a unit within another, or holding one,
+ * and two units whose brackets cross one bond.
  */
 export function repeatsRead(pairs: RepeatBrackets["pairs"], atoms: ReadAtom[], bonds: ReadBond[], bond: number, near: (a: ReadAtom, p: Point) => number): void {
   const atomAt = (p: Point) => {
@@ -763,6 +764,8 @@ export function repeatsRead(pairs: RepeatBrackets["pairs"], atoms: ReadAtom[], b
         if (i >= 0 && !atoms[i].unsure?.includes(said)) atoms[i] = { ...atoms[i], unsure: [...(atoms[i].unsure ?? []), said] };
       }
   };
+  // (each pair's unit, where it reads as one - marked only once none is found to hold, lie in, or share a crossed bond with another)
+  const found: { group: number; n: number; count: string; lines: Stroke[]; unit: number[]; cross: [number, number] }[] = [];
   pairs.forEach(({ count, brackets }, group) => {
     const lines = brackets.flatMap((b) => b.crosses);
     if (!/^\d+$/.test(count)) return say(lines, REPEAT_UNREAD(count));
@@ -805,9 +808,23 @@ export function repeatsRead(pairs: RepeatBrackets["pairs"], atoms: ReadAtom[], b
     );
     if (units.length !== 1) return refuse("what lies between its brackets is not cut off from the rest by the two bonds they cross");
     if (n === 1) return;
-    for (const i of units[0]) atoms[i] = { ...atoms[i], repeat: { group, n } };
-    for (const k of [k1, k2]) bonds[k] = { ...bonds[k], repeat: { group } };
+    found.push({ group, n, count, lines, unit: units[0], cross: [k1, k2] });
   });
+  // (brackets within brackets, or two units side by side across one bond: neither read - a copy of the one would not carry the
+  //  other's marks, and one bond cannot join two runs of copies)
+  for (const f of found) {
+    const others = found.filter((o) => o !== f);
+    if (others.some((o) => o.unit.some((i) => f.unit.includes(i)))) {
+      say(f.lines, REPEAT_REFUSED(f.count, "it lies within another repeat unit in brackets, or holds one"));
+      continue;
+    }
+    if (others.some((o) => o.cross.some((k) => f.cross.includes(k)))) {
+      say(f.lines, REPEAT_REFUSED(f.count, "a bond its brackets cross is crossed by another repeat unit's brackets too"));
+      continue;
+    }
+    for (const i of f.unit) atoms[i] = { ...atoms[i], repeat: { group: f.group, n: f.n } };
+    for (const k of f.cross) bonds[k] = { ...bonds[k], repeat: { group: f.group } };
+  }
 }
 
 /**
