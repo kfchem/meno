@@ -2,19 +2,15 @@ import { describe, expect, it } from "vitest";
 import type { ConsentRequest } from "./network";
 import { CCD_CONSENT } from "./components";
 import { UPDATE_CONSENT } from "../update";
-import { filesSetUp, pixiSetUp, uvSetUp, type SetUpFile } from "../plugins/setUpSources";
+import { filesSetUp, pixiSetUp, uvSetUp } from "../plugins/setUpSources";
 import { CATALOGUE_REQUEST } from "../plugins/online";
+import { SET_UPS } from "../../test/setUps";
 
 // What every consent says, against the hosts its task is kept to
 // (src-tauri/src/net.rs): every plugin's set-up and files, keeping Meno up
 // to date, the wwPDB's dictionary, and the plugins online. (Meno has no environment of its own
-// to set up: the console's and the workflows' went, 2026-10-13.)
-const manifests = import.meta.glob<{ id: string; environment?: string; downloads?: SetUpFile[] }>("/src-tauri/resources/plugins/*/manifest.json", { eager: true, import: "default" });
-const uvLocks = import.meta.glob<string>("/src-tauri/resources/plugins/*/requirements.lock", { eager: true, query: "?raw", import: "default" });
-const pixiLocks = import.meta.glob<string>("/src-tauri/resources/plugins/*/pixi.lock", { eager: true, query: "?raw", import: "default" });
-
-const folder = (path: string) => path.split("/").slice(-2, -1)[0];
-const lockOf = (locks: Record<string, string>, id: string) => Object.entries(locks).find(([p]) => folder(p) === id)?.[1];
+// to set up: the console's and the workflows' went, 2026-10-13.) The plugins'
+// set-ups are hand-written, each kind and each way one fetches: Meno carries none.
 
 /** Whether a host is one of those a task may reach, as Meno's network takes them (net.rs `host_named`). */
 const reaches = (hosts: readonly string[], host: string) => hosts.some((p) => (p.startsWith(".") ? host.endsWith(p) && host.length > p.length : host === p));
@@ -42,14 +38,10 @@ function consents(): [string, Pick<ConsentRequest, "sources" | "hosts">][] {
     ["the wwPDB's dictionary", CCD_CONSENT],
     ["the plugins online", CATALOGUE_REQUEST],
   ];
-  for (const m of Object.values(manifests)) {
-    const downloads = m.downloads ?? [];
-    if (m.environment === "uv") all.push([`setting ${m.id} up`, uvSetUp(lockOf(uvLocks, m.id)!, downloads)]);
-    if (m.environment === "pixi") {
-      const lock = lockOf(pixiLocks, m.id)!;
-      all.push([`setting ${m.id} up`, pixiSetUp(/- pypi: /.test(lock), downloads)]);
-    }
-    if (downloads.length) all.push([`${m.id}'s files`, filesSetUp(downloads)]);
+  for (const m of SET_UPS) {
+    if (m.environment === "uv") all.push([`setting ${m.id} up`, uvSetUp(m.lock, m.downloads)]);
+    if (m.environment === "pixi") all.push([`setting ${m.id} up`, pixiSetUp(/- pypi: /.test(m.lock), m.downloads)]);
+    if (m.downloads.length) all.push([`${m.id}'s files`, filesSetUp(m.downloads)]);
   }
   return all;
 }
@@ -57,7 +49,7 @@ function consents(): [string, Pick<ConsentRequest, "sources" | "hosts">][] {
 describe("the hosts a consent names, and those its task may reach", () => {
   it("are found for every plugin's set-up, and each of Meno's other uses of the network", () => {
     const all = consents();
-    expect(all.length).toBeGreaterThan(14);
+    expect(all.length).toBe(3 + SET_UPS.length + SET_UPS.filter((m) => m.downloads.length).length);
     for (const [what, c] of all) {
       expect(c.sources.length, what).toBeGreaterThan(0);
       expect(c.hosts.length, what).toBeGreaterThan(0);

@@ -816,8 +816,15 @@ export type WorkflowSet = {
  * of how it is drawn (workflow/entries `drawnHash`): edited since, the
  * structure is another, and its properties and status are taken away,
  * `stale` saying why.
+ *
+ * `id` is the structure's lasting id, which what is made of it names it by
+ * (its conformers in 3D: workflow/entries `SetEntry.madeOf`): given as it
+ * is first put in a set - a structure the chemist drew as much as one a step
+ * gave - and kept however it moves, is saved and opened; edited into
+ * another structure, it is another's (workflow/entries `memberRecord`,
+ * `placedRecord`).
  */
-export type DrawnRecord = { from?: string[]; properties?: Record<string, Property>; status?: EntryStatus; of?: string; stale?: string };
+export type DrawnRecord = { id?: string; from?: string[]; properties?: Record<string, Property>; status?: EntryStatus; of?: string; stale?: string };
 /** A structure drawn as a step gave it: the drawing, and its record where it has one. */
 export type DrawnModel = Model & { record?: DrawnRecord };
 /** One of a set's members: a structure drawn, by its atoms' ids, with its record, where a step gave it one; a molecule in 3D, or a picture, by id. */
@@ -963,7 +970,7 @@ export type WorkflowStep = {
   /** *Don't keep raw outputs*: its jobs' files kept in the workspace's file are only what they were given, what was read back of them, and their logs. */
   keepRaw?: false;
 };
-/** Where a wire starts: a set - a step's exits are sets of their own, so a step has no give port of its own. */
+/** Where a wire starts: a set - a step's exits are sets of their own, and each exit's port on its card is its set's (look `stepGives`). */
 export type WireEnd = { set: number };
 /** Where a wire ends: a step, and which of its inputs. */
 export type WireTo = { step: number; port: string };
@@ -1670,11 +1677,12 @@ export type EditorState = {
   /** A set's tab or a step's card right-clicked: its menu asked for, there (Workspace opens it). */
   workflowMenu: { kind: "set" | "step"; id: number; clientX: number; clientY: number } | null;
   /**
-   * A wire being drawn, to where the pointer is: from what gives, or back
-   * from a step that takes (`to`); picked up off the step it went into,
-   * the wire it was (`was`).
+   * A wire being drawn, to where the pointer is: from what gives - drawn
+   * out of its step's port for that exit, where it was pressed there
+   * (`card`) - or back from a step that takes (`to`); picked up off the
+   * step it went into, the wire it was (`was`).
    */
-  wireDrag: { from?: WireEnd; to?: WireTo; at: { x: number; y: number }; was?: number } | null;
+  wireDrag: { from?: WireEnd; to?: WireTo; at: { x: number; y: number }; was?: number; card?: true } | null;
   /** A wire let go on a step's input that does not take it: the step, and why (flow `wireRefusal`) - said on its card until a wire is drawn again. */
   wireRefused: { step: number; said: string } | null;
   setWorkflowView: (patch: Partial<Pick<EditorState, WorkflowView>>) => void;

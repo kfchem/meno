@@ -12,7 +12,7 @@ import Fills2D from "./Fills2D";
 import { Texts2D } from "./Labels2D";
 import { recordsOf, shownRecord, STACK_SWAP_MS } from "../utils/stacks";
 import { layoutByStructure, structureLayouts } from "../../../../lib/chem/layoutStructures";
-import { fitOnto, morphAt, sameAtoms, type Fit, type MatchDrawing } from "../../../../lib/layout/morph";
+import { fitOnto, fitted, matchedAtoms, morphAt, unfitted, type Fit, type MatchDrawing } from "../../../../lib/layout/morph";
 
 /** Steps through a stack come closer together than this, and a record goes over by fading alone: none moves while the next is already asked for. */
 const HELD_MS = 120;
@@ -32,12 +32,14 @@ type Going = { stack: number; record: number; atoms: number[]; mode: "rest" | "i
 
 /**
  * A record becoming the next, atom for atom (lib/layout/morph): when it began; the fit of the next's atoms onto where the
- * one let go of stood; and for each atom of the next, by id, where it stood as its match in the one let go of, and that
- * atom's id. Both records are drawn on these places as they go, the one let go of fading and the next coming.
+ * one let go of stood, by what the two share; for each atom of the next, by id, where it begins - where its match in the
+ * one let go of stood, or, outside what they share, where the fit puts it - and its match's id; and each atom of the one
+ * let go of outside what they share, by id, where it stood. Both records are drawn on these places as they go, the one let
+ * go of fading and the next coming - what they do not share riding with what they do, turned as one with it.
  */
-type Morph = { start: number; fit: Fit; was: Map<number, { x: number; y: number }>; from: Map<number, number> };
+type Morph = { start: number; fit: Fit; was: Map<number, { x: number; y: number }>; from: Map<number, number>; gone: Map<number, { x: number; y: number }> };
 
-/** Where each atom of a record going over stands at `now`: by id - the next's atoms on their ways, and the one let go of on its matches' ways. */
+/** Where each atom of a record going over stands at `now`: by id - the next's atoms on their ways, and the one let go of on its matches' ways, or on its own. */
 function morphPlaces(m: Morph, model: Model, role: "in" | "out", now: number): Map<number, { x: number; y: number }> {
   const u = easeInOutCubic((now - m.start) / STACK_SWAP_MS);
   const at = new Map(model.atoms.map((a) => [a.id, a]));
@@ -45,16 +47,18 @@ function morphPlaces(m: Morph, model: Model, role: "in" | "out", now: number): M
   for (const [id, was] of m.was) {
     const a = at.get(id);
     if (!a) continue;
-    const p = morphAt(m.fit, was, a, u);
-    out.set(role === "in" ? id : m.from.get(id)!, p);
+    if (role === "in") out.set(id, morphAt(m.fit, was, a, u));
+    else if (m.from.has(id)) out.set(m.from.get(id)!, morphAt(m.fit, was, a, u));
   }
+  // (of the one let go of, what the next does not share: turned with what it does, from where it stood)
+  if (role === "out") for (const [id, was] of m.gone) out.set(id, morphAt(m.fit, was, unfitted(m.fit, was), u));
   return out;
 }
 
 /**
- * How the record let go of becomes the next (`to`, its atoms by id), where they are one structure atom for atom: from
- * where the one let go of stands now (`from`, its atoms' places by id - on their way still, where it was coming), each
- * atom of the next matched to the one it is. None where they are not.
+ * How the record let go of becomes the next (`to`, its atoms by id), where they share a core - the same structure atom for
+ * atom, or analogues: from where the one let go of stands now (`from`, its atoms' places by id - on their way still, where
+ * it was coming), each atom of the next matched to the one it is, where it has one. None where they share too little.
  */
 function morphOf(model: Model, from: Map<number, { x: number; y: number }>, to: readonly number[], start: number): Morph | undefined {
   const at = new Map(model.atoms.map((a) => [a.id, a]));
@@ -67,19 +71,27 @@ function morphOf(model: Model, from: Map<number, { x: number; y: number }>, to: 
   };
   const was = [...from.keys()].filter((id) => at.has(id));
   const now = to.filter((id) => at.has(id));
-  const match = sameAtoms(drawing(was, (id) => from.get(id)!), drawing(now, (id) => at.get(id)!));
+  const match = matchedAtoms(drawing(was, (id) => from.get(id)!), drawing(now, (id) => at.get(id)!));
   if (!match) return undefined;
+  const pairs = now.flatMap((id, i) => (match[i] >= 0 ? [[id, was[match[i]]] as const] : []));
   const fit = fitOnto(
-    now.map((id) => at.get(id)!),
-    match.map((j) => from.get(was[j])!),
+    pairs.map(([id]) => at.get(id)!),
+    pairs.map(([, w]) => from.get(w)!),
   );
-  return { start, fit, was: new Map(now.map((id, i) => [id, from.get(was[match[i]])!])), from: new Map(now.map((id, i) => [id, was[match[i]]])) };
+  const shared = new Set(pairs.map(([, w]) => w));
+  return {
+    start,
+    fit,
+    was: new Map(now.map((id, i) => [id, match[i] >= 0 ? from.get(was[match[i]])! : fitted(fit, at.get(id)!)])),
+    from: new Map(pairs),
+    gone: new Map(was.filter((w) => !shared.has(w)).map((w) => [w, from.get(w)!])),
+  };
 }
 
 /**
  * Stacks of drawings going over from one record to the next (utils/stacks,
- * EditorState `recordSwaps`): atom for atom where the two are one
- * structure (`morphOf`), else the one let go of fading where it stands as
+ * EditorState `recordSwaps`): atom for atom where the two share a core
+ * (`morphOf`), else the one let go of fading where it stands as
  * the next comes in where it will stand, neither growing nor shrinking -
  * each drawn here, in the drawing's style, apart from the drawing, which
  * draws the next once it is there. Gone through quickly, a stack draws the last two it let go of
@@ -110,7 +122,7 @@ export default function StackSwap2D() {
       if (was[stack] === swap) continue;
       const before = [...list.values()].find((g) => g.stack === stack && g.mode !== "out");
       const record = full.atoms.find((a) => a.id === swap.to[0])?.stack?.record;
-      // (the one let go of becoming the next, atom for atom, where they are one structure - from where it stands now, on
+      // (the one let go of becoming the next, atom for atom, where they share a core - from where it stands now, on
       //  its way still where it was coming; not where steps come faster than one can be followed)
       const held = before?.mode === "in" && now - before.start < HELD_MS;
       const from = before && (before.morph && before.mode === "in" ? morphPlaces(before.morph, full, "in", now) : new Map(before.atoms.flatMap((id) => {

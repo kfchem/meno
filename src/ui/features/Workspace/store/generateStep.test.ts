@@ -18,13 +18,13 @@ vi.mock("../../../../lib/calc/workers", async (actual) => ({
 
 /**
  * The roles' worker: a SMILES read as its own block - a carbon, the SMILES its title (one it cannot read - "X" in it -
- * refused, saying why, as RDKit's is); and the elements a block leaves open - a centre for each "?" in the SMILES,
+ * refused, saying why, as Sketchkit's is); and the elements a block leaves open - a centre for each "?" in the SMILES,
  * here - only those, never its stereoisomers tried ("stereoisomers" is not asked); one with "!" in it cannot be asked.
  */
 const asked: { op: string; args: { smiles?: string; molblock?: string } }[] = [];
 vi.mock("../../../../lib/roles/worker", async (actual) => ({
   ...(await actual<typeof import("../../../../lib/roles/worker")>()),
-  rolePlugin: () => ({ id: "rdkit", version: "0.1.8", name: "RDKit" }),
+  rolePlugin: () => ({ id: "sketchkit", version: "0.1.8", name: "Sketchkit" }),
   chemWorker: async () => ({
     request: async (op: string, args: { smiles?: string; molblock?: string }) => {
       asked.push({ op, args });
@@ -60,15 +60,15 @@ import { inputKey, resultOf, stateOf } from "../workflow/flow";
 import { notReadSaid, readGenerated, seedsSaid, unreadWhy } from "../workflow/programs";
 import { pluginById } from "../../../../lib/calc/catalog";
 
-/** What REINVENT 4's plugin gives: three SMILES as sampled - one leaving a centre open ("?" here), one RDKit cannot read - each with its NLL and SMILES_state; and what made them. */
+/** What Molgen's plugin gives: three SMILES as sampled - one leaving a centre open ("?" here), one Sketchkit cannot read - each with its NLL and SMILES_state; and what made them. */
 const generated = {
   outputs: [
     { smiles: "CCO", properties: { nll: { value: 21.5, unit: "none" }, smiles_state: { value: 1, unit: "none" } } },
     { smiles: "CC(O)CC?", properties: { nll: { value: 30.25, unit: "none" }, smiles_state: { value: 1, unit: "none" } } },
     { smiles: "o1cXc", properties: { nll: { value: 27.4, unit: "none" }, smiles_state: { value: 0, unit: "none" } } },
   ],
-  said: "3 sampled from reinvent_pubchem.prior, seed 7, CPU",
-  by: { program: "REINVENT 4", version: "4.8.24", model: "reinvent_pubchem.prior", method: "sampled, seed 7, on the CPU" },
+  said: "3 sampled from molgen.prior, seed 7, CPU",
+  by: { program: "Molgen", version: "4.8.24", model: "molgen.prior", method: "sampled, seed 7, on the CPU" },
 };
 
 function page() {
@@ -83,14 +83,14 @@ describe("Generate: a step that takes nothing in", () => {
   beforeEach(() => {
     run.mockReset();
     asked.length = 0;
-    useReaders.setState({ state: { reinvent: "added", rdkit: "added" }, problem: {} });
+    useReaders.setState({ state: { molgen: "added", sketchkit: "added" }, problem: {} });
   });
 
   it("is ready with nothing wired in, runs on its options alone, and brings in each SMILES as a structure drawn, as given", async () => {
     const { st } = page();
-    const step = st().addStep("generate", "reinvent", 0, 0);
+    const step = st().addStep("generate", "molgen", 0, 0);
     st().updateStep(step, { options: { count: 3, seed: 7 } });
-    expect(stateOf(st(), st().steps.find((s) => s.id === step)!, "reinvent")).toBe("ready");
+    expect(stateOf(st(), st().steps.find((s) => s.id === step)!, "molgen")).toBe("ready");
     run.mockResolvedValueOnce(generated);
     await st().runStep(step);
     // (with ten minutes to take, not a request's two: a busy computer fails no sound run)
@@ -98,7 +98,7 @@ describe("Generate: a step that takes nothing in", () => {
     // (each SMILES read exactly as the model gave it)
     expect(asked.filter((a) => a.op === "from_smiles").map((a) => a.args.smiles)).toEqual(["CCO", "CC(O)CC?", "o1cXc"]);
     const ran = st().steps.find((s) => s.id === step)!.ran!;
-    expect(ran).toMatchObject({ ok: true, said: "3 sampled from reinvent_pubchem.prior, seed 7, CPU · 2 made · 1 with stereo left open · 1 not read: o1cXc (X is no element)" });
+    expect(ran).toMatchObject({ ok: true, said: "3 sampled from molgen.prior, seed 7, CPU · 2 made · 1 with stereo left open · 1 not read: o1cXc (X is no element)" });
     // (only where stereo is left open was asked, never each stereoisomer tried in 3D)
     expect(asked.some((a) => a.op === "stereoisomers")).toBe(false);
     const out = resultOf(st(), step)!;
@@ -107,8 +107,9 @@ describe("Generate: a step that takes nothing in", () => {
     const labels = held.structures.map((ids) => (st().model.atoms.find((a) => a.id === ids[0]) as { label?: string } | undefined)?.label);
     expect(labels).toEqual(["block:CCO", "block:CC(O)CC?"]);
     // (each with its record: the SMILES as given, the model's values - named, as computed, by what made them - and what it leaves open)
-    const by = { plugin: "reinvent", version: expect.any(String), program: "REINVENT 4 4.8.24", model: "reinvent_pubchem.prior", method: "sampled, seed 7, on the CPU" };
+    const by = { plugin: "molgen", version: expect.any(String), program: "Molgen 4.8.24", model: "molgen.prior", method: "sampled, seed 7, on the CPU" };
     expect(held.records[0]).toEqual({
+      id: expect.any(String),
       of: expect.any(String),
       properties: {
         smiles: { value: "CCO", unit: "none", status: "computed", by },
@@ -116,30 +117,30 @@ describe("Generate: a step that takes nothing in", () => {
         smiles_state: { value: 1, unit: "none", status: "computed", by },
       },
     });
-    expect(held.records[1]!.properties!.stereo_open).toEqual({ value: 1, unit: "none", status: "computed", by: { plugin: "rdkit" } });
+    expect(held.records[1]!.properties!.stereo_open).toEqual({ value: 1, unit: "none", status: "computed", by: { plugin: "sketchkit" } });
     expect(held.records[0]!.properties!.stereo_open).toBeUndefined();
     // (done, as nothing it runs on has changed; changed once its options do)
-    expect(stateOf(st(), st().steps.find((s) => s.id === step)!, "reinvent")).toBe("done");
+    expect(stateOf(st(), st().steps.find((s) => s.id === step)!, "molgen")).toBe("done");
     st().updateStep(step, { options: { count: 4, seed: 7 } });
-    expect(stateOf(st(), st().steps.find((s) => s.id === step)!, "reinvent")).toBe("changed");
+    expect(stateOf(st(), st().steps.find((s) => s.id === step)!, "molgen")).toBe("changed");
   });
 
   it("takes no wire, and fails - saying why - where nothing it gave could be read, or what it gave is not what Meno takes", async () => {
     const { st } = page();
     const set = st().addSet({ x0: -3, y0: -3, x1: 3, y1: 3 });
-    const step = st().addStep("generate", "reinvent", 0, 0);
+    const step = st().addStep("generate", "molgen", 0, 0);
     st().connect({ set }, step);
     expect(st().wires ?? []).toEqual([]);
     run.mockResolvedValueOnce({ ...generated, outputs: [generated.outputs[2]] });
     await st().runStep(step);
-    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "3 sampled from reinvent_pubchem.prior, seed 7, CPU · none could be read · 1 not read: o1cXc (X is no element)" });
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "3 sampled from molgen.prior, seed 7, CPU · none could be read · 1 not read: o1cXc (X is no element)" });
     run.mockResolvedValueOnce({ outputs: [{ smiles: "CCO", properties: { nll: { value: 2, unit: "furlongs" } } }] });
     await st().runStep(step);
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Structure 1's nll is not one Meno can take" });
   });
 
   it("takes Seeds where its plugin makes from seeds - structures drawn, each given as its blocks - and each made one keeps what its seed came from and its values, as that one's", async () => {
-    useReaders.setState({ state: { crem: "added", rdkit: "added" }, problem: {} });
+    useReaders.setState({ state: { fragswap: "added", sketchkit: "added" }, problem: {} });
     const { doc, st } = page();
     // (two seeds drawn: C-O and C-N, apart; the first with a record of its own, as a step before gave it)
     doc.edit("draw", (d) => ({
@@ -159,19 +160,19 @@ describe("Generate: a step that takes nothing in", () => {
       nextId: 100,
     }));
     const set = st().addSet({ x0: -3, y0: -3, x1: 16, y1: 3 });
-    const nll = { value: 21.5, unit: "none" as const, status: "computed" as const, by: { plugin: "reinvent" } };
+    const nll = { value: 21.5, unit: "none" as const, status: "computed" as const, by: { plugin: "molgen" } };
     doc.edit("records", (d) => ({
       ...d,
       sets: d.sets!.map((b) =>
         b.id === set ? { ...b, members: b.members!.map((m, i) => ("structure" in m && i === 0 ? { ...m, record: { from: ["molecule:7"], properties: { nll, made: { ...nll, value: "1 of 2" } } } } : m)) } : b,
       ),
     }));
-    const step = st().addStep("generate", "crem", 20, 0);
+    const step = st().addStep("generate", "fragswap", 20, 0);
     // (nothing wired in: it waits for its seeds - a model's Generate is ready as it is)
-    expect(stateOf(st(), st().steps.find((s) => s.id === step)!, "crem")).toBe("no-input");
+    expect(stateOf(st(), st().steps.find((s) => s.id === step)!, "fragswap")).toBe("no-input");
     st().connect({ set }, step);
     expect(st().wires).toHaveLength(1);
-    expect(stateOf(st(), st().steps.find((s) => s.id === step)!, "crem")).toBe("ready");
+    expect(stateOf(st(), st().steps.find((s) => s.id === step)!, "fragswap")).toBe("ready");
     run.mockResolvedValueOnce({
       outputs: [
         { smiles: "CCO", properties: { frequency: { value: 120, unit: "none" }, change: { value: "[H][*:1]>>C[*:1]", unit: "none" } }, seed: 0 },
@@ -182,7 +183,7 @@ describe("Generate: a step that takes nothing in", () => {
         { place: 1, made: 1 },
       ],
       said: "2 made from 2 seeds (fragments replaced, radius 3, seed 1)",
-      by: { program: "CReM", version: "0.3.2", model: "chembl33_sa2_f5", method: "fragments replaced, radius 3, seed 1" },
+      by: { program: "Fragswap", version: "0.3.2", model: "fragments", method: "fragments replaced, radius 3, seed 1" },
     });
     await st().runStep(step);
     const [, given, , holds] = run.mock.calls[0];
@@ -198,26 +199,26 @@ describe("Generate: a step that takes nothing in", () => {
     expect(held.records[1]!.from).toBeUndefined();
     expect(Object.keys(held.records[1]!.properties!).sort()).toEqual(["change", "frequency", "smiles"]);
     // (another seed wired in: another run)
-    const before = inputKey(st(), st().steps.find((s) => s.id === step)!, "crem");
+    const before = inputKey(st(), st().steps.find((s) => s.id === step)!, "fragswap");
     doc.edit("move", (d) => ({ ...d, model: { ...d.model, bonds: d.model.bonds.map((b) => (b.id === 6 ? { ...b, order: 2 } : b)) } }));
-    expect(inputKey(st(), st().steps.find((s) => s.id === step)!, "crem")).not.toBe(before);
+    expect(inputKey(st(), st().steps.find((s) => s.id === step)!, "fragswap")).not.toBe(before);
     // (a seed it could not read: named on the line, from the tally - not from what it said)
     run.mockResolvedValueOnce({
       outputs: [{ smiles: "CCO", properties: {}, seed: 0 }],
       seeds: [
         { place: 0, made: 1 },
-        { place: 1, why: "a part RDKit cannot read" },
+        { place: 1, why: "a part Sketchkit cannot read" },
       ],
       said: "1 made from 1 seed",
-      by: { program: "CReM" },
+      by: { program: "Fragswap" },
     });
     await st().runStep(step);
-    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "1 made from 1 seed · seed 2 not read: a part RDKit cannot read · 1 made" });
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "1 made from 1 seed · seed 2 not read: a part Sketchkit cannot read · 1 made" });
   });
 
   it("names the seeds a generator made none of, or could not read, by their numbers - from its tally, one for each seed", () => {
     const tally = (made: (number | string)[]) => made.map((m, place) => (typeof m === "number" ? { place, made: m } : { place, why: m }));
-    expect(seedsSaid(tally([3, 0, "a part RDKit cannot read", 2, 0]))).toBe("seeds 2 and 5 made none; seed 3 not read: a part RDKit cannot read");
+    expect(seedsSaid(tally([3, 0, "a part Sketchkit cannot read", 2, 0]))).toBe("seeds 2 and 5 made none; seed 3 not read: a part Sketchkit cannot read");
     expect(seedsSaid(tally([0, 0, 0, 0, 0, 0, 0, 1]))).toBe("seeds 1, 2, 3, 4, 5 and 2 more made none");
     expect(seedsSaid(tally([1, 2]))).toBe("");
     // (a tally not one for each seed, in their order, or neither made nor why: none of the run taken)
@@ -231,7 +232,7 @@ describe("Generate: a step that takes nothing in", () => {
   });
 
   it("from seeds: fails where the plugin does not tell each seed, names each where none was read, and keeps every one the line only counts", async () => {
-    useReaders.setState({ state: { crem: "added", rdkit: "added" }, problem: {} });
+    useReaders.setState({ state: { fragswap: "added", sketchkit: "added" }, problem: {} });
     const { doc, st } = page();
     // (seven seeds drawn, each C-O, apart)
     doc.edit("draw", (d) => ({
@@ -246,24 +247,24 @@ describe("Generate: a step that takes nothing in", () => {
       nextId: 100,
     }));
     const set = st().addSet({ x0: -3, y0: -3, x1: 42, y1: 3 });
-    const step = st().addStep("generate", "crem", 50, 0);
+    const step = st().addStep("generate", "fragswap", 50, 0);
     st().connect({ set }, step);
     const ran = () => st().steps.find((s) => s.id === step)!.ran!;
     // (no tally: not taken - what became of each seed would go unsaid)
-    run.mockResolvedValueOnce({ outputs: [{ smiles: "CCO", properties: {}, seed: 0 }], said: "1 made", by: { program: "CReM" } });
+    run.mockResolvedValueOnce({ outputs: [{ smiles: "CCO", properties: {}, seed: 0 }], said: "1 made", by: { program: "Fragswap" } });
     await st().runStep(step);
     expect(ran()).toMatchObject({ ok: false, said: "Its seeds are not told one by one" });
     // (none read: failed, each seed named with why, from the tally)
-    const why = (place: number) => ({ place, why: place % 2 ? "it is a label of no element" : "a part RDKit cannot read" });
-    run.mockResolvedValueOnce({ outputs: [], seeds: Array.from({ length: 7 }, (_, k) => why(k)), said: "No seed could be read", by: { program: "CReM" } });
+    const why = (place: number) => ({ place, why: place % 2 ? "it is a label of no element" : "a part Sketchkit cannot read" });
+    run.mockResolvedValueOnce({ outputs: [], seeds: Array.from({ length: 7 }, (_, k) => why(k)), said: "No seed could be read", by: { program: "Fragswap" } });
     await st().runStep(step);
-    expect(ran()).toMatchObject({ ok: false, said: "No seed could be read · seeds 1, 3, 5 and 7 not read: a part RDKit cannot read; seeds 2, 4 and 6 not read: it is a label of no element" });
+    expect(ran()).toMatchObject({ ok: false, said: "No seed could be read · seeds 1, 3, 5 and 7 not read: a part Sketchkit cannot read; seeds 2, 4 and 6 not read: it is a label of no element" });
     // (six made none: five named on the line, the sixth counted - and every one kept, shown where the line is pointed at)
     run.mockResolvedValueOnce({
       outputs: [{ smiles: "CCO", properties: {}, seed: 0 }],
       seeds: Array.from({ length: 7 }, (_, k) => ({ place: k, made: k === 0 ? 1 : 0 })),
       said: "1 made from 7 seeds",
-      by: { program: "CReM" },
+      by: { program: "Fragswap" },
     });
     await st().runStep(step);
     expect(ran()).toMatchObject({ ok: true, said: "1 made from 7 seeds · seeds 2, 3, 4, 5, 6 and 1 more made none · 1 made", named: "seeds 2, 3, 4, 5, 6 and 7 made none" });
@@ -278,17 +279,17 @@ describe("what a Generate could not read, and its stereo not examined", () => {
     expect(notReadSaid(seven)).toBe("7 not read: X0 (X is no element), X1 (X is no element), X2 (X is no element), X3 (X is no element), X4 (X is no element), and 2 more");
     expect(notReadSaid([{ smiles: "C".repeat(50), why: "w" }])).toBe(`1 not read: ${"C".repeat(39)}\u2026 (w)`);
     const { st } = page();
-    const step = st().addStep("generate", "reinvent", 0, 0);
+    const step = st().addStep("generate", "molgen", 0, 0);
     run.mockResolvedValueOnce({ ...generated, outputs: [generated.outputs[0], { smiles: "CC!", properties: {} }] });
     await st().runStep(step);
-    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "3 sampled from reinvent_pubchem.prior, seed 7, CPU · 2 made · 1 with stereo not examined" });
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "3 sampled from molgen.prior, seed 7, CPU · 2 made · 1 with stereo not examined" });
   });
 
   it("is keyed by its plugin's version and the files it was set up with: another prior is another run", () => {
     const { st, doc } = page();
-    const step = st().addStep("generate", "reinvent", 0, 0);
-    const key = () => inputKey(doc.getState(), doc.getState().steps!.find((s) => s.id === step)!, "reinvent");
-    const plugin = pluginById("reinvent")! as unknown as { version: string; downloads: { sha256: string }[] };
+    const step = st().addStep("generate", "molgen", 0, 0);
+    const key = () => inputKey(doc.getState(), doc.getState().steps!.find((s) => s.id === step)!, "molgen");
+    const plugin = pluginById("molgen")! as unknown as { version: string; downloads: { sha256: string }[] };
     const [version, sha] = [plugin.version, plugin.downloads[0].sha256];
     const before = key();
     try {

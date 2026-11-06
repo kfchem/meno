@@ -2,9 +2,9 @@
  * The plugins Meno knows of: those in place in Meno's local data folder -
  * each `plugins/<id>/<version>/`, the version in use named by
  * `plugins/<id>/current` (src-tauri/src/installed.rs) - each read as data
- * (./manifest). Only Meno's backend puts them there: for now from the
- * plugins Meno carries, as it starts; later from a catalogue, whose
- * plugins are folders of the same kind. Meno names none of them.
+ * (./manifest). Only Meno's backend puts them there, from the plugins
+ * online (lib/plugins/online; catalogue.rs). Meno carries none, and names
+ * none of them.
  *
  * The page is given them as it starts, before anything reads them
  * (`refreshPlugins`, main.tsx), and again after one is put in place or
@@ -12,6 +12,7 @@
  * binding); what is worked out from it is worked out again
  * (`onPluginsChanged`: lib/calc/catalog).
  */
+import { create } from "zustand";
 import { acceptManifest, type Manifest } from "./manifest";
 
 /** Where the plugins' folders are, in Meno's local data folder: a plugin's file is `plugins/<id>/<version>/<file>`. */
@@ -27,6 +28,14 @@ let places = new Map<string, { version: string; dir: string; grammars: Record<st
 export let MANIFESTS: readonly Manifest[] = [];
 
 const listeners = new Set<() => void>();
+
+/**
+ * How many times the plugins Meno knows of were taken anew: what a page
+ * listing them draws again by (Settings, Plugins) - one whose files were
+ * taken away gone from it at once, not drawn on from a manifest no longer
+ * here, its kinds named by their ids.
+ */
+export const usePluginsHere = create<{ taken: number }>(() => ({ taken: 0 }));
 
 /** Called each time the plugins Meno knows of are taken anew; what it gives takes the call away. */
 export function onPluginsChanged(listener: () => void): () => void {
@@ -56,6 +65,8 @@ export function setInstalled(list: readonly InstalledPlugin[]): void {
   MANIFESTS = taken.sort((a, b) => a.id.localeCompare(b.id));
   places = next;
   for (const listener of listeners) listener();
+  // (after what is worked out from them is worked out again: lib/calc/catalog)
+  usePluginsHere.setState((s) => ({ taken: s.taken + 1 }));
 }
 
 /** Where plugin `id` is in place: its version in use and its folder - none where Meno knows of no such plugin. */

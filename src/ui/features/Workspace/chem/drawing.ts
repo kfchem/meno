@@ -112,7 +112,9 @@ export function drawingOf(model: Model): { atoms: DrawnAtom[]; bonds: DrawnBond[
         b: c,
         order: b.order,
         ...(wedged ? { wedge: { narrow: index.get(narrowEnd(b, degree))!, stereo: b.stereo as "up" | "down" } } : {}),
-        ...(b.stereo === "wavy" ? { either: true } : {}),
+        // (either configuration: a wavy bond's at its ends, and a double bond's own - a MOL file's crossed one, V2000's 3, V3000's
+        //  CFG=2 - whose cis or trans is not known, however its ends happen to lie)
+        ...(b.stereo === "wavy" || (b.order === 2 && b.stereo === "either") ? { either: true } : {}),
       },
     ];
   });

@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { symmetryClasses } from "../layout/canonical";
 import { fromSmiles } from "../layout/testdata/fromSmiles";
 import { SHUFFLE_SEEDS, shuffled, tiedCages } from "../layout/testdata/shuffled";
-import type { LayoutInput } from "../layout/perceive";
+import type { LayoutAtom, LayoutBond, LayoutInput } from "../layout/perceive";
+import type { Axial } from "../layout/stereo";
 import { aromaticForm, automorphismGroup, hydrogensFolded, identity, identityKey, identityText, symmetryOrbits, type IdentityAtom, type IdentityInput } from "./identity";
 
 /** How many distinct values a list has. */
@@ -370,5 +371,231 @@ describe("a structure's identity, as found", () => {
     expect(found.complete).toBe(false);
     // (each a carbon with four hydrogens and no bonds)
     expect(found.text.match(/(^|;)C\|0\|4\|0\|/g)).toHaveLength(40);
+  });
+});
+
+describe("a configuration that makes no stereo unit, in a structure's identity", () => {
+  /** Whether the SMILES are one structure, as identity has them. */
+  const one = (...smiles: string[]) => new Set(smiles.map((s) => identityText(fromSmiles(s)))).size === 1;
+
+  it("is ignored: a wedge on an isopropyl's CH, a prenyl's C=C(CH3)2 drawn either way, an exocyclic C=C on a ring alike both ways", () => {
+    expect(one("C[C@H](C)O", "C[C@@H](C)O", "CC(C)O")).toBe(true);
+    expect(one("C/C(C)=C/CO", "C/C(C)=C\\CO", "C\\C(C)=C/CO", "CC(C)=CCO")).toBe(true);
+    expect(one("C/C=C1/CCCCC1", "C/C=C1\\CCCCC1", "CC=C1CCCCC1")).toBe(true);
+    expect(one("C/C=C1/CCC(C)CC1", "CC=C1CCC(C)CC1", "C[C@H]1CCC(=CC)CC1")).toBe(true);
+  });
+
+  it("keeps every stereo unit: a centre's two alike arms set apart by another configuration, a pseudoasymmetric centre, E and Z", () => {
+    // (cis and trans: each centre's ring arms alike until the other centre is counted)
+    expect(one("C[C@H]1CC[C@@H](C)CC1", "C[C@H]1CC[C@H](C)CC1")).toBe(false);
+    expect(one("C[C@H]1CC[C@@H](C)CC1", "CC1CCC(C)CC1")).toBe(false);
+    expect(one("C[C@H]1C[C@@H](C)C1", "C[C@H]1C[C@H](C)C1")).toBe(false);
+    // (meso and (R,R)-tartaric acid; (R)- and (S)-butan-2-ol; (E)- and (Z)-but-2-ene)
+    expect(one("O=C(O)[C@H](O)[C@@H](O)C(=O)O", "O=C(O)[C@@H](O)[C@@H](O)C(=O)O")).toBe(false);
+    expect(one("CC[C@@H](C)O", "CC[C@H](C)O")).toBe(false);
+    expect(one("C/C=C/C", "C/C=C\\C")).toBe(false);
+    // (an exocyclic C=C whose ring arms are alike by constitution only: (4-methylcyclohexylidene)ethane's two forms, mirror images)
+    expect(one("C/C=C1/CC[C@@H](C)CC1", "C/C=C1\\CC[C@@H](C)CC1")).toBe(false);
+    expect(one("C/C=C1/CC[C@@H](C)CC1", "CC=C1CC[C@@H](C)CC1")).toBe(false);
+    // (2,3,4-trihydroxyglutaric acid: its two meso forms, C3 r and s, apart; in the chiral form C3 sets nothing)
+    expect(one("O=C(O)[C@@H](O)[C@H](O)[C@@H](O)C(=O)O", "O=C(O)[C@@H](O)[C@@H](O)[C@@H](O)C(=O)O")).toBe(false);
+    expect(one("O=C(O)[C@@H](O)[C@H](O)[C@@H](O)C(=O)O", "O=C(O)[C@@H](O)C(O)[C@@H](O)C(=O)O")).toBe(false);
+    expect(one("O=C(O)[C@H](O)[C@H](O)[C@@H](O)C(=O)O", "O=C(O)[C@H](O)[C@@H](O)[C@@H](O)C(=O)O", "O=C(O)[C@H](O)C(O)[C@@H](O)C(=O)O")).toBe(true);
+  });
+
+  it("is weighed with the unit where it is: another atom alike that a symmetry takes it onto does not make its groups alike", () => {
+    // (1,3-dichloro-2,4-dimethylcyclobutane, ring C0-C3: Cl on C0 and C2, methyls on C1 and C3; C0 and both methyls'
+    // CH drawn, C2 open. A half turn takes C0 onto C2, but no symmetry keeping C0 swaps its ring arms where the
+    // methyls are cis: its Cl cis or trans to them, two structures. Where they are trans, C0's arms are alike)
+    const ring = (v0: 1 | -1, v1: 1 | -1, v3: 1 | -1): LayoutInput => ({
+      atoms: [
+        { el: "C", hs: 1, tetra: { neighbours: [1, 3, 4, -1], volume: v0 } },
+        { el: "C", hs: 1, tetra: { neighbours: [0, 2, 6, -1], volume: v1 } },
+        { el: "C", hs: 1 },
+        { el: "C", hs: 1, tetra: { neighbours: [2, 0, 7, -1], volume: v3 } },
+        { el: "Cl", hs: 0 },
+        { el: "Cl", hs: 0 },
+        { el: "C", hs: 3 },
+        { el: "C", hs: 3 },
+      ],
+      bonds: [
+        { a: 0, b: 1, order: 1 },
+        { a: 1, b: 2, order: 1 },
+        { a: 2, b: 3, order: 1 },
+        { a: 3, b: 0, order: 1 },
+        { a: 0, b: 4, order: 1 },
+        { a: 2, b: 5, order: 1 },
+        { a: 1, b: 6, order: 1 },
+        { a: 3, b: 7, order: 1 },
+      ],
+    });
+    // (the methyls cis where C1's and C3's volumes are the same, as their neighbours are listed)
+    expect(identityText(ring(1, 1, 1))).not.toBe(identityText(ring(-1, 1, 1)));
+    expect(identityText(ring(1, 1, -1))).toBe(identityText(ring(-1, 1, -1)));
+  });
+
+  it("is looked for again after each one taken out: 2,4-dimethylpentan-3-ol's C3 has alike groups only once both isopropyls' CH are", () => {
+    const plain = identityText(fromSmiles("CC(C)C(O)C(C)C"));
+    for (const a of ["@", "@@"]) for (const b of ["@", "@@"]) for (const c of ["@", "@@"]) expect(identityText(fromSmiles(`C[C${a}H](C)[C${b}H](O)[C${c}H](C)C`)), a + b + c).toBe(plain);
+  });
+
+  it("is kept, and the identity says it may not be the only one, where the search for alike groups ran out of steps before it found them", () => {
+    // (forty methanes beside the isopropanol: the search cannot finish, and the methyls' swap is not among what it found)
+    const methanes = Array(40).fill("C").join(".");
+    const found = identity(fromSmiles(`${methanes}.C[C@H](C)O`));
+    expect(found.complete).toBe(false);
+    expect(found.text).not.toBe(identity(fromSmiles(`${methanes}.CC(C)O`)).text);
+  });
+
+  it("is set aside where a search that ran out of steps still found its groups alike: what it finds alike is", () => {
+    // (forty methanes beside a CHF2Cl: the search cannot finish, but takes the two F onto each other before it stops)
+    const methanes = Array(40).fill("C").join(".");
+    expect(identity(fromSmiles(`${methanes}.F[C@H](F)Cl`)).text).toBe(identity(fromSmiles(`${methanes}.FC(F)Cl`)).text);
+  });
+
+  it("is ignored on an axis whose one end has two alike groups: a 2,6-dimethylphenyl's, against a 2-chlorophenyl", () => {
+    // (ring A 0-5, ring B 6-11, the axis 0-6; a methyl 12 on 1 and, where both, 14 on 5; a Cl 13 on 7)
+    const biaryl = (both: boolean, sense?: 1 | -1): LayoutInput => {
+      const atoms: LayoutAtom[] = [];
+      const bonds: LayoutBond[] = [];
+      for (const at of [0, 6]) {
+        for (let k = 0; k < 6; k++) atoms.push({ el: "C", hs: k < 2 || (both && at === 0 && k === 5) ? 0 : 1 });
+        for (let k = 0; k < 6; k++) bonds.push({ a: at + k, b: at + ((k + 1) % 6), order: k % 2 ? 1 : 2 });
+      }
+      atoms.push({ el: "C", hs: 3 }, { el: "Cl", hs: 0 });
+      bonds.push({ a: 0, b: 6, order: 1 }, { a: 1, b: 12, order: 1 }, { a: 7, b: 13, order: 1 });
+      if (both) {
+        atoms.push({ el: "C", hs: 3 });
+        bonds.push({ a: 5, b: 14, order: 1 });
+      }
+      return { atoms, bonds, ...(sense ? { axes: [{ atoms: [0, 6], refs: [1, 7], sense }] } : {}) };
+    };
+    expect(identityText(biaryl(true, 1))).toBe(identityText(biaryl(true)));
+    expect(identityText(biaryl(true, -1))).toBe(identityText(biaryl(true)));
+    // (one methyl: an axis of chirality, its two senses two structures)
+    expect(identityText(biaryl(false, 1))).not.toBe(identityText(biaryl(false, -1)));
+    expect(identityText(biaryl(false, 1))).not.toBe(identityText(biaryl(false)));
+  });
+
+  it("does not depend on the order of the atoms", () => {
+    for (const smiles of ["C[C@H](C)O", "C/C(C)=C/CO", "C[C@H]1CC[C@@H](C)CC1", "O=C(O)[C@@H](O)[C@H](O)[C@@H](O)C(=O)O", "C/C=C1/CC[C@@H](C)CC1"]) {
+      const g = fromSmiles(smiles);
+      for (const seed of SHUFFLE_SEEDS) expect(identityText(shuffled(g, seed)), smiles).toBe(identityText(g));
+    }
+  });
+});
+
+describe("a double bond's cis or trans and an axis's sense, in a structure's identity", () => {
+  // (a biaryl, its axis 0-6: ring A 0-5, a methyl 12 on 1; ring B 6-11, a Cl 13 on 7 - its ortho atoms 1 and 5, 7 and 11)
+  const biaryl = (axis: Axial): LayoutInput => {
+    const atoms: LayoutAtom[] = [];
+    const bonds: LayoutBond[] = [];
+    for (const at of [0, 6]) {
+      for (let k = 0; k < 6; k++) atoms.push({ el: "C", hs: k < 2 ? 0 : 1 });
+      for (let k = 0; k < 6; k++) bonds.push({ a: at + k, b: at + ((k + 1) % 6), order: k % 2 ? 1 : 2 });
+    }
+    atoms.push({ el: "C", hs: 3 }, { el: "Cl", hs: 0 });
+    bonds.push({ a: 0, b: 6, order: 1 }, { a: 1, b: 12, order: 1 }, { a: 7, b: 13, order: 1 });
+    return { atoms, bonds, axes: [axis] };
+  };
+  // (two such biaryls on a CH2 at their ring A's para atom, each axis by `axisAt` from its first atom's number)
+  const biaryls = (...axisAt: ((at: number) => Axial)[]): LayoutInput => {
+    const one = biaryl({ atoms: [0, 6], refs: [1, 7], sense: 1 });
+    const atoms = axisAt.flatMap(() => one.atoms.map((a, i) => (i === 3 ? { ...a, hs: 0 } : a)));
+    const bonds = axisAt.flatMap((_, k) => one.bonds.map((b) => ({ ...b, a: b.a + 14 * k, b: b.b + 14 * k })));
+    return { atoms: [...atoms, { el: "C", hs: 2 }], bonds: [...bonds, { a: 3, b: 28, order: 1 }, { a: 17, b: 28, order: 1 }], axes: axisAt.map((x, k) => x(14 * k)) };
+  };
+  const along = (at: number): Axial => ({ atoms: [at, at + 6], refs: [at + 1, at + 7], sense: 1 });
+  // (the same axis from its other end, and by the other ortho atom of its first end: the same atropisomer)
+  const back = (at: number): Axial => ({ atoms: [at + 6, at], refs: [at + 7, at + 1], sense: 1 });
+  const otherOrtho = (at: number): Axial => ({ atoms: [at, at + 6], refs: [at + 5, at + 7], sense: -1 });
+  // (and by the other ortho atom of its second end, or of both)
+  const farOrtho = (at: number): Axial => ({ atoms: [at, at + 6], refs: [at + 1, at + 11], sense: -1 });
+  const bothOrtho = (at: number): Axial => ({ atoms: [at, at + 6], refs: [at + 5, at + 11], sense: 1 });
+  const mirror = (at: number): Axial => ({ ...along(at), sense: -1 });
+  // (two alkenyl arms on an O, CH2-C(CH3)=C(X)Y each, X and Y as `far` has them: each arm's configuration given against its CH2 or CH3 and its X or Y)
+  type Arm = { refs: readonly ["CH2" | "CH3", "X" | "Y"]; cis: boolean };
+  const ether = (far: readonly [LayoutAtom, LayoutAtom], ...arms: Arm[]): LayoutInput => ({
+    atoms: [...arms.flatMap((): LayoutAtom[] => [{ el: "C", hs: 2 }, { el: "C", hs: 0 }, { el: "C", hs: 3 }, { el: "C", hs: 0 }, ...far]), { el: "O", hs: 0 }],
+    bonds: [
+      ...arms.flatMap(({ refs: [near, away], cis }, k): LayoutBond[] => {
+        const at = 6 * k;
+        const stereo = { refs: [near === "CH2" ? at : at + 2, away === "X" ? at + 4 : at + 5] as const, cis };
+        return [
+          { a: at, b: at + 1, order: 1 },
+          { a: at + 1, b: at + 2, order: 1 },
+          { a: at + 1, b: at + 3, order: 2, stereo },
+          { a: at + 3, b: at + 4, order: 1 },
+          { a: at + 3, b: at + 5, order: 1 },
+        ];
+      }),
+      { a: 0, b: 12, order: 1 },
+      { a: 6, b: 12, order: 1 },
+    ],
+  });
+  const FCl = [
+    { el: "F", hs: 0 },
+    { el: "Cl", hs: 0 },
+  ] as const;
+  // (the one configuration - the CH2 cis to the F - given against each pair of references)
+  const byCH2: Arm = { refs: ["CH2", "X"], cis: true };
+  const byCH3: Arm = { refs: ["CH3", "X"], cis: false };
+  const byCl: Arm = { refs: ["CH2", "Y"], cis: false };
+  const turned: Arm = { refs: ["CH2", "X"], cis: false };
+
+  it("is the same whichever neighbour of each end it was given against", () => {
+    // ((Z)-1-chloro-1,2-difluoroethene: its two F cis, or its Cl and the far F trans)
+    expect(identityText(fromSmiles("F/C(Cl)=C/F"))).toBe(identityText(fromSmiles("Cl\\C(F)=C/F")));
+    expect(identityText(fromSmiles("F/C(Cl)=C(/F)C"))).toBe(identityText(fromSmiles("Cl\\C(F)=C(\\C)F")));
+    expect(identityText(ether(FCl, byCH2, byCH2))).toBe(identityText(ether(FCl, byCH2, byCH3)));
+    expect(identityText(ether(FCl, byCH2, byCH2))).toBe(identityText(ether(FCl, byCH2, byCl)));
+    expect(identityText(biaryl(along(0)))).toBe(identityText(biaryl(otherOrtho(0))));
+    expect(identityText(biaryl(along(0)))).toBe(identityText(biaryl(back(0))));
+    expect(identityText(biaryl(along(0)))).toBe(identityText(biaryl(farOrtho(0))));
+    expect(identityText(biaryl(along(0)))).toBe(identityText(biaryl(bothOrtho(0))));
+    expect(identityText(biaryls(along, along))).toBe(identityText(biaryls(along, farOrtho)));
+    expect(identityText(biaryls(along, along))).toBe(identityText(biaryls(along, back)));
+    expect(identityText(biaryls(along, along))).toBe(identityText(biaryls(along, otherOrtho)));
+  });
+
+  it("keeps alike the parts that are alike, whichever neighbours each was given against", () => {
+    expect(symmetryOrbits(ether(FCl, byCH2, byCH3)).orbit).toEqual(symmetryOrbits(ether(FCl, byCH2, byCH2)).orbit);
+    expect(symmetryOrbits(ether(FCl, byCH2, byCl)).orbit).toEqual(symmetryOrbits(ether(FCl, byCH2, byCH2)).orbit);
+    expect(symmetryOrbits(biaryls(along, back)).orbit).toEqual(symmetryOrbits(biaryls(along, along)).orbit);
+    expect(symmetryOrbits(biaryls(along, farOrtho)).orbit).toEqual(symmetryOrbits(biaryls(along, along)).orbit);
+    expect(symmetryOrbits(biaryls(along, along)).orbit[0]).toBe(symmetryOrbits(biaryls(along, along)).orbit[14]);
+  });
+
+  it("has none where an end's two other groups are alike: given cis or trans to one of them, the same structure", () => {
+    // (CH2-C(CH3)=C(CH3)2 arms, one given cis to a far methyl and the other trans to it: no configuration either way)
+    const methyls = [
+      { el: "C", hs: 3 },
+      { el: "C", hs: 3 },
+    ] as const;
+    const one = ether(methyls, byCH2, byCH2);
+    const two = ether(methyls, byCH2, turned);
+    expect(identityText(two)).toBe(identityText(one));
+    // (the same orbits, the second arm's two methyls taken the other way round)
+    const orbit = symmetryOrbits(two).orbit;
+    expect(orbit.map((_, i) => orbit[i === 10 ? 11 : i === 11 ? 10 : i])).toEqual(symmetryOrbits(one).orbit);
+  });
+
+  it("still tells E from Z, an atropisomer from its mirror image, and a meso structure from a chiral one", () => {
+    expect(identityText(fromSmiles("F/C(Cl)=C/F"))).not.toBe(identityText(fromSmiles("F/C(Cl)=C\\F")));
+    expect(identityText(fromSmiles("F/C(Cl)=C/F"))).not.toBe(identityText(fromSmiles("Cl/C(F)=C/F")));
+    expect(identityText(ether(FCl, byCH2, byCH2))).not.toBe(identityText(ether(FCl, byCH2, turned)));
+    expect(identityText(biaryl(along(0)))).not.toBe(identityText(biaryl(mirror(0))));
+    expect(identityText(biaryl(otherOrtho(0)))).not.toBe(identityText(biaryl(mirror(0))));
+    expect(identityText(biaryls(along, along))).not.toBe(identityText(biaryls(along, mirror)));
+    expect(identityText(biaryls(along, back))).not.toBe(identityText(biaryls(back, mirror)));
+    expect(identityText(biaryls(along, farOrtho))).not.toBe(identityText(biaryls(farOrtho, mirror)));
+    expect(identityText(biaryl(farOrtho(0)))).not.toBe(identityText(biaryl(mirror(0))));
+  });
+
+  it("does not depend on the order of the atoms", () => {
+    for (const g of [fromSmiles("F/C(Cl)=C/F"), fromSmiles("Cl\\C(F)=C/F"), ether(FCl, byCH2, byCH3), ether(FCl, byCH2, byCl), biaryl(otherOrtho(0)), biaryls(along, back)]) {
+      const own = identityText(g);
+      for (const seed of SHUFFLE_SEEDS) expect(identityText(shuffled(g, seed))).toBe(own);
+    }
   });
 });
