@@ -1580,8 +1580,9 @@ Decided while building it, for the maintainer to confirm:
   are cores, at least one (lib/jobs `runningOf`). A step of hundreds of
   small jobs runs them side by side, not one after another each with every
   core. Set, each job takes that many, never more than jobs may use nor
-  than the computer has; Settings says so under the field while unset. A program is told them as `OMP_NUM_THREADS` (and MKL's
-  and OpenBLAS's); a plugin's command may say them as well (xTB's `-P`).
+  than the computer has; Settings says so under the Jobs rows while unset.
+  A program is told them as `OMP_NUM_THREADS` (and MKL's and OpenBLAS's);
+  a plugin's command may say them as well (xTB's `-P`).
 - **A program that runs as processes is given one to each physical core,
   each told one thread** (2026-10-30). Its manifest says so
   (`installed[].parallel`: `"processes"` - ORCA, its `%pal`, run under
