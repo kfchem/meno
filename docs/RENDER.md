@@ -518,8 +518,9 @@ Each is a file of its own beside those they share (`look_<id>.py`, `studio_<id>.
 Meno is Apache-2.0. The Blender plugin is GPL-3.0-or-later: its folder
 carries the licence's text (`LICENSE`) and its files say so. Nothing of
 Meno's or of another plugin's takes anything from it, and it speaks to
-Meno only through files and arguments (docs/PLUGINS.md, *Licences*).
-README lists it with its licence.
+Meno only through files and arguments (docs/PLUGINS.md, *Licences*). Its
+licence is shown in Settings, *Plugins*, and stated in its own folder of
+the plugins online (kfchem/meno-plugins), as every plugin's is.
 
 ## Decided
 

@@ -5,6 +5,7 @@ import { kekuleOrders } from "./kekulize";
 import { implicitHydrogens, valenceOrder } from "./molecule";
 import { readSmiles, type SmilesAtom, type SmilesBond } from "./smiles";
 import { ELEMENTS } from "./elements";
+import { movedBond } from "./structureBonds";
 
 /**
  * The ligands of transition-metal chemistry, and the complexes written with
@@ -31,6 +32,7 @@ export type StructureBond = SmilesBond & {
   endpoints?: number[];
   attach?: "all";
 };
+
 
 /**
  * Six metals as an octahedron, by their places 0 to 5 round it seen down
@@ -670,9 +672,7 @@ export function complexStructure(
         a.tetra ? { ...a, tetra: { ...a.tetra, neighbours: a.tetra.neighbours.map((n) => (n < 0 ? n : n + at)) } } : { ...a },
       ),
     );
-    for (const b of s.bonds) {
-      bonds.push({ ...b, a1: b.a1 + at, a2: b.a2 + at, ...(b.endpoints ? { endpoints: b.endpoints.map((e) => e + at) } : {}) });
-    }
+    for (const b of s.bonds) bonds.push(movedBond(b, (i) => i + at));
     for (const h of s.haptic ?? []) haptic.push({ star: h.star + at, atoms: h.atoms.map((e) => e + at) });
     for (const ax of s.axes ?? []) {
       axes.push({ atoms: [ax.atoms[0] + at, ax.atoms[1] + at], refs: [ax.refs[0] + at, ax.refs[1] + at], sense: ax.sense });

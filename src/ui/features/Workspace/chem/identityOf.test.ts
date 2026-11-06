@@ -65,6 +65,35 @@ describe("a structure drawn, as identity reads it", () => {
     expect(identityOfDrawn(crossed).unread).toEqual([1]);
   });
 
+  it("ignores a double bond drawn bent where one end's two other groups are alike, and keeps one where they are not", () => {
+    // (HO-CH2-CH=C(CH3)R, its C=C across: the CH2 drawn up or down off it, in line with it, or by a wave; R a methyl - prenol - or none)
+    const drawn = (ch2: "up" | "down" | "straight" | "wavy", second = true) => {
+      const [x, y] = ch2 === "down" ? [-0.75, -1.3] : ch2 === "straight" ? [-1.5, 0] : [-0.75, 1.3];
+      return {
+        atoms: [
+          { id: 1, el: "O", x: x - 1.5, y, r: 0.9 },
+          { id: 2, el: "C", x, y, r: 0.9 },
+          { id: 3, el: "C", x: 0, y: 0, r: 0.9 },
+          { id: 4, el: "C", x: 1.5, y: 0, r: 0.9 },
+          { id: 5, el: "C", x: 2.25, y: 1.3, r: 0.9 },
+          ...(second ? [{ id: 6, el: "C", x: 2.25, y: -1.3, r: 0.9 }] : []),
+        ],
+        bonds: [
+          { id: 7, a: 1, b: 2, order: 1 as const },
+          { id: 8, a: 2, b: 3, order: 1 as const, ...(ch2 === "wavy" ? { stereo: "wavy" as const } : {}) },
+          { id: 9, a: 3, b: 4, order: 2 as const },
+          { id: 10, a: 4, b: 5, order: 1 as const },
+          ...(second ? [{ id: 11, a: 4, b: 6, order: 1 as const }] : []),
+        ],
+      };
+    };
+    const prenol = identityOfDrawn(drawn("straight")).text;
+    for (const ch2 of ["up", "down", "wavy"] as const) expect(identityOfDrawn(drawn(ch2)).text, ch2).toBe(prenol);
+    // (but-2-en-1-ol: E and Z, and neither, apart)
+    const crotyl = (ch2: "up" | "down" | "straight") => identityOfDrawn(drawn(ch2, false)).text;
+    expect(new Set([crotyl("up"), crotyl("down"), crotyl("straight")]).size).toBe(3);
+  });
+
   it("splits the structures into the groups each was drawn to be in", () => {
     const meno = new Map(written.map((c) => [c.name, identityOfDrawn(c.drawn).text]));
     const same = new Map(written.map((c) => [c.name, c.same]));
