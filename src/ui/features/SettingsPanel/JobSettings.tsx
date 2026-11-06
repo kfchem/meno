@@ -6,6 +6,9 @@ import type { Option, OptionValues } from "../../../lib/options";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import OptionRows from "../../options/OptionRows";
 
+/** What Cores for each job comes to while it is not set (lib/jobs `runningOf`). */
+const CORES_SHARED_SAID = "Unless Cores for each job is set, a step's jobs share the cores jobs may use: all of them for one job, one each for as many jobs as there are cores.";
+
 /** A mebibyte's share of a gibibyte: memory is set in GB, kept in MiB. */
 const MIB_PER_GB = 1024;
 
@@ -30,19 +33,7 @@ export default function JobSettings() {
   const running = runningOf(calculations, computer.cores);
   const gb = (mib: number) => Math.round((mib / MIB_PER_GB) * 10) / 10;
   const options: Option[] = [
-    {
-      id: "cores",
-      label: "Cores for each job",
-      type: "number",
-      default: running.cores,
-      min: 1,
-      max: limits.cores,
-      step: 1,
-      whole: true,
-      unit: `of ${limits.cores}`,
-      // (unset, shared among a step's jobs - lib/jobs `runningOf`: said, as the number shown is one job's alone)
-      ...(calculations.cores == null ? { note: "Unless set, a step's jobs share the cores: all of them for one job, one each for as many jobs as there are cores." } : {}),
-    },
+    { id: "cores", label: "Cores for each job", type: "number", default: running.cores, min: 1, max: limits.cores, step: 1, whole: true, unit: `of ${limits.cores}` },
     { id: "cores-all", label: "Cores jobs may use", type: "number", default: computer.cores, min: 1, max: computer.cores, step: 1, whole: true, unit: `of ${computer.cores}` },
     ...(computer.memory > 0
       ? [{ id: "memory-all", label: "Memory jobs may use", type: "number" as const, default: gb((computer.memory * 3) / 4), min: 0.5, max: gb(computer.memory), step: 0.5, unit: `GB of ${gb(computer.memory)}` }]
@@ -109,6 +100,8 @@ export default function JobSettings() {
     <div className="rounded-lg border border-gh-line bg-white divide-y divide-gh-line/60">
       <OptionRows options={options} values={values} onChange={change} />
       {/* (how the cores are counted, where the computer runs more than one thread on each: a program of processes takes more than one) */}
+      {/* (unset, a step's jobs share the cores - lib/jobs `runningOf`: said, as the number shown is one job's alone) */}
+      {calculations.cores == null && <p className="py-2 pl-3 pr-3 text-xs text-gh-gray">{CORES_SHARED_SAID}</p>}
       {coresCountedSaid(computer) && <p className="py-2 pl-3 pr-3 text-xs text-gh-gray">{coresCountedSaid(computer)}</p>}
       {folder && (
         <div className="py-2 pl-3 pr-3 flex items-center gap-3">
