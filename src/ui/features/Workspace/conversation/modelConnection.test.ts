@@ -80,7 +80,10 @@ describe("a conversation's connection through a model's plugin", () => {
     const s: ModelSteps = {
       ...steps().s,
       ask: async (r) => {
-        if (!allowed.has(r.purpose)) asked.push(r.title), allowed.add(r.purpose);
+        if (!allowed.has(r.purpose)) {
+          asked.push(r.title);
+          allowed.add(r.purpose);
+        }
         return true;
       },
       allowed: (purpose) => allowed.has(purpose),
