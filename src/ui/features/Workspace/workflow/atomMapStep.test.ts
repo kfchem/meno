@@ -82,8 +82,13 @@ describe("Atom map, as a step: a reaction's products onto its reactants", () => 
     const order = f.kept[0].atoms.map((a) => da.product.atoms.findIndex((p) => p.x === a.x && p.y === a.y && p.z === a.z));
     expect([f.kept[0].energy, f.kept[0].imaginary, f.kept[0].calc]).toEqual([-5.5, [-412.3], { ...calc, held: [order.indexOf(0), order.indexOf(15)] }]);
     expect(f.said).toBe("1 of 1 mapped, its calculation's results not carried");
-    // (what the calculation was alone, kept whole: nothing said not carried)
-    expect(ok(runMenoPair("atom-map", { entries: [{ ...finished, calc } as unknown as SetEntry], holds: "molecules" }, { entries: [reactant], holds: "molecules" }, R)).said).toBe("1 of 1 mapped");
+    // (what the calculation was alone, kept whole: nothing said not carried; the output or the wavefunction it was read from alone, left behind and said)
+    const mappedWith = (c: object) => ok(runMenoPair("atom-map", { entries: [{ ...finished, calc: c } as unknown as SetEntry], holds: "molecules" }, { entries: [reactant], holds: "molecules" }, R));
+    expect(mappedWith(calc).said).toBe("1 of 1 mapped");
+    for (const file of [{ source: { name: "p.out", sha256: "ab" } }, { wavefunction: { name: "p.molden", sha256: "cd" } }]) {
+      const f2 = mappedWith({ ...calc, ...file });
+      expect([f2.kept[0].calc, f2.said]).toEqual([calc, "1 of 1 mapped, its calculation's results not carried"]);
+    }
   });
 
   it("carries a run's ending converged at a renumbered product's geometry - the same places - the atoms it held numbered as now; one of another geometry not", () => {
