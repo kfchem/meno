@@ -78,6 +78,8 @@ export type CalculationSettings = {
   largeWorkspaceMB?: number;
   /** Whether the computer may sleep while a job's program runs: unset, it is kept awake (src-tauri/src/awake.rs). */
   sleepWhileJobsRun?: true;
+  /** After how many minutes with nothing written a running job is said to be quiet (lib/jobs `quietFor`); unset, `QUIET_AFTER_MIN`. */
+  quietAfterMin?: number;
 };
 
 /** The most cores, and memory in MiB, Settings takes. */
@@ -87,6 +89,15 @@ export const MEMORY_MOST = 64 * 1024 * 1024;
 export const LARGE_WORKSPACE_MOST = MOST_WORKSPACE_FILE / 2 ** 20;
 /** The energy window a structure's 3D conformers are kept within, made on the canvas, in kcal/mol, unless Settings says otherwise; and the widest Settings takes. */
 export const WINDOW_3D = 30;
+/**
+ * After how many minutes with nothing written - no line of its log, no file
+ * of its work folder - a running job is said to be quiet, unless Settings
+ * says otherwise; and the most Settings takes (a day). Said only: Meno never
+ * ends a job for it (docs/WORKFLOWS.md, *A job that writes nothing*). Thirty
+ * minutes is the maintainer's choice (2026-11-06), to be changed here alone.
+ */
+export const QUIET_AFTER_MIN = 30;
+export const QUIET_AFTER_MOST = 24 * 60;
 export const WINDOW_3D_MOST = 1000;
 
 /**
@@ -236,18 +247,20 @@ export function acceptAppSettings(raw: unknown): AppSettings {
 
 /** How a workflow's jobs run, as the file holds it: the cores each takes, and the cores and memory they may use in all - whole numbers within reason. */
 function acceptCalculations(raw: unknown): CalculationSettings {
-  const r = raw as { cores?: unknown; coresAll?: unknown; memoryAll?: unknown; largeWorkspaceMB?: unknown; sleepWhileJobsRun?: unknown } | null;
+  const r = raw as { cores?: unknown; coresAll?: unknown; memoryAll?: unknown; largeWorkspaceMB?: unknown; sleepWhileJobsRun?: unknown; quietAfterMin?: unknown } | null;
   const whole = (v: unknown, most: number) => (typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= most ? v : undefined);
   const cores = whole(r?.cores, CORES_MOST);
   const coresAll = whole(r?.coresAll, CORES_MOST);
   const memoryAll = whole(r?.memoryAll, MEMORY_MOST);
   const largeWorkspaceMB = whole(r?.largeWorkspaceMB, LARGE_WORKSPACE_MOST);
+  const quietAfterMin = whole(r?.quietAfterMin, QUIET_AFTER_MOST);
   return {
     ...(cores ? { cores } : {}),
     ...(coresAll ? { coresAll } : {}),
     ...(memoryAll ? { memoryAll } : {}),
     ...(largeWorkspaceMB ? { largeWorkspaceMB } : {}),
     ...(r?.sleepWhileJobsRun === true ? { sleepWhileJobsRun: true as const } : {}),
+    ...(quietAfterMin ? { quietAfterMin } : {}),
   };
 }
 

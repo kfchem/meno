@@ -30,7 +30,29 @@ export type Job = {
   why?: string;
   /** Its key, as Meno asked for it with one (lib/jobKeys). */
   key?: string;
+  /** When its program last wrote anything - its log, or a file of its work folder - in ms: a running job's alone (src-tauri jobs.rs `last_written`). */
+  lastWritten?: number;
 };
+
+/**
+ * How many whole minutes a running job has written nothing - no line of its
+ * log, no file of its work folder - where that is `afterMin` minutes or
+ * more; none else, and none for a job not running or that never said.
+ * Said only: Meno never ends a job for it (docs/WORKFLOWS.md, *A job that
+ * writes nothing*).
+ */
+export function quietFor(job: { state: string; lastWritten?: number } | undefined, now: number, afterMin: number): number | null {
+  if (job?.state !== "running" || job.lastWritten == null) return null;
+  const min = Math.floor((now - job.lastWritten) / 60_000);
+  return min >= afterMin ? min : null;
+}
+
+/** How long, said: "47 min", or "2 h 5 min" from two hours. */
+const minutesSaid = (min: number) => (min < 120 ? `${min} min` : `${Math.floor(min / 60)} h ${min % 60} min`);
+/** A job quiet so long, said on its step's line: "no output for 47 min". */
+export const quietSaid = (min: number) => `no output for ${minutesSaid(min)}`;
+/** And in a job's place in a list, where there is less room - for a job running, in place of "running": "quiet 47 min". */
+export const quietShort = (min: number) => `quiet ${minutesSaid(min)}`;
 
 /** A file written into a job's folder before it starts, by its path there. */
 export type JobFile = { name: string; text: string };

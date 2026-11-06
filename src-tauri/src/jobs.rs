@@ -2729,11 +2729,46 @@ pub struct JobListed {
     pub key: Option<String>,
     #[serde(flatten)]
     pub record: JobRecord,
+    /// When its program last wrote anything - its log, or a file of its work folder - in ms since 1970: a running
+    /// job's alone, for the page to say one that has written nothing for long (`lastWritten`).
+    #[serde(rename = "lastWritten", skip_serializing_if = "Option::is_none")]
+    pub last_written: Option<u64>,
 }
 
 fn listed(id: &str, dir: &Path) -> Option<JobListed> {
     let spec = read_spec(dir)?;
-    Some(JobListed { id: id.to_string(), plugin: spec.plugin, program: spec.name, key: spec.key, record: current_record(dir)? })
+    let record = current_record(dir)?;
+    let last_written = (record.state == JobState::Running).then(|| last_written(dir)).flatten();
+    Some(JobListed { id: id.to_string(), plugin: spec.plugin, program: spec.name, key: spec.key, record, last_written })
+}
+
+/// How many files of a work folder `last_written` looks at, at most: a program writing more is not looked at past them.
+const WRITTEN_MOST: usize = 5000;
+
+/// When the job in `dir` last wrote anything: its log, what ran after it, or any file of its work folder, the newest,
+/// in ms since 1970 - none where none can be read.
+fn last_written(dir: &Path) -> Option<u64> {
+    let ms = |p: &Path| fs::metadata(p).ok()?.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok().map(|d| d.as_millis() as u64);
+    let mut newest = [LOG, AFTER_LOG].iter().filter_map(|l| ms(&dir.join(l))).max();
+    let mut todo = vec![dir.join(WORK)];
+    let mut seen = 0;
+    while let Some(d) = todo.pop() {
+        let Ok(entries) = fs::read_dir(&d) else { continue };
+        for e in entries.flatten() {
+            seen += 1;
+            if seen > WRITTEN_MOST {
+                return newest;
+            }
+            let p = e.path();
+            // (never followed out of the folder: a link is taken as itself)
+            match e.file_type() {
+                Ok(t) if t.is_dir() => todo.push(p),
+                Ok(t) if t.is_file() => newest = newest.max(ms(&p)),
+                _ => {}
+            }
+        }
+    }
+    newest
 }
 
 #[tauri::command]
@@ -3820,6 +3855,31 @@ mod tests {
         ask_stop(&both).unwrap();
         run_job(&both);
         assert_eq!(current_record(&both).unwrap().state, JobState::Stopped);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_running_job_says_when_it_last_wrote_anything_and_a_finished_one_does_not() {
+        let root = temp();
+        let dir = shell(&root, ECHO, 1);
+        let id = dir.file_name().unwrap().to_string_lossy().into_owned();
+        let runner = OpenOptions::new().create(true).truncate(false).write(true).open(dir.join(RUNNER_LOCK)).unwrap();
+        runner.lock().unwrap();
+        write_record(&dir, &JobRecord { state: JobState::Running, started: Some(1), ..JobRecord::new(JobState::Waiting, 1) }).unwrap();
+        let before = now_ms();
+        std::thread::sleep(Duration::from_millis(20));
+        // (a file deep in its work folder, written last)
+        fs::create_dir_all(dir.join(WORK).join("a/b")).unwrap();
+        fs::write(dir.join(WORK).join("a/b/step.tmp"), "x").unwrap();
+        let last = listed(&id, &dir).unwrap().last_written.unwrap();
+        assert!(last >= before.saturating_sub(1000) && last <= now_ms() + 1000, "{last} {before}");
+        assert_eq!(last, last_written(&dir).unwrap());
+        // (said to the page as lastWritten)
+        assert!(serde_json::to_string(&listed(&id, &dir).unwrap()).unwrap().contains("\"lastWritten\":"));
+        // (finished: none)
+        write_record(&dir, &JobRecord { state: JobState::Done, ended: Some(2), ..JobRecord::new(JobState::Done, 1) }).unwrap();
+        assert_eq!(listed(&id, &dir).unwrap().last_written, None);
+        drop(runner);
         let _ = fs::remove_dir_all(root);
     }
 

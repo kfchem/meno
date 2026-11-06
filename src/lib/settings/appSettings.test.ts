@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   acceptAppSettings,
   DEFAULT_APP_SETTINGS,
+  QUIET_AFTER_MIN,
+  QUIET_AFTER_MOST,
   loadAppSettings,
   settingsFileText,
   useAppSettings,
@@ -87,6 +89,10 @@ describe("the settings file", () => {
     expect(acceptAppSettings({ calculations: { largeWorkspaceMB: 1024 } }).calculations).toEqual({ largeWorkspaceMB: 1024 });
     // (past the most a workspace's file may come to at all: not taken)
     expect(acceptAppSettings({ calculations: { largeWorkspaceMB: 2048 } }).calculations).toEqual({});
+    // (after how many minutes a running job is said quiet: a whole number up to a day, else Meno's default)
+    expect(acceptAppSettings({ calculations: { quietAfterMin: 45 } }).calculations).toEqual({ quietAfterMin: 45 });
+    for (const v of [0, 1441, 2.5, "30"]) expect(acceptAppSettings({ calculations: { quietAfterMin: v } }).calculations).toEqual({});
+    expect([QUIET_AFTER_MIN, QUIET_AFTER_MOST]).toEqual([30, 1440]);
     // (the computer kept awake while jobs run unless turned off: only the off kept)
     expect(acceptAppSettings({ calculations: { sleepWhileJobsRun: true } }).calculations).toEqual({ sleepWhileJobsRun: true });
     for (const v of [false, "yes", 1]) expect(acceptAppSettings({ calculations: { sleepWhileJobsRun: v } }).calculations).toEqual({});
