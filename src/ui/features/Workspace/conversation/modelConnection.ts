@@ -34,14 +34,18 @@ const MOST_CALLS = 64;
 /** The most what a plugin keeps of a reply may be, as JSON. */
 const MOST_KEEP = 2_000_000;
 
-/** The purpose a model's plugin uses the network under (src-tauri/src/model.rs `purpose`). */
-export const modelPurpose = (plugin: string) => `model:${plugin}`;
+/**
+ * The purpose a model's plugin uses the network under, its hosts in it, in
+ * order (src-tauri/src/model.rs `purpose`, the same): a yes is for those
+ * hosts - a plugin updated to name others is asked of again.
+ */
+export const modelPurpose = (plugin: string, hosts: readonly string[]) => `model:${plugin}@${[...hosts].sort().join(",")}`;
 
 /** The question asked before a conversation first goes to a plugin's hosts: where it goes, and what goes there. */
 export function consentOf(p: PythonPlugin): ConsentRequest {
   const hosts = p.roleHosts?.[MODEL_ROLE] ?? [];
   return {
-    purpose: modelPurpose(p.id),
+    purpose: modelPurpose(p.id, hosts),
     title: `Send this conversation to ${listSaid(hosts)}, for ${p.name}?`,
     detail: "What is said in it, and what it is given, goes there.",
     sources: [`${p.name}: ${hosts.join(", ")}`],
@@ -101,7 +105,7 @@ export function modelConnection(p: PythonPlugin, steps: ModelSteps = MENO_STEPS)
     id: p.id,
     to: hosts.join(", "),
     async send(request: ModelRequest): Promise<ModelReply> {
-      const purpose = modelPurpose(p.id);
+      const purpose = modelPurpose(p.id, hosts);
       const before = steps.allowed(purpose);
       if (!(await steps.ask(consentOf(p)))) throw new Error(`Nothing was sent: sending to ${listSaid(hosts)} was not allowed.`);
       // (its worker started before it was allowed went out nowhere: started again, now it may - the backend begins its task as it starts)

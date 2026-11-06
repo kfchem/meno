@@ -832,7 +832,7 @@ async fn ext_spawn_sidecar(
     // taken from the page - and those alone, under its own purpose, once
     // the person has allowed that (model.rs).
     let talks = plugin.as_deref().and_then(|id| model_hosts(&data, id).map(|hosts| (id.to_string(), hosts)));
-    let task = talks.as_ref().and_then(|(id, hosts)| net.begin(&model::purpose(id), &format!("{id}: talking with a model"), Some(hosts.clone())).ok());
+    let task = talks.as_ref().and_then(|(id, hosts)| net.begin(&model::purpose(id, hosts), &format!("{id}: talking with a model"), Some(hosts.clone())).ok());
     match &task {
         Some(task) => task.route(&mut cmd),
         None => net.route_nowhere(&mut cmd),
@@ -862,12 +862,9 @@ async fn ext_spawn_sidecar(
         let id2 = id.clone();
         std::thread::spawn(move || {
             // (a line not UTF-8 read as near as it can be: never taken for the worker's end)
-            // (a model plugin's key, should it say it, taken out first: model.rs)
-            each_line(stdout, |s| {
-                let s = app2.state::<model::Models>().scrub(&id2, &s).into_owned();
+            read_worker_output(&app2.state::<model::Models>(), &id2, stdout, true, |s| {
                 let _ = app2.emit("ext:stdout", serde_json::json!({"id": id2, "line": s}).to_string());
             });
-            app2.state::<model::Models>().ended(&id2);
             if app2.state::<ProcState>().reap(&id2) {
                 let _ = app2.emit("ext:exit", serde_json::json!({"id": id2}).to_string());
             }
@@ -879,14 +876,26 @@ async fn ext_spawn_sidecar(
         let app2 = app.clone();
         let id2 = id.clone();
         std::thread::spawn(move || {
-            each_line(stderr, |s| {
-                let s = app2.state::<model::Models>().scrub(&id2, &s).into_owned();
+            read_worker_output(&app2.state::<model::Models>(), &id2, stderr, false, |s| {
                 let _ = app2.emit("ext:stderr", serde_json::json!({"id": id2, "line": s}).to_string());
             });
         });
     }
 
     Ok(id)
+}
+
+/// One of a sidecar's streams - its output (`main`), or its errors - read
+/// line by line to its end, each line given to `each` with a model plugin's
+/// key, should the worker say it, taken out (model.rs). Its output at an
+/// end is the worker's end; its keys are kept to be taken out of whatever
+/// either stream still has to say, and let go once both are read.
+fn read_worker_output<R: Read>(models: &model::Models, id: &str, stream: R, main: bool, mut each: impl FnMut(String)) {
+    each_line(stream, |s| each(models.scrub(id, &s).into_owned()));
+    if main {
+        models.ended(id);
+    }
+    models.read_to_end(id);
 }
 
 /// Writes to a sidecar's stdin with the table let go first. A worker that
@@ -1831,45 +1840,68 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("meno-converse-{}", Uuid::new_v4()));
         fs::create_dir_all(dir.join("logs")).unwrap();
         logfile::start(&dir.join("logs"), "test");
-        // (a worker that says what it was given, key and all, on stdout and on stderr - as a careless plugin might)
+        // (a worker that says what it was given, key and all, on stdout and on stderr - as a careless plugin might -
+        // and then, its output at an end ("eof") or once it is stopped ("stop"), says it again on stderr, after much else)
         let worker = dir.join("worker.py");
         fs::write(
             &worker,
-            "import json, sys\nfor line in sys.stdin:\n    asked = json.loads(line)\n    print('heard ' + line.strip(), file=sys.stderr, flush=True)\n    print(json.dumps({'id': asked['id'], 'ok': True, 'result': {'text': 'key ' + asked.get('key', ''), 'keyed': asked.get('key') == sys.argv[1]}}), flush=True)\n",
+            "import json, sys, time\nline = sys.stdin.readline()\nasked = json.loads(line)\nprint('heard ' + line.strip(), file=sys.stderr, flush=True)\nprint(json.dumps({'id': asked['id'], 'ok': True, 'result': {'text': 'key ' + asked.get('key', ''), 'keyed': asked.get('key') == sys.argv[1]}}), flush=True)\nif sys.argv[2] == 'eof':\n    sys.stdout.close()\n    time.sleep(0.2)\nelse:\n    sys.stdin.readline()\nfor i in range(300):\n    print('noise %d' % i, file=sys.stderr, flush=True)\nprint('the request had ' + asked.get('key', ''), file=sys.stderr, flush=True)\n",
         )
         .unwrap();
-        let state = ProcState(Mutex::new(HashMap::new()));
-        let mut child = Command::new(python).arg(&worker).arg(KEY).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
-        let (stdout, stderr) = (child.stdout.take().unwrap(), child.stderr.take().unwrap());
-        let stdin = child.stdin.take().map(|s| Arc::new(Mutex::new(s)));
-        state.lock().insert("w1".into(), (child, stdin));
-        let keys = model::MemoryKeys(Mutex::new(HashMap::new()));
-        model::Keys::set(&keys, "talker", KEY).unwrap();
-        let models = model::Models::new(Box::new(keys));
-        models.started("w1", "talker", None);
-        // (the page's request: no key in it - Meno adds it on the way)
-        let line = models.converse_line("w1", r#"{"id":1,"op":"converse","told":"t","said":[],"tools":[],"options":{}}"#).unwrap();
-        write_stdin(&state, "w1", &line).unwrap();
-        // (what the page is given of what the worker said - and logs, as lib/log.ts does a worker's error)
-        let mut seen = Vec::new();
-        let mut out = BufReader::new(stdout);
-        let mut answer = String::new();
-        out.read_line(&mut answer).unwrap();
-        seen.push(models.scrub("w1", answer.trim_end()).into_owned());
-        state.reap("w1");
-        each_line(stderr, |l| seen.push(models.scrub("w1", &l).into_owned()));
-        for l in &seen {
-            logfile::log_page("error".into(), l.clone());
+        for how in ["eof", "stop"] {
+            let state = Arc::new(ProcState(Mutex::new(HashMap::new())));
+            let mut child = Command::new(python).arg(&worker).arg(KEY).arg(how).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+            let (stdout, stderr) = (child.stdout.take().unwrap(), child.stderr.take().unwrap());
+            let stdin = child.stdin.take().map(|s| Arc::new(Mutex::new(s)));
+            state.lock().insert("w1".into(), (child, stdin));
+            let keys = model::MemoryKeys(Mutex::new(HashMap::new()));
+            model::Keys::set(&keys, "talker", KEY).unwrap();
+            let models = Arc::new(model::Models::new(Box::new(keys)));
+            models.started("w1", "talker", None);
+            // (what the page is given of what the worker said, read as ext_spawn_sidecar reads it: each stream on its own thread)
+            let seen = Arc::new(Mutex::new(Vec::<String>::new()));
+            let reader = |stream: Box<dyn Read + Send>, main: bool| {
+                let (models, seen, state) = (models.clone(), seen.clone(), state.clone());
+                std::thread::spawn(move || {
+                    read_worker_output(&models, "w1", stream, main, |l| seen.lock().unwrap().push(l));
+                    if main {
+                        state.reap("w1");
+                    }
+                })
+            };
+            let out = reader(Box::new(stdout), true);
+            let err = reader(Box::new(stderr), false);
+            // (the page's request: no key in it - Meno adds it on the way)
+            let line = models.converse_line("w1", r#"{"id":1,"op":"converse","told":"t","said":[],"tools":[],"options":{}}"#).unwrap();
+            write_stdin(&state, "w1", &line).unwrap();
+            if how == "stop" {
+                // (stopped as ext_kill stops it - ended first - while what it says after is still to be read)
+                while !seen.lock().unwrap().iter().any(|l| l.starts_with("{")) {
+                    std::thread::sleep(std::time::Duration::from_millis(5));
+                }
+                models.ended("w1");
+                write_stdin(&state, "w1", "go\n").unwrap();
+            }
+            out.join().unwrap();
+            err.join().unwrap();
+            let seen = seen.lock().unwrap().clone();
+            for l in &seen {
+                logfile::log_page("error".into(), l.clone());
+            }
+            let answer: serde_json::Value = serde_json::from_str(seen.iter().find(|l| l.starts_with("{")).unwrap()).unwrap();
+            assert_eq!(answer["result"]["keyed"], serde_json::json!(true), "{how}: the worker was given its key");
+            assert_eq!(answer["result"]["text"], serde_json::json!("key [key]"));
+            assert!(seen.iter().all(|l| !l.contains(KEY)), "{how}: {:?}", seen.iter().filter(|l| l.contains(KEY)).collect::<Vec<_>>());
+            assert!(seen.iter().any(|l| l.starts_with("heard ") && l.contains("[key]")));
+            assert!(seen.contains(&"the request had [key]".to_string()), "{how}: its last line read");
+            assert_eq!(seen.iter().filter(|l| l.starts_with("noise ")).count(), 300);
+            // (both its streams read to their ends: forgotten, keys and all)
+            assert_eq!(models.scrub("w1", KEY), KEY);
+            // (and what the page is told where it asks wrongly)
+            for bad in [r#"{"op":"converse","key":"x"}"#, "{"] {
+                logfile::log_page("error".into(), models.converse_line("w1", bad).unwrap_err());
+            }
         }
-        // (and what the page is told where it asks wrongly)
-        for bad in [r#"{"op":"converse","key":"x"}"#, "{"] {
-            logfile::log_page("error".into(), models.converse_line("w1", bad).unwrap_err());
-        }
-        let answer: serde_json::Value = serde_json::from_str(&seen[0]).unwrap();
-        assert_eq!(answer["result"]["keyed"], serde_json::json!(true), "the worker was given its key");
-        assert_eq!(answer["result"]["text"], serde_json::json!("key [key]"));
-        assert!(seen.iter().all(|l| !l.contains(KEY)), "{seen:?}");
-        assert!(seen.iter().any(|l| l.starts_with("heard ") && l.contains("[key]")));
         let log = fs::read_to_string(dir.join("logs/meno.log")).unwrap();
         assert!(log.contains("[key]") && !log.contains(KEY), "{log}");
         let _ = fs::remove_dir_all(&dir);

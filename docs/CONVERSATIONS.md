@@ -444,19 +444,22 @@ points there from the plugin's card.
 **Its way out.** The backend reads the hosts again from the plugin's
 manifest in place - never from the page - and starts the plugin's worker
 pointed at the network gate under a task of its own: purpose
-`model:<plugin id>`, those hosts alone (src-tauri/src/model.rs). The
-first time a conversation goes to it, Meno asks: "Send this conversation
-to *hosts*, for *plugin*? What is said in it, and what it is given, goes
-there." A yes is remembered, as any purpose's, and withdrawn in Settings,
-*Network*; a no sends nothing. A worker started before the yes went out
-nowhere: it is started again, now that it may.
+`model:<plugin id>@<hosts>`, the hosts in order, those hosts alone
+(src-tauri/src/model.rs). The first time a conversation goes to it, Meno
+asks: "Send this conversation to *hosts*, for *plugin*? What is said in it,
+and what it is given, goes there." A yes is remembered, as any purpose's,
+and withdrawn in Settings, *Network*; a no sends nothing. The yes is for
+those hosts: a plugin updated to name others is asked of again, by the
+hosts it names now. A worker started before the yes went out nowhere: it
+is started again, now that it may.
 
 **A turn, sent.** A request goes to the worker as `converse` - Meno's
 words to the model, what has been said, the tools and the plugin's
 options - by the one way the backend takes it (`ext_converse`), which
 adds the person's key on the way. The page never holds the key: it can
 neither read it nor send a key of its own, nor send `converse` by the way
-other requests go. What the plugin answers is read strictly: its words,
+other requests go: to a model plugin's worker, that way takes only whole
+lines, each a JSON object, none of them a `converse`. What the plugin answers is read strictly: its words,
 plain text, and the tools it calls, each by name with its arguments - or
 its error; anything else is refused, never guessed at
 (conversation/modelConnection `replyOf`). With them, what the plugin keeps
@@ -481,6 +484,10 @@ told only whether one is kept. Where it is kept:
 
 The key is never shown to the page or written to Meno's log. Should a
 worker say it back, the backend takes it out of what the worker says
-before the page or the log sees it - a safeguard, not a promise for the
-plugin: what a plugin does with the key is its review's to check.
+before the page or the log sees it - every key given to that worker, on
+its output and its errors alike, until both are read to their ends, after
+it was stopped too. A safeguard, not a promise for the plugin: it finds the
+key as it was given, and not one the plugin writes otherwise (a `/` a JSON
+writer gives as `\/`, say); what a plugin does with the key is its
+review's to check.
 

@@ -1,7 +1,7 @@
 //! A plugin that talks with a model: the `language-model` role
 //! (docs/CONVERSATIONS.md, *Connections*). Its worker reaches the hosts its
 //! installed manifest names, and those alone, through the network gate,
-//! under the purpose `model:<id>`. The person's key for its service is kept
+//! under the purpose `model:<id>@<hosts>`. The person's key for its service is kept
 //! in the system's keychain and read here, never handed to the page: it is
 //! added to a `converse` request on its way to the worker (`ext_converse`),
 //! the one way such a request reaches it, and taken out again of whatever
@@ -27,9 +27,13 @@ const HOSTS_MOST: usize = 8;
 pub const NO_SAFE_PLACE: &str = "No safe place to keep a key on this system";
 
 /// The purpose a model's plugin uses the network under: allowed by the
-/// person once, as any, and withdrawn in Settings, Network.
-pub fn purpose(plugin: &str) -> String {
-    format!("model:{plugin}")
+/// person once, as any, and withdrawn in Settings, Network. The hosts are in
+/// it, in order: a yes is for those hosts, and a plugin in place that names
+/// others - updated - is asked of again (lib's `modelPurpose`, the same).
+pub fn purpose(plugin: &str, hosts: &[String]) -> String {
+    let mut hosts = hosts.to_vec();
+    hosts.sort();
+    format!("model:{plugin}@{}", hosts.join(","))
 }
 
 /// The hosts a manifest's `language-model` role names, read as the page
@@ -154,12 +158,20 @@ impl Keys for SystemKeys {
 
 /// A model plugin's worker, as Meno started it: whose it is, the network
 /// task it goes out under (none where its purpose was not allowed when it
-/// started), and the key last given to it, to be taken out of what it says.
+/// started, or once it has ended), every key given to it, to be taken out of
+/// what it says, and how many of its streams - its output and its errors -
+/// are still read. It is forgotten, keys and all, only once the last of
+/// them is read to its end: what it said till then is all taken out.
 struct Worker {
     plugin: String,
     task: Option<TaskHandle>,
-    given: Option<String>,
+    given: Vec<String>,
+    reading: u8,
+    ended: bool,
 }
+
+/// The streams of a worker read: its output and its errors.
+const STREAMS: u8 = 2;
 
 /// The model plugins' workers running, by their sidecars' ids, and where
 /// keys are kept.
@@ -181,15 +193,37 @@ impl Models {
         self.keys.as_ref()
     }
 
-    /// A model plugin's worker started, as `sidecar`.
+    /// A model plugin's worker started, as `sidecar`, before its streams are read.
     pub fn started(&self, sidecar: &str, plugin: &str, task: Option<TaskHandle>) {
-        self.workers().insert(sidecar.into(), Worker { plugin: plugin.into(), task, given: None });
+        self.workers().insert(sidecar.into(), Worker { plugin: plugin.into(), task, given: Vec::new(), reading: STREAMS, ended: false });
     }
 
-    /// A worker gone: its network task ended with it.
+    /// A worker gone, or stopped: its network task ended with it, and nothing
+    /// more sent it. What it still says is read, its keys taken out
+    /// (`read_to_end`).
     pub fn ended(&self, sidecar: &str) {
-        if let Some(Worker { task: Some(task), .. }) = self.workers().remove(sidecar) {
+        let task = self.workers().get_mut(sidecar).and_then(|w| {
+            w.ended = true;
+            w.task.take()
+        });
+        if let Some(task) = task {
             task.finish(true);
+        }
+    }
+
+    /// One of a worker's streams read to its end; the last of them, and the
+    /// worker is forgotten with its keys - ended, should it not be already.
+    pub fn read_to_end(&self, sidecar: &str) {
+        let last = match self.workers().get_mut(sidecar) {
+            Some(w) => {
+                w.reading = w.reading.saturating_sub(1);
+                w.reading == 0
+            }
+            None => false,
+        };
+        if last {
+            self.ended(sidecar);
+            self.workers().remove(sidecar);
         }
     }
 
@@ -199,28 +233,43 @@ impl Models {
     /// plugin's, the request is not a converse, it brings a key of its own,
     /// or no key is kept.
     pub fn converse_line(&self, sidecar: &str, request: &str) -> Result<String, String> {
-        let plugin = self.workers().get(sidecar).map(|w| w.plugin.clone()).ok_or("Not a model plugin's worker")?;
+        let plugin = self.workers().get(sidecar).filter(|w| !w.ended).map(|w| w.plugin.clone()).ok_or("Not a model plugin's worker")?;
         let key = self.keys.get(&plugin)?.ok_or_else(|| format!("No key is kept for {plugin}: add it in Settings, Conversations"))?;
         let line = with_key(request, &key)?;
-        if let Some(w) = self.workers().get_mut(sidecar) {
-            w.given = Some(key);
+        // (each key given kept, an earlier one too - Settings may give it another while a request is under way)
+        match self.workers().get_mut(sidecar) {
+            Some(w) if !w.given.contains(&key) => w.given.push(key),
+            Some(_) => {}
+            None => return Err("Not a model plugin's worker".into()),
         }
         Ok(line + "\n")
     }
 
-    /// Whether what the page writes to `sidecar` holds a converse request:
-    /// to a model plugin's worker, only `converse_line` sends one.
+    /// Whether what the page writes to `sidecar` is refused: to a model
+    /// plugin's worker, only whole lines, each a JSON object - read as the
+    /// worker reads it, line by line - that is no converse request; only
+    /// `converse_line` sends one. A line split over two writes, or one that
+    /// is not read here as it would be there, never reaches it.
     pub fn refuses(&self, sidecar: &str, data: &str) -> bool {
-        self.workers().contains_key(sidecar) && data.lines().any(|l| serde_json::from_str::<Value>(l).ok().and_then(|v| v.get("op").and_then(Value::as_str).map(|op| op == "converse")).unwrap_or(false))
+        let line_ok = |l: &str| {
+            l.trim().is_empty()
+                || serde_json::from_str::<Value>(l).ok().is_some_and(|v| v.is_object() && v.get("op").and_then(Value::as_str) != Some("converse"))
+        };
+        self.workers().contains_key(sidecar) && (!data.ends_with('\n') || !data.lines().all(line_ok))
     }
 
-    /// A line `sidecar` said, with the key given to it taken out, wherever
+    /// A line `sidecar` said, with every key given to it taken out, wherever
     /// it is: what the page and the log are given.
     pub fn scrub<'a>(&self, sidecar: &str, line: &'a str) -> Cow<'a, str> {
-        match self.workers().get(sidecar).and_then(|w| w.given.as_deref()) {
-            Some(key) if line.contains(key) => Cow::Owned(line.replace(key, "[key]")),
-            _ => Cow::Borrowed(line),
+        let workers = self.workers();
+        let Some(w) = workers.get(sidecar) else { return Cow::Borrowed(line) };
+        let mut out = Cow::Borrowed(line);
+        for key in &w.given {
+            if out.contains(key.as_str()) {
+                out = Cow::Owned(out.replace(key.as_str(), "[key]"));
+            }
         }
+        out
     }
 }
 
@@ -325,12 +374,84 @@ mod tests {
     }
 
     #[test]
-    fn a_worker_gone_is_forgotten_with_its_key() {
+    fn a_worker_ended_has_its_keys_taken_out_till_both_its_streams_are_read_and_is_then_forgotten() {
         let m = models();
         m.converse_line("w1", r#"{"op":"converse"}"#).unwrap();
+        // (ended - its output at an end, or stopped: nothing more sent it, but what it still says has its key taken out)
         m.ended("w1");
+        assert!(m.converse_line("w1", r#"{"op":"converse"}"#).is_err());
+        assert_eq!(m.scrub("w1", &format!("late {KEY}")), "late [key]");
+        // (one stream read to its end: the other still has its key taken out)
+        m.read_to_end("w1");
+        assert_eq!(m.scrub("w1", &format!("later {KEY}")), "later [key]");
+        assert!(m.refuses("w1", "{\"op\":\"converse\"}\n"));
+        // (both read: forgotten, keys and all)
+        m.read_to_end("w1");
         assert!(!m.refuses("w1", "{\"op\":\"converse\"}\n"));
         assert!(m.converse_line("w1", r#"{"op":"converse"}"#).is_err());
+        // (its streams read to their ends before it was stopped: ended with the last of them)
+        let m = models();
+        m.converse_line("w1", r#"{"op":"converse"}"#).unwrap();
+        m.read_to_end("w1");
+        assert_eq!(m.scrub("w1", KEY), "[key]");
+        m.read_to_end("w1");
+        assert_eq!(m.scrub("w1", KEY), KEY);
+    }
+
+    #[test]
+    fn a_worker_ended_ends_its_network_task_and_is_given_no_other() {
+        let net = crate::net::Net::default();
+        net.allow(&purpose("talker", &["api.example.com".to_string()]));
+        let task = net.begin(&purpose("talker", &["api.example.com".to_string()]), "talker: talking with a model", Some(vec!["api.example.com".into()])).unwrap();
+        let m = models();
+        m.started("w1", "talker", Some(task));
+        assert_eq!(net.running(), 1);
+        m.ended("w1");
+        assert_eq!(net.running(), 0);
+        // (ended again, or read to its end: nothing more to finish)
+        m.ended("w1");
+        m.read_to_end("w1");
+        m.read_to_end("w1");
+        assert_eq!(net.running(), 0);
+    }
+
+    #[test]
+    fn every_key_given_is_taken_out_an_earlier_one_too() {
+        let keys = MemoryKeys(Mutex::new(HashMap::new()));
+        keys.set("talker", KEY).unwrap();
+        let m = Models::new(Box::new(keys));
+        m.started("w1", "talker", None);
+        m.converse_line("w1", r#"{"op":"converse"}"#).unwrap();
+        // (a new key set in Settings while the first request is under way: both taken out of what it says)
+        m.keys().set("talker", "sk-test-new-0123456789").unwrap();
+        m.converse_line("w1", r#"{"op":"converse"}"#).unwrap();
+        assert_eq!(m.scrub("w1", &format!("{KEY} then sk-test-new-0123456789")), "[key] then [key]");
+    }
+
+    #[test]
+    fn the_page_writes_a_model_plugins_worker_whole_lines_alone_each_one_read_as_the_worker_reads_it() {
+        let m = models();
+        // (a converse split over two writes: refused, each part)
+        assert!(m.refuses("w1", "{\"op\":\"converse\""));
+        assert!(m.refuses("w1", ",\"told\":\"t\"}\n"));
+        // (a line read otherwise there than here - Python's NaN - or not an object, or no JSON: refused)
+        assert!(m.refuses("w1", "{\"op\":\"converse\",\"x\":NaN}\n"));
+        assert!(m.refuses("w1", "[\"converse\"]\n"));
+        assert!(m.refuses("w1", "not json\n"));
+        // (whole lines of other requests, and blank ones: written)
+        assert!(!m.refuses("w1", "{\"id\":1,\"op\":\"ping\"}\n"));
+        assert!(!m.refuses("w1", "{\"id\":1,\"op\":\"ping\"}\r\n\n{\"id\":2,\"op\":\"stop\"}\n"));
+        // (another plugin's worker is as it was)
+        assert!(!m.refuses("w2", "{\"op\":\"converse\""));
+    }
+
+    #[test]
+    fn a_yes_is_for_the_hosts_it_was_given_for() {
+        let h = |hs: &[&str]| hs.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(purpose("talker", &h(&["b.example.com", "a.example.com"])), "model:talker@a.example.com,b.example.com");
+        assert_eq!(purpose("talker", &h(&["a.example.com", "b.example.com"])), purpose("talker", &h(&["b.example.com", "a.example.com"])));
+        // (a plugin updated to name another host: another purpose, asked of again)
+        assert_ne!(purpose("talker", &h(&["api.example.com"])), purpose("talker", &h(&["api.example.com", "other.example.net"])));
     }
 
     #[test]
