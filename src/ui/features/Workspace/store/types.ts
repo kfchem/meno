@@ -1,3 +1,6 @@
+import type { Conversation } from "../conversation/types";
+import type { ConversationPatch } from "../conversation/ops";
+import type { Talking } from "./slices/conversationsSlice";
 import type { Failure, FailureKind } from "../workflow/failures";
 import type { Converged } from "../workflow/converged";
 import type { LeftOut } from "../utils/readNotes";
@@ -1474,6 +1477,24 @@ export type EditorState = {
   selShapes: Set<number>;
   hoveredShape: number | null;
   shapeDraft: ShapeDraft | null;
+  /** The conversations on the page, each in its frame (conversation/types); which is under the pointer, which is read in the column, and each one's turn - the view's. */
+  conversations: Conversation[];
+  hoveredConversation: number | null;
+  conversationShown: number | null;
+  talking: Record<number, Talking>;
+  setHoveredConversation: (id: number | null) => void;
+  addConversation: (frame: { x0: number; y0: number; x1: number; y1: number }) => number | null;
+  moveConversation: (id: number, dx: number, dy: number, gesture?: string) => void;
+  resizeConversation: (id: number, frame: { x0: number; y0: number; x1: number; y1: number }, gesture?: string) => void;
+  updateConversation: (id: number, patch: ConversationPatch) => void;
+  removeConversation: (id: number) => void;
+  readConversation: (id: number) => void;
+  stopReadingConversation: () => void;
+  clearConversation: (id: number) => void;
+  sendToConversation: (id: number, words: string) => Promise<void>;
+  stopConversation: (id: number) => void;
+  keepConversationChanges: (id: number) => void;
+  discardConversationChanges: (id: number) => "dropped" | "running" | "since" | "none";
   /** The catalytic cycles on the page (lib/chem/cycle); which are selected, which is under the pointer - the view's. */
   cycles: Cycle[];
   selCycles: Set<number>;

@@ -75,8 +75,18 @@ export function changeSet(coalesceKey: string, by: string): ChangeSetMeta {
   return { coalesceKey, coalesceWithinMs: Infinity, by };
 }
 
-/** What a change set is made with: its own key, by which its caller may drop it, and who made it. */
-export type ChangeSetMeta = EditMeta & { coalesceKey: string; by: string };
+/**
+ * The same change set, gone on with: its edits join the step on top where
+ * that is the change set's own - its key and its maker - as a turn of a
+ * conversation does its work in several goes, a reply at a time. After any
+ * other step, they are a step of their own.
+ */
+export function goneOn(meta: ChangeSetMeta): ChangeSetMeta {
+  return { ...meta, goneOn: true };
+}
+
+/** What a change set is made with: its own key, by which its caller may drop it, and who made it - and whether it is gone on with (`goneOn`). */
+export type ChangeSetMeta = EditMeta & { coalesceKey: string; by: string; goneOn?: true };
 
 export type HistoryInfo = {
   undoDepth: number;
@@ -268,7 +278,8 @@ export function createDocument<T>(
     },
 
     edit(label, updater, meta = {}) {
-      const first = acting != null && !acting.made;
+      // (a change set's first edit never joins the step on top - unless it goes on with its own)
+      const first = acting != null && !acting.made && !(acting.meta as ChangeSetMeta).goneOn;
       if (acting) ({ label, meta } = acting);
       let next = updater(present.state);
       if (Object.is(next, present.state)) return false;

@@ -490,6 +490,8 @@ export const createModelSlice = (
           nextSlideId: (drawn.slides ?? []).length + 1,
           inks: (drawn.inks ?? []).map((k, i) => ({ ...k, id: i + 1 })),
           nextInkId: (drawn.inks ?? []).length + 1,
+          conversations: (ws.conversations ?? []).map((c, i) => ({ ...c, id: i + 1 })),
+          nextConversationId: (ws.conversations ?? []).length + 1,
         },
         // (a file saved without one: Settings' style, set as it is - fixed, not converted; opened in a tab, no change made)
         ws.style ?? useAppSettings.getState().drawingStyle,
