@@ -59,6 +59,8 @@ objc2-app-kit = { version = "0.3.1", default-features = false, features = ["std"
 objc2-foundation = { version = "0.3.1", default-features = false, features = ["std", "NSArray", "NSData", "NSGeometry", "NSString", "NSURL"] }
 # (and src/defaults.rs: the block the system answers a change of default app with)
 block2 = "0.6"
+# A model plugin's key, kept in the macOS keychain (src/model.rs)
+keyring = { version = "=3.6.3", features = ["apple-native"] }
 
 [target.'cfg(windows)'.dependencies]
 # (and jobs.rs: a job's program, and what it starts, in a job object; savefile.rs:
@@ -67,6 +69,8 @@ windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Graphic
 # Structures as OLE objects in Office documents (src/ole.rs): the COM
 # server's interfaces. The version the webview's crates already use.
 windows-core = "0.61" # (what `#[implement]` expands to names it)
+# A model plugin's key, kept in Windows' Credential Manager (src/model.rs)
+keyring = { version = "=3.6.3", features = ["windows-native"] }
 # One Meno: a workspace file opened while it runs comes to it (src/opened.rs)
 tauri-plugin-single-instance = "2"
 # A pinch the page takes for its own zoom (src/pinch.rs): WebView2's settings,

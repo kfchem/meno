@@ -32,6 +32,9 @@ import { ChemClient } from "../roles/client";
 /** A plugin's worker, running: its clients - for files and steps, and for the roles it fills - its process, and its version. */
 export type PluginWorker = { reader: ReaderClient; chem: ChemClient; id: string; version: string };
 
+/** A converse request, as the clients write one (roles/client `request`): its id, then its op. */
+const CONVERSE = /^\{"id":\d+,"op":"converse"[,}]/;
+
 /** How long a worker's first import may take: a cold start is slow. */
 const READY_MS = 90_000;
 
@@ -101,7 +104,10 @@ async function start(p: PythonPlugin, mine: () => boolean): Promise<PluginWorker
   };
   const transport = {
     send: (line: string) => {
-      if (id !== null) void invoke("ext_stdin", { id, data: line + "\n" });
+      if (id === null) return;
+      // (a converse request goes by the one way the backend takes it, which adds the person's key: src-tauri/src/model.rs)
+      if (CONVERSE.test(line)) return invoke("ext_converse", { id, request: line });
+      void invoke("ext_stdin", { id, data: line + "\n" });
     },
     listen: (f: (line: string) => void) => {
       onLine.add(f);

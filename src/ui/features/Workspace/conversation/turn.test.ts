@@ -251,4 +251,16 @@ describe("a turn of a conversation", () => {
     expect(answers[1]).toMatchObject({ ok: true, answer: { found: [] } });
     expect(answers[2]).toMatchObject({ ok: false });
   });
+
+  it("gives back to the model's plugin what it keeps of each reply, with what was said - never saved", async () => {
+    const { turn, said } = page();
+    const keep = { content: [{ type: "thinking", thinking: "", signature: "sig-1" }, { type: "tool_use", id: "t1", name: "list", input: {} }] };
+    const { model, done } = turn("What is here?", [{ text: "", calls: [{ tool: "list" }], keep }, { text: "Methanol." }]);
+    await done;
+    const modelRow = said().find((x) => x.by === "model")!;
+    expect(modelRow).toMatchObject({ by: "model", keep });
+    // (the second request carries it back, on the reply it came with)
+    expect(model.asked[1].said.find((x) => x.by === "model")).toMatchObject({ keep });
+  });
 });
+

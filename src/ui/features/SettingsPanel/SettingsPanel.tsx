@@ -24,6 +24,7 @@ import JobSettings from "./JobSettings";
 import ProcedureSettings from "./ProcedureSettings";
 import PluginSettings from "./PluginSettings";
 import { useSettingsSection, type SettingsSection } from "./section";
+import ConversationSettings from "./ConversationSettings";
 import { COLUMN_WIDTH, SECTION_WIDTH } from "./widths";
 
 const SECTIONS: { id: SettingsSection; name: string }[] = [
@@ -34,6 +35,7 @@ const SECTIONS: { id: SettingsSection; name: string }[] = [
   { id: "chemistry", name: "Chemistry" },
   { id: "files", name: "Files" },
   { id: "calculations", name: "Calculations" },
+  { id: "conversations", name: "Conversations" },
   { id: "plugins", name: "Plugins" },
   { id: "abbreviations", name: "Dictionary" },
   { id: "network", name: "Network" },
@@ -158,6 +160,16 @@ export default function SettingsPanel() {
               has them.
             </p>
             <ChemistrySettings />
+          </section>
+        ) : section === "conversations" ? (
+          <section className={SECTION}>
+            <h2 className="text-base font-semibold text-gh-black">Conversations</h2>
+            <p className="mt-1 mb-4 text-sm text-gh-gray">
+              Who talks with a model for a conversation on the page, its options, and the key for its service. Nothing
+              is sent until a plugin that does it is added, and Meno asks before a conversation first goes to its
+              service.
+            </p>
+            <ConversationSettings />
           </section>
         ) : section === "files" ? (
           <section className={SECTION}>

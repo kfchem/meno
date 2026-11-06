@@ -1375,8 +1375,10 @@ closing quits Meno once they have been asked to stop.
 | `plugin_stage`, `plugin_commit`, `plugin_discard` | `lib/plugins/online.ts` | A plugin's files from the catalogue: fetched, checked and unpacked into a stage; taken into use as its version, `current` naming it; or thrown away (`catalogue.rs`). |
 | `plugin_files_remove` | - | A plugin's files taken away: `current` first, then its folder (`catalogue.rs`). |
 | `ext_spawn_sidecar` | `lib/plugins/process.ts` | Spawn a process with piped stdio; returns an id. |
-| `ext_stdin` | `lib/plugins/process.ts` | Write to a sidecar's stdin. |
+| `ext_stdin` | `lib/plugins/process.ts` | Write to a sidecar's stdin: to a model plugin's worker, whole lines alone, each a JSON object and none a converse (`model.rs`). |
 | `ext_kill` | `lib/plugins/process.ts` | Kill a sidecar and emit `ext:exit`. |
+| `ext_converse` | `lib/plugins/process.ts` | A converse request to a model plugin's worker, the person's key added from the keychain; the one way such a request reaches it (`model.rs`). |
+| `model_key_set`, `model_key_forget`, `model_key_held` | `lib/roles/modelKey.ts` | A model plugin's key kept in the system's keychain, forgotten, or whether one is kept - never read back (`model.rs`). |
 | `pdf_hold_path`, `pdf_hold_bytes` | `lib/pdf/reader.ts` | A PDF held in Meno's cache by its SHA-256; its pages' sizes (`pdf.rs`). |
 | `pdf_bytes` | `utils/workspace.ts` | A PDF held, as its bytes, for a workspace's file. |
 | `pdf_render` | `lib/pdf/reader.ts` | A part of a page drawn by PDFium, as a PNG. |

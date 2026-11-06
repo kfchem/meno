@@ -24,7 +24,8 @@ export type ToolCall = { tool: string; args?: Record<string, unknown> };
  */
 export type Said =
   | { by: "person"; text: string; at: number }
-  | { by: "model"; text: string; calls?: ToolCall[]; at: number }
+  /** `keep`: what the model's plugin keeps of its reply - its own record, opaque to Meno - sent back to it with what is said, and never saved (utils/workspace). */
+  | { by: "model"; text: string; calls?: ToolCall[]; keep?: unknown; at: number }
   /** A tool's answer, and the things of the page it gave, by their ids (`things`): not sent again once one lies outside the frame. */
   | { by: "tool"; tool: string; answer: unknown; ok: boolean; things?: string[]; at: number }
   | { by: "meno"; text: string; at: number };
