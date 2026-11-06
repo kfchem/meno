@@ -457,9 +457,20 @@ conformers, case F, F2).
   set aside as not finished, never passed on as one that is. An entry
   renumbered keeps its energy and its imaginary frequencies, which are of
   its geometry however it is numbered, and its thermochemistry and
-  vibrations as properties of its own, renumbered with it; its calculation
-  is not carried, and the step's line says so. One numbered as it was keeps
-  all it held.
+  vibrations as properties of its own, renumbered with it. It keeps what
+  its energy is of: the calculation's program, version, method, basis,
+  solvation, charge and spin, and how it was made (a conformer search's
+  method and force field). Where a run ended converged at its geometry,
+  so it still is: the same places, numbered otherwise. The atoms the
+  calculation held (and the run that converged, where it held any), the
+  drawing's atom each atom is, and its stereo labels are renumbered with
+  it. So a
+  compound's conformers, some renumbered and some not, are still of one
+  calculation, their energies in one list, and an *Energy window* after
+  the step runs on them. The calculation's results, and the output and
+  wavefunction they were read from, number its atoms as they were: they
+  are not carried, and the step's line says so ("its calculation's results
+  not carried"). One numbered as it was keeps all it held.
 - **Nothing in part.** An entry with no hydrogens, with no reference to
   pair with, or one whose atoms do not all map one to one, goes out of *Not
   mapped* with why written on it (`set_aside`). Not one reference where it

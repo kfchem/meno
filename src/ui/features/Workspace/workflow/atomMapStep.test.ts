@@ -1,14 +1,17 @@
 import { describe, expect, it } from "vitest";
 import type { Molecule } from "../../../../lib/chem/molecule";
 import { dielsAlder, sn2 } from "../../../../lib/chem/reactionMap.fixtures";
-import { setEntries, type SetEntry } from "./entries";
+import { calcRenumbered, keptRenumbered, setEntries, unlikeMade, type SetEntry } from "./entries";
 import { measuredSet } from "./structureSteps";
 import { kindInfo } from "./kinds";
-import { runMenoPair } from "./meno";
+import { runMeno, runMenoPair } from "./meno";
+import { energiesFrom } from "./setTable";
+import { convergedAt, convergedIn, convergedOf } from "./converged";
+import type { Molecule3D } from "../store/types";
 import { addMolecule3d, emptyWorkspaceDocument } from "../document";
 import { addSet, addStep, connect } from "./model";
 import { resultOf } from "./flow";
-import { runStep, type RunWith } from "./run";
+import { resultsOf, runStep, type RunWith } from "./run";
 import { setName } from "./doers";
 import { BETWEEN } from "./look";
 
@@ -67,15 +70,34 @@ describe("Atom map, as a step: a reaction's products onto its reactants", () => 
     ]);
   });
 
-  it("never passes on a product not finished as one that is; a finished one keeps its energy and imaginary frequencies, its calculation said not carried", () => {
+  it("never passes on a product not finished as one that is; a finished one keeps its energy, its imaginary frequencies and what they are of, its calculation's results said not carried", () => {
     const unfinished = { ...product, energy: -5.5, failed: { kind: "not-converged", why: "100 cycles" } } as SetEntry;
     const o = ok(runMenoPair("atom-map", { entries: [unfinished], holds: "molecules" }, { entries: [reactant], holds: "molecules" }, R));
     expect(o.kept).toEqual([]);
     expect(o.aside.map((e) => [String(e.properties?.set_aside?.value), e.energy])).toEqual([["not finished: not converged", -5.5]]);
-    const finished = { ...product, energy: -5.5, imaginary: [-412.3], calc: { program: "xtb", readers: ["xtb 1"] } } as unknown as SetEntry;
+    const calc = { program: "xtb", version: "6.7.1", method: "GFN2-xTB", readers: ["xtb 1"], charge: 0, multiplicity: 1, imaginary: [-412.3] };
+    const finished = { ...product, energy: -5.5, imaginary: [-412.3], calc: { ...calc, results: [{ name: "charges" }], source: { name: "p.out", sha256: "ab" }, held: [0, 15] } } as unknown as SetEntry;
     const f = ok(runMenoPair("atom-map", { entries: [finished], holds: "molecules" }, { entries: [reactant], holds: "molecules" }, R));
-    expect([f.kept[0].energy, f.kept[0].imaginary, f.kept[0].calc]).toEqual([-5.5, [-412.3], undefined]);
-    expect(f.said).toBe("1 of 1 mapped, its calculation not carried");
+    // (what the calculation was, kept - the atoms it held as numbered now; its results and the output they were read from, numbering its atoms as they were, not)
+    const order = f.kept[0].atoms.map((a) => da.product.atoms.findIndex((p) => p.x === a.x && p.y === a.y && p.z === a.z));
+    expect([f.kept[0].energy, f.kept[0].imaginary, f.kept[0].calc]).toEqual([-5.5, [-412.3], { ...calc, held: [order.indexOf(0), order.indexOf(15)] }]);
+    expect(f.said).toBe("1 of 1 mapped, its calculation's results not carried");
+    // (what the calculation was alone, kept whole: nothing said not carried)
+    expect(ok(runMenoPair("atom-map", { entries: [{ ...finished, calc } as unknown as SetEntry], holds: "molecules" }, { entries: [reactant], holds: "molecules" }, R)).said).toBe("1 of 1 mapped");
+  });
+
+  it("carries a run's ending converged at a renumbered product's geometry - the same places - the atoms it held numbered as now; one of another geometry not", () => {
+    const how = "optimisation with atoms held" as const;
+    const held = { ...product, converged: convergedAt(how, product.xyz, [0, 15]) } as SetEntry;
+    const [made] = ok(runMenoPair("atom-map", { entries: [held], holds: "molecules" }, { entries: [reactant], holds: "molecules" }, R)).kept;
+    const order = made.atoms.map((a) => da.product.atoms.findIndex((p) => p.x === a.x && p.y === a.y && p.z === a.z));
+    expect(order.some((j, at) => j !== at)).toBe(true);
+    expect(made.converged).toEqual(convergedAt(how, made.xyz, [order.indexOf(0), order.indexOf(15)]));
+    expect(convergedOf(made)).toEqual(made.converged);
+    // (as a file gives it back)
+    expect(convergedIn(JSON.parse(JSON.stringify(made.converged)))).toEqual(made.converged);
+    const elsewhere = { ...product, converged: convergedAt("optimisation", product.xyz.map((v) => v + 0.1)) } as SetEntry;
+    expect(ok(runMenoPair("atom-map", { entries: [elsewhere], holds: "molecules" }, { entries: [reactant], holds: "molecules" }, R)).kept[0].converged).toBeUndefined();
   });
 
   it("names each mapped product apart - two of one name by their places - under a name of Meno's own, replacing and saying one the product carried; its vibrations kept", () => {
@@ -224,6 +246,39 @@ describe("Atom map, as a step: conformers onto their species", () => {
     const o = ok(runMenoPair("atom-map", { entries: [entryOf(da.product)], holds: "molecules" }, { entries: [entryOf(da.reactants[0])], holds: "molecules" }, same));
     expect(o.kept).toEqual([]);
     expect(String(o.aside[0].properties?.set_aside?.value)).toMatch(/^The map has bonds .* formed, .* of another order, and its bonds are to stay the same\.$/);
+  });
+
+  it("keeps a compound's energies where only some of its conformers are renumbered: each still of the one calculation, written as one molecule, and an Energy window after it runs", () => {
+    // (conformers as a search gives them: their energies of its calculation, and how they were made; a CIP label on C1=C2, bond 0)
+    const calc = { readers: ["meno"], program: "RDKit", version: "2026.03.6", method: "MMFF94" };
+    const keep = { drawnFrom: [1, 2, 3, null, null, null, null, null, null], drawnAs: "propene", made: { method: "ETKDG v3, MMFF94", how: [], energies: "MMFF94" }, stereo: { atoms: {}, bonds: { 0: "E" } } };
+    const conformer = (swapped: boolean, energy: number, number: number) => propene(swapped, { energy, number, calc, keep } as unknown as Partial<SetEntry>);
+    const o = ok(runMenoPair("atom-map", { entries: [conformer(false, -1.5, 1), conformer(true, -1.4, 2)], holds: "conformers" }, { entries: [propene()], holds: "molecules" }, same));
+    expect(o.said).toBe("2 of 2 mapped");
+    expect(o.kept.map((e) => [e.energy, e.calc, e.keep])).toEqual([
+      [-1.5, calc, keep],
+      [-1.4, calc, keep],
+    ]);
+    expect(unlikeMade(o.kept)).toBeNull();
+    // (as the step writes them to the page: one molecule, its two energies, what worked them out said)
+    const [m] = resultsOf(o, "atom-map").molecules;
+    expect([m.energies, energiesFrom(m), m.made]).toEqual([[-1.5, -1.4], energiesFrom({ calc, energies: [-1.5], made: keep.made }), keep.made]);
+    const window = runMeno("energy-window", setEntries([{ ...m, id: 1 } as Molecule3D], "conformers"), "conformers", { window: 3 });
+    expect(window).toMatchObject({ ok: true });
+  });
+
+  it("renumbers what a renumbered conformer keeps with it: the drawing's atom each atom is, its labels, the atoms its calculation held", () => {
+    // (H4 and H5 swapped: bond 2, C1-H4, now C1-H5, bond 3, and the other way round)
+    const now = [0, 1, 2, 4, 3, 5, 6, 7, 8];
+    const kept = { drawnFrom: [1, 2, 3, 4, 5, null, null, null, null], drawnAs: "d", made: { how: [] }, stereo: { atoms: { 3: "a" }, bonds: { 2: "b", 0: "E" }, shown: { atoms: [3], bonds: [2] } }, centres: [{ metal: 3, atoms: [0, 4] }] };
+    expect(keptRenumbered(kept, now, now, [0, 1, 3, 2, 4, 5, 6, 7])).toEqual({
+      drawnFrom: [1, 2, 3, 5, 4, null, null, null, null],
+      drawnAs: "d",
+      made: { how: [] },
+      stereo: { atoms: { 4: "a" }, bonds: { 3: "b", 0: "E" }, shown: { atoms: [4], bonds: [3] } },
+      centres: [{ metal: 4, atoms: [0, 3] }],
+    });
+    expect(calcRenumbered({ readers: ["meno"], method: "GFN2-xTB", held: [3, 0], results: [], source: { name: "a.out", sha256: "ab" } } as never, now)).toEqual({ readers: ["meno"], method: "GFN2-xTB", held: [4, 0] });
   });
 });
 

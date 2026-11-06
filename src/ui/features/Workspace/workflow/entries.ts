@@ -702,6 +702,56 @@ export function keptOf(m: Kept): Kept {
   };
 }
 
+/**
+ * What an entry keeps of its calculation, its atoms renumbered (`now`: each
+ * atom's new place): what the calculation was - the readers, program,
+ * version, method, basis, solvation, charge and spin, its imaginary
+ * frequencies - and the atoms it held, as numbered now; so that its energy
+ * is still one of that calculation, alike with its compound's others not
+ * renumbered (`unlikeMade`). Not its results, nor the output and the
+ * wavefunction it was read from: those number its atoms as they were.
+ */
+export function calcRenumbered(c: CalcInfo, now: readonly number[]): CalcInfo {
+  const { results: _results, source: _source, wavefunction: _wavefunction, held, ...level } = c;
+  return { ...level, ...(held ? { held: held.map((a) => now[a]) } : {}) };
+}
+
+/** Whether renumbering an entry leaves any of its calculation behind (`calcRenumbered`): its results, or the files they were read from. */
+export function calcLeftBehind(c: CalcInfo | undefined): boolean {
+  return !!(c?.results?.length || c?.source || c?.wavefunction);
+}
+
+/**
+ * What an entry keeps besides (`Kept`), its atoms renumbered (`order`: the
+ * atom each place now has; `now`, each atom's new place) and its bonds with
+ * them (`bondNow`: each bond's new place, -1 where it has none): how it was
+ * made and what its drawing was, as they were; the drawing's atom each of
+ * its atoms is, its CIP labels and which are chosen and shown, and its bonds
+ * to ring centres, as numbered now - its compound's others alike with it
+ * still (`unlikeMade`, `keptAlike`).
+ */
+export function keptRenumbered(k: Kept, order: readonly number[], now: readonly number[], bondNow: readonly number[]): Kept {
+  const atoms = (as: readonly number[]) => as.map((a) => now[a]);
+  const bonds = (bs: readonly number[]) => bs.map((b) => bondNow[b] ?? -1).filter((b) => b >= 0);
+  const st = k.stereo;
+  return {
+    drawnFrom: k.drawnFrom?.length === order.length ? order.map((j) => k.drawnFrom![j]) : undefined,
+    drawnAs: k.drawnAs,
+    ...(st
+      ? {
+          stereo: {
+            atoms: Object.fromEntries(Object.entries(st.atoms).map(([a, l]) => [now[Number(a)], l])),
+            bonds: Object.fromEntries(Object.entries(st.bonds).flatMap(([b, l]) => ((bondNow[Number(b)] ?? -1) >= 0 ? [[bondNow[Number(b)], l]] : []))),
+            ...(st.chosen ? { chosen: { atoms: atoms(st.chosen.atoms), bonds: bonds(st.chosen.bonds) } } : {}),
+            ...(st.shown ? { shown: { atoms: atoms(st.shown.atoms), bonds: bonds(st.shown.bonds) } } : {}),
+          },
+        }
+      : {}),
+    ...(k.made ? { made: k.made } : {}),
+    ...(k.centres?.length ? { centres: k.centres.map((c) => ({ metal: now[c.metal], atoms: atoms(c.atoms) })) } : {}),
+  };
+}
+
 /** `v` as JSON with every object's keys in order: two values equal as data give the one text. */
 function stableJson(v: unknown): string {
   if (Array.isArray(v)) return `[${v.map(stableJson).join(",")}]`;
