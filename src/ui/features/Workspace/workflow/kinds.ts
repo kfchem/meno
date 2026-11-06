@@ -841,6 +841,7 @@ export const KINDS: readonly KindInfo[] = [
     kind: "onto-structures",
     name: "3D results onto structures",
     icon: "onto",
+    family: "energies",
     takes: ["structures", "conformers", "molecules"],
     gives: "same",
     runs: "entries",
