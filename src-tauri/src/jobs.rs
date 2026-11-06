@@ -446,6 +446,25 @@ fn stop_asked(dir: &Path) -> bool {
     GOING.load(Ordering::SeqCst) || dir.join(STOP).exists()
 }
 
+/// What its `stop` file says where the job alone is stopped, not its step (`ask_stop_alone`).
+const ALONE: &str = "alone";
+/// Why a job stopped alone is recorded failed (lib's `STOPPED_ALONE`).
+const STOPPED_ALONE: &str = "stopped by you";
+
+/// Whether the stop asked of a job was of it alone - its step to go on without it - and not of Meno going.
+fn stopped_alone(dir: &Path) -> bool {
+    !GOING.load(Ordering::SeqCst) && fs::read_to_string(dir.join(STOP)).is_ok_and(|t| t.trim() == ALONE)
+}
+
+/// How a job stopped ends: failed, saying why, where it alone was stopped - its step bringing in the rest - else stopped.
+fn stopped_as(dir: &Path) -> (JobState, Option<String>) {
+    if stopped_alone(dir) {
+        (JobState::Failed, Some(STOPPED_ALONE.into()))
+    } else {
+        (JobState::Stopped, None)
+    }
+}
+
 /// Set once the runner is asked to go (macOS, Linux: SIGTERM, SIGINT or
 /// SIGHUP - a logout, `kill`, Activity Monitor's Quit): it stops its job as
 /// a stop does, and goes.
@@ -494,6 +513,12 @@ fn sleep_watching(dir: &Path, long: Duration) {
 /// Ask a job to stop: its runner stops its program and everything it started - or, not started yet, lets it go.
 pub fn ask_stop(dir: &Path) -> std::io::Result<()> {
     fs::write(dir.join(STOP), b"")
+}
+
+/// Ask a job alone to stop, as `ask_stop` - recorded failed, "stopped by you" (`STOPPED_ALONE`), so that its step
+/// brings in what its other jobs gave. A stop of its step asked after it is a stop as ever.
+pub fn ask_stop_alone(dir: &Path) -> std::io::Result<()> {
+    fs::write(dir.join(STOP), ALONE)
 }
 
 /// Meno's executable started as a job's runner (`--job <folder>`): the job
@@ -573,7 +598,8 @@ pub fn run_job(dir: &Path, allowed: &dyn Fn(&JobSpec) -> Result<(), String>) -> 
     let mut unsure = 0;
     loop {
         if stop_asked(dir) {
-            end(JobState::Stopped, None, None, None);
+            let (state, why) = stopped_as(dir);
+            end(state, None, None, why);
             return 0;
         }
         // (its folder taken away, or its record ended by another - written gone, say: no turn to wait for)
@@ -615,7 +641,8 @@ pub fn run_job(dir: &Path, allowed: &dyn Fn(&JobSpec) -> Result<(), String>) -> 
     let (status, stopped) = wait_program(dir, &mut program);
     let code = status.and_then(|s| s.code());
     if stopped {
-        end(JobState::Stopped, started, code, None);
+        let (state, why) = stopped_as(dir);
+        end(state, started, code, why);
     } else if !status.is_some_and(|s| s.success()) {
         end(JobState::Failed, started, code, None);
     } else {
@@ -631,7 +658,8 @@ pub fn run_job(dir: &Path, allowed: &dyn Fn(&JobSpec) -> Result<(), String>) -> 
                 }
             };
             if wait_program(dir, &mut after).1 {
-                end(JobState::Stopped, started, code, None);
+                let (state, why) = stopped_as(dir);
+                end(state, started, code, why);
                 drop(lock);
                 return 0;
             }
@@ -2793,6 +2821,12 @@ pub async fn job_stop(app: AppHandle, id: String) -> Result<(), String> {
     ask_stop(&job_dir(&app, &id)?).map_err(|e| e.to_string())
 }
 
+/// A job alone stopped, its step going on without it (`ask_stop_alone`).
+#[tauri::command]
+pub async fn job_stop_alone(app: AppHandle, id: String) -> Result<(), String> {
+    ask_stop_alone(&job_dir(&app, &id)?).map_err(|e| e.to_string())
+}
+
 /// What a job's folder taken away is named first: no job's id.
 const TAKEN: &str = ".taken-";
 
@@ -3593,6 +3627,37 @@ mod tests {
         let r = current_record(&dir).unwrap();
         assert_eq!((r.state, r.started), (JobState::Stopped, None));
         assert!(!dir.join(WORK).join("result.txt").exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_job_stopped_alone_ends_failed_saying_so_running_or_waiting_and_a_stop_of_its_step_after_is_a_stop() {
+        let root = temp();
+        // (running: its program stopped, and it recorded failed, "stopped by you")
+        let dir = shell(&root, LONG, 1);
+        let runner = {
+            let d = dir.clone();
+            std::thread::spawn(move || run_job(&d))
+        };
+        wait_for(|| current_record(&dir).is_some_and(|r| r.state == JobState::Running));
+        let t = Instant::now();
+        ask_stop_alone(&dir).unwrap();
+        runner.join().unwrap();
+        let r = current_record(&dir).unwrap();
+        assert_eq!((r.state, r.why.as_deref()), (JobState::Failed, Some(STOPPED_ALONE)));
+        assert!(r.started.is_some() && t.elapsed() < Duration::from_secs(10));
+        // (waiting: never started, failed so too)
+        let waiting = shell(&root, ECHO, 1);
+        ask_stop_alone(&waiting).unwrap();
+        run_job(&waiting);
+        let r = current_record(&waiting).unwrap();
+        assert_eq!((r.state, r.started, r.why.as_deref()), (JobState::Failed, None, Some(STOPPED_ALONE)));
+        // (its step stopped after: stopped, as ever)
+        let both = shell(&root, ECHO, 1);
+        ask_stop_alone(&both).unwrap();
+        ask_stop(&both).unwrap();
+        run_job(&both);
+        assert_eq!(current_record(&both).unwrap().state, JobState::Stopped);
         let _ = fs::remove_dir_all(root);
     }
 

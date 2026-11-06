@@ -9,7 +9,7 @@ import type { CalcSource, ReaderOutput } from "../../../../../lib/calc/output";
 import { readOutput } from "../../../../../lib/calc/read";
 import { heldOutput, rememberOutput } from "../../../../../lib/calc/asks";
 import { addedNow, pluginClient } from "../../../../../lib/calc/workers";
-import { computerCores, computerResources, finished, jobDigest, jobFiles, jobFolder, jobOf, limitsOf, listJobs, overLimits, processesOf, programStamp, readJobFile, readJobLog, removeJob, runningOf, startJob, stopJob, writeJobBack, type Job } from "../../../../../lib/jobs";
+import { computerCores, computerResources, finished, jobDigest, jobFiles, jobFolder, jobOf, limitsOf, listJobs, overLimits, processesOf, programStamp, readJobFile, readJobLog, removeJob, runningOf, startJob, stopJob, stopJobAlone, STOPPED_ALONE, writeJobBack, type Job } from "../../../../../lib/jobs";
 import { heldJobFile, heldJobSource, showFilesSaid } from "../../workflow/keptJobs";
 import { valuesOf, type OptionValues } from "../../../../../lib/options";
 import { lookFor, programKey, tooOld, useInstalled } from "../../../../../lib/plugins/installed";
@@ -1666,6 +1666,11 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           fails(mine.map(() => undefined), "failed", "What came into it changed while it ran");
           continue;
         }
+        // (stopped alone - Stop this job - its step going on: each of its entries failed, stopped, as the chemist asked)
+        if (record.state === "failed" && record.why === STOPPED_ALONE) {
+          fails(mine, "stopped", "Stopped by you");
+          continue;
+        }
         // (failed before its program could say: its runner's own words - "orca could not be started", say)
         if (record.state === "failed" && record.why) {
           fails(mine, "not-started", record.why);
@@ -1938,6 +1943,12 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       menoKills.get(id)?.();
       for (const j of stepOf(doc.getState(), id)?.running?.jobs ?? []) void stopJob(j.id).catch(() => {});
       void lookAtJobs();
+    },
+    /** One of a running step's jobs stopped alone (*Stop this job*): recorded failed, its entries said stopped - the step going on, bringing in what its other jobs gave. */
+    stopJobAlone: (job: string) => {
+      void stopJobAlone(job)
+        .catch(() => {})
+        .then(() => lookAtJobs());
     },
     stopAll: () => {
       for (const id of Object.keys(get().menoWorking)) menoStops.add(Number(id));

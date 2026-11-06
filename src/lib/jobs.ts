@@ -104,6 +104,10 @@ export const writeJobBack = (id: string, name: string, sha256: string, source: {
     : invoke<WrittenBack>("job_write_back", source.bytes, { headers: { job: id, name, sha256 } });
 /** Asks a job to stop: its program, and everything it started - or, waiting, it never starts. */
 export const stopJob = (id: string) => runnerOf(id).stop(id);
+/** Asks a job alone to stop - as `stopJob`, but recorded failed, "stopped by you" (`STOPPED_ALONE`): its step goes on, bringing in what its other jobs gave. */
+export const stopJobAlone = (id: string) => runnerOf(id).stopAlone(id);
+/** Why a job stopped alone is recorded failed (src-tauri jobs.rs `STOPPED_ALONE`). */
+export const STOPPED_ALONE = "stopped by you";
 /** A finished job's folder taken away. */
 export const removeJob = (id: string) => runnerOf(id).remove(id);
 /** Every finished job's folder taken away: how many. */
