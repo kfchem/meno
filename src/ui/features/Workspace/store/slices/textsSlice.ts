@@ -39,7 +39,7 @@ export function createTextsSlice(doc: DocumentStore<WorkspaceDocument>, set: Set
       doc.edit(gone.size > 1 ? "delete texts" : "delete text", (d) => ops.removeTexts(d, gone));
       set((prev: EditorState) => ({ ...prev, selTexts: new Set([...prev.selTexts].filter((id) => !gone.has(id))), hoveredText: prev.hoveredText != null && gone.has(prev.hoveredText) ? null : prev.hoveredText }));
     },
-    showText: (id: number) => set({ textShown: id, textsOpen: true, pdfShown: null, setTableShown: null }),
+    showText: (id: number) => set({ textShown: id, textsOpen: true, pdfShown: null, setTableShown: null, conversationShown: null }),
     // (read in the column: its tab there, as a PDF's is - not a step to undo; store/index shows it, as one come)
     readText: (id: number) => {
       const t = doc.getState().texts?.find((x) => x.id === id);
@@ -52,6 +52,7 @@ export function createTextsSlice(doc: DocumentStore<WorkspaceDocument>, set: Set
         textsOpen: true,
         pdfShown: null,
         setTableShown: null,
+        conversationShown: null,
         ...(t.at && !(prev.textsOpen && prev.textShown === id && prev.pdfShown == null) ? { textFlight: { id, to: "column" as const, start: performance.now() } } : {}),
       }));
     },

@@ -26,6 +26,7 @@ import { kekuleOrders } from "./kekulize";
 import type { TextRun } from "./layout2d";
 import { ELEMENTS as TABLE, NOT_METALS } from "./elements";
 import { VALENCE } from "./formula";
+import { movedBond } from "./structureBonds";
 
 export type Abbreviation = {
   /** How it is written when its bond comes in from the left: OTBS, CO2Me. */
@@ -312,7 +313,7 @@ export function byRule(label: string): (GroupStructure & { name: string }) | nul
       for (let k = 0; k < (m[1] ? Number(m[1]) : 1); k++) {
         const at = atoms.length;
         atoms.push(...s.atoms.map((a) => (a.tetra ? { ...a, tetra: { ...a.tetra, neighbours: a.tetra.neighbours.map((n) => (n < 0 ? n : n + at)) } } : { ...a })));
-        bonds.push(...s.bonds.map((b) => ({ ...b, a1: b.a1 + at, a2: b.a2 + at, ...(b.endpoints ? { endpoints: b.endpoints.map((e) => e + at) } : {}) })));
+        bonds.push(...s.bonds.map((b) => movedBond(b, (i) => i + at)));
         for (const ax of s.axes ?? []) {
           axes.push({ atoms: [ax.atoms[0] + at, ax.atoms[1] + at], refs: [ax.refs[0] + at, ax.refs[1] + at], sense: ax.sense });
         }
@@ -343,7 +344,7 @@ function ionStructure(label: string): (GroupStructure & { name: string }) | null
     for (let k = 0; k < n; k++) {
       const at = atoms.length;
       atoms.push(...one.atoms.map((a) => ({ ...a })));
-      bonds.push(...one.bonds.map((b) => ({ ...b, a1: b.a1 + at, a2: b.a2 + at })));
+      bonds.push(...one.bonds.map((b) => movedBond(b, (i) => i + at)));
     }
     return { atoms, bonds, attach: [], name: `${n} ${counted[1]}` };
   }
@@ -760,12 +761,32 @@ export function smilesGroup(smiles: string): GroupStructure {
   const index = new Map(keep.map((old, i) => [old, i]));
   let attach = 0;
   const bonds: Smiles["bonds"] = [];
+  const around = read.atoms.map(() => [] as number[]);
+  for (const b of read.bonds) {
+    around[b.a1].push(b.a2);
+    around[b.a2].push(b.a1);
+  }
   read.bonds.forEach((b, i) => {
     if (b.a1 === star || b.a2 === star) {
       attach = index.get(b.a1 === star ? b.a2 : b.a1) ?? 0;
       return;
     }
-    bonds.push({ a1: index.get(b.a1)!, a2: index.get(b.a2)!, order: orders[i] });
+    // (a double bond's cis or trans kept: a ref on the "*" moved to its end's other neighbour, the sense turned - or, where
+    //  the end has none, -1, the atom outside it is attached to)
+    let cisTrans: Smiles["bonds"][number]["cisTrans"];
+    if (b.cisTrans) {
+      let cis = b.cisTrans.cis;
+      const refs = b.cisTrans.refs.map((r, k) => {
+        if (r !== star) return index.get(r)!;
+        const end = k === 0 ? b.a1 : b.a2;
+        const other = around[end].find((n) => n !== star && n !== (k === 0 ? b.a2 : b.a1));
+        if (other == null) return -1;
+        cis = !cis;
+        return index.get(other)!;
+      });
+      cisTrans = { refs: [refs[0], refs[1]], cis };
+    }
+    bonds.push({ a1: index.get(b.a1)!, a2: index.get(b.a2)!, order: orders[i], ...(cisTrans ? { cisTrans } : {}) });
   });
   return {
     atoms: keep.map((i) => {

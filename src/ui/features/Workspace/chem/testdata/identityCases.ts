@@ -5,12 +5,6 @@
  * the wedges the engine draws - and written as Meno writes a molfile. Each
  * case is named; cases that are one structure share a `same`.
  */
-import { readSmiles } from "../../../../../lib/chem/smiles";
-import { layout2D } from "../../../../../lib/layout/engine";
-import { fromSmiles } from "../../../../../lib/layout/testdata/fromSmiles";
-import { emptyWorkspaceDocument, relayout } from "../../document";
-import type { Model } from "../../store/types";
-import { relayoutFrom } from "../engineLayout";
 
 export type IdentityCase = { name: string; smiles: string; same: string };
 
@@ -53,21 +47,5 @@ export const IDENTITY_CASES: readonly IdentityCase[] = [
   { name: "1,2-dimethylcyclooctatetraene, across a single bond", smiles: "CC1=CC=CC=CC=C1C", same: "dimethyl-COT" },
 ];
 
-/**
- * A SMILES drawn as Meno's engine draws it, as a drawing on the page: its
- * atoms (ids from 1, in the SMILES's order), each with its charge and mass
- * number, its bonds Kekulé, laid out and wedged by the engine - the same
- * path Clean-up takes (`relayoutFrom`), given the SMILES's configurations
- * in place of a drawing's.
- */
-export function drawnFromSmiles(smiles: string): Model {
-  const s = readSmiles(smiles);
-  const input = fromSmiles(smiles);
-  const model: Model = {
-    atoms: s.atoms.map((a, i) => ({ id: i + 1, el: a.el, x: 0, y: 0, r: 0.9, ...(a.charge ? { charge: a.charge } : {}), ...(a.isotope ? { isotope: a.isotope } : {}) })) as Model["atoms"],
-    bonds: input.bonds.map((b, k) => ({ id: 1000 + k, a: b.a + 1, b: b.b + 1, order: b.order as 1 | 2 | 3 })),
-  };
-  const job = { input, ids: model.atoms.map((a) => a.id), folded: new Map<number, number[]>() };
-  const change = relayoutFrom(model, model, job, layout2D(input));
-  return relayout({ ...emptyWorkspaceDocument(), model, nextId: 2000 }, change).model;
-}
+/** A SMILES drawn as Meno's engine draws it (utils/smilesDrawn). */
+export { drawnFromSmiles } from "../../utils/smilesDrawn";

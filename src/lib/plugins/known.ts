@@ -12,6 +12,7 @@
  * binding); what is worked out from it is worked out again
  * (`onPluginsChanged`: lib/calc/catalog).
  */
+import { create } from "zustand";
 import { acceptManifest, newerOf, type Manifest } from "./manifest";
 
 /** Where the plugins' folders are, in Meno's local data folder: a plugin's file is `plugins/<id>/<version>/<file>`. */
@@ -33,6 +34,14 @@ let newer = new Map<string, { name: string; version: string; why: string }>();
 export const newerHere = (id: string) => newer.get(id);
 
 const listeners = new Set<() => void>();
+
+/**
+ * How many times the plugins Meno knows of were taken anew: what a page
+ * listing them draws again by (Settings, Plugins) - one whose files were
+ * taken away gone from it at once, not drawn on from a manifest no longer
+ * here, its kinds named by their ids.
+ */
+export const usePluginsHere = create<{ taken: number }>(() => ({ taken: 0 }));
 
 /** Called each time the plugins Meno knows of are taken anew; what it gives takes the call away. */
 export function onPluginsChanged(listener: () => void): () => void {
@@ -71,6 +80,8 @@ export function setInstalled(list: readonly InstalledPlugin[]): void {
   places = next;
   newer = newerNext;
   for (const listener of listeners) listener();
+  // (after what is worked out from them is worked out again: lib/calc/catalog)
+  usePluginsHere.setState((s) => ({ taken: s.taken + 1 }));
 }
 
 /** Where plugin `id` is in place: its version in use and its folder - none where Meno knows of no such plugin. */

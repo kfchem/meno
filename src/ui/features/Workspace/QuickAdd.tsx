@@ -4,9 +4,10 @@ import { motion } from "motion/react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { RISE } from "../../theme/motion";
 import { useLeaving } from "../../theme/leaving";
-import { CalculationsGlyph, ProcedureGlyph, StepGlyph } from "./workflow/icons";
+import { CalculationsGlyph } from "./workflow/icons";
 import { placeQuickAdd } from "./quickAddPlace";
-import { labelWidth } from "./quickAddLabel";
+import { calcHeight, listWidth } from "./quickAddLabel";
+import QuickAddCalculations from "./QuickAddCalculations";
 import { guideNotice } from "../../../lib/guide/guide";
 import type { StepKind } from "./workflow/kinds";
 import type { QuickGroup } from "./workflow/offered";
@@ -250,24 +251,22 @@ export default function QuickAdd({
       window.removeEventListener("keydown", onKey, true);
     };
   }, [onClose, leaving]);
-  // (a row for each who does steps: its name, then its kinds - and one for the procedures, after them)
+  // (a row for each who does steps, its steps under it - and one for the procedures, after them: as wide as their names need, whatever the row above holds)
   const offered = wired ? [] : procedures;
-  const most = Math.max(1, ...steps.map((g) => g.steps.length), offered.length);
-  const labelW = useMemo(() => labelWidth([...steps.map((g) => g.name), ...(offered.length ? ["Procedures"] : [])]), [steps, offered.length]);
-  const calcWidth = labelW + most * SIZE + 8;
+  const calcWidth = useMemo(() => listWidth([...steps.flatMap((g) => [g.name, ...g.steps.map((k) => k.name)]), ...(wired ? [] : procedures).map((p) => p.name)]), [steps, procedures, wired]);
+  const listHeight = calcHeight([...steps.map((g) => g.steps.length), ...(offered.length ? [offered.length] : [])]);
   // (its icons, the Calculations one among them, the gaps between them, the divider before Calculations, the card's padding: the rules and the field below span it whole)
   const rowWidth = (ROW.length + 1) * (SIZE + GAP) + 8 + 9;
   // (a wire's: as wide as its rows, or the words saying there are none)
-  const width = wired ? (steps.length ? calcWidth : 200) : calcOpen ? Math.max(rowWidth, calcWidth) : rowWidth;
-  const rows = Math.max(1, steps.length) + (offered.length ? 1 : 0);
+  const width = wired ? (steps.length ? calcWidth + 8 : 200) : calcOpen ? Math.max(rowWidth, calcWidth + 8) : rowWidth;
   // (its size with each panel open below its row - a wire's, its calculations alone - and where it stands, chosen once, as it opens)
   const sizeOf = (panel: QuickPanel): { width: number; height: number } => {
-    if (wired) return { width, height: Math.max(1, steps.length) * SIZE + 8 };
+    if (wired) return { width, height: Math.max(SIZE, listHeight) + 8 };
     switch (panel) {
       case "none":
         return { width: rowWidth, height: SIZE + 8 };
       case "calculations":
-        return { width: Math.max(rowWidth, calcWidth), height: SIZE + 8 + rows * SIZE + 9 };
+        return { width: Math.max(rowWidth, calcWidth + 8), height: SIZE + 8 + Math.max(SIZE, listHeight) + 9 };
       case "smiles":
         return { width: rowWidth, height: SIZE + 8 + SMILES_H };
       case "scheme":
@@ -391,49 +390,11 @@ export default function QuickAdd({
       {/* (opening below the row in a short ease, not at once) */}
       <div className="grid transition-[grid-template-rows,opacity] duration-200 ease-meno" style={{ gridTemplateRows: calcOpen ? "1fr" : "0fr", opacity: calcOpen ? 1 : 0 }}>
         <div className="overflow-hidden">
-          <div role="group" aria-label="Calculations" className={wired ? "" : "mt-1 pt-1 border-t border-gh-line"} style={{ width: wired ? undefined : width - 8 }}>
-            {steps.length ? (
-              steps.map((g) => (
-                <div key={g.by} role="group" aria-label={g.name} className="flex items-center">
-                  <span className="shrink-0 truncate px-1.5 text-xs text-gh-gray" style={{ width: labelW }} title={g.name}>
-                    {g.name}
-                  </span>
-                  {g.steps.map((k) => (
-                    <button
-                      key={k.kind}
-                      aria-label={`${k.name} \u00b7 ${g.name}`}
-                      title={k.name}
-                      onClick={() => onStep(k.kind, g.by)}
-                      className="rounded-md flex items-center justify-center text-gh-black hover:bg-gh-base"
-                      style={{ width: SIZE, height: SIZE }}
-                    >
-                      <StepGlyph icon={k.icon} size={20} stroke={2.1} />
-                    </button>
-                  ))}
-                </div>
-              ))
+          <div className={wired ? "" : "mt-1 pt-1 border-t border-gh-line"} style={{ width: width - 8 }}>
+            {steps.length || offered.length ? (
+              <QuickAddCalculations steps={steps} procedures={offered} width={width - 8} shown={calcOpen} onStep={onStep} onProcedure={onProcedure} />
             ) : (
               <div className="px-2 text-xs leading-9 text-gh-gray whitespace-nowrap">No step added takes this</div>
-            )}
-            {offered.length > 0 && (
-              <div role="group" aria-label="Procedures" className="flex items-center">
-                <span className="shrink-0 truncate px-1.5 text-xs text-gh-gray" style={{ width: labelW }}>
-                  Procedures
-                </span>
-                {offered.map((p) => (
-                  <button
-                    key={p.id}
-                    aria-label={`Procedure: ${p.name}`}
-                    title={p.needs.length ? `${p.name} - needs ${p.needs.join(" and ")}` : p.name}
-                    disabled={p.needs.length > 0}
-                    onClick={() => onProcedure?.(p.id)}
-                    className="rounded-md flex items-center justify-center text-gh-black hover:bg-gh-base disabled:opacity-35 disabled:hover:bg-transparent"
-                    style={{ width: SIZE, height: SIZE }}
-                  >
-                    <ProcedureGlyph size={20} stroke={2.1} />
-                  </button>
-                ))}
-              </div>
             )}
           </div>
         </div>

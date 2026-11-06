@@ -127,9 +127,12 @@ built*).
   step and standing to the right of its card, empty and *Not run yet*
   until the step runs. Every step has its first exit; a step that can set
   entries aside has a second, under it (*Outside it*, *Alike*, *The
-  rest*). A step has no port that gives of its own: its exits' sets give.
+  rest*). Each exit has a port of its own on the card's right edge, in
+  its kind's order, the line to its set leaving from it: the port is that
+  set's (*Exit ports*, below).
 - **Port** - where a wire starts or ends: a set gives from its right
-  edge; a step's input takes on its card's left edge.
+  edge, and a step's exit from its port on the card's right edge; a
+  step's input takes on its card's left edge.
 - **Wire** - a line from a set to a step's input.
 - **Run** - one time a step was carried out, and what it gave; a step
   keeps its runs.
@@ -640,14 +643,27 @@ one of the kinds of calculation it does (decided: 16):
   arrow, and the two groups *Scheme* and *Marks on the page* (`QuickAdd.tsx`;
   docs/EDITOR-2D.md) - and gains **one button**: *Calculations*, a small
   graph of two joined sets, after a thin rule.
-- **Pressed, it opens** a panel below the row, a line for each plugin
-  added that does steps - those that run a program first - then Meno:
-  its name, and the kinds of calculation it does, each an icon, named on
-  hover (decided: 16). *As conformers* is not among Meno's: it is
-  reached from a compound set's port, its wire let go on empty space - a
-  conversion taken on purpose.
-- **Only what is added is there.** With no plugin added, the panel shows
-  Meno's line alone; nothing is shown of plugins not added.
+- **Pressed, it opens** a list below the row (`QuickAddCalculations`;
+  the maintainer, 2026-11-04): a row for who does steps - Meno's own
+  first, then each plugin added, then the procedures saved - its name and
+  how many it offers. One is open at a time, the one opened last (Meno's
+  the first time; kept in the settings), its steps under it, each its
+  icon and its name, named in full on hover; in their families - what
+  makes or sorts structures, energies, paths, charts (`family` in
+  workflow/kinds) - each apart by a thin rule. A row opens and shuts in a
+  short ease, and pressed again shuts. *As conformers* is not among
+  Meno's: it is reached from a compound set's port, its wire let go on
+  empty space - a conversion taken on purpose.
+- **As tall as it needs, never past some 560 px**: the steps of the one
+  open scroll within it past that, never fewer than six shown, with a
+  thin rail of Meno's own shown all the while they go past it
+  (controls/ScrollRail), not the system's bar. It stands as wide as its
+  longest name needs, whatever the row above holds; a name longer than
+  the most is cut, said whole on hover.
+- **Up and Down** go from row to row, the steps of the one open among
+  them; Enter does what is on it.
+- **Only what is added is there.** With no plugin added, the list shows
+  Meno's row alone; nothing is shown of plugins not added.
 - **A wire let go on an input that does not take it** is not made, and
   the step's card says why where its state is: "It takes a conformer set,
   not molecules in 3D" (2026-10-22). It says so until a wire is drawn
@@ -1129,6 +1145,33 @@ or shorter for a smaller look; a chemist's own sets are left as they
 are. A molecule switched is one step to undo, with its set; a look
 chosen in Settings is not a step of the workspace, and lays out the
 states an undo goes back to as well.
+
+### Hold its restraints
+
+An optimisation - to a minimum, or to a saddle point - may hold an entry's
+atoms fixed where they stand as its program runs, where its plugin says its
+program can (PLUGINS.md, `steps`, `restraints`): *Hold its restraints*, a
+choice of Meno's on the step's card, beside the plugin's (the maintainer,
+2026-11-06; ConfoTS's optimisation with its reacting atoms fixed).
+
+- **No, by default**: the entry optimised free of its restraints, which
+  ride along as ever - a restrained search's conformers optimised freely.
+- **Atoms fixed**: the atoms its restraints fix (*Restraints*, atoms fixed,
+  typed from 1) held where they stand; an entry that fixes none optimised as
+  any is. Its calculation's line says them ("atoms 1, 4, 7 held"), and how
+  it converged too: "optimisation with atoms held".
+- **Held, checked**: each atom held must end within 1e-4 Å of where it stood,
+  as its program gave it back - far above what the programs' printed
+  coordinates round to, far below any step an optimisation takes. One that
+  moved fails the entry ("Atom 3 moved though held"): a program, or an
+  optimiser of it, that does not hold atoms as asked is never taken for one
+  that did.
+- **Never left unheld unsaid**: an entry whose restraints hold what the step
+  does not - distances, torsions - is refused, out of *Failed*, saying which.
+- **No stationary point**: an entry optimised with atoms held is refused by
+  what takes one - Frequencies, Populations, Energy window, Choose one,
+  Duplicates' ranking, Barrier - saying which atoms it held, until it is
+  optimised free of them.
 
 ### Solvation as asked
 
@@ -1995,20 +2038,27 @@ Built, as the maintainer chose from pictures (decided: 18, 19):
   `--page`, set on the layer the page's HTML is drawn in as the zoom
   changes - from where each hangs, and faded out below 75 %, with
   the sets' names and the cards' words (`utils/pageScale`). Each is laid
-  out at that scale (CSS `zoom`, `PAGE_SIZED`), its words set at the size
+  out at that scale (CSS `zoom`, `pageSized`), its words set at the size
   they are seen at - not drawn at one size and scaled by a transform
   (2026-10-25; so the
   frames chip, *Make again*, a measurement's value and the notes over a
-  molecule or a figure).
+  molecule or a figure) - once the zoom stands still.
+- **Chips scaled while the zoom moves, laid out once it stands**
+  (2026-11-05): laying out every chip at every frame of a zoom held a page
+  of 283 molecules in 3D - some 14 700 elements in its chips - to a frame
+  every 0.6 s. While the zoom moves, `--page` stays as it was last
+  written and each chip is scaled from where it hangs by how far the zoom
+  has gone from there (`--page-k`; a molecule's or a figure's notes by
+  `--notes-k`, between their two scales: `pageTold`); a frame after the
+  zoom stops, `--page` is written and each is laid out at it, its words
+  crisp, at the size it was shown at.
 - **Written as the zoom moves, half a per cent at a time** (2026-10-31):
-  `--page`, and `--hair` that the cards' lines are as wide as (and
-  `--scale` that ports are laid out by), lay out
-  every chip and card on the page again each time they are written - some
-  80 ms on a page of sixty steps, every frame of a zoom. While the zoom
-  moves they are written only once it has gone half a per cent from the
-  last written (`zoomWritten`) - half a pixel on a chip a hundred wide,
-  not seen - and, once it stands still, as it is. A wheel's zoom on that
-  page is over half a second sooner; the laying out itself stays.
+  `--hair` that the cards' lines are as wide as (and `--scale` that ports
+  are laid out by) lay out every card on the page again each time they
+  are written - some 80 ms on a page of sixty steps, every frame of a
+  zoom. While the zoom moves they are written only once it has gone half
+  a per cent from the last written (`zoomWritten`) - half a pixel on a
+  card two hundred wide, not seen - and, once it stands still, as it is.
 - **Quick Add** opens where it will stay as a panel opens below its row -
   its calculations, or the field a SMILES is typed in: its side is chosen
   once, for its largest, and it is held by its top left corner, so that
@@ -2171,6 +2221,35 @@ them again). Not yet: a kind with two or three inputs, and matching them
 on a property - none of Meno's kinds takes two yet; the first come with
 the structure steps and *Path search*. *Tag*, which writes the property
 they match on, comes with Meno's own nodes.
+
+### Exit ports (2026-11-05)
+
+Each of a step's exits has a port of its own on the card - what it kept,
+and what it set aside or could not do - as each of its inputs has (the
+maintainer, 2026-10-31). A wire still starts at a set (`WireEnd`): the
+port is that exit's set's.
+
+- **Where:** down the card's right edge, in the order its kind declares
+  its exits (`exitsOf`), each as far down as the input of the same place
+  on its left (look `stepGives`, kinds `exitPlace`): the first level with
+  the first input. A kind has three exits at most (*Atom map*), and three
+  fit on a card shut, as three inputs do.
+- **The line to an exit's set** leaves from that exit's port (place
+  `exitStart`), and placing a set keeps that line clear, as before: the
+  exit is the set's own, read from it where it is made - run again, kept
+  under the first, made with its step (place `lineFrom`) - and said, as
+  its placing must, for one not made yet (place `placeFor`).
+- **A wire drawn out of an exit's port** is drawn out of its set: from
+  the card's port as it is drawn, then from the set's own port, as every
+  wire out of a set is. A wire drawn back from an input can be let go on
+  either. While a wire is drawn, both of a set's ports light as one.
+- **Not named beside it** while its set is on the page beside it: the
+  set's frame names it. Its label says which it is ("Failed out of
+  Optimise"), as an input's does.
+
+It is the first part of the direct wiring the maintainer asked for
+(2026-10-31): steps wired to steps, a result set's frame shown only
+where its exit is not wired on.
 
 ### The same conformer (2026-10-22)
 

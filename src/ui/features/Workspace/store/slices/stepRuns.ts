@@ -32,13 +32,14 @@ import { COORDINATION_BOND } from "../../../../../lib/chem/molecule";
 import { byOf, installedFor, optionsFor, programsFor, renderPresets, takesNothingBy } from "../../workflow/doers";
 import { partOf } from "../../chem/cleanUp";
 import { compoundLetter, frameXyz, framesOf, madeFrom, recordNumber, setEntries, TAKEN_AT_THE_EDIT, skeletonEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
+import { convergedOf, heldWhy } from "../../workflow/converged";
 import { skeletonWhy } from "../../../../../lib/chem/skeleton";
 import { conformersSought, conformersSoughtOf, soughtNumber } from "../../../../../lib/chem/conformersSought";
 import { allToRun, chainTo, findSet, inputKey, inputOf, stepOf, stepsAfter, wiresInto } from "../../workflow/flow";
 import { kindInfo, optionsOf, takesNothing, type Holds3D, type SetKind, type StepKind, isSetKind } from "../../workflow/kinds";
 import { failuresSaid, type Failure, type FailureKind } from "../../workflow/failures";
 import { setRan, setRunning } from "../../workflow/model";
-import { stoppedAt, clock, conformersWorked, doneSaid, PAIRED, drawnSaid, readDrawnAnswers, type DrawnAnswer, type DrawnValue, isFailure, entryFiles, notFound, pluginEntry, programEntries, readCollected, readGenerated, notReadSaid, seedsSaid, unreadWhy, readKept, readNote, readPrepared, readRefused, workedOf, passesAsLone, passedAsLone, passedSaid, notAsAsked, solvationAsked, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
+import { stoppedAt, clock, conformersWorked, doneSaid, PAIRED, drawnSaid, readDrawnAnswers, type DrawnAnswer, type DrawnValue, isFailure, entryFiles, notFound, pluginEntry, programEntries, readCollected, readGenerated, notReadSaid, seedsSaid, unreadWhy, readKept, readNote, readPrepared, readRefused, workedOf, passesAsLone, passedAsLone, passedSaid, notAsAsked, solvationAsked, heldAsked, heldRefused, fixedAtoms, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { emptyIn, energiesBy, energyLevels, inputEntries, keepRun, keptOf, keptRun, laidOver, LAID_OVER, ranAs, ranEmpty, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
@@ -1141,7 +1142,16 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (taking && "why" in taking) return void fail(id, taking.why, at, key);
     const entries = taking?.entries ?? [];
     if (!entries.length) return void fail(id, "Nothing came in", at, key);
-    const unpaired = taking?.refused ?? [];
+    // (refused besides, before anything is sent: an entry whose restraints hold what the step, asked to hold them, does not -
+    //  never left unheld unsaid; and frequencies of an entry optimised with atoms held, at no stationary point)
+    const held = heldAsked(step.kind, options);
+    const unpaired = [
+      ...(taking?.refused ?? []),
+      ...entries.flatMap((e, entry) => {
+        const why = heldRefused(e, held) ?? (step.kind === "frequencies" ? heldWhy(convergedOf(e)) : null);
+        return why && !(taking?.refused ?? []).some((u) => u.entry === entry) ? [{ entry, why }] : [];
+      }),
+    ];
     // (skeletons, their hydrogens not there, refused before anything is sent - each to the Failed exit, the rest run:
     //  lib/chem/skeleton. All of them skeletons, the step itself refused)
     const skeletons = skeletonEntries(step.kind, entries).filter((i) => !unpaired.some((u) => u.entry === i));
@@ -1621,6 +1631,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       // (the solvation its options ask for, as its manifest says its program says one: what each job gave held to it,
       //  whatever program ran it - workflow/programs `notAsAsked`)
       const asked = solvationAsked(plugin?.steps.find((s) => s.kind === kind)?.solvation, optionsOf(optionsFor(kind, by), run.options));
+      // (the atoms each entry's run held where they stood, where it was asked to hold them: said on what it made)
+      const holding = heldAsked(kind, optionsOf(optionsFor(kind, by), run.options)).length > 0;
+      const heldOf = (e: SetEntry) => (holding ? fixedAtoms(e) : []);
       // (the lone atoms it passed through as they came, in their order among the jobs': each before the results of the first
       //  job whose first entry came after it - an ensemble's job gives its entries' results together, wherever they came)
       const passing = [...(run.passed ?? [])].sort((a, b) => a - b);
@@ -1719,7 +1732,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
               continue;
             }
             const made =
-              kind === "conformers" ? conformersWorked(mine[i], read.output, read.readers, read.source) : workedOf(kind, mine[i], read.output, read.readers, read.source);
+              kind === "conformers" ? conformersWorked(mine[i], read.output, read.readers, read.source) : workedOf(kind, mine[i], read.output, read.readers, read.source, heldOf(mine[i]));
             if (isFailure(made)) {
               fails([mine[i]], made.kind, made.why);
               continue;
@@ -1743,7 +1756,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
               fails([mine[i]], "failed", out);
               continue;
             }
-            gave(mine[i], workedOf(kind, mine[i], out, [`${plugin.id} ${client.version || plugin.version}`], log ? source : undefined));
+            gave(mine[i], workedOf(kind, mine[i], out, [`${plugin.id} ${client.version || plugin.version}`], log ? source : undefined, heldOf(mine[i])));
           }
           continue;
         }
@@ -1762,7 +1775,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           const readers = [`${plugin.id} ${client.version || plugin.version}`];
           // (a search Meno tells how many to try: which of what it made stand, Meno's checks - lib/chem/metalHolds)
           const checks = plugin.roleTries.includes("conformers") ? entryChecks(mine[i]) : undefined;
-          gave(mine[i], kind === "conformers" ? conformersWorked(mine[i], out, readers, log ? source : undefined, checks) : workedOf(kind, mine[i], out, readers, log ? source : undefined));
+          gave(mine[i], kind === "conformers" ? conformersWorked(mine[i], out, readers, log ? source : undefined, checks) : workedOf(kind, mine[i], out, readers, log ? source : undefined, heldOf(mine[i])));
         }
       }
       passOn(Infinity);
@@ -1968,7 +1981,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         if (step.running) shown.set(jobs[0], made.last);
       }
       // (rising out of its step into the column, where the column is not showing it already)
-      set({ textShown: last, textsOpen: true, pdfShown: null, setTableShown: null, ...(showing === last ? {} : { textFlight: { id: last, to: "column" as const, start: performance.now() } }) });
+      set({ textShown: last, textsOpen: true, pdfShown: null, setTableShown: null, conversationShown: null, ...(showing === last ? {} : { textFlight: { id: last, to: "column" as const, start: performance.now() } }) });
     },
     showStepLogJob: (text: number, k: number) => {
       const t = (doc.getState().texts ?? []).find((x) => x.id === text);
