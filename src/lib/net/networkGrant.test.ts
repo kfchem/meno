@@ -1,13 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // (in Meno, not under Vitest: the app's side of a yes takes a while - net_grant answered after the question has gone)
-const slow = vi.hoisted(() => ({ fails: false }));
+// (and what the app is told, each command with what it is given, in turn)
+const slow = vi.hoisted(() => ({ fails: false, told: [] as [string, unknown][] }));
 vi.mock("@tauri-apps/api/core", () => ({
   isTauri: () => true,
-  invoke: (cmd: string) =>
-    new Promise((done, fail) =>
-      setTimeout(() => (cmd === "net_grant" && slow.fails ? fail(new Error("no app")) : done(cmd === "plugins_set_up_before" ? [] : undefined)), 20),
-    ),
+  invoke: (cmd: string, args?: unknown) =>
+    new Promise((done, fail) => {
+      slow.told.push([cmd, args]);
+      setTimeout(() => (cmd === "net_grant" && slow.fails ? fail(new Error("no app")) : done(cmd === "plugins_set_up_before" ? [] : undefined)), 20);
+    }),
 }));
 
 import { askToConnect, useNetwork } from "./network";
@@ -53,6 +55,7 @@ const CATALOGUE: Catalogue = {
 describe("a yes to a network question, the app slow to hear of it", () => {
   beforeEach(() => {
     slow.fails = false;
+    slow.told.length = 0;
     useNetwork.setState({ offline: false, granted: [], asking: null });
     useAppSettings.setState({ plugins: { ...DEFAULT_APP_SETTINGS.plugins } });
     useOnline.setState({ state: "unlisted", catalogue: undefined, problem: undefined });
@@ -61,10 +64,12 @@ describe("a yes to a network question, the app slow to hear of it", () => {
   it("counts at once: what was asked for, used straight after, is not asked of again", async () => {
     const yes = answeringYes();
     try {
-      expect(await ask("python-env:plugin-rdkit", true)).toBe(true);
-      expect(useNetwork.getState().granted).toContain("python-env:plugin-rdkit");
-      expect(await ask("python-env:plugin-rdkit")).toBe(true);
-      expect(yes.titles).toEqual(["Set up python-env:plugin-rdkit?"]);
+      expect(await ask("python-env:plugin-quanta", true)).toBe(true);
+      expect(useNetwork.getState().granted).toContain("python-env:plugin-quanta");
+      // (the app told of it, for that purpose, once - before the yes was taken as given)
+      expect(slow.told.filter(([cmd]) => cmd === "net_grant")).toEqual([["net_grant", { purpose: "python-env:plugin-quanta" }]]);
+      expect(await ask("python-env:plugin-quanta")).toBe(true);
+      expect(yes.titles).toEqual(["Set up python-env:plugin-quanta?"]);
     } finally {
       yes.stop();
     }
@@ -74,8 +79,8 @@ describe("a yes to a network question, the app slow to hear of it", () => {
     slow.fails = true;
     const yes = answeringYes();
     try {
-      expect(await ask("python-env:plugin-xtb")).toBe(true);
-      expect(useNetwork.getState().granted).toContain("python-env:plugin-xtb");
+      expect(await ask("python-env:plugin-helix")).toBe(true);
+      expect(useNetwork.getState().granted).toContain("python-env:plugin-helix");
     } finally {
       yes.stop();
     }
