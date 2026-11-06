@@ -464,7 +464,8 @@ pairing based on those IDs"):
 
 **Every exit is a result set** (question 1, answered; refining decision 9),
 made with the step, empty until it runs, to the right of the card. The
-card's own give port goes.
+card's own give port goes. (Each exit came to have a port of its own on
+the card, its set's, 2026-11-05: WORKFLOWS.md, *Exit ports*.)
 
 **Second exits.** A node that can fail entries, or set entries aside, has a
 second exit for them (revisiting question 19, question B below):
