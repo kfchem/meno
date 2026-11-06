@@ -18,7 +18,7 @@ import { stereoKnown } from "./configurations";
 import { speciesOf } from "../../../../lib/io/writers";
 import { isSkeleton } from "../utils/completeness";
 import { groupLetter } from "../../../../lib/nodes/base";
-import { aboveText, numberText } from "../../../../lib/calc/results";
+import { aboveText, numberText, resultsRenumbered } from "../../../../lib/calc/results";
 import type { DrawnRecord, Member, Model, Molecule3D, PictureItem, WorkflowSet } from "../store/types";
 import { kindInfo, type SetHolds, type StepKind } from "./kinds";
 import { skeletonWhy } from "../../../../lib/chem/skeleton";
@@ -703,22 +703,25 @@ export function keptOf(m: Kept): Kept {
 }
 
 /**
- * What an entry keeps of its calculation, its atoms renumbered (`now`: each
- * atom's new place): what the calculation was - the readers, program,
- * version, method, basis, solvation, charge and spin, its imaginary
- * frequencies - and the atoms it held, as numbered now; so that its energy
- * is still one of that calculation, alike with its compound's others not
- * renumbered (`unlikeMade`). Not its results, nor the output and the
- * wavefunction it was read from: those number its atoms as they were.
+ * What an entry keeps of its calculation, its atoms renumbered (`order`:
+ * the atom each place now has): what the calculation was - the readers,
+ * program, version, method, basis, solvation, charge and spin, its
+ * imaginary frequencies - and the atoms it held, as numbered now; so that
+ * its energy is still one of that calculation, alike with its compound's
+ * others not renumbered (`unlikeMade`). Its results as numbered now, but
+ * those that cannot be (lib/calc/results `resultsRenumbered`); not the
+ * output and the wavefunction it was read from, which number its atoms as
+ * they were. `leftBehind`: whether any of it was left so.
  */
-export function calcRenumbered(c: CalcInfo, now: readonly number[]): CalcInfo {
-  const { results: _results, source: _source, wavefunction: _wavefunction, held, ...level } = c;
-  return { ...level, ...(held ? { held: held.map((a) => now[a]) } : {}) };
-}
-
-/** Whether renumbering an entry leaves any of its calculation behind (`calcRenumbered`): its results, or the files they were read from. */
-export function calcLeftBehind(c: CalcInfo | undefined): boolean {
-  return !!(c?.results?.length || c?.source || c?.wavefunction);
+export function calcRenumbered(c: CalcInfo, order: readonly number[]): { calc: CalcInfo; leftBehind: boolean } {
+  const now = new Array<number>(order.length);
+  order.forEach((j, at) => (now[j] = at));
+  const { results, source, wavefunction, held, ...level } = c;
+  const r = results?.length ? resultsRenumbered(results, order) : { results: [], dropped: 0 };
+  return {
+    calc: { ...level, ...(r.results.length ? { results: r.results } : {}), ...(held ? { held: held.map((a) => now[a]) } : {}) },
+    leftBehind: r.dropped > 0 || !!source || !!wavefunction,
+  };
 }
 
 /**
