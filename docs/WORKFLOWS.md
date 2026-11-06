@@ -901,9 +901,8 @@ jobs), *Job 4 of 12 · quiet 47 min* (in place of *running*: the chooser's
 room is short). It is said only:
 Meno never ends a job for it, since how long a program may rightly write
 nothing depends on the program and its method. The chemist may end it with
-*Stop this job*, beside the chooser. (The default, 2026-11-06, is a
-placeholder until it is set from how long jobs that ran well went quiet,
-measured.)
+*Stop this job*, beside the chooser. (The default, 30 minutes, is the
+maintainer's choice, 2026-11-06.)
 
 ### The log
 

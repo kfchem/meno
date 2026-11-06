@@ -93,9 +93,8 @@ export const WINDOW_3D = 30;
  * After how many minutes with nothing written - no line of its log, no file
  * of its work folder - a running job is said to be quiet, unless Settings
  * says otherwise; and the most Settings takes (a day). Said only: Meno never
- * ends a job for it (docs/WORKFLOWS.md, *A job that writes nothing*). Its
- * basis is to be set from how long jobs that ran well went quiet, measured;
- * until then it is a placeholder, to be changed here alone.
+ * ends a job for it (docs/WORKFLOWS.md, *A job that writes nothing*). Thirty
+ * minutes is the maintainer's choice (2026-11-06), to be changed here alone.
  */
 export const QUIET_AFTER_MIN = 30;
 export const QUIET_AFTER_MOST = 24 * 60;
