@@ -167,13 +167,17 @@ export async function stopJobsAndWait(
 export const computerCores = () => Math.max(1, (typeof navigator !== "undefined" && navigator.hardwareConcurrency) || 1);
 
 /**
- * How many cores a job takes, as Settings, *Calculations*, has it: unset,
- * all those jobs may use - one at a time - never more than they may use,
- * nor than the computer has.
+ * How many cores each of a step's `jobs` takes, as Settings, *Calculations*,
+ * has it: set, that many; unset, those jobs may use shared among them - all
+ * of them for one job, one each for as many jobs as there are cores - so
+ * that a step of many small jobs runs them side by side, not one after
+ * another each with every core (the maintainer, 2026-11-06). Never more
+ * than they may use, nor than the computer has, and at least one.
  */
-export function runningOf(c: Pick<CalculationSettings, "cores" | "coresAll">, cores = computerCores()): { cores: number } {
+export function runningOf(c: Pick<CalculationSettings, "cores" | "coresAll">, cores = computerCores(), jobs = 1): { cores: number } {
   const all = Math.min(c.coresAll ?? cores, cores);
-  return { cores: Math.max(1, Math.min(c.cores ?? all, all)) };
+  const shared = Math.floor(all / Math.max(1, Math.min(jobs, all)));
+  return { cores: Math.max(1, Math.min(c.cores ?? shared, all)) };
 }
 
 /**

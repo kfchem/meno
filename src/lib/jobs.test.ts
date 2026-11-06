@@ -36,13 +36,27 @@ describe("jobs", () => {
     expect(["done", "failed", "stopped", "gone"].every((s) => finished(s as never))).toBe(true);
   });
 
-  it("gives a job all the cores jobs may use - one at a time - unless Settings says otherwise", () => {
+  it("gives one job all the cores jobs may use unless Settings says otherwise", () => {
     expect(runningOf({}, 8)).toEqual({ cores: 8 });
     expect(runningOf({ cores: 2 }, 8)).toEqual({ cores: 2 });
     expect(runningOf({ coresAll: 6 }, 8)).toEqual({ cores: 6 });
     // never more than jobs may use, nor than the computer has
     expect(runningOf({ cores: 7, coresAll: 4 }, 8)).toEqual({ cores: 4 });
     expect(runningOf({ cores: 32 }, 8)).toEqual({ cores: 8 });
+  });
+
+  it("shares the cores jobs may use among a step's jobs where Settings sets none: all for one, one each for as many as there are cores", () => {
+    expect(runningOf({}, 28, 1)).toEqual({ cores: 28 });
+    expect(runningOf({}, 28, 2)).toEqual({ cores: 14 });
+    expect(runningOf({}, 28, 19)).toEqual({ cores: 1 });
+    expect(runningOf({}, 28, 588)).toEqual({ cores: 1 });
+    // (shared within what jobs may use; none left over counted twice)
+    expect(runningOf({ coresAll: 16 }, 32, 3)).toEqual({ cores: 5 });
+    // (set: taken as it is, whatever the jobs)
+    expect(runningOf({ cores: 4 }, 28, 588)).toEqual({ cores: 4 });
+    expect(runningOf({ cores: 28 }, 28, 2)).toEqual({ cores: 28 });
+    // (no jobs said: as one)
+    expect(runningOf({}, 28, 0)).toEqual({ cores: 28 });
   });
 
   it("says how cores are counted where each physical core runs more than one thread - and nothing where each runs one", () => {

@@ -1573,9 +1573,14 @@ Decided while building it, for the maintainer to confirm:
   that plugin's environment - never a shell, and Python only running a
   script of the plugin's. Meno's page names a plugin and a program, never
   a path.
-- **Cores for each, unset, are the computer's shared among the jobs at
-  once** - all of them while one runs at a time; set, never more than the
-  computer has. A program is told them as `OMP_NUM_THREADS` (and MKL's
+- **Cores for each, unset, are those jobs may use shared among a step's
+  jobs** (the maintainer, 2026-11-06): each takes the cores jobs may use
+  divided by its step's jobs - one for each entry it sends, as most steps
+  make them - all of them for one job, one each for as many jobs as there
+  are cores, at least one (lib/jobs `runningOf`). A step of hundreds of
+  small jobs runs them side by side, not one after another each with every
+  core. Set, each job takes that many, never more than jobs may use nor
+  than the computer has; Settings says so under the field while unset. A program is told them as `OMP_NUM_THREADS` (and MKL's
   and OpenBLAS's); a plugin's command may say them as well (xTB's `-P`).
 - **A program that runs as processes is given one to each physical core,
   each told one thread** (2026-10-30). Its manifest says so

@@ -30,7 +30,19 @@ export default function JobSettings() {
   const running = runningOf(calculations, computer.cores);
   const gb = (mib: number) => Math.round((mib / MIB_PER_GB) * 10) / 10;
   const options: Option[] = [
-    { id: "cores", label: "Cores for each job", type: "number", default: running.cores, min: 1, max: limits.cores, step: 1, whole: true, unit: `of ${limits.cores}` },
+    {
+      id: "cores",
+      label: "Cores for each job",
+      type: "number",
+      default: running.cores,
+      min: 1,
+      max: limits.cores,
+      step: 1,
+      whole: true,
+      unit: `of ${limits.cores}`,
+      // (unset, shared among a step's jobs - lib/jobs `runningOf`: said, as the number shown is one job's alone)
+      ...(calculations.cores == null ? { note: "Unless set, a step's jobs share the cores: all of them for one job, one each for as many jobs as there are cores." } : {}),
+    },
     { id: "cores-all", label: "Cores jobs may use", type: "number", default: computer.cores, min: 1, max: computer.cores, step: 1, whole: true, unit: `of ${computer.cores}` },
     ...(computer.memory > 0
       ? [{ id: "memory-all", label: "Memory jobs may use", type: "number" as const, default: gb((computer.memory * 3) / 4), min: 0.5, max: gb(computer.memory), step: 0.5, unit: `GB of ${gb(computer.memory)}` }]
