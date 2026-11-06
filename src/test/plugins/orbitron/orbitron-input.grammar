@@ -1,0 +1,17 @@
+// Orbitron's input, a made-up program's, for Meno's tests: directives (!name=value), a route line (> ...), a title
+// line ("..."), then the charge and multiplicity and the atoms (Element x y z). Comments run from // to the line's end.
+@top Input { (Directive nl)* Route nl Title nl Value Value nl (Atom? nl)* }
+Atom { Element Value Value Value }
+Element { name }
+Route { ">" name* }
+@skip { space | Comment }
+@tokens {
+  space { $[ \t\r]+ }
+  nl { "\n" }
+  Comment { "//" ![\n]* }
+  Directive { "!" ![\n]* }
+  Title { '"' ![\n"]* '"' }
+  name { $[A-Za-z] $[A-Za-z0-9_()/=+,-]* }
+  Value { "-"? $[0-9]+ ("." $[0-9]+)? }
+  ">"
+}

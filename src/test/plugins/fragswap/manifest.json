@@ -1,0 +1,66 @@
+{
+  "id": "fragswap",
+  "name": "Fragswap",
+  "version": "0.1.0",
+  "description": "Generates molecules from a seed by swapping its fragments.",
+  "licence": "BSD-3-Clause",
+  "homepage": "https://example.org/fragswap",
+  "environment": "uv",
+  "setUpBytes": 150000000,
+  "steps": [
+    {
+      "kinds": [
+        "generate"
+      ],
+      "seeds": true,
+      "options": [
+        {
+          "id": "operation",
+          "label": "Change",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "mutate",
+              "label": "Swap a fragment"
+            },
+            {
+              "value": "grow",
+              "label": "Grow"
+            }
+          ],
+          "default": "mutate"
+        },
+        {
+          "id": "count",
+          "label": "How many from each seed (at most 100)",
+          "type": "number",
+          "default": 20,
+          "min": 1,
+          "max": 100,
+          "step": 1
+        },
+        {
+          "id": "seed",
+          "label": "Random seed",
+          "type": "number",
+          "default": 1,
+          "min": 0,
+          "max": 2147483647,
+          "step": 1
+        }
+      ]
+    }
+  ],
+  "downloads": [
+    {
+      "file": "fragments.db.gz",
+      "name": "Fragswap's fragment database",
+      "licence": "CC-BY-4.0",
+      "url": "https://downloads.example.org/fragswap/fragments.db.gz",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "bytes": 200000000,
+      "unpack": "gz",
+      "unpackedBytes": 1500000000
+    }
+  ]
+}

@@ -30,7 +30,7 @@ import { rangeOf, type DependDecl, type InterfaceDecl, type UsedInterface, type 
 import { acceptOptions, type Option } from "../options";
 import { TONE_NAMES, type Tone } from "../text/tones";
 import { isRole, ROLES, type RoleId } from "./roles";
-import { isStepKind, LONE_ATOM_PASSES, MENO_ONLY, VALUE_KINDS, type StepKind, type ValueKind } from "./steps";
+import { HELD_KINDS, HOLDS_RESTRAINTS, isStepKind, LONE_ATOM_PASSES, MENO_ONLY, VALUE_KINDS, type HeldKind, type StepKind, type ValueKind } from "./steps";
 
 /** Text a file's start holds, which tells a kind: anywhere, or at a line's start; runs of spaces counted as one. */
 export type Mark = {
@@ -238,12 +238,14 @@ export type UnsureDecl = { below: number; basis: string };
  * molecules from seeds wired in (`seeds`); and, of a kind a lone
  * atom passes through (steps `LONE_ATOM_PASSES`), whether its program
  * takes none (`noLoneAtom`); and how its options ask for a solvation, as
- * its program says one it ran in (`solvation`: `SolvationDecl`).
+ * its program says one it ran in (`solvation`: `SolvationDecl`); and, of a
+ * kind that may hold an entry's restraints (steps `HOLDS_RESTRAINTS`), the
+ * kinds of restraint its program holds (`restraints`: steps `HELD_KINDS`).
  * A manifest may say several kinds in one, with the same programs and
  * options.
  */
 /** `roleOptions`: its options are its role's, the step having said none of its own (Settings' choices for the role its defaults: workflow/doers `optionsFor`). */
-export type StepDecl = { kind: StepKind; programs: string[]; options: Option[]; roleOptions?: true; takes?: ValueKind[]; files?: string[]; seeds?: true; noLoneAtom?: true; solvation?: SolvationDecl };
+export type StepDecl = { kind: StepKind; programs: string[]; options: Option[]; roleOptions?: true; takes?: ValueKind[]; files?: string[]; seeds?: true; noLoneAtom?: true; solvation?: SolvationDecl; restraints?: HeldKind[] };
 
 /**
  * How a step's options ask for a solvation, in the words its program says
@@ -425,7 +427,8 @@ export type Manifest = {
 };
 
 const ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
-const EXTENSION = /^\.[a-z0-9]{1,12}$/;
+/** A file name's end, as a kind says its files go by: lower case, with its dot. */
+export const EXTENSION = /^\.[a-z0-9]{1,12}$/;
 /** A mark shorter than this would claim too much. */
 const MARK_LEAST = 6;
 const MARK_MOST = 200;
@@ -438,7 +441,8 @@ const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 const ids = (v: unknown): string[] => [...new Set(list(v).filter(isId))];
 const extensionsOf = (v: unknown): string[] => list(v).filter((e): e is string => typeof e === "string" && EXTENSION.test(e));
 
-function markOf(v: unknown): Mark | null {
+/** A mark, as a manifest says it; none, where it is not one Meno takes. */
+export function markOf(v: unknown): Mark | null {
   const m = v as Record<string, unknown> | null;
   const t = text(m?.text, MARK_MOST);
   if (!t || folded(t).length < MARK_LEAST) return null;
@@ -564,21 +568,28 @@ function acceptQuotedEnergies(v: unknown): QuotedEnergyDecl[] {
   return out;
 }
 
-/** A plugin's tables of atoms, as papers quote its program's, each checked: an id, at least one heading, columns of the vocabulary - each once, x, y and z among them, and the atom's atomic number or its symbol; what is not understood left out. */
+/** How many tables of atoms a plugin declares at most, and lines heading one or its columns. */
+export const QUOTED_TABLES_MOST = 4;
+const QUOTED_LINES_MOST = 8;
+
+/** A table of atoms, as papers quote its program's, checked: an id, at least one heading, columns of the vocabulary - each once, x, y and z among them, and the atom's atomic number or its symbol; none, where it is not that. */
+export function quotedTableOf(raw: unknown): QuotedTableDecl | null {
+  const lines = (x: unknown) => list(x).flatMap((l) => (typeof l === "string" && l.trim() && l.length <= 80 ? [l.trim()] : [])).slice(0, QUOTED_LINES_MOST);
+  const r = raw as Record<string, unknown> | null;
+  if (typeof r?.id !== "string" || !/^[a-z][a-z0-9-]{0,39}$/.test(r.id)) return null;
+  const headings = lines(r.headings);
+  const columns = list(r.columns).filter((c): c is QuotedColumn => typeof c === "string" && (QUOTED_COLUMNS as readonly string[]).includes(c));
+  if (!headings.length || columns.length !== list(r.columns).length || new Set(columns).size !== columns.length) return null;
+  if (!["x", "y", "z"].every((c) => columns.includes(c as QuotedColumn)) || columns.includes("atomic-number") === columns.includes("element")) return null;
+  return { id: r.id, headings, heads: lines(r.heads), columns };
+}
+
+/** A plugin's tables of atoms, as papers quote its program's, each checked (`quotedTableOf`); what is not understood left out. */
 function acceptQuotedTables(v: unknown): QuotedTableDecl[] {
-  const out: QuotedTableDecl[] = [];
-  const lines = (x: unknown) => list(x).flatMap((l) => (typeof l === "string" && l.trim() && l.length <= 80 ? [l.trim()] : [])).slice(0, 8);
-  for (const raw of list(v)) {
-    const r = raw as Record<string, unknown> | null;
-    if (typeof r?.id !== "string" || !/^[a-z][a-z0-9-]{0,39}$/.test(r.id)) continue;
-    const headings = lines(r.headings);
-    const columns = list(r.columns).filter((c): c is QuotedColumn => typeof c === "string" && (QUOTED_COLUMNS as readonly string[]).includes(c));
-    if (!headings.length || columns.length !== list(r.columns).length || new Set(columns).size !== columns.length) continue;
-    if (!["x", "y", "z"].every((c) => columns.includes(c as QuotedColumn)) || columns.includes("atomic-number") === columns.includes("element")) continue;
-    out.push({ id: r.id, headings, heads: lines(r.heads), columns });
-    if (out.length >= 4) break;
-  }
-  return out;
+  return list(v)
+    .map(quotedTableOf)
+    .filter((t): t is QuotedTableDecl => t != null)
+    .slice(0, QUOTED_TABLES_MOST);
 }
 
 const LOOK_ID = /^[a-z][a-z0-9-]{0,39}$/;
@@ -695,7 +706,8 @@ function acceptUses(v: unknown): UsesDecl[] {
   return out;
 }
 
-const PROGRAM = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,39}$/;
+/** A program's name, as a plugin runs it. */
+export const PROGRAM = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,39}$/;
 
 /** The kinds of step a manifest's step says - each one Meno defines - with what they share. */
 function stepsOf(v: unknown, roles: readonly RoleDecl[]): StepDecl[] {
@@ -706,6 +718,7 @@ function stepsOf(v: unknown, roles: readonly RoleDecl[]): StepDecl[] {
   const takes = Array.isArray(s?.takes) ? VALUE_KINDS.filter((t) => (s.takes as unknown[]).includes(t)) : [];
   const files = [...new Set(list(s?.files).filter((f): f is string => typeof f === "string" && ID.test(f)))];
   const options = acceptOptions(s?.options);
+  const held = HELD_KINDS.filter((k) => list(s?.restraints).includes(k));
   // (none said, and it fills the role of the kind's name: the role's - the same work, asked as a step)
   const roleOf = (kind: StepKind) => (s?.options === undefined ? roles.find((r) => r.role === kind && r.options.length) : undefined);
   const optionsFor = (kind: StepKind) => (s?.options !== undefined ? options : (roleOf(kind)?.options ?? []));
@@ -722,6 +735,8 @@ function stepsOf(v: unknown, roles: readonly RoleDecl[]): StepDecl[] {
       // (said only of a kind a lone atom passes through: of any other, what its program cannot take is its to refuse)
       ...(s?.noLoneAtom === true && LONE_ATOM_PASSES.includes(kind) ? { noLoneAtom: true as const } : {}),
       ...(solvation ? { solvation } : {}),
+      // (said only of a kind that may hold them: of any other, they ride along as ever)
+      ...(held.length && HOLDS_RESTRAINTS.includes(kind) ? { restraints: [...held] } : {}),
     };
   });
 }

@@ -76,6 +76,8 @@ export type CalculationSettings = {
   memoryAll?: number;
   /** The size, in MB, a save past which says the workspace is large (Settings, General; workflow/keptJobs); unset, 500. */
   largeWorkspaceMB?: number;
+  /** Whether the computer may sleep while a job's program runs: unset, it is kept awake (src-tauri/src/awake.rs). */
+  sleepWhileJobsRun?: true;
 };
 
 /** The most cores, and memory in MiB, Settings takes. */
@@ -133,12 +135,15 @@ export type PictureSettings = { dpi: (typeof PICTURE_DPIS)[number] };
  * which are not set up again of themselves when a role they fill is
  * needed; who fills each role, where the chemist chose (lib/plugins/roles);
  * where the chemist located each program installed separately that a
- * plugin's steps run, by "plugin:program" (lib/plugins/installed).
+ * plugin's steps run, by "plugin:program" (lib/plugins/installed); and
+ * whether the plugins set up here before they came online were asked about,
+ * and answered (lib/plugins/usedBefore).
  */
 export type PluginSettings = {
   removed: string[];
   roles: Record<string, string>;
   programs: Record<string, string>;
+  usedBeforeAsked?: true;
 };
 
 /** Who reads each kind of file, by the kind's id: its reader - unset, Meno where Meno reads it, or else the first added that reads it - and the readers that read it as well. */
@@ -231,13 +236,19 @@ export function acceptAppSettings(raw: unknown): AppSettings {
 
 /** How a workflow's jobs run, as the file holds it: the cores each takes, and the cores and memory they may use in all - whole numbers within reason. */
 function acceptCalculations(raw: unknown): CalculationSettings {
-  const r = raw as { cores?: unknown; coresAll?: unknown; memoryAll?: unknown; largeWorkspaceMB?: unknown } | null;
+  const r = raw as { cores?: unknown; coresAll?: unknown; memoryAll?: unknown; largeWorkspaceMB?: unknown; sleepWhileJobsRun?: unknown } | null;
   const whole = (v: unknown, most: number) => (typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= most ? v : undefined);
   const cores = whole(r?.cores, CORES_MOST);
   const coresAll = whole(r?.coresAll, CORES_MOST);
   const memoryAll = whole(r?.memoryAll, MEMORY_MOST);
   const largeWorkspaceMB = whole(r?.largeWorkspaceMB, LARGE_WORKSPACE_MOST);
-  return { ...(cores ? { cores } : {}), ...(coresAll ? { coresAll } : {}), ...(memoryAll ? { memoryAll } : {}), ...(largeWorkspaceMB ? { largeWorkspaceMB } : {}) };
+  return {
+    ...(cores ? { cores } : {}),
+    ...(coresAll ? { coresAll } : {}),
+    ...(memoryAll ? { memoryAll } : {}),
+    ...(largeWorkspaceMB ? { largeWorkspaceMB } : {}),
+    ...(r?.sleepWhileJobsRun === true ? { sleepWhileJobsRun: true as const } : {}),
+  };
 }
 
 /** The procedures saved, as the file holds them: each with an id, a name and its flow's parts as lists - read further as they are used. */
@@ -313,7 +324,7 @@ function acceptFiles(raw: unknown, before: unknown): FileSettings {
 
 /** The plugins taken away, the roles' choices and the programs located, that read: ids only. */
 function acceptPlugins(raw: unknown): PluginSettings {
-  const r = (raw ?? {}) as { removed?: unknown; roles?: unknown; programs?: unknown };
+  const r = (raw ?? {}) as { removed?: unknown; roles?: unknown; programs?: unknown; usedBeforeAsked?: unknown };
   const id = (v: unknown): v is string => typeof v === "string" && /^[a-z0-9][a-z0-9-]{0,39}$/.test(v);
   const removed = Array.isArray(r.removed) ? [...new Set(r.removed.filter(id))] : [];
   const roles: Record<string, string> = {};
@@ -329,7 +340,7 @@ function acceptPlugins(raw: unknown): PluginSettings {
       if (id(plugin) && /^[A-Za-z0-9][A-Za-z0-9._+-]{0,39}$/.test(program ?? "") && typeof path === "string" && path.length <= 1024 && /^(\/|[A-Za-z]:[\\/]|\\\\[^\\/])/.test(path)) programs[key] = path;
     }
   }
-  return { removed, roles, programs };
+  return { removed, roles, programs, ...(r.usedBeforeAsked === true ? { usedBeforeAsked: true as const } : {}) };
 }
 
 /** The options remembered that read: by a role's name, each a value that is a string, a number or a switch. Whether each still fits its option is asked when it is drawn (lib/options `valuesOf`). */

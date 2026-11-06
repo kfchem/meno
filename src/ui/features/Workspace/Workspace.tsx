@@ -1,3 +1,5 @@
+import RoleOffer from "./RoleOffer";
+import { noPluginSaid, useRoleOffer } from "../../../lib/roles/worker";
 import { canvasAlerts } from "./utils/alerts";
 import { bondKindOf, type BondKindName } from "./utils/bondKinds";
 import type { ArrowKind, ArrowWeight } from "../../../lib/chem/reactionArrow";
@@ -74,6 +76,8 @@ import { procedureNeeds, proceduresSaved, saveProcedure, suggestedName } from ".
 import { pluginWriters, WRITERS, type Writer } from "../../../lib/io/writers";
 import { anyPluginById, WRITER_PLUGINS } from "../../../lib/calc/catalog";
 import { addPlugin, useReaders } from "../../../lib/calc/workers";
+import { addOnline } from "../../../lib/calc/addOnline";
+import { useOnline } from "../../../lib/plugins/online";
 import { knownOfMolecules } from "./utils/written";
 import { carriedOf } from "./utils/workspace";
 import { runAllNote, runNote } from "./workflow/earlierRuns";
@@ -84,14 +88,13 @@ import { hasLonePair, tailOf } from "./utils/pushes";
 import { unsureOf, type Unsure } from "./chem/drawing";
 import { structureValues } from "./utils/byStructure";
 import ColourCard, { type ColourTarget } from "./ColourCard";
-import WordsCard from "./WordsCard";
-import { cardBeside, WORDS_CARD } from "./utils/cardBeside";
 import CornersCard from "./CornersCard";
 import SettingsStyleAsk from "./SettingsStyleAsk";
 import LargeWorkspaceAsk from "./LargeWorkspaceAsk";
 import { PdfNumbersCard, PdfPagesCard } from "./PdfMakeCards";
 import { combined, putBeside, savePdfFile } from "./pdfMake";
 import { listItem, stylesOf, wordsSet } from "../../../lib/chem/captions";
+import WordsFont from "./WordsFont";
 import { WordsEditor } from "./utils/wordsEditor";
 import { ringAt, ringsAmong, ringsOf } from "./utils/rings";
 import { style3dOf, useEasedStyle3D, useStyle3D, useStyleNames3D } from "./style3d";
@@ -196,6 +199,7 @@ import { branchPath, CYCLE_RADIUS, MARGIN as CYCLE_MARGIN } from "../../../lib/c
 import { inRow } from "./components/structureDrag";
 import { pickedStructure } from "./utils/pdfStructures";
 import StructureFlight from "./components/StructureFlight";
+import CompoundCard from "./components/CompoundCard";
 import { setStructureSay } from "./components/structureDrag";
 import CoordinatesCard from "./CoordinatesCard";
 import { readCoordinates, textOfPages, type CoordinateStructure, type PlacedPage } from "../../../lib/io/coordinates";
@@ -411,6 +415,8 @@ function WorkspaceContent({
   // (a plugin's kept files read through for their fingerprints, where that takes more than a moment: a model's weights - said, as setting up is)
   const checkingFiles = useCheckingFiles((s) => Object.values(s)[0]);
   const [chemError, setChemError] = useState<string | null>(null);
+  // (the role a chemistry asked of that no plugin here fills: what the line of its error offers plugins for)
+  const offerRole = useRoleOffer((s) => s.role);
   const cleaningNow = useRef(false); // one clean-up at a time, keys included
   const runCleanUp = useCallback(
     (aroundAtom: number | Iterable<number> | null) => {
@@ -698,7 +704,6 @@ function WorkspaceContent({
   const [pdfCard, setPdfCard] = useState<{ kind: "numbers" | "pages"; id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
   const [colourCard, setColourCard] = useState<{ target: ColourTarget; x: number; y: number; within: { width: number; height: number } } | null>(null);
   // the card of sizes for words on the page, where their menu was (docs/EDITOR-2D.md, *Text*)
-  const [wordsCard, setWordsCard] = useState<{ id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
   // the card of a rectangle's corners, where its menu was (docs/PRESENTING.md, *Shapes*)
   const [cornersCard, setCornersCard] = useState<{ id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
   // the field to look for words in the PDFs, opened at the column's top on
@@ -1006,7 +1011,6 @@ function WorkspaceContent({
     if (!talking) return;
     setMenu(null);
     setColourCard(null);
-    setWordsCard(null);
     setCornersCard(null);
     setNaming(null);
     setGivingOrders(null);
@@ -1492,7 +1496,13 @@ function WorkspaceContent({
   const alerts = canvasAlerts({
     import: importError ? { text: importError.text, dismiss: dismissImportError } : null,
     files: { text: files.error, dismiss: files.dismissError },
-    chem: { text: chemError, dismiss: () => setChemError(null) },
+    chem: {
+      text: chemError,
+      dismiss: () => {
+        setChemError(null);
+        useRoleOffer.setState({ role: null });
+      },
+    },
   });
   // Where the view starts, before there is anything to fit
   const style = useDrawingStyle();
@@ -1509,17 +1519,6 @@ function WorkspaceContent({
     const st = store.getState();
     const c = st.captions.find((x) => x.id === id);
     if (c) st.updateCaption(id, { size: pt, ...keepTop(c, { size: pt ?? undefined }) });
-  };
-  // (the card of how words are set put beside them, clear of them, as they are seen on the canvas - from where the menu was, by the view's scale - so that what it changes is seen changing)
-  const wordsCardPlace = (c: Caption, menu: { x: number; y: number; at: { x: number; y: number }; within: { width: number; height: number } }) => {
-    const a = clientToWorld(0, 0);
-    const b = clientToWorld(100, 100);
-    if (!a || !b || b.x === a.x || b.y === a.y) return { x: menu.x, y: menu.y };
-    const kx = 100 / (b.x - a.x);
-    const ky = 100 / (a.y - b.y);
-    const w = wordsSet(c, layoutOpts, labelSetOf(layoutOpts));
-    const target = { left: menu.x + (c.x - w.halfW - menu.at.x) * kx, top: menu.y - (c.y + w.halfH - menu.at.y) * ky, width: 2 * w.halfW * kx, height: 2 * w.halfH * ky };
-    return cardBeside(target, WORDS_CARD, menu.within);
   };
   // (their lines as far apart as asked - single, none of their own)
   const spaceWords = (id: number, lines: number | null) => {
@@ -1661,6 +1660,16 @@ function WorkspaceContent({
           <ExclamationTriangleIcon className="h-4 w-4 shrink-0 text-accel-accent" />
           <span className="break-words">{a.text}</span>
           {a.key === "import" && importError?.suggest && importError.again && <AddToRead suggest={importError.suggest} again={importError.again} />}
+          {/* (a role no plugin here fills: the plugins online that fill it, each to add) */}
+          {a.key === "chem" && offerRole && chemError?.includes(noPluginSaid(offerRole)) && (
+            <RoleOffer
+              role={offerRole}
+              done={() => {
+                setChemError(null);
+                useRoleOffer.setState({ role: null });
+              }}
+            />
+          )}
           <button
             aria-label="Dismiss"
             title="Dismiss"
@@ -1751,6 +1760,8 @@ function WorkspaceContent({
       </AnimatePresence>
       {/* (a structure carried out of a PDF, over everything: components/StructureFlight) */}
       <StructureFlight />
+      {/* (a compound's structure by its number in a PDF's text: components/CompoundCard) */}
+      <CompoundCard />
       {/* (what the chemist opens over the canvas - its questions, cards and menus - above the first-run guide: ui/guide/layers) */}
       <AboveGuide over={dropRef} shown={active} measureKey={`${styleOpen}:${textsOpen}`}>
       <AnimatePresence>
@@ -2037,23 +2048,6 @@ function WorkspaceContent({
       </AnimatePresence>
       <AnimatePresence>{inkMode && <PenCard mode={inkMode} onMode={(m) => store.getState().setInkMode(m)} onDone={endInk} />}</AnimatePresence>
       <AnimatePresence>
-        {wordsCard && (
-          <WordsCard
-            key={`${wordsCard.x},${wordsCard.y}`}
-            id={wordsCard.id}
-            label={layoutOpts.pointPx ? layoutOpts.fontPx / layoutOpts.pointPx : 10}
-            drawing={style.fontFamily}
-            onSize={(pt) => sizeWords(wordsCard.id, pt)}
-            onLines={(lines) => spaceWords(wordsCard.id, lines)}
-            onFont={(font) => faceWords(wordsCard.id, font)}
-            x={wordsCard.x}
-            y={wordsCard.y}
-            within={wordsCard.within}
-            onClose={() => setWordsCard(null)}
-          />
-        )}
-      </AnimatePresence>
-      <AnimatePresence>
         {cornersCard &&
           (() => {
             const sh = store.getState().shapes.find((x) => x.id === cornersCard.id);
@@ -2212,7 +2206,16 @@ function WorkspaceContent({
             const styles = stylesOf(c.text.length, c.marks).filter((_, i) => /\S/.test(c.text[i]));
             const st = store.getState();
             return {
-              onFont: () => setWordsCard({ id: c.id, ...wordsCardPlace(c, menu), within: menu.within }),
+              font: (
+                <WordsFont
+                  id={c.id}
+                  label={layoutOpts.pointPx ? layoutOpts.fontPx / layoutOpts.pointPx : 10}
+                  drawing={style.fontFamily}
+                  onSize={(pt) => sizeWords(c.id, pt)}
+                  onLines={(lines) => spaceWords(c.id, lines)}
+                  onFont={(font) => faceWords(c.id, font)}
+                />
+              ),
               bold: styles.length > 0 && styles.every((x) => x?.bold),
               italic: styles.length > 0 && styles.every((x) => x?.italic),
               list: c.text.split("\n").every((l) => !l.trim() || listItem(l)),
@@ -3031,28 +3034,46 @@ function Elapsed({ since }: { since: number }) {
   );
 }
 
+/**
+ * What the import alert offers where no plugin added reads a file: each
+ * plugin that would - one here, added as any plugin is; one on offer
+ * online, got first, asking first (lib/calc/workers `addOnline`) - and the
+ * file read again once one is.
+ */
 function AddToRead({ suggest, again }: { suggest: readonly string[]; again: () => void }) {
   const states = useReaders((s) => s.state);
+  const catalogue = useOnline((s) => s.catalogue);
+  const [getting, setGetting] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
   return (
     <>
       {suggest.map((id) => {
         const p = anyPluginById(id);
-        if (!p) return null;
-        const adding = states[id] === "adding" || states[id] === "waiting";
+        const entry = p ? undefined : catalogue?.plugins.find((e) => e.id === id);
+        const name = p?.name ?? entry?.name;
+        if (!name) return null;
+        const adding = getting === id || states[id] === "adding" || states[id] === "waiting";
         return (
           <button
             key={id}
             disabled={adding}
             onClick={(e) => {
               e.stopPropagation();
-              void addPlugin(p).then(again, () => undefined);
+              if (p) return void addPlugin(p).then(again, () => undefined);
+              if (!entry) return;
+              setGetting(id);
+              setProblem(null);
+              void addOnline(entry)
+                .then(again, (err: unknown) => setProblem(err instanceof Error ? err.message : String(err)))
+                .finally(() => setGetting(null));
             }}
             className="shrink-0 rounded-md border border-gh-line px-2 py-0.5 transition-colors duration-150 ease-meno hover:bg-gh-base disabled:opacity-60"
           >
-            {adding ? `Adding ${p.name}…` : `Add ${p.name}`}
+            {adding ? `Adding ${name}…` : `Add ${name}`}
           </button>
         );
       })}
+      {problem && <span className="text-accel-accent">{problem}</span>}
     </>
   );
 }

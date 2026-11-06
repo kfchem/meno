@@ -561,6 +561,14 @@ cores and memory fit what is free, and keeps the order they were asked
 for: a job never jumps ahead of an earlier one. A job's cores and memory
 are what its plugin declares; what the runner may use is capped in
 Settings, all cores and three quarters of the memory by default.
+It keeps the computer from sleeping for want of use while a job's
+program runs, so that a calculation left overnight is not cut short:
+each job's runner holds it from when its program starts until it and the
+programs after it end, whether Meno is open or not (macOS: the system's
+`caffeinate`; Windows: the runner's thread saying the system is needed;
+elsewhere nothing). The display may still turn off, and a lid closed or
+a sleep asked for is the person's. Settings, *Calculations*, can turn it
+off (`src-tauri/src/awake.rs`).
 
 **Cluster jobs are submit-and-return.** Meno submits, keeps the job's record
 (scheduler, its job id, the key), and returns. It takes the job up again
@@ -1033,9 +1041,10 @@ space: the group goes where the hydrogen was.
   the configuration it had. A wedge with three bonds in the page reads
   otherwise than a wedge with the hydrogen left out, so the old wedge alone
   would invert it.
-- **Every wedge keeps its narrow end.** A bond added to an atom changes how
-  the drawing counts its bonds, and with them which end of a wedge reads as
-  narrow, so a wedge would move to the next atom.
+- **Every wedge keeps its narrow end.** A wedge is narrow at an atom, kept
+  by id (EDITOR-2D, *A wedge's narrow end is kept by atom*), so the group's
+  bond added to an atom does not move a wedge to the next atom; a product's
+  wedge without one is given the template's.
 - **A stereocentre the group makes** (one of a CH2's two hydrogens) is left
   open, with no configuration made up. *Stereoisomers* can enumerate it.
 - **The guard behind them.** Every product is read back as the canvas reads

@@ -11,8 +11,9 @@
  */
 import type { Kind } from "../io/kinds";
 import { useAppSettings } from "../settings/appSettings";
-import { alsoReadersFor, anyPluginById, READERS, readerFor, readersUndecided, type FileChoices, type Plugin, type ReaderPlugin } from "./catalog";
+import { alsoReadersFor, anyPluginById, READERS, readerFor, readersUndecided, type FileChoices, type ReaderPlugin } from "./catalog";
 import { forThisSystem } from "../plugins/here";
+import { onlineEntry } from "../plugins/online";
 import { frameReads, givenResults, marksOf, OUTPUT_SCHEMA, type ReaderOutput } from "./output";
 import { readResults, type Result } from "./results";
 import { addedReaders, readerClient, useReaders } from "./workers";
@@ -21,8 +22,8 @@ import { checkedStructures, type StructureRead } from "../io/structures";
 
 /**
  * Why a file is not read: no plugin added reads it. `suggest` holds the
- * plugins not added that read it, by id - those Meno has and that are made
- * for this system - each to add.
+ * plugins not added that read it, by id - those here, and those on offer
+ * online, made for this system - each to add.
  */
 export class NotRead extends Error {
   constructor(
@@ -51,7 +52,13 @@ export function whoReads(
   // (several added read it, and nothing says which: the chemist chooses - never the first by its name)
   const undecided = readersUndecided(kind.id, added, choices, readers);
   if (undecided.length) return new NotRead(`${name} (${kind.name}): ${undecided.map((p) => p.name).join(" and ")} each read it - choose which in Settings, Files.`);
-  const could = (kind.suggest ?? []).map(anyPluginById).filter((p): p is Plugin => !!p && !added.has(p.id) && forThisSystem(p));
+  // (a plugin here, not added; or one on offer online, made for this system and this Meno, as its kinds were registered)
+  const could = (kind.suggest ?? []).flatMap((id): { id: string; name: string }[] => {
+    const p = anyPluginById(id);
+    if (p) return !added.has(p.id) && forThisSystem(p) ? [p] : [];
+    const entry = onlineEntry(id);
+    return entry ? [entry] : [];
+  });
   return could.length
     ? new NotRead(`${name} (${kind.name}): ${could.map((p) => p.name).join(" or ")} would read it.`, could.map((p) => p.id))
     : new NotRead(`No plugin added reads ${name}.`);

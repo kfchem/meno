@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useNetwork } from "../net/network";
 import { CATALOGUE_PURPOSE, type CatalogueEntry } from "./catalogue";
-import { getPlugin, listOnline, useOnline, type PluginFiles } from "./online";
+import { getPlugin, keptOnline, listOnline, removeFiles, useOnline, type PluginFiles } from "./online";
 
 const HEX = "b".repeat(64);
 const ENTRY = {
@@ -17,7 +17,7 @@ const ENTRY = {
   source: { url: "https://github.com/example/plugins/releases/download/sketch-v0.2.0/sketch-0.2.0.tar.gz", sha256: HEX, bytes: 10 },
   manifestSha256: HEX,
 };
-const CATALOGUE = { schema: 1, issued: "2026-11-10T00:00:00Z", serial: 3, plugins: [ENTRY] };
+const CATALOGUE = { schema: 1, issued: "2026-11-10T00:00:00Z", plugins: [ENTRY] };
 
 /** Meno's backend, as a test has it: `catalogue_get` answers as given - and says whether it was asked to fetch. */
 function backend(answer: () => unknown) {
@@ -42,6 +42,26 @@ beforeEach(() => {
   useOnline.setState({ state: "unlisted", catalogue: undefined, fetchedAt: undefined, kept: undefined, problem: undefined }, true);
 });
 
+describe("the list kept from before, as Meno starts", () => {
+  it("is read without fetching or asking - the network never allowed for it - so its plugins' kinds of file are told at once", async () => {
+    const { ask, asked } = backend(() => ({ catalogue: CATALOGUE, fetchedAt: "2026-11-09T10:00:00Z" }));
+    await keptOnline(ask);
+    expect(asked).toEqual([{ fetch: false }]);
+    expect(useOnline.getState()).toMatchObject({ state: "listed", catalogue: { issued: "2026-11-10T00:00:00Z" } });
+  });
+
+  it("leaves things as they are where none is kept, it cannot be read, or one is listed already", async () => {
+    for (const answer of [() => null, () => ({ catalogue: { schema: 9 } }), () => Promise.reject(new Error("no folder"))]) {
+      await keptOnline(backend(answer).ask);
+      expect(useOnline.getState().state).toBe("unlisted");
+    }
+    useOnline.setState({ state: "listing" });
+    const { ask, asked } = backend(() => ({ catalogue: CATALOGUE }));
+    await keptOnline(ask);
+    expect([asked, useOnline.getState().state]).toEqual([[], "listing"]);
+  });
+});
+
 describe("the plugins online, listed", () => {
   it("asks, fetches and shows nothing as Settings opens where the network was never allowed for it", async () => {
     const { ask, asked } = backend(() => ({ catalogue: CATALOGUE }));
@@ -57,7 +77,7 @@ describe("the plugins online, listed", () => {
     await list(false, ask);
     await list(true, ask);
     expect(asked).toEqual([{ fetch: true }, { fetch: false }, { fetch: true }]);
-    expect(online.getState()).toMatchObject({ state: "listed", fetchedAt: "2026-11-09T10:00:00Z", catalogue: { serial: 3 } });
+    expect(online.getState()).toMatchObject({ state: "listed", fetchedAt: "2026-11-09T10:00:00Z", catalogue: { issued: "2026-11-10T00:00:00Z" } });
   });
 
   it("shows the one kept from before offline, saying why - or, none kept, that it needs the network", async () => {
@@ -65,7 +85,7 @@ describe("the plugins online, listed", () => {
     const kept = backend(() => ({ catalogue: CATALOGUE, fetchedAt: "2026-11-09T10:00:00Z" }));
     await listOnline(true, kept.ask);
     expect(kept.asked).toEqual([{ fetch: false }]);
-    expect(useOnline.getState()).toMatchObject({ state: "listed", kept: expect.stringMatching(/offline/), catalogue: { serial: 3 } });
+    expect(useOnline.getState()).toMatchObject({ state: "listed", kept: expect.stringMatching(/offline/), catalogue: { issued: "2026-11-10T00:00:00Z" } });
     useOnline.setState({ state: "unlisted", catalogue: undefined });
     await listOnline(true, backend(() => null).ask);
     expect(useOnline.getState()).toMatchObject({ state: "failed", problem: expect.stringMatching(/^Listing them needs the network: Meno is offline/) });
@@ -103,7 +123,7 @@ const MANIFEST = { id: "sketch", name: "Sketch interface", version: "0.2.0", des
 const shaOf = async (text: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)))].map((b) => b.toString(16).padStart(2, "0")).join("");
 
 /** The entry, with its manifest's fingerprint that of `manifest` as staged. */
-const entryFor = async (manifest: unknown) => ({ ...ENTRY, manifestSha256: await shaOf(typeof manifest === "string" ? manifest : JSON.stringify(manifest)) }) as CatalogueEntry;
+const entryFor = async (manifest: unknown) => ({ ...ENTRY, fileKinds: [], quotedTables: [], manifestSha256: await shaOf(typeof manifest === "string" ? manifest : JSON.stringify(manifest)) }) as CatalogueEntry;
 
 describe("a plugin got from the list", () => {
   beforeEach(() => useNetwork.setState({ granted: [CATALOGUE_PURPOSE] }));
@@ -124,7 +144,7 @@ describe("a plugin got from the list", () => {
 
   it("is thrown away where its manifest's fingerprint is not the one the list gave - the plugin and version right or not", async () => {
     const f = files(MANIFEST);
-    await expect(getPlugin({ ...ENTRY, manifestSha256: await shaOf(JSON.stringify({ ...MANIFEST, description: "Other." })) } as CatalogueEntry, f)).rejects.toThrow("its files are not the plugin the list offered");
+    await expect(getPlugin({ ...ENTRY, fileKinds: [], quotedTables: [], manifestSha256: await shaOf(JSON.stringify({ ...MANIFEST, description: "Other." })) } as CatalogueEntry, f)).rejects.toThrow("its files are not the plugin the list offered");
     expect(f.did).toEqual(["stage sketch 0.2.0", "discard s1"]);
   });
 
@@ -133,5 +153,30 @@ describe("a plugin got from the list", () => {
     const f = files(MANIFEST);
     await expect(getPlugin(await entryFor(MANIFEST), f)).rejects.toThrow("needs the network");
     expect(f.did).toEqual([]);
+  });
+});
+
+describe("a plugin's files taken away", () => {
+  it("by Meno's backend, then the plugins in place read again - and not read again where taking them failed", async () => {
+    const did: string[] = [];
+    await removeFiles("sketch", async (id) => void did.push(`remove ${id}`), async () => void did.push("reload"));
+    expect(did).toEqual(["remove sketch", "reload"]);
+    did.length = 0;
+    await expect(removeFiles("sketch", async () => Promise.reject(new Error("in use")), async () => void did.push("reload"))).rejects.toThrow("in use");
+    expect(did).toEqual([]);
+  });
+});
+
+describe("a plugin got, taken into use", () => {
+  it("is known at once: the plugins in place read again from Meno's backend", async () => {
+    const manifest = JSON.stringify({ ...MANIFEST, id: "sketch-new" });
+    vi.doMock("@tauri-apps/api/core", () => ({ invoke: async (cmd: string) => (cmd === "plugins_installed" ? [{ id: "sketch-new", version: "0.2.0", dir: "/data/plugins/sketch-new/0.2.0", manifest, grammars: {} }] : null) }));
+    vi.resetModules();
+    const { PLUGIN_FILES: files } = await import("./online");
+    const { anyPluginById } = await import("../calc/catalog");
+    expect(anyPluginById("sketch-new")).toBeUndefined();
+    await files.reload();
+    expect(anyPluginById("sketch-new")?.name).toBe("Sketch interface");
+    vi.doUnmock("@tauri-apps/api/core");
   });
 });

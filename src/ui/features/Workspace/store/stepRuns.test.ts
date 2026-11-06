@@ -77,30 +77,31 @@ function png(w: number, h: number, seed = 0): Uint8Array {
   return new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, ...be(w), ...be(h), 8, 6, 0, 0, 0, seed, 0, 0, 0, 0, 0, 0, 0, 0, 0x49, 0x45, 0x4e, 0x44, 0, 0, 0, 0]);
 }
 
-/** The xTB plugin's worker, as the test has it: what it prepared and read back, and what it was asked. */
+/** The Tightbind plugin's worker, as the test has it: what it prepared and read back, and what it was asked. */
 const worker = {
   prepare: vi.fn(async (step: string, entries: unknown[]) => ({
     jobs: entries.map((_, i) => ({
       entries: [i],
-      program: "xtb",
-      args: step === "optimise" ? ["input.xyz", "--opt", "normal"] : ["input.xyz", "--gfn", "2"],
+      program: "tightbind",
+      args: step === "optimise" ? ["input.xyz", "--opt", "normal"] : ["input.xyz", "--method", "tb2"],
       files: [{ name: "input.xyz", text: "3\n\n" }],
-      reads: ["xtbopt.log"],
+      reads: ["tbopt.log"],
     })),
   })),
   run: vi.fn(async (_step: string, entries: unknown[]) => ({ kept: entries.length > 1 ? [0] : [] })),
-  collect: vi.fn(async (_step: string, entries: { atoms: { el: string; x: number; y: number; z: number }[] }[], _o: unknown, files: Record<string, string>, _log: string, ended: string) =>
+  collect: vi.fn(async (_step: string, entries: { atoms: { el: string; x: number; y: number; z: number }[]; restraints?: { kind: string; atoms: number[] }[] }[], _o: unknown, files: Record<string, string>, _log: string, ended: string) =>
     ended !== "done"
       ? { why: "Some atoms are very close" }
       : {
           outputs: entries.map((e) => ({
             schema: 1,
-            program: "xtb",
-            version: "6.7.1",
-            method: "GFN2-xTB",
+            program: "tightbind",
+            version: "1.0.0",
+            method: "TB-2",
             atoms: e.atoms.map((a) => a.el),
-            frames: [e.atoms.flatMap((a) => [a.x, a.y, a.z]), e.atoms.flatMap((a) => [a.x, a.y + 0.01, a.z])],
-            energies: [-5.0703, Number(files["xtbopt.log"])],
+            // (each atom moved a little - but those its restraints fix, where it was given some: held, as a program asked to holds them)
+            frames: [e.atoms.flatMap((a) => [a.x, a.y, a.z]), e.atoms.flatMap((a, i) => [a.x, a.y + ((e.restraints ?? []).some((r) => r.kind === "fixed" && r.atoms.includes(i)) ? 0 : 0.01), a.z])],
+            energies: [-5.0703, Number(files["tbopt.log"])],
             optimised: true,
           })),
         },
@@ -115,14 +116,14 @@ vi.mock("../../../../lib/plugins/installed", async (actual) => ({
 const readOutput = vi.fn(async (_name: string, _text: string, _kind: { id: string }, _sha: string) => ({
   output: {
     schema: 1,
-    program: "ORCA",
+    program: "Quanta",
     version: "6.1.0",
-    method: "B3LYP",
+    method: "M1",
     atoms: ["O", "H", "H"],
     frames: [[0, 0, 0, 0, 0.76, 0.59, 0, -0.76, 0.59]],
     energies: [-76.4],
   },
-  readers: ["cclib 1.9rc1"],
+  readers: ["manyread 2.0"],
 }));
 vi.mock("../../../../lib/calc/read", async (actual) => ({
   ...(await actual<typeof import("../../../../lib/calc/read")>()),
@@ -136,7 +137,7 @@ vi.mock("../../../../lib/calc/workers", async (actual) => ({
 const configured: string[][] = [];
 vi.mock("../../../../lib/roles/worker", async (actual) => ({
   ...(await actual<typeof import("../../../../lib/roles/worker")>()),
-  rolePlugin: (role: string) => (role === "configurations" ? { id: "rdkit", version: "0.1.7", name: "RDKit" } : undefined),
+  rolePlugin: (role: string) => (role === "configurations" ? { id: "sketchkit", version: "0.1.7", name: "Sketchkit" } : undefined),
   pluginWorker: async () => ({
     request: async (_op: string, args: { molblocks: string[] }) => {
       configured.push(args.molblocks);
@@ -180,7 +181,7 @@ import { forgetStereo } from "../workflow/configurations";
 // (the plugins Meno carries, added: the kinds their outputs are read as registered)
 registerKinds(MANIFESTS);
 
-/** A page with water in a set, wired into a step that optimises it, done by xTB. */
+/** A page with water in a set, wired into a step that optimises it, done by Tightbind. */
 function editor() {
   const doc = createWorkspaceDocument();
   doc.edit("water", (d) =>
@@ -201,7 +202,7 @@ function editor() {
   connectStoreToDocument(store, doc);
   const st = () => store.getState();
   const set = st().addSet({ x0: -3, y0: -3, x1: 3, y1: 3 });
-  const step = st().addStep("optimise", "xtb", 10, 0);
+  const step = st().addStep("optimise", "tightbind", 10, 0);
   st().connect({ set }, step);
   doc.markSaved();
   return { doc, st, step };
@@ -218,7 +219,7 @@ function waters(n: number) {
 
 /** A job of the test's ended: done with what it wrote, or as `state` says. */
 const end = (n: number, state: Job["state"] = "done", more: Partial<Job & { files: Record<string, string>; log: string }> = {}) =>
-  Object.assign(jobs.get(idOf(n))!, { state, started: 1000, ended: 2000, ...(state === "done" ? { files: { "xtbopt.log": "-5.0705" } } : {}), ...more });
+  Object.assign(jobs.get(idOf(n))!, { state, started: 1000, ended: 2000, ...(state === "done" ? { files: { "tbopt.log": "-5.0705" } } : {}), ...more });
 
 describe("a step that runs a plugin's program", () => {
   beforeEach(() => {
@@ -230,7 +231,7 @@ describe("a step that runs a plugin's program", () => {
     keepFails.length = 0;
     worker.prepare.mockClear();
     worker.collect.mockClear();
-    useReaders.setState({ state: { xtb: "added" }, problem: {} });
+    useReaders.setState({ state: { tightbind: "added" }, problem: {} });
   });
 
   it("runs a job for its entry, apart from Meno - kept with the page, no step to undo - and brings its results in as one", async () => {
@@ -239,10 +240,10 @@ describe("a step that runs a plugin's program", () => {
     await settle();
     await settle();
     // prepared by the plugin with what came in, its job started - with the cores it takes
-    expect(worker.prepare).toHaveBeenCalledWith("optimise", [expect.objectContaining({ charge: 0, multiplicity: 1 })], { method: "gfn2", solvent: "none", level: "normal" }, expect.any(Number), {});
-    expect(asked.started).toEqual([expect.objectContaining({ plugin: "xtb", program: "xtb", args: ["input.xyz", "--opt", "normal"], cores: expect.any(Number) })]);
+    expect(worker.prepare).toHaveBeenCalledWith("optimise", [expect.objectContaining({ charge: 0, multiplicity: 1 })], { hold: "no", method: "tb2", solvent: "none", level: "normal" }, expect.any(Number), {});
+    expect(asked.started).toEqual([expect.objectContaining({ plugin: "tightbind", program: "tightbind", args: ["input.xyz", "--opt", "normal"], cores: expect.any(Number) })]);
     const running = st().steps.find((s) => s.id === step)!.running!;
-    expect(running.jobs).toEqual([{ id: idOf(1), entries: [0], reads: ["xtbopt.log"], key: expect.stringMatching(/^[0-9a-f]{64}$/) }]);
+    expect(running.jobs).toEqual([{ id: idOf(1), entries: [0], reads: ["tbopt.log"], key: expect.stringMatching(/^[0-9a-f]{64}$/) }]);
     // (to be saved - and read back, so that a workspace opened again picks it up - but nothing to undo)
     expect(doc.history()).toMatchObject({ dirty: true, undoLabel: "wire" });
     expect(readWorkflow({ sets: st().sets, steps: st().steps, wires: st().wires })?.steps[0].running).toEqual(running);
@@ -253,7 +254,7 @@ describe("a step that runs a plugin's program", () => {
     expect(st().jobsSeen[idOf(1)]).toMatchObject({ state: "running", line: "cycle 2" });
 
     // done: read back by the plugin, and brought in
-    Object.assign(jobs.get(idOf(1))!, { state: "done", ended: Date.now() + 12_000, files: { "xtbopt.log": "-5.0705" } });
+    Object.assign(jobs.get(idOf(1))!, { state: "done", ended: Date.now() + 12_000, files: { "tbopt.log": "-5.0705" } });
     await st().lookAtJobs();
     await ran;
     const after = st().steps.find((s) => s.id === step)!;
@@ -263,7 +264,7 @@ describe("a step that runs a plugin's program", () => {
     expect(made.made).toEqual({ step, exit: "out", holds: "molecules" });
     // the molecule optimised: its path as its frames, ending at it, shown at its end; what the calculation was
     const m = st().molecules3d[1];
-    expect(m).toMatchObject({ path: true, energies: [-5.0703, -5.0705], calc: { program: "xtb", method: "GFN2-xTB", optimised: true } });
+    expect(m).toMatchObject({ path: true, energies: [-5.0703, -5.0705], calc: { program: "tightbind", method: "TB-2", optimised: true } });
     expect(m.frames).toHaveLength(1);
     expect(st().frames3d[m.id]).toBe(1);
     // its results one step to undo: undone, the run stays over
@@ -274,7 +275,7 @@ describe("a step that runs a plugin's program", () => {
   });
 
   it("passes a lone atom through as it came where its plugin's program takes none - never sent, said on its line and on it - and sends one where it takes one", async () => {
-    useReaders.setState({ state: { xtb: "added", crest: "added" }, problem: {} });
+    useReaders.setState({ state: { tightbind: "added", confsweep: "added" }, problem: {} });
     // (water and a sodium ion, the ion of a salt drawn as ions, in one set)
     const page = (kind: "optimise" | "conformers", by: string, water = true) => {
       const made = editor();
@@ -289,9 +290,9 @@ describe("a step that runs a plugin's program", () => {
         .molecules.map((id) => st().molecules3d.find((m) => m.id === id)!)
         .find((m) => m.atoms.length === 1)!;
 
-    // CREST's Optimise: the water sent, the ion not - where it was, no energy, no calculation, said so
+    // Confsweep's Optimise: the water sent, the ion not - where it was, no energy, no calculation, said so
     {
-      const { st, step } = page("optimise", "crest");
+      const { st, step } = page("optimise", "confsweep");
       const ran = st().runStep(step);
       await settle();
       await settle();
@@ -318,7 +319,7 @@ describe("a step that runs a plugin's program", () => {
 
     // the ion alone: nothing asked of its plugin, no job - its only conformer, at once
     {
-      const { st, step } = page("conformers", "crest", false);
+      const { st, step } = page("conformers", "confsweep", false);
       await st().runStep(step);
       expect(worker.prepare).not.toHaveBeenCalled();
       expect(asked.started).toEqual([]);
@@ -328,18 +329,58 @@ describe("a step that runs a plugin's program", () => {
       expect(ion(st, step).made?.how).toEqual([{ label: "Conformers", text: "one atom: its only conformer" }]);
     }
 
-    // xTB's Optimise, whose program takes one: the ion sent with the water, as before
+    // Tightbind's Optimise, whose program takes one: the ion sent with the water, as before
     {
-      const { st, step } = page("optimise", "xtb");
+      const { st, step } = page("optimise", "tightbind");
       const ran = st().runStep(step);
       await settle();
       await settle();
       const sent = worker.prepare.mock.lastCall![1] as { atoms: { el: string }[] }[];
       expect(sent.map((e) => e.atoms.length).sort()).toEqual([1, 3]);
       expect(st().steps.find((s) => s.id === step)!.running!.passed).toBeUndefined();
-      for (const j of [...jobs.keys()]) Object.assign(jobs.get(j)!, { state: "done", started: 1000, ended: 2000, files: { "xtbopt.log": "-5.0705" } });
+      for (const j of [...jobs.keys()]) Object.assign(jobs.get(j)!, { state: "done", started: 1000, ended: 2000, files: { "tbopt.log": "-5.0705" } });
       await st().lookAtJobs();
       await ran;
+    }
+  });
+
+  it("holds an entry's atoms fixed where it is asked to - sent with them, said on what it made - and refuses one whose restraints hold distances too, naming them", async () => {
+    // (water given its restraints by Restraints, then optimised by Tightbind, whose optimisation can hold atoms fixed)
+    const page = async (restraints: Record<string, unknown>) => {
+      const made = editor();
+      const r = made.st().addStep("restraints", "meno", 5, 0);
+      made.st().updateStep(r, { options: { coordination: false, ...restraints } });
+      made.st().connect({ set: made.st().sets[0].id }, r);
+      await made.st().runStep(r);
+      // (Restraints' out, into an optimisation asked to hold its atoms fixed)
+      const step = made.st().addStep("optimise", "tightbind", 20, 0);
+      made.st().updateStep(step, { options: { hold: "fixed" } });
+      made.st().connect({ set: made.st().sets.find((b) => b.made?.step === r && b.made.exit === "out")!.id }, step);
+      return { ...made, step };
+    };
+    {
+      const { st, step } = await page({ fixed: "1, 3" });
+      const ran = st().runStep(step);
+      await settle();
+      await settle();
+      const [sent] = worker.prepare.mock.lastCall![1] as { restraints?: { kind: string; atoms: number[] }[] }[];
+      expect(sent.restraints).toEqual([{ kind: "fixed", atoms: [0, 2] }]);
+      expect((worker.prepare.mock.lastCall as unknown as unknown[])[2]).toMatchObject({ hold: "fixed" });
+      end(1);
+      await st().lookAtJobs();
+      await ran;
+      const out = setMembers(st(), st().sets.find((b) => b.made?.step === step && b.made.exit === "out")!).molecules.map((id) => st().molecules3d.find((m) => m.id === id)!);
+      expect(out).toHaveLength(1);
+      expect(out[0].calc?.held).toEqual([0, 2]);
+    }
+    worker.prepare.mockClear();
+    jobs.clear();
+    next = 1;
+    {
+      const { st, step } = await page({ fixed: "1", distances: "2-3" });
+      await st().runStep(step);
+      expect(worker.prepare).not.toHaveBeenCalled();
+      expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: expect.stringContaining("Its restraints hold distances, which this step does not hold") });
     }
   });
 
@@ -375,7 +416,7 @@ describe("a step that runs a plugin's program", () => {
     job.log += "0\ncycle 2\n";
     await st().lookAtJobs();
     expect(st().jobsSeen[idOf(1)]).toMatchObject({ line: "cycle 2", progress: { done: 12, total: 240 } });
-    Object.assign(job, { state: "done", ended: Date.now() + 1000, files: { "xtbopt.log": "-5.0705" } });
+    Object.assign(job, { state: "done", ended: Date.now() + 1000, files: { "tbopt.log": "-5.0705" } });
     await st().lookAtJobs();
     await ran;
   });
@@ -401,7 +442,7 @@ describe("a step that runs a plugin's program", () => {
     expect(st2().jobsSeen[idOf(1)]).toMatchObject({ state: "running" });
     expect(st2().sets.find((b) => b.made?.step === step)?.made?.holds).toBeUndefined();
     // (done while the workspace was open again: read back and brought in, as if it had never been closed)
-    Object.assign(jobs.get(idOf(1))!, { state: "done", ended: Date.now() + 5000, files: { "xtbopt.log": "-5.0705" } });
+    Object.assign(jobs.get(idOf(1))!, { state: "done", ended: Date.now() + 5000, files: { "tbopt.log": "-5.0705" } });
     await st2().lookAtJobs();
     await settle();
     const after = st2().steps.find((s) => s.id === step)!;
@@ -432,8 +473,8 @@ describe("a step that runs a plugin's program", () => {
   it("given an empty set, starts nothing and says so - for each kind of step a plugin does", async () => {
     const { st } = editor();
     const empty = st().addSet({ x0: 40, y0: -3, x1: 46, y1: 3 });
-    for (const [kind, by] of [["optimise", "xtb"], ["energy", "xtb"], ["frequencies", "xtb"], ["conformers", "crest"]] as const) {
-      useReaders.setState({ state: { xtb: "added", crest: "added" }, problem: {} });
+    for (const [kind, by] of [["optimise", "tightbind"], ["energy", "tightbind"], ["frequencies", "tightbind"], ["conformers", "confsweep"]] as const) {
+      useReaders.setState({ state: { tightbind: "added", confsweep: "added" }, problem: {} });
       const step = st().addStep(kind, by, 60, 0);
       st().connect({ set: empty }, step);
       await st().runStep(step);
@@ -444,8 +485,8 @@ describe("a step that runs a plugin's program", () => {
   });
 
   it("gives a program running as processes one to each physical core, however many cores Settings gives - a program of threads all of them", async () => {
-    useReaders.setState({ state: { orca: "added", xtb: "added" }, problem: {} });
-    installedAt.orca = "/Applications/orca_6/orca";
+    useReaders.setState({ state: { quanta: "added", tightbind: "added" }, problem: {} });
+    installedAt.quanta = "/Applications/quanta_4/quanta";
     // (a computer running two threads on each of its 4 physical cores - whatever computer the test runs on: the cores
     //  the webview tells, too - and Settings giving each job all 8)
     physicalCores.n = 4;
@@ -453,20 +494,20 @@ describe("a step that runs a plugin's program", () => {
     const calculations = useAppSettings.getState().calculations;
     useAppSettings.setState({ calculations: { ...calculations, cores: 8 } });
     try {
-      worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! SP\n" }], reads: [] }] }) as never);
+      worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "quanta", args: ["input.inp"], files: [{ name: "input.inp", text: "# SP\n" }], reads: [] }] }) as never);
       const { st } = editor();
-      const orca = st().addStep("energy", "orca", 10, 10);
-      st().connect({ set: st().sets[0].id }, orca);
-      void st().runStep(orca);
+      const qm = st().addStep("energy", "quanta", 10, 10);
+      st().connect({ set: st().sets[0].id }, qm);
+      void st().runStep(qm);
       await settle();
       await settle();
-      // (ORCA, whose manifest says it runs as processes: 4 - its %pal written so, and its job counted so)
+      // (Quanta, whose manifest says it runs as processes: 4 - written so in its input, and its job counted so)
       expect((worker.prepare.mock.calls[worker.prepare.mock.calls.length - 1] as unknown[])[3]).toBe(4);
-      expect(asked.started[asked.started.length - 1]).toMatchObject({ program: "orca", cores: 4 });
-      // (xtb, of threads: all 8)
-      const xtb = st().addStep("optimise", "xtb", 10, 30);
-      st().connect({ set: st().sets[0].id }, xtb);
-      void st().runStep(xtb);
+      expect(asked.started[asked.started.length - 1]).toMatchObject({ program: "quanta", cores: 4 });
+      // (Tightbind, of threads: all 8)
+      const tb = st().addStep("optimise", "tightbind", 10, 30);
+      st().connect({ set: st().sets[0].id }, tb);
+      void st().runStep(tb);
       await settle();
       await settle();
       expect((worker.prepare.mock.calls[worker.prepare.mock.calls.length - 1] as unknown[])[3]).toBe(8);
@@ -477,27 +518,27 @@ describe("a step that runs a plugin's program", () => {
     }
   });
 
-  it("runs a job on the fewer cores its plugin says it takes - ORCA with no MPI, one - and says why once, on the step's line", async () => {
-    useReaders.setState({ state: { orca: "added" }, problem: {} });
-    installedAt.orca = "/Applications/orca_6/orca";
+  it("runs a job on the fewer cores its plugin says it takes - Quanta with no MPI, one - and says why once, on the step's line", async () => {
+    useReaders.setState({ state: { quanta: "added" }, problem: {} });
+    installedAt.quanta = "/Applications/quanta_4/quanta";
     const calculations = useAppSettings.getState().calculations;
     useAppSettings.setState({ calculations: { ...calculations, cores: 8 } });
     try {
       const NO_MPI = "run on one core: no MPI on this computer";
-      const one = { program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! SP\n" }], reads: [], cores: 1 };
+      const one = { program: "quanta", args: ["input.inp"], files: [{ name: "input.inp", text: "# SP\n" }], reads: [], cores: 1 };
       worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], ...one }], note: NO_MPI }) as never);
-      worker.collect.mockImplementationOnce(async () => ({ read: [{ kind: "orca", log: true, name: "water.out" }] }) as never);
+      worker.collect.mockImplementationOnce(async () => ({ read: [{ kind: "quanta", log: true, name: "water.out" }] }) as never);
       const { st } = editor();
-      const step = st().addStep("energy", "orca", 10, 10);
+      const step = st().addStep("energy", "quanta", 10, 10);
       st().connect({ set: st().sets[0].id }, step);
       const ran = st().runStep(step);
       await settle();
       await settle();
-      // (its plugin told where ORCA was found: its jobs' PATH begins with that folder, where it looks for MPI's launcher)
-      expect((worker.prepare.mock.calls[worker.prepare.mock.calls.length - 1] as unknown[])[4]).toEqual({ orca: "/Applications/orca_6/orca" });
+      // (its plugin told where Quanta was found: its jobs' PATH begins with that folder, where it looks for MPI's launcher)
+      expect((worker.prepare.mock.calls[worker.prepare.mock.calls.length - 1] as unknown[])[4]).toEqual({ quanta: "/Applications/quanta_4/quanta" });
       // (Settings give each job 8: this one is asked for, and counted by the queue, at 1)
-      expect(asked.started[asked.started.length - 1]).toMatchObject({ program: "orca", cores: 1 });
-      Object.assign(jobs.get(idOf(asked.started.length))!, { state: "done", started: 1000, ended: 61_000, log: "ORCA's output" });
+      expect(asked.started[asked.started.length - 1]).toMatchObject({ program: "quanta", cores: 1 });
+      Object.assign(jobs.get(idOf(asked.started.length))!, { state: "done", started: 1000, ended: 61_000, log: "Quanta's output" });
       await st().lookAtJobs();
       await ran;
       const said = st().steps.find((s) => s.id === step)!.ran!.said!;
@@ -508,67 +549,67 @@ describe("a step that runs a plugin's program", () => {
   });
 
   it("runs a program installed separately where it was found - and has Meno's readers read what it wrote", async () => {
-    useReaders.setState({ state: { orca: "added" }, problem: {} });
-    installedAt.orca = "/Applications/orca_6/orca";
-    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! SP\n" }], reads: [] }] }) as never);
-    worker.collect.mockImplementationOnce(async () => ({ read: [{ kind: "orca", log: true, name: "water.out" }] }) as never);
+    useReaders.setState({ state: { quanta: "added" }, problem: {} });
+    installedAt.quanta = "/Applications/quanta_4/quanta";
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "quanta", args: ["input.inp"], files: [{ name: "input.inp", text: "# SP\n" }], reads: [] }] }) as never);
+    worker.collect.mockImplementationOnce(async () => ({ read: [{ kind: "quanta", log: true, name: "water.out" }] }) as never);
     const { st } = editor();
-    const step = st().addStep("energy", "orca", 10, 10);
+    const step = st().addStep("energy", "quanta", 10, 10);
     st().connect({ set: st().sets[0].id }, step);
     const ran = st().runStep(step);
     await settle();
     await settle();
     // started with where it is
-    expect(asked.started).toEqual([expect.objectContaining({ plugin: "orca", program: "orca", path: "/Applications/orca_6/orca" })]);
-    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 61_000, log: "ORCA's output" });
+    expect(asked.started).toEqual([expect.objectContaining({ plugin: "quanta", program: "quanta", path: "/Applications/quanta_4/quanta" })]);
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 61_000, log: "Quanta's output" });
     await st().lookAtJobs();
     await ran;
-    // what it printed read by Meno's readers, as an output opened is - ORCA's kind - and kept, by that kind
-    expect(readOutput).toHaveBeenCalledWith("water.out", "ORCA's output", expect.objectContaining({ id: "orca" }), expect.any(String));
+    // what it printed read by Meno's readers, as an output opened is - Quanta's kind - and kept, by that kind
+    expect(readOutput).toHaveBeenCalledWith("water.out", "Quanta's output", expect.objectContaining({ id: "quanta" }), expect.any(String));
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "1:00 · E −76.400000 Eh" });
     const m = st().molecules3d[st().molecules3d.length - 1];
-    expect(m.calc).toMatchObject({ program: "ORCA", readers: ["cclib 1.9rc1"], source: { name: "water.out", kind: "orca" } });
+    expect(m.calc).toMatchObject({ program: "Quanta", readers: ["manyread 2.0"], source: { name: "water.out", kind: "quanta" } });
   });
 
-  it("asks for another plugin's program where its plugin's job needs it - the xTB plugin's xtb, for ORCA's xTB methods - and, that plugin not added, starts nothing and says so - the plugin otherwise running as it does", async () => {
-    installedAt.orca = "/Applications/orca_6/orca";
-    const needing = async () => ({ jobs: [{ entries: [0], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! XTB2 Opt\n" }], reads: [], needs: ["xtb"] }] }) as never;
-    // (the xTB plugin not added: refused before any job is made)
-    useReaders.setState({ state: { orca: "added" }, problem: {} });
+  it("asks for another plugin's program where its plugin's job needs it - the Tightbind plugin's tightbind, for Quanta's tight-binding methods - and, that plugin not added, starts nothing and says so - the plugin otherwise running as it does", async () => {
+    installedAt.quanta = "/Applications/quanta_4/quanta";
+    const needing = async () => ({ jobs: [{ entries: [0], program: "quanta", args: ["input.inp"], files: [{ name: "input.inp", text: "# TB2 OPT\n" }], reads: [], needs: ["tightbind"] }] }) as never;
+    // (the Tightbind plugin not added: refused before any job is made)
+    useReaders.setState({ state: { quanta: "added" }, problem: {} });
     worker.prepare.mockImplementationOnce(needing);
     const first = editor();
-    const step = first.st().addStep("energy", "orca", 10, 10);
+    const step = first.st().addStep("energy", "quanta", 10, 10);
     first.st().connect({ set: first.st().sets[0].id }, step);
     await first.st().runStep(step);
     expect(asked.started).toEqual([]);
-    expect(first.st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Needs xTB, which is not added." });
+    expect(first.st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Needs Tightbind, which is not added." });
     // (added: the job asks for it, by the plugin's id)
-    useReaders.setState({ state: { orca: "added", xtb: "added" }, problem: {} });
+    useReaders.setState({ state: { quanta: "added", tightbind: "added" }, problem: {} });
     worker.prepare.mockImplementationOnce(needing);
     const again = editor();
-    const next = again.st().addStep("energy", "orca", 10, 10);
+    const next = again.st().addStep("energy", "quanta", 10, 10);
     again.st().connect({ set: again.st().sets[0].id }, next);
     void again.st().runStep(next);
     await settle();
     await settle();
-    expect(asked.started).toEqual([expect.objectContaining({ plugin: "orca", program: "orca", needs: ["xtb"] })]);
+    expect(asked.started).toEqual([expect.objectContaining({ plugin: "quanta", program: "quanta", needs: ["tightbind"] })]);
   });
 
   it("runs the programs installed beside it after it, and keeps the wavefunction it wrote with what was read - saved with the workspace", async () => {
-    useReaders.setState({ state: { orca: "added" }, problem: {} });
-    installedAt.orca = "/Applications/orca_6/orca";
-    const then = [{ program: "orca_2mkl", args: ["input", "-molden"] }];
-    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! SP\n" }], then, reads: ["input.molden.input"] }] }) as never);
+    useReaders.setState({ state: { quanta: "added" }, problem: {} });
+    installedAt.quanta = "/Applications/quanta_4/quanta";
+    const then = [{ program: "quanta_molden", args: ["input", "-molden"] }];
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "quanta", args: ["input.inp"], files: [{ name: "input.inp", text: "# SP\n" }], then, reads: ["input.molden.input"] }] }) as never);
     const wavefunction = { kind: "molden", file: "input.molden.input", name: "water.molden" };
-    worker.collect.mockImplementationOnce(async () => ({ read: [{ kind: "orca", log: true, name: "water.out", wavefunction }] }) as never);
+    worker.collect.mockImplementationOnce(async () => ({ read: [{ kind: "quanta", log: true, name: "water.out", wavefunction }] }) as never);
     const { st } = editor();
-    const step = st().addStep("energy", "orca", 10, 10);
+    const step = st().addStep("energy", "quanta", 10, 10);
     st().connect({ set: st().sets[0].id }, step);
     const ran = st().runStep(step);
     await settle();
     await settle();
-    expect(asked.started).toEqual([expect.objectContaining({ program: "orca", then })]);
-    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 61_000, log: "ORCA's output", files: { "input.molden.input": "[Molden Format]\n" } });
+    expect(asked.started).toEqual([expect.objectContaining({ program: "quanta", then })]);
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 61_000, log: "Quanta's output", files: { "input.molden.input": "[Molden Format]\n" } });
     await st().lookAtJobs();
     await ran;
     const m = st().molecules3d[st().molecules3d.length - 1];
@@ -580,17 +621,17 @@ describe("a step that runs a plugin's program", () => {
   });
 
   it("keeps no wavefunction where the job wrote none", async () => {
-    useReaders.setState({ state: { orca: "added" }, problem: {} });
-    installedAt.orca = "/Applications/orca_6/orca";
-    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! SP\n" }], reads: ["input.molden.input"] }] }) as never);
-    worker.collect.mockImplementationOnce(async () => ({ read: [{ kind: "orca", log: true, name: "water.out", wavefunction: { kind: "molden", file: "input.molden.input", name: "water.molden" } }] }) as never);
+    useReaders.setState({ state: { quanta: "added" }, problem: {} });
+    installedAt.quanta = "/Applications/quanta_4/quanta";
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "quanta", args: ["input.inp"], files: [{ name: "input.inp", text: "# SP\n" }], reads: ["input.molden.input"] }] }) as never);
+    worker.collect.mockImplementationOnce(async () => ({ read: [{ kind: "quanta", log: true, name: "water.out", wavefunction: { kind: "molden", file: "input.molden.input", name: "water.molden" } }] }) as never);
     const { st } = editor();
-    const step = st().addStep("energy", "orca", 10, 10);
+    const step = st().addStep("energy", "quanta", 10, 10);
     st().connect({ set: st().sets[0].id }, step);
     const ran = st().runStep(step);
     await settle();
     await settle();
-    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 2000, log: "ORCA's output" });
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 2000, log: "Quanta's output" });
     await st().lookAtJobs();
     await ran;
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true });
@@ -598,33 +639,33 @@ describe("a step that runs a plugin's program", () => {
   });
 
   it("gives a program one of its files to read, and lays what it gave back turned over what went in - as that is turned", async () => {
-    useReaders.setState({ state: { gaussian: "added" }, problem: {} });
-    installedAt.g16 = "/Applications/g16/g16";
+    useReaders.setState({ state: { orbitron: "added" }, problem: {} });
+    installedAt.orb26 = "/Applications/orb26/orb26";
     worker.prepare.mockImplementationOnce(
-      async () => ({ jobs: [{ entries: [0], program: "g16", args: [], files: [{ name: "input.gjf", text: "# SP\n" }], stdin: "input.gjf", reads: [] }] }) as never,
+      async () => ({ jobs: [{ entries: [0], program: "orb26", args: [], files: [{ name: "input.orb", text: "# SP\n" }], stdin: "input.orb", reads: [] }] }) as never,
     );
-    worker.collect.mockImplementationOnce(async () => ({ read: [{ kind: "gaussian", log: true, name: "water.log" }] }) as never);
-    // (water as Gaussian gives it back: in its standard orientation - turned a half turn about z, and moved)
+    worker.collect.mockImplementationOnce(async () => ({ read: [{ kind: "orbitron", log: true, name: "water.log" }] }) as never);
+    // (water as Orbitron gives it back: in its standard orientation - turned a half turn about z, and moved)
     readOutput.mockImplementationOnce(async () => ({
-      output: { schema: 1, program: "Gaussian", version: "2016+B.01", method: "B3LYP", atoms: ["O", "H", "H"], frames: [[0.1, 0, 0, 0.1, -0.76, 0.59, 0.1, 0.76, 0.59]], energies: [-76.4] },
-      readers: ["cclib 1.9rc1"],
+      output: { schema: 1, program: "Orbitron", version: "26.1", method: "M1", atoms: ["O", "H", "H"], frames: [[0.1, 0, 0, 0.1, -0.76, 0.59, 0.1, 0.76, 0.59]], energies: [-76.4] },
+      readers: ["manyread 2.0"],
     }));
     const { st } = editor();
     const water = st().molecules3d[0].id;
     // (water turned on the page a quarter turn about x)
     const quarter: [number, number, number, number] = [Math.SQRT1_2, 0, 0, Math.SQRT1_2];
     st().setTurn3d(water, quarter);
-    const step = st().addStep("optimise", "gaussian", 10, 10);
+    const step = st().addStep("optimise", "orbitron", 10, 10);
     st().connect({ set: st().sets[0].id }, step);
     const ran = st().runStep(step);
     await settle();
     await settle();
-    expect(asked.started).toEqual([expect.objectContaining({ program: "g16", args: [], stdin: "input.gjf" })]);
-    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 61_000, log: "Gaussian's output" });
+    expect(asked.started).toEqual([expect.objectContaining({ program: "orb26", args: [], stdin: "input.orb" })]);
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 61_000, log: "Orbitron's output" });
     await st().lookAtJobs();
     await ran;
     const m = st().molecules3d[st().molecules3d.length - 1];
-    // (its geometry as Gaussian gave it - shown turned back, then as the water that went in is)
+    // (its geometry as Orbitron gave it - shown turned back, then as the water that went in is)
     expect(m.atoms[1]).toMatchObject({ x: 0.1, y: -0.76 });
     const [x, y, z, w] = st().turns3d[m.id];
     const half: [number, number, number, number] = [0, 0, 1, 0];
@@ -638,29 +679,29 @@ describe("a step that runs a plugin's program", () => {
     [x, y, z, w].forEach((v, i) => expect(v).toBeCloseTo(sign * want[i], 6));
   });
 
-  it("keeps a single point's geometry as it went in, and turned as it is, though Gaussian gave it back in its own orientation", async () => {
-    useReaders.setState({ state: { gaussian: "added" }, problem: {} });
-    installedAt.g16 = "/Applications/g16/g16";
+  it("keeps a single point's geometry as it went in, and turned as it is, though Orbitron gave it back in its own orientation", async () => {
+    useReaders.setState({ state: { orbitron: "added" }, problem: {} });
+    installedAt.orb26 = "/Applications/orb26/orb26";
     worker.prepare.mockImplementationOnce(
-      async () => ({ jobs: [{ entries: [0], program: "g16", args: [], files: [{ name: "input.gjf", text: "# SP\n" }], stdin: "input.gjf", reads: [] }] }) as never,
+      async () => ({ jobs: [{ entries: [0], program: "orb26", args: [], files: [{ name: "input.orb", text: "# SP\n" }], stdin: "input.orb", reads: [] }] }) as never,
     );
-    worker.collect.mockImplementationOnce(async () => ({ read: [{ kind: "gaussian", log: true, name: "water.log" }] }) as never);
+    worker.collect.mockImplementationOnce(async () => ({ read: [{ kind: "orbitron", log: true, name: "water.log" }] }) as never);
     const { st } = editor();
     const water = st().molecules3d[0];
-    // (water as Gaussian gives it back: in its standard orientation - turned a half turn about z, and moved)
+    // (water as Orbitron gives it back: in its standard orientation - turned a half turn about z, and moved)
     const turned = water.atoms.flatMap((a) => [0.1 - a.x, -a.y, a.z]);
     readOutput.mockImplementationOnce(async () => ({
-      output: { schema: 1, program: "Gaussian", version: "2016+B.01", method: "B3LYP", atoms: ["O", "H", "H"], frames: [turned], energies: [-76.4] },
-      readers: ["cclib 1.9rc1"],
+      output: { schema: 1, program: "Orbitron", version: "26.1", method: "M1", atoms: ["O", "H", "H"], frames: [turned], energies: [-76.4] },
+      readers: ["manyread 2.0"],
     }));
     const quarter: [number, number, number, number] = [Math.SQRT1_2, 0, 0, Math.SQRT1_2];
     st().setTurn3d(water.id, quarter);
-    const step = st().addStep("energy", "gaussian", 10, 10);
+    const step = st().addStep("energy", "orbitron", 10, 10);
     st().connect({ set: st().sets[0].id }, step);
     const ran = st().runStep(step);
     await settle();
     await settle();
-    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 61_000, log: "Gaussian's output" });
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 61_000, log: "Orbitron's output" });
     await st().lookAtJobs();
     await ran;
     const m = st().molecules3d[st().molecules3d.length - 1];
@@ -671,23 +712,23 @@ describe("a step that runs a plugin's program", () => {
   });
 
   it("says where to locate a program installed separately that is found nowhere - and starts nothing", async () => {
-    useReaders.setState({ state: { orca: "added" }, problem: {} });
-    installedAt.orca = null;
+    useReaders.setState({ state: { quanta: "added" }, problem: {} });
+    installedAt.quanta = null;
     const { st } = editor();
-    const step = st().addStep("energy", "orca", 10, 10);
+    const step = st().addStep("energy", "quanta", 10, 10);
     st().connect({ set: st().sets[0].id }, step);
     await st().runStep(step);
-    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "ORCA is not found: locate it in Settings, Plugins" });
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Quanta is not found: locate it in Settings, Plugins" });
     expect(asked.started).toEqual([]);
   });
 
   it("says why a program installed separately found only too old will not do - and starts nothing", async () => {
-    useReaders.setState({ state: { orca: "added" }, problem: {} });
-    installedAt.orca = null;
-    const why = "Meno needs ORCA 6.0 or later; this one is 5.0.4";
-    useInstalled.setState({ chosen: { "orca:orca": { path: "/opt/orca_5/orca", version: "5.0.4", why } } });
+    useReaders.setState({ state: { quanta: "added" }, problem: {} });
+    installedAt.quanta = null;
+    const why = "Meno needs Quanta 4.0 or later; this one is 3.0.4";
+    useInstalled.setState({ chosen: { "quanta:quanta": { path: "/opt/quanta_3/quanta", version: "3.0.4", why } } });
     const { st } = editor();
-    const step = st().addStep("energy", "orca", 10, 10);
+    const step = st().addStep("energy", "quanta", 10, 10);
     st().connect({ set: st().sets[0].id }, step);
     await st().runStep(step);
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: why });
@@ -704,18 +745,18 @@ describe("a step that runs a plugin's program", () => {
     await settle();
     expect(asked.started).toHaveLength(1);
     expect(st().steps.find((s) => s.id === step)!.running!.jobs.map((j) => j.id)).toEqual([idOf(1)]);
-    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 2000, files: { "xtbopt.log": "-5.0705" } });
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 2000, files: { "tbopt.log": "-5.0705" } });
     await st().lookAtJobs();
     await Promise.all([a, b, c]);
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true });
   });
 
   it("runs a path search on conformer sets, each conformer an entry - paired in order, a job each, each sent its end - and refuses each with each past its most pairs", async () => {
-    useReaders.setState({ state: { orca: "added", xtb: "added" }, problem: {} });
-    installedAt.orca = "/Applications/orca_6/orca";
-    worker.prepare.mockImplementationOnce(async () => ({ jobs: [0, 1].map((k) => ({ entries: [k], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! XTB2 NEB-TS\n" }], reads: [] })) }) as never);
+    useReaders.setState({ state: { quanta: "added", tightbind: "added" }, problem: {} });
+    installedAt.quanta = "/Applications/quanta_4/quanta";
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [0, 1].map((k) => ({ entries: [k], program: "quanta", args: ["input.inp"], files: [{ name: "input.inp", text: "# TB2 PATH-SADDLE\n" }], reads: [] })) }) as never);
     const { doc, st } = editor();
-    const calc = { readers: ["cclib 1.9rc1"], program: "ORCA", method: "GFN2-xTB", optimised: true };
+    const calc = { readers: ["manyread 2.0"], program: "Quanta", method: "TB-2", optimised: true };
     // (two conformer sets of water, each of two conformers optimised at one level: the starts, and their ends beside them)
     const conformers = (dy: number, k: number, at: { x: number; y: number }) => {
       const w = doc.getState().molecules3d![0];
@@ -725,7 +766,7 @@ describe("a step that runs a plugin's program", () => {
     doc.edit("sets of conformers", (d) => addMolecule3d(addMolecule3d({ ...d, molecules3d: [] }, conformers(0, 2, { x: 0, y: 0 })), conformers(0.3, 2, { x: 20, y: 0 })));
     const starts = st().addSet({ x0: -3, y0: -3, x1: 3, y1: 3 });
     const ends = st().addSet({ x0: 17, y0: -3, x1: 23, y1: 3 });
-    const step = st().addStep("path-search", "orca", 40, 0);
+    const step = st().addStep("path-search", "quanta", 40, 0);
     expect(st().connect({ set: starts }, step, "start")).toBe(true);
     expect(st().connect({ set: ends }, step, "end")).toBe(true);
     void st().runStep(step);
@@ -744,7 +785,7 @@ describe("a step that runs a plugin's program", () => {
     big.doc.edit("sets of conformers", (d) => addMolecule3d(addMolecule3d({ ...d, molecules3d: [] }, { ...conformers(0, 11, { x: 0, y: 0 }) }), { ...conformers(0.3, 10, { x: 20, y: 0 }) }));
     const s2 = big.st().addSet({ x0: -3, y0: -3, x1: 3, y1: 3 });
     const e2 = big.st().addSet({ x0: 17, y0: -3, x1: 23, y1: 3 });
-    const step2 = big.st().addStep("path-search", "orca", 40, 0);
+    const step2 = big.st().addStep("path-search", "quanta", 40, 0);
     big.st().updateStep(step2, { options: { pairs: "each" } });
     big.st().connect({ set: s2 }, step2, "start");
     big.st().connect({ set: e2 }, step2, "end");
@@ -757,7 +798,7 @@ describe("a step that runs a plugin's program", () => {
   it("runs a step of two inputs once each step before it is done, not after the first of them alone", async () => {
     const { st, step: a } = editor();
     // (two optimisations of the one set, each into Merge's inputs: the second's job ends last)
-    const b = st().addStep("optimise", "xtb", 10, 10);
+    const b = st().addStep("optimise", "tightbind", 10, 10);
     st().connect({ set: st().sets[0].id }, b);
     const merge = st().addStep("merge", "meno", 30, 0);
     expect(st().connect({ set: resultOf(st(), a)!.id }, merge, "first")).toBe(true);
@@ -765,7 +806,7 @@ describe("a step that runs a plugin's program", () => {
     const all = st().runAll();
     for (let k = 0; k < 4; k++) await settle();
     expect(asked.started).toHaveLength(2);
-    const done = (n: number) => Object.assign(jobs.get(idOf(n))!, { state: "done", started: 1000, ended: 2000, files: { "xtbopt.log": "-5.0705" } });
+    const done = (n: number) => Object.assign(jobs.get(idOf(n))!, { state: "done", started: 1000, ended: 2000, files: { "tbopt.log": "-5.0705" } });
     done(1);
     await st().lookAtJobs();
     for (let k = 0; k < 4; k++) await settle();
@@ -783,7 +824,7 @@ describe("a step that runs a plugin's program", () => {
     // (the optimisation run, its job done)
     const first = st().runStep(a);
     for (let k = 0; k < 4; k++) await settle();
-    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 2000, files: { "xtbopt.log": "-5.0705" } });
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 2000, files: { "tbopt.log": "-5.0705" } });
     await st().lookAtJobs();
     await first;
     const done = ran(a);
@@ -822,7 +863,7 @@ describe("a step that runs a plugin's program", () => {
     const r2 = round(exit(r1, "out"), "number \u2265 1", 50);
     const r3 = round(exit(r2, "out"), "number \u2265 2", 70);
     // (the last round's own: a program's step, then a step of two inputs - nothing comes into either)
-    const o3 = st().addStep("optimise", "xtb", 90, 0);
+    const o3 = st().addStep("optimise", "tightbind", 90, 0);
     st().connect({ set: exit(r3, "out") }, o3);
     const t3 = st().addStep("torsion-restraints", "meno", 110, 0);
     expect(st().connect({ set: exit(o3, "out") }, t3, "molecules")).toBe(true);
@@ -839,7 +880,7 @@ describe("a step that runs a plugin's program", () => {
     const all = st().runAll();
     for (let k = 0; k < 4; k++) await settle();
     expect(asked.started).toHaveLength(1);
-    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 2000, files: { "xtbopt.log": "-5.0705" } });
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 2000, files: { "tbopt.log": "-5.0705" } });
     await st().lookAtJobs();
     await all;
     expect(ran(r3)).toMatchObject({ ok: true });
@@ -860,7 +901,7 @@ describe("a step that runs a plugin's program", () => {
     const { st } = editor();
     // (a set drawn round nothing, wired by hand)
     const empty = st().addSet({ x0: 50, y0: 50, x1: 56, y1: 56 });
-    const o = st().addStep("optimise", "xtb", 70, 50);
+    const o = st().addStep("optimise", "tightbind", 70, 50);
     st().connect({ set: empty }, o);
     await st().runStep(o);
     expect(st().steps.find((s) => s.id === o)!.ran).toMatchObject({ ok: false });
@@ -868,13 +909,13 @@ describe("a step that runs a plugin's program", () => {
   });
 
   it("runs a path search on pairs - each start with the end in its place - sending each its end, and a pair it cannot work out out of Failed, saying why", async () => {
-    useReaders.setState({ state: { orca: "added", xtb: "added" }, problem: {} });
-    installedAt.orca = "/Applications/orca_6/orca";
-    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! XTB2 NEB-TS FREQ\n" }], reads: [] }] }) as never);
+    useReaders.setState({ state: { quanta: "added", tightbind: "added" }, problem: {} });
+    installedAt.quanta = "/Applications/quanta_4/quanta";
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "quanta", args: ["input.inp"], files: [{ name: "input.inp", text: "# TB2 PATH-SADDLE VIB\n" }], reads: [] }] }) as never);
     const { doc, st } = editor();
     // (each an optimisation, converged, at one level: a path's ends must be - and a second set beside the first: water
     //  again, its hydrogens elsewhere - and a hydrogen molecule, another molecule)
-    const calc = { readers: ["cclib 1.9rc1"], program: "ORCA", method: "GFN2-xTB", optimised: true };
+    const calc = { readers: ["manyread 2.0"], program: "Quanta", method: "TB-2", optimised: true };
     doc.edit("ends", (d) => {
       // (the start carrying how an earlier pair was made: replaced by this path's, said on the line)
       const water = { ...d.molecules3d![0], calc, properties: [{ "path.paired": { value: "matched on an earlier tag", unit: "none" as const, status: "computed" as const } }] };
@@ -884,7 +925,7 @@ describe("a step that runs a plugin's program", () => {
     const ends = st().addSet({ x0: 17, y0: -3, x1: 27, y1: 3 });
     const starts = st().addSet({ x0: -3, y0: -3, x1: 3, y1: 6 });
     // (each with each: water onto water, and water onto the hydrogen molecule - which no path joins)
-    const step = st().addStep("path-search", "orca", 40, 0);
+    const step = st().addStep("path-search", "quanta", 40, 0);
     st().updateStep(step, { options: { pairs: "each" } });
     st().connect({ set: starts }, step, "start");
     st().connect({ set: ends }, step, "end");
@@ -895,7 +936,7 @@ describe("a step that runs a plugin's program", () => {
     expect(sent[0]).toBe("path-search");
     // (only the pair that can be worked out sent, with its end beside it)
     expect((sent[1] as { end?: { atoms: unknown[] } }[]).map((e) => e.end?.atoms.length)).toEqual([3]);
-    expect(asked.started).toEqual([expect.objectContaining({ plugin: "orca", program: "orca" })]);
+    expect(asked.started).toEqual([expect.objectContaining({ plugin: "quanta", program: "quanta" })]);
 
     // (done: its path read back - two images, the point refined, the last - and brought in, shown at the point refined)
     const water = st().molecules3d[0];
@@ -905,7 +946,7 @@ describe("a step that runs a plugin's program", () => {
       async () =>
         ({
           outputs: [
-            { schema: 1, program: "ORCA", method: "GFN2-xTB", atoms: water.atoms.map((a) => a.el), frames, energies: [-5.07, -5.06, -5.05, -5.069], converged: [false, false, true, false] },
+            { schema: 1, program: "Quanta", method: "TB-2", atoms: water.atoms.map((a) => a.el), frames, energies: [-5.07, -5.06, -5.05, -5.069], converged: [false, false, true, false] },
           ],
         }) as never,
     );
@@ -920,8 +961,8 @@ describe("a step that runs a plugin's program", () => {
   });
 
   it("optimises guesses to saddle points - with their sides where both are wired, each paired as its options say; one side alone runs nothing", async () => {
-    useReaders.setState({ state: { orca: "added", xtb: "added" }, problem: {} });
-    installedAt.orca = "/Applications/orca_6/orca";
+    useReaders.setState({ state: { quanta: "added", tightbind: "added" }, problem: {} });
+    installedAt.quanta = "/Applications/quanta_4/quanta";
     const { doc, st } = editor();
     // (water to guess from, water again on each side - its hydrogens elsewhere - and a hydrogen molecule among the reactant sides)
     doc.edit("sides", (d) => {
@@ -932,7 +973,7 @@ describe("a step that runs a plugin's program", () => {
     const guesses = st().addSet({ x0: -3, y0: -3, x1: 3, y1: 6 });
     const reactants = st().addSet({ x0: 17, y0: -3, x1: 27, y1: 3 });
     const products = st().addSet({ x0: 37, y0: -3, x1: 43, y1: 3 });
-    const step = st().addStep("saddle-point", "orca", 60, 0);
+    const step = st().addStep("saddle-point", "quanta", 60, 0);
     st().connect({ set: guesses }, step, "guesses");
     // (one side alone: none of it runs, saying why)
     st().connect({ set: reactants }, step, "reactant");
@@ -941,7 +982,7 @@ describe("a step that runs a plugin's program", () => {
     // (both, each with each: the guess with each reactant side and the product side - the hydrogen molecule no side of it, out of Failed)
     st().connect({ set: products }, step, "product");
     st().updateStep(step, { options: { pairs: "each" } });
-    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! OPTTS\n" }], reads: [] }] }) as never);
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "quanta", args: ["input.inp"], files: [{ name: "input.inp", text: "# SADDLE\n" }], reads: [] }] }) as never);
     const ran = st().runStep(step);
     await settle();
     await settle();
@@ -959,20 +1000,20 @@ describe("a step that runs a plugin's program", () => {
   });
 
   it("puts an optimisation that stopped under way out of Failed at the geometry it reached, from which a step after it starts afresh - saying so", async () => {
-    useReaders.setState({ state: { orca: "added" }, problem: {} });
-    installedAt.orca = "/Applications/orca_6/orca";
+    useReaders.setState({ state: { quanta: "added" }, problem: {} });
+    installedAt.quanta = "/Applications/quanta_4/quanta";
     const { st } = editor();
     const water = st().molecules3d[0];
     const at = water.atoms.flatMap((a) => [a.x, a.y, a.z]);
     const moved = (dy: number) => at.map((v, i) => (i === 4 ? v + dy : v));
-    const step = st().addStep("optimise", "orca", 10, 10);
+    const step = st().addStep("optimise", "quanta", 10, 10);
     st().connect({ set: st().sets[0].id }, step);
-    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! OPT\n" }], reads: [] }] }) as never);
-    // (its SCF failed at its third step: ORCA's words, and its output to read for where it got to)
-    worker.collect.mockImplementationOnce(async () => ({ why: "ORCA finished by error termination in SCF", partial: [{ kind: "orca", log: true, name: "water.out" }] }) as never);
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "quanta", args: ["input.inp"], files: [{ name: "input.inp", text: "# OPT\n" }], reads: [] }] }) as never);
+    // (its SCF failed at its third step: Quanta's words, and its output to read for where it got to)
+    worker.collect.mockImplementationOnce(async () => ({ why: "Quanta stopped: its SCF did not converge", partial: [{ kind: "quanta", log: true, name: "water.out" }] }) as never);
     readOutput.mockImplementationOnce(async () => ({
-      output: { schema: 1, program: "ORCA", version: "6.1.1", method: "B3LYP", atoms: ["O", "H", "H"], frames: [moved(0.05), moved(0.1)], energies: [-76.40, -76.41] },
-      readers: ["cclib 1.9rc1"],
+      output: { schema: 1, program: "Quanta", version: "4.1", method: "M1", atoms: ["O", "H", "H"], frames: [moved(0.05), moved(0.1)], energies: [-76.40, -76.41] },
+      readers: ["manyread 2.0"],
     }));
     const ran = st().runStep(step);
     await settle();
@@ -985,18 +1026,18 @@ describe("a step that runs a plugin's program", () => {
     // (its way there as frames, from the geometry it came in with to the last it reached; no energy of it a result)
     expect(stopped.frames?.length).toBe(2);
     expect([stopped.atoms[1].y - water.atoms[1].y, stopped.energies]).toEqual([0, undefined]);
-    expect(stopped.failed?.[stopped.failed.length - 1]?.why).toBe("ORCA finished by error termination in SCF");
+    expect(stopped.failed?.[stopped.failed.length - 1]?.why).toBe("Quanta stopped: its SCF did not converge");
     const [entry] = setEntries([stopped], "molecules");
     expect(entry.xyz[4] - at[4]).toBeCloseTo(0.1, 9);
-    expect([entry.energy, entryOfSet(entry, "x").properties.failure?.value]).toEqual([undefined, "ORCA finished by error termination in SCF"]);
+    expect([entry.energy, entryOfSet(entry, "x").properties.failure?.value]).toEqual([undefined, "Quanta stopped: its SCF did not converge"]);
     // (an optimisation after it, from its Failed exit: started from where it stopped, nothing of it a result - and said)
-    const again = st().addStep("optimise", "orca", 40, 10);
+    const again = st().addStep("optimise", "quanta", 40, 10);
     st().connect({ set: failedSet.id }, again);
-    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! OPT SlowConv\n" }], reads: [] }] }) as never);
-    worker.collect.mockImplementationOnce(async () => ({ read: [{ kind: "orca", log: true, name: "water.out" }] }) as never);
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "quanta", args: ["input.inp"], files: [{ name: "input.inp", text: "# OPT SLOWSCF\n" }], reads: [] }] }) as never);
+    worker.collect.mockImplementationOnce(async () => ({ read: [{ kind: "quanta", log: true, name: "water.out" }] }) as never);
     readOutput.mockImplementationOnce(async () => ({
-      output: { schema: 1, program: "ORCA", version: "6.1.1", method: "B3LYP", atoms: ["O", "H", "H"], frames: [moved(0.1), moved(0.12)], energies: [-76.41, -76.42], optimised: true } as never,
-      readers: ["cclib 1.9rc1"],
+      output: { schema: 1, program: "Quanta", version: "4.1", method: "M1", atoms: ["O", "H", "H"], frames: [moved(0.1), moved(0.12)], energies: [-76.41, -76.42], optimised: true } as never,
+      readers: ["manyread 2.0"],
     }));
     const calls = worker.prepare.mock.calls.length;
     const ran2 = st().runStep(again);
@@ -1004,7 +1045,7 @@ describe("a step that runs a plugin's program", () => {
     await settle();
     expect(worker.prepare.mock.calls.length).toBe(calls + 1);
     expect((worker.prepare.mock.calls[worker.prepare.mock.calls.length - 1][1] as { atoms: { y: number }[] }[])[0].atoms[1].y - water.atoms[1].y).toBeCloseTo(0.1, 6);
-    Object.assign(jobs.get(idOf(2))!, { state: "done", started: 1000, ended: 31_000, log: "ORCA TERMINATED NORMALLY" });
+    Object.assign(jobs.get(idOf(2))!, { state: "done", started: 1000, ended: 31_000, log: "QUANTA FINISHED" });
     await st().lookAtJobs();
     await ran2;
     const said = st().steps.find((s) => s.id === again)!.ran;
@@ -1033,11 +1074,11 @@ describe("a step that runs a plugin's program", () => {
     const ran = st().runStep(step);
     await settle();
     await settle();
-    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 2000, files: { "xtbopt.log": TOO_LARGE } });
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 2000, files: { "tbopt.log": TOO_LARGE } });
     await st().lookAtJobs();
     await ran;
     expect(worker.collect).not.toHaveBeenCalled();
-    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "xtbopt.log is too large to read: 300 MB, past 256 MB" });
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "tbopt.log is too large to read: 300 MB, past 256 MB" });
   });
 
   it("says why it failed, in the plugin's words", async () => {
@@ -1053,7 +1094,7 @@ describe("a step that runs a plugin's program", () => {
 
   it("fails where its plugin read back a geometry it could not read - and holds up no other step, nor itself", async () => {
     const { st, step } = editor();
-    const other = st().addStep("energy", "xtb", 10, 20);
+    const other = st().addStep("energy", "tightbind", 10, 20);
     st().connect({ set: st().sets[0].id }, other);
     const ran = st().runAll();
     for (let i = 0; i < 5; i++) await settle();
@@ -1061,8 +1102,8 @@ describe("a step that runs a plugin's program", () => {
     const jobOf = (id: number) => jobs.get(stepOf(id).running!.jobs[0].id)!;
     // both jobs ended well; the first one's output read back with a frame given as null
     worker.collect.mockImplementationOnce(async () => ({ outputs: [{ schema: 1, atoms: ["O", "H", "H"], frames: [null, [0, 0, 0, 0, 0.76, 0.59, 0, -0.76, 0.59]] }] }) as never);
-    Object.assign(jobOf(step), { state: "done", started: 1000, ended: 2000, files: { "xtbopt.log": "-5.0705" } });
-    Object.assign(jobOf(other), { state: "done", started: 1000, ended: 2000, files: { "xtbopt.log": "-5.0705" } });
+    Object.assign(jobOf(step), { state: "done", started: 1000, ended: 2000, files: { "tbopt.log": "-5.0705" } });
+    Object.assign(jobOf(other), { state: "done", started: 1000, ended: 2000, files: { "tbopt.log": "-5.0705" } });
     // (looked at once a second, as Workflow2D does)
     for (let i = 0; i < 3; i++) await st().lookAtJobs();
     await ran;
@@ -1080,7 +1121,7 @@ describe("a step that runs a plugin's program", () => {
     await settle();
     await settle();
     keepFails.push("The disk is full");
-    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 2000, files: { "xtbopt.log": "-5.0705" } });
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 2000, files: { "tbopt.log": "-5.0705" } });
     await st().lookAtJobs();
     await ran;
     const after = st().steps.find((s) => s.id === step)!;
@@ -1186,14 +1227,14 @@ describe("a step that runs a plugin's program", () => {
 
   it("is its plugin's: its calculation changed to another the plugin does, with the options it takes for that one, those they share kept - never to one it does not", () => {
     const { st, step } = editor();
-    st().updateStep(step, { options: { method: "gfn1", solvent: "water", level: "tight" } });
+    st().updateStep(step, { options: { method: "tb1", solvent: "water", level: "tight" } });
     // (the step's own: the defaults are Settings', and stay as they were)
-    expect(useAppSettings.getState().options["step:xtb:optimise"]).toBeUndefined();
+    expect(useAppSettings.getState().options["step:tightbind:optimise"]).toBeUndefined();
     st().updateStep(step, { kind: "frequencies" });
     const s = st().steps.find((x) => x.id === step)!;
     expect(s.kind).toBe("frequencies");
-    expect(s.by).toBe("xtb");
-    expect(s.options).toEqual({ method: "gfn1", solvent: "water" });
+    expect(s.by).toBe("tightbind");
+    expect(s.options).toEqual({ method: "tb1", solvent: "water" });
     st().updateStep(step, { kind: "duplicates" });
     expect(st().steps.find((x) => x.id === step)!.kind).toBe("frequencies");
   });
@@ -1237,7 +1278,7 @@ describe("a step that runs a plugin's program", () => {
     await settle();
     await settle();
     expect(asked.started).toHaveLength(2);
-    Object.assign(jobs.get(idOf(2))!, { state: "done", started: 3000, ended: 4000, files: { "xtbopt.log": "-5.0705" } });
+    Object.assign(jobs.get(idOf(2))!, { state: "done", started: 3000, ended: 4000, files: { "tbopt.log": "-5.0705" } });
     await st().lookAtJobs();
     await again;
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true });
@@ -1274,7 +1315,7 @@ describe("a step that runs a plugin's program", () => {
     await first;
     expect(asked.started).toHaveLength(2);
     // (run again: the first entry's job the same - taken up again - the second's another, held as it starts)
-    const job = (entry: number, level: string) => ({ entries: [entry], program: "xtb", args: ["input.xyz", "--opt", level], files: [{ name: "input.xyz", text: "3\n\n" }], reads: ["xtbopt.log"] });
+    const job = (entry: number, level: string) => ({ entries: [entry], program: "tightbind", args: ["input.xyz", "--opt", level], files: [{ name: "input.xyz", text: "3\n\n" }], reads: ["tbopt.log"] });
     worker.prepare.mockImplementationOnce(async () => ({ jobs: [job(0, "normal"), job(1, "tight")] }) as never);
     let go = () => {};
     holdStart = new Promise((r) => (go = r));
@@ -1314,14 +1355,14 @@ describe("a step that runs a plugin's program", () => {
   it("refuses an entry whose output says it ran in another solvation than its step asked - out of its Failed exit, saying both - whatever program ran it", async () => {
     const { st, step } = waters(3);
     st().updateStep(step, { options: { solvent: "water" } });
-    // (as asked, xtb's words with its reference state after; in the gas phase; and not said)
-    const said = ["ALPB(water), reference state gsolv [1 M gas/solution]", "none", undefined];
+    // (as asked, Tightbind's words with its reference state after; in the gas phase; and not said)
+    const said = ["CONT(water), reference state gsolv [1 M gas/solution]", "none", undefined];
     worker.collect.mockImplementationOnce(async (_step, entries) => ({
       outputs: entries.map((e, i) => ({
         schema: 1,
-        program: "xtb",
-        version: "6.7.1",
-        method: "GFN2-xTB",
+        program: "tightbind",
+        version: "1.0.0",
+        method: "TB-2",
         atoms: e.atoms.map((a) => a.el),
         frames: [e.atoms.flatMap((a) => [a.x, a.y, a.z])],
         energies: [-5.07],
@@ -1329,7 +1370,7 @@ describe("a step that runs a plugin's program", () => {
         ...(said[i] ? { solvation: said[i] } : {}),
       })),
     }) as never);
-    const two = { program: "xtb", args: [], files: [], reads: ["xtbopt.log"] };
+    const two = { program: "tightbind", args: [], files: [], reads: ["tbopt.log"] };
     worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0, 1, 2], ...two }] }) as never);
     const ran = st().runStep(step);
     await settle();
@@ -1339,7 +1380,7 @@ describe("a step that runs a plugin's program", () => {
     await ran;
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:01 \u00b7 2 of 3 \u00b7 1 of 3 failed (1: refused)" });
     const failedOnes = setMembers(st(), resultOf(st(), step, "failed")!).molecules.map((id) => st().molecules3d.find((m) => m.id === id)!);
-    expect(failedOnes.map((m) => m.failed)).toEqual([[{ kind: "refused", why: "It ran in the gas phase, not in ALPB(water) as asked" }]]);
+    expect(failedOnes.map((m) => m.failed)).toEqual([[{ kind: "refused", why: "It ran in the gas phase, not in CONT(water) as asked" }]]);
 
     // (an output Meno's readers read, held to it the same)
     jobs.clear();
@@ -1347,31 +1388,31 @@ describe("a step that runs a plugin's program", () => {
     const other = waters(3);
     other.st().updateStep(other.step, { options: { solvent: "water" } });
     worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0, 1, 2], ...two }] }) as never);
-    worker.collect.mockImplementationOnce(async () => ({ read: [0, 1, 2].map(() => ({ kind: "xtb", log: true, name: "water.out" })) }) as never);
-    for (const solvation of ["ALPB(acetone)", "alpb(WATER)", "ALPB(water)"])
+    worker.collect.mockImplementationOnce(async () => ({ read: [0, 1, 2].map(() => ({ kind: "tightbind", log: true, name: "water.out" })) }) as never);
+    for (const solvation of ["CONT(acetone)", "cont(WATER)", "CONT(water)"])
       readOutput.mockImplementationOnce(async () => ({
-        output: { schema: 1, program: "xtb", version: "6.7.1", method: "GFN2-xTB", atoms: ["O", "H", "H"], frames: [[0, 0, 0, 0, 0.76, 0.59, 0, -0.76, 0.59]], energies: [-5.07], solvation },
-        readers: ["xtb 0.1.7"],
+        output: { schema: 1, program: "tightbind", version: "1.0.0", method: "TB-2", atoms: ["O", "H", "H"], frames: [[0, 0, 0, 0, 0.76, 0.59, 0, -0.76, 0.59]], energies: [-5.07], solvation },
+        readers: ["tightbind 1.0.0"],
       }));
     const again = other.st().runStep(other.step);
     await settle();
     await settle();
-    end(1, "done", { log: "xtb's output" });
+    end(1, "done", { log: "Tightbind's output" });
     await other.st().lookAtJobs();
     await again;
     expect(other.st().steps.find((s) => s.id === other.step)!.ran).toMatchObject({ ok: true, said: "0:01 \u00b7 2 of 3 \u00b7 1 of 3 failed (1: refused)" });
     const refused = setMembers(other.st(), resultOf(other.st(), other.step, "failed")!).molecules.map((id) => other.st().molecules3d.find((m) => m.id === id)!);
-    expect(refused.map((m) => m.failed)).toEqual([[{ kind: "refused", why: "It ran in ALPB(acetone), not in ALPB(water) as asked" }]]);
+    expect(refused.map((m) => m.failed)).toEqual([[{ kind: "refused", why: "It ran in CONT(acetone), not in CONT(water) as asked" }]]);
   });
 
   it("counts a job that failed as each entry it was for - and says why in its runner's words, where the runner said", async () => {
     const { st, step } = waters(3);
-    const two = { program: "xtb", args: [], files: [], reads: ["xtbopt.log"] };
+    const two = { program: "tightbind", args: [], files: [], reads: ["tbopt.log"] };
     worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0, 1], ...two }, { entries: [2], ...two }] }) as never);
     const ran = st().runStep(step);
     await settle();
     await settle();
-    end(1, "failed", { why: "xtb could not be started" });
+    end(1, "failed", { why: "tightbind could not be started" });
     end(2);
     await st().lookAtJobs();
     await ran;
@@ -1391,8 +1432,8 @@ describe("a step that runs a plugin's program", () => {
 
   it("runs the jobs its plugin prepared, and sends an entry it refused out of its Failed exit, with why - kept with the workspace while it runs", async () => {
     const { st, step } = waters(3);
-    const one = { program: "xtb", args: [], files: [], reads: ["xtbopt.log"] };
-    const why = "xTB: xTB's frequencies here take no isotope's mass: 2H would be given as H of natural mass.";
+    const one = { program: "tightbind", args: [], files: [], reads: ["tbopt.log"] };
+    const why = "Tightbind: Tightbind's frequencies here take no isotope's mass: 2H would be given as H of natural mass.";
     worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], ...one }, { entries: [2], ...one }], refused: [{ entry: 1, why }] }) as never);
     const ran = st().runStep(step);
     await settle();
@@ -1465,7 +1506,7 @@ describe("a step that runs a plugin's program", () => {
 
   it("says where a job asks for more memory than jobs may use - nothing else that declares memory runs beside it - kept with the workspace while it runs", async () => {
     const { st, step } = waters(2);
-    const job = { program: "xtb", args: [], files: [], reads: ["xtbopt.log"] };
+    const job = { program: "tightbind", args: [], files: [], reads: ["tbopt.log"] };
     worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], ...job, memory: 30 * 1024 }, { entries: [1], ...job, memory: 1000 }] }) as never);
     const ran = st().runStep(step);
     await settle();
@@ -1503,7 +1544,7 @@ describe("a step that runs a plugin's program", () => {
     expect(again.said).toMatch(/ \u00b7 Reused$/);
     // (another level: its plugin asks for another run - another key, run)
     st().updateStep(step, { options: { level: "tight" } });
-    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "xtb", args: ["input.xyz", "--opt", "tight"], files: [{ name: "input.xyz", text: "3\n\n" }], reads: ["xtbopt.log"] }] }) as never);
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "tightbind", args: ["input.xyz", "--opt", "tight"], files: [{ name: "input.xyz", text: "3\n\n" }], reads: ["tbopt.log"] }] }) as never);
     const third = st().runStep(step);
     await settle();
     await settle();
@@ -1526,7 +1567,7 @@ describe("a step that runs a plugin's program", () => {
     // (kept with the workspace, beside its key)
     expect(readWorkspace(workspaceText(st()))!.workflow!.steps.find((s) => s.id === step)!.ran!.gave).toEqual([digestOf(idOf(1))]);
     // (its output written over since - by hand, say, or by another program: taken up again, it is not what was read)
-    jobs.get(idOf(1))!.files["xtbopt.log"] = "-9.9999";
+    jobs.get(idOf(1))!.files["tbopt.log"] = "-9.9999";
     await st().runStep(step);
     await settle();
     await settle();
@@ -1541,22 +1582,22 @@ describe("a step that runs a plugin's program", () => {
   });
 
   it("keys a program installed separately by itself as it is now: replaced, its job runs again; not to be told, none is taken up again", async () => {
-    useReaders.setState({ state: { orca: "added" }, problem: {} });
-    installedAt.orca = "/Applications/orca_6/orca";
-    stamps["/Applications/orca_6/orca"] = "/Applications/orca_6/orca\n1000\n1";
-    const orca = () => ({ jobs: [{ entries: [0], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! SP\n" }], reads: [] }] }) as never;
+    useReaders.setState({ state: { quanta: "added" }, problem: {} });
+    installedAt.quanta = "/Applications/quanta_4/quanta";
+    stamps["/Applications/quanta_4/quanta"] = "/Applications/quanta_4/quanta\n1000\n1";
+    const qm = () => ({ jobs: [{ entries: [0], program: "quanta", args: ["input.inp"], files: [{ name: "input.inp", text: "# SP\n" }], reads: [] }] }) as never;
     const [prepare, collect] = [worker.prepare.getMockImplementation()!, worker.collect.getMockImplementation()!];
-    worker.prepare.mockImplementation(async () => orca());
-    worker.collect.mockImplementation(async () => ({ read: [{ kind: "orca", log: true, name: "water.out" }] }) as never);
+    worker.prepare.mockImplementation(async () => qm());
+    worker.collect.mockImplementation(async () => ({ read: [{ kind: "quanta", log: true, name: "water.out" }] }) as never);
     try {
       const { st } = editor();
-      const step = st().addStep("energy", "orca", 10, 10);
+      const step = st().addStep("energy", "quanta", 10, 10);
       st().connect({ set: st().sets[0].id }, step);
       const runOnce = async (n: number) => {
         const ran = st().runStep(step);
         await settle();
         await settle();
-        if (jobs.has(idOf(n)) && jobs.get(idOf(n))!.state === "waiting") end(n, "done", { log: "ORCA's output" });
+        if (jobs.has(idOf(n)) && jobs.get(idOf(n))!.state === "waiting") end(n, "done", { log: "Quanta's output" });
         await st().lookAtJobs();
         await ran;
         return st().steps.find((s) => s.id === step)!.ran!;
@@ -1567,12 +1608,12 @@ describe("a step that runs a plugin's program", () => {
       expect((await runOnce(2)).said).toMatch(/ \u00b7 Reused$/);
       expect(asked.started).toHaveLength(1);
       // (replaced - though it says the same version: another key, run)
-      stamps["/Applications/orca_6/orca"] = "/Applications/orca_6/orca\n1000\n2";
+      stamps["/Applications/quanta_4/quanta"] = "/Applications/quanta_4/quanta\n1000\n2";
       const replaced = await runOnce(2);
       expect(asked.started).toHaveLength(2);
       expect(replaced.keys).not.toEqual(once.keys);
       // (not to be told: run, nothing taken up again)
-      delete stamps["/Applications/orca_6/orca"];
+      delete stamps["/Applications/quanta_4/quanta"];
       await runOnce(3);
       expect(asked.started).toHaveLength(3);
     } finally {
@@ -1613,7 +1654,7 @@ describe("a step that runs a plugin's program", () => {
     // (what they gave says so, wherever its calculation is shown)
     const made = setMembers(st(), resultOf(st(), step)!).molecules.map((m) => st().molecules3d.find((x) => x.id === m)!);
     expect(made.map((m) => m.calc?.adopted)).toEqual([both.adopted![idOf(1)], both.adopted![idOf(2)]]);
-    expect(calcLine(made[0].calc!)).toMatch(/^adopted output \u00b7 xtb 6\.7\.1/);
+    expect(calcLine(made[0].calc!)).toMatch(/^adopted output \u00b7 tightbind 1\.0\.0/);
     // (a job never stopped on is not adopted)
     await st().adoptJob(step, idOf(9));
     expect(st().steps.find((s) => s.id === step)!.ran).toBe(both);
@@ -1624,7 +1665,7 @@ describe("a step that runs a plugin's program", () => {
     const ran = st().runStep(step);
     await settle();
     await settle();
-    end(1, "gone", { why: "it has no record of how it ran", files: { "xtbopt.log": "-5.0705" } });
+    end(1, "gone", { why: "it has no record of how it ran", files: { "tbopt.log": "-5.0705" } });
     await st().lookAtJobs();
     await ran;
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: `Output Meno cannot account for: ${idOf(1)} (its folder has no record of how it ran)`, unaccounted: [idOf(1)] });
@@ -1643,7 +1684,7 @@ describe("a step that runs a plugin's program", () => {
     await run;
     // (a second step on the same set, the same: it takes the first's job up again)
     const set = st().sets[0].id;
-    const twin = st().addStep("optimise", "xtb", 10, 30);
+    const twin = st().addStep("optimise", "tightbind", 10, 30);
     st().connect({ set }, twin);
     await st().runStep(twin);
     await settle();
@@ -1738,7 +1779,7 @@ describe("running a workflow's steps", () => {
     jobs.clear();
     next = 1;
     asked.started = [];
-    useReaders.setState({ state: { xtb: "added" }, problem: {} });
+    useReaders.setState({ state: { tightbind: "added" }, problem: {} });
   });
 
   it("runs a step from here: it, and every step after it, in order", async () => {
@@ -1806,7 +1847,7 @@ describe("running a workflow's steps", () => {
   it("runs steps that do not wait on one another at once", async () => {
     const { st } = editor();
     const set = st().sets[0].id;
-    const other = st().addStep("energy", "xtb", 10, 20);
+    const other = st().addStep("energy", "tightbind", 10, 20);
     st().connect({ set }, other);
     void st().runAll();
     await settle();
@@ -1844,18 +1885,18 @@ describe("a plugin's conformer search, and its duplicates", () => {
   beforeEach(() => {
     jobs.clear();
     next = 1;
-    useReaders.setState({ state: { rdkit: "added" }, problem: {} });
+    useReaders.setState({ state: { sketchkit: "added" }, problem: {} });
   });
 
   it("brings each compound's conformers in as a conformer set - numbered, with their energies", async () => {
     const { st } = editor();
     const set = st().sets[0].id;
-    const step = st().addStep("conformers", "rdkit", 10, 20);
+    const step = st().addStep("conformers", "sketchkit", 10, 20);
     st().connect({ set }, step);
     const ran = st().runStep(step);
     await settle();
     await settle();
-    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 9000, files: { "xtbopt.log": "-5.0705" } });
+    Object.assign(jobs.get(idOf(1))!, { state: "done", started: 1000, ended: 9000, files: { "tbopt.log": "-5.0705" } });
     await st().lookAtJobs();
     await ran;
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:08 \u00b7 2 conformers" });
@@ -1870,8 +1911,8 @@ describe("a plugin's conformer search, and its duplicates", () => {
     const { doc, st } = editor();
     doc.edit("water", (d) => addMolecule3d(d, { ...d.molecules3d![0], at: { x: 1, y: 1 } }));
     const set = st().sets[0].id;
-    // (RDKit's Duplicates, as a workspace saved before RDKit plugin 0.1.16 has it)
-    const step = st().addStep("duplicates", "rdkit", 10, 20);
+    // (Sketchkit's Duplicates, as a workspace saved by an older Sketchkit has it)
+    const step = st().addStep("duplicates", "sketchkit", 10, 20);
     st().connect({ set }, step);
     worker.run.mockClear();
     await st().runStep(step);
@@ -1889,32 +1930,32 @@ describe("Render as a step", () => {
     worker.prepare.mockClear();
     worker.collect.mockClear();
     madeFiles.clear();
-    useReaders.setState({ state: { blender: "added" }, problem: {} });
-    installedAt.blender = "/Applications/Blender.app/Contents/MacOS/Blender";
+    useReaders.setState({ state: { lumen: "added" }, problem: {} });
+    installedAt.lumen = "/Applications/Lumen.app/Contents/MacOS/Lumen";
   });
 
-  /** The Blender plugin's worker, as the test has it: a job for the scene, and the picture it made. */
+  /** The Lumen plugin's worker, as the test has it: a job for the scene, and the picture it made. */
   const rendering = () => {
-    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "blender", args: ["-b", "-P", "render.py"], files: [{ name: "render.json", text: "{}" }], reads: [] }] }) as never);
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "lumen", args: ["--scene", "render.py"], files: [{ name: "render.json", text: "{}" }], reads: [] }] }) as never);
     worker.collect.mockImplementationOnce(async () => ({ made: [{ entry: 0, file: "picture.png", media: "image/png" }] }) as never);
   };
 
   it("renders each entry as a picture of its own, in a set of pictures wired from the step - and run again, makes it anew in that set, one step to undo", async () => {
     const { doc, st } = editor();
-    const step = st().addStep("render", "blender", 10, 0);
+    const step = st().addStep("render", "lumen", 10, 0);
     st().connect({ set: st().sets[0].id }, step);
-    // (Meno's own choices first, then Blender's - the role's, asked as a step)
-    expect(optionsFor("render", "blender").map((o) => o.id).slice(0, 5)).toEqual(["width", "shape", "look", "molecules", "surfaces"]);
-    expect(optionsFor("render", "blender").map((o) => o.id)).toContain("engine");
+    // (Meno's own choices first, then Lumen's - the role's, asked as a step)
+    expect(optionsFor("render", "lumen").map((o) => o.id).slice(0, 5)).toEqual(["width", "shape", "look", "molecules", "surfaces"]);
+    expect(optionsFor("render", "lumen").map((o) => o.id)).toContain("engine");
     // (it gives pictures, which no step takes: nothing is wired from it)
-    expect(canWire(st(), { set: resultOf(st(), step)!.id }, st().addStep("energy", "xtb", 30, 0))).toBe(false);
+    expect(canWire(st(), { set: resultOf(st(), step)!.id }, st().addStep("energy", "tightbind", 30, 0))).toBe(false);
 
     rendering();
     let ran = st().runStep(step);
     await settle();
     await settle();
     // the scene Meno wrote put in the job's folder; the plugin given its own options alone
-    expect(asked.started[0]).toMatchObject({ plugin: "blender", program: "blender" });
+    expect(asked.started[0]).toMatchObject({ plugin: "lumen", program: "lumen" });
     expect(asked.started[0].files!.map((f) => f.name)).toEqual(["render.json", "scene.gltf"]);
     expect(JSON.parse(asked.started[0].files![1].text).asset.version).toBe("2.0");
     const given = (worker.prepare.mock.calls[0] as unknown[])[2];
@@ -1954,10 +1995,10 @@ describe("Render as a step", () => {
 
   it("says why, and keeps the pictures it made before, where it made none", async () => {
     const { st } = editor();
-    const step = st().addStep("render", "blender", 10, 0);
+    const step = st().addStep("render", "lumen", 10, 0);
     st().connect({ set: st().sets[0].id }, step);
-    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "blender", args: [], files: [], reads: [] }] }) as never);
-    worker.collect.mockImplementationOnce(async () => ({ why: "Blender quit" }) as never);
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "lumen", args: [], files: [], reads: [] }] }) as never);
+    worker.collect.mockImplementationOnce(async () => ({ why: "Lumen quit" }) as never);
     const ran = st().runStep(step);
     await settle();
     await settle();
@@ -1966,12 +2007,12 @@ describe("Render as a step", () => {
     await ran;
     expect(st().pictures).toEqual([]);
     expect(st().sets.find((b) => b.made?.step === step)?.made?.holds).toBeUndefined();
-    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Blender quit" });
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Lumen quit" });
   });
 
   it("says in small words that it rendered on the processor where the plugin says it fell back to it - and nothing otherwise", async () => {
     const { st } = editor();
-    const step = st().addStep("render", "blender", 10, 0);
+    const step = st().addStep("render", "lumen", 10, 0);
     st().connect({ set: st().sets[0].id }, step);
     rendering();
     worker.collect.mockReset();
@@ -1988,9 +2029,9 @@ describe("Render as a step", () => {
 
   it("makes the pictures of the jobs done where another went without finishing - that one said failed", async () => {
     const { st } = waters(2);
-    const step = st().addStep("render", "blender", 10, 0);
+    const step = st().addStep("render", "lumen", 10, 0);
     st().connect({ set: st().sets[0].id }, step);
-    const one = { program: "blender", args: [], files: [], reads: [] };
+    const one = { program: "lumen", args: [], files: [], reads: [] };
     // (a job prepared for each entry, one by one)
     for (let i = 0; i < 2; i++) worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], ...one }] }) as never);
     worker.collect.mockImplementationOnce(async () => ({ made: [{ entry: 0, file: "picture.png", media: "image/png" }] }) as never);

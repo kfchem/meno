@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { acceptOptions, givenOnly, noDefault, rememberable, valuesOf, type Option, shownOptions } from "./options";
 
 const OPTIONS: Option[] = [
@@ -147,7 +147,7 @@ describe("a number that sets nothing", () => {
   });
 });
 
-describe("options a bundled plugin declares", () => {
+describe("options the plugins declare", () => {
   // (every list of options in its manifest - a role's, a step's, a kind it writes, a look's - read as Meno reads it)
   const lists = (x: unknown, out: unknown[][] = []): unknown[][] => {
     if (Array.isArray(x)) x.forEach((y) => lists(y, out));
@@ -158,7 +158,8 @@ describe("options a bundled plugin declares", () => {
       }
     return out;
   };
-  const root = join(__dirname, "../../src-tauri/resources/plugins");
+  // (Meno's made-up test plugins; the plugins' own repository runs this on its plugins, MENO_PLUGINS_DIR)
+  const root = process.env.MENO_PLUGINS_DIR ? resolve(process.env.MENO_PLUGINS_DIR) : join(__dirname, "../test/plugins");
 
   it("are each read as declared - none left out as no option, a whole number's step a whole number", () => {
     for (const id of readdirSync(root)) {

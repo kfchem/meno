@@ -35,7 +35,7 @@ describe("coordinates in a text", () => {
     expect(s.warnings).toEqual([]);
   });
 
-  it("reads Gaussian's molecule specification: labels, a freeze code, commas", () => {
+  it("reads a molecule specification with labels, a freeze code and commas", () => {
     const text = lines("0,1", "C1,0,-1.170000,-0.400000,0.000000", "C2 -1 0.190000 0.290000 0.000000", ETHANOL.slice(2).map((l) => l.replace(" ", " 0 ")));
     const [s] = read(text);
     expect(s.atoms.map((a) => a.el).join("")).toBe("CCOHHHHHH");
@@ -45,17 +45,17 @@ describe("coordinates in a text", () => {
 
   describe("a table of atoms a program prints in a form of its own, as its plugin declares it", () => {
     const rule = "---------------------------------------------------------------------";
-    // (made up: a water, in the form Gaussian prints its orientation - centre, atomic number, type, x y z - under a name)
+    // (made up: a water, in the form the made-up Orbitron prints its orientation - centre, atomic number, x y z - under a name)
     const text = lines(
       "TS1",
-      "Standard orientation:",
+      "Frame orientation:",
       rule,
-      "Center     Atomic      Atomic             Coordinates (Angstroms)",
-      "Number     Number       Type             X           Y           Z",
+      "Atom     Element             Coordinates (Angstroms)",
+      "Index    Number           X           Y           Z",
       rule,
-      "1 8 0 0.000000 0.000000 0.117300",
-      "2 1 0 0.000000 0.757200 -0.469200",
-      "3 1 0 0.000000 -0.757200 -0.469200",
+      "1 8 0.000000 0.000000 0.117300",
+      "2 1 0.000000 0.757200 -0.469200",
+      "3 1 0.000000 -0.757200 -0.469200",
       rule,
     );
 
@@ -72,18 +72,18 @@ describe("coordinates in a text", () => {
       const quoted: QuotedTables = { added: [], offered: DECLARED };
       const ss = readCoordinates(text, quoted);
       expect(ss).toHaveLength(1);
-      expect(ss[0]).toMatchObject({ name: "Standard orientation:", atoms: [], unread: true });
+      expect(ss[0]).toMatchObject({ name: "Frame orientation:", atoms: [], unread: true });
       expect(ss[0].warnings).toEqual([`A table as its program prints it: the ${DECLARED[0].plugin} plugin reads it, once added in Settings, Plugins.`]);
       // (a structure written as tables of atoms are, beside it, read as ever)
       const both = readCoordinates(lines(text, "Water", ...WATER), quoted);
       expect(both.map((s) => [s.name, s.atoms.length, !!s.unread])).toEqual([
         ["Water", 3, false],
-        ["Standard orientation:", 0, true],
+        ["Frame orientation:", 0, true],
       ]);
     });
 
     it("reads its rows only as it is declared: a row of another form is no atom of it", () => {
-      expect(DECLARED.map((t) => [t.plugin, t.columns.join(" ")])).toEqual([["Gaussian interface", "centre atomic-number type x y z"]]);
+      expect(DECLARED.map((t) => [t.plugin, t.columns.join(" ")])).toEqual([["Orbitron interface", "centre atomic-number x y z"]]);
       // (an atomic number, then a whole number between, then where it stands: tables of atoms in a paper's own form)
       const [s] = read(lines("Water", "8 0 0.000000 0.000000 0.117300", "1 0 0.000000 0.757200 -0.469200", "1 0 0.000000 -0.757200 -0.469200"));
       expect(formulaOf(s.atoms)).toBe("H2O");
@@ -370,7 +370,7 @@ describe("coordinates: what a run of atoms holds, said", () => {
   });
 
   it("goes on past a note set among its atoms - an energy - listing it as not read, never losing the atom beside it", () => {
-    for (const note of ["Energy = -76.4 Eh", "E(RB3LYP) = -40.5"]) {
+    for (const note of ["Energy = -76.4 Eh", "E(RM1) = -40.5"]) {
       const [s, ...rest] = readCoordinates(["Methane", "C 0.0000 0.0000 0.0000", note, H(0), H(1), H(2), H(3)].join("\n"));
       expect([note, formulaOf(s.atoms), rest.length]).toEqual([note, "CH4", 0]);
       expect(s.skipped).toEqual([note]);
