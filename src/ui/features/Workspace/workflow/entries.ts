@@ -18,7 +18,7 @@ import { stereoKnown } from "./configurations";
 import { speciesOf } from "../../../../lib/io/writers";
 import { isSkeleton } from "../utils/completeness";
 import { groupLetter } from "../../../../lib/nodes/base";
-import { aboveText, numberText } from "../../../../lib/calc/results";
+import { aboveText, numberText, resultsRenumbered } from "../../../../lib/calc/results";
 import type { DrawnRecord, Member, Model, Molecule3D, PictureItem, WorkflowSet } from "../store/types";
 import { kindInfo, type SetHolds, type StepKind } from "./kinds";
 import { skeletonWhy } from "../../../../lib/chem/skeleton";
@@ -752,6 +752,59 @@ export function keptOf(m: Kept): Kept {
     ...(m.stereo ? { stereo: m.stereo } : {}),
     ...(m.made ? { made: m.made } : {}),
     ...(m.centres?.length ? { centres: m.centres } : {}),
+  };
+}
+
+/**
+ * What an entry keeps of its calculation, its atoms renumbered (`order`:
+ * the atom each place now has): what the calculation was - the readers,
+ * program, version, method, basis, solvation, charge and spin, its
+ * imaginary frequencies - and the atoms it held, as numbered now; so that
+ * its energy is still one of that calculation, alike with its compound's
+ * others not renumbered (`unlikeMade`). Its results as numbered now, but
+ * those that cannot be (lib/calc/results `resultsRenumbered`); not the
+ * output and the wavefunction it was read from, which number its atoms as
+ * they were. `leftBehind`: whether any of it was left so.
+ */
+export function calcRenumbered(c: CalcInfo, order: readonly number[]): { calc: CalcInfo; leftBehind: boolean } {
+  const now = new Array<number>(order.length);
+  order.forEach((j, at) => (now[j] = at));
+  const { results, source, wavefunction, held, ...level } = c;
+  const r = results?.length ? resultsRenumbered(results, order) : { results: [], dropped: 0 };
+  return {
+    calc: { ...level, ...(r.results.length ? { results: r.results } : {}), ...(held ? { held: held.map((a) => now[a]) } : {}) },
+    leftBehind: r.dropped > 0 || !!source || !!wavefunction,
+  };
+}
+
+/**
+ * What an entry keeps besides (`Kept`), its atoms renumbered (`order`: the
+ * atom each place now has; `now`, each atom's new place) and its bonds with
+ * them (`bondNow`: each bond's new place, -1 where it has none): how it was
+ * made and what its drawing was, as they were; the drawing's atom each of
+ * its atoms is, its CIP labels and which are chosen and shown, and its bonds
+ * to ring centres, as numbered now - its compound's others alike with it
+ * still (`unlikeMade`, `keptAlike`).
+ */
+export function keptRenumbered(k: Kept, order: readonly number[], now: readonly number[], bondNow: readonly number[]): Kept {
+  const atoms = (as: readonly number[]) => as.map((a) => now[a]);
+  const bonds = (bs: readonly number[]) => bs.map((b) => bondNow[b] ?? -1).filter((b) => b >= 0);
+  const st = k.stereo;
+  return {
+    drawnFrom: k.drawnFrom?.length === order.length ? order.map((j) => k.drawnFrom![j]) : undefined,
+    drawnAs: k.drawnAs,
+    ...(st
+      ? {
+          stereo: {
+            atoms: Object.fromEntries(Object.entries(st.atoms).map(([a, l]) => [now[Number(a)], l])),
+            bonds: Object.fromEntries(Object.entries(st.bonds).flatMap(([b, l]) => ((bondNow[Number(b)] ?? -1) >= 0 ? [[bondNow[Number(b)], l]] : []))),
+            ...(st.chosen ? { chosen: { atoms: atoms(st.chosen.atoms), bonds: bonds(st.chosen.bonds) } } : {}),
+            ...(st.shown ? { shown: { atoms: atoms(st.shown.atoms), bonds: bonds(st.shown.bonds) } } : {}),
+          },
+        }
+      : {}),
+    ...(k.made ? { made: k.made } : {}),
+    ...(k.centres?.length ? { centres: k.centres.map((c) => ({ metal: now[c.metal], atoms: atoms(c.atoms) })) } : {}),
   };
 }
 
