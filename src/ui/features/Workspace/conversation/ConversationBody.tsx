@@ -6,25 +6,36 @@ import { useEditor } from "../store";
 import { kindInfo } from "../workflow/kinds";
 import { connectionFor } from "./connections";
 import { LIMITS, NO_CONNECTION } from "./turn";
-import { answerLine, callSaid, exchangeRows, type ExchangeRow } from "./said";
+import { writeClipboard } from "../../../../lib/clipboard";
+import Fold from "./Fold";
+import { answerLine, callJson, callSaid, exchangeRows, foundRows, type ExchangeRow } from "./said";
 import type { Conversation } from "./types";
 
-/** One row of the exchange: words as words, never drawn as a page; a call with what came of it on its line, both folded below. */
+/** One row of the exchange: words as words, never drawn as a page; a call with what came of it on its line, what it found folded below in Meno's words - the call as it went, copied as JSON on asking. */
 function Row({ r }: { r: ExchangeRow }) {
-  if (r.kind === "call")
-    return (
-      <details className="text-xs text-gh-gray">
-        <summary className={clsx("cursor-default", r.answer && !r.answer.ok && "text-accel-accent")}>
-          {callSaid(r.call)}
-          {r.answer ? ` · ${answerLine(r.answer)}` : ""}
-        </summary>
-        <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all font-mono text-[11px]">
-          {r.call.tool}
-          {r.call.args ? ` ${JSON.stringify(r.call.args)}` : ""}
-          {r.answer ? `\n${JSON.stringify(r.answer.answer, null, 1)}` : ""}
-        </pre>
-      </details>
+  if (r.kind === "call") {
+    const line = (
+      <span className={clsx(r.answer && !r.answer.ok && "text-accel-accent")}>
+        {callSaid(r.call)}
+        {r.answer ? ` · ${answerLine(r.answer)}` : ""}
+      </span>
     );
+    const rows = foundRows(r.answer);
+    return (
+      <Fold className="text-xs text-gh-gray" head={line}>
+        <div className="mt-1 ml-3.5 flex flex-col gap-0.5">
+          {rows.map((row, k) => (
+            <span key={k} className="text-gh-black break-words">
+              {row}
+            </span>
+          ))}
+          <button type="button" onClick={() => void writeClipboard([{ flavor: "text", text: callJson(r.call, r.answer) }]).catch(() => {})} className="self-start mt-0.5 text-gh-gray hover:text-gh-black transition-colors duration-150 ease-meno">
+            Copy as JSON
+          </button>
+        </div>
+      </Fold>
+    );
+  }
   const s = r.said;
   if (s.by === "person")
     return <div className="self-end max-w-[85%] rounded-lg bg-gh-base px-3 py-2 text-sm text-gh-black whitespace-pre-wrap break-words">{s.text}</div>;
@@ -53,7 +64,9 @@ export default function ConversationBody({ conversation: c }: { conversation: Co
   const connection = connectionFor(c);
   const running = !!talking?.running;
   const end = useRef<HTMLDivElement>(null);
-  useEffect(() => end.current?.scrollIntoView({ block: "end" }), [c.said.length]);
+  // (the last thing said kept in view as more is said - and as the bar for its changes comes or goes, which takes room from the exchange: eased there)
+  const changed = !!talking?.changed;
+  useEffect(() => end.current?.scrollIntoView({ block: "end", behavior: "smooth" }), [c.said.length, changed, running]);
   const go = () => {
     if (!words.trim() || running) return;
     void send(c.id, words);
@@ -141,10 +154,7 @@ export default function ConversationBody({ conversation: c }: { conversation: Co
           </button>
         )}
       </div>
-      <details className="px-4 py-2 border-t border-gh-line text-xs text-gh-gray">
-        <summary className="cursor-default">
-          {c.sent.length === 1 ? "One request to the model" : `${c.sent.length} requests to the model`}
-        </summary>
+      <Fold className="px-4 py-2 border-t border-gh-line text-xs text-gh-gray" head={c.sent.length === 1 ? "One request to the model" : `${c.sent.length} requests to the model`}>
         <div className="mt-1 flex flex-col gap-1">
           <span>What is sent cannot be recalled. A thing moved out of the frame is not sent again, but what went is gone.</span>
           {c.sent.map((s, k) => (
@@ -157,7 +167,7 @@ export default function ConversationBody({ conversation: c }: { conversation: Co
             Clear what was said and sent
           </button>
         </div>
-      </details>
+      </Fold>
     </div>
   );
 }

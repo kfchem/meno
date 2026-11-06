@@ -17,6 +17,8 @@ describe("conversations' frames on the page", () => {
       ["conversation:3", "chosen", true, undefined],
     ]);
     expect(tabs[0].box).toEqual({ x0: 0, y0: 0, x1: 20, y1: 10 });
+    // (read in the column and pointed at, both: as read - pointing at it changes nothing)
+    expect(conversationTabs([conversation(1)], { hovered: 1, shown: 1, talking: {} })[0].tone).toBe("chosen");
   });
 
   it("say their name, and that they send nothing, what they talk through, or that they talk", () => {
