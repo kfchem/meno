@@ -643,14 +643,27 @@ one of the kinds of calculation it does (decided: 16):
   arrow, and the two groups *Scheme* and *Marks on the page* (`QuickAdd.tsx`;
   docs/EDITOR-2D.md) - and gains **one button**: *Calculations*, a small
   graph of two joined sets, after a thin rule.
-- **Pressed, it opens** a panel below the row, a line for each plugin
-  added that does steps - those that run a program first - then Meno:
-  its name, and the kinds of calculation it does, each an icon, named on
-  hover (decided: 16). *As conformers* is not among Meno's: it is
-  reached from a compound set's port, its wire let go on empty space - a
-  conversion taken on purpose.
-- **Only what is added is there.** With no plugin added, the panel shows
-  Meno's line alone; nothing is shown of plugins not added.
+- **Pressed, it opens** a list below the row (`QuickAddCalculations`;
+  the maintainer, 2026-11-04): a row for who does steps - Meno's own
+  first, then each plugin added, then the procedures saved - its name and
+  how many it offers. One is open at a time, the one opened last (Meno's
+  the first time; kept in the settings), its steps under it, each its
+  icon and its name, named in full on hover; in their families - what
+  makes or sorts structures, energies, paths, charts (`family` in
+  workflow/kinds) - each apart by a thin rule. A row opens and shuts in a
+  short ease, and pressed again shuts. *As conformers* is not among
+  Meno's: it is reached from a compound set's port, its wire let go on
+  empty space - a conversion taken on purpose.
+- **As tall as it needs, never past some 560 px**: the steps of the one
+  open scroll within it past that, never fewer than six shown, with a
+  thin rail of Meno's own shown all the while they go past it
+  (controls/ScrollRail), not the system's bar. It stands as wide as its
+  longest name needs, whatever the row above holds; a name longer than
+  the most is cut, said whole on hover.
+- **Up and Down** go from row to row, the steps of the one open among
+  them; Enter does what is on it.
+- **Only what is added is there.** With no plugin added, the list shows
+  Meno's row alone; nothing is shown of plugins not added.
 - **A wire let go on an input that does not take it** is not made, and
   the step's card says why where its state is: "It takes a conformer set,
   not molecules in 3D" (2026-10-22). It says so until a wire is drawn
