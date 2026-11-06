@@ -1342,11 +1342,10 @@ is not held to one.
   take their own folders away: a Render job, once its picture is on the
   page, and a job started for a step deleted before its run began - none
   of them taken up again from another run.
-- **Once the workspace is saved, a finished job's folder may go to the
-  Trash** - with *Settings, Calculations, Keep job folders once saved*
-  off. It is on unless changed: whether Meno does this on its own waits
-  on the maintainer (2026-11-06), and the default is one constant
-  (`JOB_FOLDERS_KEPT`). A folder goes only where the save holds every
+- **Once the workspace is saved, a finished job's folder goes to the
+  Trash** - unless *Settings, Calculations, Keep job folders once saved*
+  is on. It is off unless changed: the maintainer's choice (2026-11-06),
+  the default one constant (`JOB_FOLDERS_KEPT`). A folder goes only where the save holds every
   file of the job from that folder (none left out by *Don't keep raw
   outputs*, none kept again from another file), and only after the save
   is complete: Meno reads the file saved back, every file of the job's

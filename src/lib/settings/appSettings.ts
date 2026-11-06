@@ -85,10 +85,11 @@ export type CalculationSettings = {
 /**
  * Whether a finished job's folder is kept once a workspace's file holds all
  * of it, where Settings has not been set (workflow/keptJobs
- * `clearSavedJobs`): kept, until the maintainer decides whether Meno moves
- * such folders to the Trash on its own (docs/WORKFLOWS.md, *A job's folder*).
+ * `clearSavedJobs`): not kept - moved to the Trash once the file saved
+ * reads back holding it whole - the maintainer's choice (2026-11-06;
+ * docs/WORKFLOWS.md, *A job's folder*).
  */
-export const JOB_FOLDERS_KEPT = true;
+export const JOB_FOLDERS_KEPT = false;
 
 /** Whether a finished job's folder is kept once a workspace's file holds all of it: as Settings says, else `JOB_FOLDERS_KEPT`. */
 export const keepsJobFolders = (c: CalculationSettings): boolean => c.keepJobFolders ?? JOB_FOLDERS_KEPT;

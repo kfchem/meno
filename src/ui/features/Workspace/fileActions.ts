@@ -887,7 +887,7 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
       store.getState().markSavedAs(kept, at.written);
       store.getState().markLeftKept();
       // (its jobs' folders, every file of them held by the file just written as it reads back: moved to the Trash where
-      //  Settings does not keep them - kept, by default - and, where any stayed though finished, said once:
+      //  Settings does not keep them - not kept, by default - and, where any stayed though finished, said once:
       //  docs/WORKFLOWS.md, *A job's folder*)
       if (!keepsJobFolders(useAppSettings.getState().calculations))
         void clearSavedJobs(kept, at.jobs).then(({ said }) => said && setError((e) => (e ? `${e} ${said}` : said)));
