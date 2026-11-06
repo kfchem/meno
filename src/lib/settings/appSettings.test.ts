@@ -87,6 +87,9 @@ describe("the settings file", () => {
     expect(acceptAppSettings({ calculations: { largeWorkspaceMB: 1024 } }).calculations).toEqual({ largeWorkspaceMB: 1024 });
     // (past the most a workspace's file may come to at all: not taken)
     expect(acceptAppSettings({ calculations: { largeWorkspaceMB: 2048 } }).calculations).toEqual({});
+    // (the computer kept awake while jobs run unless turned off: only the off kept)
+    expect(acceptAppSettings({ calculations: { sleepWhileJobsRun: true } }).calculations).toEqual({ sleepWhileJobsRun: true });
+    for (const v of [false, "yes", 1]) expect(acceptAppSettings({ calculations: { sleepWhileJobsRun: v } }).calculations).toEqual({});
     expect(acceptAppSettings({ calcReaders: { chosen: { orca: "cclib", gaussian: 3, "x y": "cclib" } } }).files).toEqual({ read: { orca: "cclib" }, also: {} });
     expect(
       acceptAppSettings({ calcReaders: { chosen: { orca: "cclib" } }, files: { read: { orca: "pyscf" }, also: { orca: ["cclib", "cclib", 4], xtb: [] } } }).files,
@@ -109,6 +112,9 @@ describe("the settings file", () => {
       programs: {},
     });
     expect(acceptAppSettings({}).plugins).toEqual({ removed: [], roles: {}, programs: {} });
+    // whether the plugins set up before were asked about: kept only as answered, anything else not
+    expect(acceptAppSettings({ plugins: { usedBeforeAsked: true } }).plugins.usedBeforeAsked).toBe(true);
+    for (const v of [false, "yes", 1]) expect(acceptAppSettings({ plugins: { usedBeforeAsked: v } }).plugins).not.toHaveProperty("usedBeforeAsked");
     // the programs installed separately located: by plugin and program, each a full path
     const programs = { "orca:orca": "/opt/orca/orca", "gaussian:g16": "C:\\G16W\\g16.exe", "orca:../x": "/x", "Bad:p": "/x", "orca:x": "orca", "orca:y": 3 };
     expect(acceptAppSettings({ plugins: { programs } }).plugins.programs).toEqual({ "orca:orca": "/opt/orca/orca", "gaussian:g16": "C:\\G16W\\g16.exe" });

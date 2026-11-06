@@ -35,13 +35,8 @@ export function wordsFontPx(c: { size?: number }, opts: { fontPx: number; pointP
   return c.size != null && c.size > 0 && opts.pointPx != null ? c.size * opts.pointPx : opts.fontPx;
 }
 
-/** The sizes words on the page are offered in, in points, and what each is for: the drawing's labels' (none of their own), a talk's text, its headings and its titles. */
-export const WORDS_SIZES: readonly { name: string; pt: number | null }[] = [
-  { name: "Label", pt: null },
-  { name: "Text", pt: 14 },
-  { name: "Heading", pt: 20 },
-  { name: "Title", pt: 28 },
-];
+/** The sizes words on the page are offered in, in points: points alone, no names by purpose (the maintainer's ruling). */
+export const WORDS_SIZE_CHIPS: readonly number[] = [8, 10, 12, 14, 18, 24];
 /** The least and the most a size of their own may be, in points. */
 export const WORDS_SIZE_RANGE: readonly [number, number] = [4, 288];
 /** The sizes Ctrl/Cmd+Shift+> and < go up and down through, in points. */

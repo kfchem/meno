@@ -32,10 +32,11 @@ Blender plugin, in Settings, *Plugins*). A card over the canvas asks:
   - a film's length in seconds - a vibration's made whole periods of 1.2 s,
     so that it loops - and its frames a second (24, 30 or 60);
   - the width in pixels, and the shape: fitted to the molecules, 16:9, 4:3
-    or square - a film's width and height each made the nearest even
-    number, as its video needs (H.264 keeps colour for each 2x2 pixels:
-    360 px at 16:9 is 360 by 202), and its frame on the page given that
-    shape exactly, grown, never cut;
+    or square - a picture's and a film's height the nearest whole pixel
+    (360 px at 16:9 is 360 by 203), and its frame on the page given that
+    shape exactly, grown, never cut. What a renderer's own output needs of
+    the size - a video's encoder even sides, say - is the renderer's to
+    make of it;
   - the **look**: one choice, a bundle of what the molecules are made of,
     what the surfaces are made of, how it is shaded and how it is
     outlined. The card offers the canvas's own look, *as the canvas
@@ -334,7 +335,7 @@ picture for other programs.
 
 ## The Blender plugin
 
-`src-tauri/resources/plugins/blender/`: a worker in Python alone (made by
+`meno-plugins/plugins/blender/`: a worker in Python alone (made by
 uv, no package), and the script Blender runs, `render.py`.
 
 - **Meno's own Blender** (the maintainer, 2026-10-12): the plugin always
@@ -363,7 +364,10 @@ uv, no package), and the script Blender runs, `render.py`.
   each frame with its transparency, and then puts what it rendered over
   the background asked for - after the colours are transformed, so that
   white is white - writing a PNG, or an MP4 (H.264) through Blender's own
-  video writer.
+  video writer. H.264, as it is written here (4:2:0), keeps colour for
+  each 2x2 pixels and takes no odd side: where a side Meno asked for is
+  odd, the video is a pixel wider or taller, the frames at their own size
+  in its corner and that pixel the background asked for.
 - **Its options**: the renderer (Cycles, light traced, or EEVEE, drawn in real time),
   samples for each pixel, noise removal, where it renders (the faster of
   the graphics processor - Metal, OptiX, CUDA, HIP or oneAPI, where Blender
@@ -383,9 +387,9 @@ uv, no package), and the script Blender runs, `render.py`.
   the molecule however its shapes overlap. Meno's looks keep the picture's place
   and size.
 - **Looks, studios and motions of Blender's own** come from preset plugins
-  that use the renderer through its interface `preset` (docs/plugins/
-  blender-presets.md); the renderer itself has none. Meno carries one,
-  **Blender looks and motions** (`blender-presets`), described below. The
+  that use the renderer through its interface `preset` (meno-plugins/docs/
+  blender-presets.md); the renderer itself has none. The plugins online have one,
+  **Film looks and motions** (`blender-presets`), described below. The
   renderer runs a preset's chosen file inside its Blender, after it has
   built Meno's scene, against what the interface hands it: the request,
   and Meno's molecules as the scene's tags give them.
@@ -428,7 +432,7 @@ uv, no package), and the script Blender runs, `render.py`.
   is written in the glTF. Blender finds its own shadows and hollows as it
   lights the scene; the shadows' softness is the plugin's own option.
 
-### Blender looks and motions
+### Film looks and motions
 
 A preset plugin of Meno's, for the Blender plugin (it uses Blender from 0.7.0 to before 0.8.0, its interface `preset` from
 1.0.0 to before 2.0.0). It runs nothing of its own: Meno puts its files in the render job, and Blender runs the chosen ones.
@@ -455,13 +459,14 @@ Each is a file of its own beside those they share (`look_<id>.py`, `studio_<id>.
   copper 0.95 0.64 0.54, linear.
 - **Its studios**: the Scene's *Studio* choice offers them after *As
   asked*, the plain scene. **Paper sweep**: a floor curving up into a wall
-  behind, in the background's colour, big soft lights and a soft source
-  overhead pooling light on the floor; where Meno's camera looks level, the
-  floor lies below what it frames. **Dark cyclorama**: a wall far behind,
-  lit as a pool by its own light and seen by the camera alone, a key, a
-  fill, a top light and two coloured rims. A studio is the backdrop chosen:
-  on a transparent background the paper is white, and the cyclorama's
-  wall dark.
+  behind, white, big soft lights and a soft source overhead pooling light
+  on the floor; where Meno's camera looks level, the floor lies below what
+  it frames. **Dark cyclorama**: a dark wall far behind, lit as a pool by
+  its own light and seen by the camera alone, a key, a fill, a top light
+  and two coloured rims. A studio is the backdrop chosen: while one is,
+  the card shows the Background as the studio sets it - white for the
+  paper, black for the cyclorama - said, with why beneath it (`fixed`),
+  and a picture is that backdrop all over.
   Each is built round Meno's molecules at their own size, its lights as
   strong as the key light asked for, and as soft as the shadows' softness;
   a molecule in either reads as bright as Meno lights it with no studio.
@@ -510,12 +515,12 @@ Each is a file of its own beside those they share (`look_<id>.py`, `studio_<id>.
 
 ## Licences
 
-Meno is Apache-2.0. A script using Blender's Python API is under the GPL,
-so the Blender plugin is GPL-3.0-or-later: its folder carries the
-licence's text (`LICENSE`) and its files say so; it stands strictly apart
-- nothing of Meno's or of another plugin's takes anything from it, and it
-speaks to Meno only through files and arguments (docs/PLUGINS.md,
-*Licences*). README lists it with its licence.
+Meno is Apache-2.0. The Blender plugin is GPL-3.0-or-later: its folder
+carries the licence's text (`LICENSE`) and its files say so. Nothing of
+Meno's or of another plugin's takes anything from it, and it speaks to
+Meno only through files and arguments (docs/PLUGINS.md, *Licences*). Its
+licence is shown in Settings, *Plugins*, and stated in its own folder of
+the plugins online (kfchem/meno-plugins), as every plugin's is.
 
 ## Decided
 

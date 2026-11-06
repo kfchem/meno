@@ -6,6 +6,7 @@ import {
   useMemo,
   type ReactNode,
 } from "react";
+import type { Conversation } from "../conversation/types";
 import type { DocumentStore } from "../../../../lib/doc";
 import { createWorkspaceDocument, type WorkspaceDocument } from "../document";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
@@ -26,6 +27,7 @@ import { createWorkflowSlice } from "./slices/workflowSlice";
 import { createSlidesSlice } from "./slices/slidesSlice";
 import { createShapesSlice } from "./slices/shapesSlice";
 import { createCyclesSlice } from "./slices/cyclesSlice";
+import { createConversationsSlice } from "./slices/conversationsSlice";
 import { createInksSlice } from "./slices/inksSlice";
 import { createRecordsSlice } from "./slices/recordsSlice";
 import { shownModel } from "../utils/stacks";
@@ -79,6 +81,7 @@ function mirrorOf(doc: WorkspaceDocument, recordsShown: Readonly<Record<number, 
     shapes: doc.shapes ?? NO_SHAPES,
     inks: doc.inks ?? NO_INKS,
     cycles: doc.cycles ?? NO_CYCLES,
+    conversations: doc.conversations ?? NO_CONVERSATIONS,
   };
 }
 
@@ -118,6 +121,7 @@ const NO_SLIDES: Slide[] = [];
 const NO_SHAPES: Shape[] = [];
 const NO_INKS: Ink[] = [];
 const NO_CYCLES: Cycle[] = [];
+const NO_CONVERSATIONS: Conversation[] = [];
 
 /** The pictures selected, kept to those the document still has. */
 function picturesHeld(sel: Set<number>, pictures: readonly { id: number }[]): Set<number> {
@@ -239,6 +243,8 @@ export function connectStoreToDocument(
         selShapes: picturesHeld(prev.selShapes, mirrored.shapes),
         selCycles: picturesHeld(prev.selCycles, mirrored.cycles),
         hoveredCycle: prev.hoveredCycle != null && !mirrored.cycles.some((c) => c.id === prev.hoveredCycle) ? null : prev.hoveredCycle,
+        hoveredConversation: prev.hoveredConversation != null && !mirrored.conversations.some((c) => c.id === prev.hoveredConversation) ? null : prev.hoveredConversation,
+        conversationShown: prev.conversationShown != null && !mirrored.conversations.some((c) => c.id === prev.conversationShown) ? null : prev.conversationShown,
         selArrows: picturesHeld(prev.selArrows, mirrored.arrows),
         selPluses: picturesHeld(prev.selPluses, mirrored.pluses ?? []),
         selInks: picturesHeld(prev.selInks, mirrored.inks),
@@ -270,7 +276,9 @@ export function connectStoreToDocument(
       const setsRead = stillRead.length === prev.setsRead.length ? prev.setsRead : stillRead;
       const setTableShown =
         texts.open || pdf.open || prev.setTableShown == null ? null : setsRead.includes(prev.setTableShown) ? prev.setTableShown : (setsRead[setsRead.length - 1] ?? null);
-      const textsOpen = (texts.shown != null || pdf.shown != null || setTableShown != null) && (texts.open ?? pdf.open ?? prev.textsOpen);
+      // (a conversation read there, while it is on the page: the column stays open on it - a text or a PDF come gives way to it no more than a table)
+      const talk = held.conversationShown ?? null;
+      const textsOpen = (texts.shown != null || pdf.shown != null || setTableShown != null || talk != null) && (texts.open ?? pdf.open ?? prev.textsOpen);
       return { ...prev, ...mirrored, ...held, textShown: texts.shown, pdfShown: pdf.shown, setsRead, setTableShown, textsOpen };
     });
   sync();
@@ -304,6 +312,7 @@ export function createEditorStore(
     pdfWords: null,
     pdfBox: null,
     pdfStructureLit: null,
+    pdfLens: null,
     pdfStructures: null,
     pdfStructureFlight: null,
     hoveredText: null,
@@ -352,6 +361,9 @@ export function createEditorStore(
     selShapes: new Set<number>(),
     selCycles: new Set<number>(),
     hoveredCycle: null,
+    hoveredConversation: null,
+    conversationShown: null,
+    talking: {},
     selArrows: new Set<number>(),
     selPluses: new Set<number>(),
     hoveredShape: null,
@@ -420,6 +432,7 @@ export function createEditorStore(
     ...createSlidesSlice(doc, set, get),
     ...createShapesSlice(doc, set),
     ...createCyclesSlice(doc, set),
+    ...createConversationsSlice(doc, set, get),
     ...createInksSlice(doc, set),
     ...createRecordsSlice(doc, set, get),
   }));

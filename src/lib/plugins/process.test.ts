@@ -43,7 +43,7 @@ vi.mock("@tauri-apps/api/event", () => ({
     return () => listeners.get(event)!.delete(f);
   },
 }));
-vi.mock("@tauri-apps/api/path", () => ({ resolveResource: async (p: string) => `/app/${p}` }));
+vi.mock("@tauri-apps/api/path", () => ({ appLocalDataDir: async () => "/app", join: async (...parts: string[]) => parts.join("/") }));
 vi.mock("../pyEnv", () => ({
   pyEnvReady: async () => true,
   ensurePyEnv: async () => "/env/bin/python",
@@ -54,7 +54,7 @@ import type { PythonPlugin } from "../calc/catalog";
 import { IDLE_MS } from "./idle";
 import { onWorkerStopped, stopWorker, workerOf, workerRunning } from "./process";
 
-const plugin = { id: "cclib", name: "cclib", profile: "plugin-cclib", worker: "resources/plugins/cclib/worker.py" } as unknown as PythonPlugin;
+const plugin = { id: "cclib", name: "cclib", profile: "plugin-cclib", worker: "plugins/cclib/0.2.1/worker.py" } as unknown as PythonPlugin;
 
 describe("a plugin's worker gone unused", () => {
   beforeEach(() => {

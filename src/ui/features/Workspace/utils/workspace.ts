@@ -10,6 +10,8 @@
  * calculations' outputs its molecules were read from, its texts, its PDFs
  * and its pictures.
  */
+import type { Conversation } from "../conversation/types";
+import { readConversations } from "../conversation/saved";
 import { carriedDrawing, hiddenInStacks } from "./stacks";
 import { acceptStyleChoice } from "../../../../lib/chem/styleFields";
 import { fillsAmong } from "./rings";
@@ -61,6 +63,8 @@ export type Workspace = {
   pdfShown?: number;
   /** Its atom maps between structures (chem/structureMaps), numbered from 1. */
   structureMaps?: StructureMap[];
+  /** Its conversations, each as saved, numbered again as it opens (conversation/saved). */
+  conversations?: Omit<Conversation, "id">[];
   /** What its file held that could not be read, and was left out (utils/readNotes); none where it read whole. */
   leftOut?: LeftOut;
 };
@@ -76,7 +80,7 @@ type Saved = Pick<
   Partial<Pick<EditorState, "docStyle" | "docStyle3d">> &
   Partial<Pick<EditorState, "pushes">> &
   Partial<Pick<EditorState, "ringFills">> &
-  Partial<Pick<EditorState, "sets" | "steps" | "wires" | "texts" | "textsLost" | "textShown" | "textsOpen" | "pdfs" | "pdfShown" | "pictures" | "slides" | "shapes" | "inks" | "cycles" | "structureMaps" | "stacksShown" | "fullModel" | "recordsShown">>;
+  Partial<Pick<EditorState, "sets" | "steps" | "wires" | "texts" | "textsLost" | "textShown" | "textsOpen" | "pdfs" | "pdfShown" | "pictures" | "slides" | "shapes" | "inks" | "cycles" | "structureMaps" | "conversations" | "stacksShown" | "fullModel" | "recordsShown">>;
 
 /**
  * The canvas's molecules in 3D as a file carries them: each turned, and
@@ -192,6 +196,8 @@ export function workspaceText(given: Saved, kept: ReadonlySet<string> = new Set(
       ...(state.cycles?.length ? { cycles: state.cycles } : {}),
       // (atom maps between structures, each as it was made: chem/structureMaps)
       ...(state.structureMaps?.length ? { structureMaps: state.structureMaps.map(({ map }) => ({ map })) } : {}),
+      // (conversations, what was said and sent with them: saved by default - conversation/saved)
+      ...(state.conversations?.length ? { conversations: state.conversations.map(({ id: _id, ...c }) => c) } : {}),
     }) + "\n"
   );
 }
@@ -456,6 +462,7 @@ function readWorkspaceNoting(text: string): Workspace | null {
     pdfs?: unknown;
     pdfShown?: unknown;
     structureMaps?: unknown;
+    conversations?: unknown;
   };
   if (r?.format !== WORKSPACE || !READS.includes(r.version as number)) return null;
   // (what is drawn read at the point of the style it was drawn in)
@@ -505,6 +512,7 @@ function readWorkspaceNoting(text: string): Workspace | null {
   // (its atom maps between structures: one that does not read is left out, and said)
   const structureMaps = readStructureMaps(r.structureMaps);
   for (let k = 0; k < structureMaps.left; k++) leftOut("structureMap");
+  const conversations = readConversations(r.conversations, () => leftOut("conversation"));
   return {
     drawn,
     ...(workflow ? { workflow } : {}),
@@ -517,6 +525,7 @@ function readWorkspaceNoting(text: string): Workspace | null {
     pdfs,
     ...(pdfShown ? { pdfShown: pdfShownAt } : {}),
     ...(structureMaps.maps.length ? { structureMaps: structureMaps.maps } : {}),
+    ...(conversations.length ? { conversations } : {}),
   };
 }
 

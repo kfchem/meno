@@ -43,7 +43,9 @@ export function renumberedEntry(e: Entry, order: readonly number[], id: string):
     if (typeof v !== "object") return v;
     if ("list" in v) return v.per === "atom" && v.list.length === n ? { ...v, list: order.map((j) => v.list[j]) } : v;
     if ("modes" in v) return { modes: v.modes.map((m) => (m.length === 3 * n ? xyzBy(m) : m)) };
-    if ("restraints" in v) return { restraints: v.restraints.map((r) => ({ ...r, atoms: r.atoms.map((a) => now[a]) })) };
+    // (its restraints, each atom as numbered now - and where they were first held, by atom in turn as it is now)
+    if ("restraints" in v)
+      return { restraints: v.restraints.map((r) => ({ ...r, atoms: r.atoms.map((a) => now[a]) })), ...(v.start && v.start.length === 3 * n ? { start: xyzBy(v.start) } : {}) };
     return v;
   };
   const property = (p: Property): Property => ({ ...p, value: value(p.value), ...(p.at && keys.has(p.at.geometry) ? { at: { ...p.at, geometry: keys.get(p.at.geometry)! } } : {}) });
@@ -73,7 +75,9 @@ export function renumberedEntry(e: Entry, order: readonly number[], id: string):
 export const MAPPED_ENTRY = "map.entry";
 
 /** What a bond change is called in its table's *Change* column. */
-const CHANGE_WORDS: Record<BondChangeRow["change"], string> = { formed: "formed", broken: "broken", order: "order changed" };
+export const CHANGE_WORDS: Record<BondChangeRow["change"], string> = { formed: "formed", broken: "broken", order: "order changed" };
+/** The column of an Atom map's bond changes that says what changed (`CHANGE_WORDS`). */
+export const CHANGE = "Change";
 
 /**
  * The bond changes of each entry mapped, as one table: a row a bond - the
@@ -90,7 +94,7 @@ export function bondChangesTable<M extends { map: number; changes: readonly Bond
     columns: [
       { name: MAPPED_ENTRY, kind: "text", label: "Product" },
       ...(maps ? [{ name: "Map", kind: "number" as const, unit: "none" as const }] : []),
-      { name: "Change", kind: "text" },
+      { name: CHANGE, kind: "text" },
       { name: "Atom 1", kind: "number", unit: "none", atoms: ATOMS_FROM_1 },
       { name: "Atom 2", kind: "number", unit: "none", atoms: ATOMS_FROM_1 },
       { name: "Element 1", kind: "text" },

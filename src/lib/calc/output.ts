@@ -16,7 +16,7 @@ import type { StructureRead } from "../io/structures";
 /** The form of a plugin's answer this Meno reads. */
 export const OUTPUT_SCHEMA = 1;
 
-/** A reader's answer, as its worker writes it (resources/plugins/<id>/worker.py). */
+/** A reader's answer, as its worker writes it (plugins/<id>/<version>/worker.py). */
 export type ReaderOutput = {
   /** The form it is in: `OUTPUT_SCHEMA`, or unsaid. */
   schema?: number;
@@ -114,6 +114,8 @@ export type CalcInfo = {
   results?: Result[];
   /** Of an output that holds several jobs, the job it is: its place among them, and what it did. */
   job?: { number: number; of: number; kind?: string };
+  /** The atoms it held where they stood, from 0, where it was asked to (*Hold its restraints*): said in its line, "atoms 1, 4, 7 held". */
+  held?: number[];
   /** The output it was read from: its name, kind and SHA-256, and where it was - what a promise is asked for again from (./asks). */
   source?: CalcSource;
   /**
@@ -137,7 +139,7 @@ export function imaginaryOf(v: unknown): number[] | undefined {
   return Array.isArray(v) && v.length <= 300 && v.every((f) => isNum(f) && f < 0) ? [...(v as number[])] : undefined;
 }
 
-/** Imaginary frequencies in plain words, as a molecule is marked with them: "1 imaginary frequency, 382.6i cm⁻¹". */
+/** Imaginary frequencies in plain words, as a molecule is marked with them: "1 imaginary frequency, 391.3i cm⁻¹". */
 export function imaginaryWords(cm: readonly number[]): string {
   return `${cm.length} imaginary frequenc${cm.length === 1 ? "y" : "ies"}, ${cm.map((f) => `${Math.abs(f).toFixed(1)}i`).join(", ")} cm⁻¹`;
 }
@@ -369,13 +371,14 @@ function calcLineOf(c: CalcInfo): string {
   const program = [c.program, c.version].filter(Boolean).join(" ");
   const job = c.job ? `job ${c.job.number} of ${c.job.of}${c.job.kind ? `, ${c.job.kind.toLowerCase()}` : ""}` : "";
   const method = levelOf(c);
+  const held = c.held?.length ? `${c.held.length === 1 ? "atom" : "atoms"} ${c.held.map((a) => a + 1).join(", ")} held` : "";
   const state = [
     c.charge != null ? `charge ${c.charge > 0 ? "+" : ""}${String(c.charge).replace(/^-/, "\u2212")}` : null,
     c.multiplicity != null ? multiplicityName(c.multiplicity) : null,
   ]
     .filter(Boolean)
     .join(", ");
-  return [program, job, method, state].filter(Boolean).join(" · ");
+  return [program, job, method, held, state].filter(Boolean).join(" · ");
 }
 
 /**

@@ -1,3 +1,6 @@
+import type { Conversation } from "../conversation/types";
+import type { ConversationPatch } from "../conversation/ops";
+import type { Talking } from "./slices/conversationsSlice";
 import type { Failure, FailureKind } from "../workflow/failures";
 import type { Converged } from "../workflow/converged";
 import type { LeftOut } from "../utils/readNotes";
@@ -116,12 +119,19 @@ export type Bond = BondChem & {
   /** A single bond's wedge, hash or wave; a double bond's "either": cis or trans not known. */
   stereo?: "up" | "down" | "wavy" | "either" | "none";
   doubleMode?: "auto" | "center" | "left" | "right";
-  stereoOrient?: "principle" | "reverse";
+  /**
+   * The atom (by id, `a` or `b`) a wedge is narrow at: a stereo wedge's
+   * centre, a perspective wedge's far end. Kept by atom, so a bond added or
+   * taken away beside it does not move it; every wedge in a document has
+   * one (document `wedgesHeld`). None given, the end with more bonds (`a`
+   * on a tie).
+   */
+  narrow?: number;
   /**
    * How a single bond with no stereo is drawn; plain when unset. "wedge" is
-   * a ring's bond in perspective toward the viewer, narrow where
-   * `stereoOrient` says; on a double bond it, or "bold", is the line the
-   * second one is drawn beside.
+   * a ring's bond in perspective toward the viewer, narrow at `narrow`; on
+   * a double bond it, or "bold", is the line the second one is drawn
+   * beside.
    */
   display?: "plain" | "bold" | "hashed" | "dashed" | "wedge";
   /** A dative bond, drawn as an arrow from `a`, the donor, to `b`. */
@@ -548,6 +558,14 @@ export type Molecule3D = {
    * name, as it said it.
    */
   made?: { method?: string; how: { label: string; text: string }[]; energies?: string };
+  /**
+   * The entries it was made from, by id: its lineage, as each of its
+   * frames' entries gives it (workflow/entries `SetEntry.madeOf`) - where
+   * a *Conformers* step made it of a structure drawn whose record says
+   * what that was made from (`DrawnRecord.from`), the same: the one
+   * structure, in 3D. Not the molecule a step's entry is a frame of.
+   */
+  madeOf?: string[];
   /** What the text it was read from says of it - its charge and multiplicity, its energies - where it was read from coordinates in a text (lib/io/coordinates), as rows to show. */
   said?: { label: string; text: string }[];
   /**
@@ -634,6 +652,13 @@ export type WordPlace = { page: number; at: number };
 /** Words selected in a PDF (docs/PDF.md, *Text*): from where the selection was begun to where it has been drawn to - either way round. */
 /** A structure of a PDF's figure (utils/pageStructures): which PDF, which page, which figure there by its box, and its key among the page's structures. */
 export type PdfStructurePick = { id: number; page: number; figure: [number, number, number, number]; key: string };
+/**
+ * A compound's number in a PDF's text under the pointer (docs/PDF.md, *A
+ * compound's number*): which PDF, what the number says, and where its word
+ * lies in the window - its card shown by it, once the pointer has rested
+ * there (`since`).
+ */
+export type PdfLens = { id: number; sha256: string; label: string; word: { left: number; top: number; right: number; bottom: number }; since: number };
 /**
  * A structure carried out of a PDF (docs/PDF.md, *Structures picked from a
  * PDF*): Meno's drawing of it (SVG, its size in the drawing's units), where
@@ -939,7 +964,7 @@ export type WorkflowStep = {
   /** *Don't keep raw outputs*: its jobs' files kept in the workspace's file are only what they were given, what was read back of them, and their logs. */
   keepRaw?: false;
 };
-/** Where a wire starts: a set - a step's exits are sets of their own, so a step has no give port of its own. */
+/** Where a wire starts: a set - a step's exits are sets of their own, and each exit's port on its card is its set's (look `stepGives`). */
 export type WireEnd = { set: number };
 /** Where a wire ends: a step, and which of its inputs. */
 export type WireTo = { step: number; port: string };
@@ -1111,6 +1136,9 @@ export type EditorState = {
   /** The structure of a PDF's figure under the pointer, lit whole (docs/PDF.md, *Structures picked from a PDF*). */
   pdfStructureLit: PdfStructurePick | null;
   setPdfStructureLit: (pick: PdfStructurePick | null) => void;
+  /** A compound's number in a PDF's text under the pointer, its structure's card by it (components/CompoundCard). */
+  pdfLens: PdfLens | null;
+  setPdfLens: (lens: PdfLens | null) => void;
   /** Structures picked in a PDF, Shift adding more - one selection in a PDF at a time, with its words' and its box's. */
   pdfStructures: { id: number; picks: PdfStructurePick[] } | null;
   setPdfStructures: (picked: { id: number; picks: PdfStructurePick[] } | null) => void;
@@ -1452,6 +1480,24 @@ export type EditorState = {
   selShapes: Set<number>;
   hoveredShape: number | null;
   shapeDraft: ShapeDraft | null;
+  /** The conversations on the page, each in its frame (conversation/types); which is under the pointer, which is read in the column, and each one's turn - the view's. */
+  conversations: Conversation[];
+  hoveredConversation: number | null;
+  conversationShown: number | null;
+  talking: Record<number, Talking>;
+  setHoveredConversation: (id: number | null) => void;
+  addConversation: (frame: { x0: number; y0: number; x1: number; y1: number }) => number | null;
+  moveConversation: (id: number, dx: number, dy: number, gesture?: string) => void;
+  resizeConversation: (id: number, frame: { x0: number; y0: number; x1: number; y1: number }, gesture?: string) => void;
+  updateConversation: (id: number, patch: ConversationPatch) => void;
+  removeConversation: (id: number) => void;
+  readConversation: (id: number) => void;
+  stopReadingConversation: () => void;
+  clearConversation: (id: number) => void;
+  sendToConversation: (id: number, words: string) => Promise<void>;
+  stopConversation: (id: number) => void;
+  keepConversationChanges: (id: number) => void;
+  discardConversationChanges: (id: number) => "dropped" | "running" | "since" | "none";
   /** The catalytic cycles on the page (lib/chem/cycle); which are selected, which is under the pointer - the view's. */
   cycles: Cycle[];
   selCycles: Set<number>;
@@ -1627,11 +1673,12 @@ export type EditorState = {
   /** A set's tab or a step's card right-clicked: its menu asked for, there (Workspace opens it). */
   workflowMenu: { kind: "set" | "step"; id: number; clientX: number; clientY: number } | null;
   /**
-   * A wire being drawn, to where the pointer is: from what gives, or back
-   * from a step that takes (`to`); picked up off the step it went into,
-   * the wire it was (`was`).
+   * A wire being drawn, to where the pointer is: from what gives - drawn
+   * out of its step's port for that exit, where it was pressed there
+   * (`card`) - or back from a step that takes (`to`); picked up off the
+   * step it went into, the wire it was (`was`).
    */
-  wireDrag: { from?: WireEnd; to?: WireTo; at: { x: number; y: number }; was?: number } | null;
+  wireDrag: { from?: WireEnd; to?: WireTo; at: { x: number; y: number }; was?: number; card?: true } | null;
   /** A wire let go on a step's input that does not take it: the step, and why (flow `wireRefusal`) - said on its card until a wire is drawn again. */
   wireRefused: { step: number; said: string } | null;
   setWorkflowView: (patch: Partial<Pick<EditorState, WorkflowView>>) => void;
@@ -1849,6 +1896,11 @@ export type EditorState = {
     order?: Bond["order"],
   ) => void;
   connectAtoms: (a: number, b: number, order?: Bond["order"]) => number | null;
+  /**
+   * One bond out of atom `id`, where there is room (utils/geometry `newBondFrom`, `toward` the pointer), as one undo step:
+   * to the atom its end falls on, where it falls on one, else to a new carbon. The atom it ends at; null where none.
+   */
+  bondOut: (id: number, toward: { x: number; y: number }) => number | null;
   replaceDraggedAtomWith: (movingId: number, targetId: number) => void;
   moveAtom: (id: number, x: number, y: number) => void;
   /**
@@ -1878,15 +1930,16 @@ export type EditorState = {
   updateBond: (id: number, patch: Partial<Bond>) => void;
   /** Each of the bonds made of `kind` (utils/bondKinds), as one step. */
   setBondsKind: (ids: readonly number[], kind: import("../utils/bondKinds").BondKindName) => void;
+  /**
+   * A bond key (utils/bondKinds `bondKeyPatch`) with the pointer on bond `id`: what it makes of that bond, made of it and of
+   * every bond selected where it is among them, as one step. False where it would change nothing.
+   */
+  bondKey: (id: number, key: import("../utils/bondKinds").BondKey) => boolean;
   setBondOrder: (id: number, order: Bond["order"]) => void;
   setBondStereo: (id: number, stereo: NonNullable<Bond["stereo"]>) => void;
   setBondDoubleMode: (
     id: number,
     mode: NonNullable<Bond["doubleMode"]>,
-  ) => void;
-  setBondStereoOrient: (
-    id: number,
-    orient: NonNullable<Bond["stereoOrient"]>,
   ) => void;
   setSel: (sel: Sel, anchor?: number | null) => void;
   /**

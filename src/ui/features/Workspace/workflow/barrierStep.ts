@@ -26,7 +26,7 @@ import { geometryKey, type Property } from "../../../../lib/entry";
 import { partValue, workedOutDiffer } from "../../../../lib/nodes/base";
 import { R_GAS } from "../../../../lib/nodes/standardState";
 import { convert, isUnit, sameDimension, type Unit } from "../../../../lib/units";
-import { convergedOf } from "./converged";
+import { convergedOf, heldWhy } from "./converged";
 import { compoundLetter, entryOfSet, imaginaryOf, THERMO_PROPERTIES, type SetEntry } from "./entries";
 import type { Holds3D } from "./kinds";
 import type { Outcome3D } from "./meno";
@@ -143,6 +143,9 @@ function barrierOf(saddle: SetEntry, start: SetEntry, o: BarrierOptions): Proper
   if (species(saddle) !== species(start)) return `${s} and its start ${t} are not of one charge and spin`;
   // (each a converged result, of its geometry: the saddle point optimised to one, or a path's point refined; the start optimised)
   const sc = convergedOf(saddle);
+  // (one optimised with atoms held where they stood: a stationary point of neither kind)
+  const held = heldWhy(sc) ?? heldWhy(convergedOf(start));
+  if (held) return `${heldWhy(sc) ? s : `its start ${t}`}: ${held.charAt(0).toLowerCase()}${held.slice(1)}`;
   if (!sc || !SADDLE_HOW.includes(sc.how)) return `${s} is no converged saddle point: optimise it to a saddle point, or take Path search's point refined, then Frequencies on it`;
   const tc = convergedOf(start);
   if (!tc || tc.how !== "optimisation") return `its start ${t} is no converged optimisation: optimise it, then Frequencies on it`;
@@ -187,10 +190,15 @@ function barrierOf(saddle: SetEntry, start: SetEntry, o: BarrierOptions): Proper
 /** Whether a value says no solvation, its own or any part a program worked out: one side's matched the other's as not stated, never silently. */
 const unstated = (p: Property): boolean => (p.parts ? p.parts.some((q) => q.at && q.at.solvent == null) : p.at?.solvent == null);
 
-/** The level and conditions a barrier is of, in a few words: "G at GFN2-xTB, 298.15 K" - of a sum, its parts. */
+/** A value's level in a few words, its method and basis: "B3LYP/def2-TZVP"; none said, "". */
+const levelWords = (by: Property["by"]): string => (by?.method ? [by.method, by.basis].filter(Boolean).join("/") : "");
+
+/** The level and conditions a barrier is of, in a few words: "G at GFN2-xTB, 298.15 K" - of a sum, its parts, each at its
+ * own level where one is said: "G = energy at B3LYP/def2-TZVP + thermo.g-correction at GFN2-xTB + standard state". */
 function ofWords(p: Property, energy: BarrierEnergy, free: string): string {
-  const level = p.by?.method ? [p.by.method, p.by.basis].filter(Boolean).join("/") : free;
-  const of = energy === "E" ? `E at ${level}` : p.parts ? `G = ${p.parts.map((q) => q.property).join(" + ")}` : `G at ${level}`;
+  const level = levelWords(p.by) || free;
+  const part = (q: NonNullable<Property["parts"]>[number]) => (levelWords(q.by) ? `${q.property} at ${levelWords(q.by)}` : q.property);
+  const of = energy === "E" ? `E at ${level}` : p.parts ? `G = ${p.parts.map(part).join(" + ")}` : `G at ${level}`;
   return [of, p.at?.kelvin != null && energy !== "E" ? `${p.at.kelvin} K` : ""].filter(Boolean).join(", ");
 }
 

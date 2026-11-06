@@ -176,7 +176,7 @@ pub async fn ensure(data: &Path, tool: Tool, proxy: Option<String>) -> Result<Pa
         return Ok(program);
     }
     let proxy = proxy.ok_or("the network is not ready")?;
-    let archive = download(pin.url, &proxy).await?;
+    let archive = download(pin.url, &proxy, ARCHIVE_MOST).await?;
     check(&archive, pin.sha256).map_err(|e| format!("{} {}: {e}", pin.tool.name(), pin.version))?;
     let body = unpack(&archive, pin.archive, pin.member)?;
     place(&program, &body)?;
@@ -188,7 +188,9 @@ pub async fn ensure(data: &Path, tool: Tool, proxy: Option<String>) -> Result<Pa
 /// no size is pinned with them, so the bound is a generous one.
 const ARCHIVE_MOST: u64 = 256 * 1024 * 1024;
 
-async fn download(url: &str, proxy: &str) -> Result<Vec<u8>, String> {
+/// What is at `url`, fetched through `proxy` (a network task's), never more
+/// than `most` bytes: the tools' archives, and the plugins online (catalogue.rs).
+pub async fn download(url: &str, proxy: &str, most: u64) -> Result<Vec<u8>, String> {
     // (rustls, as the updater has it: its crypto provider set once)
     if rustls::crypto::CryptoProvider::get_default().is_none() {
         let _ = rustls::crypto::ring::default_provider().install_default();
@@ -198,13 +200,38 @@ async fn download(url: &str, proxy: &str) -> Result<Vec<u8>, String> {
         .proxy(reqwest::Proxy::all(proxy).map_err(|e| format!("proxy: {e}"))?)
         .build()
         .map_err(|e| format!("client: {e}"))?;
-    let response = client
-        .get(url)
-        .send()
-        .await
-        .and_then(|r| r.error_for_status())
-        .map_err(|e| format!("fetching {url}: {e}"))?;
-    body_within(response, url, ARCHIVE_MOST).await
+    fetch(&client, url, most, ASKED_AGAIN_AFTER).await
+}
+
+/// How long Meno waits before asking a server that failed (a 5xx) once more.
+const ASKED_AGAIN_AFTER: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// `url`'s body, by `client`, within `most` bytes. A server that fails - a
+/// 5xx, which a busy one gives now and then - is asked once more after
+/// `wait`; failing again, it is said in words, by its host, with what to do
+/// - never left as the client's own error, nor asked of without end.
+async fn fetch(client: &reqwest::Client, url: &str, most: u64, wait: std::time::Duration) -> Result<Vec<u8>, String> {
+    let mut again = true;
+    loop {
+        let response = client.get(url).send().await.map_err(|e| format!("fetching {url}: {e}"))?;
+        let status = response.status();
+        if status.is_server_error() {
+            if std::mem::take(&mut again) {
+                tokio::time::sleep(wait).await;
+                continue;
+            }
+            return Err(server_failed(url, status));
+        }
+        let response = response.error_for_status().map_err(|e| format!("fetching {url}: {e}"))?;
+        return body_within(response, url, most).await;
+    }
+}
+
+/// A server that failed twice, in words: by its host, and what it said.
+fn server_failed(url: &str, status: reqwest::StatusCode) -> String {
+    let host = reqwest::Url::parse(url).ok().and_then(|u| u.host_str().map(str::to_string)).unwrap_or_else(|| url.to_string());
+    let said = status.canonical_reason().map_or_else(|| status.as_u16().to_string(), |r| format!("{} {r}", status.as_u16()));
+    format!("{host} could not answer just then ({said}), nor when Meno asked once more: try again in a minute")
 }
 
 /// A response's body, read piece by piece as it comes, never more than
@@ -470,6 +497,49 @@ mod tests {
             assert!(said.contains(p.version), "{said}");
         }
         let _ = std::fs::remove_dir_all(&data);
+    }
+
+    /// A server that answers each request in turn with the status given for it, and says how many it was asked.
+    async fn answering(statuses: Vec<u16>) -> (String, tokio::task::JoinHandle<usize>) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/list.json", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            let mut asked = 0;
+            for status in statuses {
+                let Ok((mut socket, _)) = listener.accept().await else { break };
+                let mut head = [0u8; 4096];
+                let _ = socket.read(&mut head).await;
+                asked += 1;
+                let body = if status == 200 { "the list" } else { "" };
+                let reply = format!("HTTP/1.1 {status} X\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+                let _ = socket.write_all(reply.as_bytes()).await;
+            }
+            asked
+        });
+        (url, server)
+    }
+
+    #[tokio::test]
+    async fn a_server_that_fails_is_asked_once_more_then_said_in_words() {
+        if rustls::crypto::CryptoProvider::get_default().is_none() {
+            let _ = rustls::crypto::ring::default_provider().install_default();
+        }
+        let client = reqwest::Client::new();
+        let wait = std::time::Duration::from_millis(10);
+        // (it failed once, as GitHub now and then does: asked again, and got)
+        let (url, server) = answering(vec![502, 200]).await;
+        assert_eq!(fetch(&client, &url, 1000, wait).await.unwrap(), b"the list");
+        assert_eq!(server.await.unwrap(), 2);
+        // (failed twice: said by its host, what it said, and what to do - asked no more)
+        let (url, server) = answering(vec![503, 502, 200]).await;
+        let said = fetch(&client, &url, 1000, wait).await.unwrap_err();
+        assert_eq!(said, "127.0.0.1 could not answer just then (502 Bad Gateway), nor when Meno asked once more: try again in a minute");
+        server.abort();
+        // (a refusal of its own - not found - is not asked again)
+        let (url, server) = answering(vec![404, 200]).await;
+        assert!(fetch(&client, &url, 1000, wait).await.unwrap_err().contains("404"));
+        server.abort();
     }
 
     async fn direct(url: &str) -> Vec<u8> {

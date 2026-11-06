@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "Meno"
-version = "0.1.21"
+version = "0.1.22"
 dependencies = [
  "base64 0.22.1",
  "block2",
@@ -12,6 +12,7 @@ dependencies = [
  "flate2",
  "fontdb",
  "libc",
+ "minisign-verify",
  "objc2",
  "objc2-app-kit",
  "objc2-foundation",

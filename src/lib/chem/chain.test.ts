@@ -75,6 +75,18 @@ describe("a condensed formula read as a group (./chain)", () => {
     expect(smiles("C(O)NMe2")).toBe(smiles("CONMe2"));
     expect(smiles("N(iPr)2")).toBe(smiles("NiPr2"));
   });
+
+  it("reads a group whose name has its own hyphen - t-Bu, i-Pr - in parentheses as it is without it: N(t-Bu)2, C(t-Bu)3", () => {
+    const smiles = (l: string) => abbreviationOf(l)?.smiles;
+    expect(smiles("N(t-Bu)2")).toBeDefined();
+    expect(smiles("N(t-Bu)2")).toBe(smiles("N(tBu)2"));
+    expect(smiles("N(i-Pr)2")).toBe(smiles("N(iPr)2"));
+    expect(smiles("C(t-Bu)3")).toBe(smiles("C(tBu)3"));
+    expect(smiles("P(t-Bu)2")).toBe(smiles("P(tBu)2"));
+    expect(smiles("Si(t-Bu)Ph2")).toBe(smiles("Si(tBu)Ph2"));
+    // (and still no charge, nor a hyphen that is no group's: N-Me, CH2-)
+    for (const l of ["SO3-", "CH2-", "N-Me", "NMe3+"]) expect(smiles(l), l).toBeUndefined();
+  });
 });
 
 describe("an ion written as one (./abbreviations)", () => {

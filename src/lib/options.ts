@@ -12,6 +12,8 @@ type OptionBase = {
   id: string;
   /** What the chemist reads beside it. */
   label: string;
+  /** What a step's line calls it, where its label is too long to say there ("Radicals" for "A structure with radicals"); none, its label without what it says in brackets. */
+  brief?: string;
   /** Shown only while another option of the role has one of these values (`shownOptions`): a part that applies to one choice only. */
   when?: { id: string; in: readonly (string | number | boolean)[] };
   /** Shown folded, under this name, with those beside it that say the same: a choice's parts, which it fills in (`sets`). */
@@ -20,6 +22,12 @@ type OptionBase = {
   section?: OptionSection;
   /** What bounds it or fixes it, said under it, where the label alone does not say it - Meno's own options' alone. */
   note?: string;
+  /**
+   * The person's alone to set: never set by a conversation's tools - cores
+   * and memory, a program's free keywords, what is kept on disk
+   * (docs/CONVERSATIONS.md, *Meno's tools*).
+   */
+  person?: true;
 };
 /** The parts of Render's card, in its order: what the molecules look like, how it is rendered, the scene round them, a film's motion. */
 export const OPTION_SECTIONS = ["look", "render", "scene", "motion"] as const;
@@ -38,13 +46,17 @@ export type ChoiceOption = OptionBase & {
   choices: readonly { value: string; label: string; sets?: Readonly<Record<string, string | number | boolean>> }[];
   default: string;
 };
-/** `unset`: the value that sets nothing - what is left to the program ("0 leaves it to ORCA"): not said on a step's line. */
+/**
+ * `unset`: the value that sets nothing - what is left to the program (0, say): not said on a step's line.
+ * `whole`: a whole number alone - a count, a seed - one with a fraction refused, as one out of range is.
+ */
 export type NumberOption = OptionBase & {
   type: "number";
   default: number;
   min?: number;
   max?: number;
   step?: number;
+  whole?: true;
   unit?: string;
   from?: Known;
   unset?: number;
@@ -91,7 +103,7 @@ function fitting(o: Option, v: unknown): string | number | boolean | undefined {
     case "choice":
       return typeof v === "string" && o.choices.some((c) => c.value === v) ? v : undefined;
     case "number":
-      return typeof v === "number" && Number.isFinite(v) && (o.min == null || v >= o.min) && (o.max == null || v <= o.max) ? v : undefined;
+      return typeof v === "number" && Number.isFinite(v) && (o.min == null || v >= o.min) && (o.max == null || v <= o.max) && (!o.whole || Number.isInteger(v)) ? v : undefined;
     case "text":
     case "lines":
     case "atoms":
@@ -159,6 +171,8 @@ export function acceptOptions(raw: unknown): Option[] {
     const when = whenId && whenIn.length ? { when: { id: whenId, in: whenIn } } : {};
     const group = label(r.group, 60) ? { group: label(r.group, 60)! } : {};
     const section = (OPTION_SECTIONS as readonly unknown[]).includes(r.section) ? { section: r.section as OptionSection } : {};
+    const brief = label(r.brief, 40) ? { brief: label(r.brief, 40)! } : {};
+    const person = r.person === true ? { person: true as const } : {};
     let o: Option | null = null;
     if (r.type === "choice" && Array.isArray(r.choices)) {
       const choices = (r.choices as Record<string, unknown>[])
@@ -167,7 +181,8 @@ export function acceptOptions(raw: unknown): Option[] {
         .filter((c): c is { value: string; label: string; sets: Record<string, string | number | boolean> | undefined } => c.value != null && c.label != null)
         .map(({ sets, ...c }) => (sets ? { ...c, sets } : c));
       if (choices.length) o = { id, label: name, type: "choice", choices, default: String(r.default) };
-    } else if (r.type === "number") {
+    } else if (r.type === "number" && !(r.whole === true && num(r.step) !== undefined && !Number.isInteger(num(r.step)))) {
+      // (a whole number alone with a step that is no whole number - its arrows would step onto numbers it refuses: none)
       o = {
         id,
         label: name,
@@ -176,6 +191,7 @@ export function acceptOptions(raw: unknown): Option[] {
         ...(num(r.min) !== undefined ? { min: num(r.min) } : {}),
         ...(num(r.max) !== undefined ? { max: num(r.max) } : {}),
         ...(num(r.step) !== undefined ? { step: num(r.step) } : {}),
+        ...(r.whole === true ? { whole: true as const } : {}),
         ...(label(r.unit, 20) ? { unit: label(r.unit, 20)! } : {}),
         ...(from ? { from } : {}),
         ...(num(r.unset) !== undefined ? { unset: num(r.unset) } : {}),
@@ -184,7 +200,7 @@ export function acceptOptions(raw: unknown): Option[] {
       o = { id, label: name, type: "text", default: typeof r.default === "string" ? r.default.slice(0, 200) : "", ...(from ? { from } : {}) };
     } else if (r.type === "switch") o = { id, label: name, type: "switch", default: r.default === true };
     // (its default, one it takes: else it is none)
-    if (o && fitting(o, o.default) !== undefined) out.push({ ...o, ...when, ...group, ...section });
+    if (o && fitting(o, o.default) !== undefined) out.push({ ...o, ...when, ...group, ...section, ...brief, ...person });
   }
   return out;
 }

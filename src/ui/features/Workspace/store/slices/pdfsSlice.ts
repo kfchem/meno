@@ -40,9 +40,9 @@ export function createPdfsSlice(doc: DocumentStore<WorkspaceDocument>, set: SetS
       const open = get().textsOpen && get().pdfShown === id;
       // (and no PDF hovered on the canvas: the column now lies over where it was double-clicked open, and the pointer never
       //  leaves it there as the canvas knows - so that Delete, the page keys or a drop out of it do not act on it unasked)
-      set({ pdfShown: id, textsOpen: true, setTableShown: null, hoveredPdf: null, ...(open ? {} : { pdfFlight: { id, page: pdf.page, to: "column", start: performance.now() } }) });
+      set({ pdfShown: id, textsOpen: true, setTableShown: null, conversationShown: null, hoveredPdf: null, ...(open ? {} : { pdfFlight: { id, page: pdf.page, to: "column", start: performance.now() } }) });
     },
-    showPdf: (id: number) => set({ pdfShown: id, textsOpen: true, setTableShown: null, hoveredPdf: null }),
+    showPdf: (id: number) => set({ pdfShown: id, textsOpen: true, setTableShown: null, conversationShown: null, hoveredPdf: null }),
     stopReadingPdf: (id: number) => {
       const st = get();
       const pdf = st.pdfs.find((p) => p.id === id);
@@ -72,6 +72,8 @@ export function createPdfsSlice(doc: DocumentStore<WorkspaceDocument>, set: SetS
             : prev,
       ),
     setPdfPicture: (flight: EditorState["pdfPicture"]) => set({ pdfPicture: flight }),
+    setPdfLens: (lens: EditorState["pdfLens"]) =>
+      set((prev: EditorState) => (prev.pdfLens?.id === lens?.id && prev.pdfLens?.label === lens?.label && prev.pdfLens?.word.left === lens?.word.left && prev.pdfLens?.word.top === lens?.word.top ? prev : { ...prev, pdfLens: lens })),
     setPdfStructureLit: (pick: EditorState["pdfStructureLit"]) =>
       set((prev: EditorState) => (prev.pdfStructureLit?.key === pick?.key && prev.pdfStructureLit?.id === pick?.id && prev.pdfStructureLit?.page === pick?.page ? prev : { ...prev, pdfStructureLit: pick })),
     // (structures picked let the words selected and a box drawn go, and the drawing's selection: one selection, what is copied)

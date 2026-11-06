@@ -23,6 +23,7 @@ import { arrowPoints } from "../../../lib/chem/reactionScheme";
 import { mapAtoms, mapMarks, mapShows, mapStanding } from "./chem/atomMap";
 import { numbers3d, type StructureMap } from "./chem/structureMaps";
 import { etaHeld } from "./chem/eta";
+import { wedgesHeld } from "./chem/drawing";
 import type { Arrow, ArrowAtomMap, ArrowFormPatch, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Ink, InkLook, Shape, ShapePatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText, LostText } from "./store/types";
 import { sha256Hex } from "../../../lib/binary/sha256";
 import { ringKeyOf, ringThere } from "./utils/rings";
@@ -39,6 +40,7 @@ import { readResults } from "../../../lib/calc/results";
 import { inMenosForm, type CalcInfo } from "../../../lib/calc/output";
 import { newTextName } from "./utils/texts";
 import { fitSets, membersSettled } from "./workflow/model";
+import type { Conversation } from "./conversation/types";
 
 export type WorkspaceDocument = {
   model: Model;
@@ -121,6 +123,9 @@ export type WorkspaceDocument = {
   structureMaps?: StructureMap[];
   nextStructureMapId?: number;
   nextCycleId?: number;
+  /** Conversations on the page, each in its frame (conversation/types; docs/CONVERSATIONS.md). */
+  conversations?: Conversation[];
+  nextConversationId?: number;
 };
 
 /** Whether it holds nothing: no structure, arrow, "+" sign or words drawn, no molecule in 3D, no text, no workflow. */
@@ -139,6 +144,7 @@ export function isBlankDocument(doc: WorkspaceDocument): boolean {
     !doc.shapes?.length &&
     !doc.inks?.length &&
     !doc.cycles?.length &&
+    !doc.conversations?.length &&
     !doc.sets?.length &&
     !doc.steps?.length
   );
@@ -241,8 +247,9 @@ export function setFigureChecked(doc: WorkspaceDocument, ids: readonly number[],
 /** `doc` with its stacks of drawings kept whole as an edit leaves them (utils/stacks `settledRecords`). */
 export function withRecordsSettled(doc: WorkspaceDocument, before?: WorkspaceDocument): WorkspaceDocument {
   if (before && doc.model === before.model) return doc;
-  // (a haptic bond held to its ring, its star at the ring's centre: chem/eta)
-  const model = etaHeld(settledRecords(doc.model, before?.model), before?.model);
+  // (a haptic bond held to its ring, its star at the ring's centre: chem/eta;
+  // and each wedge held narrow at the atom it was: chem/drawing)
+  const model = wedgesHeld(etaHeld(settledRecords(doc.model, before?.model), before?.model), before?.model);
   return model === doc.model ? doc : { ...doc, model };
 }
 
@@ -279,7 +286,7 @@ export function bindRing(doc: WorkspaceDocument, metal: number, ring: readonly n
   const star = doc.nextId;
   const x = ring.reduce((s, id) => s + at.get(id)!.x, 0) / ring.length;
   const y = ring.reduce((s, id) => s + at.get(id)!.y, 0) / ring.length;
-  const bond: Bond = { id: star + 1, a: metal, b: star, order: 1, coordination: true, endpoints: [...ring], attach: "all", stereo: "none", stereoOrient: "principle" };
+  const bond: Bond = { id: star + 1, a: metal, b: star, order: 1, coordination: true, endpoints: [...ring], attach: "all", stereo: "none" };
   return {
     ...doc,
     nextId: star + 2,
@@ -347,7 +354,6 @@ export function addBond(
     b,
     order,
     stereo: "none",
-    stereoOrient: "principle",
   };
   return {
     ...doc,
@@ -550,14 +556,15 @@ export function withoutAtoms(doc: WorkspaceDocument, ids: Iterable<number>): Wor
  */
 export type Relayout = {
   atoms: { id: number; x: number; y: number; z?: number; stereoCentre?: boolean }[];
-  bonds: (Pick<Bond, "id" | "stereo" | "stereoOrient"> & { display?: Bond["display"] })[];
+  bonds: (Pick<Bond, "id" | "stereo" | "narrow"> & { display?: Bond["display"] })[];
   /** H atoms to add, each bonded to `on`, the bond wedged as given. */
   added?: {
     x: number;
     y: number;
     on: number;
     stereo: NonNullable<Bond["stereo"]>;
-    stereoOrient: NonNullable<Bond["stereoOrient"]>;
+    /** The atom its wedge is narrow at: `on`, or none for the H. */
+    narrow?: number;
   }[];
   /** Atoms to take away, with their bonds. */
   removed?: number[];
@@ -603,30 +610,31 @@ export function relayout(doc: WorkspaceDocument, change: Relayout): WorkspaceDoc
     const p = patch.get(b.id);
     const display = p && "display" in p ? p.display : b.display;
     const laid = to.has(b.a) && to.has(b.b);
-    if (laid && b.stereoAt && (!p || (p.stereo === b.stereo && p.stereoOrient === b.stereoOrient && display === b.display))) {
+    if (laid && b.stereoAt && (!p || (p.stereo === b.stereo && p.narrow === b.narrow && display === b.display))) {
       changed = true;
       const { stereoAt: _at, ...kept } = b;
       return [kept];
     }
-    if (!p || (p.stereo === b.stereo && p.stereoOrient === b.stereoOrient && display === b.display)) return [b];
+    if (!p || (p.stereo === b.stereo && p.narrow === b.narrow && display === b.display)) return [b];
     changed = true;
-    const { display: _display, stereoAt: _at, ...rest } = b;
+    const { display: _display, stereoAt: _at, narrow: _narrow, ...rest } = b;
     // (up, down and wavy on a single bond only: a double or triple bond keeps its own)
     const wedge = p.stereo === "up" || p.stereo === "down" || p.stereo === "wavy";
     const stereo = wedge && b.order !== 1 ? b.stereo : p.stereo;
-    return [{ ...rest, stereo, stereoOrient: stereo === p.stereo ? p.stereoOrient : b.stereoOrient, ...(display ? { display } : {}) }];
+    const narrow = stereo === p.stereo ? p.narrow : b.narrow;
+    return [{ ...rest, stereo, ...(narrow != null ? { narrow } : {}), ...(display ? { display } : {}) }];
   });
   if (!changed) return doc;
   let nextId = doc.nextId;
   for (const h of change.added ?? []) {
     const id = nextId++;
     atoms.push({ id, x: h.x, y: h.y, r: 0.9, el: "H" });
-    bonds.push({ id: nextId++, a: h.on, b: id, order: 1, stereo: h.stereo, stereoOrient: h.stereoOrient });
+    bonds.push({ id: nextId++, a: h.on, b: id, order: 1, stereo: h.stereo, ...(h.narrow != null ? { narrow: h.narrow } : {}) });
   }
   for (const e of change.eta ?? []) {
     const star = nextId++;
     atoms.push({ id: star, x: e.x, y: e.y, r: 0.9, el: "*" });
-    bonds.push({ id: nextId++, a: e.metal, b: star, order: 1, coordination: true, endpoints: [...e.atoms], attach: "all", stereo: "none", stereoOrient: "principle" });
+    bonds.push({ id: nextId++, a: e.metal, b: star, order: 1, coordination: true, endpoints: [...e.atoms], attach: "all", stereo: "none" });
   }
   // (electron-pushing arrows on what was laid out bent as Meno bends them again, as marks are put back)
   const pushes = (doc.pushes ?? []).map((p) => {
@@ -720,7 +728,7 @@ export function expandAbbreviation(doc: WorkspaceDocument, id: number, group?: G
     if (k == null) return b;
     const at = s.attach[k] ?? head;
     const to = ids[at];
-    const moved = b.a === id ? { ...b, a: to } : { ...b, b: to };
+    const moved = { ...(b.a === id ? { ...b, a: to } : { ...b, b: to }), ...(b.narrow === id ? { narrow: to } : {}) };
     // to a pi system's star: a haptic bond, to all its atoms; to a donor
     // that lends its pair, a coordination bond (drawn as it was)
     const pi = s.haptic?.find((h) => h.star === at);
@@ -734,7 +742,7 @@ export function expandAbbreviation(doc: WorkspaceDocument, id: number, group?: G
       b: ids[b.a2],
       order: b.order,
       stereo: b.stereo ?? "none",
-      ...(b.stereoOrient ? { stereoOrient: b.stereoOrient } : {}),
+      ...(b.narrow != null ? { narrow: ids[b.narrow] } : {}),
       ...(b.display ? { display: b.display } : {}),
       ...bondChem(b),
       ...(b.endpoints ? { endpoints: b.endpoints.map((e) => ids[e]) } : {}),
@@ -809,6 +817,7 @@ export function contractToAbbreviation(
       a2: index.get(b.b)!,
       order: b.order,
       ...(b.stereo && b.stereo !== "none" ? { stereo: b.stereo } : {}),
+      ...(b.narrow != null && index.has(b.narrow) ? { narrow: index.get(b.narrow)! } : {}),
       ...bondChem(b),
       // (a haptic bond's ends by index, as an abbreviation keeps them)
       ...(b.endpoints ? { endpoints: b.endpoints.map((e) => index.get(e)!).filter((e) => e != null) } : {}),
@@ -938,7 +947,8 @@ export function replaceDraggedAtomWith(
     );
     const alreadyInModel = hasBond(doc, targetId, other);
     if (exists || alreadyInModel) continue;
-    bonds.push(b.a === movingId ? { ...b, a: targetId } : { ...b, b: targetId });
+    // (a wedge narrow at the atom dragged, narrow at the one it was dropped on)
+    bonds.push({ ...(b.a === movingId ? { ...b, a: targetId } : { ...b, b: targetId }), ...(b.narrow === movingId ? { narrow: targetId } : {}) });
   }
   const atoms = doc.model.atoms.filter((a) => a.id !== movingId);
   // (its electron-pushing arrows with it: an end on the atom dragged now on
@@ -1042,6 +1052,7 @@ export function appendModel(
         id,
         a,
         b: z,
+        ...(b.narrow != null ? { narrow: idMap.get(b.narrow) ?? b.narrow } : {}),
         ...(whole ? { endpoints: endpoints!.map((e) => idMap.get(e)!), ...(attach ? { attach } : {}) } : {}),
       },
     ];

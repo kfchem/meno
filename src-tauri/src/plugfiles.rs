@@ -29,7 +29,6 @@ use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
-use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::net::Net;
@@ -481,10 +480,8 @@ struct Progress<'a> {
 }
 
 fn manifest_of(app: &AppHandle, id: &str) -> Result<Value, String> {
-    let path = app
-        .path()
-        .resolve(format!("resources/plugins/{id}/manifest.json"), BaseDirectory::Resource)
-        .map_err(|e| format!("{id}'s manifest: {e}"))?;
+    let data = app.path().app_local_data_dir().map_err(|e| format!("{id}'s manifest: {e}"))?;
+    let path = crate::installed::dir(&crate::installed::root(&data), id)?.join("manifest.json");
     let text = std::fs::read_to_string(&path).map_err(|e| format!("{id}'s manifest: {e}"))?;
     serde_json::from_str(&text).map_err(|e| format!("{id}'s manifest: {e}"))
 }
@@ -883,21 +880,6 @@ mod tests {
         let mut a = archive("b.zip", "zip", "*/b.exe");
         a.as_object_mut().unwrap().remove("system");
         assert!(downloads_of(&json!({"downloads": [a]})).is_err());
-    }
-
-    #[test]
-    fn reads_blender_s_official_builds_as_meno_carries_them() {
-        let text = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/plugins/blender/manifest.json")).unwrap();
-        let all = downloads_of(&serde_json::from_str(&text).unwrap()).unwrap();
-        assert_eq!(all.len(), 3);
-        assert!(all.iter().all(|d| d.provides.as_deref() == Some("blender") && d.url.starts_with("https://download.blender.org/release/")));
-        let mac = all.iter().find(|d| d.system.as_deref() == Some("macos")).unwrap();
-        assert_eq!((mac.unpack, mac.program.as_deref()), (Some(Unpack::Dmg), Some("Blender.app/Contents/MacOS/Blender")));
-        // (the one for this computer fetched as the plugin is set up, where there is one)
-        assert!(needed(&all).len() <= 1);
-        if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
-            assert_eq!(needed(&all)[0].file, "blender-5.2.2-macos-arm64.dmg");
-        }
     }
 
     #[test]

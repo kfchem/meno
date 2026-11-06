@@ -226,11 +226,20 @@ fn is_false(b: &bool) -> bool {
 }
 
 /// What this computer's jobs may use at once (docs/WORKFLOWS-FOUNDATION.md,
-/// *This computer's runner knows its resources*): cores, and memory in MiB.
+/// *This computer's runner knows its resources*): cores, and memory in MiB;
+/// and whether the computer is kept awake while a job's program runs
+/// (awake.rs) - so unless Settings turned it off, as where nothing says.
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Limits {
     pub cores: u32,
     pub memory: u64,
+    #[serde(default = "kept_awake")]
+    pub awake: bool,
+}
+
+/// The computer kept awake while jobs run, unless Settings says otherwise.
+fn kept_awake() -> bool {
+    true
 }
 
 /// What this computer has: its cores - each a thread its system runs at once, two to a physical core where it
@@ -263,7 +272,7 @@ fn taken(spec: &JobSpec, here: Resources) -> u32 {
 /// What jobs may use, Settings unsaid: all the cores, and three quarters of the memory.
 fn default_limits() -> Limits {
     let here = computer();
-    Limits { cores: here.cores.max(1), memory: here.memory / 4 * 3 }
+    Limits { cores: here.cores.max(1), memory: here.memory / 4 * 3, awake: true }
 }
 
 /// What the jobs in `root` may use at once, as last written there; the defaults where nothing is.
@@ -591,6 +600,8 @@ pub fn run_job(dir: &Path, allowed: &dyn Fn(&JobSpec) -> Result<(), String>) -> 
         }
     }
     let started = Some(now_ms());
+    // (the computer kept awake from now until it and those after it have ended, unless Settings says not: awake.rs)
+    let _awake = dir.parent().filter(|root| limits_in(root).awake).map(|_| crate::awake::hold());
 
     // its program, in its work folder, what it says going into its log
     let input = spec.stdin.as_deref();
@@ -1941,12 +1952,12 @@ fn found_again(data: &Path, plugin_dir: &Path, spec: &JobSpec) -> Result<Found, 
 /// those beside it it declares, and given what `job_start` gives, nothing
 /// else; one installed separately, and those beside it, naming no file but
 /// those in its work folder as it was made (`written`) - Meno's data folder
-/// `data`, and the plugins it carries in `plugins`.
+/// `data`, and the plugins in place in `plugins` (installed.rs), each of its version in use.
 pub fn spec_allowed(data: &Path, plugins: &Path, spec: &JobSpec, written: &[String]) -> Result<(), String> {
     if !plugin_id(&spec.plugin) {
         return Err(format!("not a plugin: {}", spec.plugin));
     }
-    let plugin_dir = plugins.join(&spec.plugin);
+    let plugin_dir = crate::installed::dir(plugins, &spec.plugin)?;
     let found = found_again(data, &plugin_dir, spec)?;
     if installed_decl(&plugin_dir, &spec.plugin, &spec.name)?.is_some() {
         names_only_written(&spec.args, written)?;
@@ -1964,13 +1975,13 @@ pub fn spec_allowed(data: &Path, plugins: &Path, spec: &JobSpec, written: &[Stri
     let cores = spec.env.contains_key(THREADS[0]).then_some(spec.cores);
     // (and, where it needs another plugin's program, what Meno gives it for that - worked out again here, from the plugins
     //  themselves: a value taken from the spec would let whatever wrote it choose the program run)
-    let (needed_env, needed) = needs_given(data, &manifest_of(&plugin_dir, &spec.plugin)?, &spec.plugin, &spec.needs, &|p| Ok(plugins.join(p)))?;
+    let (needed_env, needed) = needs_given(data, &manifest_of(&plugin_dir, &spec.plugin)?, &spec.plugin, &spec.needs, &|p| crate::installed::dir(plugins, p))?;
     if given_env(&found, port, cores).into_iter().chain(needed_env).collect::<BTreeMap<_, _>>() != spec.env {
         return Err(format!("{} given what Meno does not give it", spec.name));
     }
     let _ = needed;
     // (and, where preset plugins handed it files, those plugins as they must be - worked out again here, from the plugins)
-    presets_given(&manifest_of(&plugin_dir, &spec.plugin)?, &spec.plugin, &spec.presets, &|p| Ok(plugins.join(p)))?;
+    presets_given(&manifest_of(&plugin_dir, &spec.plugin)?, &spec.plugin, &spec.presets, &|p| crate::installed::dir(plugins, p))?;
     Ok(())
 }
 
@@ -1981,7 +1992,9 @@ pub fn needs_linked(dir: &Path, data: &Path, plugins: &Path, spec: &JobSpec) -> 
     if spec.needs.is_empty() || cfg!(not(unix)) {
         return Ok(());
     }
-    let (_, needed) = needs_given(data, &manifest_of(&plugins.join(&spec.plugin), &spec.plugin)?, &spec.plugin, &spec.needs, &|p| Ok(plugins.join(p)))?;
+    let (_, needed) = needs_given(data, &manifest_of(&crate::installed::dir(plugins, &spec.plugin)?, &spec.plugin)?, &spec.plugin, &spec.needs, &|p| {
+        crate::installed::dir(plugins, p)
+    })?;
     for (name, program) in &needed {
         if fs::read_link(dir.join(WORK).join(name)).ok().as_deref() != Some(program.as_path()) {
             return Err(format!("{name} in its folder is not the program it needs"));
@@ -2032,17 +2045,17 @@ fn data_dir_here() -> Option<PathBuf> {
     crate::folders::local_data_dir()
 }
 
-/// The plugins Meno carries, where Tauri finds its resources - for a job's runner, as for its data folder.
+/// The plugins in place, in Meno's local data folder (installed.rs) - for a job's runner, as for its data folder.
 fn plugins_here() -> Option<PathBuf> {
-    let info = tauri::PackageInfo {
-        name: "Meno".into(),
-        version: env!("CARGO_PKG_VERSION").parse().ok()?,
-        authors: env!("CARGO_PKG_AUTHORS"),
-        description: env!("CARGO_PKG_DESCRIPTION"),
-        crate_name: env!("CARGO_PKG_NAME"),
-    };
-    let resources = tauri::utils::platform::resource_dir(&info, &tauri::Env::default()).ok()?;
-    Some(resources.join("resources").join("plugins"))
+    data_dir_here().map(|d| crate::installed::root(&d))
+}
+
+/// Whether a job of plugin `id` is waiting or running, in any of the jobs' folders of Meno's local data folder `data`.
+pub fn plugin_running(data: &Path, id: &str) -> bool {
+    jobs_roots(data).iter().filter_map(|r| fs::read_dir(r).ok()).flatten().flatten().any(|e| {
+        let dir = e.path();
+        read_spec(&dir).is_some_and(|s| s.plugin == id) && current_record(&dir).is_some_and(|r| !r.state.finished())
+    })
 }
 
 // --- Meno's commands ---------------------------------------------------------
@@ -2530,7 +2543,8 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
     if let Some(name) = payload.stdin.as_deref().filter(|n| !payload.files.iter().any(|f| f.name == *n)) {
         return Err(format!("a job reads only a file written for it: {name}"));
     }
-    let plugin_dir = crate::resource_path(&app, &Path::new("resources/plugins").join(&payload.plugin))?;
+    let plugins = crate::installed::root(&data);
+    let plugin_dir = crate::installed::dir(&plugins, &payload.plugin)?;
     // (looked for off the commands' threads: a program installed separately is asked its version, which may take seconds)
     let installed = {
         let (dir, plugin, program, path) = (plugin_dir.clone(), payload.plugin.clone(), payload.program.clone(), payload.path.clone());
@@ -2551,17 +2565,13 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
     let then = then_of(&found, &payload.program, &payload.then)?;
     // (another plugin's program it needs: one its manifest declares, found as that plugin's own jobs find it - that plugin
     //  not set up, nothing is made, saying so - and named in the job's work folder, never as a path with a space in it)
-    let (needed_env, needed) = needs_given(&data, &manifest_of(&plugin_dir, &payload.plugin)?, &payload.plugin, &payload.needs, &|p| {
-        crate::resource_path(&app, &Path::new("resources/plugins").join(p))
-    })?;
+    let (needed_env, needed) = needs_given(&data, &manifest_of(&plugin_dir, &payload.plugin)?, &payload.plugin, &payload.needs, &|p| crate::installed::dir(&plugins, p))?;
     if let Some((name, _)) = needed.iter().find(|(name, _)| payload.files.iter().any(|f| &f.name == name)) {
         return Err(format!("a job's file is named {name}, as the program it needs is"));
     }
     // (the files preset plugins hand it: each of a plugin that uses it through an interface it declares, copied into its
     //  work folder unread - in a folder of their own, which none of its own files may be in)
-    let handed = presets_given(&manifest_of(&plugin_dir, &payload.plugin)?, &payload.plugin, &payload.presets, &|p| {
-        crate::resource_path(&app, &Path::new("resources/plugins").join(p))
-    })?;
+    let handed = presets_given(&manifest_of(&plugin_dir, &payload.plugin)?, &payload.plugin, &payload.presets, &|p| crate::installed::dir(&plugins, p))?;
     clear_of_presets(&payload.files, &payload.presets)?;
     // (one asking for more than the computer has never starts: refused, saying so)
     if let Some(why) = beyond(computer(), payload.cores.unwrap_or(1), payload.memory.unwrap_or(0)) {
@@ -2613,7 +2623,7 @@ pub async fn program_where(app: AppHandle, plugin: String, name: String, located
     if !plugin_id(&plugin) {
         return Err(format!("not a plugin: {plugin}"));
     }
-    let plugin_dir = crate::resource_path(&app, &Path::new("resources/plugins").join(&plugin))?;
+    let plugin_dir = crate::installed::dir(&crate::installed::root(&crate::local_data_dir(&app)?), &plugin)?;
     let decl = installed_named(&manifest_of(&plugin_dir, &plugin)?, &name, system())?.ok_or_else(|| format!("{plugin} declares no program {name}"))?;
     // (a program asked its version runs a moment: not on the async runtime's own threads)
     tauri::async_runtime::spawn_blocking(move || {
@@ -2844,9 +2854,9 @@ pub fn computer_resources() -> Resources {
 /// runner reads it as it looks for its turn - those waiting take it up at once. At least a core; memory within what
 /// the computer has, nought counting none.
 #[tauri::command]
-pub fn jobs_limits(app: AppHandle, cores: u32, memory: u64) -> Result<(), String> {
+pub fn jobs_limits(app: AppHandle, cores: u32, memory: u64, awake: Option<bool>) -> Result<(), String> {
     let root = jobs_root(&app)?;
-    write_limits(&root, Limits { cores: cores.clamp(1, 1024), memory: memory.min(MEMORY_MOST) }).map_err(|e| e.to_string())
+    write_limits(&root, Limits { cores: cores.clamp(1, 1024), memory: memory.min(MEMORY_MOST), awake: awake.unwrap_or(true) }).map_err(|e| e.to_string())
 }
 
 /// Limits written whole: a runner never reads half of them.
@@ -2949,7 +2959,7 @@ mod tests {
     /// A job running a script of the system's shell, of a core, in a queue whose jobs may use `slots` cores in all:
     /// so many at once.
     fn shell(root: &Path, script: &str, slots: u32) -> PathBuf {
-        write_limits(root, Limits { cores: slots, memory: 0 }).unwrap();
+        write_limits(root, Limits { cores: slots, memory: 0, awake: true }).unwrap();
         sized(root, script, 1, 0)
     }
 
@@ -3338,7 +3348,7 @@ mod tests {
 
     #[test]
     fn starts_a_job_where_its_cores_and_memory_fit_beside_those_running_and_never_one_ahead_of_its_turn() {
-        let l = Limits { cores: 8, memory: 16_000 };
+        let l = Limits { cores: 8, memory: 16_000, awake: true };
         // (nothing running: any job, a larger one than the limits included, runs alone)
         assert!(fits(l, (0, 0), 0, 32, 64_000));
         assert!(fits(l, (4, 8_000), 1, 4, 8_000));
@@ -3347,7 +3357,7 @@ mod tests {
         // (a job that declares no memory is counted by its cores alone; and limits with none - the computer's memory
         //  not told - count none)
         assert!(fits(l, (4, 16_000), 1, 4, 0));
-        assert!(fits(Limits { cores: 8, memory: 0 }, (4, 16_000), 1, 4, 8_000));
+        assert!(fits(Limits { cores: 8, memory: 0, awake: true }, (4, 16_000), 1, 4, 8_000));
         // (more than the computer has: refused, in plain words; within it, though over the limits, not)
         let here = Resources { cores: 10, physical: 10, memory: 32 * 1024 };
         assert_eq!(beyond(here, 12, 0).as_deref(), Some("it asks for 12 cores, and this computer has 10"));
@@ -3358,7 +3368,7 @@ mod tests {
 
         // in the queue: two of 4 cores in 6 - the second waits, though a core-sized job behind it would fit
         let root = temp();
-        write_limits(&root, Limits { cores: 6, memory: 0 }).unwrap();
+        write_limits(&root, Limits { cores: 6, memory: 0, awake: true }).unwrap();
         let first = sized(&root, PAUSE, 4, 0);
         std::thread::sleep(Duration::from_millis(5));
         let second = sized(&root, PAUSE, 4, 0);
@@ -3413,7 +3423,7 @@ mod tests {
         let data = temp();
         let scratch = temp();
         assert_eq!(jobs_roots(&data), vec![jobs_in(&data)]);
-        write_limits(&jobs_in(&data), Limits { cores: 3, memory: 4096 }).unwrap();
+        write_limits(&jobs_in(&data), Limits { cores: 3, memory: 4096, awake: true }).unwrap();
         // (one made in Meno's own before)
         let before = sized(&jobs_in(&data), ECHO, 1, 0);
         write_record(&before, &JobRecord { ended: Some(now_ms()), ..JobRecord::new(JobState::Done, now_ms()) }).unwrap();
@@ -3421,7 +3431,7 @@ mod tests {
         let chosen = scratch.join(IN_CHOSEN);
         assert_eq!(jobs_roots(&data), vec![chosen.clone(), jobs_in(&data)]);
         // (what jobs may use goes with it)
-        assert_eq!(limits_in(&chosen), Limits { cores: 3, memory: 4096 });
+        assert_eq!(limits_in(&chosen), Limits { cores: 3, memory: 4096, awake: true });
         // (a job made there: its runner takes it, as one in Meno's own; one elsewhere, never)
         let (_, dir) = make_job(&chosen, &read_spec(&before).unwrap(), &[]).unwrap();
         assert!(runner_folder(&data, &dir).is_ok());
@@ -3482,8 +3492,14 @@ mod tests {
         let root = temp();
         assert_eq!(limits_in(&root), default_limits());
         assert!(default_limits().cores >= 1);
-        write_limits(&root, Limits { cores: 3, memory: 2048 }).unwrap();
-        assert_eq!(limits_in(&root), Limits { cores: 3, memory: 2048 });
+        write_limits(&root, Limits { cores: 3, memory: 2048, awake: true }).unwrap();
+        assert_eq!(limits_in(&root), Limits { cores: 3, memory: 2048, awake: true });
+        // (the computer kept awake unless Settings turned it off - and so where limits written before it say nothing of it)
+        assert!(default_limits().awake);
+        write_limits(&root, Limits { cores: 3, memory: 2048, awake: false }).unwrap();
+        assert!(!limits_in(&root).awake);
+        fs::write(root.join(LIMITS), r#"{"cores": 2, "memory": 1024}"#).unwrap();
+        assert_eq!(limits_in(&root), Limits { cores: 2, memory: 1024, awake: true });
         // (the computer's memory told: three quarters of it, by default)
         let here = computer();
         assert!(here.memory > 0, "{here:?}");
@@ -3854,9 +3870,9 @@ mod tests {
     /// A plugin's folder naming `programs`, and Meno's data folder with its uv environment holding `files`.
     fn plugin(programs: &str, files: &[&str]) -> (PathBuf, PathBuf) {
         let base = temp();
-        let plugin = base.join("plugins").join("demo");
-        fs::create_dir_all(&plugin).unwrap();
-        fs::write(plugin.join("manifest.json"), format!(r#"{{"id": "demo", "steps": [{{"kinds": ["optimise"], "programs": {programs}}}]}}"#)).unwrap();
+        // (in place as Meno has its plugins: its version in use, named by `current`)
+        let manifest = format!(r#"{{"id": "demo", "steps": [{{"kinds": ["optimise"], "programs": {programs}}}]}}"#);
+        let plugin = crate::installed::tests::in_place(&base.join("plugins"), "demo", "1.0.0", &manifest);
         fs::write(plugin.join("worker.py"), "").unwrap();
         let data = base.join("data");
         let bin = data.join("uv").join("plugin-demo").join("venv").join(if cfg!(windows) { "Scripts" } else { "bin" });
@@ -3958,7 +3974,7 @@ mod tests {
     fn a_runner_runs_only_what_job_start_would_have_it_run() {
         let exe = |n: &str| if cfg!(windows) { format!("{n}.exe") } else { n.to_string() };
         let (data, dir) = plugin(r#"["xtb"]"#, &[&exe("xtb"), &exe("other")]);
-        let plugins = dir.parent().unwrap().to_path_buf();
+        let plugins = dir.parent().and_then(Path::parent).unwrap().to_path_buf();
         let found = plugin_program(&data, &dir, "demo", "xtb", &[]).unwrap();
         let good = spec_for("demo", "xtb", &found, &["in.xyz"]);
         assert_eq!(spec_allowed(&data, &plugins, &good, &[]), Ok(()));
@@ -4026,8 +4042,7 @@ mod tests {
     fn a_runner_runs_a_program_installed_separately_only_as_its_plugin_declares_it() {
         let base = temp();
         let plugins = base.join("plugins");
-        let plugin = plugins.join("demo");
-        fs::create_dir_all(&plugin).unwrap();
+        let plugin = crate::installed::tests::in_place(&plugins, "demo", "1.0.0", "{}");
         let exe = |n: &str| if cfg!(windows) { format!("{n}.exe") } else { n.to_string() };
         let manifest = serde_json::json!({
             "id": "demo",
@@ -4094,7 +4109,8 @@ mod tests {
         assert_eq!(data_dir_here(), crate::folders::local_data_dir());
         let local = if cfg!(windows) { Path::new("Meno").join("data") } else { PathBuf::from("Meno") };
         assert!(data_dir_here().is_some_and(|d| d.is_absolute() && d.ends_with(&local)));
-        assert!(plugins_here().is_some_and(|p| p.ends_with(Path::new("resources").join("plugins"))));
+        // (and the plugins in place, in that folder: installed.rs)
+        assert_eq!(plugins_here(), data_dir_here().map(|d| d.join("plugins")));
     }
 
     #[test]
@@ -4471,33 +4487,33 @@ mod tests {
 
     #[test]
     fn reads_what_a_plugin_declares_its_jobs_need_of_another_plugins_program_and_refuses_what_cannot_be_given() {
-        // (ORCA's, as Meno carries it: the xTB plugin's xtb, told in XTBEXE)
-        let orca: serde_json::Value = serde_json::from_str(&fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/plugins/orca/manifest.json")).unwrap()).unwrap();
-        assert_eq!(needs_declared(&orca, "orca").unwrap(), vec![Need { plugin: "xtb".into(), versions: ">=0.1.4 <0.2.0".into(), program: "xtb".into(), env: "XTBEXE".into() }]);
-        assert_eq!(needs_declared(&serde_json::json!({}), "orca").unwrap(), vec![]);
+        // (another plugin's program, told in a variable: the tightbind plugin's tightbind, in TBEXE)
+        let quanta = serde_json::json!({"depends": [{"plugin": "tightbind", "versions": ">=0.1.4 <0.2.0", "programs": [{"program": "tightbind", "env": "TBEXE"}]}]});
+        assert_eq!(needs_declared(&quanta, "quanta").unwrap(), vec![Need { plugin: "tightbind".into(), versions: ">=0.1.4 <0.2.0".into(), program: "tightbind".into(), env: "TBEXE".into() }]);
+        assert_eq!(needs_declared(&serde_json::json!({}), "quanta").unwrap(), vec![]);
         // (one used only for some of its work: its programs needed by the jobs that say so, as any)
-        assert_eq!(needs_declared(&serde_json::json!({"depends": [{"plugin": "xtb", "versions": ">=1.0.0 <2.0.0", "optional": true, "programs": [{"program": "xtb", "env": "X"}]}]}), "orca").unwrap().len(), 1);
+        assert_eq!(needs_declared(&serde_json::json!({"depends": [{"plugin": "tightbind", "versions": ">=1.0.0 <2.0.0", "optional": true, "programs": [{"program": "tightbind", "env": "X"}]}]}), "quanta").unwrap().len(), 1);
         // (a plugin used for no program: none of its programs needed)
-        assert_eq!(needs_declared(&serde_json::json!({"depends": [{"plugin": "xtb", "versions": ">=1.0.0 <2.0.0"}]}), "orca").unwrap(), vec![]);
-        let uses = |program: &str, env: &str| serde_json::json!({"plugin": "xtb", "versions": ">=0.1.0 <0.2.0", "programs": [{"program": program, "env": env}]});
+        assert_eq!(needs_declared(&serde_json::json!({"depends": [{"plugin": "tightbind", "versions": ">=1.0.0 <2.0.0"}]}), "quanta").unwrap(), vec![]);
+        let uses = |program: &str, env: &str| serde_json::json!({"plugin": "tightbind", "versions": ">=0.1.0 <0.2.0", "programs": [{"program": program, "env": env}]});
         // (itself, versions not as they must be, a shell, a path, a variable that finds or loads programs, one plugin twice, one variable twice: none of them)
         for bad in [
-            serde_json::json!([{"plugin": "orca", "versions": ">=0.1.0", "programs": [{"program": "orca", "env": "X"}]}]),
-            serde_json::json!([{"plugin": "xtb", "versions": "^0.1.0", "programs": [{"program": "xtb", "env": "X"}]}]),
-            serde_json::json!([{"plugin": "xtb", "versions": ">=0.2.0 <0.1.0", "programs": [{"program": "xtb", "env": "X"}]}]),
-            serde_json::json!([{"plugin": "xtb", "programs": [{"program": "xtb", "env": "X"}]}]),
+            serde_json::json!([{"plugin": "quanta", "versions": ">=0.1.0", "programs": [{"program": "quanta", "env": "X"}]}]),
+            serde_json::json!([{"plugin": "tightbind", "versions": "^0.1.0", "programs": [{"program": "tightbind", "env": "X"}]}]),
+            serde_json::json!([{"plugin": "tightbind", "versions": ">=0.2.0 <0.1.0", "programs": [{"program": "tightbind", "env": "X"}]}]),
+            serde_json::json!([{"plugin": "tightbind", "programs": [{"program": "tightbind", "env": "X"}]}]),
             serde_json::json!([uses("sh", "X")]),
-            serde_json::json!([uses("bin/xtb", "X")]),
-            serde_json::json!([uses("xtb", "PATH")]),
-            serde_json::json!([uses("xtb", "DYLD_INSERT_LIBRARIES")]),
-            serde_json::json!([uses("xtb", "A"), uses("xtb", "B")]),
-            serde_json::json!([{"plugin": "xtb", "versions": ">=0.1.0", "programs": [{"program": "xtb", "env": "A"}, {"program": "other", "env": "A"}]}]),
-            serde_json::json!([{"plugin": "xtb", "versions": ">=0.1.0", "optional": "yes"}]),
-            serde_json::json!({"plugin": "xtb"}),
+            serde_json::json!([uses("bin/tightbind", "X")]),
+            serde_json::json!([uses("tightbind", "PATH")]),
+            serde_json::json!([uses("tightbind", "DYLD_INSERT_LIBRARIES")]),
+            serde_json::json!([uses("tightbind", "A"), uses("tightbind", "B")]),
+            serde_json::json!([{"plugin": "tightbind", "versions": ">=0.1.0", "programs": [{"program": "tightbind", "env": "A"}, {"program": "other", "env": "A"}]}]),
+            serde_json::json!([{"plugin": "tightbind", "versions": ">=0.1.0", "optional": "yes"}]),
+            serde_json::json!({"plugin": "tightbind"}),
             // (versions with no bound above)
-            serde_json::json!([{"plugin": "xtb", "versions": ">=1.0.0"}]),
+            serde_json::json!([{"plugin": "tightbind", "versions": ">=1.0.0"}]),
         ] {
-            assert!(needs_declared(&serde_json::json!({ "depends": bad }), "orca").is_err(), "{bad}");
+            assert!(needs_declared(&serde_json::json!({ "depends": bad }), "quanta").is_err(), "{bad}");
         }
     }
 
@@ -4535,7 +4551,7 @@ mod tests {
         let tool = away.join("tool");
         fs::write(&tool, "#!/bin/sh\necho needed program ran\n").unwrap();
         fs::set_permissions(&tool, fs::Permissions::from_mode(0o755)).unwrap();
-        write_limits(&root, Limits { cores: 1, memory: 0 }).unwrap();
+        write_limits(&root, Limits { cores: 1, memory: 0, awake: true }).unwrap();
         let spec = JobSpec {
             plugin: "test".into(),
             name: "shell".into(),
@@ -4611,14 +4627,14 @@ mod tests {
             fs::write(at, text).unwrap();
             fs::set_permissions(at, fs::Permissions::from_mode(0o755)).unwrap();
         };
-        fs::create_dir_all(plugins.join("asker")).unwrap();
-        fs::write(
-            plugins.join("asker").join("manifest.json"),
+        // (each in place as Meno has its plugins: its version in use, named by `current` - installed.rs)
+        crate::installed::tests::in_place(
+            &plugins,
+            "asker",
+            "1.0.0",
             r#"{"id": "asker", "steps": [{"kinds": ["optimise"], "programs": ["main"]}], "depends": [{"plugin": "helper", "versions": ">=1.0.0 <2.0.0", "programs": [{"program": "tool", "env": "TOOLEXE"}]}]}"#,
-        )
-        .unwrap();
-        fs::create_dir_all(plugins.join("helper")).unwrap();
-        fs::write(plugins.join("helper").join("manifest.json"), r#"{"id": "helper", "name": "Helper", "version": "1.2.0", "steps": [{"kinds": ["energy"], "programs": ["tool"]}]}"#).unwrap();
+        );
+        crate::installed::tests::in_place(&plugins, "helper", "1.2.0", r#"{"id": "helper", "name": "Helper", "version": "1.2.0", "steps": [{"kinds": ["energy"], "programs": ["tool"]}]}"#);
         script(&data.join("uv/plugin-asker/venv/bin/main"), "#!/bin/sh\necho main ran\n\"$TOOLEXE\"\n");
         if helper_set_up {
             script(&data.join("uv/plugin-helper/venv/bin/tool"), "#!/bin/sh\necho the tool ran\n");
@@ -4630,10 +4646,10 @@ mod tests {
     #[test]
     fn gives_no_program_of_a_plugin_of_a_version_the_plugin_that_uses_it_does_not_work_with() {
         let (base, data, plugins) = needing(true);
-        let asker = manifest_of(&plugins.join("asker"), "asker").unwrap();
-        assert!(needs_given(&data, &asker, "asker", &["helper".to_string()], &|p| Ok(plugins.join(p))).is_ok());
-        fs::write(plugins.join("helper").join("manifest.json"), r#"{"id": "helper", "name": "Helper", "version": "2.0.0", "steps": [{"kinds": ["energy"], "programs": ["tool"]}]}"#).unwrap();
-        let err = needs_given(&data, &asker, "asker", &["helper".to_string()], &|p| Ok(plugins.join(p))).unwrap_err();
+        let asker = manifest_of(&crate::installed::dir(&plugins, "asker").unwrap(), "asker").unwrap();
+        assert!(needs_given(&data, &asker, "asker", &["helper".to_string()], &|p| crate::installed::dir(&plugins, p)).is_ok());
+        fs::write(crate::installed::dir(&plugins, "helper").unwrap().join("manifest.json"), r#"{"id": "helper", "name": "Helper", "version": "2.0.0", "steps": [{"kinds": ["energy"], "programs": ["tool"]}]}"#).unwrap();
+        let err = needs_given(&data, &asker, "asker", &["helper".to_string()], &|p| crate::installed::dir(&plugins, p)).unwrap_err();
         assert_eq!(err, "asker needs Helper >=1.0.0 <2.0.0; 2.0.0 is here");
         let _ = fs::remove_dir_all(&base);
     }
@@ -4642,8 +4658,8 @@ mod tests {
     #[test]
     fn a_runner_gives_a_program_another_plugins_only_as_it_works_it_out_again_never_as_its_spec_says() {
         let (base, data, plugins) = needing(true);
-        let found = plugin_program(&data, &plugins.join("asker"), "asker", "main", &[]).unwrap();
-        let tool = plugin_program(&data, &plugins.join("helper"), "helper", "tool", &[]).unwrap().program;
+        let found = plugin_program(&data, &crate::installed::dir(&plugins, "asker").unwrap(), "asker", "main", &[]).unwrap();
+        let tool = plugin_program(&data, &crate::installed::dir(&plugins, "helper").unwrap(), "helper", "tool", &[]).unwrap().program;
         let with = |needs: &[&str], extra: &[(&str, &str)]| {
             let mut spec = spec_for("asker", "main", &found, &[]);
             spec.needs = needs.iter().map(|n| n.to_string()).collect();
@@ -4667,7 +4683,7 @@ mod tests {
         assert!(spec_allowed(&data, &plugins, &with(&["helper", "helper"], &[("TOOLEXE", "./tool")]), &[]).is_err());
         // (the needed plugin not set up: refused, saying so)
         let (gone, gone_data, gone_plugins) = needing(false);
-        let found_gone = plugin_program(&gone_data, &gone_plugins.join("asker"), "asker", "main", &[]).unwrap();
+        let found_gone = plugin_program(&gone_data, &crate::installed::dir(&gone_plugins, "asker").unwrap(), "asker", "main", &[]).unwrap();
         let mut spec = spec_for("asker", "main", &found_gone, &[]);
         spec.needs = vec!["helper".into()];
         spec.env.insert("TOOLEXE".into(), "./tool".into());
@@ -4681,9 +4697,9 @@ mod tests {
     fn a_runner_runs_a_job_needing_another_plugins_program_linked_in_its_folder_and_no_other_link() {
         let (base, data, plugins) = needing(true);
         let jobs = data.join("jobs");
-        write_limits(&jobs, Limits { cores: 1, memory: 0 }).unwrap();
-        let found = plugin_program(&data, &plugins.join("asker"), "asker", "main", &[]).unwrap();
-        let (env, needed) = needs_given(&data, &manifest_of(&plugins.join("asker"), "asker").unwrap(), "asker", &["helper".into()], &|p| Ok(plugins.join(p))).unwrap();
+        write_limits(&jobs, Limits { cores: 1, memory: 0, awake: true }).unwrap();
+        let found = plugin_program(&data, &crate::installed::dir(&plugins, "asker").unwrap(), "asker", "main", &[]).unwrap();
+        let (env, needed) = needs_given(&data, &manifest_of(&crate::installed::dir(&plugins, "asker").unwrap(), "asker").unwrap(), "asker", &["helper".into()], &|p| crate::installed::dir(&plugins, p)).unwrap();
         assert_eq!(env, BTreeMap::from([("TOOLEXE".to_string(), "./tool".to_string())]));
         let mut spec = spec_for("asker", "main", &found, &[]);
         spec.needs = vec!["helper".into()];
@@ -4717,8 +4733,7 @@ mod tests {
         };
         let needs: Vec<String> = if cfg!(unix) { vec!["helper".into()] } else { vec![] };
         let exe = |n: &str| if cfg!(windows) { format!("{n}.exe") } else { n.to_string() };
-        let ranked = plugins.join("ranked");
-        fs::create_dir_all(&ranked).unwrap();
+        let ranked = crate::installed::tests::in_place(&plugins, "ranked", "1.0.0", "{}");
         let declare = |parallel: &str| {
             let needed = if needs.is_empty() { serde_json::json!([]) } else { serde_json::json!([{"plugin": "helper", "versions": ">=1.0.0 <2.0.0", "programs": [{"program": "tool", "env": "TOOLEXE"}]}]) };
             let manifest = serde_json::json!({
@@ -4733,7 +4748,7 @@ mod tests {
         let written = vec!["input.inp".to_string()];
         // (a job of 16 cores, made as job_start makes it: what Meno gives it, and what it gives for the program it needs)
         let job = |found: &Found| {
-            let (needed, _) = needs_given(&data, &manifest_of(&ranked, "ranked").unwrap(), "ranked", &needs, &|p| Ok(plugins.join(p))).unwrap();
+            let (needed, _) = needs_given(&data, &manifest_of(&ranked, "ranked").unwrap(), "ranked", &needs, &|p| crate::installed::dir(&plugins, p)).unwrap();
             let mut spec = JobSpec { env: given_env(found, 4567, Some(16)), cores: 16, ..spec_for("ranked", "orca", found, &["input.inp"]) };
             spec.needs = needs.clone();
             spec.env.extend(needed);

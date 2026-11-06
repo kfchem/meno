@@ -380,7 +380,9 @@ isomers, which Meno's rule takes as one structure, are listed by name.
 **Lineage.** `from` lists the entry or entries an entry was made from. An
 optimised conformer has one parent; an entry made by *Re-bond* has two: the
 one whose geometry it took and the one whose bonding it took. Lineage is a
-record, for provenance. No node matches entries by it.
+record, for provenance. No node matches entries by it. A step's entry in 3D
+keeps it as `madeOf`; its `from` is the molecule it is a frame of, which
+is not lineage (WORKFLOWS.md, *Lineage in 3D*).
 
 **Properties ride along.** An entry made from another keeps its properties,
 each still saying the geometry it was worked out at. That is how an ID
@@ -462,7 +464,8 @@ pairing based on those IDs"):
 
 **Every exit is a result set** (question 1, answered; refining decision 9),
 made with the step, empty until it runs, to the right of the card. The
-card's own give port goes.
+card's own give port goes. (Each exit came to have a port of its own on
+the card, its set's, 2026-11-05: WORKFLOWS.md, *Exit ports*.)
 
 **Second exits.** A node that can fail entries, or set entries aside, has a
 second exit for them (revisiting question 19, question B below):
@@ -559,6 +562,14 @@ cores and memory fit what is free, and keeps the order they were asked
 for: a job never jumps ahead of an earlier one. A job's cores and memory
 are what its plugin declares; what the runner may use is capped in
 Settings, all cores and three quarters of the memory by default.
+It keeps the computer from sleeping for want of use while a job's
+program runs, so that a calculation left overnight is not cut short:
+each job's runner holds it from when its program starts until it and the
+programs after it end, whether Meno is open or not (macOS: the system's
+`caffeinate`; Windows: the runner's thread saying the system is needed;
+elsewhere nothing). The display may still turn off, and a lid closed or
+a sleep asked for is the person's. Settings, *Calculations*, can turn it
+off (`src-tauri/src/awake.rs`).
 
 **Cluster jobs are submit-and-return.** Meno submits, keeps the job's record
 (scheduler, its job id, the key), and returns. It takes the job up again
@@ -659,7 +670,7 @@ of highest weight stands for it, carrying the results.
 | **Combine** | molecules | one entry holding them all, numbered in order: a complex |
 | **Re-bond** | *geometry* (molecules, 3D) and *bonding* (molecules, same atoms) | each with each, or matched on a property: the first's geometry with the second's bonds and charges, its group *a → b*, with both entries' properties (the geometry's where both have one) |
 | **Compare bonding** | molecules, 3D, and *reference* (molecules) | *same* and *different*: bonds read from the geometry, and R or S, E or Z and every centre by its atoms' numbers where asked, compared with the reference matched on a property; or with each reference, naming the one it matches. Coordination bonds, and atoms, elements or bonds the chemist lists, are passed over |
-| **Mode on atoms** | molecules with vibrations, and a table of atoms (from *bond changes*) | *kept* and *rest*: whether the imaginary vibration moves those atoms most, within a tolerance |
+| **Mode on atoms** | molecules with vibrations, and a table of atoms (from *bond changes*), or atoms typed | every entry, each with where its imaginary vibration ranks those atoms - the window, each one's rank, how many fall outside - for a *Filter* to keep on (built 2026-11-02, STRUCTURE-STEPS.md) |
 | **Atom map** | *molecules* and a *reference* (3D, every hydrogen present), each input's entries each a side of its own or one side together; matched on a property, or one reference for all; whether bonds may change (a reaction) or stay the same (conformers of the reference) | *mapped*: each side a complete 3D structure in the reference's numbering, every atom mapped one to one, hydrogens included (the first map, or every map) - a reaction's products in its reactants' numbering, or a species' conformers with their equivalent atoms (a methylene's hydrogens) where the species has them; *bond changes*: a table of each bond formed, broken or changed in order, with its atoms and orders before and after |
 | **Restraints** | molecules | the same, each with its restraints from itself: coordination bonds kept at a factor of the van der Waals distance, listed pairs kept at their distance, listed atoms fixed |
 | **Torsion restraints** | molecules, 3D, and *reference* (molecules) | *restrained*: each torsion trans across the reference's double bonds and not trans here held at 180°, stronger by a step each time; *trans already*: the rest, as they came |
@@ -761,7 +772,10 @@ Each option is read in one of three ways:
 - **an element's symbol** is that atom: `Cl`, `F`, `H`;
 - **a line with a `*` is SMILES**, read as a chemist's own abbreviation is
   (`structureProblem`): exactly one `*`, bonded by one single bond to the
-  atom the group is attached by.
+  atom the group is attached by. A double bond's cis or trans written in it
+  (`/` and `\`, `*/C=C/C` for (E)-prop-1-enyl) is kept in each product, its
+  side against the `*` taken as the atom it is attached to (`smilesGroup`):
+  so are a centre's `@` and `@@`.
 
 A line without a `*` is never read as SMILES, so `CO` is a label, and its
 reading is shown. Beside each line the step shows what it was read as: the
@@ -853,6 +867,16 @@ The texts are compared, not their hashed keys. The set states the method:
 drawn, aromatic rings as one form.* What that means, plainly:
 - **a chiral product and its mirror image are two structures.** So are two
   diastereomers, and E and Z;
+- **a configuration drawn where there is no stereo unit counts for
+  nothing.** That is a wedge on a centre two of whose groups are alike (an
+  isopropyl's CH), or a double bond drawn bent whose one end carries two
+  alike groups (a prenyl's C=C(CH3)2). The structure is the same whether
+  it was drawn so or not. "Alike" counts every other configuration in the
+  structure: the two ring arms at each centre of 1,4-dimethylcyclohexane
+  are alike only until the other centre is counted, so its cis and trans
+  stay two structures, and a pseudoasymmetric centre keeps its r or s
+  (`stereoUnitsOnly`). The drawing keeps its wedges; only identity sets
+  them aside;
 - **two Kekulé structures of one ring are one structure.** So are
   bond-shift isomers such as a 1,2-disubstituted cyclooctatetraene (the
   `aromaticForm` rule, as it is written there);
@@ -913,6 +937,31 @@ known answers are (#507):
   fixture lists the case, and the test holds Meno to its own rule there.
 
 RDKit is in the script and the fixture only, never in core.
+
+#### Whether one structure holds another (2026-11-04)
+
+Meno's own substructure search (`src/lib/chem/substructure.ts`,
+`holdsSubstructure`), for a conversation's search of the page and, later,
+for queries written as SMARTS. It finds each atom of the structure asked
+for (the query) among the atoms of the other (the target), one to one,
+with every bond between query atoms a bond between their matches. A
+target's further atoms and bonds are no matter: it is not an induced match.
+
+Its rules are identity's where the two meet:
+- an atom matches one of its element, its charge, its mass number where it
+  says one, and its unpaired electrons;
+- a bond matches one of its order, with aromatic rings in one form
+  (`aromaticForm`, above), however either structure was drawn of its Kekulé
+  structures - a phenyl drawn one way is found in a toluene drawn the
+  other, and never in a cyclohexene;
+- a query's hydrogens are no condition, but for a hydrogen drawn as an
+  atom: that asks for a hydrogen on its atom's match, drawn there or not. A
+  methyl drawn as "C" is found in any carbon, a quaternary one too;
+- configurations are not compared: a query is a constitution.
+
+It says where it found it: each query atom, other than a hydrogen drawn,
+with its match. A search that has tried a million placements stops and
+says it did not finish, never a "not found" it did not show.
 
 #### Valence, and stereocentres left open
 
@@ -1006,9 +1055,10 @@ space: the group goes where the hydrogen was.
   the configuration it had. A wedge with three bonds in the page reads
   otherwise than a wedge with the hydrogen left out, so the old wedge alone
   would invert it.
-- **Every wedge keeps its narrow end.** A bond added to an atom changes how
-  the drawing counts its bonds, and with them which end of a wedge reads as
-  narrow, so a wedge would move to the next atom.
+- **Every wedge keeps its narrow end.** A wedge is narrow at an atom, kept
+  by id (EDITOR-2D, *A wedge's narrow end is kept by atom*), so the group's
+  bond added to an atom does not move a wedge to the next atom; a product's
+  wedge without one is given the template's.
 - **A stereocentre the group makes** (one of a CH2's two hydrogens) is left
   open, with no configuration made up. *Stereoisomers* can enumerate it.
 - **The guard behind them.** Every product is read back as the canvas reads

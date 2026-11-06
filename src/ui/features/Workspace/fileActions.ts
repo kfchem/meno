@@ -19,7 +19,7 @@ import { setInUse } from "../../../lib/chem/palette";
 import { createSVG, labelBox, labelSetOf, measureLabelBox, type Layout, type LayoutOptions } from "../../../lib/chem/layout2d";
 import { arrowsWithWords, wordsSet } from "../../../lib/chem/captions";
 import { arrowsOfCycles, cycleThings } from "./utils/cycles";
-import { writeMolfile, writeMolfile3d, writeSdf, type Atom3D } from "../../../lib/chem/molWriter";
+import { withRingStars, writeMolfile, writeMolfile3d, writeSdf, type Atom3D } from "../../../lib/chem/molWriter";
 import { forFlatReaders } from "./chem/drawing";
 import { reactionArrows, reactionFileText } from "./chem/reactionFile";
 import { styleOf, type DrawingStyle } from "../../../lib/chem/style";
@@ -224,7 +224,7 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
     const skeleton = isSkeleton(m);
     const data = (i: number) => {
       const energy = m.energies?.[i];
-      const failed = m.marksUnread ? "its marks of which frames failed could not be read" : m.failed?.length === n && m.failed[i] ? `${FAILURE_WORDS[m.failed[i]!.kind]}: ${m.failed[i]!.why}` : null;
+      const failed = failedSaid(m, i);
       return (
         (energy != null && Number.isFinite(energy) ? `> <Energy (Eh)>\n${energy}\n\n` : "") +
         (failed ? `> <Failed>\n${failed.replace(/\s+/g, " ").slice(0, 200)}\n\n` : "") +
@@ -235,11 +235,17 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
       );
     };
     const atomsOf = (i: number | undefined) => (skeleton ? frameAtoms(m, i).map((a) => ({ ...a, noImplicitH: true })) : frameAtoms(m, i));
-    if (options.frames !== "all") return [writeMolfile3d(atomsOf(m.frame), bondsAt(m, m.frame), { title: name, version }) + data(m.frame ?? 0) + "$$$$\n"];
+    // (each ring bound to a metal through all its atoms as a file holds one: a star at its centre, a bond to its atoms - lib/chem/molWriter)
+    const written = (i: number | undefined) => withRingStars(atomsOf(i), bondsAt(m, i), m.centres ?? []);
+    if (options.frames !== "all") {
+      const w = written(m.frame);
+      return [writeMolfile3d(w.atoms, w.bonds, { title: name, version }) + data(m.frame ?? 0) + "$$$$\n"];
+    }
     const frames = 1 + (m.frames ?? []).filter((f) => f.length === 3 * m.atoms.length).length;
     return Array.from({ length: frames }, (_, i) => {
       // (each frame with the bonds it has, where they go frame by frame)
-      return writeMolfile3d(atomsOf(i), bondsAt(m, i), { title: `${name} ${i + 1}`, version }) + data(i) + "$$$$\n";
+      const w = written(i);
+      return writeMolfile3d(w.atoms, w.bonds, { title: `${name} ${i + 1}`, version }) + data(i) + "$$$$\n";
     });
   });
   const { loose, stacked } = recordDrawings(drawn);
@@ -488,10 +494,21 @@ export function propertiesSaid(drawn: Drawn): string[] {
 }
 
 /**
+ * Why a molecule in 3D's frame `i` did not finish - it failed, or its file's
+ * marks of which frames failed did not read - in words; none where it did.
+ */
+function failedSaid(m: Carried3D, i: number): string | null {
+  const n = 1 + (m.frames?.length ?? 0);
+  if (m.marksUnread) return "its marks of which frames failed could not be read";
+  return m.failed?.length === n && m.failed[i] ? `${FAILURE_WORDS[m.failed[i]!.kind]}: ${m.failed[i]!.why}` : null;
+}
+
+/**
  * Molecules in 3D as an XYZ file holds them (lib/chem/xyzWriter): the atoms of
  * each in the order it has them, in the frame it shows or - every frame - in
  * each frame it has, a block for each, the energy of each frame on its
- * comment line where it is known. Several molecules one after another, each
+ * comment line where it is known, and why it did not finish where it did not
+ * (`failedSaid`), as an SD file's *Failed* says. Several molecules one after another, each
  * as SDF export writes them: their blocks in turn, not placed as one system.
  * Throws where there are none.
  */
@@ -504,7 +521,7 @@ export function xyzFileText(molecules: readonly Carried3D[], title: string, opti
     const which = shown ? [Math.min(Math.max(0, m.frame ?? 0), have - 1)] : Array.from({ length: have }, (_, i) => i);
     return which.map((i) => ({
       atoms: frameAtoms(m, i),
-      comment: xyzComment(name, shown ? undefined : { i, of: have }, m.energies?.[i]),
+      comment: xyzComment(name, shown ? undefined : { i, of: have }, m.energies?.[i], failedSaid(m, i)),
     }));
   });
   return writeXyz(frames);

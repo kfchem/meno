@@ -7,9 +7,11 @@ import type { ShowBox } from "../../utils/viewShow";
 import { bondPtOf, labelPtOf, wordsKept } from "../../restyle";
 import { restyledDrawn } from "../../utils/copyPaste";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
-import { bondKindPatch, type BondKindName } from "../../utils/bondKinds";
+import { bondKeyPatch, bondKindPatch, patchAlike, patchChangesNothing, type BondKey, type BondKindName } from "../../utils/bondKinds";
 import { gestureStep } from "../../../../../lib/doc/document";
 import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
+import { newBondFrom } from "../../utils/geometry";
+import { bondLengthFrom } from "../../utils/magnified";
 import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
 import { useReadings } from "../../../../../lib/calc/readings";
@@ -174,6 +176,16 @@ export const createModelSlice = (
     doc.edit("merge atoms", (d) =>
       ops.replaceDraggedAtomWith(d, movingId, targetId),
     );
+  },
+
+  bondOut: (id: number, toward: { x: number; y: number }) => {
+    const { model } = get();
+    const end = newBondFrom(model.atoms, model.bonds, id, toward, bondLengthFrom(model.atoms, id));
+    if (!end) return null;
+    // (one gesture, one undo step: the atom and its bond together - or the bond alone, onto the atom it ends on)
+    const near = get().findAtomNear(end.x, end.y, NOMINAL_BOND_LENGTH * 0.3, id);
+    if (near != null) return get().connectAtoms(id, near, 1) == null ? null : near;
+    return get().addAtomBonded(id, end.x, end.y, "C", 1);
   },
 
   findAtomNear: (
@@ -405,6 +417,24 @@ export const createModelSlice = (
     doc.edit("change bonds' kind", (d) => ids.reduce((acc, id) => ops.updateBond(acc, id, patch), d));
   },
 
+  // (a bond key with the pointer on a bond: what it makes of that bond, made of it - and of every bond selected, where it is
+  //  among them - one step; nothing, where it would change nothing)
+  bondKey: (id: number, key: BondKey) => {
+    const { model, sel } = get();
+    const bond = model.bonds.find((b) => b.id === id);
+    if (!bond) return false;
+    const patch = bondKeyPatch(key, bond, model.atoms, model.bonds);
+    const ids = sel.bonds.has(id) ? [...sel.bonds] : [id];
+    // (each bond's own narrow end kept, or turned round, as the one pressed on has its: utils/bondKinds `patchAlike`)
+    const patchOf = (i: number) => {
+      const other = model.bonds.find((b) => b.id === i);
+      return other ? patchAlike(patch, bond, other, model.bonds) : patch;
+    };
+    if (ids.every((i) => patchChangesNothing(model.bonds.find((b) => b.id === i) ?? patch, patchOf(i)))) return false;
+    doc.edit("change bonds' kind", (d) => ids.reduce((acc, i) => ops.updateBond(acc, i, patchOf(i)), d));
+    return true;
+  },
+
   setBondOrder: (id: number, order: Bond["order"]) => {
     doc.edit("change bond order", (d) => ops.updateBond(d, id, { order }));
   },
@@ -417,15 +447,6 @@ export const createModelSlice = (
 
   setBondStereo: (id: number, stereo: NonNullable<Bond["stereo"]>) => {
     doc.edit("change stereo", (d) => ops.updateBond(d, id, { stereo }));
-  },
-
-  setBondStereoOrient: (
-    id: number,
-    orient: NonNullable<Bond["stereoOrient"]>,
-  ) => {
-    doc.edit("change stereo", (d) =>
-      ops.updateBond(d, id, { stereoOrient: orient }),
-    );
   },
 
   /**
@@ -490,6 +511,8 @@ export const createModelSlice = (
           nextInkId: (drawn.inks ?? []).length + 1,
           // (its atom maps between structures, as it was saved: what they show is on its drawing and its molecules already)
           ...(ws.structureMaps?.length ? { structureMaps: ws.structureMaps, nextStructureMapId: ws.structureMaps.length + 1 } : {}),
+          conversations: (ws.conversations ?? []).map((c, i) => ({ ...c, id: i + 1 })),
+          nextConversationId: (ws.conversations ?? []).length + 1,
         },
         // (a file saved without one: Settings' style, set as it is - fixed, not converted; opened in a tab, no change made)
         ws.style ?? useAppSettings.getState().drawingStyle,

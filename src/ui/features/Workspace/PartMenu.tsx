@@ -7,10 +7,11 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode 
 import { CheckIcon } from "@heroicons/react/24/outline";
 import { BOND_ICONS, MENU_ICONS } from "./menuIcons";
 import { withRules } from "./menuRules";
-import { BOND_KIND_NAMES, COMMON_BOND_KINDS, OTHER_BOND_KINDS, type BondKindName } from "./utils/bondKinds";
+import { BOND_KIND_KEYS, BOND_KIND_NAMES, COMMON_BOND_KINDS, OTHER_BOND_KINDS, type BondKindName } from "./utils/bondKinds";
 import { swallowPress } from "./utils/press";
 import { guideNotice } from "../../../lib/guide/guide";
 import { MAGNIFICATIONS, magnificationText } from "./utils/magnified";
+import { arrowMovesMenu, wheelClosesMenu } from "./utils/menuKeys";
 
 /**
  * What was right-clicked, where in the canvas the menu opens, and how big
@@ -265,12 +266,14 @@ export default function PartMenu({
   captionAlign?: { now: "left" | "center" | "right" | "justify"; set: (align: "left" | "center" | "right" | "justify") => void };
   /**
    * What the words right-clicked can do besides (docs/EDITOR-2D.md,
-   * *Text*): a size, line spacing and typeface of their own, chosen on a card; all their letters bold,
-   * in italics, raised or lowered - ticked where all are already; their
-   * lines a list, or plain again.
+   * *Text*): a size, line spacing and typeface of their own, under the
+   * menu's icons (`WordsFont`); all their letters bold, in italics, raised
+   * or lowered - ticked where all are already; their lines a list, or plain
+   * again.
    */
   words?: {
-    onFont: () => void;
+    /** Their size, line spacing and typeface (`WordsFont`), placed under the icons. */
+    font: ReactNode;
     bold: boolean;
     italic: boolean;
     list: boolean;
@@ -471,12 +474,15 @@ export default function PartMenu({
   const [more, setMore] = useState(() => !!bondKind?.current && OTHER_BOND_KINDS.includes(bondKind.current));
   // the magnifications offered, as "Magnification" is pressed
   const [magnifying, setMagnifying] = useState(false);
-  // the width it came out at, so that the whole of it stays in the canvas
+  // the width and height it came out at, so that the whole of it stays in the canvas (before it is drawn: no jump)
   const [width, setWidth] = useState(WIDTH);
+  const [tall, setTall] = useState<number | null>(null);
   useLayoutEffect(() => {
-    // (the same width again changes nothing: React leaves it be)
+    // (the same again changes nothing: React leaves it be)
     const w = ref.current?.offsetWidth;
     if (w) setWidth(w);
+    const h = ref.current?.offsetHeight;
+    if (h) setTall(h);
   }, [target, radical]);
   // (going, chosen from or closed: it does nothing more as it fades - theme/leaving)
   const { leaving, held } = useLeaving();
@@ -487,6 +493,8 @@ export default function PartMenu({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
       if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      // (in a field of the menu's - a size typed - the keys are the field's)
+      if (!arrowMovesMenu(e.target)) return;
       e.preventDefault();
       const buttons = [...(ref.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? [])];
       const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
@@ -501,15 +509,19 @@ export default function PartMenu({
       swallowPress(e);
       onClose();
     };
+    // (a list scrolled inside it - the typefaces' - is no turn of the wheel elsewhere)
+    const onWheel = (e: WheelEvent) => {
+      if (wheelClosesMenu(e.target, ref.current)) onClose();
+    };
     window.addEventListener("keydown", onKey);
     window.addEventListener("pointerdown", onPress, true);
-    window.addEventListener("wheel", onClose, true);
+    window.addEventListener("wheel", onWheel, true);
     // (the keys the menu's - arrows go through its items from the first - with none of them lit as it opens)
     ref.current?.focus();
     return () => {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("pointerdown", onPress, true);
-      window.removeEventListener("wheel", onClose, true);
+      window.removeEventListener("wheel", onWheel, true);
     };
   }, [onClose, leaving]);
 
@@ -715,7 +727,6 @@ export default function PartMenu({
           { name: "Edit text", keys: "", run: onEditText, icon: MENU_ICONS.edit },
           ...(words
             ? [
-                { name: "Font…", keys: "", run: words.onFont, icon: MENU_ICONS.size },
                 { name: "Bold", keys: shortcut("B"), run: words.onBold, icon: MENU_ICONS.bold, checked: words.bold },
                 { name: "Italic", keys: shortcut("I"), run: words.onItalic, icon: MENU_ICONS.italic, checked: words.italic },
                 { name: "Bullets", keys: "", run: words.onList, icon: MENU_ICONS.bullets, checked: words.list },
@@ -940,7 +951,7 @@ export default function PartMenu({
           ...(target.kind === "bond" && bondKind
             ? [
                 // a bond's kinds first, as icons; the other ways it is drawn as a compact row under them
-                ...COMMON_BOND_KINDS.map((k): Item => ({ name: BOND_KIND_NAMES[k], keys: "", run: () => bondKind.choose(k), icon: BOND_ICONS[k], checked: bondKind.current === k })),
+                ...COMMON_BOND_KINDS.map((k): Item => ({ name: BOND_KIND_NAMES[k], keys: BOND_KIND_KEYS[k] ?? "", run: () => bondKind.choose(k), icon: BOND_ICONS[k], checked: bondKind.current === k })),
                 { name: "More kinds of bond", keys: "", run: () => setMore((m) => !m), icon: BOND_ICONS.more, checked: more, keep: true },
                 ...OTHER_BOND_KINDS.map((k): Item => ({ name: BOND_KIND_NAMES[k], keys: "", run: () => bondKind.choose(k), icon: BOND_ICONS[k], checked: bondKind.current === k, compact: true })),
               ]
@@ -975,8 +986,12 @@ export default function PartMenu({
   // (a note under a command, said in as many lines as it takes at the menu's width)
   const noteOf = (text?: string) => (text ? Math.ceil(text.length / NOTE_CHARS) * NOTE_LINE + 6 : 0);
   const stepNote = target.kind === "step" ? step?.note : undefined;
-  const height =
+  // (words' size, line spacing and typeface, under the icons)
+  const font = target.kind === "caption" ? words?.font : undefined;
+  // (reckoned from its rows, and as it came out once laid out - the words' font rows, say - the larger: a row opened since, Magnification's, reckoned)
+  const reckoned =
     (row.length ? ROW + 9 : 0) + noteOf(stepNote) + (compact.length ? ROW2 + 4 : 0) + (magnifying ? ROW2 + 4 : 0) + list.length * ITEM + list.reduce((n, i) => n + noteOf(i.note), 0) + list.filter((i) => i.divider).length * 9 + 12;
+  const height = Math.max(tall ?? 0, reckoned);
   const run = (item: Item) => () => {
     if (!item.keep) onClose();
     item.run();
@@ -1076,6 +1091,12 @@ export default function PartMenu({
               {item.icon}
             </button>
           ))}
+        </div>
+      )}
+      {font && (
+        // (over the items after it: the typefaces' list opens across them)
+        <div role="group" aria-label="Font" className="relative z-10 pb-1 mb-1 border-b border-gh-line">
+          {font}
         </div>
       )}
       {/* (what running the step drops, said before it is pressed: as wide as the menu, never widening it) */}

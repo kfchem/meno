@@ -9,6 +9,7 @@ import type { Reader } from "./client";
 import type { ReaderOutput } from "./output";
 import { pack, unpack } from "./packed";
 import type { MenoQuestion } from "./menoReads";
+import type { GridPlace } from "./grids";
 
 type Answer = { id: number; ok: boolean; result?: unknown; error?: string };
 
@@ -47,6 +48,10 @@ function ask(question: MenoQuestion): Promise<unknown> {
     worker!.postMessage({ id, ...question });
   });
 }
+
+/** Orbital `k` of a wavefunction a reader gave (./expansion), drawn on `grid` in Meno's reading worker once the orbitals offered (`block`) are found orthonormal. */
+export const drawOrbital = (expansion: unknown, k: number, block: number[], grid?: GridPlace): Promise<unknown> =>
+  ask({ kind: "", op: "draw", name: "", text: "", expansion, k, block, ...(grid ? { grid } : {}) });
 
 /** Meno's own reading, as a `Reader`. It tells no kind by asking: Meno's kinds are told by their marks and layouts (lib/io/kinds). */
 export function menoReader(): Reader {

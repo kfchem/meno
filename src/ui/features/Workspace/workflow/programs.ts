@@ -5,7 +5,7 @@
  * says it did. Plain data, checked on the way in, whoever sent it; the
  * runs themselves are the store's (store/slices/workflowSlice).
  */
-import { isId } from "../../../../lib/plugins/manifest";
+import { isId, type SolvationDecl } from "../../../../lib/plugins/manifest";
 import { valueText } from "../../../../lib/calc/results";
 import { speciesOf, type WrittenMolecule } from "../../../../lib/io/writers";
 import { ENTRY_SCHEMA, geometryKey, type By, type Property, type Restraint } from "../../../../lib/entry";
@@ -23,10 +23,13 @@ import { convergedAt, convergedOf } from "./converged";
 import { inputOf, type Flow } from "./flow";
 import { levelKey, levelSaid, matchesOf, mostOf, pairEntries, PATH_PAIR, sideUnlike, type PairAs } from "./pairs";
 import type { OptionValues } from "../../../../lib/options";
+import { HOLDS_RESTRAINTS, type HeldKind } from "../../../../lib/plugins/steps";
 import { bondedPairs, bondRadii } from "../../../../utils/structureParsers";
 import type { Worked } from "./run";
 import { failureKindOf, WORDS_MOST, type Failure, type FailureKind } from "./failures";
-import { inputsOf, kindInfo, type Holds3D, type StepKind } from "./kinds";
+import { HOLD_OPTION, inputsOf, kindInfo, type Holds3D, type StepKind } from "./kinds";
+import { keptFrames, keptMade, type MadeChecks } from "../../../../lib/chem/metalHolds";
+import { partsOf, partsSideBySide } from "../chem/partsApart";
 
 /**
  * An entry as a plugin is given it: Meno's plain data - its atoms, each its
@@ -432,7 +435,7 @@ function keptAnew(entry: SetEntry, xyz: readonly number[], charge?: number | nul
  * geometry, as far as it came, is the entry of the step's Failed exit -
  * never passed on as a minimum (until 2026-10-22 it was).
  */
-export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, readers: readonly string[], source?: CalcSource): Worked | Failure {
+export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, readers: readonly string[], source?: CalcSource, held: readonly number[] = []): Worked | Failure {
   const n = entry.atoms.length;
   if (out.atoms.length !== n || out.atoms.some((el, i) => el !== entry.atoms[i].el)) return { kind: "wrong-molecule", why: "What came back is not the molecule that went" };
   const frames = out.frames.filter((f) => f.length === 3 * n && f.every(Number.isFinite));
@@ -442,7 +445,14 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
   // (an optimisation's way there - to a minimum, or to a saddle point - its frames before its last)
   const optimising = kind === "optimise" || kind === "saddle-point";
   const path = optimising && frames.length > 1 ? frames.slice(0, -1) : undefined;
-  const calc = calcOf(out, readers, source);
+  // (atoms held where they stood as it optimised, where it was asked to: said in its calculation's line - and in how it converged)
+  const holding = (kind === "optimise" || kind === "saddle-point") && held.length ? [...held] : undefined;
+  const read = calcOf(out, readers, source);
+  const calc = read && holding ? { ...read, held: holding } : read;
+  // (each atom held where it stood, as the program gave it back: one moved - its program, or its optimiser, not holding it -
+  //  fails the entry, never passed on as held)
+  const moved = holding?.find((a) => Math.hypot(last[3 * a] - entry.xyz[3 * a], last[3 * a + 1] - entry.xyz[3 * a + 1], last[3 * a + 2] - entry.xyz[3 * a + 2]) > HELD_MOVED_MOST);
+  if (moved != null) return { kind: "failed", why: `Atom ${moved + 1} moved though held` };
   if (kind === "path-search") return pathWorked(entry, out, frames, energies, calc);
   if (kind === "energy") return singlePointWorked(entry, last, energies, calc);
   if (kind === "reaction-path") return reactionPathWorked(entry, out, frames, energies, calc);
@@ -459,11 +469,15 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
   const converged = failed
     ? undefined
     : kind === "optimise" && out.optimised === true
-      ? convergedAt("optimisation", last)
+      ? holding
+        ? convergedAt("optimisation with atoms held", last, holding)
+        : convergedAt("optimisation", last)
       : kind === "saddle-point" && out.optimised === true
-        ? convergedAt("saddle point optimisation", last)
+        ? holding
+          ? convergedAt("saddle point optimisation with atoms held", last, holding)
+          : convergedAt("saddle point optimisation", last)
         : kind === "frequencies" && was && sameShape(entry.xyz, last)
-          ? convergedAt(was.how, last)
+          ? convergedAt(was.how, last, was.held)
           : undefined;
   return {
     // (a failed run's entry taken as a start geometry alone: nothing of it a result - its energy, calculation and mark dropped)
@@ -684,6 +698,79 @@ export function passedSaid(kind: StepKind, count: number): string | null {
 }
 
 /**
+ * How far, in Å, an atom held where it stood may end from where it was before it is taken for one that moved (`workedOf`):
+ * 1e-4 Å - far above what the programs' printed coordinates round to (six decimals or more), far below any step an
+ * optimisation takes (found in review, 2026-11-06).
+ */
+const HELD_MOVED_MOST = 1e-4;
+
+/** The kinds of restraint a step of `kind` is asked to hold (`HOLD_OPTION`): none, or its atoms fixed. */
+export const heldAsked = (kind: StepKind, options: OptionValues): HeldKind[] => (HOLDS_RESTRAINTS.includes(kind) && options[HOLD_OPTION.id] === "fixed" ? ["fixed"] : []);
+
+/** An entry's restraints, as Restraints and Torsion restraints left them (lib/entry `Restraint`): none where it carries none. */
+function restraintsCarried(e: SetEntry): readonly Restraint[] {
+  const held = e.properties?.restraints;
+  return held?.status === "computed" && typeof held.value === "object" && held.value !== null && "restraints" in held.value ? held.value.restraints : [];
+}
+
+/** The atoms an entry's restraints fix where they stand, from 0, each once and in order: none where they fix none. */
+export const fixedAtoms = (e: SetEntry): number[] => [...new Set(restraintsCarried(e).flatMap((r) => (r.kind === "fixed" ? r.atoms : [])))].sort((a, b) => a - b);
+
+/** A kind of restraint by what it holds, as a chemist says it. */
+const RESTRAINT_SAID: Record<Restraint["kind"], string> = { distance: "distances", dihedral: "torsions", fixed: "atoms fixed" };
+
+/**
+ * Why a step asked to hold an entry's restraints (`heldAsked`) refuses it: a
+ * kind of restraint it carries that the step does not hold - its distances,
+ * its torsions - named, never left unheld unsaid. None where it may run:
+ * nothing asked held, or all it carries held.
+ */
+export function heldRefused(e: SetEntry, held: readonly HeldKind[]): string | null {
+  if (!held.length) return null;
+  const not = [...new Set(restraintsCarried(e).map((r) => r.kind))].filter((k) => !(held as readonly string[]).includes(k));
+  if (!not.length) return null;
+  return `Its restraints hold ${not.map((k) => RESTRAINT_SAID[k]).join(" and ")}, which this step does not hold - only atoms fixed: take them off (Restraints), or hold none`;
+}
+
+/**
+ * The solvation a step's options ask for, in the words its program says
+ * one it ran in (`SolvationDecl`): "none" where they ask for none, the
+ * gas phase; else its `says` with each option's value put in - "ALPB(water)".
+ * Unsaid where the step's manifest says no solvation, or where an option it
+ * names has no value - never words with a gap in them; the options as a run
+ * takes them have every value, their defaults filled in (kinds `optionsOf`).
+ */
+export function solvationAsked(decl: SolvationDecl | undefined, options: OptionValues): string | undefined {
+  if (!decl) return undefined;
+  if (String(options[decl.none.id]) === decl.none.is) return "none";
+  const named = [...decl.says.matchAll(/\{([^{}]*)\}/g)].map((m) => m[1]);
+  if (named.some((id) => options[id] == null)) return undefined;
+  return decl.says.replace(/\{([^{}]*)\}/g, (_, id: string) => String(options[id]));
+}
+
+/** A solvation in words: "none", the gas phase. */
+const solvationSaid = (s: string) => (s === "none" ? "the gas phase" : s);
+
+/**
+ * Why what a job gave is not of the solvation asked (docs/WORKFLOWS.md,
+ * *Solvation as asked*), whatever program ran it - or none. Its output says
+ * the solvation it ran in (`ReaderOutput.solvation`); that is as asked
+ * where it is the same words, in any case, or begins with them and says
+ * more after a comma - "ALPB(water), reference state gsolv [1 M
+ * gas/solution]" is ALPB(water); never more without the comma, which may
+ * be another solvent's name going on. The gas phase is "none" alone: there
+ * is nothing of a solvation to say more of. An output that does not say
+ * its solvation is not held to it: its calculation says it was not stated.
+ */
+export function notAsAsked(asked: string | undefined, said: string | null | undefined): Failure | null {
+  if (asked == null || said == null) return null;
+  const a = asked.trim().toLowerCase();
+  const s = said.trim().toLowerCase();
+  if (s === a || (a !== "none" && s.startsWith(`${a},`))) return null;
+  return { kind: "refused", why: `It ran in ${solvationSaid(said.trim())}, not in ${solvationSaid(asked)} as asked` };
+}
+
+/**
  * An entry's conformers, as a conformer search worked them out: each
  * geometry it gave a conformer of the entry's compound, numbered in order,
  * with its energy - and what the calculation was, kept with each, what it
@@ -693,29 +780,48 @@ export function passedSaid(kind: StepKind, count: number): string | null {
  * another's (`partOf`); each linked to the structure drawn as `workedOf`
  * keeps it (`keptAnew`).
  */
-export function conformersWorked(entry: SetEntry, out: ReaderOutput, readers: readonly string[], source?: CalcSource): Worked[] | Failure {
+export function conformersWorked(entry: SetEntry, out: ReaderOutput, readers: readonly string[], source?: CalcSource, checks?: MadeChecks): Worked[] | Failure {
   const n = entry.atoms.length;
   if (out.atoms.length !== n || out.atoms.some((el, i) => el !== entry.atoms[i].el)) return { kind: "wrong-molecule", why: "What came back is not the molecule that went" };
-  const frames = out.frames.filter((f) => f.length === 3 * n && f.every(Number.isFinite));
-  if (!frames.length) return { kind: "no-geometry", why: "It found no conformer" };
-  const energies = out.energies?.length === frames.length && out.energies.every(Number.isFinite) ? out.energies : undefined;
-  // (the program's own populations, where it gives one for each - and each one's degeneracy, a whole number)
-  const shares = out.populations?.length === frames.length && out.populations.every((p) => Number.isFinite(p) && p >= 0) ? out.populations : undefined;
-  const degeneracies = out.degeneracies?.length === frames.length && out.degeneracies.every((d) => Number.isInteger(d) && d >= 1) ? out.degeneracies : undefined;
+  const whole = out.frames.filter((f) => f.length === 3 * n && f.every(Number.isFinite));
+  if (!whole.length) return { kind: "no-geometry", why: "It found no conformer" };
+  const given = out.energies?.length === whole.length && out.energies.every(Number.isFinite) ? out.energies : undefined;
+  // (those Meno's checks set aside, where it gives them: lib/chem/metalHolds `keptMade`)
+  let kept: { frames: number[][]; energies?: number[]; how?: { label: string; text: string }[] };
+  try {
+    kept = keptMade({ atoms: entry.atoms, frames: whole, ...(given ? { energies: given } : {}) }, checks ?? null);
+    // (a structure of more than one part - a salt - its parts side by side, where Meno checks what the search made: chem/partsApart)
+    if (checks) kept = partsSideBySide({ atoms: entry.atoms, ...kept }, partsOf(entry.atoms, entry.bonds));
+  } catch (e) {
+    return { kind: "no-geometry", why: e instanceof Error ? e.message : String(e) };
+  }
+  const { frames, energies } = kept;
+  // (the program's own populations, where it gives one for each and Meno set none aside - shares of all it made are no
+  //  shares of fewer, so where any was set aside they are not carried - and each one's degeneracy, a whole number, of
+  //  those kept)
+  const at = keptFrames(whole, checks ?? null);
+  const shares = at.length === whole.length && out.populations?.length === whole.length && out.populations.every((p) => Number.isFinite(p) && p >= 0) ? out.populations : undefined;
+  const degeneracies = out.degeneracies?.length === whole.length && out.degeneracies.every((d) => Number.isInteger(d) && d >= 1) ? at.map((i) => out.degeneracies![i]) : undefined;
   const calc = calcOf(out, readers, source);
+  // (what Meno's checks set aside, said in how each one kept was made)
+  const aside = kept.how?.filter((r) => r.label === "Set aside") ?? [];
   // (a search of its own: all the conformers it found, whole - whatever the entry it began from was a part of)
   const { partOf: _part, ...from } = entry;
-  return frames.map((f, k) => ({
-    ...anewWithoutEnergy(from),
+  return frames.map((f, k) => {
     // (each still linked to the structure drawn the entry was made from, where it is still that compound)
-    ...keptAnew(entry, f, calc?.charge),
-    number: k + 1,
-    xyz: [...f],
-    ...(energies ? { energy: energies[k] } : {}),
-    ...(shares ? { share: shares[k] } : {}),
-    ...(degeneracies ? { degeneracy: degeneracies[k] } : {}),
-    calc: k === 0 ? calc : { ...calc, results: undefined },
-  }));
+    const anew = keptAnew(entry, f, calc?.charge);
+    return {
+      ...anewWithoutEnergy(from),
+      ...anew,
+      ...(aside.length ? { keep: { ...anew.keep, made: { ...anew.keep?.made, how: [...(anew.keep?.made?.how ?? []), ...aside] } } } : {}),
+      number: k + 1,
+      xyz: [...f],
+      ...(energies ? { energy: energies[k] } : {}),
+      ...(shares ? { share: shares[k] } : {}),
+      ...(degeneracies ? { degeneracy: degeneracies[k] } : {}),
+      calc: k === 0 ? calc : { ...calc, results: undefined },
+    };
+  });
 }
 
 /**

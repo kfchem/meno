@@ -13,9 +13,10 @@ const MIB_PER_GB = 1024;
  * Jobs in Settings, *Calculations* (docs/WORKFLOWS-FOUNDATION.md, *This
  * computer's runner knows its resources*): the cores each job takes, the
  * cores and memory this computer's jobs may use at once - all its cores and
- * three quarters of its memory unless set - and the files of those
- * finished - how many, and how much they hold - cleared. Jobs run as many
- * at once as fit.
+ * three quarters of its memory unless set - whether the computer is kept
+ * awake while their programs run - so unless turned off - and the files
+ * of those finished - how many, and how much they hold - cleared. Jobs run
+ * as many at once as fit.
  */
 export default function JobSettings() {
   const calculations = useAppSettings((s) => s.calculations);
@@ -29,25 +30,28 @@ export default function JobSettings() {
   const running = runningOf(calculations, computer.cores);
   const gb = (mib: number) => Math.round((mib / MIB_PER_GB) * 10) / 10;
   const options: Option[] = [
-    { id: "cores", label: "Cores for each job", type: "number", default: running.cores, min: 1, max: limits.cores, step: 1, unit: `of ${limits.cores}` },
-    { id: "cores-all", label: "Cores jobs may use", type: "number", default: computer.cores, min: 1, max: computer.cores, step: 1, unit: `of ${computer.cores}` },
+    { id: "cores", label: "Cores for each job", type: "number", default: running.cores, min: 1, max: limits.cores, step: 1, whole: true, unit: `of ${limits.cores}` },
+    { id: "cores-all", label: "Cores jobs may use", type: "number", default: computer.cores, min: 1, max: computer.cores, step: 1, whole: true, unit: `of ${computer.cores}` },
     ...(computer.memory > 0
       ? [{ id: "memory-all", label: "Memory jobs may use", type: "number" as const, default: gb((computer.memory * 3) / 4), min: 0.5, max: gb(computer.memory), step: 0.5, unit: `GB of ${gb(computer.memory)}` }]
       : []),
+    { id: "awake", label: "Keep the computer awake while jobs run", type: "switch", default: true },
   ];
-  const values: OptionValues = { cores: running.cores, "cores-all": limits.cores, ...(computer.memory > 0 ? { "memory-all": gb(limits.memory) } : {}) };
+  const values: OptionValues = { cores: running.cores, "cores-all": limits.cores, ...(computer.memory > 0 ? { "memory-all": gb(limits.memory) } : {}), awake: !calculations.sleepWhileJobsRun };
   const change = (v: OptionValues) => {
     const whole = (n: unknown, most: number) => (typeof n === "number" && Number.isFinite(n) ? Math.min(Math.max(1, Math.round(n)), most) : undefined);
     // (each kept as it was set, or as it was where it was not changed - unset, the default, where it comes to that)
     const cores = v.cores !== values.cores ? whole(v.cores, computer.cores) : calculations.cores;
     const all = v["cores-all"] !== values["cores-all"] ? whole(v["cores-all"], computer.cores) : calculations.coresAll;
     const memory = v["memory-all"] !== values["memory-all"] && typeof v["memory-all"] === "number" ? whole(v["memory-all"] * MIB_PER_GB, computer.memory) : calculations.memoryAll;
-    const { cores: _c, coresAll: _a, memoryAll: _m, ...rest } = calculations;
+    const { cores: _c, coresAll: _a, memoryAll: _m, sleepWhileJobsRun: _s, ...rest } = calculations;
     setCalculations({
       ...rest,
       ...(cores != null ? { cores } : {}),
       ...(all != null && all !== computer.cores ? { coresAll: all } : {}),
       ...(memory != null ? { memoryAll: memory } : {}),
+      // (kept awake unless turned off: only the off is kept)
+      ...(v.awake === false ? { sleepWhileJobsRun: true as const } : {}),
     });
   };
 

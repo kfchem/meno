@@ -50,8 +50,8 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
   return takes.includes(holds) || (takes.includes("table") && (holds === "molecules" || holds === "conformers"));
 }
 
-/** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart, levels, a tag, a plus in a circle (a charge), a link, arrows apart (a measure), a numbered list (a rank), two tables linked (a join), a number typed in a field (a number), two values summed (a sum), levels made one (an ensemble). */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "saddle" | "descent" | "moved" | "mapped" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered" | "heldMinimum" | "ensemble" | "height";
+/** Which icon a kind has (workflow/icons: QuickAdd, a step's card), each kind its own: what each shows, docs/WORKFLOWS.md, *Kinds of step*. */
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "saddle" | "descent" | "moved" | "mapped" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered" | "heldMinimum" | "ensemble" | "height" | "modeOn";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -114,6 +114,8 @@ export type KindInfo = {
   kind: StepKind;
   name: string;
   icon: StepIcon;
+  /** Which of the kinds it stands among where they are listed (Quick Add's calculations): what makes or sorts structures, energies and what comes of them, paths and what is measured, charts and pictures - each family apart by a thin rule. */
+  family: StepFamily;
   /** What it takes: kinds of set, a table, a number. */
   takes: readonly ValueKind[];
   /** What it gives, for what it took: `same`, the kind of set that came in; a chart (Meno's), or `pictures` (Render's), which no step takes. */
@@ -153,6 +155,25 @@ export type KindInfo = {
  */
 const FAILED: StepExit = { id: "failed", name: "Failed", gives: "same", of: "failed" };
 
+/**
+ * *Hold its restraints*: whether a step that may hold an entry's restraints
+ * (lib/plugins/steps `HOLDS_RESTRAINTS`), its plugin saying its program can
+ * (`StepDecl.restraints`), holds them as it runs - no, by default: an
+ * optimisation free of them, as one after a restrained search is; or its
+ * atoms fixed where they stand. Meno's option, offered beside the plugin's
+ * (doers `optionsFor`), and given to it with them.
+ */
+export const HOLD_OPTION: Option = {
+  id: "hold",
+  label: "Hold its restraints",
+  type: "choice",
+  choices: [
+    { value: "no", label: "No" },
+    { value: "fixed", label: "Atoms fixed" },
+  ],
+  default: "no",
+};
+
 /** How a program step of more than one input pairs what comes into them (workflow/pairs): in order, each with each, or matched on a property. */
 const PAIRS_OWN: readonly Option[] = [
   {
@@ -174,22 +195,22 @@ const MOST_OWN: Option = { id: "most", label: "At most, pairs", type: "number", 
 
 export const KINDS: readonly KindInfo[] = [
   // (new structures from nothing that comes in: a generative model's, as its plugin asks it, each drawn from the SMILES it gave - no input, so no port)
-  { kind: "generate", name: "Generate", icon: "sparks", takes: [], inputs: [], gives: "structures", runs: "program", made: "Generated" },
-  { kind: "conformers", name: "Conformers", icon: "rings", takes: ["structures", "molecules", "conformers"], gives: "conformers", runs: "program", made: "Conformers", whole: true, others: [{ ...FAILED, gives: "molecules" }] },
-  { kind: "optimise", name: "Optimise", icon: "curve", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Optimised", whole: true, others: [FAILED] },
+  { kind: "generate", name: "Generate", icon: "sparks", family: "structures", takes: [], inputs: [], gives: "structures", runs: "program", made: "Generated" },
+  { kind: "conformers", name: "Conformers", icon: "rings", family: "structures", takes: ["structures", "molecules", "conformers"], gives: "conformers", runs: "program", made: "Conformers", whole: true, others: [{ ...FAILED, gives: "molecules" }] },
+  { kind: "optimise", name: "Optimise", icon: "curve", family: "energies", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Optimised", whole: true, others: [FAILED] },
   // (each entry minimised in a force field with its restraints held - Restraints', Torsion restraints' - as its plugin holds them: docs/PLUGINS.md)
-  { kind: "minimise", name: "Minimise with restraints", icon: "heldMinimum", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Minimised", whole: true, others: [FAILED] },
-  { kind: "energy", name: "Energy", icon: "level", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Energies", whole: true, others: [FAILED] },
-  { kind: "frequencies", name: "Frequencies", icon: "wave", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Frequencies", whole: true, others: [FAILED] },
+  { kind: "minimise", name: "Minimise with restraints", icon: "heldMinimum", family: "energies", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Minimised", whole: true, others: [FAILED] },
+  { kind: "energy", name: "Energy", icon: "level", family: "energies", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Energies", whole: true, others: [FAILED] },
+  { kind: "frequencies", name: "Frequencies", icon: "wave", family: "energies", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Frequencies", whole: true, others: [FAILED] },
   // (non-covalent interactions: each molecule with a surface coloured by how they attract or repel - docs/NCI.md)
-  { kind: "nci", name: "NCI", icon: "cloud", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Non-covalent interactions", whole: true, others: [FAILED] },
+  { kind: "nci", name: "NCI", icon: "cloud", family: "paths", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Non-covalent interactions", whole: true, others: [FAILED] },
   // (each entry a picture of its own, in a set of pictures - docs/RENDER.md, *Render as a step*)
   {
     // (a path between two structures of the same atoms in one numbering - each start paired with an end, as its own options say - its highest
     //  point refined: one molecule each, its frames the path, its entry the point refined; Meno judges none of them - docs/WORKFLOWS.md)
     kind: "path-search",
     name: "Path search",
-    icon: "path",
+    icon: "path", family: "paths",
     takes: ["molecules", "conformers"],
     gives: "molecules",
     runs: "program",
@@ -207,7 +228,7 @@ export const KINDS: readonly KindInfo[] = [
     //  it as its own options say: one optimisation, nothing else; Meno judges none of them a saddle point - docs/WORKFLOWS.md)
     kind: "saddle-point",
     name: "Optimise to a saddle point",
-    icon: "saddle",
+    icon: "saddle", family: "paths",
     takes: ["molecules"],
     gives: "molecules",
     runs: "program",
@@ -223,12 +244,12 @@ export const KINDS: readonly KindInfo[] = [
   },
   // (from each point given - a saddle point, as its frequencies say - down both ways, as its program follows the reaction path: one molecule
   //  each, its frames the path from one end to the other, its entry the point it started from; Meno judges none of them - docs/WORKFLOWS.md)
-  { kind: "reaction-path", name: "Follow the reaction path", icon: "descent", takes: ["molecules"], gives: "molecules", runs: "program", made: "Reaction paths", others: [FAILED], whole: true },
-  { kind: "render", name: "Render", icon: "picture", takes: ["molecules", "conformers"], gives: "pictures", runs: "program", made: "Rendered", own: renderOptions("picture", [], true) },
+  { kind: "reaction-path", name: "Follow the reaction path", icon: "descent", family: "paths", takes: ["molecules"], gives: "molecules", runs: "program", made: "Reaction paths", others: [FAILED], whole: true },
+  { kind: "render", name: "Render", icon: "picture", family: "charts", takes: ["molecules", "conformers"], gives: "pictures", runs: "program", made: "Rendered", own: renderOptions("picture", [], true) },
   {
     kind: "energy-window",
     name: "Energy window",
-    icon: "band",
+    icon: "band", family: "energies",
     takes: ["conformers", "molecules"],
     gives: "same",
     runs: "entries",
@@ -257,7 +278,7 @@ export const KINDS: readonly KindInfo[] = [
     name: "Duplicates",
     // (a plugin's comparison, of whole molecules - Meno's own, of shapes alone, takes a skeleton)
     whole: true,
-    icon: "copies",
+    icon: "copies", family: "structures",
     takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
@@ -298,7 +319,7 @@ export const KINDS: readonly KindInfo[] = [
   {
     kind: "populations",
     name: "Populations",
-    icon: "bars",
+    icon: "bars", family: "energies",
     takes: ["conformers"],
     gives: "conformers",
     runs: "entries",
@@ -310,7 +331,7 @@ export const KINDS: readonly KindInfo[] = [
     // (entries kept by conditions on their properties, each with its unit - lib/nodes/filter - the rest out of the second exit, each saying why)
     kind: "filter",
     name: "Filter",
-    icon: "sliders",
+    icon: "sliders", family: "structures",
     // (molecules in 3D by their entries' properties; structures drawn by their records')
     takes: ["molecules", "conformers", "structures"],
     gives: "same",
@@ -337,7 +358,7 @@ export const KINDS: readonly KindInfo[] = [
     // (entries ordered by a value they carry and the first N kept - in each group, each value of a property, or of all - lib/nodes/rank; the rest saying their place)
     kind: "rank",
     name: "Rank",
-    icon: "numbered",
+    icon: "numbered", family: "structures",
     takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
@@ -377,7 +398,7 @@ export const KINDS: readonly KindInfo[] = [
     // (from molecules with frames - a path, an optimisation's way down, a scan - the frames asked for, each a molecule of its one geometry)
     kind: "take-frames",
     name: "Take frames",
-    icon: "frames",
+    icon: "frames", family: "structures",
     takes: ["molecules"],
     gives: "molecules",
     runs: "entries",
@@ -401,11 +422,11 @@ export const KINDS: readonly KindInfo[] = [
     ],
     how: (v) => takeFramesHow((v.which as Which) ?? "highest", Number(v.either ?? 1), keptNames(String(v.keep ?? ""))),
   },
-  { kind: "as-conformers", name: "As conformers", icon: "grouped", takes: ["molecules"], gives: "conformers", runs: "entries", made: "Conformers", perceives: "configurations" },
+  { kind: "as-conformers", name: "As conformers", icon: "grouped", family: "structures", takes: ["molecules"], gives: "conformers", runs: "entries", made: "Conformers", perceives: "configurations" },
   {
     kind: "choose",
     name: "Choose one",
-    icon: "pointer",
+    icon: "pointer", family: "structures",
     takes: ["conformers"],
     gives: "molecules",
     runs: "entries",
@@ -431,7 +452,7 @@ export const KINDS: readonly KindInfo[] = [
   {
     kind: "check-structures",
     name: "Check structures",
-    icon: "check",
+    icon: "check", family: "structures",
     takes: ["structures"],
     gives: "structures",
     runs: "entries",
@@ -444,7 +465,7 @@ export const KINDS: readonly KindInfo[] = [
   {
     kind: "stereoisomers",
     name: "Stereoisomers",
-    icon: "twins",
+    icon: "twins", family: "structures",
     takes: ["structures"],
     gives: "structures",
     runs: "entries",
@@ -456,7 +477,7 @@ export const KINDS: readonly KindInfo[] = [
   {
     kind: "descriptors",
     name: "Descriptors",
-    icon: "list",
+    icon: "list", family: "structures",
     takes: ["structures"],
     gives: "structures",
     runs: "program",
@@ -467,7 +488,7 @@ export const KINDS: readonly KindInfo[] = [
   {
     kind: "enumerate",
     name: "Enumerate",
-    icon: "fan",
+    icon: "fan", family: "structures",
     takes: ["structures"],
     gives: "structures",
     runs: "entries",
@@ -534,7 +555,7 @@ export const KINDS: readonly KindInfo[] = [
   {
     kind: "chart",
     name: "Chart",
-    icon: "chart",
+    icon: "chart", family: "charts",
     // (a table - or molecules, seen as one: lib/table moleculesAsTable; or structures drawn, seen as one: structuresTable)
     takes: ["table", "structures"],
     gives: "chart",
@@ -550,7 +571,7 @@ export const KINDS: readonly KindInfo[] = [
     // (docs/WORKFLOWS.md, *Energy diagrams*: each level a molecule's name, at its lowest, relative to one - joined as a table says, or each to the next)
     kind: "energy-diagram",
     name: "Energy diagram",
-    icon: "levels",
+    icon: "levels", family: "charts",
     takes: ["molecules", "conformers", "table"],
     gives: "chart",
     runs: "entries",
@@ -572,7 +593,7 @@ export const KINDS: readonly KindInfo[] = [
     // (each entry given an ID of its own under the name given, which rides along with every entry made from it: two inputs are matched on it later)
     kind: "tag",
     name: "Tag",
-    icon: "tag",
+    icon: "tag", family: "structures",
     takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
@@ -585,7 +606,7 @@ export const KINDS: readonly KindInfo[] = [
     // (each entry's charge and multiplicity set - one left blank as each has it - those whose electrons cannot have them out of Failed, saying why)
     kind: "species",
     name: "Species",
-    icon: "charge",
+    icon: "charge", family: "structures",
     takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
@@ -602,7 +623,7 @@ export const KINDS: readonly KindInfo[] = [
     // (the entries, in the set's order, as one entry - a complex - each part where it stands; none of a part's properties carried, each named)
     kind: "combine",
     name: "Combine",
-    icon: "link",
+    icon: "link", family: "structures",
     takes: ["molecules"],
     gives: "molecules",
     runs: "entries",
@@ -613,7 +634,7 @@ export const KINDS: readonly KindInfo[] = [
     // (distances, angles and dihedrals between atoms numbered from 1, as the card and the 3D view show them, on each entry as properties)
     kind: "measure",
     name: "Measure",
-    icon: "span",
+    icon: "span", family: "paths",
     takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
@@ -650,10 +671,55 @@ export const KINDS: readonly KindInfo[] = [
     },
   },
   {
+    // (what each saddle point's imaginary vibration does to the reacting atoms - those a table wired in names, the bonds an Atom map forms
+    //  or breaks, or atoms typed - written on it for a Filter: every entry kept, Meno judging nothing)
+    kind: "mode-on-atoms",
+    name: "Mode on atoms",
+    icon: "modeOn",
+    family: "paths",
+    takes: ["molecules", "conformers"],
+    gives: "same",
+    runs: "entries",
+    made: "With the mode on atoms",
+    inputs: [
+      { id: ONE_INPUT, name: "Molecules", takes: ["molecules", "conformers"] },
+      { id: "atoms", name: "Atoms", takes: ["table"], optional: true },
+    ],
+    options: [
+      {
+        id: "from",
+        label: "Atoms",
+        type: "choice",
+        choices: [
+          { value: "table", label: "From the table" },
+          { value: "typed", label: "Typed" },
+        ],
+        default: "table",
+      },
+      {
+        id: "which",
+        label: "Rows",
+        type: "choice",
+        choices: [
+          { value: "made", label: "Bonds formed or broken" },
+          { value: "every", label: "Every row" },
+        ],
+        default: "made",
+        when: { id: "from", in: ["table"] },
+      },
+      { id: "rows", label: "Rows matched on (blank: every row)", type: "text", default: "", when: { id: "from", in: ["table"] } },
+      { id: "atoms", label: "Atoms, from 1 (1, 5, 11)", type: "text", default: "", when: { id: "from", in: ["typed"] } },
+      // (no reach is right for every system, and none is given without a basis: typed, a whole number from 0)
+      { id: "reach", label: "Reach: ranks past the atoms' count", type: "text", default: "" },
+    ],
+    how: (v) => modeHow(v),
+    needs: (v) => modeNeeds(v),
+  },
+  {
     // (two sets of one kind made one, First's then Second's - all, or one of each value of a property - the rest out of the second exit, each naming the one kept)
     kind: "merge",
     name: "Merge",
-    icon: "merge",
+    icon: "merge", family: "structures",
     takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
@@ -683,7 +749,7 @@ export const KINDS: readonly KindInfo[] = [
     // (each geometry given a bonding entry's bonds and charges - each with each, or paired on a property - those that cannot be out of the second exit, saying why)
     kind: "rebond",
     name: "Re-bond",
-    icon: "rebond",
+    icon: "rebond", family: "structures",
     takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
@@ -713,7 +779,7 @@ export const KINDS: readonly KindInfo[] = [
     // (whether each geometry is bonded as its reference - paired on a property, or against each, the match named - the same out of the first exit, the rest with their differences out of the second)
     kind: "compare-bonding",
     name: "Compare bonding",
-    icon: "compare",
+    icon: "compare", family: "paths",
     takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
@@ -752,7 +818,7 @@ export const KINDS: readonly KindInfo[] = [
     // (Onto's entries with properties of From's put on, matched on a property both carry - lib/nodes/join - each record as it was; those with nothing put on out of the second exit, each saying why)
     kind: "join",
     name: "Join",
-    icon: "join",
+    icon: "join", family: "structures",
     takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
@@ -773,7 +839,7 @@ export const KINDS: readonly KindInfo[] = [
     // (each saddle point's height above its start - the free energy G, or the electronic energy E - paired as Path search pairs, a conformer set's each conformer one: those it cannot have one out of Failed, each saying why)
     kind: "barrier",
     name: "Barrier",
-    icon: "height",
+    icon: "height", family: "energies",
     takes: ["molecules", "conformers"],
     gives: "molecules",
     runs: "entries",
@@ -815,7 +881,7 @@ export const KINDS: readonly KindInfo[] = [
     // (each entry's restraints from itself: its coordination bonds at a factor of their van der Waals radii together, pairs kept at their distance, atoms fixed - those it cannot have out of Failed, saying why)
     kind: "restraints",
     name: "Restraints",
-    icon: "held",
+    icon: "held", family: "structures",
     takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
@@ -835,7 +901,7 @@ export const KINDS: readonly KindInfo[] = [
     // (each torsion trans across its reference's double bonds that is not trans in the entry held at 180, stronger each time - those already trans out of the second exit)
     kind: "torsion-restraints",
     name: "Torsion restraints",
-    icon: "heldAnti",
+    icon: "heldAnti", family: "structures",
     takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
@@ -866,7 +932,7 @@ export const KINDS: readonly KindInfo[] = [
     // (a number with its unit and what worked it out - the standard-state term from its temperature, by its formula, or one typed - for a step that takes one: Add's)
     kind: "number",
     name: "Number",
-    icon: "number",
+    icon: "number", family: "energies",
     takes: [],
     inputs: [],
     gives: "number",
@@ -895,7 +961,7 @@ export const KINDS: readonly KindInfo[] = [
     // (properties of each entry's own geometry summed, a number wired in besides, into a new one - each part as it was, never one level for the sum: lib/nodes/add)
     kind: "add",
     name: "Add",
-    icon: "sum",
+    icon: "sum", family: "energies",
     takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
@@ -916,7 +982,7 @@ export const KINDS: readonly KindInfo[] = [
     // (each entry mapped onto its reference, atom for atom, hydrogens too, and written in its numbering - a reaction's products onto its reactants, a species' conformers onto it - with the bonds each map forms, breaks or changes, as a table; an entry that does not map, aside with why)
     kind: "atom-map",
     name: "Atom map",
-    icon: "mapped",
+    icon: "mapped", family: "structures",
     takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
@@ -991,7 +1057,7 @@ export const KINDS: readonly KindInfo[] = [
     // (each geometry moved along a vibration - its imaginary one, or one chosen - by an amplitude, the atom moving most by exactly that; one that cannot be, aside with why)
     kind: "displace",
     name: "Displace",
-    icon: "moved",
+    icon: "moved", family: "structures",
     takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
@@ -1019,7 +1085,7 @@ export const KINDS: readonly KindInfo[] = [
     // (each group's free energy over its members - its conformers - on the entry that stands for it, its lowest: lib/nodes/ensemble)
     kind: "ensemble",
     name: "Ensemble energy",
-    icon: "ensemble",
+    icon: "ensemble", family: "energies",
     takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
@@ -1248,6 +1314,10 @@ export function rankHow(v: Record<string, string | number | boolean>): string {
 }
 
 export const kindInfo = (kind: StepKind): KindInfo => KINDS.find((k) => k.kind === kind)!;
+
+/** The families of kinds of step, in the order they are listed. */
+export const STEP_FAMILIES = ["structures", "energies", "paths", "charts"] as const;
+export type StepFamily = (typeof STEP_FAMILIES)[number];
 /** What step `s` still needs of its options before it can run (`KindInfo.needs`), where Meno does it; nothing, where it can run as it is. */
 export const needsOf = (s: { kind: StepKind; options?: Record<string, string | number | boolean> }): string | undefined => {
   const info = kindInfo(s.kind);
@@ -1275,7 +1345,16 @@ export function madeName(kind: StepKind, options: readonly Option[], own: Record
   return made.replace(/\{([a-z0-9-]+)\}/g, (_, id: string) => String(values[id] ?? ""));
 }
 
-/** How a step does its work, in a line: each option that applies (`shownOptions`) by its value, a number with its unit, a choice by its name - one of none, and a number that sets nothing (its `unset`), left out; or as `said` says it (a kind's `how`, where Meno does it). */
+/** What a step's line calls an option: its `brief`, else its label without what it says in brackets. */
+export const briefOf = (o: Option) => o.brief ?? o.label.replace(/\s*\([^)]*\)/g, "").trim();
+
+/**
+ * How a step does its work, in a line: each option that applies (`shownOptions`) - a number by its value with its unit, a
+ * switch on by its label, a choice by its name and what is chosen ("Method: GFN2-xTB"), so that two choices alike never
+ * read as one twice; several choices with one value said once, the options after it ("Set aside: parts, radicals"), after the
+ * rest - so a choice that differs is read first, where a card cuts its line short. One of
+ * none, and a number that sets nothing (its `unset`), left out; or as `said` says it (a kind's `how`, where Meno does it).
+ */
 export function howOf(
   options: readonly Option[],
   own: Record<string, string | number | boolean> | undefined,
@@ -1283,11 +1362,35 @@ export function howOf(
 ): string {
   const values = optionsOf(options, own);
   if (said) return said(values);
-  return shownOptions(options, values)
+  const shown = shownOptions(options, values);
+  // (each choice's value as said, and how many choices say it)
+  const chosen = (o: Option) => (o.type === "choice" && values[o.id] !== "none" ? (o.choices.find((c) => c.value === values[o.id])?.label ?? String(values[o.id])) : null);
+  const alike = new Map<string, Option[]>();
+  for (const o of shown) {
+    const c = chosen(o);
+    if (c != null) alike.set(c, [...(alike.get(c) ?? []), o]);
+  }
+  const said2 = new Set<string>();
+  // (several choices with one value said after the rest: a choice that differs is read first, where a card cuts its line short)
+  const many = (o: Option) => {
+    const c = chosen(o);
+    return c != null && alike.get(c)!.length > 1;
+  };
+  return [...shown.filter((o) => !many(o)), ...shown.filter(many)]
     .flatMap((o) => {
       const v = values[o.id];
       if (o.type === "number") return o.unset !== undefined && v === o.unset ? [] : [`${typeof v === "number" ? numberText(v) : v}${o.unit ? ` ${o.unit}` : ""}`];
-      if (o.type === "choice") return v === "none" ? [] : [o.choices.find((c) => c.value === v)?.label ?? String(v)];
+      if (o.type === "choice") {
+        const c = chosen(o);
+        if (c == null) return [];
+        const all = alike.get(c)!;
+        if (all.length < 2) return [`${briefOf(o)}: ${c}`];
+        if (said2.has(c)) return [];
+        said2.add(c);
+        // (each name as a word in a list: "Radicals" as "radicals", "SMILES" as it is)
+        const lowered = (t: string) => (/^[A-Z][a-z]/.test(t) ? t.charAt(0).toLowerCase() + t.slice(1) : t);
+        return [`${c}: ${all.map((x) => lowered(briefOf(x))).join(", ")}`];
+      }
       if (o.type === "switch") return v ? [o.label] : [];
       return v ? [String(v)] : [];
     })
@@ -1353,6 +1456,9 @@ export function exitOf(kind: StepKind, exit: string): StepExit {
   return exits.find((e) => e.id === exit) ?? exits[0];
 }
 
+/** Where `exit` is among its kind's exits, from 0 - its port's place down the card's right side (look `stepGives`): the first's, where the kind has no such exit, as `exitOf` takes it. */
+export const exitPlace = (kind: StepKind, exit: string): number => Math.max(0, exitsOf(kind).findIndex((e) => e.id === exit));
+
 /** What *Compare bonding* still needs of its options before it can run: a property to pair on, or to write the match as; atoms that read. */
 export function compareNeeds(v: OptionValues): string | undefined {
   if (v.reference === "property" && !String(v.property ?? "").trim()) return "Name the property to pair them on";
@@ -1383,4 +1489,30 @@ export function compareHow(v: OptionValues): string {
     elements ? `passing over ${elements}` : "",
   ].filter(Boolean);
   return said.length ? said.join("; ") : "against each reference";
+}
+
+/** *Mode on atoms*'s options as read: its reach, and its atoms typed (from 0) where they are - or what it still needs. */
+export function modeRead(v: OptionValues): { reach: number; atoms?: number[] } | { why: string } {
+  const r = String(v.reach ?? "").trim();
+  if (!r) return { why: "Give the reach" };
+  if (!/^\d+$/.test(r)) return { why: `"${r}" is no reach: a whole number from 0` };
+  if (v.from !== "typed") return { reach: Number(r) };
+  const typed = String(v.atoms ?? "")
+    .split(/[\s,]+/)
+    .filter(Boolean);
+  if (!typed.length) return { why: "No atoms yet" };
+  const bad = typed.find((t) => !/^\d+$/.test(t) || Number(t) < 1);
+  if (bad) return { why: `"${bad}" is no atom, from 1` };
+  return { reach: Number(r), atoms: typed.map((t) => Number(t) - 1) };
+}
+const modeNeeds = (v: OptionValues): string | undefined => {
+  const r = modeRead(v);
+  return "why" in r ? r.why : undefined;
+};
+/** *Mode on atoms*'s card line: the reach, and what is not the default - atoms typed, every row, rows matched. */
+function modeHow(v: OptionValues): string {
+  const r = modeRead(v);
+  if ("why" in r) return r.why;
+  const from = v.from === "typed" ? `atoms ${String(v.atoms).trim()}` : [v.which === "every" ? "every row" : "", String(v.rows ?? "").trim() ? `rows by ${String(v.rows).trim()}` : ""].filter(Boolean).join(", ");
+  return [`reach ${r.reach}`, from].filter(Boolean).join(", ");
 }

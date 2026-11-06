@@ -7,14 +7,16 @@ use std::{
     process::{Child, ChildStdin, Command, Stdio},
     sync::{Arc, Mutex, MutexGuard, PoisonError},
 };
-use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
 use uuid::Uuid;
 
+mod awake;
+mod catalogue;
 mod ccd;
 mod clipboard;
 mod defaults;
 mod folders;
+mod installed;
 mod fonts;
 #[cfg(windows)]
 mod drop;
@@ -35,6 +37,8 @@ mod tools;
 mod truepath;
 mod update;
 mod windowstate;
+#[cfg(windows)]
+mod keymenu;
 #[cfg(windows)]
 mod ole;
 
@@ -88,17 +92,17 @@ fn setup_purpose(info: &PyEnvInfo) -> Result<String, String> {
 }
 
 // The webview supplies every path these commands use, so each one is checked
-// here: lock files must be bundled resources, venvs must live under the app
-// data dir, and sidecars may only run a venv's Python on a bundled worker
-// script. uv is none of the webview's to name: it is the one pinned in
+// here: lock files must be a plugin's, of its version in use, venvs must live
+// under the app data dir, and sidecars may only run a venv's Python on a
+// plugin's worker script. uv is none of the webview's to name: it is the one pinned in
 // tools.rs, fetched when first needed. See docs/ARCHITECTURE.md.
 /// Python interpreter file names a sidecar may be started with.
 const PYTHON_NAMES: &[&str] = &["python", "python3", "python.exe"];
 /// Interpreter flags allowed before the worker script.
 const PYTHON_FLAGS: &[&str] = &["-u", "-B"];
-/// Where a sidecar's script may be, among the resources: a plugin's folder.
+/// Where a sidecar's script may be, in Meno's local data folder: a plugin's folder in place (installed.rs).
 /// (Meno carries no worker of its own: the console's went with the console.)
-const SIDECAR_SCRIPTS: &[&str] = &["resources/plugins"];
+const SIDECAR_SCRIPTS: &[&str] = &[installed::ROOT];
 
 /// Parse `p` as a path relative to some base directory, rejecting anything
 /// that could escape it: absolute paths, drive/UNC prefixes, `.` and `..`.
@@ -172,28 +176,43 @@ pub(crate) fn plugin_id_ok(id: &str) -> bool {
     id.len() <= 40 && chars.next().is_some_and(first) && chars.all(|c| first(c) || c == '-')
 }
 
-/// A plugin's file, in its folder of its own among the plugins Meno
-/// carries: `resources/plugins/<id>/<file>`. Its id and the file's name.
+/// A plugin's file, in the folder of one of its versions in Meno's local data
+/// folder (installed.rs): `plugins/<id>/<version>/<file>`. Its id and the file's name.
 fn plugin_file(path: &Path) -> Option<(String, String)> {
     let parts: Vec<String> = path.components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect();
     match parts.as_slice() {
-        [r, p, id, file] if r == "resources" && p == "plugins" && plugin_id_ok(id) && !file.is_empty() => Some((id.clone(), file.clone())),
+        [p, id, version, file] if p == installed::ROOT && plugin_id_ok(id) && installed::version_ok(version) && !file.is_empty() => {
+            Some((id.clone(), file.clone()))
+        }
         _ => None,
     }
 }
 
+/// A plugin's file, as `plugin_file` takes its path, in Meno's local data folder `data` - of the version in use
+/// alone: one of another version, or of a plugin not in place, is refused.
+fn plugin_path(data: &Path, rel: &Path) -> Result<PathBuf, String> {
+    let (id, _) = plugin_file(rel).ok_or_else(|| format!("not a plugin's file: {}", rel.display()))?;
+    let dir = installed::dir(&installed::root(data), &id)?;
+    let path = data.join(rel);
+    if path.parent() != Some(dir.as_path()) {
+        return Err(format!("not the version of {id} in use: {}", rel.display()));
+    }
+    Ok(path)
+}
+
 /// Where a plugin's worker runs: a sidecar's script must be a plugin's
-/// `worker.py`, run by the interpreter of that plugin's own environment -
-/// `uv/plugin-<id>/venv` or `pixi/plugin-<id>` in the app data (`data`) -
-/// never another plugin's. All paths canonical; a script elsewhere is no
-/// plugin's, and is refused.
+/// `worker.py`, of its version in use (installed.rs), run by the interpreter
+/// of that plugin's own environment - `uv/plugin-<id>/venv` or
+/// `pixi/plugin-<id>` in the app data (`data`) - never another plugin's. All
+/// paths canonical; a script elsewhere is no plugin's, and is refused.
 fn plugin_worker_fits(script: &Path, entry_dir: &Path, plugins_root: &Path, data: &Path) -> Result<(), String> {
     let Ok(rel) = script.strip_prefix(plugins_root) else {
         return Err("a sidecar runs only a plugin's worker".into());
     };
     let parts: Vec<String> = rel.components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect();
     let id = match parts.as_slice() {
-        [id, file] if plugin_id_ok(id) && file == "worker.py" => id,
+        [id, version, file] if plugin_id_ok(id) && file == "worker.py" && installed::current(plugins_root, id).as_deref() == Some(version.as_str()) => id,
+        [_, _, file] if file == "worker.py" => return Err("a plugin's worker runs only of its version in use".into()),
         _ => return Err("a plugin's sidecar must be its worker.py".into()),
     };
     let homes = [data.join("uv").join(format!("plugin-{id}")), data.join("pixi").join(format!("plugin-{id}"))];
@@ -205,7 +224,7 @@ fn plugin_worker_fits(script: &Path, entry_dir: &Path, plugins_root: &Path, data
 }
 
 /// A pixi environment's paths: its lock must be a plugin's
-/// `resources/plugins/<id>/pixi.lock` (its manifest beside it), its home
+/// `plugins/<id>/<version>/pixi.lock` (its manifest beside it), its home
 /// `pixi/plugin-<id>` in the app data, and its interpreter where pixi puts it.
 fn validate_pixi_env(info: &PyEnvInfo) -> Result<ValidatedEnv, String> {
     let lock = safe_relative(&info.lock_path)?;
@@ -278,12 +297,6 @@ fn validate_sidecar(
         .parent()
         .map(Path::to_path_buf)
         .ok_or_else(|| "sidecar script has no parent directory".into())
-}
-
-fn resource_path(app: &AppHandle, rel: &Path) -> Result<PathBuf, String> {
-    app.path()
-        .resolve(rel, BaseDirectory::Resource)
-        .map_err(|e| format!("resolve resource {}: {e}", rel.display()))
 }
 
 /// Where Meno keeps what is large and of this computer alone: the Python
@@ -372,6 +385,29 @@ async fn py_env_remove(app: AppHandle, payload: PyEnvInfo) -> Result<(), String>
     Ok(())
 }
 
+/// The plugins in place (installed.rs), as the page takes them: each with its manifest and its grammars.
+#[tauri::command]
+fn plugins_installed(app: AppHandle) -> Result<Vec<installed::InstalledPlugin>, String> {
+    Ok(installed::described(&installed::root(&local_data_dir(&app)?)))
+}
+
+/// The plugins whose environments were set up on this computer (installed.rs `set_up_before`), by id: those a
+/// Meno that carried its plugins had set up, asked about once as one that does not first starts (lib/plugins/usedBefore).
+#[tauri::command]
+fn plugins_set_up_before(app: AppHandle) -> Result<Vec<String>, String> {
+    Ok(installed::set_up_before(&local_data_dir(&app)?))
+}
+
+/// Whether a job of plugin `id` is waiting or running, in any of the jobs' folders - asked before a version of it
+/// no longer in use is taken away. Jobs record their plugin, not its version: a job of any version of it counts.
+#[tauri::command]
+fn plugin_jobs_running(app: AppHandle, id: String, version: String) -> Result<bool, String> {
+    if !plugin_id_ok(&id) || !installed::version_ok(&version) {
+        return Err(format!("no plugin version {id} {version}"));
+    }
+    Ok(jobs::plugin_running(&local_data_dir(&app)?, &id))
+}
+
 #[tauri::command]
 async fn py_env_python_path_uv(app: AppHandle, payload: PyEnvInfo) -> Result<String, String> {
     let env = validate_env_info(&payload)?;
@@ -424,8 +460,8 @@ async fn py_env_setup_uv(
         payload.label.clone()
     };
     let task = net.begin(&setup_purpose(&payload)?, &label, payload.hosts.clone())?;
-    let lock = resource_path(&app, &env.lock)?;
     let data = local_data_dir(&app)?;
+    let lock = plugin_path(&data, &env.lock)?;
     // (uv itself, the first time: under the same task, the same consent)
     let uv = tools::ensure(&data, tools::Tool::Uv, task.proxy_url()).await?;
     let venv_dir = data.join(&env.venv_home);
@@ -488,7 +524,7 @@ async fn py_env_setup_pixi(app: AppHandle, payload: PyEnvInfo, net: State<'_, ne
     // (kept to the hosts its consent named: pixi's releases, conda-forge, PyPI)
     let task = net.begin(&setup_purpose(&payload)?, &label, payload.hosts.clone())?;
     let data = local_data_dir(&app)?;
-    let lock = resource_path(&app, &env.lock)?;
+    let lock = plugin_path(&data, &env.lock)?;
     let manifest_from = lock.with_file_name("pixi.toml");
     let dir = data.join(&env.venv_home);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
@@ -754,11 +790,8 @@ async fn ext_spawn_sidecar(
     if roots.is_empty() {
         return Err("the Python environment is not set up".to_string());
     }
-    // (the plugins' workers, each in its plugin's folder)
-    let workers_roots: Vec<PathBuf> = SIDECAR_SCRIPTS
-        .iter()
-        .filter_map(|r| resource_path(&app, Path::new(r)).ok()?.canonicalize().ok())
-        .collect();
+    // (the plugins' workers, each in its plugin's folder in place)
+    let workers_roots: Vec<PathBuf> = SIDECAR_SCRIPTS.iter().filter_map(|r| data.join(r).canonicalize().ok()).collect();
     if workers_roots.is_empty() {
         return Err("no worker directory".to_string());
     }
@@ -769,7 +802,7 @@ async fn ext_spawn_sidecar(
         .ok_or_else(|| validate_sidecar(&entry, &payload.args, &roots[0], &workers_roots).err().unwrap_or_default())?;
     // (a plugin's worker, in its own environment)
     if let (Some(plugins), Some(script), Some(dir)) = (
-        resource_path(&app, Path::new("resources/plugins")).ok().and_then(|p| p.canonicalize().ok()),
+        installed::root(&data).canonicalize().ok(),
         payload.args.iter().find(|a| !PYTHON_FLAGS.contains(&a.as_str())).and_then(|s| Path::new(s).canonicalize().ok()),
         entry.parent().and_then(|p| p.canonicalize().ok()),
     ) {
@@ -1086,6 +1119,13 @@ pub fn run() {
             if let Ok(data) = app.path().app_data_dir() {
                 logfile::start(&data.join("logs"), &app.package_info().version.to_string());
             }
+            // the versions no plugin uses taken away, however they came there (installed.rs)
+            if let Ok(data) = local_data_dir(app.handle()) {
+                let running = |id: &str| jobs::plugin_running(&data, id);
+                for said in installed::tidy(&installed::root(&data), &running) {
+                    logfile::line("meno", &format!("plugins: {said}"));
+                }
+            }
             net::start(app.handle());
             // a file Windows started Meno to open (opened.rs)
             #[cfg(windows)]
@@ -1098,6 +1138,9 @@ pub fn run() {
             // drags from other programs the webview cannot read (Windows)
             #[cfg(windows)]
             drop::start(app.handle());
+            // Alt let go alone kept from the window's menu, which left the page waiting (Windows)
+            #[cfg(windows)]
+            keymenu::start(app.handle());
             // structures in Office documents, opened here on a double-click
             #[cfg(windows)]
             ole::start(app.handle());
@@ -1109,6 +1152,12 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            // the plugins online: the catalogue, and a plugin's files got from it
+            catalogue::catalogue_get,
+            catalogue::plugin_stage,
+            catalogue::plugin_commit,
+            catalogue::plugin_discard,
+            catalogue::plugin_files_remove,
             // the page's errors and warnings, into Meno's log
             logfile::log_page,
             logfile::log_spot,
@@ -1162,6 +1211,9 @@ pub fn run() {
             // the wwPDB's chemical components, fetched once and kept
             ccd::ccd_components,
             plugfiles::plugin_files,
+            plugins_installed,
+            plugins_set_up_before,
+            plugin_jobs_running,
             // the window given over to a talk
             present::present_window,
             // workspace files opened from outside Meno
@@ -1334,20 +1386,23 @@ mod tests {
 
     #[test]
     fn a_pixi_environment_is_one_meno_carries_the_lock_of_made_in_the_app_data() {
-        let env = validate_env_info(&pixi_info("resources/plugins/pyscf/pixi.lock", "pixi/plugin-pyscf", ".pixi/envs/default/bin/python")).unwrap();
+        let env = validate_env_info(&pixi_info("plugins/pyscf/0.3.1/pixi.lock", "pixi/plugin-pyscf", ".pixi/envs/default/bin/python")).unwrap();
         assert!(env.pixi);
         assert_eq!(env.venv_home, Path::new("pixi/plugin-pyscf"));
-        assert!(validate_env_info(&pixi_info("resources/plugins/pyscf/pixi.lock", "pixi/plugin-pyscf", ".pixi/envs/default/python.exe")).is_ok());
+        assert!(validate_env_info(&pixi_info("plugins/pyscf/0.3.1/pixi.lock", "pixi/plugin-pyscf", ".pixi/envs/default/python.exe")).is_ok());
         for (lock, home, python) in [
             ("resources/py/requirements.chem.lock", "pixi/plugin-pyscf", ".pixi/envs/default/bin/python"),
-            ("resources/plugins/pyscf/pixi.toml", "pixi/plugin-pyscf", ".pixi/envs/default/bin/python"),
-            ("resources/plugins/../py/pixi.lock", "pixi/plugin-pyscf", ".pixi/envs/default/bin/python"),
-            ("resources/plugins/pyscf/x/pixi.lock", "pixi/plugin-pyscf", ".pixi/envs/default/bin/python"),
-            ("resources/plugins/PySCF/pixi.lock", "pixi/plugin-PySCF", ".pixi/envs/default/bin/python"),
-            ("resources/plugins/pyscf/pixi.lock", "pixi/pyscf", ".pixi/envs/default/bin/python"),
-            ("resources/plugins/pyscf/pixi.lock", "pixi/plugin-other", ".pixi/envs/default/bin/python"),
-            ("resources/plugins/pyscf/pixi.lock", "uv/plugin-pyscf", ".pixi/envs/default/bin/python"),
-            ("resources/plugins/pyscf/pixi.lock", "pixi/plugin-pyscf", "bin/sh"),
+            ("plugins/pyscf/0.3.1/pixi.toml", "pixi/plugin-pyscf", ".pixi/envs/default/bin/python"),
+            ("plugins/../py/0.3.1/pixi.lock", "pixi/plugin-pyscf", ".pixi/envs/default/bin/python"),
+            ("plugins/pyscf/0.3.1/x/pixi.lock", "pixi/plugin-pyscf", ".pixi/envs/default/bin/python"),
+            ("plugins/pyscf/pixi.lock", "pixi/plugin-pyscf", ".pixi/envs/default/bin/python"),
+            ("plugins/pyscf/.hidden/pixi.lock", "pixi/plugin-pyscf", ".pixi/envs/default/bin/python"),
+            ("resources/plugins/pyscf/pixi.lock", "pixi/plugin-pyscf", ".pixi/envs/default/bin/python"),
+            ("plugins/PySCF/0.3.1/pixi.lock", "pixi/plugin-PySCF", ".pixi/envs/default/bin/python"),
+            ("plugins/pyscf/0.3.1/pixi.lock", "pixi/pyscf", ".pixi/envs/default/bin/python"),
+            ("plugins/pyscf/0.3.1/pixi.lock", "pixi/plugin-other", ".pixi/envs/default/bin/python"),
+            ("plugins/pyscf/0.3.1/pixi.lock", "uv/plugin-pyscf", ".pixi/envs/default/bin/python"),
+            ("plugins/pyscf/0.3.1/pixi.lock", "pixi/plugin-pyscf", "bin/sh"),
         ] {
             assert!(validate_env_info(&pixi_info(lock, home, python)).is_err(), "{lock} {home} {python}");
         }
@@ -1356,8 +1411,8 @@ mod tests {
         assert!(validate_env_info(&odd).is_err());
     }
 
-    /// A plugin's lock, and where its environment is made.
-    const LOCK: &str = "resources/plugins/cclib/requirements.lock";
+    /// A plugin's lock, in the folder of a version of it in place, and where its environment is made.
+    const LOCK: &str = "plugins/cclib/0.2.1/requirements.lock";
     const VENV: &str = "uv/plugin-cclib/venv";
 
     #[test]
@@ -1409,24 +1464,12 @@ mod tests {
     }
 
     #[test]
-    fn every_lock_meno_takes_pins_its_packages_by_hash() {
-        // (Meno's own environments' locks, unhashed, went with the console)
+    fn meno_carries_no_environment_s_lock_nor_any_plugin() {
+        // (Meno's own environments' locks, unhashed, went with the console; the plugins, each with its lock, are got
+        // online, and their locks checked where they are made)
         let resources = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources");
         assert!(!resources.join("py").exists());
-        let package = |l: &str| {
-            let name = l.split_once("==").or_else(|| l.split_once(" @ ")).map(|(n, _)| n).unwrap_or_default();
-            !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || "_.-".contains(c))
-        };
-        let mut seen = 0;
-        for entry in fs::read_dir(resources.join("plugins")).unwrap().flatten() {
-            let Ok(text) = fs::read_to_string(entry.path().join("requirements.lock")) else { continue };
-            // (one that names none - a plugin that needs Python alone - has none to pin)
-            if text.lines().any(package) {
-                assert!(lock_is_hashed(&text), "{}", entry.path().display());
-                seen += 1;
-            }
-        }
-        assert!(seen > 0);
+        assert!(!resources.join(installed::ROOT).exists());
     }
 
     #[test]
@@ -1443,17 +1486,19 @@ mod tests {
     fn env_info_rejects_foreign_paths() {
         let cases = [
             env_info("resources/py/notes.txt", VENV, "3.12"),
-            env_info("resources/plugins/cclib/manifest.json", VENV, "3.12"),
-            env_info("resources/plugins/cclib/x/requirements.lock", VENV, "3.12"),
+            env_info("plugins/cclib/0.2.1/manifest.json", VENV, "3.12"),
+            env_info("plugins/cclib/0.2.1/x/requirements.lock", VENV, "3.12"),
+            env_info("plugins/cclib/requirements.lock", VENV, "3.12"),
+            env_info("resources/plugins/cclib/requirements.lock", VENV, "3.12"),
             env_info("resources/workers/requirements.lock", VENV, "3.12"),
             // a plugin's lock is its requirements.lock, made into its own environment, exactly there
-            env_info("resources/plugins/cclib/other.lock", VENV, "3.12"),
+            env_info("plugins/cclib/0.2.1/other.lock", VENV, "3.12"),
             env_info(LOCK, "uv/plugin-pyscf/venv", "3.12"),
             env_info(LOCK, "uv/console/venv", "3.12"),
             env_info(LOCK, "uv/plugin-cclib", "3.12"),
             env_info(LOCK, "uv/plugin-cclib/venv/x", "3.12"),
             env_info(LOCK, "uv/plugin-cclib/other", "3.12"),
-            env_info("resources/plugins/CClib/requirements.lock", "uv/plugin-CClib/venv", "3.12"),
+            env_info("plugins/CClib/0.2.1/requirements.lock", "uv/plugin-CClib/venv", "3.12"),
             env_info("../outside.lock", VENV, "3.12"),
             env_info(LOCK, "../../elsewhere", "3.12"),
             env_info(LOCK, "uv", "3.12"),
@@ -1574,24 +1619,50 @@ mod tests {
     fn a_plugins_worker_runs_in_its_own_environment_only() {
         let root = std::env::temp_dir().join(format!("meno-test-{}", Uuid::new_v4()));
         let bin = if cfg!(windows) { "Scripts" } else { "bin" };
-        for dir in [format!("data/uv/plugin-p/venv/{bin}"), format!("data/uv/plugin-q/venv/{bin}"), "data/pixi/plugin-r/.pixi".into(), "plugins/p".into(), "plugins/r".into(), "workers".into()] {
+        for dir in [format!("data/uv/plugin-p/venv/{bin}"), format!("data/uv/plugin-q/venv/{bin}"), "data/pixi/plugin-r/.pixi".into(), "workers".into()] {
             fs::create_dir_all(root.join(dir)).unwrap();
         }
-        for file in ["plugins/p/worker.py", "plugins/p/other.py", "plugins/r/worker.py", "workers/w.py"] {
+        let plugins = root.join("plugins");
+        for (id, version) in [("p", "1.0.0"), ("r", "0.2.0")] {
+            let dir = installed::tests::in_place(&plugins, id, version, "{}");
+            fs::write(dir.join("worker.py"), "").unwrap();
+        }
+        // (a version of p no longer in use, its worker still there)
+        fs::create_dir_all(plugins.join("p/0.9.0")).unwrap();
+        fs::write(plugins.join("p/0.9.0/worker.py"), "").unwrap();
+        for file in ["plugins/p/1.0.0/other.py", "workers/w.py"] {
             fs::write(root.join(file), "").unwrap();
         }
         let root = root.canonicalize().unwrap();
         let (plugins, data) = (root.join("plugins"), root.join("data"));
         let fits = |script: &str, env: &str| plugin_worker_fits(&root.join(script), &data.join(env), &plugins, &data);
-        assert!(fits("plugins/p/worker.py", &format!("uv/plugin-p/venv/{bin}")).is_ok());
-        assert!(fits("plugins/r/worker.py", "pixi/plugin-r/.pixi").is_ok());
-        // another plugin's environment, or another of its scripts
-        assert!(fits("plugins/p/worker.py", &format!("uv/plugin-q/venv/{bin}")).is_err());
-        assert!(fits("plugins/r/worker.py", &format!("uv/plugin-p/venv/{bin}")).is_err());
-        assert!(fits("plugins/p/other.py", &format!("uv/plugin-p/venv/{bin}")).is_err());
+        assert!(fits("plugins/p/1.0.0/worker.py", &format!("uv/plugin-p/venv/{bin}")).is_ok());
+        assert!(fits("plugins/r/0.2.0/worker.py", "pixi/plugin-r/.pixi").is_ok());
+        // another plugin's environment, another of its scripts, or a version of it not in use
+        assert!(fits("plugins/p/1.0.0/worker.py", &format!("uv/plugin-q/venv/{bin}")).is_err());
+        assert!(fits("plugins/r/0.2.0/worker.py", &format!("uv/plugin-p/venv/{bin}")).is_err());
+        assert!(fits("plugins/p/1.0.0/other.py", &format!("uv/plugin-p/venv/{bin}")).is_err());
+        assert!(fits("plugins/p/0.9.0/worker.py", &format!("uv/plugin-p/venv/{bin}")).is_err());
         // a script that is no plugin's
         assert!(fits("workers/w.py", &format!("uv/plugin-q/venv/{bin}")).is_err());
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_plugins_lock_is_of_its_version_in_use_only() {
+        let data = std::env::temp_dir().join(format!("meno-test-{}", Uuid::new_v4()));
+        let dir = installed::tests::in_place(&installed::root(&data), "p", "1.0.0", "{}");
+        fs::write(dir.join("uv.lock"), "").unwrap();
+        // (a version of p no longer in use, its lock still there)
+        fs::create_dir_all(data.join("plugins/p/0.9.0")).unwrap();
+        fs::write(data.join("plugins/p/0.9.0/uv.lock"), "").unwrap();
+        let path = |rel: &str| plugin_path(&data, Path::new(rel));
+        assert_eq!(path("plugins/p/1.0.0/uv.lock").unwrap(), dir.join("uv.lock"));
+        // another version's lock, a plugin not in place, a path that is no plugin's file or lies deeper in the folder
+        for rel in ["plugins/p/0.9.0/uv.lock", "plugins/q/1.0.0/uv.lock", "plugins/p/uv.lock", "plugins/p/1.0.0/env/uv.lock", "other/p/1.0.0/uv.lock"] {
+            assert!(path(rel).is_err(), "{rel}");
+        }
+        let _ = fs::remove_dir_all(&data);
     }
 
     #[cfg(unix)]
@@ -1621,14 +1692,14 @@ mod tests {
     #[test]
     fn a_sidecar_runs_no_worker_but_a_plugin_s() {
         let sb = Sandbox::new();
-        for file in ["resources/workers/interactive_worker.py", "resources/plugins/p/worker.py"] {
+        for file in ["resources/workers/interactive_worker.py", "plugins/p/1.0.0/worker.py"] {
             fs::create_dir_all(sb.p(file).parent().unwrap()).unwrap();
             fs::write(sb.p(file), "").unwrap();
         }
-        // (the folders a sidecar's script may be in, as Meno has them)
+        // (the folders a sidecar's script may be in, as Meno has them: in its local data folder)
         let roots: Vec<PathBuf> = SIDECAR_SCRIPTS.iter().map(|r| sb.p(r).canonicalize().unwrap()).collect();
         let check = |script: &str| validate_sidecar(&sb.python(), &["-u".into(), sb.p(script).to_string_lossy().into_owned()], &sb.p("uv"), &roots);
-        assert_eq!(check("resources/plugins/p/worker.py"), Ok(sb.p("resources/plugins/p")));
+        assert_eq!(check("plugins/p/1.0.0/worker.py"), Ok(sb.p("plugins/p/1.0.0")));
         // (the console's worker, gone with the console, is not one)
         assert!(check("resources/workers/interactive_worker.py").is_err());
         assert!(!Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/workers").exists());

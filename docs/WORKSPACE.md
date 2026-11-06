@@ -113,6 +113,7 @@ built the way the 2D layers are, rather than the viewer moved in as it is.
 | 5. Structures from PDFs | Figures read as structures, drawn beside the figure they came from and tied to it atom by atom, for the chemist to check and correct: a figure drawn with lines and letters read from PDFium's paths and letters, in Meno itself (part A, built 2026-10-11); a figure that is a picture, or any picture, read by a model, as a plugin - MolScribe or MolNexTR, as the chemist chooses - its trained model fetched with consent (part B, built 2026-10-11). Specified in [PDF.md](PDF.md), *Stage 5*. | 4 |
 | 6. Workflows that run | Workflow steps as items on the page, tied to molecules: RDKit conformers, xTB, CREST, and ORCA or Gaussian where installed. Jobs started, stopped and logged by the app. Procedures saved and shared with their results. Specified in [WORKFLOWS.md](WORKFLOWS.md) (2026-10-08): the workspace is the node editor. | 2, 3 |
 | 7. Depth | Analogue series, conformers and reaction steps arranged in depth; detail that changes with zoom. Tried as prototypes and shown before anything is settled. | 1 on |
+| 8. Conversations | A conversation with a language model as an object on the page: a card in a frame, its frame what it may see, its changes one undo step for the person to keep or discard, running left to the person. Designed in [CONVERSATIONS.md](CONVERSATIONS.md) (2026-11-04). | 6 |
 
 ## Stage 1, in order
 
@@ -486,11 +487,19 @@ Taken on 2026-10-13:
   drawn without a configuration is ringed on the drawing while Meno asks
   what to make: every stereoisomer it gives, one, or none for now. Each is
   made as a conformer set (RDKit's ETKDG, then MMFF94, MMFF94s or UFF as
-  chosen - UFF where MMFF has no parameters for the molecule) and comes
+  chosen - where MMFF has no parameters for the molecule, UFF in its place,
+  said in how it was made, or the molecule refused, as Settings' *Where
+  MMFF has no parameters* says: UFF unless chosen otherwise) and comes
   onto the page as a molecule in 3D, its frames the conformers, each once,
   lowest first (*The page's conformers*, below). Of two enantiomers, one is
   made as the other's mirror image, so the two have the same conformers and
-  shares.
+  shares: the one whose identity with its configuration comes first is
+  made (lib/chem/identity) - a choice either way would be as right, this
+  one fixed so that a pair is always made alike - and the other's
+  conformers are its
+  reflections, each checked to have the configuration drawn - one whose
+  drawing Meno cannot read whole (a wedge it does not read, a label
+  written out, a ring bound to a metal through a star) made itself.
 - **The page's conformers** (the plugin boundary, 2026-10-31). The plugin
   gives every conformer it made, as it made them (PLUGINS.md); the page
   makes them its own (`chem/pageConformers`), in a worker of its own so
@@ -897,14 +906,8 @@ given with where its output was, to be asked for from there.
 
 ### Tests
 
-No program's output is committed (the maintainer, 2026-10-05). Gaussian's
-carry Gaussian's own copyright notice, and the rest are kept out the same
-way. Sample outputs - small ones from cclib's repository, ORCA's, xTB's
-and Gaussian's - are kept on the developer's machine, in a folder git
-ignores. The tests that read them run where they are there and are
-skipped where they are not, as in CI. What a reader hands back is Meno's
-own plain data, so CI tests Meno's side of it - opening, saving, showing -
-with that data written by hand.
+No program's output is committed (the maintainer, 2026-10-05); CI tests
+Meno's side with data written by hand.
 
 ### In order
 
@@ -1023,6 +1026,14 @@ Orbitals and densities drawn as surfaces. Agreed with the maintainer on
   densities worked out on a grid from a Molden file, read and worked out
   by PySCF - each grid a promise.
   No GPL library (iodata, gbasis).
+- **WFX files**, read by Meno itself: each orbital worked out from the
+  file's own primitives (`lib/calc/wfx.ts`).
+- **Gaussian formatted checkpoints**: the Gaussian interface gives the
+  file's basis and orbitals whole, in Meno's form of a wavefunction, and
+  Meno works out each orbital on its grid itself - once it has found the
+  orbitals a list offers orthonormal over that basis, which catches a
+  basis converted wrong in a molecule, though not every such mistake
+  (docs/PLUGINS.md, *Gives a wavefunction whole*).
 
 ### In order
 
@@ -1094,6 +1105,13 @@ what it converts, the style's place and its card, and the molecules in
   to undo, eased. A workspace opened in another style is offered it too:
   the card is opened to change its styles (`settingsDiffer`,
   `DocumentStylePanel`).
+- **Opened, drawn in its own style at once** (2026-11-05). A workspace's
+  3D styles come with its molecules as it opens: with nothing drawn in 3D
+  before they came, there is nothing to go over from, and its molecules
+  are made in them at once - not made in the style the canvas had and
+  eased over, each made again at every step and its hollows worked out
+  twice (Workspace/style3d `styleGoesOver`). A change of style on a
+  canvas with molecules on it is eased as before.
 - **A change of style is one command,** from the canvas's Drawing style
   card. It sets the style and converts the page with it, so that every
   object on the page keeps its printed size and its place, and only the
@@ -1196,11 +1214,11 @@ what it converts, the style's place and its card, and the molecules in
 ## Magnified display
 
 Planned on 2026-10-16 (agreed by the maintainer on 2026-10-14 as a special
-state, for 2D and 3D alike; the command centre's defaults), and approved
-with its three choices as proposed on 2026-10-16: the magnifications
-below, a 3D molecule made from a magnified drawing taking its
-magnification, and a selection's objects each about its own centre.
-Molecules in 3D built first (`utils/magnified`), then structures in 2D.
+state, for 2D and 3D alike), and approved with its three choices as
+proposed on 2026-10-16: the magnifications below, a 3D molecule made from
+a magnified drawing taking its magnification, and a selection's objects
+each about its own centre. Molecules in 3D built first
+(`utils/magnified`), then structures in 2D.
 
 **What it is.** A structure in 2D, or a molecule in 3D, may be *shown* larger
 or smaller than it is - 100 % being its true size - without changing the
@@ -1217,10 +1235,10 @@ object is shown.
     workspace's style with every length k times over (layoutStructures
     `magnifiedOptions`): lines, labels, wedges, marks and the gaps between
     them all scale together, as a zoomed copy of it would. (Planned at
-    first as true places drawn through a transform; held as shown instead,
-    with the command centre's agreement on 2026-10-16, so that the pointer,
-    the selection, snapping and the page's boxes, which read where atoms
-    are, need nothing new.) **All chemistry reads it at its true size**
+    first as true places drawn through a transform; held as shown instead
+    on 2026-10-16, so that the pointer, the selection, snapping and the
+    page's boxes, which read where atoms are, need nothing new.)
+    **All chemistry reads it at its true size**
     (lib/chem/magnified2d `atTrueSize`, in `writeMolfile`): MOL, SD and
     RXN files, a copy for another program, what a plugin or a job is
     given and so a workflow's inputs, the drawing a 3D structure rises
@@ -1620,13 +1638,20 @@ slowing it - and in the pictures made of it.
   ribbons stand for (the maintainer's choice, 2026-10-13), so a large
   protein in ribbons is drawn lighter as it would be as atoms; those a
   look leaves out otherwise (hydrogens on carbon, water) are not.
-  Its balls are drawn with as many segments as their size on the screen
-  wants (the maintainer, 2026-10-13): the style's 32 from about 40 pixels
-  across, down to 8 under about 8 - within about 0.3 of a pixel of a
-  circle at each, so that the change is not seen; more at once as balls
-  grow, fewer once the zoom has settled (`utils/largeDrawing`
-  `ballSegmentsFor`). A box of 33 000 waters (100 000 atoms) turned at
-  183 ms a frame with 32, and turns at 33 ms.
+- **Balls as fine as their size on the screen needs**, on every canvas,
+  not only a very large drawing (the maintainer, 2026-10-13, for very
+  large drawings; every canvas since 2026-11-05): a molecule's balls are
+  drawn with as many segments as its largest ball's size on the screen
+  wants - the style's 32 from about 40 pixels across, down to 8 under
+  about 8, never more than the style's own - within about 0.3 of a pixel
+  of a circle at each, so that the change is not seen; more at once as
+  balls grow, fewer once the zoom has settled (`utils/largeDrawing`
+  `ballSegmentsFor`). The line round them follows them. What each ball
+  carries - its number, whether it is lined - goes with it to the new
+  number (`carriedSphere`). A box of 33 000 waters (100 000 atoms) turned
+  at 183 ms a frame with 32, and turns at 33 ms; a large workflow page,
+  283 molecules in 3D, drew about 17.8 million triangles a frame at Fit,
+  and draws 1.3 million.
 - **In pictures too.** A picture of molecules in 3D shades their hollows
   and casts their shadows as the canvas does, with every ball and stick,
   in a finer shadow map, however many atoms; shaded on the screen, at the
@@ -1894,9 +1919,38 @@ same way.
   is that record alone, and one whose record shown is deleted shows its
   first. The record shown moved whole, every atom alike, takes its stack
   with it.
-- **Going over.** As a stack of molecules goes over: the record let go of
-  grows a little as it fades, the next comes up from smaller into view,
-  0.42 s, eased (`StackSwap2D`). Each is drawn on a layer of its own in the
+- **Lined up as it is opened** (`alignedRecords`; the maintainer,
+  2026-11-04). Each record that shares a core with the one before it is
+  turned about the middle of what they share to lie as nearly as it can on
+  that one - moved, never reshaped:
+  - the same structure, atom for atom (`lib/layout/morph` `sameAtoms`: the
+    same elements, charges and labels bonded alike, two Kekulé structures
+    one);
+  - or analogues, on the largest core they share (`commonAtoms`): connected,
+    its atoms alike and bonded alike in both, no hydrogen in it, holding at
+    least 60 % of the smaller record's other atoms. It is searched as
+    McGregor's backtracking does, a bounded number of steps (20,000 for two
+    records; 50,000 for a whole stack as it opens, shared out among its
+    records), the largest found by then taken.
+
+  It is mirrored where that lies nearer, only where it has no mark a mirror
+  would change: a wedge, a hash, a bold or dashed line, a double bond drawn
+  to one side, a mark put by hand. A record sharing too little keeps the
+  file's orientation, and those after it line up on it. Of the ways a
+  symmetric core lies, the one that lies best, with what is outside it
+  nearest what is outside the other's, then the one that moves its atoms
+  least, so a ring turns the least it can.
+- **Going over** (`StackSwap2D`, 0.42 s, eased). Where the record let go of
+  and the next share a core, each atom of it goes from where it stood to
+  where it stands in the next, the drawing turned as one the shorter way
+  round and what that leaves of each atom's way taken in a straight line;
+  what either has outside the core rides with it, turned as one with it.
+  The next comes in over the first half while the one let go of stays, and
+  that one fades over the second, so what the two share stays solid all the
+  way, and what differs grows in or fades where it rides. Records sharing
+  too little - or past 300 atoms, or 120 for a core - cross where they
+  stand, never growing or shrinking. Steps through a stack faster than one
+  can follow fade alone. Each record is drawn on a layer of its own in the
   drawing's style, and the drawing draws the next once it is there. The
   record shown is kept ready on that layer, out of sight, so its labels are
   set when it goes.

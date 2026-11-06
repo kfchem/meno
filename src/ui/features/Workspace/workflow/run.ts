@@ -18,7 +18,7 @@ export { chipWide };
 import { findSet, givesOf, inputKey, inputOf, moleculesSeen, resultOf, stateOf, stepOf, stepsBefore, tableInto, tableWired, wireInto, wiresInto } from "./flow";
 import { chartOfTable, chartSaid, type ChartValue } from "../../../../lib/chart";
 import { diagramOf, diagramSaid, levelNamer, type DiagramValue, type RowCompound } from "../../../../lib/energyDiagram";
-import { asideExit, exitsOf, inputsOf, kindInfo, laterPortsNeed, MENO_DOES, optionsOf, ONE_INPUT, readsAsTable, takenBy, restHolds, type Holds3D, type SetHolds, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
+import { asideExit, exitsOf, inputsOf, kindInfo, modeRead, laterPortsNeed, MENO_DOES, optionsOf, ONE_INPUT, readsAsTable, takenBy, restHolds, type Holds3D, type SetHolds, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
 import { MENO_ONLY, VALUE_KINDS } from "../../../../lib/plugins/steps";
 import { doerName, inputsFor, MENO, takesBy, takesNothingBy } from "./doers";
 import { pluginById } from "../../../../lib/calc/catalog";
@@ -28,7 +28,7 @@ import { clearOf, columnWidth, frameAt, placeAgain, placeBelow, placeFor } from 
 export { frameAt, placeFor } from "./place";
 import { keptNames, takeFrames, type Which } from "./takeFrames";
 import { notResults, PAIRED, pushTo, runMeno, runMenoDrawn, runMenoPair, type CalcLevel, type Outcome, type Outcome3D } from "./meno";
-import { measuredSet } from "./structureSteps";
+import { measuredSet, modeOnAtomsSet } from "./structureSteps";
 import { addSet, CHART_SET, heldPut, holdChart, holdNumber, NUMBER_SET, holdCollection, holdTable, TABLE_SET, holdMembers, holdNothing, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
 import { notFinishedRows, structuresAsTable } from "./structuresTable";
@@ -106,6 +106,15 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   if (step.kind === "take-frames") {
     const o = optionsOf(kindInfo(step.kind).options ?? [], step.options);
     return ranAs(doc, id, takeFrames(input.molecules, (o.which as Which) ?? "highest", Number(o.either), keptNames(String(o.keep ?? ""))), key, w);
+  }
+  // (Mode on atoms: its atoms typed, or from the table wired into Atoms)
+  if (step.kind === "mode-on-atoms") {
+    const o = optionsOf(kindInfo(step.kind).options ?? [], step.options);
+    const r = modeRead(o);
+    if ("why" in r) return ranAs(doc, id, { ok: false, said: r.why }, key, w);
+    const entries = setEntries(input.molecules, input.holds as Holds3D);
+    const outcome = modeOnAtomsSet(entries, input.holds as Holds3D, { ...r, table: r.atoms ? undefined : tableInto(doc, id, "atoms"), which: o.which === "every" ? "every" : "made", rows: String(o.rows ?? "") });
+    return ranAs(doc, id, r.atoms && wireInto(doc, id, "atoms") && outcome.ok ? { ...outcome, said: `${outcome.said} \u00b7 the table wired into Atoms not read: atoms typed` } : outcome, key, w);
   }
   // (Measure's atoms from a table wired into Atoms, where its card says so - and, typed, a table wired in said not read, never passed over unsaid;
   //  what comes in is molecules: it takes nothing else)
@@ -348,7 +357,7 @@ function placeNumber(doc: WorkspaceDocument, step: WorkflowStep, number: NumberV
   const exit = exitsOf(step.kind)[0].id;
   const madeBy = { step: step.id, exit, holds: "number" as const };
   const was = resultOf(doc, step.id, exit);
-  const frame = was ? placeAgain(doc, step, was, NUMBER_SET.w, NUMBER_SET.h) : placeFor(doc, step, NUMBER_SET.w, NUMBER_SET.h);
+  const frame = was ? placeAgain(doc, step, was, NUMBER_SET.w, NUMBER_SET.h) : placeFor(doc, step, exit, NUMBER_SET.w, NUMBER_SET.h);
   if (was) return holdNumber(markMade(resizeSet(doc, was.id, frame), was.id, madeBy), was.id, number);
   const id = doc.nextWorkflowId ?? 1;
   return holdNumber(markMade(addSet(doc, frame, madeBy), id, madeBy), id, number);
@@ -360,7 +369,7 @@ function placeChart(doc: WorkspaceDocument, step: WorkflowStep, chart: ChartValu
   const was = resultOf(doc, step.id, exit);
   // (what it held before - a frame of a step not run yet holds nothing - gone; the frame as large as a chart is drawn)
   if (was) doc = removeMolecules3d(doc, setMembers(doc, was).molecules);
-  const frame = was ? placeAgain(doc, step, was, CHART_SET.w, CHART_SET.h) : placeFor(doc, step, CHART_SET.w, CHART_SET.h);
+  const frame = was ? placeAgain(doc, step, was, CHART_SET.w, CHART_SET.h) : placeFor(doc, step, exit, CHART_SET.w, CHART_SET.h);
   if (was) return holdChart(markMade(resizeSet(doc, was.id, frame), was.id, madeBy), was.id, chart);
   const id = doc.nextWorkflowId ?? 1;
   return holdChart(markMade(addSet(doc, frame, madeBy), id, madeBy), id, chart);
@@ -663,7 +672,7 @@ function fillTable(doc: WorkspaceDocument, step: WorkflowStep, exit: string, tab
   const madeBy = { step: step.id, exit, holds: "table" as const };
   const was = resultOf(doc, step.id, exit);
   if (was) doc = removeMolecules3d(doc, setMembers(doc, was).molecules);
-  const frame = was ? placeAgain(doc, step, was, TABLE_SET.w, TABLE_SET.h) : placeFor(doc, step, TABLE_SET.w, TABLE_SET.h);
+  const frame = was ? placeAgain(doc, step, was, TABLE_SET.w, TABLE_SET.h) : placeFor(doc, step, exit, TABLE_SET.w, TABLE_SET.h);
   if (was) return holdTable(markMade(resizeSet(doc, was.id, frame), was.id, madeBy), was.id, table);
   const id = doc.nextWorkflowId ?? 1;
   return holdTable(markMade(addSet(doc, frame, madeBy), id, madeBy), id, table);
@@ -790,7 +799,7 @@ function filled(
   if (was) doc = emptied(doc, was);
   const madeBy = { step: step.id, exit: of.exit, holds: of.holds };
   if (of.collection || of.drawnCollection) {
-    const frame = was ? placeAgain(doc, step, was, SUMMARY_W, SUMMARY_H) : placeFor(doc, step, SUMMARY_W, SUMMARY_H);
+    const frame = was ? placeAgain(doc, step, was, SUMMARY_W, SUMMARY_H) : placeFor(doc, step, of.exit, SUMMARY_W, SUMMARY_H);
     const id = was ? was.id : (doc.nextWorkflowId ?? 1);
     doc = was ? markMade(resizeSet(doc, id, frame), id, madeBy) : markMade(addSet(doc, frame, madeBy), id, madeBy);
     return withCore(holdCollection(doc, id, of.collection ? { collection: of.collection } : { drawnCollection: of.drawnCollection! }, of.unread), id, of.core);
@@ -803,7 +812,7 @@ function filled(
   // (in rows no wider than its step's column, where the next step's card is close: the set grows down, not over the steps after it)
   const room = columnWidth(doc, step) - 2 * SET_PAD;
   const lay = laidOut(rooms, LEAST_W, Math.max(...rooms.map((r) => r.x1 - r.x0), Math.min(rowMost(rooms), room)));
-  const frame = was ? placeAgain(doc, step, was, lay.width, lay.height) : placeFor(doc, step, lay.width, lay.height);
+  const frame = was ? placeAgain(doc, step, was, lay.width, lay.height) : placeFor(doc, step, of.exit, lay.width, lay.height);
   const put = place(doc, lay.at.map((p) => ({ x: frame.x0 + p.x, y: frame.y1 + p.y })));
   doc = put.doc;
   const id = was ? was.id : (doc.nextWorkflowId ?? 1);
@@ -846,7 +855,7 @@ function movedBy(m: Model, dx: number, dy: number): Model {
  * adds by id - and none of them a record of a stack (utils/stacks): each a
  * structure in its own right.
  */
-function numberedApart(models: readonly Model[]): Model {
+export function numberedApart(models: readonly Model[]): Model {
   const out: Model = { atoms: [], bonds: [] };
   let next = 1;
   for (const m of models) {
@@ -865,7 +874,7 @@ function numberedApart(models: readonly Model[]): Model {
       });
     }
     for (const b of m.bonds) {
-      out.bonds.push({ ...b, id: next++, a: ids.get(b.a)!, b: ids.get(b.b)!, ...(b.endpoints ? { endpoints: b.endpoints.map((e) => ids.get(e)!) } : {}) });
+      out.bonds.push({ ...b, id: next++, a: ids.get(b.a)!, b: ids.get(b.b)!, ...(b.narrow != null ? { narrow: ids.get(b.narrow)! } : {}), ...(b.endpoints ? { endpoints: b.endpoints.map((e) => ids.get(e)!) } : {}) });
     }
   }
   return out;
@@ -1043,6 +1052,7 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>, search = false):
         ...(e.degeneracy != null && e.degeneracy !== 1 ? { degeneracies: [...(path ?? []).map(() => 1), e.degeneracy, ...after.map(() => 1)] } : {}),
         ...(e.mirror ? { mirrors: [...(path ?? []).map(() => null), [...e.mirror], ...after.map(() => null)] } : {}),
         ...(e.partOf ? { partOf: true as const } : {}),
+        ...(e.madeOf?.length ? { madeOf: [...e.madeOf] } : {}),
         // (why a program step could not do it, where one could not: its Failed exit's - and its other marks - of its
         //  last frame, a path's own frames before it none)
         ...marksOf([...(path ?? []).map(() => ({})), { failed: e.failed, imaginary: imaginaryOfEntry(e), marksUnread: e.marksUnread }, ...tail]),
@@ -1070,6 +1080,8 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>, search = false):
     //  calculation, nor energies of different calculations in one list. Meno's As conformers refuses such a set
     //  first, saying why)
     const calc = alike ? (first as Worked).calc : undefined;
+    // (what they were made from, where all were made from the same: a compound's conformers, of one structure drawn)
+    const madeOf = first.madeOf?.length && g.every((e) => JSON.stringify(e.madeOf ?? []) === JSON.stringify(first.madeOf)) ? first.madeOf : undefined;
     return {
       atoms: atomsAt(first),
       bonds: first.bonds.map((b) => ({ ...b })),
@@ -1088,6 +1100,7 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>, search = false):
       // (a part of a search's conformers where any of them was - As conformers grouping one with others too: its shares not shown unless a Populations step worked them out)
       ...(g.some((e) => e.partOf) ? { partOf: true as const } : {}),
       ...(first.name ? { name: first.name } : {}),
+      ...(madeOf ? { madeOf: [...madeOf] } : {}),
       ...keptKnown(first),
       // (each conformer's marks: why it failed, its imaginary frequencies as its calculation judged them, and whether its marks did not read)
       ...marksOf(g.map((e) => ({ failed: e.failed, imaginary: imaginaryOfEntry(e), marksUnread: e.marksUnread }))),
