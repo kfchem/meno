@@ -1,4 +1,5 @@
 import { motion } from "motion/react";
+import QuestionLayer from "../../layouts/QuestionLayer";
 import { useEffect, useId, useRef, useState } from "react";
 import { useAskedKeys } from "../../layouts/asking";
 import { FADE, RISE } from "../../theme/motion";
@@ -31,10 +32,12 @@ export default function HideHydrogensAsk({ onKeep, onHide }: { onKeep: () => voi
   useAskedKeys(boxRef, onKeep);
 
   return (
+    // (a question about the whole window: asked in the window's own layer, over all else - layouts/QuestionLayer)
+    <QuestionLayer>
     <motion.div
       {...FADE}
       {...held}
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30"
+      className="absolute inset-0 flex items-center justify-center bg-black/30"
       onPointerDown={(e) => {
         // (a press outside the box keeps them)
         if (e.target === e.currentTarget) onKeep();
@@ -94,5 +97,6 @@ export default function HideHydrogensAsk({ onKeep, onHide }: { onKeep: () => voi
         </div>
       </motion.div>
     </motion.div>
+    </QuestionLayer>
   );
 }

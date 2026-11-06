@@ -720,6 +720,22 @@ closes*).
   memory where there is none) - or where none runs, whatever its size.
   One behind it never starts first. How often a waiting job looks is
   reckoned as if as many of its size ran at once as fit.
+- **Only those near the head wait on the queue's lock** (2026-11-06). A
+  waiting runner first sees where it stands from the jobs' records alone,
+  without the lock and writing nothing (`glance`); one far back is told so
+  and sleeps, and only those near the head (`near_head`) look again under
+  the lock, where the head takes its turn. Each runner remembers the jobs
+  it has seen finished and reads them no more. A waiting job whose runner
+  is gone (a Meno ended with a queue) is not counted ahead in the glance,
+  so a live one behind is never held back for ever: near the head, the
+  look under the lock records it gone, as before. So the head of a queue of
+  hundreds never waits behind them all for the lock as a job ends: every
+  runner looking at hundreds of folders under the one lock held it most of
+  the time, and on a computer whose files open slowly the next job started
+  seconds after one ended. 300 jobs of 0.3 s one at a time, on a Mac: from
+  one's end to the next one's start 60 ms on average and 2.2 s at most
+  before, 42 ms and 0.2 s after (`a_long_queue_starts_the_next_job_as_one_ends`,
+  run by hand).
 - **Looked at often while young** (2026-10-13). The runner looks for its
   turn every 400 ms, and at its program every 200 ms - but every 50 ms
   for the first 3 s of a program, and of a job at the head of the queue,

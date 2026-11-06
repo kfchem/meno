@@ -22,6 +22,12 @@ type OptionBase = {
   section?: OptionSection;
   /** What bounds it or fixes it, said under it, where the label alone does not say it - Meno's own options' alone. */
   note?: string;
+  /**
+   * The person's alone to set: never set by a conversation's tools - cores
+   * and memory, a program's free keywords, what is kept on disk
+   * (docs/CONVERSATIONS.md, *Meno's tools*).
+   */
+  person?: true;
 };
 /** The parts of Render's card, in its order: what the molecules look like, how it is rendered, the scene round them, a film's motion. */
 export const OPTION_SECTIONS = ["look", "render", "scene", "motion"] as const;
@@ -188,6 +194,7 @@ export function acceptOptions(raw: unknown): Option[] {
     const group = label(r.group, 60) ? { group: label(r.group, 60)! } : {};
     const section = (OPTION_SECTIONS as readonly unknown[]).includes(r.section) ? { section: r.section as OptionSection } : {};
     const brief = label(r.brief, 40) ? { brief: label(r.brief, 40)! } : {};
+    const person = r.person === true ? { person: true as const } : {};
     let o: Option | null = null;
     if (r.type === "choice" && Array.isArray(r.choices)) {
       const choices = (r.choices as Record<string, unknown>[])
@@ -215,7 +222,7 @@ export function acceptOptions(raw: unknown): Option[] {
       o = { id, label: name, type: "text", default: typeof r.default === "string" ? r.default.slice(0, 200) : "", ...(from ? { from } : {}) };
     } else if (r.type === "switch") o = { id, label: name, type: "switch", default: r.default === true };
     // (its default, one it takes: else it is none)
-    if (o && fitting(o, o.default) !== undefined) out.push({ ...o, ...when, ...group, ...section, ...brief });
+    if (o && fitting(o, o.default) !== undefined) out.push({ ...o, ...when, ...group, ...section, ...brief, ...person });
   }
   return out;
 }

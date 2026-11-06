@@ -41,7 +41,8 @@ function page(...at: { x: number; y: number; id: number }[]): WorkspaceDocument 
 const settled = (next: WorkspaceDocument, before: WorkspaceDocument) => membersSettled(fitSets(next, before), before);
 /** The molecule `id` moved to `at`. */
 const movedTo = (doc: WorkspaceDocument, id: number, at: { x: number; y: number }) => ({ ...doc, molecules3d: doc.molecules3d!.map((m) => (m.id === id ? { ...m, at } : m)) });
-const membersOfSet = (doc: WorkspaceDocument, id = 1) => doc.sets!.find((b) => b.id === id)!.members;
+/** A set's members, each structure by its atoms alone: its record - its lasting id, and what it is of - left out (lasting ids: lasting.test). */
+const membersOfSet = (doc: WorkspaceDocument, id = 1) => doc.sets!.find((b) => b.id === id)!.members!.map((m) => ("structure" in m ? { structure: m.structure } : m));
 
 describe("a set's members", () => {
   it("are what lies inside its frame as it is made, in reading order: row by row, each left to right", () => {
