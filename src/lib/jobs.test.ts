@@ -22,7 +22,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   },
 }));
 
-import { coresCountedSaid, finished, followJob, keptText, liveJobsOf, runningOf, limitsOf, overLimits, startJob, stopJobsAndWait, type Job } from "./jobs";
+import { coresCountedSaid, finished, quietFor, quietSaid, followJob, keptText, liveJobsOf, runningOf, limitsOf, overLimits, startJob, stopJobsAndWait, type Job } from "./jobs";
 
 describe("jobs", () => {
   beforeEach(() => {
@@ -133,5 +133,23 @@ describe("the finished jobs' files, as Settings says them", () => {
     expect(keptText(2, 1000)).toBe("2 jobs, 1 MB");
     expect(keptText(12, 1_430_000_000)).toBe("12 jobs, 1.4 GB");
     expect(keptText(3, null)).toBe("3 jobs");
+  });
+});
+
+describe("a running job that has written nothing for long", () => {
+  const MIN = 60_000;
+  it("is said quiet, in whole minutes, once that is as long as Settings says or longer - running alone, and only where it said when it wrote", () => {
+    const now = 1_000_000_000;
+    expect(quietFor({ state: "running", lastWritten: now - 47.9 * MIN }, now, 30)).toBe(47);
+    expect(quietFor({ state: "running", lastWritten: now - 30 * MIN }, now, 30)).toBe(30);
+    expect(quietFor({ state: "running", lastWritten: now - 29.9 * MIN }, now, 30)).toBeNull();
+    expect(quietFor({ state: "running" }, now, 30)).toBeNull();
+    expect(quietFor({ state: "waiting", lastWritten: now - 99 * MIN }, now, 30)).toBeNull();
+    expect(quietFor({ state: "done", lastWritten: now - 99 * MIN }, now, 30)).toBeNull();
+    expect(quietFor(undefined, now, 30)).toBeNull();
+  });
+
+  it("says how long in minutes, and in hours and minutes from two hours", () => {
+    expect([quietSaid(47), quietSaid(119), quietSaid(125), quietSaid(24 * 60)]).toEqual(["no output for 47 min", "no output for 119 min", "no output for 2 h 5 min", "no output for 24 h 0 min"]);
   });
 });

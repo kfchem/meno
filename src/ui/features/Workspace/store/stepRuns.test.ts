@@ -1432,6 +1432,22 @@ describe("a step that runs a plugin's program", () => {
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:01 \u00b7 1 of 3 \u00b7 2 of 3 failed (2: the program stopped with an error)" });
   });
 
+  it("keeps when a running job last wrote anything, as its runner says - running jobs' alone", async () => {
+    const { st, step } = waters(2);
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    Object.assign(jobs.get(idOf(1))!, { state: "running", started: 1000, lastWritten: 5000 });
+    Object.assign(jobs.get(idOf(2))!, { lastWritten: 6000 });
+    await st().lookAtJobs();
+    expect([st().jobsSeen[idOf(1)]?.lastWritten, st().jobsSeen[idOf(2)]?.lastWritten]).toEqual([5000, undefined]);
+    end(1);
+    end(2);
+    await st().lookAtJobs();
+    await ran;
+    expect(st().jobsSeen[idOf(1)]?.lastWritten).toBeUndefined();
+  });
+
   it("goes on without a job stopped alone - Stop this job - bringing in what the others gave, its entry failed, stopped by you", async () => {
     const { st, step } = waters(2);
     const ran = st().runStep(step);

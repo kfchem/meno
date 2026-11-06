@@ -21,7 +21,8 @@ import { COLUMN_NARROWEST, COLUMN_WIDEST, columnWidthFor, jobStateSaid, lostSaid
 import { takenBeside } from "../../../lib/io/beside";
 import { shortcutLabel } from "../../../lib/doc/shortcuts";
 import { isPinch, wheelReader } from "../../../lib/input/wheel";
-import { useAppSettings } from "../../../lib/settings/appSettings";
+import { QUIET_AFTER_MIN, useAppSettings } from "../../../lib/settings/appSettings";
+import { quietFor, quietSaid } from "../../../lib/jobs";
 import { pageUnder, pointOn } from "../../../lib/pdf/column";
 import { figureStructuresHad } from "./utils/pdfStructures";
 import { indexOnce, mentionUnder } from "./utils/compoundLens";
@@ -232,7 +233,13 @@ function Column({
   const logJobs = logOf?.jobs && logOf.jobs.length > 1 ? { jobs: logOf.jobs, job: logOf.job ?? 0 } : null;
   // (how each job stands: as last looked at - or, none looked at, as the step's run said they ended, a workspace reopened)
   const logRan = useEditor((st) => (logOf ? st.steps.find((x) => x.id === logOf.step)?.ran : undefined));
-  const jobState = (id: string) => jobStateSaid(id, jobsSeen, logRan);
+  // (and, running and quiet past what Settings says: for how long it has written nothing)
+  const quietAfter = useAppSettings((st) => st.calculations.quietAfterMin ?? QUIET_AFTER_MIN);
+  const jobState = (id: string) => {
+    const said = jobStateSaid(id, jobsSeen, logRan);
+    const quiet = quietFor(jobsSeen[id], Date.now(), quietAfter);
+    return said && quiet != null ? `${said} \u00b7 ${quietSaid(quiet)}` : said;
+  };
   // (the job shown, where it waits or runs: one that may be stopped alone - its step going on without it)
   const shownJob = logJobs ? logJobs.jobs[logJobs.job] : undefined;
   const stoppable = !!shownJob && (jobsSeen[shownJob]?.state === "waiting" || jobsSeen[shownJob]?.state === "running");
