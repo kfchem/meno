@@ -793,7 +793,10 @@ fn look(root: &Path, dir: &Path, base: &JobRecord, here: Resources, finished: &m
 
 /// Where the job `dir` stands among those waiting in `root`, seen from their records alone - none written, nothing but
 /// a record read of each - for a runner far back to know it is far back: how many wait before it. A job with no record
-/// yet (its runner starting) is not counted: it is looked at again under the lock, if near.
+/// yet (its runner starting) is not counted: it is looked at again under the lock, if near. Nor is one whose runner is
+/// gone (`runner_there`: tried, never waited on) - a queue left by a Meno that was ended: so a live job is never held
+/// back for ever behind dead ones far ahead of it; near the head, the look under the lock (`current_record`) records
+/// them gone.
 fn glance(root: &Path, dir: &Path, base: &JobRecord, finished: &mut HashSet<std::ffi::OsString>) -> std::io::Result<u32> {
     let mine_key = (base.created, dir.to_path_buf());
     let mut ahead = 0u32;
@@ -805,7 +808,7 @@ fn glance(root: &Path, dir: &Path, base: &JobRecord, finished: &mut HashSet<std:
         let Some(record) = read_record(&entry.path()) else { continue };
         if record.state.finished() {
             finished.insert(name);
-        } else if record.state == JobState::Waiting && (record.created, entry.path()) < mine_key {
+        } else if record.state == JobState::Waiting && (record.created, entry.path()) < mine_key && runner_there(&entry.path()) {
             ahead += 1;
         }
     }
@@ -3092,9 +3095,16 @@ mod tests {
         let waiting: Vec<PathBuf> = (0..4).map(|_| mk()).collect();
         let base = |dir: &Path| JobRecord::new(JobState::Waiting, read_spec(dir).unwrap().created);
         write_record(&done, &JobRecord { state: JobState::Done, ..base(&done) }).unwrap();
-        for w in &waiting {
-            write_record(w, &base(w)).unwrap();
-        }
+        // (each with its runner there, holding its lock)
+        let runners: Vec<_> = waiting
+            .iter()
+            .map(|w| {
+                write_record(w, &base(w)).unwrap();
+                let lock = OpenOptions::new().create(true).truncate(false).write(true).open(w.join(RUNNER_LOCK)).unwrap();
+                lock.lock().unwrap();
+                lock
+            })
+            .collect();
         // (the queue's lock held - by the head, say, as it takes its turn)
         let lock = OpenOptions::new().create(true).truncate(false).write(true).open(root.join(QUEUE_LOCK)).unwrap();
         lock.lock().unwrap();
@@ -3116,6 +3126,8 @@ mod tests {
         finished.extend(seen);
         fs::remove_file(done.join(RECORD)).unwrap();
         assert_eq!(glance(&root, last, &base(last), &mut finished).unwrap(), 3);
+        // (its record back: a folder with none is a job starting, to a look that has not seen it finished)
+        write_record(&done, &JobRecord { state: JobState::Done, ..base(&done) }).unwrap();
         // (one near the head waits on the lock: it looks again under it)
         let (tx, rx) = std::sync::mpsc::channel();
         {
@@ -3127,6 +3139,30 @@ mod tests {
         assert!(rx.recv_timeout(Duration::from_millis(300)).is_err());
         drop(lock);
         assert_eq!(rx.recv_timeout(Duration::from_secs(5)).unwrap(), Turn::Behind(1));
+        drop(runners);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_live_job_behind_waiting_ones_whose_runners_are_gone_takes_its_turn() {
+        let root = temp();
+        let mk = || {
+            std::thread::sleep(Duration::from_millis(3));
+            shell(&root, "true", 1)
+        };
+        // (five said waiting, asked for first - their runners gone with a Meno that was ended - and one live behind them)
+        let dead: Vec<PathBuf> = (0..5).map(|_| mk()).collect();
+        let live = mk();
+        let base = |dir: &Path| JobRecord::new(JobState::Waiting, read_spec(dir).unwrap().created);
+        for d in dead.iter().chain([&live]) {
+            write_record(d, &base(d)).unwrap();
+        }
+        let runner = OpenOptions::new().create(true).truncate(false).write(true).open(live.join(RUNNER_LOCK)).unwrap();
+        runner.lock().unwrap();
+        // (not told it is 5 back: its turn taken, the dead ones recorded gone as it looked under the lock)
+        assert_eq!(take_turn(&live, &read_spec(&live).unwrap(), &base(&live), 1, &mut HashSet::new()).unwrap(), Turn::Taken);
+        assert!(dead.iter().all(|d| current_record(d).unwrap().state == JobState::Gone));
+        drop(runner);
         let _ = fs::remove_dir_all(&root);
     }
 
