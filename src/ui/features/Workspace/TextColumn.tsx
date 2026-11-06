@@ -22,7 +22,7 @@ import { takenBeside } from "../../../lib/io/beside";
 import { shortcutLabel } from "../../../lib/doc/shortcuts";
 import { isPinch, wheelReader } from "../../../lib/input/wheel";
 import { QUIET_AFTER_MIN, useAppSettings } from "../../../lib/settings/appSettings";
-import { quietFor, quietSaid } from "../../../lib/jobs";
+import { quietFor, quietShort } from "../../../lib/jobs";
 import { pageUnder, pointOn } from "../../../lib/pdf/column";
 import { figureStructuresHad } from "./utils/pdfStructures";
 import { indexOnce, mentionUnder } from "./utils/compoundLens";
@@ -238,7 +238,8 @@ function Column({
   const jobState = (id: string) => {
     const said = jobStateSaid(id, jobsSeen, logRan);
     const quiet = quietFor(jobsSeen[id], Date.now(), quietAfter);
-    return said && quiet != null ? `${said} \u00b7 ${quietSaid(quiet)}` : said;
+    // (in place of "running": the chooser's room is short)
+    return quiet != null ? quietShort(quiet) : said;
   };
   // (the job shown, where it waits or runs: one that may be stopped alone - its step going on without it)
   const shownJob = logJobs ? logJobs.jobs[logJobs.job] : undefined;

@@ -47,8 +47,12 @@ export function quietFor(job: { state: string; lastWritten?: number } | undefine
   return min >= afterMin ? min : null;
 }
 
-/** A job quiet so long, said: "no output for 47 min". */
-export const quietSaid = (min: number) => `no output for ${min < 120 ? `${min} min` : `${Math.floor(min / 60)} h ${min % 60} min`}`;
+/** How long, said: "47 min", or "2 h 5 min" from two hours. */
+const minutesSaid = (min: number) => (min < 120 ? `${min} min` : `${Math.floor(min / 60)} h ${min % 60} min`);
+/** A job quiet so long, said on its step's line: "no output for 47 min". */
+export const quietSaid = (min: number) => `no output for ${minutesSaid(min)}`;
+/** And in a job's place in a list, where there is less room - for a job running, in place of "running": "quiet 47 min". */
+export const quietShort = (min: number) => `quiet ${minutesSaid(min)}`;
 
 /** A file written into a job's folder before it starts, by its path there. */
 export type JobFile = { name: string; text: string };

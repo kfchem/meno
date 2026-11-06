@@ -22,7 +22,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   },
 }));
 
-import { coresCountedSaid, finished, quietFor, quietSaid, followJob, keptText, liveJobsOf, runningOf, limitsOf, overLimits, startJob, stopJobsAndWait, type Job } from "./jobs";
+import { coresCountedSaid, finished, quietFor, quietSaid, quietShort, followJob, keptText, liveJobsOf, runningOf, limitsOf, overLimits, startJob, stopJobsAndWait, type Job } from "./jobs";
 
 describe("jobs", () => {
   beforeEach(() => {
@@ -151,5 +151,6 @@ describe("a running job that has written nothing for long", () => {
 
   it("says how long in minutes, and in hours and minutes from two hours", () => {
     expect([quietSaid(47), quietSaid(119), quietSaid(125), quietSaid(24 * 60)]).toEqual(["no output for 47 min", "no output for 119 min", "no output for 2 h 5 min", "no output for 24 h 0 min"]);
+    expect([quietShort(47), quietShort(125)]).toEqual(["quiet 47 min", "quiet 2 h 5 min"]);
   });
 });

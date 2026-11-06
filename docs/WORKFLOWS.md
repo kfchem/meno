@@ -897,7 +897,8 @@ src-tauri jobs.rs `last_written`) - and where that is longer ago than
 *Settings, Calculations, Say a job is quiet after* (minutes; 30 unless set,
 `QUIET_AFTER_MIN`), the step's running line and its log's job chooser say
 so: *Running · 3 of 12 · no output for 47 min* (the quietest of its running
-jobs), *Job 4 of 12 · running · no output for 47 min*. It is said only:
+jobs), *Job 4 of 12 · quiet 47 min* (in place of *running*: the chooser's
+room is short). It is said only:
 Meno never ends a job for it, since how long a program may rightly write
 nothing depends on the program and its method. The chemist may end it with
 *Stop this job*, beside the chooser. (The default, 2026-11-06, is a
