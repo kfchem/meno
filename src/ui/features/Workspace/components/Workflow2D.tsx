@@ -26,11 +26,12 @@ import { DURATION, EASE, eased } from "../../../theme/motion";
 import { canWire, entryOnPage, givesOf, stateOf, stepsRun, wireInto, wireRefusal } from "../workflow/flow";
 import { addHow } from "../workflow/addStep";
 import { droppedBy, namesOf } from "../workflow/earlierRuns";
-import { howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
+import { exitsOf, howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
+import { exitStart } from "../workflow/place";
 import { useReaders } from "../../../../lib/calc/workers";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { finished } from "../../../../lib/jobs";
-import { CARD_H, CARD_W, framesHash, HTML_DISTANCE, inputLead, nearWire, onLayer, PORTS_Z, portDown, PX, setGives, setTakes, shuttingCard, stepGives, stepTakes as portTakes, underCard, byTurn, FrameBudget, pointsFor, roundedWay, WIRE_LANE, WireEasing, wireLanes, wireRoute, wireKey, type WireRouted } from "../workflow/look";
+import { CARD_H, CARD_W, framesHash, HTML_DISTANCE, inputLead, nearWire, onLayer, PORTS_Z, portDown, PX, setGives, setTakes, shuttingCard, stepTakes as portTakes, underCard, byTurn, FrameBudget, pointsFor, roundedWay, WIRE_LANE, WireEasing, wireLanes, wireRoute, wireKey, type WireRouted } from "../workflow/look";
 import { byOf, doerOf, inputsFor, installedFor, kindsOf, notReadyFor, optionsFor, setName, stepOptions } from "../workflow/doers";
 import { diagramKept, diagramNeeds, diagramOptions, diagramValues } from "../workflow/diagramOptions";
 import { lookFor, useInstalled } from "../../../../lib/plugins/installed";
@@ -603,15 +604,16 @@ export default function Workflow2D() {
     else st.connect(from, step, port);
   };
 
-  /** A wire drawn out of a set: into a step's input, or - let go on empty space - Quick Add there, at the steps that take it. */
-  const drawFrom = (e: ReactPointerEvent, from: WireEnd) => {
+  /** A wire drawn out of a set - from its own port, or its step's for that exit (`card`): into a step's input, or - let go on empty space - Quick Add there, at the steps that take it. */
+  const drawFrom = (e: ReactPointerEvent, from: WireEnd, card = false) => {
     if (e.button !== 0) return;
     // (pictures - a Render step's - no step takes: no wire is drawn out of them)
     if (givesOf(store.getState(), from) === "pictures") return;
-    store.getState().setWorkflowView({ wireDrag: { from, at: worldOf(e.clientX, e.clientY) }, wireRefused: null });
+    const out = card ? { card: true as const } : {};
+    store.getState().setWorkflowView({ wireDrag: { from, at: worldOf(e.clientX, e.clientY), ...out }, wireRefused: null });
     follow(
       e,
-      (at) => store.getState().setWorkflowView({ wireDrag: { from, at } }),
+      (at) => store.getState().setWorkflowView({ wireDrag: { from, at, ...out } }),
       (moved, ev) => {
         const st = store.getState();
         st.setWorkflowView({ wireDrag: null });
@@ -788,9 +790,16 @@ export default function Workflow2D() {
   const flow = useMemo(() => ({ model, molecules3d, sets, steps, wires, pictures }), [model, molecules3d, sets, steps, wires, pictures]);
   const stepById = useMemo(() => new Map(steps.map((s) => [s.id, s])), [steps]);
   const setById = useMemo(() => new Map(sets.map((b) => [b.id, b])), [sets]);
+  // (each step's exits' sets, by step and exit: a port drawn for each)
+  const exitSets = useMemo(() => new Map(sets.flatMap((b) => (b.made ? [[`${b.made.step}:${b.made.exit}`, b] as const] : []))), [sets]);
   const gives = (end: WireEnd): Pt | null => {
     const b = setById.get(end.set);
     return b ? setGives(shownOf(b)) : null;
+  };
+  /** Where a step's result set's exit gives on its card (place `exitStart`): the port the line to the set leaves from. */
+  const exitGives = (b: WorkflowSet): Pt | null => {
+    const s = b.made ? stepById.get(b.made.step) : undefined;
+    return s && b.made ? exitStart(s, b.made.exit) : null;
   };
   // (a step whose options are its role's starts from Settings' choices for it: those changed, its card and state follow)
   const settingsOptions = useAppSettings((s) => s.options);
@@ -901,7 +910,8 @@ export default function Workflow2D() {
   const drawn = (() => {
     if (!wireDrag) return null;
     if (wireDrag.from) {
-      const p = gives(wireDrag.from);
+      const b = wireDrag.card ? setById.get(wireDrag.from.set) : undefined;
+      const p = (b && exitGives(b)) ?? gives(wireDrag.from);
       return p ? { p, q: wireDrag.at } : null;
     }
     const s = wireDrag.to != null ? stepById.get(wireDrag.to.step) : undefined;
@@ -1021,7 +1031,8 @@ export default function Workflow2D() {
     }),
     ...sets.flatMap((b) => {
       const s = b.made ? stepById.get(b.made.step) : undefined;
-      return s ? [{ key: `m${b.id}`, p: stepGives(s), q: setTakes(shownOf(b)), ends: endsNear(stepGives(s), setTakes(shownOf(b)), { from: cardFrame(s), to: shownOf(b) }), moving: false, color: WIRE, onHover: undefined }] : [];
+      const p = exitGives(b);
+      return s && p ? [{ key: `m${b.id}`, p, q: setTakes(shownOf(b)), ends: endsNear(p, setTakes(shownOf(b)), { from: cardFrame(s), to: shownOf(b) }), moving: false, color: WIRE, onHover: undefined }] : [];
     }),
   ];
   const shownWires = usePresence(wireParts, (w) => w.key);
@@ -1103,6 +1114,7 @@ export default function Workflow2D() {
           {steps.map((s) => {
             const ports = inputsFor(s.kind, byOf(s));
             const name = kindInfo(s.kind).name;
+            const exits = exitsOf(s.kind);
             return (
               <div key={`s${s.id}`} className="meno-fade-in" style={{ ...onLayer(s.x, s.y), width: 0, height: 0 }}>
                 {ports.map((p, k) =>
@@ -1118,6 +1130,22 @@ export default function Workflow2D() {
                   />
                   ),
                 )}
+                {/* (each exit a port of its own down the card's right side, as its inputs are down its left: a wire drawn out of it is drawn out of that exit's set) */}
+                {exits.map((x, k) => {
+                  const b = exitSets.get(`${s.id}:${x.id}`);
+                  if (!b || (s.id !== cover?.step && underCard({ x: s.x + CARD_W, y: s.y - portDown(k) }, coverFrame, portR))) return null;
+                  return (
+                    <Port
+                      key={`x${x.id}`}
+                      look={portLook("give", { set: b.id })}
+                      label={exits.length > 1 ? `${setInfo.get(b.id)?.name ?? x.name} out of ${name}` : `Out of ${name}`}
+                      data={{ "data-give-set": String(b.id) }}
+                      onPointerDown={(e) => drawFrom(e, { set: b.id }, true)}
+                      style={{ left: CARD_W / PX, top: portDown(k) / PX }}
+                      of={CARD_H / PX}
+                    />
+                  );
+                })}
               </div>
             );
           })}

@@ -15,7 +15,9 @@ import { forThisSystem, systemHere, SYSTEM_NAMES } from "../../../lib/plugins/he
 import { locate, lookForAll, programKey, useInstalled } from "../../../lib/plugins/installed";
 import { SYSTEMS, type InstalledDecl } from "../../../lib/plugins/manifest";
 import { showSettingsSection } from "./section";
+import { usePluginsHere } from "../../../lib/plugins/known";
 import { KINDS } from "../Workspace/workflow/kinds";
+import { actOnFiles, filesCanGo, filesView, type FilesAsked } from "./pluginFiles";
 import { kindById } from "../../../lib/io/kinds";
 import { useCheckingFiles, useDownloads } from "../../../lib/pyEnv";
 
@@ -39,6 +41,8 @@ const when = (iso: string) => new Date(iso).toLocaleString(undefined, { year: "n
  * itself is not among them: what it reads and writes is in Files.
  */
 export default function PluginSettings() {
+  // (drawn again each time the plugins in place are taken anew: one whose files were taken away leaves the list at once, offered online again)
+  usePluginsHere((s) => s.taken);
   const states = useReaders((s) => s.state);
   const problems = useReaders((s) => s.problem);
   const online = useOnline();
@@ -178,6 +182,8 @@ function Plugin({ plugin: p, state, problem, offer }: { plugin: AnyPlugin; state
   const [live, setLive] = useState<readonly Job[] | null>(null);
   // (the plugins added that use it, as taking it away was asked: taken away too, only once the chemist says so - never it alone)
   const [using, setUsing] = useState<readonly AnyPlugin[] | null>(null);
+  // (its files, as taking them away was asked - here and not added: taken away only once the chemist says so - and why not, where they were not)
+  const [filesAsked, setFilesAsked] = useState<FilesAsked>({ asking: false });
   // (why it is stopped, added: a plugin it uses not added, or not of a version it works with)
   const stopped = useReaders((s) => (s.state[p.id] === "added" ? stoppedOf(p, new Set(Object.keys(s.state).filter((id) => s.state[id] === "added"))) : null));
   // (a kind of file of another plugin's it uses, not taken now - that plugin of another version - each a line: as text, one value to compare)
@@ -208,6 +214,16 @@ function Plugin({ plugin: p, state, problem, offer }: { plugin: AnyPlugin; state
         } else run((q) => removePlugin(q, [], true));
       });
   };
+  const files = filesView(
+    filesAsked,
+    (act) => {
+      if (act.type === "remove") setBusy(true);
+      void actOnFiles(act, p.id, setFilesAsked).finally(() => act.type === "remove" && setBusy(false));
+    },
+    p.name,
+    busy,
+  );
+
   // (its files besides its packages, as they come - all come, and a program's build being unpacked: no share said)
   const share = useDownloads((s) => s[p.id]);
   // (its files read through for their fingerprints, where that takes more than a moment: a model's weights)
@@ -275,7 +291,7 @@ function Plugin({ plugin: p, state, problem, offer }: { plugin: AnyPlugin; state
         )}
         <p className="text-xs text-gh-gray mt-1 max-w-2xl">
           {p.licence} · {p.homepage.replace(/^https?:\/\//, "")}
-          {!runs(p) && " · Comes with Meno: nothing to download."}
+          {!runs(p) && " · Nothing to set up: its files only."}
         </p>
         {offer && <TermsAndCite entry={offer.entry} />}
         {refused.length > 0 && (
@@ -292,7 +308,7 @@ function Plugin({ plugin: p, state, problem, offer }: { plugin: AnyPlugin; state
               {line}.
             </p>
           ))}
-        {problem && <p className="text-xs text-accel-accent mt-1 meno-fade-in">{problem}</p>}
+        {(problem ?? filesAsked.problem) && <p className="text-xs text-accel-accent mt-1 meno-fade-in">{problem ?? filesAsked.problem}</p>}
       </div>
       <div className="flex flex-col items-end gap-1.5">
         <span key={status} className="text-xs text-gh-gray meno-fade-in">
@@ -329,6 +345,7 @@ function Plugin({ plugin: p, state, problem, offer }: { plugin: AnyPlugin; state
             </button>
           </div>
         )}
+        {filesCanGo(state, addedUsing(p.id)) && files.button}
       </div>
       <AnimatePresence>
         {using && (
@@ -344,6 +361,12 @@ function Plugin({ plugin: p, state, problem, offer }: { plugin: AnyPlugin; state
                 remove(true);
               }}
             />
+          </motion.div>
+        )}
+        {files.question && (
+          // (over the whole window, as a question about the app is)
+          <motion.div key="files" {...FADE} className="fixed inset-0 z-[100]">
+            {files.question}
           </motion.div>
         )}
         {live && (

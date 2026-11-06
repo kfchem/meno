@@ -30,22 +30,6 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
-      # A plugin's worker that needs Python alone is tested here; those that
-      # need their packages, in the job "plugins" below.
-      - run: python3 -m unittest scripts/calc/test_plugin_gaussian.py
-      - run: python3 -m unittest scripts/calc/test_reader_gaussian.py
-      - run: python3 -m unittest scripts/calc/test_plugin_orca.py
-      - run: python3 -m unittest scripts/calc/test_reader_orca.py
-      - run: python3 -m unittest scripts/calc/test_plugin_xtb.py
-      - run: python3 -m unittest scripts/calc/test_reader_xtb.py
-      - run: python3 -m unittest scripts/calc/test_plugin_crest.py
-      - run: python3 -m unittest scripts/calc/test_plugin_blender.py
-      - run: python3 -m unittest scripts/calc/test_plugin_blender_presets.py
-      - run: python3 -m unittest scripts/calc/test_plugin_nci.py
-      - run: python3 -m unittest scripts/calc/test_plugin_pictures.py
-      - run: python3 -m unittest scripts/calc/test_plugin_reinvent.py
-      - run: python3 -m unittest scripts/calc/test_plugin_crem.py
-      - run: python3 -m unittest scripts/calc/test_charge_multiplicity.py
 
   frontend-windows:
     name: Frontend tests on Windows
@@ -60,41 +44,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
-
-  plugins:
-    # The plugins' own tests that need their packages, each in its plugin's
-    # environment installed from the plugin's lock - exactly the versions
-    # the app sets up - so that a known answer they hold (the RDKit plugin's
-    # ring chairs, its configurations) is checked on every push. A job of
-    # its own: the package index being down fails this, not the build.
-    name: Plugins (each in its locked environment)
-    # (its locks are compiled for Python 3.12, this image's own)
-    runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - plugin: rdkit
-            needs: rdkit
-            tests: scripts/calc/test_plugin_rdkit.py scripts/chem/test_chem_worker.py
-          # (its fragment database aside: 2 GB unpacked, its tests that need it skipped here)
-          - plugin: crem
-            needs: crem
-            tests: scripts/calc/test_plugin_crem.py
-          # (the programs' outputs aside: never committed, its tests that read them skipped here)
-          - plugin: cclib
-            needs: cclib
-            tests: scripts/calc/test_reader_cclib.py
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - name: Its environment, from its lock
-        run: |
-          python3 --version
-          python3 -m venv "$RUNNER_TEMP/env"
-          "$RUNNER_TEMP/env/bin/python" -m pip install --require-hashes --no-deps -r src-tauri/resources/plugins/${{ matrix.plugin }}/requirements.lock
-      # (the package its tests need, there - so that they run, not skip)
-      - run: '"$RUNNER_TEMP/env/bin/python" -c "import ${{ matrix.needs }}"'
-      - run: '"$RUNNER_TEMP/env/bin/python" -m unittest ${{ matrix.tests }}'
 
   rust:
     name: Rust backend (check, clippy, test)

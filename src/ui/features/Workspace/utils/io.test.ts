@@ -19,7 +19,7 @@ import { readMarks } from "./figures";
 import { implicitHydrogens } from "../../../../lib/chem/molecule";
 
 // (XYZ energies are read by the patterns of the plugins added: those of the programs that write them)
-beforeAll(() => registerKinds(MANIFESTS.filter((m) => ["xtb", "crest", "orca"].includes(m.id))));
+beforeAll(() => registerKinds(MANIFESTS.filter((m) => ["tightbind", "confsweep", "quanta"].includes(m.id))));
 afterAll(() => registerKinds([]));
 
 describe("processFileContent", () => {
@@ -121,7 +121,7 @@ describe("a file with no coordinates", () => {
 
 describe("opensAsText", () => {
   it("takes a file of no kind as text, as Open does - not one Meno does not read yet, nor bytes", () => {
-    expect(opensAsText("job.inp", "! B3LYP def2-SVP\n")).toBe(true);
+    expect(opensAsText("job.inp", "# M1 B-small\n")).toBe(true);
     expect(opensAsText("README", "words")).toBe(true);
     expect(opensAsText("scheme.KET", '{"root":{}}')).toBe(false);
     expect(opensAsText("picture.png", "\u0089PNG\r\n\u001a\n\u0000\u0000\u0000\rIHDR")).toBe(false);
@@ -185,30 +185,30 @@ describe("files of 3D structures", () => {
   });
 
   it("open an optimisation's steps, as a plugin knows its program's file of them - renamed too: no frame an entry, convergence not stated in it", async () => {
-    // (xtb 6.7.1 writes an optimisation's steps to xtbopt.log, ORCA 6.1.1 to <name>_trj.xyz, each frame's comment line
-    // as below: which converged is said in their outputs, not there)
-    registerKinds(MANIFESTS.filter((m) => ["xtb", "crest", "orca"].includes(m.id)));
+    // (the made-up Tightbind writes an optimisation's steps to tbopt.log, Quanta to <name>_path.xyz, each frame's comment
+    // line as below: which converged is said in their outputs, not there)
+    registerKinds(MANIFESTS.filter((m) => ["tightbind", "confsweep", "quanta"].includes(m.id)));
     const water = (comment: string, x: number) => `3\n${comment}\nO 0 0 0\nH ${x} 0 0\nH -0.24 0.93 0\n`;
-    const xtb = water(" energy: -5.061234567891 gnorm: 0.061234567891 xtb: 6.7.1 (abc1234)", 0.99) + water(" energy: -5.071234 gnorm: 0.000321 xtb: 6.7.1 (abc1234)", 0.96);
-    const orca = water("Coordinates from ORCA-job opt E -76.02", 0.99) + water("Coordinates from ORCA-job opt E -76.03", 0.96);
-    // (ORCA's relaxed scan's points, each converged, and a conformer search's: ensembles)
-    const scan = water("Coordinates from ORCA-job oscan Relaxed Surface Scan Step 1 E -113.548212345678", 0.99) + ">\n" + water("Coordinates from ORCA-job oscan Relaxed Surface Scan Step 2 E -113.541850", 0.96);
-    const crest = water("        -5.07123400", 0.96) + water("        -5.06912300", 0.99);
+    const tb = water(" energy: -5.061234567891 gradient: 0.061234567891 tightbind 1.0", 0.99) + water(" energy: -5.071234 gradient: 0.000321 tightbind 1.0", 0.96);
+    const quanta = water("Quanta step opt E -76.02", 0.99) + water("Quanta step opt E -76.03", 0.96);
+    // (a relaxed scan's points, each converged, and a conformer search's: ensembles)
+    const scan = water("Quanta scan point 1 E -113.548212345678", 0.99) + ">\n" + water("Quanta scan point 2 E -113.541850", 0.96);
+    const sweep = water("        -5.07123400", 0.96) + water("        -5.06912300", 0.99);
     const opened = async (name: string, text: string) => (await processFileContent(name, text)).molecules3d![0];
-    for (const [name, text] of [["xtbopt.log", xtb], ["opt.log", xtb], ["water_xtbopt.log", xtb], ["opt_trj.xyz", orca], ["OPT_TRJ.XYZ", crest], ["steps.xyz", orca]]) {
+    for (const [name, text] of [["tbopt.log", tb], ["opt.log", tb], ["water_tbopt.log", tb], ["opt_path.xyz", quanta], ["OPT_PATH.XYZ", sweep], ["steps.xyz", quanta]]) {
       const m = await opened(name, text);
       expect([m.entryFrames, m.noEntryWhy, entriesIn(m)], name).toEqual([[], "unstated", 0]);
     }
-    for (const [name, text] of [["oscan.allxyz", scan], ["crest_conformers.xyz", crest], ["ensemble.xyz", crest], ["xtbopt.xyz", water(" energy: -5.0705 gnorm: 0.0003 xtb: 6.7.1", 0.96)]]) {
+    for (const [name, text] of [["scan.allxyz", scan], ["sweep_conformers.xyz", sweep], ["ensemble.xyz", sweep], ["tbopt.xyz", water(" energy: -5.0705 gradient: 0.0003 tightbind 1.0", 0.96)]]) {
       const m = await opened(name, text);
-      expect([m.entryFrames, entriesIn(m)], name).toEqual([undefined, name === "xtbopt.xyz" ? 1 : 2]);
+      expect([m.entryFrames, entriesIn(m)], name).toEqual([undefined, name === "tbopt.xyz" ? 1 : 2]);
     }
   });
 
   it("keep each frame's energy, where a calculation reader finds one", async () => {
     const frame = (comment: string, x: number) => `2\n${comment}\nH 0 0 0\nH ${x} 0 0\n`;
-    const crest = await processFileContent("crest_conformers.xyz", frame("  -1.1700", 0.74) + frame("  -1.1650", 0.8));
-    expect(crest.molecules3d![0].energies).toEqual([-1.17, -1.165]);
+    const sweep = await processFileContent("sweep_conformers.xyz", frame("  -1.1700", 0.74) + frame("  -1.1650", 0.8));
+    expect(sweep.molecules3d![0].energies).toEqual([-1.17, -1.165]);
     expect(xyzComments(frame("first", 0.74) + frame(" second ", 0.8))).toEqual(["first", " second "]);
     const titled = await processFileContent("h2.xyz", frame("first", 0.74) + frame("second", 0.8));
     expect(titled.molecules3d![0].energies).toBeUndefined();
@@ -261,8 +261,8 @@ describe("an aromatic ring whose file does not say which nitrogen carries its H"
 describe("a calculation's output, as a reader read it", () => {
   // an optimisation of water, in the reader's plain data, written by hand
   const out = {
-    program: "ORCA",
-    method: "B3LYP",
+    program: "Quanta",
+    method: "M1",
     charge: 0,
     multiplicity: 1,
     atoms: ["O", "H", "H"],
@@ -276,7 +276,7 @@ describe("a calculation's output, as a reader read it", () => {
   };
 
   it("stands on the page as one molecule in 3D: its steps the frames, the last shown, its bonds found as an XYZ file's are", () => {
-    const [m] = calcResult(out, ["cclib 1.9rc1"], "water_opt.out").molecules3d!;
+    const [m] = calcResult(out, ["manyread 2.0"], "water_opt.out").molecules3d!;
     expect(m.atoms.map((a) => a.el)).toEqual(["O", "H", "H"]);
     expect(m.bonds).toHaveLength(2);
     // (its bonds by distance, frame by frame: an output gives none)
@@ -285,14 +285,14 @@ describe("a calculation's output, as a reader read it", () => {
     expect(m.frame).toBe(2);
     expect(m.energies).toEqual([-76.30, -76.31, -76.32]);
     expect(m.name).toBe("water_opt.out");
-    expect(m.calc).toMatchObject({ readers: ["cclib 1.9rc1"], program: "ORCA", method: "B3LYP", optimised: true });
+    expect(m.calc).toMatchObject({ readers: ["manyread 2.0"], program: "Quanta", method: "M1", optimised: true });
   });
 
-  // (the maintainer, 2026-10-13: a file of several jobs - Gaussian's Link1, ORCA's $new_job - opens as one molecule for each)
+  // (the maintainer, 2026-10-13: a file of several jobs, as some programs write one, opens as one molecule for each)
   it("of a file of several jobs, stands as one molecule for each, side by side: each its own frames, energies and words", () => {
     const sp = { ...out, method: "HF", basis: "3-21G", frames: [out.frames[2]], energies: [-75.58], optimised: null, job: { number: 2, of: 2, kind: "Single point" } };
     const opt = { ...out, method: "HF", basis: "STO-3G", job: { number: 1, of: 2, kind: "Optimisation" } };
-    const r = calcResult({ ...sp, jobs: [opt, sp] }, ["cclib 1.9rc1"], "link1.log", { name: "link1.log", sha256: "c".repeat(64) });
+    const r = calcResult({ ...sp, jobs: [opt, sp] }, ["manyread 2.0"], "link1.log", { name: "link1.log", sha256: "c".repeat(64) });
     const [a, b] = r.molecules3d!;
     expect(r.molecules3d).toHaveLength(2);
     expect([a.name, b.name]).toEqual(["link1.log, job 1", "link1.log, job 2"]);
@@ -303,20 +303,20 @@ describe("a calculation's output, as a reader read it", () => {
     expect(b.calc).toMatchObject({ basis: "3-21G", job: { number: 2, of: 2, kind: "Single point" } });
     expect(b.calc!.optimised).toBeUndefined();
     // (a job that gives no geometry stands as none; a file of one job, as before)
-    expect(calcResult({ ...sp, jobs: [{ ...opt, frames: [] }, sp] }, ["cclib"], "x.log").molecules3d).toHaveLength(1);
-    expect(calcResult(out, ["cclib"], "one.out").molecules3d![0].name).toBe("one.out");
+    expect(calcResult({ ...sp, jobs: [{ ...opt, frames: [] }, sp] }, ["manyread"], "x.log").molecules3d).toHaveLength(1);
+    expect(calcResult(out, ["manyread"], "one.out").molecules3d![0].name).toBe("one.out");
   });
 
   describe("of an optimisation or a relaxed scan, the geometries it converged on are its entries", () => {
-    // (methanol's H-C-O-H dihedral scanned over its points - 21 geometries, the four it converged on marked as cclib
-    // marks them; their energies, made up)
+    // (methanol's H-C-O-H dihedral scanned over its points - 21 geometries, the four it converged on marked as the
+    // reader marks them; their energies, made up)
     const SCAN = [
       -113.540100, -113.541200, -113.541800, -113.541900, -113.541950, -113.490100, -113.530100, -113.547100, -113.548100, -113.548150, -113.548200,
       -113.485100, -113.525100, -113.541100, -113.541800, -113.541850, -113.480100, -113.530100, -113.546100, -113.547100, -113.547200,
     ];
     const methanol = (k: number) => [0, 0, 0, 0, 0, 1.42, 1.03, 0, -0.36, -0.515, 0.892, -0.36, -0.515, -0.892, -0.36, 0.93 - 0.01 * k, 0.01 * k, 1.74];
     const output = (n: number, converged: boolean[], energies = SCAN.slice(0, n)) => ({
-      program: "Gaussian",
+      program: "Orbitron",
       method: "HF",
       atoms: ["C", "O", "H", "H", "H", "H"],
       frames: Array.from({ length: n }, (_, k) => methanol(k)),
@@ -327,7 +327,7 @@ describe("a calculation's output, as a reader read it", () => {
 
     it("a relaxed scan: its four points, each with the energy it converged at - not its 21 steps", () => {
       const converged = SCAN.map((_, k) => [4, 10, 15, 20].includes(k));
-      const [m] = calcResult(output(21, converged), ["cclib"], "scan.log").molecules3d!;
+      const [m] = calcResult(output(21, converged), ["manyread"], "scan.log").molecules3d!;
       expect(m.frames).toHaveLength(20);
       expect(m.entryFrames).toEqual([4, 10, 15, 20]);
       expect(entriesIn(m)).toBe(4);
@@ -336,12 +336,12 @@ describe("a calculation's output, as a reader read it", () => {
     });
 
     it("an optimisation: its last geometry alone", () => {
-      const [m] = calcResult(output(5, [false, false, false, false, true]), ["cclib"], "opt.log").molecules3d!;
+      const [m] = calcResult(output(5, [false, false, false, false, true]), ["manyread"], "opt.log").molecules3d!;
       expect(entries(m).map((e) => [e.frame, e.energy])).toEqual([[4, SCAN[4]]]);
     });
 
     it("one that never converged: its last geometry an entry marked failed, not converged - seen and carried on, never weighed as a minimum", () => {
-      const [m] = calcResult(output(2, [false, false]), ["cclib"], "opt2.log").molecules3d!;
+      const [m] = calcResult(output(2, [false, false]), ["manyread"], "opt2.log").molecules3d!;
       expect(m.notConverged).toBe(true);
       expect(entries(m).map((e) => [e.frame, e.failed])).toEqual([[1, { kind: "not-converged", why: UNFINISHED_WHY }]]);
       expect(m.frames).toHaveLength(1);
@@ -352,7 +352,7 @@ describe("a calculation's output, as a reader read it", () => {
 
     it("says how many of its frames are entries, and that the rest are steps on the way", () => {
       const converged = SCAN.map((_, k) => [4, 10, 15, 20].includes(k));
-      const [m] = calcResult(output(21, converged), ["cclib"], "scan.log").molecules3d!;
+      const [m] = calcResult(output(21, converged), ["manyread"], "scan.log").molecules3d!;
       const molecule = { ...m, id: 1, at: { x: 0, y: 0 } } as Molecule3D;
       // (and, as any opened output's, that its bond orders are not known)
       expect(notesOf(molecule, solidOf(molecule, STYLE_3D), "primary")).toEqual(["Bond orders unknown", "4 of 21 frames are entries (converged points)"]);
@@ -361,7 +361,7 @@ describe("a calculation's output, as a reader read it", () => {
     it("a scan stopped before its last point converged: the points it converged on - and that last point, an entry marked failed, not converged", () => {
       // (the same scan's output cut short in its third point - 13 geometries, points 1 and 2 converged)
       const converged = SCAN.slice(0, 13).map((_, k) => [4, 10].includes(k));
-      const [m] = calcResult(output(13, converged), ["cclib"], "scan-cut.log").molecules3d!;
+      const [m] = calcResult(output(13, converged), ["manyread"], "scan-cut.log").molecules3d!;
       expect(m.entryFrames).toEqual([4, 10, 12]);
       expect(entries(m).map((e) => [e.energy, e.failed?.kind])).toEqual([
         [-113.54195, undefined],
@@ -375,8 +375,8 @@ describe("a calculation's output, as a reader read it", () => {
     });
 
     it("an optimisation stopped at its first geometry says it did not converge, as one stopped at its second does", () => {
-      const [one] = calcResult(output(1, [false]), ["cclib"], "opt1.log").molecules3d!;
-      const [two] = calcResult(output(2, [false, false]), ["cclib"], "opt2.log").molecules3d!;
+      const [one] = calcResult(output(1, [false]), ["manyread"], "opt1.log").molecules3d!;
+      const [two] = calcResult(output(2, [false, false]), ["manyread"], "opt2.log").molecules3d!;
       const notes = (m: typeof one) => notesOf({ ...m, id: 1, at: { x: 0, y: 0 } } as Molecule3D, solidOf({ ...m, id: 1, at: { x: 0, y: 0 } } as Molecule3D, STYLE_3D), "primary");
       // (its one geometry its one entry: only that it did not converge is said - and that it failed, as an entry)
       expect(notes(one)).toEqual(["Bond orders unknown", "Not converged"]);
@@ -391,9 +391,9 @@ describe("a calculation's output, as a reader read it", () => {
     const notes = (m: Omit<Molecule3D, "id" | "at">) => notesOf({ ...m, id: 1, at: { x: 0, y: 0 } } as Molecule3D, solidOf({ ...m, id: 1, at: { x: 0, y: 0 } } as Molecule3D, STYLE_3D), "primary");
 
     it("every geometry, where the reader marks none; none, where its marks are not one a geometry - convergence not stated, never every one", () => {
-      const [plain] = calcResult({ ...output(3, []), converged: undefined }, ["cclib"], "x.out").molecules3d!;
+      const [plain] = calcResult({ ...output(3, []), converged: undefined }, ["manyread"], "x.out").molecules3d!;
       expect(entriesIn(plain)).toBe(3);
-      const [odd] = calcResult(output(3, [false, true]), ["cclib"], "x.out").molecules3d!;
+      const [odd] = calcResult(output(3, [false, true]), ["manyread"], "x.out").molecules3d!;
       expect([odd.entryFrames, odd.noEntryWhy, odd.notConverged]).toEqual([[], "unstated", undefined]);
       expect(notes(odd)).toEqual(["Bond orders unknown", "No frame is an entry (convergence not stated in this file)"]);
     });
@@ -402,7 +402,7 @@ describe("a calculation's output, as a reader read it", () => {
       // (the scan, its eighth geometry cut short: 20 read, the four points still the four, a place earlier after it)
       const converged = SCAN.map((_, k) => [4, 10, 15, 20].includes(k));
       const o = output(21, converged);
-      const [m] = calcResult({ ...o, frames: o.frames.map((f, k) => (k === 7 ? f.slice(0, 10) : f)) }, ["cclib"], "scan.log").molecules3d!;
+      const [m] = calcResult({ ...o, frames: o.frames.map((f, k) => (k === 7 ? f.slice(0, 10) : f)) }, ["manyread"], "scan.log").molecules3d!;
       expect(m.frames).toHaveLength(19);
       expect(m.entryFrames).toEqual([4, 9, 14, 19]);
       expect(entriesIn(m)).toBe(4);
@@ -410,7 +410,7 @@ describe("a calculation's output, as a reader read it", () => {
     });
 
     it("none, where the reader says why none is: a run that did not end as it should, a path's points, convergence not stated", () => {
-      const why = (unmarked: Unmarked, n = 3) => calcResult({ ...output(n, Array(n).fill(false)), unmarked }, ["cclib"], "x.log").molecules3d![0];
+      const why = (unmarked: Unmarked, n = 3) => calcResult({ ...output(n, Array(n).fill(false)), unmarked }, ["manyread"], "x.log").molecules3d![0];
       expect(notes(why("error"))).toEqual(["Bond orders unknown", "No frame is an entry (the run ended with an error)"]);
       expect(notes(why("cut"))).toEqual(["Bond orders unknown", "No frame is an entry (the run did not come to its end)"]);
       expect(notes(why("path"))).toEqual(["Bond orders unknown", "No frame is an entry (points of a scan or a reaction path)"]);
@@ -425,14 +425,14 @@ describe("a calculation's output, as a reader read it", () => {
     });
 
     it("none, where which are entries does not read as the workspace is opened again - never every one", () => {
-      const [m] = calcResult(output(5, [false, false, false, false, true]), ["cclib"], "opt.log").molecules3d!;
+      const [m] = calcResult(output(5, [false, false, false, false, true]), ["manyread"], "opt.log").molecules3d!;
       for (const bad of [[9], [2, 1], "4", [0.5], null]) {
         const back = readCarried3D(JSON.parse(JSON.stringify({ ...m, entryFrames: bad, at: { x: 0, y: 0 } })))!;
         expect([back.entryFrames, back.noEntryWhy, entriesIn(back)], JSON.stringify(bad)).toEqual([[], "unread", 0]);
       }
       expect(notes(readCarried3D(JSON.parse(JSON.stringify({ ...m, entryFrames: [9], at: { x: 0, y: 0 } })))!)).toContain("No frame is an entry (which are could not be read)");
       // (a frame that does not read, left out: each entry kept by its place among those kept, the one left out with it)
-      const o = calcResult(output(21, SCAN.map((_, k) => [4, 10, 15, 20].includes(k))), ["cclib"], "scan.log").molecules3d![0];
+      const o = calcResult(output(21, SCAN.map((_, k) => [4, 10, 15, 20].includes(k))), ["manyread"], "scan.log").molecules3d![0];
       const holed = { ...o, frames: o.frames!.map((f, k) => (k === 9 ? [0] : k === 2 ? "x" : f)), at: { x: 0, y: 0 } };
       expect(readCarried3D(JSON.parse(JSON.stringify(holed)))!.entryFrames).toEqual([3, 13, 18]);
       // (a why that does not read is not said; none is still none)
@@ -442,21 +442,21 @@ describe("a calculation's output, as a reader read it", () => {
 
     it("kept as the workspace is saved and opened again", () => {
       const converged = SCAN.map((_, k) => [4, 10, 15, 20].includes(k));
-      const [m] = calcResult(output(21, converged), ["cclib"], "scan.log").molecules3d!;
+      const [m] = calcResult(output(21, converged), ["manyread"], "scan.log").molecules3d!;
       const back = readCarried3D(JSON.parse(JSON.stringify({ ...m, at: { x: 0, y: 0 } })))!;
       expect(back.entryFrames).toEqual([4, 10, 15, 20]);
-      const [n] = calcResult(output(2, [false, false]), ["cclib"], "opt2.log").molecules3d!;
+      const [n] = calcResult(output(2, [false, false]), ["manyread"], "opt2.log").molecules3d!;
       expect(readCarried3D(JSON.parse(JSON.stringify({ ...n, at: { x: 0, y: 0 } })))!.notConverged).toBe(true);
     });
   });
 
   it("keeps no energies that are not one a frame", () => {
-    const [m] = calcResult({ ...out, energies: [-76.32] }, ["cclib"], "x.out").molecules3d!;
+    const [m] = calcResult({ ...out, energies: [-76.32] }, ["manyread"], "x.out").molecules3d!;
     expect(m.energies).toBeUndefined();
   });
 
   it("is one frame, shown, for a single point", () => {
-    const [m] = calcResult({ ...out, frames: [out.frames[2]], energies: [-76.32] }, ["cclib"], "sp.out").molecules3d!;
+    const [m] = calcResult({ ...out, frames: [out.frames[2]], energies: [-76.32] }, ["manyread"], "sp.out").molecules3d!;
     expect(m.frames).toBeUndefined();
     expect(m.frame).toBeUndefined();
     expect(m.energies).toEqual([-76.32]);

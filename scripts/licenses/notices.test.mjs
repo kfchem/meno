@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { measured } from "../../src/testing/timeouts";
@@ -67,11 +67,8 @@ describe("the third-party notices", () => {
     expect(notices).not.toContain("\r");
     expect(notices.endsWith("\n") && !notices.endsWith("\n\n")).toBe(true);
     for (const name of ["PDFium-*", "pdfium-render-*", "IBM-Plex-OFL.txt", "Arimo-OFL.txt", "ACCeL-MIT.txt"]) expect(notices).toContain(`  ${name} `);
-    // (each plugin Meno carries whose own code is under another licence, its LICENSE in its folder: named - docs/PLUGINS.md, *Licences*)
-    const plugins = join(ROOT, "src-tauri", "resources", "plugins");
-    const own = readdirSync(plugins).filter((id) => existsSync(join(plugins, id, "LICENSE")));
-    expect(own.length).toBeGreaterThan(0);
-    for (const id of own) expect(notices, id).toMatch(new RegExp(`resources/plugins/${id}(?![\\w-])`));
+    // (Meno carries no plugin: none named here - each one's licence is in its own folder, in the plugins' repository)
+    expect(notices).not.toMatch(/resources\/plugins\//);
   });
 
   it("are carried by the app on every system, where Settings reads them", () => {

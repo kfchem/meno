@@ -153,3 +153,14 @@ export async function getPlugin(entry: CatalogueEntry, files: PluginFiles = PLUG
   await files.commit(stage);
   await files.reload();
 }
+
+/**
+ * A plugin's files taken away, where it is here and not added (Meno's
+ * backend, `plugin_files_remove`: the version in use unnamed first, then
+ * its folder) - then the plugins in place read again, so that it is gone at
+ * once. It can be got again from the list, as any plugin is.
+ */
+export async function removeFiles(id: string, remove = (id: string) => invoke<void>("plugin_files_remove", { id }), reload: () => Promise<void> = refreshPlugins): Promise<void> {
+  await remove(id);
+  await reload();
+}

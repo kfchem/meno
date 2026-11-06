@@ -1,0 +1,26 @@
+// Quanta's input, a made-up program's, for Meno's tests: keyword lines (# ...), sections (@name ... @close) of
+// settings (name value) and atoms (Element x y z). Comments run from ; to the line's end. A section left open is
+// not Quanta's input.
+@top Input { (item | nl)* }
+item { Keywords nl | Section }
+Keywords { "#" Keyword* }
+Keyword { upper | lower }
+Section { SectionName nl (line? nl)* Close nl }
+line { Setting | Atom }
+Setting { Name Value* }
+Name { lower }
+Atom { Element Value+ }
+Element { upper }
+@skip { space | Comment }
+@tokens {
+  space { $[ \t\r]+ }
+  nl { "\n" }
+  Comment { ";" ![\n]* }
+  SectionName { "@" $[a-z]+ }
+  Close { "@close" }
+  upper { $[A-Z] $[A-Za-z0-9_()+-]* }
+  lower { $[a-z] $[a-z0-9_-]* }
+  Value { "-"? $[0-9]+ ("." $[0-9]+)? }
+  "#"
+  @precedence { Close, SectionName }
+}

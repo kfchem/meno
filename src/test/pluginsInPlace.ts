@@ -1,9 +1,10 @@
-// Tests: the plugins Meno carries, for now, taken as if put in place (lib/plugins/known) - each folder's manifest
-// and grammars as written, at plugins/<id>/<version> of a data folder of no computer's - before any test reads them.
+// Tests: Meno's made-up test plugins (./plugins: invented programs, hand-written, standing for any a chemist adds)
+// taken as if put in place (lib/plugins/known) - each folder's manifest and grammars, at plugins/<id>/<version> of a
+// data folder of no computer's - before any test reads them. Meno carries no plugin.
 import { setInstalled } from "../lib/plugins/known";
 
-const manifests = import.meta.glob<string>("/src-tauri/resources/plugins/*/manifest.json", { eager: true, query: "?raw", import: "default" });
-const grammars = import.meta.glob<string>("/src-tauri/resources/plugins/*/*.grammar", { eager: true, query: "?raw", import: "default" });
+const manifests = import.meta.glob<string>("/src/test/plugins/*/manifest.json", { eager: true, query: "?raw", import: "default" });
+const grammars = import.meta.glob<string>("/src/test/plugins/*/*.grammar", { eager: true, query: "?raw", import: "default" });
 
 setInstalled(
   Object.entries(manifests).map(([path, manifest]) => {

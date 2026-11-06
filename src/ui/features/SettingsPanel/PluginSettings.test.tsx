@@ -5,7 +5,7 @@ import type { Online } from "../../../lib/plugins/online";
 import PluginSettings from "./PluginSettings";
 
 // (the list online, as the test has it: the server's renderer reads a store as it began, so the store is stood in for)
-const shown = vi.hoisted(() => ({ online: { state: "unlisted" } as Online }));
+const shown = vi.hoisted(() => ({ online: { state: "unlisted" } as Online, usedBy: {} as Record<string, { id: string }[]> }));
 vi.mock("../../../lib/plugins/online", async (actual) => {
   const real = await actual<typeof import("../../../lib/plugins/online")>();
   const hook = Object.assign(<T,>(pick?: (s: Online) => T) => (pick ? pick(shown.online) : shown.online), { setState: () => {}, getState: () => shown.online, subscribe: () => () => {} });
@@ -16,7 +16,7 @@ vi.mock("../../../lib/calc/workers", async (actual) => {
   const real = await actual<typeof import("../../../lib/calc/workers")>();
   const { ALL_PLUGINS: all } = await import("../../../lib/calc/catalog");
   const now = { state: Object.fromEntries(all.map((p) => [p.id, "absent"])), problem: {} };
-  return { ...real, useReaders: <T,>(pick: (s: typeof now) => T) => pick(now), addedReaders: async () => new Set() };
+  return { ...real, useReaders: <T,>(pick: (s: typeof now) => T) => pick(now), addedReaders: async () => new Set(), addedUsing: (id: string) => shown.usedBy[id] ?? [] };
 });
 vi.mock("../../../lib/plugins/here", async (actual) => ({ ...(await actual<typeof import("../../../lib/plugins/here")>()), systemHere: () => "macos" }));
 
@@ -89,6 +89,17 @@ describe("Plugins in Settings, with the list online", () => {
     expect(html).toContain("It is for a newer Meno");
     // (the plugin here not offered again)
     expect(html.split(`${HERE.name} <span`).length).toBe(2);
+  });
+
+  it("offers to take the files of a plugin here, and not added, away - asking first - and not where a plugin added uses it", () => {
+    const cardOf = (html: string) => {
+      const card = html.slice(html.indexOf(`${HERE.name} <span`));
+      return card.slice(0, card.indexOf('<div class="rounded-lg border'));
+    };
+    expect(cardOf(drawn({ state: "unlisted" }))).toMatch(/>Remove its files</);
+    shown.usedBy = { [HERE.id]: [{ id: "uses-it" }] };
+    expect(cardOf(drawn({ state: "unlisted" }))).not.toMatch(/Remove its files/);
+    shown.usedBy = {};
   });
 
   it("says why there is no list, in Meno's warning colour, and how it is the one from before where it is", () => {

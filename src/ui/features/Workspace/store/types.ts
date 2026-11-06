@@ -963,7 +963,7 @@ export type WorkflowStep = {
   /** *Don't keep raw outputs*: its jobs' files kept in the workspace's file are only what they were given, what was read back of them, and their logs. */
   keepRaw?: false;
 };
-/** Where a wire starts: a set - a step's exits are sets of their own, so a step has no give port of its own. */
+/** Where a wire starts: a set - a step's exits are sets of their own, and each exit's port on its card is its set's (look `stepGives`). */
 export type WireEnd = { set: number };
 /** Where a wire ends: a step, and which of its inputs. */
 export type WireTo = { step: number; port: string };
@@ -1670,11 +1670,12 @@ export type EditorState = {
   /** A set's tab or a step's card right-clicked: its menu asked for, there (Workspace opens it). */
   workflowMenu: { kind: "set" | "step"; id: number; clientX: number; clientY: number } | null;
   /**
-   * A wire being drawn, to where the pointer is: from what gives, or back
-   * from a step that takes (`to`); picked up off the step it went into,
-   * the wire it was (`was`).
+   * A wire being drawn, to where the pointer is: from what gives - drawn
+   * out of its step's port for that exit, where it was pressed there
+   * (`card`) - or back from a step that takes (`to`); picked up off the
+   * step it went into, the wire it was (`was`).
    */
-  wireDrag: { from?: WireEnd; to?: WireTo; at: { x: number; y: number }; was?: number } | null;
+  wireDrag: { from?: WireEnd; to?: WireTo; at: { x: number; y: number }; was?: number; card?: true } | null;
   /** A wire let go on a step's input that does not take it: the step, and why (flow `wireRefusal`) - said on its card until a wire is drawn again. */
   wireRefused: { step: number; said: string } | null;
   setWorkflowView: (patch: Partial<Pick<EditorState, WorkflowView>>) => void;

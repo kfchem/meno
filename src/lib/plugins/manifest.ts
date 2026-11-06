@@ -30,7 +30,7 @@ import { rangeOf, type DependDecl, type InterfaceDecl, type UsedInterface, type 
 import { acceptOptions, type Option } from "../options";
 import { TONE_NAMES, type Tone } from "../text/tones";
 import { isRole, ROLES, type RoleId } from "./roles";
-import { isStepKind, LONE_ATOM_PASSES, MENO_ONLY, VALUE_KINDS, type StepKind, type ValueKind } from "./steps";
+import { HELD_KINDS, HOLDS_RESTRAINTS, isStepKind, LONE_ATOM_PASSES, MENO_ONLY, VALUE_KINDS, type HeldKind, type StepKind, type ValueKind } from "./steps";
 
 /** Text a file's start holds, which tells a kind: anywhere, or at a line's start; runs of spaces counted as one. */
 export type Mark = {
@@ -244,12 +244,14 @@ export type UnsureDecl = { below: number; basis: string };
  * molecules from seeds wired in (`seeds`); and, of a kind a lone
  * atom passes through (steps `LONE_ATOM_PASSES`), whether its program
  * takes none (`noLoneAtom`); and how its options ask for a solvation, as
- * its program says one it ran in (`solvation`: `SolvationDecl`).
+ * its program says one it ran in (`solvation`: `SolvationDecl`); and, of a
+ * kind that may hold an entry's restraints (steps `HOLDS_RESTRAINTS`), the
+ * kinds of restraint its program holds (`restraints`: steps `HELD_KINDS`).
  * A manifest may say several kinds in one, with the same programs and
  * options.
  */
 /** `roleOptions`: its options are its role's, the step having said none of its own (Settings' choices for the role its defaults: workflow/doers `optionsFor`). */
-export type StepDecl = { kind: StepKind; programs: string[]; options: Option[]; roleOptions?: true; takes?: ValueKind[]; files?: string[]; seeds?: true; noLoneAtom?: true; solvation?: SolvationDecl };
+export type StepDecl = { kind: StepKind; programs: string[]; options: Option[]; roleOptions?: true; takes?: ValueKind[]; files?: string[]; seeds?: true; noLoneAtom?: true; solvation?: SolvationDecl; restraints?: HeldKind[] };
 
 /**
  * How a step's options ask for a solvation, in the words its program says
@@ -739,6 +741,7 @@ function stepsOf(v: unknown, roles: readonly RoleDecl[]): StepDecl[] {
   const takes = Array.isArray(s?.takes) ? VALUE_KINDS.filter((t) => (s.takes as unknown[]).includes(t)) : [];
   const files = [...new Set(list(s?.files).filter((f): f is string => typeof f === "string" && ID.test(f)))];
   const options = acceptOptions(s?.options);
+  const held = HELD_KINDS.filter((k) => list(s?.restraints).includes(k));
   // (none said, and it fills the role of the kind's name: the role's - the same work, asked as a step)
   const roleOf = (kind: StepKind) => (s?.options === undefined ? roles.find((r) => r.role === kind && r.options.length) : undefined);
   const optionsFor = (kind: StepKind) => (s?.options !== undefined ? options : (roleOf(kind)?.options ?? []));
@@ -755,6 +758,8 @@ function stepsOf(v: unknown, roles: readonly RoleDecl[]): StepDecl[] {
       // (said only of a kind a lone atom passes through: of any other, what its program cannot take is its to refuse)
       ...(s?.noLoneAtom === true && LONE_ATOM_PASSES.includes(kind) ? { noLoneAtom: true as const } : {}),
       ...(solvation ? { solvation } : {}),
+      // (said only of a kind that may hold them: of any other, they ride along as ever)
+      ...(held.length && HOLDS_RESTRAINTS.includes(kind) ? { restraints: [...held] } : {}),
     };
   });
 }
