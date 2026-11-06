@@ -888,10 +888,8 @@ rests.
 
 ### A job that writes nothing
 
-A program may go on running without writing anything more - seen with a
-parallel numerical frequency calculation whose SCF did not converge: the
-program kept a core busy and wrote nothing for hours, and its step could
-never finish. So a running job's runner says when its program last wrote
+A program may go on running without writing anything more, and its step
+then never finishes. So a running job's runner says when its program last wrote
 anything - a line of its log, or any file of its work folder (`lastWritten`,
 src-tauri jobs.rs `last_written`) - and where that is longer ago than
 *Settings, Calculations, Say a job is quiet after* (minutes; 30 unless set,
