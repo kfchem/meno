@@ -76,14 +76,14 @@ describe("Save after Save As", () => {
     const store = storeOf(doc);
     const tab = await tabOf(doc);
     // (opened through the page's file input: its name, and no path)
-    store.getState().markOpenedOver("run-da-xtb-v2.meno");
+    store.getState().markOpenedOver("run.meno");
     store.getState().addAtom(0, 0, "C");
-    io.picked = "C:\\Users\\me\\Documents\\run-da-xtb-v2.meno";
+    io.picked = "C:\\Users\\me\\Documents\\run.meno";
     await act(async () => void (await tab.files().saveAs()));
-    expect(io.asked).toEqual(["run-da-xtb-v2.meno"]);
+    expect(io.asked).toEqual(["run.meno"]);
     expect(io.written).toEqual([io.picked]);
     expect(store.getState().savedPath).toBe(io.picked);
-    expect(tab.named).toEqual(["run-da-xtb-v2.meno"]);
+    expect(tab.named).toEqual(["run.meno"]);
     // (changed, and saved: where Save As saved it, nothing asked)
     store.getState().addAtom(1.5, 0, "C");
     await act(async () => void (await tab.files().save()));
@@ -95,7 +95,7 @@ describe("Save after Save As", () => {
     const doc = createWorkspaceDocument();
     const store = storeOf(doc);
     const tab = await tabOf(doc);
-    store.getState().markOpenedOver("run-da-xtb-v2.meno");
+    store.getState().markOpenedOver("scan.meno");
     store.getState().addAtom(0, 0, "C");
     io.picked = "C:\\Users\\me\\Documents\\run";
     await act(async () => void (await tab.files().saveAs()));
