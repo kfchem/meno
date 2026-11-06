@@ -11,7 +11,7 @@ import { COORDINATION_BOND, type ParsedAtom, type ParsedBond } from "../../../..
 import type { CalcInfo } from "../../../../lib/calc/output";
 import { FREQUENCY, geometryKey, propertyIn, type At, type By, type Entry, type EntryAtom, type EntryStatus, type EntryStereo, type Property } from "../../../../lib/entry";
 import { leftOut, readEach } from "../utils/readNotes";
-import { signatureOf } from "../utils/drawnLink";
+import { pageIndex, signatureOf } from "../utils/drawnLink";
 import { identityOfDrawn, labelsDrawnOut } from "../chem/identityOf";
 import { partOf } from "../chem/cleanUp";
 import { stereoKnown } from "./configurations";
@@ -208,8 +208,7 @@ export function membersOf(found: {
  */
 export function drawnHash(model: Model, ids: readonly number[]): string {
   // (worked out once for each structure as drawn: an edit elsewhere on the page leaves its drawing's key, and so this, as it was)
-  const labels = model.atoms.filter((a) => a.abbrev && ids.includes(a.id)).map((a) => `${a.id}:${JSON.stringify(a.abbrev)}`);
-  const drawn = `${drawnKey(model, ids)}|${labels.join(";")}`;
+  const drawn = drawingKey(model, ids);
   let key = identities.get(drawn);
   if (key == null) {
     // (wedges identity cannot read - crossed, or at an atom of three bonds that keeps no configuration, lib/chem/lonePairCentres - or a search it could not finish: its configuration
@@ -223,6 +222,13 @@ export function drawnHash(model: Model, ids: readonly number[]): string {
 }
 const identities = new Map<string, string>();
 const IDENTITIES_KEPT = 4096;
+
+/** A structure's drawing as one key (`drawnKey`), with what each of its labels holds: what its identity is kept by (`drawnHash`), and worked out at a fraction of its cost. */
+export function drawingKey(model: Model, ids: readonly number[]): string {
+  const { byId } = pageIndex(model);
+  const labels = ids.flatMap((id) => (byId.get(id)?.abbrev ? [byId.get(id)!] : [])).map((a) => `${a.id}:${JSON.stringify(a.abbrev)}`);
+  return `${drawnKey(model, ids)}|${labels.join(";")}`;
+}
 
 /** What a record says once the structure it was given for has been edited: its properties and status taken away. */
 export const BEFORE_THE_EDIT = "its properties were for the structure before the edit";
@@ -245,10 +251,55 @@ function joined(a: DrawnRecord | undefined, b: DrawnRecord): DrawnRecord | undef
   return Object.keys(out).length ? out : undefined;
 }
 
-/** A record as its structure stands now: as it is, where that is the structure it was given for (or it does not say); else its properties and status taken away (`joined`). */
+/** A record as its structure stands now: as it is, where that is the structure it was given for (or it does not say); else its properties and status taken away (`joined`) - and its lasting id, the structure being another. */
 export function recordNow(record: DrawnRecord | undefined, model: Model, ids: readonly number[]): DrawnRecord | undefined {
   if (!record?.of || record.of === drawnHash(model, ids)) return record;
   return joined(undefined, record);
+}
+
+/** How what is made of a structure drawn names it in its lineage (`SetEntry.madeOf`): by its lasting id (`DrawnRecord.id`). */
+export const structureLineage = (id: string): string => `structure:${id}`;
+
+/**
+ * A lasting id for a structure (`DrawnRecord.id`) given where it is put -
+ * `where`, a step's exit or a set, and `at`, its place there or its first
+ * atom - as it is drawn (`drawing`: `drawingKey`, or its identity's key):
+ * two hashes, wide enough that no two of a workspace's structures share one,
+ * and the same each time it is worked out, so that a step run again on what
+ * it ran on before gives its structures the ids it gave them then.
+ */
+export function structureIdAt(where: string, at: number, drawing: string): string {
+  const text = `${where}|${at}|${drawing}`;
+  return `${hash(text).toString(36)}-${hash(text, 0x01000193).toString(36)}`;
+}
+
+/**
+ * A set's member's record with its lasting id (`DrawnRecord.id`), as set
+ * `set` holds the structure drawn now:
+ * - one a step gave - its record says what it is of (`of`) - keeps the id it
+ *   has: edited into another, `recordNow` has taken that away with its
+ *   properties, and it is given one as the chemist's are;
+ * - one the chemist drew - its record says nothing of what it is of - is
+ *   given its id afresh each time, from the set, its first atom and its
+ *   drawing (`drawingKey`): the same while it is drawn the same, moved or
+ *   turned whole, another once it is drawn as another - its identity, which
+ *   costs far more, never worked out for it.
+ */
+export function memberRecord(record: DrawnRecord | undefined, model: Model, ids: readonly number[], set: number): DrawnRecord {
+  if (record?.of && record.id) return record;
+  return { ...record, id: structureIdAt(`set ${set}`, ids[0], drawingKey(model, ids)) };
+}
+
+/**
+ * The record of a structure a step gave, as it is put on the page
+ * (`recordOn`): of it as drawn there, its lasting id kept where it is still
+ * the structure the record was of, else `given`'s for what it is
+ * (`structureIdAt`, at the step's exit and its place).
+ */
+export function placedRecord(record: DrawnRecord, model: Model, ids: readonly number[], given: (now: string) => string): DrawnRecord {
+  const now = drawnHash(model, ids);
+  const id = record.id && (!record.of || record.of === now) ? record.id : given(now);
+  return { ...record, id, of: now };
 }
 
 /** What a record adds to a step's key (flow `inputKey`): all it says, but not what it is of - the structure's own key says that. */
@@ -317,10 +368,11 @@ export function drawnKey(model: Model, ids: readonly number[]): string {
   const name = ids.join(",");
   const had = known.get(name);
   if (had != null) return had;
-  const of = new Set(ids);
-  const at = new Map(model.atoms.filter((a) => of.has(a.id)).map((a) => [a.id, a]));
+  // (through the drawing's index: the structure's own atoms and bonds alone, however many others the page holds)
+  const { byId, bondsOf } = pageIndex(model);
+  const at = new Map(ids.flatMap((id) => (byId.has(id) ? [[id, byId.get(id)!] as const] : [])));
   const near = new Map<number, number[]>();
-  const bonds = model.bonds.filter((b) => at.has(b.a) && at.has(b.b));
+  const bonds = [...new Set(ids.flatMap((id) => bondsOf.get(id) ?? []))].filter((b) => at.has(b.a) && at.has(b.b));
   for (const b of bonds) {
     near.set(b.a, [...(near.get(b.a) ?? []), b.b]);
     near.set(b.b, [...(near.get(b.b) ?? []), b.a]);
@@ -375,7 +427,7 @@ function statusIn(v: unknown): EntryStatus | undefined {
  * nothing of it reads.
  */
 export function readDrawnRecord(v: unknown): DrawnRecord | undefined {
-  const r = v as { from?: unknown; properties?: unknown; status?: unknown; of?: unknown; stale?: unknown } | null;
+  const r = v as { id?: unknown; from?: unknown; properties?: unknown; status?: unknown; of?: unknown; stale?: unknown } | null;
   if (!r || typeof r !== "object") return undefined;
   const from = readEach(r.from, (id) => (isText(id) ? id : null), "madeFrom");
   const properties: Record<string, Property> = {};
@@ -388,6 +440,7 @@ export function readDrawnRecord(v: unknown): DrawnRecord | undefined {
   }
   const status = statusIn(r.status);
   const record: DrawnRecord = {
+    ...(isText(r.id) && r.id ? { id: r.id } : {}),
     ...(from.length ? { from } : {}),
     ...(Object.keys(properties).length ? { properties } : {}),
     ...(status ? { status } : {}),

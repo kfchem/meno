@@ -59,13 +59,19 @@ export type CatalogueEntry = {
   manifestSha256: string;
   /**
    * Where it says what this Meno does not know - a role, a kind, a system, a
-   * kind of file or a table as a newer Meno writes them - what, in words: it
-   * is listed as for a newer Meno, never got, and nothing of what it says is
-   * taken (its roles, kinds and files left empty). The list is not refused
-   * for it: a newer plugin on offer never takes the list from an older Meno.
+   * kind of file, a table, or the plugin it brings presets for, as a newer
+   * Meno writes them - what, in words: it is listed as for a newer Meno,
+   * never got, and nothing of what it says is taken (its roles, kinds and
+   * files left empty, no presets offered). The list is not refused for it: a
+   * newer plugin on offer never takes the list from an older Meno.
    */
   newer?: string;
+  /** The plugin it brings presets for, by id, as its manifest's `presets.for` says (lib/plugins/manifest `PresetsDecl`): offered with that one where it is got again (./usedBefore). */
+  presetsFor?: string;
 };
+
+/** A plugin no longer offered online, by its id and name, and why, in words: "Meno reads these files itself now". Said where one set up before is not got again (./usedBefore). */
+export type Retired = { id: string; name: string; why: string };
 
 /**
  * A kind of file a plugin on offer reads, as its manifest says it: what it
@@ -80,7 +86,7 @@ export type FileKind = { id: string; name: string; extensions: string[]; marks: 
  * (`issuedOk`), which only grows: Meno's backend takes none issued before
  * the one taken, nor another issued the same second - and its plugins.
  */
-export type Catalogue = { schema: number; issued: string; plugins: CatalogueEntry[] };
+export type Catalogue = { schema: number; issued: string; plugins: CatalogueEntry[]; retired?: Retired[] };
 
 /** When a catalogue was issued, as Meno takes it: `2026-11-05T13:04:09Z` - UTC, to the second, nothing else - and a real time. */
 const ISSUED = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})Z$/;
@@ -202,6 +208,9 @@ function entryOf(raw: unknown): CatalogueEntry | string {
   const cite = said("cite", 2000);
   const homepage = e.homepage == null ? undefined : typeof e.homepage === "string" && /^https:\/\/[^\s]{1,300}$/.test(e.homepage) ? e.homepage : null;
   if (description === null || terms === null || cite === null || homepage === null) return `${id}: a description, terms, cite or home page not as Meno takes them`;
+  // (the plugin it brings presets for: another's id - one not as this Meno takes it, a newer Meno's)
+  const presetsFor = e.presetsFor == null ? undefined : typeof e.presetsFor === "string" && ID.test(e.presetsFor) && e.presetsFor !== id ? e.presetsFor : null;
+  if (presetsFor === null) unknown.push("the plugin it brings presets for");
   const newer = unknown.length ? `It says ${listSaid(unknown)} this Meno does not know` : undefined;
   return {
     id,
@@ -222,7 +231,24 @@ function entryOf(raw: unknown): CatalogueEntry | string {
     ...(homepage ? { homepage } : {}),
     ...(terms ? { terms } : {}),
     ...(cite ? { cite } : {}),
+    ...(presetsFor && !newer ? { presetsFor } : {}),
   };
+}
+
+/** The plugins no longer offered, as a catalogue lists them: each by its id, name and why - all as Meno takes them, each once, or the list is not one. */
+function retiredOf(v: unknown): Retired[] | null {
+  if (v == null) return [];
+  if (!Array.isArray(v)) return null;
+  const out: Retired[] = [];
+  for (const raw of v) {
+    const r = raw as Record<string, unknown> | null;
+    const id = typeof r?.id === "string" && ID.test(r.id) ? r.id : null;
+    const name = text(r?.name, 60);
+    const why = text(r?.why, 160);
+    if (!id || !name || !why || out.some((o) => o.id === id)) return null;
+    out.push({ id, name, why });
+  }
+  return out;
 }
 
 /**
@@ -244,7 +270,10 @@ export function acceptCatalogue(raw: unknown): { catalogue: Catalogue } | { why:
     if (plugins.some((p) => p.id === e.id)) return { why: `It offers ${e.id} twice` };
     plugins.push(e);
   }
-  return { catalogue: { schema: CATALOGUE_SCHEMA, issued, plugins } };
+  const retired = retiredOf(c.retired);
+  if (!retired) return { why: "Its plugins no longer offered are not as Meno takes them" };
+  if (retired.some((r) => plugins.some((p) => p.id === r.id))) return { why: "It offers a plugin it says is no longer offered" };
+  return { catalogue: { schema: CATALOGUE_SCHEMA, issued, plugins, ...(retired.length ? { retired } : {}) } };
 }
 
 /**
