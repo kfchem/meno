@@ -1,53 +1,69 @@
 import { isElementSymbol } from "../../../../lib/roles/molblock";
 import type { Model, Molecule3D } from "../store/types";
 
+type Atom = Model["atoms"][number];
+type Bond = Model["bonds"][number];
+
+/** A drawing's atoms by id, and each atom's bonds: made once for each drawing, so that a structure is read in the time its own atoms take, not the page's (`pageIndex`). */
+export type PageIndex = { byId: ReadonlyMap<number, Atom>; bondsOf: ReadonlyMap<number, readonly Bond[]> };
+const indexes = new WeakMap<Model, PageIndex>();
+
+/** A drawing's index (`PageIndex`), made the first time it is asked for and kept while the drawing is. */
+export function pageIndex(model: Model): PageIndex {
+  const had = indexes.get(model);
+  if (had) return had;
+  const byId = new Map(model.atoms.map((a) => [a.id, a]));
+  const bondsOf = new Map<number, Bond[]>();
+  for (const b of model.bonds) for (const end of b.a === b.b ? [b.a] : [b.a, b.b]) bondsOf.set(end, [...(bondsOf.get(end) ?? []), b]);
+  const index = { byId, bondsOf };
+  indexes.set(model, index);
+  return index;
+}
+
 /**
  * What a drawn structure is, as its molecules in 3D were made from it: its
  * atoms (by id: element, charge, mass), its bonds (order and wedge, and
  * what a haptic bond binds), and those that leave it - not where anything
  * is drawn. A molecule in 3D whose
- * drawing no longer says the same is its drawing's no longer.
+ * drawing no longer says the same is its drawing's no longer. Read through
+ * the drawing's index (`pageIndex`): the structure's own atoms and bonds
+ * alone, however many others the page holds.
  */
 export function signatureOf(model: Model, ids: Iterable<number>): string {
+  const { byId, bondsOf } = pageIndex(model);
   const of = new Set(ids);
   // (a haptic bond's star with the metal it is bound to: no atom of a
   // molecule in 3D, so not among its drawing's atoms, but of the structure
   // as its bond is - else every complex so bound read as drawn otherwise)
-  for (const b of model.bonds) {
-    if (!b.endpoints?.length) continue;
-    for (const [star, other] of [
-      [b.b, b.a],
-      [b.a, b.b],
-    ]) {
-      if (of.has(other) && model.atoms.some((a) => a.id === star && a.el === "*")) of.add(star);
+  for (const id of [...of])
+    for (const b of bondsOf.get(id) ?? []) {
+      if (!b.endpoints?.length) continue;
+      const star = b.a === id ? b.b : b.a;
+      if (byId.get(star)?.el === "*") of.add(star);
     }
-  }
   // (and a label bonded to it - Cp, cod - written out for the plugin: where it is bound through a pi system, its place in
   // the structure asked about is that system's star, no atom of the molecule in 3D, so no atom the molecule is tied to;
   // of the structure all the same, as the bond to it is - else every complex so labelled read as drawn otherwise)
-  const label = (a: Model["atoms"][number]) => !!a.abbrev || (a.el !== "*" && !isElementSymbol(a.el));
-  const byId = new Map(model.atoms.map((a) => [a.id, a]));
-  for (let grew = true; grew; ) {
-    grew = false;
-    for (const b of model.bonds) {
-      for (const [x, y] of [
-        [b.a, b.b],
-        [b.b, b.a],
-      ]) {
-        const other = byId.get(y);
-        if (of.has(x) && !of.has(y) && other && label(other)) {
-          of.add(y);
-          grew = true;
-        }
+  const label = (a: Atom) => !!a.abbrev || (a.el !== "*" && !isElementSymbol(a.el));
+  const reach = [...of];
+  while (reach.length) {
+    const x = reach.pop()!;
+    for (const b of bondsOf.get(x) ?? []) {
+      const y = b.a === x ? b.b : b.a;
+      const other = byId.get(y);
+      if (!of.has(y) && other && label(other)) {
+        of.add(y);
+        reach.push(y);
       }
     }
   }
-  const atoms = model.atoms
-    .filter((a) => of.has(a.id))
+  const atoms = [...of]
+    .flatMap((id) => (byId.has(id) ? [byId.get(id)!] : []))
     .map((a) => `${a.id}:${a.el}:${a.charge ?? 0}:${a.isotope ?? ""}`)
     .sort();
-  const bonds = model.bonds
-    .filter((b) => of.has(b.a) || of.has(b.b))
+  const touching = new Set<Bond>();
+  for (const id of of) for (const b of bondsOf.get(id) ?? []) touching.add(b);
+  const bonds = [...touching]
     .map((b) => {
       const ends = of.has(b.a) && of.has(b.b) ? `${b.a}-${b.b}` : of.has(b.a) ? `${b.a}-out` : `${b.b}-out`;
       // (and what a haptic bond binds)

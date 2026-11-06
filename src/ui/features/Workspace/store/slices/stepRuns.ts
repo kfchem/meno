@@ -31,7 +31,7 @@ import { holdsGraphOf3d, keptMade, madeChecks, madeChecksOf, metalHolds, metalHo
 import { COORDINATION_BOND } from "../../../../../lib/chem/molecule";
 import { byOf, installedFor, optionsFor, programsFor, renderPresets, takesNothingBy } from "../../workflow/doers";
 import { partOf } from "../../chem/cleanUp";
-import { compoundLetter, frameXyz, framesOf, madeFrom, recordNumber, setEntries, TAKEN_AT_THE_EDIT, skeletonEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
+import { compoundLetter, frameXyz, framesOf, madeFrom, recordNumber, setEntries, structureLineage, TAKEN_AT_THE_EDIT, skeletonEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
 import { convergedOf, heldWhy } from "../../workflow/converged";
 import { skeletonWhy } from "../../../../../lib/chem/skeleton";
 import { conformersSought, conformersSoughtOf, soughtNumber } from "../../../../../lib/chem/conformersSought";
@@ -802,8 +802,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         // (what was worked out of the structure drawn - a model's values, its descriptors, its SMILES - is of each of its
         //  conformers too, the same structure: carried on with them, for a Filter or a table to read)
         const properties = record?.properties && Object.keys(record.properties).length ? record.properties : undefined;
-        // (and what it was made from, by id: the lineage of each of its conformers, the same structure)
-        const madeOf = record?.from?.length ? record.from : undefined;
+        // (and what it was made of, by id: the structure drawn itself, by its lasting id - the lineage of each of its conformers, that structure in 3D)
+        const madeOf = record?.id ? [structureLineage(record.id)] : undefined;
         for (let f = 0; f < framesOf(m); f++) {
           worked.push({
             compound: compounds,
