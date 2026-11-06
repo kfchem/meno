@@ -153,6 +153,25 @@ export type KindInfo = {
  */
 const FAILED: StepExit = { id: "failed", name: "Failed", gives: "same", of: "failed" };
 
+/**
+ * *Hold its restraints*: whether a step that may hold an entry's restraints
+ * (lib/plugins/steps `HOLDS_RESTRAINTS`), its plugin saying its program can
+ * (`StepDecl.restraints`), holds them as it runs - no, by default: an
+ * optimisation free of them, as one after a restrained search is; or its
+ * atoms fixed where they stand. Meno's option, offered beside the plugin's
+ * (doers `optionsFor`), and given to it with them.
+ */
+export const HOLD_OPTION: Option = {
+  id: "hold",
+  label: "Hold its restraints",
+  type: "choice",
+  choices: [
+    { value: "no", label: "No" },
+    { value: "fixed", label: "Atoms fixed" },
+  ],
+  default: "no",
+};
+
 /** How a program step of more than one input pairs what comes into them (workflow/pairs): in order, each with each, or matched on a property. */
 const PAIRS_OWN: readonly Option[] = [
   {

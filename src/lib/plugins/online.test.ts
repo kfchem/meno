@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useNetwork } from "../net/network";
 import { CATALOGUE_PURPOSE, type CatalogueEntry } from "./catalogue";
-import { getPlugin, keptOnline, listOnline, useOnline, type PluginFiles } from "./online";
+import { getPlugin, keptOnline, listOnline, removeFiles, useOnline, type PluginFiles } from "./online";
 
 const HEX = "b".repeat(64);
 const ENTRY = {
@@ -153,6 +153,17 @@ describe("a plugin got from the list", () => {
     const f = files(MANIFEST);
     await expect(getPlugin(await entryFor(MANIFEST), f)).rejects.toThrow("needs the network");
     expect(f.did).toEqual([]);
+  });
+});
+
+describe("a plugin's files taken away", () => {
+  it("by Meno's backend, then the plugins in place read again - and not read again where taking them failed", async () => {
+    const did: string[] = [];
+    await removeFiles("sketch", async (id) => void did.push(`remove ${id}`), async () => void did.push("reload"));
+    expect(did).toEqual(["remove sketch", "reload"]);
+    did.length = 0;
+    await expect(removeFiles("sketch", async () => Promise.reject(new Error("in use")), async () => void did.push("reload"))).rejects.toThrow("in use");
+    expect(did).toEqual([]);
   });
 });
 

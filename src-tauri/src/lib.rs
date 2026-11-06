@@ -10,6 +10,7 @@ use std::{
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
 use uuid::Uuid;
 
+mod awake;
 mod catalogue;
 mod ccd;
 mod clipboard;
