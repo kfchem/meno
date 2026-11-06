@@ -193,6 +193,16 @@ const PAIRS_OWN: readonly Option[] = [
 /** How many pairs *Path search*'s each with each makes at most: its own, as every pair is a path search run (workflow/mostPairs). */
 const MOST_OWN: Option = { id: "most", label: "At most, pairs", type: "number", default: MOST_PAIRS, min: 1, step: 1, when: { id: "pairs", in: ["each"] } };
 
+/**
+ * What an energy window's field says under it, the window being the
+ * chemist's own: a guide, not a default - at 298.15 K a conformer ΔE above
+ * the lowest weighs exp(-ΔE/RT) as much, 1/100 at RT ln 100 = 2.73 kcal/mol.
+ */
+// (each number with its unit, and RT ln 100, never split across lines: joined by no-break spaces)
+export const WINDOW_GUIDE = "Meno sets none: give your own. As a guide, at 298.15 K one 2.73\u00a0kcal/mol above the lowest weighs 1/100 as much (RT\u00a0ln\u00a0100).";
+/** What an energy window given none needs, on its card and on its line alike. */
+export const WINDOW_NEEDED = "Give the window, in kcal/mol";
+
 export const KINDS: readonly KindInfo[] = [
   // (new structures from nothing that comes in: a generative model's, as its plugin asks it, each drawn from the SMILES it gave - no input, so no port)
   { kind: "generate", name: "Generate", icon: "sparks", family: "structures", takes: [], inputs: [], gives: "structures", runs: "program", made: "Generated" },
@@ -256,7 +266,8 @@ export const KINDS: readonly KindInfo[] = [
     made: "Within {window} kcal/mol",
     others: [{ id: "rest", name: "Outside it", gives: "same", of: "rest" }],
     options: [
-      { id: "window", label: "Within", type: "number", default: 3, min: 0, step: 0.5, unit: "kcal/mol" },
+      // (none by default: the chemist's own - no window has a basis that holds for every set of energies)
+      { id: "window", label: "Within", type: "number", default: Number.NaN, min: 0, step: 0.5, unit: "kcal/mol", note: WINDOW_GUIDE },
       // (of each compound's lowest, as it was; or of the lowest of those with one value of a property - a path, a product: never grouped by guess)
       {
         id: "within",
@@ -1293,8 +1304,10 @@ export function duplicatesHow(v: Record<string, string | number | boolean>): str
   return [...(v.mirrors === "counted" ? ["mirror images counted as one"] : []), ...(v.within === "each value" ? [`compared within each ${by}`] : [])].join(" · ");
 }
 
-/** What an Energy window still needs before it can run: the property, where its groups are a property's values. */
+/** What an Energy window still needs before it can run: its window, the chemist's own; and the property, where its groups are a property's values. */
 export function energyWindowNeeds(v: Record<string, string | number | boolean>): string | undefined {
+  const window = Number(v.window);
+  if (v.window === "" || !Number.isFinite(window) || window < 0) return WINDOW_NEEDED;
   return v.within === "each value" && !String(v.groupBy ?? "").trim() ? "Name the property whose values are the groups" : undefined;
 }
 
@@ -1337,10 +1350,11 @@ export function optionsOf(options: readonly Option[], own: Record<string, string
   return values;
 }
 
-/** What a step's result set is called, its options' values put in. */
+/** What a step's result set is called, its options' values put in - or, where a number it is called by is none yet (an Energy window's window, the chemist's to give), its kind's name. */
 export function madeName(kind: StepKind, options: readonly Option[], own: Record<string, string | number | boolean> | undefined): string {
   const values = optionsOf(options, own);
-  const { made, madeOne } = kindInfo(kind);
+  const { made, madeOne, name } = kindInfo(kind);
+  if ([...made.matchAll(/\{([a-z0-9-]+)\}/g)].some(([, id]) => typeof values[id] === "number" && !Number.isFinite(values[id]))) return name;
   if (madeOne && Number(values[madeOne.option]) === 1) return madeOne.name;
   return made.replace(/\{([a-z0-9-]+)\}/g, (_, id: string) => String(values[id] ?? ""));
 }

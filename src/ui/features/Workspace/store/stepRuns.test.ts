@@ -1766,6 +1766,7 @@ function chain() {
   const a = st().addStep("as-conformers", "meno", 10, 0);
   st().connect({ set }, a);
   const b = st().addStep("energy-window", "meno", 30, 0);
+  st().updateStep(b, { options: { window: 3 } });
   // (each step's exit, the set it makes, into the next)
   st().connect({ set: resultOf(st(), a)!.id }, b);
   const c = st().addStep("populations", "meno", 50, 0);
