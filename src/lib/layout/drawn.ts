@@ -300,7 +300,9 @@ const turned = (p: { x: number; y: number }, c: { x: number; y: number }, t: num
  * saying either; more groups round it than a tetrahedral centre's four; an
  * atom with three bonds that keeps no configuration of its own, where a
  * wedge states none (an amine's N, a plain N-alkyl aziridine's, a B: Meno's
- * rule, lib/chem/lonePairCentres); two of its bonds in line or on top of each other (a T, ST-1.2.12);
+ * rule, lib/chem/lonePairCentres); a centre by its lone pair drawn with
+ * two bonds, its H carried (a secondary phosphine's P), its H and its lone
+ * pair both left out; two of its bonds in line or on top of each other (a T, ST-1.2.12);
  * or else wedges and hashes that cancel, saying neither way round.
  */
 export function unreadWhy(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], c: number): string {
@@ -311,6 +313,9 @@ export function unreadWhy(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond
   const groups = around.length + atom.hs;
   if (groups > 4) return `it has ${groups} groups round it, more than the four of a tetrahedral centre`;
   if (around.length === 3 && atom.hs === 0 && !lonePairCentres(atoms, bonds)(c)) return "it has three bonds and keeps no configuration of its own, so a wedge at it states none";
+  // (a centre by its lone pair, two bonds drawn and its H carried: the two corners left are each other's mirror image, and
+  //  which holds the H, which the lone pair, is not drawn)
+  if (around.length === 2 && atom.hs === 1 && lonePairCentres(atoms, bonds)(c)) return "its H and its lone pair are both left out, so which way each points is not drawn: draw its H as an atom";
   // (as readStereo has it: a centre drawn with three bonds - its H, or its lone pair, left out)
   if (around.length === 3 && twoInLine(atom, around.map((n) => atoms[n]))) return "two of its bonds in line or on top of each other";
   return "they are drawn crossed, saying neither way round";

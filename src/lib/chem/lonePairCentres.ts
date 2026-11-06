@@ -47,7 +47,10 @@
  * secondary phosphine's P); an N, or an S, Se or Te, never is, its ring,
  * cage or charge notwithstanding (an oxaziridine's N-H, a sulfonium's
  * S+-H): the maintainer's ruling, 2026-11-06, one rule for a drawing, a
- * SMILES and a molecule in 3D alike.
+ * SMILES and a molecule in 3D alike. A drawing states such a centre with
+ * its H drawn as an atom: with its H carried and two bonds drawn, the two
+ * corners left are each other's mirror image, which holds the H not
+ * drawn, so its wedge states none (lib/layout/drawn `unreadWhy`).
  *
  * An atom has a lone pair where its valence electrons, less its charge
  * and its bonds' orders, leave two or more: an amine's N, a phosphine's P,

@@ -1684,7 +1684,11 @@ lipids each have their own way of being drawn, which it should know.
      H is in 3D - a P, As, Sb or Bi keeps its configuration as it does
      without one (a secondary phosphine's P); an N, or an S, Se or Te, never
      does, its ring, cage or charge notwithstanding (an oxaziridine's N-H, a
-     sulfonium's S+-H) (the maintainer, 2026-11-06). A SMILES's [P@H] is
+     sulfonium's S+-H) (the maintainer, 2026-11-06). A drawing states a
+     P-H's configuration with its H drawn as an atom: drawn with its H
+     carried and two bonds, the two corners left are each other's mirror
+     image and which holds the H is not drawn, so its wedge states none,
+     and Clean-up says so rather than lose it. A SMILES's [P@H] is
      still refused: where its H and its lone pair each go in the text's
      order is not yet measured against the reading libraries.
      An amine's N keeps none. One rule (`lib/chem/lonePairCentres.ts`)
