@@ -633,7 +633,8 @@ const BOND_PER_SIZE = 1.4;
  * one small letter - at the lower end of one. Its brackets are read as no
  * bonds and its count as no word. Found where a line or a curve half a
  * bond to two and a half long crosses a line of the figure square enough,
- * away from both their ends, with a count by its lower end; its partner,
+ * away from both their ends - or a wedge's, a hash's (`hashed`) or a wavy
+ * bond's, from end to end, as its bond lies - with a count by its lower end; its partner,
  * where there is one, the nearest other such line or curve that crosses
  * one, with no count (`pairs`). What the figure makes of each pair, as it
  * reads its bonds (`repeatsRead`): a whole count's unit read that many
@@ -666,9 +667,19 @@ function crossing(s: { a: Point; b: Point }, t: { a: Point; b: Point }, piece = 
   return along && v > 0.1 && v < 0.9 ? { u, v } : null;
 }
 
-export function repeatBrackets(shapes: Shapes, words: readonly Word[], bond: number): RepeatBrackets {
+export function repeatBrackets(shapes: Shapes, words: readonly Word[], bond: number, hashed: readonly Drawn[] = []): RepeatBrackets {
   const out: RepeatBrackets = { strokes: new Set(), curves: new Set(), counts: new Set(), pairs: [] };
-  const bondLines = shapes.strokes.filter((t) => len(t) >= 0.3 * bond);
+  // (a wedge, hashes or a wavy line, as the line its bond lies along: a bracket across one is one - no line of it a bond, its
+  //  count no word - for the unit to be refused as it is read (`repeatsRead`); a hash's strokes run along a bracket, crossing none)
+  const stereoLines = [
+    ...shapes.wedges.map((w) => ({ a: w.tip, b: w.base })),
+    ...hashed.map((h) => ({ a: h.a, b: h.b })),
+    ...shapes.curves.flatMap((c) => {
+      const d = wavy(c, bond);
+      return d ? [{ a: d.a, b: d.b }] : [];
+    }),
+  ].map((l): Stroke => ({ ...l, w: 0 }));
+  const bondLines = [...shapes.strokes.filter((t) => len(t) >= 0.3 * bond), ...stereoLines];
   // (a bracket: a line, or a curve's chord, of half a bond to two and a half, across a bond line at more than 45 degrees)
   type Bracket = { ends: [Point, Point]; stroke?: Stroke; curve?: Curve; crosses: Stroke[] };
   const across = (seg: { a: Point; b: Point }, not?: Stroke, piece = false) =>
@@ -783,6 +794,8 @@ export function repeatsRead(pairs: RepeatBrackets["pairs"], atoms: ReadAtom[], b
     if (crossing.some((c) => c.length !== 1)) return refuse("each of its two brackets must cross one bond, and one crosses more");
     const [k1, k2] = crossing.map((c) => c[0]);
     if (k1 === k2) return refuse("its two brackets cross the same bond");
+    // (a wedge's, a hash's or a wavy bond's: which way each copy's would face is not drawn)
+    if (bonds[k1].stereo || bonds[k2].stereo) return refuse("a bracket crosses a wedged, hashed or wavy bond");
     if (bonds[k1].order !== bonds[k2].order || bonds[k1].aromatic || bonds[k2].aromatic) return refuse("the two bonds its brackets cross are not of one order");
     // (what lies between them: the atoms joined to an end of each by other bonds, and to neither other end)
     const up = atoms.map((_, i) => i);
@@ -870,7 +883,7 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   for (const l of fromShapes) for (const f of l.from) inLetters.add(f);
   const written = wordsOf([...drawn.letters, ...fromShapes]);
   // (a repeat unit in brackets with its count: its brackets no bonds, its count no word - what is read of it, below)
-  const repeats = repeatBrackets(shapes, written, bond);
+  const repeats = repeatBrackets(shapes, written, bond, hashed);
   const words = written.filter((_, k) => !repeats.counts.has(k));
   // (two labels set touching, the first ending in its charge - Cl- HN+ - are two: a word that reads as nothing is cut after a
   // charge written before a capital, where both pieces read)
