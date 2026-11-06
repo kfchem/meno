@@ -520,6 +520,12 @@ mod tests {
         (url, server)
     }
 
+    #[test]
+    fn a_server_that_fails_is_asked_again_two_seconds_later() {
+        // (what `download` waits before asking once more: the test below waits 10 ms, as it may)
+        assert_eq!(ASKED_AGAIN_AFTER, std::time::Duration::from_secs(2));
+    }
+
     #[tokio::test]
     async fn a_server_that_fails_is_asked_once_more_then_said_in_words() {
         if rustls::crypto::CryptoProvider::get_default().is_none() {

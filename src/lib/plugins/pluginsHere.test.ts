@@ -10,14 +10,14 @@ describe("the plugins in place, taken anew", () => {
     // (Remove its files: its folder taken away, then the plugins in place taken anew)
     const done: string[] = [];
     await removeFiles(
-      "gaussian",
+      "quanta",
       async (id) => void done.push(`removed ${id}`),
       async () => {
         done.push("taken anew");
         setInstalled([]);
       },
     );
-    expect(done).toEqual(["removed gaussian", "taken anew"]);
+    expect(done).toEqual(["removed quanta", "taken anew"]);
     expect(usePluginsHere.getState().taken).toBe(before + 2);
   });
 });
