@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { PAGE_PX } from "../utils/pageScale";
 import { controlLine, controlMost, controlSize, lineWidth, pagePx, type Control } from "./units";
 import { inDrawOrder, packShapes, PER, type Shape } from "./shapes";
-import { hitAt, type Region } from "./hits";
+import { cursorChange, hitAt, type Hit, type Region } from "./hits";
 import { fitted, placed, textWidth } from "./texts";
 import { cellOf } from "./icons";
 
@@ -201,5 +201,34 @@ describe("the page's layers of regions", () => {
     all.remove(a);
     expect(all.at(5, 3, zoom)).toBeNull();
     expect(all.at(25, 3, zoom)?.key).toBe("set:2");
+  });
+});
+
+describe("where the page's WebGL is drawn", () => {
+  it("after the molecules in 3D and their joints, as the page's HTML lay over them all", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const { PAGE_GL_ORDER } = await import("./PageShapes");
+    const view = readFileSync(join(__dirname, "../components/Molecule3DView.tsx"), "utf8");
+    const over = Number(/export const OVER_PAGE = (\d+);/.exec(view)![1]);
+    const most = Math.max(...[...view.matchAll(/renderOrder=\{OVER_PAGE \+ (\d+)\}/g)].map((m) => over + Number(m[1])), over);
+    expect(PAGE_GL_ORDER).toBeGreaterThan(most);
+  });
+});
+
+describe("the canvas's cursor as the pointer moves over what the page's WebGL draws", () => {
+  const hit = (key: string, part: string, cursor?: string): Hit => ({ key, part, region: { key, part, rect: { x0: 0, y0: 0, x1: 1, y1: 1 }, z: 0, ...(cursor ? { cursor } : {}) } });
+  it("is left alone over none of the page's regions, so the rest of the canvas keeps its own - a 3D molecule's turn and move, the drawing's crosshair, a slide's move", () => {
+    // (each set once - as the pointer comes over a molecule, as drawing begins - and never again while it moves)
+    expect(cursorChange(null, null)).toBeNull();
+  });
+  it("is left alone while it stays on the same region", () => {
+    expect(cursorChange(hit("set:1", "tab", "default"), hit("set:1", "tab", "default"))).toBeNull();
+  });
+  it("is set coming onto a region with a cursor of its own, and cleared only leaving one that set it", () => {
+    expect(cursorChange(null, hit("set:1", "tab", "default"))).toEqual({ clear: false, set: "default" });
+    expect(cursorChange(hit("set:1", "tab", "default"), null)).toEqual({ clear: true, set: null });
+    expect(cursorChange(hit("step:2", "card"), null)).toEqual({ clear: false, set: null });
+    expect(cursorChange(hit("set:1", "edge:n", "ns-resize"), hit("set:1", "tab", "default"))).toEqual({ clear: true, set: "default" });
   });
 });
