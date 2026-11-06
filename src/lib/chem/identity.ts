@@ -17,7 +17,7 @@
  * plain hydrogen atom as one of its neighbour's hydrogens
  * (`hydrogensFolded`).
  */
-import { canonicalWritten, symmetryOrbits as orbitsAsDrawn } from "../layout/canonical";
+import { canonicalWritten, symmetryClasses, symmetryOrbits as orbitsAsDrawn } from "../layout/canonical";
 import { isMetal, type LayoutAtom, type LayoutBond, type LayoutInput } from "../layout/perceive";
 import type { Axial, Tetrahedral } from "../layout/stereo";
 import type { Radical } from "./molecule";
@@ -249,7 +249,77 @@ function compared(input: IdentityInput): LayoutInput {
  * bond-shift isomers, hydrogens folded in).
  */
 export function identity(input: IdentityInput): { text: string; complete: boolean } {
-  return canonicalWritten(compared(input));
+  const units = stereoUnitsOnly(compared(input));
+  const found = canonicalWritten(units.input);
+  return { text: found.text, complete: found.complete && units.complete };
+}
+
+/** A configuration a structure carries: a centre's, by its atom; a double bond's, by its bond; an axis's, by its place among the axes. */
+type StereoUnit = { centre: number } | { bond: number } | { axis: number };
+
+/**
+ * The structure with only the configurations that make a stereo unit: a
+ * wedge on a centre two of whose neighbours are alike, or a double bond
+ * drawn bent, or an axis, whose end has its two other neighbours alike,
+ * sets nothing - an isopropyl's CH, a prenyl's C=C(CH3)2 - and is taken
+ * out, so that the structure is one whether drawn so or not. Alike means
+ * in one orbit of the structure with that configuration left out and
+ * every other one kept, under the symmetries that keep the unit's own
+ * atoms where they are: 1,4-dimethylcyclohexane's ring arms at one centre
+ * are alike until the other centre's configuration is counted, and its cis
+ * and trans stay apart. Each is tried in turn, again after each one taken
+ * out, until none is. A search for the orbits that ran out of steps still
+ * joins only atoms an automorphism found takes onto each other, so groups
+ * it finds alike are; where it did not find them alike, the configuration
+ * is kept, as drawn, and `complete` says so.
+ */
+export function stereoUnitsOnly(input: LayoutInput): { input: LayoutInput; complete: boolean } {
+  const around: number[][] = input.atoms.map(() => []);
+  for (const b of input.bonds) {
+    around[b.a].push(b.b);
+    around[b.b].push(b.a);
+  }
+  // (the groups whose two alike would set nothing: a centre's neighbours; each end's others, a double bond's or an axis's)
+  const ends = (a: number, b: number) => [around[a].filter((m) => m !== b), around[b].filter((m) => m !== a)];
+  const sides = (g: LayoutInput, u: StereoUnit): number[][] => {
+    if ("centre" in u) return [g.atoms[u.centre].tetra!.neighbours.filter((m) => m >= 0)];
+    if ("bond" in u) return ends(g.bonds[u.bond].a, g.bonds[u.bond].b);
+    return ends(...g.axes![u.axis].atoms);
+  };
+  const alike = (of: readonly number[], side: readonly number[]) => new Set(side.map((m) => of[m])).size < side.length;
+  const without = (g: LayoutInput, u: StereoUnit): LayoutInput => {
+    if ("centre" in u) return { ...g, atoms: g.atoms.map((a, i) => (i === u.centre ? (({ tetra: _tetra, ...rest }) => rest)(a) : a)) };
+    if ("bond" in u) return { ...g, bonds: g.bonds.map((b, i) => (i === u.bond ? (({ stereo: _stereo, ...rest }) => rest)(b) : b)) };
+    return { ...g, axes: g.axes!.filter((_, i) => i !== u.axis) };
+  };
+  let g = input;
+  let complete = true;
+  for (;;) {
+    const units: StereoUnit[] = [
+      ...g.atoms.flatMap((a, i) => (a.tetra ? [{ centre: i }] : [])),
+      ...g.bonds.flatMap((b, i) => (b.stereo ? [{ bond: i }] : [])),
+      ...(g.axes ?? []).map((_, i) => ({ axis: i })),
+    ];
+    if (!units.length) return { input: g, complete };
+    // (atoms the ranks tell apart are apart in every orbit: only those they leave alike are searched)
+    const classes = symmetryClasses(g);
+    let next: LayoutInput | null = null;
+    for (const u of units) {
+      if (!sides(g, u).some((side) => alike(classes, side))) continue;
+      const left = without(g, u);
+      // (the unit's own atoms marked, for the search only: the orbits of what keeps it where it is, not of what takes it
+      // onto another atom alike - 1,3-dichloro-2,4-dimethylcyclobutane's two CHCl, one open, swapped by a half turn)
+      const own = new Set("centre" in u ? [u.centre] : "bond" in u ? [g.bonds[u.bond].a, g.bonds[u.bond].b] : g.axes![u.axis].atoms);
+      const found = orbitsAsDrawn({ ...left, atoms: left.atoms.map((a, i) => (own.has(i) ? { ...a, el: `${a.el}*` } : a)) });
+      if (sides(g, u).some((side) => alike(found.orbit, side))) {
+        next = left;
+        break;
+      }
+      if (!found.complete) complete = false;
+    }
+    if (!next) return { input: g, complete };
+    g = next;
+  }
 }
 
 /**

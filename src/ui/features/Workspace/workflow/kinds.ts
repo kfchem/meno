@@ -114,6 +114,8 @@ export type KindInfo = {
   kind: StepKind;
   name: string;
   icon: StepIcon;
+  /** Which of the kinds it stands among where they are listed (Quick Add's calculations): what makes or sorts structures, energies and what comes of them, paths and what is measured, charts and pictures - each family apart by a thin rule. */
+  family: StepFamily;
   /** What it takes: kinds of set, a table, a number. */
   takes: readonly ValueKind[];
   /** What it gives, for what it took: `same`, the kind of set that came in; a chart (Meno's), or `pictures` (Render's), which no step takes. */
@@ -153,6 +155,25 @@ export type KindInfo = {
  */
 const FAILED: StepExit = { id: "failed", name: "Failed", gives: "same", of: "failed" };
 
+/**
+ * *Hold its restraints*: whether a step that may hold an entry's restraints
+ * (lib/plugins/steps `HOLDS_RESTRAINTS`), its plugin saying its program can
+ * (`StepDecl.restraints`), holds them as it runs - no, by default: an
+ * optimisation free of them, as one after a restrained search is; or its
+ * atoms fixed where they stand. Meno's option, offered beside the plugin's
+ * (doers `optionsFor`), and given to it with them.
+ */
+export const HOLD_OPTION: Option = {
+  id: "hold",
+  label: "Hold its restraints",
+  type: "choice",
+  choices: [
+    { value: "no", label: "No" },
+    { value: "fixed", label: "Atoms fixed" },
+  ],
+  default: "no",
+};
+
 /** How a program step of more than one input pairs what comes into them (workflow/pairs): in order, each with each, or matched on a property. */
 const PAIRS_OWN: readonly Option[] = [
   {
@@ -172,24 +193,34 @@ const PAIRS_OWN: readonly Option[] = [
 /** How many pairs *Path search*'s each with each makes at most: its own, as every pair is a path search run (workflow/mostPairs). */
 const MOST_OWN: Option = { id: "most", label: "At most, pairs", type: "number", default: MOST_PAIRS, min: 1, step: 1, when: { id: "pairs", in: ["each"] } };
 
+/**
+ * What an energy window's field says under it, the window being the
+ * chemist's own: a guide, not a default - at 298.15 K a conformer ΔE above
+ * the lowest weighs exp(-ΔE/RT) as much, 1/100 at RT ln 100 = 2.73 kcal/mol.
+ */
+// (each number with its unit, and RT ln 100, never split across lines: joined by no-break spaces)
+export const WINDOW_GUIDE = "Meno sets none: give your own. As a guide, at 298.15 K one 2.73\u00a0kcal/mol above the lowest weighs 1/100 as much (RT\u00a0ln\u00a0100).";
+/** What an energy window given none needs, on its card and on its line alike. */
+export const WINDOW_NEEDED = "Give the window, in kcal/mol";
+
 export const KINDS: readonly KindInfo[] = [
   // (new structures from nothing that comes in: a generative model's, as its plugin asks it, each drawn from the SMILES it gave - no input, so no port)
-  { kind: "generate", name: "Generate", icon: "sparks", takes: [], inputs: [], gives: "structures", runs: "program", made: "Generated" },
-  { kind: "conformers", name: "Conformers", icon: "rings", takes: ["structures", "molecules", "conformers"], gives: "conformers", runs: "program", made: "Conformers", whole: true, others: [{ ...FAILED, gives: "molecules" }] },
-  { kind: "optimise", name: "Optimise", icon: "curve", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Optimised", whole: true, others: [FAILED] },
+  { kind: "generate", name: "Generate", icon: "sparks", family: "structures", takes: [], inputs: [], gives: "structures", runs: "program", made: "Generated" },
+  { kind: "conformers", name: "Conformers", icon: "rings", family: "structures", takes: ["structures", "molecules", "conformers"], gives: "conformers", runs: "program", made: "Conformers", whole: true, others: [{ ...FAILED, gives: "molecules" }] },
+  { kind: "optimise", name: "Optimise", icon: "curve", family: "energies", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Optimised", whole: true, others: [FAILED] },
   // (each entry minimised in a force field with its restraints held - Restraints', Torsion restraints' - as its plugin holds them: docs/PLUGINS.md)
-  { kind: "minimise", name: "Minimise with restraints", icon: "heldMinimum", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Minimised", whole: true, others: [FAILED] },
-  { kind: "energy", name: "Energy", icon: "level", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Energies", whole: true, others: [FAILED] },
-  { kind: "frequencies", name: "Frequencies", icon: "wave", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Frequencies", whole: true, others: [FAILED] },
+  { kind: "minimise", name: "Minimise with restraints", icon: "heldMinimum", family: "energies", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Minimised", whole: true, others: [FAILED] },
+  { kind: "energy", name: "Energy", icon: "level", family: "energies", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Energies", whole: true, others: [FAILED] },
+  { kind: "frequencies", name: "Frequencies", icon: "wave", family: "energies", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Frequencies", whole: true, others: [FAILED] },
   // (non-covalent interactions: each molecule with a surface coloured by how they attract or repel - docs/NCI.md)
-  { kind: "nci", name: "NCI", icon: "cloud", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Non-covalent interactions", whole: true, others: [FAILED] },
+  { kind: "nci", name: "NCI", icon: "cloud", family: "paths", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Non-covalent interactions", whole: true, others: [FAILED] },
   // (each entry a picture of its own, in a set of pictures - docs/RENDER.md, *Render as a step*)
   {
     // (a path between two structures of the same atoms in one numbering - each start paired with an end, as its own options say - its highest
     //  point refined: one molecule each, its frames the path, its entry the point refined; Meno judges none of them - docs/WORKFLOWS.md)
     kind: "path-search",
     name: "Path search",
-    icon: "path",
+    icon: "path", family: "paths",
     takes: ["molecules", "conformers"],
     gives: "molecules",
     runs: "program",
@@ -207,7 +238,7 @@ export const KINDS: readonly KindInfo[] = [
     //  it as its own options say: one optimisation, nothing else; Meno judges none of them a saddle point - docs/WORKFLOWS.md)
     kind: "saddle-point",
     name: "Optimise to a saddle point",
-    icon: "saddle",
+    icon: "saddle", family: "paths",
     takes: ["molecules"],
     gives: "molecules",
     runs: "program",
@@ -223,19 +254,20 @@ export const KINDS: readonly KindInfo[] = [
   },
   // (from each point given - a saddle point, as its frequencies say - down both ways, as its program follows the reaction path: one molecule
   //  each, its frames the path from one end to the other, its entry the point it started from; Meno judges none of them - docs/WORKFLOWS.md)
-  { kind: "reaction-path", name: "Follow the reaction path", icon: "descent", takes: ["molecules"], gives: "molecules", runs: "program", made: "Reaction paths", others: [FAILED], whole: true },
-  { kind: "render", name: "Render", icon: "picture", takes: ["molecules", "conformers"], gives: "pictures", runs: "program", made: "Rendered", own: renderOptions("picture", [], true) },
+  { kind: "reaction-path", name: "Follow the reaction path", icon: "descent", family: "paths", takes: ["molecules"], gives: "molecules", runs: "program", made: "Reaction paths", others: [FAILED], whole: true },
+  { kind: "render", name: "Render", icon: "picture", family: "charts", takes: ["molecules", "conformers"], gives: "pictures", runs: "program", made: "Rendered", own: renderOptions("picture", [], true) },
   {
     kind: "energy-window",
     name: "Energy window",
-    icon: "band",
+    icon: "band", family: "energies",
     takes: ["conformers", "molecules"],
     gives: "same",
     runs: "entries",
     made: "Within {window} kcal/mol",
     others: [{ id: "rest", name: "Outside it", gives: "same", of: "rest" }],
     options: [
-      { id: "window", label: "Within", type: "number", default: 3, min: 0, step: 0.5, unit: "kcal/mol" },
+      // (none by default: the chemist's own - no window has a basis that holds for every set of energies)
+      { id: "window", label: "Within", type: "number", default: Number.NaN, min: 0, step: 0.5, unit: "kcal/mol", note: WINDOW_GUIDE },
       // (of each compound's lowest, as it was; or of the lowest of those with one value of a property - a path, a product: never grouped by guess)
       {
         id: "within",
@@ -257,7 +289,7 @@ export const KINDS: readonly KindInfo[] = [
     name: "Duplicates",
     // (a plugin's comparison, of whole molecules - Meno's own, of shapes alone, takes a skeleton)
     whole: true,
-    icon: "copies",
+    icon: "copies", family: "structures",
     takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
@@ -298,7 +330,7 @@ export const KINDS: readonly KindInfo[] = [
   {
     kind: "populations",
     name: "Populations",
-    icon: "bars",
+    icon: "bars", family: "energies",
     takes: ["conformers"],
     gives: "conformers",
     runs: "entries",
@@ -310,7 +342,7 @@ export const KINDS: readonly KindInfo[] = [
     // (entries kept by conditions on their properties, each with its unit - lib/nodes/filter - the rest out of the second exit, each saying why)
     kind: "filter",
     name: "Filter",
-    icon: "sliders",
+    icon: "sliders", family: "structures",
     // (molecules in 3D by their entries' properties; structures drawn by their records')
     takes: ["molecules", "conformers", "structures"],
     gives: "same",
@@ -337,7 +369,7 @@ export const KINDS: readonly KindInfo[] = [
     // (entries ordered by a value they carry and the first N kept - in each group, each value of a property, or of all - lib/nodes/rank; the rest saying their place)
     kind: "rank",
     name: "Rank",
-    icon: "numbered",
+    icon: "numbered", family: "structures",
     takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
@@ -377,7 +409,7 @@ export const KINDS: readonly KindInfo[] = [
     // (from molecules with frames - a path, an optimisation's way down, a scan - the frames asked for, each a molecule of its one geometry)
     kind: "take-frames",
     name: "Take frames",
-    icon: "frames",
+    icon: "frames", family: "structures",
     takes: ["molecules"],
     gives: "molecules",
     runs: "entries",
@@ -401,11 +433,11 @@ export const KINDS: readonly KindInfo[] = [
     ],
     how: (v) => takeFramesHow((v.which as Which) ?? "highest", Number(v.either ?? 1), keptNames(String(v.keep ?? ""))),
   },
-  { kind: "as-conformers", name: "As conformers", icon: "grouped", takes: ["molecules"], gives: "conformers", runs: "entries", made: "Conformers", perceives: "configurations" },
+  { kind: "as-conformers", name: "As conformers", icon: "grouped", family: "structures", takes: ["molecules"], gives: "conformers", runs: "entries", made: "Conformers", perceives: "configurations" },
   {
     kind: "choose",
     name: "Choose one",
-    icon: "pointer",
+    icon: "pointer", family: "structures",
     takes: ["conformers"],
     gives: "molecules",
     runs: "entries",
@@ -431,7 +463,7 @@ export const KINDS: readonly KindInfo[] = [
   {
     kind: "check-structures",
     name: "Check structures",
-    icon: "check",
+    icon: "check", family: "structures",
     takes: ["structures"],
     gives: "structures",
     runs: "entries",
@@ -444,7 +476,7 @@ export const KINDS: readonly KindInfo[] = [
   {
     kind: "stereoisomers",
     name: "Stereoisomers",
-    icon: "twins",
+    icon: "twins", family: "structures",
     takes: ["structures"],
     gives: "structures",
     runs: "entries",
@@ -456,7 +488,7 @@ export const KINDS: readonly KindInfo[] = [
   {
     kind: "descriptors",
     name: "Descriptors",
-    icon: "list",
+    icon: "list", family: "structures",
     takes: ["structures"],
     gives: "structures",
     runs: "program",
@@ -467,7 +499,7 @@ export const KINDS: readonly KindInfo[] = [
   {
     kind: "enumerate",
     name: "Enumerate",
-    icon: "fan",
+    icon: "fan", family: "structures",
     takes: ["structures"],
     gives: "structures",
     runs: "entries",
@@ -534,7 +566,7 @@ export const KINDS: readonly KindInfo[] = [
   {
     kind: "chart",
     name: "Chart",
-    icon: "chart",
+    icon: "chart", family: "charts",
     // (a table - or molecules, seen as one: lib/table moleculesAsTable; or structures drawn, seen as one: structuresTable)
     takes: ["table", "structures"],
     gives: "chart",
@@ -550,7 +582,7 @@ export const KINDS: readonly KindInfo[] = [
     // (docs/WORKFLOWS.md, *Energy diagrams*: each level a molecule's name, at its lowest, relative to one - joined as a table says, or each to the next)
     kind: "energy-diagram",
     name: "Energy diagram",
-    icon: "levels",
+    icon: "levels", family: "charts",
     takes: ["molecules", "conformers", "table"],
     gives: "chart",
     runs: "entries",
@@ -572,7 +604,7 @@ export const KINDS: readonly KindInfo[] = [
     // (each entry given an ID of its own under the name given, which rides along with every entry made from it: two inputs are matched on it later)
     kind: "tag",
     name: "Tag",
-    icon: "tag",
+    icon: "tag", family: "structures",
     takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
@@ -585,7 +617,7 @@ export const KINDS: readonly KindInfo[] = [
     // (each entry's charge and multiplicity set - one left blank as each has it - those whose electrons cannot have them out of Failed, saying why)
     kind: "species",
     name: "Species",
-    icon: "charge",
+    icon: "charge", family: "structures",
     takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
@@ -602,7 +634,7 @@ export const KINDS: readonly KindInfo[] = [
     // (the entries, in the set's order, as one entry - a complex - each part where it stands; none of a part's properties carried, each named)
     kind: "combine",
     name: "Combine",
-    icon: "link",
+    icon: "link", family: "structures",
     takes: ["molecules"],
     gives: "molecules",
     runs: "entries",
@@ -613,7 +645,7 @@ export const KINDS: readonly KindInfo[] = [
     // (distances, angles and dihedrals between atoms numbered from 1, as the card and the 3D view show them, on each entry as properties)
     kind: "measure",
     name: "Measure",
-    icon: "span",
+    icon: "span", family: "paths",
     takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
@@ -655,6 +687,7 @@ export const KINDS: readonly KindInfo[] = [
     kind: "mode-on-atoms",
     name: "Mode on atoms",
     icon: "modeOn",
+    family: "paths",
     takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
@@ -697,7 +730,7 @@ export const KINDS: readonly KindInfo[] = [
     // (two sets of one kind made one, First's then Second's - all, or one of each value of a property - the rest out of the second exit, each naming the one kept)
     kind: "merge",
     name: "Merge",
-    icon: "merge",
+    icon: "merge", family: "structures",
     takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
@@ -727,7 +760,7 @@ export const KINDS: readonly KindInfo[] = [
     // (each geometry given a bonding entry's bonds and charges - each with each, or paired on a property - those that cannot be out of the second exit, saying why)
     kind: "rebond",
     name: "Re-bond",
-    icon: "rebond",
+    icon: "rebond", family: "structures",
     takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
@@ -757,7 +790,7 @@ export const KINDS: readonly KindInfo[] = [
     // (whether each geometry is bonded as its reference - paired on a property, or against each, the match named - the same out of the first exit, the rest with their differences out of the second)
     kind: "compare-bonding",
     name: "Compare bonding",
-    icon: "compare",
+    icon: "compare", family: "paths",
     takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
@@ -796,7 +829,7 @@ export const KINDS: readonly KindInfo[] = [
     // (Onto's entries with properties of From's put on, matched on a property both carry - lib/nodes/join - each record as it was; those with nothing put on out of the second exit, each saying why)
     kind: "join",
     name: "Join",
-    icon: "join",
+    icon: "join", family: "structures",
     takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
@@ -817,7 +850,7 @@ export const KINDS: readonly KindInfo[] = [
     // (each saddle point's height above its start - the free energy G, or the electronic energy E - paired as Path search pairs, a conformer set's each conformer one: those it cannot have one out of Failed, each saying why)
     kind: "barrier",
     name: "Barrier",
-    icon: "height",
+    icon: "height", family: "energies",
     takes: ["molecules", "conformers"],
     gives: "molecules",
     runs: "entries",
@@ -859,7 +892,7 @@ export const KINDS: readonly KindInfo[] = [
     // (each entry's restraints from itself: its coordination bonds at a factor of their van der Waals radii together, pairs kept at their distance, atoms fixed - those it cannot have out of Failed, saying why)
     kind: "restraints",
     name: "Restraints",
-    icon: "held",
+    icon: "held", family: "structures",
     takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
@@ -879,7 +912,7 @@ export const KINDS: readonly KindInfo[] = [
     // (each torsion trans across its reference's double bonds that is not trans in the entry held at 180, stronger each time - those already trans out of the second exit)
     kind: "torsion-restraints",
     name: "Torsion restraints",
-    icon: "heldAnti",
+    icon: "heldAnti", family: "structures",
     takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
@@ -910,7 +943,7 @@ export const KINDS: readonly KindInfo[] = [
     // (a number with its unit and what worked it out - the standard-state term from its temperature, by its formula, or one typed - for a step that takes one: Add's)
     kind: "number",
     name: "Number",
-    icon: "number",
+    icon: "number", family: "energies",
     takes: [],
     inputs: [],
     gives: "number",
@@ -939,7 +972,7 @@ export const KINDS: readonly KindInfo[] = [
     // (properties of each entry's own geometry summed, a number wired in besides, into a new one - each part as it was, never one level for the sum: lib/nodes/add)
     kind: "add",
     name: "Add",
-    icon: "sum",
+    icon: "sum", family: "energies",
     takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
@@ -960,7 +993,7 @@ export const KINDS: readonly KindInfo[] = [
     // (each entry mapped onto its reference, atom for atom, hydrogens too, and written in its numbering - a reaction's products onto its reactants, a species' conformers onto it - with the bonds each map forms, breaks or changes, as a table; an entry that does not map, aside with why)
     kind: "atom-map",
     name: "Atom map",
-    icon: "mapped",
+    icon: "mapped", family: "structures",
     takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
@@ -1035,7 +1068,7 @@ export const KINDS: readonly KindInfo[] = [
     // (each geometry moved along a vibration - its imaginary one, or one chosen - by an amplitude, the atom moving most by exactly that; one that cannot be, aside with why)
     kind: "displace",
     name: "Displace",
-    icon: "moved",
+    icon: "moved", family: "structures",
     takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
@@ -1063,7 +1096,7 @@ export const KINDS: readonly KindInfo[] = [
     // (each group's free energy over its members - its conformers - on the entry that stands for it, its lowest: lib/nodes/ensemble)
     kind: "ensemble",
     name: "Ensemble energy",
-    icon: "ensemble",
+    icon: "ensemble", family: "energies",
     takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
@@ -1271,8 +1304,10 @@ export function duplicatesHow(v: Record<string, string | number | boolean>): str
   return [...(v.mirrors === "counted" ? ["mirror images counted as one"] : []), ...(v.within === "each value" ? [`compared within each ${by}`] : [])].join(" · ");
 }
 
-/** What an Energy window still needs before it can run: the property, where its groups are a property's values. */
+/** What an Energy window still needs before it can run: its window, the chemist's own; and the property, where its groups are a property's values. */
 export function energyWindowNeeds(v: Record<string, string | number | boolean>): string | undefined {
+  const window = Number(v.window);
+  if (v.window === "" || !Number.isFinite(window) || window < 0) return WINDOW_NEEDED;
   return v.within === "each value" && !String(v.groupBy ?? "").trim() ? "Name the property whose values are the groups" : undefined;
 }
 
@@ -1292,6 +1327,10 @@ export function rankHow(v: Record<string, string | number | boolean>): string {
 }
 
 export const kindInfo = (kind: StepKind): KindInfo => KINDS.find((k) => k.kind === kind)!;
+
+/** The families of kinds of step, in the order they are listed. */
+export const STEP_FAMILIES = ["structures", "energies", "paths", "charts"] as const;
+export type StepFamily = (typeof STEP_FAMILIES)[number];
 /** What step `s` still needs of its options before it can run (`KindInfo.needs`), where Meno does it; nothing, where it can run as it is. */
 export const needsOf = (s: { kind: StepKind; options?: Record<string, string | number | boolean> }): string | undefined => {
   const info = kindInfo(s.kind);
@@ -1311,10 +1350,11 @@ export function optionsOf(options: readonly Option[], own: Record<string, string
   return values;
 }
 
-/** What a step's result set is called, its options' values put in. */
+/** What a step's result set is called, its options' values put in - or, where a number it is called by is none yet (an Energy window's window, the chemist's to give), its kind's name. */
 export function madeName(kind: StepKind, options: readonly Option[], own: Record<string, string | number | boolean> | undefined): string {
   const values = optionsOf(options, own);
-  const { made, madeOne } = kindInfo(kind);
+  const { made, madeOne, name } = kindInfo(kind);
+  if ([...made.matchAll(/\{([a-z0-9-]+)\}/g)].some(([, id]) => typeof values[id] === "number" && !Number.isFinite(values[id]))) return name;
   if (madeOne && Number(values[madeOne.option]) === 1) return madeOne.name;
   return made.replace(/\{([a-z0-9-]+)\}/g, (_, id: string) => String(values[id] ?? ""));
 }
@@ -1429,6 +1469,9 @@ export function exitOf(kind: StepKind, exit: string): StepExit {
   const exits = exitsOf(kind);
   return exits.find((e) => e.id === exit) ?? exits[0];
 }
+
+/** Where `exit` is among its kind's exits, from 0 - its port's place down the card's right side (look `stepGives`): the first's, where the kind has no such exit, as `exitOf` takes it. */
+export const exitPlace = (kind: StepKind, exit: string): number => Math.max(0, exitsOf(kind).findIndex((e) => e.id === exit));
 
 /** What *Compare bonding* still needs of its options before it can run: a property to pair on, or to write the match as; atoms that read. */
 export function compareNeeds(v: OptionValues): string | undefined {

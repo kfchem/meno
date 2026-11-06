@@ -21,7 +21,7 @@ import { barrierSet } from "./barrierStep";
 import { ensembleSet } from "./ensembleStep";
 import type { StyleChoice } from "../../../../lib/chem/style";
 import type { DrawnRecord, SeriesCore } from "../store/types";
-import { displaceRead, kindInfo, optionsOf, type Holds3D, type StepKind } from "./kinds";
+import { displaceRead, kindInfo, optionsOf, WINDOW_NEEDED, type Holds3D, type StepKind } from "./kinds";
 import { rmsd } from "./rmsd";
 import { cappedSaid, SAME_CONFORMER, Sameness } from "./sameConformer";
 import { least } from "../../../../lib/chem/lists";
@@ -30,6 +30,7 @@ import { factor } from "../../../../lib/units";
 import { imaginaryWords, levelOf, type CalcInfo } from "../../../../lib/calc/output";
 import { numberText } from "../../../../lib/calc/results";
 import { FAILURE_WORDS } from "./failures";
+import { convergedOf, heldWhy } from "./converged";
 
 /** Kilocalories per mole in a hartree (Meno's units table). */
 const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");
@@ -56,7 +57,7 @@ export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Hol
     case "as-conformers":
       return asConformers(entries);
     case "energy-window":
-      return options.within === "each value" ? energyWindowByValue(entries, holds, Number(options.window), String(options.groupBy ?? "")) : energyWindow(entries, Number(options.window), holds);
+      return options.within === "each value" ? energyWindowByValue(entries, holds, windowOf(options.window), String(options.groupBy ?? "")) : energyWindow(entries, windowOf(options.window), holds);
     case "duplicates":
       return drain(duplicates(entries, holds, mirrorsOf(options), never, options.within === "each value" ? String(options.groupBy ?? "") : undefined, levels));
     case "populations":
@@ -480,7 +481,8 @@ const asPart = (g: readonly SetEntry[]): SetEntry[] => g.map((e) => (e.partOf ? 
  */
 function energyWindow(entries: readonly SetEntry[], kcal: number, holds: Holds3D): Outcome3D {
   // (as Populations refuses a temperature it cannot use: a window below 0 would keep nothing, not even the lowest)
-  if (!(Number.isFinite(kcal) && kcal >= 0)) return NO_WINDOW;
+  const refused = windowRefused(kcal);
+  if (refused) return refused;
   // (molecules are no compound's conformers: each its own group, as Rank takes them, so none is outside its window - said, that the chemist names a property to take them together)
   if (holds !== "conformers") return { ok: true, holds, kept: [...entries], aside: [], said: `${entries.length} of ${countEntries(entries.length)} kept: each molecule is its own group` };
   const basis = basisOf(entries);
@@ -504,6 +506,12 @@ function energyWindow(entries: readonly SetEntry[], kcal: number, holds: Holds3D
 
 const NO_WINDOW: Outcome3D = { ok: false, said: "The window must be 0 kcal/mol or more" };
 
+/** An Energy window's window as its options hold it, a number - none (NaN) where there is none, never an empty text read as 0. */
+const windowOf = (v: string | number | boolean | undefined): number => (typeof v === "number" ? v : typeof v === "string" && v.trim() ? Number(v) : Number.NaN);
+
+/** Why a window cannot be used: none given - the chemist's to give, there being no default - or one below 0 or past any number; else none. */
+const windowRefused = (kcal: number): Outcome3D | null => (Number.isNaN(kcal) ? { ok: false, said: WINDOW_NEEDED } : Number.isFinite(kcal) && kcal >= 0 ? null : NO_WINDOW);
+
 /** What an entry is, as its frequencies say: a saddle point where it has an imaginary one, a minimum where they were worked out with none, else not known (entries `imaginaryOf`). */
 const kindOf = (e: SetEntry): "minimum" | "saddle point" | "not known" => {
   const im = imaginaryOf(e);
@@ -525,7 +533,8 @@ const named = (e: SetEntry) => `${compoundLetter(e.compound)} #${e.number}`;
  * (`basisOf`), each group's values alike.
  */
 function energyWindowByValue(entries: readonly SetEntry[], holds: Holds3D, kcal: number, groupBy: string): Outcome3D {
-  if (!(Number.isFinite(kcal) && kcal >= 0)) return NO_WINDOW;
+  const refused = windowRefused(kcal);
+  if (refused) return refused;
   const name = groupBy.trim();
   if (!name) return { ok: false, said: "Name the property whose values are the groups" };
   const failed = notResults(entries, (k) => compoundLetter(entries[k].compound));
@@ -871,6 +880,12 @@ export function notAllMinima(entries: readonly SetEntry[]): string | null {
   const name = (e: SetEntry) => `${compoundLetter(e.compound)} #${e.number}`;
   const failed = notResults(entries, (k) => compoundLetter(entries[k].compound));
   if (failed) return failed;
+  // (one optimised with atoms held where they stood: no minimum, whatever its frequencies)
+  const held = entries.flatMap((e) => {
+    const why = heldWhy(convergedOf(e));
+    return why ? [`${name(e)}: ${why.charAt(0).toLowerCase()}${why.slice(1)}`] : [];
+  });
+  if (held.length) return held.join("; ");
   const saddles = entries.filter((x) => x.imaginary?.length).map((e) => `${name(e)} has ${imaginaryWords(e.imaginary!)}`);
   if (!saddles.length) return null;
   return saddles.length === 1 ? `${saddles[0]}: it is no minimum - take it out first` : `${saddles.join("; ")}: they are no minima - take them out first`;

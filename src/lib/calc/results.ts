@@ -440,6 +440,29 @@ export function grouped<R extends Result>(results: readonly R[]): { group: strin
   return out;
 }
 
+/**
+ * Results with their molecule's atoms renumbered (`order`: the atom each
+ * place now has): a value of the whole molecule or of each frame, as it
+ * was - of no atom; each atom's value at its atom's new place; a pair's
+ * atoms as numbered now. A list whose rows name atoms, move them or promise
+ * a value (its plugin asked for it by a key of the old numbering) is left
+ * behind, and so is a result that does not fit the atoms: `dropped` counts
+ * those.
+ */
+export function resultsRenumbered(results: readonly Result[], order: readonly number[]): { results: Result[]; dropped: number } {
+  const n = order.length;
+  const now = new Array<number>(n);
+  order.forEach((j, at) => (now[j] = at));
+  const out: Result[] = [];
+  for (const r of results) {
+    if (r.on === "molecule" || r.on === "frames") out.push(r);
+    else if (r.on === "atoms" && r.values.length === n) out.push({ ...r, values: order.map((j) => r.values[j]) });
+    else if (r.on === "pairs" && r.pairs.every(([a, b]) => isIndex(a, n) && isIndex(b, n))) out.push({ ...r, pairs: r.pairs.map(([a, b, v]) => [now[a], now[b], v]) });
+    else if (r.on === "list" && r.rows.every((row) => !row.atoms && !row.move && !isAsk(row.surface) && !isAsk(row.colour?.by))) out.push(r);
+  }
+  return { results: out, dropped: results.length - out.length };
+}
+
 /** A pair's value in a result of pairs, whichever way round it is given; none, undefined. */
 export function pairValue(r: PairsResult, a: number, b: number): Cell | undefined {
   return r.pairs.find(([x, y]) => (x === a && y === b) || (x === b && y === a))?.[2];

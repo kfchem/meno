@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cardPlace, REST_MS, restLeft } from "./compoundCardPlace";
+import { cardHolds, cardPlace, REST_MS, restLeft } from "./compoundCardPlace";
 
 describe("where a compound's card stands by its word", () => {
   const view = { width: 1000, height: 800 };
@@ -24,5 +24,21 @@ describe("when a compound's card comes", () => {
     expect(restLeft(1000, 1100)).toBe(250);
     expect(restLeft(1000, 1350)).toBe(0);
     expect(restLeft(1000, 5000)).toBe(0);
+  });
+});
+
+describe("what a compound's card holds", () => {
+  it("is its drawing once its number is placed and its structure read whole; while its PDF is still read for numbers, or its figure, says so; else nothing", () => {
+    const at = (placed: boolean, read: boolean, drawn: boolean, whole: boolean) => cardHolds({ placed, read, drawn, whole });
+    expect(at(true, true, true, true)).toBe("drawing");
+    expect(at(true, true, true, false)).toBe("drawing");
+    // (its PDF's pages still gone through: the number may be on one not yet read)
+    expect(at(false, false, false, false)).toBe("reading");
+    // (placed, its figure's structures still being read)
+    expect(at(true, false, false, true)).toBe("reading");
+    // (gone through whole and the number drawn nowhere, or its structure not read whole: no card)
+    expect(at(false, false, false, true)).toBeNull();
+    expect(at(true, true, false, true)).toBeNull();
+    expect(at(true, true, false, false)).toBeNull();
   });
 });

@@ -1,9 +1,8 @@
 import clsx from "clsx";
 import { longPressMs } from "../longPress";
-import { PAGE_SIZED } from "../utils/pageScale";
 import PageHtml from "./PageHtml";
 import { useFrame, useThree } from "@react-three/fiber";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
 import { COLORS } from "../../../theme/colors";
 import { DURATION, TAU } from "../../../theme/motion";
@@ -12,7 +11,7 @@ import { buttonHeld } from "./buttonHeld";
 import { atomColour, ballCircles, bondRadiusOf, linedBall, lineWidth, LINE_LEAST_PX, type Style3D } from "../../../../lib/chem/style3d";
 import type { Look3D, Measure3D, Molecule3D, Rising3D, Turn3D } from "../store/types";
 import { menoShader } from "../utils/menoShader";
-import { NOTES_SCALE, pageScale } from "../utils/pageScale";
+import { notesSized, pagePx, pageScale, pageSized } from "../utils/pageScale";
 import { bentStickGeometry, stickBends, withStickBend } from "../utils/stickBend";
 import { FRAMES_CHIP_GAP, imaginaryShown, withCentres, fadeStep, bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, plainNoteOf, frameOf, framesChipAt, labelSpot, linesOf, magnifiedOf, seenShare, sharesOf, sharesWithheld, solidOf, spotFollowed, valueSpots, widestWay, WORLD_PER_ANGSTROM, type BondLine, type DrawnBond, type LabelBox, type LabelFade, type SpotAbout, type Stick, type ValueAt } from "../utils/molecule3d";
 import { MARK_MIN_PX, MARK_SCALE, marksReadAt, stereoTextEms } from "../chem/marks";
@@ -42,7 +41,8 @@ import { ISO_ORBITAL, isoOf } from "../../../../lib/calc/grids";
 import { dollyAt, dollyMatrix, RISE_ACROSS_FROM, RISE_END, RISE_GROW, RISE_UP } from "../utils/rise";
 import { chainRuns } from "../../../../lib/chem/biopolymer";
 import { residueOnRay, ribbonMesh, ribbonSpheres, type RibbonSpheres } from "../utils/ribbon";
-import { BALLS_NEAR, BALLS_SETTLE_MS, ballSegmentsFor, largeOn } from "../utils/largeDrawing";
+import { sameMoleculeProps } from "../utils/moleculeHandlers";
+import { BALLS_NEAR, ballSegmentsFor, ballSegmentsNext, carriedSphere, outlineSegments } from "../utils/largeDrawing";
 import { typedValue } from "../utils/typedValue";
 import { raycastCylinders, raycastSpheres } from "./raycast3d";
 import { commitInstanceMatrices } from "./instances";
@@ -100,7 +100,8 @@ const LOOK_TAU = 0.08;
 /**
  * The line round the balls (utils/outlineMaterial) is a ball drawn again,
  * as smooth as the balls up to LINES_FINE_MOST atoms, and of LINES_COARSE
- * segments past them: measured on 10 648 atoms and 30 492 bonds, a frame
+ * segments past them, never more than the balls have (utils/largeDrawing
+ * `outlineSegments`): measured on 10 648 atoms and 30 492 bonds, a frame
  * took 14.0 ms with no line, 19.7 ms with lines as smooth as the balls (32
  * segments) and 16.4 ms with 16 - its rim strays from a circle by under a
  * pixel up to balls 40 pixels across.
@@ -109,7 +110,10 @@ const LINES_FINE_MOST = 2000;
 const LINES_COARSE = 16;
 /** Where what goes under an opened frames chip lies among the page's HTML: over the workflow's ports, as the chip is over them (Workflow2D hides those under it). */
 const CHIP_RAISED_Z: [number, number] = [PORTS_Z + 3, PORTS_Z + 1];
-
+/** A chip as large as the page draws it, hung from its middle - a measure's value - or from its top - what it says of its 3D structure, below it; and its notes, hung from their foot (utils/pageScale `pageSized`, `notesSized`). */
+const SIZED_MIDDLE = pageSized("middle");
+const SIZED_TOP = pageSized("top");
+const NOTES_SIZED = notesSized("foot");
 /** How gently the frames' chip follows the molecule's lowest point as it turns, in seconds. */
 const PILL_TAU = 0.12;
 /** How quickly a stereo label goes round its atom to the way it stands best, as the molecule turns, in seconds: as `TAU.move`. */
@@ -278,7 +282,7 @@ export type Molecule3DViewProps = {
  */
 /** The imaginary frequencies each of a molecule's `n` frames was judged to have: a conformer set's, frame by frame; a single geometry's, its calculation's, of its last. */
 
-export default function Molecule3DView(props: Molecule3DViewProps) {
+function Molecule3DView(props: Molecule3DViewProps) {
   const { m, style, look, frame, turn, lit, selected, chosen, chosenBonds, holding, following, leaving } = props;
   const solid = solidOf(m, style);
   const n = m.atoms.length;
@@ -408,11 +412,17 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   });
   // how far over to the secondary look it is drawn: 0 the primary, 1 the secondary
   const fill = useRef(look === "secondary" ? 1 : 0);
-  // the segments round its balls: as the style has them - or, on a canvas
-  // drawn lighter, as many as their size on the screen wants
-  // (utils/largeDrawing `ballSegmentsFor`): more at once as they grow, fewer
-  // once the zoom has settled
+  // the segments round its balls: as many as their size on the screen wants,
+  // never more than the style has them (utils/largeDrawing
+  // `ballSegmentsFor`): more at once as they grow, fewer once the zoom has
+  // settled
   const [segments, setSegments] = useState(style.ballSegments);
+  // (its balls' sphere, made again at another number of segments with what
+  // each ball carries - its number, whether it is lined - carried over:
+  // utils/largeDrawing `carriedSphere`)
+  const ballGeo = useRef<THREE.SphereGeometry | null>(null);
+  const ballGeometry = useMemo(() => (ballGeo.current = carriedSphere(segments, ballGeo.current)), [segments]);
+  useEffect(() => () => ballGeometry.dispose(), [ballGeometry]);
   // (by a loop: spread over a hundred thousand atoms, Math.max overruns the stack)
   const biggest = useMemo(() => {
     const most = (r: Float32Array) => r.reduce((a, b) => Math.max(a, b), 0);
@@ -730,26 +740,24 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   useFrame((_, dt) => {
     const step = Math.min(dt, 1 / 30);
     let moving = false;
-    // (its balls' segments, by their size on the screen where the canvas is drawn lighter; as the style has them otherwise, at once)
+    // (its balls' segments, by their size on the screen, never more than the style's)
     {
-      const lighter = largeOn(gl).lighter;
       const zoom = (camera as THREE.OrthographicCamera).zoom || 1;
       const bs = ballSizing.current;
-      if (!bs.zoom || Math.abs(Math.log(zoom / bs.zoom)) >= BALLS_NEAR) {
+      // (on its first frame, as many as it wants at once: nothing has been drawn to change)
+      const first = !bs.zoom;
+      if (first || Math.abs(Math.log(zoom / bs.zoom)) >= BALLS_NEAR) {
         bs.zoom = zoom;
         bs.since = performance.now();
       }
-      const want = lighter ? ballSegmentsFor(2 * biggest[look] * zoom * gl.getPixelRatio(), style.ballSegments) : style.ballSegments;
-      // (more at once, as balls grow on the screen - fewer only once the zoom has settled)
-      if (want !== segments) {
-        const left = lighter && want < segments ? BALLS_SETTLE_MS - (performance.now() - bs.since) : 0;
-        if (left <= 0) setSegments(want);
-        else if (!bs.timer) {
-          bs.timer = window.setTimeout(() => {
-            bs.timer = 0;
-            invalidate();
-          }, left + 5);
-        }
+      const want = ballSegmentsFor(2 * biggest[look] * zoom * gl.getPixelRatio(), style.ballSegments);
+      const next = ballSegmentsNext(want, segments, first ? Infinity : performance.now() - bs.since);
+      if (next && "now" in next) setSegments(next.now);
+      else if (next && !bs.timer) {
+        bs.timer = window.setTimeout(() => {
+          bs.timer = 0;
+          invalidate();
+        }, next.waitMs + 5);
       }
     }
     // another frame: its atoms go there
@@ -1206,6 +1214,8 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       bn.shown.value = any ? 1 - share : 0;
       const ju = jointUniforms(jointMesh);
       ju.shown.value = any ? share : 0;
+      // (not drawn at all while it shows no number: a draw call a molecule saved)
+      jointMesh.visible = ju.shown.value > 0;
       if (any && share > 0) {
         ju.pxPer.value = 1 / px;
         ju.height.value = JOINT_NUMBER_A * WORLD_PER_ANGSTROM * risen.current;
@@ -1747,14 +1757,14 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           }}
           onPointerOut={() => setHoverAtom(null)}
         >
-          <sphereGeometry args={[1, segments, segments]} />
+          <primitive object={ballGeometry} attach="geometry" dispose={null} />
           <meshStandardMaterial ref={atomsMat} transparent opacity={1} />
         </instancedMesh>
         {/* atom numbers where the sticks meet, where there are no balls to carry them (utils/jointNumbers) */}
         <primitive object={jointMesh} renderOrder={OVER_PAGE + 1} />
         {/* the style's line round every ball (utils/outlineMaterial) */}
         <instancedMesh ref={atomLines} args={[undefined, outlines.atoms.material, n]} renderOrder={OVER_PAGE} frustumCulled={false} visible={false} raycast={() => {}}>
-          <sphereGeometry args={[1, n > LINES_FINE_MOST ? LINES_COARSE : style.ballSegments, n > LINES_FINE_MOST ? LINES_COARSE / 2 : style.ballSegments]} />
+          <sphereGeometry args={[1, ...outlineSegments(segments, n, LINES_FINE_MOST, LINES_COARSE)]} />
         </instancedMesh>
         {lineCount > 0 && (
           <instancedMesh
@@ -1976,7 +1986,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
                 Delete key) */}
             <PageHtml center zIndexRange={[30, 20]} style={{ pointerEvents: "none" }}>
               {/* (as large as the page draws it: a chip on the page) */}
-              <div className="meno-page-chip" style={PAGE_SIZED}>
+              <div className="meno-page-chip" style={SIZED_MIDDLE}>
                 <div
                   ref={(el) => {
                     const l = labels.current.get(x.id) ?? { anchor: null, el: null };
@@ -2058,8 +2068,8 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
                   down as it is tall now: its controls not yet drawn by WebGL) */}
               {(props.onRemake || props.list) && (
                 <PageHtml zIndexRange={chip.raised ? CHIP_RAISED_Z : [30, 20]}>
-                  <div className="meno-control-chip flex flex-col items-center" style={{ transform: `translate(-50%, calc(${FRAMES_CHIP_GAP + chip.heightPx}px * var(--page, 1)))` }}>
-                    <div className="flex flex-col items-center" style={{ ...PAGE_SIZED, pointerEvents: "auto" }}>
+                  <div className="meno-control-chip flex flex-col items-center" style={{ transform: `translate(-50%, ${pagePx(FRAMES_CHIP_GAP + chip.heightPx)})` }}>
+                    <div className="flex flex-col items-center" style={{ ...SIZED_TOP, pointerEvents: "auto" }}>
                       {props.onRemake && <Changed onRemake={props.onRemake} />}
                       {props.list}
                     </div>
@@ -2071,9 +2081,9 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
             <PageHtml zIndexRange={[30, 20]}>
               <div
                 className="meno-page-chip meno-control-chip flex flex-col items-center"
-                style={{ transform: "translate(-50%, calc(10px * var(--page, 1)))" }}
+                style={{ transform: `translate(-50%, ${pagePx(10)})` }}
               >
-                <div className="flex flex-col items-center" style={PAGE_SIZED}>
+                <div className="flex flex-col items-center" style={SIZED_TOP}>
                   {m.edited && <Edited from={m.edited.from} />}
                   {props.onRemake && <Changed onRemake={props.onRemake} />}
                 </div>
@@ -2108,7 +2118,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
               data-fit-notes={MARK_GAP_PX}
               style={{ transform: `translate(-50%, calc(-100% - ${MARK_GAP_PX}px))` }}
             >
-              <div className="flex flex-col items-center" style={{ zoom: `clamp(${NOTES_SCALE.least}, var(--page, 1), ${NOTES_SCALE.most})` }}>
+              <div className="flex flex-col items-center" style={NOTES_SIZED}>
               {notesEver.map((text) => (
                 <NoteMark
                   key={text}
@@ -2308,3 +2318,12 @@ function Changed({ onRemake }: { onRemake: () => void }) {
     </div>
   );
 }
+
+/**
+ * Drawn again only where its own props have changed (utils/moleculeHandlers
+ * `sameMoleculeProps`): the set of molecules drawn again for one of them -
+ * a frame chosen, a set laid out - leaves the rest as they are. Its
+ * handlers are kept the same for it (`moleculeHandlers`) so that they do
+ * not count as a change.
+ */
+export default memo(Molecule3DView, sameMoleculeProps);

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { forgetIndex, indexPdf, indexWhole, labelPlaces, labelsRead, type PageLabels } from "./compoundIndex";
+import { forgetIndex, hurryIndex, indexPdf, indexWhole, labelPlaces, labelsRead, type PageLabels } from "./compoundIndex";
 
 type B = [number, number, number, number];
 const fig = (y: number): B => [0, y, 100, y + 50];
@@ -54,4 +54,57 @@ describe("a PDF's compounds by their numbers", () => {
     expect(indexWhole("pdf")).toBe(true);
     expect(labelPlaces("pdf", "2")).toHaveLength(1);
   });
+
+  it("hurried - a number's card waiting on it - reads on without waiting for an idle moment, the one it waits for too, but yields between pages", async () => {
+    const asked: number[] = [];
+    const read: PageLabels = async (p) => {
+      asked.push(p);
+      return [{ figure: fig(0), labels: [label(`${p + 1}`)] }];
+    };
+    // (an idle moment that never comes - Windows' webview, the pointer moving - and the window's next turns, each kept to be given)
+    const never = () => {};
+    const turns: (() => void)[] = [];
+    const next = (go: () => void) => turns.push(go);
+    const run = indexPdf("pdf", 3, read, never, next);
+    await Promise.resolve();
+    expect(asked).toEqual([]);
+    // (hurried: the wait for idle given up, its page read at the window's next turn - not before)
+    hurryIndex("pdf");
+    expect(turns).toHaveLength(1);
+    expect(asked).toEqual([]);
+    // (each page after its own turn: never two read in one)
+    for (let page = 0; page < 3; page++) {
+      turns.shift()!();
+      await new Promise((r) => setTimeout(r, 0));
+      expect(asked).toEqual([0, 1, 2].slice(0, page + 1));
+    }
+    await run;
+    expect(indexWhole("pdf")).toBe(true);
+    expect(labelPlaces("pdf", "3")).toHaveLength(1);
+  });
+
+  it("leaves nothing behind: a PDF hurried while none goes waits for idle when it does go, and a run after a hurried one is hurried only if asked again", async () => {
+    const read: PageLabels = async (p) => [{ figure: fig(0), labels: [label(`${p + 1}`)] }];
+    const idles: (() => void)[] = [];
+    const idle = (go: () => void) => idles.push(go);
+    const now = (go: () => void) => go();
+    // (hurried before any reading: nothing kept, so its first page still waits for idle)
+    hurryIndex("pdf");
+    const first = indexPdf("pdf", 1, read, idle, now);
+    await Promise.resolve();
+    expect(idles).toHaveLength(1);
+    // (hurried now: read at once, and the run ends)
+    hurryIndex("pdf");
+    await first;
+    // (a later run of it - its pages to read again - waits for idle, as no one has hurried it)
+    forgetIndex("pdf");
+    idles.length = 0;
+    const second = indexPdf("pdf", 1, read, idle, now);
+    await Promise.resolve();
+    expect(idles).toHaveLength(1);
+    idles.shift()!();
+    await second;
+    expect(indexWhole("pdf")).toBe(true);
+  });
 });
+

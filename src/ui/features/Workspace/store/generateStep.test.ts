@@ -109,6 +109,7 @@ describe("Generate: a step that takes nothing in", () => {
     // (each with its record: the SMILES as given, the model's values - named, as computed, by what made them - and what it leaves open)
     const by = { plugin: "molgen", version: expect.any(String), program: "Molgen 4.8.24", model: "molgen.prior", method: "sampled, seed 7, on the CPU" };
     expect(held.records[0]).toEqual({
+      id: expect.any(String),
       of: expect.any(String),
       properties: {
         smiles: { value: "CCO", unit: "none", status: "computed", by },
