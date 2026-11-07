@@ -22,6 +22,7 @@ import { pathLength, pointAlong, type ArrowLook } from "../../../lib/chem/reacti
 import { arrowPoints } from "../../../lib/chem/reactionScheme";
 import { mapAtoms, mapMarks, mapShows, mapStanding } from "./chem/atomMap";
 import { numbers3d, sideMolecules, type StructureMap } from "./chem/structureMaps";
+import { joinedAdded, joinedStructures, joinsSettled, separatedStructures } from "./utils/joinedParts";
 import { etaHeld } from "./chem/eta";
 import { wedgesHeld } from "./chem/drawing";
 import type { Arrow, ArrowAtomMap, ArrowFormPatch, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Ink, InkLook, Shape, ShapePatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText, LostText } from "./store/types";
@@ -212,7 +213,7 @@ export function createWorkspaceDocument(
   return createDocument<WorkspaceDocument>(doc, {
     settle: (next, before) => {
       const held = heldSettled(next, before, extentIn?.(next));
-      return mapsSettled(withRecordsSettled(membersSettled(fitSets(withOneMagnification(held, before), before), before), before), before);
+      return mapsSettled(joinsDocSettled(withRecordsSettled(membersSettled(fitSets(withOneMagnification(held, before), before), before), before)), before);
     },
     cost: stepCost,
   });
@@ -994,7 +995,8 @@ export function replaceModel(
   return {
     ...doc,
     // (which record each stack of drawings shows is the view's, not the document's)
-    model: { atoms: unmarked(next.atoms), bonds: next.bonds.slice() },
+    // (a structure of several parts whose number holds one piece only - read so from a file - is that piece alone: utils/joinedParts)
+    model: joinsSettled({ atoms: unmarked(next.atoms), bonds: next.bonds.slice() }),
     arrows: [],
     nextArrowId: 1,
     pluses: [],
@@ -1055,7 +1057,8 @@ export function appendModel(
     return groups.get(g)!;
   };
   // (a stack of drawings it brings numbered after the document's own; one record copied out of its stack, that record alone)
-  const atoms = addedStacks(next.atoms, freshRecordsId(doc.model.atoms)).map((a) => ({
+  // (and a structure of several parts it brings given a number of its own, joining nothing here - utils/joinedParts)
+  const atoms = joinedAdded(addedStacks(next.atoms, freshRecordsId(doc.model.atoms)), doc.model.atoms).map((a) => ({
     ...a,
     id: idMap.get(a.id)!,
     ...(a.sgroups
@@ -1615,6 +1618,24 @@ function molecules3dTurned(maps: readonly StructureMap[], next: WorkspaceDocumen
       }),
     ),
   );
+}
+
+/** A structure of several parts kept to two pieces or more after an edit: a number left on one piece - the others deleted - taken off (utils/joinedParts). */
+function joinsDocSettled(next: WorkspaceDocument): WorkspaceDocument {
+  const model = joinsSettled(next.model);
+  return model === next.model ? next : { ...next, model };
+}
+
+/** The structures holding `ids` made one structure of several parts (utils/joinedParts): nothing moves. */
+export function joinStructures(doc: WorkspaceDocument, ids: Iterable<number>): WorkspaceDocument {
+  const model = joinedStructures(doc.model, ids);
+  return model === doc.model ? doc : { ...doc, model };
+}
+
+/** The structures of several parts holding `ids` taken apart, each piece its own structure again. */
+export function separateStructures(doc: WorkspaceDocument, ids: Iterable<number>): WorkspaceDocument {
+  const model = separatedStructures(doc.model, ids);
+  return model === doc.model ? doc : { ...doc, model };
 }
 
 /**

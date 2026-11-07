@@ -343,7 +343,7 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
       const own = reach({ ...copy, id: 0 });
       const y = m.at.y;
       let left = m.at.x + reach(m) + NOMINAL_BOND_LENGTH + own;
-      // (a set held off the page lies nowhere: workflow/held)
+      // (a set drawn nowhere lies nowhere: workflow/held)
       for (const b of setsOnPage(doc.getState(), doc.getState().sets ?? [])) if (left >= b.x0 && left <= b.x1 && y >= b.y0 && y <= b.y1) left = b.x1 + NOMINAL_BOND_LENGTH + own;
       const newId = doc.getState().nextMolecule3dId ?? 1;
       doc.edit(label, (d) => ops.addMolecule3d(d, { ...copy, at: { x: left, y } }), meta);

@@ -20,7 +20,7 @@ import { placeCard } from "../../workflow/place";
 import { proceduresSaved } from "../../workflow/procedures";
 import { fitResultSets, placeAsSet, type RunWith } from "../../workflow/run";
 import { holdsOwn, type Frame } from "../../workflow/entries";
-import type { EditorState, Molecule3D, WorkflowView } from "../types";
+import type { EditorState, Molecule3D, WireEnd, WorkflowView } from "../types";
 import { createStepRuns } from "./stepRuns";
 import { positionIds } from "../../workflow/substituents";
 
@@ -107,13 +107,15 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
           chosenSet: prev.chosenSet != null && ids.includes(prev.chosenSet) ? null : prev.chosenSet,
         }));
     },
-    addStep: (kind: StepKind, by: string, x: number, y: number) => {
+    addStep: (kind: StepKind, by: string, x: number, y: number, from?: WireEnd) => {
       const id = doc.getState().nextWorkflowId ?? 1;
       // (with the defaults Settings has for its kind, done by it - and, of one with no default, the chemist's own value
       // there, else none: an Energy window's window)
       const options = givenOnly(valuesOf(optionsFor(kind, by), useAppSettings.getState().options[stepRole(kind, by)]));
-      // (where it was put down, or lower where something is there: never over a set, a card or a wire)
+      // (where it was put down, or lower where something is there: never over a set, a card or a wire - or, brought by a wire
+      //  from an exit's port, close by its card and wired, in the same step of the history: model `addStepFrom`)
       doc.edit("add step", (d) => {
+        if (from) return wf.addStepFrom(d, kind, from, x, y, options, by);
         const at = placeCard(d, x, y);
         return wf.addStep(d, kind, at.x, at.y, options, by);
       });

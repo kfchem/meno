@@ -18,7 +18,7 @@ import { countOf, countSaid, numberedOn, recordHow, recordNumber, recordWhy, typ
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { lookEvery } from "../workflow/lookEvery";
 import { labelReach, selectionFrame, selectionInSet } from "../workflow/selectionSet";
-import { isHeld, setsOnPage } from "../workflow/onPage";
+import { unseenSets } from "../workflow/onPage";
 import { exitChip, exitNames } from "../workflow/exitNames";
 import type { Drawn } from "../pageGl/PagePlaced";
 import PagePlaced, { usePlaced } from "../pageGl/PagePlaced";
@@ -44,7 +44,9 @@ import { diagramKept, diagramNeeds, diagramOptions, diagramValues } from "../wor
 import { lookFor, useInstalled } from "../../../../lib/plugins/installed";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { dragSelection } from "../utils/dragSelection";
+import PageField from "../pageGl/PageField";
 import PageLayer from "../pageGl/PageLayer";
+import { FRAME_PX, tabStart } from "../pageGl/frameParts";
 import { cardFace, TONE, type CardFaceOf } from "../pageGl/cardFace";
 import { dropOn, portOfKey, portParts, type PortAt } from "../pageGl/ports";
 import { PAGE_GL_ORDER } from "../pageGl/PageShapes";
@@ -534,8 +536,10 @@ export default function Workflow2D() {
   const chipOver = useEditor((s) => s.chipOver);
   const steps = useEditor((s) => s.steps);
   const wires = useEditor((s) => s.wires);
-  // (the sets that lie on the page: all but those held off it - their exits wired on, workflow/held - whose frames are drawn nowhere)
-  const onPage = useMemo(() => setsOnPage({ sets, wires }, sets), [sets, wires]);
+  // (the sets that lie on the page: all but those drawn nowhere - held off it, their exits wired on, or an exit's for what its step
+  //  sets aside, holding nothing: workflow/held - the same as long as those are, a card moved or not)
+  const unseen = useMemo(() => unseenSets({ sets, wires, steps }), [sets, wires, steps]);
+  const onPage = useMemo(() => (unseen.size ? sets.filter((b) => !unseen.has(b.id)) : sets), [sets, unseen]);
   // (the sets on the page as last drawn, and when each came onto it: a step's result set come within a fold's time grows out of its port)
   const seenSets = useRef<Set<number> | null>(null);
   const cameAt = useRef(new Map<number, number>());
@@ -979,6 +983,7 @@ export default function Workflow2D() {
   const setById = useMemo(() => new Map(sets.map((b) => [b.id, b])), [sets]);
   // (each step's exits' sets, by step and exit: a port drawn for each)
   const exitSets = useMemo(() => new Map(sets.flatMap((b) => (b.made ? [[`${b.made.step}:${b.made.exit}`, b] as const] : []))), [sets]);
+  const renamed = renaming != null ? setById.get(renaming) : undefined;
   // (each exit's name beside its port where its set is on no page beside it - held off it - to name it: workflow/exitNames)
   // (and the exit whose port the pointer is on, where its set is held and holds anything: said beside its port, its step's names gone meanwhile)
   const hoveredExit = useEditor((s) => s.hoveredExit);
@@ -1147,12 +1152,12 @@ export default function Workflow2D() {
   // sets and steps, each drawn as it is - and those just gone, as they last were, fading out; the steps' cards shut drawn by WebGL
   const faceList: CardFaceOf[] = [];
   const parts = [
-    // (what a set holds - a summary, a table, a chart - and its name being written anew, in HTML: its frame and tab by WebGL, `setTabs`;
+    // (what a set holds - a summary, a table, a chart - in HTML: its frame and tab by WebGL, `setTabs`; its name written anew too, `PageField`;
     //  a step's result set's folding into its exit's port as it is held, and growing out of it as it is shown again)
     ...onPage.flatMap((b) => {
       const info = setInfo.get(b.id)!;
       const f = shownOf(b);
-      if (!info.summary && !b.table && !b.number && !b.chart && renaming !== b.id) return [];
+      if (!info.summary && !b.table && !b.number && !b.chart) return [];
       return [
         <div key={`b${b.id}`} className={b.made && growing(b.id) ? "meno-fold-in" : undefined} style={b.made ? foldAbout(b) : undefined}>
         <div style={onLayer(f.x0, f.y1)}>
@@ -1162,11 +1167,6 @@ export default function Workflow2D() {
             {...(info.summary ? { summary: info.summary, onOpenTable: () => store.getState().readSetTable(b.id) } : {})}
             compact={compact}
             onContextMenu={menuOf("set", b.id)}
-            renaming={renaming === b.id}
-            onRename={(name) => {
-              if (name != null) store.getState().renameSet(b.id, name);
-              setRenaming(null);
-            }}
             {...(b.chart ? { onEntry: showEntry } : {})}
           />
         </div>
@@ -1186,10 +1186,14 @@ export default function Workflow2D() {
       const state = run?.waiting ? "waiting" : (states.get(s.id) ?? "ready");
       const missing = notReadyFor(s) ?? (diagram ? diagramNeeds(flow, s) : undefined);
       const who = doer?.name ?? "Nothing added";
-      // (shut, drawn by WebGL - pageGl/cardFace; opened, or shrinking back once shut, its HTML: the one HTML on the page)
-      if (openStep !== s.id && shutting !== s.id) {
+      // (shut, drawn by WebGL - pageGl/cardFace; opened, or shrinking back once shut, its HTML over it: the one HTML on the page.
+      //  The face stays drawn under its HTML, whole, so that the HTML alone fades in over it and out off it - one layer
+      //  crossing, the card never paler than it is)
+      {
         const line = wireRefused?.step === s.id ? refusedState(wireRefused.said) : cardState(state, s.ran?.said, run?.view, Date.now(), missing);
         const inputs = inputsFor(s.kind, byOf(s));
+        // (under its opened HTML: its inputs' names are the HTML's, and its state's icon still - nothing drawn twice, nothing turning unseen)
+        const under = openStep === s.id || shutting === s.id;
         faceList.push({
           key: `step:${s.id}`,
           x: s.x,
@@ -1197,16 +1201,16 @@ export default function Workflow2D() {
           icon: info.icon,
           who,
           summary: [info.name, how && how !== line.text ? how : ""].filter(Boolean).join(" \u00b7 "),
-          state: line,
+          state: under ? { ...line, turning: false } : line,
           ...(state === "running" && run?.view.line ? { said: run.view.line } : {}),
           ...(state === "running" && run && (run.view.share != null || run.view.total > 1) ? { progress: run.view.share ?? run.view.ended / run.view.total } : {}),
           stateTip: [line.text, s.ran?.named].filter(Boolean).join("\n"),
           selected: selFlow.steps.has(s.id),
           words,
-          inputs: inputs.length > 1 ? inputs.map((p) => p.name) : [],
+          inputs: inputs.length > 1 && !under ? inputs.map((p) => p.name) : [],
         });
-        return [];
       }
+      if (openStep !== s.id && shutting !== s.id) return [];
       return [
         // (its top at its place: the card grows downwards as it opens - over the cards below it)
         <div key={`s${s.id}`} data-step-card={s.id} style={onLayer(s.x, s.y, openStep === s.id || shutting === s.id)}>
@@ -1314,11 +1318,12 @@ export default function Workflow2D() {
       edges: true,
     };
   });
-  // (a step's result set folding into its exit's port as it is held, and growing out of it as it is shown again - about that port,
-  //  as its HTML did: its frame drawn that far from the port, as present as it is)
+  // (a step's result set folding into its exit's port as it comes to be drawn nowhere - held, or an exit's for what its step sets
+  //  aside, given nothing - and growing out of it as it is shown again - about that port, as its HTML did: its frame drawn that far
+  //  from the port, as present as it is)
   const tabsShown = useFaded(setTabs, (t) => t.key).map(({ item, opacity, leaving }) => {
     const b = setById.get(stepOfKey(item.key));
-    const p = b?.made && (leaving ? isHeld({ sets, wires }, b) : growing(b.id)) ? exitGives(b) : null;
+    const p = b?.made && (leaving ? unseen.has(b.id) : growing(b.id)) ? exitGives(b) : null;
     return { ...item, ...(p ? { box: towards(item.box, p, opacity) } : {}), opacity, ...(leaving ? { noHits: true as const } : {}) };
   });
   // (two presses on a chemist's set's tab, close together: its name written anew, in a field over the tab)
@@ -1562,9 +1567,10 @@ export default function Workflow2D() {
       <PageHtml transform distanceFactor={HTML_DISTANCE} position={[0, 0, 0]} zIndexRange={[18, 18]} pointerEvents="none">
         <div ref={layer} style={{ position: "relative", width: 0, height: 0 }}>
           {shownParts.map(({ key, item, leaving }) => {
-            // (a step's result set held off the page now: folding into its exit's port, as it last was)
+            // (a step's result set drawn nowhere now - held off the page, or an exit's for what its step sets aside, given nothing:
+            //  folding into its exit's port, as it last was)
             const set = leaving && key.startsWith("b") ? sets.find((x) => x.id === Number(key.slice(1))) : undefined;
-            const fold = set?.made && isHeld({ sets, wires }, set) ? foldAbout(set) : undefined;
+            const fold = set?.made && unseen.has(set.id) ? foldAbout(set) : undefined;
             return leaving ? (
               // (gone: as it last was, fading, and no longer taking the pointer)
               <div key={key} inert className={fold ? "meno-fold-out" : "meno-fade-out"} style={fold}>
@@ -1576,6 +1582,23 @@ export default function Workflow2D() {
           })}
         </div>
       </PageHtml>
+      {/* a chemist's set's name written anew, where its tab says it: drawn by WebGL, typed into a field unseen (pageGl/PageField) */}
+      {renamed && (
+        <PageField
+          key={renamed.id}
+          fieldKey={`name:${renamed.id}`}
+          x={tabStart(shownOf(renamed)).x}
+          y={tabStart(shownOf(renamed)).y}
+          initial={renamed.name ?? setInfo.get(renamed.id)?.name ?? ""}
+          sizePx={FRAME_PX.words}
+          weight={500}
+          label="Set name"
+          onDone={(name) => {
+            if (name != null) store.getState().renameSet(renamed.id, name);
+            setRenaming(null);
+          }}
+        />
+      )}
       {/* the ports, by WebGL: over the cards and the molecules' chips - a port is pressed, lit and let go on whatever lies
           over it on the page - but those under a card or a chip opened over the rest, which takes the press (PORTS_ORDER) */}
       <PageLayer shapes={portRings} texts={NO_TEXTS} regions={portRegions} on={onPort} order={PORTS_ORDER} />

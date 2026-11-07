@@ -229,6 +229,7 @@ import { Remake3D } from "./components/remake3d";
 import { mapAtoms, mapStanding, reactionOf, unpairedSaid } from "./chem/atomMap";
 import { structuresOf } from "./workflow/entries";
 import { conformerPairs, conformersSaid } from "./chem/structureMaps";
+import { partsOffered } from "./utils/joinedParts";
 import { useAtomMaps } from "./chem/useAtomMaps";
 import { turnOnto } from "./utils/align3d";
 import type { ArrowFormPatch, Caption, Drawn, Molecule3D, PictureFrom, WordsFrom } from "./store/types";
@@ -1926,9 +1927,9 @@ function WorkspaceContent({
               const st = store.getState();
               const { at, wire } = quickAdd;
               st.setQuickAdd(null);
-              // (its port that takes where Quick Add was opened - where the wire was let go)
-              const id = st.addStep(kind, by, at.x, at.y + PORT_DOWN);
-              if (wire) st.connect(wire, id);
+              // (its port that takes where Quick Add was opened - where the wire was let go; brought from an exit's port, close
+              //  by that step's card instead, and wired in the same edit: model `addStepFrom`)
+              const id = st.addStep(kind, by, at.x, at.y + PORT_DOWN, wire);
               // (and brought into view, with the sets it will give, where they are not: put down near the window's edge, or moved lower)
               const now = store.getState();
               const box = partsBounds({ sets: now.sets.filter((b) => b.made?.step === id), steps: now.steps.filter((s) => s.id === id), wires: [] });
@@ -2604,6 +2605,18 @@ function WorkspaceContent({
                   },
                 };
               })()),
+            };
+          })()}
+          parts={(() => {
+            // (one structure of several parts: the structures selected made one; the one right-clicked, of several parts, taken apart - utils/joinedParts)
+            const st = store.getState();
+            const at = menu.kind === "atom" || menu.kind === "bond" ? structureAt(menu.kind, menu.id) : null;
+            const picked = menu.selection === "here" ? st.sel.atoms : new Set<number>();
+            const { join: joinable, separate: joined } = partsOffered(st.model, picked, at);
+            if (!joinable && !joined) return undefined;
+            return {
+              ...(joinable ? { onJoin: () => store.getState().joinStructures(picked) } : {}),
+              ...(joined ? { onSeparate: () => store.getState().separateStructures([at!]) } : {}),
             };
           })()}
           pageMap={(() => {

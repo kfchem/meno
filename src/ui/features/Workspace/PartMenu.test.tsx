@@ -143,6 +143,12 @@ describe("the right-click menu", () => {
     expect(menu(target({ kind: "atom", id: 1 }), { pageMap: { held } }).listed).toEqual(["Unpaired electron", "Hide atom map", "Export reaction in 3D…", "Conformers: 6 × 3 = 18 pairs", "Not numbered: 1 of 6 conformers of Before", "Select this structure"]);
   });
 
+  it("offers the structures selected made one, and one of several parts taken apart", () => {
+    const here = { ...target({ selection: "here", drawing: true }), kind: "atom" as const, id: 1 };
+    expect(menu(here, { parts: { onJoin: none } }).listed[0]).toBe("Make one structure");
+    expect(menu(target({ kind: "atom", id: 1 }), { parts: { onSeparate: none } }).listed).toEqual(["Unpaired electron", "Separate", "Select this structure"]);
+  });
+
   it("offers a record of a stack of drawings its stack laid out as a grid - or, laid out, stacked again", () => {
     expect(menu(target({ kind: "atom", id: 1 }), { records: { spread: false, run: none } }).listed).toEqual(["Unpaired electron", "Select this structure", "Lay out as a grid"]);
     expect(menu(target({ kind: "bond", id: 2 }), { records: { spread: true, run: none } }).listed).toEqual(["Select this structure", "Stack again"]);

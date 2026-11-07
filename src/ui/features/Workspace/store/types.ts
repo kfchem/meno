@@ -70,6 +70,12 @@ export type Atom = EditorAtom & {
   /** The stack of drawings it is in, with the record it is of (utils/stacks). */
   stack?: AtomStack;
   /**
+   * The structure of several parts it is in, by number (docs/EDITOR-2D.md,
+   * *One structure of several parts*): the atoms that share it are one
+   * structure, bonded or not - a salt, a complex, the side of a map.
+   */
+  joined?: number;
+  /**
    * How large its structure is shown (docs/WORKSPACE.md, *Magnified
    * display*): every atom of a structure says the same; held where it is
    * shown, so many times as far apart about its centre, and read at its
@@ -1768,8 +1774,14 @@ export type EditorState = {
   removeSet: (id: number | readonly number[], asked?: boolean) => void;
   /** Sets that hold their molecules themselves asked to be deleted - by a key, or a selection that held them: the question asked (Workspace). */
   askDeleteSet: number[] | null;
-  /** A step of `kind`, done by `by` - Meno, or a plugin - put down, its card's top left at (x, y), with the defaults Settings has for its kind done by it; its id. */
-  addStep: (kind: StepKind, by: string, x: number, y: number) => number;
+  /**
+   * A step of `kind`, done by `by` - Meno, or a plugin - put down, its
+   * card's top left at (x, y), with the defaults Settings has for its kind
+   * done by it; its id. Brought by a wire drawn out of a set (`from`), let
+   * go at (x, y): wired from it in the same edit, and put close by the card
+   * it is wired from, where the set is a step's exit's.
+   */
+  addStep: (kind: StepKind, by: string, x: number, y: number, from?: WireEnd) => number;
   moveStep: (id: number, x: number, y: number, gesture?: string) => void;
   /** A step's options changed - its own, the defaults left as they are - or its kind, to another who does it fills. */
   updateStep: (id: number, patch: { options?: OptionValues; kind?: StepKind }) => void;
@@ -2193,6 +2205,10 @@ export type EditorState = {
   setAtomMap: (arrowId: number, map: ArrowAtomMap | null) => void;
   /** Maps between structures on the page added (chem/structureMaps), what they show put on the drawing and its molecules in 3D: one undo step. */
   addStructureMaps: (maps: readonly ArrowAtomMap[], replacing?: readonly number[]) => void;
+  /** The structures holding these atoms made one structure of several parts (utils/joinedParts): one undo step, nothing moved. */
+  joinStructures: (ids: Iterable<number>) => void;
+  /** The structures of several parts holding these atoms taken apart: one undo step. */
+  separateStructures: (ids: Iterable<number>) => void;
   /** The maps between structures given, by id, shown or hidden: one step. */
   showStructureMaps: (ids: readonly number[], shown: boolean) => void;
   /** Each map between structures given, by id, showing its next map: one step. */

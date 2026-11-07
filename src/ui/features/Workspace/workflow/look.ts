@@ -66,6 +66,15 @@ export function shuttingCard(onShutting: (id: number | null) => void, ms: number
 /** A step's card: how wide, and how tall closed, about. */
 export const CARD_W = 208 * PX;
 export const CARD_H = 76 * PX;
+/**
+ * How tall a step's card is drawn closed at the most (StepCard): its hair
+ * line, its padding, its name, what it does on two lines, its state on two,
+ * what its program said, and its bar - 2 + 8 + 20 + 32 + 6 + 32 + 16 + 9 +
+ * 10. What placing keeps clear of a card and gives a card put down (place):
+ * its words can draw it taller than `CARD_H`, never than this. Its ports,
+ * its wires and fitting the page keep to `CARD_H`.
+ */
+export const CARD_TALL = 135 * PX;
 /** How far below its top a step's ports stand: wires join where they always did as its card opens. */
 export const PORT_DOWN = 28 * PX;
 /** How far apart a card's inputs are, where it takes more than one: each under the one before. */
@@ -134,6 +143,8 @@ export const CHART_PX = { w: 360, h: 260 };
 /** A large result set's summary inside its frame, in px (SummaryBody): what it holds - that it is on no page, and *Open as a table* - a grid of four by three structures, and a chart. */
 export const SUMMARY_PX = { w: 480, h: 448 };
 export const NAME_DOWN = 18 * PX;
+/** How far a frame's tab's words start from its left edge: as far as its icon - 14 px, its middle NAME_DOWN down - stands from its top (pageGl/frameParts; a set's name typed anew, SetFrame). */
+export const TAB_INSET = 11 * PX;
 /** A result set's distance from its step, and between molecules in it: between their ink, half a bond (docs/LOOK.md, *Room*). */
 export const GAP = 64 * PX;
 export const BETWEEN = 24 * PX;
