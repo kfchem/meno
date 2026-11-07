@@ -30,11 +30,12 @@ import type { SavedText, Workspace } from "../../utils/workspace";
 import { StoreApi } from "zustand";
 import { nextIdAfter } from "../../workflow/saved";
 import { membersFound } from "../../workflow/model";
+import { heldSettled } from "../../workflow/held";
 import { appendParts, carriedRenumbered, NO_PARTS, removeParts } from "../../workflow/parts";
 import { holdsOwn } from "../../workflow/entries";
 import { recordsShownAdded, recordsShownOf, shownModel } from "../../utils/stacks";
 import { editAtTrueSize } from "../../utils/trueSize";
-import { style3dOf } from "../../style3d";
+import { extentIn, style3dOf } from "../../style3d";
 import { hapticStars } from "../../chem/eta";
 import { workspace3dOf } from "../../../../../lib/chem/workspaceStyle3d";
 import { principalTurn } from "../../utils/align3d";
@@ -489,8 +490,9 @@ export const createModelSlice = (
       const next = ops.withImportedScheme(ops.replaceModel(d, drawn), ops.schemeOf(drawn));
       // (a workflow's parts by their own ids, each set's members as the file said them: utils/workspace)
       const workflow = ws.workflow ? { ...ws.workflow, nextWorkflowId: nextIdAfter(ws.workflow) } : {};
-      // (sets of a file saved before sets kept their members: what lies inside each frame, read once)
-      return membersFound(ops.setDocumentStyle3d(ops.setDocumentStyle(
+      // (sets of a file saved before sets kept their members: what lies inside each frame, read once - and each result set
+      //  wired on held off the page, as every edit keeps them: workflow/held - here too where it opens with no edit, start)
+      const found = membersFound(ops.setDocumentStyle3d(ops.setDocumentStyle(
         {
           ...next,
           ...workflow,
@@ -520,6 +522,7 @@ export const createModelSlice = (
         // (and its styles in 3D - a file saved before workspaces carried them: Settings' as it opens, fixed from then on)
         ws.style3d ?? workspace3dOf(useAppSettings.getState().style3d),
       ));
+      return heldSettled(found, undefined, extentIn(found));
     };
     if (start) doc.reset(opened(doc.getState()), "open workspace");
     else doc.edit("open workspace", opened);

@@ -15,6 +15,7 @@ import { turnAfter, turnOver } from "../utils/align3d";
 import { calcProperties, compoundLetter, entryOfSet, holdsOf, numberShown, setMembers, setMolecules, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, drawingKey, placedRecord, structureIdAt, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
 import { chipWide, hasChip } from "./selectionSet";
 export { chipWide };
+import { isHeld } from "./onPage";
 import { findSet, givesOf, inputKey, inputOf, moleculesSeen, resultOf, stateOf, stepOf, stepsBefore, tableInto, tableWired, wireInto, wiresInto } from "./flow";
 import { chartOfTable, chartSaid, type ChartValue } from "../../../../lib/chart";
 import { diagramOf, diagramSaid, levelNamer, type DiagramValue, type RowCompound } from "../../../../lib/energyDiagram";
@@ -365,6 +366,8 @@ function placeNumber(doc: WorkspaceDocument, step: WorkflowStep, number: NumberV
   const exit = exitsOf(step.kind)[0].id;
   const madeBy = { step: step.id, exit, holds: "number" as const };
   const was = resultOf(doc, step.id, exit);
+  // (held off the page - its exit wired on: workflow/held - its frame as it was, drawn nowhere)
+  if (was && isHeld(doc, was)) return holdNumber(markMade(doc, was.id, madeBy), was.id, number);
   const frame = was ? placeAgain(doc, step, was, NUMBER_SET.w, NUMBER_SET.h) : placeFor(doc, step, exit, NUMBER_SET.w, NUMBER_SET.h);
   if (was) return holdNumber(markMade(resizeSet(doc, was.id, frame), was.id, madeBy), was.id, number);
   const id = doc.nextWorkflowId ?? 1;
@@ -680,6 +683,8 @@ function fillTable(doc: WorkspaceDocument, step: WorkflowStep, exit: string, tab
   const madeBy = { step: step.id, exit, holds: "table" as const };
   const was = resultOf(doc, step.id, exit);
   if (was) doc = removeMolecules3d(doc, setMembers(doc, was).molecules);
+  // (held off the page - its exit wired on: workflow/held - its frame as it was, drawn nowhere)
+  if (was && isHeld(doc, was)) return holdTable(markMade(doc, was.id, madeBy), was.id, table);
   const frame = was ? placeAgain(doc, step, was, TABLE_SET.w, TABLE_SET.h) : placeFor(doc, step, exit, TABLE_SET.w, TABLE_SET.h);
   if (was) return holdTable(markMade(resizeSet(doc, was.id, frame), was.id, madeBy), was.id, table);
   const id = doc.nextWorkflowId ?? 1;
@@ -693,10 +698,19 @@ function fillTable(doc: WorkspaceDocument, step: WorkflowStep, exit: string, tab
  */
 function keepExitsUnder(doc: WorkspaceDocument, step: Pick<WorkflowStep, "id" | "kind">): WorkspaceDocument {
   const exits = exitsOf(step.kind);
-  let above = resultOf(doc, step.id, exits[0].id);
+  // (a set held off the page lies nowhere: workflow/held - those under it kept under the one above it, or the first shown)
+  const shown = (id: string) => {
+    const b = resultOf(doc, step.id, id);
+    return b && !isHeld(doc, b) ? b : undefined;
+  };
+  let above = shown(exits[0].id);
   for (const [k, exit] of exits.slice(1).entries()) {
-    const b = resultOf(doc, step.id, exit.id);
-    if (!above || !b) break;
+    const b = shown(exit.id);
+    if (!b) continue;
+    if (!above) {
+      above = b;
+      continue;
+    }
     const reach = above.y0 - BETWEEN;
     // (under the one above where it reached over it - and lower still, where something else is there: clear of all, as any set -
     //  but the step's sets of exits after it, which go under it in turn)
@@ -729,8 +743,9 @@ function fillExit(
   w: Pick<RunWith, "extentOf">,
   turns?: readonly (Turn3D | undefined)[],
 ): WorkspaceDocument {
-  // (more than are laid out on the page: held in the set, its frame summing them up - docs/WORKFLOWS-FOUNDATION.md, *What a set shows*)
-  if (made.reduce((n, m) => n + entriesIn(m), 0) > LARGE_SET) return filled(doc, step, { exit, holds, unread, collection: [...made] }, [], () => ({ doc, members: [] }));
+  // (more than are laid out on the page - or its exit wired on, held off the page whatever it holds: workflow/held - held in the set, its frame summing them up, or drawn nowhere - docs/WORKFLOWS-FOUNDATION.md, *What a set shows*)
+  const was = resultOf(doc, step.id, exit);
+  if (made.reduce((n, m) => n + entriesIn(m), 0) > LARGE_SET || (was && isHeld(doc, was))) return filled(doc, step, { exit, holds, unread, collection: [...made] }, [], () => ({ doc, members: [] }));
   const rooms = made.map((m, i) => roomOf(m, w.extentOf({ ...m, at: { x: 0, y: 0 } }, turns?.[i])));
   return filled(doc, step, { exit, holds, unread }, rooms, (d, at) => {
     // (all put on the page at once: one at a time copied the page's molecules again for each)
@@ -756,37 +771,71 @@ function fillExit(
 function fillDrawn(doc: WorkspaceDocument, step: WorkflowStep, exit: string, gave: readonly DrawnModel[], core?: SeriesCore, unread?: number): WorkspaceDocument {
   // (each with its lasting id: the one the step carried on with it, else one of its own by its place at this exit - entries `structureIdAt`; checked
   //  to be of the same structure as it is put on the page, `placedRecord`)
-  const idAt = (i: number) => (drawing: string) => structureIdAt(`step ${step.id} ${exit}`, i, drawing);
+  const idAt = placeIds(step.id, exit);
   const given = gave.map((m, i) => (m.record?.id ? m : { ...m, record: { ...m.record, id: idAt(i)(drawingKey(m, m.atoms.map((a) => a.id))) } }));
-  // (each about the middle of its box)
+  // (its exit wired on: all held off the page, its frame drawn nowhere - workflow/held)
+  const was = resultOf(doc, step.id, exit);
+  if (was && isHeld(doc, was)) return filled(doc, step, { exit, holds: "structures", unread, ...(core ? { core } : {}), drawnCollection: [...given] }, [], () => ({ doc, members: [] }));
+  const { made, middles, rooms, rest } = drawnRooms(given);
+  const filledIn = filled(doc, step, { exit, holds: "structures", unread, ...(core ? { core } : {}) }, rooms, (d, at) => drawnPut(d, made, middles, at, false, idAt));
+  const set = resultOf(filledIn, step.id, exit);
+  return set ? holdRest(filledIn, set.id, rest) : filledIn;
+}
+
+/** A structure's lasting id, of its own, by its place at a step's exit and its drawing (entries `structureIdAt`). */
+const placeIds = (step: number, exit: string) => (i: number) => (drawing: string) => structureIdAt(`step ${step} ${exit}`, i, drawing);
+
+/**
+ * Structures drawn as a set lays them out on the page: each about the
+ * middle of its box, with room for its number under it where its step
+ * numbered it; as many as take no more of the page than `DRAWN_ON_PAGE`
+ * allows (`made`), in their order, and the rest, held in the set.
+ */
+function drawnRooms(given: readonly DrawnModel[]): { made: DrawnModel[]; middles: { x: number; y: number }[]; rooms: (Frame & { chip: number })[]; rest: DrawnModel[] } {
   const boxes = given.map(boxOf);
   const middles = boxes.map((b) => ({ x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 }));
   // (a structure its step numbered given room for its number under it, as Workflow2D shows it: half a bond down, a line of 16 px)
   const all = boxes.map((b, i) => ({ x0: b.x0 - middles[i].x, x1: b.x1 - middles[i].x, y0: b.y0 - middles[i].y, y1: b.y1 - middles[i].y, chip: recordNumber(given[i].record) != null ? NUMBER_ROOM : 0 }));
   // (those the page shows, by the room they take; the rest held in the set)
   const shown = drawnShown(all);
-  const made = given.slice(0, shown);
-  const rooms = all.slice(0, shown);
-  const filledIn = filled(doc, step, { exit, holds: "structures", unread, ...(core ? { core } : {}) }, rooms, (d, at) => {
-    // (all put on the page at once, as one model - one at a time copied the page's drawing again for each - their ids made apart first: two given in one numbering, as a template's products are, would be one structure)
-    const apart = numberedApart(made.map((m, i) => movedBy(m, at[i].x - middles[i].x, at[i].y - middles[i].y)));
-    const there = new Set(d.model.atoms.map((a) => a.id));
-    d = appendModel(d, apart);
-    // (each structure's atoms, as many as it brought)
-    const added = d.model.atoms.filter((a) => !there.has(a.id)).map((a) => a.id);
-    let from = 0;
-    // (each with its record, where the step gave it one: of that structure, as it is drawn now)
-    return {
-      doc: d,
-      members: made.map((m, k) => {
-        const ids = added.slice(from, (from += m.atoms.length));
-        return structureMember(ids, m.record && placedRecord(m.record, d.model, ids, idAt(k)));
-      }),
-      put: added,
-    };
-  });
-  const set = resultOf(filledIn, step.id, exit);
-  return set ? holdRest(filledIn, set.id, given.slice(shown)) : filledIn;
+  return { made: given.slice(0, shown), middles: middles.slice(0, shown), rooms: all.slice(0, shown), rest: given.slice(shown) };
+}
+
+/**
+ * `doc` with structures drawn put on the page, each moved from its middle
+ * to its place (`at`): as one model, their ids made apart first - two given
+ * in one numbering, as a template's products are, would be one structure -
+ * or, `keep`, each on its own ids where they are free (document
+ * `appendModel`), as a set held off the page gives them back. Each a
+ * member with its record, where it has one: of that structure, as it is
+ * drawn now, its lasting id kept where it is of the same structure, else
+ * one of its own by its place (`idAt`; entries `placedRecord`); and the
+ * atoms put.
+ */
+function drawnPut(
+  d: WorkspaceDocument,
+  made: readonly DrawnModel[],
+  middles: readonly { x: number; y: number }[],
+  at: readonly { x: number; y: number }[],
+  keep: boolean,
+  idAt: (i: number) => (drawing: string) => string,
+): { doc: WorkspaceDocument; members: Member[]; put: number[] } {
+  const moved = made.map((m, i) => movedBy(m, at[i].x - middles[i].x, at[i].y - middles[i].y));
+  const there = new Set(d.model.atoms.map((a) => a.id));
+  // (all at once where they are numbered afresh - one at a time copied the page's drawing again for each)
+  if (keep) for (const m of moved) d = appendModel(d, m, true);
+  else d = appendModel(d, numberedApart(moved));
+  // (each structure's atoms, as many as it brought)
+  const added = d.model.atoms.filter((a) => !there.has(a.id)).map((a) => a.id);
+  let from = 0;
+  return {
+    doc: d,
+    members: made.map((m, k) => {
+      const ids = added.slice(from, (from += m.atoms.length));
+      return structureMember(ids, m.record && placedRecord(m.record, d.model, ids, idAt(k)));
+    }),
+    put: added,
+  };
 }
 
 /**
@@ -811,9 +860,11 @@ function filled(
   if (was) doc = emptied(doc, was);
   const madeBy = { step: step.id, exit: of.exit, holds: of.holds };
   if (of.collection || of.drawnCollection) {
-    const frame = was ? placeAgain(doc, step, was, SUMMARY_W, SUMMARY_H) : placeFor(doc, step, of.exit, SUMMARY_W, SUMMARY_H);
+    // (held off the page - its exit wired on: workflow/held - its frame as it was, drawn nowhere; else as large as its summary)
+    const held = !!was && isHeld(doc, was);
+    const frame = was && !held ? placeAgain(doc, step, was, SUMMARY_W, SUMMARY_H) : was ? was : placeFor(doc, step, of.exit, SUMMARY_W, SUMMARY_H);
     const id = was ? was.id : (doc.nextWorkflowId ?? 1);
-    doc = was ? markMade(resizeSet(doc, id, frame), id, madeBy) : markMade(addSet(doc, frame, madeBy), id, madeBy);
+    doc = was ? markMade(held ? doc : resizeSet(doc, id, frame), id, madeBy) : markMade(addSet(doc, frame, madeBy), id, madeBy);
     return withCore(holdCollection(doc, id, of.collection ? { collection: of.collection } : { drawnCollection: of.drawnCollection! }, of.unread), id, of.core);
   }
   // (an exit that gave nothing keeps its frame as it stands, saying so)
@@ -831,6 +882,68 @@ function filled(
   doc = was ? markMade(resizeSet(doc, id, frame), id, madeBy) : markMade(addSet(doc, frame, madeBy), id, madeBy);
   // (and the core its series shares, where it is one: none kept from a run before)
   return withCore(heldPut(holdMembers(doc, id, put.members, of.unread), id, put.put ?? []), id, of.core);
+}
+
+/**
+ * `doc` with set `id`, held off the page until now (workflow/held), laid
+ * out on it again as its step's run lays out what it gives (`filled`):
+ * where its frame was, where that is clear - else where its step's results
+ * go (`placeAgain`); a set made by none, below where it was. Its molecules
+ * in 3D each on the id it had there (`WorkflowSet.heldIds`), so that what
+ * names it finds it again - one still there, another set's too, taken up
+ * as it is - only where their room can be worked out (`extentOf`); its
+ * structures drawn on their own atoms' ids where those are free (document
+ * `appendModel`), so that what was worked out from them is the same - as
+ * many as a set lays out, the rest held still. As it was where it holds
+ * nothing it lays out. Its step's other exits' sets are then kept under
+ * its first, as a run keeps them (`keepExitsUnder`): where it was put, they
+ * were no hindrance (`placeAgain`).
+ */
+export function laidOutAgain(doc: WorkspaceDocument, id: number, extentOf?: RunWith["extentOf"]): WorkspaceDocument {
+  const out = layOutAgain(doc, id, extentOf);
+  const set = out === doc ? undefined : findSet(out, id);
+  const step = set?.made ? stepOf(out, set.made.step) : undefined;
+  return step ? keepExitsUnder(out, step) : out;
+}
+
+/** `doc` with set `id` laid out on the page again, its step's other exits' sets as they stand (`laidOutAgain`). */
+function layOutAgain(doc: WorkspaceDocument, id: number, extentOf?: RunWith["extentOf"]): WorkspaceDocument {
+  const set = findSet(doc, id);
+  if (!set) return doc;
+  const step = set.made ? stepOf(doc, set.made.step) : undefined;
+  // (in rows no wider than its step's column, where the next step's card is close - as `filled` lays them)
+  const lay = (rooms: readonly (Frame & { chip: number })[]) => laidOut(rooms, LEAST_W, Math.max(...rooms.map((r) => r.x1 - r.x0), Math.min(rowMost(rooms), step ? columnWidth(doc, step) - 2 * SET_PAD : Infinity)));
+  const where = (width: number, height: number): Frame => (step ? placeAgain(doc, step, set, width, height) : placeBelow(doc, set.x0, set.y1, width, height, { set: id }));
+  if (set.collection?.length) {
+    if (!extentOf) return doc;
+    const made = set.collection;
+    const l = lay(made.map((m) => roomOf(m, extentOf({ ...m, at: { x: 0, y: 0 } }))));
+    const frame = where(l.width, l.height);
+    const there = new Set((doc.molecules3d ?? []).map((m) => m.id));
+    let next = doc.nextMolecule3dId ?? 1;
+    const added: Molecule3D[] = [];
+    const members: Member[] = made.map((m, k) => {
+      const was = set.heldIds?.[k];
+      // (still on the page - another set's too: taken up where it is)
+      if (was != null && there.has(was)) return { molecule: was };
+      const mid = was != null && was < next ? was : next++;
+      added.push({ ...m, id: mid, at: { x: frame.x0 + l.at[k].x, y: frame.y1 + l.at[k].y } });
+      return { molecule: mid };
+    });
+    const out: WorkspaceDocument = { ...doc, molecules3d: [...(doc.molecules3d ?? []), ...added], nextMolecule3dId: next };
+    return resizeSet(holdMembers(out, id, members, set.unread), id, frame);
+  }
+  if (set.drawnCollection?.length) {
+    const { made, middles, rooms, rest } = drawnRooms(set.drawnCollection);
+    const l = lay(rooms);
+    const frame = where(l.width, l.height);
+    // (each on its own lasting id, kept where it is of the same structure: by its place at its step's exit, where it has one)
+    const idAt = set.made ? placeIds(set.made.step, set.made.exit) : (i: number) => (drawing: string) => structureIdAt(`set ${id}`, i, drawing);
+    const put = drawnPut(doc, made, middles, l.at.map((p) => ({ x: frame.x0 + p.x, y: frame.y1 + p.y })), true, idAt);
+    const out = holdRest(heldPut(holdMembers(put.doc, id, put.members, set.unread), id, set.made ? put.put : []), id, rest);
+    return resizeSet(out, id, frame);
+  }
+  return doc;
 }
 
 /**

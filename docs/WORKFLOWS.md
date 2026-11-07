@@ -129,7 +129,9 @@ built*).
   entries aside has a second, under it (*Outside it*, *Alike*, *The
   rest*). Each exit has a port of its own on the card's right edge, in
   its kind's order, the line to its set leaving from it: the port is that
-  set's (*Exit ports*, below).
+  set's (*Exit ports*, below). An exit wired on to another step holds
+  its set off the page, its frame drawn nowhere (*Held results*,
+  below).
 - **Port** - where a wire starts or ends: a set gives from its right
   edge, and a step's exit from its port on the card's right edge; a
   step's input takes on its card's left edge.
@@ -2321,17 +2323,96 @@ port is that exit's set's.
   exit is the set's own, read from it where it is made - run again, kept
   under the first, made with its step (place `lineFrom`) - and said, as
   its placing must, for one not made yet (place `placeFor`).
-- **A wire drawn out of an exit's port** is drawn out of its set: from
-  the card's port as it is drawn, then from the set's own port, as every
-  wire out of a set is. A wire drawn back from an input can be let go on
-  either. While a wire is drawn, both of a set's ports light as one.
+- **A wire drawn out of an exit's port** is drawn out of its set, and
+  starts at that port, drawn and made (place `wireStart`): a step's
+  result set's frame gives from no port of its own - a set the chemist
+  made gives from its frame's right side. A wire drawn back from an
+  input is let go on the port.
 - **Not named beside it** while its set is on the page beside it: the
   set's frame names it. Its label says which it is ("Failed out of
-  Optimise"), as an input's does.
+  Optimise"), as an input's does. Held off the page, it is named beside
+  its port (*Exit names*, below).
 
 It is the first part of the direct wiring the maintainer asked for
 (2026-10-31): steps wired to steps, a result set's frame shown only
 where its exit is not wired on.
+
+### Held results (2026-11-05)
+
+A step's result set whose exit is wired on to another step is held off
+the page (workflow/held): what it holds is kept in the set itself - its
+molecules in 3D in its collection, its structures drawn in its drawn
+collection, as a large set keeps them (WORKFLOWS-FOUNDATION.md, *What a
+set shows*) - and its frame is drawn nowhere. The wire runs from its
+exit's port on the card straight to the step it goes into, and the step
+takes what the set holds from there, as from a large set. The second
+part of the direct wiring the maintainer asked for (2026-10-31): a
+page of sixty steps shows the steps and the frames of the exits not
+wired on, not one frame for every result.
+
+- **Held is never stored**: a set is held where it is a step's result
+  (`made`), a wire leaves it, and the chemist has not opened it
+  (`WorkflowSet.opened`, saved with it). One rule keeps the page so
+  after every edit (`heldSettled`, the workspace's document's settle),
+  in the same step of the history as the edit: a wire drawn out of an
+  exit holds its set; the last wire out taken away - deleted, picked up
+  and let go on nothing, or gone with the step it went into - lays it
+  out again, as its step's run lays out what it gives. A file opened is
+  settled so too.
+- **Moved, not copied**: what leaves the page is in the set alone, and
+  a file keeps it once. A molecule in 3D keeps all it held, and the set
+  keeps the id it had on the page (`heldIds`, this session's only): laid
+  out again, it is that molecule again, and a text shown from it, or a
+  chart's point, finds it. A structure drawn keeps its atoms' own ids
+  and its record, and is laid out on them again where they are free
+  (document `appendModel`): what a step after it worked out from it is
+  the same, held or shown, and no step is *Changed* by wiring alone
+  (held.test).
+- **Only what it alone holds leaves**: a molecule another set holds too -
+  one a chemist's frame was drawn over - stays on the page, that set's,
+  and is taken up again where it is as the held set is laid out.
+- **A run fills a held exit off the page**, whatever it gives - one
+  entry or a thousand: its frame stays where it was, drawn nowhere.
+- **A set not held lays out what a run would**, derived, never marked:
+  the structures a large result set shows deleted, the next it holds
+  come on in that edit's own step of the history, and one undo gives back
+  all as it was (held.test).
+- **It lies nowhere on the page**: what finds sets by their frames -
+  where a set or a card goes, a box or a lasso, the selection's own set,
+  a molecule pasted beside a set - passes it by. A box that takes a step
+  takes its held sets with it, so that a copy keeps the wires out of
+  them.
+- **Laid out again**: where its frame was, where that is clear, else
+  where its step's results go; its molecules turned as they come - a
+  turn given on the page is not kept while it is held. Its step's other
+  exits' sets are then kept under its first, as a run keeps them (run
+  `keepExitsUnder`): one moved onto where its frame was goes down.
+- **Folded, never cut** (no abrupt changes): a frame being held shrinks
+  and fades into its exit's port, about that port, over Meno's base time
+  with its ease (App.css `meno-fold-out`); a frame shown again grows out
+  of it the same way (`meno-fold-in`). Its wires start at the port
+  either way (`wireStart`), so none of them moves.
+
+Not yet: opening a held set in place, from its port or its wire, and
+what its port says of it pointed at; an exit not wired on that holds
+nothing shown as its port alone.
+
+### Exit names (2026-11-07)
+
+Where a step has more than one exit, an exit whose set is on no page
+beside it - held off it - is named beside its port (workflow/exitNames),
+since no frame names it: outside the card's right side, half a port's
+step above its port, as an input's name stands above its port on the
+left - between the wire that leaves the port level and the line above
+it, through neither - in the quiet words an input's name is in.
+
+- **The first is cut** with an ellipsis short of where its set's frame
+  would stand (`GAP` out from the card): a wire leaves its port level
+  there. Those under it are whole.
+- **Drawn by WebGL** (pageGl `PageTexts`), placed as the page's other
+  words drawn so are (`usePlaced`): gone where the page's words are too
+  small to read, and while a talk is given.
+- An exit whose set is on the page is named by its frame, as before.
 
 ### The same conformer (2026-10-22)
 

@@ -7,10 +7,12 @@
  * (`placeCard`).
  */
 import type { WorkspaceDocument } from "../document";
+import type { WorkflowSet, WorkflowStep } from "../store/types";
 import { inside, setMembers, structuresOf, type Frame } from "./entries";
 import { boxOf } from "../chem/make3d";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { exitPlace, exitsOf, inputsOf, ONE_EXIT, type StepKind } from "./kinds";
+import { heldSets } from "./onPage";
 import { BETWEEN, CARD_H, CARD_W, GAP, inputLead, nearWire, setGives, setTakes, stepGives, stepTakes, wirePath } from "./look";
 
 /** A frame `w` by `h`, its top left at (x, y). */
@@ -63,6 +65,17 @@ export function lineFrom(doc: Pick<WorkspaceDocument, "sets" | "steps">, self?: 
   return exitStart(step, (made?.step === step.id ? made.exit : undefined) ?? self?.exit ?? exitsOf(step.kind)[0].id);
 }
 
+/**
+ * Where a wire out of a set starts: a step's result set's at its exit's
+ * port on the step's card (look `stepGives`), held or not - its frame,
+ * where it has one on the page, gives from no port of its own; a set the
+ * chemist made, at its frame's right side.
+ */
+export function wireStart(steps: readonly Pick<WorkflowStep, "id" | "x" | "y" | "kind">[] | ReadonlyMap<number, Pick<WorkflowStep, "id" | "x" | "y" | "kind">>, set: Frame & Pick<WorkflowSet, "made">): Pt {
+  const s = set.made ? ("get" in steps ? steps.get(set.made.step) : steps.find((x) => x.id === set.made!.step)) : undefined;
+  return s && set.made ? exitStart(s, set.made.exit) : setGives(set);
+}
+
 /** A step's card, shut: where it stands on the page. */
 const cardOf = (s: { x: number; y: number }): Frame => frameAt(s.x, s.y, CARD_W, CARD_H);
 
@@ -98,27 +111,32 @@ function takenOn(doc: WorkspaceDocument, self?: Self, along?: { x0: number; x1: 
     const name = inputs.length > 1 ? inputs.find((p) => p.id === port)?.name : undefined;
     return name ? { lead: inputLead(name) } : {};
   };
-  const frames: Taken["frames"] = [...(doc.sets ?? []).filter((b) => !own(b.id)), ...(doc.steps ?? []).map((s) => ({ ...frameAt(s.x, s.y, CARD_W, CARD_H), card: s.id }))];
+  // (a set held off the page lies nowhere: workflow/held)
+  const held = heldSets(doc);
+  const frames: Taken["frames"] = [...(doc.sets ?? []).filter((b) => !own(b.id) && !held.has(b.id)), ...(doc.steps ?? []).map((s) => ({ ...frameAt(s.x, s.y, CARD_W, CARD_H), card: s.id }))];
   // (what wires go round: the sets and cards, as Workflow2D has them go round - look `wireCurve`)
   const round = frames.slice();
   frames.push(...inkOf(doc, own, along));
   const points: Pt[] = [...doc.model.atoms.map((a) => ({ x: a.x, y: a.y })), ...(doc.molecules3d ?? []).filter((m) => !self?.molecules?.has(m.id)).map((m) => m.at)];
   const to: Taken["to"] = [];
-  // (each wire from a set into a step's input, and each line from a step to its result set)
+  // (each wire from a set into a step's input - a step's result set's from its exit's port on the card, which a frame placed does
+  //  not move: `wireStart` - and each line from a step to its result set on the page)
   for (const w of doc.wires ?? []) {
     const b = sets.get(w.from.set);
     const s = steps.get(w.to.step);
     if (!b || !s) continue;
-    if (b.id === self?.set) to.push({ step: s.id, at: takes(s, w.to.port), card: cardOf(s), ...lead(s, w.to.port) });
-    else if (!own(b.id)) {
-      const e = { from: b, to: cardOf(s), ...lead(s, w.to.port) };
+    const by = b.made ? steps.get(b.made.step) : undefined;
+    if (b.id === self?.set && !by) to.push({ step: s.id, at: takes(s, w.to.port), card: cardOf(s), ...lead(s, w.to.port) });
+    else if (by || !own(b.id)) {
+      const e = { from: by ? cardOf(by) : b, to: cardOf(s), ...lead(s, w.to.port) };
+      const p = wireStart(steps, b);
       const q = takes(s, w.to.port);
-      points.push(...wirePath(setGives(b), q, e, nearWire(setGives(b), q, e, round)));
+      points.push(...wirePath(p, q, e, nearWire(p, q, e, round)));
     }
   }
   for (const b of doc.sets ?? []) {
     const s = b.made ? steps.get(b.made.step) : undefined;
-    if (s && !own(b.id)) {
+    if (s && !own(b.id) && !held.has(b.id)) {
       const e = { from: cardOf(s), to: b };
       const p = exitStart(s, b.made!.exit);
       points.push(...wirePath(p, setTakes(b), e, nearWire(p, setTakes(b), e, round)));

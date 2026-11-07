@@ -290,8 +290,8 @@ describe("Sketchkit's conformer search as a step, on structures drawn", () => {
     expect(st().steps.find((s) => s.id === step)!.ran?.said).toMatch(/ · 51 conformers of 51 compounds$/);
     const made = st().sets.find((b) => b.made?.step === step && b.made.exit === "out")!.collection!;
     expect(made).toHaveLength(51);
-    // (those held made in 3D linked to no drawing: they are on no page)
-    expect(made.filter((m) => m.drawnFrom === undefined && m.drawnAs === undefined)).toHaveLength(51 - shown);
+    // (those held made in 3D linked to no drawing: they are on no page - all 51, Enumerate's exit wired on, all held off it: workflow/held)
+    expect(made.filter((m) => m.drawnFrom === undefined && m.drawnAs === undefined)).toHaveLength(51);
   });
 
 
@@ -333,12 +333,17 @@ describe("Sketchkit's conformer search as a step, on structures drawn", () => {
     const sodium = { atoms: [at(1, "Na", 0, 1)], bonds: [] };
     const salt = { atoms: [at(1, "C", 0), at(2, "N", 1.5, 1), at(3, "Cl", 4, -1)], bonds: [{ id: 4, a: 1, b: 2, order: 1 }] };
     const doc = createWorkspaceDocument();
-    doc.edit("held", (d) => ({ ...d, sets: [...(d.sets ?? []), { id: 900, x0: -50, y0: -50, x1: 50, y1: 50, made: { step: 899, exit: "out", holds: "structures" }, drawnCollection: [water, sodium, salt] as never }], nextWorkflowId: 901 }));
     const store = createEditorStore(doc);
     connectStoreToDocument(store, doc);
     const st = () => store.getState();
     const step = st().addStep("conformers", "sketchkit", 200, 0);
-    st().connect({ set: 900 }, step);
+    // (wired on as it is made: held off the page - a set not wired on lays out what it holds, workflow/held)
+    doc.edit("held", (d) => ({
+      ...d,
+      sets: [...(d.sets ?? []), { id: 900, x0: -50, y0: -50, x1: 50, y1: 50, made: { step: 899, exit: "out", holds: "structures" }, drawnCollection: [water, sodium, salt] as never }],
+      wires: [...(d.wires ?? []), { id: 901, from: { set: 900 }, to: { step, port: "in" } }],
+      nextWorkflowId: 902,
+    }));
     await st().runStep(step);
     // (the sodium ion never asked about; the salt asked about as its cation)
     expect(asked.map((a) => readMolfile(a.molblock)!.atoms.map((x) => x.symbol).join(""))).toEqual(["OHH", "CN"]);

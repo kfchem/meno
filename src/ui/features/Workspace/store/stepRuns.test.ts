@@ -176,7 +176,7 @@ import { canWire, resultOf, stateOf } from "../workflow/flow";
 import { MOST_PAIRS } from "../workflow/pairs";
 import { byOf, optionsFor } from "../workflow/doers";
 import { CARD_W } from "../workflow/look";
-import { countOf, entryOfSet, setEntries, setMembers } from "../workflow/entries";
+import { countOf, entryOfSet, setEntries, setMembers, setMolecules } from "../workflow/entries";
 import { forgetStereo } from "../workflow/configurations";
 
 // (the plugins Meno carries, added: the kinds their outputs are read as registered)
@@ -1855,7 +1855,8 @@ describe("running a workflow's steps", () => {
     const { st, b, c } = chain();
     await st().runFrom(c);
     // (asked once, by As conformers, for all three, each its own geometry; Populations' two, the window's, known by then)
-    const kept = setEntries(st().molecules3d.filter((m) => setMembers(st(), st().sets.find((x) => x.made?.step === b)!).molecules.includes(m.id)), "conformers");
+    // (the window's kept, held in its set: its exit wired on, workflow/held)
+    const kept = setEntries(setMolecules(st(), st().sets.find((x) => x.made?.step === b && x.made.exit === "out")!), "conformers");
     expect(configured.map((blocks) => blocks.length)).toEqual([3]);
     expect(kept).toHaveLength(2);
     expect(kept.map((e) => (e.stereo?.perceived ? e.stereo.key : null))).toEqual(kept.map(() => `k${configured[0][0].split("\n").length}`));

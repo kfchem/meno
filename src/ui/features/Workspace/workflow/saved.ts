@@ -122,6 +122,8 @@ function readSet(v: unknown): WorkflowSet | null {
     })(),
     // (a result set kept out of its file, and what it held when it was saved)
     ...(b.keep === false && made ? { keep: false as const } : {}),
+    // (a result set wired on that the chemist opened, to be seen on the page: workflow/held)
+    ...(b.opened === true && made ? { opened: true as const } : {}),
     ...(() => {
       const n = b.notKept as { count?: unknown; hash?: unknown } | undefined;
       return n && Number.isInteger(n.count) && (n.count as number) >= 0 && typeof n.hash === "string" ? { notKept: { count: n.count as number, hash: n.hash } } : {};

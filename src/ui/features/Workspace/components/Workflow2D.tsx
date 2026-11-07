@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import PageHtml from "./PageHtml";
 import { useEditor, useEditorStore } from "../store";
@@ -16,6 +16,10 @@ import { countOf, countSaid, numberedOn, recordHow, recordNumber, recordWhy, typ
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { lookEvery } from "../workflow/lookEvery";
 import { labelReach, selectionFrame, selectionInSet } from "../workflow/selectionSet";
+import { isHeld, setsOnPage } from "../workflow/onPage";
+import { exitNames } from "../workflow/exitNames";
+import PagePlaced, { usePlaced } from "../pageGl/PagePlaced";
+import type { PageText } from "../pageGl/texts";
 import { useDrawnLayout } from "./drawnLayoutContext";
 import { useShownFrames } from "./useShownFrames";
 import { useMemberMarks } from "./useMemberMarks";
@@ -440,6 +444,13 @@ function runRows(s: WorkflowStep): RunRow[] {
   ];
 }
 
+/** The exits' names (workflow/exitNames), placed on the page as its other words by WebGL are (pageGl `usePlaced`), each where it is given. */
+function ExitNames({ items }: { items: readonly PageText[] }) {
+  const [anchor, setAnchor] = useState<THREE.Group | null>(null);
+  usePlaced(anchor ? { key: "exit-names", anchor, words: true, control: true, draw: (at) => ({ shapes: [], texts: items.map((t) => ({ ...t, x: t.x + at.x, y: t.y + at.y })) }) } : null);
+  return <group ref={setAnchor} />;
+}
+
 /**
  * A workflow on the page (docs/WORKFLOWS.md): its sets, its steps and the
  * wires between them, drawn at the page's scale - and the port on the
@@ -454,6 +465,11 @@ export default function Workflow2D() {
   const chipOver = useEditor((s) => s.chipOver);
   const steps = useEditor((s) => s.steps);
   const wires = useEditor((s) => s.wires);
+  // (the sets that lie on the page: all but those held off it - their exits wired on, workflow/held - whose frames are drawn nowhere)
+  const onPage = useMemo(() => setsOnPage({ sets, wires }, sets), [sets, wires]);
+  // (the sets on the page as last drawn, and when each came onto it: a step's result set come within a fold's time grows out of its port)
+  const seenSets = useRef<Set<number> | null>(null);
+  const cameAt = useRef(new Map<number, number>());
   const model = useEditor((s) => s.model);
   const molecules3d = useEditor((s) => s.molecules3d);
   const pictures = useEditor((s) => s.pictures);
@@ -491,9 +507,9 @@ export default function Workflow2D() {
     store.getState().fitResultSets();
   }, [store, style3d]);
   // (each set's frame as it is drawn: on its way to where the document has it)
-  const shownSets = useShownFrames(sets);
+  const shownSets = useShownFrames(onPage);
   // (what has just joined a set or left it, marked a moment)
-  const memberMarks = useMemberMarks(sets, { model, molecules3d, pictures }, (m) => reachOverFrames(m, style3d, turns3d[m.id]));
+  const memberMarks = useMemberMarks(onPage, { model, molecules3d, pictures }, (m) => reachOverFrames(m, style3d, turns3d[m.id]));
   const shownOf = (b: WorkflowSet): Frame => shownSets.get(b.id) ?? b;
   // (each structure a step numbered - Enumerate's - its number under it, how it was made on pointing at it)
   const numbered = useMemo(() => numberedOn({ model }, sets), [model, sets]);
@@ -674,16 +690,15 @@ export default function Workflow2D() {
     else st.connect(from, step, port);
   };
 
-  /** A wire drawn out of a set - from its own port, or its step's for that exit (`card`): into a step's input, or - let go on empty space - Quick Add there, at the steps that take it. */
-  const drawFrom = (e: ReactPointerEvent, from: WireEnd, card = false) => {
+  /** A wire drawn out of a set - a step's result set's from its exit's port on the card (place `wireStart`): into a step's input, or - let go on empty space - Quick Add there, at the steps that take it. */
+  const drawFrom = (e: ReactPointerEvent, from: WireEnd) => {
     if (e.button !== 0) return;
     // (pictures - a Render step's - no step takes: no wire is drawn out of them)
     if (givesOf(store.getState(), from) === "pictures") return;
-    const out = card ? { card: true as const } : {};
-    store.getState().setWorkflowView({ wireDrag: { from, at: worldOf(e.clientX, e.clientY), ...out }, wireRefused: null });
+    store.getState().setWorkflowView({ wireDrag: { from, at: worldOf(e.clientX, e.clientY) }, wireRefused: null });
     follow(
       e,
-      (at) => store.getState().setWorkflowView({ wireDrag: { from, at, ...out } }),
+      (at) => store.getState().setWorkflowView({ wireDrag: { from, at } }),
       (moved, ev) => {
         const st = store.getState();
         st.setWorkflowView({ wireDrag: null });
@@ -862,14 +877,23 @@ export default function Workflow2D() {
   const setById = useMemo(() => new Map(sets.map((b) => [b.id, b])), [sets]);
   // (each step's exits' sets, by step and exit: a port drawn for each)
   const exitSets = useMemo(() => new Map(sets.flatMap((b) => (b.made ? [[`${b.made.step}:${b.made.exit}`, b] as const] : []))), [sets]);
-  const gives = (end: WireEnd): Pt | null => {
-    const b = setById.get(end.set);
-    return b ? setGives(shownOf(b)) : null;
-  };
-  /** Where a step's result set's exit gives on its card (place `exitStart`): the port the line to the set leaves from. */
+  // (each exit's name beside its port where its set is on no page beside it - held off it - to name it: workflow/exitNames)
+  const names = useMemo(() => {
+    const shown = new Set(onPage.map((b) => b.id));
+    return exitNames(steps, (step, exit) => {
+      const b = exitSets.get(`${step}:${exit}`);
+      return b && !shown.has(b.id) ? setName(b, steps) : null;
+    });
+  }, [steps, exitSets, onPage]);
+  /** Where a step's result set's exit gives on its card (place `exitStart`): the port its wires, and the line to the set where it is on the page, leave from. */
   const exitGives = (b: WorkflowSet): Pt | null => {
     const s = b.made ? stepById.get(b.made.step) : undefined;
     return s && b.made ? exitStart(s, b.made.exit) : null;
+  };
+  /** Where a wire out of a set starts (place `wireStart`): a step's result set's at its exit's port on the card, held or not; a set the chemist made, at its frame's right side, as it is drawn. */
+  const gives = (end: WireEnd): Pt | null => {
+    const b = setById.get(end.set);
+    return b ? (exitGives(b) ?? setGives(shownOf(b))) : null;
   };
   // (a step whose options are its role's starts from Settings' choices for it: those changed, its card and state follow)
   const settingsOptions = useAppSettings((s) => s.options);
@@ -952,8 +976,8 @@ export default function Workflow2D() {
   const drawing = useDrawnLayout();
   const labels = useMemo(() => labelReach(drawing.layout, drawing.atoms, drawing.opts), [drawing.layout, drawing.atoms, drawing.opts]);
   const asSet = useMemo(
-    () => (selectionInSet({ model, molecules3d, pictures }, sel.atoms, sel3d, sets) ? null : selectionFrame(model, sel.atoms, molecules3d, sel3d, style3d, turns3d, frames3d, labels)),
-    [sel, sel3d, model, molecules3d, pictures, sets, style3d, turns3d, frames3d, labels],
+    () => (selectionInSet({ model, molecules3d, pictures }, sel.atoms, sel3d, onPage) ? null : selectionFrame(model, sel.atoms, molecules3d, sel3d, style3d, turns3d, frames3d, labels)),
+    [sel, sel3d, model, molecules3d, pictures, onPage, style3d, turns3d, frames3d, labels],
   );
 
   /** The selection made a set, an input, and a wire drawn out of it. */
@@ -983,21 +1007,33 @@ export default function Workflow2D() {
   const drawn = (() => {
     if (!wireDrag) return null;
     if (wireDrag.from) {
-      const b = wireDrag.card ? setById.get(wireDrag.from.set) : undefined;
-      const p = (b && exitGives(b)) ?? gives(wireDrag.from);
+      const p = gives(wireDrag.from);
       return p ? { p, q: wireDrag.at } : null;
     }
     const s = wireDrag.to != null ? stepById.get(wireDrag.to.step) : undefined;
     return s && wireDrag.to ? { p: wireDrag.at, q: stepTakes(s, wireDrag.to.port) } : null;
   })();
 
+  // (a step's result set folds into its exit's port as it is held off the page, and grows out of it as it is shown again: about
+  //  that port, where it stands on the layer - workflow/held; those come onto the page within the fold's time, growing)
+  const foldAbout = (b: WorkflowSet): CSSProperties | undefined => {
+    const p = exitGives(b);
+    if (!p) return undefined;
+    const at = onLayer(p.x, p.y);
+    return { position: "absolute", left: 0, top: 0, width: 0, height: 0, transformOrigin: `${at.left}px ${at.top}px` };
+  };
+  const now = performance.now();
+  if (seenSets.current) for (const b of onPage) if (b.made && !seenSets.current.has(b.id)) cameAt.current.set(b.id, now);
+  seenSets.current = new Set(onPage.map((b) => b.id));
+  const growing = (id: number) => now - (cameAt.current.get(id) ?? -Infinity) < DURATION.base * 1000;
   // sets and steps, each drawn as it is - and those just gone, as they last were, fading out
   const parts = [
-    ...sets.map((b) => {
+    ...onPage.map((b) => {
       const info = setInfo.get(b.id)!;
       const f = shownOf(b);
       return (
-        <div key={`b${b.id}`} style={onLayer(f.x0, f.y1)}>
+        <div key={`b${b.id}`} className={b.made && growing(b.id) ? "meno-fold-in" : undefined} style={b.made ? foldAbout(b) : undefined}>
+        <div style={onLayer(f.x0, f.y1)}>
           <SetFrame
             set={{ ...b, ...f }}
             name={info.name}
@@ -1013,6 +1049,7 @@ export default function Workflow2D() {
             {...(!b.made ? { onRename: (name: string) => store.getState().renameSet(b.id, name) } : {})}
             {...(b.chart ? { onEntry: showEntry } : {})}
           />
+        </div>
         </div>
       );
     }),
@@ -1062,7 +1099,8 @@ export default function Workflow2D() {
       );
     }),
   ];
-  const shownParts = usePresence(parts, (el) => String(el.key));
+  // (kept as long as a fold takes, the longest of what goes)
+  const shownParts = usePresence(parts, (el) => String(el.key), DURATION.base * 1000);
   // the card opened over the rest, on the page: what the ports under it are not drawn for; a port's reach, half its 9 hairs (a hair, 1 / zoom on the page)
   const coverStep = cover ? stepById.get(cover.step) : undefined;
   const coverFrame = coverStep && cover ? { x0: coverStep.x, x1: coverStep.x + cover.w, y0: coverStep.y - cover.h, y1: coverStep.y } : null;
@@ -1071,7 +1109,7 @@ export default function Workflow2D() {
   const underOpened = (p: { x: number; y: number }, notCover?: boolean) => (!notCover && underCard(p, coverFrame, portR)) || underCard(p, chipOver, portR);
   // the wires: each drawn, and each step's to the set it made - each going round what it leaves and comes into, where it comes back (a step's card as it stands shut: where wires join it, look `wireCurve`)
   const cardFrame = (s: WorkflowStep): Frame => ({ x0: s.x, x1: s.x + CARD_W, y0: s.y - CARD_H, y1: s.y });
-  const around = [...sets.map(shownOf), ...steps.map(cardFrame)];
+  const around = [...onPage.map(shownOf), ...steps.map(cardFrame)];
 
   // (each wire with the sets and cards near it, which it may go round, and those as one number: worked out again only where it or they moved - look `nearWire`, `wireKey`)
   const endsNear = (p: Pt, q: Pt, e: Ends): Ends => {
@@ -1092,19 +1130,21 @@ export default function Workflow2D() {
       if (!p || !s) return [];
       const failed = states.get(s.id) === "failed";
       const from = setById.get(w.from.set);
+      // (leaving a card - a step's result set's, from its exit's port - or a set's frame)
+      const by = from?.made ? stepById.get(from.made.step) : undefined;
       return [
         {
           key: `w${w.id}`,
           p,
           q: stepTakes(s, w.to.port),
-          ends: endsNear(p, stepTakes(s, w.to.port), { ...(from ? { from: shownOf(from) } : {}), to: cardFrame(s), ...leadInto(s, w.to.port) }),
+          ends: endsNear(p, stepTakes(s, w.to.port), { ...(by ? { from: cardFrame(by) } : from ? { from: shownOf(from) } : {}), to: cardFrame(s), ...leadInto(s, w.to.port) }),
           moving: !!s.running && hoveredWire !== w.id,
           color: hoveredWire === w.id ? COLORS.highlight : failed ? ATTENTION : WIRE,
           onHover: (on: boolean) => (on ? hover({ hoveredWire: w.id }) : unhover("hoveredWire", w.id)),
         },
       ];
     }),
-    ...sets.flatMap((b) => {
+    ...onPage.flatMap((b) => {
       const s = b.made ? stepById.get(b.made.step) : undefined;
       const p = exitGives(b);
       return s && p ? [{ key: `m${b.id}`, p, q: setTakes(shownOf(b)), ends: endsNear(p, setTakes(shownOf(b)), { from: cardFrame(s), to: shownOf(b) }), moving: false, color: WIRE, onHover: undefined }] : [];
@@ -1115,6 +1155,10 @@ export default function Workflow2D() {
 
   return (
     <group>
+      {/* the exits' names, as the page's words: gone where too small to read, and while a talk is given */}
+      <PagePlaced>
+        <ExitNames items={names} />
+      </PagePlaced>
       {/* wires: those drawn, and each step's to the set it made - and those just gone, fading */}
       {shownWires.map(({ key, item, leaving }) => {
         const target = wirePoints.get(item.key);
@@ -1157,16 +1201,19 @@ export default function Workflow2D() {
               </span>
             </div>
           ))}
-          {shownParts.map(({ key, item, leaving }) =>
-            leaving ? (
+          {shownParts.map(({ key, item, leaving }) => {
+            // (a step's result set held off the page now: folding into its exit's port, as it last was)
+            const set = leaving && key.startsWith("b") ? sets.find((x) => x.id === Number(key.slice(1))) : undefined;
+            const fold = set?.made && isHeld({ sets, wires }, set) ? foldAbout(set) : undefined;
+            return leaving ? (
               // (gone: as it last was, fading, and no longer taking the pointer)
-              <div key={key} inert className="meno-fade-out">
+              <div key={key} inert className={fold ? "meno-fold-out" : "meno-fade-out"} style={fold}>
                 {item}
               </div>
             ) : (
               <Fragment key={key}>{item}</Fragment>
-            ),
-          )}
+            );
+          })}
         </div>
       </PageHtml>
       {/* The ports, on a layer of their own over the molecules' chips and
@@ -1176,10 +1223,11 @@ export default function Workflow2D() {
       {/* (but those under a step's card opened over the rest: it is over them, and takes the press) */}
       <PageHtml transform distanceFactor={HTML_DISTANCE} position={[0, 0, 0]} zIndexRange={[PORTS_Z, PORTS_Z]} pointerEvents="none">
         <div ref={portsLayer} style={{ position: "relative", width: 0, height: 0 }}>
-          {sets.map((b) => {
+          {/* (a set's own port: a set the chemist made's - a step's result set gives from its exit's port on the card, below) */}
+          {onPage.map((b) => {
             const f = shownOf(b);
             const info = setInfo.get(b.id)!;
-            if (underOpened({ x: f.x1, y: (f.y0 + f.y1) / 2 })) return null;
+            if (b.made || underOpened({ x: f.x1, y: (f.y0 + f.y1) / 2 })) return null;
             return (
               <div key={`b${b.id}`} className="meno-fade-in" style={{ ...onLayer(f.x1, (f.y0 + f.y1) / 2), width: 0, height: 0 }}>
                 <Port look={portLook("give", { set: b.id })} label={`Out of ${info.name}`} data={{ "data-give-set": String(b.id) }} onPointerDown={(e) => drawFrom(e, { set: b.id })} style={{ left: 0, top: 0 }} of={(f.y1 - f.y0) / PX} />
@@ -1215,7 +1263,7 @@ export default function Workflow2D() {
                       look={portLook("give", { set: b.id })}
                       label={exits.length > 1 ? `${setInfo.get(b.id)?.name ?? x.name} out of ${name}` : `Out of ${name}`}
                       data={{ "data-give-set": String(b.id) }}
-                      onPointerDown={(e) => drawFrom(e, { set: b.id }, true)}
+                      onPointerDown={(e) => drawFrom(e, { set: b.id })}
                       style={{ left: CARD_W / PX, top: portDown(k) / PX }}
                       of={CARD_H / PX}
                     />

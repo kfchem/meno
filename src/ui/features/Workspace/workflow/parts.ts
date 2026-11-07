@@ -9,6 +9,7 @@ import type { Wire, WorkflowSet, WorkflowStep } from "../store/types";
 import { insidePolygon } from "../utils/selection";
 import { CARD_H, CARD_W } from "./look";
 import { removeSet, removeStep, withExits } from "./model";
+import { heldSets } from "./onPage";
 import { greatest, least } from "../../../../lib/chem/lists";
 
 type Pt = { x: number; y: number };
@@ -46,7 +47,7 @@ export function partsOf(doc: Flow, sets: ReadonlySet<number>, steps: ReadonlySet
     sets: (doc.sets ?? [])
       .filter((b) => sets.has(b.id))
       // (a step's exit without its step is a set like the chemist's; with it, empty until that step runs again)
-      .map(({ members, keep: _k, notKept: _n, put: _p, collection: _c, drawnCollection, unread: _u, carried: _r, core: _co, ...b }) => {
+      .map(({ members, keep: _k, notKept: _n, put: _p, collection: _c, drawnCollection, unread: _u, carried: _r, core: _co, heldIds: _h, ...b }) => {
         // (the records of its structures drawn, by their atoms' ids: taken up by them again, put down - each without its lasting id, a copy
         //  being another structure that is given its own, and none where that and what it is of are all it says)
         const carried = (members ?? []).flatMap((m) => {
@@ -145,9 +146,13 @@ export function flowIn(doc: Flow, kind: "box" | "lasso", points: readonly Pt[]):
     if (points.length < 3) return { sets: [], steps: [] };
     inside = (m) => insidePolygon(m, points);
   }
+  // (a set held off the page lies nowhere: workflow/held - it goes with its step, chosen, so that a copy keeps the wires out of it)
+  const steps = (doc.steps ?? []).filter((s) => inside(stepMiddle(s))).map((s) => s.id);
+  const held = heldSets(doc);
+  const chosen = new Set(steps);
   return {
-    sets: (doc.sets ?? []).filter((b) => inside(setMiddle(b))).map((b) => b.id),
-    steps: (doc.steps ?? []).filter((s) => inside(stepMiddle(s))).map((s) => s.id),
+    sets: (doc.sets ?? []).filter((b) => (held.has(b.id) ? chosen.has(b.made!.step) : inside(setMiddle(b)))).map((b) => b.id),
+    steps,
   };
 }
 

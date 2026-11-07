@@ -8,6 +8,7 @@ import { exitPlace, inputsOf } from "./kinds";
 import { BETWEEN, WIRE_ROOM, byTurn, CARD_H, CARD_W, framesHash, pointsFor, wirePath, wireRoute, type WireWay, GAP, inputLead, nearWire, PORT_DOWN, PORT_STEP, PX, setGives, setTakes, stepGives, stepTakes, WIRE_TURNS, wireCurve, wireToward, shapeMoved, FrameBudget, wireKey, doublesBack, WireEasing, wireLanes } from "./look";
 import { addStep, connect } from "./model";
 import { clearOf } from "./place";
+import { setsOnPage } from "./onPage";
 import { boxOf } from "../chem/make3d";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { placeResults, type RunResults, type RunWith } from "./run";
@@ -36,7 +37,8 @@ const overlap = (a: Frame, b: Frame) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y
  * wire - one from or to another set or step than its own - each said.
  */
 function overlaps(doc: WorkspaceDocument): string[] {
-  const sets = doc.sets ?? [];
+  // (the sets on the page: one held off it lies nowhere - workflow/held)
+  const sets = setsOnPage(doc, doc.sets ?? []);
   const steps = doc.steps ?? [];
   const said: string[] = [];
   const made = sets.filter((b) => b.made);
@@ -45,15 +47,18 @@ function overlaps(doc: WorkspaceDocument): string[] {
   for (const b of made) {
     for (const o of sets) if (o.id !== b.id && overlap(b, o)) said.push(`set ${b.id} over set ${o.id}`);
     for (const s of steps) if (overlap(b, cardOf(s))) said.push(`set ${b.id} over step ${s.id}'s card`);
-    // (each wire not its own: from a set into a step, and from a step to its result set)
+    // (each wire not its own: from a set into a step - a step's result set's from its exit's port on the card, where its frame
+    //  does not move it, so its own too: workflow/held - and from a step to its result set)
     const lines: { name: string; pts: { x: number; y: number }[] }[] = [];
     for (const w of doc.wires ?? []) {
-      const from = sets.find((x) => x.id === w.from.set)!;
+      const from = (doc.sets ?? []).find((x) => x.id === w.from.set)!;
       const to = steps.find((x) => x.id === w.to.step)!;
-      if (from.id === b.id) continue;
-      const e = { from, to: cardOf(to) };
+      const by = from.made && steps.find((x) => x.id === from.made!.step);
+      if (from.id === b.id && !by) continue;
+      const e = { from: by ? cardOf(by) : from, to: cardOf(to) };
+      const p = by ? stepGives(by, exitPlace(by.kind, from.made!.exit)) : setGives(from);
       const q = stepTakes(to, Math.max(0, inputsOf(to.kind).findIndex((p) => p.id === w.to.port)));
-      lines.push({ name: `wire ${w.id}`, pts: wirePath(setGives(from), q, e, nearWire(setGives(from), q, e, page)) });
+      lines.push({ name: `wire ${w.id}`, pts: wirePath(p, q, e, nearWire(p, q, e, page)) });
     }
     // (each line from its exit's own port: look `stepGives`)
     for (const o of sets) {
@@ -65,7 +70,7 @@ function overlaps(doc: WorkspaceDocument): string[] {
     for (const l of lines) if (l.pts.some((p) => inside(b, p))) said.push(`set ${b.id} over ${l.name}`);
     // (and its own wires and line, none turning back over it: in it, off its sides)
     const within = (p: { x: number; y: number }) => p.x > b.x0 + 1e-6 && p.x < b.x1 - 1e-6 && p.y > b.y0 + 1e-6 && p.y < b.y1 - 1e-6;
-    for (const w of (doc.wires ?? []).filter((w) => w.from.set === b.id)) {
+    for (const w of (doc.wires ?? []).filter((w) => w.from.set === b.id && !b.made)) {
       const to = steps.find((x) => x.id === w.to.step)!;
       const e = { from: b as Frame, to: cardOf(to) };
       const q = stepTakes(to, Math.max(0, inputsOf(to.kind).findIndex((p) => p.id === w.to.port)));
