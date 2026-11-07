@@ -1346,6 +1346,8 @@ export default function Workflow2D() {
     const f = shownOf(b);
     const info = setInfo.get(b.id)!;
     if (!b.made && !underOpened({ x: f.x1, y: (f.y0 + f.y1) / 2 })) portList.push({ key: `port:give:${b.id}`, x: f.x1, y: (f.y0 + f.y1) / 2, ofPx: (f.y1 - f.y0) / PX, label: `Out of ${info.name}` });
+    // (a set a step made: one that takes on its left - drawn only, where its step's wire comes in)
+    if (b.made && !underOpened({ x: f.x0, y: (f.y0 + f.y1) / 2 })) portList.push({ key: `port:into:${b.id}`, x: f.x0, y: (f.y0 + f.y1) / 2, ofPx: (f.y1 - f.y0) / PX, label: `Into ${info.name}`, noHits: true });
   }
   for (const s of steps) {
     const ports = inputsFor(s.kind, byOf(s));

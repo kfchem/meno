@@ -45,8 +45,8 @@ describe("the workflow's ports", () => {
     expect(underCard({ x: 8.3, y: -5 }, card, 0.2)).toBe(false);
     expect(underCard({ x: 4, y: 0.3 }, card, 0.2)).toBe(false);
     expect(underCard({ x: 4, y: -5 }, null, 0.2)).toBe(false);
-    // (and the layer asks it of every port it draws - a chemist's sets', and steps' inputs and exits - the open step's own off it)
+    // (and the layer asks it of every port it draws - sets' giving and taking, and steps' inputs and exits - the open step's own off it)
     const layer = readFileSync(join(__dirname, "../components/Workflow2D.tsx"), "utf8");
-    expect(layer.match(/!underOpened\(/g)).toHaveLength(3);
+    expect(layer.match(/!underOpened\(/g)).toHaveLength(4);
   });
 });
