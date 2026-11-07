@@ -537,7 +537,14 @@ Taken on 2026-10-13:
   number of the chemist's own, up to 5000: *Conformers sought*, in
   Settings, *Chemistry*, under *3D*, shown where the plugin chosen there
   takes a number of tries. A workflow's *Conformers* step says its own,
-  this choice its default.
+  this choice its default. Where the plugin's search takes draws, as many
+  as the molecule needs are asked in rounds, until a round brings no new
+  conformer within the chemist's window of the lowest, the most tried, or
+  ten minutes (PLUGINS.md, *As many as the molecule needs, in rounds*):
+  the window, *New conformers within*, has no default, and until it is
+  given the 3D structure says so rather than being made; its first round
+  and most tried are there too. How the rounds ended is said with how it
+  was made.
 - **Conformers kept** (2026-10-26). Those within 30 kcal/mol of the
   lowest are kept; those above are set aside. The window is set in
   Settings, *Chemistry*, under *3D*, and is said with how they were made

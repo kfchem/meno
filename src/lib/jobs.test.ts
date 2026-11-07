@@ -22,7 +22,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   },
 }));
 
-import { coresCountedSaid, finished, processesOf, followJob, keptText, liveJobsOf, runningOf, limitsOf, overLimits, startJob, stopJobsAndWait, type Job } from "./jobs";
+import { coresCountedSaid, finished, processesOf, quietFor, quietSaid, quietShort, followJob, keptText, liveJobsOf, runningOf, limitsOf, overLimits, startJob, stopJobsAndWait, type Job } from "./jobs";
 
 describe("jobs", () => {
   beforeEach(() => {
@@ -36,13 +36,27 @@ describe("jobs", () => {
     expect(["done", "failed", "stopped", "gone"].every((s) => finished(s as never))).toBe(true);
   });
 
-  it("gives a job all the cores jobs may use - one at a time - unless Settings says otherwise", () => {
+  it("gives one job all the cores jobs may use unless Settings says otherwise", () => {
     expect(runningOf({}, 8)).toEqual({ cores: 8 });
     expect(runningOf({ cores: 2 }, 8)).toEqual({ cores: 2 });
     expect(runningOf({ coresAll: 6 }, 8)).toEqual({ cores: 6 });
     // never more than jobs may use, nor than the computer has
     expect(runningOf({ cores: 7, coresAll: 4 }, 8)).toEqual({ cores: 4 });
     expect(runningOf({ cores: 32 }, 8)).toEqual({ cores: 8 });
+  });
+
+  it("shares the cores jobs may use among a step's jobs where Settings sets none: all for one, one each for as many as there are cores", () => {
+    expect(runningOf({}, 28, 1)).toEqual({ cores: 28 });
+    expect(runningOf({}, 28, 2)).toEqual({ cores: 14 });
+    expect(runningOf({}, 28, 19)).toEqual({ cores: 1 });
+    expect(runningOf({}, 28, 588)).toEqual({ cores: 1 });
+    // (shared within what jobs may use; none left over counted twice)
+    expect(runningOf({ coresAll: 16 }, 32, 3)).toEqual({ cores: 5 });
+    // (set: taken as it is, whatever the jobs)
+    expect(runningOf({ cores: 4 }, 28, 588)).toEqual({ cores: 4 });
+    expect(runningOf({ cores: 28 }, 28, 2)).toEqual({ cores: 28 });
+    // (no jobs said: as one)
+    expect(runningOf({}, 28, 0)).toEqual({ cores: 28 });
   });
 
   it("says how cores are counted where each physical core runs more than one thread - and nothing where each runs one", () => {
@@ -149,5 +163,24 @@ describe("the finished jobs' files, as Settings says them", () => {
     expect(keptText(2, 1000)).toBe("2 jobs, 1 MB");
     expect(keptText(12, 1_430_000_000)).toBe("12 jobs, 1.4 GB");
     expect(keptText(3, null)).toBe("3 jobs");
+  });
+});
+
+describe("a running job that has written nothing for long", () => {
+  const MIN = 60_000;
+  it("is said quiet, in whole minutes, once that is as long as Settings says or longer - running alone, and only where it said when it wrote", () => {
+    const now = 1_000_000_000;
+    expect(quietFor({ state: "running", lastWritten: now - 47.9 * MIN }, now, 30)).toBe(47);
+    expect(quietFor({ state: "running", lastWritten: now - 30 * MIN }, now, 30)).toBe(30);
+    expect(quietFor({ state: "running", lastWritten: now - 29.9 * MIN }, now, 30)).toBeNull();
+    expect(quietFor({ state: "running" }, now, 30)).toBeNull();
+    expect(quietFor({ state: "waiting", lastWritten: now - 99 * MIN }, now, 30)).toBeNull();
+    expect(quietFor({ state: "done", lastWritten: now - 99 * MIN }, now, 30)).toBeNull();
+    expect(quietFor(undefined, now, 30)).toBeNull();
+  });
+
+  it("says how long in minutes, and in hours and minutes from two hours", () => {
+    expect([quietSaid(47), quietSaid(119), quietSaid(125), quietSaid(24 * 60)]).toEqual(["no output for 47 min", "no output for 119 min", "no output for 2 h 5 min", "no output for 24 h 0 min"]);
+    expect([quietShort(47), quietShort(125)]).toEqual(["quiet 47 min", "quiet 2 h 5 min"]);
   });
 });

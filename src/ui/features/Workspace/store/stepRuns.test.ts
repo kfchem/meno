@@ -1432,6 +1432,45 @@ describe("a step that runs a plugin's program", () => {
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:01 \u00b7 1 of 3 \u00b7 2 of 3 failed (2: the program stopped with an error)" });
   });
 
+  it("keeps when a running job last wrote anything, as its runner says - running jobs' alone", async () => {
+    const { st, step } = waters(2);
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    Object.assign(jobs.get(idOf(1))!, { state: "running", started: 1000, lastWritten: 5000 });
+    Object.assign(jobs.get(idOf(2))!, { lastWritten: 6000 });
+    await st().lookAtJobs();
+    expect([st().jobsSeen[idOf(1)]?.lastWritten, st().jobsSeen[idOf(2)]?.lastWritten]).toEqual([5000, undefined]);
+    end(1);
+    end(2);
+    await st().lookAtJobs();
+    await ran;
+    expect(st().jobsSeen[idOf(1)]?.lastWritten).toBeUndefined();
+  });
+
+  it("shares the cores among its jobs where Settings sets none for each: one entry all 8, four entries 2 each", async () => {
+    // (a computer of 8 cores, the webview telling 8, whatever computer the test runs on)
+    Object.defineProperty(globalThis.navigator, "hardwareConcurrency", { value: 8, configurable: true });
+    const calculations = useAppSettings.getState().calculations;
+    const { cores: _c, ...unset } = calculations;
+    useAppSettings.setState({ calculations: unset });
+    try {
+      for (const [n, each] of [[1, 8], [4, 2]] as const) {
+        jobs.clear();
+        asked.started = [];
+        const { st, step } = waters(n);
+        const ran = st().runStep(step);
+        for (let i = 0; i < 8 && asked.started.length < n; i++) await settle();
+        expect(asked.started.map((a) => a.cores), `${n} entries`).toEqual(Array(n).fill(each));
+        for (let k = 1; k <= n; k++) end(next - n + k - 1);
+        await st().lookAtJobs();
+        await ran;
+      }
+    } finally {
+      useAppSettings.setState({ calculations });
+    }
+  });
+
   it("goes on without a job stopped alone - Stop this job - bringing in what the others gave, its entry failed, stopped by you", async () => {
     const { st, step } = waters(2);
     const ran = st().runStep(step);

@@ -3,8 +3,13 @@ import { useCallback, useEffect, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { chooseJobsFolder, clearFinishedJobs, computerCores, coresCountedSaid, computerResources, finished, finishedJobsBytes, jobsFolder, keptText, limitsOf, listJobs, runningOf, type JobsFolder } from "../../../lib/jobs";
 import type { Option, OptionValues } from "../../../lib/options";
-import { useAppSettings } from "../../../lib/settings/appSettings";
+import { keepsJobFolders, QUIET_AFTER_MIN, QUIET_AFTER_MOST, useAppSettings } from "../../../lib/settings/appSettings";
 import OptionRows from "../../options/OptionRows";
+
+/** What Cores for each job comes to while it is not set (lib/jobs `runningOf`). */
+export const CORES_SHARED_SAID = "Unless Cores for each job is set, a step's jobs share the cores jobs may use: all of them for one job, one each for as many jobs as there are cores.";
+/** That line, while Cores for each job is unset; none once it is set. */
+export const coresSharedSaid = (c: { cores?: number }): string | null => (c.cores == null ? CORES_SHARED_SAID : null);
 
 /** A mebibyte's share of a gibibyte: memory is set in GB, kept in MiB. */
 const MIB_PER_GB = 1024;
@@ -36,15 +41,27 @@ export default function JobSettings() {
       ? [{ id: "memory-all", label: "Memory jobs may use", type: "number" as const, default: gb((computer.memory * 3) / 4), min: 0.5, max: gb(computer.memory), step: 0.5, unit: `GB of ${gb(computer.memory)}` }]
       : []),
     { id: "awake", label: "Keep the computer awake while jobs run", type: "switch", default: true },
+    // (a finished job's folder, once a workspace's file holds all of it: kept, or moved to the Trash - workflow/keptJobs `clearSavedJobs`)
+    { id: "keep-folders", label: "Keep job folders once saved", type: "switch", default: keepsJobFolders({}) },
+    // (a running job that has written nothing so long: said on its step, never ended for it - lib/jobs `quietFor`)
+    { id: "quiet-after", label: "Say a job is quiet after", type: "number", default: QUIET_AFTER_MIN, min: 1, max: QUIET_AFTER_MOST, step: 1, whole: true, unit: "min" },
   ];
-  const values: OptionValues = { cores: running.cores, "cores-all": limits.cores, ...(computer.memory > 0 ? { "memory-all": gb(limits.memory) } : {}), awake: !calculations.sleepWhileJobsRun };
+  const values: OptionValues = {
+    cores: running.cores,
+    "cores-all": limits.cores,
+    ...(computer.memory > 0 ? { "memory-all": gb(limits.memory) } : {}),
+    awake: !calculations.sleepWhileJobsRun,
+    "keep-folders": keepsJobFolders(calculations),
+    "quiet-after": calculations.quietAfterMin ?? QUIET_AFTER_MIN,
+  };
   const change = (v: OptionValues) => {
     const whole = (n: unknown, most: number) => (typeof n === "number" && Number.isFinite(n) ? Math.min(Math.max(1, Math.round(n)), most) : undefined);
     // (each kept as it was set, or as it was where it was not changed - unset, the default, where it comes to that)
     const cores = v.cores !== values.cores ? whole(v.cores, computer.cores) : calculations.cores;
     const all = v["cores-all"] !== values["cores-all"] ? whole(v["cores-all"], computer.cores) : calculations.coresAll;
     const memory = v["memory-all"] !== values["memory-all"] && typeof v["memory-all"] === "number" ? whole(v["memory-all"] * MIB_PER_GB, computer.memory) : calculations.memoryAll;
-    const { cores: _c, coresAll: _a, memoryAll: _m, sleepWhileJobsRun: _s, ...rest } = calculations;
+    const quietAfter = v["quiet-after"] !== values["quiet-after"] ? whole(v["quiet-after"], QUIET_AFTER_MOST) : calculations.quietAfterMin;
+    const { cores: _c, coresAll: _a, memoryAll: _m, sleepWhileJobsRun: _s, keepJobFolders: _k, quietAfterMin: _q, ...rest } = calculations;
     setCalculations({
       ...rest,
       ...(cores != null ? { cores } : {}),
@@ -52,6 +69,10 @@ export default function JobSettings() {
       ...(memory != null ? { memoryAll: memory } : {}),
       // (kept awake unless turned off: only the off is kept)
       ...(v.awake === false ? { sleepWhileJobsRun: true as const } : {}),
+      // (as set once changed; else as it was - unset, Meno's default)
+      ...(v["keep-folders"] !== values["keep-folders"] ? { keepJobFolders: v["keep-folders"] === true } : calculations.keepJobFolders != null ? { keepJobFolders: calculations.keepJobFolders } : {}),
+      // (as set, where it is not Meno's default)
+      ...(quietAfter != null && quietAfter !== QUIET_AFTER_MIN ? { quietAfterMin: quietAfter } : {}),
     });
   };
 
@@ -97,6 +118,8 @@ export default function JobSettings() {
     <div className="rounded-lg border border-gh-line bg-white divide-y divide-gh-line/60">
       <OptionRows options={options} values={values} onChange={change} />
       {/* (how the cores are counted, where the computer runs more than one thread on each: a program of processes takes more than one) */}
+      {/* (unset, a step's jobs share the cores - lib/jobs `runningOf`: said, as the number shown is one job's alone) */}
+      {coresSharedSaid(calculations) && <p className="py-2 pl-3 pr-3 text-xs text-gh-gray">{coresSharedSaid(calculations)}</p>}
       {coresCountedSaid(computer) && <p className="py-2 pl-3 pr-3 text-xs text-gh-gray">{coresCountedSaid(computer)}</p>}
       {folder && (
         <div className="py-2 pl-3 pr-3 flex items-center gap-3">

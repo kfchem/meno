@@ -51,7 +51,7 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
 }
 
 /** Which icon a kind has (workflow/icons: QuickAdd, a step's card), each kind its own: what each shows, docs/WORKFLOWS.md, *Kinds of step*. */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "saddle" | "descent" | "moved" | "mapped" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered" | "heldMinimum" | "ensemble" | "height" | "modeOn";
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "saddle" | "descent" | "moved" | "mapped" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered" | "heldMinimum" | "ensemble" | "height" | "modeOn" | "onto";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -845,6 +845,24 @@ export const KINDS: readonly KindInfo[] = [
     ],
     how: (v) => joinHow(v),
     needs: (v) => joinNeeds(v),
+  },
+  {
+    // (each structure drawn with what the 3D set wired in holds made of it - by its lasting id - written on its record: its conformers, its lowest
+    //  E and G, its share among the structures of its formula; none set aside - workflow/ontoStructures)
+    kind: "onto-structures",
+    name: "3D results onto structures",
+    icon: "onto",
+    family: "energies",
+    takes: ["structures", "conformers", "molecules"],
+    gives: "same",
+    runs: "entries",
+    made: "With 3D results",
+    inputs: [
+      { id: "structures", name: "Structures", takes: ["structures"] },
+      { id: "results", name: "3D results", takes: ["conformers", "molecules"] },
+    ],
+    // (shares at Populations' own temperature unless the chemist says another: the IUPAC standard 298.15 K)
+    options: [{ id: "temperature", label: "Shares at", type: "number", default: 298.15, min: 1, step: 1, unit: "K" }],
   },
   {
     // (each saddle point's height above its start - the free energy G, or the electronic energy E - paired as Path search pairs, a conformer set's each conformer one: those it cannot have one out of Failed, each saying why)

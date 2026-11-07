@@ -10,11 +10,13 @@ export type Role = {
   /** What it does, as the chemist reads it in Settings. */
   name: string;
   /** Where in Settings who fills it is chosen. */
-  where: "chemistry" | "molecules3d";
+  where: "chemistry" | "molecules3d" | "conversations";
   /** Whether it takes options - the plugin's that fills it, drawn in Settings where it is chosen and sent with each request. */
   options?: true;
   /** Whether a plugin that fills it declares, as data, below what confidence of its model's a reading is unsure (`RoleDecl.unsure`): models' confidences are not on one scale. */
   unsure?: true;
+  /** Whether a plugin that fills it names, as data, the hosts it talks to (`RoleDecl.hosts`): its only way out, through Meno's network gate, and what the consent names. */
+  hosts?: true;
 };
 
 export const ROLES = {
@@ -26,6 +28,7 @@ export const ROLES = {
   conformers: { name: "Structures in 3D, and their conformers", where: "molecules3d", options: true },
   drawing: { name: "A molecule in 3D drawn as a formula", where: "molecules3d" },
   render: { name: "Pictures and films of molecules in 3D, rendered", where: "molecules3d", options: true },
+  "language-model": { name: "Talking with a model, in a conversation", where: "conversations", options: true, hosts: true },
 } as const satisfies Record<string, Role>;
 
 export type RoleId = keyof typeof ROLES;

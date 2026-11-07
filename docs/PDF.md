@@ -1326,7 +1326,8 @@ it where it lies out of view.
     read as no bonds and its count as no word (lib/figure/read
     `repeatBrackets`). A bracket is a line or a curve half a bond to two
     and a half long that crosses a line of the figure square enough, away
-    from both their ends, its own ends free - at no other line's end but
+    from both their ends - or a wedge, hashes or a wavy line, across the
+    line its bond lies along (2026-11-06) - its own ends free - at no other line's end but
     its ticks', and into no label - with its count by its lower end (a
     count in reach of two brackets' lower ends is the nearer's); its
     partner is the nearest other such line or curve, uncounted. A line
@@ -1360,7 +1361,9 @@ it where it lies out of view.
       across a line that is no bond, both across one bond, the two bonds
       of two orders (or a ring's drawn with its circle), what lies between
       not cut off by them, a count of 0, a unit within another or holding
-      one, two units whose brackets cross one bond - each saying which ("A repeat
+      one, two units whose brackets cross one bond, a bracket across a
+      wedged, hashed or wavy bond (which way each copy's would face is not
+      drawn) - each saying which ("A repeat
       unit in brackets, counted 6, is not read: its two brackets cross the
       same bond. It is drawn here once.");
   - a label that writes more or fewer hydrogens than its atom's bonds leave

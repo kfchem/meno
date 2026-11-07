@@ -29,8 +29,8 @@ import { droppedBy, namesOf } from "../workflow/earlierRuns";
 import { exitsOf, howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
 import { exitStart } from "../workflow/place";
 import { useReaders } from "../../../../lib/calc/workers";
-import { useAppSettings } from "../../../../lib/settings/appSettings";
-import { finished } from "../../../../lib/jobs";
+import { QUIET_AFTER_MIN, useAppSettings } from "../../../../lib/settings/appSettings";
+import { finished, quietFor } from "../../../../lib/jobs";
 import { CARD_H, CARD_W, framesHash, HTML_DISTANCE, inputLead, nearWire, onLayer, PORTS_Z, portDown, PX, setGives, setTakes, shuttingCard, stepTakes as portTakes, underCard, byTurn, FrameBudget, pointsFor, roundedWay, WIRE_LANE, WireEasing, wireLanes, wireRoute, wireKey, type WireRouted } from "../workflow/look";
 import { byOf, doerOf, inputsFor, installedFor, kindsOf, notReadyFor, optionsFor, setName, stepOptions } from "../workflow/doers";
 import { diagramKept, diagramNeeds, diagramOptions, diagramValues } from "../workflow/diagramOptions";
@@ -877,7 +877,8 @@ export default function Workflow2D() {
   // (Settings' choices are read where the options are worked out, not passed in: a dependency all the same)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const states = useMemo(() => new Map(steps.map((s) => [s.id, menoWorking[s.id] ? ("running" as const) : stateOf(flow, s, byOf(s))])), [flow, steps, menoWorking, settingsOptions]);
-  // how each running step's jobs are getting on, as last looked at
+  // how each running step's jobs are getting on, as last looked at - and how long the quietest running one has written nothing, past what Settings says
+  const quietAfter = useAppSettings((s) => s.calculations.quietAfterMin ?? QUIET_AFTER_MIN);
   const runs = useMemo(() => {
     const out = new Map<number, { waiting: boolean; view: RunView }>();
     for (const s of steps) {
@@ -886,6 +887,7 @@ export default function Workflow2D() {
       const places = seen.flatMap((x) => (x?.place ? [x.place] : []));
       const starts = seen.flatMap((x) => (x?.started != null ? [x.started] : []));
       const line = seen.find((x) => x?.state === "running" && x.line)?.line;
+      const quiet = Math.max(-1, ...seen.map((x) => quietFor(x, Date.now(), quietAfter) ?? -1));
       out.set(s.id, {
         waiting: seen.every((x) => !x || x.state === "waiting"),
         view: {
@@ -895,13 +897,14 @@ export default function Workflow2D() {
           total: s.running.jobs.length,
           ...(line ? { line } : {}),
           ...(shareOf(seen) != null ? { share: shareOf(seen) } : {}),
+          ...(quiet >= 0 ? { quiet } : {}),
         },
       });
     }
     // (and Meno's working in turns: how many of its entries it has been through)
     for (const [id, m] of Object.entries(menoWorking)) out.set(Number(id), { waiting: false, view: { since: m.since, ended: m.done, total: m.total } });
     return out;
-  }, [steps, jobsSeen, menoWorking]);
+  }, [steps, jobsSeen, menoWorking, quietAfter]);
   // each set's name and count: what it holds, worked out as the page changes, not as the pointer moves
   const setInfo = useMemo(
     () =>

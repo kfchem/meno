@@ -1428,6 +1428,68 @@ describe("a repeat unit in brackets, counted (docs/PDF.md, *A repeat unit in bra
       }
   });
 
+  it("takes a line across a wedge, hashes or a wavy line for a bracket - none of it a bond, its count no word - and refuses its unit, the bond kept as drawn", () => {
+    // (HO-C-[C(C)-C(C)]-C-OH, its unit's bonds out drawn `k1` and `k2` - a wedge or hashes from its narrow end, `R` the other
+    //  way, a wavy line, or a line - crossed by brackets, the second counted)
+    const p0: P = [40, 80];
+    const p1 = step(p0, -30);
+    const p2 = step(p1, 30);
+    const p3 = step(p2, -30);
+    const p4 = step(p3, 30);
+    const p5 = step(p4, -30);
+    const [h, t] = [0.55 * L, 0.18 * L];
+    const [x1, x2] = [along(p1, p2, 0.5), along(p3, p4, 0.5)];
+    const bracket = ([x, y]: P, side: number) => stroke([x + side * t, y - h], [x, y - h], [x, y + h], [x + side * t, y + h]);
+    const wave = (a: P, b: P): FigurePath => {
+      const [ux, uy] = unit(a, b);
+      return {
+        fill: null,
+        stroke: "#000000ff",
+        width: 0.6,
+        d: Array.from({ length: 25 }, (_, k): PathStep => {
+          const f = k / 24;
+          const off = 1.5 * Math.sin(f * 8 * Math.PI);
+          return [k ? "C" : "M", a[0] + (b[0] - a[0]) * f - uy * off, a[1] + (b[1] - a[1]) * f + ux * off];
+        }),
+      };
+    };
+    const drawn = (k: string, a: P, b: P): FigurePath[] =>
+      ({ wedge: [wedge(a, b)], wedgeR: [wedge(b, a)], hash: hashes(a, b), hashR: hashes(b, a), wavy: [wave(a, b)], line: [stroke(a, b)] })[k]!;
+    const across = (k1: string, k2: string, count: string) =>
+      figure(
+        [stroke(along(p0, p1, 0.25), p1), ...drawn(k1, p1, p2), stroke(step(p2, 90), p2, p3, step(p3, -90)), ...drawn(k2, p3, p4), stroke(p4, along(p4, p5, 0.75)), bracket(x1, 1), bracket(x2, -1)],
+        [...word("O", p0), ...word("O", p5), ...word(count, [x2[0] + 0.25 * L, x2[1] + h])],
+      );
+    const at = (r: ReturnType<typeof readFigure>, i: number, p: P) => Math.hypot(r.atoms[i].x - p[0], r.atoms[i].y - p[1]) < 0.3 * L;
+    const why = "a bracket crosses a wedged, hashed or wavy bond";
+    for (const [k1, k2] of [["wedge", "line"], ["line", "wedge"], ["wedge", "wedge"], ["wedgeR", "wedgeR"], ["hash", "line"], ["line", "hash"], ["hash", "hash"], ["hashR", "hashR"], ["wavy", "line"], ["line", "wavy"], ["wavy", "wavy"]]) {
+      const f = across(k1, k2, "3");
+      const s = read(f);
+      // (the figure's eight atoms alone - its brackets no bonds - its count no word, the unit drawn once, saying why)
+      expect(s.atoms.map((a) => a.el).sort(), `${k1} ${k2}`).toEqual([...Array(6).fill("C"), "O", "O"]);
+      expect(s.bonds, `${k1} ${k2}`).toHaveLength(7);
+      const r = readFigure(f);
+      expect(r.left.letters, `${k1} ${k2}`).toEqual([]);
+      expect(refused(s, "3", why), `${k1} ${k2}`).toBeGreaterThan(0);
+      expect(s.atoms.some((a) => a.multiple), `${k1} ${k2}`).toBe(false);
+      // (each wedge, hashes or wavy line kept as drawn, its narrow end where it is drawn - and so in the structure)
+      for (const [k, a, b] of [[k1, p1, p2], [k2, p3, p4]] as [string, P, P][]) {
+        if (k === "line") continue;
+        const [narrow, wide] = k.endsWith("R") ? [b, a] : [a, b];
+        const kind = k.startsWith("wedge") ? "up" : k.startsWith("hash") ? "down" : "wavy";
+        expect(r.bonds.filter((d) => d.stereo === kind && (kind === "wavy" ? (at(r, d.a, narrow) && at(r, d.b, wide)) || (at(r, d.a, wide) && at(r, d.b, narrow)) : at(r, d.a, narrow) && at(r, d.b, wide))), `${k1} ${k2}: ${k}`).toHaveLength(1);
+      }
+      expect(s.bonds.filter((d) => d.stereo).length, `${k1} ${k2}`).toBe([k1, k2].filter((k) => k !== "line").length);
+    }
+    // (a letter's count, a polymer's n: drawn once, as before - the bonds as drawn)
+    for (const [k1, k2] of [["wedge", "wedge"], ["line", "hash"]]) {
+      const s = read(across(k1, k2, "n"));
+      expect(s.atoms, `${k1} ${k2}`).toHaveLength(8);
+      expect(marked(s, "n"), `${k1} ${k2}`).toBeGreaterThan(0);
+      expect(refused(s, "n", why)).toBe(0);
+    }
+  });
+
   it("reads a unit in a ring so many times, the ring closing on itself - what lies round it left where it is", () => {
     // (a hexagon, one corner's two bonds across brackets, counted 3: an eight-membered ring)
     const c: P = [100, 100];

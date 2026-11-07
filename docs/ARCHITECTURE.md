@@ -1375,8 +1375,10 @@ closing quits Meno once they have been asked to stop.
 | `plugin_stage`, `plugin_commit`, `plugin_discard` | `lib/plugins/online.ts` | A plugin's files from the catalogue: fetched, checked and unpacked into a stage; taken into use as its version, `current` naming it; or thrown away (`catalogue.rs`). |
 | `plugin_files_remove` | - | A plugin's files taken away: `current` first, then its folder (`catalogue.rs`). |
 | `ext_spawn_sidecar` | `lib/plugins/process.ts` | Spawn a process with piped stdio; returns an id. |
-| `ext_stdin` | `lib/plugins/process.ts` | Write to a sidecar's stdin. |
+| `ext_stdin` | `lib/plugins/process.ts` | Write to a sidecar's stdin: to a model plugin's worker, whole lines alone, each a JSON object and none a converse (`model.rs`). |
 | `ext_kill` | `lib/plugins/process.ts` | Kill a sidecar and emit `ext:exit`. |
+| `ext_converse` | `lib/plugins/process.ts` | A converse request to a model plugin's worker, the person's key added from the keychain; the one way such a request reaches it (`model.rs`). |
+| `model_key_set`, `model_key_forget`, `model_key_held` | `lib/roles/modelKey.ts` | A model plugin's key kept in the system's keychain, forgotten, or whether one is kept - never read back (`model.rs`). |
 | `pdf_hold_path`, `pdf_hold_bytes` | `lib/pdf/reader.ts` | A PDF held in Meno's cache by its SHA-256; its pages' sizes (`pdf.rs`). |
 | `pdf_bytes` | `utils/workspace.ts` | A PDF held, as its bytes, for a workspace's file. |
 | `pdf_render` | `lib/pdf/reader.ts` | A part of a page drawn by PDFium, as a PNG. |
@@ -1489,12 +1491,20 @@ page reads anything of them (`catalogue.rs`):
   (`HOSTS`); the proxy follows it to those alone. It is checked against
   Meno's own public keys (minisign, `minisign-verify`) - the one in use and
   the next, so that a key is changed by a Meno that carries both first -
-  before it is parsed at all. Then its form, and its serial against the one
-  kept: a lower one is refused and the one kept stays, so that an older list
-  replayed never undoes a plugin taken off it. None but a list checked is
-  kept: `catalogue.json`, its `.minisig` and `catalogue-state.json` (its
-  serial, and when it was fetched), each written whole. The one kept is
-  checked again each time it is read. Until a key is carried, no list is
+  before it is parsed at all. Then its form, and when it was issued against
+  the one kept: an earlier one is refused, and one of the same second only
+  taken where it is that very list, so that an older list replayed never
+  undoes a plugin taken off it. None but a list checked is kept:
+  `catalogue-2.json`, its `.minisig` and `catalogue-2-state.json` (when it
+  was issued, its SHA-256, and when it was fetched), each written whole. The
+  one kept is checked again each time it is read. This Meno fetches
+  `catalogue-2.json`, the whole list; an earlier Meno fetched
+  `catalogue.json`, the plugins every Meno in use reads whole (PLUGINS.md,
+  *Plugins online*). Until this Meno's is first fetched, the one an earlier
+  Meno kept is shown, and holds a fetched one to when it was issued, and
+  that alone: the two of one release are issued the same second, as
+  different files, and an older list, signed, served in this Meno's place
+  is still refused. Until a key is carried, no list is
   taken. Only minisign's own signatures, made over the list's hash, are
   taken - never its older form, made over the list itself.
 - **A plugin's files** (`plugin_stage`) are found by their id and version in

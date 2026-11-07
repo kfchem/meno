@@ -60,6 +60,8 @@ export type PythonPlugin = ReaderBase &
     roleOptions: Partial<Record<RoleId, readonly Option[]>>;
     /** The roles whose search takes how many to try, which Meno sends (the conformers role's: lib/chem/conformersSought). */
     roleTries: readonly RoleId[];
+    /** Of those, the roles whose search gives another set of tries for each draw Meno asks for, so that it can ask in rounds (`draw`: lib/plugins/manifest `RoleDecl.draws`). */
+    roleDraws: readonly RoleId[];
     /** The looks it can make for a role, by role, where it declares any (Render: docs/RENDER.md). */
     roleLooks: Partial<Record<RoleId, readonly LookDecl[]>>;
     /** The motions it makes of a film for a role, by role, where it declares any (Render: docs/RENDER.md). */
@@ -68,6 +70,8 @@ export type PythonPlugin = ReaderBase &
     rolePrograms: Partial<Record<RoleId, readonly string[]>>;
     /** The confidence of its model's below which what it reads for a role is unsure, by role, where it declares one (Structures read from pictures). */
     roleUnsure: Partial<Record<RoleId, number>>;
+    /** The hosts it talks to for a role, by role, where the role has them (Talking with a model): its only way out, read again by the backend from its manifest in place. */
+    roleHosts?: Partial<Record<RoleId, readonly string[]>>;
     /** The kinds of a workflow's step it fills (docs/WORKFLOWS.md). */
     steps: readonly StepDecl[];
     /** The programs installed separately that its steps run: found or located, never fetched (lib/plugins/installed). */
@@ -122,10 +126,12 @@ export const pluginOf = (m: Manifest): Plugin => {
     ...(m.setUpBytes ? { setUpBytes: m.setUpBytes } : {}),
     roleOptions: Object.fromEntries(m.roles.filter((r) => r.options.length).map((r) => [r.role, r.options])),
     roleTries: m.roles.filter((r) => r.tries).map((r) => r.role),
+    roleDraws: m.roles.filter((r) => r.tries && r.draws).map((r) => r.role),
     roleLooks: Object.fromEntries(m.roles.filter((r) => r.looks?.length).map((r) => [r.role, r.looks!])),
     roleMotions: Object.fromEntries(m.roles.filter((r) => r.motions?.length).map((r) => [r.role, r.motions!])),
     rolePrograms: Object.fromEntries(m.roles.filter((r) => r.programs.length).map((r) => [r.role, r.programs])),
     roleUnsure: Object.fromEntries(m.roles.filter((r) => r.unsure).map((r) => [r.role, r.unsure!.below])),
+    ...(m.roles.some((r) => r.hosts) ? { roleHosts: Object.fromEntries(m.roles.filter((r) => r.hosts).map((r) => [r.role, r.hosts!])) } : {}),
     profile: `plugin-${m.id}`,
     // (in the folder of its version in use, in Meno's local data folder: lib/plugins/known)
     lock: `${PLUGINS_ROOT}/${m.id}/${m.version}/${lockOf(m.environment)}`,

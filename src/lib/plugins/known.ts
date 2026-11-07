@@ -13,7 +13,7 @@
  * (`onPluginsChanged`: lib/calc/catalog).
  */
 import { create } from "zustand";
-import { acceptManifest, type Manifest } from "./manifest";
+import { acceptManifest, newerOf, type Manifest } from "./manifest";
 
 /** Where the plugins' folders are, in Meno's local data folder: a plugin's file is `plugins/<id>/<version>/<file>`. */
 export const PLUGINS_ROOT = "plugins";
@@ -26,6 +26,12 @@ let places = new Map<string, { version: string; dir: string; grammars: Record<st
 
 /** The manifests of the plugins Meno knows of, in their ids' order: each in place, of its folder's id and version. */
 export let MANIFESTS: readonly Manifest[] = [];
+
+/** The plugins in place that are a newer Meno's (manifest `newerOf`), by id: their name and version, and why - not taken, said. */
+let newer = new Map<string, { name: string; version: string; why: string }>();
+
+/** Plugin `id`, in place, where it is a newer Meno's: its name and version, and why; none, where it is not. */
+export const newerHere = (id: string) => newer.get(id);
 
 const listeners = new Set<() => void>();
 
@@ -61,11 +67,19 @@ export function onPluginsChanged(listener: () => void): () => void {
 export function setInstalled(list: readonly InstalledPlugin[]): void {
   const taken: Manifest[] = [];
   const next = new Map<string, { version: string; dir: string; grammars: Record<string, string> }>();
+  const newerNext = new Map<string, { name: string; version: string; why: string }>();
   for (const p of list) {
     let raw: unknown;
     try {
       raw = JSON.parse(p.manifest);
     } catch {
+      continue;
+    }
+    // (a newer Meno's: not taken, and said to be so - never added half-read)
+    const why = newerOf(raw);
+    if (why) {
+      const name = (raw as { name?: unknown }).name;
+      newerNext.set(p.id, { name: typeof name === "string" && name.trim() ? name.trim().slice(0, 60) : p.id, version: p.version, why });
       continue;
     }
     const m = acceptManifest(raw);
@@ -75,6 +89,7 @@ export function setInstalled(list: readonly InstalledPlugin[]): void {
   }
   MANIFESTS = taken.sort((a, b) => a.id.localeCompare(b.id));
   places = next;
+  newer = newerNext;
   for (const listener of listeners) listener();
   // (after what is worked out from them is worked out again: lib/calc/catalog)
   usePluginsHere.setState((s) => ({ taken: s.taken + 1 }));
