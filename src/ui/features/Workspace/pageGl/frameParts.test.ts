@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { FRAME_COLORS, FRAME_PX, frameTabParts, tabWidthPx, type FrameTab } from "./frameParts";
-import { NAME_DOWN, SET_PAD } from "../workflow/look";
+import { FRAME_COLORS, FRAME_PX, frameLine, frameTabParts, OUTWARD_LINE, tabStart, tabWidthPx, type FrameTab } from "./frameParts";
+import { NAME_DOWN, PX, TAB_INSET } from "../workflow/look";
 import { pagePx } from "./units";
 import { textWidth } from "./texts";
 import type { Box } from "./shapes";
@@ -21,9 +21,9 @@ describe("a frame with its tab, drawn as a set's", () => {
     const mid = 10 - NAME_DOWN;
     expect(read.icons.map((i) => [i.icon, i.color, i.y])).toEqual([["chat", FRAME_COLORS.quiet, mid], ["warning", FRAME_COLORS.warn, mid]]);
     expect(read.texts.map((t) => [t.text, t.color, t.weight])).toEqual([["Esters", FRAME_COLORS.words, 500], ["talks", FRAME_COLORS.quiet, 400], ["Sees the whole page", FRAME_COLORS.warn, 400]]);
-    // (in turn, left to right, from the frame's padding, each after a gap)
+    // (in turn, left to right, from the tab's inset, each after a gap)
     const name = read.texts[0];
-    expect(name.x).toBeCloseTo(SET_PAD + pagePx(FRAME_PX.icon + FRAME_PX.gap));
+    expect(name.x).toBeCloseTo(TAB_INSET + pagePx(FRAME_PX.icon + FRAME_PX.gap));
     expect(read.texts[1].x).toBeCloseTo(name.x + pagePx(textWidth("Esters", 11, 500) + FRAME_PX.gap));
     const small = frameTabParts([frame()], false);
     expect([small.texts, small.icons.map((i) => i.icon)]).toEqual([[], ["chat"]]);
@@ -34,22 +34,49 @@ describe("a frame with its tab, drawn as a set's", () => {
     const read = frameTabParts([set], true);
     expect(read.icons).toEqual([]);
     expect(read.texts[0]).toMatchObject({ text: "Input", weight: 500 });
-    expect(read.texts[0].x).toBeCloseTo(SET_PAD);
-    expect(read.texts[1].x).toBeCloseTo(SET_PAD + pagePx(textWidth("Input", 11, 500) + FRAME_PX.gap));
+    expect(read.texts[0].x).toBeCloseTo(TAB_INSET);
+    expect(read.texts[1].x).toBeCloseTo(TAB_INSET + pagePx(textWidth("Input", 11, 500) + FRAME_PX.gap));
     expect(tabWidthPx(set.tab, true, true)).toBeCloseTo(textWidth("Input", 11, 500) + FRAME_PX.gap + textWidth("3 structures", 11));
     const small = frameTabParts([set], false);
     expect([small.texts, small.icons.map((i) => i.icon)]).toEqual([[], ["rings"]]);
+  });
+
+  it("starts its words where a set's name is written anew: the field over its tab stands where its name did (pageGl/PageField)", () => {
+    const box = { x0: 3, y0: 0, x1: 23, y1: 10 };
+    const set = frame({ key: "set:3", box, iconWhenSmall: true, tab: { icon: "rings", name: "Input", status: "3 structures" } });
+    const name = frameTabParts([set], true).texts[0];
+    expect([name.x, name.y]).toEqual([tabStart(box).x, tabStart(box).y]);
+    expect(tabStart(box).y).toBeCloseTo(10 - NAME_DOWN, 12);
   });
 
   it("of the whole page, is its tab alone - a white box as wide as what it says - and takes the pointer there only", () => {
     const it = frame({ tabOnly: true, edges: true, tab: { icon: "chat", name: "Ideas", warn: "Sees the whole page" } });
     const parts = frameTabParts([it], true);
     const [box] = parts.shapes as Box[];
-    const width = SET_PAD + pagePx(tabWidthPx(it.tab, true)) + SET_PAD;
+    const width = TAB_INSET + pagePx(tabWidthPx(it.tab, true)) + TAB_INSET;
     expect(box).toMatchObject({ key: "conversation:1:tab", x0: 0, y0: 10 - 2 * NAME_DOWN, y1: 10, fill: FRAME_COLORS.fill });
     expect(box.x1).toBeCloseTo(width);
     // (no edges to size: it has no frame)
     expect(parts.regions.map((r) => r.part)).toEqual(["tab"]);
+  });
+
+  it("starts its tab's words as far from its left edge as its icon stands from its top - a conversation's and a set's alike", () => {
+    // (11 px: the icon, 14 px, its middle NAME_DOWN down)
+    expect(TAB_INSET).toBeCloseTo(11 * PX, 12);
+    expect(TAB_INSET).toBeCloseTo(NAME_DOWN - pagePx(FRAME_PX.icon / 2), 12);
+    const box = { x0: 3, y0: 0, x1: 23, y1: 10 };
+    const talk = frameTabParts([frame({ box, outward: true })], true);
+    const icon = talk.icons[0];
+    expect(icon.x - pagePx(FRAME_PX.icon / 2) - box.x0).toBeCloseTo(box.y1 - (icon.y + pagePx(FRAME_PX.icon / 2)), 12);
+    // (a set's, read, its name where a conversation's icon starts; too small to read, its icon there)
+    const set = frame({ key: "set:3", box, iconWhenSmall: true, tab: { icon: "rings", name: "Input", status: "3 structures" } });
+    expect(frameTabParts([set], true).texts[0].x).toBeCloseTo(box.x0 + TAB_INSET, 12);
+    expect(frameTabParts([set], false).icons[0].x - pagePx(FRAME_PX.icon / 2)).toBeCloseTo(box.x0 + TAB_INSET, 12);
+    // (a tab alone ends as far past its words as they start in: read or not, with its icon or without)
+    for (const [it, read] of [[frame({ box, tabOnly: true }), true], [frame({ box, tabOnly: true }), false], [{ ...set, tabOnly: true as const }, true]] as const) {
+      const [tab] = frameTabParts([it], read).shapes as Box[];
+      expect(tab.x1).toBeCloseTo(box.x0 + TAB_INSET + pagePx(tabWidthPx(it.tab, read, it.iconWhenSmall)) + TAB_INSET, 12);
+    }
   });
 
   it("takes the pointer at its tab, along its whole top, and - sized - at its eight edges; never inside", () => {
@@ -68,5 +95,26 @@ describe("a frame with its tab, drawn as a set's", () => {
   it("going, is drawn but taken hold of nowhere", () => {
     const parts = frameTabParts([frame({ edges: true, noHits: true, opacity: 0.3 })], true);
     expect([parts.shapes.length, parts.regions]).toEqual([1, []]);
+  });
+});
+
+describe("an outward frame - what lies inside it may be sent away from this computer", () => {
+  it("is never a set's hairline: dashed in Meno's colour, heavier pointed at and heavier still chosen, its weight eased between", () => {
+    for (const tone of ["rest", "hover", "chosen"] as const) {
+      const line = (frameTabParts([frame({ outward: true, tone })], true).shapes[0] as Box).line!;
+      expect(line).toMatchObject({ color: OUTWARD_LINE.color, dashed: OUTWARD_LINE.dashed, widthPx: OUTWARD_LINE[tone] });
+      expect(line.dashed).toBeDefined();
+      expect(frameLine({ tone }).dashed).toBeUndefined();
+    }
+    // (half-way from rest to pointed at: half-way in weight)
+    expect(frameLine({ tone: "hover", outward: true, level: 0.5 }).widthPx).toBeCloseTo((OUTWARD_LINE.rest + OUTWARD_LINE.hover) / 2, 9);
+    expect(frameLine({ tone: "chosen", outward: true, level: 1.5 }).widthPx).toBeCloseTo((OUTWARD_LINE.hover + OUTWARD_LINE.chosen) / 2, 9);
+  });
+
+  it("has its icon in Meno's colour, as its line is; of the whole page, its tab's box dashed the same", () => {
+    expect(frameTabParts([frame({ outward: true })], true).icons[0].color).toBe(OUTWARD_LINE.color);
+    expect(frameTabParts([frame()], true).icons[0].color).toBe(FRAME_COLORS.quiet);
+    const tab = frameTabParts([frame({ outward: true, tabOnly: true })], true).shapes[0] as Box;
+    expect(tab.line).toMatchObject({ color: OUTWARD_LINE.color, dashed: OUTWARD_LINE.dashed });
   });
 });

@@ -5,7 +5,8 @@ import { useEditor, useEditorStore } from "../store";
 import { MOV_PX } from "../constants";
 import { PX } from "../workflow/look";
 import { pageAt } from "../utils/page";
-import { ChatBubbleLeftRightIcon } from "@heroicons/react/24/outline";
+import { ChatBubbleLeftRightIcon, CloudArrowUpIcon, ComputerDesktopIcon } from "@heroicons/react/24/outline";
+import { DURATION } from "../../../theme/motion";
 import FrameTabs from "../pageGl/FrameTabs";
 import { addPageIcon } from "../pageGl/icons";
 import type { FrameTab } from "../pageGl/frameParts";
@@ -15,14 +16,22 @@ import type { Side } from "../pageGl/hits";
 import { conversationTabs } from "./tabs";
 
 addPageIcon("chat", (size) => <ChatBubbleLeftRightIcon width={size} height={size} strokeWidth={1.5} />);
+// (where what is in a conversation's frame may go: away from this computer, or staying on it)
+addPageIcon("sent-away", (size) => <CloudArrowUpIcon width={size} height={size} strokeWidth={1.5} />);
+addPageIcon("this-computer", (size) => <ComputerDesktopIcon width={size} height={size} strokeWidth={1.5} />);
+
+/** A tone's level: 0 at rest, 1 pointed at, 2 chosen - an outward frame's line weighs more as it rises (pageGl/frameParts `frameLine`). */
+const LEVEL = { rest: 0, hover: 1, chosen: 2 } as const;
 
 /** How small a frame may be sized, each way: as a set's (components/Workflow2D). */
 const LEAST = 48 * PX;
 
 /**
  * The page's conversations (docs/CONVERSATIONS.md, *The Conversation
- * object*), drawn by WebGL as a set is (pageGl/FrameTabs): a frame a hair
- * thick - what lies inside it is what it sees - its tab along its top,
+ * object*), drawn by WebGL (pageGl/FrameTabs): a frame of its own, dashed in
+ * Meno's colour, never a set's hairline - what lies inside it is what it
+ * sees, and may be sent away (the maintainer, 2026-11-07) - its tab along
+ * its top, saying where to,
  * which drags the frame alone and, clicked, reads it in the column; its
  * edges and corners size it. One of the whole page: its tab alone, saying
  * so in Meno's warning colour.
@@ -40,10 +49,31 @@ export default function ConversationFrames() {
   const [, redraw] = useState(0);
   const now = performance.now();
   present.current = presentAt(present.current ?? new Map(), live, now, present.current == null);
+  // (each frame's tone eased to where it goes - a level a quick time - as a colour is: its line never jumps)
+  const levels = useRef(new Map<string, number>());
+  const last = useRef(now);
+  const dt = Math.min(now - last.current, 1000 / 30);
+  last.current = now;
+  let easing = false;
+  // (none kept of a conversation gone)
+  for (const k of levels.current.keys()) if (!live.some((t) => t.key === k)) levels.current.delete(k);
+  for (const t of live) {
+    const to = LEVEL[t.tone];
+    const at = levels.current.get(t.key) ?? to;
+    const step = dt / (DURATION.quick * 1000);
+    const next = at < to ? Math.min(to, at + step) : Math.max(to, at - step);
+    if (next !== to) easing = true;
+    levels.current.set(t.key, next);
+  }
   useFrame(() => {
-    if (present.current && fading(present.current, performance.now())) redraw((n) => n + 1);
+    if (easing || (present.current && fading(present.current, performance.now()))) redraw((n) => n + 1);
   });
-  const items = [...present.current.values()].map((p) => ({ ...p.item, opacity: presenceAt(p, now), ...(p.gone != null ? { noHits: true as const } : {}) }));
+  const items = [...present.current.values()].map((p) => ({
+    ...p.item,
+    opacity: presenceAt(p, now),
+    level: levels.current.get(p.item.key) ?? LEVEL[p.item.tone],
+    ...(p.gone != null ? { noHits: true as const } : {}),
+  }));
   const byKey = (key: string) => conversations.find((c) => `conversation:${c.id}` === key);
 
   /** Where a pointer is on the page. */

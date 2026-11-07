@@ -143,6 +143,8 @@ export const CHART_PX = { w: 360, h: 260 };
 /** A large result set's summary inside its frame, in px (SummaryBody): what it holds - that it is on no page, and *Open as a table* - a grid of four by three structures, and a chart. */
 export const SUMMARY_PX = { w: 480, h: 448 };
 export const NAME_DOWN = 18 * PX;
+/** How far a frame's tab's words start from its left edge: as far as its icon - 14 px, its middle NAME_DOWN down - stands from its top (pageGl/frameParts; a set's name typed anew, SetFrame). */
+export const TAB_INSET = 11 * PX;
 /** A result set's distance from its step, and between molecules in it: between their ink, half a bond (docs/LOOK.md, *Room*). */
 export const GAP = 64 * PX;
 export const BETWEEN = 24 * PX;
