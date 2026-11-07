@@ -1362,7 +1362,11 @@ it, in `features/Workspace/pageGl/`:
   worked out from its distance to its edge in the fragment shader -
   rounded corners, a line inside the edge as a CSS inset ring is, solid or
   dashed - so that thousands are one draw call, smooth at any zoom; the
-  zoom told to the shader each frame, nothing packed again for it.
+  zoom told to the shader each frame, nothing packed again for it. They
+  are packed into the arrays they had while those have room; where more
+  come than those hold, the geometry is disposed before its new arrays
+  are put in, so that every shape is drawn, not only as many as it was
+  first drawn with (`fillShapesGeometry`).
 - **Words** (`PageTexts`): in IBM Plex Sans, the files the app's HTML is set
   in - Regular from its TrueType file and Medium from IBM's WOFF of it, the
   forms troika reads - in batches (components/textBatch); each placed by
