@@ -11,7 +11,7 @@ import { useStyle3D } from "../style3d";
 import SetFrame from "../workflow/SetFrame";
 import FrameTabs, { FRAMES_ORDER, type FrameTab, type FrameTabsOn } from "../pageGl/FrameTabs";
 import { MEMBER_MS, memberMarkBox, memberPulse, positionBadge, recordLabel } from "../pageGl/workflowMarks";
-import StepCard, { shareOf, type PortLook, type RunRow, type RunView } from "../workflow/StepCard";
+import StepCard, { Port, shareOf, type PortLook, type RunRow, type RunView } from "../workflow/StepCard";
 import { clickedOpen, type CardClick } from "../workflow/cardOpen";
 import { positionMarks } from "../workflow/substituents";
 import { countOf, countSaid, numberedOn, recordHow, recordNumber, recordWhy, type Frame } from "../workflow/entries";
@@ -1163,6 +1163,18 @@ export default function Workflow2D() {
             onContextMenu={menuOf("step", s.id)}
             onHover={(on) => (on ? hover({ hoveredStep: s.id }) : unhover("hoveredStep", s.id))}
           />
+          {/* (its inputs' ports over it, as the page's other ports are over the cards: a wire drawn into it while it is open) */}
+          {inputsFor(s.kind, byOf(s)).map((p, k, all) => (
+            <Port
+              key={`take:${p.id}`}
+              look={portLook("take", { step: s.id, port: p.id })}
+              label={all.length > 1 ? `${p.name} into ${info.name}` : `Into ${info.name}`}
+              data={{ "data-take": `${s.id}:${p.id}` }}
+              onPointerDown={(e) => drawInto(e, s.id, p.id)}
+              style={{ left: 0, top: portDown(k) / PX }}
+              of={CARD_H / PX}
+            />
+          ))}
         </div>,
       ];
     }),
@@ -1293,12 +1305,13 @@ export default function Workflow2D() {
     const ports = inputsFor(s.kind, byOf(s));
     const name = kindInfo(s.kind).name;
     ports.forEach((p, k) => {
-      if (!underOpened({ x: s.x, y: s.y - portDown(k) }, s.id === cover?.step)) portList.push({ key: `port:take:${s.id}:${p.id}`, x: s.x, y: s.y - portDown(k), ofPx: CARD_H / PX, label: ports.length > 1 ? `${p.name} into ${name}` : `Into ${name}` });
+      // (the opened card's own: on it, in its HTML - WebGL draws under the page's HTML)
+      if (s.id !== over && !underOpened({ x: s.x, y: s.y - portDown(k) })) portList.push({ key: `port:take:${s.id}:${p.id}`, x: s.x, y: s.y - portDown(k), ofPx: CARD_H / PX, label: ports.length > 1 ? `${p.name} into ${name}` : `Into ${name}` });
     });
     const exits = exitsOf(s.kind);
     exits.forEach((x, k) => {
       const b = exitSets.get(`${s.id}:${x.id}`);
-      if (b && !underOpened({ x: s.x + CARD_W, y: s.y - portDown(k) }, s.id === cover?.step))
+      if (b && s.id !== over && !underOpened({ x: s.x + CARD_W, y: s.y - portDown(k) }))
         portList.push({ key: `port:exit:${s.id}:${x.id}`, x: s.x + CARD_W, y: s.y - portDown(k), ofPx: CARD_H / PX, label: exits.length > 1 ? `${setInfo.get(b.id)?.name ?? x.name} out of ${name}` : `Out of ${name}` });
     });
   }
