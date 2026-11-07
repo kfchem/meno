@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import PageHtml from "./PageHtml";
 import { useEditor, useEditorStore } from "../store";
@@ -16,7 +16,10 @@ import { countOf, countSaid, numberedOn, recordHow, recordNumber, recordWhy, typ
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { lookEvery } from "../workflow/lookEvery";
 import { labelReach, selectionFrame, selectionInSet } from "../workflow/selectionSet";
-import { setsOnPage } from "../workflow/onPage";
+import { isHeld, setsOnPage } from "../workflow/onPage";
+import { exitNames } from "../workflow/exitNames";
+import PagePlaced, { usePlaced } from "../pageGl/PagePlaced";
+import type { PageText } from "../pageGl/texts";
 import { useDrawnLayout } from "./drawnLayoutContext";
 import { useShownFrames } from "./useShownFrames";
 import { useMemberMarks } from "./useMemberMarks";
@@ -441,6 +444,13 @@ function runRows(s: WorkflowStep): RunRow[] {
   ];
 }
 
+/** The exits' names (workflow/exitNames), placed on the page as its other words by WebGL are (pageGl `usePlaced`), each where it is given. */
+function ExitNames({ items }: { items: readonly PageText[] }) {
+  const [anchor, setAnchor] = useState<THREE.Group | null>(null);
+  usePlaced(anchor ? { key: "exit-names", anchor, words: true, control: true, draw: (at) => ({ shapes: [], texts: items.map((t) => ({ ...t, x: t.x + at.x, y: t.y + at.y })) }) } : null);
+  return <group ref={setAnchor} />;
+}
+
 /**
  * A workflow on the page (docs/WORKFLOWS.md): its sets, its steps and the
  * wires between them, drawn at the page's scale - and the port on the
@@ -456,6 +466,9 @@ export default function Workflow2D() {
   const wires = useEditor((s) => s.wires);
   // (the sets that lie on the page: all but those held off it - their exits wired on, workflow/held - whose frames are drawn nowhere)
   const onPage = useMemo(() => setsOnPage({ sets, wires }, sets), [sets, wires]);
+  // (the sets on the page as last drawn, and when each came onto it: a step's result set come within a fold's time grows out of its port)
+  const seenSets = useRef<Set<number> | null>(null);
+  const cameAt = useRef(new Map<number, number>());
   const model = useEditor((s) => s.model);
   const molecules3d = useEditor((s) => s.molecules3d);
   const pictures = useEditor((s) => s.pictures);
@@ -863,6 +876,14 @@ export default function Workflow2D() {
   const setById = useMemo(() => new Map(sets.map((b) => [b.id, b])), [sets]);
   // (each step's exits' sets, by step and exit: a port drawn for each)
   const exitSets = useMemo(() => new Map(sets.flatMap((b) => (b.made ? [[`${b.made.step}:${b.made.exit}`, b] as const] : []))), [sets]);
+  // (each exit's name beside its port where its set is on no page beside it - held off it - to name it: workflow/exitNames)
+  const names = useMemo(() => {
+    const shown = new Set(onPage.map((b) => b.id));
+    return exitNames(steps, (step, exit) => {
+      const b = exitSets.get(`${step}:${exit}`);
+      return !!b && !shown.has(b.id);
+    });
+  }, [steps, exitSets, onPage]);
   /** Where a step's result set's exit gives on its card (place `exitStart`): the port its wires, and the line to the set where it is on the page, leave from. */
   const exitGives = (b: WorkflowSet): Pt | null => {
     const s = b.made ? stepById.get(b.made.step) : undefined;
@@ -992,13 +1013,26 @@ export default function Workflow2D() {
     return s && wireDrag.to ? { p: wireDrag.at, q: stepTakes(s, wireDrag.to.port) } : null;
   })();
 
+  // (a step's result set folds into its exit's port as it is held off the page, and grows out of it as it is shown again: about
+  //  that port, where it stands on the layer - workflow/held; those come onto the page within the fold's time, growing)
+  const foldAbout = (b: WorkflowSet): CSSProperties | undefined => {
+    const p = exitGives(b);
+    if (!p) return undefined;
+    const at = onLayer(p.x, p.y);
+    return { position: "absolute", left: 0, top: 0, width: 0, height: 0, transformOrigin: `${at.left}px ${at.top}px` };
+  };
+  const now = performance.now();
+  if (seenSets.current) for (const b of onPage) if (b.made && !seenSets.current.has(b.id)) cameAt.current.set(b.id, now);
+  seenSets.current = new Set(onPage.map((b) => b.id));
+  const growing = (id: number) => now - (cameAt.current.get(id) ?? -Infinity) < DURATION.base * 1000;
   // sets and steps, each drawn as it is - and those just gone, as they last were, fading out
   const parts = [
     ...onPage.map((b) => {
       const info = setInfo.get(b.id)!;
       const f = shownOf(b);
       return (
-        <div key={`b${b.id}`} style={onLayer(f.x0, f.y1)}>
+        <div key={`b${b.id}`} className={b.made && growing(b.id) ? "meno-fold-in" : undefined} style={b.made ? foldAbout(b) : undefined}>
+        <div style={onLayer(f.x0, f.y1)}>
           <SetFrame
             set={{ ...b, ...f }}
             name={info.name}
@@ -1014,6 +1048,7 @@ export default function Workflow2D() {
             {...(!b.made ? { onRename: (name: string) => store.getState().renameSet(b.id, name) } : {})}
             {...(b.chart ? { onEntry: showEntry } : {})}
           />
+        </div>
         </div>
       );
     }),
@@ -1063,7 +1098,8 @@ export default function Workflow2D() {
       );
     }),
   ];
-  const shownParts = usePresence(parts, (el) => String(el.key));
+  // (kept as long as a fold takes, the longest of what goes)
+  const shownParts = usePresence(parts, (el) => String(el.key), DURATION.base * 1000);
   // the card opened over the rest, on the page: what the ports under it are not drawn for; a port's reach, half its 9 hairs (a hair, 1 / zoom on the page)
   const coverStep = cover ? stepById.get(cover.step) : undefined;
   const coverFrame = coverStep && cover ? { x0: coverStep.x, x1: coverStep.x + cover.w, y0: coverStep.y - cover.h, y1: coverStep.y } : null;
@@ -1116,6 +1152,10 @@ export default function Workflow2D() {
 
   return (
     <group>
+      {/* the exits' names, as the page's words: gone where too small to read, and while a talk is given */}
+      <PagePlaced>
+        <ExitNames items={names} />
+      </PagePlaced>
       {/* wires: those drawn, and each step's to the set it made - and those just gone, fading */}
       {shownWires.map(({ key, item, leaving }) => {
         const target = wirePoints.get(item.key);
@@ -1158,16 +1198,19 @@ export default function Workflow2D() {
               </span>
             </div>
           ))}
-          {shownParts.map(({ key, item, leaving }) =>
-            leaving ? (
+          {shownParts.map(({ key, item, leaving }) => {
+            // (a step's result set held off the page now: folding into its exit's port, as it last was)
+            const set = leaving && key.startsWith("b") ? sets.find((x) => x.id === Number(key.slice(1))) : undefined;
+            const fold = set?.made && isHeld({ sets, wires }, set) ? foldAbout(set) : undefined;
+            return leaving ? (
               // (gone: as it last was, fading, and no longer taking the pointer)
-              <div key={key} inert className="meno-fade-out">
+              <div key={key} inert className={fold ? "meno-fold-out" : "meno-fade-out"} style={fold}>
                 {item}
               </div>
             ) : (
               <Fragment key={key}>{item}</Fragment>
-            ),
-          )}
+            );
+          })}
         </div>
       </PageHtml>
       {/* The ports, on a layer of their own over the molecules' chips and

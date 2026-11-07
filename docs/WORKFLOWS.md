@@ -2330,7 +2330,8 @@ port is that exit's set's.
   input is let go on the port.
 - **Not named beside it** while its set is on the page beside it: the
   set's frame names it. Its label says which it is ("Failed out of
-  Optimise"), as an input's does.
+  Optimise"), as an input's does. Held off the page, it is named beside
+  its port (*Exit names*, below).
 
 It is the first part of the direct wiring the maintainer asked for
 (2026-10-31): steps wired to steps, a result set's frame shown only
@@ -2384,10 +2385,32 @@ wired on, not one frame for every result.
 - **Laid out again**: where its frame was, where that is clear, else
   where its step's results go; its molecules turned as they come - a
   turn given on the page is not kept while it is held.
+- **Folded, never cut** (no abrupt changes): a frame being held shrinks
+  and fades into its exit's port, about that port, over Meno's base time
+  with its ease (App.css `meno-fold-out`); a frame shown again grows out
+  of it the same way (`meno-fold-in`). Its wires start at the port
+  either way (`wireStart`), so none of them moves.
 
 Not yet: opening a held set in place, from its port or its wire, and
 what its port says of it pointed at; an exit not wired on that holds
 nothing shown as its port alone.
+
+### Exit names (2026-11-07)
+
+Where a step has more than one exit, an exit whose set is on no page
+beside it - held off it - is named beside its port (workflow/exitNames),
+since no frame names it: outside the card's right side, half a port's
+step above its port, as an input's name stands above its port on the
+left - between the wire that leaves the port level and the line above
+it, through neither - in the quiet words an input's name is in.
+
+- **The first is cut** with an ellipsis short of where its set's frame
+  would stand (`GAP` out from the card): a wire leaves its port level
+  there. Those under it are whole.
+- **Drawn by WebGL** (pageGl `PageTexts`), placed as the page's other
+  words drawn so are (`usePlaced`): gone where the page's words are too
+  small to read, and while a talk is given.
+- An exit whose set is on the page is named by its frame, as before.
 
 ### The same conformer (2026-10-22)
 
