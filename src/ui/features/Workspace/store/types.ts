@@ -880,7 +880,7 @@ export type StepRan = {
   kept?: KeptJob[];
   /** A run the chemist keeps (docs/WORKFLOWS.md, *Earlier runs*): never dropped while kept. */
   keep?: true;
-  /** Every seed its line counts but does not name - made none, or not read, with why (workflow/programs `seedsSaid`): shown where the line is pointed at. */
+  /** Every seed its line counts but does not name - made none, or not read, with why (workflow/programs `seedsSaid`) - and every SMILES it could not read, as given, with why (`notReadNamed`): shown where the line is pointed at. */
   named?: string;
 };
 /** A job's file a workspace's file keeps (docs/FILE-IO.md, *A step's jobs*): its name in the job's folder, SHA-256, size, and what it is to the job. */
