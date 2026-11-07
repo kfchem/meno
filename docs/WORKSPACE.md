@@ -1405,6 +1405,24 @@ it, in `features/Workspace/pageGl/`:
   words on the page are selected; opened, the workflow's ports under it
   are not drawn. What goes under it - Make again, a list of results - is
   HTML still, a control, as far down as the chip is tall.
+- **A workflow** (components/Workflow2D): its steps' cards shut (`cardFace`)
+  - who does it, what and how, its state in words and an icon turning
+  while it runs, a log's last line in Plex Mono and a bar of how far its
+  jobs are; its icons alone and large where its words are too small to
+  read - laid out as their HTML was, so that a card opened (HTML still,
+  the one HTML on the page) takes its place unseen; what its card says
+  that a chemist copies - a failure, a program's line - copied from its
+  menu. Its sets' frames and tabs (`FrameTabs`): the tab drags it, its
+  edges and corners size it, two presses on a chemist's set's tab write
+  its name anew in a field over it; its icon - what made it - stands in
+  for its words where they are too small to read; what a set holds (a
+  summary, a table, a chart) is HTML still, inside its frame. Its ports
+  (`ports`): rings as large as a hand takes them, lit where a wire being
+  drawn may join them, a wire let go on one found by its shape. And its
+  small marks (`workflowMarks`): what just joined a set or left it, an
+  Enumerate step's positions, a structure's number with how it was made in
+  the tip. Frames under cards under chips under ports, all over the
+  molecules, as their HTML lay.
 - **The hover tip** (components/PageTip): not placed on the page, it may be
   HTML (LOOK.md, rule 7) - one for all of the page's WebGL: what a mark
   says, why a chip's bar did not finish, under what it is about or over

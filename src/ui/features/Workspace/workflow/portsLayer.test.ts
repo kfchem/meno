@@ -23,12 +23,18 @@ describe("the workflow's ports", () => {
     expect(all.filter((r) => r.most >= PORTS_Z)).toEqual([]);
   });
 
-  it("are drawn on their own layer, not in a set's frame or a step's card, under the chips", () => {
+  it("are drawn by WebGL on a layer of their own, over the cards and the chips, not in a set's frame or a step's card", () => {
     const frame = readFileSync(join(__dirname, "SetFrame.tsx"), "utf8");
     const card = readFileSync(join(__dirname, "StepCard.tsx"), "utf8");
-    expect(frame).not.toContain("data-give-set");
+    expect(frame).not.toContain("Port");
     expect(card).not.toContain("data-take");
-    expect(readFileSync(join(__dirname, "../components/Workflow2D.tsx"), "utf8")).toMatch(/zIndexRange=\{\[PORTS_Z, PORTS_Z\]\}[\s\S]*data-give-set[\s\S]*data-take/);
+    const layer = readFileSync(join(__dirname, "../components/Workflow2D.tsx"), "utf8");
+    expect(layer).toMatch(/<PageLayer shapes=\{portRings\}[^>]*order=\{PORTS_ORDER\}/);
+    expect(layer).toMatch(/const PORTS_ORDER = PAGE_GL_ORDER \+ 4;/);
+    // (a wire let go on one finds it by its shape, as the page's WebGL takes the pointer: no element under the pointer asked)
+    expect(layer).toMatch(/hitAt\(\{ x: ev\.clientX, y: ev\.clientY \}, \(key\) => key\.startsWith\("port:"\)\)/);
+    // (and, where none is under it, on an opened card's own ports in its HTML - pageGl/ports `dropOn`)
+    expect(layer).toMatch(/dropOn\(port\?\.key \?\? null, \{ take: el\?\.closest\("\[data-take\]"\)\?\.getAttribute\("data-take"\), give: el\?\.closest\("\[data-give-set\]"\)\?\.getAttribute\("data-give-set"\) \}/);
   });
 
   it("are not drawn under a step's card opened over the rest - inside it, or half over its border - and are elsewhere", () => {
@@ -41,8 +47,8 @@ describe("the workflow's ports", () => {
     expect(underCard({ x: 8.3, y: -5 }, card, 0.2)).toBe(false);
     expect(underCard({ x: 4, y: 0.3 }, card, 0.2)).toBe(false);
     expect(underCard({ x: 4, y: -5 }, null, 0.2)).toBe(false);
-    // (and the layer asks it of every port it draws - sets', and steps' inputs and exits - the open step's own excepted)
+    // (and the layer asks it of every port it draws - sets' giving and taking, and steps' inputs and exits - the open step's own off it)
     const layer = readFileSync(join(__dirname, "../components/Workflow2D.tsx"), "utf8");
-    expect(layer.match(/underCard\(/g)).toHaveLength(3);
+    expect(layer.match(/!underOpened\(/g)).toHaveLength(4);
   });
 });
