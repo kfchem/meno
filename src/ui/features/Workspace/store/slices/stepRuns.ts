@@ -1949,6 +1949,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
             ...(place > 0 ? { place } : {}),
             ...(line ? { line } : {}),
             ...(progress ? { progress } : {}),
+            ...(job.state === "running" && job.lastWritten != null ? { lastWritten: job.lastWritten } : {}),
           };
         }
       }
