@@ -13,6 +13,7 @@ import { useStructureEvents } from "./hooks/useStructureEvents";
 import { useCanvasSetup } from "./hooks/useCanvasSetup";
 import PageHits from "./pageGl/PageHits";
 import PagePlaced from "./pageGl/PagePlaced";
+import ConversationFrames from "./conversation/ConversationFrames";
 import {
   Atoms2D,
   Bonds2D,
@@ -198,6 +199,7 @@ import Ask3D from "./Ask3D";
 import Cycles2D from "./components/Cycles2D";
 import { cyclePointed, cycleThings, endsAt, turnCycle } from "./utils/cycles";
 import { branchPath, CYCLE_RADIUS, MARGIN as CYCLE_MARGIN } from "../../../lib/chem/cycle";
+import { CONVERSATION_FRAME } from "./conversation/ops";
 import { inRow } from "./components/structureDrag";
 import { pickedStructure } from "./utils/pdfStructures";
 import StructureFlight from "./components/StructureFlight";
@@ -907,6 +909,10 @@ function WorkspaceContent({
       } else if (isDeleteKey(e) && kind && id != null) {
         e.preventDefault();
         deletePart(kind, id);
+      } else if (isDeleteKey(e) && !busy && st.hoveredConversation != null) {
+        // (a conversation's tab under the pointer: it and what was said with it - not while it talks)
+        e.preventDefault();
+        st.removeConversation(st.hoveredConversation);
       } else if (isDeleteKey(e) && !busy && st.hoveredPush != null && st.pushes.some((p) => p.id === st.hoveredPush)) {
         e.preventDefault();
         st.removePush(st.hoveredPush);
@@ -1999,6 +2005,13 @@ function WorkspaceContent({
                 const seen = viewBox();
                 if (seen) st.addSlide(slideOfView(seen, WIDE));
               }
+              // (a conversation's frame about where Quick Add was opened, read in the column: what lies inside it is what it sees)
+              else if (what === "conversation") {
+                const w = CONVERSATION_FRAME.w * NOMINAL_BOND_LENGTH;
+                const h = CONVERSATION_FRAME.h * NOMINAL_BOND_LENGTH;
+                const id = st.addConversation({ x0: at.x - w / 2, y0: at.y - h / 2, x1: at.x + w / 2, y1: at.y + h / 2 });
+                if (id != null) st.readConversation(id);
+              }
               else st.addPlus(at.x, at.y);
             }}
           />
@@ -2725,6 +2738,8 @@ function WorkspaceContent({
         {/* ... and what is placed on it by what moves - the molecules' and stacks' frames chips - drawn with it at once (pageGl/PagePlaced) */}
         <PagePlaced>
         <FitToContent2D trigger={fitNonce} />
+        {/* Conversations' frames, drawn as sets' are (docs/CONVERSATIONS.md) */}
+        <ConversationFrames />
         {/* The drawing, laid out once for every layer below to draw from */}
         <DrawnLayoutProvider>
           {/* PDFs, under the drawing - an icon's name in its type - and one read in the column over the canvas's right side (docs/PDF.md) */}

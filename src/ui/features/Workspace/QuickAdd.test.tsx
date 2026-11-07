@@ -27,7 +27,7 @@ function rows() {
 describe("Quick Add", () => {
   it("has in its first row what makes a structure and a scheme's words and arrow, then two groups - each opening a row of its own (layout A, 2026-10-29)", () => {
     const { first, scheme, marks } = rows();
-    expect(first).toEqual(["Bond", "Chain", "SMILES", "Text", "Arrow", "Scheme", "Marks on the page"]);
+    expect(first).toEqual(["Bond", "Chain", "SMILES", "Text", "Arrow", "Scheme", "Marks on the page", "Conversation"]);
     // (Scheme: the "+", the electron-pushing arrow, the catalytic cycle and the slide; one arrow on the page, the Arrow, in the first row)
     expect(scheme).toEqual(["Plus", "Electron-pushing arrow", "Catalytic cycle", "Slide"]);
     // (Marks on the page: the shapes - a rectangle, its corners rounded from its menu, an ellipse and a line - and the pen)
