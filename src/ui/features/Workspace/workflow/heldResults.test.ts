@@ -161,6 +161,41 @@ describe("a step's result set held off the page (docs/WORKFLOWS.md, *Held result
     expect(setMembers(back, setOf(back, KEPT)).molecules).toEqual([first, second]);
   });
 
+  it("takes off the page no structure another set holds too: its atoms stay, that set's", () => {
+    let doc = addStep(emptyWorkspaceDocument(), "check-structures", 0, 0);
+    doc = addStep(doc, "descriptors", 300, 0);
+    doc = placeResults(doc, doc.steps![0], drawn([ethanol(1), ethanol(10)]), W);
+    const out = resultOf(doc, 1)!.id;
+    const [first, second] = setMembers(doc, setOf(doc, out)).structures;
+    doc = addSet(doc, { x0: -100, y0: -100, x1: -90, y1: -90 });
+    const other = doc.sets![doc.sets!.length - 1]!.id;
+    doc = { ...doc, sets: doc.sets!.map((b) => (b.id === other ? { ...b, members: [{ structure: first }] } : b)) };
+    const held = heldSettled(connect(doc, { set: out }, doc.steps![1].id), undefined, extentOf);
+    const left = new Set(held.model.atoms.map((a) => a.id));
+    expect([first.every((a) => left.has(a)), second.some((a) => left.has(a))]).toEqual([true, false]);
+    expect(setMembers(held, setOf(held, other)).structures).toEqual([first]);
+  });
+
+  it("holds the structures it shows before those it held already, in their order", () => {
+    let doc = addStep(emptyWorkspaceDocument(), "check-structures", 0, 0);
+    doc = addStep(doc, "descriptors", 300, 0);
+    doc = placeResults(doc, doc.steps![0], drawn([ethanol(1), ethanol(10)]), W);
+    const out = resultOf(doc, 1)!.id;
+    const atoms = setMembers(doc, setOf(doc, out)).structures;
+    // (one held in it already, past what it shows)
+    doc = { ...doc, sets: doc.sets!.map((b) => (b.id === out ? { ...b, drawnCollection: [ethanol(100)] } : b)) };
+    const held = heldSettled(connect(doc, { set: out }, doc.steps![1].id), undefined, extentOf);
+    expect(setOf(held, out).drawnCollection!.map((m) => m.atoms.map((a) => a.id))).toEqual([atoms[0], atoms[1], [100, 101, 102]]);
+  });
+
+  it("lays out again no set holding a table, a number or a chart, whatever it held besides", () => {
+    const doc = addStep(emptyWorkspaceDocument(), "atom-map", 0, 0);
+    const changes = resultOf(doc, 1, "changes")!.id;
+    const table = { columns: [], rows: [], unread: [], left: [] };
+    const with_ = { ...doc, sets: doc.sets!.map((b) => (b.id === changes ? { ...b, table, drawnCollection: [ethanol(100)] } : b)) };
+    expect(heldSettled(with_, undefined, extentOf).model.atoms).toEqual(with_.model.atoms);
+  });
+
   it("keeps what names its molecules: a text shown from one, and a molecule's link to its drawing, find it again as it is laid out", () => {
     let doc = page();
     const [first] = setMembers(doc, setOf(doc, KEPT)).molecules;
