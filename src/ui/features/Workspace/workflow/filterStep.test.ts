@@ -81,7 +81,7 @@ describe("a Filter step", () => {
   it("keeps the conformers that meet its conditions, the rest out of its second exit - both counted, and why each of the rest was, one with no value for the property said", () => {
     // (a conformer set of four: NLL 12, 40, none, 25)
     const doc = runStep(filtering([water([{ nll: nll(12) }, { nll: nll(40) }, {}, { nll: nll(25) }], { conformerSet: true })], "nll < 30"), 2, W);
-    expect(ran(doc)).toMatchObject({ ok: true, said: "2 of 4 entries kept \u00b7 rest 2 (1: not nll < 30 (40); 1: it has no nll)" });
+    expect(ran(doc)).toMatchObject({ ok: true, said: "2 of 4 entries kept \u00b7 rest 2 (1: not nll < 30; 1: it has no nll)" });
     const [kept] = out(doc);
     const [rest] = out(doc, "rest");
     // (each as it came: its number, its energy, its properties)
@@ -95,14 +95,14 @@ describe("a Filter step", () => {
     const b = water([{ nll: nll(10), gap: { value: 0.5, unit: "eV", status: "computed" } }]);
     // (1 eV is 23.060548 kcal/mol, from the SI values of e and N_A and the thermochemical calorie: 2 eV is 46.12 kcal/mol, above 40; 0.5 eV is 11.530274)
     const all = runStep(filtering([a, b], "gap > 40 kcal/mol"), 2, W);
-    expect([ran(all)?.said, out(all).length]).toEqual(["1 of 2 entries kept \u00b7 rest 1 (1: not gap > 40 kcal/mol (11.530274 kcal/mol))", 1]);
+    expect([ran(all)?.said, out(all).length]).toEqual(["1 of 2 entries kept \u00b7 rest 1 (1: not gap > 40 kcal/mol)", 1]);
     const any = runStep(filtering([a, b], "gap > 40 kcal/mol; nll < 20", "any"), 2, W);
     expect([ran(any)?.said, out(any).length]).toEqual(["2 of 2 entries kept", 2]);
   });
 
   it("reads Meno's own properties of an entry as well: its energy, its number, its group", () => {
     const doc = runStep(filtering([water([{}, {}, {}], { conformerSet: true })], "energy <= -76.399 Eh; number != 1"), 2, W);
-    expect([ran(doc)?.said, out(doc)[0].numbers]).toEqual(["1 of 3 entries kept \u00b7 rest 2 (1: not number \u2260 1 (1); 1: not energy \u2264 -76.399 Eh (-76.398 Eh))", [2]]);
+    expect([ran(doc)?.said, out(doc)[0].numbers]).toEqual(["1 of 3 entries kept \u00b7 rest 2 (1: not number \u2260 1; 1: not energy \u2264 -76.399 Eh)", [2]]);
   });
 
   it("says why, and makes nothing, where its conditions do not read, or there are none", () => {
@@ -119,7 +119,7 @@ describe("a Filter step", () => {
     expect(ran(doc)).toMatchObject({ ok: false, said: '"energy" is Meno\'s own, and 1 entry carries one of its own by that name too: which is meant cannot be told' });
     // (a condition on another: the entry, and its own energy, go on as they came)
     const other = runStep(filtering(given, "nll < 30"), 2, W);
-    expect([ran(other)?.said, out(other)[0].properties?.[0].energy]).toEqual(["1 of 2 entries kept \u00b7 rest 1 (1: not nll < 30 (50))", own(-1)]);
+    expect([ran(other)?.said, out(other)[0].properties?.[0].energy]).toEqual(["1 of 2 entries kept \u00b7 rest 1 (1: not nll < 30)", own(-1)]);
   });
 
   it("compares a property with another of the same entry (\"its\"): kept where they agree, the rest saying why - one missing either never kept; Meno's own name on either side read as on one", () => {

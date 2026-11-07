@@ -4,11 +4,10 @@
  */
 import type { WorkflowStep } from "../store/types";
 import { COLORS } from "../../../theme/colors";
-import { CHIP, CHIP_HEIGHT, chipLine, shutChip } from "../pageGl/chips";
+import { CHIP, chipLine } from "../pageGl/chips";
 import type { Drawn } from "../pageGl/PagePlaced";
 import type { PageText } from "../pageGl/texts";
 import { pagePx } from "../pageGl/units";
-import { FRAMES_CHIP_GAP } from "../utils/molecule3d";
 import { exitsOf } from "./kinds";
 import { CARD_W, GAP, PORT_STEP, portDown, PX } from "./look";
 
@@ -60,23 +59,28 @@ export const EXIT_CHIP_OUT = 8;
  * What a held exit's set holds, said beside its port as the pointer is on
  * it (docs/WORKFLOWS.md, *Held results*): its name, then its count in the
  * words a large set's summary says it in ("Failed · 3 molecules") - in a
- * chip as a molecule's frames chip is drawn shut (pageGl `shutChip`), but
- * whole, not let through: it stands on its port's wire, which would show
- * through it. Out to the right of the port, level with it; taking no
- * pointer, so that the port keeps it.
+ * chip as a molecule's frames chip is drawn (pageGl `chips`: its box, its
+ * words, their sizes and tones), but whole, not let through: it stands on
+ * its port's wire, which would show through it. Out to the right of the
+ * port, its middle level with it; taking no pointer, so that the port
+ * keeps it.
  */
 export function exitChip(key: string, name: string, holds: string, port: { x: number; y: number }): Drawn {
-  const runs = [
-    { text: `${name} \u00b7 `, tone: "quiet" as const },
-    { text: holds, tone: "ink" as const },
-  ];
-  const w = pagePx(chipLine(runs).width + 2 * CHIP.side);
-  const h = pagePx(CHIP_HEIGHT);
-  // (hung, as a frames chip is, FRAMES_CHIP_GAP below a point: here the one that puts its middle level with the port)
-  const chip = shutChip(key, runs, { x: port.x + pagePx(EXIT_CHIP_OUT) + w / 2, y: port.y + h / 2 + pagePx(FRAMES_CHIP_GAP) });
+  const line = chipLine([
+    { text: `${name} \u00b7 `, tone: "quiet" },
+    { text: holds, tone: "ink" },
+  ]);
+  const w = pagePx(line.width + 2 * CHIP.side);
+  const h = pagePx(CHIP.line + 2 * CHIP.pad + 2 * CHIP.border);
+  const x0 = port.x + pagePx(EXIT_CHIP_OUT);
+  const box = { x0, x1: x0 + w, y0: port.y - h / 2, y1: port.y + h / 2 };
+  // (its baseline as Plex sets its words in its line: half the room the letters leave, then their ascent - as a frames chip's)
+  const baseline = box.y1 - pagePx(CHIP.border + CHIP.pad + (CHIP.line - 1.3 * CHIP.size) / 2 + 1.025 * CHIP.size);
+  const left = x0 + pagePx(CHIP.side);
+  const tone = { quiet: COLORS.quiet, ink: COLORS.ink, attention: COLORS.attention };
   return {
-    shapes: chip.shapes.map((s) => (s.kind === "box" ? { ...s, opacity: 1, fillAlpha: 1 } : s)),
-    texts: chip.texts.map((t) => ({ ...t, opacity: 1 })),
+    shapes: [{ kind: "box", key, ...box, radiusPx: CHIP.radius, fill: COLORS.background, fillAlpha: 1, line: { widthPx: CHIP.border, color: COLORS.hairline }, shadow: CHIP.shadow, opacity: 1 }],
+    texts: line.runs.map((r, i) => ({ key: `${key}:${i}`, x: left + pagePx(r.from), y: baseline, anchor: "start", text: r.text, sizePx: CHIP.size, color: tone[r.tone], z: 1, opacity: 1 })),
     regions: [],
   };
 }

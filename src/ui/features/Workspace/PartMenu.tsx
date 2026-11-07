@@ -12,6 +12,11 @@ import { swallowPress } from "./utils/press";
 import { guideNotice } from "../../../lib/guide/guide";
 import { MAGNIFICATIONS, magnificationText } from "./utils/magnified";
 import { arrowMovesMenu, wheelClosesMenu } from "./utils/menuKeys";
+import { copying, writeClipboard } from "../../../lib/clipboard";
+import type { ChipCopy } from "./store/types";
+
+/** `text` put on the clipboard as words (a chip's Copy). */
+const copyText = (text: string) => copying(() => writeClipboard([{ flavor: "text", text }])).catch(() => {});
 
 /**
  * What was right-clicked, where in the canvas the menu opens, and how big
@@ -22,13 +27,15 @@ export type MenuTarget = {
    * The atom, bond, reaction arrow or "+" right-clicked, or a molecule in 3D
    * or a measurement on one; null, when it was nothing.
    */
-  kind: "atom" | "bond" | "arrow" | "plus" | "caption" | "pdf" | "picture" | "text" | "molecule3d" | "measure3d" | "set" | "step" | "wire" | "push" | "ring" | "slide" | "shape" | "ink" | "cycle" | null;
+  kind: "atom" | "bond" | "arrow" | "plus" | "caption" | "pdf" | "picture" | "text" | "molecule3d" | "measure3d" | "chip" | "set" | "step" | "wire" | "push" | "ring" | "slide" | "shape" | "ink" | "cycle" | null;
   /** Its id: for a measurement, its molecule's; for a ring, one of its atoms'. */
   id: number | null;
   /** A ring right-clicked inside: its key (utils/rings). */
   ring?: string;
   /** A measurement's own id. */
   measure?: number;
+  /** A molecule's frames chip's: what its Copy items put on the clipboard. */
+  copy?: ChipCopy;
   /** A molecule in 3D's atom under the pointer as it was right-clicked, by index: which of its ligands the menu is about. */
   atom?: number;
   /**
@@ -882,6 +889,12 @@ export default function PartMenu({
         ]
       : target.kind === "wire"
       ? [...(shownOnPage ? [{ name: "Show its results on the page", keys: "", run: () => shownOnPage.set(!shownOnPage.shown), checked: shownOnPage.shown }] : []), { ...del("Delete wire"), divider: !!shownOnPage }]
+      : target.kind === "chip"
+      ? [
+          // (what it says, as text - its results, why it failed - and its energies as a table: copied from here, as no words on the page are selected)
+          ...(target.copy ? [{ name: "Copy", keys: "", run: () => void copyText(target.copy!.all) }] : []),
+          ...(target.copy?.energies ? [{ name: "Copy energies", keys: "", run: () => void copyText(target.copy!.energies!) }] : []),
+        ]
       : target.selection === "here"
       ? [
           { name: "Cut", keys: shortcut("X"), run: clipboard.onCut, icon: MENU_ICONS.cut },
@@ -1034,6 +1047,8 @@ export default function PartMenu({
                     ? "Wire"
                   : target.kind === "molecule3d"
                     ? "Molecule"
+                  : target.kind === "chip"
+                    ? "Frames"
                     : target.kind === "measure3d"
                       ? "Measurement"
                     : target.kind === "push"

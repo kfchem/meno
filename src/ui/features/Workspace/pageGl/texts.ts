@@ -122,3 +122,73 @@ export function lineOf(key: string, x: number, y: number, anchor: PageText["anch
 export function widthOfRuns(runs: readonly Run[], sizePx: number): number {
   return runs.reduce((a, r) => a + textWidth(r.text, sizePx, r.weight ?? 400), 0);
 }
+
+/** A run that may be broken across lines (`wrapRuns`); `atomic`, never - a title cut to its most, as an inline block. */
+export type WrapRun = Run & { atomic?: boolean };
+
+/** One line of wrapped runs and how wide it is, in page pixels. */
+export type WrappedLine = { runs: Run[]; width: number };
+
+/**
+ * Runs laid in lines no wider than `maxPx` page pixels, as HTML lays words
+ * that may break anywhere (`overflow-wrap: anywhere`): broken after spaces
+ * where they can be, and inside a word only where it is wider than a line by
+ * itself; a run `atomic` kept whole. Each line's runs keep their colours;
+ * the spaces a line breaks at are not drawn.
+ */
+export function wrapRuns(runs: readonly WrapRun[], sizePx: number, maxPx: number): WrappedLine[] {
+  // (pieces a line may end after: each word with the spaces after it, an atomic run whole)
+  const pieces: { run: Run; text: string; atomic: boolean }[] = [];
+  for (const r of runs) {
+    if (!r.text) continue;
+    if (r.atomic) pieces.push({ run: r, text: r.text, atomic: true });
+    else for (const w of r.text.match(/\S*\s*/g) ?? []) if (w) pieces.push({ run: r, text: w, atomic: false });
+  }
+  const width = (t: string, r: Run) => textWidth(t, sizePx, r.weight ?? 400);
+  const lines: { run: Run; text: string }[][] = [[]];
+  let at = 0;
+  const put = (run: Run, text: string) => {
+    lines[lines.length - 1].push({ run, text });
+    at += width(text, run);
+  };
+  const breakLine = () => {
+    lines.push([]);
+    at = 0;
+  };
+  for (const p of pieces) {
+    const bare = p.text.trimEnd();
+    if (at > 0 && at + width(bare, p.run) > maxPx + 1e-6) breakLine();
+    if (!p.atomic && width(bare, p.run) > maxPx + 1e-6) {
+      // (a word wider than a line: broken letter by letter where it runs out)
+      for (const ch of p.text) {
+        if (at > 0 && ch.trim() && at + width(ch, p.run) > maxPx + 1e-6) breakLine();
+        put(p.run, ch);
+      }
+    } else put(p.run, p.text);
+  }
+  return lines
+    .map((line) => {
+      // (the same run's pieces in one, its spaces at the line's end left off)
+      const joined: Run[] = [];
+      for (const { run, text } of line) {
+        const last = joined[joined.length - 1];
+        if (last && last.color === run.color && (last.weight ?? 400) === (run.weight ?? 400)) last.text += text;
+        else joined.push({ ...run, text });
+      }
+      const end = joined[joined.length - 1];
+      if (end) end.text = end.text.trimEnd();
+      const kept = joined.filter((r) => r.text.length > 0);
+      return { runs: kept, width: widthOfRuns(kept, sizePx) };
+    })
+    .filter((l) => l.runs.length > 0);
+}
+
+/** Words in one colour laid in lines no wider than `maxPx` (`wrapRuns`): each line's words and width. */
+export function wrapText(text: string, sizePx: number, maxPx: number, weight: Weight = 400): { text: string; width: number }[] {
+  return wrapRuns([{ text, color: "", weight }], sizePx, maxPx).map((l) => ({ text: l.runs.map((r) => r.text).join(""), width: l.width }));
+}
+
+/** Where the alphabetic baseline of `sizePx` Plex stands below the top of a line `linePx` high, as CSS sets it: half the room its ascent and descent leave, then its ascent. */
+export function baselineIn(linePx: number, sizePx: number): number {
+  return (linePx - 1.3 * sizePx) / 2 + 1.025 * sizePx;
+}
