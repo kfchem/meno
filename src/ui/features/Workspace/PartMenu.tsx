@@ -13,7 +13,7 @@ import { guideNotice } from "../../../lib/guide/guide";
 import { MAGNIFICATIONS, magnificationText } from "./utils/magnified";
 import { arrowMovesMenu, wheelClosesMenu } from "./utils/menuKeys";
 import { copying, writeClipboard } from "../../../lib/clipboard";
-import type { ChipCopy } from "./store/types";
+import type { ChipCopy, CopyLine } from "./store/types";
 
 /** `text` put on the clipboard as words (a chip's Copy). */
 const copyText = (text: string) => copying(() => writeClipboard([{ flavor: "text", text }])).catch(() => {});
@@ -36,6 +36,8 @@ export type MenuTarget = {
   measure?: number;
   /** A molecule's frames chip's: what its Copy items put on the clipboard. */
   copy?: ChipCopy;
+  /** A step's: what its card says that its menu copies, each an item of its own. */
+  lines?: CopyLine[];
   /** A molecule in 3D's atom under the pointer as it was right-clicked, by index: which of its ligands the menu is about. */
   atom?: number;
   /**
@@ -880,6 +882,8 @@ export default function PartMenu({
           { name: "Options…", keys: "", run: onStepOptions, icon: MENU_ICONS.options },
           del("Delete step"),
           ...(step?.onShowLog ? [{ name: "Show log", keys: "", run: step.onShowLog }] : []),
+          // (what its card says that a chemist copies: no words on the page are selected)
+          ...(target.lines ?? []).map((l, i) => ({ name: l.name, keys: "", run: () => void copyText(l.text), ...(i === 0 ? { divider: true } : {}) })),
           ...(step?.adopt ?? []).map((a, i) => ({ name: `Adopt ${a.job}`, keys: "", run: a.run, ...(i === 0 ? { divider: true } : {}) })),
           ...(step?.onShowFiles ? [{ name: "Show files", keys: "", run: step.onShowFiles }] : []),
           ...(onSaveProcedure ? [{ name: "Save as procedure…", keys: "", run: onSaveProcedure, divider: !!step?.onShowLog }] : []),

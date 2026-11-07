@@ -7,7 +7,7 @@
  * and how far each part has opened (theme/opening), as its HTML laid itself
  * out; `components/useFramesChip` holds what it is doing and eases it.
  */
-import { colourHex, COLORS } from "../../../theme/colors";
+import { colourHex, colourMix, COLORS } from "../../../theme/colors";
 import { barsAbove, NO_LOWEST, NOT_FINISHED } from "../utils/barsAbove";
 import { chipWidthOf } from "../utils/chipWidth";
 import { aboutLine, chipDetails, isSingle, setChipRuns, singleChipRuns, type ChipFacts, type SaidRun } from "../utils/chipSaid";
@@ -448,17 +448,12 @@ export function barTone(i: number, frame: number, pointed: number | null): numbe
   return i === frame ? 2 : i === pointed ? 1 : 0;
 }
 
-/** A colour "#rrggbb"'s red, green and blue, 0 to 255. */
-const bytesOf = (hex: string) => [1, 3, 5].map((k) => parseInt(hex.slice(k, k + 2), 16));
-
 /** A bar's colour at `tone`: the rest's, the pointed one's, the shown one's, and between them - mixed in sRGB, as CSS eases a colour. */
 export function toneColour(tone: number): string {
   if (tone <= 0) return BAR.rest;
   if (tone === 1) return BAR.pointed;
   if (tone >= 2) return BAR.shown;
-  const [a, b, t] = tone < 1 ? [BAR.rest, BAR.pointed, tone] : [BAR.pointed, BAR.shown, tone - 1];
-  const [p, q] = [bytesOf(a), bytesOf(b)];
-  return colourHex(p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t, p[2] + (q[2] - p[2]) * t);
+  return tone < 1 ? colourMix(BAR.rest, BAR.pointed, tone) : colourMix(BAR.pointed, BAR.shown, tone - 1);
 }
 
 /** Why a bar did not finish, as it is said in the tip over it: its marks unread, why its step failed, or not finished. */

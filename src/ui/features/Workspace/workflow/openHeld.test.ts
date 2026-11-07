@@ -66,10 +66,13 @@ describe("a held set opened and closed (docs/WORKFLOWS.md, *Held results*)", () 
     const was = d.getState();
     st().exitPortClicked(3);
     expect(d.getState()).toBe(was);
-    // (the ports are HTML, in a WebGL page: read as written - a click on one asks the store, its menu is the set's)
+    // (the ports are drawn by WebGL, an opened card's own in HTML: read as written - a click on one asks the store, its menu is the set's,
+    //  what the port says gone first)
     const layer = readFileSync(join(__dirname, "../components/Workflow2D.tsx"), "utf8");
     expect(layer).toMatch(/if \(!moved\) \{\s*st\.exitPortClicked\(from\.set\);\s*return;/);
-    expect(layer).toMatch(/exits\.map\([\s\S]*?onContextMenu=\{\(e\) => \{[\s\S]*?menuOf\("set", b\.id\)\(e\);/);
+    expect(layer).toMatch(/const onPort: HitHandlers = \{[\s\S]*?"exit" in of\) \{\s*const b = exitSet\(of\.exit\);\s*if \(b\) drawFrom\(asPress\(e\), \{ set: b\.id \}\);/);
+    expect(layer).toMatch(/const onPort: HitHandlers = \{[\s\S]*?menu: \(key, _part, e\) => \{[\s\S]*?st\.exitPortHovered\(b\.id, false\);\s*st\.setWorkflowView\(\{ workflowMenu: \{ kind: "set", id: b\.id,/);
+    expect(layer).toMatch(/exitsOf\(s\.kind\)\.map\([\s\S]*?onContextMenu=\{\(e\) => \{\s*\/\/[^\n]*\n\s*store\.getState\(\)\.exitPortHovered\(b\.id, false\);\s*menuOf\("set", b\.id\)\(e\);/);
   });
 
   it("is told the pointer is on its exit's port, and off it, by the store (`exitPortHovered`): another's leaving clears nothing", () => {
@@ -80,6 +83,10 @@ describe("a held set opened and closed (docs/WORKFLOWS.md, *Held results*)", () 
     expect(st().hoveredExit).toBe(2);
     st().exitPortHovered(2, false);
     expect(st().hoveredExit).toBeNull();
+    // (told by the WebGL ports' hover, an exit's port's only, and by an opened card's own exit ports)
+    const layer = readFileSync(join(__dirname, "../components/Workflow2D.tsx"), "utf8");
+    expect(layer).toMatch(/hover: \(key, _part, on\) => \{[\s\S]*?const b = of && "exit" in of \? exitSet\(of\.exit\) : undefined;\s*if \(b\) store\.getState\(\)\.exitPortHovered\(b\.id, on\);/);
+    expect(layer).toMatch(/onHover=\{\(on\) => store\.getState\(\)\.exitPortHovered\(b\.id, on\)\}/);
   });
 
   it("is opened as a step's atoms are chosen where what comes into it is held - its structures are where they are chosen - in one edit", () => {
