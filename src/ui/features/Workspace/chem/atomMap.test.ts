@@ -6,7 +6,7 @@ import { dielsAlder } from "../../../../lib/chem/reactionMap.fixtures";
 import * as ops from "../document";
 import { createWorkspaceDocument, emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
 import type { Arrow, Atom, Bond, Model } from "../store/types";
-import { keptMap, mapMarks, mappedPairSdf, mapStanding, reactionOf, type Side3D } from "./atomMap";
+import { beforeNumbers, keptMap, mapMarks, mappedPairSdf, mapStanding, reactionOf, type Side3D } from "./atomMap";
 import { reactionFileText } from "./reactionFile";
 
 /**
@@ -142,14 +142,18 @@ describe("a kept map and what it shows", () => {
     expect(maps.every((n) => n >= 1 && n <= 6)).toBe(true);
   });
 
-  it("writes the reaction in 3D: the product's atoms in the reactants' order", () => {
+  it("writes the reaction in 3D in the reactants' numbering: their heavy atoms, then their hydrogens, the product's atoms each where its partner is", () => {
     const d = drawn();
     const { reactants, products, result } = sides();
     const kept = keptMap(d.model, result, reactants, products);
     const records = readSDfile(mappedPairSdf(kept, "da"));
     expect(records.length).toBe(2);
     expect(records[1].atoms.map((a) => a.symbol)).toEqual(records[0].atoms.map((a) => a.symbol));
-    // reactant atom 11 (C5) bonds reactant atom 1 (C1) in the product
-    expect(records[1].bonds.some((b) => (b.a1 === 0 && b.a2 === 10) || (b.a1 === 10 && b.a2 === 0))).toBe(true);
+    const symbols = records[0].atoms.map((a) => a.symbol);
+    expect(symbols.slice(symbols.indexOf("H")).every((el) => el === "H")).toBe(true);
+    // reactant atom 11 (C5) bonds reactant atom 1 (C1) in the product, each written at its number's place
+    const n = beforeNumbers(kept);
+    const [c1, c5] = [n[0] - 1, n[10] - 1];
+    expect(records[1].bonds.some((b) => (b.a1 === c1 && b.a2 === c5) || (b.a1 === c5 && b.a2 === c1))).toBe(true);
   });
 });

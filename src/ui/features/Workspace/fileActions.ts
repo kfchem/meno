@@ -11,6 +11,7 @@ import { truePath } from "../../../lib/io/truePath";
 import { turnsOf } from "../../../lib/doc/saveTurns";
 import { heldElsewhere } from "../../../lib/doc/savers";
 import { exportRefusal, mappedPairSdf } from "./chem/atomMap";
+import { pairedSdf } from "./chem/structureMaps";
 import { useCallback, useRef, useState } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { asBonds, bondLinePtOf, fillOutline, flattenedCurve, lineWidthOf, outlineCurve, shapeBounds, strokePieces } from "../../../lib/chem/shapes";
@@ -999,6 +1000,9 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
         const from = state.savedPath ?? state.openedName;
         const base = from ? withExtension(from, "sdf").replace(/\.sdf$/i, "") : "reaction";
         const name = fileNameOf(base);
+        // (a map's conformers paired: each pair written, as the map's own two are - else the map's own two)
+        const paired = map.pairs ? pairedSdf(map, state.molecules3d, state.model, name) : null;
+        if (map.pairs && paired == null) throw new Error("The conformers paired have changed since they were paired: pair them again.");
         const picked = await saveDialog({
           title: "Export reaction in 3D",
           defaultPath: from ? `${base}-reaction.sdf` : "reaction.sdf",
@@ -1006,7 +1010,7 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
         });
         if (!picked) return;
         const path = picked.toLowerCase().endsWith(".sdf") ? picked : `${picked}.sdf`;
-        await writeDocument(path, mappedPairSdf(map, name));
+        await writeDocument(path, paired ?? mappedPairSdf(map, name));
       }),
     [attempt, store],
   );

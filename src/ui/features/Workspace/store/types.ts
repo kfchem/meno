@@ -201,6 +201,18 @@ export type ArrowAtomMap = {
   complete: boolean;
   chosen: number;
   shown: boolean;
+  /**
+   * Before's atoms' numbers, by its atom (chem/atomMap `beforeNumbers`), where
+   * they were renumbered (*Renumber atoms*); else its heavy atoms in its
+   * order, then its hydrogens.
+   */
+  numbers?: number[];
+  /**
+   * The conformers paired (*Pair conformers*, chem/structureMaps): Before's
+   * frames and After's, each with each - frame 0 a molecule's own - to be
+   * written a pair of records each.
+   */
+  pairs?: { before: number[]; after: number[] };
 };
 /** A change to an arrow's form and colour: each said is set - its kind, its heads (1 or 2), an equilibrium's full heads, dashes, weight, corners (none: straight) and colour - null or "regular" taking what it set away. */
 export type ArrowFormPatch = {
@@ -596,6 +608,13 @@ export type Molecule3D = {
   stereo?: { atoms: Record<number, string>; bonds: Record<number, string>; chosen?: { atoms: number[]; bonds: number[] }; shown?: { atoms: number[]; bonds: number[] } };
   /** The numbers shown on its atoms (utils/atomNumbers): of what kind, and on which of them - all, given none; unset, none. */
   atomNumbers?: AtomNumbersShown;
+  /**
+   * Each of its frames after the first, as an atom map on the page numbers
+   * it (chem/structureMaps): its atoms' map numbers in that frame - a
+   * conformer may put two alike atoms each in the other's place - or null
+   * where its numbering could not be resolved, and it shows none.
+   */
+  mapFrames?: (number[] | null)[];
   /** What the calculation it was read from says of it, besides its geometries and energies (lib/calc). */
   calc?: CalcInfo;
   /**
@@ -2194,6 +2213,12 @@ export type EditorState = {
   showStructureMaps: (ids: readonly number[], shown: boolean) => void;
   /** Each map between structures given, by id, showing its next map: one step. */
   otherStructureMaps: (ids: readonly number[]) => void;
+  /** Each complete map between structures given, by id, its Before's atoms numbered by the drawing's order (chem/atomMap `renumbered`): one step. */
+  renumberStructureMaps: (ids: readonly number[]) => void;
+  /** An arrow's complete atom map renumbered likewise: one step. */
+  renumberAtomMap: (arrowId: number) => void;
+  /** A map between structures given its conformers paired (chem/structureMaps `conformerPairs`), Before's frames and After's: one step. */
+  pairStructureMap: (id: number, pairs: { before: number[]; after: number[] }) => void;
   /** An arrow's atom map shown on the drawing - its numbers and reacting centres - or taken off it, kept: one step. */
   showAtomMap: (arrowId: number, shown: boolean) => void;
   /** An arrow's next map, of those its reaction has, shown and used instead: one step. */

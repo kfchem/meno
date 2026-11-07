@@ -228,6 +228,7 @@ import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gestu
 import { Remake3D } from "./components/remake3d";
 import { mapAtoms, mapStanding, reactionOf, unpairedSaid } from "./chem/atomMap";
 import { structuresOf } from "./workflow/entries";
+import { conformerPairs, conformersSaid } from "./chem/structureMaps";
 import { partsOffered } from "./utils/joinedParts";
 import { useAtomMaps } from "./chem/useAtomMaps";
 import { turnOnto } from "./utils/align3d";
@@ -2598,6 +2599,7 @@ function WorkspaceContent({
                     onMake: () => void atomMaps.makeAtomMap(a.id),
                     onShow: (shown: boolean) => store.getState().showAtomMap(a.id, shown),
                     onOther: () => store.getState().otherAtomMap(a.id),
+                    onRenumber: () => store.getState().renumberAtomMap(a.id),
                     onExport: () => void files.exportReaction3d({ arrow: a.id }),
                     ...(a.atomMap ? { unpaired: unpairedSaid(a.atomMap, ["the reactants", "the products"]) ?? undefined } : {}),
                   },
@@ -2647,8 +2649,23 @@ function WorkspaceContent({
                       chosen: first.map.chosen,
                       onShow: (shown: boolean) => store.getState().showStructureMaps(ids, shown),
                       onOther: () => store.getState().otherStructureMaps(ids),
+                      onRenumber: () => store.getState().renumberStructureMaps(ids),
                       onExport: () => void files.exportReaction3d({ structureMap: first.id }),
                       unpaired: unpairedSaid(first.map, ["Before", "After"]) ?? undefined,
+                      conformers: conformersSaid(first.map, st.molecules3d, st.model),
+                      ...(first.map.pairs ? { paired: first.map.pairs.before.length * first.map.pairs.after.length } : {}),
+                      pair: (() => {
+                        const p = conformerPairs(first.map, st.molecules3d, st.model);
+                        // (none to make, or those paired already)
+                        const same = (x: readonly number[], y: readonly number[] | undefined) => !!y && x.length === y.length && x.every((v, i) => v === y[i]);
+                        if (!p || (same(p.before, first.map.pairs?.before) && same(p.after, first.map.pairs?.after))) return undefined;
+                        const [k, l] = [p.before.length, p.after.length];
+                        const all = k === p.of[0] && l === p.of[1];
+                        return {
+                          name: all ? `Pair conformers: ${k} × ${l} = ${k * l} pairs` : `Pair the lowest-energy conformers: ${k} × ${l} = ${k * l} pairs`,
+                          run: () => store.getState().pairStructureMap(first.id, { before: p.before, after: p.after }),
+                        };
+                      })(),
                       // (of the structures before an edit: made again between them as they are now, the old ones' place taken)
                       onAgain: () => {
                         const now = store.getState().model;

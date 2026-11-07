@@ -21,7 +21,7 @@ import { DEFAULT_WORKSPACE_3D, type Workspace3D } from "../../../lib/chem/worksp
 import { pathLength, pointAlong, type ArrowLook } from "../../../lib/chem/reactionArrow";
 import { arrowPoints } from "../../../lib/chem/reactionScheme";
 import { mapAtoms, mapMarks, mapShows, mapStanding } from "./chem/atomMap";
-import { numbers3d, type StructureMap } from "./chem/structureMaps";
+import { numbers3d, sideMolecules, type StructureMap } from "./chem/structureMaps";
 import { joinedAdded, joinedStructures, joinsSettled, separatedStructures } from "./utils/joinedParts";
 import { etaHeld } from "./chem/eta";
 import { wedgesHeld } from "./chem/drawing";
@@ -1579,14 +1579,15 @@ export function setStructureMaps(doc: WorkspaceDocument, maps: readonly Structur
     if (!touched.has(m.id)) return m;
     const n = now.numbers.get(m.id);
     const atoms3d = m.atoms.map((a, i) => {
-      const k = n?.[i] ?? 0;
+      const k = n?.first[i] ?? 0;
       if (k === (a.map ?? 0)) return a;
       const { map: _m, ...rest } = a;
       return k ? { ...rest, map: k } : rest;
     });
-    const { atomNumbers: shownBefore, ...rest } = m;
+    const { atomNumbers: shownBefore, mapFrames: _f, ...rest } = m;
     const atomNumbers = n ? { kind: "map" as const } : shownBefore?.kind === "map" ? undefined : shownBefore;
-    return { ...rest, atoms: atoms3d, ...(atomNumbers ? { atomNumbers } : {}) };
+    // (each frame after the first numbered as its own: chem/structureMaps `framesNumbered`)
+    return { ...rest, atoms: atoms3d, ...(atomNumbers ? { atomNumbers } : {}), ...(n?.rest.length ? { mapFrames: n.rest } : {}) };
   });
   const { structureMaps: _s, ...restDoc } = doc;
   return {
@@ -1603,6 +1604,20 @@ export function addStructureMaps(doc: WorkspaceDocument, made: readonly Structur
   const added = made.map((map) => ({ id: id++, map }));
   const kept = (doc.structureMaps ?? []).filter((m) => !replacing.includes(m.id));
   return { doc: { ...setStructureMaps(doc, [...kept, ...added]), nextStructureMapId: id }, ids: added.map((m) => m.id) };
+}
+
+/** Whether a map's side has a molecule in 3D now that it had not before, or one whose frames are not as they were. */
+function molecules3dTurned(maps: readonly StructureMap[], next: WorkspaceDocument, before: WorkspaceDocument): boolean {
+  const was = new Map((before.molecules3d ?? []).map((m) => [m.id, m]));
+  return maps.some(({ map }) =>
+    [map.reactant, map.product].some((side) =>
+      [...sideMolecules(side, next.molecules3d ?? [], next.model).keys()].some((id) => {
+        const m = next.molecules3d!.find((x) => x.id === id)!;
+        const old = was.get(id);
+        return !old || old.frames !== m.frames || old.atoms !== m.atoms;
+      }),
+    ),
+  );
 }
 
 /** A structure of several parts kept to two pieces or more after an edit: a number left on one piece - the others deleted - taken off (utils/joinedParts). */
@@ -1631,11 +1646,14 @@ export function separateStructures(doc: WorkspaceDocument, ids: Iterable<number>
  * menu then says it is of the structure before, and offers it made again.
  */
 function mapsSettled(next: WorkspaceDocument, before: WorkspaceDocument): WorkspaceDocument {
-  if (next.model === before.model) return next;
+  const maps = next.structureMaps ?? [];
+  // (a side's molecule in 3D made again or given other conformers - *3D structure* on a mapped structure: each of its frames
+  //  numbered onto the map's own geometry, chem/structureMaps)
+  const remade = maps.length > 0 && next.molecules3d !== before.molecules3d && molecules3dTurned(maps, next, before);
+  if (next.model === before.model && !remade) return next;
   const turned = (map: ArrowAtomMap) => mapStanding({ atomMap: map }, next.model) !== mapStanding({ atomMap: map }, before.model);
   let out = next;
-  const maps = next.structureMaps ?? [];
-  if (maps.some((m) => turned(m.map))) out = setStructureMaps(out, maps);
+  if (remade || maps.some((m) => turned(m.map))) out = setStructureMaps(out, maps);
   for (const a of next.arrows) if (a.atomMap && turned(a.atomMap)) out = setAtomMap(out, a.id, a.atomMap);
   return out;
 }

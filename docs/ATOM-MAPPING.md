@@ -438,11 +438,20 @@ A reaction drawn on the page is mapped from its arrow's right-click menu,
   so each shows other numbers; maps that differ only in where the
   hydrogens go, which the drawing does not show, are not stepped through.
   `mapReaction` gives all of them, as ACCeL does.
+- **Renumber atoms** numbers the reactants' atoms by the drawing's order:
+  their heavy atoms as they are drawn, in the order of the drawing's atoms,
+  then each heavy atom's hydrogens in its turn; the products' atoms take
+  their partners' numbers, on the drawing, on the molecules in 3D and in
+  the export alike. One undo step. Without it, the heavy atoms are numbered
+  as the map holds them and the hydrogens after them. Only a complete map
+  is renumbered: a partial one's menu says it needs every atom mapped. (The
+  maintainer's reading of *Renumber* is still to come; this is the one
+  recommended, `renumbered` in chem/atomMap the one place it is chosen.)
 - **Export reaction in 3D...** writes an SD file of two records: the
   reactants in 3D, and the products with every atom - hydrogens too - in the
-  reactants' numbering, as a nudged elastic band, QST2 or an IRC's ends
-  need. (Two XYZ files may follow, written by a plugin, as Meno writes no
-  XYZ of its own.)
+  reactants' numbering, each atom written at its number's place, as a
+  nudged elastic band, QST2 or an IRC's ends need. (Two XYZ files may
+  follow, written by a plugin, as Meno writes no XYZ of its own.)
 - **An RXN file** (Export, copy) carries the map's numbers and centres
   whether or not they are shown.
 - **Partial** (the maintainer, 2026-10-30). Where not every atom finds its
@@ -489,9 +498,33 @@ offers *Atom map*.
     after them in the same order; each of After's atoms its Before atom's.
     They are shown as the molecule's atom-map numbers (docs/WORKSPACE.md,
     *Atom numbers*).
+- **Conformers** (the maintainer, 2026-10-30). A map is made on each side's
+  molecule in 3D as it stands: no conformer search is run to map.
+  - Each frame of a side's molecule - the conformers *3D structure* made,
+    or makes again later - is numbered onto the geometry the map was made
+    on (`lib/chem/referenceNumbering` `numberedLike`, the light way). A
+    conformer that puts two alike atoms (a methyl's hydrogens) each in the
+    other's place has their numbers swapped with them, and each frame
+    shows its own.
+  - A frame whose numbering is not resolved shows no numbers, and the menu
+    says how many ("Not numbered: 1 of 6 conformers of Before").
+  - The menu says how many pairs of conformers the two sides make, before
+    any is made ("Conformers: 6 × 3 = 18 pairs").
+  - **Pair conformers** (a complete map, each side one molecule in 3D):
+    each of Before's numbered conformers with each of After's, kept on the
+    map; *Export reaction in 3D...* then writes a pair of records for each
+    pair, each in the reactants' numbering, ready for a path search. Past
+    1000 pairs (`MOST_PAIRS`), the lowest-energy k of each side, k as large
+    as keeps within it - a side with fewer kept whole ("Pair the
+    lowest-energy conformers: 31 × 31 = 961 pairs"); without energies, as
+    they come. Nothing is made until it is chosen; a conformer paired that
+    is gone since says so on export, and is paired again. (The maintainer's
+    number is still to come; `MOST_PAIRS` and `pairedCounts` in
+    chem/structureMaps are the one place it is set.)
 - **From a structure's menu** in a map: *Show / Hide atom map* (of all the
-  maps it is in), *Other map* ("2 of 4", stepping each of them), and
-  *Export reaction in 3D...* (Before and the first After, as above).
+  maps it is in), *Other map* ("2 of 4", stepping each of them), *Renumber
+  atoms* (Before's atoms by the drawing's order, as above), and *Export
+  reaction in 3D...* (Before and the first After, as above).
 - **Partial** is as an arrow's: a map whose atoms do not all pair numbers
   those that do - on the drawing and on the molecules in 3D - and names the
   rest in the menu ("Not mapped: C of Before; C of After"); its export says
