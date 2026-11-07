@@ -518,6 +518,11 @@ pub fn ask_stop(dir: &Path) -> std::io::Result<()> {
 /// Ask a job alone to stop, as `ask_stop` - recorded failed, "stopped by you" (`STOPPED_ALONE`), so that its step
 /// brings in what its other jobs gave. A stop of its step asked after it is a stop as ever.
 pub fn ask_stop_alone(dir: &Path) -> std::io::Result<()> {
+    // (its step's stop asked already - an empty stop file - stays a stop of its step, never made one of it alone: the
+    //  step would otherwise bring in the rest of what it was stopped from)
+    if fs::read(dir.join(STOP)).is_ok_and(|b| b.is_empty()) {
+        return Ok(());
+    }
     fs::write(dir.join(STOP), ALONE)
 }
 
@@ -3820,6 +3825,40 @@ mod tests {
         ask_stop(&both).unwrap();
         run_job(&both);
         assert_eq!(current_record(&both).unwrap().state, JobState::Stopped);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_stop_of_its_step_asked_first_stays_a_stop_though_the_job_is_then_stopped_alone() {
+        let root = temp();
+        let dir = shell(&root, ECHO, 1);
+        ask_stop(&dir).unwrap();
+        ask_stop_alone(&dir).unwrap();
+        assert_eq!(fs::read(dir.join(STOP)).unwrap(), b"");
+        run_job(&dir);
+        assert_eq!(current_record(&dir).unwrap().state, JobState::Stopped);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    /// A job stopped alone while a program it runs after its own runs: failed, saying so, as while its own runs.
+    #[cfg(unix)]
+    #[test]
+    fn a_job_stopped_alone_while_a_program_after_its_own_runs_ends_failed_saying_so() {
+        let root = temp();
+        let dir = shell(&root, ECHO, 1);
+        let mut spec = read_spec(&dir).unwrap();
+        spec.then = vec![Then { name: "sh".into(), program: "/bin/sh".into(), args: vec!["-c".into(), LONG.into()] }];
+        fs::write(dir.join(SPEC), serde_json::to_string(&spec).unwrap()).unwrap();
+        let runner = {
+            let d = dir.clone();
+            std::thread::spawn(move || run_job(&d))
+        };
+        wait_for(|| read_work_file(&dir, "child.pid").is_ok_and(|s| s.ends_with('\n')));
+        ask_stop_alone(&dir).unwrap();
+        runner.join().unwrap();
+        let r = current_record(&dir).unwrap();
+        assert_eq!((r.state, r.why.as_deref()), (JobState::Failed, Some(STOPPED_ALONE)));
+        assert!(r.started.is_some());
         let _ = fs::remove_dir_all(root);
     }
 
