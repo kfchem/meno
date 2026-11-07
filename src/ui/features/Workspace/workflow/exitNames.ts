@@ -4,7 +4,11 @@
  */
 import type { WorkflowStep } from "../store/types";
 import { COLORS } from "../../../theme/colors";
+import { CHIP, CHIP_HEIGHT, chipLine, shutChip } from "../pageGl/chips";
+import type { Drawn } from "../pageGl/PagePlaced";
 import type { PageText } from "../pageGl/texts";
+import { pagePx } from "../pageGl/units";
+import { FRAMES_CHIP_GAP } from "../utils/molecule3d";
 import { exitsOf } from "./kinds";
 import { CARD_W, GAP, PORT_STEP, portDown, PX } from "./look";
 
@@ -44,4 +48,27 @@ export function exitNames(steps: readonly Pick<WorkflowStep, "id" | "x" | "y" | 
         : [],
     );
   });
+}
+
+/** How far out from its port a held exit's chip begins, in page px. */
+export const EXIT_CHIP_OUT = 8;
+
+/**
+ * What a held exit's set holds, said beside its port as the pointer is on
+ * it (docs/WORKFLOWS.md, *Held results*): its name, then its count in the
+ * words a large set's summary says it in ("Failed · 3 molecules") - in a
+ * chip as a molecule's frames chip is drawn shut (pageGl `shutChip`), out
+ * to the right of the port, level with it; taking no pointer, so that the
+ * port keeps it.
+ */
+export function exitChip(key: string, name: string, holds: string, port: { x: number; y: number }): Drawn {
+  const runs = [
+    { text: `${name} \u00b7 `, tone: "quiet" as const },
+    { text: holds, tone: "ink" as const },
+  ];
+  const w = pagePx(chipLine(runs).width + 2 * CHIP.side);
+  const h = pagePx(CHIP_HEIGHT);
+  // (hung, as a frames chip is, FRAMES_CHIP_GAP below a point: here the one that puts its middle level with the port)
+  const chip = shutChip(key, runs, { x: port.x + pagePx(EXIT_CHIP_OUT) + w / 2, y: port.y + h / 2 + pagePx(FRAMES_CHIP_GAP) });
+  return { ...chip, regions: [] };
 }

@@ -215,6 +215,10 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
       // (what the page draws the port with calls this alone: the rule is here, whatever draws it)
       if (b?.made && d.wires?.some((w) => w.from.set === id)) get().openHeld(id, !b.opened);
     },
+    exitPortHovered: (id: number, on: boolean) => {
+      if (on) set({ hoveredExit: id });
+      else if (get().hoveredExit === id) set({ hoveredExit: null });
+    },
     /**
      * A step's atoms chosen on the drawing, or no longer (`choosingAtoms`):
      * what comes into it held off the page opened first, in one edit - its

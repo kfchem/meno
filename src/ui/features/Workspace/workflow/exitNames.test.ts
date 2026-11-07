@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { COLORS } from "../../../theme/colors";
 import { DURATION } from "../../../theme/motion";
-import { exitNames, EXIT_NAME_OUT, EXIT_NAME_PX } from "./exitNames";
+import { exitChip, exitNames, EXIT_CHIP_OUT, EXIT_NAME_OUT, EXIT_NAME_PX } from "./exitNames";
+import { pagePx } from "../pageGl/units";
 import { exitsOf } from "./kinds";
 import { CARD_W, GAP, PORT_STEP, portDown, PX } from "./look";
 
@@ -33,9 +34,9 @@ describe("an exit's name beside its port (docs/WORKFLOWS.md, *Exit names*)", () 
 
   it("is drawn by WebGL, as the page's words are, from the sets on the page (Workflow2D)", () => {
     const layer = readFileSync(join(__dirname, "../components/Workflow2D.tsx"), "utf8");
-    expect(layer).toMatch(/exitNames\(steps, \(step, exit\) => \{\s*const b = exitSets\.get\(`\$\{step\}:\$\{exit\}`\);\s*return !!b && !shown\.has\(b\.id\);/);
-    expect(layer).toMatch(/<PagePlaced>\s*<ExitNames items=\{names\} \/>\s*<\/PagePlaced>/);
-    expect(layer).toMatch(/usePlaced\(anchor \? \{ key: "exit-names", anchor, words: true, control: true,/);
+    expect(layer).toMatch(/exitNames\([\s\S]*?\(step, exit\) => \{\s*const b = exitSets\.get\(`\$\{step\}:\$\{exit\}`\);\s*return !!b && !shown\.has\(b\.id\);/);
+    expect(layer).toMatch(/<PagePlaced>\s*<ExitNames items=\{names\} chip=\{chip\} \/>\s*<\/PagePlaced>/);
+    expect(layer).toMatch(/usePlaced\(\s*anchor\s*\? \{\s*key: "exit-names",\s*anchor,\s*words: true,\s*control: true,/);
   });
 });
 
@@ -56,5 +57,25 @@ describe("a step's result set folding into its exit's port, and out of it (docs/
     expect(css).toMatch(new RegExp(`\\.meno-fold-in \\{\\s*animation: meno-fold-in ${ms}ms var\\(--ease-meno\\) both;`));
     expect(layer).toMatch(/usePresence\(parts, \(el\) => String\(el\.key\), DURATION\.base \* 1000\)/);
     expect(layer).toMatch(/now - \(cameAt\.current\.get\(id\) \?\? -Infinity\) < DURATION\.base \* 1000/);
+  });
+});
+
+describe("what a held exit's set holds, said beside its port as the pointer is on it (docs/WORKFLOWS.md, *Held results*)", () => {
+  it("is its name and its count in a large set's words, in a chip out to the right of the port, level with it, taking no pointer", () => {
+    const port = { x: 10, y: -2 };
+    const chip = exitChip("exit-chip:7", "Failed", "3 molecules", port);
+    expect(chip.texts.map((t) => t.text).join("")).toBe("Failed · 3 molecules");
+    const box = chip.shapes[0] as { x0: number; x1: number; y0: number; y1: number };
+    expect(box.x0).toBeCloseTo(port.x + pagePx(EXIT_CHIP_OUT));
+    expect((box.y0 + box.y1) / 2).toBeCloseTo(port.y);
+    expect(chip.regions).toEqual([]);
+  });
+
+  it("is told by the port, whatever draws it (store `exitPortHovered`), and said only for a held set that holds anything - its step's names gone meanwhile", () => {
+    const layer = readFileSync(join(__dirname, "../components/Workflow2D.tsx"), "utf8");
+    expect(layer).toMatch(/onHover=\{\(on\) => store\.getState\(\)\.exitPortHovered\(b\.id, on\)\}/);
+    expect(layer).toMatch(/b\?\.made && \(b\.collection\?\.length \|\| b\.drawnCollection\?\.length\) && !onPage\.some\(\(x\) => x\.id === b\.id\) \? b : undefined/);
+    expect(layer).toMatch(/steps\.filter\(\(s\) => s\.id !== saying\?\.made\?\.step\)/);
+    expect(layer).toMatch(/exitChip\(`exit-chip:\$\{saying\.id\}`, info\.name, `\$\{info\.summary\.count\} \$\{info\.summary\.nouns\}`, p\)/);
   });
 });
