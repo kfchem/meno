@@ -18,7 +18,7 @@ import { countOf, countSaid, numberedOn, recordHow, recordNumber, recordWhy, typ
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { lookEvery } from "../workflow/lookEvery";
 import { labelReach, selectionFrame, selectionInSet } from "../workflow/selectionSet";
-import { isHeld, setsOnPage } from "../workflow/onPage";
+import { unseenSets } from "../workflow/onPage";
 import { exitChip, exitNames } from "../workflow/exitNames";
 import type { Drawn } from "../pageGl/PagePlaced";
 import PagePlaced, { usePlaced } from "../pageGl/PagePlaced";
@@ -536,8 +536,10 @@ export default function Workflow2D() {
   const chipOver = useEditor((s) => s.chipOver);
   const steps = useEditor((s) => s.steps);
   const wires = useEditor((s) => s.wires);
-  // (the sets that lie on the page: all but those held off it - their exits wired on, workflow/held - whose frames are drawn nowhere)
-  const onPage = useMemo(() => setsOnPage({ sets, wires }, sets), [sets, wires]);
+  // (the sets that lie on the page: all but those drawn nowhere - held off it, their exits wired on, or an exit's for what its step
+  //  sets aside, holding nothing: workflow/held - the same as long as those are, a card moved or not)
+  const unseen = useMemo(() => unseenSets({ sets, wires, steps }), [sets, wires, steps]);
+  const onPage = useMemo(() => (unseen.size ? sets.filter((b) => !unseen.has(b.id)) : sets), [sets, unseen]);
   // (the sets on the page as last drawn, and when each came onto it: a step's result set come within a fold's time grows out of its port)
   const seenSets = useRef<Set<number> | null>(null);
   const cameAt = useRef(new Map<number, number>());
@@ -1316,11 +1318,12 @@ export default function Workflow2D() {
       edges: true,
     };
   });
-  // (a step's result set folding into its exit's port as it is held, and growing out of it as it is shown again - about that port,
-  //  as its HTML did: its frame drawn that far from the port, as present as it is)
+  // (a step's result set folding into its exit's port as it comes to be drawn nowhere - held, or an exit's for what its step sets
+  //  aside, given nothing - and growing out of it as it is shown again - about that port, as its HTML did: its frame drawn that far
+  //  from the port, as present as it is)
   const tabsShown = useFaded(setTabs, (t) => t.key).map(({ item, opacity, leaving }) => {
     const b = setById.get(stepOfKey(item.key));
-    const p = b?.made && (leaving ? isHeld({ sets, wires }, b) : growing(b.id)) ? exitGives(b) : null;
+    const p = b?.made && (leaving ? unseen.has(b.id) : growing(b.id)) ? exitGives(b) : null;
     return { ...item, ...(p ? { box: towards(item.box, p, opacity) } : {}), opacity, ...(leaving ? { noHits: true as const } : {}) };
   });
   // (two presses on a chemist's set's tab, close together: its name written anew, in a field over the tab)
@@ -1564,9 +1567,10 @@ export default function Workflow2D() {
       <PageHtml transform distanceFactor={HTML_DISTANCE} position={[0, 0, 0]} zIndexRange={[18, 18]} pointerEvents="none">
         <div ref={layer} style={{ position: "relative", width: 0, height: 0 }}>
           {shownParts.map(({ key, item, leaving }) => {
-            // (a step's result set held off the page now: folding into its exit's port, as it last was)
+            // (a step's result set drawn nowhere now - held off the page, or an exit's for what its step sets aside, given nothing:
+            //  folding into its exit's port, as it last was)
             const set = leaving && key.startsWith("b") ? sets.find((x) => x.id === Number(key.slice(1))) : undefined;
-            const fold = set?.made && isHeld({ sets, wires }, set) ? foldAbout(set) : undefined;
+            const fold = set?.made && unseen.has(set.id) ? foldAbout(set) : undefined;
             return leaving ? (
               // (gone: as it last was, fading, and no longer taking the pointer)
               <div key={key} inert className={fold ? "meno-fold-out" : "meno-fade-out"} style={fold}>

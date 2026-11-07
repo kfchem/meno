@@ -698,7 +698,8 @@ function fillTable(doc: WorkspaceDocument, step: WorkflowStep, exit: string, tab
  */
 function keepExitsUnder(doc: WorkspaceDocument, step: Pick<WorkflowStep, "id" | "kind">): WorkspaceDocument {
   const exits = exitsOf(step.kind);
-  // (a set held off the page lies nowhere: workflow/held - those under it kept under the one above it, or the first shown)
+  // (a set held off the page lies nowhere: workflow/held - those under it kept under the one above it, or the first shown; an empty
+  //  exit's for what its step sets aside, drawn nowhere too, kept under all the same: there it is laid out, once given anything)
   const shown = (id: string) => {
     const b = resultOf(doc, step.id, id);
     return b && !isHeld(doc, b) ? b : undefined;

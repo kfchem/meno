@@ -4,7 +4,8 @@
  * structures, its molecules in 3D and its wires - never over one. One
  * place for the rule, for a step's result sets as it runs (run), its
  * exits' frames as it is added (model `withExits`), and a card put down
- * (`placeCard`).
+ * (`placeCard`) - close by the card it is wired from, where a wire from an
+ * exit's port brought it (`placeNext`).
  */
 import type { WorkspaceDocument } from "../document";
 import type { WorkflowSet, WorkflowStep } from "../store/types";
@@ -12,8 +13,8 @@ import { inside, setMembers, structuresOf, type Frame } from "./entries";
 import { boxOf } from "../chem/make3d";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { exitPlace, exitsOf, inputsOf, ONE_EXIT, type StepKind } from "./kinds";
-import { heldSets } from "./onPage";
-import { BETWEEN, CARD_H, CARD_W, GAP, inputLead, nearWire, setGives, setTakes, stepGives, stepTakes, wirePath } from "./look";
+import { unseenSets } from "./onPage";
+import { BETWEEN, CARD_H, CARD_TALL, CARD_W, GAP, inputLead, nearWire, portDown, setGives, setTakes, stepGives, stepTakes, wirePath } from "./look";
 
 /** A frame `w` by `h`, its top left at (x, y). */
 export const frameAt = (x: number, y: number, w: number, h: number): Frame => ({ x0: x, x1: x + w, y0: y - h, y1: y });
@@ -111,12 +112,13 @@ function takenOn(doc: WorkspaceDocument, self?: Self, along?: { x0: number; x1: 
     const name = inputs.length > 1 ? inputs.find((p) => p.id === port)?.name : undefined;
     return name ? { lead: inputLead(name) } : {};
   };
-  // (a set held off the page lies nowhere: workflow/held)
-  const held = heldSets(doc);
-  const frames: Taken["frames"] = [...(doc.sets ?? []).filter((b) => !own(b.id) && !held.has(b.id)), ...(doc.steps ?? []).map((s) => ({ ...frameAt(s.x, s.y, CARD_W, CARD_H), card: s.id }))];
+  // (a set drawn nowhere lies nowhere: held off the page, or an exit's for what its step sets aside, holding nothing - workflow/held)
+  const unseen = unseenSets(doc);
+  const shown = (doc.sets ?? []).filter((b) => !own(b.id) && !unseen.has(b.id));
   // (what wires go round: the sets and cards, as Workflow2D has them go round - look `wireCurve`)
-  const round = frames.slice();
-  frames.push(...inkOf(doc, own, along));
+  const round: Frame[] = [...shown, ...(doc.steps ?? []).map((s) => frameAt(s.x, s.y, CARD_W, CARD_H))];
+  // (and what is kept clear of: each card as tall as its words can draw it closed - look `CARD_TALL`)
+  const frames: Taken["frames"] = [...shown, ...(doc.steps ?? []).map((s) => ({ ...frameAt(s.x, s.y, CARD_W, CARD_TALL), card: s.id })), ...inkOf(doc, own, along)];
   const points: Pt[] = [...doc.model.atoms.map((a) => ({ x: a.x, y: a.y })), ...(doc.molecules3d ?? []).filter((m) => !self?.molecules?.has(m.id)).map((m) => m.at)];
   const to: Taken["to"] = [];
   // (each wire from a set into a step's input - a step's result set's from its exit's port on the card, which a frame placed does
@@ -136,7 +138,7 @@ function takenOn(doc: WorkspaceDocument, self?: Self, along?: { x0: number; x1: 
   }
   for (const b of doc.sets ?? []) {
     const s = b.made ? steps.get(b.made.step) : undefined;
-    if (s && !own(b.id) && !held.has(b.id)) {
+    if (s && !own(b.id) && !unseen.has(b.id)) {
       const e = { from: cardOf(s), to: b };
       const p = exitStart(s, b.made!.exit);
       points.push(...wirePath(p, setTakes(b), e, nearWire(p, setTakes(b), e, round)));
@@ -236,7 +238,34 @@ export function placeBelow(doc: WorkspaceDocument, x: number, top: number, width
  * top left.
  */
 export function placeCard(doc: WorkspaceDocument, x: number, y: number): { x: number; y: number } {
-  const f = placeBelow(doc, x, y, CARD_W, CARD_H);
+  const f = placeBelow(doc, x, y, CARD_W, CARD_TALL);
+  return { x: f.x0, y: f.y1 };
+}
+
+/**
+ * Where the card goes of a step of `kind` added from an exit's port - a
+ * wire drawn out of it let go on empty space, the step chosen there
+ * (docs/WORKFLOWS.md, *A step added from an exit*): close by, `GAP` right
+ * of the card the wire leaves, its input `port` level with that exit's
+ * port, so that the wire runs straight; where something is there, plainly
+ * beneath that card - `BETWEEN` under it, as tall as its words can draw it -
+ * and lower from there, half a card at a time (`placeBelow`): a step down,
+ * not a row out of line - never over one, its wire crossing none where it
+ * can. The exit's set is no hindrance, wired on - held off
+ * the page (workflow/held) - but where the chemist opened it. Its top
+ * left; none where the wire comes from no step's exit - a set the chemist
+ * made - which puts the card where it was let go (`placeCard`).
+ */
+export function placeNext(doc: WorkspaceDocument, from: { set: number }, kind: StepKind, port: string): { x: number; y: number } | undefined {
+  const set = doc.sets?.find((b) => b.id === from.set);
+  const step = set?.made ? doc.steps?.find((s) => s.id === set.made!.step) : undefined;
+  if (!set?.made || !step) return undefined;
+  const top = exitStart(step, set.made.exit).y + portDown(Math.max(0, inputsOf(kind).findIndex((p) => p.id === port)));
+  const self: Self = set.opened ? { step: step.id, exit: set.made.exit } : { set: set.id, molecules: new Set(setMembers(doc, set).molecules), step: step.id };
+  const x = step.x + CARD_W + GAP;
+  const level = placeBelow(doc, x, top, CARD_W, CARD_TALL, self);
+  if (level.y1 === top) return { x: level.x0, y: level.y1 };
+  const f = placeBelow(doc, x, Math.min(top, step.y - CARD_TALL - BETWEEN), CARD_W, CARD_TALL, self);
   return { x: f.x0, y: f.y1 };
 }
 

@@ -9,7 +9,7 @@ import type { Wire, WorkflowSet, WorkflowStep } from "../store/types";
 import { insidePolygon } from "../utils/selection";
 import { CARD_H, CARD_W } from "./look";
 import { removeSet, removeStep, withExits } from "./model";
-import { heldSets } from "./onPage";
+import { unseenSets } from "./onPage";
 import { greatest, least } from "../../../../lib/chem/lists";
 
 type Pt = { x: number; y: number };
@@ -146,12 +146,13 @@ export function flowIn(doc: Flow, kind: "box" | "lasso", points: readonly Pt[]):
     if (points.length < 3) return { sets: [], steps: [] };
     inside = (m) => insidePolygon(m, points);
   }
-  // (a set held off the page lies nowhere: workflow/held - it goes with its step, chosen, so that a copy keeps the wires out of it)
+  // (a set drawn nowhere lies nowhere - held off the page, or an exit's for what its step sets aside, holding nothing: workflow/held -
+  //  it goes with its step, chosen, so that a copy keeps the wires out of it, and its step's exits)
   const steps = (doc.steps ?? []).filter((s) => inside(stepMiddle(s))).map((s) => s.id);
-  const held = heldSets(doc);
+  const unseen = unseenSets(doc);
   const chosen = new Set(steps);
   return {
-    sets: (doc.sets ?? []).filter((b) => (held.has(b.id) ? chosen.has(b.made!.step) : inside(setMiddle(b)))).map((b) => b.id),
+    sets: (doc.sets ?? []).filter((b) => (unseen.has(b.id) ? chosen.has(b.made!.step) : inside(setMiddle(b)))).map((b) => b.id),
     steps,
   };
 }

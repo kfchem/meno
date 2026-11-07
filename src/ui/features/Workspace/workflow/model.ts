@@ -16,7 +16,7 @@ import { canWire, resultOf, wireInto } from "./flow";
 import { exitsOf, ONE_INPUT, type StepKind } from "./kinds";
 import { byOf, inputsFor } from "./doers";
 import { CARD_H, CARD_W, GAP, BETWEEN } from "./look";
-import { frameAt, placeBelow } from "./place";
+import { frameAt, placeBelow, placeCard, placeNext } from "./place";
 
 const idOf = (doc: WorkspaceDocument) => doc.nextWorkflowId ?? 1;
 
@@ -195,6 +195,25 @@ export function addStep(doc: WorkspaceDocument, kind: StepKind, x: number, y: nu
   const id = idOf(doc);
   const step: WorkflowStep = { id, kind, x, y, ...(by ? { by } : {}), ...(options && Object.keys(options).length ? { options } : {}) };
   return withExits({ ...doc, nextWorkflowId: id + 1, steps: [...(doc.steps ?? []), step] }, id);
+}
+
+/**
+ * `doc` with a step of `kind` added from a set - a wire drawn out of it,
+ * `from`, let go on empty space at (x, y), the step chosen there - and
+ * wired from it into the first of its inputs that takes what it gives
+ * (`connect`), in one edit: its card close by the card it is wired from,
+ * where `from` is a step's exit (place `placeNext`); else where it was let
+ * go (place `placeCard`). Where none of its inputs takes it, unwired, where
+ * it was let go.
+ */
+export function addStepFrom(doc: WorkspaceDocument, kind: StepKind, from: WireEnd, x: number, y: number, options?: OptionValues, by?: string): WorkspaceDocument {
+  const id = idOf(doc);
+  // (the input it would be wired into, by the step alone - its exits are placed by where it goes)
+  const bare: WorkspaceDocument = { ...doc, nextWorkflowId: id + 1, steps: [...(doc.steps ?? []), { id, kind, x, y, ...(by ? { by } : {}) }] };
+  const port = connect(bare, from, id).wires?.find((w) => w.to.step === id)?.to.port;
+  const at = (port && placeNext(doc, from, kind, port)) || placeCard(doc, x, y);
+  const added = addStep(doc, kind, at.x, at.y, options, by);
+  return port ? connect(added, from, id, port) : added;
 }
 
 /**

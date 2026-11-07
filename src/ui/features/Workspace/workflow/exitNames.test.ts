@@ -46,7 +46,7 @@ describe("a step's result set folding into its exit's port, and out of it (docs/
 
   it("folds into the port as it is held - about the port, where it stands on the layer - and grows out of it as it is shown", () => {
     expect(layer).toMatch(/const p = exitGives\(b\);[\s\S]*?transformOrigin: `\$\{at\.left\}px \$\{at\.top\}px`/);
-    expect(layer).toMatch(/const fold = set\?\.made && isHeld\(\{ sets, wires \}, set\) \? foldAbout\(set\) : undefined;/);
+    expect(layer).toMatch(/const fold = set\?\.made && unseen\.has\(set\.id\) \? foldAbout\(set\) : undefined;/);
     expect(layer).toMatch(/className=\{fold \? "meno-fold-out" : "meno-fade-out"\} style=\{fold\}/);
     expect(layer).toMatch(/className=\{b\.made && growing\(b\.id\) \? "meno-fold-in" : undefined\} style=\{b\.made \? foldAbout\(b\) : undefined\}/);
   });
