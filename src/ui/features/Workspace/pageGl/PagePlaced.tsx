@@ -6,13 +6,40 @@ import { useEditor } from "../store";
 import { wordsReadAt } from "../utils/pageScale";
 import type { Region } from "./hits";
 import { usePageHits, type HitHandlers } from "./PageHits";
-import PageShapes from "./PageShapes";
+import PageTip from "../components/PageTip";
+import { PORTS_Z } from "../workflow/look";
+import type { PageIcon } from "./icons";
+import PageIcons from "./PageIcons";
+import PagePolys, { type PagePoly } from "./PagePolys";
+import PageShapes, { PAGE_GL_ORDER } from "./PageShapes";
 import PageTexts from "./PageTexts";
 import type { Shape } from "./shapes";
 import type { PageText } from "./texts";
 
-/** What a placed thing draws where it stands (`at`, the page's units): its boxes, its words, the places that take the pointer. */
-export type Drawn = { shapes: readonly Shape[]; texts: readonly PageText[]; regions?: readonly Region[] };
+/** What the page's hover tip says (components/PageTip), and the middle and size of what it is about, in the page's units. */
+export type PageTipAt = { key: string; text: string; x: number; y: number; w: number; h: number };
+
+/**
+ * What a placed thing draws where it stands (`at`, the page's units): its
+ * boxes, its words, its icons and filled shapes, the places that take the
+ * pointer; and what the page's tip says for it, while a part of it is
+ * pointed at that says something.
+ */
+export type Drawn = { shapes: readonly Shape[]; texts: readonly PageText[]; icons?: readonly PageIcon[]; polys?: readonly PagePoly[]; regions?: readonly Region[]; tip?: PageTipAt };
+
+/** How the page is seen as a thing is drawn: its zoom, and the screen's device pixels to its own - what lays a chip's bars on whole device pixels. */
+export type PageView = { zoom: number; dpr: number };
+
+/**
+ * Where what is raised is drawn among the page's WebGL - an opened chip -
+ * over all the rest of it, the words of the chips beside it and R and S
+ * beside their molecules (components/StereoInk3D) among them: as its HTML
+ * was laid over the rest of the page's HTML.
+ */
+export const RAISED_ORDER = PAGE_GL_ORDER + 12;
+
+/** Where the page's tip lies among its HTML: over the workflow's ports (`PORTS_Z`) as an opened chip was, so nothing hides it. */
+const RAISED_Z: [number, number] = [PORTS_Z + 3, PORTS_Z + 1];
 
 /**
  * A thing placed on the page by something that moves - a molecule's frames
@@ -22,8 +49,20 @@ export type Drawn = { shapes: readonly Shape[]; texts: readonly PageText[]; regi
  * to read, as its HTML's were (`words`); gone while a talk is given, where
  * it is something to work the page with (`control`: a frames chip - App.css
  * `.meno-control-chip`, docs/PRESENTING.md); told of the pointer by `on`.
+ * `raised`, it is drawn over all the rest (`RAISED_ORDER`: an opened chip);
+ * `zoomed`, drawn again as the zoom changes, where how it is drawn depends
+ * on it (`PageView`: bars on whole device pixels).
  */
-export type Placed = { key: string; anchor: THREE.Object3D; draw: (at: { x: number; y: number }) => Drawn; words?: boolean; control?: boolean; on?: HitHandlers };
+export type Placed = {
+  key: string;
+  anchor: THREE.Object3D;
+  draw: (at: { x: number; y: number }, view: PageView) => Drawn;
+  words?: boolean;
+  control?: boolean;
+  raised?: boolean;
+  zoomed?: boolean;
+  on?: HitHandlers;
+};
 
 type Registry = { set: (key: string, p: Placed | null) => void };
 const Placements = createContext<Registry | null>(null);
@@ -61,7 +100,8 @@ const at = new THREE.Vector3();
  * those that work the page faded out while a talk is given, and back after.
  */
 export default function PagePlaced({ children }: { children?: ReactNode }) {
-  const { camera, invalidate } = useThree();
+  const { camera, invalidate, gl } = useThree();
+  const view = useRef<PageView>({ zoom: 1, dpr: 1 });
   const placed = useRef(new Map<string, Placed>());
   const where = useRef(new Map<string, { x: number; y: number }>());
   const [version, setVersion] = useState(0);
@@ -94,6 +134,11 @@ export default function PagePlaced({ children }: { children?: ReactNode }) {
   };
   useFrame((_, dt) => {
     const zoom = (camera as THREE.OrthographicCamera).zoom || 1;
+    const dpr = gl.getPixelRatio();
+    if (zoom !== view.current.zoom || dpr !== view.current.dpr) {
+      view.current = { zoom, dpr };
+      for (const p of placed.current.values()) if (p.zoomed) dirty.current = true;
+    }
     read.current = wordsReadAt(zoom, read.current);
     const to = read.current ? 1 : 0;
     if (shown.current !== to) {
@@ -121,35 +166,53 @@ export default function PagePlaced({ children }: { children?: ReactNode }) {
     }
   });
   const drawn = useMemo(() => {
-    const shapes: Shape[] = [];
-    const texts: PageText[] = [];
+    // (the rest, and what is raised over it: each its boxes, filled shapes, words and icons)
+    const layers = [0, 1].map(() => ({ shapes: [] as Shape[], polys: [] as PagePoly[], texts: [] as PageText[], icons: [] as PageIcon[] }));
     const regions: Region[] = [];
     const handlers = new Map<string, HitHandlers>();
+    let tip: PageTipAt | null = null;
     for (const [key, p] of placed.current) {
       const w = where.current.get(key);
       if (!w) continue;
-      const d = p.draw(w);
+      const d = p.draw(w, view.current);
       const fade = (p.words ? shown.current : 1) * (p.control ? controls.current : 1);
       if (fade <= 0) continue;
-      for (const s of d.shapes) shapes.push(fade < 1 ? { ...s, opacity: (s.opacity ?? 1) * fade } : s);
-      for (const t of d.texts) texts.push(fade < 1 ? { ...t, opacity: (t.opacity ?? 1) * fade } : t);
+      const faded = <T extends { opacity?: number }>(x: T): T => (fade < 1 ? { ...x, opacity: (x.opacity ?? 1) * fade } : x);
+      const layer = layers[p.raised ? 1 : 0];
+      for (const s of d.shapes) layer.shapes.push(faded(s));
+      for (const q of d.polys ?? []) layer.polys.push(faded(q));
+      for (const t of d.texts) layer.texts.push(faded(t));
+      for (const i of d.icons ?? []) layer.icons.push(faded(i));
       // (none taking the pointer while it is not read: as its HTML's took none, faded out)
       if (fade === 1) for (const r of d.regions ?? []) regions.push(r);
+      if (fade === 1 && d.tip) tip = d.tip;
       if (p.on) handlers.set(key, p.on);
     }
-    return { shapes, texts, regions, handlers };
+    return { layers, regions, handlers, tip };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- version: drawn again as anchors move, things come and go, words switch
   }, [version]);
   usePageHits(drawn.regions, {
     down: (key, part, e) => drawn.handlers.get(key)?.down?.(key, part, e),
     hover: (key, part, on) => drawn.handlers.get(key)?.hover?.(key, part, on),
+    move: (key, part, e) => drawn.handlers.get(key)?.move?.(key, part, e),
     menu: (key, part, e) => drawn.handlers.get(key)?.menu?.(key, part, e),
   });
   return (
     <Placements.Provider value={registry}>
       {children}
-      <PageShapes items={drawn.shapes} />
-      <PageTexts items={drawn.texts} />
+      {drawn.tip && <PageTip tipKey={drawn.tip.key} x={drawn.tip.x} y={drawn.tip.y} w={drawn.tip.w} h={drawn.tip.h} zoom={view.current.zoom} text={drawn.tip.text} zIndexRange={RAISED_Z} />}
+      {drawn.layers.map((l, k) => {
+        const order = k ? RAISED_ORDER : PAGE_GL_ORDER;
+        // (a layer's filled shapes over its boxes, its words and icons over both; what is raised over all the rest)
+        return (
+          <group key={k}>
+            <PageShapes items={l.shapes} order={order} />
+            <PagePolys items={l.polys} order={order + 0.5} />
+            <PageTexts items={l.texts} order={order + 1} />
+            <PageIcons items={l.icons} order={order + 1} />
+          </group>
+        );
+      })}
     </Placements.Provider>
   );
 }

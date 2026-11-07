@@ -71,7 +71,7 @@ const NOTES_GAP = 8 * PX;
 /**
  * Boxes round what a molecule in 3D shows besides its atoms, as it is seen
  * (`seen`, its atoms' bounds on the page): its frames chip under it, as
- * wide as it is (Frames3D), and its notes over it (`notesOf`). A place
+ * wide as it is (pageGl/liveChip), and its notes over it (`notesOf`). A place
  * found clear of its atoms alone was found over these: a TS's notes over
  * the chip of the molecule above it.
  */
