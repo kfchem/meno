@@ -65,7 +65,7 @@ describe("a set's chip, shut, as runs to draw", () => {
 describe("what a chip says opened, and copies", () => {
   const failed = [null, { kind: "not-converged" as const, why: "The optimisation did not converge" }];
   const warnings = [{ kind: "hessian-not-stationary" as const, text: "hessian_numhess: Hessian on incompletely optimized geometry!" }];
-  const c: ChipFacts = { count: 2, frame: 1, about: "xtb", failed, warnings };
+  const c: ChipFacts = { count: 2, frame: 1, about: "Tight", failed, warnings };
 
   it("says why the frame told failed, first, and what its calculation warned of, in the program's words", () => {
     const groups = chipDetails(c, 1);
@@ -87,10 +87,16 @@ describe("what a chip says opened, and copies", () => {
     const text = chipCopy(c, 1);
     const lines = text.split("\n");
     expect(lines[0]).toBe(said({ ...c, frame: 1 }));
-    expect(lines[1]).toBe("xtb");
+    expect(lines[1]).toBe("Tight");
     expect(lines).toContain("Failed");
     expect(lines).toContain("Not converged\tThe optimisation did not converge");
     expect(text).toContain("Warnings");
+    // (how it was made too, folded as it is on the chip)
+    const made = { method: "ETKDG v3 + MMFF94", how: [{ label: "Kept", text: "17 of 50 embedded" }] };
+    const withMade = chipCopy({ ...c, made }, 1).split("\n");
+    expect(withMade).toContain(MADE_GROUP);
+    expect(withMade).toContain("Method\tETKDG v3 + MMFF94");
+    expect(withMade).toContain("Kept\t17 of 50 embedded");
   });
 
   it("copies each frame's energy as a table - its number, its energy, how far above the lowest and its share - or none without energies", () => {
@@ -102,14 +108,26 @@ describe("what a chip says opened, and copies", () => {
     expect(chipEnergies({ count: 2, frame: 0 })).toBeNull();
   });
 
+  it("copies a path's energies from its start - its first frame none, each other the first's taken from it - not above the lowest", () => {
+    const energies = [-76, -76.0015936014, -75.999];
+    const col = (t: string) => t.split("\n").slice(1).map((l) => l.split("\t")[2]);
+    const above = col(chipEnergies({ count: 3, frame: 0, energies })!);
+    const t = chipEnergies({ count: 3, frame: 0, energies, fromStart: true })!;
+    expect(t.split("\n")[0]).toBe("Frame\tEnergy (Eh)\tFrom its start (kcal/mol)");
+    const fromStart = col(t);
+    expect(fromStart[0]).toBe("0.00");
+    expect(fromStart.map(Number)).toEqual(above.map((a) => expect.closeTo(Number(a) - Number(above[0]), 1)));
+    expect(Number(fromStart[1])).toBeCloseTo(-1, 1);
+  });
+
   it("says a single geometry's title, what it was and its marks, its title cut at 14rem", () => {
-    const runs = singleChipRuns({ count: 1, frame: 0, title: "aspirin", about: "xtb", failed: [{ kind: "not-converged", why: "x" }] });
-    expect(runs.map((r) => r.text).join("")).toBe(`aspirin · xtb · ${FAILURE_WORDS["not-converged"]}`);
+    const runs = singleChipRuns({ count: 1, frame: 0, title: "aspirin", about: "Tight", failed: [{ kind: "not-converged", why: "x" }] });
+    expect(runs.map((r) => r.text).join("")).toBe(`aspirin · Tight · ${FAILURE_WORDS["not-converged"]}`);
     expect(runs[0]).toMatchObject({ tone: "ink", mostPx: 224 });
   });
 
   it("holds each number to its unit in its line, never broken between them", () => {
-    expect(unitsHeld("CREST 2.12 · charge 0, singlet · −8.226118 Eh")).toBe("CREST 2.12 · charge 0, singlet · −8.226118 Eh");
+    expect(unitsHeld("Loose 1.0 · charge 0, singlet · −1.234567 Eh")).toBe("Loose 1.0 · charge 0, singlet · −1.234567 Eh");
     expect(unitsHeld("1.85 D · 120.5° · 2 Å")).toBe("1.85 D · 120.5° · 2 Å");
   });
 });

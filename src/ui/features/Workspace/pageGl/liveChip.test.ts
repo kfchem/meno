@@ -70,7 +70,7 @@ describe("a frames chip at rest, drawn by WebGL", () => {
 
   it("holds what the calculation found in itself, shut - drawn only as it opens, never over the molecule", () => {
     const results = [{ id: "dipole", on: "molecule" as const, group: "Properties", label: "Dipole moment", quantity: "dipole" as const, value: 1.85, rank: 2 }];
-    const r: ChipFacts = { count: 5, frame: 2, about: "xtb", results };
+    const r: ChipFacts = { count: 5, frame: 2, about: "Tight", results };
     expect(words(liveChip(state(r), { x: 0, y: 0 }, VIEW))).not.toContain("Dipole moment");
     const d = liveChip(opened(r), { x: 0, y: 0 }, VIEW);
     expect(words(d)).toContain("Dipole moment");
@@ -198,6 +198,12 @@ describe("a frames chip opened", () => {
     expect(frameAtSlider(5, LIVE.width, LIVE.thumb / 2)).toBe(0);
     expect(frameAtSlider(5, LIVE.width, LIVE.width - LIVE.thumb / 2)).toBe(4);
     expect(frameAtSlider(5, LIVE.width, LIVE.width / 2)).toBe(2);
+    // (from the thumb's middle at either end: the first frame and the last, however many, and the middle between)
+    for (const n of [2, 5, 40]) {
+      expect(frameAtSlider(n, LIVE.width, LIVE.thumb / 2), `${n}`).toBe(0);
+      expect(frameAtSlider(n, LIVE.width, LIVE.width - LIVE.thumb / 2), `${n}`).toBe(n - 1);
+      expect(frameAtSlider(n, LIVE.width, LIVE.width / 2), `${n}`).toBe(Math.round((n - 1) / 2));
+    }
   });
 });
 
@@ -241,5 +247,7 @@ describe("a press on a chip", () => {
     expect(chipPressed({ ...at, single: true, hasMore: true }, "chip").pinned).toBe(true);
     expect(chipPressed({ ...at, single: true, hasMore: true, pinned: true }, "chip").pinned).toBe(false);
     expect(chipPressed({ ...at, single: true }, "chip")).toEqual({ expanded: false, pinned: false, fold: false });
+    // (a press on its bars or its slider shows a frame, and neither pins it nor opens it)
+    for (const part of ["bars", "slider"]) expect(chipPressed({ ...at, single: true, hasMore: true }, part), part).toEqual({ expanded: false, pinned: false, fold: false });
   });
 });
