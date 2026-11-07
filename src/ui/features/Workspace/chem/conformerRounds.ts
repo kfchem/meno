@@ -112,6 +112,20 @@ function joined(a: Conformers, b: Conformers): Conformers {
   return { ...rest, frames: [...a.frames, ...b.frames], ...(energies ? { energies } : {}), ...(modelEnergies ? { modelEnergies } : {}) };
 }
 
+/**
+ * What the plugin said of how each round was made (`Conformers.how`), as
+ * one: a line every round said alike once, else each round's in turn -
+ * its words its own, never read or summed, so that what one round kept is
+ * never shown as the whole search's.
+ */
+export function roundsHow(hows: readonly (readonly { label: string; text: string }[] | undefined)[]): { label: string; text: string }[] {
+  const labels = [...new Set(hows.flatMap((h) => (h ?? []).map((r) => r.label)))];
+  return labels.map((label) => {
+    const texts = hows.map((h) => h?.find((r) => r.label === label)?.text ?? "");
+    return { label, text: texts.every((t) => t === texts[0]) ? texts[0] : texts.map((t, k) => `round ${k + 1}: ${t || "none said"}`).join("; ") };
+  });
+}
+
 /** How a search in rounds is asked: its first round, the most it tries, its window (kcal/mol), whether its plugin gives another set for each draw, and the time it may take (ms), where it has a limit. */
 export type RoundsAsked = { first: number; most: number; window: number; draws: boolean; budget?: number; now?: () => number };
 
@@ -132,6 +146,7 @@ export async function inRounds(
   let tried = 0;
   let rounds = 0;
   let ended: RoundsEnd = "most";
+  const hows: Conformers["how"][] = [];
   try {
     for (const n of roundSizes(o.first, o.most)) {
       // (past its time, or where the next round, as long for each try as those before, would take it past: ended)
@@ -145,6 +160,7 @@ export async function inRounds(
       const got = await ask(n, rounds);
       tried += n;
       rounds++;
+      hows.push(got.how);
       made = made ? joined(made, got) : got;
       if (!o.draws) {
         ended = "one";
@@ -164,6 +180,8 @@ export async function inRounds(
   } finally {
     judging?.end();
   }
+  // (how it was made, each round's said: the first round's alone would be one round's count for the whole)
+  if (made && hows.length > 1 && hows.some((h) => h?.length)) made = { ...made, how: roundsHow(hows) };
   return { made: made!, run: { tried, rounds, ended } };
 }
 
