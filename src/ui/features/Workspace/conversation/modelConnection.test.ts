@@ -54,6 +54,8 @@ describe("a conversation's connection through a model's plugin", () => {
     const t = steps({ before: true });
     expect(await modelConnection(plugin, t.s).send(request)).toEqual({ text: "It is ethanol." });
     expect(t.done).toEqual(["consent model:talker@api.example.com,files.example.com", "worker", `ask converse ${REPLY_MS}`]);
+    // (a reply, whole, waited for 10 minutes)
+    expect(REPLY_MS).toBe(600_000);
     expect(t.conversed).toEqual([{ ...request, options: { model: "small" } }]);
     expect(JSON.stringify(t.conversed)).not.toContain("key");
   });
