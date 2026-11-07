@@ -247,9 +247,11 @@ export function placeCard(doc: WorkspaceDocument, x: number, y: number): { x: nu
  * wire drawn out of it let go on empty space, the step chosen there
  * (docs/WORKFLOWS.md, *A step added from an exit*): close by, `GAP` right
  * of the card the wire leaves, its input `port` level with that exit's
- * port, so that the wire runs straight; lower, half a card at a time, where
- * something is there (`placeBelow`) - never over one, its wire crossing
- * none where it can. The exit's set is no hindrance, wired on - held off
+ * port, so that the wire runs straight; where something is there, plainly
+ * beneath that card - `BETWEEN` under it, as tall as its words can draw it -
+ * and lower from there, half a card at a time (`placeBelow`): a step down,
+ * not a row out of line - never over one, its wire crossing none where it
+ * can. The exit's set is no hindrance, wired on - held off
  * the page (workflow/held) - but where the chemist opened it. Its top
  * left; none where the wire comes from no step's exit - a set the chemist
  * made - which puts the card where it was let go (`placeCard`).
@@ -260,7 +262,10 @@ export function placeNext(doc: WorkspaceDocument, from: { set: number }, kind: S
   if (!set?.made || !step) return undefined;
   const top = exitStart(step, set.made.exit).y + portDown(Math.max(0, inputsOf(kind).findIndex((p) => p.id === port)));
   const self: Self = set.opened ? { step: step.id, exit: set.made.exit } : { set: set.id, molecules: new Set(setMembers(doc, set).molecules), step: step.id };
-  const f = placeBelow(doc, step.x + CARD_W + GAP, top, CARD_W, CARD_TALL, self);
+  const x = step.x + CARD_W + GAP;
+  const level = placeBelow(doc, x, top, CARD_W, CARD_TALL, self);
+  if (level.y1 === top) return { x: level.x0, y: level.y1 };
+  const f = placeBelow(doc, x, Math.min(top, step.y - CARD_TALL - BETWEEN), CARD_W, CARD_TALL, self);
   return { x: f.x0, y: f.y1 };
 }
 

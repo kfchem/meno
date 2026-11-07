@@ -2448,8 +2448,10 @@ A wire drawn out of a step's exit's port and let go on empty space opens
 Quick Add there, as before. The step chosen is now put close by the card
 it comes from, not where the wire was let go (model `addStepFrom`, place
 `placeNext`): `GAP` right of that card, the input the wire goes into level
-with the exit's port, so that the wire runs straight - or lower, half a
-card at a time, where something is there, never over a set, a card or a
+with the exit's port, so that the wire runs straight. Where something is
+there, it goes plainly beneath that card - `BETWEEN` under it, counted as
+tall as its words can draw it - and lower from there, half a card at a
+time: a step down, not a row out of line. Never over a set, a card or a
 wire. Steps on a page stay where they were put: only a step added so is
 placed (the maintainer, 2026-10-31).
 
