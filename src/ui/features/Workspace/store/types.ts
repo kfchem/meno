@@ -7,6 +7,7 @@ import type { LeftOut } from "../utils/readNotes";
 import type { ShowBox } from "../utils/viewShow";
 import type { ChemMarks } from "../chem/marks";
 import type { AtomNumberKind, AtomNumbersShown } from "../utils/atomNumbers";
+import type { StructureMap } from "../chem/structureMaps";
 import type { CyclePatch, ImportedScheme, MarkOf, MarkPlaces, Relayout, WorkspaceDocument, WrittenAsLabel } from "../document";
 import type { SetHolds, SetKind, StepKind } from "../workflow/kinds";
 import type { OptionValues } from "../../../../lib/options";
@@ -879,7 +880,7 @@ export type StepRan = {
   kept?: KeptJob[];
   /** A run the chemist keeps (docs/WORKFLOWS.md, *Earlier runs*): never dropped while kept. */
   keep?: true;
-  /** Every seed its line counts but does not name - made none, or not read, with why (workflow/programs `seedsSaid`): shown where the line is pointed at. */
+  /** Every seed its line counts but does not name - made none, or not read, with why (workflow/programs `seedsSaid`) - and every SMILES it could not read, as given, with why (`notReadNamed`): shown where the line is pointed at. */
   named?: string;
 };
 /** A job's file a workspace's file keeps (docs/FILE-IO.md, *A step's jobs*): its name in the job's folder, SHA-256, size, and what it is to the job. */
@@ -983,7 +984,7 @@ export type WorkflowView = "hoveredSet" | "chosenSet" | "hoveredStep" | "hovered
  * was asked for, started and ended; its place among those waiting, where it
  * waits; and the last line of its log, where it runs.
  */
-export type JobSeen = { state: JobState; created: number; started?: number; ended?: number; place?: number; line?: string; progress?: { done: number; total: number } };
+export type JobSeen = { state: JobState; created: number; started?: number; ended?: number; place?: number; line?: string; progress?: { done: number; total: number }; lastWritten?: number };
 /** A turn, as a quaternion's x, y, z and w. */
 export type Turn3D = [number, number, number, number];
 /** A molecule in 3D rising out of its drawing (EditorState `rising3d`). */
@@ -1392,6 +1393,8 @@ export type EditorState = {
   removeMeasure3d: (id: number, measure: number) => void;
   /** The electron-pushing arrows. */
   pushes: PushArrow[];
+  /** Atom maps between structures on the page, not on an arrow (chem/structureMaps). */
+  structureMaps: StructureMap[];
   /** The electron-pushing arrow under the pointer: its menu is the one a right-click opens. */
   hoveredPush: number | null;
   setHoveredPush: (id: number | null) => void;
@@ -1754,6 +1757,8 @@ export type EditorState = {
   runAll: () => Promise<void>;
   /** A step's jobs asked to stop: those waiting never start, those running are stopped with what they started. */
   stopStep: (id: number) => void;
+  /** One of a running step's jobs asked to stop alone (*Stop this job*): recorded failed, its entries said stopped - its step goes on, bringing in what its other jobs gave. */
+  stopJobAlone: (job: string) => void;
   /** Every step's jobs asked to stop. */
   stopAll: () => void;
   /** A step's run kept, or no longer (docs/WORKFLOWS.md, *Earlier runs*): the one it shows at -1, an earlier one by its place among them - one step to undo. */
@@ -2131,6 +2136,12 @@ export type EditorState = {
   setArrowForm: (ids: readonly number[], patch: ArrowFormPatch, gesture?: string) => void;
   /** An arrow given its reaction's atom map, or its map taken away (null), what it shows on the drawing with it - one step (chem/atomMap). */
   setAtomMap: (arrowId: number, map: ArrowAtomMap | null) => void;
+  /** Maps between structures on the page added (chem/structureMaps), what they show put on the drawing and its molecules in 3D: one undo step. */
+  addStructureMaps: (maps: readonly ArrowAtomMap[], replacing?: readonly number[]) => void;
+  /** The maps between structures given, by id, shown or hidden: one step. */
+  showStructureMaps: (ids: readonly number[], shown: boolean) => void;
+  /** Each map between structures given, by id, showing its next map: one step. */
+  otherStructureMaps: (ids: readonly number[]) => void;
   /** An arrow's atom map shown on the drawing - its numbers and reacting centres - or taken off it, kept: one step. */
   showAtomMap: (arrowId: number, shown: boolean) => void;
   /** An arrow's next map, of those its reaction has, shown and used instead: one step. */

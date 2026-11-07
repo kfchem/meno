@@ -47,7 +47,11 @@ export type ChoiceOption = OptionBase & {
   default: string;
 };
 /**
- * `unset`: the value that sets nothing - what is left to the program (0, say): not said on a step's line.
+ * `unset`: the value that sets nothing - what is left to the program (0,
+ * say): not said on a step's line. A `default` that is no number (NaN) is
+ * none: the field is empty until the chemist gives one, and a step needs it
+ * before it runs (its kind's `needs`) - Meno's own kinds' alone, where no
+ * value has a basis to stand as a default.
  * `whole`: a whole number alone - a count, a seed - one with a fraction refused, as one out of range is.
  */
 export type NumberOption = OptionBase & {
@@ -89,6 +93,16 @@ export type Option = ChoiceOption | NumberOption | TextOption | SwitchOption | L
 export function shownOptions<O extends Option>(options: readonly O[], values: OptionValues, context: OptionValues = {}): O[] {
   const all = { ...context, ...values };
   return options.filter((o) => !o.when || o.when.in.includes(all[o.when.id] as string | number | boolean));
+}
+
+/** Options in parts, each ending at one with a note - which a form shows right under its row (Settings, Chemistry) - and the rest after. */
+export function notedParts<O extends Option>(options: readonly O[]): O[][] {
+  const parts: O[][] = [[]];
+  for (const o of options) {
+    parts[parts.length - 1].push(o);
+    if (o.note) parts.push([]);
+  }
+  return parts.filter((p) => p.length);
 }
 
 /** How many choices are shown side by side, each to pick; more, and they are a list to pick from. */
@@ -135,8 +149,16 @@ export function valuesOf(
 /** The values to remember of `values`: all but those that start from what is written (`Known`). */
 export function rememberable(options: readonly Option[], values: OptionValues): OptionValues {
   const fresh = new Set(options.filter((o) => ((o.type === "number" || o.type === "text") && o.from) || o.type === "atoms").map((o) => o.id));
-  return Object.fromEntries(Object.entries(values).filter(([id]) => !fresh.has(id)));
+  return Object.fromEntries(Object.entries(givenOnly(values)).filter(([id]) => !fresh.has(id)));
 }
+
+/** `values` without a number that is none (NaN, or infinite): an option left empty - one whose default is none - holds nothing, never a number that is none. */
+export function givenOnly(values: OptionValues): OptionValues {
+  return Object.fromEntries(Object.entries(values).filter(([, v]) => typeof v !== "number" || Number.isFinite(v)));
+}
+
+/** Whether an option's default is none: a number the chemist gives, no default standing for it (`NumberOption`). */
+export const noDefault = (o: Option): boolean => o.type === "number" && Number.isNaN(o.default);
 
 const OPTION_ID = /^[a-z][a-z0-9-]{0,39}$/;
 const KNOWN: readonly Known[] = ["charge", "multiplicity", "name"];

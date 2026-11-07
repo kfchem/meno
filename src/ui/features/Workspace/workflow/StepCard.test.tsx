@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
-import { Port } from "./StepCard";
+import { Port, stateLine } from "./StepCard";
 import { PORT, PORT_SHARE, portSize, PX } from "./look";
 
 // Vitest runs in Node, with no page to mount on: the server's renderer draws the port.
@@ -34,5 +34,13 @@ describe("a port", () => {
     expect(html).toContain("transform-origin:0 0");
     expect(html).not.toContain("margin");
     expect(html).toContain("top:28px");
+  });
+});
+
+describe("a running step's line", () => {
+  it("says how long its quietest running job has written nothing, where that is past what Settings says - said only", () => {
+    expect(stateLine("running", undefined, { ended: 1, total: 4, quiet: 47 }, 0).text).toBe("Running \u00b7 1 of 4 \u00b7 no output for 47 min");
+    expect(stateLine("running", undefined, { ended: 0, total: 1, since: 0, quiet: 125 }, 3_600_000).text).toBe("Running 1:00:00 \u00b7 no output for 2 h 5 min");
+    expect(stateLine("running", undefined, { ended: 1, total: 4 }, 0).text).toBe("Running \u00b7 1 of 4");
   });
 });

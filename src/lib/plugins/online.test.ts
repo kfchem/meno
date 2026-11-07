@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useNetwork } from "../net/network";
 import { CATALOGUE_PURPOSE, type CatalogueEntry } from "./catalogue";
 import { getPlugin, keptOnline, listOnline, removeFiles, useOnline, type PluginFiles } from "./online";
+import { listedName, setListedNames } from "./known";
+import { pluginName } from "../calc/catalog";
 
 const HEX = "b".repeat(64);
 const ENTRY = {
@@ -38,6 +40,7 @@ async function fresh() {
 }
 
 beforeEach(() => {
+  setListedNames([]);
   useNetwork.setState({ offline: false, granted: [], asking: null });
   useOnline.setState({ state: "unlisted", catalogue: undefined, fetchedAt: undefined, kept: undefined, problem: undefined }, true);
 });
@@ -59,6 +62,18 @@ describe("the list kept from before, as Meno starts", () => {
     const { ask, asked } = backend(() => ({ catalogue: CATALOGUE }));
     await keptOnline(ask);
     expect([asked, useOnline.getState().state]).toEqual([[], "listing"]);
+  });
+});
+
+describe("the names the list gives", () => {
+  it("are taken as the list kept from before is read, and as one is listed - naming a plugin not in place", async () => {
+    await keptOnline(backend(() => ({ catalogue: CATALOGUE })).ask);
+    expect([listedName("sketch"), pluginName("sketch")]).toEqual(["Sketch interface", "Sketch interface"]);
+    setListedNames([]);
+    useOnline.setState({ state: "unlisted", catalogue: undefined }, true);
+    useNetwork.setState({ offline: false, granted: [CATALOGUE_PURPOSE], asking: null });
+    await listOnline(true, backend(() => ({ catalogue: { ...CATALOGUE, plugins: [{ ...ENTRY, name: "Sketch interface, listed" }] } })).ask);
+    expect(pluginName("sketch")).toBe("Sketch interface, listed");
   });
 });
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ABOUT_FOCUS, aboveText, bySource, chipLine, grouped, isMarked, numberText, pairValue, readResults, resultKey, resultsOn, symmetryText, valueText, type ListResult, type MoleculeResult, type PairsResult } from "./results";
+import { ABOUT_FOCUS, aboveText, bySource, chipLine, grouped, isMarked, numberText, pairValue, readResults, resultKey, resultsOn, resultsRenumbered, symmetryText, valueText, type AtomsResult, type FramesResult, type ListResult, type MoleculeResult, type PairsResult } from "./results";
 import { cardGroupsOf, readerNameOf, titled } from "./sources";
 
 describe("a calculation's results, as a plugin gives them", () => {
@@ -273,3 +273,37 @@ describe("results in Meno's own forms", () => {
   });
 });
 
+
+describe("a calculation's results, its molecule's atoms renumbered", () => {
+  // (three atoms turned round: place 0 now atom 1, place 1 atom 2, place 2 atom 0 - atom 0 now at 2, 1 at 0, 2 at 1)
+  const order = [1, 2, 0];
+  const dipole: MoleculeResult = { id: "dipole", on: "molecule", group: "Properties", label: "Dipole moment", quantity: "dipole", value: 1.85, vector: [0, 0, 1.85] };
+  const grad: FramesResult = { id: "grad", on: "frames", group: "Optimisation", label: "RMS gradient", values: [0.01, 0.001] };
+  const q: AtomsResult = { id: "q", on: "atoms", group: "Partial charges", label: "Mulliken", quantity: "charge", values: [-0.4, 0.1, 0.3] };
+  const wbi: PairsResult = { id: "wbi", on: "pairs", group: "Bond orders", label: "Wiberg bond index", pairs: [[0, 1, 0.82], [0, 2, 0.79]] };
+  const plain: ListResult = { id: "mo", on: "list", group: "Orbitals", label: "Orbital energies", columns: [{ label: "E" }], rows: [{ cells: [-0.5] }, { cells: [0.1] }] };
+  const listOf = (row: ListResult["rows"][number]): ListResult => ({ ...plain, id: "l", rows: [{ cells: [1] }, row] });
+
+  it("keeps the molecule's and each frame's as they are, each atom's at its new place, a pair's atoms as numbered now, and a list of values alone", () => {
+    expect(resultsRenumbered([dipole, grad, q, wbi, plain], order)).toEqual({
+      results: [dipole, grad, { ...q, values: [0.1, 0.3, -0.4] }, { ...wbi, pairs: [[2, 0, 0.82], [2, 1, 0.79]] }, plain],
+      dropped: 0,
+    });
+  });
+
+  it("leaves behind, counted, a list whose rows name atoms, move them or promise a value, and a result that does not fit the atoms", () => {
+    const behind = [
+      listOf({ cells: [2], atoms: [0, 1] }),
+      listOf({ cells: [2], move: [0, 0, 0, 0, 0, 0, 0, 0, 0] }),
+      listOf({ cells: [2], move: { ask: "mode 1" } }),
+      listOf({ cells: [2], surface: { ask: "orbital 5" } }),
+      listOf({ cells: [2], surface: { origin: [0, 0, 0], axes: [[1, 0, 0], [0, 1, 0], [0, 0, 1]], counts: [1, 1, 1], values: "AAAAAA==" }, colour: { by: { ask: "esp" }, from: -1, to: 1 } }),
+      { ...q, values: [0.1, 0.2] },
+      { ...wbi, pairs: [[0, 3, 0.5]] },
+    ] as ListResult[];
+    expect(resultsRenumbered([dipole, ...behind], order)).toEqual({ results: [dipole], dropped: behind.length });
+    // (a surface on a grid of its own, in space - of no atom - kept)
+    const grid = listOf({ cells: [2], surface: { origin: [0, 0, 0], axes: [[1, 0, 0], [0, 1, 0], [0, 0, 1]], counts: [1, 1, 1], values: "AAAAAA==" } });
+    expect(resultsRenumbered([grid], order)).toEqual({ results: [grid], dropped: 0 });
+  });
+});

@@ -336,6 +336,20 @@ describe("a centre with a lone pair for its fourth group", () => {
     };
   };
 
+  it("is said to read only by luck, as a centre with an H left out is, where its other bonds lie in a line - and not where they are spread", () => {
+    for (const el of ["S", "P"]) {
+      const { atoms, bonds } = sulfoxide(el, "up");
+      expect(unsureStereo(atoms, bonds).atoms).toEqual([]);
+      // (its O - or methyl - and its ring carbon in one line through it, its wedged methyl off it: either way round by luck)
+      const tee = atoms.map((a, i) => (i === 1 ? { ...a, x: -1, y: 0 } : i === 2 ? { ...a, x: 0, y: -1 } : i === 3 ? { ...a, x: 1, y: 0 } : a));
+      expect(unsureStereo(tee, bonds).atoms).toEqual([0]);
+    }
+    // (an atom of three bonds that keeps no configuration - an amine's N - is never asked)
+    const amine = sulfoxide("P", "up");
+    const n = amine.atoms.map((a, i) => (i === 0 ? { ...a, el: "N" } : i === 1 ? { ...a, x: -1, y: 0 } : i === 2 ? { ...a, x: 0, y: -1 } : i === 3 ? { ...a, x: 1, y: 0 } : a));
+    expect(unsureStereo(n, amine.bonds).atoms).toEqual([]);
+  });
+
   it("is read from its wedge where its lone pair keeps a configuration - a sulfoxide's S, a selenoxide's Se, a telluroxide's Te, a phosphine's P, an arsine's As, a stibine's Sb, a bismuthine's Bi - the two ways round told apart", () => {
     for (const el of ["S", "Se", "Te", "P", "As", "Sb", "Bi"]) {
       const up = readStereo(sulfoxide(el, "up").atoms, sulfoxide(el, "up").bonds).tetra.get(0);
@@ -454,6 +468,25 @@ describe("a centre with a lone pair for its fourth group", () => {
     expect(unreadWhy(nh.atoms, nh.bonds, 0)).not.toBe(KEEPS_NONE);
   });
 
+  it("reads a P with an H drawn as an atom, and no N with one - nor a P with its H carried and two bonds, which says why (the maintainer, 2026-11-06)", () => {
+    // (a secondary phosphine: its H drawn as an atom, a centre; carried, its H and its lone pair both left out)
+    const phosphine = (h: boolean): { atoms: DrawnAtom[]; bonds: DrawnBond[] } => ({
+      atoms: [{ x: 0, y: 0, el: "P", hs: h ? 0 : 1 }, { ...at(90), el: "C", hs: 3 }, { ...at(210), el: "C", hs: 3 }, ...(h ? [{ ...at(330), el: "H", hs: 0 }] : [])],
+      bonds: [{ a: 0, b: 1, order: 1, wedge: { narrow: 0, stereo: "up" } }, { a: 0, b: 2, order: 1 }, ...(h ? [{ a: 0, b: 3, order: 1 }] : [])],
+    });
+    expect(readStereo(phosphine(true).atoms, phosphine(true).bonds).tetra.has(0)).toBe(true);
+    expect(readStereo(phosphine(false).atoms, phosphine(false).bonds).tetra.has(0)).toBe(false);
+    expect(unreadWhy(phosphine(false).atoms, phosphine(false).bonds, 0)).toBe("its H and its lone pair are both left out, so which way each points is not drawn: draw its H as an atom");
+    // (an oxaziridine's N, its ring's C and O beside it: with a methyl a centre, with an H drawn as an atom none, and said)
+    const oxaziridine = (on: string): { atoms: DrawnAtom[]; bonds: DrawnBond[] } => ({
+      atoms: [{ x: 0, y: 0, el: "N", hs: 0 }, { ...at(60), el: "C", hs: 2 }, { ...at(120), el: "O", hs: 0 }, { ...at(270), el: on, hs: on === "C" ? 3 : 0 }],
+      bonds: [{ a: 0, b: 1, order: 1, wedge: { narrow: 0, stereo: "up" } }, { a: 0, b: 2, order: 1 }, { a: 1, b: 2, order: 1 }, { a: 0, b: 3, order: 1 }],
+    });
+    expect(readStereo(oxaziridine("C").atoms, oxaziridine("C").bonds).tetra.has(0)).toBe(true);
+    expect(readStereo(oxaziridine("H").atoms, oxaziridine("H").bonds).tetra.has(0)).toBe(false);
+    expect(unreadWhy(oxaziridine("H").atoms, oxaziridine("H").bonds, 0)).toBe(KEEPS_NONE);
+  });
+
   it("drawn by the engine from a SMILES, reads back as given: a sulfoxide, a sulfinamide, a phosphine, a sulfonium, a selenoxide, a stibine, an N-chloro aziridine, an oxaziridine, each way round", () => {
     for (const smiles of [
       "C[S@](=O)c1ccccc1",
@@ -472,5 +505,53 @@ describe("a centre with a lone pair for its fourth group", () => {
       const input = fromSmiles(smiles);
       expect(misreadCentres(input, layout2D(input)), smiles).toEqual([]);
     }
+  });
+});
+
+describe("an axis inside a ring, drawn", () => {
+  /** A biphenyl bridged at 2 and 2' (`smiles`, its biaryl bond between atoms `i` and `j`), drawn by the engine with its axis given: the axis read back, or none. */
+  const readBack = (smiles: string, [i, j]: [number, number]) => {
+    const g = fromSmiles(smiles);
+    const around: number[][] = g.atoms.map(() => []);
+    for (const b of g.bonds) {
+      around[b.a].push(b.b);
+      around[b.b].push(b.a);
+    }
+    expect(around[i]).toContain(j);
+    const refs = [Math.min(...around[i].filter((n) => n !== j)), Math.min(...around[j].filter((n) => n !== i))] as const;
+    const given = { atoms: [i, j] as const, refs, sense: 1 as const };
+    const drawn = drawing({ ...g, axes: [given] });
+    // (each atom its element, as a drawing's are: a metal in a ring known for one)
+    const atoms = drawn.atoms.map((a, k) => (k < g.atoms.length ? { ...a, el: g.atoms[k].el } : { ...a, el: "H" }));
+    const bonds = drawn.bonds;
+    // (a wedge at an end, as the engine draws one; one put there where it does not, so that each case has one to read)
+    if (!bonds.some((b) => b.wedge && (b.wedge.narrow === i || b.wedge.narrow === j))) {
+      const out = bonds.find((b) => b.order === 1 && (b.a === i || b.b === i) && b.a !== j && b.b !== j)!;
+      out.wedge = { narrow: i, stereo: "up" };
+    }
+    return { given, read: readStereo(atoms, bonds).axes };
+  };
+
+  it("reads one in a ring of seven atoms or more - a 2,2'-bridged biphenyl, a dibenzocycloheptanone - as drawn", () => {
+    const { given, read } = readBack("O=C1Cc2ccccc2-c2ccccc2C1", [8, 9]);
+    expect(read).toHaveLength(1);
+    // (the same axis: from either end, against the same two groups, the same sense)
+    expect(new Set(read[0].atoms)).toEqual(new Set(given.atoms));
+    expect(read[0].sense).toBe(given.sense);
+  });
+
+  it("counts a metal as any atom of the ring: BINAP's chelate ring on Pd, of seven, read; 2,2'-bipyridine's on Pd, of five, held flat, none", () => {
+    // (BINAP-PdCl2, its C1-C1' atoms 25 and 26 as the SMILES is written)
+    const binap = "Cl[Pd]1(Cl)P(c2ccccc2)(c2ccccc2)c2ccc3ccccc3c2-c2c(P1(c1ccccc1)c1ccccc1)ccc1ccccc21";
+    const { given, read } = readBack(binap, [25, 26]);
+    expect(read).toHaveLength(1);
+    expect(read[0].sense).toBe(given.sense);
+    // (2,2'-bipyridine-PdCl2, its N bound to Pd written as N+, Pd as 2-, so that its rings are aromatic as drawn)
+    expect(readBack("Cl[Pd-2]1(Cl)[n+]2ccccc2-c2cccc[n+]21", [8, 9]).read).toEqual([]);
+  });
+
+  it("reads none in a ring of five or six: fluorene and 9,10-dihydrophenanthrene are held all but flat, or turn over fast", () => {
+    expect(readBack("C1c2ccccc2-c2ccccc12", [6, 7]).read).toEqual([]);
+    expect(readBack("C1Cc2ccccc2-c2ccccc12", [7, 8]).read).toEqual([]);
   });
 });

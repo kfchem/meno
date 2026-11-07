@@ -290,7 +290,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Kind | Icon (Heroicons' outline, or drawn as Quick Add's are) | Takes | Gives |
 | --- | --- | --- | --- |
 | Generate | sparkles | nothing: no input, nothing wired in - or, where its plugin makes from seeds (CReM's), *Seeds*: structures drawn | **structures drawn**, each the SMILES the model gave, read as one pasted is - its stereo as written, what it leaves open counted on its record (`stereo_open`), never chosen - with the model's own values on its record, named (REINVENT 4's `nll` and `smiles_state`), and what made them (PLUGINS.md, *Generate*). How many and with what seed its options say. Nothing is made 3D here, nothing enumerated, nothing refused: the general steps after it do that. It is ready as it is put down, run on its options alone, and changed when they change; made from seeds, it waits for them, and each made one keeps its seed's values as the seed's (`made_from.<name>`). Its line counts what the model gave, what was made, what leaves stereo open, and what could not be read |
-| Conformers | a stack of layers | structures drawn, or molecules in 3D | **a conformer set**: each compound's conformers, every one the program gives - no energy window, as a structure made 3D on the canvas has (WORKSPACE.md, *Conformers kept*); only an *Energy window* step sets any aside. Where the program's search takes a number of tries, how many is Meno's, among the step's options: as many as each molecule needs, or a number (*Conformers sought*: PLUGINS.md, *How many conformers are tried is Meno's to say*); which of those made are kept is Meno's too (PLUGINS.md, *Which of what was made are kept is Meno's*) |
+| Conformers | a stack of layers | structures drawn, or molecules in 3D | **a conformer set**: each compound's conformers, every one the program gives - no energy window, as a structure made 3D on the canvas has (WORKSPACE.md, *Conformers kept*); only an *Energy window* step sets any aside. Where the program's search takes a number of tries, how many is Meno's, among the step's options: as many as each molecule needs, or a number (*Conformers sought*: PLUGINS.md, *How many conformers are tried is Meno's to say*) - as many as it needs asked in rounds, where the search takes draws, until a round brings no new conformer within the step's window, which has no default (PLUGINS.md, *As many as the molecule needs, in rounds*), each structure drawn's; molecules in 3D, run as jobs, each asked once, said; which of those made are kept is Meno's too (PLUGINS.md, *Which of what was made are kept is Meno's*) |
 | Optimise | a ball at the bottom of an energy well, an arrow down into it (drawn) | molecules in 3D | each optimised, its path as frames - the same kind of set |
 | Minimise with restraints | Optimise's well, its floor hatched as Restraints' wall (drawn) | molecules in 3D, or conformer sets | each minimised in a force field with its restraints held - Restraints', Torsion restraints' - from where it is, or from where its restraints were first held; one that does not converge out of *Failed* (PLUGINS.md, RDKit) |
 | Energy | a level against an energy axis, measured up to (drawn) | molecules in 3D | each with its energy at its own geometry, kept as it came (its key with it, though the program turned it), and what it carried of the calculation it came from - a Frequencies step's correction to G, its vibrations - each with its own level; one whose atoms moved fails - the same kind of set |
@@ -322,6 +322,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Torsion restraints | four atoms anti, held (drawn) | *Molecules* and *Reference*: molecules in 3D, or conformer sets | each torsion trans across the reference's double bonds and not trans in the entry held at 180°, stronger by a step each time, out of *Restrained*; those trans already out of *Trans already* (STRUCTURE-STEPS.md, *Torsion restraints*) |
 | Compare bonding | a chain and its reference, equal (drawn) | *Molecules* and *Reference*: molecules in 3D, or conformer sets | those bonded as their reference out of *Same* - against each reference, the match written on it, or matched on a property - the rest out of *Different*, with their differences, or why they were not compared; bonds read within a reach of the covalent radii, 1.2 times unless set (STRUCTURE-STEPS.md, *Compare bonding*) |
 | Join | two tables, a row of each linked (drawn) | *Onto* and *From*: molecules in 3D, or conformer sets | *Onto*'s entries, each with properties of *From*'s put on - matched on a property both carry (an ID a Tag gave), each record as it was, under its own name or one given ("species as first end") - out of *Joined*; those with nothing put on out of *Not joined*, saying why (*Join*, below) |
+| 3D results onto structures | two tables, a row of each linked (drawn; its own to come) | *Structures*: structures drawn; *3D results*: molecules in 3D, or conformer sets | the same structures, none set aside, each with what was made of it in 3D - by its lasting id - written on its record: its conformers in the set, its lowest E and G, its share among the structures of its formula, its state in 3D (*3D results onto structures*, below) |
 | Barrier | a barrier's height above its start, measured (drawn) | *Saddle points* and *Starts*: molecules in 3D, or conformer sets - each conformer one - each saddle point paired with a start - in order, each with each, or matched on a property | **molecules in 3D**: each saddle point with its `barrier`, in kcal/mol, of its free energy G (by default) or its electronic energy E above its start's, out of *With barriers*; one it cannot give one, out of *Failed*, saying why (*Barrier*, below) |
 | Number | a number typed in a field (drawn) | nothing | **a number** with its unit and what worked it out: the standard-state term, 1 atm to 1 mol/L, at its temperature, by its formula - or one typed (*Add and Number*, below) |
 | Add | two values summed (drawn) | *Molecules*: molecules in 3D, or conformer sets; *Number*, where wanted: a number | each entry with the sum of the values named - each of its own geometry, at one temperature and pressure - and the number wired in, written under the name given, each part as it was; those it cannot be worked out for out of *Not added*, saying why (*Add and Number*, below) |
@@ -677,7 +678,11 @@ one of the kinds of calculation it does (decided: 16):
   it was wired, at its run.
 - **A wire let go on empty space** opens Quick Add already at
   *Calculations*, showing only the kinds that take what the wire
-  carries - and a plugin only where it does one of them.
+  carries - and a plugin only where it does one of them. From a
+  Generate's exit, or Conformers' *Failed* - where structures that leave
+  their stereo open come out - it offers *Stereoisomers* first: Meno's
+  line first, and it first in it, the rest as they are (workflow/offered
+  `offeredFirst`, 2026-11-06).
 
 ### Wires
 
@@ -710,8 +715,9 @@ frames chip opens to its slider:
   options the two share kept as they were;
 - the plugin's own options, drawn in Meno's general form (`lib/options`,
   as Export draws a writer's): for xTB, its method (GFN2-xTB, GFN1-xTB,
-  GFN-FF), solvent, optimisation level; for *Energy window*, the window
-  (3 kcal/mol) - or *No options*;
+  GFN-FF), solvent, optimisation level; for *Energy window*, the window,
+  which is the chemist's own (*The window is the chemist's*) - or *No
+  options*;
 - its runs, where it has more than one: each when, and what it said,
   with *Show* to put its results back on the page (*Results*).
 
@@ -845,7 +851,8 @@ Conformers go through a workflow as any set does (decided):
 | --- | --- |
 | A step's menu (right-click) | *Run* - this step, and first any step before it that has not run, has changed, failed or stopped, however far back, and every step on a way from one of those to this one; a step done on no such way is not run, however near - of a step of two inputs, the side done is left as it is |
 | | *Run from here* - this step and every step after it |
-| | *Stop* - while it is waiting or running |
+| | *Stop* - while it is waiting or running: the whole step stopped, nothing of its run brought in (its jobs done are taken up again by the next run) |
+| A step's log of several jobs (the text column) | *Stop this job* - the job shown, while it is waiting or running: it alone stopped, and recorded failed, "stopped by you"; the step goes on and brings in what its other jobs gave, that job's entries on its Failed exit, stopped (2026-11-06) |
 | | *Show log*, *Show files*, *Options…*, *Delete step* |
 | | *Don't keep raw outputs* - a step a plugin does: its jobs' files kept in the workspace's file are what they were given, what Meno read back and their logs (docs/FILE-IO.md, *A step's jobs*) |
 | The menu on empty space | *Run all* - every step on the page that is not done - not run, changed, failed or stopped - and every step after one, in order; no other |
@@ -884,6 +891,24 @@ rests.
 | Failed | an exclamation mark, the attention colour | *Failed* - and the line of the log that says why, where nothing was done. Where some entries were, the step is done: *78 of 81 · 3 of 81 failed (2: not converged; 1: refused)* |
 | Stopped | a stop, grey | *Stopped after 0:31* |
 | Changed | turning arrows, grey | *Changed · run again* - its options, or what comes into it (its atoms with their charges, radicals and isotopes, their places, its frames), changed since its run; its results stay as they are |
+
+### A job that writes nothing
+
+A program may go on running without writing anything more, and its step
+then never finishes. So a running job's runner says when its program last wrote
+anything - a line of its log, or any file or folder of its work folder
+(`lastWritten`, src-tauri jobs.rs `last_written`; a work folder of more
+than 5000 entries is not walked past them, and then nothing is said, never
+a time older than a write it did not reach) - and where that is longer ago than
+*Settings, Calculations, Say a job is quiet after* (minutes; 30 unless set,
+`QUIET_AFTER_MIN`), the step's running line and its log's job chooser say
+so: *Running · 3 of 12 · no output for 47 min* (the quietest of its running
+jobs), *Job 4 of 12 · quiet 47 min* (in place of *running*: the chooser's
+room is short). It is said only:
+Meno never ends a job for it, since how long a program may rightly write
+nothing depends on the program and its method. The chemist may end it with
+*Stop this job*, beside the chooser. (The default, 30 minutes, is the
+maintainer's choice, 2026-11-06.)
 
 ### The log
 
@@ -929,6 +954,29 @@ beside its edge - being drawn over all of it.
   their line: "2 of 2 kept, on electronic energies · each compound has
   one conformer", or "1 compound has one conformer" where others have
   more (2026-10-22);
+- **The window is the chemist's** (2026-11-05): *Energy window* sets
+  none. Its field is empty until the chemist gives one, and until then
+  the card says what it needs ("Give the window, in kcal/mol") and the
+  step does not run; run without one, its line says the same. No window
+  has a basis that holds for every set of energies, so none stands as a
+  default. The field gives a guide, not a default: at 298.15 K a
+  conformer ΔE above the lowest weighs exp(-ΔE/RT) as much, 1/100 at
+  RT ln 100 = 2.73 kcal/mol (`WINDOW_GUIDE`, workflow/kinds). Which
+  energies it is on is below.
+  - **A window of the chemist's own** may be kept in Settings,
+    *Calculations*, under Meno's *Energy window*, where it is empty
+    until given, with the same guide under it. Each new Energy window
+    step starts with it, as each step starts with the options set there;
+    a step's own window is then its own, and changing Settings later
+    changes no step put down before. *Clear*, beside it, empties it
+    again: each new step then asks. It is the chemist's value, never
+    Meno's.
+  - A new step holds no window until one is given: an option with no
+    default is never held, nor remembered in Settings, as a number that
+    is none (lib/options `givenOnly`).
+  - A step put down before this holds the window it started with (3
+    kcal/mol) as its own and runs as before. Only one with no window of
+    its own - made otherwise than on the canvas - asks for one.
 - **Which energy** *Energy window* and *Populations* are on (2026-10-24):
   the free energy G where every entry has one and each compound's were
   worked out alike - the same temperature, pressure, solvent, program,
@@ -1358,6 +1406,29 @@ is not held to one.
   take their own folders away: a Render job, once its picture is on the
   page, and a job started for a step deleted before its run began - none
   of them taken up again from another run.
+- **Once the workspace is saved, a finished job's folder goes to the
+  Trash** - unless *Settings, Calculations, Keep job folders once saved*
+  is on. It is off unless changed: the maintainer's choice (2026-11-06),
+  the default one constant (`JOB_FOLDERS_KEPT`). A folder goes only where the save holds every
+  file of the job from that folder (none left out by *Don't keep raw
+  outputs*, none kept again from another file), and only after the save
+  is complete: Meno reads the file saved back, every file of the job's
+  record to its size and SHA-256, checks that the job has finished and
+  that its folder holds nothing the record does not, and that the file
+  saved has not changed meanwhile. It is moved to the system's Trash
+  (the Recycle Bin on Windows), never deleted outright; where there is
+  no Trash Meno knows, or on Windows its drive has no Recycle Bin (a
+  network drive, many a USB one), it stays - and where Windows would
+  destroy it rather than recycle it, Windows asks first, and declined, it
+  stays. Any that stays though finished is said
+  once, with why, beside the save. What a later save keeps of a job
+  whose folder went, and what *Show log* and *Show files* show, Meno
+  reads from the file saved, as it does from a file opened (FILE-IO.md,
+  *A step's jobs*). Where that file is moved or written since, within
+  the session, a later save says those files are not to be had - they
+  are in the file as it was, and in the Trash; Meno takes them from
+  neither on its own. A job whose folder went is run again where it
+  would have been taken up (*Job keys*).
 - **A saved workspace keeps its jobs' files**, raw outputs included,
   unless the step says *Don't keep raw outputs*; opened elsewhere, *Show
   files* writes them back out (docs/FILE-IO.md, *A step's jobs*).
@@ -1549,21 +1620,31 @@ Decided while building it, for the maintainer to confirm:
   that plugin's environment - never a shell, and Python only running a
   script of the plugin's. Meno's page names a plugin and a program, never
   a path.
-- **Cores for each, unset, are the computer's shared among the jobs at
-  once** - all of them while one runs at a time; set, never more than the
-  computer has. A program is told them as `OMP_NUM_THREADS` (and MKL's
-  and OpenBLAS's); a plugin's command may say them as well (xTB's `-P`).
+- **Cores for each, unset, are those jobs may use shared among a step's
+  jobs** (the maintainer, 2026-11-06): each takes the cores jobs may use
+  divided by its step's jobs - one for each entry it sends, as most steps
+  make them - all of them for one job, one each for as many jobs as there
+  are cores, at least one (lib/jobs `runningOf`). A step of hundreds of
+  small jobs runs them side by side, not one after another each with every
+  core. Set, each job takes that many, never more than jobs may use nor
+  than the computer has; Settings says so under the Jobs rows while unset.
+  A program is told them as `OMP_NUM_THREADS` (and MKL's and OpenBLAS's);
+  a plugin's command may say them as well (xTB's `-P`).
 - **A program that runs as processes is given one to each physical core,
   each told one thread** (2026-10-30). Its manifest says so
   (`installed[].parallel`: `"processes"` - ORCA, its `%pal`, run under
-  MPI). Its job takes the cores Settings gives each, as processes - never
-  more than the computer's physical cores - and each process is told one
+  MPI). Its job takes as many processes as fit in the cores Settings gives
+  each, each counted as the queue counts it (below) - never more than the
+  computer's physical cores, and at least one - and each process is told one
   thread (`OMP_NUM_THREADS`, MKL's and OpenBLAS's, all `1`). Before, each
   of its processes was told all the job's cores as its threads: on a
   computer of 16 physical cores running two threads on each, 32 processes
   of 32 threads each. Where the computer runs two threads on each physical
   core, the queue counts each process as two of its cores, so that two
-  such jobs never share a physical core. Settings, *Calculations*, says so under its cores,
+  such jobs never share a physical core - and the processes are as many as
+  fit in the job's cores so counted (2026-11-06): 28 cores there are 14
+  processes, never 16, which the queue counts as 32, past the 28 Settings
+  allows. Settings, *Calculations*, says so under its cores,
   where the computer runs more than one thread on each: they are counted
   in logical cores, and such a program takes that many for each process. Its physical cores are what its
   system says: on macOS `hw.physicalcpu`; on Linux the distinct cores in
@@ -2077,7 +2158,8 @@ Built, as the maintainer chose from pictures (decided: 18, 19):
   stereoisomers RDKit does not count. The canvas's *3D structure* asks
   which is meant; a step cannot ask, and never chooses. The others are
   made, and the step's line names those not made by their places
-  (*structure 3 of 4 leaves stereo open: draw it, wedges and all*). Each
+  (*structure 3 of 4 leaves stereo open: put Stereoisomers before
+  Conformers*, as each one's record says it, 2026-11-06). Each
   structure drawn that is not made - its stereo left open, one atom alone,
   or one that could not be made - goes to the step's *Failed* exit as it
   came, its record with it, failed - no result to stand on, so a table
@@ -2346,10 +2428,8 @@ Its second part:
   what Meno would give it), and output Meno cannot account for stops its
   step (*Job keys*); still, choose a folder only you write in.
 
-Not yet: job folders cleaned once their files are in the `.meno` unless
-*Keep job folders* is chosen (that waits for raw outputs kept in the
-`.meno`, #9b); *Show files*, on a step's menu, opens a job's folder, and
-an entry's menu does not yet.
+Not yet: *Show files*, on a step's menu, opens a job's folder, and an
+entry's menu does not yet.
 
 ### Job keys, and a job taken up again (2026-10-22)
 
@@ -3067,7 +3147,11 @@ molecules in 3D does: *Open as a table* on its menu (workflow
   holds off it (`drawnCollection`), all of them, in the step's order - the
   page's first, as a step after it takes them (`setStructures`). A set
   that shows 50 of 120 has 120 rows.
-- **Its columns**: its place (#); its SMILES as the step that made it
+- **Its columns**: its place (#); which structure it is, as a number
+  (`structure`): the number its record carries where every one carries
+  one (an *Enumerate*'s), else its place from 1, never the two mixed - what
+  a chart takes across to plot a value for each structure, a value a
+  record holds by that name said apart as `structure (record)` (2026-11-06); its SMILES as the step that made it
   gave it (`SMILES (record)`, `smiles` on its record, its stereo with it),
   where any did; its SMILES as Meno writes it from the drawing (`SMILES
   (drawing, constitution only)`: Kekulé, a label of no element as `*`,
@@ -3353,7 +3437,14 @@ it.
 - **Its two exits add up to what came in**: those kept, in the order they
   came, and *The rest*, both counted on its line, with how many of the
   rest were set aside for each reason ("2 of 4 entries kept · rest 2 (1:
-  not nll < 30 (40); 1: it has no nll)"). An entry with no value for a
+  not nll < 30; 1: it has no nll)"). The line counts them by the
+  conditions not met, a number's without its value, so that forty
+  structures over a limit are one count, not forty ("rest 12 (8: not nll
+  < 40; 4: not mw ≤ 500 g/mol)"); each one's own value is on its record
+  as it is set aside ("not nll < 40 (45)"), in the set and its table.
+  A text or true or false is counted with its value, being a kind rather
+  than an entry's own number ("2: not state = finished (not converged)")
+  (2026-11-06). An entry with no value for a
   property named does not meet that condition, and is never dropped
   unsaid. What it keeps and sets aside is as it came: its number, its
   energy, its properties.
@@ -3457,6 +3548,67 @@ of a reaction path's two ends put back on its saddle point, matched on
   still needs. It takes molecules in 3D and conformer sets; a table to
   join from, and joining by identity or by drawn atom (the foundation's
   other two ways), are not built yet.
+### 3D results onto structures (2026-11-05)
+
+*3D results onto structures*, Meno's own (workflow/ontoStructures), puts
+what was found in 3D back onto the structures drawn it was found for, so
+that a set of structures read as a table - or charted, filtered, ranked -
+has each one's results in its row. Which 3D set is read is the one wired
+in: a step, not a table's guess (the maintainer, 2026-10-29).
+
+- **Two inputs**: *Structures*, structures drawn, which come out as they
+  came, none set aside; and *3D results*, molecules in 3D or conformer
+  sets - what *Conformers* made of them, and the steps after.
+- **Matched by lasting id alone.** Each conformer names the structure it
+  was made of by the structure's lasting id (*Lineage in 3D*, above;
+  `DrawnRecord.id`); never by what a structure is, its SMILES or identity.
+  A structure with no lasting id, or whose id another structure among
+  them has too, is given nothing, saying so; conformers made of none of
+  them are counted in what the step says.
+- **What each is given**, on its record, as any other value - each under
+  its name, a number with its unit - first on the record, in this order,
+  before what it said already: a table shows them first, and a chart told
+  no columns takes the share (2026-11-06):
+  - *share among isomers*: below;
+  - *conformers in 3D*: how many of its conformers the set holds;
+  - *E min* (Eh): the lowest electronic energy of its finished
+    conformers, as that conformer's energy is - where they come from one
+    calculation; else not worked out, and why;
+  - *G min* (Eh): the lowest free energy, where each finished conformer
+    has one and all were worked out alike (temperature, pressure,
+    solvent, program, method, basis, treatment); else not worked out, and
+    why - never a G of one level beside another's;
+  - *state in 3D*: finished; or how many of its conformers did not
+    finish; or none of them finished, and why; or *no 3D result*;
+  - the share, *share among isomers*: its Boltzmann share at *Shares at* (298.15 K,
+    the IUPAC standard temperature, as Populations' own) among the
+    structures of its formula and charge alone: each of their finished
+    conformers weighed as *Populations* weighs one - by G where each has
+    one alike, else by E, said which - with each one's degeneracy where
+    each has one; refused, naming it, where one is no minimum. The
+    isomers are weighed against each other only on energies of one
+    calculation, and by G only where all of theirs were worked out alike
+    - else by E, saying why not G; else no share, saying so. Structures
+    of another formula are never weighed against it: their energies are
+    of other atoms. One alone in its formula has all of its own (1). A
+    value of its conformers together, as an ensemble's: at its lowest
+    conformer's geometry and the temperature, by what worked out the
+    energies weighed, over its own conformers (`Property.at`, `by`,
+    `ensemble`) - so a chart's axis says where it stands.
+- **Never a number in place of none.** A value that cannot be worked out
+  says why in its cell ("not worked out: its conformer #2 has no free
+  energy"), and a structure with no 3D result has no share, not 0 - nor
+  an E min or a G min: none, saying why, as does one with no conformer
+  finished.
+- Failed and unfinished conformers are never a minimum: they are left out
+  of E min, G min and the shares, and counted in its state.
+- One optimised with atoms held where they stood (*Hold its restraints*)
+  is no stationary point either: it is left out of E min and G min, and
+  how many were is said in the step's line; where every finished
+  conformer of a structure was, its E min and G min say so, naming them.
+  The shares of its isomers are refused, naming it, as *Populations*
+  refuses them.
+
 ### Add and Number (2026-10-29)
 
 *Add* and *Number*, Meno's own, make the free energy at a higher level
@@ -3556,7 +3708,9 @@ one - and gives a
 chart, one column of numbers against another, in a set of its own to the
 right of it. Its options name the columns, *Across* and *Up*; none named,
 it takes the first two columns of numbers (molecules seen as a table:
-each entry's number, then its energy).
+each entry's number, then its energy; structures drawn: which structure
+each is, `structure`, then the first value their records hold - a value
+for each structure).
 - **A chart of molecules plots no entry that is no result**: one that
   failed, by any kind, or whose marks did not read refuses it, each named,
   as an *Energy diagram*'s levels do (`notResults`, 2026-10-23).

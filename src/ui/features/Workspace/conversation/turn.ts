@@ -23,8 +23,14 @@ import type { Conversation, Said, Sent, ToolCall } from "./types";
 /** What is sent to a model, a turn's each go: what Meno tells it, all that was said, and its tools. */
 export type ModelRequest = { told: string; said: readonly Said[]; tools: readonly { name: string; does: string }[] };
 
-/** A model's reply: its words, and the tools it calls. */
-export type ModelReply = { text: string; calls?: ToolCall[] };
+/**
+ * A model's reply: its words, and the tools it calls - and what its plugin
+ * keeps of it (`keep`), opaque to Meno: its service's own record of the
+ * reply, the reasoning it says it must be given back with what it said, as
+ * it gave it. Kept with the reply while the conversation is open, and sent
+ * back with it; never saved.
+ */
+export type ModelReply = { text: string; calls?: ToolCall[]; keep?: unknown };
 
 /**
  * A conversation's connection: a plugin of the language-model kind (or one
@@ -185,7 +191,7 @@ export async function runTurn(o: {
       // (its words, as words: plain text - never drawn as a page, nothing fetched for them)
       const text = typeof reply?.text === "string" ? reply.text : "";
       const asked = Array.isArray(reply?.calls) ? reply.calls.filter((k): k is ToolCall => typeof k?.tool === "string") : [];
-      keep([{ by: "model", text, ...(asked.length ? { calls: asked } : {}), at: now() }]);
+      keep([{ by: "model", text, ...(asked.length ? { calls: asked } : {}), ...(reply?.keep !== undefined ? { keep: reply.keep } : {}), at: now() }]);
       if (!asked.length) return { sent: true, ...(madeAny ? { changed: key } : {}) };
       for (const call of asked) {
         if (calls >= limits.calls) {

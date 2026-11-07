@@ -30,7 +30,29 @@ export type Job = {
   why?: string;
   /** Its key, as Meno asked for it with one (lib/jobKeys). */
   key?: string;
+  /** When its program last wrote anything - its log, or a file of its work folder - in ms: a running job's alone (src-tauri jobs.rs `last_written`). */
+  lastWritten?: number;
 };
+
+/**
+ * How many whole minutes a running job has written nothing - no line of its
+ * log, no file of its work folder - where that is `afterMin` minutes or
+ * more; none else, and none for a job not running or that never said.
+ * Said only: Meno never ends a job for it (docs/WORKFLOWS.md, *A job that
+ * writes nothing*).
+ */
+export function quietFor(job: { state: string; lastWritten?: number } | undefined, now: number, afterMin: number): number | null {
+  if (job?.state !== "running" || job.lastWritten == null) return null;
+  const min = Math.floor((now - job.lastWritten) / 60_000);
+  return min >= afterMin ? min : null;
+}
+
+/** How long, said: "47 min", or "2 h 5 min" from two hours. */
+const minutesSaid = (min: number) => (min < 120 ? `${min} min` : `${Math.floor(min / 60)} h ${min % 60} min`);
+/** A job quiet so long, said on its step's line: "no output for 47 min". */
+export const quietSaid = (min: number) => `no output for ${minutesSaid(min)}`;
+/** And in a job's place in a list, where there is less room - for a job running, in place of "running": "quiet 47 min". */
+export const quietShort = (min: number) => `quiet ${minutesSaid(min)}`;
 
 /** A file written into a job's folder before it starts, by its path there. */
 export type JobFile = { name: string; text: string };
@@ -104,6 +126,14 @@ export const writeJobBack = (id: string, name: string, sha256: string, source: {
     : invoke<WrittenBack>("job_write_back", source.bytes, { headers: { job: id, name, sha256 } });
 /** Asks a job to stop: its program, and everything it started - or, waiting, it never starts. */
 export const stopJob = (id: string) => runnerOf(id).stop(id);
+/** Asks a job alone to stop - as `stopJob`, but recorded failed, "stopped by you" (`STOPPED_ALONE`): its step goes on, bringing in what its other jobs gave. */
+export const stopJobAlone = (id: string) => runnerOf(id).stopAlone(id);
+/** Why a job stopped alone is recorded failed (src-tauri jobs.rs `STOPPED_ALONE`). */
+export const STOPPED_ALONE = "stopped by you";
+/** What a save's job folders came to (src-tauri keptjobs.rs `job_clear_saved`): the jobs whose folders went to the Trash; those left, and why - `quiet` where nothing is amiss, a job not finished; and the saved file as it was read back, none where it could not be. */
+export type ClearedSaved = { gone: string[]; left: { job: string; why: string; quiet: boolean }[]; at: { size: number; mtime: number | null } | null };
+/** After a save to `path`: the folders of `jobs` moved to the system's Trash, each only where the file there, read back, holds every file of its record whole (src-tauri keptjobs.rs `job_clear_saved`). This computer's runner's: the only one there is yet. */
+export const clearSavedFolders = (path: string, jobs: { job: string; files: { name: string; sha256: string; size: number }[] }[]) => invoke<ClearedSaved>("job_clear_saved", { path, jobs });
 /** A finished job's folder taken away. */
 export const removeJob = (id: string) => runnerOf(id).remove(id);
 /** Every finished job's folder taken away: how many. */
@@ -167,13 +197,17 @@ export async function stopJobsAndWait(
 export const computerCores = () => Math.max(1, (typeof navigator !== "undefined" && navigator.hardwareConcurrency) || 1);
 
 /**
- * How many cores a job takes, as Settings, *Calculations*, has it: unset,
- * all those jobs may use - one at a time - never more than they may use,
- * nor than the computer has.
+ * How many cores each of a step's `jobs` takes, as Settings, *Calculations*,
+ * has it: set, that many; unset, those jobs may use shared among them - all
+ * of them for one job, one each for as many jobs as there are cores - so
+ * that a step of many small jobs runs them side by side, not one after
+ * another each with every core (the maintainer, 2026-11-06). Never more
+ * than they may use, nor than the computer has, and at least one.
  */
-export function runningOf(c: Pick<CalculationSettings, "cores" | "coresAll">, cores = computerCores()): { cores: number } {
+export function runningOf(c: Pick<CalculationSettings, "cores" | "coresAll">, cores = computerCores(), jobs = 1): { cores: number } {
   const all = Math.min(c.coresAll ?? cores, cores);
-  return { cores: Math.max(1, Math.min(c.cores ?? all, all)) };
+  const shared = Math.floor(all / Math.max(1, Math.min(jobs, all)));
+  return { cores: Math.max(1, Math.min(c.cores ?? shared, all)) };
 }
 
 /**
@@ -194,12 +228,17 @@ export function coresCountedSaid(c: { cores: number; physical?: number }): strin
 
 /**
  * How many processes a job of a program running as processes takes (a
- * manifest's `installed[].parallel`: MPI): the cores Settings
- * gives it, one process to each - never more than the computer's physical
- * cores, each process a whole one.
+ * manifest's `installed[].parallel`: MPI), of the cores Settings gives it:
+ * each process a whole physical core - the threads the computer runs on
+ * one, as the queue counts it (jobs.rs `taken`) - so as many as fit in
+ * those cores, and never more than its physical cores. At least one, which
+ * takes a whole core however few it is given. Where its physical cores
+ * cannot be told, one process to each core.
  */
-export function processesOf(cores: number, physical: number): number {
-  return Math.max(1, Math.min(cores, physical));
+export function processesOf(cores: number, here: { cores: number; physical?: number }): number {
+  const physical = here.physical && here.physical >= 1 ? here.physical : here.cores;
+  const perProcess = Math.max(1, Math.ceil(here.cores / physical));
+  return Math.max(1, Math.min(Math.floor(cores / perProcess), physical));
 }
 
 /**

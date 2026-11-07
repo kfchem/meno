@@ -7,8 +7,11 @@ import {
   WINDOW_3D_MOST,
   type ChemistrySettings as Settings,
 } from "../../../lib/settings/appSettings";
-import { shownOptions, type Option, type OptionValues } from "../../../lib/options";
-import { MOST_CONFORMERS, RING_CONFORMERS, soughtOptions } from "../../../lib/chem/conformersSought";
+import { Fragment } from "react";
+import { notedParts, shownOptions, type Option, type OptionValues } from "../../../lib/options";
+import { clearOf } from "./CalculationSettings";
+import { RING_CONFORMERS, soughtOptions } from "../../../lib/chem/conformersSought";
+import { soughtChosen, soughtValues } from "./soughtSettings";
 import OptionRows from "../../options/OptionRows";
 import Switch from "../../controls/Switch";
 
@@ -116,16 +119,29 @@ export default function ChemistrySettings() {
  * (lib/chem/conformersSought): shown only where the one chosen does.
  */
 function Sought3D({ chemistry, setChemistry }: { chemistry: Settings; setChemistry: (c: Settings) => void }) {
-  if (!rolePlugin("conformers")?.roleTries.includes("conformers")) return null;
-  const values: OptionValues = { sought: chemistry.sought3d ?? "needed", count: chemistry.count3d ?? RING_CONFORMERS };
-  const change = (v: OptionValues) => {
-    const { sought3d: _s, count3d: _c, ...rest } = chemistry;
-    const n = typeof v.count === "number" && Number.isFinite(v.count) ? Math.min(Math.max(1, Math.round(v.count)), MOST_CONFORMERS) : RING_CONFORMERS;
-    setChemistry({ ...rest, ...(v.sought === "fixed" ? { sought3d: "fixed" as const } : {}), ...(n !== RING_CONFORMERS ? { count3d: n } : {}) });
-  };
+  const plugin = rolePlugin("conformers");
+  if (!plugin?.roleTries.includes("conformers")) return null;
+  // (as many as the molecule needs, in rounds, where its search takes draws: their window - the chemist's own, none until given - first round and most)
+  const rounds = plugin.roleDraws.includes("conformers");
+  const values = soughtValues(chemistry, rounds);
+  const change = (v: OptionValues) => setChemistry(soughtChosen(chemistry, v));
+  const shown = shownOptions(soughtOptions("needed", RING_CONFORMERS, rounds ? {} : undefined), values);
   return (
     <div className="mt-2 rounded-lg border border-gh-line bg-white">
-      <OptionRows options={shownOptions(soughtOptions(), values)} values={values} onChange={change} />
+      {/* (each option's note right under its row, as one row with it - the window's guide, with Clear just before its field, as
+           Settings, Calculations has it; the first round's, what 0 is) */}
+      {notedParts(shown).map((part, k) => {
+        const note = part[part.length - 1].note;
+        const rows = <OptionRows options={part} values={values} onChange={change} before={(o) => clearOf(o, { within: values.within }, () => change({ ...values, within: Number.NaN }))} />;
+        return note ? (
+          <div key={k}>
+            {rows}
+            <p className="pr-3 pb-2.5 pl-3 max-w-2xl text-xs leading-snug text-gh-gray">{note}</p>
+          </div>
+        ) : (
+          <Fragment key={k}>{rows}</Fragment>
+        );
+      })}
       <p className="px-3 pb-2.5 text-xs leading-snug text-gh-gray max-w-2xl">
         How many conformers are tried of a structure made in 3D here. A workflow's Conformers step says its own, starting from this.
       </p>

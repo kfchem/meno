@@ -78,7 +78,23 @@ export type CalculationSettings = {
   largeWorkspaceMB?: number;
   /** Whether the computer may sleep while a job's program runs: unset, it is kept awake (src-tauri/src/awake.rs). */
   sleepWhileJobsRun?: true;
+  /** Whether a finished job's folder is kept once a workspace's file holds all of it, as Settings was set; unset, as `JOB_FOLDERS_KEPT` says (`keepsJobFolders`). */
+  keepJobFolders?: boolean;
+  /** After how many minutes with nothing written a running job is said to be quiet (lib/jobs `quietFor`); unset, `QUIET_AFTER_MIN`. */
+  quietAfterMin?: number;
 };
+
+/**
+ * Whether a finished job's folder is kept once a workspace's file holds all
+ * of it, where Settings has not been set (workflow/keptJobs
+ * `clearSavedJobs`): not kept - moved to the Trash once the file saved
+ * reads back holding it whole - the maintainer's choice (2026-11-06;
+ * docs/WORKFLOWS.md, *A job's folder*).
+ */
+export const JOB_FOLDERS_KEPT = false;
+
+/** Whether a finished job's folder is kept once a workspace's file holds all of it: as Settings says, else `JOB_FOLDERS_KEPT`. */
+export const keepsJobFolders = (c: CalculationSettings): boolean => c.keepJobFolders ?? JOB_FOLDERS_KEPT;
 
 /** The most cores, and memory in MiB, Settings takes. */
 export const CORES_MOST = 1024;
@@ -87,6 +103,15 @@ export const MEMORY_MOST = 64 * 1024 * 1024;
 export const LARGE_WORKSPACE_MOST = MOST_WORKSPACE_FILE / 2 ** 20;
 /** The energy window a structure's 3D conformers are kept within, made on the canvas, in kcal/mol, unless Settings says otherwise; and the widest Settings takes. */
 export const WINDOW_3D = 30;
+/**
+ * After how many minutes with nothing written - no line of its log, no file
+ * of its work folder - a running job is said to be quiet, unless Settings
+ * says otherwise; and the most Settings takes (a day). Said only: Meno never
+ * ends a job for it (docs/WORKFLOWS.md, *A job that writes nothing*). Thirty
+ * minutes is the maintainer's choice (2026-11-06), to be changed here alone.
+ */
+export const QUIET_AFTER_MIN = 30;
+export const QUIET_AFTER_MOST = 24 * 60;
 export const WINDOW_3D_MOST = 1000;
 
 /**
@@ -175,6 +200,17 @@ export type ChemistrySettings = {
   sought3d?: "fixed";
   /** The number tried where `sought3d` is "fixed": 1 to `MOST_CONFORMERS` - unset, `RING_CONFORMERS`. */
   count3d?: number;
+  /**
+   * As many as the molecule needs, asked in rounds where the search takes
+   * draws (lib/chem/conformersSought `RoundsChosen`) - the page's, and a
+   * Conformers step's to start from: the window for new conformers, in
+   * kcal/mol, the chemist's own - unset, none, and each search asks for
+   * one; the first round - unset, the molecule's own count; the most tried
+   * - unset, `MOST_CONFORMERS`.
+   */
+  within3d?: number;
+  first3d?: number;
+  most3d?: number;
 };
 
 export type NetworkSettings = {
@@ -236,18 +272,21 @@ export function acceptAppSettings(raw: unknown): AppSettings {
 
 /** How a workflow's jobs run, as the file holds it: the cores each takes, and the cores and memory they may use in all - whole numbers within reason. */
 function acceptCalculations(raw: unknown): CalculationSettings {
-  const r = raw as { cores?: unknown; coresAll?: unknown; memoryAll?: unknown; largeWorkspaceMB?: unknown; sleepWhileJobsRun?: unknown } | null;
+  const r = raw as { cores?: unknown; coresAll?: unknown; memoryAll?: unknown; largeWorkspaceMB?: unknown; sleepWhileJobsRun?: unknown; keepJobFolders?: unknown; quietAfterMin?: unknown } | null;
   const whole = (v: unknown, most: number) => (typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= most ? v : undefined);
   const cores = whole(r?.cores, CORES_MOST);
   const coresAll = whole(r?.coresAll, CORES_MOST);
   const memoryAll = whole(r?.memoryAll, MEMORY_MOST);
   const largeWorkspaceMB = whole(r?.largeWorkspaceMB, LARGE_WORKSPACE_MOST);
+  const quietAfterMin = whole(r?.quietAfterMin, QUIET_AFTER_MOST);
   return {
     ...(cores ? { cores } : {}),
     ...(coresAll ? { coresAll } : {}),
     ...(memoryAll ? { memoryAll } : {}),
     ...(largeWorkspaceMB ? { largeWorkspaceMB } : {}),
     ...(r?.sleepWhileJobsRun === true ? { sleepWhileJobsRun: true as const } : {}),
+    ...(typeof r?.keepJobFolders === "boolean" ? { keepJobFolders: r.keepJobFolders } : {}),
+    ...(quietAfterMin ? { quietAfterMin } : {}),
   };
 }
 
@@ -385,13 +424,17 @@ function acceptUpdates(raw: unknown): UpdateSettings {
 function acceptChemistry(raw: unknown): ChemistrySettings {
   const d = DEFAULT_APP_SETTINGS.chemistry;
   if (typeof raw !== "object" || raw === null) return d;
-  const { valenceWarnings, window3d, sought3d, count3d } = raw as Record<string, unknown>;
+  const { valenceWarnings, window3d, sought3d, count3d, within3d, first3d, most3d } = raw as Record<string, unknown>;
+  const conformers = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n) && n >= 1 && n <= MOST_CONFORMERS;
   return {
     valenceWarnings:
       typeof valenceWarnings === "boolean" ? valenceWarnings : d.valenceWarnings,
     ...(typeof window3d === "number" && Number.isFinite(window3d) && window3d >= 0 && window3d <= WINDOW_3D_MOST ? { window3d } : {}),
     ...(sought3d === "fixed" ? { sought3d } : {}),
-    ...(typeof count3d === "number" && Number.isInteger(count3d) && count3d >= 1 && count3d <= MOST_CONFORMERS ? { count3d } : {}),
+    ...(conformers(count3d) ? { count3d } : {}),
+    ...(typeof within3d === "number" && Number.isFinite(within3d) && within3d >= 0 ? { within3d } : {}),
+    ...(conformers(first3d) ? { first3d } : {}),
+    ...(conformers(most3d) ? { most3d } : {}),
   };
 }
 

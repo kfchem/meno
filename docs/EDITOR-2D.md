@@ -1680,6 +1680,17 @@ lipids each have their own way of being drawn, which it should know.
        three atoms or fewer (Tröger's base, a quinuclidine, bicyclo[3.3.3]
        at most): it cannot turn over without breaking a bond. A larger cage
        can turn it in and out, and is left free.
+     With an H among its three - carried, or an atom of its own, as every
+     H is in 3D - a P, As, Sb or Bi keeps its configuration as it does
+     without one (a secondary phosphine's P); an N, or an S, Se or Te, never
+     does, its ring, cage or charge notwithstanding (an oxaziridine's N-H, a
+     sulfonium's S+-H) (the maintainer, 2026-11-06). A drawing states a
+     P-H's configuration with its H drawn as an atom: drawn with its H
+     carried and two bonds, the two corners left are each other's mirror
+     image and which holds the H is not drawn, so its wedge states none,
+     and Clean-up says so rather than lose it. A SMILES's [P@H] is
+     still refused: where its H and its lone pair each go in the text's
+     order is not yet measured against the reading libraries.
      An amine's N keeps none. One rule (`lib/chem/lonePairCentres.ts`)
      says which such atoms a drawing's wedge is read at, which a SMILES's @
      is read at, which centres a structure leaves open, and which a

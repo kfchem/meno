@@ -4,7 +4,7 @@ import { readSDfile } from "../../../../lib/chem/ctfile";
 import { mapReaction, type ReactionMap } from "../../../../lib/chem/reactionMap";
 import { dielsAlder } from "../../../../lib/chem/reactionMap.fixtures";
 import * as ops from "../document";
-import { emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
+import { createWorkspaceDocument, emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
 import type { Arrow, Atom, Bond, Model } from "../store/types";
 import { keptMap, mapMarks, mappedPairSdf, mapStanding, reactionOf, type Side3D } from "./atomMap";
 import { reactionFileText } from "./reactionFile";
@@ -111,6 +111,21 @@ describe("a kept map and what it shows", () => {
     expect(mapStanding({ atomMap: kept }, d.model)).toBe("ready");
     expect(mapStanding({ atomMap: kept }, changed.model)).toBe("changed");
     expect(ops.setAtomMap(changed, 1, kept).model.atoms.every((a) => a.map === undefined)).toBe(true);
+  });
+
+  it("fails closed: an edit to its drawing takes its numbers and centres off at once, in the same step - undo gives them back", () => {
+    const d = drawn();
+    const { reactants, products, result } = sides();
+    const store = createWorkspaceDocument();
+    store.reset(ops.setAtomMap(d, 1, keptMap(d.model, result, reactants, products)));
+    const marked = () => store.getState().model.atoms.filter((a) => a.map).length + store.getState().model.bonds.filter((b) => b.reactingCentre).length;
+    const before = marked();
+    expect(before).toBeGreaterThan(0);
+    store.edit("element", (x) => ({ ...x, model: { ...x.model, atoms: x.model.atoms.map((a) => (a.id === 5 ? { ...a, el: "N" } : a)) } }));
+    expect(marked()).toBe(0);
+    expect(store.getState().arrows[0].atomMap).toBeDefined();
+    store.undo();
+    expect(marked()).toBe(before);
   });
 
   it("is written into the RXN file, shown or not", () => {

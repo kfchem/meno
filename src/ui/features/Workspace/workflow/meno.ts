@@ -21,7 +21,7 @@ import { barrierSet } from "./barrierStep";
 import { ensembleSet } from "./ensembleStep";
 import type { StyleChoice } from "../../../../lib/chem/style";
 import type { DrawnRecord, SeriesCore } from "../store/types";
-import { displaceRead, kindInfo, optionsOf, type Holds3D, type StepKind } from "./kinds";
+import { displaceRead, kindInfo, optionsOf, WINDOW_NEEDED, type Holds3D, type StepKind } from "./kinds";
 import { rmsd } from "./rmsd";
 import { cappedSaid, SAME_CONFORMER, Sameness } from "./sameConformer";
 import { least } from "../../../../lib/chem/lists";
@@ -57,7 +57,7 @@ export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Hol
     case "as-conformers":
       return asConformers(entries);
     case "energy-window":
-      return options.within === "each value" ? energyWindowByValue(entries, holds, Number(options.window), String(options.groupBy ?? "")) : energyWindow(entries, Number(options.window), holds);
+      return options.within === "each value" ? energyWindowByValue(entries, holds, windowOf(options.window), String(options.groupBy ?? "")) : energyWindow(entries, windowOf(options.window), holds);
     case "duplicates":
       return drain(duplicates(entries, holds, mirrorsOf(options), never, options.within === "each value" ? String(options.groupBy ?? "") : undefined, levels));
     case "populations":
@@ -427,7 +427,7 @@ function onesSaid(entries: readonly SetEntry[]): string {
 const NO_ENERGY: Outcome3D = { ok: false, said: "Not every entry has an energy" };
 
 /** Whether an entry has an energy: one that is a number - NaN or an infinite one is none. */
-const hasEnergy = (e: SetEntry): boolean => e.energy != null && Number.isFinite(e.energy);
+export const hasEnergy = (e: SetEntry): boolean => e.energy != null && Number.isFinite(e.energy);
 
 /**
  * The energy a window or shares are worked out on (docs/WORKFLOWS.md,
@@ -438,8 +438,8 @@ const hasEnergy = (e: SetEntry): boolean => e.energy != null && Number.isFinite(
  * else the electronic energy, and, where any had a G, why not it. Said
  * either way: which it was.
  */
-type Basis = { energy: (e: SetEntry) => number | undefined; free: boolean; words: string };
-function basisOf(entries: readonly SetEntry[], kelvin?: number, groups: readonly { said: string; entries: readonly SetEntry[] }[] = byCompound(entries).map((c) => ({ said: `compound ${compoundLetter(c[0].compound)}'s`, entries: c }))): Basis {
+export type Basis = { energy: (e: SetEntry) => number | undefined; free: boolean; words: string };
+export function basisOf(entries: readonly SetEntry[], kelvin?: number, groups: readonly { said: string; entries: readonly SetEntry[] }[] = byCompound(entries).map((c) => ({ said: `compound ${compoundLetter(c[0].compound)}'s`, entries: c }))): Basis {
   const name = (e: SetEntry) => `${compoundLetter(e.compound)} #${e.number}`;
   const electronic = (why?: string): Basis => ({
     energy: (e) => (hasEnergy(e) ? e.energy : undefined),
@@ -481,7 +481,8 @@ const asPart = (g: readonly SetEntry[]): SetEntry[] => g.map((e) => (e.partOf ? 
  */
 function energyWindow(entries: readonly SetEntry[], kcal: number, holds: Holds3D): Outcome3D {
   // (as Populations refuses a temperature it cannot use: a window below 0 would keep nothing, not even the lowest)
-  if (!(Number.isFinite(kcal) && kcal >= 0)) return NO_WINDOW;
+  const refused = windowRefused(kcal);
+  if (refused) return refused;
   // (molecules are no compound's conformers: each its own group, as Rank takes them, so none is outside its window - said, that the chemist names a property to take them together)
   if (holds !== "conformers") return { ok: true, holds, kept: [...entries], aside: [], said: `${entries.length} of ${countEntries(entries.length)} kept: each molecule is its own group` };
   const basis = basisOf(entries);
@@ -505,6 +506,12 @@ function energyWindow(entries: readonly SetEntry[], kcal: number, holds: Holds3D
 
 const NO_WINDOW: Outcome3D = { ok: false, said: "The window must be 0 kcal/mol or more" };
 
+/** An Energy window's window as its options hold it, a number - none (NaN) where there is none, never an empty text read as 0. */
+const windowOf = (v: string | number | boolean | undefined): number => (typeof v === "number" ? v : typeof v === "string" && v.trim() ? Number(v) : Number.NaN);
+
+/** Why a window cannot be used: none given - the chemist's to give, there being no default - or one below 0 or past any number; else none. */
+const windowRefused = (kcal: number): Outcome3D | null => (Number.isNaN(kcal) ? { ok: false, said: WINDOW_NEEDED } : Number.isFinite(kcal) && kcal >= 0 ? null : NO_WINDOW);
+
 /** What an entry is, as its frequencies say: a saddle point where it has an imaginary one, a minimum where they were worked out with none, else not known (entries `imaginaryOf`). */
 const kindOf = (e: SetEntry): "minimum" | "saddle point" | "not known" => {
   const im = imaginaryOf(e);
@@ -526,7 +533,8 @@ const named = (e: SetEntry) => `${compoundLetter(e.compound)} #${e.number}`;
  * (`basisOf`), each group's values alike.
  */
 function energyWindowByValue(entries: readonly SetEntry[], holds: Holds3D, kcal: number, groupBy: string): Outcome3D {
-  if (!(Number.isFinite(kcal) && kcal >= 0)) return NO_WINDOW;
+  const refused = windowRefused(kcal);
+  if (refused) return refused;
   const name = groupBy.trim();
   if (!name) return { ok: false, said: "Name the property whose values are the groups" };
   const failed = notResults(entries, (k) => compoundLetter(entries[k].compound));

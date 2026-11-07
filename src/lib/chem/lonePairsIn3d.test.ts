@@ -153,6 +153,19 @@ describe("lonePairsIn3d", () => {
     }
   });
 
+  it("reads an oxaziridine's N-methyl and no oxaziridine's N-H, the same ring: no N with an H is a centre, in 3D too (the maintainer, 2026-11-06)", () => {
+    const ring = (on: string) => {
+      const z = aziridine(on, 120);
+      return { ...z, atoms: z.atoms.map((a, i) => (i === 2 ? { el: "O" } : a)) };
+    };
+    const methyl = ring("C");
+    const nh = ring("H");
+    expect(lonePairsIn3d(methyl.atoms, methyl.bonds, methyl.xyz, [0]).read.has(0)).toBe(true);
+    const r = lonePairsIn3d(nh.atoms, nh.bonds, nh.xyz, [0]);
+    expect(r.read.size).toBe(0);
+    expect(r.none).toEqual(new Set([0]));
+  });
+
   it("reads no atom whose lone pair keeps no configuration, and says it is no centre: a plain N-methyl aziridine's N, an amine's, an O+", () => {
     const plain = aziridine("C", 120);
     const amine = { atoms: [{ el: "N" }, { el: "C" }, { el: "C" }, { el: "C" }, { el: "C" }], bonds: phosphine().bonds };
@@ -203,5 +216,90 @@ describe("lonePairsIn3d", () => {
     const { atoms, bonds } = phosphine();
     const xyz = pyramid(PLACES, ETHYL);
     expect(lonePairsIn3d(atoms, bonds, xyz, [0, 0])).toEqual(lonePairsIn3d(atoms, bonds, xyz, [0]));
+  });
+});
+
+describe("the key of the centres read, its rings' bonds marked aromatic or written out", () => {
+  // (a phosphine's P - its methyl's C, a pyrrol-2-yl's C, Cl - the pyrrole's other atoms and its H further out: synthetic)
+  const ring: BondIn3d[] = [
+    { a1: 2, a2: 4, order: 2 },
+    { a1: 4, a2: 5, order: 1 },
+    { a1: 5, a2: 6, order: 2 },
+    { a1: 6, a2: 7, order: 1 },
+    { a1: 7, a2: 2, order: 1 },
+  ];
+  const pyrrolyl = (aromatic: boolean): { atoms: AtomIn3d[]; bonds: BondIn3d[] } => ({
+    atoms: [{ el: "P" }, { el: "C" }, { el: "C" }, { el: "Cl" }, { el: "C" }, { el: "C" }, { el: "C" }, { el: "N" }, { el: "H" }, { el: "H" }, { el: "H" }, { el: "H" }],
+    bonds: [
+      { a1: 0, a2: 1, order: 1 },
+      { a1: 0, a2: 2, order: 1 },
+      { a1: 0, a2: 3, order: 1 },
+      ...ring.map((b) => (aromatic ? { ...b, order: 4 } : b)),
+      { a1: 7, a2: 8, order: 1 },
+      { a1: 4, a2: 9, order: 1 },
+      { a1: 5, a2: 10, order: 1 },
+      { a1: 6, a2: 11, order: 1 },
+    ],
+  });
+  const MORE = [
+    [-1.5, 2.6, -0.4],
+    [-1.2, 3.9, -0.6],
+    [0.1, 4.0, -0.6],
+    [0.5, 2.7, -0.5],
+    [1.5, 2.4, -0.5],
+    [-2.0, 4.7, -0.7],
+    [0.8, 4.8, -0.7],
+    [-2.5, 2.2, -0.3],
+  ];
+  const keyOf = (aromatic: boolean, mirror = false) => {
+    const m = pyrrolyl(aromatic);
+    return lonePairsIn3d(m.atoms, m.bonds, pyramid(PLACES, MORE, mirror), [0]).key;
+  };
+
+  it("is one for one molecule with a charged ring atom too - a pyridinium's N+, its charge counted as its ring is written out", () => {
+    // (the phosphine's P on a pyridinium's N+: P, its methyl's C, the N+, Cl; the ring's five C and their H further out)
+    const ring6: BondIn3d[] = [
+      { a1: 2, a2: 4, order: 2 },
+      { a1: 4, a2: 5, order: 1 },
+      { a1: 5, a2: 6, order: 2 },
+      { a1: 6, a2: 7, order: 1 },
+      { a1: 7, a2: 8, order: 2 },
+      { a1: 8, a2: 2, order: 1 },
+    ];
+    const pyridinium = (aromatic: boolean): { atoms: AtomIn3d[]; bonds: BondIn3d[] } => ({
+      atoms: [{ el: "P" }, { el: "C" }, { el: "N", charge: 1 }, { el: "Cl" }, { el: "C" }, { el: "C" }, { el: "C" }, { el: "C" }, { el: "C" }, { el: "H" }, { el: "H" }, { el: "H" }, { el: "H" }, { el: "H" }],
+      bonds: [
+        { a1: 0, a2: 1, order: 1 },
+        { a1: 0, a2: 2, order: 1 },
+        { a1: 0, a2: 3, order: 1 },
+        ...ring6.map((b) => (aromatic ? { ...b, order: 4 } : b)),
+        ...[4, 5, 6, 7, 8].map((c, k) => ({ a1: c, a2: 9 + k, order: 1 })),
+      ],
+    });
+    const SIX = [
+      [-1.6, 2.5, -0.4],
+      [-1.4, 3.9, -0.6],
+      [-0.1, 4.5, -0.7],
+      [1.1, 3.8, -0.6],
+      [0.9, 2.4, -0.5],
+      [-2.5, 2.0, -0.3],
+      [-2.3, 4.5, -0.6],
+      [-0.1, 5.6, -0.8],
+      [2.1, 4.3, -0.6],
+      [1.8, 1.8, -0.4],
+    ];
+    const keyOfPyridinium = (aromatic: boolean) => {
+      const m = pyridinium(aromatic);
+      return lonePairsIn3d(m.atoms, m.bonds, pyramid(PLACES, SIX), [0]).key;
+    };
+    expect(keyOfPyridinium(false)).not.toBeNull();
+    expect(keyOfPyridinium(true)).toBe(keyOfPyridinium(false));
+  });
+
+  it("is one for one molecule whether a file marks its rings' bonds aromatic or writes them out - a pyrrole's, which identity keeps as drawn", () => {
+    expect(keyOf(false)).not.toBeNull();
+    expect(keyOf(true)).toBe(keyOf(false));
+    // (and its mirror image, another)
+    expect(keyOf(true, true)).not.toBe(keyOf(true));
   });
 });
