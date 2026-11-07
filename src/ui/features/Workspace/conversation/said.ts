@@ -44,6 +44,85 @@ export function answerLine(s: Extract<Said, { by: "tool" }>): string {
 }
 
 
+/** A thing on the page by its id ("structure:3"), as the exchange says it: "a structure". */
+const thingSaid = (id: unknown) => (typeof id === "string" ? (READ_KIND[id.split(":")[0]] ?? "a thing") : "a thing");
+
+/** A count of things, in words: "one atom", "3 atoms". */
+const counted = (n: number, one: string, many = `${one}s`) => (n === 1 ? `one ${one}` : `${n} ${many}`);
+
+/** The fields of what is read that a reader is told, by what each is called in words: any other is the model's alone, never shown. */
+const FIELD_WORDS: Record<string, string> = { formula: "Formula", name: "Name", stereo: "Stereo", kind: "Kind", by: "By", ran: "Ran" };
+
+/** What one field of what was read says, in words: none where it says nothing a reader takes, or is not one a reader is told. */
+function fieldSaid(key: string, v: unknown): string | null {
+  if (v == null || v === "") return null;
+  switch (key) {
+    case "atoms":
+      return Array.isArray(v) ? counted(v.length, "atom") : typeof v === "string" ? v : null;
+    case "bonds":
+      return Array.isArray(v) ? counted(v.length, "bond") : null;
+    case "smiles":
+      return `SMILES ${String(v)}`;
+    case "frames":
+      return Number(v) > 1 ? counted(Number(v), "frame") : null;
+    case "text":
+      return String(v).length > 200 ? `${String(v).slice(0, 200)}…` : String(v);
+    case "running":
+      return v === true ? "Running" : null;
+    case "energies": {
+      const o = v as { values?: unknown; unit?: unknown };
+      return Array.isArray(o.values) ? `${counted(o.values.length, "energy", "energies")}, in ${String(o.unit ?? "")}`.trim() : null;
+    }
+    case "inScope": {
+      const o = v as Record<string, unknown>;
+      return `In the frame: ${counted(Number(o.structures) || 0, "structure")}, ${counted(Number(o.molecules) || 0, "molecule")}, ${counted(Number(o.pictures) || 0, "picture")}`;
+    }
+    case "options": {
+      const parts = Object.entries(v as Record<string, unknown>).filter(([, x]) => x != null && typeof x !== "object").map(([k, x]) => `${k} ${String(x)}`);
+      return parts.length ? `Options: ${parts.join(", ")}` : null;
+    }
+    default:
+      return FIELD_WORDS[key] && typeof v !== "object" ? `${FIELD_WORDS[key]}: ${String(v)}` : null;
+  }
+}
+
+/**
+ * What a call found, as the exchange shows it unfolded: in Meno's words, a
+ * row each - each thing listed by what it is, what was read field by field,
+ * what was found by what it is - never the call as it went to the model
+ * (that is copied, as JSON, on asking). None where there is nothing more
+ * to say than its line.
+ */
+export function foundRows(s: Extract<Said, { by: "tool" }> | undefined): string[] {
+  if (!s?.ok) return [];
+  const a = s.answer;
+  if (typeof a === "string") return a ? [a] : [];
+  if (!a || typeof a !== "object" || Array.isArray(a)) return [];
+  const o = a as Record<string, unknown>;
+  if (Array.isArray(o.things)) {
+    const rows = o.things.map((t) => (t && typeof (t as { line?: unknown }).line === "string" ? (t as { line: string }).line : thingSaid((t as { id?: unknown } | null)?.id)));
+    return typeof o.more === "number" && o.more > 0 ? [...rows, `and ${o.more} more`] : rows;
+  }
+  if (Array.isArray(o.found)) {
+    // (what was found, by what it is, counted: "2 structures")
+    const byKind = new Map<string, number>();
+    for (const id of o.found) byKind.set(thingSaid(id).replace(/^an? /, ""), (byKind.get(thingSaid(id).replace(/^an? /, "")) ?? 0) + 1);
+    const rows = [...byKind].map(([noun, n]) => `${n === 1 ? "One" : n} ${n === 1 ? noun : `${noun}s`} found`);
+    if (Array.isArray(o.couldNotTell) && o.couldNotTell.length) rows.push(`Could not tell for ${counted(o.couldNotTell.length, "structure")}`);
+    if (typeof o.notLookedAt === "number" && o.notLookedAt > 0) rows.push(`${counted(o.notLookedAt, "thing")} not looked at`);
+    return rows;
+  }
+  return Object.entries(o).flatMap(([k, v]) => {
+    const said = fieldSaid(k, v);
+    return said ? [said] : [];
+  });
+}
+
+/** A call and what came of it, as JSON - as it went to the model and came back: copied on asking, never shown. */
+export function callJson(call: ToolCall, answer?: Extract<Said, { by: "tool" }>): string {
+  return JSON.stringify({ call: { tool: call.tool, ...(call.args ? { args: call.args } : {}) }, ...(answer ? { answer: { ok: answer.ok, answer: answer.answer } } : {}) }, null, 2);
+}
+
 /** A row of the exchange: a thing said, or a call the model made with the answer it had - one line each. */
 export type ExchangeRow = { kind: "said"; said: Said } | { kind: "call"; call: ToolCall; answer?: Extract<Said, { by: "tool" }> };
 

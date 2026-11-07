@@ -19,7 +19,14 @@ const KCAL = factor("Eh", "kcal/mol");
 const EMPTY: Model = { atoms: [], bonds: [] };
 
 /** A structure drawn, at `place`, its lasting id `id` (none where not given). */
-const row = (place: number, id?: string): DrawnEntry => ({ place, drawn: EMPTY, ...(id ? { record: { id, of: `of-${id}` } } : {}) });
+const row = (place: number, id?: string, drawn: Model = EMPTY): DrawnEntry => ({ place, drawn, ...(id ? { record: { id, of: `of-${id}` } } : {}) });
+/** A structure drawn as a chain of `els`, each the next's neighbour by a single bond, its hydrogens left to its valence. */
+const chain = (els: string[]): Model => ({
+  atoms: els.map((el, i) => ({ id: i + 1, el, x: i * 1.3, y: i % 2 ? 0.75 : 0, r: 0.9 })) as Model["atoms"],
+  bonds: els.slice(1).map((_, i) => ({ id: 100 + i, a: i + 1, b: i + 2, order: 1 as const })),
+});
+const PROPANOL = ["C", "C", "C", "O"];
+const ETHANOL = ["C", "C", "O"];
 
 /** A conformer `number` of compound `compound`, made of the structure `of`, its elements `els`, `kcal` above -100 Eh. */
 function conformer(of: string, compound: number, number: number, els: string[], kcal: number, extra: Partial<SetEntry> = {}): SetEntry {
@@ -193,6 +200,54 @@ describe("3D results onto structures", () => {
     // (the isomers' shares refused, the held ones named)
     for (const k of [0, 1, 2]) expect(valueOf(out, k, IN_3D.share)?.status).toMatchObject({ failed: expect.stringMatching(/^a #2: optimised with atom 1 held where it stood: .*; c #2: /) });
     expect(out.ok && out.said).toContain("4 conformers optimised with atoms held left out of E min and G min");
+  });
+
+  it("refuses the shares of a formula where a structure drawn of it has no conformer finished, naming it - one worked out alone never stands at all of it", () => {
+    // (1-propanol worked out, 2-propanol - its isomer, drawn - with none in the set, then with none finished; ethanol alone in its formula)
+    const rows = [row(0, "a", chain(PROPANOL)), row(1, "b", chain(["C", "C", "O", "C"])), row(2, "c", chain(ETHANOL))];
+    const one = ontoStructures(rows, [conformer("a", 0, 1, C3H8O, 0), conformer("c", 2, 1, C2H6O, 0)], 298.15);
+    const why = "structure 2, of its formula and charge, has no conformer finished: a share among them would leave it out";
+    expect(valueOf(one, 0, IN_3D.share)).toMatchObject({ value: "", status: { failed: why } });
+    expect(valueOf(one, 2, IN_3D.share)?.value).toBe(1);
+    // (its own values stand: its E min, its state)
+    expect(valueOf(one, 0, IN_3D.eMin)?.value).toBe(-100);
+    const unfinished = ontoStructures(rows, [conformer("a", 0, 1, C3H8O, 0), conformer("b", 1, 1, C3H8O, 0, { failed: { kind: "failed", why: "x" } })], 298.15);
+    expect(valueOf(unfinished, 0, IN_3D.share)?.status).toEqual({ failed: why });
+    // (two missing, both named)
+    const three = [...rows.slice(0, 2), row(2, "d", chain(["C", "O", "C", "C"]))];
+    expect(valueOf(ontoStructures(three, [conformer("a", 0, 1, C3H8O, 0)], 298.15), 0, IN_3D.share)?.status).toEqual({
+      failed: "structure 2, structure 3, of its formula and charge, have no conformer finished: a share among them would leave them out",
+    });
+    // (each finished: shared as before)
+    expect(valueOf(ontoStructures(rows.slice(0, 2), [conformer("a", 0, 1, C3H8O, 0), conformer("b", 1, 1, C3H8O, 0)], 298.15), 0, IN_3D.share)?.value).toBeCloseTo(0.5, 12);
+  });
+
+  it("reads a structure drawn's formula and charge for it: its hydrogens, its labels drawn out, its charge", () => {
+    const share = (drawn: Model, extra: SetEntry[] = []) =>
+      valueOf(ontoStructures([row(0, "a", chain(PROPANOL)), row(1, "b", drawn)], [conformer("a", 0, 1, C3H8O, 0), ...extra], 298.15), 0, IN_3D.share)?.status;
+    // (propanal, C3H6O: the same heavy atoms, two hydrogens fewer - no isomer of propanol's, so its share stands)
+    const propanal = chain(PROPANOL);
+    propanal.bonds[2] = { ...propanal.bonds[2], order: 2 };
+    expect(share(propanal)).toBe("computed");
+    // (ethyl methyl ether drawn with its OMe written as a label: propanol's isomer, so its share is refused)
+    const ether: Model = { atoms: [...chain(["C", "C"]).atoms, { id: 3, el: "OMe", x: 2.6, y: 0, r: 0.9 }] as Model["atoms"], bonds: [...chain(["C", "C"]).bonds, { id: 101, a: 2, b: 3, order: 1 }] };
+    expect(share(ether)).toMatchObject({ failed: expect.stringMatching(/^structure 2, of its formula and charge/) });
+    // (an ethyl cation worked out, an ethyl anion - the same atoms, drawn - with none: no isomer of it, by its charge)
+    const ethyl = (charge: number): Model => ({ ...chain(["C", "C"]), atoms: chain(["C", "C"]).atoms.map((a, i) => (i === 1 ? { ...a, charge } : a)) });
+    const C2H5 = ["C", "C", "H", "H", "H", "H", "H"];
+    const out = ontoStructures([row(0, "a", ethyl(1)), row(1, "b", ethyl(-1))], [conformer("a", 0, 1, C2H5, 0, { charge: 1 })], 298.15);
+    expect(valueOf(out, 0, IN_3D.share)?.value).toBe(1);
+  });
+
+  it("weighs a cation and a neutral of one formula apart: by formula and charge", () => {
+    const out = ontoStructures([row(0, "a"), row(1, "b")], [conformer("a", 0, 1, C3H8O, 0), conformer("b", 1, 1, C3H8O, 5, { charge: 1 })], 298.15);
+    expect([valueOf(out, 0, IN_3D.share)?.value, valueOf(out, 1, IN_3D.share)?.value]).toEqual([1, 1]);
+    expect(out.ok && out.said).toMatch(/\(2 formulas\)/);
+  });
+
+  it("says, where the 3D set names none of the structures, to make it again from them", () => {
+    const out = ontoStructures([row(0, "a"), row(1, "b")], [conformer("x", 0, 1, C3H8O, 0)], 298.15);
+    expect(out.ok && out.said).toBe("0 of 2 structures with 3D results · 1 conformer made of none of them · the 3D set names none of these structures - make it again from them");
   });
 
   it("gives nothing to a structure with no lasting id, nor to two that share one - and counts the conformers made of none of them", () => {

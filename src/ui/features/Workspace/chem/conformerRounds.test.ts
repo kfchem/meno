@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Conformers } from "../../../../lib/roles/client";
 import { factor } from "../../../../lib/units";
-import { inRounds, judgeHere, roundEnergies, roundSizes, RoundsSeen, roundsSaid, SEARCH_BUDGET_MS, type RoundsJudge } from "./conformerRounds";
+import { inRounds, judgeHere, roundEnergies, roundsHow, roundSizes, RoundsSeen, roundsSaid, SEARCH_BUDGET_MS, type RoundsJudge } from "./conformerRounds";
 
 const KCAL = factor("Eh", "kcal/mol");
 const ATOMS = [
@@ -112,6 +112,11 @@ describe("a search in rounds", () => {
     expect((await inRounds(p.ask, { first: 10, most: 5000, window: 3, draws: true })).run).toEqual({ tried: 20, rounds: 2, ended: "settled" });
   });
 
+  it("does not end on a round that brings no conformer at all, before any is made: none new is judged against some", async () => {
+    const p = plugin([[], [0], [0]], () => 0);
+    expect((await inRounds(p.ask, { first: 10, most: 5000, window: 3, draws: true })).run).toEqual({ tried: 40, rounds: 3, ended: "settled" });
+  });
+
   it("ends at the most it tries, each round bringing a new one", async () => {
     const p = plugin([[0], [1], [2], [3], [4]], () => 0);
     const { run } = await inRounds(p.ask, { first: 10, most: 40, window: 3, draws: true });
@@ -157,6 +162,24 @@ describe("a search in rounds", () => {
     };
     await expect(inRounds(failing, { first: 10, most: 5000, window: 3, draws: true }, judge)).rejects.toThrow("gave nothing");
     expect(ended).toBe(2);
+  });
+
+  it("says how each round was made: a line every round said alike once, one of its own each round's in turn - never one round's for the whole", async () => {
+    const p = plugin([[0], [1], [1]], () => 0);
+    const ask = async (count: number, draw: number) => ({ ...(await p.ask(count, draw)), how: [{ label: "Embedded", text: "ETKDG" }, { label: "Kept", text: `${count} of ${count}` }] });
+    const { made: m, run } = await inRounds(ask, { first: 10, most: 5000, window: 3, draws: true });
+    expect(run.rounds).toBe(3);
+    expect(m.how).toEqual([
+      { label: "Embedded", text: "ETKDG" },
+      { label: "Kept", text: "round 1: 10 of 10; round 2: 10 of 10; round 3: 20 of 20" },
+    ]);
+    // (one round: its own lines as they were; a line one round did not say, said so)
+    expect(roundsHow([[{ label: "Kept", text: "5 of 5" }], [{ label: "Kept", text: "5 of 5" }, { label: "Pruned", text: "1" }]])).toEqual([
+      { label: "Kept", text: "5 of 5" },
+      { label: "Pruned", text: "round 1: none said; round 2: 1" },
+    ]);
+    const once = await inRounds(ask, { first: 10, most: 5000, window: 3, draws: false });
+    expect(once.made.how).toEqual([{ label: "Embedded", text: "ETKDG" }, { label: "Kept", text: "10 of 10" }]);
   });
 
   it("says how it ended", () => {

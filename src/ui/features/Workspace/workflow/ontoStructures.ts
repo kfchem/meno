@@ -12,7 +12,9 @@
  *   finished conformers weighed by Populations' own rule (meno `basisOf`),
  *   with their degeneracies where each has one - their energies all of one
  *   calculation, and their free energies used only where all of them were
- *   worked out alike; none across formulas. A value of a group, as an
+ *   worked out alike; none across formulas; refused, naming it, where a
+ *   structure drawn of the same formula and charge has no conformer
+ *   finished. A value of a group, as an
  *   ensemble's: at its lowest conformer's geometry and the temperature, by
  *   what worked out the energies it is of, over its own conformers;
  * - `conformers in 3D`: how many of its conformers the set holds;
@@ -40,6 +42,9 @@ import { geometryKey } from "../../../../lib/entry";
 import { calcLevel, entryOfSet, entryState, FINISHED, freeEnergyOf, madeWords, structureLineage, type DrawnEntry, type SetEntry } from "./entries";
 import { basisOf, hasEnergy, notAllMinima, type DrawnOutcome } from "./meno";
 import { convergedOf, heldAt } from "./converged";
+import { drawingOf } from "../chem/drawing";
+import { labelsDrawnOut } from "../chem/identityOf";
+import type { Model } from "../store/types";
 
 /** The names the values are written under, as a table's columns name them - in the order they are written. */
 export const IN_3D = { share: "share among isomers", conformers: "conformers in 3D", eMin: "E min", gMin: "G min", state: "state in 3D" } as const;
@@ -56,9 +61,24 @@ const notApplicable = (why: string, unit: Property["unit"] = "none"): Property =
 function isomerKey(e: SetEntry): string {
   const counts = new Map<string, number>();
   for (const a of e.atoms) counts.set(a.el, (counts.get(a.el) ?? 0) + 1);
-  const charge = e.charge ?? e.atoms.reduce((s, a) => s + (a.charge ?? 0), 0);
-  return `${[...counts].sort(([x], [y]) => x.localeCompare(y)).map(([el, n]) => `${el}${n}`).join("")}|${charge}`;
+  return formulaKey(counts, e.charge ?? e.atoms.reduce((s, a) => s + (a.charge ?? 0), 0));
 }
+
+/** A structure drawn's formula and charge, as `isomerKey` keys a molecule's: its labels drawn out, each atom's hydrogens counted. */
+function drawnIsomerKey(m: Model): string {
+  const counts = new Map<string, number>();
+  let charge = 0;
+  for (const a of drawingOf(labelsDrawnOut(m)).atoms) {
+    const el = a.el ?? "C";
+    counts.set(el, (counts.get(el) ?? 0) + 1);
+    if (a.hs) counts.set("H", (counts.get("H") ?? 0) + a.hs);
+    charge += a.charge ?? 0;
+  }
+  return formulaKey(counts, charge);
+}
+
+const formulaKey = (counts: ReadonlyMap<string, number>, charge: number) =>
+  `${[...counts].sort(([x], [y]) => x.localeCompare(y)).map(([el, n]) => `${el}${n}`).join("")}|${charge}`;
 
 /** A structure's conformers' lowest energy, as that conformer's energy is - where those finished come from one calculation. */
 function eMinOf(done: readonly SetEntry[]): Property {
@@ -139,9 +159,21 @@ export function ontoStructures(rows: readonly DrawnEntry[], entries: readonly Se
     const key = isomerKey(done[k][0]);
     groups.set(key, [...(groups.get(key) ?? []), k]);
   });
+  // (a structure drawn of a formula and charge with no conformer finished: the shares of the others of it would leave it out -
+  //  refused, naming it, so that one worked out alone never stands at all of it)
+  const drawnKeys = rows.map((r) => drawnIsomerKey(r.drawn));
+  const unfinished = rows.flatMap((_, k) => (done[k].length ? [] : [k]));
   const sharesSaid: string[] = [];
   for (const members of groups.values()) {
     const all = members.flatMap((k) => done[k]);
+    const kin = new Set(members.map((k) => drawnKeys[k]));
+    const missing = unfinished.filter((j) => kin.has(drawnKeys[j]));
+    if (missing.length) {
+      const which = missing.map(name).join(", ");
+      for (const k of members)
+        properties[k][IN_3D.share] = notWorked(`${missing.length === 1 ? `${which}, of its formula and charge, has` : `${which}, of its formula and charge, have`} no conformer finished: a share among them would leave ${missing.length === 1 ? "it" : "them"} out`);
+      continue;
+    }
     // (the isomers' free energies all worked out alike, as one compound's are, to be weighed against each other; else their electronic energies, all of one calculation)
     const basis = basisOf(all, kelvin, [{ said: "its isomers'", entries: all }]);
     const levels = new Set(all.filter(hasEnergy).map((e) => calcLevel(e.calc)));
@@ -189,6 +221,10 @@ export function ontoStructures(rows: readonly DrawnEntry[], entries: readonly Se
     ...(groups.size ? [`shares at ${kelvin} K among the isomers of each formula (${plural(groups.size, "formula", "formulas")}), from ${[...new Set(sharesSaid)].join("; ") || "no energies"}`] : []),
     ...(heldOut ? [`${plural(heldOut, "conformer")} optimised with atoms held left out of E min and G min`] : []),
     ...(unmatched ? [`${plural(unmatched, "conformer")} made of none of them`] : []),
+    // (conformers come in, and none names any of these: a 3D set made of other structures, or of these before each had its lasting id)
+    ...(unmatched === entries.length && entries.length && !entries.some((e) => ids.some((id) => id && e.madeOf?.includes(structureLineage(id))))
+      ? ["the 3D set names none of these structures - make it again from them"]
+      : []),
     ...(shared.size ? [`${plural(rows.filter((_, k) => ids[k] && shared.has(ids[k]!)).length, "structure")} sharing a lasting id given nothing`] : []),
   ];
   return { ok: true, holds: "structures", kept, aside: [], said: said.join(" · ") };
