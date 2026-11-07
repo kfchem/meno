@@ -139,7 +139,7 @@ nothing, and its card says why in one line.
     - the *language model* and *outside entrance* roles are filled only by plugins of Meno's own catalogue - a plugin from elsewhere cannot fill them until a worker's network is confined by the system, or goes through Meno only: a later question;
     - those plugins' workers are reviewed to open no connection but to the hosts their consent names, and their tests - the scripted test model's too - check it;
     - adding one asks plainly: it names the service's host, and says the plugin sends what the conversation shares there, with the person's key, which goes to the plugin.
-  - The key is the person's own, typed by them in Settings. Core keeps it in the system's keychain (the Keychain on macOS, the Credential Manager on Windows, the Secret Service on Linux), by the `keyring` crate, and hands it to that plugin's worker in memory for each request: never in its arguments or environment, never in the .meno, a log, the send log, a job folder or any file Meno writes. Where the system has no keychain, no model plugin is run, saying why; the key is never kept in a file instead.
+  - The key is the person's own, typed by them in Settings. Core keeps it in the system's keychain (the Keychain on macOS, the Credential Manager on Windows), by the `keyring` crate, and hands it to that plugin's worker in memory for each request: never in its arguments or environment, never in the .meno, Meno's log, the send log, a job folder or any file Meno writes. Where the system has no keychain Meno trusts, no key is kept, saying why; never in a file instead.
 - **A program outside Meno**, connecting by the model-tool protocol, reaches
   the same tools through a plugin of its own kind, *outside entrance*.
   Without it added, nothing listens.
@@ -179,7 +179,9 @@ turn that reaches the limit stops and says so.
   together.
 - The card lists it. It says plainly that what was sent cannot be recalled,
   and that a thing moved out of the frame is not sent again but is not
-  unsent.
+  unsent. Not sent again means the exchange too: a tool's answer that gave
+  a thing now outside the frame is sent, from then on, as withheld (*A
+  turn*, as built).
 - A key is never in it.
 
 ## Saved with the workspace
@@ -326,3 +328,166 @@ A tool Meno does not have is said to be none: *There is no tool called
 
 The tests play a scripted test model's calls on a page and check each
 answer.
+
+### The conversation, kept and saved (2026-11-05)
+
+A conversation is kept with the page (`conversation/types`,
+`conversation/ops`): its frame, or the whole page; its rights - a new one
+may read and proposes nothing until the person lets it; the plugin it
+talks through, by its id; what was said; and what was sent where. Put
+down, changed and taken away, it is a step of the page's history. What is
+said and sent is not: undo takes none of it back, and *Clear* empties both.
+A workspace's file saves it all (`conversations`), and opening one reads it
+back strictly (`conversation/saved`): one not as Meno writes it is left out
+and said, as is a thing said that is not.
+
+### Search (2026-11-05)
+
+`search` finds, among the structures drawn in scope, those that are the
+compound a SMILES names (by Meno's identity) or that hold it (by Meno's own
+matcher). A structure the matcher could not finish is said to be one it
+could not tell (`couldNotTell`), never one that does not hold it. A SMILES
+Meno does not read is said to be one.
+
+### The tools that change (2026-11-05)
+
+Given only where the person has let the conversation propose changes
+(`conversation/change`):
+
+- `put_structure` draws a SMILES by Meno's own reader and layout engine
+  and puts it down after the scheme's last piece, on its line, where that
+  lies wholly inside the frame; else clear of what is there (`clearSpot`);
+  else - the frame full - nothing: it is refused, saying the frame has no
+  room left (`NO_ROOM`). Nothing is ever put over what lies there (a piece
+  over another reads as a mistake), nor outside the frame;
+- `put_arrow`, `put_plus` and `put_text` likewise;
+- `add_step` adds a step, with Settings' defaults, of a kind its doer fills,
+  in the frame's room, or is refused likewise;
+- `wire` wires a set to a step, both in scope;
+- `set_options` sets a step's options, checked as its card checks them.
+
+A tool never sets an option its plugin leaves to the person (`person` in
+its manifest), nor - until every plugin marks those - one of free text or
+atoms, a switch, or a number with no bounds: those are "left to you to
+set". Every id a change tool is given must lie in scope.
+
+**The frame is the person's.** No tool moves it or grows it, and nothing
+is put down past it: what a conversation sees is never something it can
+widen by what it does (found in review, 2026-11-05 - a frame grown round
+what was put down let a model sweep a strip of the page into its scope).
+
+### A turn (2026-11-05)
+
+`runTurn` sends the person's words through the conversation's connection,
+and takes the model's replies in turn (`conversation/turn`):
+
+- **No connection, nothing sent.** Core makes none: a turn with none sends
+  nothing and says why, and nothing is kept.
+- **Each go** sends what Meno tells the model, all that was said, and the
+  tools its rights give it. Tool answers go as answers, apart from what
+  Meno says, and the model is told they are data. A tool's answer that
+  gave a thing of the page no longer in scope - moved out of the frame,
+  taken away - is sent as withheld: each answer keeps the ids of what it
+  gave (`things`) for that. The person's own rows keep it whole.
+- **The model's words** are kept as plain text, whatever they hold.
+- **Each tool it calls** is answered within the scope and rights, and the
+  answer kept. A change is made at once, as its reply comes - and all the
+  changes of the turn are one change set: one step to undo, said to be the
+  conversation's, gone on with reply by reply (lib/doc `goneOn`), never
+  joined to the person's. *Discard* drops it by its key.
+- **It stops** when the model calls no tool, when the person asks, or at
+  its limit of replies or of tool calls after one message, saying which -
+  or where it fails part way (a tool that throws, a reply not as one is),
+  saying why: its changes so far kept to keep or discard, and it is never
+  left talking.
+- **The send log** has an entry for each go: what of the page it carried
+  - each thing by its id and characters - how many characters in all, and
+  where it went.
+
+### The scripted test model (2026-11-05)
+
+A connection that plays back replies written beforehand and keeps every
+request it was sent (`conversation/scripted`). The tests drive whole
+turns with it; it sends nothing anywhere.
+
+### Talked to from the page (2026-11-05)
+
+The page's side of a conversation (`store/slices/conversationsSlice`), on
+which its card and its column are built:
+
+- **Put down, changed and taken away**, each a step to undo - not taken
+  away while it talks.
+- **Sent to** (`sendToConversation`): a turn run with what it talks
+  through (`conversation/connections`: none in Meno itself, so nothing is
+  sent, and why is kept to say), the person's words and the replies kept
+  outside the page's history. While it talks it is marked so, and *Stop*
+  ends the turn at its next reply.
+- **A turn's changes** are one step, marked: *Keep* lets the mark go;
+  *Discard* undoes that step - refused, and why, where a step it added is
+  running, or where the page has changed since: then undo is the
+  person's, step by step. The steps done before whose options it changed
+  are named, as those that will run again when next run.
+- **What was said, as rows** (`conversation/said`): each person's and
+  model's words, each tool called with what came of it on its line - what
+  a column shows, as words, never drawn as a page.
+
+### Talking through a plugin (2026-11-05)
+
+**The role.** *Talking with a model, in a conversation* (`language-model`,
+lib/plugins/roles) is filled by a plugin that names, in its manifest, the
+hosts it talks to: each a host's name exactly, 1 to 8, never a pattern, an
+address or a port (`hosts`, lib/plugins/manifest `hostsOf`). Without them
+the role is not its; no other role names any. Who fills it, and its
+options, are chosen in Settings, *Conversations*; Settings, *Plugins*,
+points there from the plugin's card.
+
+**Its way out.** The backend reads the hosts again from the plugin's
+manifest in place - never from the page - and starts the plugin's worker
+pointed at the network gate under a task of its own: purpose
+`model:<plugin id>@<hosts>`, the hosts in order, those hosts alone
+(src-tauri/src/model.rs). The first time a conversation goes to it, Meno
+asks: "Send this conversation to *hosts*, for *plugin*? What is said in it,
+and what it is given, goes there." A yes is remembered, as any purpose's,
+and withdrawn in Settings, *Network*; a no sends nothing. The yes is for
+those hosts: a plugin updated to name others is asked of again, by the
+hosts it names now. A worker started before the yes went out nowhere: it
+is started again, now that it may.
+
+**A turn, sent.** A request goes to the worker as `converse` - Meno's
+words to the model, what has been said, the tools and the plugin's
+options - by the one way the backend takes it (`ext_converse`), which
+adds the person's key on the way. The page never holds the key: it can
+neither read it nor send a key of its own, nor send `converse` by the way
+other requests go: to a model plugin's worker, that way takes only whole
+lines, each a JSON object, none of them a `converse`. What the plugin answers is read strictly: its words,
+plain text, and the tools it calls, each by name with its arguments - or
+its error; anything else is refused, never guessed at
+(conversation/modelConnection `replyOf`). With them, what the plugin keeps
+of the reply (`keep`, at most 2 MB as JSON): its service's own record of
+it - the reasoning a service needs given back, as it gave it, with what was
+said after it. Opaque to Meno, it stays with the reply while the
+conversation is open and goes back to the plugin with it; it is never
+saved in the .meno.
+
+**The key.** Typed once in Settings, *Conversations*, and kept by the
+system's keychain under the service "Meno", one account a plugin
+(`model:<plugin id>`), so that *Forget* forgets that one alone. The page is
+told only whether one is kept. Where it is kept:
+- **macOS**: the person's login keychain. A Meno other than the one that
+  kept it - an update, a build made for testing; Meno's Mac builds are
+  signed ad hoc - is asked by the system before it reads the key, and the
+  person may allow it or not.
+- **Windows**: the Credential Manager, where any program running as the
+  person can read it - another build of Meno as well.
+- **Elsewhere**: no key is kept: "No safe place to keep a key on this
+  system".
+
+The key is never shown to the page or written to Meno's log. Should a
+worker say it back, the backend takes it out of what the worker says
+before the page or the log sees it - every key given to that worker, on
+its output and its errors alike, until both are read to their ends, after
+it was stopped too. A safeguard, not a promise for the plugin: it finds the
+key as it was given, and not one the plugin writes otherwise (a `/` a JSON
+writer gives as `\/`, say); what a plugin does with the key is its
+review's to check.
+

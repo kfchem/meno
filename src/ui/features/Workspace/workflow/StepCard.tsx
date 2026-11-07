@@ -1,6 +1,7 @@
 import TextBars from "./TextBars";
 import clsx from "clsx";
 import { ArrowPathIcon, CheckCircleIcon, ClockIcon, ExclamationCircleIcon, StopCircleIcon } from "@heroicons/react/24/outline";
+import { quietSaid } from "../../../../lib/jobs";
 import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { DURATION, EASE, LEAVE } from "../../../theme/motion";
@@ -48,6 +49,7 @@ export function Port({
   label,
   of,
   onContextMenu,
+  onHover,
 }: {
   look: PortLook;
   style: CSSProperties;
@@ -57,6 +59,8 @@ export function Port({
   of?: number;
   /** Its menu, where it has one: an exit's port, its set's (a set held off the page has no frame to right-click). */
   onContextMenu?: (e: ReactMouseEvent) => void;
+  /** The pointer come onto it, or gone off it: what an exit's port says of its set (`exitPortHovered`). */
+  onHover?: (on: boolean) => void;
 }) {
   const size = portSize(of);
   return (
@@ -66,6 +70,7 @@ export function Port({
       aria-label={label}
       onPointerDown={onPointerDown}
       onContextMenu={onContextMenu}
+      {...(onHover ? { onPointerEnter: () => onHover(true), onPointerLeave: () => onHover(false) } : {})}
       className={clsx(
         // (a press on it begins no selection of the page's text: one left over turns a later drag on the drawing into the system's own drag-and-drop, Workspace.tsx)
         // (taken hold of over at least 12 px about its middle, however small it is drawn: meno-port)
@@ -96,7 +101,7 @@ export function Port({
  * their place among those waiting; where they run, since when, how many of
  * how many have ended, and what the log says last.
  */
-export type RunView = { place?: number; since?: number; ended: number; total: number; line?: string; share?: number };
+export type RunView = { place?: number; since?: number; ended: number; total: number; line?: string; share?: number; /** How many minutes the quietest of its running jobs has written nothing, where past what Settings says (lib/jobs `quietFor`). */ quiet?: number };
 
 /**
  * How far a run's jobs are, as a share - where a running one says how far
@@ -118,7 +123,7 @@ export type RunRow = { at: number; name: string; said: string; how: string; show
 const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
 
 /** What a state says, with its icon and its words' colour (Meno's palette: the accent for done and running, the attention colour for failed). */
-function stateLine(
+export function stateLine(
   state: StepState,
   said: string | undefined,
   run: RunView | undefined,
@@ -138,7 +143,7 @@ function stateLine(
       return {
         Icon: ArrowPathIcon,
         turning: true,
-        text: run && run.total > 1 ? `Running \u00b7 ${run.ended} of ${run.total}` : `Running ${clock(run?.since != null ? now - run.since : 0)}`,
+        text: `${run && run.total > 1 ? `Running \u00b7 ${run.ended} of ${run.total}` : `Running ${clock(run?.since != null ? now - run.since : 0)}`}${run?.quiet != null ? ` \u00b7 ${quietSaid(run.quiet)}` : ""}`,
         tone: "text-accel-base",
       };
     case "stopped":

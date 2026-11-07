@@ -52,7 +52,7 @@ describe("the fixed numbering, on the steps there are", () => {
   const kinds: StepKind[] = ["as-conformers", "energy-window", "duplicates", "populations", "choose"];
   for (const kind of kinds) {
     it(`${kind} hands on every entry's atoms and bonds in the order they came in`, () => {
-      const out = runMeno(kind, set, "conformers");
+      const out = runMeno(kind, set, "conformers", kind === "energy-window" ? { window: 3 } : undefined);
       expect(out.ok).toBe(true);
       if (!out.ok) return;
       for (const e of [...out.kept, ...out.aside]) {

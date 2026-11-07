@@ -18,6 +18,7 @@ import { labelTrims, layoutMolecule, showsLabel } from "../../../../lib/chem/lay
 import { chemistry } from "../../../../lib/chem/molecule";
 import type { DrawingStyle } from "../../../../lib/chem/style";
 import { readStereo, sameConfiguration, straightEnds, unreadWhy } from "../../../../lib/layout/drawn";
+import { lonePairCentres } from "../../../../lib/chem/lonePairCentres";
 import type { Layout2D, LayoutInput } from "../../../../lib/layout/engine";
 import { etaBondedAtomByAtom, isMetal, type CisTrans } from "../../../../lib/layout/perceive";
 import { allylCurve } from "../../../../lib/chem/allylArc";
@@ -66,11 +67,14 @@ function bondsAt(bonds: readonly { a: number; b: number }[]): Map<number, number
 export function unreadWedges(drawing: ReturnType<typeof drawingOf>, stereo: ReturnType<typeof readStereo>): number[] {
   const bondsOf = bondsAt(drawing.bonds);
   const out = new Set<number>();
+  // (a centre by its lone pair drawn with two bonds, its H carried - a secondary phosphine's P: a centre its wedge cannot state)
+  const keepsPyramid = lonePairCentres(drawing.atoms, drawing.bonds);
   for (const b of drawing.bonds) {
     const c = b.wedge?.narrow;
     // (an axis of chirality's end: its wedge says how the axis turns)
     if (c == null || stereo.tetra.has(c) || stereo.axes.some((ax) => ax.atoms[0] === c)) continue;
-    if ((bondsOf.get(c)?.length ?? 0) >= 3 && drawing.atoms[c].hs <= 1) out.add(c);
+    const n = bondsOf.get(c)?.length ?? 0;
+    if ((n >= 3 && drawing.atoms[c].hs <= 1) || (n === 2 && drawing.atoms[c].hs === 1 && keepsPyramid(c))) out.add(c);
   }
   return [...out];
 }

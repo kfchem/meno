@@ -32,7 +32,7 @@ To give a slide to Word or PowerPoint, choose *Select what is on it* and copy (�
 - Chemical formulas set themselves as they are typed: the numbers of K2CO3 go down, the plus of NH4+ goes up, and the t of t-BuOK slants.
 - Typed shorthand becomes what it means, such as 60dc for 60 °C, while Settings, *General*, *Write words on the page as they are meant* is on.
 - Words put down beside an arrow stand above or below it, and the arrow grows to fit them.
-- Right-click words for *Edit text*, *Font…* - its sizes *Label*, *Text*, *Heading* and *Title*, the line spacing and the typeface - *Bold*, *Italic*, *Bullets*, *Colour…*, *Align left*, *Align centre*, *Align right*, *Justify*, *Superscript* and *Subscript*.
+- Right-click words for *Edit text*, *Bold*, *Italic*, *Bullets*, *Colour…*, *Align left*, *Align centre*, *Align right*, *Justify*, *Superscript* and *Subscript*. Under the menu's icons are their size in points - 8, 10, 12, 14, 18 or 24, or any from 4 to 288, typed and given with Enter - their line spacing - 1, 1.15, 1.5 or 2, or any from 0.5 to 4 - and their typeface. Each is given at once, and the menu stays open to try another.
 
 ## Arrows and cycles {#arrows}
 

@@ -164,6 +164,37 @@ body {
   animation: meno-fade-out 120ms var(--ease-meno-leave) both;
 }
 
+/* A step's result set folding into its exit's port as it is held off the
+   page, and growing out of it as it is shown again, about that port - its
+   transform-origin (components/Workflow2D; docs/WORKFLOWS.md, *Held
+   results*): DURATION.base, Meno's ease. */
+@keyframes meno-fold-out {
+  from {
+    transform: scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: scale(0);
+    opacity: 0;
+  }
+}
+@keyframes meno-fold-in {
+  from {
+    transform: scale(0);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.meno-fold-out {
+  animation: meno-fold-out 160ms var(--ease-meno) both;
+}
+.meno-fold-in {
+  animation: meno-fold-in 160ms var(--ease-meno) both;
+}
+
 /* What has just joined a workflow's set, or left it: marked a moment, coming
    and going (components/useMemberMarks, MARK_MS). */
 @keyframes meno-member-mark {

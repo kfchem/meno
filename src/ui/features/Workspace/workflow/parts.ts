@@ -48,8 +48,13 @@ export function partsOf(doc: Flow, sets: ReadonlySet<number>, steps: ReadonlySet
       .filter((b) => sets.has(b.id))
       // (a step's exit without its step is a set like the chemist's; with it, empty until that step runs again)
       .map(({ members, keep: _k, notKept: _n, put: _p, collection: _c, drawnCollection, unread: _u, carried: _r, core: _co, heldIds: _h, ...b }) => {
-        // (the records of its structures drawn, by their atoms' ids: taken up by them again, put down)
-        const carried = (members ?? []).flatMap((m) => ("structure" in m && m.record ? [{ structure: m.structure, record: m.record }] : []));
+        // (the records of its structures drawn, by their atoms' ids: taken up by them again, put down - each without its lasting id, a copy
+        //  being another structure that is given its own, and none where that and what it is of are all it says)
+        const carried = (members ?? []).flatMap((m) => {
+          if (!("structure" in m) || !m.record) return [];
+          const { id: _id, ...record } = m.record;
+          return Object.keys(record).some((k) => k !== "of") ? [{ structure: m.structure, record }] : [];
+        });
         const withStep = !!b.made && steps.has(b.made.step);
         // (and those it holds off the page: never a copy of the shown alone - and, with its step, what it holds said, as it was)
         const held = drawnCollection?.length ? { drawnCollection } : {};

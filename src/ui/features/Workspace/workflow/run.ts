@@ -12,7 +12,7 @@ import { partOf } from "../chem/cleanUp";
 import { levelOf } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
-import { calcProperties, compoundLetter, entryOfSet, holdsOf, numberShown, setMembers, setMolecules, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, recordOn, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
+import { calcProperties, compoundLetter, entryOfSet, holdsOf, numberShown, setMembers, setMolecules, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, drawingKey, placedRecord, structureIdAt, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
 import { chipWide, hasChip } from "./selectionSet";
 export { chipWide };
 import { isHeld } from "./onPage";
@@ -29,6 +29,7 @@ import { clearOf, columnWidth, frameAt, placeAgain, placeBelow, placeFor } from 
 export { frameAt, placeFor } from "./place";
 import { keptNames, takeFrames, type Which } from "./takeFrames";
 import { notResults, PAIRED, pushTo, runMeno, runMenoDrawn, runMenoPair, type CalcLevel, type Outcome, type Outcome3D } from "./meno";
+import { ontoStructures } from "./ontoStructures";
 import { measuredSet, modeOnAtomsSet } from "./structureSteps";
 import { addSet, CHART_SET, heldPut, holdChart, holdNumber, NUMBER_SET, holdCollection, holdTable, TABLE_SET, holdMembers, holdNothing, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
@@ -85,6 +86,13 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
     const [p, q] = inputsOf(step.kind).map((port) => inputOf(doc, id, port.id)!);
     const entriesOf = (x: typeof p) => ({ entries: setEntries(x.molecules, x.holds as Holds3D), holds: x.holds as Holds3D });
     return ranAs(doc, id, runMenoPair(step.kind, entriesOf(p), entriesOf(q), step.options), key, w);
+  }
+  // (structures drawn, each with what the 3D set wired in holds made of it, by its lasting id: workflow/ontoStructures)
+  if (step.kind === "onto-structures") {
+    const [into, results] = [inputOf(doc, id, "structures"), inputOf(doc, id, "results")];
+    if (!into || !results) return fail(!into ? "Nothing comes into Structures" : "Nothing comes into 3D results");
+    const o = optionsOf(kindInfo(step.kind).options ?? [], step.options);
+    return ranAs(doc, id, ontoStructures(inputEntries(doc.model, into), setEntries(results.molecules, results.holds as Holds3D), Number(o.temperature)), key, w);
   }
   // (a number from its options alone: nothing comes in)
   if (step.kind === "number") {
@@ -761,15 +769,22 @@ function fillExit(
  * off the page (`WorkflowSet.drawnCollection`). With how many did not read
  * from a file (`unread`), where any.
  */
-function fillDrawn(doc: WorkspaceDocument, step: WorkflowStep, exit: string, given: readonly DrawnModel[], core?: SeriesCore, unread?: number): WorkspaceDocument {
+function fillDrawn(doc: WorkspaceDocument, step: WorkflowStep, exit: string, gave: readonly DrawnModel[], core?: SeriesCore, unread?: number): WorkspaceDocument {
+  // (each with its lasting id: the one the step carried on with it, else one of its own by its place at this exit - entries `structureIdAt`; checked
+  //  to be of the same structure as it is put on the page, `placedRecord`)
+  const idAt = placeIds(step.id, exit);
+  const given = gave.map((m, i) => (m.record?.id ? m : { ...m, record: { ...m.record, id: idAt(i)(drawingKey(m, m.atoms.map((a) => a.id))) } }));
   // (its exit wired on: all held off the page, its frame drawn nowhere - workflow/held)
   const was = resultOf(doc, step.id, exit);
   if (was && isHeld(doc, was)) return filled(doc, step, { exit, holds: "structures", unread, ...(core ? { core } : {}), drawnCollection: [...given] }, [], () => ({ doc, members: [] }));
   const { made, middles, rooms, rest } = drawnRooms(given);
-  const filledIn = filled(doc, step, { exit, holds: "structures", unread, ...(core ? { core } : {}) }, rooms, (d, at) => drawnPut(d, made, middles, at, false));
+  const filledIn = filled(doc, step, { exit, holds: "structures", unread, ...(core ? { core } : {}) }, rooms, (d, at) => drawnPut(d, made, middles, at, false, idAt));
   const set = resultOf(filledIn, step.id, exit);
   return set ? holdRest(filledIn, set.id, rest) : filledIn;
 }
+
+/** A structure's lasting id, of its own, by its place at a step's exit and its drawing (entries `structureIdAt`). */
+const placeIds = (step: number, exit: string) => (i: number) => (drawing: string) => structureIdAt(`step ${step} ${exit}`, i, drawing);
 
 /**
  * Structures drawn as a set lays them out on the page: each about the
@@ -794,9 +809,18 @@ function drawnRooms(given: readonly DrawnModel[]): { made: DrawnModel[]; middles
  * or, `keep`, each on its own ids where they are free (document
  * `appendModel`), as a set held off the page gives them back. Each a
  * member with its record, where it has one: of that structure, as it is
- * drawn now; and the atoms put.
+ * drawn now, its lasting id kept where it is of the same structure, else
+ * one of its own by its place (`idAt`; entries `placedRecord`); and the
+ * atoms put.
  */
-function drawnPut(d: WorkspaceDocument, made: readonly DrawnModel[], middles: readonly { x: number; y: number }[], at: readonly { x: number; y: number }[], keep: boolean): { doc: WorkspaceDocument; members: Member[]; put: number[] } {
+function drawnPut(
+  d: WorkspaceDocument,
+  made: readonly DrawnModel[],
+  middles: readonly { x: number; y: number }[],
+  at: readonly { x: number; y: number }[],
+  keep: boolean,
+  idAt: (i: number) => (drawing: string) => string,
+): { doc: WorkspaceDocument; members: Member[]; put: number[] } {
   const moved = made.map((m, i) => movedBy(m, at[i].x - middles[i].x, at[i].y - middles[i].y));
   const there = new Set(d.model.atoms.map((a) => a.id));
   // (all at once where they are numbered afresh - one at a time copied the page's drawing again for each)
@@ -807,9 +831,9 @@ function drawnPut(d: WorkspaceDocument, made: readonly DrawnModel[], middles: re
   let from = 0;
   return {
     doc: d,
-    members: made.map((m) => {
+    members: made.map((m, k) => {
       const ids = added.slice(from, (from += m.atoms.length));
-      return structureMember(ids, m.record && recordOn(m.record, d.model, ids));
+      return structureMember(ids, m.record && placedRecord(m.record, d.model, ids, idAt(k)));
     }),
     put: added,
   };
@@ -904,7 +928,9 @@ export function laidOutAgain(doc: WorkspaceDocument, id: number, extentOf?: RunW
     const { made, middles, rooms, rest } = drawnRooms(set.drawnCollection);
     const l = lay(rooms);
     const frame = where(l.width, l.height);
-    const put = drawnPut(doc, made, middles, l.at.map((p) => ({ x: frame.x0 + p.x, y: frame.y1 + p.y })), true);
+    // (each on its own lasting id, kept where it is of the same structure: by its place at its step's exit, where it has one)
+    const idAt = set.made ? placeIds(set.made.step, set.made.exit) : (i: number) => (drawing: string) => structureIdAt(`set ${id}`, i, drawing);
+    const put = drawnPut(doc, made, middles, l.at.map((p) => ({ x: frame.x0 + p.x, y: frame.y1 + p.y })), true, idAt);
     const out = holdRest(heldPut(holdMembers(put.doc, id, put.members, set.unread), id, set.made ? put.put : []), id, rest);
     return resizeSet(out, id, frame);
   }

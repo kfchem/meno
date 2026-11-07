@@ -1,9 +1,13 @@
+import type { Conversation } from "../conversation/types";
+import type { ConversationPatch } from "../conversation/ops";
+import type { Talking } from "./slices/conversationsSlice";
 import type { Failure, FailureKind } from "../workflow/failures";
 import type { Converged } from "../workflow/converged";
 import type { LeftOut } from "../utils/readNotes";
 import type { ShowBox } from "../utils/viewShow";
 import type { ChemMarks } from "../chem/marks";
 import type { AtomNumberKind, AtomNumbersShown } from "../utils/atomNumbers";
+import type { StructureMap } from "../chem/structureMaps";
 import type { CyclePatch, ImportedScheme, MarkOf, MarkPlaces, Relayout, WorkspaceDocument, WrittenAsLabel } from "../document";
 import type { SetHolds, SetKind, StepKind } from "../workflow/kinds";
 import type { OptionValues } from "../../../../lib/options";
@@ -828,8 +832,15 @@ export type WorkflowSet = {
  * of how it is drawn (workflow/entries `drawnHash`): edited since, the
  * structure is another, and its properties and status are taken away,
  * `stale` saying why.
+ *
+ * `id` is the structure's lasting id, which what is made of it names it by
+ * (its conformers in 3D: workflow/entries `SetEntry.madeOf`): given as it
+ * is first put in a set - a structure the chemist drew as much as one a step
+ * gave - and kept however it moves, is saved and opened; edited into
+ * another structure, it is another's (workflow/entries `memberRecord`,
+ * `placedRecord`).
  */
-export type DrawnRecord = { from?: string[]; properties?: Record<string, Property>; status?: EntryStatus; of?: string; stale?: string };
+export type DrawnRecord = { id?: string; from?: string[]; properties?: Record<string, Property>; status?: EntryStatus; of?: string; stale?: string };
 /** A structure drawn as a step gave it: the drawing, and its record where it has one. */
 export type DrawnModel = Model & { record?: DrawnRecord };
 /** One of a set's members: a structure drawn, by its atoms' ids, with its record, where a step gave it one; a molecule in 3D, or a picture, by id. */
@@ -982,13 +993,13 @@ export type WireTo = { step: number; port: string };
 /** A wire, from the set that gives to the input that takes it. */
 export type Wire = { id: number; from: WireEnd; to: WireTo };
 /** What of a workflow is the view's, not the document's. */
-export type WorkflowView = "hoveredSet" | "chosenSet" | "hoveredStep" | "hoveredWire" | "openStep" | "choosingAtoms" | "wireDrag" | "wireRefused" | "workflowMenu" | "askDeleteStep" | "askDeleteSet";
+export type WorkflowView = "hoveredSet" | "hoveredExit" | "chosenSet" | "hoveredStep" | "hoveredWire" | "openStep" | "choosingAtoms" | "wireDrag" | "wireRefused" | "workflowMenu" | "askDeleteStep" | "askDeleteSet";
 /**
  * A job of a step's, as last looked at (lib/jobs): where it is, when it
  * was asked for, started and ended; its place among those waiting, where it
  * waits; and the last line of its log, where it runs.
  */
-export type JobSeen = { state: JobState; created: number; started?: number; ended?: number; place?: number; line?: string; progress?: { done: number; total: number } };
+export type JobSeen = { state: JobState; created: number; started?: number; ended?: number; place?: number; line?: string; progress?: { done: number; total: number }; lastWritten?: number };
 /** A turn, as a quaternion's x, y, z and w. */
 export type Turn3D = [number, number, number, number];
 /** A molecule in 3D rising out of its drawing (EditorState `rising3d`). */
@@ -1397,6 +1408,8 @@ export type EditorState = {
   removeMeasure3d: (id: number, measure: number) => void;
   /** The electron-pushing arrows. */
   pushes: PushArrow[];
+  /** Atom maps between structures on the page, not on an arrow (chem/structureMaps). */
+  structureMaps: StructureMap[];
   /** The electron-pushing arrow under the pointer: its menu is the one a right-click opens. */
   hoveredPush: number | null;
   setHoveredPush: (id: number | null) => void;
@@ -1489,6 +1502,24 @@ export type EditorState = {
   selShapes: Set<number>;
   hoveredShape: number | null;
   shapeDraft: ShapeDraft | null;
+  /** The conversations on the page, each in its frame (conversation/types); which is under the pointer, which is read in the column, and each one's turn - the view's. */
+  conversations: Conversation[];
+  hoveredConversation: number | null;
+  conversationShown: number | null;
+  talking: Record<number, Talking>;
+  setHoveredConversation: (id: number | null) => void;
+  addConversation: (frame: { x0: number; y0: number; x1: number; y1: number }) => number | null;
+  moveConversation: (id: number, dx: number, dy: number, gesture?: string) => void;
+  resizeConversation: (id: number, frame: { x0: number; y0: number; x1: number; y1: number }, gesture?: string) => void;
+  updateConversation: (id: number, patch: ConversationPatch) => void;
+  removeConversation: (id: number) => void;
+  readConversation: (id: number) => void;
+  stopReadingConversation: () => void;
+  clearConversation: (id: number) => void;
+  sendToConversation: (id: number, words: string) => Promise<void>;
+  stopConversation: (id: number) => void;
+  keepConversationChanges: (id: number) => void;
+  discardConversationChanges: (id: number) => "dropped" | "running" | "since" | "none";
   /** The catalytic cycles on the page (lib/chem/cycle); which are selected, which is under the pointer - the view's. */
   cycles: Cycle[];
   selCycles: Set<number>;
@@ -1655,6 +1686,8 @@ export type EditorState = {
   wires: Wire[];
   /** The set whose tab is under the pointer; the set chosen (its tab clicked); the step and the wire under the pointer; the step open to its options. */
   hoveredSet: number | null;
+  /** The step's result set whose exit's port is under the pointer (`exitPortHovered`): what it holds said beside the port, where it is held off the page. */
+  hoveredExit: number | null;
   chosenSet: number | null;
   hoveredStep: number | null;
   hoveredWire: number | null;
@@ -1738,6 +1771,8 @@ export type EditorState = {
   openHeld: (id: number, open: boolean) => void;
   /** A click on a step's exit's port, no wire drawn from it: its result set, wired on, shown on the page or held off it again (`openHeld`); nothing where its exit is wired on to none. */
   exitPortClicked: (set: number) => void;
+  /** The pointer come onto a step's exit's port, or gone off it (`on`): its result set's, `set` - whatever draws the port. */
+  exitPortHovered: (set: number, on: boolean) => void;
   /** A step's atoms chosen on the drawing from `option`, or no longer (null): what comes into it held off the page opened first. */
   chooseAtomsFor: (step: number, option: string | null) => void;
   /**
@@ -1752,6 +1787,8 @@ export type EditorState = {
   runAll: () => Promise<void>;
   /** A step's jobs asked to stop: those waiting never start, those running are stopped with what they started. */
   stopStep: (id: number) => void;
+  /** One of a running step's jobs asked to stop alone (*Stop this job*): recorded failed, its entries said stopped - its step goes on, bringing in what its other jobs gave. */
+  stopJobAlone: (job: string) => void;
   /** Every step's jobs asked to stop. */
   stopAll: () => void;
   /** A step's run kept, or no longer (docs/WORKFLOWS.md, *Earlier runs*): the one it shows at -1, an earlier one by its place among them - one step to undo. */
@@ -2129,6 +2166,12 @@ export type EditorState = {
   setArrowForm: (ids: readonly number[], patch: ArrowFormPatch, gesture?: string) => void;
   /** An arrow given its reaction's atom map, or its map taken away (null), what it shows on the drawing with it - one step (chem/atomMap). */
   setAtomMap: (arrowId: number, map: ArrowAtomMap | null) => void;
+  /** Maps between structures on the page added (chem/structureMaps), what they show put on the drawing and its molecules in 3D: one undo step. */
+  addStructureMaps: (maps: readonly ArrowAtomMap[], replacing?: readonly number[]) => void;
+  /** The maps between structures given, by id, shown or hidden: one step. */
+  showStructureMaps: (ids: readonly number[], shown: boolean) => void;
+  /** Each map between structures given, by id, showing its next map: one step. */
+  otherStructureMaps: (ids: readonly number[]) => void;
   /** An arrow's atom map shown on the drawing - its numbers and reacting centres - or taken off it, kept: one step. */
   showAtomMap: (arrowId: number, shown: boolean) => void;
   /** An arrow's next map, of those its reaction has, shown and used instead: one step. */

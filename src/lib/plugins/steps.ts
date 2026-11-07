@@ -49,6 +49,7 @@ export const STEP_KINDS = [
   "saddle-point",
   "barrier",
   "ensemble",
+  "onto-structures",
 ] as const;
 export type StepKind = (typeof STEP_KINDS)[number];
 
@@ -93,6 +94,7 @@ export const MENO_ONLY: readonly StepKind[] = [
   "rank",
   "ensemble",
   "barrier",
+  "onto-structures",
 ];
 
 /**
@@ -102,6 +104,19 @@ export const MENO_ONLY: readonly StepKind[] = [
  * optimise. Through any other kind, it goes to the plugin as any entry does.
  */
 export const LONE_ATOM_PASSES: readonly StepKind[] = ["conformers", "optimise"];
+
+/**
+ * The kinds of step that may hold an entry's restraints as their program
+ * runs, where its plugin says it can (`StepDecl.restraints`): an
+ * optimisation, to a minimum or to a saddle point - asked on the step's
+ * card (workflow/doers `optionsFor`, *Hold its restraints*). A restraint a
+ * step of another kind is given rides along, held by none.
+ */
+export const HOLDS_RESTRAINTS: readonly StepKind[] = ["optimise", "saddle-point"];
+
+/** The kinds of restraint a step's program may hold as it runs: atoms fixed where they stand (lib/entry `Restraint`). */
+export const HELD_KINDS = ["fixed"] as const;
+export type HeldKind = (typeof HELD_KINDS)[number];
 
 /** What flows along a wire: structures drawn (any not yet in 3D), molecules in 3D each a compound, or conformer sets. */
 export const SET_KINDS = ["structures", "molecules", "conformers"] as const;

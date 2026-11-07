@@ -9,7 +9,7 @@
  * entry still, what was worked out at another structure or state never
  * carried. Each says what it did; nothing it does not pass on goes unsaid.
  */
-import type { Entry } from "../../../../lib/entry";
+import { geometryKey, type Entry } from "../../../../lib/entry";
 import { tag } from "../../../../lib/nodes/tag";
 import { merge } from "../../../../lib/nodes/merge";
 import { matchedOn } from "../../../../lib/nodes/match";
@@ -27,7 +27,8 @@ import { mapOnto, type BondChangeRow } from "../../../../lib/chem/reactionMap";
 import type { Molecule } from "../../../../lib/chem/molecule";
 import { atomsOfRows, type Table } from "../../../../lib/table";
 import { displacedEntry } from "../../../../lib/steps/vibrations";
-import { CALC_CARRIED, compoundLetter, entryOfSet, entryState, FINISHED, setEntryOfEntry, type SetEntry } from "./entries";
+import { CALC_CARRIED, calcRenumbered, compoundLetter, entryOfSet, entryState, FINISHED, keptRenumbered, setEntryOfEntry, type SetEntry } from "./entries";
+import { convergedOf } from "./converged";
 import type { Holds3D } from "./kinds";
 import type { Outcome3D } from "./meno";
 
@@ -486,9 +487,14 @@ export function atomMapPlan(entries: readonly SetEntry[], references: readonly S
  * that does not map one to one, is set aside with why - never passed on as
  * mapped. A mapped entry keeps its energy and its imaginary frequencies, of
  * its geometry however it is numbered, and one numbered as it was keeps all
- * it held; a calculation does not follow a renumbering, and the line says
- * so. Several entries mapped as one side come out as one, in the places the
- * map set them in, carrying none of their own values.
+ * it held. A renumbered one keeps what its energy is of - its calculation's
+ * program and level, how it was made - so that a compound's conformers,
+ * some renumbered and some not, stay one calculation's, their energies in
+ * one list; its calculation's results follow it, renumbered, but those
+ * that cannot be and the files they were read from, numbered as it was,
+ * and the line says so. Several entries mapped as one side come out as
+ * one, in the places the map set them in, carrying none of their own
+ * values.
  * `mapped`, where the mapping was worked out already (in a worker): for each
  * of `atomMapPlan`'s groups, its sides mapped, in order.
  */
@@ -541,10 +547,28 @@ export function atomMapSet(entries: readonly SetEntry[], references: readonly Se
       let held = e;
       if (side.length === 1 && moved) {
         // (renumbered, its energy and imaginary frequencies its geometry's, whatever its numbering: carried, and its thermochemistry
-        //  and vibrations as its own properties, renumbered with it; its calculation not)
+        //  and vibrations as its own properties, renumbered with it; and what its energy is of - its calculation's program and
+        //  level, how it was made - with what else it keeps, renumbered: alike with its compound's conformers not renumbered, as
+        //  one molecule writes them, its energy in their list; its calculation's results renumbered, but those that cannot be and
+        //  the files they were read from. Where a run ended converged at its geometry, that too: the same places, renumbered - the
+        //  atoms it held with them)
         const carried = Object.fromEntries(CALC_CARRIED.flatMap((key) => (r.properties[key] ? [[key, r.properties[key]]] : [])));
-        held = { ...e, properties: { ...e.properties, ...carried }, ...(first.energy != null ? { energy: first.energy } : {}), ...(first.imaginary ? { imaginary: [...first.imaginary] } : {}) };
-        if (first.calc) calc++;
+        const now = new Array<number>(m.order.length);
+        m.order.forEach((j, at) => (now[j] = at));
+        const converged = convergedOf(first);
+        const ran = first.calc ? calcRenumbered(first.calc, m.order) : undefined;
+        const bondAt = new Map(e.bonds.map((b, i) => [`${Math.min(b.a1, b.a2)}-${Math.max(b.a1, b.a2)}`, i]));
+        const bondNow = first.bonds.map((b) => bondAt.get(`${Math.min(now[b.a1], now[b.a2])}-${Math.max(now[b.a1], now[b.a2])}`) ?? -1);
+        held = {
+          ...e,
+          properties: { ...e.properties, ...carried },
+          ...(first.energy != null ? { energy: first.energy } : {}),
+          ...(first.imaginary ? { imaginary: [...first.imaginary] } : {}),
+          ...(ran ? { calc: ran.calc } : {}),
+          ...(first.keep ? { keep: keptRenumbered(first.keep, m.order, now, bondNow) } : {}),
+          ...(converged ? { converged: { ...converged, geometry: geometryKey(e.xyz), ...(converged.held ? { held: converged.held.map((a) => now[a]) } : {}) } } : {}),
+        };
+        if (ran?.leftBehind) calc++;
       }
       if (side.length > 1 && side.some((i) => entries[i].energy != null || entries[i].calc || Object.keys(entries[i].properties ?? {}).length)) partsOwn++;
       if (side.length === 1 && first.properties?.[MAPPED_ENTRY]) replaced++;
@@ -560,7 +584,7 @@ export function atomMapSet(entries: readonly SetEntry[], references: readonly Se
   const sideCount = (v.moleculesAre === "together" ? 1 : entries.length);
   const line = [`${mappedSides.size} of ${sideCount} mapped`];
   if (aside.length) line.push(`${v.moleculesAre === "together" ? 1 : aside.length} not mapped`);
-  if (calc) line.push(`${calc === 1 ? "its calculation" : "calculations"} not carried`);
+  if (calc) line.push(`part of ${calc === 1 ? "its calculation" : "their calculations"} not carried`);
   if (partsOwn) line.push("the parts' own values not carried");
   if (replaced) line.push(`the ${MAPPED_ENTRY} ${replaced === 1 ? "an entry" : `${replaced} entries`} carried replaced`);
   return { ok: true, holds, kept, aside, said: line.join(", "), tables: { changes } };

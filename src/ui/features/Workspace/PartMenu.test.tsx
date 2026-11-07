@@ -108,6 +108,22 @@ describe("the right-click menu", () => {
     expect(menu({ ...here, kind: "atom", id: 1 }).icons).not.toContain("Paste");
   });
 
+  it("offers an atom map between the structures selected on the one right-clicked - and, on a structure in maps, what they do", () => {
+    const here = { ...target({ selection: "here", drawing: true }), kind: "atom" as const, id: 1 };
+    expect(menu(here, { pageMap: { onMake: none } }).listed).toEqual(["Atom map", "Copy as SMILES", "Turn over left to right", "Turn over top to bottom", "Save as abbreviation…"]);
+    const held = { standing: "ready" as const, shown: true, maps: 3, chosen: 0, onShow: none, onOther: none, onExport: none };
+    expect(menu(target({ kind: "atom", id: 1 }), { pageMap: { held } }).listed).toEqual(["Unpaired electron", "Hide atom map", "Other map", "Export reaction in 3D…", "Select this structure"]);
+    expect(menu(target({ kind: "atom", id: 1 }), { pageMap: { held: { ...held, shown: false, maps: 1 } } }).listed).toEqual(["Unpaired electron", "Show atom map", "Export reaction in 3D…", "Select this structure"]);
+    // (partial: shown, the atoms not paired named, its export said to need them all; of a structure edited since: said, and made again)
+    expect(menu(target({ kind: "bond", id: 2 }), { pageMap: { held: { ...held, standing: "incomplete", maps: 1, unpaired: "Not mapped: O of Before" } } }).listed).toEqual([
+      "Hide atom map",
+      "Not mapped: O of Before",
+      "Export reaction in 3D… (needs every atom mapped)",
+      "Select this structure",
+    ]);
+    expect(menu(target({ kind: "bond", id: 2 }), { pageMap: { held: { ...held, standing: "changed", onAgain: none } } }).listed).toEqual(["Atom map of the structure before its edit", "Map again", "Select this structure"]);
+  });
+
   it("offers a record of a stack of drawings its stack laid out as a grid - or, laid out, stacked again", () => {
     expect(menu(target({ kind: "atom", id: 1 }), { records: { spread: false, run: none } }).listed).toEqual(["Unpaired electron", "Select this structure", "Lay out as a grid"]);
     expect(menu(target({ kind: "bond", id: 2 }), { records: { spread: true, run: none } }).listed).toEqual(["Select this structure", "Stack again"]);

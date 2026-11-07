@@ -5,12 +5,12 @@ import { pushShapes } from "./utils/pushes";
 import { exists } from "@tauri-apps/plugin-fs";
 import { fileNow } from "../../../lib/jobs";
 import { writeDocument, type Appended } from "../../../lib/io/writeDocument";
-import { jobsToKeep, LARGE_WORKSPACE_MB, sizeAsk, type SizeAsk } from "./workflow/keptJobs";
+import { clearSavedJobs, jobsToKeep, LARGE_WORKSPACE_MB, sizeAsk, type SizeAsk } from "./workflow/keptJobs";
 import { MOST_FILE } from "../../../lib/doc/menoFile";
 import { truePath } from "../../../lib/io/truePath";
 import { turnsOf } from "../../../lib/doc/saveTurns";
 import { heldElsewhere } from "../../../lib/doc/savers";
-import { mapStanding, mappedPairSdf } from "./chem/atomMap";
+import { exportRefusal, mappedPairSdf } from "./chem/atomMap";
 import { useCallback, useRef, useState } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { asBonds, bondLinePtOf, fillOutline, flattenedCurve, lineWidthOf, outlineCurve, shapeBounds, strokePieces } from "../../../lib/chem/shapes";
@@ -23,7 +23,7 @@ import { withRingStars, writeMolfile, writeMolfile3d, writeSdf, type Atom3D } fr
 import { forFlatReaders } from "./chem/drawing";
 import { reactionArrows, reactionFileText } from "./chem/reactionFile";
 import { styleOf, type DrawingStyle } from "../../../lib/chem/style";
-import { useAppSettings } from "../../../lib/settings/appSettings";
+import { keepsJobFolders, useAppSettings } from "../../../lib/settings/appSettings";
 import { editorLayoutOptions, layoutBonds } from "./layoutOptions";
 import { useEditorStore } from "./store";
 import type { Carried3D, Drawn, DrawnRecord, EditorState, Model } from "./store/types";
@@ -886,6 +886,11 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
       );
       store.getState().markSavedAs(kept, at.written);
       store.getState().markLeftKept();
+      // (its jobs' folders, every file of them held by the file just written as it reads back: moved to the Trash where
+      //  Settings does not keep them - not kept, by default - and, where any stayed though finished, said once:
+      //  docs/WORKFLOWS.md, *A job's folder*)
+      if (!keepsJobFolders(useAppSettings.getState().calculations))
+        void clearSavedJobs(kept, at.jobs).then(({ said }) => said && setError((e) => (e ? `${e} ${said}` : said)));
       naming.current?.(fileNameOf(kept));
       // (saved - new work is not lost for a file it could not keep - and each such file named, where Save's failures are, till dismissed; and, each time, what was left out as it opened)
       const keptAs = old && fileNameOf(old);
@@ -979,16 +984,18 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
 
   /**
    * A drawn reaction written in 3D, where its arrow's atom map is ready
-   * (chem/atomMap `mappedPairSdf`): an SD file of two records, the
-   * reactants and the product in the reactants' numbering, where the
-   * chemist says.
+   * (chem/atomMap `mappedPairSdf`) - or a map between structures on the
+   * page (chem/structureMaps), Before as the reactants, After as the
+   * product: an SD file of two records, the reactants and the product in
+   * the reactants' numbering, where the chemist says.
    */
   const exportReaction3d = useCallback(
-    (arrowId: number) =>
+    (of: { arrow: number } | { structureMap: number }) =>
       attempt("Export", async () => {
         const state = store.getState();
-        const map = state.arrows.find((a) => a.id === arrowId)?.atomMap;
-        if (!map || mapStanding({ atomMap: map }, state.model) !== "ready") throw new Error("The reaction has no atom map of it as it is drawn.");
+        const map = "arrow" in of ? state.arrows.find((a) => a.id === of.arrow)?.atomMap : state.structureMaps.find((m) => m.id === of.structureMap)?.map;
+        const refused = exportRefusal(map, state.model);
+        if (refused || !map) throw new Error(refused ?? "The reaction has no atom map of it as it is drawn.");
         const from = state.savedPath ?? state.openedName;
         const base = from ? withExtension(from, "sdf").replace(/\.sdf$/i, "") : "reaction";
         const name = fileNameOf(base);

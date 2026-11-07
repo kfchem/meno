@@ -270,6 +270,28 @@ describe("the page's mirror images", () => {
     }
   });
 
+  it("asks for each stereoisomer alone, in rounds of its own, where the search is asked in rounds", async () => {
+    // (butane-2,3-diol's two enantiomers and its meso form, as below: two made themselves, never asked together here)
+    const diol: Model = {
+      atoms: [...butanol("up").atoms, { id: 6, x: 2.6, y: -1.5, r: 0.9, el: "O" }],
+      bonds: [...butanol("up").bonds.map((b) => (b.id === 14 ? { ...b, stereo: undefined } : b)), { id: 15, a: 3, b: 6, order: 1 }],
+    };
+    const isomers = (
+      [
+        [1, -1],
+        [-1, 1],
+        [1, 1],
+      ] as const
+    ).map(([p, q]) => ({ centres: [centre(1, [0, 2, 4], p), centre(2, [1, 3, 5], q)], doubles: [] as [] }));
+    const { chem, asked } = shaper();
+    const [block] = blocksOf(diol, [1]);
+    const made = await conformersOf(chem, opener([1, 2], isomers), block, "all", {}, 10, { window: 3, first: 10, most: 5000 });
+    expect(asked).toEqual([1, 1, 1]);
+    expect(made).toHaveLength(3);
+    // (this plugin gives no energies: each asked once, and said why)
+    for (const c of made) expect(c.how?.find((r) => r.label === "Rounds")?.text).toBe("1 round, 10 tried: no energies came with them to tell a new conformer by");
+  });
+
   it("asks for each stereoisomer alone where the plugin answers fewer than it was asked for", async () => {
     // (butane-2,3-diol drawn with no wedge: its two enantiomers and its meso form asked for - two of them made themselves
     //  at once. Each centre's neighbours in the order given, the same sense at both is the meso form)

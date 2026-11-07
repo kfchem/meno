@@ -72,6 +72,16 @@ describe("a held set opened and closed (docs/WORKFLOWS.md, *Held results*)", () 
     expect(layer).toMatch(/exits\.map\([\s\S]*?onContextMenu=\{menuOf\("set", b\.id\)\}/);
   });
 
+  it("is told the pointer is on its exit's port, and off it, by the store (`exitPortHovered`): another's leaving clears nothing", () => {
+    const { st } = stored(page());
+    st().exitPortHovered(2, true);
+    expect(st().hoveredExit).toBe(2);
+    st().exitPortHovered(3, false);
+    expect(st().hoveredExit).toBe(2);
+    st().exitPortHovered(2, false);
+    expect(st().hoveredExit).toBeNull();
+  });
+
   it("is opened as a step's atoms are chosen where what comes into it is held - its structures are where they are chosen - in one edit", () => {
     const { d, st } = stored(page());
     st().chooseAtomsFor(4, "atoms");

@@ -7,9 +7,9 @@ import type { ChartValue } from "../../../../lib/chart";
 import type { DiagramValue } from "../../../../lib/energyDiagram";
 import type { NumberValue, Table } from "../../../../lib/table";
 import type { WorkspaceDocument } from "../document";
-import type { DrawnModel, Member, StepRunKept, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
+import type { DrawnModel, DrawnRecord, Member, StepRunKept, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import type { OptionValues } from "../../../../lib/options";
-import { inside, lyingIn, membersOf, placesOf, readingOrder, recordOn, setMembers, structureMember, structuresOf, type Frame } from "./entries";
+import { inside, lyingIn, membersOf, placesOf, readingOrder, setMembers, memberRecord, recordOn, structureMember, structuresOf, type Frame } from "./entries";
 import { drawnBox } from "../../../../utils/importers";
 import { CHART_PX, NAME_DOWN, PX, SET_PAD, SET_TOP, TABLE_PX, tableBodyPx } from "./look";
 import { canWire, resultOf, wireInto } from "./flow";
@@ -27,7 +27,7 @@ export const framed = (f: Frame): Frame => ({ x0: Math.min(f.x0, f.x1), y0: Math
 export function addSet(doc: WorkspaceDocument, frame: Frame, made?: WorkflowSet["made"], name?: string): WorkspaceDocument {
   const id = idOf(doc);
   const f = framed(frame);
-  const set: WorkflowSet = { id, ...f, ...(made ? { made } : {}), ...(name ? { name } : {}), members: membersOf(lyingIn(doc, f)) };
+  const set: WorkflowSet = { id, ...f, ...(made ? { made } : {}), ...(name ? { name } : {}), members: membersOf(lyingWithIds(doc, f, id)) };
   return { ...doc, nextWorkflowId: id + 1, sets: [...(doc.sets ?? []), set] };
 }
 
@@ -388,8 +388,8 @@ export function membersSettled(doc: WorkspaceDocument, before: WorkspaceDocument
       ...held.structures.map((ids, i) => {
         const at = nowAt.get(ids[0])!.at;
         const w = wasMiddle(ids);
-        // (with its record: a step's, which a structure keeps however it moves)
-        return { member: structureMember(ids, held.records[i]), at, wasIn: !!(prior && w && inside(prior, w)) };
+        // (with its record: a step's, which a structure keeps however it moves - and its lasting id, given where it has none)
+        return { member: structureMember(ids, memberRecord(held.records[i], doc.model, ids, set.id)), at, wasIn: !!(prior && w && inside(prior, w)) };
       }),
       ...held.molecules.map((id) => {
         const w = was.molecules.get(id);
@@ -420,7 +420,7 @@ export function membersSettled(doc: WorkspaceDocument, before: WorkspaceDocument
         const entry = { member, at, wasIn: false };
         kept = k < 0 ? [...kept, entry] : [...kept.slice(0, k), entry, ...kept.slice(k)];
       };
-      for (const s of now.structures) if (!s.ids.some((id) => heldAtoms.has(id))) add({ structure: s.ids }, s.at, wasMiddle(s.ids));
+      for (const s of now.structures) if (!s.ids.some((id) => heldAtoms.has(id))) add(structureMember(s.ids, memberRecord(undefined, doc.model, s.ids, set.id)), s.at, wasMiddle(s.ids));
       for (const [id, at] of now.molecules) if (!isMember.has(`m${id}`)) add({ molecule: id }, at, was.molecules.get(id));
       for (const [id, at] of now.pictures) if (!isMember.has(`p${id}`)) add({ picture: id }, at, was.pictures.get(id));
     }
@@ -441,16 +441,23 @@ export function membersFound(doc: WorkspaceDocument): WorkspaceDocument {
 /**
  * A set holding what lies inside its frame: each structure a copy carried a
  * record for (`WorkflowSet.carried`) - the same atoms - with that record,
- * of the structure as it is drawn now.
+ * of the structure as it is drawn now; each with a lasting id of its own (a
+ * copy carries none: workflow/parts `partsOf`).
  */
 function membersLying(doc: WorkspaceDocument, { carried, ...set }: WorkflowSet): WorkflowSet {
   const found = lyingIn(doc, set);
   const records = found.structures.map((ids) => {
     const of = new Set(ids);
     const c = carried?.find((x) => x.structure.length === ids.length && x.structure.every((id) => of.has(id)));
-    return c && (c.record.of ? recordOn(c.record, doc.model, ids) : c.record);
+    return memberRecord(c && (c.record.of ? recordOn(c.record, doc.model, ids) : c.record), doc.model, ids, set.id);
   });
   return { ...set, members: membersOf({ ...found, records }) };
+}
+
+/** What lies inside a frame (`lyingIn`), each structure with a lasting id of its own in set `id` (`memberRecord`). */
+function lyingWithIds(doc: WorkspaceDocument, frame: Frame, id: number): ReturnType<typeof lyingIn> & { records: DrawnRecord[] } {
+  const found = lyingIn(doc, frame);
+  return { ...found, records: found.structures.map((ids) => memberRecord(undefined, doc.model, ids, id)) };
 }
 
 /** Whether two lists of members are the same, in the same order. */

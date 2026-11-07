@@ -13,7 +13,7 @@
  */
 import { lockOf, WORKER, type DownloadDecl, type InstalledDecl, type LookDecl, type Manifest, type MotionDecl, type PresetsDecl, type StepDecl, type System, type UsesDecl, type WriteDecl } from "../plugins/manifest";
 import type { Option } from "../options";
-import { MANIFESTS, onPluginsChanged, PLUGINS_ROOT } from "../plugins/known";
+import { listedName, MANIFESTS, onPluginsChanged, PLUGINS_ROOT } from "../plugins/known";
 import { dependencyOrder, dependentsOf, dependsRefused, filesRefused, filesTaken, missingWhy, stoppedWhy, type DependDecl, type InterfaceDecl } from "../plugins/depends";
 import type { RoleId } from "../plugins/roles";
 import { MENO_READS } from "./menoReads";
@@ -60,6 +60,8 @@ export type PythonPlugin = ReaderBase &
     roleOptions: Partial<Record<RoleId, readonly Option[]>>;
     /** The roles whose search takes how many to try, which Meno sends (the conformers role's: lib/chem/conformersSought). */
     roleTries: readonly RoleId[];
+    /** Of those, the roles whose search gives another set of tries for each draw Meno asks for, so that it can ask in rounds (`draw`: lib/plugins/manifest `RoleDecl.draws`). */
+    roleDraws: readonly RoleId[];
     /** The looks it can make for a role, by role, where it declares any (Render: docs/RENDER.md). */
     roleLooks: Partial<Record<RoleId, readonly LookDecl[]>>;
     /** The motions it makes of a film for a role, by role, where it declares any (Render: docs/RENDER.md). */
@@ -68,6 +70,8 @@ export type PythonPlugin = ReaderBase &
     rolePrograms: Partial<Record<RoleId, readonly string[]>>;
     /** The confidence of its model's below which what it reads for a role is unsure, by role, where it declares one (Structures read from pictures). */
     roleUnsure: Partial<Record<RoleId, number>>;
+    /** The hosts it talks to for a role, by role, where the role has them (Talking with a model): its only way out, read again by the backend from its manifest in place. */
+    roleHosts?: Partial<Record<RoleId, readonly string[]>>;
     /** The kinds of a workflow's step it fills (docs/WORKFLOWS.md). */
     steps: readonly StepDecl[];
     /** The programs installed separately that its steps run: found or located, never fetched (lib/plugins/installed). */
@@ -122,10 +126,12 @@ export const pluginOf = (m: Manifest): Plugin => {
     ...(m.setUpBytes ? { setUpBytes: m.setUpBytes } : {}),
     roleOptions: Object.fromEntries(m.roles.filter((r) => r.options.length).map((r) => [r.role, r.options])),
     roleTries: m.roles.filter((r) => r.tries).map((r) => r.role),
+    roleDraws: m.roles.filter((r) => r.tries && r.draws).map((r) => r.role),
     roleLooks: Object.fromEntries(m.roles.filter((r) => r.looks?.length).map((r) => [r.role, r.looks!])),
     roleMotions: Object.fromEntries(m.roles.filter((r) => r.motions?.length).map((r) => [r.role, r.motions!])),
     rolePrograms: Object.fromEntries(m.roles.filter((r) => r.programs.length).map((r) => [r.role, r.programs])),
     roleUnsure: Object.fromEntries(m.roles.filter((r) => r.unsure).map((r) => [r.role, r.unsure!.below])),
+    ...(m.roles.some((r) => r.hosts) ? { roleHosts: Object.fromEntries(m.roles.filter((r) => r.hosts).map((r) => [r.role, r.hosts!])) } : {}),
     profile: `plugin-${m.id}`,
     // (in the folder of its version in use, in Meno's local data folder: lib/plugins/known)
     lock: `${PLUGINS_ROOT}/${m.id}/${m.version}/${lockOf(m.environment)}`,
@@ -157,6 +163,9 @@ export let WRITER_PLUGINS: readonly PythonPlugin[] = [];
 /** A plugin of that id, whether it runs something or not. */
 export const anyPluginById = (id: string): Plugin | undefined => ALL_PLUGINS.find((p) => p.id === id);
 
+/** A plugin's name, by its id: the one Meno knows of, or else the list of plugins online's - one used, not got yet - or else its id. */
+export const pluginName = (id: string): string => anyPluginById(id)?.name ?? listedName(id) ?? id;
+
 /** The plugin of that id. */
 export const pluginById = (id: string): PythonPlugin | undefined => PLUGINS.find((p) => p.id === id);
 
@@ -180,7 +189,7 @@ const interfaceVersion = (plugin: string, id: string) => anyPluginById(plugin)?.
 export function stoppedOf(p: Plugin, added: ReadonlySet<string>): string | null {
   const m = manifestOf(p.id);
   if (!m) return null;
-  return stoppedWhy(m, (id) => (added.has(id) ? anyPluginById(id)?.version : undefined), (id) => anyPluginById(id)?.name ?? id, interfaceVersion);
+  return stoppedWhy(m, (id) => (added.has(id) ? anyPluginById(id)?.version : undefined), pluginName, interfaceVersion);
 }
 
 /** What an added plugin brings another through its interface: by whom, and what. */
@@ -208,7 +217,7 @@ export function presetsFor(p: Plugin, added: ReadonlySet<string>): Offered[] {
 export function neededWhy(p: PythonPlugin, id: string, added: ReadonlySet<string>): string | null {
   const d = p.depends?.find((x) => x.plugin === id);
   if (!d || !d.programs.length) return `${p.name} asked for ${id}'s program, which it does not say it uses`;
-  return missingWhy(d, (x) => (added.has(x) ? anyPluginById(x)?.version : undefined), (x) => anyPluginById(x)?.name ?? x);
+  return missingWhy(d, (x) => (added.has(x) ? anyPluginById(x)?.version : undefined), pluginName);
 }
 
 /**
@@ -218,7 +227,7 @@ export function neededWhy(p: PythonPlugin, id: string, added: ReadonlySet<string
 export function stepFiles(p: PythonPlugin, kind: string, added: ReadonlySet<string>): string[] {
   const files = p.steps.find((s) => s.kind === kind)?.files ?? [];
   const m = manifestOf(p.id);
-  return m ? filesTaken(m, files, (id) => (added.has(id) ? anyPluginById(id)?.version : undefined), (id) => anyPluginById(id)?.name ?? id) : files;
+  return m ? filesTaken(m, files, (id) => (added.has(id) ? anyPluginById(id)?.version : undefined), pluginName) : files;
 }
 
 /**
@@ -231,7 +240,7 @@ export function kindsNotTaken(p: Plugin, added: ReadonlySet<string>): string[] {
   const version = (id: string) => (added.has(id) ? anyPluginById(id)?.version : undefined);
   return (manifestOf(p.id)?.depends ?? []).flatMap((d) => {
     if (!d.kinds?.length || !added.has(d.plugin)) return [];
-    const why = missingWhy(d, version, (id) => anyPluginById(id)?.name ?? id);
+    const why = missingWhy(d, version, pluginName);
     return why ? d.kinds.map((k) => `${manifestOf(d.plugin)?.kinds.find((x) => x.id === k)?.name ?? k} is not taken: ${why}`) : [];
   });
 }

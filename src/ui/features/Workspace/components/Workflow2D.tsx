@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { Fragment, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import PageHtml from "./PageHtml";
 import { useEditor, useEditorStore } from "../store";
@@ -16,12 +16,16 @@ import { countOf, countSaid, numberedOn, recordHow, recordNumber, recordWhy, typ
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { lookEvery } from "../workflow/lookEvery";
 import { labelReach, selectionFrame, selectionInSet } from "../workflow/selectionSet";
-import { unseenSets } from "../workflow/onPage";
+import { isHeld, unseenSets } from "../workflow/onPage";
+import { exitChip, exitNames } from "../workflow/exitNames";
+import type { Drawn } from "../pageGl/PagePlaced";
+import PagePlaced, { usePlaced } from "../pageGl/PagePlaced";
+import type { PageText } from "../pageGl/texts";
 import { useDrawnLayout } from "./drawnLayoutContext";
 import { useShownFrames } from "./useShownFrames";
 import { useMemberMarks } from "./useMemberMarks";
 import { reachOverFrames } from "../utils/molecule3d";
-import { wordsReadAt, zoomWritten } from "../utils/pageScale";
+import { hairWritten, wordsReadAt, zoomWritten } from "../utils/pageScale";
 import { usePresence } from "../../../theme/presence";
 import { DURATION, EASE, eased } from "../../../theme/motion";
 import { canWire, entryOnPage, givesOf, stateOf, stepsRun, wireInto, wireRefusal } from "../workflow/flow";
@@ -30,8 +34,8 @@ import { droppedBy, namesOf } from "../workflow/earlierRuns";
 import { exitsOf, howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
 import { exitStart } from "../workflow/place";
 import { useReaders } from "../../../../lib/calc/workers";
-import { useAppSettings } from "../../../../lib/settings/appSettings";
-import { finished } from "../../../../lib/jobs";
+import { QUIET_AFTER_MIN, useAppSettings } from "../../../../lib/settings/appSettings";
+import { finished, quietFor } from "../../../../lib/jobs";
 import { CARD_H, CARD_W, framesHash, HTML_DISTANCE, inputLead, nearWire, onLayer, PORTS_Z, portDown, PX, setGives, setTakes, shuttingCard, stepTakes as portTakes, underCard, byTurn, FrameBudget, pointsFor, roundedWay, WIRE_LANE, WireEasing, wireLanes, wireRoute, wireKey, type WireRouted } from "../workflow/look";
 import { byOf, doerOf, inputsFor, installedFor, kindsOf, notReadyFor, optionsFor, setName, stepOptions } from "../workflow/doers";
 import { diagramKept, diagramNeeds, diagramOptions, diagramValues } from "../workflow/diagramOptions";
@@ -53,6 +57,7 @@ const WIRE = "rgb(89, 99, 110)";
 const ACCENT = "rgb(49, 118, 137)";
 const ATTENTION = "rgb(205, 69, 96)";
 /** A wire's width on the screen, in px, at any zoom; and the band round it the pointer takes. */
+/** A wire's width in page pixels (`wireWidth`); how wide it takes the pointer, in screen pixels. */
 const WIRE_PX = 1.25;
 const WIRE_HIT_PX = 10;
 /** The wire into a running step, dashed - its dashes and gaps, in px on the screen - and how fast they move along it, in px a second: slowly. */
@@ -236,9 +241,15 @@ function useWirePoints(items: readonly WireItem[], frames: readonly Frame[], zoo
 /** A zoom as the points a wire is drawn through are worked out at: by quarter steps of doubling, so that a wire is not worked out again for every frame of a zoom. */
 const zoomStep = (zoom: number) => 2 ** (Math.round(Math.log2(zoom) * 4) / 4);
 
-/** A wire through `pts` as a ribbon `width` wide. */
-function ribbon(pts: readonly Pt[], width: number): THREE.BufferGeometry {
+/**
+ * A wire through `pts` as a ribbon on its line: each point twice, one to
+ * either side of it by a unit normal (`normal`, signed), the ribbon's width
+ * given when it is drawn (`widened`) - so that a zoom, which changes how wide
+ * it is in the page's units, makes no geometry again.
+ */
+function ribbon(pts: readonly Pt[]): THREE.BufferGeometry {
   const positions: number[] = [];
+  const normals: number[] = [];
   const index: number[] = [];
   // (how far along it each point is, for a dash)
   const along: number[] = [];
@@ -249,24 +260,48 @@ function ribbon(pts: readonly Pt[], width: number): THREE.BufferGeometry {
     const a = pts[Math.max(0, i - 1)];
     const b = pts[Math.min(pts.length - 1, i + 1)];
     const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
-    const nx = (-(b.y - a.y) / len) * (width / 2);
-    const ny = ((b.x - a.x) / len) * (width / 2);
-    positions.push(pt.x + nx, pt.y + ny, 0, pt.x - nx, pt.y - ny, 0);
+    const nx = -(b.y - a.y) / len;
+    const ny = (b.x - a.x) / len;
+    positions.push(pt.x, pt.y, 0, pt.x, pt.y, 0);
+    normals.push(nx, ny, -nx, -ny);
     if (i < pts.length - 1) index.push(2 * i, 2 * i + 1, 2 * i + 2, 2 * i + 1, 2 * i + 3, 2 * i + 2);
   });
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  g.setAttribute("ribbonNormal", new THREE.Float32BufferAttribute(normals, 2));
   g.setAttribute("along", new THREE.Float32BufferAttribute(along, 1));
   g.setIndex(index);
   return g;
 }
 
+/** A ribbon's material widened in its vertex shader by half its width (`half.value`, world units), set as it is drawn. */
+function widened(material: THREE.Material, half: { value: number }): void {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.ribbonHalf = half;
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nattribute vec2 ribbonNormal;\nuniform float ribbonHalf;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\ntransformed.xy += ribbonNormal * ribbonHalf;");
+  };
+  material.customProgramCacheKey = () => "ribbon";
+}
+
+/**
+ * How wide a wire is, in world units, at `zoom` on a screen of `dpr`: a page
+ * pixel and a quarter, as wide as the page draws it, never thinner than a
+ * device pixel (the maintainer, 2026-11-05: page units, floored).
+ */
+export const wireWidth = (zoom: number, dpr: number) => Math.max(WIRE_PX * PX, 1 / (Math.max(zoom, 1e-9) * Math.max(dpr, 1)));
+
 const DASH_VERTEX = `
 attribute float along;
+attribute vec2 ribbonNormal;
+uniform float ribbonHalf;
 varying float vAlong;
 void main() {
   vAlong = along;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  vec3 p = position;
+  p.xy += ribbonNormal * ribbonHalf;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 }`;
 const DASH_FRAGMENT = `
 uniform vec3 color;
@@ -282,12 +317,12 @@ void main() {
 /** The wire into a running step: dashed, its dashes moving slowly towards the step - a frame drawn for each step they move. */
 function MovingWire({ target, color, zoom }: { target: Pt[]; color: string; zoom: number }) {
   const pts = useEasedPoints(target, zoom);
-  const line = useMemo(() => ribbon(pts, WIRE_PX / zoom), [pts, zoom]);
+  const line = useMemo(() => ribbon(pts), [pts]);
   useEffect(() => () => line.dispose(), [line]);
   const material = useMemo(
     () =>
       new THREE.ShaderMaterial({
-        uniforms: { color: { value: new THREE.Color(color) }, offset: { value: 0 }, dash: { value: 1 }, gap: { value: 1 } },
+        uniforms: { color: { value: new THREE.Color(color) }, offset: { value: 0 }, dash: { value: 1 }, gap: { value: 1 }, ribbonHalf: { value: 0 } },
         vertexShader: DASH_VERTEX,
         fragmentShader: DASH_FRAGMENT,
         depthTest: false,
@@ -296,9 +331,10 @@ function MovingWire({ target, color, zoom }: { target: Pt[]; color: string; zoom
     [color],
   );
   useEffect(() => () => material.dispose(), [material]);
-  const { invalidate } = useThree();
+  const { invalidate, camera, gl } = useThree();
   useFrame((_, dt) => {
     const u = material.uniforms;
+    u.ribbonHalf.value = wireWidth((camera as THREE.OrthographicCamera).zoom || 1, gl.getPixelRatio()) / 2;
     u.dash.value = DASH_PX / zoom;
     u.gap.value = GAP_PX / zoom;
     u.offset.value = (u.offset.value + (Math.min(dt, 0.1) * DASH_SPEED) / zoom) % ((DASH_PX + GAP_PX) / zoom);
@@ -338,30 +374,54 @@ function useFade(material: React.RefObject<THREE.Material | null>, leaving: bool
 
 /** A wire drawn from `p` to `q`; where it can be pointed at, a wider band round it that the pointer takes. It fades in as it comes, and out as it goes (`leaving`). */
 function WireLine({ target, color, zoom, onHover, leaving = false }: { target: Pt[]; color: string; zoom: number; onHover?: (on: boolean) => void; leaving?: boolean }) {
-  // (as wide on the screen at any zoom: a hair, as the frames' lines are)
+  // (as wide as the page draws it, never thinner than a device pixel - `wireWidth`; taken by the pointer as wide on the screen at any zoom)
   const pts = useEasedPoints(target, zoom);
-  const line = useMemo(() => ribbon(pts, WIRE_PX / zoom), [pts, zoom]);
-  const hit = useMemo(() => (onHover && !leaving ? ribbon(pts, WIRE_HIT_PX / zoom) : null), [pts, zoom, !!onHover, leaving]); // eslint-disable-line react-hooks/exhaustive-deps
+  const line = useMemo(() => ribbon(pts), [pts]);
+  const hit = useMemo(() => (onHover && !leaving ? ribbon(pts) : null), [pts, !!onHover, leaving]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => line.dispose(), [line]);
   useEffect(() => () => hit?.dispose(), [hit]);
-  const material = useRef<THREE.MeshBasicMaterial>(null);
+  const half = useMemo(() => ({ value: 0 }), []);
+  const hitHalf = useMemo(() => ({ value: 0 }), []);
+  const drawn = useMemo(() => {
+    const m = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthTest: false, depthWrite: false, toneMapped: false });
+    widened(m, half);
+    return m;
+  }, [half]);
+  const taken = useMemo(() => {
+    const m = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthTest: false, depthWrite: false });
+    widened(m, hitHalf);
+    return m;
+  }, [hitHalf]);
+  useEffect(() => void drawn.color.set(color), [drawn, color]);
+  useEffect(
+    () => () => {
+      drawn.dispose();
+      taken.dispose();
+    },
+    [drawn, taken],
+  );
+  const material = useRef<THREE.MeshBasicMaterial>(drawn);
+  material.current = drawn;
   useFade(material, leaving);
+  const { camera, gl } = useThree();
+  useFrame(() => {
+    const z = (camera as THREE.OrthographicCamera).zoom || 1;
+    half.value = wireWidth(z, gl.getPixelRatio()) / 2;
+    hitHalf.value = WIRE_HIT_PX / z / 2;
+  });
   return (
     <group position={[0, 0, 0.012]}>
-      <mesh geometry={line} renderOrder={4}>
-        <meshBasicMaterial ref={material} color={color} transparent opacity={0} depthTest={false} depthWrite={false} toneMapped={false} />
-      </mesh>
+      <mesh geometry={line} material={drawn} renderOrder={4} />
       {hit && (
         <mesh
           geometry={hit}
+          material={taken}
           onPointerOver={(e) => {
             e.stopPropagation();
             onHover!(true);
           }}
           onPointerOut={() => onHover!(false)}
-        >
-          <meshBasicMaterial transparent opacity={0} depthTest={false} depthWrite={false} />
-        </mesh>
+        />
       )}
     </group>
   );
@@ -385,6 +445,28 @@ function runRows(s: WorkflowStep): RunRow[] {
   ];
 }
 
+/** The exits' names (workflow/exitNames), placed on the page as its other words by WebGL are (pageGl `usePlaced`), each where it is given. */
+function ExitNames({ items, chip }: { items: readonly PageText[]; chip: Drawn | null }) {
+  const [anchor, setAnchor] = useState<THREE.Group | null>(null);
+  const moved = <T extends { x: number; y: number }>(t: T, at: { x: number; y: number }): T => ({ ...t, x: t.x + at.x, y: t.y + at.y });
+  usePlaced(
+    anchor
+      ? {
+          key: "exit-names",
+          anchor,
+          words: true,
+          control: true,
+          draw: (at) => ({
+            // (and what a held exit's set holds, said beside its port as the pointer is on it: workflow/exitNames `exitChip`)
+            shapes: (chip?.shapes ?? []).map((s) => (s.kind === "box" ? { ...s, x0: s.x0 + at.x, x1: s.x1 + at.x, y0: s.y0 + at.y, y1: s.y1 + at.y } : moved(s, at))),
+            texts: [...items, ...(chip?.texts ?? [])].map((t) => moved(t, at)),
+          }),
+        }
+      : null,
+  );
+  return <group ref={setAnchor} />;
+}
+
 /**
  * A workflow on the page (docs/WORKFLOWS.md): its sets, its steps and the
  * wires between them, drawn at the page's scale - and the port on the
@@ -402,6 +484,9 @@ export default function Workflow2D() {
   //  sets aside, holding nothing: workflow/held - the same as long as those are, a card moved or not)
   const unseen = useMemo(() => unseenSets({ sets, wires, steps }), [sets, wires, steps]);
   const onPage = useMemo(() => (unseen.size ? sets.filter((b) => !unseen.has(b.id)) : sets), [sets, unseen]);
+  // (the sets on the page as last drawn, and when each came onto it: a step's result set come within a fold's time grows out of its port)
+  const seenSets = useRef<Set<number> | null>(null);
+  const cameAt = useRef(new Map<number, number>());
   const model = useEditor((s) => s.model);
   const molecules3d = useEditor((s) => s.molecules3d);
   const pictures = useEditor((s) => s.pictures);
@@ -488,7 +573,7 @@ export default function Workflow2D() {
   const read = useRef(true);
   const [zoom, setZoom] = useState((camera as THREE.OrthographicCamera).zoom || 1);
   // (what a hair was last written as, on which layers, and the zoom the frame before)
-  const hair = useRef<{ layer: HTMLDivElement | null; ports: HTMLDivElement | null; zoom: number; before: number }>({ layer: null, ports: null, zoom: NaN, before: NaN });
+  const hair = useRef<{ layer: HTMLDivElement | null; ports: HTMLDivElement | null; zoom: number; before: number; hair: number }>({ layer: null, ports: null, zoom: NaN, before: NaN, hair: NaN });
   const layer = useRef<HTMLDivElement>(null);
   const portsLayer = useRef<HTMLDivElement>(null);
   // the card opened over the rest - or shutting - as tall as it is now, in the page's units: the ports under it are not drawn
@@ -504,6 +589,11 @@ export default function Workflow2D() {
     watch.observe(el);
     return () => watch.disconnect();
   }, [over]);
+  // (a port drawn among the cards, made after the scale was last told - a result set's Into, as its step finishes: told it too)
+  useLayoutEffect(() => {
+    const z = hair.current.zoom;
+    if (z > 0) layer.current?.querySelectorAll<HTMLElement>(".meno-port").forEach((el) => el.style.setProperty("--scale", `${z * PX}`));
+  });
   useFrame(() => {
     const z = (camera as THREE.OrthographicCamera).zoom || 1;
     // (its words read, or too small: switched past their threshold - utils/pageScale `wordsReadAt` - and faded over a short time by CSS)
@@ -515,13 +605,21 @@ export default function Workflow2D() {
     const still = z === hair.current.before;
     hair.current.before = z;
     const h = hair.current;
-    if (h.layer !== layer.current || h.ports !== portsLayer.current || zoomWritten(h.zoom, z, still)) {
-      hair.current = { layer: layer.current, ports: portsLayer.current, zoom: z, before: z };
-      for (const el of [layer.current, portsLayer.current]) {
-        el?.style.setProperty("--hair", `${1 / (z * PX)}px`);
-        el?.style.setProperty("--scale", `${z * PX}`);
-      }
-    } else if (h.zoom !== z) invalidate();
+    // (a card's and a set's lines a page pixel, never thinner than a device pixel: written only while that floor holds,
+    //  in steps - utils/pageScale `hairWritten` - so that zoomed in the cards are never laid out again for them)
+    const fresh = h.layer !== layer.current || h.ports !== portsLayer.current;
+    const hairPx = hairWritten(fresh ? NaN : h.hair, z, gl.getPixelRatio());
+    if (hairPx != null) for (const el of [layer.current, portsLayer.current]) el?.style.setProperty("--hair", `${hairPx}px`);
+    // (the ports, laid out in the screen's pixels, their layer's scale undone on them: told it on their own layer only)
+    if (fresh || zoomWritten(h.zoom, z, still)) {
+      hair.current = { layer: layer.current, ports: portsLayer.current, zoom: z, before: z, hair: hairPx ?? h.hair };
+      portsLayer.current?.style.setProperty("--scale", `${z * PX}`);
+      // (and the ports drawn among the cards - a result set's Into - each on itself: the cards' layer told it would restyle them all)
+      layer.current?.querySelectorAll<HTMLElement>(".meno-port").forEach((el) => el.style.setProperty("--scale", `${z * PX}`));
+    } else {
+      if (hairPx != null) hair.current = { ...h, hair: hairPx };
+      if (h.zoom !== z) invalidate();
+    }
     layer.current?.style.setProperty("--words", read.current ? "1" : "0");
     layer.current?.style.setProperty("--stand-in", read.current ? "0" : "1");
   });
@@ -800,6 +898,23 @@ export default function Workflow2D() {
   const setById = useMemo(() => new Map(sets.map((b) => [b.id, b])), [sets]);
   // (each step's exits' sets, by step and exit: a port drawn for each)
   const exitSets = useMemo(() => new Map(sets.flatMap((b) => (b.made ? [[`${b.made.step}:${b.made.exit}`, b] as const] : []))), [sets]);
+  // (each exit's name beside its port where its set is on no page beside it - held off it - to name it: workflow/exitNames)
+  // (and the exit whose port the pointer is on, where its set is held and holds anything: said beside its port, its step's names gone meanwhile)
+  const hoveredExit = useEditor((s) => s.hoveredExit);
+  const saying = useMemo(() => {
+    const b = hoveredExit != null ? sets.find((x) => x.id === hoveredExit) : undefined;
+    return b?.made && (b.collection?.length || b.drawnCollection?.length) && !onPage.some((x) => x.id === b.id) ? b : undefined;
+  }, [hoveredExit, sets, onPage]);
+  const names = useMemo(() => {
+    const shown = new Set(onPage.map((b) => b.id));
+    return exitNames(
+      steps.filter((s) => s.id !== saying?.made?.step),
+      (step, exit) => {
+        const b = exitSets.get(`${step}:${exit}`);
+        return b && !shown.has(b.id) ? setName(b, steps) : null;
+      },
+    );
+  }, [steps, exitSets, onPage, saying]);
   /** Where a step's result set's exit gives on its card (place `exitStart`): the port its wires, and the line to the set where it is on the page, leave from. */
   const exitGives = (b: WorkflowSet): Pt | null => {
     const s = b.made ? stepById.get(b.made.step) : undefined;
@@ -816,7 +931,8 @@ export default function Workflow2D() {
   // (Settings' choices are read where the options are worked out, not passed in: a dependency all the same)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const states = useMemo(() => new Map(steps.map((s) => [s.id, menoWorking[s.id] ? ("running" as const) : stateOf(flow, s, byOf(s))])), [flow, steps, menoWorking, settingsOptions]);
-  // how each running step's jobs are getting on, as last looked at
+  // how each running step's jobs are getting on, as last looked at - and how long the quietest running one has written nothing, past what Settings says
+  const quietAfter = useAppSettings((s) => s.calculations.quietAfterMin ?? QUIET_AFTER_MIN);
   const runs = useMemo(() => {
     const out = new Map<number, { waiting: boolean; view: RunView }>();
     for (const s of steps) {
@@ -825,6 +941,7 @@ export default function Workflow2D() {
       const places = seen.flatMap((x) => (x?.place ? [x.place] : []));
       const starts = seen.flatMap((x) => (x?.started != null ? [x.started] : []));
       const line = seen.find((x) => x?.state === "running" && x.line)?.line;
+      const quiet = Math.max(-1, ...seen.map((x) => quietFor(x, Date.now(), quietAfter) ?? -1));
       out.set(s.id, {
         waiting: seen.every((x) => !x || x.state === "waiting"),
         view: {
@@ -834,13 +951,14 @@ export default function Workflow2D() {
           total: s.running.jobs.length,
           ...(line ? { line } : {}),
           ...(shareOf(seen) != null ? { share: shareOf(seen) } : {}),
+          ...(quiet >= 0 ? { quiet } : {}),
         },
       });
     }
     // (and Meno's working in turns: how many of its entries it has been through)
     for (const [id, m] of Object.entries(menoWorking)) out.set(Number(id), { waiting: false, view: { since: m.since, ended: m.done, total: m.total } });
     return out;
-  }, [steps, jobsSeen, menoWorking]);
+  }, [steps, jobsSeen, menoWorking, quietAfter]);
   // each set's name and count: what it holds, worked out as the page changes, not as the pointer moves
   const setInfo = useMemo(
     () =>
@@ -926,13 +1044,33 @@ export default function Workflow2D() {
     return s && wireDrag.to ? { p: wireDrag.at, q: stepTakes(s, wireDrag.to.port) } : null;
   })();
 
+  // (a step's result set folds into its exit's port as it is held off the page, and grows out of it as it is shown again: about
+  //  that port, where it stands on the layer - workflow/held; those come onto the page within the fold's time, growing)
+  const foldAbout = (b: WorkflowSet): CSSProperties | undefined => {
+    const p = exitGives(b);
+    if (!p) return undefined;
+    const at = onLayer(p.x, p.y);
+    return { position: "absolute", left: 0, top: 0, width: 0, height: 0, transformOrigin: `${at.left}px ${at.top}px` };
+  };
+  const now = performance.now();
+  if (seenSets.current) for (const b of onPage) if (b.made && !seenSets.current.has(b.id)) cameAt.current.set(b.id, now);
+  seenSets.current = new Set(onPage.map((b) => b.id));
+  const growing = (id: number) => now - (cameAt.current.get(id) ?? -Infinity) < DURATION.base * 1000;
+  // (what a held exit's set holds, in a large set's words: its frame's summary - workflow/exitNames `exitChip`)
+  const chip = useMemo(() => {
+    const info = saying ? setInfo.get(saying.id) : undefined;
+    const p = saying ? exitGives(saying) : null;
+    return saying && info?.summary && p ? exitChip(`exit-chip:${saying.id}`, info.name, `${info.summary.count} ${info.summary.nouns}`, p) : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- exitGives: of the steps, which are among these
+  }, [saying, setInfo, steps]);
   // sets and steps, each drawn as it is - and those just gone, as they last were, fading out
   const parts = [
     ...onPage.map((b) => {
       const info = setInfo.get(b.id)!;
       const f = shownOf(b);
       return (
-        <div key={`b${b.id}`} style={onLayer(f.x0, f.y1)}>
+        <div key={`b${b.id}`} className={b.made && growing(b.id) ? "meno-fold-in" : undefined} style={b.made ? foldAbout(b) : undefined}>
+        <div style={onLayer(f.x0, f.y1)}>
           <SetFrame
             set={{ ...b, ...f }}
             name={info.name}
@@ -948,6 +1086,7 @@ export default function Workflow2D() {
             {...(!b.made ? { onRename: (name: string) => store.getState().renameSet(b.id, name) } : {})}
             {...(b.chart ? { onEntry: showEntry } : {})}
           />
+        </div>
         </div>
       );
     }),
@@ -997,7 +1136,8 @@ export default function Workflow2D() {
       );
     }),
   ];
-  const shownParts = usePresence(parts, (el) => String(el.key));
+  // (kept as long as a fold takes, the longest of what goes)
+  const shownParts = usePresence(parts, (el) => String(el.key), DURATION.base * 1000);
   // the card opened over the rest, on the page: what the ports under it are not drawn for; a port's reach, half its 9 hairs (a hair, 1 / zoom on the page)
   const coverStep = cover ? stepById.get(cover.step) : undefined;
   const coverFrame = coverStep && cover ? { x0: coverStep.x, x1: coverStep.x + cover.w, y0: coverStep.y - cover.h, y1: coverStep.y } : null;
@@ -1050,6 +1190,10 @@ export default function Workflow2D() {
 
   return (
     <group>
+      {/* the exits' names, as the page's words: gone where too small to read, and while a talk is given */}
+      <PagePlaced>
+        <ExitNames items={names} chip={chip} />
+      </PagePlaced>
       {/* wires: those drawn, and each step's to the set it made - and those just gone, fading */}
       {shownWires.map(({ key, item, leaving }) => {
         const target = wirePoints.get(item.key);
@@ -1092,16 +1236,19 @@ export default function Workflow2D() {
               </span>
             </div>
           ))}
-          {shownParts.map(({ key, item, leaving }) =>
-            leaving ? (
+          {shownParts.map(({ key, item, leaving }) => {
+            // (a step's result set held off the page now: folding into its exit's port, as it last was)
+            const set = leaving && key.startsWith("b") ? sets.find((x) => x.id === Number(key.slice(1))) : undefined;
+            const fold = set?.made && isHeld({ sets, wires }, set) ? foldAbout(set) : undefined;
+            return leaving ? (
               // (gone: as it last was, fading, and no longer taking the pointer)
-              <div key={key} inert className="meno-fade-out">
+              <div key={key} inert className={fold ? "meno-fold-out" : "meno-fade-out"} style={fold}>
                 {item}
               </div>
             ) : (
               <Fragment key={key}>{item}</Fragment>
-            ),
-          )}
+            );
+          })}
         </div>
       </PageHtml>
       {/* The ports, on a layer of their own over the molecules' chips and
@@ -1153,6 +1300,7 @@ export default function Workflow2D() {
                       data={{ "data-give-set": String(b.id) }}
                       onPointerDown={(e) => drawFrom(e, { set: b.id })}
                       onContextMenu={menuOf("set", b.id)}
+                      onHover={(on) => store.getState().exitPortHovered(b.id, on)}
                       style={{ left: CARD_W / PX, top: portDown(k) / PX }}
                       of={CARD_H / PX}
                     />

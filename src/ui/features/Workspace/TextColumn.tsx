@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import clsx from "clsx";
-import { ArrowsPointingInIcon, ArrowsPointingOutIcon, ArrowUpTrayIcon, ChevronDoubleRightIcon, ChevronDownIcon, ChevronUpIcon, CodeBracketIcon, ExclamationTriangleIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { ArrowsPointingInIcon, ArrowsPointingOutIcon, ArrowUpTrayIcon, ChevronDoubleRightIcon, ChevronDownIcon, ChevronUpIcon, CodeBracketIcon, ExclamationTriangleIcon, MagnifyingGlassIcon, StopCircleIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { exists } from "@tauri-apps/plugin-fs";
 import { writeDocument } from "../../../lib/io/writeDocument";
@@ -21,7 +21,8 @@ import { COLUMN_NARROWEST, COLUMN_WIDEST, columnWidthFor, jobStateSaid, lostSaid
 import { takenBeside } from "../../../lib/io/beside";
 import { shortcutLabel } from "../../../lib/doc/shortcuts";
 import { isPinch, wheelReader } from "../../../lib/input/wheel";
-import { useAppSettings } from "../../../lib/settings/appSettings";
+import { QUIET_AFTER_MIN, useAppSettings } from "../../../lib/settings/appSettings";
+import { quietFor, quietShort } from "../../../lib/jobs";
 import { pageUnder, pointOn } from "../../../lib/pdf/column";
 import { figureStructuresHad } from "./utils/pdfStructures";
 import { indexOnce, mentionUnder } from "./utils/compoundLens";
@@ -232,7 +233,17 @@ function Column({
   const logJobs = logOf?.jobs && logOf.jobs.length > 1 ? { jobs: logOf.jobs, job: logOf.job ?? 0 } : null;
   // (how each job stands: as last looked at - or, none looked at, as the step's run said they ended, a workspace reopened)
   const logRan = useEditor((st) => (logOf ? st.steps.find((x) => x.id === logOf.step)?.ran : undefined));
-  const jobState = (id: string) => jobStateSaid(id, jobsSeen, logRan);
+  // (and, running and quiet past what Settings says: for how long it has written nothing)
+  const quietAfter = useAppSettings((st) => st.calculations.quietAfterMin ?? QUIET_AFTER_MIN);
+  const jobState = (id: string) => {
+    const said = jobStateSaid(id, jobsSeen, logRan);
+    const quiet = quietFor(jobsSeen[id], Date.now(), quietAfter);
+    // (in place of "running": the chooser's room is short)
+    return quiet != null ? quietShort(quiet) : said;
+  };
+  // (the job shown, where it waits or runs: one that may be stopped alone - its step going on without it)
+  const shownJob = logJobs ? logJobs.jobs[logJobs.job] : undefined;
+  const stoppable = !!shownJob && (jobsSeen[shownJob]?.state === "waiting" || jobsSeen[shownJob]?.state === "running");
   const markdown = !!shown && isMarkdown(shown.name);
   const source = useShowsSource(store, shown?.id ?? null);
   const exportText = async (t: WorkspaceText) => {
@@ -277,6 +288,17 @@ function Column({
             className="shrink-0 max-w-[11rem]"
             variant="quiet"
           />
+        )}
+        {/* (that job alone stopped: failed, "stopped by you" - the step brings in what its other jobs gave, where its Stop would bring in none) */}
+        {shown && stoppable && (
+          <button
+            onClick={() => store.getState().stopJobAlone(shownJob!)}
+            aria-label="Stop this job"
+            title="Stop this job"
+            className="h-7 w-7 shrink-0 rounded-md flex items-center justify-center hover:bg-gh-base"
+          >
+            <StopCircleIcon className="h-4 w-4" />
+          </button>
         )}
         {shown && markdown && (
           <button

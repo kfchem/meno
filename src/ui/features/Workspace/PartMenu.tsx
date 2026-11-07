@@ -150,6 +150,26 @@ export type MenuMolecule3D = {
  * listed under it (the maintainer, 2026-10-10: the menus had grown busy).
  * Closes on Escape, on a press anywhere else, and on a turn of the wheel.
  */
+/**
+ * What a map shown - complete or partial - offers: shown or hidden; the next
+ * map taken ("2 of 4": most differ only in where the hydrogens go, which the
+ * drawing does not show); and the reaction written in 3D, which needs every
+ * atom paired - a partial map's atoms that do not pair named instead, and its
+ * export said to need them all.
+ */
+function mapShownItems(m: { standing: "ready" | "incomplete"; shown: boolean; maps: number; chosen: number; onShow: (shown: boolean) => void; onOther: () => void; onExport: () => void; unpaired?: string }, divider: boolean): Item[] {
+  return [
+    { name: m.shown ? "Hide atom map" : "Show atom map", keys: "", run: () => m.onShow(!m.shown), divider },
+    ...(m.maps > 1 ? [{ name: "Other map", keys: `${m.chosen + 1} of ${m.maps}`, run: m.onOther, keep: true }] : []),
+    ...(m.standing === "ready"
+      ? [{ name: "Export reaction in 3D…", keys: "", run: m.onExport }]
+      : [
+          { name: m.unpaired ?? "Not every atom mapped", keys: "", run: () => {}, disabled: true },
+          { name: "Export reaction in 3D… (needs every atom mapped)", keys: "", run: () => {}, disabled: true },
+        ]),
+  ];
+}
+
 export default function PartMenu({
   target,
   records,
@@ -192,6 +212,7 @@ export default function PartMenu({
   onPush,
   push,
   arrow,
+  pageMap,
   onColour,
   onRender,
   picture,
@@ -376,7 +397,21 @@ export default function PartMenu({
       onShow: (shown: boolean) => void;
       onOther: () => void;
       onExport: () => void;
+      /** A partial map's atoms that do not pair, in words. */
+      unpaired?: string;
     };
+  };
+  /**
+   * Atom maps between structures on the page (docs/ATOM-MAPPING.md,
+   * *Between structures on the page*): made, where two or more structures
+   * are selected and one of them right-clicked - it Before, each other After;
+   * and those its structure is in, as one: how they stand, whether shown, how
+   * many maps the first steps through - and shown or hidden, the next map
+   * taken, the first written in 3D.
+   */
+  pageMap?: {
+    onMake?: () => void;
+    held?: { standing: "changed" | "incomplete" | "ready"; shown: boolean; maps: number; chosen: number; onShow: (shown: boolean) => void; onOther: () => void; onExport: () => void; onAgain?: () => void; unpaired?: string };
   };
   /** The part - an atom, a bond, a ring, the selection - given a colour, a highlight or a fill, in a card where the menu was. */
   onColour?: () => void;
@@ -511,6 +546,20 @@ export default function PartMenu({
   const colour: Item[] = onColour ? [{ name: "Colour…", keys: "", run: onColour, icon: MENU_ICONS.colour }] : [];
   // (a record of a stack of drawings: its stack laid out as a grid, or stacked again)
   const stackItem: Item[] = records ? [{ name: records.spread ? "Stack again" : "Lay out as a grid", keys: "", run: records.run, divider: true }] : [];
+  // (atom maps between structures on the page: made from two or more selected; those its structure is in, shown or hidden, another taken, written in 3D)
+  const mapsHeld = pageMap?.held;
+  const pageMapItems: Item[] = [
+    ...(pageMap?.onMake ? [{ name: "Atom map", keys: "", run: pageMap.onMake, divider: true }] : []),
+    ...(mapsHeld?.standing === "ready" || mapsHeld?.standing === "incomplete"
+      ? mapShownItems({ ...mapsHeld, standing: mapsHeld.standing }, !pageMap?.onMake)
+      : mapsHeld?.standing === "changed"
+          ? [
+              // (of the structure as it was before an edit: it shows nothing - said, and made again)
+              { name: "Atom map of the structure before its edit", keys: "", run: () => {}, disabled: true, divider: !pageMap?.onMake },
+              ...(mapsHeld.onAgain ? [{ name: "Map again", keys: "", run: mapsHeld.onAgain }] : []),
+            ]
+          : []),
+  ];
   const stereoItem: Item[] = [
     ...(stereo ? [{ name: stereo.name, keys: "", run: stereo.run, divider: true }] : []),
     ...(numbers
@@ -664,16 +713,10 @@ export default function PartMenu({
             : []),
           // (its reaction's atom map: made; shown or hidden, another taken, written in 3D - or said to be incomplete)
           ...(arrow?.atomMap
-            ? arrow.atomMap.standing === "ready"
-              ? [
-                  { name: arrow.atomMap.shown ? "Hide atom map" : "Show atom map", keys: "", run: () => arrow.atomMap!.onShow(!arrow.atomMap!.shown), divider: true },
-                  // (which of how many is in use: most differ only in where the hydrogens go, which the drawing does not show)
-                  ...(arrow.atomMap.maps > 1 ? [{ name: "Other map", keys: `${arrow.atomMap.chosen + 1} of ${arrow.atomMap.maps}`, run: arrow.atomMap.onOther, keep: true }] : []),
-                  { name: "Export reaction in 3D…", keys: "", run: arrow.atomMap.onExport },
-                ]
+            ? arrow.atomMap.standing === "ready" || arrow.atomMap.standing === "incomplete"
+              ? mapShownItems({ ...arrow.atomMap, standing: arrow.atomMap.standing }, true)
               : [
                   { name: "Atom map", keys: "", run: arrow.atomMap.onMake, divider: true },
-                  ...(arrow.atomMap.standing === "incomplete" ? [{ name: "Atom map incomplete", keys: "", run: () => {}, disabled: true }] : []),
                   // (one of a drawing changed since, still shown: taken off it)
                   ...(arrow.atomMap.standing === "changed" && arrow.atomMap.shown ? [{ name: "Hide atom map", keys: "", run: () => arrow.atomMap!.onShow(false) }] : []),
                 ]
@@ -854,6 +897,7 @@ export default function PartMenu({
                 ...colour,
               ]
             : []),
+          ...pageMapItems,
           del("Delete selection"),
           // (an atom selected alone, right-clicked: its label, as on the atom's own menu)
           ...(target.kind === "atom" && onEditLabel ? [{ name: "Edit label", keys: "", run: onEditLabel }] : []),
@@ -933,6 +977,7 @@ export default function PartMenu({
               ]
             : []),
           ...stereoItem,
+          ...pageMapItems,
           { name: "Select this structure", keys: "", run: onSelectStructure },
           ...(figure ? [{ name: figure.from, keys: "", run: () => {}, disabled: true, divider: true }, ...(figure.run ? [{ name: "Checked against the figure", keys: "", run: figure.run }] : [])] : []),
           ...stackItem,
