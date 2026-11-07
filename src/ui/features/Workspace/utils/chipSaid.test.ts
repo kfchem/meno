@@ -64,13 +64,13 @@ describe("a set's chip, shut, as runs to draw", () => {
 
 describe("what a chip says opened, and copies", () => {
   const failed = [null, { kind: "not-converged" as const, why: "The optimisation did not converge" }];
-  const warnings = [{ kind: "hessian-not-stationary" as const, text: "hessian_numhess: Hessian on incompletely optimized geometry!" }];
+  const warnings = [{ kind: "hessian-not-stationary" as const, text: "Frequencies taken where the geometry had not settled" }];
   const c: ChipFacts = { count: 2, frame: 1, about: "Tight", failed, warnings };
 
-  it("says why the frame told failed, first, and what its calculation warned of, in the program's words", () => {
+  it("says why the frame told failed, first, and what its calculation warned of, as its reader says it", () => {
     const groups = chipDetails(c, 1);
     expect(groups[0]).toEqual({ group: "Failed", rows: [{ label: "Not converged", text: "The optimisation did not converge" }] });
-    expect(groups[groups.length - 1]).toMatchObject({ group: "Warnings", rows: [{ text: "hessian_numhess: Hessian on incompletely optimized geometry!" }] });
+    expect(groups[groups.length - 1]).toMatchObject({ group: "Warnings", rows: [{ text: "Frequencies taken where the geometry had not settled" }] });
     expect(said({ ...c, frame: 1 })).toContain("1 warning");
     // (another frame, which did not fail: its warnings alone)
     expect(chipDetails(c, 0).some((g) => g.group === "Failed")).toBe(false);
