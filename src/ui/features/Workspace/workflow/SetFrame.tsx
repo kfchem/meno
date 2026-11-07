@@ -4,7 +4,7 @@ import type { WorkflowSet } from "../store/types";
 import type { ChartPoint } from "../../../../lib/chart";
 import type { DiagramLevel } from "../../../../lib/energyDiagram";
 import type { StyleChoice } from "../../../../lib/chem/style";
-import { CHART_PX, NAME_DOWN, SET_PAD, PX, SUMMARY_PX, TABLE_PX, tableBodyPx } from "./look";
+import { CHART_PX, NAME_DOWN, SET_PAD, PX, SUMMARY_PX, TABLE_PX, TAB_INSET, tableBodyPx } from "./look";
 import { ChartBody, DiagramBody, NumberBody, TableBody } from "./ValueBody";
 import SummaryBody from "./SummaryBody";
 
@@ -44,7 +44,7 @@ export default function SetFrame(p: SetFrameProps) {
   return (
     <div className="meno-fade-in relative select-none" style={{ width: w, height: h, pointerEvents: "none" }} onContextMenu={p.onContextMenu}>
       {p.renaming && (
-        <div className="absolute flex items-center text-[11px] leading-4" style={{ left: SET_PAD / PX, top: 0, height: (2 * NAME_DOWN) / PX, pointerEvents: "auto" }}>
+        <div className="absolute flex items-center text-[11px] leading-4" style={{ left: TAB_INSET / PX, top: 0, height: (2 * NAME_DOWN) / PX, pointerEvents: "auto" }}>
           <input
             autoFocus
             aria-label="Set name"

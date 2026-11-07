@@ -1,5 +1,5 @@
 import type { Frame } from "../workflow/entries";
-import { NAME_DOWN, SET_PAD } from "../workflow/look";
+import { NAME_DOWN, TAB_INSET } from "../workflow/look";
 import { COLORS } from "../../../theme/colors";
 import type { PageIcon } from "./icons";
 import { textWidth, type PageText } from "./texts";
@@ -89,8 +89,8 @@ export function frameTabParts(items: readonly FrameTab[], read: boolean): { shap
     const fade = it.opacity != null ? { opacity: it.opacity } : {};
     const top = y1;
     const mid = top - BAND / 2;
-    const left = x0 + SET_PAD;
-    const tabRight = left + pagePx(tabWidthPx(it.tab, read, it.iconWhenSmall)) + SET_PAD;
+    const left = x0 + TAB_INSET;
+    const tabRight = left + pagePx(tabWidthPx(it.tab, read, it.iconWhenSmall)) + TAB_INSET;
     // (its frame - or, of the whole page, its tab alone, a box of its own)
     if (it.tabOnly) shapes.push({ kind: "box", key: `${it.key}:tab`, x0, y0: top - BAND, x1: tabRight, y1: top, radiusPx: FRAME_PX.radius, fill: FRAME_COLORS.fill, line, z: 1, ...fade });
     else shapes.push({ kind: "box", key: `${it.key}:frame`, x0, y0, x1, y1, radiusPx: FRAME_PX.radius, line, z: 0, ...fade });
