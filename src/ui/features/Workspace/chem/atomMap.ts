@@ -251,13 +251,15 @@ export function renumbered(map: ArrowAtomMap, drawnOrder: ReadonlyMap<number, nu
     return id != null && drawnOrder.has(id) ? drawnOrder.get(id)! : Infinity;
   };
   const heavy = atoms.map((_, i) => i).filter((i) => atoms[i].el !== "H");
-  heavy.sort((p, q) => place(p) - place(q) || p - q);
+  // (by place, then by their own order - two with no place alike, compared so: Infinity less Infinity is no number)
+  const by = (key: (i: number) => number) => (p: number, q: number) => (key(p) === key(q) ? p - q : key(p) - key(q));
+  heavy.sort(by(place));
   const number = new Array<number>(n).fill(0);
   heavy.forEach((i, k) => (number[i] = k + 1));
   // (each H after the heavy atoms, by the number of the atom it is on; one on none, or on another H, last)
   const on = (h: number) => around[h].map((x) => number[x]).find((v) => v > 0) ?? Infinity;
   const hydrogens = atoms.map((_, i) => i).filter((i) => atoms[i].el === "H");
-  hydrogens.sort((p, q) => on(p) - on(q) || p - q);
+  hydrogens.sort(by(on));
   hydrogens.forEach((i, k) => (number[i] = heavy.length + k + 1));
   return number;
 }

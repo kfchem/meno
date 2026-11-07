@@ -173,7 +173,7 @@ function sideFrames(side: ArrowAtomMap["reactant"], numbers: readonly number[], 
   if (start !== 0 || molecule.atoms.length !== side.atoms.length) return null;
   const numbered = framesNumbered(molecule, side, 0, numbers);
   const energy = (f: number) => molecule.energies?.[f] ?? Infinity;
-  const frames = numbered.flatMap((n, at) => (n && n.every((k) => k > 0) ? [{ at, numbers: n }] : []));
+  const frames = numbered.flatMap((n, at) => (n ? [{ at, numbers: n }] : []));
   frames.sort((p, q) => energy(p.at) - energy(q.at) || p.at - q.at);
   return { molecule, frames };
 }
