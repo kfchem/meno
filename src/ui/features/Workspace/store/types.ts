@@ -999,7 +999,7 @@ export type ChipCopy = { all: string; energies: string | null };
 /** A line a card says that its menu copies - a step's failure, its program's last line - by the item's name (Workflow2D). */
 export type CopyLine = { name: string; text: string };
 
-export type WorkflowView = "hoveredSet" | "chosenSet" | "hoveredStep" | "hoveredWire" | "openStep" | "choosingAtoms" | "wireDrag" | "wireRefused" | "workflowMenu" | "chipOver" | "askDeleteStep" | "askDeleteSet";
+export type WorkflowView = "hoveredSet" | "hoveredExit" | "chosenSet" | "hoveredStep" | "hoveredWire" | "openStep" | "choosingAtoms" | "wireDrag" | "wireRefused" | "workflowMenu" | "chipOver" | "askDeleteStep" | "askDeleteSet";
 /**
  * A job of a step's, as last looked at (lib/jobs): where it is, when it
  * was asked for, started and ended; its place among those waiting, where it
@@ -1692,6 +1692,8 @@ export type EditorState = {
   wires: Wire[];
   /** The set whose tab is under the pointer; the set chosen (its tab clicked); the step and the wire under the pointer; the step open to its options. */
   hoveredSet: number | null;
+  /** The step's result set whose exit's port is under the pointer (`exitPortHovered`): what it holds said beside the port, where it is held off the page. */
+  hoveredExit: number | null;
   chosenSet: number | null;
   hoveredStep: number | null;
   hoveredWire: number | null;
@@ -1771,6 +1773,14 @@ export type EditorState = {
   /** A wire from a set into a step's input - the first that takes it, where none is named - where it may go (workflow/flow `canWire`); whether it went. */
   connect: (from: WireEnd, to: number, port?: string) => boolean;
   removeWire: (id: number) => void;
+  /** A step's result set held off the page opened to be seen on it, or closed again: an edit. */
+  openHeld: (id: number, open: boolean) => void;
+  /** A click on a step's exit's port, no wire drawn from it: its result set, wired on, shown on the page or held off it again (`openHeld`); nothing where its exit is wired on to none. */
+  exitPortClicked: (set: number) => void;
+  /** The pointer come onto a step's exit's port, or gone off it (`on`): its result set's, `set` - whatever draws the port. */
+  exitPortHovered: (set: number, on: boolean) => void;
+  /** A step's atoms chosen on the drawing from `option`, or no longer (null): what comes into it held off the page opened first. */
+  chooseAtomsFor: (step: number, option: string | null) => void;
   /**
    * A step run, and first the steps before it that need it - each step's
    * results coming in one step to undo. A step that runs a program waits

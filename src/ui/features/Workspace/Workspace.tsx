@@ -2183,6 +2183,15 @@ function WorkspaceContent({
             const set = st.sets.find((b) => b.id === menu.id);
             return set && holdsOwn(set) ? heldOwn(st, set) : undefined;
           })()}
+          shownOnPage={(() => {
+            // (a step's result set whose exit is wired on - right-clicked, or the one the wire right-clicked comes from: held off the page, or opened)
+            if ((menu.kind !== "set" && menu.kind !== "wire") || menu.id == null) return undefined;
+            const st = store.getState();
+            const id = menu.kind === "set" ? menu.id : st.wires.find((w) => w.id === menu.id)?.from.set;
+            const set = st.sets.find((b) => b.id === id);
+            if (!set?.made || !st.wires.some((w) => w.from.set === set.id)) return undefined;
+            return { shown: !!set.opened, set: (show: boolean) => store.getState().openHeld(set.id, show) };
+          })()}
           keepInFile={(() => {
             if (menu.kind !== "set" || menu.id == null) return undefined;
             const set = store.getState().sets.find((b) => b.id === menu.id);

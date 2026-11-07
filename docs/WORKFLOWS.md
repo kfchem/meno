@@ -2393,9 +2393,25 @@ wired on, not one frame for every result.
   of it the same way (`meno-fold-in`). Its wires start at the port
   either way (`wireStart`), so none of them moves.
 
-Not yet: opening a held set in place, from its port or its wire, and
-what its port says of it pointed at; an exit not wired on that holds
-nothing shown as its port alone.
+- **Opened in place**: a click on its exit's port shows it on the page,
+  and another holds it off again; so does *Show on the page* in its
+  port's menu (right-click), or *Show its results on the page* in the menu
+  of a wire out of it. Each is one edit, undone as one. Choosing a step's
+  atoms on the drawing opens what comes into it, held, first: its
+  structures are where they are chosen. Opened, it is laid out where its
+  frame was, where that is clear, its line from its port.
+- **Said by its port**: the pointer on a held exit's port says what its
+  set holds, beside the port - its name, then its count in the words a
+  large set's summary says it in ("Failed · 3 molecules") - in a chip as
+  a molecule's frames chip is drawn, but whole: it stands on the port's
+  wire (workflow/exitNames `exitChip`, by WebGL). Nothing where it holds
+  nothing. Its step's exit names go while it is said; a first name cut
+  short is read whole there. The port tells the store
+  (`exitPortHovered`), as a click on it does (`exitPortClicked`),
+  whatever draws the port.
+
+Not yet: an exit not wired on that holds nothing shown as its port
+alone.
 
 ### Exit names (2026-11-07)
 
