@@ -2,7 +2,7 @@ import { useThree } from "@react-three/fiber";
 import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from "react";
 import * as THREE from "three";
 import { CURSORS, setCursor, type CursorName } from "../../../theme/cursors";
-import { pageAt } from "../utils/page";
+import { pageAtScreen } from "../utils/page";
 import { cursorChange, hitAt, type Hit, type Region } from "./hits";
 
 /**
@@ -87,15 +87,9 @@ export function useHitAt(): (screen: { x: number; y: number }, accept?: (key: st
   const { camera, gl } = useThree();
   return (screen, accept) => {
     if (!all) return null;
-    const p = toPage(screen, gl.domElement, camera);
+    const p = pageAtScreen(screen, gl.domElement, camera);
     return all.at(p.x, p.y, (camera as THREE.OrthographicCamera).zoom || 1, accept);
   };
-}
-
-function toPage(screen: { x: number; y: number }, el: HTMLElement, camera: THREE.Camera): { x: number; y: number } {
-  const r = el.getBoundingClientRect();
-  const p = pageAt(((screen.x - r.left) / r.width) * 2 - 1, -((screen.y - r.top) / r.height) * 2 + 1, camera);
-  return { x: p.x, y: p.y };
 }
 
 const isMeno = (c: string): c is CursorName => c in CURSORS;
@@ -121,7 +115,7 @@ export default function PageHits({ children }: { children?: ReactNode }) {
     let over: (Hit & { on: HitHandlers }) | null = null;
     const find = (e: PointerEvent | MouseEvent) => {
       const screen = { x: e.clientX, y: e.clientY };
-      const page = toPage(screen, dom, camera);
+      const page = pageAtScreen(screen, dom, camera);
       const zoom = (camera as THREE.OrthographicCamera).zoom || 1;
       return { hit: all.at(page.x, page.y, zoom), at: { screen, page, zoom, event: e } as PagePointer };
     };

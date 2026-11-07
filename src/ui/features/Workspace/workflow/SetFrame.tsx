@@ -1,10 +1,10 @@
 import clsx from "clsx";
-import { useState, type MouseEvent as ReactMouseEvent } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
 import type { WorkflowSet } from "../store/types";
 import type { ChartPoint } from "../../../../lib/chart";
 import type { DiagramLevel } from "../../../../lib/energyDiagram";
 import type { StyleChoice } from "../../../../lib/chem/style";
-import { CHART_PX, NAME_DOWN, SET_PAD, PX, SUMMARY_PX, TABLE_PX, TAB_INSET, tableBodyPx } from "./look";
+import { CHART_PX, NAME_DOWN, SET_PAD, PX, SUMMARY_PX, TABLE_PX, tableBodyPx } from "./look";
 import { ChartBody, DiagramBody, NumberBody, TableBody } from "./ValueBody";
 import SummaryBody from "./SummaryBody";
 
@@ -15,9 +15,6 @@ export type SetFrameProps = {
   /** Its words too small to read at this zoom: what it holds, as such. */
   compact: boolean;
   onContextMenu: (e: ReactMouseEvent) => void;
-  /** A chemist's set being named anew (two clicks on its tab, drawn by WebGL): its name in a field over the tab - Enter, or a click away, keeps it; Escape leaves it as it was. */
-  renaming?: boolean;
-  onRename?: (name: string | null) => void;
   /**
    * A large result set's (`WorkflowSet.collection`, `drawnCollection`): what it holds, said in its frame
    * where they would lie - molecules in 3D with a sample of them drawn and a chart of their energies
@@ -38,30 +35,10 @@ export type SetFrameProps = {
  * name, while a chemist names it anew, in a field over its tab.
  */
 export default function SetFrame(p: SetFrameProps) {
-  const [naming, setNaming] = useState(p.set.name ?? p.name);
   const w = (p.set.x1 - p.set.x0) / PX;
   const h = (p.set.y1 - p.set.y0) / PX;
   return (
     <div className="meno-fade-in relative select-none" style={{ width: w, height: h, pointerEvents: "none" }} onContextMenu={p.onContextMenu}>
-      {p.renaming && (
-        <div className="absolute flex items-center text-[11px] leading-4" style={{ left: TAB_INSET / PX, top: 0, height: (2 * NAME_DOWN) / PX, pointerEvents: "auto" }}>
-          <input
-            autoFocus
-            aria-label="Set name"
-            value={naming}
-            onChange={(e) => setNaming(e.target.value)}
-            onPointerDown={(e) => e.stopPropagation()}
-            onKeyDown={(e) => {
-              e.stopPropagation();
-              if (e.key === "Enter") p.onRename?.(naming);
-              else if (e.key === "Escape") p.onRename?.(null);
-            }}
-            onBlur={() => p.onRename?.(naming)}
-            className="font-medium text-gh-black bg-white rounded px-0.5 -mx-0.5 outline-none ring-1 ring-gh-line"
-            style={{ width: `${Math.max(6, naming.length + 1)}ch` }}
-          />
-        </div>
-      )}
       {p.summary && (
         <div
           className="meno-words absolute overflow-hidden"
