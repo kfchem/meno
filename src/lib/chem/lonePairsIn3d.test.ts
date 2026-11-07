@@ -153,6 +153,19 @@ describe("lonePairsIn3d", () => {
     }
   });
 
+  it("reads an oxaziridine's N-methyl and no oxaziridine's N-H, the same ring: no N with an H is a centre, in 3D too (the maintainer, 2026-11-06)", () => {
+    const ring = (on: string) => {
+      const z = aziridine(on, 120);
+      return { ...z, atoms: z.atoms.map((a, i) => (i === 2 ? { el: "O" } : a)) };
+    };
+    const methyl = ring("C");
+    const nh = ring("H");
+    expect(lonePairsIn3d(methyl.atoms, methyl.bonds, methyl.xyz, [0]).read.has(0)).toBe(true);
+    const r = lonePairsIn3d(nh.atoms, nh.bonds, nh.xyz, [0]);
+    expect(r.read.size).toBe(0);
+    expect(r.none).toEqual(new Set([0]));
+  });
+
   it("reads no atom whose lone pair keeps no configuration, and says it is no centre: a plain N-methyl aziridine's N, an amine's, an O+", () => {
     const plain = aziridine("C", 120);
     const amine = { atoms: [{ el: "N" }, { el: "C" }, { el: "C" }, { el: "C" }, { el: "C" }], bonds: phosphine().bonds };
