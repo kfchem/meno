@@ -23,7 +23,7 @@ const gave = (kept: number, aside: number): RunResults =>
 
 /** An Optimise (step 1) not run yet: its sets 2, Optimised, and 3, Failed. */
 function optimise(): WorkspaceDocument {
-  const doc = addStep(emptyWorkspaceDocument(), "optimise", 0, 0, {}, "xtb");
+  const doc = addStep(emptyWorkspaceDocument(), "optimise", 0, 0, {}, "some-program");
   expect([resultOf(doc, 1)!.id, resultOf(doc, 1, "failed")!.id]).toEqual([2, 3]);
   return doc;
 }
@@ -53,16 +53,26 @@ describe("an exit for what a step sets aside (docs/WORKFLOWS.md, *Exits that set
     expect([...unseenSets(again)]).toEqual([3]);
   });
 
-  it("is shown where it has anything to say: none read, or its members not known - an older file's, read from its frame", () => {
+  it.each([
+    // (a large set's structures, kept with no members of its own: its molecules, or its drawings - run `drawnPut`)
+    ["molecules held in it", { collection: [water(0)] }],
+    ["drawings held in it", { drawnCollection: [{ atoms: [], bonds: [] }] }],
+    ["a table", { table: { columns: [], rows: [] } }],
+    ["a number", { number: { value: 0 } }],
+    ["a chart", { chart: { kind: "bars" } }],
+    ["none read", { unread: 2 }],
+    ["none not kept", { notKept: { count: 4, hash: "x" } }],
+    // (an older file's, its members to be looked for in its frame)
+    ["its members not known", { members: undefined }],
+  ])("is shown where it has anything to say: %s", (_, patch) => {
     const doc = optimise();
-    const said = (patch: object) => ({ ...doc, sets: doc.sets!.map((b) => (b.id === 3 ? { ...b, ...patch } : b)) });
-    expect(unseenSets(said({ unread: 2 })).size).toBe(0);
-    expect(unseenSets(said({ members: undefined })).size).toBe(0);
-    expect(unseenSets(said({ notKept: { count: 4, hash: "x" } })).size).toBe(0);
+    const said = (p: object) => ({ ...doc, sets: doc.sets!.map((b) => (b.id === 3 ? { ...b, ...p } : b)) });
+    expect([...unseenSets(said({}))]).toEqual([3]);
+    expect(unseenSets(said(patch)).size).toBe(0);
   });
 
   it("wired on, is held off the page; wired and opened, is shown though it holds nothing", () => {
-    let doc = addStep(optimise(), "energy", 600, 0, {}, "xtb");
+    let doc = addStep(optimise(), "energy", 600, 0, {}, "some-program");
     doc = connect(doc, { set: 3 }, lastStep(doc).id);
     expect([heldSets(doc).has(3), unseenSets(doc).has(3)]).toEqual([true, true]);
     const opened = openedSet(doc, 3, true);
@@ -92,7 +102,9 @@ describe("an exit for what a step sets aside (docs/WORKFLOWS.md, *Exits that set
     const doc = optimise();
     const was = unseenSets(doc);
     expect(unseenSets(moveStep(doc, 1, 40, 40))).toBe(was);
-    expect(unseenSets(addStep(doc, "energy", 600, 0, {}, "xtb"))).not.toBe(was);
+    // (worked out again as the steps change, though the sets and wires do not: what sets aside is by its step's kind)
+    expect(unseenSets({ ...doc, steps: doc.steps!.map((s) => ({ ...s, kind: "number" as const })) }).size).toBe(0);
+    expect(unseenSets(addStep(doc, "energy", 600, 0, {}, "some-program"))).not.toBe(was);
   });
 });
 
@@ -102,7 +114,7 @@ describe("a step added from an exit's port (docs/WORKFLOWS.md, *A step added fro
 
   it("goes close by: GAP right of the card, its input level with the exit's port, wired - wherever the wire was let go", () => {
     const doc = filter();
-    const added = addStepFrom(doc, "energy", { set: 2 }, 900, -700, {}, "xtb");
+    const added = addStepFrom(doc, "energy", { set: 2 }, 900, -700, {}, "some-program");
     const s = lastStep(added);
     expect([s.kind, s.x, s.y]).toEqual(["energy", CARD_W + GAP, exitStart(doc.steps![0], "out").y + portDown(0)]);
     expect(added.wires!.map((w) => [w.from, w.to])).toEqual([[{ set: 2 }, { step: s.id, port: ONE_INPUT }]]);
@@ -112,7 +124,7 @@ describe("a step added from an exit's port (docs/WORKFLOWS.md, *A step added fro
 
   it("from a later exit, level with that port where it can be - where it cannot, plainly beneath the card it comes from, clear of what is there", () => {
     const doc = filter();
-    const added = addStepFrom(doc, "energy", { set: 3 }, 900, -700, {}, "xtb");
+    const added = addStepFrom(doc, "energy", { set: 3 }, 900, -700, {}, "some-program");
     const s = lastStep(added);
     const kept = setOf(doc, 2);
     expect(s.x).toBe(CARD_W + GAP);
@@ -139,15 +151,15 @@ describe("a step added from an exit's port (docs/WORKFLOWS.md, *A step added fro
 
   it("keeps clear of the frame it comes from where the chemist opened it", () => {
     let doc = filter();
-    doc = openedSet(connect(addStep(doc, "energy", 900, 0, {}, "xtb"), { set: 2 }, 4), 2, true);
-    const added = addStepFrom(doc, "energy", { set: 2 }, 900, -700, {}, "xtb");
+    doc = openedSet(connect(addStep(doc, "energy", 900, 0, {}, "some-program"), { set: 2 }, 4), 2, true);
+    const added = addStepFrom(doc, "energy", { set: 2 }, 900, -700, {}, "some-program");
     expect(lastStep(added).y).toBeLessThanOrEqual(setOf(doc, 2).y0 - BETWEEN + 1e-9);
   });
 
   it("from a set the chemist made, goes where the wire was let go; where no input of it takes what the wire gives, there too, unwired", () => {
     const doc = addSet(filter(), { x0: -300, y0: -40, x1: -200, y1: 0 });
     const chemist = doc.sets![doc.sets!.length - 1].id;
-    const added = addStepFrom(doc, "energy", { set: chemist }, 900, -700, {}, "xtb");
+    const added = addStepFrom(doc, "energy", { set: chemist }, 900, -700, {}, "some-program");
     expect([lastStep(added).x, lastStep(added).y]).toEqual(Object.values(placeCard(doc, 900, -700)));
     expect(added.wires!.map((w) => w.from)).toEqual([{ set: chemist }]);
     const none = addStepFrom(doc, "generate", { set: 2 }, 900, -700);
@@ -158,7 +170,7 @@ describe("a step added from an exit's port (docs/WORKFLOWS.md, *A step added fro
     // (a set put a little below the level spot - clear of a card CARD_H tall there, not of one as tall as its words can draw it)
     const below = -(CARD_H + BETWEEN + 10 * PX);
     const doc = addSet(filter(), { x0: CARD_W + GAP, y0: below - CARD_H, x1: 2 * CARD_W + GAP, y1: below });
-    const s = lastStep(addStepFrom(doc, "energy", { set: 2 }, 900, -700, {}, "xtb"));
+    const s = lastStep(addStepFrom(doc, "energy", { set: 2 }, 900, -700, {}, "some-program"));
     expect(s.y).toBeLessThan(exitStart(doc.steps![0], "out").y + portDown(0));
     // (a frame put under a card, and a card put down there: below as much of it as its words can draw)
     const plain = filter();
@@ -177,7 +189,7 @@ describe("a step added from an exit's port (docs/WORKFLOWS.md, *A step added fro
     d.reset(filter());
     const store = createEditorStore(d);
     connectStoreToDocument(store, d);
-    const id = store.getState().addStep("energy", "xtb", 900, -700, { set: 2 });
+    const id = store.getState().addStep("energy", "some-program", 900, -700, { set: 2 });
     expect([d.getState().steps!.map((s) => s.id), d.getState().wires!.map((w) => w.to.step)]).toEqual([[1, id], [id]]);
     d.undo();
     expect([d.getState().steps!.map((s) => s.id), d.getState().wires ?? []]).toEqual([[1], []]);
