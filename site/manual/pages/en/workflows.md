@@ -10,7 +10,7 @@ Choose structures, or molecules in 3D. A port - a small ring - shows on the righ
 - Let go on a step's input, and the set is wired to it.
 - Let go where nothing takes it, or press Escape, and the wire goes; the set stays.
 
-A set holds what lay inside its frame when it was made, in that order. Drag something into a set you made, or out of it, to add it or take it away.
+A set holds what lay inside its frame when it was made, in the order they lie on the page: top to bottom, left to right. Drag something into a set you made, or out of it, to add it or take it away.
 
 ## Steps {#steps}
 
