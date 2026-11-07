@@ -2640,9 +2640,12 @@ function WorkspaceContent({
                       onExport: () => void files.exportReaction3d({ structureMap: first.id }),
                       unpaired: unpairedSaid(first.map, ["Before", "After"]) ?? undefined,
                       conformers: conformersSaid(first.map, st.molecules3d, st.model),
+                      ...(first.map.pairs ? { paired: first.map.pairs.before.length * first.map.pairs.after.length } : {}),
                       pair: (() => {
                         const p = conformerPairs(first.map, st.molecules3d, st.model);
-                        if (!p) return undefined;
+                        // (none to make, or those paired already)
+                        const same = (x: readonly number[], y: readonly number[] | undefined) => !!y && x.length === y.length && x.every((v, i) => v === y[i]);
+                        if (!p || (same(p.before, first.map.pairs?.before) && same(p.after, first.map.pairs?.after))) return undefined;
                         const [k, l] = [p.before.length, p.after.length];
                         const all = k === p.of[0] && l === p.of[1];
                         return {

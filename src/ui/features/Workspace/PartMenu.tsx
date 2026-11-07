@@ -179,6 +179,8 @@ function mapShownItems(
     unpaired?: string;
     conformers?: string[];
     pair?: { name: string; run: () => void };
+    /** How many pairs of conformers it keeps, paired: what its export writes. */
+    paired?: number;
   },
   divider: boolean,
 ): Item[] {
@@ -190,7 +192,7 @@ function mapShownItems(
       ? [m.standing === "ready" ? { name: "Renumber atoms", keys: "", run: m.onRenumber } : { name: "Renumber atoms (needs every atom mapped)", keys: "", run: () => {}, disabled: true }]
       : []),
     ...(m.standing === "ready"
-      ? [{ name: "Export reaction in 3D…", keys: "", run: m.onExport }]
+      ? [{ name: m.paired ? `Export reaction in 3D… (${m.paired} ${m.paired === 1 ? "pair" : "pairs"} of conformers)` : "Export reaction in 3D…", keys: "", run: m.onExport }]
       : [
           { name: m.unpaired ?? "Not every atom mapped", keys: "", run: () => {}, disabled: true },
           { name: "Export reaction in 3D… (needs every atom mapped)", keys: "", run: () => {}, disabled: true },
@@ -456,8 +458,10 @@ export default function PartMenu({
       onAgain?: () => void;
       unpaired?: string;
       conformers?: string[];
-      /** Its conformers paired, the menu line saying how many (chem/structureMaps `conformerPairs`). */
+      /** Its conformers paired, the menu line saying how many (chem/structureMaps `conformerPairs`); unset, where those are paired already. */
       pair?: { name: string; run: () => void };
+      /** How many pairs of conformers it keeps, paired. */
+      paired?: number;
     };
   };
   /** The part - an atom, a bond, a ring, the selection - given a colour, a highlight or a fill, in a card where the menu was. */

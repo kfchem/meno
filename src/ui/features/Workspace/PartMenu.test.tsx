@@ -127,6 +127,9 @@ describe("the right-click menu", () => {
   it("offers a map's conformers paired, the line saying how many", () => {
     const held = { standing: "ready" as const, shown: true, maps: 1, chosen: 0, onShow: none, onOther: none, onExport: none, conformers: ["Conformers: 6 × 3 = 18 pairs"], pair: { name: "Pair conformers: 6 × 3 = 18 pairs", run: none } };
     expect(menu(target({ kind: "atom", id: 1 }), { pageMap: { held } }).listed).toEqual(["Unpaired electron", "Hide atom map", "Export reaction in 3D…", "Conformers: 6 × 3 = 18 pairs", "Pair conformers: 6 × 3 = 18 pairs", "Select this structure"]);
+    // (paired: its export says how many it writes, and no pairing offered again)
+    const { pair: _pair, ...paired } = { ...held, paired: 18 };
+    expect(menu(target({ kind: "atom", id: 1 }), { pageMap: { held: paired } }).listed).toEqual(["Unpaired electron", "Hide atom map", "Export reaction in 3D… (18 pairs of conformers)", "Conformers: 6 × 3 = 18 pairs", "Select this structure"]);
   });
 
   it("offers a complete map renumbered, and says a partial one needs every atom mapped", () => {
