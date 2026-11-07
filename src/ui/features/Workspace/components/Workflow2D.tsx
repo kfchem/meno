@@ -909,7 +909,7 @@ export default function Workflow2D() {
       steps.filter((s) => s.id !== saying?.made?.step),
       (step, exit) => {
         const b = exitSets.get(`${step}:${exit}`);
-        return !!b && !shown.has(b.id);
+        return b && !shown.has(b.id) ? setName(b, steps) : null;
       },
     );
   }, [steps, exitSets, onPage, saying]);
