@@ -97,7 +97,7 @@ describe("a set of structures drawn as a table", () => {
     const { store, set } = holding(2, 0, record);
     const t = setStructuresTable(store.getState(), set);
     const head = t.columns.map((c) => (c.kind === "number" && c.unit !== "none" ? `${c.name} (${c.unit})` : c.name));
-    expect(head).toEqual(["id", "what", "SMILES (record)", "SMILES (drawing, constitution only)", "state", "made", "made_from.nll", "mw (g/mol)", "tpsa (Å2)"]);
+    expect(head).toEqual(["id", "structure", "what", "SMILES (record)", "SMILES (drawing, constitution only)", "state", "made", "made_from.nll", "mw (g/mol)", "tpsa (Å2)"]);
     // (its SMILES as the step that made it gave it - its stereo with it - and not again among its values; the drawing's beside it, never in its place)
     expect(column(t, "SMILES (record)")).toEqual(["CC[C@@H](C)O", "CC[C@H](C)O"]);
     expect(column(t, "SMILES (drawing, constitution only)")).toEqual(["CCO", "CCO"]);
@@ -230,7 +230,7 @@ describe("a set of structures drawn as a table", () => {
     );
     // (a name's chevron before it where it is set to the right: the name read past it)
     const names = [...html.matchAll(/role="columnheader"[^>]*><button[^>]*>(?:<svg.*?<\/svg>)?<span[^>]*>([^<]*)</g)].map((m) => m[1]);
-    expect(names).toEqual(["#", "SMILES (drawing, constitution only)", "state", "mw (g/mol)"]);
+    expect(names).toEqual(["#", "structure", "SMILES (drawing, constitution only)", "state", "mw (g/mol)"]);
     expect(html).toContain("120 structures");
     expect(html).toContain(`aria-rowcount="121"`);
     const drawn = html.match(/role="row" aria-rowindex/g) ?? [];
