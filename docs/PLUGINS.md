@@ -109,7 +109,10 @@ embed both.
     the volume its three neighbours span. It is specified, and the key is
     the plugin's, then Meno's for those centres, so that two P-epimers are
     two stereoisomers, and a phosphine is not taken for one whose
-    configuration is unspecified;
+    configuration is unspecified. Meno's is the identity of the molecule
+    with those centres, its bonds marked aromatic (a file's type 4)
+    written out as a Kekulé structure first, so that one molecule has one
+    key whichever way its file gives its rings (2026-11-06);
   - but only where its three bond angles add up to 350 degrees or less.
     A pyramid inverts through the planar form, its three angles then 360
     (Rauk, Allen and Mislow, Angew. Chem. Int. Ed. Engl. 9, 400, 1970,
