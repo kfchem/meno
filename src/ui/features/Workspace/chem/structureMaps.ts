@@ -8,6 +8,7 @@
  * molecules in 3D too: there, every atom's number, its hydrogens' with it.
  */
 import type { Molecule } from "../../../../lib/chem/molecule";
+import { writeMolfile3d } from "../../../../lib/chem/molWriter";
 import { numberedLike } from "../../../../lib/chem/referenceNumbering";
 import type { ArrowAtomMap, Model, Molecule3D } from "../store/types";
 import { linkOf } from "../utils/drawnLink";
@@ -138,10 +139,94 @@ export function conformersSaid(map: ArrowAtomMap, molecules3d: readonly Molecule
   const one = (k: number) => (k === 1 ? "1 conformer" : `${k} conformers`);
   const pairs = before.frames * after.frames;
   return [
-    `Conformers: ${before.frames} × ${after.frames} = ${pairs} ${pairs === 1 ? "pair" : "pairs"}`,
+    `Conformers: ${before.frames} × ${after.frames} = ${pairs} ${pairs === 1 ? "pair" : "pairs"}${pairs > MOST_PAIRS ? `, more than ${MOST_PAIRS} at once` : ""}`,
     ...(before.unnumbered ? [`Not numbered: ${before.unnumbered} of ${one(before.frames)} of Before`] : []),
     ...(after.unnumbered ? [`Not numbered: ${after.unnumbered} of ${one(after.frames)} of After`] : []),
   ];
+}
+
+/**
+ * The most pairs of conformers *Pair conformers* makes: past it, the
+ * lowest-energy k of each side, k as large as keeps them within it. The
+ * maintainer's number is still to come; this is the one place it is set.
+ */
+export const MOST_PAIRS = 1000;
+
+/** Of `n` and `m` conformers, how many of each are paired: all, or the k of each - fewer where a side has fewer - whose pairs stay within `most`. */
+export function pairedCounts(n: number, m: number, most = MOST_PAIRS): [number, number] {
+  if (n * m <= most) return [n, m];
+  let k = 1;
+  while (k < Math.max(n, m) && Math.min(n, k + 1) * Math.min(m, k + 1) <= most) k++;
+  return [Math.min(n, k), Math.min(m, k)];
+}
+
+/**
+ * A side's one molecule in 3D and its frames numbered by the map, lowest
+ * energy first (as they come, where its file gives none): each frame's
+ * atoms' numbers. Null where the side is not one molecule in 3D on the page.
+ */
+function sideFrames(side: ArrowAtomMap["reactant"], numbers: readonly number[], molecules3d: readonly Molecule3D[], model: Model): { molecule: Molecule3D; frames: { at: number; numbers: number[] }[] } | null {
+  const held = [...sideMolecules(side, molecules3d, model)];
+  if (held.length !== 1) return null;
+  const [id, start] = held[0];
+  const molecule = molecules3d.find((m) => m.id === id)!;
+  if (start !== 0 || molecule.atoms.length !== side.atoms.length) return null;
+  const numbered = framesNumbered(molecule, side, 0, numbers);
+  const energy = (f: number) => molecule.energies?.[f] ?? Infinity;
+  const frames = numbered.flatMap((n, at) => (n && n.every((k) => k > 0) ? [{ at, numbers: n }] : []));
+  frames.sort((p, q) => energy(p.at) - energy(q.at) || p.at - q.at);
+  return { molecule, frames };
+}
+
+/**
+ * What *Pair conformers* would pair on a ready map whose sides are each one
+ * molecule in 3D with more than one conformer between them: how many there
+ * are, Before by After, and those it pairs - all, or past `MOST_PAIRS` the
+ * lowest-energy k of each (`pairedCounts`), by frame. Null where there is
+ * nothing to pair.
+ */
+export function conformerPairs(map: ArrowAtomMap, molecules3d: readonly Molecule3D[], model: Model): { of: [number, number]; before: number[]; after: number[] } | null {
+  if (!map.complete) return null;
+  const n = sideNumbers(map);
+  const before = sideFrames(map.reactant, n.before, molecules3d, model);
+  const after = sideFrames(map.product, n.after, molecules3d, model);
+  if (!before || !after || before.frames.length * after.frames.length < 2) return null;
+  const [k, l] = pairedCounts(before.frames.length, after.frames.length);
+  return { of: [before.frames.length, after.frames.length], before: before.frames.slice(0, k).map((f) => f.at), after: after.frames.slice(0, l).map((f) => f.at) };
+}
+
+/**
+ * The conformers a map pairs (`pairs`) written as one SD file: for each
+ * pair, Before's frame and After's, each atom written at its number's place
+ * - the reactants' numbering, as *Export reaction in 3D* writes the map's
+ * own two. Null where a frame paired is gone, or no longer numbered.
+ */
+export function pairedSdf(map: ArrowAtomMap, molecules3d: readonly Molecule3D[], model: Model, title: string): string | null {
+  if (!map.pairs) return null;
+  const n = sideNumbers(map);
+  const before = sideFrames(map.reactant, n.before, molecules3d, model);
+  const after = sideFrames(map.product, n.after, molecules3d, model);
+  if (!before || !after) return null;
+  const record = (side: { molecule: Molecule3D; frames: { at: number; numbers: number[] }[] }, at: number, name: string) => {
+    const f = side.frames.find((x) => x.at === at);
+    if (!f) return null;
+    const m = side.molecule;
+    const xyz = at === 0 ? m.atoms.flatMap((a) => [a.x, a.y, a.z]) : (m.frames ?? []).filter((x) => x.length === 3 * m.atoms.length)[at - 1];
+    if (!xyz) return null;
+    const atoms = new Array<{ el: string; x: number; y: number; z: number; charge?: number }>(m.atoms.length);
+    m.atoms.forEach((a, i) => (atoms[f.numbers[i] - 1] = { el: a.el, x: xyz[3 * i], y: xyz[3 * i + 1], z: xyz[3 * i + 2], ...(a.charge ? { charge: a.charge } : {}) }));
+    const bonds = m.bonds.map((b) => ({ a1: f.numbers[b.a1] - 1, a2: f.numbers[b.a2] - 1, order: b.order }));
+    return writeMolfile3d(atoms, bonds, { title: `${title} ${name}` }) + "$$$$\n";
+  };
+  let out = "";
+  for (const b of map.pairs.before)
+    for (const a of map.pairs.after) {
+      const r = record(before, b, `reactant conformer ${b + 1}`);
+      const p = record(after, a, `product conformer ${a + 1}`);
+      if (r == null || p == null) return null;
+      out += r + p;
+    }
+  return out;
 }
 
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
@@ -164,6 +249,13 @@ function sideRead(v: unknown): ArrowAtomMap["reactant"] | null {
   }
   const drawnFrom = (s.drawnFrom as unknown[]).map((id) => (Number.isInteger(id) ? (id as number) : null));
   return { atoms, bonds, drawnFrom };
+}
+
+/** Whether `v` is a map's conformers paired: Before's frames and After's, each a frame's number, one at least each. */
+function pairsRead(v: unknown): boolean {
+  const p = v as { before?: unknown; after?: unknown } | null;
+  const frames = (x: unknown) => Array.isArray(x) && x.length > 0 && x.every((f) => Number.isInteger(f) && f >= 0);
+  return !!p && frames(p.before) && frames(p.after);
 }
 
 /** Whether `v` numbers `n` atoms 1 to n, each once. */
@@ -202,6 +294,8 @@ export function readStructureMaps(v: unknown): { maps: StructureMap[]; left: num
         shown: m.shown !== false,
         // (Before's numbers, where renumbered: each atom one of 1 to n, none twice - else as it holds them)
         ...(numbersRead(m.numbers, reactant!.atoms.length) ? { numbers: m.numbers as number[] } : {}),
+        // (its conformers paired, by frame: kept where each is a frame's number, a frame not there said so when it is written)
+        ...(pairsRead(m.pairs) ? { pairs: m.pairs as { before: number[]; after: number[] } } : {}),
       },
     });
   }

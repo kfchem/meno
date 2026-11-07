@@ -201,6 +201,12 @@ export type ArrowAtomMap = {
    * order, then its hydrogens.
    */
   numbers?: number[];
+  /**
+   * The conformers paired (*Pair conformers*, chem/structureMaps): Before's
+   * frames and After's, each with each - frame 0 a molecule's own - to be
+   * written a pair of records each.
+   */
+  pairs?: { before: number[]; after: number[] };
 };
 /** A change to an arrow's form and colour: each said is set - its kind, its heads (1 or 2), an equilibrium's full heads, dashes, weight, corners (none: straight) and colour - null or "regular" taking what it set away. */
 export type ArrowFormPatch = {
@@ -2195,6 +2201,8 @@ export type EditorState = {
   renumberStructureMaps: (ids: readonly number[]) => void;
   /** An arrow's complete atom map renumbered likewise: one step. */
   renumberAtomMap: (arrowId: number) => void;
+  /** A map between structures given its conformers paired (chem/structureMaps `conformerPairs`), Before's frames and After's: one step. */
+  pairStructureMap: (id: number, pairs: { before: number[]; after: number[] }) => void;
   /** An arrow's atom map shown on the drawing - its numbers and reacting centres - or taken off it, kept: one step. */
   showAtomMap: (arrowId: number, shown: boolean) => void;
   /** An arrow's next map, of those its reaction has, shown and used instead: one step. */

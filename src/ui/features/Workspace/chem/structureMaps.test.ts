@@ -10,7 +10,7 @@ import { atomNumbersOf } from "../utils/atomNumbers";
 import { readWorkspace, workspaceText } from "../utils/workspace";
 import { readSDfile } from "../../../../lib/chem/ctfile";
 import { beforeNumbers, exportRefusal, keptMap, mappedPairSdf, mapMarks, mapShows, mapStanding, renumbered, unpairedSaid } from "./atomMap";
-import { conformersSaid, numbers3d, readStructureMaps, sideMolecules, sideNumbers } from "./structureMaps";
+import { conformerPairs, conformersSaid, MOST_PAIRS, numbers3d, pairedCounts, pairedSdf, readStructureMaps, sideMolecules, sideNumbers } from "./structureMaps";
 
 /**
  * A Diels-Alder pair drawn with no arrow - butadiene and ethylene, and the
@@ -420,5 +420,56 @@ describe("an atom map renumbered", () => {
     expect(readStructureMaps([{ map: { ...kept, numbers } }]).maps[0].map.numbers).toEqual(numbers);
     expect(readStructureMaps([{ map: { ...kept, numbers: numbers.map(() => 1) } }]).maps[0].map.numbers).toBeUndefined();
     expect(readStructureMaps([{ map: { ...kept, numbers: numbers.slice(1) } }]).maps[0].map.numbers).toBeUndefined();
+  });
+});
+
+describe("an atom map's conformers paired", () => {
+  it("pairs all of each side's conformers within the most there may be, and past it the k of each that keeps within it", () => {
+    expect(MOST_PAIRS).toBe(1000);
+    expect(pairedCounts(6, 3)).toEqual([6, 3]);
+    expect(pairedCounts(40, 25)).toEqual([40, 25]);
+    // (40 by 100: 31 of each, 961 pairs; a side of two kept whole, the other cut to 500)
+    expect(pairedCounts(40, 100)).toEqual([31, 31]);
+    expect(pairedCounts(2, 3000)).toEqual([2, 500]);
+    expect(pairedCounts(1001, 1)).toEqual([1000, 1]);
+  });
+
+  /** `page` with Before's molecule given frames - each the first's geometry, its energy as given, in hartrees - and After's none. */
+  const withConformers = (energies: number[]) => {
+    const { doc, kept } = page();
+    const m1 = doc.molecules3d!.find((m) => m.id === 1)!;
+    const xyz = m1.atoms.flatMap((a) => [a.x, a.y, a.z]);
+    const frames = energies.slice(1).map(() => [...xyz]);
+    return { doc: { ...doc, molecules3d: doc.molecules3d!.map((m) => (m.id === 1 ? { ...m, frames, energies } : m)) }, kept };
+  };
+
+  it("takes Before's frames by After's, lowest energy first - its own first frame among them - and none where there is but one pair", () => {
+    const { doc, kept } = withConformers([-1.2, -1.5, -1.1, -1.4]);
+    const p = conformerPairs(kept, doc.molecules3d!, doc.model)!;
+    expect(p.of).toEqual([4, 1]);
+    expect(p.before).toEqual([1, 3, 0, 2]);
+    expect(p.after).toEqual([0]);
+    const one = page();
+    expect(conformerPairs(one.kept, one.doc.molecules3d!, one.doc.model)).toBeNull();
+    // (a partial map pairs none)
+    expect(conformerPairs(partial, doc.molecules3d!, doc.model)).toBeNull();
+  });
+
+  it("writes each pair as the map's own two are, in the reactants' numbering - and none where a frame paired is gone", () => {
+    const { doc, kept } = withConformers([-1.2, -1.5]);
+    const map = { ...kept, pairs: { before: [1, 0], after: [0] } };
+    const records = readSDfile(pairedSdf(map, doc.molecules3d!, doc.model, "da")!);
+    expect(records.length).toBe(4);
+    const own = readSDfile(mappedPairSdf(kept, "da"));
+    // (each reactant record, a frame of the same geometry here, as the map's own reactant; each product, as its product)
+    for (const k of [0, 2]) expect(records[k].atoms.map((a) => [a.symbol, a.x, a.y, a.z])).toEqual(own[0].atoms.map((a) => [a.symbol, a.x, a.y, a.z]));
+    for (const k of [1, 3]) expect(records[k].atoms.map((a) => a.symbol)).toEqual(own[1].atoms.map((a) => a.symbol));
+    expect(pairedSdf({ ...map, pairs: { before: [5], after: [0] } }, doc.molecules3d!, doc.model, "da")).toBeNull();
+  });
+
+  it("is kept in the workspace's file", () => {
+    const { kept } = page();
+    expect(readStructureMaps([{ map: { ...kept, pairs: { before: [1, 0], after: [0] } } }]).maps[0].map.pairs).toEqual({ before: [1, 0], after: [0] });
+    expect(readStructureMaps([{ map: { ...kept, pairs: { before: [], after: [0] } } }]).maps[0].map.pairs).toBeUndefined();
   });
 });

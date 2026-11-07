@@ -167,7 +167,19 @@ export type MenuMolecule3D = {
  * export said to need them all.
  */
 function mapShownItems(
-  m: { standing: "ready" | "incomplete"; shown: boolean; maps: number; chosen: number; onShow: (shown: boolean) => void; onOther: () => void; onRenumber?: () => void; onExport: () => void; unpaired?: string; conformers?: string[] },
+  m: {
+    standing: "ready" | "incomplete";
+    shown: boolean;
+    maps: number;
+    chosen: number;
+    onShow: (shown: boolean) => void;
+    onOther: () => void;
+    onRenumber?: () => void;
+    onExport: () => void;
+    unpaired?: string;
+    conformers?: string[];
+    pair?: { name: string; run: () => void };
+  },
   divider: boolean,
 ): Item[] {
   return [
@@ -183,8 +195,9 @@ function mapShownItems(
           { name: m.unpaired ?? "Not every atom mapped", keys: "", run: () => {}, disabled: true },
           { name: "Export reaction in 3D… (needs every atom mapped)", keys: "", run: () => {}, disabled: true },
         ]),
-    // (the sides' conformers, said: how many pairs there are, before any is made; those not numbered)
+    // (the sides' conformers, said: how many pairs there are, before any is made; those not numbered; then paired, as said)
     ...(m.conformers ?? []).map((name) => ({ name, keys: "", run: () => {}, disabled: true })),
+    ...(m.pair ? [{ name: m.pair.name, keys: "", run: m.pair.run }] : []),
   ];
 }
 
@@ -443,6 +456,8 @@ export default function PartMenu({
       onAgain?: () => void;
       unpaired?: string;
       conformers?: string[];
+      /** Its conformers paired, the menu line saying how many (chem/structureMaps `conformerPairs`). */
+      pair?: { name: string; run: () => void };
     };
   };
   /** The part - an atom, a bond, a ring, the selection - given a colour, a highlight or a fill, in a card where the menu was. */

@@ -124,6 +124,11 @@ describe("the right-click menu", () => {
     expect(menu(target({ kind: "bond", id: 2 }), { pageMap: { held: { ...held, standing: "changed", onAgain: none } } }).listed).toEqual(["Atom map of the structure before its edit", "Map again", "Select this structure"]);
   });
 
+  it("offers a map's conformers paired, the line saying how many", () => {
+    const held = { standing: "ready" as const, shown: true, maps: 1, chosen: 0, onShow: none, onOther: none, onExport: none, conformers: ["Conformers: 6 × 3 = 18 pairs"], pair: { name: "Pair conformers: 6 × 3 = 18 pairs", run: none } };
+    expect(menu(target({ kind: "atom", id: 1 }), { pageMap: { held } }).listed).toEqual(["Unpaired electron", "Hide atom map", "Export reaction in 3D…", "Conformers: 6 × 3 = 18 pairs", "Pair conformers: 6 × 3 = 18 pairs", "Select this structure"]);
+  });
+
   it("offers a complete map renumbered, and says a partial one needs every atom mapped", () => {
     const held = { standing: "ready" as const, shown: true, maps: 1, chosen: 0, onShow: none, onOther: none, onRenumber: none, onExport: none };
     expect(menu(target({ kind: "atom", id: 1 }), { pageMap: { held } }).listed).toEqual(["Unpaired electron", "Hide atom map", "Renumber atoms", "Export reaction in 3D…", "Select this structure"]);

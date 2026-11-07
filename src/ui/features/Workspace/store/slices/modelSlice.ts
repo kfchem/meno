@@ -329,6 +329,10 @@ export const createModelSlice = (
     });
   },
 
+  pairStructureMap: (id: number, pairs: { before: number[]; after: number[] }) => {
+    doc.edit("pair conformers", (d) => ops.setStructureMaps(d, (d.structureMaps ?? []).map((m) => (m.id === id ? { ...m, map: { ...m.map, pairs } } : m))));
+  },
+
   renumberAtomMap: (arrowId: number) => {
     const map = get().arrows.find((a) => a.id === arrowId)?.atomMap;
     if (!map?.complete) return;

@@ -508,6 +508,17 @@ offers *Atom map*.
     says how many ("Not numbered: 1 of 6 conformers of Before").
   - The menu says how many pairs of conformers the two sides make, before
     any is made ("Conformers: 6 × 3 = 18 pairs").
+  - **Pair conformers** (a complete map, each side one molecule in 3D):
+    each of Before's numbered conformers with each of After's, kept on the
+    map; *Export reaction in 3D...* then writes a pair of records for each
+    pair, each in the reactants' numbering, ready for a path search. Past
+    1000 pairs (`MOST_PAIRS`), the lowest-energy k of each side, k as large
+    as keeps within it - a side with fewer kept whole ("Pair the
+    lowest-energy conformers: 31 × 31 = 961 pairs"); without energies, as
+    they come. Nothing is made until it is chosen; a conformer paired that
+    is gone since says so on export, and is paired again. (The maintainer's
+    number is still to come; `MOST_PAIRS` and `pairedCounts` in
+    chem/structureMaps are the one place it is set.)
 - **From a structure's menu** in a map: *Show / Hide atom map* (of all the
   maps it is in), *Other map* ("2 of 4", stepping each of them), *Renumber
   atoms* (Before's atoms by the drawing's order, as above), and *Export
