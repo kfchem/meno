@@ -57,6 +57,15 @@ export type CatalogueEntry = {
   source: { url: string; sha256: string; bytes: number };
   /** Its manifest's fingerprint, checked once its files are unpacked. */
   manifestSha256: string;
+  /**
+   * Where it says what this Meno does not know - a role, a kind, a system, a
+   * kind of file, a table, or the plugin it brings presets for, as a newer
+   * Meno writes them - what, in words: it is listed as for a newer Meno,
+   * never got, and nothing of what it says is taken (its roles, kinds and
+   * files left empty, no presets offered). The list is not refused for it: a
+   * newer plugin on offer never takes the list from an older Meno.
+   */
+  newer?: string;
   /** The plugin it brings presets for, by id, as its manifest's `presets.for` says (lib/plugins/manifest `PresetsDecl`): offered with that one where it is got again (./usedBefore). */
   presetsFor?: string;
 };
@@ -157,6 +166,9 @@ function sourceUrl(v: unknown): string | null {
   return u.protocol === "https:" && !u.username && !u.password && !u.port && CATALOGUE_HOSTS.includes(u.hostname) ? u.href : null;
 }
 
+/** Things in words: "a", "a and b", "a, b and c". */
+const listSaid = (names: readonly string[]) => (names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`);
+
 /** One plugin on offer, read strictly; why not, where it is not as a catalogue's entry is. */
 function entryOf(raw: unknown): CatalogueEntry | string {
   const e = raw as Record<string, unknown> | null;
@@ -168,17 +180,21 @@ function entryOf(raw: unknown): CatalogueEntry | string {
   const licence = text(e.licence, 200);
   const contract = typeof e.contract === "number" && Number.isInteger(e.contract) && e.contract > 0 ? e.contract : null;
   if (!version || !name || !licence || contract == null) return `${id}: its version, name, licence or contract missing`;
-  const systems = e.systems ?? [];
-  if (!Array.isArray(systems) || !systems.every((s) => SYSTEMS.includes(s as System))) return `${id}: a system Meno does not know`;
+  // (what it does - its systems, roles, kinds and files: one this Meno does not know is a newer Meno's, listed as such, never refusing the list)
+  const unknown: string[] = [];
+  const systemsRaw = e.systems ?? [];
+  const systems = Array.isArray(systemsRaw) && systemsRaw.every((s) => SYSTEMS.includes(s as System)) ? (systemsRaw as System[]) : null;
+  if (!systems) unknown.push("a system");
   const list = (v: unknown, ok: (s: string) => boolean): string[] | null => (v == null ? [] : Array.isArray(v) && v.every((s) => typeof s === "string" && ok(s)) ? [...new Set(v as string[])] : null);
   const roles = list(e.roles, isRole);
   const kinds = list(e.kinds, (k) => KIND.test(k));
   const reads = list(e.reads, (k) => KIND.test(k));
-  if (!roles || !kinds || !reads) return `${id}: a role or kind Meno does not take`;
+  if (!roles) unknown.push("a role");
+  if (!kinds || !reads) unknown.push("a kind");
   const fileKinds = fileKindsOf(e.fileKinds);
-  if (!fileKinds) return `${id}: a kind of file it reads not as Meno takes it`;
+  if (!fileKinds) unknown.push("a kind of file");
   const quotedTables = quotedTablesOf(e.quotedTables);
-  if (!quotedTables) return `${id}: a table of atoms not as Meno takes it`;
+  if (!quotedTables) unknown.push("a table of atoms");
   const s = e.source as Record<string, unknown> | null;
   const url = sourceUrl(s?.url);
   const sha256 = typeof s?.sha256 === "string" && HEX64.test(s.sha256) ? s.sha256 : null;
@@ -192,28 +208,30 @@ function entryOf(raw: unknown): CatalogueEntry | string {
   const cite = said("cite", 2000);
   const homepage = e.homepage == null ? undefined : typeof e.homepage === "string" && /^https:\/\/[^\s]{1,300}$/.test(e.homepage) ? e.homepage : null;
   if (description === null || terms === null || cite === null || homepage === null) return `${id}: a description, terms, cite or home page not as Meno takes them`;
-  // (the plugin it brings presets for: another's id)
+  // (the plugin it brings presets for: another's id - one not as this Meno takes it, a newer Meno's)
   const presetsFor = e.presetsFor == null ? undefined : typeof e.presetsFor === "string" && ID.test(e.presetsFor) && e.presetsFor !== id ? e.presetsFor : null;
-  if (presetsFor === null) return `${id}: the plugin it brings presets for not as Meno takes it`;
+  if (presetsFor === null) unknown.push("the plugin it brings presets for");
+  const newer = unknown.length ? `It says ${listSaid(unknown)} this Meno does not know` : undefined;
   return {
     id,
     version,
     name,
     licence,
     contract,
-    systems: systems as System[],
-    roles: roles as RoleId[],
-    kinds,
-    reads,
-    fileKinds,
-    quotedTables,
+    systems: systems ?? [],
+    roles: newer ? [] : (roles as RoleId[]),
+    kinds: newer ? [] : kinds!,
+    reads: newer ? [] : reads!,
+    fileKinds: newer ? [] : fileKinds!,
+    quotedTables: newer ? [] : quotedTables!,
+    ...(newer ? { newer } : {}),
     source: { url, sha256, bytes },
     manifestSha256,
     ...(description ? { description } : {}),
     ...(homepage ? { homepage } : {}),
     ...(terms ? { terms } : {}),
     ...(cite ? { cite } : {}),
-    ...(presetsFor ? { presetsFor } : {}),
+    ...(presetsFor && !newer ? { presetsFor } : {}),
   };
 }
 
@@ -272,6 +290,8 @@ export type Offer = { entry: CatalogueEntry; offer: "add" | "update" | "here" } 
 export function offersOf(catalogue: Catalogue, here: ReadonlyMap<string, string>, system: System | null, contracts: readonly number[] = CONTRACTS): Offer[] {
   return catalogue.plugins.map((entry): Offer => {
     const mine = here.get(entry.id);
+    // (one that says what this Meno does not know: a newer Meno's)
+    if (entry.newer) return { entry, offer: "not-here", why: mine ? "Its newer versions are for a newer Meno" : "It is for a newer Meno" };
     if (!contracts.includes(entry.contract)) return { entry, offer: "not-here", why: mine ? "Its newer versions are for a newer Meno" : "It is for a newer Meno" };
     if (system && entry.systems.length && !entry.systems.includes(system)) return { entry, offer: "not-here", why: `For ${entry.systems.map((s) => SYSTEM_NAMES[s]).join(" and ")} only` };
     if (mine == null) return { entry, offer: "add" };

@@ -454,6 +454,25 @@ describe("a centre with a lone pair for its fourth group", () => {
     expect(unreadWhy(nh.atoms, nh.bonds, 0)).not.toBe(KEEPS_NONE);
   });
 
+  it("reads a P with an H drawn as an atom, and no N with one - nor a P with its H carried and two bonds, which says why (the maintainer, 2026-11-06)", () => {
+    // (a secondary phosphine: its H drawn as an atom, a centre; carried, its H and its lone pair both left out)
+    const phosphine = (h: boolean): { atoms: DrawnAtom[]; bonds: DrawnBond[] } => ({
+      atoms: [{ x: 0, y: 0, el: "P", hs: h ? 0 : 1 }, { ...at(90), el: "C", hs: 3 }, { ...at(210), el: "C", hs: 3 }, ...(h ? [{ ...at(330), el: "H", hs: 0 }] : [])],
+      bonds: [{ a: 0, b: 1, order: 1, wedge: { narrow: 0, stereo: "up" } }, { a: 0, b: 2, order: 1 }, ...(h ? [{ a: 0, b: 3, order: 1 }] : [])],
+    });
+    expect(readStereo(phosphine(true).atoms, phosphine(true).bonds).tetra.has(0)).toBe(true);
+    expect(readStereo(phosphine(false).atoms, phosphine(false).bonds).tetra.has(0)).toBe(false);
+    expect(unreadWhy(phosphine(false).atoms, phosphine(false).bonds, 0)).toBe("its H and its lone pair are both left out, so which way each points is not drawn: draw its H as an atom");
+    // (an oxaziridine's N, its ring's C and O beside it: with a methyl a centre, with an H drawn as an atom none, and said)
+    const oxaziridine = (on: string): { atoms: DrawnAtom[]; bonds: DrawnBond[] } => ({
+      atoms: [{ x: 0, y: 0, el: "N", hs: 0 }, { ...at(60), el: "C", hs: 2 }, { ...at(120), el: "O", hs: 0 }, { ...at(270), el: on, hs: on === "C" ? 3 : 0 }],
+      bonds: [{ a: 0, b: 1, order: 1, wedge: { narrow: 0, stereo: "up" } }, { a: 0, b: 2, order: 1 }, { a: 1, b: 2, order: 1 }, { a: 0, b: 3, order: 1 }],
+    });
+    expect(readStereo(oxaziridine("C").atoms, oxaziridine("C").bonds).tetra.has(0)).toBe(true);
+    expect(readStereo(oxaziridine("H").atoms, oxaziridine("H").bonds).tetra.has(0)).toBe(false);
+    expect(unreadWhy(oxaziridine("H").atoms, oxaziridine("H").bonds, 0)).toBe(KEEPS_NONE);
+  });
+
   it("drawn by the engine from a SMILES, reads back as given: a sulfoxide, a sulfinamide, a phosphine, a sulfonium, a selenoxide, a stibine, an N-chloro aziridine, an oxaziridine, each way round", () => {
     for (const smiles of [
       "C[S@](=O)c1ccccc1",

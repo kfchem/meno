@@ -69,6 +69,11 @@ describe("saveIntent", () => {
     expect(saveIntent({ key: "s", metaKey: true, shiftKey: true })).toBe("saveAs");
   });
 
+  it("saves, not saves as, on Ctrl+S with Caps Lock on: Shift says Save As, never the letter's case", () => {
+    expect(saveIntent({ key: "S", ctrlKey: true })).toBe("save");
+    expect(saveIntent({ key: "S", ctrlKey: true, shiftKey: true })).toBe("saveAs");
+  });
+
   it("leaves other keys and a bare S alone", () => {
     expect(saveIntent({ key: "s" })).toBeNull();
     expect(saveIntent({ key: "a", ctrlKey: true })).toBeNull();

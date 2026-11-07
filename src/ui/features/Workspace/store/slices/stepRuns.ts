@@ -10,7 +10,7 @@ import { readOutput } from "../../../../../lib/calc/read";
 import { heldOutput, rememberOutput } from "../../../../../lib/calc/asks";
 import { addedNow, pluginClient } from "../../../../../lib/calc/workers";
 import { computerCores, computerResources, finished, jobDigest, jobFiles, jobFolder, jobOf, limitsOf, listJobs, overLimits, processesOf, programStamp, readJobFile, readJobLog, removeJob, runningOf, startJob, stopJob, stopJobAlone, STOPPED_ALONE, writeJobBack, type Job } from "../../../../../lib/jobs";
-import { heldJobFile, heldJobSource, showFilesSaid } from "../../workflow/keptJobs";
+import { heldJobFile, heldJobSource, keptLogOf, recordOf, showFilesSaid } from "../../workflow/keptJobs";
 import { valuesOf, type OptionValues } from "../../../../../lib/options";
 import { lookFor, programKey, tooOld, useInstalled } from "../../../../../lib/plugins/installed";
 import { jobKey, reusable } from "../../../../../lib/jobKeys";
@@ -1169,8 +1169,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       doc.amend((x) => setRunning(x, id, { at, input: key, options, jobs: [], kind: step.kind, passed: lone, ...(refusedHere.length ? { refused: refusedHere } : {}) }), { unsaved: true });
       return void (await finishStep(id));
     }
-    // (the cores it takes, as Settings says - a program running as processes, one to each physical core: never two on one)
-    const { cores: settled } = runningOf(useAppSettings.getState().calculations);
+    // (the cores each job takes, as Settings says - unset, those jobs may use shared among its jobs, one for each entry
+    //  sent, as most steps make them - a program running as processes, one to each physical core: never two on one)
+    const { cores: settled } = runningOf(useAppSettings.getState().calculations, undefined, sendIdx.length);
     const asProcesses = installedFor(step.kind, plugin.id).some((d) => d.parallel === "processes");
     const cores = asProcesses ? processesOf(settled, (await computerResources().catch(() => null)) ?? { cores: settled }) : settled;
     // (a program installed separately: where it is, looked for again - and found, or said not to be)
@@ -1468,8 +1469,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (made.length) set((prev) => ({ ...prev, picturesLaid: new Set([...prev.picturesLaid, ...made.map((_, i) => first + i)]) }));
   }
 
-  /** A job's log, all of it. */
-  async function wholeLog(job: string): Promise<string> {
+  /** A job's log, all of it - its folder gone, as the workspace's file holds it, where the step `step` kept it. */
+  async function wholeLog(job: string, step?: WorkflowStep): Promise<string> {
     let text = "";
     for (let from = 0, k = 0; k < 4000; k++) {
       const read = await readJobLog(job, from).catch(() => null);
@@ -1477,6 +1478,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       text += read.text;
       from = read.next;
     }
+    if (!text && step && !step.running) text = (await keptLogOf(job, recordOf(step, job))) ?? "";
     return text;
   }
 
@@ -1512,7 +1514,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     // (the last asked for wins: one asked for before it, read after it, is let go)
     const asked = (logAsked.get(text) ?? 0) + 1;
     logAsked.set(text, asked);
-    const all = await wholeLog(jobs[k]);
+    const of = (doc.getState().texts ?? []).find((x) => x.id === text)?.of;
+    const all = await wholeLog(jobs[k], of && "step" in of ? stepOf(doc.getState(), of.step) : undefined);
     if (logAsked.get(text) !== asked) return;
     const t = (doc.getState().texts ?? []).find((x) => x.id === text);
     if (!t?.of || !("step" in t.of)) return;
@@ -1985,7 +1988,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         // (its jobs as they are now - run again since: the first shown; one job: its log as it is now)
         if (!several || JSON.stringify(of.jobs) !== JSON.stringify(jobs)) await showLogJob(open.id, jobs, 0);
       } else {
-        const text = await wholeLog(jobs[0]);
+        const text = await wholeLog(jobs[0], step);
         const made = ops.addTexts(doc.getState(), [{ name: `${name} log`, text: text || "(Nothing yet)", of: { step: id, ...(several ? { jobs, job: 0 } : {}) } }]);
         if (made.doc !== doc.getState()) doc.edit("open text", () => made.doc);
         if (made.last == null) return;
@@ -2008,7 +2011,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const there = await jobFolder(job).catch(() => null);
       if (there) return void (await revealItemInDir(there));
       // (its folder not on this computer - a workspace saved elsewhere: what the file kept of it written back out, and shown)
-      const kept = [step.ran, ...(step.runs ?? [])].flatMap((r) => r?.kept ?? []).find((k) => k.job === job);
+      const kept = recordOf(step, job);
       let work: string | null = null;
       // (each file not written back, and why: never one there already written over)
       const differs: string[] = [];

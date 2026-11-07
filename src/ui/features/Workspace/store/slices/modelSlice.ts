@@ -297,6 +297,25 @@ export const createModelSlice = (
     doc.edit("atom map", (d) => ops.setAtomMap(d, arrowId, map));
   },
 
+  addStructureMaps: (maps: readonly ArrowAtomMap[], replacing: readonly number[] = []) => {
+    if (maps.length) doc.edit("atom map", (d) => ops.addStructureMaps(d, maps, replacing).doc);
+  },
+
+  showStructureMaps: (ids: readonly number[], shown: boolean) => {
+    const of = new Set(ids);
+    doc.edit(shown ? "show atom map" : "hide atom map", (d) => ops.setStructureMaps(d, (d.structureMaps ?? []).map((m) => (of.has(m.id) ? { ...m, map: { ...m.map, shown } } : m))));
+  },
+
+  otherStructureMaps: (ids: readonly number[]) => {
+    const of = new Set(ids);
+    doc.edit("other atom map", (d) =>
+      ops.setStructureMaps(
+        d,
+        (d.structureMaps ?? []).map((m) => (of.has(m.id) && m.map.maps.length > 1 ? { ...m, map: { ...m.map, chosen: (m.map.chosen + 1) % m.map.maps.length, shown: true } } : m)),
+      ),
+    );
+  },
+
   showAtomMap: (arrowId: number, shown: boolean) => {
     const map = get().arrows.find((a) => a.id === arrowId)?.atomMap;
     if (map) doc.edit(shown ? "show atom map" : "hide atom map", (d) => ops.setAtomMap(d, arrowId, { ...map, shown }));
@@ -490,6 +509,8 @@ export const createModelSlice = (
           nextSlideId: (drawn.slides ?? []).length + 1,
           inks: (drawn.inks ?? []).map((k, i) => ({ ...k, id: i + 1 })),
           nextInkId: (drawn.inks ?? []).length + 1,
+          // (its atom maps between structures, as it was saved: what they show is on its drawing and its molecules already)
+          ...(ws.structureMaps?.length ? { structureMaps: ws.structureMaps, nextStructureMapId: ws.structureMaps.length + 1 } : {}),
           conversations: (ws.conversations ?? []).map((c, i) => ({ ...c, id: i + 1 })),
           nextConversationId: (ws.conversations ?? []).length + 1,
         },

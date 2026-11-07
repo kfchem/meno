@@ -23,6 +23,7 @@ mod drop;
 mod jobs;
 mod keptjobs;
 mod logfile;
+mod model;
 mod pdf;
 mod pdfmake;
 mod net;
@@ -205,7 +206,8 @@ fn plugin_path(data: &Path, rel: &Path) -> Result<PathBuf, String> {
 /// of that plugin's own environment - `uv/plugin-<id>/venv` or
 /// `pixi/plugin-<id>` in the app data (`data`) - never another plugin's. All
 /// paths canonical; a script elsewhere is no plugin's, and is refused.
-fn plugin_worker_fits(script: &Path, entry_dir: &Path, plugins_root: &Path, data: &Path) -> Result<(), String> {
+/// Whose worker it is, where it fits.
+fn plugin_worker_fits(script: &Path, entry_dir: &Path, plugins_root: &Path, data: &Path) -> Result<String, String> {
     let Ok(rel) = script.strip_prefix(plugins_root) else {
         return Err("a sidecar runs only a plugin's worker".into());
     };
@@ -217,7 +219,7 @@ fn plugin_worker_fits(script: &Path, entry_dir: &Path, plugins_root: &Path, data
     };
     let homes = [data.join("uv").join(format!("plugin-{id}")), data.join("pixi").join(format!("plugin-{id}"))];
     if homes.iter().filter_map(|h| h.canonicalize().ok()).any(|h| entry_dir.starts_with(h)) {
-        Ok(())
+        Ok(id.clone())
     } else {
         Err(format!("{id}'s worker runs only in {id}'s own environment"))
     }
@@ -783,6 +785,7 @@ async fn ext_spawn_sidecar(
     payload: SpawnArgs,
     state: State<'_, ProcState>,
     net: State<'_, net::Net>,
+    models: State<'_, model::Models>,
 ) -> Result<String, String> {
     // (an interpreter of uv's environments, or of pixi's)
     let data = local_data_dir(&app)?;
@@ -801,12 +804,13 @@ async fn ext_spawn_sidecar(
         .find_map(|root| validate_sidecar(&entry, &payload.args, root, &workers_roots).ok().map(|cwd| (cwd, root.clone())))
         .ok_or_else(|| validate_sidecar(&entry, &payload.args, &roots[0], &workers_roots).err().unwrap_or_default())?;
     // (a plugin's worker, in its own environment)
+    let mut plugin = None;
     if let (Some(plugins), Some(script), Some(dir)) = (
         installed::root(&data).canonicalize().ok(),
         payload.args.iter().find(|a| !PYTHON_FLAGS.contains(&a.as_str())).and_then(|s| Path::new(s).canonicalize().ok()),
         entry.parent().and_then(|p| p.canonicalize().ok()),
     ) {
-        plugin_worker_fits(&script, &dir, &plugins, &data.canonicalize().map_err(|e| e.to_string())?)?;
+        plugin = Some(plugin_worker_fits(&script, &dir, &plugins, &data.canonicalize().map_err(|e| e.to_string())?)?);
     }
 
     let mut cmd = Command::new(&entry);
@@ -823,8 +827,16 @@ async fn ext_spawn_sidecar(
     }
     // A plugin's worker runs no one's code and needs no network: it is
     // pointed at the proxy with no task, so an attempt is refused and on the
-    // record - never left to go out on its own.
-    net.route_nowhere(&mut cmd);
+    // record - never left to go out on its own. But a model plugin's: it
+    // talks to the hosts its manifest in place names - read here, never
+    // taken from the page - and those alone, under its own purpose, once
+    // the person has allowed that (model.rs).
+    let talks = plugin.as_deref().and_then(|id| model_hosts(&data, id).map(|hosts| (id.to_string(), hosts)));
+    let task = talks.as_ref().and_then(|(id, hosts)| net.begin(&model::purpose(id, hosts), &format!("{id}: talking with a model"), Some(hosts.clone())).ok());
+    match &task {
+        Some(task) => task.route(&mut cmd),
+        None => net.route_nowhere(&mut cmd),
+    }
     let mut child = cmd
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -839,6 +851,9 @@ async fn ext_spawn_sidecar(
     // Register before the reader threads start so an immediate exit can be
     // reaped.
     state.lock().insert(id.clone(), (child, stdin));
+    if let Some((plugin, _)) = talks {
+        models.started(&id, &plugin, task);
+    }
 
     // stdout -> ext:stdout; EOF means the sidecar is gone: reap it, then
     // announce the exit (unless ext_kill already did).
@@ -847,7 +862,7 @@ async fn ext_spawn_sidecar(
         let id2 = id.clone();
         std::thread::spawn(move || {
             // (a line not UTF-8 read as near as it can be: never taken for the worker's end)
-            each_line(stdout, |s| {
+            read_worker_output(&app2.state::<model::Models>(), &id2, stdout, true, |s| {
                 let _ = app2.emit("ext:stdout", serde_json::json!({"id": id2, "line": s}).to_string());
             });
             if app2.state::<ProcState>().reap(&id2) {
@@ -861,13 +876,34 @@ async fn ext_spawn_sidecar(
         let app2 = app.clone();
         let id2 = id.clone();
         std::thread::spawn(move || {
-            each_line(stderr, |s| {
+            read_worker_output(&app2.state::<model::Models>(), &id2, stderr, false, |s| {
                 let _ = app2.emit("ext:stderr", serde_json::json!({"id": id2, "line": s}).to_string());
             });
         });
     }
 
     Ok(id)
+}
+
+/// A sidecar stopped: a model plugin's worker ended first - its network
+/// task finished, nothing more sent it, its keys still taken out of what it
+/// has yet to say (model.rs) - then the process. Whether it was running.
+fn stop_worker(models: &model::Models, state: &ProcState, id: &str) -> bool {
+    models.ended(id);
+    state.reap(id)
+}
+
+/// One of a sidecar's streams - its output (`main`), or its errors - read
+/// line by line to its end, each line given to `each` with a model plugin's
+/// key, should the worker say it, taken out (model.rs). Its output at an
+/// end is the worker's end; its keys are kept to be taken out of whatever
+/// either stream still has to say, and let go once both are read.
+fn read_worker_output<R: Read>(models: &model::Models, id: &str, stream: R, main: bool, mut each: impl FnMut(String)) {
+    each_line(stream, |s| each(models.scrub(id, &s).into_owned()));
+    if main {
+        models.ended(id);
+    }
+    models.read_to_end(id);
 }
 
 /// Writes to a sidecar's stdin with the table let go first. A worker that
@@ -889,15 +925,67 @@ fn write_stdin(state: &ProcState, id: &str, data: &str) -> Result<(), String> {
 
 #[tauri::command]
 async fn ext_stdin(app: AppHandle, id: String, data: String) -> Result<(), String> {
+    // (a converse request reaches a model plugin's worker only through ext_converse, its key added there)
+    if app.state::<model::Models>().refuses(&id, &data) {
+        return Err("A converse request is sent only as Meno sends it".into());
+    }
     // (off the commands' threads: a write a stuck worker holds up waits on its own)
     tauri::async_runtime::spawn_blocking(move || write_stdin(&app.state::<ProcState>(), &id, &data))
         .await
         .map_err(|e| e.to_string())?
 }
 
+/// A conversation's request, on its way to a model plugin's worker, the
+/// person's key for it added from the keychain (model.rs): the page never
+/// holds the key, and nothing logs the line it goes in.
+#[tauri::command]
+async fn ext_converse(app: AppHandle, id: String, request: String) -> Result<(), String> {
+    let line = app.state::<model::Models>().converse_line(&id, &request)?;
+    tauri::async_runtime::spawn_blocking(move || write_stdin(&app.state::<ProcState>(), &id, &line))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// A model plugin's key, kept in the system's keychain - never read back by
+/// the page: only whether one is kept (`model_key_held`).
+#[tauri::command]
+fn model_key_set(models: State<'_, model::Models>, plugin: String, key: String) -> Result<(), String> {
+    if !plugin_id_ok(&plugin) {
+        return Err("Not a plugin's id".into());
+    }
+    if !model::key_ok(key.trim()) {
+        return Err("Not a key as a service gives one: 8 to 4096 letters, digits and -._~+/=".into());
+    }
+    models.keys().set(&plugin, key.trim())
+}
+
+#[tauri::command]
+fn model_key_forget(models: State<'_, model::Models>, plugin: String) -> Result<(), String> {
+    if !plugin_id_ok(&plugin) {
+        return Err("Not a plugin's id".into());
+    }
+    models.keys().forget(&plugin)
+}
+
+#[tauri::command]
+fn model_key_held(models: State<'_, model::Models>, plugin: String) -> Result<bool, String> {
+    if !plugin_id_ok(&plugin) {
+        return Err("Not a plugin's id".into());
+    }
+    models.keys().get(&plugin).map(|k| k.is_some())
+}
+
+/// The hosts a plugin in place talks to, as its manifest's `language-model`
+/// role names them (model.rs `hosts_of`); none where it fills no such role.
+fn model_hosts(data: &Path, id: &str) -> Option<Vec<String>> {
+    let path = installed::dir(&installed::root(data), id).ok()?.join("manifest.json");
+    let manifest: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()?;
+    model::hosts_of(&manifest)
+}
+
 #[tauri::command]
 async fn ext_kill(app: AppHandle, id: String, state: State<'_, ProcState>) -> Result<(), String> {
-    if state.reap(&id) {
+    if stop_worker(&app.state::<model::Models>(), &state, &id) {
         let _ = app.emit("ext:exit", serde_json::json!({"id": id}).to_string());
     }
     Ok(())
@@ -1094,6 +1182,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(ProcState(Mutex::new(HashMap::new())))
         .manage(net::Net::default())
+        .manage(model::Models::new(Box::new(model::SystemKeys)))
         .manage(pdf::PdfState::default())
         .manage(update::Updates::new(version))
         .manage(opened::Opened::default())
@@ -1232,6 +1321,11 @@ pub fn run() {
             ext_spawn_sidecar,
             ext_stdin,
             ext_kill,
+            // a model plugin's converse, its key added; its key kept (model.rs)
+            ext_converse,
+            model_key_set,
+            model_key_forget,
+            model_key_held,
             // jobs: programs run for a workflow's steps, apart from Meno
             jobs::job_start,
             jobs::program_where,
@@ -1255,7 +1349,8 @@ pub fn run() {
             jobs::jobs_finished_bytes,
             keptjobs::job_kept,
             keptjobs::file_now,
-            keptjobs::job_write_back
+            keptjobs::job_write_back,
+            keptjobs::job_clear_saved
         ])
         .build(context)
         .expect("error while building tauri application")
@@ -1728,6 +1823,131 @@ mod tests {
         let mut lines = Vec::new();
         each_line(said, |l| lines.push(l));
         assert_eq!(lines, ["first \u{5316}", "second \u{fffd}t\u{fffd}", "third", "no end"]);
+    }
+
+    #[test]
+    fn a_model_plugins_hosts_are_those_its_manifest_in_place_names() {
+        let data = std::env::temp_dir().join(format!("meno-test-{}", Uuid::new_v4()));
+        let root = installed::root(&data);
+        installed::tests::in_place(&root, "talker", "1.0.0", r#"{"roles": [{"role": "language-model", "hosts": ["api.example.com"]}]}"#);
+        installed::tests::in_place(&root, "reader", "1.0.0", r#"{"roles": [{"role": "smiles"}]}"#);
+        assert_eq!(model_hosts(&data, "talker"), Some(vec!["api.example.com".to_string()]));
+        // (one that fills no such role, or is not in place, talks to none: its worker goes nowhere)
+        assert_eq!(model_hosts(&data, "reader"), None);
+        assert_eq!(model_hosts(&data, "absent"), None);
+        let _ = fs::remove_dir_all(&data);
+    }
+
+    #[test]
+    fn a_model_plugins_worker_is_given_its_key_and_neither_the_page_nor_the_log_sees_it() {
+        let Some(python) = a_python() else {
+            assert!(std::env::var_os("CI").is_none(), "no Python on CI: the converse worker test did not run");
+            eprintln!("no Python here: not run");
+            return;
+        };
+        const KEY: &str = "sk-test-key-0123456789abcdef";
+        let dir = std::env::temp_dir().join(format!("meno-converse-{}", Uuid::new_v4()));
+        fs::create_dir_all(dir.join("logs")).unwrap();
+        logfile::start(&dir.join("logs"), "test");
+        // (a worker that says what it was given, key and all, on stdout and on stderr - as a careless plugin might -
+        // and then, its output at an end ("eof") or once it is stopped ("stop"), says it again on stderr, after much else)
+        let worker = dir.join("worker.py");
+        fs::write(
+            &worker,
+            "import json, sys, time\nline = sys.stdin.readline()\nasked = json.loads(line)\nprint('heard ' + line.strip(), file=sys.stderr, flush=True)\nprint(json.dumps({'id': asked['id'], 'ok': True, 'result': {'text': 'key ' + asked.get('key', ''), 'keyed': asked.get('key') == sys.argv[1]}}), flush=True)\nif sys.argv[2] == 'eof':\n    sys.stdout.close()\n    time.sleep(0.2)\nelse:\n    sys.stdin.readline()\nfor i in range(300):\n    print('noise %d' % i, file=sys.stderr, flush=True)\nprint('the request had ' + asked.get('key', ''), file=sys.stderr, flush=True)\n",
+        )
+        .unwrap();
+        for how in ["eof", "stop"] {
+            let state = Arc::new(ProcState(Mutex::new(HashMap::new())));
+            let mut child = Command::new(python).arg(&worker).arg(KEY).arg(how).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+            let (stdout, stderr) = (child.stdout.take().unwrap(), child.stderr.take().unwrap());
+            let stdin = child.stdin.take().map(|s| Arc::new(Mutex::new(s)));
+            state.lock().insert("w1".into(), (child, stdin));
+            let keys = model::MemoryKeys(Mutex::new(HashMap::new()));
+            model::Keys::set(&keys, "talker", KEY).unwrap();
+            let models = Arc::new(model::Models::new(Box::new(keys)));
+            models.started("w1", "talker", None);
+            // (what the page is given of what the worker said, read as ext_spawn_sidecar reads it: each stream on its own thread)
+            let seen = Arc::new(Mutex::new(Vec::<String>::new()));
+            let reader = |stream: Box<dyn Read + Send>, main: bool| {
+                let (models, seen, state) = (models.clone(), seen.clone(), state.clone());
+                std::thread::spawn(move || {
+                    read_worker_output(&models, "w1", stream, main, |l| seen.lock().unwrap().push(l));
+                    if main {
+                        state.reap("w1");
+                    }
+                })
+            };
+            let out = reader(Box::new(stdout), true);
+            let err = reader(Box::new(stderr), false);
+            // (the page's request: no key in it - Meno adds it on the way)
+            let line = models.converse_line("w1", r#"{"id":1,"op":"converse","told":"t","said":[],"tools":[],"options":{}}"#).unwrap();
+            write_stdin(&state, "w1", &line).unwrap();
+            if how == "stop" {
+                // (stopped as ext_kill stops it - ended first - while what it says after is still to be read)
+                while !seen.lock().unwrap().iter().any(|l| l.starts_with("{")) {
+                    std::thread::sleep(std::time::Duration::from_millis(5));
+                }
+                models.ended("w1");
+                write_stdin(&state, "w1", "go\n").unwrap();
+            }
+            out.join().unwrap();
+            err.join().unwrap();
+            let seen = seen.lock().unwrap().clone();
+            for l in &seen {
+                logfile::log_page("error".into(), l.clone());
+            }
+            let answer: serde_json::Value = serde_json::from_str(seen.iter().find(|l| l.starts_with("{")).unwrap()).unwrap();
+            assert_eq!(answer["result"]["keyed"], serde_json::json!(true), "{how}: the worker was given its key");
+            assert_eq!(answer["result"]["text"], serde_json::json!("key [key]"));
+            assert!(seen.iter().all(|l| !l.contains(KEY)), "{how}: {:?}", seen.iter().filter(|l| l.contains(KEY)).collect::<Vec<_>>());
+            assert!(seen.iter().any(|l| l.starts_with("heard ") && l.contains("[key]")));
+            assert!(seen.contains(&"the request had [key]".to_string()), "{how}: its last line read");
+            assert_eq!(seen.iter().filter(|l| l.starts_with("noise ")).count(), 300);
+            // (both its streams read to their ends: forgotten, keys and all)
+            assert_eq!(models.scrub("w1", KEY), KEY);
+            // (and what the page is told where it asks wrongly)
+            for bad in [r#"{"op":"converse","key":"x"}"#, "{"] {
+                logfile::log_page("error".into(), models.converse_line("w1", bad).unwrap_err());
+            }
+        }
+        let log = fs::read_to_string(dir.join("logs/meno.log")).unwrap();
+        assert!(log.contains("[key]") && !log.contains(KEY), "{log}");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_model_plugins_worker_ends_its_network_task_as_its_output_ends_or_it_is_stopped_its_keys_still_taken_out() {
+        const KEY: &str = "sk-test-key-0123456789abcdef";
+        let net = net::Net::default();
+        let hosts = vec!["api.example.com".to_string()];
+        net.allow(&model::purpose("talker", &hosts));
+        let models = || {
+            let keys = model::MemoryKeys(Mutex::new(HashMap::new()));
+            model::Keys::set(&keys, "talker", KEY).unwrap();
+            let m = model::Models::new(Box::new(keys));
+            m.started("w1", "talker", Some(net.begin(&model::purpose("talker", &hosts), "talker", Some(hosts.clone())).unwrap()));
+            m.converse_line("w1", r#"{"op":"converse"}"#).unwrap();
+            m
+        };
+        // (its output at an end, its errors still read: its task ended, its key still taken out)
+        let m = models();
+        read_worker_output(&m, "w1", std::io::empty(), true, |_| {});
+        assert_eq!(net.running(), 0);
+        assert_eq!(m.scrub("w1", KEY), "[key]");
+        // (its errors at an end first: its task goes on while its output is read)
+        let m = models();
+        read_worker_output(&m, "w1", std::io::empty(), false, |_| {});
+        assert_eq!(net.running(), 1);
+        read_worker_output(&m, "w1", std::io::empty(), true, |_| {});
+        assert_eq!(net.running(), 0);
+        // (stopped, as ext_kill stops it: its task ended, its key still taken out of what is still to be read)
+        let m = models();
+        let state = ProcState(Mutex::new(HashMap::new()));
+        assert!(!stop_worker(&m, &state, "w1"));
+        assert_eq!(net.running(), 0);
+        assert_eq!(m.scrub("w1", KEY), "[key]");
+        assert!(m.converse_line("w1", r#"{"op":"converse"}"#).is_err());
     }
 
     /// A Python here to run a worker with: `python3`, or `python` (Windows).

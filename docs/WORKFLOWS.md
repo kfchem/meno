@@ -1401,6 +1401,29 @@ is not held to one.
   take their own folders away: a Render job, once its picture is on the
   page, and a job started for a step deleted before its run began - none
   of them taken up again from another run.
+- **Once the workspace is saved, a finished job's folder goes to the
+  Trash** - unless *Settings, Calculations, Keep job folders once saved*
+  is on. It is off unless changed: the maintainer's choice (2026-11-06),
+  the default one constant (`JOB_FOLDERS_KEPT`). A folder goes only where the save holds every
+  file of the job from that folder (none left out by *Don't keep raw
+  outputs*, none kept again from another file), and only after the save
+  is complete: Meno reads the file saved back, every file of the job's
+  record to its size and SHA-256, checks that the job has finished and
+  that its folder holds nothing the record does not, and that the file
+  saved has not changed meanwhile. It is moved to the system's Trash
+  (the Recycle Bin on Windows), never deleted outright; where there is
+  no Trash Meno knows, or on Windows its drive has no Recycle Bin (a
+  network drive, many a USB one), it stays - and where Windows would
+  destroy it rather than recycle it, Windows asks first, and declined, it
+  stays. Any that stays though finished is said
+  once, with why, beside the save. What a later save keeps of a job
+  whose folder went, and what *Show log* and *Show files* show, Meno
+  reads from the file saved, as it does from a file opened (FILE-IO.md,
+  *A step's jobs*). Where that file is moved or written since, within
+  the session, a later save says those files are not to be had - they
+  are in the file as it was, and in the Trash; Meno takes them from
+  neither on its own. A job whose folder went is run again where it
+  would have been taken up (*Job keys*).
 - **A saved workspace keeps its jobs' files**, raw outputs included,
   unless the step says *Don't keep raw outputs*; opened elsewhere, *Show
   files* writes them back out (docs/FILE-IO.md, *A step's jobs*).
@@ -1592,10 +1615,16 @@ Decided while building it, for the maintainer to confirm:
   that plugin's environment - never a shell, and Python only running a
   script of the plugin's. Meno's page names a plugin and a program, never
   a path.
-- **Cores for each, unset, are the computer's shared among the jobs at
-  once** - all of them while one runs at a time; set, never more than the
-  computer has. A program is told them as `OMP_NUM_THREADS` (and MKL's
-  and OpenBLAS's); a plugin's command may say them as well (xTB's `-P`).
+- **Cores for each, unset, are those jobs may use shared among a step's
+  jobs** (the maintainer, 2026-11-06): each takes the cores jobs may use
+  divided by its step's jobs - one for each entry it sends, as most steps
+  make them - all of them for one job, one each for as many jobs as there
+  are cores, at least one (lib/jobs `runningOf`). A step of hundreds of
+  small jobs runs them side by side, not one after another each with every
+  core. Set, each job takes that many, never more than jobs may use nor
+  than the computer has; Settings says so under the Jobs rows while unset.
+  A program is told them as `OMP_NUM_THREADS` (and MKL's and OpenBLAS's);
+  a plugin's command may say them as well (xTB's `-P`).
 - **A program that runs as processes is given one to each physical core,
   each told one thread** (2026-10-30). Its manifest says so
   (`installed[].parallel`: `"processes"` - ORCA, its `%pal`, run under
@@ -2393,10 +2422,8 @@ Its second part:
   what Meno would give it), and output Meno cannot account for stops its
   step (*Job keys*); still, choose a folder only you write in.
 
-Not yet: job folders cleaned once their files are in the `.meno` unless
-*Keep job folders* is chosen (that waits for raw outputs kept in the
-`.meno`, #9b); *Show files*, on a step's menu, opens a job's folder, and
-an entry's menu does not yet.
+Not yet: *Show files*, on a step's menu, opens a job's folder, and an
+entry's menu does not yet.
 
 ### Job keys, and a job taken up again (2026-10-22)
 
