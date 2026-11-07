@@ -463,8 +463,9 @@ lines, each a JSON object, none of them a `converse`. Meno waits for the
 reply whole, up to 10 minutes - as long as a model service's own SDK
 waits for one request by default - and nothing of it is shown till then; a
 plugin gives up within that, in words (`REPLY_MS`; replies shown as they
-come are for a later version). What the plugin answers is read strictly: its words,
-plain text, and the tools it calls, each by name with its arguments - or
+come are for a later version). What the plugin answers is read strictly:
+its words, plain text, and the tools it calls, each by name with its
+arguments - or
 its error; anything else is refused, never guessed at
 (conversation/modelConnection `replyOf`). With them, what the plugin keeps
 of the reply (`keep`, at most 2 MB as JSON): its service's own record of
