@@ -14,20 +14,23 @@ export const EXIT_NAME_PX = 10;
 
 /**
  * Each exit's name, where its step has more than one exit and its set is on
- * no page beside it (`named`: held off the page, workflow/held) - a set on
- * the page is named by its frame. Outside the card's right side, half a
- * port's step above its port, as an input's name is above its port on the
- * left: between the wire that leaves its port level and the line above,
- * through neither. In the quiet words an input's name is in. The first cut
- * with an ellipsis short of where its set's frame would stand (`GAP` out),
- * as a wire leaves it level there; those under it whole.
+ * no page beside it (`named`: the name its frame would have - doers
+ * `setName`, its kind's words filled from the step's options - for one held
+ * off the page, workflow/held; none for one on the page, which its frame
+ * names). Outside the card's right side, half a port's step above its port,
+ * as an input's name is above its port on the left: between the wire that
+ * leaves its port level and the line above, through neither. In the quiet
+ * words an input's name is in. The first cut with an ellipsis short of
+ * where its set's frame would stand (`GAP` out), as a wire leaves it level
+ * there; those under it whole.
  */
-export function exitNames(steps: readonly Pick<WorkflowStep, "id" | "x" | "y" | "kind">[], named: (step: number, exit: string) => boolean): PageText[] {
+export function exitNames(steps: readonly Pick<WorkflowStep, "id" | "x" | "y" | "kind">[], named: (step: number, exit: string) => string | null): PageText[] {
   return steps.flatMap((s) => {
     const exits = exitsOf(s.kind);
     if (exits.length < 2) return [];
-    return exits.flatMap((x, k): PageText[] =>
-      named(s.id, x.id)
+    return exits.flatMap((x, k): PageText[] => {
+      const name = named(s.id, x.id);
+      return name
         ? [
             {
               key: `exit:${s.id}:${x.id}`,
@@ -35,13 +38,13 @@ export function exitNames(steps: readonly Pick<WorkflowStep, "id" | "x" | "y" | 
               y: s.y - portDown(k) + PORT_STEP / 2,
               anchor: "start",
               baseline: "middle",
-              text: x.name,
+              text: name,
               sizePx: EXIT_NAME_PX,
               color: COLORS.quiet,
               ...(k === 0 ? { maxWidthPx: GAP / PX - 2 * EXIT_NAME_OUT } : {}),
             },
           ]
-        : [],
-    );
+        : [];
+    });
   });
 }

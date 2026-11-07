@@ -881,7 +881,7 @@ export default function Workflow2D() {
     const shown = new Set(onPage.map((b) => b.id));
     return exitNames(steps, (step, exit) => {
       const b = exitSets.get(`${step}:${exit}`);
-      return !!b && !shown.has(b.id);
+      return b && !shown.has(b.id) ? setName(b, steps) : null;
     });
   }, [steps, exitSets, onPage]);
   /** Where a step's result set's exit gives on its card (place `exitStart`): the port its wires, and the line to the set where it is on the page, leave from. */

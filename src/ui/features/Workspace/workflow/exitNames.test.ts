@@ -4,7 +4,6 @@ import { join } from "node:path";
 import { COLORS } from "../../../theme/colors";
 import { DURATION } from "../../../theme/motion";
 import { exitNames, EXIT_NAME_OUT, EXIT_NAME_PX } from "./exitNames";
-import { exitsOf } from "./kinds";
 import { CARD_W, GAP, PORT_STEP, portDown, PX } from "./look";
 
 describe("an exit's name beside its port (docs/WORKFLOWS.md, *Exit names*)", () => {
@@ -16,15 +15,16 @@ describe("an exit's name beside its port (docs/WORKFLOWS.md, *Exit names*)", () 
   ];
 
   it("names each exit whose set is on no page beside it, where its step has more than one - one on the page is named by its frame", () => {
-    const named = exitNames(steps, (step, exit) => !(step === 1 && exit === "rest"));
+    // (each by the name its frame would have: here its step and exit, said)
+    const named = exitNames(steps, (step, exit) => (step === 1 && exit === "rest" ? null : `${exit} of ${step}`));
     expect(named.map((t) => t.key)).toEqual(["exit:1:out", "exit:1:changes", "exit:2:out", "exit:2:failed"]);
-    expect(named.map((t) => t.text)).toEqual([...exitsOf("atom-map").filter((x) => x.id !== "rest"), ...exitsOf("optimise")].map((x) => x.name));
+    expect(named.map((t) => t.text)).toEqual(["out of 1", "changes of 1", "out of 2", "failed of 2"]);
     // (a step of one exit names none, whatever its set)
-    expect(exitNames([steps[2]], () => true)).toEqual([]);
+    expect(exitNames([steps[2]], () => "x")).toEqual([]);
   });
 
   it("stands outside the card's right side, half a port's step above its port, in the quiet words an input's name is in - the first cut short of where its frame would stand", () => {
-    const [first, second] = exitNames([steps[1]], () => true);
+    const [first, second] = exitNames([steps[1]], () => "x");
     expect([first.x, first.y, second.y]).toEqual([20 + CARD_W + EXIT_NAME_OUT * PX, -10 - portDown(0) + PORT_STEP / 2, -10 - portDown(1) + PORT_STEP / 2]);
     expect([first.anchor, first.baseline, first.sizePx, first.color, EXIT_NAME_PX]).toEqual(["start", "middle", 10, COLORS.quiet, 10]);
     expect(first.maxWidthPx).toBe(GAP / PX - 2 * EXIT_NAME_OUT);
@@ -33,7 +33,7 @@ describe("an exit's name beside its port (docs/WORKFLOWS.md, *Exit names*)", () 
 
   it("is drawn by WebGL, as the page's words are, from the sets on the page (Workflow2D)", () => {
     const layer = readFileSync(join(__dirname, "../components/Workflow2D.tsx"), "utf8");
-    expect(layer).toMatch(/exitNames\(steps, \(step, exit\) => \{\s*const b = exitSets\.get\(`\$\{step\}:\$\{exit\}`\);\s*return !!b && !shown\.has\(b\.id\);/);
+    expect(layer).toMatch(/exitNames\([\s\S]*?\(step, exit\) => \{\s*const b = exitSets\.get\(`\$\{step\}:\$\{exit\}`\);\s*return b && !shown\.has\(b\.id\) \? setName\(b, steps\) : null;/);
     expect(layer).toMatch(/<PagePlaced>\s*<ExitNames items=\{names\} \/>\s*<\/PagePlaced>/);
     expect(layer).toMatch(/usePlaced\(anchor \? \{ key: "exit-names", anchor, words: true, control: true,/);
   });
