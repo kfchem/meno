@@ -1567,6 +1567,28 @@ All hover-based, as above.
     place for them, and does not keep them.
 - Copy and paste, within Meno and between tabs. (PR #68, as above; and
   between Meno and other programs, through the system clipboard.)
+- **One structure of several parts** (the maintainer, 2026-10-30; built
+  2026-11-05). Structures not bonded to one another can be one structure:
+  a salt, a complex, the reactants on one side of an atom map. With two or
+  more selected, the menu offers *Make one structure*. On one of them, it
+  offers *Separate*. Each is one undo step, and nothing moves.
+  - **How it is kept.** A number on its atoms (`Atom.joined`;
+    `utils/joinedParts`). The bonds stay as drawn: nothing reads a bond
+    that is not there.
+  - **What takes it as one:**
+    - *Select this structure*;
+    - copy and paste: a pasted one is given a number of its own, so it
+      joins nothing on the page;
+    - *3D structure*: one molecule in 3D, its parts embedded together and
+      set side by side, as a salt's are (`chem/partsApart`);
+    - a set's entries: one entry, as Combine makes one, its identity and
+      its charge and spin those of all its parts;
+    - an atom map's side.
+  - **What takes it in pieces:** Clean-up lays out each piece as it is, and
+    the parts keep where they stand.
+  - **How the number is kept true.** It is saved with the workspace. A
+    number left on one piece only, after a delete or as read from a file, is
+    dropped.
 
 ### 4a. A layout engine of Meno's own
 

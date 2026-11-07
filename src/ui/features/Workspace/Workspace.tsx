@@ -228,6 +228,7 @@ import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gestu
 import { Remake3D } from "./components/remake3d";
 import { mapAtoms, mapStanding, reactionOf, unpairedSaid } from "./chem/atomMap";
 import { structuresOf } from "./workflow/entries";
+import { partsOffered } from "./utils/joinedParts";
 import { useAtomMaps } from "./chem/useAtomMaps";
 import { turnOnto } from "./utils/align3d";
 import type { ArrowFormPatch, Caption, Drawn, Molecule3D, PictureFrom, WordsFrom } from "./store/types";
@@ -2602,6 +2603,18 @@ function WorkspaceContent({
                   },
                 };
               })()),
+            };
+          })()}
+          parts={(() => {
+            // (one structure of several parts: the structures selected made one; the one right-clicked, of several parts, taken apart - utils/joinedParts)
+            const st = store.getState();
+            const at = menu.kind === "atom" || menu.kind === "bond" ? structureAt(menu.kind, menu.id) : null;
+            const picked = menu.selection === "here" ? st.sel.atoms : new Set<number>();
+            const { join: joinable, separate: joined } = partsOffered(st.model, picked, at);
+            if (!joinable && !joined) return undefined;
+            return {
+              ...(joinable ? { onJoin: () => store.getState().joinStructures(picked) } : {}),
+              ...(joined ? { onSeparate: () => store.getState().separateStructures([at!]) } : {}),
             };
           })()}
           pageMap={(() => {

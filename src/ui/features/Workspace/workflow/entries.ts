@@ -31,7 +31,7 @@ export type Page = { model: Model; molecules3d?: readonly Molecule3D[]; pictures
 /** Whether `p` is inside a frame. */
 export const inside = (b: Frame, p: Pt) => p.x >= b.x0 && p.x <= b.x1 && p.y >= b.y0 && p.y <= b.y1;
 
-/** The structures drawn on the page, each its atoms' ids, as their bonds join them. */
+/** The structures drawn on the page, each its atoms' ids, as their bonds join them - and a structure of several parts (`Atom.joined`) as one, as Combine makes one entry of its parts. */
 export function structuresOf(model: Model): number[][] {
   const around = new Map<number, number[]>();
   const join = (p: number, q: number) => {
@@ -44,6 +44,14 @@ export function structuresOf(model: Model): number[][] {
     // walked by its bonds alone, the metal and the star were a structure
     // without the ring)
     for (const e of b.endpoints ?? []) join(b.a, e);
+  }
+  // (a structure of several parts: each of its atoms joined to the first of them - chem/cleanUp `neighboursIn` likewise)
+  const first = new Map<number, number>();
+  for (const a of model.atoms) {
+    if (a.joined == null) continue;
+    const f = first.get(a.joined);
+    if (f == null) first.set(a.joined, a.id);
+    else join(f, a.id);
   }
   const seen = new Set<number>();
   const out: number[][] = [];

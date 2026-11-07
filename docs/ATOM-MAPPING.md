@@ -469,7 +469,9 @@ offers *Atom map*.
   structure selected is an After, mapped onto Before on its own, as a
   workflow's *Atom map* step maps "each its own". A structure is a drawn
   one, or a molecule in 3D still its drawing's. A side of several molecules
-  is not made here: it waits for structures of several parts.
+  is one structure of several parts (docs/EDITOR-2D.md, *One structure of
+  several parts*): made one first, it is one side, its parts set side by
+  side in 3D.
 - **Each in 3D, on the page.** A structure with no molecule in 3D of its own
   is given one first, beside it, as *3D structure* makes one (one
   conformer). A mapped drawing so keeps its 3D. Then each side is mapped as a

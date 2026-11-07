@@ -222,6 +222,7 @@ export default function PartMenu({
   push,
   arrow,
   pageMap,
+  parts,
   onColour,
   onRender,
   picture,
@@ -418,6 +419,12 @@ export default function PartMenu({
    * many maps the first steps through - and shown or hidden, the next map
    * taken, the first written in 3D.
    */
+  /**
+   * One structure of several parts (docs/EDITOR-2D.md): the structures
+   * selected made one, where there are two or more of them; the structure
+   * right-clicked, one of several parts, taken apart.
+   */
+  parts?: { onJoin?: () => void; onSeparate?: () => void };
   pageMap?: {
     onMake?: () => void;
     held?: { standing: "changed" | "incomplete" | "ready"; shown: boolean; maps: number; chosen: number; onShow: (shown: boolean) => void; onOther: () => void; onExport: () => void; onAgain?: () => void; unpaired?: string };
@@ -557,6 +564,10 @@ export default function PartMenu({
   const stackItem: Item[] = records ? [{ name: records.spread ? "Stack again" : "Lay out as a grid", keys: "", run: records.run, divider: true }] : [];
   // (atom maps between structures on the page: made from two or more selected; those its structure is in, shown or hidden, another taken, written in 3D)
   const mapsHeld = pageMap?.held;
+  const partsItems: Item[] = [
+    ...(parts?.onJoin ? [{ name: "Make one structure", keys: "", run: parts.onJoin, divider: true }] : []),
+    ...(parts?.onSeparate ? [{ name: "Separate", keys: "", run: parts.onSeparate, divider: !parts.onJoin }] : []),
+  ];
   const pageMapItems: Item[] = [
     ...(pageMap?.onMake ? [{ name: "Atom map", keys: "", run: pageMap.onMake, divider: true }] : []),
     ...(mapsHeld?.standing === "ready" || mapsHeld?.standing === "incomplete"
@@ -914,6 +925,7 @@ export default function PartMenu({
                 ...colour,
               ]
             : []),
+          ...partsItems,
           ...pageMapItems,
           del("Delete selection"),
           // (an atom selected alone, right-clicked: its label, as on the atom's own menu)
@@ -994,6 +1006,7 @@ export default function PartMenu({
               ]
             : []),
           ...stereoItem,
+          ...partsItems,
           ...pageMapItems,
           { name: "Select this structure", keys: "", run: onSelectStructure },
           ...(figure ? [{ name: figure.from, keys: "", run: () => {}, disabled: true, divider: true }, ...(figure.run ? [{ name: "Checked against the figure", keys: "", run: figure.run }] : [])] : []),
