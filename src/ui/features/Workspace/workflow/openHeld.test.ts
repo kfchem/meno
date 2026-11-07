@@ -69,7 +69,7 @@ describe("a held set opened and closed (docs/WORKFLOWS.md, *Held results*)", () 
     // (the ports are HTML, in a WebGL page: read as written - a click on one asks the store, its menu is the set's)
     const layer = readFileSync(join(__dirname, "../components/Workflow2D.tsx"), "utf8");
     expect(layer).toMatch(/if \(!moved\) \{\s*st\.exitPortClicked\(from\.set\);\s*return;/);
-    expect(layer).toMatch(/exits\.map\([\s\S]*?onContextMenu=\{menuOf\("set", b\.id\)\}/);
+    expect(layer).toMatch(/exits\.map\([\s\S]*?onContextMenu=\{\(e\) => \{[\s\S]*?menuOf\("set", b\.id\)\(e\);/);
   });
 
   it("is told the pointer is on its exit's port, and off it, by the store (`exitPortHovered`): another's leaving clears nothing", () => {

@@ -76,6 +76,8 @@ describe("what a held exit's set holds, said beside its port as the pointer is o
   it("is told by the port, whatever draws it (store `exitPortHovered`), and said only for a held set that holds anything - its step's names gone meanwhile", () => {
     const layer = readFileSync(join(__dirname, "../components/Workflow2D.tsx"), "utf8");
     expect(layer).toMatch(/onHover=\{\(on\) => store\.getState\(\)\.exitPortHovered\(b\.id, on\)\}/);
+    // (and gone as its menu opens over it)
+    expect(layer).toMatch(/onContextMenu=\{\(e\) => \{[\s\S]*?store\.getState\(\)\.exitPortHovered\(b\.id, false\);\s*menuOf\("set", b\.id\)\(e\);/);
     expect(layer).toMatch(/b\?\.made && \(b\.collection\?\.length \|\| b\.drawnCollection\?\.length\) && !onPage\.some\(\(x\) => x\.id === b\.id\) \? b : undefined/);
     expect(layer).toMatch(/steps\.filter\(\(s\) => s\.id !== saying\?\.made\?\.step\)/);
     expect(layer).toMatch(/exitChip\(`exit-chip:\$\{saying\.id\}`, info\.name, `\$\{info\.summary\.count\} \$\{info\.summary\.nouns\}`, p\)/);

@@ -1299,7 +1299,11 @@ export default function Workflow2D() {
                       label={exits.length > 1 ? `${setInfo.get(b.id)?.name ?? x.name} out of ${name}` : `Out of ${name}`}
                       data={{ "data-give-set": String(b.id) }}
                       onPointerDown={(e) => drawFrom(e, { set: b.id })}
-                      onContextMenu={menuOf("set", b.id)}
+                      onContextMenu={(e) => {
+                        // (its menu over what the port says: that gone, said again as the pointer next comes onto it)
+                        store.getState().exitPortHovered(b.id, false);
+                        menuOf("set", b.id)(e);
+                      }}
                       onHover={(on) => store.getState().exitPortHovered(b.id, on)}
                       style={{ left: CARD_W / PX, top: portDown(k) / PX }}
                       of={CARD_H / PX}
