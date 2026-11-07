@@ -36,7 +36,6 @@ import { stereoShownOf } from "../document";
 import { viewBack, viewShowingCopy } from "../utils/copySeen";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import StackChip3D from "./StackChip3D";
-import PagePlaced from "../pageGl/PagePlaced";
 import { useDrawingStyle } from "../useDrawingStyle";
 import { editorLayoutOptions } from "../layoutOptions";
 import { MARK_SCALE } from "../chem/marks";
@@ -772,7 +771,6 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
     return hovered?.id === id || freshCopy === id ? 1 : 0;
   };
   return (
-    <PagePlaced>
     <group>
       <ambientLight intensity={style.ambientLight} />
       <KeyLight3D
@@ -943,7 +941,6 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
         />
       ))}
     </group>
-    </PagePlaced>
   );
 }
 

@@ -589,6 +589,7 @@ export const createModelSlice = (
       wireDrag: null,
       wireRefused: null,
       workflowMenu: null,
+      chipOver: null,
       turns3d: {},
       frames3d: {},
       hovered3d: null,

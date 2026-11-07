@@ -7,6 +7,7 @@
  */
 import { smallestRings } from "../layout/rings";
 import { flatRingAtoms } from "./conformersSought";
+import { valenceOrders } from "./kekulize";
 import { readMolfile } from "./ctfile";
 import { lonePairCentres, lonePairOfThree } from "./lonePairCentres";
 import { implicitHydrogens } from "./molecule";
@@ -27,14 +28,15 @@ export const MOVING_CN = {
 } as const;
 export type MovingWhy = keyof typeof MOVING_CN;
 
-/** Each atom's hydrogens that are no atoms of their own: those given, or those its valence leaves (lib/chem/molecule). */
+/** Each atom's hydrogens that are no atoms of their own: those given, or those its valence leaves (lib/chem/molecule), aromatic bonds as a Kekulé structure has them (lib/chem/kekulize `valenceOrders`). */
 function implicitOf(atoms: readonly StereoAtom[], bonds: readonly StereoBond[]): number[] {
   const sum = atoms.map(() => 0);
-  for (const b of bonds) {
-    const o = b.order === 4 ? 1.5 : b.order <= 3 ? b.order : 0;
+  const orders = valenceOrders(atoms, bonds);
+  bonds.forEach((b, k) => {
+    const o = orders[k] <= 3 ? orders[k] : 0;
     sum[b.a] += o;
     sum[b.b] += o;
-  }
+  });
   return atoms.map((a, i) => a.hs ?? implicitHydrogens(a.el, Math.round(sum[i]), a.charge ?? 0));
 }
 
@@ -63,18 +65,14 @@ function notCentres(atoms: readonly StereoAtom[], bonds: readonly StereoBond[]):
   return (at) => lonePairOfThree(atoms[at].el, atoms[at].charge ?? 0, around[at], orders[at], hs[at]) && !keeps(at);
 }
 
-/** Each atom's hydrogens: those given, or those its valence leaves (lib/chem/molecule), and the hydrogen atoms bonded to it. */
+/** Each atom's hydrogens: those given, or those its valence leaves (`implicitOf`), and the hydrogen atoms bonded to it. */
 function hydrogensOf(atoms: readonly StereoAtom[], bonds: readonly StereoBond[]): number[] {
-  const sum = atoms.map(() => 0);
   const explicit = atoms.map(() => 0);
   for (const b of bonds) {
-    const o = b.order === 4 ? 1.5 : b.order <= 3 ? b.order : 0;
-    sum[b.a] += o;
-    sum[b.b] += o;
     if (atoms[b.a]?.el === "H") explicit[b.b]++;
     if (atoms[b.b]?.el === "H") explicit[b.a]++;
   }
-  return atoms.map((a, i) => (a.hs ?? implicitHydrogens(a.el, Math.round(sum[i]), a.charge ?? 0)) + explicit[i]);
+  return implicitOf(atoms, bonds).map((n, i) => n + explicit[i]);
 }
 
 /**

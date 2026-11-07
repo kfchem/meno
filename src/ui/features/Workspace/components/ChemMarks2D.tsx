@@ -1,6 +1,5 @@
-import PageHtml from "./PageHtml";
 import { useFrame, useThree } from "@react-three/fiber";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import {
   labelBox,
@@ -29,15 +28,14 @@ import { usePresence } from "../../../theme/presence";
 import { MarkHold } from "./MarkHold2D";
 import MarkBoxes2D from "./MarkBoxes2D";
 import { Texts2D } from "./Labels2D";
-import { usePageHtmlLayer } from "./coverLayer";
-import { TIP_GAP_PX, tipPlace, tipUnder, type ScreenBox } from "./markTip";
+import PageTip from "./PageTip";
 
 /** Nothing worked out, for a drawing with nothing to mark. */
 const NO_ATOMS = new Map<number, LAtom>();
 const NO_MODEL: Model = { atoms: [], bonds: [] };
 
 /** A mark's words sit over the drawing, and under the canvas's buttons and cards. */
-const Z_RANGE = [20, 10];
+const Z_RANGE: [number, number] = [20, 10];
 /** R, S, E and Z over the drawing's bonds and labels, under the marks' boxes. */
 const STEREO_ORDER = 35;
 
@@ -71,14 +69,6 @@ export default function ChemMarks2D({
   const model = useEditor((s) => s.model);
   const hoveredAtom = useEditor((s) => s.hovered.atomId);
   const hoveredBond = useEditor((s) => s.hovered.bondId);
-  // (what can be seen of the canvas, the column over its right side left out: where what a mark says is kept - markTip)
-  const gl = useThree((s) => s.gl);
-  const layer = usePageHtmlLayer();
-  const cover = useEditor((s) => s.cover);
-  const room = useCallback((): ScreenBox => {
-    const r = (layer?.current ?? gl.domElement).getBoundingClientRect();
-    return { left: r.left, top: r.top, right: r.right - cover, bottom: r.bottom };
-  }, [layer, gl, cover]);
   const invalidate = useThree((s) => s.invalidate);
   useEffect(() => invalidate(), [marks, invalidate]);
 
@@ -320,13 +310,7 @@ export default function ChemMarks2D({
       })}
       {boxesNow.length > 0 && <MarkBoxes2D boxes={boxesNow} leaving={boxesLeaving} zoom={z} />}
       {/* what the box pointed at says, under it: words over the page, while it is pointed at */}
-      {pointed && (
-        <PageHtml key={`tip-${pointed.key}`} position={[pointed.x, pointed.y, 0]} center zIndexRange={Z_RANGE} style={{ pointerEvents: "none" }}>
-          <div role="img" aria-label={pointed.message} className="relative" style={{ width: pointed.w * z, height: pointed.h * z }}>
-            <MarkTip text={pointed.message} room={room} />
-          </div>
-        </PageHtml>
-      )}
+      {pointed && <PageTip tipKey={pointed.key} x={pointed.x} y={pointed.y} w={pointed.w} h={pointed.h} zoom={z} text={pointed.message} zIndexRange={Z_RANGE} />}
       {stereoTexts.length > 0 && (
         <Texts2D
           texts={stereoTexts}
@@ -339,30 +323,5 @@ export default function ChemMarks2D({
         />
       )}
     </group>
-  );
-}
-
-/** What a mark says, under it - moved along, or put over it, to lie where it can be seen (markTip). */
-function MarkTip({ text, room }: { text: string; room: () => ScreenBox }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [place, setPlace] = useState<{ dx: number; above: boolean } | null>(null);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    const mark = el?.parentElement?.getBoundingClientRect();
-    if (!el || !mark) return;
-    setPlace(tipPlace(tipUnder(mark, el.offsetWidth, el.offsetHeight), mark, room()));
-  }, [text, room]);
-  return (
-    <div
-      ref={ref}
-      className={"meno-fade-in absolute left-1/2 w-max max-w-[22rem] rounded-md border border-gh-line bg-white px-2 py-1 text-[11px] text-gh-black shadow-sm " + (place?.above ? "bottom-full" : "top-full")}
-      style={{
-        [place?.above ? "marginBottom" : "marginTop"]: TIP_GAP_PX,
-        transform: `translateX(calc(-50% + ${place?.dx ?? 0}px))`,
-        visibility: place ? undefined : "hidden",
-      }}
-    >
-      {text}
-    </div>
   );
 }

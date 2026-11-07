@@ -43,3 +43,13 @@ export function colourCss(r: number, g: number, b: number, alpha = 1): string {
   const c = (v: number) => Math.round(Math.min(255, Math.max(0, v)));
   return alpha >= 1 ? `rgb(${c(r)} ${c(g)} ${c(b)})` : `rgb(${c(r)} ${c(g)} ${c(b)} / ${Math.max(0, alpha)})`;
 }
+
+/**
+ * A colour made from data as WebGL takes it - "#rrggbb", which three.js
+ * reads where it reads no CSS colour of today's form (`colourCss`'s
+ * "rgb(r g b)"): a chip's bars drawn on the page (pageGl).
+ */
+export function colourHex(r: number, g: number, b: number): string {
+  const c = (v: number) => Math.round(Math.min(255, Math.max(0, v))).toString(16).padStart(2, "0");
+  return `#${c(r)}${c(g)}${c(b)}`;
+}

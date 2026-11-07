@@ -613,9 +613,14 @@ Taken on 2026-10-13:
   no wider (the maintainer, 2026-10-28). Opened, the card first grows to
   it, wider and taller together in 160 ms, and only then do its lines fade
   in, in 120 ms, as gently at first as at the end; shut, they fade out
-  first, the same way, and the card then shrinks back. It widens to the
-  right only as *How it was made* opens, and back, so the toggle at its
-  left stays under the pointer that pressed it.
+  first, the same way, and the card then shrinks back. It widens both
+  ways about its middle as *How it was made* opens, and back, as it does
+  opening at all (the maintainer, 2026-11-06; until then it widened to the
+  right only, the toggle at its left kept under the pointer). Its toggle
+  is a chevron alone, in the middle (the maintainer, 2026-11-06): pointing
+  down, turned up as it opens, it stays under the pointer as the card
+  widens about it; its name, *How it was made*, is said in the page's tip
+  as it is pointed at, shut.
   A frames chip opens to its details the same way. Opened or shut again
   part way, it goes back from where it is (the maintainer, 2026-10-29;
   `theme/opening`). An eta complex's
@@ -1376,6 +1381,30 @@ it, in `features/Workspace/pageGl/`:
   or a move on one is its own. Among circles that both reach the pointer,
   the nearest; a frame's corner over the sides it joins. A drop asks the
   same (`useHitAt`) where HTML asked `elementFromPoint`.
+- **Filled shapes** (`PagePolys`): a few polygons - a chip's energy
+  profile through many frames - triangulated again as they change.
+- **What is placed by what moves** (`PagePlaced`, `usePlaced`): a
+  molecule's or a stack's frames chip, hanging below what it is of as that
+  turns - every one drawn at once, each where its anchor is at each frame,
+  drawn again only where one moved, came or went. Its words go with the
+  page's below the size they are read at; one that works the page goes
+  while a talk is given (docs/PRESENTING.md); one opened is drawn over all
+  the rest of the page's WebGL - its neighbours' words, R and S beside
+  their molecules - as its HTML was laid over the rest.
+- **The frames chip** (`liveChip`, components/useFramesChip): shut, pointed
+  at and opened - a set's bars, on whole device pixels, or one profile
+  through a long run of frames; its slider; what its calculation was and
+  found; how it was made, folded under a chevron - laid out as its HTML
+  was, in page pixels, and opened the same way (theme/opening). A press on
+  its bars or its slider shows the frame under it, a drag goes through
+  them. Its words are copied from its menu (Copy, Copy energies), as no
+  words on the page are selected; opened, the workflow's ports under it
+  are not drawn. What goes under it - Make again, a list of results - is
+  HTML still, a control, as far down as the chip is tall.
+- **The hover tip** (components/PageTip): not placed on the page, it may be
+  HTML (LOOK.md, rule 7) - one for all of the page's WebGL: what a mark
+  says, why a chip's bar did not finish, under what it is about or over
+  it, kept where it can be seen.
 
 ## Styles in 3D
 

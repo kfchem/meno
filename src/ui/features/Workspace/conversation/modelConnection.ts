@@ -22,8 +22,12 @@ const listSaid = (names: readonly string[]) => (names.length < 2 ? names.join(""
 /** The role a model's plugin fills (lib/plugins/roles). */
 export const MODEL_ROLE = "language-model" as const;
 
-/** How long a model may take to answer: a long reply is slow. */
-export const REPLY_MS = 180_000;
+/**
+ * How long a model may take to answer, whole - nothing of a reply is shown
+ * till it is: 10 minutes, as long as a model service's own SDK waits for one
+ * request by default. A plugin gives up within it, in words.
+ */
+export const REPLY_MS = 600_000;
 
 /** The most a model's words may be: as much as a conversation keeps of one (./saved). */
 const MOST_TEXT = 1_000_000;

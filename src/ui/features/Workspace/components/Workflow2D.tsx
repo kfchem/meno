@@ -462,6 +462,7 @@ function ExitNames({ items }: { items: readonly PageText[] }) {
 export default function Workflow2D() {
   const store = useEditorStore();
   const sets = useEditor((s) => s.sets);
+  const chipOver = useEditor((s) => s.chipOver);
   const steps = useEditor((s) => s.steps);
   const wires = useEditor((s) => s.wires);
   // (the sets that lie on the page: all but those held off it - their exits wired on, workflow/held - whose frames are drawn nowhere)
@@ -1104,6 +1105,8 @@ export default function Workflow2D() {
   const coverStep = cover ? stepById.get(cover.step) : undefined;
   const coverFrame = coverStep && cover ? { x0: coverStep.x, x1: coverStep.x + cover.w, y0: coverStep.y - cover.h, y1: coverStep.y } : null;
   const portR = 4.5 / zoom;
+  // (and a molecule's frames chip opened over the rest: those under it not drawn either)
+  const underOpened = (p: { x: number; y: number }, notCover?: boolean) => (!notCover && underCard(p, coverFrame, portR)) || underCard(p, chipOver, portR);
   // the wires: each drawn, and each step's to the set it made - each going round what it leaves and comes into, where it comes back (a step's card as it stands shut: where wires join it, look `wireCurve`)
   const cardFrame = (s: WorkflowStep): Frame => ({ x0: s.x, x1: s.x + CARD_W, y0: s.y - CARD_H, y1: s.y });
   const around = [...onPage.map(shownOf), ...steps.map(cardFrame)];
@@ -1224,7 +1227,7 @@ export default function Workflow2D() {
           {onPage.map((b) => {
             const f = shownOf(b);
             const info = setInfo.get(b.id)!;
-            if (b.made || underCard({ x: f.x1, y: (f.y0 + f.y1) / 2 }, coverFrame, portR)) return null;
+            if (b.made || underOpened({ x: f.x1, y: (f.y0 + f.y1) / 2 })) return null;
             return (
               <div key={`b${b.id}`} className="meno-fade-in" style={{ ...onLayer(f.x1, (f.y0 + f.y1) / 2), width: 0, height: 0 }}>
                 <Port look={portLook("give", { set: b.id })} label={`Out of ${info.name}`} data={{ "data-give-set": String(b.id) }} onPointerDown={(e) => drawFrom(e, { set: b.id })} style={{ left: 0, top: 0 }} of={(f.y1 - f.y0) / PX} />
@@ -1238,7 +1241,7 @@ export default function Workflow2D() {
             return (
               <div key={`s${s.id}`} className="meno-fade-in" style={{ ...onLayer(s.x, s.y), width: 0, height: 0 }}>
                 {ports.map((p, k) =>
-                  s.id !== cover?.step && underCard({ x: s.x, y: s.y - portDown(k) }, coverFrame, portR) ? null : (
+                  underOpened({ x: s.x, y: s.y - portDown(k) }, s.id === cover?.step) ? null : (
                   <Port
                     key={p.id}
                     look={portLook("take", { step: s.id, port: p.id })}
