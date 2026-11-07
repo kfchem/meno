@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { PAGE_PX } from "../utils/pageScale";
 import { controlLine, controlMost, controlSize, lineWidth, pagePx, type Control } from "./units";
-import { inDrawOrder, packShapes, PER, type Shape } from "./shapes";
+import * as THREE from "three";
+import { fillShapesGeometry, inDrawOrder, packShapes, PER, SHAPE_ATTRIBUTES, type Shape } from "./shapes";
 import { cursorChange, hitAt, type Hit, type Region } from "./hits";
-import { fitted, placed, textWidth } from "./texts";
+import { fitted, placed, textWidth, wrapText } from "./texts";
 import { cellOf } from "./icons";
 
 describe("the page's own lengths", () => {
@@ -72,6 +73,43 @@ describe("shapes packed for the shader", () => {
     expect(again.centre).toBe(first.centre);
     expect(again.count).toBe(1);
     expect(again.keys).toEqual(["c"]);
+  });
+
+  it("are all drawn as they grow past what the geometry was first drawn with", () => {
+    // (three.js's renderer, as WebGLGeometries and WebGLRenderer have it: the instances it may draw kept from the first
+    //  instanced attribute it bound, forgotten only when the geometry is disposed - its own listener, added as it is first drawn)
+    const g = new THREE.InstancedBufferGeometry();
+    type Cached = { _maxInstanceCount?: number };
+    let disposed = 0;
+    const draw = () => {
+      if (!g.hasEventListener("dispose", forget)) g.addEventListener("dispose", forget);
+      const first = g.getAttribute("aCentre") as THREE.InstancedBufferAttribute;
+      const c = g as unknown as Cached;
+      if (c._maxInstanceCount === undefined) c._maxInstanceCount = first.meshPerAttribute * first.count;
+      return Math.min(g.instanceCount, c._maxInstanceCount);
+    };
+    function forget() {
+      disposed++;
+      g.removeEventListener("dispose", forget);
+      delete (g as unknown as Cached)._maxInstanceCount;
+    }
+    const many = (n: number) => Array.from({ length: n }, (_, i) => box(`s${i}`));
+    let packed = packShapes(many(20));
+    fillShapesGeometry(g, packed);
+    expect(draw()).toBe(20);
+    // (fewer, and as many again: in the arrays it has, uploaded again, nothing disposed)
+    const version = (g.getAttribute("aFill") as THREE.InstancedBufferAttribute).version;
+    packed = packShapes(many(12), packed);
+    fillShapesGeometry(g, packed);
+    expect([draw(), disposed, (g.getAttribute("aFill") as THREE.InstancedBufferAttribute).version]).toEqual([12, 0, version + 1]);
+    packed = packShapes(many(20), packed);
+    fillShapesGeometry(g, packed);
+    expect(draw()).toBe(20);
+    // (more than its arrays hold: new ones, the geometry disposed first, so that every one is drawn)
+    packed = packShapes(many(45), packed);
+    fillShapesGeometry(g, packed);
+    expect([draw(), disposed]).toEqual([45, 1]);
+    for (const [k, name] of SHAPE_ATTRIBUTES) expect([g.getAttribute(name).array, (g.getAttribute(name) as THREE.InstancedBufferAttribute).itemSize]).toEqual([packed[k], PER[k]]);
   });
 });
 
@@ -248,5 +286,14 @@ describe("the canvas's cursor as the pointer moves over what the page's WebGL dr
     expect(cursorChange(hit("set:1", "tab", "default"), null)).toEqual({ clear: true, set: null });
     expect(cursorChange(hit("step:2", "card"), null)).toEqual({ clear: false, set: null });
     expect(cursorChange(hit("set:1", "edge:n", "ns-resize"), hit("set:1", "tab", "default"))).toEqual({ clear: true, set: "default" });
+  });
+});
+
+describe("words broken after a hyphen", () => {
+  it("never before a figure: a pH-7 stays whole, broken at the space before it", () => {
+    const w = (textWidth("a pH-", 11) + textWidth("a pH-7", 11)) / 2;
+    expect(wrapText("a pH-7", 11, w).map((l) => l.text)).toEqual(["a", "pH-7"]);
+    // (before a letter: broken after it)
+    expect(wrapText("a pH-x", 11, w).map((l) => l.text)).toEqual(["a pH-", "x"]);
   });
 });

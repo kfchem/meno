@@ -2432,7 +2432,8 @@ of the direct wiring the maintainer asked for (2026-10-31).
 - **Given anything, laid out** as any result set: where its frame was,
   where that is clear - kept under its step's first exit's while it was
   drawn nowhere, as it is while shown (run `keepExitsUnder`) - else
-  where its step's results go. Given nothing again, its port alone.
+  where its step's results go. Given nothing again, its port alone,
+  folding into it as a held set does (*Folded, never cut*).
 - **Wired on, held**, as any exit's set (*Held results*); opened, shown,
   though it holds nothing.
 - **It lies nowhere**, as a held set lies nowhere: where a set or a card
