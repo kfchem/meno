@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { COLORS } from "../../../theme/colors";
 import { PORT, PX } from "../workflow/look";
-import { portColours, portControl, portOfKey, portParts, PORT_PX } from "./ports";
+import { dropOn, portColours, portControl, portOfKey, portParts, PORT_PX } from "./ports";
 
 describe("a workflow's port as WebGL draws it", () => {
   it("is as large as a hand takes it: 9 screen pixels near, never more than its own size on the page nor a sixth of what it is on", () => {
@@ -23,9 +23,31 @@ describe("a workflow's port as WebGL draws it", () => {
 
   it("says by its key what it is", () => {
     expect(portOfKey("port:take:12:mols")).toEqual({ take: { step: 12, port: "mols" } });
+    // (a port's id may hold a colon)
+    expect(portOfKey("port:take:12:a:b")).toEqual({ take: { step: 12, port: "a:b" } });
     expect(portOfKey("port:give:4")).toEqual({ give: { set: 4 } });
     expect(portOfKey("port:exit:12:kept")).toEqual({ exit: { step: 12, exit: "kept" } });
     expect(portOfKey("port:selection")).toEqual({ selection: true });
     expect(portOfKey("step:4")).toBeNull();
+  });
+});
+
+describe("where a wire let go lands", () => {
+  const exitSet = (x: { step: number; exit: string }) => (x.step === 4 && x.exit === "kept" ? 9 : undefined);
+  it("is a port the page's WebGL draws, found by its shape - an exit's taken as its set's giving", () => {
+    expect(dropOn("port:take:12:a:b", {}, exitSet)).toEqual({ take: { step: 12, port: "a:b" } });
+    expect(dropOn("port:give:3", {}, exitSet)).toEqual({ give: { set: 3 } });
+    expect(dropOn("port:exit:4:kept", {}, exitSet)).toEqual({ give: { set: 9 } });
+    // (it wins over what lies under it in the page's HTML)
+    expect(dropOn("port:give:3", { take: "5:mols" }, exitSet)).toEqual({ give: { set: 3 } });
+  });
+
+  it("or else one in the page's HTML - an opened card's own ports - or nothing", () => {
+    expect(dropOn(null, { take: "5:a:b" }, exitSet)).toEqual({ take: { step: 5, port: "a:b" } });
+    expect(dropOn(null, { give: "7" }, exitSet)).toEqual({ give: { set: 7 } });
+    // (an exit with no set, and nothing under it: nothing)
+    expect(dropOn("port:exit:4:failed", {}, exitSet)).toBeNull();
+    expect(dropOn(null, {}, exitSet)).toBeNull();
+    expect(dropOn("port:selection", {}, exitSet)).toBeNull();
   });
 });

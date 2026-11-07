@@ -31,3 +31,12 @@ describe("a workflow's small marks drawn by WebGL", () => {
     expect(recordLabel("r", 0, 0, "#3", false).region).toBeNull();
   });
 });
+
+describe("a workflow's small marks' least sizes", () => {
+  it("are a round badge at least 16 px across for a single figure, and a structure's number taking 16 px of height for its tip", () => {
+    const b = positionBadge("p", 0, 0, 3);
+    expect(b.shape.kind === "box" && b.shape.x1 - b.shape.x0).toBeCloseTo(pagePx(16), 9);
+    const r = recordLabel("r", 0, 0, "#3", true).region!;
+    expect("rect" in r && r.rect.y1 - r.rect.y0).toBeCloseTo(pagePx(16), 9);
+  });
+});

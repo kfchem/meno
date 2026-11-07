@@ -33,6 +33,8 @@ describe("the workflow's ports", () => {
     expect(layer).toMatch(/const PORTS_ORDER = PAGE_GL_ORDER \+ 4;/);
     // (a wire let go on one finds it by its shape, as the page's WebGL takes the pointer: no element under the pointer asked)
     expect(layer).toMatch(/hitAt\(\{ x: ev\.clientX, y: ev\.clientY \}, \(key\) => key\.startsWith\("port:"\)\)/);
+    // (and, where none is under it, on an opened card's own ports in its HTML - pageGl/ports `dropOn`)
+    expect(layer).toMatch(/dropOn\(port\?\.key \?\? null, \{ take: el\?\.closest\("\[data-take\]"\)\?\.getAttribute\("data-take"\), give: el\?\.closest\("\[data-give-set\]"\)\?\.getAttribute\("data-give-set"\) \}/);
   });
 
   it("are not drawn under a step's card opened over the rest - inside it, or half over its border - and are elsewhere", () => {

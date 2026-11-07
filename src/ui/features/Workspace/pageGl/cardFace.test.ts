@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { COLORS } from "../../../theme/colors";
 import { cardState } from "../workflow/cardState";
 import { CARD_H, CARD_W, PORT_STEP, portDown } from "../workflow/look";
-import { CARD, cardFace, clamped, type CardFaceOf } from "./cardFace";
+import { CARD, cardFace, cardLines, clamped, type CardFaceOf } from "./cardFace";
 import type { Box } from "./shapes";
 import { textWidth } from "./texts";
 import { pagePx } from "./units";
@@ -12,8 +12,8 @@ const card = (over: Partial<CardFaceOf> = {}): CardFaceOf => ({
   x: 2,
   y: 3,
   icon: "rings",
-  who: "xtb",
-  summary: "Optimise · GFN2-xTB",
+  who: "Tight",
+  summary: "Optimise · Method: Loose",
   state: cardState("ready", undefined, undefined, 0),
   selected: false,
   words: 1,
@@ -37,7 +37,7 @@ describe("a step's card, shut, drawn by WebGL", () => {
 
   it("says who does it in its words' colour and weight, what it does and how quietly, and its state in its tone, with their icons", () => {
     const d = cardFace(card({ state: cardState("done", "3 conformers", undefined, 0) }));
-    expect(words(d)).toEqual(["xtb", "Optimise · GFN2-xTB", "3 conformers"]);
+    expect(words(d)).toEqual(["Tight", "Optimise · Method: Loose", "3 conformers"]);
     expect(d.texts[0]).toMatchObject({ sizePx: 13, weight: 500, color: COLORS.ink });
     expect(d.texts[1]).toMatchObject({ sizePx: 11, color: COLORS.quiet });
     expect(d.texts[2]).toMatchObject({ sizePx: 11, color: COLORS.base });
@@ -94,5 +94,30 @@ describe("a step's card, shut, drawn by WebGL", () => {
     expect(cardFace(c).regions.map((r) => r.part)).toEqual(["card", "state"]);
     expect(cardFace(c, true).tip).toMatchObject({ text: "Failed · the program stopped\nRun 2" });
     expect(cardFace({ ...c, words: 0 }, true).tip).toBeNull();
+  });
+
+  it("is a card's least height with one line each, counts a log's line in its height, and draws its bar from its words' column, never past full", () => {
+    // (one line of summary and of state: its HTML's least height, inside its hair)
+    expect(cardLines({ summary: "Optimise", state: { text: "Ready", tone: "quiet" } }).height).toBe(CARD.h + 2 * CARD.hair);
+    const tall = { summary: "Optimise · a method · a solvent · converged to tight, a good way", state: { text: "Running 1:02", tone: "base" as const } };
+    expect(cardLines({ ...tall, said: "cycle 12" }).words - cardLines(tall).words).toBe(CARD.line);
+    const d = cardFace(card({ state: cardState("running", undefined, { since: 0, ended: 0, total: 2 }, 1000), progress: 1.5 }));
+    const [track, done] = d.shapes.slice(1) as Box[];
+    expect(track.x0).toBeCloseTo(2 + pagePx(CARD.hair + CARD.side + CARD.icon + CARD.gap), 9);
+    expect(done.x1 - done.x0).toBeCloseTo(track.x1 - track.x0, 9);
+  });
+
+  it("fades its icons alone in as its words fade out - three quarters in with its words a quarter read - and takes no pointer for its state's tip then", () => {
+    const c = card({ words: 0.25, state: { icon: "failed", text: "Failed", tone: "attention" }, stateTip: "Failed · why" });
+    const d = cardFace(c);
+    const by = (k: string) => d.icons.find((i) => i.key.endsWith(`:${k}`))!.opacity;
+    expect([by("kind"), by("big")]).toEqual([0.25, 0.75]);
+    expect(d.regions.map((r) => r.part)).toEqual(["card"]);
+  });
+
+  it("says its state in the colour it is given as it eases from one tone to the next, its tone's where none is given", () => {
+    const d = cardFace(card({ state: cardState("done", undefined, undefined, 0), toneColour: "#123456" }));
+    expect(d.texts.find((t) => t.key.endsWith(":state:0"))?.color).toBe("#123456");
+    expect(cardFace(card({ state: cardState("done", undefined, undefined, 0) })).texts.find((t) => t.key.endsWith(":state:0"))?.color).toBe(COLORS.base);
   });
 });

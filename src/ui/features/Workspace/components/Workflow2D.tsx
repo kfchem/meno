@@ -5,7 +5,7 @@ import PageHtml from "./PageHtml";
 import { useEditor, useEditorStore } from "../store";
 import type { EditorState, StepRunKept, WireEnd, WireTo, WorkflowSet, WorkflowStep } from "../store/types";
 import { pageAt } from "../utils/page";
-import { COLORS } from "../../../theme/colors";
+import { colourHex, COLORS, rgbOf } from "../../../theme/colors";
 import { MOV_PX } from "../constants";
 import { useStyle3D } from "../style3d";
 import SetFrame from "../workflow/SetFrame";
@@ -44,8 +44,8 @@ import { lookFor, useInstalled } from "../../../../lib/plugins/installed";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { dragSelection } from "../utils/dragSelection";
 import PageLayer from "../pageGl/PageLayer";
-import { cardFace, type CardFaceOf } from "../pageGl/cardFace";
-import { portOfKey, portParts, type PortAt } from "../pageGl/ports";
+import { cardFace, TONE, type CardFaceOf } from "../pageGl/cardFace";
+import { dropOn, portOfKey, portParts, type PortAt } from "../pageGl/ports";
 import { PAGE_GL_ORDER } from "../pageGl/PageShapes";
 import { useAges, useEasedValues, useFaded } from "../pageGl/faded";
 import { useHitAt, type HitHandlers, type PagePointer } from "../pageGl/PageHits";
@@ -749,12 +749,12 @@ export default function Workflow2D() {
 
   /** What lies under the pointer where a wire is let go: a port that takes or gives, empty space, or something else. */
   const dropTarget = (ev: PointerEvent): { take: WireTo } | { give: WireEnd } | "empty" | null => {
-    // (a port: a step's input, or a set's giving - found by its shape on the page, as the page's WebGL takes the pointer)
+    // (a port: a step's input, or a set's giving - found by its shape on the page, as the page's WebGL takes the pointer - or one
+    //  on a card opened over the rest, in its HTML)
     const port = hitAt({ x: ev.clientX, y: ev.clientY }, (key) => key.startsWith("port:"));
-    const of = port ? portOfKey(port.key) : null;
-    if (of && "take" in of) return { take: of.take };
-    if (of && "give" in of) return { give: of.give };
     const el = document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null;
+    const on = dropOn(port?.key ?? null, { take: el?.closest("[data-take]")?.getAttribute("data-take"), give: el?.closest("[data-give-set]")?.getAttribute("data-give-set") }, (x) => exitSets.get(`${x.step}:${x.exit}`)?.id);
+    if (on) return on;
     if (el !== gl.domElement) return null;
     const s = store.getState();
     const onSomething =
@@ -1313,9 +1313,25 @@ export default function Workflow2D() {
   };
   // the shut cards, coming and going as their HTML did, drawn by WebGL in one layer over the wires (pageGl/cardFace)
   const faces = useFaded(faceList, (f) => f.key);
+  // (how far its jobs are, eased as its HTML bar's width was, and its state's colour eased from one tone to the next, as its words' were)
+  const cardEased = useEasedValues(
+    new Map(
+      faceList.flatMap((f) => {
+        const [r, g, b] = rgbOf(TONE[f.state.tone]);
+        return [[`${f.key}:r`, r], [`${f.key}:g`, g], [`${f.key}:b`, b], ...(f.progress != null ? [[`${f.key}:bar`, Math.min(1, f.progress)] as [string, number]] : [])] as [string, number][];
+      }),
+    ),
+    200,
+  );
   const cards = { shapes: [] as Shape[], texts: [] as PageText[], icons: [] as PageIcon[], regions: [] as Region[], tip: null as PageTipAt | null };
   for (const { item, opacity, leaving } of faces) {
-    const d = cardFace({ ...item, opacity }, statePointed === stepOfKey(item.key));
+    const eased = (part: string) => cardEased.get(`${item.key}:${part}`);
+    const rgb = [eased("r"), eased("g"), eased("b")];
+    const bar = eased("bar");
+    const d = cardFace(
+      { ...item, opacity, ...(rgb.every((v) => v != null) ? { toneColour: colourHex(rgb[0]!, rgb[1]!, rgb[2]!) } : {}), ...(item.progress != null && bar != null ? { progress: bar } : {}) },
+      statePointed === stepOfKey(item.key),
+    );
     cards.shapes.push(...d.shapes);
     cards.texts.push(...d.texts);
     cards.icons.push(...d.icons);

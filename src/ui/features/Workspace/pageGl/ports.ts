@@ -14,7 +14,7 @@ import type { Region } from "./hits";
 import type { Ring } from "./shapes";
 import type { Control } from "./units";
 
-/** A port where it stands on the page; what it is on, how tall (page px); what it says to the page's tip and a screen reader; whether it takes the pointer. */
+/** A port where it stands on the page; what it is on, how tall (page px); what it is called - for the page's tip and a screen reader, which say it from part 9 of drawing the page by WebGL: nothing reads it yet; whether it takes the pointer. */
 export type PortAt = { key: string; x: number; y: number; ofPx?: number; label: string; noHits?: true };
 
 /** The screen pixels a port is drawn at where the page is near, and taken hold of over. */
@@ -52,5 +52,31 @@ export function portOfKey(key: string): { take: { step: number; port: string } }
   if (side === "exit" && a != null && rest.length) return { exit: { step: Number(a), exit: rest.join(":") } };
   if (side === "give" && a != null) return { give: { set: Number(a) } };
   if (side === "selection") return { selection: true };
+  return null;
+}
+
+/**
+ * Where a wire let go lands: on a port the page's WebGL draws (`key`, found
+ * by its shape) - an exit's taken as its set's giving - or else on one in
+ * the page's HTML, an opened card's own (its `data-take` "step:port", its
+ * `data-give-set`); none where neither is under the pointer.
+ */
+export function dropOn(
+  key: string | null,
+  html: { take?: string | null; give?: string | null },
+  setOfExit: (exit: { step: number; exit: string }) => number | undefined,
+): { take: { step: number; port: string } } | { give: { set: number } } | null {
+  const of = key ? portOfKey(key) : null;
+  if (of && "take" in of) return { take: of.take };
+  if (of && "give" in of) return { give: of.give };
+  if (of && "exit" in of) {
+    const set = setOfExit(of.exit);
+    if (set != null) return { give: { set } };
+  }
+  if (html.take) {
+    const at = html.take.indexOf(":");
+    if (at > 0) return { take: { step: Number(html.take.slice(0, at)), port: html.take.slice(at + 1) } };
+  }
+  if (html.give) return { give: { set: Number(html.give) } };
   return null;
 }

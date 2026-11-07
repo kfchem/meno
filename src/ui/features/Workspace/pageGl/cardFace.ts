@@ -42,7 +42,7 @@ export const CARD = {
 
 /** A state's tone: quiet (grey), Meno's colour (done, running), or attention (failed, refused). */
 export type CardTone = "quiet" | "base" | "attention";
-const TONE: Record<CardTone, string> = { quiet: COLORS.quiet, base: COLORS.base, attention: COLORS.attention };
+export const TONE: Record<CardTone, string> = { quiet: COLORS.quiet, base: COLORS.base, attention: COLORS.attention };
 
 /** What a card says, shut, and how it stands (Workflow2D, from what StepCard is told). */
 export type CardFaceOf = {
@@ -61,6 +61,8 @@ export type CardFaceOf = {
   said?: string;
   /** How far its jobs are, as a share, while it runs. */
   progress?: number;
+  /** Its state's colour as it eases from one tone to the next (Workflow2D): its tone's, where none is given. */
+  toneColour?: string;
   /** Its full words, said in the tip as its state is pointed at: the state's, and the run's name. */
   stateTip?: string;
   selected: boolean;
@@ -132,7 +134,7 @@ export function cardFace(c: CardFaceOf, statePointed = false): CardDrawn {
   laid.summary.forEach((l, i) => text(`summary:${i}`, textLeft, y + i * CARD.line, CARD.line, l, 11, COLORS.quiet));
   y += laid.summary.length * CARD.line + CARD.stateTop;
   // its state
-  const tone = TONE[c.state.tone];
+  const tone = c.toneColour ?? TONE[c.state.tone];
   if (c.state.icon && c.words > 0) icon("state", c.state.icon, left + CARD.icon / 2 - 1, y + CARD.line / 2, CARD.stateIcon, tone, c.words, c.state.turning);
   const stateTop = y;
   laid.state.forEach((l, i) => text(`state:${i}`, textLeft, y + i * CARD.line, CARD.line, l, 11, tone));

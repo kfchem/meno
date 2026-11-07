@@ -48,10 +48,14 @@ export function colourCss(r: number, g: number, b: number, alpha = 1): string {
 
 /** Two colours "#rrggbb" mixed `t` of the way from `a` to `b`, in sRGB as CSS eases a colour: a port's fill as it is pointed at. */
 export function colourMix(a: string, b: string, t: number): string {
-  const bytes = (hex: string) => [1, 3, 5].map((k) => parseInt(hex.slice(k, k + 2), 16));
-  const [p, q] = [bytes(a), bytes(b)];
+  const [p, q] = [rgbOf(a), rgbOf(b)];
   const k = Math.min(1, Math.max(0, t));
   return colourHex(p[0] + (q[0] - p[0]) * k, p[1] + (q[1] - p[1]) * k, p[2] + (q[2] - p[2]) * k);
+}
+
+/** A "#rrggbb" colour's red, green and blue, each 0-255. */
+export function rgbOf(hex: string): [number, number, number] {
+  return [1, 3, 5].map((k) => parseInt(hex.slice(k, k + 2), 16)) as [number, number, number];
 }
 
 /**

@@ -3,7 +3,7 @@ import { PAGE_PX } from "../utils/pageScale";
 import { controlLine, controlMost, controlSize, lineWidth, pagePx, type Control } from "./units";
 import { inDrawOrder, packShapes, PER, type Shape } from "./shapes";
 import { cursorChange, hitAt, type Hit, type Region } from "./hits";
-import { fitted, placed, textWidth } from "./texts";
+import { fitted, placed, textWidth, wrapText } from "./texts";
 import { cellOf } from "./icons";
 
 describe("the page's own lengths", () => {
@@ -248,5 +248,14 @@ describe("the canvas's cursor as the pointer moves over what the page's WebGL dr
     expect(cursorChange(hit("set:1", "tab", "default"), null)).toEqual({ clear: true, set: null });
     expect(cursorChange(hit("step:2", "card"), null)).toEqual({ clear: false, set: null });
     expect(cursorChange(hit("set:1", "edge:n", "ns-resize"), hit("set:1", "tab", "default"))).toEqual({ clear: true, set: "default" });
+  });
+});
+
+describe("words broken after a hyphen", () => {
+  it("never before a figure: a pH-7 stays whole, broken at the space before it", () => {
+    const w = (textWidth("a pH-", 11) + textWidth("a pH-7", 11)) / 2;
+    expect(wrapText("a pH-7", 11, w).map((l) => l.text)).toEqual(["a", "pH-7"]);
+    // (before a letter: broken after it)
+    expect(wrapText("a pH-x", 11, w).map((l) => l.text)).toEqual(["a pH-", "x"]);
   });
 });
