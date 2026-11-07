@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type * as THREE from "three";
 import PageHtml from "../components/PageHtml";
 import { useEasedValues } from "./faded";
-import { caretPx, fieldParts, indexAt, wordAt } from "./field";
+import { caretPx, fieldParts, indexAt, pressAt } from "./field";
 import PageLayer from "./PageLayer";
 import type { HitHandlers } from "./PageHits";
 import { pageAtScreen } from "../utils/page";
@@ -16,8 +16,6 @@ export const FIELD_ORDER = PAGE_GL_ORDER + 3;
 /** How long the caret stays, then goes, at rest; how long after a key it stays still. */
 const BLINK_MS = 530;
 const STILL_MS = 600;
-/** How soon a second press is a double one's, in ms. */
-const DOUBLE_MS = 400;
 
 /**
  * A short field typed into where it stands on the page - a set's name,
@@ -62,7 +60,7 @@ export default function PageField({
   // (a press of its own: the field keeps its focus, not finished by the blur the press brings)
   const pressed = useRef(false);
   const done = useRef(false);
-  const lastDown = useRef(0);
+  const lastDown = useRef(-Infinity);
   const { camera, gl } = useThree();
   const zoom = (camera as THREE.OrthographicCamera).zoom || 1;
 
@@ -114,28 +112,25 @@ export default function PageField({
   };
   const on: HitHandlers = {
     down: (_key, _part, e) => {
+      // (the field's own press: the blur it brings finishes nothing - until the press is let go, however it ends)
       pressed.current = true;
       const i = indexAt(value, pxAt(e.page.x), sizePx, weight);
-      const now = performance.now();
-      if (now - lastDown.current < DOUBLE_MS) {
-        lastDown.current = 0;
-        const [a, b] = wordAt(value, i);
-        place(a, b);
-        return;
-      }
-      lastDown.current = now;
-      const anchor = (e.event as PointerEvent).shiftKey ? sel[0] : i;
-      place(anchor, i);
+      const press = pressAt({ value, i, at: performance.now(), lastDown: lastDown.current, shift: (e.event as PointerEvent).shiftKey, selected: sel });
+      lastDown.current = press.lastDown;
+      place(press.select[0], press.select[1]);
       // (a drag from it selects, wherever the pointer goes meanwhile)
+      const anchor = press.select[0];
       const move = (m: PointerEvent) => place(anchor, indexAt(value, pxAt(pageAtScreen({ x: m.clientX, y: m.clientY }, gl.domElement, camera).x), sizePx, weight));
       const up = () => {
         window.removeEventListener("pointermove", move, true);
         window.removeEventListener("pointerup", up, true);
+        window.removeEventListener("pointercancel", up, true);
         pressed.current = false;
         input.current?.focus({ preventScroll: true });
       };
-      window.addEventListener("pointermove", move, true);
+      if (press.drag) window.addEventListener("pointermove", move, true);
       window.addEventListener("pointerup", up, true);
+      window.addEventListener("pointercancel", up, true);
     },
   };
 

@@ -91,3 +91,18 @@ export function fieldParts(f: FieldOf): { shapes: Shape[]; texts: PageText[]; re
   const texts: PageText[] = f.value ? [{ key: `${f.key}:words`, x: f.x, y: f.y, anchor: "start", baseline: "middle", text: f.value, sizePx: f.sizePx, color: COLORS.ink, weight, z: z + 1 }] : [];
   return { shapes, texts, region: { key: f.key, part: "field", rect: box, z: z + 3, cursor: "text" } };
 }
+
+/** How soon a second press is a double one's, in ms. */
+export const DOUBLE_MS = 400;
+
+/**
+ * What a press in a field does (PageField): a second within `DOUBLE_MS` of
+ * the last selects the word there, and drags nothing; else the caret goes
+ * there - or, with shift, what is selected reaches there from where it
+ * began - and a drag from it selects. `lastDown`: when the next press is
+ * counted from (none after a double press: a third is a single one).
+ */
+export function pressAt(p: { value: string; i: number; at: number; lastDown: number; shift: boolean; selected: readonly [number, number] }): { select: [number, number]; drag: boolean; lastDown: number } {
+  if (p.at - p.lastDown < DOUBLE_MS) return { select: wordAt(p.value, p.i), drag: false, lastDown: -Infinity };
+  return { select: [p.shift ? p.selected[0] : p.i, p.i], drag: true, lastDown: p.at };
+}

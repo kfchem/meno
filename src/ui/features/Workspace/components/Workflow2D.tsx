@@ -1190,6 +1190,8 @@ export default function Workflow2D() {
       {
         const line = wireRefused?.step === s.id ? refusedState(wireRefused.said) : cardState(state, s.ran?.said, run?.view, Date.now(), missing);
         const inputs = inputsFor(s.kind, byOf(s));
+        // (under its opened HTML: its inputs' names are the HTML's, and its state's icon still - nothing drawn twice, nothing turning unseen)
+        const under = openStep === s.id || shutting === s.id;
         faceList.push({
           key: `step:${s.id}`,
           x: s.x,
@@ -1197,13 +1199,13 @@ export default function Workflow2D() {
           icon: info.icon,
           who,
           summary: [info.name, how && how !== line.text ? how : ""].filter(Boolean).join(" \u00b7 "),
-          state: line,
+          state: under ? { ...line, turning: false } : line,
           ...(state === "running" && run?.view.line ? { said: run.view.line } : {}),
           ...(state === "running" && run && (run.view.share != null || run.view.total > 1) ? { progress: run.view.share ?? run.view.ended / run.view.total } : {}),
           stateTip: [line.text, s.ran?.named].filter(Boolean).join("\n"),
           selected: selFlow.steps.has(s.id),
           words,
-          inputs: inputs.length > 1 ? inputs.map((p) => p.name) : [],
+          inputs: inputs.length > 1 && !under ? inputs.map((p) => p.name) : [],
         });
       }
       if (openStep !== s.id && shutting !== s.id) return [];
