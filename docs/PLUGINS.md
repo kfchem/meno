@@ -578,6 +578,33 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
   most, and wrote 4.9 MB.
   The set they make holds them itself, off the page, as any set of more
   than 50 does.
+- **As many as the molecule needs, in rounds** (2026-11-05;
+  Workspace/chem/conformerRounds). Where a plugin's conformers role also
+  says `draws` - its search gives another set of tries for each draw it
+  is sent, the same draw and options the same set - Meno asks it in
+  rounds rather than once: the first round the molecule's own count
+  (above) or the chemist's *First round*, the second as many again, so
+  that "nothing new" is never judged on a round smaller than the one
+  before, then each twice the one before, up to *Tried at most* (5000
+  unless the chemist says fewer). After each round, a conformer is new
+  where it lies within the chemist's window of the lowest found so far,
+  by the search's own energies, and is none of those found before by
+  Meno's one definition of the same conformer (WORKFLOWS.md, *The same
+  conformer*). It ends where a round brings none new, at the most it
+  tries, or - on the page, where a search takes ten minutes at most, the
+  maintainer's ruling of 2026-10-29 - where the next round would take it
+  past its time; how it ended is said with how it was made (*Rounds*).
+  - The window has no default: no width has a basis to stand as one. It
+    is the chemist's (*New conformers within*, in kcal/mol): in Settings,
+    Chemistry, 3D, for the page, and among a *Conformers* step's options,
+    Settings' its default. Until given, the page's 3D structure says so,
+    and the step is not ready. As a guide, 2.73 kcal/mol at 298.15 K is
+    a conformer a hundredth as populated as the lowest (RT ln 100).
+  - A search that takes no draws is asked once, as before. So is one
+    whose conformers come back with no energies: there is nothing to
+    tell a new low one by. A *Conformers* step on molecules in 3D, run
+    as jobs, asks each once with its own count, and says so.
+  - Each stereoisomer is asked for alone, in rounds of its own.
 - **Which conformers are the same is Meno's** (the plugin boundary,
   2026-10-31; WORKFLOWS.md, *The same conformer*). RDKit's conformers come
   back every one, as RDKit made them (below): Meno's own page keeps each
@@ -1057,11 +1084,12 @@ The same for every plugin and for Meno's own parts:
     configuration of the `open` elements, its SMILES and, with `drawings`,
     a drawing of it - or why it cannot be one - and `free` where none
     holds in 3D); `conformers {molblock, isomers?, count,
-    holds?, options}` (structures in 3D and their conformers - of
+    draw?, holds?, options}` (structures in 3D and their conformers - of
     each configuration `isomers` gives, which Meno chose, or of the
     structure as drawn; a metal complex held as `holds` says, lib/chem/
     metalHolds - `count`
-    tried - Meno's number, where the role says `tries` - with the role's
+    tried - Meno's number, where the role says `tries`; `draw`, which
+    set of tries, where it also says `draws` - with the role's
     options: every one made, in the order made, each its energy - or,
     where the molecule's are none, those of the model it was optimised in,
     `modelEnergies` - each stereoisomer made itself);

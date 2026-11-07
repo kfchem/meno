@@ -95,6 +95,16 @@ export function shownOptions<O extends Option>(options: readonly O[], values: Op
   return options.filter((o) => !o.when || o.when.in.includes(all[o.when.id] as string | number | boolean));
 }
 
+/** Options in parts, each ending at one with a note - which a form shows right under its row (Settings, Chemistry) - and the rest after. */
+export function notedParts<O extends Option>(options: readonly O[]): O[][] {
+  const parts: O[][] = [[]];
+  for (const o of options) {
+    parts[parts.length - 1].push(o);
+    if (o.note) parts.push([]);
+  }
+  return parts.filter((p) => p.length);
+}
+
 /** How many choices are shown side by side, each to pick; more, and they are a list to pick from. */
 export const MANY_CHOICES = 5;
 

@@ -156,6 +156,14 @@ describe("a plugin's manifest", () => {
       { role: "smiles", programs: [], options: [] },
     ]);
     expect(acceptManifest({ ...good, reads: [], kinds: [], roles: [{ role: "conformers", tries: "yes" }] })?.roles).toEqual([{ role: "conformers", programs: [], options: [] }]);
+    // (one that gives another set of tries for each draw: said with tries, on the conformers role alone, as true - Meno asks in rounds)
+    const draws = [{ role: "conformers", tries: true, draws: true }, { role: "smiles", tries: true, draws: true }];
+    expect(acceptManifest({ ...good, reads: [], kinds: [], roles: draws })?.roles).toEqual([
+      { role: "conformers", programs: [], options: [], tries: true, draws: true },
+      { role: "smiles", programs: [], options: [] },
+    ]);
+    for (const role of [{ role: "conformers", draws: true }, { role: "conformers", tries: true, draws: "yes" }])
+      expect(acceptManifest({ ...good, reads: [], kinds: [], roles: [role] })?.roles?.[0]).not.toHaveProperty("draws");
     // (a role it does by running a program: the program by name - never a path - each once)
     const render = [{ role: "render", programs: ["lumen", "../bin/sh", "/usr/bin/lumen", "lumen"] }];
     expect(acceptManifest({ ...good, reads: [], kinds: [], roles: render })?.roles).toEqual([{ role: "render", programs: ["lumen"], options: [] }]);

@@ -83,9 +83,13 @@ export type ChemRequests = {
   conformers: {
     /**
      * `options`: those the plugin declares for the role (its manifest's
-     * roleOptions), as chosen in Settings.
+     * roleOptions), as chosen in Settings. `draw`: which set of `count`
+     * tries, where the search is asked in rounds (chem/conformerRounds) -
+     * each draw another set, the same draw and options the same set; sent
+     * only to a plugin whose role says it takes draws (lib/plugins/manifest
+     * `draws`).
      */
-    args: { molblock: string; isomers?: Configuration[]; count?: number; holds?: MetalHolds; options?: OptionValues };
+    args: { molblock: string; isomers?: Configuration[]; count?: number; draw?: number; holds?: MetalHolds; options?: OptionValues };
     result: { isomers: Omit<Conformers, "chosen">[] };
   };
   /**

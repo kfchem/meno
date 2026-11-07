@@ -189,6 +189,17 @@ export type ChemistrySettings = {
   sought3d?: "fixed";
   /** The number tried where `sought3d` is "fixed": 1 to `MOST_CONFORMERS` - unset, `RING_CONFORMERS`. */
   count3d?: number;
+  /**
+   * As many as the molecule needs, asked in rounds where the search takes
+   * draws (lib/chem/conformersSought `RoundsChosen`) - the page's, and a
+   * Conformers step's to start from: the window for new conformers, in
+   * kcal/mol, the chemist's own - unset, none, and each search asks for
+   * one; the first round - unset, the molecule's own count; the most tried
+   * - unset, `MOST_CONFORMERS`.
+   */
+  within3d?: number;
+  first3d?: number;
+  most3d?: number;
 };
 
 export type NetworkSettings = {
@@ -400,13 +411,17 @@ function acceptUpdates(raw: unknown): UpdateSettings {
 function acceptChemistry(raw: unknown): ChemistrySettings {
   const d = DEFAULT_APP_SETTINGS.chemistry;
   if (typeof raw !== "object" || raw === null) return d;
-  const { valenceWarnings, window3d, sought3d, count3d } = raw as Record<string, unknown>;
+  const { valenceWarnings, window3d, sought3d, count3d, within3d, first3d, most3d } = raw as Record<string, unknown>;
+  const conformers = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n) && n >= 1 && n <= MOST_CONFORMERS;
   return {
     valenceWarnings:
       typeof valenceWarnings === "boolean" ? valenceWarnings : d.valenceWarnings,
     ...(typeof window3d === "number" && Number.isFinite(window3d) && window3d >= 0 && window3d <= WINDOW_3D_MOST ? { window3d } : {}),
     ...(sought3d === "fixed" ? { sought3d } : {}),
-    ...(typeof count3d === "number" && Number.isInteger(count3d) && count3d >= 1 && count3d <= MOST_CONFORMERS ? { count3d } : {}),
+    ...(conformers(count3d) ? { count3d } : {}),
+    ...(typeof within3d === "number" && Number.isFinite(within3d) && within3d >= 0 ? { within3d } : {}),
+    ...(conformers(first3d) ? { first3d } : {}),
+    ...(conformers(most3d) ? { most3d } : {}),
   };
 }
 

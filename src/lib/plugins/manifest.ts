@@ -205,6 +205,14 @@ export type RoleDecl = {
   options: Option[];
   /** Its conformer search takes how many to try, which Meno works out or the chemist sets (*Conformers sought*: lib/chem/conformersSought) and sends: the conformers role's alone. */
   tries?: true;
+  /**
+   * Its conformer search, taking a number of tries, gives another set of
+   * tries for each draw Meno asks for (`draw`, from 0) - and the same set
+   * for the same draw and options - so that Meno can ask in rounds until no
+   * new conformer comes (*As many as the molecule needs*): the conformers
+   * role's alone, with `tries`.
+   */
+  draws?: true;
   /** The looks it makes, each declared in full, where the role has looks (Render: docs/RENDER.md); none declared, none said. */
   looks?: LookDecl[];
   /** The motions it makes of a film, each declared in full, where the role has them (Render); none declared, none said. */
@@ -1125,6 +1133,7 @@ export function acceptManifest(raw: unknown): Manifest | null {
             programs,
             options: "options" in ROLES[r.role] ? acceptOptions(r.options) : [],
             ...(r.role === "conformers" && r.tries === true ? { tries: true as const } : {}),
+            ...(r.role === "conformers" && r.tries === true && r.draws === true ? { draws: true as const } : {}),
             ...(looks.length ? { looks } : {}),
             ...(motions.length ? { motions } : {}),
             ...(unsure ? { unsure } : {}),

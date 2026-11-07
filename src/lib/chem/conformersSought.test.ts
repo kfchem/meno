@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readSmiles } from "./smiles";
-import { canFlip, conformersSought, conformersSoughtOf, FEW_CONFORMERS, MOST_CONFORMERS, RING_CONFORMERS, soughtNumber, soughtOptions, turningBonds, type SoughtAtom, type SoughtBond } from "./conformersSought";
+import { factor, GAS_CONSTANT_HARTREE } from "../units";
+import { canFlip, conformersSought, conformersSoughtOf, FEW_CONFORMERS, MOST_CONFORMERS, RING_CONFORMERS, roundsAsked, soughtNumber, soughtOptions, turningBonds, WITHIN_GUIDE, WITHIN_NEEDED, type SoughtAtom, type SoughtBond } from "./conformersSought";
 
 /** A molecule as the count reads it, from SMILES written with its double bonds (a Kekulé structure, as Meno draws one). */
 function mol(smiles: string): { atoms: SoughtAtom[]; bonds: SoughtBond[] } {
@@ -159,5 +160,45 @@ describe("the chemist's choice", () => {
     expect(soughtOptions().map((o) => o.id)).toEqual(["sought", "count"]);
     expect(soughtOptions("fixed", 40).map((o) => o.default)).toEqual(["fixed", 40]);
     expect(MOST_CONFORMERS).toBe(5000);
+  });
+});
+
+describe("as many as the molecule needs, asked in rounds", () => {
+  it("is offered its window, its first round and the most it tries only where the search takes draws - the window none until given", () => {
+    expect(soughtOptions("needed", 200, {}).map((o) => [o.id, o.when?.in ?? null])).toEqual([
+      ["sought", null],
+      ["count", ["fixed"]],
+      ["within", ["needed"]],
+      ["first", ["needed"]],
+      ["most", ["needed"]],
+    ]);
+    const [, , within, first, most] = soughtOptions("needed", 200, {});
+    expect(within.type === "number" && Number.isNaN(within.default)).toBe(true);
+    expect(within.note).toBe(WITHIN_GUIDE);
+    expect([first.default, first.type === "number" && first.unset, most.default]).toEqual([0, 0, MOST_CONFORMERS]);
+    // (Settings' own, where the chemist set them)
+    expect(soughtOptions("needed", 200, { within: 2, first: 100, most: 1000 }).slice(2).map((o) => o.default)).toEqual([2, 100, 1000]);
+  });
+
+  it("says its guide's numbers one with the other, and that its energies are the force field's", () => {
+    const [, kelvin, kcal, ratio, logOf] = /at ([\d.]+) K one ([\d.]+)\skcal\/mol above the lowest weighs 1\/(\d+) as much \(RT\sln\s(\d+)\)/.exec(WITHIN_GUIDE)!;
+    // (its number and unit, and RT ln 100, each one unbroken: no-break spaces, as the Energy window's guide has them)
+    expect(WITHIN_GUIDE).toContain("2.73\u00a0kcal/mol");
+    expect(WITHIN_GUIDE).toContain("(RT\u00a0ln\u00a0100)");
+    expect(logOf).toBe(ratio);
+    expect((GAS_CONSTANT_HARTREE * Number(kelvin) * Math.log(Number(ratio)) * factor("Eh", "kcal/mol")).toFixed(2)).toBe(kcal);
+    expect(WITHIN_GUIDE).toContain("force field");
+  });
+
+  it("is asked with the chemist's window, the first round theirs else the molecule's own, kept to the most - or needs a window", () => {
+    const of = (v: Record<string, string | number | boolean>) => roundsAsked(v, () => 50);
+    expect(of({ sought: "needed", within: 2.5, first: 0, most: 5000 })).toEqual({ window: 2.5, first: 50, most: 5000 });
+    expect(of({ sought: "needed", within: 2.5, first: 120, most: 5000 })).toEqual({ window: 2.5, first: 120, most: 5000 });
+    expect(of({ sought: "needed", within: 0, first: 900, most: 300 })).toEqual({ window: 0, first: 300, most: 300 });
+    expect(of({ sought: "needed", within: 2.5, first: 0, most: 9000 })).toEqual({ window: 2.5, first: 50, most: MOST_CONFORMERS });
+    for (const within of [Number.NaN, -1, Number.POSITIVE_INFINITY, ""]) expect(of({ sought: "needed", within, first: 0, most: 5000 })).toEqual({ needs: WITHIN_NEEDED });
+    // (a number of the chemist's own, or a search offered no rounds: not asked in rounds)
+    expect(of({ sought: "fixed", within: 2.5, count: 40 })).toBeNull();
+    expect(of({ sought: "needed", count: 40 })).toBeNull();
   });
 });
