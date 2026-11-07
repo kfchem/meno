@@ -110,7 +110,7 @@ describe("a step added from an exit's port (docs/WORKFLOWS.md, *A step added fro
     expect(heldSets(added).has(2)).toBe(true);
   });
 
-  it("from a later exit, level with that port where it can be - lower, clear of what is there, where it cannot", () => {
+  it("from a later exit, level with that port where it can be - where it cannot, plainly beneath the card it comes from, clear of what is there", () => {
     const doc = filter();
     const added = addStepFrom(doc, "energy", { set: 3 }, 900, -700, {}, "xtb");
     const s = lastStep(added);
@@ -119,6 +119,8 @@ describe("a step added from an exit's port (docs/WORKFLOWS.md, *A step added fro
     // (the kept set's frame, shown and not run yet, stands where the card would be level with the rest's port)
     expect(exitStart(doc.steps![0], "rest").y + portDown(0)).toBeGreaterThan(kept.y0 - BETWEEN);
     expect(s.y).toBeLessThanOrEqual(kept.y0 - BETWEEN + 1e-9);
+    // (a step down, not a row out of line: its top the page's room under the card it comes from, drawn as tall as it can be)
+    expect(s.y).toBeLessThanOrEqual(doc.steps![0].y - CARD_TALL - BETWEEN + 1e-9);
     // (clear of all that was there but the set its wire comes from)
     expect(clearOf(doc, frameAt(s.x, s.y, CARD_W, CARD_H), { set: 3 })).toBe(true);
     expect(added.wires!.map((w) => w.from)).toEqual([{ set: 3 }]);
