@@ -47,6 +47,23 @@ export function kekuleOrders(atoms: readonly KekuleAtom[], bonds: readonly Kekul
 }
 
 /**
+ * Per bond, its order with those given as aromatic (4) written out as a
+ * Kekulé structure (`kekuleOrders`), the rest as given: what an atom's
+ * hydrogens are counted from by its valence. Counted as 1.5 each, an
+ * aromatic bond rounds a pyrrole's N, two such bonds and no H stated, to
+ * none. An aromatic bond no Kekulé structure gives a double bond stays
+ * single (1), as `kekuleOrders` leaves it - so its atoms count it as a
+ * single bond, and may carry a hydrogen more than 1.5 would have given,
+ * never fewer. (No aromatic bond at all: the orders as given, untouched -
+ * a shortcut only.)
+ */
+export function valenceOrders(atoms: readonly KekuleAtom[], bonds: readonly { a: number; b: number; order: number }[]): number[] {
+  if (!bonds.some((b) => b.order === AROMATIC_BOND)) return bonds.map((b) => b.order);
+  const kekule = kekuleOrders(atoms, bonds.map((b) => ({ a1: b.a, a2: b.b, order: b.order })));
+  return bonds.map((b, i) => (b.order === AROMATIC_BOND ? kekule[i] : b.order));
+}
+
+/**
  * Per bond, the order to draw it with (`kekuleOrders`); and the atoms read
  * as carrying an H the input did not state, where another atom of their
  * ring system could have carried it instead (`hChosen`, by index): which
