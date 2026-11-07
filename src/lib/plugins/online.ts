@@ -11,7 +11,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
 import { askToConnect, useNetwork, type ConsentRequest } from "../net/network";
 import { acceptCatalogue, CATALOGUE_HOSTS, CATALOGUE_PURPOSE, type Catalogue, type CatalogueEntry } from "./catalogue";
-import { refreshPlugins } from "./known";
+import { refreshPlugins, setListedNames } from "./known";
 import { acceptManifest } from "./manifest";
 
 /**
@@ -83,6 +83,7 @@ export async function listOnline(again = false, ask: typeof invoke = invoke): Pr
   if (!got) return useOnline.setState(offline ? { state: "failed", problem: `Listing them needs the network: ${offline}.` } : { state: "unlisted" });
   const read = acceptCatalogue(got.catalogue);
   if ("why" in read) return useOnline.setState({ state: "failed", catalogue: undefined, problem: `The list of plugins online could not be read: ${read.why}.` });
+  setListedNames(read.catalogue.plugins);
   useOnline.setState({ state: "listed", catalogue: read.catalogue, fetchedAt: got.fetchedAt, kept: got.kept ?? offline, problem: undefined });
 }
 
@@ -97,6 +98,7 @@ export async function keptOnline(ask: typeof invoke = invoke): Promise<void> {
   const got = (await (ask("catalogue_get", { fetch: false }) as Promise<Got | null>).catch(() => null)) ?? null;
   const read = got ? acceptCatalogue(got.catalogue) : null;
   if (!read || "why" in read || useOnline.getState().state !== "unlisted") return;
+  setListedNames(read.catalogue.plugins);
   useOnline.setState({ state: "listed", catalogue: read.catalogue, fetchedAt: got!.fetchedAt, kept: got!.kept });
 }
 

@@ -156,6 +156,14 @@ describe("a plugin's manifest", () => {
       { role: "smiles", programs: [], options: [] },
     ]);
     expect(acceptManifest({ ...good, reads: [], kinds: [], roles: [{ role: "conformers", tries: "yes" }] })?.roles).toEqual([{ role: "conformers", programs: [], options: [] }]);
+    // (one that gives another set of tries for each draw: said with tries, on the conformers role alone, as true - Meno asks in rounds)
+    const draws = [{ role: "conformers", tries: true, draws: true }, { role: "smiles", tries: true, draws: true }];
+    expect(acceptManifest({ ...good, reads: [], kinds: [], roles: draws })?.roles).toEqual([
+      { role: "conformers", programs: [], options: [], tries: true, draws: true },
+      { role: "smiles", programs: [], options: [] },
+    ]);
+    for (const role of [{ role: "conformers", draws: true }, { role: "conformers", tries: true, draws: "yes" }])
+      expect(acceptManifest({ ...good, reads: [], kinds: [], roles: [role] })?.roles?.[0]).not.toHaveProperty("draws");
     // (a role it does by running a program: the program by name - never a path - each once)
     const render = [{ role: "render", programs: ["lumen", "../bin/sh", "/usr/bin/lumen", "lumen"] }];
     expect(acceptManifest({ ...good, reads: [], kinds: [], roles: render })?.roles).toEqual([{ role: "render", programs: ["lumen"], options: [] }]);
@@ -185,6 +193,13 @@ describe("a plugin's manifest", () => {
     expect(unsure({ below: 0.6, basis: " Set on pictures drawn for it. " })).toEqual({ below: 0.6, basis: "Set on pictures drawn for it." });
     for (const u of [{ below: 0.6 }, { below: 0.6, basis: " " }, { below: 1, basis: "b" }, { below: 0, basis: "b" }, { below: "0.6", basis: "b" }, 0.6]) expect(unsure(u)).toBeUndefined();
     expect(unsure({ below: 0.6, basis: "b" }, "smiles")).toBeUndefined();
+    // (the hosts a model's plugin talks to: each a name exactly, 1 to 8 - the role none without them, and no other role naming any)
+    const talks = (hosts: unknown, role = "language-model") => acceptManifest({ ...good, reads: [], kinds: [], roles: [{ role, hosts }] })?.roles[0];
+    expect(talks(["api.example.com", "api.example.com", "files.example.com"])?.hosts).toEqual(["api.example.com", "files.example.com"]);
+    for (const h of [undefined, [], ["*.example.com"], [".example.com"], ["API.example.com"], ["api.example.com:443"], ["127.0.0.1"], ["localhost"], ["https://api.example.com"], ["-a.example.com"], ["api.example.com", 3], Array.from({ length: 9 }, (_, i) => `h${i}.example.com`), "api.example.com"])
+      expect(talks(h), JSON.stringify(h)).toBeUndefined();
+    expect(talks(["api.example.com"], "smiles")).toBeUndefined();
+    expect(acceptManifest({ ...good, reads: [], kinds: [], roles: [{ role: "smiles" }] })?.roles[0].hosts).toBeUndefined();
     // (Sketchkit's, as it carries them)
     const sketchkit = MANIFESTS.find((m) => m.id === "sketchkit")!;
     expect(sketchkit.roles.map((r) => r.role)).toEqual(["smiles", "checks", "stereoisomers", "configurations", "conformers", "drawing"]);

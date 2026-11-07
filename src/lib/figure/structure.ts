@@ -33,7 +33,24 @@ export function readDrawnLabel(drawn: string, reads: LabelReader): { el: string;
   return { el: drawn, read: false };
 }
 
-export type StructureAtom = { x: number; y: number; el: string; charge?: number; isotope?: number; radical?: Radical; unsure?: string[] };
+/**
+ * An atom of the structure a figure reads as. A copy of a repeat unit's
+ * atom read so many times stands for the figure's atom it copies (`of`, by
+ * index; none where it is the figure's own atom at its index), and each of
+ * the unit's atoms, copies and all, carries the unit's count, the first
+ * unit's the paradigm (`multiple`: a CTfile multiple group).
+ */
+export type StructureAtom = {
+  x: number;
+  y: number;
+  el: string;
+  charge?: number;
+  isotope?: number;
+  radical?: Radical;
+  unsure?: string[];
+  of?: number;
+  multiple?: { group: number; n: number; paradigm?: true };
+};
 export type StructureBond = { a: number; b: number; order: 1 | 2 | 3; stereo?: "up" | "down" | "wavy"; bold?: boolean; unsure?: string[] };
 
 /** How many hydrogens a label as drawn writes on its atom: OH 1, NH2 2, HN 1, N none. */
@@ -93,8 +110,10 @@ export function drawnBond(read: Pick<FigureRead, "atoms" | "bonds" | "bond">): n
  * or fewer hydrogens than its bonds leave it is unsure, as is a label
  * nothing reads.
  */
-export function structureOf(read: FigureRead, reads: LabelReader, about?: { x: number; y: number }): { atoms: StructureAtom[]; bonds: StructureBond[] } {
-  const drawn = drawnBond(read);
+export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: number; y: number }): { atoms: StructureAtom[]; bonds: StructureBond[] } {
+  // (each repeat unit drawn in brackets with a whole count read that many times, before anything is worked out of its atoms)
+  const { read, of, multiple } = repeatsExpanded(given);
+  const drawn = drawnBond(given);
   const k = drawn ? NOMINAL_BOND_LENGTH / drawn : 1;
   const xs = read.atoms.map((a) => a.x);
   const ys = read.atoms.map((a) => a.y);
@@ -175,7 +194,17 @@ export function structureOf(read: FigureRead, reads: LabelReader, about?: { x: n
     if (over) unsure.push(over);
     const isotope = label && "isotope" in label ? label.isotope : undefined;
     if (radicals[i] === "singlet") unsure.push("Two dots: read as a pair of electrons (a singlet); a triplet is drawn the same.");
-    return { x: (a.x - cx) * k, y: -(a.y - cy) * k, el: els[i], ...(charges[i] ? { charge: charges[i] } : {}), ...(isotope ? { isotope } : {}), ...(radicals[i] ? { radical: radicals[i] } : {}), ...(unsure.length ? { unsure } : {}) };
+    return {
+      x: (a.x - cx) * k,
+      y: -(a.y - cy) * k,
+      el: els[i],
+      ...(charges[i] ? { charge: charges[i] } : {}),
+      ...(isotope ? { isotope } : {}),
+      ...(radicals[i] ? { radical: radicals[i] } : {}),
+      ...(unsure.length ? { unsure } : {}),
+      ...(of[i] !== i ? { of: of[i] } : {}),
+      ...(multiple[i] ? { multiple: multiple[i] } : {}),
+    };
   });
   // a hashed bond whose narrow end is not drawn: at the end that can be a
   // stereocentre - an atom of four bonds, its hydrogens counted, none of them
@@ -227,6 +256,77 @@ export function structureOf(read: FigureRead, reads: LabelReader, about?: { x: n
     if (read.bond && Math.hypot(a.x - other.x, a.y - other.y) < SHORT_END * read.bond) (atoms[i].unsure ??= []).push("Its bond is drawn short, as one to a label is, but no label is read at its end.");
   });
   return { atoms, bonds };
+}
+
+/**
+ * The figure with each repeat unit marked to be read so many times
+ * (`ReadAtom.repeat`, `ReadBond.repeat`: lib/figure/read `repeatsRead`)
+ * read so. Its copies follow it head to tail: each is joined to the one
+ * before it by the bond the second bracket crossed, and the last to what
+ * that bond joined. Each is set on from the one before by the unit's
+ * length and a bond, alternately the second bracket's bond and the
+ * first's, so that they turn back and forth as a chain does. What lies
+ * past the unit is moved on with them, unless it reaches round to the unit
+ * again (a ring), which stays where it is. An odd number of atoms put in
+ * leaves one bend straight where the copies meet what lies past them:
+ * turning that the other way would draw its mirror image, its wedges' too. Each atom's index in the figure
+ * as given (`of`), and each unit's atoms, copies and all, with its count,
+ * the first unit's the paradigm (`multiple`).
+ */
+function repeatsExpanded(given: FigureRead): { read: FigureRead; of: number[]; multiple: (StructureAtom["multiple"] | undefined)[] } {
+  const atoms = given.atoms.map((a) => ({ ...a }));
+  const bonds = given.bonds.map((b) => ({ ...b }));
+  const of = atoms.map((_, i) => i);
+  const multiple: (StructureAtom["multiple"] | undefined)[] = atoms.map(() => undefined);
+  for (const group of [...new Set(given.atoms.flatMap((a) => (a.repeat ? [a.repeat.group] : [])))]) {
+    const unit = atoms.flatMap((a, i) => (a.repeat?.group === group ? [i] : []));
+    const crossing = bonds.flatMap((b, k) => (b.repeat?.group === group ? [k] : []));
+    // (both its bonds out of the brackets, as a part of the figure keeps them with its unit)
+    if (crossing.length !== 2) continue;
+    const n = atoms[unit[0]].repeat!.n;
+    const inUnit = new Set(unit);
+    const ends = (k: number) => (inUnit.has(bonds[k].a) ? { inner: bonds[k].a, outer: bonds[k].b } : { inner: bonds[k].b, outer: bonds[k].a });
+    const [{ inner: h, outer: before }, { inner: t, outer: past }] = crossing.map(ends);
+    const step = (p: number, q: number) => ({ x: atoms[q].x - atoms[p].x, y: atoms[q].y - atoms[p].y });
+    const [along, out, into] = [step(h, t), step(t, past), step(before, h)];
+    // (what lies past the unit: reached from its far side without going through it)
+    const beyond = new Set([past]);
+    for (let grew = true; grew; ) {
+      grew = false;
+      for (const b of bonds)
+        for (const [x, y] of [
+          [b.a, b.b],
+          [b.b, b.a],
+        ])
+          if (beyond.has(x) && !beyond.has(y) && !inUnit.has(y)) {
+            beyond.add(y);
+            grew = true;
+          }
+    }
+    const within = bonds.filter((b) => inUnit.has(b.a) && inUnit.has(b.b));
+    const { repeat: _r, ...link } = bonds[crossing[1]];
+    let at = { x: 0, y: 0 };
+    let last = t;
+    for (let k = 1; k < n; k++) {
+      const turn = k % 2 ? out : into;
+      at = { x: at.x + along.x + turn.x, y: at.y + along.y + turn.y };
+      const copy = new Map<number, number>();
+      for (const i of unit) {
+        copy.set(i, atoms.length);
+        const { repeat: _a, ...atom } = atoms[i];
+        atoms.push({ ...atom, x: atoms[i].x + at.x, y: atoms[i].y + at.y });
+        of.push(of[i]);
+        multiple.push({ group, n });
+      }
+      for (const b of within) bonds.push({ ...b, a: copy.get(b.a)!, b: copy.get(b.b)! });
+      bonds.push({ ...link, a: last, b: copy.get(h)! });
+      last = copy.get(t)!;
+    }
+    bonds[crossing[1]] = { ...link, a: last, b: past };
+    if (!beyond.has(before)) for (const i of beyond) atoms[i] = { ...atoms[i], x: atoms[i].x + at.x, y: atoms[i].y + at.y };
+    for (const i of unit) multiple[i] = { group, n, paradigm: true };
+  }
+  return { read: { ...given, atoms, bonds }, of, multiple };
 }
 
 /**

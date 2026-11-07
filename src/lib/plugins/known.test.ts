@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from "vitest";
-import { grammarText, MANIFESTS, onPluginsChanged, placeOf, setInstalled, type InstalledPlugin } from "./known";
+import { grammarText, MANIFESTS, newerHere, onPluginsChanged, placeOf, setInstalled, type InstalledPlugin } from "./known";
 import { ALL_PLUGINS, manifestOf, READERS } from "../calc/catalog";
 
 /** A plugin in place, as Meno's backend gives it: its manifest written as JSON. */
@@ -58,4 +58,22 @@ describe("the plugins Meno knows of", () => {
     const [p] = ALL_PLUGINS;
     expect(p && "lock" in p && [p.lock, p.worker]).toEqual(["plugins/alpha/0.2.0/requirements.lock", "plugins/alpha/0.2.0/worker.py"]);
   });
+
+  it("takes no plugin a newer Meno's, but says it is one, and why - never half-read", () => {
+    setInstalled([
+      placed("alpha", "0.2.0"),
+      placed("talker", "1.0.0", { roles: [{ role: "talking-to-a-thing", hosts: ["api.example.com"] }] }),
+      placed("later", "1.0.0", { contract: 99 }),
+      placed("steps", "1.0.0", { steps: [{ kinds: ["energy", "a-new-step"] }] }),
+    ]);
+    expect(MANIFESTS.map((m) => m.id)).toEqual(["alpha"]);
+    expect(newerHere("talker")).toEqual({ name: "TALKER", version: "1.0.0", why: "It says a role this Meno does not know" });
+    expect(newerHere("later")?.why).toBe("It says a contract this Meno does not know");
+    expect(newerHere("steps")?.why).toBe("It says a kind of step this Meno does not know");
+    expect(newerHere("alpha")).toBeUndefined();
+    // (taken anew: as it is then)
+    setInstalled([placed("alpha", "0.2.0")]);
+    expect(newerHere("talker")).toBeUndefined();
+  });
 });
+

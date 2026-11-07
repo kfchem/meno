@@ -12,7 +12,8 @@
  * binding); what is worked out from it is worked out again
  * (`onPluginsChanged`: lib/calc/catalog).
  */
-import { acceptManifest, type Manifest } from "./manifest";
+import { create } from "zustand";
+import { acceptManifest, newerOf, type Manifest } from "./manifest";
 
 /** Where the plugins' folders are, in Meno's local data folder: a plugin's file is `plugins/<id>/<version>/<file>`. */
 export const PLUGINS_ROOT = "plugins";
@@ -26,7 +27,32 @@ let places = new Map<string, { version: string; dir: string; grammars: Record<st
 /** The manifests of the plugins Meno knows of, in their ids' order: each in place, of its folder's id and version. */
 export let MANIFESTS: readonly Manifest[] = [];
 
+/** The plugins in place that are a newer Meno's (manifest `newerOf`), by id: their name and version, and why - not taken, said. */
+let newer = new Map<string, { name: string; version: string; why: string }>();
+
+/** Plugin `id`, in place, where it is a newer Meno's: its name and version, and why; none, where it is not. */
+export const newerHere = (id: string) => newer.get(id);
+
 const listeners = new Set<() => void>();
+
+/** The names the list of plugins online gives, by id (lib/plugins/online): a plugin's name where it is not here yet. */
+let listed = new Map<string, string>();
+
+/** The list of plugins online read: the names it gives taken (lib/plugins/online). */
+export function setListedNames(entries: readonly { id: string; name: string }[]): void {
+  listed = new Map(entries.map((e) => [e.id, e.name]));
+}
+
+/** A plugin's name as the list of plugins online gives it; none, where the list holds none of that id or is not here. */
+export const listedName = (id: string): string | undefined => listed.get(id);
+
+/**
+ * How many times the plugins Meno knows of were taken anew: what a page
+ * listing them draws again by (Settings, Plugins) - one whose files were
+ * taken away gone from it at once, not drawn on from a manifest no longer
+ * here, its kinds named by their ids.
+ */
+export const usePluginsHere = create<{ taken: number }>(() => ({ taken: 0 }));
 
 /** Called each time the plugins Meno knows of are taken anew; what it gives takes the call away. */
 export function onPluginsChanged(listener: () => void): () => void {
@@ -41,11 +67,19 @@ export function onPluginsChanged(listener: () => void): () => void {
 export function setInstalled(list: readonly InstalledPlugin[]): void {
   const taken: Manifest[] = [];
   const next = new Map<string, { version: string; dir: string; grammars: Record<string, string> }>();
+  const newerNext = new Map<string, { name: string; version: string; why: string }>();
   for (const p of list) {
     let raw: unknown;
     try {
       raw = JSON.parse(p.manifest);
     } catch {
+      continue;
+    }
+    // (a newer Meno's: not taken, and said to be so - never added half-read)
+    const why = newerOf(raw);
+    if (why) {
+      const name = (raw as { name?: unknown }).name;
+      newerNext.set(p.id, { name: typeof name === "string" && name.trim() ? name.trim().slice(0, 60) : p.id, version: p.version, why });
       continue;
     }
     const m = acceptManifest(raw);
@@ -55,7 +89,10 @@ export function setInstalled(list: readonly InstalledPlugin[]): void {
   }
   MANIFESTS = taken.sort((a, b) => a.id.localeCompare(b.id));
   places = next;
+  newer = newerNext;
   for (const listener of listeners) listener();
+  // (after what is worked out from them is worked out again: lib/calc/catalog)
+  usePluginsHere.setState((s) => ({ taken: s.taken + 1 }));
 }
 
 /** Where plugin `id` is in place: its version in use and its folder - none where Meno knows of no such plugin. */

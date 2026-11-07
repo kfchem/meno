@@ -101,7 +101,7 @@ holds whole: the file is read (before, either failed as it was read).
 
 | What | How | Why |
 |---|---|---|
-| A double bond of either configuration | The double bond as it is, and a wavy bond on a single substituent beside it: never on a bond to another stereocentre; on both substituents of an end that has two, where no end has one free; none where the drawing shows no configuration anyway (a substituent straight on, or an end with none). | IUPAC ST-4.4 prefers this; it does not accept a crossed double bond for general use. |
+| A double bond of either configuration | The double bond as it is, and a wavy bond on a single substituent beside it: never on a bond to another stereocentre; on both substituents of an end that has two, where no end has one free; none where the drawing shows no configuration anyway (a substituent straight on, or an end with none). Read so, it has no cis or trans, wherever its ends lie (V2000's 3, V3000's CFG=2, in a MOL file or a reaction's): identity, Clean-up and the rest read none from its drawing (until 2026-11-06 the drawing's shape was read as E or Z). | IUPAC ST-4.4 prefers this; it does not accept a crossed double bond for general use. |
 | A hydrogen bond (type 10) | Dotted: round dots a line and a half wide, three line widths apart, at least three. | GR-1.8: partial bonds dotted, at least three dots; GR-1.3: gaps of 2 to 4 line widths. |
 | A coordination bond shown as COORD | A plain line. | GR-1.7: coordination bonds plain; dashed not acceptable. |
 | A coordination bond otherwise (type 9, or DATIVE) | A dative arrow, from the first atom to the second, as before. | |

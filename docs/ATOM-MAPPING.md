@@ -445,13 +445,61 @@ A reaction drawn on the page is mapped from its arrow's right-click menu,
   XYZ of its own.)
 - **An RXN file** (Export, copy) carries the map's numbers and centres
   whether or not they are shown.
-- **Incomplete.** Where not every atom finds its counterpart, the arrow
-  keeps the reaction as incomplete, with no map: the menu says *Atom map
-  incomplete* (and offers *Atom map* again), nothing is numbered, and
-  nothing is written.
-- **Changed since.** A map of a drawing changed since (an atom, a bond, a
-  charge) shows nothing new: the menu offers *Atom map* again, and *Hide
-  atom map* where its numbers are still on the drawing.
+- **Partial** (the maintainer, 2026-10-30). Where not every atom finds its
+  counterpart, the arrow keeps the partial maps, best first: the atoms they
+  pair are numbered, the rest left without a number and named in the menu
+  ("Not mapped: O, 2 H of the reactants"). No bond's change is marked:
+  which bonds change is the whole map's to say. What needs every atom paired
+  is not offered for a partial map, and says why: *Export reaction in 3D*,
+  the RXN file's numbers, a workflow's *Mapped*.
+- **Changed since: it fails closed.** An edit to the drawing of a mapped
+  reaction (an atom, a bond, a charge) takes the map's numbers and reacting
+  centres off it in the same step: numbers that no longer match the
+  structure are never shown as if they did. The map is kept, and undo of the
+  edit shows it again. The menu offers *Atom map* again.
+
+## Between structures on the page
+
+Any two or more structures on the page can be mapped, with no arrow
+between them (`ui/features/Workspace/chem/structureMaps.ts`; the
+maintainer, 2026-10-30): selected, the right-click menu of one of them
+offers *Atom map*.
+
+- **Before and After.** The structure right-clicked is Before. Each other
+  structure selected is an After, mapped onto Before on its own, as a
+  workflow's *Atom map* step maps "each its own". A structure is a drawn
+  one, or a molecule in 3D still its drawing's. A side of several molecules
+  is not made here: it waits for structures of several parts.
+- **Each in 3D, on the page.** A structure with no molecule in 3D of its own
+  is given one first, beside it, as *3D structure* makes one (one
+  conformer). A mapped drawing so keeps its 3D. Then each side is mapped as a
+  reaction is (above, *On a drawn scheme*): off the drawing's thread, with
+  the status at the canvas's foot and *Stop*.
+- **Kept on the page,** not on an arrow: one map for each After, as an
+  arrow's map is kept (Before as its reactants, After as its products), in
+  the workspace's file with it.
+- **What it shows,** in the same undo step:
+  - on the drawing, as an arrow's map: each heavy atom's map number,
+    Before's numbered one after another, and the reacting centres of the
+    bonds it makes, breaks or changes in order;
+  - on each side's molecule in 3D, **every atom's number, hydrogens too**:
+    Before's heavy atoms as the drawing numbers them, then its hydrogens
+    after them in the same order; each of After's atoms its Before atom's.
+    They are shown as the molecule's atom-map numbers (docs/WORKSPACE.md,
+    *Atom numbers*).
+- **From a structure's menu** in a map: *Show / Hide atom map* (of all the
+  maps it is in), *Other map* ("2 of 4", stepping each of them), and
+  *Export reaction in 3D...* (Before and the first After, as above).
+- **Partial** is as an arrow's: a map whose atoms do not all pair numbers
+  those that do - on the drawing and on the molecules in 3D - and names the
+  rest in the menu ("Not mapped: C of Before; C of After"); its export says
+  it needs every atom mapped.
+- **Changed since: it fails closed,** as an arrow's does. An edit to either
+  structure of a map takes its numbers and reacting centres off the drawing
+  and off its molecules in 3D, in the same step; undo of the edit gives them
+  back. The structure's menu says *Atom map of the structure before its
+  edit* and offers *Map again*: made again between the structures as they
+  are now, in the old map's place.
 
 ## For a workflow's *Atom map* step
 
