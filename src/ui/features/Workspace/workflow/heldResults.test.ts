@@ -7,12 +7,12 @@ import { setMembers, setMolecules } from "./entries";
 import { inputKey, resultOf } from "./flow";
 import { heldOff, heldSettled } from "./held";
 import { heldSets, isHeld, setsOnPage } from "./onPage";
-import { addSet, addStep, connect, removeStep, removeWire } from "./model";
+import { addSet, addStep, connect, moveSet, removeStep, removeWire } from "./model";
 import { flowIn } from "./parts";
 import { clearOf, wireStart } from "./place";
 import { placeResults, type RunResults, type RunWith } from "./run";
 import { exitPlace } from "./kinds";
-import { setGives, stepGives } from "./look";
+import { BETWEEN, setGives, stepGives } from "./look";
 
 /** Each molecule reaching 2 page units about its middle, as a look draws it. */
 const extentOf: RunWith["extentOf"] = () => ({ x0: -2, x1: 2, y0: -2, y1: 2 });
@@ -208,6 +208,17 @@ describe("a step's result set held off the page (docs/WORKFLOWS.md, *Held result
     const chemist = addSet(doc, { x0: -40, y0: -40, x1: -30, y1: -30 });
     const last = chemist.sets![chemist.sets!.length - 1];
     expect(wireStart(chemist.steps!, last)).toEqual(setGives(last));
+  });
+
+  it("laid out again, keeps its step's other exits' sets under it, as a run does: one moved onto where its frame was, moved down", () => {
+    let doc = addStep(emptyWorkspaceDocument(), "filter", 0, 0);
+    doc = addStep(doc, "energy", 300, 0, {}, "xtb");
+    doc = placeResults(doc, doc.steps![0], { molecules: [water(0), water(3, -76.3)], rest: [water(6, -76.2)], holds: "molecules" } as unknown as RunResults, W);
+    const held = heldSettled(connect(doc, { set: KEPT }, ENERGY), doc, extentOf);
+    const [kept, rest] = [setOf(held, KEPT), setOf(held, 3)];
+    const moved = moveSet(held, 3, kept.x0 - rest.x0, kept.y1 - rest.y1);
+    const opened = heldSettled({ ...moved, sets: moved.sets!.map((b) => (b.id === KEPT ? { ...b, opened: true as const } : b)) }, moved, extentOf);
+    expect(setOf(opened, 3).y1).toBeLessThanOrEqual(setOf(opened, KEPT).y0 - BETWEEN + 1e-9);
   });
 
   it("is laid out once opened, and held again once closed", () => {

@@ -2384,7 +2384,9 @@ wired on, not one frame for every result.
   them.
 - **Laid out again**: where its frame was, where that is clear, else
   where its step's results go; its molecules turned as they come - a
-  turn given on the page is not kept while it is held.
+  turn given on the page is not kept while it is held. Its step's other
+  exits' sets are then kept under its first, as a run keeps them (run
+  `keepExitsUnder`): one moved onto where its frame was goes down.
 - **Folded, never cut** (no abrupt changes): a frame being held shrinks
   and fades into its exit's port, about that port, over Meno's base time
   with its ease (App.css `meno-fold-out`); a frame shown again grows out
