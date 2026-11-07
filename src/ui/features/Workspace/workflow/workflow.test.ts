@@ -1008,8 +1008,9 @@ describe("Quick Add, for structures that leave their stereo open", () => {
     const lines = offered(gen, exitSet(gen, id));
     expect(lines[0][0]).toBe("Meno");
     expect((lines[0][1] as string[])[0]).toBe("stereoisomers");
-    // (the rest as they were, after it: the plugin's line, and Meno's others in their order)
-    expect(lines).toEqual([["Meno", ["stereoisomers", "filter", "check-structures", "enumerate", "chart"]], ["Sketchkit", ["conformers", "descriptors"]]]);
+    // (the rest as they were, after it: the plugin's line, and Meno's others in their order - 3D results onto structures among
+    //  them, which takes structures drawn)
+    expect(lines).toEqual([["Meno", ["stereoisomers", "filter", "check-structures", "enumerate", "chart", "onto-structures"]], ["Sketchkit", ["conformers", "descriptors"]]]);
   });
 
   it("and from Conformers' Failed exit - not from its conformers, nor from a set the chemist made", () => {
@@ -1023,7 +1024,7 @@ describe("Quick Add, for structures that leave their stereo open", () => {
     const failed = exitSet(doc, conf, "failed").set;
     doc = { ...doc, sets: doc.sets!.map((b) => (b.id === failed ? { ...b, made: { ...b.made!, holds: "structures" as const } } : b)) };
     expect(offeredFirst(doc, exitSet(doc, conf, "failed"))).toBe("stereoisomers");
-    expect(offered(doc, exitSet(doc, conf, "failed"))[0]).toEqual(["Meno", ["stereoisomers", "filter", "check-structures", "enumerate", "chart"]]);
+    expect(offered(doc, exitSet(doc, conf, "failed"))[0]).toEqual(["Meno", ["stereoisomers", "filter", "check-structures", "enumerate", "chart", "onto-structures"]]);
     expect(offeredFirst(doc, exitSet(doc, conf))).toBeNull();
     expect(offeredFirst(doc, { set: drawn })).toBeNull();
     expect(offeredFirst(doc)).toBeNull();
