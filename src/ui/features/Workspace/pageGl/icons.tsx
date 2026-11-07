@@ -9,8 +9,8 @@ import type { ReactElement } from "react";
 import { ArrowPathIcon, CheckCircleIcon, ChevronRightIcon, ClockIcon, ExclamationCircleIcon, ExclamationTriangleIcon, StopCircleIcon } from "@heroicons/react/24/outline";
 import { StepGlyph, STEP_ICONS } from "../workflow/icons";
 
-/** An icon on the page: where its middle is (the page's units), `sizePx` page pixels square, tinted sRGB `color`, turned `turn` radians clockwise as seen (a chevron opening). */
-export type PageIcon = { key: string; icon: string; x: number; y: number; sizePx: number; color: string; turn?: number; z?: number; opacity?: number };
+/** An icon on the page: where its middle is (the page's units), `sizePx` page pixels square, tinted sRGB `color`, turned `turn` radians clockwise as seen (a chevron opening) - and turning `spin` times a second (a step's running icon). */
+export type PageIcon = { key: string; icon: string; x: number; y: number; sizePx: number; color: string; turn?: number; spin?: number; z?: number; opacity?: number };
 
 /** Bumped as icons are added: an atlas made before it is made again. */
 export let atlasVersion = 0;

@@ -51,7 +51,9 @@ describe("a step's exits' ports (docs/WORKFLOWS.md, *Exit ports*)", () => {
 
   it("are drawn on the ports layer, one for each exit with a set, its set's - a wire drawn out of it drawn out of that set, from the card", () => {
     const layer = readFileSync(join(__dirname, "../components/Workflow2D.tsx"), "utf8");
-    expect(layer).toMatch(/exits\.map\(\(x, k\) =>[\s\S]*data-give-set[\s\S]*drawFrom\(e, \{ set: b\.id \}, true\)[\s\S]*left: CARD_W \/ PX, top: portDown\(k\) \/ PX/);
+    // (drawn by WebGL: each its key, down the card's right edge, as far down as an input of its place - pageGl/ports)
+    expect(layer).toMatch(/exits\.forEach\(\(x, k\) =>[\s\S]*?key: `port:exit:\$\{s\.id\}:\$\{x\.id\}`, x: s\.x \+ CARD_W, y: s\.y - portDown\(k\)/);
+    expect(layer).toMatch(/"exit" in of[\s\S]*?drawFrom\(asPress\(e\), \{ set: b\.id \}, true\)/);
     // (its line to its set drawn from where placing measures it: `exitStart`, the layer rendered only in a WebGL page)
     expect(layer).toMatch(/const exitGives = [\s\S]*?exitStart\(s, b\.made\.exit\)/);
     expect(layer).toMatch(/key: `m\$\{b\.id\}`, p, q: setTakes/);

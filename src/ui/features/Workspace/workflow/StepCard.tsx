@@ -1,7 +1,6 @@
 import TextBars from "./TextBars";
 import clsx from "clsx";
 import { ArrowPathIcon, CheckCircleIcon, ClockIcon, ExclamationCircleIcon, StopCircleIcon } from "@heroicons/react/24/outline";
-import { quietSaid } from "../../../../lib/jobs";
 import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { DURATION, EASE, LEAVE } from "../../../theme/motion";
@@ -13,7 +12,7 @@ import type { StepState } from "./flow";
 import { StepGlyph } from "./icons";
 import type { KindInfo, StepKind } from "./kinds";
 import { CARD_H, CARD_W, PORT_STEP, portDown, portSize, PX } from "./look";
-import { clock } from "./programs";
+import { cardState } from "./cardState";
 import { COPYABLE } from "../hooks/useKeepUnselected";
 
 /**
@@ -105,42 +104,15 @@ export function shareOf(seen: readonly (Pick<JobSeen, "state" | "progress"> | un
 /** A run as its card lists it: when, named apart from the step's other runs (workflow/earlierRuns `namesOf`); what it said; how it was set; whether it is shown, and kept. */
 export type RunRow = { at: number; name: string; said: string; how: string; shown: boolean; keep: boolean };
 
-/** A place in the queue, as it is said: 1st, 2nd, 3rd, 4th... */
-const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
+/** Each of a card's state icons by name (cardState), as Heroicons' outline set draws them. */
+const STATE_ICONS = { waiting: ClockIcon, running: ArrowPathIcon, stopped: StopCircleIcon, done: CheckCircleIcon, failed: ExclamationCircleIcon } as const;
+/** Each tone's words' colour (Meno's palette). */
+const TONE_CLASS = { quiet: "text-gh-gray", base: "text-accel-base", attention: "text-accel-accent" } as const;
 
-/** What a state says, with its icon and its words' colour (Meno's palette: the accent for done and running, the attention colour for failed). */
-export function stateLine(
-  state: StepState,
-  said: string | undefined,
-  run: RunView | undefined,
-  now: number,
-  missing?: string,
-): { Icon?: typeof CheckCircleIcon; text: string; tone: string; turning?: true } {
-  // (a program installed separately that is found nowhere, or too old, or what its options still need: said where Ready would be)
-  if (missing && (state === "ready" || state === "changed")) return { Icon: ExclamationCircleIcon, text: missing, tone: "text-gh-gray" };
-  switch (state) {
-    case "no-input":
-      return { text: "No input", tone: "text-gh-gray" };
-    case "ready":
-      return { text: "Ready", tone: "text-gh-gray" };
-    case "waiting":
-      return { Icon: ClockIcon, text: run?.place ? `Waiting \u00b7 ${ordinal(run.place)}` : "Waiting", tone: "text-gh-gray" };
-    case "running":
-      return {
-        Icon: ArrowPathIcon,
-        turning: true,
-        text: `${run && run.total > 1 ? `Running \u00b7 ${run.ended} of ${run.total}` : `Running ${clock(run?.since != null ? now - run.since : 0)}`}${run?.quiet != null ? ` \u00b7 ${quietSaid(run.quiet)}` : ""}`,
-        tone: "text-accel-base",
-      };
-    case "stopped":
-      return { Icon: StopCircleIcon, text: said ?? "Stopped", tone: "text-gh-gray" };
-    case "done":
-      return { Icon: CheckCircleIcon, text: said ?? "Done", tone: "text-accel-base" };
-    case "failed":
-      return { Icon: ExclamationCircleIcon, text: `Failed${said ? ` · ${said}` : ""}`, tone: "text-accel-accent" };
-    case "changed":
-      return { Icon: ArrowPathIcon, text: "Changed · run again", tone: "text-gh-gray" };
-  }
+/** What a state says, with its icon and its words' colour (cardState). */
+export function stateLine(...args: Parameters<typeof cardState>): { Icon?: typeof CheckCircleIcon; text: string; tone: string; turning?: true } {
+  const c = cardState(...args);
+  return { ...(c.icon ? { Icon: STATE_ICONS[c.icon] } : {}), text: c.text, tone: TONE_CLASS[c.tone], ...(c.turning ? { turning: true as const } : {}) };
 }
 
 export type StepCardProps = {
@@ -198,7 +170,7 @@ export type StepCardProps = {
  * does it fills - and its options.
  */
 export default function StepCard(p: StepCardProps) {
-  const line = p.refused ? { Icon: ExclamationCircleIcon, text: p.refused, tone: "text-accel-accent" } : stateLine(p.state, p.step.ran?.said, p.run, Date.now(), p.missing);
+  const line = p.refused ? { Icon: ExclamationCircleIcon, text: p.refused, tone: TONE_CLASS.attention } : stateLine(p.state, p.step.ran?.said, p.run, Date.now(), p.missing);
   // (what it does and how, under its name - its kind alone where its state line says the same: what it still needs, said once)
   const summary = [p.info.name, p.how && p.how !== line.text ? p.how : ""].filter(Boolean).join(" \u00b7 ");
   const said = p.state === "running" && p.run?.line ? p.run.line : undefined;

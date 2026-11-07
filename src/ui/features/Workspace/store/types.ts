@@ -981,6 +981,9 @@ export type Wire = { id: number; from: WireEnd; to: WireTo };
 /** What a frames chip's Copy items put on the clipboard: all it says of the frame shown, and each frame's energy as a table, where it has energies (utils/chipSaid). */
 export type ChipCopy = { all: string; energies: string | null };
 
+/** A line a card says that its menu copies - a step's failure, its program's last line - by the item's name (Workflow2D). */
+export type CopyLine = { name: string; text: string };
+
 export type WorkflowView = "hoveredSet" | "chosenSet" | "hoveredStep" | "hoveredWire" | "openStep" | "choosingAtoms" | "wireDrag" | "wireRefused" | "workflowMenu" | "chipOver" | "askDeleteStep" | "askDeleteSet";
 /**
  * A job of a step's, as last looked at (lib/jobs): where it is, when it
@@ -1685,7 +1688,7 @@ export type EditorState = {
    * (its molecule's id, and what its Copy items put on the clipboard): its
    * menu asked for, there (Workspace opens it).
    */
-  workflowMenu: { kind: "set" | "step" | "chip"; id: number | null; clientX: number; clientY: number; copy?: ChipCopy } | null;
+  workflowMenu: { kind: "set" | "step" | "chip"; id: number | null; clientX: number; clientY: number; copy?: ChipCopy; lines?: CopyLine[] } | null;
   /** Where a molecule's frames chip lies opened, in the page's units: the workflow's ports under it not drawn, as under an opened card - it is over them (components/useFramesChip). */
   chipOver: { x0: number; y0: number; x1: number; y1: number } | null;
   /**
