@@ -333,6 +333,9 @@ export function unreadWhy(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond
  * drawn so); and the double bonds whose cis or trans changes so, a group
  * on one in line with it. A reader - RDKit, a chemist - may take either
  * the other way (docs/LAYOUT-2D-TUNING.md, *A wedge that reads by luck*).
+ * A centre with a lone pair for its fourth group - a sulfoxide's S, a
+ * phosphine's P (lib/chem/lonePairCentres) - is asked so too: its
+ * configuration read as readStereo reads it, from its three groups.
  */
 export function unsureStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): { atoms: number[]; bonds: number[] } {
   const neighbours: number[][] = atoms.map(() => []);
@@ -347,12 +350,16 @@ export function unsureStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnB
     const w = bondOf.get(key(c, n))?.wedge;
     return w && w.narrow === c ? (w.stereo === "up" ? 1 : -1) : 0;
   };
+  // (which atoms of three bonds keep a configuration by their lone pair: Meno's rule, as readStereo asks it)
+  const keepsPyramid = lonePairCentres(atoms, [...bondOf.values()]);
   const centres: number[] = [];
   atoms.forEach((atom, c) => {
     const around = neighbours[c];
-    if (atom.centre || atom.hs > 1 || around.length + atom.hs !== 4) return;
+    const lonePair = atom.hs === 0 && around.length === 3 && keepsPyramid(c);
+    if (atom.centre || (!lonePair && (atom.hs > 1 || around.length + atom.hs !== 4))) return;
     if (around.some((n) => bondOf.get(key(c, n))!.either)) return;
     if (!around.some((n) => lift(c, n) !== 0)) return;
+    // (as readStereo reads it: an H left out a fourth group, a lone pair none - the volume of its three)
     const order = atom.hs ? [...around, -1] : around;
     const lifts = order.map((n) => (n === -1 ? 0 : lift(c, n)));
     const at = (n: number) => (n === -1 ? null : atoms[n]);
