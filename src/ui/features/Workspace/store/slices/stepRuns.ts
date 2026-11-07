@@ -1169,8 +1169,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       doc.amend((x) => setRunning(x, id, { at, input: key, options, jobs: [], kind: step.kind, passed: lone, ...(refusedHere.length ? { refused: refusedHere } : {}) }), { unsaved: true });
       return void (await finishStep(id));
     }
-    // (the cores it takes, as Settings says - a program running as processes, one to each physical core: never two on one)
-    const { cores: settled } = runningOf(useAppSettings.getState().calculations);
+    // (the cores each job takes, as Settings says - unset, those jobs may use shared among its jobs, one for each entry
+    //  sent, as most steps make them - a program running as processes, one to each physical core: never two on one)
+    const { cores: settled } = runningOf(useAppSettings.getState().calculations, undefined, sendIdx.length);
     const asProcesses = installedFor(step.kind, plugin.id).some((d) => d.parallel === "processes");
     const cores = asProcesses ? processesOf(settled, (await computerResources().catch(() => null)) ?? { cores: settled }) : settled;
     // (a program installed separately: where it is, looked for again - and found, or said not to be)

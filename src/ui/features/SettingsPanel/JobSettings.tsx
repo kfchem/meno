@@ -6,6 +6,11 @@ import type { Option, OptionValues } from "../../../lib/options";
 import { keepsJobFolders, useAppSettings } from "../../../lib/settings/appSettings";
 import OptionRows from "../../options/OptionRows";
 
+/** What Cores for each job comes to while it is not set (lib/jobs `runningOf`). */
+export const CORES_SHARED_SAID = "Unless Cores for each job is set, a step's jobs share the cores jobs may use: all of them for one job, one each for as many jobs as there are cores.";
+/** That line, while Cores for each job is unset; none once it is set. */
+export const coresSharedSaid = (c: { cores?: number }): string | null => (c.cores == null ? CORES_SHARED_SAID : null);
+
 /** A mebibyte's share of a gibibyte: memory is set in GB, kept in MiB. */
 const MIB_PER_GB = 1024;
 
@@ -101,6 +106,8 @@ export default function JobSettings() {
     <div className="rounded-lg border border-gh-line bg-white divide-y divide-gh-line/60">
       <OptionRows options={options} values={values} onChange={change} />
       {/* (how the cores are counted, where the computer runs more than one thread on each: a program of processes takes more than one) */}
+      {/* (unset, a step's jobs share the cores - lib/jobs `runningOf`: said, as the number shown is one job's alone) */}
+      {coresSharedSaid(calculations) && <p className="py-2 pl-3 pr-3 text-xs text-gh-gray">{coresSharedSaid(calculations)}</p>}
       {coresCountedSaid(computer) && <p className="py-2 pl-3 pr-3 text-xs text-gh-gray">{coresCountedSaid(computer)}</p>}
       {folder && (
         <div className="py-2 pl-3 pr-3 flex items-center gap-3">
