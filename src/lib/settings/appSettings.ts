@@ -78,7 +78,21 @@ export type CalculationSettings = {
   largeWorkspaceMB?: number;
   /** Whether the computer may sleep while a job's program runs: unset, it is kept awake (src-tauri/src/awake.rs). */
   sleepWhileJobsRun?: true;
+  /** Whether a finished job's folder is kept once a workspace's file holds all of it, as Settings was set; unset, as `JOB_FOLDERS_KEPT` says (`keepsJobFolders`). */
+  keepJobFolders?: boolean;
 };
+
+/**
+ * Whether a finished job's folder is kept once a workspace's file holds all
+ * of it, where Settings has not been set (workflow/keptJobs
+ * `clearSavedJobs`): not kept - moved to the Trash once the file saved
+ * reads back holding it whole - the maintainer's choice (2026-11-06;
+ * docs/WORKFLOWS.md, *A job's folder*).
+ */
+export const JOB_FOLDERS_KEPT = false;
+
+/** Whether a finished job's folder is kept once a workspace's file holds all of it: as Settings says, else `JOB_FOLDERS_KEPT`. */
+export const keepsJobFolders = (c: CalculationSettings): boolean => c.keepJobFolders ?? JOB_FOLDERS_KEPT;
 
 /** The most cores, and memory in MiB, Settings takes. */
 export const CORES_MOST = 1024;
@@ -236,7 +250,7 @@ export function acceptAppSettings(raw: unknown): AppSettings {
 
 /** How a workflow's jobs run, as the file holds it: the cores each takes, and the cores and memory they may use in all - whole numbers within reason. */
 function acceptCalculations(raw: unknown): CalculationSettings {
-  const r = raw as { cores?: unknown; coresAll?: unknown; memoryAll?: unknown; largeWorkspaceMB?: unknown; sleepWhileJobsRun?: unknown } | null;
+  const r = raw as { cores?: unknown; coresAll?: unknown; memoryAll?: unknown; largeWorkspaceMB?: unknown; sleepWhileJobsRun?: unknown; keepJobFolders?: unknown } | null;
   const whole = (v: unknown, most: number) => (typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= most ? v : undefined);
   const cores = whole(r?.cores, CORES_MOST);
   const coresAll = whole(r?.coresAll, CORES_MOST);
@@ -248,6 +262,7 @@ function acceptCalculations(raw: unknown): CalculationSettings {
     ...(memoryAll ? { memoryAll } : {}),
     ...(largeWorkspaceMB ? { largeWorkspaceMB } : {}),
     ...(r?.sleepWhileJobsRun === true ? { sleepWhileJobsRun: true as const } : {}),
+    ...(typeof r?.keepJobFolders === "boolean" ? { keepJobFolders: r.keepJobFolders } : {}),
   };
 }
 

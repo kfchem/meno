@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { chooseJobsFolder, clearFinishedJobs, computerCores, coresCountedSaid, computerResources, finished, finishedJobsBytes, jobsFolder, keptText, limitsOf, listJobs, runningOf, type JobsFolder } from "../../../lib/jobs";
 import type { Option, OptionValues } from "../../../lib/options";
-import { useAppSettings } from "../../../lib/settings/appSettings";
+import { keepsJobFolders, useAppSettings } from "../../../lib/settings/appSettings";
 import OptionRows from "../../options/OptionRows";
 
 /** A mebibyte's share of a gibibyte: memory is set in GB, kept in MiB. */
@@ -36,15 +36,17 @@ export default function JobSettings() {
       ? [{ id: "memory-all", label: "Memory jobs may use", type: "number" as const, default: gb((computer.memory * 3) / 4), min: 0.5, max: gb(computer.memory), step: 0.5, unit: `GB of ${gb(computer.memory)}` }]
       : []),
     { id: "awake", label: "Keep the computer awake while jobs run", type: "switch", default: true },
+    // (a finished job's folder, once a workspace's file holds all of it: kept, or moved to the Trash - workflow/keptJobs `clearSavedJobs`)
+    { id: "keep-folders", label: "Keep job folders once saved", type: "switch", default: keepsJobFolders({}) },
   ];
-  const values: OptionValues = { cores: running.cores, "cores-all": limits.cores, ...(computer.memory > 0 ? { "memory-all": gb(limits.memory) } : {}), awake: !calculations.sleepWhileJobsRun };
+  const values: OptionValues = { cores: running.cores, "cores-all": limits.cores, ...(computer.memory > 0 ? { "memory-all": gb(limits.memory) } : {}), awake: !calculations.sleepWhileJobsRun, "keep-folders": keepsJobFolders(calculations) };
   const change = (v: OptionValues) => {
     const whole = (n: unknown, most: number) => (typeof n === "number" && Number.isFinite(n) ? Math.min(Math.max(1, Math.round(n)), most) : undefined);
     // (each kept as it was set, or as it was where it was not changed - unset, the default, where it comes to that)
     const cores = v.cores !== values.cores ? whole(v.cores, computer.cores) : calculations.cores;
     const all = v["cores-all"] !== values["cores-all"] ? whole(v["cores-all"], computer.cores) : calculations.coresAll;
     const memory = v["memory-all"] !== values["memory-all"] && typeof v["memory-all"] === "number" ? whole(v["memory-all"] * MIB_PER_GB, computer.memory) : calculations.memoryAll;
-    const { cores: _c, coresAll: _a, memoryAll: _m, sleepWhileJobsRun: _s, ...rest } = calculations;
+    const { cores: _c, coresAll: _a, memoryAll: _m, sleepWhileJobsRun: _s, keepJobFolders: _k, ...rest } = calculations;
     setCalculations({
       ...rest,
       ...(cores != null ? { cores } : {}),
@@ -52,6 +54,8 @@ export default function JobSettings() {
       ...(memory != null ? { memoryAll: memory } : {}),
       // (kept awake unless turned off: only the off is kept)
       ...(v.awake === false ? { sleepWhileJobsRun: true as const } : {}),
+      // (as set once changed; else as it was - unset, Meno's default)
+      ...(v["keep-folders"] !== values["keep-folders"] ? { keepJobFolders: v["keep-folders"] === true } : calculations.keepJobFolders != null ? { keepJobFolders: calculations.keepJobFolders } : {}),
     });
   };
 
