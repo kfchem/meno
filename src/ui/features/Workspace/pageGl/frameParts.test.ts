@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FRAME_COLORS, FRAME_PX, frameTabParts, tabWidthPx, type FrameTab } from "./frameParts";
+import { FRAME_COLORS, FRAME_PX, frameLine, frameTabParts, OUTWARD_LINE, tabWidthPx, type FrameTab } from "./frameParts";
 import { NAME_DOWN, SET_PAD } from "../workflow/look";
 import { pagePx } from "./units";
 import { textWidth } from "./texts";
@@ -56,5 +56,26 @@ describe("a frame with its tab, drawn as a set's", () => {
   it("going, is drawn but taken hold of nowhere", () => {
     const parts = frameTabParts([frame({ edges: true, noHits: true, opacity: 0.3 })], true);
     expect([parts.shapes.length, parts.regions]).toEqual([1, []]);
+  });
+});
+
+describe("an outward frame - what lies inside it may be sent away from this computer", () => {
+  it("is never a set's hairline: dashed in Meno's colour, heavier pointed at and heavier still chosen, its weight eased between", () => {
+    for (const tone of ["rest", "hover", "chosen"] as const) {
+      const line = (frameTabParts([frame({ outward: true, tone })], true).shapes[0] as Box).line!;
+      expect(line).toMatchObject({ color: OUTWARD_LINE.color, dashed: OUTWARD_LINE.dashed, widthPx: OUTWARD_LINE[tone] });
+      expect(line.dashed).toBeDefined();
+      expect(frameLine({ tone }).dashed).toBeUndefined();
+    }
+    // (half-way from rest to pointed at: half-way in weight)
+    expect(frameLine({ tone: "hover", outward: true, level: 0.5 }).widthPx).toBeCloseTo((OUTWARD_LINE.rest + OUTWARD_LINE.hover) / 2, 9);
+    expect(frameLine({ tone: "chosen", outward: true, level: 1.5 }).widthPx).toBeCloseTo((OUTWARD_LINE.hover + OUTWARD_LINE.chosen) / 2, 9);
+  });
+
+  it("has its icon in Meno's colour, as its line is; of the whole page, its tab's box dashed the same", () => {
+    expect(frameTabParts([frame({ outward: true })], true).icons[0].color).toBe(OUTWARD_LINE.color);
+    expect(frameTabParts([frame()], true).icons[0].color).toBe(FRAME_COLORS.quiet);
+    const tab = frameTabParts([frame({ outward: true, tabOnly: true })], true).shapes[0] as Box;
+    expect(tab.line).toMatchObject({ color: OUTWARD_LINE.color, dashed: OUTWARD_LINE.dashed });
   });
 });
