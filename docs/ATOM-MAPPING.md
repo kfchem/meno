@@ -487,6 +487,18 @@ offers *Atom map*.
     after them in the same order; each of After's atoms its Before atom's.
     They are shown as the molecule's atom-map numbers (docs/WORKSPACE.md,
     *Atom numbers*).
+- **Conformers** (the maintainer, 2026-10-30). A map is made on each side's
+  molecule in 3D as it stands: no conformer search is run to map.
+  - Each frame of a side's molecule - the conformers *3D structure* made,
+    or makes again later - is numbered onto the geometry the map was made
+    on (`lib/chem/referenceNumbering` `numberedLike`, the light way). A
+    conformer that puts two alike atoms (a methyl's hydrogens) each in the
+    other's place has their numbers swapped with them, and each frame
+    shows its own.
+  - A frame whose numbering is not resolved shows no numbers, and the menu
+    says how many ("Not numbered: 1 of 6 conformers of Before").
+  - The menu says how many pairs of conformers the two sides make, before
+    any is made ("Conformers: 6 × 3 = 18 pairs").
 - **From a structure's menu** in a map: *Show / Hide atom map* (of all the
   maps it is in), *Other map* ("2 of 4", stepping each of them), and
   *Export reaction in 3D...* (Before and the first After, as above).

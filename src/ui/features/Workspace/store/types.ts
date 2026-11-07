@@ -590,6 +590,13 @@ export type Molecule3D = {
   stereo?: { atoms: Record<number, string>; bonds: Record<number, string>; chosen?: { atoms: number[]; bonds: number[] }; shown?: { atoms: number[]; bonds: number[] } };
   /** The numbers shown on its atoms (utils/atomNumbers): of what kind, and on which of them - all, given none; unset, none. */
   atomNumbers?: AtomNumbersShown;
+  /**
+   * Each of its frames after the first, as an atom map on the page numbers
+   * it (chem/structureMaps): its atoms' map numbers in that frame - a
+   * conformer may put two alike atoms each in the other's place - or null
+   * where its numbering could not be resolved, and it shows none.
+   */
+  mapFrames?: (number[] | null)[];
   /** What the calculation it was read from says of it, besides its geometries and energies (lib/calc). */
   calc?: CalcInfo;
   /**

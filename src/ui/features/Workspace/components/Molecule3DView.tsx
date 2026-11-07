@@ -621,6 +621,18 @@ function Molecule3DView(props: Molecule3DViewProps) {
     invalidate();
   }, [m, n, target, style, atomGoals, invalidate, props.atomNumbers]);
 
+  // (atom-map numbers by the frame shown: a conformer may put alike atoms in each other's places - chem/structureMaps)
+  useEffect(() => {
+    if (!atoms.current || numbersKind.current !== "map" || !m.mapFrames) return;
+    const nums = atomNumbersOf(m, "map", frame);
+    numbersNow.current = nums;
+    setBallNumbers(atoms.current.geometry, nums);
+    numberDigits.current = Uint8Array.from(nums, digitsOf);
+    numbersPlaced.current = false;
+    dirty.current = true;
+    invalidate();
+  }, [m, frame, invalidate]);
+
   // measurements come and go, fading
   useEffect(() => {
     const now = m.measures ?? [];

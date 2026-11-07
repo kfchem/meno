@@ -6,9 +6,10 @@ import * as ops from "../document";
 import { createWorkspaceDocument, emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
 import type { Atom, Bond, Model, Molecule3D } from "../store/types";
 import { signatureOf } from "../utils/drawnLink";
+import { atomNumbersOf } from "../utils/atomNumbers";
 import { readWorkspace, workspaceText } from "../utils/workspace";
 import { exportRefusal, keptMap, mapMarks, mapShows, mapStanding, unpairedSaid } from "./atomMap";
-import { numbers3d, readStructureMaps, sideMolecules, sideNumbers } from "./structureMaps";
+import { conformersSaid, numbers3d, readStructureMaps, sideMolecules, sideNumbers } from "./structureMaps";
 
 /**
  * A Diels-Alder pair drawn with no arrow - butadiene and ethylene, and the
@@ -315,5 +316,63 @@ describe("a partial atom map", () => {
     // (with no carbon among them, all alphabetically, as Hill has it: H before O)
     const noCarbon = { ...two, reactant: { ...two.reactant, atoms: two.reactant.atoms.map((a) => (a.el === "C" ? { ...a, el: "O" } : a)) }, product: { ...two.product, atoms: two.product.atoms.map((a) => (a.el === "C" ? { ...a, el: "O" } : a)) } };
     expect(unpairedSaid(noCarbon, ["Before", "After"])).toBe("Not mapped: 2 H, O of Before; 2 H, O of After");
+  });
+});
+
+describe("an atom map's numbers on a molecule's conformers", () => {
+  it("number each frame as the geometry the map was made on: a conformer with a CH2's hydrogens in each other's places has their numbers swapped too", () => {
+    const { doc, kept } = page();
+    const [m1] = doc.molecules3d!;
+    const h1a = R_NAMES.indexOf("H1a");
+    const h1b = R_NAMES.indexOf("H1b");
+    // (frame 1: as the first, the two hydrogens of C1 each where the other was)
+    const xyz = m1.atoms.flatMap((a) => [a.x, a.y, a.z]);
+    const swapped = [...xyz];
+    for (let d = 0; d < 3; d++) [swapped[3 * h1a + d], swapped[3 * h1b + d]] = [swapped[3 * h1b + d], swapped[3 * h1a + d]];
+    const withFrames = { ...doc, molecules3d: doc.molecules3d!.map((m) => (m.id === 1 ? { ...m, frames: [xyz, swapped] } : m)) };
+    const shown = ops.addStructureMaps(withFrames, [kept]).doc;
+    const m = shown.molecules3d!.find((x) => x.id === 1)!;
+    const first = Array.from(atomNumbersOf(m, "map", 0));
+    expect(Array.from(atomNumbersOf(m, "map", 1))).toEqual(first);
+    const second = Array.from(atomNumbersOf(m, "map", 2));
+    expect([second[h1a], second[h1b]]).toEqual([first[h1b], first[h1a]]);
+    second.forEach((k, i) => i !== h1a && i !== h1b && expect(k).toBe(first[i]));
+    // (Before's three frames by After's one: three pairs, said before any is made)
+    expect(conformersSaid(kept, shown.molecules3d!, shown.model)).toEqual(["Conformers: 3 × 1 = 3 pairs"]);
+    // (a frame not numbered: said, of its side)
+    const unresolved = { ...shown, molecules3d: shown.molecules3d!.map((x) => (x.id === 1 ? { ...x, mapFrames: [x.mapFrames![0], null] } : x)) };
+    expect(conformersSaid(kept, unresolved.molecules3d!, unresolved.model)).toEqual(["Conformers: 3 × 1 = 3 pairs", "Not numbered: 1 of 3 conformers of Before"]);
+  });
+
+  it("numbers the new conformers of a mapped structure's molecule as they come, in the same step - 3D structure made again", () => {
+    const { doc, kept } = page();
+    const store = createWorkspaceDocument();
+    store.reset(ops.addStructureMaps(doc, [kept]).doc);
+    const h1a = R_NAMES.indexOf("H1a");
+    const h1b = R_NAMES.indexOf("H1b");
+    store.edit("conformers", (d) => ({
+      ...d,
+      molecules3d: d.molecules3d!.map((m) => {
+        if (m.id !== 1) return m;
+        const xyz = m.atoms.flatMap((a) => [a.x, a.y, a.z]);
+        for (let k = 0; k < 3; k++) [xyz[3 * h1a + k], xyz[3 * h1b + k]] = [xyz[3 * h1b + k], xyz[3 * h1a + k]];
+        return { ...m, frames: [xyz] };
+      }),
+    }));
+    const m = store.getState().molecules3d!.find((x) => x.id === 1)!;
+    const first = Array.from(atomNumbersOf(m, "map", 0));
+    const second = Array.from(atomNumbersOf(m, "map", 1));
+    expect(m.mapFrames?.length).toBe(1);
+    expect([second[h1a], second[h1b]]).toEqual([first[h1b], first[h1a]]);
+  });
+
+  it("show none on a frame whose numbering is not resolved, nor on a frame past those numbered", () => {
+    const m = { atoms: [{ el: "C", x: 0, y: 0, z: 0, map: 1 }, { el: "O", x: 1, y: 0, z: 0, map: 2 }], mapFrames: [null, [2, 1]] };
+    expect(Array.from(atomNumbersOf(m as never, "map", 0))).toEqual([1, 2]);
+    expect(Array.from(atomNumbersOf(m as never, "map", 1))).toEqual([0, 0]);
+    expect(Array.from(atomNumbersOf(m as never, "map", 2))).toEqual([2, 1]);
+    expect(Array.from(atomNumbersOf(m as never, "map", 3))).toEqual([0, 0]);
+    // (another kind: the atoms' own, whatever the frame)
+    expect(Array.from(atomNumbersOf(m as never, "order", 2))).toEqual([1, 2]);
   });
 });

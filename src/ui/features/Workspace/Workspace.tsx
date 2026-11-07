@@ -228,6 +228,7 @@ import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gestu
 import { Remake3D } from "./components/remake3d";
 import { mapAtoms, mapStanding, reactionOf, unpairedSaid } from "./chem/atomMap";
 import { structuresOf } from "./workflow/entries";
+import { conformersSaid } from "./chem/structureMaps";
 import { useAtomMaps } from "./chem/useAtomMaps";
 import { turnOnto } from "./utils/align3d";
 import type { ArrowFormPatch, Caption, Drawn, Molecule3D, PictureFrom, WordsFrom } from "./store/types";
@@ -2636,6 +2637,7 @@ function WorkspaceContent({
                       onOther: () => store.getState().otherStructureMaps(ids),
                       onExport: () => void files.exportReaction3d({ structureMap: first.id }),
                       unpaired: unpairedSaid(first.map, ["Before", "After"]) ?? undefined,
+                      conformers: conformersSaid(first.map, st.molecules3d, st.model),
                       // (of the structures before an edit: made again between them as they are now, the old ones' place taken)
                       onAgain: () => {
                         const now = store.getState().model;
