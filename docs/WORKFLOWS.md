@@ -3746,7 +3746,11 @@ in: a step, not a table's guess (the maintainer, 2026-10-29).
     calculation, and by G only where all of theirs were worked out alike
     - else by E, saying why not G; else no share, saying so. Structures
     of another formula are never weighed against it: their energies are
-    of other atoms. One alone in its formula has all of its own (1). A
+    of other atoms. Where a structure drawn of the same formula and charge
+    (its labels drawn out, its hydrogens counted) has no conformer
+    finished, the shares are refused, naming it: they would leave it out,
+    and one worked out alone would stand at all of it. One alone in its
+    formula, none missing, has all of its own (1). A
     value of its conformers together, as an ensemble's: at its lowest
     conformer's geometry and the temperature, by what worked out the
     energies weighed, over its own conformers (`Property.at`, `by`,
@@ -3756,6 +3760,10 @@ in: a step, not a table's guess (the maintainer, 2026-10-29).
   energy"), and a structure with no 3D result has no share, not 0 - nor
   an E min or a G min: none, saying why, as does one with no conformer
   finished.
+- **None found**: where conformers come in and none names any of these
+  structures - a 3D set made of other structures, or of these before
+  each had its lasting id - the step's line says to make the set again
+  from them.
 - Failed and unfinished conformers are never a minimum: they are left out
   of E min, G min and the shares, and counted in its state.
 - One optimised with atoms held where they stood (*Hold its restraints*)
