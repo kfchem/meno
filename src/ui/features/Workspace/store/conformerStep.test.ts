@@ -476,6 +476,22 @@ describe("Sketchkit's conformer search as a step, on structures drawn", () => {
     }
   });
 
+  it("fails each structure, saying it needs its window, where it is run with none - its search taking draws", async () => {
+    const search = PLUGINS.find((p) => p.id === "sketchkit") as unknown as { roleDraws: readonly string[] };
+    const was = search.roleDraws;
+    search.roleDraws = ["conformers"];
+    try {
+      const { step, st } = await searched();
+      // (none asked, none made: each in its Failed exit as it came, saying why)
+      expect(asked).toHaveLength(0);
+      expect(st().molecules3d.filter((m) => m.conformerSet)).toHaveLength(0);
+      const failed = st().sets.find((b) => b.made?.step === step.id && b.made.exit === "failed")!;
+      expect((failed.members ?? []).map((m) => ("structure" in m ? m.record?.status : null))).toEqual(Array(3).fill({ failed: WITHIN_NEEDED }));
+    } finally {
+      search.roleDraws = was;
+    }
+  });
+
   it("needs its window - its own, else Settings' - where its plugin's search takes draws; not where it takes none, nor for a number of the chemist's own", () => {
     const needed = { sought: "needed", count: 200, within: Number.NaN, first: 0, most: 5000 };
     expect(roundsNeed("conformers", true, needed)).toBe(WITHIN_NEEDED);

@@ -112,6 +112,11 @@ describe("a search in rounds", () => {
     expect((await inRounds(p.ask, { first: 10, most: 5000, window: 3, draws: true })).run).toEqual({ tried: 20, rounds: 2, ended: "settled" });
   });
 
+  it("does not end on a round that brings no conformer at all, before any is made: none new is judged against some", async () => {
+    const p = plugin([[], [0], [0]], () => 0);
+    expect((await inRounds(p.ask, { first: 10, most: 5000, window: 3, draws: true })).run).toEqual({ tried: 40, rounds: 3, ended: "settled" });
+  });
+
   it("ends at the most it tries, each round bringing a new one", async () => {
     const p = plugin([[0], [1], [2], [3], [4]], () => 0);
     const { run } = await inRounds(p.ask, { first: 10, most: 40, window: 3, draws: true });

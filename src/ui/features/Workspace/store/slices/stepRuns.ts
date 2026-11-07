@@ -787,7 +787,12 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           // (as many as the molecule needs, in rounds, where the plugin's search takes draws: until a round brings no conformer new within
           //  the step's window - chem/conformerRounds; a workflow's search has no time it must end in)
           const rounds = plugin.roleDraws.includes("conformers") ? roundsAsked(options, () => conformersSoughtOf(block.molblock)) : null;
-          if (rounds && "needs" in rounds) throw new Error(rounds.needs);
+          // (its window not given - a step not ready, run all the same: each said so in Meno's words, never taken for what could not be made)
+          if (rounds && "needs" in rounds) {
+            failed.push(place + 1);
+            asideAs(rounds.needs);
+            continue;
+          }
           // (a metal's holds, Meno's - and which of what was made stand: lib/chem/metalHolds)
           const holds = metalHoldsOf(block.molblock);
           const ask = async (count: number | null, draw?: number) =>
