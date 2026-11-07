@@ -17,7 +17,8 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { lookEvery } from "../workflow/lookEvery";
 import { labelReach, selectionFrame, selectionInSet } from "../workflow/selectionSet";
 import { isHeld, setsOnPage } from "../workflow/onPage";
-import { exitNames } from "../workflow/exitNames";
+import { exitChip, exitNames } from "../workflow/exitNames";
+import type { Drawn } from "../pageGl/PagePlaced";
 import PagePlaced, { usePlaced } from "../pageGl/PagePlaced";
 import type { PageText } from "../pageGl/texts";
 import { useDrawnLayout } from "./drawnLayoutContext";
@@ -445,9 +446,24 @@ function runRows(s: WorkflowStep): RunRow[] {
 }
 
 /** The exits' names (workflow/exitNames), placed on the page as its other words by WebGL are (pageGl `usePlaced`), each where it is given. */
-function ExitNames({ items }: { items: readonly PageText[] }) {
+function ExitNames({ items, chip }: { items: readonly PageText[]; chip: Drawn | null }) {
   const [anchor, setAnchor] = useState<THREE.Group | null>(null);
-  usePlaced(anchor ? { key: "exit-names", anchor, words: true, control: true, draw: (at) => ({ shapes: [], texts: items.map((t) => ({ ...t, x: t.x + at.x, y: t.y + at.y })) }) } : null);
+  const moved = <T extends { x: number; y: number }>(t: T, at: { x: number; y: number }): T => ({ ...t, x: t.x + at.x, y: t.y + at.y });
+  usePlaced(
+    anchor
+      ? {
+          key: "exit-names",
+          anchor,
+          words: true,
+          control: true,
+          draw: (at) => ({
+            // (and what a held exit's set holds, said beside its port as the pointer is on it: workflow/exitNames `exitChip`)
+            shapes: (chip?.shapes ?? []).map((s) => (s.kind === "box" ? { ...s, x0: s.x0 + at.x, x1: s.x1 + at.x, y0: s.y0 + at.y, y1: s.y1 + at.y } : moved(s, at))),
+            texts: [...items, ...(chip?.texts ?? [])].map((t) => moved(t, at)),
+          }),
+        }
+      : null,
+  );
   return <group ref={setAnchor} />;
 }
 
@@ -702,7 +718,11 @@ export default function Workflow2D() {
       (moved, ev) => {
         const st = store.getState();
         st.setWorkflowView({ wireDrag: null });
-        if (!moved) return;
+        // (a click, no wire drawn: a step's result set whose exit is wired on shown on the page, or held off it again - workflow/held)
+        if (!moved) {
+          st.exitPortClicked(from.set);
+          return;
+        }
         const there = dropTarget(ev);
         if (there && there !== "empty" && "take" in there) wireTo(from, there.take.step, there.take.port);
         else if (there === "empty") {
@@ -878,13 +898,22 @@ export default function Workflow2D() {
   // (each step's exits' sets, by step and exit: a port drawn for each)
   const exitSets = useMemo(() => new Map(sets.flatMap((b) => (b.made ? [[`${b.made.step}:${b.made.exit}`, b] as const] : []))), [sets]);
   // (each exit's name beside its port where its set is on no page beside it - held off it - to name it: workflow/exitNames)
+  // (and the exit whose port the pointer is on, where its set is held and holds anything: said beside its port, its step's names gone meanwhile)
+  const hoveredExit = useEditor((s) => s.hoveredExit);
+  const saying = useMemo(() => {
+    const b = hoveredExit != null ? sets.find((x) => x.id === hoveredExit) : undefined;
+    return b?.made && (b.collection?.length || b.drawnCollection?.length) && !onPage.some((x) => x.id === b.id) ? b : undefined;
+  }, [hoveredExit, sets, onPage]);
   const names = useMemo(() => {
     const shown = new Set(onPage.map((b) => b.id));
-    return exitNames(steps, (step, exit) => {
-      const b = exitSets.get(`${step}:${exit}`);
-      return b && !shown.has(b.id) ? setName(b, steps) : null;
-    });
-  }, [steps, exitSets, onPage]);
+    return exitNames(
+      steps.filter((s) => s.id !== saying?.made?.step),
+      (step, exit) => {
+        const b = exitSets.get(`${step}:${exit}`);
+        return b && !shown.has(b.id) ? setName(b, steps) : null;
+      },
+    );
+  }, [steps, exitSets, onPage, saying]);
   /** Where a step's result set's exit gives on its card (place `exitStart`): the port its wires, and the line to the set where it is on the page, leave from. */
   const exitGives = (b: WorkflowSet): Pt | null => {
     const s = b.made ? stepById.get(b.made.step) : undefined;
@@ -1026,6 +1055,13 @@ export default function Workflow2D() {
   if (seenSets.current) for (const b of onPage) if (b.made && !seenSets.current.has(b.id)) cameAt.current.set(b.id, now);
   seenSets.current = new Set(onPage.map((b) => b.id));
   const growing = (id: number) => now - (cameAt.current.get(id) ?? -Infinity) < DURATION.base * 1000;
+  // (what a held exit's set holds, in a large set's words: its frame's summary - workflow/exitNames `exitChip`)
+  const chip = useMemo(() => {
+    const info = saying ? setInfo.get(saying.id) : undefined;
+    const p = saying ? exitGives(saying) : null;
+    return saying && info?.summary && p ? exitChip(`exit-chip:${saying.id}`, info.name, `${info.summary.count} ${info.summary.nouns}`, p) : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- exitGives: of the steps, which are among these
+  }, [saying, setInfo, steps]);
   // sets and steps, each drawn as it is - and those just gone, as they last were, fading out
   const parts = [
     ...onPage.map((b) => {
@@ -1087,7 +1123,7 @@ export default function Workflow2D() {
             drops={openStep === s.id ? droppedBy(flow, stepsRun(flow, [s.id])) : undefined}
             onOptions={(values) => store.getState().updateStep(s.id, { options: diagram ? diagramKept(values, optionsOf(takes, own), s.options) : values })}
             choosing={choosingAtoms?.step === s.id ? choosingAtoms.option : null}
-            onChoose={(option) => store.getState().setWorkflowView({ choosingAtoms: option ? { step: s.id, option } : null })}
+            onChoose={(option) => store.getState().chooseAtomsFor(s.id, option)}
             onKind={(kind) => store.getState().updateStep(s.id, { kind })}
             onShowRun={(index) => store.getState().showRun(s.id, index)}
             onKeepRun={(index, keep) => store.getState().keepRunOf(s.id, index, keep)}
@@ -1157,7 +1193,7 @@ export default function Workflow2D() {
     <group>
       {/* the exits' names, as the page's words: gone where too small to read, and while a talk is given */}
       <PagePlaced>
-        <ExitNames items={names} />
+        <ExitNames items={names} chip={chip} />
       </PagePlaced>
       {/* wires: those drawn, and each step's to the set it made - and those just gone, fading */}
       {shownWires.map(({ key, item, leaving }) => {
@@ -1264,6 +1300,12 @@ export default function Workflow2D() {
                       label={exits.length > 1 ? `${setInfo.get(b.id)?.name ?? x.name} out of ${name}` : `Out of ${name}`}
                       data={{ "data-give-set": String(b.id) }}
                       onPointerDown={(e) => drawFrom(e, { set: b.id })}
+                      onContextMenu={(e) => {
+                        // (its menu over what the port says: that gone, said again as the pointer next comes onto it)
+                        store.getState().exitPortHovered(b.id, false);
+                        menuOf("set", b.id)(e);
+                      }}
+                      onHover={(on) => store.getState().exitPortHovered(b.id, on)}
                       style={{ left: CARD_W / PX, top: portDown(k) / PX }}
                       of={CARD_H / PX}
                     />

@@ -210,6 +210,7 @@ export default function PartMenu({
   text,
   onSaveProcedure,
   keepInFile,
+  shownOnPage,
   onOpenAsTable,
   setHoldsOwn,
   onUseAsInput,
@@ -346,6 +347,8 @@ export default function PartMenu({
   onSaveProcedure?: () => void;
   /** A step's result set right-clicked: whether its molecules are kept in the workspace's file, and that changed. */
   keepInFile?: { kept: boolean; set: (keep: boolean) => void };
+  /** A step's result set whose exit is wired on (workflow/held) - the set right-clicked, or the one a wire right-clicked comes from: shown on the page, opened, or held off it; and shown or held as asked. */
+  shownOnPage?: { shown: boolean; set: (show: boolean) => void };
   /** A large result set right-clicked (`WorkflowSet.collection`): read as a table in the column. */
   onOpenAsTable?: () => void;
   /** A set right-clicked that holds its molecules itself, on no page (a large set's `collection`): what it holds, said ("118 molecules"), since they go with it when it is deleted. */
@@ -861,6 +864,7 @@ export default function PartMenu({
         ]
       : target.kind === "set"
       ? [
+          ...(shownOnPage ? [{ name: "Show on the page", keys: "", run: () => shownOnPage.set(!shownOnPage.shown), checked: shownOnPage.shown }] : []),
           ...(onOpenAsTable ? [{ name: "Open as a table", keys: "", run: onOpenAsTable }] : []),
           ...(setHoldsOwn ? [] : [{ ...del("Delete set"), divider: !!onOpenAsTable }]),
           ...(onSaveProcedure ? [{ name: "Save as procedure…", keys: "", run: onSaveProcedure }] : []),
@@ -884,7 +888,7 @@ export default function PartMenu({
             : []),
         ]
       : target.kind === "wire"
-      ? [del("Delete wire")]
+      ? [...(shownOnPage ? [{ name: "Show its results on the page", keys: "", run: () => shownOnPage.set(!shownOnPage.shown), checked: shownOnPage.shown }] : []), { ...del("Delete wire"), divider: !!shownOnPage }]
       : target.kind === "chip"
       ? [
           // (what it says, as text - its results, why it failed - and its energies as a table: copied from here, as no words on the page are selected)

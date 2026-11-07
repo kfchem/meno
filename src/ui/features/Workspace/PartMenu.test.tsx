@@ -292,6 +292,20 @@ describe("a set's menu", () => {
     expect(menu(set, { keepInFile: { kept: true, set: none } }).listed).not.toContain("Open as a table");
   });
 
+  it("offers a result set wired on - held off the page, or shown - to be shown on the page, first; and no other set", () => {
+    const set = target({ kind: "set", id: 4 });
+    expect(menu(set, { shownOnPage: { shown: false, set: none }, onOpenAsTable: none }).listed.slice(0, 2)).toEqual(["Show on the page", "Open as a table"]);
+    expect(menu(set).listed).not.toContain("Show on the page");
+  });
+
+  it("offers on a wire from a result set held off the page to show its results, and Delete wire still", () => {
+    const wire = target({ kind: "wire", id: 9 });
+    const held = menu(wire, { shownOnPage: { shown: false, set: none } });
+    expect([...held.listed, ...held.icons]).toEqual(expect.arrayContaining(["Show its results on the page", "Delete wire"]));
+    const plain = menu(wire);
+    expect([...plain.listed, ...plain.icons]).not.toContain("Show its results on the page");
+  });
+
   it("says what goes with a set that holds its molecules itself, before it is deleted", () => {
     const set = target({ kind: "set", id: 7 });
     // (in words, listed - not an icon whose name shows only on hover)

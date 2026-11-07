@@ -48,6 +48,8 @@ export function Port({
   data,
   label,
   of,
+  onContextMenu,
+  onHover,
 }: {
   look: PortLook;
   style: CSSProperties;
@@ -55,6 +57,10 @@ export function Port({
   data: Record<string, string>;
   label: string;
   of?: number;
+  /** Its menu, where it has one: an exit's port, its set's (a set held off the page has no frame to right-click). */
+  onContextMenu?: (e: ReactMouseEvent) => void;
+  /** The pointer come onto it, or gone off it: what an exit's port says of its set (`exitPortHovered`). */
+  onHover?: (on: boolean) => void;
 }) {
   const size = portSize(of);
   return (
@@ -63,6 +69,8 @@ export function Port({
       role="button"
       aria-label={label}
       onPointerDown={onPointerDown}
+      onContextMenu={onContextMenu}
+      {...(onHover ? { onPointerEnter: () => onHover(true), onPointerLeave: () => onHover(false) } : {})}
       className={clsx(
         // (a press on it begins no selection of the page's text: one left over turns a later drag on the drawing into the system's own drag-and-drop, Workspace.tsx)
         // (taken hold of over at least 12 px about its middle, however small it is drawn: meno-port)

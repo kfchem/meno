@@ -578,6 +578,7 @@ export const createModelSlice = (
       selFlow: { sets: new Set<number>(), steps: new Set<number>() },
       chosen3d: null,
       hoveredSet: null,
+      hoveredExit: null,
       chosenSet: null,
       // (sets read as tables: of the old document's sets)
       setsRead: [],
