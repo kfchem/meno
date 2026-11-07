@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { createWorkspaceDocument, emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import type { Molecule3D } from "../store/types";
+import { cardLines } from "../pageGl/cardFace";
 import { resultOf } from "./flow";
 import { ONE_INPUT } from "./kinds";
 import { BETWEEN, CARD_H, CARD_TALL, CARD_W, GAP, PX, portDown } from "./look";
@@ -82,8 +83,9 @@ describe("an exit for what a step sets aside (docs/WORKFLOWS.md, *Exits that set
     const src = readFileSync(join(__dirname, "../components/Workflow2D.tsx"), "utf8");
     expect(src).toMatch(/const unseen = useMemo\(\(\) => unseenSets\(\{ sets, wires, steps \}\), \[sets, wires, steps\]\);/);
     expect(src).toMatch(/const onPage = useMemo\(\(\) => \(unseen\.size \? sets\.filter\(\(b\) => !unseen\.has\(b\.id\)\) : sets\), \[sets, unseen\]\);/);
-    // (given nothing again: folding into its port as a held set does, not fading)
+    // (given nothing again: folding into its port as a held set does, not fading - its words and its frame alike)
     expect(src).toMatch(/const fold = set\?\.made && unseen\.has\(set\.id\) \? foldAbout\(set\) : undefined;/);
+    expect(src).toMatch(/const p = b\?\.made && \(leaving \? unseen\.has\(b\.id\) : growing\(b\.id\)\) \? exitGives\(b\) : null;/);
   });
 
   it("is the same answer, the same object, while only the cards move - so what is drawn of the sets is not worked out again", () => {
@@ -160,6 +162,9 @@ describe("a step added from an exit's port (docs/WORKFLOWS.md, *A step added fro
     const plain = filter();
     expect(placeBelow(plain, 0, 0, CARD_W, CARD_H).y1).toBeLessThanOrEqual(-CARD_TALL - BETWEEN + 1e-9);
     expect(placeCard(plain, 0, 0).y).toBeLessThanOrEqual(-CARD_TALL - BETWEEN + 1e-9);
+    // (as tall as the tallest card is drawn closed - pageGl/cardFace: its words cut at two lines each, a line said, a bar)
+    const long = "words long enough to run past two lines of a card, and on past them, and on past them again";
+    expect(CARD_TALL / PX).toBe(cardLines({ summary: long, state: { text: long, tone: "quiet" }, said: "x", progress: 0 }).height);
     // (a card put down above a set it would reach, drawn as tall as its words can draw it: lower)
     const under = addSet(emptyWorkspaceDocument(), { x0: 0, y0: below - CARD_H, x1: CARD_W, y1: below });
     expect(placeCard(under, 0, 0).y).toBeLessThan(0);

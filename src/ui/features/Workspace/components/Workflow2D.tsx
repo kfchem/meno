@@ -1316,11 +1316,12 @@ export default function Workflow2D() {
       edges: true,
     };
   });
-  // (a step's result set folding into its exit's port as it is held, and growing out of it as it is shown again - about that port,
-  //  as its HTML did: its frame drawn that far from the port, as present as it is)
+  // (a step's result set folding into its exit's port as it comes to be drawn nowhere - held, or an exit's for what its step sets
+  //  aside, given nothing - and growing out of it as it is shown again - about that port, as its HTML did: its frame drawn that far
+  //  from the port, as present as it is)
   const tabsShown = useFaded(setTabs, (t) => t.key).map(({ item, opacity, leaving }) => {
     const b = setById.get(stepOfKey(item.key));
-    const p = b?.made && (leaving ? isHeld({ sets, wires }, b) : growing(b.id)) ? exitGives(b) : null;
+    const p = b?.made && (leaving ? unseen.has(b.id) : growing(b.id)) ? exitGives(b) : null;
     return { ...item, ...(p ? { box: towards(item.box, p, opacity) } : {}), opacity, ...(leaving ? { noHits: true as const } : {}) };
   });
   // (two presses on a chemist's set's tab, close together: its name written anew, in a field over the tab)
