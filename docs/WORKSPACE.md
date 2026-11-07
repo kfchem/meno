@@ -1422,7 +1422,9 @@ it, in `features/Workspace/pageGl/`:
   candidates beside the words, pasting, undoing and a screen reader are
   the system's own - Enter or a press away keeps it, Escape leaves it as
   it was; its icon - what made it - stands in for its words where they are
-  too small to read; what a set holds (a summary, a table, a chart) is
+  too small to read; a tab's words start as far from the frame's left edge
+  as its icon stands from its top, a conversation's and a set's alike
+  (`TAB_INSET`); what a set holds (a summary, a table, a chart) is
   HTML still, inside its frame. Its ports (`ports`): rings as large as a
   hand takes them, lit where a wire being drawn may join them, a wire let
   go on one found by its shape. And its small marks (`workflowMarks`):
