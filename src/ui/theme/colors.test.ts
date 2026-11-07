@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { COLORS } from "./colors";
+import { colourHex, COLORS } from "./colors";
 
 /** src/App.css, where the tokens are set (read as text: Vitest hands a stylesheet imported raw over empty). */
 const css = readFileSync(new URL("../../App.css", import.meta.url), "utf8");
@@ -22,5 +22,13 @@ describe("the interface's colours in code and in CSS (docs/LOOK.md, Colours)", (
     expect(COLORS.ink).toBe(token("gh-black"));
     expect(COLORS.quiet).toBe(token("gh-gray"));
     expect(COLORS.hairline).toBe(token("gh-line"));
+  });
+});
+
+describe("a colour made from data, for WebGL", () => {
+  it("is written as three.js reads it, each part clamped to a byte", async () => {
+    const THREE = await import("three");
+    expect(new THREE.Color(colourHex(207, 222, 229)).getHex()).toBe((207 << 16) | (222 << 8) | 229);
+    expect(new THREE.Color(colourHex(-4, 300, 7.6)).getHex()).toBe((0 << 16) | (255 << 8) | 8);
   });
 });
