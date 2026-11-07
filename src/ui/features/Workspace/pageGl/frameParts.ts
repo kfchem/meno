@@ -1,5 +1,5 @@
 import type { Frame } from "../workflow/entries";
-import { NAME_DOWN, SET_PAD } from "../workflow/look";
+import { NAME_DOWN, TAB_INSET } from "../workflow/look";
 import { COLORS } from "../../../theme/colors";
 import type { PageIcon } from "./icons";
 import { textWidth, type PageText } from "./texts";
@@ -16,13 +16,19 @@ import { pagePx } from "./units";
  * - in Meno's warning colour, with the warning icon - `warn`; below the
  * zoom words are read at, its icon alone. `edges`: its sides and corners
  * take the pointer, to size it. `opacity`: as present as the caller fades
- * it (DURATION, EASE).
+ * it (DURATION, EASE). `outward`: what lies inside it may be sent away
+ * from this computer - a conversation's scope - its line dashed, in Meno's
+ * colour, never a set's hairline (the maintainer, 2026-11-07).
  */
 export type FrameTab = {
   key: string;
   box: Frame;
   tabOnly?: true;
   tone: "rest" | "hover" | "chosen";
+  /** What lies inside it may be sent away from this computer: its own line, not a set's. */
+  outward?: true;
+  /** How far its tone has come, eased (0 at rest, 1 pointed at, 2 chosen): an outward line's weight follows it. */
+  level?: number;
   tab: { icon: string; name: string; status?: string; warn?: string };
   /** Its icon only where its words are too small to read, standing in for them: a set's tab says its name alone, read. */
   iconWhenSmall?: true;
@@ -37,6 +43,19 @@ export const FRAME_COLORS = { line: COLORS.hairline, hover: COLORS.quiet, chosen
 
 /** A frame's corners, its line, and its tab's words and icons, in page pixels: as a set's (rounded-xl, the hair line, text-[11px], h-3.5, gap-1.5). */
 export const FRAME_PX = { radius: 12, line: 1, words: 11, icon: 14, gap: 6, edge: 8 } as const;
+
+/** An outward frame's line (`FrameTab.outward`): dashed in Meno's colour - a little heavier pointed at, heavier chosen - in page px. */
+export const OUTWARD_LINE = { color: COLORS.base, rest: 1, hover: 1.5, chosen: 2, dashed: { onPx: 6, offPx: 4 } } as const;
+
+/** A frame's line as its tone has it: a set's hairline, darker pointed at, Meno's colour chosen; an outward one's dashes. */
+export function frameLine(it: Pick<FrameTab, "tone" | "outward" | "level">): { widthPx: number; color: string; dashed?: { onPx: number; offPx: number } } {
+  if (it.outward) {
+    const level = it.level ?? { rest: 0, hover: 1, chosen: 2 }[it.tone];
+    const widthPx = level <= 1 ? OUTWARD_LINE.rest + (OUTWARD_LINE.hover - OUTWARD_LINE.rest) * level : OUTWARD_LINE.hover + (OUTWARD_LINE.chosen - OUTWARD_LINE.hover) * (level - 1);
+    return { widthPx, color: OUTWARD_LINE.color, dashed: OUTWARD_LINE.dashed };
+  }
+  return { widthPx: FRAME_PX.line, color: it.tone === "chosen" ? FRAME_COLORS.chosen : it.tone === "hover" ? FRAME_COLORS.hover : FRAME_COLORS.line };
+}
 
 const SIDES: readonly Side[] = ["n", "s", "e", "w", "ne", "nw", "se", "sw"];
 const CURSOR: Record<Side, string> = { n: "ns-resize", s: "ns-resize", e: "ew-resize", w: "ew-resize", ne: "nesw-resize", sw: "nesw-resize", nw: "nwse-resize", se: "nwse-resize" };
@@ -66,20 +85,19 @@ export function frameTabParts(items: readonly FrameTab[], read: boolean): { shap
   const regions: Region[] = [];
   for (const it of items) {
     const { x0, y0, x1, y1 } = it.box;
-    const color = it.tone === "chosen" ? FRAME_COLORS.chosen : it.tone === "hover" ? FRAME_COLORS.hover : FRAME_COLORS.line;
-    const line = { widthPx: FRAME_PX.line, color };
+    const line = frameLine(it);
     const fade = it.opacity != null ? { opacity: it.opacity } : {};
     const top = y1;
     const mid = top - BAND / 2;
-    const left = x0 + SET_PAD;
-    const tabRight = left + pagePx(tabWidthPx(it.tab, read, it.iconWhenSmall)) + SET_PAD;
+    const left = x0 + TAB_INSET;
+    const tabRight = left + pagePx(tabWidthPx(it.tab, read, it.iconWhenSmall)) + TAB_INSET;
     // (its frame - or, of the whole page, its tab alone, a box of its own)
     if (it.tabOnly) shapes.push({ kind: "box", key: `${it.key}:tab`, x0, y0: top - BAND, x1: tabRight, y1: top, radiusPx: FRAME_PX.radius, fill: FRAME_COLORS.fill, line, z: 1, ...fade });
     else shapes.push({ kind: "box", key: `${it.key}:frame`, x0, y0, x1, y1, radiusPx: FRAME_PX.radius, line, z: 0, ...fade });
     // (its tab's words: its icon, then - read - its name, its status, its warning)
     let x = left;
     if (!it.iconWhenSmall || !read) {
-      icons.push({ key: `${it.key}:icon`, icon: it.tab.icon, x: x + pagePx(FRAME_PX.icon / 2), y: mid, sizePx: FRAME_PX.icon, color: FRAME_COLORS.quiet, ...fade });
+      icons.push({ key: `${it.key}:icon`, icon: it.tab.icon, x: x + pagePx(FRAME_PX.icon / 2), y: mid, sizePx: FRAME_PX.icon, color: it.outward ? OUTWARD_LINE.color : FRAME_COLORS.quiet, ...fade });
       x += pagePx(FRAME_PX.icon);
     } else x -= pagePx(FRAME_PX.gap);
     if (read) {
