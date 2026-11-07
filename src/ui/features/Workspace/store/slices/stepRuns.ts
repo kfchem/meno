@@ -114,10 +114,11 @@ export function notMade(places: readonly number[], of: number): string {
  * The structures not made in 3D because their drawing leaves a stereocentre
  * or a double bond open that could go more than one way, by their places
  * among `of`: a conformer search never chooses a configuration the drawing
- * does not give.
+ * does not give. Said as each one's record says it (`openWhy`): what to put
+ * before Conformers, the same for one or several.
  */
 export function stereoOpen(places: readonly number[], of: number): string {
-  return `${structuresAt(places)} of ${of} ${places.length === 1 ? "leaves" : "leave"} stereo open: draw it, wedges and all`;
+  return `${structuresAt(places)} of ${of} ${places.length === 1 ? "leaves" : "leave"} stereo open: put Stereoisomers before Conformers`;
 }
 
 /** What a conformer search of molecules in 3D, run as jobs, says where it was asked for as many as each molecule needs: one round, the molecule's own count - rounds are asked of structures drawn (chem/conformerRounds). */

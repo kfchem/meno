@@ -22,7 +22,7 @@ const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");
 import { rmsd } from "./rmsd";
 import { addSet, addStep, connect, fitSets, moveSet, removeSet, removeStep, removeWire, resizeSet, updateStep } from "./model";
 import { energiesBy, laidOver, placeResults, resultsOf, runStep, type RunWith } from "./run";
-import { offeredSteps } from "./offered";
+import { offeredFirst, offeredSteps } from "./offered";
 import { inputsOf, needsOf } from "./kinds";
 import { doerOf } from "./doers";
 import { pluginById } from "../../../../lib/calc/catalog";
@@ -993,6 +993,40 @@ describe("Quick Add's calculations", () => {
     expect(canWire(gen, { set: 1 }, id)).toBe(false);
     expect(connect(gen, { set: 1 }, id)).toBe(gen);
     expect(inputsOf("generate")).toEqual([]);
+  });
+});
+
+describe("Quick Add, for structures that leave their stereo open", () => {
+  const offered = (...a: Parameters<typeof offeredSteps>) => offeredSteps(...a).map((g) => [g.name, g.steps.map((k) => k.kind)]);
+  afterEach(() => useReaders.setState({ state: {}, problem: {} }));
+
+  it("offers Stereoisomers first from a Generate's exit: Meno's line first, and it first in it", () => {
+    useReaders.setState({ state: { molgen: "added", sketchkit: "added" }, problem: {} });
+    const gen = addStep(page(), "generate", 9, 0, undefined, "molgen");
+    const id = gen.steps![gen.steps!.length - 1].id;
+    expect(offeredFirst(gen, exitSet(gen, id))).toBe("stereoisomers");
+    const lines = offered(gen, exitSet(gen, id));
+    expect(lines[0][0]).toBe("Meno");
+    expect((lines[0][1] as string[])[0]).toBe("stereoisomers");
+    // (the rest as they were, after it: the plugin's line, and Meno's others in their order)
+    expect(lines).toEqual([["Meno", ["stereoisomers", "filter", "check-structures", "enumerate", "chart"]], ["Sketchkit", ["conformers", "descriptors"]]]);
+  });
+
+  it("and from Conformers' Failed exit - not from its conformers, nor from a set the chemist made", () => {
+    useReaders.setState({ state: { sketchkit: "added" }, problem: {} });
+    let doc = addSet({ ...page(), model: { atoms: [{ id: 1, x: 40, y: 0, r: 0.9, el: "C" }, { id: 2, x: 41.5, y: 0, r: 0.9, el: "O" }], bonds: [{ id: 1, a: 1, b: 2, order: 1 }] } }, { x0: 38, y0: -2, x1: 44, y1: 2 });
+    const drawn = doc.sets![doc.sets!.length - 1].id;
+    doc = addStep(doc, "conformers", 50, 0, undefined, "sketchkit");
+    const conf = doc.steps![doc.steps!.length - 1].id;
+    doc = connect(doc, { set: drawn }, conf);
+    // (run, its Failed exit holds the structures drawn it could not make)
+    const failed = exitSet(doc, conf, "failed").set;
+    doc = { ...doc, sets: doc.sets!.map((b) => (b.id === failed ? { ...b, made: { ...b.made!, holds: "structures" as const } } : b)) };
+    expect(offeredFirst(doc, exitSet(doc, conf, "failed"))).toBe("stereoisomers");
+    expect(offered(doc, exitSet(doc, conf, "failed"))[0]).toEqual(["Meno", ["stereoisomers", "filter", "check-structures", "enumerate", "chart"]]);
+    expect(offeredFirst(doc, exitSet(doc, conf))).toBeNull();
+    expect(offeredFirst(doc, { set: drawn })).toBeNull();
+    expect(offeredFirst(doc)).toBeNull();
   });
 });
 
