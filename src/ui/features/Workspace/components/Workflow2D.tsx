@@ -16,7 +16,7 @@ import { countOf, countSaid, numberedOn, recordHow, recordNumber, recordWhy, typ
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { lookEvery } from "../workflow/lookEvery";
 import { labelReach, selectionFrame, selectionInSet } from "../workflow/selectionSet";
-import { isHeld, unseenSets } from "../workflow/onPage";
+import { unseenSets } from "../workflow/onPage";
 import { exitChip, exitNames } from "../workflow/exitNames";
 import type { Drawn } from "../pageGl/PagePlaced";
 import PagePlaced, { usePlaced } from "../pageGl/PagePlaced";
@@ -1240,9 +1240,10 @@ export default function Workflow2D() {
             </div>
           ))}
           {shownParts.map(({ key, item, leaving }) => {
-            // (a step's result set held off the page now: folding into its exit's port, as it last was)
+            // (a step's result set drawn nowhere now - held off the page, or an exit's for what its step sets aside, given nothing:
+            //  folding into its exit's port, as it last was)
             const set = leaving && key.startsWith("b") ? sets.find((x) => x.id === Number(key.slice(1))) : undefined;
-            const fold = set?.made && isHeld({ sets, wires }, set) ? foldAbout(set) : undefined;
+            const fold = set?.made && unseen.has(set.id) ? foldAbout(set) : undefined;
             return leaving ? (
               // (gone: as it last was, fading, and no longer taking the pointer)
               <div key={key} inert className={fold ? "meno-fold-out" : "meno-fade-out"} style={fold}>

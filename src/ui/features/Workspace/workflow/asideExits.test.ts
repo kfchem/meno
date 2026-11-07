@@ -82,6 +82,8 @@ describe("an exit for what a step sets aside (docs/WORKFLOWS.md, *Exits that set
     const src = readFileSync(join(__dirname, "../components/Workflow2D.tsx"), "utf8");
     expect(src).toMatch(/const unseen = useMemo\(\(\) => unseenSets\(\{ sets, wires, steps \}\), \[sets, wires, steps\]\);/);
     expect(src).toMatch(/const onPage = useMemo\(\(\) => \(unseen\.size \? sets\.filter\(\(b\) => !unseen\.has\(b\.id\)\) : sets\), \[sets, unseen\]\);/);
+    // (given nothing again: folding into its port as a held set does, not fading)
+    expect(src).toMatch(/const fold = set\?\.made && unseen\.has\(set\.id\) \? foldAbout\(set\) : undefined;/);
   });
 
   it("is the same answer, the same object, while only the cards move - so what is drawn of the sets is not worked out again", () => {
