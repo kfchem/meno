@@ -31,7 +31,7 @@ A step takes on its card's left edge and gives on its right: a port for each inp
 
 ## A step added from a port {#adding}
 
-Drag a wire out of a step's exit and let go on empty space: the steps that take what that exit gives are offered there, and only those. The step you choose is put close by, just to the right of the card it comes from, its input level with the port so that the wire runs straight - or lower, where something is there already. It comes wired, and one undo takes both away.
+Drag a wire out of a step's exit and let go on empty space: the steps that take what that exit gives are offered there, and only those. The step you choose is put close by, just to the right of the card it comes from, its input level with the port so that the wire runs straight - or below that card, where something is there already. It comes wired, and one undo takes both away.
 
 ## Where results go {#results}
 
@@ -40,6 +40,7 @@ What a step gives is in its exits.
 - An exit wired on to another step shows no frame. Its results are held off the page, the wire runs from card to card, and the next step takes them from there.
 - An exit not wired on shows its results in a frame to the right of the card: molecules or structures to pick up and work on, as anything else on the page. Until its step runs, the frame says *Not run yet*.
 - An exit for what a step sets aside - *Failed*, *The rest* - is its port alone while it holds nothing, and shows its frame once it holds anything.
+- Point at the port of an exit wired on, and what its results hold is said beside it.
 - To see results held off the page, click the exit's port, or right-click it and choose *Show on the page*. On a wire, right-click and choose *Show its results on the page*. They are laid out where their frame was. Click the port again to hold them off the page.
 - A set of more than 50 shows a summary in its frame. *Open as a table*, on its menu, opens it in the column.
 
