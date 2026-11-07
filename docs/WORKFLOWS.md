@@ -3147,7 +3147,11 @@ molecules in 3D does: *Open as a table* on its menu (workflow
   holds off it (`drawnCollection`), all of them, in the step's order - the
   page's first, as a step after it takes them (`setStructures`). A set
   that shows 50 of 120 has 120 rows.
-- **Its columns**: its place (#); its SMILES as the step that made it
+- **Its columns**: its place (#); which structure it is, as a number
+  (`structure`): the number its record carries where every one carries
+  one (an *Enumerate*'s), else its place from 1, never the two mixed - what
+  a chart takes across to plot a value for each structure, a value a
+  record holds by that name said apart as `structure (record)` (2026-11-06); its SMILES as the step that made it
   gave it (`SMILES (record)`, `smiles` on its record, its stereo with it),
   where any did; its SMILES as Meno writes it from the drawing (`SMILES
   (drawing, constitution only)`: Kekulé, a label of no element as `*`,
@@ -3433,7 +3437,14 @@ it.
 - **Its two exits add up to what came in**: those kept, in the order they
   came, and *The rest*, both counted on its line, with how many of the
   rest were set aside for each reason ("2 of 4 entries kept · rest 2 (1:
-  not nll < 30 (40); 1: it has no nll)"). An entry with no value for a
+  not nll < 30; 1: it has no nll)"). The line counts them by the
+  conditions not met, a number's without its value, so that forty
+  structures over a limit are one count, not forty ("rest 12 (8: not nll
+  < 40; 4: not mw ≤ 500 g/mol)"); each one's own value is on its record
+  as it is set aside ("not nll < 40 (45)"), in the set and its table.
+  A text or true or false is counted with its value, being a kind rather
+  than an entry's own number ("2: not state = finished (not converged)")
+  (2026-11-06). An entry with no value for a
   property named does not meet that condition, and is never dropped
   unsaid. What it keeps and sets aside is as it came: its number, its
   energy, its properties.
@@ -3697,7 +3708,9 @@ one - and gives a
 chart, one column of numbers against another, in a set of its own to the
 right of it. Its options name the columns, *Across* and *Up*; none named,
 it takes the first two columns of numbers (molecules seen as a table:
-each entry's number, then its energy).
+each entry's number, then its energy; structures drawn: which structure
+each is, `structure`, then the first value their records hold - a value
+for each structure).
 - **A chart of molecules plots no entry that is no result**: one that
   failed, by any kind, or whose marks did not read refuses it, each named,
   as an *Energy diagram*'s levels do (`notResults`, 2026-10-23).

@@ -109,7 +109,10 @@ embed both.
     the volume its three neighbours span. It is specified, and the key is
     the plugin's, then Meno's for those centres, so that two P-epimers are
     two stereoisomers, and a phosphine is not taken for one whose
-    configuration is unspecified;
+    configuration is unspecified. Meno's is the identity of the molecule
+    with those centres, its bonds marked aromatic (a file's type 4)
+    written out as a Kekulé structure first, so that one molecule has one
+    key whichever way its file gives its rings (2026-11-06);
   - but only where its three bond angles add up to 350 degrees or less.
     A pyramid inverts through the planar form, its three angles then 360
     (Rauk, Allen and Mislow, Angew. Chem. Int. Ed. Engl. 9, 400, 1970,
@@ -1471,8 +1474,13 @@ and the seed's values as the seed's (`made_from.<name>`, one level, as
 *Stereoisomers* carries them), never as its own. Nothing is chosen for it. One whose stereo cannot be
 asked about is kept, and counted as *with stereo not examined*. A SMILES
 that cannot be read is counted on the step's line as *not read*, never
-dropped unsaid, the first five named with why: *20 sampled ... · 18 made
-· 3 with stereo left open · 2 not read: C1CC (a ring left open), …*.
+dropped unsaid: *20 sampled ... · 18 made · 3 with stereo left open · 2
+not read*. Each one - its SMILES as given, whole, and why - is named
+where the line is pointed at, one to a line, the first thirty, the rest
+counted (*C1CC: a ring left open*; workflow/programs `notReadNamed`,
+`StepRan.named`). Fewer are named where long ones would pass what a saved
+page keeps (4,000 characters, `NAMED_KEPT`), so every line is kept whole. Named on the line itself, a few long SMILES with their
+reasons made it a paragraph, cut short where it mattered (2026-11-06).
 Where none can be read, the step fails, saying so.
 What the plugin gives that is not this form - a value with a unit Meno
 does not know, a SMILES missing, a seed that did not come in - takes none

@@ -129,7 +129,7 @@ describe("an Energy diagram step", () => {
     const later: RunWith = { ...W, now: 2000 };
     doc = runStep(doc, step, later);
     const ran = (id: number) => doc.steps!.find((x) => x.id === id)!.ran!;
-    expect([ran(filter).at, ran(filter).said]).toEqual([2000, "1 of 2 entries kept \u00b7 rest 1 (1: not energy < -76.41 Eh (-76.4 Eh))"]);
+    expect([ran(filter).at, ran(filter).said]).toEqual([2000, "1 of 2 entries kept \u00b7 rest 1 (1: not energy < -76.41 Eh)"]);
     expect([ran(step).ok, ran(step).said]).toEqual([false, "It takes two levels at least"]);
     // (and where the Filter fails, the diagram says so, and does not run on what it gave before)
     doc = updateStep(doc, filter, { options: { conditions: "energy <" } });

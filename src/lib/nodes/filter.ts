@@ -19,7 +19,7 @@
  */
 import type { Entry, Property } from "../entry";
 import { isUnit, UNITS, type Unit } from "../units";
-import { entries as count, numberIn, setAside, tally, unitLabel, unreadable, type NodeOutcome } from "./base";
+import { entries as count, numberIn, setAside, unitLabel, unreadable, type NodeOutcome } from "./base";
 
 /** A comparison: less than, at most, more than, at least, equal to, other than. Text and true/false compare by = and ≠ alone. */
 export type Comparison = "<" | "≤" | ">" | "≥" | "=" | "≠";
@@ -83,13 +83,20 @@ function badCondition(c: Condition): string | null {
 }
 
 /** Whether an entry meets a condition; or why it does not - its value compared and found not to (`asked`), or none it could be compared by: not there, not worked out, not finite, of another unit or kind. */
-type Met = true | { why: string; asked: boolean };
+/**
+ * A condition met, or why not - `why`, said on the entry set aside, its own
+ * value with it; and, for a number, the condition it did not meet without
+ * the value (`unmet`), by which those set aside are counted on the step's
+ * line - a number is the entry's own, where a text or true or false
+ * (a state, "not converged") is a kind, and counted as it is.
+ */
+type Met = true | { why: string; asked: boolean; unmet?: string };
 function meets(e: Entry, c: Condition): Met {
   if ("its" in c) return meetsIts(e, c);
   if (typeof c.value === "number") {
     const v = numberIn(e, c.property, c.unit ?? "none");
     if ("why" in v) return { why: v.why, asked: false };
-    return compares(v.value, c.compare, c.value) || { why: `not ${conditionText(c)} (${trim(v.value)}${c.unit && c.unit !== "none" ? ` ${unitLabel(c.unit)}` : ""})`, asked: true };
+    return compares(v.value, c.compare, c.value) || { why: `not ${conditionText(c)} (${trim(v.value)}${c.unit && c.unit !== "none" ? ` ${unitLabel(c.unit)}` : ""})`, asked: true, unmet: `not ${conditionText(c)}` };
   }
   const p = e.properties[c.property];
   const why = unreadable(p, c.property);
@@ -121,7 +128,7 @@ function meetsIts(e: Entry, c: Extract<Condition, { its: string }>): Met {
     if ("why" in left) return { why: left.why, asked: false };
     // (each said as the entry holds it, in its own unit - never a number converted that the chemist never had)
     const held = (q: Property) => `${trim(q.value as number)}${q.unit !== "none" ? ` ${unitLabel(q.unit)}` : ""}`;
-    return compares(left.value, c.compare, v.value) || { why: `not ${conditionText(c)} (${held(p!)} and ${held(e.properties[c.its]!)})`, asked: true };
+    return compares(left.value, c.compare, v.value) || { why: `not ${conditionText(c)} (${held(p!)} and ${held(e.properties[c.its]!)})`, asked: true, unmet: `not ${conditionText(c)}` };
   }
   const q = e.properties[c.its]!;
   if (typeof q.value !== typeof p!.value) return { why: `its ${c.property} is ${kindOf(p!.value)} and its ${c.its} ${kindOf(q.value)}`, asked: false };
@@ -163,6 +170,8 @@ export function filter(entries: readonly Entry[], options: FilterOptions): NodeO
   }
   const kept: Entry[] = [];
   const rest: Entry[] = [];
+  // (what each set aside did not meet, without its own value: what the line counts them by - each value stays on its entry)
+  const restUnmet: string[] = [];
   // (kept where any is met, another not asked of it - no value, of another unit or kind: said, never passed over)
   const notAsked: string[] = [];
   let keptNotAsked = 0;
@@ -170,6 +179,7 @@ export function filter(entries: readonly Entry[], options: FilterOptions): NodeO
     const no = options.unread?.(e);
     if (no) {
       rest.push(setAside(e, no));
+      restUnmet.push(no);
       continue;
     }
     const results = options.conditions.map((c) => meets(e, c));
@@ -180,12 +190,15 @@ export function filter(entries: readonly Entry[], options: FilterOptions): NodeO
       const not = unmet.filter((r) => !r.asked);
       if (not.length) keptNotAsked++;
       notAsked.push(...not.map((r) => r.why));
-    } else rest.push(setAside(e, unmet.map((r) => r.why).join("; ")));
+    } else {
+      rest.push(setAside(e, unmet.map((r) => r.why).join("; ")));
+      restUnmet.push(unmet.map((r) => r.unmet ?? r.why).join("; "));
+    }
   }
   const said =
     `${kept.length} of ${count(entries.length)} kept` +
     (keptNotAsked ? ` · ${keptNotAsked} of them with a condition not asked (${counted(notAsked)})` : "") +
-    (rest.length ? ` · rest ${rest.length} (${tally(rest)})` : "");
+    (rest.length ? ` · rest ${rest.length} (${counted(restUnmet)})` : "");
   return { ok: true, exits: { kept, rest }, said };
 }
 

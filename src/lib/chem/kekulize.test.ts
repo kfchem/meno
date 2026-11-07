@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AROMATIC_BOND, kekuleOrders, kekulized, type KekuleBond } from "./kekulize";
+import { AROMATIC_BOND, kekuleOrders, kekulized, valenceOrders, type KekuleBond } from "./kekulize";
 import { readSmiles } from "./smiles";
 import { implicitHydrogens } from "./molecule";
 
@@ -258,5 +258,36 @@ describe("which atom carries an H the input did not place (kekulized hChosen)", 
     expect(chosen("c1ccncc1")).toEqual([]); // pyridine
     expect(chosen("c1cnccn1")).toEqual([]); // pyrazine
     expect(chosen("c1c[nH]cn1")).toEqual([]); // imidazole, its H stated
+  });
+});
+
+describe("the orders an atom's hydrogens are counted from (valenceOrders)", () => {
+  const ring = (els: string[]) => ({ atoms: els.map((el) => ({ el })), bonds: els.map((_, i) => ({ a: i, b: (i + 1) % els.length, order: AROMATIC_BOND })) });
+  const hydrogens = (m: ReturnType<typeof ring>) => {
+    const orders = valenceOrders(m.atoms, m.bonds);
+    return m.atoms.map((a, i) => implicitHydrogens(a.el, m.bonds.reduce((n, b, k) => n + (b.a === i || b.b === i ? orders[k] : 0), 0), 0));
+  };
+
+  it("gives a pyrrole's N, its bonds aromatic and no H stated, its hydrogen - and a pyridine's none", () => {
+    expect(hydrogens(ring(["N", "C", "C", "C", "C"]))).toEqual([1, 1, 1, 1, 1]);
+    expect(hydrogens(ring(["N", "C", "C", "C", "C", "C"]))).toEqual([0, 1, 1, 1, 1, 1]);
+    expect(hydrogens(ring(["O", "C", "C", "C", "C"]))).toEqual([0, 1, 1, 1, 1]);
+  });
+
+  it("leaves an aromatic bond no Kekulé structure makes double single - a hydrogen more, never fewer", () => {
+    // (a ring of five carbons, its bonds aromatic: two doubles at most, one carbon left with none)
+    const orders = valenceOrders(ring(["C", "C", "C", "C", "C"]).atoms, ring(["C", "C", "C", "C", "C"]).bonds);
+    expect(orders.every((o) => o === 1 || o === 2)).toBe(true);
+    expect(orders.filter((o) => o === 2)).toHaveLength(2);
+    expect(hydrogens(ring(["C", "C", "C", "C", "C"])).sort()).toEqual([1, 1, 1, 1, 2]);
+  });
+
+  it("leaves bonds not aromatic as they are, and a molecule with none untouched", () => {
+    const bonds = [
+      { a: 0, b: 1, order: 2 },
+      { a: 1, b: 2, order: 1 },
+      { a: 2, b: 3, order: 3 },
+    ];
+    expect(valenceOrders(["C", "C", "C", "N"].map((el) => ({ el })), bonds)).toEqual([2, 1, 3]);
   });
 });

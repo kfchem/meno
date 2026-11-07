@@ -22,7 +22,51 @@ describe("Filter", () => {
       ["d", { aside: "it has no relative energy" }],
     ]);
     expect(out.exits.kept.length + out.exits.rest.length).toBe(set.length);
-    expect(out.said).toBe("2 of 4 entries kept · rest 2 (1: not relative energy ≤ 3 kcal/mol (4 kcal/mol); 1: it has no relative energy)");
+    expect(out.said).toBe("2 of 4 entries kept · rest 2 (1: not relative energy ≤ 3 kcal/mol; 1: it has no relative energy)");
+  });
+
+  it("counts those set aside on its line by the condition they did not meet, each value said on its own entry", () => {
+    const g = (nll: number, mw: number) => ({ nll: quantity(nll, "none"), mw: quantity(mw, "g/mol") });
+    const many = [entry("a", g(30, 300)), entry("b", g(45, 300)), entry("c", g(56, 310)), entry("d", g(49, 552)), entry("e", g(62, 628)), entry("f", g(20, 725)), entry("g", g(44, 320))];
+    const out = filter(many, {
+      conditions: [
+        { property: "nll", compare: "<", value: 40 },
+        { property: "mw", compare: "≤", value: 500, unit: "g/mol" },
+      ],
+      match: "all",
+    });
+    if (!out.ok) throw new Error(out.said);
+    // (one group for each set of conditions not met - most first - not one for each value)
+    expect(out.said).toBe("1 of 7 entries kept · rest 6 (3: not nll < 40; 2: not nll < 40; not mw ≤ 500 g/mol; 1: not mw ≤ 500 g/mol)");
+    expect(out.exits.rest.map((e) => [e.id, e.status])).toEqual([
+      ["b", { aside: "not nll < 40 (45)" }],
+      ["c", { aside: "not nll < 40 (56)" }],
+      ["d", { aside: "not nll < 40 (49); not mw ≤ 500 g/mol (552 g/mol)" }],
+      ["e", { aside: "not nll < 40 (62); not mw ≤ 500 g/mol (628 g/mol)" }],
+      ["f", { aside: "not mw ≤ 500 g/mol (725 g/mol)" }],
+      ["g", { aside: "not nll < 40 (44)" }],
+    ]);
+  });
+
+  it("counts those set aside by a property against another of their own by the condition, the two values on each entry", () => {
+    const ab = (a: number, b: number) => ({ a: quantity(a, "none"), b: quantity(b, "none") });
+    const pairs = [entry("p", ab(1, 2)), entry("q", ab(3, 2)), entry("r", ab(5, 4)), entry("s", ab(9, 1))];
+    const out = filter(pairs, { conditions: [{ property: "a", compare: "<", its: "b" }], match: "all" });
+    if (!out.ok) throw new Error(out.said);
+    expect(out.said).toBe("1 of 4 entries kept · rest 3 (3: not a < its b)");
+    expect(out.exits.rest.map((e) => [e.id, e.status])).toEqual([
+      ["q", { aside: "not a < its b (3 and 2)" }],
+      ["r", { aside: "not a < its b (5 and 4)" }],
+      ["s", { aside: "not a < its b (9 and 1)" }],
+    ]);
+  });
+
+  it("counts those set aside by a text as it is, its value with it: a text is a kind, not an entry's own number", () => {
+    const text = (v: string): Property => ({ ...quantity(0, "none"), value: v });
+    const kinds = [entry("a", { route: text("found") }), entry("b", { route: text("lost") }), entry("c", { route: text("lost") }), entry("d", { route: text("open") })];
+    const out = filter(kinds, { conditions: [{ property: "route", compare: "=", value: "found" }], match: "all" });
+    if (!out.ok) throw new Error(out.said);
+    expect(out.said).toBe("1 of 4 entries kept · rest 3 (2: not route = found (lost); 1: not route = found (open))");
   });
 
   it("compares in the condition's unit: 1 kcal/mol is 4.184 kJ/mol exactly (the thermochemical calorie)", () => {
@@ -138,7 +182,7 @@ describe("Filter, on what cannot be compared", () => {
     if (!out.ok) throw new Error(out.said);
     expect(ids(out.exits.kept)).toEqual(["a", "b"]);
     expect(out.said).toBe(
-      "2 of 3 entries kept · 2 of them with a condition not asked (1: its gap is in eV, which does not convert to K; 1: it has no gap) · rest 1 (1: not nll < 20 (50); it has no gap)",
+      "2 of 3 entries kept · 2 of them with a condition not asked (1: its gap is in eV, which does not convert to K; 1: it has no gap) · rest 1 (1: not nll < 20; it has no gap)",
     );
     // (all met, nothing more to say)
     const met = filter(two.slice(0, 2), { conditions: [{ property: "nll", compare: "<", value: 20, unit: "none" }], match: "any" });
