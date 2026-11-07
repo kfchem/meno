@@ -1215,6 +1215,21 @@ export default function Workflow2D() {
               of={CARD_H / PX}
             />
           ))}
+          {/* (and its exits' ports down its right edge: a wire drawn out of one drawn out of that exit's set) */}
+          {exitsOf(s.kind).map((x, k, all) => {
+            const b = exitSets.get(`${s.id}:${x.id}`);
+            return b ? (
+              <Port
+                key={`exit:${x.id}`}
+                look={portLook("give", { set: b.id })}
+                label={all.length > 1 ? `${setInfo.get(b.id)?.name ?? x.name} out of ${info.name}` : `Out of ${info.name}`}
+                data={{ "data-give-set": String(b.id) }}
+                onPointerDown={(e) => drawFrom(e, { set: b.id })}
+                style={{ left: CARD_W / PX, top: portDown(k) / PX }}
+                of={CARD_H / PX}
+              />
+            ) : null;
+          })}
         </div>,
       ];
     }),
