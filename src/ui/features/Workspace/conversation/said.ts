@@ -50,23 +50,40 @@ const thingSaid = (id: unknown) => (typeof id === "string" ? (READ_KIND[id.split
 /** A count of things, in words: "one atom", "3 atoms". */
 const counted = (n: number, one: string, many = `${one}s`) => (n === 1 ? `one ${one}` : `${n} ${many}`);
 
-/** What one field of what was read says, in words: none where it says nothing a reader takes. */
+/** The fields of what is read that a reader is told, by what each is called in words: any other is the model's alone, never shown. */
+const FIELD_WORDS: Record<string, string> = { formula: "Formula", name: "Name", stereo: "Stereo", kind: "Kind", by: "By", ran: "Ran" };
+
+/** What one field of what was read says, in words: none where it says nothing a reader takes, or is not one a reader is told. */
 function fieldSaid(key: string, v: unknown): string | null {
-  // (an id is how the model names a thing back: no word of the page's)
-  if (v == null || v === "" || key === "id") return null;
-  if (Array.isArray(v)) return key === "atoms" ? counted(v.length, "atom") : key === "bonds" ? counted(v.length, "bond") : `${key}: ${counted(v.length, "item")}`;
-  if (typeof v === "object") {
-    const o = v as Record<string, unknown>;
-    if (key === "energies" && Array.isArray(o.values)) return `${counted(o.values.length, "energy", "energies")}, in ${String(o.unit ?? "")}`.trim();
-    if (key === "inScope") return `In the frame: ${counted(Number(o.structures) || 0, "structure")}, ${counted(Number(o.molecules) || 0, "molecule")}, ${counted(Number(o.pictures) || 0, "picture")}`;
-    const parts = Object.entries(o).filter(([, x]) => x != null && typeof x !== "object").map(([k, x]) => `${k} ${String(x)}`);
-    return parts.length ? `${key}: ${parts.join(", ")}` : null;
+  if (v == null || v === "") return null;
+  switch (key) {
+    case "atoms":
+      return Array.isArray(v) ? counted(v.length, "atom") : typeof v === "string" ? v : null;
+    case "bonds":
+      return Array.isArray(v) ? counted(v.length, "bond") : null;
+    case "smiles":
+      return `SMILES ${String(v)}`;
+    case "frames":
+      return Number(v) > 1 ? counted(Number(v), "frame") : null;
+    case "text":
+      return String(v).length > 200 ? `${String(v).slice(0, 200)}…` : String(v);
+    case "running":
+      return v === true ? "Running" : null;
+    case "energies": {
+      const o = v as { values?: unknown; unit?: unknown };
+      return Array.isArray(o.values) ? `${counted(o.values.length, "energy", "energies")}, in ${String(o.unit ?? "")}`.trim() : null;
+    }
+    case "inScope": {
+      const o = v as Record<string, unknown>;
+      return `In the frame: ${counted(Number(o.structures) || 0, "structure")}, ${counted(Number(o.molecules) || 0, "molecule")}, ${counted(Number(o.pictures) || 0, "picture")}`;
+    }
+    case "options": {
+      const parts = Object.entries(v as Record<string, unknown>).filter(([, x]) => x != null && typeof x !== "object").map(([k, x]) => `${k} ${String(x)}`);
+      return parts.length ? `Options: ${parts.join(", ")}` : null;
+    }
+    default:
+      return FIELD_WORDS[key] && typeof v !== "object" ? `${FIELD_WORDS[key]}: ${String(v)}` : null;
   }
-  if (key === "smiles") return `SMILES ${String(v)}`;
-  if (key === "frames") return Number(v) > 1 ? counted(Number(v), "frame") : null;
-  if (key === "text") return String(v).length > 200 ? `${String(v).slice(0, 200)}…` : String(v);
-  if (typeof v === "boolean") return v ? key : null;
-  return `${key[0].toUpperCase()}${key.slice(1)}: ${String(v)}`;
 }
 
 /**
@@ -87,7 +104,10 @@ export function foundRows(s: Extract<Said, { by: "tool" }> | undefined): string[
     return typeof o.more === "number" && o.more > 0 ? [...rows, `and ${o.more} more`] : rows;
   }
   if (Array.isArray(o.found)) {
-    const rows = o.found.map((id) => `${thingSaid(id)[0].toUpperCase()}${thingSaid(id).slice(1)}, ${String(id).split(":")[1] ?? ""}`.replace(/, $/, ""));
+    // (what was found, by what it is, counted: "2 structures")
+    const byKind = new Map<string, number>();
+    for (const id of o.found) byKind.set(thingSaid(id).replace(/^an? /, ""), (byKind.get(thingSaid(id).replace(/^an? /, "")) ?? 0) + 1);
+    const rows = [...byKind].map(([noun, n]) => `${n === 1 ? "One" : n} ${n === 1 ? noun : `${noun}s`} found`);
     if (Array.isArray(o.couldNotTell) && o.couldNotTell.length) rows.push(`Could not tell for ${counted(o.couldNotTell.length, "structure")}`);
     if (typeof o.notLookedAt === "number" && o.notLookedAt > 0) rows.push(`${counted(o.notLookedAt, "thing")} not looked at`);
     return rows;

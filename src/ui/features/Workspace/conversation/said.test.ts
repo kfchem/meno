@@ -40,7 +40,10 @@ describe("what a call found, unfolded", () => {
     expect(foundRows(tool("read", { atoms: [{}, {}, {}], bonds: [{}, {}], smiles: "CCO", stereo: "drawn, not written in the SMILES" }))).toEqual(["3 atoms", "2 bonds", "SMILES CCO", "Stereo: drawn, not written in the SMILES"]);
     expect(foundRows(tool("read", { formula: "C2H6O", name: "ethanol", atoms: [{}], frames: 1, energies: { values: [-1, -2], unit: "hartree" } }))).toEqual(["Formula: C2H6O", "Name: ethanol", "one atom", "2 energies, in hartree"]);
     expect(foundRows(tool("read", { name: "Esters", inScope: { structures: 2, molecules: 0, pictures: 1 } }))).toEqual(["Name: Esters", "In the frame: 2 structures, 0 molecules, one picture"]);
-    expect(foundRows(tool("search", { found: ["structure:1", "structure:4"], couldNotTell: ["structure:9"], notLookedAt: 2 }))).toEqual(["A structure, 1", "A structure, 4", "Could not tell for one structure", "2 things not looked at"]);
+    expect(foundRows(tool("search", { found: ["structure:1", "structure:4"], couldNotTell: ["structure:9"], notLookedAt: 2 }))).toEqual(["2 structures found", "Could not tell for one structure", "2 things not looked at"]);
+    expect(foundRows(tool("search", { found: ["molecule:7"] }))).toEqual(["One molecule found"]);
+    // (a step read: what a reader is told of it; a field no reader is told of, never shown by its name)
+    expect(foundRows(tool("read", { kind: "Conformers", by: "meno", options: { count: 10, seed: 1 }, ran: "done", running: true, internalKey: "x", nested: { a: 1 } }))).toEqual(["Kind: Conformers", "By: meno", "Options: count 10, seed 1", "Ran: done", "Running"]);
     // (a piece put down: nothing more than its line)
     expect(foundRows(tool("put_arrow", { id: "arrow:1" }))).toEqual([]);
     // (refused: its why is its line, nothing below it)
