@@ -8,7 +8,8 @@ import type { Atom, Bond, Model, Molecule3D } from "../store/types";
 import { signatureOf } from "../utils/drawnLink";
 import { atomNumbersOf } from "../utils/atomNumbers";
 import { readWorkspace, workspaceText } from "../utils/workspace";
-import { exportRefusal, keptMap, mapMarks, mapShows, mapStanding, unpairedSaid } from "./atomMap";
+import { readSDfile } from "../../../../lib/chem/ctfile";
+import { beforeNumbers, exportRefusal, keptMap, mappedPairSdf, mapMarks, mapShows, mapStanding, renumbered, unpairedSaid } from "./atomMap";
 import { conformersSaid, numbers3d, readStructureMaps, sideMolecules, sideNumbers } from "./structureMaps";
 
 /**
@@ -374,5 +375,50 @@ describe("an atom map's numbers on a molecule's conformers", () => {
     expect(Array.from(atomNumbersOf(m as never, "map", 3))).toEqual([0, 0]);
     // (another kind: the atoms' own, whatever the frame)
     expect(Array.from(atomNumbersOf(m as never, "order", 2))).toEqual([1, 2]);
+  });
+});
+
+describe("an atom map renumbered", () => {
+  /** The drawing's order of atoms, by id: as `page` draws them, or with Before's six carbons taken in reverse. */
+  const drawnOrder = (reverse = false) => {
+    const ids = [1, 2, 3, 4, 5, 6];
+    return new Map((reverse ? [...ids].reverse() : ids).map((id, i) => [id, i]));
+  };
+  const named = (numbers: readonly number[]) => Object.fromEntries(R_NAMES.map((k, i) => [k, numbers[i]]));
+
+  it("numbers Before's heavy atoms in the drawing's order, then each one's hydrogens in its turn - every number once", () => {
+    const { kept } = page();
+    // (as drawn: C1 to C6 are 1 to 6, then C1's two H, C2's, C3's, C4's two, C5's two and C6's two)
+    expect(named(renumbered(kept, drawnOrder()))).toMatchObject({ C1: 1, C2: 2, C3: 3, C4: 4, C5: 5, C6: 6, H1a: 7, H1b: 8, H2: 9, H3: 10, H4a: 11, H4b: 12, H5a: 13, H6b: 16 });
+    // (Before's carbons drawn the other way round: C6 first, its hydrogens first after the heavy atoms)
+    expect(named(renumbered(kept, drawnOrder(true)))).toMatchObject({ C6: 1, C5: 2, C4: 3, C1: 6, H6a: 7, H6b: 8, H1b: 16 });
+    const all = renumbered(kept, drawnOrder(true));
+    expect([...all].sort((p, q) => p - q)).toEqual(Array.from({ length: 16 }, (_, i) => i + 1));
+  });
+
+  it("is what the drawing, 3D and the export show, After's atoms taking their partners' - but not on a partial map", () => {
+    const { kept } = page();
+    const numbers = renumbered(kept, drawnOrder(true));
+    const map = { ...kept, numbers };
+    expect(beforeNumbers(map)).toEqual(numbers);
+    const n = sideNumbers(map);
+    const mapping = map.maps[map.chosen];
+    n.after.forEach((k, j) => expect(k).toBe(numbers[mapping[j]]));
+    // (on the drawing: C6 numbered 1)
+    expect(mapMarks(map, page().doc.model).numbers.get(R_ID.C6)).toBe(1);
+    // (in the export, C6 written first, where it is in 3D)
+    const records = readSDfile(mappedPairSdf(map, "da"));
+    const c6 = kept.reactant.atoms[R_NAMES.indexOf("C6")];
+    expect([records[0].atoms[0].x, records[0].atoms[0].y, records[0].atoms[0].z]).toEqual([c6.x, c6.y, c6.z].map((v) => Number(v.toFixed(4))));
+    // (a partial map keeps its own: those it pairs, as it holds them)
+    expect(beforeNumbers({ ...partial, numbers })).toEqual(beforeNumbers(partial));
+  });
+
+  it("is kept in the workspace's file, and numbers that are not each of 1 to n once are left out", () => {
+    const { kept } = page();
+    const numbers = renumbered(kept, drawnOrder(true));
+    expect(readStructureMaps([{ map: { ...kept, numbers } }]).maps[0].map.numbers).toEqual(numbers);
+    expect(readStructureMaps([{ map: { ...kept, numbers: numbers.map(() => 1) } }]).maps[0].map.numbers).toBeUndefined();
+    expect(readStructureMaps([{ map: { ...kept, numbers: numbers.slice(1) } }]).maps[0].map.numbers).toBeUndefined();
   });
 });

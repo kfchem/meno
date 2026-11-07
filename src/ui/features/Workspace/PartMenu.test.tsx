@@ -124,6 +124,12 @@ describe("the right-click menu", () => {
     expect(menu(target({ kind: "bond", id: 2 }), { pageMap: { held: { ...held, standing: "changed", onAgain: none } } }).listed).toEqual(["Atom map of the structure before its edit", "Map again", "Select this structure"]);
   });
 
+  it("offers a complete map renumbered, and says a partial one needs every atom mapped", () => {
+    const held = { standing: "ready" as const, shown: true, maps: 1, chosen: 0, onShow: none, onOther: none, onRenumber: none, onExport: none };
+    expect(menu(target({ kind: "atom", id: 1 }), { pageMap: { held } }).listed).toEqual(["Unpaired electron", "Hide atom map", "Renumber atoms", "Export reaction in 3D…", "Select this structure"]);
+    expect(menu(target({ kind: "atom", id: 1 }), { pageMap: { held: { ...held, standing: "incomplete" } } }).listed).toContain("Renumber atoms (needs every atom mapped)");
+  });
+
   it("says on a mapped structure how many conformer pairs its sides make, and those not numbered", () => {
     const held = { standing: "ready" as const, shown: true, maps: 1, chosen: 0, onShow: none, onOther: none, onExport: none, conformers: ["Conformers: 6 × 3 = 18 pairs", "Not numbered: 1 of 6 conformers of Before"] };
     expect(menu(target({ kind: "atom", id: 1 }), { pageMap: { held } }).listed).toEqual(["Unpaired electron", "Hide atom map", "Export reaction in 3D…", "Conformers: 6 × 3 = 18 pairs", "Not numbered: 1 of 6 conformers of Before", "Select this structure"]);

@@ -438,11 +438,20 @@ A reaction drawn on the page is mapped from its arrow's right-click menu,
   so each shows other numbers; maps that differ only in where the
   hydrogens go, which the drawing does not show, are not stepped through.
   `mapReaction` gives all of them, as ACCeL does.
+- **Renumber atoms** numbers the reactants' atoms by the drawing's order:
+  their heavy atoms as they are drawn, in the order of the drawing's atoms,
+  then each heavy atom's hydrogens in its turn; the products' atoms take
+  their partners' numbers, on the drawing, on the molecules in 3D and in
+  the export alike. One undo step. Without it, the heavy atoms are numbered
+  as the map holds them and the hydrogens after them. Only a complete map
+  is renumbered: a partial one's menu says it needs every atom mapped. (The
+  maintainer's reading of *Renumber* is still to come; this is the one
+  recommended, `renumbered` in chem/atomMap the one place it is chosen.)
 - **Export reaction in 3D...** writes an SD file of two records: the
   reactants in 3D, and the products with every atom - hydrogens too - in the
-  reactants' numbering, as a nudged elastic band, QST2 or an IRC's ends
-  need. (Two XYZ files may follow, written by a plugin, as Meno writes no
-  XYZ of its own.)
+  reactants' numbering, each atom written at its number's place, as a
+  nudged elastic band, QST2 or an IRC's ends need. (Two XYZ files may
+  follow, written by a plugin, as Meno writes no XYZ of its own.)
 - **An RXN file** (Export, copy) carries the map's numbers and centres
   whether or not they are shown.
 - **Partial** (the maintainer, 2026-10-30). Where not every atom finds its
@@ -500,8 +509,9 @@ offers *Atom map*.
   - The menu says how many pairs of conformers the two sides make, before
     any is made ("Conformers: 6 × 3 = 18 pairs").
 - **From a structure's menu** in a map: *Show / Hide atom map* (of all the
-  maps it is in), *Other map* ("2 of 4", stepping each of them), and
-  *Export reaction in 3D...* (Before and the first After, as above).
+  maps it is in), *Other map* ("2 of 4", stepping each of them), *Renumber
+  atoms* (Before's atoms by the drawing's order, as above), and *Export
+  reaction in 3D...* (Before and the first After, as above).
 - **Partial** is as an arrow's: a map whose atoms do not all pair numbers
   those that do - on the drawing and on the molecules in 3D - and names the
   rest in the menu ("Not mapped: C of Before; C of After"); its export says

@@ -14,6 +14,7 @@ import { newBondFrom } from "../../utils/geometry";
 import { bondLengthFrom } from "../../utils/magnified";
 import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
+import { renumbered } from "../../chem/atomMap";
 import { useReadings } from "../../../../../lib/calc/readings";
 import type { ImportedScheme, WorkspaceDocument } from "../../document";
 import type { ArrowLook } from "../../../../../lib/chem/reactionArrow";
@@ -315,6 +316,23 @@ export const createModelSlice = (
         (d.structureMaps ?? []).map((m) => (of.has(m.id) && m.map.maps.length > 1 ? { ...m, map: { ...m.map, chosen: (m.map.chosen + 1) % m.map.maps.length, shown: true } } : m)),
       ),
     );
+  },
+
+  renumberStructureMaps: (ids: readonly number[]) => {
+    const of = new Set(ids);
+    doc.edit("renumber atoms", (d) => {
+      const drawn = new Map(d.model.atoms.map((a, i) => [a.id, i]));
+      return ops.setStructureMaps(
+        d,
+        (d.structureMaps ?? []).map((m) => (of.has(m.id) && m.map.complete ? { ...m, map: { ...m.map, numbers: renumbered(m.map, drawn), shown: true } } : m)),
+      );
+    });
+  },
+
+  renumberAtomMap: (arrowId: number) => {
+    const map = get().arrows.find((a) => a.id === arrowId)?.atomMap;
+    if (!map?.complete) return;
+    doc.edit("renumber atoms", (d) => ops.setAtomMap(d, arrowId, { ...map, numbers: renumbered(map, new Map(d.model.atoms.map((a, i) => [a.id, i]))), shown: true }));
   },
 
   showAtomMap: (arrowId: number, shown: boolean) => {

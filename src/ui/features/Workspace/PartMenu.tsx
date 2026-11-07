@@ -166,10 +166,17 @@ export type MenuMolecule3D = {
  * atom paired - a partial map's atoms that do not pair named instead, and its
  * export said to need them all.
  */
-function mapShownItems(m: { standing: "ready" | "incomplete"; shown: boolean; maps: number; chosen: number; onShow: (shown: boolean) => void; onOther: () => void; onExport: () => void; unpaired?: string; conformers?: string[] }, divider: boolean): Item[] {
+function mapShownItems(
+  m: { standing: "ready" | "incomplete"; shown: boolean; maps: number; chosen: number; onShow: (shown: boolean) => void; onOther: () => void; onRenumber?: () => void; onExport: () => void; unpaired?: string; conformers?: string[] },
+  divider: boolean,
+): Item[] {
   return [
     { name: m.shown ? "Hide atom map" : "Show atom map", keys: "", run: () => m.onShow(!m.shown), divider },
     ...(m.maps > 1 ? [{ name: "Other map", keys: `${m.chosen + 1} of ${m.maps}`, run: m.onOther, keep: true }] : []),
+    // (Before's atoms numbered by the drawing's order, the rest following: a complete map's only)
+    ...(m.onRenumber
+      ? [m.standing === "ready" ? { name: "Renumber atoms", keys: "", run: m.onRenumber } : { name: "Renumber atoms (needs every atom mapped)", keys: "", run: () => {}, disabled: true }]
+      : []),
     ...(m.standing === "ready"
       ? [{ name: "Export reaction in 3D…", keys: "", run: m.onExport }]
       : [
@@ -407,6 +414,8 @@ export default function PartMenu({
       onMake: () => void;
       onShow: (shown: boolean) => void;
       onOther: () => void;
+      /** Its reactants' atoms numbered by the drawing's order, the rest following. */
+      onRenumber?: () => void;
       onExport: () => void;
       /** A partial map's atoms that do not pair, in words. */
       unpaired?: string;
@@ -422,7 +431,19 @@ export default function PartMenu({
    */
   pageMap?: {
     onMake?: () => void;
-    held?: { standing: "changed" | "incomplete" | "ready"; shown: boolean; maps: number; chosen: number; onShow: (shown: boolean) => void; onOther: () => void; onExport: () => void; onAgain?: () => void; unpaired?: string; conformers?: string[] };
+    held?: {
+      standing: "changed" | "incomplete" | "ready";
+      shown: boolean;
+      maps: number;
+      chosen: number;
+      onShow: (shown: boolean) => void;
+      onOther: () => void;
+      onRenumber?: () => void;
+      onExport: () => void;
+      onAgain?: () => void;
+      unpaired?: string;
+      conformers?: string[];
+    };
   };
   /** The part - an atom, a bond, a ring, the selection - given a colour, a highlight or a fill, in a card where the menu was. */
   onColour?: () => void;

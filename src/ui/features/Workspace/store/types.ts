@@ -195,6 +195,12 @@ export type ArrowAtomMap = {
   complete: boolean;
   chosen: number;
   shown: boolean;
+  /**
+   * Before's atoms' numbers, by its atom (chem/atomMap `beforeNumbers`), where
+   * they were renumbered (*Renumber atoms*); else its heavy atoms in its
+   * order, then its hydrogens.
+   */
+  numbers?: number[];
 };
 /** A change to an arrow's form and colour: each said is set - its kind, its heads (1 or 2), an equilibrium's full heads, dashes, weight, corners (none: straight) and colour - null or "regular" taking what it set away. */
 export type ArrowFormPatch = {
@@ -2185,6 +2191,10 @@ export type EditorState = {
   showStructureMaps: (ids: readonly number[], shown: boolean) => void;
   /** Each map between structures given, by id, showing its next map: one step. */
   otherStructureMaps: (ids: readonly number[]) => void;
+  /** Each complete map between structures given, by id, its Before's atoms numbered by the drawing's order (chem/atomMap `renumbered`): one step. */
+  renumberStructureMaps: (ids: readonly number[]) => void;
+  /** An arrow's complete atom map renumbered likewise: one step. */
+  renumberAtomMap: (arrowId: number) => void;
   /** An arrow's atom map shown on the drawing - its numbers and reacting centres - or taken off it, kept: one step. */
   showAtomMap: (arrowId: number, shown: boolean) => void;
   /** An arrow's next map, of those its reaction has, shown and used instead: one step. */

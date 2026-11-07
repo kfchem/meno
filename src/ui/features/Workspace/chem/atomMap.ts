@@ -177,12 +177,10 @@ export function mapMarks(map: ArrowAtomMap, model: Pick<Model, "bonds">): { numb
   if (!mapping) return { numbers, centres };
   // (a partial map: only the atoms it pairs numbered, and no bond's change told - which bonds change is the whole map's to say)
   const paired = pairedOf(map, mapping);
-  const number = new Array<number>(map.reactant.atoms.length).fill(0);
-  let next = 1;
+  const number = beforeNumbers(map);
   map.reactant.atoms.forEach((a, i) => {
     const id = map.reactant.drawnFrom[i];
-    if (a.el === "H" || id == null || !paired.has(i)) return;
-    number[i] = next++;
+    if (a.el === "H" || id == null || !paired.has(i) || !number[i]) return;
     numbers.set(id, number[i]);
   });
   mapping.forEach((r, j) => {
@@ -213,6 +211,57 @@ export function mapMarks(map: ArrowAtomMap, model: Pick<Model, "bonds">): { numb
   return { numbers, centres };
 }
 
+/**
+ * Each of Before's atoms' numbers, by its atom, 0 for none: those renumbered
+ * (`numbers`), on a complete map; else its drawn heavy atoms one after
+ * another as it holds them - the numbers the drawing shows - then the rest,
+ * its hydrogens, after them in the same order. Of a partial map, only those
+ * it pairs.
+ */
+export function beforeNumbers(map: ArrowAtomMap): number[] {
+  const n = map.reactant.atoms.length;
+  if (map.complete && map.numbers?.length === n) return [...map.numbers];
+  const out = new Array<number>(n).fill(0);
+  const mapping = map.maps[map.chosen] ?? map.maps[0];
+  if (!mapping) return out;
+  const paired = new Set(map.complete ? map.reactant.atoms.map((_, i) => i) : mapping.filter((r) => r >= 0));
+  const drawnHeavy = (i: number) => map.reactant.atoms[i].el !== "H" && map.reactant.drawnFrom[i] != null;
+  let next = 1;
+  for (let i = 0; i < n; i++) if (drawnHeavy(i) && paired.has(i)) out[i] = next++;
+  for (let i = 0; i < n; i++) if (!drawnHeavy(i) && paired.has(i)) out[i] = next++;
+  return out;
+}
+
+/**
+ * Before's numbers by the drawing's order (*Renumber atoms*, docs/ATOM-MAPPING.md):
+ * its heavy atoms as they are drawn - in the order of the drawing's atoms -
+ * then each heavy atom's hydrogens, in its turn; an atom drawn by none
+ * after those that are, as it was. The one place the order is chosen.
+ */
+export function renumbered(map: ArrowAtomMap, drawnOrder: ReadonlyMap<number, number>): number[] {
+  const atoms = map.reactant.atoms;
+  const n = atoms.length;
+  const around: number[][] = atoms.map(() => []);
+  for (const b of map.reactant.bonds) {
+    around[b.a1].push(b.a2);
+    around[b.a2].push(b.a1);
+  }
+  const place = (i: number) => {
+    const id = map.reactant.drawnFrom[i];
+    return id != null && drawnOrder.has(id) ? drawnOrder.get(id)! : Infinity;
+  };
+  const heavy = atoms.map((_, i) => i).filter((i) => atoms[i].el !== "H");
+  heavy.sort((p, q) => place(p) - place(q) || p - q);
+  const number = new Array<number>(n).fill(0);
+  heavy.forEach((i, k) => (number[i] = k + 1));
+  // (each H after the heavy atoms, by the number of the atom it is on; one on none, or on another H, last)
+  const on = (h: number) => around[h].map((x) => number[x]).find((v) => v > 0) ?? Infinity;
+  const hydrogens = atoms.map((_, i) => i).filter((i) => atoms[i].el === "H");
+  hydrogens.sort((p, q) => on(p) - on(q) || p - q);
+  hydrogens.forEach((i, k) => (number[i] = heavy.length + k + 1));
+  return number;
+}
+
 /** The drawn atoms a kept map is of: those its marks may be on. */
 export function mapAtoms(map: ArrowAtomMap): Set<number> {
   return new Set([...map.reactant.drawnFrom, ...map.product.drawnFrom].filter((id): id is number => id != null));
@@ -226,10 +275,20 @@ export function mapAtoms(map: ArrowAtomMap): Set<number> {
  */
 export function mappedPairSdf(map: ArrowAtomMap, title: string): string {
   const mapping = map.maps[map.chosen] ?? map.maps[0];
-  const reactant = map.reactant;
-  const atoms: ParsedAtom[] = new Array(reactant.atoms.length);
-  mapping.forEach((r, j) => (atoms[r] = { ...map.product.atoms[j] }));
-  const bonds: ParsedBond[] = map.product.bonds.map((b) => ({ a1: mapping[b.a1], a2: mapping[b.a2], order: b.order }));
+  // (each atom written at its number's place: the reactants' numbering, as the drawing and 3D show it)
+  const number = beforeNumbers(map);
+  const at = (i: number) => number[i] - 1;
+  const reactant = {
+    atoms: (() => {
+      const out: ParsedAtom[] = new Array(map.reactant.atoms.length);
+      map.reactant.atoms.forEach((a, i) => (out[at(i)] = { ...a }));
+      return out;
+    })(),
+    bonds: map.reactant.bonds.map((b) => ({ a1: at(b.a1), a2: at(b.a2), order: b.order })),
+  };
+  const atoms: ParsedAtom[] = new Array(map.reactant.atoms.length);
+  mapping.forEach((r, j) => (atoms[at(r)] = { ...map.product.atoms[j] }));
+  const bonds: ParsedBond[] = map.product.bonds.map((b) => ({ a1: at(mapping[b.a1]), a2: at(mapping[b.a2]), order: b.order }));
   const record = (name: string, as: readonly ParsedAtom[], bs: readonly ParsedBond[]) =>
     writeMolfile3d(
       as.map((a) => ({ el: a.el, x: a.x, y: a.y, z: a.z, ...(a.charge ? { charge: a.charge } : {}) })),

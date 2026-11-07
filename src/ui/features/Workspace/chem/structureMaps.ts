@@ -11,7 +11,7 @@ import type { Molecule } from "../../../../lib/chem/molecule";
 import { numberedLike } from "../../../../lib/chem/referenceNumbering";
 import type { ArrowAtomMap, Model, Molecule3D } from "../store/types";
 import { linkOf } from "../utils/drawnLink";
-import { mapShows, mapStanding } from "./atomMap";
+import { beforeNumbers, mapShows, mapStanding } from "./atomMap";
 
 /** A map kept between two structures on the page, numbered as it was made. */
 export type StructureMap = { id: number; map: ArrowAtomMap };
@@ -24,20 +24,9 @@ export type StructureMap = { id: number; map: ArrowAtomMap };
  */
 export function sideNumbers(map: ArrowAtomMap): { before: number[]; after: number[] } {
   const mapping = map.maps[map.chosen] ?? map.maps[0];
-  const before = new Array<number>(map.reactant.atoms.length).fill(0);
+  const before = beforeNumbers(map);
   const after = new Array<number>(map.product.atoms.length).fill(0);
   if (!mapping) return { before, after };
-  // (the drawn heavy atoms first, as chem/atomMap `mapMarks` numbers them on the drawing; then the rest - the hydrogens; of a
-  // partial map, only those it pairs)
-  const paired = new Set(map.complete ? map.reactant.atoms.map((_, i) => i) : mapping.filter((r) => r >= 0));
-  const drawnHeavy = (i: number) => map.reactant.atoms[i].el !== "H" && map.reactant.drawnFrom[i] != null;
-  let next = 1;
-  map.reactant.atoms.forEach((_, i) => {
-    if (drawnHeavy(i) && paired.has(i)) before[i] = next++;
-  });
-  map.reactant.atoms.forEach((_, i) => {
-    if (!drawnHeavy(i) && paired.has(i)) before[i] = next++;
-  });
   mapping.forEach((r, j) => (after[j] = r >= 0 ? (before[r] ?? 0) : 0));
   return { before, after };
 }
@@ -177,6 +166,11 @@ function sideRead(v: unknown): ArrowAtomMap["reactant"] | null {
   return { atoms, bonds, drawnFrom };
 }
 
+/** Whether `v` numbers `n` atoms 1 to n, each once. */
+function numbersRead(v: unknown, n: number): boolean {
+  return Array.isArray(v) && v.length === n && new Set(v).size === n && v.every((k) => Number.isInteger(k) && k >= 1 && k <= n);
+}
+
 /** The maps between structures a workspace's file keeps (`structureMaps`), each read whole or left out; numbered from 1, in order. */
 export function readStructureMaps(v: unknown): { maps: StructureMap[]; left: number } {
   const maps: StructureMap[] = [];
@@ -198,7 +192,17 @@ export function readStructureMaps(v: unknown): { maps: StructureMap[]; left: num
     }
     maps.push({
       id: maps.length + 1,
-      map: { drawnAs: m.drawnAs as string, reactant: reactant!, product: product!, maps: all as number[][], complete: complete && all!.length > 0, chosen: m.chosen as number, shown: m.shown !== false },
+      map: {
+        drawnAs: m.drawnAs as string,
+        reactant: reactant!,
+        product: product!,
+        maps: all as number[][],
+        complete: complete && all!.length > 0,
+        chosen: m.chosen as number,
+        shown: m.shown !== false,
+        // (Before's numbers, where renumbered: each atom one of 1 to n, none twice - else as it holds them)
+        ...(numbersRead(m.numbers, reactant!.atoms.length) ? { numbers: m.numbers as number[] } : {}),
+      },
     });
   }
   return { maps, left };
