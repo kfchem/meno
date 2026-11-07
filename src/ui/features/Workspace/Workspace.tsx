@@ -11,6 +11,7 @@ import { useEditor, useEditorStore, EditorProvider } from "./store";
 import { selectedOf, selectionIsAtom } from "./store/slices/selectionSlice";
 import { useStructureEvents } from "./hooks/useStructureEvents";
 import { useCanvasSetup } from "./hooks/useCanvasSetup";
+import PageHits from "./pageGl/PageHits";
 import {
   Atoms2D,
   Bonds2D,
@@ -143,7 +144,7 @@ import { exportKindOf, exportKinds, holdsOfDrawn, useFileActions, type FileActio
 import { setSavedPathOf, setSaver } from "../../../lib/doc/savers";
 import { useReadings } from "../../../lib/calc/readings";
 import { useCanvasRatio } from "./canvasRatio";
-import { editorLayoutOptions, startingZoom } from "./layoutOptions";
+import { editorLayoutOptions, startingZoom, setDrawnRatio } from "./layoutOptions";
 import { labelSetOf } from "../../../lib/chem/layout2d";
 import { useDrawingStyle } from "./useDrawingStyle";
 import { DrawnLayoutProvider } from "./components/DrawnLayout";
@@ -210,7 +211,7 @@ import { pictureRegion, readStructure } from "./components/readStructure";
 import { isFilm } from "../../../lib/picture/image";
 import { placedBeside, readMarks } from "./utils/figures";
 import { useNotices } from "../../notices";
-import { bareAtomsOf, bareWords, blocksOf, blocksStill, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, pageCount, placeRow, rowFrom, takenOnPage, turnedOver, withinWindow, type Block, type Box, type Open } from "./chem/make3d";
+import { bareAtomsOf, bareWords, blocksOf, blocksStill, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, pageCount, pageRounds, placeRow, rowFrom, takenOnPage, turnedOver, withinWindow, type Block, type Box, type Open } from "./chem/make3d";
 import { isomersToMake } from "./chem/openStereo";
 import { centredAt, clipItems } from "./utils/copyPaste";
 import { structureInOutput } from "./chem/fromClipboard";
@@ -222,7 +223,8 @@ import { addedBox } from "./store/slices/modelSlice";
 import { viewPanning } from "./components/viewGoal";
 import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gesture";
 import { Remake3D } from "./components/remake3d";
-import { mapStanding, reactionOf } from "./chem/atomMap";
+import { mapAtoms, mapStanding, reactionOf, unpairedSaid } from "./chem/atomMap";
+import { structuresOf } from "./workflow/entries";
 import { useAtomMaps } from "./chem/useAtomMaps";
 import { turnOnto } from "./utils/align3d";
 import type { ArrowFormPatch, Caption, Drawn, Molecule3D, PictureFrom, WordsFrom } from "./store/types";
@@ -356,6 +358,8 @@ function WorkspaceContent({
   const store = useEditorStore();
   // (how finely the canvas is drawn, as Settings has it: a change shows at once)
   const canvasRatio = useCanvasRatio();
+  // (bonds never thinner than one of the canvas's device pixels: layoutOptions `minLinePx`)
+  setDrawnRatio(canvasRatio);
   // (no menu over a talk)
   const talking = useEditor((s) => s.presenting != null);
   // (a structure selected: a guide's step waiting for it goes on)
@@ -537,7 +541,11 @@ function WorkspaceContent({
           if (stopped) return;
           // (within the window Settings gives: a workflow's conformer step keeps every one - make3d withinWindow)
           const window3d = useAppSettings.getState().chemistry.window3d ?? WINDOW_3D;
-          const isomersMade = (await conformersOf(chem, stereo, block, isomers, options, pageCount(block, useAppSettings.getState().chemistry))).map((c) => withinWindow(c, window3d));
+          // (as many as the molecule needs, in rounds, where its plugin's search takes draws: given a window first - make3d pageRounds)
+          const chosen = useAppSettings.getState().chemistry;
+          const rounds = pageRounds(block, chosen, !!plugin?.roleDraws.includes("conformers"));
+          if (rounds && "needs" in rounds) throw new Error(rounds.needs);
+          const isomersMade = (await conformersOf(chem, stereo, block, isomers, options, pageCount(block, chosen), rounds)).map((c) => withinWindow(c, window3d));
           // (several stereoisomers: their R and S shown, to tell them apart)
           const ms = isomersMade.map((c) => moleculeOf(c, block, isomersMade.length > 1));
           const model = store.getState().model;
@@ -1070,10 +1078,10 @@ function WorkspaceContent({
   // a molecule in 3D right-clicked: what its menu does to it
   const molecules3d = useEditor((s) => s.molecules3d);
   const chosen3d = useEditor((s) => s.chosen3d);
-  // (its molecules going over to a change of the workspace's styles in 3D, not jumping - at once in a very large drawing)
+  // (its molecules going over to a change of the workspace's styles in 3D, not jumping - at once in a very large drawing, or where none was drawn before it came)
   const target3d = useStyle3D();
   const atoms3d = useEditor((s) => s.molecules3d.reduce((n, m) => n + m.atoms.length, 0));
-  const style3d = useEasedStyle3D(target3d, atoms3d > LARGE_ATOMS);
+  const style3d = useEasedStyle3D(target3d, atoms3d > LARGE_ATOMS, atoms3d > 0);
   const styleNames3d = useStyleNames3D();
   const menuMolecule = menu?.kind === "molecule3d" ? molecules3d.find((m) => m.id === menu.id) : undefined;
   // a molecule's output shown in the column of texts, held in the
@@ -1745,7 +1753,7 @@ function WorkspaceContent({
           >
             <AnimatePresence mode="wait" initial={false}>
               <motion.span key={atomMaps.mapping.phase} {...FADE} className="block">
-                {atomMaps.mapping.phase === "3d" ? "Making the reaction's 3D structures…" : "Mapping the reaction's atoms…"}
+                {atomMaps.mapping.arrowId < 0 ? (atomMaps.mapping.phase === "3d" ? "Making the structures' 3D structures…" : "Mapping the structures' atoms…") : atomMaps.mapping.phase === "3d" ? "Making the reaction's 3D structures…" : "Mapping the reaction's atoms…"}
               </motion.span>
             </AnimatePresence>
             <Elapsed since={atomMaps.mapping.since} />
@@ -2564,10 +2572,60 @@ function WorkspaceContent({
                     onMake: () => void atomMaps.makeAtomMap(a.id),
                     onShow: (shown: boolean) => store.getState().showAtomMap(a.id, shown),
                     onOther: () => store.getState().otherAtomMap(a.id),
-                    onExport: () => void files.exportReaction3d(a.id),
+                    onExport: () => void files.exportReaction3d({ arrow: a.id }),
+                    ...(a.atomMap ? { unpaired: unpairedSaid(a.atomMap, ["the reactants", "the products"]) ?? undefined } : {}),
                   },
                 };
               })()),
+            };
+          })()}
+          pageMap={(() => {
+            // (atom maps between structures on the page: made from the structures selected, the one right-clicked Before -
+            // chem/structureMaps; and those the structure right-clicked is in)
+            const st = store.getState();
+            const of3d = menu.kind === "molecule3d" ? st.molecules3d.find((m) => m.id === menu.id) : undefined;
+            const at = menu.kind === "atom" || menu.kind === "bond" ? structureAt(menu.kind, menu.id) : of3d && linkOf(of3d, st.model) === "live" ? of3d.drawnFrom!.find((id) => id != null) ?? null : null;
+            if (at == null) return undefined;
+            const before = fragmentOf(st.model, at);
+            // (the structures selected: drawn, or a molecule in 3D still its drawing's)
+            const picked = new Set<number>(st.sel.atoms);
+            for (const m of st.molecules3d) if (st.sel3d.has(m.id) && linkOf(m, st.model) === "live") for (const id of m.drawnFrom!) if (id != null) picked.add(id);
+            const structures = structuresOf(st.model).filter((s) => s.some((id) => picked.has(id)));
+            const afters = structures.filter((s) => !s.some((id) => before.has(id)));
+            const makes = menu.selection === "here" && picked.has(at) && afters.length > 0;
+            const maps = st.structureMaps.filter((m) => [...mapAtoms(m.map)].some((id) => before.has(id)));
+            const first = maps[0];
+            const standing = first ? mapStanding({ atomMap: first.map }, st.model) : "none";
+            if (!makes && (!first || standing === "none")) return undefined;
+            const ids = maps.map((m) => m.id);
+            return {
+              ...(makes ? { onMake: () => void atomMaps.makeStructureMaps([...before], afters, (atoms) => build3d(blocksOf(store.getState().model, atoms), "one")) } : {}),
+              ...(first && standing !== "none"
+                ? {
+                    held: {
+                      standing,
+                      shown: maps.some((m) => m.map.shown),
+                      maps: first.map.maps.length,
+                      chosen: first.map.chosen,
+                      onShow: (shown: boolean) => store.getState().showStructureMaps(ids, shown),
+                      onOther: () => store.getState().otherStructureMaps(ids),
+                      onExport: () => void files.exportReaction3d({ structureMap: first.id }),
+                      unpaired: unpairedSaid(first.map, ["Before", "After"]) ?? undefined,
+                      // (of the structures before an edit: made again between them as they are now, the old ones' place taken)
+                      onAgain: () => {
+                        const now = store.getState().model;
+                        const present = new Set(now.atoms.map((a) => a.id));
+                        const otherSide = (m: (typeof maps)[number]) => {
+                          const inBefore = m.map.reactant.drawnFrom.some((id) => id != null && before.has(id));
+                          const id = (inBefore ? m.map.product : m.map.reactant).drawnFrom.find((x) => x != null && present.has(x));
+                          return id == null ? null : [...fragmentOf(now, id)];
+                        };
+                        const afters = maps.map(otherSide).filter((s): s is number[] => !!s && !s.some((id) => before.has(id)));
+                        void atomMaps.makeStructureMaps([...fragmentOf(now, at)], afters, (atoms) => build3d(blocksOf(store.getState().model, atoms), "one"), ids);
+                      },
+                    },
+                  }
+                : {}),
             };
           })()}
           push={(() => {
@@ -2660,6 +2718,8 @@ function WorkspaceContent({
         onCreated={onCreated}
       >
         <color attach="background" args={["#ffffff"]} />
+        {/* What WebGL draws on the page takes the pointer before anything else on the canvas, as the page's HTML did (pageGl/PageHits) */}
+        <PageHits>
         <FitToContent2D trigger={fitNonce} />
         {/* The drawing, laid out once for every layer below to draw from */}
         <DrawnLayoutProvider>
@@ -2759,6 +2819,7 @@ function WorkspaceContent({
         {/* (the view following the column over the canvas's right side) */}
         <FollowCover />
         <FollowStyle />
+        </PageHits>
       </Canvas>
       </PageHtmlLayer.Provider>
       {/* the page's HTML, cut off where the column begins (coverLayer) */}

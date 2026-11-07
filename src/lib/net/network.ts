@@ -99,6 +99,9 @@ export function purposeName(purpose: string): string {
   if (plugin) return `Setting up ${plugin.name}`;
   if (purpose.startsWith("python-env:"))
     return `Setting up Python (${purpose.slice("python-env:".length)})`;
+  // (a model's plugin, by the hosts it was allowed for: conversation/modelConnection `modelPurpose`)
+  const model = /^model:([^@]+)@(.+)$/.exec(purpose);
+  if (model) return `Conversations through ${model[1]}, to ${model[2].split(",").join(", ")}`;
   return purpose;
 }
 

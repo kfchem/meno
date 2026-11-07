@@ -17,6 +17,10 @@ import { perceive, type LayoutInput } from "./perceive";
  * it; one in a ring of seven atoms or fewer, cis as such a ring must be,
  * its neighbours round the ring drawn on opposite sides (it would read
  * trans). By where the atoms are on the page, as any reader sees them.
+ * The smallest rings (`perceive`, a minimum cycle basis) hold, for every
+ * bond, a ring as small as the smallest through it - where rings tie, and
+ * the one kept is another - so a ring of seven or fewer through a double
+ * bond is never missed here (rings.test.ts holds it, ties included).
  */
 export function turnedDoubleBonds(input: LayoutInput, out: { x: readonly number[]; y: readonly number[] }): string[] {
   const side = (a: number, b: number, n: number) =>

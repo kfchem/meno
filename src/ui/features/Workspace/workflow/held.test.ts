@@ -1,274 +1,132 @@
 import { describe, expect, it } from "vitest";
-import { createWorkspaceDocument, emptyWorkspaceDocument, withoutAtoms, type WorkspaceDocument } from "../document";
-import { createEditorStore, connectStoreToDocument } from "../store";
-import type { DrawnModel, DrawnRecord, Molecule3D } from "../store/types";
-import { readWorkspace, workspaceText } from "../utils/workspace";
-import { setMembers, setMolecules } from "./entries";
-import { inputKey, resultOf } from "./flow";
-import { heldOff, heldSettled } from "./held";
-import { heldSets, isHeld, setsOnPage } from "./onPage";
-import { addSet, addStep, connect, removeStep, removeWire } from "./model";
-import { flowIn } from "./parts";
-import { clearOf, wireStart } from "./place";
-import { placeResults, type RunResults, type RunWith } from "./run";
-import { exitPlace } from "./kinds";
-import { setGives, stepGives } from "./look";
+import type { ReaderOutput } from "../../../../lib/calc/output";
+import { calcLine } from "../../../../lib/calc/output";
+import { acceptManifest } from "../../../../lib/plugins/manifest";
+import type { Restraint } from "../../../../lib/entry";
+import TIGHTBIND from "../../../../test/plugins/tightbind/manifest.json?raw";
+import { optionsFor } from "./doers";
+import { convergedIn, convergedOf, heldWhy } from "./converged";
+import { readCarried3D } from "../utils/copyPaste";
+import type { Molecule3D } from "../store/types";
+import { HOLD_OPTION } from "./kinds";
+import { notAllMinima } from "./meno";
+import { fixedAtoms, heldAsked, heldRefused, isFailure, workedOf } from "./programs";
+import type { SetEntry } from "./entries";
+import type { Worked } from "./run";
 
-/** Each molecule reaching 2 page units about its middle, as a look draws it. */
-const extentOf: RunWith["extentOf"] = () => ({ x0: -2, x1: 2, y0: -2, y1: 2 });
-const W: RunWith = { extentOf, byOf: () => "meno", now: 1 };
+// *Hold its restraints* (docs/WORKFLOWS.md): an optimisation that holds an entry's atoms fixed where they stand, where its
+// plugin says its program can - on the made-up test plugins (src/test/plugins: Tightbind's optimisation says it can).
 
-/** Water at `dx` Å along: one geometry, its energy. */
-function water(dx: number, energy = -76.4): Omit<Molecule3D, "id" | "at"> {
-  return {
-    atoms: [
-      { el: "O", x: dx, y: 0, z: 0 },
-      { el: "H", x: dx + 0.96, y: 0, z: 0 },
-      { el: "H", x: dx - 0.24, y: 0.93, z: 0 },
-    ],
+/** Water, as a step's entry, at `xyz`, with `restraints` where given. */
+const water = (restraints: Restraint[] = [], xyz = [0, 0, 0, 0.96, 0, 0, -0.24, 0.93, 0]): SetEntry =>
+  ({
+    compound: 0,
+    number: 1,
+    atoms: [{ el: "O" }, { el: "H" }, { el: "H" }],
     bonds: [
       { a1: 0, a2: 1, order: 1 },
       { a1: 0, a2: 2, order: 1 },
     ],
-    energies: [energy],
-  };
-}
+    xyz,
+    ...(restraints.length ? { properties: { restraints: { value: { restraints }, unit: "none", status: "computed" } } } : {}),
+  }) as unknown as SetEntry;
 
-/** Ethanol drawn, its atoms numbered from `from`, with a record where given. */
-function ethanol(from: number, record?: DrawnRecord): DrawnModel {
-  return {
-    atoms: [
-      { id: from, el: "C", x: 0, y: 0 },
-      { id: from + 1, el: "C", x: 1.5, y: 0 },
-      { id: from + 2, el: "O", x: 2.25, y: 1.3 },
-    ],
-    bonds: [
-      { id: from + 3, a: from, b: from + 1, order: 1 },
-      { id: from + 4, a: from + 1, b: from + 2, order: 1 },
-    ],
-    ...(record ? { record } : {}),
-  } as DrawnModel;
-}
-const made: DrawnRecord = { from: ["seed-1"], properties: { nll: { value: 23.5, unit: "none", status: "computed", by: { plugin: "reinvent", version: "4.6.0" } } } };
+// (atom 2 moved, atoms 1 and 3 where they began)
+const MIN = [0, 0, 0, 0.97, 0, 0, -0.24, 0.93, 0];
+const output = (more: Partial<ReaderOutput> = {}): ReaderOutput =>
+  ({ schema: 1, program: "Tightbind", method: "TB2", atoms: ["O", "H", "H"], frames: [[0, 0, 0, 0.96, 0, 0, -0.24, 0.93, 0], MIN], energies: [-5.07, -5.08], optimised: true, ...more }) as unknown as ReaderOutput;
+const worked = (w: ReturnType<typeof workedOf>): Worked => {
+  if (isFailure(w)) throw new Error(w.why);
+  return w as Worked;
+};
 
-/** Molecules a step gives, as a run does. */
-const molecules = (ms: readonly Omit<Molecule3D, "id" | "at">[]): RunResults => ({ molecules: [...ms], rest: [], holds: "molecules" }) as unknown as RunResults;
-/** Structures drawn a step gives, as a run does. */
-const drawn = (ms: readonly DrawnModel[]): RunResults => ({ molecules: [], rest: [], holds: "structures", drawn: { made: [...ms], rest: [] } }) as unknown as RunResults;
-
-/**
- * A Filter (step 1; its sets 2, kept, and 3, the rest) that gave two
- * waters, on the page, and an Energy step (4; its sets 5 and 6) after it,
- * not wired yet.
- */
-function page(): WorkspaceDocument {
-  let doc = addStep(emptyWorkspaceDocument(), "filter", 0, 0);
-  doc = addStep(doc, "energy", 300, 0, {}, "xtb");
-  expect([doc.steps!.map((s) => s.id), resultOf(doc, 1)!.id, resultOf(doc, 4)!.id]).toEqual([[1, 4], 2, 5]);
-  return placeResults(doc, doc.steps![0], molecules([water(0), water(3, -76.3)]), W);
-}
-const KEPT = 2;
-const ENERGY = 4;
-
-/** `doc`'s set `id`, as it is now. */
-const setOf = (doc: WorkspaceDocument, id: number) => doc.sets!.find((b) => b.id === id)!;
-
-/** A workspace's document whose edits settle as the app's do: held off the page or laid out as they wire it. */
-function documented(doc: WorkspaceDocument) {
-  const d = createWorkspaceDocument(undefined, undefined, undefined, () => extentOf);
-  d.reset(doc);
-  return d;
-}
-
-describe("a step's result set held off the page (docs/WORKFLOWS.md, *Held results*)", () => {
-  it("is one whose exit is wired on and not opened: not a set the chemist made, not one not wired on", () => {
-    let doc = addSet(page(), { x0: -40, y0: -40, x1: -30, y1: -30 });
-    const chemist = doc.sets![doc.sets!.length - 1]!.id;
-    expect(heldSets(doc).size).toBe(0);
-    doc = connect(connect(doc, { set: KEPT }, ENERGY), { set: chemist }, ENERGY);
-    // (the chemist's set wired in place of the Filter's: one wire into an input)
-    expect([isHeld(doc, setOf(doc, KEPT)), isHeld(doc, setOf(doc, chemist))]).toEqual([false, false]);
-    doc = connect(doc, { set: KEPT }, ENERGY);
-    expect([isHeld(doc, setOf(doc, KEPT)), isHeld(doc, setOf(doc, chemist))]).toEqual([true, false]);
-    doc = { ...doc, sets: doc.sets!.map((b) => (b.id === KEPT ? { ...b, opened: true as const } : b)) };
-    expect(isHeld(doc, setOf(doc, KEPT))).toBe(false);
-  });
-
-  it("is held as its wire is drawn, in that one step of the history: its molecules off the page, in its order, kept by their ids - and laid out again on the same ids as the wire goes", () => {
-    const d = documented(page());
-    const ids = setMembers(d.getState(), setOf(d.getState(), KEPT)).molecules;
-    const frame = (({ x0, x1, y0, y1 }) => ({ x0, x1, y0, y1 }))(setOf(d.getState(), KEPT));
-    d.edit("wire", (s) => connect(s, { set: KEPT }, ENERGY));
-    const held = setOf(d.getState(), KEPT);
-    expect(d.getState().molecules3d!.filter((m) => ids.includes(m.id))).toEqual([]);
-    expect([held.members, held.collection!.map((m) => m.energies), held.heldIds]).toEqual([[], [[-76.4], [-76.3]], ids]);
-    expect((({ x0, x1, y0, y1 }) => ({ x0, x1, y0, y1 }))(held)).toEqual(frame);
-    // (one step back: on the page, no wire)
-    d.undo();
-    expect([d.getState().wires ?? [], setMembers(d.getState(), setOf(d.getState(), KEPT)).molecules]).toEqual([[], ids]);
-    d.redo();
-    d.edit("unwire", (s) => removeWire(s, s.wires![0].id));
-    const back = setOf(d.getState(), KEPT);
-    expect([setMembers(d.getState(), back).molecules, back.collection, back.heldIds]).toEqual([ids, undefined, undefined]);
-  });
-
-  it("gives a step after it the same as on the page - its key too: no step changed by wiring it, nor by laying it out", () => {
-    const wired = connect(page(), { set: KEPT }, ENERGY);
-    const step = () => wired.steps!.find((s) => s.id === ENERGY)!;
-    const shown = inputKey(wired, step(), "xtb");
-    const held = heldSettled(wired, undefined, extentOf);
-    expect(setOf(held, KEPT).collection).toHaveLength(2);
-    expect(inputKey(held, step(), "xtb")).toBe(shown);
-    const opened = heldSettled({ ...held, sets: held.sets!.map((b) => (b.id === KEPT ? { ...b, opened: true as const } : b)) }, held, extentOf);
-    expect(setMembers(opened, setOf(opened, KEPT)).molecules).toHaveLength(2);
-    expect(inputKey(opened, step(), "xtb")).toBe(shown);
-  });
-
-  it("keeps structures drawn on their own atoms' ids, with their records - the key of what a step after it takes the same - and lays them out on them again", () => {
-    let doc = addStep(emptyWorkspaceDocument(), "check-structures", 0, 0);
-    doc = addStep(doc, "descriptors", 300, 0);
-    doc = placeResults(doc, doc.steps![0], drawn([ethanol(1, made), ethanol(10)]), W);
-    const out = resultOf(doc, 1)!.id;
-    const atoms = setMembers(doc, setOf(doc, out)).structures;
-    const step = doc.steps![1];
-    doc = connect(doc, { set: out }, step.id);
-    const shown = inputKey(doc, step, "rdkit");
-    const held = heldSettled(doc, undefined, extentOf);
-    expect(setOf(held, out).drawnCollection!.map((m) => [m.atoms.map((a) => a.id), m.record?.from])).toEqual([
-      [atoms[0], ["seed-1"]],
-      [atoms[1], undefined],
+describe("holding an entry's restraints as it is optimised", () => {
+  it("is declared by a plugin's step of a kind that may hold them, and only atoms fixed", () => {
+    // (Tightbind's manifest, its steps said anew)
+    const tightbind = JSON.parse(TIGHTBIND) as Record<string, unknown>;
+    const m = acceptManifest({
+      ...tightbind,
+      steps: [
+        { kinds: ["optimise", "saddle-point", "energy"], programs: ["tightbind"], restraints: ["fixed", "distance"] },
+        { kinds: ["frequencies"], programs: ["tightbind"], restraints: ["fixed"] },
+      ],
+    })!;
+    expect(m.steps.map((s) => [s.kind, s.restraints])).toEqual([
+      ["optimise", ["fixed"]],
+      ["saddle-point", ["fixed"]],
+      ["energy", undefined],
+      ["frequencies", undefined],
     ]);
-    expect(held.model.atoms.filter((a) => atoms.flat().includes(a.id))).toEqual([]);
-    expect(inputKey(held, step, "rdkit")).toBe(shown);
-    const back = heldSettled(removeWire(held, held.wires![0].id), held, extentOf);
-    expect(setMembers(back, setOf(back, out)).structures).toEqual(atoms);
-    expect(setOf(back, out).put).toEqual(atoms.flat());
-    expect(setMembers(back, setOf(back, out)).records.map((r) => r?.from)).toEqual([["seed-1"], undefined]);
   });
 
-  it("takes off the page only what it alone holds: a molecule another set holds too stays its, and is taken up again where it is", () => {
-    let doc = page();
-    const [first, second] = setMembers(doc, setOf(doc, KEPT)).molecules;
-    doc = addSet(doc, { x0: -100, y0: -100, x1: -90, y1: -90 });
-    const other = doc.sets![doc.sets!.length - 1]!.id;
-    doc = { ...doc, sets: doc.sets!.map((b) => (b.id === other ? { ...b, members: [{ molecule: first }] } : b)) };
-    const held = heldSettled(connect(doc, { set: KEPT }, ENERGY), undefined, extentOf);
-    expect(held.molecules3d!.map((m) => m.id)).toEqual([first]);
-    expect(setMembers(held, setOf(held, other)).molecules).toEqual([first]);
-    expect(setOf(held, KEPT).collection).toHaveLength(2);
-    const back = heldSettled(removeWire(held, held.wires![0].id), held, extentOf);
-    expect(back.molecules3d!.map((m) => m.id).sort()).toEqual([first, second].sort());
-    expect(setMembers(back, setOf(back, KEPT)).molecules).toEqual([first, second]);
+  it("is offered on the step's card, Meno's, only where its plugin says its program can: no by default", () => {
+    expect(optionsFor("optimise", "tightbind")[0]).toEqual(HOLD_OPTION);
+    expect(HOLD_OPTION.default).toBe("no");
+    expect(optionsFor("optimise", "confsweep").some((o) => o.id === HOLD_OPTION.id)).toBe(false);
+    expect(optionsFor("energy", "quanta").some((o) => o.id === HOLD_OPTION.id)).toBe(false);
+    expect(heldAsked("optimise", { hold: "fixed" })).toEqual(["fixed"]);
+    expect(heldAsked("optimise", { hold: "no" })).toEqual([]);
+    expect(heldAsked("energy", { hold: "fixed" })).toEqual([]);
   });
 
-  it("keeps what names its molecules: a text shown from one, and a molecule's link to its drawing, find it again as it is laid out", () => {
-    let doc = page();
-    const [first] = setMembers(doc, setOf(doc, KEPT)).molecules;
-    doc = {
-      ...doc,
-      texts: [{ id: 1, name: "out.log", text: "...", of: { molecule: first } }],
-      molecules3d: doc.molecules3d!.map((m) => (m.id === first ? { ...m, drawnFrom: [7, 8, 9] } : m)),
-    };
-    const held = heldSettled(connect(doc, { set: KEPT }, ENERGY), undefined, extentOf);
-    const back = heldSettled(removeWire(held, held.wires![0].id), held, extentOf);
-    const named = back.texts![0].of as { molecule: number };
-    expect(back.molecules3d!.find((m) => m.id === named.molecule)?.drawnFrom).toEqual([7, 8, 9]);
+  it("takes an entry's atoms fixed, from 0, each once; and refuses one whose restraints hold what it does not, naming it", () => {
+    const both = water([
+      { kind: "fixed", atoms: [2, 0] },
+      { kind: "fixed", atoms: [0] },
+      { kind: "distance", atoms: [1, 2], value: 1.5, strength: 500 },
+    ]);
+    expect(fixedAtoms(both)).toEqual([0, 2]);
+    expect(fixedAtoms(water())).toEqual([]);
+    expect(heldRefused(both, ["fixed"])).toBe("Its restraints hold distances, which this step does not hold - only atoms fixed: take them off (Restraints), or hold none");
+    expect(heldRefused(both, [])).toBeNull();
+    expect(heldRefused(water([{ kind: "fixed", atoms: [1] }]), ["fixed"])).toBeNull();
   });
 
-  it("is filled by its step's run off the page, however few it is given - 1, 50 or 51 - its frame where it was", () => {
-    for (const n of [1, 50, 51]) {
-      const doc = heldSettled(connect(page(), { set: KEPT }, ENERGY), undefined, extentOf);
-      const frame = setOf(doc, KEPT);
-      const ran = placeResults(doc, doc.steps![0], molecules(Array.from({ length: n }, (_, k) => water(k))), W);
-      const set = setOf(ran, KEPT);
-      expect([ran.molecules3d!.length, set.collection!.length, set.members, set.x0, set.y1]).toEqual([0, n, [], frame.x0, frame.y1]);
-    }
+  it("says the atoms it held in its calculation's line, from 1, and how it converged - no stationary point", () => {
+    const e = water([{ kind: "fixed", atoms: [0, 2] }]);
+    const held = worked(workedOf("optimise", e, output(), ["tightbind 0.2.0"], undefined, fixedAtoms(e)));
+    expect(calcLine(held.calc!)).toContain("atoms 1, 3 held");
+    expect(convergedOf(held)).toMatchObject({ how: "optimisation with atoms held", held: [0, 2] });
+    expect(heldWhy(convergedOf(held))).toBe("Optimised with atoms 1, 3 held where they stood: no stationary point - optimise it free of them first");
+    // (asked to hold none: as ever)
+    const free = worked(workedOf("optimise", e, output(), ["tightbind 0.2.0"]));
+    expect(calcLine(free.calc!)).not.toContain("held");
+    expect(convergedOf(free)?.how).toBe("optimisation");
+    expect(heldWhy(convergedOf(free))).toBeNull();
+    // (Frequencies at that geometry carry how it converged, and so what it held)
+    const freq = worked(workedOf("frequencies", held, output({ frames: [MIN], optimised: undefined }), ["tightbind 0.2.0"]));
+    expect(convergedOf(freq)?.held).toEqual([0, 2]);
   });
 
-  it("lies nowhere on the page: where another set goes is the same wherever its frame was, a box takes it only with its step, a selection's set does not see it", () => {
-    const doc = heldSettled(connect(page(), { set: KEPT }, ENERGY), undefined, extentOf);
-    const set = setOf(doc, KEPT);
-    // (its frame moved far off: whether a frame where it was is clear, the same - the wire from its port there either way)
-    const away = { ...doc, sets: doc.sets!.map((b) => (b.id === KEPT ? { ...b, x0: b.x0 + 1e5, x1: b.x1 + 1e5 } : b)) };
-    for (const f of [{ x0: set.x0, x1: set.x1, y0: set.y0, y1: set.y1 }, { x0: set.x0, x1: set.x1, y0: set.y0 - 40, y1: set.y0 - 20 }]) expect(clearOf(doc, f, { set: -1 })).toBe(clearOf(away, f, { set: -1 }));
-    // (a set on the page there, its frame in the way)
-    const shown = { ...doc, sets: doc.sets!.map((b) => (b.id === KEPT ? { ...b, opened: true as const } : b)) };
-    expect(clearOf(shown, { x0: set.x0, x1: set.x1, y0: set.y0, y1: set.y1 }, { set: -1 })).toBe(false);
-    expect(setsOnPage(doc, doc.sets!).map((b) => b.id)).not.toContain(KEPT);
-    const around = [{ x: set.x0 - 1, y: set.y0 - 1 }, { x: set.x1 + 1, y: set.y1 + 1 }];
-    expect(flowIn(doc, "box", around).sets).not.toContain(KEPT);
-    const withStep = [{ x: -10, y: set.y0 - 200 }, { x: set.x1 + 1, y: set.y1 + 200 }];
-    expect(flowIn(doc, "box", withStep)).toMatchObject({ sets: expect.arrayContaining([KEPT]), steps: expect.arrayContaining([1]) });
+  it("fails an entry whose held atom moved, as its program gave it back - never passed on as held", () => {
+    const e = water([{ kind: "fixed", atoms: [1] }]);
+    // (atom 2 at the end where it began, to well within 1e-4 Å: held)
+    const still = [0, 0, 0.001, 0.96, 0, 0.00005, -0.24, 0.93, 0];
+    expect(isFailure(workedOf("optimise", e, output({ frames: [[...e.xyz], still] }), ["tightbind 0.2.0"], undefined, fixedAtoms(e)))).toBe(false);
+    // (moved by a thousandth of an ångström: not held)
+    const moved = [0, 0, 0, 0.961, 0, 0, -0.24, 0.93, 0];
+    expect(workedOf("optimise", e, output({ frames: [[...e.xyz], moved] }), ["tightbind 0.2.0"], undefined, fixedAtoms(e))).toEqual({ kind: "failed", why: "Atom 2 moved though held" });
   });
 
-  it("gives its wires from its exit's port on the card, a set the chemist made from its frame", () => {
-    const doc = heldSettled(connect(page(), { set: KEPT }, ENERGY), undefined, extentOf);
-    const step = doc.steps![0];
-    expect(wireStart(doc.steps!, setOf(doc, KEPT))).toEqual(stepGives(step, exitPlace(step.kind, "out")));
-    const chemist = addSet(doc, { x0: -40, y0: -40, x1: -30, y1: -30 });
-    const last = chemist.sets![chemist.sets!.length - 1];
-    expect(wireStart(chemist.steps!, last)).toEqual(setGives(last));
+  it("goes through a file and back with the atoms it held - a record that does not say them as it must, none", () => {
+    const e = water([{ kind: "fixed", atoms: [0, 2] }]);
+    const held = worked(workedOf("optimise", e, output(), ["tightbind 0.2.0"], undefined, fixedAtoms(e)));
+    const m = { id: 1, at: { x: 0, y: 0 }, atoms: e.atoms.map((a, k) => ({ ...a, x: MIN[3 * k], y: MIN[3 * k + 1], z: MIN[3 * k + 2] })), bonds: e.bonds, converged: [held.converged] } as unknown as Molecule3D;
+    const back = readCarried3D(JSON.parse(JSON.stringify(m)));
+    expect(back?.converged).toEqual([{ how: "optimisation with atoms held", geometry: held.converged!.geometry, held: [0, 2] }]);
+    // (what does not read: none - never one of a run that held atoms read back as a free one)
+    const g = held.converged!.geometry;
+    for (const bad of [[-1], [0.5], [], "0, 2", null]) expect(convergedIn({ how: "optimisation with atoms held", geometry: g, held: bad }), JSON.stringify(bad)).toBeNull();
+    expect(convergedIn({ how: "optimisation with atoms held", geometry: g })).toBeNull();
+    expect(convergedIn({ how: "optimisation", geometry: g, held: [0] })).toBeNull();
+    expect(convergedIn({ how: "saddle point optimisation with atoms held", geometry: g, held: [3] })).toEqual({ how: "saddle point optimisation with atoms held", geometry: g, held: [3] });
   });
 
-  it("is laid out once opened, and held again once closed", () => {
-    const held = heldSettled(connect(page(), { set: KEPT }, ENERGY), undefined, extentOf);
-    const open = (doc: WorkspaceDocument, on: boolean) => ({ ...doc, sets: doc.sets!.map((b) => (b.id === KEPT ? (({ opened: _o, ...rest }) => (on ? { ...rest, opened: true as const } : rest))(b) : b)) });
-    const opened = heldSettled(open(held, true), held, extentOf);
-    expect(setMolecules(opened, setOf(opened, KEPT)).every((m) => m.id > 0)).toBe(true);
-    const closed = heldSettled(open(opened, false), opened, extentOf);
-    expect([closed.molecules3d, setOf(closed, KEPT).collection!.length]).toEqual([[], 2]);
-  });
-
-  it("is laid out as the step it went into is deleted, its wire with it - and as its own step is, a chemist's set from then on", () => {
-    const held = heldSettled(connect(page(), { set: KEPT }, ENERGY), undefined, extentOf);
-    const intoGone = heldSettled(removeStep(held, ENERGY), held, extentOf);
-    expect(setMembers(intoGone, setOf(intoGone, KEPT)).molecules).toHaveLength(2);
-    const ownGone = heldSettled(removeStep(held, 1), held, extentOf);
-    const kept = setOf(ownGone, KEPT);
-    expect([kept.made, setMembers(ownGone, kept).molecules.length]).toEqual([undefined, 2]);
-  });
-
-  it("is saved held - its molecules once, in it, never also on the page; its ids on the page this session's only - and opens held, opened kept", () => {
-    const save = (doc: WorkspaceDocument) => {
-      const d = createWorkspaceDocument();
-      const store = createEditorStore(d);
-      connectStoreToDocument(store, d);
-      d.edit("as it was", () => doc);
-      return workspaceText(store.getState());
-    };
-    const moleculesIn = (text: string) => {
-      const json = JSON.parse(text) as { molecules3d?: unknown[]; sets?: { collection?: unknown[] }[] };
-      return (json.molecules3d?.length ?? 0) + (json.sets ?? []).reduce((n, b) => n + (b.collection?.length ?? 0), 0);
-    };
-    const shown = page();
-    const held = heldSettled(connect(shown, { set: KEPT }, ENERGY), undefined, extentOf);
-    const text = save(held);
-    expect([moleculesIn(save(shown)), moleculesIn(text)]).toEqual([2, 2]);
-    expect(text).not.toContain("heldIds");
-    const ws = readWorkspace(text)!;
-    expect(ws.workflow!.sets.find((b) => b.id === KEPT)!.collection).toHaveLength(2);
-    const opened = heldSettled({ ...held, sets: held.sets!.map((b) => (b.id === KEPT ? { ...b, opened: true as const } : b)) }, held, extentOf);
-    expect(readWorkspace(save(opened))!.workflow!.sets.find((b) => b.id === KEPT)!.opened).toBe(true);
-  });
-
-  it("not held, lays out what a run would: the shown structures of a large set deleted, the next come on in that edit's own step - one undo, all as it was", () => {
-    let start = addStep(emptyWorkspaceDocument(), "check-structures", 0, 0);
-    start = placeResults(start, start.steps![0], drawn(Array.from({ length: 53 }, (_, k) => ethanol(1 + 10 * k))), W);
-    const out = resultOf(start, 1)!.id;
-    const shown = setMembers(start, setOf(start, out)).structures;
-    const rest = setOf(start, out).drawnCollection!.length;
-    expect([shown.length > 0, rest > 0, shown.length + rest]).toEqual([true, true, 53]);
-    const d = documented(start);
-    d.edit("delete", (s) => withoutAtoms(s, shown.flat()));
-    const after = setOf(d.getState(), out);
-    expect([setMembers(d.getState(), after).structures.length, after.drawnCollection?.length ?? 0]).toEqual([rest, 0]);
-    d.undo();
-    expect([setMembers(d.getState(), setOf(d.getState(), out)).structures, setOf(d.getState(), out).drawnCollection!.length]).toEqual([shown, rest]);
-  });
-
-  it("holds nothing more where it is held already - each edit after it leaves it as it is", () => {
-    const held = heldSettled(connect(page(), { set: KEPT }, ENERGY), undefined, extentOf);
-    expect(heldOff(held, KEPT)).toBe(held);
-    expect(heldSettled({ ...held, sets: [...held.sets!] }, held, extentOf).sets!.find((b) => b.id === KEPT)).toBe(setOf(held, KEPT));
+  it("is no minimum for a step that takes minima, until it is optimised free of them", () => {
+    const e = water([{ kind: "fixed", atoms: [2] }]);
+    const held = worked(workedOf("optimise", e, output(), ["tightbind 0.2.0"], undefined, fixedAtoms(e)));
+    expect(notAllMinima([held])).toBe("a #1: optimised with atom 3 held where it stood: no stationary point - optimise it free of it first");
+    const again = worked(workedOf("optimise", held, output({ frames: [MIN, [0, 0, 0, 0.98, 0, 0, -0.25, 0.95, 0]] }), ["tightbind 0.2.0"]));
+    expect(notAllMinima([again])).toBeNull();
   });
 });

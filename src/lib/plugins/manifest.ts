@@ -30,7 +30,7 @@ import { rangeOf, type DependDecl, type InterfaceDecl, type UsedInterface, type 
 import { acceptOptions, type Option } from "../options";
 import { TONE_NAMES, type Tone } from "../text/tones";
 import { isRole, ROLES, type RoleId } from "./roles";
-import { isStepKind, LONE_ATOM_PASSES, MENO_ONLY, VALUE_KINDS, type StepKind, type ValueKind } from "./steps";
+import { HELD_KINDS, HOLDS_RESTRAINTS, isStepKind, LONE_ATOM_PASSES, MENO_ONLY, VALUE_KINDS, type HeldKind, type StepKind, type ValueKind } from "./steps";
 
 /** Text a file's start holds, which tells a kind: anywhere, or at a line's start; runs of spaces counted as one. */
 export type Mark = {
@@ -205,6 +205,14 @@ export type RoleDecl = {
   options: Option[];
   /** Its conformer search takes how many to try, which Meno works out or the chemist sets (*Conformers sought*: lib/chem/conformersSought) and sends: the conformers role's alone. */
   tries?: true;
+  /**
+   * Its conformer search, taking a number of tries, gives another set of
+   * tries for each draw Meno asks for (`draw`, from 0) - and the same set
+   * for the same draw and options - so that Meno can ask in rounds until no
+   * new conformer comes (*As many as the molecule needs*): the conformers
+   * role's alone, with `tries`.
+   */
+  draws?: true;
   /** The looks it makes, each declared in full, where the role has looks (Render: docs/RENDER.md); none declared, none said. */
   looks?: LookDecl[];
   /** The motions it makes of a film, each declared in full, where the role has them (Render); none declared, none said. */
@@ -216,6 +224,12 @@ export type RoleDecl = {
    * declared, nothing said unsure for its confidence.
    */
   unsure?: UnsureDecl;
+  /**
+   * Where the role takes them (Talking with a model): the hosts it talks to,
+   * each named exactly - its only way out, through Meno's network gate, and
+   * what the consent names (docs/CONVERSATIONS.md, *Connections*).
+   */
+  hosts?: string[];
 };
 
 /** A model's confidence below which what it reads is unsure, and on what that was set. */
@@ -238,12 +252,14 @@ export type UnsureDecl = { below: number; basis: string };
  * molecules from seeds wired in (`seeds`); and, of a kind a lone
  * atom passes through (steps `LONE_ATOM_PASSES`), whether its program
  * takes none (`noLoneAtom`); and how its options ask for a solvation, as
- * its program says one it ran in (`solvation`: `SolvationDecl`).
+ * its program says one it ran in (`solvation`: `SolvationDecl`); and, of a
+ * kind that may hold an entry's restraints (steps `HOLDS_RESTRAINTS`), the
+ * kinds of restraint its program holds (`restraints`: steps `HELD_KINDS`).
  * A manifest may say several kinds in one, with the same programs and
  * options.
  */
 /** `roleOptions`: its options are its role's, the step having said none of its own (Settings' choices for the role its defaults: workflow/doers `optionsFor`). */
-export type StepDecl = { kind: StepKind; programs: string[]; options: Option[]; roleOptions?: true; takes?: ValueKind[]; files?: string[]; seeds?: true; noLoneAtom?: true; solvation?: SolvationDecl };
+export type StepDecl = { kind: StepKind; programs: string[]; options: Option[]; roleOptions?: true; takes?: ValueKind[]; files?: string[]; seeds?: true; noLoneAtom?: true; solvation?: SolvationDecl; restraints?: HeldKind[] };
 
 /**
  * How a step's options ask for a solvation, in the words its program says
@@ -664,6 +680,23 @@ function fixedOf(v: unknown): FixedChoice[] {
   return out;
 }
 
+/** The most hosts a role names: a service's own, not the web. */
+export const HOSTS_MOST = 8;
+
+/**
+ * Hosts a role names (`RoleDecl.hosts`): each a host's name exactly, as the
+ * network gate reads one (src-tauri/src/net.rs `pattern_ok`) - lowercase
+ * labels of letters, digits and hyphens - never a pattern, an address or a
+ * port; 1 to HOSTS_MOST, each once. One amiss, and there are none.
+ */
+export function hostsOf(v: unknown): string[] | null {
+  if (!Array.isArray(v) || !v.length || v.length > HOSTS_MOST) return null;
+  const label = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+  const named = (h: unknown): h is string => typeof h === "string" && h.length <= 253 && h.split(".").length >= 2 && h.split(".").every((l) => label.test(l)) && !/^[0-9.]+$/.test(h);
+  if (!v.every(named)) return null;
+  return [...new Set(v)];
+}
+
 /** A role's `unsure` as declared: a confidence between 0 and 1, and its basis said; otherwise none. */
 function unsureOf(v: unknown): UnsureDecl | undefined {
   const u = v as { below?: unknown; basis?: unknown } | null | undefined;
@@ -716,6 +749,7 @@ function stepsOf(v: unknown, roles: readonly RoleDecl[]): StepDecl[] {
   const takes = Array.isArray(s?.takes) ? VALUE_KINDS.filter((t) => (s.takes as unknown[]).includes(t)) : [];
   const files = [...new Set(list(s?.files).filter((f): f is string => typeof f === "string" && ID.test(f)))];
   const options = acceptOptions(s?.options);
+  const held = HELD_KINDS.filter((k) => list(s?.restraints).includes(k));
   // (none said, and it fills the role of the kind's name: the role's - the same work, asked as a step)
   const roleOf = (kind: StepKind) => (s?.options === undefined ? roles.find((r) => r.role === kind && r.options.length) : undefined);
   const optionsFor = (kind: StepKind) => (s?.options !== undefined ? options : (roleOf(kind)?.options ?? []));
@@ -732,6 +766,8 @@ function stepsOf(v: unknown, roles: readonly RoleDecl[]): StepDecl[] {
       // (said only of a kind a lone atom passes through: of any other, what its program cannot take is its to refuse)
       ...(s?.noLoneAtom === true && LONE_ATOM_PASSES.includes(kind) ? { noLoneAtom: true as const } : {}),
       ...(solvation ? { solvation } : {}),
+      // (said only of a kind that may hold them: of any other, they ride along as ever)
+      ...(held.length && HOLDS_RESTRAINTS.includes(kind) ? { restraints: [...held] } : {}),
     };
   });
 }
@@ -1030,6 +1066,25 @@ function read<T>(raw: unknown, one: (v: unknown) => T | null, key: (t: T) => str
 }
 
 /** A manifest as Meno reads it, or null where it does not read as one: what reads wrong in it is left out, what it cannot do without makes it none. */
+/**
+ * Whether a manifest is a newer Meno's - written to a contract this Meno
+ * does not speak, its environment of a kind it does not make, or filling a
+ * role or adding a kind of step it does not know - and what, in words; none,
+ * where it is not. Such a plugin is not taken (`acceptManifest`): it is said
+ * to be for a newer Meno, never added half-read (./known `setInstalled`).
+ */
+export function newerOf(raw: unknown): string | null {
+  const m = raw as Record<string, unknown> | null;
+  if (!m || typeof m !== "object") return null;
+  const said: string[] = [];
+  if (m.contract !== undefined && (typeof m.contract !== "number" || !CONTRACTS.includes(m.contract))) said.push("a contract");
+  if (m.environment !== undefined && m.environment !== "uv" && m.environment !== "pixi") said.push("an environment");
+  if (list(m.roles).some((r) => typeof (r as Record<string, unknown> | null)?.role === "string" && !isRole((r as Record<string, string>).role))) said.push("a role");
+  if (list(m.steps).some((st) => list((st as Record<string, unknown> | null)?.kinds).some((k) => typeof k === "string" && !isStepKind(k)))) said.push("a kind of step");
+  if (!said.length) return null;
+  return `It says ${said.length < 2 ? said[0] : `${said.slice(0, -1).join(", ")} and ${said[said.length - 1]}`} this Meno does not know`;
+}
+
 export function acceptManifest(raw: unknown): Manifest | null {
   const m = raw as Record<string, unknown> | null;
   if (!m || typeof m !== "object") return null;
@@ -1070,14 +1125,19 @@ export function acceptManifest(raw: unknown): Manifest | null {
           const looks = acceptLooks(r.looks);
           const motions = acceptMotions(r.motions);
           const unsure = "unsure" in ROLES[r.role] ? unsureOf(r.unsure) : undefined;
+          // (the hosts it talks to, where the role has them - and then it is none without them; no other role names any)
+          const hosts = "hosts" in ROLES[r.role] ? hostsOf(r.hosts) : r.hosts === undefined ? undefined : null;
+          if (hosts === null || ("hosts" in ROLES[r.role] && !hosts)) return null;
           return {
             role: r.role,
             programs,
             options: "options" in ROLES[r.role] ? acceptOptions(r.options) : [],
             ...(r.role === "conformers" && r.tries === true ? { tries: true as const } : {}),
+            ...(r.role === "conformers" && r.tries === true && r.draws === true ? { draws: true as const } : {}),
             ...(looks.length ? { looks } : {}),
             ...(motions.length ? { motions } : {}),
             ...(unsure ? { unsure } : {}),
+            ...(hosts ? { hosts } : {}),
           };
         },
         (r) => r.role,

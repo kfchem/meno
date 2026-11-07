@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { changeSet, createDocument, DEFAULT_COALESCE_MS, DEFAULT_HISTORY_LIMIT, gestureStep } from "./document";
+import { changeSet, goneOn, createDocument, DEFAULT_COALESCE_MS, DEFAULT_HISTORY_LIMIT, gestureStep } from "./document";
 
 type Doc = { atoms: string[]; title: string };
 
@@ -236,6 +236,22 @@ describe("createDocument", () => {
     };
     expect(() => doc.actAs("conversation", changeSet("turn:1", "a conversation"), waits as never)).toThrow("A change set does its work at once");
     expect(doc.history()).toMatchObject({ undoDepth: 1, undoBy: "a conversation" });
+  });
+
+  it("goes on with a change set across goes - one step - where the step on top is its own, and never after another", () => {
+    const { doc } = withClock();
+    doc.edit("add C", addAtom("C"));
+    const meta = changeSet("turn:1", "a conversation");
+    doc.actAs("conversation", meta, () => (doc.edit("add N", addAtom("N")), undefined));
+    doc.actAs("conversation", goneOn(meta), () => (doc.edit("add O", addAtom("O")), undefined));
+    expect(doc.history()).toMatchObject({ undoDepth: 2, undoBy: "a conversation" });
+    // (the person's step between: the change set's next go a step of its own)
+    doc.edit("add S", addAtom("S"));
+    doc.actAs("conversation", goneOn(meta), () => (doc.edit("add P", addAtom("P")), undefined));
+    expect(doc.history().undoDepth).toBe(4);
+    // (and gone on with by another maker: its own step)
+    doc.actAs("conversation", goneOn(changeSet("turn:1", "another")), () => (doc.edit("add B", addAtom("B")), undefined));
+    expect(doc.history().undoDepth).toBe(5);
   });
 
   it("lets nothing of the history be gone back on while a change set runs", () => {

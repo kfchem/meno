@@ -1319,25 +1319,53 @@ it where it lies out of view.
   bond it is set.
 - **Marked as unsure**, rather than guessed silently:
   - a label nothing reads ("Xq" was not read as an element or a group);
-  - **a repeat unit in brackets, counted** (2026-11-05): a pair of
-    brackets drawn across bonds - square, a line and its ticks, or round,
-    a curve - with a count at the foot of one: digits, as (CH2)6 drawn
-    out, or a small letter, a polymer's n. Meno does not read the count
-    yet. So that the unit, drawn once, is never taken for the whole, its
-    brackets are read as no bonds and its count as no word, and the atoms
-    of each bond a bracket crosses are marked ("A repeat unit in brackets,
-    counted 6, is not read: it is drawn here once.";
-    lib/figure/read `repeatBrackets`). A bracket is a line or a curve half
-    a bond to two and a half long that crosses a line of the figure
-    square enough, away from both their ends, its own ends free - at no
-    other line's end but its ticks', and into no label - with its count
-    by its lower end (a count in reach of two brackets' lower ends is the
-    nearer's); its partner is the nearest other such line or curve,
-    uncounted. A line across a bond with no count is read as before, and a
-    number by no bracket - a compound's - is left as it was. A label
-    written as one word, (CH2)6, is not read either (above). A picture
-    read by a model (part B) comes with no brackets nor counts: there,
-    nothing tells one yet;
+  - **a repeat unit in brackets, counted** (2026-11-05), where it is not
+    read: a pair of brackets drawn across bonds - square, a line and its
+    ticks, or round, a curve - with a count at the foot of one: digits, as
+    (CH2)6 drawn out, or a small letter, a polymer's n. Its brackets are
+    read as no bonds and its count as no word (lib/figure/read
+    `repeatBrackets`). A bracket is a line or a curve half a bond to two
+    and a half long that crosses a line of the figure square enough, away
+    from both their ends - or a wedge, hashes or a wavy line, across the
+    line its bond lies along (2026-11-06) - its own ends free - at no other line's end but
+    its ticks', and into no label - with its count by its lower end (a
+    count in reach of two brackets' lower ends is the nearer's); its
+    partner is the nearest other such line or curve, uncounted. A line
+    that crosses brackets alone is none: a double bond's second line, a
+    bracket drawn over it. A line across a bond with no count is read as
+    before, and a number by no bracket - a compound's - is left as it
+    was. A label written as one word, (CH2)6, is not read either (above).
+    A picture read by a model (part B) comes with no brackets nor counts:
+    there, nothing tells one.
+    - **A whole count is read** (2026-11-06; `repeatsRead`, then
+      lib/figure/structure). Where each bracket crosses one bond (a double
+      bond's two lines one bond), the two bonds are other bonds of one
+      order, and what lies between them is joined to the rest by those two
+      alone, the unit is read that many times: (CH2)6 as six CH2. Its
+      copies follow it head to tail, each joined to the next by the second
+      bracket's bond, the last to what that bond joined. The structure is
+      the molecule drawn out in full, its formula and identity the same.
+      The copies are set on from it back and forth, as a chain is drawn,
+      and what lies past them is moved on with them; in a ring it is left
+      where it is. An odd number of atoms put in leaves one bend straight
+      where they meet what lies past: turning it would draw its mirror
+      image. Each copy is tied to where the figure draws the unit. It is
+      kept a multiple group (CTfile MUL: its count, its first unit the
+      paradigm), so a file written of it says so. Counted 1, the unit is
+      read once, as drawn.
+    - **Not read, saying why**, where it cannot be, the atoms of each bond
+      a bracket crosses marked: a count that is a letter, a polymer's n
+      ("A repeat unit in brackets, counted n, is not read: it is drawn
+      here once."); or a whole count whose shape breaks a rule above - one
+      bracket with no partner, a bracket across more than one bond or
+      across a line that is no bond, both across one bond, the two bonds
+      of two orders (or a ring's drawn with its circle), what lies between
+      not cut off by them, a count of 0, a unit within another or holding
+      one, two units whose brackets cross one bond, a bracket across a
+      wedged, hashed or wavy bond (which way each copy's would face is not
+      drawn) - each saying which ("A repeat
+      unit in brackets, counted 6, is not read: its two brackets cross the
+      same bond. It is drawn here once.");
   - a label that writes more or fewer hydrogens than its atom's bonds leave
     it;
   - hashes as wide at both ends, where both ends could be a stereocentre or
@@ -1670,7 +1698,12 @@ mention a number, and the card.
   (`pdfPageLabels`), never holding up what is shown; a page that could not
   be read is gone through again the next time. It starts the first time
   the pointer moves over the PDF's words, in the column or on the page
-  (`utils/compoundLens` `indexOnce`).
+  (`utils/compoundLens` `indexOnce`). Once the pointer rests on a number
+  the index has not placed yet, it is hurried (`hurryIndex`): someone is
+  waiting, so it no longer waits for idle moments - on Windows, whose
+  webview is seldom idle while the pointer moves, a page could wait half a
+  second - but still reads one page at a time, the window's next turn
+  between them, so a long PDF never holds the pointer up.
 - **A number mentioned** (`utils/compoundMentions`): the word under the
   pointer, of a compound number's shape, set as a compound's number is -
   bold, as most journals set one in their text, or after a word that names
@@ -1685,7 +1718,11 @@ mention a number, and the card.
   only where there is no room above - holds Meno's own drawing of the structure, its number, its page,
   and the pages it is drawn on again ("12  p. 1 · also on p. 4"). It fades
   in and out (`DURATION.base`), lingering a moment so the pointer can come
-  onto it. Its drawing dragged onto the canvas puts the structure there as
+  onto it. While the PDF is still being gone through for numbers, or the
+  number's figure is still being read, it says so ("12  Reading this PDF's
+  figures…") and grows into the drawing once it comes, its size and place
+  eased, never a jump (`cardHolds`); gone through whole and the number
+  drawn nowhere, no card. Its drawing dragged onto the canvas puts the structure there as
   one dragged out of its figure is (*Structures picked from a PDF*: the same
   reading, its note and unsure marks). Its page clicked shows the figure in
   the column, the structure marked a moment. A number no structure is set

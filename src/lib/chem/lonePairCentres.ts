@@ -42,6 +42,16 @@
  * Any other N - an amine's, which turns over many times a second (4-8
  * kcal/mol, Table 3, p. 409) - is no centre; nor is any other element.
  *
+ * With an H among its three - carried, or an atom of its own, as every H
+ * is in 3D - a P, As, Sb or Bi is a centre as it is without one (a
+ * secondary phosphine's P); an N, or an S, Se or Te, never is, its ring,
+ * cage or charge notwithstanding (an oxaziridine's N-H, a sulfonium's
+ * S+-H): the maintainer's ruling, 2026-11-06, one rule for a drawing, a
+ * SMILES and a molecule in 3D alike. A drawing states such a centre with
+ * its H drawn as an atom: with its H carried and two bonds drawn, the two
+ * corners left are each other's mirror image, which holds the H not
+ * drawn, so its wedge states none (lib/layout/drawn `unreadWhy`).
+ *
  * An atom has a lone pair where its valence electrons, less its charge
  * and its bonds' orders, leave two or more: an amine's N, a phosphine's P,
  * a sulfoxide's S (two bonds and a double), a sulfonium's S+; not an
@@ -53,6 +63,9 @@ import { flatRingAtoms } from "./conformersSought";
 
 /** The elements of the rule but N, which keeps its configuration only where its ring or its cage holds it. */
 const KEPT: ReadonlySet<string> = new Set(["P", "As", "Sb", "Bi", "S", "Se", "Te"]);
+
+/** The elements of the rule that are centres with an H among their three (above): the rest - N, S, Se, Te - never are. */
+const KEPT_WITH_H: ReadonlySet<string> = new Set(["P", "As", "Sb", "Bi"]);
 
 /** The atoms beside an aziridine's N that hold it: a halogen, an O or an N, on it or next to it in the ring. */
 const HOLDS: ReadonlySet<string> = new Set(["F", "Cl", "Br", "I", "O", "N"]);
@@ -102,8 +115,10 @@ export function lonePairCentres(atoms: readonly PyramidAtom[], bonds: readonly P
   function centre(at: number): boolean {
     const atom = atoms[at];
     const el = atom?.el ?? "C";
-    if (!atom || atom.hs || around[at].length !== 3) return false;
-    if (!lonePairOfThree(el, atom.charge ?? 0, 3, order[at], 0)) return false;
+    const hs = atom?.hs ?? 0;
+    if (!atom || !lonePairOfThree(el, atom.charge ?? 0, around[at].length, order[at], hs)) return false;
+    // (an H among its three, carried or an atom of its own: a centre still only where the rule keeps it so - above)
+    if ((hs || around[at].some((n) => atoms[n].el === "H")) && !KEPT_WITH_H.has(el)) return false;
     if (el === "P" || el === "As") return !onAromatic(at);
     if (el !== "N") return KEPT.has(el);
     // (an N held by its ring or its cage: its three bonds single, none to a metal)
@@ -172,14 +187,15 @@ const PYRAMID_VALENCE: ReadonlyMap<string, number> = new Map([
 ]);
 
 /**
- * Whether an atom of three neighbours, no H besides, has a lone pair for
- * its fourth - a pyramid of three, whether or not the lone pair keeps it
- * (`lonePairCentres`): its valence electrons, less its charge and its
- * bonds' orders (`bondOrders`, aromatic 1.5), leave two or more.
+ * Whether an atom of three - its `neighbours` and the `hs` hydrogens it
+ * carries - has a lone pair for its fourth: a pyramid of three, whether or
+ * not the lone pair keeps it (`lonePairCentres`): its valence electrons,
+ * less its charge, its bonds' orders (`bondOrders`, aromatic 1.5) and its
+ * hydrogens, leave two or more.
  */
 export function lonePairOfThree(el: string, charge: number, neighbours: number, bondOrders: number, hs: number): boolean {
   const valence = PYRAMID_VALENCE.get(el) ?? 0;
-  return valence > 0 && !hs && neighbours === 3 && valence - charge - bondOrders >= 2;
+  return valence > 0 && neighbours + hs === 3 && valence - charge - bondOrders - hs >= 2;
 }
 
 /**

@@ -21,3 +21,17 @@ export function cardPlace(word: PdfLens["word"], card: { width: number; height: 
   const over = word.top - LINE_GAP - card.height;
   return { left, top: over >= EDGE ? over : word.bottom + LINE_GAP };
 }
+
+/**
+ * What a number's card holds: its structure's drawing, once the number is
+ * placed in its PDF's index (`placed`), that structure read (`read`) and read
+ * whole (`drawn`); "reading" while its PDF's pages are still being gone
+ * through for numbers (`whole` not yet), or the number placed and its
+ * figure's structures still being read; else nothing - the number drawn
+ * nowhere, or its structure not read whole.
+ */
+export function cardHolds(c: { placed: boolean; read: boolean; drawn: boolean; whole: boolean }): "drawing" | "reading" | null {
+  // (read: drawn whole, or never to be - nothing to wait for)
+  if (c.placed && c.read) return c.drawn ? "drawing" : null;
+  return !c.whole || c.placed ? "reading" : null;
+}

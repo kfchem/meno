@@ -22,8 +22,8 @@ const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");
 import { rmsd } from "./rmsd";
 import { addSet, addStep, connect, fitSets, moveSet, removeSet, removeStep, removeWire, resizeSet, updateStep } from "./model";
 import { energiesBy, laidOver, placeResults, resultsOf, runStep, type RunWith } from "./run";
-import { offeredSteps } from "./offered";
-import { inputsOf } from "./kinds";
+import { offeredFirst, offeredSteps } from "./offered";
+import { inputsOf, needsOf } from "./kinds";
 import { doerOf } from "./doers";
 import { pluginById } from "../../../../lib/calc/catalog";
 import { populations } from "../utils/molecule3d";
@@ -360,13 +360,19 @@ describe("Meno's own steps", () => {
 
   it("need energies for a window and for populations", () => {
     const set = entries(bent({ x: 0, y: 0 }, 2), "conformers");
-    expect(runMeno("energy-window", set, "conformers")).toEqual({ ok: false, said: "Not every entry has an energy" });
+    expect(runMeno("energy-window", set, "conformers", { window: 3 })).toEqual({ ok: false, said: "Not every entry has an energy" });
     expect(runMeno("populations", set, "conformers").ok).toBe(false);
   });
 
   it("refuse a window they cannot keep by, saying why, as Populations does a temperature", () => {
     const set = entries(bent({ x: 0, y: 0 }, 2, [0, kcal(1)]), "conformers");
-    for (const window of [-1, Number.NaN, Number.POSITIVE_INFINITY]) expect(runMeno("energy-window", set, "conformers", { window })).toEqual({ ok: false, said: "The window must be 0 kcal/mol or more" });
+    for (const window of [-1, Number.POSITIVE_INFINITY]) expect(runMeno("energy-window", set, "conformers", { window })).toEqual({ ok: false, said: "The window must be 0 kcal/mol or more" });
+    // (none given - no default stands in for it - or one that is no number: the window asked for, as its card asks)
+    for (const options of [undefined, { window: Number.NaN }, { window: "" }, { window: "a" }]) expect(runMeno("energy-window", set, "conformers", options)).toEqual({ ok: false, said: "Give the window, in kcal/mol" });
+    // (the same from the lowest in each value of a property: its own check, as its own words)
+    const byValue = { within: "each value", groupBy: "product" };
+    for (const window of [undefined, Number.NaN, ""]) expect(runMeno("energy-window", set, "conformers", { ...byValue, ...(window !== undefined ? { window } : {}) })).toEqual({ ok: false, said: "Give the window, in kcal/mol" });
+    for (const window of [-1, Number.POSITIVE_INFINITY]) expect(runMeno("energy-window", set, "conformers", { ...byValue, window })).toEqual({ ok: false, said: "The window must be 0 kcal/mol or more" });
     // (0: the lowest of each compound alone)
     const none = runMeno("energy-window", set, "conformers", { window: 0 });
     expect(none.ok && none.kept.map((e) => e.number)).toEqual([1]);
@@ -935,32 +941,42 @@ describe("Quick Add's calculations", () => {
     }
   });
 
+  it("put down with no window of the chemist's own in Settings, an Energy window holds none - never a number that is none - and asks for one", () => {
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const id = store.getState().addStep("energy-window", "meno", 0, 0);
+    const step = store.getState().steps.find((s) => s.id === id)!;
+    expect(step.options).toEqual({ within: "each compound", groupBy: "" });
+    expect(needsOf(step)).toBe("Give the window, in kcal/mol");
+  });
+
   it("are by who does them - each plugin added, then Meno - each with the kinds it fills; As conformers only from a compound set's wire", () => {
     let doc = addStep(page(), "as-conformers", 5, 0);
     doc = connect(doc, { set: 1 }, 2);
     // (no plugin added: Meno's own steps on entries)
-    expect(offered(doc)).toEqual([["Meno", ["energy-window", "duplicates", "populations", "filter", "rank", "take-frames", "choose", "check-structures", "stereoisomers", "enumerate", "chart", "energy-diagram", "tag", "species", "combine", "measure", "mode-on-atoms", "merge", "rebond", "compare-bonding", "join", "barrier", "restraints", "torsion-restraints", "number", "add", "atom-map", "displace", "ensemble"]]]);
+    expect(offered(doc)).toEqual([["Meno", ["energy-window", "duplicates", "populations", "filter", "rank", "take-frames", "choose", "check-structures", "stereoisomers", "enumerate", "chart", "energy-diagram", "tag", "species", "combine", "measure", "mode-on-atoms", "merge", "rebond", "compare-bonding", "join", "onto-structures", "barrier", "restraints", "torsion-restraints", "number", "add", "atom-map", "displace", "ensemble"]]]);
     // a compound set's wire: what takes it - a chart of it seen as a table too - and the conversion
-    expect(offered(doc, { set: 1 })).toEqual([["Meno", ["energy-window", "duplicates", "filter", "rank", "take-frames", "as-conformers", "chart", "energy-diagram", "tag", "species", "combine", "measure", "mode-on-atoms", "merge", "rebond", "compare-bonding", "join", "barrier", "restraints", "torsion-restraints", "add", "atom-map", "displace", "ensemble"]]]);
+    expect(offered(doc, { set: 1 })).toEqual([["Meno", ["energy-window", "duplicates", "filter", "rank", "take-frames", "as-conformers", "chart", "energy-diagram", "tag", "species", "combine", "measure", "mode-on-atoms", "merge", "rebond", "compare-bonding", "join", "onto-structures", "barrier", "restraints", "torsion-restraints", "add", "atom-map", "displace", "ensemble"]]]);
     // a conformer set's
-    expect(offered(doc, exitSet(doc, 2))).toEqual([["Meno", ["energy-window", "duplicates", "populations", "filter", "rank", "choose", "chart", "energy-diagram", "tag", "species", "measure", "mode-on-atoms", "merge", "rebond", "compare-bonding", "join", "barrier", "restraints", "torsion-restraints", "add", "atom-map", "displace", "ensemble"]]]);
+    expect(offered(doc, exitSet(doc, 2))).toEqual([["Meno", ["energy-window", "duplicates", "populations", "filter", "rank", "choose", "chart", "energy-diagram", "tag", "species", "measure", "mode-on-atoms", "merge", "rebond", "compare-bonding", "join", "onto-structures", "barrier", "restraints", "torsion-restraints", "add", "atom-map", "displace", "ensemble"]]]);
     // plugins added: theirs first, each under its name - and only those that take what a wire carries
     useReaders.setState({ state: { sketchkit: "added", tightbind: "added" }, problem: {} });
     expect(offered(doc)).toEqual([
       ["Sketchkit", ["conformers", "minimise", "descriptors"]],
       ["Tightbind", ["optimise", "energy", "frequencies"]],
-      ["Meno", ["energy-window", "duplicates", "populations", "filter", "rank", "take-frames", "choose", "check-structures", "stereoisomers", "enumerate", "chart", "energy-diagram", "tag", "species", "combine", "measure", "mode-on-atoms", "merge", "rebond", "compare-bonding", "join", "barrier", "restraints", "torsion-restraints", "number", "add", "atom-map", "displace", "ensemble"]],
+      ["Meno", ["energy-window", "duplicates", "populations", "filter", "rank", "take-frames", "choose", "check-structures", "stereoisomers", "enumerate", "chart", "energy-diagram", "tag", "species", "combine", "measure", "mode-on-atoms", "merge", "rebond", "compare-bonding", "join", "onto-structures", "barrier", "restraints", "torsion-restraints", "number", "add", "atom-map", "displace", "ensemble"]],
     ]);
     expect(offered(doc, { set: 1 })).toEqual([
       ["Sketchkit", ["conformers", "minimise"]],
       ["Tightbind", ["optimise", "energy", "frequencies"]],
-      ["Meno", ["energy-window", "duplicates", "filter", "rank", "take-frames", "as-conformers", "chart", "energy-diagram", "tag", "species", "combine", "measure", "mode-on-atoms", "merge", "rebond", "compare-bonding", "join", "barrier", "restraints", "torsion-restraints", "add", "atom-map", "displace", "ensemble"]],
+      ["Meno", ["energy-window", "duplicates", "filter", "rank", "take-frames", "as-conformers", "chart", "energy-diagram", "tag", "species", "combine", "measure", "mode-on-atoms", "merge", "rebond", "compare-bonding", "join", "onto-structures", "barrier", "restraints", "torsion-restraints", "add", "atom-map", "displace", "ensemble"]],
     ]);
     // a set of structures drawn: a conformer search made from them - Sketchkit's, not Confsweep's, which starts from 3D - and Filter, on their records, and Chart, of them seen as a table
     doc = addSet({ ...doc, model: { atoms: [{ id: 1, x: 40, y: 0, r: 0.9, el: "C" }, { id: 2, x: 41.5, y: 0, r: 0.9, el: "O" }], bonds: [{ id: 1, a: 1, b: 2, order: 1 }] } }, { x0: 38, y0: -2, x1: 44, y1: 2 });
     const drawn = doc.sets![doc.sets!.length - 1].id;
     useReaders.setState({ state: { sketchkit: "added", confsweep: "added" }, problem: {} });
-    expect(offered(doc, { set: drawn }).map(([who, kinds]) => [who, kinds])).toEqual([["Sketchkit", ["conformers", "descriptors"]], ["Meno", ["filter", "check-structures", "stereoisomers", "enumerate", "chart"]]]);
+    expect(offered(doc, { set: drawn }).map(([who, kinds]) => [who, kinds])).toEqual([["Sketchkit", ["conformers", "descriptors"]], ["Meno", ["filter", "check-structures", "stereoisomers", "enumerate", "chart", "onto-structures"]]]);
     // an interface to a program installed separately: under the program's name, not the interface's
     useReaders.setState({ state: { quanta: "added" }, problem: {} });
     expect(offered(doc)[0]).toEqual(["Quanta", ["optimise", "energy", "frequencies", "path-search", "saddle-point", "reaction-path"]]);
@@ -979,6 +995,40 @@ describe("Quick Add's calculations", () => {
     expect(canWire(gen, { set: 1 }, id)).toBe(false);
     expect(connect(gen, { set: 1 }, id)).toBe(gen);
     expect(inputsOf("generate")).toEqual([]);
+  });
+});
+
+describe("Quick Add, for structures that leave their stereo open", () => {
+  const offered = (...a: Parameters<typeof offeredSteps>) => offeredSteps(...a).map((g) => [g.name, g.steps.map((k) => k.kind)]);
+  afterEach(() => useReaders.setState({ state: {}, problem: {} }));
+
+  it("offers Stereoisomers first from a Generate's exit: Meno's line first, and it first in it", () => {
+    useReaders.setState({ state: { molgen: "added", sketchkit: "added" }, problem: {} });
+    const gen = addStep(page(), "generate", 9, 0, undefined, "molgen");
+    const id = gen.steps![gen.steps!.length - 1].id;
+    expect(offeredFirst(gen, exitSet(gen, id))).toBe("stereoisomers");
+    const lines = offered(gen, exitSet(gen, id));
+    expect(lines[0][0]).toBe("Meno");
+    expect((lines[0][1] as string[])[0]).toBe("stereoisomers");
+    // (the rest as they were, after it: the plugin's line, and Meno's others in their order)
+    expect(lines).toEqual([["Meno", ["stereoisomers", "filter", "check-structures", "enumerate", "chart"]], ["Sketchkit", ["conformers", "descriptors"]]]);
+  });
+
+  it("and from Conformers' Failed exit - not from its conformers, nor from a set the chemist made", () => {
+    useReaders.setState({ state: { sketchkit: "added" }, problem: {} });
+    let doc = addSet({ ...page(), model: { atoms: [{ id: 1, x: 40, y: 0, r: 0.9, el: "C" }, { id: 2, x: 41.5, y: 0, r: 0.9, el: "O" }], bonds: [{ id: 1, a: 1, b: 2, order: 1 }] } }, { x0: 38, y0: -2, x1: 44, y1: 2 });
+    const drawn = doc.sets![doc.sets!.length - 1].id;
+    doc = addStep(doc, "conformers", 50, 0, undefined, "sketchkit");
+    const conf = doc.steps![doc.steps!.length - 1].id;
+    doc = connect(doc, { set: drawn }, conf);
+    // (run, its Failed exit holds the structures drawn it could not make)
+    const failed = exitSet(doc, conf, "failed").set;
+    doc = { ...doc, sets: doc.sets!.map((b) => (b.id === failed ? { ...b, made: { ...b.made!, holds: "structures" as const } } : b)) };
+    expect(offeredFirst(doc, exitSet(doc, conf, "failed"))).toBe("stereoisomers");
+    expect(offered(doc, exitSet(doc, conf, "failed"))[0]).toEqual(["Meno", ["stereoisomers", "filter", "check-structures", "enumerate", "chart"]]);
+    expect(offeredFirst(doc, exitSet(doc, conf))).toBeNull();
+    expect(offeredFirst(doc, { set: drawn })).toBeNull();
+    expect(offeredFirst(doc)).toBeNull();
   });
 });
 
