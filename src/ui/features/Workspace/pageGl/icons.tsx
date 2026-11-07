@@ -6,11 +6,11 @@
  * the page with icons of its own adds them (`addPageIcon`).
  */
 import type { ReactElement } from "react";
-import { ArrowPathIcon, CheckCircleIcon, ClockIcon, ExclamationCircleIcon, ExclamationTriangleIcon, StopCircleIcon } from "@heroicons/react/24/outline";
+import { ArrowPathIcon, CheckCircleIcon, ChevronRightIcon, ClockIcon, ExclamationCircleIcon, ExclamationTriangleIcon, StopCircleIcon } from "@heroicons/react/24/outline";
 import { StepGlyph, STEP_ICONS } from "../workflow/icons";
 
-/** An icon on the page: where its middle is (the page's units), `sizePx` page pixels square, tinted sRGB `color`. */
-export type PageIcon = { key: string; icon: string; x: number; y: number; sizePx: number; color: string; z?: number; opacity?: number };
+/** An icon on the page: where its middle is (the page's units), `sizePx` page pixels square, tinted sRGB `color`, turned `turn` radians clockwise as seen (a chevron opening). */
+export type PageIcon = { key: string; icon: string; x: number; y: number; sizePx: number; color: string; turn?: number; z?: number; opacity?: number };
 
 /** Bumped as icons are added: an atlas made before it is made again. */
 export let atlasVersion = 0;
@@ -27,6 +27,8 @@ export function addPageIcon(name: string, draw: (size: number) => ReactElement):
 for (const icon of STEP_ICONS) addPageIcon(icon, (size) => <StepGlyph icon={icon} size={size} />);
 const HERO = { running: ArrowPathIcon, done: CheckCircleIcon, waiting: ClockIcon, failed: ExclamationCircleIcon, stopped: StopCircleIcon, warning: ExclamationTriangleIcon };
 for (const [name, Hero] of Object.entries(HERO)) addPageIcon(name, (size) => <Hero width={size} height={size} strokeWidth={1.5} aria-hidden />);
+// (a group folded under its name - how a chip's molecule was made - its chevron as heavy as its HTML's)
+addPageIcon("chevron-right", (size) => <ChevronRightIcon width={size} height={size} strokeWidth={2.5} aria-hidden />);
 
 /** Every icon's name, in the order the atlas lays them. */
 export function pageIconNames(): string[] {

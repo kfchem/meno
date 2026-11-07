@@ -978,7 +978,10 @@ export type WireTo = { step: number; port: string };
 /** A wire, from the set that gives to the input that takes it. */
 export type Wire = { id: number; from: WireEnd; to: WireTo };
 /** What of a workflow is the view's, not the document's. */
-export type WorkflowView = "hoveredSet" | "chosenSet" | "hoveredStep" | "hoveredWire" | "openStep" | "choosingAtoms" | "wireDrag" | "wireRefused" | "workflowMenu" | "askDeleteStep" | "askDeleteSet";
+/** What a frames chip's Copy items put on the clipboard: all it says of the frame shown, and each frame's energy as a table, where it has energies (utils/chipSaid). */
+export type ChipCopy = { all: string; energies: string | null };
+
+export type WorkflowView = "hoveredSet" | "chosenSet" | "hoveredStep" | "hoveredWire" | "openStep" | "choosingAtoms" | "wireDrag" | "wireRefused" | "workflowMenu" | "chipOver" | "askDeleteStep" | "askDeleteSet";
 /**
  * A job of a step's, as last looked at (lib/jobs): where it is, when it
  * was asked for, started and ended; its place among those waiting, where it
@@ -1677,8 +1680,14 @@ export type EditorState = {
   openStep: number | null;
   /** A step's atoms being chosen on the drawing - Enumerate's positions: a click on an atom takes it into the step's option, or out of it (`AtomsOption`). */
   choosingAtoms: { step: number; option: string } | null;
-  /** A set's tab or a step's card right-clicked: its menu asked for, there (Workspace opens it). */
-  workflowMenu: { kind: "set" | "step"; id: number; clientX: number; clientY: number } | null;
+  /**
+   * A set's tab or a step's card right-clicked, or a molecule's frames chip
+   * (its molecule's id, and what its Copy items put on the clipboard): its
+   * menu asked for, there (Workspace opens it).
+   */
+  workflowMenu: { kind: "set" | "step" | "chip"; id: number | null; clientX: number; clientY: number; copy?: ChipCopy } | null;
+  /** Where a molecule's frames chip lies opened, in the page's units: the workflow's ports under it not drawn, as under an opened card - it is over them (components/useFramesChip). */
+  chipOver: { x0: number; y0: number; x1: number; y1: number } | null;
   /**
    * A wire being drawn, to where the pointer is: from what gives - drawn
    * out of its step's port for that exit, where it was pressed there

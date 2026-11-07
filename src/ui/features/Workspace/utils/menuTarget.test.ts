@@ -24,6 +24,14 @@ const on = (kind: MenuTarget["kind"], id: number | null): MenuTarget => ({
 });
 
 describe("a right-click menu over a part gone (Workspace closes it)", () => {
+  it("knows a frames chip's molecule gone - and a stack of drawings' chip, which is no molecule's, never gone for it", () => {
+    const { state } = editor();
+    const parts = { ...state(), molecules3d: [{ id: 7 }] } as unknown as Parameters<typeof menuTargetGone>[1];
+    expect(menuTargetGone(on("chip", 7), parts)).toBe(false);
+    expect(menuTargetGone(on("chip", 8), parts)).toBe(true);
+    expect(menuTargetGone(on("chip", null), parts)).toBe(false);
+  });
+
   it("knows words, an arrow, a plus undone away while their menu is open - Cmd+Z reaches the document with it open", () => {
     const { doc, store, state } = editor();
     const words = state().addCaption("K2CO3, DMF", 1, 2);

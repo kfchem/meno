@@ -11,7 +11,7 @@ export const NOT_FINISHED = "not finished";
 
 /**
  * What a frames chip says of frame `k`'s energy, where it has one, as
- * Frames3D says it of `bars` (its widest number for one above the lowest):
+ * a frames chip says it of `bars` (its widest number for one above the lowest):
  * its height above it - or, on a path whose highest point was refined
  * (`fromStart`), its height above the path's start - or why it has none.
  */
