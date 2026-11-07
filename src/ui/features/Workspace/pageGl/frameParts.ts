@@ -24,6 +24,8 @@ export type FrameTab = {
   tabOnly?: true;
   tone: "rest" | "hover" | "chosen";
   tab: { icon: string; name: string; status?: string; warn?: string };
+  /** Its icon only where its words are too small to read, standing in for them: a set's tab says its name alone, read. */
+  iconWhenSmall?: true;
   edges?: true;
   opacity?: number;
   /** Going - fading out, as it last was: drawn, never taken hold of. */
@@ -43,9 +45,11 @@ const CURSOR: Record<Side, string> = { n: "ns-resize", s: "ns-resize", e: "ew-re
 const BAND = 2 * NAME_DOWN;
 
 /** How wide a tab's words are, in page pixels: its icon, and - read - its name, status and warning, each after a gap. */
-export function tabWidthPx(tab: FrameTab["tab"], read: boolean): number {
+export function tabWidthPx(tab: FrameTab["tab"], read: boolean, iconWhenSmall = false): number {
   if (!read) return FRAME_PX.icon;
   const word = (t: string | undefined, weight: 400 | 500 = 400) => (t ? FRAME_PX.gap + textWidth(t, FRAME_PX.words, weight) : 0);
+  // (no icon before its words, read: they start where the icon would)
+  if (iconWhenSmall) return word(tab.name, 500) - FRAME_PX.gap + word(tab.status) + (tab.warn ? FRAME_PX.gap + FRAME_PX.icon + 4 + textWidth(tab.warn, FRAME_PX.words) : 0);
   return FRAME_PX.icon + word(tab.name, 500) + word(tab.status) + (tab.warn ? FRAME_PX.gap + FRAME_PX.icon + 4 + textWidth(tab.warn, FRAME_PX.words) : 0);
 }
 
@@ -68,14 +72,16 @@ export function frameTabParts(items: readonly FrameTab[], read: boolean): { shap
     const top = y1;
     const mid = top - BAND / 2;
     const left = x0 + SET_PAD;
-    const tabRight = left + pagePx(tabWidthPx(it.tab, read)) + SET_PAD;
+    const tabRight = left + pagePx(tabWidthPx(it.tab, read, it.iconWhenSmall)) + SET_PAD;
     // (its frame - or, of the whole page, its tab alone, a box of its own)
     if (it.tabOnly) shapes.push({ kind: "box", key: `${it.key}:tab`, x0, y0: top - BAND, x1: tabRight, y1: top, radiusPx: FRAME_PX.radius, fill: FRAME_COLORS.fill, line, z: 1, ...fade });
     else shapes.push({ kind: "box", key: `${it.key}:frame`, x0, y0, x1, y1, radiusPx: FRAME_PX.radius, line, z: 0, ...fade });
     // (its tab's words: its icon, then - read - its name, its status, its warning)
     let x = left;
-    icons.push({ key: `${it.key}:icon`, icon: it.tab.icon, x: x + pagePx(FRAME_PX.icon / 2), y: mid, sizePx: FRAME_PX.icon, color: FRAME_COLORS.quiet, ...fade });
-    x += pagePx(FRAME_PX.icon);
+    if (!it.iconWhenSmall || !read) {
+      icons.push({ key: `${it.key}:icon`, icon: it.tab.icon, x: x + pagePx(FRAME_PX.icon / 2), y: mid, sizePx: FRAME_PX.icon, color: FRAME_COLORS.quiet, ...fade });
+      x += pagePx(FRAME_PX.icon);
+    } else x -= pagePx(FRAME_PX.gap);
     if (read) {
       const words = (part: string, text: string | undefined, colour: string, weight: 400 | 500 = 400) => {
         if (!text) return;

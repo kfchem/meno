@@ -19,6 +19,8 @@ export const COLORS = {
   ink: "#1f2328",
   quiet: "#59636e",
   hairline: "#d1d9e0",
+  // A port pointed at, filled (--color-accel-lightbase; pageGl ports)
+  lightBase: "#cfe7ee",
 
   // Base drawing colors (kept here for centralization)
   bond: "#000000",
@@ -42,6 +44,14 @@ export const ALPHA = {
 export function colourCss(r: number, g: number, b: number, alpha = 1): string {
   const c = (v: number) => Math.round(Math.min(255, Math.max(0, v)));
   return alpha >= 1 ? `rgb(${c(r)} ${c(g)} ${c(b)})` : `rgb(${c(r)} ${c(g)} ${c(b)} / ${Math.max(0, alpha)})`;
+}
+
+/** Two colours "#rrggbb" mixed `t` of the way from `a` to `b`, in sRGB as CSS eases a colour: a port's fill as it is pointed at. */
+export function colourMix(a: string, b: string, t: number): string {
+  const bytes = (hex: string) => [1, 3, 5].map((k) => parseInt(hex.slice(k, k + 2), 16));
+  const [p, q] = [bytes(a), bytes(b)];
+  const k = Math.min(1, Math.max(0, t));
+  return colourHex(p[0] + (q[0] - p[0]) * k, p[1] + (q[1] - p[1]) * k, p[2] + (q[2] - p[2]) * k);
 }
 
 /**

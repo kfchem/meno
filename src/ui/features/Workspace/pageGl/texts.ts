@@ -28,6 +28,8 @@ export type PageText = {
   sizePx: number;
   color: string;
   weight?: Weight;
+  /** In Plex Mono, Regular (`font-mono`): a log's line. */
+  mono?: true;
   maxWidthPx?: number;
   z?: number;
   opacity?: number;
@@ -35,6 +37,10 @@ export type PageText = {
 
 /** The family the app's HTML is set in (App.css `--font-sans`), its Japanese after it. */
 const FAMILY = '"IBM Plex Sans", "IBM Plex Sans JP", sans-serif';
+/** The app's monospaced family (App.css `--font-mono`), its Japanese after it. */
+const MONO = '"IBM Plex Mono", "IBM Plex Sans JP", monospace';
+/** Plex Mono's advance, every letter's, as a share of its size. */
+const MONO_ADVANCE = 0.6;
 
 let context: CanvasRenderingContext2D | null | undefined;
 function measurer(): CanvasRenderingContext2D | null {
@@ -56,13 +62,14 @@ function measurer(): CanvasRenderingContext2D | null {
  * Plex's own advances (lib/chem/fonts/ibmPlexSans), a capital's for what it
  * lacks.
  */
-export function textWidth(text: string, sizePx: number, weight: Weight = 400): number {
+export function textWidth(text: string, sizePx: number, weight: Weight = 400, mono?: boolean): number {
   const c = measurer();
   if (c && typeof c.measureText === "function") {
-    c.font = `${weight} ${sizePx}px ${FAMILY}`;
+    c.font = mono ? `400 ${sizePx}px ${MONO}` : `${weight} ${sizePx}px ${FAMILY}`;
     const w = c.measureText(text).width;
     if (Number.isFinite(w) && (w > 0 || text.length === 0)) return w;
   }
+  if (mono) return [...text].length * MONO_ADVANCE * sizePx;
   let w = 0;
   for (const ch of text) w += advanceIn(IBM_PLEX_SANS, ch);
   return w * sizePx;
@@ -71,14 +78,14 @@ export function textWidth(text: string, sizePx: number, weight: Weight = 400): n
 const ELLIPSIS = "…";
 
 /** `text`, cut with an ellipsis where it is wider than `maxWidthPx`: as many of its letters as fit before it. */
-export function fitted(text: string, sizePx: number, weight: Weight, maxWidthPx?: number): string {
-  if (maxWidthPx == null || textWidth(text, sizePx, weight) <= maxWidthPx) return text;
+export function fitted(text: string, sizePx: number, weight: Weight, maxWidthPx?: number, mono?: boolean): string {
+  if (maxWidthPx == null || textWidth(text, sizePx, weight, mono) <= maxWidthPx) return text;
   const letters = [...text];
   let lo = 0;
   let hi = letters.length;
   while (lo < hi) {
     const mid = Math.ceil((lo + hi) / 2);
-    if (textWidth(letters.slice(0, mid).join("") + ELLIPSIS, sizePx, weight) <= maxWidthPx) lo = mid;
+    if (textWidth(letters.slice(0, mid).join("") + ELLIPSIS, sizePx, weight, mono) <= maxWidthPx) lo = mid;
     else hi = mid - 1;
   }
   return lo > 0 ? letters.slice(0, lo).join("").trimEnd() + ELLIPSIS : ELLIPSIS;
@@ -90,8 +97,8 @@ const CAP = IBM_PLEX_SANS.capHeight / IBM_PLEX_SANS.unitsPerEm;
 /** Where `t` is drawn from - its first letter's baseline, in the page's units - what it says, cut to fit, and how large, in world units. */
 export function placed(t: PageText): { text: string; x: number; y: number; size: number } {
   const weight = t.weight ?? 400;
-  const text = fitted(t.text, t.sizePx, weight, t.maxWidthPx);
-  const w = pagePx(textWidth(text, t.sizePx, weight));
+  const text = fitted(t.text, t.sizePx, weight, t.maxWidthPx, t.mono);
+  const w = pagePx(textWidth(text, t.sizePx, weight, t.mono));
   const x = t.anchor === "start" ? t.x : t.anchor === "middle" ? t.x - w / 2 : t.x - w;
   const y = t.baseline === "middle" ? t.y - (pagePx(t.sizePx) * CAP) / 2 : t.y;
   return { text, x, y, size: pagePx(t.sizePx) };
@@ -142,7 +149,8 @@ export function wrapRuns(runs: readonly WrapRun[], sizePx: number, maxPx: number
   for (const r of runs) {
     if (!r.text) continue;
     if (r.atomic) pieces.push({ run: r, text: r.text, atomic: true });
-    else for (const w of r.text.match(/\S*\s*/g) ?? []) if (w) pieces.push({ run: r, text: w, atomic: false });
+    // (a line may end after a space, or after a hyphen inside a word - "GFN2-xTB" - as CSS's lines do; never one before a figure, a minus)
+    else for (const w of r.text.match(/[^\s-]+-(?=[^\s\d-])|\S*\s*/g) ?? []) if (w) pieces.push({ run: r, text: w, atomic: false });
   }
   const width = (t: string, r: Run) => textWidth(t, sizePx, r.weight ?? 400);
   const lines: { run: Run; text: string }[][] = [[]];
