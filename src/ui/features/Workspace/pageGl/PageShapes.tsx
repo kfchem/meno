@@ -1,7 +1,7 @@
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
-import { packShapes, PER, type Packed, type Shape } from "./shapes";
+import { fillShapesGeometry, packShapes, type Packed, type Shape } from "./shapes";
 
 /**
  * Where the page's WebGL is drawn among the rest: after the drawing, the
@@ -121,18 +121,6 @@ void main() {
 }
 `;
 
-const ATTRIBUTES: [keyof typeof PER, string][] = [
-  ["centre", "aCentre"],
-  ["half", "aHalf"],
-  ["radiusLine", "aRadiusLine"],
-  ["control", "aControl"],
-  ["fill", "aFill"],
-  ["stroke", "aStroke"],
-  ["dash", "aDash"],
-  ["kindOpacity", "aKindOpacity"],
-  ["shadow", "aShadow"],
-];
-
 /**
  * Boxes and rings on the page (`shapes`), drawn by WebGL as one instanced
  * mesh over the drawing: in the page's units, their lines in page pixels
@@ -173,12 +161,7 @@ export default function PageShapes({ items, order = PAGE_GL_ORDER }: { items: re
     const before = packed.current;
     const now = packShapes(items, before ?? undefined);
     packed.current = now;
-    for (const [k, name] of ATTRIBUTES) {
-      const was = geometry.getAttribute(name) as THREE.InstancedBufferAttribute | undefined;
-      if (!was || was.array !== now[k]) geometry.setAttribute(name, new THREE.InstancedBufferAttribute(now[k], PER[k]));
-      else was.needsUpdate = true;
-    }
-    geometry.instanceCount = now.count;
+    fillShapesGeometry(geometry, now);
     invalidate();
   }, [items, geometry, invalidate]);
   useFrame(() => {

@@ -78,6 +78,39 @@ export const PER = {
 
 export type Packed = { -readonly [K in keyof typeof PER]: Float32Array } & { count: number; keys: string[] };
 
+/** Each packed array's attribute in the shader (PageShapes). */
+export const SHAPE_ATTRIBUTES: readonly [keyof typeof PER, string][] = [
+  ["centre", "aCentre"],
+  ["half", "aHalf"],
+  ["radiusLine", "aRadiusLine"],
+  ["control", "aControl"],
+  ["fill", "aFill"],
+  ["stroke", "aStroke"],
+  ["dash", "aDash"],
+  ["kindOpacity", "aKindOpacity"],
+  ["shadow", "aShadow"],
+];
+
+/**
+ * `packed` put into the one geometry the page's shapes are drawn with: in
+ * place where its arrays are the ones it holds, told to upload them again.
+ * Where they grew - new, longer arrays - the geometry is disposed first:
+ * three.js keeps how many instances it may draw from the attributes it was
+ * first drawn with, and forgets it only on `dispose` (WebGLGeometries), so
+ * that every shape past those would go undrawn; disposing also frees the
+ * old arrays' buffers. It is drawn again from what it holds next frame.
+ */
+export function fillShapesGeometry(geometry: THREE.InstancedBufferGeometry, packed: Packed): void {
+  const grew = SHAPE_ATTRIBUTES.some(([k, name]) => geometry.getAttribute(name)?.array !== packed[k]);
+  if (grew) geometry.dispose();
+  for (const [k, name] of SHAPE_ATTRIBUTES) {
+    const was = geometry.getAttribute(name) as THREE.InstancedBufferAttribute | undefined;
+    if (was && was.array === packed[k]) was.needsUpdate = true;
+    else geometry.setAttribute(name, new THREE.InstancedBufferAttribute(packed[k], PER[k]));
+  }
+  geometry.instanceCount = packed.count;
+}
+
 const colour = new THREE.Color();
 /** An sRGB hex as the shader takes it: linear, as the page's colours are drawn (components/textBatch `PageBatch`). */
 function linear(hex: string, out: Float32Array, at: number, alpha: number): void {

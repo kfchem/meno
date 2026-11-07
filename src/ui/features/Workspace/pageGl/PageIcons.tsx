@@ -1,4 +1,4 @@
-import { useThree } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useState } from "react";
 import * as THREE from "three";
 import { colourHex } from "../../../theme/colors";
@@ -65,6 +65,8 @@ const VERTEX = /* glsl */ `
 attribute vec2 aCentre;
 attribute float aSize;
 attribute float aTurn;
+attribute float aSpin;
+uniform float uTime;
 attribute vec4 aUv;
 attribute vec4 aTint;
 varying vec2 vUv;
@@ -73,8 +75,10 @@ void main() {
   vUv = mix(aUv.xy, aUv.zw, position.xy + 0.5);
   vTint = aTint;
   // (turned clockwise as seen, as CSS turns it: the page's y is up)
-  float c = cos(aTurn);
-  float s = sin(aTurn);
+  // (and turning on its own, aSpin turns a second: a step's running icon, as CSS's animate-spin turns it)
+  float a = aTurn + aSpin * uTime * 6.28318530718;
+  float c = cos(a);
+  float s = sin(a);
   vec2 p = vec2(c * position.x + s * position.y, -s * position.x + c * position.y);
   gl_Position = projectionMatrix * modelViewMatrix * vec4(aCentre + p * aSize, 0.0, 1.0);
 }
@@ -120,7 +124,7 @@ export default function PageIcons({ items, order = PAGE_GL_ORDER + 1 }: { items:
   const material = useMemo(
     () =>
       new THREE.ShaderMaterial({
-        uniforms: { uAtlas: { value: null } },
+        uniforms: { uAtlas: { value: null }, uTime: { value: 0 } },
         vertexShader: VERTEX,
         fragmentShader: FRAGMENT,
         transparent: true,
@@ -151,6 +155,7 @@ export default function PageIcons({ items, order = PAGE_GL_ORDER + 1 }: { items:
     const centre = new Float32Array(n * 2);
     const size = new Float32Array(n);
     const turn = new Float32Array(n);
+    const spin = new Float32Array(n);
     const uv = new Float32Array(n * 4);
     const tint = new Float32Array(n * 4);
     shown.forEach((t, i) => {
@@ -158,6 +163,7 @@ export default function PageIcons({ items, order = PAGE_GL_ORDER + 1 }: { items:
       centre.set([t.x, t.y], i * 2);
       size[i] = pagePx(t.sizePx);
       turn[i] = t.turn ?? 0;
+      spin[i] = t.spin ?? 0;
       uv.set([c.u0, c.v0, c.u1, c.v1], i * 4);
       colour.set(t.color);
       tint.set([colour.r, colour.g, colour.b, t.opacity ?? 1], i * 4);
@@ -169,6 +175,7 @@ export default function PageIcons({ items, order = PAGE_GL_ORDER + 1 }: { items:
     g.setAttribute("aCentre", new THREE.InstancedBufferAttribute(centre, 2));
     g.setAttribute("aSize", new THREE.InstancedBufferAttribute(size, 1));
     g.setAttribute("aTurn", new THREE.InstancedBufferAttribute(turn, 1));
+    g.setAttribute("aSpin", new THREE.InstancedBufferAttribute(spin, 1));
     g.setAttribute("aUv", new THREE.InstancedBufferAttribute(uv, 4));
     g.setAttribute("aTint", new THREE.InstancedBufferAttribute(tint, 4));
     g.instanceCount = n;
@@ -176,5 +183,12 @@ export default function PageIcons({ items, order = PAGE_GL_ORDER + 1 }: { items:
     invalidate();
     return () => g.dispose();
   }, [items, ready, material, invalidate]);
+  // (one turning on its own: the time told to the shader each frame, and a frame asked for after it while any turns)
+  const spinning = items.some((t) => t.spin);
+  useFrame(({ clock, invalidate: again }) => {
+    if (!spinning) return;
+    material.uniforms.uTime.value = clock.elapsedTime;
+    again();
+  });
   return ready && geometry ? <mesh geometry={geometry} material={material} renderOrder={order} frustumCulled={false} /> : null;
 }
