@@ -394,6 +394,7 @@ export function createEditorStore(
     wireDrag: null,
     wireRefused: null,
     workflowMenu: null,
+    chipOver: null,
     askDeleteStep: null,
     askDeleteSet: null,
     askUndo: null,

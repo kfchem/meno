@@ -46,8 +46,10 @@ describe("a mark's box as WebGL draws it", () => {
     const marks = readFileSync(join(process.cwd(), "src/ui/features/Workspace/components/ChemMarks2D.tsx"), "utf8");
     expect(marks).toContain("<MarkBoxes2D");
     expect(marks).toContain("<Texts2D");
-    expect(marks.match(/<PageHtml/g)).toHaveLength(1);
-    expect(marks).toMatch(/\{pointed && \(\s+<PageHtml/);
+    // (the one HTML: the page's tip, over the box pointed at - components/PageTip)
+    expect(marks).not.toContain("<PageHtml");
+    expect(marks.match(/<PageTip/g)).toHaveLength(1);
+    expect(marks).toMatch(/\{pointed && <PageTip/);
   });
 
   it("draws R, S, E and Z beside a molecule in 3D by WebGL too, placed frame by frame: no HTML for them", () => {
