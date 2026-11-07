@@ -608,14 +608,29 @@ export default function Workflow2D() {
   const [cover, setCover] = useState<{ step: number; w: number; h: number } | null>(null);
   const over = openStep ?? shutting;
   useEffect(() => {
-    const el = over != null ? layer.current?.querySelector<HTMLElement>(`[data-step-card="${over}"] > *`) : null;
-    if (over == null || !el) return setCover(null);
-    // (followed as it opens, and as it shuts: it grows and shrinks)
-    const measure = () => setCover({ step: over, w: el.offsetWidth * PX, h: el.offsetHeight * PX });
-    measure();
-    const watch = new ResizeObserver(measure);
-    watch.observe(el);
-    return () => watch.disconnect();
+    if (over == null) return setCover(null);
+    // (its HTML put on the page a frame or two after it is opened - the page's HTML is mounted apart: looked for until it is there)
+    let watch: ResizeObserver | null = null;
+    let frame = 0;
+    let tries = 0;
+    const find = () => {
+      const el = layer.current?.querySelector<HTMLElement>(`[data-step-card="${over}"] > *`);
+      if (!el) {
+        if (tries++ < 60) frame = requestAnimationFrame(find);
+        else setCover(null);
+        return;
+      }
+      // (followed as it opens, and as it shuts: it grows and shrinks)
+      const measure = () => setCover({ step: over, w: el.offsetWidth * PX, h: el.offsetHeight * PX });
+      measure();
+      watch = new ResizeObserver(measure);
+      watch.observe(el);
+    };
+    find();
+    return () => {
+      cancelAnimationFrame(frame);
+      watch?.disconnect();
+    };
   }, [over]);
   // (a port drawn among the cards, made after the scale was last told - a result set's Into, as its step finishes: told it too)
   useLayoutEffect(() => {
