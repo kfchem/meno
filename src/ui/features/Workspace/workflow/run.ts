@@ -896,9 +896,19 @@ function filled(
  * structures drawn on their own atoms' ids where those are free (document
  * `appendModel`), so that what was worked out from them is the same - as
  * many as a set lays out, the rest held still. As it was where it holds
- * nothing it lays out.
+ * nothing it lays out. Its step's other exits' sets are then kept under
+ * its first, as a run keeps them (`keepExitsUnder`): where it was put, they
+ * were no hindrance (`placeAgain`).
  */
 export function laidOutAgain(doc: WorkspaceDocument, id: number, extentOf?: RunWith["extentOf"]): WorkspaceDocument {
+  const out = layOutAgain(doc, id, extentOf);
+  const set = out === doc ? undefined : findSet(out, id);
+  const step = set?.made ? stepOf(out, set.made.step) : undefined;
+  return step ? keepExitsUnder(out, step) : out;
+}
+
+/** `doc` with set `id` laid out on the page again, its step's other exits' sets as they stand (`laidOutAgain`). */
+function layOutAgain(doc: WorkspaceDocument, id: number, extentOf?: RunWith["extentOf"]): WorkspaceDocument {
   const set = findSet(doc, id);
   if (!set) return doc;
   const step = set.made ? stepOf(doc, set.made.step) : undefined;

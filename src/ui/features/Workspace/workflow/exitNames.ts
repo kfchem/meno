@@ -60,9 +60,10 @@ export const EXIT_CHIP_OUT = 8;
  * What a held exit's set holds, said beside its port as the pointer is on
  * it (docs/WORKFLOWS.md, *Held results*): its name, then its count in the
  * words a large set's summary says it in ("Failed · 3 molecules") - in a
- * chip as a molecule's frames chip is drawn shut (pageGl `shutChip`), out
- * to the right of the port, level with it; taking no pointer, so that the
- * port keeps it.
+ * chip as a molecule's frames chip is drawn shut (pageGl `shutChip`), but
+ * whole, not let through: it stands on its port's wire, which would show
+ * through it. Out to the right of the port, level with it; taking no
+ * pointer, so that the port keeps it.
  */
 export function exitChip(key: string, name: string, holds: string, port: { x: number; y: number }): Drawn {
   const runs = [
@@ -73,5 +74,9 @@ export function exitChip(key: string, name: string, holds: string, port: { x: nu
   const h = pagePx(CHIP_HEIGHT);
   // (hung, as a frames chip is, FRAMES_CHIP_GAP below a point: here the one that puts its middle level with the port)
   const chip = shutChip(key, runs, { x: port.x + pagePx(EXIT_CHIP_OUT) + w / 2, y: port.y + h / 2 + pagePx(FRAMES_CHIP_GAP) });
-  return { ...chip, regions: [] };
+  return {
+    shapes: chip.shapes.map((s) => (s.kind === "box" ? { ...s, opacity: 1, fillAlpha: 1 } : s)),
+    texts: chip.texts.map((t) => ({ ...t, opacity: 1 })),
+    regions: [],
+  };
 }

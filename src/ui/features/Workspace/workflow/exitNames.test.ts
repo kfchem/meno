@@ -69,6 +69,8 @@ describe("what a held exit's set holds, said beside its port as the pointer is o
     expect(box.x0).toBeCloseTo(port.x + pagePx(EXIT_CHIP_OUT));
     expect((box.y0 + box.y1) / 2).toBeCloseTo(port.y);
     expect(chip.regions).toEqual([]);
+    // (whole, not let through: its port's wire runs under it)
+    expect([(chip.shapes[0] as { opacity?: number }).opacity, (chip.shapes[0] as { fillAlpha?: number }).fillAlpha, ...chip.texts.map((t) => t.opacity)]).toEqual([1, 1, 1, 1]);
   });
 
   it("is told by the port, whatever draws it (store `exitPortHovered`), and said only for a held set that holds anything - its step's names gone meanwhile", () => {
