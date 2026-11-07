@@ -55,6 +55,8 @@ export default function ConversationFrames() {
   const dt = Math.min(now - last.current, 1000 / 30);
   last.current = now;
   let easing = false;
+  // (none kept of a conversation gone)
+  for (const k of levels.current.keys()) if (!live.some((t) => t.key === k)) levels.current.delete(k);
   for (const t of live) {
     const to = LEVEL[t.tone];
     const at = levels.current.get(t.key) ?? to;

@@ -41,8 +41,9 @@ The same holds for the exchange as it is saved and opened again.
   lies inside it may be sent away from this computer, so its line is its
   own, dashed in Meno's colour - heavier pointed at, heavier still read in
   the column, eased - and its tab says where it may go: *May be sent to*
-  the hosts its model plugin names, *Stays on this computer* for a model
-  run here, or *Sends nothing* without one; its icon a cloud with an arrow
+  the hosts its model plugin's manifest names - those its consent names
+  and Meno holds it to - *Stays on this computer* for Meno's scripted
+  test model, run here, or *Sends nothing* without one; its icon a cloud with an arrow
   out of it, or a computer.
 - **Each conversation is apart.** Two frames never share what was said or
   sent.

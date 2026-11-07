@@ -39,6 +39,9 @@ export type ModelReply = { text: string; calls?: ToolCall[]; keep?: unknown };
  */
 export type Connection = { id: string; to: string; send(request: ModelRequest): Promise<ModelReply> };
 
+/** A connection's `to` where what it is sent stays here: Meno's scripted test model's alone - a model plugin's `to` is the hosts its manifest names (modelConnection). */
+export const THIS_COMPUTER = "this computer";
+
 /** How far a turn goes: how many replies, and how many tool calls, after the person's words. Shown on the card, and the person's to change. */
 export type Limits = { replies: number; calls: number };
 export const LIMITS: Limits = { replies: 8, calls: 24 };

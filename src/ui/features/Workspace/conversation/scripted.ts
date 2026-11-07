@@ -4,7 +4,7 @@
  * - and keeps every request it was sent, for a test to look at. For tests
  * alone: never offered, and it sends nothing anywhere.
  */
-import type { Connection, ModelReply, ModelRequest } from "./turn";
+import { THIS_COMPUTER, type Connection, type ModelReply, type ModelRequest } from "./turn";
 
 export type Scripted = Connection & { asked: ModelRequest[] };
 
@@ -13,7 +13,7 @@ export function scriptedModel(replies: readonly ModelReply[] | ((request: ModelR
   const asked: ModelRequest[] = [];
   return {
     id,
-    to: "this computer",
+    to: THIS_COMPUTER,
     asked,
     send: async (request) => {
       asked.push(request);
