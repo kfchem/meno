@@ -7,7 +7,9 @@ import { createWorkspaceDocument, emptyWorkspaceDocument } from "../document";
 import type { Atom, Bond, Model } from "../store/types";
 import { structuresOf } from "../workflow/entries";
 import { blocksOf } from "../chem/make3d";
-import { joinedAdded, joinedStructures, joinsSettled, separatedStructures } from "./joinedParts";
+import { joinedAdded, joinedStructures, joinsSettled, partsOffered, separatedStructures } from "./joinedParts";
+import { cleanUp } from "../chem/cleanUp";
+import { connectStoreToDocument, createEditorStore } from "../store";
 import { readWorkspace, workspaceText } from "./workspace";
 
 /** Sodium acetate drawn as two structures - the acetate (ids 1-4), Na+ (5) beside it - and ethanol (11-13) apart. */
@@ -114,5 +116,74 @@ describe("one structure of several parts", () => {
     expect(blocks.length).toBe(1);
     expect(sorted(blocks[0].atoms)).toEqual([1, 2, 3, 4, 5]);
     expect(blocksOf(page(), [1]).map((b) => sorted(b.atoms))).toEqual([[1, 2, 3, 4]]);
+  });
+});
+
+describe("one structure of several parts, joined again, pasted, offered, cleaned up", () => {
+  const numberOf = (m: Model, id: number) => m.atoms.find((a) => a.id === id)!.joined;
+
+  it("joined to another structure, takes it in whole: all its parts and the other's one number, kept as the page settles", () => {
+    const m = joinedStructures(joinedStructures(page(), [1, 5]), [1, 11]);
+    const n = numberOf(m, 1);
+    expect([1, 2, 3, 4, 5, 11, 12, 13].map((id) => numberOf(m, id))).toEqual(Array(8).fill(n));
+    expect(joinsSettled(m)).toBe(m);
+  });
+
+  it("two of them pasted at once stay two: each its own fresh number", () => {
+    const two = [...joinedStructures(page(), [1, 5]).atoms.filter((a) => a.id <= 5), ...joinedStructures(page(), [11, 5]).atoms.filter((a) => a.id >= 11).map((a) => ({ ...a, joined: 7 }))];
+    const pasted = joinedAdded(two, page().atoms);
+    expect(new Set(pasted.filter((a) => a.id <= 5).map((a) => a.joined)).size).toBe(1);
+    expect(pasted.find((a) => a.id === 1)!.joined).not.toBe(pasted.find((a) => a.id === 11)!.joined);
+  });
+
+  it("of lone ions alone - nothing bonded - is still one structure", () => {
+    const ions: Model = { atoms: [{ id: 5, el: "Na", x: 0, y: 0, r: 0, charge: 1 }, { id: 6, el: "Cl", x: 3 * L, y: 0, r: 0, charge: -1 }], bonds: [] } as unknown as Model;
+    const salt = joinedStructures(ions, [5, 6]);
+    expect(fragmentsOf(salt).map(sorted)).toEqual([[5, 6]]);
+    expect(fragmentsOf(ions)).toEqual([]);
+  });
+
+  it("is taken apart only where it is one: a page with none joined given back as it is", () => {
+    const m = page();
+    expect(separatedStructures(m, [1])).toBe(m);
+  });
+
+  it("is offered made one where the atoms selected are in two structures or more, and taken apart where the one right-clicked is of several parts", () => {
+    const m = page();
+    const joined = joinedStructures(m, [1, 5]);
+    expect(partsOffered(m, new Set([1, 5]), null)).toEqual({ join: true, separate: false });
+    expect(partsOffered(m, new Set([1, 2]), 1)).toEqual({ join: false, separate: false });
+    expect(partsOffered(m, new Set(), 5)).toEqual({ join: false, separate: false });
+    expect(partsOffered(joined, new Set([1, 5]), 5)).toEqual({ join: false, separate: true });
+    expect(partsOffered(joined, new Set([1, 11]), 11)).toEqual({ join: true, separate: false });
+  });
+
+  it("is laid out by Clean-up piece by piece, the parts keeping where they stand - a lone ion joined to it never moved", async () => {
+    // (the acetate drawn crooked, its O3 pulled away: Clean-up lays it out again)
+    const crooked = (): Model => {
+      const m = page();
+      return { ...m, atoms: m.atoms.map((a) => (a.id === 3 ? { ...a, x: a.x + 0.4 * L, y: a.y + 0.3 * L } : a)) };
+    };
+    const where = (m: Model, ids: number[]) => {
+      const as = m.atoms.filter((a) => ids.includes(a.id));
+      return [as.reduce((t, a) => t + a.x, 0) / as.length, as.reduce((t, a) => t + a.y, 0) / as.length];
+    };
+    for (const around of [null, 1, 5] as const) {
+      const doc = createWorkspaceDocument();
+      doc.reset({ ...doc.getState(), model: joinedStructures(crooked(), [1, 5]), nextId: 2000 });
+      const store = createEditorStore(doc);
+      connectStoreToDocument(store, doc);
+      const before = store.getState().model;
+      await cleanUp(store, around);
+      const after = store.getState().model;
+      const o3 = (m: Model) => m.atoms.find((a) => a.id === 3)!;
+      // (Na+ where it was; the acetate laid out about its own centre - or, Clean-up asked of Na+ alone, nothing laid out)
+      expect(where(after, [5]), String(around)).toEqual(where(before, [5]));
+      const [p, q] = [where(before, [1, 2, 3, 4]), where(after, [1, 2, 3, 4])];
+      expect(q[0], String(around)).toBeCloseTo(p[0], 6);
+      expect(q[1], String(around)).toBeCloseTo(p[1], 6);
+      if (around === 5) expect(after).toBe(before);
+      else expect(o3(after)).not.toEqual(o3(before));
+    }
   });
 });

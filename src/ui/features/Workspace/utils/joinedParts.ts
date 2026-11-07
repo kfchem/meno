@@ -6,8 +6,9 @@
  * only what asks for a structure (chem/cleanUp `fragmentOf`,
  * `fragmentsHolding`; workflow/entries `structuresOf`) joins its parts.
  */
-import { fragmentsHolding } from "../chem/cleanUp";
+import { fragmentOf, fragmentsHolding } from "../chem/cleanUp";
 import type { Atom, Model } from "../store/types";
+import { structuresOf } from "../workflow/entries";
 
 /** A number no atom of `atoms` has: one past the highest. */
 export function freshJoined(atoms: readonly Pick<Atom, "joined">[]): number {
@@ -25,6 +26,18 @@ export function joinedStructures(model: Model, ids: Iterable<number>): Model {
   const n = freshJoined(model.atoms);
   const all = new Set(pieces.flatMap((p) => [...p]));
   return { ...model, atoms: model.atoms.map((a) => (all.has(a.id) ? { ...a, joined: n } : a)) };
+}
+
+/**
+ * What the menu offers: *Make one structure* where the atoms selected
+ * (`picked`) are in two structures or more; *Separate* where the structure
+ * holding the atom right-clicked (`at`) is of several parts.
+ */
+export function partsOffered(model: Model, picked: ReadonlySet<number>, at: number | null): { join: boolean; separate: boolean } {
+  return {
+    join: structuresOf(model).filter((s) => s.some((id) => picked.has(id))).length > 1,
+    separate: at != null && [...fragmentOf(model, at)].some((id) => model.atoms.find((a) => a.id === id)?.joined != null),
+  };
 }
 
 /** The structures of several parts that hold `ids` taken apart: their number taken off, each piece a structure of its own again. */
