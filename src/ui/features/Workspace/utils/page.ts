@@ -56,3 +56,10 @@ export function pageAt(ndcX: number, ndcY: number, camera: THREE.Camera): THREE.
   const far = new THREE.Vector3(ndcX, ndcY, 1).unproject(camera);
   return near.lerp(far, near.z / (near.z - far.z));
 }
+
+/** Where on the page (its units) a point on the screen is, over the canvas `el` seen by `camera`. */
+export function pageAtScreen(screen: { x: number; y: number }, el: HTMLElement, camera: THREE.Camera): { x: number; y: number } {
+  const r = el.getBoundingClientRect();
+  const p = pageAt(((screen.x - r.left) / r.width) * 2 - 1, -((screen.y - r.top) / r.height) * 2 + 1, camera);
+  return { x: p.x, y: p.y };
+}

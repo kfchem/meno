@@ -53,6 +53,11 @@ export function tabWidthPx(tab: FrameTab["tab"], read: boolean, iconWhenSmall = 
   return FRAME_PX.icon + word(tab.name, 500) + word(tab.status) + (tab.warn ? FRAME_PX.gap + FRAME_PX.icon + 4 + textWidth(tab.warn, FRAME_PX.words) : 0);
 }
 
+/** Where a frame's tab's words start - its left, and the middle of its band - in the page's units: a set's name, read, starts there, and so does the field it is written anew in (pageGl/PageField). */
+export function tabStart(box: Frame): { x: number; y: number } {
+  return { x: box.x0 + SET_PAD, y: box.y1 - BAND / 2 };
+}
+
 /**
  * The parts `items` are drawn and taken hold of by - boxes, words, icons
  * and the places that take the pointer - with their words `read` or their
@@ -70,8 +75,7 @@ export function frameTabParts(items: readonly FrameTab[], read: boolean): { shap
     const line = { widthPx: FRAME_PX.line, color };
     const fade = it.opacity != null ? { opacity: it.opacity } : {};
     const top = y1;
-    const mid = top - BAND / 2;
-    const left = x0 + SET_PAD;
+    const { x: left, y: mid } = tabStart(it.box);
     const tabRight = left + pagePx(tabWidthPx(it.tab, read, it.iconWhenSmall)) + SET_PAD;
     // (its frame - or, of the whole page, its tab alone, a box of its own)
     if (it.tabOnly) shapes.push({ kind: "box", key: `${it.key}:tab`, x0, y0: top - BAND, x1: tabRight, y1: top, radiusPx: FRAME_PX.radius, fill: FRAME_COLORS.fill, line, z: 1, ...fade });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FRAME_COLORS, FRAME_PX, frameTabParts, tabWidthPx, type FrameTab } from "./frameParts";
+import { FRAME_COLORS, FRAME_PX, frameTabParts, tabStart, tabWidthPx, type FrameTab } from "./frameParts";
 import { NAME_DOWN, SET_PAD } from "../workflow/look";
 import { pagePx } from "./units";
 import { textWidth } from "./texts";
@@ -39,6 +39,14 @@ describe("a frame with its tab, drawn as a set's", () => {
     expect(tabWidthPx(set.tab, true, true)).toBeCloseTo(textWidth("Input", 11, 500) + FRAME_PX.gap + textWidth("3 structures", 11));
     const small = frameTabParts([set], false);
     expect([small.texts, small.icons.map((i) => i.icon)]).toEqual([[], ["rings"]]);
+  });
+
+  it("starts its words where a set's name is written anew: the field over its tab stands where its name did (pageGl/PageField)", () => {
+    const box = { x0: 3, y0: 0, x1: 23, y1: 10 };
+    const set = frame({ key: "set:3", box, iconWhenSmall: true, tab: { icon: "rings", name: "Input", status: "3 structures" } });
+    const name = frameTabParts([set], true).texts[0];
+    expect([name.x, name.y]).toEqual([tabStart(box).x, tabStart(box).y]);
+    expect(tabStart(box).y).toBeCloseTo(10 - NAME_DOWN, 12);
   });
 
   it("of the whole page, is its tab alone - a white box as wide as what it says - and takes the pointer there only", () => {
