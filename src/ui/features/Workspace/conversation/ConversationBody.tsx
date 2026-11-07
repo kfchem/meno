@@ -66,7 +66,10 @@ export default function ConversationBody({ conversation: c }: { conversation: Co
   const end = useRef<HTMLDivElement>(null);
   // (the last thing said kept in view as more is said - and as the bar for its changes comes or goes, which takes room from the exchange: eased there)
   const changed = !!talking?.changed;
-  useEffect(() => end.current?.scrollIntoView({ block: "end", behavior: "smooth" }), [c.said.length, changed, running]);
+  // (in a block: a scroll may give back a promise, never a clean-up to run)
+  useEffect(() => {
+    void end.current?.scrollIntoView({ block: "end", behavior: "smooth" });
+  }, [c.said.length, changed, running]);
   const go = () => {
     if (!words.trim() || running) return;
     void send(c.id, words);
