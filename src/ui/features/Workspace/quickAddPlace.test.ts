@@ -93,4 +93,14 @@ describe("placeQuickAdd", () => {
     // (a pixel taller: neither above the point nor below it - not held for: at the point, by its row)
     expect(placeQuickAdd(300, 500, canvas, row, [row, { width: 300, height: 483 }]).top).toBe(500 - 14 - 44);
   });
+
+  it("takes a panel as standing below the point to the very margin of 4 px - held for, the row beside it where it fits", () => {
+    // (near the right edge, the row fitting to the right and the panel only to the left: held for, it stands to the left - so whether it is held for shows)
+    const canvas = { width: 1000, height: 800 };
+    const row = { width: 200, height: 44 };
+    // (below the point only - none above it at y 100 - its bottom 4 px from the canvas's: 100 + 14 + 682 = 796)
+    expect(placeQuickAdd(700, 100, canvas, row, [row, { width: 380, height: 682 }])).toMatchObject({ left: 700 - 14 - 380, origin: "bottom right" });
+    // (a pixel taller: neither below the point nor above it - not held for: up and to the right of the point, by its row)
+    expect(placeQuickAdd(700, 100, canvas, row, [row, { width: 380, height: 683 }])).toMatchObject({ left: 714, origin: "bottom left" });
+  });
 });
