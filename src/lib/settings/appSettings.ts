@@ -110,7 +110,7 @@ export const WINDOW_3D = 30;
  * fresh Settings with nothing asked first - no measured basis claimed. A
  * workflow's *Conformers* step still asks for its own.
  */
-export const WITHIN_3D = 30;
+export const WITHIN_3D = 5;
 /**
  * After how many minutes with nothing written - no line of its log, no file
  * of its work folder - a running job is said to be quiet, unless Settings

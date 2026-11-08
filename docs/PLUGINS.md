@@ -599,7 +599,7 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
   past its time; how it ended is said with how it was made (*Rounds*).
   - The window is the chemist's (*New conformers within*, in kcal/mol):
     in Settings, Chemistry, 3D, for the page, and among a *Conformers*
-    step's options, Settings' its default. On the page Meno's is 30
+    step's options, Settings' its default. On the page Meno's is 5
     kcal/mol until the chemist gives one, so that a 3D structure is made
     from fresh Settings with nothing asked first - the maintainer's choice
     (2026-11-08), no measured basis claimed. A step has none until given,

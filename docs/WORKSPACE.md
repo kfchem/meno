@@ -541,7 +541,7 @@ Taken on 2026-10-13:
   as the molecule needs are asked in rounds, until a round brings no new
   conformer within the chemist's window of the lowest, the most tried, or
   ten minutes (PLUGINS.md, *As many as the molecule needs, in rounds*):
-  the window, *New conformers within*, Meno's 30 kcal/mol until the
+  the window, *New conformers within*, Meno's 5 kcal/mol until the
   chemist gives one (the maintainer's choice, 2026-11-08: a 3D structure
   is made from fresh Settings with nothing asked first); its first round
   and most tried are there too. How the rounds ended is said with how it

@@ -13,14 +13,14 @@ import { pageSoughtOptions, soughtChosen, soughtValues } from "./soughtSettings"
 const plain: ChemistrySettings = { valenceWarnings: true };
 
 describe("conformers sought on the page, in Settings", () => {
-  it("shows the page's window for new conformers as Meno's, 30 kcal/mol until the chemist gives one, saying so - a step's still asks for its own", () => {
+  it("shows the page's window for new conformers as Meno's, 5 kcal/mol until the chemist gives one, saying so - a step's still asks for its own", () => {
     const within = (options: { id: string; note?: string; default?: unknown }[]) => options.find((o) => o.id === "within");
-    expect(WITHIN_3D).toBe(30);
-    expect(within(pageSoughtOptions(true))).toMatchObject({ default: 30, note: pageWithinGuide(30) });
-    expect(pageWithinGuide(30)).toMatch(/^Meno's is 30\u00a0kcal\/mol; yours to change\. A round that brings no new conformer within this of the lowest is the last\. As a guide/);
-    expect(soughtValues(plain, true).within).toBe(30);
+    expect(WITHIN_3D).toBe(5);
+    expect(within(pageSoughtOptions(true))).toMatchObject({ default: 5, note: pageWithinGuide(5) });
+    expect(pageWithinGuide(5)).toMatch(/^Meno's is 5\u00a0kcal\/mol; yours to change\. A round that brings no new conformer within this of the lowest is the last\. As a guide/);
+    expect(soughtValues(plain, true).within).toBe(5);
     // (Meno's own not kept as the chemist's; another is)
-    expect(soughtChosen(plain, { ...soughtValues(plain, true), within: 30 })).toEqual(plain);
+    expect(soughtChosen(plain, { ...soughtValues(plain, true), within: 5 })).toEqual(plain);
     expect(soughtChosen(plain, { ...soughtValues(plain, true), within: 2.5 })).toMatchObject({ within3d: 2.5 });
     // (a step's: none, asking for its own, as before)
     expect(within(soughtOptions("needed", RING_CONFORMERS, {}))).toMatchObject({ note: WITHIN_GUIDE });
