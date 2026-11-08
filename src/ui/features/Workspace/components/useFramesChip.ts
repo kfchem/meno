@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useEasedTo, useOpening, GROW_MS, SHOW_MS } from "../../../theme/opening";
-import { useEditorStore } from "../store";
+import { useEditorStoreIfAny } from "../store";
 import { chipCopy, chipEnergies, isSingle, type ChipFacts } from "../utils/chipSaid";
 import { CHIP, CHIP_SHUT } from "../pageGl/chips";
 import { barTone, chipHeights, chipMeasures, chipPressed, frameAtBars, frameAtSlider, liveChip, type ChipState, type LiveDrawn } from "../pageGl/liveChip";
@@ -68,7 +68,8 @@ export function useFramesChip({
   /** In use: pointed at, opened, or its lines still going as it shuts - a single geometry's while it lingers too. */
   active: boolean;
 } {
-  const store = useEditorStore();
+  // (none where the molecule is drawn alone - Settings' 3D preview: no menu, nothing told the workflow)
+  const store = useEditorStoreIfAny();
   const single = isSingle(facts);
   const [part, setPart] = useState<string | null>(null);
   const hovered = part != null;
@@ -224,7 +225,7 @@ export function useFramesChip({
     },
     menu: (_k, _p, e) => {
       const { facts: f, told: t } = now.current;
-      store.getState().setWorkflowView({
+      store?.getState().setWorkflowView({
         workflowMenu: { kind: "chip", id, clientX: e.screen.x, clientY: e.screen.y, copy: { all: chipCopy(f, t), energies: chipEnergies(f) } },
       });
     },
@@ -233,7 +234,7 @@ export function useFramesChip({
   //  and again once how it was made has opened or shut)
   const madeSettled = madeAt.grown === 0 || madeAt.grown === 1 ? madeAt.grown : -1;
   useEffect(() => {
-    if (!opened || read.grown < 1 || madeSettled < 0 || !last.current) return;
+    if (!store || !opened || read.grown < 1 || madeSettled < 0 || !last.current) return;
     const b = last.current.box;
     store.getState().setWorkflowView({ chipOver: { x0: b.x0, y0: b.y0, x1: b.x1, y1: b.y1 } });
     return () => {
