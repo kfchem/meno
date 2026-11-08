@@ -70,5 +70,37 @@ describe("placeQuickAdd", () => {
     // (two pixels more: 790 - past the margin, and the left has no room (396 - 14 - 380 = 2) - not held for: at the point, by its row)
     expect(placeQuickAdd(396, 500, { width: 792, height: 800 }, row, [row, panel])).toMatchObject({ left: 410, origin: "bottom left" });
   });
-});
 
+  it("opens at the point, wherever it is, though a panel of it is too tall to stand below the point or above it", () => {
+    // (Meno's own steps, listed: taller than the canvas less the room above or below the point)
+    const canvas = { width: 1440, height: 800 };
+    const rowWide = { width: 330, height: 44 };
+    const calculations = { width: 600, height: 700 };
+    for (const y of [200, 400, 600]) {
+      const at = placeQuickAdd(700, y, canvas, rowWide, [rowWide, calculations]);
+      // (up and to the right of the point, by its row - never held at the top of the canvas for the panel)
+      expect(at, `y ${y}`).toEqual({ left: 714, top: y - 14 - 44, origin: "bottom left" });
+    }
+    // (one that stands above the point near the bottom: held for still - higher, room made for it below its row)
+    expect(placeQuickAdd(700, 700, canvas, rowWide, [rowWide, { width: 600, height: 400 }]).top).toBe(800 - 4 - 400);
+  });
+
+  it("takes a panel as standing above the point to the very margin of 4 px - and not a pixel past it", () => {
+    const canvas = { width: 1000, height: 800 };
+    const row = { width: 200, height: 44 };
+    // (its top 4 px from the canvas's: 500 - 14 - 482 = 4 - held for, the row higher, room made for it below: 800 - 4 - 482)
+    expect(placeQuickAdd(300, 500, canvas, row, [row, { width: 300, height: 482 }]).top).toBe(314);
+    // (a pixel taller: neither above the point nor below it - not held for: at the point, by its row)
+    expect(placeQuickAdd(300, 500, canvas, row, [row, { width: 300, height: 483 }]).top).toBe(500 - 14 - 44);
+  });
+
+  it("takes a panel as standing below the point to the very margin of 4 px - held for, the row beside it where it fits", () => {
+    // (near the right edge, the row fitting to the right and the panel only to the left: held for, it stands to the left - so whether it is held for shows)
+    const canvas = { width: 1000, height: 800 };
+    const row = { width: 200, height: 44 };
+    // (below the point only - none above it at y 100 - its bottom 4 px from the canvas's: 100 + 14 + 682 = 796)
+    expect(placeQuickAdd(700, 100, canvas, row, [row, { width: 380, height: 682 }])).toMatchObject({ left: 700 - 14 - 380, origin: "bottom right" });
+    // (a pixel taller: neither below the point nor above it - not held for: up and to the right of the point, by its row)
+    expect(placeQuickAdd(700, 100, canvas, row, [row, { width: 380, height: 683 }])).toMatchObject({ left: 714, origin: "bottom left" });
+  });
+});
