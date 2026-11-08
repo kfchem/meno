@@ -13,8 +13,11 @@ const OFF = 14;
  * as its row: Meno's own steps, thirty in a row - is left out of the
  * choice: held for it, Quick Add stood far from the point, wherever the
  * canvas was double-clicked (v0.1.22). It opens at the point, and that
- * panel, opened, is eased back within the canvas (./QuickAdd). Its left
- * and top; and the corner it rises from, the one nearest the point.
+ * panel, opened, is eased back within the canvas (./QuickAdd). So too a
+ * panel too tall to stand below the point or above it - Meno's own steps,
+ * listed: held for it, Quick Add stood at the top of the canvas, wherever
+ * it was double-clicked (v0.1.23). Its left and top; and the corner it
+ * rises from, the one nearest the point.
  */
 export function placeQuickAdd(
   x: number,
@@ -23,8 +26,13 @@ export function placeQuickAdd(
   first: { width: number; height: number },
   sizes: readonly { width: number; height: number }[],
 ): { left: number; top: number; origin: string } {
-  // (the panels it is held for: those that can stand beside the point, on one side or the other, no more than twice as wide as its row)
-  const beside = sizes.filter((s) => s.width <= 2 * first.width && (x + OFF + s.width <= within.width - 4 || x - OFF - s.width >= 4));
+  // (the panels it is held for: those that can stand beside the point, on one side or the other, no more than twice as wide as its row - and below it or above it)
+  const beside = sizes.filter(
+    (s) =>
+      s.width <= 2 * first.width &&
+      (x + OFF + s.width <= within.width - 4 || x - OFF - s.width >= 4) &&
+      (y + OFF + s.height <= within.height - 4 || y - OFF - s.height >= 4),
+  );
   const most = { width: Math.max(first.width, ...beside.map((s) => s.width)), height: Math.max(first.height, ...beside.map((s) => s.height)) };
   const right = x + OFF + most.width <= within.width - 4 || x - OFF - most.width < 4;
   const above = y - OFF - first.height >= 4;
