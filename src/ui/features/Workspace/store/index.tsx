@@ -522,6 +522,11 @@ export function useEditorStore(): EditorStore {
   return store;
 }
 
+/** The store of the workspace drawn in, where there is one: none for a molecule drawn alone - Settings' 3D preview and its style cards. */
+export function useEditorStoreIfAny(): EditorStore | null {
+  return useContext(EditorStoreContext);
+}
+
 export function useEditor<T = EditorState>(
   selector?: (s: EditorState) => T,
 ): T {
