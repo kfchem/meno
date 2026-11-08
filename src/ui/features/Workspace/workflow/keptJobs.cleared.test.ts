@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { ClearedSaved, KeptJobFile } from "../../../../lib/jobs";
 import type { WorkflowStep } from "../store/types";
-import { clearableJobs, clearSavedJobs, heldJobSource, jobsToKeep, recordOf, type JobsKept } from "./keptJobs";
+import { clearableJobs, clearSavedJobs, heldJobPacked, heldJobSource, holdJobFilesOf, jobsToKeep, recordOf, sizeAsk, type JobsKept } from "./keptJobs";
+import { JOB_FILE_MEDIA, menoFileBytes, readMenoFile } from "../../../../lib/doc/menoFile";
+import { sha256Hex } from "../../../../lib/binary/sha256";
 
 // A job's folder moved to the Trash once a workspace's file holds all of it, read back (docs/WORKFLOWS.md, *A job's
 // folder*) - and the next save keeping its files all the same, from the file just written. The backend that reads the
@@ -97,5 +99,40 @@ describe("a job's folder, once the workspace's file holds all of it", () => {
     // (one it was never asked about, said gone: not noted)
     const stray = await clearSavedJobs(SAVED, { ...kept, records: new Map([[J1, kept.records.get(J1)!]]) }, async () => ({ gone: [J1, J2], left: [], at: AS_SAVED }));
     expect(stray.gone).toEqual([J1]);
+  });
+
+  it("comes to the same in the next save, its folder gone: its files counted as the file just written keeps them, deflated - never at their size, unpacked", async () => {
+    // (a page's job, its folder on this computer: saved, the file holding it whole, the folder gone)
+    const J = "0b6f5c1e-0000-4000-8000-000000000021";
+    const files: KeptJobFile[] = folder("a").map((f, k) => ({ ...f, sha256: sha("cdef"[k]) }));
+    const steps = [step(1, [J])];
+    const first = await jobsToKeep(steps, async () => files);
+    expect(first.bytes).toBe(60 + 200 + 4000 + 8);
+    expect((await clearSavedJobs(SAVED, first, backend().clear)).gone).toEqual([J]);
+    // (edited, and saved again: the same files, now from the file saved - about what the first save counted them at)
+    const second = await jobsToKeep(steps, async () => null, () => null, async () => SAVED);
+    expect(second.appended.map((a) => a.from)).toEqual(files.map(() => SAVED));
+    expect([second.bytes, second.adds]).toEqual([first.bytes, first.adds]);
+    for (const f of files) expect(heldJobPacked(f.sha256)).toBe(f.deflated);
+    // (so the size warning, past a threshold the first save crossed, is not asked of it again)
+    expect(sizeAsk(steps, second, 100, 100 + first.adds, 0.001)).toBeNull();
+  });
+
+  it("counts a job's file kept from a file opened at what that file kept it at, packed", async () => {
+    const data = new TextEncoder().encode("a job's output, the same line again and again\n".repeat(400));
+    const hash = sha256Hex(data);
+    const bytes = menoFileBytes("{}", [{ sha256: hash, name: "work/job.out", media: JOB_FILE_MEDIA, data }]);
+    const file = readMenoFile(bytes);
+    holdJobFilesOf(file, { path: "/w/opened.meno", size: bytes.length, mtime: 1 });
+    const packed = file.packed(hash)!;
+    expect(packed).toBeLessThan(data.length / 10);
+    expect(heldJobPacked(hash)).toBe(packed);
+    const opened = step(1, ["0b6f5c1e-0000-4000-8000-000000000022"]);
+    opened.ran!.kept = [{ job: "0b6f5c1e-0000-4000-8000-000000000022", files: [{ name: "work/job.out", sha256: hash, size: data.length, role: "read" }] }];
+    // (read again from that file by Meno, or carried by the page where it has changed: either way at its packed size)
+    const there = await jobsToKeep([opened], async () => null, () => data, async () => "/w/opened.meno");
+    expect([there.adds, there.bytes]).toEqual([packed, packed]);
+    const carried = await jobsToKeep([opened], async () => null, () => data, async () => null);
+    expect(carried.bytes).toBe(packed);
   });
 });

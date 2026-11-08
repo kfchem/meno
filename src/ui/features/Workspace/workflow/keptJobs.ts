@@ -36,6 +36,8 @@ export type JobsKept = {
   adds: number;
   /** The largest file kept, as it is: past what a workspace's file keeps of one (`MOST_FILE`), it cannot be saved as it is. */
   largest: number;
+  /** About how much each file kept comes to in the file, deflated, by SHA-256: held for the next save, where its folder goes once this one holds it. */
+  packed: Map<string, number>;
 };
 
 /** A step's jobs, of its run and the runs it keeps, each once. */
@@ -50,13 +52,25 @@ export const recordOf = (s: WorkflowStep, job: string): KeptJob | undefined => [
 /** A workspace's file opened this session, where it was: its path, and its size and when it was written as it was opened. */
 export type OpenedFrom = { path: string; size: number; mtime: number | null };
 
-/** The job files the workspace files opened this session keep, by SHA-256: each read from the file held only when wanted - and where that file is. */
-const held = new Map<string, { read: () => Uint8Array | null; from?: OpenedFrom }>();
+/**
+ * The job files the workspace files opened this session keep, by SHA-256:
+ * each read from the file held only when wanted - where that file is, and
+ * how much the file kept it at, packed: what it comes to in the next file,
+ * deflated again as it is written (src-tauri keptjobs.rs).
+ */
+const held = new Map<string, { read: () => Uint8Array | null; from?: OpenedFrom; packed?: number }>();
 
 /** Holds the job files a workspace's file keeps, as it is opened - from where it was (`from`), where that is known: each read from it only when wanted. */
 export function holdJobFilesOf(file: MenoFile, from?: OpenedFrom): void {
-  for (const f of file.files) if (f.media === JOB_FILE_MEDIA && !held.has(f.sha256)) held.set(f.sha256, { read: () => file.data(f.sha256), ...(from ? { from } : {}) });
+  for (const f of file.files) {
+    if (f.media !== JOB_FILE_MEDIA || held.has(f.sha256)) continue;
+    const packed = file.packed(f.sha256);
+    held.set(f.sha256, { read: () => file.data(f.sha256), ...(from ? { from } : {}), ...(packed != null ? { packed } : {}) });
+  }
 }
+
+/** How much a job file held comes to in a workspace's file, packed: none where that is not known - then its size, unpacked, stands in. */
+export const heldJobPacked = (sha256: string): number | undefined => held.get(sha256)?.packed;
 
 /** A job file a workspace's file opened this session keeps, as its bytes; none where none is held, or it does not read. */
 export const heldJobFile = (sha256: string): Uint8Array | null => held.get(sha256)?.read() ?? null;
@@ -109,7 +123,11 @@ export async function clearSavedJobs(
   for (const id of gone) {
     const record = jobs.records.get(id)!;
     cleared.set(id, record);
-    for (const f of record.files) held.set(f.sha256, { read: held.get(f.sha256)?.read ?? (() => null), from: from! });
+    // (and how much each came to in it, deflated, as this save counted it)
+    for (const f of record.files) {
+      const packed = jobs.packed.get(f.sha256) ?? held.get(f.sha256)?.packed;
+      held.set(f.sha256, { read: held.get(f.sha256)?.read ?? (() => null), from: from!, ...(packed != null ? { packed } : {}) });
+    }
   }
   const loud = done.left.filter((l) => !l.quiet);
   const said = loud.length ? `${loud.length === 1 ? "A job's folder was" : `${loud.length} jobs' folders were`} kept, though the workspace was saved: ${loud[0].why}.` : null;
@@ -140,8 +158,9 @@ export async function jobsToKeep(
   read: (job: string) => Promise<KeptJobFile[] | null> = jobKept,
   bytesOf: (sha256: string) => Uint8Array | null = heldJobFile,
   sourceOf: (sha256: string) => Promise<string | null> = heldJobSource,
+  packedOf: (sha256: string) => number | undefined = heldJobPacked,
 ): Promise<JobsKept> {
-  const out: JobsKept = { records: new Map(), listed: [], appended: [], carried: [], steps: [], bytes: 0, adds: 0, largest: 0 };
+  const out: JobsKept = { records: new Map(), listed: [], appended: [], carried: [], steps: [], bytes: 0, adds: 0, largest: 0, packed: new Map() };
   const seen = new Set<string>();
   for (const step of steps) {
     const raw = step.keepRaw !== false;
@@ -163,6 +182,7 @@ export async function jobsToKeep(
           out.listed.push({ sha256: f.sha256, name: f.name, media: JOB_FILE_MEDIA, size: f.size });
           out.appended.push({ sha256: f.sha256, job, name: f.name });
           out.largest = Math.max(out.largest, f.size);
+          out.packed.set(f.sha256, f.deflated);
           bytes += f.deflated;
           out.adds += f.deflated;
         }
@@ -186,8 +206,11 @@ export async function jobsToKeep(
             out.listed.push({ sha256: f.sha256, name: f.name, media: JOB_FILE_MEDIA, size: f.size });
             out.appended.push({ sha256: f.sha256, job, name: f.name, from });
             out.largest = Math.max(out.largest, f.size);
-            bytes += f.size;
-            out.adds += f.size;
+            // (deflated again as it is written: about what the file it comes from kept it at - not its size, unpacked)
+            const packed = packedOf(f.sha256) ?? f.size;
+            out.packed.set(f.sha256, packed);
+            bytes += packed;
+            out.adds += packed;
             continue;
           }
           const data = bytesOf(f.sha256);
@@ -199,7 +222,10 @@ export async function jobsToKeep(
           seen.add(f.sha256);
           out.carried.push({ sha256: f.sha256, name: f.name, media: JOB_FILE_MEDIA, data });
           out.largest = Math.max(out.largest, data.length);
-          bytes += data.length;
+          // (deflated as the page writes it: about what the file it comes from kept it at)
+          const packed = packedOf(f.sha256) ?? data.length;
+          out.packed.set(f.sha256, packed);
+          bytes += packed;
         }
         // (what that file had left out, still left out - and said)
         left.push(...(was.left ?? []).filter((l) => !left.some((x) => x.name === l.name)));
