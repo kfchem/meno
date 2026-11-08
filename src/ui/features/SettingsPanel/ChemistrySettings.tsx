@@ -10,8 +10,7 @@ import {
 import { Fragment } from "react";
 import { notedParts, shownOptions, type Option, type OptionValues } from "../../../lib/options";
 import { clearOf } from "./CalculationSettings";
-import { RING_CONFORMERS, soughtOptions } from "../../../lib/chem/conformersSought";
-import { soughtChosen, soughtValues } from "./soughtSettings";
+import { pageSoughtOptions, soughtChosen, soughtValues } from "./soughtSettings";
 import OptionRows from "../../options/OptionRows";
 import Switch from "../../controls/Switch";
 
@@ -125,7 +124,7 @@ function Sought3D({ chemistry, setChemistry }: { chemistry: Settings; setChemist
   const rounds = plugin.roleDraws.includes("conformers");
   const values = soughtValues(chemistry, rounds);
   const change = (v: OptionValues) => setChemistry(soughtChosen(chemistry, v));
-  const shown = shownOptions(soughtOptions("needed", RING_CONFORMERS, rounds ? {} : undefined), values);
+  const shown = shownOptions(pageSoughtOptions(rounds), values);
   return (
     <div className="mt-2 rounded-lg border border-gh-line bg-white">
       {/* (each option's note right under its row, as one row with it - the window's guide, with Clear just before its field, as

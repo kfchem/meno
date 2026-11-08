@@ -104,6 +104,14 @@ export const LARGE_WORKSPACE_MOST = MOST_WORKSPACE_FILE / 2 ** 20;
 /** The energy window a structure's 3D conformers are kept within, made on the canvas, in kcal/mol, unless Settings says otherwise; and the widest Settings takes. */
 export const WINDOW_3D = 30;
 /**
+ * The window for new conformers a structure made in 3D on the canvas is
+ * searched in rounds with, in kcal/mol, unless Settings says otherwise:
+ * the maintainer's choice (2026-11-08), so that a 3D structure is made from
+ * fresh Settings with nothing asked first - no measured basis claimed. A
+ * workflow's *Conformers* step still asks for its own.
+ */
+export const WITHIN_3D = 30;
+/**
  * After how many minutes with nothing written - no line of its log, no file
  * of its work folder - a running job is said to be quiet, unless Settings
  * says otherwise; and the most Settings takes (a day). Said only: Meno never
@@ -204,8 +212,8 @@ export type ChemistrySettings = {
    * As many as the molecule needs, asked in rounds where the search takes
    * draws (lib/chem/conformersSought `RoundsChosen`) - the page's, and a
    * Conformers step's to start from: the window for new conformers, in
-   * kcal/mol, the chemist's own - unset, none, and each search asks for
-   * one; the first round - unset, the molecule's own count; the most tried
+   * kcal/mol, the chemist's own - unset, Meno's `WITHIN_3D` on the page,
+   * and none for a step, which asks for one; the first round - unset, the molecule's own count; the most tried
    * - unset, `MOST_CONFORMERS`.
    */
   within3d?: number;

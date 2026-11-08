@@ -306,6 +306,8 @@ export function conformersSoughtOf(molblock: string): number | null {
  */
 export const WITHIN_GUIDE =
   "Meno sets none: give your own. A round that brings no new conformer within this of the lowest is the last. As a guide, at 298.15 K one 2.73\u00a0kcal/mol above the lowest weighs 1/100 as much (RT\u00a0ln\u00a0100). The energies are the search's own force field's.";
+/** The window's guide in Settings, for the page: Meno's value said, the chemist's to change (lib/settings/appSettings `WITHIN_3D`); the guide as `WITHIN_GUIDE`'s. */
+export const pageWithinGuide = (within: number) => WITHIN_GUIDE.replace("Meno sets none: give your own.", `Meno's is ${within}\u00a0kcal/mol; yours to change.`);
 /** What a search in rounds given no window needs, wherever it is asked. */
 export const WITHIN_NEEDED = "Give the window for new conformers, in kcal/mol";
 

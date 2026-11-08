@@ -16,7 +16,7 @@ import type { OptionValues } from "../../../../lib/options";
 import { conformersSoughtOf, MOST_CONFORMERS, RING_CONFORMERS, roundsAsked, soughtNumber } from "../../../../lib/chem/conformersSought";
 import { inRounds, roundsSaid, SEARCH_BUDGET_MS } from "./conformerRounds";
 import { roundsJudge } from "./roundsJudge";
-import type { ChemistrySettings } from "../../../../lib/settings/appSettings";
+import { WITHIN_3D, type ChemistrySettings } from "../../../../lib/settings/appSettings";
 import { chemMolblock, isElementSymbol, molIndex } from "../../../../lib/roles/molblock";
 import { readMolfile } from "../../../../lib/chem/ctfile";
 import { COORDINATION_BOND } from "../../../../lib/chem/molecule";
@@ -540,14 +540,15 @@ export type PageRounds = { window: number; first: number; most: number };
  * The rounds the page asks a block's conformers in, as Settings has it:
  * where it seeks as many as the molecule needs and its plugin's search
  * takes another set of tries for each draw (`draws`) - the chemist's window,
- * none until given, then what it still needs, said where to give it; the
- * first round the chemist's, else the molecule's own count; and the most it
- * tries. None where it is asked once: a number of the chemist's own, or a
- * search that takes no draws.
+ * else Meno's (`WITHIN_3D`, the maintainer's choice), so that a 3D structure
+ * is made from fresh Settings with nothing asked first; the first round the
+ * chemist's, else the molecule's own count; and the most it tries. None
+ * where it is asked once: a number of the chemist's own, or a search that
+ * takes no draws.
  */
 export function pageRounds(block: Pick<Block, "molblock">, chosen: Pick<ChemistrySettings, "sought3d" | "within3d" | "first3d" | "most3d">, draws: boolean): PageRounds | { needs: string } | null {
   if (!draws) return null;
-  const values = { sought: chosen.sought3d ?? "needed", within: chosen.within3d ?? Number.NaN, first: chosen.first3d ?? 0, most: chosen.most3d ?? MOST_CONFORMERS };
+  const values = { sought: chosen.sought3d ?? "needed", within: chosen.within3d ?? WITHIN_3D, first: chosen.first3d ?? 0, most: chosen.most3d ?? MOST_CONFORMERS };
   const asked = roundsAsked(values, () => conformersSoughtOf(block.molblock));
   return asked && "needs" in asked ? { needs: `${asked.needs}, in Settings, Chemistry` } : asked;
 }

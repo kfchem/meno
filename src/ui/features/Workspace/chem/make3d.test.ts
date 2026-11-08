@@ -7,7 +7,8 @@ import { writeMolfile3d } from "../../../../lib/chem/molWriter";
 import { factor } from "../../../../lib/units";
 import type { Model } from "../store/types";
 import { solidOf } from "../utils/molecule3d";
-import { MOST_CONFORMERS, RING_CONFORMERS, WITHIN_NEEDED } from "../../../../lib/chem/conformersSought";
+import { MOST_CONFORMERS, RING_CONFORMERS } from "../../../../lib/chem/conformersSought";
+import { WITHIN_3D } from "../../../../lib/settings/appSettings";
 import { covalentLength } from "../../../../lib/chem/metalHolds";
 import { vdwRadius } from "../../../../lib/chem/elements";
 import { bareAtomsOf, bareWords, blocksOf, blocksStill, conformersOf, pageCount, pageRounds, drawnBlocksOf, formulaOf, standsForMolecule, likeOf, linkOf, moleculeOf, placeRow, rowFrom, signatureOf, takenOnPage, turnedOver, withinWindow, type Box, type Turned } from "./make3d";
@@ -512,14 +513,26 @@ describe("conformers made for the page", () => {
     expect(made.how?.filter((r) => r.label === "Parts")).toEqual([{ label: "Parts", text: "2, side by side: where they lie against each other is not modelled" }]);
   });
 
-  it("asks in rounds where Settings seeks as many as the molecule needs and its search takes draws - not until the chemist gives its window", () => {
+  it("asks in rounds where Settings seeks as many as the molecule needs and its search takes draws - with fresh Settings too, its window Meno's until the chemist gives one", () => {
     const [block] = blocksOf(ethanol, [12]);
     expect(pageRounds(block, { within3d: 2.5 }, false)).toBeNull();
     expect(pageRounds(block, { sought3d: "fixed", within3d: 2.5 }, true)).toBeNull();
-    expect(pageRounds(block, {}, true)).toEqual({ needs: `${WITHIN_NEEDED}, in Settings, Chemistry` });
+    // (fresh Settings: nothing asked first - Meno's window for new conformers, the chemist's where given)
+    expect(pageRounds(block, {}, true)).toEqual({ window: WITHIN_3D, first: 50, most: MOST_CONFORMERS });
     // (ethanol's first round its own fifty - lib/chem/conformersSought - or the chemist's)
     expect(pageRounds(block, { within3d: 2.5 }, true)).toEqual({ window: 2.5, first: 50, most: MOST_CONFORMERS });
     expect(pageRounds(block, { within3d: 2.5, first3d: 120, most3d: 1000 }, true)).toEqual({ window: 2.5, first: 120, most: 1000 });
+  });
+
+  it("makes a 3D structure from fresh Settings, in rounds, no window asked - Meno's window for new conformers its own", async () => {
+    const chem = { request: async () => ({ isomers: [answer] }) } as unknown as ChemClient;
+    const stereo = { request: async (op: string) => (op === "stereo_elements" ? { read: true, elements: [] } : Promise.reject(new Error(`no ${op} here`))) } as unknown as ChemClient;
+    const [block] = blocksOf(ethanol, [12]);
+    const rounds = pageRounds(block, {}, true);
+    expect(rounds && "needs" in rounds).toBe(false);
+    const made = await conformersOf(chem, stereo, block, "one", {}, 50, rounds as Exclude<typeof rounds, { needs: string } | null>);
+    expect(made).toHaveLength(1);
+    expect(made[0].how?.find((r) => r.label === "Rounds")?.text).toBe(`2 rounds, 100 tried: the last brought no new conformer within ${WITHIN_3D} kcal/mol of the lowest`);
   });
 
   it("asks each stereoisomer alone in rounds, each with a draw of its own, until one brings no new conformer - and says how it ended", async () => {
