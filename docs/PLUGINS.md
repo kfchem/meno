@@ -597,12 +597,14 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
   tries, or - on the page, where a search takes ten minutes at most, the
   maintainer's ruling of 2026-10-29 - where the next round would take it
   past its time; how it ended is said with how it was made (*Rounds*).
-  - The window has no default: no width has a basis to stand as one. It
-    is the chemist's (*New conformers within*, in kcal/mol): in Settings,
-    Chemistry, 3D, for the page, and among a *Conformers* step's options,
-    Settings' its default. Until given, the page's 3D structure says so,
-    and the step is not ready. As a guide, 2.73 kcal/mol at 298.15 K is
-    a conformer a hundredth as populated as the lowest (RT ln 100).
+  - The window is the chemist's (*New conformers within*, in kcal/mol):
+    in Settings, Chemistry, 3D, for the page, and among a *Conformers*
+    step's options, Settings' its default. On the page Meno's is 5
+    kcal/mol until the chemist gives one, so that a 3D structure is made
+    from fresh Settings with nothing asked first - the maintainer's choice
+    (2026-11-08), no measured basis claimed. A step has none until given,
+    and is not ready until it has one. As a guide, 2.73 kcal/mol at 298.15
+    K is a conformer a hundredth as populated as the lowest (RT ln 100).
   - A search that takes no draws is asked once, as before. So is one
     whose conformers come back with no energies: there is nothing to
     tell a new low one by. A *Conformers* step on molecules in 3D, run
