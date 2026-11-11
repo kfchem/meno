@@ -609,7 +609,7 @@ pub struct PdfState {
     readers: Mutex<Vec<Option<Arc<Reader>>>>,
     turn: AtomicU64,
     /// The passwords of the PDFs locked with one that were opened with it, by SHA-256, this session: in memory alone -
-    /// never written to the disk, a log, a workspace's file, the settings or an event - and wiped as they are let go.
+    /// never written to the disk, a log, a workspace's file, the settings or an event. The map's strings are wiped as they are let go, and the request line is wiped once written; the copies PDFium's loader, Tauri's argument and the reader's parsed request make while a request is under way are not.
     passwords: Mutex<HashMap<String, Zeroizing<String>>>,
 }
 
@@ -723,7 +723,7 @@ async fn ask_on(app: &tauri::AppHandle, slot: usize, mut req: Value) -> Result<(
 }
 
 /// A PDF held: what it is known by, its size, and each page's width and height, in points.
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct Held {
     sha256: String,
     size: u64,
@@ -754,20 +754,22 @@ async fn hold(app: &tauri::AppHandle, bytes: &[u8]) -> Result<Held, String> {
         std::fs::write(&part, bytes).map_err(|e| e.to_string())?;
         std::fs::rename(&part, &path).map_err(|e| e.to_string())?;
     }
+    let held = held_from(ask(app, json!({"op": "pages", "sha": sha})).await.map(|(head, _)| head), &sha, bytes.len() as u64);
     // (one PDFium cannot open is not kept: taken in just now, it goes again)
-    let (head, _) = match ask(app, json!({"op": "pages", "sha": sha})).await {
-        Ok(answer) => answer,
-        // (one locked with a password is kept as it is: asked for its password, where it lies)
-        Err(e) if e == LOCKED => return Ok(Held { sha256: sha, size: bytes.len() as u64, pages: vec![], locked: true }),
-        Err(e) => {
-            if fresh {
-                let _ = std::fs::remove_file(&path);
-            }
-            return Err(e);
-        }
-    };
-    let pages: Vec<[f32; 2]> = serde_json::from_value(head["pages"].clone()).unwrap_or_default();
-    Ok(Held { sha256: sha, size: bytes.len() as u64, pages, locked: false })
+    if held.is_err() && fresh {
+        let _ = std::fs::remove_file(&path);
+    }
+    held
+}
+
+/// What a PDF taken in comes to, by what the reader said of it: its pages; or - locked with a password, which is asked for where
+/// it lies (`pdf_unlock`) - held as it is, its pages not known (`locked`); or the reason it is refused.
+fn held_from(asked: Result<Value, String>, sha: &str, size: u64) -> Result<Held, String> {
+    match asked {
+        Ok(head) => Ok(Held { sha256: sha.into(), size, pages: serde_json::from_value(head["pages"].clone()).unwrap_or_default(), locked: false }),
+        Err(e) if e == LOCKED => Ok(Held { sha256: sha.into(), size, pages: vec![], locked: true }),
+        Err(e) => Err(e),
+    }
 }
 
 /// What a PDF opened with a password tried says, in words: of one it is locked with, that it is not its password.
@@ -1382,7 +1384,7 @@ mod tests {
 
     #[test]
     fn a_pdfs_password_is_kept_in_memory_alone() {
-        // (by construction: the state holds it in a map of wiped strings, and the one place that writes what a request says to
+        // (a tripwire, by single lines: a multi-line macro would escape it - the logging lines were read; by construction the state holds it in a map of wiped strings, and the one place that writes what a request says to
         // anywhere but the reader's pipe, the log of a PDF not opened, writes PDFium's error and never a request)
         let state = PdfState::default();
         assert!(state.passwords.lock().unwrap().is_empty());
@@ -1391,6 +1393,37 @@ mod tests {
         for line in production.lines().filter(|l| l.contains("eprintln!") || l.contains("println!") || l.contains("std::fs::write") || l.contains("log::")) {
             assert!(!line.contains("password") && !line.contains("ask") && !line.contains("req"), "{line}");
         }
+    }
+
+    #[test]
+    fn a_pdf_taken_in_is_held_as_the_reader_says_of_it() {
+        let sha = "a".repeat(64);
+        let held = held_from(Ok(json!({"pages": [[300.0, 400.0]]})), &sha, 9).unwrap();
+        assert_eq!((held.pages.len(), held.locked, held.size), (1, false, 9));
+        // (one locked with a password is kept, not refused: held locked, its pages not known - the way in to asking for the word)
+        let locked = held_from(Err(LOCKED.into()), &sha, 9).unwrap();
+        assert!(locked.locked && locked.pages.is_empty());
+        assert_eq!(locked.sha256, sha);
+        // (any other trouble refuses it, in the reader's words)
+        assert_eq!(held_from(Err("it is damaged, or is not a PDF".into()), &sha, 9).unwrap_err(), "it is damaged, or is not a PDF");
+        assert_eq!(held_from(Err("it is locked in a way Meno cannot open".into()), &sha, 9).unwrap_err(), "it is locked in a way Meno cannot open");
+    }
+
+    #[test]
+    fn a_pdf_made_from_pages_of_a_locked_one_opens_it_with_its_password() {
+        let Some((pdfium, cache, sha)) = locked_cache("made") else { return };
+        let mut docs = HashMap::new();
+        let plan = json!({"pages": [{"sha": sha, "page": 0}]});
+        let without = make(&mut docs, pdfium, &cache, &json!({"op": "make", "plan": plan})).unwrap_err();
+        assert_eq!(without, LOCKED);
+        let (_, bytes) = make(&mut docs, pdfium, &cache, &json!({"op": "make", "plan": plan, "passwords": {&sha: "meno-test"}})).unwrap();
+        // (a new PDF of its own: it opens without the word, with its one page)
+        assert!(looks_like_pdf(&bytes));
+        let made = pdfium.load_pdf_from_byte_vec(bytes, None).unwrap();
+        assert_eq!(made.pages().len(), 1);
+        drop(made);
+        drop(docs);
+        let _ = std::fs::remove_dir_all(&cache);
     }
 
     #[test]

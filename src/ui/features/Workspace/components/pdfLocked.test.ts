@@ -62,4 +62,16 @@ describe("a PDF locked with a password, on the page", () => {
     expect(draw).toHaveBeenCalledTimes(1);
     draw.mockRestore();
   });
+
+  it("gives the sizes to the PDF opened and to no other on the page", () => {
+    const { doc, store } = editor([[595, 842]]);
+    const other = "e".repeat(64);
+    store.getState().addPdfs([{ name: "other.pdf", sha256: other, pages: [[100, 200], [100, 200]] }], { x: 900, y: 0 });
+    store.getState().setPdfPages(sha, [[300, 400], [300, 400], [300, 400]]);
+    const [a, b] = store.getState().pdfs;
+    expect(a.pages).toHaveLength(3);
+    expect(b.sha256).toBe(other);
+    expect(b.pages).toEqual([[100, 200], [100, 200]]);
+    expect(doc.getState().pdfs?.[1].pages).toEqual([[100, 200], [100, 200]]);
+  });
 });

@@ -4,7 +4,7 @@ const invoke = vi.fn();
 vi.mock("@tauri-apps/api/core", () => ({ invoke: (...args: unknown[]) => invoke(...args), isTauri: () => true }));
 
 import { isLocked } from "../doc/locked";
-import { holdPdfBytes, LOCKED_SHEET, unlockPdf } from "./reader";
+import { holdPdfBytes, linksOf, LOCKED_SHEET, unlockPdf } from "./reader";
 
 const sha = "e".repeat(64);
 
@@ -38,5 +38,22 @@ describe("a PDF held that is locked with a password", () => {
     invoke.mockRejectedValueOnce("That is not its password");
     await expect(unlockPdf(sha, "wrong")).rejects.toBe("That is not its password");
     expect(isLocked(sha)).toBe(true);
+  });
+
+  it("is asked of nothing for its links while it is locked, and is as soon as it is opened", async () => {
+    const other = "f".repeat(64);
+    invoke.mockResolvedValueOnce({ sha256: other, size: 9, pages: [], locked: true });
+    await holdPdfBytes(new Uint8Array([1]));
+    invoke.mockClear();
+    expect(linksOf(other, 0)).toBeNull();
+    expect(invoke).not.toHaveBeenCalled();
+    invoke.mockResolvedValueOnce({ sha256: other, size: 9, pages: [[300, 400]] });
+    await unlockPdf(other, "word");
+    invoke.mockClear();
+    invoke.mockResolvedValue([]);
+    linksOf(other, 0);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(invoke).toHaveBeenCalledWith("pdf_links", { sha: other, page: 0 });
   });
 });
