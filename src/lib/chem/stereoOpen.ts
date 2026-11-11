@@ -214,6 +214,46 @@ export type ConfiguredDouble = { bond: number; ends: [number, number]; cis: bool
 /** Some of a structure's elements given configurations, in Meno's terms: the plugin makes them its own toolkit's. */
 export type Configuration = { centres: ConfiguredCentre[]; doubles: ConfiguredDouble[] };
 
+/**
+ * One configuration, as a string that two of the same give: each centre by
+ * its atom and its sense taken over its neighbours in ascending order (the
+ * sense turns with the parity of the order they were named in), each double
+ * bond by its bond, its ends and whether they are cis - the elements in the
+ * order of their atoms and bonds.
+ */
+export function configurationKey(c: Configuration): string {
+  const centres = [...c.centres]
+    .sort((p, q) => p.atom - q.atom)
+    .map((x) => {
+      const sorted = [...x.neighbours].sort((p, q) => p - q);
+      // (the swaps that put the neighbours in order, counted as inversions)
+      let odd = false;
+      for (let i = 0; i < x.neighbours.length; i++) for (let j = i + 1; j < x.neighbours.length; j++) if (x.neighbours[i] > x.neighbours[j]) odd = !odd;
+      return [x.atom, sorted, odd ? -x.sense : x.sense];
+    });
+  const doubles = [...c.doubles].sort((p, q) => p.bond - q.bond).map((x) => [x.bond, x.ends, x.cis]);
+  return JSON.stringify([centres, doubles]);
+}
+
+/**
+ * Stereoisomers each once, by their configuration, the first of each kept:
+ * the toolkit enumerates elements Meno leaves open by its own rules (a
+ * lone pair's inversion at an aziridine's N, with a carbon centre beside
+ * it), and its isomers then differ only where Meno does not see them. One
+ * that gives no configuration at all is kept whatever - it has none to tell
+ * it by, as an axis of chirality gives none - and so are all of them.
+ */
+export function distinctIsomers<T extends { configured: Configuration }>(isomers: readonly T[]): T[] {
+  const seen = new Set<string>();
+  return isomers.filter((i) => {
+    if (!i.configured.centres.length && !i.configured.doubles.length) return true;
+    const key = configurationKey(i.configured);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 /** What the plugin made of a structure's stereoisomers, as Meno asked for them (Workspace/chem/openStereo `stereoisomersOf`). */
 export type IsomersMade =
   | { isomers: { configured: Configuration; smiles: string; molblock?: string; error?: string }[]; free: boolean }

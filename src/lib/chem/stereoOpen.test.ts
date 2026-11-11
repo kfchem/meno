@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readSmiles } from "./smiles";
 import { v2000 } from "./testdata/v2000";
-import { configuredFrom, cumulatedRuns, leftOver, movingCN, movingSaid, openCumulenes, stereoGraphOf, stereoLeft, type StereoAtom, type StereoBond } from "./stereoOpen";
+import { configuredFrom, configurationKey, cumulatedRuns, distinctIsomers, leftOver, movingCN, movingSaid, openCumulenes, stereoGraphOf, stereoLeft, type StereoAtom, type StereoBond } from "./stereoOpen";
 
 /** A molecule as the rules read it, from SMILES written with its double bonds. */
 function mol(smiles: string): { atoms: StereoAtom[]; bonds: StereoBond[] } {
@@ -153,5 +153,43 @@ describe("what a structure leaves open, as Meno decides it", () => {
       "M  V30 1 Pd 0 0 0 0", "M  V30 2 C 1 0 0 0", "M  V30 3 C 2 0 0 0", "M  V30 4 C 3 0 0 0", "M  V30 5 * 2 1 0 0", "M  V30 END ATOM", "M  V30 BEGIN BOND",
       "M  V30 1 1 2 3", "M  V30 2 2 3 4", "M  V30 3 9 1 5 ENDPTS=(3 2 3 4) ATTACH=ALL", "M  V30 END BOND", "M  V30 END CTAB", "M  END"].join("\n");
     expect(stereoGraphOf([eta])!.bonds[2]).toEqual({ a: 0, b: 4, order: 0 });
+  });
+});
+
+describe("stereoisomers each once, by their configuration", () => {
+  const centre = (sense: 1 | -1, neighbours = [0, 2, 4], atom = 1) => ({ centres: [{ atom, neighbours, sense }], doubles: [] });
+  it("keeps the first of each configuration, in order: an aziridine's four, as the toolkit flips its N too, are two", () => {
+    // (CN1CC1C: C1's sense +1, -1, +1, -1 - the plugin's four, observed)
+    const four = [1, -1, 1, -1].map((sense, i) => ({ configured: centre(sense as 1 | -1), smiles: `s${i}` }));
+    expect(distinctIsomers(four).map((i) => i.smiles)).toEqual(["s0", "s1"]);
+    // (none repeated: all kept; none at all: none)
+    expect(distinctIsomers(four.slice(0, 2))).toHaveLength(2);
+    expect(distinctIsomers([])).toEqual([]);
+  });
+
+  it("keeps every isomer that gives no configuration, having none to tell them by", () => {
+    const none = { centres: [], doubles: [] };
+    const list = [{ configured: none, smiles: "a" }, { configured: none, smiles: "b" }, { configured: centre(1), smiles: "c" }, { configured: centre(1), smiles: "d" }];
+    expect(distinctIsomers(list).map((i) => i.smiles)).toEqual(["a", "b", "c"]);
+  });
+
+  it("tells configurations apart: another sense, another atom, another bond's cis or trans", () => {
+    expect(configurationKey(centre(1))).not.toBe(configurationKey(centre(-1)));
+    expect(configurationKey(centre(1))).not.toBe(configurationKey(centre(1, [0, 2, 4], 3)));
+    const bond = (cis: boolean) => ({ centres: [], doubles: [{ bond: 2, ends: [0, 4] as [number, number], cis }] });
+    expect(configurationKey(bond(true))).not.toBe(configurationKey(bond(false)));
+    expect(configurationKey(bond(true))).toBe(configurationKey(bond(true)));
+    // (a centre and a bond together: one that differs in either differs)
+    const both = (sense: 1 | -1, cis: boolean) => ({ centres: centre(sense).centres, doubles: bond(cis).doubles });
+    expect(new Set([both(1, true), both(1, false), both(-1, true), both(-1, false)].map(configurationKey)).size).toBe(4);
+  });
+
+  it("reads a centre by its neighbours in any order: the same configuration named with two neighbours swapped has its sense turned", () => {
+    expect(configurationKey(centre(1, [0, 2, 4]))).toBe(configurationKey(centre(-1, [2, 0, 4])));
+    expect(configurationKey(centre(1, [0, 2, 4]))).toBe(configurationKey(centre(1, [2, 4, 0])));
+    expect(configurationKey(centre(1, [0, 2, 4]))).not.toBe(configurationKey(centre(1, [2, 0, 4])));
+    // (the order of the elements in a list does not matter)
+    const two = { centres: [...centre(1).centres, ...centre(-1, [5, 7, 9], 6).centres], doubles: [] };
+    expect(configurationKey(two)).toBe(configurationKey({ centres: [...two.centres].reverse(), doubles: [] }));
   });
 });

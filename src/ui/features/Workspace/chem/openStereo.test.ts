@@ -40,6 +40,17 @@ describe("what a structure leaves open, and the stereoisomers to make of it", ()
     await expect(isomersToMake(unread, BUTANOL, undefined, "one")).rejects.toThrow("The plugin could not read it");
   });
 
+  it("counts and makes each configuration once, where the toolkit enumerates what Meno's rules leave out: an aziridine's four are two", async () => {
+    // (CN1CC1C: only C1 open by Meno's rules, the plugin's isomers flip its N as well - four, C1's sense +1, -1, +1, -1)
+    const at = (sense: 1 | -1) => ({ configured: { centres: [{ atom: 1, neighbours: [0, 2, 4], sense }], doubles: [] } });
+    const four = plugin({ isomers: [at(1), at(-1), at(1), at(-1)].map((c, i) => ({ ...c, smiles: `s${i}` })), free: false });
+    const all = await isomersToMake(four.chem, BUTANOL, undefined, "all");
+    expect(all.count).toBe(2);
+    expect(all.isomers).toEqual([at(1).configured, at(-1).configured]);
+    const one = await isomersToMake(four.chem, BUTANOL, undefined, "one");
+    expect([one.count, one.isomers]).toEqual([2, [at(1).configured]]);
+  });
+
   it("says which configurations were chosen: the CIP labels of the elements the drawing leaves open, no others", async () => {
     const open = await openStereo(plugin().chem, [BUTANOL]);
     const c = withChosen({ cip: { atoms: { "1": "R", "7": "S" }, bonds: { "3": "E" } } }, open);
