@@ -736,8 +736,12 @@ enum Turn {
     Asked,
 }
 
+/// How often a runner tries again for the queue's lock while another holds it: only those near the head try, so
+/// it may be often - the head takes the lock within moments of its being let go, as it did waiting on it.
+const LOCK_STEP: Duration = Duration::from_millis(10);
+
 /// The queue's lock taken for the job `dir` - or, asked to stop while
-/// another holds it, none (false): tried again every `QUICK_STEP`, its stop
+/// another holds it, none (false): tried again every `LOCK_STEP`, its stop
 /// looked for between, never waited on blind. A runner waiting on the lock
 /// itself saw no stop until the lock came to it, and each before it looked
 /// at every job's folder under it: on a computer whose files open slowly,
@@ -755,7 +759,7 @@ fn lock_watching(dir: &Path, queue: &File) -> std::io::Result<bool> {
         if stop_asked(dir) {
             return Ok(false);
         }
-        std::thread::sleep(QUICK_STEP);
+        std::thread::sleep(LOCK_STEP);
     }
 }
 
