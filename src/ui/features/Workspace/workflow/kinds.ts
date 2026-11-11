@@ -753,7 +753,7 @@ export const KINDS: readonly KindInfo[] = [
       },
       { id: "property", label: "Of each", type: "text", default: "", when: { id: "keep", in: ["one"] } },
     ],
-    how: (v) => (v.keep === "one" ? (String(v.property ?? "").trim() ? `First's, then Second's: one of each ${String(v.property).trim()}` : "Name the property to keep one of each") : "First's, then Second's: all"),
+    how: (v) => (v.keep === "one" ? (String(v.property ?? "").trim() ? `First's, then Second's: one of each ${String(v.property).trim()}` : "Name the property to keep one of each") : "First's, then Second's: all \u00b7 several wires into one input do the same"),
     needs: (v) => (v.keep === "one" && !String(v.property ?? "").trim() ? "Name the property to keep one of each" : undefined),
   },
   {
