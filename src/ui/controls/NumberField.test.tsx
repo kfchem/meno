@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
 import type { Option } from "../../lib/options";
-import OptionRows from "../options/OptionRows";
+import OptionRows, { numberFieldOf } from "../options/OptionRows";
 import OptionsForm from "../options/OptionsForm";
-import { numberDraft, numberField, rangeSaid, setAsItGoes, typedNumber, type NumberDraft, type NumberEvent, type NumberRange } from "./number";
+import { escapeTakes, numberDraft, numberField, rangeOf, rangeSaid, setAsItGoes, shown, typedNumber, type NumberDraft, type NumberEvent, type NumberRange } from "./number";
 
 // Vitest runs in Node, with no page to mount on: the field's keys as the
 // steps they make (number.ts), and the forms as the server's renderer writes them.
@@ -12,6 +12,59 @@ import { numberDraft, numberField, rangeSaid, setAsItGoes, typedNumber, type Num
 function after(value: number, events: NumberEvent[], range: NumberRange = { min: 1, max: 100 }): NumberDraft {
   return events.reduce((d, e) => numberField(d, e, range), numberDraft(value));
 }
+
+describe("a number that may be left unset", () => {
+  const range = { min: 1, max: 16, whole: true, unsettable: true };
+  it("is unset by emptying the field: no number, not the last good one", () => {
+    const d = after(4, [{ kind: "typed", text: "" }, { kind: "commit" }], range);
+    expect(d.text).toBe("");
+    expect(Number.isNaN(d.value)).toBe(true);
+    expect(d.refused).toBe(false);
+  });
+  it("is set by typing a number over the empty field, and otherwise keeps to its range", () => {
+    expect(after(NaN, [{ kind: "typed", text: "8" }, { kind: "commit" }], range)).toEqual({ text: "8", value: 8, refused: false });
+    expect(after(NaN, [{ kind: "typed", text: "99" }, { kind: "commit" }], range).refused).toBe(true);
+  });
+  it("is set by an arrow key from empty, from its least", () => {
+    expect(after(NaN, [{ kind: "step", by: 1 }], range).value).toBe(2);
+  });
+  it("is told to the card as it goes while being emptied", () => {
+    expect(Number.isNaN(setAsItGoes({ text: "", value: 4, refused: false }, true, range)!)).toBe(true);
+  });
+  it("goes back to the last good number for a field that may not be unset", () => {
+    expect(after(4, [{ kind: "typed", text: "" }, { kind: "commit" }], { min: 1, max: 16, whole: true })).toEqual({ text: "4", value: 4, refused: true });
+  });
+});
+
+describe("a number's row, as its field is given it", () => {
+  const o = { id: "cores", label: "Cores", type: "number", default: 6 } as Extract<Option, { type: "number" }>;
+  it("passes on that it may be unset, and what an empty field shows, only for the ids given", () => {
+    expect(numberFieldOf(o, { cores: NaN }, ["cores"])).toMatchObject({ unsettable: true, placeholder: "6" });
+    expect(Number.isNaN(numberFieldOf(o, { cores: NaN }, ["cores"]).value)).toBe(true);
+    expect(numberFieldOf(o, { cores: 4 }, ["cores"]).value).toBe(4);
+    expect(numberFieldOf(o, {}, [])).toEqual({ value: 6, unsettable: false, placeholder: undefined });
+  });
+});
+
+describe("an unset number's field", () => {
+  it("leaves Escape to close what the field is in while it shows nothing, and takes back what was typed over it", () => {
+    // (the field shows nothing of NaN: no text differs from it)
+    expect(shown(NaN)).toBe("");
+    expect(escapeTakes("", NaN)).toBe(false);
+    expect(escapeTakes("8", NaN)).toBe(true);
+    // (a set number: as before)
+    expect(escapeTakes("4", 4)).toBe(false);
+    expect(escapeTakes("", 4)).toBe(true);
+    expect(escapeTakes("5", 4)).toBe(true);
+  });
+  it("is handed its range whole by the field, the flag too", () => {
+    expect(rangeOf({ min: 1, max: 9, step: 1, whole: true, unsettable: true })).toEqual({ min: 1, max: 9, step: 1, whole: true, unsettable: true });
+    expect(rangeOf({}).unsettable).toBeUndefined();
+  });
+  it("takes a field of spaces alone as emptied", () => {
+    expect(Number.isNaN(after(4, [{ kind: "typed", text: "   " }, { kind: "commit" }], { min: 1, unsettable: true }).value)).toBe(true);
+  });
+});
 
 describe("Meno's own number field", () => {
   it("holds what is typed, nothing too: the first digit of 25 taken out and 3 typed gives 35", () => {

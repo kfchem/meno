@@ -10,6 +10,7 @@ import { MOV_PX } from "../constants";
 import { useStyle3D } from "../style3d";
 import SetFrame from "../workflow/SetFrame";
 import FrameTabs, { FRAMES_ORDER, type FrameTab, type FrameTabsOn } from "../pageGl/FrameTabs";
+import { dashAdvance, runningTick } from "../pageGl/runningTick";
 import { MEMBER_MS, memberMarkBox, memberPulse, positionBadge, recordLabel } from "../pageGl/workflowMarks";
 import StepCard, { Port, shareOf, type PortLook, type RunRow, type RunView } from "../workflow/StepCard";
 import { clickedOpen, type CardClick } from "../workflow/cardOpen";
@@ -331,7 +332,7 @@ void main() {
   gl_FragColor = vec4(color, 1.0);
 }`;
 
-/** The wire into a running step: dashed, its dashes moving slowly towards the step - a frame drawn for each step they move. */
+/** The wire into a running step: dashed, its dashes moving slowly towards the step - a frame drawn thirty times a second. */
 function MovingWire({ target, color, zoom }: { target: Pt[]; color: string; zoom: number }) {
   const pts = useEasedPoints(target, zoom);
   const line = useMemo(() => ribbon(pts), [pts]);
@@ -349,13 +350,16 @@ function MovingWire({ target, color, zoom }: { target: Pt[]; color: string; zoom
   );
   useEffect(() => () => material.dispose(), [material]);
   const { invalidate, camera, gl } = useThree();
+  // (a frame asked for thirty times a second, the dashes going by the time between frames: pageGl/runningTick)
+  const tick = useMemo(runningTick, []);
+  useEffect(() => tick.stop, [tick]);
   useFrame((_, dt) => {
     const u = material.uniforms;
     u.ribbonHalf.value = wireWidth((camera as THREE.OrthographicCamera).zoom || 1, gl.getPixelRatio()) / 2;
     u.dash.value = DASH_PX / zoom;
     u.gap.value = GAP_PX / zoom;
-    u.offset.value = (u.offset.value + (Math.min(dt, 0.1) * DASH_SPEED) / zoom) % ((DASH_PX + GAP_PX) / zoom);
-    invalidate();
+    u.offset.value = dashAdvance(u.offset.value, dt, DASH_SPEED, zoom, DASH_PX, GAP_PX);
+    tick.ask(invalidate);
   });
   return (
     <group position={[0, 0, 0.012]}>

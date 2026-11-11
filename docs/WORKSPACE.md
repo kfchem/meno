@@ -243,8 +243,11 @@ Taken on 2026-10-03:
   - **The selection's handle turns molecules in 3D** (agreed 2026-10-03;
     in the page's plane since 2026-10-24, the maintainer: the handle turns
     round, so it turns them round, as it does a drawing):
-    - selected alone, in the page's plane about the line of sight, in
-      steps of 15 degrees or freely after a pause, as a drawing turns:
+    - selected alone, in the page's plane about the line of sight, freely
+      and never in steps (the maintainer, 2026-11-11: a molecule in 3D has
+      no grid to keep to), the same with Shift, each about its own centre,
+      even with a drawing selected; selected with a drawing, they are
+      carried round with it, in its steps of 15 degrees:
       several as one body about their common middle - so that molecules
       placed together, a complex say, stay as they are to one another -
       which moves them; one about its own centre, where it stands. Either
@@ -1753,7 +1756,12 @@ slowing it - and in the pictures made of it.
   balls grow, fewer once the zoom has settled (`utils/largeDrawing`
   `ballSegmentsFor`). The line round them follows them. What each ball
   carries - its number, whether it is lined - goes with it to the new
-  number (`carriedSphere`). A box of 33 000 waters (100 000 atoms) turned
+  number, moved, not shared: the old sphere, let go once the new one is
+  drawn, keeps none of it, so that letting it go takes nothing the new
+  balls draw with (`carriedSphere`; shared, the balls were lost after a
+  change of segments). Its size on the screen is the pixels a unit spans
+  at the molecule for either camera (`pxPerWorld`): the canvas's zoom, or
+  a perspective preview's - Settings' - by how far off the molecule stands. A box of 33 000 waters (100 000 atoms) turned
   at 183 ms a frame with 32, and turns at 33 ms; a large workflow page,
   283 molecules in 3D, drew about 17.8 million triangles a frame at Fit,
   and draws 1.3 million.

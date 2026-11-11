@@ -42,12 +42,13 @@ import { dollyAt, dollyMatrix, RISE_ACROSS_FROM, RISE_END, RISE_GROW, RISE_UP } 
 import { chainRuns } from "../../../../lib/chem/biopolymer";
 import { residueOnRay, ribbonMesh, ribbonSpheres, type RibbonSpheres } from "../utils/ribbon";
 import { sameMoleculeProps } from "../utils/moleculeHandlers";
-import { BALLS_NEAR, ballSegmentsFor, ballSegmentsNext, carriedSphere, outlineSegments } from "../utils/largeDrawing";
+import { BALLS_NEAR, ballSegmentsFor, ballSegmentsNext, carriedSphere, outlineSegments, pxPerWorld } from "../utils/largeDrawing";
 import { typedValue } from "../utils/typedValue";
 import { raycastCylinders, raycastSpheres } from "./raycast3d";
 import { commitInstanceMatrices } from "./instances";
 import { named3d } from "../workflow/selectionSet";
 import { usePlaced } from "../pageGl/PagePlaced";
+import { CHIP_HTML } from "../pageGl/chips";
 import type { ChipFacts } from "../utils/chipSaid";
 import { refinedFrame } from "../workflow/takeFrames";
 import MagnifiedMark from "./MagnifiedMark";
@@ -418,8 +419,8 @@ function Molecule3DView(props: Molecule3DViewProps) {
   // settled
   const [segments, setSegments] = useState(style.ballSegments);
   // (its balls' sphere, made again at another number of segments with what
-  // each ball carries - its number, whether it is lined - carried over:
-  // utils/largeDrawing `carriedSphere`)
+  // each ball carries - its number, whether it is lined - moved over, the
+  // old one disposed with none of it: utils/largeDrawing `carriedSphere`)
   const ballGeo = useRef<THREE.SphereGeometry | null>(null);
   const ballGeometry = useMemo(() => (ballGeo.current = carriedSphere(segments, ballGeo.current)), [segments]);
   useEffect(() => () => ballGeometry.dispose(), [ballGeometry]);
@@ -752,9 +753,10 @@ function Molecule3DView(props: Molecule3DViewProps) {
   useFrame((_, dt) => {
     const step = Math.min(dt, 1 / 30);
     let moving = false;
-    // (its balls' segments, by their size on the screen, never more than the style's)
+    // (its balls' segments, by their size on the screen, never more than the style's - pixels a unit spans at the
+    // molecule, for either camera: a perspective one's zoom, always 1, made every ball in Settings' previews a pixel)
     {
-      const zoom = (camera as THREE.OrthographicCamera).zoom || 1;
+      const zoom = pxPerWorld(camera, size.height, -placed.current.getWorldPosition(fadeCentre).applyMatrix4(camera.matrixWorldInverse).z);
       const bs = ballSizing.current;
       // (on its first frame, as many as it wants at once: nothing has been drawn to change)
       const first = !bs.zoom;
@@ -1035,13 +1037,10 @@ function Molecule3DView(props: Molecule3DViewProps) {
           }
         }
       }
-      const zoom = (camera as THREE.OrthographicCamera).zoom || 1;
       // (where the molecule's front and back stand in the camera's depth: what fades between)
       const centre = placed.current.getWorldPosition(fadeCentre).applyMatrix4(camera.matrixWorldInverse).z;
-      // (a screen pixel in the camera's space at the molecule: an orthographic camera's - the canvas's - its zoom's;
-      // a perspective one's - Settings' preview - as far off as the molecule stands)
-      const pc = camera as THREE.PerspectiveCamera;
-      const perPx = pc.isPerspectiveCamera ? (2 * Math.max(-centre, 1e-6) * Math.tan((pc.fov * Math.PI) / 360)) / Math.max(size.height, 1) : 1 / zoom;
+      // (a screen pixel in the camera's space at the molecule, for either camera: utils/largeDrawing `pxPerWorld`)
+      const perPx = 1 / pxPerWorld(camera, size.height, -centre);
       const reach = (solid.reach.primary + (solid.reach.secondary - solid.reach.primary) * ff) * placed.current.scale.x * magShown.current;
       const fades = [fadeOf(atomsMat.current, "atoms"), ...(bondsMat.current ? [fadeOf(bondsMat.current, "bonds")] : []), outlines.atoms.fade, outlines.bonds.fade, outlines.bent.fade];
       for (const u of fades) {
@@ -2270,7 +2269,7 @@ function NoteMark({ text, title, on, plain, short }: { text: string; title?: str
 /** Made by editing a result: what from, said quietly under it - an edited result is no longer that result. */
 function Edited({ from }: { from: string }) {
   return (
-    <div className="mt-1.5 w-max whitespace-nowrap rounded-full border border-gh-line bg-white/90 px-2 text-[11px] leading-[20px] text-gh-gray shadow-sm">
+    <div className={`mt-1.5 ${CHIP_HTML}`}>
       Edited from {from}
     </div>
   );
@@ -2320,7 +2319,7 @@ function MeasureField({ text, onSet, onDone }: { text: string; onSet: (value: nu
 function Changed({ onRemake }: { onRemake: () => void }) {
   return (
     <div
-      className="mt-1.5 whitespace-nowrap rounded-full border border-gh-line bg-white/90 px-2 text-[11px] leading-[20px] text-gh-gray shadow-sm"
+      className={`mt-1.5 ${CHIP_HTML}`}
       onPointerDown={(e) => e.stopPropagation()}
     >
       Its drawing has changed ·{" "}
