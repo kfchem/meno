@@ -73,7 +73,7 @@ export default function JobSettings() {
     ...(computer.memory > 0
       ? [{ id: "memory-all", label: "Memory jobs may use", type: "number" as const, default: gb((computer.memory * 3) / 4), min: 0.5, max: gb(computer.memory), step: 0.5, unit: `GB of ${gb(computer.memory)}` }]
       : []),
-    { id: "awake", label: "Keep the computer awake while jobs run", type: "switch", default: true },
+    { id: "awake", label: "Keep the computer awake while calculations run", type: "switch", default: true },
     // (a finished job's folder, once a workspace's file holds all of it: kept, or moved to the Trash - workflow/keptJobs `clearSavedJobs`)
     { id: "keep-folders", label: "Keep job folders once saved", type: "switch", default: keepsJobFolders({}) },
     // (a running job that has written nothing so long: said on its step, never ended for it - lib/jobs `quietFor`)
