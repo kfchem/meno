@@ -19,7 +19,7 @@ import { isHeld } from "./onPage";
 import { findSet, givesOf, inputKey, inputOf, moleculesSeen, resultOf, stateOf, stepOf, stepsBefore, tableInto, tableWired, wireInto, wiresInto } from "./flow";
 import { chartOfTable, chartSaid, type ChartValue } from "../../../../lib/chart";
 import { diagramOf, diagramSaid, levelNamer, type DiagramValue, type RowCompound } from "../../../../lib/energyDiagram";
-import { asideExit, exitsOf, inputsOf, kindInfo, modeRead, laterPortsNeed, MENO_DOES, optionsOf, ONE_INPUT, readsAsTable, takenBy, restHolds, type Holds3D, type SetHolds, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
+import { asideExit, exitsOf, inputsOf, kindInfo, modeRead, laterPortsNeed, MENO_DOES, optionsOf, ONE_INPUT, readsAsTable, RESTRAINTS_INPUT, severalInputs, takenBy, restHolds, type Holds3D, type SetHolds, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
 import { MENO_ONLY, VALUE_KINDS } from "../../../../lib/plugins/steps";
 import { doerName, inputsFor, MENO, takesBy, takesNothingBy } from "./doers";
 import { pluginById } from "../../../../lib/calc/catalog";
@@ -175,7 +175,10 @@ export function emptyIn(doc: WorkspaceDocument, step: WorkflowStep, by: string):
   if (!ports.length) return null;
   const empty: string[] = [];
   let full = 0;
+  const several = severalInputs(ports);
   for (const port of ports) {
+    // (restraints, a table: no entries of their own to give)
+    if (port.id === RESTRAINTS_INPUT.id) continue;
     const at = ports.length > 1 ? port.id : undefined;
     const wire = wireInto(doc, step.id, at);
     const input = wire ? inputOf(doc, step.id, at) : null;
@@ -190,7 +193,7 @@ export function emptyIn(doc: WorkspaceDocument, step: WorkflowStep, by: string):
     empty.push(port.name);
   }
   if (!empty.length || (step.kind === "merge" && full)) return null;
-  return ports.length > 1 ? `Nothing came into ${namesSaid(empty)}` : "Nothing came in";
+  return several ? `Nothing came into ${namesSaid(empty)}` : "Nothing came in";
 }
 
 /**
@@ -214,6 +217,9 @@ export function ranEmpty(doc: WorkspaceDocument, id: number, said: string, key: 
   return setRan(doc, id, { at: w.now, ok: true, said, input: key, kind: step.kind, ...(step.options ? { options: step.options } : {}) });
 }
 
+/** The option a step of a page saved before restraints were wired in held its molecules' atoms fixed by ("Hold its restraints"). */
+const HOLD_WAS = "hold";
+
 /**
  * Why a step cannot run as things are, whoever does it: the step before it
  * failed this time; nothing comes into it; what does is not what it takes;
@@ -234,7 +240,8 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
   if (takesNothingBy(step.kind, by)) return by ? null : "Nothing added does this step";
   // (a kind of several inputs: its first, which it cannot run without; the others, where wired, it takes as they are)
   const ports = inputsFor(step.kind, by);
-  const first = ports.length > 1 ? ports[0] : undefined;
+  // (its first named where it takes another besides restraints)
+  const first = severalInputs(ports) ? ports[0] : undefined;
   const input = inputOf(doc, step.id, first?.id);
   // (a table wired in - a set's, or molecules seen as one: no entries of its own to give)
   const holds = input?.holds ?? (tableWired(doc, step.id, first?.id) ? "table" : null);
@@ -251,6 +258,12 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
   const plugin = by !== MENO.id ? pluginById(by) : undefined;
   if (plugin && MENO_ONLY.includes(step.kind)) return `${kindInfo(step.kind).name} is Meno's own step: add it again`;
   if (plugin && !plugin.steps.some((d) => d.kind === step.kind)) return `${doerName(plugin)} does not do ${kindInfo(step.kind).name}`;
+  // (a step of a page saved when it held what its molecules carried, asked on its card: no longer so - what it holds is wired in, and
+  //  it is never run now holding nothing unsaid)
+  if (step.options?.[HOLD_WAS] === "fixed" && !wireInto(doc, step.id, RESTRAINTS_INPUT.id))
+    return ports.some((p) => p.id === RESTRAINTS_INPUT.id)
+      ? "It was saved holding its atoms fixed (Hold its restraints): wire a Restraints table of them into Restraints"
+      : `It was saved holding its atoms fixed (Hold its restraints), which ${kindInfo(step.kind).name} no longer does`;
   // (its later inputs: each it cannot run without wired, an optional one where wanted - two that go together, both or neither -
   //  and each wired one taking what comes into it; Merge's second of the kind its first is)
   const missing = laterPortsNeed(ports, (port) => !!wireInto(doc, step.id, port));
@@ -263,6 +276,7 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
     const gives = givesOf(doc, wire.from);
     if (!gives) return `Nothing comes into ${port.name}`;
     if (!isValueKind(gives) || !takenBy(port.takes, gives)) return `${port.name} takes ${port.takes.map((s) => SET_NAMES[s]).join(" or ")}`;
+    if (port.id === RESTRAINTS_INPUT.id && gives !== "table") return "Restraints takes a table of restraints, not molecules";
     if (step.kind === "merge" && gives !== holds) return `${ports[0].name} holds ${SET_NAMES[holds]} and ${port.name} ${SET_NAMES[gives]}: Merge makes one set of two of one kind`;
   }
   if (step.kind === "energy-diagram") return diagramNeeds(doc, step) ?? null;

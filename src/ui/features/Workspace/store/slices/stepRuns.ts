@@ -29,7 +29,10 @@ import { stereoisomersAnswer } from "../../workflow/stereoisomers";
 import { EXAMINE_MS } from "../../../../../lib/chem/stereoOpen";
 import { holdsGraphOf3d, keptMade, madeChecks, madeChecksOf, metalHolds, metalHoldsOf } from "../../../../../lib/chem/metalHolds";
 import { COORDINATION_BOND } from "../../../../../lib/chem/molecule";
-import { byOf, installedFor, optionsFor, programsFor, renderPresets, takesNothingBy } from "../../workflow/doers";
+import { byOf, doerName, installedFor, optionsFor, programsFor, renderPresets, takesNothingBy } from "../../workflow/doers";
+import { heldBy, heldRows, type HeldRows } from "../../workflow/heldRows";
+import { HOLDS_RESTRAINTS } from "../../../../../lib/plugins/steps";
+import type { Restraint } from "../../../../../lib/entry";
 import { partOf } from "../../chem/cleanUp";
 import { compoundLetter, frameXyz, framesOf, madeFrom, recordNumber, setEntries, structureLineage, TAKEN_AT_THE_EDIT, skeletonEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
 import { convergedOf, heldWhy } from "../../workflow/converged";
@@ -38,11 +41,11 @@ import { conformersSought, conformersSoughtOf, roundsAsked, soughtNumber } from 
 import type { Conformers } from "../../../../../lib/roles/client";
 import { inRounds, roundsSaid } from "../../chem/conformerRounds";
 import { roundsJudge } from "../../chem/roundsJudge";
-import { allToRun, chainTo, findSet, inputKey, inputOf, stepOf, stepsAfter, wiresInto } from "../../workflow/flow";
+import { allToRun, chainTo, findSet, inputKey, inputOf, stepOf, stepsAfter, wiresInto, type Flow } from "../../workflow/flow";
 import { kindInfo, optionsOf, takesNothing, type Holds3D, type SetKind, type StepKind, isSetKind } from "../../workflow/kinds";
 import { failuresSaid, type Failure, type FailureKind } from "../../workflow/failures";
 import { setRan, setRunning } from "../../workflow/model";
-import { stoppedAt, clock, conformersWorked, doneSaid, PAIRED, drawnSaid, readDrawnAnswers, type DrawnAnswer, type DrawnValue, isFailure, entryFiles, notFound, pluginEntry, programEntries, readCollected, readGenerated, notReadSaid, seedsSaid, unreadWhy, readKept, readNote, readPrepared, readRefused, workedOf, notReadNamed, NAMED_KEPT, passesAsLone, passedAsLone, passedSaid, notAsAsked, solvationAsked, heldAsked, heldRefused, fixedAtoms, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
+import { stoppedAt, clock, conformersWorked, doneSaid, PAIRED, drawnSaid, readDrawnAnswers, type DrawnAnswer, type DrawnValue, isFailure, entryFiles, notFound, pluginEntry, programEntries, readCollected, readGenerated, notReadSaid, seedsSaid, unreadWhy, readKept, readNote, readPrepared, readRefused, workedOf, notReadNamed, NAMED_KEPT, passesAsLone, passedAsLone, passedSaid, notAsAsked, solvationAsked, fixedAtoms, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { emptyIn, energiesBy, energyLevels, inputEntries, keepRun, keptOf, keptRun, laidOver, LAID_OVER, ranAs, ranEmpty, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
@@ -103,6 +106,28 @@ function entryHolds(e: Pick<SetEntry, "atoms" | "bonds">) {
 function entryChecks(e: Pick<SetEntry, "atoms" | "bonds">) {
   const g = holdsGraphOf3d(e.atoms, e.bonds, COORDINATION_BOND);
   return madeChecks(g.atoms, g.bonds, metalHolds(g.atoms, g.bonds));
+}
+
+/** The restraints wired into step `id`'s Restraints input, each entry's own, as its plugin holds them (workflow/heldRows); none where none are wired in, or its kind holds none. */
+function restraintsWired(d: Flow, id: number, kind: StepKind, plugin: PythonPlugin, entries: readonly SetEntry[]): HeldRows | { why: string } | null {
+  if (!HOLDS_RESTRAINTS.includes(kind)) return null;
+  return heldRows(d, id, entries, heldBy(kind, plugin.steps.find((s) => s.kind === kind)?.restraints), doerName(plugin));
+}
+
+/** The rows held for entry `k` of those wired in: none where none are wired in, or it is refused. */
+function rowsWired(wired: HeldRows | { why: string } | null, k: number): Restraint[] | undefined {
+  const mine = wired && !("why" in wired) ? wired.each[k] : undefined;
+  return mine && "rows" in mine ? mine.rows : undefined;
+}
+
+/**
+ * The options a plugin is given, with its program asked to hold atoms fixed
+ * where restraints are wired in and it says it holds them - as a plugin
+ * that holds only atoms fixed is asked (`hold`: "fixed", docs/PLUGINS.md).
+ */
+function holdAsked(options: OptionValues, plugin: PythonPlugin | undefined, kind: StepKind, wired: HeldRows | { why: string } | null): OptionValues {
+  if (!wired || "why" in wired || !plugin?.steps.find((s) => s.kind === kind)?.restraints?.includes("fixed")) return options;
+  return { ...options, hold: "fixed" };
 }
 
 /** The structures that could not be made in 3D, by their places among `of`: "structure 3 of 4 could not be made in 3D". */
@@ -1174,13 +1199,17 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (taking && "why" in taking) return void fail(id, taking.why, at, key);
     const entries = taking?.entries ?? [];
     if (!entries.length) return void fail(id, "Nothing came in", at, key);
-    // (refused besides, before anything is sent: an entry whose restraints hold what the step, asked to hold them, does not -
-    //  never left unheld unsaid; and frequencies of an entry optimised with atoms held, at no stationary point)
-    const held = heldAsked(step.kind, options);
+    // (the restraints wired in, each entry its own rows - workflow/heldRows - as its plugin says its program holds them)
+    const wired = restraintsWired(d, id, step.kind, plugin, entries);
+    if (wired && "why" in wired) return void fail(id, wired.why, at, key);
+    // (refused besides, before anything is sent: an entry whose restraints wired in cannot be held as they are - none made for
+    //  it, made in another numbering, of a kind its program does not hold - never left unheld unsaid; and frequencies of an
+    //  entry optimised with atoms held, at no stationary point)
     const unpaired = [
       ...(taking?.refused ?? []),
       ...entries.flatMap((e, entry) => {
-        const why = heldRefused(e, held) ?? (step.kind === "frequencies" ? heldWhy(convergedOf(e)) : null);
+        const mine = wired?.each[entry];
+        const why = (mine && "why" in mine ? mine.why : null) ?? (step.kind === "frequencies" ? heldWhy(convergedOf(e)) : null);
         return why && !(taking?.refused ?? []).some((u) => u.entry === entry) ? [{ entry, why }] : [];
       }),
     ];
@@ -1237,13 +1266,13 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         const holds = entryHolds(e);
         return holds ? { holds } : {};
       };
-      const sent = sending.map((e, i) => ({ ...pluginEntry(e), ...(given[i].length ? { files: given[i] } : {}), ...(tries ? { count: triesOf(e), ...holdsOf(e) } : {}) }));
-      const raw = await client.prepare(step.kind, sent, options, cores, Object.fromEntries(paths));
+      const sent = sending.map((e, i) => ({ ...pluginEntry(e, rowsWired(wired, sendIdx[i])), ...(given[i].length ? { files: given[i] } : {}), ...(tries ? { count: triesOf(e), ...holdsOf(e) } : {}) }));
+      const raw = await client.prepare(step.kind, sent, holdAsked(options, plugin, step.kind, wired), cores, Object.fromEntries(paths));
       prepared = readPrepared(raw, sending.length);
       refused = readRefused(raw, sending.length);
       // (asked for as many as each molecule needs, where the search takes draws: of molecules in 3D, run as jobs, one round - said)
       const once = oneRoundAsJobs(tries, plugin.roleDraws.includes("conformers"), options);
-      note = [readNote(raw), once].filter(Boolean).join(" \u00b7 ") || undefined;
+      note = [readNote(raw), once, ...(wired?.said ?? [])].filter(Boolean).join(" \u00b7 ") || undefined;
       said = client.version ?? "";
     } catch (e) {
       return void fail(id, message(e), at, key);
@@ -1668,9 +1697,10 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       // (the solvation its options ask for, as its manifest says its program says one: what each job gave held to it,
       //  whatever program ran it - workflow/programs `notAsAsked`)
       const asked = solvationAsked(plugin?.steps.find((s) => s.kind === kind)?.solvation, optionsOf(optionsFor(kind, by), run.options));
-      // (the atoms each entry's run held where they stood, where it was asked to hold them: said on what it made)
-      const holding = heldAsked(kind, optionsOf(optionsFor(kind, by), run.options)).length > 0;
-      const heldOf = (e: SetEntry) => (holding ? fixedAtoms(e) : []);
+      // (the restraints wired in that each entry's run held - its atoms held where they stood said on what it made, and checked)
+      const wiredNow = plugin ? restraintsWired(d, id, kind, plugin, entries) : null;
+      const rowsOf = (e: SetEntry) => rowsWired(wiredNow && !("why" in wiredNow) ? wiredNow : null, entries.indexOf(e));
+      const heldOf = (e: SetEntry) => fixedAtoms(rowsOf(e) ?? []);
       // (the lone atoms it passed through as they came, in their order among the jobs': each before the results of the first
       //  job whose first entry came after it - an ensemble's job gives its entries' results together, wherever they came)
       const passing = [...(run.passed ?? [])].sort((a, b) => a - b);
@@ -1736,7 +1766,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         let said;
         try {
           // (a folder with no record, adopted: read as one that ran to its end - the chemist took what it holds)
-          said = readCollected(await client.collect(kind, mine.map(pluginEntry), run.options, files, log, unrecorded[k] ? "done" : record.state), mine.length);
+          said = readCollected(await client.collect(kind, mine.map((e) => pluginEntry(e, rowsOf(e))), holdAsked(run.options, plugin, kind, wiredNow && !("why" in wiredNow) ? wiredNow : null), files, log, unrecorded[k] ? "done" : record.state), mine.length);
         } catch (e) {
           // (its plugin refused what it was given, or what came back)
           fails(mine, "refused", message(e));
@@ -1774,7 +1804,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
               continue;
             }
             const made =
-              kind === "conformers" ? conformersWorked(mine[i], read.output, read.readers, read.source) : workedOf(kind, mine[i], read.output, read.readers, read.source, heldOf(mine[i]));
+              kind === "conformers" ? conformersWorked(mine[i], read.output, read.readers, read.source) : workedOf(kind, mine[i], read.output, read.readers, read.source, heldOf(mine[i]), !!rowsOf(mine[i]));
             if (isFailure(made)) {
               fails([mine[i]], made.kind, made.why);
               continue;
@@ -1798,7 +1828,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
               fails([mine[i]], "failed", out);
               continue;
             }
-            gave(mine[i], workedOf(kind, mine[i], out, [`${plugin.id} ${client.version || plugin.version}`], log ? source : undefined, heldOf(mine[i])));
+            gave(mine[i], workedOf(kind, mine[i], out, [`${plugin.id} ${client.version || plugin.version}`], log ? source : undefined, heldOf(mine[i]), !!rowsOf(mine[i])));
           }
           continue;
         }
@@ -1817,7 +1847,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           const readers = [`${plugin.id} ${client.version || plugin.version}`];
           // (a search Meno tells how many to try: which of what it made stand, Meno's checks - lib/chem/metalHolds)
           const checks = plugin.roleTries.includes("conformers") ? entryChecks(mine[i]) : undefined;
-          gave(mine[i], kind === "conformers" ? conformersWorked(mine[i], out, readers, log ? source : undefined, checks) : workedOf(kind, mine[i], out, readers, log ? source : undefined, heldOf(mine[i])));
+          gave(mine[i], kind === "conformers" ? conformersWorked(mine[i], out, readers, log ? source : undefined, checks) : workedOf(kind, mine[i], out, readers, log ? source : undefined, heldOf(mine[i]), !!rowsOf(mine[i])));
         }
       }
       passOn(Infinity);

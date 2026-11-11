@@ -106,16 +106,25 @@ export const MENO_ONLY: readonly StepKind[] = [
 export const LONE_ATOM_PASSES: readonly StepKind[] = ["conformers", "optimise"];
 
 /**
- * The kinds of step that may hold an entry's restraints as their program
- * runs, where its plugin says it can (`StepDecl.restraints`): an
- * optimisation, to a minimum or to a saddle point - asked on the step's
- * card (workflow/doers `optionsFor`, *Hold its restraints*). A restraint a
- * step of another kind is given rides along, held by none.
+ * The kinds of step that may hold restraints as their program runs - the
+ * rows of a *Restraints* table wired into their *Restraints* input
+ * (workflow/kinds `RESTRAINTS_INPUT`), each molecule its own - where its
+ * plugin says what it holds (`StepDecl.restraints`): a minimisation, an
+ * optimisation, a path search. (Not an optimisation to a saddle point: its
+ * card has room for its three inputs alone.) A row a
+ * plugin does not say it holds is refused before anything is sent, never
+ * left unheld unsaid, nor held another way.
  */
-export const HOLDS_RESTRAINTS: readonly StepKind[] = ["optimise", "saddle-point"];
+export const HOLDS_RESTRAINTS: readonly StepKind[] = ["minimise", "optimise", "path-search"];
 
-/** The kinds of restraint a step's program may hold as it runs: atoms fixed where they stand (lib/entry `Restraint`). */
-export const HELD_KINDS = ["fixed"] as const;
+/**
+ * The kinds of restraint a step's program may hold as it runs (lib/entry
+ * `Restraint`): atoms fixed where they stand; a distance or a torsion held
+ * by a strength (restrained); or held exactly at its value (constrained:
+ * `-exact`). A manifest names those its program holds; one it does not name
+ * it does not hold.
+ */
+export const HELD_KINDS = ["fixed", "distance", "dihedral", "distance-exact", "dihedral-exact"] as const;
 export type HeldKind = (typeof HELD_KINDS)[number];
 
 /** What flows along a wire: structures drawn (any not yet in 3D), molecules in 3D each a compound, or conformer sets. */

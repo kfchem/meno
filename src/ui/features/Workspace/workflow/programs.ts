@@ -23,11 +23,10 @@ import { convergedAt, convergedOf } from "./converged";
 import { inputOf, type Flow } from "./flow";
 import { levelKey, levelSaid, matchesOf, mostOf, pairEntries, PATH_PAIR, sideUnlike, type PairAs } from "./pairs";
 import type { OptionValues } from "../../../../lib/options";
-import { HOLDS_RESTRAINTS, type HeldKind } from "../../../../lib/plugins/steps";
 import { bondedPairs, bondRadii } from "../../../../utils/structureParsers";
 import type { Worked } from "./run";
 import { failureKindOf, WORDS_MOST, type Failure, type FailureKind } from "./failures";
-import { HOLD_OPTION, inputsOf, kindInfo, type Holds3D, type StepKind } from "./kinds";
+import { inputsOf, kindInfo, type Holds3D, type StepKind } from "./kinds";
 import { keptFrames, keptMade, type MadeChecks } from "../../../../lib/chem/metalHolds";
 import { partsOf, partsSideBySide } from "../chem/partsApart";
 
@@ -76,7 +75,12 @@ export async function entryFiles(
   return [];
 }
 
-export function pluginEntry(e: SetEntry): PluginEntry {
+/**
+ * An entry as a plugin is given it - with `wired`, the restraints its step
+ * holds for it (workflow/heldRows), in place of any it carries; none given,
+ * those it carries (Torsion restraints'), as they ride.
+ */
+export function pluginEntry(e: SetEntry, wired?: readonly Restraint[]): PluginEntry {
   const molecule: WrittenMolecule = {
     ...(e.name ? { name: e.name } : {}),
     atoms: e.atoms.map((a, i) => ({
@@ -115,7 +119,7 @@ export function pluginEntry(e: SetEntry): PluginEntry {
     ...(e.end ? { end: pluginEntry(e.end) } : {}),
     // (its sides, where it is a guess paired with them: each given as it is - Optimise to a saddle point's)
     ...(e.sides ? { sides: { reactant: pluginEntry(e.sides.reactant), product: pluginEntry(e.sides.product) } } : {}),
-    ...(restraints?.restraints.length ? { restraints: restraints.restraints.map((r) => ({ ...r, atoms: [...r.atoms] })) } : {}),
+    ...(wired ? { restraints: wired.map((r) => ({ ...r, atoms: [...r.atoms] })) } : restraints?.restraints.length ? { restraints: restraints.restraints.map((r) => ({ ...r, atoms: [...r.atoms] })) } : {}),
     ...(restraints?.start ? { start: [...restraints.start] } : {}),
   };
 }
@@ -435,7 +439,7 @@ function keptAnew(entry: SetEntry, xyz: readonly number[], charge?: number | nul
  * geometry, as far as it came, is the entry of the step's Failed exit -
  * never passed on as a minimum (until 2026-10-22 it was).
  */
-export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, readers: readonly string[], source?: CalcSource, held: readonly number[] = []): Worked | Failure {
+export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, readers: readonly string[], source?: CalcSource, held: readonly number[] = [], restrained = false): Worked | Failure {
   const n = entry.atoms.length;
   if (out.atoms.length !== n || out.atoms.some((el, i) => el !== entry.atoms[i].el)) return { kind: "wrong-molecule", why: "What came back is not the molecule that went" };
   const frames = out.frames.filter((f) => f.length === 3 * n && f.every(Number.isFinite));
@@ -490,7 +494,7 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
     calc,
     ...(failed ? { failed } : {}),
     ...(out.optimised === false && kind === "minimise" ? { failed: { kind: "not-converged" as const, why: "The minimisation did not converge in the steps it was given" } } : {}),
-    ...(kind === "minimise" ? firstHeld(entry) : {}),
+    ...(kind === "minimise" ? firstHeld(entry, restrained) : {}),
     ...(converged ? { converged } : {}),
   };
 }
@@ -512,17 +516,20 @@ export function stoppedAt(kind: StepKind, entry: SetEntry, out: ReaderOutput, re
 }
 
 /**
- * An entry's restraints once a minimisation has held them, saying where
- * they were first held (`start`): where they already say, as they say;
- * else where the entry stood as it came - so that a later minimisation,
- * asked to, starts again from there, as case F's rounds each start from the
- * geometry before the first (docs/WORKFLOWS-FOUNDATION.md, F15). Nothing
- * where it held none.
+ * An entry's restraints once a minimisation has held them - those it
+ * carries, or those wired in for it (`restrained`) - saying where they were
+ * first held (`start`): where they already say, as they say; else where
+ * the entry stood as it came - so that a later minimisation, asked to,
+ * starts again from there, as case F's rounds each start from the geometry
+ * before the first (docs/WORKFLOWS-FOUNDATION.md, F15). Rows wired in are
+ * not carried on: the next step holds what is wired into it. Nothing where
+ * it held none.
  */
-function firstHeld(entry: SetEntry): Pick<SetEntry, "properties"> | Record<string, never> {
+function firstHeld(entry: SetEntry, restrained: boolean): Pick<SetEntry, "properties"> | Record<string, never> {
   const held = entry.properties?.restraints;
-  if (held?.status !== "computed" || typeof held.value !== "object" || held.value === null || !("restraints" in held.value) || held.value.start) return {};
-  return { properties: { ...anew(entry).properties, restraints: { ...held, value: { ...held.value, start: [...entry.xyz] } } } };
+  const was = held?.status === "computed" && typeof held.value === "object" && held.value !== null && "restraints" in held.value ? held.value : undefined;
+  if (was?.start || (!was?.restraints.length && !restrained)) return {};
+  return { properties: { ...anew(entry).properties, restraints: { value: { restraints: was?.restraints ?? [], start: [...entry.xyz] }, unit: "none", status: "computed" } } };
 }
 
 /** How far, in Å, a distance between two atoms may differ in what a single point printed back - its program's rounding - before an atom is taken to have moved. */
@@ -704,33 +711,8 @@ export function passedSaid(kind: StepKind, count: number): string | null {
  */
 const HELD_MOVED_MOST = 1e-4;
 
-/** The kinds of restraint a step of `kind` is asked to hold (`HOLD_OPTION`): none, or its atoms fixed. */
-export const heldAsked = (kind: StepKind, options: OptionValues): HeldKind[] => (HOLDS_RESTRAINTS.includes(kind) && options[HOLD_OPTION.id] === "fixed" ? ["fixed"] : []);
-
-/** An entry's restraints, as Restraints and Torsion restraints left them (lib/entry `Restraint`): none where it carries none. */
-function restraintsCarried(e: SetEntry): readonly Restraint[] {
-  const held = e.properties?.restraints;
-  return held?.status === "computed" && typeof held.value === "object" && held.value !== null && "restraints" in held.value ? held.value.restraints : [];
-}
-
-/** The atoms an entry's restraints fix where they stand, from 0, each once and in order: none where they fix none. */
-export const fixedAtoms = (e: SetEntry): number[] => [...new Set(restraintsCarried(e).flatMap((r) => (r.kind === "fixed" ? r.atoms : [])))].sort((a, b) => a - b);
-
-/** A kind of restraint by what it holds, as a chemist says it. */
-const RESTRAINT_SAID: Record<Restraint["kind"], string> = { distance: "distances", dihedral: "torsions", fixed: "atoms fixed" };
-
-/**
- * Why a step asked to hold an entry's restraints (`heldAsked`) refuses it: a
- * kind of restraint it carries that the step does not hold - its distances,
- * its torsions - named, never left unheld unsaid. None where it may run:
- * nothing asked held, or all it carries held.
- */
-export function heldRefused(e: SetEntry, held: readonly HeldKind[]): string | null {
-  if (!held.length) return null;
-  const not = [...new Set(restraintsCarried(e).map((r) => r.kind))].filter((k) => !(held as readonly string[]).includes(k));
-  if (!not.length) return null;
-  return `Its restraints hold ${not.map((k) => RESTRAINT_SAID[k]).join(" and ")}, which this step does not hold - only atoms fixed: take them off (Restraints), or hold none`;
-}
+/** The atoms `rows` fix where they stand, from 0, each once and in order: none where they fix none. */
+export const fixedAtoms = (rows: readonly Restraint[]): number[] => [...new Set(rows.flatMap((r) => (r.kind === "fixed" ? r.atoms : [])))].sort((a, b) => a - b);
 
 /**
  * The solvation a step's options ask for, in the words its program says
@@ -834,7 +816,7 @@ export function conformersWorked(entry: SetEntry, out: ReaderOutput, readers: re
 export function programEntries(d: Flow, step: number, kind: StepKind, options: OptionValues): { entries: SetEntry[]; holds: Holds3D; refused: { entry: number; why: string }[]; paired?: string } | { why: string } | null {
   const ports = inputsOf(kind);
   if (kind === "saddle-point") return guessesWithSides(d, step, options);
-  if (kindInfo(kind).runs === "program" && ports.length === 2) {
+  if (kind === "path-search") {
     const [start, end] = ports.map((p) => inputOf(d, step, p.id));
     if (!start || start.holds === "structures") return null;
     if (!end || end.holds === "structures") return { why: `Nothing comes into ${ports[1].name}` };

@@ -1,13 +1,13 @@
 /**
  * *Restraints* and *Torsion restraints* (docs/WORKFLOWS-FOUNDATION.md,
  * *Meno's own nodes*, Structures; docs/STRUCTURE-STEPS.md): the restraints
- * a restrained minimisation holds a geometry to, as the property
- * `restraints` - rows of the entry record's `Restraint` (src/lib/entry.ts),
- * atoms from 0, each with its energy as the record states it. Restraints
- * are a label, not a value of a geometry (lib/entry `Property`): they name
- * no geometry, and ride through the steps after as they are.
+ * a restrained minimisation holds a geometry to - rows of the entry
+ * record's `Restraint` (src/lib/entry.ts), atoms from 0, each with its
+ * energy as the record states it.
  *
- * *Restraints*: each entry is its own reference - its bonds say which
+ * *Restraints*: a table of them (`restraintsTable`), a row for each, which a
+ * step holding restraints takes in its *Restraints* input
+ * (workflow/heldRows); each entry its own reference - its bonds say which
  * restraints there are, its geometry the values they hold.
  * - **Coordination bonds** (a bond the entry marks as one) are kept at a
  *   factor of their atoms' van der Waals radii together - Alvarez's radii
@@ -20,7 +20,8 @@
  * to become, in one numbering - each torsion across one of the reference's
  * double bonds that is trans there, and is not trans here, held at 180°;
  * its strength raised by a step each time, from what the entry already
- * holds. A torsion once held stays held, at the strength it reached.
+ * holds. A torsion once held stays held, at the strength it reached. These
+ * the entry carries as the property `restraints`, a label that rides on.
  *
  * Nothing is left out quietly: an atom the entry has not, an element with
  * no van der Waals radius, or an entry with no 3D places fails it, with the
@@ -30,6 +31,7 @@ import { elementOf } from "../chem/elements";
 import { aromaticForm } from "../chem/identity";
 import { AROMATIC_BOND } from "../chem/kekulize";
 import type { Entry, Property, Restraint } from "../entry";
+import type { Table, TableColumn } from "../table";
 import { dihedral, distance } from "./measure";
 
 /**
@@ -67,8 +69,8 @@ export type RestraintsAsked = {
   strength?: number;
 };
 
-/** What restraints an entry was given, by kind, as a step's line counts them - and how many it held before of the kinds made here (distances, atoms fixed), now replaced, and of torsions, kept. */
-export type RestraintsCount = { coordination: number; distances: number; fixed: number; replaced: number; torsionsKept: number };
+/** A restraint as a step made it for an entry: the row (lib/entry `Restraint`, atoms from 0), and why it is there, in a chemist's words. */
+export type RowMade = { restraint: Restraint; why: string };
 
 type V = [number, number, number];
 const at = (xyz: readonly number[], i: number): V => [xyz[3 * i], xyz[3 * i + 1], xyz[3 * i + 2]];
@@ -80,12 +82,14 @@ export function restraintsHeld(e: Pick<Entry, "properties">): Restraint[] {
 }
 
 /**
- * Restraints from `e` itself (*Restraints*), or why there can be none. Of
- * what the entry held before, the kinds made here - distances, atoms fixed -
- * are replaced, and its torsions (*Torsion restraints*', with the strengths
- * they reached) kept, each counted.
+ * The restraints *Restraints* makes for `e`, from `e` itself, each with why
+ * - or why there can be none. A coordination bond is kept IN CONTACT, at
+ * the factor of the two van der Waals radii together (about twice a bond's
+ * length at 0.9: a Lewis pair before it bonds, not a dative bond - said in
+ * its why, so that a bonded complex is not pulled apart unseen); a pair
+ * typed at its distance here; atoms typed fixed where they stand.
  */
-export function restraintsOf(e: Entry, o: RestraintsAsked): { property: Property; count: RestraintsCount } | { failed: string } {
+export function restraintRows(e: Entry, o: RestraintsAsked): { rows: RowMade[] } | { failed: string } {
   if (e.geometry.kind !== "3d") return { failed: e.geometry.kind === "frames" ? "It holds frames: take one frame first (Take frames)." : "It has no 3D places to take restraints from." };
   const xyz = e.geometry.xyz;
   const atoms = e.structure.atoms;
@@ -94,33 +98,147 @@ export function restraintsOf(e: Entry, o: RestraintsAsked): { property: Property
   if (missing !== undefined) return { failed: `It has no atom ${missing + 1}: its atoms are 1 to ${n}.` };
   const strength = o.strength ?? NaN;
   if ((o.coordination != null || o.distances?.length) && !(strength > 0 && Number.isFinite(strength))) return { failed: "A distance held needs a strength above 0." };
-  const before = restraintsHeld(e);
-  const torsions = before.filter((r) => r.kind === "dihedral").map((r) => ({ ...r, atoms: [...r.atoms] }));
-  const rows: Restraint[] = [...torsions];
-  const count: RestraintsCount = { coordination: 0, distances: 0, fixed: 0, replaced: before.length - torsions.length, torsionsKept: torsions.length };
+  const rows: RowMade[] = [];
   if (o.coordination != null) {
     for (const b of e.structure.bonds) {
       if (!b.coordination) continue;
       const [ra, rb] = [atoms[b.a1].el, atoms[b.a2].el].map((el) => elementOf(el)?.vdw ?? null);
       if (ra == null || rb == null) return { failed: `No van der Waals radius is known for ${ra == null ? atoms[b.a1].el : atoms[b.a2].el}, so its coordination bond cannot be kept.` };
-      rows.push({ kind: "distance", atoms: [b.a1, b.a2], value: o.coordination * (ra + rb), strength });
-      count.coordination++;
+      rows.push({ restraint: { kind: "distance", atoms: [b.a1, b.a2], value: o.coordination * (ra + rb), strength }, why: `coordination bond in contact, ${o.coordination} \u00d7 vdW (Alvarez)` });
     }
   }
-  for (const [p, q] of o.distances ?? []) {
-    rows.push({ kind: "distance", atoms: [p, q], value: distance(at(xyz, p), at(xyz, q)), strength });
-    count.distances++;
-  }
+  for (const [p, q] of o.distances ?? []) rows.push({ restraint: { kind: "distance", atoms: [p, q], value: distance(at(xyz, p), at(xyz, q)), strength }, why: "typed: kept at its distance here" });
   // (atoms fixed are fixed: nothing to hold them to, nothing to hold them by)
   const fixed = [...new Set(o.fixed ?? [])];
-  if (fixed.length) {
-    rows.push({ kind: "fixed", atoms: fixed });
-    count.fixed = fixed.length;
-  }
-  const was = e.properties.restraints?.value;
-  const value = typeof was === "object" && was !== null && "restraints" in was ? { ...was, restraints: rows } : { restraints: rows };
-  return { property: { value, unit: "none", status: "computed" }, count };
+  if (fixed.length) rows.push({ restraint: { kind: "fixed", atoms: fixed }, why: "typed: fixed where they stand" });
+  return { rows };
 }
+
+// ---- the table *Restraints* gives, and reading it back ----
+
+/**
+ * A row of a restraints table: the restraint, and why; the molecule it is
+ * for - the value `for` of its property `on`, an ID a step wrote (a Tag's),
+ * matched as Path search matches (docs/WORKFLOWS-FOUNDATION.md, question
+ * A); and the numbering its atoms are in (`numbering`: the property Atom map
+ * writes, `OWN_NUMBERING` where it was never mapped), so that a molecule
+ * numbered anew since is never held on the wrong atoms.
+ */
+export type RestraintRow = RowMade & { for: string; on: string; numbering: string };
+
+/** The property *Atom map* writes on each entry it numbers anew, a label naming the map: a restraint's atoms are in one numbering. */
+export const NUMBERING = "numbering";
+/** The numbering of an entry no Atom map has numbered anew: its own. */
+export const OWN_NUMBERING = "its own";
+
+/** A restraint's kind as its table says it. */
+const KIND_WORDS: Record<Restraint["kind"], string> = { distance: "distance", dihedral: "torsion", fixed: "atoms fixed" };
+/** A strength's unit, by the kind it holds, as the record's energy states it (lib/entry `Restraint`). */
+const STRENGTH_UNIT = { distance: "kcal/mol/\u00c5\u00b2", dihedral: "kcal/mol/rad\u00b2" } as const;
+/** The strength cell of a row held exactly, said: never a blank. */
+export const EXACT = "exact";
+/** The strength cell of atoms fixed: they have none. */
+const FIXED_CELL = "fixed where they stand";
+
+/** The columns of a restraints table, by name: the restraint - a target in its unit, distance or angle - first, as a set shows its first columns; then what each row is for. */
+const COLUMNS: TableColumn[] = [
+  { name: "kind", kind: "text", label: "Kind" },
+  { name: "atoms", kind: "text", label: "Atoms, from 1" },
+  { name: "target distance", kind: "number", unit: "\u00c5", label: "Target" },
+  { name: "target angle", kind: "number", unit: "\u00b0", label: "Target" },
+  { name: "strength", kind: "text", label: "Strength" },
+  { name: "why", kind: "text", label: "Why" },
+  { name: "for", kind: "text", label: "For" },
+  { name: "on", kind: "text", label: "Matched on" },
+  { name: "numbering", kind: "text", label: "Numbering" },
+];
+
+/** A row's atoms, from 1: a distance's and a torsion's joined as a chain, atoms fixed as a list. */
+const atomsText = (r: Restraint) => r.atoms.map((a) => a + 1).join(r.kind === "fixed" ? ", " : "-");
+
+/** A row's strength cell: the strength with its unit, "exact", or what atoms fixed have. */
+const strengthText = (r: Restraint) => (r.kind === "fixed" ? FIXED_CELL : r.exact ? EXACT : `${r.strength} ${STRENGTH_UNIT[r.kind]}`);
+
+/** A restraints table: a row for each restraint, said as a chemist reads it (docs/STRUCTURE-STEPS.md, *Restraints*). */
+export function restraintsTable(rows: readonly RestraintRow[]): Table {
+  return {
+    columns: COLUMNS.map((c) => ({ ...c })),
+    rows: rows.map((x) => {
+      const r = x.restraint;
+      return [KIND_WORDS[r.kind], atomsText(r), r.kind === "distance" ? r.value! : null, r.kind === "dihedral" ? r.value! : null, strengthText(r), x.why, x.for, x.on, x.numbering];
+    }),
+    unread: [],
+    left: [],
+  };
+}
+
+/**
+ * The rows of a restraints table, read back - a step's (`restraintsTable`),
+ * or one read from a file with the same columns: each row's kind, atoms
+ * (from 1), target in its column's unit, and strength - a number in the
+ * unit of its kind, "exact", or atoms fixed's. Why not, the row named,
+ * where any row does not read: nothing held in part, nothing guessed.
+ */
+export function restraintRowsIn(table: Table): { rows: RestraintRow[] } | { why: string } {
+  const col = (name: string) => table.columns.findIndex((c) => c.name === name);
+  const k = Object.fromEntries(COLUMNS.map((c) => [c.name, col(c.name)]));
+  const lacking = COLUMNS.find((c) => k[c.name] < 0);
+  if (lacking) return { why: `It is no table of restraints: it has no column "${lacking.name}"` };
+  // (a target's unit as its column says: Å and °, nothing else taken)
+  for (const [name, unit] of [["target distance", "\u00c5"], ["target angle", "\u00b0"]] as const) {
+    const c = table.columns[k[name]];
+    if (c.kind !== "number" || c.unit !== unit) return { why: `Its column "${name}" is not in ${unit}` };
+  }
+  const rows: RestraintRow[] = [];
+  for (const [i, row] of table.rows.entries()) {
+    const text = (name: string) => {
+      const v = row[k[name]];
+      return typeof v === "string" ? v.trim() : typeof v === "number" ? String(v) : "";
+    };
+    const bad = (what: string) => ({ why: `Row ${i + 1} of the restraints does not read: ${what}` });
+    const kind = (Object.keys(KIND_WORDS) as Restraint["kind"][]).find((x) => KIND_WORDS[x] === text("kind"));
+    if (!kind) return bad(`its kind "${text("kind")}" is none of distance, torsion, atoms fixed`);
+    const atoms = text("atoms")
+      .split(kind === "fixed" ? /\s*,\s*/ : "-")
+      .map((a) => (/^[0-9]+$/.test(a.trim()) ? Number(a) - 1 : NaN));
+    const wants = kind === "distance" ? 2 : kind === "dihedral" ? 4 : null;
+    if (!atoms.length || atoms.some((a) => !Number.isInteger(a) || a < 0) || (wants != null && atoms.length !== wants) || new Set(atoms).size !== atoms.length)
+      return bad(`its atoms "${text("atoms")}" are not ${wants ?? "one or more"} different atoms from 1`);
+    const forWhat = text("for");
+    const on = text("on");
+    if (!forWhat || !on) return bad("it does not say which molecule it is for");
+    const numbering = text("numbering") || OWN_NUMBERING;
+    const why = text("why");
+    const strength = text("strength");
+    if (kind === "fixed") {
+      if (strength !== FIXED_CELL) return bad(`atoms fixed have no strength, not "${strength}"`);
+      rows.push({ for: forWhat, on, numbering, why, restraint: { kind, atoms } });
+      continue;
+    }
+    const value = row[k[kind === "distance" ? "target distance" : "target angle"]];
+    if (typeof value !== "number" || !Number.isFinite(value)) return bad(`its target is not a number in ${kind === "distance" ? "\u00c5" : "\u00b0"}`);
+    if (strength === EXACT) {
+      rows.push({ for: forWhat, on, numbering, why, restraint: { kind, atoms, value, exact: true } });
+      continue;
+    }
+    const m = /^([0-9.eE+-]+)\s+(\S+)$/.exec(strength);
+    const k2 = m ? Number(m[1]) : NaN;
+    if (!m || m[2] !== STRENGTH_UNIT[kind] || !(k2 > 0) || !Number.isFinite(k2)) return bad(`its strength "${strength}" is neither "exact" nor a number above 0 in ${STRENGTH_UNIT[kind]}`);
+    rows.push({ for: forWhat, on, numbering, why, restraint: { kind, atoms, value, strength: k2 } });
+  }
+  return { rows };
+}
+
+/** A restraint's atoms and kind, as two rows hold the same (a distance and a torsion either way round; atoms fixed as a set). */
+export function restraintKey(r: Restraint): string {
+  if (r.kind === "fixed") return `fixed:${[...r.atoms].sort((a, b) => a - b).join(",")}`;
+  const fwd = r.atoms.join("-");
+  const back = [...r.atoms].reverse().join("-");
+  return `${r.kind}:${fwd < back ? fwd : back}`;
+}
+
+/** A restraint as a step's line names it: "distance 3-7", "torsion 1-2-3-4", "atoms fixed 1, 4". */
+export const restraintSaid = (r: Restraint): string => `${KIND_WORDS[r.kind]} ${atomsText(r)}`;
 
 /**
  * The torsions a reference holds trans across its double bonds, each as

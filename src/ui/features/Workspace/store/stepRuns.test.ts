@@ -176,6 +176,7 @@ import { canWire, resultOf, stateOf } from "../workflow/flow";
 import { MOST_PAIRS } from "../workflow/pairs";
 import { byOf, optionsFor } from "../workflow/doers";
 import { CARD_W } from "../workflow/look";
+import { RESTRAINTS_INPUT } from "../workflow/kinds";
 import { countOf, entryOfSet, setEntries, setMembers, setMolecules } from "../workflow/entries";
 import { forgetStereo } from "../workflow/configurations";
 
@@ -242,7 +243,7 @@ describe("a step that runs a plugin's program", () => {
     await settle();
     await settle();
     // prepared by the plugin with what came in, its job started - with the cores it takes
-    expect(worker.prepare).toHaveBeenCalledWith("optimise", [expect.objectContaining({ charge: 0, multiplicity: 1 })], { hold: "no", method: "tb2", solvent: "none", level: "normal" }, expect.any(Number), {});
+    expect(worker.prepare).toHaveBeenCalledWith("optimise", [expect.objectContaining({ charge: 0, multiplicity: 1 })], { method: "tb2", solvent: "none", level: "normal" }, expect.any(Number), {});
     expect(asked.started).toEqual([expect.objectContaining({ plugin: "tightbind", program: "tightbind", args: ["input.xyz", "--opt", "normal"], cores: expect.any(Number) })]);
     const running = st().steps.find((s) => s.id === step)!.running!;
     expect(running.jobs).toEqual([{ id: idOf(1), entries: [0], reads: ["tbopt.log"], key: expect.stringMatching(/^[0-9a-f]{64}$/) }]);
@@ -346,18 +347,25 @@ describe("a step that runs a plugin's program", () => {
     }
   });
 
-  it("holds an entry's atoms fixed where it is asked to - sent with them, said on what it made - and refuses one whose restraints hold distances too, naming them", async () => {
-    // (water given its restraints by Restraints, then optimised by Tightbind, whose optimisation can hold atoms fixed)
+  it("holds the atoms fixed a Restraints table wired in makes for each molecule - matched on its ID, sent with them, said on what it made - and refuses rows its plugin does not hold, naming them", async () => {
+    // (water tagged, given its restraints by Restraints as a table, the tagged water optimised by Tightbind - whose optimisation can
+    //  hold atoms fixed - with the table wired into its Restraints input)
     const page = async (restraints: Record<string, unknown>) => {
       const made = editor();
+      const t = made.st().addStep("tag", "meno", 3, 0);
+      made.st().updateStep(t, { options: { name: "start" } });
+      made.st().connect({ set: made.st().sets[0].id }, t);
+      await made.st().runStep(t);
+      const tagged = made.st().sets.find((b) => b.made?.step === t && b.made.exit === "out")!.id;
       const r = made.st().addStep("restraints", "meno", 5, 0);
-      made.st().updateStep(r, { options: { coordination: false, ...restraints } });
-      made.st().connect({ set: made.st().sets[0].id }, r);
+      made.st().updateStep(r, { options: { on: "start", coordination: false, ...restraints } });
+      made.st().connect({ set: tagged }, r);
       await made.st().runStep(r);
-      // (Restraints' out, into an optimisation asked to hold its atoms fixed)
+      const table = made.st().sets.find((b) => b.made?.step === r && b.made.exit === "out")!;
+      expect(table.made?.holds).toBe("table");
       const step = made.st().addStep("optimise", "tightbind", 20, 0);
-      made.st().updateStep(step, { options: { hold: "fixed" } });
-      made.st().connect({ set: made.st().sets.find((b) => b.made?.step === r && b.made.exit === "out")!.id }, step);
+      made.st().connect({ set: tagged }, step);
+      made.st().connect({ set: table.id }, step, RESTRAINTS_INPUT.id);
       return { ...made, step };
     };
     {
@@ -382,8 +390,16 @@ describe("a step that runs a plugin's program", () => {
       const { st, step } = await page({ fixed: "1", distances: "2-3" });
       await st().runStep(step);
       expect(worker.prepare).not.toHaveBeenCalled();
-      expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: expect.stringContaining("Its restraints hold distances, which this step does not hold") });
+      expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: expect.stringContaining("plugin holds no distances: distance 2-3") });
     }
+  });
+
+  it("refuses a step of a page saved holding its atoms fixed, until a table of them is wired in", async () => {
+    const { st, step } = editor();
+    st().updateStep(step, { options: { hold: "fixed" } });
+    await st().runStep(step);
+    expect(worker.prepare).not.toHaveBeenCalled();
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "It was saved holding its atoms fixed (Hold its restraints): wire a Restraints table of them into Restraints" });
   });
 
   it("ends on what came in when it started - its wire undone while it runs - and is changed once its results are in", async () => {

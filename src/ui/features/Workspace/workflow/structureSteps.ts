@@ -18,16 +18,16 @@ import { atomsFromOne, comparedBonding, matchingReference, type CompareOptions }
 import { combined } from "../../../../lib/steps/combine";
 import { measured, measurementName, measurementsTyped } from "../../../../lib/steps/measure";
 import { speciesNeeds, speciesTyped, withSpecies } from "../../../../lib/steps/species";
-import { restraintsOf, TORSION_STEP, torsionsRestrained } from "../../../../lib/steps/restraints";
+import { NUMBERING, OWN_NUMBERING, restraintRows, restraintsTable, TORSION_STEP, torsionsRestrained, type RestraintRow } from "../../../../lib/steps/restraints";
 import type { OptionValues } from "../../../../lib/options";
-import { atomMapNeeds, restraintsTyped, torsionsNeeds } from "./kinds";
+import { atomMapNeeds, ONE_EXIT, restraintsTyped, torsionsNeeds } from "./kinds";
 import { bondChangesTable, CHANGE, CHANGE_WORDS, MAPPED_ENTRY, renumberedEntry } from "../../../../lib/steps/reaction";
 import { MODE_NAMES, modeOnAtomsEntry } from "../../../../lib/steps/modeOnAtoms";
 import { mapOnto, type BondChangeRow } from "../../../../lib/chem/reactionMap";
 import type { Molecule } from "../../../../lib/chem/molecule";
 import { atomsOfRows, type Table } from "../../../../lib/table";
 import { displacedEntry } from "../../../../lib/steps/vibrations";
-import { CALC_CARRIED, calcRenumbered, compoundLetter, entryOfSet, entryState, FINISHED, keptRenumbered, setEntryOfEntry, type SetEntry } from "./entries";
+import { CALC_CARRIED, calcRenumbered, compoundLetter, entryOfSet, entryState, FINISHED, hash, keptRenumbered, setEntryOfEntry, type SetEntry } from "./entries";
 import { convergedOf } from "./converged";
 import type { Holds3D } from "./kinds";
 import type { Outcome3D } from "./meno";
@@ -333,41 +333,55 @@ export function comparedSet(entries: readonly SetEntry[], references: readonly S
 const withRestraints = (e: SetEntry, restraints: NonNullable<SetEntry["properties"]>[string]): SetEntry => ({ ...e, properties: { ...e.properties, restraints } });
 
 /**
- * *Restraints* (lib/steps `restraintsOf`): each entry with its restraints
- * from itself - its coordination bonds at the factor given, the pairs
- * typed at their distance, the atoms typed fixed - whatever it held before
- * replaced; one it cannot have them out of *Failed*, saying why.
+ * *Restraints* (lib/steps `restraintRows`): a table of restraints, a row for
+ * each, made of each entry from itself - its coordination bonds at the
+ * factor given, the pairs typed at their distance, the atoms typed fixed -
+ * each row for that entry by the value of the property named (an ID a step
+ * wrote: question A), and in the numbering it has now (`NUMBERING`). The
+ * entries are not passed on: a step that holds restraints takes them in its
+ * *Restraints* input. One it cannot make rows for - no such ID, an ID
+ * another entry has too, an atom it has not - out of *Failed*, saying why.
  */
 export function restrainedSet(entries: readonly SetEntry[], holds: Holds3D, v: OptionValues): Outcome3D {
   const typed = restraintsTyped(v);
   if ("why" in typed) return { ok: false, said: typed.why };
-  const kept: SetEntry[] = [];
+  const { on } = typed;
   const aside: SetEntry[] = [];
-  const total = { coordination: 0, distances: 0, fixed: 0 };
-  let replaced = 0;
-  let torsionsKept = 0;
+  const rows: RestraintRow[] = [];
+  const total = { coordination: 0, distances: 0, fixed: 0, none: 0 };
+  // (each entry's ID - a text, a number, as it says it - and those two or more entries share: a row for one would be the other's too)
+  const idOf = (e: SetEntry) => {
+    const p = e.properties?.[on];
+    return p?.status === "computed" && (typeof p.value === "string" || typeof p.value === "number") ? String(p.value) : null;
+  };
+  const ids = entries.map(idOf);
+  const shared = new Set(ids.filter((id, i) => id != null && ids.indexOf(id) !== i));
   entries.forEach((was, i) => {
-    const r = restraintsOf(entryOfSet(was, String(i)), typed.asked);
-    if ("failed" in r) {
-      aside.push({ ...was, failed: { kind: "refused", why: r.failed } });
-      return;
+    const refuse = (why: string) => aside.push({ ...was, failed: { kind: "refused", why } });
+    const id = ids[i];
+    if (id == null) return refuse(`It has no ${on} to make its rows for: give it one (Tag)`);
+    if (shared.has(id)) return refuse(`Its ${on}, ${id}, is another entry's here too: rows made for it would be both's`);
+    const r = restraintRows(entryOfSet(was, String(i)), typed.asked);
+    if ("failed" in r) return refuse(r.failed);
+    const n = was.properties?.[NUMBERING];
+    const numbering = n?.status === "computed" && typeof n.value === "string" ? n.value : OWN_NUMBERING;
+    for (const row of r.rows) {
+      rows.push({ ...row, for: id, on, numbering });
+      if (row.restraint.kind === "fixed") total.fixed += row.restraint.atoms.length;
+      else if (row.why.startsWith("coordination")) total.coordination++;
+      else total.distances++;
     }
-    total.coordination += r.count.coordination;
-    total.distances += r.count.distances;
-    total.fixed += r.count.fixed;
-    if (r.count.replaced) replaced++;
-    if (r.count.torsionsKept) torsionsKept++;
-    kept.push(withRestraints(was, r.property));
+    if (!r.rows.length) total.none++;
   });
-  const said = [`${plural(kept.length, "entry", "entries")} restrained`];
+  const made = entries.length - aside.length;
+  const said = [`${plural(rows.length, "row")} for ${plural(made, "entry", "entries")}`];
   if (typed.asked.coordination != null) said.push(total.coordination ? `${plural(total.coordination, "coordination bond")} held` : "no coordination bonds");
   if (total.distances) said.push(`${plural(total.distances, "pair")} at their distance`);
   if (total.fixed) said.push(`${plural(total.fixed, "atom")} fixed`);
-  // (what an entry held before: its distances and atoms fixed replaced, its torsions - with the strengths they reached - kept; both said)
-  if (replaced) said.push(`${replaced} ${replaced === 1 ? "entry's" : "entries'"} earlier distances and atoms fixed replaced`);
-  if (torsionsKept) said.push(`${torsionsKept} ${torsionsKept === 1 ? "entry's" : "entries'"} torsions kept`);
+  // (an entry it made no row for: said - a step holding these takes none for it, and refuses it)
+  if (total.none) said.push(`${plural(total.none, "entry", "entries")} with none to hold`);
   if (aside.length) said.push(`${aside.length} failed`);
-  return { ok: true, holds, kept, aside, said: said.join(" \u00b7 ") };
+  return { ok: true, holds, kept: [], aside, said: said.join(" \u00b7 "), tables: { [ONE_EXIT]: restraintsTable(rows) } };
 }
 
 /**
@@ -572,6 +586,9 @@ export function atomMapSet(entries: readonly SetEntry[], references: readonly Se
       }
       if (side.length > 1 && side.some((i) => entries[i].energy != null || entries[i].calc || Object.keys(entries[i].properties ?? {}).length)) partsOwn++;
       if (side.length === 1 && first.properties?.[MAPPED_ENTRY]) replaced++;
+      // (numbered anew - its atoms in another order, or several made one: said in a label that rides on, each such map after the
+      //  last, so that a restraint made in the numbering it had is never held on what are now other atoms - lib/steps NUMBERING)
+      if (moved || side.length > 1) held = numberedAnew(held, first, g.reference.map((i) => references[i]));
       kept.push(withSaid(held, MAPPED_ENTRY, sideKey(side, m.map)));
     }
   });
@@ -588,6 +605,21 @@ export function atomMapSet(entries: readonly SetEntry[], references: readonly Se
   if (partsOwn) line.push("the parts' own values not carried");
   if (replaced) line.push(`the ${MAPPED_ENTRY} ${replaced === 1 ? "an entry" : `${replaced} entries`} carried replaced`);
   return { ok: true, holds, kept, aside, said: line.join(", "), tables: { changes } };
+}
+
+/**
+ * `e`, numbered anew by Atom map in `references`' numbering, with its
+ * numbering said (lib/steps `NUMBERING`): the one it had (`was`'s) and,
+ * after it, this one - the references by name and by what their atoms and
+ * bonds are, so that two references of one compound number alike, and two
+ * of different compounds never do. A label: it rides on as an ID does.
+ */
+function numberedAnew(e: SetEntry, was: SetEntry, references: readonly SetEntry[]): SetEntry {
+  const n = was.properties?.[NUMBERING];
+  const before = n?.status === "computed" && typeof n.value === "string" ? n.value : null;
+  const graph = references.map((r) => `${r.atoms.map((a) => a.el).join(",")}|${r.bonds.map((b) => `${b.a1}-${b.a2}:${b.order}`).join(",")}`).join(" + ");
+  const now = `as ${references.map((r) => r.name ?? named(r)).join(" + ")} (${hash(graph).toString(36)})`;
+  return { ...e, properties: { ...e.properties, [NUMBERING]: { value: before ? `${before}, then ${now}` : now, unit: "none", status: "computed", label: true } } };
 }
 
 /** Several step's entries as one entry record, their atoms one after another (lib/steps `combined`), or why not. */
