@@ -300,7 +300,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Frequencies | two atoms on a spring (drawn) | molecules in 3D | each with its vibrations and thermal corrections - the same kind of set |
 | Path search | a way over a barrier between two structures, its top the point refined (drawn) | *Start* and *End*: molecules in 3D, or conformer sets - each conformer one - each start paired with an end - in order, each with each, or matched on a property - the two the same atoms in one numbering, of one charge and spin | **molecules in 3D**: one for each pair, its frames the path its program found, its entry the highest point it refined (*Path search*, below); a pair that cannot be worked out, or whose job failed, out of its second exit, *Failed*, saying why |
 | Follow the reaction path | from the top of a barrier, down both ways (drawn) | molecules in 3D: each a point to start from - a saddle point, as the chemist's *Filter* on its frequencies chose | **molecules in 3D**: one for each, its frames the path its program followed down both ways, one end to the other, its entry the point it started from (*Follow the reaction path*, below); one whose side stopped before its end, or whose job failed, out of its second exit, *Failed*, saying why |
-| Optimise to a saddle point | a ball at the top of a barrier, an arrow up into it (drawn) | *Guesses*: molecules in 3D; and *Reactant side* and *Product side*, both or neither, each guess paired with one of each - in order, each with each, or matched on a property - the same atoms in one numbering, of one charge and spin | **molecules in 3D**: each guess optimised by its program towards a saddle point, its way there as frames, its last its entry (*Optimise to a saddle point*, below); one that did not converge, at the last geometry it reached, or whose job failed, out of its second exit, *Failed*, saying why |
+| Optimise to a saddle point | a ball at the top of a barrier, an arrow up into it (drawn) | *Guesses*: molecules in 3D; and *Reactant side* and *Product side*, both or neither, each guess paired with one of each - in order, each with each, or matched on a property - the same atoms in one numbering, of one charge and spin; *Restraints*, where wanted: restraints tables (*Restraints wired in*) | **molecules in 3D**: each guess optimised by its program towards a saddle point, holding the restraints wired in for it as its plugin holds them, its way there as frames, its last its entry (*Optimise to a saddle point*, below); one that did not converge, at the last geometry it reached, or whose job failed, out of its second exit, *Failed*, saying why |
 | NCI | a cloud | molecules in 3D | each with its non-covalent interactions as a surface coloured by their strength (NCI.md) - the same kind of set |
 | Render | a picture | molecules in 3D | a set of pictures: each entry a picture of its own (RENDER.md, *Render as a step*); no step takes pictures |
 | Energy window | levels, the lowest few within a bracket (drawn) | a conformer set, with energies; or molecules, in each value of a property | those within the window of their compound's lowest, or of the lowest with their value of a property; the rest out of its second exit, *Outside it*, each saying why |
@@ -1200,14 +1200,16 @@ states an undo goes back to as well.
 ### Restraints wired in
 
 A step that may hold restraints - *Conformers*, *Minimise with
-restraints*, *Optimise*, *Path search* - has a *Restraints* input,
+restraints*, *Optimise*, *Path search*, *Optimise to a saddle point* - has
+a *Restraints* input,
 where wanted: wired, it holds the rows of the restraints tables that come
 in (*Restraints*, STRUCTURE-STEPS.md), each molecule those made for it; none
 wired, it holds none (2026-11-11). This replaced *Hold its restraints*, the
 card's choice to hold what an entry carried: a step of a page saved with it
-set to atoms fixed is refused, saying so, until a table of them is wired in
-(*Optimise to a saddle point*, whose card has room for its three inputs
-alone, holds none now: one saved holding atoms fixed is refused, saying so).
+set to atoms fixed is refused, saying so, until a table of them is wired in.
+A card of four inputs - *Optimise to a saddle point*'s - is one port's step
+taller than the rest, its inputs a plain list down its left edge, each named
+(*Exit ports*).
 
 - **Matched on an ID a step wrote** (WORKFLOWS-FOUNDATION.md, question A),
   never by lineage or place: each row names the property it was made for
@@ -2343,7 +2345,12 @@ port is that exit's set's.
   its exits (`exitsOf`), each as far down as the input of the same place
   on its left (look `stepGives`, kinds `exitPlace`): the first level with
   the first input. A kind has three exits at most (*Atom map*), and three
-  fit on a card shut, as three inputs do.
+  fit on a card shut, as three inputs do. A kind of four inputs -
+  *Optimise to a saddle point*, its *Restraints* the fourth - has a card
+  one port's step taller (look `cardHigh`, kinds `cardHighOf`; 2026-11-11):
+  its inputs a plain list down its left edge, each on the card and named,
+  and its card's frame as tall wherever a card is measured - placing,
+  wires going round it, fitting the page, choosing by a box.
 - **The line to an exit's set** leaves from that exit's port (place
   `exitStart`), and placing a set keeps that line clear, as before: the
   exit is the set's own, read from it where it is made - run again, kept
