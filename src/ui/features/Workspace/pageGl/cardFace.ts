@@ -70,6 +70,8 @@ export type CardFaceOf = {
   words: number;
   /** Its inputs' names, beside their ports on its left, where it takes more than one. */
   inputs: readonly string[];
+  /** How tall it is at least, in page px: as its kind's ports make it (workflow/kinds `cardHighOf`) - `CARD.h` where none is given. */
+  high?: number;
   opacity?: number;
   z?: number;
 };
@@ -84,13 +86,13 @@ export function clamped(text: string, sizePx: number, maxPx: number, most: numbe
 }
 
 /** How a card's words lie: each block's lines and the card's height, in page px (`cardFace`). */
-export function cardLines(c: Pick<CardFaceOf, "summary" | "state" | "said" | "progress">): { summary: string[]; state: string[]; height: number; words: number } {
+export function cardLines(c: Pick<CardFaceOf, "summary" | "state" | "said" | "progress" | "high">): { summary: string[]; state: string[]; height: number; words: number } {
   const col = CARD.w - 2 * CARD.hair - 2 * CARD.side - CARD.icon - CARD.gap;
   const summary = clamped(c.summary, 11, col, 2);
   const state = clamped(c.state.text, 11, col, 2);
   const words = CARD.top + CARD.whoLine + summary.length * CARD.line + CARD.stateTop + state.length * CARD.line + (c.said ? CARD.line : 0) + (c.progress != null ? CARD.barTop + CARD.bar : 0) + CARD.bottom;
   // (its words in a grid at least as tall as a card, inside its hair of padding: as its HTML, StepCard)
-  return { summary, state, height: Math.max(CARD.h, words) + 2 * CARD.hair, words };
+  return { summary, state, height: Math.max(c.high ?? CARD.h, words) + 2 * CARD.hair, words };
 }
 
 /** A card as drawn: its box, words, icons and the places that take the pointer, and how tall it is; the tip, where its state is pointed at. */
@@ -152,10 +154,11 @@ export function cardFace(c: CardFaceOf, statePointed = false): CardDrawn {
   }
   // its icons alone and large, where its words are too small to read: in the middle of its least height
   if (c.words < 1) {
+    const mid = (c.high ?? CARD.h) / 2;
     const both = CARD.big + (c.state.icon ? CARD.bigGap + CARD.bigState : 0);
     const from = CARD.w / 2 - both / 2;
-    icon("big", c.icon, from + CARD.big / 2, CARD.h / 2, CARD.big, COLORS.ink, 1 - c.words);
-    if (c.state.icon) icon("bigState", c.state.icon, from + CARD.big + CARD.bigGap + CARD.bigState / 2, CARD.h / 2, CARD.bigState, tone, 1 - c.words, c.state.turning);
+    icon("big", c.icon, from + CARD.big / 2, mid, CARD.big, COLORS.ink, 1 - c.words);
+    if (c.state.icon) icon("bigState", c.state.icon, from + CARD.big + CARD.bigGap + CARD.bigState / 2, mid, CARD.bigState, tone, 1 - c.words, c.state.turning);
   }
   // its inputs' names, outside it: right of them 8 px off its left edge, half a port's step above each port
   if (c.inputs.length > 1)

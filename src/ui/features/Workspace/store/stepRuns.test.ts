@@ -413,6 +413,51 @@ describe("a step that runs a plugin's program", () => {
     expect(made.st().steps.find((s) => s.id === c)!.ran).toMatchObject({ ok: false, said: expect.stringContaining("The Confsweep plugin holds no distances: distance 2-3") });
   });
 
+  it("gives an optimisation to a saddle point the restraints wired into its fourth input for each guess - refused, in words, where its plugin holds none of their kind", async () => {
+    useReaders.setState({ state: { quanta: "added" }, problem: {} });
+    installedAt.quanta = "/Applications/quanta_4/quanta";
+    // (water tagged, given its restraints by Restraints as a table; the tagged water the guess Quanta - which holds atoms fixed - optimises)
+    const page = async (restraints: Record<string, unknown>) => {
+      const made = editor();
+      const t = made.st().addStep("tag", "meno", 3, 0);
+      made.st().updateStep(t, { options: { name: "start" } });
+      made.st().connect({ set: made.st().sets[0].id }, t);
+      await made.st().runStep(t);
+      const tagged = made.st().sets.find((b) => b.made?.step === t && b.made.exit === "out")!.id;
+      const r = made.st().addStep("restraints", "meno", 5, 0);
+      made.st().updateStep(r, { options: { on: "start", coordination: false, ...restraints } });
+      made.st().connect({ set: tagged }, r);
+      await made.st().runStep(r);
+      const step = made.st().addStep("saddle-point", "quanta", 20, 0);
+      made.st().connect({ set: tagged }, step, "guesses");
+      made.st().connect({ set: made.st().sets.find((b) => b.made?.step === r && b.made.exit === "out")!.id }, step, RESTRAINTS_INPUT.id);
+      return { ...made, step };
+    };
+    {
+      const { st, step } = await page({ fixed: "1, 3" });
+      worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "quanta", args: ["input.inp"], files: [{ name: "input.inp", text: "# SADDLE\n" }], reads: [] }] }) as never);
+      const ran = st().runStep(step);
+      await settle();
+      await settle();
+      const sent = worker.prepare.mock.lastCall as unknown as unknown[];
+      expect(sent[0]).toBe("saddle-point");
+      expect((sent[1] as { restraints?: { kind: string; atoms: number[] }[] }[])[0].restraints).toEqual([{ kind: "fixed", atoms: [0, 2] }]);
+      expect(sent[2]).toMatchObject({ hold: "fixed" });
+      Object.assign(jobs.get(idOf(1))!, { state: "failed", started: 1000, ended: 2000, files: {} });
+      await st().lookAtJobs();
+      await ran;
+    }
+    worker.prepare.mockClear();
+    jobs.clear();
+    next = 1;
+    {
+      const { st, step } = await page({ fixed: "1", distances: "2-3" });
+      await st().runStep(step);
+      expect(worker.prepare).not.toHaveBeenCalled();
+      expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: expect.stringContaining("plugin holds no distances: distance 2-3") });
+    }
+  });
+
   it("refuses a step of a page saved holding its atoms fixed, until a table of them is wired in", async () => {
     const { st, step } = editor();
     st().updateStep(step, { options: { hold: "fixed" } });

@@ -8,6 +8,7 @@ import { CHECK_OPTIONS } from "./checkStructures";
 import { STEREO_OPTIONS } from "./stereoisomers";
 import { deltaOf, levelsTyped } from "../../../../lib/energyDiagram";
 import { MOST_PAIRS } from "./mostPairs";
+import { cardHigh } from "./look";
 import { numberText } from "../../../../lib/calc/results";
 import { shownOptions, type Option, type OptionValues } from "../../../../lib/options";
 import type { SetKind, StepKind, ValueKind } from "../../../../lib/plugins/steps";
@@ -244,7 +245,8 @@ export const KINDS: readonly KindInfo[] = [
   },
   {
     // (a guess optimised to a saddle point by its program - with the reactant and product sides, where both are wired, each paired with
-    //  it as its own options say: one optimisation, nothing else; Meno judges none of them a saddle point - docs/WORKFLOWS.md)
+    //  it as its own options say, and the restraints wired in for it held, as its plugin holds them: one optimisation, nothing else;
+    //  Meno judges none of them a saddle point - docs/WORKFLOWS.md. Four inputs: its card one port's step taller - look `cardHigh`)
     kind: "saddle-point",
     name: "Optimise to a saddle point",
     icon: "saddle", family: "paths",
@@ -256,6 +258,7 @@ export const KINDS: readonly KindInfo[] = [
       { id: "guesses", name: "Guesses", takes: ["molecules"] },
       { id: "reactant", name: "Reactant side", takes: ["molecules"], optional: true, together: "product" },
       { id: "product", name: "Product side", takes: ["molecules"], optional: true, together: "reactant" },
+      RESTRAINTS_INPUT,
     ],
     others: [FAILED],
     whole: true,
@@ -1502,6 +1505,9 @@ export function exitOf(kind: StepKind, exit: string): StepExit {
   const exits = exitsOf(kind);
   return exits.find((e) => e.id === exit) ?? exits[0];
 }
+
+/** How tall a card of `kind` is closed (look `cardHigh`): as many port rows as it has inputs down its left or exits down its right, the more of the two. */
+export const cardHighOf = (kind: StepKind): number => cardHigh(Math.max(inputsOf(kind).length, exitsOf(kind).length));
 
 /** Where `exit` is among its kind's exits, from 0 - its port's place down the card's right side (look `stepGives`): the first's, where the kind has no such exit, as `exitOf` takes it. */
 export const exitPlace = (kind: StepKind, exit: string): number => Math.max(0, exitsOf(kind).findIndex((e) => e.id === exit));

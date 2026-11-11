@@ -33,7 +33,7 @@ import { DURATION, EASE, eased } from "../../../theme/motion";
 import { canWire, entryOnPage, givesOf, stateOf, stepsRun, wireInto, wireRefusal } from "../workflow/flow";
 import { addHow } from "../workflow/addStep";
 import { droppedBy, namesOf } from "../workflow/earlierRuns";
-import { exitsOf, howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
+import { cardHighOf, exitsOf, howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
 import { exitStart } from "../workflow/place";
 import { useReaders } from "../../../../lib/calc/workers";
 import { QUIET_AFTER_MIN, useAppSettings } from "../../../../lib/settings/appSettings";
@@ -1208,6 +1208,7 @@ export default function Workflow2D() {
           selected: selFlow.steps.has(s.id),
           words,
           inputs: inputs.length > 1 && !under ? inputs.map((p) => p.name) : [],
+          high: cardHighOf(s.kind) / PX,
         });
       }
       if (openStep !== s.id && shutting !== s.id) return [];
@@ -1491,7 +1492,7 @@ export default function Workflow2D() {
   };
 
   // the wires: each drawn, and each step's to the set it made - each going round what it leaves and comes into, where it comes back (a step's card as it stands shut: where wires join it, look `wireCurve`)
-  const cardFrame = (s: WorkflowStep): Frame => ({ x0: s.x, x1: s.x + CARD_W, y0: s.y - CARD_H, y1: s.y });
+  const cardFrame = (s: WorkflowStep): Frame => ({ x0: s.x, x1: s.x + CARD_W, y0: s.y - cardHighOf(s.kind), y1: s.y });
   const around = [...onPage.map(shownOf), ...steps.map(cardFrame)];
 
   // (each wire with the sets and cards near it, which it may go round, and those as one number: worked out again only where it or they moved - look `nearWire`, `wireKey`)
