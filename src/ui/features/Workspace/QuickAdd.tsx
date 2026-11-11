@@ -291,7 +291,7 @@ export default function QuickAdd({
                     ? (e) => togglesOn(e.detail) && setOpen((o) => toggledPanel(o, c.id as QuickPanel))
                     : () => onChoose(c.id as QuickAddChoice)
               }
-              className={`relative rounded-md flex items-center justify-center text-gh-black transition-colors duration-150 ease-meno ${opens(c.id) && open === c.id ? "bg-gh-base" : "hover:bg-gh-base"}`}
+              className={`meno-press relative rounded-md flex items-center justify-center text-gh-black transition-colors duration-150 ease-meno ${opens(c.id) && open === c.id ? "bg-gh-base" : "hover:bg-gh-base"}`}
               style={{ width: SIZE, height: SIZE }}
             >
               <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -311,7 +311,7 @@ export default function QuickAdd({
             aria-expanded={calcOpen}
             title="Calculations"
             onClick={(e) => togglesOn(e.detail) && setOpen((o) => (o === "calculations" ? "none" : "calculations"))}
-            className={`rounded-md flex items-center justify-center text-gh-black transition-colors duration-150 ease-meno ${calcOpen ? "bg-gh-base" : "hover:bg-gh-base"}`}
+            className={`meno-press rounded-md flex items-center justify-center text-gh-black transition-colors duration-150 ease-meno ${calcOpen ? "bg-gh-base" : "hover:bg-gh-base"}`}
             style={{ width: SIZE, height: SIZE }}
           >
             {/* (as heavy as the glyphs beside it, drawn on a 20-unit square) */}
@@ -536,7 +536,7 @@ function RowIcon({ name, icon, onClick, onPointerDown }: { name: string; icon: R
       title={name}
       onClick={onClick}
       onPointerDown={onPointerDown}
-      className="rounded-md flex items-center justify-center text-gh-black hover:bg-gh-base transition-colors duration-150 ease-meno"
+      className="meno-press rounded-md flex items-center justify-center text-gh-black hover:bg-gh-base transition-colors duration-150 ease-meno"
       style={{ width: SIZE, height: SIZE }}
     >
       <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
