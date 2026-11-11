@@ -383,9 +383,11 @@ split on.
   each four different atoms, held at the angle typed (°, taken into
   (−180°, 180°]: −180 is written 180). The angle has no default: it is the
   chemist's. A torsion with no angle to hold refuses the entry: one whose
-  second or third atom is linear by its bonds - a triple bond on it, or two
-  double bonds (an alkyne's, a nitrile's carbon, a cumulene's centre, CO2's
-  C, an azide's central N: sp, linear by VSEPR), however little bent it
+  second or third atom is linear by its bonds - a triple bond on it (an
+  alkyne's, a nitrile's carbon), or two double bonds and no other neighbour
+  at a carbon or an N⁺ (a cumulene's centre, CO2's C, an azide's central N;
+  not a sulfone's S nor SO2's, which are not linear): sp, linear by VSEPR -
+  however little bent it
   stands (the torsion is the angle between planes 1-2-3 and 2-3-4, Moss
   1996); and, Meno's numerical guard for anything else, three of its atoms
   within 1° of a straight line (`LINE_WITHIN`: an end atom moved 0.01 Å at

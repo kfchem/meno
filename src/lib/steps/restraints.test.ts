@@ -353,6 +353,25 @@ describe("Torsion restraints", () => {
       ],
     );
     expect(torsionRowsTyped(allene, [[0, 1, 2, 3]], 90, { strength: 50 })).toEqual({ failed: "C3 is linear by its bonds (two double bonds): the torsion 1-2-3-4 has no angle to hold." });
+    // (a sulfone's S, two S=O and tetrahedral: dimethyl sulfone's H-C-S-C is a torsion to hold)
+    const sulfone = entry(
+      [
+        ["H", -0.5, 0.9, 0.4],
+        ["C", 0, 0, 0],
+        ["S", 1.78, 0, 0],
+        ["C", 2.38, 1.69, 0],
+        ["O", 2.25, -0.7, 1.2],
+        ["O", 2.25, -0.7, -1.2],
+      ],
+      [
+        { a1: 0, a2: 1, order: 1 },
+        { a1: 1, a2: 2, order: 1 },
+        { a1: 2, a2: 3, order: 1 },
+        { a1: 2, a2: 4, order: 2 },
+        { a1: 2, a2: 5, order: 2 },
+      ],
+    );
+    expect(torsionRowsTyped(sulfone, [[0, 1, 2, 3]], 180, { strength: 50 })).toMatchObject({ rows: [{ restraint: { kind: "dihedral", atoms: [0, 1, 2, 3] } }] });
     // (three single-bonded atoms within 1° of a line: Meno's numerical guard)
     const flat = entry(
       [
