@@ -134,8 +134,10 @@ merged; the step says so. A conformer set's compounds stay apart: *Second*'s
 are numbered on after *First*'s. *Keep* is *All*, or *One of each* value of
 a property: the first met is kept, and each later one is set aside, naming
 the one kept ("the same start as a #1, which was kept"). One with no value
-of it is set aside too, saying so. More than two sets are merged by chaining
-Merges. One input that holds nothing - a branch that gave none this time, a
+of it is set aside too, saying so. *All* does what several wires into one
+input do (WORKFLOWS.md, *Several wires into one input*), and the card says
+so; any number of sets wired into one input come in one after another,
+each entry naming the set it came from. One input that holds nothing - a branch that gave none this time, a
 step's second exit that none went out of - adds nothing: the other's
 entries come out, and the line says so ("nothing came from
 First"). Both empty, nothing is merged, and the step says so.
