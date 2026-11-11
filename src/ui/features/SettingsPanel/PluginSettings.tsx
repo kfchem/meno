@@ -21,7 +21,7 @@ import { KINDS } from "../Workspace/workflow/kinds";
 import { actOnFiles, filesCanGo, filesView, type FilesAsked } from "./pluginFiles";
 import { kindById } from "../../../lib/io/kinds";
 import { useCheckingFiles, useDownloads } from "../../../lib/pyEnv";
-import { updatable, updateEach } from "./updateAll";
+import { updatable, updatedSaid, updateEach, updateOne as updateWith } from "./updateAll";
 
 /** A list in words: "a", "a and b", "a, b and c". */
 const listOf = (names: readonly string[]) => (names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`);
@@ -54,12 +54,17 @@ export default function PluginSettings() {
   // (those with a newer version online, all updated one after another from the one button)
   const updates = updatable(offers, states);
   const [updating, setUpdating] = useState(false);
-  const [updatedSaid, setUpdatedSaid] = useState<string | null>(null);
+  const [updatedLine, setUpdatedLine] = useState<string | null>(null);
   const updateAll = () => {
     setUpdating(true);
-    setUpdatedSaid(null);
-    updateEach(updates, (o) => updateOne(o.entry, states[o.entry.id], ALL_PLUGINS.find((p) => p.id === o.entry.id)!))
-      .then(({ done, failed }) => setUpdatedSaid(failed ? `${done} of ${done + failed} updated; ${failed === 1 ? "one" : failed} did not - its card says why.` : null))
+    setUpdatedLine(null);
+    // (each with the plugin it is of: one gone from the list since is passed over)
+    const each = updates.flatMap((o) => {
+      const was = ALL_PLUGINS.find((p) => p.id === o.entry.id);
+      return was ? [{ entry: o.entry, was }] : [];
+    });
+    updateEach(each, (u) => updateOne(u.entry, states[u.entry.id], u.was))
+      .then((out) => setUpdatedLine(updatedSaid(out)))
       .finally(() => setUpdating(false));
   };
   useEffect(() => {
@@ -73,7 +78,7 @@ export default function PluginSettings() {
   }, []);
   return (
     <div className="space-y-3">
-      <OnlineList online={online} offered={offers.length} updates={updates.length} updating={updating} updated={updatedSaid} onUpdateAll={updateAll} />
+      <OnlineList online={online} offered={offers.length} updates={updates.length} updating={updating} updated={updatedLine} onUpdateAll={updateAll} />
       {/* (those that run nothing, first) */}
       {[...ALL_PLUGINS.filter((p) => !runs(p)), ...ALL_PLUGINS.filter(runs)].map((p) => (
         <Plugin key={p.id} plugin={p} state={states[p.id]} problem={problems[p.id]} offer={offers.find((o) => o.entry.id === p.id)} locked={updating} />
@@ -196,11 +201,8 @@ function OnlinePlugin({ offer }: { offer: Offer }) {
 }
 
 /** A plugin's newer version got, then set up again only where it was added and its environment is no longer the one it needs. */
-async function updateOne(entry: CatalogueEntry, state: string | undefined, was: AnyPlugin): Promise<void> {
-  await getPlugin(entry);
-  const now = anyPluginById(was.id) ?? was;
-  if (state === "added" && !(await addedReaders([now])).has(now.id)) await addPlugin(now);
-}
+const updateOne = (entry: CatalogueEntry, state: string | undefined, was: AnyPlugin) =>
+  updateWith(entry, state, was, { get: getPlugin, now: anyPluginById, setUp: addedReaders, add: addPlugin });
 
 /** A plugin: what it is and does, whether it is added, the button that adds it or takes it away - and the one that updates it, where the list online has a newer version. */
 function Plugin({ plugin: p, state, problem, offer, locked = false }: { plugin: AnyPlugin; state?: string; problem?: string; offer?: Offer; locked?: boolean }) {
