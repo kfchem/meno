@@ -63,7 +63,7 @@ export function readConversations(v: unknown, left: () => void = () => leftOut("
   for (const raw of v as Record<string, unknown>[]) {
     const rights = rightsOf(raw?.rights);
     const frame = raw && num(raw.x0) && num(raw.y0) && num(raw.x1) && num(raw.y1) && (raw.x1 as number) > (raw.x0 as number) && (raw.y1 as number) > (raw.y0 as number);
-    if (!frame || !rights || (raw.connection != null && !(typeof raw.connection === "string" && ID.test(raw.connection))) || (raw.name != null && !text(raw.name, 200))) {
+    if (!frame || !rights || (raw.connection != null && !(typeof raw.connection === "string" && ID.test(raw.connection)))) {
       left();
       continue;
     }
@@ -80,7 +80,6 @@ export function readConversations(v: unknown, left: () => void = () => leftOut("
       x1: raw.x1 as number,
       y1: raw.y1 as number,
       ...(raw.wholePage === true ? { wholePage: true as const } : {}),
-      ...(raw.name ? { name: raw.name as string } : {}),
       rights,
       ...(raw.connection ? { connection: raw.connection as string } : {}),
       said,

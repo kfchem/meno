@@ -228,3 +228,22 @@ describe("where a card lies in its frame", () => {
     expect(FRAME_LEAST).toEqual({ w: 456, h: 44 + 19 + 12 + 12 + 24 });
   });
 });
+
+describe("what is said of the changes waiting", () => {
+  it("is each note a quiet line in the attention colour under the chips, 6 below them or the note before", () => {
+    const state = { changed: true, notes: ["This makes Filter run again, when you next run it.", "The page has changed since: undo is yours, step by step."] };
+    const blocks = cardBlocks([], state);
+    expect(blocks).toEqual<CardBlock[]>([{ kind: "changes", notes: state.notes }]);
+    const l = cardLayout(blocks, 2 * CARD.side + 1000);
+    // (the changes line at 12 to 28, 6, the chips at 34 to 56, then each note: 6 below, 16 high - 62, 84)
+    expect(l.chips.map((c) => c.y)).toEqual([34, 34]);
+    expect(l.lines.map((x) => [text(x), x.y, x.runs[0].color])).toEqual([
+      ["It changed the page, as one undo step.", 12, COLORS.ink],
+      [state.notes[0], 62, COLORS.attention],
+      [state.notes[1], 84, COLORS.attention],
+    ]);
+    expect(l.height).toBe(84 + 16 + 12);
+    expect(cardBlocks([], { changed: true })).toEqual<CardBlock[]>([{ kind: "changes" }]);
+    expect(cardBlocks([], { notes: ["x"] })).toEqual([]);
+  });
+});

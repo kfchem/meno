@@ -21,24 +21,22 @@ export function addConversation(doc: WorkspaceDocument, frame: { x0: number; y0:
   return { ...doc, conversations: [...(doc.conversations ?? []), made], nextConversationId: id + 1 };
 }
 
-/** What may be changed of a conversation: its frame, whether it sees the whole page, its name, its rights, its connection (null: none). */
-export type ConversationPatch = { frame?: { x0: number; y0: number; x1: number; y1: number }; wholePage?: boolean; name?: string | null; rights?: Partial<Rights>; connection?: string | null };
+/** What may be changed of a conversation: its frame, whether it sees the whole page, its rights, its connection (null: none). */
+export type ConversationPatch = { frame?: { x0: number; y0: number; x1: number; y1: number }; wholePage?: boolean; rights?: Partial<Rights>; connection?: string | null };
 
 /** `doc` with the conversation `id` changed as `patch` says. */
 export function updateConversation(doc: WorkspaceDocument, id: number, patch: ConversationPatch): WorkspaceDocument {
   const at = (doc.conversations ?? []).findIndex((c) => c.id === id);
   if (at < 0) return doc;
   const was = doc.conversations![at];
-  const { wholePage: _w, name: _n, connection: _c, ...rest } = was;
+  const { wholePage: _w, connection: _c, ...rest } = was;
   const frame = patch.frame && finite(patch.frame.x0, patch.frame.y0, patch.frame.x1, patch.frame.y1) && patch.frame.x1 > patch.frame.x0 && patch.frame.y1 > patch.frame.y0 ? patch.frame : undefined;
   const whole = patch.wholePage ?? !!was.wholePage;
-  const name = patch.name === undefined ? was.name : patch.name ?? undefined;
   const connection = patch.connection === undefined ? was.connection : patch.connection ?? undefined;
   const next: Conversation = {
     ...rest,
     ...(frame ?? {}),
     ...(whole ? { wholePage: true as const } : {}),
-    ...(name ? { name } : {}),
     ...(connection ? { connection } : {}),
     rights: { ...was.rights, ...patch.rights },
   };

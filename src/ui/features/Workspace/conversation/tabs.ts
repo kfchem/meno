@@ -4,7 +4,7 @@ import { THIS_COMPUTER } from "./turn";
 import type { Conversation } from "./types";
 
 /**
- * What a conversation's tab says beside its name: where what lies inside its
+ * What a conversation's tab says - it has no name: where what lies inside its
  * frame may go - sent to the hosts its model plugin's manifest names (the
  * ones its consent names and Meno holds it to: modelConnection), or kept on
  * this computer (the scripted test model, `THIS_COMPUTER`) - while it talks too; or that it sends nothing (the maintainer,
@@ -16,6 +16,9 @@ export function statusOf(c: Conversation, talking: boolean): string {
   if (via.to === THIS_COMPUTER) return talking ? "Talking… · stays on this computer" : "Stays on this computer";
   return talking ? `Talking… · sending to ${via.to}` : `May be sent to ${via.to}`;
 }
+
+/** What the column's tab for a conversation read in it says: its icon alone, no name - a conversation has none - and what it is for those who point at it. */
+export const COLUMN_TAB = { name: "", title: "Conversation" } as const;
 
 /** Its tab's icon: something going away from this computer, a computer where it stays, or a conversation that sends nothing. */
 export function iconOf(c: Conversation): string {
@@ -31,6 +34,6 @@ export function conversationTabs(conversations: readonly Conversation[], o: { ho
     ...(c.wholePage ? { tabOnly: true as const } : { edges: true as const }),
     tone: o.shown === c.id ? "chosen" : o.hovered === c.id ? "hover" : "rest",
     outward: true as const,
-    tab: { icon: iconOf(c), name: c.name ?? "Conversation", status: statusOf(c, !!o.talking[c.id]?.running), ...(c.wholePage ? { warn: "Sees the whole page" } : {}) },
+    tab: { icon: iconOf(c), status: statusOf(c, !!o.talking[c.id]?.running), ...(c.wholePage ? { warn: "Sees the whole page" } : {}) },
   }));
 }

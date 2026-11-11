@@ -29,7 +29,7 @@ export type FrameTab = {
   outward?: true;
   /** How far its tone has come, eased (0 at rest, 1 pointed at, 2 chosen): an outward line's weight follows it. */
   level?: number;
-  tab: { icon: string; name: string; status?: string; warn?: string };
+  tab: { icon: string; name?: string; status?: string; warn?: string };
   /** Its icon only where its words are too small to read, standing in for them: a set's tab says its name alone, read. */
   iconWhenSmall?: true;
   edges?: true;

@@ -28,7 +28,6 @@ describe("a conversation, talked to from the page", () => {
 
   it("keeps the column open on it as the page changes, and as what is said is kept", async () => {
     const { store, id } = page([{ text: "Hello." }]);
-    store.getState().updateConversation(id, { name: "Esters" });
     store.getState().addPlus(1, 1);
     await store.getState().sendToConversation(id, "Hi");
     expect(store.getState()).toMatchObject({ conversationShown: id, textsOpen: true });

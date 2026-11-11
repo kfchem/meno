@@ -41,7 +41,6 @@ export type Conversation = {
   x1: number;
   y1: number;
   wholePage?: true;
-  name?: string;
   rights: Rights;
   /** The plugin it talks through, by its id; none, and it sends nothing. */
   connection?: string;

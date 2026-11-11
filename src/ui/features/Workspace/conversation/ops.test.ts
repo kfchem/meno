@@ -13,9 +13,9 @@ describe("a conversation on the page", () => {
     expect(doc.getState().conversations).toEqual([{ id: 1, x0: 0, y0: 0, x1: 20, y1: 10, rights: NEW_RIGHTS, said: [], sent: [] }]);
     // (no frame of its own: none put down)
     expect(addConversation(doc.getState(), { x0: 5, y0: 0, x1: 5, y1: 10 })).toBe(doc.getState());
-    doc.edit("whole page", (d) => updateConversation(d, 1, { wholePage: true, rights: { propose: true }, connection: "a-model", name: "Ideas" }));
-    expect(doc.getState().conversations![0]).toMatchObject({ wholePage: true, rights: { read: true, propose: true }, connection: "a-model", name: "Ideas" });
-    doc.edit("back", (d) => updateConversation(d, 1, { wholePage: false, connection: null, name: null }));
+    doc.edit("whole page", (d) => updateConversation(d, 1, { wholePage: true, rights: { propose: true }, connection: "a-model" }));
+    expect(doc.getState().conversations![0]).toMatchObject({ wholePage: true, rights: { read: true, propose: true }, connection: "a-model" });
+    doc.edit("back", (d) => updateConversation(d, 1, { wholePage: false, connection: null }));
     expect(doc.getState().conversations![0]).toEqual({ id: 1, x0: 0, y0: 0, x1: 20, y1: 10, rights: { read: true, propose: true }, said: [], sent: [] });
     doc.edit("gone", (d) => removeConversations(d, [1]));
     expect(doc.getState().conversations).toEqual([]);
@@ -41,6 +41,14 @@ describe("conversations as a file keeps them", () => {
 
   it("are read back as written", () => {
     expect(readConversations([saved])).toEqual([saved]);
+  });
+
+  it("have no name: one an old file gives is not read, and the conversation opens without it - however odd that name was", () => {
+    for (const name of ["Esters", "", 7, { x: 1 }, "x".repeat(500)]) {
+      let left = 0;
+      expect(readConversations([{ ...saved, name }], () => left++)).toEqual([saved]);
+      expect(left).toBe(0);
+    }
   });
 
   it("leave out one not as Meno writes it, and a thing said that is not, the rest kept", () => {

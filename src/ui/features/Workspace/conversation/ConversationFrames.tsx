@@ -7,12 +7,21 @@ import { PX } from "../workflow/look";
 import { pageAt } from "../utils/page";
 import { ChatBubbleLeftRightIcon, CloudArrowUpIcon, ComputerDesktopIcon } from "@heroicons/react/24/outline";
 import { DURATION } from "../../../theme/motion";
-import FrameTabs from "../pageGl/FrameTabs";
+import FrameTabs, { FRAMES_ORDER } from "../pageGl/FrameTabs";
+import PageLayer from "../pageGl/PageLayer";
+import { cardBlocks, cardLayout, type CardLayout } from "../pageGl/conversationCard";
+import { cardParts } from "../pageGl/conversationCardParts";
+import { useEasedValues } from "../pageGl/faded";
+import { wordsReadAt } from "../utils/pageScale";
+import { discardedSaid, runsAgainSaid } from "./changesSaid";
 import { addPageIcon } from "../pageGl/icons";
 import type { FrameTab } from "../pageGl/frameParts";
 import { fading, presenceAt, presentAt, type Present } from "../pageGl/presence";
 import type { PagePointer } from "../pageGl/PageHits";
-import type { Side } from "../pageGl/hits";
+import type { Region, Side } from "../pageGl/hits";
+import type { Shape } from "../pageGl/shapes";
+import type { PageText } from "../pageGl/texts";
+import type { Said } from "./types";
 import { conversationTabs } from "./tabs";
 
 addPageIcon("chat", (size) => <ChatBubbleLeftRightIcon width={size} height={size} strokeWidth={1.5} />);
@@ -22,6 +31,9 @@ addPageIcon("this-computer", (size) => <ComputerDesktopIcon width={size} height=
 
 /** A tone's level: 0 at rest, 1 pointed at, 2 chosen - an outward frame's line weighs more as it rises (pageGl/frameParts `frameLine`). */
 const LEVEL = { rest: 0, hover: 1, chosen: 2 } as const;
+
+/** Where a card is drawn among the page's WebGL: over its frame's line and under the steps' cards - the frame's order, a little over it. */
+const CARD_ORDER = FRAMES_ORDER + 0.25;
 
 /** How small a frame may be sized, each way: as a set's (components/Workflow2D). */
 const LEAST = 48 * PX;
@@ -42,7 +54,14 @@ export default function ConversationFrames() {
   const hovered = useEditor((s) => s.hoveredConversation);
   const shown = useEditor((s) => s.conversationShown);
   const talking = useEditor((s) => s.talking);
+  const steps = useEditor((s) => s.steps);
   const { gl, camera } = useThree();
+  // (its words read, or its turns alone: switched past their threshold as the zoom goes, as a frame's tab words are)
+  const readRef = useRef(wordsReadAt(camera.zoom, true));
+  const [read, setRead] = useState(readRef.current);
+  // (why Discard left a conversation's changes as they were, said on its card)
+  const [discarded, setDiscarded] = useState<Record<number, string | null>>({});
+  const laid = useRef(new Map<number, { said: readonly Said[]; key: string; layout: CardLayout }>());
   const live = useMemo(() => conversationTabs(conversations, { hovered, shown, talking }), [conversations, hovered, shown, talking]);
   // (each coming in and going out over Meno's base time - one gone drawn as it last was till it has: pageGl/presence)
   const present = useRef<Map<string, Present<FrameTab>> | null>(null);
@@ -66,6 +85,11 @@ export default function ConversationFrames() {
     levels.current.set(t.key, next);
   }
   useFrame(() => {
+    const now = wordsReadAt(camera.zoom, readRef.current);
+    if (now !== readRef.current) {
+      readRef.current = now;
+      setRead(now);
+    }
     if (easing || (present.current && fading(present.current, performance.now()))) redraw((n) => n + 1);
   });
   const items = [...present.current.values()].map((p) => ({
@@ -75,6 +99,40 @@ export default function ConversationFrames() {
     ...(p.gone != null ? { noHits: true as const } : {}),
   }));
   const byKey = (key: string) => conversations.find((c) => `conversation:${c.id}` === key);
+  // (each conversation's card: laid out again only where what was said, or the state of its changes, changed - never as its frame is moved)
+  const shownCards = items.flatMap((it) => {
+    const c = byKey(it.key);
+    return c && !c.wholePage ? [{ it, c }] : [];
+  });
+  for (const id of [...laid.current.keys()]) if (!conversations.some((c) => c.id === id && !c.wholePage)) laid.current.delete(id);
+  const words = useEasedValues(new Map(shownCards.map(({ it }) => [it.key, read ? 1 : 0])), DURATION.quick * 1000);
+  const parts = { shapes: [] as Shape[], texts: [] as PageText[], regions: [] as Region[] };
+  for (const { it, c } of shownCards) {
+    const running = !!talking[c.id]?.running;
+    const changed = !!talking[c.id]?.changed;
+    const notes = changed ? [runsAgainSaid(talking[c.id]?.runsAgain, steps), discarded[c.id] ?? null].flatMap((n) => n ?? []) : [];
+    const key = `${running}|${changed}|${notes.join("\n")}`;
+    let had = laid.current.get(c.id);
+    if (!had || had.said !== c.said || had.key !== key) {
+      had = { said: c.said, key, layout: cardLayout(cardBlocks(c.said, { running, changed, notes })) };
+      laid.current.set(c.id, had);
+    }
+    const drawn = cardParts({
+      key: it.key,
+      frame: { x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1 },
+      layout: had.layout,
+      // (the newest at the bottom, as it is said: scrolling it is the card's own to come)
+      offset: Infinity,
+      words: words.get(it.key) ?? 1,
+      turns: c.said.filter((s) => s.by === "person").length,
+      running,
+      changed,
+      opacity: it.opacity,
+    });
+    parts.shapes.push(...drawn.shapes);
+    parts.texts.push(...drawn.texts);
+    if (!it.noHits) parts.regions.push(...drawn.regions);
+  }
 
   /** Where a pointer is on the page. */
   const pageOf = (e: PointerEvent) => {
@@ -101,52 +159,75 @@ export default function ConversationFrames() {
   };
 
   return (
-    <FrameTabs
-      items={items}
-      on={{
-        // (its tab: the frame dragged alone - what lies inside it is what then lies there - or, clicked, read in the column)
-        tabDown: (key, e) => {
-          const c = byKey(key);
-          if (!c) return;
-          let last = e.page;
-          const gesture = `${performance.now()}`;
-          follow(
-            e,
-            (p) => {
-              store.getState().moveConversation(c.id, p.x - last.x, p.y - last.y, gesture);
-              last = p;
-            },
-            (moved) => !moved && store.getState().readConversation(c.id),
-          );
-        },
-        // (an edge or a corner: its frame sized - what it sees is what then lies inside it)
-        edgeDown: (key, side: Side, e) => {
-          const c = byKey(key);
-          if (!c) return;
-          const was = { x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1 };
-          const gesture = `${performance.now()}`;
-          follow(
-            e,
-            (p) => {
-              const dx = p.x - e.page.x;
-              const dy = p.y - e.page.y;
-              const f = { ...was };
-              if (side.includes("e")) f.x1 = Math.max(was.x1 + dx, was.x0 + LEAST);
-              if (side.includes("w")) f.x0 = Math.min(was.x0 + dx, was.x1 - LEAST);
-              if (side.includes("n")) f.y1 = Math.max(was.y1 + dy, was.y0 + LEAST);
-              if (side.includes("s")) f.y0 = Math.min(was.y0 + dy, was.y1 - LEAST);
-              store.getState().resizeConversation(c.id, f, gesture);
-            },
-            () => {},
-          );
-        },
-        hover: (key, on) => {
-          const c = byKey(key);
-          const st = store.getState();
-          if (c && on) st.setHoveredConversation(c.id);
-          else if (c && st.hoveredConversation === c.id) st.setHoveredConversation(null);
-        },
-      }}
-    />
+    <>
+      <PageLayer
+        shapes={parts.shapes}
+        texts={parts.texts}
+        regions={parts.regions}
+        order={CARD_ORDER}
+        on={{
+          // (a chip of the changes waiting: kept, or let go of - and said, where it cannot be)
+          down: (key, part) => {
+            const c = byKey(key);
+            if (!c) return;
+            const st = store.getState();
+            if (part === "keep") {
+              st.keepConversationChanges(c.id);
+              setDiscarded((d) => ({ ...d, [c.id]: null }));
+            } else if (part === "discard") {
+              const said = discardedSaid(st.discardConversationChanges(c.id));
+              setDiscarded((d) => ({ ...d, [c.id]: said }));
+            }
+          },
+        }}
+      />
+      <FrameTabs
+        items={items}
+        on={{
+          // (its tab: the frame dragged alone - what lies inside it is what then lies there - or, clicked, read in the column)
+          tabDown: (key, e) => {
+            const c = byKey(key);
+            if (!c) return;
+            let last = e.page;
+            const gesture = `${performance.now()}`;
+            follow(
+              e,
+              (p) => {
+                store.getState().moveConversation(c.id, p.x - last.x, p.y - last.y, gesture);
+                last = p;
+              },
+              (moved) => !moved && store.getState().readConversation(c.id),
+            );
+          },
+          // (an edge or a corner: its frame sized - what it sees is what then lies inside it)
+          edgeDown: (key, side: Side, e) => {
+            const c = byKey(key);
+            if (!c) return;
+            const was = { x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1 };
+            const gesture = `${performance.now()}`;
+            follow(
+              e,
+              (p) => {
+                const dx = p.x - e.page.x;
+                const dy = p.y - e.page.y;
+                const f = { ...was };
+                if (side.includes("e")) f.x1 = Math.max(was.x1 + dx, was.x0 + LEAST);
+                if (side.includes("w")) f.x0 = Math.min(was.x0 + dx, was.x1 - LEAST);
+                if (side.includes("n")) f.y1 = Math.max(was.y1 + dy, was.y0 + LEAST);
+                if (side.includes("s")) f.y0 = Math.min(was.y0 + dy, was.y1 - LEAST);
+                store.getState().resizeConversation(c.id, f, gesture);
+              },
+              () => {},
+            );
+          },
+          hover: (key, on) => {
+            const c = byKey(key);
+            const st = store.getState();
+            if (c && on) st.setHoveredConversation(c.id);
+            else if (c && st.hoveredConversation === c.id) st.setHoveredConversation(null);
+          },
+        }}
+      />
+    </>
   );
 }

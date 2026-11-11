@@ -54,10 +54,11 @@ export type CardBlock =
   | { kind: "item"; marker: string; spans: Span[]; gap?: number }
   | { kind: "tool"; text: string; failed: boolean }
   | { kind: "note"; text: string }
-  | { kind: "changes" };
+  /** The changes waiting; `notes`, what is to be said of them in the attention colour - the steps they make run again, why Discard left them. */
+  | { kind: "changes"; notes?: string[] };
 
 /** What else the card says besides what was said: that the model is working, and that it changed the page, its changes waiting to be kept or discarded. */
-export type CardState = { running?: boolean; changed?: boolean };
+export type CardState = { running?: boolean; changed?: boolean; notes?: string[] };
 
 const BULLET = /^\s*(?:[-*•])\s+(.*)$/;
 const NUMBERED = /^\s*(\d+[.)])\s+(.*)$/;
@@ -120,7 +121,7 @@ export function replyBlocks(text: string): CardBlock[] {
 /**
  * What was said as blocks, in turn (`exchangeRows`): the person's words a question, the model's its paragraphs and lists, each of its
  * calls one line - what it did, and what came of it, in a line - Meno's own word a quiet line; then that it is working, and the
- * changes waiting - last, where the person looks for them.
+ * changes waiting, with what is said of them - last, where the person looks for them.
  */
 export function cardBlocks(said: readonly Said[], state: CardState = {}): CardBlock[] {
   const blocks: CardBlock[] = [];
@@ -135,7 +136,7 @@ export function cardBlocks(said: readonly Said[], state: CardState = {}): CardBl
     else if (s.by === "meno") blocks.push({ kind: "note", text: s.text });
   }
   if (state.running) blocks.push({ kind: "note", text: "Talking…" });
-  if (state.changed) blocks.push({ kind: "changes" });
+  if (state.changed) blocks.push({ kind: "changes", ...(state.notes?.length ? { notes: state.notes } : {}) });
   return blocks;
 }
 
@@ -213,6 +214,12 @@ export function cardLayout(blocks: readonly CardBlock[], widthPx: number = CARD.
         x += w + CARD.chip.gap;
       }
       y += CARD.chip.h;
+      for (const note of b.notes ?? []) {
+        y += CARD.chip.gap;
+        const said = wrapRuns([{ text: note, color: TEXT_TONE.failed }], CARD.quietSize, inner);
+        said.forEach((l, k) => put(l.runs, CARD.side, y + k * CARD.quietLine, CARD.quietSize, CARD.quietLine, l.width));
+        y += said.length * CARD.quietLine;
+      }
     }
   });
   return { lines, boxes, chips, height: y + CARD.bottom };
