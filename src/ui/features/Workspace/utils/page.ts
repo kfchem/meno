@@ -57,6 +57,18 @@ export function pageAt(ndcX: number, ndcY: number, camera: THREE.Camera): THREE.
   return near.lerp(far, near.z / (near.z - far.z));
 }
 
+/**
+ * Where the camera's middle goes for the page to slide on the screen by
+ * (`dx`, `dy`) px - right and down where positive - on a canvas `size` px
+ * across: to the point on the page that will be at the middle then. The
+ * zoom is as it is.
+ */
+export function middleAfterPan(camera: THREE.OrthographicCamera, size: { width: number; height: number }, dx: number, dy: number): { x: number; y: number } {
+  const here = pageAt(0, 0, camera);
+  const there = pageAt((-2 * dx) / size.width, (2 * dy) / size.height, camera);
+  return { x: camera.position.x + (there.x - here.x), y: camera.position.y + (there.y - here.y) };
+}
+
 /** Where on the page (its units) a point on the screen is, over the canvas `el` seen by `camera`. */
 export function pageAtScreen(screen: { x: number; y: number }, el: HTMLElement, camera: THREE.Camera): { x: number; y: number } {
   const r = el.getBoundingClientRect();

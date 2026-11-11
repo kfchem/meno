@@ -1031,6 +1031,7 @@ export const KINDS: readonly KindInfo[] = [
         type: "choice",
         choices: [
           { value: "one", label: "The one reference" },
+          { value: "order", label: "In order" },
           { value: "property", label: "Matched on" },
         ],
         default: "one",
@@ -1218,7 +1219,6 @@ export function atomMapNeeds(v: OptionValues): string | undefined {
   const side = (x: unknown) => x === "each" || x === "together";
   if (!side(v.moleculesAre)) return "Choose how the molecules are taken";
   if (!side(v.referenceIs)) return "Choose how the reference is taken";
-  if (v.reference === "property" && (v.moleculesAre === "together" || v.referenceIs === "together")) return "Matched on a property takes each entry on its own: set both inputs to each its own";
   if (v.reference === "property" && !String(v.property ?? "").trim()) return "Name the property to pair them on";
   if (v.bonds !== "change" && v.bonds !== "same") return "Choose whether bonds may change";
   return undefined;
@@ -1230,10 +1230,12 @@ export function atomMapHow(v: OptionValues): string {
   if (needs) return needs;
   // (an input taken each its own, the plain reading, unsaid - one taken as one side said; whether bonds may change, always)
   return [
-    ...(v.moleculesAre === "together" ? ["molecules as one side"] : []),
-    ...(v.referenceIs === "together" ? ["reference as one side"] : []),
+    // (matched on a property, together is one side for each value of it)
+    ...(v.moleculesAre === "together" ? [`molecules as one side${v.reference === "property" ? ` per ${String(v.property).trim()}` : ""}`] : []),
+    ...(v.referenceIs === "together" ? [`reference as one side${v.reference === "property" ? ` per ${String(v.property).trim()}` : ""}`] : []),
     v.bonds === "same" ? "bonds stay the same" : "bonds may change",
     ...(v.maps === "every" ? ["every map"] : []),
+    ...(v.reference === "order" ? ["in order"] : []),
     ...(v.reference === "property" ? [`matched on ${String(v.property).trim()}`] : []),
   ].join(", ");
 }

@@ -1869,6 +1869,9 @@ export type EditorState = {
   showRequest: { box: ShowBox; n: number } | null;
   /** The view to show `box`, as what was just put down is shown (`showRequest`). */
   requestShow: (box: ShowBox) => void;
+  /** The page slid on the screen by so many px, right and down where positive: a menu opened past the canvas's edge (menuAt). */
+  panRequest: { dx: number; dy: number; n: number } | null;
+  requestPan: (dx: number, dy: number) => void;
   autoFitSuspended: boolean;
   aromaticEnabled: boolean; // legacy/global
   aromaticRings: Record<string, boolean>; // per-ring enabled flags by ringKey

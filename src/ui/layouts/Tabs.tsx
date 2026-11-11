@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { useEffect, useRef, type RefObject } from "react";
 import { DURATION, EASE, EASE_SLIDE, FADE, LEAVE } from "../theme/motion";
 import { dragWithin, scrollToShow } from "./tabDrag";
+import { risesAfter, tabInitial, tabRoom, useMovedAlong, useRises } from "./tabMotion";
 
 export type TabMeta = { id: string; label: string; dirty?: boolean };
 
@@ -18,11 +19,6 @@ export type TabMeta = { id: string; label: string; dirty?: boolean };
  */
 /** How far the chosen tab's corners stand past its sides, in pixels (`Shoulders`). */
 const CORNER_PX = 8;
-/** A tab's width with room to spare, the least it narrows to (chosen, and not), and the gap after it, in pixels. */
-const TAB_PX = 192;
-const LEAST_PX = { chosen: 96, other: 32 };
-const GAP_PX = 4;
-
 export function TabStrip({
   tabOrder,
   tabsById,
@@ -39,6 +35,8 @@ export function TabStrip({
   close: (id: string) => void;
 }) {
   const draggingRef = useRef(false);
+  // (the tabs there were as the bar was first drawn come in as they are; those added after it rise)
+  const first = useRef(new Set(tabOrder));
   const stripRef = useRef<HTMLUListElement>(null);
   // (where a tab dragged may go: the strip as it is seen, within its padding - its last tab's place the furthest, so
   // that one dragged never runs into the padding and the strip scrolls under it. The last tab's gap and the padding
@@ -95,6 +93,8 @@ export function TabStrip({
               tab={tabsById[id]}
               selected={id === activeId}
               draggingRef={draggingRef}
+              rises={risesAfter(first.current, id)}
+              count={tabOrder.length}
               strip={stripRef}
               within={roomRef}
               onSelect={() => select(id)}
@@ -114,6 +114,8 @@ function Tab({
   tab,
   selected,
   draggingRef,
+  rises,
+  count,
   strip,
   within,
   onSelect,
@@ -122,6 +124,10 @@ function Tab({
   tab: TabMeta;
   selected: boolean;
   draggingRef: RefObject<boolean>;
+  /** Added after the bar was first drawn: it rises as it comes in. */
+  rises: boolean;
+  /** How many tabs there are: a tab moved along by a change of it is eased to its new place. */
+  count: number;
   /** The strip the tabs are laid in, scrolled or not. */
   strip: RefObject<HTMLUListElement | null>;
   /** The room a tab is dragged within: the strip as seen, which ends where "+" begins. */
@@ -134,6 +140,8 @@ function Tab({
   // (motion's own dragConstraints, given the room, left a tab closed meanwhile in the strip, unseen, taking up its room)
   const x = useMotionValue(0);
   const self = useRef<HTMLLIElement>(null);
+  useRises(self, rises);
+  useMovedAlong(self, count, "add");
   useEffect(
     () =>
       x.on("change", (v) => {
@@ -153,16 +161,10 @@ function Tab({
       value={tab.id}
       style={{ x }}
       data-tab={tab.id}
-      initial={{ opacity: 0, y: 30, width: 0, minWidth: 0, marginRight: 0 }}
-      animate={{
-        opacity: 1,
-        y: 0,
-        width: TAB_PX,
-        // (in a full bar, the chosen tab widening for its name and the one left narrowing, together)
-        minWidth: selected ? LEAST_PX.chosen : LEAST_PX.other,
-        marginRight: GAP_PX,
-        transition: { duration: DURATION.base, ease: EASE },
-      }}
+      // (its room is taken at once: it rises by transform and opacity, `useRises`, where the browser's compositor can run it
+      // as the page it opens mounts; and in a full bar the chosen tab widening for its name and the one left narrowing, together)
+      initial={tabInitial(selected)}
+      animate={{ ...tabRoom(selected), transition: { duration: DURATION.base, ease: EASE } }}
       exit={{ opacity: 0, y: 20, width: 0, minWidth: 0, marginRight: 0, transition: { ...LEAVE, width: SHUT, minWidth: SHUT, marginRight: SHUT } }}
       // Chosen or not, a tab goes over in the same time and the same
       // way as its curved corners, which are drawn beside it: the

@@ -341,7 +341,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Barrier | a barrier's height above its start, measured (drawn) | *Saddle points* and *Starts*: molecules in 3D, or conformer sets - each conformer one - each saddle point paired with a start - in order, each with each, or matched on a property | **molecules in 3D**: each saddle point with its `barrier`, in kcal/mol, of its free energy G (by default) or its electronic energy E above its start's, out of *With barriers*; one it cannot give one, out of *Failed*, saying why (*Barrier*, below) |
 | Number | a number typed in a field (drawn) | nothing | **a number** with its unit and what worked it out: the standard-state term, 1 atm to 1 mol/L, at its temperature, by its formula - or one typed (*Add and Number*, below) |
 | Add | two values summed (drawn) | *Molecules*: molecules in 3D, or conformer sets; *Number*, where wanted: a number | each entry with the sum of the values named - each of its own geometry, at one temperature and pressure - and the number wired in, written under the name given, each part as it was; those it cannot be worked out for out of *Not added*, saying why (*Add and Number*, below) |
-| Atom map | an atom, an arrow, the same atom after it, mapped (drawn) | *Molecules* and *Reference*: molecules in 3D with every hydrogen, each input's entries each a side of its own or one side together; whether bonds may change (a reaction) or stay the same (conformers of the reference) | **the same kind**: each side in the reference's numbering, atom for atom - by its first map, or by every map - out of *Mapped*; one that does not map one to one, or changes a bond that was to stay the same, out of *Not mapped*, saying why; the bonds each map forms, breaks or changes in order, **a table**, out of *Bond changes* (STRUCTURE-STEPS.md, *Atom map*) |
+| Atom map | an atom, an arrow, the same atom after it, mapped (drawn) | *Molecules* and *Reference*: molecules in 3D with every hydrogen, each input's entries each a side of its own or one side together (matched on a property, one side for each value of it); against the one reference, in order or matched on a property; whether bonds may change (a reaction) or stay the same (conformers of the reference) | **the same kind**: each side in the reference's numbering, atom for atom - by its first map, or by every map - out of *Mapped*; one that does not map one to one, or changes a bond that was to stay the same, out of *Not mapped*, saying why; the bonds each map forms, breaks or changes in order, **a table**, out of *Bond changes* (STRUCTURE-STEPS.md, *Atom map*) |
 | Displace | an atom moved along, where it stood dashed (drawn) | molecules in 3D with vibrations, or a conformer set | **the same kind of set**: each geometry moved along its imaginary vibration - or one by number - the atom moving most by the amplitude (Å) given; one with no such vibration out of *Not displaced*, saying why (STRUCTURE-STEPS.md, *Displace*) |
 | Ensemble energy | levels made one (drawn) | molecules in 3D, or conformer sets | each group's free energy over its members, -RT ln Σ g exp(-G/RT) at the temperature they state, written on its lowest; the others out of *The rest*, each saying whose ensemble it is in (*Ensemble energy*, below) |
 
@@ -2155,10 +2155,10 @@ Built, as the maintainer chose from pictures (decided: 18, 19):
   zoom. While the zoom moves they are written only once it has gone half
   a per cent from the last written (`zoomWritten`) - half a pixel on a
   card two hundred wide, not seen - and, once it stands still, as it is.
-- **Quick Add** opens where it will stay as a panel opens below its row -
-  its calculations, or the field a SMILES is typed in: its side is chosen
-  once, for its largest, and it is held by its top left corner, so that
-  nothing in it moves as the panel grows (`quickAddPlace.ts`).
+- **Quick Add** opens at its point, up and to the right of it, whatever its
+  size - never moved for it: where it would lie past the canvas the view
+  eases along (docs/EDITOR-2D.md, *Menus on the page*), so nothing in it moves
+  as a panel opens below its row.
 - **No *3D structure* step**: *Conformers* takes structures drawn - RDKit's
   search, in its worker, as *3D structures* on the canvas makes them, with the step's
   own options - and *Choose one*, Meno's, takes one conformer of each

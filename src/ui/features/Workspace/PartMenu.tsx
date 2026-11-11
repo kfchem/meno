@@ -3,7 +3,7 @@ import { SHAPE_WIDTHS_PT } from "../../../lib/chem/shapes";
 import { AnimatePresence, motion } from "motion/react";
 import { RISE } from "../../theme/motion";
 import { useLeaving } from "../../theme/leaving";
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { CheckIcon } from "@heroicons/react/24/outline";
 import { BOND_ICONS, MENU_ICONS } from "./menuIcons";
 import { withRules } from "./menuRules";
@@ -14,6 +14,8 @@ import { MAGNIFICATIONS, magnificationText } from "./utils/magnified";
 import { arrowMovesMenu, wheelClosesMenu } from "./utils/menuKeys";
 import { copying, writeClipboard } from "../../../lib/clipboard";
 import type { ChipCopy, CopyLine } from "./store/types";
+import { MENU_MARGIN, MENU_OFF } from "./menuAt";
+import { useMenuAt, type MenuAnchor } from "./useMenuAt";
 
 /** `text` put on the clipboard as words (a chip's Copy). */
 const copyText = (text: string) => copying(() => writeClipboard([{ flavor: "text", text }])).catch(() => {});
@@ -62,20 +64,15 @@ const MAC =
   /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 
 /**
- * The least width the menu takes, and each item's height, for keeping it
- * inside the canvas. It grows past that to fit its longest item on one line:
+ * The least width the menu takes. It grows past that to fit its longest item on one line:
  * a shortcut is written out on Windows (Ctrl+Shift+K) where a Mac has three
  * symbols, and an item that wrapped would spill into the one below it.
  */
 const WIDTH = 240;
-const ITEM = 32;
 /** Each icon's square along the top, as Quick Add's are, in px. */
 const ROW = 36;
 /** A compact row under the icons: the kinds of bond there are besides the common ones. */
 const ROW2 = 28;
-/** A note under a command: its line's height, and about how many of its letters a line of the menu holds. */
-const NOTE_LINE = 16;
-const NOTE_CHARS = 40;
 
 /** What the clipboard's items in the menu do. */
 export type MenuClipboard = {
@@ -263,8 +260,11 @@ export default function PartMenu({
   measure3d,
   magnify,
   onClose,
+  anchor,
 }: {
   target: MenuTarget;
+  /** The canvas, for the menu to stand at its point on the page and the view to ease along for it (useMenuAt). */
+  anchor?: MenuAnchor;
   /** The part deleted, or the selection when the menu is its. */
   onDelete: () => void;
   /** The part's structure cleaned up, or the selection's structures. */
@@ -537,16 +537,8 @@ export default function PartMenu({
   const [more, setMore] = useState(() => !!bondKind?.current && OTHER_BOND_KINDS.includes(bondKind.current));
   // the magnifications offered, as "Magnification" is pressed
   const [magnifying, setMagnifying] = useState(false);
-  // the width and height it came out at, so that the whole of it stays in the canvas (before it is drawn: no jump)
-  const [width, setWidth] = useState(WIDTH);
-  const [tall, setTall] = useState<number | null>(null);
-  useLayoutEffect(() => {
-    // (the same again changes nothing: React leaves it be)
-    const w = ref.current?.offsetWidth;
-    if (w) setWidth(w);
-    const h = ref.current?.offsetHeight;
-    if (h) setTall(h);
-  }, [target, radical]);
+  // opened at its point on the page, up and to the right; the view eases along where it would lie past the canvas (useMenuAt)
+  useMenuAt(ref, target, anchor);
   // (going, chosen from or closed: it does nothing more as it fades - theme/leaving)
   const { leaving, held } = useLeaving();
   // (opened: a guide's step waiting for it goes on)
@@ -1067,15 +1059,9 @@ export default function PartMenu({
   const compact = items.filter((i) => i.icon && i.compact);
   const row2 = more ? compact : [];
   const list = withRules(items.filter((i) => !i.icon));
-  // (a note under a command, said in as many lines as it takes at the menu's width)
-  const noteOf = (text?: string) => (text ? Math.ceil(text.length / NOTE_CHARS) * NOTE_LINE + 6 : 0);
   const stepNote = target.kind === "step" ? step?.note : undefined;
   // (words' size, line spacing and typeface, under the icons)
   const font = target.kind === "caption" ? words?.font : undefined;
-  // (reckoned from its rows, and as it came out once laid out - the words' font rows, say - the larger: a row opened since, Magnification's, reckoned)
-  const reckoned =
-    (row.length ? ROW + 9 : 0) + noteOf(stepNote) + (compact.length ? ROW2 + 4 : 0) + (magnifying ? ROW2 + 4 : 0) + list.length * ITEM + list.reduce((n, i) => n + noteOf(i.note), 0) + list.filter((i) => i.divider).length * 9 + 12;
-  const height = Math.max(tall ?? 0, reckoned);
   const run = (item: Item) => () => {
     if (!item.keep) onClose();
     item.run();
@@ -1135,8 +1121,11 @@ export default function PartMenu({
       tabIndex={-1}
       className="absolute z-50 rounded-md border border-gh-line bg-white py-1 shadow-lg text-sm text-gh-black outline-none"
       style={{
-        left: Math.max(0, Math.min(target.x, target.within.width - width - 8)),
-        top: Math.max(0, Math.min(target.y, target.within.height - height - 8)),
+        left: target.x + MENU_OFF,
+        top: target.y - MENU_OFF,
+        // (taller than the canvas: it scrolls inside)
+        maxHeight: target.within.height - 2 * MENU_MARGIN,
+        overflowY: "auto",
         minWidth: WIDTH,
       }}
       onMouseDown={(e) => e.stopPropagation()}
@@ -1171,7 +1160,7 @@ export default function PartMenu({
                     }
                   : undefined
               }
-              className={`${item.del ? "ml-auto " : ""}shrink-0 rounded-md flex items-center justify-center outline-none transition-colors duration-150 ease-meno disabled:text-gh-line disabled:hover:bg-transparent ${item.checked ? "bg-gh-base text-gh-black" : "text-gh-black hover:bg-gh-base focus:bg-gh-base"}`}
+              className={`${item.del ? "ml-auto " : ""}meno-press shrink-0 rounded-md flex items-center justify-center outline-none transition-colors duration-150 ease-meno disabled:text-gh-line disabled:hover:bg-transparent ${item.checked ? "bg-gh-base text-gh-black" : "text-gh-black hover:bg-gh-base focus:bg-gh-base"}`}
               style={{ width: ROW, height: ROW }}
             >
               {item.icon}
@@ -1211,7 +1200,7 @@ export default function PartMenu({
               aria-pressed={item.checked}
               title={item.name}
               onClick={run(item)}
-              className={`shrink-0 rounded-md flex items-center justify-center outline-none transition-colors duration-150 ease-meno ${item.checked ? "bg-gh-base text-gh-black" : "text-gh-black hover:bg-gh-base focus:bg-gh-base"}`}
+              className={`meno-press shrink-0 rounded-md flex items-center justify-center outline-none transition-colors duration-150 ease-meno ${item.checked ? "bg-gh-base text-gh-black" : "text-gh-black hover:bg-gh-base focus:bg-gh-base"}`}
               style={{ width: ROW2, height: ROW2 }}
             >
               <span className="scale-90">{item.icon}</span>
