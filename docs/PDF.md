@@ -325,6 +325,36 @@ PDFs there - one step, which an undo takes back. It is held as any other
   it*) is the workspace's, over its pages, not the PDF's - it stays with the
   PDF it was written on.
 
+## Printing
+
+- **Where**: *Print…* on a PDF's right-click menu (beside *Save as PDF…*), the
+  printer button in the column's header while the column shows a PDF, and
+  Ctrl/Cmd+P while it does.
+- **How it is printed**: each page is drawn by PDFium at 300 dots an inch
+  (the reader's `render`, the page whole), one picture a page, and laid out
+  in a document of its own that only the printer sees - the rest of Meno is
+  hidden from it - which the window's print gives to the system's own dialog.
+  Where to print, how many copies and which pages are that dialog's, as a
+  file dialog is the system's, not a control of Meno's. A page so large that
+  300 dots an inch would be more than 8191 dots along a side is drawn at the
+  most that fits.
+- **Memory**: the pages are drawn one at a time and held as pictures only
+  until the dialog is done with them; their addresses are let go of whether
+  it printed or was cancelled, or a page could not be drawn.
+- **What its author allows**: the PDF's permissions are read from the PDF
+  (`FPDF_GetDocPermissions`, with its security handler's revision: ISO 32000-1,
+  table 22, bits 3 and 12). Where printing is not allowed, the command is
+  shown, cannot be pressed, and says why: "Its author does not allow
+  printing". Where it is allowed only in a quality from which a faithful copy
+  could not be made (bit 3 set, bit 12 clear), the pages are drawn at 150 dots
+  an inch. A PDF whose permissions cannot be read is taken as not allowing
+  it. Never worked around. A PDF with no security handler, or with an owner
+  password alone that leaves printing on, prints.
+- **Not done**: a page is made to fit the paper, whole, as it lies: a
+  landscape page on portrait paper is printed small, until the dialog is
+  told *Landscape*. Pages are printed as pictures, so printed words cannot be
+  selected from the paper's PDF.
+
 ## A picture
 
 - **From anywhere**: a figure taken out of a PDF, an image file (PNG,

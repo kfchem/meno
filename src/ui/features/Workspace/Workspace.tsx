@@ -96,6 +96,8 @@ import SettingsStyleAsk from "./SettingsStyleAsk";
 import LargeWorkspaceAsk from "./LargeWorkspaceAsk";
 import { PdfNumbersCard, PdfPagesCard } from "./PdfMakeCards";
 import { combined, putBeside, savePdfFile } from "./pdfMake";
+import { printed, printingKnown } from "../../../lib/pdf/print";
+import { usePrinting } from "./hooks/usePrinting";
 import { listItem, stylesOf, wordsSet } from "../../../lib/chem/captions";
 import WordsFont from "./WordsFont";
 import { WordsEditor } from "./utils/wordsEditor";
@@ -124,7 +126,7 @@ import {
   isDeleteKey,
   isFitKey,
   isDeselectKey,
-  isFillKey, isFindKey,
+  isFillKey, isFindKey, isPrintKey,
   isSelectAllKey,
   IS_MAC,
   presentIntent,
@@ -712,6 +714,8 @@ function WorkspaceContent({
     [store],
   );
   const [menu, setMenu] = useState<MenuTarget | null>(null);
+  // (what the author of the PDF its menu is of allows of printing: found as the menu opens)
+  usePrinting(menu?.kind === "pdf" ? store.getState().pdfs.find((x) => x.id === menu.id)?.sha256 : undefined);
   // a colour card opened from a menu, where the menu was (ColourCard)
   // (a card for a new PDF made from one held: its pages numbered, or put in order - docs/PDF.md, *A new PDF from pages*)
   const [pdfCard, setPdfCard] = useState<{ kind: "numbers" | "pages"; id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
@@ -999,6 +1003,11 @@ function WorkspaceContent({
         // the PDF or text in the column filling the workspace, or back beside the canvas
         e.preventDefault();
         st.setColumnFilled(!st.columnFilled);
+      } else if (isPrintKey(e) && st.textsOpen && st.pdfShown != null && st.pdfs.some((p) => p.id === st.pdfShown)) {
+        // the PDF in the column printed (docs/PDF.md, *Printing*)
+        e.preventDefault();
+        const p = st.pdfs.find((x) => x.id === st.pdfShown)!;
+        void printed(p.sha256, p.pages).then((said) => said && setChemError(said));
       } else if (isFindKey(e) && st.pdfs.length) {
         // looking for words in the PDFs (docs/PDF.md, *Search*)
         e.preventDefault();
@@ -2430,6 +2439,8 @@ function WorkspaceContent({
               onNumbers: () => setPdfCard({ kind: "numbers", id: p.id, x: menu.x, y: menu.y, within: menu.within }),
               onPages: () => setPdfCard({ kind: "pages", id: p.id, x: menu.x, y: menu.y, within: menu.within }),
               onSave: () => void savePdfFile(p).catch((e: unknown) => setChemError(`Save failed: ${e instanceof Error ? e.message : String(e)}`)),
+              onPrint: () => void printed(p.sha256, p.pages).then((said) => said && setChemError(said)),
+              ...(printingKnown(p.sha256) === "no" ? { printNot: true } : {}),
               ...(selects(st.pdfSel) && st.pdfSel.id === p.id ? { onCopy: () => void copyWords() } : {}),
               // (the coordinates in the words selected, or in the box drawn: the structures they hold, shown before they are placed)
               ...(selects(st.pdfSel) && st.pdfSel.id === p.id

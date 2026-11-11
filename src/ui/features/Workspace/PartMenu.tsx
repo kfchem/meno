@@ -10,6 +10,7 @@ import { withRules } from "./menuRules";
 import { BOND_KIND_KEYS, BOND_KIND_NAMES, COMMON_BOND_KINDS, OTHER_BOND_KINDS, type BondKindName } from "./utils/bondKinds";
 import { swallowPress } from "./utils/press";
 import { guideNotice } from "../../../lib/guide/guide";
+import { NOT_ALLOWED } from "../../../lib/pdf/print";
 import { MAGNIFICATIONS, magnificationText } from "./utils/magnified";
 import { arrowMovesMenu, wheelClosesMenu } from "./utils/menuKeys";
 import { copying, writeClipboard } from "../../../lib/clipboard";
@@ -361,6 +362,9 @@ export default function PartMenu({
     onPages: () => void;
     /** Its bytes written to a file. */
     onSave: () => void;
+    /** Its pages printed (docs/PDF.md, *Printing*); `printNot`: its author does not allow it, so the command is there and cannot be used. */
+    onPrint?: () => void;
+    printNot?: boolean;
   };
   /** The PDFs selected made one new PDF, in the order they are read on the page. */
   onCombinePdfs?: () => void;
@@ -861,6 +865,7 @@ export default function PartMenu({
                 { name: "Pages…", keys: "", run: pdf.onPages },
                 ...(onCombinePdfs ? [{ name: "Combine into one PDF", keys: "", run: onCombinePdfs }] : []),
                 { name: "Save as PDF…", keys: "", run: pdf.onSave },
+                ...(pdf.onPrint ? [{ name: pdf.printNot ? `Print… (${NOT_ALLOWED.toLowerCase()})` : "Print…", keys: "", run: pdf.onPrint, disabled: pdf.printNot }] : []),
               ]
             : []),
         ]

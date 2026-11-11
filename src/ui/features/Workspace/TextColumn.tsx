@@ -3,7 +3,7 @@ import type { Conversation } from "./conversation/types";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import clsx from "clsx";
-import { ArrowsPointingInIcon, ArrowsPointingOutIcon, ArrowUpTrayIcon, ChevronDoubleRightIcon, ChevronDownIcon, ChevronUpIcon, CodeBracketIcon, ExclamationTriangleIcon, MagnifyingGlassIcon, StopCircleIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { ArrowsPointingInIcon, ArrowsPointingOutIcon, ArrowUpTrayIcon, ChevronDoubleRightIcon, ChevronDownIcon, ChevronUpIcon, CodeBracketIcon, ExclamationTriangleIcon, MagnifyingGlassIcon, PrinterIcon, StopCircleIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { exists } from "@tauri-apps/plugin-fs";
 import { writeDocument } from "../../../lib/io/writeDocument";
@@ -26,6 +26,8 @@ import { isPinch, wheelReader } from "../../../lib/input/wheel";
 import { QUIET_AFTER_MIN, useAppSettings } from "../../../lib/settings/appSettings";
 import { quietFor, quietShort } from "../../../lib/jobs";
 import { pageUnder, pointOn } from "../../../lib/pdf/column";
+import { NOT_ALLOWED, printed } from "../../../lib/pdf/print";
+import { usePrinting } from "./hooks/usePrinting";
 import { figureStructuresHad } from "./utils/pdfStructures";
 import { indexOnce, mentionUnder } from "./utils/compoundLens";
 import { PRESS_WIDENED, structureAt, type PageStructure } from "./utils/pageStructures";
@@ -253,6 +255,12 @@ function Column({
   const stoppable = !!shownJob && (jobsSeen[shownJob]?.state === "waiting" || jobsSeen[shownJob]?.state === "running");
   const markdown = !!shown && isMarkdown(shown.name);
   const source = useShowsSource(store, shown?.id ?? null);
+  const printing = usePrinting(pdf?.sha256);
+  const printPdf = async (p: PdfItem) => {
+    setError(null);
+    const said = await printed(p.sha256, p.pages);
+    if (said) setError(said);
+  };
   const exportText = async (t: WorkspaceText) => {
     try {
       setError(null);
@@ -327,6 +335,17 @@ function Column({
             className="h-7 w-7 shrink-0 rounded-md flex items-center justify-center hover:bg-gh-base"
           >
             <ArrowUpTrayIcon className="h-4 w-4" />
+          </button>
+        )}
+        {pdf && (
+          <button
+            onClick={() => void printPdf(pdf)}
+            disabled={printing === "no"}
+            aria-label="Print…"
+            title={printing === "no" ? NOT_ALLOWED : `Print… (${shortcutLabel("P")})`}
+            className="h-7 w-7 shrink-0 rounded-md flex items-center justify-center hover:bg-gh-base disabled:text-gh-line disabled:hover:bg-transparent"
+          >
+            <PrinterIcon className="h-4 w-4" />
           </button>
         )}
         <button
