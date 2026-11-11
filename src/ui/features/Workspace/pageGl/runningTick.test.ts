@@ -24,9 +24,10 @@ describe("a running mark's frames", () => {
       tick.ask(invalidate);
       vi.advanceTimersByTime(1000 / 60);
     }
-    const asked = invalidate.mock.calls.length;
-    expect(asked).toBeGreaterThanOrEqual(Math.floor(1000 / (RUNNING_FRAME_MS + 17)));
-    expect(asked).toBeLessThanOrEqual(Math.ceil(1000 / RUNNING_FRAME_MS));
+    // (about thirty a second: the claim, not the constant)
+    expect(RUNNING_FRAME_MS).toBe(33);
+    expect(invalidate.mock.calls.length).toBeGreaterThanOrEqual(25);
+    expect(invalidate.mock.calls.length).toBeLessThanOrEqual(31);
   });
 
   it("asks no frame after it is stopped, and none is left waiting", () => {
@@ -54,6 +55,16 @@ describe("a wire's dashes", () => {
     // (a second, the period 10 / zoom apart: the same place round it)
     expect(along(60, 1 / 60)).toBeCloseTo(along(30, 1 / 30), 9);
     expect(along(10, 1 / 60)).toBeCloseTo(along(5, 1 / 30), 9);
+  });
+  it("go as far in a unit's time at half the zoom as at twice it, in the ratio of the zooms", () => {
+    expect(dashAdvance(0, 0.1, 12, 1, 600, 400)).toBeCloseTo(2 * dashAdvance(0, 0.1, 12, 2, 600, 400), 9);
+    expect(dashAdvance(0, 0.1, 12, 1, 600, 400)).toBeCloseTo(1.2, 9);
+  });
+  it("go round the length of a dash and a gap, not of a dash: a place between the two is reached", () => {
+    // (a period of 10 at zoom 1: after 7.5 of travel they stand at 7.5, past a dash's 6; after 10, round to 0)
+    expect(dashAdvance(0, 0.1, 75, 1, 6, 4)).toBeCloseTo(7.5, 9);
+    expect(dashAdvance(7.5, 0.1, 25, 1, 6, 4)).toBeCloseTo(0, 9);
+    expect(dashAdvance(0, 0.1, 99, 2, 6, 4)).toBeCloseTo(4.95, 9);
   });
   it("never go past one dash and gap, nor leap on a stalled page", () => {
     expect(along(1000, 1 / 30, 2)).toBeLessThan(10 / 2);
