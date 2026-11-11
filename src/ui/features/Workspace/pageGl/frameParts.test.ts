@@ -260,4 +260,36 @@ describe("a set's tab, zoomed out", () => {
       }
     }
   });
+
+  it("has a name that lies over a frame holding its own whole - a set nested in another - kept, the outer frame's own name unaffected; a frame that holds it in x alone is a neighbour", () => {
+    const outer = set({ key: "outer", box: { x0: 0, y0: 0, x1: 100, y1: 50 }, tab: { icon: "rings", name: "All" } });
+    const inner = set({ key: "inner", box: { x0: 10, y0: 5, x1: 30, y1: 20 }, tab: { icon: "rings", name: "Part" } });
+    // (the inner name lies within the outer frame's box)
+    const b = tabNameBox(inner, 0.4);
+    expect(b.x0).toBeGreaterThanOrEqual(outer.box.x0);
+    expect(b.y1).toBeLessThan(outer.box.y1);
+    expect([...tabNamesKept([outer, inner], 0.4, "named")].sort()).toEqual(["inner", "outer"]);
+    // (outer holds it in x, not in y: its top is under the inner's - then it is a neighbour, and the inner name lies over it)
+    const short = set({ key: "short", box: { x0: 0, y0: 0, x1: 100, y1: 19.5 }, tab: { icon: "rings", name: "Low" } });
+    const tall = set({ key: "tall", box: { x0: 10, y0: 5, x1: 30, y1: 20 }, tab: { icon: "rings", name: "Part" } });
+    const t = tabNameBox(tall, 0.4);
+    expect(t.y0).toBeLessThan(short.box.y1);
+    expect([...tabNamesKept([short, tall], 0.4, "named")]).not.toContain("tall");
+    // (and in y alone: its right edge short of the inner's)
+    const narrow = set({ key: "narrow", box: { x0: 0, y0: 0, x1: 11.5, y1: 50 }, tab: { icon: "rings", name: "Left" } });
+    const wide = set({ key: "wide", box: { x0: 10, y0: 5, x1: 30, y1: 20 }, tab: { icon: "rings", name: "Part" } });
+    expect(tabNameBox(wide, 0.4).x0).toBeLessThan(narrow.box.x1);
+    expect(tabNameBox(wide, 0.4).x1).toBeGreaterThan(narrow.box.x1);
+    expect([...tabNamesKept([narrow, wide], 0.4, "named")]).not.toContain("wide");
+  });
+
+  it("is not stopped by a frame that takes no pointer - one going - or one that is no set's - a conversation's tab alone: neither is a neighbour", () => {
+    const mine = set({ key: "m", box: { x0: 3, y0: 0, x1: 23, y1: 10 }, tab: { icon: "rings", name: "Tag" } });
+    const name = tabNameBox(mine, 0.4);
+    const over = { x0: (name.x0 + name.x1) / 2, y0: name.y0 + 0.01, x1: name.x1 + 5, y1: name.y1 + 5 };
+    expect([...tabNamesKept([mine, frame({ key: "going", box: over, noHits: true })], 0.4, "named")]).toContain("m");
+    expect([...tabNamesKept([mine, frame({ key: "chat", box: over, tabOnly: true })], 0.4, "named")]).toContain("m");
+    // (the same frame as a set, taking the pointer: it is in the way)
+    expect([...tabNamesKept([mine, set({ key: "other", box: over })], 0.4, "named")]).not.toContain("m");
+  });
 });

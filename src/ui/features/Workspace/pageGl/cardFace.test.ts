@@ -186,6 +186,20 @@ describe("a card zoomed out: named, then marked", () => {
     }
   });
 
+  it("has the room it says: the box less its mark's reach (its inset, its size and four screen pixels) at each side where marked, after its icon where named - at two scales, to the number", () => {
+    for (const scale of [0.5, 0.2]) {
+      const reach = Math.min(5 / scale, CARD.h / 7) + Math.min(10 / scale, 0.4 * CARD.h) + 4 / scale;
+      expect(nameRoom(scale, false)).toBeCloseTo(CARD.w - 2 * reach, 9);
+      expect(nameRoom(scale, true)).toBeCloseTo(CARD.w - (CARD.hair + CARD.side + 14 / scale + 5 / scale) - reach, 9);
+    }
+    // (the mark's size and inset each give way to the box's height where the page is far: one scale where they are capped, one where not)
+    expect(Math.min(10 / 0.5, 0.4 * CARD.h)).not.toBe(0.4 * CARD.h);
+    expect(Math.min(10 / 0.2, 0.4 * CARD.h)).toBe(0.4 * CARD.h);
+    // (never less than nothing: a page so far that the mark and its gap take the whole box)
+    expect(nameRoom(0.0001, false)).toBe(0);
+    expect(nameRoom(0.0001, true)).toBe(0);
+  });
+
   it("never prints a name beyond its box or over its mark: a name that fits, in the marked band, lies inside the box and clear of the mark - at every scale, whichever its state", () => {
     const names = ["Meno", "Within 1 kcal/mol", "Tagged", "xtb", "Optimise", "Energy window"];
     for (const scale of [0.24, 0.2, 0.17, 0.14, 0.1, 0.05, 0.02]) {
