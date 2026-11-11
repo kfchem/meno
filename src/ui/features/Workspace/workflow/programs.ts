@@ -18,7 +18,7 @@ import { skeletonWhy } from "../../../../lib/chem/skeleton";
 import { calcOf, OUTPUT_SCHEMA, type CalcInfo, type CalcSource, type ReaderOutput } from "../../../../lib/calc/output";
 import { REFINED_SAID } from "../../../../lib/calc/paths";
 import { angle, dihedral, distance } from "../../../../lib/steps/measure";
-import { restraintSaid } from "../../../../lib/steps/restraints";
+import { LINE_WITHIN, restraintSaid } from "../../../../lib/steps/restraints";
 import type { JobFile } from "../../../../lib/jobs";
 import { CALC_CARRIED, calcProperties, setEntries, withoutCarried, type SetEntry } from "./entries";
 import { convergedAt, convergedOf } from "./converged";
@@ -741,8 +741,12 @@ const pointOf = (xyz: readonly number[], i: number): [number, number, number] =>
  *   its end bond and θ the angle at the inner atom, the nearer of its two
  *   ends (the smaller lever), at the places it ended - its angle and its
  *   value compared the shorter way round, so that 179.999° and -179.999°
- *   are 0.002° apart. Its end atom within `HELD_MOVED_MOST` of the axis -
- *   three of its atoms in a line - and it is no dihedral: missed, said so.
+ *   are 0.002° apart. Three of its atoms ended in a line - a bond angle
+ *   within `LINE_WITHIN` of 180° or of 0°, the guard a torsion is refused by
+ *   as it is made - and it has no angle to hold: missed, said so, as it is
+ *   where an end atom ended within `HELD_MOVED_MOST` of its neighbour's
+ *   axis. The same 1° bounds a torsion going in and coming out: within it,
+ *   the lever is so short that nearly any angle would pass.
  */
 export function exactMissed(r: Restraint, xyz: readonly number[]): string | null {
   const p = r.atoms.map((a) => pointOf(xyz, a));
@@ -753,8 +757,10 @@ export function exactMissed(r: Restraint, xyz: readonly number[]): string | null
     const d = distance(p[0], p[1]);
     return Math.abs(d - value) <= HELD_MOVED_MOST ? null : `${Said} ended at ${d.toFixed(5)} \u00c5, held at ${value} \u00c5`;
   }
-  const lever = Math.min(distance(p[0], p[1]) * Math.sin((angle(p[0], p[1], p[2]) * Math.PI) / 180), distance(p[2], p[3]) * Math.sin((angle(p[1], p[2], p[3]) * Math.PI) / 180));
-  if (!(lever > HELD_MOVED_MOST)) return `${Said} ended with three of its atoms in a line: no torsion to hold at ${value}\u00b0`;
+  const bends = [angle(p[0], p[1], p[2]), angle(p[1], p[2], p[3])];
+  if (bends.some((t) => !(t >= LINE_WITHIN && t <= 180 - LINE_WITHIN))) return `${Said} ended with three of its atoms in a line, within ${LINE_WITHIN}\u00b0: no torsion to hold at ${value}\u00b0`;
+  const lever = Math.min(distance(p[0], p[1]) * Math.sin((bends[0] * Math.PI) / 180), distance(p[2], p[3]) * Math.sin((bends[1] * Math.PI) / 180));
+  if (!(lever > HELD_MOVED_MOST)) return `${Said} ended with an end atom within ${HELD_MOVED_MOST} \u00c5 of its neighbour's axis: no torsion to hold at ${value}\u00b0`;
   const phi = dihedral(p[0], p[1], p[2], p[3]);
   const off = Math.abs(((((phi - value) % 360) + 540) % 360) - 180);
   return off <= (HELD_MOVED_MOST / lever) * (180 / Math.PI) ? null : `${Said} ended at ${phi.toFixed(3)}\u00b0, held at ${value}\u00b0`;
