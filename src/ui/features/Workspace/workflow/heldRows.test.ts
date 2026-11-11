@@ -122,6 +122,14 @@ describe("the restraints a step holds, wired in", () => {
     expect(heldRows(alike, 40, [molecule("p1")], RDKIT, "RDKit")).toEqual({ each: [{ rows: [torsion(T2, 50)] }], said: [] });
   });
 
+  it("never takes a row held exactly and one held by a strength for the same: the later step's held and said, or refused in one table", () => {
+    const exact: Restraint = { kind: "dihedral", atoms: T2, value: 180, exact: true };
+    const held = heldRows(rounds([row(torsion(T2, 50))], [row(exact)]), 40, [molecule("p1")], heldBy("minimise", ["dihedral", "dihedral-exact"]), "RDKit");
+    expect(held).toEqual({ each: [{ rows: [exact] }], said: ["1 row taken over by a later step's"] });
+    const one = page([[10, "restraints"], [40, "minimise"]], [{ id: 11, by: 10, rows: [row(torsion(T2, 50)), row(exact)] }], [[11, 40, RESTRAINTS_INPUT.id]]);
+    expect(heldRows(one, 40, [molecule("p1")], RDKIT, "RDKit")).toEqual({ each: [{ why: "Rows of one table hold torsion 2-3-4-5 for it unlike each other" }], said: [] });
+  });
+
   it("refuses a molecule one table's rows hold unlike", () => {
     const d = page([[10, "restraints"], [40, "minimise"]], [{ id: 11, by: 10, rows: [row(torsion(T1, 50)), row(torsion(T1, 60))] }], [[11, 40, RESTRAINTS_INPUT.id]]);
     expect(heldRows(d, 40, [molecule("p1")], RDKIT, "RDKit")).toEqual({ each: [{ why: "Rows of one table hold torsion 1-2-3-4 for it unlike each other" }], said: [] });

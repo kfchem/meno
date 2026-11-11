@@ -163,6 +163,16 @@ describe("a restraints table", () => {
     expect("why" in restraintRowsIn(wrong)).toBe(true);
   });
 
+  it("is refused, the row named, where a row's strength is not above 0, an atom is named twice, or atoms fixed say a strength", () => {
+    const t = restraintsTable(rows);
+    const at = (name: string) => t.columns.findIndex((c) => c.name === name);
+    const cell = (r: number, name: string, v: string) => ({ ...t, rows: t.rows.map((x, i) => (i === r ? x.map((c, j) => (j === at(name) ? v : c)) : x)) });
+    expect(restraintRowsIn(cell(1, "strength", "0 kcal/mol/rad\u00b2"))).toEqual({ why: 'Row 2 of the restraints does not read: its strength "0 kcal/mol/rad\u00b2" is neither "exact" nor a number above 0 in kcal/mol/rad\u00b2' });
+    expect(restraintRowsIn(cell(1, "strength", "-50 kcal/mol/rad\u00b2"))).toMatchObject({ why: expect.stringContaining("Row 2") });
+    expect(restraintRowsIn(cell(0, "atoms", "1-1"))).toEqual({ why: 'Row 1 of the restraints does not read: its atoms "1-1" are not 2 different atoms from 1' });
+    expect(restraintRowsIn(cell(3, "strength", "500 kcal/mol/\u00c5\u00b2"))).toEqual({ why: 'Row 4 of the restraints does not read: atoms fixed have no strength, not "500 kcal/mol/\u00c5\u00b2"' });
+  });
+
   it("is refused, saying why, where it is no restraints table: a column missing, a target in another unit", () => {
     const t = restraintsTable(rows);
     expect(restraintRowsIn({ ...t, columns: t.columns.filter((c) => c.name !== "numbering") })).toEqual({ why: 'It is no table of restraints: it has no column "numbering"' });
