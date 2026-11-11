@@ -114,6 +114,14 @@ describe("a distance or dihedral held exactly", () => {
       const at = hcch(60, 1.09, theta);
       expect(exactMissed(torsion(measured(at)), at), String(theta)).toBe(`Torsion 1-2-3-4 ended with three of its atoms in a line, within 1°: no torsion to hold at ${measured(at)}°`);
     }
+    // (one end alone within it, the other bent as usual: on the line all the same - either bend is enough)
+    for (const [theta, theta4] of [
+      [179.5, 110],
+      [110, 0.5],
+    ]) {
+      const one = hcch(60, 1.09, theta, 1.09, theta4);
+      expect(exactMissed(torsion(measured(one)), one), `${theta} ${theta4}`).toBe(`Torsion 1-2-3-4 ended with three of its atoms in a line, within 1°: no torsion to hold at ${measured(one)}°`);
+    }
     // (178.5°, outside it: judged by its lever - 1.09 sin 1.5° = 0.0285 Å, so about 0.2° - 0.1° off within, 0.3° not)
     const bent = hcch(60, 1.09, 178.5);
     expect(exactMissed(torsion(measured(bent) + 0.1), bent)).toBeNull();
