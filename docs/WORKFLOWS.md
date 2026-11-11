@@ -2143,10 +2143,10 @@ Built, as the maintainer chose from pictures (decided: 18, 19):
   zoom. While the zoom moves they are written only once it has gone half
   a per cent from the last written (`zoomWritten`) - half a pixel on a
   card two hundred wide, not seen - and, once it stands still, as it is.
-- **Quick Add** opens where it will stay as a panel opens below its row -
-  its calculations, or the field a SMILES is typed in: its side is chosen
-  once, for its largest, and it is held by its top left corner, so that
-  nothing in it moves as the panel grows (`quickAddPlace.ts`).
+- **Quick Add** opens at its point, up and to the right of it, whatever its
+  size - never moved for it: where it would lie past the canvas the view
+  eases along (docs/EDITOR-2D.md, *Menus on the page*), so nothing in it moves
+  as a panel opens below its row.
 - **No *3D structure* step**: *Conformers* takes structures drawn - RDKit's
   search, in its worker, as *3D structures* on the canvas makes them, with the step's
   own options - and *Choose one*, Meno's, takes one conformer of each
