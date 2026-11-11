@@ -62,33 +62,37 @@ export function useRises(ref: RefObject<HTMLElement | null>, rises: boolean) {
 }
 
 /**
+ * The place an element had just before the number of tabs changed, to ease from: its place now, read as the render with the new
+ * `count` begins - the layout still the committed one, before the tabs take their room - where `seen` is the count it was last
+ * laid out for. `null` where the count is the same (nothing to read), or the element is not there. It is the place just before
+ * the change, never one read at an earlier change: a tab closing leaves its room moving on after the last render, so an earlier read
+ * would be a place the element has left.
+ */
+export const placeBefore = (seen: number, count: number, left: number | null): number | null => (seen === count ? null : left);
+
+/**
  * An element whose place moved along as the tabs took their room - "+"
  * after the last, a tab in a full bar - kept where it was and eased into its
  * new place by transform (`TAB_RISE.timing`; `flipFrom`), from the room being
  * taken at once. `count` is the number of tabs: only a change of it is eased,
- * and only then is the element's place read (a layout each). `composite` is
- * "add" for one that may be dragged meanwhile, whose transform is the drag's,
- * kept; "replace" for one with none ("+").
+ * and only then is the element's place read (a layout each, in the render
+ * that has the new count: `placeBefore`). `composite` is "add" for one that may
+ * be dragged meanwhile, whose transform is the drag's, kept; "replace" for one
+ * with none ("+").
  */
 export function useMovedAlong(ref: RefObject<HTMLElement | null>, count: number, composite: "add" | "replace" = "replace") {
-  const at = useRef<{ left: number; count: number } | null>(null);
+  // (the count it was last laid out for, and the place it had as the count changed)
+  const seen = useRef<number | null>(null);
+  const before = useRef<number | null>(null);
+  if (seen.current !== null) before.current = placeBefore(seen.current, count, ref.current ? ref.current.offsetLeft : null) ?? before.current;
   useLayoutEffect(() => {
     const el = ref.current;
-    if (!el) return;
-    // (the place kept from the last read, and again when the window is resized, so that a move that is not the tabs' is not eased)
-    if (at.current && at.current.count === count) return;
-    const left = el.offsetLeft;
-    const by = flipFrom(at.current, left, count);
-    at.current = { left, count };
+    const was = seen.current;
+    seen.current = count;
+    if (!el || was === null || was === count) return;
+    const by = flipFrom(before.current === null ? null : { left: before.current, count: was }, el.offsetLeft, count);
+    before.current = null;
     if (by === null || typeof el.animate !== "function") return;
     el.animate({ transform: [`translateX(${by}px)`, "translateX(0)"] }, { ...TAB_RISE.timing, composite });
   });
-  useLayoutEffect(() => {
-    const keep = () => {
-      const el = ref.current;
-      if (el && at.current) at.current = { ...at.current, left: el.offsetLeft };
-    };
-    window.addEventListener("resize", keep);
-    return () => window.removeEventListener("resize", keep);
-  }, [ref]);
 }

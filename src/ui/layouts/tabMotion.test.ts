@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TAB_RISE, flipFrom, risesAfter, tabInitial, tabRoom } from "./tabMotion";
+import { TAB_RISE, flipFrom, placeBefore, risesAfter, tabInitial, tabRoom } from "./tabMotion";
 import { DURATION } from "../theme/motion";
 
 describe("a tab coming in", () => {
@@ -54,5 +54,22 @@ describe("what a tab's coming in moves along", () => {
     expect(flipFrom({ left: 100, count: 1 }, 100, 2)).toBeNull();
     // (nothing known of where it was: the first read)
     expect(flipFrom(null, 100, 1)).toBeNull();
+  });
+});
+
+describe("the place a moved element is eased from", () => {
+  it("is the one it had as the count changed: read then, and not where the count is the same", () => {
+    expect(placeBefore(3, 2, 600)).toBe(600);
+    expect(placeBefore(2, 3, 404)).toBe(404);
+    expect(placeBefore(3, 3, 600)).toBeNull();
+    expect(placeBefore(3, 2, null)).toBeNull();
+  });
+
+  it("eases an add after a close from where the room left it, not from where it was before the close", () => {
+    // ("+" at 600 with three tabs; one closes - at the render with two, its room is still held, so "+" reads 600 and does not
+    // ease; the exit moves it to 404 with no render; a tab is added: the render with three reads 404, and the room taken puts it at 600)
+    expect(flipFrom({ left: placeBefore(3, 2, 600)!, count: 3 }, 600, 2)).toBeNull();
+    const first = placeBefore(2, 3, 404)!;
+    expect(flipFrom({ left: first, count: 2 }, 600, 3)).toBe(-196);
   });
 });
