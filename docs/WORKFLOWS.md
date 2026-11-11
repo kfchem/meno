@@ -2613,7 +2613,10 @@ question N):
 - **Same key, same result.** A job whose key this workspace has run to the
   end - in any step's last run, or one it keeps - is not run again while
   its runner still has it: what it gave is taken up again, and the step's
-  line says so (*Reused*, or *2 reused*). Only within one workspace: no
+  line says so (*Reused*, or *2 reused*). How long the run took counts
+  the jobs it ran alone: one taken up again ran then, not now
+  (`workflow/runTime`; 2026-11-11, before which a run of a step two days
+  on said it took two days). Only within one workspace: no
   cache on the computer decides what runs. Its folder cleared since, it is
   run again.
 - **A step deleted takes no job's folder away**: another step's run may
