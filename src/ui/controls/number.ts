@@ -1,5 +1,5 @@
-/** The numbers a field takes: from `min` to `max`, each where given, whole ones alone where `whole`; `step` what an arrow key adds or takes away. */
-export type NumberRange = { min?: number; max?: number; step?: number; whole?: boolean };
+/** The numbers a field takes: from `min` to `max`, each where given, whole ones alone where `whole`; `step` what an arrow key adds or takes away. `unsettable`: the field may be left empty, which is no number (NaN), and says it is unset. */
+export type NumberRange = { min?: number; max?: number; step?: number; whole?: boolean; unsettable?: boolean };
 
 /**
  * A number field as it is (NumberField): the text in it, the last good
@@ -76,6 +76,8 @@ export function numberField(d: NumberDraft, e: NumberEvent, range: NumberRange =
     case "escape":
       return numberDraft(d.value);
     case "commit": {
+      // (an empty field of a number that may be unset: it is - none, not the last good number)
+      if (range.unsettable && d.text.trim() === "") return numberDraft(NaN);
       const n = typedNumber(d.text);
       if (inRange(n, range)) return numberDraft(n);
       return { ...numberDraft(d.value), refused: d.text !== shown(d.value) };

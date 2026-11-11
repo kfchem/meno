@@ -17,6 +17,7 @@ export default function OptionRows({
   onChange,
   indent = false,
   before,
+  unsettable = [],
 }: {
   options: readonly Option[];
   values: OptionValues;
@@ -25,6 +26,8 @@ export default function OptionRows({
   indent?: boolean;
   /** What a number's or a text's row shows just before its field, where it shows anything: a Clear of the chemist's own value (Settings, Calculations) - the field staying where it is. */
   before?: (o: Option) => ReactNode;
+  /** The numbers (by id) that may be left unset: emptying one gives NaN, and a value of NaN shows it empty, its default dimmed. */
+  unsettable?: readonly string[];
 }) {
   const set = (id: string, v: string | number | boolean) => onChange({ ...values, [id]: v });
   return (
@@ -57,7 +60,7 @@ export default function OptionRows({
             <span className="shrink-0 flex items-center gap-1.5">
               {before?.(o)}
               {o.type === "number" ? (
-                <NumberField label={o.label} value={Number(values[o.id] ?? o.default)} min={o.min} max={o.max} step={o.step} whole={o.whole} onChange={(n) => set(o.id, n)} className="w-24 text-xs" />
+                <NumberField label={o.label} value={Number(values[o.id] ?? o.default)} min={o.min} max={o.max} step={o.step} whole={o.whole} unsettable={unsettable.includes(o.id)} placeholder={unsettable.includes(o.id) ? String(o.default) : undefined} onChange={(n) => set(o.id, n)} className="w-24 text-xs" />
               ) : (
                 <input
                   type="text"

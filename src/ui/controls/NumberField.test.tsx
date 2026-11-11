@@ -13,6 +13,29 @@ function after(value: number, events: NumberEvent[], range: NumberRange = { min:
   return events.reduce((d, e) => numberField(d, e, range), numberDraft(value));
 }
 
+describe("a number that may be left unset", () => {
+  const range = { min: 1, max: 16, whole: true, unsettable: true };
+  it("is unset by emptying the field: no number, not the last good one", () => {
+    const d = after(4, [{ kind: "typed", text: "" }, { kind: "commit" }], range);
+    expect(d.text).toBe("");
+    expect(Number.isNaN(d.value)).toBe(true);
+    expect(d.refused).toBe(false);
+  });
+  it("is set by typing a number over the empty field, and otherwise keeps to its range", () => {
+    expect(after(NaN, [{ kind: "typed", text: "8" }, { kind: "commit" }], range)).toEqual({ text: "8", value: 8, refused: false });
+    expect(after(NaN, [{ kind: "typed", text: "99" }, { kind: "commit" }], range).refused).toBe(true);
+  });
+  it("is set by an arrow key from empty, from its least", () => {
+    expect(after(NaN, [{ kind: "step", by: 1 }], range).value).toBe(2);
+  });
+  it("is told to the card as it goes while being emptied", () => {
+    expect(Number.isNaN(setAsItGoes({ text: "", value: 4, refused: false }, true, range)!)).toBe(true);
+  });
+  it("goes back to the last good number for a field that may not be unset", () => {
+    expect(after(4, [{ kind: "typed", text: "" }, { kind: "commit" }], { min: 1, max: 16, whole: true })).toEqual({ text: "4", value: 4, refused: true });
+  });
+});
+
 describe("Meno's own number field", () => {
   it("holds what is typed, nothing too: the first digit of 25 taken out and 3 typed gives 35", () => {
     const typed = after(25, [

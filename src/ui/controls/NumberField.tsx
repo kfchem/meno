@@ -24,6 +24,8 @@ export default function NumberField({
   max,
   step,
   whole,
+  unsettable,
+  placeholder,
   className,
 }: {
   value: number;
@@ -34,9 +36,13 @@ export default function NumberField({
   step?: number;
   /** A whole number alone, one with a fraction refused as one out of range is. */
   whole?: boolean;
+  /** The number may be left unset: emptying the field says so (`onChange` is given NaN), and `value` NaN shows it empty. */
+  unsettable?: boolean;
+  /** What an empty field shows, dimmed: what unset comes to. */
+  placeholder?: string;
   className?: string;
 }) {
-  const range = { min, max, step, whole };
+  const range = { min, max, step, whole, unsettable };
   const [draft, setDraft] = useState(() => numberDraft(value));
   const typing = useRef(false);
   const field = useRef<HTMLInputElement>(null);
@@ -76,6 +82,7 @@ export default function NumberField({
       aria-invalid={draft.refused || undefined}
       title={rangeSaid(range) || undefined}
       value={draft.text}
+      placeholder={draft.text === "" ? placeholder : undefined}
       spellCheck={false}
       autoComplete="off"
       onFocus={() => (typing.current = true)}

@@ -9,6 +9,17 @@ import OptionRows from "../../options/OptionRows";
 /** What Cores for each job comes to while it is not set (lib/jobs `runningOf`). */
 export const CORES_SHARED_SAID = "Unless Cores for each job is set, a step's jobs share the cores jobs may use: all of them for one job, one each for as many jobs as there are cores.";
 /** That line, while Cores for each job is unset; none once it is set. */
+/**
+ * Cores for each job as the field leaves it: the number typed, held to 1 and
+ * the computer's cores; none where the field was emptied (NaN: unset again,
+ * the cores shared among a step's jobs); as it was (`kept`) where the field
+ * was not changed (`typed` the same as `shown`, NaN for NaN).
+ */
+export function coresChosen(typed: unknown, shown: unknown, kept: number | undefined, most: number): number | undefined {
+  if (Object.is(typed, shown)) return kept;
+  return typeof typed === "number" && Number.isFinite(typed) ? Math.min(Math.max(1, Math.round(typed)), most) : undefined;
+}
+
 export const coresSharedSaid = (c: { cores?: number }): string | null => (c.cores == null ? CORES_SHARED_SAID : null);
 
 /** A mebibyte's share of a gibibyte: memory is set in GB, kept in MiB. */
@@ -47,7 +58,8 @@ export default function JobSettings() {
     { id: "quiet-after", label: "Say a job is quiet after", type: "number", default: QUIET_AFTER_MIN, min: 1, max: QUIET_AFTER_MOST, step: 1, whole: true, unit: "min" },
   ];
   const values: OptionValues = {
-    cores: running.cores,
+    // (unset: empty - the number it comes to dimmed in it - until one is typed; emptied again, it is unset again)
+    cores: calculations.cores ?? NaN,
     "cores-all": limits.cores,
     ...(computer.memory > 0 ? { "memory-all": gb(limits.memory) } : {}),
     awake: !calculations.sleepWhileJobsRun,
@@ -57,7 +69,7 @@ export default function JobSettings() {
   const change = (v: OptionValues) => {
     const whole = (n: unknown, most: number) => (typeof n === "number" && Number.isFinite(n) ? Math.min(Math.max(1, Math.round(n)), most) : undefined);
     // (each kept as it was set, or as it was where it was not changed - unset, the default, where it comes to that)
-    const cores = v.cores !== values.cores ? whole(v.cores, computer.cores) : calculations.cores;
+    const cores = coresChosen(v.cores, values.cores, calculations.cores, computer.cores);
     const all = v["cores-all"] !== values["cores-all"] ? whole(v["cores-all"], computer.cores) : calculations.coresAll;
     const memory = v["memory-all"] !== values["memory-all"] && typeof v["memory-all"] === "number" ? whole(v["memory-all"] * MIB_PER_GB, computer.memory) : calculations.memoryAll;
     const quietAfter = v["quiet-after"] !== values["quiet-after"] ? whole(v["quiet-after"], QUIET_AFTER_MOST) : calculations.quietAfterMin;
@@ -116,7 +128,7 @@ export default function JobSettings() {
 
   return (
     <div className="rounded-lg border border-gh-line bg-white divide-y divide-gh-line/60">
-      <OptionRows options={options} values={values} onChange={change} />
+      <OptionRows options={options} values={values} onChange={change} unsettable={["cores"]} />
       {/* (how the cores are counted, where the computer runs more than one thread on each: a program of processes takes more than one) */}
       {/* (unset, a step's jobs share the cores - lib/jobs `runningOf`: said, as the number shown is one job's alone) */}
       {coresSharedSaid(calculations) && <p className="py-2 pl-3 pr-3 text-xs text-gh-gray">{coresSharedSaid(calculations)}</p>}
