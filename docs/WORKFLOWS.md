@@ -1243,10 +1243,26 @@ taller than the rest, its inputs a plain list down its left edge, each named
   One that moved fails the entry ("Atom 3 moved though held"). Its
   calculation's line says them ("atoms 1, 4, 7 held"), and how it
   converged: "optimisation with atoms held".
-- **No stationary point**: an entry optimised with atoms held is refused by
-  what takes one - Frequencies, Populations, Energy window, Choose one,
-  Duplicates' ranking, Barrier - saying which atoms it held, until it is
-  optimised free of them.
+- **Distances and torsions held exactly, checked**: where a run that said
+  it converged ended, each must be at its value, on the same basis as an
+  atom held - a distance within 1e-4 Å; a torsion within the angle
+  through which moving an end atom 1e-4 Å turns it, 1e-4 Å / (r sin θ)
+  in radians, r the end bond and θ the angle at the inner atom, of the
+  nearer of its two ends - about 0.0056° for H-C-C-H at 1.09 Å and 110° -
+  compared the shorter way round, so that 179.999° and -179.999° are
+  0.002° apart. One that is not fails the entry, saying where it ended ("Torsion
+  1-2-3-4 ended at 59.980°, held at 60°"); a torsion three of whose atoms
+  ended in a line is no torsion, and is said so. How it converged:
+  "optimisation with restraints held", with the rows it held and any
+  atoms held besides. A run not converged is said so, as ever: it may
+  have stopped short of a value it was making for.
+- **No stationary point**: an entry optimised with atoms held, or with a
+  distance or torsion held exactly, is refused by what takes one -
+  Frequencies, Populations, Energy window, Choose one, Duplicates'
+  ranking, Barrier - saying what it held, until it is optimised free of
+  them. It is stationary only on the surface those constraints leave,
+  even where a row happens to sit where the molecule would rest: Meno
+  cannot know that without its gradient.
 - **Where they were first held** (`start`) stays on what a minimisation
   gives, for the next round to start from; the rows themselves are not
   carried on - the next step holds what is wired into it.
@@ -3801,8 +3817,9 @@ in: a step, not a table's guess (the maintainer, 2026-10-29).
   from them.
 - Failed and unfinished conformers are never a minimum: they are left out
   of E min, G min and the shares, and counted in its state.
-- One optimised with atoms held where they stood (*Restraints wired in*)
-  is no stationary point either: it is left out of E min and G min, and
+- One optimised with atoms held where they stood, or with a distance or
+  torsion held exactly (*Restraints wired in*), is no stationary point
+  either: it is left out of E min and G min, and
   how many were is said in the step's line; where every finished
   conformer of a structure was, its E min and G min say so, naming them.
   The shares of its isomers are refused, naming it, as *Populations*

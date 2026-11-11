@@ -1557,7 +1557,20 @@ Each entry in `prepare`, `collect` and `run` is one molecule, as JSON:
   input, matched to it (WORKFLOWS.md, *Restraints wired in*) - as
   `restraints`, and `start`, the places a minimisation first held them
   at, where one has. The RDKit plugin holds them (*Minimise with
-  restraints, and a search that holds them*, below). A step that holds
+  restraints, and a search that holds them*, below). The ORCA plugin's
+  *Optimise* holds a distance or a dihedral exactly in its `%geom`
+  block's constraints, as ORCA's manual writes them - `{B a b value C}`
+  in Å, `{D a b c d value C}` in degrees, written in (-180, 180] - and
+  atoms fixed as `{C a C}`, atoms from 0; to a saddle point, atoms fixed
+  alone; one held by a strength it refuses (meno-plugins, ORCA 0.5.7).
+  The Gaussian plugin holds atoms fixed alone, in an optimisation or to a
+  saddle point: `Opt=ModRedundant` with `X n F` for each, atoms from 1,
+  after each molecule specification, and `NoSymm` so that they come back
+  in the orientation they were given; a distance or a torsion it refuses,
+  as the reference's ModRedundant input freezes a coordinate where it
+  stands, at no value it is given (meno-plugins, Gaussian 0.6.1). What
+  each held is checked where its run ended (WORKFLOWS.md, *Restraints
+  wired in*). A step that holds
   none - an *Optimise*, an *Energy* - is given them all the same and leaves
   them aside: what its program gives back is unheld. It need not refuse
   them, as case F optimises, unheld, what it minimised with restraints
