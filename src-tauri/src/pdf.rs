@@ -832,6 +832,14 @@ pub async fn pdf_printing(app: tauri::AppHandle, sha: String) -> Result<String, 
     Ok(head["printing"].as_str().unwrap_or("no").to_string())
 }
 
+/// The system's own print dialog for the window that asked, over what the window shows. WebKit's `window.print()` shows
+/// nothing in the app, so the pages the reader laid out for the printer (src/lib/pdf/print.ts) are printed by the window's
+/// own print operation: macOS's print panel, the GTK print dialog, WebView2's print dialog.
+#[tauri::command]
+pub async fn pdf_print_window(window: tauri::WebviewWindow) -> Result<(), String> {
+    window.print().map_err(|e| e.to_string())
+}
+
 /// The links on a page: where each lies, in points from the page's top
 /// left, and where it goes - a page, and how far down it, in points; or a
 /// web page, by its address.

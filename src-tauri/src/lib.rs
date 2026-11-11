@@ -1257,6 +1257,7 @@ pub fn run() {
             pdf::pdf_render,
             pdf::pdf_links,
             pdf::pdf_printing,
+            pdf::pdf_print_window,
             pdf::pdf_text,
             pdf::pdf_objects,
             pdf::pdf_figure,

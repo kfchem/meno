@@ -23,6 +23,9 @@ const MOST_SIDE = 8192;
 /** Said where printing is refused, and beside the command that cannot be used. */
 export const NOT_ALLOWED = "Its author does not allow printing";
 
+/** The tip of the Print button: what it does, or - where the author does not allow printing - why it does not. */
+export const printTip = (printing: Printing | undefined, key: string): string => (printing === "no" ? `${NOT_ALLOWED}.` : `Print… (${key})`);
+
 /** What the PDF's author allows of printing it. */
 export const printingOf = (sha256: string) => invoke<Printing>("pdf_printing", { sha: sha256 });
 
@@ -70,7 +73,7 @@ export type PrintDeps = {
   /** A picture held by an address that is let go of with `release`. */
   hold: (png: Uint8Array) => string;
   release: (url: string) => void;
-  /** The pictures laid out for the printer, the dialog asked for, and the pictures taken away once it is done with. */
+  /** The pictures laid out for the printer, and the window's print dialog asked for (the pictures are let go of through `release`, which the window keeps them for while the dialog may still use them). */
   show: (urls: string[]) => Promise<void>;
 };
 
@@ -123,8 +126,24 @@ export async function printed(sha256: string, pages: readonly (readonly [number,
   }
 }
 
-/** The print document as the window has it: put in the page, printed - the system's dialog - and taken out once the dialog is done with. */
-async function showToPrinter(urls: string[]): Promise<void> {
+/** The window asked to print what it shows: its own print dialog, as WebKit's `window.print()` shows none in the app (src-tauri/src/pdf.rs `pdf_print_window`). */
+export const askWindowToPrint = () => invoke<void>("pdf_print_window");
+
+/** Takes the print document away, and lets go of its pictures: the one on the window, if there is one. */
+let retire: (() => void) | null = null;
+
+/** Pictures printed, held as addresses until the print document is taken away. */
+const kept = new Set<string>();
+
+/**
+ * The print document as the window has it: put in the page, and the window's
+ * own print dialog asked for. The dialog goes on after this returns (the
+ * system's is not waited on, nor does it say when it has gone), so the
+ * pictures stay until the window says it has printed, the next print takes
+ * them away, or a long wait is over.
+ */
+export async function showToPrinter(urls: string[], ask: () => Promise<void> = askWindowToPrint): Promise<void> {
+  retire?.();
   const sheet = document.createElement("div");
   sheet.id = "meno-print";
   const style = document.createElement("style");
@@ -138,22 +157,24 @@ async function showToPrinter(urls: string[]): Promise<void> {
     return img;
   });
   document.body.append(sheet);
+  const finished = () => {
+    window.removeEventListener("afterprint", finished);
+    window.clearTimeout(limit);
+    sheet.remove();
+    for (const url of kept) URL.revokeObjectURL(url);
+    kept.clear();
+    if (retire === finished) retire = null;
+  };
+  const limit = window.setTimeout(finished, MOST_WAIT_MS);
+  window.addEventListener("afterprint", finished);
+  retire = finished;
   try {
     // (decoded before the dialog asks for them, or a page may print blank)
     await Promise.all(images.map((img) => img.decode().catch(() => {})));
-    await new Promise<void>((done) => {
-      const finished = () => {
-        window.removeEventListener("afterprint", finished);
-        window.clearTimeout(limit);
-        done();
-      };
-      window.addEventListener("afterprint", finished);
-      // (a window that prints without waiting, as WebKit's does, is waited on until its dialog has gone)
-      const limit = window.setTimeout(finished, MOST_WAIT_MS);
-      window.print();
-    });
-  } finally {
-    sheet.remove();
+    await ask();
+  } catch (e) {
+    finished();
+    throw e;
   }
 }
 
@@ -164,6 +185,7 @@ const real: PrintDeps = {
   allowed: printingOf,
   draw: boxPicture,
   hold: (png) => URL.createObjectURL(new Blob([png as BlobPart], { type: "image/png" })),
-  release: (url) => URL.revokeObjectURL(url),
+  // (kept while the print document is on the window: the dialog draws from it after this has returned)
+  release: (url) => (retire ? void kept.add(url) : URL.revokeObjectURL(url)),
   show: showToPrinter,
 };

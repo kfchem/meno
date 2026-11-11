@@ -1,5 +1,12 @@
-import { describe, expect, it } from "vitest";
-import { LOW_DPI, NOT_ALLOWED, PRINT_CSS, PRINT_DPI, printDpi, printPdf, printed, type PrintDeps, type Printing } from "./print";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { LOW_DPI, NOT_ALLOWED, PRINT_CSS, PRINT_DPI, askWindowToPrint, printDpi, printPdf, printTip, printed, showToPrinter, type PrintDeps, type Printing } from "./print";
+
+const invoked = vi.hoisted(() => ({ calls: [] as [string, unknown][] }));
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: async (name: string, args?: unknown) => {
+    invoked.calls.push([name, args]);
+  },
+}));
 
 const A4: [number, number] = [595, 842];
 
@@ -133,5 +140,87 @@ describe("Print, as the command says it", () => {
     const later = window_("full");
     expect(await printed(sha, [A4], later.deps)).toBeNull();
     expect(later.said.drawn).toHaveLength(1);
+  });
+});
+
+/** A window of just what the print document needs: elements that remember what is put in them, the page's body, the window's events. */
+function pageWindow() {
+  type El = { tag: string; id: string; src: string; children: El[]; removed: boolean; textContent: string; append: (...e: El[]) => void; remove: () => void; decode: () => Promise<void>; alt: string };
+  const make = (tag: string): El => {
+    const el: El = { tag, id: "", src: "", alt: "", textContent: "", children: [], removed: false, append: (...e) => el.children.push(...e), remove: () => void (el.removed = true), decode: async () => {} };
+    return el;
+  };
+  const body = make("body");
+  const listeners = new Map<string, () => void>();
+  const revoked: string[] = [];
+  vi.stubGlobal("document", { createElement: make, body });
+  vi.stubGlobal("window", {
+    addEventListener: (name: string, f: () => void) => listeners.set(name, f),
+    removeEventListener: (name: string) => listeners.delete(name),
+    setTimeout: (f: () => void) => globalThis.setTimeout(f, 1e9),
+    clearTimeout: (t: number) => globalThis.clearTimeout(t),
+  });
+  vi.stubGlobal("URL", { revokeObjectURL: (u: string) => revoked.push(u) });
+  const sheets = () => body.children.filter((c) => c.id === "meno-print" && !c.removed);
+  return { sheets, revoked, afterprint: () => listeners.get("afterprint")?.() };
+}
+
+describe("The window's own print dialog", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it("is asked of the window by the command that prints it", async () => {
+    invoked.calls.length = 0;
+    await askWindowToPrint();
+    expect(invoked.calls).toEqual([["pdf_print_window", undefined]]);
+  });
+
+  it("is asked for once the pictures are in the page, and they stay until the window has printed", async () => {
+    vi.useFakeTimers();
+    const w = pageWindow();
+    const asked: number[] = [];
+    await showToPrinter(["blob:a", "blob:b"], async () => void asked.push(w.sheets().length));
+    // (the sheet was in the page, with a picture each, when the dialog was asked)
+    expect(asked).toEqual([1]);
+    expect(w.sheets()[0].children.filter((c) => c.tag === "img").map((c) => c.src)).toEqual(["blob:a", "blob:b"]);
+    w.afterprint();
+    expect(w.sheets()).toHaveLength(0);
+  });
+
+  it("goes on after the call returns: the pictures are held, not let go of, while the dialog may draw from them", async () => {
+    vi.useFakeTimers();
+    const w = pageWindow();
+    await showToPrinter(["blob:a"], async () => {});
+    expect(w.sheets()).toHaveLength(1);
+    expect(w.revoked).toEqual([]);
+  });
+
+  it("is taken away when the next print puts its own in the page", async () => {
+    vi.useFakeTimers();
+    const w = pageWindow();
+    await showToPrinter(["blob:a"], async () => {});
+    await showToPrinter(["blob:b"], async () => {});
+    expect(w.sheets()).toHaveLength(1);
+    expect(w.sheets()[0].children.find((c) => c.tag === "img")?.src).toBe("blob:b");
+    w.afterprint();
+    expect(w.sheets()).toHaveLength(0);
+  });
+
+  it("leaves nothing in the page where the dialog could not be asked for", async () => {
+    vi.useFakeTimers();
+    const w = pageWindow();
+    await expect(showToPrinter(["blob:a"], async () => Promise.reject(new Error("no dialog")))).rejects.toThrow("no dialog");
+    expect(w.sheets()).toHaveLength(0);
+  });
+});
+
+describe("The Print button's tip", () => {
+  it("says what the button does, and where the author does not allow printing, why it does not", () => {
+    expect(printTip("full", "Cmd+P")).toBe("Print… (Cmd+P)");
+    expect(printTip("low", "Cmd+P")).toBe("Print… (Cmd+P)");
+    expect(printTip(undefined, "Cmd+P")).toBe("Print… (Cmd+P)");
+    expect(printTip("no", "Cmd+P")).toBe("Its author does not allow printing.");
   });
 });

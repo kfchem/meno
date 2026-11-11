@@ -26,7 +26,7 @@ import { isPinch, wheelReader } from "../../../lib/input/wheel";
 import { QUIET_AFTER_MIN, useAppSettings } from "../../../lib/settings/appSettings";
 import { quietFor, quietShort } from "../../../lib/jobs";
 import { pageUnder, pointOn } from "../../../lib/pdf/column";
-import { NOT_ALLOWED, printed } from "../../../lib/pdf/print";
+import { printed, printTip } from "../../../lib/pdf/print";
 import { usePrinting } from "./hooks/usePrinting";
 import { figureStructuresHad } from "./utils/pdfStructures";
 import { indexOnce, mentionUnder } from "./utils/compoundLens";
@@ -339,11 +339,11 @@ function Column({
         )}
         {pdf && (
           <button
-            onClick={() => void printPdf(pdf)}
-            disabled={printing === "no"}
+            onClick={() => printing !== "no" && void printPdf(pdf)}
+            aria-disabled={printing === "no" || undefined}
             aria-label="Print…"
-            title={printing === "no" ? NOT_ALLOWED : `Print… (${shortcutLabel("P")})`}
-            className="h-7 w-7 shrink-0 rounded-md flex items-center justify-center hover:bg-gh-base disabled:text-gh-line disabled:hover:bg-transparent"
+            title={printTip(printing, shortcutLabel("P"))}
+            className={`h-7 w-7 shrink-0 rounded-md flex items-center justify-center ${printing === "no" ? "text-gh-line cursor-default" : "hover:bg-gh-base"}`}
           >
             <PrinterIcon className="h-4 w-4" />
           </button>
