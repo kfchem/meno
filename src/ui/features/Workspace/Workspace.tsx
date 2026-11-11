@@ -367,6 +367,8 @@ function WorkspaceContent({
   setDrawnRatio(canvasRatio);
   // (no menu over a talk)
   const talking = useEditor((s) => s.presenting != null);
+  // (each frame its members' room, and what was let go over one eased out of it: as each pointer is let go - workflow/fitFrames)
+  useEffect(() => store.getState().watchFrames(), [store]);
   // (a structure selected: a guide's step waiting for it goes on)
   useEffect(() => store.subscribe((s, prev) => void (s.sel.atoms.size && !prev.sel.atoms.size && guideNotice("selected"))), [store]);
   // (a tab's own, unless it is a document's, holds texts opened while it is in front: ui/views/texts)

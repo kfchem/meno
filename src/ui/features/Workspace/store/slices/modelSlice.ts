@@ -32,6 +32,7 @@ import { StoreApi } from "zustand";
 import { nextIdAfter } from "../../workflow/saved";
 import { membersFound } from "../../workflow/model";
 import { heldSettled } from "../../workflow/held";
+import { framesFitted } from "../../workflow/fitFrames";
 import { appendParts, carriedRenumbered, NO_PARTS, removeParts } from "../../workflow/parts";
 import { holdsOwn } from "../../workflow/entries";
 import { recordsShownAdded, recordsShownOf, shownModel } from "../../utils/stacks";
@@ -554,7 +555,8 @@ export const createModelSlice = (
         // (and its styles in 3D - a file saved before workspaces carried them: Settings' as it opens, fixed from then on)
         ws.style3d ?? workspace3dOf(useAppSettings.getState().style3d),
       ));
-      return heldSettled(found, undefined, extentIn(found));
+      // (and each frame its members' room, as an edit leaves it: a file saved with frames sized by hand, or before molecules were drawn as they are now, is fitted as it opens)
+      return framesFitted(heldSettled(found, undefined, extentIn(found)), undefined, extentIn(found));
     };
     if (start) doc.reset(opened(doc.getState()), "open workspace");
     else doc.edit("open workspace", opened);

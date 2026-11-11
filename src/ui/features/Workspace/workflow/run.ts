@@ -696,7 +696,7 @@ function fillTable(doc: WorkspaceDocument, step: WorkflowStep, exit: string, tab
  * made (`withExits`): each moved down, with what it holds, where the one
  * above it has grown onto it - never up, nor sideways.
  */
-function keepExitsUnder(doc: WorkspaceDocument, step: Pick<WorkflowStep, "id" | "kind">): WorkspaceDocument {
+export function keepExitsUnder(doc: WorkspaceDocument, step: Pick<WorkflowStep, "id" | "kind">): WorkspaceDocument {
   const exits = exitsOf(step.kind);
   // (a set held off the page lies nowhere: workflow/held - those under it kept under the one above it, or the first shown; an empty
   //  exit's for what its step sets aside, drawn nowhere too, kept under all the same: there it is laid out, once given anything)
@@ -1036,7 +1036,7 @@ export function placeAsSet(
  * wider than the molecule (centred under it: "4 / 4 · 0.00 kcal/mol" is
  * wider than a water).
  */
-function roomOf(m: Pick<Molecule3D, "frames" | "calc" | "energies" | "shares" | "numbers" | "conformerSet"> & Partial<Pick<Molecule3D, "title" | "stack" | "partOf" | "degeneracies">>, e: Frame): Frame & { chip: number } {
+export function roomOf(m: Pick<Molecule3D, "frames" | "calc" | "energies" | "shares" | "numbers" | "conformerSet"> & Partial<Pick<Molecule3D, "title" | "stack" | "partOf" | "degeneracies">>, e: Frame): Frame & { chip: number } {
   const least = NOMINAL_BOND_LENGTH / 4;
   const half = chipWide(m) / 2;
   return { x0: Math.min(e.x0, -least, -half), x1: Math.max(e.x1, least, half), y0: Math.min(e.y0, -least), y1: Math.max(e.y1, least), chip: hasChip(m) ? CHIP : 0 };
@@ -1078,17 +1078,18 @@ export function laidOut(rooms: readonly (Frame & { chip: number })[], least = LE
 }
 
 /**
- * `doc` with each result set whose molecules no longer fit it laid out
- * again (the maintainer, 2026-10-13): a molecule reaching past its frame
- * or onto its name, or two over one another, as each is drawn now
- * (`extentOf`, in its look and turned as `turnOf` says) - a bigger 3D look
- * chosen, say. The frame widens as far as they need, its top left where it
- * was, never narrower or shorter than it was; they lie in it as a run lays
- * them, in the order the run gave them - or, where the set would then
- * reach over something beside it (the next step's card), in rows no wider
- * than it was, the set growing downwards. A set they fit, a chemist's set and a set
- * of pictures are left as they are - and, where `only` says, a set holding
- * none of those molecules.
+ * `doc` with each result set whose molecules lie over one another laid out
+ * again (the maintainer, 2026-10-13): two over one another, as each is
+ * drawn now (`extentOf`, in its look and turned as `turnOf` says) - a
+ * bigger 3D look chosen, say. The frame is theirs as it is laid out, its
+ * top left where it was, never narrower or shorter than it was; they lie in
+ * it as a run lays them, in the order the run gave them - or, where the set
+ * would then reach over something beside it (the next step's card), in
+ * rows no wider than it was, the set growing downwards. A set whose
+ * molecules lie clear of one another, a chemist's set and a set of
+ * pictures are left as they are - and, where `only` says, a set holding none
+ * of those molecules; a frame is its members' room whatever they are
+ * (workflow/fitFrames), as the document settles.
  */
 export function fitResultSets(
   doc: WorkspaceDocument,
@@ -1107,9 +1108,8 @@ export function fitResultSets(
     const rooms = ms.map((m) => roomOf(m, extentOf(m, turnOf(m.id))));
     // (each where it is: its reach, and its chip below it)
     const boxes = ms.map((m, i) => ({ x0: m.at.x + rooms[i].x0, x1: m.at.x + rooms[i].x1, y0: m.at.y + rooms[i].y0 - rooms[i].chip, y1: m.at.y + rooms[i].y1 }));
-    const within = boxes.every((b) => b.x0 >= set.x0 - EPS && b.x1 <= set.x1 + EPS && b.y0 >= set.y0 - EPS && b.y1 <= set.y1 - SET_TOP + EPS);
     const apart = boxes.every((a, i) => boxes.every((b, j) => j <= i || !(a.x0 < b.x1 - EPS && b.x0 < a.x1 - EPS && a.y0 < b.y1 - EPS && b.y0 < a.y1 - EPS)));
-    if (within && apart) continue;
+    if (apart) continue;
     const least = Math.max(LEAST_W, set.x1 - set.x0 - 2 * SET_PAD);
     const frameOf = (l: { width: number; height: number }) => frameAt(set.x0, set.y1, l.width, Math.max(l.height, set.y1 - set.y0));
     // (its step's other exits' sets are no hindrance: they move down with it)

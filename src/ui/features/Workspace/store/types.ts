@@ -1767,9 +1767,17 @@ export type EditorState = {
   placeTable: (table: Table, at: { x: number; y: number }, name?: string) => number;
   /** A procedure saved, put down with its middle at (x, y), as one step - selected. */
   putDownProcedure: (id: string, x: number, y: number) => void;
-  /** A set's frame sized anew, or the set moved with all it holds: a run of either in one gesture one step. */
-  resizeSet: (id: number, frame: { x0: number; y0: number; x1: number; y1: number }, gesture?: string) => void;
+  /** A set moved with all it holds: a run of it in one gesture one step. */
   moveSet: (id: number, dx: number, dy: number, gesture?: string) => void;
+  /**
+   * Every frame its members' room, and what no set holds eased out of the
+   * frames it lies over (workflow/fitFrames `framesSettled`), as the pointer
+   * is let go: `down`, the document as it was when it was pressed. One edit that
+   * joins the gesture's step to undo, never a step of its own after one.
+   */
+  settleFrames: (down: WorkspaceDocument) => void;
+  /** Settles frames (`settleFrames`) as each pointer is let go; the call that stops it. */
+  watchFrames: () => () => void;
   /** A set deleted, or several in one step - one that holds its molecules itself, on no page, which go with it, only once asked about (`askDeleteSet`), `asked`. */
   removeSet: (id: number | readonly number[], asked?: boolean) => void;
   /** Sets that hold their molecules themselves asked to be deleted - by a key, or a selection that held them: the question asked (Workspace). */

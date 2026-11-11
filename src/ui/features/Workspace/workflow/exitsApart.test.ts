@@ -6,6 +6,7 @@ import { resultOf } from "./flow";
 import { exitsOf, type StepKind } from "./kinds";
 import { BETWEEN } from "./look";
 import { addSet, addStep, connect } from "./model";
+import { framesFitted } from "./fitFrames";
 import { fitResultSets, runStep, type RunWith } from "./run";
 
 /** Each molecule reaching `r` Å about its middle, as a look draws it. */
@@ -64,7 +65,8 @@ describe("a step's two exits, each a conformer set", () => {
   it.each(KINDS)("lie apart after %s's sets are laid out again in a bigger look, the first grown down onto the second", (kind, options) => {
     const small = ran(kind, options, 1.2);
     const [first] = apart(small);
-    const big = fitResultSets(small, reaching(3.6));
+    // (laid out again where they lie over one another, then each frame its members' room - as the document settles a bigger look)
+    const big = framesFitted(fitResultSets(small, reaching(3.6)), undefined, reaching(3.6));
     const [grown] = apart(big);
     // (it did grow: the second was taken down with it)
     expect(grown.y0).toBeLessThan(first.y0);

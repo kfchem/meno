@@ -41,7 +41,8 @@ import { readerLine, sameAtoms, type Found, type Unread } from "../../../lib/cal
 import { readResults } from "../../../lib/calc/results";
 import { inMenosForm, type CalcInfo } from "../../../lib/calc/output";
 import { newTextName } from "./utils/texts";
-import { fitSets, membersSettled } from "./workflow/model";
+import { membersSettled } from "./workflow/model";
+import { framesFitted } from "./workflow/fitFrames";
 import { heldSettled } from "./workflow/held";
 import type { RunWith } from "./workflow/run";
 import type { Conversation } from "./conversation/types";
@@ -204,7 +205,7 @@ export function createWorkspaceDocument(
   for (const p of pdfsInRow(Array.isArray(held) ? held : [], { x: 0, y: 0 })) doc = addPdf(doc, p);
   const pictures = (data as { pictures?: unknown } | null | undefined)?.pictures;
   for (const p of picturesInRow(Array.isArray(pictures) ? (pictures as PictureToAdd[]) : [], { x: 0, y: 0 })) doc = addPicture(doc, p);
-  // (each edit's sets grown to keep what is drawn on in them inside them, as
+  // (each edit's sets fitted to their members, as
   // part of it - and its stacks of drawings kept whole: utils/stacks; its
   // result sets held off the page or laid out on it as it wires them,
   // workflow/held, in the same step)
@@ -213,8 +214,11 @@ export function createWorkspaceDocument(
   // shares with the step before; the maintainer, 2026-10-13)
   return createDocument<WorkspaceDocument>(doc, {
     settle: (next, before) => {
-      const held = heldSettled(next, before, extentIn?.(next));
-      return mapsSettled(joinsDocSettled(withRecordsSettled(membersSettled(fitSets(withOneMagnification(held, before), before), before), before)), before);
+      const extentOf = extentIn?.(next);
+      const held = heldSettled(next, before, extentOf);
+      // (members as the edit leaves them, then each frame its members' room - where none is being dragged: workflow/fitFrames)
+      const members = membersSettled(withOneMagnification(held, before), before);
+      return framesFitted(mapsSettled(joinsDocSettled(withRecordsSettled(members, before)), before), before, extentOf);
     },
     cost: stepCost,
   });

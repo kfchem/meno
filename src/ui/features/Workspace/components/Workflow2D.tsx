@@ -53,7 +53,7 @@ import { dropOn, portOfKey, portParts, type PortAt } from "../pageGl/ports";
 import { PAGE_GL_ORDER } from "../pageGl/PageShapes";
 import { useAges, useEasedValues, useFaded } from "../pageGl/faded";
 import { useHitAt, type HitHandlers, type PagePointer } from "../pageGl/PageHits";
-import type { Region, Side as Edge } from "../pageGl/hits";
+import type { Region } from "../pageGl/hits";
 import type { PageIcon } from "../pageGl/icons";
 import type { PageTipAt } from "../pageGl/PagePlaced";
 import type { Shape } from "../pageGl/shapes";
@@ -61,9 +61,6 @@ import { cardState, refusedState } from "../workflow/cardState";
 import { useEasedTo } from "../../../theme/opening";
 
 type Pt = { x: number; y: number };
-
-/** The least a set is sized to, each way. */
-const LEAST = 48 * PX;
 
 /**
  * A wire's colours, from Meno's palette (docs/WORKFLOWS.md, *How it looks*):
@@ -891,28 +888,6 @@ export default function Workflow2D() {
     );
   };
 
-  /** A set sized by an edge or a corner: what it holds is what then lies inside it. */
-  const sizeSet = (edge: Edge, e: ReactPointerEvent, set: WorkflowSet) => {
-    if (e.button !== 0) return;
-    const start = worldOf(e.clientX, e.clientY);
-    const was = { x0: set.x0, y0: set.y0, x1: set.x1, y1: set.y1 };
-    const gesture = `${performance.now()}`;
-    follow(
-      e,
-      (p) => {
-        const dx = p.x - start.x;
-        const dy = p.y - start.y;
-        const f = { ...was };
-        if (edge.includes("e")) f.x1 = Math.max(was.x1 + dx, was.x0 + LEAST);
-        if (edge.includes("w")) f.x0 = Math.min(was.x0 + dx, was.x1 - LEAST);
-        if (edge.includes("n")) f.y1 = Math.max(was.y1 + dy, was.y0 + LEAST);
-        if (edge.includes("s")) f.y0 = Math.min(was.y0 + dy, was.y1 - LEAST);
-        store.getState().resizeSet(set.id, f, gesture);
-      },
-      () => {},
-    );
-  };
-
   /** A step dragged by its card; clicked, opened to its options, or shut. */
   const dragStep = (e: ReactPointerEvent, step: WorkflowStep) => {
     if (e.button !== 0) return;
@@ -1319,7 +1294,6 @@ export default function Workflow2D() {
       // (its words left to the field over its tab while it is named anew)
       tab: renaming === b.id ? { icon: maker ? kindInfo(maker.kind).icon : "copies", name: "" } : { icon: maker ? kindInfo(maker.kind).icon : "copies", name: info.name, status: info.count },
       iconWhenSmall: true,
-      edges: true,
     };
   });
   // (a step's result set folding into its exit's port as it comes to be drawn nowhere - held, or an exit's for what its step sets
@@ -1350,10 +1324,6 @@ export default function Workflow2D() {
         return;
       }
       dragSet(asPress(e), b);
-    },
-    edgeDown: (key, side, e) => {
-      const b = setById.get(stepOfKey(key));
-      if (b) sizeSet(side as Edge, asPress(e), b);
     },
     hover: (key, on) => {
       const id = stepOfKey(key);
