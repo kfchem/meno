@@ -7,7 +7,7 @@
  * after it was asked holds it, for every worker at once; the last one at
  * work answered, it is let go `LET_GO_MS` later, unless asked again. A
  * quick question - a structure checked as it is drawn - holds nothing.
- * Settings' "Keep the computer awake while jobs run" holds for this too:
+ * Settings' "Keep the computer awake while calculations run" holds for this too:
  * the backend asks it as it holds (src-tauri/src/jobs.rs `worker_awake`).
  */
 import { invoke } from "@tauri-apps/api/core";
