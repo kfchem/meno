@@ -250,9 +250,11 @@ function configuresAllOf(c: Configuration, open: Pick<StereoLeft, "atoms" | "bon
 
 /**
  * Stereoisomers each once, by their configuration, the first of each kept:
- * the toolkit enumerates elements Meno leaves open by its own rules (a
- * lone pair's inversion at an aziridine's N, with a carbon centre beside
- * it), and its isomers then differ only where Meno does not see them. An
+ * the toolkit enumerates what Meno does not see, by its own rules, and its
+ * isomers then differ only there: a lone pair's inversion at an aziridine's
+ * N, with a carbon centre beside it, and the inversion of an enhanced
+ * stereo group (AND, OR: its atoms are specified, so a configuration never
+ * shows them; made as drawn). An
  * isomer whose configuration leaves some of what the toolkit enumerates
  * out (`open`: an allene's axis, or a centre it gives none of) is kept
  * whatever - the others could differ there, and merged would be dropped
