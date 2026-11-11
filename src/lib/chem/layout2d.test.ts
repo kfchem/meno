@@ -978,7 +978,8 @@ describe("a label must not change how a bond is drawn", () => {
 
   it("stops a hashed wedge's widest hash short of a bare atom at its wide end that bonds go on from, where the style asks", () => {
     const bond: Bond = { a1: 0, a2: 1, order: 1, stereo: "down" };
-    const o = opts();
+    // (the widest hash reaching the atom: what no style asks for now, but one saved before the setting is drawn so)
+    const o = opts({ hashedWedgeShort: undefined });
     // (its wide end a chain's or a ring's atom: two more bonds go on from it)
     const onward = new Map([
       [0, 3],
@@ -1003,7 +1004,7 @@ describe("a label must not change how a bond is drawn", () => {
       [1, 2],
     ]);
     const far = (h: { far: number }[]) => Math.max(...h.map((x) => x.far));
-    const o = opts();
+    const o = opts({ hashedWedgeShort: undefined });
     const at = hashesOf(buildBondPrimitives(pair("C"), bond, o, ZOOM, two).polys);
     const short = hashesOf(buildBondPrimitives(pair("C"), bond, opts({ hashedWedgeShort: true }), ZOOM, two).polys);
     expect(far(at) - far(short)).toBeCloseTo(o.hashSpacingPx - o.lineWidthPx, 9);

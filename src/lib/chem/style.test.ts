@@ -108,14 +108,14 @@ describe("style presets", () => {
     expect(presetById("nonsense")).toBe(STYLE_PRESETS[0]);
   });
 
-  it("makes Meno's own ACS 1996 with round ends in IBM Plex Sans, R and S written bare, in the palette's black, its hashed wedges short of the atom", () => {
+  it("makes Meno's own ACS 1996 with round ends in IBM Plex Sans, R and S written bare, in the palette's black, its hashed wedges short of the atom and its reaction arrow's head a little barbed", () => {
     const { style } = presetById("meno");
     expect(DEFAULT_STYLE_CHOICE.preset).toBe("meno");
-    const { ends, fontFamily, stereoDescriptors, stereoDescriptorGap, bondColor, labelColor, shortHashes, hashedWedgeEnd, ...rest } = style;
-    const { ends: e, fontFamily: f, stereoDescriptors: d, stereoDescriptorGap: g, bondColor: b, labelColor: l, shortHashes: h, hashedWedgeEnd: w, ...acs } = ACS_1996;
+    const { ends, fontFamily, stereoDescriptors, stereoDescriptorGap, bondColor, labelColor, shortHashes, hashedWedgeEnd, reactionArrowHeadInset, ...rest } = style;
+    const { ends: e, fontFamily: f, stereoDescriptors: d, stereoDescriptorGap: g, bondColor: b, labelColor: l, shortHashes: h, hashedWedgeEnd: w, reactionArrowHeadInset: i, ...acs } = ACS_1996;
     expect(rest).toEqual(acs);
-    expect([ends, fontFamily, stereoDescriptors, stereoDescriptorGap, bondColor, labelColor, shortHashes, hashedWedgeEnd]).toEqual(["round", "IBM Plex Sans", "plain", 0.15, "#141414", "#141414", "three", "short"]);
-    expect([e, f, d, g, b, l, h, w]).toEqual(["square", "Arial", "parentheses", 0.35, "#000000", "#000000", "spaced", "atom"]);
+    expect([ends, fontFamily, stereoDescriptors, stereoDescriptorGap, bondColor, labelColor, shortHashes, hashedWedgeEnd, reactionArrowHeadInset]).toEqual(["round", "IBM Plex Sans", "plain", 0.15, "#141414", "#141414", "three", "short", 0.2]);
+    expect([e, f, d, g, b, l, h, w, i]).toEqual(["square", "Arial", "parentheses", 0.35, "#000000", "#000000", "spaced", "short", 0]);
     // the baseline follows the typeface
     expect(style.labelBaseline).toBeUndefined();
   });
