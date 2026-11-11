@@ -568,7 +568,7 @@ export function automaticValue(
     case "shortHashes":
       return "spaced";
     case "hashedWedgeEnd":
-      return "atom";
+      return "short";
     case "reactionArrowThickness":
       return style.lineThickness;
     case "labelBaseline":
@@ -710,7 +710,7 @@ export function acceptDrawingStyle(raw: unknown): DrawingStyle {
   const out: Record<string, unknown> = { ...base };
   // (a style saved before it could say how a short hashed bond is drawn, at the spacing, as it was drawn then - not as Meno's)
   if (r.shortHashes === undefined) delete out.shortHashes;
-  // (and one saved before it could say where a hashed wedge's widest hash lies, reaching the atom, as then)
+  // (and one saved before it could say where a hashed wedge's widest hash lies, reaching the atom, as then - not as every style now has it)
   if (r.hashedWedgeEnd === undefined) delete out.hashedWedgeEnd;
   for (const [key, value] of Object.entries(r)) {
     const field = FIELD_BY_KEY.get(key as keyof DrawingStyle);

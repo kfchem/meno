@@ -685,10 +685,10 @@ Both go together, because both touch every layer.
   (2026-10-27), and a style saved before the setting is drawn at the
   spacing.
 - **A hashed wedge's widest hash** stops a hash's clear gap short of a bare
-  atom at its wide end in Meno's own style, the bonds on from the atom
-  starting there on their own (the maintainer, 2026-10-29). In the journals'
-  styles it reaches the atom: none of their specifications says otherwise.
-  The setting is "Hashed wedge: widest hash" (At the atom, Short of the
+  atom at its wide end, the bonds on from the atom starting there on their
+  own: in Meno's own style (the maintainer, 2026-10-29) and, since
+  2026-11-11, in every style - none of the journals' specifications says
+  otherwise. The setting is "Hashed wedge: widest hash" (At the atom, Short of the
   atom). It holds only where bonds go on from the wide end: at a bare end
   bonded to nothing else, the widest hash is the bond's end in every style,
   or the wedge would have no end and look short (the maintainer,
