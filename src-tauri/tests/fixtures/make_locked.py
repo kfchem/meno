@@ -40,7 +40,7 @@ def encrypted(num: int, data: bytes) -> bytes:
 
 
 hexed = lambda b: "<" + b.hex() + ">"
-content = encrypted(4, b"BT /F1 14 Tf 72 700 Td (Made-up locked page) Tj ET")
+content = encrypted(4, b"BT /F1 14 Tf 72 350 Td (Made-up locked page) Tj ET")
 objs = {
     1: b"<< /Type /Catalog /Pages 2 0 R >>",
     2: b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
