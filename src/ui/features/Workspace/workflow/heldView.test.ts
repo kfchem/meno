@@ -6,7 +6,7 @@ import { readWorkspace, workspaceText } from "../utils/workspace";
 import { LARGE_SET } from "./entries";
 import { addStep } from "./model";
 import { CHIP, SET_PAD, SET_TOP } from "./look";
-import { placeResults, type RunWith } from "./run";
+import { HELD_SIZED, placeResults, type RunWith } from "./run";
 import { HELD_CHIP_ROW, HELD_LEAST_W, HELD_VIEWS, chipRows, heldFrame, heldViewAt, heldViewId, heldViews, isHeldView, shownIn, showsOneAtATime } from "./heldView";
 
 vi.mock("../../../../lib/calc/workers", () => ({ readerClient: () => Promise.reject(new Error("no workers in tests")) }));
@@ -91,6 +91,10 @@ describe("a held set's frame", () => {
     const lopsided = heldFrame([{ x0: -1, x1: 5, y0: -2, y1: 0.5, chip: 0 }], 1, 1);
     expect(lopsided.width).toBeCloseTo(10 + 2 * SET_PAD, 9);
     expect(lopsided.height).toBeCloseTo(SET_TOP + 4 + CHIP + SET_PAD, 9);
+    // (and the other way: it reaches further left than right, above than below)
+    const left = heldFrame([{ x0: -5, x1: 1, y0: -0.5, y1: 2, chip: 0 }], 1, 1);
+    expect(left.width).toBeCloseTo(10 + 2 * SET_PAD, 9);
+    expect(left.height).toBeCloseTo(SET_TOP + 4 + CHIP + SET_PAD, 9);
   });
   it("is at least as wide as its name and count need", () => {
     expect(heldFrame([room(0.1, 0.1)], 1, 500).width).toBe(500);
@@ -124,6 +128,27 @@ describe("a placed large set", () => {
     // (a conformer set among them: a frames chip's row too)
     const withFrames = ran([...waters(LARGE_SET), conformers(0, 4)], "conformers");
     expect(withFrames.sets![0].y1 - withFrames.sets![0].y0).toBeCloseTo(f.height + CHIP, 9);
+  });
+});
+
+describe("a placed large set's frame, as it is measured", () => {
+  /** A water that reaches `reach` page units each way about its middle, by its first atom's z. */
+  const reaching = (reach: number) => ({ ...water(0), atoms: water(0).atoms.map((a, i) => (i === 0 ? { ...a, z: reach } : a)) });
+  const byReach: RunWith["extentOf"] = (m) => ({ x0: -m.atoms[0].z, x1: m.atoms[0].z, y0: -m.atoms[0].z, y1: m.atoms[0].z });
+  const frameOf = (reaches: number[]) => {
+    const doc = addStep(emptyWorkspaceDocument(), "optimise", 0, 0, {}, "xtb");
+    const set = placeResults(doc, doc.steps![0], { molecules: reaches.map(reaching), rest: [], holds: "molecules" }, { extentOf: byReach }).sets![0];
+    return { width: set.x1 - set.x0, height: set.y1 - set.y0 };
+  };
+  const most = (reach: number) => heldFrame([{ x0: -reach, x1: reach, y0: -reach, y1: reach, chip: 0 }], 1, HELD_LEAST_W);
+
+  it("is as large as the largest it holds, wherever it stands among them, of the first HELD_SIZED", () => {
+    const all = (at: number, reach: number) => Array.from({ length: HELD_SIZED + 5 }, (_, k) => (k === at ? reach : 1));
+    // (the largest third, last of those measured, and the first not measured: that one is not counted)
+    expect(frameOf(all(2, 4))).toEqual(most(4));
+    expect(frameOf(all(HELD_SIZED - 1, 4))).toEqual(most(4));
+    expect(frameOf(all(HELD_SIZED, 4))).toEqual(most(1));
+    expect(frameOf(all(0, 4))).toEqual(most(4));
   });
 });
 
