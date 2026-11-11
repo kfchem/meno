@@ -13,7 +13,7 @@ import {
 } from "./lib/core";
 import { Deck, viewRegistry, type ViewEntry } from "./ui/views";
 import DocumentBridge from "./ui/views/DocumentBridge";
-import { openable, openedAs, openedTexts, sayNoneTold, stylesOfFile, textsOf, workspaceOfFile, type Opened, type OpenedStyles } from "./ui/views/openFile";
+import { openable, openedAs, openedTexts, sayNoneTold, stylesOfFile, textsOf, unreadWorkspaceSaid, workspaceOfFile, type Opened, type OpenedStyles } from "./ui/views/openFile";
 import { keptOnline } from "./lib/plugins/online";
 import StyleFileAsk from "./ui/features/StyleEditor/StyleFileAsk";
 import QuestionLayer from "./ui/layouts/QuestionLayer";
@@ -457,6 +457,13 @@ export default function App() {
         const text = textOf(bytes);
         // (what it is: told by what it holds - or, where nothing tells it, by a plugin asked)
         const kind = await kindOfFile(name, text);
+        // (told to be a workspace but none that reads - not a Meno file, cut short: said, not dropped unseen)
+        const unread = unreadWorkspaceSaid(name, text, kind);
+        if (unread) {
+          console.warn("a workspace file could not be read");
+          setNotice(unread);
+          continue;
+        }
         const opened = openedAs(name, text, path, kind);
         const asText = textsOf(opened);
         if (asText) texts.push(...asText);
@@ -554,6 +561,13 @@ export default function App() {
         const text = textOf(bytes);
         // (told as Open through the dialog tells it: a catalogue's kind too)
         const kind = await kindOfFile(f.name, text);
+        // (told to be a workspace but none that reads - not a Meno file, cut short: said, not dropped unseen)
+        const unread = unreadWorkspaceSaid(f.name, text, kind);
+        if (unread) {
+          console.warn("a workspace file could not be read");
+          setNotice(unread);
+          continue;
+        }
         const opened = openedAs(f.name, text, undefined, kind);
         const asText = textsOf(opened);
         if (asText) texts.push(...asText);

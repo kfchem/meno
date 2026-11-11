@@ -35,6 +35,8 @@ const KNOWN: readonly (readonly [RegExp, (m: RegExpExecArray) => string])[] = [
   [/^Meno: the tab "[\s\S]*" stopped working\.$/, () => 'Meno: the tab "…" stopped working.'],
   // (hooks/useStructureEvents, clipboardActions, useOfficeLink, chem/fromSmiles)
   [/^(initial payload|append) import failed$/, (m) => m[0]],
+  // (App: a workspace file that does not read, said on the page - its name left out)
+  [/^a workspace file could not be read$/, (m) => m[0]],
   [/^the structure is copied without its pictures$/, (m) => m[0]],
   [/^the document did not take the structure$/, (m) => m[0]],
   [/^the SMILES is drawn as the plugin laid it out$/, (m) => m[0]],
