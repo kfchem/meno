@@ -105,9 +105,8 @@ export type DrawingStyle = {
    * A hashed wedge's widest hash: reaching the atom at its wide end ("atom"),
    * or stopping short of it by a hash's clear gap ("short"), the bonds on
    * from the atom starting there on their own. "short" in every style (the
-   * maintainer, 2026-10-29 for Meno's own; 2026-11-11 for all - the journals'
-   * specifications do not say otherwise); unset, in one saved before the
-   * setting, "atom", as it was drawn then.
+   * maintainer, 2026-10-29 for Meno's own; 2026-11-11 for all); unset,
+   * "short", as every style has it: the journals' specifications say nothing of it.
    */
   hashedWedgeEnd?: "atom" | "short";
   /** A dashed bond's dashes, and the least gap between two of them. */
@@ -542,7 +541,7 @@ export function layoutOptionsFor(
     hashSpacingPx: at(style.hashInterval),
     hashFirstGapPx: at(style.hashStartOffset ?? style.hashInterval),
     ...(style.shortHashes === "three" ? { fewestHashes: FEWEST_HASHES } : {}),
-    ...(style.hashedWedgeEnd === "short" ? { hashedWedgeShort: true } : {}),
+    ...(style.hashedWedgeEnd !== "atom" ? { hashedWedgeShort: true } : {}),
     boldWidthPx: at(style.boldThickness),
     dashLengthPx: at(style.dashLength),
     dashGapPx: at(style.dashGap),

@@ -688,13 +688,14 @@ Both go together, because both touch every layer.
   atom at its wide end, the bonds on from the atom starting there on their
   own: in Meno's own style (the maintainer, 2026-10-29) and, since
   2026-11-11, in every style - none of the journals' specifications says
-  otherwise. The setting is "Hashed wedge: widest hash" (At the atom, Short of the
-  atom). It holds only where bonds go on from the wide end: at a bare end
-  bonded to nothing else, the widest hash is the bond's end in every style,
-  or the wedge would have no end and look short (the maintainer,
-  2026-11-05). At a label the hashes stop at the label in every style. A style
-  saved before the setting reaches the atom, as it was drawn then; a
-  picture draws it as the canvas does.
+  otherwise - and in a style that says nothing of it, as one saved before
+  the setting (which then draws it short, not at the atom as before). The
+  setting is "Hashed wedge: widest hash" (At the atom, Short of the atom).
+  It holds only where bonds go on from the wide end: at a bare end bonded
+  to nothing else, the widest hash is the bond's end in every style, or the
+  wedge would have no end and look short (the maintainer, 2026-11-05). At a
+  label the hashes stop at the label in every style. A picture draws it as
+  the canvas does.
 - **A bold bond's free end** is square, its corners rounded as a line's end
   is when ends are round - not a half circle (the maintainer, 2026-10-24).
 - **More bond types.** Besides single, double, triple, wedge, hashed wedge and

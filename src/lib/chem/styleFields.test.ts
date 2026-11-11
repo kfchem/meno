@@ -207,9 +207,10 @@ describe("a hashed wedge's widest hash, a style's own setting", () => {
       const own = acceptDrawingStyle(JSON.parse(JSON.stringify(p.style)));
       expect(layoutOptionsFor(own, 1).hashedWedgeShort, p.id).toBe(want);
     }
-    // (an own style saved before the setting reaches the atom, as it was drawn then)
+    // (an own style saved before the setting, with none, stops short as every style does - what Automatic says)
     const before = { ...presetById("acs1996").style, hashedWedgeEnd: undefined };
-    expect(layoutOptionsFor(acceptDrawingStyle(JSON.parse(JSON.stringify(before))), 1).hashedWedgeShort).toBeUndefined();
+    expect(layoutOptionsFor(acceptDrawingStyle(JSON.parse(JSON.stringify(before))), 1).hashedWedgeShort).toBe(true);
+    expect(automaticValue("hashedWedgeEnd", ACS_1996)).toBe("short");
     // (a change either way, kept)
     const toAtom = withSetting({ preset: "meno", changes: {} }, "hashedWedgeEnd", "atom");
     const back = acceptStyleChoice(JSON.parse(JSON.stringify(toAtom)));
