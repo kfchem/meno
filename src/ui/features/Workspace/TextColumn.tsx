@@ -3,7 +3,7 @@ import type { Conversation } from "./conversation/types";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import clsx from "clsx";
-import { ArrowsPointingInIcon, ArrowsPointingOutIcon, ArrowUpTrayIcon, ChevronDoubleRightIcon, ChevronDownIcon, ChevronUpIcon, CodeBracketIcon, ExclamationTriangleIcon, MagnifyingGlassIcon, PrinterIcon, StopCircleIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { ArrowsPointingInIcon, ArrowsPointingOutIcon, ArrowUpTrayIcon, ChevronDoubleRightIcon, ChevronDownIcon, ChevronUpIcon, CodeBracketIcon, ExclamationTriangleIcon, MagnifyingGlassIcon, StopCircleIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { exists } from "@tauri-apps/plugin-fs";
 import { writeDocument } from "../../../lib/io/writeDocument";
@@ -26,7 +26,8 @@ import { isPinch, wheelReader } from "../../../lib/input/wheel";
 import { QUIET_AFTER_MIN, useAppSettings } from "../../../lib/settings/appSettings";
 import { quietFor, quietShort } from "../../../lib/jobs";
 import { pageUnder, pointOn } from "../../../lib/pdf/column";
-import { printed, printTip } from "../../../lib/pdf/print";
+import { printed } from "../../../lib/pdf/print";
+import PrintButton from "./components/PrintButton";
 import { usePrinting } from "./hooks/usePrinting";
 import { figureStructuresHad } from "./utils/pdfStructures";
 import { indexOnce, mentionUnder } from "./utils/compoundLens";
@@ -337,17 +338,7 @@ function Column({
             <ArrowUpTrayIcon className="h-4 w-4" />
           </button>
         )}
-        {pdf && (
-          <button
-            onClick={() => printing !== "no" && void printPdf(pdf)}
-            aria-disabled={printing === "no" || undefined}
-            aria-label="Print…"
-            title={printTip(printing, shortcutLabel("P"))}
-            className={`h-7 w-7 shrink-0 rounded-md flex items-center justify-center ${printing === "no" ? "text-gh-line cursor-default" : "hover:bg-gh-base"}`}
-          >
-            <PrinterIcon className="h-4 w-4" />
-          </button>
-        )}
+        {pdf && <PrintButton printing={printing} shortcut={shortcutLabel("P")} onPrint={() => void printPdf(pdf)} />}
         <button
           onClick={() => setFilled(!filled)}
           aria-label={filled ? "Back beside the canvas" : "Fill the workspace"}

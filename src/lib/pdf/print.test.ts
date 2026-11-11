@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { LOW_DPI, NOT_ALLOWED, PRINT_CSS, PRINT_DPI, askWindowToPrint, printDpi, printPdf, pageSizeCss, printTip, printed, showToPrinter, type PrintDeps, type Printing } from "./print";
+import { LOW_DPI, MOST_WAIT_MS, NOT_ALLOWED, PRINT_CSS, PRINT_DPI, askWindowToPrint, holdPicture, learnPrinting, printDpi, printPdf, pageSizeCss, printTip, printed, printingKnown, releasePicture, showToPrinter, watchPrinting, type PrintDeps, type Printing } from "./print";
 
-const invoked = vi.hoisted(() => ({ calls: [] as [string, unknown][] }));
+const invoked = vi.hoisted(() => ({ calls: [] as [string, unknown][], answers: {} as Record<string, unknown> }));
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: async (name: string, args?: unknown) => {
     invoked.calls.push([name, args]);
+    return invoked.answers[name];
   },
 }));
 
@@ -161,10 +162,10 @@ describe("Print, as the command says it", () => {
 });
 
 /** A window of just what the print document needs: elements that remember what is put in them, the page's body, the window's events. */
-function pageWindow() {
+function pageWindow(decode: () => Promise<void> = async () => {}) {
   type El = { tag: string; id: string; src: string; className: string; children: El[]; removed: boolean; textContent: string; append: (...e: El[]) => void; remove: () => void; decode: () => Promise<void>; alt: string };
   const make = (tag: string): El => {
-    const el: El = { tag, id: "", src: "", className: "", alt: "", textContent: "", children: [], removed: false, append: (...e) => el.children.push(...e), remove: () => void (el.removed = true), decode: async () => {} };
+    const el: El = { tag, id: "", src: "", className: "", alt: "", textContent: "", children: [], removed: false, append: (...e) => el.children.push(...e), remove: () => void (el.removed = true), decode };
     return el;
   };
   const body = make("body");
@@ -174,12 +175,12 @@ function pageWindow() {
   vi.stubGlobal("window", {
     addEventListener: (name: string, f: () => void) => listeners.set(name, f),
     removeEventListener: (name: string) => listeners.delete(name),
-    setTimeout: (f: () => void) => globalThis.setTimeout(f, 1e9),
+    setTimeout: (f: () => void, ms: number) => globalThis.setTimeout(f, ms),
     clearTimeout: (t: number) => globalThis.clearTimeout(t),
   });
   vi.stubGlobal("URL", { revokeObjectURL: (u: string) => revoked.push(u) });
   const sheets = () => body.children.filter((c) => c.id === "meno-print" && !c.removed);
-  return { sheets, revoked, afterprint: () => listeners.get("afterprint")?.() };
+  return { sheets, revoked, listeners, body, afterprint: () => listeners.get("afterprint")?.() };
 }
 
 describe("The window's own print dialog", () => {
@@ -231,6 +232,165 @@ describe("The window's own print dialog", () => {
     const w = pageWindow();
     await expect(showToPrinter(["blob:a"], [A4], async () => Promise.reject(new Error("no dialog")))).rejects.toThrow("no dialog");
     expect(w.sheets()).toHaveLength(0);
+  });
+});
+
+describe("The pictures kept for the dialog", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it("are let go of at once where no print document is on the window", () => {
+    const w = pageWindow();
+    releasePicture("blob:x");
+    expect(w.revoked).toEqual(["blob:x"]);
+  });
+
+  it("are held while the print document is on the window, and let go of when the window has printed", async () => {
+    vi.useFakeTimers();
+    const w = pageWindow();
+    await showToPrinter(["blob:a", "blob:b"], [A4, A4], async () => {});
+    releasePicture("blob:a");
+    releasePicture("blob:b");
+    expect(w.revoked).toEqual([]);
+    w.afterprint();
+    expect(w.revoked).toEqual(["blob:a", "blob:b"]);
+    // (and a window that says it again lets go of nothing twice)
+    w.afterprint();
+    expect(w.revoked).toEqual(["blob:a", "blob:b"]);
+  });
+
+  it("are let go of, with the print document, when the next print takes it away", async () => {
+    vi.useFakeTimers();
+    const w = pageWindow();
+    await showToPrinter(["blob:a"], [A4], async () => {});
+    releasePicture("blob:a");
+    await showToPrinter(["blob:b"], [A4], async () => {});
+    expect(w.revoked).toEqual(["blob:a"]);
+    expect(w.sheets()).toHaveLength(1);
+  });
+
+  it("are let go of, with the print document, after a long wait for a window that never says it has printed", async () => {
+    vi.useFakeTimers();
+    const w = pageWindow();
+    await showToPrinter(["blob:a"], [A4], async () => {});
+    releasePicture("blob:a");
+    vi.advanceTimersByTime(MOST_WAIT_MS - 1);
+    expect(w.sheets()).toHaveLength(1);
+    expect(w.revoked).toEqual([]);
+    vi.advanceTimersByTime(1);
+    expect(w.sheets()).toHaveLength(0);
+    expect(w.revoked).toEqual(["blob:a"]);
+  });
+
+  it("leave nothing behind once let go of: no listener for the window's word, no timer waiting", async () => {
+    vi.useFakeTimers();
+    const w = pageWindow();
+    await showToPrinter(["blob:a"], [A4], async () => {});
+    expect(w.listeners.has("afterprint")).toBe(true);
+    expect(vi.getTimerCount()).toBe(1);
+    w.afterprint();
+    expect(w.listeners.size).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("are let go of at once where the dialog could not be asked for, with the print document", async () => {
+    vi.useFakeTimers();
+    const w = pageWindow();
+    await expect(showToPrinter(["blob:a"], [A4], async () => Promise.reject(new Error("no dialog")))).rejects.toThrow();
+    releasePicture("blob:a");
+    expect(w.revoked).toEqual(["blob:a"]);
+    expect(w.listeners.size).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("are held by an address from a PNG", () => {
+    const made: Blob[] = [];
+    vi.stubGlobal("URL", { createObjectURL: (b: Blob) => (made.push(b), `blob:${made.length}`) });
+    expect(holdPicture(new Uint8Array([1, 2]))).toBe("blob:1");
+    expect(made[0].type).toBe("image/png");
+    expect(made[0].size).toBe(2);
+  });
+});
+
+describe("The print document as the window has it", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it("holds the print rules and the pages' sizes, and each picture with no words of its own", async () => {
+    vi.useFakeTimers();
+    const w = pageWindow();
+    await showToPrinter(["blob:a", "blob:b"], [A4, [842, 595]], async () => {});
+    const sheet = w.sheets()[0];
+    expect(sheet.children[0].tag).toBe("style");
+    expect(sheet.children[0].textContent).toBe(PRINT_CSS + pageSizeCss([A4, [842, 595]]));
+    expect(sheet.children.filter((c) => c.tag === "img").map((c) => c.alt)).toEqual(["", ""]);
+    expect(sheet.children.filter((c) => c.tag === "img").map((c) => c.className)).toEqual(["p595x842", "p842x595"]);
+  });
+
+  it("is asked of the window only once every picture has been decoded", async () => {
+    vi.useFakeTimers();
+    let decoded: () => void = () => {};
+    pageWindow(() => new Promise<void>((done) => (decoded = done)));
+    const order: string[] = [];
+    const pending = showToPrinter(["blob:a"], [A4], async () => void order.push("asked"));
+    await Promise.resolve();
+    expect(order).toEqual([]);
+    decoded();
+    await pending;
+    expect(order).toEqual(["asked"]);
+  });
+
+  it("is asked of the window even where a picture could not be decoded", async () => {
+    vi.useFakeTimers();
+    pageWindow(() => Promise.reject(new Error("no picture")));
+    const order: string[] = [];
+    await showToPrinter(["blob:a"], [A4], async () => void order.push("asked"));
+    expect(order).toEqual(["asked"]);
+  });
+
+  it("fits a picture to the paper's width and no more than its height, and lets the window's own height go", () => {
+    expect(PRINT_CSS).toMatch(/#meno-print img \{[^}]*width: 100%;[^}]*height: auto;[^}]*max-height: 100vh;/);
+    expect(PRINT_CSS).toMatch(/html, body \{[^}]*min-height: 0 !important;/);
+  });
+});
+
+describe("What the author allows, as the column asks it", () => {
+  const sha = (c: string) => c.repeat(64);
+
+  it("is asked of the reader once for each PDF, and known after", async () => {
+    invoked.calls.length = 0;
+    invoked.answers.pdf_printing = "low";
+    expect(printingKnown(sha("e"))).toBeUndefined();
+    expect(await learnPrinting(sha("e"))).toBe("low");
+    expect(await learnPrinting(sha("e"))).toBe("low");
+    expect(printingKnown(sha("e"))).toBe("low");
+    expect(invoked.calls).toEqual([["pdf_printing", { sha: sha("e") }]]);
+  });
+
+  it("is said to a watcher once it is found, and not asked again where it is known", async () => {
+    invoked.answers.pdf_printing = "no";
+    invoked.calls.length = 0;
+    let told = 0;
+    watchPrinting(sha("f"), () => told++);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(told).toBe(1);
+    expect(printingKnown(sha("f"))).toBe("no");
+    watchPrinting(sha("f"), () => told++);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(told).toBe(1);
+    expect(invoked.calls).toHaveLength(1);
+  });
+
+  it("is not said to a watcher that has stopped", async () => {
+    invoked.answers.pdf_printing = "full";
+    let told = 0;
+    watchPrinting(sha("g"), () => told++)();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(told).toBe(0);
   });
 });
 

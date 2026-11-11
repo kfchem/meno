@@ -35,6 +35,24 @@ const known = new Map<string, Printing>();
 /** What a PDF's author allows, as it was found; none until `learnPrinting` has. */
 export const printingKnown = (sha256: string): Printing | undefined => known.get(sha256);
 
+/**
+ * Asks what the author of the PDF allows, for a column or menu that shows it
+ * (`usePrinting`): `onKnown` is told once it is found, unless the watch has
+ * been stopped (the returned function) first. Nothing is asked where it is
+ * already known; a reader that cannot say is not heard from.
+ */
+export function watchPrinting(sha256: string, onKnown: () => void): () => void {
+  if (known.has(sha256)) return () => {};
+  let live = true;
+  learnPrinting(sha256).then(
+    () => live && onKnown(),
+    () => {},
+  );
+  return () => {
+    live = false;
+  };
+}
+
 /** What a PDF's author allows, asked of the reader once for each PDF. */
 export async function learnPrinting(sha256: string): Promise<Printing> {
   const had = known.get(sha256);
@@ -206,13 +224,18 @@ export async function showToPrinter(urls: string[], sizes: readonly PageSize[], 
 }
 
 /** The longest the printer's pictures are kept for a window that never says it has printed. */
-const MOST_WAIT_MS = 10 * 60 * 1000;
+export const MOST_WAIT_MS = 10 * 60 * 1000;
+
+/** A picture held by an address, for the print document. */
+export const holdPicture = (png: Uint8Array): string => URL.createObjectURL(new Blob([png as BlobPart], { type: "image/png" }));
+
+/** A picture let go of - kept while the print document is on the window, as the dialog draws from it after printing has returned. */
+export const releasePicture = (url: string): void => (retire ? void kept.add(url) : URL.revokeObjectURL(url));
 
 const real: PrintDeps = {
   allowed: printingOf,
   draw: boxPicture,
-  hold: (png) => URL.createObjectURL(new Blob([png as BlobPart], { type: "image/png" })),
-  // (kept while the print document is on the window: the dialog draws from it after this has returned)
-  release: (url) => (retire ? void kept.add(url) : URL.revokeObjectURL(url)),
+  hold: holdPicture,
+  release: releasePicture,
   show: showToPrinter,
 };

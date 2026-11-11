@@ -338,8 +338,11 @@ PDFs there - one step, which an undo takes back. It is held as any other
   shows no dialog in the app: macOS's print panel, WebView2's and GTK's
   dialogs). The print document's `html` and `body` are let grow to hold every
   picture (the app's own are the window's height with the rest cut off, which
-  printed one page), and each page's own size is given as a named CSS page, so
-  that where the engine takes the paper from the document, letter stays letter.
+  printed one page), and each page's own size is given as a named CSS page. Chromium
+  (WebView2, on Windows) takes the paper from it, so letter stays letter; WebKit's
+  dialog on a Mac does not (the named page is not honoured there): it prints on
+  the paper the dialog has chosen, the Mac's default, A4 or letter, and each
+  picture is fitted to it whole.
   On a Mac the first print raises the system's "find devices on your local
   network" prompt (printer discovery); printing to a PDF file works whichever
   answer is given. The print document stays in the window, out of sight, until the
