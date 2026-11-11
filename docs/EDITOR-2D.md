@@ -503,7 +503,8 @@ molecule in 3D or a picture.
   `dragsSelection`); an atom that is not selected, or is selected alone,
   moves on its own as before.
 - Dragging the handle turns it about its middle, in steps of 15 degrees, or
-  freely after a pause - one undo step. While it turns, or a selection is
+  freely after a pause - one undo step. Molecules in 3D selected alone are
+  turned freely, never in steps: a molecule in 3D has no grid to keep to. While it turns, or a selection is
   dragged, each frame only draws: a structure only carried keeps its
   layout, turned and moved with it, its labels upright beside their atoms,
   and electron-pushing arrows on it are carried likewise; each is laid out
