@@ -167,7 +167,7 @@ export const CHIPS = [
 
 /**
  * `blocks` laid in a card `widthPx` wide: each block in its room, one under the other, their gap between them (`CARD.gap`, or
- * the block's own), the card's own room above the first and below the last. A question stands against the right, in a ground as wide as
+ * the block's own), the card's own room above the first and below the last. A question stands against the right - each line of it its own, as it was written -  in a ground as wide as
  * its widest line needs, at most `CARD.question.share` of the width inside; a list item hangs its words under its first line's, after its
  * marker.
  */
@@ -184,8 +184,14 @@ export function cardLayout(blocks: readonly CardBlock[], widthPx: number = CARD.
       lines.push({ runs, x, y: top, baseline: top + baselineIn(line, size), width, size, block });
     if (b.kind === "question") {
       const q = CARD.question;
-      const wrapped = wrapRuns([{ text: b.text, color: COLORS.ink }], CARD.size, Math.max(inner * q.share - 2 * q.padX, 1));
-      const text = wrapped.length ? wrapped : [{ runs: [] as Run[], width: 0 }];
+      // (each line the person wrote its own - the ask field starts one with Shift+Enter - an empty one kept as a line's room)
+      const text = b.text
+        .replace(/\r\n?/g, "\n")
+        .split("\n")
+        .flatMap((p) => {
+          const wrapped = wrapRuns([{ text: p, color: COLORS.ink }], CARD.size, Math.max(inner * q.share - 2 * q.padX, 1));
+          return wrapped.length ? wrapped : [{ runs: [] as Run[], width: 0 }];
+        });
       const w = Math.max(...text.map((l) => l.width)) + 2 * q.padX;
       const h = text.length * CARD.line + 2 * q.padY;
       const x = widthPx - CARD.side - w;

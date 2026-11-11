@@ -131,6 +131,15 @@ describe("a card's blocks laid in lines", () => {
     expect(at(room + 1).lines.map(text)).toEqual(["alpha beta"]);
   });
 
+  it("lays each line of a question - a Shift+Enter in the ask field - on a line of its own, the ground as tall as all of them, an empty one a line's room", () => {
+    const l = cardLayout([{ kind: "question", text: "alpha\n\nbeta\r\ngamma" }]);
+    expect(l.lines.map(text)).toEqual(["alpha", "", "beta", "gamma"]);
+    // (alpha 8 below the ground's top, 12; the empty line 19 below it, beta 38, gamma 57; four lines, the ground 4 x 19 + 16)
+    expect(l.lines.map((x) => x.y)).toEqual([20, 39, 58, 77]);
+    expect(l.boxes[0].h).toBe(4 * 19 + 16);
+    expect(l.height).toBe(12 + 4 * 19 + 16 + 12);
+  });
+
   it("sets a call's line and Meno's word small and quiet - a failed call in the attention colour - in lines of 16", () => {
     const l = cardLayout([
       { kind: "tool", text: "Listed what lies in the frame \u00b7 2 things in the frame", failed: false },
