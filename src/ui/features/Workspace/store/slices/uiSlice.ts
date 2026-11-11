@@ -261,6 +261,7 @@ export function createUiSlice(
 
     requestShow: (box: ShowBox) =>
       set((prev: EditorState) => ({ ...prev, showRequest: { box, n: (prev.showRequest?.n ?? 0) + 1 } })),
+    requestPan: (dx: number, dy: number) => set((prev: EditorState) => ({ ...prev, panRequest: { dx, dy, n: (prev.panRequest?.n ?? 0) + 1 } })),
 
     beginAutoFitSuspend: () =>
       set((prev: EditorState) => ({ ...prev, autoFitSuspended: true })),

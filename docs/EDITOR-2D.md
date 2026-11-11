@@ -299,6 +299,18 @@ molecule selects it. A right-click, or a press with two fingers,
 opens the menu for what is under the pointer; it waits for the button to
 come up, so a right drag is a move, not a menu.
 
+**Menus on the page** (the maintainer). Quick Add, and the menu a right-click
+opens - a part's, a step's card's, a frames chip's - stand where they were
+asked for: the menu's top left corner 14 px up and to the right of the point,
+whatever its size, and kept at that point on the page as the view moves. Where
+any of it would lie past the canvas - the column's width counted - the view
+eases along by just what it lies past and 16 px more, never zooming: a menu is
+a screen's size, not the page's. A panel opened in Quick Add, or a row in a
+menu, that makes it larger asks again. A menu taller than the canvas has its
+top brought in and scrolls inside. Once it has shut, the view stays where it
+went. The pan needed is one pure rule (`panFor`, `menuAt.ts`; the hook that
+anchors a menu and asks for it, `useMenuAt.ts`).
+
 **Bond keys** (users' wish, relayed by the maintainer on 2026-11-02; pressed
 again they go on as clicks do, 2026-11-04). With the pointer on a bond, 1, 2
 and 3 set its kind, and a key pressed again goes on round as a click would:
