@@ -574,7 +574,8 @@ programs after it end, whether Meno is open or not (macOS: the system's
 `caffeinate`; Windows: the runner's thread saying the system is needed;
 elsewhere nothing). The display may still turn off, and a lid closed or
 a sleep asked for is the person's. Settings, *Calculations*, can turn it
-off (`src-tauri/src/awake.rs`).
+off ("Keep the computer awake while calculations run";
+`src-tauri/src/awake.rs`).
 
 **Cluster jobs are submit-and-return.** Meno submits, keeps the job's record
 (scheduler, its job id, the key), and returns. It takes the job up again
