@@ -1358,10 +1358,10 @@ it, in `features/Workspace/pageGl/`:
 - **Its lengths** (`units`): in page pixels - a screen pixel at the zoom a
   canvas opens at (utils/pageScale `PAGE_PX`) - so all of it grows and
   shrinks with the page, its lines too, never thinner than one device
-  pixel. A control - a port, a handle - is as large as a hand needs it
-  instead: its screen pixels where the page is near, no more than its own
-  page pixels zoomed out, nor than its share of what it belongs to
-  (`Control`).
+  pixel. A control - a port - is its page pixels too, no more than its
+  share of what it belongs to, and never under its least on the screen
+  where the page is far (`Control`; 2026-11-11, the maintainer: a port's
+  dots were far too small zoomed in).
 - **Boxes and rings** (`PageShapes`): one instanced quad each, its shape
   worked out from its distance to its edge in the fragment shader -
   rounded corners, a line inside the edge as a CSS inset ring is, solid or
@@ -1429,8 +1429,8 @@ it, in `features/Workspace/pageGl/`:
   too small to read; a tab's words start as far from the frame's left edge
   as its icon stands from its top, a conversation's and a set's alike
   (`TAB_INSET`); what a set holds (a summary, a table, a chart) is
-  HTML still, inside its frame. Its ports (`ports`): rings as large as a
-  hand takes them, lit where a wire being drawn may join them, a wire let
+  HTML still, inside its frame. Its ports (`ports`): rings that grow with the
+  page, never under 5 screen pixels, lit where a wire being drawn may join them, a wire let
   go on one found by its shape. And its small marks (`workflowMarks`):
   what just joined a set or left it, an Enumerate step's positions, a
   structure's number with how it was made in the tip. Frames under cards
