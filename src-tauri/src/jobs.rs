@@ -3027,6 +3027,35 @@ pub fn jobs_limits(app: AppHandle, cores: u32, memory: u64, awake: Option<bool>)
     write_limits(&root, Limits { cores: cores.clamp(1, 1024), memory: memory.min(MEMORY_MOST), awake: awake.unwrap_or(true) }).map_err(|e| e.to_string())
 }
 
+/// The computer kept awake while a plugin's worker works on what it was asked (lib/plugins/awake), as while a job
+/// runs - unless Settings says not, as the jobs' limits say it: held from the first ask to the last let go.
+#[derive(Default)]
+pub struct WorkerAwake(std::sync::Mutex<Option<crate::awake::Awake>>);
+
+/// Hold the computer awake for a plugin's worker at work (`held`), or let it go. Held already, or let go already, it
+/// is left as it is.
+#[tauri::command]
+pub fn worker_awake(app: AppHandle, state: tauri::State<'_, WorkerAwake>, held: bool) -> Result<(), String> {
+    let root = jobs_root(&app)?;
+    hold_for_worker(&state.0, held, || limits_in(&root).awake);
+    Ok(())
+}
+
+/// The hold for workers let go, whatever held it: the page that took it is gone (lib.rs, a page loaded anew).
+pub fn worker_let_go(state: &WorkerAwake) {
+    hold_for_worker(&state.0, false, || false);
+}
+
+/// The hold `kept` taken where `held` and Settings let it (`allowed`, asked only then), else let go.
+fn hold_for_worker(kept: &std::sync::Mutex<Option<crate::awake::Awake>>, held: bool, allowed: impl Fn() -> bool) {
+    let mut kept = kept.lock().unwrap_or_else(|e| e.into_inner());
+    if !held {
+        *kept = None;
+    } else if kept.is_none() && allowed() {
+        *kept = Some(crate::awake::hold());
+    }
+}
+
 /// Limits written whole: a runner never reads half of them.
 fn write_limits(root: &Path, limits: Limits) -> std::io::Result<()> {
     fs::create_dir_all(root)?;
@@ -3253,6 +3282,28 @@ mod tests {
         assert_eq!(rx.recv_timeout(Duration::from_secs(5)).unwrap(), Turn::Behind(1));
         drop(runners);
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_worker_at_work_holds_the_computer_awake_once_where_settings_let_it_and_lets_go() {
+        let kept = std::sync::Mutex::new(None);
+        // (Settings saying to let it sleep: nothing held)
+        hold_for_worker(&kept, true, || false);
+        assert!(kept.lock().unwrap().is_none());
+        hold_for_worker(&kept, true, || true);
+        assert!(kept.lock().unwrap().is_some());
+        // (held already: kept as it is, Settings not asked again)
+        hold_for_worker(&kept, true, || unreachable!("asked again while held"));
+        assert!(kept.lock().unwrap().is_some());
+        hold_for_worker(&kept, false, || unreachable!("asked as it lets go"));
+        assert!(kept.lock().unwrap().is_none());
+        hold_for_worker(&kept, false, || true);
+        assert!(kept.lock().unwrap().is_none());
+        // (the page loaded anew: whatever was held let go, Settings not asked)
+        let state = WorkerAwake::default();
+        hold_for_worker(&state.0, true, || true);
+        worker_let_go(&state);
+        assert!(state.0.lock().unwrap().is_none());
     }
 
     #[test]

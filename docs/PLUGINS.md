@@ -957,6 +957,17 @@ fills.
   The next request waits for the worker to start, as a session's first
   request does: a role says "Starting RDKit…" meanwhile, and a file's
   reading or a step waits as on its first use.
+- **The computer kept awake while it works** (2026-11-11;
+  `lib/plugins/awake.ts`, backend `worker_awake`). A step a worker
+  computes itself - conformers made on the page, in rounds, say - can take
+  long, as a job can. A request still unanswered 10 s after it was asked
+  keeps the computer awake, as a running job does, for every worker at
+  once; once no worker is on such a request, it is let go 3 s later,
+  unless a request comes meanwhile (the next round of a step). A quick
+  request, such as the checks made as a structure is drawn, holds
+  nothing. Settings, *Calculations*, "Keep the computer awake while
+  calculations run" holds for this too: off, nothing is held. The page loaded anew -
+  reloaded while a worker held it - lets go of what the page before held.
 - **Held on a request.** A worker answers one request at a time, in the
   order asked. If the request it is on is not answered in that request's
   time, the worker is stopped, and the next request starts it afresh
