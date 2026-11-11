@@ -6,7 +6,7 @@ import { dielsAlder } from "../../../../lib/chem/reactionMap.fixtures";
 import * as ops from "../document";
 import { createWorkspaceDocument, emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
 import type { Arrow, Atom, Bond, Model } from "../store/types";
-import { beforeNumbers, keptMap, mapMarks, mappedPairSdf, mapStanding, reactionOf, type Side3D } from "./atomMap";
+import { beforeNumbers, keptMap, mapMarks, mapOffered, mappedPairSdf, mapStanding, noMapSaid, reactionOf, type Side3D } from "./atomMap";
 import { reactionFileText } from "./reactionFile";
 
 /**
@@ -113,6 +113,31 @@ describe("a kept map and what it shows", () => {
     expect(ops.setAtomMap(changed, 1, kept).model.atoms.every((a) => a.map === undefined)).toBe(true);
   });
 
+  it("stands as refused once its arrow comes to mean no reaction, shows nothing then, is kept, and is back where the arrow means a reaction again", () => {
+    const d = drawn();
+    const { reactants, products, result } = sides();
+    const kept = keptMap(d.model, result, reactants, products);
+    const store = createWorkspaceDocument();
+    store.reset(ops.setAtomMap(d, 1, kept));
+    const marked = () => store.getState().model.atoms.filter((a) => a.map).length;
+    const before = marked();
+    expect(before).toBeGreaterThan(0);
+    for (const patch of [{ kind: "noReaction" as const }, { kind: "retrosynthetic" as const }, { heads: 2 as const }]) {
+      store.edit("arrow", (x) => ops.setArrowForm(x, [1], patch));
+      const arrow = store.getState().arrows[0];
+      expect(mapStanding(arrow, store.getState().model)).toBe("refused");
+      // (kept as data, its numbers off the drawing)
+      expect(arrow.atomMap).toBeDefined();
+      expect(marked()).toBe(0);
+      store.edit("arrow", (x) => ops.setArrowForm(x, [1], { kind: null, heads: 1 }));
+      expect(mapStanding(store.getState().arrows[0], store.getState().model)).toBe("ready");
+      expect(marked()).toBe(before);
+    }
+    // (an equilibrium, two-headed or not, still means a reaction)
+    store.edit("arrow", (x) => ops.setArrowForm(x, [1], { kind: "equilibrium", heads: 2 }));
+    expect(mapStanding(store.getState().arrows[0], store.getState().model)).toBe("ready");
+  });
+
   it("fails closed: an edit to its drawing takes its numbers and centres off at once, in the same step - undo gives them back", () => {
     const d = drawn();
     const { reactants, products, result } = sides();
@@ -155,5 +180,37 @@ describe("a kept map and what it shows", () => {
     const n = beforeNumbers(kept);
     const [c1, c5] = [n[0] - 1, n[10] - 1];
     expect(records[1].bonds.some((b) => (b.a1 === c1 && b.a2 === c5) || (b.a1 === c5 && b.a2 === c1))).toBe(true);
+  });
+});
+
+describe("the page's atom map, for the arrows that mean a reaction", () => {
+  const both = { reactants: [[1]], products: [[2]] };
+  const one = { reactants: [[1]], products: [] };
+  it("is offered for a plain, dashed, bent or equilibrium arrow with a reaction drawn on both sides - and for none else", () => {
+    for (const arrow of [{}, { kind: "equilibrium" as const }, { kind: "equilibrium" as const, heads: 2 as const }]) {
+      expect(mapOffered(arrow, both)).toBe(true);
+      expect(mapOffered(arrow, one)).toBe(false);
+      expect(mapOffered(arrow, { reactants: [], products: [] })).toBe(false);
+    }
+  });
+  it("is not offered for a crossed-out, retrosynthetic or two-headed arrow, whatever is drawn beside it", () => {
+    for (const arrow of [{ kind: "noReaction" as const }, { kind: "retrosynthetic" as const }, { heads: 2 as const }, { heads: 0 as const }]) expect(mapOffered(arrow, both)).toBe(false);
+    // (the same arrow with its head - none said, one - is)
+    expect(mapOffered({}, both)).toBe(true);
+  });
+  it("is offered, to be taken off, for one of those holding a map from before", () => {
+    const kept = {} as never;
+    for (const arrow of [{ kind: "noReaction" as const }, { kind: "retrosynthetic" as const }, { heads: 2 as const }]) {
+      expect(mapOffered({ ...arrow, atomMap: kept }, both)).toBe(true);
+      expect(mapOffered({ ...arrow, atomMap: kept }, { reactants: [], products: [] })).toBe(true);
+    }
+  });
+  it("says why no map is made of an arrow that means none, in words, and nothing of one that does", () => {
+    expect(noMapSaid({})).toBeNull();
+    expect(noMapSaid({ kind: "equilibrium", heads: 2 })).toBeNull();
+    expect(noMapSaid({ kind: "noReaction" })).toBe("No atom map for this arrow: a crossed-out arrow: no reaction.");
+    expect(noMapSaid({ kind: "retrosynthetic" })).toBe("No atom map for this arrow: a retrosynthetic arrow: draw the reaction forward to map it.");
+    expect(noMapSaid({ heads: 0 })).toBe("No atom map for this arrow: a line with no head: draw its head to say which way the reaction goes.");
+    expect(noMapSaid({ heads: 2 })).toBe("No atom map for this arrow: a two-headed arrow joins resonance forms, not a reaction.");
   });
 });
