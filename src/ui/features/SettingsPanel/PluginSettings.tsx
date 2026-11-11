@@ -21,6 +21,7 @@ import { KINDS } from "../Workspace/workflow/kinds";
 import { actOnFiles, filesCanGo, filesView, type FilesAsked } from "./pluginFiles";
 import { kindById } from "../../../lib/io/kinds";
 import { useCheckingFiles, useDownloads } from "../../../lib/pyEnv";
+import { updatable, updateEach } from "./updateAll";
 
 /** A list in words: "a", "a and b", "a, b and c". */
 const listOf = (names: readonly string[]) => (names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`);
@@ -50,6 +51,17 @@ export default function PluginSettings() {
   const here = new Map(ALL_PLUGINS.map((p) => [p.id, p.version]));
   const offers = online.catalogue ? offersOf(online.catalogue, here, systemHere()) : [];
   const elsewhere = offers.filter((o) => !here.has(o.entry.id));
+  // (those with a newer version online, all updated one after another from the one button)
+  const updates = updatable(offers, states);
+  const [updating, setUpdating] = useState(false);
+  const [updatedSaid, setUpdatedSaid] = useState<string | null>(null);
+  const updateAll = () => {
+    setUpdating(true);
+    setUpdatedSaid(null);
+    updateEach(updates, (o) => updateOne(o.entry, states[o.entry.id], ALL_PLUGINS.find((p) => p.id === o.entry.id)!))
+      .then(({ done, failed }) => setUpdatedSaid(failed ? `${done} of ${done + failed} updated; ${failed === 1 ? "one" : failed} did not - its card says why.` : null))
+      .finally(() => setUpdating(false));
+  };
   useEffect(() => {
     void listOnline();
     void addedReaders(ALL_PLUGINS);
@@ -61,10 +73,10 @@ export default function PluginSettings() {
   }, []);
   return (
     <div className="space-y-3">
-      <OnlineList online={online} offered={offers.length} />
+      <OnlineList online={online} offered={offers.length} updates={updates.length} updating={updating} updated={updatedSaid} onUpdateAll={updateAll} />
       {/* (those that run nothing, first) */}
       {[...ALL_PLUGINS.filter((p) => !runs(p)), ...ALL_PLUGINS.filter(runs)].map((p) => (
-        <Plugin key={p.id} plugin={p} state={states[p.id]} problem={problems[p.id]} offer={offers.find((o) => o.entry.id === p.id)} />
+        <Plugin key={p.id} plugin={p} state={states[p.id]} problem={problems[p.id]} offer={offers.find((o) => o.entry.id === p.id)} locked={updating} />
       ))}
       {elsewhere.length > 0 && (
         <>
@@ -79,7 +91,7 @@ export default function PluginSettings() {
 }
 
 /** The list of plugins online: when it was fetched, or why it is not here, and the button that fetches it again - a line, not a card, as no plugin is. */
-function OnlineList({ online, offered }: { online: Online; offered: number }) {
+function OnlineList({ online, offered, updates, updating, updated, onUpdateAll }: { online: Online; offered: number; updates: number; updating: boolean; updated: string | null; onUpdateAll: () => void }) {
   const line =
     online.state === "listing"
       ? "Listing the plugins online…"
@@ -90,11 +102,21 @@ function OnlineList({ online, offered }: { online: Online; offered: number }) {
             ? `The list as it was${online.fetchedAt ? ` on ${when(online.fetchedAt)}` : ""}: a newer one could not be fetched (${online.kept}).`
             : `${offered === 1 ? "One plugin" : `${offered} plugins`} online${online.fetchedAt ? `, as listed on ${when(online.fetchedAt)}` : ""}${online.catalogue ? ` - the list of ${day(online.catalogue.issued)}` : ""}.`
           : "Plugins are got from a list online, which Meno checks is its own before reading it.";
+  const said = updated ? `${line} ${updated}` : line;
   return (
     <div className="flex items-center gap-4">
-      <p key={line} className={`flex-1 text-xs meno-fade-in ${online.state === "failed" ? "text-accel-accent" : "text-gh-gray"}`} aria-live="polite">
-        {line}
+      <p key={said} className={`flex-1 text-xs meno-fade-in ${online.state === "failed" ? "text-accel-accent" : "text-gh-gray"}`} aria-live="polite">
+        {said}
       </p>
+      {updates > 0 && (
+        <button
+          disabled={updating}
+          onClick={onUpdateAll}
+          className="h-7 shrink-0 rounded-md border border-gh-line bg-white px-3 text-xs text-gh-black hover:bg-gh-base disabled:opacity-50"
+        >
+          {updating ? "Updating…" : updates === 1 ? "Update all (1)" : `Update all (${updates})`}
+        </button>
+      )}
       <button
         disabled={online.state === "listing"}
         onClick={() => void listOnline(true)}
@@ -173,9 +195,18 @@ function OnlinePlugin({ offer }: { offer: Offer }) {
   );
 }
 
+/** A plugin's newer version got, then set up again only where it was added and its environment is no longer the one it needs. */
+async function updateOne(entry: CatalogueEntry, state: string | undefined, was: AnyPlugin): Promise<void> {
+  await getPlugin(entry);
+  const now = anyPluginById(was.id) ?? was;
+  if (state === "added" && !(await addedReaders([now])).has(now.id)) await addPlugin(now);
+}
+
 /** A plugin: what it is and does, whether it is added, the button that adds it or takes it away - and the one that updates it, where the list online has a newer version. */
-function Plugin({ plugin: p, state, problem, offer }: { plugin: AnyPlugin; state?: string; problem?: string; offer?: Offer }) {
-  const [busy, setBusy] = useState(false);
+function Plugin({ plugin: p, state, problem, offer, locked = false }: { plugin: AnyPlugin; state?: string; problem?: string; offer?: Offer; locked?: boolean }) {
+  const [own, setBusy] = useState(false);
+  // (and while all are being updated: its own buttons wait too)
+  const busy = own || locked;
   // (whose set-up one waiting waits for: set-ups run one at a time, lib/calc/workers)
   const waiting = useReaders((s) => (state === "waiting" ? waitingSaid(s.state) : ""));
   // (its jobs that wait or run - and those of the plugins added that use it, taken away with it - as taking it away was asked:
@@ -196,12 +227,7 @@ function Plugin({ plugin: p, state, problem, offer }: { plugin: AnyPlugin; state
       .finally(() => setBusy(false));
   };
   // (the newer version got, then set up again only where it was added and its environment is no longer the one it needs)
-  const update = (entry: CatalogueEntry) =>
-    run(async (q) => {
-      await getPlugin(entry);
-      const now = anyPluginById(q.id) ?? q;
-      if (state === "added" && !(await addedReaders([now])).has(now.id)) await addPlugin(now);
-    });
+  const update = (entry: CatalogueEntry) => run((q) => updateOne(entry, state, q));
   const remove = (withUsing = false) => {
     const others = addedUsing(p.id);
     if (others.length && !withUsing) return setUsing(others);
