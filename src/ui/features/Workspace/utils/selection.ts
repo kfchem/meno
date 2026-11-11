@@ -159,6 +159,16 @@ export const turnedBy = (angle: number) => (p: MarkAt): MarkAt => ({
   y: p.x * Math.sin(angle) + p.y * Math.cos(angle),
 });
 
+/** A drawing's turn snaps to steps of this many degrees, until a pause lets it go. */
+export const TURN_STEP = 15;
+
+/** The turn a drawing is given for the angle the pointer has gone round: on the steps of `TURN_STEP`, or as it is once let go of them. */
+export const turnSnapped = (angle: number, free: boolean) => {
+  if (free) return angle;
+  const step = (TURN_STEP * Math.PI) / 180;
+  return Math.round(angle / step) * step;
+};
+
 /** Where the selected atoms go, the selection turned by `angle` (radians, anticlockwise) about `about`. */
 export function turned(
   atoms: readonly { id: number; x: number; y: number }[],

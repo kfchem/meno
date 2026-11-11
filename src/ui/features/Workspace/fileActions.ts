@@ -10,7 +10,7 @@ import { MOST_FILE } from "../../../lib/doc/menoFile";
 import { truePath } from "../../../lib/io/truePath";
 import { turnsOf } from "../../../lib/doc/saveTurns";
 import { heldElsewhere } from "../../../lib/doc/savers";
-import { exportRefusal, mappedPairSdf } from "./chem/atomMap";
+import { exportOf, mappedPairSdf } from "./chem/atomMap";
 import { pairedSdf } from "./chem/structureMaps";
 import { useCallback, useRef, useState } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
@@ -994,9 +994,9 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
     (of: { arrow: number } | { structureMap: number }) =>
       attempt("Export", async () => {
         const state = store.getState();
-        const map = "arrow" in of ? state.arrows.find((a) => a.id === of.arrow)?.atomMap : state.structureMaps.find((m) => m.id === of.structureMap)?.map;
-        const refused = exportRefusal(map, state.model);
-        if (refused || !map) throw new Error(refused ?? "The reaction has no atom map of it as it is drawn.");
+        const found = exportOf(state, of);
+        if ("refused" in found) throw new Error(found.refused);
+        const { map } = found;
         const from = state.savedPath ?? state.openedName;
         const base = from ? withExtension(from, "sdf").replace(/\.sdf$/i, "") : "reaction";
         const name = fileNameOf(base);

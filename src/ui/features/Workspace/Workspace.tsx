@@ -226,7 +226,7 @@ import { addedBox } from "./store/slices/modelSlice";
 import { viewPanning } from "./components/viewGoal";
 import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gesture";
 import { Remake3D } from "./components/remake3d";
-import { mapAtoms, mapStanding, reactionOf, unpairedSaid } from "./chem/atomMap";
+import { mapAtoms, mapOffered, mapStanding, reactionOf, unpairedSaid } from "./chem/atomMap";
 import { structuresOf } from "./workflow/entries";
 import { conformerPairs, conformersSaid } from "./chem/structureMaps";
 import { partsOffered } from "./utils/joinedParts";
@@ -2586,13 +2586,14 @@ function WorkspaceContent({
               weight: a.weight ?? "regular",
               setWeight: (weight: ArrowWeight | "regular") => set({ weight }),
               ...(a.corners?.length ? { onStraighten: () => set({ corners: null }) } : {}),
-              // (an arrow with a reaction drawn on either side: its atom map)
+              // (an arrow that means a reaction, with one drawn on either side: its atom map - and one made before it came to mean none, said so and taken off)
               ...((() => {
                 const sides = reactionOf(st.model, a, st.pluses);
-                if (!sides.reactants.length || !sides.products.length) return {};
+                if (!mapOffered(a, sides)) return {};
                 return {
                   atomMap: {
                     standing: mapStanding(a, st.model),
+                    onRemove: () => store.getState().setAtomMap(a.id, null),
                     shown: !!a.atomMap?.shown,
                     maps: a.atomMap?.maps.length ?? 0,
                     chosen: a.atomMap?.chosen ?? 0,
@@ -2635,7 +2636,8 @@ function WorkspaceContent({
             const makes = menu.selection === "here" && picked.has(at) && afters.length > 0;
             const maps = st.structureMaps.filter((m) => [...mapAtoms(m.map)].some((id) => before.has(id)));
             const first = maps[0];
-            const standing = first ? mapStanding({ atomMap: first.map }, st.model) : "none";
+            // (a map between structures has no arrow: never refused)
+            const standing = first ? (mapStanding({ atomMap: first.map }, st.model) as Exclude<ReturnType<typeof mapStanding>, "refused">) : "none";
             if (!makes && (!first || standing === "none")) return undefined;
             const ids = maps.map((m) => m.id);
             return {

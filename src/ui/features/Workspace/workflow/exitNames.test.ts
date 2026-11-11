@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { COLORS } from "../../../theme/colors";
 import { DURATION } from "../../../theme/motion";
-import { exitChip, exitNames, EXIT_CHIP_OUT, EXIT_NAME_OUT, EXIT_NAME_PX } from "./exitNames";
+import { exitChip, exitNames, EXIT_CHIP_OUT, EXIT_NAME_OUT, EXIT_NAME_PX, EXIT_NAME_RISE } from "./exitNames";
 import { pagePx } from "../pageGl/units";
 import { CARD_W, GAP, PORT_STEP, portDown, PX } from "./look";
 
@@ -24,9 +24,11 @@ describe("an exit's name beside its port (docs/WORKFLOWS.md, *Exit names*)", () 
     expect(exitNames([steps[2]], () => "x")).toEqual([]);
   });
 
-  it("stands outside the card's right side, half a port's step above its port, in the quiet words an input's name is in - the first cut short of where its frame would stand", () => {
+  it("stands outside the card's right side, just above its own port - nearer it than the port above - in the quiet words an input's name is in - the first cut short of where its frame would stand", () => {
     const [first, second] = exitNames([steps[1]], () => "x");
-    expect([first.x, first.y, second.y]).toEqual([20 + CARD_W + EXIT_NAME_OUT * PX, -10 - portDown(0) + PORT_STEP / 2, -10 - portDown(1) + PORT_STEP / 2]);
+    expect([first.x, first.y, second.y]).toEqual([20 + CARD_W + EXIT_NAME_OUT * PX, -10 - portDown(0) + EXIT_NAME_RISE * PX, -10 - portDown(1) + EXIT_NAME_RISE * PX]);
+    // (nearer its own port's wire than the port above's)
+    expect(EXIT_NAME_RISE * PX).toBeLessThan(PORT_STEP / 2);
     expect([first.anchor, first.baseline, first.sizePx, first.color, EXIT_NAME_PX]).toEqual(["start", "middle", 10, COLORS.quiet, 10]);
     expect(first.maxWidthPx).toBe(GAP / PX - 2 * EXIT_NAME_OUT);
     expect(second.maxWidthPx).toBeUndefined();

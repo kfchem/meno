@@ -11,6 +11,16 @@ export const CHIP = { size: 11, line: 18, side: 10, pad: 4, border: 1, radius: 1
 /** How opaque it is shut, letting the page show through a little, and its fill: as its HTML was shut. */
 export const CHIP_SHUT = { opacity: 0.75, fill: 0.85 } as const;
 
+/**
+ * The chip's look as CSS says it, for what stands under it in HTML - Make
+ * again, Edited from - so that every chip is one style: its room, line, words,
+ * hairline, fill, shadow and rest opacity as above, full once pointed at
+ * (`CHIP`, `CHIP_SHUT`; chips.test pins them to each other, and its shadow
+ * - `meno-chip-shadow` in App.css - to `CHIP.shadow`).
+ */
+export const CHIP_HTML =
+  "w-max whitespace-nowrap rounded-full border border-gh-line bg-white/85 px-[9px] py-[4px] text-[11px] leading-[18px] text-gh-gray opacity-75 meno-chip-shadow transition-opacity duration-150 ease-meno hover:opacity-100";
+
 /** Its runs as they are drawn - each cut to its most, after its room - and how wide they come to, in page px. */
 export function chipLine(runs: readonly SaidRun[]): { runs: { text: string; tone: SaidRun["tone"]; from: number }[]; width: number } {
   let x = 0;
