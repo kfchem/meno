@@ -3923,9 +3923,9 @@ for each structure).
   back, does not switch them back and forth (utils/pageScale
   `wordsReadAt`, utils/zoomSwitch `switchedAt`). Switched, they fade over
   Meno's quick time, 120 ms, on its curve (`--words` on the page's layer,
-  a CSS transition), as a molecule's chips do; a step's card's large icons,
-  which stand for its words where they are gone, fade in as they go
-  (`--stand-in`). What is pressed on them switches with them.
+  a CSS transition), as a molecule's chips do; a step's card's name and
+  state mark, which stand for its words where they are gone, fade in as
+  they go (docs/WORKSPACE.md, *A workflow*: named, then marked). What is pressed on them switches with them.
 - Its set's count line says its points. It is kept in the workspace's
   file. A chart goes into no step.
 - A point dragged reports where to in the axes' own units (`ChartBody`

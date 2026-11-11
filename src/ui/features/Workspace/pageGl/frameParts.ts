@@ -6,6 +6,8 @@ import { textWidth, type PageText } from "./texts";
 import type { Region, Side } from "./hits";
 import type { Shape } from "./shapes";
 import { pagePx } from "./units";
+import { NAME_PX, inReadingOrder, namesKept, onPage, type Band, type NameBox } from "./cardBands";
+import { PAGE_PX } from "../utils/pageScale";
 
 /**
  * A frame on the page with a tab along its top, as a set's is drawn
@@ -57,6 +59,32 @@ export function frameLine(it: Pick<FrameTab, "tone" | "outward" | "level">): { w
   return { widthPx: FRAME_PX.line, color: it.tone === "chosen" ? FRAME_COLORS.chosen : it.tone === "hover" ? FRAME_COLORS.hover : FRAME_COLORS.line };
 }
 
+/**
+ * How a set's tab is drawn zoomed out (`frameTabParts`): the page's scale, the band it is drawn in (pageGl/cardBands), how far its words are
+ * read (1) or not (0), eased - its name stands in for them, as large on the screen as the page's smallest words - and how far each name
+ * is shown (`labels`, by key, 1 where none is said), eased, where it would overlap one before it.
+ */
+export type FarTabs = { scale: number; band: Band; words: number; labels?: ReadonlyMap<string, number> };
+
+/** The widest a set's name runs zoomed out, in page px: its frame's width and half as much again - cut with an ellipsis. */
+const farWidest = (box: Frame): number => (1.5 * Math.abs(box.x1 - box.x0)) / PAGE_PX;
+
+/** Where a set's name lies on the page, zoomed out, in the world's units: from where its tab's words start, as wide as it is at its size on the screen, or as its frame allows. */
+export function tabNameBox(it: Pick<FrameTab, "key" | "box" | "tab">, scale: number): NameBox & { fits: boolean } {
+  const size = onPage(NAME_PX, scale);
+  const natural = textWidth(it.tab.name, size, 500);
+  const { x, y } = tabStart(it.box);
+  const wide = Math.min(natural, farWidest(it.box));
+  return { key: it.key, x0: x, x1: x + pagePx(wide), y0: y - pagePx(size) / 2, y1: y + pagePx(size) / 2, fits: natural <= farWidest(it.box) };
+}
+
+/** The keys of the sets whose names stay, zoomed out: in the order their tabs are read, one that overlaps one before it is left out - and, only marked, one that would be cut short. */
+export function tabNamesKept(items: readonly FrameTab[], scale: number, band: Band): Set<string> {
+  const among = items.filter((it) => it.iconWhenSmall && !it.noHits);
+  const ordered = inReadingOrder(among.map((it) => ({ x: it.box.x0, y: it.box.y1, key: it.key, it })));
+  return namesKept(ordered.map((o) => tabNameBox(o.it, scale)).filter((b) => band !== "marked" || b.fits));
+}
+
 const SIDES: readonly Side[] = ["n", "s", "e", "w", "ne", "nw", "se", "sw"];
 const CURSOR: Record<Side, string> = { n: "ns-resize", s: "ns-resize", e: "ew-resize", w: "ew-resize", ne: "nesw-resize", sw: "nesw-resize", nw: "nwse-resize", se: "nwse-resize" };
 
@@ -83,7 +111,7 @@ export function tabStart(box: Frame): { x: number; y: number } {
  * icons alone. The frame's inside takes nothing: the page under it stays
  * the page's.
  */
-export function frameTabParts(items: readonly FrameTab[], read: boolean): { shapes: Shape[]; texts: PageText[]; icons: PageIcon[]; regions: Region[] } {
+export function frameTabParts(items: readonly FrameTab[], read: boolean, far?: FarTabs): { shapes: Shape[]; texts: PageText[]; icons: PageIcon[]; regions: Region[] } {
   const shapes: Shape[] = [];
   const texts: PageText[] = [];
   const icons: PageIcon[] = [];
@@ -92,33 +120,42 @@ export function frameTabParts(items: readonly FrameTab[], read: boolean): { shap
     const { x0, y0, x1, y1 } = it.box;
     const line = frameLine(it);
     const fade = it.opacity != null ? { opacity: it.opacity } : {};
+    // (a set's words, as far as they are read while the page is zoomed out of reading them: its name instead - as large on the screen as the page's smallest words)
+    // (a set's words are there while they fade, `far.words`; others', as the page reads them)
+    const shown = it.iconWhenSmall && far ? far.words > 0 : read;
+    const readFade = far && it.iconWhenSmall ? { opacity: (it.opacity ?? 1) * far.words } : fade;
     const top = y1;
     const { x: left, y: mid } = tabStart(it.box);
-    const tabRight = left + pagePx(tabWidthPx(it.tab, read, it.iconWhenSmall)) + TAB_INSET;
+    const tabRight = left + pagePx(tabWidthPx(it.tab, shown, it.iconWhenSmall)) + TAB_INSET;
     // (its frame - or, of the whole page, its tab alone, a box of its own)
     if (it.tabOnly) shapes.push({ kind: "box", key: `${it.key}:tab`, x0, y0: top - BAND, x1: tabRight, y1: top, radiusPx: FRAME_PX.radius, fill: FRAME_COLORS.fill, line, z: 1, ...fade });
     else shapes.push({ kind: "box", key: `${it.key}:frame`, x0, y0, x1, y1, radiusPx: FRAME_PX.radius, line, z: 0, ...fade });
     // (its tab's words: its icon, then - read - its name, its status, its warning)
     let x = left;
-    if (!it.iconWhenSmall || !read) {
+    if (!it.iconWhenSmall || (!shown && !far)) {
       icons.push({ key: `${it.key}:icon`, icon: it.tab.icon, x: x + pagePx(FRAME_PX.icon / 2), y: mid, sizePx: FRAME_PX.icon, color: it.outward ? OUTWARD_LINE.color : FRAME_COLORS.quiet, ...fade });
       x += pagePx(FRAME_PX.icon);
     } else x -= pagePx(FRAME_PX.gap);
-    if (read) {
+    if (shown) {
       const words = (part: string, text: string | undefined, colour: string, weight: 400 | 500 = 400) => {
         if (!text) return;
         x += pagePx(FRAME_PX.gap);
-        texts.push({ key: `${it.key}:${part}`, x, y: mid, anchor: "start", baseline: "middle", text, sizePx: FRAME_PX.words, color: colour, weight, ...fade });
+        texts.push({ key: `${it.key}:${part}`, x, y: mid, anchor: "start", baseline: "middle", text, sizePx: FRAME_PX.words, color: colour, weight, ...readFade });
         x += pagePx(textWidth(text, FRAME_PX.words, weight));
       };
       words("name", it.tab.name, FRAME_COLORS.words, 500);
       words("status", it.tab.status, FRAME_COLORS.quiet);
       if (it.tab.warn) {
         x += pagePx(FRAME_PX.gap);
-        icons.push({ key: `${it.key}:warn-icon`, icon: "warning", x: x + pagePx(FRAME_PX.icon / 2), y: mid, sizePx: FRAME_PX.icon, color: FRAME_COLORS.warn, ...fade });
+        icons.push({ key: `${it.key}:warn-icon`, icon: "warning", x: x + pagePx(FRAME_PX.icon / 2), y: mid, sizePx: FRAME_PX.icon, color: FRAME_COLORS.warn, ...readFade });
         x += pagePx(FRAME_PX.icon + 4) - pagePx(FRAME_PX.gap);
         words("warn", it.tab.warn, FRAME_COLORS.warn);
       }
+    }
+    // (zoomed out: its name, in the place its words start, cut at its frame's width and half as much again)
+    if (far && it.iconWhenSmall && far.words < 1) {
+      const opacity = (it.opacity ?? 1) * (1 - far.words) * (far.labels?.get(it.key) ?? 1);
+      if (opacity > 0) texts.push({ key: `${it.key}:nameFar`, x: left, y: mid, anchor: "start", baseline: "middle", text: it.tab.name, sizePx: onPage(NAME_PX, far.scale), color: FRAME_COLORS.words, weight: 500, maxWidthPx: farWidest(it.box), opacity });
     }
     // (what takes the pointer: its tab - along the frame's whole top, or its own box - and, where it is sized, its edges)
     if (it.noHits) continue;

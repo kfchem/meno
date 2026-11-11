@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { FRAME_COLORS, FRAME_PX, frameLine, frameTabParts, OUTWARD_LINE, tabStart, tabWidthPx, type FrameTab } from "./frameParts";
+import { FRAME_COLORS, FRAME_PX, frameLine, frameTabParts, OUTWARD_LINE, tabNameBox, tabNamesKept, tabStart, tabWidthPx, type FarTabs, type FrameTab } from "./frameParts";
+import { NAME_PX } from "./cardBands";
+import { PAGE_PX } from "../utils/pageScale";
 import { NAME_DOWN, PX, TAB_INSET } from "../workflow/look";
 import { pagePx } from "./units";
 import { textWidth } from "./texts";
@@ -116,5 +118,66 @@ describe("an outward frame - what lies inside it may be sent away from this comp
     expect(frameTabParts([frame()], true).icons[0].color).toBe(FRAME_COLORS.quiet);
     const tab = frameTabParts([frame({ outward: true, tabOnly: true })], true).shapes[0] as Box;
     expect(tab.line).toMatchObject({ color: OUTWARD_LINE.color, dashed: OUTWARD_LINE.dashed });
+  });
+});
+
+describe("a set's tab, zoomed out", () => {
+  const set = (over: Partial<FrameTab> = {}) => frame({ key: "set:3", box: { x0: 3, y0: 0, x1: 23, y1: 10 }, iconWhenSmall: true, tab: { icon: "rings", name: "Input", status: "3 structures" }, ...over });
+  const far = (over: Partial<FarTabs> = {}): FarTabs => ({ scale: 0.4, band: "named", words: 0, ...over });
+  const nameFar = (items: FrameTab[], f: FarTabs, read = false) => frameTabParts(items, read, f).texts.find((t) => t.key.endsWith(":nameFar"));
+
+  it("says its name instead of its icon, eleven screen pixels high whatever the scale, from where its words start, cut at its frame's width and half as much again", () => {
+    for (const scale of [0.7, 0.4, 0.26]) {
+      const t = nameFar([set()], far({ scale }))!;
+      expect(t).toMatchObject({ text: "Input", weight: 500, anchor: "start", baseline: "middle", opacity: 1 });
+      expect(t.sizePx * scale).toBeCloseTo(NAME_PX, 12);
+      expect([t.x, t.y]).toEqual([tabStart(set().box).x, tabStart(set().box).y]);
+      expect(t.maxWidthPx).toBeCloseTo((1.5 * 20) / PAGE_PX, 9);
+    }
+    // (no icon of its own standing there, nor its words)
+    const d = frameTabParts([set()], false, far());
+    expect([d.icons, d.texts.map((t) => t.key)]).toEqual([[], ["set:3:nameFar"]]);
+  });
+
+  it("crosses over from its words as they fade: its words as far as they are read, its name as far as they are not", () => {
+    const half = frameTabParts([set()], false, far({ words: 0.25 }));
+    expect(half.texts.map((t) => [t.key.split(":").pop(), t.opacity])).toEqual([["name", 0.25], ["status", 0.25], ["nameFar", 0.75]]);
+    // (read, nothing of the other)
+    const read = frameTabParts([set()], true, far({ words: 1 }));
+    expect(read.texts.map((t) => t.key.split(":").pop())).toEqual(["name", "status"]);
+    // (going, fading with the frame)
+    expect(nameFar([set({ opacity: 0.5 })], far())?.opacity).toBe(0.5);
+  });
+
+  it("leaves its name out as far as it is made to, where it lies over one before it", () => {
+    expect(nameFar([set()], far({ labels: new Map([["set:3", 0]]) }))).toBeUndefined();
+    expect(nameFar([set()], far({ labels: new Map([["set:3", 0.5]]) }))?.opacity).toBe(0.5);
+    expect(nameFar([set()], far({ labels: new Map([["other", 0]]) }))?.opacity).toBe(1);
+  });
+
+  it("changes nothing of a frame whose tab is its icon alone - a conversation's - nor where the words are read", () => {
+    const chat = frame();
+    expect(frameTabParts([chat], false, far()).texts).toEqual([]);
+    expect(frameTabParts([chat], false, far()).icons.map((i) => i.icon)).toEqual(["chat"]);
+    expect(frameTabParts([chat], true, far({ words: 1 }))).toEqual(frameTabParts([chat], true));
+  });
+
+  it("keeps the names that do not overlap, in the order the tabs are read, the later of two overlapping left out", () => {
+    const a = set({ key: "a", box: { x0: 0, y0: 0, x1: 3, y1: 10 }, tab: { icon: "rings", name: "Conformers" } });
+    const b = set({ key: "b", box: { x0: 1, y0: 0, x1: 4, y1: 10 }, tab: { icon: "rings", name: "Optimised" } });
+    const c = set({ key: "c", box: { x0: 90, y0: 0, x1: 93, y1: 10 }, tab: { icon: "rings", name: "Energy" } });
+    expect([...tabNamesKept([b, a, c], 0.4, "named")].sort()).toEqual(["a", "c"]);
+    // (one that is not a set's, or takes no pointer, takes no part)
+    expect([...tabNamesKept([frame(), set({ noHits: true })], 0.4, "named")]).toEqual([]);
+  });
+
+  it("leaves out of the marked band a name that would be cut short - and it keeps none from showing", () => {
+    // (a narrow frame: its name is wider than the frame and half as much again at its size on the screen)
+    const narrow = set({ key: "n", box: { x0: 0, y0: 0, x1: 0.2, y1: 10 } });
+    const wide = set({ key: "w", box: { x0: 0.05, y0: 0, x1: 30, y1: 10 }, tab: { icon: "rings", name: "Input" } });
+    expect(tabNameBox(narrow, 0.1).fits).toBe(false);
+    expect([...tabNamesKept([narrow, wide], 0.1, "marked")]).toEqual(["w"]);
+    // (named: cut with an ellipsis, shown)
+    expect([...tabNamesKept([narrow], 0.1, "named")]).toEqual(["n"]);
   });
 });

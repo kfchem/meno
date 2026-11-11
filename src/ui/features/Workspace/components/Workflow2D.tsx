@@ -28,7 +28,7 @@ import { useDrawnLayout } from "./drawnLayoutContext";
 import { useShownFrames } from "./useShownFrames";
 import { useMemberMarks } from "./useMemberMarks";
 import { reachOverFrames } from "../utils/molecule3d";
-import { hairWritten, wordsReadAt, zoomWritten } from "../utils/pageScale";
+import { hairWritten, pageScale, wordsReadAt, zoomWritten } from "../utils/pageScale";
 import { usePresence } from "../../../theme/presence";
 import { DURATION, EASE, eased } from "../../../theme/motion";
 import { canWire, entryOnPage, givesOf, stateOf, stepsRun, wireInto, wireRefusal } from "../workflow/flow";
@@ -48,7 +48,8 @@ import { dragSelection } from "../utils/dragSelection";
 import PageField from "../pageGl/PageField";
 import PageLayer from "../pageGl/PageLayer";
 import { FRAME_PX, tabStart } from "../pageGl/frameParts";
-import { cardFace, TONE, type CardFaceOf } from "../pageGl/cardFace";
+import { cardFace, nameBoxOf, nameFits, TONE, type CardFaceOf } from "../pageGl/cardFace";
+import { bandAt, inReadingOrder, namesKept, type Band } from "../pageGl/cardBands";
 import { dropOn, portOfKey, portParts, type PortAt } from "../pageGl/ports";
 import { PAGE_GL_ORDER } from "../pageGl/PageShapes";
 import { useAges, useEasedValues, useFaded } from "../pageGl/faded";
@@ -632,6 +633,11 @@ export default function Workflow2D() {
   const [compact, setCompact] = useState(false);
   // (the cards' words, faded as the page's are past the zoom they are read at: their icons alone and large below it)
   const words = useEasedTo(compact ? 0 : 1);
+  // (zoomed out: named - the box, its kind's icon and its name - or only marked, below a quarter: switched with a little hysteresis - pageGl/cardBands - and eased)
+  const [band, setBand] = useState<Band>("read");
+  const bandNow = useRef<Band>("read");
+  const named = useEasedTo(band === "marked" ? 0 : 1);
+  const hoveredStep = useEditor((s) => s.hoveredStep);
   // (a chemist's set being named anew, by two presses on its tab)
   const [renaming, setRenaming] = useState<number | null>(null);
   // (a shut card's state pointed at: its words in full, in the page's tip)
@@ -683,6 +689,8 @@ export default function Workflow2D() {
     const z = (camera as THREE.OrthographicCamera).zoom || 1;
     // (its words read, or too small: switched past their threshold - utils/pageScale `wordsReadAt` - and faded over a short time by CSS)
     read.current = wordsReadAt(z, read.current);
+    bandNow.current = bandAt(pageScale(z), bandNow.current);
+    if (bandNow.current !== band) setBand(bandNow.current);
     const small = !read.current;
     if (small !== compact) setCompact(small);
     if (Math.abs(Math.log(z / zoom)) > 0.03) setZoom(z);
@@ -1155,6 +1163,11 @@ export default function Workflow2D() {
   }, [saying, setInfo, steps]);
   // sets and steps, each drawn as it is - and those just gone, as they last were, fading out; the steps' cards shut drawn by WebGL
   const faceList: CardFaceOf[] = [];
+  // (how many entries of a step failed, where it counts them: those in its Failed exit's set)
+  const failedOf = (step: number): number => {
+    const b = exitSets.get(`${step}:failed`);
+    return b ? countOf(flow, b).entries : 0;
+  };
   const parts = [
     // (what a set holds - a summary, a table, a chart - in HTML: its frame and tab by WebGL, `setTabs`; its name written anew too, `PageField`;
     //  a step's result set's folding into its exit's port as it is held, and growing out of it as it is shown again)
@@ -1211,6 +1224,9 @@ export default function Workflow2D() {
           stateTip: [line.text, s.ran?.named].filter(Boolean).join("\n"),
           selected: selFlow.steps.has(s.id),
           words,
+          scale: pageScale(zoom),
+          named,
+          ...(failedOf(s.id) ? { failed: failedOf(s.id) } : {}),
           inputs: inputs.length > 1 && !under ? inputs.map((p) => p.name) : [],
         });
       }
@@ -1364,12 +1380,16 @@ export default function Workflow2D() {
   };
   // the shut cards, coming and going as their HTML did, drawn by WebGL in one layer over the wires (pageGl/cardFace)
   const faces = useFaded(faceList, (f) => f.key);
+  // (zoomed out, the names that stay where two cards' names would overlap: in the order the cards are read, the later left out)
+  const scaleNow = pageScale(zoom);
+  // (where it is only marked, one that would be cut short is left out, and does not keep another from showing)
+  const keptNames = band === "read" ? null : namesKept(inReadingOrder(faceList).filter((f) => band !== "marked" || nameFits(f.who, scaleNow)).map((f) => nameBoxOf(f, scaleNow, band !== "marked")));
   // (how far its jobs are, eased as its HTML bar's width was, and its state's colour eased from one tone to the next, as its words' were)
   const cardEased = useEasedValues(
     new Map(
       faceList.flatMap((f) => {
         const [r, g, b] = rgbOf(TONE[f.state.tone]);
-        return [[`${f.key}:r`, r], [`${f.key}:g`, g], [`${f.key}:b`, b], ...(f.progress != null ? [[`${f.key}:bar`, Math.min(1, f.progress)] as [string, number]] : [])] as [string, number][];
+        return [[`${f.key}:r`, r], [`${f.key}:g`, g], [`${f.key}:b`, b], [`${f.key}:label`, !keptNames || keptNames.has(f.key) ? 1 : 0], ...(f.progress != null ? [[`${f.key}:bar`, Math.min(1, f.progress)] as [string, number]] : [])] as [string, number][];
       }),
     ),
     200,
@@ -1380,7 +1400,7 @@ export default function Workflow2D() {
     const rgb = [eased("r"), eased("g"), eased("b")];
     const bar = eased("bar");
     const d = cardFace(
-      { ...item, opacity, ...(rgb.every((v) => v != null) ? { toneColour: colourHex(rgb[0]!, rgb[1]!, rgb[2]!) } : {}), ...(item.progress != null && bar != null ? { progress: bar } : {}) },
+      { ...item, opacity, ...(rgb.every((v) => v != null) ? { toneColour: colourHex(rgb[0]!, rgb[1]!, rgb[2]!) } : {}), ...(item.progress != null && bar != null ? { progress: bar } : {}), ...(eased("label") != null ? { label: eased("label") } : {}) },
       statePointed === stepOfKey(item.key),
     );
     cards.shapes.push(...d.shapes);
@@ -1389,6 +1409,11 @@ export default function Workflow2D() {
     // (going: drawn as it last was, taking nothing)
     if (!leaving) cards.regions.push(...d.regions);
     if (d.tip) cards.tip = d.tip;
+    // (a name left out where it lies over one before it: its card pointed at, the page's tip says it)
+    else if (!leaving && keptNames && !keptNames.has(item.key) && hoveredStep === stepOfKey(item.key) && !cards.tip) {
+      const n = nameBoxOf(item, scaleNow, band !== "marked");
+      cards.tip = { key: `${item.key}:name`, text: item.who, x: (n.x0 + n.x1) / 2, y: (n.y0 + n.y1) / 2, w: n.x1 - n.x0, h: n.y1 - n.y0 };
+    }
   }
   const onCard: HitHandlers = {
     down: (key, _part, e) => {

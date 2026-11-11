@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 import { COLORS } from "../../../theme/colors";
 import { cardState } from "../workflow/cardState";
 import { CARD_H, CARD_W, PORT_STEP, portDown } from "../workflow/look";
-import { CARD, cardFace, cardLines, clamped, type CardFaceOf } from "./cardFace";
-import type { Box } from "./shapes";
+import { CARD, NAME_WIDEST, cardFace, cardLines, clamped, markOf, nameBoxOf, nameFits, type CardFaceOf } from "./cardFace";
+import { ICON_PX, MARK_PX, NAME_PX } from "./cardBands";
+import type { Box, Ring } from "./shapes";
 import { textWidth } from "./texts";
 import { pagePx } from "./units";
 
@@ -65,17 +66,21 @@ describe("a step's card, shut, drawn by WebGL", () => {
     expect(cardFace(card({ summary: long, state: { text: long, tone: "attention" } })).heightPx).toBeGreaterThan(CARD.h);
   });
 
-  it("shows its icons alone and large where its words are too small to read, the one fading out as the other comes in", () => {
-    const half = cardFace(card({ words: 0.5, state: cardState("done", undefined, undefined, 0) }));
-    expect(half.icons.map((i) => [i.key.split(":").pop(), i.sizePx, i.opacity])).toEqual([
-      ["kind", 16, 0.5],
-      ["state", 14, 0.5],
-      ["big", 28, 0.5],
-      ["bigState", 24, 0.5],
+  it("shows its name and its state's mark where its words are too small to read, the one fading out as the other comes in", () => {
+    const half = cardFace(card({ words: 0.5, scale: 0.5, state: cardState("done", undefined, undefined, 0) }));
+    // (its words as they were, half there; its name and its kind's icon half in; its mark)
+    expect(half.texts.filter((t) => !t.key.includes("name")).every((t) => t.opacity === 0.5)).toBe(true);
+    expect(half.icons.map((i) => [i.key.split(":").pop(), i.opacity])).toEqual([
+      ["kind", 0.5],
+      ["state", 0.5],
+      ["big", 0.5],
     ]);
-    expect(half.texts.every((t) => t.opacity === 0.5)).toBe(true);
-    const none = cardFace(card({ words: 0 }));
-    expect(none.icons.map((i) => i.key.split(":").pop())).toEqual(["big"]);
+    expect(half.texts.find((t) => t.key.endsWith(":nameNamed"))?.opacity).toBe(0.5);
+    // (nothing of the zoomed-out look where its words are read)
+    const read = cardFace(card({ words: 1, scale: 1 }));
+    expect(read.texts.some((t) => t.key.includes("name"))).toBe(false);
+    expect(read.icons.map((i) => i.key.split(":").pop())).toEqual(["kind"]);
+    expect(read.shapes.map((x) => x.key)).toEqual(["step:4"]);
   });
 
   it("names its inputs left of it, half a port's step above each, where it takes more than one", () => {
@@ -107,8 +112,8 @@ describe("a step's card, shut, drawn by WebGL", () => {
     expect(done.x1 - done.x0).toBeCloseTo(track.x1 - track.x0, 9);
   });
 
-  it("fades its icons alone in as its words fade out - three quarters in with its words a quarter read - and takes no pointer for its state's tip then", () => {
-    const c = card({ words: 0.25, state: { icon: "failed", text: "Failed", tone: "attention" }, stateTip: "Failed · why" });
+  it("fades its name in as its words fade out - three quarters in with its words a quarter read - and takes no pointer for its state's tip then", () => {
+    const c = card({ words: 0.25, scale: 0.5, state: { icon: "failed", text: "Failed", tone: "attention" }, stateTip: "Failed · why" });
     const d = cardFace(c);
     const by = (k: string) => d.icons.find((i) => i.key.endsWith(`:${k}`))!.opacity;
     expect([by("kind"), by("big")]).toEqual([0.25, 0.75]);
@@ -119,5 +124,120 @@ describe("a step's card, shut, drawn by WebGL", () => {
     const d = cardFace(card({ state: cardState("done", undefined, undefined, 0), toneColour: "#123456" }));
     expect(d.texts.find((t) => t.key.endsWith(":state:0"))?.color).toBe("#123456");
     expect(cardFace(card({ state: cardState("done", undefined, undefined, 0) })).texts.find((t) => t.key.endsWith(":state:0"))?.color).toBe(COLORS.base);
+  });
+});
+
+describe("a card zoomed out: named, then marked", () => {
+  const far = (over: Partial<CardFaceOf> = {}) => card({ words: 0, scale: 0.5, ...over });
+  const name = (d: ReturnType<typeof cardFace>, key = "nameNamed") => d.texts.find((t) => t.key.endsWith(`:${key}`));
+
+  it("names the step in its box, on one line, eleven screen pixels high whatever the zoom, cut at its box's width and half as much again", () => {
+    for (const scale of [0.7, 0.5, 0.3]) {
+      const t = name(cardFace(far({ scale })))!;
+      expect(t).toMatchObject({ text: "Tight", weight: 500, anchor: "start", baseline: "middle", maxWidthPx: CARD.w * 1.5, opacity: 1 });
+      expect(t.sizePx * scale).toBeCloseTo(NAME_PX, 12);
+    }
+    expect(NAME_WIDEST).toBe(1.5 * CARD.w);
+    // (its kind's icon before it, as large on the screen)
+    const icon = cardFace(far({ scale: 0.4 })).icons.find((i) => i.key.endsWith(":big"))!;
+    expect(icon.sizePx * 0.4).toBeCloseTo(ICON_PX, 12);
+    expect(icon.icon).toBe("rings");
+    // (and none of what it says read: no summary, no state words, no log line, no bar, no inputs' names)
+    const d = cardFace(far({ said: "a log line", progress: 0.4, inputs: ["a", "b"], state: cardState("running", undefined, { ended: 1, total: 2, since: 0 } as never, 0) }));
+    expect(d.texts.filter((t) => !t.key.includes("name") && !t.key.endsWith(":count")).every((t) => t.opacity === 0)).toBe(true);
+  });
+
+  it("is only marked below: its name in the middle of its box, its box tinted by its state, no icon of its kind", () => {
+    const d = cardFace(far({ scale: 0.15, named: 0, state: cardState("done", undefined, undefined, 0) }));
+    expect(name(d)).toBeUndefined();
+    expect(name(d, "nameMarked")).toMatchObject({ anchor: "middle", x: 2 + pagePx(CARD.w / 2), opacity: 1 });
+    expect(d.icons.some((i) => i.key.endsWith(":big"))).toBe(false);
+    const tint = d.shapes.find((x) => x.key.endsWith(":tint")) as Box;
+    expect(tint).toMatchObject({ fill: COLORS.quiet, fillAlpha: 0.12, opacity: 1 });
+    expect([tint.x0, tint.x1, tint.y0, tint.y1]).toEqual([(d.shapes[0] as Box).x0, (d.shapes[0] as Box).x1, (d.shapes[0] as Box).y0, (d.shapes[0] as Box).y1]);
+    // (named, none)
+    expect(cardFace(far({ named: 1 })).shapes.some((x) => x.key.endsWith(":tint"))).toBe(false);
+    // (a state with nothing to tint by - waiting, ready - lightly, in the quiet ink: a box is not lost)
+    for (const state of ["waiting", "ready"] as const) {
+      const quiet = cardFace(far({ named: 0, state: cardState(state, undefined, undefined, 0) })).shapes.find((x) => x.key.endsWith(":tint")) as Box;
+      expect(quiet).toMatchObject({ fill: COLORS.quiet, fillAlpha: 0.06 });
+    }
+  });
+
+  it("leaves a name out of the marked band where it would be cut short: as wide as its box and half as much again, or less, fits", () => {
+    expect(nameFits("xtb", 1)).toBe(true);
+    expect(nameFits("xtb", 0.05)).toBe(false);
+    // (the edge: the width of the name at its size on the page, against its box's and half as much again)
+    const scale = 0.4;
+    const wide = textWidth("Optimise", NAME_PX / scale);
+    expect(nameFits("Optimise", scale)).toBe(wide <= NAME_WIDEST);
+    expect(nameFits("Optimise".repeat(10), scale)).toBe(false);
+  });
+
+  it("goes from named to marked as it eases: the name where it was and the one in the middle, each as far as it has come", () => {
+    const d = cardFace(far({ named: 0.25 }));
+    expect([name(d)?.opacity, name(d, "nameMarked")?.opacity]).toEqual([0.25, 0.75]);
+  });
+
+  it("leaves its name out where it is made to, easing it: half there is half shown", () => {
+    expect(name(cardFace(far({ label: 0 })))).toBeUndefined();
+    expect(name(cardFace(far({ label: 0.5 })))?.opacity).toBe(0.5);
+    expect(name(cardFace(far({ label: 0, named: 0 })), "nameMarked")).toBeUndefined();
+  });
+
+  it("marks its state at its top right corner: running turns in Meno's colour, done is filled in the quiet ink, waiting is hollow, and none says nothing", () => {
+    const mark = (state: CardFaceOf["state"], failed?: number) => cardFace(far({ state, failed }));
+    const running = mark(cardState("running", undefined, { ended: 0, total: 1, since: 0 } as never, 0));
+    expect(running.icons.find((i) => i.key.endsWith(":mark"))).toMatchObject({ icon: "running", color: COLORS.base, spin: 0.5 });
+    const done = mark(cardState("done", undefined, undefined, 0)).shapes.find((x) => x.key.endsWith(":mark")) as Ring;
+    expect(done).toMatchObject({ kind: "ring", fill: COLORS.quiet });
+    const waiting = mark(cardState("waiting", undefined, undefined, 0)).shapes.find((x) => x.key.endsWith(":mark")) as Ring;
+    expect(waiting.fill).toBeUndefined();
+    expect(waiting.line?.color).toBe(COLORS.quiet);
+    for (const quiet of ["ready", "no-input"] as const) {
+      const d = mark(cardState(quiet, undefined, undefined, 0));
+      expect([d.shapes.some((x) => x.key.endsWith(":mark")), d.icons.some((i) => i.key.endsWith(":mark"))]).toEqual([false, false]);
+    }
+    // (at the corner: inside the box's top right, a mark's width from the edge)
+    const box = done && (mark(cardState("done", undefined, undefined, 0)).shapes[0] as Box);
+    expect(done.x).toBeLessThan(box.x1);
+    expect(done.x).toBeGreaterThan(box.x1 - pagePx(CARD.w / 2));
+    expect(done.y).toBeLessThan(box.y1);
+    expect(done.y).toBeGreaterThan(box.y1 - pagePx(CARD.h / 2));
+  });
+
+  it("says in the alert tone how many of its entries failed, in its mark - and a failed step with none counted, the tone alone", () => {
+    const failed = cardFace(far({ state: cardState("done", "5 compounds", undefined, 0), failed: 3 }));
+    expect(failed.shapes.find((x) => x.key.endsWith(":mark"))).toMatchObject({ fill: COLORS.attention });
+    expect(failed.texts.find((t) => t.key.endsWith(":mark:count"))).toMatchObject({ text: "3", color: COLORS.background, anchor: "middle" });
+    expect((failed.shapes.find((x) => x.key.endsWith(":tint")) as Box | undefined)?.fill).toBeUndefined();
+    const whole = cardFace(far({ named: 0, state: cardState("failed", "why", undefined, 0) }));
+    expect(whole.shapes.find((x) => x.key.endsWith(":mark"))).toMatchObject({ fill: COLORS.attention });
+    expect(whole.texts.some((t) => t.key.endsWith(":count"))).toBe(false);
+    expect(whole.shapes.find((x) => x.key.endsWith(":tint"))).toMatchObject({ fill: COLORS.attention });
+    // (none failed: none said)
+    expect(markOf({ icon: "done" }, 0)).toMatchObject({ kind: "done" });
+    expect(markOf({ icon: "done" }, undefined)).not.toHaveProperty("count");
+  });
+
+  it("draws its mark as large on the screen as ten pixels, never more than two fifths of its height, in from its corner", () => {
+    const m = (scale: number) => cardFace(far({ scale, state: cardState("done", undefined, undefined, 0) })).shapes.find((x) => x.key.endsWith(":mark")) as Ring;
+    expect(m(0.5).diameterPx * 0.5).toBeCloseTo(MARK_PX, 12);
+    expect(m(0.4).diameterPx * 0.4).toBeCloseTo(MARK_PX, 12);
+    expect(m(0.05).diameterPx).toBeCloseTo(0.4 * CARD.h, 12);
+  });
+
+  it("is told where its name lies: after its icon where named, centred where only marked, cut as it is", () => {
+    const named = nameBoxOf({ key: "k", x: 2, y: 3, who: "Tight" }, 0.5, true);
+    const marked = nameBoxOf({ key: "k", x: 2, y: 3, who: "Tight" }, 0.5, false);
+    expect(named.x0).toBeGreaterThan(2 + pagePx(CARD.hair + CARD.side));
+    expect((marked.x0 + marked.x1) / 2).toBeCloseTo(2 + pagePx(CARD.w / 2), 9);
+    expect(named.x1 - named.x0).toBeCloseTo(marked.x1 - marked.x0, 12);
+    // (eleven screen pixels high, in the middle of its least height)
+    expect(named.y1 - named.y0).toBeCloseTo(pagePx(NAME_PX / 0.5), 9);
+    expect((named.y0 + named.y1) / 2).toBeCloseTo(3 - pagePx(CARD.h / 2), 9);
+    // (a name longer than its box and half as much again: as wide as that)
+    const long = nameBoxOf({ key: "k", x: 0, y: 0, who: "w".repeat(200) }, 0.5, false);
+    expect(long.x1 - long.x0).toBeCloseTo(pagePx(NAME_WIDEST), 9);
   });
 });
