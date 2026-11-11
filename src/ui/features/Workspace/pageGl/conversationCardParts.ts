@@ -31,10 +31,10 @@ export function cardWidth(frame: Rect): number | null {
   return rect ? (rect.x1 - rect.x0) / PAGE_PX : null;
 }
 
-/** How tall a card's history view is for a frame, in page px - the card's height less its ask field's: none where the frame leaves no room (`cardRect`). */
-export function cardView(frame: Rect): number | null {
+/** How tall a card's history view is for a frame, in page px - the card's height less its ask area's (`askPx`, as tall as the field has grown): none where the frame leaves no room (`cardRect`). */
+export function cardView(frame: Rect, askPx: number = CARD.ask): number | null {
   const rect = cardRect(frame);
-  return rect ? historyHeight((rect.y1 - rect.y0) / PAGE_PX) : null;
+  return rect ? historyHeight((rect.y1 - rect.y0) / PAGE_PX, askPx) : null;
 }
 
 /** What a card is told to be drawn: its key, its frame, what was said as laid out and how far it is scrolled, how far its words are read, what it holds. */
@@ -47,6 +47,8 @@ export type CardOf = {
   /** How far its words are read: 1 read, 0 too small - its turns and state alone, faded as the page's words are. */
   words: number;
   turns: number;
+  /** How tall its ask area is, in page px (pageGl/askField `askArea`): the card's least where it is left out. */
+  ask?: number;
   running: boolean;
   changed: boolean;
   /**
@@ -96,7 +98,8 @@ export function cardParts(c: CardOf): ConversationCardDrawn {
   const z = c.z ?? 0;
   const widthPx = (rect.x1 - rect.x0) / PAGE_PX;
   const heightPx = (rect.y1 - rect.y0) / PAGE_PX;
-  const view = historyHeight(heightPx);
+  const askPx = c.ask ?? CARD.ask;
+  const view = historyHeight(heightPx, askPx);
   const shapes: Shape[] = [{ kind: "box", key: `${c.key}:card`, ...rect, radiusPx: CARD.radius, fill: COLORS.background, line: { widthPx: 1, color: COLORS.hairline }, opacity: o, z }];
   const texts: PageText[] = [];
   const icons: PageIcon[] = [];
@@ -178,6 +181,6 @@ export function cardParts(c: CardOf): ConversationCardDrawn {
     chip(chips[1], c.scroll.dot);
   }
   // (its ask field's room at its foot: set off from the history by a hairline - the field itself is drawn over it)
-  shapes.push({ kind: "box", key: `${c.key}:ask`, x0: rect.x0, x1: rect.x1, y0: rect.y0 + P(CARD.ask), y1: rect.y0 + P(CARD.ask) + P(1), radiusPx: 0, fill: COLORS.hairline, opacity: o * c.words, z: z + 1 });
+  shapes.push({ kind: "box", key: `${c.key}:ask`, x0: rect.x0, x1: rect.x1, y0: rect.y0 + P(askPx), y1: rect.y0 + P(askPx) + P(1), radiusPx: 0, fill: COLORS.hairline, opacity: o * c.words, z: z + 1 });
   return { shapes, texts, icons, regions, rect, offset: w.offset, max: w.max, view, trackPx };
 }

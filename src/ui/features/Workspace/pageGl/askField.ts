@@ -4,7 +4,7 @@
  * lines - Enter asks, Shift+Enter starts another - growing to four, then
  * scrolled inside; its words, caret, selection and what an input method is
  * composing; and, while the model works, what it says and the Stop beside it.
- * What is typed is typed into a real field, unseen (pageGl/AskField), as a
+ * What is typed is typed into a real field, unseen (pageGl/PageAsk), as a
  * set's name is (pageGl/PageField, pageGl/field): this is how it is laid
  * out - each line with the places of the words it holds - and how it looks.
  */
@@ -182,6 +182,53 @@ export type AskDrawn = { shapes: Shape[]; texts: PageText[]; regions: Region[]; 
 export const stopWidth = (): number => textWidth("Stop", ASK.stopSize) + 20;
 
 /**
+ * What the ask area of a card `widthPx` wide holds, for what is typed in it (`value`; where the model works the field holds none - it says so): its lines,
+ * how tall the area is and how wide its words may be, in page px.
+ */
+export function askArea(value: string, widthPx: number, running: boolean): { lines: AskLine[]; heightPx: number; maxPx: number; stop: number } {
+  const stop = running ? stopWidth() : 0;
+  const maxPx = askWidth(widthPx, stop);
+  const lines = askLines(running ? "" : value, maxPx);
+  return { lines, heightPx: askHeight(lines.length), maxPx, stop };
+}
+
+/** The box of the field in its area, page px from the area's top left: where it starts, how far down, how wide and how tall - its room above the same as below. */
+export function askBox(widthPx: number, heightPx: number, shown: number, stop: number): { left: number; top: number; wide: number; boxH: number } {
+  const boxH = 2 * ASK.padY + shown * ASK.line;
+  return { left: ASK.margin, top: (heightPx - boxH) / 2, wide: widthPx - 2 * ASK.margin - (stop > 0 ? stop + ASK.gap : 0), boxH };
+}
+
+/** The middle of the caret's line, and how far in it is: page px from the area's top left - where the real field, unseen, is laid, for an input method's candidates. */
+export function caretSpot(value: string, lines: readonly AskLine[], place: number, first: number, widthPx: number, heightPx: number): { x: number; y: number } {
+  const b = askBox(widthPx, heightPx, Math.min(lines.length, ASK.most), 0);
+  const c = caretOf(value, lines, place);
+  return { x: b.left + ASK.padX + c.x, y: b.top + ASK.padY + (c.line - first) * ASK.line + ASK.line / 2 };
+}
+
+/** The place in the value a press `px` right and `py` down of the first line's top left (the area's box's text) is at: its line, and the nearest place on it. */
+export function placeAtPoint(value: string, lines: readonly AskLine[], first: number, px: number, py: number): number {
+  return indexOnLine(value, lines, lineAtPx(lines, first, py), px);
+}
+
+/**
+ * What a key does where the field's own text would go by its own idea of lines (an arrow up or down, Home, End): the place the caret goes
+ * to by the lines drawn - the browser's field wraps by its own font - from `end`, and `null` for any other key. `goal` is the column
+ * kept going up and down, page px.
+ */
+export function movedBy(key: string, value: string, lines: readonly AskLine[], end: number, goal: number | null, sizePx: number = ASK.size): { place: number; goal: number | null } | null {
+  const c = caretOf(value, lines, end, sizePx);
+  const col = goal ?? c.x;
+  const go = (line: number) => indexOnLine(value, lines, line, col, sizePx);
+  if (key === "ArrowUp") return { place: c.line === 0 ? 0 : go(c.line - 1), goal: col };
+  if (key === "ArrowDown") return { place: c.line === lines.length - 1 ? value.length : go(c.line + 1), goal: col };
+  const l = lines[c.line];
+  if (!l) return null;
+  if (key === "Home") return { place: l.from, goal: null };
+  if (key === "End") return { place: l.from + value.slice(l.from, l.to).replace(/\s+$/, "").length, goal: null };
+  return null;
+}
+
+/**
  * The field in the foot of its card: a box with a hairline, its lines as far as four of them, the caret, what is selected washed in
  * Meno's colour, what an input method composes underlined; or, empty, what it is for, quiet; or, while the model works, that, and Stop
  * beside it. It takes the pointer over its box, and Stop over that.
@@ -190,16 +237,9 @@ export function askParts(f: AskOf): AskDrawn {
   const P = pagePx;
   const z = f.z ?? 0;
   const o = (f.opacity ?? 1) * f.words;
-  const stop = f.running ? stopWidth() : 0;
-  const maxPx = askWidth(f.widthPx, stop);
-  const lines = askLines(f.value, maxPx);
-  const heightPx = askHeight(lines.length);
+  const { lines, heightPx, maxPx, stop } = askArea(f.value, f.widthPx, f.running);
   const shown = Math.min(lines.length, ASK.most);
-  const boxH = 2 * ASK.padY + shown * ASK.line;
-  // (the box vertically in the ask area: its room above the same as below)
-  const top = (heightPx - boxH) / 2;
-  const left = ASK.margin;
-  const wide = f.widthPx - 2 * ASK.margin - (stop > 0 ? stop + ASK.gap : 0);
+  const { left, top, wide, boxH } = askBox(f.widthPx, heightPx, shown, stop);
   // (from the card's foot: the area is its bottom `heightPx`; y up, so its top is `y0 + P(heightPx)`)
   const areaTop = f.rect.y0 + P(heightPx);
   const at = (x: number, y: number) => ({ x: f.rect.x0 + P(x), y: areaTop - P(y) });
@@ -214,8 +254,8 @@ export function askParts(f: AskOf): AskDrawn {
   const first = Math.min(f.first, Math.max(lines.length - ASK.most, 0));
   const lineTop = (line: number) => top + ASK.padY + (line - first) * ASK.line;
   const textAt = (line: number, x: number) => at(left + ASK.padX + x, lineTop(line));
-  if (f.running || (!f.value && !f.focused)) {
-    // (what it says, quiet: that it works, what it is for, or what it needs)
+  if (f.running || (!f.value && (!f.focused || f.noModel))) {
+    // (what it says, quiet: that it works, what it is for, or what it needs - that stays while it is typed in, there being nothing to send to)
     const said = f.running ? ASK_SAID.working : f.noModel ? ASK_SAID.noModel : ASK_SAID.empty;
     const p = textAt(0, 0);
     texts.push(...lineOf(`${f.key}:ask:said`, p.x, p.y - P(ASK.line / 2), "start", [{ text: said, color: COLORS.quiet }], ASK.size, { baseline: "middle", opacity: o, z: z + 3 }));

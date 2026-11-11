@@ -48,6 +48,19 @@ The same holds for the exchange as it is saved and opened again.
     *Latest* carries a dot for what is new below.
   Where it was left is the view's: saved with the file, no step of undo,
   none for a card left at its latest.
+- **Its ask field is at the card's foot**, drawn on the page, typed into
+  a real field laid unseen at the caret, so that keys, an input method,
+  pasting and undoing are the system's own. Several lines: *Enter* asks,
+  *Shift+Enter* starts another (an Enter an input method takes, choosing a
+  candidate, is never an ask), *Escape* leaves it. It grows to four lines,
+  then scrolls inside, and the history gives up that room. Empty, it says
+  what it is for - or, with no model plugin, what it needs; while the model
+  works it says so, with *Stop* beside it. A press places the caret, a drag
+  selects, a double press selects a word; up, down, Home and End go by the
+  lines drawn. What is typed and not asked stays with the card, as the
+  card is looked away from. Each line of a question is a line of the card.
+  The words of the card's history are not selected by dragging: they are
+  drawn, not text.
 - **A conversation has no name.** Neither its frame nor its tab says one,
   and the column's tab for it is its icon alone. One an older file gave is
   not read.

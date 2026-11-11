@@ -9,6 +9,9 @@ import { ArrowDownIcon, ArrowUpIcon, ChatBubbleLeftRightIcon, CloudArrowUpIcon, 
 import { DURATION } from "../../../theme/motion";
 import FrameTabs, { FRAMES_ORDER } from "../pageGl/FrameTabs";
 import PageLayer from "../pageGl/PageLayer";
+import PageAsk from "../pageGl/PageAsk";
+import { askArea } from "../pageGl/askField";
+import { connectionFor } from "./connections";
 import { CARD, cardBlocks, cardLayout, clampScroll, scrollMax, type CardLayout } from "../pageGl/conversationCard";
 import { cardParts, cardView, cardWidth, SCROLL_ICONS } from "../pageGl/conversationCardParts";
 import { earlierOf, glideAt, gliding, newBelow, offsetByKey, offsetByThumb, pagedByPress, TRACK, type Glide } from "../pageGl/conversationScroll";
@@ -21,10 +24,10 @@ import { addPageIcon } from "../pageGl/icons";
 import type { FrameTab } from "../pageGl/frameParts";
 import { fading, presenceAt, presentAt, type Present } from "../pageGl/presence";
 import type { PagePointer } from "../pageGl/PageHits";
-import type { Region, Side } from "../pageGl/hits";
+import type { Rect, Region, Side } from "../pageGl/hits";
 import type { Shape } from "../pageGl/shapes";
 import type { PageText } from "../pageGl/texts";
-import type { Said } from "./types";
+import type { Conversation, Said } from "./types";
 import { conversationTabs } from "./tabs";
 
 addPageIcon(SCROLL_ICONS.earlier, (size) => <ArrowUpIcon width={size} height={size} strokeWidth={1.5} />);
@@ -66,6 +69,8 @@ export default function ConversationFrames() {
   const [read, setRead] = useState(readRef.current);
   // (why Discard left a conversation's changes as they were, said on its card)
   const [discarded, setDiscarded] = useState<Record<number, string | null>>({});
+  // (what is typed in each card's ask field and not yet asked: kept as the card is looked away from)
+  const [drafts, setDrafts] = useState<Record<number, string>>({});
   const laid = useRef(new Map<number, { said: readonly Said[]; key: string; layout: CardLayout }>());
   // (each card's scroll as it is shown, gliding to where it goes; the card the pointer is on, and a thumb being dragged - the offset it is at)
   const glides = useRef(new Map<number, Glide>());
@@ -133,7 +138,11 @@ export default function ConversationFrames() {
   const words = useEasedValues(new Map(shownCards.map(({ it }) => [it.key, read ? 1 : 0])), DURATION.quick * 1000);
   // (a card's scroll: where it goes - the end, unless it was left scrolled up - and where it is, gliding there; its track, Earlier and Latest as present as they are wanted, eased)
   const scrolled = shownCards.map(({ it, c }) => {
-    const view = cardView({ x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1 }) ?? 0;
+    const frame = { x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1 };
+    // (its ask area as tall as its field has grown: what the history's view gives up to it)
+    const widthPx = cardWidth(frame) ?? CARD.w;
+    const ask = askArea(drafts[c.id] ?? "", widthPx, !!talking[c.id]?.running).heightPx;
+    const view = cardView(frame, ask) ?? 0;
     const height = laid.current.get(c.id)?.layout.height ?? 0;
     const target = clampScroll(c.scroll ?? Infinity, height, view);
     const drag = dragging.current?.id === c.id ? dragging.current.offset : null;
@@ -144,7 +153,7 @@ export default function ConversationFrames() {
     glides.current.set(c.id, g);
     // (a card at its latest keeps up with what grows it: what it saw when it was last scrolled by hand is its own height now)
     if (c.scroll == null) saw.current.set(c.id, height);
-    return { it, c, view, height, shown: glideAt(g, now) };
+    return { it, c, view, ask, widthPx, height, shown: glideAt(g, now) };
   });
   for (const id of [...glides.current.keys()]) if (!scrolled.some((x) => x.c.id === id)) glides.current.delete(id);
   const wanted = new Map<string, number>();
@@ -154,8 +163,9 @@ export default function ConversationFrames() {
     wanted.set(`${it.key}:latest`, shown < scrollMax(height, view) - 0.5 ? 1 : 0);
   }
   const scrollLevels = useEasedValues(wanted, DURATION.quick * 1000);
+  const fields: { it: (typeof items)[number]; c: Conversation; rect: Rect; widthPx: number; running: boolean }[] = [];
   const parts = { shapes: [] as Shape[], texts: [] as PageText[], icons: [] as PageIcon[], regions: [] as Region[] };
-  for (const { it, c, view, height, shown } of scrolled) {
+  for (const { it, c, view, ask, widthPx, height, shown } of scrolled) {
     const had = laid.current.get(c.id)!;
     const running = !!talking[c.id]?.running;
     const changed = !!talking[c.id]?.changed;
@@ -166,6 +176,7 @@ export default function ConversationFrames() {
       offset: shown,
       words: words.get(it.key) ?? 1,
       turns: c.said.filter((s) => s.by === "person").length,
+      ask,
       running,
       changed,
       scroll: { track: scrollLevels.get(`${it.key}:track`) ?? 0, earlier: scrollLevels.get(`${it.key}:earlier`) ?? 0, latest: scrollLevels.get(`${it.key}:latest`) ?? 0, dot: newBelow(c.scroll, saw.current.get(c.id), height, view) },
@@ -176,6 +187,7 @@ export default function ConversationFrames() {
     parts.texts.push(...drawn.texts);
     parts.icons.push(...drawn.icons);
     if (!it.noHits) parts.regions.push(...drawn.regions);
+    if (drawn.rect) fields.push({ it, c, rect: drawn.rect, widthPx, running });
   }
 
   /** A card left scrolled to `offset` (or at its latest, where that is the end): kept as the view's, and what it held then told. */
@@ -287,6 +299,23 @@ export default function ConversationFrames() {
           },
         }}
       />
+      {fields.map(({ it, c, rect, widthPx, running }) => (
+        <PageAsk
+          key={it.key}
+          fieldKey={it.key}
+          rect={rect}
+          widthPx={widthPx}
+          value={drafts[c.id] ?? ""}
+          onValue={(v) => setDrafts((d) => (d[c.id] === v ? d : { ...d, [c.id]: v }))}
+          running={running}
+          noModel={!connectionFor(c)}
+          words={words.get(it.key) ?? 1}
+          opacity={it.opacity}
+          noHits={it.noHits}
+          onAsk={(text) => void store.getState().sendToConversation(c.id, text)}
+          onStop={() => store.getState().stopConversation(c.id)}
+        />
+      ))}
       <FrameTabs
         items={items}
         on={{

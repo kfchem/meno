@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { COLORS } from "../../../theme/colors";
 import { CARD, cardLayout, type CardBlock } from "./conversationCard";
-import { cardParts, edgeFade, EDGE_FADE, SCROLL_ICONS, turnsSaid, type CardOf } from "./conversationCardParts";
+import { cardParts, cardView, edgeFade, EDGE_FADE, SCROLL_ICONS, turnsSaid, type CardOf } from "./conversationCardParts";
 import { SCROLL_CHIP, TRACK } from "./conversationScroll";
 
 /** A frame put down: 24 by 14 bonds of 1.8 world units; its card 432 by 648 page px, its history 604 (the ask field's 44 less). */
@@ -31,6 +31,15 @@ describe("a conversation's card as drawn", () => {
     // (44 page px above the card's foot: 44 x 0.0375 = 1.65 above 0.45)
     expect([(ask as { y0: number }).y0, (ask as { y1: number }).y1].map(near)).toEqual([2.1, 2.1375]);
     expect(d.regions).toEqual([{ key: "conversation:1", part: "card", rect: d.rect, z: 0, cursor: "default" }]);
+  });
+
+  it("gives its history the room its ask area leaves: 44 by default, the hairline over the area, and the view that much shorter as it grows", () => {
+    const d = cardParts(card([reply("hello")], { ask: 81 }));
+    const hair = d.shapes.find((s) => s.key === "conversation:1:ask") as { y0: number; y1: number };
+    // (81 page px above the card's foot: 81 x 0.0375 = 3.0375 above 0.45)
+    expect([hair.y0, hair.y1].map(near)).toEqual([3.4875, 3.525]);
+    expect([d.view, cardParts(card([reply("hello")])).view]).toEqual([567, 604]);
+    expect([cardView(FRAME, 81), cardView(FRAME)]).toEqual([567, 604]);
   });
 
   it("puts a line's words on its baseline, 14 px in: 12 + 1.05 + 13.325 = 26.375 below the card's top", () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { ASK, askHeight, askKey, askLines, askWidth, caretOf, firstLineShown, indexOnLine, lineAtPx, selectionBoxes } from "./askField";
+import { ASK, ASK_SAID, askArea, askBox, askHeight, askKey, askLines, askParts, askWidth, caretOf, caretSpot, firstLineShown, indexOnLine, lineAtPx, movedBy, placeAtPoint, selectionBoxes, stopWidth, type AskOf } from "./askField";
+import { COLORS } from "../../../theme/colors";
 import { textWidth } from "./texts";
 
 const w = (t: string) => textWidth(t, ASK.size);
@@ -122,5 +123,114 @@ describe("how tall the field is", () => {
     expect(askWidth(432)).toBe(432 - 16 - 20);
     expect(askWidth(432, 40)).toBe(432 - 16 - 20 - 40 - 8);
     expect(askWidth(10)).toBe(1);
+  });
+});
+
+describe("what the ask area holds", () => {
+  it("is its lines at the card's width less its room - and Stop's where the model works, then no words, the model having them", () => {
+    const a = askArea("", 432, false);
+    expect([a.lines.length, a.heightPx, a.maxPx, a.stop]).toEqual([1, 44, 396, 0]);
+    const long = "word ".repeat(200);
+    const b = askArea(long, 432, false);
+    expect([b.lines.length > 4, b.heightPx]).toEqual([true, 100]);
+    const r = askArea(long, 432, true);
+    expect([r.lines.length, r.heightPx, r.stop, r.maxPx]).toEqual([1, 44, stopWidth(), 396 - stopWidth() - 8]);
+  });
+
+  it("puts its box in the area with the same room above and below, 8 in from the card's side - and Stop's room taken from its width", () => {
+    expect(askBox(432, 44, 1, 0)).toEqual({ left: 8, top: 8.5, wide: 416, boxH: 27 });
+    expect(askBox(432, 100, 4, 0)).toEqual({ left: 8, top: 8, wide: 416, boxH: 84 });
+    expect(askBox(432, 44, 1, 40).wide).toBe(416 - 48);
+  });
+
+  it("lays the real field at the caret's line: its middle, from the area's top left, as far in as the caret", () => {
+    const value = "ab\ncd";
+    const lines = askLines(value, 396);
+    const w = (t: string) => textWidth(t, ASK.size);
+    // (the box 2 lines: 8 + 19 x 2 = 46 tall in a 62 area: 8 above; its first line 4 in, 9.5 to its middle)
+    expect(caretSpot(value, lines, 4, 0, 432, askHeight(2))).toEqual({ x: 18 + w("c"), y: 8 + 4 + 19 + 9.5 });
+    expect(caretSpot(value, lines, 0, 0, 432, askHeight(2))).toEqual({ x: 18, y: 8 + 4 + 9.5 });
+  });
+});
+
+describe("a press in the field", () => {
+  it("is at the place on the line it falls on: 10 + 4 in from the box's text, 19 px a line, clamped", () => {
+    const value = "ab\nab";
+    const lines = askLines(value, 396);
+    expect(placeAtPoint(value, lines, 0, 0, 5)).toBe(0);
+    expect(placeAtPoint(value, lines, 0, textWidth("ab", ASK.size) + 30, 5)).toBe(2);
+    expect(placeAtPoint(value, lines, 0, 0, 25)).toBe(3);
+    expect(placeAtPoint(value, lines, 0, 1000, 500)).toBe(5);
+    expect(placeAtPoint(value, lines, 0, 0, -30)).toBe(0);
+  });
+});
+
+describe("the keys that go by the lines drawn", () => {
+  const w = (t: string) => textWidth(t, ASK.size);
+  it("goes up and down a line to the place as far in - the column kept over a short line - the first line's start and the last's end past them", () => {
+    const value = "abcdef\nx\nabcdef";
+    const lines = askLines(value, 396);
+    const down = movedBy("ArrowDown", value, lines, 5, null)!;
+    // (the short line: its end - and the column of "abcde" kept for the next)
+    expect([down.place, down.goal]).toEqual([8, w("abcde")]);
+    expect(movedBy("ArrowDown", value, lines, 8, down.goal)!.place).toBe(14);
+    expect(movedBy("ArrowUp", value, lines, 14, down.goal)!.place).toBe(8);
+    expect(movedBy("ArrowUp", value, lines, 3, null)!.place).toBe(0);
+    expect(movedBy("ArrowDown", value, lines, 12, null)!.place).toBe(value.length);
+  });
+
+  it("goes Home to the line's start and End to its words' end - not after the space a line broke at - and leaves every other key", () => {
+    const value = "aaa aaa";
+    const lines = askLines(value, w("aaa") + 1);
+    expect(lines.map((l) => [l.from, l.to])).toEqual([
+      [0, 4],
+      [4, 7],
+    ]);
+    expect(movedBy("End", value, lines, 0, 5)!).toEqual({ place: 3, goal: null });
+    expect(movedBy("Home", value, lines, 6, null)!).toEqual({ place: 4, goal: null });
+    expect(movedBy("a", value, lines, 0, null)).toBeNull();
+    expect(movedBy("ArrowLeft", value, lines, 3, null)).toBeNull();
+  });
+});
+
+describe("the ask field as drawn", () => {
+  const rect = { x0: 0, y0: 0, x1: 16.2, y1: 24.3 };
+  const field = (over: Partial<AskOf> = {}): AskOf => ({ key: "conversation:1", rect, widthPx: 432, value: "", start: 0, end: 0, focused: false, first: 0, caret: 1, running: false, words: 1, ...over });
+
+  it("says what it is for, quiet, in a hairline box 27 tall at the foot of the card, 8 in; where it takes the pointer, a text cursor", () => {
+    const d = askParts(field());
+    expect(d.heightPx).toBe(44);
+    expect(d.shapes).toHaveLength(1);
+    expect(d.shapes[0]).toMatchObject({ key: "conversation:1:ask:box", radiusPx: 8, fill: COLORS.background, line: { widthPx: 1, color: COLORS.hairline } });
+    expect(d.texts.map((t) => [t.text, t.color])).toEqual([[ASK_SAID.empty, COLORS.quiet]]);
+    expect(d.regions).toEqual([{ key: "conversation:1", part: "ask", rect: expect.any(Object), z: 2, cursor: "text" }]);
+  });
+
+  it("says what it needs where there is no model - kept while it is typed in, there being nothing to send to - and that it works, with Stop, where it does", () => {
+    expect(askParts(field({ noModel: true, focused: true })).texts.map((t) => t.text)).toEqual([ASK_SAID.noModel]);
+    expect(askParts(field({ focused: true })).texts).toEqual([]);
+    const r = askParts(field({ running: true, value: "typed", focused: true }));
+    expect(r.texts.map((t) => t.text)).toEqual([ASK_SAID.working, "Stop"]);
+    expect(r.regions.map((g) => [g.part, g.cursor])).toEqual([
+      ["ask", "default"],
+      ["stop", "pointer"],
+    ]);
+  });
+
+  it("shows four lines of what is typed from the first shown, the caret on its line, what is selected washed on each line it crosses, and grows to 100", () => {
+    const value = "one\ntwo\nthree\nfour\nfive\nsix";
+    const d = askParts(field({ value, focused: true, first: 2, start: 8, end: 22 }));
+    expect(d.heightPx).toBe(100);
+    expect(d.texts.map((t) => t.text)).toEqual(["three", "four", "five", "six"]);
+    expect(d.shapes.filter((s) => s.key.includes(":selected:")).map((s) => s.key)).toEqual(["conversation:1:ask:selected:2", "conversation:1:ask:selected:3", "conversation:1:ask:selected:4"]);
+    const caret = askParts(field({ value, focused: true, first: 2, start: 22, end: 22 })).shapes.find((s) => s.key.endsWith(":caret"));
+    expect(caret).toBeDefined();
+    // (a caret above the lines shown is not drawn)
+    expect(askParts(field({ value, focused: true, first: 2, start: 0, end: 0 })).shapes.some((s) => s.key.endsWith(":caret"))).toBe(false);
+  });
+
+  it("draws nothing where the page's words are too small to read", () => {
+    const d = askParts(field({ words: 0 }));
+    expect([d.shapes, d.texts, d.regions]).toEqual([[], [], []]);
   });
 });

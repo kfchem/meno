@@ -1414,8 +1414,9 @@ it, in `features/Workspace/pageGl/`:
   line, and, last, the changes waiting with their Keep and Discard chips -
   its total height, and the part of it a scroll offset shows. The card lies
   against its frame's right edge, 432 page pixels wide (9 bonds), the
-  frame's height less its padding; the ask field at its foot takes
-  44 page pixels at least, and the history the rest. A line, a ground or a
+  frame's height less its padding; the ask field at its foot (`askField`,
+  typed into a real field unseen: `PageAsk`) takes 44 page pixels at
+  least, growing to four lines, and the history the rest. A line, a ground or a
   chip at an edge that more lies past fades over one line as it nears it,
   never cut in two; its words fade with the page's, and too small to read
   it says its turns and state alone. It is scrolled by a track, *Earlier*
