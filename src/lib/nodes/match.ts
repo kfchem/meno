@@ -16,6 +16,15 @@ const valueKey = (p: Property) => (typeof p.value === "number" ? `${p.value} ${u
 /** What a property's value is, in a line: "start-2". */
 const valueSaid = (p: Property) => (typeof p.value === "string" ? p.value : typeof p.value === "number" ? `${p.value}${p.unit === "none" ? "" : ` ${unitLabel(p.unit)}`}` : JSON.stringify(p.value));
 
+/** Each of `entries`' value of the property `name` as one to group on - its key, and as a chemist reads it - or why it has none to read. */
+export function valuesOn(entries: readonly Entry[], name: string): ({ key: string; said: string } | { why: string })[] {
+  return entries.map((e) => {
+    const p = e.properties[name];
+    const why = unreadable(p, name);
+    return why ? { why } : { key: valueKey(p!), said: valueSaid(p!) };
+  });
+}
+
 /** Each of `entries` paired with the one of `others` whose `name` is the same, by its place among them, or why none is. */
 export function matchedOn(entries: readonly Entry[], others: readonly Entry[], name: string, otherName = "the other input"): ({ index: number } | { why: string })[] {
   const byValue = new Map<string, number[]>();
