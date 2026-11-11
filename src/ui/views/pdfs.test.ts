@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { addAtom, createWorkspaceDocument } from "../features/Workspace/document";
-import { connectStoreToDocument, createEditorStore } from "../features/Workspace/store";
+import { connectStoreToDocument, createEditorStore, storeOf } from "../features/Workspace/store";
 import { suggestedSavePath } from "../features/Workspace/fileActions";
-import { openedPdfs, outsidePdfsPlan, type OpenedPdf } from "./pdfs";
+import { openedPdfs, outsidePdfsPlan, pdfsDestination, type OpenedPdf } from "./pdfs";
 import { opensReadingFilled } from "../features/Workspace/document";
 
 const pdf = (name: string, c: string): OpenedPdf => ({ name, sha256: c.repeat(64), size: 9, pages: [[595, 842]] });
@@ -112,5 +112,29 @@ describe("PDFs opened from outside Meno", () => {
     // (several in one go: each tab once, in the order they came; the new ones together; the same one twice, once)
     expect(outsidePdfsPlan([c, b, a, d, b], tabs)).toEqual({ forward: ["t3", "t1"], fresh: [b] });
     expect(outsidePdfsPlan([], tabs)).toEqual({ forward: [], fresh: [] });
+  });
+
+  it("have only the first PDF of a canvas read, and a canvas with none read nothing", () => {
+    const two = createWorkspaceDocument(openedPdfs([pdf("a.pdf", "a"), pdf("b.pdf", "b")], true).data);
+    expect(two.getState().pdfs?.map((p) => !!p.reading)).toEqual([true, false]);
+    const none = createWorkspaceDocument({ pdfs: [], readFilled: true });
+    expect(none.getState().pdfs ?? []).toEqual([]);
+    expect(opensReadingFilled(none)).toBe(false);
+  });
+
+  it("keep the view the chemist chose where the canvas is made again for the same document", () => {
+    const doc = createWorkspaceDocument(opened.data);
+    const store = storeOf(doc);
+    store.getState().setColumnFilled(false);
+    expect(storeOf(doc)).toBe(store);
+    expect(storeOf(doc).getState().columnFilled).toBe(false);
+  });
+
+  it("go where the way they were opened says: outside, to tabs and a canvas of their own; by Open or a drop, onto the workspace in front", () => {
+    const a = pdf("a.pdf", "a");
+    const b = pdf("b.pdf", "b");
+    const tabs = [{ id: "t1", pdfs: [{ sha256: "a".repeat(64) }] }];
+    expect(pdfsDestination(true, [a, b], tabs)).toEqual({ forward: ["t1"], fresh: [b], intoFront: [] });
+    expect(pdfsDestination(false, [a, b], tabs)).toEqual({ forward: [], fresh: [], intoFront: [a, b] });
   });
 });

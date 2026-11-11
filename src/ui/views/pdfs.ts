@@ -51,3 +51,15 @@ export function outsidePdfsPlan(pdfs: readonly OpenedPdf[], tabs: readonly { id:
   }
   return { forward, fresh };
 }
+
+/**
+ * Where PDFs opened go: from outside Meno (`outside`), by `outsidePdfsPlan` - tabs that hold them brought forward, the rest in a canvas
+ * of their own, read filled; opened by Open, or dropped, all `intoFront` - onto the page of the workspace in front, as they always were.
+ */
+export function pdfsDestination(
+  outside: boolean,
+  pdfs: readonly OpenedPdf[],
+  tabs: readonly { id: string; pdfs: readonly { sha256: string }[] | undefined }[],
+): { forward: string[]; fresh: OpenedPdf[]; intoFront: OpenedPdf[] } {
+  return outside ? { ...outsidePdfsPlan(pdfs, tabs), intoFront: [] } : { forward: [], fresh: [], intoFront: [...pdfs] };
+}
