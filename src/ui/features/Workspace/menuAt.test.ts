@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { panFor, type PxBox } from "./menuAt";
+import { MENU_MARGIN, MENU_OFF, panFor, type PxBox } from "./menuAt";
 
 const view: PxBox = { left: 0, top: 0, right: 1000, bottom: 700 };
 const at = (left: number, top: number, w = 200, h = 100): PxBox => ({ left, top, right: left + w, bottom: top + h });
@@ -45,5 +45,12 @@ describe("panFor", () => {
 
   it("keeps a cover wider than the canvas from taking the canvas away", () => {
     expect(panFor(at(100, 300, 200, 100), view, 5000)).toEqual({ dx: 0 + 16 - 100, dy: 0 });
+  });
+});
+
+describe("the menu's numbers", () => {
+  it("stands 14 px up and to the right of its point, and keeps 16 px clear of the canvas's edges", () => {
+    expect(MENU_OFF).toBe(14);
+    expect(MENU_MARGIN).toBe(16);
   });
 });
