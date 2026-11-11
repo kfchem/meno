@@ -88,6 +88,37 @@ describe("frames settled as the pointer is let go (the store's watchFrames)", ()
     expect(doc.history().undoDepth).toBe(depth);
   });
 
+  it("does nothing for a press that undid a step - a click on the history's button, let go: the state undone to is settled already, what lies over a frame there is eased by no one, and redo stays", () => {
+    const { w, doc } = setup();
+    // (settled once; then a structure put over the frame's edge, its middle outside it - a step of its own)
+    w.fire("pointerdown");
+    w.fire("pointerup");
+    vi.runAllTimers();
+    doc.edit("place", (d) => ({ ...d, model: { ...d.model, atoms: d.model.atoms.map((a) => (a.id >= 3 ? { ...a, x: a.x - 16.5 } : a)) } }));
+    const lying = doc.getState();
+    // (dragged away - a gesture of its own, let go: one step)
+    w.fire("pointerdown");
+    doc.edit("drag", (d) => ({ ...d, model: { ...d.model, atoms: d.model.atoms.map((a) => (a.id >= 3 ? { ...a, x: a.x + 30 } : a)) } }), gestureStep("drag"));
+    w.fire("pointerup");
+    vi.runAllTimers();
+    // (the button pressed, the step undone, the button let go)
+    w.fire("pointerdown");
+    expect(doc.undo()).toBe(true);
+    const undone = doc.getState();
+    expect(undone.model.atoms[2].x).toBe(lying.model.atoms[2].x);
+    w.fire("pointerup");
+    vi.runAllTimers();
+    expect(doc.getState()).toBe(undone);
+    expect(doc.history().redoDepth).toBe(1);
+    // (and redone: the same)
+    w.fire("pointerdown");
+    expect(doc.redo()).toBe(true);
+    const redone = doc.getState();
+    w.fire("pointerup");
+    vi.runAllTimers();
+    expect(doc.getState()).toBe(redone);
+  });
+
   it("stops listening when it is told to", () => {
     const { w, stop } = setup();
     expect(w.count()).toBe(3);

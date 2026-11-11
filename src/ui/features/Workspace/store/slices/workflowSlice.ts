@@ -101,6 +101,8 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
       };
     },
     settleFrames: (down: WorkspaceDocument) => {
+      // (the state an undo or a redo came to - a press on a button of the history, let go - is one that was settled when it was made: nothing is eased, and what is to redo stays)
+      if (doc.travelled()) return;
       doc.edit("fit frames", (d) => framesSettled(d, down, extentIn(d)), { joinTop: true });
     },
     moveSet: (id: number, dx: number, dy: number, gesture?: string) => doc.edit("move set", (d) => wf.moveSet(d, id, dx, dy), coalesce("set-move", id, gesture)),

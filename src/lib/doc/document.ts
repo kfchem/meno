@@ -58,7 +58,11 @@ export type EditMeta = {
    * top - whatever that step's key, however long ago it was made - where
    * that step is a gesture's (made with a `coalesceKey`) by the same maker:
    * one step to undo for the whole, its label and key those of the gesture.
-   * With no gesture on top, a step of its own.
+   * With no gesture on top, a step of its own: so, too, where the gesture
+   * ended in a plain edit - one made with no key - which is the step on top
+   * then (a drop made by a plain step is two steps to undo: the drop, then
+   * what followed it). Never a change set's first edit, nor the edit a
+   * history with nothing before the step on top makes.
    */
   joinTop?: true;
 };

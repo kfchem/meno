@@ -6,7 +6,7 @@ import type { DocumentStore } from "../../../../lib/doc";
 import { addMolecule3d, addPicture, createWorkspaceDocument, moveMolecule3d, type WorkspaceDocument } from "../document";
 import type { Molecule3D } from "../store/types";
 import type { Frame } from "./entries";
-import { easedOut, frameAround, framesFitted, framesSettled, holdsToFit, memberBoxes, structureBox } from "./fitFrames";
+import { easedOut, frameAround, framesFitted, framesSettled, holdsToFit, memberBoxes, pushedOut, structureBox } from "./fitFrames";
 import { CHIP, PX, SET_PAD, SET_TOP } from "./look";
 import { addSet, markMade } from "./model";
 import { LEAST_W, roomOf, type RunWith } from "./run";
@@ -108,6 +108,9 @@ describe("a set's frame", () => {
     expect(holdsToFit({ ...empty, members: [{ molecule: 1 }], table: { rows: [] } as never })).toBe(false);
     expect(holdsToFit({ ...empty, members: [{ molecule: 1 }], number: 3 as never })).toBe(false);
     expect(holdsToFit({ ...empty, members: [{ molecule: 1 }], collection: [{}] as never })).toBe(false);
+    expect(holdsToFit({ ...empty, members: [{ molecule: 1 }], chart: {} as never })).toBe(false);
+    expect(holdsToFit({ ...empty, members: [{ molecule: 1 }], drawnCollection: [{}] as never })).toBe(false);
+    expect(holdsToFit({ ...empty, members: [{ molecule: 1 }], unread: 2 })).toBe(false);
     expect(holdsToFit({ ...empty, members: [{ molecule: 1 }] })).toBe(true);
     // (and one without members known)
     expect(holdsToFit({ id: 1, x0: 0, y0: 0, x1: 3, y1: 3 })).toBe(false);
@@ -229,7 +232,7 @@ describe("what is let go over a frame", () => {
     const doc = fitted();
     doc.edit("draw", (d) => ({
       ...d,
-      model: { atoms: [{ id: 1, x: 8, y: 0, r: 0.9, el: "O", charge: -1, chargeAt: { x: 8.3, y: 0.4 } }, { id: 2, x: 9.3, y: 0, r: 0.9, el: "C" }], bonds: [{ id: 1, a: 1, b: 2, order: 1 as const }] },
+      model: { atoms: [{ id: 1, x: 8, y: 0, r: 0.9, el: "O", charge: -1, chargeAt: { x: 8.3, y: 0.4 } }, { id: 2, x: 9.3, y: 0, r: 0.9, el: "C" }], bonds: [{ id: 1, a: 1, b: 2, order: 1 as const, stereoAt: { x: 8.6, y: 0.4 } }] },
       nextId: 3,
     }));
     const down = doc.getState();
@@ -244,6 +247,9 @@ describe("what is let go over a frame", () => {
     expect(now.model.atoms[1].x - dragged.model.atoms[1].x).toBeCloseTo(dx, 12);
     expect(now.model.atoms[0].chargeAt!.x - dragged.model.atoms[0].chargeAt!.x).toBeCloseTo(dx, 12);
     expect(now.model.atoms[0].y).toBe(0);
+    // (and the mark put by hand on its bond)
+    expect(now.model.bonds[0].stereoAt!.x - dragged.model.bonds[0].stereoAt!.x).toBeCloseTo(dx, 12);
+    expect(now.model.bonds[0].stereoAt!.y).toBe(dragged.model.bonds[0].stereoAt!.y);
     // (its box now clear of the frame by the padding)
     const m = now.model;
     const box = structureBox(m, new Map(m.atoms.map((a) => [a.id, a])), [1, 2]);
@@ -291,6 +297,124 @@ describe("what is let go over a frame", () => {
     expect(grown.x1).toBeCloseTo(2.5 + R + SET_PAD, 9);
     expect(at(doc.getState(), 2).x - R).toBeCloseTo(grown.x1 + SET_PAD, 9);
   });
+});
+
+const PIC = { name: "p", sha256: "00", media: "image/png" as never, px: [10, 10] as [number, number], w: 2, h: 1 };
+
+describe("what the gesture did not touch", () => {
+  /** The frame of set 1 round molecule 1; then, lying over its right edge with their middles outside it and no set's: a molecule 2, a structure (atoms 1, 2), a picture. */
+  function lying() {
+    const doc = fitted();
+    const before = doc.getState();
+    doc.edit("molecule", (d) => addMolecule3d(d, mol(3.6, 0)));
+    doc.edit("structure", (d) => ({ ...d, model: { atoms: [{ id: 1, x: 2.6, y: 1, r: 0.9, el: "C" }, { id: 2, x: 4.1, y: 1, r: 0.9, el: "C" }], bonds: [{ id: 1, a: 1, b: 2, order: 1 as const }] }, nextId: 3 }));
+    doc.edit("picture", (d) => addPicture(d, { ...PIC, x: 3.9, y: -1.5 }));
+    return { doc, before };
+  }
+  const where = (d: WorkspaceDocument) => ({ molecule: d.molecules3d!.find((m) => m.id === 2)!.at, atom: d.model.atoms[0].x, picture: d.pictures![0].x });
+
+  it("stays where it lies - a structure, a molecule, a picture - when the pointer is let go on something else: only what the gesture changed, or a frame that grew over it, is eased", () => {
+    const { doc, before } = lying();
+    const state = doc.getState();
+    // (none of them members: each lies with its middle outside the frame, over its edge)
+    expect(state.sets![0].members).toEqual([{ molecule: 1 }]);
+    const from = where(state);
+    expect(from.molecule.x - R).toBeLessThan(AROUND_A.x1);
+    // (a release with nothing changed since the press: nothing is eased)
+    const same = framesSettled(state, state, reach);
+    expect(where(same)).toEqual(from);
+    expect(same.model).toBe(state.model);
+    expect(same.molecules3d).toBe(state.molecules3d);
+    expect(same.pictures).toBe(state.pictures);
+    // (and the same, as controls: pressed before they came, each is changed, and each is eased out)
+    const eased = framesSettled(state, before, reach);
+    expect(where(eased).molecule.x - R).toBeCloseTo(AROUND_A.x1 + SET_PAD, 9);
+    expect(where(eased).atom).toBeGreaterThan(from.atom);
+    expect(where(eased).picture).toBeGreaterThan(from.picture);
+  });
+
+  it("is eased one kind at a time: a structure changed alone is eased, the molecule and the picture beside it, untouched, stay", () => {
+    const { doc } = lying();
+    const state = doc.getState();
+    const touched = (kind: "molecule" | "structure" | "picture"): WorkspaceDocument => ({
+      ...state,
+      ...(kind === "molecule" ? { molecules3d: state.molecules3d!.map((m) => (m.id === 2 ? { ...m } : m)) } : {}),
+      ...(kind === "structure" ? { model: { ...state.model, atoms: state.model.atoms.map((a) => ({ ...a })) } } : {}),
+      ...(kind === "picture" ? { pictures: state.pictures!.map((p) => ({ ...p })) } : {}),
+    });
+    const from = where(state);
+    // (the press was on a copy of the page in which one kind is another object: it is the one changed)
+    const m = where(framesSettled(state, touched("molecule"), reach));
+    expect([m.molecule.x === from.molecule.x, m.atom === from.atom, m.picture === from.picture]).toEqual([false, true, true]);
+    const s = where(framesSettled(state, touched("structure"), reach));
+    expect([s.molecule.x === from.molecule.x, s.atom === from.atom, s.picture === from.picture]).toEqual([true, false, true]);
+    const p = where(framesSettled(state, touched("picture"), reach));
+    expect([p.molecule.x === from.molecule.x, p.atom === from.atom, p.picture === from.picture]).toEqual([true, true, false]);
+  });
+
+  it("is eased out of the frame it lies most over, once: over two frames, it goes to the greater overlap and stays over the other", () => {
+    const build = (x: number) => {
+      const doc = workspace();
+      doc.edit("place", (d) => addMolecule3d(addMolecule3d(addMolecule3d(d, mol(0, 0)), mol(6.5, 0)), mol(40, 40)));
+      doc.edit("sets", (d) => addSet(addSet(d, { x0: -3, y0: -3, x1: 3, y1: 3 }), { x0: 4, y0: -3, x1: 9, y1: 3 }));
+      doc.edit("fit", (d) => framesSettled(d, d, reach));
+      // (set 1's frame reaches 3.15; set 2's begins at 3.35)
+      expect(frameOf(doc.getState(), 1).x1).toBeCloseTo(3.15, 9);
+      expect(frameOf(doc.getState(), 2).x0).toBeCloseTo(3.35, 9);
+      dragged(doc, 3, { x, y: 0 });
+      return doc.getState();
+    };
+    // (its box 2.0 to 4.4: 1.15 over the first frame, 1.05 over the second: it goes right, out of the first, and lies over the second still)
+    const first = build(3.2);
+    expect(at(first, 3).x - R).toBeCloseTo(3.15 + SET_PAD, 9);
+    expect(at(first, 3).x - R).toBeLessThan(frameOf(first, 2).x1);
+    expect(at(first, 3).x + R).toBeGreaterThan(frameOf(first, 2).x0);
+    // (its box 2.1 to 4.5: 1.05 and 1.15 - the second: it goes left, to 0.9 from the second's left edge, and lies over the first)
+    const second = build(3.3);
+    expect(at(second, 3).x + R).toBeCloseTo(3.35 - SET_PAD, 9);
+    expect(at(second, 3).x + R).toBeGreaterThan(frameOf(second, 1).x0);
+    expect(at(second, 3).x - R).toBeLessThan(frameOf(second, 1).x1);
+  });
+
+  it("does not ease what a set holds: a picture one set holds, lying over another set's frame, stays - though the gesture changed it", () => {
+    const doc = workspace();
+    doc.edit("place", (d) => addPicture(addMolecule3d(d, mol(5, 0)), { ...PIC, x: 0, y: 0, w: 6, h: 1 }));
+    doc.edit("sets", (d) => addSet(addSet(d, { x0: -4, y0: -3, x1: 4, y1: 3 }, undefined, "pictures"), { x0: 2, y0: -3, x1: 8, y1: 3 }));
+    doc.edit("fit", (d) => framesSettled(d, d, reach));
+    const state = doc.getState();
+    expect(state.sets![0].members).toEqual([{ picture: 1 }]);
+    // (the second frame lies over the picture's right end)
+    expect(frameOf(state, 2).x0).toBeLessThan(3);
+    const touched = { ...state, pictures: state.pictures!.map((p) => ({ ...p })) };
+    const out = framesSettled(touched, state, reach);
+    expect(out.pictures![0].x).toBe(0);
+  });
+
+  it("is no obstacle where its set is held off the page: a frame drawn nowhere eases nothing out", () => {
+    const doc = fitted({ x: 20, y: 0 });
+    const down = doc.getState();
+    // (a result set of molecule 2's place, wired on and not opened: held, on no page)
+    const held = { ...down, sets: [...down.sets!, { id: 9, x0: 18, y0: -3, x1: 23, y1: 3, members: [], made: { step: 5, exit: "out", holds: "molecules" as const } }], wires: [{ id: 1, from: { set: 9 }, to: { step: 5, port: "in" } }] };
+    const touched = { ...held, molecules3d: held.molecules3d!.map((m) => (m.id === 2 ? { ...m } : m)) };
+    expect(at(pushedOut(touched, held, reach), 2)).toEqual({ x: 20, y: 0 });
+    // (the same frame, wired to nothing: it is in the way)
+    const shown = { ...touched, wires: [] };
+    expect(at(pushedOut(shown, held, reach), 2)).not.toEqual({ x: 20, y: 0 });
+  });
+
+  it("keeps a frame while a picture it holds is dragged, as for a structure and a molecule: let go, it is fitted", () => {
+    const doc = workspace();
+    doc.edit("place", (d) => addPicture(d, { ...PIC, x: 0, y: 0 }));
+    doc.edit("set", (d) => addSet(d, { x0: -3, y0: -3, x1: 3, y1: 3 }));
+    doc.edit("fit", (d) => framesSettled(d, d, reach));
+    const was = frameOf(doc.getState());
+    const down = doc.getState();
+    doc.edit("move", (d) => ({ ...d, pictures: d.pictures!.map((p) => ({ ...p, x: 1.5 })) }), gestureStep("drag"));
+    expect(frameOf(doc.getState())).toEqual(was);
+    doc.edit("fit frames", (d) => framesSettled(d, down, reach), { joinTop: true });
+    expect(frameOf(doc.getState()).x1).toBeGreaterThan(was.x1);
+  });
+
 });
 
 describe("easedOut", () => {
