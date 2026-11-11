@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { PAGE_PX } from "../utils/pageScale";
 import { controlLine, controlOnPage, controlSize, lineWidth, pagePx, type Control } from "./units";
 import * as THREE from "three";
-import { fillShapesGeometry, inDrawOrder, packShapes, PER, SHAPE_ATTRIBUTES, type Shape } from "./shapes";
+import { CONTROL_SIZE_GLSL, fillShapesGeometry, inDrawOrder, packShapes, PER, SHAPE_ATTRIBUTES, type Shape } from "./shapes";
 import { cursorChange, hitAt, type Hit, type Region } from "./hits";
 import { fitted, placed, textWidth, wrapText } from "./texts";
 import { cellOf } from "./icons";
@@ -53,6 +53,10 @@ describe("shapes packed for the shader", () => {
     expect(p.fill[0]).toBeCloseTo(1, 6);
     expect(p.stroke[0]).toBeCloseTo(0.63, 2);
     expect(p.kindOpacity[0]).toBe(0);
+  });
+
+  it("size a control in the shader as controlSize does: the larger of its least on the screen and its size on the page", () => {
+    expect(CONTROL_SIZE_GLSL).toBe("max(aControl.x * uScreen, aControl.y)");
   });
 
   it("carry a control's screen pixels and most for the shader to size it by the zoom, and none for a ring of fixed size", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { COLORS } from "../../../theme/colors";
-import { dropOn, portColours, portControl, portOfKey, portParts, PORT_PX } from "./ports";
+import { dropOn, portColours, portControl, portOfKey, portParts } from "./ports";
 
 describe("a workflow's port as WebGL draws it", () => {
   it("is 9 page pixels, nor more than a sixth of what it is on, but never under 5 screen pixels", () => {
@@ -16,7 +16,7 @@ describe("a workflow's port as WebGL draws it", () => {
 
   it("is taken hold of over 12 screen pixels about its middle, over the cards - but one only drawn takes nothing", () => {
     const p = portParts({ key: "port:give:3", x: 1, y: 2, label: "Out of Input" }, 0);
-    expect(p.region).toMatchObject({ key: "port:give:3", part: "port", circle: { x: 1, y: 2, diameterPx: PORT_PX.taken }, z: 5, cursor: "crosshair" });
+    expect(p.region).toMatchObject({ key: "port:give:3", part: "port", circle: { x: 1, y: 2, diameterPx: 12 }, z: 5, cursor: "crosshair" });
     expect(portParts({ key: "port:into:3", x: 1, y: 2, label: "Into", noHits: true }, 0).region).toBeNull();
   });
 

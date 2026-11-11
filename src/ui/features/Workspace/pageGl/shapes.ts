@@ -35,6 +35,13 @@ export type Box = {
 export type Shadow = { blurPx: number; offsetYPx: number; alpha: number };
 
 /**
+ * A control's size in the vertex shader (units `controlSize`): the larger of
+ * its least on the screen and its size on the page, so that it grows with the
+ * page and is not lost zoomed out.
+ */
+export const CONTROL_SIZE_GLSL = "max(aControl.x * uScreen, aControl.y)";
+
+/**
  * A ring - a circle, filled or not - centred at `x`, `y`: `diameterPx` page
  * pixels across, or, a control (`size`), sized as a control is (units `Control`), its
  * line then as a control's is (units `controlLine`).

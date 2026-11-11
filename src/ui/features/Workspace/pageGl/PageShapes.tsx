@@ -1,7 +1,7 @@
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
-import { fillShapesGeometry, packShapes, type Packed, type Shape } from "./shapes";
+import { CONTROL_SIZE_GLSL, fillShapesGeometry, packShapes, type Packed, type Shape } from "./shapes";
 
 /**
  * Where the page's WebGL is drawn among the rest: after the drawing, the
@@ -41,7 +41,7 @@ void main() {
   float line = aRadiusLine.y > 0.0 ? max(aRadiusLine.y, uDevice) : 0.0;
   if (aControl.z > 0.5) {
     // (a control, as a hand needs it: units controlSize, controlLine)
-    float d = max(aControl.x * uScreen, aControl.y);
+    float d = ${CONTROL_SIZE_GLSL};
     hs = vec2(d * 0.5);
     radius = d * 0.5;
     line = aStroke.a > 0.0 ? max(min(uScreen, d / 5.0), uDevice) : 0.0;
