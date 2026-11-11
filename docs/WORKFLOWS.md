@@ -306,7 +306,7 @@ arrow in its frame has no properties added and nothing said.
   structure alongside the arrow's words, as near them as a reactant must be to
   the tail (five bonds, as an RXN file reads a reaction).
 - A plain, dashed or bent arrow gives roles; an equilibrium too, as drawn (its
-  tail side the reactants), said once. A crossed-out arrow, a retrosynthetic
+  tail side the reactants), said once, with their number where there are several. A crossed-out arrow, a retrosynthetic
   one (its tail holds the target), a line with no head and a two-headed arrow
   (resonance forms) give none, and the count line says which.
 - A structure of two arrows has no role, said: a scheme of several steps is

@@ -100,6 +100,19 @@ describe("a set around a drawn reaction: each structure's role and reaction", ()
     expect(saidOf(doc)).toEqual(["1 reaction: 1 reactant, 1 product", "an equilibrium, read as drawn"]);
   });
 
+  it("says each equilibrium read as drawn, by its number", () => {
+    const doc = page([A1, C, pair(21, 24, 0), pair(24, 34, 0)], [arrow(1, 0, 0, { kind: "equilibrium", heads: 2 }), arrow(2, 29, 0, { kind: "equilibrium", heads: 2 })]);
+    expect(saidOf(doc)).toEqual(["2 reactions: 2 reactants, 2 products", "2 equilibria, read as drawn"]);
+  });
+
+  it("gives a structure beside the arrow but more than five bonds from its words no role - not a reagent - saying it is on no arrow", () => {
+    const near = page([A1, C, pair(5, 0.5, -4)], [arrow(1, 0, 0)]);
+    expect(rolesOf(near)).toEqual({ 1: "reactant/1", 5: "reagent/1", 7: "product/1" });
+    const far = page([A1, C, pair(5, 0.5, -7)], [arrow(1, 0, 0)]);
+    expect(rolesOf(far)).toEqual({ 1: "reactant/1", 5: "none", 7: "product/1" });
+    expect(saidOf(far)).toEqual(["1 reaction: 1 reactant, 1 product", "1 structure on no arrow"]);
+  });
+
   it("counts a salt drawn as its ions one molecule, each ion with its role", () => {
     // (Na and Cl, atoms of their own, closer than a bond: one product)
     const na = { atoms: [{ id: 30, el: "Na", x: 4 * L, y: 0, r: 0, charge: 1 } as Atom], bonds: [] };

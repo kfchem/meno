@@ -157,7 +157,7 @@ export function schemeRoles(page: SchemePage, frame: Frame, structures: readonly
   };
   const parts = [word("reactant", "reactants"), word("product", "products"), word("reagent", "reagents")].filter((p): p is string => !!p);
   if (reactions) said.push(`${plural(reactions, "reaction")}${parts.length ? `: ${parts.join(", ")}` : ""}`);
-  if (equilibria) said.push("an equilibrium, read as drawn");
+  if (equilibria) said.push(equilibria === 1 ? "an equilibrium, read as drawn" : `${equilibria} equilibria, read as drawn`);
   for (const { arrow, n } of refused.values()) said.push(refusedSaid(arrow, n));
   if (twice) said.push(`${plural(twice, "structure")} on two arrows: draw ${twice === 1 ? "it" : "each"} once for each`);
   if (none) said.push(`${plural(none, "structure")} on no arrow`);
