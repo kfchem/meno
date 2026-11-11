@@ -130,6 +130,57 @@ describe("createDocument", () => {
     expect(doc.getState().title).toBe("untitled");
   });
 
+  it("joins an edit that follows a gesture to the gesture's step: one undo for both, whatever the gesture's key or how long ago", () => {
+    const { doc, tick } = withClock();
+    doc.edit("drag", (d) => ({ ...d, title: "a" }), gestureStep("drag:1"));
+    doc.edit("drag", (d) => ({ ...d, title: "b" }), gestureStep("drag:1"));
+    tick(100 * DEFAULT_COALESCE_MS);
+    expect(doc.edit("fit", (d) => ({ ...d, atoms: ["C"] }), { joinTop: true })).toBe(true);
+    expect(doc.history()).toMatchObject({ undoDepth: 1, undoLabel: "drag" });
+    expect(doc.getState()).toEqual({ atoms: ["C"], title: "b" });
+    doc.undo();
+    expect(doc.getState()).toBe(initial);
+    expect(doc.history()).toMatchObject({ undoDepth: 0, redoDepth: 1 });
+    doc.redo();
+    expect(doc.getState()).toEqual({ atoms: ["C"], title: "b" });
+  });
+
+  it("makes a step of its own of an edit that joins nothing: no gesture on top, or one by another maker", () => {
+    const { doc } = withClock();
+    // (nothing yet: a step of its own)
+    doc.edit("fit", (d) => ({ ...d, title: "a" }), { joinTop: true });
+    expect(doc.history().undoDepth).toBe(1);
+    // (a plain step on top, no key: not a gesture)
+    doc.edit("type", (d) => ({ ...d, title: "b" }));
+    doc.edit("fit", (d) => ({ ...d, title: "c" }), { joinTop: true });
+    expect(doc.history()).toMatchObject({ undoDepth: 3, undoLabel: "fit" });
+    // (a gesture made by another)
+    doc.edit("drag", (d) => ({ ...d, title: "d" }), { ...gestureStep("drag:1"), by: "a conversation" });
+    doc.edit("fit", (d) => ({ ...d, title: "e" }), { joinTop: true });
+    expect(doc.history()).toMatchObject({ undoDepth: 5, undoLabel: "fit" });
+    expect(doc.history().undoBy).toBeUndefined();
+  });
+
+  it("leaves no step where the joining edit changes nothing", () => {
+    const { doc } = withClock();
+    doc.edit("drag", (d) => ({ ...d, title: "a" }), gestureStep("drag:1"));
+    const before = doc.getState();
+    expect(doc.edit("fit", (d) => d, { joinTop: true })).toBe(false);
+    expect(doc.getState()).toBe(before);
+    expect(doc.history().undoDepth).toBe(1);
+  });
+
+  it("a joining edit is settled like any, and clears what was to redo", () => {
+    const doc = createDocument<Doc>(initial, { settle: (next) => ({ ...next, title: next.title.toUpperCase() }) });
+    doc.edit("one", (d) => ({ ...d, title: "a" }), gestureStep("g"));
+    doc.edit("two", (d) => ({ ...d, title: "b" }), gestureStep("g2"));
+    doc.undo();
+    expect(doc.history().redoDepth).toBe(1);
+    doc.edit("fit", (d) => ({ ...d, atoms: ["C"] }), { joinTop: true });
+    expect(doc.getState()).toEqual({ atoms: ["C"], title: "A" });
+    expect(doc.history()).toMatchObject({ undoDepth: 1, redoDepth: 0 });
+  });
+
   it("keeps who made a step, where not the person, and never merges it with another's - whatever its key", () => {
     const { doc } = withClock();
     doc.edit("drag", (d) => ({ ...d, title: "a" }), gestureStep("drag:1"));
