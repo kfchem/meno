@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { connectStoreToDocument, createEditorStore } from ".";
-import { createWorkspaceDocument } from "../document";
+import { createWorkspaceDocument, setAtomChemistry } from "../document";
 import { acsWorldOptions, NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { labelSetOf } from "../../../../lib/chem/layout2d";
 import { clickSpread, DRAW_BACK_MS, SPREAD_MS } from "../components/selectionShade";
@@ -188,5 +188,33 @@ describe("a label typed over an atom that is selected with others (docs/EDITOR-2
     st().setSel({ atoms: new Set([c, x]), bonds: new Set() }, c);
     write(c, () => st().beginLabelEdit(c, "", { select: true }));
     expect(st().model.atoms.find((a) => a.id === x)!.el).toBe("C");
+  });
+
+  it("leaves an atom that is not selected alone, with two others selected - and puts it back in one undo step", () => {
+    const { doc, st, c, x } = editor();
+    const y = st().addAtom(2 * NOMINAL_BOND_LENGTH, 0, "C");
+    st().setSel({ atoms: new Set([c, x]), bonds: new Set() }, c);
+    const depth = doc.history().undoDepth;
+    // (a letter typed over y, which is not among the two selected)
+    st().beginLabelEdit(y, "N");
+    st().setLabelEditValue("N");
+    st().commitLabelEdit();
+    const el = (id: number) => st().model.atoms.find((a) => a.id === id)!.el;
+    expect([el(c), el(x), el(y)]).toEqual(["C", "C", "N"]);
+    expect(doc.history().undoDepth).toBe(depth + 1);
+    doc.undo();
+    expect([el(c), el(x), el(y)]).toEqual(["C", "C", "C"]);
+  });
+
+  it("keeps each atom's own element and radical, where only a charge is typed", () => {
+    const { doc, st, c, x } = editor();
+    doc.edit("set", (d) => setAtomChemistry(d, c, { el: "N", radical: "doublet" }));
+    st().setSel({ atoms: new Set([c, x]), bonds: new Set() }, c);
+    st().beginLabelEdit(c, "+");
+    st().setLabelEditValue("+");
+    st().commitLabelEdit();
+    const [n, carbon] = [c, x].map((id) => st().model.atoms.find((a) => a.id === id)!);
+    expect([n.el, n.charge, n.radical]).toEqual(["N", 1, "doublet"]);
+    expect([carbon.el, carbon.charge, carbon.radical]).toEqual(["C", 1, undefined]);
   });
 });

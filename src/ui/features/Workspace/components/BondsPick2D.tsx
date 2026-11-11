@@ -3,7 +3,7 @@ import { degrees, narrowEnd } from "../chem/drawing";
 import { longPressMs } from "../longPress";
 import * as THREE from "three";
 import { pageAt } from "../utils/page";
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { useThree } from "@react-three/fiber";
 import { pressMovedUnder } from "./viewGoal";
@@ -20,12 +20,15 @@ import { bondLengthFrom } from "../utils/magnified";
 export default function BondsPick2D() {
   const { camera, gl } = useThree();
   const store = useEditorStore();
-  const toWorld = (cx: number, cy: number) => {
-    const rect = gl.domElement.getBoundingClientRect();
-    const v = new THREE.Vector3(((cx - rect.left) / rect.width) * 2 - 1, -(((cy - rect.top) / rect.height) * 2 - 1), 0);
-    const p = pageAt(v.x, v.y, camera);
-    return { x: p.x, y: p.y };
-  };
+  const toWorld = useCallback(
+    (cx: number, cy: number) => {
+      const rect = gl.domElement.getBoundingClientRect();
+      const v = new THREE.Vector3(((cx - rect.left) / rect.width) * 2 - 1, -(((cy - rect.top) / rect.height) * 2 - 1), 0);
+      const p = pageAt(v.x, v.y, camera);
+      return { x: p.x, y: p.y };
+    },
+    [camera, gl],
+  );
   // a bond key with the pointer on a bond (docs/EDITOR-2D.md, *Bond keys*): 1, 2, 3 - not while a label or any field is typed
   // in, nor while a button is held (a drag going on: the bond under it is the gesture's); with the pointer on an atom, on no bond,
   // the key goes on a chain from it: one bond of that order out of the atom (`bondOut`, as a click with Option held), the new
@@ -50,9 +53,7 @@ export default function BondsPick2D() {
         s.bondKey(id, key);
         return;
       }
-      const rect = gl.domElement.getBoundingClientRect();
-      const toward = pageAt(((at.current.x - rect.left) / rect.width) * 2 - 1, -(((at.current.y - rect.top) / rect.height) * 2 - 1), camera);
-      const end = s.bondOut(atom!, { x: toward.x, y: toward.y }, key);
+      const end = s.bondOut(atom!, toWorld(at.current.x, at.current.y), key);
       if (end != null) s.setHoveredFromId(end);
     };
     window.addEventListener("keydown", onKeyDown);
@@ -69,7 +70,7 @@ export default function BondsPick2D() {
       window.removeEventListener("pointercancel", onUp, true);
       window.removeEventListener("blur", onUp);
     };
-  }, [store, camera, gl]);
+  }, [store, toWorld]);
   const {
     model,
     setHoveredFromId,
