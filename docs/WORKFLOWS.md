@@ -4025,9 +4025,42 @@ molecules of one geometry - which a step that works on entries refuses
   level is joined to the next, in the order they come. A row naming no
   other level is counted and said. A conformer of a level with no energy,
   where the level has others, is counted and said too.
+- **Levels by** (a list of property names, one to a line; blank is the
+  rule above): the first of these properties an entry carries names its
+  level, else the rule above. A workflow's minima and saddle points are
+  named so - *species*, then *path*, where minima carry the one and saddle
+  points the other. A name no entry carries refuses the step, saying so.
+- **Joined by** (property names, one to a line; blank is *Connects*, else
+  each level to the next): each level is joined to the level each property's
+  value names - by its name or its shown name - read from the level's lowest
+  entry. **The first property names the level before it, the rest the levels
+  after it** (*first end*, then *last end*): the card says so. Where a level's
+  entries name different levels, the lowest's is taken and the line says so;
+  a value naming no level, or its own, is counted and said as a row of
+  *Connects* is. *Connects* wired and *Joined by* written together refuse
+  the step ("Links from both Connects and Joined by: take one").
+- **Columns from the lines**: wherever lines are given - *Connects* or
+  *Joined by* - a level's column is its signed distance from the reference
+  along them, +1 along a line and -1 against it, all shifted so that the
+  leftmost is 0. A reaction keeps its direction: A, TS1, I, TS2, P relative
+  to I are columns 0, 1, 2, 3, 4 - distance taken both ways would put A and
+  P in one. Levels in one column share it, side by side, in the order they
+  are listed. A level reached at two different distances (a cycle) stands at
+  the nearest to the reference, and is said; a level no line reaches comes
+  after the last column, and is said. With no lines given, one level to a
+  column, as before.
+- **Conformers**: *The lowest* (as before), or *Every one*: each other entry
+  of a level is a thin line at its own value, in the same unit and relative
+  to the same reference, under the level's bold bar at its lowest. Pointed at,
+  a thin line says its number and value and its own imaginary frequencies
+  (a saddle point's other conformers can differ in them); pressed, its entry
+  is shown. An entry with no value of the energy is counted and said ("not
+  drawn"); a level of several compounds draws its sum alone, said once. The
+  thin lines fade in and out with the option.
 - Its card says how many levels, relative to which; its set's count line
   says its levels. It is kept in the workspace's file, and has changed when
-  either input, a level's name, or its options have.
+  either input, a level's name, or its options have. A diagram kept without
+  columns, thin lines or a naming property reads as before.
 
 ## Questions
 

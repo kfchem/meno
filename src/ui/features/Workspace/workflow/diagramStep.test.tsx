@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
-import { diagramIn, frequenciesSaid, type DiagramValue } from "../../../../lib/energyDiagram";
+import { diagramIn, frequenciesSaid, pointedSaid, type DiagramValue } from "../../../../lib/energyDiagram";
 import { readTable } from "../../../../lib/table";
 import { factor } from "../../../../lib/units";
 import { addMolecule3d, emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
@@ -322,12 +322,12 @@ describe("an Energy diagram of outputs opened, its levels as its card lists them
     expect(howOf(listed, diagramValues(listed, { reference: "R", levels: "R = HCN\nTS\nQ\nTS" }), kindInfo("energy-diagram").how)).toBe("ΔE, relative to HCN");
     // (Levels changed alone: the reference left as shown, blank, stays blank - the first as they are now listed - never P, as it stood)
     const shown = diagramValues(options, { quantity: "energy", levels: "", reference: "" });
-    expect(diagramKept({ ...shown, levels: "R = HCN\nTS\nP" }, shown, { quantity: "energy", levels: "", reference: "" })).toEqual({ quantity: "energy", levels: "R = HCN\nTS\nP", reference: "" });
+    expect(diagramKept({ ...shown, levels: "R = HCN\nTS\nP" }, shown, { quantity: "energy", levels: "", reference: "" })).toEqual({ quantity: "energy", levels: "R = HCN\nTS\nP", reference: "", levelsBy: "", joinedBy: "", conformers: "" });
     // (one the chemist picked: kept)
     expect(diagramKept({ ...shown, reference: "TS" }, shown, { reference: "" }).reference).toBe("TS");
     // (nothing in Levels: as the kind declares them)
     const bare = addStep(emptyWorkspaceDocument(), "energy-diagram", 0, 0);
-    expect(diagramOptions(bare, bare.steps![0], stepOptions(bare.steps![0])).map((o) => o.type)).toEqual(["text", "lines", "text"]);
+    expect(diagramOptions(bare, bare.steps![0], stepOptions(bare.steps![0])).map((o) => o.type)).toEqual(["text", "lines", "text", "lines", "lines", "choice"]);
   });
 });
 
@@ -390,3 +390,61 @@ describe("an Energy diagram's level of several compounds", () => {
   });
 });
 
+
+describe("an Energy diagram step: every conformer a thin line, levels in columns", () => {
+  it("runs with Conformers: Every one: each other conformer at its own energy relative to the reference, its imaginary frequencies of its own", () => {
+    const { doc, step } = page("GFN2-xTB", { conformers: "every" });
+    const d = diagramOf(runStep(doc, step, W), step)!;
+    // (TS's lowest is #2; #1, 0.025 Eh above R, is the thin line)
+    expect(d.levels.map((l) => l.others?.map((o) => [Number(o.value.toFixed(3)), o.number, o.imaginary]))).toEqual([undefined, [[Number((0.025 * KCAL).toFixed(3)), 1, "not computed"]], undefined]);
+    expect(diagramIn(JSON.parse(JSON.stringify(d)))).toEqual(d);
+    // (The lowest, as today: no thin line)
+    const plain = diagramOf(runStep(page().doc, page().step, W), page().step)!;
+    expect(plain.levels.every((l) => l.others === undefined && l.column === undefined)).toBe(true);
+  });
+
+  const level = (name: string, value: number, extra: Partial<DiagramValue["levels"][number]> = {}) => ({ name, value, lowestOf: 1, lowest: { row: 0 }, ...extra });
+  const d: DiagramValue = {
+    kind: "diagram",
+    axis: { name: "ΔG", unit: "kcal/mol" },
+    reference: "a",
+    levels: [
+      level("a", 0, { column: 0, lowestOf: 3, others: [{ value: 0.8, row: 1, number: 2 }, { value: 1.5, row: 2, number: 3 }] }),
+      level("ts1", 35.2, { column: 1, lowest: { row: 3, imaginary: [-300] } }),
+      level("ts2", 29.1, { column: 1, others: [{ value: 33.4, row: 5, number: 2, imaginary: [-250.5, -40] }] }),
+      level("b", -6.3, { column: 2 }),
+      level("c", -1.9, { column: 2 }),
+    ],
+    links: [
+      [0, 1],
+      [0, 2],
+      [1, 3],
+      [2, 4],
+    ],
+    left: [],
+  };
+
+  it("draws levels of one column side by side in its slot, a thin line under each level's bar - grey, 1 px - and fades them in", () => {
+    const html = renderToString(<DiagramBody diagram={d} />).split("<!-- -->").join("");
+    expect(html.match(/data-thin=""/g)).toHaveLength(3);
+    expect(html.match(/meno-fade-in/g)).toHaveLength(3);
+    // (three columns, five levels: the two saddle points share the middle column's slot, each half of it)
+    const named = [...html.matchAll(/<span class="absolute -translate-x-1\/2 truncate text-center text-gh-black" style="left:([0-9.]+)px;top:[^"]*;max-width:([0-9.]+)px">([^<]+)</g)].map((m) => ({ name: m[3], left: Number(m[1]), room: Number(m[2]) }));
+    const at = (n: string) => named.find((l) => l.name === n)!;
+    expect(at("ts1").room).toBeCloseTo(at("a").room / 2, 5);
+    expect(at("ts1").left).toBeLessThan(at("ts2").left);
+    expect(at("b").left).toBeLessThan(at("c").left);
+    expect(at("a").left).toBeLessThan(at("ts1").left);
+    expect(at("ts2").left).toBeLessThan(at("b").left);
+    // (the old look where no column is given: each level its own)
+    const old = renderToString(<DiagramBody diagram={{ ...d, levels: d.levels.map(({ column: _c, others: _o, ...l }) => l) }} />).split("<!-- -->").join("");
+    expect(old).not.toContain("data-thin");
+  });
+
+  it("says a thin line pointed at: its number, its value and its own imaginary frequencies; a level's lowest as it did", () => {
+    expect(pointedSaid(d.levels[0], d.levels[0].others![1])).toBe("a · #3 · +1.5 kcal/mol");
+    expect(pointedSaid(d.levels[2], d.levels[2].others![0])).toBe("ts2 · #2 · +33.4 kcal/mol · has 2 imaginary frequencies, 250.5i, 40.0i cm⁻¹");
+    expect(pointedSaid(d.levels[1])).toBe("ts1 · +35.2 kcal/mol · has 1 imaginary frequency, 300.0i cm⁻¹");
+    expect(pointedSaid(d.levels[0])).toBe("a · 0.0 kcal/mol · lowest of 3");
+  });
+});

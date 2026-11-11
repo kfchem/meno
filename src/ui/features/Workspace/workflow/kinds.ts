@@ -6,7 +6,7 @@
  */
 import { CHECK_OPTIONS } from "./checkStructures";
 import { STEREO_OPTIONS } from "./stereoisomers";
-import { deltaOf, levelsTyped } from "../../../../lib/energyDiagram";
+import { deltaOf, levelsTyped, propertiesTyped } from "../../../../lib/energyDiagram";
 import { MOST_PAIRS } from "./mostPairs";
 import { numberText } from "../../../../lib/calc/results";
 import { shownOptions, type Option, type OptionValues } from "../../../../lib/options";
@@ -596,8 +596,28 @@ export const KINDS: readonly KindInfo[] = [
       { id: "quantity", label: "Energy", type: "text", default: "energy" },
       { id: "levels", label: "Levels, in order", type: "lines", default: "", rows: 3, note: "Rename one by writing = and the name after it, as R = HCN" },
       { id: "reference", label: "Relative to", type: "text", default: "" },
+      // (blank: as before - a level by its title, name or group)
+      { id: "levelsBy", label: "Levels by", type: "lines", default: "", rows: 2, note: "Property names, one to a line: the first an entry carries names its level" },
+      // (blank: Connects, else each level to the next)
+      { id: "joinedBy", label: "Joined by", type: "lines", default: "", rows: 2, note: "Property names, one to a line: the first names what comes before a level, the rest what comes after" },
+      {
+        id: "conformers",
+        label: "Conformers",
+        type: "choice",
+        choices: [
+          { value: "lowest", label: "The lowest" },
+          { value: "every", label: "Every one" },
+        ],
+        default: "lowest",
+      },
     ],
-    how: (v) => `${deltaOf(String(v.quantity || "energy"))}, relative to ${shownAs(String(v.levels ?? ""), String(v.reference ?? "")) || "the first"}`,
+    how: (v) =>
+      [
+        `${deltaOf(String(v.quantity || "energy"))}, relative to ${shownAs(String(v.levels ?? ""), String(v.reference ?? "")) || "the first"}`,
+        ...(propertiesTyped(String(v.levelsBy ?? "")).length ? [`levels by ${propertiesTyped(String(v.levelsBy)).join(", ")}`] : []),
+        ...(propertiesTyped(String(v.joinedBy ?? "")).length ? [`joined by ${propertiesTyped(String(v.joinedBy)).join(", ")}`] : []),
+        ...(v.conformers === "every" ? ["every conformer"] : []),
+      ].join(", "),
   },
   // (Meno's steps on structures - docs/STRUCTURE-STEPS.md - each on a set's entries as Meno's entry records, workflow/structureSteps)
   {
