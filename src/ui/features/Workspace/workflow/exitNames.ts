@@ -9,20 +9,23 @@ import type { Drawn } from "../pageGl/PagePlaced";
 import type { PageText } from "../pageGl/texts";
 import { pagePx } from "../pageGl/units";
 import { exitsOf } from "./kinds";
-import { CARD_W, GAP, PORT_STEP, portDown, PX } from "./look";
+import { CARD_W, GAP, portDown, PX } from "./look";
 
 /** How far out from the card's side a name begins, as an input's (StepCard), and how large its letters are, in page px. */
 export const EXIT_NAME_OUT = 8;
 export const EXIT_NAME_PX = 10;
+/** How far above its port's wire a name's middle stands, in page px: nearer its own port than the port above it, which a port's step (20) would make no nearer. */
+export const EXIT_NAME_RISE = 6;
 
 /**
  * Each exit's name, where its step has more than one exit and its set is on
  * no page beside it (`named`: the name its frame would have - doers
  * `setName`, its kind's words filled from the step's options - for one held
  * off the page, workflow/held; none for one on the page, which its frame
- * names). Outside the card's right side, half a port's step above its port,
- * as an input's name is above its port on the left: between the wire that
- * leaves its port level and the line above, through neither. In the quiet
+ * names). Outside the card's right side, just above its own port - nearer
+ * it than the port above, so that no name reads as the one beside the other
+ * - between the wire that leaves its port level and the line above, through
+ * neither. In the quiet
  * words an input's name is in. The first cut with an ellipsis short of
  * where its set's frame would stand (`GAP` out), as a wire leaves it level
  * there; those under it whole.
@@ -38,7 +41,7 @@ export function exitNames(steps: readonly Pick<WorkflowStep, "id" | "x" | "y" | 
             {
               key: `exit:${s.id}:${x.id}`,
               x: s.x + CARD_W + EXIT_NAME_OUT * PX,
-              y: s.y - portDown(k) + PORT_STEP / 2,
+              y: s.y - portDown(k) + EXIT_NAME_RISE * PX,
               anchor: "start",
               baseline: "middle",
               text: name,

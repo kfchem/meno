@@ -11,7 +11,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { DOUBLE_CLICK_MS, FREE_MS, MOV_PX } from "../constants";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { pressOnEmpty } from "../utils/clickCount";
-import { arrowsIn, cornersOf, inBox, inLasso, marksAtOf, middleOf, molecules3dIn, turned, turnedArrows, turnedBy, wordsIn } from "../utils/selection";
+import { arrowsIn, cornersOf, inBox, inLasso, marksAtOf, middleOf, molecules3dIn, turnSnapped, turned, turnedArrows, turnedBy, wordsIn } from "../utils/selection";
 import { flowIn } from "../workflow/parts";
 import { middleOf as shapeMiddle, turned as turnedShape } from "../../../../lib/chem/shapes";
 import { shapePlace } from "../document";
@@ -40,8 +40,6 @@ const NO_MODEL: Model = { atoms: [], bonds: [] };
 /** The handle's radius on the screen, in px, and how far off it a press still takes it. */
 const HANDLE_PX = 6;
 const HANDLE_HIT = 2;
-/** Turning snaps to steps of this many degrees, until a pause lets it go. */
-const TURN_STEP = 15;
 
 /** A molecule in 3D as a turn takes it, turned as it is now. */
 const turningOf =
@@ -105,10 +103,11 @@ function selectionExtent(
  *   a lasso rather than a box;
  * - a handle above the selection that turns it about its middle, in steps
  *   of 15 degrees, or freely after a pause. Molecules in 3D it turns in the
- *   page's plane, about the line of sight, as it turns the drawing: alone,
- *   several as one body about their common middle, one about its own
- *   centre; selected with the drawing, carried round with it. With Shift,
- *   each molecule turns about its own centre instead, and the drawing stays.
+ *   page's plane, about the line of sight, as it turns the drawing: by
+ *   themselves, freely and never in steps - several as one body about their
+ *   common middle, one about its own centre; selected with the drawing,
+ *   carried round with it, in its steps. With Shift, each molecule turns
+ *   about its own centre instead, freely, and the drawing stays.
  */
 export default function Selection2D() {
   const { model, sel, boxSelect } = useEditor();
@@ -384,9 +383,7 @@ export default function Selection2D() {
     let put = 0;
     const apply = () => {
       frame = null;
-      const a = Math.atan2(last.y - about.y, last.x - about.x) - a0;
-      const step = (TURN_STEP * Math.PI) / 180;
-      const angle = free ? a : Math.round(a / step) * step;
+      const angle = turnSnapped(Math.atan2(last.y - about.y, last.x - about.x) - a0, free);
       if (angle === put) return;
       put = angle;
       // (molecules with the drawing: carried round in its plane, and turned with it)
@@ -455,8 +452,8 @@ export default function Selection2D() {
 
   /**
    * Molecules in 3D turned by the handle in the page's plane - about the
-   * line of sight, as it turns a drawing - in steps of 15 degrees, or
-   * freely after a pause: several as one body about their common middle,
+   * line of sight, as it turns a drawing - freely, never in steps (a
+   * molecule in 3D has no grid to keep to): several as one body about their common middle,
    * which carries them round; one, or each with Shift, about its own
    * centre, where it stands. Either is one undo step, and Escape puts them
    * back. (Turned out of the plane, by a drag on a molecule itself, they
@@ -476,17 +473,13 @@ export default function Selection2D() {
     const p0 = toWorld(e.clientX, e.clientY);
     const a0 = Math.atan2(p0.y - about.y, p0.x - about.x);
     let last = p0;
-    let free = false;
-    let pause: number | null = null;
     let frame: number | null = null;
     st.beginPanHold(e.pointerId);
     st.suppressDoubleClick(DOUBLE_CLICK_MS);
     let put = 0;
     const apply = () => {
       frame = null;
-      const a = Math.atan2(last.y - about.y, last.x - about.x) - a0;
-      const step = (TURN_STEP * Math.PI) / 180;
-      const angle = free ? a : Math.round(a / step) * step;
+      const angle = Math.atan2(last.y - about.y, last.x - about.x) - a0;
       if (angle === put) return;
       put = angle;
       went = true;
@@ -503,16 +496,10 @@ export default function Selection2D() {
     const onMove = (ev: PointerEvent) => {
       last = toWorld(ev.clientX, ev.clientY);
       if (frame == null) frame = window.requestAnimationFrame(apply);
-      if (pause != null) window.clearTimeout(pause);
-      pause = window.setTimeout(() => {
-        free = true;
-        apply();
-      }, FREE_MS);
     };
     const done = () => {
-      if (pause != null) window.clearTimeout(pause);
       if (frame != null) window.cancelAnimationFrame(frame);
-      pause = frame = null;
+      frame = null;
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp, true);
       window.removeEventListener("keydown", onKey, true);

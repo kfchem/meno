@@ -30,11 +30,13 @@ pub const PURPOSE: &str = "plugin-catalogue";
 /// Where they are: the releases of the plugins' repository, and where those send their files.
 pub const HOSTS: [&str; 3] = ["github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com"];
 
-/// The catalogue, as the newest release of the plugins' repository has it; its signature beside it, `.minisig`.
+/// The catalogue, as the plugins' repository's release `catalogue` has it - asked of that release by its name, not
+/// as the newest release: a step fewer for GitHub to hand it on through, and the same file (that release is the one
+/// marked newest, for the address an earlier Meno fetches); its signature beside it, `.minisig`.
 /// This Meno's generation of it (docs/PLUGINS.md, *Plugins online*): the whole list, `catalogue-2.json`, read
 /// by a Meno that lists a plugin made for a newer Meno as such - beside `catalogue.json`, the plugins every Meno
 /// still in use reads whole, which an earlier Meno fetches.
-const LIST_URL: &str = "https://github.com/kfchem/meno-plugins/releases/latest/download/catalogue-2.json";
+const LIST_URL: &str = "https://github.com/kfchem/meno-plugins/releases/download/catalogue/catalogue-2.json";
 
 /// Where a catalogue is kept in the plugins' folder: the list, its signature and its state.
 struct Kept {
@@ -254,13 +256,18 @@ fn now_iso() -> String {
     crate::logfile::utc(secs).replacen(' ', "T", 1)
 }
 
+/// Where the list's signature is: beside it, `.minisig`.
+fn signature_url() -> String {
+    format!("{LIST_URL}.minisig")
+}
+
 /// The catalogue and its signature, fetched under its purpose, to its hosts alone.
 async fn fetch_list(net: &net::Net) -> Fetched {
     let task = net.begin(PURPOSE, "The plugins online", Some(hosts()))?;
     let proxy = task.proxy_url().ok_or("the network is not ready")?;
     let got = async {
         let list = tools::download(LIST_URL, &proxy, LIST_MOST).await?;
-        let sig = tools::download(&format!("{LIST_URL}.minisig"), &proxy, SIGNATURE_MOST).await?;
+        let sig = tools::download(&signature_url(), &proxy, SIGNATURE_MOST).await?;
         Ok::<_, String>((list, sig))
     }
     .await;
@@ -604,6 +611,15 @@ pub fn plugin_files_remove(app: AppHandle, id: String) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_list_is_asked_of_its_release_by_name_its_signature_beside_it() {
+        // (the release `catalogue`, by its name - not the newest release - and catalogue-2.json, this Meno's list)
+        assert_eq!(LIST_URL, "https://github.com/kfchem/meno-plugins/releases/download/catalogue/catalogue-2.json");
+        assert_eq!(signature_url(), format!("{LIST_URL}.minisig"));
+        // (at a host the catalogue's purpose is let reach)
+        assert!(HOSTS.contains(&reqwest::Url::parse(LIST_URL).unwrap().host_str().unwrap()));
+    }
 
     // Three key pairs made for these tests alone, their secret keys not kept: the list signed with the first
     // (issued 2026-11-03, and one of 11-02, and another issued at the same second as the first), and with the

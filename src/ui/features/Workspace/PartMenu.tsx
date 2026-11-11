@@ -422,7 +422,9 @@ export default function PartMenu({
      * shown or hidden, the next map taken, the reaction written in 3D.
      */
     atomMap?: {
-      standing: "none" | "changed" | "incomplete" | "ready";
+      standing: "none" | "refused" | "changed" | "incomplete" | "ready";
+      /** A map taken off its arrow: one of an arrow that no longer means a reaction. */
+      onRemove?: () => void;
       shown: boolean;
       maps: number;
       /** Which of them is in use, from 0: the best first. */
@@ -775,7 +777,13 @@ export default function PartMenu({
             : []),
           // (its reaction's atom map: made; shown or hidden, another taken, written in 3D - or said to be incomplete)
           ...(arrow?.atomMap
-            ? arrow.atomMap.standing === "ready" || arrow.atomMap.standing === "incomplete"
+            ? arrow.atomMap.standing === "refused"
+              ? [
+                  // (made while the arrow meant a reaction: kept, said not to be one now, never shown - taken off by the chemist)
+                  { name: "Not a reaction now", keys: "", run: () => {}, disabled: true, divider: true },
+                  ...(arrow.atomMap.onRemove ? [{ name: "Remove map", keys: "", run: arrow.atomMap.onRemove }] : []),
+                ]
+              : arrow.atomMap.standing === "ready" || arrow.atomMap.standing === "incomplete"
               ? mapShownItems({ ...arrow.atomMap, standing: arrow.atomMap.standing }, true)
               : [
                   { name: "Atom map", keys: "", run: arrow.atomMap.onMake, divider: true },

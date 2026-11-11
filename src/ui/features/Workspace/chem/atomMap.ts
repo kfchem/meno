@@ -2,8 +2,8 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import type { Molecule, ParsedAtom, ParsedBond } from "../../../../lib/chem/molecule";
 import { writeMolfile3d } from "../../../../lib/chem/molWriter";
 import { bondChanges, type ReactionMap } from "../../../../lib/chem/reactionMap";
-import { arrowEnds, reactionRoles } from "../../../../lib/chem/reactionScheme";
-import type { Arrow, ArrowAtomMap, Model, Plus } from "../store/types";
+import { arrowEnds, reactionMeant, reactionRoles } from "../../../../lib/chem/reactionScheme";
+import type { Arrow, ArrowAtomMap, Model, Plus, EditorState } from "../store/types";
 import { signatureOf } from "../utils/drawnLink";
 
 /**
@@ -67,6 +67,22 @@ export function reactionOf(model: Model, arrow: Arrow, pluses: readonly Plus[]):
   return { reactants: side(roles.reactants, from), products: side(roles.products, to) };
 }
 
+/**
+ * Whether an arrow's menu has its atom map: where it means a reaction
+ * (`reactionMeant`) and has one drawn on either side; or where it holds a
+ * map made before it came to mean none - said so, to be taken off.
+ */
+export function mapOffered(arrow: Pick<Arrow, "atomMap"> & Partial<Pick<Arrow, "kind" | "heads">>, sides: { reactants: readonly unknown[]; products: readonly unknown[] }): boolean {
+  if (reactionMeant(arrow) !== true) return !!arrow.atomMap;
+  return sides.reactants.length > 0 && sides.products.length > 0;
+}
+
+/** Why no atom map is made of an arrow, in a sentence - or null where it means a reaction. */
+export function noMapSaid(arrow: Partial<Pick<Arrow, "kind" | "heads">>): string | null {
+  const meant = reactionMeant(arrow);
+  return meant === true ? null : `No atom map for this arrow: ${meant.why}.`;
+}
+
 /** A structure in 3D for mapping, and the drawn atom each of its atoms is (none for a hydrogen made for it). */
 export type Side3D = { molecule: Molecule; drawnFrom: (number | null)[] };
 
@@ -114,23 +130,43 @@ export function keptMap(model: Model, result: ReactionMap, reactants: readonly S
 }
 
 /**
- * How an arrow's map stands to the drawing: none made; made of a drawing
+ * How an arrow's map stands to the drawing: none made; made of an arrow
+ * that no longer means a reaction (`refused`: kept, never shown); made of a drawing
  * changed since; partial - made with atoms that do not all map, shown, and
  * not used where one to one is needed; or ready to show and use.
  */
-export function mapStanding(arrow: Pick<Arrow, "atomMap">, model: Model): "none" | "changed" | "incomplete" | "ready" {
+export function mapStanding(arrow: Pick<Arrow, "atomMap"> & Partial<Pick<Arrow, "kind" | "heads">>, model: Model): "none" | "refused" | "changed" | "incomplete" | "ready" {
   const m = arrow.atomMap;
   if (!m) return "none";
+  // (made of an arrow that has since come to mean no reaction - crossed out, retrosynthetic, headless, two-headed: kept, said, never shown)
+  if (reactionMeant(arrow) !== true) return "refused";
   const ids = [...m.reactant.drawnFrom, ...m.product.drawnFrom].filter((id): id is number => id != null);
   if (signatureOf(model, ids) !== m.drawnAs) return "changed";
   return m.complete ? "ready" : "incomplete";
 }
 
 /** Why a map cannot be written in 3D as a reaction - partial, or of the drawing before an edit, or none - or null where it can. */
-export function exportRefusal(map: ArrowAtomMap | undefined, model: Model): string | null {
-  const standing = map ? mapStanding({ atomMap: map }, model) : "none";
+export function exportRefusal(map: ArrowAtomMap | undefined, model: Model, arrow: Partial<Pick<Arrow, "kind" | "heads">> = {}): string | null {
+  const standing = map ? mapStanding({ atomMap: map, ...arrow }, model) : "none";
+  // (the map of an arrow that no longer means a reaction: not written, whatever it was made as)
+  if (standing === "refused") {
+    const meant = reactionMeant(arrow, "export");
+    return `No 3D reaction for this arrow: ${meant === true ? "it means no reaction" : meant.why}.`;
+  }
   if (standing === "incomplete") return "Every atom must be mapped to write the reaction in 3D, and this map is partial.";
   return standing === "ready" ? null : "The reaction has no atom map of it as it is drawn.";
+}
+
+/**
+ * The map to write in 3D for an arrow or a map between structures, or why
+ * there is none: `exportRefusal` of that arrow's own kind and heads, so the
+ * route that writes the file refuses as the drawing says.
+ */
+export function exportOf(state: Pick<EditorState, "arrows" | "structureMaps" | "model">, of: { arrow: number } | { structureMap: number }): { map: ArrowAtomMap } | { refused: string } {
+  const arrow = "arrow" in of ? state.arrows.find((a) => a.id === of.arrow) : undefined;
+  const map = "arrow" in of ? arrow?.atomMap : state.structureMaps.find((m) => m.id === of.structureMap)?.map;
+  const refused = exportRefusal(map, state.model, arrow ?? {});
+  return refused || !map ? { refused: refused ?? "The reaction has no atom map of it as it is drawn." } : { map };
 }
 
 /** Whether a map's standing has it show on the drawing: ready, or partial. */

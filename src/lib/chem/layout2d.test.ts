@@ -978,7 +978,8 @@ describe("a label must not change how a bond is drawn", () => {
 
   it("stops a hashed wedge's widest hash short of a bare atom at its wide end that bonds go on from, where the style asks", () => {
     const bond: Bond = { a1: 0, a2: 1, order: 1, stereo: "down" };
-    const o = opts();
+    // (the widest hash reaching the atom: what no style asks for now, but one saved before the setting is drawn so)
+    const o = opts({ hashedWedgeShort: undefined });
     // (its wide end a chain's or a ring's atom: two more bonds go on from it)
     const onward = new Map([
       [0, 3],
@@ -1003,7 +1004,7 @@ describe("a label must not change how a bond is drawn", () => {
       [1, 2],
     ]);
     const far = (h: { far: number }[]) => Math.max(...h.map((x) => x.far));
-    const o = opts();
+    const o = opts({ hashedWedgeShort: undefined });
     const at = hashesOf(buildBondPrimitives(pair("C"), bond, o, ZOOM, two).polys);
     const short = hashesOf(buildBondPrimitives(pair("C"), bond, opts({ hashedWedgeShort: true }), ZOOM, two).polys);
     expect(far(at) - far(short)).toBeCloseTo(o.hashSpacingPx - o.lineWidthPx, 9);
@@ -1415,6 +1416,71 @@ describe("a wedge with a bond carrying straight on", () => {
     expect(end.length).toBe(3);
     // and the end reaches past the atom, so the bond comes out of it
     expect(Math.max(...end.map((p) => p.x))).toBeGreaterThan(1.5);
+  });
+});
+
+describe("a wedge's wide end where one bond carries straight on", () => {
+  const ZOOM = 40;
+  const atoms: Atom[] = [
+    { id: 1, x: 0, y: 0, el: "C" },
+    { id: 2, x: 1.5, y: 0, el: "C" },
+    { id: 3, x: 3, y: 0, el: "C" },
+  ];
+  const bonds: Bond[] = [
+    { a1: 0, a2: 1, order: 1, stereo: "up", narrow: 0 },
+    { a1: 1, a2: 2, order: 1, stereo: "none" },
+  ];
+  const wideEnd = (joinStyle: "round" | "sharp") => {
+    const { polys } = buildAllPrimitives(atoms, bonds, opts({ joinStyle }), ZOOM);
+    const wedge = polys.reduce((big, p) => (polyArea(p.points) > polyArea(big.points) ? p : big));
+    return wedge.points.filter((p) => p.x > 0.75);
+  };
+  // the corner a square end has: furthest out along the wedge and across it
+  const hasSharpCorner = (end: Vec2[]) => {
+    const far = Math.max(...end.map((p) => p.x));
+    const wide = Math.max(...end.map((p) => Math.abs(p.y)));
+    return end.some((p) => Math.abs(p.x - far) < 1e-9 && Math.abs(Math.abs(p.y) - wide) < 1e-9);
+  };
+
+  it("leaves the corners as they are cut when joins are sharp", () => {
+    expect(hasSharpCorner(wideEnd("sharp"))).toBe(true);
+  });
+
+  it("rounds both corners when joins are round", () => {
+    const end = wideEnd("round");
+    expect(end.length).toBeGreaterThan(wideEnd("sharp").length);
+    expect(hasSharpCorner(end)).toBe(false);
+  });
+
+  it("rounds only the corner that no bond's edge carries on, where a side bond leaves too", () => {
+    const withSide = [...atoms, { id: 4, x: 2.2, y: -1.3, el: "C" } as Atom];
+    const withSideBonds = [...bonds, { a1: 1, a2: 3, order: 1, stereo: "none" } as Bond];
+    const endOf = (joinStyle: "round" | "sharp") => {
+      const { polys } = buildAllPrimitives(withSide, withSideBonds, opts({ joinStyle }), ZOOM);
+      const wedge = polys.reduce((big, p) => (polyArea(p.points) > polyArea(big.points) ? p : big));
+      return wedge.points.filter((p) => p.x > 0.75);
+    };
+    const sharp = endOf("sharp");
+    const round = endOf("round");
+    const at = (pts: Vec2[], q: Vec2) => pts.some((p) => Math.hypot(p.x - q.x, p.y - q.y) < 1e-9);
+    // the corner on the side bond's edge (the side bond leaves downwards) stays where it was cut,
+    // the one on the square cut across the straight-on bond is gone
+    const down = sharp.reduce((m, p) => (p.y < m.y ? p : m));
+    const up = sharp.reduce((m, p) => (p.y > m.y ? p : m));
+    expect(at(round, down)).toBe(true);
+    expect(at(round, up)).toBe(false);
+    expect(round.length).toBeGreaterThan(sharp.length);
+  });
+
+  it("rounds a bold bar's end likewise", () => {
+    const bar = bonds.map((b, i) => (i === 0 ? { ...b, stereo: "none" as const, display: "bold" as const } : b));
+    const endOf = (joinStyle: "round" | "sharp") => {
+      const { polys } = buildAllPrimitives(atoms, bar, opts({ joinStyle }), ZOOM);
+      const shape = polys.reduce((big, p) => (polyArea(p.points) > polyArea(big.points) ? p : big));
+      return shape.points.filter((p) => p.x > 0.75);
+    };
+    expect(hasSharpCorner(endOf("sharp"))).toBe(true);
+    expect(hasSharpCorner(endOf("round"))).toBe(false);
   });
 });
 

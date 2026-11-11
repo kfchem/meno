@@ -1974,9 +1974,9 @@ export type EditorState = {
   connectAtoms: (a: number, b: number, order?: Bond["order"]) => number | null;
   /**
    * One bond out of atom `id`, where there is room (utils/geometry `newBondFrom`, `toward` the pointer), as one undo step:
-   * to the atom its end falls on, where it falls on one, else to a new carbon. The atom it ends at; null where none.
+   * to the atom its end falls on, where it falls on one, else to a new carbon; single, or of `order`. The atom it ends at; null where none.
    */
-  bondOut: (id: number, toward: { x: number; y: number }) => number | null;
+  bondOut: (id: number, toward: { x: number; y: number }, order?: Bond["order"]) => number | null;
   replaceDraggedAtomWith: (movingId: number, targetId: number) => void;
   moveAtom: (id: number, x: number, y: number) => void;
   /**

@@ -15,11 +15,12 @@ import { isElementSymbol } from "../../../lib/roles/molblock";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { DEFAULT_STYLE_CHOICE, styleOf, type StyleChoice } from "../../../lib/chem/style";
 import { groupTurn } from "./utils/expandPlace";
+import { mayBecome } from "./utils/dropMerge";
 import { magnificationWithin } from "./utils/magnified";
 import { magnifiedTo, oneMagnificationEach } from "../../../lib/chem/magnified2d";
 import { DEFAULT_WORKSPACE_3D, type Workspace3D } from "../../../lib/chem/workspaceStyle3d";
 import { pathLength, pointAlong, type ArrowLook } from "../../../lib/chem/reactionArrow";
-import { arrowPoints } from "../../../lib/chem/reactionScheme";
+import { arrowPoints, reactionMeant } from "../../../lib/chem/reactionScheme";
 import { mapAtoms, mapMarks, mapShows, mapStanding } from "./chem/atomMap";
 import { numbers3d, sideMolecules, type StructureMap } from "./chem/structureMaps";
 import { joinedAdded, joinedStructures, joinsSettled, separatedStructures } from "./utils/joinedParts";
@@ -942,33 +943,22 @@ export function updateBond(
 }
 
 /**
- * Drops the dragged atom onto another one: bonds that pointed at it are
- * rewired to the target, skipping duplicates and self-bonds.
+ * Drops the dragged atom onto another one: the bonds that pointed at it are
+ * rewired to the target. Only where no bond is lost by it (`mayBecome`): an
+ * atom it is bonded to, or shares a neighbour with, is left as it is.
  */
 export function replaceDraggedAtomWith(
   doc: WorkspaceDocument,
   movingId: number,
   targetId: number,
 ): WorkspaceDocument {
-  if (movingId === targetId) return doc;
-  const bonds: Bond[] = [];
-  for (const b of doc.model.bonds) {
-    const other = b.a === movingId ? b.b : b.b === movingId ? b.a : null;
-    if (other == null) {
-      bonds.push(b);
-      continue;
-    }
-    if (other === targetId) continue; // collapses onto the target
-    const exists = bonds.some(
-      (kept) =>
-        (kept.a === targetId && kept.b === other) ||
-        (kept.b === targetId && kept.a === other),
-    );
-    const alreadyInModel = hasBond(doc, targetId, other);
-    if (exists || alreadyInModel) continue;
-    // (a wedge narrow at the atom dragged, narrow at the one it was dropped on)
-    bonds.push({ ...(b.a === movingId ? { ...b, a: targetId } : { ...b, b: targetId }), ...(b.narrow === movingId ? { narrow: targetId } : {}) });
-  }
+  if (!mayBecome(doc.model, movingId, targetId)) return doc;
+  const bonds = doc.model.bonds.map((b) =>
+    b.a !== movingId && b.b !== movingId
+      ? b
+      : // (a wedge narrow at the atom dragged, narrow at the one it was dropped on)
+        { ...(b.a === movingId ? { ...b, a: targetId } : { ...b, b: targetId }), ...(b.narrow === movingId ? { narrow: targetId } : {}) },
+  );
   const atoms = doc.model.atoms.filter((a) => a.id !== movingId);
   // (its electron-pushing arrows with it: an end on the atom dragged now on
   // the one it was dropped on, and those on a bond that collapsed, or come
@@ -1513,7 +1503,7 @@ export function setAtomMap(doc: WorkspaceDocument, arrowId: number, map: ArrowAt
   if (!arrow) return doc;
   const before = arrow.atomMap;
   const inside = new Set<number>([...(before ? mapAtoms(before) : []), ...(map ? mapAtoms(map) : [])]);
-  const marks = map && map.shown && mapShows(mapStanding({ atomMap: map }, doc.model)) ? mapMarks(map, doc.model) : null;
+  const marks = map && map.shown && mapShows(mapStanding({ atomMap: map, kind: arrow.kind, heads: arrow.heads }, doc.model)) ? mapMarks(map, doc.model) : null;
   const atoms = doc.model.atoms.map((a) => {
     if (!inside.has(a.id)) return a;
     const n = marks?.numbers.get(a.id);
@@ -1817,7 +1807,12 @@ export function setArrowForm(doc: WorkspaceDocument, ids: readonly number[], pat
   if (!changed) return doc;
   // (straightened, or given corners: the words by it go with its line)
   const bent = arrows.flatMap((next, i) => (JSON.stringify(next.corners) !== JSON.stringify(doc.arrows[i].corners) ? [[doc.arrows[i], next] as const] : []));
-  return withWordsAlong({ ...doc, arrows }, bent);
+  let out = withWordsAlong({ ...doc, arrows }, bent);
+  // (an arrow with a map that came to mean no reaction, or came to mean one again: what its map shows on the drawing taken off, or put back)
+  arrows.forEach((next, i) => {
+    if (next.atomMap && (reactionMeant(next) === true) !== (reactionMeant(doc.arrows[i]) === true)) out = setAtomMap(out, next.id, next.atomMap);
+  });
+  return out;
 }
 
 /** `doc` with the arrow setting `look` for itself, in place of what it set. */
