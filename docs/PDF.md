@@ -336,7 +336,13 @@ PDFs there - one step, which an undo takes back. It is held as any other
   hidden from it - which the window's own print operation gives to the
   system's dialog (Tauri's `WebviewWindow::print`, as WebKit's `window.print()`
   shows no dialog in the app: macOS's print panel, WebView2's and GTK's
-  dialogs). The print document stays in the window, out of sight, until the
+  dialogs). The print document's `html` and `body` are let grow to hold every
+  picture (the app's own are the window's height with the rest cut off, which
+  printed one page), and each page's own size is given as a named CSS page, so
+  that where the engine takes the paper from the document, letter stays letter.
+  On a Mac the first print raises the system's "find devices on your local
+  network" prompt (printer discovery); printing to a PDF file works whichever
+  answer is given. The print document stays in the window, out of sight, until the
   window says it has printed or the next print replaces it, as the dialog is
   not waited on.
   Where to print, how many copies and which pages are that dialog's, as a

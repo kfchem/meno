@@ -51,18 +51,44 @@ export function printDpi(printing: "full" | "low", page: readonly [number, numbe
   return Math.min(asked, ((MOST_SIDE - 1) * 72) / longest);
 }
 
-/** The document the printer sees: nothing of Meno's, but the pictures, a page each, as large as the paper allows. */
+/**
+ * The document the printer sees: nothing of Meno's, but the pictures, a page
+ * each, as large as the paper allows. The window's own `html` and `body` are
+ * the height of the window with what is beyond it cut off, which would print
+ * one page and no more: for the printer they grow to hold every picture.
+ */
 export const PRINT_CSS = `
 #meno-print { display: none; }
 @media print {
   @page { margin: 0; }
+  html, body { height: auto !important; min-height: 0 !important; overflow: visible !important; margin: 0; padding: 0; background: #fff; }
   body > *:not(#meno-print) { display: none !important; }
-  html, body { margin: 0; padding: 0; background: #fff; }
-  #meno-print { display: block; }
-  #meno-print img { display: block; width: 100vw; height: 100vh; object-fit: contain; break-after: page; page-break-after: always; }
+  #meno-print { display: block; position: static; }
+  #meno-print img { display: block; width: 100%; height: auto; max-height: 100vh; object-fit: contain; break-after: page; page-break-after: always; }
   #meno-print img:last-child { break-after: auto; page-break-after: auto; }
 }
 `;
+
+/** A page's size as the paper it asks for, in points (a PDF's size, so that letter stays letter and A4 stays A4 where the printer takes the page's size). */
+export type PageSize = readonly [number, number];
+
+/** What names a size among the print document's pages. */
+const sizeName = (size: PageSize) => `p${Math.round(size[0])}x${Math.round(size[1])}`;
+
+/**
+ * Each page's own paper size, as CSS names it: a named page for each size the
+ * PDF has, and the picture that is a page of it put on that page. Where the
+ * print engine does not take a page's size from the document, the paper is the
+ * dialog's and the pictures are fitted to it.
+ */
+export function pageSizeCss(sizes: readonly PageSize[]): string {
+  const distinct = [...new Set(sizes.map(sizeName))];
+  const rules = distinct.map((name) => {
+    const [w, h] = name.slice(1).split("x");
+    return `  @page ${name} { size: ${w}pt ${h}pt; margin: 0; }\n  #meno-print img.${name} { page: ${name}; }`;
+  });
+  return rules.length ? `@media print {\n${rules.join("\n")}\n}\n` : "";
+}
 
 /** What printing needs from the window - each one a part that can be put in its place in a test. */
 export type PrintDeps = {
@@ -74,7 +100,7 @@ export type PrintDeps = {
   hold: (png: Uint8Array) => string;
   release: (url: string) => void;
   /** The pictures laid out for the printer, and the window's print dialog asked for (the pictures are let go of through `release`, which the window keeps them for while the dialog may still use them). */
-  show: (urls: string[]) => Promise<void>;
+  show: (urls: string[], sizes: readonly PageSize[]) => Promise<void>;
 };
 
 /** A page printed, and how it was drawn: what the test of the print document reads. */
@@ -98,7 +124,7 @@ export async function printPdf(sha256: string, pages: readonly (readonly [number
       dpi.push(picture.dpi);
       urls.push(deps.hold(picture.png));
     }
-    await deps.show(urls);
+    await deps.show(urls, pages);
     return { pages: urls.length, dpi };
   } finally {
     for (const url of urls) deps.release(url);
@@ -142,16 +168,17 @@ const kept = new Set<string>();
  * pictures stay until the window says it has printed, the next print takes
  * them away, or a long wait is over.
  */
-export async function showToPrinter(urls: string[], ask: () => Promise<void> = askWindowToPrint): Promise<void> {
+export async function showToPrinter(urls: string[], sizes: readonly PageSize[], ask: () => Promise<void> = askWindowToPrint): Promise<void> {
   retire?.();
   const sheet = document.createElement("div");
   sheet.id = "meno-print";
   const style = document.createElement("style");
-  style.textContent = PRINT_CSS;
+  style.textContent = PRINT_CSS + pageSizeCss(sizes);
   sheet.append(style);
-  const images = urls.map((url) => {
+  const images = urls.map((url, i) => {
     const img = document.createElement("img");
     img.src = url;
+    img.className = sizeName(sizes[i]);
     img.alt = "";
     sheet.append(img);
     return img;

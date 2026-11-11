@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { LOW_DPI, NOT_ALLOWED, PRINT_CSS, PRINT_DPI, askWindowToPrint, printDpi, printPdf, printTip, printed, showToPrinter, type PrintDeps, type Printing } from "./print";
+import { LOW_DPI, NOT_ALLOWED, PRINT_CSS, PRINT_DPI, askWindowToPrint, printDpi, printPdf, pageSizeCss, printTip, printed, showToPrinter, type PrintDeps, type Printing } from "./print";
 
 const invoked = vi.hoisted(() => ({ calls: [] as [string, unknown][] }));
 vi.mock("@tauri-apps/api/core", () => ({
@@ -12,7 +12,7 @@ const A4: [number, number] = [595, 842];
 
 /** A window that draws pages as pictures of the size asked, and says what was asked of it. */
 function window_(printing: Printing, fail?: { draw?: number; show?: boolean }) {
-  const said = { drawn: [] as { page: number; dpi: number; box: number[] }[], held: [] as string[], released: [] as string[], shown: [] as string[][] };
+  const said = { drawn: [] as { page: number; dpi: number; box: number[] }[], held: [] as string[], released: [] as string[], shown: [] as string[][], sizes: [] as (readonly [number, number])[][] };
   const deps: PrintDeps = {
     allowed: async () => printing,
     draw: async (_sha, page, box, dpi) => {
@@ -26,7 +26,8 @@ function window_(printing: Printing, fail?: { draw?: number; show?: boolean }) {
       return url;
     },
     release: (url) => said.released.push(url),
-    show: async (urls) => {
+    show: async (urls, sizes) => {
+      said.sizes.push([...sizes]);
       said.shown.push([...urls]);
       if (fail?.show) throw new Error("the dialog failed");
     },
@@ -44,6 +45,8 @@ describe("a PDF printed", () => {
       { page: 2, dpi: 300, box: [0, 0, 842, 595] },
     ]);
     expect(said.shown).toEqual([["blob:page-0", "blob:page-1", "blob:page-2"]]);
+    // (with each page's own size, that the paper is the PDF's: letter stays letter)
+    expect(said.sizes).toEqual([[A4, A4, [842, 595]]]);
     expect(done).toEqual({ pages: 3, dpi: [300, 300, 300] });
     expect(PRINT_DPI).toBe(300);
   });
@@ -109,6 +112,20 @@ describe("the dots an inch a page is printed at", () => {
 });
 
 describe("the print document", () => {
+  it("lets the window's own html and body grow to hold every picture, as the app's are the window's height with the rest cut off", () => {
+    expect(PRINT_CSS).toMatch(/@media print[\s\S]*html, body \{[^}]*height: auto !important;[^}]*overflow: visible !important;/);
+    expect(PRINT_CSS).toMatch(/#meno-print \{ display: block; position: static; \}/);
+  });
+
+  it("gives each size a PDF has its own named page of that paper size in points, and no rule where there is no page", () => {
+    const css = pageSizeCss([[612, 792], [595.28, 841.89], [612, 792]]);
+    expect(css).toContain("@page p612x792 { size: 612pt 792pt; margin: 0; }");
+    expect(css).toContain("#meno-print img.p612x792 { page: p612x792; }");
+    expect(css).toContain("@page p595x842 { size: 595pt 842pt; margin: 0; }");
+    expect(css.match(/@page p612x792/g)).toHaveLength(1);
+    expect(pageSizeCss([])).toBe("");
+  });
+
   it("is hidden but for the printer, and breaks each picture on to a page of its own", () => {
     expect(PRINT_CSS).toMatch(/#meno-print \{ display: none; \}/);
     expect(PRINT_CSS).toMatch(/@media print[\s\S]*body > \*:not\(#meno-print\) \{ display: none !important; \}/);
@@ -126,7 +143,7 @@ describe("Print, as the command says it", () => {
   it("is asked for a PDF once while it is being printed: a second press waits for nothing and prints nothing", async () => {
     const first = window_("full");
     let release: () => void = () => {};
-    const slow: PrintDeps = { ...first.deps, show: () => new Promise<void>((done) => (release = done)) };
+    const slow: PrintDeps = { ...first.deps, show: (_urls, _sizes) => new Promise<void>((done) => (release = done)) };
     const sha = "d".repeat(64);
     const pending = printed(sha, [A4], slow);
     // (let the first reach its dialog)
@@ -145,9 +162,9 @@ describe("Print, as the command says it", () => {
 
 /** A window of just what the print document needs: elements that remember what is put in them, the page's body, the window's events. */
 function pageWindow() {
-  type El = { tag: string; id: string; src: string; children: El[]; removed: boolean; textContent: string; append: (...e: El[]) => void; remove: () => void; decode: () => Promise<void>; alt: string };
+  type El = { tag: string; id: string; src: string; className: string; children: El[]; removed: boolean; textContent: string; append: (...e: El[]) => void; remove: () => void; decode: () => Promise<void>; alt: string };
   const make = (tag: string): El => {
-    const el: El = { tag, id: "", src: "", alt: "", textContent: "", children: [], removed: false, append: (...e) => el.children.push(...e), remove: () => void (el.removed = true), decode: async () => {} };
+    const el: El = { tag, id: "", src: "", className: "", alt: "", textContent: "", children: [], removed: false, append: (...e) => el.children.push(...e), remove: () => void (el.removed = true), decode: async () => {} };
     return el;
   };
   const body = make("body");
@@ -181,10 +198,11 @@ describe("The window's own print dialog", () => {
     vi.useFakeTimers();
     const w = pageWindow();
     const asked: number[] = [];
-    await showToPrinter(["blob:a", "blob:b"], async () => void asked.push(w.sheets().length));
+    await showToPrinter(["blob:a", "blob:b"], [A4, A4], async () => void asked.push(w.sheets().length));
     // (the sheet was in the page, with a picture each, when the dialog was asked)
     expect(asked).toEqual([1]);
     expect(w.sheets()[0].children.filter((c) => c.tag === "img").map((c) => c.src)).toEqual(["blob:a", "blob:b"]);
+    expect(w.sheets()[0].children.filter((c) => c.tag === "img").map((c) => c.className)).toEqual(["p595x842", "p595x842"]);
     w.afterprint();
     expect(w.sheets()).toHaveLength(0);
   });
@@ -192,7 +210,7 @@ describe("The window's own print dialog", () => {
   it("goes on after the call returns: the pictures are held, not let go of, while the dialog may draw from them", async () => {
     vi.useFakeTimers();
     const w = pageWindow();
-    await showToPrinter(["blob:a"], async () => {});
+    await showToPrinter(["blob:a"], [A4], async () => {});
     expect(w.sheets()).toHaveLength(1);
     expect(w.revoked).toEqual([]);
   });
@@ -200,8 +218,8 @@ describe("The window's own print dialog", () => {
   it("is taken away when the next print puts its own in the page", async () => {
     vi.useFakeTimers();
     const w = pageWindow();
-    await showToPrinter(["blob:a"], async () => {});
-    await showToPrinter(["blob:b"], async () => {});
+    await showToPrinter(["blob:a"], [A4], async () => {});
+    await showToPrinter(["blob:b"], [A4], async () => {});
     expect(w.sheets()).toHaveLength(1);
     expect(w.sheets()[0].children.find((c) => c.tag === "img")?.src).toBe("blob:b");
     w.afterprint();
@@ -211,7 +229,7 @@ describe("The window's own print dialog", () => {
   it("leaves nothing in the page where the dialog could not be asked for", async () => {
     vi.useFakeTimers();
     const w = pageWindow();
-    await expect(showToPrinter(["blob:a"], async () => Promise.reject(new Error("no dialog")))).rejects.toThrow("no dialog");
+    await expect(showToPrinter(["blob:a"], [A4], async () => Promise.reject(new Error("no dialog")))).rejects.toThrow("no dialog");
     expect(w.sheets()).toHaveLength(0);
   });
 });
