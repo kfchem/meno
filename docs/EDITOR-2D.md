@@ -42,8 +42,14 @@ and in particular:
   that way of drawing rather than for keys to learn: no keyboard shortcut
   builds a structure (agreed 2026-09-27); the bond keys only set a bond's
   kind (*Bond keys*, below; 2026-11-02).
-  - A drag on an atom moves it; it snaps as it goes, and dropped on another
-    atom it becomes that atom.
+  - A drag on an atom moves it; it snaps as it goes, never onto another atom
+    (a snap stands clear of every atom, so no drag merges where it only
+    meant to move; 2026-11-11, after dragging a tert-butyl's centre
+    collapsed its carbons). Dropped with the pointer on another atom it
+    becomes that atom - a ring closed, a chain joined - and the preview shows
+    it there before the button comes up, one undo step. It does not become an
+    atom it is bonded to or shares a neighbour with: that would lose a bond
+    (or the atom itself), so there the drag only moves it (`utils/dropMerge`).
   - A double-click on an atom draws one bond where there is room; a
     double-click that drags draws one bond where it is led. Near 120
     degrees from a bond already there it snaps to that, and an arc grows

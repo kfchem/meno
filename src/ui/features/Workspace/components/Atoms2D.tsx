@@ -9,7 +9,8 @@ import { dragSelection } from "../utils/dragSelection";
 import { onChord } from "../utils/press";
 import { dragsSelection } from "../store/slices/selectionSlice";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { computeMoveSnap } from "../utils/moveSnap";
+import { computeMoveSnap, onAnotherAtom, snapAngleAbout } from "../utils/moveSnap";
+import { mergeTarget } from "../utils/dropMerge";
 import { ATOM_PICK_RADIUS_RATIO, DOUBLE_CLICK_MS, FREE_MS, MOV_PX } from "../constants";
 import { oncePerEvent, pressNumber } from "../utils/clickCount";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
@@ -225,13 +226,10 @@ export function Atoms2D() {
       }
       try {
         const pEnd = toWorld(ev.clientX, ev.clientY);
-        // Dropped straight onto another atom: it becomes that atom.
-        const onto = findAtomNear(
-          pEnd.x,
-          pEnd.y,
-          NOMINAL_BOND_LENGTH * 0.4,
-          thisAtom.id,
-        );
+        // Dropped with the pointer on another atom it may become (one it
+        // shares no bond or neighbour with - utils/dropMerge): it becomes
+        // that atom, as the preview showed. Nowhere else does a drag merge.
+        const onto = mergeTarget(model, thisAtom.id, pEnd);
         if (onto != null) {
           replaceDraggedAtomWith(thisAtom.id, onto);
         } else {
@@ -242,20 +240,19 @@ export function Atoms2D() {
           }
           // (as long as the bonds of its structure are shown)
           const L = bondLengthFrom(model.atoms, thisAtom.id);
-          const step = Math.PI / 6;
           const only =
             nbrs.length === 1
               ? model.atoms.find((aa) => aa.id === nbrs[0]) || null
               : null;
           let finalX = pEnd.x + offset.dx;
           let finalY = pEnd.y + offset.dy;
-          if (moveFree) {
-            // Free: exactly at the pointer, as the preview shows it
+          if (moveFree && !onAnotherAtom(model as any, thisAtom.id, pEnd, L)) {
+            // Free: exactly at the pointer, as the preview shows it (but never
+            // on an atom: it is where the snap would put it instead)
             finalX = pEnd.x;
             finalY = pEnd.y;
           } else if (only) {
-            const ang = Math.atan2(pEnd.y - only.y, pEnd.x - only.x);
-            const snap = Math.round(ang / step) * step;
+            const snap = snapAngleAbout(model as any, thisAtom.id, only, pEnd, L);
             finalX = only.x + L * Math.cos(snap);
             finalY = only.y + L * Math.sin(snap);
           } else if (nbrs.length >= 2) {
@@ -268,14 +265,8 @@ export function Atoms2D() {
               finalY = snap.py;
             }
           }
-          const hitId = findAtomNear(
-            finalX,
-            finalY,
-            NOMINAL_BOND_LENGTH * 0.4,
-            thisAtom.id,
-          );
-          if (hitId != null) replaceDraggedAtomWith(thisAtom.id, hitId);
-          else moveAtom(thisAtom.id, finalX, finalY);
+          // (an atom is never left on another, whichever way it was led there)
+          if (!onAnotherAtom(model as any, thisAtom.id, { x: finalX, y: finalY }, L)) moveAtom(thisAtom.id, finalX, finalY);
         }
       } catch {}
       endMoveDrag();
