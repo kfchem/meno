@@ -61,8 +61,7 @@ export type EditMeta = {
    * With no gesture on top, a step of its own: so, too, where the gesture
    * ended in a plain edit - one made with no key - which is the step on top
    * then (a drop made by a plain step is two steps to undo: the drop, then
-   * what followed it). Never a change set's first edit, nor the edit a
-   * history with nothing before the step on top makes.
+   * what followed it). Never a change set's first edit.
    */
   joinTop?: true;
 };
@@ -300,8 +299,8 @@ export function createDocument<T>(
 
       const at = now();
       const window = meta.coalesceWithinMs ?? DEFAULT_COALESCE_MS;
-      // (joining the gesture on top: only one that is one - a step made with a key, with a step under it - and the same maker's; never a change set's first edit)
-      const joins = !first && meta.joinTop === true && present.coalesceKey != null && past.length > 0 && present.by === meta.by;
+      // (joining the gesture on top: only one that is one - a step made with a key - and the same maker's; never a change set's first edit)
+      const joins = !first && meta.joinTop === true && present.coalesceKey != null && present.by === meta.by;
       const coalesce =
         !first &&
         meta.coalesceKey != null &&
