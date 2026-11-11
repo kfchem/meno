@@ -121,6 +121,13 @@ describe("the pixels a unit of the scene spans at a molecule", () => {
     expect(pxPerWorld(c, 200, 20)).toBeCloseTo(37.3205 / 2, 4);
   });
 
+  it("are reckoned for Settings' preview with its camera where its framing puts it: 30 degrees, as far off as fits", () => {
+    // (1 + 1.15 / tan 15 degrees, for a sample that reaches 1)
+    expect(FOV).toBe(30);
+    expect(framedAt(1)).toBeCloseTo(5.29186, 4);
+    expect(framedAt(2)).toBeCloseTo(10.58372, 4);
+  });
+
   it("give a Settings preview's balls the segments of their own size, not those of a pixel", () => {
     // (the sample in Ball and stick, on a card 176 pixels tall at twice the screen's pixels, its camera where Framing puts it)
     const style = STYLE_3D;
