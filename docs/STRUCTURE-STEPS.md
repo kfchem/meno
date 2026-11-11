@@ -382,10 +382,14 @@ split on.
 - **Typed** (`torsionRowsTyped`): torsions four atoms to a line, from 1,
   each four different atoms, held at the angle typed (°, taken into
   (−180°, 180°]: −180 is written 180). The angle has no default: it is the
-  chemist's. A torsion whose three atoms lie on a line in the entry -
-  across an alkyne - has no angle to hold, and the entry is refused: within
-  1° of a straight line, the maintainer's choice, no measured basis claimed
-  (`LINE_WITHIN`).
+  chemist's. A torsion with no angle to hold refuses the entry: one whose
+  second or third atom is linear by its bonds - a triple bond on it, or two
+  double bonds (an alkyne's, a nitrile's carbon, a cumulene's centre, CO2's
+  C, an azide's central N: sp, linear by VSEPR), however little bent it
+  stands (the torsion is the angle between planes 1-2-3 and 2-3-4, Moss
+  1996); and, Meno's numerical guard for anything else, three of its atoms
+  within 1° of a straight line (`LINE_WITHIN`: an end atom moved 0.01 Å at
+  1.5 Å and 1° turns the torsion by about 22°, no plane worth holding).
 - **From the reference** (`torsionRowsFromReference`), its optional
   *Reference* input wired - against the one reference, or the one with the
   same value of a property: rows only for the torsions unlike here, as
@@ -418,7 +422,8 @@ split on.
   none wired, is refused as a whole.
 
 Checked: four atoms at 180° by 50 give one row, exactly an exact row, and
-−180° is written 180°; but-2-yne's C1-C2≡C3-C4 is refused; (Z)- against
+−180° is written 180°; but-2-yne's C1-C2≡C3-C4 is refused, bent to 178.5°
+too, and propyne's H-C1-C2≡C3; (Z)- against
 (E)-but-2-ene at 180° where trans gives rows for its two unlike torsions
 alone, and (E)-azobenzene against (Z) none, said, but one at the reference's
 own angle.
