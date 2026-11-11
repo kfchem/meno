@@ -20,7 +20,7 @@ import { magnificationWithin } from "./utils/magnified";
 import { magnifiedTo, oneMagnificationEach } from "../../../lib/chem/magnified2d";
 import { DEFAULT_WORKSPACE_3D, type Workspace3D } from "../../../lib/chem/workspaceStyle3d";
 import { pathLength, pointAlong, type ArrowLook } from "../../../lib/chem/reactionArrow";
-import { arrowPoints } from "../../../lib/chem/reactionScheme";
+import { arrowPoints, reactionMeant } from "../../../lib/chem/reactionScheme";
 import { mapAtoms, mapMarks, mapShows, mapStanding } from "./chem/atomMap";
 import { numbers3d, sideMolecules, type StructureMap } from "./chem/structureMaps";
 import { joinedAdded, joinedStructures, joinsSettled, separatedStructures } from "./utils/joinedParts";
@@ -1503,7 +1503,7 @@ export function setAtomMap(doc: WorkspaceDocument, arrowId: number, map: ArrowAt
   if (!arrow) return doc;
   const before = arrow.atomMap;
   const inside = new Set<number>([...(before ? mapAtoms(before) : []), ...(map ? mapAtoms(map) : [])]);
-  const marks = map && map.shown && mapShows(mapStanding({ atomMap: map }, doc.model)) ? mapMarks(map, doc.model) : null;
+  const marks = map && map.shown && mapShows(mapStanding({ atomMap: map, kind: arrow.kind, heads: arrow.heads }, doc.model)) ? mapMarks(map, doc.model) : null;
   const atoms = doc.model.atoms.map((a) => {
     if (!inside.has(a.id)) return a;
     const n = marks?.numbers.get(a.id);
@@ -1807,7 +1807,12 @@ export function setArrowForm(doc: WorkspaceDocument, ids: readonly number[], pat
   if (!changed) return doc;
   // (straightened, or given corners: the words by it go with its line)
   const bent = arrows.flatMap((next, i) => (JSON.stringify(next.corners) !== JSON.stringify(doc.arrows[i].corners) ? [[doc.arrows[i], next] as const] : []));
-  return withWordsAlong({ ...doc, arrows }, bent);
+  let out = withWordsAlong({ ...doc, arrows }, bent);
+  // (an arrow with a map that came to mean no reaction, or came to mean one again: what its map shows on the drawing taken off, or put back)
+  arrows.forEach((next, i) => {
+    if (next.atomMap && (reactionMeant(next) === true) !== (reactionMeant(doc.arrows[i]) === true)) out = setAtomMap(out, next.id, next.atomMap);
+  });
+  return out;
 }
 
 /** `doc` with the arrow setting `look` for itself, in place of what it set. */

@@ -8,7 +8,7 @@ import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { useNotices } from "../../../notices";
 import type { EditorState, Model } from "../store/types";
 import { linkOf, signatureOf } from "../utils/drawnLink";
-import { keptMap, reactionOf, type Side3D } from "./atomMap";
+import { keptMap, noMapSaid, reactionOf, type Side3D } from "./atomMap";
 import { bareAtomsOf, blocksOf, conformersOf, moleculeOf, pageCount } from "./make3d";
 import { mapAtoms, MappingStopped } from "./mapAtoms";
 
@@ -76,6 +76,12 @@ export function useAtomMaps(store: Store, setChemError: (e: string | null) => vo
       const st = store.getState();
       const arrow = st.arrows.find((a) => a.id === arrowId);
       if (!arrow) return;
+      // (an arrow that means no reaction - crossed out, retrosynthetic, headless, two-headed - is mapped by no route)
+      const noMap = noMapSaid(arrow);
+      if (noMap) {
+        setChemError(noMap);
+        return;
+      }
       const model = st.model;
       const { reactants, products } = reactionOf(model, arrow, st.pluses);
       if (!reactants.length || !products.length) {

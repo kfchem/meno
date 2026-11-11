@@ -340,3 +340,38 @@ describe("a set's menu", () => {
     expect([plain.icons, plain.listed.some((n) => n.includes("it holds"))]).toEqual([["Delete set"], false]);
   });
 });
+
+describe("an arrow's menu and its atom map", () => {
+  const arrowMenu = (atomMap?: object) =>
+    menu(target({ kind: "arrow", id: 1 }), {
+      arrow: {
+        kind: null,
+        setKind: none,
+        heads: 1,
+        setHeads: none,
+        full: false,
+        setFull: none,
+        dash: false,
+        setDash: none,
+        weight: "regular",
+        setWeight: none,
+        ...(atomMap ? { atomMap } : {}),
+      } as never,
+    });
+  const map = (over: object = {}) => ({ standing: "none", shown: false, maps: 0, chosen: 0, onMake: none, onShow: none, onOther: none, onExport: none, ...over });
+
+  it("makes the map of an arrow that means a reaction, and has none for one that does not", () => {
+    expect(arrowMenu(map()).listed).toContain("Atom map");
+    // (an arrow that means none is given no map at all: its menu has no such row - nothing disabled to teach a rule)
+    expect(arrowMenu().listed).not.toContain("Atom map");
+  });
+
+  it("says a map from before is not a reaction's now, and takes it off - nothing else of it", () => {
+    const listed = arrowMenu(map({ standing: "refused", onRemove: none })).listed;
+    expect(listed).toContain("Not a reaction now");
+    expect(listed).toContain("Remove map");
+    expect(listed).not.toContain("Atom map");
+    expect(listed).not.toContain("Hide atom map");
+    expect(listed).not.toContain("Show atom map");
+  });
+});
