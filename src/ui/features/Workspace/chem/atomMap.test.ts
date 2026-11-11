@@ -6,7 +6,7 @@ import { dielsAlder } from "../../../../lib/chem/reactionMap.fixtures";
 import * as ops from "../document";
 import { createWorkspaceDocument, emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
 import type { Arrow, Atom, Bond, Model } from "../store/types";
-import { beforeNumbers, exportRefusal, keptMap, mapMarks, mapOffered, mappedPairSdf, mapStanding, noMapSaid, reactionOf, type Side3D } from "./atomMap";
+import { beforeNumbers, exportOf, exportRefusal, keptMap, mapMarks, mapOffered, mappedPairSdf, mapStanding, noMapSaid, reactionOf, type Side3D } from "./atomMap";
 import { reactionFileText } from "./reactionFile";
 
 /**
@@ -151,6 +151,21 @@ describe("a kept map and what it shows", () => {
     expect(exportRefusal(kept, d.model, { kind: "retrosynthetic" })).toBe("No 3D reaction for this arrow: a retrosynthetic arrow: draw the reaction forward to export it.");
     expect(exportRefusal(kept, d.model, { heads: 2 })).toMatch(/resonance forms/);
     expect(exportRefusal(kept, d.model, { heads: 0 })).toMatch(/no head/);
+  });
+
+  it("is refused on the route that writes the file, by the arrow's own kind and heads", () => {
+    const d = drawn();
+    const { reactants, products, result } = sides();
+    const store = createWorkspaceDocument();
+    store.reset(ops.setAtomMap(d, 1, keptMap(d.model, result, reactants, products)));
+    const of = { arrow: 1 };
+    const state = () => ({ arrows: store.getState().arrows, model: store.getState().model, structureMaps: [] });
+    expect(exportOf(state(), of)).toHaveProperty("map");
+    store.edit("arrow", (x) => ops.setArrowForm(x, [1], { kind: "retrosynthetic" }));
+    expect(exportOf(state(), of)).toEqual({ refused: "No 3D reaction for this arrow: a retrosynthetic arrow: draw the reaction forward to export it." });
+    store.edit("arrow", (x) => ops.setArrowForm(x, [1], { kind: null, heads: 2 }));
+    expect(exportOf(state(), of)).toHaveProperty("refused");
+    expect(exportOf(state(), { arrow: 99 })).toEqual({ refused: "The reaction has no atom map of it as it is drawn." });
   });
 
   it("fails closed: an edit to its drawing takes its numbers and centres off at once, in the same step - undo gives them back", () => {

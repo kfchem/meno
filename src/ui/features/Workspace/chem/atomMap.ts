@@ -3,7 +3,7 @@ import type { Molecule, ParsedAtom, ParsedBond } from "../../../../lib/chem/mole
 import { writeMolfile3d } from "../../../../lib/chem/molWriter";
 import { bondChanges, type ReactionMap } from "../../../../lib/chem/reactionMap";
 import { arrowEnds, reactionMeant, reactionRoles } from "../../../../lib/chem/reactionScheme";
-import type { Arrow, ArrowAtomMap, Model, Plus } from "../store/types";
+import type { Arrow, ArrowAtomMap, Model, Plus, EditorState } from "../store/types";
 import { signatureOf } from "../utils/drawnLink";
 
 /**
@@ -155,6 +155,18 @@ export function exportRefusal(map: ArrowAtomMap | undefined, model: Model, arrow
   }
   if (standing === "incomplete") return "Every atom must be mapped to write the reaction in 3D, and this map is partial.";
   return standing === "ready" ? null : "The reaction has no atom map of it as it is drawn.";
+}
+
+/**
+ * The map to write in 3D for an arrow or a map between structures, or why
+ * there is none: `exportRefusal` of that arrow's own kind and heads, so the
+ * route that writes the file refuses as the drawing says.
+ */
+export function exportOf(state: Pick<EditorState, "arrows" | "structureMaps" | "model">, of: { arrow: number } | { structureMap: number }): { map: ArrowAtomMap } | { refused: string } {
+  const arrow = "arrow" in of ? state.arrows.find((a) => a.id === of.arrow) : undefined;
+  const map = "arrow" in of ? arrow?.atomMap : state.structureMaps.find((m) => m.id === of.structureMap)?.map;
+  const refused = exportRefusal(map, state.model, arrow ?? {});
+  return refused || !map ? { refused: refused ?? "The reaction has no atom map of it as it is drawn." } : { map };
 }
 
 /** Whether a map's standing has it show on the drawing: ready, or partial. */
