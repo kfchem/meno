@@ -258,6 +258,24 @@ describe("a line of runs", () => {
     const middle = lineOf("chip", 2, 1, "middle", runs, 11);
     expect(middle[0].x).toBeCloseTo(2 - pagePx(widthOfRuns(runs, 11)) / 2, 9);
   });
+
+
+  it("sets a run in Plex Mono where it says so - wide by Mono's advance, 0.6 of its size, and kept apart from the words beside it where lines break", async () => {
+    const { lineOf, widthOfRuns, wrapRuns } = await import("./texts");
+    const runs = [{ text: "see ", color: "#000000" }, { text: "abcdefghij", color: "#000000", mono: true as const }];
+    // (ten letters of 0.6 x 10 px: 60 px)
+    expect(widthOfRuns(runs.slice(1), 10)).toBeCloseTo(60, 9);
+    const line = lineOf("code", 0, 0, "start", runs, 10);
+    expect(line.map((t) => !!t.mono)).toEqual([false, true]);
+    expect(line[1].x).toBeCloseTo(pagePx(textWidth("see ", 10)), 9);
+    // (the same colour and weight, but not the same face: two runs in a line that is long enough, one that is mono wide by Mono's own)
+    const lines = wrapRuns([...runs, { text: " end", color: "#000000" }], 10, 1000);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].runs.map((r) => [r.text, !!r.mono])).toEqual([["see ", false], ["abcdefghij", true], [" end", false]]);
+    expect(lines[0].width).toBeCloseTo(textWidth("see ", 10) + 60 + textWidth(" end", 10), 9);
+    // (a mono word of ten, 60 px, in a line of 35: broken where it runs out, 5 letters each)
+    expect(wrapRuns([runs[1]], 10, 35).map((l) => l.runs.map((r) => r.text).join(""))).toEqual(["abcde", "fghij"]);
+  });
 });
 
 describe("where the page's WebGL is drawn", () => {
