@@ -24,6 +24,7 @@ import {
 } from "../../../lib/text/editing";
 import { lineComposing } from "../../../lib/text/field";
 import type { Command, Unit } from "../../../lib/text/keys";
+import { TAU, follow } from "../../theme/motion";
 import { colAt, LINE_PX, lineWidth, xAt } from "./linePictures";
 import type { FieldBox, FieldHost } from "./typingField";
 
@@ -59,12 +60,15 @@ export function scrollOfThumb(pos: number, len: number, track: number, most: num
   return track <= len ? 0 : Math.min(1, Math.max(0, pos / (track - len))) * most;
 }
 
+/** A scroll bar's thumb: where it starts and how long it is, along a track `track` long. */
+export type Thumb = { start: number; len: number; track: number };
+
 /** A thumb along a track `track` long, from `at`: where it starts and how long it is, for text `total` long seen through `view`, scrolled `scroll` - null where it all shows. */
-export function thumbOf(total: number, view: number, scroll: number, track: number, at = 0): { start: number; len: number } | null {
+export function thumbOf(total: number, view: number, scroll: number, track: number, at = 0): Thumb | null {
   if (total <= view + 0.5 || view <= 0 || track <= 0) return null;
   const len = Math.min(track, Math.max(BAR_LEAST, (track * view) / total));
   const most = total - view;
-  return { start: at + (track - len) * Math.min(1, Math.max(0, scroll / most)), len };
+  return { start: at + (track - len) * Math.min(1, Math.max(0, scroll / most)), len, track };
 }
 /** How near its end, in px, a text scrolled is taken to be at it - one growing there, a job's log, staying there. */
 const AT_END_PX = 8;
@@ -86,6 +90,9 @@ export class Editor implements FieldHost {
   /** How wide the longest line is, as far as it is known - and the line the IME is composing in, while it does. */
   private widest = 0;
   private composedWide = 0;
+  /** How wide a line number's digit is: measured in the type, a seam for a test. */
+  digitWidth: () => number = () => lineWidth("0");
+  private gutterNow: number | null = null;
   /** Told when anything drawn has changed; and when the text has, by typing. */
   onChange: () => void = () => {};
   onEdited: (text: string) => void = () => {};
@@ -106,17 +113,46 @@ export class Editor implements FieldHost {
     this.widest = lineWidth(this.lines.line(longest));
   }
 
-  /** How wide the column of line numbers is: wide enough for the last number, with room either side. */
-  get gutter(): number {
-    return gutterFor(this.lines.count, lineWidth("0"));
+  /** Where the column of line numbers is going to be: wide enough for the last number, with room either side. */
+  get gutterGoal(): number {
+    return gutterFor(this.lines.count, this.digitWidth());
   }
 
-  /** The scroll bars' thumbs on the view, null where the text fits: down the right edge, and along the bottom beside the numbers. */
-  get thumbs(): { v: { start: number; len: number } | null; h: { start: number; len: number } | null } {
+  /**
+   * How wide the column of line numbers is now: it eases to its goal as the
+   * count of lines takes another digit (`easeGutter`), the text, the caret
+   * and the pointer all reading it, so that they agree with the drawing at
+   * every frame - and begins at its goal.
+   */
+  get gutter(): number {
+    return (this.gutterNow ??= this.gutterGoal);
+  }
+
+  /** One step, `dt` seconds, of the gutter towards its goal; whether it is still on the way. */
+  easeGutter(dt: number): boolean {
+    const goal = this.gutterGoal;
+    const now = this.gutter;
+    if (now === goal) return false;
+    const next = follow(now, goal, Math.min(dt, 1 / 20), TAU.quick);
+    this.gutterNow = Math.abs(next - goal) < 0.25 ? goal : next;
+    return true;
+  }
+
+  /**
+   * The scroll bars' thumbs on the view, null where the text fits: down the
+   * right edge, and along the bottom beside the numbers - each stopping
+   * short of the corner where both show.
+   */
+  get thumbs(): { v: Thumb | null; h: Thumb | null } {
     const g = this.gutter;
-    const v = thumbOf(this.lines.count * LINE_PX + LINE_PX, this.viewH, this.scrollTop, this.viewH);
-    const h = thumbOf(Math.max(this.widest, this.composedWide) + PAD_PX * 2, this.viewW - g, this.scrollLeft, this.viewW - g, g);
-    return { v, h };
+    const down = this.lines.count * LINE_PX + LINE_PX;
+    const across = Math.max(this.widest, this.composedWide) + PAD_PX * 2;
+    const both = !!thumbOf(down, this.viewH, 0, this.viewH) && !!thumbOf(across, this.viewW - g, 0, this.viewW - g, g);
+    const corner = both ? BAR_PX + BAR_EDGE : 0;
+    return {
+      v: thumbOf(down, this.viewH, this.scrollTop, this.viewH - corner),
+      h: thumbOf(across, this.viewW - g, this.scrollLeft, this.viewW - g - corner, g),
+    };
   }
 
   /** How far down the text can be scrolled, and across. */

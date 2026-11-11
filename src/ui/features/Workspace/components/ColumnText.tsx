@@ -80,6 +80,8 @@ export default function ColumnText({ text, hidden = false }: { text: WorkspaceTe
   const bars = useRef({ v: 0, h: 0 });
   const barMats = useRef<{ v: THREE.MeshBasicMaterial | null; h: THREE.MeshBasicMaterial | null }>({ v: null, h: null });
   useFrame((_, dt) => {
+    // (the column of numbers easing to the width its last number needs: all drawn again at each step)
+    if (ed.easeGutter(dt)) ed.onChange();
     const t = ed.thumbs;
     for (const k of ["v", "h"] as const) {
       const to = t[k] ? 1 : 0;

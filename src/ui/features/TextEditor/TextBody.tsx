@@ -25,6 +25,8 @@ export default function TextBody({ entry, value, onChange, write = false, onWrit
   const ec = useMemo(hasEditContext, []);
   const fieldRef = useRef<HTMLTextAreaElement & HTMLDivElement>(null);
   const field = useRef<TypingField | null>(null);
+  // (a scroll bar's thumb being dragged: let go of if the text closes under it)
+  const barDrag = useRef<(() => void) | null>(null);
   const changed = useRef(onChange);
   changed.current = onChange;
 
@@ -91,6 +93,7 @@ export default function TextBody({ entry, value, onChange, write = false, onWrit
     };
     box.addEventListener("wheel", onWheel, { passive: false });
     return () => {
+      barDrag.current?.();
       seen.disconnect();
       box.removeEventListener("wheel", onWheel);
     };
@@ -116,13 +119,15 @@ export default function TextBody({ entry, value, onChange, write = false, onWrit
       const now = along === "v" ? m.clientY - box.top : m.clientX - box.left;
       const th = ed.thumbs[along];
       if (!th) return;
-      if (along === "v") ed.scrollTo(scrollOfThumb(now - grab, th.len, ed.viewH, ed.mostTop));
-      else ed.scrollTo(ed.scrollTop, scrollOfThumb(now - grab - ed.gutter, th.len, ed.viewW - ed.gutter, ed.mostLeft));
+      if (along === "v") ed.scrollTo(scrollOfThumb(now - grab, th.len, th.track, ed.mostTop));
+      else ed.scrollTo(ed.scrollTop, scrollOfThumb(now - grab - ed.gutter, th.len, th.track, ed.mostLeft));
     };
     const onUp = () => {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
+      barDrag.current = null;
     };
+    barDrag.current = onUp;
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
     return true;
