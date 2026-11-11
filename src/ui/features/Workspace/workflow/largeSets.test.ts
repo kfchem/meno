@@ -9,8 +9,8 @@ import { workspaceOfFile } from "../../../views/openFile";
 import { collectionHash, countOf, countSaid, LARGE_SET, setMembers } from "./entries";
 import { inputOf, resultOf } from "./flow";
 import { addStep, keepSet } from "./model";
-import { keepRun, LEAST_W, placeResults, resultsNow, showRun, type RunWith } from "./run";
-import { heldFrame } from "./heldView";
+import { keepRun, placeResults, resultsNow, showRun, type RunWith } from "./run";
+import { HELD_LEAST_W, heldFrame } from "./heldView";
 import { setRan } from "./model";
 
 vi.mock("../../../../lib/calc/workers", () => ({ readerClient: () => Promise.reject(new Error("no workers in tests")) }));
@@ -52,7 +52,7 @@ describe("a large result set (docs/WORKFLOWS-FOUNDATION.md, *What a set shows*)"
     expect(set.collection![7].atoms[0].x).toBeCloseTo(0.07, 12);
     expect(countOf(d, set)).toEqual({ holds: "molecules", entries: 51, compounds: 51 });
     // (extentOf: 2 wide and 2 tall, a molecule's room about its place - its frame holds it, its name and one chip row, no summary's room)
-    const frame = heldFrame([{ x0: -1, x1: 1, y0: -1, y1: 1, chip: 0 }], 1, LEAST_W);
+    const frame = heldFrame([{ x0: -1, x1: 1, y0: -1, y1: 1, chip: 0 }], 1, HELD_LEAST_W);
     expect(set.x1 - set.x0).toBeCloseTo(frame.width, 9);
     expect(set.y1 - set.y0).toBeCloseTo(frame.height, 9);
   });

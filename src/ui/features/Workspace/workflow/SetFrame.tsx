@@ -43,7 +43,7 @@ export default function SetFrame(p: SetFrameProps) {
           onPointerDown={(e) => e.stopPropagation()}
           onClick={p.onOpenTable}
           className="meno-words absolute h-6 rounded-md px-2 text-xs leading-4 text-gh-black bg-white ring-1 ring-gh-line transition-colors duration-150 ease-meno hover:bg-gh-base"
-          style={{ right: SET_PAD / PX, top: -NAME_DOWN / PX, pointerEvents: p.compact ? "none" : "auto" }}
+          style={{ right: SET_PAD / PX, top: NAME_DOWN / PX - 12, pointerEvents: p.compact ? "none" : "auto" }}
         >
           Open as a table
         </button>

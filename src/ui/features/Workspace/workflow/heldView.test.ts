@@ -6,8 +6,8 @@ import { readWorkspace, workspaceText } from "../utils/workspace";
 import { LARGE_SET } from "./entries";
 import { addStep } from "./model";
 import { CHIP, SET_PAD, SET_TOP } from "./look";
-import { placeResults, LEAST_W, type RunWith } from "./run";
-import { HELD_CHIP_ROW, HELD_VIEWS, chipRows, heldFrame, heldViewAt, heldViewId, heldViews, isHeldView, shownIn, showsOneAtATime } from "./heldView";
+import { placeResults, type RunWith } from "./run";
+import { HELD_CHIP_ROW, HELD_LEAST_W, HELD_VIEWS, chipRows, heldFrame, heldViewAt, heldViewId, heldViews, isHeldView, shownIn, showsOneAtATime } from "./heldView";
 
 vi.mock("../../../../lib/calc/workers", () => ({ readerClient: () => Promise.reject(new Error("no workers in tests")) }));
 
@@ -118,7 +118,7 @@ describe("a placed large set", () => {
   it("is as large as its largest molecule's room and its chips need - not as a summary card", () => {
     const d = ran(waters(LARGE_SET + 1));
     const set = d.sets![0];
-    const f = heldFrame([{ x0: -1, x1: 2, y0: -3, y1: 1, chip: 0 }], 1, LEAST_W);
+    const f = heldFrame([{ x0: -1, x1: 2, y0: -3, y1: 1, chip: 0 }], 1, HELD_LEAST_W);
     expect(set.x1 - set.x0).toBeCloseTo(f.width, 9);
     expect(set.y1 - set.y0).toBeCloseTo(f.height, 9);
     // (a conformer set among them: a frames chip's row too)

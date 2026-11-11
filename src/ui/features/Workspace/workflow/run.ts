@@ -23,7 +23,7 @@ import { asideExit, exitsOf, inputsOf, kindInfo, modeRead, laterPortsNeed, MENO_
 import { MENO_ONLY, VALUE_KINDS } from "../../../../lib/plugins/steps";
 import { doerName, inputsFor, MENO, takesBy, takesNothingBy } from "./doers";
 import { pluginById } from "../../../../lib/calc/catalog";
-import { chipRows, heldFrame } from "./heldView";
+import { chipRows, HELD_LEAST_W, heldFrame } from "./heldView";
 import { BETWEEN, SET_PAD, SET_TOP, CHIP, drawnShown, PX, SUMMARY_PX } from "./look";
 import { clearOf, columnWidth, frameAt, placeAgain, placeBelow, placeFor } from "./place";
 
@@ -753,7 +753,7 @@ function fillExit(
   if (made.length > LARGE_SET || (was && isHeld(doc, was))) {
     // (its frame as large as the largest of them - of the first `HELD_SIZED`, as many as can be measured as a run is made - and their chips need: it shows one at a time)
     const sized = made.slice(0, HELD_SIZED).map((m, i) => roomOf(m, w.extentOf({ ...m, at: { x: 0, y: 0 } }, turns?.[i])));
-    return filled(doc, step, { exit, holds, unread, collection: [...made], view: heldFrame(sized, chipRows(made), LEAST_W) }, [], () => ({ doc, members: [] }));
+    return filled(doc, step, { exit, holds, unread, collection: [...made], view: heldFrame(sized, chipRows(made), HELD_LEAST_W) }, [], () => ({ doc, members: [] }));
   }
   const rooms = made.map((m, i) => roomOf(m, w.extentOf({ ...m, at: { x: 0, y: 0 } }, turns?.[i])));
   return filled(doc, step, { exit, holds, unread }, rooms, (d, at) => {

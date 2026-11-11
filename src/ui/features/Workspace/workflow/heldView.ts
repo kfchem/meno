@@ -33,6 +33,9 @@ export function shownIn(b: Pick<WorkflowSet, "id" | "collection">, shown: Readon
   return k != null && Number.isInteger(k) && k >= 0 && k < n ? k : 0;
 }
 
+/** The least a held set's frame is wide: its tab's name and count, and *Open as a table* beside them, in its first line. */
+export const HELD_LEAST_W = 300 * PX;
+
 /** How far the frames chip hangs below the stack chip, where a view's molecule has one (page units): a chip's own height and the gap between. */
 export const HELD_CHIP_ROW = 28 * PX;
 
