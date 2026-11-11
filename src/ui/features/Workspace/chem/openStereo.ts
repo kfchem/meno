@@ -71,8 +71,8 @@ export async function stereoisomersOf(chem: ChemClient, molblocks: readonly stri
     },
     ms,
   );
-  // (each configuration once: the plugin's toolkit may enumerate what Meno's rules leave out, an aziridine's N)
-  return "isomers" in made ? { ...made, isomers: distinctIsomers(made.isomers) } : made;
+  // (each configuration once: the plugin's toolkit may enumerate what Meno's rules leave out, an aziridine's N - but isomers differing where a configuration does not tell stay)
+  return "isomers" in made ? { ...made, isomers: distinctIsomers(made.isomers, open.drawn) } : made;
 }
 
 /**
