@@ -14,6 +14,7 @@
  * Diels-Alder, and kept, the line's end after it read as nothing.
  */
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { isLocked } from "../doc/locked";
 
 /**
  * A page's letters: each one's character; its box - left, top, right,
@@ -90,6 +91,8 @@ export function textHad(sha256: string, page: number, came: () => void = () => {
   const key = `${sha256}:${page}`;
   const h = had.get(key);
   if (h && h !== "asked") return h;
+  // (a PDF locked with a password has none to read until it is opened)
+  if (isLocked(sha256)) return null;
   if (!h) {
     had.set(key, "asked");
     textOf(sha256, page)
