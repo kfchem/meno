@@ -237,13 +237,20 @@ export function ChartBody({
   );
 }
 
+/** How far above the line a level's name stands, in px: its words' box ends on that line - a bar's, or the highest thin line's (`nameTop`). */
+export const NAME_RISE = 14;
+
+/** Where the name of a level stands, from its top: above the highest of the lines its bar and its thin lines make, at `ys` from the plot's top - so that no line strikes through it. */
+export const nameTop = (ys: readonly number[]): number => Math.min(...ys) - NAME_RISE;
+
 /**
  * A set holding an energy diagram, inside its frame (docs/WORKFLOWS.md,
  * *Energy diagrams*): each level a bar at its energy relative to the
  * reference, its name above and its value below, the lines between levels
  * dashed - in the column its place along the lines gives it, levels of one
  * column side by side; where a level's other entries are asked for, each a
- * thin line at its own value, under the bar. The axis its quantity, unit and
+ * thin line at its own value, on the bar's column - the name above the
+ * highest of them, never struck through by one. The axis its quantity, unit and
  * what worked it out. A level or a thin line pointed at says its value
  * (`pointedSaid`); pressed, the entry it stands at is shown (`onLevel`).
  * How many levels, relative to which, and what was left, never hidden.
@@ -314,7 +321,7 @@ export function DiagramBody({ diagram, onLevel }: { diagram: DiagramValue; onLev
       </svg>
       {/* (names, values, the axis's numbers and label in HTML: SVG text is not drawn on the page's layer) */}
       {diagram.levels.map((l, k) => (
-        <span key={`n${k}`} className="absolute -translate-x-1/2 truncate text-center text-gh-black" style={{ left: left + cx(k), top: top + py(l.value) - 14, maxWidth: room(k) }}>
+        <span key={`n${k}`} className="absolute -translate-x-1/2 truncate text-center text-gh-black" style={{ left: left + cx(k), top: top + nameTop([py(l.value), ...(l.others ?? []).map((o) => py(o.value))]), maxWidth: room(k) }}>
           {l.name}
         </span>
       ))}

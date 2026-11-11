@@ -14,7 +14,7 @@ import { howOf, kindInfo } from "./kinds";
 import { stepOptions } from "./doers";
 import { runStep, whyNot, type RunWith } from "./run";
 import { readWorkflow } from "./saved";
-import { DiagramBody } from "./ValueBody";
+import { DiagramBody, NAME_RISE } from "./ValueBody";
 
 const W: RunWith = { extentOf: () => ({ x0: -1, x1: 1, y0: -1, y1: 1 }), byOf: () => "meno", now: 1000 };
 const KCAL = factor("Eh", "kcal/mol");
@@ -440,6 +440,34 @@ describe("an Energy diagram step: every conformer a thin line, levels in columns
     // (the old look where no column is given: each level its own)
     const old = renderToString(<DiagramBody diagram={{ ...d, levels: d.levels.map(({ column: _c, others: _o, ...l }) => l) }} />).split("<!-- -->").join("");
     expect(old).not.toContain("data-thin");
+  });
+
+  it("stands each level's name above the highest of its lines - its thin lines too - so that none strikes through it", () => {
+    const html = renderToString(<DiagramBody diagram={d} />).split("<!-- -->").join("");
+    // (the plot's own corner, where the lines' y is from)
+    const svg = /<svg[^>]*style="[^"]*left:([0-9.]+)px;top:([0-9.]+)px/.exec(html)!;
+    const [plotLeft, plotTop] = [Number(svg[1]), Number(svg[2])];
+    const thin = [...html.matchAll(/<g[^>]*data-thin=""[\s\S]*?<line x1="([0-9.]+)" x2="([0-9.]+)" y1="([0-9.-]+)"/g)].map((m) => ({ x1: Number(m[1]), x2: Number(m[2]), y: Number(m[3]) }));
+    const bars = [...html.matchAll(/<line x1="([0-9.]+)" x2="([0-9.]+)" y1="([0-9.-]+)" y2="[0-9.-]+" class="stroke-gh-black"/g)].map((m) => ({ x1: Number(m[1]), x2: Number(m[2]), y: Number(m[3]) }));
+    const names = [...html.matchAll(/<span class="absolute -translate-x-1\/2 truncate text-center text-gh-black" style="left:([0-9.]+)px;top:([0-9.-]+)px;[^"]*">([^<]+)</g)].map((m) => ({ name: m[3], x: Number(m[1]) - plotLeft, top: Number(m[2]) - plotTop }));
+    expect([thin.length, bars.length, names.length]).toEqual([3, 5, 5]);
+    const lineAt = (x: number) => [...thin, ...bars].filter((l) => x >= l.x1 - 1e-6 && x <= l.x2 + 1e-6);
+    for (const n of names) {
+      const mine = lineAt(n.x);
+      expect(mine.length).toBeGreaterThan(0);
+      // (its words' box ends on the highest of the lines its bar makes with its thin ones - NAME_RISE above them)
+      expect(n.top + NAME_RISE).toBeCloseTo(Math.min(...mine.map((l) => l.y)), 6);
+      for (const l of mine) expect(n.top + NAME_RISE).toBeLessThanOrEqual(l.y + 1e-6);
+    }
+    // (a level with thin lines: its name higher than its bar's own - a's has 0.8 and 1.5 above it; one with none, as before)
+    const a = names.find((n) => n.name === "a")!;
+    const bar = (name: string) => bars[names.findIndex((n) => n.name === name)];
+    expect(a.top + NAME_RISE).toBeLessThan(bar("a").y - 1);
+    const b = names.find((n) => n.name === "b")!;
+    expect(b.top + NAME_RISE).toBeCloseTo(bar("b").y, 6);
+    // (the two saddle points of one column, side by side: each its own name above its own lines)
+    const [ts1, ts2] = [names.find((n) => n.name === "ts1")!, names.find((n) => n.name === "ts2")!];
+    expect([ts1.top + NAME_RISE, ts2.top + NAME_RISE]).toEqual([bar("ts1").y, Math.min(bar("ts2").y, thin[2].y)]);
   });
 
   it("says a thin line pointed at: its number, its value and its own imaginary frequencies; a level's lowest as it did", () => {
