@@ -382,7 +382,9 @@ are a *Frequencies* step's, wired after it.
   `%geom` block's MaxIter (4.5.13), ORCA's own unless said. Each is the
   chemist's to change on the card.
 - **Pairs.** Each start is paired with an end as the step's *Pairs* says:
-  *In order* (the k-th with the k-th; other numbers refused), *Each with
+  *In order* (the k-th with the k-th, as they come in - over several wires
+  into one input, by where their sets lie on the page, so moving a frame
+  past another changes the pairs; other numbers refused), *Each with
   each*, or *Matched on* a property typed, an ID a *Tag* gave. A start with
   no end to match, a pair of other atoms or another order of them, or of
   another charge or spin, goes out of *Failed* with why; only the rest are
