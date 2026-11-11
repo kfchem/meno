@@ -6,7 +6,7 @@ import { readWorkspace, workspaceFile, workspaceText } from "../utils/workspace"
 import { rememberOutput } from "../../../../lib/calc/asks";
 import { readMenoFile } from "../../../../lib/doc/menoFile";
 import { workspaceOfFile } from "../../../views/openFile";
-import { collectionHash, countOf, LARGE_SET, setMembers } from "./entries";
+import { collectionHash, countOf, countSaid, LARGE_SET, setMembers } from "./entries";
 import { inputOf, resultOf } from "./flow";
 import { addStep, keepSet } from "./model";
 import { keepRun, placeResults, resultsNow, showRun, SUMMARY_H, SUMMARY_W, type RunWith } from "./run";
@@ -54,13 +54,21 @@ describe("a large result set (docs/WORKFLOWS-FOUNDATION.md, *What a set shows*)"
     expect(set.y1 - set.y0).toBeCloseTo(SUMMARY_H, 9);
   });
 
-  it("counts entries, not molecules: one compound of 60 conformers is held, 1 of 50 laid out", () => {
-    const one = { ...water(), conformerSet: true, frames: Array.from({ length: 59 }, (_, k) => water(k + 1).atoms.flatMap((a) => [a.x, a.y, a.z])) };
-    const d = ran([one], "conformers");
-    expect(d.sets![0].collection).toHaveLength(1);
-    expect(countOf(d, d.sets![0])).toEqual({ holds: "conformers", entries: 60, compounds: 1 });
-    const fewer = ran([{ ...one, frames: one.frames.slice(0, 49) }], "conformers");
-    expect(fewer.molecules3d).toHaveLength(1);
+  it("counts the molecules it would draw, never their frames: 3 compounds of 200 conformers are laid out, 51 compounds of one are held", () => {
+    const conformers = (k: number, n: number) => ({ ...water(k), conformerSet: true, frames: Array.from({ length: n - 1 }, (_, j) => water(j + 1).atoms.flatMap((a) => [a.x, a.y, a.z])) });
+    const few = ran([conformers(0, 200), conformers(1, 200), conformers(2, 200)], "conformers");
+    expect(few.sets![0].collection).toBeUndefined();
+    expect(few.molecules3d).toHaveLength(3);
+    expect(setMembers(few, few.sets![0]).molecules).toHaveLength(3);
+    expect(countOf(few, few.sets![0])).toEqual({ holds: "conformers", entries: 600, compounds: 3 });
+    expect(countSaid(few.sets![0], countOf(few, few.sets![0]))).toBe("3 compounds · 600");
+    // (one molecule of 1000 frames: still one on the page)
+    const long = ran([conformers(0, 1000)], "conformers");
+    expect(long.molecules3d).toHaveLength(1);
+    // (51 of them, one frame each: held, as 51 molecules are)
+    const many = ran(Array.from({ length: LARGE_SET + 1 }, (_, k) => conformers(k, 1)), "conformers");
+    expect(many.molecules3d ?? []).toHaveLength(0);
+    expect(many.sets![0].collection).toHaveLength(51);
   });
 
   it("gives the steps after it what it holds, each molecule with an id of its own within the set", () => {

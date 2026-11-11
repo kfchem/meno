@@ -12,7 +12,7 @@ import { partOf } from "../chem/cleanUp";
 import { levelOf } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
-import { calcProperties, compoundLetter, entryOfSet, holdsOf, numberShown, setMembers, setMolecules, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, drawingKey, placedRecord, structureIdAt, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
+import { calcProperties, compoundLetter, entryOfSet, holdsOf, numberShown, setMembers, setMolecules, setEntries, frameXyz, framesOf, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, drawingKey, placedRecord, structureIdAt, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
 import { chipWide, hasChip } from "./selectionSet";
 export { chipWide };
 import { isHeld } from "./onPage";
@@ -746,7 +746,7 @@ function fillExit(
 ): WorkspaceDocument {
   // (more than are laid out on the page - or its exit wired on, held off the page whatever it holds: workflow/held - held in the set, its frame summing them up, or drawn nowhere - docs/WORKFLOWS-FOUNDATION.md, *What a set shows*)
   const was = resultOf(doc, step.id, exit);
-  if (made.reduce((n, m) => n + entriesIn(m), 0) > LARGE_SET || (was && isHeld(doc, was))) return filled(doc, step, { exit, holds, unread, collection: [...made] }, [], () => ({ doc, members: [] }));
+  if (made.length > LARGE_SET || (was && isHeld(doc, was))) return filled(doc, step, { exit, holds, unread, collection: [...made] }, [], () => ({ doc, members: [] }));
   const rooms = made.map((m, i) => roomOf(m, w.extentOf({ ...m, at: { x: 0, y: 0 } }, turns?.[i])));
   return filled(doc, step, { exit, holds, unread }, rooms, (d, at) => {
     // (all put on the page at once: one at a time copied the page's molecules again for each)
