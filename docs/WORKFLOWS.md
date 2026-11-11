@@ -2473,10 +2473,12 @@ placed (the maintainer, 2026-10-31).
 
 Where a step has more than one exit, an exit whose set is on no page
 beside it - held off it - is named beside its port (workflow/exitNames),
-since no frame names it: outside the card's right side, half a port's
-step above its port, as an input's name stands above its port on the
-left - between the wire that leaves the port level and the line above
-it, through neither - in the quiet words an input's name is in.
+since no frame names it: outside the card's right side, just above its
+own port - 6 px above its wire, nearer it than the port above, so that a
+name never reads as the one beside the other (2026-11-11; it stood half a
+port's step up, between two ports) - between the wire that leaves the
+port level and the line above it, through neither - in the quiet words an
+input's name is in.
 
 - **The first is cut** with an ellipsis short of where its set's frame
   would stand (`GAP` out from the card): a wire leaves its port level

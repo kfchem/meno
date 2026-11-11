@@ -48,6 +48,7 @@ import { raycastCylinders, raycastSpheres } from "./raycast3d";
 import { commitInstanceMatrices } from "./instances";
 import { named3d } from "../workflow/selectionSet";
 import { usePlaced } from "../pageGl/PagePlaced";
+import { CHIP_HTML } from "../pageGl/chips";
 import type { ChipFacts } from "../utils/chipSaid";
 import { refinedFrame } from "../workflow/takeFrames";
 import MagnifiedMark from "./MagnifiedMark";
@@ -2268,7 +2269,7 @@ function NoteMark({ text, title, on, plain, short }: { text: string; title?: str
 /** Made by editing a result: what from, said quietly under it - an edited result is no longer that result. */
 function Edited({ from }: { from: string }) {
   return (
-    <div className="mt-1.5 w-max whitespace-nowrap rounded-full border border-gh-line bg-white/90 px-2 text-[11px] leading-[20px] text-gh-gray shadow-sm">
+    <div className={`mt-1.5 ${CHIP_HTML}`}>
       Edited from {from}
     </div>
   );
@@ -2318,7 +2319,7 @@ function MeasureField({ text, onSet, onDone }: { text: string; onSet: (value: nu
 function Changed({ onRemake }: { onRemake: () => void }) {
   return (
     <div
-      className="mt-1.5 whitespace-nowrap rounded-full border border-gh-line bg-white/90 px-2 text-[11px] leading-[20px] text-gh-gray shadow-sm"
+      className={`mt-1.5 ${CHIP_HTML}`}
       onPointerDown={(e) => e.stopPropagation()}
     >
       Its drawing has changed ·{" "}
