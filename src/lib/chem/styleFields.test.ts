@@ -211,6 +211,8 @@ describe("a hashed wedge's widest hash, a style's own setting", () => {
     const before = { ...presetById("acs1996").style, hashedWedgeEnd: undefined };
     expect(layoutOptionsFor(acceptDrawingStyle(JSON.parse(JSON.stringify(before))), 1).hashedWedgeShort).toBe(true);
     expect(automaticValue("hashedWedgeEnd", ACS_1996)).toBe("short");
+    // (and a style object with no such field, as it comes before it is accepted: short too)
+    expect(layoutOptionsFor({ ...presetById("meno").style, hashedWedgeEnd: undefined }, 1).hashedWedgeShort).toBe(true);
     // (a change either way, kept)
     const toAtom = withSetting({ preset: "meno", changes: {} }, "hashedWedgeEnd", "atom");
     const back = acceptStyleChoice(JSON.parse(JSON.stringify(toAtom)));
