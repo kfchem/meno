@@ -243,8 +243,11 @@ Taken on 2026-10-03:
   - **The selection's handle turns molecules in 3D** (agreed 2026-10-03;
     in the page's plane since 2026-10-24, the maintainer: the handle turns
     round, so it turns them round, as it does a drawing):
-    - selected alone, in the page's plane about the line of sight, in
-      steps of 15 degrees or freely after a pause, as a drawing turns:
+    - selected alone, in the page's plane about the line of sight, freely
+      and never in steps (the maintainer, 2026-11-11: a molecule in 3D has
+      no grid to keep to), the same with Shift, each about its own centre,
+      even with a drawing selected; selected with a drawing, they are
+      carried round with it, in its steps of 15 degrees:
       several as one body about their common middle - so that molecules
       placed together, a complex say, stay as they are to one another -
       which moves them; one about its own centre, where it stands. Either
