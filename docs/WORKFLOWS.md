@@ -283,6 +283,41 @@ A set's entries are its members, in their order. A set the chemist makes is a
 **compound set**: each entry a compound of its own, however alike two
 are (*Compound sets and conformer sets*).
 
+**A set around a drawn reaction** says each structure's part in it
+(`workflow/schemeRoles.ts`). Where the set's frame holds an arrow, each
+structure carries two properties, worked out from the drawing each time it
+is asked - never stored, so a structure moved across the arrow changes its
+role at once:
+
+- `role`: `reactant`, `product` or `reagent`;
+- `reaction`: the arrow's number, from 1, in the order the set holds its
+  arrows (top to bottom, left to right), counting only arrows that mean a
+  reaction.
+
+A *Filter* `role = reactant` (or `product`) splits the set; an *Atom map*
+matched on `reaction` takes each reaction's products onto its reactants
+(STRUCTURE-STEPS.md, *Atom map*). The set's count line says the roles:
+"4 structures · 1 reaction: 2 reactants, 1 product, 1 reagent". A set with no
+arrow in its frame has no properties added and nothing said.
+
+- Which structures an arrow has is the page's own reaction rule (ATOM-MAPPING.md,
+  *On a drawn scheme*): reactants and products only near its tail and its
+  point, chained by a "+" - of the set's structures alone. A reagent is a
+  structure alongside the arrow's words, as near them as a reactant must be to
+  the tail (five bonds, as an RXN file reads a reaction).
+- A plain, dashed or bent arrow gives roles; an equilibrium too, as drawn (its
+  tail side the reactants), said once. A crossed-out arrow, a retrosynthetic
+  one (its tail holds the target), a line with no head and a two-headed arrow
+  (resonance forms) give none, and the count line says which.
+- A structure of two arrows has no role, said: a scheme of several steps is
+  drawn as one drawing for each reaction. A structure on no arrow, in a set
+  with an arrow, has none either, said.
+- A salt drawn as its ions is one molecule: each ion carries the role, and the
+  count line counts one ("1 product (2 ions)").
+- A number written before a structure ("2 A") is not a coefficient: draw the
+  structure twice. An Atom map refuses the unbalanced side, so nothing passes
+  silently. Reagents get a role and nothing uses it yet.
+
 ### Kinds of step
 
 Meno defines the kinds of step - what each takes, what it gives, and how

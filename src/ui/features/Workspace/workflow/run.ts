@@ -33,6 +33,7 @@ import { ontoStructures } from "./ontoStructures";
 import { measuredSet, modeOnAtomsSet } from "./structureSteps";
 import { addSet, CHART_SET, heldPut, holdChart, holdNumber, NUMBER_SET, holdCollection, holdTable, TABLE_SET, holdMembers, holdNothing, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
+import { recordsWithRoles } from "./schemeRoles";
 import { notFinishedRows, structuresAsTable } from "./structuresTable";
 import { diagramNeeds } from "./diagramOptions";
 import type { NumberValue, Table } from "../../../../lib/table";
@@ -425,13 +426,13 @@ export function inputEntries(model: Model, input: { structures: readonly (readon
 }
 
 /** Every structure drawn a set holds, as a step after it takes them (`inputEntries`): those on the page, then those it holds off it. */
-export function setStructures(doc: Pick<WorkspaceDocument, "model" | "molecules3d" | "pictures">, set: WorkflowSet): DrawnEntry[] {
+export function setStructures(doc: Pick<WorkspaceDocument, "model" | "molecules3d" | "pictures"> & Partial<Pick<WorkspaceDocument, "arrows" | "pluses">>, set: WorkflowSet): DrawnEntry[] {
   const { structures, records } = set.members ? setMembers(doc, set) : { structures: [], records: [] };
-  return inputEntries(doc.model, { structures, records, ...(set.drawnCollection ? { held: set.drawnCollection } : {}) });
+  return inputEntries(doc.model, { structures, records: recordsWithRoles(doc, set, structures, records), ...(set.drawnCollection ? { held: set.drawnCollection } : {}) });
 }
 
 /** A set of structures drawn as a table (structuresTable): every structure it holds (`setStructures`), each row's id the set's and its place. */
-export function setStructuresTable(doc: Pick<WorkspaceDocument, "model" | "molecules3d" | "pictures">, set: WorkflowSet): Table {
+export function setStructuresTable(doc: Pick<WorkspaceDocument, "model" | "molecules3d" | "pictures"> & Partial<Pick<WorkspaceDocument, "arrows" | "pluses">>, set: WorkflowSet): Table {
   return structuresAsTable(setStructures(doc, set), (k) => `structure:${set.id}#${k}`);
 }
 
