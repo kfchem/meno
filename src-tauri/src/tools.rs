@@ -195,16 +195,21 @@ pub async fn download(url: &str, proxy: &str, most: u64) -> Result<Vec<u8>, Stri
     if rustls::crypto::CryptoProvider::get_default().is_none() {
         let _ = rustls::crypto::ring::default_provider().install_default();
     }
-    let client = reqwest::Client::builder()
-        .user_agent(concat!("Meno/", env!("CARGO_PKG_VERSION")))
-        .proxy(reqwest::Proxy::all(proxy).map_err(|e| format!("proxy: {e}"))?)
-        // (a server that takes the connection and then says nothing is given up on, and asked again: never waited on
-        //  without end - a slow line's large file still comes, as long as it keeps coming)
-        .connect_timeout(CONNECT_MOST)
-        .read_timeout(SILENT_MOST)
-        .build()
-        .map_err(|e| format!("client: {e}"))?;
+    let proxy = reqwest::Proxy::all(proxy).map_err(|e| format!("proxy: {e}"))?;
+    let client = client_for(Some(proxy), CONNECT_MOST, SILENT_MOST)?;
     fetch(&client, url, most, &ASKED_AGAIN_AFTER).await
+}
+
+/// The client a download is fetched by, through `proxy` (Meno's own, its network watched): a server that takes the
+/// connection and then says nothing is given up on after `silent`, and asked again - never waited on without end; a
+/// slow line's large file still comes, as long as it keeps coming.
+fn client_for(proxy: Option<reqwest::Proxy>, connect: std::time::Duration, silent: std::time::Duration) -> Result<reqwest::Client, String> {
+    let builder = reqwest::Client::builder().user_agent(concat!("Meno/", env!("CARGO_PKG_VERSION"))).connect_timeout(connect).read_timeout(silent);
+    let builder = match proxy {
+        Some(p) => builder.proxy(p),
+        None => builder.no_proxy(),
+    };
+    builder.build().map_err(|e| format!("client: {e}"))
 }
 
 /// How long Meno waits before asking a server that failed once more - a 5xx, which a busy one gives now and then,
@@ -215,7 +220,7 @@ const CONNECT_MOST: std::time::Duration = std::time::Duration::from_secs(30);
 const SILENT_MOST: std::time::Duration = std::time::Duration::from_secs(60);
 
 /// `url`'s body, by `client`, within `most` bytes. A server that fails - a
-/// 5xx - or a connection that fails or goes silent, is asked again after
+/// 5xx - or a connection that fails or goes silent before it answers, is asked again after
 /// each of `waits`; failing still, it is said in words, by the host that
 /// answered (the one it was sent on to, where it was), with what to do -
 /// never left as the client's own error, nor asked of without end. A
@@ -592,6 +597,32 @@ mod tests {
             }
         });
         assert_eq!(fetch(&client, &url, 1000, &wait).await.unwrap(), b"the list");
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_server_that_says_nothing_is_given_up_on_and_asked_again() {
+        if rustls::crypto::CryptoProvider::get_default().is_none() {
+            let _ = rustls::crypto::ring::default_provider().install_default();
+        }
+        // (the client as a download builds it, its silence short for the test)
+        let client = client_for(None, CONNECT_MOST, std::time::Duration::from_millis(200)).unwrap();
+        let wait = [std::time::Duration::from_millis(10); 2];
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/list.json", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            // (the first connection taken, read, and left without a word; the second answered)
+            let (mut first, _) = listener.accept().await.unwrap();
+            let mut head = [0u8; 4096];
+            let _ = first.read(&mut head).await;
+            let (mut second, _) = listener.accept().await.unwrap();
+            let _ = second.read(&mut head).await;
+            let _ = second.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 8\r\nConnection: close\r\n\r\nthe list").await;
+            drop(first);
+        });
+        let got = tokio::time::timeout(std::time::Duration::from_secs(10), fetch(&client, &url, 1000, &wait)).await;
+        assert_eq!(got.expect("a silent server was waited on without end").unwrap(), b"the list");
         server.await.unwrap();
     }
 

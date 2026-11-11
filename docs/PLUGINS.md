@@ -1670,7 +1670,9 @@ comes in its own pull request.
   fewer for GitHub to hand it on through; that release is the one marked
   newest, for the address earlier Menos fetch. A server that fails (a
   5xx, which GitHub gives now and then), or a connection that fails or
-  goes silent (30 s to connect, 60 s with nothing coming), is asked again
+  goes silent before it answers (30 s to connect, 60 s with nothing
+  coming; one that goes silent partway through its file is not asked
+  again, but said), is asked again
   2 s later and once more 5 s after that; failing still, it is said by the
   host that answered - where a request was handed on, the one it was
   handed to - with what to do (`tools::fetch`). The plugins' own files are
