@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Molecule } from "../../../../lib/chem/molecule";
 import { dielsAlder, sn2 } from "../../../../lib/chem/reactionMap.fixtures";
 import { calcRenumbered, keptRenumbered, setEntries, unlikeMade, type SetEntry } from "./entries";
-import { measuredSet } from "./structureSteps";
+import { atomMapPlan, measuredSet } from "./structureSteps";
 import { kindInfo } from "./kinds";
 import { runMeno, runMenoPair } from "./meno";
 import { energiesFrom } from "./setTable";
@@ -328,12 +328,114 @@ describe("Atom map, as a step: sides of several structures", () => {
     expect(k.needs?.({})).toBe("Choose how the molecules are taken");
     expect(k.needs?.({ moleculesAre: "each" })).toBe("Choose how the reference is taken");
     expect(k.needs?.({ moleculesAre: "each", referenceIs: "each" })).toBe("Choose whether bonds may change");
-    expect(k.needs?.({ moleculesAre: "together", referenceIs: "each", bonds: "change", reference: "property", property: "species" })).toBe(
-      "Matched on a property takes each entry on its own: set both inputs to each its own",
+    // (matched on a property, together is one side for each value of it)
+    expect(k.needs?.({ moleculesAre: "together", referenceIs: "together", bonds: "change", reference: "property", property: "" })).toBe("Name the property to pair them on");
+    expect(k.needs?.({ moleculesAre: "together", referenceIs: "together", bonds: "change", reference: "property", property: "reaction" })).toBeUndefined();
+    expect(k.how?.({ moleculesAre: "together", referenceIs: "together", bonds: "change", maps: "first", reference: "property", property: "reaction" })).toBe(
+      "molecules as one side per reaction, reference as one side per reaction, bonds may change, matched on reaction",
     );
+    expect(k.how?.({ moleculesAre: "each", referenceIs: "each", bonds: "change", maps: "first", reference: "order" })).toBe("bonds may change, in order");
     expect(k.how?.({ moleculesAre: "each", referenceIs: "together", bonds: "change", maps: "first", reference: "one" })).toBe("reference as one side, bonds may change");
     expect(k.how?.({ moleculesAre: "each", referenceIs: "each", bonds: "same", maps: "every", reference: "property", property: "species" })).toBe(
       "bonds stay the same, every map, matched on species",
     );
+  });
+});
+
+describe("Atom map, as a step: one side per reaction, and sides in order", () => {
+  const da = dielsAlder();
+  const { reactant: sn2Reactant, product: sn2Product } = sn2();
+  /** The atoms of a molecule at `idx`, as a molecule of its own (the bonds between them kept). */
+  const part = (m: Molecule, idx: number[], charged?: string): Molecule => ({
+    atoms: idx.map((i) => ({ ...m.atoms[i], ...(m.atoms[i].el === charged ? { charge: -1 } : {}) })),
+    bonds: m.bonds.filter((b) => idx.includes(b.a1) && idx.includes(b.a2)).map((b) => ({ ...b, a1: idx.indexOf(b.a1), a2: idx.indexOf(b.a2) })),
+  });
+  const upTo = (n: number) => Array.from({ length: n }, (_, i) => i);
+  const rest = (m: Molecule, n: number) => Array.from({ length: m.atoms.length - n }, (_, i) => n + i);
+  const tagged = (e: SetEntry, reaction: string, name: string): SetEntry =>
+    ({ ...e, name, properties: { ...e.properties, reaction: { value: reaction, unit: "none", status: "computed" } } }) as SetEntry;
+  // (butadiene's atoms are the first ten of the stack, ethylene's the last six; CH3Br the atoms but Cl, chloride alone)
+  const cl = sn2Reactant.atoms.findIndex((a) => a.el === "Cl");
+  const br = sn2Product.atoms.findIndex((a) => a.el === "Br");
+  const without = (m: Molecule, i: number) => m.atoms.map((_, k) => k).filter((k) => k !== i);
+  const reactants = (charge?: string) => [
+    tagged(entryOf(part(da.reactants[0], upTo(10))), "1", "butadiene"),
+    tagged(entryOf(part(da.reactants[0], rest(da.reactants[0], 10))), "1", "ethylene"),
+    tagged(entryOf(part(sn2Reactant, without(sn2Reactant, cl))), "2", "bromomethane"),
+    tagged(entryOf(part(sn2Reactant, [cl], charge)), "2", "chloride"),
+  ];
+  const products = (charge?: string) => [
+    tagged(entryOf(da.product), "1", "cyclohexene"),
+    tagged(entryOf(part(sn2Product, without(sn2Product, br))), "2", "chloromethane"),
+    tagged(entryOf(part(sn2Product, [br], charge)), "2", "bromide"),
+  ];
+  const together = { moleculesAre: "together", referenceIs: "together", bonds: "change", reference: "property", property: "reaction" };
+
+  it("maps each reaction's products as one side onto its reactants as one side, matched on a property: two reactions in one set", () => {
+    const [bd, eth, mebr, cl_] = reactants("Cl");
+    const [cyc, mecl, br_] = products("Br");
+    expect(atomMapPlan([cyc, mecl, br_], [bd, eth, mebr, cl_], together)).toEqual({
+      groups: [
+        { reference: [0, 1], sides: [[0]] },
+        { reference: [2, 3], sides: [[1, 2]] },
+      ],
+      aside: [],
+      sides: 2,
+    });
+    const o = ok(runMenoPair("atom-map", { entries: [cyc, mecl, br_], holds: "molecules" }, { entries: [bd, eth, mebr, cl_], holds: "molecules" }, together));
+    // (the tags of the parts are not carried onto the side they make: said)
+    expect(o.said).toBe("2 of 2 mapped, the parts' own values not carried");
+    expect(o.kept.map((e) => e.atoms.length)).toEqual([16, 6]);
+    expect(o.tables!.changes.rows.map((r) => r[0])).toContain("chloromethane + bromide");
+    expect(o.tables!.changes.rows.map((r) => r[0])).toContain("cyclohexene");
+  });
+
+  it("sets aside a side whose value no reference has, or that has none, saying why", () => {
+    const [bd, eth, mebr, cl_] = reactants("Cl");
+    const [cyc, mecl, br_] = products("Br");
+    const three = tagged(entryOf(da.product), "3", "orphan");
+    const none = entryOf(da.product, 0, { name: "untagged" } as Partial<SetEntry>);
+    const o = ok(runMenoPair("atom-map", { entries: [cyc, three, none, mecl, br_], holds: "molecules" }, { entries: [bd, eth, mebr, cl_], holds: "molecules" }, together));
+    expect(o.said).toBe("2 of 4 mapped, 2 not mapped, the parts' own values not carried");
+    expect(o.aside.map((e) => [e.name, e.properties?.set_aside?.value])).toEqual([
+      ["orphan", "not paired: no reference with reaction = 3"],
+      ["untagged", "not paired: it has no reaction"],
+    ]);
+  });
+
+  it("maps a side only onto a reference of its own charge: chloride and bromomethane against chloromethane and bromide maps, bromide drawn neutral does not", () => {
+    const refs = reactants("Cl");
+    const ok1 = ok(runMenoPair("atom-map", { entries: products("Br").slice(1), holds: "molecules" }, { entries: refs.slice(2), holds: "molecules" }, together));
+    expect(ok1.said).toBe("1 of 1 mapped, the parts' own values not carried");
+    const o = ok(runMenoPair("atom-map", { entries: products().slice(1), holds: "molecules" }, { entries: refs.slice(2), holds: "molecules" }, together));
+    expect(o.kept).toEqual([]);
+    expect(o.aside.map((e) => e.properties?.set_aside?.value)).toEqual(["charge 0 here, -1 in the reference", "charge 0 here, -1 in the reference"]);
+  });
+
+  it("does not filter the reagents: one left in Reference makes its side unbalanced, refused with the mapper's words", () => {
+    const [bd, eth] = reactants();
+    const reagent = tagged(entryOf(part(sn2Reactant, without(sn2Reactant, cl))), "1", "reagent");
+    const o = ok(runMenoPair("atom-map", { entries: [products()[0]], holds: "molecules" }, { entries: [bd, eth, reagent], holds: "molecules" }, together));
+    expect(o.kept).toEqual([]);
+    expect(String(o.aside[0].properties?.set_aside?.value)).toMatch(/^It has 16 atoms and the reference 21: every atom must map/);
+  });
+
+  it("takes the k-th side of Molecules onto the k-th of Reference, and refuses unequal counts saying both", () => {
+    const order = { moleculesAre: "each", referenceIs: "each", bonds: "change", reference: "order" };
+    const stack = entryOf(da.reactants[0]);
+    const sn = entryOf(sn2Reactant);
+    const dp = entryOf(da.product);
+    const sp = entryOf(sn2Product);
+    const o = ok(runMenoPair("atom-map", { entries: [dp, sp], holds: "molecules" }, { entries: [stack, sn], holds: "molecules" }, order));
+    expect(o.said).toBe("2 of 2 mapped");
+    expect(o.kept.map((e) => e.atoms.length)).toEqual([16, 6]);
+    // (by place, never by which one fits: the other way round, neither maps)
+    const swapped = ok(runMenoPair("atom-map", { entries: [sp, dp], holds: "molecules" }, { entries: [stack, sn], holds: "molecules" }, order));
+    expect(swapped.kept).toEqual([]);
+    expect(swapped.said).toBe("0 of 2 mapped, 2 not mapped");
+    expect(runMenoPair("atom-map", { entries: [dp, sp], holds: "molecules" }, { entries: [stack, sn, stack], holds: "molecules" }, order)).toEqual({
+      ok: false,
+      said: "Molecules holds 2 and Reference 3: in order, each side is paired with the reference side in its place",
+    });
   });
 });

@@ -426,9 +426,26 @@ conformers, case F, F2).
     an entry whose map forms, breaks or changes any bond is then not
     mapped, the bonds said.
 
-  *Against* is *The one reference* (the default), or *Matched on* a
-  property - a Tag's *species* - with both inputs each their own. *Maps* is
-  *First map* (the default) or *Every map*.
+  *Against* is *The one reference* (the default), *In order*, or *Matched
+  on* a property - a Tag's *reaction* or *species*. *Maps* is *First map*
+  (the default) or *Every map*. Two rules say which side goes onto which:
+  - *Matched on* a property, *One side together* is one side for each
+    value of it: the entries of a set holding several reactions, each
+    reaction's products as one side onto its reactants as one side (after
+    a *Filter* `role = reactant` on the reference: a reagent left in it
+    makes its side unbalanced, and the step refuses it with the mapper's
+    words). A value on one input and on none of the other, or an entry with
+    no value, is not mapped, saying why. *Each its own* takes each entry on
+    its own, as it always did: with one entry of *Reference* to a value.
+  - *In order*: the k-th side of *Molecules* onto the k-th side of
+    *Reference*, the sides as *Each its own* and *One side together* make
+    them - by place alone, never by which one fits (as *Path search*'s
+    *In order*). Unequal counts are refused, both said.
+
+  A side is mapped only onto a reference of the same total charge, atoms'
+  formal charges or the charge a calculation gave: the calculations after
+  take one charge for each system. One that differs is not mapped, both
+  charges said ("charge -1 here, 0 in the reference").
 - **Mapped.** Each entry the same entry renumbered (`renumberedEntry`,
   `src/lib/steps/reaction.ts`): its atoms where they stand in it, in the
   order of the reference atoms they map to, its bonds with them. What names
