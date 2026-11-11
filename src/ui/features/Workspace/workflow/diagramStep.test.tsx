@@ -444,6 +444,8 @@ describe("an Energy diagram step: every conformer a thin line, levels in columns
 
   it("stands each level's name above the highest of its lines - its thin lines too - so that none strikes through it", () => {
     const html = renderToString(<DiagramBody diagram={d} />).split("<!-- -->").join("");
+    // (14 px: the height of the words' box, ending on the line - pinned as a number, not by the constant)
+    expect(NAME_RISE).toBe(14);
     // (the plot's own corner, where the lines' y is from)
     const svg = /<svg[^>]*style="[^"]*left:([0-9.]+)px;top:([0-9.]+)px/.exec(html)!;
     const [plotLeft, plotTop] = [Number(svg[1]), Number(svg[2])];
