@@ -72,8 +72,16 @@ const BAND = 2 * NAME_DOWN;
 /** The widest a set's name runs zoomed out, in page px: its frame's width less its tab's inset either side - cut with an ellipsis, so that it never lies beyond its frame. */
 const farWidest = (box: Frame): number => Math.max(0, Math.abs(box.x1 - box.x0) / PAGE_PX - (2 * TAB_INSET) / PAGE_PX);
 
-/** Where a set's name's middle is, zoomed out, in the page's units: in its tab's band where it is as high as the band, else raised so that its lower edge stays on the band's - the name rises above its frame's top, never down over what the frame holds. */
-const farNameY = (box: Frame, scale: number): number => Math.max(tabStart(box).y, box.y1 - BAND + pagePx(onPage(NAME_PX, scale)) / 2);
+/**
+ * Where a set's name's middle is, zoomed out, in the page's units: in its tab's band where it is no higher than the band; larger, it rises - its
+ * lower edge from the band's lower edge, the whole of the band, up to its frame's top where it is twice as high as the band - so that
+ * it never lies down over what the frame holds, and, as large on the screen as it is, wholly above its frame when the page is far off.
+ */
+const farNameY = (box: Frame, scale: number): number => {
+  const size = pagePx(onPage(NAME_PX, scale));
+  const lower = box.y1 - BAND * Math.min(1, Math.max(0, 2 - size / BAND));
+  return Math.max(tabStart(box).y, lower + size / 2);
+};
 
 /** Where a set's name lies on the page, zoomed out, in the world's units: from where its tab's words start, as wide as it is at its size on the screen, or as its frame allows. */
 export function tabNameBox(it: Pick<FrameTab, "key" | "box" | "tab">, scale: number): NameBox & { fits: boolean } {
@@ -85,11 +93,25 @@ export function tabNameBox(it: Pick<FrameTab, "key" | "box" | "tab">, scale: num
   return { key: it.key, x0: x, x1: x + pagePx(wide), y0: y - pagePx(size) / 2, y1: y + pagePx(size) / 2, fits: natural <= farWidest(it.box) };
 }
 
-/** The keys of the sets whose names stay, zoomed out: in the order their tabs are read, one that overlaps one before it is left out - and, only marked, one that would be cut short. */
-export function tabNamesKept(items: readonly FrameTab[], scale: number, band: Band): Set<string> {
+/**
+ * The keys of the sets whose names stay, zoomed out: in the order their tabs are read, one that overlaps one before it is left out, one that
+ * would lie over another frame or anything in `clear` (the page's cards: boxes in the page's units) - and, only marked, one that would be cut
+ * short. A name is shown whole inside its frame's width and clear of everything beside it, or not at all.
+ */
+export function tabNamesKept(items: readonly FrameTab[], scale: number, band: Band, clear: readonly Frame[] = []): Set<string> {
   const among = items.filter((it) => it.iconWhenSmall && !it.noHits);
   const ordered = inReadingOrder(among.map((it) => ({ x: it.box.x0, y: it.box.y1, key: it.key, it })));
-  return namesKept(ordered.map((o) => tabNameBox(o.it, scale)).filter((b) => band !== "marked" || b.fits));
+  const over = (b: NameBox, other: Frame) => {
+    const x0 = Math.min(other.x0, other.x1);
+    const x1 = Math.max(other.x0, other.x1);
+    const y0 = Math.min(other.y0, other.y1);
+    const y1 = Math.max(other.y0, other.y1);
+    return b.x0 < x1 && x0 < b.x1 && b.y0 < y1 && y0 < b.y1;
+  };
+  // (a frame that holds this one whole is no neighbour of its name)
+  const holds = (o: Frame, it: Frame) => Math.min(o.x0, o.x1) <= Math.min(it.x0, it.x1) && Math.max(o.x0, o.x1) >= Math.max(it.x0, it.x1) && Math.min(o.y0, o.y1) <= Math.min(it.y0, it.y1) && Math.max(o.y0, o.y1) >= Math.max(it.y0, it.y1);
+  const clearOf = (it: FrameTab, b: NameBox) => !items.some((o) => o.key !== it.key && !o.noHits && !o.tabOnly && !holds(o.box, it.box) && over(b, o.box)) && !clear.some((c) => over(b, c));
+  return namesKept(ordered.map((o) => ({ o, b: tabNameBox(o.it, scale) })).filter(({ o, b }) => (band !== "marked" || b.fits) && clearOf(o.it, b)).map(({ b }) => b));
 }
 
 const SIDES: readonly Side[] = ["n", "s", "e", "w", "ne", "nw", "se", "sw"];

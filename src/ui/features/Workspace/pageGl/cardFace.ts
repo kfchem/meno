@@ -45,8 +45,6 @@ export const CARD = {
 export type CardTone = "quiet" | "base" | "attention";
 export const TONE: Record<CardTone, string> = { quiet: COLORS.quiet, base: COLORS.base, attention: COLORS.attention };
 
-/** How wide a card's name runs at most: its box's width and half as much again, in page px. */
-export const NAME_WIDEST = CARD.w * 1.5;
 /** The weight a card's name is drawn in, and so measured in. */
 const NAME_WEIGHT = 500;
 /** The gap between a card's icon and its name where it is named, in screen px. */
@@ -56,9 +54,6 @@ const TINT_ALPHA = 0.12;
 /** How far a box with no state to tint it by is tinted: a share of the quiet ink. */
 const TINT_QUIET = 0.06;
 
-/** Whether a card's name is as wide as its box and half as much again, or less, at a page scale: where it is only marked, a name cut short is left out. */
-export const nameFits = (who: string, scale: number): boolean => textWidth(who, onPage(NAME_PX, scale), NAME_WEIGHT) <= NAME_WIDEST;
-
 /** Where its name starts, from its left, in page px, where it is named: after its icon. */
 const nameLeft = (scale: number): number => CARD.hair + CARD.side + onPage(ICON_PX, scale) + onPage(NAME_GAP, scale);
 
@@ -66,6 +61,20 @@ const nameLeft = (scale: number): number => CARD.hair + CARD.side + onPage(ICON_
 const markSize = (scale: number): number => Math.min(onPage(MARK_PX, scale), 0.4 * CARD.h);
 /** How far its mark is in from its box's corner, in page px: five on the screen, never more than a seventh of its least height. */
 const markInset = (scale: number): number => Math.min(onPage(5, scale), CARD.h / 7);
+
+/** The gap kept between a card's name and its mark, or its box's edge, in screen px. */
+const NAME_CLEAR = 4;
+/** How far in from a box's right edge its mark reaches, and a gap besides - what its name keeps clear of, in page px. */
+const markClear = (scale: number): number => markInset(scale) + markSize(scale) + onPage(NAME_CLEAR, scale);
+
+/**
+ * How wide a card's name may run at a page scale, in page px - never beyond its box, nor over its mark: centred where it is only marked (clear of
+ * the mark's width at both sides), after its icon where it is named (clear of the mark at its right).
+ */
+export const nameRoom = (scale: number, named: boolean): number => Math.max(0, named ? CARD.w - nameLeft(scale) - markClear(scale) : CARD.w - 2 * markClear(scale));
+
+/** Whether a card's name fits where it is only marked, whole inside its box and clear of its mark, at a page scale: where it does not, the name is left out - never cut short. */
+export const nameFits = (who: string, scale: number): boolean => textWidth(who, onPage(NAME_PX, scale), NAME_WEIGHT) <= nameRoom(scale, false);
 
 /** What the mark at a card's corner is, zoomed out: what it is of its state (running turns, done is filled in the quiet ink, failed in the alert tone with its count, waiting hollow), its colour, whether it tints a box that is only marked, and the count it says. */
 export type Mark = { kind: "running" | "done" | "failed" | "waiting"; colour: string; tint: boolean; count?: number };
@@ -92,7 +101,7 @@ export function markOf(state: Pick<CardFaceOf["state"], "icon" | "turning">, fai
 export function nameBoxOf(c: Pick<CardFaceOf, "key" | "x" | "y" | "who">, scale: number, named: boolean): NameBox {
   const P = pagePx;
   const size = onPage(NAME_PX, scale);
-  const wide = Math.min(textWidth(c.who, size, NAME_WEIGHT), NAME_WIDEST);
+  const wide = Math.min(textWidth(c.who, size, NAME_WEIGHT), nameRoom(scale, named));
   const x0 = named ? nameLeft(scale) : (CARD.w - wide) / 2;
   const mid = c.y - P(CARD.h / 2);
   return { key: c.key, x0: c.x + P(x0), x1: c.x + P(x0 + wide), y0: mid - P(size) / 2, y1: mid + P(size) / 2 };
@@ -224,13 +233,13 @@ export function cardFace(c: CardFaceOf, statePointed = false): CardDrawn {
     // (a state with none to tint by - waiting, ready - lightly, in the quiet ink, so that a box is not lost)
     if (named < 1) shapes.push({ kind: "box", key: `${c.key}:tint`, ...box, radiusPx: CARD.radius, fill: mark?.tint ? mark.colour : COLORS.quiet, fillAlpha: mark?.tint ? TINT_ALPHA : TINT_QUIET, opacity: o * far * (1 - named), z: z + 0.5 });
     if (named > 0) icon("big", c.icon, nameLeft(scale) - onPage(ICON_PX, scale) / 2 - onPage(NAME_GAP, scale), CARD.h / 2, onPage(ICON_PX, scale), COLORS.ink, far * named);
-    // (its name: after its icon where it is named, in the middle of its box where it is only marked; cut at its box's width and half as much again)
+    // (its name: after its icon where it is named, in the middle of its box where it is only marked; cut inside its box, clear of its mark)
     const size = onPage(NAME_PX, scale);
-    const nameText = (key: string, x: number, anchor: PageText["anchor"], opacity: number) => {
-      if (opacity > 0) texts.push({ key: `${c.key}:${key}`, x: c.x + P(x), y: c.y - P(CARD.h / 2), anchor, baseline: "middle", text: c.who, sizePx: size, color: COLORS.ink, weight: NAME_WEIGHT, maxWidthPx: NAME_WIDEST, opacity: o * opacity, z: z + 1 });
+    const nameText = (key: string, x: number, anchor: PageText["anchor"], opacity: number, room: number) => {
+      if (opacity > 0) texts.push({ key: `${c.key}:${key}`, x: c.x + P(x), y: c.y - P(CARD.h / 2), anchor, baseline: "middle", text: c.who, sizePx: size, color: COLORS.ink, weight: NAME_WEIGHT, maxWidthPx: room, opacity: o * opacity, z: z + 1 });
     };
-    nameText("nameNamed", nameLeft(scale), "start", far * named * label);
-    nameText("nameMarked", CARD.w / 2, "middle", far * (1 - named) * label);
+    nameText("nameNamed", nameLeft(scale), "start", far * named * label, nameRoom(scale, true));
+    nameText("nameMarked", CARD.w / 2, "middle", far * (1 - named) * label, nameRoom(scale, false));
     if (mark) {
       const d = markSize(scale);
       const inset = markInset(scale);

@@ -48,7 +48,7 @@ import { dragSelection } from "../utils/dragSelection";
 import PageField from "../pageGl/PageField";
 import PageLayer from "../pageGl/PageLayer";
 import { FRAME_PX, tabStart } from "../pageGl/frameParts";
-import { cardFace, nameBoxOf, nameFits, TONE, type CardFaceOf } from "../pageGl/cardFace";
+import { CARD, cardFace, nameBoxOf, nameFits, TONE, type CardFaceOf } from "../pageGl/cardFace";
 import { bandAt, inReadingOrder, namesKept, type Band } from "../pageGl/cardBands";
 import { dropOn, portOfKey, portParts, type PortAt } from "../pageGl/ports";
 import { PAGE_GL_ORDER } from "../pageGl/PageShapes";
@@ -1586,7 +1586,7 @@ export default function Workflow2D() {
       {/* the marks of what joined a set or left it, positions numbered, structures numbered: by WebGL, under the frames (MARKS_ORDER) */}
       <PageLayer shapes={marks.shapes} texts={marks.texts} regions={marks.regions} on={onMarks} tip={marks.tip} order={MARKS_ORDER} />
       {/* the sets' frames and tabs, by WebGL: under the cards (FrameTabs `FRAMES_ORDER`) */}
-      <FrameTabs items={tabsShown} on={onSetTabs} />
+      <FrameTabs items={tabsShown} on={onSetTabs} clear={faceList.map((f) => ({ x0: f.x, x1: f.x + CARD.w * PX, y0: f.y - CARD.h * PX, y1: f.y }))} />
       {/* the steps' cards, shut, by WebGL: over the wires and the drawing, under the molecules' chips (CARDS_ORDER) */}
       <PageLayer shapes={cards.shapes} texts={cards.texts} icons={cards.icons} regions={cards.regions} on={onCard} tip={cards.tip} order={CARDS_ORDER} />
       {/* Sets and steps drawn in HTML on one layer laid on the page at its

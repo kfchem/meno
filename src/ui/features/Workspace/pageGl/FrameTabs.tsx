@@ -9,6 +9,7 @@ import PageTexts from "./PageTexts";
 import PageIcons from "./PageIcons";
 import { usePageHits, type PagePointer } from "./PageHits";
 import type { Side } from "./hits";
+import type { Frame } from "../workflow/entries";
 import { frameTabParts, tabNamesKept, type FarTabs, type FrameTab } from "./frameParts";
 
 export type { FrameTab } from "./frameParts";
@@ -28,7 +29,7 @@ export type FrameTabsOn = {
 export const FRAMES_ORDER = PAGE_GL_ORDER - 7.5;
 
 /** Frames with their tabs on the page (`FrameTab`), drawn by WebGL from `order` among its WebGL and taken hold of by the page's own regions (./PageHits). */
-export default function FrameTabs({ items, on, order = FRAMES_ORDER }: { items: readonly FrameTab[]; on: FrameTabsOn; order?: number }) {
+export default function FrameTabs({ items, on, order = FRAMES_ORDER, clear }: { items: readonly FrameTab[]; on: FrameTabsOn; order?: number; clear?: readonly Frame[] }) {
   const camera = useThree((s) => s.camera);
   // (its words read, or its icons alone: switched past their threshold as the zoom goes, as a set's are - utils/pageScale `wordsReadAt`)
   const readRef = useRef(wordsReadAt(camera.zoom, true));
@@ -51,7 +52,7 @@ export default function FrameTabs({ items, on, order = FRAMES_ORDER }: { items: 
   // (its words fade out as its name fades in, and a name left out where it would lie over one before it fades out)
   const words = useEasedTo(read ? 1 : 0);
   const scale = pageScale(zoom);
-  const kept = useMemo(() => (read ? null : tabNamesKept(items, scale, band)), [items, scale, band, read]);
+  const kept = useMemo(() => (read ? null : tabNamesKept(items, scale, band, clear)), [items, scale, band, read, clear]);
   const labels = useEasedValues(new Map(items.map((it) => [it.key, !kept || kept.has(it.key) ? 1 : 0] as [string, number])));
   const far: FarTabs = useMemo(() => ({ scale, band, words, labels }), [scale, band, words, labels]);
   const parts = useMemo(() => frameTabParts(items, read, far), [items, read, far]);

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { COLORS } from "../../../theme/colors";
 import { cardState } from "../workflow/cardState";
 import { CARD_H, CARD_W, PORT_STEP, portDown } from "../workflow/look";
-import { CARD, NAME_WIDEST, cardFace, cardLines, clamped, markOf, nameBoxOf, nameFits, type CardFaceOf } from "./cardFace";
+import { CARD, cardFace, cardLines, clamped, markOf, nameBoxOf, nameFits, nameRoom, type CardFaceOf } from "./cardFace";
 import { ICON_PX, MARK_PX, NAME_PX } from "./cardBands";
 import type { Box, Ring } from "./shapes";
 import { textWidth } from "./texts";
@@ -136,13 +136,14 @@ describe("a card zoomed out: named, then marked", () => {
   const far = (over: Partial<CardFaceOf> = {}) => card({ words: 0, scale: 0.5, ...over });
   const name = (d: ReturnType<typeof cardFace>, key = "nameNamed") => d.texts.find((t) => t.key.endsWith(`:${key}`));
 
-  it("names the step in its box, on one line, eleven screen pixels high whatever the zoom, cut at its box's width and half as much again", () => {
+  it("names the step in its box, on one line, eleven screen pixels high whatever the zoom, cut inside its box, clear of its mark", () => {
     for (const scale of [0.7, 0.5, 0.3]) {
       const t = name(cardFace(far({ scale })))!;
-      expect(t).toMatchObject({ text: "Tight", weight: 500, anchor: "start", baseline: "middle", maxWidthPx: CARD.w * 1.5, opacity: 1 });
+      expect(t).toMatchObject({ text: "Tight", weight: 500, anchor: "start", baseline: "middle", maxWidthPx: nameRoom(scale, true), opacity: 1 });
       expect(t.sizePx * scale).toBeCloseTo(NAME_PX, 12);
     }
-    expect(NAME_WIDEST).toBe(1.5 * CARD.w);
+    // (the room: after its icon to its mark's edge, and a gap)
+    expect(nameRoom(0.5, true)).toBeLessThan(CARD.w - (CARD.hair + CARD.side + 14 / 0.5 + 5 / 0.5));
     // (its kind's icon before it, as large on the screen)
     const icon = cardFace(far({ scale: 0.4 })).icons.find((i) => i.key.endsWith(":big"))!;
     expect(icon.sizePx * 0.4).toBeCloseTo(ICON_PX, 12);
@@ -169,13 +170,47 @@ describe("a card zoomed out: named, then marked", () => {
     }
   });
 
-  it("leaves a name out of the marked band where it would be cut short: as wide as its box and half as much again, or less, fits", () => {
+  it("leaves a name out of the marked band where it would be cut short: it fits whole inside its box, clear of its mark at both sides, or it is left out", () => {
     expect(nameFits("xtb", 1)).toBe(true);
     expect(nameFits("xtb", 0.05)).toBe(false);
-    // (the edge: the width of the name at its size on the page, against its box's and half as much again)
+    // (the edge: the width of the name at its size on the page, against its box less its mark's room at each side - not its box's width and more)
     const scale = 0.4;
     const wide = textWidth("Optimise", NAME_PX / scale, 500);
-    expect(nameFits("Optimise", scale)).toBe(wide <= NAME_WIDEST);
+    expect(nameFits("Optimise", scale)).toBe(wide <= nameRoom(scale, false));
+    expect(nameRoom(scale, false)).toBeLessThan(CARD.w);
+    expect(nameRoom(scale, false)).toBeLessThan(nameRoom(scale, true) + 2 * (CARD.hair + CARD.side + 14 / scale + 5 / scale));
+    // (a name as wide as the box, or a little less, is no longer one that fits: it would lie over its mark)
+    for (const s of [0.2, 0.15, 0.1]) {
+      const who = "w".repeat(Math.ceil(CARD.w / textWidth("w", NAME_PX / s, 500)));
+      expect(nameFits(who, s)).toBe(false);
+    }
+  });
+
+  it("never prints a name beyond its box or over its mark: a name that fits, in the marked band, lies inside the box and clear of the mark - at every scale, whichever its state", () => {
+    const names = ["Meno", "Within 1 kcal/mol", "Tagged", "xtb", "Optimise", "Energy window"];
+    for (const scale of [0.24, 0.2, 0.17, 0.14, 0.1, 0.05, 0.02]) {
+      for (const who of names) {
+        for (const state of ["done", "failed", "running", "waiting"] as const) {
+          const d = cardFace(far({ scale, named: 0, who, state: cardState(state, undefined, state === "running" ? ({ ended: 1, total: 2, since: 0 } as never) : undefined, 0) }));
+          const kept = nameFits(who, scale);
+          const t = d.texts.find((x) => x.key.endsWith(":nameMarked"))!;
+          const box = nameBoxOf({ key: "k", x: 2, y: 0, who }, scale, false);
+          // (what is drawn is what is measured: cut at the room, which a name that fits is inside)
+          expect(t.maxWidthPx).toBeCloseTo(nameRoom(scale, false), 9);
+          const room = nameRoom(scale, false);
+          const natural = textWidth(who, NAME_PX / scale, 500);
+          expect(kept).toBe(natural <= room);
+          if (!kept) continue;
+          // (inside its box, a gap of the mark's reach from each side)
+          const mark = d.shapes.find((x) => x.key.endsWith(":mark")) as Ring | undefined;
+          expect(box.x0).toBeGreaterThanOrEqual(2 - 1e-12);
+          expect(box.x1).toBeLessThanOrEqual(2 + pagePx(CARD.w) + 1e-12);
+          // (the mark's own left edge, and its mirror at the box's left: a name is centred, so it is as clear of the left as of the right)
+          if (mark) expect(box.x1).toBeLessThanOrEqual(mark.x - pagePx(mark.diameterPx) / 2 + 1e-12);
+          if (mark) expect(box.x0).toBeGreaterThanOrEqual(2 + pagePx(CARD.w) - (mark.x + pagePx(mark.diameterPx) / 2) + 2 - 1e-12);
+        }
+      }
+    }
   });
 
   it("measures its name as it is drawn, at its weight: where the heavier is wider, a name that fits only in the lighter does not fit, and its box is as wide", async () => {
@@ -188,9 +223,10 @@ describe("a card zoomed out: named, then marked", () => {
     const box = fresh.nameBoxOf({ key: "k", x: 0, y: 0, who }, 1, false);
     expect(box.x1 - box.x0).toBeCloseTo(pagePx(70), 12);
     // (fits at 400 and not at 500)
-    const n = Math.floor(fresh.NAME_WIDEST / 6);
-    expect(n * 6).toBeLessThanOrEqual(fresh.NAME_WIDEST);
-    expect(n * 7).toBeGreaterThan(fresh.NAME_WIDEST);
+    const room = fresh.nameRoom(1, false);
+    const n = Math.floor(room / 6);
+    expect(n * 6).toBeLessThanOrEqual(room);
+    expect(n * 7).toBeGreaterThan(room);
     expect(fresh.nameFits("x".repeat(n), 1)).toBe(false);
   });
 
@@ -261,11 +297,12 @@ describe("a card zoomed out: named, then marked", () => {
     // (eleven screen pixels high, in the middle of its least height)
     expect(named.y1 - named.y0).toBeCloseTo(pagePx(NAME_PX / 0.5), 9);
     expect((named.y0 + named.y1) / 2).toBeCloseTo(3 - pagePx(CARD.h / 2), 9);
-    // (a name longer than its box and half as much again: as wide as that)
+    // (a name longer than its room: as wide as that, inside its box)
     const long = nameBoxOf({ key: "k", x: 0, y: 0, who: "w".repeat(200) }, 0.5, false);
-    expect(long.x1 - long.x0).toBeCloseTo(pagePx(NAME_WIDEST), 9);
+    expect(long.x1 - long.x0).toBeCloseTo(pagePx(nameRoom(0.5, false)), 9);
     const longNamed = nameBoxOf({ key: "k", x: 0, y: 0, who: "w".repeat(200) }, 0.5, true);
-    expect(longNamed.x1 - longNamed.x0).toBeCloseTo(pagePx(NAME_WIDEST), 9);
+    expect(longNamed.x1 - longNamed.x0).toBeCloseTo(pagePx(nameRoom(0.5, true)), 9);
+    expect(longNamed.x1).toBeLessThan(pagePx(CARD.w));
   });
 
   it("keeps the sizes it says as screen pixels: the icon fourteen, the name eleven, the mark ten, its count seven tenths of the mark, the hollow mark's line one and a half", () => {

@@ -140,27 +140,32 @@ describe("a set's tab, zoomed out", () => {
     expect([d.icons, d.texts.map((t) => t.key)]).toEqual([[], ["set:3:nameFar"]]);
   });
 
-  it("rises over its frame's top where it is higher than its band, its lower edge on the band's: never down over what its frame holds", () => {
+  it("rises over its frame's top where it is higher than its band: its lower edge from the band's, up to the frame's top at twice the band's height - never down over what its frame holds", () => {
     const box = set().box;
-    const bandBottom = box.y1 - 2 * NAME_DOWN;
-    // (as high as the band: in it; higher: its lower edge stays where the band's is)
+    const band = 2 * NAME_DOWN;
+    const bandBottom = box.y1 - band;
     const ofScale = (scale: number) => {
       const t = nameFar([set()], far({ scale }))!;
       return { t, h: pagePx(t.sizePx) };
     };
     const inBand = ofScale(0.33);
-    expect(inBand.h).toBeLessThan(2 * NAME_DOWN);
+    expect(inBand.h).toBeLessThan(band);
     expect(inBand.t.y).toBeCloseTo(tabStart(box).y, 12);
-    for (const scale of [0.2, 0.1, 0.03]) {
+    for (const scale of [0.3, 0.25, 0.2, 0.15, 0.1, 0.03, 0.005]) {
       const { t, h } = ofScale(scale);
-      expect(h).toBeGreaterThan(2 * NAME_DOWN);
-      expect(t.y - h / 2).toBeCloseTo(bandBottom, 12);
+      expect(h).toBeGreaterThan(band);
+      // (its lower edge never below the band's: nothing it holds is under it)
+      expect(t.y - h / 2).toBeGreaterThanOrEqual(bandBottom - 1e-12);
+      // (the lower edge as far up as the height says: from the band's, to the frame's top at twice the band)
+      expect(t.y - h / 2).toBeCloseTo(box.y1 - band * Math.min(1, Math.max(0, 2 - h / band)), 12);
       // (and the box the overlap is found on is where it is drawn)
       const b = tabNameBox(set(), scale);
       expect([b.y0, b.y1]).toEqual([t.y - h / 2, t.y + h / 2]);
     }
+    // (far off: wholly above its frame, none of it in the frame)
+    for (const scale of [0.1, 0.03]) expect(tabNameBox(set(), scale).y0).toBeGreaterThanOrEqual(box.y1 - 1e-12);
     // (the edge: as high as the band is in it)
-    const s = (2 * NAME_DOWN) / pagePx(NAME_PX);
+    const s = band / pagePx(NAME_PX);
     expect(tabNameBox(set(), 1 / s).y0).toBeCloseTo(bandBottom, 12);
   });
 
@@ -200,11 +205,12 @@ describe("a set's tab, zoomed out", () => {
     expect(frameTabParts([chat], true, far({ words: 1 }))).toEqual(frameTabParts([chat], true));
   });
 
-  it("keeps the names that do not overlap, in the order the tabs are read, the later of two overlapping left out", () => {
+  it("keeps the names that do not overlap, in the order the tabs are read, and leaves out one that lies over another frame - frames that overlap lose their names, a frame clear of them keeps its own", () => {
     const a = set({ key: "a", box: { x0: 0, y0: 0, x1: 3, y1: 10 }, tab: { icon: "rings", name: "Conformers" } });
     const b = set({ key: "b", box: { x0: 1, y0: 0, x1: 4, y1: 10 }, tab: { icon: "rings", name: "Optimised" } });
     const c = set({ key: "c", box: { x0: 90, y0: 0, x1: 93, y1: 10 }, tab: { icon: "rings", name: "Energy" } });
-    expect([...tabNamesKept([b, a, c], 0.4, "named")].sort()).toEqual(["a", "c"]);
+    expect([...tabNamesKept([b, a, c], 0.4, "named")].sort()).toEqual(["c"]);
+    expect([...tabNamesKept([a, c], 0.4, "named")].sort()).toEqual(["a", "c"]);
     // (one that is not a set's, or takes no pointer, takes no part)
     expect([...tabNamesKept([frame(), set({ noHits: true })], 0.4, "named")]).toEqual([]);
   });
@@ -217,5 +223,41 @@ describe("a set's tab, zoomed out", () => {
     expect([...tabNamesKept([narrow, wide], 0.1, "marked")]).toEqual(["w"]);
     // (named: cut with an ellipsis, shown)
     expect([...tabNamesKept([narrow], 0.1, "named")]).toEqual(["n"]);
+  });
+
+  it("never prints a name over a neighbour: a name that would lie over another frame's box, or a card's (`clear`), is left out, in the named band and the marked; touching, or clear, it stays", () => {
+    const box = { x0: 3, y0: 0, x1: 23, y1: 10 };
+    const mine = set({ key: "m", box, tab: { icon: "rings", name: "Tag" } });
+    for (const band of ["named", "marked"] as const) {
+      const scale = band === "named" ? 0.4 : 0.1;
+      const name = tabNameBox(mine, scale);
+      // (another frame, over where the name lies)
+      const beside = set({ key: "up", box: { x0: (name.x0 + name.x1) / 2, y0: name.y0 + 0.5 * (name.y1 - name.y0), x1: name.x1 + 5, y1: name.y1 + 5 } });
+      expect([...tabNamesKept([mine, beside], scale, band)]).not.toContain("m");
+      // (a card's box likewise)
+      expect([...tabNamesKept([mine], scale, band, [{ x0: name.x0, x1: name.x0 + 0.01, y0: name.y0 + 0.01, y1: name.y1 + 1 }])]).not.toContain("m");
+      // (clear by a hair, or touching, it stays - only where the marked band's name fits)
+      const fits = band === "named" || name.fits;
+      const touching = [{ x0: name.x1, x1: name.x1 + 1, y0: name.y0, y1: name.y1 }, { x0: name.x0, x1: name.x1, y0: name.y1, y1: name.y1 + 1 }];
+      expect([...tabNamesKept([mine], scale, band, touching)].includes("m")).toBe(fits);
+    }
+  });
+
+  it("holds a name inside its frame's width in the marked band and above its frame, the page's cards beside it clear: a name is shown whole, clear of its molecules and what is beside it, or not at all", () => {
+    // (the names of a row of frames at the smallest scales: each shown name inside its frame, wholly above it, clear of every other box)
+    const frames = [0, 1, 2, 3].map((k) => set({ key: `s${k}`, box: { x0: k * 8, y0: 0, x1: k * 8 + 6, y1: 10 }, tab: { icon: "rings", name: ["Tagged", "Input", "A rather long name", "Out"][k] } }));
+    for (const scale of [0.24, 0.15, 0.1, 0.05, 0.01]) {
+      const kept = tabNamesKept(frames, scale, "marked");
+      for (const it of frames) {
+        const b = tabNameBox(it, scale);
+        if (!kept.has(it.key)) continue;
+        expect(b.fits).toBe(true);
+        expect(b.x0).toBeGreaterThanOrEqual(it.box.x0 - 1e-12);
+        expect(b.x1).toBeLessThanOrEqual(it.box.x1 + 1e-12);
+        // (nothing of it below the band, where the molecules are)
+        expect(b.y0).toBeGreaterThanOrEqual(it.box.y1 - 2 * NAME_DOWN - 1e-12);
+        for (const other of frames) if (other !== it) expect(b.x1 <= other.box.x0 || other.box.x1 <= b.x0 || b.y1 <= other.box.y0 || other.box.y1 <= b.y0).toBe(true);
+      }
+    }
   });
 });
