@@ -324,8 +324,14 @@ nothing is no step (`bondKey`, utils/bondKinds `bondKeyPatch`). The key the
 hand pressed is read (`code`, the top row or the keypad), so a keyboard
 whose digits take Shift and an input method that is on set it all the same.
 None is taken with Ctrl, ⌘ or Alt held (⌘1 fits the view), held down and
-coming again, over an atom - digits never begin a label - while a button
-is held (a drag going on), or while a label or any field is typed in. A bond's menu says each beside *Single bond*,
+coming again, while a button is held (a drag going on), or while a label or
+any field is typed in. **Over an atom** (on no bond) a key goes on a chain
+(2026-11-11): one bond of that order - single, double, triple - out of the
+atom where there is room, to a new carbon, as a click with Option held draws
+one (`bondOut`), one undo step; the new atom is the one the next key goes
+on from, so that 1 1 1 draws three bonds of a chain with the pointer where
+it was (a move of the pointer takes the atom under it again). Digits never
+begin a label. A bond's menu says each beside *Single bond*,
 *Double bond* and *Triple bond*. They are the only keys that change a structure;
 ring templates and the like are still not keys.
 
@@ -840,6 +846,13 @@ All hover-based, as above.
   that an input method's candidates show there - an input method's
   full-width letters are taken as the ordinary ones once it gives them;
   Cut, Copy, Paste and Select All work on its letters as on words.
+  - **Over an atom selected with others** (2026-11-11), a letter typed
+    begins the label, and the label kept is written on every atom selected,
+    as one undo step: atoms alone - a bond, words or a picture selected with
+    them has none. Typed over an atom that is not selected, or selected
+    alone, or begun from a menu (*Edit label*), it is that atom's alone; the
+    keys that already mean something - Delete, + and -, the bond keys - mean
+    it still.
   - A space typed is seen (2026-10-19: spaces typed were not, and piled
     up unseen): one between letters is set as typed, a run of them as
     wide as it is - a label may be a reagent's name, Grubbs II - and
