@@ -30,11 +30,13 @@ pub const PURPOSE: &str = "plugin-catalogue";
 /// Where they are: the releases of the plugins' repository, and where those send their files.
 pub const HOSTS: [&str; 3] = ["github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com"];
 
-/// The catalogue, as the newest release of the plugins' repository has it; its signature beside it, `.minisig`.
+/// The catalogue, as the plugins' repository's release `catalogue` has it - asked of that release by its name, not
+/// as the newest release: a step fewer for GitHub to hand it on through, and the same file (that release is the one
+/// marked newest, for the address an earlier Meno fetches); its signature beside it, `.minisig`.
 /// This Meno's generation of it (docs/PLUGINS.md, *Plugins online*): the whole list, `catalogue-2.json`, read
 /// by a Meno that lists a plugin made for a newer Meno as such - beside `catalogue.json`, the plugins every Meno
 /// still in use reads whole, which an earlier Meno fetches.
-const LIST_URL: &str = "https://github.com/kfchem/meno-plugins/releases/latest/download/catalogue-2.json";
+const LIST_URL: &str = "https://github.com/kfchem/meno-plugins/releases/download/catalogue/catalogue-2.json";
 
 /// Where a catalogue is kept in the plugins' folder: the list, its signature and its state.
 struct Kept {

@@ -1664,6 +1664,17 @@ comes in its own pull request.
   same second. When no Meno in use refuses the whole any more, the first
   is no longer written (meno-plugins' README says by which rule). A list is not refused for its age: Settings shows the day it was
   issued, beside when it was listed.
+- **Asked of its release by name** (2026-11-11): this Meno fetches
+  `releases/download/catalogue/catalogue-2.json`, the release
+  `catalogue` asked for by its name, not as the newest release - a step
+  fewer for GitHub to hand it on through; that release is the one marked
+  newest, for the address earlier Menos fetch. A server that fails (a
+  5xx, which GitHub gives now and then), or a connection that fails or
+  goes silent (30 s to connect, 60 s with nothing coming), is asked again
+  2 s later and once more 5 s after that; failing still, it is said by the
+  host that answered - where a request was handed on, the one it was
+  handed to - with what to do (`tools::fetch`). The plugins' own files are
+  fetched so too.
 - **Where a plugin's files may be.** On https, at the hosts the plugins'
   releases are at - each exactly, its letters made small, nothing only
   like one, nor one with a dot at its end - with no port and no name or
