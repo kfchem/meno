@@ -7,6 +7,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { useDrawnLayout } from "./drawnLayoutContext";
 import { computeMoveSnap, onAnotherAtom, snapAngleAbout } from "../utils/moveSnap";
 import { mergeTarget } from "../utils/dropMerge";
+import { bondLengthFrom } from "../utils/magnified";
 import { TAU, follow } from "../../../theme/motion";
 
 // Preview for moving an atom without mutating coordinates during drag.
@@ -110,6 +111,8 @@ export default function MovePreview2D() {
     const deg = nbrIds.length;
 
     const L = NOMINAL_BOND_LENGTH;
+    // (as the drop measures it - a magnified atom's bond is longer: utils/dropOutcome)
+    const bondL = bondLengthFrom(model.atoms, moving.id);
     const zoom = (camera as any)?.zoom || 1;
     const thinW = Math.max(lineWidthWorld, 1 / Math.max(zoom, 1e-6));
 
@@ -126,7 +129,7 @@ export default function MovePreview2D() {
     let pxSnap = ptr.x,
       pySnap = ptr.y;
     // (free, but never on an atom: there it keeps to the snap, as the drop does)
-    const isFree = (moveDrag as any).mode === "free" && !onAnotherAtom(model as any, moving.id, ptr, L);
+    const isFree = (moveDrag as any).mode === "free" && !onAnotherAtom(model as any, moving.id, ptr, bondL);
     if (deg === 1) {
       // simple: center at neighbor, angle snap + angle spring, fixed radius L
       const nb = model.atoms.find((a) => a.id === nbrIds[0]);
@@ -135,7 +138,7 @@ export default function MovePreview2D() {
           curAngRef.current = Math.atan2(ptr.y - nb.y, ptr.x - nb.x);
           angVelRef.current = 0;
         }
-        const snapAng = snapAngleAbout(model as any, moving.id, nb, ptr, L);
+        const snapAng = snapAngleAbout(model as any, moving.id, nb, ptr, bondL);
         const dt = Math.min(Math.max(dtRaw || 0.016, 0.001), 0.05);
         const k = 800;
         const zeta = 0.5;

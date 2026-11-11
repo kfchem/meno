@@ -9,8 +9,7 @@ import { dragSelection } from "../utils/dragSelection";
 import { onChord } from "../utils/press";
 import { dragsSelection } from "../store/slices/selectionSlice";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { computeMoveSnap, onAnotherAtom, snapAngleAbout } from "../utils/moveSnap";
-import { mergeTarget } from "../utils/dropMerge";
+import { dropOutcome } from "../utils/dropOutcome";
 import { ATOM_PICK_RADIUS_RATIO, DOUBLE_CLICK_MS, FREE_MS, MOV_PX } from "../constants";
 import { oncePerEvent, pressNumber } from "../utils/clickCount";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
@@ -19,7 +18,6 @@ import { useDrawnLayout } from "./drawnLayoutContext";
 import { labelReach } from "../workflow/selectionSet";
 import { setLabelReach } from "../utils/labelHits";
 import { hapticStars } from "../chem/eta";
-import { bondLengthFrom } from "../utils/magnified";
 
 // The hit area is world-fixed, the size of the hover ring
 // (ATOM_PICK_RADIUS_RATIO), so what lights up is what can be picked.
@@ -226,48 +224,12 @@ export function Atoms2D() {
       }
       try {
         const pEnd = toWorld(ev.clientX, ev.clientY);
-        // Dropped with the pointer on another atom it may become (one it
-        // shares no bond or neighbour with - utils/dropMerge): it becomes
-        // that atom, as the preview showed. Nowhere else does a drag merge.
-        const onto = mergeTarget(model, thisAtom.id, pEnd);
-        if (onto != null) {
-          replaceDraggedAtomWith(thisAtom.id, onto);
-        } else {
-          const nbrs: number[] = [];
-          for (const b of model.bonds) {
-            if (b.a === thisAtom.id) nbrs.push(b.b);
-            else if (b.b === thisAtom.id) nbrs.push(b.a);
-          }
-          // (as long as the bonds of its structure are shown)
-          const L = bondLengthFrom(model.atoms, thisAtom.id);
-          const only =
-            nbrs.length === 1
-              ? model.atoms.find((aa) => aa.id === nbrs[0]) || null
-              : null;
-          let finalX = pEnd.x + offset.dx;
-          let finalY = pEnd.y + offset.dy;
-          if (moveFree && !onAnotherAtom(model as any, thisAtom.id, pEnd, L)) {
-            // Free: exactly at the pointer, as the preview shows it (but never
-            // on an atom: it is where the snap would put it instead)
-            finalX = pEnd.x;
-            finalY = pEnd.y;
-          } else if (only) {
-            const snap = snapAngleAbout(model as any, thisAtom.id, only, pEnd, L);
-            finalX = only.x + L * Math.cos(snap);
-            finalY = only.y + L * Math.sin(snap);
-          } else if (nbrs.length >= 2) {
-            const snap = computeMoveSnap(model as any, thisAtom.id, {
-              x: pEnd.x,
-              y: pEnd.y,
-            });
-            if (snap && Number.isFinite(snap.px) && Number.isFinite(snap.py)) {
-              finalX = snap.px;
-              finalY = snap.py;
-            }
-          }
-          // (an atom is never left on another, whichever way it was led there)
-          if (!onAnotherAtom(model as any, thisAtom.id, { x: finalX, y: finalY }, L)) moveAtom(thisAtom.id, finalX, finalY);
-        }
+        // What the drop does is utils/dropOutcome's: it becomes the atom the
+        // pointer is on, where it may (as the preview showed), else goes
+        // where it snaps to - and merges nothing otherwise.
+        const out = dropOutcome(model as any, thisAtom.id, pEnd, { x: offset.dx, y: offset.dy }, moveFree);
+        if ("merge" in out) replaceDraggedAtomWith(thisAtom.id, out.merge);
+        else if ("move" in out) moveAtom(thisAtom.id, out.move.x, out.move.y);
       } catch {}
       endMoveDrag();
       endPanHold(ev.pointerId ?? pid);

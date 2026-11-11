@@ -26,8 +26,10 @@ const neighboursOf = (model: Pick<Model, "bonds">, id: number): Set<number> => {
  * (2026-11-11: dragging a tert-butyl's centre onto a methyl left the
  * structure with carbons gone).
  */
-export function mayBecome(model: Pick<Model, "bonds">, movingId: number, targetId: number): boolean {
+export function mayBecome(model: Pick<Model, "atoms" | "bonds">, movingId: number, targetId: number): boolean {
   if (movingId === targetId) return false;
+  // (both there: one an undo took away while the button was down is no atom to become)
+  if (!model.atoms.some((a) => a.id === movingId) || !model.atoms.some((a) => a.id === targetId)) return false;
   const mine = neighboursOf(model, movingId);
   if (mine.has(targetId)) return false;
   for (const n of neighboursOf(model, targetId)) if (mine.has(n)) return false;

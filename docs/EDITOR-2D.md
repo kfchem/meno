@@ -49,7 +49,10 @@ and in particular:
     becomes that atom - a ring closed, a chain joined - and the preview shows
     it there before the button comes up, one undo step. It does not become an
     atom it is bonded to or shares a neighbour with: that would lose a bond
-    (or the atom itself), so there the drag only moves it (`utils/dropMerge`).
+    (or the atom itself), so there the drag only moves it (`utils/dropMerge`, `utils/dropOutcome`).
+    Fusing two drawn rings by dragging atom onto atom therefore stops after
+    the first pair - the second shares a neighbour with it; fused and spiro
+    rings come from the ring templates.
   - A double-click on an atom draws one bond where there is room; a
     double-click that drags draws one bond where it is led. Near 120
     degrees from a bond already there it snaps to that, and an arc grows

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import { createWorkspaceDocument } from "../document";
-import { mayBecome, mergeTarget, SNAP_CLEAR } from "./dropMerge";
-import { computeMoveSnap, onAnotherAtom } from "./moveSnap";
+import { mayBecome, mergeTarget } from "./dropMerge";
+import { computeMoveSnap, onAnotherAtom, snapAngleAbout } from "./moveSnap";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import type { Model } from "../store/types";
 
@@ -24,7 +24,7 @@ describe("dragging the centre of a tert-butyl", () => {
     for (let x = -2 * L; x <= 2 * L; x += L / 8) {
       for (let y = -2 * L; y <= 2 * L; y += L / 8) {
         const snap = computeMoveSnap(model, 1, { x, y });
-        expect(onAnotherAtom(model, 1, { x: snap.px, y: snap.py }, L, SNAP_CLEAR)).toBe(false);
+        expect(onAnotherAtom(model, 1, { x: snap.px, y: snap.py }, L, 0.75)).toBe(false);
       }
     }
   });
@@ -35,6 +35,41 @@ describe("dragging the centre of a tert-butyl", () => {
       const a = model.atoms.find((x) => x.id === id)!;
       expect(mergeTarget(model, 1, { x: a.x, y: a.y })).toBeNull();
     }
+  });
+});
+
+describe("an atom dropped on a lone atom", () => {
+  // 1 and 2 far apart, no bond between them: 2 is the one to become
+  const model: Model = { atoms: [atom(1, 0, 0), atom(2, 5 * L, 0)], bonds: [] };
+  it("is taken within 0.4 of a bond length of the pointer, and not past it", () => {
+    expect(mergeTarget(model, 1, { x: 5 * L + 0.3 * L, y: 0 })).toBe(2);
+    expect(mergeTarget(model, 1, { x: 5 * L + 0.5 * L, y: 0 })).toBeNull();
+    expect(mergeTarget(model, 1, { x: 5 * L - 0.3 * L, y: 0 })).toBe(2);
+    expect(mergeTarget(model, 1, { x: 5 * L - 0.5 * L, y: 0 })).toBeNull();
+  });
+  it("is the nearer of two within reach", () => {
+    const two: Model = { atoms: [atom(1, 0, 0), atom(2, 5 * L, 0), atom(3, 5 * L + 0.5 * L, 0)], bonds: [] };
+    expect(mergeTarget(two, 1, { x: 5 * L + 0.1 * L, y: 0 })).toBe(2);
+    expect(mergeTarget(two, 1, { x: 5 * L + 0.4 * L, y: 0 })).toBe(3);
+  });
+  it("is never the atom itself, one that is gone, nor a haptic bond's star", () => {
+    expect(mayBecome(model, 1, 1)).toBe(false);
+    expect(mayBecome(model, 1, 99)).toBe(false);
+    expect(mayBecome(model, 99, 2)).toBe(false);
+    const star = { ...atom(9, 8 * L, 0), el: "*" };
+    const ring: Model = {
+      atoms: [atom(1, 0, 0), star, atom(3, 7 * L, 1), atom(4, 8 * L, 1), atom(5, 9 * L, 1), { ...atom(6, 8 * L, -3), el: "Fe" }],
+      bonds: [{ ...bond(11, 6, 9), endpoints: [3, 4, 5] }],
+    };
+    expect(mergeTarget(ring, 1, { x: 8 * L, y: 0 })).toBeNull();
+  });
+});
+
+describe("a place a snap may take", () => {
+  it("never has the atom moving counted as another", () => {
+    const model: Model = { atoms: [atom(1, 0, 0)], bonds: [] };
+    expect(onAnotherAtom(model, 1, { x: 0, y: 0 }, L)).toBe(false);
+    expect(onAnotherAtom(model, 2, { x: 0, y: 0 }, L)).toBe(true);
   });
 });
 
@@ -110,5 +145,36 @@ describe("a ring closed by a drag", () => {
     expect(doc.history().undoDepth).toBe(depth + 1);
     doc.undo();
     expect(JSON.parse(JSON.stringify(st().model))).toEqual(before);
+  });
+});
+
+describe("the angle an atom with one bond snaps to", () => {
+  const turn = Math.PI / 6;
+  const spot = (deg: number, r = L) => ({ x: r * Math.cos((deg * Math.PI) / 180), y: r * Math.sin((deg * Math.PI) / 180) });
+  const base = (others: { x: number; y: number }[]): Model => ({
+    atoms: [atom(1, L, 0), atom(2, 0, 0), ...others.map((p, i) => atom(10 + i, p.x, p.y))],
+    bonds: [bond(11, 1, 2)],
+  });
+  const at = (deg: number) => ({ x: spot(deg, 2 * L).x, y: spot(deg, 2 * L).y });
+
+  it("is the nearest to the pointer where all are free", () => {
+    expect(snapAngleAbout(base([]), 1, { x: 0, y: 0 }, at(8), L)).toBeCloseTo(0);
+    expect(snapAngleAbout(base([]), 1, { x: 0, y: 0 }, at(22), L)).toBeCloseTo(turn);
+  });
+  it("skips a place not clear by 0.75 of a bond length, to the side the pointer is on first", () => {
+    // a blocker 0.6 bond lengths out from the 0 degree place: not on it, but not clear of it
+    const blocked = base([{ x: 1.6 * L, y: 0 }]);
+    expect(snapAngleAbout(blocked, 1, { x: 0, y: 0 }, at(5), L)).toBeCloseTo(turn);
+    expect(snapAngleAbout(blocked, 1, { x: 0, y: 0 }, at(-5), L)).toBeCloseTo(-turn);
+  });
+  it("goes to the far side where the near side's first place is taken", () => {
+    const blocked = base([{ x: 1.6 * L, y: 0 }, spot(30)]);
+    expect(snapAngleAbout(blocked, 1, { x: 0, y: 0 }, at(5), L)).toBeCloseTo(-turn);
+  });
+  it("takes the nearest place not on an atom where none is clear", () => {
+    // every place has a blocker 0.6 out from it: none clear of 0.75, all but the blocked-on free of 0.4
+    const all = base(Array.from({ length: 12 }, (_, k) => spot(k * 30, 1.6 * L)));
+    expect(snapAngleAbout(all, 1, { x: 0, y: 0 }, at(8), L)).toBeCloseTo(0);
+    expect(snapAngleAbout(all, 1, { x: 0, y: 0 }, at(22), L)).toBeCloseTo(turn);
   });
 });
