@@ -3015,6 +3015,11 @@ pub fn worker_awake(app: AppHandle, state: tauri::State<'_, WorkerAwake>, held: 
     Ok(())
 }
 
+/// The hold for workers let go, whatever held it: the page that took it is gone (lib.rs, a page loaded anew).
+pub fn worker_let_go(state: &WorkerAwake) {
+    hold_for_worker(&state.0, false, || false);
+}
+
 /// The hold `kept` taken where `held` and Settings let it (`allowed`, asked only then), else let go.
 fn hold_for_worker(kept: &std::sync::Mutex<Option<crate::awake::Awake>>, held: bool, allowed: impl Fn() -> bool) {
     let mut kept = kept.lock().unwrap_or_else(|e| e.into_inner());
@@ -3268,6 +3273,11 @@ mod tests {
         assert!(kept.lock().unwrap().is_none());
         hold_for_worker(&kept, false, || true);
         assert!(kept.lock().unwrap().is_none());
+        // (the page loaded anew: whatever was held let go, Settings not asked)
+        let state = WorkerAwake::default();
+        hold_for_worker(&state.0, true, || true);
+        worker_let_go(&state);
+        assert!(state.0.lock().unwrap().is_none());
     }
 
     #[test]

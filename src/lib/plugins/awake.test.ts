@@ -57,6 +57,17 @@ describe("the computer kept awake while a worker works", () => {
     expect(told).toEqual([true, false]);
   });
 
+  it("lets go as its one question is given up on, as one answered", async () => {
+    const told: boolean[] = [];
+    const w = workersAwake((h) => told.push(h)).watch();
+    w.sent(1);
+    await vi.advanceTimersByTimeAsync(AWAKE_AFTER_MS);
+    expect(told).toEqual([true]);
+    w.overdue(1);
+    await vi.advanceTimersByTimeAsync(LET_GO_MS);
+    expect(told).toEqual([true, false]);
+  });
+
   it("lets go of what a worker held as it goes, a question given up on as one answered", async () => {
     const told: boolean[] = [];
     const all = workersAwake((h) => told.push(h));

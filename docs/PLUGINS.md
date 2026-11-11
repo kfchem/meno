@@ -966,7 +966,8 @@ fills.
   unless a request comes meanwhile (the next round of a step). A quick
   request, such as the checks made as a structure is drawn, holds
   nothing. Settings, *Calculations*, "Keep the computer awake while jobs
-  run" holds for this too: off, nothing is held.
+  run" holds for this too: off, nothing is held. The page loaded anew -
+  reloaded while a worker held it - lets go of what the page before held.
 - **Held on a request.** A worker answers one request at a time, in the
   order asked. If the request it is on is not answered in that request's
   time, the worker is stopped, and the next request starts it afresh
