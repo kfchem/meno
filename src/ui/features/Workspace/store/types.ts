@@ -834,6 +834,13 @@ export type WorkflowSet = {
    * point) finds them again. This session's only: never in a file.
    */
   heldIds?: number[];
+  /**
+   * A large result set that shows its molecules one at a time
+   * (workflow/heldView): which of its collection its view showed when
+   * the workspace was saved. Only a file carries it - while the workspace is
+   * open the view's is `EditorState.heldShown`, which is not an undo step.
+   */
+  shown?: number;
   /** A result set opened from a file, or an earlier run's shown again: how many of its molecules or structures did not read, and were left out - said with its count until the step runs again. */
   unread?: number;
   /** A table it holds (lib/table, docs/WORKFLOWS.md *Tables*): read from a file and put on the page, or a step's; no members then. */
@@ -1263,6 +1270,10 @@ export type EditorState = {
   stacksShown: Record<number, number>;
   /** A stack shows another of its molecules - turned as the one it showed was. */
   showInStack: (stack: number, id: number) => void;
+  /** Which molecule each large result set that shows them one at a time shows, by the set's id: its place in its collection; the first if absent (workflow/heldView). */
+  heldShown: Record<number, number>;
+  /** A large result set's view shows another of its molecules - turned as the one it showed was; not an undo step. */
+  showHeld: (setId: number, index: number) => void;
   /** A stack's molecules laid out as a grid where it stands, each shown: one undo step. */
   spreadStack: (stack: number) => void;
   /** A stack's molecules, laid out as a grid, stacked again in its middle, `shown` the one it shows: one undo step. */

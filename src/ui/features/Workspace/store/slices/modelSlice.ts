@@ -568,6 +568,9 @@ export const createModelSlice = (
     // a stack of drawings, the record marked: utils/stacks)
     const recordsShown = recordsShownOf(drawn.atoms);
     const stacksShown: EditorState["stacksShown"] = {};
+    // (and each large result set's view the molecule it showed: workflow/heldView)
+    const heldShown: EditorState["heldShown"] = {};
+    for (const b of doc.getState().sets ?? []) if (b.collection && b.shown != null) heldShown[b.id] = b.shown;
     const opened3d = doc.getState().molecules3d ?? [];
     (drawn.molecules3d ?? []).forEach((m, i) => {
       const stack = opened3d[i]?.stack;
@@ -581,7 +584,7 @@ export const createModelSlice = (
     const pdfShown = ws.pdfShown != null ? ws.pdfShown + 1 : null;
     // (what its file held that could not be read: said on every save - and, opened as the document, its file kept beside the first saved over it; opened into one, never its file to keep)
     const leftOnOpen = start ? (ws.leftOut ? { left: ws.leftOut, kept: false } : null) : ws.leftOut ? { left: leftTogether(get().leftOnOpen?.left, ws.leftOut), kept: true } : get().leftOnOpen;
-    set((prev: EditorState) => ({ ...prev, turns3d, frames3d, lists3d, stacksShown, recordsShown, model: shownModel(prev.fullModel, recordsShown), textShown: shown ?? texts[0]?.id ?? textsLost[0]?.id ?? null, pdfShown, textsOpen: shown != null || pdfShown != null, leftOnOpen }));
+    set((prev: EditorState) => ({ ...prev, turns3d, frames3d, lists3d, stacksShown, heldShown, recordsShown, model: shownModel(prev.fullModel, recordsShown), textShown: shown ?? texts[0]?.id ?? textsLost[0]?.id ?? null, pdfShown, textsOpen: shown != null || pdfShown != null, leftOnOpen }));
   },
 
   /** A file opened over what the canvas holds: one step, arrow and all. */

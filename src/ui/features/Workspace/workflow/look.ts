@@ -140,8 +140,8 @@ export const TABLE_COLUMN_GAP_PX = 16;
 export const tableBodyPx = (rows: number) => TABLE_HEAD_PX + TABLE_GAP_PX + TABLE_ROW_PX * Math.min(rows, TABLE_SHOWN_ROWS) + TABLE_FOOT_PX;
 /** How large a chart is drawn inside its set's frame, in px at the page's own size: its axes, labels and points. */
 export const CHART_PX = { w: 360, h: 260 };
-/** A large result set's summary inside its frame, in px (SummaryBody): what it holds - that it is on no page, and *Open as a table* - a grid of four by three structures, and a chart. */
-export const SUMMARY_PX = { w: 480, h: 448 };
+/** What a large result set of structures drawn says inside its frame, in px: how many, and that they are on no page. */
+export const SUMMARY_PX = { w: 240, h: 64 };
 export const NAME_DOWN = 18 * PX;
 /** How far a frame's tab's words start from its left edge: as far as its icon - 14 px, its middle NAME_DOWN down - stands from its top (pageGl/frameParts; a set's name typed anew, SetFrame). */
 export const TAB_INSET = 11 * PX;

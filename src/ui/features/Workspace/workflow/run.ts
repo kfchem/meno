@@ -23,6 +23,7 @@ import { asideExit, exitsOf, inputsOf, kindInfo, modeRead, laterPortsNeed, MENO_
 import { MENO_ONLY, VALUE_KINDS } from "../../../../lib/plugins/steps";
 import { doerName, inputsFor, MENO, takesBy, takesNothingBy } from "./doers";
 import { pluginById } from "../../../../lib/calc/catalog";
+import { chipRows, heldFrame } from "./heldView";
 import { BETWEEN, SET_PAD, SET_TOP, CHIP, drawnShown, PX, SUMMARY_PX } from "./look";
 import { clearOf, columnWidth, frameAt, placeAgain, placeBelow, placeFor } from "./place";
 
@@ -554,7 +555,10 @@ export const LEAST_W = 120 * PX;
 /** The room a numbered structure's number takes under it (Workflow2D `numbered`): half a bond, and a line of 16 px. */
 const NUMBER_ROOM = NOMINAL_BOND_LENGTH / 2 + 16 * PX;
 
-/** A large result set's frame (`LARGE_SET`), as wide and as tall as its summary takes. */
+/** How many of a large result set's molecules are measured to size its frame (`heldFrame`): a run of thousands is not measured through, each. */
+export const HELD_SIZED = 500;
+
+/** A large result set's structures drawn: a frame as wide and as tall as the count it says takes. */
 export const SUMMARY_W = SUMMARY_PX.w * PX + 2 * SET_PAD;
 export const SUMMARY_H = SET_TOP + SUMMARY_PX.h * PX + SET_PAD;
 
@@ -746,7 +750,11 @@ function fillExit(
 ): WorkspaceDocument {
   // (more than are laid out on the page - or its exit wired on, held off the page whatever it holds: workflow/held - held in the set, its frame summing them up, or drawn nowhere - docs/WORKFLOWS-FOUNDATION.md, *What a set shows*)
   const was = resultOf(doc, step.id, exit);
-  if (made.length > LARGE_SET || (was && isHeld(doc, was))) return filled(doc, step, { exit, holds, unread, collection: [...made] }, [], () => ({ doc, members: [] }));
+  if (made.length > LARGE_SET || (was && isHeld(doc, was))) {
+    // (its frame as large as the largest of them - of the first `HELD_SIZED`, as many as can be measured as a run is made - and their chips need: it shows one at a time)
+    const sized = made.slice(0, HELD_SIZED).map((m, i) => roomOf(m, w.extentOf({ ...m, at: { x: 0, y: 0 } }, turns?.[i])));
+    return filled(doc, step, { exit, holds, unread, collection: [...made], view: heldFrame(sized, chipRows(made), LEAST_W) }, [], () => ({ doc, members: [] }));
+  }
   const rooms = made.map((m, i) => roomOf(m, w.extentOf({ ...m, at: { x: 0, y: 0 } }, turns?.[i])));
   return filled(doc, step, { exit, holds, unread }, rooms, (d, at) => {
     // (all put on the page at once: one at a time copied the page's molecules again for each)
@@ -853,7 +861,7 @@ function drawnPut(
 function filled(
   doc: WorkspaceDocument,
   step: WorkflowStep,
-  of: { exit: string; holds: SetKind; unread?: number; collection?: NonNullable<WorkflowSet["collection"]>; drawnCollection?: NonNullable<WorkflowSet["drawnCollection"]>; core?: SeriesCore },
+  of: { exit: string; holds: SetKind; unread?: number; collection?: NonNullable<WorkflowSet["collection"]>; drawnCollection?: NonNullable<WorkflowSet["drawnCollection"]>; core?: SeriesCore; view?: { width: number; height: number } },
   rooms: readonly (Frame & { chip: number })[],
   place: (doc: WorkspaceDocument, at: readonly { x: number; y: number }[]) => { doc: WorkspaceDocument; members: Member[]; put?: number[] },
 ): WorkspaceDocument {
@@ -863,7 +871,8 @@ function filled(
   if (of.collection || of.drawnCollection) {
     // (held off the page - its exit wired on: workflow/held - its frame as it was, drawn nowhere; else as large as its summary)
     const held = !!was && isHeld(doc, was);
-    const frame = was && !held ? placeAgain(doc, step, was, SUMMARY_W, SUMMARY_H) : was ? was : placeFor(doc, step, of.exit, SUMMARY_W, SUMMARY_H);
+    const { width, height } = of.view ?? { width: SUMMARY_W, height: SUMMARY_H };
+    const frame = was && !held ? placeAgain(doc, step, was, width, height) : was ? was : placeFor(doc, step, of.exit, width, height);
     const id = was ? was.id : (doc.nextWorkflowId ?? 1);
     doc = was ? markMade(held ? doc : resizeSet(doc, id, frame), id, madeBy) : markMade(addSet(doc, frame, madeBy), id, madeBy);
     return withCore(holdCollection(doc, id, of.collection ? { collection: of.collection } : { drawnCollection: of.drawnCollection! }, of.unread), id, of.core);

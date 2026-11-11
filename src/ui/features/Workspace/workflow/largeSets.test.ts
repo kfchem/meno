@@ -9,7 +9,8 @@ import { workspaceOfFile } from "../../../views/openFile";
 import { collectionHash, countOf, countSaid, LARGE_SET, setMembers } from "./entries";
 import { inputOf, resultOf } from "./flow";
 import { addStep, keepSet } from "./model";
-import { keepRun, placeResults, resultsNow, showRun, SUMMARY_H, SUMMARY_W, type RunWith } from "./run";
+import { keepRun, LEAST_W, placeResults, resultsNow, showRun, type RunWith } from "./run";
+import { heldFrame } from "./heldView";
 import { setRan } from "./model";
 
 vi.mock("../../../../lib/calc/workers", () => ({ readerClient: () => Promise.reject(new Error("no workers in tests")) }));
@@ -42,7 +43,7 @@ describe("a large result set (docs/WORKFLOWS-FOUNDATION.md, *What a set shows*)"
     expect(setMembers(d, d.sets![0]).molecules).toHaveLength(50);
   });
 
-  it("holds more itself, in the step's order - none on the page - its frame as large as its summary", () => {
+  it("holds more itself, in the step's order - none on the page - its frame as large as the molecule it shows and its chips need", () => {
     const d = ran(waters(LARGE_SET + 1));
     const set = d.sets![0];
     expect(d.molecules3d ?? []).toHaveLength(0);
@@ -50,8 +51,10 @@ describe("a large result set (docs/WORKFLOWS-FOUNDATION.md, *What a set shows*)"
     expect(set.collection).toHaveLength(51);
     expect(set.collection![7].atoms[0].x).toBeCloseTo(0.07, 12);
     expect(countOf(d, set)).toEqual({ holds: "molecules", entries: 51, compounds: 51 });
-    expect(set.x1 - set.x0).toBeCloseTo(SUMMARY_W, 9);
-    expect(set.y1 - set.y0).toBeCloseTo(SUMMARY_H, 9);
+    // (extentOf: 2 wide and 2 tall, a molecule's room about its place - its frame holds it, its name and one chip row, no summary's room)
+    const frame = heldFrame([{ x0: -1, x1: 1, y0: -1, y1: 1, chip: 0 }], 1, LEAST_W);
+    expect(set.x1 - set.x0).toBeCloseTo(frame.width, 9);
+    expect(set.y1 - set.y0).toBeCloseTo(frame.height, 9);
   });
 
   it("counts the molecules it would draw, never their frames: 3 compounds of 200 conformers are laid out, 51 compounds of one are held", () => {
