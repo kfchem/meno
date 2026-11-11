@@ -4,7 +4,7 @@ import clsx from "clsx";
 import { useEffect, useRef, type RefObject } from "react";
 import { DURATION, EASE, EASE_SLIDE, FADE, LEAVE } from "../theme/motion";
 import { dragWithin, scrollToShow } from "./tabDrag";
-import { tabRoom, useMovedAlong, useRises } from "./tabMotion";
+import { risesAfter, tabInitial, tabRoom, useMovedAlong, useRises } from "./tabMotion";
 
 export type TabMeta = { id: string; label: string; dirty?: boolean };
 
@@ -93,7 +93,7 @@ export function TabStrip({
               tab={tabsById[id]}
               selected={id === activeId}
               draggingRef={draggingRef}
-              rises={!first.current.has(id)}
+              rises={risesAfter(first.current, id)}
               count={tabOrder.length}
               strip={stripRef}
               within={roomRef}
@@ -141,7 +141,7 @@ function Tab({
   const x = useMotionValue(0);
   const self = useRef<HTMLLIElement>(null);
   useRises(self, rises);
-  useMovedAlong(self, count);
+  useMovedAlong(self, count, "add");
   useEffect(
     () =>
       x.on("change", (v) => {
@@ -163,7 +163,7 @@ function Tab({
       data-tab={tab.id}
       // (its room is taken at once: it rises by transform and opacity, `useRises`, where the browser's compositor can run it
       // as the page it opens mounts; and in a full bar the chosen tab widening for its name and the one left narrowing, together)
-      initial={tabRoom(selected)}
+      initial={tabInitial(selected)}
       animate={{ ...tabRoom(selected), transition: { duration: DURATION.base, ease: EASE } }}
       exit={{ opacity: 0, y: 20, width: 0, minWidth: 0, marginRight: 0, transition: { ...LEAVE, width: SHUT, minWidth: SHUT, marginRight: SHUT } }}
       // Chosen or not, a tab goes over in the same time and the same

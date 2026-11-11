@@ -14,6 +14,9 @@ const GAP_PX = 4;
  */
 export const tabRoom = (selected: boolean) => ({ width: TAB_PX, minWidth: selected ? LEAST_PX.chosen : LEAST_PX.other, marginRight: GAP_PX });
 
+/** What a tab is as it comes in: its room already, and nothing else (it rises by `useRises`). */
+export const tabInitial = tabRoom;
+
 /**
  * A tab coming in rises, and what its room moves along moves with it: by
  * `transform` and `opacity` alone, as animations of the Web Animations API,
@@ -26,16 +29,30 @@ export const TAB_RISE = {
   timing: { duration: DURATION.base * 1000, easing: `cubic-bezier(${EASE.join(",")})` },
 } as const;
 
+/** Whether a tab rises as it comes in: only one added after the bar was first drawn (`first`, the ids it had then). */
+export const risesAfter = (first: ReadonlySet<string>, id: string) => !first.has(id);
+
+/**
+ * How far an element's place moved along as the tabs took their room, in
+ * pixels to be eased away (FLIP: it is put back where it was, by that, and
+ * goes to 0). `null` for no ease: nothing known of where it was, the number
+ * of tabs the same (a window resized, a tab's room going as it leaves), or
+ * the place the same.
+ */
+export const flipFrom = (was: { left: number; count: number } | null, left: number, count: number): number | null =>
+  !was || was.count === count || was.left === left ? null : was.left - left;
+
 /**
  * An element rising into its place, once, as it is mounted: by transform and
- * opacity (`TAB_RISE`).
+ * opacity (`TAB_RISE`). Replacing the transform, not adding to it: a tab
+ * coming in has none to keep, and a replacing animation is the one a
+ * compositor takes most surely.
  */
 export function useRises(ref: RefObject<HTMLElement | null>, rises: boolean) {
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el || !rises || typeof el.animate !== "function") return;
-    // (added to the transform the element already has, a tab dragged meanwhile: it is the drag's, kept)
-    const moved = el.animate({ transform: [TAB_RISE.from.transform, TAB_RISE.to.transform] }, { ...TAB_RISE.timing, composite: "add", fill: "backwards" });
+    const moved = el.animate({ transform: [TAB_RISE.from.transform, TAB_RISE.to.transform] }, { ...TAB_RISE.timing, fill: "backwards" });
     const shown = el.animate({ opacity: [TAB_RISE.from.opacity, TAB_RISE.to.opacity] }, { ...TAB_RISE.timing, fill: "backwards" });
     return () => {
       moved.cancel();
@@ -47,20 +64,31 @@ export function useRises(ref: RefObject<HTMLElement | null>, rises: boolean) {
 /**
  * An element whose place moved along as the tabs took their room - "+"
  * after the last, a tab in a full bar - kept where it was and eased into its
- * new place by transform (`TAB_RISE.timing`; FLIP), from the room being taken at
- * once. `count` is the number of tabs: only a change of it is eased.
+ * new place by transform (`TAB_RISE.timing`; `flipFrom`), from the room being
+ * taken at once. `count` is the number of tabs: only a change of it is eased,
+ * and only then is the element's place read (a layout each). `composite` is
+ * "add" for one that may be dragged meanwhile, whose transform is the drag's,
+ * kept; "replace" for one with none ("+").
  */
-export function useMovedAlong(ref: RefObject<HTMLElement | null>, count: number) {
+export function useMovedAlong(ref: RefObject<HTMLElement | null>, count: number, composite: "add" | "replace" = "replace") {
   const at = useRef<{ left: number; count: number } | null>(null);
-  // (every render: where it stands now, laid out - as the window is resized, too, so that a move that is not the tabs' is not eased)
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
+    // (the place kept from the last read, and again when the window is resized, so that a move that is not the tabs' is not eased)
+    if (at.current && at.current.count === count) return;
     const left = el.offsetLeft;
-    const was = at.current;
+    const by = flipFrom(at.current, left, count);
     at.current = { left, count };
-    if (!was || was.count === count || was.left === left || typeof el.animate !== "function") return;
-    el.animate({ transform: [`translateX(${was.left - left}px)`, "translateX(0)"] }, { ...TAB_RISE.timing, composite: "add" });
+    if (by === null || typeof el.animate !== "function") return;
+    el.animate({ transform: [`translateX(${by}px)`, "translateX(0)"] }, { ...TAB_RISE.timing, composite });
   });
+  useLayoutEffect(() => {
+    const keep = () => {
+      const el = ref.current;
+      if (el && at.current) at.current = { ...at.current, left: el.offsetLeft };
+    };
+    window.addEventListener("resize", keep);
+    return () => window.removeEventListener("resize", keep);
+  }, [ref]);
 }
-

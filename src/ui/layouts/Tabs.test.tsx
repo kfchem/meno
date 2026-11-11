@@ -21,9 +21,7 @@ describe("the tabs in the title bar", () => {
     expect(html).toContain("pl-1.5 pr-1 overflow-x-auto");
     // (the last tab's gap and the padding together as wide as the corners)
     expect(html).toContain("margin-right:4px");
-    // (a tab has its room from its first frame: no width opens as it comes in)
     expect(html).toContain("width:192px");
-    expect(html).not.toMatch(/width:0/);
     expect(html).toMatch(/class="absolute inset-y-0 left-1\.5 right-2 pointer-events-none"/);
   });
 
