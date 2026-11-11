@@ -66,14 +66,21 @@ export function frameLine(it: Pick<FrameTab, "tone" | "outward" | "level">): { w
  */
 export type FarTabs = { scale: number; band: Band; words: number; labels?: ReadonlyMap<string, number> };
 
-/** The widest a set's name runs zoomed out, in page px: its frame's width and half as much again - cut with an ellipsis. */
-const farWidest = (box: Frame): number => (1.5 * Math.abs(box.x1 - box.x0)) / PAGE_PX;
+/** Its tab's band: along its frame's top, 2 * NAME_DOWN high. */
+const BAND = 2 * NAME_DOWN;
+
+/** The widest a set's name runs zoomed out, in page px: its frame's width less its tab's inset either side - cut with an ellipsis, so that it never lies beyond its frame. */
+const farWidest = (box: Frame): number => Math.max(0, Math.abs(box.x1 - box.x0) / PAGE_PX - (2 * TAB_INSET) / PAGE_PX);
+
+/** Where a set's name's middle is, zoomed out, in the page's units: in its tab's band where it is as high as the band, else raised so that its lower edge stays on the band's - the name rises above its frame's top, never down over what the frame holds. */
+const farNameY = (box: Frame, scale: number): number => Math.max(tabStart(box).y, box.y1 - BAND + pagePx(onPage(NAME_PX, scale)) / 2);
 
 /** Where a set's name lies on the page, zoomed out, in the world's units: from where its tab's words start, as wide as it is at its size on the screen, or as its frame allows. */
 export function tabNameBox(it: Pick<FrameTab, "key" | "box" | "tab">, scale: number): NameBox & { fits: boolean } {
   const size = onPage(NAME_PX, scale);
   const natural = textWidth(it.tab.name, size, 500);
-  const { x, y } = tabStart(it.box);
+  const { x } = tabStart(it.box);
+  const y = farNameY(it.box, scale);
   const wide = Math.min(natural, farWidest(it.box));
   return { key: it.key, x0: x, x1: x + pagePx(wide), y0: y - pagePx(size) / 2, y1: y + pagePx(size) / 2, fits: natural <= farWidest(it.box) };
 }
@@ -87,9 +94,6 @@ export function tabNamesKept(items: readonly FrameTab[], scale: number, band: Ba
 
 const SIDES: readonly Side[] = ["n", "s", "e", "w", "ne", "nw", "se", "sw"];
 const CURSOR: Record<Side, string> = { n: "ns-resize", s: "ns-resize", e: "ew-resize", w: "ew-resize", ne: "nesw-resize", sw: "nesw-resize", nw: "nwse-resize", se: "nwse-resize" };
-
-/** Its tab's band: along its frame's top, 2 * NAME_DOWN high. */
-const BAND = 2 * NAME_DOWN;
 
 /** How wide a tab's words are, in page pixels: its icon, and - read - its name, status and warning, each after a gap. */
 export function tabWidthPx(tab: FrameTab["tab"], read: boolean, iconWhenSmall = false): number {
@@ -152,10 +156,10 @@ export function frameTabParts(items: readonly FrameTab[], read: boolean, far?: F
         words("warn", it.tab.warn, FRAME_COLORS.warn);
       }
     }
-    // (zoomed out: its name, in the place its words start, cut at its frame's width and half as much again)
+    // (zoomed out: its name, from where its words start, in its band or - larger than it - raised over its frame's top, cut at its frame's width inside its inset)
     if (far && it.iconWhenSmall && far.words < 1) {
       const opacity = (it.opacity ?? 1) * (1 - far.words) * (far.labels?.get(it.key) ?? 1);
-      if (opacity > 0) texts.push({ key: `${it.key}:nameFar`, x: left, y: mid, anchor: "start", baseline: "middle", text: it.tab.name, sizePx: onPage(NAME_PX, far.scale), color: FRAME_COLORS.words, weight: 500, maxWidthPx: farWidest(it.box), opacity });
+      if (opacity > 0) texts.push({ key: `${it.key}:nameFar`, x: left, y: farNameY(it.box, far.scale), anchor: "start", baseline: "middle", text: it.tab.name, sizePx: onPage(NAME_PX, far.scale), color: FRAME_COLORS.words, weight: 500, maxWidthPx: farWidest(it.box), opacity });
     }
     // (what takes the pointer: its tab - along the frame's whole top, or its own box - and, where it is sized, its edges)
     if (it.noHits) continue;

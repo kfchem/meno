@@ -1427,7 +1427,9 @@ it, in `features/Workspace/pageGl/`:
   (the earlier staying) and the page's tip says it as its card is
   pointed at. The bands switch with a little hysteresis (5 % each way) and
   fade over Meno's quick time. A set's tab follows the same rule: its name,
-  11 screen pixels high, stands in for its words - laid out as their HTML was, and drawn on under a card
+  11 screen pixels high, stands in for its words (cut inside its frame's
+  width, a tab's inset from each side, and raised over its frame's top where
+  it is higher than its tab's band, never down over what the frame holds) - laid out as their HTML was, and drawn on under a card
   opened (HTML still, the one HTML on the page), which alone fades in over
   it and out off it, so the card is never paler as it opens or shuts; what
   its card says that a chemist copies - a failure, a program's line -

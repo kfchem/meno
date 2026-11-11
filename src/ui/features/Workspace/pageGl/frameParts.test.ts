@@ -126,17 +126,55 @@ describe("a set's tab, zoomed out", () => {
   const far = (over: Partial<FarTabs> = {}): FarTabs => ({ scale: 0.4, band: "named", words: 0, ...over });
   const nameFar = (items: FrameTab[], f: FarTabs, read = false) => frameTabParts(items, read, f).texts.find((t) => t.key.endsWith(":nameFar"));
 
-  it("says its name instead of its icon, eleven screen pixels high whatever the scale, from where its words start, cut at its frame's width and half as much again", () => {
-    for (const scale of [0.7, 0.4, 0.26]) {
+  it("says its name instead of its icon, eleven screen pixels high whatever the scale, from where its words start, cut at its frame's width inside its inset either side", () => {
+    // (at these scales as high as its band, it stands in it)
+    for (const scale of [0.7, 0.4, 0.33]) {
       const t = nameFar([set()], far({ scale }))!;
       expect(t).toMatchObject({ text: "Input", weight: 500, anchor: "start", baseline: "middle", opacity: 1 });
       expect(t.sizePx * scale).toBeCloseTo(NAME_PX, 12);
       expect([t.x, t.y]).toEqual([tabStart(set().box).x, tabStart(set().box).y]);
-      expect(t.maxWidthPx).toBeCloseTo((1.5 * 20) / PAGE_PX, 9);
+      expect(t.maxWidthPx).toBeCloseTo(20 / PAGE_PX - 22, 9);
     }
     // (no icon of its own standing there, nor its words)
     const d = frameTabParts([set()], false, far());
     expect([d.icons, d.texts.map((t) => t.key)]).toEqual([[], ["set:3:nameFar"]]);
+  });
+
+  it("rises over its frame's top where it is higher than its band, its lower edge on the band's: never down over what its frame holds", () => {
+    const box = set().box;
+    const bandBottom = box.y1 - 2 * NAME_DOWN;
+    // (as high as the band: in it; higher: its lower edge stays where the band's is)
+    const ofScale = (scale: number) => {
+      const t = nameFar([set()], far({ scale }))!;
+      return { t, h: pagePx(t.sizePx) };
+    };
+    const inBand = ofScale(0.33);
+    expect(inBand.h).toBeLessThan(2 * NAME_DOWN);
+    expect(inBand.t.y).toBeCloseTo(tabStart(box).y, 12);
+    for (const scale of [0.2, 0.1, 0.03]) {
+      const { t, h } = ofScale(scale);
+      expect(h).toBeGreaterThan(2 * NAME_DOWN);
+      expect(t.y - h / 2).toBeCloseTo(bandBottom, 12);
+      // (and the box the overlap is found on is where it is drawn)
+      const b = tabNameBox(set(), scale);
+      expect([b.y0, b.y1]).toEqual([t.y - h / 2, t.y + h / 2]);
+    }
+    // (the edge: as high as the band is in it)
+    const s = (2 * NAME_DOWN) / pagePx(NAME_PX);
+    expect(tabNameBox(set(), 1 / s).y0).toBeCloseTo(bandBottom, 12);
+  });
+
+  it("is cut inside its frame, a tab's inset from each side: a name that would be wider than that is cut short, and in the marked band left out", () => {
+    const narrow = set({ box: { x0: 0, y0: 0, x1: 100 * PAGE_PX, y1: 10 }, tab: { icon: "rings", name: "Energy window" } });
+    const t = nameFar([narrow], far())!;
+    expect(t.maxWidthPx).toBeCloseTo(100 - 22, 9);
+    // (the name's right edge, from its start, lies inside the frame's, an inset in)
+    const b = tabNameBox(narrow, 0.4);
+    expect(b.x1).toBeLessThanOrEqual(narrow.box.x1 - TAB_INSET + 1e-9);
+    // (a frame no wider than its two insets: no room, none fits)
+    const none = set({ box: { x0: 0, y0: 0, x1: 22 * PAGE_PX, y1: 10 } });
+    expect(tabNameBox(none, 0.4)).toMatchObject({ fits: false });
+    expect(nameFar([none], far())!.maxWidthPx).toBe(0);
   });
 
   it("crosses over from its words as they fade: its words as far as they are read, its name as far as they are not", () => {
