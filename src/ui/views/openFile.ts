@@ -1,7 +1,7 @@
 import type { TabKind } from "../../lib/core";
-import { cataloguedKinds, kindOf, kinds, MARK_REACH, textKinds, type Kind } from "../../lib/io/kinds";
+import { cataloguedKinds, kindOf, kinds, MARK_REACH, MENO_KINDS, textKinds, type Kind } from "../../lib/io/kinds";
 import { opensAsText } from "../features/Workspace/utils/io";
-import { keptNamedIn } from "../features/Workspace/utils/workspace";
+import { keptNamedIn, workspaceProblem } from "../features/Workspace/utils/workspace";
 import { holdOutputsOf } from "../../lib/calc/asks";
 import { holdPdfsOf } from "../../lib/pdf/reader";
 import { holdPicturesOf } from "../../lib/picture/held";
@@ -136,6 +136,19 @@ export function stylesOfFile(bytes: Uint8Array): OpenedStyles | null {
   const styles = readStyleFileText(file.styles);
   if (!styles) throw new NotMenoFile("It is a style file whose styles do not read.");
   return { styles, picture: file.picture };
+}
+
+/**
+ * Why a file told to be a Meno workspace - by its name, or what it holds -
+ * is not opened: none where it reads, or `bytes` were no zip but a text
+ * that is the workspace's JSON. Said as "<name> could not be read: ...",
+ * so that a `.meno` that is none (cut short, not a Meno file at all, saved
+ * by a newer Meno) is never dropped without a word.
+ */
+export function unreadWorkspaceSaid(name: string, text: string, kind: Kind | null): string | null {
+  if (kind?.id !== MENO_KINDS.workspace.id) return null;
+  const problem = workspaceProblem(text);
+  return problem ? `${name} could not be read: ${problem}.` : null;
 }
 
 /**

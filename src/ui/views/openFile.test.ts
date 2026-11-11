@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { openable, openedAs, openedTexts, sayNoneTold, textsOf } from "./openFile";
+import { openable, openedAs, openedTexts, sayNoneTold, textsOf, unreadWorkspaceSaid, workspaceOfFile } from "./openFile";
 import { useNotices } from "../notices";
 import { useOnline } from "../../lib/plugins/online";
 import type { CatalogueEntry } from "../../lib/plugins/catalogue";
-import { registerKinds } from "../../lib/io/kinds";
+import { kindOf, MENO_KINDS, registerKinds } from "../../lib/io/kinds";
+import { connectStoreToDocument, createEditorStore } from "../features/Workspace/store";
+import { createWorkspaceDocument } from "../features/Workspace/document";
+import { workspaceFile } from "../features/Workspace/utils/workspace";
 import { MANIFESTS } from "../../lib/plugins/known";
 
 const MOL = `ethanol
@@ -151,5 +154,29 @@ describe("texts nothing told, opened while the plugins online are not listed", (
     sayNoneTold(["water.out"], () => {}, none);
     useNotices.getState().notices[0].action!.run();
     await vi.waitFor(() => expect(useNotices.getState().notices[0].text).toBe("Listing them needs the network."));
+  });
+});
+
+describe("a file told to be a workspace that does not read", () => {
+  const told = (name: string, text: string) => kindOf(name, text);
+
+  it("is said, by its name, and why: not a Meno file at all, cut short, saved by a newer Meno", () => {
+    // (a .meno of plain text: no zip, no workspace JSON - once dropped without a word)
+    expect(told("notes.meno", "hello, this is not a zip")?.id).toBe(MENO_KINDS.workspace.id);
+    expect(unreadWorkspaceSaid("notes.meno", "hello, this is not a zip", told("notes.meno", "hello, this is not a zip"))).toBe("notes.meno could not be read: it is not a workspace Meno reads.");
+    const newer = JSON.stringify({ format: "meno-workspace", version: 999 });
+    expect(unreadWorkspaceSaid("new.meno", newer, told("new.meno", newer))).toBe("new.meno could not be read: it was saved by a newer Meno - update Meno to open it.");
+    expect(unreadWorkspaceSaid("empty.meno", "", told("empty.meno", ""))).toContain("empty.meno could not be read");
+  });
+
+  it("is nothing to say of a file of another kind, nor of a workspace's own JSON", async () => {
+    expect(unreadWorkspaceSaid("ethanol.mol", MOL, kindOf("ethanol.mol", MOL))).toBeNull();
+    expect(unreadWorkspaceSaid("notes.txt", "line one", null)).toBeNull();
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const { bytes } = await workspaceFile(store.getState());
+    const json = workspaceOfFile(bytes)!;
+    expect(unreadWorkspaceSaid("mine.meno", json, kindOf("mine.meno", json))).toBeNull();
   });
 });
