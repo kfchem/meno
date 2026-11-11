@@ -1182,6 +1182,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(ProcState(Mutex::new(HashMap::new())))
         .manage(net::Net::default())
+        .manage(jobs::WorkerAwake::default())
         .manage(model::Models::new(Box::new(model::SystemKeys)))
         .manage(pdf::PdfState::default())
         .manage(update::Updates::new(version))
@@ -1341,6 +1342,7 @@ pub fn run() {
             jobs::jobs_clear_finished,
             jobs::computer_resources,
             jobs::jobs_limits,
+            jobs::worker_awake,
             jobs::jobs_folder,
             jobs::jobs_folder_choose,
             jobs::job_digest,
