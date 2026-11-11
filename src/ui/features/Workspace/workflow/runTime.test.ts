@@ -22,5 +22,7 @@ describe("how long a step's run took", () => {
   it("is from the run's beginning, where every job was taken up again or none says when it ran", () => {
     expect(runTook([{ started: 1, ended: 2 }], [{ reused: true }], 1_000, 1_250)).toBe(250);
     expect(runTook([null, { started: null, ended: null }], [{}, {}], 1_000, 1_400)).toBe(400);
+    // (a job stopped before it started: an end, and no start - from the run's beginning, never a time of no start)
+    expect(runTook([{ ended: 900 }], [{}], 1_000, 1_300)).toBe(300);
   });
 });
