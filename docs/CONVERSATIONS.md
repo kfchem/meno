@@ -35,6 +35,19 @@ The same holds for the exchange as it is saved and opened again.
   sheet or a PDF does. The column shows the exchange, what was sent, and
   the changes waiting to be kept: the one conversation of the frame in
   focus, never a list of them.
+- **Its card is scrolled without the wheel**, which on the page always
+  zooms and moves the view, over the card as anywhere:
+  - a track on its right edge, as thin as a hairline at rest and wider
+    pointed at - its thumb dragged, a press on the track paging a screen;
+  - *Earlier* and *Latest* chips at its top and foot, only where there is
+    more that way - a click moves a screen, eased, *Latest* to the end;
+  - keys, for the card the pointer is on or the one read in the column:
+    Page Up and Page Down, Home and End, and Alt with the up and down
+    arrows by a line (plain arrows stay with the text of a field);
+  - at its latest, it follows what is said; scrolled up, it stays, and
+    *Latest* carries a dot for what is new below.
+  Where it was left is the view's: saved with the file, no step of undo,
+  none for a card left at its latest.
 - **A conversation has no name.** Neither its frame nor its tab says one,
   and the column's tab for it is its icon alone. One an older file gave is
   not read.

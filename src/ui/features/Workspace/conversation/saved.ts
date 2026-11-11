@@ -80,6 +80,8 @@ export function readConversations(v: unknown, left: () => void = () => leftOut("
       x1: raw.x1 as number,
       y1: raw.y1 as number,
       ...(raw.wholePage === true ? { wholePage: true as const } : {}),
+      // (where its card was left scrolled up: any other is not read, the card then at its latest)
+      ...(num(raw.scroll) && (raw.scroll as number) >= 0 ? { scroll: raw.scroll as number } : {}),
       rights,
       ...(raw.connection ? { connection: raw.connection as string } : {}),
       said,

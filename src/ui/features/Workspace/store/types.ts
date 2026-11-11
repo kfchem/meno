@@ -1547,6 +1547,8 @@ export type EditorState = {
   readConversation: (id: number) => void;
   stopReadingConversation: () => void;
   clearConversation: (id: number) => void;
+  /** A conversation's card left scrolled to `offset` page px from the top of its history, or at its latest (null): the view's, no step of the history. */
+  scrollConversation: (id: number, offset: number | null) => void;
   sendToConversation: (id: number, words: string) => Promise<void>;
   stopConversation: (id: number) => void;
   keepConversationChanges: (id: number) => void;

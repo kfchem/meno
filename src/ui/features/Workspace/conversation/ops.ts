@@ -55,8 +55,21 @@ export function addSaid(doc: WorkspaceDocument, id: number, said: readonly Said[
   return { ...doc, conversations: doc.conversations.map((c) => (c.id === id ? { ...c, said: [...c.said, ...said], sent: [...c.sent, ...sent] } : c)) };
 }
 
-/** `doc` with a conversation's exchange and its send log emptied (*Clear*). */
+/** `doc` with a conversation's exchange and its send log emptied (*Clear*) - and its card at its latest, there being nothing to scroll back to. */
 export function clearSaid(doc: WorkspaceDocument, id: number): WorkspaceDocument {
   if (!doc.conversations?.some((c) => c.id === id)) return doc;
-  return { ...doc, conversations: doc.conversations.map((c) => (c.id === id ? { ...c, said: [], sent: [] } : c)) };
+  return { ...doc, conversations: doc.conversations.map((c) => (c.id === id ? { ...withoutScroll(c), said: [], sent: [] } : c)) };
+}
+
+const withoutScroll = ({ scroll: _s, ...c }: Conversation): Conversation => c;
+
+/** `doc` with the card of the conversation `id` left scrolled to `offset` page px from the top of its history - or, null (or no offset past nothing), at its latest. */
+export function scrolledConversation(doc: WorkspaceDocument, id: number, offset: number | null): WorkspaceDocument {
+  const at = (doc.conversations ?? []).findIndex((c) => c.id === id);
+  if (at < 0) return doc;
+  const was = doc.conversations![at];
+  const to = offset != null && Number.isFinite(offset) && offset >= 0 ? offset : null;
+  if ((was.scroll ?? null) === to) return doc;
+  const next: Conversation = to == null ? withoutScroll(was) : { ...was, scroll: to };
+  return { ...doc, conversations: doc.conversations!.map((c, i) => (i === at ? next : c)) };
 }

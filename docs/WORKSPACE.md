@@ -1418,7 +1418,9 @@ it, in `features/Workspace/pageGl/`:
   44 page pixels at least, and the history the rest. A line, a ground or a
   chip at an edge that more lies past fades over one line as it nears it,
   never cut in two; its words fade with the page's, and too small to read
-  it says its turns and state alone.
+  it says its turns and state alone. It is scrolled by a track, *Earlier*
+  and *Latest* chips and keys (`conversationScroll`), never by the wheel:
+  no region of the page hears one, so a wheel over the card zooms.
 - **A workflow** (components/Workflow2D): its steps' cards shut
   (`cardFace`) - who does it, what and how, its state in words and an icon
   turning while it runs, a log's last line in Plex Mono and a bar of how

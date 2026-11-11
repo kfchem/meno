@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { COLORS } from "../../../theme/colors";
 import { CARD, cardLayout, type CardBlock } from "./conversationCard";
-import { cardParts, edgeFade, EDGE_FADE, turnsSaid, type CardOf } from "./conversationCardParts";
+import { cardParts, edgeFade, EDGE_FADE, SCROLL_ICONS, turnsSaid, type CardOf } from "./conversationCardParts";
+import { SCROLL_CHIP, TRACK } from "./conversationScroll";
 
 /** A frame put down: 24 by 14 bonds of 1.8 world units; its card 432 by 648 page px, its history 604 (the ask field's 44 less). */
 const FRAME = { x0: 0, y0: 0, x1: 43.2, y1: 25.2 };
@@ -65,13 +66,13 @@ describe("a conversation's card as drawn", () => {
     // (at the start: line 0 at 12, nothing above it - all of it; line 19 ends at 582, 22 from the foot - all; line 20 at 592 is past it - none)
     const start = cardParts({ ...laid, offset: 0 });
     expect(["line 0", "line 19", "line 20"].map((n) => start.texts.find((t) => t.text === n)?.opacity)).toEqual([1, 1, undefined]);
-    expect(start.regions.map((r) => r.part)).toEqual(["card"]);
+    expect(start.regions.map((r) => r.part)).toEqual(["card", "track", "thumb"]);
     // (scrolled 10: line 0 at 2 with more above it - 2 of 19; line 20 at 582 ending at 601, 3 from the foot - 3 of 19)
     const part = cardParts({ ...laid, offset: 10 });
     expect(["line 0", "line 1", "line 20"].map((n) => near(part.texts.find((t) => t.text === n)?.opacity ?? -1))).toEqual([near(2 / 19), 1, near(3 / 19)]);
     // (at the end: the chips in the view, whole)
     const end = cardParts({ ...laid, offset: Infinity });
-    expect(end.regions.map((r) => r.part)).toEqual(["card", "keep", "discard"]);
+    expect(end.regions.map((r) => r.part)).toEqual(["card", "keep", "discard", "track", "thumb"]);
     expect(end.offset).toBe(end.max);
     expect(end.texts.find((t) => t.text === "line 0")).toBeUndefined();
   });
@@ -94,10 +95,92 @@ describe("a conversation's card as drawn", () => {
   });
 
   it("is nothing where its frame leaves no room", () => {
-    expect(cardParts(card([reply("hello")], { frame: { x0: 0, y0: 0, x1: 0.5, y1: 25.2 } }))).toEqual({ shapes: [], texts: [], regions: [], rect: null, offset: 0, max: 0 });
+    expect(cardParts(card([reply("hello")], { frame: { x0: 0, y0: 0, x1: 0.5, y1: 25.2 } }))).toEqual({ shapes: [], texts: [], icons: [], regions: [], rect: null, offset: 0, max: 0, view: 0, trackPx: 0 });
   });
 
   it("keeps a card's lengths as the layout has them", () => {
     expect([CARD.w, CARD.ask]).toEqual([432, 44]);
+  });
+});
+
+describe("a conversation's card scrolled without the wheel", () => {
+  // (30 lines: 884 high in a 604 view, 280 to scroll; the track 604 less its 8 at each end: 588; its thumb 588 x 604 / 884 = 401.8 long)
+  const many = card(Array.from({ length: 30 }, (_, k) => reply(`line ${k}`)));
+  const box = (d: ReturnType<typeof cardParts>, key: string) => d.shapes.find((s) => s.key === `conversation:1:${key}`) as { x0: number; x1: number; y0: number; y1: number; opacity: number; radiusPx: number } | undefined;
+
+  it("has a track on its right edge, 5 px in: the thumb 2 px wide at rest and 6 pointed at, its length and place those of the history it shows", () => {
+    expect([TRACK.rest, TRACK.pointed, TRACK.edge, TRACK.ends]).toEqual([2, 6, 5, 8]);
+    const rest = cardParts({ ...many, offset: 0 });
+    const thumb = box(rest, "thumb")!;
+    // (the card's right edge 42.75; 5 px in 42.5625; 2 px wide from 42.4875)
+    expect([near(thumb.x1), near(thumb.x0), near(thumb.radiusPx)]).toEqual([near(42.75 - 5 * 0.0375), near(42.75 - 7 * 0.0375), 1]);
+    // (at the start: from 8 px below the card's top, 401.8 long)
+    expect([near(thumb.y1), near(thumb.y1 - thumb.y0)]).toEqual([near(24.75 - 8 * 0.0375), near((588 * 604 / 884) * 0.0375)]);
+    const pointed = box(cardParts({ ...many, offset: 0, scroll: { track: 1, earlier: 0, latest: 0 } }), "thumb")!;
+    expect([near(pointed.x1 - pointed.x0), pointed.opacity > thumb.opacity]).toEqual([near(6 * 0.0375), true]);
+    // (at the end: the thumb's foot at the track's, 8 px above the history's foot - 604 - that is 596 below the card's top)
+    const end = box(cardParts({ ...many, offset: Infinity }), "thumb")!;
+    expect(near(end.y0)).toBe(near(24.75 - 596 * 0.0375));
+    // (the track under it drawn only as it is pointed at)
+    expect([box(rest, "track")!.opacity, box(cardParts({ ...many, scroll: { track: 1, earlier: 0, latest: 0 } }), "track")!.opacity]).toEqual([0, 0.6]);
+  });
+
+  it("takes the pointer on a strip 14 px wide along the track, the thumb over it - and none where the history fits", () => {
+    const d = cardParts({ ...many, offset: 0 });
+    expect(d.regions.map((r) => [r.part, r.cursor])).toEqual([["card", "default"], ["track", "default"], ["thumb", "grab"]]);
+    const strip = d.regions[1] as { rect: { x0: number; x1: number; y0: number; y1: number } };
+    expect(near(strip.rect.x1 - strip.rect.x0)).toBe(near(14 * 0.0375));
+    expect([near(strip.rect.y1), near(strip.rect.y1 - strip.rect.y0)]).toEqual([near(24.75 - 8 * 0.0375), near(588 * 0.0375)]);
+    expect([d.view, d.trackPx]).toEqual([604, 588]);
+    const fits = cardParts(card([reply("one")]));
+    expect(fits.shapes.some((s) => s.key.endsWith(":thumb"))).toBe(false);
+    expect(fits.regions.map((r) => r.part)).toEqual(["card"]);
+  });
+
+  it("draws Earlier and Latest as chips 22 high at the history's top and foot, 10 in, as present as they are told - an arrow, then the word - where there is more that way", () => {
+    const d = cardParts({ ...many, offset: 100, scroll: { track: 0, earlier: 1, latest: 0.5 } });
+    const earlier = box(d, "earlier")!;
+    const latest = box(d, "latest")!;
+    expect([near(earlier.y1), near(earlier.y1 - earlier.y0), earlier.opacity]).toEqual([near(24.75 - 10 * 0.0375), near(22 * 0.0375), 1]);
+    expect(latest.y1).toBeCloseTo(24.75 - (604 - 10 - 22) * 0.0375, 9);
+    expect(latest.opacity).toBe(0.5);
+    // (centred in the card: the same room either side)
+    expect(earlier.x0 - 26.55).toBeCloseTo(42.75 - earlier.x1, 9);
+    expect(d.icons.map((i) => [i.key, i.icon, i.sizePx, i.opacity])).toEqual([["conversation:1:earlier:icon", SCROLL_ICONS.earlier, 12, 1], ["conversation:1:latest:icon", SCROLL_ICONS.latest, 12, 0.5]]);
+    expect(d.texts.filter((t) => ["Earlier", "Latest"].includes(t.text)).map((t) => [t.text, t.opacity, t.baseline])).toEqual([["Earlier", 1, "middle"], ["Latest", 0.5, "middle"]]);
+    // (a hand takes one that is half there)
+    expect(d.regions.map((r) => r.part)).toEqual(["card", "track", "thumb", "earlier", "latest"]);
+    expect(cardParts({ ...many, offset: 100, scroll: { track: 0, earlier: 0.49, latest: 0 } }).regions.map((r) => r.part)).toEqual(["card", "track", "thumb"]);
+    // (one told it is not there is not drawn)
+    const none = cardParts({ ...many, offset: 100, scroll: { track: 0, earlier: 0, latest: 0 } });
+    expect([box(none, "earlier"), box(none, "latest"), none.icons]).toEqual([undefined, undefined, []]);
+  });
+
+  it("fades the words a chip lies over, as much as the chip is there - those it does not reach are as they were", () => {
+    // (a paragraph of long lines, the first at 12 to 31, within the top chip's 10 to 32 and across the middle where it stands; the 4th at 69 clear of it)
+    const long = card([reply("word ".repeat(120))]);
+    const opacities = (earlier: number) => cardParts({ ...long, offset: 0, scroll: { track: 0, earlier, latest: 0 } }).texts.filter((t) => t.text.startsWith("word")).map((t) => t.opacity);
+    expect(opacities(0).slice(0, 4)).toEqual([1, 1, 1, 1]);
+    expect(opacities(0.5).slice(0, 4)).toEqual([0.5, 0.5, 1, 1]);
+    // (one there whole hides what is under it: its two lines not drawn at all)
+    expect(opacities(1)).toHaveLength(opacities(0).length - 2);
+  });
+
+  it("puts a dot on Latest where there is more that is new, 6 px across at its top right corner", () => {
+    const d = cardParts({ ...many, offset: 100, scroll: { track: 0, earlier: 0, latest: 1, dot: true } });
+    const latest = box(d, "latest")!;
+    const dot = box(d, "latest:dot")!;
+    expect(dot.x1).toBeCloseTo(latest.x1 - 0.0375, 9);
+    expect(dot.y1).toBeCloseTo(latest.y1 - 0.0375, 9);
+    expect([near(dot.x1 - dot.x0), dot.radiusPx]).toEqual([near(6 * 0.0375), 3]);
+    expect(box(cardParts({ ...many, offset: 100, scroll: { track: 0, earlier: 0, latest: 1 } }), "latest:dot")).toBeUndefined();
+  });
+
+  it("draws none of it where its words are too small to read", () => {
+    const d = cardParts({ ...many, words: 0, offset: 100, scroll: { track: 1, earlier: 1, latest: 1, dot: true } });
+    expect(d.shapes.map((s) => s.key)).toEqual(["conversation:1:card", "conversation:1:ask"]);
+    expect(d.icons).toEqual([]);
+    expect(d.regions.map((r) => r.part)).toEqual(["card"]);
+    expect(SCROLL_CHIP.h).toBe(22);
   });
 });

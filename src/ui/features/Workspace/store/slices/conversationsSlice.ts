@@ -2,7 +2,7 @@ import type { StoreApi } from "zustand";
 import type { DocumentStore } from "../../../../../lib/doc";
 import { gestureStep } from "../../../../../lib/doc/document";
 import type { WorkspaceDocument } from "../../document";
-import { addConversation, clearSaid, removeConversations, updateConversation, type ConversationPatch } from "../../conversation/ops";
+import { addConversation, clearSaid, removeConversations, scrolledConversation, updateConversation, type ConversationPatch } from "../../conversation/ops";
 import { connectionFor } from "../../conversation/connections";
 import { runTurn } from "../../conversation/turn";
 import type { EditorState } from "../types";
@@ -58,6 +58,8 @@ export function createConversationsSlice(doc: DocumentStore<WorkspaceDocument>, 
       }),
     /** What was said and sent emptied (*Clear*): no step of the page's history. */
     clearConversation: (id: number) => doc.amend((d) => clearSaid(d, id), { unsaved: true }),
+    /** A card left scrolled: view state, kept with the file and no step of the page's history, nor a change the file is asked to be saved for. */
+    scrollConversation: (id: number, offset: number | null) => doc.amend((d) => scrolledConversation(d, id, offset)),
     /**
      * The person's words sent: a turn, through the conversation's
      * connection - none, and nothing is sent, said on the card. Its changes,

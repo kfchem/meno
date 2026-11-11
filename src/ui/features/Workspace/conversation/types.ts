@@ -41,6 +41,11 @@ export type Conversation = {
   x1: number;
   y1: number;
   wholePage?: true;
+  /**
+   * Where its card was left scrolled up, in page px from the top of its history: the view's, kept with the file and no step of the
+   * page's history. None: it is at the latest, and follows what is said.
+   */
+  scroll?: number;
   rights: Rights;
   /** The plugin it talks through, by its id; none, and it sends nothing. */
   connection?: string;

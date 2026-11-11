@@ -38,6 +38,7 @@ export const CARD = {
   question: { share: 0.85, padX: 10, padY: 8, radius: 10 },
   chip: { h: 22, padX: 10, gap: 6, size: 11, radius: 11 },
   ask: 44,
+  chipShadow: { blurPx: 2, offsetYPx: 1, alpha: 0.05 },
   radius: 12,
 } as const;
 
