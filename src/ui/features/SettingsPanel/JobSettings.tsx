@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { chooseJobsFolder, clearFinishedJobs, computerCores, coresCountedSaid, computerResources, finished, finishedJobsBytes, jobsFolder, keptText, limitsOf, listJobs, runningOf, type JobsFolder } from "../../../lib/jobs";
 import type { Option, OptionValues } from "../../../lib/options";
-import { keepsJobFolders, QUIET_AFTER_MIN, QUIET_AFTER_MOST, useAppSettings } from "../../../lib/settings/appSettings";
+import { keepsJobFolders, QUIET_AFTER_MIN, QUIET_AFTER_MOST, useAppSettings, type CalculationSettings } from "../../../lib/settings/appSettings";
 import OptionRows from "../../options/OptionRows";
 
 /** What Cores for each job comes to while it is not set (lib/jobs `runningOf`). */
@@ -18,6 +18,28 @@ export const CORES_SHARED_SAID = "Unless Cores for each job is set, a step's job
 export function coresChosen(typed: unknown, shown: unknown, kept: number | undefined, most: number): number | undefined {
   if (Object.is(typed, shown)) return kept;
   return typeof typed === "number" && Number.isFinite(typed) ? Math.min(Math.max(1, Math.round(typed)), most) : undefined;
+}
+
+/** The calculations settings after the rows were changed to `v` from `values`: each kept as it was set, or as it was where it was not changed - unset, the default, where it comes to that. */
+export function calculationsAfter(v: OptionValues, values: OptionValues, calculations: CalculationSettings, computer: { cores: number; memory: number }): CalculationSettings {
+  const whole = (n: unknown, most: number) => (typeof n === "number" && Number.isFinite(n) ? Math.min(Math.max(1, Math.round(n)), most) : undefined);
+  const cores = coresChosen(v.cores, values.cores, calculations.cores, computer.cores);
+  const all = v["cores-all"] !== values["cores-all"] ? whole(v["cores-all"], computer.cores) : calculations.coresAll;
+  const memory = v["memory-all"] !== values["memory-all"] && typeof v["memory-all"] === "number" ? whole(v["memory-all"] * MIB_PER_GB, computer.memory) : calculations.memoryAll;
+  const quietAfter = v["quiet-after"] !== values["quiet-after"] ? whole(v["quiet-after"], QUIET_AFTER_MOST) : calculations.quietAfterMin;
+  const { cores: _c, coresAll: _a, memoryAll: _m, sleepWhileJobsRun: _s, keepJobFolders: _k, quietAfterMin: _q, ...rest } = calculations;
+  return {
+    ...rest,
+    ...(cores != null ? { cores } : {}),
+    ...(all != null && all !== computer.cores ? { coresAll: all } : {}),
+    ...(memory != null ? { memoryAll: memory } : {}),
+    // (kept awake unless turned off: only the off is kept)
+    ...(v.awake === false ? { sleepWhileJobsRun: true as const } : {}),
+    // (as set once changed; else as it was - unset, Meno's default)
+    ...(v["keep-folders"] !== values["keep-folders"] ? { keepJobFolders: v["keep-folders"] === true } : calculations.keepJobFolders != null ? { keepJobFolders: calculations.keepJobFolders } : {}),
+    // (as set, where it is not Meno's default)
+    ...(quietAfter != null && quietAfter !== QUIET_AFTER_MIN ? { quietAfterMin: quietAfter } : {}),
+  };
 }
 
 export const coresSharedSaid = (c: { cores?: number }): string | null => (c.cores == null ? CORES_SHARED_SAID : null);
@@ -66,27 +88,7 @@ export default function JobSettings() {
     "keep-folders": keepsJobFolders(calculations),
     "quiet-after": calculations.quietAfterMin ?? QUIET_AFTER_MIN,
   };
-  const change = (v: OptionValues) => {
-    const whole = (n: unknown, most: number) => (typeof n === "number" && Number.isFinite(n) ? Math.min(Math.max(1, Math.round(n)), most) : undefined);
-    // (each kept as it was set, or as it was where it was not changed - unset, the default, where it comes to that)
-    const cores = coresChosen(v.cores, values.cores, calculations.cores, computer.cores);
-    const all = v["cores-all"] !== values["cores-all"] ? whole(v["cores-all"], computer.cores) : calculations.coresAll;
-    const memory = v["memory-all"] !== values["memory-all"] && typeof v["memory-all"] === "number" ? whole(v["memory-all"] * MIB_PER_GB, computer.memory) : calculations.memoryAll;
-    const quietAfter = v["quiet-after"] !== values["quiet-after"] ? whole(v["quiet-after"], QUIET_AFTER_MOST) : calculations.quietAfterMin;
-    const { cores: _c, coresAll: _a, memoryAll: _m, sleepWhileJobsRun: _s, keepJobFolders: _k, quietAfterMin: _q, ...rest } = calculations;
-    setCalculations({
-      ...rest,
-      ...(cores != null ? { cores } : {}),
-      ...(all != null && all !== computer.cores ? { coresAll: all } : {}),
-      ...(memory != null ? { memoryAll: memory } : {}),
-      // (kept awake unless turned off: only the off is kept)
-      ...(v.awake === false ? { sleepWhileJobsRun: true as const } : {}),
-      // (as set once changed; else as it was - unset, Meno's default)
-      ...(v["keep-folders"] !== values["keep-folders"] ? { keepJobFolders: v["keep-folders"] === true } : calculations.keepJobFolders != null ? { keepJobFolders: calculations.keepJobFolders } : {}),
-      // (as set, where it is not Meno's default)
-      ...(quietAfter != null && quietAfter !== QUIET_AFTER_MIN ? { quietAfterMin: quietAfter } : {}),
-    });
-  };
+  const change = (v: OptionValues) => setCalculations(calculationsAfter(v, values, calculations, computer));
 
   // where jobs are made: a working folder chosen, or Meno's own (changed only while none waits or runs) - one chosen
   // and not there said so, never another taken in its place

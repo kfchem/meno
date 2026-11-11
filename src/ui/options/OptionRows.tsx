@@ -11,6 +11,12 @@ import Select from "../controls/Select";
  * are - a choice as buttons side by side, or of many a list to pick from;
  * a number with its unit, a text, a switch. For rows within a card: no frame of their own.
  */
+/** A number's row as its field is given it: the value (NaN where it is unset), whether it may be, and what an empty field shows. */
+export function numberFieldOf(o: Extract<Option, { type: "number" }>, values: OptionValues, unsettable: readonly string[]) {
+  const may = unsettable.includes(o.id);
+  return { value: Number(values[o.id] ?? o.default), unsettable: may, placeholder: may ? String(o.default) : undefined };
+}
+
 export default function OptionRows({
   options,
   values,
@@ -60,7 +66,7 @@ export default function OptionRows({
             <span className="shrink-0 flex items-center gap-1.5">
               {before?.(o)}
               {o.type === "number" ? (
-                <NumberField label={o.label} value={Number(values[o.id] ?? o.default)} min={o.min} max={o.max} step={o.step} whole={o.whole} unsettable={unsettable.includes(o.id)} placeholder={unsettable.includes(o.id) ? String(o.default) : undefined} onChange={(n) => set(o.id, n)} className="w-24 text-xs" />
+                <NumberField label={o.label} {...numberFieldOf(o, values, unsettable)} min={o.min} max={o.max} step={o.step} whole={o.whole} onChange={(n) => set(o.id, n)} className="w-24 text-xs" />
               ) : (
                 <input
                   type="text"

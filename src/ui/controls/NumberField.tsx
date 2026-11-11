@@ -1,7 +1,7 @@
 import clsx from "clsx";
 import { useEffect, useRef, useState } from "react";
 import { DURATION, EASE } from "../theme/motion";
-import { numberDraft, numberField, rangeSaid, setAsItGoes, type NumberEvent } from "./number";
+import { escapeTakes, numberDraft, numberField, rangeOf, rangeSaid, setAsItGoes, type NumberEvent } from "./number";
 
 /** How long a refused number's field is marked, the number it went back to fading in. */
 const REFUSED_MS = 1600;
@@ -42,7 +42,7 @@ export default function NumberField({
   placeholder?: string;
   className?: string;
 }) {
-  const range = { min, max, step, whole, unsettable };
+  const range = rangeOf({ min, max, step, whole, unsettable });
   const [draft, setDraft] = useState(() => numberDraft(value));
   const typing = useRef(false);
   const field = useRef<HTMLInputElement>(null);
@@ -96,7 +96,7 @@ export default function NumberField({
         else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
           e.preventDefault();
           go({ kind: "step", by: e.key === "ArrowUp" ? 1 : -1 });
-        } else if (e.key === "Escape" && draft.text !== String(value)) {
+        } else if (e.key === "Escape" && escapeTakes(draft.text, value)) {
           // (what was typed taken back; the card it is in stays open)
           e.preventDefault();
           e.stopPropagation();

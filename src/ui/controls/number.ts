@@ -17,8 +17,20 @@ export type NumberEvent =
   | { kind: "set"; value: number };
 
 /** What a number field shows of `value`: nothing, where there is none. */
-function shown(value: number): string {
+export function shown(value: number): string {
   return Number.isFinite(value) ? String(value) : "";
+}
+
+/**
+ * Whether Escape, in a field with `text` in it standing for `value`, takes
+ * back what was typed: where the text is other than the field shows of the
+ * value - nothing, for none. Else it is left to close what the field is in.
+ */
+export const escapeTakes = (text: string, value: number): boolean => text !== shown(value);
+
+/** The range a number field takes, from what it is given: its bounds, step, whole, and whether it may be left unset. */
+export function rangeOf(r: NumberRange): NumberRange {
+  return { min: r.min, max: r.max, step: r.step, whole: r.whole, unsettable: r.unsettable };
 }
 
 /** A number field showing `value`. */

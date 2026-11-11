@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
-import JobSettings, { CORES_SHARED_SAID, coresChosen, coresSharedSaid } from "./JobSettings";
+import JobSettings, { calculationsAfter, CORES_SHARED_SAID, coresChosen, coresSharedSaid } from "./JobSettings";
 
 // Vitest runs in Node, with no page to mount on: the card as the server's renderer writes it - with the settings as they
 // start, Cores for each job unset.
@@ -31,5 +31,17 @@ describe("Jobs in Settings, Calculations", () => {
     // (not changed: as it was, set or unset)
     expect(coresChosen(NaN, NaN, undefined, 16)).toBeUndefined();
     expect(coresChosen(4, 4, 4, 16)).toBe(4);
+  });
+
+  it("is unset by the row's change when Cores for each job is emptied, and set when a number is typed - as the card hands it on", () => {
+    const computer = { cores: 16, memory: 0 };
+    const set = { cores: 4 };
+    // (emptied: the number there before, NaN now; nothing else changed)
+    expect(calculationsAfter({ cores: NaN, "cores-all": 16 }, { cores: 4, "cores-all": 16 }, set, computer)).not.toHaveProperty("cores");
+    // (typed over the empty field)
+    expect(calculationsAfter({ cores: 8, "cores-all": 16 }, { cores: NaN, "cores-all": 16 }, {}, computer)).toMatchObject({ cores: 8 });
+    // (another row changed: Cores for each job as it was, set or not)
+    expect(calculationsAfter({ cores: 4, "cores-all": 8 }, { cores: 4, "cores-all": 16 }, set, computer)).toMatchObject({ cores: 4, coresAll: 8 });
+    expect(calculationsAfter({ cores: NaN, "cores-all": 8 }, { cores: NaN, "cores-all": 16 }, {}, computer)).not.toHaveProperty("cores");
   });
 });
