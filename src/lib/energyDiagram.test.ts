@@ -426,6 +426,34 @@ describe("an energy diagram: levels by a property, joined by properties, columns
     expect(d.left.map((l) => [l.count, l.rows])).toEqual([[2, ["b", "c"]]]);
   });
 
+  it("joins a pair once where both properties name it - a's Last end names a>b, and a>b's First end names a", () => {
+    const both = tableOf([
+      [1, 0, "a", null, null, "a>b"],
+      [1, 35.2, null, "a>b", "a", "b"],
+      [1, -6.3, "b", null, null, null],
+    ]);
+    const d = ok(diagramOf(both, joined));
+    // (a=0 a>b=1 b=2: the pair a, a>b once)
+    expect(d.links).toEqual([[0, 1], [1, 2]]);
+    expect(d.left).toEqual([]);
+  });
+
+  it("counts columns from the reference named, wherever it stands in the list: in a cycle, and where the lines leave some levels out", () => {
+    const cyc = tableOf([
+      [1, 0, "a", null, null, null],
+      [1, 5, "b", null, null, null],
+      [1, 9, "c", null, null, null],
+    ]);
+    // (relative to c: a is one line ahead of it, b one behind - b 0, c 1, a 2; a and b are each reached two ways)
+    const around = ok(diagramOf(cyc, { levelsBy: "species", reference: "c" }, readTable("from,to\na,b\nb,c\nc,a\n")));
+    expect(around.levels.map((l) => l.column)).toEqual([2, 0, 1]);
+    expect(around.left.map((l) => [l.count, l.rows])).toEqual([[2, ["a", "b"]]]);
+    // (only b to c given, relative to c: b 0, c 1, and a, no line reaches, after them)
+    const apart = ok(diagramOf(cyc, { levelsBy: "species", reference: "c" }, readTable("from,to\nb,c\n")));
+    expect(apart.levels.map((l) => l.column)).toEqual([2, 0, 1]);
+    expect(apart.left.map((l) => [l.count, l.rows])).toEqual([[1, ["a"]]]);
+  });
+
   it("is read back from a file as it was made, columns, thin lines and the property that named a level; one without them reads as today", () => {
     const d = ok(diagramOf(T, { ...joined, conformers: "every" }));
     const back = diagramIn(JSON.parse(JSON.stringify(d)))!;

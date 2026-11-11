@@ -3,6 +3,7 @@ import { renderToString } from "react-dom/server";
 import { diagramIn, frequenciesSaid, pointedSaid, type DiagramValue } from "../../../../lib/energyDiagram";
 import { readTable } from "../../../../lib/table";
 import { factor } from "../../../../lib/units";
+import type { Property } from "../../../../lib/entry";
 import { addMolecule3d, emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
 import type { Molecule3D } from "../store/types";
 import { countOf, MARKS_UNREAD } from "./entries";
@@ -446,5 +447,86 @@ describe("an Energy diagram step: every conformer a thin line, levels in columns
     expect(pointedSaid(d.levels[2], d.levels[2].others![0])).toBe("ts2 · #2 · +33.4 kcal/mol · has 2 imaginary frequencies, 250.5i, 40.0i cm⁻¹");
     expect(pointedSaid(d.levels[1])).toBe("ts1 · +35.2 kcal/mol · has 1 imaginary frequency, 300.0i cm⁻¹");
     expect(pointedSaid(d.levels[0])).toBe("a · 0.0 kcal/mol · lowest of 3");
+  });
+});
+
+describe("an Energy diagram step: levels by a property, joined by properties", () => {
+  const text = (value: string): Property => ({ value, unit: "none", status: "computed" });
+  /** A water called `title` at `x` (a name no property gives), of the energies given (hartrees), each conformer carrying the properties given. */
+  const carrying = (title: string, x: number, energies: number[], properties: Record<string, string>[]): Omit<Molecule3D, "id"> => ({
+    ...water(title, x, energies),
+    properties: properties.map((p) => Object.fromEntries(Object.entries(p).map(([k, v]) => [k, text(v)]))),
+  });
+  /**
+   * Minima a (-76.40) and b (-76.42) and the saddle point a>b, of two conformers - the second, -76.375, its lowest; the first, -76.37, naming
+   * another first end, b - on a page wired into an Energy diagram step of `options`.
+   */
+  function joined(options: Record<string, string>) {
+    let doc = addMolecule3d(emptyWorkspaceDocument(), carrying("m1", 0, [-76.4], [{ species: "a" }]));
+    doc = addMolecule3d(doc, carrying("m2", 4, [-76.42], [{ species: "b" }]));
+    doc = addMolecule3d(
+      doc,
+      carrying("m3", 8, [-76.37, -76.375], [
+        { path: "a>b", "first end": "b", "last end": "b" },
+        { path: "a>b", "first end": "a", "last end": "b" },
+      ]),
+    );
+    const set = doc.nextWorkflowId ?? 1;
+    doc = addSet(doc, { x0: -2, y0: -2, x1: 10, y1: 2 });
+    const step = doc.nextWorkflowId!;
+    doc = addStep(doc, "energy-diagram", 14, 0, options);
+    return { doc: connect(doc, { set }, step), step };
+  }
+  const BY = { levelsBy: "species\npath", joinedBy: "first end\nlast end", reference: "a" };
+
+  it("names the levels by a property and joins them by two others, as the library does: a, b and a>b; a to a>b to b, in columns 0, 2 and 1", () => {
+    const { doc, step } = joined(BY);
+    const ran = runStep(doc, step, W);
+    const d = diagramOf(ran, step)!;
+    expect(ran.steps!.find((x) => x.id === step)!.ran?.ok).toBe(true);
+    expect(d.levels.map((l) => [l.name, Number(l.value.toFixed(3)), l.column, l.lowestOf])).toEqual([
+      ["a", 0, 0, 1],
+      ["b", Number((-0.02 * KCAL).toFixed(3)), 2, 1],
+      ["a>b", Number((0.025 * KCAL).toFixed(3)), 1, 2],
+    ]);
+    // (the saddle point read from its lowest, the second: its first end a, not the first row's b)
+    expect(d.links).toEqual([[0, 2], [2, 1]]);
+    expect(d.reference).toBe("a");
+  });
+
+  it("names, where an entry is no result, the level by the property Levels by names - b, not its molecule's title", () => {
+    const { doc, step } = joined(BY);
+    const failed = { ...doc, molecules3d: doc.molecules3d!.map((m) => (m.title === "m2" ? { ...m, failed: [{ kind: "not-converged" as const, why: "stopped at 200 cycles" }] } : m)) };
+    const ran = runStep(failed, step, W);
+    expect([ran.steps!.find((x) => x.id === step)!.ran?.said, diagramOf(ran, step)]).toEqual([
+      'Not every entry is a result to stand on: b #1 not converged - take it out first (a Filter on "state = finished")',
+      undefined,
+    ]);
+  });
+
+  it("names the levels as they come where Levels by names nothing, and joins each to the next where Joined by names nothing", () => {
+    const { doc, step } = joined({ reference: "m1" });
+    const d = diagramOf(runStep(doc, step, W), step)!;
+    expect([d.levels.map((l) => l.name), d.links, d.levels.some((l) => l.column !== undefined)]).toEqual([["m1", "m2", "m3"], [[0, 1], [1, 2]], false]);
+    // (Levels by alone: the levels named, joined each to the next)
+    const named = diagramOf(runStep(updateStep(doc, step, { options: { levelsBy: "species\npath", reference: "a" } }), step, W), step)!;
+    expect([named.levels.map((l) => l.name), named.links]).toEqual([["a", "b", "a>b"], [[0, 1], [1, 2]]]);
+    // (Joined by alone, levels named otherwise: no property names a level, so none is joined)
+    const bare = diagramOf(runStep(updateStep(doc, step, { options: { joinedBy: "first end\nlast end", reference: "m1" } }), step, W), step)!;
+    expect(bare.links).toEqual([]);
+  });
+
+  it("lists, as Relative to's choices, the levels Levels by names - and the list follows a change of Levels by", () => {
+    const { doc, step } = joined({ reference: "a" });
+    const s = doc.steps!.find((x) => x.id === step)!;
+    const choices = (levelsBy: string) => {
+      const o = diagramOptions(doc, { ...s, options: { ...s.options, levelsBy } }, stepOptions(s)).find((x) => x.id === "reference")!;
+      return o.type === "choice" ? o.choices.map((c) => c.value) : null;
+    };
+    // (the same page, the same Levels: only the property differs)
+    expect(choices("")).toEqual(["m1", "m2", "m3"]);
+    expect(choices("species\npath")).toEqual(["a", "b", "a>b"]);
+    expect(choices("path")).toEqual(["m1", "m2", "a>b"]);
+    expect(choices("")).toEqual(["m1", "m2", "m3"]);
   });
 });

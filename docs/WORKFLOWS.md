@@ -4046,7 +4046,7 @@ molecules of one geometry - which a step that works on entries refuses
   to I are columns 0, 1, 2, 3, 4 - distance taken both ways would put A and
   P in one. Levels in one column share it, side by side, in the order they
   are listed. A level reached at two different distances (a cycle) stands at
-  the nearest to the reference, and is said; a level no line reaches comes
+  the nearest to the reference (at equal distance, the first line listed), and is said; a level no line reaches comes
   after the last column, and is said. With no lines given, one level to a
   column, as before.
 - **Conformers**: *The lowest* (as before), or *Every one*: each other entry
