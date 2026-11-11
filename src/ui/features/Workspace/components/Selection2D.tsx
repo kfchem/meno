@@ -103,11 +103,11 @@ function selectionExtent(
  *   a lasso rather than a box;
  * - a handle above the selection that turns it about its middle, in steps
  *   of 15 degrees, or freely after a pause. Molecules in 3D it turns in the
- *   page's plane, about the line of sight, as it turns the drawing - but
- *   alone, freely and never in steps: alone,
- *   several as one body about their common middle, one about its own
- *   centre; selected with the drawing, carried round with it. With Shift,
- *   each molecule turns about its own centre instead, and the drawing stays.
+ *   page's plane, about the line of sight, as it turns the drawing: by
+ *   themselves, freely and never in steps - several as one body about their
+ *   common middle, one about its own centre; selected with the drawing,
+ *   carried round with it, in its steps. With Shift, each molecule turns
+ *   about its own centre instead, freely, and the drawing stays.
  */
 export default function Selection2D() {
   const { model, sel, boxSelect } = useEditor();
