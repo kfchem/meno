@@ -1015,7 +1015,7 @@ work.meno (zip)
   never keeps a workspace from opening.
 - **Save never drops a file still to be had, and names what it could not
   keep.** A file the workspace has that is held nowhere this session - a
-  PDF Meno could not open (one locked with a password), a picture or an
+  PDF Meno could not open (one damaged past mending), a picture or an
   output held nowhere, an output not where it was, a text that could not
   be read - is taken from the
   workspace file the canvas was last saved to, or opened from, where that

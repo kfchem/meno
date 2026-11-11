@@ -1251,6 +1251,7 @@ pub fn run() {
             logfile::log_page,
             logfile::log_spot,
             pdf::pdf_hold_path,
+            pdf::pdf_unlock,
             pdf::pdf_hold_bytes,
             pdf::pdf_make,
             pdf::pdf_bytes,

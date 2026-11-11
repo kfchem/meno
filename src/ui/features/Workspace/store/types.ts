@@ -1469,6 +1469,8 @@ export type EditorState = {
   pdfs: PdfItem[];
   /** PDFs held put on the page, as one step: the first where `at` is, the others beside it in a row. */
   addPdfs: (pdfs: { name: string; sha256: string; pages: [number, number][] }[], at: { x: number; y: number }) => void;
+  /** A PDF locked with a password opened with it: each of its items has its pages' real sizes (kept at the next save, no step to undo). */
+  setPdfPages: (sha256: string, pages: [number, number][]) => void;
   /** A PDF moved, its top page's middle to (x, y): one step for a drag (`gesture`). */
   movePdf: (id: number, x: number, y: number, gesture?: string) => void;
   /** Another page on top of a PDF's stack. */

@@ -2203,6 +2203,23 @@ export function addPdf(doc: WorkspaceDocument, pdf: Omit<PdfItem, "id">): Worksp
   return { ...doc, pdfs: [...(doc.pdfs ?? []), { ...pdf, id }], nextPdfId: id + 1 };
 }
 
+/**
+ * `doc` with every PDF of one file given the sizes of its pages: a PDF put down locked, its pages unknown, and opened with its
+ * password. The page on top stays on top where it is still a page; pages laid out each in a place of its own (`placed`) go back in
+ * rows, for those places were made for pages that were not these.
+ */
+export function setPdfPages(doc: WorkspaceDocument, sha256: string, pages: [number, number][]): WorkspaceDocument {
+  if (!doc.pdfs?.some((p) => p.sha256 === sha256)) return doc;
+  return {
+    ...doc,
+    pdfs: doc.pdfs.map((p) => {
+      if (p.sha256 !== sha256) return p;
+      const { placed: _placed, ...rest } = p;
+      return { ...rest, pages, page: Math.min(p.page, Math.max(0, pages.length - 1)) };
+    }),
+  };
+}
+
 /** `doc` with a PDF moved, turned to another page, spread, its pages put back in their rows (`placed: null`), or made an icon - unchanged where it has no such PDF, or the page is none of its. */
 export function updatePdf(
   doc: WorkspaceDocument,
