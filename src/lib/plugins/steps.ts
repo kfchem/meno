@@ -109,13 +109,13 @@ export const LONE_ATOM_PASSES: readonly StepKind[] = ["conformers", "optimise"];
  * The kinds of step that may hold restraints as their program runs - the
  * rows of a *Restraints* table wired into their *Restraints* input
  * (workflow/kinds `RESTRAINTS_INPUT`), each molecule its own - where its
- * plugin says what it holds (`StepDecl.restraints`): a minimisation, an
- * optimisation, a path search. (Not an optimisation to a saddle point: its
- * card has room for its three inputs alone.) A row a
+ * plugin says what it holds (`StepDecl.restraints`): a conformer search, a
+ * minimisation, an optimisation, a path search. (Not an optimisation to a
+ * saddle point: its card has room for its three inputs alone.) A row a
  * plugin does not say it holds is refused before anything is sent, never
  * left unheld unsaid, nor held another way.
  */
-export const HOLDS_RESTRAINTS: readonly StepKind[] = ["minimise", "optimise", "path-search"];
+export const HOLDS_RESTRAINTS: readonly StepKind[] = ["conformers", "minimise", "optimise", "path-search"];
 
 /**
  * The kinds of restraint a step's program may hold as it runs (lib/entry

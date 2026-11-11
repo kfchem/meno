@@ -250,6 +250,8 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
   const from = wireInto(doc, step.id, first?.id)?.from;
   const mixed = input?.holds === "molecules" && from && !findSet(doc, from.set)?.made && !readsAsTable(step.kind, first?.id ?? ONE_INPUT) ? plainAmong(input.molecules) : null;
   if (mixed) return mixed;
+  // (restraints wired into a step given structures drawn: they are held on molecules in 3D, each by its ID - none drawn has one)
+  if (holds === "structures" && wireInto(doc, step.id, RESTRAINTS_INPUT.id)) return "Restraints are held on molecules in 3D: make the structures 3D first, then wire them in";
   if (first && !takenBy(first.takes, holds)) return `${first.name} takes ${first.takes.map((s) => SET_NAMES[s]).join(" or ")}`;
   if (!first && !takesBy(step.kind, by, holds)) return `Takes ${kindInfo(step.kind).takes.filter((s) => takesBy(step.kind, by, s)).map((s) => SET_NAMES[s]).join(" or ")}`;
   if (!by) return "Nothing added does this step";

@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { addMolecule3d, emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
 import { OWN_NUMBERING, restraintsTable } from "../../../../lib/steps/restraints";
 import { inputKey, wireInto, wireRefusal } from "./flow";
-import { holdTable, addSet, addStep, connect } from "./model";
+import { holdTable, addSet, addStep, connect, setRan } from "./model";
+import { placeResults, whyNot, type RunWith } from "./run";
+import type { DrawnModel } from "../store/types";
 import { ONE_INPUT, RESTRAINTS_INPUT } from "./kinds";
 
 // The Restraints input on a step that holds restraints (docs/WORKFLOWS.md, *Restraints wired in*): what "its input" means where a
@@ -54,3 +56,21 @@ describe("a step's Restraints input", () => {
 
 /** The step's key as main gave it, before Minimise had a Restraints input (45cd584c). */
 const KEY_BEFORE = "brjkm4";
+
+describe("a conformer search's Restraints input", () => {
+  it("is refused with structures drawn coming in: restraints are held on molecules in 3D, each by its ID", () => {
+    const W: RunWith = { extentOf: () => ({ x0: -1, x1: 1, y0: -1, y1: 1 }), byOf: () => "meno", now: 1000 };
+    const ethane: DrawnModel = { atoms: [{ id: 1, el: "C", x: 0, y: 0 }, { id: 2, el: "C", x: 1.56, y: 0.9 }] as never, bonds: [{ id: 1, a: 1, b: 2, order: 1 }] as never };
+    // (structures a step made, run: what comes into the search)
+    let d = addStep(page(), "generate", 0, 30);
+    const made = d.steps!.find((s) => s.kind === "generate")!;
+    d = placeResults(d, made, { molecules: [], rest: [], holds: "structures", drawn: { made: [ethane], rest: [] } }, W);
+    d = setRan(d, made.id, { at: 1, ok: true, said: "made", input: inputKey(d, made, "meno"), kind: made.kind });
+    d = addStep(d, "conformers", 40, 30, undefined, "rdkit");
+    const c = d.steps![d.steps!.length - 1];
+    d = connect(d, { set: d.sets!.find((b) => b.made?.step === made.id && b.made.exit === "out")!.id }, c.id, ONE_INPUT);
+    expect(whyNot(d, c, "rdkit")).not.toBe("Restraints are held on molecules in 3D: make the structures 3D first, then wire them in");
+    d = connect(d, { set: 5 }, c.id, RESTRAINTS_INPUT.id);
+    expect(whyNot(d, d.steps!.find((s) => s.id === c.id)!, "rdkit")).toBe("Restraints are held on molecules in 3D: make the structures 3D first, then wire them in");
+  });
+});
