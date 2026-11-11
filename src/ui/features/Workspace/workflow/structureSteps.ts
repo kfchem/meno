@@ -453,6 +453,8 @@ export function atomMapPlan(entries: readonly SetEntry[], references: readonly S
   const by = v.reference === "order" ? "order" : v.reference === "property" ? "property" : "one";
   if (by === "one" && !together.reference && references.length !== 1)
     return { refused: `Against the one reference, but ${references.length} came into Reference: match them on a property, or take the reference as one side` };
+  // (a reference taken as one side, none come into it: a side with nothing to map onto)
+  if (by === "one" && together.reference && !references.length) return { refused: "Nothing comes into Reference" };
   const eachOf = (n: number) => Array.from({ length: n }, (_, i) => [i]);
   const allOf = (n: number) => (n ? [Array.from({ length: n }, (_, i) => i)] : []);
   // (a side: its entries, by place in *Molecules*, and the reference side it goes onto - by place in the reference's sides - or why it goes onto none)

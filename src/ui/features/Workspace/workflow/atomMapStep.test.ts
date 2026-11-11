@@ -438,4 +438,53 @@ describe("Atom map, as a step: one side per reaction, and sides in order", () =>
       said: "Molecules holds 2 and Reference 3: in order, each side is paired with the reference side in its place",
     });
   });
+
+  it("offers the three ways to match: the one reference, in order, or on a property", () => {
+    const against = kindInfo("atom-map").options!.find((o) => o.id === "reference")!;
+    expect("choices" in against && against.choices.map((c) => c.value)).toEqual(["one", "order", "property"]);
+  });
+
+  it("refuses an empty Reference - a Filter may keep nothing - never crashing, with each way of matching and each side taking", () => {
+    const [cyc] = products();
+    const plan = (reference: string, referenceIs: string) => atomMapPlan([cyc], [], { moleculesAre: "together", referenceIs, bonds: "change", reference, property: "reaction" });
+    expect(plan("one", "together")).toEqual({ refused: "Nothing comes into Reference" });
+    expect(plan("one", "each")).toEqual({ refused: "Against the one reference, but 0 came into Reference: match them on a property, or take the reference as one side" });
+    for (const referenceIs of ["each", "together"]) {
+      expect(plan("order", referenceIs)).toEqual({ refused: "Nothing comes into Reference" });
+      // (matched on a property: no reference has its value, so its side is not mapped, saying why)
+      expect(plan("property", referenceIs)).toEqual({ groups: [], aside: [{ entry: 0, why: "not paired: no reference with reaction = 1" }], sides: 1 });
+    }
+  });
+
+  it("refuses a value held by several entries of Reference, each its own: no product is paired with whichever came first", () => {
+    const [bd, eth] = reactants();
+    const [cyc] = products();
+    const each = { moleculesAre: "each", referenceIs: "each", bonds: "change", reference: "property", property: "reaction" };
+    const o = ok(runMenoPair("atom-map", { entries: [cyc], holds: "molecules" }, { entries: [bd, eth], holds: "molecules" }, each));
+    expect(o.kept).toEqual([]);
+    expect(o.aside.map((e) => e.properties?.set_aside?.value)).toEqual(["not paired: 2 entries of Reference have its reaction, 1"]);
+  });
+
+  it("takes together or each its own on either input alone, matched on a property: two entries of one value one side, or two sides", () => {
+    const [bd, eth] = reactants();
+    const [cyc, mecl, br_] = products();
+    const [, , mebr, cl_] = reactants();
+    const whole = tagged(entryOf(sn2Reactant), "2", "SN2 reactants");
+    const wholeProduct = tagged(entryOf(sn2Product), "2", "SN2 products");
+    const on = { bonds: "change", reference: "property", property: "reaction" };
+    // (the products together onto the one reactant entry of their value; the reactants together onto the one product entry)
+    const a = ok(runMenoPair("atom-map", { entries: [mecl, br_], holds: "molecules" }, { entries: [whole], holds: "molecules" }, { ...on, moleculesAre: "together", referenceIs: "each" }));
+    expect(a.said).toBe("1 of 1 mapped, the parts' own values not carried");
+    const b = ok(runMenoPair("atom-map", { entries: [wholeProduct], holds: "molecules" }, { entries: [mebr, cl_], holds: "molecules" }, { ...on, moleculesAre: "each", referenceIs: "together" }));
+    expect(b.said).toBe("1 of 1 mapped");
+    // (each its own on Molecules: two products of one reaction are two sides, each onto the reactants together)
+    const c = ok(runMenoPair("atom-map", { entries: [cyc, tagged(entryOf(da.product), "1", "cyclohexene again")], holds: "molecules" }, { entries: [bd, eth], holds: "molecules" }, { ...on, moleculesAre: "each", referenceIs: "together" }));
+    expect(c.said).toBe("2 of 2 mapped");
+  });
+
+  it("counts what is not mapped by sides: two entries that are one unmapped side say 1, not 2", () => {
+    const o = ok(runMenoPair("atom-map", { entries: products().slice(1), holds: "molecules" }, { entries: [entryOf(da.reactants[0])], holds: "molecules" }, { moleculesAre: "together", referenceIs: "each", bonds: "change" }));
+    expect(o.aside).toHaveLength(2);
+    expect(o.said).toBe("0 of 1 mapped, 1 not mapped");
+  });
 });
