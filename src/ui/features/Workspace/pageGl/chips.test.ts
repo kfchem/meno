@@ -28,6 +28,8 @@ describe("the chip's look in HTML", () => {
     expect(CHIP_HTML).toContain(`opacity-${Math.round(CHIP_SHUT.opacity * 100)}`);
     const css = readFileSync(join(__dirname, "../../../../App.css"), "utf8");
     expect(CHIP_HTML).toContain("meno-chip-shadow");
+    // (pointed at, it is whole, eased; round, hairline-bordered, and as wide as its words)
+    for (const c of ["hover:opacity-100", "transition-opacity", "duration-150", "ease-meno", "rounded-full", "border border-gh-line", "w-max", "whitespace-nowrap"]) expect(CHIP_HTML).toContain(c);
     expect(css).toContain(`.meno-chip-shadow {\n  box-shadow: 0 ${CHIP.shadow.offsetYPx}px ${CHIP.shadow.blurPx}px rgb(0 0 0 / ${CHIP.shadow.alpha});`);
   });
 });
