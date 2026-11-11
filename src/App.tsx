@@ -21,7 +21,7 @@ import { afterAnswer, withAsked } from "./ui/features/StyleEditor/styleAsks";
 import { ownChoice, withOwnStyle2d } from "./lib/chem/styleFields";
 import { withOwn3d, withRole } from "./lib/chem/style3d";
 import { forgetFiles, giveFiles, type OpenedFile } from "./ui/views/files";
-import { pdfTakerOf, type OpenedPdf } from "./ui/views/pdfs";
+import { openedPdfs, pdfTakerOf, type OpenedPdf } from "./ui/views/pdfs";
 import { pictureTakerOf } from "./ui/views/pictures";
 import { holdPdfPath } from "./lib/pdf/reader";
 import { isPictureName } from "./lib/picture/image";
@@ -327,7 +327,7 @@ export default function App() {
   // PDFs opened, likewise: on the page of the workspace in front, or on a canvas of their own (ui/views/pdfs)
   const openPdfs = (pdfs: OpenedPdf[], into: string | null): boolean => {
     const take = into ? pdfTakerOf(into) : undefined;
-    if (!take) return openTab({ kind: "workspace", label: pdfs[0].name, data: { pdfs, filename: pdfs[0].name } });
+    if (!take) return openTab(openedPdfs(pdfs));
     take(pdfs);
     return true;
   };
