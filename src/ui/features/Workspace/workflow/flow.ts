@@ -41,6 +41,10 @@ export function wiresInto(doc: Flow, step: number, port?: string): Wire[] {
   });
 }
 
+/** The wire into a step's input wired in last - the one a press on its port picks up, of several - none where none is. */
+export const newestWire = (doc: Pick<Flow, "wires">, step: number, port: string): Wire | undefined =>
+  (doc.wires ?? []).reduce<Wire | undefined>((last, w) => (w.to.step === step && w.to.port === port && !(last && last.id > w.id) ? w : last), undefined);
+
 /** Whether a set holds no entries now - none on the page, none held off it; a table or a number is not empty - and is not a step's exit that has not run, which will hold what its step gives. */
 export function emptyNow(doc: Flow, set: WorkflowSet): boolean {
   if (set.table || set.number != null || (set.made && !set.made.holds)) return false;

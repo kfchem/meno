@@ -3,7 +3,7 @@ import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type C
 import { useFrame, useThree } from "@react-three/fiber";
 import PageHtml from "./PageHtml";
 import { useEditor, useEditorStore } from "../store";
-import type { EditorState, StepRunKept, Wire, WireEnd, WireTo, WorkflowSet, WorkflowStep } from "../store/types";
+import type { EditorState, StepRunKept, WireEnd, WireTo, WorkflowSet, WorkflowStep } from "../store/types";
 import { pageAt } from "../utils/page";
 import { colourHex, COLORS, rgbOf } from "../../../theme/colors";
 import { MOV_PX } from "../constants";
@@ -30,7 +30,7 @@ import { reachOverFrames } from "../utils/molecule3d";
 import { hairWritten, wordsReadAt, zoomWritten } from "../utils/pageScale";
 import { usePresence } from "../../../theme/presence";
 import { DURATION, EASE, eased } from "../../../theme/motion";
-import { canWire, entryOnPage, givesOf, sourcesInto, stateOf, stepsRun, wiresInto, wireRefusal } from "../workflow/flow";
+import { canWire, entryOnPage, givesOf, newestWire, sourcesInto, stateOf, stepsRun, wiresInto, wireRefusal } from "../workflow/flow";
 import { addHow } from "../workflow/addStep";
 import { droppedBy, namesOf } from "../workflow/earlierRuns";
 import { exitsOf, howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
@@ -824,7 +824,7 @@ export default function Workflow2D() {
   const drawInto = (e: ReactPointerEvent, step: number, port: string) => {
     if (e.button !== 0) return;
     const st = store.getState();
-    const was = st.wires.filter((w) => w.to.step === step && w.to.port === port).reduce<Wire | undefined>((last, w) => (last && last.id > w.id ? last : w), undefined);
+    const was = newestWire(st, step, port);
     const at = worldOf(e.clientX, e.clientY);
     const drag = (p: Pt) => (was ? { from: was.from, at: p, was: was.id } : { to: { step, port }, at: p });
     st.setWorkflowView({ wireDrag: drag(at), wireRefused: null });

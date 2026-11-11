@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { addMolecule3d, emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
+import { addMolecule3d, appendModel, emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
+import type { DrawnModel, Model } from "../store/types";
 import { setEntries } from "./entries";
-import { CAME_FROM, chainTo, inputKey, inputOf, resultOf, tablesJoined, wireRefusal, wiresInto } from "./flow";
+import { CAME_FROM, chainTo, inputKey, inputOf, newestWire, resultOf, tablesJoined, wireRefusal, wiresInto } from "./flow";
 import { addSet, addStep, connect, removeWire } from "./model";
 import { procedureLine } from "./procedures";
 import { programEntries } from "./programs";
@@ -36,6 +37,14 @@ function twoRounds() {
   const two = waterAt(one.doc, 0, 0, "Round 2");
   const doc = addStep(two.doc, "duplicates", 20, 0);
   return { doc, high: one.set, low: two.set, step: doc.steps![doc.steps!.length - 1].id };
+}
+
+/** `doc` with ethane drawn at (x, y), a set named `name` drawn round it - holding off the page, where given, more structures drawn; and that set's id. */
+function ethaneAt(doc: WorkspaceDocument, x: number, y: number, name: string, held?: DrawnModel[]): { doc: WorkspaceDocument; set: number } {
+  const model = { atoms: [{ id: 1, el: "C", x, y }, { id: 2, el: "C", x: x + 1.5, y }], bonds: [{ id: 1, a: 1, b: 2, order: 1 }] } as unknown as Model;
+  doc = addSet(appendModel(doc, model), { x0: x - 3, y0: y - 3, x1: x + 5, y1: y + 3 }, undefined, name);
+  const set = doc.sets![doc.sets!.length - 1].id;
+  return { doc: held ? { ...doc, sets: doc.sets!.map((b) => (b.id === set ? { ...b, drawnCollection: held } : b)) } : doc, set };
 }
 
 const moleculeOf = (doc: WorkspaceDocument, set: number) => doc.sets!.find((b) => b.id === set)!.members!.flatMap((m) => ("molecule" in m ? [m.molecule] : []));
@@ -84,6 +93,44 @@ describe("several wires into one input (docs/WORKFLOWS.md, *Several wires into o
     expect(inputKey(doc, doc.steps![0], "meno")).toBe(inputKey(doc, doc.steps![0], "meno"));
   });
 
+  it("of structures drawn give every set's on the page, in page order, then every set's held off it, in page order", () => {
+    const heldOne = (y: number): DrawnModel => ({ atoms: [{ id: 1, el: "O", x: 0, y }], bonds: [] }) as unknown as DrawnModel;
+    const top = ethaneAt(emptyWorkspaceDocument(), 0, 20, "Top", [heldOne(1)]);
+    const bottom = ethaneAt(top.doc, 0, 0, "Bottom", [heldOne(2)]);
+    let doc = addStep(bottom.doc, "check-structures", 30, 0);
+    const step = doc.steps![0].id;
+    doc = connect(connect(doc, { set: bottom.set }, step), { set: top.set }, step);
+    const input = inputOf(doc, step)!;
+    const idsOf = (set: number) => doc.sets!.find((b) => b.id === set)!.members!.flatMap((m) => ("structure" in m ? [m.structure] : []));
+    expect(input.holds).toBe("structures");
+    expect(input.structures).toEqual([...idsOf(top.set), ...idsOf(bottom.set)]);
+    expect(input.held!.map((m) => m.atoms[0].y)).toEqual([1, 2]);
+    expect(input.held!.map((m) => m.record?.properties?.[CAME_FROM]?.value)).toEqual(["Top", "Bottom"]);
+    expect(input.records.map((r) => r?.properties?.[CAME_FROM]?.value)).toEqual(["Top", "Bottom"]);
+  });
+
+  it("at the same corner come in the order they were wired; one from no set there, last", () => {
+    const one = waterAt(emptyWorkspaceDocument(), 0, 0, "One");
+    const two = waterAt(one.doc, 0, 0, "Two");
+    let doc = addStep(two.doc, "duplicates", 20, 0);
+    const step = doc.steps![doc.steps!.length - 1].id;
+    doc = connect(connect(doc, { set: two.set }, step), { set: one.set }, step);
+    expect(wiresInto(doc, step).map((w) => w.from.set)).toEqual([two.set, one.set]);
+    expect(wiresInto({ ...doc, wires: [...doc.wires!].reverse() }, step).map((w) => w.from.set)).toEqual([two.set, one.set]);
+    const port = doc.wires![0].to.port;
+    const gone = { ...doc, wires: [{ id: 1, from: { set: 999 }, to: { step, port } }, ...doc.wires!] };
+    expect(wiresInto(gone, step).map((w) => w.from.set)).toEqual([two.set, one.set, 999]);
+  });
+
+  it("are picked up at their port the last wired first", () => {
+    const { doc: d0, high, low, step } = twoRounds();
+    const doc = connect(connect(d0, { set: low }, step), { set: high }, step);
+    const port = doc.wires![0].to.port;
+    expect(newestWire(doc, step, port)?.from.set).toBe(high);
+    expect(newestWire({ wires: [...doc.wires!].reverse() }, step, port)?.from.set).toBe(high);
+    expect(newestWire(doc, step, "elsewhere")).toBeUndefined();
+  });
+
   it("make the step wait for a set wired in whose step has not run - one empty adds nothing, and its line says so", () => {
     const { doc: d0, high, low, step } = twoRounds();
     // (a Filter on Round 2 that keeps none: run, its set empty)
@@ -109,6 +156,7 @@ describe("several wires into one input (docs/WORKFLOWS.md, *Several wires into o
     const empty = addSet(conf.doc, { x0: 50, y0: 50, x1: 60, y1: 60 }, undefined, "Empty");
     const emptyId = empty.sets![empty.sets!.length - 1].id;
     expect(wireRefusal(connect(empty, { set: conf.set }, step), { set: emptyId }, step)).toBeNull();
+    expect(wireRefusal(connect(empty, { set: emptyId }, step), { set: conf.set }, step)).toBeNull();
     expect(whyNot(connect(connect(empty, { set: low }, step), { set: emptyId }, step), empty.steps!.find((s) => s.id === step)!, "meno")).toBeNull();
     // (wired so all the same - as a set may come to hold another kind after it is wired: said before it runs)
     doc = { ...doc, wires: [...doc.wires!, { id: 999, from: { set: conf.set }, to: { step, port: doc.wires![0].to.port } }] };
@@ -123,6 +171,9 @@ describe("several wires into one input (docs/WORKFLOWS.md, *Several wires into o
     add = connect(add, { set: resultOf(add, n1)!.id }, sum, "number");
     expect(wireRefusal(add, { set: resultOf(add, n2)!.id }, sum, "number")).toBe("It takes one number: one is wired into it already");
     expect(wireRefusal(add, { set: resultOf(add, n1)!.id }, sum, "number")).toBeNull();
+    // (two numbers wired so all the same: said before it runs)
+    const two = { ...add, wires: [...add.wires!, { id: 998, from: { set: resultOf(add, n2)!.id }, to: { step: sum, port: "number" } }] };
+    expect(whyNot(two, two.steps!.find((s) => s.id === sum)!, "meno")).toBe("Number takes one number: 2 are wired into it");
   });
 
   it("into a Path search's Start, paired In order, count all their entries, in order", () => {
@@ -156,6 +207,19 @@ describe("several wires into one input (docs/WORKFLOWS.md, *Several wires into o
     expect(procedureLine({ sets: doc.sets!, steps: doc.steps!, wires: doc.wires! })).toBe("Filter · Meno → Duplicates · Meno");
   });
 
+  it("lead a saved procedure's line past the furthest step that feeds any of them", () => {
+    const { doc: d0, low, step } = twoRounds();
+    // (Filter, then Tag after it - and Duplicates wired from both, the Filter's wire first, Duplicates highest on the page)
+    let doc = addStep(d0, "filter", 10, -40, { conditions: "number ≥ 1", match: "all" });
+    const filter = doc.steps![doc.steps!.length - 1].id;
+    doc = addStep(doc, "tag", 30, -60, { name: "x" });
+    const tag = doc.steps![doc.steps!.length - 1].id;
+    doc = connect(connect(doc, { set: low }, filter), { set: resultOf(doc, filter, "out")!.id }, tag);
+    doc = connect(connect(doc, { set: resultOf(doc, filter, "out")!.id }, step), { set: resultOf(doc, tag, "out")!.id }, step);
+    expect(wiresInto(doc, step)).toHaveLength(2);
+    expect(procedureLine({ sets: doc.sets!, steps: doc.steps!, wires: doc.wires! })).toBe("Filter · Meno → Tag · Meno → Duplicates · Meno");
+  });
+
   it("are kept through a save and opening again, each as it was", () => {
     const { doc: d0, high, low, step } = twoRounds();
     const doc = connect(connect(d0, { set: low }, step), { set: high }, step);
@@ -177,5 +241,10 @@ describe("tables wired into one input", () => {
       [null, 3, 4],
     ]);
     expect(joined.unread).toEqual([{ row: 1, column: "c", text: "x", why: "not a number" }]);
+    // (a row shorter than its columns: empty past its end)
+    expect(tablesJoined([table(["a"], [[1]]), table(["a", "b"], [[2]])]).rows).toEqual([
+      [1, null],
+      [2, null],
+    ]);
   });
 });
