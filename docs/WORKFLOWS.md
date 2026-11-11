@@ -734,8 +734,9 @@ one of the kinds of calculation it does (decided: 16):
 - **Waiting**: a set wired in whose step has not run makes the step wait,
   as one wire does. An empty set adds nothing, and the step's line says
   so ("2 wires, 1 empty").
-- **Pairing inputs** (*Path search* and *Atom map* In order, Each with
-  each) count the entries over all their wires, in that order.
+- **Pairing inputs** (*Path search*'s Start and End, *In order* or *Each
+  with each*; any step of two inputs) count the entries over all their
+  wires, in that order.
 - **How it looks**: with two or more wires, a small count stands beside
   the port, in the port's colour. Pointed at, the page's tip lists the
   sets in order ("1 Round 1 · 2 Round 2 · 3 Trans already").
