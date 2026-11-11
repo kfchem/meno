@@ -4,7 +4,7 @@ import { gestureStep } from "../../../../../lib/doc/document";
 import { marksAll } from "../../../../../lib/chem/captions";
 import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
-import { EditorState } from "../types";
+import { EditorState, type Atom } from "../types";
 import type { LeftOut } from "../../utils/readNotes";
 import { StoreApi } from "zustand";
 import type { StyleChoice } from "../../../../../lib/chem/style";
@@ -95,18 +95,18 @@ export function createUiSlice(
       if (value && atom) {
         const read = readLabel(value, isElementSymbol);
         const named = read.kind === "element" && isElementSymbol(value) && abbreviationOf(value);
-        const chem = (d: WorkspaceDocument) =>
+        const chem = (d: WorkspaceDocument, at: Atom) =>
           named
-            ? { el: value, abbrev: ops.groupHeldAt(d, id, value) }
+            ? { el: value, abbrev: ops.groupHeldAt(d, at.id, value) }
             : read.kind === "charge"
-            ? { ...atom, charge: read.charge }
+            ? { ...at, charge: read.charge }
             : read.kind === "element"
               ? {
                   el: read.el,
                   charge: read.charge,
                   isotope: read.isotope,
                   // (an unpaired electron stays with its element)
-                  radical: read.el === atom.el ? atom.radical : undefined,
+                  radical: read.el === at.el ? at.radical : undefined,
                 }
               : // R1, R2: an Rgroup, drawn R¹ (IUPAC GR-9.1)
                 /^R\d+$/.test(read.el)
@@ -114,7 +114,16 @@ export function createUiSlice(
                 : { el: read.el };
         // (what was typed, where it is read as something else: to be had back from the atom's menu)
         const as = typed != null && typed.normalize("NFKC").trim() !== value ? typed.normalize("NFKC").trim() : undefined;
-        changed = doc.edit("rename atom", (d) => ops.setAtomChemistry(d, id, chem(d), as));
+        // (begun by a letter typed over an atom that is selected, it is written on every atom selected, in the one step: atoms
+        // alone - bonds, words and the rest selected with them have no label; one begun from a menu is that atom's alone)
+        const sel = get().sel.atoms;
+        const ids = labelEdit.grow && sel.has(id) && sel.size > 1 ? [id, ...[...sel].filter((x) => x !== id)] : [id];
+        changed = doc.edit("rename atom", (d) =>
+          ids.reduce((acc, i) => {
+            const at = acc.model.atoms.find((a) => a.id === i);
+            return at ? ops.setAtomChemistry(acc, i, chem(acc, at), as) : acc;
+          }, d),
+        );
       }
       set((prev: EditorState) => ({
         ...prev,
