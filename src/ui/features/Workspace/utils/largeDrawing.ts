@@ -84,13 +84,35 @@ export function outlineSegments(balls: number, atoms: number, fineMost: number, 
  * A molecule's unit sphere for its balls at `segments` round and from pole
  * to pole, with what each ball carries on the sphere it had (`was`) - its
  * number, whether it is lined, where its number stands: every instanced
- * attribute - carried over, so that going to more or fewer segments changes
- * nothing else of how its balls are drawn.
+ * attribute - moved over, so that going to more or fewer segments changes
+ * nothing else of how its balls are drawn. The old sphere keeps none of
+ * them: three's dispose of a geometry deletes the buffers of every
+ * attribute it still lists, and the old sphere is disposed once the new one
+ * has been drawn - shared, the new sphere's balls were left drawing from
+ * deleted buffers, and drew nothing.
  */
 export function carriedSphere(segments: number, was: THREE.BufferGeometry | null): THREE.SphereGeometry {
   const g = new THREE.SphereGeometry(1, segments, segments);
   if (was) {
-    for (const [name, a] of Object.entries(was.attributes)) if (a instanceof THREE.InstancedBufferAttribute) g.setAttribute(name, a);
+    for (const [name, a] of Object.entries(was.attributes)) {
+      if (!(a instanceof THREE.InstancedBufferAttribute)) continue;
+      g.setAttribute(name, a);
+      was.deleteAttribute(name);
+    }
   }
   return g;
+}
+
+/**
+ * How many screen pixels one unit of the scene spans at `depth` in front of
+ * `camera` (its distance along the camera's view), the view `height` pixels
+ * tall: an orthographic camera's - the canvas's - its zoom, wherever the
+ * molecule stands; a perspective one's - Settings' previews - as far off as
+ * the molecule stands. What a ball's size on the screen is reckoned by, and
+ * a pixel at the molecule for its depth's fade.
+ */
+export function pxPerWorld(camera: THREE.Camera, height: number, depth: number): number {
+  const pc = camera as THREE.PerspectiveCamera;
+  if (pc.isPerspectiveCamera) return Math.max(height, 1) / (2 * Math.max(depth, 1e-6) * Math.tan((pc.fov * Math.PI) / 360));
+  return (camera as THREE.OrthographicCamera).zoom || 1;
 }

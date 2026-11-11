@@ -1753,7 +1753,12 @@ slowing it - and in the pictures made of it.
   balls grow, fewer once the zoom has settled (`utils/largeDrawing`
   `ballSegmentsFor`). The line round them follows them. What each ball
   carries - its number, whether it is lined - goes with it to the new
-  number (`carriedSphere`). A box of 33 000 waters (100 000 atoms) turned
+  number, moved, not shared: the old sphere, let go once the new one is
+  drawn, keeps none of it, so that letting it go takes nothing the new
+  balls draw with (`carriedSphere`; shared, the balls were lost after a
+  change of segments). Its size on the screen is the pixels a unit spans
+  at the molecule for either camera (`pxPerWorld`): the canvas's zoom, or
+  a perspective preview's - Settings' - by how far off the molecule stands. A box of 33 000 waters (100 000 atoms) turned
   at 183 ms a frame with 32, and turns at 33 ms; a large workflow page,
   283 molecules in 3D, drew about 17.8 million triangles a frame at Fit,
   and draws 1.3 million.

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { BALLS_SETTLE_MS, ballSegmentsFor, ballSegmentsNext, carriedSphere, outlineSegments } from "./largeDrawing";
+import { BALLS_SETTLE_MS, ballSegmentsFor, ballSegmentsNext, carriedSphere, outlineSegments, pxPerWorld } from "./largeDrawing";
+import { STYLE_3D } from "../../../../lib/chem/style3d";
+import { solidOf } from "./molecule3d";
+import { SAMPLE_3D } from "../../StyleEditor/sample3d";
+import { FOV, framedAt } from "../../StyleEditor/framing";
 
 describe("a molecule's balls, by their size on the screen", () => {
   it("are given as many segments as their size on the screen wants: 32 from about 40 pixels across, down to 8 under about 8", () => {
@@ -78,5 +82,57 @@ describe("a molecule's balls made again at another number of segments", () => {
     expect(now.getAttribute("ballLined")).toBe(lined);
     expect(now.getAttribute("ballNumber")).toBe(numbers);
     expect(now.getAttribute("position").count).toBeLessThan(was.getAttribute("position").count);
+  });
+});
+
+describe("a molecule's balls, given more or fewer segments", () => {
+  it("move what each ball carries over to the new sphere: the old one, disposed, lists none of it", () => {
+    const g1 = new THREE.SphereGeometry(1, 8, 8);
+    const lined = new THREE.InstancedBufferAttribute(new Float32Array([1, 0, 1]), 1);
+    const number = new THREE.InstancedBufferAttribute(new Float32Array([3, 7, 9]), 1);
+    g1.setAttribute("ballLined", lined);
+    g1.setAttribute("ballNumber", number);
+    const g2 = carriedSphere(16, g1);
+    // (three's dispose deletes the buffer of every attribute the geometry still lists)
+    const freed = Object.values(g1.attributes);
+    expect(freed).not.toContain(lined);
+    expect(freed).not.toContain(number);
+    expect(g2.getAttribute("ballLined")).toBe(lined);
+    expect(g2.getAttribute("ballNumber")).toBe(number);
+    expect(Array.from((g2.getAttribute("ballNumber") as THREE.BufferAttribute).array)).toEqual([3, 7, 9]);
+    // (its own sphere kept, to be disposed with it; the new one's its own)
+    expect(g1.getAttribute("position")).toBeDefined();
+    expect(g2.getAttribute("position")).not.toBe(g1.getAttribute("position"));
+  });
+});
+
+describe("the pixels a unit of the scene spans at a molecule", () => {
+  it("are an orthographic camera's zoom, wherever the molecule stands", () => {
+    const c = new THREE.OrthographicCamera(-1, 1, 1, -1);
+    c.zoom = 37;
+    expect(pxPerWorld(c, 200, 10)).toBe(37);
+    expect(pxPerWorld(c, 900, 0.5)).toBe(37);
+  });
+
+  it("are a perspective camera's as far off as the molecule stands", () => {
+    const c = new THREE.PerspectiveCamera(30);
+    // (200 / (2 x 10 x tan 15 degrees))
+    expect(pxPerWorld(c, 200, 10)).toBeCloseTo(37.3205, 4);
+    expect(pxPerWorld(c, 200, 20)).toBeCloseTo(37.3205 / 2, 4);
+  });
+
+  it("give a Settings preview's balls the segments of their own size, not those of a pixel", () => {
+    // (the sample in Ball and stick, on a card 176 pixels tall at twice the screen's pixels, its camera where Framing puts it)
+    const style = STYLE_3D;
+    const solid = solidOf(SAMPLE_3D, style);
+    const distance = framedAt(solid.reach.primary);
+    const biggest = solid.radii.primary.reduce((a, b) => Math.max(a, b), 0);
+    const perUnit = 176 / (2 * distance * Math.tan(((FOV / 2) * Math.PI) / 180));
+    const across = 2 * biggest * perUnit * 2;
+    const want = ballSegmentsFor(across, style.ballSegments);
+    expect(ballSegmentsFor(2 * biggest * pxPerWorld(new THREE.PerspectiveCamera(FOV), 176, distance) * 2, style.ballSegments)).toBe(want);
+    // (a perspective camera's zoom, always 1, made each ball about a pixel across: 8)
+    expect(ballSegmentsFor(2 * biggest * (new THREE.PerspectiveCamera(FOV).zoom || 1) * 2, style.ballSegments)).toBe(8);
+    expect(want).toBeGreaterThan(8);
   });
 });
