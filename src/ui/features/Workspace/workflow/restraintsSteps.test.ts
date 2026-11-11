@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { Restraint } from "../../../../lib/entry";
 import type { SetEntry } from "./entries";
 import { kindInfo, ONE_EXIT } from "./kinds";
 import { NUMBERING, restraintRowsIn } from "../../../../lib/steps/restraints";
 import { runMeno, runMenoPair } from "./meno";
+import { torsionsSet, TORSIONS_UNLIKE, TORSIONS_UNLIKE_COUNT } from "./structureSteps";
 import { menoFileBytes, readMenoFile } from "../../../../lib/doc/menoFile";
 import { addMolecule3d, createWorkspaceDocument, emptyWorkspaceDocument } from "../document";
 import { connectStoreToDocument, createEditorStore } from "../store";
@@ -43,10 +43,6 @@ const dce = (cis: boolean, properties: SetEntry["properties"] = {}) => {
 /** H3N->BH3. */
 const borane = entry(["B", "N", "H", "H"], [0, 0, 0, 1.65, 0, 0, -0.4, 1, 0, 2.05, 1, 0], [[0, 1, 1], [0, 2, 1], [1, 3, 1]]);
 
-const held = (e: SetEntry): Restraint[] => {
-  const v = e.properties?.restraints?.value;
-  return typeof v === "object" && v !== null && "restraints" in v ? v.restraints : [];
-};
 const tagged = (e: SetEntry, name: string, value: string): SetEntry => ({ ...e, properties: { ...e.properties, [name]: { value, unit: "none", status: "computed" } } });
 
 /** The rows of the table a Restraints step gave. */
@@ -117,74 +113,99 @@ describe("Restraints, as a step", () => {
   });
 });
 
+/** The Torsion restraints step's options, as its card would hold them: rows for each "start". */
+const TORSIONS = { on: "start" };
+
 describe("Torsion restraints, as a step", () => {
-  it("holds the torsions trans in the reference that are not trans here, 50 stronger each round, and passes on those trans already", () => {
-    const first = runMenoPair("torsion-restraints", { entries: [dce(true), dce(false)], holds: "molecules" }, { entries: [dce(false)], holds: "molecules" }, { step: "50" });
-    if (!first.ok) throw new Error(first.said);
-    // (trans-1,2-dichloroethene holds Cl3-C1=C2-Cl4 and H5-C1=C2-H6 trans; the cis isomer neither)
-    expect(held(first.kept[0])).toEqual([
-      { kind: "dihedral", atoms: [2, 0, 1, 3], value: 180, strength: 50 },
-      { kind: "dihedral", atoms: [4, 0, 1, 5], value: 180, strength: 50 },
+  it("gives a table of the torsions typed, each for its entry, at the angle typed - by a strength, or exactly", () => {
+    const o = torsionsSet([tagged(dce(true), "start", "p1")], null, "molecules", { ...TORSIONS, torsions: "typed", atoms: "3-1-2-4", target: "-180", hold: "strength", strength: "50" });
+    expect(rowsGiven(o).map((r) => [r.for, r.restraint])).toEqual([["p1", { kind: "dihedral", atoms: [2, 0, 1, 3], value: 180, strength: 50 }]]);
+    expect(o.ok && o.said).toBe("1 row for 1 entry");
+    const exact = torsionsSet([tagged(dce(true), "start", "p1")], null, "molecules", { ...TORSIONS, torsions: "typed", atoms: "3-1-2-4\n5 1 2 6", target: "180", hold: "exact" });
+    expect(rowsGiven(exact).map((r) => r.restraint)).toEqual([
+      { kind: "dihedral", atoms: [2, 0, 1, 3], value: 180, exact: true },
+      { kind: "dihedral", atoms: [4, 0, 1, 5], value: 180, exact: true },
     ]);
-    expect(first.aside).toEqual([dce(false)]);
-    expect(first.said).toBe("1 restrained · 1 trans already · 2 torsions newly held");
-    // (a second round, still cis: each torsion 50 more)
-    const second = runMenoPair("torsion-restraints", { entries: first.kept, holds: "molecules" }, { entries: [dce(false)], holds: "molecules" }, { step: "50" });
-    if (!second.ok) throw new Error(second.said);
-    expect(held(second.kept[0]).map((r) => r.strength)).toEqual([100, 100]);
-    expect(second.said).toBe("1 restrained · 2 torsions held stronger");
   });
 
-  it("matches each entry with its reference on a property, and does nothing where one has none, saying which", () => {
+  it("from the reference, at 180° where trans: rows only for the torsions trans there and cis here, none for one already trans", () => {
+    // (trans-1,2-dichloroethene holds Cl3-C1=C2-Cl4 and H5-C1=C2-H6 trans; the cis isomer neither)
+    const o = torsionsSet([tagged(dce(true), "start", "p1"), tagged(dce(false), "start", "p2")], [dce(false)], "molecules", { ...TORSIONS, torsions: "reference", at: "trans", strength: "50" });
+    expect(rowsGiven(o).map((r) => [r.for, r.restraint])).toEqual([
+      ["p1", { kind: "dihedral", atoms: [2, 0, 1, 3], value: 180, strength: 50 }],
+      ["p1", { kind: "dihedral", atoms: [4, 0, 1, 5], value: 180, strength: 50 }],
+    ]);
+    expect(o.ok && o.said).toBe("2 rows for 2 entries \u00b7 1 entry with none to hold");
+  });
+
+  it("matches each entry with its reference on a property; one it cannot, or one with no ID, out of Failed with why", () => {
     const refs = [tagged(dce(false), "product", "p-1"), tagged(dce(true), "product", "p-2")];
-    const o = runMenoPair("torsion-restraints", { entries: [tagged(dce(true), "product", "p-1"), tagged(dce(true), "product", "p-2")], holds: "molecules" }, { entries: refs, holds: "molecules" }, { reference: "property", property: "product", step: "50" });
-    if (!o.ok) throw new Error(o.said);
-    expect([o.kept.length, o.aside.length]).toEqual([1, 1]);
-    expect(runMenoPair("torsion-restraints", { entries: [tagged(dce(true), "product", "p-3")], holds: "molecules" }, { entries: refs, holds: "molecules" }, { reference: "property", property: "product", step: "50" })).toEqual({
-      ok: false,
-      said: "1 entry could not be set against a reference: a #1: no entry of Reference has its product, p-3",
-    });
-    expect(runMenoPair("torsion-restraints", { entries: [dce(true)], holds: "molecules" }, { entries: refs, holds: "molecules" }, { step: "50" })).toEqual({
-      ok: false,
-      said: "Against the one reference, but 2 came into Reference: match them on a property",
-    });
+    const both = (e: SetEntry, product: string, start?: string) => (start ? tagged(tagged(e, "product", product), "start", start) : tagged(e, "product", product));
+    const o = torsionsSet([both(dce(true), "p-1", "a"), both(dce(true), "p-3", "b"), both(dce(true), "p-1")], refs, "molecules", { ...TORSIONS, torsions: "reference", reference: "property", property: "product" });
+    expect(rowsGiven(o).map((r) => r.for)).toEqual(["a", "a"]);
+    expect(o.ok && o.aside.map((e) => e.failed?.why)).toEqual(["No entry of Reference has its product, p-3", "It has no start to make its rows for: give it one (Tag)"]);
+    expect(torsionsSet([tagged(dce(true), "start", "a")], refs, "molecules", { ...TORSIONS, torsions: "reference" })).toEqual({ ok: false, said: "Against the one reference, but 2 came into Reference: match them on a property" });
   });
 
-  it("counts apart an entry whose reference has no trans torsion at all, from those trans already", () => {
-    // (a reference with no double bond: no trans torsion to hold)
-    const ref = entry(["C", "C", "H", "H"], [0, 0, 0, 1.54, 0, 0, -0.5, 0.9, 0, 2.04, 0.9, 0], [[0, 1, 1], [0, 2, 1], [1, 3, 1]]);
-    const both = [tagged(dce(false), "product", "p-0"), tagged(ref, "product", "p-1")];
-    const o = runMenoPair("torsion-restraints", { entries: both, holds: "molecules" }, { entries: both, holds: "molecules" }, { reference: "property", property: "product", step: "50" });
-    if (!o.ok) throw new Error(o.said);
-    expect(o.said).toBe("1 trans already · 1 with no trans torsion in its reference");
+  it("refuses a reference wired with torsions typed, and torsions from a reference with none wired", () => {
+    expect(torsionsSet([dce(true)], [dce(false)], "molecules", { ...TORSIONS, torsions: "typed", atoms: "3-1-2-4", target: "180" })).toEqual({
+      ok: false,
+      said: "A reference is wired, and the torsions are typed: choose From the reference, or take its wire away",
+    });
+    expect(torsionsSet([dce(true)], null, "molecules", { ...TORSIONS, torsions: "reference" })).toEqual({ ok: false, said: "Nothing comes into Reference: wire the reference, or type the torsions" });
   });
 
-  it("names every entry it could not set against a reference", () => {
+  it("says what it needs - no angle of its own - and its line, the strength unless held exactly: 50 kcal/mol/rad² unless set, measured", () => {
+    const needs = kindInfo("torsion-restraints").needs!;
+    expect(needs({})).toBe("Name the property each row is for (an ID a Tag wrote)");
+    expect(needs({ on: "start" })).toBe("Type the torsions, four atoms to a line");
+    expect(needs({ on: "start", atoms: "1-2-3" })).toBe('"1-2-3" is not four different atoms from 1');
+    expect(needs({ on: "start", atoms: "1-2-3-1" })).toBe('"1-2-3-1" is not four different atoms from 1');
+    expect(needs({ on: "start", atoms: "1-2-3-4" })).toBe("Set the angle to hold them at");
+    expect(needs({ on: "start", atoms: "1-2-3-4", target: "x" })).toBe("The angle must be a number, in degrees");
+    expect(needs({ on: "start", atoms: "1-2-3-4", target: "180", strength: "" })).toBe("Set the strength");
+    expect(needs({ on: "start", atoms: "1-2-3-4", target: "180" })).toBeUndefined();
+    expect(needs({ on: "start", torsions: "reference", reference: "property" })).toBe("Name the property to pair them on");
+    const how = kindInfo("torsion-restraints").how!;
+    expect(how({ on: "start", atoms: "1-2-3-4", target: "-180" })).toBe("1 torsion at 180\u00b0, 50 kcal/mol/rad\u00b2; for each start");
+    expect(how({ on: "start", torsions: "reference", hold: "exact" })).toBe("unlike the reference: trans there and cis here, at 180\u00b0, exactly; for each start");
+    expect(how({ on: "start", torsions: "reference", at: "own", reference: "property", property: "product" })).toBe("unlike the reference: at its own angle, matched on product, 50 kcal/mol/rad\u00b2; for each start");
+    expect(kindInfo("torsion-restraints").inputs?.map((p) => [p.name, p.optional ?? false])).toEqual([
+      ["Molecules", false],
+      ["Reference", true],
+    ]);
+    expect(kindInfo("torsion-restraints").others?.map((x) => x.id)).toEqual(["failed"]);
+  });
+});
+
+describe("Compare torsions, as a step", () => {
+  it("writes on each entry how many torsions are unlike its reference's, and which - every entry passed on", () => {
+    const o = runMenoPair("compare-torsions", { entries: [dce(true), dce(false)], holds: "molecules" }, { entries: [dce(false)], holds: "molecules" }, {});
+    if (!o.ok) throw new Error(o.said);
+    expect(o.kept.map((e) => e.properties?.[TORSIONS_UNLIKE_COUNT]?.value)).toEqual([2, 0]);
+    expect(o.kept.map((e) => e.properties?.[TORSIONS_UNLIKE]?.value)).toEqual(["Cl3-C1=C2-Cl4: 0.0\u00b0 (reference 180.0\u00b0); H5-C1=C2-H6: 0.0\u00b0 (reference 180.0\u00b0)", "none"]);
+    expect(o.said).toBe("2 entries compared \u00b7 1 with torsions unlike the reference's");
+    expect(kindInfo("compare-torsions").how?.({})).toBe("trans in the reference, cis here \u00b7 trans: more than 90\u00b0 either way (Klyne\u2013Prelog)");
+    expect(kindInfo("compare-torsions").others?.map((x) => x.id)).toEqual(["failed"]);
+  });
+
+  it("sets one it cannot set against a reference out of Failed, with why", () => {
     const refs = [tagged(dce(false), "product", "p-1")];
-    const o = runMenoPair("torsion-restraints", { entries: [tagged(dce(true), "product", "p-2"), tagged(dce(true), "product", "p-3")], holds: "molecules" }, { entries: refs, holds: "molecules" }, { reference: "property", property: "product", step: "50" });
-    expect(o).toEqual({ ok: false, said: "2 entries could not be set against a reference: a #1: no entry of Reference has its product, p-2; a #1: no entry of Reference has its product, p-3" });
-  });
-
-  it("adds 50 kcal/mol/rad² each time unless set - measured - and asks where it is cleared", () => {
-    expect(kindInfo("torsion-restraints").needs?.({})).toBeUndefined();
-    expect(kindInfo("torsion-restraints").needs?.({ step: "" })).toBe("Set the strength added");
-    expect(kindInfo("torsion-restraints").how?.({})).toBe("held at 180°, +50 kcal/mol/rad²");
-    expect(kindInfo("torsion-restraints").inputs?.map((p) => p.name)).toEqual(["Molecules", "Reference"]);
-    expect(kindInfo("torsion-restraints").how?.({ reference: "property", property: "product", step: "50" })).toBe("held at 180°, +50 kcal/mol/rad², matched on product");
-    expect(kindInfo("torsion-restraints").how?.({ step: "50" })).toBe("held at 180°, +50 kcal/mol/rad²");
+    const o = runMenoPair("compare-torsions", { entries: [tagged(dce(true), "product", "p-2"), tagged(borane, "product", "p-1")], holds: "molecules" }, { entries: refs, holds: "molecules" }, { reference: "property", property: "product" });
+    if (!o.ok) throw new Error(o.said);
+    expect(o.aside.map((e) => e.failed?.why)).toEqual(["No entry of Reference has its product, p-2", "It has 4 atoms and the reference 6: both must hold the same atoms in one numbering."]);
   });
 });
 
 describe("restraints in a saved workspace", () => {
-  it("are read back as they were when the workspace is opened again, none left out", () => {
-    const held = runMenoPair("torsion-restraints", { entries: [dce(true)], holds: "molecules" }, { entries: [dce(false)], holds: "molecules" }, { step: "50" });
-    if (!held.ok) throw new Error(held.said);
-    const e = held.kept[0];
+  it("are read back as they were when the workspace is opened again, none left out - a row held exactly, and where they were first held", () => {
+    const e = dce(true);
+    const restraints = { value: { restraints: [{ kind: "dihedral" as const, atoms: [2, 0, 1, 3], value: 180, exact: true as const }], start: [...e.xyz] }, unit: "none" as const, status: "computed" as const };
     const m: Omit<Molecule3D, "id"> = {
       at: { x: 0, y: 0 },
       atoms: e.atoms.map((a, i) => ({ el: a.el, x: e.xyz[3 * i], y: e.xyz[3 * i + 1], z: e.xyz[3 * i + 2] })),
       bonds: e.bonds.map((b) => ({ ...b })),
-      properties: [e.properties!],
+      properties: [{ restraints }],
     } as Omit<Molecule3D, "id">;
     const saving = createWorkspaceDocument();
     const store = createEditorStore(saving);
@@ -196,6 +217,6 @@ describe("restraints in a saved workspace", () => {
     const again = createEditorStore(opened);
     connectStoreToDocument(again, opened);
     again.getState().openWorkspace(ws, true);
-    expect(again.getState().molecules3d[0].properties?.[0]?.restraints).toEqual(e.properties!.restraints);
+    expect(again.getState().molecules3d[0].properties?.[0]?.restraints).toEqual(restraints);
   });
 });

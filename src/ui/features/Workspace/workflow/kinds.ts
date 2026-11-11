@@ -23,7 +23,7 @@ import { measurementName, measurementsTyped } from "../../../../lib/steps/measur
 import { atomsFromOne } from "../../../../lib/steps/compareBonding";
 import { BOND_REACH, REACH_FLOOR } from "../../../../utils/structureParsers";
 import { speciesNeeds, speciesTyped } from "../../../../lib/steps/species";
-import { DISTANCE_STRENGTH, TORSION_STEP, type RestraintsAsked } from "../../../../lib/steps/restraints";
+import { angleIn, DISTANCE_STRENGTH, TORSION_STEP, type RestraintsAsked } from "../../../../lib/steps/restraints";
 import { listsReadAs, readLists } from "./enumerate";
 import { groupsReadAs, NO_POSITIONS, positionIds, readGroups } from "./substituents";
 
@@ -51,7 +51,7 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
 }
 
 /** Which icon a kind has (workflow/icons: QuickAdd, a step's card), each kind its own: what each shows, docs/WORKFLOWS.md, *Kinds of step*. */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "saddle" | "descent" | "moved" | "mapped" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered" | "heldMinimum" | "ensemble" | "height" | "modeOn" | "onto";
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "check" | "twins" | "copies" | "bars" | "list" | "grouped" | "fan" | "pointer" | "sparks" | "sliders" | "chart" | "levels" | "tag" | "charge" | "link" | "span" | "merge" | "rebond" | "compare" | "frames" | "path" | "saddle" | "descent" | "moved" | "mapped" | "number" | "sum" | "held" | "heldAnti" | "join" | "numbered" | "heldMinimum" | "ensemble" | "height" | "modeOn" | "onto" | "torsions";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -926,19 +926,89 @@ export const KINDS: readonly KindInfo[] = [
     needs: (v) => restraintsNeeds(v),
   },
   {
-    // (each torsion trans across its reference's double bonds that is not trans in the entry held at 180, stronger each time - those already trans out of the second exit)
+    // (a table of torsion restraints, a row for each: torsions typed, each held at the angle typed; or each across the Reference's double
+    //  bonds unlike here (Compare torsions' rule) at 180° or at the reference's own angle - each by its strength or exactly, each row for its
+    //  molecule by an ID a step wrote; those it cannot make rows for out of Failed - docs/STRUCTURE-STEPS.md)
     kind: "torsion-restraints",
     name: "Torsion restraints",
     icon: "heldAnti", family: "structures",
     takes: ["molecules", "conformers"],
+    gives: "table",
+    runs: "entries",
+    made: "Torsion restraints",
+    inputs: [
+      { id: "molecules", name: "Molecules", takes: ["molecules", "conformers"] },
+      { id: "reference", name: "Reference", takes: ["molecules", "conformers"], optional: true },
+    ],
+    others: [FAILED],
+    options: [
+      { id: "on", label: "Each row for the molecule by its", type: "text", default: "" },
+      {
+        id: "torsions",
+        label: "Torsions",
+        type: "choice",
+        choices: [
+          { value: "typed", label: "Typed" },
+          { value: "reference", label: "From the reference" },
+        ],
+        default: "typed",
+      },
+      { id: "atoms", label: "Four atoms to a line, from 1 (1-2-3-4)", type: "lines", default: "", rows: 2, when: { id: "torsions", in: ["typed"] } },
+      { id: "target", label: "Held at, \u00b0", type: "text", default: "", when: { id: "torsions", in: ["typed"] } },
+      {
+        id: "at",
+        label: "Held at",
+        type: "choice",
+        choices: [
+          { value: "trans", label: "180\u00b0 where trans" },
+          { value: "own", label: "The reference's own angle" },
+        ],
+        default: "trans",
+        when: { id: "torsions", in: ["reference"] },
+      },
+      {
+        id: "reference",
+        label: "Against",
+        type: "choice",
+        choices: [
+          { value: "one", label: "The one reference" },
+          { value: "property", label: "Matched on" },
+        ],
+        default: "one",
+        when: { id: "torsions", in: ["reference"] },
+      },
+      { id: "property", label: "Property", type: "text", default: "", when: { id: "reference", in: ["property"] } },
+      {
+        id: "hold",
+        label: "Each held",
+        type: "choice",
+        choices: [
+          { value: "strength", label: "By a strength" },
+          { value: "exact", label: "Exactly" },
+        ],
+        default: "strength",
+      },
+      { id: "strength", label: "Strength, kcal/mol/rad\u00b2", type: "text", default: String(TORSION_STEP), when: { id: "hold", in: ["strength"] } },
+    ],
+    how: (v) => torsionsHow(v),
+    needs: (v) => torsionsNeeds(v),
+  },
+  {
+    // (each entry against its reference, in one numbering: how many torsions across the reference's double bonds are unlike here - trans
+    //  there and cis here, and, of a double bond with no trans torsion there, trans here - and which, written on it for a Filter to split
+    //  on; one it cannot set against a reference out of Failed - docs/STRUCTURE-STEPS.md)
+    kind: "compare-torsions",
+    name: "Compare torsions",
+    icon: "torsions", family: "structures",
+    takes: ["molecules", "conformers"],
     gives: "same",
     runs: "entries",
-    made: "Restrained",
+    made: "Compared",
     inputs: [
       { id: "molecules", name: "Molecules", takes: ["molecules", "conformers"] },
       { id: "reference", name: "Reference", takes: ["molecules", "conformers"] },
     ],
-    others: [{ id: "rest", name: "Trans already", gives: "same", of: "rest" }],
+    others: [FAILED],
     options: [
       {
         id: "reference",
@@ -951,10 +1021,9 @@ export const KINDS: readonly KindInfo[] = [
         default: "one",
       },
       { id: "property", label: "Property", type: "text", default: "", when: { id: "reference", in: ["property"] } },
-      { id: "step", label: "Strength added each time, kcal/mol/rad\u00b2", type: "text", default: String(TORSION_STEP) },
     ],
-    how: (v) => torsionsHow(v),
-    needs: (v) => torsionsNeeds(v),
+    how: (v) => compareTorsionsHow(v),
+    needs: (v) => compareTorsionsNeeds(v),
   },
   {
     // (a number with its unit and what worked it out - the standard-state term from its temperature, by its formula, or one typed - for a step that takes one: Add's)
@@ -1197,22 +1266,70 @@ export function restraintsHow(v: OptionValues): string {
   return `${said.join("; ")}${strength != null && strength !== DISTANCE_STRENGTH ? `; ${strength} kcal/mol/\u00c5\u00b2` : ""}; for each ${typed.on}`;
 }
 
-/** What a Torsion restraints step still needs of its options. */
-export function torsionsNeeds(v: OptionValues): string | undefined {
-  if (v.reference === "property" && !String(v.property ?? "").trim()) return "Name the property to pair them on";
-  const step = aboveZero(String(v.step ?? TORSION_STEP), "The strength added");
-  if (step == null) return "Set the strength added";
-  return typeof step === "object" ? step.why : undefined;
+/** The torsions typed on a Torsion restraints card, one to a line, each four different atoms from 1 (as 0), or why a line does not read. */
+export function torsionsTyped(text: string): { torsions: number[][] } | { why: string } {
+  const torsions: number[][] = [];
+  for (const line of text.split("\n").map((l) => l.trim()).filter(Boolean)) {
+    const atoms = line.split(/\s*[-,\s]\s*/).map((a) => (/^[0-9]+$/.test(a) ? Number(a) - 1 : NaN));
+    if (atoms.length !== 4 || atoms.some((a) => !(a >= 0)) || new Set(atoms).size !== 4) return { why: `"${line}" is not four different atoms from 1` };
+    torsions.push(atoms);
+  }
+  return { torsions };
 }
 
-/** A Torsion restraints step's line: what it adds each time, and what it matches on where it does. */
+/** A Torsion restraints step's options as read from its card: what it makes - typed torsions and their angle, or those from the reference - how each is held, and the property each row names its molecule by; or why they do not read. */
+export function torsionsRead(v: OptionValues): { on: string; hold: { strength: number } | { exact: true } } & ({ typed: number[][]; target: number } | { from: "trans" | "own"; property?: string }) | { why: string } {
+  const on = String(v.on ?? "").trim();
+  if (!on) return { why: "Name the property each row is for (an ID a Tag wrote)" };
+  let hold: { strength: number } | { exact: true } = { exact: true };
+  if (v.hold !== "exact") {
+    const k = aboveZero(String(v.strength ?? TORSION_STEP), "The strength");
+    if (k == null) return { why: "Set the strength" };
+    if (typeof k === "object") return k;
+    hold = { strength: k };
+  }
+  if (v.torsions === "reference") {
+    if (v.reference === "property" && !String(v.property ?? "").trim()) return { why: "Name the property to pair them on" };
+    return { on, hold, from: v.at === "own" ? "own" : "trans", ...(v.reference === "property" ? { property: String(v.property).trim() } : {}) };
+  }
+  const typed = torsionsTyped(String(v.atoms ?? ""));
+  if ("why" in typed) return typed;
+  if (!typed.torsions.length) return { why: "Type the torsions, four atoms to a line" };
+  const t = String(v.target ?? "").trim();
+  const target = Number(t);
+  if (!t) return { why: "Set the angle to hold them at" };
+  if (!Number.isFinite(target) || !/^[0-9.eE+-]+$/.test(t)) return { why: "The angle must be a number, in degrees" };
+  return { on, hold, typed: typed.torsions, target };
+}
+
+/** What a Torsion restraints step still needs of its options. */
+export function torsionsNeeds(v: OptionValues): string | undefined {
+  const r = torsionsRead(v);
+  return "why" in r ? r.why : undefined;
+}
+
+/** A Torsion restraints step's line: what it holds, at what, how, and what each row is for. */
 export function torsionsHow(v: OptionValues): string {
-  const needs = torsionsNeeds(v);
+  const r = torsionsRead(v);
+  if ("why" in r) return r.why;
+  const how = "exact" in r.hold ? "exactly" : `${r.hold.strength} kcal/mol/rad\u00b2`;
+  const what =
+    "typed" in r
+      ? `${r.typed.length} ${r.typed.length === 1 ? "torsion" : "torsions"} at ${angleIn(r.target)}\u00b0`
+      : `unlike the reference: ${r.from === "trans" ? "trans there and cis here, at 180\u00b0" : "at its own angle"}${r.property ? `, matched on ${r.property}` : ""}`;
+  return `${what}, ${how}; for each ${r.on}`;
+}
+
+/** What a Compare torsions step still needs of its options. */
+export function compareTorsionsNeeds(v: OptionValues): string | undefined {
+  return v.reference === "property" && !String(v.property ?? "").trim() ? "Name the property to pair them on" : undefined;
+}
+
+/** A Compare torsions step's line: what it counts, and by what rule (Klyne and Prelog's). */
+export function compareTorsionsHow(v: OptionValues): string {
+  const needs = compareTorsionsNeeds(v);
   if (needs) return needs;
-  // (the one reference is the default: left unsaid)
-  const matched = v.reference === "property" ? `, matched on ${String(v.property).trim()}` : "";
-  // (the + says it adds each time - the option's own label says it whole)
-  return `held at 180\u00b0, +${String(v.step ?? TORSION_STEP).trim()} kcal/mol/rad\u00b2${matched}`;
+  return `trans in the reference, cis here \u00b7 trans: more than 90\u00b0 either way (Klyne\u2013Prelog)${v.reference === "property" ? `, matched on ${String(v.property).trim()}` : ""}`;
 }
 
 /** What an Atom map step still needs of its options. */
