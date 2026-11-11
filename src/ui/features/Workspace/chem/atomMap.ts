@@ -138,7 +138,7 @@ export function keptMap(model: Model, result: ReactionMap, reactants: readonly S
 export function mapStanding(arrow: Pick<Arrow, "atomMap"> & Partial<Pick<Arrow, "kind" | "heads">>, model: Model): "none" | "refused" | "changed" | "incomplete" | "ready" {
   const m = arrow.atomMap;
   if (!m) return "none";
-  // (made of an arrow that has since come to mean no reaction - crossed out, retrosynthetic, two-headed: kept, said, never shown)
+  // (made of an arrow that has since come to mean no reaction - crossed out, retrosynthetic, headless, two-headed: kept, said, never shown)
   if (reactionMeant(arrow) !== true) return "refused";
   const ids = [...m.reactant.drawnFrom, ...m.product.drawnFrom].filter((id): id is number => id != null);
   if (signatureOf(model, ids) !== m.drawnAs) return "changed";
@@ -146,8 +146,13 @@ export function mapStanding(arrow: Pick<Arrow, "atomMap"> & Partial<Pick<Arrow, 
 }
 
 /** Why a map cannot be written in 3D as a reaction - partial, or of the drawing before an edit, or none - or null where it can. */
-export function exportRefusal(map: ArrowAtomMap | undefined, model: Model): string | null {
-  const standing = map ? mapStanding({ atomMap: map }, model) : "none";
+export function exportRefusal(map: ArrowAtomMap | undefined, model: Model, arrow: Partial<Pick<Arrow, "kind" | "heads">> = {}): string | null {
+  const standing = map ? mapStanding({ atomMap: map, ...arrow }, model) : "none";
+  // (the map of an arrow that no longer means a reaction: not written, whatever it was made as)
+  if (standing === "refused") {
+    const meant = reactionMeant(arrow, "export");
+    return `No 3D reaction for this arrow: ${meant === true ? "it means no reaction" : meant.why}.`;
+  }
   if (standing === "incomplete") return "Every atom must be mapped to write the reaction in 3D, and this map is partial.";
   return standing === "ready" ? null : "The reaction has no atom map of it as it is drawn.";
 }

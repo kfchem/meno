@@ -76,7 +76,7 @@ export function useAtomMaps(store: Store, setChemError: (e: string | null) => vo
       const st = store.getState();
       const arrow = st.arrows.find((a) => a.id === arrowId);
       if (!arrow) return;
-      // (an arrow that means no reaction - crossed out, retrosynthetic, two-headed - is mapped by no route)
+      // (an arrow that means no reaction - crossed out, retrosynthetic, headless, two-headed - is mapped by no route)
       const noMap = noMapSaid(arrow);
       if (noMap) {
         setChemError(noMap);

@@ -995,7 +995,8 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
       attempt("Export", async () => {
         const state = store.getState();
         const map = "arrow" in of ? state.arrows.find((a) => a.id === of.arrow)?.atomMap : state.structureMaps.find((m) => m.id === of.structureMap)?.map;
-        const refused = exportRefusal(map, state.model);
+        // (the arrow's own kind and heads: the map of one that no longer means a reaction is not written)
+        const refused = exportRefusal(map, state.model, "arrow" in of ? (state.arrows.find((a) => a.id === of.arrow) ?? {}) : {});
         if (refused || !map) throw new Error(refused ?? "The reaction has no atom map of it as it is drawn.");
         const from = state.savedPath ?? state.openedName;
         const base = from ? withExtension(from, "sdf").replace(/\.sdf$/i, "") : "reaction";
