@@ -302,11 +302,26 @@ Checked:
 
 ## Restraints
 
-Each entry's restraints from itself (`restraintsOf`): the property
-`restraints`, rows of the entry record's `Restraint`, with atoms from 0,
-each held by the energy the record states (`src/lib/entry.ts`): a distance
-by E = k d²/2, k in kcal mol⁻¹ Å⁻²; atoms fixed with neither value nor
-strength. Restraints are a label: they name no geometry, and ride along.
+A table of restraints, a row for each, made of each entry from itself
+(`restraintRows`, `restraintsTable`): the rows of the entry record's
+`Restraint`, each held by the energy the record states (`src/lib/entry.ts`):
+a distance by E = k d²/2, k in kcal mol⁻¹ Å⁻²; atoms fixed with neither
+value nor strength. The entries are not passed on: a step that holds
+restraints takes the table in its *Restraints* input (WORKFLOWS.md,
+*Restraints wired in*), so the chemist reads exactly what will be held.
+
+- **The table's columns**, the restraint first: *Kind* (distance, torsion,
+  atoms fixed); *Atoms*, from 1; *Target*, a number, in Å for a distance and
+  in ° for a torsion, each in a column of its unit; *Strength* - the number
+  with its unit (kcal/mol/Å², kcal/mol/rad²), "exact" for a row held
+  exactly (said, never read from a blank), or "fixed where they stand";
+  *Why* - "coordination bond in contact, 0.9 × vdW (Alvarez)", "typed: kept
+  at its distance here". Then *For* and *Matched on* - the value, and the
+  name, of the property the row's entry has (an ID a step wrote, a Tag's,
+  named on the card: no default); and *Numbering* - *its own*, or the maps
+  *Atom map* numbered it anew by (the label `numbering` it writes on each
+  entry it renumbers). A table read from a file with these columns reads alike; one row
+  that does not read refuses the whole table, the row named.
 
 - **Coordination bonds**, the bonds the entry marks as such, are kept at a
   factor of their atoms' van der Waals radii together. The radii are
@@ -337,20 +352,22 @@ strength. Restraints are a label: they name no geometry, and ride along.
   0.9 of the van der Waals radii together holds an acid and a base in
   contact, about twice a bond's length (H3N→BH3: 3.21 Å; its B–N bond is
   about 1.6 Å).
-- **What an entry held before.** Its distances and atoms fixed - the kinds
-  this step makes - are replaced. Its torsions (*Torsion restraints*'),
-  with the strengths they reached in earlier rounds, are kept. The line
-  says both: "2 entries' earlier distances and atoms fixed replaced · 2
-  entries' torsions kept".
-- **Refused, with the reason** (out of *Failed*): an atom the entry does not
-  have, an element Alvarez gives no radius for, or an entry with no 3D
-  places or with frames.
-- **Its line** counts what it held: "12 entries restrained · 3 coordination
+- **In contact, not bonded**: 0.9 × the van der Waals radii holds a Lewis
+  pair in contact, about twice a bond's length; a metal's dative bond is
+  far shorter (Cu–N: 3.636 Å so held, about 1.83 Å by Pyykkö's single-bond
+  radii). The why says "in contact", so a bonded complex is never pulled
+  apart unseen: for a metal–ligand bond, type the distance.
+- **Refused, with the reason** (out of *Failed*): an entry without the
+  property its rows are for, or whose value another entry has too; an atom
+  the entry does not have, an element Alvarez gives no radius for, or an
+  entry with no 3D places or with frames.
+- **Its line** counts what it made: "12 rows for 12 entries · 3 coordination
   bonds held". Coordination bonds asked and none marked are said ("no
-  coordination bonds"), not passed over.
+  coordination bonds"), not passed over, and so are entries it made no row
+  for ("2 entries with none to hold").
 
 Checked: H3N→BH3's B–N coordination bond kept at 0.9 × (1.91 + 1.66) Å,
-from Alvarez's published radii; a 3-4-5 triangle's 5 Å; an atom the entry
+and Cu–N at 0.9 × (2.38 + 1.66) = 3.636 Å, from Alvarez's published radii; a 3-4-5 triangle's 5 Å; an atom the entry
 lacks, an element with no radius, and no strength each refused in words.
 
 ## Torsion restraints
