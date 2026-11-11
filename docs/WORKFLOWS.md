@@ -153,8 +153,8 @@ in 3D, arrows, text - and is made of three things:
 
 - **Sets.** A thin rounded frame, its name along its top, inside it -
   *Input*, or what a step made (*Conformers*, *Optimised*, *Within 3
-  kcal/mol*) - and how many it holds (*1 structure*, *2 compounds*, *1
-  compound · 81*, *1 compound · 23 of 81*). It
+  kcal/mol*) - and how many it holds (*1 structure*, *2 compounds*, *81
+  conformers of 1 compound*). It
   gives from a port on its right edge, half-way down; a result set takes
   on its left edge too.
 - **Steps.** A small card: who does it (*xTB*), with the icon of what it
@@ -833,7 +833,7 @@ Conformers go through a workflow as any set does (decided):
   molecules, each its own.
 - **A set's count says what it holds**: a compound set of molecules in
   3D, its compounds (*2 compounds*); a conformer set, its compounds and
-  its conformers (*2 compounds · 81*); structures drawn, or a
+  its conformers (*81 conformers of 2 compounds*); structures drawn, or a
   Render step's pictures, how many (*3 structures*, *9 pictures*); a set
   with nothing in it, *Empty*; a step's exit whose step has not run, *Not
   run yet*. Its name is *Input* where the chemist made it, a second exit's
@@ -1075,7 +1075,7 @@ its molecules, and says so.
 before, docs/WORKFLOWS-FOUNDATION.md, *What a set shows*): the frame holds
 the molecule it shows and its chips, and nothing else - no grid of a sample,
 no chart, no empty room. Its tab keeps the count ("Optimised - 118
-molecules"; "600 conformers of 3 compounds"), and beside it *Open as a
+compounds"; "600 conformers of 3 compounds", as its exit's chip says it too), and beside it *Open as a
 table*.
 - **A stack chip**, as a stack's on the page (docs/WORKSPACE.md, *Stacks*): which of how many
   ("3 / 118"), and the molecule's title - of a conformer set's, its
@@ -1121,7 +1121,7 @@ set is (2026-10-21):
   set's order: each one geometry with its energy and what worked it out,
   and of its calculation only what is of that frame. A compound's
   conformers chosen stay one conformer set, so that the new set counts
-  them as the step's did ("2 compounds · 5"). Where some of the
+  them as the step's did ("5 conformers of 2 compounds"). Where some of the
   compound's conformers are left out, the set is a part of a search
   (below), and the table shows no energy above the compound's lowest,
   which may not be among them. All of a compound's conformers chosen are
@@ -2197,7 +2197,7 @@ Decided while building it, for the maintainer to confirm:
   on the canvas, not as a job: it does not go on when Meno closes. A
   search on molecules in 3D is still a job.
 - **The conformers it chose from are set aside**, kept with the set as
-  any step's are: the set's count says *1 compound · 1 of 9*.
+  any step's are: the set's count says *1 conformer of 1 compound*.
 
 Then, of the leftovers the maintainer chose:
 

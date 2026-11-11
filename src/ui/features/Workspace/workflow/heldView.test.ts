@@ -7,7 +7,7 @@ import { LARGE_SET } from "./entries";
 import { addStep } from "./model";
 import { CHIP, SET_PAD, SET_TOP } from "./look";
 import { HELD_SIZED, placeResults, type RunWith } from "./run";
-import { HELD_CHIP_ROW, HELD_LEAST_W, HELD_VIEWS, chipRows, heldFrame, heldViewAt, heldViewId, heldViews, isHeldView, shownIn, showsOneAtATime } from "./heldView";
+import { HELD_CHIP_ROW, HELD_LEAST_W, HELD_TOP_GAP, HELD_VIEWS, chipRows, heldFrame, heldViewAt, heldViewId, heldViews, isHeldView, shownIn, showsOneAtATime } from "./heldView";
 
 vi.mock("../../../../lib/calc/workers", () => ({ readerClient: () => Promise.reject(new Error("no workers in tests")) }));
 
@@ -86,15 +86,15 @@ describe("a held set's frame", () => {
   it("is as wide as the widest molecule it holds and as tall as the tallest, and its chips", () => {
     const f = heldFrame([room(10, 4), room(6, 12), room(8, 8)], 2, 1);
     expect(f.width).toBeCloseTo(10 + 2 * SET_PAD, 9);
-    expect(f.height).toBeCloseTo(SET_TOP + 12 + 2 * CHIP + SET_PAD, 9);
+    expect(f.height).toBeCloseTo(SET_TOP + HELD_TOP_GAP + 12 + 2 * CHIP + SET_PAD, 9);
     // (a molecule's room about its place: the greater side of it)
     const lopsided = heldFrame([{ x0: -1, x1: 5, y0: -2, y1: 0.5, chip: 0 }], 1, 1);
     expect(lopsided.width).toBeCloseTo(10 + 2 * SET_PAD, 9);
-    expect(lopsided.height).toBeCloseTo(SET_TOP + 4 + CHIP + SET_PAD, 9);
+    expect(lopsided.height).toBeCloseTo(SET_TOP + HELD_TOP_GAP + 4 + CHIP + SET_PAD, 9);
     // (and the other way: it reaches further left than right, above than below)
     const left = heldFrame([{ x0: -5, x1: 1, y0: -0.5, y1: 2, chip: 0 }], 1, 1);
     expect(left.width).toBeCloseTo(10 + 2 * SET_PAD, 9);
-    expect(left.height).toBeCloseTo(SET_TOP + 4 + CHIP + SET_PAD, 9);
+    expect(left.height).toBeCloseTo(SET_TOP + HELD_TOP_GAP + 4 + CHIP + SET_PAD, 9);
   });
   it("is at least as wide as its name and count need", () => {
     expect(heldFrame([room(0.1, 0.1)], 1, 500).width).toBe(500);
@@ -110,8 +110,10 @@ describe("a held set's frame", () => {
     const frame = { x0: 10, x1: 30, y0: -50, y1: -10 };
     const at = heldViewAt({ x0: 10, x1: 30, y0: -50, y1: -10 }, 1);
     expect(at.x).toBe(20);
-    const room = 40 - SET_TOP - CHIP - SET_PAD;
-    expect(at.y).toBeCloseTo(-10 - SET_TOP - room / 2, 9);
+    const room = 40 - SET_TOP - HELD_TOP_GAP - CHIP - SET_PAD;
+    expect(at.y).toBeCloseTo(-10 - SET_TOP - HELD_TOP_GAP - room / 2, 9);
+    // (a gap under the tab line: the molecule's top is that far from it more than its atoms reach)
+    expect(HELD_TOP_GAP).toBeGreaterThan(0);
     // (more chips under it: it stands higher)
     expect(heldViewAt(frame, 2).y).toBeGreaterThan(at.y - CHIP);
     expect(heldViewAt(frame, 2).y).toBeCloseTo(at.y + CHIP / 2, 9);

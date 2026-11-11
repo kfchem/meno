@@ -64,7 +64,12 @@ describe("a large result set (docs/WORKFLOWS-FOUNDATION.md, *What a set shows*)"
     expect(few.molecules3d).toHaveLength(3);
     expect(setMembers(few, few.sets![0]).molecules).toHaveLength(3);
     expect(countOf(few, few.sets![0])).toEqual({ holds: "conformers", entries: 600, compounds: 3 });
-    expect(countSaid(few.sets![0], countOf(few, few.sets![0]))).toBe("3 compounds · 600");
+    expect(countSaid(few.sets![0], countOf(few, few.sets![0]))).toBe("600 conformers of 3 compounds");
+    // (said as its exit's chip and its step's line say it: thousands grouped, one alone in the singular)
+    const say = (holds: "conformers" | "molecules", entries: number, compounds: number) => countSaid({}, { holds, entries, compounds });
+    expect(say("conformers", 1800, 3)).toBe("1,800 conformers of 3 compounds");
+    expect(say("conformers", 1, 1)).toBe("1 conformer of 1 compound");
+    expect(say("molecules", 118, 118)).toBe("118 compounds");
     // (one molecule of 1000 frames: still one on the page)
     const long = ran([conformers(0, 1000)], "conformers");
     expect(long.molecules3d).toHaveLength(1);

@@ -586,10 +586,11 @@ export function countSaid(b: Pick<WorkflowSet, "notKept" | "made" | "number" | "
           : plural(count.entries, "structure")
         : count.holds === "molecules"
           ? plural(count.compounds, "compound")
-          : `${plural(count.compounds, "compound")} · ${count.entries}`;
+          : // (a conformer set: as its exit's chip and its step's line say it - "1,800 conformers of 3 compounds")
+            `${plural(count.entries, "conformer", "conformers", true)} of ${plural(count.compounds, "compound")}`;
 }
 
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const plural = (n: number, one: string, many = `${one}s`, grouped = false) => `${grouped ? n.toLocaleString("en-US") : n} ${n === 1 ? one : many}`;
 
 /** How many frames a molecule in 3D has: its own geometry, and the rest. */
 export const framesOf = (m: Pick<Molecule3D, "frames">) => 1 + (m.frames?.length ?? 0);

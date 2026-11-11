@@ -1065,8 +1065,8 @@ export default function Workflow2D() {
                           ? "structure"
                           : "structures"
                         : count.entries === 1
-                          ? "molecule"
-                          : "molecules",
+                          ? "compound"
+                          : "compounds",
                 }
               : undefined;
           return [b.id, { name: setName(b, steps), count: `${counted}${b.unread ? ` · ${b.unread.toLocaleString("en-US")} not read` : ""}${b.keep === false && count.entries ? " · not kept" : ""}`, summary }];

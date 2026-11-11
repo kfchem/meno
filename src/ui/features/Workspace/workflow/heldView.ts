@@ -36,6 +36,9 @@ export function shownIn(b: Pick<WorkflowSet, "id" | "collection">, shown: Readon
 /** The least a held set's frame is wide: its tab's name and count, and *Open as a table* beside them, in its first line. */
 export const HELD_LEAST_W = 300 * PX;
 
+/** The room left between the tab's line - its name, count and *Open as a table* - and the molecule below it: the top of the molecule is seen further than the atoms alone reach (page units). */
+export const HELD_TOP_GAP = 16 * PX;
+
 /** How far the frames chip hangs below the stack chip, where a view's molecule has one (page units): a chip's own height and the gap between. */
 export const HELD_CHIP_ROW = 28 * PX;
 
@@ -58,13 +61,13 @@ export function heldFrame(rooms: readonly (Frame & { chip: number })[], rows: nu
     half = Math.max(half, -r.x0, r.x1);
     reach = Math.max(reach, -r.y0, r.y1);
   }
-  return { width: Math.max(least, 2 * half + 2 * SET_PAD), height: SET_TOP + 2 * reach + rows * CHIP + SET_PAD };
+  return { width: Math.max(least, 2 * half + 2 * SET_PAD), height: SET_TOP + HELD_TOP_GAP + 2 * reach + rows * CHIP + SET_PAD };
 }
 
-/** Where a view's molecule stands in its set's frame: across its middle, in the room between its name and its chips. */
+/** Where a view's molecule stands in its set's frame: across its middle, in the room between its name (and the gap under it) and its chips. */
 export function heldViewAt(b: Frame, rows: number): { x: number; y: number } {
-  const room = Math.abs(b.y1 - b.y0) - SET_TOP - rows * CHIP - SET_PAD;
-  return { x: (b.x0 + b.x1) / 2, y: Math.max(b.y0, b.y1) - SET_TOP - room / 2 };
+  const room = Math.abs(b.y1 - b.y0) - SET_TOP - HELD_TOP_GAP - rows * CHIP - SET_PAD;
+  return { x: (b.x0 + b.x1) / 2, y: Math.max(b.y0, b.y1) - SET_TOP - HELD_TOP_GAP - room / 2 };
 }
 
 export type HeldView = {
