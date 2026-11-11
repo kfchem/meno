@@ -1450,6 +1450,37 @@ describe("a wedge's wide end where one bond carries straight on", () => {
     expect(end.length).toBeGreaterThan(wideEnd("sharp").length);
     expect(hasSharpCorner(end)).toBe(false);
   });
+
+  it("rounds only the corner that no bond's edge carries on, where a side bond leaves too", () => {
+    const withSide = [...atoms, { id: 4, x: 2.2, y: -1.3, el: "C" } as Atom];
+    const withSideBonds = [...bonds, { a1: 1, a2: 3, order: 1, stereo: "none" } as Bond];
+    const endOf = (joinStyle: "round" | "sharp") => {
+      const { polys } = buildAllPrimitives(withSide, withSideBonds, opts({ joinStyle }), ZOOM);
+      const wedge = polys.reduce((big, p) => (polyArea(p.points) > polyArea(big.points) ? p : big));
+      return wedge.points.filter((p) => p.x > 0.75);
+    };
+    const sharp = endOf("sharp");
+    const round = endOf("round");
+    const at = (pts: Vec2[], q: Vec2) => pts.some((p) => Math.hypot(p.x - q.x, p.y - q.y) < 1e-9);
+    // the corner on the side bond's edge (the side bond leaves downwards) stays where it was cut,
+    // the one on the square cut across the straight-on bond is gone
+    const down = sharp.reduce((m, p) => (p.y < m.y ? p : m));
+    const up = sharp.reduce((m, p) => (p.y > m.y ? p : m));
+    expect(at(round, down)).toBe(true);
+    expect(at(round, up)).toBe(false);
+    expect(round.length).toBeGreaterThan(sharp.length);
+  });
+
+  it("rounds a bold bar's end likewise", () => {
+    const bar = bonds.map((b, i) => (i === 0 ? { ...b, stereo: "none" as const, display: "bold" as const } : b));
+    const endOf = (joinStyle: "round" | "sharp") => {
+      const { polys } = buildAllPrimitives(atoms, bar, opts({ joinStyle }), ZOOM);
+      const shape = polys.reduce((big, p) => (polyArea(p.points) > polyArea(big.points) ? p : big));
+      return shape.points.filter((p) => p.x > 0.75);
+    };
+    expect(hasSharpCorner(endOf("sharp"))).toBe(true);
+    expect(hasSharpCorner(endOf("round"))).toBe(false);
+  });
 });
 
 describe("a wavy bond", () => {
