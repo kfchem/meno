@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { NOMINAL_BOND_LENGTH as L } from "../../../../lib/chem/acs";
-import type { Arrow, Atom, Bond, Model } from "../store/types";
+import type { Arrow, Atom, Bond, DrawnRecord, Model } from "../store/types";
 import { emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
 import { countOf, countSaid, lyingIn, type Frame } from "./entries";
 import { inputOf } from "./flow";
 import { addSet, addStep, connect } from "./model";
+import { setStructuresTable } from "./run";
 import { recordsWithRoles, schemeRoles, schemeSaid } from "./schemeRoles";
 
 /**
@@ -113,6 +114,16 @@ describe("a set around a drawn reaction: each structure's role and reaction", ()
     expect(saidOf(far)).toEqual(["1 reaction: 1 reactant, 1 product", "1 structure on no arrow"]);
   });
 
+  it("reads only the pluses inside the frame: a plus just outside it, between two structures less than a bond apart, does not part them", () => {
+    // (two structures half a bond apart and a "+" between them parts them into two molecules; the frame's top edge, between the row and the "+" - 0.4 bonds above it - leaves the "+" out, and they are one molecule)
+    const frame = { x0: -60 * L, y0: -60 * L, x1: 60 * L, y1: 0.2 * L };
+    const close = [pair(1, -5, 0), pair(3, -3.5, 0), C];
+    const parted = page(close, [arrow(1, 0, 0)], [{ x: -3.75, y: 0 }]);
+    expect(saidOf(parted, frame)).toEqual(["1 reaction: 2 reactants, 1 product"]);
+    const left = page(close, [arrow(1, 0, 0)], [{ x: -3.75, y: 0.4 }]);
+    expect(saidOf(left, frame)).toEqual(["1 reaction: 1 reactant (2 ions), 1 product"]);
+  });
+
   it("counts a salt drawn as its ions one molecule, each ion with its role", () => {
     // (Na and Cl, atoms of their own, closer than a bond: one product)
     const na = { atoms: [{ id: 30, el: "Na", x: 4 * L, y: 0, r: 0, charge: 1 } as Atom], bonds: [] };
@@ -190,5 +201,34 @@ describe("a set around a drawn reaction, as the page reads it", () => {
     const set = doc.sets![0];
     expect(schemeSaid(doc, set)).toEqual([]);
     expect(countSaid(set, countOf(doc, set), schemeSaid(doc, set))).toBe("2 structures");
+  });
+
+  it("keeps a record's own properties - a Tag's id, a name - beside the role and reaction it is given", () => {
+    const doc = page([A, B, R, C], [arrow(1, 0, 0)], [plus]);
+    const { structures } = lyingIn(doc, FRAME);
+    const own = { id: { value: "T-7", unit: "none", status: "computed" }, name: { value: "ketone", unit: "none", status: "computed" } } as const;
+    const records = structures.map(() => ({ properties: { ...own } }) as DrawnRecord);
+    const out = recordsWithRoles(doc, FRAME, structures, records);
+    out.forEach((r, i) => {
+      expect(Object.keys(r!.properties!).sort()).toEqual(["id", "name", "reaction", "role"]);
+      expect(r!.properties!.id).toEqual(own.id);
+      expect(r!.properties!.name).toEqual(own.name);
+      expect(r!.properties!.role.value).toBe(rolesOf(doc)[Math.min(...structures[i])].split("/")[0]);
+    });
+    // (a structure with no record yet is given one holding the role and reaction alone; the records handed in are not changed)
+    const bare = recordsWithRoles(doc, FRAME, structures, structures.map(() => undefined));
+    expect(Object.keys(bare[0]!.properties!).sort()).toEqual(["reaction", "role"]);
+    expect(Object.keys(records[0].properties!)).toEqual(["id", "name"]);
+  });
+
+  it("carries role and reaction into the table of a set's structures too", () => {
+    const doc = page([A, B, R, C], [arrow(1, 0, 0)], [plus]);
+    const { structures } = lyingIn(doc, FRAME);
+    const set = { ...addSet(doc, FRAME).sets![0], members: structures.map((s) => ({ structure: s })) };
+    const table = setStructuresTable(doc, set);
+    const names = table.columns.map((c) => c.name);
+    expect(names).toEqual(expect.arrayContaining(["role", "reaction"]));
+    const at = names.indexOf("role");
+    expect(table.rows.map((r) => String((r[at] as { value?: unknown })?.value ?? r[at])).sort()).toEqual(["product", "reactant", "reactant", "reagent"]);
   });
 });
