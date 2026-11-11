@@ -21,7 +21,7 @@ import { afterAnswer, withAsked } from "./ui/features/StyleEditor/styleAsks";
 import { ownChoice, withOwnStyle2d } from "./lib/chem/styleFields";
 import { withOwn3d, withRole } from "./lib/chem/style3d";
 import { forgetFiles, giveFiles, type OpenedFile } from "./ui/views/files";
-import { openedPdfs, pdfTakerOf, type OpenedPdf } from "./ui/views/pdfs";
+import { openedPdfs, outsidePdfsPlan, pdfTakerOf, type OpenedPdf } from "./ui/views/pdfs";
 import { pictureTakerOf } from "./ui/views/pictures";
 import { holdPdfPath } from "./lib/pdf/reader";
 import { isPictureName } from "./lib/picture/image";
@@ -331,6 +331,18 @@ export default function App() {
     take(pdfs);
     return true;
   };
+  // PDFs opened from outside Meno (a double-click, Open With): each in a canvas of its own - in place of a blank one in front - read
+  // in the column, which fills the workspace, the workspace kept behind it; one a tab holds already brings that tab forward
+  const openPdfsFromOutside = (pdfs: OpenedPdf[]) => {
+    const tabs = Object.values(stateRef.current.tabsById).map((t) => {
+      const held = documentsRef.current.get(t.meta.id);
+      const own = held?.kind === "workspace" ? (held.doc as DocumentStore<WorkspaceDocument>).getState().pdfs : (t.content.data as { pdfs?: OpenedPdf[] } | undefined)?.pdfs;
+      return { id: t.meta.id, pdfs: own };
+    });
+    const { forward, fresh } = outsidePdfsPlan(pdfs, tabs);
+    for (const id of forward) act({ type: "SELECT_TAB", id });
+    if (fresh.length) openTab(openedPdfs(fresh, true));
+  };
   // and pictures (ui/views/pictures)
   const openPictures = (pictures: PictureToAdd[], into: string | null): boolean => {
     const take = into ? pictureTakerOf(into) : undefined;
@@ -398,14 +410,14 @@ export default function App() {
   // outside Meno (a workspace file double-clicked: src-tauri/src/opened.rs)
   // - by what each is.
   // (a file opened is the user's first action, where nothing came before it - once it is open: lib/firstAction)
-  const openPaths = async (paths: readonly string[]) => {
+  const openPaths = async (paths: readonly string[], outside = false) => {
     try {
-      await openPathsAlone(paths);
+      await openPathsAlone(paths, outside);
     } finally {
       if (paths.length) firstActionDone();
     }
   };
-  const openPathsAlone = async (paths: readonly string[]) => {
+  const openPathsAlone = async (paths: readonly string[], outside = false) => {
     // (where what is not a workspace file goes: the workspace in front as
     // Open was pressed - not the tab of a workspace file opened with it,
     // which opens as it was saved, untouched: the maintainer, 2026-10-13)
@@ -480,7 +492,10 @@ export default function App() {
     );
     if (rest && workspaces.length && front && stateRef.current.tabsById[front]) act({ type: "SELECT_TAB", id: front });
     if (texts.length) openTexts(texts, front);
-    if (pdfs.length) openPdfs(pdfs, front);
+    if (pdfs.length) {
+      if (outside) openPdfsFromOutside(pdfs);
+      else openPdfs(pdfs, front);
+    }
     if (pictures.length) openPictures(pictures, front);
     if (structures.length) openStructureFiles(structures, front);
     sayUntold(untold);
@@ -693,7 +708,7 @@ export default function App() {
   openPathsNow.current = openPaths;
   useEffect(() => {
     if (!isTauri()) return;
-    return watchOpenedFiles((paths) => void openPathsNow.current(paths));
+    return watchOpenedFiles((paths) => void openPathsNow.current(paths, true));
   }, []);
 
   const ctl: TabsController = {
