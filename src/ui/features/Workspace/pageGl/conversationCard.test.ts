@@ -29,6 +29,13 @@ describe("a conversation's words as the card's blocks", () => {
     ]);
   });
 
+  it("reads \"1)\" as a list marker too, kept as written", () => {
+    expect(replyBlocks("1) one\n2) two")).toEqual<CardBlock[]>([
+      { kind: "item", marker: "1)", spans: [{ text: "one" }] },
+      { kind: "item", marker: "2)", spans: [{ text: "two" }], gap: CARD.itemGap },
+    ]);
+  });
+
   it("is the exchange as blocks - question, reply, a call with what came of it, Meno's word - then that it works, then the changes waiting", () => {
     const said: Said[] = [
       { by: "person", text: "Optimise these", at: 1 },
@@ -191,6 +198,14 @@ describe("what a scroll offset shows of a laid card", () => {
     // (and one that only touches the foot: line 7 at 215, the foot at 215 with an offset of 15 - not in; at 16, in)
     expect(cardWindow(many, 15, view).lines.some((l) => text(l) === "line 7")).toBe(false);
     expect(cardWindow(many, 16, view).lines.some((l) => text(l) === "line 7")).toBe(true);
+  });
+
+  it("takes a quiet line's own height, 16, not a reply line's: one ending at the view's top exactly is not in", () => {
+    // (a tool line at 12 to 28; the card 40 high, a view of 10 - scrolled at most 30)
+    const one = cardLayout([{ kind: "tool", text: "Put down an arrow", failed: false }], 2 * CARD.side + 1000);
+    expect(one.height).toBe(40);
+    expect(cardWindow(one, 27, 10).lines).toHaveLength(1);
+    expect(cardWindow(one, 28, 10).lines).toHaveLength(0);
   });
 
   it("shows all of what fits, no more above or below - and boxes and chips as they come in the view", () => {

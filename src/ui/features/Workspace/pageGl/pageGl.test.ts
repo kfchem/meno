@@ -268,6 +268,10 @@ describe("a line of runs", () => {
     const line = lineOf("code", 0, 0, "start", runs, 10);
     expect(line.map((t) => !!t.mono)).toEqual([false, true]);
     expect(line[1].x).toBeCloseTo(pagePx(textWidth("see ", 10)), 9);
+    // (and the run after one in Mono starts where Mono's width ends it: 60 px on)
+    const after = lineOf("code", 0, 0, "start", [runs[1], { text: "end", color: "#000000" }], 10);
+    expect(after[1].x).toBeCloseTo(pagePx(60), 9);
+    expect(lineOf("code", 0, 0, "end", [runs[1]], 10)[0].x).toBeCloseTo(-pagePx(60), 9);
     // (the same colour and weight, but not the same face: two runs in a line that is long enough, one that is mono wide by Mono's own)
     const lines = wrapRuns([...runs, { text: " end", color: "#000000" }], 10, 1000);
     expect(lines).toHaveLength(1);
