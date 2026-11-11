@@ -1570,11 +1570,11 @@ Decided while building it, for the maintainer to confirm:
   top: wires join where they always did as the card opens.
 - **A port** is round at every zoom - a ring a hair thick, or filled in
   the accent while a wire may join it - and stands exactly at its wire's
-  end. It is 9 px across on the screen where the page is near; zoomed
-  out, never more than its own 11 page px - it shrinks with the page from
-  there - nor than a sixth of its set's or card's height, its ring then at
-  most a fifth of it across (the maintainer, 2026-10-28: zoomed out, ports
-  were far too big for their sets; look `portSize`).
+  end. It is 9 page px across, so it grows and shrinks with the page, never
+  more than a sixth of its set's or card's height - and never under 5 screen
+  px, where the page is far - its ring at most a fifth of it across (the
+  maintainer, 2026-10-28: zoomed out, ports were far too big for their sets;
+  2026-11-11: zoomed in, far too small; look `portSize`).
 - **Laid out in the screen's pixels, lines drawn as shadows** (2026-10-31,
   seen on Windows): the page's layer of HTML is laid out in its own
   pixels and scaled to the zoom after. Chromium, Windows' WebView2, rounds

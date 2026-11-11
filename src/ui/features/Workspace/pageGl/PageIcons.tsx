@@ -1,5 +1,5 @@
 import { useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { colourHex } from "../../../theme/colors";
 import { atlasVersion, CELL, cellOf, pageIconDrawing, pageIconNames, type PageIcon } from "./icons";
@@ -135,8 +135,10 @@ export default function PageIcons({ items, order = PAGE_GL_ORDER + 1 }: { items:
     [],
   );
   // (a geometry of its own each time what it draws changes - few as they are - the last let go: one drawn first with none
-  //  and given its icons after, its attributes replaced, the app's WebKit drew nothing of, 2026-11-06)
-  const [geometry, setGeometry] = useState<THREE.InstancedBufferGeometry | null>(null);
+  //  and given its icons after, its attributes replaced, the app's WebKit drew nothing of, 2026-11-06.
+  //  Put on the mesh in the effect itself, as the shapes' are filled, not by state that comes a render after:
+  //  an icon then moved in the same frame as its card, not one behind it)
+  const mesh = useRef<THREE.Mesh>(null);
   useEffect(() => () => material.dispose(), [material]);
   useEffect(() => {
     if (!ready) return;
@@ -147,8 +149,10 @@ export default function PageIcons({ items, order = PAGE_GL_ORDER + 1 }: { items:
       .sort((a, b) => (a[0].z ?? 0) - (b[0].z ?? 0) || a[1] - b[1])
       .map(([t]) => t);
     const n = shown.length;
+    const m = mesh.current;
+    if (!m) return;
     if (!n) {
-      setGeometry(null);
+      m.visible = false;
       invalidate();
       return;
     }
@@ -179,7 +183,8 @@ export default function PageIcons({ items, order = PAGE_GL_ORDER + 1 }: { items:
     g.setAttribute("aUv", new THREE.InstancedBufferAttribute(uv, 4));
     g.setAttribute("aTint", new THREE.InstancedBufferAttribute(tint, 4));
     g.instanceCount = n;
-    setGeometry(g);
+    m.geometry = g;
+    m.visible = true;
     invalidate();
     return () => g.dispose();
   }, [items, ready, material, invalidate]);
@@ -190,5 +195,5 @@ export default function PageIcons({ items, order = PAGE_GL_ORDER + 1 }: { items:
     material.uniforms.uTime.value = clock.elapsedTime;
     again();
   });
-  return ready && geometry ? <mesh geometry={geometry} material={material} renderOrder={order} frustumCulled={false} /> : null;
+  return ready ? <mesh ref={mesh} material={material} renderOrder={order} frustumCulled={false} visible={false} /> : null;
 }

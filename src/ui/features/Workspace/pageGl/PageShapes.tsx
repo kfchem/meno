@@ -41,7 +41,7 @@ void main() {
   float line = aRadiusLine.y > 0.0 ? max(aRadiusLine.y, uDevice) : 0.0;
   if (aControl.z > 0.5) {
     // (a control, as a hand needs it: units controlSize, controlLine)
-    float d = min(aControl.x * uScreen, aControl.y);
+    float d = max(aControl.x * uScreen, aControl.y);
     hs = vec2(d * 0.5);
     radius = d * 0.5;
     line = aStroke.a > 0.0 ? max(min(uScreen, d / 5.0), uDevice) : 0.0;
