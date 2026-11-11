@@ -1418,6 +1418,40 @@ describe("a wedge with a bond carrying straight on", () => {
   });
 });
 
+describe("a wedge's wide end where one bond carries straight on", () => {
+  const ZOOM = 40;
+  const atoms: Atom[] = [
+    { id: 1, x: 0, y: 0, el: "C" },
+    { id: 2, x: 1.5, y: 0, el: "C" },
+    { id: 3, x: 3, y: 0, el: "C" },
+  ];
+  const bonds: Bond[] = [
+    { a1: 0, a2: 1, order: 1, stereo: "up", narrow: 0 },
+    { a1: 1, a2: 2, order: 1, stereo: "none" },
+  ];
+  const wideEnd = (joinStyle: "round" | "sharp") => {
+    const { polys } = buildAllPrimitives(atoms, bonds, opts({ joinStyle }), ZOOM);
+    const wedge = polys.reduce((big, p) => (polyArea(p.points) > polyArea(big.points) ? p : big));
+    return wedge.points.filter((p) => p.x > 0.75);
+  };
+  // the corner a square end has: furthest out along the wedge and across it
+  const hasSharpCorner = (end: Vec2[]) => {
+    const far = Math.max(...end.map((p) => p.x));
+    const wide = Math.max(...end.map((p) => Math.abs(p.y)));
+    return end.some((p) => Math.abs(p.x - far) < 1e-9 && Math.abs(Math.abs(p.y) - wide) < 1e-9);
+  };
+
+  it("leaves the corners as they are cut when joins are sharp", () => {
+    expect(hasSharpCorner(wideEnd("sharp"))).toBe(true);
+  });
+
+  it("rounds both corners when joins are round", () => {
+    const end = wideEnd("round");
+    expect(end.length).toBeGreaterThan(wideEnd("sharp").length);
+    expect(hasSharpCorner(end)).toBe(false);
+  });
+});
+
 describe("a wavy bond", () => {
   const o = opts();
   const L = NOMINAL_BOND_LENGTH;

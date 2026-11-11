@@ -717,6 +717,9 @@ Both go together, because both touch every layer.
 - **Rounding is all or nothing.** When ends and joins are round, every end is
   round - double and triple bonds included, which today are not. When they
   are square, every one is square.
+  A wedge's wide end, where one bond carries straight on through it, is cut
+  square across and its two corners are rounded like any free corner (they
+  were left sharp).
 - **Units.** Every length can be given in points or as a fraction of the bond
   length, whichever the user prefers.
 - **Scope.** An application default; a document's own style over it; and
