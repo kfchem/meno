@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { COLORS } from "../../../theme/colors";
 import { cardState } from "../workflow/cardState";
 import { CARD_H, CARD_W, PORT_STEP, portDown } from "../workflow/look";
@@ -127,6 +127,11 @@ describe("a step's card, shut, drawn by WebGL", () => {
   });
 });
 
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.resetModules();
+});
+
 describe("a card zoomed out: named, then marked", () => {
   const far = (over: Partial<CardFaceOf> = {}) => card({ words: 0, scale: 0.5, ...over });
   const name = (d: ReturnType<typeof cardFace>, key = "nameNamed") => d.texts.find((t) => t.key.endsWith(`:${key}`));
@@ -169,9 +174,24 @@ describe("a card zoomed out: named, then marked", () => {
     expect(nameFits("xtb", 0.05)).toBe(false);
     // (the edge: the width of the name at its size on the page, against its box's and half as much again)
     const scale = 0.4;
-    const wide = textWidth("Optimise", NAME_PX / scale);
+    const wide = textWidth("Optimise", NAME_PX / scale, 500);
     expect(nameFits("Optimise", scale)).toBe(wide <= NAME_WIDEST);
-    expect(nameFits("Optimise".repeat(10), scale)).toBe(false);
+  });
+
+  it("measures its name as it is drawn, at its weight: where the heavier is wider, a name that fits only in the lighter does not fit, and its box is as wide", async () => {
+    // (a canvas to measure by, six wide a letter at 400, seven at 500)
+    vi.stubGlobal("document", { createElement: () => ({ getContext: () => ({ font: "", measureText(t: string) { return { width: t.length * (this.font.startsWith("500") ? 7 : 6) }; } }) }) });
+    vi.resetModules();
+    const fresh = await import("./cardFace");
+    const who = "x".repeat(10);
+    expect(fresh.nameFits(who, 1)).toBe(true);
+    const box = fresh.nameBoxOf({ key: "k", x: 0, y: 0, who }, 1, false);
+    expect(box.x1 - box.x0).toBeCloseTo(pagePx(70), 12);
+    // (fits at 400 and not at 500)
+    const n = Math.floor(fresh.NAME_WIDEST / 6);
+    expect(n * 6).toBeLessThanOrEqual(fresh.NAME_WIDEST);
+    expect(n * 7).toBeGreaterThan(fresh.NAME_WIDEST);
+    expect(fresh.nameFits("x".repeat(n), 1)).toBe(false);
   });
 
   it("goes from named to marked as it eases: the name where it was and the one in the middle, each as far as it has come", () => {
@@ -231,6 +251,11 @@ describe("a card zoomed out: named, then marked", () => {
     const named = nameBoxOf({ key: "k", x: 2, y: 3, who: "Tight" }, 0.5, true);
     const marked = nameBoxOf({ key: "k", x: 2, y: 3, who: "Tight" }, 0.5, false);
     expect(named.x0).toBeGreaterThan(2 + pagePx(CARD.hair + CARD.side));
+    // (after its icon and the gap: at scale a half, fourteen and five screen pixels)
+    expect(named.x0).toBeCloseTo(2 + pagePx(CARD.hair + CARD.side + 14 / 0.5 + 5 / 0.5), 12);
+    expect(named.x0).not.toBeCloseTo(marked.x0, 6);
+    // (its width as it is drawn, at its weight)
+    expect(named.x1 - named.x0).toBeCloseTo(pagePx(textWidth("Tight", NAME_PX / 0.5, 500)), 12);
     expect((marked.x0 + marked.x1) / 2).toBeCloseTo(2 + pagePx(CARD.w / 2), 9);
     expect(named.x1 - named.x0).toBeCloseTo(marked.x1 - marked.x0, 12);
     // (eleven screen pixels high, in the middle of its least height)
@@ -239,5 +264,52 @@ describe("a card zoomed out: named, then marked", () => {
     // (a name longer than its box and half as much again: as wide as that)
     const long = nameBoxOf({ key: "k", x: 0, y: 0, who: "w".repeat(200) }, 0.5, false);
     expect(long.x1 - long.x0).toBeCloseTo(pagePx(NAME_WIDEST), 9);
+    const longNamed = nameBoxOf({ key: "k", x: 0, y: 0, who: "w".repeat(200) }, 0.5, true);
+    expect(longNamed.x1 - longNamed.x0).toBeCloseTo(pagePx(NAME_WIDEST), 9);
+  });
+
+  it("keeps the sizes it says as screen pixels: the icon fourteen, the name eleven, the mark ten, its count seven tenths of the mark, the hollow mark's line one and a half", () => {
+    expect([ICON_PX, NAME_PX, MARK_PX]).toEqual([14, 11, 10]);
+    for (const scale of [0.5, 0.4]) {
+      const d = cardFace(far({ scale, state: cardState("waiting", undefined, undefined, 0) }));
+      expect((d.shapes.find((x) => x.key.endsWith(":mark")) as Ring).line?.widthPx).toBeCloseTo(1.5 / scale, 12);
+      expect(d.icons.find((i) => i.key.endsWith(":big"))!.sizePx).toBeCloseTo(14 / scale, 12);
+      expect(name(d)!.sizePx).toBeCloseTo(11 / scale, 12);
+      const count = cardFace(far({ scale, state: cardState("done", undefined, undefined, 0), failed: 2 })).texts.find((t) => t.key.endsWith(":mark:count"))!;
+      expect(count.sizePx).toBeCloseTo((10 / scale) * 0.7, 12);
+    }
+  });
+
+  it("puts its icon before its name, five screen pixels between them, and its mark five screen pixels in from its corner - or, small, a seventh of its height", () => {
+    const scale = 0.5;
+    const d = cardFace(far({ scale, state: cardState("done", undefined, undefined, 0) }));
+    const icon = d.icons.find((i) => i.key.endsWith(":big"))!;
+    const nameAt = name(d)!.x;
+    // (its right edge, the gap, then its name)
+    expect(nameAt - (icon.x + pagePx(14 / scale / 2))).toBeCloseTo(pagePx(5 / scale), 12);
+    expect(icon.x).toBeCloseTo(2 + pagePx(CARD.hair + CARD.side + 14 / scale / 2), 12);
+    const mark = d.shapes.find((x) => x.key.endsWith(":mark")) as Ring;
+    expect(mark.x).toBeCloseTo(2 + pagePx(CARD.w - 5 / scale - 10 / scale / 2), 12);
+    expect(mark.y).toBeCloseTo(3 - pagePx(5 / scale + 10 / scale / 2), 12);
+    // (small: its inset capped at a seventh of its height, its mark at two fifths)
+    const small = cardFace(far({ scale: 0.05, state: cardState("done", undefined, undefined, 0) })).shapes.find((x) => x.key.endsWith(":mark")) as Ring;
+    expect(small.x).toBeCloseTo(2 + pagePx(CARD.w - CARD.h / 7 - 0.2 * CARD.h), 12);
+    expect(small.y).toBeCloseTo(3 - pagePx(CARD.h / 7 + 0.2 * CARD.h), 12);
+  });
+});
+
+describe("a card's mark, from its state", () => {
+  it("a card that is only changed is hollow, not turning: running turns only where it runs", () => {
+    expect(markOf({ icon: "running", turning: false })).toEqual({ kind: "waiting", colour: COLORS.quiet, tint: false });
+    expect(markOf({ icon: "running" })).toEqual({ kind: "waiting", colour: COLORS.quiet, tint: false });
+    expect(markOf({ icon: "running", turning: true })).toEqual({ kind: "running", colour: COLORS.base, tint: true });
+  });
+
+  it("a stopped step is hollow as one waiting is, and a state that is none has no mark", () => {
+    expect(markOf({ icon: "stopped" })).toEqual({ kind: "waiting", colour: COLORS.quiet, tint: false });
+    expect(markOf({ icon: "waiting" })).toEqual({ kind: "waiting", colour: COLORS.quiet, tint: false });
+    expect(markOf({ icon: "failed" })).toEqual({ kind: "failed", colour: COLORS.attention, tint: true });
+    expect(markOf({ icon: undefined })).toBeNull();
+    expect(markOf({ icon: "nothing" })).toBeNull();
   });
 });

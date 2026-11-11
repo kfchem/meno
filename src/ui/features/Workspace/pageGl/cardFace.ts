@@ -47,6 +47,8 @@ export const TONE: Record<CardTone, string> = { quiet: COLORS.quiet, base: COLOR
 
 /** How wide a card's name runs at most: its box's width and half as much again, in page px. */
 export const NAME_WIDEST = CARD.w * 1.5;
+/** The weight a card's name is drawn in, and so measured in. */
+const NAME_WEIGHT = 500;
 /** The gap between a card's icon and its name where it is named, in screen px. */
 const NAME_GAP = 5;
 /** How far a tinted box is tinted, a share of its state's colour. */
@@ -55,7 +57,7 @@ const TINT_ALPHA = 0.12;
 const TINT_QUIET = 0.06;
 
 /** Whether a card's name is as wide as its box and half as much again, or less, at a page scale: where it is only marked, a name cut short is left out. */
-export const nameFits = (who: string, scale: number): boolean => textWidth(who, onPage(NAME_PX, scale)) <= NAME_WIDEST;
+export const nameFits = (who: string, scale: number): boolean => textWidth(who, onPage(NAME_PX, scale), NAME_WEIGHT) <= NAME_WIDEST;
 
 /** Where its name starts, from its left, in page px, where it is named: after its icon. */
 const nameLeft = (scale: number): number => CARD.hair + CARD.side + onPage(ICON_PX, scale) + onPage(NAME_GAP, scale);
@@ -90,7 +92,7 @@ export function markOf(state: Pick<CardFaceOf["state"], "icon" | "turning">, fai
 export function nameBoxOf(c: Pick<CardFaceOf, "key" | "x" | "y" | "who">, scale: number, named: boolean): NameBox {
   const P = pagePx;
   const size = onPage(NAME_PX, scale);
-  const wide = Math.min(textWidth(c.who, size), NAME_WIDEST);
+  const wide = Math.min(textWidth(c.who, size, NAME_WEIGHT), NAME_WIDEST);
   const x0 = named ? nameLeft(scale) : (CARD.w - wide) / 2;
   const mid = c.y - P(CARD.h / 2);
   return { key: c.key, x0: c.x + P(x0), x1: c.x + P(x0 + wide), y0: mid - P(size) / 2, y1: mid + P(size) / 2 };
@@ -225,7 +227,7 @@ export function cardFace(c: CardFaceOf, statePointed = false): CardDrawn {
     // (its name: after its icon where it is named, in the middle of its box where it is only marked; cut at its box's width and half as much again)
     const size = onPage(NAME_PX, scale);
     const nameText = (key: string, x: number, anchor: PageText["anchor"], opacity: number) => {
-      if (opacity > 0) texts.push({ key: `${c.key}:${key}`, x: c.x + P(x), y: c.y - P(CARD.h / 2), anchor, baseline: "middle", text: c.who, sizePx: size, color: COLORS.ink, weight: 500, maxWidthPx: NAME_WIDEST, opacity: o * opacity, z: z + 1 });
+      if (opacity > 0) texts.push({ key: `${c.key}:${key}`, x: c.x + P(x), y: c.y - P(CARD.h / 2), anchor, baseline: "middle", text: c.who, sizePx: size, color: COLORS.ink, weight: NAME_WEIGHT, maxWidthPx: NAME_WIDEST, opacity: o * opacity, z: z + 1 });
     };
     nameText("nameNamed", nameLeft(scale), "start", far * named * label);
     nameText("nameMarked", CARD.w / 2, "middle", far * (1 - named) * label);
