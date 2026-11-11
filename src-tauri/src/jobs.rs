@@ -616,6 +616,8 @@ pub fn run_job(dir: &Path, allowed: &dyn Fn(&JobSpec) -> Result<(), String>) -> 
         match take_turn(dir, &spec, &base, slots, &mut finished) {
             Ok(Turn::Taken) => break,
             Ok(Turn::Next) => sleep_watching(dir, step_at(at_head.get_or_insert_with(Instant::now).elapsed(), WAIT_STEP)),
+            // (its stop seen as it waited for the queue's lock: ended as the loop begins again)
+            Ok(Turn::Asked) => {}
             Ok(Turn::Behind(ahead)) => {
                 // (how long it has been near the head, not how long it has waited: one that came there from far back is new to it)
                 let near = if near_head(ahead, slots) {
@@ -730,6 +732,35 @@ enum Turn {
     Taken,
     Next,
     Behind(u32),
+    /// Asked to stop while it waited for the queue's lock: none taken.
+    Asked,
+}
+
+/// How often a runner tries again for the queue's lock while another holds it: only those near the head try, so
+/// it may be often - the head takes the lock within moments of its being let go, as it did waiting on it.
+const LOCK_STEP: Duration = Duration::from_millis(10);
+
+/// The queue's lock taken for the job `dir` - or, asked to stop while
+/// another holds it, none (false): tried again every `LOCK_STEP`, its stop
+/// looked for between, never waited on blind. A runner waiting on the lock
+/// itself saw no stop until the lock came to it, and each before it looked
+/// at every job's folder under it: on a computer whose files open slowly,
+/// a step's Stop left hundreds of runners waiting their turn at the lock
+/// for many minutes, only to stop as each came to it.
+fn lock_watching(dir: &Path, queue: &File) -> std::io::Result<bool> {
+    loop {
+        match queue.try_lock() {
+            Ok(()) => return Ok(true),
+            Err(TryLockError::WouldBlock) => {}
+            // (one given on a system that does, after a signal heard: tried again)
+            Err(TryLockError::Error(e)) if e.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(TryLockError::Error(e)) => return Err(e),
+        }
+        if stop_asked(dir) {
+            return Ok(false);
+        }
+        std::thread::sleep(LOCK_STEP);
+    }
 }
 
 /// Whether a job `ahead` places back in a queue running `slots` at once is
@@ -868,13 +899,8 @@ fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord, slots: u32, finished:
         return Ok(Turn::Behind(behind));
     }
     let queue = OpenOptions::new().create(true).truncate(false).write(true).open(root.join(QUEUE_LOCK))?;
-    // (a runner asked to go takes its wait up again of itself - its signals
-    // are heard with SA_RESTART, `listen_for_going` - so Unix gives no
-    // Interrupted here; one given, on a system that does, is waited again)
-    while let Err(e) = queue.lock() {
-        if e.kind() != std::io::ErrorKind::Interrupted {
-            return Err(e);
-        }
+    if !lock_watching(dir, &queue)? {
+        return Ok(Turn::Asked);
     }
     let Seen { running, used, first, ahead } = look(root, dir, base, here, finished)?;
     let mine = first.is_some_and(|(_, p)| p.file_name() == dir.file_name());
@@ -3001,6 +3027,35 @@ pub fn jobs_limits(app: AppHandle, cores: u32, memory: u64, awake: Option<bool>)
     write_limits(&root, Limits { cores: cores.clamp(1, 1024), memory: memory.min(MEMORY_MOST), awake: awake.unwrap_or(true) }).map_err(|e| e.to_string())
 }
 
+/// The computer kept awake while a plugin's worker works on what it was asked (lib/plugins/awake), as while a job
+/// runs - unless Settings says not, as the jobs' limits say it: held from the first ask to the last let go.
+#[derive(Default)]
+pub struct WorkerAwake(std::sync::Mutex<Option<crate::awake::Awake>>);
+
+/// Hold the computer awake for a plugin's worker at work (`held`), or let it go. Held already, or let go already, it
+/// is left as it is.
+#[tauri::command]
+pub fn worker_awake(app: AppHandle, state: tauri::State<'_, WorkerAwake>, held: bool) -> Result<(), String> {
+    let root = jobs_root(&app)?;
+    hold_for_worker(&state.0, held, || limits_in(&root).awake);
+    Ok(())
+}
+
+/// The hold for workers let go, whatever held it: the page that took it is gone (lib.rs, a page loaded anew).
+pub fn worker_let_go(state: &WorkerAwake) {
+    hold_for_worker(&state.0, false, || false);
+}
+
+/// The hold `kept` taken where `held` and Settings let it (`allowed`, asked only then), else let go.
+fn hold_for_worker(kept: &std::sync::Mutex<Option<crate::awake::Awake>>, held: bool, allowed: impl Fn() -> bool) {
+    let mut kept = kept.lock().unwrap_or_else(|e| e.into_inner());
+    if !held {
+        *kept = None;
+    } else if kept.is_none() && allowed() {
+        *kept = Some(crate::awake::hold());
+    }
+}
+
 /// Limits written whole: a runner never reads half of them.
 fn write_limits(root: &Path, limits: Limits) -> std::io::Result<()> {
     fs::create_dir_all(root)?;
@@ -3227,6 +3282,54 @@ mod tests {
         assert_eq!(rx.recv_timeout(Duration::from_secs(5)).unwrap(), Turn::Behind(1));
         drop(runners);
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_worker_at_work_holds_the_computer_awake_once_where_settings_let_it_and_lets_go() {
+        let kept = std::sync::Mutex::new(None);
+        // (Settings saying to let it sleep: nothing held)
+        hold_for_worker(&kept, true, || false);
+        assert!(kept.lock().unwrap().is_none());
+        hold_for_worker(&kept, true, || true);
+        assert!(kept.lock().unwrap().is_some());
+        // (held already: kept as it is, Settings not asked again)
+        hold_for_worker(&kept, true, || unreachable!("asked again while held"));
+        assert!(kept.lock().unwrap().is_some());
+        hold_for_worker(&kept, false, || unreachable!("asked as it lets go"));
+        assert!(kept.lock().unwrap().is_none());
+        hold_for_worker(&kept, false, || true);
+        assert!(kept.lock().unwrap().is_none());
+        // (the page loaded anew: whatever was held let go, Settings not asked)
+        let state = WorkerAwake::default();
+        hold_for_worker(&state.0, true, || true);
+        worker_let_go(&state);
+        assert!(state.0.lock().unwrap().is_none());
+    }
+
+    #[test]
+    fn a_waiting_job_asked_to_stop_ends_while_another_holds_the_queues_lock() {
+        let root = temp();
+        let dir = shell(&root, ECHO, 1);
+        // (the queue's lock held, as by a look at hundreds of folders on a disk that opens them slowly)
+        let lock = OpenOptions::new().create(true).truncate(false).write(true).open(root.join(QUEUE_LOCK)).unwrap();
+        lock.lock().unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        {
+            let d = dir.clone();
+            std::thread::spawn(move || {
+                let _ = tx.send(run_job(&d));
+            });
+        }
+        // (the head of the queue, at the lock: waiting, and still so a while on)
+        wait_for(|| current_record(&dir).is_some_and(|r| r.state == JobState::Waiting));
+        assert!(rx.recv_timeout(Duration::from_millis(300)).is_err());
+        // (its step stopped: it ends, the lock still held by the other, and runs nothing)
+        ask_stop(&dir).unwrap();
+        assert_eq!(rx.recv_timeout(Duration::from_secs(5)).expect("a stop went unseen while it waited for the queue's lock"), 0);
+        let record = current_record(&dir).unwrap();
+        assert_eq!((record.state, record.started), (JobState::Stopped, None));
+        drop(lock);
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]

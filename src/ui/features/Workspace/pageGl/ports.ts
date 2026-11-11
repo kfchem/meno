@@ -1,15 +1,15 @@
 /**
  * A workflow's ports as WebGL draws them (docs/WORKSPACE.md, *Drawn by
  * WebGL*; docs/WORKFLOWS.md, *How it looks*): a small ring on a set's or a
- * card's edge, as large as a hand takes it - 9 screen pixels where the page
- * is near, never more than 11 page pixels zoomed out nor than a sixth of
- * what it is on (workflow/look `portSize`) - its line a control's; white
+ * card's edge, 9 page pixels across - it grows and shrinks with the page,
+ * never more than a sixth of what it is on, nor under 5 screen pixels where
+ * the page is far (workflow/look `portSize`) - its line a control's; white
  * with a grey line, Meno's light colour as it is pointed at, filled with
  * Meno's colour where a wire being drawn may join it. Taken hold of over
  * 12 screen pixels about its middle, however small it is drawn.
  */
 import { colourMix, COLORS } from "../../../theme/colors";
-import { PORT, PORT_SHARE, PX } from "../workflow/look";
+import { PORT_LEAST_SCREEN_PX, PORT_PAGE_PX, PORT_SHARE, PX } from "../workflow/look";
 import type { Region } from "./hits";
 import type { Ring } from "./shapes";
 import type { PageText } from "./texts";
@@ -18,12 +18,12 @@ import type { Control } from "./units";
 /** A port where it stands on the page; what it is on, how tall (page px); what it is called - for the page's tip and a screen reader, which say it from part 9 of drawing the page by WebGL: nothing reads it yet; whether it takes the pointer. */
 export type PortAt = { key: string; x: number; y: number; ofPx?: number; label: string; noHits?: true };
 
-/** The screen pixels a port is drawn at where the page is near, and taken hold of over. */
-export const PORT_PX = { drawn: 9, taken: 12 } as const;
+/** The page pixels a port is drawn at, the least of the screen's it is drawn at, and the screen pixels it is taken hold of over. */
+export const PORT_PX = { drawn: PORT_PAGE_PX, least: PORT_LEAST_SCREEN_PX, taken: 12 } as const;
 
 /** A port's size as a control (pageGl/units `Control`): workflow/look `portSize`'s. */
 export function portControl(ofPx?: number): Control {
-  return { screenPx: PORT_PX.drawn, mostPagePx: PORT / PX, ...(ofPx != null && ofPx > 0 ? { leastOfPx: { of: ofPx, share: PORT_SHARE } } : {}) };
+  return { leastScreenPx: PORT_PX.least, onPagePx: PORT_PX.drawn, ...(ofPx != null && ofPx > 0 ? { leastOfPx: { of: ofPx, share: PORT_SHARE } } : {}) };
 }
 
 /**
@@ -40,7 +40,7 @@ export function portParts(p: PortAt, tone: number, opacity = 1): { ring: Ring; r
   const size = portControl(p.ofPx);
   const c = portColours(tone);
   return {
-    ring: { kind: "ring", key: p.key, x: p.x, y: p.y, diameterPx: size.mostPagePx, size, fill: c.fill, line: { widthPx: 1, color: c.line }, z: 5, opacity },
+    ring: { kind: "ring", key: p.key, x: p.x, y: p.y, diameterPx: size.onPagePx, size, fill: c.fill, line: { widthPx: 1, color: c.line }, z: 5, opacity },
     region: p.noHits ? null : { key: p.key, part: "port", circle: { x: p.x, y: p.y, diameterPx: PORT_PX.taken, size }, z: 5, cursor: "crosshair" },
   };
 }

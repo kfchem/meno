@@ -33,6 +33,7 @@ import { byOf, installedFor, optionsFor, programsFor, renderPresets, takesNothin
 import { partOf } from "../../chem/cleanUp";
 import { compoundLetter, frameXyz, framesOf, madeFrom, recordNumber, setEntries, structureLineage, TAKEN_AT_THE_EDIT, skeletonEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
 import { convergedOf, heldWhy } from "../../workflow/converged";
+import { runTook } from "../../workflow/runTime";
 import { skeletonWhy } from "../../../../../lib/chem/skeleton";
 import { conformersSought, conformersSoughtOf, roundsAsked, soughtNumber } from "../../../../../lib/chem/conformersSought";
 import type { Conformers } from "../../../../../lib/roles/client";
@@ -1587,9 +1588,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const by = byOf(step);
       const plugin = pluginById(by);
       const records = await Promise.all(run.jobs.map((j) => jobOf(j.id).catch((): Job | null => null)));
-      const starts = records.flatMap((r) => (r?.started != null ? [r.started] : []));
-      const ends = records.flatMap((r) => (r?.ended != null ? [r.ended] : []));
-      const took = ends.length && starts.length ? Math.max(...ends) - Math.min(...starts) : Date.now() - run.at;
+      // (the jobs this run ran, from the first starting to the last ending - not those taken up again: workflow/runTime)
+      const took = runTook(records, run.jobs, run.at, Date.now());
       const ids = run.jobs.map((j) => j.id);
       // (the kind and options it ran as: the step's may have changed since)
       const kind = run.kind ?? step.kind;

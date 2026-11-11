@@ -1609,11 +1609,11 @@ Decided while building it, for the maintainer to confirm:
   top: wires join where they always did as the card opens.
 - **A port** is round at every zoom - a ring a hair thick, or filled in
   the accent while a wire may join it - and stands exactly at its wire's
-  end. It is 9 px across on the screen where the page is near; zoomed
-  out, never more than its own 11 page px - it shrinks with the page from
-  there - nor than a sixth of its set's or card's height, its ring then at
-  most a fifth of it across (the maintainer, 2026-10-28: zoomed out, ports
-  were far too big for their sets; look `portSize`).
+  end. It is 9 page px across, so it grows and shrinks with the page, never
+  more than a sixth of its set's or card's height - and never under 5 screen
+  px, where the page is far - its ring at most a fifth of it across (the
+  maintainer, 2026-10-28: zoomed out, ports were far too big for their sets;
+  2026-11-11: zoomed in, far too small; look `portSize`).
 - **Laid out in the screen's pixels, lines drawn as shadows** (2026-10-31,
   seen on Windows): the page's layer of HTML is laid out in its own
   pixels and scaled to the zoom after. Chromium, Windows' WebView2, rounds
@@ -2512,10 +2512,12 @@ placed (the maintainer, 2026-10-31).
 
 Where a step has more than one exit, an exit whose set is on no page
 beside it - held off it - is named beside its port (workflow/exitNames),
-since no frame names it: outside the card's right side, half a port's
-step above its port, as an input's name stands above its port on the
-left - between the wire that leaves the port level and the line above
-it, through neither - in the quiet words an input's name is in.
+since no frame names it: outside the card's right side, just above its
+own port - 6 px above its wire, nearer it than the port above, so that a
+name never reads as the one beside the other (2026-11-11; it stood half a
+port's step up, between two ports) - between the wire that leaves the
+port level and the line above it, through neither - in the quiet words an
+input's name is in.
 
 - **The first is cut** with an ellipsis short of where its set's frame
   would stand (`GAP` out from the card): a wire leaves its port level
@@ -2652,7 +2654,10 @@ question N):
 - **Same key, same result.** A job whose key this workspace has run to the
   end - in any step's last run, or one it keeps - is not run again while
   its runner still has it: what it gave is taken up again, and the step's
-  line says so (*Reused*, or *2 reused*). Only within one workspace: no
+  line says so (*Reused*, or *2 reused*). How long the run took counts
+  the jobs it ran alone: one taken up again ran then, not now
+  (`workflow/runTime`; 2026-11-11, before which a run of a step two days
+  on said it took two days). Only within one workspace: no
   cache on the computer decides what runs. Its folder cleared since, it is
   run again.
 - **A step deleted takes no job's folder away**: another step's run may

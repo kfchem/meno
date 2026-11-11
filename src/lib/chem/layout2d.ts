@@ -1178,8 +1178,11 @@ function buildTripleLines(
 /**
  * A line as a point and a direction; the cut the wide end of a wedge follows.
  * `reach` is how far a corner may travel to land on it - see WEDGE_MITRE_REACH.
+ * `square` says it is no bond's edge but the cut straight across the end, made
+ * for a bond that runs straight on: a corner on it is as free as a square
+ * end's, and may be rounded.
  */
-type Cut = { on: Vec2; dir: Vec2; key: number; reach: number };
+type Cut = { on: Vec2; dir: Vec2; key: number; reach: number; square?: boolean };
 
 /**
  * A bond carrying on from the wide end of a wedge: which way it goes, how far
@@ -1284,6 +1287,7 @@ function baseCut(
       // square across the axis: the corner only has to come back as far as
       // the cut itself, whatever the bond does
       reach: half * 4,
+      square: true,
     };
   }
   const off = vperp(dir);
@@ -1773,8 +1777,9 @@ function broadEnd(
   const baseR = mitredR ?? vadd(squareR, back);
   const points = [baseL];
   // A corner cut along a bond carries on into that bond, so it is not a free
-  // corner and must stay as it is; the rest may be softened.
-  const soften = [!mitredL];
+  // corner and must stay as it is; the rest may be softened - a corner on a
+  // cut straight across the end, for a bond running straight on, as well.
+  const soften = [!mitredL || !!cutL?.square];
   const close =
     mitredL && mitredR && cutL && cutR && cutL.key !== cutR.key
       ? centredClose(p, neighbours, cutL.key, cutR.key)
@@ -1809,7 +1814,7 @@ function broadEnd(
     }
   }
   points.push(baseR);
-  soften.push(!mitredR);
+  soften.push(!mitredR || !!cutR?.square);
   return { points, soften };
 }
 

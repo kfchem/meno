@@ -957,6 +957,17 @@ fills.
   The next request waits for the worker to start, as a session's first
   request does: a role says "Starting RDKit…" meanwhile, and a file's
   reading or a step waits as on its first use.
+- **The computer kept awake while it works** (2026-11-11;
+  `lib/plugins/awake.ts`, backend `worker_awake`). A step a worker
+  computes itself - conformers made on the page, in rounds, say - can take
+  long, as a job can. A request still unanswered 10 s after it was asked
+  keeps the computer awake, as a running job does, for every worker at
+  once; once no worker is on such a request, it is let go 3 s later,
+  unless a request comes meanwhile (the next round of a step). A quick
+  request, such as the checks made as a structure is drawn, holds
+  nothing. Settings, *Calculations*, "Keep the computer awake while
+  calculations run" holds for this too: off, nothing is held. The page loaded anew -
+  reloaded while a worker held it - lets go of what the page before held.
 - **Held on a request.** A worker answers one request at a time, in the
   order asked. If the request it is on is not answered in that request's
   time, the worker is stopped, and the next request starts it afresh
@@ -1664,6 +1675,19 @@ comes in its own pull request.
   same second. When no Meno in use refuses the whole any more, the first
   is no longer written (meno-plugins' README says by which rule). A list is not refused for its age: Settings shows the day it was
   issued, beside when it was listed.
+- **Asked of its release by name** (2026-11-11): this Meno fetches
+  `releases/download/catalogue/catalogue-2.json`, the release
+  `catalogue` asked for by its name, not as the newest release - a step
+  fewer for GitHub to hand it on through; that release is the one marked
+  newest, for the address earlier Menos fetch. A server that fails (a
+  5xx, which GitHub gives now and then), or a connection that fails or
+  goes silent before it answers (30 s to connect, 60 s with nothing
+  coming; one that goes silent partway through its file is not asked
+  again, but said), is asked again
+  2 s later and once more 5 s after that; failing still, it is said by the
+  host that answered - where a request was handed on, the one it was
+  handed to - with what to do (`tools::fetch`). The plugins' own files are
+  fetched so too.
 - **Where a plugin's files may be.** On https, at the hosts the plugins'
   releases are at - each exactly, its letters made small, nothing only
   like one, nor one with a dot at its end - with no port and no name or
