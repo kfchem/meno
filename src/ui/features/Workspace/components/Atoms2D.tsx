@@ -8,6 +8,7 @@ import { useEditor, useEditorStore } from "../store";
 import { dragSelection } from "../utils/dragSelection";
 import { onChord } from "../utils/press";
 import { dragsSelection } from "../store/slices/selectionSlice";
+import { newmanTurnGesture, newmanTurnable } from "../utils/newmanTurn";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { dropOutcome } from "../utils/dropOutcome";
 import { ATOM_PICK_RADIUS_RATIO, DOUBLE_CLICK_MS, FREE_MS, MOV_PX } from "../constants";
@@ -239,6 +240,18 @@ export function Atoms2D() {
     window.addEventListener("keydown", onKey, true);
   };
 
+  /** A Newman pair's group dragged round its circle: its atom's three groups turned together, as one undo step (utils/newmanTurn). */
+  const newmanTurnGestureOn = (group: number, pid: number | null) => {
+    cand.current.started = true;
+    suppressDoubleClick?.(600);
+    newmanTurnGesture(store, toWorld, group, (ev) => {
+      resetCand();
+      endedByInteractive.current = true;
+      suppressDoubleClick?.(480);
+      endPanHold(ev?.pointerId ?? pid);
+    });
+  };
+
   /**
    * The selection moved together, dragged by one of its atoms: by as much as
    * the pointer goes, off the grid, as one undo step.
@@ -432,6 +445,8 @@ export function Atoms2D() {
         const st = store.getState();
         const withSelection = held || dragsSelection(st, a.id);
         if (withSelection) selectionMoveGesture(pid);
+        // (a group of a Newman pair is turned round its circle with its atom's others, not moved alone)
+        else if (newmanTurnable(store.getState().model, a.id)) newmanTurnGestureOn(a.id, pid);
         else moveGesture(idx, ev, pid);
       };
       const onEarlyUp = (ev: PointerEvent) => {

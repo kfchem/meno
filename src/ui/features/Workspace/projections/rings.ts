@@ -5,11 +5,12 @@
 import type { Atom, Bond } from "../store/types";
 import { chairOf, chairsIn, chairDrawing, type ChairDrawing } from "./chair";
 import { haworthDrawing, haworthOf, haworthsIn } from "./haworth";
+import { newmansIn } from "./newman";
 
 /** A projection found: what it is, its ring's atoms in order round it, the tool's drawing of it where it stands, and each atom's place in that drawing. */
 export type FoundProjection = { kind: "chair" | "haworth"; ring: number[]; drawing: ChairDrawing; index: Map<number, number> };
 
-/** The projections among the atoms `ids` (a structure's) of a drawing, or among all of it. */
+/** The ring projections among the atoms `ids` (a structure's) of a drawing, or among all of it. */
 export function projectionsIn(model: { atoms: Atom[]; bonds: Bond[] }, ids: ReadonlySet<number> = new Set(model.atoms.map((a) => a.id))): FoundProjection[] {
   // (nothing drawn with depth: nothing to look for, at every frame of every drag)
   if (!model.atoms.some((a) => a.z != null)) return [];
@@ -26,4 +27,4 @@ export function projectionsIn(model: { atoms: Atom[]; bonds: Bond[] }, ids: Read
 }
 
 /** Whether a structure holds a projection: Clean-up leaves it as drawn, and *Draw flat* lays it out flat (docs/EDITOR-2D.md, *Projections*). */
-export const isProjection = (model: { atoms: Atom[]; bonds: Bond[] }, ids: ReadonlySet<number>): boolean => projectionsIn(model, ids).length > 0;
+export const isProjection = (model: { atoms: Atom[]; bonds: Bond[] }, ids: ReadonlySet<number>): boolean => projectionsIn(model, ids).length > 0 || newmansIn(model, ids).length > 0;

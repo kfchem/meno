@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { NOMINAL_BOND_LENGTH as L } from "../../../../lib/chem/acs";
 import type { Atom, Bond, Model } from "../store/types";
-import { angleFrom, isEndOn, newmanDrawing, newmanExtension, newmansIn, setOf, spokeAngles, turnedAbout, turnedTo, turnOf } from "./newman";
+import { angleFrom, isEndOn, newmanDrawing, newmanExtension, newmansIn, newmanTurn, setOf, spokeAngles, turnedAbout, turnedTo, turnOf } from "./newman";
 
 const pair = (at = { x: 0, y: 0 }) => newmanDrawing({ at, firstId: 1, firstBondId: 100 });
 
@@ -92,5 +92,63 @@ describe("the sets of spokes, and turning about the bond", () => {
     expect(p.x).toBeCloseTo(0, 12);
     expect(p.y).toBeCloseTo(1, 12);
     for (const set of ["A", "B"] as const) expect(spokeAngles(set, false, false)).toHaveLength(3);
+  });
+});
+
+describe("a spoke dragged round the circle", () => {
+  const polar = (deg: number, r = L) => ({ x: r * Math.cos((deg * Math.PI) / 180), y: r * Math.sin((deg * Math.PI) / 180) });
+  /** The pair with three groups on the back atom (30, 150, 270) and one on the front (90), a second atom hung from the back's first group. */
+  const model = (): Model => {
+    const m = withGroups([[2, 30], [2, 150], [2, 270], [1, 90]]);
+    const [g] = m.atoms.filter((a) => a.id === 10);
+    return { atoms: [...m.atoms, { id: 40, el: "C", r: 0.9, x: g.x + 0.5 * L, y: g.y }], bonds: [...m.bonds, { id: 300, a: 10, b: 40, order: 1 }] };
+  };
+  const apply = (m: Model, moves: { id: number; x: number; y: number }[]): Model => ({ atoms: m.atoms.map((a) => moves.find((x) => x.id === a.id) ? { ...a, ...moves.find((x) => x.id === a.id)! } : a), bonds: m.bonds });
+
+  it("turns all three groups of the atom together, to the place nearest the pointer, with what hangs beyond them", () => {
+    const m = model();
+    const moves = newmanTurn(m, 10, polar(100, 3 * L))!;
+    const after = apply(m, moves);
+    const angles = [10, 11, 12].map((id) => angleFrom(after.atoms.find((a) => a.id === id)!, { x: 0, y: 0 }));
+    // (the grabbed group at 102, the eclipsed place - the front's set is A, 90 - and the others 120 on each side)
+    expect(angles[0]).toBeCloseTo(102, 6);
+    expect(angles[1]).toBeCloseTo(222, 6);
+    expect(angles[2]).toBeCloseTo(342, 6);
+    // (what hung from the first group went with it: the same step, the same distance from its group)
+    const [g, h] = [after.atoms.find((a) => a.id === 10)!, after.atoms.find((a) => a.id === 40)!];
+    expect(Math.hypot(h.x - g.x, h.y - g.y)).toBeCloseTo(0.5 * L, 9);
+    // (a turn about the bond: every group the same distance from the centre, the front's group where it was)
+    for (const id of [10, 11, 12]) expect(Math.hypot(after.atoms.find((a) => a.id === id)!.x, after.atoms.find((a) => a.id === id)!.y)).toBeCloseTo(L, 9);
+    expect(after.atoms.find((a) => a.id === 13)).toEqual(m.atoms.find((a) => a.id === 13));
+  });
+
+  it("keeps the cyclic order of the groups, whatever place it is dragged to", () => {
+    const m = model();
+    for (let deg = 0; deg < 360; deg += 17) {
+      const after = apply(m, newmanTurn(m, 10, polar(deg, 3 * L))!);
+      const order = (mm: Model) => [10, 11, 12].map((id) => angleFrom(mm.atoms.find((a) => a.id === id)!, { x: 0, y: 0 })).map((a, k, all) => (((all[(k + 1) % 3] - a) % 360) + 360) % 360);
+      for (const gap of order(after)) expect(gap).toBeCloseTo(120, 6);
+    }
+  });
+
+  it("moves the other atom's groups by the offset where the two sets come to be the same - and back again", () => {
+    // (the front's group at 90, set A; the back's at 30, set B: staggered. The front dragged round to 150: its set is B now, the back's
+    //  the same as it, so the back's groups turn by the eclipsed offset to still show)
+    const m = model();
+    const moves = newmanTurn(m, 13, polar(150, 3 * L))!;
+    const after = apply(m, moves);
+    expect(angleFrom(after.atoms.find((a) => a.id === 13)!, { x: 0, y: 0 })).toBeCloseTo(150, 6);
+    expect(angleFrom(after.atoms.find((a) => a.id === 10)!, { x: 0, y: 0 })).toBeCloseTo(42, 6);
+    // (and the front taken back to A: the back's again where it was)
+    const back = apply(after, newmanTurn(after, 13, polar(90, 3 * L))!);
+    expect(angleFrom(back.atoms.find((a) => a.id === 10)!, { x: 0, y: 0 })).toBeCloseTo(30, 6);
+  });
+
+  it("is none for an atom that is no group of a pair, and for a pair whose groups lie at none of its places", () => {
+    const m = model();
+    expect(newmanTurn(m, 1, polar(100))).toBeNull();
+    expect(newmanTurn(m, 99, polar(100))).toBeNull();
+    const odd = withGroups([[2, 33]]);
+    expect(newmanTurn(odd, 10, polar(100))).toBeNull();
   });
 });

@@ -23,7 +23,7 @@ import { resolve, sameFormula, type Reading } from "./chem/resolve";
 import { FormulaText } from "../../abbreviations/FormulaText";
 
 /** What Quick Add puts down where it was opened. */
-export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "cycle" | "slide" | "pen" | "conversation" | "chair" | "pyranose" | "furanose";
+export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "cycle" | "slide" | "pen" | "conversation" | "chair" | "pyranose" | "furanose" | "newman";
 
 /** Each icon's size, in px; and the gap between two in a row (gap-0.5). */
 const SIZE = 36;
@@ -196,6 +196,18 @@ const PROJECTIONS: typeof ROW = [
       <>
         <path d="M11 4.8 L16.5 7.8 L14.4 10.4 L7.6 10.4 L5.5 7.8 Z" />
         <path d="M14.4 10.4 L7.6 10.4" strokeWidth={2.8} />
+      </>
+    ),
+  },
+  {
+    id: "newman",
+    name: "Newman projection",
+    // (a circle, three bonds meeting at its centre and three starting at its rim)
+    icon: (
+      <>
+        <circle cx="11" cy="11" r="4.2" />
+        <path d="M11 11 L11 3.5 M11 11 L4.5 14.8 M11 11 L17.5 14.8" />
+        <path d="M14.6 9 L18 7 M7.4 9 L4 7 M11 15.2 L11 19" />
       </>
     ),
   },

@@ -177,3 +177,64 @@ export function newmanExtension(model: { atoms: readonly Atom[]; bonds: readonly
   }
   return null;
 }
+
+/**
+ * A group's atom of a Newman pair dragged round the circle to `pointer` (page units): all three groups of its atom turned together - each with
+ * what hangs beyond it, rigidly - so that the one dragged comes to rest at the nearest of that atom's places (`turnedTo`); and, where the
+ * pair's two sets come to be the same or stop being, the other atom's groups moved the eclipsed offset so that both still show. A turn about
+ * the central bond changes no configuration: the cyclic order of an atom's groups and every distance are kept. Worked from `model` as the
+ * gesture began, so that the moves of one frame do not add to those of the last. None where `group` is no group of a pair of the tool's, or a
+ * group of the pair lies at none of its places (drawn by hand: nothing is guessed).
+ */
+export function newmanTurn(model: { atoms: readonly Atom[]; bonds: readonly Bond[] }, group: number, pointer: { x: number; y: number }): { id: number; x: number; y: number }[] | null {
+  for (const found of newmansIn(model)) {
+    const ofFront = found.groups.front.find((g) => g.id === group);
+    const ofBack = found.groups.back.find((g) => g.id === group);
+    if (!ofFront && !ofBack) continue;
+    const now = turnOf(found);
+    if (!now) return null;
+    const back = !!ofBack;
+    const held = (ofBack ?? ofFront)!.angle;
+    const t = turnedTo({ held, pointer: { x: pointer.x - found.at.x, y: pointer.y - found.at.y }, back, other: back ? now.front : now.back });
+    // (the sets after the turn: the dragged atom's is the one it rests in, the other's is as it was)
+    const next = back ? { front: now.front, back: t.set } : { front: t.set, back: now.back };
+    const eclipsed = next.front === next.back;
+    // (each atom's groups: turned by `turn` - the dragged atom's by the turn it came to - and the other's by what the offset changes)
+    const byId = new Map(model.atoms.map((a) => [a.id, a]));
+    const inPair = new Set([found.front, found.back]);
+    const beyond = (from: number, through: number): number[] => {
+      const out = [through];
+      const seen = new Set([from, through]);
+      for (let h = 0; h < out.length; h++) {
+        for (const b of model.bonds) {
+          const other = b.a === out[h] ? b.b : b.b === out[h] ? b.a : null;
+          if (other == null || seen.has(other) || inPair.has(other)) continue;
+          seen.add(other);
+          out.push(other);
+        }
+      }
+      return out;
+    };
+    const moves = new Map<number, { id: number; x: number; y: number }>();
+    const turnGroups = (groups: Group[], from: number, degrees: number) => {
+      if (Math.abs(degrees) < 1e-9) return;
+      for (const g of groups) {
+        for (const id of beyond(from, g.id)) {
+          const a = byId.get(id)!;
+          const p = turnedAbout(a, found.at, degrees);
+          moves.set(id, { id, x: p.x, y: p.y });
+        }
+      }
+    };
+    const other = back ? found.groups.front : found.groups.back;
+    const mine = back ? found.groups.back : found.groups.front;
+    turnGroups(mine, back ? found.back : found.front, t.turn);
+    // (the other atom's: its places are those of its own set, and the back's offset by the eclipse: from where they were to where they are)
+    const was = back ? spokeAngles(now.front, false, false)[0] : spokeAngles(now.back, true, now.eclipsed)[0];
+    const to = back ? spokeAngles(next.front, false, false)[0] : spokeAngles(next.back, true, eclipsed)[0];
+    const shift = (((to - was) % 120) + 180) % 120 - 60;
+    turnGroups(other, back ? found.front : found.back, shift);
+    return [...moves.values()];
+  }
+  return null;
+}

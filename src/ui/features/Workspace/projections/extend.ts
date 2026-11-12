@@ -1,10 +1,11 @@
 /**
- * A bond dragged out of an atom of a projection - a chair, a Haworth ring (docs/EDITOR-2D.md, *Projections*: groups are drawn by extension): it goes to
+ * A bond dragged out of an atom of a projection - a chair, a Haworth ring, a Newman pair (docs/EDITOR-2D.md, *Projections*: groups are drawn by extension): it goes to
  * one of that atom's free positions as F9 gives them, seen as the solid is seen - the one whose seen direction is nearest the pointer's - and
  * nowhere between, so that nothing a projection is extended with is left unread. Pure: the model in, where the bond ends and what the place is called out.
  */
 import type { Atom, Bond } from "../store/types";
 import { seenPlaces, snapTo, type SeenPlace } from "./chair";
+import { newmanExtension } from "./newman";
 import { projectionsIn } from "./rings";
 
 /** Where a bond out of `tip` ends, and what the place is called ("axial", "equatorial", "up", "down"). */
@@ -19,6 +20,9 @@ const NEAR = 1e-3;
 export function chairExtension(model: { atoms: readonly Atom[]; bonds: readonly Bond[] }, tip: number, pointer: { x: number; y: number }): ChairExtension | null {
   const atoms = model.atoms as Atom[];
   const bonds = model.bonds as Bond[];
+  // (a Newman pair: the front atom's spokes and the back's, a bond length from the centre)
+  const spoke = newmanExtension({ atoms, bonds }, tip, pointer);
+  if (spoke) return spoke;
   for (const found of projectionsIn({ atoms, bonds })) {
     if (!found.ring.includes(tip)) continue;
     const d = found.drawing;
