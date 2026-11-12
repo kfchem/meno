@@ -105,8 +105,10 @@ function textureOf(d: DrawnPart, mip: boolean): THREE.Texture {
   return tex;
 }
 
-/** How long, in ms, after a picture is put on the graphics card the next waits: a frame's worth, so that two views asking in one frame put one. */
+/** How long, in ms, after a picture is put on the graphics card the next waits: a frame's worth, so that two views - or two PDFs' - asking in one frame put one. */
 const UPLOAD_GAP_MS = 8;
+/** When the last picture was put on the graphics card, by any `Pictures` - each PDF on the page keeps its own, and they draw in the same frames (ms). */
+let uploadedAt = -Infinity;
 
 /** How many levels a page is drawn at to each doubling: a sixteenth of one apart. */
 export const LEVELS_PER_DOUBLING = 16;
@@ -166,8 +168,6 @@ export class Pictures {
    * as the view moves.
    */
   private arriving: { key: string; d: DrawnPart; preview?: true }[] = [];
-  /** When the last picture was put on the graphics card (ms): one every frame at most, however many views draw them (`reveal`). */
-  private uploadedAt = -Infinity;
   /** The part of each page last asked for as seen, by PDF and page: its level, and its pixels at it. */
   seen = new Map<string, { level: number; x0: number; y0: number; x1: number; y1: number }>();
   private listeners = new Set<() => void>();
@@ -299,14 +299,14 @@ export class Pictures {
     let shown = 0;
     while (shown < most && this.arriving.length) {
       // (a frame's worth: both the column and the page ask each frame, and a 1024 px tile is several ms to put on the graphics card - one is put, the rest wait for the next frame)
-      if (Number.isFinite(most) && performance.now() - this.uploadedAt < UPLOAD_GAP_MS) break;
+      if (Number.isFinite(most) && performance.now() - uploadedAt < UPLOAD_GAP_MS) break;
       const { key, d, preview } = this.arriving.shift()!;
       // (asked for still: one dropped meanwhile is not shown)
       if ((preview ? this.previews : this.tiles).get(key) !== "asked") continue;
       const tex = textureOf(d, !!preview);
       upload?.(tex);
       (preview ? this.previews : this.tiles).set(key, { tex, born: performance.now() });
-      this.uploadedAt = performance.now();
+      uploadedAt = performance.now();
       shown++;
     }
     if (shown) this.came();
