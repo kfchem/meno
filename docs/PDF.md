@@ -1366,7 +1366,16 @@ it where it lies out of view.
   drawn flat - more than twice as wide as tall - a minus: a hyphen as
   WebKit prints one), and digits set high before the element its isotope's mass
   number (13C, 18F, 2H); a count set low before any letter - the H of an
-  H3N left outside the box - is no one's. A number set smaller than the
+  H3N left outside the box - is no one's. Two labels set close - a group's
+  name by an atom's, Me by an O - are two where the drawing says so, and one
+  word where it does not: a word is cut at a capital where both pieces read,
+  one a group's name and the other an atom's label (neither a lone H), by the
+  bonds first - bond ends come to both parts: two atoms, each with its own
+  bonds, a methoxy having its one bond at the O - then the size - a part at
+  nine tenths of the other's or less - then the line - a part set off the
+  other's by a twelfth of its size or more; one size on one line and no bond at
+  both is one word, as MeOH is. Cut by the bonds alone, both atoms say so. The
+  cut comes before the number rule: Me7OH is Me7 and OH. A number set smaller than the
   label's letters, after the first of them, is an atom's number - the small
   atom numbers a drawing sets by its atoms ("Me" and its 7) - and no part of
   the label (2026-11-13), by these rules: an atom's number stands at the END of its label - a small digit with a letter of the label after it is never one (inside a label it is a count, or the mass number of the letter after it: CO2Me, NH4Cl, O13CH3), each run judged on its own, primes after it no letters. (1) After the name of a point of
