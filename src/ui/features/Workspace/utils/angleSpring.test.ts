@@ -49,14 +49,29 @@ describe("the angle spring, shared by a bond, a moved atom and a turned selectio
   it("is the one function in all three: none keeps a spring of its own", () => {
     for (const file of ["ExtendPreview2D.tsx", "MovePreview2D.tsx", "Selection2D.tsx"]) {
       const source = readFileSync(join(process.cwd(), "src/ui/features/Workspace/components", file), "utf8");
-      expect(source, file).toContain('utils/angleSpring"');
+      // (the turn through the gesture's own pure frame, which is the one that holds it)
+      expect(source, file).toContain(file === "Selection2D.tsx" ? 'utils/turnGesture"' : 'utils/angleSpring"');
       // (an angle's own constants: a radius spring, as an atom's moving has, is another)
       expect(source, file).not.toMatch(/const (kA|zA|cA)\b|const k = 800/);
     }
   });
 });
 
+describe("the numbers of the spring and its ease", () => {
+  it("are the ones a bond's angle has always had", () => {
+    // (a change of feel is a ruling, not a side effect: these pin the values)
+    expect(SNAP_SPRING).toEqual({ k: 800, zeta: 0.5 });
+    expect(MOVE_SPRING).toEqual({ k: 1000, zeta: 0.4 });
+    expect(FREE_BLEND_S).toBe(0.18);
+  });
+});
+
 describe("letting go of the steps", () => {
+  it("is kept between the angle it begins at and the pointer's: a time before 0 or past 1 gives neither side of it", () => {
+    expect(freedAngle(deg(45), deg(52), -3)).toBe(deg(45));
+    expect(freedAngle(deg(45), deg(52), 7)).toBeCloseTo(deg(52));
+  });
+
   it("eases from the snapped angle to the pointer's, and reaches it", () => {
     const from = deg(45);
     const to = deg(52);
@@ -132,5 +147,22 @@ describe("the drop of a turn", () => {
     expect(turnReference(model, new Set([2, 3]))).toBeCloseTo(deg(37));
     expect(turnReference(model, new Set([1, 3]))).toBe(0);
     expect(turnReference(model, new Set())).toBe(0);
+  });
+
+  it("takes only a bond with both ends in the selection, one with a single end in it - not along 0 - is not one", () => {
+    const model = {
+      atoms: [
+        { id: 1, x: 0, y: 0 },
+        { id: 2, x: Math.cos(deg(50)), y: Math.sin(deg(50)) },
+        { id: 3, x: Math.cos(deg(50)) + Math.cos(deg(20)), y: Math.sin(deg(50)) + Math.sin(deg(20)) },
+      ],
+      bonds: [
+        { a: 1, b: 2 },
+        { a: 2, b: 3 },
+      ],
+    };
+    // (the first bond has only atom 2 of the selection: the second is the one)
+    expect(turnReference(model, new Set([2, 3]))).toBeCloseTo(deg(20));
+    expect(turnReference(model, new Set([1, 2]))).toBeCloseTo(deg(50));
   });
 });
