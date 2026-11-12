@@ -16,6 +16,9 @@ import { lineOf, textWidth, type PageText } from "./texts";
 import { PAGE_PX } from "../utils/pageScale";
 import { pagePx } from "./units";
 
+/** The ground under a run of inline code, in page px: what it reaches past its letters at each end, in from its line's top and foot, and its corners. */
+export const CODE = { pad: 2, inset: 2, radius: 3 } as const;
+
 /** The room a line, a box or a chip fades over at the view's edge where there is more beyond it: one line of the card's, so that it goes as it is scrolled out, never cut in two. */
 export const EDGE_FADE = CARD.line;
 
@@ -130,11 +133,30 @@ export function cardParts(c: CardOf): ConversationCardDrawn {
       const f = fade(b.y, b.h);
       if (f > 0) shapes.push({ kind: "box", key: `${c.key}:ground:${i}`, x0: rect.x0 + P(b.x), y0: rect.y1 - P(b.y + b.h), x1: rect.x0 + P(b.x + b.w), y1: rect.y1 - P(b.y), radiusPx: b.radius, fill: b.fill, opacity: f, z: z + 1 });
     }
+    // (what shares a row - a list item's marker and its first line of words - is under a chip, or not, as one: the marker does not stay where its words go)
+    const rows = new Map<string, { x0: number; x1: number }>();
+    for (const l of w.lines) {
+      const row = rows.get(`${l.block}:${l.y}`);
+      rows.set(`${l.block}:${l.y}`, { x0: Math.min(row?.x0 ?? Infinity, l.x), x1: Math.max(row?.x1 ?? -Infinity, l.x + l.width) });
+    }
     for (const [i, l] of w.lines.entries()) {
       const high = l.size === CARD.size ? CARD.line : CARD.quietLine;
-      const f = fade(l.y, high) * underChip(l.x, l.width, l.y, high);
+      const row = rows.get(`${l.block}:${l.y}`)!;
+      const f = fade(l.y, high) * underChip(row.x0, row.x1 - row.x0, l.y, high);
       const p = at(l.x, l.baseline);
-      if (f > 0) texts.push(...lineOf(`${c.key}:line:${i}`, p.x, p.y, "start", l.runs, l.size, { opacity: f, z: z + 2 }));
+      if (f <= 0) continue;
+      // (inline code on a ground of its own, as the words around it are not: Plex Mono beside Plex Sans is too like it to be told apart by its face alone)
+      let across = l.x;
+      for (const [k, r] of l.runs.entries()) {
+        const wide = textWidth(r.text, l.size, r.weight ?? 400, r.mono);
+        if (r.mono) {
+          const x0 = across - CODE.pad;
+          const y0 = l.y + CODE.inset;
+          shapes.push({ kind: "box", key: `${c.key}:code:${i}:${k}`, x0: rect.x0 + P(x0), x1: rect.x0 + P(x0 + wide + 2 * CODE.pad), y1: rect.y1 - P(y0), y0: rect.y1 - P(y0 + high - 2 * CODE.inset), radiusPx: CODE.radius, fill: COLORS.ground, opacity: f, z: z + 1 });
+        }
+        across += wide;
+      }
+      texts.push(...lineOf(`${c.key}:line:${i}`, p.x, p.y, "start", l.runs, l.size, { opacity: f, z: z + 2 }));
     }
     for (const [i, chip] of w.chips.entries()) {
       const f = fade(chip.y, chip.h);

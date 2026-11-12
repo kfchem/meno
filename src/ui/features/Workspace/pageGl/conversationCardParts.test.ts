@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { COLORS } from "../../../theme/colors";
 import { CARD, cardLayout, type CardBlock } from "./conversationCard";
-import { cardParts, cardView, edgeFade, EDGE_FADE, SCROLL_ICONS, turnsSaid, type CardOf } from "./conversationCardParts";
+import { cardParts, cardView, CODE, edgeFade, EDGE_FADE, SCROLL_ICONS, turnsSaid, type CardOf } from "./conversationCardParts";
 import { SCROLL_CHIP, TRACK } from "./conversationScroll";
 
 /** A frame put down: 24 by 14 bonds of 1.8 world units; its card 432 by 648 page px, its history 604 (the ask field's 44 less). */
@@ -54,6 +54,40 @@ describe("a conversation's card as drawn", () => {
     const ground = d.shapes.find((s) => s.key === "conversation:1:ground:0") as { x0: number; y1: number; fill: string; y0: number } | undefined;
     expect(ground && [near(ground.y1), near(ground.y1 - ground.y0), ground.fill]).toEqual([near(24.75 - 12 * 0.0375), near(35 * 0.0375), COLORS.ground]);
     expect(d.texts.filter((x) => x.mono).map((x) => x.text)).toEqual(["xtb"]);
+  });
+
+  it("lays a ground under each run of inline code, a hair wider than its letters, as present as its line, and none under the words around it", () => {
+    const d = cardParts(card([{ kind: "reply", spans: [{ text: "run " }, { text: "C6H14O", code: true }, { text: " now" }] }]));
+    const grounds = d.shapes.filter((s) => s.key.startsWith("conversation:1:code:")) as { x0: number; x1: number; y0: number; y1: number; fill: string; opacity: number; radiusPx: number }[];
+    expect(grounds).toHaveLength(1);
+    // ("run " 4 letters of Plex Sans, then six letters at the mono advance, 13 px: its box begins at the words' x less the pad, as wide as they come to and the pad twice)
+    const code = d.texts.find((x) => x.mono)!;
+    expect(grounds[0].fill).toBe(COLORS.ground);
+    expect(grounds[0].radiusPx).toBe(CODE.radius);
+    expect(grounds[0].x0).toBeCloseTo(code.x - CODE.pad * 0.0375, 5);
+    expect(grounds[0].x1 - grounds[0].x0).toBeCloseTo((6 * 7.8 + 2 * CODE.pad) * 0.0375, 5);
+    // (from 2 px in from its line's top, to 2 in from its foot: 19 - 4 = 15 tall)
+    expect(near(grounds[0].y1 - grounds[0].y0)).toBe(near(15 * 0.0375));
+    expect(grounds[0].opacity).toBe(1);
+    expect(d.shapes.some((s) => s.key.includes(":code:") && s.key.endsWith(":0:0"))).toBe(false);
+  });
+
+  it("fades a list item's marker with its words, as one row: a chip over the words takes the marker too, where it does not reach the marker itself", () => {
+    const long = "second point that runs well on past the middle of the card where the chip lies";
+    const filler = (n: number) => Array.from({ length: n }, (_, i) => reply(`line ${i}`));
+    // (long enough to be scrolled: the item well down it)
+    const blocks: CardBlock[] = [...filler(20), { kind: "item", marker: "•", spans: [{ text: long }] }, ...filler(30)];
+    const layout = cardLayout(blocks);
+    const row = layout.lines.find((l) => l.runs.some((r) => r.text.startsWith("second")))!;
+    // (scrolled so that the item's row lies where the Earlier chip does)
+    const offset = row.y - SCROLL_CHIP.from - 1;
+    const shown = (earlier: number) => {
+      const d = cardParts(card(blocks, { offset, scroll: { track: 0, earlier, latest: 0 } }));
+      return [d.texts.some((x) => x.text === "•"), d.texts.some((x) => x.text.startsWith("second"))];
+    };
+    // (no chip: both there; the chip over the words: the words go and the marker with them)
+    expect(shown(0)).toEqual([true, true]);
+    expect(shown(1)).toEqual([false, false]);
   });
 
   it("draws the changes' chips under their line, Keep in Meno's colour and Discard quiet, each taking the pointer over its box as a pointer", () => {

@@ -28,7 +28,7 @@ The same holds for the exchange as it is saved and opened again.
 - **A card on the page, inside a frame.** It lies against the frame's
   right edge, drawn on the page: what was said in turn - each question in
   a light ground against the right, each reply as paragraphs, lists and
-  `inline code`, each tool call a quiet line - and, last, the changes
+  `inline code` (in Plex Mono, on a light ground of its own), each tool call a quiet line - and, last, the changes
   waiting to be kept, with *Keep* and *Discard*. Its words fade with the
   page's; too small to read, it says how many turns it holds and whether
   it works or has changes waiting. It opens in the right column, as a text
