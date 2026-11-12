@@ -101,15 +101,34 @@ describe("a thing let go with its middle on a conversation's card is eased off i
     expect(atomsX(cardsCleared(held, down, extent))).toEqual(atomsX(held));
   });
 
+  it("leaves a molecule in 3D and a picture a set holds, as it leaves a structure: they are the set's, not eased off a card", () => {
+    const middle = (room.x0 + room.x1) / 2;
+    const flat = addMolecule3d(base(), { atoms: [{ el: "O", x: 0, y: 0, z: 0 }], bonds: [], at: { x: 5, y: middleY } } as Parameters<typeof addMolecule3d>[1]);
+    const down: WorkspaceDocument = {
+      ...flat,
+      pictures: [{ id: 1, name: "a.png", sha256: "a".repeat(64), media: "image/png", px: [10, 10], x: 6, y: middleY, w: 2, h: 2 }],
+      sets: [{ id: 5, x0: room.x0, y0: 6, x1: room.x1, y1: 8, name: "S" }],
+    } as WorkspaceDocument;
+    const now: WorkspaceDocument = { ...down, molecules3d: down.molecules3d!.map((m) => ({ ...m, at: { x: middle, y: middleY } })), pictures: down.pictures!.map((p) => ({ ...p, x: middle })) };
+    const out = cardsCleared(now, down, extent);
+    expect(out.molecules3d![0].at).toEqual({ x: middle, y: middleY });
+    expect(out.pictures![0].x).toBe(middle);
+    // (the same, held by no set: both eased)
+    const free = cardsCleared({ ...now, sets: [] }, { ...down, sets: [] }, extent);
+    expect(free.molecules3d![0].at.x).toBeLessThan(room.x0);
+    expect(free.pictures![0].x).toBeLessThan(room.x0);
+  });
+
   it("keeps its middle in what the conversation sees where the room left of the card is narrower than it - never carried out of the frame", () => {
     const box = { x0: 0, x1: 20, y0: 0, y1: 2 };
     const f = { x0: 0, y0: 0, x1: 30, y1: 14 };
     const card = { x0: 15, y0: 0, x1: 29, y1: 14 };
     // (20 across, middle at 20: its right edge would go to 15 - 0.75, its middle to 4.25, inside)
     expect(easedOffCard(box, { x: 20, y: 1 }, f, card)).toBeCloseTo(15 - SET_PAD - 20, 9);
-    // (40 across: eased so far its middle would be left of the frame's edge: its middle stays inside)
-    const wide = easedOffCard({ x0: -10, x1: 30, y0: 0, y1: 2 }, { x: 20, y: 1 }, f, card)!;
+    // (80 across, its middle at 20: its right edge would go to 15 - 0.75 and its middle far left of the frame - kept just inside it)
+    const wide = easedOffCard({ x0: -20, x1: 60, y0: 0, y1: 2 }, { x: 20, y: 1 }, f, card)!;
     expect(20 + wide).toBeGreaterThan(f.x0);
+    expect(20 + wide).toBeCloseTo(f.x0 + 0.01, 9);
     expect(20 + wide).toBeLessThan(card.x0);
     // (not on the card: none)
     expect(easedOffCard(box, { x: 14.99, y: 1 }, f, card)).toBeNull();
