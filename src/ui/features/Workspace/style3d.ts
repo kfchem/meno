@@ -25,10 +25,21 @@ export function style3dOf(st: Partial<Pick<EditorState, "docStyle3d">>): Style3D
  * `reachOverFrames`): what a set held off the page needs to be laid out on
  * it again (document `createWorkspaceDocument`, workflow/held).
  */
-export const extentIn =
-  (doc: Pick<WorkspaceDocument, "style3d">): RunWith["extentOf"] =>
-  (m, turn) =>
-    reachOverFrames({ ...m, id: 0 }, style3dOf({ docStyle3d: doc.style3d }), turn);
+export const extentIn = (doc: Pick<WorkspaceDocument, "style3d">): RunWith["extentOf"] => {
+  const style = style3dOf({ docStyle3d: doc.style3d });
+  // (a molecule's reach, turned as it is made - none: worked out once for each molecule and style, as every edit asks of every set's)
+  let reach = reachedIn.get(style);
+  if (!reach) reachedIn.set(style, (reach = new WeakMap()));
+  return (m, turn) => {
+    if (turn) return reachOverFrames({ ...m, id: 0 }, style, turn);
+    let found = reach!.get(m);
+    if (!found) reach!.set(m, (found = reachOverFrames({ ...m, id: 0 }, style, turn)));
+    return found;
+  };
+};
+
+/** How far each molecule reaches, by the style in 3D it was worked out in (`extentIn`). */
+const reachedIn = new WeakMap<Style3D, WeakMap<object, { x0: number; x1: number; y0: number; y1: number }>>();
 
 /** The same, for a component: it draws again as the workspace's styles, or Settings', change. */
 export function useStyle3D(): Style3D {

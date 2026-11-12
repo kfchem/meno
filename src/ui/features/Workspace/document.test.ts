@@ -192,17 +192,14 @@ describe("structure document operations", () => {
     expect(single.model.bonds[0]).toMatchObject({ order: 1, stereo: "up" });
   });
 
-  it("merges a dragged atom into its target, rewiring bonds", () => {
-    // chain: 1-2, plus 3 bonded to 1; dropping 3 onto 2 should bond 2-1 only once
+  it("leaves a dragged atom alone that would lose a bond on becoming its target", () => {
+    // chain: 1-2, plus 3 bonded to 1; 3 and 2 share the neighbour 1: dropping 3 onto 2 would fold two bonds into one
     let d = ethane();
     d = ops.addAtomBonded(d, 1, -1.5, 0, "C");
     const draggedId = d.model.atoms[2].id;
-    const merged = ops.replaceDraggedAtomWith(d, draggedId, 2);
-
-    expect(merged.model.atoms.map((a) => a.id)).toEqual([1, 2]);
-    // the rewired bond would duplicate 1-2, so it is dropped
-    expect(merged.model.bonds).toHaveLength(1);
-    expect(merged.model.bonds[0]).toMatchObject({ a: 1, b: 2 });
+    expect(ops.replaceDraggedAtomWith(d, draggedId, 2)).toBe(d);
+    // nor does an atom become its own neighbour
+    expect(ops.replaceDraggedAtomWith(d, draggedId, 1)).toBe(d);
   });
 
   it("keeps a rewired bond when it is not a duplicate", () => {

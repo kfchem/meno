@@ -20,22 +20,22 @@ export function lineWidth(widthPx: number, zoom: number, dpr: number): number {
 }
 
 /**
- * A control's size - a port, a handle to grab - as a hand needs it, not as
- * the page draws it: `screenPx` on the screen where the page is near, never
- * more than `mostPagePx` page pixels zoomed out, nor than `share` of `of`
- * page pixels (a sixth of its set's height, say) - so it stays as large as a
- * pointer can take hold of, and no larger than what it belongs to.
+ * A control's size - a port, a handle to grab: `onPagePx` page pixels, no
+ * more than `share` of `of` page pixels (a sixth of its set's height, say),
+ * so it grows and shrinks with the page and is no larger than what it
+ * belongs to - but never under `leastScreenPx` on the screen, so that zoomed
+ * far out it is still there to see.
  */
-export type Control = { screenPx: number; mostPagePx: number; leastOfPx?: { of: number; share: number } };
+export type Control = { leastScreenPx: number; onPagePx: number; leastOfPx?: { of: number; share: number } };
 
-/** The most a control is drawn at, zoomed out, in world units (`Control`). */
-export function controlMost(c: Control): number {
-  return Math.min(pagePx(c.mostPagePx), c.leastOfPx ? pagePx(c.leastOfPx.of * c.leastOfPx.share) : Infinity);
+/** A control's size on the page, in world units (`Control`). */
+export function controlOnPage(c: Control): number {
+  return Math.min(pagePx(c.onPagePx), c.leastOfPx ? pagePx(c.leastOfPx.of * c.leastOfPx.share) : Infinity);
 }
 
 /** A control's size at `zoom`, in world units (`Control`). */
 export function controlSize(c: Control, zoom: number): number {
-  return Math.min(c.screenPx / Math.max(zoom, 1e-9), controlMost(c));
+  return Math.max(c.leastScreenPx / Math.max(zoom, 1e-9), controlOnPage(c));
 }
 
 /**

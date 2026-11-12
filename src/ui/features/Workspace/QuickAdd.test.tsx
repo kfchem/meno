@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
 import QuickAdd, { DrawAs } from "./QuickAdd";
-import { CALC_MOST, CALC_ROW, LIST_LEAST, LIST_MOST, calcHeight, listWidth, stepsMost } from "./quickAddLabel";
+import { CALC_MOST, CALC_ROW, LIST_LEAST, LIST_MOST, listWidth, stepsMost } from "./quickAddLabel";
 import { pastedAs } from "./quickAddPaste";
 import { toggledPanel } from "./quickAddPanel";
 import { registerKinds } from "../../../lib/io/kinds";
@@ -138,10 +138,8 @@ describe("how the calculations' list stands", () => {
     expect(listWidth(["A plugin whose name runs on and on, far past what a row can hold"])).toBe(LIST_MOST);
   });
 
-  it("as tall as its rows and the largest one's steps opened, those scrolling past the most - and never fewer than six of them shown", () => {
-    expect(calcHeight([3, 2])).toBe(2 * CALC_ROW + 3 * CALC_ROW + 4);
-    expect(calcHeight([40, 2])).toBe(CALC_MOST);
+  it("shows never fewer than six of the steps of the one open, however many rows there are", () => {
     expect(stepsMost(40)).toBe(6 * CALC_ROW);
-    expect(calcHeight([])).toBe(0);
+    expect(stepsMost(2)).toBe(CALC_MOST - 2 * CALC_ROW);
   });
 });

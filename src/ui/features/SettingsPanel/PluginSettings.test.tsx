@@ -82,6 +82,8 @@ describe("Plugins in Settings, with the list online", () => {
       },
     });
     expect(html).toMatch(/>Update to 99\.0\.0</);
+    // (and the one button that updates every one that has a newer version online)
+    expect(html).toMatch(/>Update all \(1\)</);
     expect(html).toContain("For Windows only");
     // (one that cannot be added here: its name in grey)
     expect(html).toMatch(/<div class="text-sm text-gh-gray">Windows thing <span/);
@@ -89,6 +91,15 @@ describe("Plugins in Settings, with the list online", () => {
     expect(html).toContain("It is for a newer Meno");
     // (the plugin here not offered again)
     expect(html.split(`${HERE.name} <span`).length).toBe(2);
+  });
+
+  it("has no Update all where no plugin here has a newer version online", () => {
+    expect(drawn({ state: "unlisted" })).not.toMatch(/Update all/);
+    const none = drawn({
+      state: "listed",
+      catalogue: { schema: 1, issued: "2026-11-10T00:00:00Z", plugins: [entry({ id: HERE.id, name: HERE.name, version: HERE.version })] as never },
+    });
+    expect(none).not.toMatch(/Update all/);
   });
 
   it("offers to take the files of a plugin here, and not added, away - asking first - and not where a plugin added uses it", () => {

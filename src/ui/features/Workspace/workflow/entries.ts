@@ -19,14 +19,21 @@ import { speciesOf } from "../../../../lib/io/writers";
 import { isSkeleton } from "../utils/completeness";
 import { groupLetter } from "../../../../lib/nodes/base";
 import { aboveText, numberText, resultsRenumbered } from "../../../../lib/calc/results";
-import type { DrawnRecord, Member, Model, Molecule3D, PictureItem, WorkflowSet } from "../store/types";
+import type { Arrow, DrawnRecord, Member, Model, Molecule3D, PictureItem, Plus, WorkflowSet } from "../store/types";
 import { kindInfo, type SetHolds, type StepKind } from "./kinds";
 import { skeletonWhy } from "../../../../lib/chem/skeleton";
 import { PATH_FRAME, REFINED_SAID, STARTED_SAID } from "../../../../lib/calc/paths";
 
 type Pt = { x: number; y: number };
 export type Frame = Pick<WorkflowSet, "x0" | "y0" | "x1" | "y1">;
-export type Page = { model: Model; molecules3d?: readonly Molecule3D[]; pictures?: readonly Pick<PictureItem, "id" | "x" | "y">[] };
+export type Page = {
+  model: Model;
+  molecules3d?: readonly Molecule3D[];
+  pictures?: readonly Pick<PictureItem, "id" | "x" | "y">[];
+  /** The arrows and pluses drawn: what a set around a drawn reaction reads its structures' roles from (workflow/schemeRoles). */
+  arrows?: readonly Arrow[];
+  pluses?: readonly Plus[];
+};
 
 /** Whether `p` is inside a frame. */
 export const inside = (b: Frame, p: Pt) => p.x >= b.x0 && p.x <= b.x1 && p.y >= b.y0 && p.y <= b.y1;
@@ -562,7 +569,7 @@ export function numberShown(n: { value: number; unit: string }): string {
 }
 
 /** A set's count line, as its frame says it: how many of what it holds - and, of structures drawn more than the page shows (look `DRAWN_ON_PAGE`), how many it shows of how many - or that it is empty, not run yet, or not kept. */
-export function countSaid(b: Pick<WorkflowSet, "notKept" | "made" | "number" | "chart" | "drawnCollection">, count: ReturnType<typeof countOf>): string {
+export function countSaid(b: Pick<WorkflowSet, "notKept" | "made" | "number" | "chart" | "drawnCollection">, count: ReturnType<typeof countOf>, scheme: readonly string[] = []): string {
   // (a result set the file did not keep: how many it held; one kept out of the file from now on, said so;
   // a step's exit not run yet, so - not empty, which would say it ran and gave nothing)
   return b.notKept && !count.entries
@@ -583,13 +590,15 @@ export function countSaid(b: Pick<WorkflowSet, "notKept" | "made" | "number" | "
         ? // (more than the page shows - look DRAWN_ON_PAGE - how many it shows of how many it holds)
           b.drawnCollection?.length && count.entries > b.drawnCollection.length
           ? `${(count.entries - b.drawnCollection.length).toLocaleString("en-US")} of ${plural(count.entries, "structure")} shown`
-          : plural(count.entries, "structure")
+          : // (and what a drawn reaction in its frame says of them: schemeRoles)
+            [plural(count.entries, "structure"), ...scheme].join(" \u00b7 ")
         : count.holds === "molecules"
           ? plural(count.compounds, "compound")
-          : `${plural(count.compounds, "compound")} · ${count.entries}`;
+          : // (a conformer set: as its exit's chip and its step's line say it - "1,800 conformers of 3 compounds")
+            `${plural(count.entries, "conformer", "conformers", true)} of ${plural(count.compounds, "compound")}`;
 }
 
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const plural = (n: number, one: string, many = `${one}s`, grouped = false) => `${grouped ? n.toLocaleString("en-US") : n} ${n === 1 ? one : many}`;
 
 /** How many frames a molecule in 3D has: its own geometry, and the rest. */
 export const framesOf = (m: Pick<Molecule3D, "frames">) => 1 + (m.frames?.length ?? 0);

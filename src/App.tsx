@@ -13,7 +13,7 @@ import {
 } from "./lib/core";
 import { Deck, viewRegistry, type ViewEntry } from "./ui/views";
 import DocumentBridge from "./ui/views/DocumentBridge";
-import { openable, openedAs, openedTexts, sayNoneTold, stylesOfFile, textsOf, workspaceOfFile, type Opened, type OpenedStyles } from "./ui/views/openFile";
+import { openable, openedAs, openedTexts, sayNoneTold, stylesOfFile, textsOf, unreadWorkspaceSaid, workspaceOfFile, type Opened, type OpenedStyles } from "./ui/views/openFile";
 import { keptOnline } from "./lib/plugins/online";
 import StyleFileAsk from "./ui/features/StyleEditor/StyleFileAsk";
 import QuestionLayer from "./ui/layouts/QuestionLayer";
@@ -21,7 +21,7 @@ import { afterAnswer, withAsked } from "./ui/features/StyleEditor/styleAsks";
 import { ownChoice, withOwnStyle2d } from "./lib/chem/styleFields";
 import { withOwn3d, withRole } from "./lib/chem/style3d";
 import { forgetFiles, giveFiles, type OpenedFile } from "./ui/views/files";
-import { pdfTakerOf, type OpenedPdf } from "./ui/views/pdfs";
+import { openedPdfs, pdfsDestination, pdfTakerOf, type OpenedPdf } from "./ui/views/pdfs";
 import { pictureTakerOf } from "./ui/views/pictures";
 import { holdPdfPath } from "./lib/pdf/reader";
 import { isPictureName } from "./lib/picture/image";
@@ -327,10 +327,18 @@ export default function App() {
   // PDFs opened, likewise: on the page of the workspace in front, or on a canvas of their own (ui/views/pdfs)
   const openPdfs = (pdfs: OpenedPdf[], into: string | null): boolean => {
     const take = into ? pdfTakerOf(into) : undefined;
-    if (!take) return openTab({ kind: "workspace", label: pdfs[0].name, data: { pdfs, filename: pdfs[0].name } });
+    if (!take) return openTab(openedPdfs(pdfs));
     take(pdfs);
     return true;
   };
+  // PDFs opened from outside Meno (a double-click, Open With): each in a canvas of its own - in place of a blank one in front - read
+  // in the column, which fills the workspace, the workspace kept behind it; one a tab holds already brings that tab forward
+  const pdfsOfTabs = () =>
+    Object.values(stateRef.current.tabsById).map((t) => {
+      const held = documentsRef.current.get(t.meta.id);
+      const own = held?.kind === "workspace" ? (held.doc as DocumentStore<WorkspaceDocument>).getState().pdfs : (t.content.data as { pdfs?: OpenedPdf[] } | undefined)?.pdfs;
+      return { id: t.meta.id, pdfs: own };
+    });
   // and pictures (ui/views/pictures)
   const openPictures = (pictures: PictureToAdd[], into: string | null): boolean => {
     const take = into ? pictureTakerOf(into) : undefined;
@@ -398,14 +406,14 @@ export default function App() {
   // outside Meno (a workspace file double-clicked: src-tauri/src/opened.rs)
   // - by what each is.
   // (a file opened is the user's first action, where nothing came before it - once it is open: lib/firstAction)
-  const openPaths = async (paths: readonly string[]) => {
+  const openPaths = async (paths: readonly string[], outside = false) => {
     try {
-      await openPathsAlone(paths);
+      await openPathsAlone(paths, outside);
     } finally {
       if (paths.length) firstActionDone();
     }
   };
-  const openPathsAlone = async (paths: readonly string[]) => {
+  const openPathsAlone = async (paths: readonly string[], outside = false) => {
     // (where what is not a workspace file goes: the workspace in front as
     // Open was pressed - not the tab of a workspace file opened with it,
     // which opens as it was saved, untouched: the maintainer, 2026-10-13)
@@ -457,6 +465,13 @@ export default function App() {
         const text = textOf(bytes);
         // (what it is: told by what it holds - or, where nothing tells it, by a plugin asked)
         const kind = await kindOfFile(name, text);
+        // (told to be a workspace but none that reads - not a Meno file, cut short: said, not dropped unseen)
+        const unread = unreadWorkspaceSaid(name, text, kind);
+        if (unread) {
+          console.warn("a workspace file could not be read");
+          setNotice(unread);
+          continue;
+        }
         const opened = openedAs(name, text, path, kind);
         const asText = textsOf(opened);
         if (asText) texts.push(...asText);
@@ -480,7 +495,12 @@ export default function App() {
     );
     if (rest && workspaces.length && front && stateRef.current.tabsById[front]) act({ type: "SELECT_TAB", id: front });
     if (texts.length) openTexts(texts, front);
-    if (pdfs.length) openPdfs(pdfs, front);
+    if (pdfs.length) {
+      const { forward, fresh, intoFront } = pdfsDestination(outside, pdfs, pdfsOfTabs());
+      for (const id of forward) act({ type: "SELECT_TAB", id });
+      if (fresh.length) openTab(openedPdfs(fresh, true));
+      if (intoFront.length) openPdfs(intoFront, front);
+    }
     if (pictures.length) openPictures(pictures, front);
     if (structures.length) openStructureFiles(structures, front);
     sayUntold(untold);
@@ -554,6 +574,13 @@ export default function App() {
         const text = textOf(bytes);
         // (told as Open through the dialog tells it: a catalogue's kind too)
         const kind = await kindOfFile(f.name, text);
+        // (told to be a workspace but none that reads - not a Meno file, cut short: said, not dropped unseen)
+        const unread = unreadWorkspaceSaid(f.name, text, kind);
+        if (unread) {
+          console.warn("a workspace file could not be read");
+          setNotice(unread);
+          continue;
+        }
         const opened = openedAs(f.name, text, undefined, kind);
         const asText = textsOf(opened);
         if (asText) texts.push(...asText);
@@ -693,7 +720,7 @@ export default function App() {
   openPathsNow.current = openPaths;
   useEffect(() => {
     if (!isTauri()) return;
-    return watchOpenedFiles((paths) => void openPathsNow.current(paths));
+    return watchOpenedFiles((paths) => void openPathsNow.current(paths, true));
   }, []);
 
   const ctl: TabsController = {

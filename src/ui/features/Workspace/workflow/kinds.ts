@@ -6,7 +6,7 @@
  */
 import { CHECK_OPTIONS } from "./checkStructures";
 import { STEREO_OPTIONS } from "./stereoisomers";
-import { deltaOf, levelsTyped } from "../../../../lib/energyDiagram";
+import { deltaOf, levelsTyped, propertiesTyped } from "../../../../lib/energyDiagram";
 import { MOST_PAIRS } from "./mostPairs";
 import { numberText } from "../../../../lib/calc/results";
 import { shownOptions, type Option, type OptionValues } from "../../../../lib/options";
@@ -596,8 +596,28 @@ export const KINDS: readonly KindInfo[] = [
       { id: "quantity", label: "Energy", type: "text", default: "energy" },
       { id: "levels", label: "Levels, in order", type: "lines", default: "", rows: 3, note: "Rename one by writing = and the name after it, as R = HCN" },
       { id: "reference", label: "Relative to", type: "text", default: "" },
+      // (blank: as before - a level by its title, name or group)
+      { id: "levelsBy", label: "Levels by", type: "lines", default: "", rows: 2, note: "Property names, one to a line: the first an entry carries names its level" },
+      // (blank: Connects, else each level to the next)
+      { id: "joinedBy", label: "Joined by", type: "lines", default: "", rows: 2, note: "Property names, one to a line: the first names what comes before a level, the rest what comes after" },
+      {
+        id: "conformers",
+        label: "Conformers",
+        type: "choice",
+        choices: [
+          { value: "lowest", label: "The lowest" },
+          { value: "every", label: "Every one" },
+        ],
+        default: "lowest",
+      },
     ],
-    how: (v) => `${deltaOf(String(v.quantity || "energy"))}, relative to ${shownAs(String(v.levels ?? ""), String(v.reference ?? "")) || "the first"}`,
+    how: (v) =>
+      [
+        `${deltaOf(String(v.quantity || "energy"))}, relative to ${shownAs(String(v.levels ?? ""), String(v.reference ?? "")) || "the first"}`,
+        ...(propertiesTyped(String(v.levelsBy ?? "")).length ? [`levels by ${propertiesTyped(String(v.levelsBy)).join(", ")}`] : []),
+        ...(propertiesTyped(String(v.joinedBy ?? "")).length ? [`joined by ${propertiesTyped(String(v.joinedBy)).join(", ")}`] : []),
+        ...(v.conformers === "every" ? ["every conformer"] : []),
+      ].join(", "),
   },
   // (Meno's steps on structures - docs/STRUCTURE-STEPS.md - each on a set's entries as Meno's entry records, workflow/structureSteps)
   {
@@ -1031,6 +1051,7 @@ export const KINDS: readonly KindInfo[] = [
         type: "choice",
         choices: [
           { value: "one", label: "The one reference" },
+          { value: "order", label: "In order" },
           { value: "property", label: "Matched on" },
         ],
         default: "one",
@@ -1218,7 +1239,6 @@ export function atomMapNeeds(v: OptionValues): string | undefined {
   const side = (x: unknown) => x === "each" || x === "together";
   if (!side(v.moleculesAre)) return "Choose how the molecules are taken";
   if (!side(v.referenceIs)) return "Choose how the reference is taken";
-  if (v.reference === "property" && (v.moleculesAre === "together" || v.referenceIs === "together")) return "Matched on a property takes each entry on its own: set both inputs to each its own";
   if (v.reference === "property" && !String(v.property ?? "").trim()) return "Name the property to pair them on";
   if (v.bonds !== "change" && v.bonds !== "same") return "Choose whether bonds may change";
   return undefined;
@@ -1230,10 +1250,12 @@ export function atomMapHow(v: OptionValues): string {
   if (needs) return needs;
   // (an input taken each its own, the plain reading, unsaid - one taken as one side said; whether bonds may change, always)
   return [
-    ...(v.moleculesAre === "together" ? ["molecules as one side"] : []),
-    ...(v.referenceIs === "together" ? ["reference as one side"] : []),
+    // (matched on a property, together is one side for each value of it)
+    ...(v.moleculesAre === "together" ? [`molecules as one side${v.reference === "property" ? ` per ${String(v.property).trim()}` : ""}`] : []),
+    ...(v.referenceIs === "together" ? [`reference as one side${v.reference === "property" ? ` per ${String(v.property).trim()}` : ""}`] : []),
     v.bonds === "same" ? "bonds stay the same" : "bonds may change",
     ...(v.maps === "every" ? ["every map"] : []),
+    ...(v.reference === "order" ? ["in order"] : []),
     ...(v.reference === "property" ? [`matched on ${String(v.property).trim()}`] : []),
   ].join(", ");
 }

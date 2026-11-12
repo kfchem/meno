@@ -8,7 +8,7 @@ import {
 } from "react";
 import type { Conversation } from "../conversation/types";
 import type { DocumentStore } from "../../../../lib/doc";
-import { createWorkspaceDocument, type WorkspaceDocument } from "../document";
+import { createWorkspaceDocument, opensReadingFilled, type WorkspaceDocument } from "../document";
 import { extentIn } from "../style3d";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { DEFAULT_WORKSPACE_3D, workspace3dOf } from "../../../../lib/chem/workspaceStyle3d";
@@ -296,11 +296,12 @@ export function createEditorStore(
     ...mirrorOf(doc.getState(), NO_RECORDS),
     // (a canvas opened for a text shows it)
     textShown: doc.getState().texts?.slice(-1)[0]?.id ?? null,
-    textsOpen: !!doc.getState().texts?.length,
+    // (and one made for a PDF opened from outside Meno, its PDF: read in the column, which fills the workspace)
+    textsOpen: !!doc.getState().texts?.length || opensReadingFilled(doc),
     cover: 0,
     shownMarks: null,
     columnWidth: COLUMN_WIDTH,
-    columnFilled: false,
+    columnFilled: opensReadingFilled(doc),
     pdfColumnWidth: null,
     pdfShown: null,
     setsRead: [],
@@ -338,6 +339,7 @@ export function createEditorStore(
     lists3d: {},
     frames3d: {},
     stacksShown: {},
+    heldShown: {},
     recordsShown: NO_RECORDS,
     talkLooks: NO_LOOKS,
     recordSwaps: {},
@@ -402,6 +404,7 @@ export function createEditorStore(
     pressHold: null,
     fitNonce: 0,
     showRequest: null,
+    panRequest: null,
     autoFitSuspended: false,
     labelEdit: { active: false, atomId: null, value: "" },
     labelLeft: null,

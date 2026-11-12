@@ -243,8 +243,11 @@ Taken on 2026-10-03:
   - **The selection's handle turns molecules in 3D** (agreed 2026-10-03;
     in the page's plane since 2026-10-24, the maintainer: the handle turns
     round, so it turns them round, as it does a drawing):
-    - selected alone, in the page's plane about the line of sight, in
-      steps of 15 degrees or freely after a pause, as a drawing turns:
+    - selected alone, in the page's plane about the line of sight, freely
+      and never in steps (the maintainer, 2026-11-11: a molecule in 3D has
+      no grid to keep to), the same with Shift, each about its own centre,
+      even with a drawing selected; selected with a drawing, they are
+      carried round with it, in its steps of 15 degrees:
       several as one body about their common middle - so that molecules
       placed together, a complex say, stay as they are to one another -
       which moves them; one about its own centre, where it stands. Either
@@ -1143,7 +1146,7 @@ what it converts, the style's place and its card, and the molecules in
   | A shape | x0, y0, x1, y1 | times k; its corners' radius and its line's width in pt are kept - a line as wide as the bonds' as wide as the new style's |
   | Ink | its strokes' points | x and y times k (not the pressure); its width in pt is kept |
   | A workflow step | x, y | times k |
-  | A workflow set | its frame | fitted round what it holds once that has moved (`fitSets`) |
+  | A workflow set | its frame | fitted round what it holds once that has moved (`framesFitted`) |
   | A print frame (later) | its frame | times k |
 
   What is given in points - words' sizes, shapes' weights, ink widths, a
@@ -1355,10 +1358,10 @@ it, in `features/Workspace/pageGl/`:
 - **Its lengths** (`units`): in page pixels - a screen pixel at the zoom a
   canvas opens at (utils/pageScale `PAGE_PX`) - so all of it grows and
   shrinks with the page, its lines too, never thinner than one device
-  pixel. A control - a port, a handle - is as large as a hand needs it
-  instead: its screen pixels where the page is near, no more than its own
-  page pixels zoomed out, nor than its share of what it belongs to
-  (`Control`).
+  pixel. A control - a port - is its page pixels too, no more than its
+  share of what it belongs to, and never under its least on the screen
+  where the page is far (`Control`; 2026-11-11, the maintainer: a port's
+  dots were far too small zoomed in).
 - **Boxes and rings** (`PageShapes`): one instanced quad each, its shape
   worked out from its distance to its edge in the fragment shader -
   rounded corners, a line inside the edge as a CSS inset ring is, solid or
@@ -1425,25 +1428,45 @@ it, in `features/Workspace/pageGl/`:
 - **A workflow** (components/Workflow2D): its steps' cards shut
   (`cardFace`) - who does it, what and how, its state in words and an icon
   turning while it runs, a log's last line in Plex Mono and a bar of how
-  far its jobs are; its icons alone and large where its words are too
-  small to read - laid out as their HTML was, and drawn on under a card
+  far its jobs are; zoomed out where its words are too small to read, in
+  two more bands (`pageGl/cardBands`: by the page's scale, a screen pixel
+  to a page pixel): from three quarters down to a quarter it is *named* -
+  its box at the page's size, its kind's icon and its name on one line
+  (the name 11 screen pixels high at any zoom, cut inside its box, clear
+  of its mark), a mark of its state at its top right (running
+  turns, in Meno's colour; done is filled, in the quiet ink; waiting is
+  hollow; failed is in the alert tone with how many of its entries failed,
+  where it counts them) - and none of its summary, state words, log line,
+  bar or port names; under a quarter it is *marked*: its box tinted by
+  its state, the mark, and its name only where it fits whole inside its
+  box and clear of the mark at both sides - never cut short, never over its
+  box's edge or its mark.
+  Where two names would overlap, the later in reading order fades out
+  (the earlier staying) and the page's tip says it as its card is
+  pointed at. The bands switch with a little hysteresis (5 % each way) and
+  fade over Meno's quick time. A set's tab follows the same rule: its name,
+  11 screen pixels high, stands in for its words (cut inside its frame's
+  width, a tab's inset from each side, and raised over its frame's top where
+  it is higher than its tab's band - wholly above it, far off - never down
+  over what the frame holds, and left out where it would lie over another
+  frame or a card) - laid out as their HTML was, and drawn on under a card
   opened (HTML still, the one HTML on the page), which alone fades in over
   it and out off it, so the card is never paler as it opens or shuts; what
   its card says that a chemist copies - a failure, a program's line -
   copied from its menu. Its sets' frames and tabs (`FrameTabs`): the tab
-  drags it, its edges and corners size it, two presses on a chemist's
+  drags it (its frame is its members' room, never sized by hand), two presses on a chemist's
   set's tab write its name anew where it stands (`PageField`): drawn in
   its own size and weight, in a white box, with its caret, what is
   selected and what an input method is composing underlined; typed into a
   real field laid unseen at the caret, so that keys, the input method's
   candidates beside the words, pasting, undoing and a screen reader are
   the system's own - Enter or a press away keeps it, Escape leaves it as
-  it was; its icon - what made it - stands in for its words where they are
-  too small to read; a tab's words start as far from the frame's left edge
+  it was; its name, 11 screen pixels high, stands in for its words where
+  they are too small to read (a conversation's tab: its icon); a tab's words start as far from the frame's left edge
   as its icon stands from its top, a conversation's and a set's alike
   (`TAB_INSET`); what a set holds (a summary, a table, a chart) is
-  HTML still, inside its frame. Its ports (`ports`): rings as large as a
-  hand takes them, lit where a wire being drawn may join them, a wire let
+  HTML still, inside its frame. Its ports (`ports`): rings that grow with the
+  page, never under 5 screen pixels, lit where a wire being drawn may join them, a wire let
   go on one found by its shape. And its small marks (`workflowMarks`):
   what just joined a set or left it, an Enumerate step's positions, a
   structure's number with how it was made in the tip. Frames under cards
@@ -1769,7 +1792,12 @@ slowing it - and in the pictures made of it.
   balls grow, fewer once the zoom has settled (`utils/largeDrawing`
   `ballSegmentsFor`). The line round them follows them. What each ball
   carries - its number, whether it is lined - goes with it to the new
-  number (`carriedSphere`). A box of 33 000 waters (100 000 atoms) turned
+  number, moved, not shared: the old sphere, let go once the new one is
+  drawn, keeps none of it, so that letting it go takes nothing the new
+  balls draw with (`carriedSphere`; shared, the balls were lost after a
+  change of segments). Its size on the screen is the pixels a unit spans
+  at the molecule for either camera (`pxPerWorld`): the canvas's zoom, or
+  a perspective preview's - Settings' - by how far off the molecule stands. A box of 33 000 waters (100 000 atoms) turned
   at 183 ms a frame with 32, and turns at 33 ms; a large workflow page,
   283 molecules in 3D, drew about 17.8 million triangles a frame at Fit,
   and draws 1.3 million.

@@ -32,6 +32,7 @@ import { StoreApi } from "zustand";
 import { nextIdAfter } from "../../workflow/saved";
 import { membersFound } from "../../workflow/model";
 import { heldSettled } from "../../workflow/held";
+import { framesFitted } from "../../workflow/fitFrames";
 import { appendParts, carriedRenumbered, NO_PARTS, removeParts } from "../../workflow/parts";
 import { holdsOwn } from "../../workflow/entries";
 import { recordsShownAdded, recordsShownOf, shownModel } from "../../utils/stacks";
@@ -180,14 +181,14 @@ export const createModelSlice = (
     );
   },
 
-  bondOut: (id: number, toward: { x: number; y: number }) => {
+  bondOut: (id: number, toward: { x: number; y: number }, order: Bond["order"] = 1) => {
     const { model } = get();
     const end = newBondFrom(model.atoms, model.bonds, id, toward, bondLengthFrom(model.atoms, id));
     if (!end) return null;
     // (one gesture, one undo step: the atom and its bond together - or the bond alone, onto the atom it ends on)
     const near = get().findAtomNear(end.x, end.y, NOMINAL_BOND_LENGTH * 0.3, id);
-    if (near != null) return get().connectAtoms(id, near, 1) == null ? null : near;
-    return get().addAtomBonded(id, end.x, end.y, "C", 1);
+    if (near != null) return get().connectAtoms(id, near, order) == null ? null : near;
+    return get().addAtomBonded(id, end.x, end.y, "C", order);
   },
 
   findAtomNear: (
@@ -554,7 +555,8 @@ export const createModelSlice = (
         // (and its styles in 3D - a file saved before workspaces carried them: Settings' as it opens, fixed from then on)
         ws.style3d ?? workspace3dOf(useAppSettings.getState().style3d),
       ));
-      return heldSettled(found, undefined, extentIn(found));
+      // (and each frame its members' room, as an edit leaves it: a file saved with frames sized by hand, or before molecules were drawn as they are now, is fitted as it opens)
+      return framesFitted(heldSettled(found, undefined, extentIn(found)), undefined, extentIn(found));
     };
     if (start) doc.reset(opened(doc.getState()), "open workspace");
     else doc.edit("open workspace", opened);
@@ -568,6 +570,9 @@ export const createModelSlice = (
     // a stack of drawings, the record marked: utils/stacks)
     const recordsShown = recordsShownOf(drawn.atoms);
     const stacksShown: EditorState["stacksShown"] = {};
+    // (and each large result set's view the molecule it showed: workflow/heldView)
+    const heldShown: EditorState["heldShown"] = {};
+    for (const b of doc.getState().sets ?? []) if (b.collection && b.shown != null) heldShown[b.id] = b.shown;
     const opened3d = doc.getState().molecules3d ?? [];
     (drawn.molecules3d ?? []).forEach((m, i) => {
       const stack = opened3d[i]?.stack;
@@ -581,7 +586,7 @@ export const createModelSlice = (
     const pdfShown = ws.pdfShown != null ? ws.pdfShown + 1 : null;
     // (what its file held that could not be read: said on every save - and, opened as the document, its file kept beside the first saved over it; opened into one, never its file to keep)
     const leftOnOpen = start ? (ws.leftOut ? { left: ws.leftOut, kept: false } : null) : ws.leftOut ? { left: leftTogether(get().leftOnOpen?.left, ws.leftOut), kept: true } : get().leftOnOpen;
-    set((prev: EditorState) => ({ ...prev, turns3d, frames3d, lists3d, stacksShown, recordsShown, model: shownModel(prev.fullModel, recordsShown), textShown: shown ?? texts[0]?.id ?? textsLost[0]?.id ?? null, pdfShown, textsOpen: shown != null || pdfShown != null, leftOnOpen }));
+    set((prev: EditorState) => ({ ...prev, turns3d, frames3d, lists3d, stacksShown, heldShown, recordsShown, model: shownModel(prev.fullModel, recordsShown), textShown: shown ?? texts[0]?.id ?? textsLost[0]?.id ?? null, pdfShown, textsOpen: shown != null || pdfShown != null, leftOnOpen }));
   },
 
   /** A file opened over what the canvas holds: one step, arrow and all. */

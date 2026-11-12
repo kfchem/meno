@@ -3,7 +3,7 @@ import { degrees, narrowEnd } from "../chem/drawing";
 import { longPressMs } from "../longPress";
 import * as THREE from "three";
 import { pageAt } from "../utils/page";
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { useThree } from "@react-three/fiber";
 import { pressMovedUnder } from "./viewGoal";
@@ -20,42 +20,57 @@ import { bondLengthFrom } from "../utils/magnified";
 export default function BondsPick2D() {
   const { camera, gl } = useThree();
   const store = useEditorStore();
+  const toWorld = useCallback(
+    (cx: number, cy: number) => {
+      const rect = gl.domElement.getBoundingClientRect();
+      const v = new THREE.Vector3(((cx - rect.left) / rect.width) * 2 - 1, -(((cy - rect.top) / rect.height) * 2 - 1), 0);
+      const p = pageAt(v.x, v.y, camera);
+      return { x: p.x, y: p.y };
+    },
+    [camera, gl],
+  );
   // a bond key with the pointer on a bond (docs/EDITOR-2D.md, *Bond keys*): 1, 2, 3 - not while a label or any field is typed
-  // in, nor while a button is held (a drag going on: the bond under it is the gesture's)
+  // in, nor while a button is held (a drag going on: the bond under it is the gesture's); with the pointer on an atom, on no bond,
+  // the key goes on a chain from it: one bond of that order out of the atom (`bondOut`, as a click with Option held), the new
+  // atom the one the next key goes on from
+  const at = useRef({ x: 0, y: 0 });
   useEffect(() => {
     let held = 0;
     const onDown = () => void held++;
     const onUp = () => void (held = 0);
+    const onMove = (e: PointerEvent) => void (at.current = { x: e.clientX, y: e.clientY });
     const onKeyDown = (e: KeyboardEvent) => {
       const key = bondKeyOf(e);
       if (key == null || held) return;
       const s = store.getState();
       const id = s.hovered.bondId;
-      if (id == null || s.labelEdit.active) return;
+      const atom = s.hovered.atomId;
+      if ((id == null && atom == null) || s.labelEdit.active) return;
       const t = e.target as HTMLElement | null;
       if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable || t.dataset.textField != null)) return;
       e.preventDefault();
-      s.bondKey(id, key);
+      if (id != null) {
+        s.bondKey(id, key);
+        return;
+      }
+      const end = s.bondOut(atom!, toWorld(at.current.x, at.current.y), key);
+      if (end != null) s.setHoveredFromId(end);
     };
     window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("pointermove", onMove, true);
     window.addEventListener("pointerdown", onDown, true);
     window.addEventListener("pointerup", onUp, true);
     window.addEventListener("pointercancel", onUp, true);
     window.addEventListener("blur", onUp);
     return () => {
       window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("pointermove", onMove, true);
       window.removeEventListener("pointerdown", onDown, true);
       window.removeEventListener("pointerup", onUp, true);
       window.removeEventListener("pointercancel", onUp, true);
       window.removeEventListener("blur", onUp);
     };
-  }, [store]);
-  const toWorld = (cx: number, cy: number) => {
-    const rect = gl.domElement.getBoundingClientRect();
-    const v = new THREE.Vector3(((cx - rect.left) / rect.width) * 2 - 1, -(((cy - rect.top) / rect.height) * 2 - 1), 0);
-    const p = pageAt(v.x, v.y, camera);
-    return { x: p.x, y: p.y };
-  };
+  }, [store, toWorld]);
   const {
     model,
     setHoveredFromId,

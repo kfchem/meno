@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
 import { Port, stateLine } from "./StepCard";
-import { PORT, PORT_SHARE, portSize, PX } from "./look";
+import { PORT_SHARE, portSize } from "./look";
 
 // Vitest runs in Node, with no page to mount on: the server's renderer draws the port.
 
@@ -14,16 +14,15 @@ describe("a port", () => {
     expect(html).toMatch(/class="[^"]*\bselect-none\b/);
   });
 
-  it("is 9 px on the screen near, never more than its own 11 page px zoomed out, nor a sixth of its set's height: round, its ring at most a fifth of it", () => {
-    expect(PORT / PX).toBeCloseTo(11, 9);
-    // (a set 300 px tall: its own 11 px the most - as many of the screen's pixels as the layer's scale makes them)
-    expect(portSize(300)).toBe("min(9px, calc(var(--scale, 1) * 11.00px))");
+  it("is 9 page px, nor more than a sixth of its set's height, but never under 5 screen px: round, its ring at most a fifth of it", () => {
+    // (a set 300 px tall: its own 9 px - as many of the screen's pixels as the layer's scale makes them)
+    expect(portSize(300)).toBe("max(5px, calc(var(--scale, 1) * 9.00px))");
     // (a set 36 px tall: a sixth of it, 6 px)
-    expect(portSize(36)).toBe(`min(9px, calc(var(--scale, 1) * ${(36 * PORT_SHARE).toFixed(2)}px))`);
+    expect(portSize(36)).toBe(`max(5px, calc(var(--scale, 1) * ${(36 * PORT_SHARE).toFixed(2)}px))`);
     const html = renderToString(<Port look="plain" label="Into Filter" data={{}} onPointerDown={() => {}} style={{}} of={36} />);
-    expect(html).toContain("width:min(9px, calc(var(--scale, 1) * 6.00px))");
-    expect(html).toContain("height:min(9px, calc(var(--scale, 1) * 6.00px))");
-    expect(html).toContain("border-width:min(1px, calc(min(9px, calc(var(--scale, 1) * 6.00px)) / 5))");
+    expect(html).toContain("width:max(5px, calc(var(--scale, 1) * 6.00px))");
+    expect(html).toContain("height:max(5px, calc(var(--scale, 1) * 6.00px))");
+    expect(html).toContain("border-width:min(1px, calc(max(5px, calc(var(--scale, 1) * 6.00px)) / 5))");
     expect(html).toMatch(/class="[^"]*\brounded-full\b/);
   });
 

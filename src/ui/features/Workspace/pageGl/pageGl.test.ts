@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { PAGE_PX } from "../utils/pageScale";
-import { controlLine, controlMost, controlSize, lineWidth, pagePx, type Control } from "./units";
+import { controlLine, controlOnPage, controlSize, lineWidth, pagePx, type Control } from "./units";
 import * as THREE from "three";
-import { fillShapesGeometry, inDrawOrder, packShapes, PER, SHAPE_ATTRIBUTES, type Shape } from "./shapes";
+import { CONTROL_SIZE_GLSL, fillShapesGeometry, inDrawOrder, packShapes, PER, SHAPE_ATTRIBUTES, type Shape } from "./shapes";
 import { cursorChange, hitAt, type Hit, type Region } from "./hits";
 import { fitted, placed, textWidth, wrapText } from "./texts";
 import { cellOf } from "./icons";
@@ -17,17 +17,19 @@ describe("the page's own lengths", () => {
     expect(lineWidth(1, zoom, 2)).toBeGreaterThan(pagePx(1));
   });
 
-  it("keep a control as large as a hand needs it: its screen pixels near, no more than its own page pixels, nor its share of what it belongs to", () => {
-    const port: Control = { screenPx: 9, mostPagePx: 11, leastOfPx: { of: 60, share: 1 / 6 } };
-    expect(controlMost(port)).toBeCloseTo(pagePx(10), 12);
-    // (near: 9 screen pixels)
+  it("grow a control with the page: its page pixels, no more than its share of what it belongs to, never under its least on the screen", () => {
+    const port: Control = { leastScreenPx: 5, onPagePx: 11, leastOfPx: { of: 120, share: 1 / 6 } };
+    expect(controlOnPage(port)).toBeCloseTo(pagePx(11), 12);
+    expect(controlOnPage({ ...port, leastOfPx: { of: 60, share: 1 / 6 } })).toBeCloseTo(pagePx(10), 12);
+    // (zoomed in: as the page has it, larger on the screen)
     const near = 4 / PAGE_PX;
-    expect(controlSize(port, near)).toBeCloseTo(9 / near, 12);
-    // (far: its own most)
-    const far = 0.5 / PAGE_PX;
-    expect(controlSize(port, far)).toBeCloseTo(pagePx(10), 12);
+    expect(controlSize(port, near)).toBeCloseTo(pagePx(11), 12);
+    expect(controlSize(port, near) * near).toBeGreaterThan(5);
+    // (far: five screen pixels, no less)
+    const far = 0.1 / PAGE_PX;
+    expect(controlSize(port, far)).toBeCloseTo(5 / far, 12);
     // (its line: a screen pixel, a fifth of it where it is tiny, never under a device pixel)
-    expect(controlLine(9 / near, near, 2)).toBeCloseTo(1 / near, 12);
+    expect(controlLine(controlSize(port, near), near, 2)).toBeCloseTo(1 / near, 12);
     const tiny = 3 / far;
     expect(controlLine(tiny, far, 1)).toBeCloseTo(Math.max(tiny / 5, 1 / far), 12);
   });
@@ -53,13 +55,17 @@ describe("shapes packed for the shader", () => {
     expect(p.kindOpacity[0]).toBe(0);
   });
 
+  it("size a control in the shader as controlSize does: the larger of its least on the screen and its size on the page", () => {
+    expect(CONTROL_SIZE_GLSL).toBe("max(aControl.x * uScreen, aControl.y)");
+  });
+
   it("carry a control's screen pixels and most for the shader to size it by the zoom, and none for a ring of fixed size", () => {
-    const port: Control = { screenPx: 9, mostPagePx: 11 };
+    const port: Control = { leastScreenPx: 5, onPagePx: 11 };
     const p = packShapes([
       { kind: "ring", key: "port", x: 3, y: 4, diameterPx: 9, size: port, fill: "#ffffff", line: { widthPx: 1, color: "#6e7781" } },
       { kind: "ring", key: "dot", x: 0, y: 0, diameterPx: 6, fill: "#000000" },
     ]);
-    expect([...p.control.slice(0, 3)]).toEqual([9, controlMost(port), 1].map((v) => Math.fround(v)));
+    expect([...p.control.slice(0, 3)]).toEqual([5, controlOnPage(port), 1].map((v) => Math.fround(v)));
     expect([...p.control.slice(PER.control, 2 * PER.control)]).toEqual([0, 0, 0]);
     expect(p.half[PER.half]).toBeCloseTo(pagePx(3), 6);
     expect(p.kindOpacity[0]).toBe(1);
@@ -175,7 +181,7 @@ describe("what is under the pointer, at its edges", () => {
   });
 
   it("takes a control where it is drawn, where that is larger than its grab size", () => {
-    const big: Region[] = [{ key: "c", part: "take", circle: { x: 0, y: 0, diameterPx: 12, size: { screenPx: 40, mostPagePx: 100 } } }];
+    const big: Region[] = [{ key: "c", part: "take", circle: { x: 0, y: 0, diameterPx: 12, size: { leastScreenPx: 40, onPagePx: 1 } } }];
     // (15 screen pixels out: past its grab size's 6, within its 20 drawn)
     expect(hitAt([big], 15 / zoom, 0, zoom)?.key).toBe("c");
     expect(hitAt([big], 21 / zoom, 0, zoom)).toBeNull();

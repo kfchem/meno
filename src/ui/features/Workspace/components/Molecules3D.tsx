@@ -36,6 +36,8 @@ import { stereoShownOf } from "../document";
 import { viewBack, viewShowingCopy } from "../utils/copySeen";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import StackChip3D from "./StackChip3D";
+import HeldViews3D from "./HeldViews3D";
+import { showsOneAtATime } from "../workflow/heldView";
 import { useDrawingStyle } from "../useDrawingStyle";
 import { editorLayoutOptions } from "../layoutOptions";
 import { MARK_SCALE } from "../chem/marks";
@@ -180,19 +182,11 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
   }
   // (R and S on, every molecule's labels; off, a stereoisomer's own, which tell it from the others)
   // (R and S on them as large as on the drawing, and written as it writes them)
-  const drawingStyle = useDrawingStyle();
-  const stereoFont = useMemo(() => {
-    const opts = editorLayoutOptions(drawingStyle);
-    return {
-      size: opts.fontPx * MARK_SCALE,
-      units: opts.units === "px" ? ("px" as const) : ("world" as const),
-      family: fontStack(labelSetOf(opts).fontFamily ?? "Arial"),
-      parentheses: !!opts.stereoParentheses,
-      // (and set as the drawing's are: StereoInk3D)
-      opts,
-      gap: opts.stereoGap ?? 0.35,
-    };
-  }, [drawingStyle]);
+  const stereoFont = useStereoFont();
+  // the large result sets' views (workflow/heldView): whether the pointer is on one, and a drag is turning it
+  const [heldHover, setHeldHover] = useState<number | null>(null);
+  const [heldTurning, setHeldTurning] = useState(false);
+  const heldAny = useEditor((s) => s.sets.some(showsOneAtATime));
   const frames = useEditor((s) => s.frames3d);
   const hovered = useEditor((s) => s.hovered3d);
   const sel3d = useEditor((s) => s.sel3d);
@@ -699,15 +693,15 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
       dom,
       settingMoves && !active
         ? "sideways"
-        : active?.kind === "turn"
+        : active?.kind === "turn" || heldTurning
         ? "turning"
         : active?.kind === "move" || (hovered && sel3d.has(hovered.id))
           ? "move"
-          : hovered
+          : hovered || heldHover != null
             ? "turn"
             : null,
     );
-  }, [dom, hovered, active, sel3d, settingMoves]);
+  }, [dom, hovered, active, sel3d, settingMoves, heldHover, heldTurning]);
 
   // any press - on the page, in a talk, anywhere - or Escape stops the molecules turning once, gently (utils/turnOnce)
   useEffect(() => {
@@ -765,7 +759,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
     invalidate();
   };
 
-  if (!molecules.length && !leaving.length && !receding.length) return null;
+  if (!molecules.length && !leaving.length && !receding.length && !heldAny) return null;
   const litOf = (id: number): number => {
     if (active) return active.group.includes(id) ? (active.kind === "move" ? 2 : 1) : 0;
     return hovered?.id === id || freshCopy === id ? 1 : 0;
@@ -780,6 +774,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
         screen={style.primary.occlusionBy === "screen" || style.secondary.occlusionBy === "screen"}
       />
       <ScreenShade3D />
+      {heldAny && <HeldViews3D style={style} hover={heldHover} onHover={setHeldHover} onTurning={setHeldTurning} stereoFont={stereoFont} />}
       {molecules.map((m) => {
         if (hiddenStacked.has(m.id)) return null;
         const inStack = placeInStack(molecules, m);
@@ -945,6 +940,24 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
 }
 
 const NONE: number[] = [];
+
+/** How a molecule's stereo marks are written, as the drawing writes its own (StereoInk3D). */
+export function useStereoFont() {
+  const drawingStyle = useDrawingStyle();
+  return useMemo(() => {
+    const opts = editorLayoutOptions(drawingStyle);
+    return {
+      size: opts.fontPx * MARK_SCALE,
+      units: opts.units === "px" ? ("px" as const) : ("world" as const),
+      family: fontStack(labelSetOf(opts).fontFamily ?? "Arial"),
+      parentheses: !!opts.stereoParentheses,
+      // (and set as the drawing's are: StereoInk3D)
+      opts,
+      gap: opts.stereoGap ?? 0.35,
+    };
+  }, [drawingStyle]);
+}
+
 /** How much a measurement's value changes for each pixel a drag across it goes: in ångströms, and in degrees. */
 const SCRUB_ANGSTROM = 0.01;
 const SCRUB_DEGREES = 0.5;

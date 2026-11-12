@@ -7,7 +7,7 @@
  * packed into the arrays the shader reads.
  */
 import * as THREE from "three";
-import { controlMost, pagePx, type Control } from "./units";
+import { controlOnPage, pagePx, type Control } from "./units";
 
 /** A line round a shape, inside its edge as a CSS inset ring is: `widthPx` page pixels (never under a device pixel), sRGB `color`, solid or dashed. */
 export type Line = { widthPx: number; color: string; dashed?: { onPx: number; offPx: number } };
@@ -35,8 +35,15 @@ export type Box = {
 export type Shadow = { blurPx: number; offsetYPx: number; alpha: number };
 
 /**
+ * A control's size in the vertex shader (units `controlSize`): the larger of
+ * its least on the screen and its size on the page, so that it grows with the
+ * page and is not lost zoomed out.
+ */
+export const CONTROL_SIZE_GLSL = "max(aControl.x * uScreen, aControl.y)";
+
+/**
  * A ring - a circle, filled or not - centred at `x`, `y`: `diameterPx` page
- * pixels across, or, a control (`size`), as large as a hand needs it, its
+ * pixels across, or, a control (`size`), sized as a control is (units `Control`), its
  * line then as a control's is (units `controlLine`).
  */
 export type Ring = {
@@ -62,7 +69,7 @@ export const PER = {
   half: 2,
   /** corner radius, world units; line width, world units (0: none) */
   radiusLine: 2,
-  /** a control's screen px, its most in world units, and 1 where it is one */
+  /** a control's least screen px, its size on the page in world units, and 1 where it is one */
   control: 3,
   /** fill, linear rgb and alpha */
   fill: 4,
@@ -149,7 +156,7 @@ export function packShapes(shapes: readonly Shape[], into?: Packed): Packed {
       out.half.set([r, r], i * PER.half);
       out.radiusLine.set([r, line ? pagePx(line.widthPx) : 0], i * PER.radiusLine);
       // (a control: its size and line worked out in the shader from the zoom, as `controlSize` and `controlLine` do)
-      out.control.set(s.size ? [s.size.screenPx, controlMost(s.size), 1] : [0, 0, 0], i * PER.control);
+      out.control.set(s.size ? [s.size.leastScreenPx, controlOnPage(s.size), 1] : [0, 0, 0], i * PER.control);
     }
     if (s.fill) linear(s.fill, out.fill, i * PER.fill, s.kind === "box" ? (s.fillAlpha ?? 1) : 1);
     else out.fill.fill(0, i * PER.fill, (i + 1) * PER.fill);
