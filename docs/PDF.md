@@ -1367,14 +1367,16 @@ it where it lies out of view.
   WebKit prints one), and digits set high before the element its isotope's mass
   number (13C, 18F, 2H); a count set low before any letter - the H of an
   H3N left outside the box - is no one's. Two labels set close - a group's
-  name by an atom's, Me by an O - are two where the drawing says so, and one
-  word where it does not: a word is cut at a capital where both pieces read,
-  one a group's name and the other an atom's label (neither a lone H), by the
-  bonds first - bond ends come to both parts: two atoms, each with its own
-  bonds, a methoxy having its one bond at the O - then the size - a part at
-  nine tenths of the other's or less - then the line - a part set off the
-  other's by a twelfth of its size or more; one size on one line and no bond at
-  both is one word, as MeOH is. Cut by the bonds alone, both atoms say so. The
+  name by an atom's, Me by an O - are two only where the bonds say so, and one
+  word where they do not: a word is cut at a capital where both pieces read,
+  one a group's name and the other an atom's label (neither a lone H), and two
+  different bond ends come to it, each counted for the piece it is nearer, one
+  for each - so that each is an atom with a bond of its own: an ether or an
+  ester has its one bond at the O, OMe, OAc and OPMB are one label, however
+  near another bond passes. Cut where the size - a part at nine tenths of the
+  other's or less - or the line - a part set off the other's by a twelfth of
+  its size or more - show it too, the atoms say nothing; cut by the bonds alone,
+  both say so; no bond at both is one word, as MeOH is. The
   cut comes before the number rule: Me7OH is Me7 and OH. A number set smaller than the
   label's letters, after the first of them, is an atom's number - the small
   atom numbers a drawing sets by its atoms ("Me" and its 7) - and no part of

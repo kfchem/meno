@@ -994,10 +994,11 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   // (a repeat unit in brackets with its count: its brackets no bonds, its count no word - what is read of it, below)
   const repeats = repeatBrackets(shapes, written, bond, hashed);
   const words = written.filter((_, k) => !repeats.counts.has(k));
-  // (two labels set close - a group's name by an atom's, Me by an O - are two where the drawing says so, and one word where it does not: cut at a capital
-  // where both pieces read, one a group's name and the other an atom's label, by the bonds first - bond ends come to both parts: two atoms, each with its
-  // own bonds, a methoxy having its one bond at the O - then the size - a part at nine tenths of the other's or less - then the line - a part set off the
-  // other's by a twelfth of its size or more. One size on one line and no bond at both: one word, as MeOH is. Cut by the bonds alone, both are said)
+  // (two labels set close - a group's name by an atom's, Me by an O - are two only where the bonds say so, and one word where they do not: cut at a capital
+  // where both pieces read, one a group's name and the other an atom's label, and two different bond ends come to the word - each counted for the piece it is
+  // nearer, one for each, so that each piece is an atom with a bond of its own; an ether or an ester has its one bond at the O: OMe, OAc, OPMB. The cut is
+  // said on both atoms where neither the size - a part at nine tenths of the other's or less - nor the line - a part set off the other's by a twelfth of its
+  // size or more - shows it too)
   const bondEnds: { p: Point; out: Point }[] = [...shapes.strokes.flatMap((t) => [{ p: t.a, out: unit(t.b, t.a) }, { p: t.b, out: unit(t.a, t.b) }]), ...shapes.wedges.flatMap((w) => [{ p: w.tip, out: unit(w.base, w.tip) }, { p: w.base, out: unit(w.tip, w.base) }]), ...hashed.flatMap((h) => [{ p: h.a, out: unit(h.b, h.a) }, { p: h.b, out: unit(h.a, h.b) }])];
   const pieceOf = (ls: FigureLetter[]): Word => ({ letters: ls, box: boxOfBoxes(ls.map((l) => l.box)), size: Math.max(...ls.map((l) => l.size)) });
   const baseline = (w: Word) => {
@@ -1014,11 +1015,14 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
       // (a group's name and an atom's label, each read on its own: neither a lone H, a charge, nor a number)
       const group = (t: string) => abbreviationStructure(t) != null;
       if (!reads(tp) || !reads(tq) || tp === "H" || tq === "H" || group(tp) === group(tq)) continue;
-      const bonded = (b: Box) => bondEnds.some((e) => reaches(e.p, e.out, b, bond));
-      const byBonds = bonded(p.box) && bonded(q.box);
+      // (each bond end that comes to the word is counted for the one piece it is nearer, and the cut needs one end for each: a single end reaching both is
+      // no cut - OPMB, OAc, OMe on their one bond - and a piece left with no bond of its own would be no atom)
+      const mine = bondEnds.filter((e) => reaches(e.p, e.out, p.box, bond) || reaches(e.p, e.out, q.box, bond));
+      const forP = mine.filter((e) => fromBox(e.p, p.box) <= fromBox(e.p, q.box));
+      const byBonds = forP.length > 0 && mine.length - forP.length > 0;
+      if (!byBonds) continue;
       const bySize = Math.min(p.size, q.size) <= 0.9 * Math.max(p.size, q.size);
       const byLine = Math.abs(baseline(p) - baseline(q)) >= (1 / 12) * Math.max(p.size, q.size);
-      if (!byBonds && !bySize && !byLine) continue;
       const said = byBonds && !bySize && !byLine ? `Two labels, "${tp}" and "${tq}", set close: cut where the bonds come to both, nothing else says so.` : undefined;
       words.splice(i, 1, { ...p, ...(said ? { cut: said } : {}) }, { ...q, ...(said ? { cut: said } : {}) });
       break;

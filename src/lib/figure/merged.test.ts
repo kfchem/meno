@@ -7,7 +7,7 @@ import { readFigure } from "./read";
 const S = 10;
 type P = [number, number];
 const line = (a: P, b: P): FigurePath => ({ fill: null, stroke: "#000000ff", width: 0.6, d: [["M", a[0], a[1]], ["L", b[0], b[1]]] as PathStep[] });
-const WIDTH: Record<string, number> = { M: 0.69, e: 0.49, O: 0.71, H: 0.6 };
+const WIDTH: Record<string, number> = { M: 0.69, e: 0.49, O: 0.71, H: 0.6, A: 0.67, c: 0.5, P: 0.67, B: 0.67 };
 
 /** A word of letters set one after another from `x`: each with its gap before it (in letter sizes), its size (share of S) and how far it is set up (in S). */
 function word(parts: { c: string; gap: number; size?: number; up?: number }[], x: number, y: number): FigureLetter[] {
@@ -22,7 +22,7 @@ function word(parts: { c: string; gap: number; size?: number; up?: number }[], x
     return l;
   });
 }
-const READS = new Set(["Me", "O", "OH", "MeO", "OMe", "MeOH", "H", "C"]);
+const READS = new Set(["Me", "O", "OH", "MeO", "OMe", "MeOH", "H", "C", "Ac", "AcO", "OAc", "PMB", "PMBO", "OPMB"]);
 const reads = (l: string) => READS.has(l);
 const figure = (paths: FigurePath[], letters: FigureLetter[]): FigureDrawn => ({ paths, letters, pictures: [] });
 const labelsOf = (d: FigureDrawn) => readFigure(d, reads).atoms.map((a) => a.label ?? a.el ?? "").filter(Boolean).sort();
@@ -63,13 +63,19 @@ describe("two labels set close, read as one word or two", () => {
     }
   });
 
-  it("is two labels by the size alone, or the line alone, with no bond at both: an O at 0.87 of the size, or set 0.09 up, by a bond at the M only - the Me an atom, the O no atom of its own", () => {
+  it("is ONE label where the size or the line differs but only one bond comes to the word: no bond of its own for the other piece, no cut", () => {
     for (const o of [{ size: 0.87 }, { up: 0.09 }]) {
       const d = meo(0.11, 0.09, o, [intoM]);
       const labels = labelsOf({ ...d, paths: [...d.paths, ...ringBonds()] });
-      expect(labels).toContain("Me");
-      expect(labels).not.toContain("MeO");
+      expect(labels).toContain("MeO");
     }
+  });
+
+  it("is two atoms, with nothing said, where the size or the line shows it too: an O at 0.87 of the size, a bond to each", () => {
+    const d = meo(0.11, 0.08, { size: 0.87 }, [intoM, ...intoO]);
+    const atoms = readFigure({ ...d, paths: [...d.paths, ...ringBonds()] }, reads).atoms.filter((a) => a.label === "Me" || a.label === "O");
+    expect(atoms).toHaveLength(2);
+    expect(atoms.every((a) => !a.unsure)).toBe(true);
   });
 
   it("says, where only the bonds cut the word - one size on one line - that it was cut so", () => {
@@ -89,5 +95,25 @@ describe("two labels set close, read as one word or two", () => {
   it("keeps a lone H a part of its atom, and the NH of a chain - a bond at each end - one label", () => {
     const d = figure([line([84, 96], [97, 96]), line([135, 96], [123, 96]), ...ringBonds()], word([{ c: "O", gap: 0 }, { c: "H", gap: 0.1 }, { c: "H", gap: 0.1 }], 100, 100));
     expect(labelsOf(d).some((l) => l === "O" || l === "H")).toBe(false);
+  });
+
+  it("is one label, unmarked, for an acetate and a PMB ether on their one bond - AcO, PMBO - and a bond that merely comes near the group's letters", () => {
+    const acO = word([{ c: "A", gap: 0 }, { c: "c", gap: 0.1 }, { c: "O", gap: 0.1 }], 100, 100);
+    const pmbO = word([{ c: "P", gap: 0 }, { c: "M", gap: 0.1 }, { c: "B", gap: 0.1 }, { c: "O", gap: 0.1 }], 100, 100);
+    for (const letters of [acO, pmbO]) {
+      // (the one bond: into the O from the right; another bond's end pointing at the group's letters from far off - beyond a bond's reach)
+      const end = letters[letters.length - 1].box[2];
+      const one = figure([line([end + 14, 96], [end + 3, 96]), line([84, 70], [96, 94]), ...ringBonds()], letters);
+      const read = readFigure(one, (l) => reads(l) || l === "Ac" || l === "PMB");
+      const atoms = read.atoms.filter((a) => /O$/.test(a.label ?? "") || a.label === "O" || a.label === "Ac" || a.label === "PMB");
+      expect(atoms.map((a) => a.label)).toEqual(expect.not.arrayContaining(["O"]));
+      expect(read.atoms.every((a) => !a.unsure?.some((t) => t.startsWith("Two labels")))).toBe(true);
+    }
+  });
+
+  it("is two atoms for a Me and a ring's O, each with its own bond end", () => {
+    const d = meo(0.11, 0.15, { up: 0.014 }, [intoM, ...intoO]);
+    const labels = labelsOf({ ...d, paths: [...d.paths, ...ringBonds()] });
+    expect(labels).toEqual(expect.arrayContaining(["Me", "O"]));
   });
 });
