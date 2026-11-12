@@ -1,0 +1,331 @@
+/**
+ * The recipe of the ConfoTS-type template, as data: each step of the page - its stage, its kind, who does it, its options - and where each of
+ * its inputs comes from. One table, reviewed line by line (docs/WORKFLOWS-FOUNDATION.md, case F); `build.ts` puts it on a page through the
+ * workspace's own actions, so the page always matches the current kinds and is made again, never edited by hand.
+ *
+ * A source is `"@reaction"` - the chemist's set round the drawn reaction - or a step's key, `"key"` for its first exit, `"key.rest"` for another.
+ * Every number here is the chemist's to change; the values are the recipe's starting ones (docs/CONFOTS-TEMPLATE.md names where each comes from).
+ */
+import type { OptionValues } from "../../src/lib/options";
+import type { StepKind } from "../../src/ui/features/Workspace/workflow/kinds";
+
+/**
+ * The options each plugin's steps take, by kind, as their manifests say (kfchem/meno-plugins, 2026-11-12: orca 0.5.7, gaussian 0.6.1, rdkit 0.1.24; the manifests are read
+ * where the plugin is installed, so the test holds the recipe to this list): a recipe naming an option a plugin has not is caught here, not on a card.
+ */
+export const PLUGIN_OPTIONS: Record<string, Record<string, readonly string[]>> = {
+  orca: {
+    optimise: ["method", "basis", "dispersion", "solvation", "solvent", "keywords", "maxcore", "wavefunction"],
+    frequencies: ["method", "basis", "dispersion", "solvation", "solvent", "keywords", "maxcore", "vibrations", "wavefunction"],
+    "path-search": ["method", "basis", "run", "images", "maxiter", "keywords", "maxcore"],
+    "reaction-path": ["method", "basis", "dispersion", "solvation", "solvent", "keywords", "maxiter", "maxcore"],
+    "saddle-point": ["method", "basis", "dispersion", "solvation", "solvent", "keywords", "hessian", "maxcore"],
+  },
+  gaussian: {
+    optimise: ["method", "basis", "dispersion", "solvation", "solvent", "keywords", "memory", "wavefunction"],
+    energy: ["method", "basis", "dispersion", "solvation", "solvent", "keywords", "memory", "wavefunction"],
+    frequencies: ["method", "basis", "dispersion", "solvation", "solvent", "keywords", "memory", "wavefunction"],
+    "saddle-point": ["method", "basis", "dispersion", "solvation", "solvent", "keywords", "memory", "hessian", "tight"],
+  },
+  rdkit: { conformers: [], minimise: ["field", "fallback", "steps", "start"], descriptors: [] },
+};
+
+export type Source = string;
+export type RecipeStep = {
+  key: string;
+  /** The stage it belongs to: a row of the page, and the name its frame takes. */
+  stage: string;
+  kind: StepKind;
+  /** The plugin that does it: none for Meno's own steps. */
+  by?: string;
+  options?: OptionValues;
+  /** Each input port, and where it is fed from; several sources are several wires into the port. */
+  in: Record<string, Source | Source[]>;
+  /** What it is for, in a few words: the table's own comment (a step's set is named by what made it; the stage's heading is on the page). */
+  note?: string;
+};
+
+/** The program steps' options: xTB by the ORCA plugin's native GFN2, as the page of record uses it. */
+export const XTB = { method: "NATIVE-XTB2", basis: "", dispersion: "none", wavefunction: false } as const;
+const NEB = { method: "NATIVE-XTB2", basis: "", run: "NEB-TS", images: 8, maxiter: 999, keywords: "", maxcore: 0 } as const;
+const IRC = { method: "NATIVE-XTB2", basis: "", dispersion: "none", solvation: "none", solvent: "water", keywords: "", maxiter: 256, maxcore: 0 } as const;
+const MINIMISE = { field: "MMFF94", steps: 2000, start: "first" } as const;
+/** The torsions held again, each round's strength in kcal/mol/rad^2: one value a round. */
+export const ROUNDS = ["50", "100", "150"] as const;
+
+const step = (s: RecipeStep): RecipeStep => s;
+
+const STAGES = {
+  reaction: "The reaction",
+  species: "3D for each species",
+  conformers: "Conformers of each species",
+  pairs: "Pairs",
+  paths: "Paths",
+  diagram: "Diagram (xTB)",
+  dft: "DFT",
+} as const;
+
+/**
+ * The pairs and the paths from one side to the other. `from` is the side whose conformers give the paths' starts, `to` the side whose
+ * bonding the ends are given: forward, the reactant's conformers re-bonded as the products; backward, the products' as the reactant.
+ */
+function direction(d: "forward" | "backward", sides: { geometry: Source; bonding: Source; geometryTag: string; bondingTag: string; reference: Source; pathsBy: string }): RecipeStep[] {
+  const k = (name: string) => `${d}/${name}`;
+  const pairs = `${STAGES.pairs} ${d === "forward" ? "to the products" : "to the reactant"}`;
+  const paths = `${STAGES.paths} ${d === "forward" ? "to the products" : "to the reactant"}`;
+  const out: RecipeStep[] = [
+    step({ key: k("geometry"), stage: pairs, kind: "tag", options: { name: sides.geometryTag }, in: { in: sides.geometry } }),
+    step({ key: k("bonding"), stage: pairs, kind: "tag", options: { name: sides.bondingTag }, in: { in: sides.bonding } }),
+    step({ key: k("ends"), stage: pairs, kind: "rebond", options: { pairs: "each" }, in: { geometry: k("geometry"), bonding: k("bonding") }, note: "Ends: one side's conformers with the other's bonding" }),
+    step({ key: k("held"), stage: pairs, kind: "restraints", options: { on: sides.bondingTag, coordination: true, factor: "0.9", strength: "500" }, in: { in: k("bonding") }, note: "Coordination bonds held" }),
+  ];
+  // (the first minimisation, then each round: the torsions that turned from trans across the targets' double bonds held again, every earlier table wired in beside)
+  let tables = [k("held")];
+  let again = k("ends");
+  let min = k("min0");
+  out.push(step({ key: min, stage: pairs, kind: "minimise", by: "rdkit", options: MINIMISE, in: { in: again, restraints: tables } }));
+  ROUNDS.forEach((strength, r) => {
+    const check = k(`check${r}`);
+    const sorted = k(`sorted${r}`);
+    out.push(
+      step({ key: check, stage: pairs, kind: "compare-torsions", options: { reference: "property", property: sides.bondingTag }, in: { molecules: min, reference: k("bonding") } }),
+      step({ key: sorted, stage: pairs, kind: "filter", options: { conditions: "torsions unlike reference = 0", match: "all" }, in: { in: check } }),
+    );
+    const table = k(`torsions${r + 1}`);
+    out.push(
+      step({
+        key: table,
+        stage: pairs,
+        kind: "torsion-restraints",
+        options: { on: sides.bondingTag, torsions: "reference", at: "trans", reference: "property", property: sides.bondingTag, hold: "strength", strength },
+        in: { molecules: `${sorted}.rest`, reference: k("bonding") },
+        note: `Torsions held, round ${r + 1}`,
+      }),
+    );
+    tables = [...tables, table];
+    min = k(`min${r + 1}`);
+    out.push(step({ key: min, stage: pairs, kind: "minimise", by: "rdkit", options: MINIMISE, in: { in: `${sorted}.rest`, restraints: tables } }));
+    again = min;
+  });
+  const last = k("check3");
+  out.push(step({ key: last, stage: pairs, kind: "compare-torsions", options: { reference: "property", property: sides.bondingTag }, in: { molecules: min, reference: k("bonding") } }));
+  out.push(step({ key: k("sorted3"), stage: pairs, kind: "filter", options: { conditions: "torsions unlike reference = 0", match: "all" }, in: { in: last } }));
+  // (the ends whose torsions are right, from every round, together)
+  const done = [k("sorted0"), k("sorted1"), k("sorted2"), k("sorted3")];
+  out.push(
+    step({ key: k("merged1"), stage: pairs, kind: "merge", options: { keep: "all", property: "" }, in: { first: done[0], second: done[1] } }),
+    step({ key: k("merged2"), stage: pairs, kind: "merge", options: { keep: "all", property: "" }, in: { first: k("merged1"), second: done[2] } }),
+    step({ key: k("merged3"), stage: pairs, kind: "merge", options: { keep: "all", property: "" }, in: { first: k("merged2"), second: done[3] } }),
+    step({ key: k("optimised"), stage: pairs, kind: "optimise", by: "orca", options: XTB, in: { in: k("merged3") } }),
+    step({
+      key: k("ends-ok"),
+      stage: pairs,
+      kind: "compare-bonding",
+      options: { reference: "property", property: sides.bondingTag, rs: true, ez: true, numbered: true },
+      in: { molecules: k("optimised"), reference: k("bonding") },
+      note: "Ends, optimised and checked against the bonding they were given",
+    }),
+  );
+  // (the paths: a nudged elastic band from one side's conformers to the other's ends, matched on the tag the ends carry)
+  out.push(
+    step({ key: k("path"), stage: paths, kind: "path-search", by: "orca", options: { ...NEB, pairs: "property", property: sides.geometryTag }, in: { start: k("geometry"), end: k("ends-ok") }, note: "Paths" }),
+    step({ key: k("guesses"), stage: paths, kind: "duplicates", in: { in: k("path") } }),
+    step({ key: k("freq"), stage: paths, kind: "frequencies", by: "orca", options: XTB, in: { in: k("guesses") } }),
+    step({ key: k("one"), stage: paths, kind: "filter", options: { conditions: "imaginary = 1", match: "all" }, in: { in: k("freq") } }),
+    step({ key: k("tag"), stage: paths, kind: "tag", options: { name: `path-${d}` }, in: { in: k("one") } }),
+    step({ key: k("irc"), stage: paths, kind: "reaction-path", by: "orca", options: IRC, in: { in: k("tag") } }),
+    step({ key: k("first"), stage: paths, kind: "take-frames", options: { which: "first", keep: `path-${d}\nspecies\n${sides.geometryTag}\n${sides.bondingTag}` }, in: { in: k("irc") } }),
+    step({ key: k("last"), stage: paths, kind: "take-frames", options: { which: "last", keep: `path-${d}\nspecies\n${sides.geometryTag}\n${sides.bondingTag}` }, in: { in: k("irc") } }),
+    step({ key: k("first-opt"), stage: paths, kind: "optimise", by: "orca", options: XTB, in: { in: k("first") } }),
+    step({ key: k("last-opt"), stage: paths, kind: "optimise", by: "orca", options: XTB, in: { in: k("last") } }),
+    step({
+      key: k("first-end"),
+      stage: paths,
+      kind: "compare-bonding",
+      options: { reference: "each", writes: "first end", from: "species", rs: true, ez: true, numbered: true },
+      in: { molecules: k("first-opt"), reference: sides.reference },
+    }),
+    step({
+      key: k("last-end"),
+      stage: paths,
+      kind: "compare-bonding",
+      options: { reference: "each", writes: "last end", from: "species", rs: true, ez: true, numbered: true },
+      in: { molecules: k("last-opt"), reference: sides.reference },
+    }),
+    step({ key: k("with-first"), stage: paths, kind: "join", options: { on: `path-${d}`, carry: "first end" }, in: { onto: k("tag"), from: k("first-end") } }),
+    step({ key: k("with-both"), stage: paths, kind: "join", options: { on: `path-${d}`, carry: "last end" }, in: { onto: k("with-first"), from: k("last-end") } }),
+    step({
+      key: k("valid"),
+      stage: paths,
+      kind: "filter",
+      options: { conditions: d === "forward" ? "first end = species-1\nlast end = its species" : "last end = species-1\nfirst end = its species", match: "all" },
+      in: { in: k("with-both") },
+      note: `Saddle points, ${d === "forward" ? "from the reactant" : "from the products"}`,
+    }),
+    // (those within 10 kcal/mol of the lowest of their path, at most 16 of each: ConfoTS's window and limit before the higher level)
+    step({ key: k("window"), stage: paths, kind: "energy-window", options: { window: 10, within: "each value", groupBy: sides.pathsBy }, in: { in: k("valid") } }),
+    step({
+      key: k("ranked"),
+      stage: paths,
+      kind: "rank",
+      options: { property: "energy", order: "lowest first", keep: 16, within: "each value", groupBy: sides.pathsBy },
+      in: { in: k("window") },
+      note: "At most 16 saddle points of each path",
+    }),
+  );
+  return out;
+}
+
+/**
+ * Words on the page beside a stage's heading: what a chemist opening the template needs to read there. The difference from the program the template
+ * is of is said now, in these words (CHEM, 2026-11-11); no equivalence of numbers is claimed.
+ */
+export const NOTES: { stage: string; text: string }[] = [
+  { stage: STAGES.reaction, text: "Draw your reaction over this one, inside the frame: the set takes what lies in it, and each structure's role from the arrow." },
+  {
+    stage: `${STAGES.pairs} to the products`,
+    text: "Counted per entry: each torsion held in a pass takes that pass's value for its entry. ConfoTS counts each torsion's own failed passes, so a torsion here can be held more strongly than there. The strengths, 50, 100 and 150, are this template's to change; no equivalence to another program's force constant is claimed.",
+  },
+  { stage: `${STAGES.pairs} to the reactant`, text: "The same rounds, from the products' conformers. Both directions are wired: take the paths of the one you want, or both." },
+];
+
+/** The DFT level the template starts from, the chemist's to change: the geometry's and the single point's. By convention of the protocol the template follows; no claim of it. */
+const DFT_GEOMETRY = { method: "wB97XD", basis: "6-31G(d)", dispersion: "none", solvation: "none", keywords: "", memory: "", wavefunction: false } as const;
+const DFT_SINGLE_POINT = { ...DFT_GEOMETRY, basis: "6-311+G(d,p)" } as const;
+
+/**
+ * The DFT stage: the saddle points of each direction optimised from the ends the reaction path found, the minima optimised, both with
+ * frequencies at that level and checked (one imaginary vibration, and the reacting atoms moving most in it; none for a minimum), a larger single point
+ * and the thermal correction summed to a free energy at the higher level, the lowest of each, the populations, the diagram and the barriers.
+ * The standard-state term is left off: it cancels in every difference where each species is one system.
+ */
+function dft(): RecipeStep[] {
+  const stage = STAGES.dft;
+  const sum = { parts: "energy; thermo.g-correction", as: "G-DFT" };
+  const r: RecipeStep[] = [
+    step({ key: "dft-min", stage, kind: "optimise", by: "gaussian", options: DFT_GEOMETRY, in: { in: "minima-16" } }),
+    step({ key: "dft-min-freq", stage, kind: "frequencies", by: "gaussian", options: DFT_GEOMETRY, in: { in: "dft-min" } }),
+    step({ key: "dft-min-ok", stage, kind: "filter", options: { conditions: "imaginary = 0", match: "all" }, in: { in: "dft-min-freq" }, note: "No imaginary vibration: a minimum" }),
+    step({ key: "dft-min-sp", stage, kind: "energy", by: "gaussian", options: DFT_SINGLE_POINT, in: { in: "dft-min-ok" } }),
+    step({ key: "dft-min-g", stage, kind: "add", options: sum, in: { in: "dft-min-sp" }, note: "G at the DFT level: the single point plus the thermal correction" }),
+    step({ key: "dft-min-distinct", stage, kind: "duplicates", in: { in: "dft-min-g" } }),
+  ];
+  for (const d of ["forward", "backward"] as const) {
+    // (the ends of a reaction path: the reactant's is the first where the paths are made from the reactant's conformers, the last where from the products')
+    const [reactantSide, productSide] = d === "forward" ? [`${d}/first-opt`, `${d}/last-opt`] : [`${d}/last-opt`, `${d}/first-opt`];
+    const k = (name: string) => `dft-${d}-${name}`;
+    r.push(
+      step({
+        key: k("saddle"),
+        stage,
+        kind: "saddle-point",
+        by: "gaussian",
+        options: { method: DFT_GEOMETRY.method, basis: DFT_GEOMETRY.basis, dispersion: DFT_GEOMETRY.dispersion, solvation: DFT_GEOMETRY.solvation, keywords: "", memory: "", hessian: "computed", tight: true, pairs: "property", property: `path-${d}` },
+        in: { guesses: `${d}/ranked`, reactant: reactantSide, product: productSide },
+        note: "The saddle point from the guess and the two ends, matched on the path",
+      }),
+      step({ key: k("freq"), stage, kind: "frequencies", by: "gaussian", options: DFT_GEOMETRY, in: { in: k("saddle") } }),
+      step({ key: k("one"), stage, kind: "filter", options: { conditions: "imaginary = 1", match: "all" }, in: { in: k("freq") } }),
+      step({ key: k("mode"), stage, kind: "mode-on-atoms", options: { from: "table", which: "made", rows: "", atoms: "", reach: "1" }, in: { in: k("one"), atoms: "mapped.changes" } }),
+      step({ key: k("moving"), stage, kind: "filter", options: { conditions: "mode.outside <= 1", match: "all" }, in: { in: k("mode") }, note: "The reacting atoms move most, at most one outside" }),
+      step({ key: k("sp"), stage, kind: "energy", by: "gaussian", options: DFT_SINGLE_POINT, in: { in: k("moving") } }),
+      step({ key: k("g"), stage, kind: "add", options: sum, in: { in: k("sp") } }),
+    );
+  }
+  r.push(
+    step({ key: "dft-saddles", stage, kind: "merge", options: { keep: "all", property: "" }, in: { first: "dft-forward-g", second: "dft-backward-g" } }),
+    step({ key: "dft-saddles-distinct", stage, kind: "duplicates", in: { in: "dft-saddles" } }),
+    step({ key: "dft-saddle-set", stage, kind: "as-conformers", in: { in: "dft-saddles-distinct" } }),
+    step({ key: "dft-shares", stage, kind: "populations", options: { temperature: 298.15 }, in: { in: "dft-saddle-set" }, note: "Share of each path" }),
+    step({ key: "dft-levels", stage, kind: "merge", options: { keep: "all", property: "" }, in: { first: "dft-min-distinct", second: "dft-saddles-distinct" } }),
+    step({
+      key: "dft-diagram",
+      stage,
+      kind: "energy-diagram",
+      options: { quantity: "G-DFT", levels: "", reference: "species-1", levelsBy: "species\npath-forward\npath-backward", joinedBy: "first end\nlast end", conformers: "every" },
+      in: { levels: "dft-levels" },
+    }),
+    step({ key: "dft-lowest", stage, kind: "rank", options: { property: "G-DFT", order: "lowest first", keep: 1, within: "each value", groupBy: "species" }, in: { in: "dft-min-distinct" } }),
+    step({ key: "dft-barriers", stage, kind: "barrier", options: { energy: "G", free: "G-DFT", symmetry: "as-read", pairs: "each", property: "" }, in: { saddles: "dft-saddles-distinct", starts: "dft-lowest" } }),
+  );
+  return r;
+}
+
+/** The xTB + DFT template's steps: the xTB template's, and the DFT stage after its diagram. */
+export function dftRecipe(): RecipeStep[] {
+  return [...body(), ...dft()];
+}
+
+/** The xTB template's steps, in an order where each step's sources come before it. */
+export function xtbRecipe(): RecipeStep[] {
+  return body();
+}
+
+function body(): RecipeStep[] {
+  const r: RecipeStep[] = [
+    // The reaction: the structures drawn, by their role
+    step({ key: "reactants", stage: STAGES.reaction, kind: "filter", options: { conditions: "role = reactant", match: "all" }, in: { in: "@reaction" }, note: "Reactants" }),
+    step({ key: "products", stage: STAGES.reaction, kind: "filter", options: { conditions: "role = product", match: "all" }, in: { in: "@reaction" }, note: "Products" }),
+    step({ key: "weighed", stage: STAGES.reaction, kind: "descriptors", by: "rdkit", in: { in: "reactants" } }),
+    step({ key: "light", stage: STAGES.reaction, kind: "filter", options: { conditions: "mw <= 512", match: "all" }, in: { in: "weighed" } }),
+    // 3D for each species: one structure each, every hydrogen there
+    step({ key: "reactant-conformers", stage: STAGES.species, kind: "conformers", by: "rdkit", in: { in: "light" } }),
+    step({ key: "reactant-3d", stage: STAGES.species, kind: "rank", options: { property: "energy", order: "lowest first", keep: 1, within: "each group", groupBy: "" }, in: { in: "reactant-conformers" }, note: "Reactant in 3D" }),
+    step({ key: "product-conformers", stage: STAGES.species, kind: "conformers", by: "rdkit", in: { in: "products" } }),
+    step({ key: "product-3d", stage: STAGES.species, kind: "rank", options: { property: "energy", order: "lowest first", keep: 1, within: "each group", groupBy: "" }, in: { in: "product-conformers" }, note: "Products in 3D" }),
+    step({
+      key: "mapped",
+      stage: STAGES.species,
+      kind: "atom-map",
+      options: { reference: "one", property: "", moleculesAre: "each", referenceIs: "together", bonds: "change", maps: "first" },
+      in: { molecules: "product-3d", reference: "reactant-3d" },
+      note: "Products in the reactant's numbering",
+    }),
+    // Conformers of each species
+    step({ key: "species-set", stage: STAGES.conformers, kind: "merge", options: { keep: "all", property: "" }, in: { first: "reactant-3d", second: "mapped" } }),
+    step({ key: "species", stage: STAGES.conformers, kind: "tag", options: { name: "species" }, in: { in: "species-set" }, note: "Each species" }),
+    step({ key: "coordination", stage: STAGES.conformers, kind: "restraints", options: { on: "species", coordination: true, factor: "0.9", strength: "500" }, in: { in: "species" } }),
+    step({ key: "search", stage: STAGES.conformers, kind: "conformers", by: "rdkit", in: { in: "species", restraints: "coordination" } }),
+    step({
+      key: "numbered",
+      stage: STAGES.conformers,
+      kind: "atom-map",
+      options: { reference: "property", property: "species", moleculesAre: "each", referenceIs: "each", bonds: "same", maps: "first" },
+      in: { molecules: "search", reference: "species" },
+    }),
+    step({ key: "within-10", stage: STAGES.conformers, kind: "energy-window", options: { window: 10 }, in: { in: "numbered" } }),
+    step({ key: "optimised", stage: STAGES.conformers, kind: "optimise", by: "orca", options: XTB, in: { in: "within-10" } }),
+    step({ key: "distinct", stage: STAGES.conformers, kind: "duplicates", in: { in: "optimised" } }),
+    step({
+      key: "bonded",
+      stage: STAGES.conformers,
+      kind: "compare-bonding",
+      options: { reference: "property", property: "species", rs: false, ez: false },
+      in: { molecules: "distinct", reference: "species" },
+    }),
+    step({ key: "within-5", stage: STAGES.conformers, kind: "energy-window", options: { window: 5 }, in: { in: "bonded" } }),
+    step({ key: "most-64", stage: STAGES.conformers, kind: "rank", options: { property: "energy", order: "lowest first", keep: 64, within: "each group", groupBy: "" }, in: { in: "within-5" } }),
+    step({ key: "sides", stage: STAGES.conformers, kind: "filter", options: { conditions: "species = species-1", match: "all" }, in: { in: "most-64" }, note: "Reactant conformers" }),
+    ...direction("forward", { geometry: "sides", bonding: "mapped", geometryTag: "start", bondingTag: "product", reference: "species", pathsBy: "product" }),
+    ...direction("backward", { geometry: "sides.rest", bonding: "reactant-3d", geometryTag: "pc", bondingTag: "reactant", reference: "species", pathsBy: "species" }),
+    // The diagram at the xTB level
+    step({ key: "saddles", stage: STAGES.diagram, kind: "merge", options: { keep: "all", property: "" }, in: { first: "forward/ranked", second: "backward/ranked" }, note: "Validated saddle points" }),
+    step({ key: "minima-5", stage: STAGES.diagram, kind: "energy-window", options: { window: 5 }, in: { in: "bonded" } }),
+    step({ key: "minima-16", stage: STAGES.diagram, kind: "rank", options: { property: "energy", order: "lowest first", keep: 16, within: "each group", groupBy: "" }, in: { in: "minima-5" } }),
+    step({ key: "minima-freq", stage: STAGES.diagram, kind: "frequencies", by: "orca", options: XTB, in: { in: "minima-16" } }),
+    step({ key: "levels", stage: STAGES.diagram, kind: "merge", options: { keep: "all", property: "" }, in: { first: "minima-freq", second: "saddles" }, note: "Minima and saddle points" }),
+    step({
+      key: "diagram",
+      stage: STAGES.diagram,
+      kind: "energy-diagram",
+      options: { quantity: "thermo.free-energy", levels: "", reference: "species-1", levelsBy: "species\npath-forward\npath-backward", joinedBy: "first end\nlast end", conformers: "every" },
+      in: { levels: "levels" },
+      note: "Energy diagram",
+    }),
+    step({ key: "saddle-set", stage: STAGES.diagram, kind: "as-conformers", in: { in: "saddles" }, note: "The saddle points of both paths as one conformer set" }),
+    step({ key: "shares", stage: STAGES.diagram, kind: "populations", options: { temperature: 298.15 }, in: { in: "saddle-set" }, note: "Share of each path" }),
+    step({ key: "lowest", stage: STAGES.diagram, kind: "rank", options: { property: "thermo.free-energy", order: "lowest first", keep: 1, within: "each value", groupBy: "species" }, in: { in: "minima-freq" } }),
+    step({ key: "barriers", stage: STAGES.diagram, kind: "barrier", options: { energy: "G", free: "thermo.free-energy", symmetry: "as-read", pairs: "each", property: "" }, in: { saddles: "saddles", starts: "lowest" }, note: "Barriers" }),
+  ];
+  return r;
+}
