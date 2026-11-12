@@ -773,6 +773,10 @@ one of the kinds of calculation it does (decided: 16):
   the set it came from as its frame says it (a step's exit, as the step
   names what it makes). A *Filter* or a *Join* can use it. One wire alone
   adds no such name.
+- **Drawn reactions**: each set around a drawn reaction gives its
+  structures their `role` and `reaction` from its own drawing (*A set
+  around a drawn reaction*), so two sets' reactions may both be number 1;
+  `came from` tells them apart.
 - **One kind**: the sets wired into one input hold one kind, as one set's
   entries do. A wire that gives another kind than the one there is
   refused, and a set that has come to hold another kind since is said

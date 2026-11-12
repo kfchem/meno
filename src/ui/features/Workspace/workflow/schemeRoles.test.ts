@@ -195,6 +195,19 @@ describe("a set around a drawn reaction, as the page reads it", () => {
     expect(countSaid(set, countOf(doc, set), schemeSaid(doc, set))).toBe("4 structures · 1 reaction: 2 reactants, 1 product, 1 reagent");
   });
 
+  it("gives the structures of two sets wired into one input each its own set's role and reaction, told apart by where they came from", () => {
+    // (Upper: 11 -> 17 above; Lower: 1 -> 7 below - each its own reaction 1)
+    let doc = page([pair(11, -5, 30), pair(17, 4, 30), A1, C], [arrow(2, 0, 30), arrow(1, 0, 0)]);
+    doc = addSet(doc, { x0: -20 * L, y0: 20 * L, x1: 20 * L, y1: 40 * L }, undefined, "Upper");
+    doc = addSet(doc, { x0: -20 * L, y0: -10 * L, x1: 20 * L, y1: 10 * L }, undefined, "Lower");
+    doc = addStep(doc, "filter", 70 * L, 0, { conditions: "role = reactant", match: "all" });
+    const step = doc.steps![0].id;
+    doc = connect(connect(doc, { set: doc.sets![1].id }, step), { set: doc.sets![0].id }, step);
+    const input = inputOf(doc, step)!;
+    const said = input.records.map((r) => `${r?.properties?.["came from"]?.value} ${r?.properties?.role?.value}/${r?.properties?.reaction?.value}`);
+    expect(said).toEqual(["Upper reactant/1", "Upper product/1", "Lower reactant/1", "Lower product/1"]);
+  });
+
   it("leaves a set that holds no arrow's count line as it was", () => {
     let doc = page([A1, C], []);
     doc = addSet(doc, FRAME);
