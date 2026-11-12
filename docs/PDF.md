@@ -559,6 +559,35 @@ together, in short eased transitions.
   white. They go to the window as bytes, not as text (Tauri's binary
   response), and are unpacked off its main thread.
 
+### Never in the way of a frame (2026-11-12)
+
+Drawing and input come first, always. What a PDF is read for besides being
+shown - its letters, its figures, its structures, its index of compounds'
+numbers - is background work, and it never stalls a frame:
+- **Off the drawing's thread.** A figure's structures are read in a worker
+  (`utils/structuresRead`, `structuresWorker`, `structuresOff`), two of them:
+  one for the figure the pointer is on, which is never kept waiting behind
+  the other, the one that reads a whole PDF's figures ahead, one after
+  another. A figure taking seconds - a large scheme drawn with thousands of
+  paths can - holds nothing up. Its drawn lines come from the reader as
+  bytes (`pdf_figure_raw`) and are unpacked in the worker, so that even
+  the parsing of megabytes of them is not done on the drawing's thread.
+  What is left there - handing a figure's page over, taking its structures
+  back - is milliseconds.
+- **It waits for the hands to rest** (`lib/core/calm`). Nothing read ahead
+  starts while a wheel turns (scroll, a touchpad's pinch), a button is
+  down on a drag or a pan, or a touch moves, and for 200 ms after the last
+  of it: the window's idle callback, where macOS' has none, was a fixed wait
+  that scrolling did not stop. The pointer coming to a figure begins its
+  reading at once, as it did.
+- **The reader is not held up by a page's words.** Listing what a page is
+  made of (`pdf_objects`) asked each text object for its words, each
+  loading the page's text again, so that a page of a thousand words kept
+  the one reader that answers everything but pages' pictures busy for
+  seconds; the page's text is loaded once.
+- **Results land in small pieces:** a figure at a time, the page's own
+  letters and objects having come before it.
+
 ### One canvas
 
 - **The column is drawn on the canvas**: one WebGL canvas spans the
@@ -1674,7 +1703,7 @@ words are: by itself, not by a box drawn round it.
 - **Never in a picture**: a picture of the drawing - copied as one, exported or printed - has no note, as R and S marks are Meno's.
 
 **In the column, as built** (`TextColumn`, `utils/pdfStructures`, `components/structureDrag`, `components/StructureFlight`):
-- a page's letters and figures, for a press on them, are read once it is shown - the column still, its tiles come - in idle time, one page at a time, and its figures worked out in idle time once its parts have come (`lib/core/idle`): never with its turn. A figure under the pointer, pressed, or looked for is asked for at once and worked out at once - one read ahead and waiting for idle time is hurried - and a page whose reading failed, or a PDF gone from the column and come back, is read again;
+- a page's letters and figures, for a press on them, are read once it is shown - the column still, its tiles come - once the hands rest, one page at a time, and its figures worked out once its parts have come (`lib/core/calm`; *Never in the way of a frame*): never with its turn, and never while it is scrolled. A figure under the pointer, pressed, or looked for is asked for at once and worked out at once - one read ahead and waiting for idle time is hurried - and a page whose reading failed, or a PDF gone from the column and come back, is read again;
 - a figure is read the first time the pointer comes over it (`pdf_figure`, as *Read as structure* reads it), with all of its page that does not reach into it beside it, and kept - but lines whose box holds all of a structure (a page's background, a frame round it, a coloured panel behind it and its neighbours) are no lines beside it; lines crossing into it are;
 - the structure under the pointer is lit along its bonds and over its labels, the cursor a hand; one picked is lit stronger;
 - a press within half a bond of a structure takes it, before any words about it (a scheme's conditions set close by);
@@ -1749,8 +1778,8 @@ mention a number, and the card.
   structure it is set by - its page, its figure and its key there - in the
   order of the pages, so that a compound drawn again in a later scheme keeps
   each place. Kept as figures are read, by the pointer on one or through the
-  whole PDF in idle time (`indexPdf`): a page, then the window's next idle
-  moment, then the next, each page's figures read as the column reads them
+  whole PDF once the hands rest (`indexPdf`): a page, then the next moment
+  they rest, then the next, each page's figures read as the column reads them
   (`pdfPageLabels`), never holding up what is shown; a page that could not
   be read is gone through again the next time. It starts the first time
   the pointer moves over the PDF's words, in the column or on the page

@@ -1406,6 +1406,7 @@ closing quits Meno once they have been asked to stop.
 | `pdf_text` | `lib/pdf/text.ts` | A page's letters, each with its box and whether it is set bold. |
 | `pdf_objects` | `lib/pdf/figures.ts` | What a page is made of - words, paths, pictures, shadings, forms - each with its box. |
 | `pdf_figure` | `ui/features/Workspace/utils/figures.ts` | What a figure within a box is drawn with: its paths' steps, its letters, its pictures' boxes. |
+| `pdf_figure_raw` | `ui/features/Workspace/utils/pdfStructures.ts` | The same as `pdf_figure`, as its JSON in bytes: a worker unpacks it (`structuresRead`), so that megabytes of paths are never parsed on the drawing's thread. |
 | `write_document` | `lib/io/writeDocument.ts` | A document the chemist chose where to put - saved, exported, a picture, a PDF - written whole or not at all: beside it first, then put in its place, the file there left as it was where anything fails, and what it had besides its bytes kept; with `keep-old`, the file there kept beside it first as `<name>.bak`; only where the fs plugin's scope lets the page write (`savefile.rs`; docs/FILE-IO.md, *Save and Export*). |
 | `write_app_file` | `lib/io/writeDocument.ts` | One of Meno's own files - its settings, its environments' notes - written whole or not at all, as a document is; only a path inside Meno's data folder or its local one (`savefile.rs`). |
 | `font_families` | `ui/fonts/typefaces.ts` | Every typeface installed (fontdb), for the label typeface picker. |
