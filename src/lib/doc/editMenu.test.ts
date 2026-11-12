@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { EDIT_MENU_EVENT, editFromMenu, editMenuState, fieldHasUndo, tellEditMenu, watchEditMenu } from "./editMenu";
 
 const input = { tagName: "INPUT" };
@@ -116,3 +118,30 @@ describe("the page and the app menu, between them", () => {
     await Promise.resolve();
   });
 });
+
+describe("the names the page and the app share with the menu's Rust side (src-tauri/src/editmenu.rs)", () => {
+  const rust = readFileSync(join(process.cwd(), "src-tauri/src/editmenu.rs"), "utf8");
+  const lib = readFileSync(join(process.cwd(), "src-tauri/src/lib.rs"), "utf8");
+
+  it("the event the page listens for is the one the menu emits", () => {
+    const emitted = [...rust.matchAll(/\.emit_to\(\s*"main"\s*,\s*"([^"]+)"/g)].map((m) => m[1]);
+    expect(emitted).toEqual([EDIT_MENU_EVENT]);
+  });
+
+  it("the commands the page is told are the ones the menu sends", () => {
+    const sent = [...rust.matchAll(/=>\s*Some\("([^"]+)"\)/g)].map((m) => m[1]).sort();
+    expect(sent).toEqual(["redo", "undo"]);
+  });
+
+  it("the command the page tells the menu its state by is one the app registers, with the arguments the page sends", () => {
+    const name = [...tellSource().matchAll(/send\("([^"]+)"/g)].map((m) => m[1]);
+    expect(name).toEqual(["edit_menu_state"]);
+    expect(rust).toMatch(/pub fn edit_menu_state\(app: AppHandle, undo: bool, redo: bool\)/);
+    expect(lib).toContain("editmenu::edit_menu_state");
+  });
+});
+
+/** The source of `tellEditMenu`, for the command name it sends under. */
+function tellSource(): string {
+  return readFileSync(join(process.cwd(), "src/lib/doc/editMenu.ts"), "utf8");
+}
