@@ -112,7 +112,7 @@ describe("the ideal boat, C2v", () => {
   const b = boat();
   const w = Math.sqrt(8 / 3);
 
-  it("is the six atoms CHEM calculated: every bond 1, every angle 109.471 degrees, the two out-of-plane atoms 5/3 apart", () => {
+  it("is the six atoms as calculated: every bond 1, every angle 109.471 degrees, the two out-of-plane atoms 5/3 apart", () => {
     const q = Math.SQRT2 / 3;
     const want: V3[] = [[-1 / 3, w / 2, q], [0, 0, 0], [1, 0, 0], [4 / 3, w / 2, q], [1, w, 0], [0, w, 0]];
     b.atoms.forEach((p, k) => closeV(p, want[k]));
