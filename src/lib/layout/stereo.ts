@@ -16,27 +16,12 @@ import { angleOf, centroid, drawnVolume, insidePolygon, segmentsCross, splitOuts
 import { hydrogenSpot, hydrogenWritten } from "./metrics";
 import { key, type Molecule } from "./perceive";
 import { atomDepth, isName, namesLaid } from "./names";
+import type { Axial, Tetrahedral } from "../chem/perception/stereo/types";
 
 export { drawnVolume };
 
-export type Tetrahedral = {
-  /** Neighbours in order; -1 for an implicit H, last. */
-  neighbours: readonly number[];
-  /** The sign of the volume the first three span, seen from the centre. */
-  volume: 1 | -1;
-};
-
-/**
- * An axis of chirality: the single bond between `atoms`, each end with two
- * other neighbours (a biaryl's - BINAP's C1-C1'), and how the two `refs`,
- * one bonded to each end, are turned about it: the sign of the torsion
- * refs[0]-atoms[0]-atoms[1]-refs[1] (IUPAC's: + where, looking along the
- * axis, the near one turns clockwise onto the far one). Drawn flat, it is
- * shown by a wedge on a bond out of an end of it, narrow there, to the
- * neighbour that stands out of the page, the other end's neighbours in it -
- * as an atropisomer's wedge is read.
- */
-export type Axial = { atoms: readonly [number, number]; refs: readonly [number, number]; sense: 1 | -1 };
+// (the types are the core's: lib/chem/perception/stereo/types)
+export type { Axial, Tetrahedral };
 
 /** The sign of the torsion p-q-r-s, IUPAC's: + where, looking from q to r, p turns clockwise onto s. */
 export function torsionSense(p: readonly number[], q: readonly number[], r: readonly number[], s: readonly number[]): 1 | -1 | 0 {
