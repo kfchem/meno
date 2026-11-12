@@ -178,6 +178,15 @@ its own history (Ctrl+Z belongs to the active tab, not the whole app), edits
 sharing a `coalesceKey` inside a short window collapse into one step (a drag
 must not need one undo per frame), and the stack is capped.
 
+On a Mac the app menu's Edit > Undo and Redo go the same way as the keys
+(`lib/doc/editMenu`, `src-tauri/src/editmenu.rs`): Tauri's own items undo only
+what the web view edits, so the two are Meno's. Choosing one tells the page,
+which undoes or redoes the active tab's document - or, with a field of the
+browser's own undo in focus (a single-line input, rich text, a text box that
+says so), that field - and the page tells the menu which has a step to take,
+the other greyed (both stay on in such a field). Windows and Linux show no
+app menu, so the keys are all there is.
+
 An edit may say who made it where it was not the person at the keyboard
 (`EditMeta.by`: "a conversation, by <its connection>"). The history keeps it
 with the step (`history().undoBy`, `redoBy`), and a step made by one is never

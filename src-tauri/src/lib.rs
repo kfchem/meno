@@ -27,6 +27,7 @@ mod model;
 mod pdf;
 mod pdfmake;
 mod net;
+mod editmenu;
 mod opened;
 mod pinch;
 mod pixienv;
@@ -1173,6 +1174,11 @@ pub fn run() {
             opened::show(app);
         }));
     }
+    // macOS: the app menu's Edit > Undo and Redo reach the workspace's history, as the keys do (editmenu.rs)
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder.menu(editmenu::menu).on_menu_event(|app, event| editmenu::chosen(app, event.id().as_ref()));
+    }
     builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_os::init())
@@ -1250,6 +1256,8 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            // the menu's Undo and Redo greyed where the page has nothing for them (macOS; editmenu.rs)
+            editmenu::edit_menu_state,
             // the plugins online: the catalogue, and a plugin's files got from it
             catalogue::catalogue_get,
             catalogue::plugin_stage,
