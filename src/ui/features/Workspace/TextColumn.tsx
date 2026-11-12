@@ -28,6 +28,9 @@ import { isPinch, wheelReader } from "../../../lib/input/wheel";
 import { QUIET_AFTER_MIN, useAppSettings } from "../../../lib/settings/appSettings";
 import { quietFor, quietShort } from "../../../lib/jobs";
 import { pageUnder, pointOn } from "../../../lib/pdf/column";
+import { printed } from "../../../lib/pdf/print";
+import PrintButton from "./components/PrintButton";
+import { usePrinting } from "./hooks/usePrinting";
 import { figureStructuresHad } from "./utils/pdfStructures";
 import { indexOnce, mentionUnder } from "./utils/compoundLens";
 import { PRESS_WIDENED, structureAt, type PageStructure } from "./utils/pageStructures";
@@ -257,6 +260,12 @@ function Column({
   const stoppable = !!shownJob && (jobsSeen[shownJob]?.state === "waiting" || jobsSeen[shownJob]?.state === "running");
   const markdown = !!shown && isMarkdown(shown.name);
   const source = useShowsSource(store, shown?.id ?? null);
+  const printing = usePrinting(pdf?.sha256);
+  const printPdf = async (p: PdfItem) => {
+    setError(null);
+    const said = await printed(p.sha256, p.pages);
+    if (said) setError(said);
+  };
   const exportText = async (t: WorkspaceText) => {
     try {
       setError(null);
@@ -333,6 +342,7 @@ function Column({
             <ArrowUpTrayIcon className="h-4 w-4" />
           </button>
         )}
+        {pdf && <PrintButton printing={printing} shortcut={shortcutLabel("P")} onPrint={() => void printPdf(pdf)} />}
         <button
           onClick={() => setFilled(!filled)}
           aria-label={filled ? "Back beside the canvas" : "Fill the workspace"}

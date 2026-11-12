@@ -266,6 +266,19 @@ fn unreadable(e: PdfiumError) -> String {
     }
 }
 
+/// What a PDF's author allows of printing: "full" - it may be printed in any quality - "low" - printed, but not in a quality
+/// from which a faithful copy could be made - or "no" (ISO 32000-1, table 22, bits 3 and 12). A PDF with no security handler
+/// allows all.
+fn printing_of(high: bool, low: bool) -> &'static str {
+    if high {
+        "full"
+    } else if low {
+        "low"
+    } else {
+        "no"
+    }
+}
+
 fn answer(docs: &mut HashMap<String, PdfDocument<'static>>, pdfium: &'static Pdfium, cache: &Path, ask: &Value) -> Result<(Value, Vec<u8>), String> {
     let t = Instant::now();
     let sha = ask["sha"].as_str().unwrap_or("").to_string();
@@ -285,6 +298,12 @@ fn answer(docs: &mut HashMap<String, PdfDocument<'static>>, pdfium: &'static Pdf
         "pages" | "unlock" => {
             let sizes: Vec<[f32; 2]> = doc.pages().iter().map(|p| [p.width().value, p.height().value]).collect();
             Ok((json!({"pages": sizes, "ms": ms(t)}), vec![]))
+        }
+        "printing" => {
+            let permissions = doc.permissions();
+            // (a handler whose permissions PDFium cannot read is taken as forbidding: never printed on a guess)
+            let printing = printing_of(permissions.can_print_high_quality().unwrap_or(false), permissions.can_print_only_low_quality().unwrap_or(false));
+            Ok((json!({"printing": printing, "ms": ms(t)}), vec![]))
         }
         "render" => {
             let page = doc.pages().get(ask["page"].as_i64().unwrap_or(0) as i32).map_err(|_| "no such page".to_string())?;
@@ -875,6 +894,22 @@ pub async fn pdf_render(
     Ok(tauri::ipc::Response::new(out))
 }
 
+/// What the PDF's author allows of printing it, as the PDF says (`printing_of`): "full", "low" or "no". Asked before it is printed,
+/// and never worked around.
+#[tauri::command]
+pub async fn pdf_printing(app: tauri::AppHandle, sha: String) -> Result<String, String> {
+    let (head, _) = ask(&app, json!({"op": "printing", "sha": sha})).await?;
+    Ok(head["printing"].as_str().unwrap_or("no").to_string())
+}
+
+/// The system's own print dialog for the window that asked, over what the window shows. WebKit's `window.print()` shows
+/// nothing in the app, so the pages the reader laid out for the printer (src/lib/pdf/print.ts) are printed by the window's
+/// own print operation: macOS's print panel, the GTK print dialog, WebView2's print dialog.
+#[tauri::command]
+pub async fn pdf_print_window(window: tauri::WebviewWindow) -> Result<(), String> {
+    window.print().map_err(|e| e.to_string())
+}
+
 /// The links on a page: where each lies, in points from the page's top
 /// left, and where it goes - a page, and how far down it, in points; or a
 /// web page, by its address.
@@ -953,6 +988,41 @@ mod tests {
         // (no error's name for the person: a PDF cut short reads as damaged, anything else as not opened)
         let other = unreadable(PdfiumError::PdfiumLibraryInternalError(PdfiumInternalError::FileError));
         assert_eq!(other, "Meno could not open it");
+    }
+
+    #[test]
+    fn printing_is_what_the_pdfs_author_allows() {
+        assert_eq!(printing_of(true, false), "full");
+        assert_eq!(printing_of(false, true), "low");
+        assert_eq!(printing_of(false, false), "no");
+        // (PDFium as the build fetched it: scripts/fetch-pdfium.mjs)
+        let Ok(bindings) = Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path(&library_dir())) else {
+            eprintln!("PDFium is not here: node scripts/fetch-pdfium.mjs");
+            return;
+        };
+        let pdfium: &'static Pdfium = Box::leak(Box::new(Pdfium::new(bindings)));
+        let cache = std::env::temp_dir().join(format!("meno-pdf-printing-{}", std::process::id()));
+        std::fs::create_dir_all(&cache).unwrap();
+        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+        // (made up, by tests/fixtures/make_print_fixtures.py: encrypted with no password to open, each with its own permissions;
+        //  and one that is not encrypted, which says nothing against printing)
+        let held = [
+            ("a", std::fs::read(fixtures.join("printing-allowed.pdf")).unwrap(), "full"),
+            ("b", std::fs::read(fixtures.join("printing-low.pdf")).unwrap(), "low"),
+            ("c", std::fs::read(fixtures.join("printing-forbidden.pdf")).unwrap(), "no"),
+            ("d", linked_pdf(), "full"),
+        ];
+        let mut docs = HashMap::new();
+        for (letter, bytes, want) in held {
+            let sha = letter.repeat(64);
+            std::fs::write(cache.join(format!("{sha}.pdf")), bytes).unwrap();
+            let (head, _) = answer(&mut docs, pdfium, &cache, &json!({"op": "printing", "sha": sha})).unwrap();
+            assert_eq!(head["printing"], json!(want), "{letter}");
+        }
+        // (each still opens and draws: the permissions are asked of a PDF that is read as any)
+        let (pages, _) = answer(&mut docs, pdfium, &cache, &json!({"op": "pages", "sha": "c".repeat(64)})).unwrap();
+        assert_eq!(pages["pages"], json!([[595.0, 842.0]]));
+        let _ = std::fs::remove_dir_all(&cache);
     }
 
     #[test]

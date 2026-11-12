@@ -8,6 +8,7 @@ import {
   isDeselectKey,
   isFillKey,
   isFindKey,
+  isPrintKey,
   isFitKey,
   isSelectAllKey,
   keepClipboard,
@@ -125,6 +126,18 @@ describe("the column's keys", () => {
     expect(isFillKey({ key: "f", ctrlKey: true, shiftKey: true, target: { tagName: "TEXTAREA" } })).toBe(false);
     expect(isFindKey({ key: "f", ctrlKey: true, shiftKey: true })).toBe(false);
     expect(isFindKey({ key: "f", ctrlKey: true })).toBe(true);
+  });
+});
+
+describe("the print key", () => {
+  it("is Ctrl/Cmd+P alone, and not in a text field", () => {
+    expect(isPrintKey({ key: "p", ctrlKey: true })).toBe(true);
+    expect(isPrintKey({ key: "P", metaKey: true })).toBe(true);
+    expect(isPrintKey({ key: "p" })).toBe(false);
+    expect(isPrintKey({ key: "p", ctrlKey: true, shiftKey: true })).toBe(false);
+    expect(isPrintKey({ key: "p", ctrlKey: true, altKey: true })).toBe(false);
+    expect(isPrintKey({ key: "p", metaKey: true, target: { tagName: "TEXTAREA" } })).toBe(false);
+    expect(isPrintKey({ key: "o", ctrlKey: true })).toBe(false);
   });
 });
 
