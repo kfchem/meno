@@ -125,6 +125,8 @@ export const STICK_TRIANGLES = 1_000_000;
  * light as it was.
  */
 export function stickSegmentsFor(acrossPx: number, most: number, sticks: number): number {
+  // (a width that is no number, or none: the fewest)
+  if (!(acrossPx > 0)) return Math.min(most, STICK_STEPS[0]);
   const rim = (n: number) => (acrossPx / 2) * (1 - Math.cos(Math.PI / n));
   const wanted = STICK_STEPS.find((n) => rim(n) <= STICK_EDGE_PX) ?? STICK_STEPS[STICK_STEPS.length - 1];
   const afforded = Math.max(STICK_STEPS[0], Math.floor(STICK_TRIANGLES / (4 * Math.max(sticks, 1))));

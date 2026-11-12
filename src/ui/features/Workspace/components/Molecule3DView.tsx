@@ -498,20 +498,27 @@ function Molecule3DView(props: Molecule3DViewProps) {
   const lineBond = useMemo(() => drawn.bonds.flatMap((b, i) => Array.from({ length: linesOf(b.order) }, () => i)), [drawn.bonds]);
   const bent = useMemo(() => bentLinesOf(drawn, solid), [drawn, solid]);
   const isBent = useMemo(() => (bent ? Uint8Array.from({ length: lineCount }, (_, k) => (bent.includes(k) ? 1 : 0)) : null), [bent, lineCount]);
-  // (made again at another number of segments with what each stick carries - its bend, its colours - moved over: `carriedInstanced`; not where the lines that bend are others)
-  const bentMade = useRef<{ bent: unknown; stick: THREE.BufferGeometry | null; hull: THREE.BufferGeometry | null }>({ bent: null, stick: null, hull: null });
-  const bentGeometry = useMemo(() => {
+  // (made again at another number of segments with what each stick carries - its bend, its colours - moved over: `carriedInstanced`;
+  //  not where the lines that bend are others. Once for each geometry it carries from: a render that runs a memo twice, as React's
+  //  development builds do, keeps its first result, and a second carry would take the attributes from it)
+  const bentMade = useRef<{ bent: unknown; segments: number; stick: THREE.BufferGeometry | null; hull: THREE.BufferGeometry | null }>({ bent: null, segments: 0, stick: null, hull: null });
+  const bentGeometries = useMemo(() => {
     const made = bentMade.current;
-    if (!bent) return (made.stick = null);
-    return (made.stick = carriedInstanced(bentStickGeometry(stickSegments), made.bent === bent ? made.stick : null));
+    if (!bent) {
+      made.stick = made.hull = null;
+      made.bent = null;
+      return { stick: null, hull: null };
+    }
+    // (asked again of the same, no new carrying: what the first asking made)
+    if (made.bent === bent && made.segments === stickSegments && made.stick && made.hull) return { stick: made.stick, hull: made.hull };
+    const was = made.bent === bent ? { stick: made.stick, hull: made.hull } : { stick: null, hull: null };
+    const stick = carriedInstanced(bentStickGeometry(stickSegments), was.stick);
+    const hull = carriedInstanced(bentStickGeometry(stickSegments), was.hull);
+    Object.assign(made, { bent, segments: stickSegments, stick, hull });
+    return { stick, hull };
   }, [bent, stickSegments]);
-  const bentHullGeometry = useMemo(() => {
-    const made = bentMade.current;
-    if (!bent) return (made.hull = null);
-    const g = carriedInstanced(bentStickGeometry(stickSegments), made.bent === bent ? made.hull : null);
-    made.bent = bent;
-    return (made.hull = g);
-  }, [bent, stickSegments]);
+  const bentGeometry = bentGeometries.stick;
+  const bentHullGeometry = bentGeometries.hull;
   const bentHullMat = useMemo(() => {
     return menoShader(new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, toneMapped: false }), "bent-hull", (shader) => withStickBend(shader));
   }, []);

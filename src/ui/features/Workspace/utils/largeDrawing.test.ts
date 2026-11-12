@@ -157,6 +157,13 @@ describe("a molecule's sticks, by their size on the screen", () => {
     expect(stickSegmentsFor(1e6, 32, 100)).toBe(32);
   });
 
+  it("are the fewest where their width is none or no number", () => {
+    expect(stickSegmentsFor(Number.NaN, 32, 100)).toBe(8);
+    expect(stickSegmentsFor(0, 32, 100)).toBe(8);
+    expect(stickSegmentsFor(-3, 32, 100)).toBe(8);
+    expect(stickSegmentsFor(Number.NaN, 6, 100)).toBe(6);
+  });
+
   it("keep the rim within STICK_EDGE_PX at every size up to where 32 is not enough, and never use more segments than that takes", () => {
     const steps = [8, 12, 16, 24, 32];
     for (let across = 0.5; across < 300; across *= 1.07) {
