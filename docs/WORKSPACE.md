@@ -1738,6 +1738,13 @@ space-filling side by side is better science than either alone.
   A test reads each of them for a word GLSL keeps back - the one that
   once made every ball vanish was `half` - and for brackets that do not
   close.
+- **Shaders made ready.** The shaders a molecule in 3D is drawn with are
+  made as the page starts, once it is idle, not when the first molecule is
+  put on it (components/WarmShaders3D): a molecule of no account, unseen
+  and far off the page, drawn in the workspace's style, is compiled in the
+  background once its colours are given, and again as the style changes.
+  It is kept, so its shaders are kept: the first 3D structure made never
+  waits a frame on a shader being made for it.
 - **Pictures as the canvas.** A copied or exported picture of a molecule
   in 3D draws its style's colours, lines and depth fade as the canvas
   does - its lines in proportion to the molecule at any size, being in
