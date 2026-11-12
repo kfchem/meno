@@ -727,7 +727,7 @@ export async function conformersGrowing(
   judgeOf: typeof growingJudge = growingJudge,
 ): Promise<Growth> {
   const made = await isomersToMake(stereo, block.molblock, block.like, which, CONFORMERS_MS);
-  const sent = { ...options, threads: threadsOf(settings.calculations) };
+  const sent = { ...options, threads: pageThreadsOf(settings.calculations) };
   const holds = metalHoldsOf(block.molblock);
   const checks = madeChecksOf(block.molblock, holds);
   // (each stereoisomer's search, and its judge, which makes what the page shows of it; those let go - a twin's reflection
