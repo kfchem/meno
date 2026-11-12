@@ -90,16 +90,16 @@ const calledAs = (el: string) => (el === "C" ? "a carbon" : (NAMES.get(el) ?? `"
 /** How short a bond's open end may be drawn, for the figure's bond, before it is taken to have been drawn to something not read. */
 const SHORT_END = 0.72;
 
-/**
- * How long a bond of a structure read is drawn, in the page's points: the length most of its own bonds are drawn at - those
- * between two corners, where it has two or more, its labels' bonds drawn to a label's middle - and not the figure's, whose
- * other structures may be drawn larger or smaller; with too few bonds to say, the figure's.
- */
 /** How what an atom says of a charge no atom carries begins: "A charge of 18− is more than sulfur carries." - one place for the words and for those that tell the sentence (`saysChargeTooMuch`). */
 const CHARGE_TOO_MUCH = "A charge of";
 /** Whether a thing said of an atom is that its charge is more than its element carries - no valence, whatever its bonds. */
 export const saysChargeTooMuch = (said: string): boolean => said.startsWith(CHARGE_TOO_MUCH);
 
+/**
+ * How long a bond of a structure read is drawn, in the page's points: the length most of its own bonds are drawn at - those
+ * between two corners, where it has two or more, its labels' bonds drawn to a label's middle - and not the figure's, whose
+ * other structures may be drawn larger or smaller; with too few bonds to say, the figure's.
+ */
 export function drawnBond(read: Pick<FigureRead, "atoms" | "bonds" | "bond">): number {
   const bare = (i: number) => !read.atoms[i].label && !read.atoms[i].el;
   const length = (b: FigureRead["bonds"][number]) => Math.hypot(read.atoms[b.a].x - read.atoms[b.b].x, read.atoms[b.a].y - read.atoms[b.b].y);
