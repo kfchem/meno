@@ -338,6 +338,7 @@ export function createEditorStore(
     lists3d: {},
     frames3d: {},
     stacksShown: {},
+    heldShown: {},
     recordsShown: NO_RECORDS,
     talkLooks: NO_LOOKS,
     recordSwaps: {},

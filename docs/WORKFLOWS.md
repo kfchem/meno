@@ -153,8 +153,8 @@ in 3D, arrows, text - and is made of three things:
 
 - **Sets.** A thin rounded frame, its name along its top, inside it -
   *Input*, or what a step made (*Conformers*, *Optimised*, *Within 3
-  kcal/mol*) - and how many it holds (*1 structure*, *2 compounds*, *1
-  compound · 81*, *1 compound · 23 of 81*). It
+  kcal/mol*) - and how many it holds (*1 structure*, *2 compounds*, *81
+  conformers of 1 compound*). It
   gives from a port on its right edge, half-way down; a result set takes
   on its left edge too.
 - **Steps.** A small card: who does it (*xTB*), with the icon of what it
@@ -833,7 +833,7 @@ Conformers go through a workflow as any set does (decided):
   molecules, each its own.
 - **A set's count says what it holds**: a compound set of molecules in
   3D, its compounds (*2 compounds*); a conformer set, its compounds and
-  its conformers (*2 compounds · 81*); structures drawn, or a
+  its conformers (*81 conformers of 2 compounds*); structures drawn, or a
   Render step's pictures, how many (*3 structures*, *9 pictures*); a set
   with nothing in it, *Empty*; a step's exit whose step has not run, *Not
   run yet*. Its name is *Input* where the chemist made it, a second exit's
@@ -1049,10 +1049,13 @@ page, each as the step drew it, and feed a step that takes structures
 drawn - *Conformers* - as a set the chemist drew does.
 
 **A large result set** (2026-10-21, docs/WORKFLOWS-FOUNDATION.md, *What a
-set shows*): up to 50 entries are laid out on the page, as above. An exit
-that gives more - a search's 1,000 conformers, or what Duplicates set aside -
-puts none of them on the page: its set holds them itself, in the step's order, and its frame
-says what it holds ("400 conformers of 2 compounds"). The steps after it
+set shows*): up to 50 molecules in 3D are laid out on the page, as above -
+counted as the page would draw them, one for each molecule or conformer
+set, never by their frames: 3 compounds of 200 conformers each are 3
+molecules on the page, each with its frames chip. An exit that gives more
+- a search's 118 compounds, or what Duplicates set aside - puts none of
+them on the page: its set holds them itself, in the step's order, and its
+frame shows them one at a time (below). The steps after it
 take them from there, a run kept keeps them, and the workspace's file
 keeps them, with the outputs they were read from - or, with *Don't keep
 in the file*, only their count and hash. Opened from a file, a molecule
@@ -1061,50 +1064,40 @@ how many ("51 compounds · 2 not read") until the step runs again; saved
 again, the file says so too. So does a step's earlier run kept with the
 file, on its row of the step's card - what both its exits held - and in
 each exit's set once it is shown again. Its molecules are on no page,
-so deleting the set deletes them: its frame says so ("On no page:
-deleting the set deletes them"), and so does its menu, in words, last
+so deleting the set deletes them: its menu says so, in words, last
 ("Delete set and the 118 molecules it holds"), before it happens
-(2026-10-22). Deleted by the Delete key it is asked about first, as a
+(2026-10-22, 2026-11-11). Deleted by the Delete key it is asked about first, as a
 step running is - and so it is in a selection deleted: the rest goes, and
 it is asked about. A cut leaves it in place, since a copy does not carry
 its molecules, and says so.
 
-**Its frame sums it up** (2026-10-22, docs/WORKFLOWS-FOUNDATION.md, *What
-a set shows*): what it holds - that it is on no page, and *Open as a
-table* beside it - a grid of a sample of its structures, and a chart of
-its energies, each saying what it is of.
-- **The sample**: in a conformer set, each compound once - its first
-  conformer, since a drawing shows what its conformers share - the first
-  twelve compounds in the step's order; in a set of molecules, the first
-  twelve, each as it ends. A line under the grid says which ("The first
-  12 of 40 compounds, in the step's order, each drawn once").
-- **Drawn by Meno's engine**, as a molecule in 3D is drawn as a formula:
-  the plugin that draws molecules wedges its heavy atoms as it is in 3D,
-  and Meno lays them all out at once (docs/LAYOUT-2D.md, *Many at
-  once*), lined up on what they share, each read back against the
-  molecule it was given. One that does not show it as given is marked
-  *Not as given*, saying how on hover; one that could not be drawn says
-  *Not drawn*, and why on hover - never left out. All are drawn at one
-  scale, so their bonds are alike.
-- **The chart**: in a conformer set, each conformer's energy above its
-  compound's lowest, in kcal/mol, of the energies one method worked out
-  - a program, its version and a level; not a job, nor a charge - the
-  method most of them were (the first of those as many) - each
-  conformer counted once. Those by a method not stated are not charted,
-  since two such may be two methods; nor is an energy that is no finite
-  number. Its line says
-  the quantity, the unit, the method and how many; those worked out
-  another way, by a method not stated, or with no usable energy, are
-  counted and said, not charted - and so are those of a compound only a
-  part of whose conformers is here (*A part of a search*, below), whose
-  lowest may not be among them. Its bars are binned by Sturges's rule (⌈log₂ n⌉ + 1 bins,
-  Sturges 1926), and each says its range and count on hover. A set of
-  molecules has no chart: the energies of different compounds are not
-  set against one another.
-- The summary is drawn at its own size in a new frame, and smaller in a
-  frame made smaller, by hand or before it was this large.
+**Its frame shows one at a time** (2026-11-11; it was a summary card
+before, docs/WORKFLOWS-FOUNDATION.md, *What a set shows*): the frame holds
+the molecule it shows and its chips, and nothing else - no grid of a sample,
+no chart, no empty room. Its tab keeps the count ("Optimised - 118
+compounds"; "600 conformers of 3 compounds", as its exit's chip says it too), and beside it *Open as a
+table*.
+- **A stack chip**, as a stack's on the page (docs/WORKSPACE.md, *Stacks*): which of how many
+  ("3 / 118"), and the molecule's title - of a conformer set's, its
+  compound's letter - clicked, a slider through them. Going over to another
+  is the stack's own motion: the one let go of towards the viewer, the next
+  up from behind. A conformer set's molecule keeps its own frames chip,
+  under the stack chip, with the program line (program, method, phase) when
+  it is opened.
+- **A view of the set**, not a molecule of the page: it can be turned by a
+  drag across it and pointed at, but it is not selected, moved or deleted,
+  since it is on no page. Which one is shown is the view's, not a step of
+  the history (as a stack's is); a turn goes on to the next as a stack's
+  does. The file keeps it, with the set.
+- **The frame's size** is that of the largest molecule it holds - of the
+  first 500, where it holds more - with its chips, set when the step runs
+  and not changed as the stack goes over. A set not run again keeps the
+  frame the chemist gave it.
+- Structures drawn, held in a set (*Structures drawn as results*), say
+  how many in their frame, as they did; they are drawn one at a time by a
+  later change.
 
-*Open as a table*, on the set's menu or at the top of its summary, reads them in
+*Open as a table*, on the set's menu or in the line of its tab, reads them in
 the column beside the texts and PDFs, a tab of their own named as the
 set is (2026-10-21):
 - A row for each entry, in the step's order: its place; in a conformer
@@ -1118,9 +1111,7 @@ set is (2026-10-21):
   failure in words ("not converged", "refused"), or "marks not read" -
   and its energy above is blank: the lowest is taken among those that
   finished alone, and the line at the top says so ("ΔE above the lowest of
-  8 that finished; 2 not counted"). A large set's summary chart draws only
-  those that finished, its baseline among them, and names those left out;
-  none finished, it draws none and says why. An SD file written of such a
+  8 that finished; 2 not counted"). An SD file written of such a
   frame carries a *Failed* field beside its energy (2026-10-23).
 - Pressing a column's name sorts by it, again the other way; rows with no
   value go last. Only the rows in view are drawn, so 1,000 scroll as 10 do.
@@ -1130,7 +1121,7 @@ set is (2026-10-21):
   set's order: each one geometry with its energy and what worked it out,
   and of its calculation only what is of that frame. A compound's
   conformers chosen stay one conformer set, so that the new set counts
-  them as the step's did ("2 compounds · 5"). Where some of the
+  them as the step's did ("5 conformers of 2 compounds"). Where some of the
   compound's conformers are left out, the set is a part of a search
   (below), and the table shows no energy above the compound's lowest,
   which may not be among them. All of a compound's conformers chosen are
@@ -2206,7 +2197,7 @@ Decided while building it, for the maintainer to confirm:
   on the canvas, not as a job: it does not go on when Meno closes. A
   search on molecules in 3D is still a job.
 - **The conformers it chose from are set aside**, kept with the set as
-  any step's are: the set's count says *1 compound · 1 of 9*.
+  any step's are: the set's count says *1 conformer of 1 compound*.
 
 Then, of the leftovers the maintainer chose:
 
@@ -2403,7 +2394,7 @@ wired on, not one frame for every result.
   frame was, where that is clear, its line from its port.
 - **Said by its port**: the pointer on a held exit's port says what its
   set holds, beside the port - its name, then its count in the words a
-  large set's summary says it in ("Failed · 3 molecules") - in a chip as
+  large set's tab says it in ("Failed · 3 molecules") - in a chip as
   a molecule's frames chip is drawn, but whole: it stands on the port's
   wire (workflow/exitNames `exitChip`, by WebGL). Nothing where it holds
   nothing. Its step's exit names go while it is said; a first name cut
@@ -3397,7 +3388,7 @@ the build settled:
   those whose SMILES are product n's. No case differs by design so far.
 - **Not yet.**
   - A set of structures drawn held off the page can't yet be opened as a
-    table or shown with a sample of its structures, as a large set of
+    table or shown one at a time, as a large set of
     molecules in 3D is (6b, 6c). Its frame says how many it holds, and that
     they are on no page.
   - Copied without its step, such a set pastes as an empty frame of the

@@ -425,12 +425,16 @@ nowhere, what it holds kept as a large set keeps it (WORKFLOWS.md,
 *Held results*, 2026-11-05). An exit for what its step sets aside, wired
 on to none, shows nothing while it holds nothing: its port alone
 (WORKFLOWS.md, *Exits that set aside*). Otherwise, by its size:
-- **up to 50 entries, on the page**, as today (question 15, answered). An
-  entry with frames shows its frames chip;
-- **more, as a summary in its frame**: its count with nouns, a grid of a
-  sample of its structures (drawn in 2D by Meno's own layout where they have
-  no drawing), and histograms of the properties chosen. It also opens as a
-  table in the column, and any entries can be put on the page from there.
+- **up to 50 molecules, on the page**, as today (question 15, answered):
+  one for each molecule or conformer set, never counted by its frames (3
+  compounds of 200 conformers are 3 molecules). An entry with frames shows
+  its frames chip;
+- **more, one at a time in its frame** (2026-11-11): its tab says the count
+  with nouns, and its frame shows one of them with a stack chip to go
+  through them - a view of the set, not a molecule of the page. It also
+  opens as a table in the column, and any entries can be put on the page
+  from there. (Superseded 2026-11-11: a summary in its frame - a grid of a
+  sample of its structures and histograms of the properties chosen.)
 
 **Members are explicit** (question 2, answered; refining decision 5):
 - a set's members are a list in order: its collection's;

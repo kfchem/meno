@@ -20,6 +20,7 @@ import { POINT, pointFor } from "../../../../lib/pdf/layout";
 import { acceptWorkspace3d, type Workspace3D } from "../../../../lib/chem/workspaceStyle3d";
 import type { Carried3D, Drawn, EditorState, LostText, Member, Molecule3D, PdfItem, PictureItem, TextOf, WorkspaceText } from "../store/types";
 import { collectionHash, setMembers } from "../workflow/entries";
+import { shownIn } from "../workflow/heldView";
 import { pdfBytes } from "../../../../lib/pdf/reader";
 import { readPdfsAt } from "./pdfItems";
 import { anyLeftOut, leftOut, noting, type LeftOut } from "./readNotes";
@@ -80,7 +81,7 @@ type Saved = Pick<
   Partial<Pick<EditorState, "docStyle" | "docStyle3d">> &
   Partial<Pick<EditorState, "pushes">> &
   Partial<Pick<EditorState, "ringFills">> &
-  Partial<Pick<EditorState, "sets" | "steps" | "wires" | "texts" | "textsLost" | "textShown" | "textsOpen" | "pdfs" | "pdfShown" | "pictures" | "slides" | "shapes" | "inks" | "cycles" | "structureMaps" | "conversations" | "stacksShown" | "fullModel" | "recordsShown">>;
+  Partial<Pick<EditorState, "sets" | "steps" | "wires" | "texts" | "textsLost" | "textShown" | "textsOpen" | "pdfs" | "pdfShown" | "pictures" | "slides" | "shapes" | "inks" | "cycles" | "structureMaps" | "conversations" | "stacksShown" | "heldShown" | "fullModel" | "recordsShown">>;
 
 /**
  * The canvas's molecules in 3D as a file carries them: each turned, and
@@ -128,12 +129,13 @@ export function workspaceText(given: Saved, kept: ReadonlySet<string> = new Set(
   // (the atoms a step put on the page, of those written: one not written - a set kept out of the file - could be another's once the file is opened and numbering goes on)
   const written = new Set((state.fullModel ?? state.model).atoms.map((a) => a.id));
   // (a held set's molecules' ids on the page this session are its own: not written - workflow/held)
-  const savedSets = (state.sets ?? []).map(({ members, collection, drawnCollection, put, heldIds: _held, ...set }) => {
+  const savedSets = (state.sets ?? []).map(({ members, collection, drawnCollection, put, heldIds: _held, shown: _shown, ...set }) => {
     const putWritten = put?.filter((id) => written.has(id));
     const b = putWritten?.length ? { ...set, put: putWritten } : set;
     if (b.keep === false && b.made) return { ...b, notKept: { count: collection?.length ?? (members?.length ?? 0) + (drawnCollection?.length ?? 0), hash: collectionHash(page, { ...b, members, collection, drawnCollection }) } };
     // (a large result set's collection: written as its molecules are, in the step's order - or its structures drawn, each as it holds it)
-    if (collection) return { ...b, members: [], collection: collection.map((m) => outputKept(m, kept)) };
+    // (and, of a large one shown one at a time, the molecule its view showed, if not its first: workflow/heldView)
+    if (collection) return { ...b, members: [], collection: collection.map((m) => outputKept(m, kept)), ...(shownIn({ id: b.id, collection }, state.heldShown ?? {}) > 0 ? { shown: shownIn({ id: b.id, collection }, state.heldShown ?? {}) } : {}) };
     const saved = (members ?? []).flatMap((m): Member[] => {
       if ("structure" in m) return [m];
       if ("molecule" in m) return moleculeAt.has(m.molecule) ? [{ molecule: moleculeAt.get(m.molecule)! }] : [];

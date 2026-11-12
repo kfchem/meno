@@ -16,7 +16,7 @@
  */
 import { removeMolecules3d, withoutAtoms, type WorkspaceDocument } from "../document";
 import type { DrawnModel, Molecule3D, WorkflowSet } from "../store/types";
-import { setMembers, setMolecules, entriesIn, LARGE_SET } from "./entries";
+import { setMembers, setMolecules, LARGE_SET } from "./entries";
 import { heldSets } from "./onPage";
 import { drawnEntries, laidOutAgain, type RunWith } from "./run";
 
@@ -98,7 +98,7 @@ function showsAny(doc: WorkspaceDocument, set: WorkflowSet): boolean {
 function laysOut(doc: WorkspaceDocument, set: WorkflowSet): boolean {
   if (set.table || set.number || set.chart || !(set.collection?.length || set.drawnCollection?.length)) return false;
   if (showsAny(doc, set)) return false;
-  return set.collection?.length ? set.collection.reduce((n, m) => n + entriesIn(m), 0) <= LARGE_SET : true;
+  return set.collection?.length ? set.collection.length <= LARGE_SET : true;
 }
 
 /**
