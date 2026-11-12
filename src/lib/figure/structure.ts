@@ -115,9 +115,54 @@ export function drawnBond(read: Pick<FigureRead, "atoms" | "bonds" | "bond">): n
  * or fewer hydrogens than its bonds leave it is unsure, as is a label
  * nothing reads.
  */
+/**
+ * An atom labelled N2 or N2+ read by its bonds, never by its letters (IUPAC, glossary of class names, 1995: a diazo group is =N+=N- on a carbon, a
+ * diazonium's N is triply bonded to the other): N2 at the end of ONE DOUBLE bond to a carbon is the diazo group - N+ double-bonded to the carbon and to an
+ * N- - and N2+ at the end of ONE SINGLE bond to a carbon the diazonium group - N+ single-bonded to the carbon, triply to an N - each written out as its
+ * atoms, the second a bond further along. Else: N2 on a plain nitrogen's bonds (two or more) is an N and the 2 its number, marked; any other, a label
+ * not read, marked as it is. Nothing else changes: O2 at a bond's end has no one meaning and stays unread.
+ */
+export function diazoRead(given: FigureRead): { read: FigureRead; parent: Map<number, number> } {
+  const parent = new Map<number, number>();
+  const here = (i: number) => given.bonds.filter((b) => b.a === i || b.b === i);
+  const carbon = (j: number) => {
+    const a = given.atoms[j];
+    return !a.el && (!a.label || /^C(H\d?)?$/.test(a.label)) ? true : a.el === "C";
+  };
+  const atoms = given.atoms.map((a) => ({ ...a }));
+  const bonds = [...given.bonds];
+  const length = given.bond || drawnBond(given);
+  given.atoms.forEach((a, i) => {
+    if (a.el || (a.label !== "N2" && a.label !== "N2+")) return;
+    const mine = here(i);
+    const diazo = a.label === "N2";
+    if (mine.length === 1 && mine[0].order === (diazo ? 2 : 1)) {
+      const j = mine[0].a === i ? mine[0].b : mine[0].a;
+      if (carbon(j)) {
+        const away = Math.hypot(a.x - given.atoms[j].x, a.y - given.atoms[j].y) || 1;
+        const next = atoms.length;
+        parent.set(next, i);
+        atoms[i] = { ...a, label: undefined, alts: undefined, el: "N", charge: 1 };
+        atoms.push({ x: a.x + ((a.x - given.atoms[j].x) / away) * length, y: a.y + ((a.y - given.atoms[j].y) / away) * length, el: "N", ...(diazo ? { charge: -1 } : {}) });
+        bonds.push({ a: i, b: next, order: diazo ? 2 : 3 });
+        return;
+      }
+    }
+    if (diazo && mine.length >= 2) {
+      atoms[i] = { ...a, label: "N", alts: undefined, unsure: [...(a.unsure ?? []), 'A small number by it was taken as the atom\'s number, not a count: read as "N".'] };
+      return;
+    }
+    atoms[i] = { ...a, unsure: [...(a.unsure ?? []), `"${a.label}" was not read as an element or a group.`] };
+  });
+  return { read: { ...given, atoms, bonds }, parent };
+}
+
 export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: number; y: number }): { atoms: StructureAtom[]; bonds: StructureBond[] } {
-  // (each repeat unit drawn in brackets with a whole count read that many times, before anything is worked out of its atoms)
-  const { read, of, multiple } = repeatsExpanded(given);
+  // (each repeat unit drawn in brackets with a whole count read that many times, before anything is worked out of its atoms; an N2 by its bonds)
+  const diazo = diazoRead(given);
+  const { read, of, multiple } = repeatsExpanded(diazo.read);
+  // (an atom written out of an N2 stands for the figure's atom it was written from, as a repeat unit's copy does)
+  for (const [added, from] of diazo.parent) of[added] = of[from];
   const drawn = drawnBond(given);
   const k = drawn ? NOMINAL_BOND_LENGTH / drawn : 1;
   const xs = read.atoms.map((a) => a.x);

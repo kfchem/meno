@@ -59,6 +59,8 @@ export function wholeLabel(label: string): boolean {
 }
 
 export const figureLabels: LabelReader = (label) => {
+  // (N2 and N2+ are read by their bonds, not by the letters: the figure reader (lib/figure/structure `diazoRead`) says which, and marks what it does not read)
+  if (label === "N2" || label === "N2+") return { el: label };
   if (!labelReading(label)) return null;
   const r = readLabel(label, isElementSymbol);
   if (r.kind === "element") return { el: r.el, charge: r.charge, ...(r.isotope ? { isotope: r.isotope } : {}) };

@@ -950,3 +950,95 @@ describe("a small number beside a label, read with Meno's own label reader (made
     expect(word([["13", 6, 4], ["C", 10, 0]])).toBe("13C");
   });
 });
+
+describe("an N2 or N2+ beside a bond, read by its bonds (made drawings)", () => {
+  /** A label as typeset at (x, y): each part its text, its size and how far its baseline stands above the line's. */
+  const labelLetters = (parts: [string, number, number][], x: number, y: number): FigureLetter[] => {
+    let at = x;
+    return parts.flatMap(([text, size, up]) =>
+      [...text].map((ch): FigureLetter => {
+        const w = size * 0.6;
+        const base = y + 3.6 - up;
+        const l: FigureLetter = { c: ch, box: [at, base - size * 0.72, at + w, base], at: [at, base], size, loose: [at, base - size, at + w + 0.2, base + 0.2 * size] };
+        at += w + 0.2;
+        return l;
+      }),
+    );
+  };
+  const N2: [string, number, number][] = [["N", 10, 0], ["2", 7, -2.5]];
+  const formula = (m: Model) => partFormula(m);
+
+  /** CH3-CH=N2: a methyl, a CH, and the label at the end of a double bond. */
+  const diazoethane = (parts: [string, number, number][] = N2): Model => {
+    const a: P = [100, 200];
+    const b = step(a, 30);
+    const o = step(b, -30);
+    return structureFrom({ paths: [stroke(a, b), ...doubled(b, o, 0, 0.45 * L)], letters: labelLetters(parts, o[0] - 1, o[1]), pictures: [] }, SHA, 1) as Model;
+  };
+
+  it("reads N2 at the end of one double bond to a carbon as a diazo group: N+ double-bonded to the carbon and to an N-", () => {
+    const m = diazoethane();
+    expect(formula(m)).toBe("C2H4N2");
+    const [n1, n2] = [m.atoms.filter((x) => x.el === "N" && x.charge === 1), m.atoms.filter((x) => x.el === "N" && x.charge === -1)];
+    expect([n1.length, n2.length]).toEqual([1, 1]);
+    expect(m.atoms.every((x) => !x.unsure)).toBe(true);
+    const orders = m.bonds.map((b) => b.order).sort();
+    expect(orders).toEqual([1, 2, 2]);
+  });
+
+  it("reads N2+ at the end of one single bond to a ring carbon as a diazonium group: cyclohexanediazonium, C6H11N2+", () => {
+    const from: P = [200, 200];
+    const pts: P[] = [from];
+    for (let k = 1; k < 6; k++) pts.push(step(pts[k - 1], 60 * k));
+    const centre: P = [pts.reduce((t, p) => t + p[0], 0) / 6, pts.reduce((t, p) => t + p[1], 0) / 6];
+    const away = [from[0] - centre[0], from[1] - centre[1]];
+    const n = Math.hypot(away[0], away[1]);
+    const out: P = [from[0] + (away[0] / n) * L, from[1] + (away[1] / n) * L];
+    const m = structureFrom({ paths: [...ring(from, 0), cut(from, out, 0, 5)], letters: labelLetters([["N", 10, 0], ["2", 7, -2.5], ["+", 7, 4]], out[0] - 3, out[1]), pictures: [] }, SHA, 1) as Model;
+    expect(formula(m)).toBe("C6H11N2+");
+    expect(m.atoms.filter((x) => x.charge === 1)).toHaveLength(1);
+    expect(m.bonds.some((b) => b.order === 3)).toBe(true);
+  });
+
+  it("takes an N2 with no bond - a word of the conditions - for no atom, and does not change what is read beside it", () => {
+    const a: P = [100, 200];
+    const b = step(a, 30);
+    const c = step(b, -30);
+    const chain = [stroke(a, b, c)];
+    const without = structureFrom({ paths: chain, letters: [], pictures: [] }, SHA, 1) as Model;
+    const beside = structureFrom({ paths: chain, letters: labelLetters([["under N", 10, 0], ["2", 7, -2.5]], 250, 200), pictures: [] }, SHA, 1) as Model;
+    expect(beside.atoms.map((x) => x.el)).toEqual(without.atoms.map((x) => x.el));
+    expect(beside.atoms.every((x) => x.el !== "N2" && !x.unsure)).toBe(true);
+  });
+
+  it("leaves N2 on one single bond, uncharged, unread and marked", () => {
+    const a: P = [100, 200];
+    const b = step(a, 30);
+    const m = structureFrom({ paths: [stroke(a, [b[0] - 1, b[1] + 0.5])], letters: labelLetters(N2, b[0], b[1]), pictures: [] }, SHA, 1) as Model;
+    const n = m.atoms.find((x) => x.el === "N2");
+    expect(n?.unsure?.said).toEqual(['"N2" was not read as an element or a group.']);
+  });
+
+  it("takes N2 on a ring nitrogen - two bonds - as an N with the 2 for its number, marked; a 2 clearly high as no mark at all", () => {
+    const a: P = [100, 200];
+    const b = step(a, 30);
+    const c = step(b, -30);
+    const level = structureFrom({ paths: [cut(a, b, 0, 5), cut(b, c, 5, 0)], letters: labelLetters([["N", 10, 0], ["2", 7, -0.3]], b[0] - 3, b[1]), pictures: [] }, SHA, 1) as Model;
+    const high = structureFrom({ paths: [cut(a, b, 0, 5), cut(b, c, 5, 0)], letters: labelLetters([["N", 10, 0], ["2", 7, 4]], b[0] - 3, b[1]), pictures: [] }, SHA, 1) as Model;
+    const n = (m: Model) => m.atoms.find((x) => x.el === "N");
+    expect(n(level)).toBeDefined();
+    expect(n(level)?.unsure?.said.some((t) => t.startsWith("A small number by it"))).toBe(true);
+    // (no mark for the number: what is said of it is its hydrogen, as of any N drawn so)
+    expect(n(high)?.unsure?.said.some((t) => t.startsWith("A small number")) ?? false).toBe(false);
+  });
+
+  it("leaves O2 at a bond's end unread and marked, and SO2Me, CO2Me, NO2 as they were", () => {
+    const a: P = [100, 200];
+    const b = step(a, 30);
+    const at = (parts: [string, number, number][]) => structureFrom({ paths: [stroke(a, [b[0] - 1, b[1] + 0.5])], letters: labelLetters(parts, b[0], b[1]), pictures: [] }, SHA, 1) as Model;
+    expect(at([["O", 10, 0], ["2", 7, -2.5]]).atoms.some((x) => x.unsure?.said.includes('"O2" was not read as an element or a group.'))).toBe(true);
+    for (const text of [[["SO", 10, 0], ["2", 7, -2.5], ["Me", 10, 0]], [["CO", 10, 0], ["2", 7, -2.5], ["Me", 10, 0]], [["NO", 10, 0], ["2", 7, -2.5]]] as [string, number, number][][]) {
+      expect(at(text).atoms.some((x) => x.unsure?.said.some((t) => t.includes("not read")))).toBe(false);
+    }
+  });
+});
