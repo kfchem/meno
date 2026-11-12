@@ -52,6 +52,18 @@ export type EditMeta = {
    * always steps of their own.
    */
   by?: string;
+  /**
+   * What this edit follows from, once a gesture is over (a frame fitted to
+   * what was let go on it, as the pointer is released): it joins the step on
+   * top - whatever that step's key, however long ago it was made - where
+   * that step is a gesture's (made with a `coalesceKey`) by the same maker:
+   * one step to undo for the whole, its label and key those of the gesture.
+   * With no gesture on top, a step of its own: so, too, where the gesture
+   * ended in a plain edit - one made with no key - which is the step on top
+   * then (a drop made by a plain step is two steps to undo: the drop, then
+   * what followed it). Never a change set's first edit.
+   */
+  joinTop?: true;
 };
 
 /**
@@ -287,6 +299,8 @@ export function createDocument<T>(
 
       const at = now();
       const window = meta.coalesceWithinMs ?? DEFAULT_COALESCE_MS;
+      // (joining the gesture on top: only one that is one - a step made with a key - and the same maker's; never a change set's first edit)
+      const joins = !first && meta.joinTop === true && present.coalesceKey != null && present.by === meta.by;
       const coalesce =
         !first &&
         meta.coalesceKey != null &&
@@ -296,7 +310,11 @@ export function createDocument<T>(
       const by = meta.by != null ? { by: meta.by } : {};
 
       travelled = false;
-      if (coalesce) {
+      if (joins) {
+        // The step on top stays what it is - its label, key and time - and takes the new end point.
+        present = { ...present, state: next, cost: undefined };
+        bound();
+      } else if (coalesce) {
         // Keep the step that is already on the stack and move its end point,
         // so undo jumps back to before the whole gesture.
         present = { state: next, label, coalesceKey: meta.coalesceKey, ...by, at };

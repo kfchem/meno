@@ -1146,7 +1146,7 @@ what it converts, the style's place and its card, and the molecules in
   | A shape | x0, y0, x1, y1 | times k; its corners' radius and its line's width in pt are kept - a line as wide as the bonds' as wide as the new style's |
   | Ink | its strokes' points | x and y times k (not the pressure); its width in pt is kept |
   | A workflow step | x, y | times k |
-  | A workflow set | its frame | fitted round what it holds once that has moved (`fitSets`) |
+  | A workflow set | its frame | fitted round what it holds once that has moved (`framesFitted`) |
   | A print frame (later) | its frame | times k |
 
   What is given in points - words' sizes, shapes' weights, ink widths, a
@@ -1447,7 +1447,7 @@ it, in `features/Workspace/pageGl/`:
   it and out off it, so the card is never paler as it opens or shuts; what
   its card says that a chemist copies - a failure, a program's line -
   copied from its menu. Its sets' frames and tabs (`FrameTabs`): the tab
-  drags it, its edges and corners size it, two presses on a chemist's
+  drags it (its frame is its members' room, never sized by hand), two presses on a chemist's
   set's tab write its name anew where it stands (`PageField`): drawn in
   its own size and weight, in a white box, with its caret, what is
   selected and what an input method is composing underlined; typed into a

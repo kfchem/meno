@@ -41,8 +41,7 @@ each is merged, this file describes what is built.
    conformer sets*, below).
 5. **A set holds its members, in order**: what lies inside its frame as
    it is made; a structure moved into it joins it, one moved out leaves
-   it; a frame resized takes in and lets go of what then lies inside it
-   or not.
+   it; the frame is always its members' room.
 6. **xTB first.** Programs installed separately - ORCA, Gaussian and
    others - are to be run later, through the same kinds of step.
 7. **This computer only**, for now. A cluster or a remote machine comes
@@ -259,17 +258,30 @@ pointer does; put back by an undo, they glide back.
 - dragged into a set the chemist made, a structure or a molecule joins it,
   at its place in that order among the members; dragged out of any set,
   it leaves; moved within the frame, it keeps its place;
-- a frame resized takes in what then lies inside it and lets go of what
-  then lies outside it, as one step to undo; what joins or leaves is
-  marked a moment as it does;
+- what joins or leaves is marked a moment as it does;
 - deleted from the page, a member is gone from its set, with nothing
   asked; drawn on, a structure stays one member, and joined to another
-  the two are one; the frame grows to keep it inside if it would reach
-  past it;
+  the two are one;
 - a step's result set holds what its step made, in its order, and takes
   nothing in: dragged into it, a structure stays outside the set;
-- the frame is the set's own: its tab drags it, with all it holds; its
-  edges and corners drag to size it;
+- **the frame is its members' room** (the maintainer, 2026-11-11), never
+  sized by hand: each member's box as it is drawn - a structure's labels
+  and a molecule's frames chip below it included - and half a bond about
+  them, with room for the name above and never narrower than a name needs
+  (`workflow/fitFrames`). It grows and shrinks as they change - a structure
+  drawn on, a bigger look, a member deleted - its edges eased, in the same
+  step as the edit; a workspace saved with frames of other sizes is fitted
+  as it opens. Its tab drags it, with all it holds;
+- **nothing lies half over a frame.** While a member is dragged its frame
+  stays where it is, so that it can be dragged out. Let go, a thing with
+  its middle in the frame is its member, and the frame grows round it
+  whole; a thing no set holds, with its middle outside, is eased out to
+  just outside, on the nearest side, half a bond from the frame. A frame
+  that grows into a thing no set holds eases it out the same way, once:
+  where that leaves it over another frame, it stays. A step's result set
+  takes nothing in, so anything over it is eased out. All of it is part
+  of the gesture's step: one undo takes back the drag, the frame and what
+  was eased;
 - *Delete set* (right-click its tab) takes the frame away and leaves what
   it held; a set left empty stays, empty, until it is deleted;
 - *Don't keep in the file* (right-click a result set's tab): its molecules
@@ -1211,15 +1223,15 @@ gave), and one can be shown again.
 
 A result set is laid out for the 3D look its molecules are drawn in.
 When a bigger look is chosen - a molecule switched to its other look, or
-another look in Settings - and its molecules no longer fit (one reaching
-past the frame or onto the set's name, or two over one another), the
-frame widens and they are laid out again, as a run in that look lays
-them out (decided, 2026-10-13) - or, where widening would reach over
-what stands beside the set (the next step's card), in rows as wide as
-the set was, the set growing downwards. The frame and the molecules
-glide there together, and nothing is left over another. A set never grows narrower
-or shorter for a smaller look; a chemist's own sets are left as they
-are. A molecule switched is one step to undo, with its set; a look
+another look in Settings - the frame is its molecules' room as they are
+drawn (*A set holds its members*). Where they come to lie over one
+another they are laid out again, as a run in that look lays them out
+(decided, 2026-10-13) - or, where that would reach over what stands
+beside the set (the next step's card), in rows as wide as the set was,
+the set growing downwards. The frame and the molecules glide there
+together, and nothing is left over another. A chemist's own sets are
+fitted to their members the same way, without laying them out again. A
+molecule switched is one step to undo, with its set; a look
 chosen in Settings is not a step of the workspace, and lays out the
 states an undo goes back to as well.
 
@@ -1525,8 +1537,8 @@ undone and saved with it; an input made from the selection's port, or
 *Use as input* in its menu; wires drawn from a port that gives or back from one
 that takes, picked up off a step and put into another, replaced, and
 deleted (Delete or Backspace on one, its menu, or picked up and let go
-on nothing); a set dragged by its tab with what it holds, sized by its
-edges and corners, chosen by a click on its tab; steps dragged, opened in
+on nothing); a set dragged by its tab with what it holds, its frame always its
+members' room, chosen by a click on its tab; steps dragged, opened in
 place to their options by a click; Quick Add's one button; Meno's *As
 conformers*, *Energy window*, *Duplicates* and *Populations*, run from a
 step's menu - the steps before it first, where they have not run or have
@@ -2236,12 +2248,13 @@ Decided while building it, for the maintainer to confirm:
 
 Then, of the leftovers the maintainer chose:
 
-- **A set grows to keep a structure drawn on in it inside it** - an atom
-  added past its edge, one moved on its own, one made another element -
-  as part of the same edit, one step to undo (`fitSets`, settled on each
-  edit of the workspace's document). A structure moved whole, and a frame
-  sized anew, leave it as it is: one is dragged out of a set, and a set
-  made smaller than what it holds, on purpose.
+- **A set's frame is its members' room** - an atom added past its edge,
+  one moved on its own, one made another element, a member deleted - as
+  part of the same edit, one step to undo (`framesFitted`, settled on each
+  edit of the workspace's document). A member moved whole leaves it as it
+  is until the pointer is let go (`framesSettled`, joined to the
+  gesture's step), so that it can be dragged out. Frames are no longer
+  sized by hand (the maintainer, 2026-11-11).
 - **Sets, steps and wires fade out as they go**, as they fade in; a
   deleted one is left as it was, taking no pointer, for the fade.
 - **A thin bar on a running card** fills as its jobs end, where it runs
