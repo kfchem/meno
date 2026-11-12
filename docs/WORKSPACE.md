@@ -1711,7 +1711,9 @@ space-filling side by side is better science than either alone.
   and far off the page, drawn in the workspace's style, is compiled in the
   background once its colours are given, and again as the style changes.
   It is kept, so its shaders are kept: the first 3D structure made never
-  waits a frame on a shader being made for it.
+  waits a frame on a shader being made for it. Being kept, it does at each
+  frame what a molecule on the page does at each frame (it is never drawn):
+  the work of a molecule of nine atoms.
 - **Pictures as the canvas.** A copied or exported picture of a molecule
   in 3D draws its style's colours, lines and depth fade as the canvas
   does - its lines in proportion to the molecule at any size, being in

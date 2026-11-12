@@ -15,7 +15,9 @@ import Molecule3DView from "./Molecule3DView";
  * browser can (`compileAsync`, KHR_parallel_shader_compile), and again
  * whenever the style changes. Kept, unseen, so that its shaders are kept:
  * the first molecule made then draws with them, never waiting a frame on a
- * shader made for it.
+ * shader made for it. Kept, it does at each frame what a molecule on the
+ * page does at each frame, though it is never drawn: a molecule of nine
+ * atoms' work.
  */
 export default function WarmShaders3D({ style, stereoFont }: { style: Style3D; stereoFont: Parameters<typeof Molecule3DView>[0]["stereoFont"] }) {
   const [on, setOn] = useState(false);
