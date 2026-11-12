@@ -91,13 +91,15 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
         down = null;
         if (was) window.setTimeout(() => get().settleFrames(was), 0);
       };
+      // (the release heard before anything under the window can stop it: a molecule in 3D's drag ends with a stopPropagation on the canvas, and
+      //  the settle - on the next turn, after the gesture's own last edit - would never be asked)
       window.addEventListener("pointerdown", press, true);
-      window.addEventListener("pointerup", release);
-      window.addEventListener("pointercancel", release);
+      window.addEventListener("pointerup", release, true);
+      window.addEventListener("pointercancel", release, true);
       return () => {
         window.removeEventListener("pointerdown", press, true);
-        window.removeEventListener("pointerup", release);
-        window.removeEventListener("pointercancel", release);
+        window.removeEventListener("pointerup", release, true);
+        window.removeEventListener("pointercancel", release, true);
       };
     },
     settleFrames: (down: WorkspaceDocument) => {

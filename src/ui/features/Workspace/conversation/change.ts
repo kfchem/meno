@@ -22,7 +22,7 @@ import { labelBoxes, labelledPart } from "../utils/freePlace";
 import { styleOf, type DrawingStyle } from "../../../../lib/chem/style";
 import { byOf, kindsOf, optionsFor } from "../workflow/doers";
 import { KINDS, type StepKind } from "../workflow/kinds";
-import { inScope, readSeenId, seenId, type Scope } from "./scope";
+import { inScope, placingFrameOf, readSeenId, seenId, type Scope } from "./scope";
 import { drawnFromSmiles } from "../utils/smilesDrawn";
 import { centredAt } from "../utils/copyPaste";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
@@ -135,7 +135,7 @@ export function nextInScheme(d: WorkspaceDocument, scope: Scope, w: number): { x
 
 /** The frame a change is put down in: the conversation's, or - one of the whole page - round what is on it. */
 function frameOf(d: WorkspaceDocument, scope: Scope): { x0: number; y0: number; x1: number; y1: number } {
-  if ("frame" in scope) return scope.frame;
+  if ("frame" in scope) return placingFrameOf(scope.frame);
   const points = taken(d);
   if (!points.length) return { x0: -20, y0: -20, x1: 20, y1: 20 };
   const xs = points.map((p) => p.x);

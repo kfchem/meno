@@ -22,7 +22,8 @@ import { moveMolecules3d, type WorkspaceDocument } from "../document";
 import type { Atom, Bond, Model, Molecule3D, PictureItem, WorkflowSet } from "../store/types";
 import { drawnBox } from "../../../../utils/importers";
 import { cornersOf } from "../utils/selection";
-import { structuresOf, setMembers, type Frame } from "./entries";
+import { cardRect } from "../pageGl/conversationCard";
+import { drawnIn, inside, structuresOf, setMembers, type Frame } from "./entries";
 import { SET_PAD, SET_TOP } from "./look";
 import { resizeSet } from "./model";
 import { unseenSets } from "./onPage";
@@ -252,7 +253,7 @@ export function framesFitted(doc: WorkspaceDocument, before: WorkspaceDocument |
  */
 export function framesSettled(doc: WorkspaceDocument, down: WorkspaceDocument | undefined, extentOf: Reach | undefined): WorkspaceDocument {
   const fitted = framesFitted(doc, undefined, extentOf);
-  return down ? pushedOut(fitted, down, extentOf) : fitted;
+  return down ? cardsCleared(pushedOut(fitted, down, extentOf), down, extentOf) : fitted;
 }
 
 /** `p` and `q` overlap by more than a rounding in both directions. */
@@ -287,6 +288,18 @@ function structureMoved(doc: WorkspaceDocument, ids: readonly number[], dx: numb
   };
 }
 
+/** What a set holds, whichever: not a thing for no set - atoms (of structures), molecules and pictures, by id. */
+function heldBySets(doc: WorkspaceDocument) {
+  const held = { atoms: new Set<number>(), molecules: new Set<number>(), pictures: new Set<number>() };
+  for (const b of doc.sets ?? []) {
+    const m = setMembers(doc, b);
+    m.structures.flat().forEach((id) => held.atoms.add(id));
+    m.molecules.forEach((id) => held.molecules.add(id));
+    m.pictures.forEach((id) => held.pictures.add(id));
+  }
+  return held;
+}
+
 /**
  * `doc` with what no set holds eased out of the frames it lies over - the
  * structures, molecules in 3D and pictures the gesture since `down` moved or
@@ -299,14 +312,7 @@ export function pushedOut(doc: WorkspaceDocument, down: WorkspaceDocument, exten
   const unseen = unseenSets(doc);
   const sets = (doc.sets ?? []).filter((b) => !unseen.has(b.id));
   if (!sets.length) return doc;
-  // (what a set holds, whichever: not a thing for no set)
-  const held = { atoms: new Set<number>(), molecules: new Set<number>(), pictures: new Set<number>() };
-  for (const b of doc.sets ?? []) {
-    const m = setMembers(doc, b);
-    m.structures.flat().forEach((id) => held.atoms.add(id));
-    m.molecules.forEach((id) => held.molecules.add(id));
-    m.pictures.forEach((id) => held.pictures.add(id));
-  }
+  const held = heldBySets(doc);
   // (the frames that are not as they were when the pointer was pressed: they push what lies under them)
   const grew = new Set(sets.filter((b) => { const d = down.sets?.find((x) => x.id === b.id); return !d || !sameFrame(d, b); }).map((b) => b.id));
   const wasAtom = new Map(down.model.atoms.map((a) => [a.id, a]));
@@ -348,6 +354,78 @@ export function pushedOut(doc: WorkspaceDocument, down: WorkspaceDocument, exten
     if (held.pictures.has(p.id)) return p;
     const to = ease(on.picture(p), wasPicture.get(p.id) !== p);
     return to ? { ...p, x: p.x + to.dx, y: p.y + to.dy } : p;
+  });
+  if (pictures.some((p, i) => p !== (doc.pictures ?? [])[i])) out = { ...out, pictures };
+  return out;
+}
+
+/** How far inside a conversation's frame a thing eased off its card keeps its middle at least, at the frame's left edge, in world units: never carried out of what the conversation sees. */
+const MIDDLE_IN = 0.01;
+
+/**
+ * How far a thing is eased off a conversation's card, to the left (the card
+ * lies against its frame's right edge): its right edge `SET_PAD` from the
+ * card's left - as `easedOut` leaves it from a frame - and its middle never
+ * past the frame's left edge, where the room to the left of the card is
+ * narrower than the thing. None where its middle is not on the card.
+ */
+export function easedOffCard(box: Frame, middle: { x: number; y: number }, frame: Frame, card: Frame): number | null {
+  if (!inside(card, middle)) return null;
+  const to = card.x0 - SET_PAD - box.x1;
+  // (its middle stays in what the conversation sees, if its box is wider than what lies to the left of the card)
+  return Math.max(to, frame.x0 + MIDDLE_IN - middle.x);
+}
+
+/**
+ * `doc` with what no set holds eased off the cards of conversations
+ * (docs/CONVERSATIONS.md, *The frame is its scope*): a card's room is never
+ * scope, so a structure, molecule in 3D or picture the gesture since `down`
+ * moved or drew, or that a card was moved or sized over - its middle on a
+ * card - is moved left to lie just left of it, inside what the
+ * conversation sees, in the same edit. Once: what it comes to lie over is
+ * not eased in turn. A conversation of the whole page has no card.
+ */
+export function cardsCleared(doc: WorkspaceDocument, down: WorkspaceDocument, extentOf: Reach | undefined): WorkspaceDocument {
+  const cards = (doc.conversations ?? []).flatMap((c) => {
+    const card = c.wholePage ? null : cardRect(c);
+    if (!card) return [];
+    const was = down.conversations?.find((d) => d.id === c.id);
+    return [{ frame: { x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1 }, card, moved: !was || !sameFrame(was, c) }];
+  });
+  if (!cards.length) return doc;
+  const held = heldBySets(doc);
+  const wasAtom = new Map(down.model.atoms.map((a) => [a.id, a]));
+  const nowAtom = new Map(doc.model.atoms.map((a) => [a.id, a]));
+  const wasMolecule = new Map((down.molecules3d ?? []).map((m) => [m.id, m]));
+  const wasPicture = new Map((down.pictures ?? []).map((p) => [p.id, p]));
+  const on = boxesOn(doc, extentOf ?? (() => ({ x0: 0, x1: 0, y0: 0, y1: 0 })));
+  // (the card a thing's middle is on, and how far to the left it goes off it: only what was touched, or what a card moved over)
+  const dxFor = (box: () => Frame, middle: { x: number; y: number }, touched: boolean): number | null => {
+    for (const c of cards) {
+      if (!touched && !c.moved) continue;
+      if (!inside(c.card, middle)) continue;
+      const dx = easedOffCard(box(), middle, c.frame, c.card);
+      return dx != null && dx !== 0 ? dx : null;
+    }
+    return null;
+  };
+  let out = doc;
+  for (const { ids, at } of drawnIn(doc.model)) {
+    if (ids.some((id) => held.atoms.has(id))) continue;
+    const dx = dxFor(() => on.structure(ids), at, ids.some((id) => wasAtom.get(id) !== nowAtom.get(id)));
+    if (dx != null) out = structureMoved(out, ids, dx, 0);
+  }
+  const moves: { id: number; at: { x: number; y: number } }[] = [];
+  for (const m of doc.molecules3d ?? []) {
+    if (held.molecules.has(m.id) || !extentOf) continue;
+    const dx = dxFor(() => on.molecule(m), m.at, wasMolecule.get(m.id) !== m);
+    if (dx != null) moves.push({ id: m.id, at: { x: m.at.x + dx, y: m.at.y } });
+  }
+  if (moves.length) out = moveMolecules3d(out, moves);
+  const pictures = (doc.pictures ?? []).map((p) => {
+    if (held.pictures.has(p.id)) return p;
+    const dx = dxFor(() => on.picture(p), p, wasPicture.get(p.id) !== p);
+    return dx != null ? { ...p, x: p.x + dx } : p;
   });
   if (pictures.some((p, i) => p !== (doc.pictures ?? [])[i])) out = { ...out, pictures };
   return out;

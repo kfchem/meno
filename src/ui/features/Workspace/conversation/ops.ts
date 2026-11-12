@@ -5,6 +5,7 @@
  * does not take back what was said, nor what was sent (`amend`).
  */
 import type { WorkspaceDocument } from "../document";
+import { framedForCard } from "../pageGl/conversationCard";
 import { NEW_RIGHTS, type Conversation, type Rights, type Said, type Sent } from "./types";
 
 const finite = (...xs: number[]) => xs.every(Number.isFinite);
@@ -14,14 +15,15 @@ export const CONVERSATION_FRAME = { w: 24, h: 14 };
 
 /** `doc` with a conversation put down in `frame` - or of the whole page - numbered `nextConversationId`: it may read, and proposes nothing yet. */
 export function addConversation(doc: WorkspaceDocument, frame: { x0: number; y0: number; x1: number; y1: number }, wholePage = false): WorkspaceDocument {
-  const { x0, y0, x1, y1 } = frame;
-  if (!finite(x0, y0, x1, y1) || !(x1 > x0) || !(y1 > y0)) return doc;
+  if (!finite(frame.x0, frame.y0, frame.x1, frame.y1) || !(frame.x1 > frame.x0) || !(frame.y1 > frame.y0)) return doc;
+  // (a frame always holds its card: put down smaller, it is made as large as the card needs)
+  const { x0, y0, x1, y1 } = framedForCard(frame);
   const id = doc.nextConversationId ?? 1;
   const made: Conversation = { id, x0, y0, x1, y1, ...(wholePage ? { wholePage: true as const } : {}), rights: { ...NEW_RIGHTS }, said: [], sent: [] };
   return { ...doc, conversations: [...(doc.conversations ?? []), made], nextConversationId: id + 1 };
 }
 
-/** What may be changed of a conversation: its frame, whether it sees the whole page, its rights, its connection (null: none). */
+/** What may be changed of a conversation: its frame (made as large as its card needs), whether it sees the whole page, its rights, its connection (null: none). */
 export type ConversationPatch = { frame?: { x0: number; y0: number; x1: number; y1: number }; wholePage?: boolean; rights?: Partial<Rights>; connection?: string | null };
 
 /** `doc` with the conversation `id` changed as `patch` says. */
@@ -30,7 +32,7 @@ export function updateConversation(doc: WorkspaceDocument, id: number, patch: Co
   if (at < 0) return doc;
   const was = doc.conversations![at];
   const { wholePage: _w, connection: _c, ...rest } = was;
-  const frame = patch.frame && finite(patch.frame.x0, patch.frame.y0, patch.frame.x1, patch.frame.y1) && patch.frame.x1 > patch.frame.x0 && patch.frame.y1 > patch.frame.y0 ? patch.frame : undefined;
+  const frame = patch.frame && finite(patch.frame.x0, patch.frame.y0, patch.frame.x1, patch.frame.y1) && patch.frame.x1 > patch.frame.x0 && patch.frame.y1 > patch.frame.y0 ? framedForCard(patch.frame) : undefined;
   const whole = patch.wholePage ?? !!was.wholePage;
   const connection = patch.connection === undefined ? was.connection : patch.connection ?? undefined;
   const next: Conversation = {

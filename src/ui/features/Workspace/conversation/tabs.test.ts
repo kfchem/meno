@@ -24,6 +24,13 @@ describe("conversations' frames on the page", () => {
     expect(conversationTabs([conversation(1)], { hovered: 1, shown: 1, talking: {} })[0].tone).toBe("chosen");
   });
 
+  it("are drawn as they are given - on their way to the document's frame, a frame grown to hold its card eased out to it - and as the document has them where none is given", () => {
+    const eased = new Map([[2, { x0: 4, y0: 5, x1: 6, y1: 7 }]]);
+    const tabs = conversationTabs([conversation(1), conversation(2)], { hovered: null, shown: null, talking: {}, frames: eased });
+    expect(tabs[0].box).toEqual({ x0: 0, y0: 0, x1: 20, y1: 10 });
+    expect(tabs[1].box).toEqual({ x0: 4, y0: 5, x1: 6, y1: 7 });
+  });
+
   it("say where what is inside them may go, and no name: sent to the hosts their model plugin names, kept on this computer, or nowhere", () => {
     // (a conversation has no name; one an old file gave was dropped as it was read)
     expect(conversationTabs([conversation(1)], { hovered: null, shown: null, talking: {} })[0].tab).toEqual({ icon: "chat", status: "Sends nothing: no model plugin" });

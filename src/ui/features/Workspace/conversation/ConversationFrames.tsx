@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type * as THREE from "three";
 import { useEditor, useEditorStore } from "../store";
 import { MOV_PX } from "../constants";
-import { PX } from "../workflow/look";
 import { pageAt } from "../utils/page";
 import { ArrowDownIcon, ArrowUpIcon, ChatBubbleLeftRightIcon, CloudArrowUpIcon, ComputerDesktopIcon } from "@heroicons/react/24/outline";
 import { DURATION } from "../../../theme/motion";
@@ -12,7 +11,9 @@ import PageLayer from "../pageGl/PageLayer";
 import PageAsk from "../pageGl/PageAsk";
 import { askArea } from "../pageGl/askField";
 import { connectionFor } from "./connections";
-import { CARD, cardBlocks, cardLayout, clampScroll, scrollMax, type CardLayout } from "../pageGl/conversationCard";
+import { CARD, cardBlocks, cardLayout, clampScroll, FRAME_LEAST, scrollMax, type CardLayout } from "../pageGl/conversationCard";
+import { pagePx } from "../pageGl/units";
+import { useShownFrames } from "../components/useShownFrames";
 import { cardParts, cardView, cardWidth, SCROLL_ICONS } from "../pageGl/conversationCardParts";
 import { cardForKey, earlierOf, glideAt, gliding, newBelow, offsetByKey, offsetByThumb, pagedByPress, TRACK, type Glide } from "../pageGl/conversationScroll";
 import { PAGE_PX } from "../utils/pageScale";
@@ -43,8 +44,8 @@ const LEVEL = { rest: 0, hover: 1, chosen: 2 } as const;
 /** Where a card is drawn among the page's WebGL: over its frame's line and under the steps' cards - the frame's order, a little over it. */
 const CARD_ORDER = FRAMES_ORDER + 0.25;
 
-/** How small a frame may be sized, each way: as a set's (components/Workflow2D). */
-const LEAST = 48 * PX;
+/** How small a frame may be sized, each way: what holds its card (pageGl/conversationCard `FRAME_LEAST`), in world units. */
+const LEAST = { w: pagePx(FRAME_LEAST.w), h: pagePx(FRAME_LEAST.h) };
 
 /**
  * The page's conversations (docs/CONVERSATIONS.md, *The Conversation
@@ -81,7 +82,10 @@ export default function ConversationFrames() {
   const saw = useRef(new Map<number, number>());
   // (what each card's handlers need to know of it as it was drawn last)
   const nowOf = useRef(new Map<number, { height: number; view: number; trackPx: number; shown: number; top: number }>());
-  const live = useMemo(() => conversationTabs(conversations, { hovered, shown, talking }), [conversations, hovered, shown, talking]);
+  // (each frame as it is drawn: on its way to where the document has it, as a set's is - one that grew to hold its card eased out to it)
+  const framesShown = useShownFrames(conversations);
+  const live = useMemo(() => conversationTabs(conversations, { hovered, shown, talking, frames: framesShown }), [conversations, hovered, shown, talking, framesShown]);
+  const frameOf = (c: Conversation) => framesShown.get(c.id) ?? { x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1 };
   // (each coming in and going out over Meno's base time - one gone drawn as it last was till it has: pageGl/presence)
   const present = useRef<Map<string, Present<FrameTab>> | null>(null);
   const [, redraw] = useState(0);
@@ -130,7 +134,7 @@ export default function ConversationFrames() {
     const changed = !!talking[c.id]?.changed;
     const notes = changed ? [runsAgainSaid(talking[c.id]?.runsAgain, steps), discarded[c.id] ?? null].flatMap((n) => n ?? []) : [];
     // (at the width the frame leaves it: its words wrap there, and are laid out again where that changes - a frame sized)
-    const width = cardWidth({ x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1 }) ?? CARD.w;
+    const width = cardWidth(frameOf(c)) ?? CARD.w;
     const key = `${running}|${changed}|${notes.join("\n")}|${width.toFixed(2)}`;
     const had = laid.current.get(c.id);
     if (!had || had.said !== c.said || had.key !== key) laid.current.set(c.id, { said: c.said, key, layout: cardLayout(cardBlocks(c.said, { running, changed, notes }), width) });
@@ -138,7 +142,7 @@ export default function ConversationFrames() {
   const words = useEasedValues(new Map(shownCards.map(({ it }) => [it.key, read ? 1 : 0])), DURATION.quick * 1000);
   // (a card's scroll: where it goes - the end, unless it was left scrolled up - and where it is, gliding there; its track, Earlier and Latest as present as they are wanted, eased)
   const scrolled = shownCards.map(({ it, c }) => {
-    const frame = { x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1 };
+    const frame = frameOf(c);
     // (its ask area as tall as its field has grown: what the history's view gives up to it)
     const widthPx = cardWidth(frame) ?? CARD.w;
     const ask = askArea(drafts[c.id] ?? "", widthPx, !!talking[c.id]?.running).heightPx;
@@ -171,7 +175,7 @@ export default function ConversationFrames() {
     const changed = !!talking[c.id]?.changed;
     const drawn = cardParts({
       key: it.key,
-      frame: { x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1 },
+      frame: frameOf(c),
       layout: had.layout,
       offset: shown,
       words: words.get(it.key) ?? 1,
@@ -347,10 +351,10 @@ export default function ConversationFrames() {
                 const dx = p.x - e.page.x;
                 const dy = p.y - e.page.y;
                 const f = { ...was };
-                if (side.includes("e")) f.x1 = Math.max(was.x1 + dx, was.x0 + LEAST);
-                if (side.includes("w")) f.x0 = Math.min(was.x0 + dx, was.x1 - LEAST);
-                if (side.includes("n")) f.y1 = Math.max(was.y1 + dy, was.y0 + LEAST);
-                if (side.includes("s")) f.y0 = Math.min(was.y0 + dy, was.y1 - LEAST);
+                if (side.includes("e")) f.x1 = Math.max(was.x1 + dx, was.x0 + LEAST.w);
+                if (side.includes("w")) f.x0 = Math.min(was.x0 + dx, was.x1 - LEAST.w);
+                if (side.includes("n")) f.y1 = Math.max(was.y1 + dy, was.y0 + LEAST.h);
+                if (side.includes("s")) f.y0 = Math.min(was.y0 + dy, was.y1 - LEAST.h);
                 store.getState().resizeConversation(c.id, f, gesture);
               },
               () => {},

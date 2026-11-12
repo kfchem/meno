@@ -15,6 +15,7 @@ import type { WorkspaceDocument } from "../document";
 import { inside, lyingIn, type Frame } from "../workflow/entries";
 import { setMiddle, stepMiddle } from "../workflow/parts";
 import { sheetMiddle } from "../utils/textSheets";
+import { cardRect } from "../pageGl/conversationCard";
 
 /** A conversation's scope: its frame, or the whole page. */
 export type Scope = { frame: Frame } | { page: true };
@@ -33,12 +34,26 @@ export type SeenId = `${SeenKind}:${number}`;
 /** What a scope holds, by kind, each in the order it lies on the page where that is kept (structures, molecules, pictures), else the page's. */
 export type InScope = { [K in SeenKind]: number[] } & { structureAtoms: Map<number, number[]> };
 
-/** What lies inside a scope, on the page as it is now. */
+/** Where a frame's card lies (pageGl/conversationCard `cardRect`): its room is never scope - a thing whose middle is on it is not seen. None for a scope of the whole page. */
+export const cardRoomOf = (scope: Scope): Frame | null => ("page" in scope ? null : cardRect(scope.frame));
+
+/**
+ * The part of a scope a thing is put down in: its frame to the left of its card, where the
+ * card lies - nothing a conversation puts down goes under its own card. A scope of the
+ * whole page is as it is.
+ */
+export function placingFrameOf(frame: Frame): Frame {
+  const room = cardRect(frame);
+  return room ? { ...frame, x1: Math.max(room.x0, frame.x0) } : frame;
+}
+
+/** What lies inside a scope, on the page as it is now - the room of its card excepted. */
 export function inScope(d: WorkspaceDocument, scope: Scope): InScope {
   const all = "page" in scope;
   const frame: Frame = all ? { x0: -Infinity, y0: -Infinity, x1: Infinity, y1: Infinity } : scope.frame;
-  const within = (p: { x: number; y: number }) => all || inside(frame, p);
-  const lying = lyingIn({ model: d.model, molecules3d: d.molecules3d, pictures: d.pictures }, frame);
+  const room = cardRoomOf(scope);
+  const within = (p: { x: number; y: number }) => all || (inside(frame, p) && !(room && inside(room, p)));
+  const lying = lyingIn({ model: d.model, molecules3d: d.molecules3d, pictures: d.pictures }, frame, room ?? undefined);
   // (a structure by its first atom: its lowest id)
   const structureAtoms = new Map(lying.structures.map((ids) => [Math.min(...ids), ids]));
   return {

@@ -26,11 +26,15 @@ export function iconOf(c: Conversation): string {
   return !via ? "chat" : via.to === THIS_COMPUTER ? "this-computer" : "sent-away";
 }
 
-/** The frames of the page's conversations, as FrameTabs draws them (pageGl/FrameTabs): outward - their own line, not a set's - and a conversation's words. */
-export function conversationTabs(conversations: readonly Conversation[], o: { hovered: number | null; shown: number | null; talking: Record<number, { running: boolean } | undefined> }): FrameTab[] {
+/** The frames of the page's conversations (as drawn, `frames`, else as the document has them), as FrameTabs draws them (pageGl/FrameTabs): outward - their own line, not a set's - and a conversation's words. */
+export function conversationTabs(
+  conversations: readonly Conversation[],
+  o: { hovered: number | null; shown: number | null; talking: Record<number, { running: boolean } | undefined>; frames?: ReadonlyMap<number, { x0: number; y0: number; x1: number; y1: number }> },
+): FrameTab[] {
   return conversations.map((c) => ({
     key: `conversation:${c.id}`,
-    box: { x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1 },
+    // (as it is drawn, on its way to where the document has it: a frame grown to hold its card is eased out to it)
+    box: o.frames?.get(c.id) ?? { x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1 },
     ...(c.wholePage ? { tabOnly: true as const } : { edges: true as const }),
     tone: o.shown === c.id ? "chosen" : o.hovered === c.id ? "hover" : "rest",
     outward: true as const,

@@ -5,6 +5,7 @@
  * a thing said that is not, likewise, the rest of its conversation kept.
  */
 import { leftOut } from "../utils/readNotes";
+import { framedForCard } from "../pageGl/conversationCard";
 import type { Conversation, Rights, Said, Sent, ToolCall } from "./types";
 
 const MOST_TEXT = 1_000_000;
@@ -74,11 +75,13 @@ export function readConversations(v: unknown, left: () => void = () => leftOut("
       return read ? [read] : [];
     });
     const sent = (Array.isArray(raw.sent) ? raw.sent.slice(-MOST_SAID) : []).flatMap((s) => sentOf(s) ?? []);
+    // (a frame always holds its card: one a file gave smaller is made as large as the card needs)
+    const { x0, y0, x1, y1 } = framedForCard({ x0: raw.x0 as number, y0: raw.y0 as number, x1: raw.x1 as number, y1: raw.y1 as number });
     out.push({
-      x0: raw.x0 as number,
-      y0: raw.y0 as number,
-      x1: raw.x1 as number,
-      y1: raw.y1 as number,
+      x0,
+      y0,
+      x1,
+      y1,
       ...(raw.wholePage === true ? { wholePage: true as const } : {}),
       // (where its card was left scrolled up: any other is not read, the card then at its latest)
       ...(num(raw.scroll) && (raw.scroll as number) >= 0 ? { scroll: raw.scroll as number } : {}),

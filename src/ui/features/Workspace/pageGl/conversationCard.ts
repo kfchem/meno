@@ -288,3 +288,18 @@ export function cardRect(frame: { x0: number; y0: number; x1: number; y1: number
 
 /** The least a frame is, in page px, to hold its card at its full width, its history a line high, and its ask field. */
 export const FRAME_LEAST = { w: CARD.w + 2 * CARD.pad, h: CARD.ask + CARD.line + CARD.top + CARD.bottom + 2 * CARD.pad } as const;
+
+/**
+ * A frame grown to hold its card (docs/CONVERSATIONS.md, *The frame is its
+ * scope*): at least `FRAME_LEAST` each way, in world units - where it is less,
+ * its top and right edges kept (the tab is along its top, the card lies against
+ * its right edge) and the frame grown to the left and downward. The same frame
+ * where it holds its card already.
+ */
+export function framedForCard<F extends { x0: number; y0: number; x1: number; y1: number }>(frame: F): F {
+  const w = pagePx(FRAME_LEAST.w);
+  const h = pagePx(FRAME_LEAST.h);
+  const x0 = frame.x1 - frame.x0 < w ? frame.x1 - w : frame.x0;
+  const y0 = frame.y1 - frame.y0 < h ? frame.y1 - h : frame.y0;
+  return x0 === frame.x0 && y0 === frame.y0 ? frame : { ...frame, x0, y0 };
+}
