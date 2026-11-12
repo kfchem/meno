@@ -579,7 +579,9 @@ numbers - is background work, and it never stalls a frame:
   down on a drag or a pan, or a touch moves, and for 200 ms after the last
   of it: the window's idle callback, where macOS' has none, was a fixed wait
   that scrolling did not stop. The pointer coming to a figure begins its
-  reading at once, as it did.
+  reading at once, as it did - one still waiting for the hands is begun then;
+  a figure already begun in the background is not hurried: it goes on in its
+  own worker, which the pointer's never waits behind.
 - **The reader is not held up by a page's words.** Listing what a page is
   made of (`pdf_objects`) asked each text object for its words, each
   loading the page's text again, so that a page of a thousand words kept
