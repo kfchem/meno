@@ -1016,9 +1016,11 @@ function readOnce(drawn: FigureDrawn, reads: (label: string) => boolean, known: 
   // nearer, one for each, so that each piece is an atom with a bond of its own; an ether or an ester has its one bond at the O: OMe, OAc, OPMB. The cut is
   // said on both atoms where neither the size - a part at nine tenths of the other's or less - nor the line - a part set off the other's by a twelfth of its
   // size or more - shows it too)
-  const bondEnds: { p: Point; out: Point }[] = [...shapes.strokes.flatMap((t) => [{ p: t.a, out: unit(t.b, t.a) }, { p: t.b, out: unit(t.a, t.b) }]), ...shapes.wedges.flatMap((w) => [{ p: w.tip, out: unit(w.base, w.tip) }, { p: w.base, out: unit(w.tip, w.base) }]), ...hashed.flatMap((h) => [{ p: h.a, out: unit(h.b, h.a) }, { p: h.b, out: unit(h.a, h.b) }])];
-  // (only a free end - one meeting no other bond's end - is a label's bond: where two bonds meet is a corner, a carbon, never the end of a bond drawn to a label)
-  const freeEnds = bondEnds.filter((e, k) => !bondEnds.some((o, m) => m !== k && Math.hypot(o.p.x - e.p.x, o.p.y - e.p.y) < 0.2 * bond));
+  // (the ends of bonds as drawn: a hashed bond's marks are no bonds - the hash is one, with one end at each of its ends - and the two lines of a double bond, side by side and
+  // running the one way, are one bond's end)
+  const bondEnds: { p: Point; out: Point }[] = [...shapes.strokes.filter((t) => !inHashes.has(t)).flatMap((t) => [{ p: t.a, out: unit(t.b, t.a) }, { p: t.b, out: unit(t.a, t.b) }]), ...shapes.wedges.flatMap((w) => [{ p: w.tip, out: unit(w.base, w.tip) }, { p: w.base, out: unit(w.tip, w.base) }]), ...hashed.flatMap((h) => [{ p: h.a, out: unit(h.b, h.a) }, { p: h.b, out: unit(h.a, h.b) }])];
+  // (only a free end - one at which no other bond ends, the lines of one double bond not being two bonds meeting - is a label's bond: a corner, where two bonds meet at an angle, is a carbon)
+  const freeEnds = bondEnds.filter((e, k) => !bondEnds.some((o, m) => m !== k && Math.hypot(o.p.x - e.p.x, o.p.y - e.p.y) < 0.2 * bond && Math.abs(o.out.x * e.out.y - o.out.y * e.out.x) > 0.25));
   const pieceOf = (ls: FigureLetter[]): Word => ({ letters: ls, box: boxOfBoxes(ls.map((l) => l.box)), size: Math.max(...ls.map((l) => l.size)) });
   const baseline = (w: Word) => {
     const ys = w.letters.filter((l) => l.size >= 0.85 * w.size).map((l) => l.at?.[1] ?? l.box[3]).sort((a, b) => a - b);

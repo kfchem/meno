@@ -146,4 +146,28 @@ describe("two labels set close, read as one word or two", () => {
       expect(read.bonds.some((b) => b.a === i || b.b === i)).toBe(true);
     }
   });
+
+  describe("a carbonyl's O beside a Me that hangs on a bond of its own", () => {
+    // (the word OMe: the O at the end of a DOUBLE bond - two parallel lines side by side, from the left - the Me on a short bond below: hashed, or plain)
+    const oMe = word([{ c: "O", gap: 0 }, { c: "M", gap: 0.09 }, { c: "e", gap: 0.11 }], 100, 100);
+    const double: FigurePath[] = [line([84, 95.4], [97, 95.4]), line([84, 97.6], [97, 97.6])];
+    const hashes: FigurePath[] = [0, 1, 2, 3].map((k) => line([111.5 - 0.6 * (k + 1), 106 + 2.5 * k], [111.5 + 0.6 * (k + 1), 106 + 2.5 * k]));
+    const plain: FigurePath[] = [line([111.5, 112], [111.5, 103])];
+
+    it("is two atoms, the O on its double bond and the Me on its hashed bond - the lines of a double bond are not two bonds meeting, a hash's marks are no bonds", () => {
+      const read = readFigure(figure([...double, ...hashes, ...ringBonds()], oMe), reads);
+      const labels = read.atoms.map((a) => a.label).filter(Boolean);
+      expect(labels).toEqual(expect.arrayContaining(["O", "Me"]));
+      expect(labels).not.toContain("OMe");
+      const o = read.atoms.findIndex((a) => a.label === "O");
+      expect(read.bonds.filter((b) => b.a === o || b.b === o).map((b) => b.order)).toEqual([2]);
+    });
+
+    it("is two atoms the same with the Me on a plain bond", () => {
+      const read = readFigure(figure([...double, ...plain, ...ringBonds()], oMe), reads);
+      const labels = read.atoms.map((a) => a.label).filter(Boolean);
+      expect(labels).toEqual(expect.arrayContaining(["O", "Me"]));
+      expect(labels).not.toContain("OMe");
+    });
+  });
 });

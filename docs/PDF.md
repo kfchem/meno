@@ -1370,8 +1370,10 @@ it where it lies out of view.
   name by an atom's, Me by an O - are two only where the bonds say so, and one
   word where they do not: a word is cut at a capital where both pieces read,
   one a group's name and the other an atom's label (neither a lone H), and two
-  different FREE bond ends come to it - an end that meets no other bond's end:
-  where two bonds meet is a corner, a carbon, never a label's bond - each counted
+  different FREE bond ends come to it - the end of a bond as drawn, at which no
+  other bond ends: where two bonds meet at an angle is a corner, a carbon, never
+  a label's bond, while the two lines of a double bond, side by side, are one
+  bond's end and a hash's marks are no bonds, the hash one - each counted
   for the piece it is nearer, one for each; and a cut is kept only where each
   piece is an atom with a bond of its own in what is read, else the word is read
   whole again - so that each is an atom with a bond of its own: an ether or an
