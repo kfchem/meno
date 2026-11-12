@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { BALLS_SETTLE_MS, ballSegmentsFor, ballSegmentsNext, carriedSphere, outlineSegments, pxPerWorld } from "./largeDrawing";
+import { BALLS_SETTLE_MS, STICK_EDGE_PX, STICK_TRIANGLES, ballSegmentsFor, ballSegmentsNext, carriedInstanced, carriedSphere, outlineSegments, pxPerWorld, stickSegmentsFor } from "./largeDrawing";
+import { bentStickGeometry } from "./stickBend";
 import { STYLE_3D } from "../../../../lib/chem/style3d";
 import { solidOf } from "./molecule3d";
 import { SAMPLE_3D } from "../../StyleEditor/sample3d";
@@ -141,5 +142,88 @@ describe("the pixels a unit of the scene spans at a molecule", () => {
     // (a perspective camera's zoom, always 1, made each ball about a pixel across: 8)
     expect(ballSegmentsFor(2 * biggest * (new THREE.PerspectiveCamera(FOV).zoom || 1) * 2, style.ballSegments)).toBe(8);
     expect(want).toBeGreaterThan(8);
+  });
+});
+
+describe("a molecule's sticks, by their size on the screen", () => {
+  const rim = (across: number, n: number) => (across / 2) * (1 - Math.cos(Math.PI / n));
+
+  it("are given the fewest segments that keep their rim within a third of a pixel of a circle: 8 where thin, 32 close up", () => {
+    expect(stickSegmentsFor(2, 32, 100)).toBe(8);
+    expect(stickSegmentsFor(10, 32, 100)).toBe(12);
+    expect(stickSegmentsFor(20, 32, 100)).toBe(16);
+    expect(stickSegmentsFor(40, 32, 100)).toBe(24);
+    expect(stickSegmentsFor(120, 32, 100)).toBe(32);
+    expect(stickSegmentsFor(1e6, 32, 100)).toBe(32);
+  });
+
+  it("keep the rim within STICK_EDGE_PX at every size up to where 32 is not enough, and never use more segments than that takes", () => {
+    const steps = [8, 12, 16, 24, 32];
+    for (let across = 0.5; across < 300; across *= 1.07) {
+      const n = stickSegmentsFor(across, 32, 100);
+      if (n < 32) expect(rim(across, n)).toBeLessThanOrEqual(STICK_EDGE_PX);
+      // (the one before it on the ladder is not enough)
+      const before = steps[steps.indexOf(n) - 1];
+      if (before) expect(rim(across, before)).toBeGreaterThan(STICK_EDGE_PX);
+    }
+  });
+
+  it("never go down as the stick grows on the screen, and never above the style's own", () => {
+    for (const most of [8, 16, 32]) {
+      let last = 0;
+      for (let across = 0.5; across < 500; across *= 1.05) {
+        const n = stickSegmentsFor(across, most, 100);
+        expect(n).toBeGreaterThanOrEqual(last);
+        expect(n).toBeLessThanOrEqual(most);
+        last = n;
+      }
+    }
+    // (a style that has 8 - the old default - keeps 8 however close)
+    expect(stickSegmentsFor(500, 8, 100)).toBe(8);
+  });
+
+  it("are fewer where a molecule has so many that they would pass the triangles they may come to, never under 8", () => {
+    expect(stickSegmentsFor(120, 32, STICK_TRIANGLES / 128)).toBe(32);
+    expect(stickSegmentsFor(120, 32, STICK_TRIANGLES / 96)).toBe(24);
+    expect(stickSegmentsFor(120, 32, STICK_TRIANGLES / 64)).toBe(16);
+    expect(stickSegmentsFor(120, 32, 1_000_000)).toBe(8);
+    expect(stickSegmentsFor(120, 32, 0)).toBe(32);
+    for (const sticks of [1_000, 10_000, 100_000]) expect(4 * sticks * stickSegmentsFor(500, 32, sticks)).toBeLessThanOrEqual(Math.max(STICK_TRIANGLES, 4 * sticks * 8));
+  });
+
+  it("have the default style's finest at 32, the balls' own: a stick as smooth as the ball it enters", () => {
+    expect(STYLE_3D.bondSegments).toBe(STYLE_3D.ballSegments);
+  });
+
+  it("are settled as the balls' are: more at once, fewer once the zoom has stayed", () => {
+    expect(ballSegmentsNext(stickSegmentsFor(120, 32, 100), 8, 0)).toEqual({ now: 32 });
+    expect(ballSegmentsNext(stickSegmentsFor(2, 32, 100), 32, 0)).toEqual({ waitMs: BALLS_SETTLE_MS });
+  });
+});
+
+describe("a molecule's sticks made again at another number of segments", () => {
+  it("keep what each carries - its bend, its colours - the old geometry, disposed, listing none of it", () => {
+    const was = bentStickGeometry(8);
+    const bend = new THREE.InstancedBufferAttribute(new Float32Array([0, 0, 0, 1]), 4);
+    const ends = new THREE.InstancedBufferAttribute(new Float32Array([1, 0, 0]), 3);
+    was.setAttribute("stickBend", bend);
+    was.setAttribute("bondEndA", ends);
+    const now = carriedInstanced(bentStickGeometry(24), was);
+    expect(now.getAttribute("stickBend")).toBe(bend);
+    expect(now.getAttribute("bondEndA")).toBe(ends);
+    expect(Object.values(was.attributes)).not.toContain(bend);
+    expect(Object.values(was.attributes)).not.toContain(ends);
+    // (its own shape: more segments round it, none of the old one's)
+    expect(now.getAttribute("position").count).toBeGreaterThan(was.getAttribute("position").count);
+    expect(now.getAttribute("position")).not.toBe(was.getAttribute("position"));
+  });
+
+  it("carry nothing from nothing, and leave the shape's own attributes where they are", () => {
+    const g = carriedInstanced(bentStickGeometry(8), null);
+    expect(Object.keys(g.attributes).sort()).toEqual(["normal", "position", "uv"]);
+    const plain = bentStickGeometry(8);
+    const g2 = carriedInstanced(bentStickGeometry(12), plain);
+    expect(plain.getAttribute("position")).toBeDefined();
+    expect(Object.keys(g2.attributes).sort()).toEqual(["normal", "position", "uv"]);
   });
 });

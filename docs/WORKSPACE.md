@@ -1794,6 +1794,15 @@ slowing it - and in the pictures made of it.
   at 183 ms a frame with 32, and turns at 33 ms; a large workflow page,
   283 molecules in 3D, drew about 17.8 million triangles a frame at Fit,
   and draws 1.3 million.
+- **Sticks the same.** A molecule's sticks are given as many segments as
+  the widest stick's width on the screen wants - from 8 where thin, up to
+  the style's 32 close up - the fewest that keep its rim within 0.3 of a
+  pixel of a circle, so that a stick close up is round where it enters a
+  ball, not faceted. More at once as they grow, fewer once the zoom has
+  settled; never more than would pass a million triangles between a
+  molecule's sticks, and never under 8 (`utils/largeDrawing`
+  `stickSegmentsFor`). What a bent stick carries - its bend, its colours -
+  goes with it to the new number (`carriedInstanced`).
 - **In pictures too.** A picture of molecules in 3D shades their hollows
   and casts their shadows as the canvas does, with every ball and stick,
   in a finer shadow map, however many atoms; shaded on the screen, at the
