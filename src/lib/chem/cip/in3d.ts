@@ -48,7 +48,8 @@ export function cipIn3d(m: In3d): { atoms: Record<string, string>; bonds: Record
   // the candidates: four single bonds to no metal (a protonated amine's N where its amine's is held), three and a lone pair, a double bond
   const four = m.atoms.flatMap((_, i) => (around[i].length === 4 && single(i) && !metal(i) && !around[i].some(metal) && held(i) !== false ? [i] : []));
   const three = m.atoms.flatMap((_, i) => (around[i].length === 3 ? [i] : []));
-  // (a cumulated double bond, an allene's or a butatriene's, is no unit of its own: its run's, `runsIn3d`)
+  // (a cumulated double bond, an allene's or a butatriene's, is no unit of its own: its run's, `runsIn3d`. The other tests already keep one
+  //  from getting a label, so this guard has no case where it shows - it says what a unit here is)
   const doublesAt = m.atoms.map((_, i) => m.bonds.filter((b) => b.order === 2 && (b.a1 === i || b.a2 === i)).length);
   const doubles = m.bonds.flatMap((b, i) =>
     b.order === 2 && around[b.a1].length > 1 && around[b.a2].length > 1 && doublesAt[b.a1] === 1 && doublesAt[b.a2] === 1 && ringThrough(around, b.a1, b.a2) >= OPEN_RING ? [i] : [],

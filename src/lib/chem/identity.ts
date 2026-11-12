@@ -304,6 +304,8 @@ export function stereoUnitsOnly(input: LayoutInput): { input: LayoutInput; compl
   }
   // (the groups whose two alike would set nothing: a centre's neighbours; each end's others, a double bond's or an
   // axis's - but the atom it runs on through: the other end, bonded to it, or an allene's or a cumulene's next one)
+  // (the atom a run goes on through is left out of an end's groups. Were it counted, it could never be alike with one of them: a cumulated
+  //  carbon has bonds no substituent of the end has - so this changes no result, and says what the groups are)
   const across = (end: number, other: number) => (around[end].includes(other) ? other : (multiple.get(end) ?? other));
   const ends = (a: number, b: number) => [around[a].filter((m) => m !== across(a, b)), around[b].filter((m) => m !== across(b, a))];
   const sides = (g: LayoutInput, u: StereoUnit): number[][] => {
