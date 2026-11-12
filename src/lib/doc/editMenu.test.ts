@@ -119,11 +119,37 @@ describe("the page and the app menu, between them", () => {
   });
 });
 
+/** Whether a rejection the code under test was given goes unhandled, once the queue has been let run. */
+async function unhandledAfter(run: () => void): Promise<unknown[]> {
+  const seen: unknown[] = [];
+  const note = (reason: unknown) => seen.push(reason);
+  process.on("unhandledRejection", note);
+  try {
+    run();
+    await new Promise((r) => setTimeout(r, 10));
+  } finally {
+    process.off("unhandledRejection", note);
+  }
+  return seen;
+}
+
+describe("a menu that is not there", () => {
+  it("leaves the page as it was: listening or telling it refused is no unhandled rejection", async () => {
+    const seen = await unhandledAfter(() => {
+      watchEditMenu(vi.fn(), (() => Promise.reject(new Error("no event system"))) as never);
+      tellEditMenu({ undo: true, redo: true }, (() => Promise.reject(new Error("no such command"))) as never);
+    });
+    expect(seen).toEqual([]);
+  });
+});
+
 describe("the names the page and the app share with the menu's Rust side (src-tauri/src/editmenu.rs)", () => {
   const rust = readFileSync(join(process.cwd(), "src-tauri/src/editmenu.rs"), "utf8");
   const lib = readFileSync(join(process.cwd(), "src-tauri/src/lib.rs"), "utf8");
 
   it("the event the page listens for is the one the menu emits", () => {
+    // (the literal, not only the constant: the page and the menu must agree on the name itself)
+    expect(EDIT_MENU_EVENT).toBe("edit-menu");
     const emitted = [...rust.matchAll(/\.emit_to\(\s*"main"\s*,\s*"([^"]+)"/g)].map((m) => m[1]);
     expect(emitted).toEqual([EDIT_MENU_EVENT]);
   });
