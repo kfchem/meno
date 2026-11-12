@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FRAME_COLORS, FRAME_PX, frameLine, frameTabParts, OUTWARD_LINE, tabNameBox, tabNamesKept, tabStart, tabWidthPx, type FarTabs, type FrameTab } from "./frameParts";
+import { FRAME_COLORS, FRAME_PX, frameLine, frameTabParts, NAME_GAP_PX, OUTWARD_LINE, tabNameBox, tabNamesKept, tabStart, tabWidthPx, type FarTabs, type FrameTab } from "./frameParts";
 import { NAME_PX } from "./cardBands";
 import { PAGE_PX } from "../utils/pageScale";
 import { NAME_DOWN, PX, TAB_INSET } from "../workflow/look";
@@ -127,8 +127,8 @@ describe("a set's tab, zoomed out", () => {
   const nameFar = (items: FrameTab[], f: FarTabs, read = false) => frameTabParts(items, read, f).texts.find((t) => t.key.endsWith(":nameFar"));
 
   it("says its name instead of its icon, eleven screen pixels high whatever the scale, from where its words start, cut at its frame's width inside its inset either side", () => {
-    // (at these scales as high as its band, it stands in it)
-    for (const scale of [0.7, 0.4, 0.33]) {
+    // (at these scales it and its gap are no higher than its band: it stands in the middle of it)
+    for (const scale of [0.9, 0.7, 0.5]) {
       const t = nameFar([set()], far({ scale }))!;
       expect(t).toMatchObject({ text: "Input", weight: 500, anchor: "start", baseline: "middle", opacity: 1 });
       expect(t.sizePx * scale).toBeCloseTo(NAME_PX, 12);
@@ -140,33 +140,44 @@ describe("a set's tab, zoomed out", () => {
     expect([d.icons, d.texts.map((t) => t.key)]).toEqual([[], ["set:3:nameFar"]]);
   });
 
-  it("rises over its frame's top where it is higher than its band: its lower edge from the band's, up to the frame's top at twice the band's height - never down over what its frame holds", () => {
+  it("rises over its frame's top where it and its gap are higher than its band: its lower edge a gap above the band's, up to a gap above the frame's top at twice the band's height - never down over, nor touching, what its frame holds", () => {
     const box = set().box;
     const band = 2 * NAME_DOWN;
     const bandBottom = box.y1 - band;
     const ofScale = (scale: number) => {
       const t = nameFar([set()], far({ scale }))!;
-      return { t, h: pagePx(t.sizePx) };
+      return { t, h: pagePx(t.sizePx), gap: pagePx(NAME_GAP_PX / scale) };
     };
-    const inBand = ofScale(0.33);
-    expect(inBand.h).toBeLessThan(band);
+    const inBand = ofScale(0.5);
+    expect(inBand.h + 2 * inBand.gap).toBeLessThan(band);
     expect(inBand.t.y).toBeCloseTo(tabStart(box).y, 12);
-    for (const scale of [0.3, 0.25, 0.2, 0.15, 0.1, 0.03, 0.005]) {
-      const { t, h } = ofScale(scale);
-      expect(h).toBeGreaterThan(band);
-      // (its lower edge never below the band's: nothing it holds is under it)
-      expect(t.y - h / 2).toBeGreaterThanOrEqual(bandBottom - 1e-12);
-      // (the lower edge as far up as the height says: from the band's, to the frame's top at twice the band)
-      expect(t.y - h / 2).toBeCloseTo(box.y1 - band * Math.min(1, Math.max(0, 2 - h / band)), 12);
+    for (const scale of [0.4, 0.3, 0.25, 0.2, 0.15, 0.1, 0.03, 0.005]) {
+      const { t, h, gap } = ofScale(scale);
+      expect(h + 2 * gap).toBeGreaterThan(band);
+      // (its lower edge a gap above the band's, or more: nothing it holds is under it or touches it)
+      expect(t.y - h / 2).toBeGreaterThanOrEqual(bandBottom + gap - 1e-12);
+      // (the lower edge as far up as the height says: a gap over the band's, to a gap over the frame's top at twice the band)
+      expect(t.y - h / 2).toBeCloseTo(box.y1 - band * Math.min(1, Math.max(0, 2 - h / band)) + gap, 12);
       // (and the box the overlap is found on is where it is drawn)
       const b = tabNameBox(set(), scale);
       expect([b.y0, b.y1]).toEqual([t.y - h / 2, t.y + h / 2]);
     }
     // (far off: wholly above its frame, none of it in the frame)
     for (const scale of [0.1, 0.03]) expect(tabNameBox(set(), scale).y0).toBeGreaterThanOrEqual(box.y1 - 1e-12);
-    // (the edge: as high as the band is in it)
-    const s = band / pagePx(NAME_PX);
-    expect(tabNameBox(set(), 1 / s).y0).toBeCloseTo(bandBottom, 12);
+  });
+
+  it("stands clear of its molecules by the gap at every scale, the named band and the marked: its box's lower edge never nearer the band's lower edge, where they begin, than three screen pixels", () => {
+    const box = set().box;
+    const bandBottom = box.y1 - 2 * NAME_DOWN;
+    for (let scale = 1; scale > 0.004; scale *= 0.97) {
+      const b = tabNameBox(set(), scale);
+      expect(b.y0 - bandBottom).toBeGreaterThanOrEqual(pagePx(NAME_GAP_PX / scale) - 1e-12);
+    }
+    // (the case seen built: a name's height a little over its band's - it used to rest on the molecules' top)
+    const s = (2 * NAME_DOWN) / pagePx(NAME_PX);
+    for (const scale of [s * 0.99, s, s * 1.01, s * 1.05]) {
+      expect(tabNameBox(set(), scale).y0).toBeGreaterThan(bandBottom + pagePx(NAME_GAP_PX / scale) - 1e-9);
+    }
   });
 
   it("is cut inside its frame, a tab's inset from each side: a name that would be wider than that is cut short, and in the marked band left out", () => {

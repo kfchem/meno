@@ -1440,8 +1440,9 @@ it, in `features/Workspace/pageGl/`:
   fade over Meno's quick time. A set's tab follows the same rule: its name,
   11 screen pixels high, stands in for its words (cut inside its frame's
   width, a tab's inset from each side, and raised over its frame's top where
-  it is higher than its tab's band - wholly above it, far off - never down
-  over what the frame holds, and left out where it would lie over another
+  it, and a gap of three screen pixels under it, is higher than its tab's
+  band - wholly above it, far off - never down over, nor touching, what
+  the frame holds, and left out where it would lie over another
   frame or a card) - laid out as their HTML was, and drawn on under a card
   opened (HTML still, the one HTML on the page), which alone fades in over
   it and out off it, so the card is never paler as it opens or shuts; what
