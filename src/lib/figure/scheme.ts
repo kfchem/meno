@@ -8,7 +8,7 @@
  */
 import { chargeMarks, withoutMarks } from "./charges";
 import { boxOf, narrowestBox, shapesOf, type Blob, type Box, type FigureDrawn, type FigureLetter, type Point, type Shapes, type Stroke, type Wedge } from "./drawn";
-import { figureBond, readFigure, type FigureRead } from "./read";
+import { bondOf, readFigure, sizedOutlines, type FigureRead } from "./read";
 import { shapeLetters, sureEnough, type GlyphShape } from "./glyphs";
 import type { ArrowForm, ArrowWeight } from "../chem/reactionArrow";
 import type { WordsMark, WordsStyle } from "../chem/captions";
@@ -835,12 +835,13 @@ export function readScheme(
   known: readonly GlyphShape[] = [],
   whole: (label: string) => boolean = () => false,
 ): SchemeRead {
-  const shapes = shapesOf(drawn);
+  // (its chains of bars - one filled outline's - told as bonds or not by the drawing's own bond, before anything is read of them)
+  const shapes = sizedOutlines(shapesOf(drawn), drawn.letters);
   if (shapes.strokes.length > MOST_LINES) return { figure: { atoms: [], bonds: [], bond: 14.4, left: { letters: [] } }, arrows: [], pluses: [], words: [], bond: 14.4, tooMany: true };
   // (how long its bonds are drawn: as most of its lines are - unless, its letters telling, those are arrows, there being no structure)
   const sizes = drawn.letters.map((l) => l.size).sort((a, b) => a - b);
   const byLetters = sizes.length ? 1.44 * sizes[Math.floor(sizes.length / 2)] : 0;
-  const byLines = figureBond(shapes, drawn.letters);
+  const byLines = bondOf(shapes, drawn.letters);
   // (three lines that long or more, each meeting another long line at an end - a structure's bonds at their joints; an arrow's line
   // meets only its head's short strokes - tell it, however small the letters by them)
   const long = shapes.strokes.filter((s) => len(s) > 0.5 * byLines);

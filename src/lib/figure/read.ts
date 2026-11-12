@@ -190,6 +190,33 @@ function hashesOf(short: Stroke[], bond: number, filled: ReadonlySet<Stroke>): {
   return { hashes, used, groups };
 }
 
+/**
+ * The bond a figure's chains of bars are told by: that of the lines it is drawn with besides, or that of its bars - the length most of them share
+ * (`bondLength`) - whichever has the more lines of its length: a drawing's own bonds are most of what it is drawn with.
+ */
+export function barBond(shapes: Shapes, letters: readonly FigureLetter[] = []): number {
+  const bars = shapes.strokes.filter((s) => s.bar).map(len);
+  const byBars = bondLength(bars);
+  const byLines = figureBond({ ...shapes, strokes: shapes.strokes.filter((t) => t.chain == null), wedges: shapes.wedges.filter((t) => t.chain == null) }, letters);
+  const near = (lengths: readonly number[], b: number) => (b ? lengths.filter((l) => Math.abs(l - b) <= b / 8).length : 0);
+  const lines = shapes.strokes.filter((t) => t.chain == null).map(len);
+  return near(bars, byBars) > near(lines, byLines) ? byBars : byLines || byBars;
+}
+
+/** Shapes with their chains of bars told by `barBond`: kept as bonds, or given up (`outlineChains`). */
+export function sizedOutlines(shapes: Shapes, letters: readonly FigureLetter[] = []): Shapes {
+  return outlineChains(shapes, barBond(shapes, letters));
+}
+
+/**
+ * How long a figure's bonds are drawn, as `figureBond` has it of what the figure is drawn with besides its chains of bars - their number, kept or given
+ * up, does not move it - or, the figure having nothing else, of the bars kept.
+ */
+export function bondOf(shapes: Shapes, letters: readonly FigureLetter[]): number {
+  const plain: Shapes = { ...shapes, strokes: shapes.strokes.filter((t) => t.chain == null), wedges: shapes.wedges.filter((t) => t.chain == null) };
+  return figureBond(plain, letters) || figureBond(shapes, letters);
+}
+
 /** The shortest a chain's bar is, in the drawing's bonds, to be a bond: under it, a speck or a letter's stem. */
 const CHAIN_LEAST = 0.45;
 /** How far across a chain is, in the drawing's bonds, at the least: two bonds at a right angle are 1.4 across, a letter's stems and a speck well under one. */
@@ -990,13 +1017,10 @@ export function repeatsRead(pairs: RepeatBrackets["pairs"], atoms: ReadAtom[], b
  * word near the rest but at no bond's end - an ion - as an atom alone.
  */
 export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean = () => true, known: readonly GlyphShape[] = [], given?: Shapes): FigureRead {
-  // (a chain of bars the polygon of one filled outline made - ./drawn `barsOfOutline` - is the drawing's bonds, or not: told by the drawing's own bond)
-  const made = given ?? shapesOf(drawn);
-  // (the bond they are told by: that of the lines and shapes the figure has besides - a chain of bars does not size itself - or, where it has none, of the bars)
-  const plain: Shapes = { ...made, strokes: made.strokes.filter((t) => t.chain == null), wedges: made.wedges.filter((t) => t.chain == null) };
-  const sized = plain.strokes.length || plain.wedges.length ? figureBond(plain, drawn.letters) : figureBond(made, drawn.letters);
-  const all = outlineChains(made, sized);
-  const bond = figureBond(all, drawn.letters);
+  // (a chain of bars the polygon of one filled outline made - ./drawn `barsOfOutline` - is the drawing's bonds, or not: told by the drawing's own bond;
+  // shapes given - a scheme's - have been told already)
+  const all = given ?? sizedOutlines(shapesOf(drawn), drawn.letters);
+  const bond = bondOf(all, drawn.letters);
   const empty: FigureRead = { atoms: [], bonds: [], bond, left: { letters: [...drawn.letters] } };
   if (!bond) return empty;
   // (a charge drawn in a ring by an atom - its ring and the strokes in it - is that atom's, and nothing else: lib/figure/charges)

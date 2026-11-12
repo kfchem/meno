@@ -159,7 +159,9 @@ describe("which chains of bars are bonds: told by the drawing's own bond, not by
   /** A structure drawn with lines, bonds of `bond` points: what gives the figure its bond length. */
   const structure = (bond: number, from: P = [50, 50]): FigurePath[] => {
     const c = zig(5, from, bond);
-    return [stroked(c.slice(0, 4)), stroked(c.slice(3, 6))];
+    // (a chain of five bonds, and a hexagon: eleven lines of the bond's length)
+    const hex = Array.from({ length: 6 }, (_, i): P => [from[0] + 200 + bond * Math.cos((Math.PI / 3) * i), from[1] + 120 + bond * Math.sin((Math.PI / 3) * i)]);
+    return [stroked(c.slice(0, 4)), stroked(c.slice(3, 6)), stroked([...hex, hex[0]])];
   };
 
   it("reads a ring and a chain of bonds ten points long, as small as a journal's, drawn as outlines", () => {
@@ -173,7 +175,7 @@ describe("which chains of bars are bonds: told by the drawing's own bond, not by
     const chart = thick([[40, 300], [75, 300], [90, 350], [120, 350], [135, 270], [170, 270], [185, 330]], 0.8, "mitre");
     const read = readFigure(figure(...structure(10), chart));
     // (only the structure's own bonds: five)
-    expect(read.bonds).toHaveLength(5);
+    expect(read.bonds).toHaveLength(11);
     expect(shapesOf(figure(chart)).strokes.some((s) => s.bar)).toBe(true);
   });
 
@@ -181,18 +183,18 @@ describe("which chains of bars are bonds: told by the drawing's own bond, not by
     const speck = thick([[300, 300], [303, 301.5], [306, 300]], 0.4, "mitre");
     const bigger = { ...speck, d: speck.d.map((st): PathStep => (st[0] === "Z" ? st : [st[0], st[1] + 0, st[2] + 0])) };
     const read = readFigure(figure(...structure(10), bigger));
-    expect(read.bonds).toHaveLength(5);
+    expect(read.bonds).toHaveLength(11);
   });
 
   it("keeps a chain whose bars are 0.5 to 1.8 bonds long, and gives up one a bar over 1.9 or under 0.45", () => {
     const keep = (long: number, bonds = 3) => readFigure(figure(...structure(10), thick(zig(bonds, [200, 200], long), Math.min(0.8, 0.07 * long), "mitre"))).bonds.length;
-    expect(keep(10)).toBe(5 + 3);
-    expect(keep(18)).toBe(5 + 3);
-    expect(keep(20)).toBe(5);
-    expect(keep(5, 6)).toBe(5 + 6);
-    expect(keep(4, 8)).toBe(5);
+    expect(keep(10)).toBe(11 + 3);
+    expect(keep(18)).toBe(11 + 3);
+    expect(keep(20)).toBe(11);
+    expect(keep(5, 6)).toBe(11 + 6);
+    expect(keep(4, 8)).toBe(11);
     // (and a chain under a bond and a half across - three bars of half a bond - is no chain)
-    expect(keep(5)).toBe(5);
+    expect(keep(5)).toBe(11);
   });
 
   it("gives up the thin stems of a letter set beside a structure of ten-point bonds, a seven-point W or M drawn as one outline: the polygon stays a shape, the label can be read", () => {
@@ -202,13 +204,13 @@ describe("which chains of bars are bonds: told by the drawing's own bond, not by
     for (const letter of [wLetter, mLetter]) {
       const drawn = figure(...structure(10), letter);
       expect(shapesOf(drawn).strokes.filter((s) => s.bar).length).toBeGreaterThan(1);
-      expect(readFigure(drawn).bonds).toHaveLength(5);
+      expect(readFigure(drawn).bonds).toHaveLength(11);
     }
   });
 
   it("gives up a level-slope-level polyline whose bars are four to six bonds long - an energy profile's line", () => {
     const profile = thick([[200, 300], [250, 300], [300, 340], [350, 340]], 0.8, "mitre");
     expect(shapesOf(figure(profile)).strokes.filter((s) => s.bar).length).toBeGreaterThan(1);
-    expect(readFigure(figure(...structure(10), profile)).bonds).toHaveLength(5);
+    expect(readFigure(figure(...structure(10), profile)).bonds).toHaveLength(11);
   });
 });

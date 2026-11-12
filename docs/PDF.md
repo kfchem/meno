@@ -1262,8 +1262,11 @@ it where it lies out of view.
     chain only of two bars or more that meet at corners, one fewer than they are
     (a ring as many), and whose bars fill it; which chains are the drawing's
     bonds is then told by the drawing's own bond (that of the lines it has
-    besides, or of the bars themselves where it has none: `outlineChains`,
-    lib/figure/read): a chain a bond and a half across at the least, every bar
+    besides or that of its bars, whichever has the more of that length: a
+    drawing's bonds are most of what it is drawn with - `barBond`,
+    `outlineChains`, lib/figure/read; the scheme reader tells them before it
+    reads anything of them, and the figure's own bond, for all else, is that of
+    what is drawn besides its chains, whether they are kept or not): a chain a bond and a half across at the least, every bar
     from 0.45 to 1.9 bonds long. A chart's line (bars several bonds long), a
     speck, a letter's stems (under a bond and a half across), a frame, an arrow
     of one polygon, a big letter's stems (they meet at no corner) are none, and
