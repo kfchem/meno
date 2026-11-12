@@ -1255,7 +1255,7 @@ it where it lies out of view.
     a program leaves where it draws a chain's lines joined, its corners mitred
     or rounded, a ring as its outer outline and its inner one the other way
     round - is read as the bars it is made of (`barsOfOutline`, lib/figure/drawn):
-    each bond's two long edges, a line's width apart (a sixth of their length at
+    each bond's two long edges, a line's width apart (a tenth of their length at
     the most), running opposite ways and over each other for most of the
     shorter, are one bar, its ends where it meets the next bar's line (a
     mitred corner's two points brought back to the one corner). A polygon is a
