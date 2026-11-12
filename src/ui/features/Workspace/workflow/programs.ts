@@ -514,9 +514,7 @@ export function stoppedAt(kind: StepKind, entry: SetEntry, out: ReaderOutput, re
   const { energy: _energy, pathEnergies: _pathEnergies, failed: _failed, ...at } = w as Worked & { pathEnergies?: number[] };
   // (what its calculation says of each frame: none of the geometry it came in with, put before its own - so that each
   //  value stays on the frame it is of, and the molecule's frames and its values are as many)
-  const calc = at.calc?.results?.some((r) => r.on === "frames")
-    ? { ...at.calc, results: at.calc.results.map((r) => (r.on === "frames" ? { ...r, values: [null, ...r.values] } : r)) }
-    : at.calc;
+  const calc = at.calc?.results ? { ...at.calc, results: at.calc.results.map((r) => (r.on === "frames" ? { ...r, values: [null, ...r.values] } : r)) } : at.calc;
   return { ...at, ...(calc ? { calc } : {}), path: [[...entry.xyz], ...(w.path ?? [])] };
 }
 
