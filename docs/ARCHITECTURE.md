@@ -62,7 +62,7 @@ src/
   lib/chem/cip/           R/S and E/Z by Meno's own reading of the CIP rules: prepare.ts (the 1966 conventions), digraph.ts,
                           rank.ts (rules 1a to 3) - docs/CIP.md; not wired in yet
   lib/chem/perception/    the core of what the chemistry reads of a structure (one definition per concept): graph.ts (the graph the core
-                          reads), facts.ts (a graph's neighbours, bonds and pieces, worked out once per graph object), stereo/types.ts (the
+                          reads), facts.ts (a graph's neighbours, bonds, pieces and rings, worked out once per graph object), rings.ts (the smallest set of smallest rings, and what two rings share: spiro, fused, bridged), stereo/types.ts (the
                           types for a centre, a double bond and an axis). Two rules, each kept by a test: it imports nothing of the layout's,
                           the UI's or any other lib/chem file but the element table (boundary.test.ts), and a concept it is to define
                           has no new copy outside it (oneDefinition.test.ts: the copies still standing are listed, each with the part

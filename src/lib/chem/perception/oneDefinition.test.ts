@@ -34,16 +34,13 @@ export const CONCEPTS: Record<string, RegExp> = {
  */
 export const STILL_APART: Copy[] = [
   // rings: one perception, and the "smallest ring through" searches, the bridge test and the ring-system groupers onto it
-  { concept: "rings", file: "lib/layout/rings.ts", name: "smallestRings", part: 2 },
-  { concept: "rings", file: "lib/layout/rings.ts", name: "ringParts", part: 2 },
-  { concept: "rings", file: "lib/layout/rings.ts", name: "ringsAlike", part: 2 },
-  { concept: "rings", file: "lib/layout/drawn.ts", name: "inSmallRing", part: 2 },
-  { concept: "rings", file: "lib/layout/drawn.ts", name: "ringThrough", part: 2 },
-  { concept: "rings", file: "lib/chem/conformersSought.ts", name: "ringBonds", part: 2 },
-  { concept: "rings", file: "lib/chem/ordersFromGeometry.ts", name: "smallRings", part: 2 },
-  { concept: "rings", file: "lib/chem/protonation.ts", name: "smallRings", part: 2 },
-  { concept: "rings", file: "ui/features/Workspace/utils/expandPlace.ts", name: "ringsThrough", part: 2 },
-  { concept: "rings", file: "ui/features/Workspace/utils/molecule3d.ts", name: "ringsOf", part: 2 },
+  { concept: "rings", file: "lib/layout/rings.ts", name: "ringsAlike", part: 2, why: "the cycles beyond a smallest set: the layout's own question, not the set the core defines" },
+  { concept: "rings", file: "lib/layout/drawn.ts", name: "inSmallRing", part: 2, why: "in drawn.ts, which the CIP chain rewrites: moved after it, with part 2b" },
+  { concept: "rings", file: "lib/layout/drawn.ts", name: "ringThrough", part: 2, why: "in drawn.ts, which the CIP chain rewrites: moved after it, with part 2b" },
+  { concept: "rings", file: "lib/chem/ordersFromGeometry.ts", name: "smallRings", part: 2, why: "every simple cycle of three to six atoms, not a smallest set: its flatness test is asked of each (not moved in part 2)" },
+  { concept: "rings", file: "lib/chem/protonation.ts", name: "smallRings", part: 2, why: "returns the smallest ring through each bond, each once, its atoms in order: the core's set holds two of bicyclo[2.2.2]octane's three six-rings, this returns all three, so the lists are not the same sets (not moved in part 2)" },
+  { concept: "rings", file: "ui/features/Workspace/utils/expandPlace.ts", name: "ringsThrough", part: 2, why: "the rings through two neighbours of one atom, the shortest way round from one to the other, their atoms in order: another question than a smallest set (not moved in part 2)" },
+  { concept: "rings", file: "ui/features/Workspace/utils/molecule3d.ts", name: "ringsOf", part: 2, why: "the smallest ring through each bond, each once (up to eight atoms), its atoms in order: the lists differ from a smallest set where rings tie, as protonation's (not moved in part 2)" },
   { concept: "rings", file: "ui/features/Workspace/utils/rings.ts", name: "ringsOf", part: 2, why: "the rings at a point of the page, for the UI: it takes its rings from the core and tests where the pointer is (display)" },
   { concept: "rings", file: "lib/layout/bridge.ts", name: "withSmallRings", part: 2, why: "the layout's own choice of ring set for a bridged system" },
   { concept: "rings", file: "lib/layout/cage.ts", name: "smallestSets", part: 2, why: "the layout's own choice of ring set for a cage" },

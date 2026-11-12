@@ -3,9 +3,10 @@
  * anything: who is bonded to whom, the rings, and the ring systems - rings
  * sharing an atom or more, laid out together as one piece.
  */
-import { smallestRings } from "./rings";
 import type { Tetrahedral } from "./stereo";
 import type { ChemAtom, ChemBond, ChemGraph } from "../chem/perception/graph";
+import { factsOf } from "../chem/perception/facts";
+import { smallestRings } from "../chem/perception/rings";
 
 export type { CisTrans } from "../chem/perception/stereo/types";
 
@@ -177,30 +178,16 @@ export function perceive(input: LayoutInput): Molecule {
       join(star, first, bonds.length - 1);
     }
   });
-  const edges = [...bondIndex.keys()].map((k) => k.split(",").map(Number) as [number, number]);
-  const rings = smallestRings(n, edges);
-  const ringsOf: number[][] = Array.from({ length: n }, () => []);
-  rings.forEach((r, i) => r.forEach((a) => ringsOf[a].push(i)));
+  // (the rings, and the systems they make, are the core's: lib/chem/perception - this graph being the drawing's own bonds and the star bonds just added)
+  const facts = factsOf({ atoms: input.atoms, bonds });
+  const rings = facts.rings.map((r) => [...r]);
+  const ringsOf = facts.ringsAt.map((r) => [...r]);
   const ringBonds = new Set<string>();
   for (const r of rings) r.forEach((a, i) => ringBonds.add(key(a, r[(i + 1) % r.length])));
 
   // ring systems: rings sharing an atom, merged
   const systemOf = new Array<number>(n).fill(-1);
-  const groupOf = rings.map((_, i) => i);
-  const find = (i: number): number => (groupOf[i] === i ? i : (groupOf[i] = find(groupOf[i])));
-  for (let a = 0; a < n; a++) {
-    const rs = ringsOf[a];
-    for (let i = 1; i < rs.length; i++) groupOf[find(rs[i])] = find(rs[0]);
-  }
-  const byGroup = new Map<number, RingSystem>();
-  rings.forEach((r, i) => {
-    const g = find(i);
-    const sys = byGroup.get(g) ?? { atoms: [], rings: [] };
-    sys.rings.push(i);
-    for (const a of r) if (!sys.atoms.includes(a)) sys.atoms.push(a);
-    byGroup.set(g, sys);
-  });
-  const systems = [...byGroup.values()];
+  const systems: RingSystem[] = facts.ringSystems.map((sys) => ({ atoms: [...sys.atoms], rings: [...sys.rings] }));
   systems.forEach((s, i) => s.atoms.forEach((a) => (systemOf[a] = i)));
   // each ring bound face-on joined by its star, at its centre
   const eta: EtaRing[] = [];
