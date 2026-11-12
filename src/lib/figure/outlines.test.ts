@@ -154,6 +154,19 @@ describe("a thin polygon that is no chain of bonds is left as it was", () => {
   });
 });
 
+describe("a chain whose end bars are cut short by labels", () => {
+  it("is its three bars: the O-CH2-CH2-O of a dioxolane, end bars about half a bond, the middle one a whole bond - read as bonds beside a structure of ten-point bonds", () => {
+    const stroked = (pts: P[]): FigurePath => ({ fill: null, stroke: black, width: 0.6, d: pts.map(([x, y], i): PathStep => [i ? "L" : "M", x, y]) });
+    const c = zig(5, [50, 50], 10);
+    const hex = Array.from({ length: 6 }, (_, i): P => [250 + 10 * Math.cos((Math.PI / 3) * i), 170 + 10 * Math.sin((Math.PI / 3) * i)]);
+    const structure = [stroked(c.slice(0, 4)), stroked(c.slice(3, 6)), stroked([...hex, hex[0]])];
+    // (three bars: 5, 10 and 5 points, level, slope, level - the ends cut short where an O is set)
+    const outline = thick([[300, 300], [305, 300], [314.7, 304.5], [319.7, 304.5]], 0.6, "mitre");
+    expect(shapesOf(figure(outline)).strokes.filter((s) => s.bar)).toHaveLength(3);
+    expect(readFigure(figure(...structure, outline)).bonds).toHaveLength(11 + 3);
+  });
+});
+
 describe("which chains of bars are bonds: told by the drawing's own bond, not by points", () => {
   const stroked = (pts: P[], w = 0.6): FigurePath => ({ fill: null, stroke: black, width: w, d: pts.map(([x, y], i): PathStep => [i ? "L" : "M", x, y]) });
   /** A structure drawn with lines, bonds of `bond` points: what gives the figure its bond length. */

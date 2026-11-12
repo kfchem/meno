@@ -250,8 +250,8 @@ function flatTipped(given: Point[]): Wedge | null {
 }
 
 /**
- * How thin a bar is at the most, against its length, to be a bond's line drawn as a filled outline: a line's width is a tenth of a bond or less (a
- * letter's stroke, a fifth and more, is not).
+ * How thin a bar is at the most, against the polygon's longest straight run, to be a bond's line drawn as a filled outline: a line's width is a tenth of a
+ * bond or less (a letter's stroke, a fifth and more, is not); a bar cut short at a label is as thin as the bond it is the end of.
  */
 const BAR_THIN = 0.1;
 
@@ -301,7 +301,7 @@ export function barsOfOutline(parts: readonly { pts: Point[]; straight: boolean[
       if (t === r || r.u.x * t.u.x + r.u.y * t.u.y > -0.99) continue;
       const gap = Math.abs(across(r, t.a) + across(r, t.b)) / 2;
       const spread = Math.abs(across(r, t.a) - across(r, t.b));
-      if (gap < 1e-3 || gap > BAR_THIN * Math.min(r.len, t.len) || spread > 0.25 * gap + 0.05) continue;
+      if (gap < 1e-3 || gap > BAR_THIN * longest || spread > 0.25 * gap + 0.05) continue;
       const [lo, hi] = [Math.max(0, Math.min(along(r, t.a), along(r, t.b))), Math.min(r.len, Math.max(along(r, t.a), along(r, t.b)))];
       if (hi - lo < 0.7 * Math.min(r.len, t.len)) continue;
       if (!partner.has(r) || gap < partner.get(r)!.gap) partner.set(r, { run: t, gap });
