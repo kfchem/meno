@@ -101,7 +101,7 @@ export function middleOfAtoms(byId: ReadonlyMap<number, Pt>, ids: readonly numbe
  * each structure).
  */
 const drawnAt = new WeakMap<Model, { ids: number[]; at: Pt }[]>();
-function drawnIn(model: Model): { ids: number[]; at: Pt }[] {
+export function drawnIn(model: Model): { ids: number[]; at: Pt }[] {
   let found = drawnAt.get(model);
   if (!found) {
     const byId = new Map(model.atoms.map((a) => [a.id, a]));
@@ -476,18 +476,22 @@ export function placesOf(page: Page): { structures: { ids: number[]; at: Pt }[];
 
 export { before as readingOrder };
 
-/** What lies inside a frame: the structures drawn (each its atoms' ids), the molecules in 3D and the pictures (by id) whose middles are inside it, each in the order they lie. */
-export function lyingIn(page: Page, set: Frame): { structures: number[][]; molecules: number[]; pictures: number[] } {
+/**
+ * What lies inside a frame: the structures drawn (each its atoms' ids), the molecules in 3D and the pictures (by id) whose middles are inside it, each in the order they lie
+ * - but for those whose middles lie in `apart`, where one is given (a conversation's card: its room is never what it sees).
+ */
+export function lyingIn(page: Page, set: Frame, apart?: Frame): { structures: number[][]; molecules: number[]; pictures: number[] } {
+  const within = (p: Pt) => inside(set, p) && !(apart && inside(apart, p));
   const structures = drawnIn(page.model)
-    .filter((s) => inside(set, s.at))
+    .filter((s) => within(s.at))
     .sort((p, q) => before(p.at, q.at))
     .map((s) => s.ids);
   const molecules = (page.molecules3d ?? [])
-    .filter((m) => inside(set, m.at))
+    .filter((m) => within(m.at))
     .sort((p, q) => before(p.at, q.at))
     .map((m) => m.id);
   const pictures = (page.pictures ?? [])
-    .filter((p) => inside(set, p))
+    .filter((p) => within(p))
     .sort((p, q) => before(p, q))
     .map((p) => p.id);
   return { structures, molecules, pictures };

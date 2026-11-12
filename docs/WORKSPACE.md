@@ -1424,7 +1424,14 @@ it, in `features/Workspace/pageGl/`:
   never cut in two; its words fade with the page's, and too small to read
   it says its turns and state alone. It is scrolled by a track, *Earlier*
   and *Latest* chips and keys (`conversationScroll`), never by the wheel:
-  no region of the page hears one, so a wheel over the card zooms.
+  no region of the page hears one, so a wheel over the card zooms. The
+  frame always holds the card (`framedForCard`: at least `FRAME_LEAST`, its
+  top and right edges kept, as it is put down, sized and opened, drawn
+  eased to it as a set's frame is - `useShownFrames`); the card's room is
+  never scope (`inScope`), what a conversation puts down goes left of it
+  (`placingFrameOf`), and a structure, molecule in 3D or picture let go
+  with its middle on it is eased off, to the left, in the gesture's step
+  (`workflow/fitFrames` `cardsCleared`, part of `framesSettled`).
 - **A workflow** (components/Workflow2D): its steps' cards shut
   (`cardFace`) - who does it, what and how, its state in words and an icon
   turning while it runs, a log's last line in Plex Mono and a bar of how

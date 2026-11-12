@@ -76,6 +76,19 @@ The same holds for the exchange as it is saved and opened again.
     stop that.
   - The frame moved moves its card and leaves what lay inside where it is.
     What lies inside changes with it, as a set's members do.
+  - **The frame always holds its card's room**, and that room is never
+    scope: a thing whose middle lies on the card is not seen, whatever
+    its kind, and what the conversation puts down goes to the left of the
+    card, never under it. A frame smaller than its card needs - one put
+    down or sized too small, or a file's - is made as large as the card
+    needs (the card at its full width, its history a line high and its
+    ask field), its top and right edges kept, and eased out to that as a
+    set's frame is; sizing it by hand stops there.
+  - **A thing let go with its middle on the card is eased off it**, to
+    lie just left of the card, inside what the conversation sees, in the
+    same step of undo as the gesture - a structure, a molecule in 3D or a
+    picture that no set holds. So too what a frame moved or sized put its
+    card over. Once: where that leaves it is not eased in turn.
 - **Its frame looks unlike a set's** (the maintainer, 2026-11-07): what
   lies inside it may be sent away from this computer, so its line is its
   own, dashed in Meno's colour - heavier pointed at, heavier still read in
