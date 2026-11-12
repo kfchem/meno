@@ -9,9 +9,10 @@ import { sheetMiddle, sheetOfText } from "../utils/textSheets";
 import { pdfBounds, pointOf } from "../../../../lib/pdf/layout";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { DOUBLE_CLICK_MS, FREE_MS, MOV_PX } from "../constants";
+import { FREE_BLEND_S, SNAP_SPRING, freedAngle, springAngle, springSettled } from "../utils/angleSpring";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { pressOnEmpty } from "../utils/clickCount";
-import { arrowsIn, cornersOf, inBox, inLasso, marksAtOf, middleOf, molecules3dIn, turnSnapped, turned, turnedArrows, turnedBy, wordsIn } from "../utils/selection";
+import { arrowsIn, cornersOf, inBox, inLasso, marksAtOf, middleOf, molecules3dIn, turnReference, turnSnapped, turned, turnedArrows, turnedBy, wordsIn } from "../utils/selection";
 import { flowIn } from "../workflow/parts";
 import { middleOf as shapeMiddle, turned as turnedShape } from "../../../../lib/chem/shapes";
 import { shapePlace } from "../document";
@@ -372,18 +373,26 @@ export default function Selection2D() {
     const p0 = toWorld(e.clientX, e.clientY);
     const a0 = Math.atan2(p0.y - about.y, p0.x - about.x);
     const gesture = `turn-${performance.now()}`;
+    // (the steps are the drawing's own: from the direction of a bond of it)
+    const reference = turnReference(st.model, st.sel.atoms);
     let free = false;
     let pause: number | null = null;
     let frame: number | null = null;
     let last = p0;
+    // (what the pointer has turned it, and where that snaps to: the angle shown springs to the one, and eases to the other once let go)
+    const pointed = () => Math.atan2(last.y - about.y, last.x - about.x) - a0;
+    const wanted = () => turnSnapped(pointed(), free, reference);
+    let shown = 0;
+    let speed = 0;
+    let freedFrom: { angle: number; t: number } | null = null;
+    let before = performance.now();
+    let moved = false;
     st.beginPanHold(e.pointerId);
     st.suppressDoubleClick(DOUBLE_CLICK_MS);
     selectionMoving.active = true;
     // (the angle last put: a frame at the same angle - a step held - puts nothing, the drawing as it is)
     let put = 0;
-    const apply = () => {
-      frame = null;
-      const angle = turnSnapped(Math.atan2(last.y - about.y, last.x - about.x) - a0, free);
+    const lay = (angle: number) => {
       if (angle === put) return;
       put = angle;
       // (molecules with the drawing: carried round in its plane, and turned with it)
@@ -405,14 +414,39 @@ export default function Selection2D() {
       if (carried.length) store.getState().turnMolecules3d(turnedInPlane(carried, about, angle), gesture, turned(from, about, angle), marks);
       else store.getState().moveAtoms(turned(from, about, angle), gesture, marks);
     };
+    // (one turn a frame, every turn laying the drawing out again: the angle shown springs to its step - as a bond's does - or, let go of the steps, eases to the pointer's; frames go on while it is on its way)
+    const frameAt = (now: number) => {
+      frame = null;
+      const dt = Math.min(Math.max((now - before) / 1000, 0.001), 0.05);
+      before = now;
+      const want = wanted();
+      let onItsWay: boolean;
+      if (free) {
+        if (!freedFrom) freedFrom = { angle: shown, t: 0 };
+        freedFrom.t = Math.min(1, freedFrom.t + dt / FREE_BLEND_S);
+        shown = freedAngle(freedFrom.angle, want, freedFrom.t);
+        speed = 0;
+        onItsWay = freedFrom.t < 1;
+      } else {
+        const sprung = springAngle(shown, speed, want, dt, SNAP_SPRING);
+        shown = sprung.angle;
+        speed = sprung.velocity;
+        onItsWay = !springSettled(shown, speed, want);
+        if (!onItsWay) shown = want;
+      }
+      lay(shown);
+      if (onItsWay) frame = window.requestAnimationFrame(frameAt);
+    };
     const onMove = (ev: PointerEvent) => {
       last = toWorld(ev.clientX, ev.clientY);
-      // (one turn a frame: every turn lays the drawing out again)
-      if (frame == null) frame = window.requestAnimationFrame(apply);
+      if (!moved) before = performance.now();
+      moved = true;
+      if (frame == null) frame = window.requestAnimationFrame(frameAt);
+      // (a pause of FREE_MS since the last move - the bond's rule - lets it go of the steps)
       if (pause != null) window.clearTimeout(pause);
       pause = window.setTimeout(() => {
         free = true;
-        apply();
+        if (frame == null) frame = window.requestAnimationFrame(frameAt);
       }, FREE_MS);
     };
     // Escape lets it go: all of it back as it was, the molecules turned as they were (the maintainer, 2026-10-12)
@@ -432,10 +466,10 @@ export default function Selection2D() {
     };
     const onUp = (ev: PointerEvent) => {
       if (pause != null) window.clearTimeout(pause);
-      if (frame != null) {
-        window.cancelAnimationFrame(frame);
-        apply();
-      }
+      if (frame != null) window.cancelAnimationFrame(frame);
+      frame = null;
+      // (dropped where it is heading, the step - or the pointer's angle, once let go of them - never an angle the spring is passing through)
+      if (moved) lay(wanted());
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp, true);
       window.removeEventListener("keydown", onKey, true);
