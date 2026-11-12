@@ -9,6 +9,7 @@ import { dragSelection } from "../utils/dragSelection";
 import { onChord } from "../utils/press";
 import { dragsSelection } from "../store/slices/selectionSlice";
 import { newmanTurnGesture, newmanTurnable } from "../utils/newmanTurn";
+import { NEWMAN_CIRCLE, newmansIn } from "../projections/newman";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { dropOutcome } from "../utils/dropOutcome";
 import { ATOM_PICK_RADIUS_RATIO, DOUBLE_CLICK_MS, FREE_MS, MOV_PX } from "../constants";
@@ -283,6 +284,12 @@ export function Atoms2D() {
     const was = placed.current.atoms;
     // (a haptic bond's star is no atom to pick: no hit area - chem/eta)
     const stars = hapticStars({ atoms, bonds: model.bonds });
+    // (a Newman pair's two atoms lie at one place: the front atom's disc is the small one, nearer, taking a press at the centre; the back atom's is
+    // larger - out to the circle's line - and behind, taking a press there: the look owner's choice of handling, not what the circle stands for)
+    const pairs = newmansIn({ atoms, bonds: model.bonds });
+    const frontIds = new Set(pairs.map((p) => p.front));
+    const backIds = new Set(pairs.map((p) => p.back));
+    const kinds = ((placed.current as { kinds?: number[] }).kinds ??= []);
     for (let i = 0; i < atoms.length; i++) {
       const a = atoms[i];
       if (stars.has(a.id)) {
@@ -291,10 +298,13 @@ export function Atoms2D() {
         inst.current.setMatrixAt(i, tmpM);
         continue;
       }
-      if (was[i] === a) continue;
+      const kind = frontIds.has(a.id) ? 1 : backIds.has(a.id) ? 2 : 0;
+      if (was[i] === a && kinds[i] === kind) continue;
       was[i] = a;
+      kinds[i] = kind;
       // Nudge z slightly forward (z=+1e-3) to prioritize atom raycasting over bond hit areas
-      tmpM.makeScale(rWorld, rWorld, 1).setPosition(a.x, a.y, 1e-3);
+      const r = kind === 2 ? (NEWMAN_CIRCLE + 0.1) * NOMINAL_BOND_LENGTH : rWorld;
+      tmpM.makeScale(r, r, 1).setPosition(a.x, a.y, kind === 1 ? 2e-3 : 1e-3);
       inst.current.setMatrixAt(i, tmpM);
     }
     commitInstanceMatrices(inst.current);
@@ -443,7 +453,13 @@ export function Atoms2D() {
         // a drag is not the first click of a double-click
         forgetPresses();
         const st = store.getState();
-        const withSelection = held || dragsSelection(st, a.id);
+        // (an atom of a Newman pair is never moved alone: they lie at one place, and parted they are no projection - its whole structure goes)
+        const ofPair = !held && newmansIn(st.model).some((p) => p.front === a.id || p.back === a.id);
+        if (ofPair && !dragsSelection(st, a.id)) {
+          st.clearSel();
+          st.selectStructure(a.id);
+        }
+        const withSelection = held || ofPair || dragsSelection(st, a.id);
         if (withSelection) selectionMoveGesture(pid);
         // (a group of a Newman pair is turned round its circle with its atom's others, not moved alone)
         else if (newmanTurnable(store.getState().model, a.id)) newmanTurnGestureOn(a.id, pid);

@@ -9,6 +9,7 @@ import {
   joinsAtAtoms,
   buildTextLabels,
   implicitHydrogens,
+  isEndOn,
   isTail,
   labelHulls,
   labelSetOf,
@@ -2785,5 +2786,45 @@ describe("a double bond at an atom a label is being written over", () => {
     expect(close(back(0), there)).toBe(true);
     expect(back(0.5).x2).toBeCloseTo((plain.x2 + there.x2) / 2, 6);
     expect(close(back(1), plain)).toBe(true);
+  });
+});
+
+describe("a Newman projection's primitives", () => {
+  const OPTS = opts();
+  const L = NOMINAL_BOND_LENGTH;
+  const at = (id: number, x: number, y: number, z?: number): Atom => ({ id, x, y, el: "C", ...(z != null ? { z } : {}) }) as Atom;
+  const bond = (a1: number, a2: number): Bond => ({ a1, a2, order: 1 }) as Bond;
+  // (the front atom 0 and the back atom 1 at the origin; a front group at 90 degrees and a back one at 30, each a bond length out)
+  const pair = () => ({
+    atoms: [at(1, 0, 0, 0.5), at(2, 0, 0, -0.5), at(3, 0, L, 0), at(4, L * Math.cos(Math.PI / 6), L * Math.sin(Math.PI / 6), 0)],
+    bonds: [bond(0, 1), bond(0, 2), bond(1, 3)],
+  });
+
+  it("draws no line for the central bond, a circle half a bond long in radius, the front bond from the centre and the back bond from the rim", () => {
+    const { atoms, bonds } = pair();
+    const out = buildAllPrimitives(atoms, bonds, OPTS, 1);
+    expect(out.circles).toHaveLength(1);
+    expect(out.circles[0].r).toBeCloseTo(0.5 * NOMINAL_BOND_LENGTH, 9);
+    expect(out.circles[0].c).toEqual({ x: 0, y: 0 });
+    // (the front bond from the centre to its group; the back bond from the rim to its)
+    const starts = out.lines.map((l) => [Math.hypot(l.x1, l.y1), Math.hypot(l.x2, l.y2)].sort((p, q) => p - q));
+    expect(starts).toHaveLength(2);
+    const near = starts.map((s) => s[0]).sort((p, q) => p - q);
+    expect(near[0]).toBeCloseTo(0, 6);
+    expect(near[1]).toBeCloseTo(0.5 * NOMINAL_BOND_LENGTH, 6);
+    // (nothing drawn is of no length, nor of no direction: no line is a point)
+    for (const l of out.lines) expect(Math.hypot(l.x2 - l.x1, l.y2 - l.y1)).toBeGreaterThan(0.1);
+    // (the reach of each bond is there for each, the central bond's none)
+    expect(out.reach).toHaveLength(3);
+  });
+
+  it("leaves every other drawing as it was: no circle, the bonds from their atoms", () => {
+    const flat = { atoms: [at(1, 0, 0), at(2, L, 0)], bonds: [bond(0, 1)] };
+    const out = buildAllPrimitives(flat.atoms, flat.bonds, OPTS, 1);
+    expect(out.circles).toHaveLength(0);
+    expect(out.lines).toHaveLength(1);
+    expect(isEndOn(at(1, 0, 0, 1), at(2, 0, 0, 0))).toBe(true);
+    expect(isEndOn(at(1, 0, 0, 1), at(2, 0, 0, 1))).toBe(false);
+    expect(isEndOn(at(1, 0, 0), at(2, 0, 0))).toBe(false);
   });
 });

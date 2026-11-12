@@ -3679,7 +3679,7 @@ export function buildAllPrimitives(
       const d = Math.hypot(other.x - back.x, other.y - back.y);
       if (d <= rim) continue;
       // (the bond starts at the rim: a bare vertex of its own there, the back atom's other bonds each its own)
-      drawnAtoms.push({ id: nextId++, x: back.x + ((other.x - back.x) / d) * rim, y: back.y + ((other.y - back.y) / d) * rim, el: "C", r: back.r } as Atom);
+      drawnAtoms.push({ id: nextId++, x: back.x + ((other.x - back.x) / d) * rim, y: back.y + ((other.y - back.y) / d) * rim, el: "C" } as Atom);
       c = { ...c, [end]: drawnAtoms.length - 1 };
     }
     drawnBonds.push(c);

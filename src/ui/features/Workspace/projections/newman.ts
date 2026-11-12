@@ -7,6 +7,7 @@
  * Pure: nothing here knows a page or a store.
  */
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
+import { isEndOn } from "../../../../lib/chem/layout2d";
 import { CHAIR_R, ECLIPSED_OFFSET_DEG, newman } from "../../../../lib/chem/perception/projection/solids";
 import { standardView } from "../../../../lib/chem/perception/projection/views";
 import type { Atom, Bond } from "../store/types";
@@ -33,7 +34,7 @@ export function newmanDrawing(opts: { at: { x: number; y: number }; firstId: num
 }
 
 /** Whether a bond is seen end-on: its two atoms at one place on the page, one nearer than the other (a Newman's central bond): lib/chem/layout2d's, the one place that says so. */
-export { isEndOn } from "../../../../lib/chem/layout2d";
+export { isEndOn };
 
 /** The three spoke angles of a set, in degrees counter-clockwise from the right (y up): the set whose first is `base` - 90 or 30, as the solid has them. */
 const spokes = (base: number): number[] => [0, 1, 2].map((j) => base + 120 * j);
