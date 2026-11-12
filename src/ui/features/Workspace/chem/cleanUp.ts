@@ -17,6 +17,7 @@ import { layoutJob, nextFree, relayoutFrom, type LayoutJob } from "./engineLayou
 import { layOut } from "./layOut";
 import { atTrueSize } from "../../../../lib/chem/magnified2d";
 import { formulaOf } from "../../../../lib/io/coordinates";
+import { isProjection } from "../projections/chair";
 
 /**
  * An atom and every atom bonded to it, however far along - a haptic bond
@@ -184,17 +185,20 @@ async function laidOutWithLabels(part: Model, expanded: ReadonlySet<number>): Pr
  * written so, and applied as one undo step. What *Expand abbreviation* has
  * just drawn out is left drawn out. Refuses, rather than changing anything,
  * if the structure changed meanwhile, or if the new layout would not say
- * the stereochemistry the old one said.
+ * the stereochemistry the old one said. A projection - a chair the
+ * Projections tool put down - is left as it is drawn, and named so;
+ * `flat` lays it out flat as any structure (its right-click *Draw flat*).
  */
 export async function cleanUp(
   store: EditorStore,
   around: number | Iterable<number> | null = null,
+  flat = false,
 ): Promise<void> {
   // (each structure shown magnified laid out at its true size, and shown as large again: store relayout, utils/trueSize)
   const held = store.getState().model;
   const model = atTrueSize(held);
   const expanded = store.getState().justExpanded();
-  const parts = (
+  const all = (
     // (each piece as it is: a structure of several parts is laid out piece by piece, its parts keeping where they stand)
     around == null
       ? fragmentsOf(model, false)
@@ -202,7 +206,12 @@ export async function cleanUp(
   )
     .map((ids) => partOf(model, ids))
     .filter((part) => part.bonds.length > 0);
-  if (!parts.length) return; // nothing to lay out
+  if (!all.length) return; // nothing to lay out
+  // (a projection is drawn as it is: its depth is what it says, a flat layout would draw it another way)
+  const isKept = (part: Model) => !flat && isProjection(model, new Set(part.atoms.map((a) => a.id)));
+  const parts = all.filter((part) => !isKept(part));
+  const projections = all.filter(isKept).map((part) => ({ formula: partFormula(part), why: "it is a projection, drawn as it is - Draw flat, in its right-click menu, lays it out flat" }));
+  if (!parts.length) throw new CleanUpRefused(projections, all.length);
   // (each on its own: one whose wedges cannot be kept, refused before it is laid out, named with the rest below)
   const settled = await Promise.allSettled(parts.map((part) => laidOutWithLabels(part, expanded)));
   const cleaned = settled.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
@@ -241,7 +250,8 @@ export async function cleanUp(
     );
   }
   const left = [...unlaid, ...refused.map((t) => ({ part: t.c.part, why: t.why! }))];
-  if (left.length) throw new CleanUpRefused(left.map((l) => ({ formula: partFormula(l.part), why: l.why })), parts.length);
+  const named = [...left.map((l) => ({ formula: partFormula(l.part), why: l.why })), ...projections];
+  if (named.length) throw new CleanUpRefused(named, all.length);
 }
 
 /**

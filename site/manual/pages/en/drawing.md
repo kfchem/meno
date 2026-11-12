@@ -31,6 +31,16 @@ Double-click empty space and choose *Chain* from the icons, or choose *Chain fro
 - Lead it on round the next hexagon, over the bond the two share, and it closes that ring too: fused rings - naphthalene, phenanthrene - come in one stroke.
 - Rings of other sizes, such as a cyclopentane, are drawn bond by bond.
 
+## A chair {#projections}
+
+Double-click empty space and open *Projections*, then choose *Chair*: a cyclohexane chair is put down where you double-clicked, drawn as a chair is drawn, with its near edge bold.
+
+- Double-click an atom of the chair and drag out a bond: it goes to one of the atom's two places, axial or equatorial, whichever is nearer the pointer, and says which. It cannot be left between the two. Where a group makes a stereocentre, its R or S is shown.
+- Right-click the chair for *Flip chair* - the ring flips, each group stays on its own face, and the compound is the same - and *Draw flat*, which lays the structure out flat with wedges. *Clean up this structure* leaves a chair as it is drawn.
+- Right-click a ring bond of the chair for a second ring fused on it: *Fuse a chair, trans*, *Fuse a chair, cis on the upper face* or *Fuse a chair, cis on the lower face*. Which of the two cis fusions is meant matters once the ring carries a group, so both are offered.
+- A chair states the configuration of every centre in it. To leave one open, make its bond wavy.
+- A 3D structure made from a chair takes the drawing's configuration, not the conformation it is drawn in.
+
 ## Labels {#labels}
 
 Point at an atom and type: O, NH2, OMe, Ph. The label is written where it stands, and kept when the pointer moves on. To change a label, choose *Edit label* on the atom's right-click menu.

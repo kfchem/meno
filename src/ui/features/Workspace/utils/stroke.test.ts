@@ -9,6 +9,7 @@ import {
   type StrokeNode,
 } from "./stroke";
 import type { Pt } from "./extendSnap";
+import { chairDrawing, seenPlaces } from "../projections/chair";
 import { measured } from "../../../../testing/timeouts";
 
 const L = 1;
@@ -236,5 +237,37 @@ describe("a chain stroke beside a large drawing", () => {
     expect(s.nodes.length).toBeGreaterThanOrEqual(2);
     // (gone over once: about 70 ms of CPU; gone over at every step, about 950)
     expect(spent).toBeLessThan(350);
+  });
+});
+
+describe("a bond stroke out of an atom of a chair", () => {
+  const d = chairDrawing({ at: { x: 0, y: 0 }, firstId: 1, firstBondId: 1 });
+  const model = { atoms: d.atoms, bonds: d.bonds };
+  const [axial, equatorial] = [seenPlaces(d, 3).find((p) => p.free.kind === "axial")!, seenPlaces(d, 3).find((p) => p.free.kind === "equatorial")!];
+  const at = d.atoms[3];
+  const toward = (p: { place: { x: number; y: number } }, turn = 0) => {
+    const dx = p.place.x - at.x;
+    const dy = p.place.y - at.y;
+    return { x: at.x + 4 * (dx * Math.cos(turn) - dy * Math.sin(turn)), y: at.y + 4 * (dx * Math.sin(turn) + dy * Math.cos(turn)) };
+  };
+
+  it("ends at the free position nearest the pointer, named, and never between two", () => {
+    const s = startStroke("bond", d.ring[3]);
+    for (const turn of [-0.2, 0, 0.2]) {
+      const t = strokeTarget(model, s, toward(axial, turn), L)!;
+      expect(t.position).toBe("axial");
+      expect(t.end.x).toBeCloseTo(axial.place.x, 9);
+      expect(t.end.y).toBeCloseTo(axial.place.y, 9);
+    }
+    expect(strokeTarget(model, s, toward(equatorial), L)!.position).toBe("equatorial");
+    // (a pause does not let it go: held, it is still at a free position)
+    const held = holdStroke(model, s, toward(equatorial), L);
+    expect(strokeTarget(model, held, { x: at.x + 0.3, y: at.y + 0.1 }, L)!.position).toBeDefined();
+  });
+
+  it("is laid down there: one bond, its new atom at the place", () => {
+    const [node] = finishStroke(model, startStroke("bond", d.ring[3]), toward(axial), L);
+    expect(node.x).toBeCloseTo(axial.place.x, 9);
+    expect(node.y).toBeCloseTo(axial.place.y, 9);
   });
 });

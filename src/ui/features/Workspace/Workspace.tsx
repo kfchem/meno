@@ -40,6 +40,7 @@ import {
   LabelTyping2D,
   HoverOverlay2D,
   ChemMarks2D,
+  PositionTip,
   SnapArc2D,
   Selection2D,
 } from "./components";
@@ -226,6 +227,9 @@ import { leftOutSaid } from "./utils/readNotes";
 import { outputKindIn } from "../../../lib/calc/probe";
 import { NotRead } from "../../../lib/calc/read";
 import { namedDrawn, putDownSmiles } from "./utils/quickAddSmiles";
+import { chairDrawing, isProjection } from "./projections/chair";
+import { flipOf } from "./projections/flip";
+import { FUSE_WAYS, fusedOn, fusableBonds } from "./projections/fuse";
 import { addedBox } from "./store/slices/modelSlice";
 import { viewPanning } from "./components/viewGoal";
 import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gesture";
@@ -434,11 +438,11 @@ function WorkspaceContent({
   const offerRole = useRoleOffer((s) => s.role);
   const cleaningNow = useRef(false); // one clean-up at a time, keys included
   const runCleanUp = useCallback(
-    (aroundAtom: number | Iterable<number> | null) => {
+    (aroundAtom: number | Iterable<number> | null, flat = false) => {
       if (cleaningNow.current) return;
       cleaningNow.current = true;
       setChemError(null);
-      cleanUp(store, aroundAtom)
+      cleanUp(store, aroundAtom, flat)
         .catch((e: unknown) =>
           setChemError(
             // (what it left as drawn, named - the rest laid out: its own words; anything else, a failure)
@@ -611,6 +615,8 @@ function WorkspaceContent({
       }
       setChemError(null);
       if (bare.length) useNotices.getState().show({ id: "bare-3d", title: "3D structure", text: bareWords(bare, true) });
+      // (a projection drawn as a conformation: its configuration is taken, the conformation is not - the maintainer's ruling)
+      if (blocks.some((b) => isProjection(model, new Set(b.atoms)))) useNotices.getState().show({ id: "projection-3d", title: "3D structure", text: "Made from the drawing's configuration. The conformation is not taken from the drawing." });
       try {
         const chem = await chemWorker("stereoisomers");
         const open = await Promise.all(
@@ -2056,6 +2062,8 @@ function WorkspaceContent({
                 const id = st.addConversation({ x0: at.x - w / 2, y0: at.y - h / 2, x1: at.x + w / 2, y1: at.y + h / 2 });
                 if (id != null) st.readConversation(id);
               }
+              // (a chair put down where Quick Add was opened, as drawn atoms and bonds that carry their depth: the ids are the paste's own)
+              else if (what === "chair") st.pasteModel(centredAt(chairDrawing({ at, firstId: 1, firstBondId: 1 }), at));
               else st.addPlus(at.x, at.y);
             }}
           />
@@ -2534,6 +2542,41 @@ function WorkspaceContent({
             const at = structureAt(menu.kind, menu.id);
             if (at != null) store.getState().selectStructure(at);
           }}
+          projection={(() => {
+            // (a chair the Projections tool put down: laid out flat, wedges for its depth - and flipped, where it can be)
+            const at = menu.kind === "atom" || menu.kind === "bond" ? structureAt(menu.kind, menu.id) : null;
+            if (at == null) return undefined;
+            const st = store.getState();
+            const ids = fragmentOf(st.model, at);
+            if (!isProjection(st.model, ids)) return undefined;
+            const flip = flipOf(st.model, ids);
+            const bondId = menu.kind === "bond" && menu.id != null && fusableBonds(st.model, ids).includes(menu.id) ? menu.id : null;
+            return {
+              flat: () => runCleanUp(at, true),
+              ...(bondId != null
+                ? {
+                    fuse: FUSE_WAYS.map(({ how, name }) => ({
+                      name,
+                      run: () => {
+                        const now = store.getState();
+                        const made = fusedOn(now.model, fragmentOf(now.model, at), bondId, how);
+                        if (!made) return;
+                        if ("refused" in made) setChemError(made.refused);
+                        else now.addSolid(made.atoms, made.bonds, "fuse chair");
+                      },
+                    })),
+                  }
+                : {}),
+              ...(flip
+                ? {
+                    flip: () => {
+                      if ("refused" in flip) setChemError(flip.refused);
+                      else store.getState().placeSolid(flip.moves, "flip chair");
+                    },
+                  }
+                : {}),
+            };
+          })()}
           figure={(() => {
             // (its structure read from a figure: where it came from - and, not yet said to be checked, saying so, one step)
             const at = menu.kind === "atom" || menu.kind === "bond" ? structureAt(menu.kind, menu.id) : null;
@@ -2889,6 +2932,8 @@ function WorkspaceContent({
           <ClickBondPreview2D />
           {/* The 120-degree arc while a bond snaps to it */}
           <SnapArc2D />
+          {/* A projection's free position, named while a group is led to it */}
+          <PositionTip />
           {/* Move preview */}
           <MovePreview2D />
           <HoverOverlay2D />

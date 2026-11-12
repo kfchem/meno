@@ -135,6 +135,7 @@ export default function ExtendPreview2D() {
       setExtendPreview(end.x, end.y, {
         atomId: target.atomId,
         pathIndex: target.pathIndex,
+        position: target.position,
       });
     }
   });

@@ -407,7 +407,10 @@ with a wedge that says it, as any cage Clean-up draws is: on a bond out of
 the centre, or - where it has none to take one - on an explicit H atom
 added to the file for it, after every atom there is
 (`chem/drawing.ts#forFlatReaders`; docs/EDITOR-2D.md). The depth itself is
-not written, so the cage opens again flat, its configuration wedged.
+not written, so the cage opens again flat, its configuration wedged. A chair the Projections tool put down is written the
+same way (docs/EDITOR-2D.md, *Projections*): its 2D places, wedges for what
+its depth says, a z of 0 throughout, never the conformation it is drawn in;
+the .meno keeps it as drawn.
 
 **Hydrogens drawn as said.** Where a structure says an atom has more H
 than its valence leaves - Bu3SnH's tin, a metal's hydride, LiAlH4's

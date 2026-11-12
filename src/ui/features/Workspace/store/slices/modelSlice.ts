@@ -19,7 +19,7 @@ import { useReadings } from "../../../../../lib/calc/readings";
 import type { ImportedScheme, WorkspaceDocument } from "../../document";
 import type { ArrowLook } from "../../../../../lib/chem/reactionArrow";
 import { ARROW_LENGTH_BONDS } from "../../../../../lib/chem/reactionScheme";
-import { EditorState, Bond, Arrow, Model, Drawn, type ArrowAtomMap, type ArrowFormPatch, type MarkAt, type PushEnd } from "../types";
+import { EditorState, Atom, Bond, Arrow, Model, Drawn, type ArrowAtomMap, type ArrowFormPatch, type MarkAt, type PushEnd } from "../types";
 import { marksAtOf, turnedOver, turnedOverArrows } from "../../utils/selection";
 import { turnedOverRest, turnOverMiddle } from "../../utils/turnOver";
 import { endsRenamed } from "../../utils/cycles";
@@ -210,6 +210,25 @@ export const createModelSlice = (
 
   moveAtoms: (moves: { id: number; x: number; y: number }[], gesture: string, marks?: ops.MarkPlaces) => {
     doc.edit("move atoms", (d) => ops.placeMarks(ops.placeAtoms(d, moves), marks), gestureStep(`move-atoms:${gesture}`));
+  },
+
+  addSolid: (atoms: Omit<Atom, "id">[], bonds: { a: { id: number } | { new: number }; b: { id: number } | { new: number }; display?: "bold" }[], name: string) => {
+    doc.edit(name, (d) => {
+      const ids = atoms.map((_, n) => d.nextId + n);
+      const end = (e: { id: number } | { new: number }) => ("id" in e ? e.id : ids[e.new]);
+      return {
+        ...d,
+        nextId: d.nextId + atoms.length + bonds.length,
+        model: {
+          atoms: [...d.model.atoms, ...atoms.map((a, n) => ({ ...a, id: ids[n] }))],
+          bonds: [...d.model.bonds, ...bonds.map((b, n): Bond => ({ id: d.nextId + atoms.length + n, a: end(b.a), b: end(b.b), order: 1, ...(b.display ? { display: b.display } : {}) }))],
+        },
+      };
+    });
+  },
+
+  placeSolid: (moves: { id: number; x: number; y: number; z?: number }[], name: string) => {
+    doc.edit(name, (d) => ops.placeAtoms(d, moves));
   },
 
   dropMoveAtoms: (gesture: string) => {

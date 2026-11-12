@@ -23,7 +23,7 @@ import { resolve, sameFormula, type Reading } from "./chem/resolve";
 import { FormulaText } from "../../abbreviations/FormulaText";
 
 /** What Quick Add puts down where it was opened. */
-export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "cycle" | "slide" | "pen" | "conversation";
+export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "cycle" | "slide" | "pen" | "conversation" | "chair";
 
 /** Each icon's size, in px; and the gap between two in a row (gap-0.5). */
 const SIZE = 36;
@@ -45,7 +45,7 @@ const SHAPE_ICONS: Record<ShapeKind, ReactNode> = {
  * *Marks on the page* - the shapes and the pen, which draw on the page and
  * say nothing chemical.
  */
-const ROW: { id: QuickAddChoice | "chain" | "smiles" | "scheme" | "marks"; name: string; icon: ReactNode }[] = [
+const ROW: { id: QuickAddChoice | "chain" | "smiles" | "scheme" | "marks" | "projections"; name: string; icon: ReactNode }[] = [
   {
     id: "bond",
     name: "Bond",
@@ -106,6 +106,12 @@ const ROW: { id: QuickAddChoice | "chain" | "smiles" | "scheme" | "marks"; name:
     ),
   },
   {
+    id: "projections",
+    name: "Projections",
+    // (a chair, as it is drawn: the ring's six atoms seen from above and in front)
+    icon: <path d="M16.6 9 L13.3 8.7 L6.7 6.5 L3.4 11 L6.7 11.3 L13.3 13.5 Z" />,
+  },
+  {
     id: "conversation",
     name: "Conversation",
     // (a word balloon: what is said, in a frame of its own)
@@ -157,6 +163,22 @@ const SCHEME: typeof ROW = [
   },
 ];
 
+/** What *Projections* opens below the row (docs/EDITOR-2D.md, *Projections*): the tools that put down a solid seen as a drawing is made of it. */
+const PROJECTIONS: typeof ROW = [
+  {
+    id: "chair",
+    name: "Chair",
+    // (the chair of the row's icon, its near edge heavier)
+    icon: (
+      <>
+        <path d="M16.6 9 L13.3 8.7 L6.7 6.5 L3.4 11 L6.7 11.3" />
+        <path d="M6.7 11.3 L13.3 13.5" strokeWidth={2.8} />
+        <path d="M13.3 13.5 L16.6 9" />
+      </>
+    ),
+  },
+];
+
 /** The pen, among the marks on the page after the shapes: its card opened, to write by hand. */
 const PEN = {
   id: "pen" as const,
@@ -166,7 +188,7 @@ const PEN = {
 };
 
 /** Each that opens a row below the row (or a field): its id. */
-const OPENS = ["smiles", "scheme", "marks"] as const;
+const OPENS = ["smiles", "scheme", "marks", "projections"] as const;
 const opens = (id: string): id is (typeof OPENS)[number] => (OPENS as readonly string[]).includes(id);
 
 /**
@@ -298,7 +320,7 @@ export default function QuickAdd({
                 {c.icon}
               </svg>
               {/* (a group's corner mark: it opens a row of its own) */}
-              {(c.id === "scheme" || c.id === "marks") && (
+              {(c.id === "scheme" || c.id === "marks" || c.id === "projections") && (
                 <svg viewBox="0 0 6 4" width={6} height={4} aria-hidden className="absolute right-1 bottom-1 text-gh-gray">
                   <path d="M0 0 H6 L3 4 Z" fill="currentColor" />
                 </svg>
@@ -334,6 +356,18 @@ export default function QuickAdd({
           <div className="overflow-hidden" inert={open !== "scheme"}>
             <div role="group" aria-label="Scheme" className="mt-1 pt-1 border-t border-gh-line flex items-center gap-0.5" style={{ width: width - 8 }}>
               {SCHEME.map((c) => (
+                <RowIcon key={c.id} name={c.name} icon={c.icon} onClick={() => onChoose(c.id as QuickAddChoice)} />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* (the projections, likewise: each tool puts its solid down where Quick Add was opened) */}
+      {!wired && (
+        <div className="grid transition-[grid-template-rows,opacity] duration-200 ease-meno" style={{ gridTemplateRows: open === "projections" ? "1fr" : "0fr", opacity: open === "projections" ? 1 : 0 }}>
+          <div className="overflow-hidden" inert={open !== "projections"}>
+            <div role="group" aria-label="Projections" className="mt-1 pt-1 border-t border-gh-line flex items-center gap-0.5" style={{ width: width - 8 }}>
+              {PROJECTIONS.map((c) => (
                 <RowIcon key={c.id} name={c.name} icon={c.icon} onClick={() => onChoose(c.id as QuickAddChoice)} />
               ))}
             </div>

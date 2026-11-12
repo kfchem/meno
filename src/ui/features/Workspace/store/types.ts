@@ -1974,7 +1974,7 @@ export type EditorState = {
      * or one of the stroke's own when it closes onto it - so the drawing can
      * lay it out there.
      */
-    preview?: { x: number; y: number; atomId?: number; pathIndex?: number } | null;
+    preview?: { x: number; y: number; atomId?: number; pathIndex?: number; position?: string } | null;
   };
   panHold: { active: boolean; pointerId: number | null };
   suppressDblClickUntil: number;
@@ -2072,6 +2072,10 @@ export type EditorState = {
    * - all of one gesture one step.
    */
   moveAtoms: (moves: { id: number; x: number; y: number }[], gesture: string, marks?: MarkPlaces) => void;
+  /** Atoms put at the places and depths of another picture of the same solid - a chair flipped (../projections/chair) - as one undo step. */
+  /** Atoms with their depth, and bonds to them or from them to atoms already there, added together - a ring fused on a chair (../projections/fuse) - as one undo step. */
+  addSolid: (atoms: Omit<Atom, "id">[], bonds: { a: { id: number } | { new: number }; b: { id: number } | { new: number }; display?: "bold" }[], name: string) => void;
+  placeSolid: (moves: { id: number; x: number; y: number; z?: number }[], name: string) => void;
   /** A move or a turn made with moveAtoms (`gesture`) let go of by Escape: taken back, nothing left to redo. */
   dropMoveAtoms: (gesture: string) => void;
   /** The selection turned over, left to right or top to bottom (utils/selection). */
@@ -2201,7 +2205,7 @@ export type EditorState = {
   setExtendPreview: (
     x: number,
     y: number,
-    join?: { atomId?: number; pathIndex?: number },
+    join?: { atomId?: number; pathIndex?: number; position?: string },
   ) => void;
   endMoveDrag: () => void;
   /** The structure a tab opens with: where its document starts, not an edit. */

@@ -127,7 +127,7 @@ export function createInteractionSlice(set: SetState, get: GetState) {
     setExtendPreview: (
       x: number,
       y: number,
-      join?: { atomId?: number; pathIndex?: number },
+      join?: { atomId?: number; pathIndex?: number; position?: string },
     ) =>
       set((prev: EditorState) => {
         if (!prev.extend.active) return prev;
@@ -137,7 +137,8 @@ export function createInteractionSlice(set: SetState, get: GetState) {
           Math.abs(cur.x - x) < 1e-4 &&
           Math.abs(cur.y - y) < 1e-4 &&
           cur.atomId === join?.atomId &&
-          cur.pathIndex === join?.pathIndex
+          cur.pathIndex === join?.pathIndex &&
+          cur.position === join?.position
         ) {
           return prev;
         }
