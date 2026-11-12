@@ -819,6 +819,16 @@ export const GENERIC_SYMBOLS: ReadonlyMap<string, string> = new Map([
   ["Het", "a heteroatom"],
 ]);
 /**
+ * The names of a point of variability, as a drawing writes one (Brecher 2008, GR-9.1 and GR-9.2 with Table GR-9.1): a number set after one is part
+ * of the name - X1 and X2 are two variables, as R1 and R2 are - never an atom's number. R (with its primes), X, Z and G are GR-9.1's, Alk, Alkyl,
+ * Ar, Aryl, E, EWG, M, Nu and Q Table GR-9.1's; PG, LG, EDG, Hal and Het are Meno's own class symbols; Y, A, L and HetAr are a judgement (common
+ * use: no text read names them). The figure reader asks of a label only its LAST capital with its small letters (the Ar of OAr, the G of EWG, the Ar
+ * of HetAr), so the compound names - EWG, EDG, PG, LG, HetAr - are listed for the record: it is their last capital that decides. B and P are left out: they stay elements (a nucleobase B1, a protecting group P1 are read as boron and
+ * phosphorus - a stated limit).
+ */
+export const VARIABLE_NAMES: ReadonlySet<string> = new Set(["R", "X", "Y", "Z", "G", "A", "L", "M", "Q", "E", "Ar", "Aryl", "Alk", "Alkyl", "Nu", "EWG", "EDG", "PG", "LG", "Hal", "Het", "HetAr"]);
+
+/**
  * What a label is read into: the groups the abbreviations name, longest
  * first - and "pin", for pinacolato - before element symbols.
  */
