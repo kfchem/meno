@@ -190,6 +190,9 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
         if (left !== drawn) unsure.push(`Drawn as ${as}, but its bonds leave it ${left === 0 ? "no hydrogen" : left === 1 ? "one hydrogen" : `${left} hydrogens`}.`);
       }
     }
+    // (a Y with one bond and no charge is a variable, as X and Z are - Meno's rule, as the writer has it (docs/CTFILE.md): a label cannot tell it from
+    // yttrium's symbol, so the atom says it was taken so. An Ar with a bond is an aryl group's by the same rule, its reading not in doubt)
+    if (!a.el && a.label === "Y" && degree[i] === 1 && !charges[i]) unsure.push("Taken as a variable, as X and Z are, not as yttrium: a Y with one bond stands for a group.");
     const over = tooMany[i];
     if (over) unsure.push(over);
     const isotope = label && "isotope" in label ? label.isotope : undefined;

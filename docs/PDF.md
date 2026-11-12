@@ -1352,7 +1352,7 @@ it where it lies out of view.
   drawn flat - more than twice as wide as tall - a minus: a hyphen as
   WebKit prints one), and digits set high before the element its isotope's mass
   number (13C, 18F, 2H); a count set low before any letter - the H of an
-  H3N left outside the box - is no one's. A charge drawn in a small circle - a "+" or a "-" in a ring,
+  H3N left outside the box - is no one's. A label that is a variable's name and an element's symbol too is read by Meno's own rule (docs/CTFILE.md): an Ar with a bond is an aryl group's, the atom unmarked and written to a MOL file as a star atom with its alias, never as argon; a Y with one bond is a variable's, as X and Z are, and the atom says it was taken so and not as yttrium (a label cannot tell them); a Y with two bonds or more, or a charge, is yttrium. A charge drawn in a small circle - a "+" or a "-" in a ring,
   as Meno draws one and as many papers do - is the charge of the atom it is
   by, however the page is turned and where a box drawn across it cuts some
   of its ring off; never a bond, nor a scheme's "+". A lone H at no

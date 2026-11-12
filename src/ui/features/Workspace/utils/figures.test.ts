@@ -700,3 +700,41 @@ describe("a repeat unit in brackets, counted, read that many times (docs/PDF.md,
     expect(unit.every((a) => a.seen && a.seen.x === paradigm.seen!.x && a.seen.y === paradigm.seen!.y)).toBe(true);
   });
 });
+
+describe("a figure's Ar and Y: a variable's name that is an element's symbol too", () => {
+  const chainTo = (label: string, bonds = 1): Model => {
+    // (a chain of three bonds, the last to a label at its end - and, for two bonds, the label's other side also drawn to a carbon)
+    const a: P = [100, 200];
+    const b = step(a, 30);
+    const c = step(b, -30);
+    const o = step(c, 30);
+    const paths = [stroke(a, b, c), stroke(c, [c[0] + (o[0] - c[0]) * 0.55, c[1] + (o[1] - c[1]) * 0.55])];
+    if (bonds === 2) {
+      const far = step(o, -30);
+      paths.push(stroke(far, [o[0] + (far[0] - o[0]) * 0.55, o[1] + (far[1] - o[1]) * 0.55]));
+    }
+    return structureFrom({ paths, letters: letters(label, o), pictures: [] }, SHA, 1) as Model;
+  };
+  /** The atom symbols a MOL file's atom block writes, in order. */
+  const symbolsOf = (m: Model) =>
+    [...structureFileText({ atoms: m.atoms, bonds: m.bonds }, "x.mol").matchAll(/^\s*-?\d+\.\d+\s+-?\d+\.\d+\s+-?\d+\.\d+ (\S+)/gm)].map((x) => x[1]);
+
+  it("holds an Ar with a bond as an aryl group's name, unmarked, and writes it to a MOL file as a star atom with its alias - no argon atom", () => {
+    const m = chainTo("Ar");
+    expect(m.atoms.find((x) => x.el === "Ar")?.unsure).toBeUndefined();
+    const symbols = symbolsOf(m);
+    expect(symbols).not.toContain("Ar");
+    expect(symbols).toContain("*");
+    expect(structureFileText({ atoms: m.atoms, bonds: m.bonds }, "x.mol")).toMatch(/Ar/);
+  });
+
+  it("marks a Y with one bond - taken as a variable and not as yttrium, written as a star atom - and leaves a Y with two bonds yttrium, as Meno's rule has it", () => {
+    const one = chainTo("Y");
+    expect(one.atoms.find((x) => x.el === "Y")?.unsure?.said).toEqual(["Taken as a variable, as X and Z are, not as yttrium: a Y with one bond stands for a group."]);
+    expect(symbolsOf(one)).not.toContain("Y");
+    expect(symbolsOf(one)).toContain("*");
+    const two = chainTo("Y", 2);
+    expect(two.atoms.find((x) => x.el === "Y")?.unsure).toBeUndefined();
+    expect(symbolsOf(two)).toContain("Y");
+  });
+});
