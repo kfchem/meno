@@ -162,6 +162,28 @@ describe("the page's mirror images", () => {
     expect(down.frames[0].map((v, k) => (k % 3 === 0 ? -v : v))).toEqual(up.frames[0].map((v) => v));
   });
 
+  it("growing, gives the mirror image its own R or S as it shows it - read from its places, as conformersOf gives it, never the plugin's", async () => {
+    const rounds = { window: 5, first: 10, most: 5000 };
+    const labels: string[] = [];
+    // (each round's answer with an energy, so that its rounds are judged in the worker; and with none, made as conformersOf makes it)
+    for (const [s, judged] of [["up", true], ["down", true], ["up", false], ["down", false]] as const) {
+      const { chem: plain } = plugin();
+      const chem = { request: async (op: string, args: never) => {
+        const got = (await plain.request(op as never, args)) as { isomers: object[] };
+        return { isomers: got.isomers.map((c) => (judged ? { ...c, energies: [-0.1] } : c)) };
+      } } as unknown as ChemClient;
+      const [block] = blocksOf(butanol(s), [1]);
+      const growth = await conformersGrowing(chem, stereo, block, "one", {}, { calculations: {} }, rounds, () => false);
+      const [whole] = await conformersOf(chem, stereo, block, "one", {}, null, rounds);
+      expect(growth.first[0].cip.atoms["1"]).toBe(whole.cip.atoms["1"]);
+      let last = growth.first[0];
+      await growth.rest((_, c) => (last = c));
+      expect(last.cip.atoms["1"]).toBe(whole.cip.atoms["1"]);
+      labels.push(last.cip.atoms["1"]);
+    }
+    expect(labels.sort()).toEqual(["R", "R", "S", "S"]);
+  });
+
   it("makes one itself where the reflection of its mirror image has not its configuration after all", async () => {
     // (the drawing made as a mirror image: the one that is)
     const twin = (["up", "down"] as const).find((s) => madeAs(butanol(s), none) === "mirror")!;

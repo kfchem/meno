@@ -12,7 +12,7 @@
 import type { Conformers } from "../../../../lib/roles/client";
 import { keptMade, type MadeChecks } from "../../../../lib/chem/metalHolds";
 import { joined, roundsHow, RoundsSeen, type RoundsJudge } from "./conformerRounds";
-import { withChosen, type OpenStereo } from "./openStereo";
+import { withChosen, withOwnCip, type OpenStereo } from "./openStereo";
 import { partsSideBySide } from "./partsApart";
 import { reflectedConformers } from "./pageMirror";
 import { asThePageShows } from "./pageConformers";
@@ -26,13 +26,14 @@ type Row = { label: string; text: string };
 /**
  * A stereoisomer's conformers as the page shows them, as make3d's
  * `conformersOf` makes them of what a search gave: reflected where they are
- * its mirror image's, with the configurations chosen, those its checks let
+ * its mirror image's, their R and S read from their own places
+ * (`withOwnCip`), with the configurations chosen, those its checks let
  * stand, its parts side by side, each once (`asThePageShows`) - laid over
  * `onto`, where given.
  */
 export function shownOf(raw: Conformers, w: ShownWith, onto?: readonly number[]): Conformers {
   const c = w.reflect ? reflectedConformers(raw) : raw;
-  return asThePageShows(partsSideBySide(keptMade(withChosen(c, w.open), w.checks), w.parts), onto);
+  return asThePageShows(partsSideBySide(keptMade(withChosen(withOwnCip(c), w.open), w.checks), w.parts), onto);
 }
 
 /**

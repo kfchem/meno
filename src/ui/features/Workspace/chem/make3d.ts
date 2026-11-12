@@ -789,7 +789,7 @@ export async function conformersGrowing(
     const { made: raw } = l.search.result();
     const c = { ...(l.reflect ? reflectedConformers(raw) : raw), how: [...(raw.how ?? []), ...more] };
     const w = { open: made.open, checks, parts: partsOf(c.atoms, c.bonds, holds?.eta) };
-    return (await shownConformers([partsSideBySide(keptMade(withChosen(c, w.open), w.checks), w.parts)]))[0];
+    return (await shownConformers([partsSideBySide(keptMade(withChosen(withOwnCip(c), w.open), w.checks), w.parts)]))[0];
   };
   const said = (l: Live) => (l.search.ended ? { label: "Rounds", text: roundsSaid(l.search.result().run, { ...rounds, budget: SEARCH_BUDGET_MS }) } : searchingRow(l.search));
   const first = await Promise.all(live.map((l) => shownOf(l!, [said(l!)])));
