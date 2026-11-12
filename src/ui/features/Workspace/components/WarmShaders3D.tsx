@@ -4,6 +4,7 @@ import type * as THREE from "three";
 import type { Style3D } from "../../../../lib/chem/style3d";
 import type { Molecule3D } from "../store/types";
 import Molecule3DView from "./Molecule3DView";
+import { probeNewPrograms } from "../../../../lib/core/frameProbe";
 
 /**
  * The page's shaders for molecules in 3D made ready before the first is put
@@ -30,6 +31,9 @@ export default function WarmShaders3D({ style, stereoFont }: { style: Style3D; s
     const id = setTimeout(() => setOn(true), 500);
     return () => clearTimeout(id);
   }, []);
+  useEffect(() => {
+    if (on) console.warn(`[probe] warm: unseen molecule put in at ${performance.now().toFixed(0)}ms`);
+  }, [on]);
   return on ? <Warmed style={style} stereoFont={stereoFont} /> : null;
 }
 
@@ -70,7 +74,17 @@ function Warmed({ style, stereoFont }: { style: Style3D; stereoFont: Parameters<
     let live = true;
     // (a frame after it is put in: every effect of it has run, and each part of it holds what it is drawn with)
     const frame = requestAnimationFrame(() => {
-      if (live && group.current) void gl.compileAsync(group.current, camera, scene).catch(() => undefined);
+      if (live && group.current) {
+        // TEMPORARY PROBE (not for merge): the warm-up's compile, its programs named
+        console.warn(`[probe] warm: compile asked at ${performance.now().toFixed(0)}ms, programs ${gl.info.programs?.length ?? 0}`);
+        probeNewPrograms(gl as never, "before the warm-up's compile");
+        const at = performance.now();
+        void gl
+          .compileAsync(group.current, camera, scene)
+          .then(() => console.warn(`[probe] warm: compile done after ${(performance.now() - at).toFixed(0)}ms, programs ${gl.info.programs?.length ?? 0}`))
+          .catch((e) => console.warn(`[probe] warm: compile failed: ${String(e)}`));
+        probeNewPrograms(gl as never, "by the warm-up's compile");
+      }
     });
     return () => {
       live = false;

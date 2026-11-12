@@ -36,3 +36,14 @@ export function startProbe(): void {
   };
   requestAnimationFrame(tick);
 }
+
+/** TEMPORARY PROBE (not for merge): each WebGL program the renderer made, named once - where, and its cache key (what tells it from another). */
+const probeSeen = new WeakSet<object>();
+export function probeNewPrograms(gl: { info: { programs: unknown[] | null } }, where: string): void {
+  for (const p of (gl.info.programs ?? []) as { name?: string; cacheKey?: string; id?: number }[]) {
+    if (probeSeen.has(p)) continue;
+    probeSeen.add(p);
+    console.warn(`[probe] program #${p.id} "${p.name}" made ${where} at ${performance.now().toFixed(0)}ms: key ${p.cacheKey}`);
+  }
+}
+
