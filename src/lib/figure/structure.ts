@@ -119,8 +119,9 @@ export function drawnBond(read: Pick<FigureRead, "atoms" | "bonds" | "bond">): n
  * An atom labelled N2 or N2+ read by its bonds, never by its letters (IUPAC, glossary of class names, 1995: a diazo group is =N+=N- on a carbon, a
  * diazonium's N is triply bonded to the other): N2 at the end of ONE DOUBLE bond to a carbon is the diazo group - N+ double-bonded to the carbon and to an
  * N- - and N2+ at the end of ONE SINGLE bond to a carbon the diazonium group - N+ single-bonded to the carbon, triply to an N - each written out as its
- * atoms, the second a bond further along. Else: N2 on a plain nitrogen's bonds (two or more) is an N and the 2 its number, marked; any other, a label
- * not read, marked as it is. Nothing else changes: O2 at a bond's end has no one meaning and stays unread.
+ * atoms, the second a bond further along. Any other N2 - on two bonds or more, on one single bond uncharged, on a triple bond - is a label not read, marked as
+ * it is: a word N2 may land on the atom beneath it, and that atom is a carbon, which an unread label leaves as drawn. O2 at a bond's end has no one meaning and
+ * stays unread too.
  */
 export function diazoRead(given: FigureRead): { read: FigureRead; parent: Map<number, number> } {
   const parent = new Map<number, number>();
@@ -147,10 +148,6 @@ export function diazoRead(given: FigureRead): { read: FigureRead; parent: Map<nu
         bonds.push({ a: i, b: next, order: diazo ? 2 : 3 });
         return;
       }
-    }
-    if (diazo && mine.length >= 2) {
-      atoms[i] = { ...a, label: "N", alts: undefined, unsure: [...(a.unsure ?? []), 'A small number by it was taken as the atom\'s number, not a count: read as "N".'] };
-      return;
     }
     // (any other N2: a label not read, marked by the reader as any is)
   });

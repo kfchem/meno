@@ -1034,17 +1034,18 @@ describe("an N2 or N2+ beside a bond, read by its bonds (made drawings)", () => 
     expect(n?.unsure?.said).toEqual(['"N2" was not read as an element or a group.']);
   });
 
-  it("takes N2 on a ring nitrogen - two bonds - as an N with the 2 for its number, marked; a 2 clearly high as no mark at all", () => {
+  it("leaves N2 on a ring nitrogen - two bonds - unread and marked, a level 2 as a 2 set lowered; a 2 set clearly high is an atom's number: N, unmarked for it", () => {
     const a: P = [100, 200];
     const b = step(a, 30);
     const c = step(b, -30);
-    const level = structureFrom({ paths: [cut(a, b, 0, 5), cut(b, c, 5, 0)], letters: labelLetters([["N", 10, 0], ["2", 7, -0.3]], b[0] - 3, b[1]), pictures: [] }, SHA, 1) as Model;
-    const high = structureFrom({ paths: [cut(a, b, 0, 5), cut(b, c, 5, 0)], letters: labelLetters([["N", 10, 0], ["2", 7, 4]], b[0] - 3, b[1]), pictures: [] }, SHA, 1) as Model;
-    const n = (m: Model) => m.atoms.find((x) => x.el === "N");
-    expect(n(level)).toBeDefined();
-    expect(n(level)?.unsure?.said.some((t) => t.startsWith("A small number by it"))).toBe(true);
-    // (no mark for the number: what is said of it is its hydrogen, as of any N drawn so)
-    expect(n(high)?.unsure?.said.some((t) => t.startsWith("A small number")) ?? false).toBe(false);
+    const at = (parts: [string, number, number][]) => structureFrom({ paths: [cut(a, b, 0, 5), cut(b, c, 5, 0)], letters: labelLetters(parts, b[0] - 3, b[1]), pictures: [] }, SHA, 1) as Model;
+    const level = at([["N", 10, 0], ["2", 7, -0.3]]);
+    const high = at([["N", 10, 0], ["2", 7, 4]]);
+    const unread = level.atoms.find((x) => x.el === "N2");
+    expect(unread?.unsure?.said).toContain('"N2" was not read as an element or a group.');
+    const n = high.atoms.find((x) => x.el === "N");
+    expect(n).toBeDefined();
+    expect(n?.unsure?.said.some((t) => t.startsWith("A small number"))).toBe(false);
   });
 
   it("leaves O2 at a bond's end unread and marked, and SO2Me, CO2Me, NO2 as they were", () => {
