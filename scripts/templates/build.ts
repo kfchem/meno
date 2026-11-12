@@ -17,7 +17,7 @@ import { dftRecipe, NOTES, xtbRecipe, type RecipeStep } from "./recipe";
 
 /** What the page is laid out on: a step's column and a stage's row, in world units - a card, the set it gives to its right, and room for the one under it (the page of record's own spacing). */
 const PITCH = 2 * (CARD_W + GAP);
-const ROW = 3 * CARD_H;
+const ROW = 4 * CARD_H;
 /** How many steps a stage's row holds before it goes on under itself. */
 const WRAP = 10;
 /** Where the first step's card stands, left of which the drawn reaction is. */
