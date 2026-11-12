@@ -58,20 +58,20 @@ function thick(pts: P[], w: number, join: "mitre" | "round"): FigurePath {
 }
 
 /** A hexagon of side L, its outline drawn as ONE filled shape: the outer outline, and the inner outline the other way round. */
-function ring(c: P, join: "mitre" | "round"): FigurePath {
-  const v = Array.from({ length: 6 }, (_, i): P => [c[0] + L * Math.cos((Math.PI / 3) * i), c[1] + L * Math.sin((Math.PI / 3) * i)]);
+function ring(c: P, join: "mitre" | "round", bond = L, width = W): FigurePath {
+  const v = Array.from({ length: 6 }, (_, i): P => [c[0] + bond * Math.cos((Math.PI / 3) * i), c[1] + bond * Math.sin((Math.PI / 3) * i)]);
   const grown = (by: number): P[] => v.map((p) => unit(sub(p, c)).map((x, i) => p[i] + (x * by) / Math.cos(Math.PI / 6)) as P);
-  const [outer, inner] = [grown(W / 2), grown(-W / 2)];
+  const [outer, inner] = [grown(width / 2), grown(-width / 2)];
   const steps = (poly: P[], reverse: boolean): PathStep[] => (reverse ? [...poly].reverse() : poly).map((p, i): PathStep => [i ? "L" : "M", p[0], p[1]]);
   void join;
   return { fill: black, stroke: null, width: 0, d: [...steps(outer, false), ["Z"], ...steps(inner, true), ["Z"]] };
 }
 
-const zig = (n: number, from: P = [100, 200]): P[] => {
+const zig = (n: number, from: P = [100, 200], bond = L): P[] => {
   const out: P[] = [from];
   for (let i = 0; i < n; i++) {
     const [x, y] = out[i];
-    out.push([x + L * Math.cos(Math.PI / 6), y + (i % 2 ? -1 : 1) * L * Math.sin(Math.PI / 6)]);
+    out.push([x + bond * Math.cos(Math.PI / 6), y + (i % 2 ? -1 : 1) * bond * Math.sin(Math.PI / 6)]);
   }
   return out;
 };
@@ -151,5 +151,64 @@ describe("a thin polygon that is no chain of bonds is left as it was", () => {
   it("is an arrow drawn as one polygon, its shaft and its head: no bond of it", () => {
     const arrow = polygon([[100, 100], [160, 100], [160, 96], [172, 101], [160, 106], [160, 102], [100, 102]]);
     expect(shapesOf(figure(arrow)).strokes).toHaveLength(0);
+  });
+});
+
+describe("which chains of bars are bonds: told by the drawing's own bond, not by points", () => {
+  const stroked = (pts: P[], w = 0.6): FigurePath => ({ fill: null, stroke: black, width: w, d: pts.map(([x, y], i): PathStep => [i ? "L" : "M", x, y]) });
+  /** A structure drawn with lines, bonds of `bond` points: what gives the figure its bond length. */
+  const structure = (bond: number, from: P = [50, 50]): FigurePath[] => {
+    const c = zig(5, from, bond);
+    return [stroked(c.slice(0, 4)), stroked(c.slice(3, 6))];
+  };
+
+  it("reads a ring and a chain of bonds ten points long, as small as a journal's, drawn as outlines", () => {
+    // (ring: 17.9 x 20.7 points across - under the twenty a letter was told by - and bonds of 10)
+    const small = readFigure(figure(ring([200, 200], "mitre", 10, 0.8), thick(zig(3, [50, 50], 10), 0.8, "mitre")));
+    expect(small.bonds).toHaveLength(9);
+    expect(Math.round(small.bond)).toBe(10);
+  });
+
+  it("gives up a chain whose bars are several bonds long - a chart's line drawn as one outline - and reads it as before", () => {
+    const chart = thick([[40, 300], [75, 300], [90, 350], [120, 350], [135, 270], [170, 270], [185, 330]], 0.8, "mitre");
+    const read = readFigure(figure(...structure(10), chart));
+    // (only the structure's own bonds: five)
+    expect(read.bonds).toHaveLength(5);
+    expect(shapesOf(figure(chart)).strokes.some((s) => s.bar)).toBe(true);
+  });
+
+  it("gives up a speck: a chain of bars a third of a bond long", () => {
+    const speck = thick([[300, 300], [303, 301.5], [306, 300]], 0.4, "mitre");
+    const bigger = { ...speck, d: speck.d.map((st): PathStep => (st[0] === "Z" ? st : [st[0], st[1] + 0, st[2] + 0])) };
+    const read = readFigure(figure(...structure(10), bigger));
+    expect(read.bonds).toHaveLength(5);
+  });
+
+  it("keeps a chain whose bars are 0.5 to 1.8 bonds long, and gives up one a bar over 1.9 or under 0.45", () => {
+    const keep = (long: number, bonds = 3) => readFigure(figure(...structure(10), thick(zig(bonds, [200, 200], long), Math.min(0.8, 0.07 * long), "mitre"))).bonds.length;
+    expect(keep(10)).toBe(5 + 3);
+    expect(keep(18)).toBe(5 + 3);
+    expect(keep(20)).toBe(5);
+    expect(keep(5, 6)).toBe(5 + 6);
+    expect(keep(4, 8)).toBe(5);
+    // (and a chain under a bond and a half across - three bars of half a bond - is no chain)
+    expect(keep(5)).toBe(5);
+  });
+
+  it("gives up the thin stems of a letter set beside a structure of ten-point bonds, a seven-point W or M drawn as one outline: the polygon stays a shape, the label can be read", () => {
+    // (stems 5 long and 0.4 across: bars all the same, joined at corners, filling the polygon - a chain but for its size: a bond and a half across at the least)
+    const wLetter = thick([[300, 300], [302.5, 305], [305, 300], [307.5, 305], [310, 300]], 0.4, "mitre");
+    const mLetter = thick([[320, 305], [320, 300], [323, 304], [326, 300], [326, 305]], 0.4, "mitre");
+    for (const letter of [wLetter, mLetter]) {
+      const drawn = figure(...structure(10), letter);
+      expect(shapesOf(drawn).strokes.filter((s) => s.bar).length).toBeGreaterThan(1);
+      expect(readFigure(drawn).bonds).toHaveLength(5);
+    }
+  });
+
+  it("gives up a level-slope-level polyline whose bars are four to six bonds long - an energy profile's line", () => {
+    const profile = thick([[200, 300], [250, 300], [300, 340], [350, 340]], 0.8, "mitre");
+    expect(shapesOf(figure(profile)).strokes.filter((s) => s.bar).length).toBeGreaterThan(1);
+    expect(readFigure(figure(...structure(10), profile)).bonds).toHaveLength(5);
   });
 });

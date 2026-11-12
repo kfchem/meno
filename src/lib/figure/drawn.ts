@@ -23,16 +23,16 @@ export type FigureDrawn = { paths: FigurePath[]; letters: FigureLetter[]; pictur
 export type Point = { x: number; y: number };
 
 /** A straight stroke - a line stroked, or a bar filled - from `a` to `b`, `w` thick; a bar's own outline kept, as a letter's stem may be one; its colour (#rrggbbaa), and whether it is stroked dashed. */
-export type Stroke = { a: Point; b: Point; w: number; outline?: Point[]; ink?: string; dash?: true };
+export type Stroke = { a: Point; b: Point; w: number; outline?: Point[]; ink?: string; dash?: true; chain?: number; bar?: true };
 
 /** A filled wedge: its narrow end, the middle of its wide end, and how wide that is; its outline, and its colour. */
-export type Wedge = { tip: Point; base: Point; w: number; outline?: Point[]; ink?: string };
+export type Wedge = { tip: Point; base: Point; w: number; outline?: Point[]; ink?: string; chain?: number };
 
 /** A curve stroked, as points along it: a wavy bond, a ring's circle, an arrow's arc; its colour. */
 export type Curve = { pts: Point[]; closed: boolean; w: number; ink?: string };
 
 /** A filled shape that is none of the above - a letter drawn as its outline, a dot, an arrow's head: its outlines, each closed, a hole within another where the path has one; its colour. */
-export type Blob = { pts: Point[]; parts: Point[][]; box: Box; curved: boolean; ink?: string };
+export type Blob = { pts: Point[]; parts: Point[][]; box: Box; curved: boolean; ink?: string; chain?: number };
 
 /** What a figure's paths make: strokes, wedges, curves and other shapes. */
 export type Shapes = { strokes: Stroke[]; wedges: Wedge[]; curves: Curve[]; blobs: Blob[] };
@@ -253,16 +253,15 @@ function flatTipped(given: Point[]): Wedge | null {
  * How thin a bar is at the most, against its length, to be a bond's line drawn as a filled outline: a line's width is a tenth of a bond or less (a
  * letter's stroke, a fifth and more, is not).
  */
-const BAR_THIN = 0.16;
-/** How long a polygon's box is at the least, in points, to be a chain of bonds and no letter: a ten-point letter is under ten across. */
-const CHAIN_BOX_PT = 20;
+const BAR_THIN = 0.1;
 
 /**
  * A chain or a ring of bonds drawn as ONE filled outline - the thin polygon a drawing program leaves where it draws a chain's lines joined, its corners
  * mitred or rounded, a ring as its outer and its inner outline - read as the bars it is made of: each bond's two long edges, a line's width apart,
  * running opposite ways and over each other for most of their length, are one bar from end to end (its ends where it meets the next bar's line, a
- * mitred corner's two points brought back to the one corner). Only a polygon of two bars or more is a chain; one whose bars do not meet at corners, or whose box is under `CHAIN_BOX_PT`
- * is a letter, one whose bars do not fill it is a shape of its own - a frame, an arrow, a bracket's drawn tick: none. Its bars as strokes, or none.
+ * mitred corner's two points brought back to the one corner). Only a polygon of two bars or more is a chain; one whose bars do not meet at corners
+ * is a letter's stems, one whose bars do not fill it is a shape of its own - a frame, an arrow, a bracket's drawn tick: none. Its bars as strokes, or none.
+ * What a chain of bars is - a drawing's bonds, or a chart's line, a speck, a letter - is told by the drawing's own bond (`outlineChains`, ./read), not here.
  */
 export function barsOfOutline(parts: readonly { pts: Point[]; straight: boolean[]; closed: boolean }[]): Stroke[] | null {
   // (each straight run of each part: a curve's steps - a rounded corner, a rounded end - are no run, and runs along one line are one)
@@ -291,9 +290,6 @@ export function barsOfOutline(parts: readonly { pts: Point[]; straight: boolean[
     }
     if (cur) runs.push(cur);
   }
-  const all = parts.flatMap((p) => p.pts);
-  const box = boxOf(all);
-  if (Math.max(box[2] - box[0], box[3] - box[1]) < CHAIN_BOX_PT) return null;
   const longest = Math.max(0, ...runs.map((r) => r.len));
   const long = runs.filter((r) => r.len >= 0.25 * longest);
   // (the pairs: two runs running opposite ways, a line's width apart, over each other for most of the shorter)
@@ -357,7 +353,19 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
   const out: Shapes = { strokes: [], wedges: [], curves: [], blobs: [] };
   // (each filled shape read as a line or as a shape of no kind, and its corners)
   const cornersOf = new Map<object, Point[]>();
+  // (what a chain's polygon makes besides its bars - the shapes it was read as before - carries the chain's number, so that the reader can have
+  // either the bars or those, as the chain proves to be bonds or not: `outlineChains`)
+  let chains = 0;
+  let open: { id: number; s: number; b: number; w: number } | null = null;
+  const close = () => {
+    if (!open) return;
+    for (const s of out.strokes.slice(open.s)) if (!s.bar) s.chain = open.id;
+    for (const b of out.blobs.slice(open.b)) b.chain = open.id;
+    for (const w of out.wedges.slice(open.w)) w.chain = open.id;
+    open = null;
+  };
   for (const path of drawn.paths) {
+    close();
     const parts = partsOf(path.d);
     const filled = !blank(path.fill);
     const stroked = !blank(path.stroke) && path.width >= 0;
@@ -366,8 +374,9 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
       // (a chain or a ring of bonds drawn as one filled outline: the bars it is made of, each a line)
       const bars = barsOfOutline(parts);
       if (bars) {
-        for (const b of bars) out.strokes.push({ ...b, ink });
-        continue;
+        const id = ++chains;
+        for (const b of bars) out.strokes.push({ ...b, ink, chain: id, bar: true });
+        open = { id, s: out.strokes.length, b: out.blobs.length, w: out.wedges.length };
       }
       // (a letter drawn as its outline - several parts in one path, curved, a hole in some - is a blob whole)
       const curved = parts.some((p) => p.straight.some((s) => !s));
@@ -408,6 +417,7 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
       }
     }
   }
+  close();
   // (a line drawn again over a longer one - a joint drawn as short pieces along the bonds that meet there, as some drawings
   // have one - is that line's, not a line of its own)
   out.strokes = withoutDrawnOver(out.strokes);

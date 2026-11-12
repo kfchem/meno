@@ -1260,9 +1260,14 @@ it where it lies out of view.
     shorter, are one bar, its ends where it meets the next bar's line (a
     mitred corner's two points brought back to the one corner). A polygon is a
     chain only of two bars or more that meet at corners, one fewer than they are
-    (a ring as many), whose box is at least 20 points across and whose bars fill
-    it; a letter drawn as an outline (under ten across), the stems of a big letter
-    (they meet at none), a frame, an arrow of one polygon, are none;
+    (a ring as many), and whose bars fill it; which chains are the drawing's
+    bonds is then told by the drawing's own bond (that of the lines it has
+    besides, or of the bars themselves where it has none: `outlineChains`,
+    lib/figure/read): a chain a bond and a half across at the least, every bar
+    from 0.45 to 1.9 bonds long. A chart's line (bars several bonds long), a
+    speck, a letter's stems (under a bond and a half across), a frame, an arrow
+    of one polygon, a big letter's stems (they meet at no corner) are none, and
+    the polygon is read as it was before;
   - short strokes side by side across a line, evenly spaced - a
     twenty-fifth of a bond apart or more, or two and a half of their
     widths where a long bond's many lines are set close - are a bond
