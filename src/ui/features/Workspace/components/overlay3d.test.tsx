@@ -121,8 +121,11 @@ describe("a molecule's other conformers drawn over it", () => {
     await o.frames(3);
     expect(laid).not.toHaveBeenCalled();
     expect(o.mesh().count).toBe(0);
+    // (nor room made for them: one instance's)
+    expect(o.mesh().instanceMatrix.array.length).toBe(16);
     // (and, shown then, as the frames are now)
     await o.redraw(ethanol(200), true);
     expect(o.mesh().count).toBe(2 * 199);
+    expect(o.mesh().instanceMatrix.array.length).toBe(16 * 2 * 199);
   });
 });

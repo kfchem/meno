@@ -133,15 +133,19 @@ describe("the shaders of molecules in 3D, made ready as the page starts", () => 
   });
 
   it("take a compile that fails as nothing: the page goes on, its shaders made when first drawn", async () => {
-    // (the failed compile handled where it is asked for: nothing left unhandled)
-    const failed = Promise.reject(new Error("no parallel compiling here"));
-    const handled = vi.spyOn(failed, "catch");
-    const p = await page(vi.fn(() => failed));
+    // (the failed compile handled where it is asked for, its only handler: nothing left unhandled)
+    const handled: ReturnType<typeof vi.fn>[] = [];
+    const p = await page(
+      vi.fn(() => {
+        const failed = Promise.reject(new Error("no parallel compiling here"));
+        handled.push(vi.spyOn(failed, "catch") as unknown as ReturnType<typeof vi.fn>);
+        return failed;
+      }),
+    );
     await p.idle.run();
     await p.frame.run();
     expect(p.compileAsync).toHaveBeenCalledTimes(1);
-    expect(handled).toHaveBeenCalledTimes(1);
-    await failed.catch(() => undefined);
+    expect(handled[0]).toHaveBeenCalledTimes(1);
   });
 
   it("are made after a short wait where the browser tells no idle time", async () => {
