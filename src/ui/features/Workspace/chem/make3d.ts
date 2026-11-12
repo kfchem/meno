@@ -16,7 +16,8 @@ import type { OptionValues } from "../../../../lib/options";
 import { conformersSoughtOf, MOST_CONFORMERS, RING_CONFORMERS, roundsAsked, soughtNumber } from "../../../../lib/chem/conformersSought";
 import { inRounds, roundsSaid, SEARCH_BUDGET_MS } from "./conformerRounds";
 import { roundsJudge } from "./roundsJudge";
-import { WITHIN_3D, type ChemistrySettings } from "../../../../lib/settings/appSettings";
+import { WITHIN_3D, type CalculationSettings, type ChemistrySettings } from "../../../../lib/settings/appSettings";
+import { threadsOf } from "../../../../lib/jobs";
 import { chemMolblock, isElementSymbol, molIndex } from "../../../../lib/roles/molblock";
 import { readMolfile } from "../../../../lib/chem/ctfile";
 import { COORDINATION_BOND } from "../../../../lib/chem/molecule";
@@ -531,6 +532,25 @@ export function rowFrom(items: Turned[], at: { x: number; y: number }): { x: num
  */
 export function pageCount(block: Pick<Block, "molblock">, chosen: Pick<ChemistrySettings, "sought3d" | "count3d">): number | null {
   return soughtNumber({ sought: chosen.sought3d ?? "needed", count: chosen.count3d ?? RING_CONFORMERS }, () => conformersSoughtOf(block.molblock));
+}
+
+/**
+ * A block's conformers as the page asks for them, from Settings: how many to
+ * try (Chemistry, `pageCount`) and the threads the search may use
+ * (Calculations, `threadsOf`) - the one place the page's own searches (the 3D
+ * structure made from a drawing, the atom map's) take both, so that neither
+ * can be asked without them.
+ */
+export function conformersOnPage(
+  chem: ChemClient,
+  stereo: ChemClient,
+  block: Block,
+  which: "one" | "all",
+  options: OptionValues,
+  settings: { chemistry: ChemistrySettings; calculations: Pick<CalculationSettings, "cores" | "coresAll"> },
+  rounds: PageRounds | null = null,
+): Promise<Conformers[]> {
+  return conformersOf(chem, stereo, block, which, options, pageCount(block, settings.chemistry), rounds, threadsOf(settings.calculations));
 }
 
 /** How the page's search is asked in rounds (chem/conformerRounds): its window (kcal/mol), its first round and the most it tries. */

@@ -5,12 +5,11 @@ import { roleOptionsRole } from "../../../../lib/plugins/roles";
 import { chemWorker, rolePlugin } from "../../../../lib/roles/worker";
 import { stopWorker } from "../../../../lib/plugins/process";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
-import { threadsOf } from "../../../../lib/jobs";
 import { useNotices } from "../../../notices";
 import type { EditorState, Model } from "../store/types";
 import { linkOf, signatureOf } from "../utils/drawnLink";
 import { keptMap, noMapSaid, reactionOf, type Side3D } from "./atomMap";
-import { bareAtomsOf, blocksOf, conformersOf, moleculeOf, pageCount } from "./make3d";
+import { bareAtomsOf, blocksOf, conformersOnPage, moleculeOf } from "./make3d";
 import { mapAtoms, MappingStopped } from "./mapAtoms";
 
 type Store = { getState: () => EditorState };
@@ -60,7 +59,7 @@ export function useAtomMaps(store: Store, setChemError: (e: string | null) => vo
       chem ??= await chemWorker("conformers");
       const declared = rolePlugin("conformers")?.roleOptions.conformers ?? [];
       const options = valuesOf(declared, useAppSettings.getState().options[roleOptionsRole("conformers")]);
-      const [c] = await conformersOf(chem, await chemWorker("stereoisomers"), block, "one", options, pageCount(block, useAppSettings.getState().chemistry), null, threadsOf(useAppSettings.getState().calculations));
+      const [c] = await conformersOnPage(chem, await chemWorker("stereoisomers"), block, "one", options, useAppSettings.getState());
       if (!c) throw new Error("A structure of the reaction has no 3D structure.");
       const m = moleculeOf(c, block);
       out.push({ molecule: { atoms: m.atoms, bonds: m.bonds }, drawnFrom: m.drawnFrom ?? [] });
