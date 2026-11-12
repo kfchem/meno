@@ -435,11 +435,10 @@ whole, and is what RDKit is asked about; one not known is text. Ar is
 argon's symbol as well as aryl's (GR-9.2): typed alone, it is argon; drawn
 with a bond, which argon never has, it is aryl's - written as a label, a
 star atom with its alias, as is any element that forms no bonds (He, Ne)
-drawn with one. Y is yttrium's symbol and a variable's (the maintainer,
-2026-10-17; the charge CHEM's, 2026-11-13): alone, with several bonds, or with a
-charge (a variable carries none), it is yttrium; with one bond, in a
-substituent's place, it stands for a group as X and Z do, and a file is
-written with it as a label, a star atom with its alias. The groups
+drawn with one. Y is yttrium's symbol and a variable's: with one bond and no
+charge, in a substituent's place, it stands for a group as X and Z do, and a
+file is written with it as a label, a star atom with its alias; alone, with
+several bonds, or with a charge (a variable carries none), it is yttrium. The groups
 named as an element is - Ac (acetyl), Pr (propyl), Ts (tosyl), Fm
 (fluorenylmethyl), At (HOAt's) - are the groups (the maintainer,
 2026-10-10): typed, or written by Clean-up, the atom holds the group

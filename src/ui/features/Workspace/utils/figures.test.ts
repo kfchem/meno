@@ -738,6 +738,30 @@ describe("a figure's Ar and Y: a variable's name that is an element's symbol too
     expect(charged?.charge).toBe(1);
     expect(charged?.unsure?.said.some((t) => t.startsWith("Taken as a variable")) ?? false).toBe(false);
     expect(symbolsOf(chainTo("Y+"))).toContain("Y");
+    // (a charge drawn as Meno draws one, a "+" in a ring of small pieces by the label: the same, the charge read from the ring)
+    const ring = (cx: number, cy: number): FigurePath[] => [
+      ...Array.from({ length: 40 }, (_, k): FigurePath => {
+        const t = (k / 40) * 2 * Math.PI;
+        const [x, y] = [cx + 2.5 * Math.cos(t), cy + 2.5 * Math.sin(t)];
+        return { fill: "#000000ff", stroke: null, width: 0, d: [["M", x - 0.25, y - 0.25], ["L", x + 0.25, y - 0.25], ["L", x + 0.25, y + 0.25], ["L", x - 0.25, y + 0.25], ["Z"]] };
+      }),
+      stroke([cx - 1.5, cy], [cx + 1.5, cy]),
+      stroke([cx, cy - 1.5], [cx, cy + 1.5]),
+    ];
+    const bond = chainTo("Y");
+    const yPlace = bond.atoms.find((x) => x.el === "Y")!;
+    expect(yPlace).toBeDefined();
+    {
+      const a: P = [100, 200];
+      const b = step(a, 30);
+      const c = step(b, -30);
+      const o = step(c, 30);
+      const ringed = structureFrom({ paths: [stroke(a, b, c), stroke(c, [c[0] + (o[0] - c[0]) * 0.55, c[1] + (o[1] - c[1]) * 0.55]), ...ring(o[0] + 6, o[1] - 7)], letters: letters("Y", o), pictures: [] }, SHA, 1) as Model;
+      const ion = ringed.atoms.find((x) => x.el === "Y");
+      expect(ion?.charge).toBe(1);
+      expect(ion?.unsure).toBeUndefined();
+      expect(symbolsOf(ringed)).toContain("Y");
+    }
     const two = chainTo("Y", 2);
     expect(two.atoms.find((x) => x.el === "Y")?.unsure).toBeUndefined();
     expect(symbolsOf(two)).toContain("Y");
