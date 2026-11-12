@@ -22,6 +22,7 @@ describe("the interface's colours in code and in CSS (docs/LOOK.md, Colours)", (
     expect(COLORS.ink).toBe(token("gh-black"));
     expect(COLORS.quiet).toBe(token("gh-gray"));
     expect(COLORS.hairline).toBe(token("gh-line"));
+    expect(COLORS.ground).toBe(token("gh-base"));
     expect(COLORS.lightBase).toBe(token("accel-lightbase"));
   });
 });
