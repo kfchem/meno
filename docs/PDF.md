@@ -702,6 +702,7 @@ What it showed:
 Built:
 - **Putting a PDF on the page.**
   - A PDF opened (*Open…*) goes onto the page of the workspace in front, at the middle of the view, or onto a canvas of its own where none is in front.
+    - That canvas is made for the PDFs, and they are where its document starts: it is not changed, so it is not marked unsaved and closing it asks nothing, until anything on it is changed. Save suggests the first PDF's name with `.meno`. A PDF added to a workspace that is open is a change, as anything put on its page is.
   - A PDF dropped goes where it is dropped.
   - The view eases to take it in where it was not all in view.
 - **Holding and saving it.**

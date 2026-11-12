@@ -23,3 +23,12 @@ export function setPdfTaker(id: string, take: (pdfs: OpenedPdf[]) => void): () =
 export function pdfTakerOf(id: string): ((pdfs: OpenedPdf[]) => void) | undefined {
   return takers.get(id);
 }
+
+/**
+ * PDFs opened where no workspace takes them (App `openPdfs`): a workspace tab of its own, made for them - named for the first, the
+ * PDFs on its page as it is made. They are where its document starts: nothing to undo, nothing unsaved, no ask as it is closed,
+ * until the chemist changes anything. Save suggests the first PDF's name with `.meno` (it is the tab's `filename`, as an opened file's).
+ */
+export function openedPdfs(pdfs: OpenedPdf[]): { kind: "workspace"; label: string; data: { pdfs: OpenedPdf[]; filename: string } } {
+  return { kind: "workspace", label: pdfs[0].name, data: { pdfs, filename: pdfs[0].name } };
+}
