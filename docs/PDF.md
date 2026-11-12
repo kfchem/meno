@@ -1240,6 +1240,18 @@ it where it lies out of view.
     and one cut back so far it is wider than long - three corners, two
     sides from its tip as long, its wide end longer - narrow at that tip,
     or, its three sides near as long, at the one corner a line ends at;
+  - a chain or a ring of bonds drawn as ONE filled outline - the thin polygon
+    a program leaves where it draws a chain's lines joined, its corners mitred
+    or rounded, a ring as its outer outline and its inner one the other way
+    round - is read as the bars it is made of (`barsOfOutline`, lib/figure/drawn):
+    each bond's two long edges, a line's width apart (a sixth of their length at
+    the most), running opposite ways and over each other for most of the
+    shorter, are one bar, its ends where it meets the next bar's line (a
+    mitred corner's two points brought back to the one corner). A polygon is a
+    chain only of two bars or more that meet at corners, one fewer than they are
+    (a ring as many), whose box is at least 20 points across and whose bars fill
+    it; a letter drawn as an outline (under ten across), the stems of a big letter
+    (they meet at none), a frame, an arrow of one polygon, are none;
   - short strokes side by side across a line, evenly spaced - a
     twenty-fifth of a bond apart or more, or two and a half of their
     widths where a long bond's many lines are set close - are a bond

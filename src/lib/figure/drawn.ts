@@ -249,6 +249,109 @@ function flatTipped(given: Point[]): Wedge | null {
   return { tip, base, w: across(wide), outline: given };
 }
 
+/**
+ * How thin a bar is at the most, against its length, to be a bond's line drawn as a filled outline: a line's width is a tenth of a bond or less (a
+ * letter's stroke, a fifth and more, is not).
+ */
+const BAR_THIN = 0.16;
+/** How long a polygon's box is at the least, in points, to be a chain of bonds and no letter: a ten-point letter is under ten across. */
+const CHAIN_BOX_PT = 20;
+
+/**
+ * A chain or a ring of bonds drawn as ONE filled outline - the thin polygon a drawing program leaves where it draws a chain's lines joined, its corners
+ * mitred or rounded, a ring as its outer and its inner outline - read as the bars it is made of: each bond's two long edges, a line's width apart,
+ * running opposite ways and over each other for most of their length, are one bar from end to end (its ends where it meets the next bar's line, a
+ * mitred corner's two points brought back to the one corner). Only a polygon of two bars or more is a chain; one whose bars do not meet at corners, or whose box is under `CHAIN_BOX_PT`
+ * is a letter, one whose bars do not fill it is a shape of its own - a frame, an arrow, a bracket's drawn tick: none. Its bars as strokes, or none.
+ */
+export function barsOfOutline(parts: readonly { pts: Point[]; straight: boolean[]; closed: boolean }[]): Stroke[] | null {
+  // (each straight run of each part: a curve's steps - a rounded corner, a rounded end - are no run, and runs along one line are one)
+  type Run = { a: Point; b: Point; len: number; u: Point };
+  const runs: Run[] = [];
+  for (const part of parts) {
+    const n = part.pts.length;
+    const steps = part.closed || dist(part.pts[0], part.pts[n - 1]) < 1e-3 ? n : n - 1;
+    let cur: Run | null = null;
+    for (let i = 0; i < steps; i++) {
+      const [p, q] = [part.pts[i], part.pts[(i + 1) % n]];
+      const len = dist(p, q);
+      const straight = i < part.straight.length ? part.straight[i] : true;
+      if (len < 1e-3 || !straight) {
+        if (cur) runs.push(cur);
+        cur = null;
+        continue;
+      }
+      const u = { x: (q.x - p.x) / len, y: (q.y - p.y) / len };
+      if (cur && Math.abs(cur.u.x * u.y - cur.u.y * u.x) < Math.sin((1.5 * Math.PI) / 180) && cur.u.x * u.x + cur.u.y * u.y > 0) {
+        cur = { a: cur.a, b: q, len: dist(cur.a, q), u };
+      } else {
+        if (cur) runs.push(cur);
+        cur = { a: p, b: q, len, u };
+      }
+    }
+    if (cur) runs.push(cur);
+  }
+  const all = parts.flatMap((p) => p.pts);
+  const box = boxOf(all);
+  if (Math.max(box[2] - box[0], box[3] - box[1]) < CHAIN_BOX_PT) return null;
+  const longest = Math.max(0, ...runs.map((r) => r.len));
+  const long = runs.filter((r) => r.len >= 0.25 * longest);
+  // (the pairs: two runs running opposite ways, a line's width apart, over each other for most of the shorter)
+  const across = (r: Run, p: Point) => (p.x - r.a.x) * -r.u.y + (p.y - r.a.y) * r.u.x;
+  const along = (r: Run, p: Point) => (p.x - r.a.x) * r.u.x + (p.y - r.a.y) * r.u.y;
+  const partner = new Map<Run, { run: Run; gap: number }>();
+  for (const r of long) {
+    for (const t of long) {
+      if (t === r || r.u.x * t.u.x + r.u.y * t.u.y > -0.99) continue;
+      const gap = Math.abs(across(r, t.a) + across(r, t.b)) / 2;
+      const spread = Math.abs(across(r, t.a) - across(r, t.b));
+      if (gap < 1e-3 || gap > BAR_THIN * Math.min(r.len, t.len) || spread > 0.25 * gap + 0.05) continue;
+      const [lo, hi] = [Math.max(0, Math.min(along(r, t.a), along(r, t.b))), Math.min(r.len, Math.max(along(r, t.a), along(r, t.b)))];
+      if (hi - lo < 0.7 * Math.min(r.len, t.len)) continue;
+      if (!partner.has(r) || gap < partner.get(r)!.gap) partner.set(r, { run: t, gap });
+    }
+  }
+  const bars: { a: Point; b: Point; w: number }[] = [];
+  const taken = new Set<Run>();
+  for (const [r, { run: t, gap }] of partner) {
+    if (taken.has(r) || partner.get(t)?.run !== r) continue;
+    taken.add(r).add(t);
+    // (the line between them, over the length they share)
+    const [lo, hi] = [Math.max(0, Math.min(along(r, t.a), along(r, t.b))), Math.min(r.len, Math.max(along(r, t.a), along(r, t.b)))];
+    const side = (across(r, t.a) + across(r, t.b)) / 4;
+    const at = (x: number): Point => ({ x: r.a.x + r.u.x * x + -r.u.y * side, y: r.a.y + r.u.y * x + r.u.x * side });
+    bars.push({ a: at(lo), b: at(hi), w: gap });
+  }
+  if (bars.length < 2) return null;
+  // (a chain's corners: where two bars' lines cross near their ends, the one point - a mitred corner's two points brought back to it)
+  const dir = (b: { a: Point; b: Point }) => ({ x: (b.b.x - b.a.x) / dist(b.a, b.b), y: (b.b.y - b.a.y) / dist(b.a, b.b) });
+  let corners = 0;
+  for (let i = 0; i < bars.length; i++) {
+    for (let j = i + 1; j < bars.length; j++) {
+      const [p, q] = [bars[i], bars[j]];
+      const [u, v] = [dir(p), dir(q)];
+      const den = u.x * v.y - u.y * v.x;
+      if (Math.abs(den) < Math.sin((12 * Math.PI) / 180)) continue;
+      const t = ((q.a.x - p.a.x) * v.y - (q.a.y - p.a.y) * v.x) / den;
+      const hit = { x: p.a.x + u.x * t, y: p.a.y + u.y * t };
+      const reach = 2 * Math.max(p.w, q.w) + 0.5;
+      const endP = dist(hit, p.a) < dist(hit, p.b) ? "a" : "b";
+      const endQ = dist(hit, q.a) < dist(hit, q.b) ? "a" : "b";
+      if (dist(hit, p[endP]) > reach || dist(hit, q[endQ]) > reach) continue;
+      p[endP] = hit;
+      q[endQ] = hit;
+      corners++;
+    }
+  }
+  // (a chain: its bars meet at corners, one fewer than they are - or as many, a ring; two stems of a big letter meet at none)
+  if (corners < bars.length - 1) return null;
+  // (the bars fill the polygon: their areas the polygon's, its corners and ends besides - else it is a shape of its own)
+  const polygon = Math.abs(parts.reduce((t, p) => t + area(p.pts), 0));
+  const barred = bars.reduce((t, b) => t + dist(b.a, b.b) * b.w, 0);
+  if (polygon <= 0 || barred < 0.6 * polygon || barred > 1.25 * polygon) return null;
+  return bars.map((b) => ({ a: b.a, b: b.b, w: b.w }));
+}
+
 /** The shapes a figure's paths make: what is drawn in paper's colour left out. */
 export function shapesOf(drawn: FigureDrawn): Shapes {
   const out: Shapes = { strokes: [], wedges: [], curves: [], blobs: [] };
@@ -260,6 +363,12 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
     const stroked = !blank(path.stroke) && path.width >= 0;
     if (filled) {
       const ink = path.fill!;
+      // (a chain or a ring of bonds drawn as one filled outline: the bars it is made of, each a line)
+      const bars = barsOfOutline(parts);
+      if (bars) {
+        for (const b of bars) out.strokes.push({ ...b, ink });
+        continue;
+      }
       // (a letter drawn as its outline - several parts in one path, curved, a hole in some - is a blob whole)
       const curved = parts.some((p) => p.straight.some((s) => !s));
       if (parts.length > 1 && curved) {
