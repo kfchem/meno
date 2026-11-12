@@ -72,14 +72,19 @@ const BAND = 2 * NAME_DOWN;
 /** The widest a set's name runs zoomed out, in page px: its frame's width less its tab's inset either side - cut with an ellipsis, so that it never lies beyond its frame. */
 const farWidest = (box: Frame): number => Math.max(0, Math.abs(box.x1 - box.x0) / PAGE_PX - (2 * TAB_INSET) / PAGE_PX);
 
+/** How far clear of its molecules a set's name stands, zoomed out, in screen px: the band's lower edge is where they begin. */
+export const NAME_GAP_PX = 3;
+
 /**
- * Where a set's name's middle is, zoomed out, in the page's units: in its tab's band where it is no higher than the band; larger, it rises - its
- * lower edge from the band's lower edge, the whole of the band, up to its frame's top where it is twice as high as the band - so that
- * it never lies down over what the frame holds, and, as large on the screen as it is, wholly above its frame when the page is far off.
+ * Where a set's name's middle is, zoomed out, in the page's units: in its tab's band, in the middle of it, where there is room for it with
+ * `NAME_GAP_PX` clear below it; larger, it rises - its lower edge `NAME_GAP_PX` above the band's lower edge, then up with its height, the whole of the band,
+ * to its frame's top where it is twice as high as the band - so that it never lies down over, or touches, what the frame holds, and, as large on the
+ * screen as it is, wholly above its frame when the page is far off.
  */
 const farNameY = (box: Frame, scale: number): number => {
   const size = pagePx(onPage(NAME_PX, scale));
-  const lower = box.y1 - BAND * Math.min(1, Math.max(0, 2 - size / BAND));
+  const gap = pagePx(onPage(NAME_GAP_PX, scale));
+  const lower = box.y1 - BAND * Math.min(1, Math.max(0, 2 - size / BAND)) + gap;
   return Math.max(tabStart(box).y, lower + size / 2);
 };
 
