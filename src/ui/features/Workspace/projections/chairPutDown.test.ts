@@ -64,3 +64,32 @@ describe("a chair fused, flipped and drawn flat on a page", () => {
     expect(doc.history().undoDepth).toBe(before + 1);
   });
 });
+
+describe("a Newman pair put down from Quick Add", () => {
+  it("is two carbons at one place, the front nearer, where Quick Add was opened, and is read back as a pair", async () => {
+    const { newmanDrawing, newmansIn } = await import("./newman");
+    const at = { x: 12, y: -7 };
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    store.getState().pasteModel(centredAt(newmanDrawing({ at, firstId: 1, firstBondId: 1 }), at));
+    const m = doc.getState().model;
+    expect(m.atoms).toHaveLength(2);
+    expect(m.atoms.every((a) => a.x === at.x && a.y === at.y && a.el === "C" && a.stereoCentre === true)).toBe(true);
+    expect(m.atoms[0].z!).toBeGreaterThan(m.atoms[1].z!);
+    expect(newmansIn(m)).toHaveLength(1);
+  });
+
+  it("refuses a label on either atom: they are drawn at one place and have no room for one", async () => {
+    const { newmanDrawing } = await import("./newman");
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    store.getState().pasteModel(centredAt(newmanDrawing({ at: { x: 0, y: 0 }, firstId: 1, firstBondId: 1 }), { x: 0, y: 0 }));
+    const [front, back] = doc.getState().model.atoms;
+    store.getState().beginLabelEdit(front.id);
+    expect(store.getState().labelEdit.active).toBe(false);
+    store.getState().beginLabelEdit(back.id);
+    expect(store.getState().labelEdit.active).toBe(false);
+  });
+});

@@ -1,3 +1,5 @@
+import { newmansIn } from "../../projections/newman";
+import { useNotices } from "../../../../notices";
 import type { ShowBox } from "../../utils/viewShow";
 import type { DocumentStore } from "../../../../../lib/doc";
 import { gestureStep } from "../../../../../lib/doc/document";
@@ -57,6 +59,11 @@ export function createUiSlice(
         const base = prev.model.atoms.find((a) => a.id === atomId);
         // (an atom no longer drawn has no label to write)
         if (!base) return prev;
+        // (the two atoms of a Newman pair are drawn at one place: neither has room for a label of its own, and both are carbon - said)
+        if (newmansIn(prev.model).some((p) => p.front === atomId || p.back === atomId)) {
+          useNotices.getState().show({ id: "newman-label", title: "Newman projection", text: "The two atoms of a Newman projection are drawn at one place and have no room for a label of their own: both are carbon." });
+          return prev;
+        }
         // (with its charge and mass number, as they are typed: N+, 13C - or the letter it is begun with, as typed)
         const val = initial.length ? initial : base ? labelTextOf(base) : "";
         return {

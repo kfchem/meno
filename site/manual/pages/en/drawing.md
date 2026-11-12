@@ -43,6 +43,8 @@ Double-click empty space and open *Projections*, then choose *Chair*: a cyclohex
 
 Beside *Chair*, *Projections* has a Haworth ring of six atoms (a pyranose) and one of five (a furanose), seen from slightly above with the ring oxygen behind and the front edge bold. A bond led out of a ring atom goes straight up or straight down the page, and the tip says which.
 
+*Projections* also has a Newman projection: two carbons seen end-on, drawn at one place with a circle round them. The front carbon's bonds meet at the circle's centre; the back carbon's start at its rim. A bond led out of either carbon goes to one of its three places, and the tip says *front* or *back*. Drag a bond's end round the circle to turn all three groups of its carbon together; the compound is the same. Neither carbon can be given a label.
+
 ## Labels {#labels}
 
 Point at an atom and type: O, NH2, OMe, Ph. The label is written where it stands, and kept when the pointer moves on. To change a label, choose *Edit label* on the atom's right-click menu.

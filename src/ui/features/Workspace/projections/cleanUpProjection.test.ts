@@ -4,6 +4,7 @@ import { identityOfDrawn } from "../chem/identityOf";
 import { createWorkspaceDocument } from "../document";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import { chairDrawing, seenPlaces } from "./chair";
+import { newmanDrawing } from "./newman";
 
 /** A trans-1,2-dimethylcyclohexane drawn as a chair, on a page. */
 function page() {
@@ -40,5 +41,21 @@ describe("Clean-up and a projection", () => {
     const now = doc.getState().model;
     expect(now.atoms.every((a) => a.z == null)).toBe(true);
     expect(identityOfDrawn(now).text).toBe(was);
+  });
+
+  it("leaves a Newman pair as it is drawn, and says so", async () => {
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const d = newmanDrawing({ at: { x: 0, y: 0 }, firstId: 1, firstBondId: 1 });
+    store.getState().pasteModel({
+      atoms: [...d.atoms, { id: 3, el: "C", r: 0.9, x: 0, y: 1.5 }, { id: 4, el: "C", r: 0.9, x: 1.3, y: 0.75 }],
+      bonds: [...d.bonds, { id: 10, a: 1, b: 3, order: 1 }, { id: 11, a: 2, b: 4, order: 1 }],
+    });
+    const was = doc.getState().model;
+    const error = await cleanUp(store, null).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(CleanUpRefused);
+    expect((error as Error).message).toMatch(/projection, drawn as it is/);
+    expect(doc.getState().model).toBe(was);
   });
 });
