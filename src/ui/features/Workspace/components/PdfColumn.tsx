@@ -21,6 +21,7 @@
 import * as THREE from "three";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal, useFrame, useThree } from "@react-three/fiber";
+import { startProbe, timed, noteEntry } from "../../../../lib/core/frameProbe";
 import { useEditor, useEditorStore } from "../store";
 import type { EditorState, PdfFlight, PdfItem, PictureFlight as PictureFlightState, WordsFlight as WordsFlightState, WorkspaceText } from "../store/types";
 import { pdfRoom, pointOf, scaleOf, shownSheet, topSheet } from "../../../../lib/pdf/layout";
@@ -285,6 +286,19 @@ function ColumnPass({
   // (and its scale, when that last changed, and when tiles were last asked for as it went)
   const clock = useRef({ last: performance.now(), still: 0, levels: new Map<number, number>(), top: 0, way: 0, scale: 0, scaledAt: 0, movingAsked: 0 });
   useFrame(({ gl: r, scene: page, camera }) => {
+    startProbe();
+    const rr = r as unknown as { __probed?: boolean; render: (...a: unknown[]) => void; info: { memory: { textures: number } } };
+    if (!rr.__probed) {
+      rr.__probed = true;
+      const orig = rr.render.bind(rr);
+      rr.render = (...a: unknown[]) => {
+        const before = rr.info.memory.textures;
+        const t0 = performance.now();
+        orig(...a);
+        const ms = performance.now() - t0;
+        if (ms >= 3) noteEntry(`gl.render(+${rr.info.memory.textures - before} tex)`, ms);
+      };
+    }
     const now = performance.now();
     const c = clock.current;
     const dt = Math.min(0.05, (now - c.last) / 1000);
@@ -319,7 +333,7 @@ function ColumnPass({
         else window.setTimeout(() => invalidate(), SETTLE_MS + 20);
       }
       // (a tile come shown this frame, one a frame)
-      pics.reveal(1, (tex) => r.initTexture(tex));
+      timed("column reveal", () => pics.reveal(1, (tex) => timed(`initTexture ${(tex.image as { width?: number; height?: number })?.width}x${(tex.image as { width?: number; height?: number })?.height}`, () => r.initTexture(tex), 0)));
       if (pics.fading(now)) redraw();
       // (a place shown marked, fading)
       if (st.pdfFlash && now - st.pdfFlash.start < FLASH_MS + 80) redraw();

@@ -28,6 +28,7 @@ import { shownUnbroken } from "../../../../lib/pdf/make";
 import * as THREE from "three";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
+import { timed } from "../../../../lib/core/frameProbe";
 import { Text } from "@react-three/drei";
 import { pageAt } from "../utils/page";
 import { setViewGoal } from "./viewGoal";
@@ -295,7 +296,7 @@ export default function Pdfs2D() {
       if (m.held && heldShows(m.held, now)) animating = true;
     }
     // (a tile come shown this frame - one a frame, so that none waits on many put on the graphics card at once)
-    pics.reveal(1, (tex) => gl.initTexture(tex));
+    timed("page reveal", () => pics.reveal(1, (tex) => timed(`initTexture ${(tex.image as { width?: number; height?: number })?.width}x${(tex.image as { width?: number; height?: number })?.height}`, () => gl.initTexture(tex), 0)));
     // (the tiles' fading in, and the motions, ask for frames while they last)
     const fading = pics.fading(now);
     // (what moves is worked out as it is drawn: drawn again each frame while it moves)

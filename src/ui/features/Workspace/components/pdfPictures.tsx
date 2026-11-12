@@ -10,6 +10,7 @@
  * its tiles over it, its edge a hairline; lifted, a little larger, with a
  * soft shadow under it.
  */
+import { timed } from "../../../../lib/core/frameProbe";
 import * as THREE from "three";
 import { BAND_OF_DISC, DISC_OF_BOND } from "./selectionShade";
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
@@ -94,6 +95,7 @@ export type Tile = { key: string; pic: Pic; i: number; j: number; level: number;
 
 function textureOf(d: DrawnPart, mip: boolean): THREE.Texture {
   const tex = new THREE.Texture(d.bitmap);
+  void 0;
   // (taken apart upside down already: lib/pdf/reader)
   tex.flipY = false;
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -188,7 +190,7 @@ export class Pictures {
         .then((d) => {
           if (!d) return void this.previews.delete(key);
           this.previews.set(key, { tex: textureOf(d, true), born: performance.now() });
-          this.came();
+          timed(`preview came (${d.w}x${d.h})`, () => this.came(), 0);
         })
         .catch(() => this.previews.delete(key));
     }

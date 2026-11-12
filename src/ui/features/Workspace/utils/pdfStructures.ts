@@ -7,6 +7,7 @@
  */
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import type { Box } from "../../../../lib/figure/drawn";
+import { timed } from "../../../../lib/core/frameProbe";
 import { whenCalm } from "../../../../lib/core/calm";
 import { figuresHad, figuresOn, objectsHad } from "../../../../lib/pdf/figures";
 import type { PdfStructurePick } from "../store/types";
@@ -66,8 +67,8 @@ export function figureStructuresHad(sha256: string, page: number, figures: reado
       .then((figure) => {
         had.set(key, figure);
         // (its compounds' numbers, for the PDF's index of them: ./compoundIndex)
-        labelsRead(sha256, page, figures[k], figure.labels);
-        came();
+        timed("labelsRead", () => labelsRead(sha256, page, figures[k], figure.labels), 0);
+        timed("figure came()", () => came(), 0);
         for (const c of told.get(key) ?? []) c();
         told.delete(key);
         tell(key, figure);

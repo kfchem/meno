@@ -13,6 +13,7 @@
  */
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { whenCalm } from "../core/calm";
+import { timed } from "../core/frameProbe";
 import { textOf, type PageText } from "./text";
 
 /** A box on a page, in points from its top left: left, top, right, bottom. */
@@ -77,7 +78,7 @@ export async function figuresOn(sha256: string, page: number, ahead = false): Pr
       hurry.set(key, done);
       whenCalm(done);
     }).finally(() => hurry.delete(key));
-  const figures = figuresOf(objects, text ? (b) => wordsIn(text, b) : undefined);
+  const figures = timed(`figuresOf p${page}`, () => figuresOf(objects, text ? (b) => wordsIn(text, b) : undefined), 0);
   objectsKept.set(key, objects);
   had.set(key, figures);
   return figures;

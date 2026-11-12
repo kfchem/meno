@@ -6,6 +6,7 @@
  * another (`urgent` or not). Where there are no workers - tests - it is read
  * here.
  */
+import { timed } from "../../../../lib/core/frameProbe";
 import { figureRead, type FigureJob, type FigureStructures } from "./structuresRead";
 
 type Answer = { id: number; ok: true; read: FigureStructures } | { id: number; ok: false; error: string };
@@ -22,7 +23,7 @@ function started(lane: Lane): Worker {
     const waiting = lane.waiting.get(a.id);
     if (!waiting) return;
     lane.waiting.delete(a.id);
-    if (a.ok) waiting.done(a.read);
+    if (a.ok) timed("worker result received", () => waiting.done(a.read), 0);
     else waiting.fail(new Error(a.error));
   };
   w.onerror = (e) => {

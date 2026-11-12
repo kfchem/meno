@@ -15,6 +15,7 @@
  */
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { isLocked } from "../doc/locked";
+import { timed } from "./../core/frameProbe";
 
 /**
  * A page's letters: each one's character; its box - left, top, right,
@@ -75,7 +76,7 @@ export function textOf(sha256: string, page: number): Promise<PageText> {
   if (!w) {
     w = isTauri()
       ? invoke<ArrayBuffer>("pdf_text", { sha: sha256, page }).then((buf) => {
-          const t = pageTextOf(buf);
+          const t = timed(`pageTextOf ${buf.byteLength / 24 | 0} letters`, () => pageTextOf(buf), 0);
           had.set(key, t);
           return t;
         })
