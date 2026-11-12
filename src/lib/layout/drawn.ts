@@ -291,7 +291,9 @@ export function readStereo(
   // an allene's axis and an odd cumulene's cis or trans: each run of
   // cumulated double bonds, end to end, drawn straight through
   const odd: Cumulated[] = [];
-  const middle = (x: number) => neighbours[x].length === 2 && neighbours[x].every((n) => bondOf.get(key(x, n))!.order === 2);
+  // (a carbon, or an N+, between two double bonds: a sulfur's C=S=C is bent, no axis - the rule the restraints' linear-by-bonds has)
+  const linearMiddle = (x: number) => (atoms[x].el ?? "C") === "C" || ((atoms[x].el ?? "C") === "N" && (atoms[x].charge ?? 0) === 1);
+  const middle = (x: number) => linearMiddle(x) && neighbours[x].length === 2 && neighbours[x].every((n) => bondOf.get(key(x, n))!.order === 2);
   atoms.forEach((_, i) => {
     if (middle(i)) return;
     for (const m of neighbours[i]) {

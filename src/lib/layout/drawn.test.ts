@@ -546,6 +546,30 @@ describe("an allene's axis and an odd cumulene's cis or trans, drawn", () => {
     return readStereo(atoms, bonds);
   };
 
+  it("takes only a carbon, or an N+, between two double bonds for an allene's middle: a sulfur's C=S=C is bent, and has no axis", () => {
+    const middle = (el: string, charge?: number) => {
+      const atoms: DrawnAtom[] = [
+        { x: -1.3, y: 0.75, hs: 3 },
+        { x: 0, y: 0, hs: 1 },
+        { x: 1.3, y: 0, hs: 0, el, ...(charge ? { charge } : {}) },
+        { x: 2.6, y: 0, hs: 1 },
+        { x: 3.9, y: 0.75, hs: 3 },
+      ];
+      const bonds: DrawnBond[] = [
+        { a: 1, b: 0, order: 1, wedge: { narrow: 1, stereo: "up" } },
+        { a: 1, b: 2, order: 2 },
+        { a: 2, b: 3, order: 2 },
+        { a: 3, b: 4, order: 1 },
+      ];
+      return readStereo(atoms, bonds);
+    };
+    expect(middle("C").axes).toHaveLength(1);
+    expect(middle("N", 1).axes).toHaveLength(1);
+    expect(middle("S").axes).toEqual([]);
+    expect(middle("S").cumulated).toEqual([]);
+    expect(middle("N").axes).toEqual([]);
+  });
+
   it("reads an allene's axis from a wedge at one end, the other end's groups in the page, as a biaryl's: the other wedge, the other sense", () => {
     const up = allene("up").axes;
     const down = allene("down").axes;

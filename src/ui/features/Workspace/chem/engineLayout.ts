@@ -38,6 +38,8 @@ export type LayoutJob = {
   bound?: { metal: number; atoms: number[] }[];
   /** The H atoms taken as their centre's own H, by the centre's input index. */
   folded: Map<number, number[]>;
+  /** The axes and cumulenes of `input` are the structure's own text's, given in place of what its drawing says (`laidOut`): the drawing's reading of them is not to be kept. */
+  given?: true;
 };
 
 /**
@@ -637,11 +639,18 @@ function drawnAs(m: Model, style: DrawingStyle) {
 function stereoDiffers(part: Model, change: Relayout, job: LayoutJob): "changed" | "gained" | null {
   const doc = { ...emptyWorkspaceDocument(), model: part, nextId: nextFree(part) };
   const pair = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
-  return stereoChange(part, relayout(doc, change).model, {
-    centres: new Set(job.input.atoms.flatMap((a, k) => (a.tetra ? [job.ids[k]] : []))),
-    doubles: new Set([...job.input.bonds.flatMap((b) => (b.stereo ? [pair(job.ids[b.a], job.ids[b.b])] : [])), ...(job.input.cumulated ?? []).map((x) => pair(job.ids[x.atoms[0]], job.ids[x.atoms[1]]))]),
-    axes: new Set((job.input.axes ?? []).map((ax) => pair(job.ids[ax.atoms[0]], job.ids[ax.atoms[1]]))),
-  });
+  const cumulated = new Set((job.input.cumulated ?? []).map((x) => pair(job.ids[x.atoms[0]], job.ids[x.atoms[1]])));
+  const axes = new Set((job.input.axes ?? []).map((ax) => pair(job.ids[ax.atoms[0]], job.ids[ax.atoms[1]])));
+  return stereoChange(
+    part,
+    relayout(doc, change).model,
+    {
+      centres: new Set(job.input.atoms.flatMap((a, k) => (a.tetra ? [job.ids[k]] : []))),
+      doubles: new Set([...job.input.bonds.flatMap((b) => (b.stereo ? [pair(job.ids[b.a], job.ids[b.b])] : [])), ...cumulated]),
+      axes,
+    },
+    job.given ? { doubles: cumulated, axes } : undefined,
+  );
 }
 
 /**
@@ -662,7 +671,7 @@ export function sameStereo(was: Model, after: Model): boolean {
  * shows the same. Only where `was` is drawn: atoms not yet placed - all on
  * one point, a SMILES's before it is laid out - state nothing to keep.
  */
-function stereoChange(was: Model, after: Model, asked?: { centres: Set<number>; doubles: Set<string>; axes: Set<string> }): "changed" | "gained" | null {
+function stereoChange(was: Model, after: Model, asked?: { centres: Set<number>; doubles: Set<string>; axes: Set<string> }, given?: { doubles: Set<string>; axes: Set<string> }): "changed" | "gained" | null {
   const place = new Map(was.atoms.map((a) => [a.id, a]));
   const drawnApart = (...ids: number[]) => ids.some((id) => ids.some((other) => Math.hypot(place.get(id)!.x - place.get(other)!.x, place.get(id)!.y - place.get(other)!.y) > 1e-6));
   const before = stereoOf(was);
@@ -672,11 +681,13 @@ function stereoChange(was: Model, after: Model, asked?: { centres: Set<number>; 
     if (!u || !sameConfiguration(t, u)) return "changed";
   }
   for (const [key, d] of before.doubles) {
+    // (an odd cumulene's cis or trans the structure's own text gives: what its drawing said of it is not kept)
+    if (given?.doubles.has(key)) continue;
     const e = now.doubles.get(key);
     // (read against the other group on an end, the reading turns)
     if (!e || (e.cis !== d.cis) !== ((e.refs[0] !== d.refs[0]) !== (e.refs[1] !== d.refs[1]))) return "changed";
   }
-  for (const [key, sense] of before.axes) if (now.axes.get(key) !== sense) return "changed";
+  for (const [key, sense] of before.axes) if (!given?.axes.has(key) && now.axes.get(key) !== sense) return "changed";
   const ends = (key: string) => key.split(",").map(Number).filter((id) => place.has(id));
   for (const [c, t] of now.centres) if (!before.centres.has(c) && !asked?.centres.has(c) && place.has(c) && drawnApart(c, ...t.neighbours.filter((n) => place.has(n)))) return "gained";
   for (const key of now.doubles.keys()) if (!before.doubles.has(key) && !asked?.doubles.has(key) && drawnApart(...ends(key))) return "gained";
