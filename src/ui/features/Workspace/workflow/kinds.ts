@@ -155,25 +155,6 @@ export type KindInfo = {
  */
 const FAILED: StepExit = { id: "failed", name: "Failed", gives: "same", of: "failed" };
 
-/**
- * *Hold its restraints*: whether a step that may hold an entry's restraints
- * (lib/plugins/steps `HOLDS_RESTRAINTS`), its plugin saying its program can
- * (`StepDecl.restraints`), holds them as it runs - no, by default: an
- * optimisation free of them, as one after a restrained search is; or its
- * atoms fixed where they stand. Meno's option, offered beside the plugin's
- * (doers `optionsFor`), and given to it with them.
- */
-export const HOLD_OPTION: Option = {
-  id: "hold",
-  label: "Hold its restraints",
-  type: "choice",
-  choices: [
-    { value: "no", label: "No" },
-    { value: "fixed", label: "Atoms fixed" },
-  ],
-  default: "no",
-};
-
 /** How a program step of more than one input pairs what comes into them (workflow/pairs): in order, each with each, or matched on a property. */
 const PAIRS_OWN: readonly Option[] = [
   {
@@ -203,13 +184,27 @@ export const WINDOW_GUIDE = "Meno sets none: give your own. As a guide, at 298.1
 /** What an energy window given none needs, on its card and on its line alike. */
 export const WINDOW_NEEDED = "Give the window, in kcal/mol";
 
+/**
+ * The input a step that holds restraints takes them by (lib/plugins/steps
+ * `HOLDS_RESTRAINTS`): *Restraints* tables, each row for a molecule by an ID
+ * a step wrote on it (workflow/heldRows). Wired, it holds them - none
+ * wired, none held; nothing an entry carries is held instead.
+ */
+export const RESTRAINTS_INPUT: StepPort = { id: "restraints", name: "Restraints", takes: ["table"], optional: true };
+
+/** Whether a kind's inputs are several besides its *Restraints* input - each named on its card and in what it says - or one (with it or not). */
+export const severalInputs = (ports: readonly StepPort[]): boolean => ports.filter((p) => p.id !== RESTRAINTS_INPUT.id).length > 1;
+
+/** The first input of a kind that holds restraints: what comes in to be worked out, where it is not the kind's one input any longer. */
+const MOLECULES_IN: StepPort = { id: ONE_INPUT, name: "Molecules", takes: ["molecules", "conformers"] };
+
 export const KINDS: readonly KindInfo[] = [
   // (new structures from nothing that comes in: a generative model's, as its plugin asks it, each drawn from the SMILES it gave - no input, so no port)
   { kind: "generate", name: "Generate", icon: "sparks", family: "structures", takes: [], inputs: [], gives: "structures", runs: "program", made: "Generated" },
   { kind: "conformers", name: "Conformers", icon: "rings", family: "structures", takes: ["structures", "molecules", "conformers"], gives: "conformers", runs: "program", made: "Conformers", whole: true, others: [{ ...FAILED, gives: "molecules" }] },
-  { kind: "optimise", name: "Optimise", icon: "curve", family: "energies", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Optimised", whole: true, others: [FAILED] },
-  // (each entry minimised in a force field with its restraints held - Restraints', Torsion restraints' - as its plugin holds them: docs/PLUGINS.md)
-  { kind: "minimise", name: "Minimise with restraints", icon: "heldMinimum", family: "energies", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Minimised", whole: true, others: [FAILED] },
+  { kind: "optimise", name: "Optimise", icon: "curve", family: "energies", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Optimised", whole: true, inputs: [MOLECULES_IN, RESTRAINTS_INPUT], others: [FAILED] },
+  // (each entry minimised in a force field with the restraints wired in for it held, as its plugin holds them: docs/PLUGINS.md)
+  { kind: "minimise", name: "Minimise with restraints", icon: "heldMinimum", family: "energies", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Minimised", whole: true, inputs: [MOLECULES_IN, RESTRAINTS_INPUT], others: [FAILED] },
   { kind: "energy", name: "Energy", icon: "level", family: "energies", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Energies", whole: true, others: [FAILED] },
   { kind: "frequencies", name: "Frequencies", icon: "wave", family: "energies", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Frequencies", whole: true, others: [FAILED] },
   // (non-covalent interactions: each molecule with a surface coloured by how they attract or repel - docs/NCI.md)
@@ -228,6 +223,7 @@ export const KINDS: readonly KindInfo[] = [
     inputs: [
       { id: "start", name: "Start", takes: ["molecules", "conformers"] },
       { id: "end", name: "End", takes: ["molecules", "conformers"] },
+      RESTRAINTS_INPUT,
     ],
     others: [FAILED],
     whole: true,
@@ -927,16 +923,19 @@ export const KINDS: readonly KindInfo[] = [
     needs: (v) => barrierNeeds(v),
   },
   {
-    // (each entry's restraints from itself: its coordination bonds at a factor of their van der Waals radii together, pairs kept at their distance, atoms fixed - those it cannot have out of Failed, saying why)
+    // (a table of restraints, a row for each, made of each entry: its coordination bonds at a factor of their van der Waals radii together,
+    //  pairs kept at their distance, atoms fixed - each row for the entry by an ID a step wrote on it, which a Restraints input matches on;
+    //  those it cannot make rows for out of Failed, saying why - docs/STRUCTURE-STEPS.md)
     kind: "restraints",
     name: "Restraints",
     icon: "held", family: "structures",
     takes: ["molecules", "conformers"],
-    gives: "same",
+    gives: "table",
     runs: "entries",
-    made: "Restrained",
+    made: "Restraints",
     others: [FAILED],
     options: [
+      { id: "on", label: "Each row for the molecule by its", type: "text", default: "" },
       { id: "coordination", label: "Coordination bonds", type: "switch", default: true },
       { id: "factor", label: "Kept at \u00d7 the sum of their van der Waals radii (Alvarez 2013)", type: "text", default: "", when: { id: "coordination", in: [true] } },
       { id: "distances", label: "Pairs kept at their distance, atoms from 1 (3-7, 1-12)", type: "text", default: "" },
@@ -1170,8 +1169,10 @@ function aboveZero(text: string, what: string): number | { why: string } | null 
   return Number.isFinite(n) && n > 0 && /^[0-9.eE+-]+$/.test(t) ? n : { why: `${what} must be a number above 0` };
 }
 
-/** *Restraints*' options as read from its card: what it holds, or why they do not read (its run refuses the same). */
-export function restraintsTyped(v: OptionValues): { asked: RestraintsAsked } | { why: string } {
+/** *Restraints*' options as read from its card: what it holds, and the property each row names its molecule by - or why they do not read (its run refuses the same). */
+export function restraintsTyped(v: OptionValues): { asked: RestraintsAsked; on: string } | { why: string } {
+  const on = String(v.on ?? "").trim();
+  if (!on) return { why: "Name the property each row is for (an ID a Tag wrote)" };
   const coordination = v.coordination !== false;
   const factor = aboveZero(String(v.factor ?? ""), "The factor");
   if (coordination && factor == null) return { why: "Set the factor" };
@@ -1187,6 +1188,7 @@ export function restraintsTyped(v: OptionValues): { asked: RestraintsAsked } | {
   if ((coordination || typed.atoms.length) && strength == null) return { why: "Set the strength" };
   if (strength && typeof strength === "object") return { why: strength.why };
   return {
+    on,
     asked: {
       ...(coordination ? { coordination: factor as number } : {}),
       ...(typed.atoms.length ? { distances: typed.atoms.map((a) => [a[0], a[1]] as const) } : {}),
@@ -1212,8 +1214,8 @@ export function restraintsHow(v: OptionValues): string {
     distances?.length ? `${distances.length} ${distances.length === 1 ? "pair" : "pairs"} at their distance` : "",
     fixed?.length ? `${fixed.length} ${fixed.length === 1 ? "atom" : "atoms"} fixed` : "",
   ].filter(Boolean);
-  // (the strength where it is not the default: what was chosen, said)
-  return `${said.join("; ")}${strength != null && strength !== DISTANCE_STRENGTH ? `; ${strength} kcal/mol/\u00c5\u00b2` : ""}`;
+  // (the strength where it is not the default: what was chosen, said - and what each row is for)
+  return `${said.join("; ")}${strength != null && strength !== DISTANCE_STRENGTH ? `; ${strength} kcal/mol/\u00c5\u00b2` : ""}; for each ${typed.on}`;
 }
 
 /** What a Torsion restraints step still needs of its options. */

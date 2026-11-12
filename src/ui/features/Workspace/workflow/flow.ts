@@ -10,7 +10,7 @@ import { conformersOfOne, drawnKey, entryOfSet, framesOf, hash, holdsOf, plainAm
 import type { Property } from "../../../../lib/entry";
 import { moleculesAsTable, WHAT_COLUMN, type Table } from "../../../../lib/table";
 import { levelOf } from "../../../../lib/calc/output";
-import { exitOf, ONE_INPUT, optionsOf, readsAsTable, takenBy, takesNothing, type SetHolds, type SetKind, type ValueKind, isSetKind } from "./kinds";
+import { exitOf, ONE_INPUT, optionsOf, readsAsTable, RESTRAINTS_INPUT, severalInputs, takenBy, takesNothing, type SetHolds, type SetKind, type ValueKind, isSetKind } from "./kinds";
 import { byOf, doerStamp, inputsFor, optionsFor, presetsStamp, setName, takesBy, takesNothingBy } from "./doers";
 
 export type Flow = Pick<WorkspaceDocument, "model" | "molecules3d" | "sets" | "steps" | "wires" | "pictures"> & Partial<Pick<WorkspaceDocument, "arrows" | "pluses">>;
@@ -22,8 +22,9 @@ export const findSet = (doc: Flow, id: number): WorkflowSet | undefined => doc.s
 export const allWiresInto = (doc: Flow, step: number): Wire[] => (doc.wires ?? []).filter((w) => w.to.step === step);
 
 /**
- * The wires into one of a step's inputs - where none is named, the one the
- * first wire found goes into - in the order their sets lie on the page: top
+ * The wires into one of a step's inputs - where none is named, its first
+ * (of a step not there, the one the first wire found goes into): never its
+ * *Restraints* input, beside its first - in the order their sets lie on the page: top
  * to bottom, then left to right, by each frame's top left corner, as a
  * set's members are ordered (entries `readingOrder`); a step's exit by the
  * set it made. The order they were wired in is seen nowhere, and orders
@@ -31,7 +32,8 @@ export const allWiresInto = (doc: Flow, step: number): Wire[] => (doc.wires ?? [
  */
 export function wiresInto(doc: Flow, step: number, port?: string): Wire[] {
   const all = allWiresInto(doc, step);
-  const at = port ?? all[0]?.to.port;
+  const s = port == null ? stepOf(doc, step) : undefined;
+  const at = port ?? (s ? inputsFor(s.kind, byOf(s))[0]?.id : undefined) ?? all[0]?.to.port;
   const into = all.filter((w) => w.to.port === at);
   if (into.length < 2) return into;
   const corner = new Map(into.map((w) => [w.id, ((b) => (b ? { x: b.x0, y: b.y1 } : null))(findSet(doc, w.from.set))]));
@@ -134,8 +136,12 @@ export function wireRefusal(doc: Flow, from: WireEnd, to: number, port: string =
   if (mixed) return mixed;
   // (the input it goes to takes what it gives; a kind that takes one holds to what the doer takes of it)
   const inputs = inputsFor(step.kind, byOf(step));
-  const several = inputs.length > 1;
-  const takes = (inputs.find((p) => p.id === port) ?? inputs[0]).takes.filter((k) => several || takesBy(step.kind, byOf(step), k));
+  // (its first, where it takes nothing else but restraints, as its doer takes it too)
+  const into = inputs.find((p) => p.id === port) ?? inputs[0];
+  const several = severalInputs(inputs) || into !== inputs[0];
+  const takes = into.takes.filter((k) => several || takesBy(step.kind, byOf(step), k));
+  // (restraints: a table of them, never molecules seen as one)
+  if (into.id === RESTRAINTS_INPUT.id && holds !== "table") return "It takes a table of restraints, not molecules";
   // (molecules or conformer sets into a port that takes a table, seen as one: kinds `takenBy`)
   if (!takenBy(takes, holds)) {
     const wants = takes.length ? takes.map((k) => SET_WORDS[k]).join(" or ") : "nothing that is given";
@@ -352,7 +358,8 @@ export function inputKey(doc: Flow, step: WorkflowStep, by: string): string {
   // (a step that takes nothing in runs on its options alone, and who does it)
   // (and what of its plugin the results hang on: its version, the files it was set up with - another prior is another run)
   if (takesNothingBy(step.kind, by)) return hash(`${step.kind}|${by}|${doerStamp(by)}|${options}`).toString(36);
-  const ports = inputsFor(step.kind, by);
+  // (a Restraints input with nothing wired into it: no input of its - a step that never had one keeps its key)
+  const ports = inputsFor(step.kind, by).filter((p) => p.id !== RESTRAINTS_INPUT.id || wiresInto(doc, step.id, p.id).length > 0);
   // (a kind of several inputs: each one's own, in turn - none where its first has nothing coming in; the names its molecules go by too, which an energy diagram's levels are)
   if (ports.length > 1) {
     const keys = ports.map((p) => portKey(doc, step.id, p.id, true));
