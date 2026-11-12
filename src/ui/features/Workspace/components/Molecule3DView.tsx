@@ -399,7 +399,27 @@ function Molecule3DView(props: Molecule3DViewProps) {
     if (!ribbonsNow) setHoverResidue(null);
   }, [ribbonsNow]);
   const ribbonMade = useRef(-1);
-  const { invalidate, camera, size, gl } = useThree();
+  const { invalidate, camera, size, gl, scene } = useThree();
+  // (its shaders compiled before it is first drawn - in the background, where the browser can (KHR_parallel_shader_compile) -
+  //  every part of it, those shown later too: no frame waits on a compile, its first draw nor one that shows a part of it after)
+  const [compiled, setCompiled] = useState(false);
+  useLayoutEffect(() => {
+    let live = true;
+    const asked = performance.now();
+    gl.compileAsync(dolly.current, camera, scene)
+      .catch(() => undefined)
+      .then(() => {
+        if (!live) return;
+        console.warn(`[probe] Molecule3DView #${m.id} shaders ready after ${(performance.now() - asked).toFixed(1)} ms (programs ${gl.info.programs?.length ?? 0})`);
+        setCompiled(true);
+        invalidate();
+      });
+    return () => {
+      live = false;
+    };
+    // (once, as it is first put on the page)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const quaternion = useMemo(() => (turn ? new THREE.Quaternion(...turn) : new THREE.Quaternion()), [turn]);
   // how it is turned as drawn: following a drag at once, going over to a turn set afresh
   const shownTurn = useRef<THREE.Quaternion | null>(null);
@@ -1786,7 +1806,7 @@ function Molecule3DView(props: Molecule3DViewProps) {
   );
 
   return (
-    <group ref={dolly} matrixAutoUpdate={false}>
+    <group ref={dolly} matrixAutoUpdate={false} visible={compiled}>
     <group ref={placed}>
       <group ref={turned}>
         <instancedMesh
