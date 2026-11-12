@@ -218,7 +218,7 @@ import { pictureRegion, readStructure } from "./components/readStructure";
 import { isFilm } from "../../../lib/picture/image";
 import { placedBeside, readMarks } from "./utils/figures";
 import { useNotices } from "../../notices";
-import { bareAtomsOf, bareWords, blocksOf, blocksStill, boxOf, conformersOnPage, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, pageRounds, placeRow, rowFrom, takenOnPage, turnedOver, withinWindow, type Block, type Box, type Open } from "./chem/make3d";
+import { bareAtomsOf, bareWords, blocksOf, blocksStill, boxOf, conformersGrowing, conformersOnPage, formulaOf, type Growth, formulaPlace, likeOf, linkOf, moleculeOf, openIn, pageRounds, placeRow, rowFrom, takenOnPage, turnedOver, withinWindow, type Block, type Box, type Open } from "./chem/make3d";
 import { isomersToMake } from "./chem/openStereo";
 import { centredAt, clipItems } from "./utils/copyPaste";
 import { structureInOutput } from "./chem/fromClipboard";
@@ -236,7 +236,7 @@ import { conformerPairs, conformersSaid } from "./chem/structureMaps";
 import { partsOffered } from "./utils/joinedParts";
 import { useAtomMaps } from "./chem/useAtomMaps";
 import { turnOnto } from "./utils/align3d";
-import type { ArrowFormPatch, Caption, Drawn, Molecule3D, PictureFrom, WordsFrom } from "./store/types";
+import type { ArrowFormPatch, Caption, Drawn, Grown3D, Molecule3D, PictureFrom, WordsFrom } from "./store/types";
 import { resultKey, resultsOn } from "../../../lib/calc/results";
 import { titled } from "../../../lib/calc/sources";
 import { byOf, MENO, missingFor } from "./workflow/doers";
@@ -485,6 +485,12 @@ function WorkspaceContent({
   // (structures being made in 3D: since when, and how to stop it - the plugin's worker stopped, nothing added)
   const [making3d, setMaking3d] = useState<number | null>(null);
   const stop3d = useRef<(() => void) | null>(null);
+  // (how many 3D structures were made this session: each one's key - what its search goes on to bring joins its step)
+  const madeCount = useRef(0);
+  // (how many have been asked: the latest says how it is getting on)
+  const builds3d = useRef(0);
+  // (how a search going on, its 3D structure on the page, is stopped: by the next one asked, as by Stop)
+  const searching3d = useRef<(() => void) | null>(null);
   // A drawn reaction's atom map, made off the drawing's thread - said
   // meanwhile, and stoppable - and kept on its arrow (chem/useAtomMaps)
   const atomMaps = useAtomMaps(store, setChemError);
@@ -521,15 +527,26 @@ function WorkspaceContent({
   );
   const build3d = useCallback(
     async (blocks: Block[], isomers: "one" | "all", replacing?: Molecule3D) => {
+      // (a search going on from one made before: stopped, what it brought kept, before this one asks the same plugin)
+      searching3d.current?.();
       setWorking3d("Making the 3D structure…");
       setChemError(null);
-      // (stopped: the worker making them stopped - started afresh when next asked - and nothing added)
+      // (stopped: the worker making them stopped - started afresh when next asked - and nothing added; or, once they are on
+      //  the page and their search goes on, the search ended there, what it brought kept)
       let stopped = false;
       const plugin = rolePlugin("conformers");
+      // (this one the latest asked: only it says how it is getting on, and only it is stopped by Stop)
+      const mine = ++builds3d.current;
       stop3d.current = () => {
         stopped = true;
         if (plugin) void stopWorker(plugin.id, `${plugin.name} was stopped while it made a 3D structure`);
       };
+      // (each block's search that goes on after its first round, and where its stereoisomers stand among those made)
+      const growths: { growth: Growth; block: Block; several: boolean; from: number; window3d: number }[] = [];
+      // (a search goes on while its molecules are on the page: an undo that took them away, or a 3D structure made again, ends it)
+      let gone = () => false;
+      // (on the page: what fails after is its search's, not its making's)
+      let on3d = false;
       setMaking3d(Date.now());
       try {
         const chem = await chemWorker("conformers");
@@ -556,7 +573,10 @@ function WorkspaceContent({
           const chosen = useAppSettings.getState().chemistry;
           const rounds = pageRounds(block, chosen, !!plugin?.roleDraws.includes("conformers"));
           if (rounds && "needs" in rounds) throw new Error(rounds.needs);
-          const isomersMade = (await conformersOnPage(chem, stereo, block, isomers, options, useAppSettings.getState(), rounds)).map((c) => withinWindow(c, window3d));
+          // (in rounds: shown once each has had its first, the rest going on after - docs/WORKSPACE.md, *As its search goes on*)
+          const growth = rounds ? await conformersGrowing(chem, stereo, block, isomers, options, useAppSettings.getState(), rounds, () => stopped || gone()) : null;
+          if (growth) growths.push({ growth, block, several: growth.first.length > 1, from: made.length, window3d });
+          const isomersMade = (growth ? growth.first : await conformersOnPage(chem, stereo, block, isomers, options, useAppSettings.getState(), rounds)).map((c) => withinWindow(c, window3d));
           // (several stereoisomers: their R and S shown, to tell them apart)
           const ms = isomersMade.map((c) => moleculeOf(c, block, isomersMade.length > 1));
           const model = store.getState().model;
@@ -583,15 +603,47 @@ function WorkspaceContent({
           setChemError("The drawing changed while its 3D structure was being made, so none was added.");
           return;
         }
-        store.getState().riseMolecules3d(made, replacing ? [replacing.id] : []);
+        // (made with a key where a search goes on, so that what it brings joins this step where nothing came between)
+        const key = `made3d:${++madeCount.current}`;
+        const ids = store.getState().riseMolecules3d(made, replacing ? [replacing.id] : [], growths.length ? key : undefined);
         // (with no room for them in view, the view goes to them - along, or out as little as needed)
         if (!allInView && made3d) store.getState().requestShow(made3d);
+        if (!growths.length) return;
+        // (each stereoisomer's search goes on, in turn: what it brings shown as it lands, over what the page holds - the view's
+        //  until it ends, then written into the document once - docs/WORKSPACE.md, *As its search goes on*)
+        const idsOf = (g: (typeof growths)[number]) => g.growth.first.map((_, k) => ids[g.from + k]);
+        const grownOf = (m: Omit<Molecule3D, "id" | "at">): Grown3D => ({ atoms: m.atoms, frames: m.frames, energies: m.energies, made: m.made });
+        for (const g of growths) idsOf(g).forEach((id, k) => store.getState().grow3d(id, grownOf(made[g.from + k].m), key));
+        gone = () => growths.every((g) => idsOf(g).every((id) => !store.getState().growing3d[id]));
+        setWorking3d("Searching for more conformers…");
+        // (stopped by the next asked as it gets to its next round, what it brought kept: the plugin it asks is left to them both)
+        searching3d.current = () => {
+          stopped = true;
+        };
+        on3d = true;
+        for (const g of [...growths]) {
+          try {
+            await g.growth.rest((k, c) => {
+              const id = ids[g.from + k];
+              if (store.getState().growing3d[id]) store.getState().grow3d(id, grownOf(moleculeOf(withinWindow(c, g.window3d), g.block, g.several)), key);
+            });
+          } finally {
+            // (what it brought written, however it ended: never left shown as searching)
+            for (const id of idsOf(g)) store.getState().settleGrown3d(id);
+          }
+        }
       } catch (e: unknown) {
-        if (!stopped) setChemError(`No 3D structure could be made: ${e instanceof Error ? e.message : String(e)}`);
+        const why = e instanceof Error ? e.message : String(e);
+        if (!stopped) setChemError(on3d ? `The search for more conformers stopped: ${why}` : `No 3D structure could be made: ${why}`);
       } finally {
-        stop3d.current = null;
-        setMaking3d(null);
-        setWorking3d(null);
+        // (every search let go, its worker with it: ended, or never on the page - stopped, the drawing changed, a failure)
+        for (const g of growths) g.growth.drop();
+        if (builds3d.current === mine) {
+          searching3d.current = null;
+          stop3d.current = null;
+          setMaking3d(null);
+          setWorking3d(null);
+        }
       }
     },
     [store, viewBox, camRef],
