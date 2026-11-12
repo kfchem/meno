@@ -5,13 +5,14 @@
  */
 import type { WorkspaceDocument } from "../document";
 import type { DrawnModel, DrawnRecord, Molecule3D, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
+import { recordsWithRoles } from "./schemeRoles";
 import { conformersOfOne, drawnKey, entryOfSet, hash, holdsOf, plainAmong, recordKey, setEntries, setMembers, setMolecules, type SetEntry } from "./entries";
 import { moleculesAsTable, WHAT_COLUMN, type Table } from "../../../../lib/table";
 import { levelOf } from "../../../../lib/calc/output";
 import { exitOf, ONE_INPUT, optionsOf, readsAsTable, takenBy, takesNothing, type SetHolds, type SetKind, type ValueKind, isSetKind } from "./kinds";
 import { byOf, doerStamp, inputsFor, optionsFor, presetsStamp, takesBy, takesNothingBy } from "./doers";
 
-export type Flow = Pick<WorkspaceDocument, "model" | "molecules3d" | "sets" | "steps" | "wires" | "pictures">;
+export type Flow = Pick<WorkspaceDocument, "model" | "molecules3d" | "sets" | "steps" | "wires" | "pictures"> & Partial<Pick<WorkspaceDocument, "arrows" | "pluses">>;
 
 export const stepOf = (doc: Flow, id: number): WorkflowStep | undefined => doc.steps?.find((s) => s.id === id);
 export const findSet = (doc: Flow, id: number): WorkflowSet | undefined => doc.sets?.find((b) => b.id === id);
@@ -122,7 +123,8 @@ export function inputOf(
   // (a table, a number, a chart - no entries to give a step that works on them)
   if (!isSetKind(holds)) return null;
   const { structures, records } = setMembers(doc, set);
-  return { holds, molecules: setMolecules(doc, set), structures, records, ...(set.drawnCollection ? { held: set.drawnCollection } : {}) };
+  // (a drawn reaction in its frame: each structure's role and reaction, worked out as it is drawn now)
+  return { holds, molecules: setMolecules(doc, set), structures, records: recordsWithRoles(doc, set, structures, records), ...(set.drawnCollection ? { held: set.drawnCollection } : {}) };
 }
 
 /** The table a set holds that comes into a step - read from a file, or a step's: none where what comes in holds none. */

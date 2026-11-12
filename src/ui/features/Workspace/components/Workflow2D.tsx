@@ -15,6 +15,7 @@ import { MEMBER_MS, memberMarkBox, memberPulse, positionBadge, recordLabel } fro
 import StepCard, { Port, shareOf, type PortLook, type RunRow, type RunView } from "../workflow/StepCard";
 import { clickedOpen, type CardClick } from "../workflow/cardOpen";
 import { positionMarks } from "../workflow/substituents";
+import { schemeSaid } from "../workflow/schemeRoles";
 import { countOf, countSaid, numberedOn, recordHow, recordNumber, recordWhy, type Frame } from "../workflow/entries";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { lookEvery } from "../workflow/lookEvery";
@@ -550,6 +551,8 @@ export default function Workflow2D() {
   const model = useEditor((s) => s.model);
   const molecules3d = useEditor((s) => s.molecules3d);
   const pictures = useEditor((s) => s.pictures);
+  const arrows = useEditor((s) => s.arrows);
+  const pluses = useEditor((s) => s.pluses);
   const hoveredSet = useEditor((s) => s.hoveredSet);
   const chosenSet = useEditor((s) => s.chosenSet);
   const hoveredWire = useEditor((s) => s.hoveredWire);
@@ -981,7 +984,7 @@ export default function Workflow2D() {
   }, [chosenSet, store, gl]);
 
   // --- what is drawn ---------------------------------------------------------
-  const flow = useMemo(() => ({ model, molecules3d, sets, steps, wires, pictures }), [model, molecules3d, sets, steps, wires, pictures]);
+  const flow = useMemo(() => ({ model, molecules3d, sets, steps, wires, pictures, arrows, pluses }), [model, molecules3d, sets, steps, wires, pictures, arrows, pluses]);
   const stepById = useMemo(() => new Map(steps.map((s) => [s.id, s])), [steps]);
   const setById = useMemo(() => new Map(sets.map((b) => [b.id, b])), [sets]);
   // (each step's exits' sets, by step and exit: a port drawn for each)
@@ -1054,7 +1057,7 @@ export default function Workflow2D() {
       new Map(
         sets.map((b) => {
           const count = countOf(flow, b);
-          const counted = countSaid(b, count);
+          const counted = countSaid(b, count, count.holds === "structures" ? schemeSaid(flow, b) : []);
           // (a large result set: what it holds, said large in its frame)
           // (structures drawn held, none of them on the page: summed up in its frame too - those it shows are on the page, and it says how many)
           const summary =
