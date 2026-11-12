@@ -29,6 +29,7 @@ import { sameStereo } from "../chem/engineLayout";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
 import { implicitHydrogens } from "../../../../lib/chem/molecule";
 import { overBonded } from "../../../../lib/chem/molWriter";
+import { structuresOf } from "../../../../lib/chem/magnified2d";
 import { ELEMENTS } from "../../../../lib/chem/elements";
 import { labelReading, readLabel } from "./labelTyping";
 import { systemGlyphs } from "./glyphShapes";
@@ -122,7 +123,7 @@ export function lettersAsShapes(drawn: FigureDrawn): boolean {
 export type Unread = { none: string };
 
 /** What a figure gives: its structure, and - a scheme - its arrows, "+" signs and words, in Meno's units, where they stand to it as the figure has them. */
-export type FigureResult = { model: Model; scheme?: ImportedScheme };
+export type FigureResult = { model: Model; scheme?: ImportedScheme; /** Where structures of the figure were left out - an atom with more bonds than it takes - what to say of them. */ left?: string };
 
 /**
  * A figure within a box of a PDF's page, read as a structure: its atoms
@@ -250,11 +251,12 @@ export function figureFrom(given: FigureDrawn, sha256: string, page: number, kno
   const box = schemeBox(structure ? read : { ...read, figure: { ...read.figure, atoms: [] } })!;
   const about = { x: (box[0] + box[2]) / 2, y: (box[1] + box[3]) / 2 };
   const model = structure ? modelOf(read.figure, (x, y) => ({ sha256, page, ...back({ x, y }), bond: read.figure.bond }), about) : { atoms: [], bonds: [] };
-  // (an atom with more bonds than it takes: refused, with why - never placed)
-  const broken = structure ? overBondedWhy(model) : null;
-  if (broken) return { none: broken };
+  // (a structure with an atom with more bonds than it takes is left out, each on its own - the rest of the figure is read - and said)
+  const { kept, left } = structure ? withoutOverBonded(model) : { kept: model, left: 0 };
+  if (structure && !kept.atoms.length) return { none: overBondedWhy(model)! };
   const scheme = schemeOf(read, about);
-  return { model, ...(scheme ? { scheme } : {}) };
+  const said = left ? `${left === 1 ? "A structure of this figure was" : `${left} structures of this figure were`} left out: as read, ${left === 1 ? "an atom has" : "atoms have"} more bonds than ${left === 1 ? "it takes" : "they take"}.` : null;
+  return { model: kept, ...(scheme ? { scheme } : {}), ...(said ? { left: said } : {}) };
 }
 
 /**
@@ -356,18 +358,42 @@ export function modelOf(read: FigureRead, spot: (x: number, y: number) => Figure
 
 const ELEMENT_NAMES = new Map(ELEMENTS.map((e) => [e.symbol, e.name]));
 
+/** The atoms of a structure read that have more bonds than they take, written out as a file has it - not a charge alone: an atom's charge no atom carries is said by the atom, and is no valence (a page's "S188−" taken for a sulfur). */
+function overBondedAtoms(model: Model): Set<number> {
+  return new Set([...overBonded(model)].filter((id) => !model.atoms.find((x) => x.id === id)?.unsure?.said.some((t) => t.startsWith("A charge of"))));
+}
+
 /**
- * Why a structure read has an atom with more bonds than it takes - a bold front bond of a perspective drawing read as a triple
- * bond, a line twice - and so is not taken, whole, as read (the maintainer, 2026-11-13: a read that breaks valence is refused, and
- * says why, never put down): none where no atom has. An atom's label written out, a group's, counted as a file has it.
+ * Why a structure read is not taken: it has an atom with more bonds than it takes - a bold double bond of a perspective drawing read as a
+ * triple bond, a line twice (the maintainer, 2026-11-13: a read that breaks valence is refused, and says why, never put down). None where
+ * no atom has. As read: a drawing can itself show five bonds (a transition state's forming bond), which Meno does not take as one.
  */
 export function overBondedWhy(model: Model): string | null {
-  // (a charge no atom carries is said by the atom, and is no valence: a page's "S188−" taken for a sulfur)
-  const over = new Set([...overBonded(model)].filter((id) => !model.atoms.find((x) => x.id === id)?.unsure?.said.some((t) => t.startsWith("A charge of"))));
+  const over = overBondedAtoms(model);
   if (!over.size) return null;
   const a = model.atoms.find((x) => over.has(x.id))!;
   const name = a.el === "C" ? "a carbon" : (ELEMENT_NAMES.get(a.el) ?? `"${a.el}"`);
-  return `More bonds meet at ${name} than it takes${over.size > 1 ? `, and at ${over.size - 1} more` : ""}: the drawing is misread, so none of it is taken.`;
+  return `As read, more bonds meet at ${name} than it takes${over.size > 1 ? `, and at ${over.size - 1} more` : ""}: none of it is taken.`;
+}
+
+/** A figure's atoms and bonds without its structures that have an atom with more bonds than it takes, each structure on its own, and how many it left out. */
+export function withoutOverBonded(model: Model): { kept: Model; left: number } {
+  const over = overBondedAtoms(model);
+  if (!over.size) return { kept: model, left: 0 };
+  const groups = structuresOf(model.atoms, model.bonds);
+  const bad = groups.filter((g) => g.some((i) => over.has(model.atoms[i].id)));
+  const drop = new Set(bad.flat().map((i) => model.atoms[i].id));
+  const atoms = model.atoms.filter((a) => !drop.has(a.id));
+  const bonds = model.bonds.filter((b) => !drop.has(b.a) && !drop.has(b.b));
+  // (numbered again, from 1: atoms, then bonds, then the multiple groups' ids, as `modelOf` numbers them)
+  const to = new Map(atoms.map((a, i) => [a.id, i + 1]));
+  const groupIds = [...new Set(atoms.flatMap((a) => (a.sgroups ?? []).map((g) => g.id)))].sort((p, q) => p - q);
+  const kept: Model = {
+    ...model,
+    atoms: atoms.map((a, i) => ({ ...a, id: i + 1, ...(a.sgroups ? { sgroups: a.sgroups.map((g) => ({ ...g, id: atoms.length + bonds.length + groupIds.indexOf(g.id) + 1 })) } : {}) })),
+    bonds: bonds.map((b, i) => ({ ...b, id: atoms.length + i + 1, a: to.get(b.a)!, b: to.get(b.b)!, ...(b.narrow ? { narrow: to.get(b.narrow) } : {}) })),
+  };
+  return { kept, left: bad.length };
 }
 
 type Region = { x0: number; y0: number; x1: number; y1: number };

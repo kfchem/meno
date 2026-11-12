@@ -1217,13 +1217,19 @@ it where it lies out of view.
   short of.
 - **Bonds**:
   - a line stroked, or a thin box filled, is a single bond, and a line
-    much thicker than the rest a bold one - but not one more than two and
-    a half bonds long that meets others only square, or none: a frame's
-    side, a graph's axis, a page's rule. A bold line is one single bond,
-    drawn thick, toward the viewer, as a perspective drawing's front bond
-    is (2026-11-13): never a line of a double or triple bond, whatever thin
-    lines run beside it a third of a bond off, as a chair's do - read so, it
-    was a carbon with five bonds;
+    much thicker than the rest - at least 1.8 times: a perspective drawing's
+    near edge is a little over twice - a bold one - but not one more than two
+    and a half bonds long that meets others only square, or none: a frame's
+    side, a graph's axis, a page's rule. A bold line is a bond drawn thick,
+    toward the viewer (2026-11-13): single, or double where a thin line,
+    shorter than it (under 0.85 of its length), runs inside it within the
+    usual double-bond spacing - the double bond kept bold; never one line of
+    three, and never joined by a thin line as long as it, whatever its spacing,
+    as a chair's back bond beside its front one is not. A line lying along
+    another - the same middle line, within a sixteenth of a bond, within its
+    stretch: the hairline a program draws along a bold bar - is that line, never
+    a second line of a multiple bond. (Read as a triple bond, a near edge's double
+    bond was an alkene lost to a carbon with five bonds.);
   - lines side by side - the second may be short, from three twentieths
     of a bond, where it lies alongside the first within its stretch - a fifth of a bond or so apart and alongside each
     other for most of the shorter (seven tenths: a cube's parallel edges,
@@ -1253,7 +1259,10 @@ it where it lies out of view.
     of its own lines may be a dot: a small filled shape, or a line next to
     nothing long whose round ends make it one, as Meno's own style draws
     it) - one of them at least a line of some width: dots alone are a
-    joint's. Its
+    joint's. A line drawn as a filled round-capped mark, a stadium, or a dot
+    drawn so is one too, where it is thin (under 0.16 of a bond across) and
+    shorter than 0.3 of a bond (2026-11-13: a label's hashed bond of three such
+    marks was not read, and the label with it). Its
     lines all go one way, so two hashes meeting at an atom, joined there
     through its joints' dots, are two; and a hash's narrow end set off
     from its atom, its first line taken as a joint's or stopping short,
@@ -1448,12 +1457,14 @@ it where it lies out of view.
     positive charge: a diaryliodonium's iodine); a charge past four
     either way - marks the atom or
     label drawn. Where an atom has more bonds than it takes, written out as
-    a file has it - not a charge alone - the structure is not taken at all
-    (2026-11-13: a misread drawing is not put down, even marked unsure): a
-    structure picked from a page, or a figure read as one, gives none and says
-    why ("More bonds meet at a carbon than it takes: the drawing is misread,
-    so none of it is taken."). A picture read by the plugin that reads
-    pictures is that plugin's, and is not refused so;
+    a file has it - not a charge alone - that structure is not taken
+    (2026-11-13: not put down, even marked unsure): a structure picked from a
+    page gives none and says why ("As read, more bonds meet at a carbon than it
+    takes: none of it is taken."); a figure read whole leaves out each such
+    structure on its own - the rest placed - and says how many it left out. A
+    drawing can itself show five bonds, a transition state's forming bond: the
+    words say "as read". A picture read by the plugin that reads pictures is
+    that plugin's, and is not refused so;
   - a radical's dots by an atom whose bonds leave it no unpaired electron:
     no radical is read - a speck, or a letter's round shape, lies there
     as often ("A dot by it, but its bonds leave it no unpaired electron:

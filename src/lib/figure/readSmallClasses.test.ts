@@ -21,6 +21,38 @@ const beside = (a: P, b: P, by: number): [P, P] => {
 };
 const figure = (paths: FigurePath[], letters: FigureLetter[] = []): FigureDrawn => ({ paths, letters, pictures: [] });
 
+describe("a double bond on a perspective drawing's near edge", () => {
+  // (measured on a real page: the near edge's double bond is three lines - a bold bar a bond long, twice a thin line's width; a hairline
+  //  bar along it, the same middle; and the double bond's thin inner line, shorter, a fifth of a bond off - read as a triple bond)
+  const thin = 0.073 * L;
+  const near = (inner: boolean, hairline = true): FigurePath[] => {
+    const [p1, p2]: [P, P] = [[100, 100], [100 + L, 100]];
+    const m = 100 + L / 2;
+    return [
+      line([p1[0] - L / 2, 100 - 0.87 * L], p1, thin),
+      line(p2, [p2[0] + L / 2, 100 - 0.87 * L], thin),
+      bar([m - 0.465 * L, 100], [m + 0.465 * L, 100], 0.15 * L),
+      ...(hairline ? [line([m - 0.455 * L, 100], [m + 0.455 * L, 100], 0.009 * L)] : []),
+      ...(inner ? [line([m + 0.15 * L - 0.34 * L, 100 + 0.2 * L], [m + 0.15 * L + 0.34 * L, 100 + 0.2 * L], thin)] : []),
+    ];
+  };
+
+  it("is one double bond, drawn bold: not a triple bond of its three lines", () => {
+    const read = readFigure(figure(near(true)));
+    expect(read.bonds).toHaveLength(3);
+    const double = read.bonds.filter((b) => b.order > 1);
+    expect(double).toHaveLength(1);
+    expect(double[0]).toMatchObject({ order: 2, bold: true });
+  });
+
+  it("is a single bold bond where it has no inner line: its hairline is the same line, never a second one", () => {
+    const read = readFigure(figure(near(false)));
+    expect(read.bonds).toHaveLength(3);
+    expect(read.bonds.filter((b) => b.bold).map((b) => b.order)).toEqual([1]);
+    expect(Math.max(...read.bonds.map((b) => b.order))).toBe(1);
+  });
+});
+
 describe("a bold bond of a perspective drawing (a thick front bond)", () => {
   // (a ring's edge drawn thick, thin edges of the ring's other side running parallel to it a third of a bond off - as a chair's back
   //  and front bonds do - were taken for the lines of a double or a triple bond: a carbon with five bonds)

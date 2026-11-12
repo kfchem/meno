@@ -690,6 +690,6 @@ describe("a structure read that breaks valence is not taken (a bold front bond r
     // (a fifth line from the same carbon: no carbon has five bonds)
     const five = structuresOf({ paths: [...four, stroke(c, step(c, 45))], letters: [], pictures: [] }, 0, "pdf", 0, []);
     expect(five).toHaveLength(1);
-    expect(five[0].read).toEqual({ none: "More bonds meet at a carbon than it takes: the drawing is misread, so none of it is taken." });
+    expect(five[0].read).toEqual({ none: "As read, more bonds meet at a carbon than it takes: none of it is taken." });
   });
 });

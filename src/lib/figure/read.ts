@@ -200,7 +200,10 @@ function multiples(lines: Stroke[], bond: number, bold: (s: Stroke) => boolean =
   const used = new Set<Stroke>();
   const bonds: Drawn[] = [];
   const pair = (s: Stroke, t: Stroke) => {
-    if (bold(s) || bold(t)) return false;
+    // (a bold line is the near edge of a double bond - its second line a thin one, shorter, inside it - or a single bond; a thin line as
+    // long as it, a chair's back bond beside its front one, is another bond's, and a bold line is never one of three)
+    const [longer, shorter] = len(s) >= len(t) ? [s, t] : [t, s];
+    if (bold(shorter) || (bold(longer) && len(shorter) >= 0.85 * len(longer))) return false;
     const u = unit(s.a, s.b);
     if (Math.abs(cross(u, unit(t.a, t.b))) > Math.sin((8 * Math.PI) / 180)) return false;
     const off = Math.abs(cross(u, { x: mid(t.a, t.b).x - s.a.x, y: mid(t.a, t.b).y - s.a.y }));
@@ -217,7 +220,7 @@ function multiples(lines: Stroke[], bond: number, bold: (s: Stroke) => boolean =
     left.delete(s);
     for (let i = 0; i < group.length && group.length < 3; i++) {
       for (const t of [...left]) {
-        if (group.length < 3 && pair(group[i], t)) {
+        if (group.length < (group.some(bold) ? 2 : 3) && pair(group[i], t)) {
           group.push(t);
           left.delete(t);
         }
@@ -263,7 +266,7 @@ function multiples(lines: Stroke[], bond: number, bold: (s: Stroke) => boolean =
       const p1 = { x: s0.a.x + u.x * hi, y: s0.a.y + u.y * hi };
       ends = [f(p0), f(p1)];
     }
-    bonds.push({ a: ends[0], b: ends[1], order: group.length as 2 | 3 });
+    bonds.push({ a: ends[0], b: ends[1], order: group.length as 2 | 3, ...(group.some(bold) ? { bold: true } : {}) });
   }
   return { bonds, used };
 }
@@ -283,6 +286,12 @@ function wavy(c: Curve, bond: number): Drawn | null {
   for (let i = 1; i < offs.length; i++) if (Math.sign(offs[i]) !== Math.sign(offs[i - 1]) && Math.abs(offs[i]) > most * 0.2) turns++;
   return turns >= 2 ? { a, b, order: 1, stereo: "wavy" } : null;
 }
+
+/** How thin a round-capped mark is at the most, in bonds, to be a hash's: its line or its dot. */
+const THIN_MARK = 0.16;
+
+/** How many times the thin lines' width a line is, at the least, to be bold: a perspective drawing's near edge is a little over twice it. */
+const BOLD_TIMES = 1.8;
 
 const SYMBOLS = new Set(ELEMENTS.map((e) => e.symbol));
 /** Whether a label is an element's symbol alone, with its H and charge (N, OH, Cl-): no group's name (Me is one). */
@@ -897,7 +906,8 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   // (small filled shapes - a hash's first strokes drawn filled - as strokes too)
   const blobOf = new Map<Stroke, object>();
   const bits = shapes.blobs
-    .filter((b) => !b.curved && Math.max(b.box[2] - b.box[0], b.box[3] - b.box[1]) < 0.3 * bond)
+    // (a round-capped mark - a hash's lines drawn as filled stadiums, or its dot - too: thin, no letter's shape)
+    .filter((b) => Math.max(b.box[2] - b.box[0], b.box[3] - b.box[1]) < 0.3 * bond && (!b.curved || narrowestBox(b.pts).short < THIN_MARK * bond))
     .map((b): Stroke => {
       const n = narrowestBox(b.pts);
       const s = { a: { x: n.mid.x - (n.u.x * n.long) / 2, y: n.mid.y - (n.u.y * n.long) / 2 }, b: { x: n.mid.x + (n.u.x * n.long) / 2, y: n.mid.y + (n.u.y * n.long) / 2 }, w: n.short };
@@ -1019,13 +1029,23 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   // (a line broken where another passes in front, one piece short - a cage's back edge - joined again too; a short piece joined to nothing stays out)
   const loose = shapes.strokes.filter((s) => !repeats.strokes.has(s) && !inHashes.has(s) && !inLetters.has(s) && !lines.includes(s) && !ruled(s) && !table.has(s) && len(s) > 0.04 * bond);
   const joined = joinedAcross([...lines, ...loose], bond);
-  const whole = joined.filter((s) => !loose.includes(s));
+  // (a line lying along another - the same middle line, within a sixteenth of a bond, as long as the other or shorter, within its stretch -
+  // is that line: a bold bar has a hairline drawn along it. It is never a second line of a multiple bond)
+  const along = (s: Stroke, t: Stroke) => {
+    if (s === t || len(t) < len(s) || (len(t) === len(s) && joined.indexOf(t) > joined.indexOf(s))) return false;
+    const u = unit(t.a, t.b);
+    if (Math.abs(cross(u, unit(s.a, s.b))) > Math.sin((3 * Math.PI) / 180)) return false;
+    const off = (p: Point) => Math.abs(cross(u, { x: p.x - t.a.x, y: p.y - t.a.y }));
+    const at = (p: Point) => dot(u, { x: p.x - t.a.x, y: p.y - t.a.y });
+    return off(mid(s.a, s.b)) < 0.06 * bond && [s.a, s.b].every((p) => at(p) > -0.05 * bond && at(p) < len(t) + 0.05 * bond);
+  };
+  const whole = joined.filter((s) => !loose.includes(s) && !joined.some((t) => along(s, t)));
   const used = loose.filter((s) => !joined.includes(s));
-  // (a line much thicker than most - a Haworth ring's front, a perspective drawing's front bond - is bold: a single bond drawn
-  // thick, toward the viewer; never a line of a double or triple bond, whatever thin lines run beside it)
+  // (a line much thicker than most - a Haworth ring's front, a perspective drawing's near edge - is bold: a bond drawn thick, toward
+  // the viewer, single or double - the double with a thin inner line, shorter, beside it - never one line of three)
   const widths = whole.map((s) => s.w).sort((a, b) => a - b);
   const thin = widths.length ? widths[Math.floor(widths.length / 2)] : 0;
-  const bold = (s: Stroke) => s.w > 2.5 * thin && s.w > 0.12 * bond;
+  const bold = (s: Stroke) => s.w > BOLD_TIMES * thin && s.w > 0.12 * bond;
   const { bonds: multi, used: inMulti } = multiples(whole, bond, bold);
   const drawnBonds: Drawn[] = [
     ...whole.filter((s) => !inMulti.has(s)).map((s): Drawn => ({ a: s.a, b: s.b, order: 1, ...(bold(s) ? { bold: true } : {}) })),
