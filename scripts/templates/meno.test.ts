@@ -231,3 +231,22 @@ describe("the backward paths, run on made results", () => {
     expect([b.titles(a), b.titles(second), b.titles(second, "rest")]).toEqual([["right"], ["reversed"], ["other species"]]);
   });
 });
+
+describe("the cap after the two directions are merged, and the split back by direction", () => {
+  const found = (name: string, dir: "forward" | "backward", product: string, energy: number) => entry(name, 0, [energy], [{ [`path-${dir}`]: name, product, "path-name": name }]);
+
+  it("keeps the lowest 16 of each path whichever direction they came from, and splits what is kept by the path tag it carries", () => {
+    const b = builder();
+    // (18 saddle points of path product-1: 9 from each direction, energies rising; 2 of path product-2)
+    const many = Array.from({ length: 18 }, (_, i) => found(`s${String(i).padStart(2, "0")}`, i % 2 ? "forward" : "backward", "product-1", -76.4 + 0.001 * i));
+    const set = b.set([...many, found("t0", "forward", "product-2", -76.39), found("t1", "backward", "product-2", -76.38)]);
+    const capped = b.run("saddles-16", { in: { set } });
+    const kept = b.titles(capped, "out", "path-name");
+    expect(kept).toHaveLength(18);
+    expect(kept.filter((t) => t.startsWith("s"))).toEqual(many.slice(0, 16).map((m) => String(m.properties![0]["path-name"].value)).sort());
+    expect(b.titles(capped, "rest", "path-name")).toEqual(["s16", "s17"]);
+    const split = b.run("dft-split", { in: { set: resultOf(b.doc, capped)!.id } });
+    expect(b.titles(split, "out", "path-name")).toEqual(["s01", "s03", "s05", "s07", "s09", "s11", "s13", "s15", "t0"]);
+    expect(b.titles(split, "rest", "path-name")).toEqual(["s00", "s02", "s04", "s06", "s08", "s10", "s12", "s14", "t1"]);
+  });
+});
