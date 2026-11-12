@@ -513,7 +513,7 @@ solid of lib/chem/perception/projection seen its standard way, as ordinary atoms
 their configuration is the drawing's (`stereoCentre`) and the near edge bold (`Bond.display`); after that it is a drawing like any other - nothing
 remembers that a tool made it - and what Meno does with a structure works on it through its depth (`volumeInSpace`, lib/layout/drawn). The
 longest ring bond as drawn is the style's bond length (`chairScale`, one constant: by convention, no basis claimed). Built so far: the **chair**
-(`Workspace/projections/`: `chair`, `extend`, `flip`, `fuse`); the Haworth ring and the Newman projection follow.
+(`Workspace/projections/`: `chair`, `extend`, `flip`, `fuse`), and the **Haworth ring** (`haworth`; `rings` finds either on a page); the Newman projection follows.
 - **Groups are drawn by extension.** A bond led out of an atom of a chair goes to one of that atom's free positions, as the solid gives them seen as it is
   seen - the nearer the pointer's direction - and nowhere between, held or paused, so that nothing drawn on a chair is unread; a position a group holds is
   not offered; both held, the stroke goes as any. The pointer's tip says what the place is - "axial" or "equatorial" - not how it is read
@@ -539,7 +539,16 @@ longest ring bond as drawn is the style's bond length (`chairScale`, one constan
 - **What a chair states.** A projection always states a configuration (Brecher 2008, ST-3.2: every centre without a wavy bond): a group led out
   "wherever it fits" has drawn one, meant or not, and the R and S shown are the check. To leave a centre open, make its bond wavy. An atom dragged by
   hand keeps its depth: what is read may change, and only the labels say so.
-- **Limits.** No five-ring or bridged ring from the tools; no boat or twist from a tool (one can be drawn bond by bond); flat to chair is not offered;
+- **The Haworth ring** (Quick Add, *Projections*: a ring of six, a pyranose's, and of five, a furanose's - two icons, the look owner to say whether one icon
+  with a second click is better). Seen from slightly above so that the nearer edge is drawn lower, bold, the ring O behind - at the back right for the six,
+  at the back for the five - and C-1 at the right-hand end (McNaught 1996, 2-Carb-5.4); the ring O is an atom like any and can be changed. The free
+  positions are *up* and *down* at each ring atom, vertical on the page: groups are led out to them as a chair's are, the tip saying "up" or "down". The
+  right-click *Draw flat*, Clean-up leaving it as drawn and the 3D notice are the chair's. It is not flipped or fused. **What reads a Haworth ring is F8's:**
+  today a ring all of whose atoms carry a depth is taken as a cage's solid (`cageFits`, lib/layout/drawn) and a planar ring read so states no
+  configuration at its centres (measured: the same ring with one atom's depth left out reads each) - so until the depth read of F8 is in, a Haworth
+  ring's groups are drawn right and read as nothing, and *Draw flat* and 3D would lose them. Its known answers (beta- and alpha-D-glucopyranose
+  against their SMILES, and against the 4C1 chair built with the chair tool) are written in `haworth.test.ts` as todos for F8.
+- **Limits.** No five-ring or bridged ring from the tools beyond the Haworth furanose; no boat or twist from a tool (one can be drawn bond by bond); flat to chair is not offered;
   a fused system is not flipped by the tool; the chair's second standard view is the solids' (`standardView`, form 1), not yet a choice in the tool.
 
 *SMILES*, *Scheme*, *Projections*, *Marks on the page* and *Calculations* open and shut their panels a click

@@ -33,7 +33,7 @@ describe("Quick Add", () => {
     // (Marks on the page: the shapes - a rectangle, its corners rounded from its menu, an ellipse and a line - and the pen)
     expect(marks).toEqual(["Rectangle", "Ellipse", "Line", "Pen"]);
     // (Projections: the solids put down as a drawing is made of them - the chair first)
-    expect(projections).toEqual(["Chair"]);
+    expect(projections).toEqual(["Chair", "Haworth ring, six atoms", "Haworth ring, five atoms"]);
   });
 
   it("its rules and its SMILES field span the row whole: each icon, the gaps between them, the divider", () => {

@@ -17,7 +17,7 @@ import { layoutJob, nextFree, relayoutFrom, type LayoutJob } from "./engineLayou
 import { layOut } from "./layOut";
 import { atTrueSize } from "../../../../lib/chem/magnified2d";
 import { formulaOf } from "../../../../lib/io/coordinates";
-import { isProjection } from "../projections/chair";
+import { isProjection } from "../projections/rings";
 
 /**
  * An atom and every atom bonded to it, however far along - a haptic bond

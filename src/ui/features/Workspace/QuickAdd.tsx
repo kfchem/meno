@@ -23,7 +23,7 @@ import { resolve, sameFormula, type Reading } from "./chem/resolve";
 import { FormulaText } from "../../abbreviations/FormulaText";
 
 /** What Quick Add puts down where it was opened. */
-export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "cycle" | "slide" | "pen" | "conversation" | "chair";
+export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "cycle" | "slide" | "pen" | "conversation" | "chair" | "pyranose" | "furanose";
 
 /** Each icon's size, in px; and the gap between two in a row (gap-0.5). */
 const SIZE = 36;
@@ -174,6 +174,28 @@ const PROJECTIONS: typeof ROW = [
         <path d="M16.6 9 L13.3 8.7 L6.7 6.5 L3.4 11 L6.7 11.3" />
         <path d="M6.7 11.3 L13.3 13.5" strokeWidth={2.8} />
         <path d="M13.3 13.5 L16.6 9" />
+      </>
+    ),
+  },
+  {
+    id: "pyranose",
+    name: "Haworth ring, six atoms",
+    // (a Haworth ring of six seen from slightly above: the ring O behind, the front edge heavier)
+    icon: (
+      <>
+        <path d="M5 7.5 L8.5 5.2 L13.5 5.2 L17 7.5 L14 9.8 L8 9.8 Z" />
+        <path d="M14 9.8 L8 9.8" strokeWidth={2.8} />
+      </>
+    ),
+  },
+  {
+    id: "furanose",
+    name: "Haworth ring, five atoms",
+    // (and of five: the ring O at the back)
+    icon: (
+      <>
+        <path d="M11 4.8 L16.5 7.8 L14.4 10.4 L7.6 10.4 L5.5 7.8 Z" />
+        <path d="M14.4 10.4 L7.6 10.4" strokeWidth={2.8} />
       </>
     ),
   },

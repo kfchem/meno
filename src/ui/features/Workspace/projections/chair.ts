@@ -23,19 +23,19 @@ export function chairScale(solid: Solid, view: View, length = NOMINAL_BOND_LENGT
 }
 
 /**
- * A chair in one of its two standard views (`form` 0 or 1, F9 `standardView`), or its ring flip (`flip`), its middle at `at`: atom k of the solid is
- * `firstId + k`, its bond k `firstBondId + k`. The near edge - the two atoms nearest the viewer - is bold.
+ * A solid seen in `view` as a drawing: atom k of the solid is `firstId + k`, its bond k `firstBondId + k`, its middle at `at`, scaled so that the longest of
+ * its ring bonds as drawn is `length`; the atoms carry their depth, the flag that their configuration is the drawing's and R and S shown where a group
+ * makes a centre. The near edge - the two atoms nearest the viewer, where they are bonded - is bold. `element` names atom k's element (carbon).
  */
-export function chairDrawing(opts: { at: { x: number; y: number }; form?: 0 | 1; flip?: boolean; firstId: number; firstBondId: number; length?: number }): ChairDrawing {
-  const base = chair();
-  const solid = opts.flip ? flipped(base) : base;
-  const view = standardView(base, opts.form ?? 0);
-  const scale = chairScale(base, view, opts.length);
+export function drawSolid(opts: { solid: Solid; view: View; at: { x: number; y: number }; firstId: number; firstBondId: number; length?: number; element?: (k: number) => string }): ChairDrawing {
+  const { solid, view } = opts;
+  const scale = chairScale(solid, view, opts.length);
   const seen = solid.atoms.map((p) => project(view, p));
-  const middle = { x: seen.reduce((s, p) => s + p.x, 0) / 6, y: seen.reduce((s, p) => s + p.y, 0) / 6 };
+  const n = seen.length;
+  const middle = { x: seen.reduce((s, p) => s + p.x, 0) / n, y: seen.reduce((s, p) => s + p.y, 0) / n };
   const atoms: Atom[] = seen.map((p, k) => ({
     id: opts.firstId + k,
-    el: "C",
+    el: opts.element?.(k) ?? "C",
     r: 0.9,
     x: opts.at.x + (p.x - middle.x) * scale,
     y: opts.at.y + (p.y - middle.y) * scale,
@@ -53,6 +53,15 @@ export function chairDrawing(opts: { at: { x: number; y: number }; form?: 0 | 1;
     ...(near.includes(a) && near.includes(b) ? { display: "bold" as const } : {}),
   }));
   return { atoms, bonds, ring: atoms.map((a) => a.id), solid, view, scale };
+}
+
+/**
+ * A chair in one of its two standard views (`form` 0 or 1, F9 `standardView`), or its ring flip (`flip`), its middle at `at`: atom k of the solid is
+ * `firstId + k`, its bond k `firstBondId + k`.
+ */
+export function chairDrawing(opts: { at: { x: number; y: number }; form?: 0 | 1; flip?: boolean; firstId: number; firstBondId: number; length?: number }): ChairDrawing {
+  const base = chair();
+  return drawSolid({ solid: opts.flip ? flipped(base) : base, view: standardView(base, opts.form ?? 0), at: opts.at, firstId: opts.firstId, firstBondId: opts.firstBondId, length: opts.length });
 }
 
 /** A free position as the page sees it from atom `k` of a drawing: where a group's atom goes (page units), and what the position is. */
@@ -89,8 +98,8 @@ export function snapTo(d: ChairDrawing, k: number, pointer: { x: number; y: numb
 /** A chair found on a page: which of its two standard views and whether flipped, how it is scaled and where its middle is, and each ring atom's place in the solid. */
 export type FoundChair = { form: 0 | 1; flip: boolean; scale: number; at: { x: number; y: number }; index: Map<number, number> };
 
-/** The six-rings of a drawing whose atoms all carry a depth, each as atom ids in order round it. */
-export function depthRings(model: Pick<{ atoms: Atom[]; bonds: Bond[] }, "atoms" | "bonds">): number[][] {
+/** The rings of `size` of a drawing whose atoms all carry a depth, each as atom ids in order round it. */
+export function depthRings(model: Pick<{ atoms: Atom[]; bonds: Bond[] }, "atoms" | "bonds">, size = 6): number[][] {
   const deep = new Set(model.atoms.filter((a) => a.z != null).map((a) => a.id));
   const near = new Map<number, number[]>();
   for (const b of model.bonds) {
@@ -102,8 +111,8 @@ export function depthRings(model: Pick<{ atoms: Atom[]; bonds: Bond[] }, "atoms"
   const walk = (path: number[]) => {
     const last = path[path.length - 1];
     for (const n of near.get(last) ?? []) {
-      if (path.length === 6 && n === path[0]) found.set([...path].sort((p, q) => p - q).join(","), [...path]);
-      else if (path.length < 6 && n > path[0] && !path.includes(n)) walk([...path, n]);
+      if (path.length === size && n === path[0]) found.set([...path].sort((p, q) => p - q).join(","), [...path]);
+      else if (path.length < size && n > path[0] && !path.includes(n)) walk([...path, n]);
     }
   };
   for (const id of near.keys()) walk([id]);
@@ -198,6 +207,3 @@ export function chairsIn(model: { atoms: Atom[]; bonds: Bond[] }, ids: ReadonlyS
   const part = { atoms: model.atoms.filter((a) => ids.has(a.id)), bonds: model.bonds.filter((b) => ids.has(b.a) && ids.has(b.b)) };
   return depthRings(part).filter((ring) => chairOf(part, ring) != null);
 }
-
-/** Whether a structure holds a projection - for now, a chair of the tool's: Clean-up leaves it as drawn, and *Draw flat* lays it out flat (docs/EDITOR-2D.md, *Projections*). */
-export const isProjection = (model: { atoms: Atom[]; bonds: Bond[] }, ids: ReadonlySet<number>): boolean => chairsIn(model, ids).length > 0;

@@ -227,7 +227,9 @@ import { leftOutSaid } from "./utils/readNotes";
 import { outputKindIn } from "../../../lib/calc/probe";
 import { NotRead } from "../../../lib/calc/read";
 import { namedDrawn, putDownSmiles } from "./utils/quickAddSmiles";
-import { chairDrawing, isProjection } from "./projections/chair";
+import { chairDrawing } from "./projections/chair";
+import { haworthDrawing } from "./projections/haworth";
+import { isProjection } from "./projections/rings";
 import { flipOf } from "./projections/flip";
 import { FUSE_WAYS, fusedOn, fusableBonds } from "./projections/fuse";
 import { addedBox } from "./store/slices/modelSlice";
@@ -2064,6 +2066,8 @@ function WorkspaceContent({
               }
               // (a chair put down where Quick Add was opened, as drawn atoms and bonds that carry their depth: the ids are the paste's own)
               else if (what === "chair") st.pasteModel(centredAt(chairDrawing({ at, firstId: 1, firstBondId: 1 }), at));
+              // (and a Haworth ring, a pyranose's of six or a furanose's of five: the same)
+              else if (what === "pyranose" || what === "furanose") st.pasteModel(centredAt(haworthDrawing({ at, size: what === "pyranose" ? 6 : 5, firstId: 1, firstBondId: 1 }), at));
               else st.addPlus(at.x, at.y);
             }}
           />
