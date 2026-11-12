@@ -165,8 +165,14 @@ describe("the half-chair and the envelope, drawn by convention", () => {
     const h = halfChair();
     for (const k of [0, 3]) expect(freeAt(h, k).map((f) => f.kind).sort()).toEqual(["pseudo-axial", "pseudo-equatorial"]);
     for (const k of [4, 5]) expect(freeAt(h, k).map((f) => f.kind).sort()).toEqual(["axial", "equatorial"]);
-    // (none on the double bond's atoms, 1 and 2)
-    expect(freeAt(h, 1)).toEqual([]);
+    // (the double bond's atoms, 1 and 2, have one each, in the plane and pointing out: opposite the bisector of the two ring bonds, 120 degrees from each)
+    for (const k of [1, 2]) {
+      const [only] = freeAt(h, k);
+      expect(freeAt(h, k)).toHaveLength(1);
+      expect(only.kind).toBe("in-plane");
+      close(only.direction[2], 0);
+      for (const u of arms(h, k)) close(dot(only.direction, u), -0.5);
+    }
     // (the axial one the steeper: nearer the normal)
     for (const k of [0, 3, 4, 5]) {
       const [x, y] = freeAt(h, k).sort((p, q) => (p.kind.endsWith("axial") ? -1 : 1) - (q.kind.endsWith("axial") ? -1 : 1));
@@ -335,6 +341,48 @@ describe("rings fused on a chair", () => {
     const lengths = m.bonds.map(([a, b]) => distance(m.atoms[a], m.atoms[b])).sort((x, y) => y - x);
     close(lengths[0], 1.501, 3);
     expect(lengths.slice(1).every((v) => Math.abs(v - 1) < 1e-9)).toBe(true);
+  });
+
+  describe("the faces of a fused ring's own atoms, signed as the first ring signs them", () => {
+    /** Every free position's face is the side of the axis its direction leans to, in a system whose rings all share the axis. */
+    const faces = (d: Solid) => {
+      for (const f of d.free) expect(Math.sign(f.direction[2])).toBe(f.face);
+    };
+    const bondOf = (d: Solid, a: number, b: number) => d.bonds.findIndex(([x, y]) => x === a && y === b);
+
+    it("in trans-decalin, trans-syn-trans perhydroanthracene and trans-anti-trans perhydrophenanthrene: face 1 points up the axis, every one", () => {
+      const t = fused(c, 0, "chair", "trans");
+      faces(t);
+      expect(t.free).toHaveLength(10 + 8);
+      faces(fused(t, bondOf(t, 8, 9), "chair", "trans"));
+      faces(fused(t, bondOf(t, 7, 8), "chair", "trans"));
+    });
+
+    it("in each cis-decalin, the fusion hydrogens are on the face the first ring gives them as the new ring's own labels see them", () => {
+      for (const face of [1, -1] as const) {
+        const d = fused(c, 0, "chair", { cis: face });
+        const ring = [0, 1, 7, 8, 9, 6];
+        const p = ring.map((k) => d.atoms[k]);
+        const n = unit(cross(sub(p[2], p[0]), sub(p[4], p[0])));
+        // (the new ring's labelled up: the side its own positions that say face 1 lean to)
+        const own = d.free.filter((f) => f.at >= 6);
+        const up = Math.sign(dot(own[0].direction, n)) * own[0].face;
+        for (const f of own) expect(Math.sign(dot(f.direction, n)) * up).toBe(f.face);
+        for (const h of d.free.filter((f) => f.at < 6 && arms(d, f.at).length === 3)) expect(Math.sign(dot(h.direction, n)) * up).toBe(h.face);
+      }
+    });
+
+    it("a third ring fused cis on face 1 onto trans-decalin's new ring leaves on the upper side of the whole, face -1 on the lower", () => {
+      const t = fused(c, 0, "chair", "trans");
+      const bond = bondOf(t, 7, 8);
+      for (const face of [1, -1] as const) {
+        const three = fused(t, bond, "chair", { cis: face });
+        const added = three.atoms.slice(10);
+        const mean = added.reduce((sum, p) => sum + p[2], 0) / added.length;
+        const base = t.atoms.reduce((sum, p) => sum + p[2], 0) / t.atoms.length;
+        expect(Math.sign(mean - base)).toBe(face);
+      }
+    });
   });
 
   it("refuses what it does not build: a boat, a bond that is not a chair's ring bond", () => {

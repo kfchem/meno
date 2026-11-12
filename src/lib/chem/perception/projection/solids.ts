@@ -22,8 +22,8 @@ export type FreePosition = {
   /** A unit vector, from the atom. */
   direction: V3;
   /** What the place is called: a chair's axial or equatorial; a Haworth ring's up or down; one of a Newman atom's three. */
-  kind: "axial" | "equatorial" | "pseudo-axial" | "pseudo-equatorial" | "bowsprit" | "flagpole" | "up" | "down" | "spoke";
-  /** Which side of the ring's mean plane it lies on: 1 the side the axis points to - up - and -1 the other. A Newman's spoke, which has no ring: 1 on the front atom, -1 on the back. */
+  kind: "axial" | "equatorial" | "pseudo-axial" | "pseudo-equatorial" | "bowsprit" | "flagpole" | "up" | "down" | "spoke" | "in-plane";
+  /** Which side of the ring's mean plane it lies on (an `in-plane` position, which lies on none, says 1): 1 the side the axis points to - up - and -1 the other. A Newman's spoke, which has no ring: 1 on the front atom, -1 on the back. */
   face: 1 | -1;
 };
 
@@ -109,8 +109,10 @@ export function flipped(c: Solid): Solid {
  *  - a pyranose: O at 60 degrees (back right), C1 at 0 (right), C2 at -60 (front right), C3 at -120, C4 at 180 (left), C5 at 120;
  *  - a furanose: O at 90 (the back), C1 at 18 (right), C2 at -54, C3 at -126, C4 at 162.
  * The corners of a regular n-gon of side 1 lie on a circle of radius 1/(2 sin(180/n)): 1 for six, 0.85065 for five.
- * By convention (the carbohydrate drawing's: ring O at the back right, C1 at the right - to be checked by CHEM against
- * IUPAC 1996, nomenclature of carbohydrates, the Haworth representation).
+ * McNaught 1996, 2-Carb-5.4 (checked by CHEM): "viewed from slightly above so that the edge closer to the viewer is drawn below the more
+ * distant edge, with the oxygen behind and C-1 at the right-hand end", the numbering then running clockwise; "the ring O at the back right"
+ * of a pyranose is not in the words, it follows from them. 2-Carb-5.5 allows other orientations, in all of which the lower edge is still the
+ * nearer: this is the tool's standard one, and a reader must not need the O at the back.
  */
 export function haworth(size: 5 | 6): Solid {
   const radius = 1 / (2 * Math.sin(Math.PI / size));
@@ -261,7 +263,8 @@ export const HALF_CHAIR_OUT = 0.25;
  * 0 and 3 at the next corners of the regular hexagon, (-1, -sqrt(3)/2, 0) and (1, -sqrt(3)/2, 0); atom 4 at (x, y, d), with |4 - 5| = 1
  * giving x = sqrt(1/4 - d^2), and |4 - 3| = 1 giving y = -sqrt(3)/2 - sqrt(1 - d^2 - (x - 1)^2). The free positions at the allylic atoms
  * are pseudo-axial (the one more nearly parallel to the plane's normal) and pseudo-equatorial (Moss, *Axial, Equatorial*); at the other
- * two, axial and equatorial. The axis is the plane's normal.
+ * two, axial and equatorial; the double bond's atoms, 1 and 2, have one each, `in-plane`, pointing out of the ring (a group on an alkene carbon).
+ * The axis is the plane's normal.
  */
 export function halfChair(): Solid {
   const d = HALF_CHAIR_OUT;
@@ -276,6 +279,11 @@ export function halfChair(): Solid {
     [-x, y, -d],
   ];
   const bonds = ringBonds(6);
+  // (the double bond's atoms, 1 and 2, have one each, in the plane, pointing out: opposite the bisector of their two ring bonds)
+  const vinylic = [1, 2].map((k): FreePosition => {
+    const [u1, u2] = ringArms(atoms, bonds, k);
+    return { at: k, direction: unit(scale(add(u1, u2), -1)), kind: "in-plane", face: 1 };
+  });
   const free = [0, 3, 4, 5].flatMap((k): FreePosition[] => {
     const [d1, d2] = completing(...ringArms(atoms, bonds, k));
     const [steep, flat] = Math.abs(d1[2]) > Math.abs(d2[2]) ? [d1, d2] : [d2, d1];
@@ -285,7 +293,7 @@ export function halfChair(): Solid {
       { at: k, direction: flat, kind: allylic ? "pseudo-equatorial" : "equatorial", face: flat[2] >= 0 ? 1 : -1 },
     ];
   });
-  return { kind: "half-chair", atoms, bonds, free, axis: [0, 0, 1] };
+  return { kind: "half-chair", atoms, bonds, free: [...vinylic, ...free].sort((p, q) => p.at - q.at), axis: [0, 0, 1] };
 }
 
 /**
@@ -327,7 +335,10 @@ export function envelope(): Solid {
  * first ring calls it.
  *
  * A five-ring (`envelope`) does not close with ideal angles: it is built on the four atoms in a row and its fifth atom placed tetrahedrally
- * from the bond's second atom, turned about the bond to come nearest the first; the solid's `miss` is how far from 1 that closing bond comes out.
+ * from the bond's second atom, turned about the bond to come nearest the first; the solid's `miss` is how far from 1 that closing bond comes out
+ * (1.50, and an angle of some 85 degrees). It is stated, not hidden, but it is NOT a usable five-ring shape: nothing is to be drawn or fitted from
+ * it until a five-ring is built another way (a hydrindane's or a steroid's D ring needs strained angles, which the engine's cage solids or a
+ * fit's tolerance carry).
  */
 export function fused(a: Solid, bond: number, ring: SolidKind, how: "trans" | { cis: 1 | -1 }): Solid {
   if (ring !== "chair" && ring !== "envelope") throw new Error(`a ${ring} ring is not fused here`);
@@ -356,6 +367,10 @@ export function fused(a: Solid, bond: number, ring: SolidKind, how: "trans" | { 
   }
   if (!found) throw new Error("no chair of the new ring matches");
   const { m, order } = found;
+  // (the new ring's faces are signed as the first ring signs them: the ring-fusion hydrogen at the bond's first atom keeps its face. The template's
+  // faces are its own sides - of the axis m z - which may be the first ring's down: then all of them are turned over)
+  const h = kept.find((f) => f.at === i)!;
+  const flip = Math.sign(dot(h.direction, turn(m, [0, 0, 1]))) * h.face;
   // (the new ring's atoms in order: x1, i, j, x2, then y, z - the two the first ring does not have)
   const atoms = [...a.atoms, x1, apply(m, six[order[3]]), apply(m, six[order[4]]), apply(m, six[order[5]])];
   const [ix1, ix2, iy, iz] = [n, n + 1, n + 2, n + 3];
@@ -363,7 +378,7 @@ export function fused(a: Solid, bond: number, ring: SolidKind, how: "trans" | { 
   // (the new ring's free positions, at its four new atoms: as the template gives them, turned)
   const own = [ix1, ix2, iy, iz];
   const newFree = [order[0], order[3], order[4], order[5]].flatMap((t, k) =>
-    template.free.filter((f) => f.at === t).map((f): FreePosition => ({ at: own[k], direction: turn(m, f.direction), kind: f.kind, face: f.face })),
+    template.free.filter((f) => f.at === t).map((f): FreePosition => ({ at: own[k], direction: turn(m, f.direction), kind: f.kind, face: (f.face * flip) as 1 | -1 })),
   );
   return { kind: "chair", atoms, bonds, free: [...kept, ...newFree], axis: a.axis };
 }
@@ -387,7 +402,9 @@ function fiveRing(a: Solid, i: number, j: number, x1: V3, x2: V3, kept: FreePosi
   const bonds: [number, number][] = [...a.bonds, [j, n + 1], [n + 1, n + 2], [n + 2, n], [n, i]];
   // (the new ring's own up: the normal of the plane through its four atoms in a row, to the side its fifth atom lies on)
   const normal = unit(cross(sub(a.atoms[j], a.atoms[i]), sub(x1, a.atoms[i])));
-  const up = dot(normal, sub(best.y, a.atoms[i])) >= 0 ? normal : scale(normal, -1);
+  // (up is the side the ring-fusion hydrogen at the bond's first atom keeps its face on: as the first ring signs it)
+  const h = kept.find((f) => f.at === i)!;
+  const up = Math.sign(dot(normal, h.direction)) * h.face >= 0 ? normal : scale(normal, -1);
   const own = [n, n + 1, n + 2];
   const free = own.flatMap((k): FreePosition[] =>
     completing(...ringArms(atoms, bonds, k)).map((d): FreePosition => ({ at: k, direction: d, kind: dot(d, up) >= 0 ? "up" : "down", face: dot(d, up) >= 0 ? 1 : -1 })),
