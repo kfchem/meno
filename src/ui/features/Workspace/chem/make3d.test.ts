@@ -436,6 +436,27 @@ describe("conformers made for the page", () => {
     expect(asked[0].args).toEqual({ molblock: block.molblock, isomers: [none], count: 40, options: {} });
   });
 
+  it("tells the plugin how many threads it may use beside its options, in one asking and in rounds, the options themselves left as they are - and none where none is given", async () => {
+    const asked: { options: Record<string, unknown>; count?: number; draw?: number }[] = [];
+    const chem = { request: async (_op: string, args: { options: Record<string, unknown>; count?: number; draw?: number }) => (asked.push(args), { isomers: [] }) } as unknown as ChemClient;
+    const stereo = { request: async (op: string) => (op === "stereo_elements" ? { read: true, elements: [] } : Promise.reject(new Error(`no ${op} here`))) } as unknown as ChemClient;
+    const [block] = blocksOf(ethanol, [12]);
+    const options = { field: "UFF" };
+    await conformersOf(chem, stereo, block, "one", options, 40, null, 6);
+    expect(asked.map((a) => a.options)).toEqual([{ field: "UFF", threads: 6 }]);
+    expect(options).toEqual({ field: "UFF" });
+    // (none given: the options as they were, so that a plugin that never heard of threads is asked as it was)
+    asked.length = 0;
+    await conformersOf(chem, stereo, block, "one", options, 40);
+    expect(asked.map((a) => a.options)).toEqual([{ field: "UFF" }]);
+    expect(asked[0].options).toBe(options);
+    // (in rounds: every round told)
+    asked.length = 0;
+    await conformersOf(chem, stereo, block, "one", options, 50, { window: 3, first: 10, most: MOST_CONFORMERS }, 3).catch(() => undefined);
+    expect(asked.length).toBeGreaterThan(0);
+    expect(asked.every((a) => a.options.threads === 3 && a.options.field === "UFF" && a.draw != null)).toBe(true);
+  });
+
   it("sends a metal complex's holds, and sets aside what Meno's checks find in what came back, saying so after the plugin's rows", async () => {
     // (Cl-Pd-P drawn; the plugin's answer its three atoms then the P's two H: a conformer at the bonds' lengths, then one with its P at 1.3)
     const pdModel: Model = {

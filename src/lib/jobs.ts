@@ -210,6 +210,20 @@ export function runningOf(c: Pick<CalculationSettings, "cores" | "coresAll">, co
   return { cores: Math.max(1, Math.min(c.cores ?? shared, all)) };
 }
 
+/** The most threads a search may be told it can use: what the plugins that take the number accept. */
+export const MOST_THREADS = 1024;
+
+/**
+ * How many threads one conformer search may use, as Settings, *Calculations*,
+ * has its cores (`runningOf`): the cores a job may take, a search being one -
+ * or, where `searches` run side by side, those shared among them - sent to the
+ * plugin with the request, which uses every core where it is told none. Never
+ * more than `MOST_THREADS`.
+ */
+export function threadsOf(c: Pick<CalculationSettings, "cores" | "coresAll">, cores = computerCores(), searches = 1): number {
+  return Math.min(MOST_THREADS, runningOf(c, cores, searches).cores);
+}
+
 /**
  * How Settings' cores are counted, in plain words, where it matters: on a
  * computer that runs more than one thread on each physical core, as its

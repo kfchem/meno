@@ -1106,7 +1106,9 @@ The same for every plugin and for Meno's own parts:
     metalHolds - `count`
     tried - Meno's number, where the role says `tries`; `draw`, which
     set of tries, where it also says `draws` - with the role's
-    options: every one made, in the order made, each its energy - or,
+    options, and `options.threads`, how many threads it may use: the
+    cores Settings, *Calculations*, gives a job (a plugin that does not
+    know it ignores it, and takes every core as it did): every one made, in the order made, each its energy - or,
     where the molecule's are none, those of the model it was optimised in,
     `modelEnergies` - each stereoisomer made itself);
     `drawing_of {molblock, perceive?}` (a drawing of a molecule in 3D,
