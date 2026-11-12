@@ -9,7 +9,7 @@ import type { CalcSource, ReaderOutput } from "../../../../../lib/calc/output";
 import { readOutput } from "../../../../../lib/calc/read";
 import { heldOutput, rememberOutput } from "../../../../../lib/calc/asks";
 import { addedNow, pluginClient } from "../../../../../lib/calc/workers";
-import { computerCores, computerResources, finished, jobDigest, jobFiles, jobFolder, jobOf, limitsOf, listJobs, overLimits, processesOf, programStamp, readJobFile, readJobLog, removeJob, runningOf, startJob, stopJob, stopJobAlone, STOPPED_ALONE, writeJobBack, type Job } from "../../../../../lib/jobs";
+import { computerCores, computerResources, finished, jobDigest, jobFiles, jobFolder, jobOf, limitsOf, listJobs, overLimits, processesOf, programStamp, readJobFile, readJobLog, removeJob, runningOf, startJob, stopJob, stopJobAlone, STOPPED_ALONE, threadsOf, writeJobBack, type Job } from "../../../../../lib/jobs";
 import { heldJobFile, heldJobSource, keptLogOf, recordOf, showFilesSaid } from "../../workflow/keptJobs";
 import { valuesOf, type OptionValues } from "../../../../../lib/options";
 import { lookFor, programKey, tooOld, useInstalled } from "../../../../../lib/plugins/installed";
@@ -797,7 +797,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           // (a metal's holds, Meno's - and which of what was made stand: lib/chem/metalHolds)
           const holds = metalHoldsOf(block.molblock);
           const ask = async (count: number | null, draw?: number) =>
-            (await chem.request("conformers", { molblock: block.molblock, isomers: which.isomers, ...(count != null ? { count } : {}), ...(draw != null ? { draw } : {}), ...(holds ? { holds } : {}), options }, CONFORMERS_MS)).isomers[0];
+            (await chem.request("conformers", { molblock: block.molblock, isomers: which.isomers, ...(count != null ? { count } : {}), ...(draw != null ? { draw } : {}), ...(holds ? { holds } : {}), options: { ...options, threads: threadsOf(useAppSettings.getState().calculations) } }, CONFORMERS_MS)).isomers[0];
           let got = rounds ? undefined : await ask(tries);
           if (rounds) {
             const round = async (n: number, draw: number) => {

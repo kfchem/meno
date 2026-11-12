@@ -578,9 +578,12 @@ export async function conformersOf(
   options: OptionValues = {},
   count: number | null = null,
   rounds: PageRounds | null = null,
+  threads: number | null = null,
 ): Promise<Conformers[]> {
   const made = await isomersToMake(stereo, block.molblock, block.like, which, CONFORMERS_MS);
   const tries = count != null ? { count } : {};
+  // (the threads it may use, beside the plugin's options: one that does not know them takes every core, as it did)
+  const sent = threads != null ? { ...options, threads } : options;
   const start = Date.now();
   // (a metal's holds, Meno's - of the block asked for, the drawing or its mirror image - and which of what was made stand:
   //  lib/chem/metalHolds)
@@ -591,12 +594,12 @@ export async function conformersOf(
   };
   const once = async (molblock: string, isomers: Configuration[]) => {
     const holds = held(molblock);
-    if (!rounds) return (await chem.request("conformers", { molblock, isomers, ...tries, ...(holds ? { holds } : {}), options }, CONFORMERS_MS)).isomers;
+    if (!rounds) return (await chem.request("conformers", { molblock, isomers, ...tries, ...(holds ? { holds } : {}), options: sent }, CONFORMERS_MS)).isomers;
     // (in rounds: each alone, as many as it needs, in what is left of the time the search takes at most - its first round always)
     const out: Omit<Conformers, "chosen">[] = [];
     for (const iso of isomers) {
       const ask = async (n: number, draw: number) => {
-        const [c] = (await chem.request("conformers", { molblock, isomers: [iso], count: n, draw, ...(holds ? { holds } : {}), options }, CONFORMERS_MS)).isomers;
+        const [c] = (await chem.request("conformers", { molblock, isomers: [iso], count: n, draw, ...(holds ? { holds } : {}), options: sent }, CONFORMERS_MS)).isomers;
         if (!c) throw new Error("the search gave nothing for a round");
         return c as Conformers;
       };

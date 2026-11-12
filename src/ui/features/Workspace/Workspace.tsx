@@ -142,6 +142,7 @@ import { useCheckingFiles, useDownloads } from "../../../lib/pyEnv";
 import { roleOptionsRole } from "../../../lib/plugins/roles";
 import { valuesOf } from "../../../lib/options";
 import { useAppSettings, WINDOW_3D } from "../../../lib/settings/appSettings";
+import { threadsOf } from "../../../lib/jobs";
 import { STEREO_LABELS } from "../../../lib/settings/stereoLabels";
 import { stereoItemFor, type StereoItem } from "./utils/stereoShown";
 import { CleanUpRefused, cleanUp, fragmentOf } from "./chem/cleanUp";
@@ -556,7 +557,7 @@ function WorkspaceContent({
           const chosen = useAppSettings.getState().chemistry;
           const rounds = pageRounds(block, chosen, !!plugin?.roleDraws.includes("conformers"));
           if (rounds && "needs" in rounds) throw new Error(rounds.needs);
-          const isomersMade = (await conformersOf(chem, stereo, block, isomers, options, pageCount(block, chosen), rounds)).map((c) => withinWindow(c, window3d));
+          const isomersMade = (await conformersOf(chem, stereo, block, isomers, options, pageCount(block, chosen), rounds, threadsOf(useAppSettings.getState().calculations))).map((c) => withinWindow(c, window3d));
           // (several stereoisomers: their R and S shown, to tell them apart)
           const ms = isomersMade.map((c) => moleculeOf(c, block, isomersMade.length > 1));
           const model = store.getState().model;
