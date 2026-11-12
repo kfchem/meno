@@ -27,15 +27,23 @@ const page = () => ({
 
 /** A stand-in for the window: the listeners it was given, to be fired by the test. */
 function windowStub() {
-  const on = new Map<string, Set<(e?: unknown) => void>>();
-  // (how each was listened for: in the capture phase or not)
-  const captured = new Map<string, boolean>();
+  // (listeners as a window keeps them: by type, function and phase - one added for the capture phase is removed only by a removal for it)
+  const on = new Map<string, { f: (e?: unknown) => void; capture: boolean }[]>();
   const stub = {
-    addEventListener: (type: string, f: (e?: unknown) => void, capture?: boolean) => (captured.set(type, capture === true), on.set(type, (on.get(type) ?? new Set()).add(f))),
-    removeEventListener: (type: string, f: (e?: unknown) => void) => on.get(type)?.delete(f),
+    addEventListener: (type: string, f: (e?: unknown) => void, capture?: boolean) => {
+      const list = on.get(type) ?? [];
+      if (!list.some((l) => l.f === f && l.capture === (capture === true))) on.set(type, [...list, { f, capture: capture === true }]);
+    },
+    removeEventListener: (type: string, f: (e?: unknown) => void, capture?: boolean) => on.set(type, (on.get(type) ?? []).filter((l) => !(l.f === f && l.capture === (capture === true)))),
     setTimeout: (f: () => void) => globalThis.setTimeout(f, 0),
   };
-  return { stub, captured, fire: (type: string) => on.get(type)?.forEach((f) => f()), count: () => [...on.values()].reduce((n, s) => n + s.size, 0) };
+  return {
+    stub,
+    /** The phase each type is listened for in: true for the capture phase. */
+    captured: () => new Map([...on].flatMap(([type, list]) => list.map((l) => [type, l.capture] as const))),
+    fire: (type: string) => on.get(type)?.forEach((l) => l.f()),
+    count: () => [...on.values()].reduce((n, l) => n + l.length, 0),
+  };
 }
 
 afterEach(() => {
@@ -132,7 +140,7 @@ describe("frames settled as the pointer is let go (the store's watchFrames)", ()
 
   it("hears the release before anything under the window can stop it: a molecule in 3D's drag ends with a stopPropagation on the canvas, which a listener of the bubbling phase never hears", () => {
     const { w } = setup();
-    expect(Object.fromEntries(w.captured)).toEqual({ pointerdown: true, pointerup: true, pointercancel: true });
+    expect(Object.fromEntries(w.captured())).toEqual({ pointerdown: true, pointerup: true, pointercancel: true });
   });
 
   it("eases a molecule in 3D dragged onto a conversation's card off it, to its left, in the drag's own step", () => {
