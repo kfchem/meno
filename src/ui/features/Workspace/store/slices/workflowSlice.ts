@@ -5,7 +5,7 @@ import type { DocumentStore } from "../../../../../lib/doc";
 import { givenOnly, valuesOf } from "../../../../../lib/options";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import type { WorkspaceDocument } from "../../document";
-import { style3dOf } from "../../style3d";
+import { extentIn, style3dOf } from "../../style3d";
 import { ONE_INPUT } from "../../workflow/kinds";
 import { reachOverFrames } from "../../utils/molecule3d";
 import { freePlace, pageBoxes } from "../../utils/freePlace";
@@ -19,6 +19,7 @@ import { appendParts, partsBounds } from "../../workflow/parts";
 import { placeCard } from "../../workflow/place";
 import { proceduresSaved } from "../../workflow/procedures";
 import { fitResultSets, placeAsSet, type RunWith } from "../../workflow/run";
+import { framesSettled } from "../../workflow/fitFrames";
 import { holdsOwn, type Frame } from "../../workflow/entries";
 import type { EditorState, Molecule3D, WireEnd, WorkflowView } from "../types";
 import { createStepRuns } from "./stepRuns";
@@ -78,8 +79,34 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
       doc.edit("put table", (d) => wf.addTableSet(d, at, table, name));
       return id;
     },
-    resizeSet: (id: number, frame: { x0: number; y0: number; x1: number; y1: number }, gesture?: string) =>
-      doc.edit("size set", (d) => wf.resizeSet(d, id, frame), coalesce("set-size", id, gesture)),
+    watchFrames: () => {
+      // (the document as it was when a pointer went down, kept till it comes up: what it was let go on is settled then - after the gesture's own
+      //  last edit, which is made as the pointer comes up: on the next turn)
+      let down: WorkspaceDocument | null = null;
+      const press = () => {
+        down ??= doc.getState();
+      };
+      const release = () => {
+        const was = down;
+        down = null;
+        if (was) window.setTimeout(() => get().settleFrames(was), 0);
+      };
+      // (the release heard before anything under the window can stop it: a molecule in 3D's drag ends with a stopPropagation on the canvas, and
+      //  the settle - on the next turn, after the gesture's own last edit - would never be asked)
+      window.addEventListener("pointerdown", press, true);
+      window.addEventListener("pointerup", release, true);
+      window.addEventListener("pointercancel", release, true);
+      return () => {
+        window.removeEventListener("pointerdown", press, true);
+        window.removeEventListener("pointerup", release, true);
+        window.removeEventListener("pointercancel", release, true);
+      };
+    },
+    settleFrames: (down: WorkspaceDocument) => {
+      // (the state an undo or a redo came to - a press on a button of the history, let go - is one that was settled when it was made: nothing is eased, and what is to redo stays)
+      if (doc.travelled()) return;
+      doc.edit("fit frames", (d) => framesSettled(d, down, extentIn(d)), { joinTop: true });
+    },
     moveSet: (id: number, dx: number, dy: number, gesture?: string) => doc.edit("move set", (d) => wf.moveSet(d, id, dx, dy), coalesce("set-move", id, gesture)),
     // (the one asked for shown in the column - a PDF read there before giving way, as a text asked for does)
     readSetTable: (id: number) => set((prev: EditorState) => ({ ...prev, setsRead: prev.setsRead.includes(id) ? prev.setsRead : [...prev.setsRead, id], setTableShown: id, textsOpen: true, pdfShown: null, conversationShown: null })),

@@ -325,6 +325,50 @@ PDFs there - one step, which an undo takes back. It is held as any other
   it*) is the workspace's, over its pages, not the PDF's - it stays with the
   PDF it was written on.
 
+## Printing
+
+- **Where**: *Print…* on a PDF's right-click menu (beside *Save as PDF…*), the
+  printer button in the column's header while the column shows a PDF, and
+  Ctrl/Cmd+P while it does.
+- **How it is printed**: each page is drawn by PDFium at 300 dots an inch
+  (the reader's `render`, the page whole), one picture a page, and laid out
+  in a document of its own that only the printer sees - the rest of Meno is
+  hidden from it - which the window's own print operation gives to the
+  system's dialog (Tauri's `WebviewWindow::print`, as WebKit's `window.print()`
+  shows no dialog in the app: macOS's print panel, WebView2's and GTK's
+  dialogs). The print document's `html` and `body` are let grow to hold every
+  picture (the app's own are the window's height with the rest cut off, which
+  printed one page), and each page's own size is given as a named CSS page. Chromium
+  (WebView2, on Windows) takes the paper from it, so letter stays letter; WebKit's
+  dialog on a Mac does not (the named page is not honoured there): it prints on
+  the paper the dialog has chosen, the Mac's default, A4 or letter, and each
+  picture is fitted to it whole.
+  On a Mac the first print raises the system's "find devices on your local
+  network" prompt (printer discovery); printing to a PDF file works whichever
+  answer is given. The print document stays in the window, out of sight, until the
+  window says it has printed or the next print replaces it, as the dialog is
+  not waited on.
+  Where to print, how many copies and which pages are that dialog's, as a
+  file dialog is the system's, not a control of Meno's. A page so large that
+  300 dots an inch would be more than 8191 dots along a side is drawn at the
+  most that fits.
+- **Memory**: the pages are drawn one at a time and held as pictures only
+  until the dialog is done with them (see above); their addresses are let go
+  of whether it printed or was cancelled, or a page could not be drawn.
+- **What its author allows**: the PDF's permissions are read from the PDF
+  (`FPDF_GetDocPermissions`, with its security handler's revision: ISO 32000-1,
+  table 22, bits 3 and 12). Where printing is not allowed, the command is
+  shown, cannot be pressed, and says why - in its tip, and as the notice
+  of Ctrl/Cmd+P and the menu: "Its author does not allow printing." Where it
+  is allowed only in a quality from which a faithful copy could not be made (bit 3 set, bit 12 clear), the pages are drawn at 150 dots
+  an inch. A PDF whose permissions cannot be read is taken as not allowing
+  it. Never worked around. A PDF with no security handler, or with an owner
+  password alone that leaves printing on, prints.
+- **Not done**: a page is made to fit the paper, whole, as it lies: a
+  landscape page on portrait paper is printed small, until the dialog is
+  told *Landscape*. Pages are printed as pictures, so printed words cannot be
+  selected from the paper's PDF.
+
 ## A picture
 
 - **From anywhere**: a figure taken out of a PDF, an image file (PNG,
@@ -608,6 +652,16 @@ A PDF is a file from anywhere, and is treated as such.
 - **Its text and pictures go no further than the page, the column and
   the clipboard**, as the chemist moves them.
 
+### Locked with a password (2026-11-11)
+
+A PDF that asks for a password to be opened is held, and put on the page, like any other - locked.
+
+- **What it is.** It lies as one sheet, an A4 page with a padlock on it, until it is opened with its password; its real pages are not known before. Nothing of it is drawn, read, searched or linked meanwhile, and nothing is asked of the reader for it.
+- **Asking for the password.** Read in the column (a double-click on it), the PDF's place there is a card: *Locked with a password*, its name, a password field of Meno's own and *Open*. Enter or *Open* tries the word typed. A wrong one is said so in words (*That is not its password*), and may be tried again as often as there is need. Right, the PDF draws as any other, and each of its items on the page has its pages' real sizes, kept at the next save.
+- **Where the password lives.** The word typed goes to Meno's reader and is kept there, in memory, for this session and this PDF - so that its pages are drawn, its words read and a new PDF made from its pages. It is never written to the disk, a log, a workspace's file, the settings or an event, and never said back in a message; the copy Meno keeps is wiped from memory as it is let go, and so is each request line once it is sent (the copies PDFium's loader and the app's own plumbing make while a request is under way are not). Saved, the workspace keeps the PDF's own bytes, locked, as it was put in: opened again, the PDF is locked again, and asks again.
+- **A PDF made from pages of one opened with its password** has none of its lock: it is a new PDF, the chemist's own.
+- **What is not asked.** A PDF locked another way - a certificate, a handler PDFium cannot open - is refused, with *it is locked in a way Meno cannot open*, and not worked round. A PDF with only an owner password (open to all, print or copy restricted) opens as any other.
+
 ### Platforms
 
 - **The same PDFium on every system**: the library for macOS (Apple
@@ -692,11 +746,13 @@ What it showed:
 Built:
 - **Putting a PDF on the page.**
   - A PDF opened (*Open…*) goes onto the page of the workspace in front, at the middle of the view, or onto a canvas of its own where none is in front.
+    - That canvas is made for the PDFs, and they are where its document starts: it is not changed, so it is not marked unsaved and closing it asks nothing, until anything on it is changed. Save suggests the first PDF's name with `.meno`. A PDF added to a workspace that is open is a change, as anything put on its page is.
+    - A PDF opened from outside Meno - double-clicked, or opened with Meno from the system - always takes a canvas of its own (in place of a blank one in front), never the page of a workspace in front. The PDF is placed on its page, and read in the column, which fills the workspace (*Fill the workspace*). The workspace is hidden by it, not gone: *Back beside the canvas*, or its key, shows the canvas with the PDF beside it, and *Fill the workspace* hides the canvas again. One a tab holds already (the same PDF, by its bytes) brings that tab forward, in the view it was left in. A PDF opened with *Open…* or dropped still goes onto the page of the workspace in front.
   - A PDF dropped goes where it is dropped.
   - The view eases to take it in where it was not all in view.
 - **Holding and saving it.**
   - It is held in Meno's cache by its SHA-256.
-  - It is refused, and the reason said, where it is larger than 1 GiB, the most a workspace's file keeps of any one file (*it is too large*); where it does not begin as a PDF does, `%PDF-` in its first kilobyte (*it is not a PDF*); or where it cannot be opened: one that asks for a password, Meno giving none (*it is locked with a password*), one locked another way (*it is locked in a way Meno cannot open*), one damaged past mending - cut short, or no PDF inside (*it is damaged, or is not a PDF*) - or, where PDFium gives another reason, *Meno could not open it*, the reason to the log. A PDF whose cross-reference table is wrong, but whose objects are all there, is mended as it is opened and read. One refused is not kept in Meno's cache. Opened (*Open…*, or from outside Meno), a notice at the window's top says so, after the file's name; dropped or pasted, the canvas's alert names each refused and says why, and the rest dropped with it are put down. Kept in a workspace's file and refused as the workspace opens - or not held whole by the file - a notice in the window's corner names it and says why: drawn, it would be blank.
+  - It is refused, and the reason said, where it is larger than 1 GiB, the most a workspace's file keeps of any one file (*it is too large*); where it does not begin as a PDF does, `%PDF-` in its first kilobyte (*it is not a PDF*); or where it cannot be opened: one locked with a password is not refused but held, locked (*Locked with a password*, below), one locked another way (*it is locked in a way Meno cannot open*), one damaged past mending - cut short, or no PDF inside (*it is damaged, or is not a PDF*) - or, where PDFium gives another reason, *Meno could not open it*, the reason to the log. A PDF whose cross-reference table is wrong, but whose objects are all there, is mended as it is opened and read. One refused is not kept in Meno's cache. Opened (*Open…*, or from outside Meno), a notice at the window's top says so, after the file's name; dropped or pasted, the canvas's alert names each refused and says why, and the rest dropped with it are put down. Kept in a workspace's file and refused as the workspace opens - or not held whole by the file - a notice in the window's corner names it and says why: drawn, it would be blank.
   - It is kept in the workspace's file, and is held again when the file is opened.
   - Its place, the page on top and whether it is spread are saved with it.
 - **The stack.**

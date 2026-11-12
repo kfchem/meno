@@ -5,6 +5,7 @@
  * a thing said that is not, likewise, the rest of its conversation kept.
  */
 import { leftOut } from "../utils/readNotes";
+import { framedForCard } from "../pageGl/conversationCard";
 import type { Conversation, Rights, Said, Sent, ToolCall } from "./types";
 
 const MOST_TEXT = 1_000_000;
@@ -63,7 +64,7 @@ export function readConversations(v: unknown, left: () => void = () => leftOut("
   for (const raw of v as Record<string, unknown>[]) {
     const rights = rightsOf(raw?.rights);
     const frame = raw && num(raw.x0) && num(raw.y0) && num(raw.x1) && num(raw.y1) && (raw.x1 as number) > (raw.x0 as number) && (raw.y1 as number) > (raw.y0 as number);
-    if (!frame || !rights || (raw.connection != null && !(typeof raw.connection === "string" && ID.test(raw.connection))) || (raw.name != null && !text(raw.name, 200))) {
+    if (!frame || !rights || (raw.connection != null && !(typeof raw.connection === "string" && ID.test(raw.connection)))) {
       left();
       continue;
     }
@@ -74,13 +75,16 @@ export function readConversations(v: unknown, left: () => void = () => leftOut("
       return read ? [read] : [];
     });
     const sent = (Array.isArray(raw.sent) ? raw.sent.slice(-MOST_SAID) : []).flatMap((s) => sentOf(s) ?? []);
+    // (a frame always holds its card: one a file gave smaller is made as large as the card needs)
+    const { x0, y0, x1, y1 } = framedForCard({ x0: raw.x0 as number, y0: raw.y0 as number, x1: raw.x1 as number, y1: raw.y1 as number });
     out.push({
-      x0: raw.x0 as number,
-      y0: raw.y0 as number,
-      x1: raw.x1 as number,
-      y1: raw.y1 as number,
+      x0,
+      y0,
+      x1,
+      y1,
       ...(raw.wholePage === true ? { wholePage: true as const } : {}),
-      ...(raw.name ? { name: raw.name as string } : {}),
+      // (where its card was left scrolled up: any other is not read, the card then at its latest)
+      ...(num(raw.scroll) && (raw.scroll as number) >= 0 ? { scroll: raw.scroll as number } : {}),
       rights,
       ...(raw.connection ? { connection: raw.connection as string } : {}),
       said,

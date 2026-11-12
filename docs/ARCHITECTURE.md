@@ -178,6 +178,15 @@ its own history (Ctrl+Z belongs to the active tab, not the whole app), edits
 sharing a `coalesceKey` inside a short window collapse into one step (a drag
 must not need one undo per frame), and the stack is capped.
 
+On a Mac the app menu's Edit > Undo and Redo go the same way as the keys
+(`lib/doc/editMenu`, `src-tauri/src/editmenu.rs`): Tauri's own items undo only
+what the web view edits, so the two are Meno's. Choosing one tells the page,
+which undoes or redoes the active tab's document - or, with a field of the
+browser's own undo in focus (a single-line input, rich text, a text box that
+says so), that field - and the page tells the menu which has a step to take,
+the other greyed (both stay on in such a field). Windows and Linux show no
+app menu, so the keys are all there is.
+
 An edit may say who made it where it was not the person at the keyboard
 (`EditMeta.by`: "a conversation, by <its connection>"). The history keeps it
 with the step (`history().undoBy`, `redoBy`), and a step made by one is never
@@ -738,6 +747,15 @@ closes*).
   one's end to the next one's start 60 ms on average and 2.2 s at most
   before, 42 ms and 0.2 s after (`a_long_queue_starts_the_next_job_as_one_ends`,
   run by hand).
+- **A stop is seen at the queue's lock too** (2026-11-11). A runner near
+  the head never waits on the lock blind: it tries for it every 10 ms
+  (`lock_watching`), looking for its stop between tries, and asked to stop
+  it ends without taking it. Waiting on the lock itself, a runner saw no
+  stop until the lock came to it, after each before it had looked at every
+  job's folder under it: on a computer whose files open slowly, a step's
+  Stop left hundreds of runners waiting at the lock, each stopping only as
+  its turn at the lock came
+  (`a_waiting_job_asked_to_stop_ends_while_another_holds_the_queues_lock`).
 - **Looked at often while young** (2026-10-13). The runner looks for its
   turn every 400 ms, and at its program every 200 ms - but every 50 ms
   for the first 3 s of a program, and of a job at the head of the queue,

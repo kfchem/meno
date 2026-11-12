@@ -1,9 +1,10 @@
 import ConversationBody from "./conversation/ConversationBody";
+import { COLUMN_TAB } from "./conversation/tabs";
 import type { Conversation } from "./conversation/types";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import clsx from "clsx";
-import { ArrowsPointingInIcon, ArrowsPointingOutIcon, ArrowUpTrayIcon, ChevronDoubleRightIcon, ChevronDownIcon, ChevronUpIcon, CodeBracketIcon, ExclamationTriangleIcon, MagnifyingGlassIcon, StopCircleIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { ArrowsPointingInIcon, ArrowsPointingOutIcon, ArrowUpTrayIcon, ChatBubbleLeftRightIcon, ChevronDoubleRightIcon, ChevronDownIcon, ChevronUpIcon, CodeBracketIcon, ExclamationTriangleIcon, MagnifyingGlassIcon, StopCircleIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { exists } from "@tauri-apps/plugin-fs";
 import { writeDocument } from "../../../lib/io/writeDocument";
@@ -13,6 +14,8 @@ import MarkdownBody from "../TextEditor/MarkdownBody";
 import { isMarkdown } from "../../../lib/text/markdown";
 import { DURATION, EASE_SLIDE, FADE } from "../../theme/motion";
 import { useEditor, useEditorStore } from "./store";
+import { useLocked } from "../../../lib/doc/locked";
+import LockedPdf from "./LockedPdf";
 import type { LostText, PdfFind, PdfItem, PdfLens, PdfStructurePick, WordPlace, WorkflowSet, WorkspaceText } from "./store/types";
 import SetTableBody from "./workflow/SetTableBody";
 import Select from "../../controls/Select";
@@ -26,6 +29,9 @@ import { isPinch, wheelReader } from "../../../lib/input/wheel";
 import { QUIET_AFTER_MIN, useAppSettings } from "../../../lib/settings/appSettings";
 import { quietFor, quietShort } from "../../../lib/jobs";
 import { pageUnder, pointOn } from "../../../lib/pdf/column";
+import { printed } from "../../../lib/pdf/print";
+import PrintButton from "./components/PrintButton";
+import { usePrinting } from "./hooks/usePrinting";
 import { figureStructuresHad } from "./utils/pdfStructures";
 import { indexOnce, mentionUnder } from "./utils/compoundLens";
 import { PRESS_WIDENED, structureAt, type PageStructure } from "./utils/pageStructures";
@@ -222,6 +228,8 @@ function Column({
   const removeLostText = useEditor((s) => s.removeLostText);
   const showPdf = useEditor((s) => s.showPdf);
   const stopReadingPdf = useEditor((s) => s.stopReadingPdf);
+  // (a PDF locked with a password not given: asked for it, where its pages would be read)
+  const locked = useLocked((s) => s.shas);
   const find = useEditor((s) => s.pdfFind);
   const editText = useEditor((s) => s.editText);
   // (a text just made to be written in: given the keys as it shows)
@@ -253,6 +261,12 @@ function Column({
   const stoppable = !!shownJob && (jobsSeen[shownJob]?.state === "waiting" || jobsSeen[shownJob]?.state === "running");
   const markdown = !!shown && isMarkdown(shown.name);
   const source = useShowsSource(store, shown?.id ?? null);
+  const printing = usePrinting(pdf?.sha256);
+  const printPdf = async (p: PdfItem) => {
+    setError(null);
+    const said = await printed(p.sha256, p.pages);
+    if (said) setError(said);
+  };
   const exportText = async (t: WorkspaceText) => {
     try {
       setError(null);
@@ -281,7 +295,7 @@ function Column({
           {read.map((p) => (
             <Name key={`pdf-${p.id}`} name={p.name} title={p.name} chosen={p.id === pdf?.id} onShow={() => showPdf(p.id)} onClose={() => stopReadingPdf(p.id)} />
           ))}
-          {talk && <Name key={`talk-${talk.id}`} name={talk.name ?? "Conversation"} title={talk.name ?? "Conversation"} chosen onShow={() => {}} onClose={() => store.getState().stopReadingConversation()} />}
+          {talk && <Name key={`talk-${talk.id}`} name={COLUMN_TAB.name} title={COLUMN_TAB.title} icon={<ChatBubbleLeftRightIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />} chosen onShow={() => {}} onClose={() => store.getState().stopReadingConversation()} />}
           {tables.map((b) => (
             <Name key={`set-${b.id}`} name={setName(b, steps)} title={setName(b, steps)} chosen={b.id === table?.id} onShow={() => showSetTable(b.id)} onClose={() => stopReadingSetTable(b.id)} />
           ))}
@@ -329,6 +343,7 @@ function Column({
             <ArrowUpTrayIcon className="h-4 w-4" />
           </button>
         )}
+        {pdf && <PrintButton printing={printing} shortcut={shortcutLabel("P")} onPrint={() => void printPdf(pdf)} />}
         <button
           onClick={() => setFilled(!filled)}
           aria-label={filled ? "Back beside the canvas" : "Fill the workspace"}
@@ -371,7 +386,7 @@ function Column({
           )}
         </AnimatePresence>
         {talk && <ConversationBody key={`talk-${talk.id}`} conversation={talk} />}
-        {pdf && <PdfBody key={`pdf-${pdf.id}`} pdf={pdf} />}
+        {pdf && (locked.has(pdf.sha256) ? <LockedPdf key={`locked-${pdf.id}`} pdf={pdf} /> : <PdfBody key={`pdf-${pdf.id}`} pdf={pdf} />)}
         {table && (table.collection ? <SetTableBody key={`set-${table.id}`} set={table} /> : <StructuresTableBody key={`set-${table.id}`} set={table} />)}
         {lostShown && (
           <div key={`lost-${lostShown.id}`} role="status" className="absolute inset-0 flex items-start gap-2 px-4 py-3 bg-white text-xs text-gh-black">
@@ -568,7 +583,7 @@ function useTabsFade(row: React.RefObject<HTMLDivElement | null>): React.CSSProp
   return { maskImage: mask, WebkitMaskImage: mask };
 }
 
-function Name({ name, title, chosen, onShow, onClose, unread = false }: { name: string; title: string; chosen: boolean; onShow: () => void; onClose: () => void; unread?: boolean }) {
+function Name({ name, title, icon, chosen, onShow, onClose, unread = false }: { name: string; title: string; icon?: ReactNode; chosen: boolean; onShow: () => void; onClose: () => void; unread?: boolean }) {
   // (chosen - a log just opened, say, its tab past the row's end - its row scrolled, eased, until it is seen whole: the row alone, nothing round it)
   const tab = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -595,12 +610,13 @@ function Name({ name, title, chosen, onShow, onClose, unread = false }: { name: 
     >
       <button onClick={onShow} className="min-w-0 h-full flex items-center gap-1 pl-2 pr-1">
         {unread && <ExclamationTriangleIcon aria-label="Could not be read" className="h-3.5 w-3.5 shrink-0 text-accel-accent" />}
-        <span className="truncate">{name}</span>
+        {icon}
+        {name && <span className="truncate">{name}</span>}
       </button>
       <button
         onClick={onClose}
-        aria-label={`Close ${name}`}
-        title={`Close ${name}`}
+        aria-label={`Close ${name || title}`}
+        title={`Close ${name || title}`}
         className={clsx(
           "h-5 w-5 mr-1 shrink-0 rounded flex items-center justify-center hover:bg-gh-line transition-opacity duration-150 ease-meno",
           chosen ? "opacity-100" : "opacity-0 group-hover:opacity-100",

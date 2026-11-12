@@ -85,9 +85,10 @@ describe("a step's result set held off the page (docs/WORKFLOWS.md, *Held result
     let doc = addSet(page(), { x0: -40, y0: -40, x1: -30, y1: -30 });
     const chemist = doc.sets![doc.sets!.length - 1]!.id;
     expect(heldSets(doc).size).toBe(0);
-    doc = connect(connect(doc, { set: KEPT }, ENERGY), { set: chemist }, ENERGY);
-    // (the chemist's set wired in place of the Filter's: one wire into an input)
+    doc = connect(doc, { set: chemist }, ENERGY);
+    // (the chemist's set wired in, not the Filter's)
     expect([isHeld(doc, setOf(doc, KEPT)), isHeld(doc, setOf(doc, chemist))]).toEqual([false, false]);
+    // (the Filter's wired in beside it: several wires into one input)
     doc = connect(doc, { set: KEPT }, ENERGY);
     expect([isHeld(doc, setOf(doc, KEPT)), isHeld(doc, setOf(doc, chemist))]).toEqual([true, false]);
     doc = { ...doc, sets: doc.sets!.map((b) => (b.id === KEPT ? { ...b, opened: true as const } : b)) };
@@ -208,6 +209,16 @@ describe("a step's result set held off the page (docs/WORKFLOWS.md, *Held result
     const back = heldSettled(removeWire(held, held.wires![0].id), held, extentOf);
     const named = back.texts![0].of as { molecule: number };
     expect(back.molecules3d!.find((m) => m.id === named.molecule)?.drawnFrom).toEqual([7, 8, 9]);
+  });
+
+  it("is laid out again as it is let go of where it holds as many as a page lays out, 50 - and stays held, one at a time in its frame, at 51", () => {
+    for (const [n, laidOut] of [[50, true], [51, false]] as const) {
+      const ran = placeResults(page(), page().steps![0], molecules(Array.from({ length: n }, (_, k) => water(k))), W);
+      const wired = heldSettled(connect(ran, { set: KEPT }, ENERGY), ran, extentOf);
+      expect(setOf(wired, KEPT).collection).toHaveLength(n);
+      const back = heldSettled(removeWire(wired, wired.wires![0].id), wired, extentOf);
+      expect([back.molecules3d?.length ?? 0, setOf(back, KEPT).collection?.length]).toEqual(laidOut ? [n + 0, undefined] : [0, n]);
+    }
   });
 
   it("is filled by its step's run off the page, however few it is given - 1, 50 or 51 - its frame where it was", () => {

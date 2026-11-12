@@ -4,6 +4,8 @@ import { addMolecule3d, createWorkspaceDocument, type WorkspaceDocument } from "
 import { connectStoreToDocument, createEditorStore } from "../store";
 import type { Frame } from "../workflow/entries";
 import { CARD_H, CARD_W } from "../workflow/look";
+import { CARD } from "../pageGl/conversationCard";
+import { pagePx } from "../pageGl/units";
 import { sheetMiddle } from "../utils/textSheets";
 import { inScope, readSeenId, SEEN_KINDS, type Scope, type SeenKind } from "./scope";
 import { ATOMS_MOST, callTool, LIST_MOST, NO_SUCH, TEXT_MOST, type ToolCall } from "./tools";
@@ -20,8 +22,11 @@ const WATER = {
   ],
 };
 
-/** A frame about a point, `r` each way. */
-const about = (p: { x: number; y: number }, r = 0.5): Frame => ({ x0: p.x - r, y0: p.y - r, x1: p.x + r, y1: p.y + r });
+/** A frame given the card's room at its right: the frame as it was is what the conversation sees. */
+const withCard = (f: Frame): Frame => ({ ...f, x1: f.x1 + pagePx(CARD.w) + pagePx(CARD.pad) });
+
+/** A frame about a point, `r` each way, its card to the right of it. */
+const about = (p: { x: number; y: number }, r = 0.5): Frame => withCard({ x0: p.x - r, y0: p.y - r, x1: p.x + r, y1: p.y + r });
 
 /**
  * A page of each kind of thing, each well apart: methanol drawn at the
@@ -88,7 +93,7 @@ function page() {
   const step = store.getState().addStep("energy-window", "meno", 300, 0);
   // (where the step's card ended up - placed clear of others)
   const card = doc.getState().steps!.find((s) => s.id === step)!;
-  const scope: Scope = { frame: { x0: -2, y0: -5, x1: 20, y1: 5 } };
+  const scope: Scope = { frame: withCard({ x0: -2, y0: -5, x1: 20, y1: 5 }) };
   return { doc, store, step, card, scope, call: (c: ToolCall, s: Scope = scope) => callTool(doc.getState(), s, c) };
 }
 
@@ -198,11 +203,11 @@ describe("what a conversation sees: what lies inside its frame", () => {
     expect(call({ tool: "read", args: { id: `step:${step}` } })).toMatchObject({ ok: true, value: { kind: "Energy window", by: "meno" } });
     // (the frame moved over the benzene: the benzene seen, methanol not - and nothing on the page moved)
     const before = doc.getState();
-    const over: Scope = { frame: { x0: 395, y0: -5, x1: 405, y1: 5 } };
+    const over: Scope = { frame: withCard({ x0: 395, y0: -5, x1: 405, y1: 5 }) };
     expect(call({ tool: "read", args: { id: "structure:10" } }, over)).toMatchObject({ ok: true, value: { smiles: expect.stringMatching(/^C1=CC=CC=C1$|^c1ccccc1$/) } });
     expect(call({ tool: "read", args: { id: "structure:1" } }, over)).toEqual({ ok: false, why: NO_SUCH });
     expect(doc.getState()).toBe(before);
-    expect(scope).toEqual({ frame: { x0: -2, y0: -5, x1: 20, y1: 5 } });
+    expect(scope).toEqual({ frame: withCard({ x0: -2, y0: -5, x1: 20, y1: 5 }) });
   });
 
   it("sees the whole page where it was made a conversation of the whole page - still never a text with no sheet", () => {

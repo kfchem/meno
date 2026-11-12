@@ -8,6 +8,11 @@ import { NO_SUCH } from "./tools";
 import { inkBox, NO_ROOM } from "./change";
 import { styleOf } from "../../../../lib/chem/style";
 import { arrowEnds } from "../../../../lib/chem/reactionScheme";
+
+/** What a frame gives its card to the right of what it sees: the card and the room it keeps from the edge. */
+const CARD_ROOM = pagePx(CARD.w) + pagePx(CARD.pad);
+import { CARD, cardRect } from "../pageGl/conversationCard";
+import { pagePx } from "../pageGl/units";
 import type { ModelReply } from "./turn";
 import type { Said } from "./types";
 
@@ -148,24 +153,38 @@ describe("a turn of a conversation", () => {
     expect(tools[13]).toMatchObject({ tool: "read", ok: false, answer: NO_SUCH });
   });
 
-  it("puts an arrow down inside a narrow frame, never past its edge", async () => {
+  it("puts an arrow down inside a narrow frame, never past its edge nor under its card", async () => {
     const { turn, doc } = page(true);
-    doc.edit("narrow", (d) => updateConversation(d, 1, { frame: { x0: -5, y0: -5, x1: 6, y1: 5 } }));
+    // (a frame 11 across to the left of its card, which lies against its right edge)
+    doc.edit("narrow", (d) => updateConversation(d, 1, { frame: { x0: -5, y0: -5, x1: 6 + CARD_ROOM, y1: 5 } }));
     await turn("An arrow.", [{ text: "", calls: [{ tool: "put_arrow" }] }, { text: "." }]).done;
     const a = arrowEnds(doc.getState().arrows[0]);
-    expect(doc.getState().conversations![0]).toMatchObject({ x0: -5, x1: 6 });
+    expect(doc.getState().conversations![0]).toMatchObject({ x0: -5, x1: 6 + CARD_ROOM });
     expect(Math.max(a.from.x, a.to.x)).toBeLessThanOrEqual(6);
+  });
+
+  it("puts nothing down on its card's room, though the frame is wide enough for it there: only to the left of the card", async () => {
+    const { turn, doc } = page(true);
+    // (the scope to the left of the card 8 across: an arrow of 3 goes in it - a structure of 8 carbons, wider, does not, though the frame holds it were its card not there)
+    doc.edit("frame", (d) => updateConversation(d, 1, { frame: { x0: -5, y0: -5, x1: 3 + CARD_ROOM, y1: 5 } }));
+    await turn("An arrow, then a long one.", [{ text: "", calls: [{ tool: "put_arrow" }, { tool: "put_structure", args: { smiles: "CCCCCCCC" } }] }, { text: "." }]).done;
+    const d = doc.getState();
+    const room = cardRect(d.conversations![0])!;
+    const a = arrowEnds(d.arrows[0]);
+    expect(Math.max(a.from.x, a.to.x)).toBeLessThanOrEqual(room.x0);
+    expect(d.model.atoms.filter((x) => x.id >= 30)).toEqual([]);
+    expect(room.x0).toBeGreaterThan(d.conversations![0].x0 + 8 - 1e-9);
   });
 
   it("puts nothing down where the frame has no room left - nothing over what lies there, nothing past it - and says why", async () => {
     const { turn, doc, said } = page(true);
-    doc.edit("narrow", (d) => updateConversation(d, 1, { frame: { x0: -5, y0: -5, x1: 6, y1: 5 } }));
+    doc.edit("narrow", (d) => updateConversation(d, 1, { frame: { x0: -5, y0: -5, x1: 6 + CARD_ROOM, y1: 5 } }));
     const atoms = doc.getState().model.atoms.length;
     await turn("Two.", [{ text: "", calls: [{ tool: "put_structure", args: { smiles: "CCCCCCCC" } }, { tool: "put_text", args: { text: "Notes" } }] }, { text: "." }]).done;
     const tools = said().filter((x) => x.by === "tool");
     expect(tools.map((t) => [t.ok, t.answer])).toEqual([[false, NO_ROOM], [false, NO_ROOM]]);
     expect([doc.getState().model.atoms.length, (doc.getState().texts ?? []).length]).toEqual([atoms, 0]);
-    expect(doc.getState().conversations![0]).toMatchObject({ x0: -5, y0: -5, x1: 6, y1: 5 });
+    expect(doc.getState().conversations![0]).toMatchObject({ x0: -5, y0: -5, x1: 6 + CARD_ROOM, y1: 5 });
   });
 
 

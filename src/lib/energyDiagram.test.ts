@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deltaOf, diagramIn, diagramOf, diagramQuantities, diagramSaid, levelsTyped, referenceNeed, withoutExtension, type DiagramValue } from "./energyDiagram";
+import { deltaOf, diagramIn, diagramOf, diagramQuantities, diagramSaid, levelNamer, levelsTyped, referenceNeed, withoutExtension, type DiagramValue } from "./energyDiagram";
 import { readTable, type Table } from "./table";
 import { factor } from "./units";
 
@@ -262,3 +262,204 @@ describe("an energy diagram's level of several compounds, told apart", () => {
   });
 });
 
+
+describe("an energy diagram: levels by a property, joined by properties, columns from the lines, every conformer", () => {
+  /**
+   * A workflow's minima and saddle points as the table of entries sees them, free energies in kcal/mol: minima a (three
+   * conformers, 0.0, 0.8 and 1.5), b and c (two), each carrying `species`; saddle points "a>b" (two) and "a>c", each
+   * carrying `path` and its ends, `first end` and `last end`.
+   */
+  const COLUMNS: Table["columns"] = [
+    { name: "id", kind: "entry" },
+    { name: "number", kind: "number", unit: "none" },
+    { name: "energy", kind: "number", unit: "kcal/mol", by: BY, at: { geometry: "own" } },
+    { name: "species", kind: "text" },
+    { name: "path", kind: "text" },
+    { name: "first end", kind: "text" },
+    { name: "last end", kind: "text" },
+  ];
+  type Row = [number, number | null, string | null, string | null, string | null, string | null];
+  const tableOf = (rows: Row[], columns = COLUMNS): Table => ({ columns, rows: rows.map((r, i) => [`molecule:${i + 1}#0`, ...r]), unread: [], left: [] });
+  const MINIMA: Row[] = [
+    [1, 0.0, "a", null, null, null],
+    [2, 0.8, "a", null, null, null],
+    [3, 1.5, "a", null, null, null],
+    [1, -6.3, "b", null, null, null],
+    [1, -1.9, "c", null, null, null],
+    [2, -1.0, "c", null, null, null],
+  ];
+  const SADDLES: Row[] = [
+    [1, 35.2, null, "a>b", "a", "b"],
+    [2, 36.0, null, "a>b", "a", "b"],
+    [1, 29.1, null, "a>c", "a", "c"],
+  ];
+  const T = tableOf([...MINIMA, ...SADDLES]);
+  const by = { levelsBy: "species\npath", reference: "a" };
+  const joined = { ...by, joinedBy: "first end\nlast end" };
+
+  it("names a level by the first of the properties an entry carries - species, else path - and by today's rule where it carries none", () => {
+    const d = ok(diagramOf(T, by));
+    expect(d.levels.map((l) => [l.name, l.named, l.lowestOf])).toEqual([
+      ["a", "species", 3],
+      ["b", "species", 1],
+      ["c", "species", 2],
+      ["a>b", "path", 2],
+      ["a>c", "path", 1],
+    ]);
+    // (no property named: today's, by title, name or group - none here)
+    expect(levelNamer(T)(T.rows[0])).toBe("");
+    expect(levelNamer(T, ["species", "path"])(T.rows[0])).toBe("a");
+    expect(diagramOf(T, { levelsBy: "colour" })).toEqual({ why: 'Levels by names "colour", which no entry carries' });
+  });
+
+  it("joins each level to the levels a property names - the first names what comes before it, the rest what comes after - and puts the levels in columns from the reference, the direction kept", () => {
+    const d = ok(diagramOf(T, joined));
+    // (a=0 b=1 c=2 a>b=3 a>c=4)
+    expect(d.links).toEqual([[0, 3], [3, 1], [0, 4], [4, 2]]);
+    expect(d.levels.map((l) => [l.name, l.column])).toEqual([["a", 0], ["b", 2], ["c", 2], ["a>b", 1], ["a>c", 1]]);
+    expect(d.left).toEqual([
+      // (two conformers of a>b both name a and b: nothing to say; the lowest's taken)
+    ]);
+  });
+
+  it("is relative to the reference, in the direction the lines run: A - TS1 - I - TS2 - P from Connects, relative to I, is columns 0 1 2 3 4 - not A and P in one", () => {
+    const chain = tableOf([
+      [1, 0, "A", null, null, null],
+      [1, 20, "TS1", null, null, null],
+      [1, 5, "I", null, null, null],
+      [1, 18, "TS2", null, null, null],
+      [1, -3, "P", null, null, null],
+    ]);
+    const connects = readTable("from,to\nA,TS1\nTS1,I\nI,TS2\nTS2,P\n");
+    const d = ok(diagramOf(chain, { levelsBy: "species", reference: "I" }, connects));
+    expect(d.levels.map((l) => [l.name, l.column])).toEqual([["A", 0], ["TS1", 1], ["I", 2], ["TS2", 3], ["P", 4]]);
+    expect(d.reference).toBe("I");
+  });
+
+  it("draws every other conformer of a level as a thin line at its own value, the bold one at the lowest: a's are 0.8 and 1.5", () => {
+    const d = ok(diagramOf(T, { ...joined, conformers: "every" }));
+    expect(d.levels[0].others?.map((o) => [Number(o.value.toFixed(4)), o.number, o.entry])).toEqual([
+      [0.8, 2, "molecule:2#0"],
+      [1.5, 3, "molecule:3#0"],
+    ]);
+    // (c's other, relative to a's lowest; the lowest of a saddle point's two)
+    expect(d.levels[2].others?.map((o) => Number(o.value.toFixed(4)))).toEqual([-1]);
+    expect(d.levels[3].others?.map((o) => Number(o.value.toFixed(4)))).toEqual([36]);
+    // (none where the option is the lowest: as today)
+    expect(ok(diagramOf(T, joined)).levels.every((l) => l.others === undefined)).toBe(true);
+  });
+
+  it("converts a thin line's value as the bold ones' - hartrees in, kcal/mol out: 0.001 and 0.002 Eh above are 0.6275 and 1.2550", () => {
+    const eh = tableOf(
+      [
+        [1, -76.4, "a", null, null, null],
+        [2, -76.399, "a", null, null, null],
+        [3, -76.398, "a", null, null, null],
+        [1, -76.42, "b", null, null, null],
+      ],
+      COLUMNS.map((c) => (c.name === "energy" ? { ...c, unit: "Eh" as const } : c)),
+    );
+    const d = ok(diagramOf(eh, { levelsBy: "species", conformers: "every" }));
+    expect(d.levels[0].others?.map((o) => Number(o.value.toFixed(4)))).toEqual([0.6275, 1.255]);
+  });
+
+  it("counts a conformer with no value, never just absent; and says once that a level of several compounds draws no thin lines", () => {
+    const missing = tableOf([...MINIMA.slice(0, 2), [3, null, "a", null, null, null], MINIMA[3]]);
+    const d = ok(diagramOf(missing, { levelsBy: "species", conformers: "every" }));
+    expect(d.left).toEqual([{ count: 1, why: 'of "a" with no E: not drawn', rows: expect.any(Array) }]);
+    // (R: two compounds, a sum; P one compound of two conformers)
+    const AB = ["C", "H", "H", "H", "H", "Cl"];
+    const rows: [string, string, string[], number, number, number][] = [
+      ["R", "A", ["C", "H", "H", "H", "H"], 0, 1, -10.0],
+      ["R", "A", ["C", "H", "H", "H", "H"], 0, 1, -9.9],
+      ["R", "B", ["Cl"], 0, 1, -5.0],
+      ["P", "AB", AB, 0, 1, -15.1],
+      ["P", "AB", AB, 0, 1, -15.0],
+    ];
+    const t: Table = {
+      columns: [{ name: "id", kind: "entry" }, { name: "title", kind: "text" }, { name: "number", kind: "number", unit: "none" }, { name: "energy", kind: "number", unit: "Eh", by: BY }],
+      rows: rows.map(([l, , , , , e], i) => [`molecule:${i + 1}#0`, l, i + 1, e]),
+      unread: [],
+      left: [],
+    };
+    const s = ok(diagramOf(t, { conformers: "every" }, undefined, rows.map(([, key, elements, charge, multiplicity]) => ({ key, elements, charge, multiplicity }))));
+    expect(s.levels[0].others).toBeUndefined();
+    expect(s.levels[1].others).toHaveLength(1);
+    expect(s.left).toEqual([{ count: 1, why: "level that sum compounds: thin lines not drawn", rows: ["R"] }]);
+  });
+
+  it("counts a value naming no level, or its own level, and says where a level's conformers name different levels - its lowest's taken", () => {
+    const odd = tableOf([
+      ...MINIMA,
+      [1, 35.2, null, "a>b", "a", "b"],
+      // (a>b's second conformer names another first end; the lowest's, a, is taken)
+      [2, 36.0, null, "a>b", "c", "b"],
+      // (a>c ends in a level that does not come in; a path whose end is itself)
+      [1, 29.1, null, "a>c", "a", "zzz"],
+      [1, 40.0, null, "loop", "loop", "loop"],
+    ]);
+    const d = ok(diagramOf(odd, joined));
+    expect(d.links).toEqual([[0, 3], [3, 1], [0, 4]]);
+    expect(d.left.map((l) => [l.count, l.why, l.rows])).toEqual([
+      [1, "level whose conformers name different levels: the lowest's taken", ["a>b: its conformers name 2 different first ends; its lowest's taken"]],
+      [3, "values of Joined by naming no other level (zzz, loop)", ["Joined by, a>c: last end", "Joined by, loop: first end", "Joined by, loop: last end"]],
+      // (c's line was a>c's, which named a level that does not come in; loop has none)
+      [2, "levels no line reaches: after the last column", ["c", "loop"]],
+    ]);
+    expect(d.levels.map((l) => l.column)).toEqual([0, 2, 3, 1, 1, 4]);
+  });
+
+  it("refuses links from both Connects and Joined by", () => {
+    expect(diagramOf(T, joined, readTable("from,to\na,b\n"))).toEqual({ why: "Links from both Connects and Joined by: take one" });
+  });
+
+  it("keeps a level that a cycle reaches at two distances at the nearest to the reference, said", () => {
+    // (a - b - c - a: a loop of three lines all running one way)
+    const cyc = tableOf([
+      [1, 0, "a", null, null, null],
+      [1, 5, "b", null, null, null],
+      [1, 9, "c", null, null, null],
+    ]);
+    const d = ok(diagramOf(cyc, { levelsBy: "species", reference: "a" }, readTable("from,to\na,b\nb,c\nc,a\n")));
+    // (c is one line behind a, and two ahead of it: the nearest, one behind; b is as ambiguous)
+    expect(d.levels.map((l) => l.column)).toEqual([1, 2, 0]);
+    expect(d.left.map((l) => [l.count, l.rows])).toEqual([[2, ["b", "c"]]]);
+  });
+
+  it("joins a pair once where both properties name it - a's Last end names a>b, and a>b's First end names a", () => {
+    const both = tableOf([
+      [1, 0, "a", null, null, "a>b"],
+      [1, 35.2, null, "a>b", "a", "b"],
+      [1, -6.3, "b", null, null, null],
+    ]);
+    const d = ok(diagramOf(both, joined));
+    // (a=0 a>b=1 b=2: the pair a, a>b once)
+    expect(d.links).toEqual([[0, 1], [1, 2]]);
+    expect(d.left).toEqual([]);
+  });
+
+  it("counts columns from the reference named, wherever it stands in the list: in a cycle, and where the lines leave some levels out", () => {
+    const cyc = tableOf([
+      [1, 0, "a", null, null, null],
+      [1, 5, "b", null, null, null],
+      [1, 9, "c", null, null, null],
+    ]);
+    // (relative to c: a is one line ahead of it, b one behind - b 0, c 1, a 2; a and b are each reached two ways)
+    const around = ok(diagramOf(cyc, { levelsBy: "species", reference: "c" }, readTable("from,to\na,b\nb,c\nc,a\n")));
+    expect(around.levels.map((l) => l.column)).toEqual([2, 0, 1]);
+    expect(around.left.map((l) => [l.count, l.rows])).toEqual([[2, ["a", "b"]]]);
+    // (only b to c given, relative to c: b 0, c 1, and a, no line reaches, after them)
+    const apart = ok(diagramOf(cyc, { levelsBy: "species", reference: "c" }, readTable("from,to\nb,c\n")));
+    expect(apart.levels.map((l) => l.column)).toEqual([2, 0, 1]);
+    expect(apart.left.map((l) => [l.count, l.rows])).toEqual([[1, ["a"]]]);
+  });
+
+  it("is read back from a file as it was made, columns, thin lines and the property that named a level; one without them reads as today", () => {
+    const d = ok(diagramOf(T, { ...joined, conformers: "every" }));
+    const back = diagramIn(JSON.parse(JSON.stringify(d)))!;
+    expect(back).toEqual(d);
+    const old = ok(diagramOf(RTP));
+    expect(diagramIn(JSON.parse(JSON.stringify(old)))).toEqual(old);
+    expect(old.levels.some((l) => l.column !== undefined || l.others !== undefined || l.named !== undefined)).toBe(false);
+  });
+});

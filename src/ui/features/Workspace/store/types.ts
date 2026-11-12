@@ -834,6 +834,13 @@ export type WorkflowSet = {
    * point) finds them again. This session's only: never in a file.
    */
   heldIds?: number[];
+  /**
+   * A large result set that shows its molecules one at a time
+   * (workflow/heldView): which of its collection its view showed when
+   * the workspace was saved. Only a file carries it - while the workspace is
+   * open the view's is `EditorState.heldShown`, which is not an undo step.
+   */
+  shown?: number;
   /** A result set opened from a file, or an earlier run's shown again: how many of its molecules or structures did not read, and were left out - said with its count until the step runs again. */
   unread?: number;
   /** A table it holds (lib/table, docs/WORKFLOWS.md *Tables*): read from a file and put on the page, or a step's; no members then. */
@@ -1263,6 +1270,10 @@ export type EditorState = {
   stacksShown: Record<number, number>;
   /** A stack shows another of its molecules - turned as the one it showed was. */
   showInStack: (stack: number, id: number) => void;
+  /** Which molecule each large result set that shows them one at a time shows, by the set's id: its place in its collection; the first if absent (workflow/heldView). */
+  heldShown: Record<number, number>;
+  /** A large result set's view shows another of its molecules - turned as the one it showed was; not an undo step. */
+  showHeld: (setId: number, index: number) => void;
   /** A stack's molecules laid out as a grid where it stands, each shown: one undo step. */
   spreadStack: (stack: number) => void;
   /** A stack's molecules, laid out as a grid, stacked again in its middle, `shown` the one it shows: one undo step. */
@@ -1469,6 +1480,8 @@ export type EditorState = {
   pdfs: PdfItem[];
   /** PDFs held put on the page, as one step: the first where `at` is, the others beside it in a row. */
   addPdfs: (pdfs: { name: string; sha256: string; pages: [number, number][] }[], at: { x: number; y: number }) => void;
+  /** A PDF locked with a password opened with it: each of its items has its pages' real sizes (kept at the next save, no step to undo). */
+  setPdfPages: (sha256: string, pages: [number, number][]) => void;
   /** A PDF moved, its top page's middle to (x, y): one step for a drag (`gesture`). */
   movePdf: (id: number, x: number, y: number, gesture?: string) => void;
   /** Another page on top of a PDF's stack. */
@@ -1547,6 +1560,8 @@ export type EditorState = {
   readConversation: (id: number) => void;
   stopReadingConversation: () => void;
   clearConversation: (id: number) => void;
+  /** A conversation's card left scrolled to `offset` page px from the top of its history, or at its latest (null): the view's, no step of the history. */
+  scrollConversation: (id: number, offset: number | null) => void;
   sendToConversation: (id: number, words: string) => Promise<void>;
   stopConversation: (id: number) => void;
   keepConversationChanges: (id: number) => void;
@@ -1767,9 +1782,17 @@ export type EditorState = {
   placeTable: (table: Table, at: { x: number; y: number }, name?: string) => number;
   /** A procedure saved, put down with its middle at (x, y), as one step - selected. */
   putDownProcedure: (id: string, x: number, y: number) => void;
-  /** A set's frame sized anew, or the set moved with all it holds: a run of either in one gesture one step. */
-  resizeSet: (id: number, frame: { x0: number; y0: number; x1: number; y1: number }, gesture?: string) => void;
+  /** A set moved with all it holds: a run of it in one gesture one step. */
   moveSet: (id: number, dx: number, dy: number, gesture?: string) => void;
+  /**
+   * Every frame its members' room, and what no set holds eased out of the
+   * frames it lies over (workflow/fitFrames `framesSettled`), as the pointer
+   * is let go: `down`, the document as it was when it was pressed. One edit that
+   * joins the gesture's step to undo, never a step of its own after one.
+   */
+  settleFrames: (down: WorkspaceDocument) => void;
+  /** Settles frames (`settleFrames`) as each pointer is let go; the call that stops it. */
+  watchFrames: () => () => void;
   /** A set deleted, or several in one step - one that holds its molecules itself, on no page, which go with it, only once asked about (`askDeleteSet`), `asked`. */
   removeSet: (id: number | readonly number[], asked?: boolean) => void;
   /** Sets that hold their molecules themselves asked to be deleted - by a key, or a selection that held them: the question asked (Workspace). */
@@ -1861,6 +1884,9 @@ export type EditorState = {
   showRequest: { box: ShowBox; n: number } | null;
   /** The view to show `box`, as what was just put down is shown (`showRequest`). */
   requestShow: (box: ShowBox) => void;
+  /** The page slid on the screen by so many px, right and down where positive: a menu opened past the canvas's edge (menuAt). */
+  panRequest: { dx: number; dy: number; n: number } | null;
+  requestPan: (dx: number, dy: number) => void;
   autoFitSuspended: boolean;
   aromaticEnabled: boolean; // legacy/global
   aromaticRings: Record<string, boolean>; // per-ring enabled flags by ringKey
@@ -1974,9 +2000,9 @@ export type EditorState = {
   connectAtoms: (a: number, b: number, order?: Bond["order"]) => number | null;
   /**
    * One bond out of atom `id`, where there is room (utils/geometry `newBondFrom`, `toward` the pointer), as one undo step:
-   * to the atom its end falls on, where it falls on one, else to a new carbon. The atom it ends at; null where none.
+   * to the atom its end falls on, where it falls on one, else to a new carbon; single, or of `order`. The atom it ends at; null where none.
    */
-  bondOut: (id: number, toward: { x: number; y: number }) => number | null;
+  bondOut: (id: number, toward: { x: number; y: number }, order?: Bond["order"]) => number | null;
   replaceDraggedAtomWith: (movingId: number, targetId: number) => void;
   moveAtom: (id: number, x: number, y: number) => void;
   /**
