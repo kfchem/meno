@@ -14,8 +14,8 @@ import type { ChairDrawing } from "./chair";
 
 const DEG = Math.PI / 180;
 
-/** The circle's radius, in bond lengths: by eye, the look owner's choice, no basis claimed. A group's atom is a whole bond length from the centre. */
-export const NEWMAN_CIRCLE = 0.5;
+/** The circle's radius, in bond lengths (lib/chem/layout2d, where the page draws it): a group's atom is a whole bond length from the centre. */
+export { NEWMAN_CIRCLE } from "../../../../lib/chem/layout2d";
 
 /** The scale of a Newman drawing: a spoke's length on the page is the style's bond length (the solid's spoke is `CHAIR_R` long). */
 export const newmanScale = (length = NOMINAL_BOND_LENGTH): number => length / CHAIR_R;
@@ -32,10 +32,8 @@ export function newmanDrawing(opts: { at: { x: number; y: number }; firstId: num
   return { atoms, bonds, ring: atoms.map((a) => a.id), solid, view: standardView(solid), scale };
 }
 
-/** Whether a bond is seen end-on: its two atoms at one place on the page, one nearer than the other (a Newman's central bond). The one place that says so. */
-export function isEndOn(a: Pick<Atom, "x" | "y" | "z">, b: Pick<Atom, "x" | "y" | "z">): boolean {
-  return a.z != null && b.z != null && a.z !== b.z && Math.hypot(a.x - b.x, a.y - b.y) < 1e-9 * NOMINAL_BOND_LENGTH;
-}
+/** Whether a bond is seen end-on: its two atoms at one place on the page, one nearer than the other (a Newman's central bond): lib/chem/layout2d's, the one place that says so. */
+export { isEndOn } from "../../../../lib/chem/layout2d";
 
 /** The three spoke angles of a set, in degrees counter-clockwise from the right (y up): the set whose first is `base` - 90 or 30, as the solid has them. */
 const spokes = (base: number): number[] => [0, 1, 2].map((j) => base + 120 * j);

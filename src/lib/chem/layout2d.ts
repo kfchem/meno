@@ -14,6 +14,7 @@ import {
 } from "./molecule";
 import { italicUnits, labelRuns, labelUnits, namesRingFirst, reversedLabel, unitRuns } from "./abbreviations";
 import { ELEMENTS } from "./elements";
+import { NOMINAL_BOND_LENGTH } from "./acs";
 import { greatest, least, pushAll } from "./lists";
 import { clearRowSide, namesLaid, rowClearer } from "../layout/names";
 
@@ -3625,7 +3626,74 @@ function allylCurvePrimitives(
   return { lines, bends, ends: [points[0], points[points.length - 1]], middle };
 }
 
+/** The radius of a Newman projection's circle, in bond lengths: by eye, the look owner's choice, no basis claimed. A group's atom lies a whole bond length from the centre. */
+export const NEWMAN_CIRCLE = 0.5;
+
+/**
+ * Whether two bonded atoms are seen end-on: at one place on the page, one nearer than the other - a Newman projection's central bond, which has no
+ * drawn length and no direction. The one place that says so; the atom with the greater depth is the front atom.
+ */
+export function isEndOn(a: { x: number; y: number; z?: number }, b: { x: number; y: number; z?: number }): boolean {
+  return a.z != null && b.z != null && a.z !== b.z && Math.hypot(a.x - b.x, a.y - b.y) < 1e-6;
+}
+
+/** The Newman pairs of a drawing: each single bond seen end-on (`isEndOn`), by its place among the bonds, with its front atom and its back atom's indices. */
+export function newmanPairs(atoms: readonly Atom[], bonds: readonly Bond[]): { bond: number; front: number; back: number }[] {
+  if (!atoms.some((a) => a.z != null)) return [];
+  return bonds.flatMap((b, bond) => {
+    const [p, q] = [atoms[b.a1], atoms[b.a2]];
+    if (b.order !== 1 || !p || !q || !isEndOn(p, q)) return [];
+    return p.z! > q.z! ? [{ bond, front: b.a1, back: b.a2 }] : [{ bond, front: b.a2, back: b.a1 }];
+  });
+}
+
+/**
+ * A drawing's primitives, a Newman projection's drawn as one: the central bond - seen end-on, no length - is not drawn at all; a bond out of the
+ * back atom starts at the circle's rim, not at the centre (the front atom's bonds meet there: Moss 1996, *Newman Projection*, the circle stands for the
+ * nearer atom); and the circle itself is one of the drawing's circles, a bond length across at its half (`NEWMAN_CIRCLE`). Every other drawing
+ * goes straight to `primitivesOf`.
+ */
 export function buildAllPrimitives(
+  atoms: Atom[],
+  bonds: Bond[],
+  opts: LayoutOptions,
+  zoom: number,
+  labels: TextItem[] = buildTextLabels(atoms, opts, bonds),
+): ReturnType<typeof primitivesOf> {
+  const pairs = newmanPairs(atoms, bonds);
+  if (!pairs.length) return primitivesOf(atoms, bonds, opts, zoom, labels);
+  const ends = new Set(pairs.map((p) => p.bond));
+  const backOf = new Map(pairs.map((p) => [p.back, p]));
+  const drawnAtoms = [...atoms];
+  let nextId = Math.max(0, ...atoms.map((a) => a.id)) + 1;
+  const kept: number[] = [];
+  const drawnBonds: Bond[] = [];
+  bonds.forEach((b, k) => {
+    if (ends.has(k)) return;
+    let c = b;
+    for (const end of ["a1", "a2"] as const) {
+      const pair = backOf.get(b[end]);
+      if (!pair) continue;
+      const [back, other] = [atoms[pair.back], atoms[end === "a1" ? b.a2 : b.a1]];
+      const rim = NEWMAN_CIRCLE * NOMINAL_BOND_LENGTH * (back.magnified ?? 1);
+      const d = Math.hypot(other.x - back.x, other.y - back.y);
+      if (d <= rim) continue;
+      // (the bond starts at the rim: a bare vertex of its own there, the back atom's other bonds each its own)
+      drawnAtoms.push({ id: nextId++, x: back.x + ((other.x - back.x) / d) * rim, y: back.y + ((other.y - back.y) / d) * rim, el: "C", r: back.r } as Atom);
+      c = { ...c, [end]: drawnAtoms.length - 1 };
+    }
+    drawnBonds.push(c);
+    kept.push(k);
+  });
+  const prim = primitivesOf(drawnAtoms, drawnBonds, opts, zoom, labels);
+  // (the reach of the bonds drawn, each at its own place among the drawing's bonds; the central bond reaches nowhere)
+  const reach: BondReach[] = bonds.map(() => ({ left1: 0, right1: 0, left2: 0, right2: 0 }));
+  kept.forEach((k, i) => (reach[k] = prim.reach[i]));
+  const circles = pairs.map((p) => ({ c: { x: atoms[p.front].x, y: atoms[p.front].y }, r: NEWMAN_CIRCLE * NOMINAL_BOND_LENGTH * (atoms[p.front].magnified ?? 1), key: `newman-${atoms[p.front].id}-${atoms[p.back].id}` }));
+  return { ...prim, circles: [...prim.circles, ...circles], reach };
+}
+
+function primitivesOf(
   atoms: Atom[],
   bonds: Bond[],
   opts: LayoutOptions,
