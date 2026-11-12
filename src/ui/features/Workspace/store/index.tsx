@@ -143,11 +143,11 @@ const NO_LOOKS: Readonly<Record<number, Look>> = {};
 const NO_GROWING: Readonly<Record<number, Growing3D>> = {};
 
 /** The searches going on whose molecules are still there as they began (`growing3d`): the rest let go - a molecule taken away, made again, or its atoms edited - the same object where none is. */
-function growingHeld(growing: Readonly<Record<number, Growing3D>>, molecules: readonly { id: number; atoms: unknown }[]): Readonly<Record<number, Growing3D>> {
+function growingHeld(growing: Readonly<Record<number, Growing3D>>, molecules: readonly { id: number; atoms: unknown; frames?: unknown }[]): Readonly<Record<number, Growing3D>> {
   const ids = Object.keys(growing).map(Number);
   if (!ids.length) return growing;
-  const atomsOf = new Map(molecules.map((m) => [m.id, m.atoms]));
-  const kept = ids.filter((id) => atomsOf.get(id) === growing[id].base);
+  const byId = new Map(molecules.map((m) => [m.id, m]));
+  const kept = ids.filter((id) => byId.get(id)?.atoms === growing[id].base.atoms && byId.get(id)?.frames === growing[id].base.frames);
   return kept.length === ids.length ? growing : kept.length ? Object.fromEntries(kept.map((id) => [id, growing[id]])) : NO_GROWING;
 }
 

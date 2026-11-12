@@ -664,8 +664,15 @@ describe("conformers made for the page", () => {
     const [block] = blocksOf(ethanol, [12]);
     const growth = await conformersGrowing(chem, stereo, block, "one", {}, { calculations: {} }, { window: 3, first: 10, most: MOST_CONFORMERS }, () => false);
     const said: string[] = [];
-    await growth.rest((_, c) => said.push(c.how?.find((r) => r.label === "Rounds")?.text ?? ""));
-    expect(said).toEqual(["1 round, 10 tried: a round failed (the plugin could not read its answer), what came kept"]);
+    const warned = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      await growth.rest((_, c) => said.push(c.how?.find((r) => r.label === "Rounds")?.text ?? ""));
+      // (said failed; why logged, as Meno's log keeps an error)
+      expect(said).toEqual(["1 round, 10 tried: a round failed, what came kept"]);
+      expect(warned).toHaveBeenCalledWith("Meno: a 3D structure's search ended: a round failed.", expect.objectContaining({ message: "the plugin could not read its answer" }));
+    } finally {
+      warned.mockRestore();
+    }
   });
 
   it("growing: runs its rest once, asked twice at once; lets each judge go as its search ends, or all of them where the rest is not run", async () => {
@@ -710,6 +717,16 @@ describe("conformers made for the page", () => {
     ).rejects.toThrow("gone");
     expect(grown).toEqual([1]);
     expect([...new Set(settled)].sort()).toEqual([1, 2, 3]);
+    // (each written as it ends, before the next one goes on)
+    const order: string[] = [];
+    await growOn(
+      [
+        { growth: { rest: async () => void order.push("rest 1") }, ids: [1], shownAs },
+        { growth: { rest: async () => void order.push("rest 2") }, ids: [2], shownAs },
+      ],
+      { grow: () => undefined, settle: (id) => order.push(`settle ${id}`) },
+    );
+    expect(order.slice(0, 3)).toEqual(["rest 1", "settle 1", "rest 2"]);
   });
 
   it("tries as many as Settings says: the chemist's number, or as many as the molecule needs", () => {

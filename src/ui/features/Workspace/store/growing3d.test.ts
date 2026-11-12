@@ -114,6 +114,23 @@ describe("a 3D structure whose search goes on", () => {
     expect(again.state().growing3d[again.id]).toBeDefined();
   });
 
+  it("does nothing once its search has ended - written, its molecule gone or edited - nor is begun again by it", () => {
+    const { state, id } = editor();
+    state().grow3d(id, grown([0, 1, 2], 2));
+    state().settleGrown3d(id);
+    const before = state().molecules3d;
+    expect(() => state().grow3d(id, grown([0, 1, 2, 3], 3))).not.toThrow();
+    expect(state().growing3d[id]).toBeUndefined();
+    expect(state().molecules3d).toBe(before);
+  });
+
+  it("ends where a conformer of its molecule is taken away meanwhile, its atoms as they were", () => {
+    const { state, id } = editor();
+    state().grow3d(id, grown([0, 1, 2], 2));
+    state().changeMolecule3d("Take a conformer away", id, (m) => ({ ...m, frames: [] }));
+    expect(state().growing3d[id]).toBeUndefined();
+  });
+
   it("is written whole as it ends: frames it no longer has gone - one conformer, none after its own", () => {
     const { doc, state, id } = editor();
     state().grow3d(id, grown([0], 2));

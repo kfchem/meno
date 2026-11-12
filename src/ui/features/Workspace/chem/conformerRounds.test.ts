@@ -213,9 +213,10 @@ describe("a search in rounds", () => {
     let stop = false;
     const failing = new RoundsSearch(async (n, draw) => (draw ? Promise.reject(new Error("the plugin's worker stopped")) : p.ask(n, draw)), { first: 10, most: 5000, window: 3, draws: true, stopped: () => stop });
     await failing.next();
-    await failing.next().catch((e) => failing.failed(e));
-    expect(failing.result().run).toEqual({ tried: 10, rounds: 1, ended: "failed", why: "the plugin's worker stopped" });
-    expect(roundsSaid(failing.result().run, { window: 3, most: 5000 })).toBe("1 round, 10 tried: a round failed (the plugin's worker stopped), what came kept");
+    await failing.next().catch(() => failing.failed());
+    expect(failing.result().run).toEqual({ tried: 10, rounds: 1, ended: "failed" });
+    // (said failed, not why: what a plugin's library says is none of the chemist's to read)
+    expect(roundsSaid(failing.result().run, { window: 3, most: 5000 })).toBe("1 round, 10 tried: a round failed, what came kept");
     // (stopped as the round was under way: its plugin stopped with it - stopped, not failed)
     const asked = new RoundsSearch(
       async (n, draw) => {
@@ -226,7 +227,7 @@ describe("a search in rounds", () => {
       { first: 10, most: 5000, window: 3, draws: true, stopped: () => stop },
     );
     await asked.next();
-    await asked.next().catch((e) => asked.failed(e));
+    await asked.next().catch(() => asked.failed());
     expect(asked.result().run).toEqual({ tried: 10, rounds: 1, ended: "stopped" });
   });
 

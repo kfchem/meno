@@ -338,7 +338,7 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
         const kept = doc.getState().molecules3d ?? [];
         const there = kept.find((m) => m.id === id);
         if (!there) return prev;
-        const growing: Record<number, Growing3D> = { ...prev.growing3d, [id]: { grown, key, base: there.atoms } };
+        const growing: Record<number, Growing3D> = { ...prev.growing3d, [id]: { grown, key, base: { atoms: there.atoms, frames: there.frames } } };
         return { ...prev, growing3d: growing, molecules3d: withGrowth(withLooks(kept, prev.talkLooks), growing) };
       }),
     grow3d: (id: number, grown: Grown3D | null) =>
@@ -346,7 +346,8 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
         const kept = doc.getState().molecules3d ?? [];
         const going = prev.growing3d[id];
         // (its search ended - its molecule gone, made again, edited: nothing to grow, never begun again)
-        if (!going || kept.find((m) => m.id === id)?.atoms !== going.base) return prev;
+        const there = kept.find((m) => m.id === id);
+        if (!going || there?.atoms !== going.base.atoms || there?.frames !== going.base.frames) return prev;
         const growing: Record<number, Growing3D> = { ...prev.growing3d };
         if (grown) growing[id] = { ...going, grown };
         else delete growing[id];

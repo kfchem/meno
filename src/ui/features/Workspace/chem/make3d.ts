@@ -805,8 +805,9 @@ export async function conformersGrowing(
             while (await l.search.next()) grown(k, await shownOf(l, [searchingRow(l.search)]));
           } catch (e) {
             // (a round that failed ends it there, what came kept: stopped, where it was asked to stop - its plugin stopped with
-            //  it - else failed, saying why)
-            l.search.failed(e);
+            //  it - else failed: said so, why logged, as Meno's log keeps an error - its name and where, never what it quotes)
+            l.search.failed();
+            if (l.search.ended === "failed") console.warn("Meno: a 3D structure's search ended: a round failed.", e);
           }
           grown(k, await shownOf(l, [said(l)]));
         }
