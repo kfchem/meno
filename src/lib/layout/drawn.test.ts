@@ -581,6 +581,55 @@ describe("an allene's axis and an odd cumulene's cis or trans, drawn", () => {
     expect(allene("up").cisTrans.size).toBe(0);
   });
 
+  it("reads an allene wedged only at its far end: its axis from that wedge, the opposite wedge the opposite sense", () => {
+    const wedgedAtFar = (wedge: "up" | "down") => {
+      const atoms: DrawnAtom[] = [
+        { x: -1.3, y: 0.75, hs: 3 },
+        { x: 0, y: 0, hs: 1 },
+        { x: 1.3, y: 0, hs: 0 },
+        { x: 2.6, y: 0, hs: 1 },
+        { x: 3.9, y: 0.75, hs: 3 },
+      ];
+      const bonds: DrawnBond[] = [
+        { a: 1, b: 0, order: 1 },
+        { a: 1, b: 2, order: 2 },
+        { a: 2, b: 3, order: 2 },
+        { a: 3, b: 4, order: 1, wedge: { narrow: 3, stereo: wedge } },
+      ];
+      return readStereo(atoms, bonds).axes;
+    };
+    const [up, down] = [wedgedAtFar("up"), wedgedAtFar("down")];
+    expect(up).toHaveLength(1);
+    expect(down).toHaveLength(1);
+    expect(up[0].sense).toBe(-down[0].sense);
+  });
+
+  it("reads an odd cumulene's side from the group off its line, not one straight on from it - at either end", () => {
+    // (a butatriene, each end with a group straight on from the run - listed first - and another off it: the off-line one is the side)
+    const atoms: DrawnAtom[] = [
+      { x: -1.3, y: 0, hs: 0, el: "Cl" },
+      { x: 0, y: 0, hs: 0 },
+      { x: 1.3, y: 0, hs: 0 },
+      { x: 2.6, y: 0, hs: 0 },
+      { x: 3.9, y: 0, hs: 0 },
+      { x: 5.2, y: 0, hs: 0, el: "Cl" },
+      { x: 5.2, y: 0.75, hs: 0, el: "F" },
+      { x: -0.65, y: 1.1, hs: 0, el: "F" },
+    ];
+    const bonds: DrawnBond[] = [
+      { a: 1, b: 0, order: 1 },
+      { a: 1, b: 2, order: 2 },
+      { a: 2, b: 3, order: 2 },
+      { a: 3, b: 4, order: 2 },
+      { a: 4, b: 5, order: 1 },
+      { a: 4, b: 6, order: 1 },
+      { a: 1, b: 7, order: 1 },
+    ];
+    const read = readStereo(atoms, bonds).cumulated;
+    expect(read).toHaveLength(1);
+    expect(read[0].refs).toEqual([7, 6]);
+  });
+
   it("reads an allene wedged at both ends where the two agree, and none where they say opposite ways - and says why", () => {
     // (the far end's methyl wedged too: up or down, at its end C3)
     const both = (near: "up" | "down", far: "up" | "down") => {

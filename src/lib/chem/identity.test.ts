@@ -4,7 +4,7 @@ import { fromSmiles } from "../layout/testdata/fromSmiles";
 import { SHUFFLE_SEEDS, shuffled, tiedCages } from "../layout/testdata/shuffled";
 import type { LayoutAtom, LayoutBond, LayoutInput } from "../layout/perceive";
 import type { Axial } from "../layout/stereo";
-import { aromaticForm, automorphismGroup, hydrogensFolded, identity, identityKey, identityText, symmetryOrbits, type IdentityAtom, type IdentityInput } from "./identity";
+import { aromaticForm, automorphismGroup, hydrogensFolded, identity, identityKey, identityText, stereoUnitsOnly, symmetryOrbits, type IdentityAtom, type IdentityInput } from "./identity";
 
 /** How many distinct values a list has. */
 const distinct = (xs: readonly number[]) => new Set(xs).size;
@@ -631,5 +631,22 @@ describe("an allene's axis and an odd cumulene's cis or trans, in a structure's 
       const g = fromSmiles(smiles);
       for (const seed of SHUFFLE_SEEDS) expect(identityText(shuffled(g, seed)), smiles).toBe(identityText(g));
     }
+  });
+});
+
+describe("an allene's or a cumulene's end with two alike groups sets nothing", () => {
+  it("drops an allene's axis where one end has two alike groups, and keeps it where neither has", () => {
+    // (3-methylpenta-2,3-diene's cousin: (CH3)2C=C=CHCH3 - an end with two methyls - against CH3CH=C=CHCH3, each end a methyl and an H)
+    expect(fromSmiles("CC(C)=[C@]=CC").axes).toHaveLength(1);
+    expect(stereoUnitsOnly(fromSmiles("CC(C)=[C@]=CC")).input.axes ?? []).toHaveLength(0);
+    expect(fromSmiles("CC=[C@]=CC").axes).toHaveLength(1);
+    expect(stereoUnitsOnly(fromSmiles("CC=[C@]=CC")).input.axes ?? []).toHaveLength(1);
+  });
+
+  it("drops an odd cumulene's cis or trans likewise, and keeps it where its ends' groups differ", () => {
+    expect(fromSmiles("F/C(F)=C=C=C/F").cumulated ?? []).toHaveLength(1);
+    expect(stereoUnitsOnly(fromSmiles("F/C(F)=C=C=C/F")).input.cumulated ?? []).toHaveLength(0);
+    expect(fromSmiles("F/C=C=C=C/F").cumulated).toHaveLength(1);
+    expect(stereoUnitsOnly(fromSmiles("F/C=C=C=C/F")).input.cumulated ?? []).toHaveLength(1);
   });
 });
