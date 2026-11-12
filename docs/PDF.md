@@ -1369,7 +1369,7 @@ it where it lies out of view.
   H3N left outside the box - is no one's. A number set smaller than the
   label's letters, after the first of them, is an atom's number - the small
   atom numbers a drawing sets by its atoms ("Me" and its 7) - and no part of
-  the label (2026-11-13), by three rules. (1) After the name of a point of
+  the label (2026-11-13), by these rules: an atom's number stands at the END of its label - a small digit with a letter of the label after it is never one (inside a label it is a count, or the mass number of the letter after it: CO2Me, NH4Cl, O13CH3), each run judged on its own, primes after it no letters. (1) After the name of a point of
   variability the number stays, high or level: the name is the unit just
   before the digit, not the whole label (R1, X1, Ar1, Het1, OR2, NR1R2,
   CO2R1, OAr1; the names are `VARIABLE_NAMES`, lib/chem/abbreviations, after
@@ -1381,8 +1381,10 @@ it where it lies out of view.
   subscript is drawn so by many papers: it is left out only where the label
   reads as nothing with it and reads without it (Meno's label reader decides:
   O14, Me7, C7, N1 and H3 lose theirs; CH2Cl2, K2CO3, Et3N, N3 and CO2Me
-  keep theirs). A level number that also reads as a count stays (N3, O3, Me2:
-  a stated limit). A charge drawn in a small circle - a "+" or a "-" in a ring,
+  keep theirs), and the atom says so - a level number's place cannot tell a count
+  from an atom's number - while one clearly high needs no mark. A level number
+  that also reads as a count stays (N3, O3, Me2: a stated limit; CH3 and a
+  level 7 after it are one run, CH37). A charge drawn in a small circle - a "+" or a "-" in a ring,
   as Meno draws one and as many papers do - is the charge of the atom it is
   by, however the page is turned and where a box drawn across it cuts some
   of its ring off; never a bond, nor a scheme's "+". A lone H at no

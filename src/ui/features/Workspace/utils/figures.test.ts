@@ -912,6 +912,30 @@ describe("a small number beside a label, read with Meno's own label reader (made
     expect(word([["N", 10, 0], raised("3")])).toBe("N");
   });
 
+  it("says so on the atom where a level number was left out - and says nothing where it was clearly high", () => {
+    const a: P = [100, 200];
+    const b = step(a, 30);
+    const c = step(b, -30);
+    const end = step(c, 30);
+    const atomOf = (parts: [string, number, number][]) => {
+      // (a chain of three bonds, its last to a label set at its end)
+      let at = end[0] + 2;
+      const ls = parts.flatMap(([text, size, up]) =>
+        [...text].map((ch): FigureLetter => {
+          const w = size * 0.6;
+          const base = end[1] + 3.6 - up;
+          const l: FigureLetter = { c: ch, box: [at, base - size * 0.72, at + w, base], at: [at, base], size, loose: [at, base - size, at + w + 0.2, base + 0.2 * size] };
+          at += w + 0.2;
+          return l;
+        }),
+      );
+      const m = structureFrom({ paths: [stroke(a, b, c), stroke(c, [end[0] - 1, end[1] + 0.2])], letters: ls, pictures: [] }, SHA, 1) as Model;
+      return m.atoms.find((x) => x.el === "Me");
+    };
+    expect(atomOf([["Me", 10, 0], ["7", 6.5, 0]])?.unsure?.said).toEqual(['A small number by it was taken as the atom\'s number, not a count: read as "Me".']);
+    expect(atomOf([["Me", 10, 0], raised("7")])?.unsure).toBeUndefined();
+  });
+
   it("keeps a variable's number, whatever it is named - and inside a label", () => {
     for (const name of ["R", "X", "Y", "Z", "G", "Ar", "Het", "HetAr", "PG", "Nu", "E", "EWG", "M", "L", "Q", "A", "Alk"]) {
       expect(word([[name, 10, 0], raised("1")]), name).toBe(`${name}1`);

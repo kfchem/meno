@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FigureDrawn, FigureLetter, FigurePath, PathStep } from "./drawn";
-import { labelText, lyingAlong, readFigure, wordsOf } from "./read";
+import { labelParts, labelText, lyingAlong, readFigure, wordsOf } from "./read";
 
 // Made samples, drawn as a drawing program draws (bonds 14.4 points, lines 0.6 thick, 10-point letters): the small ways a
 // perspective drawing or a page of a paper is misread, each with what Meno's own drawing would be.
@@ -97,7 +97,7 @@ function label(parts: [string, number, number][], x = 100, y = 100): FigureLette
   );
 }
 /** Labels that read as an atom or a group, as Meno's label reader says (a stand-in for it: made labels only). */
-const READS = new Set(["O", "Me", "C", "N", "H", "CH2", "CH2Cl2", "K2CO3", "Et3N", "EtN", "H2O", "N3", "NH2", "CO2Me", "CF3", "Ca2+", "13C", "OR", "NRR", "Ca12+", "S2-", "O+", "CMe", "O4", "S", "OMe"]);
+const READS = new Set(["O", "Me", "C", "N", "H", "OCH3", "H3C", "COMe", "NHCl", "O13CH3", "H313C", "CH2", "CH2Cl2", "K2CO3", "Et3N", "EtN", "H2O", "N3", "NH2", "CO2Me", "CF3", "Ca2+", "13C", "OR", "NRR", "Ca12+", "S2-", "O+", "CMe", "O4", "S", "OMe"]);
 const reads = (l: string) => READS.has(l);
 const read = (parts: [string, number, number][], given: (l: string) => boolean = reads) => {
   const words = wordsOf(label(parts));
@@ -109,6 +109,36 @@ const read = (parts: [string, number, number][], given: (l: string) => boolean =
 //  high is 0.6 and 0.4 high - the lines of label() are 10 points: size 7.7 and up 4, size 6.5 and up -0.4 or -0.9)
 const number = (digits: string): [string, number, number] => [digits, 7.7, 4];
 const count = (digits: string, lowered = 0.4): [string, number, number] => [digits, 6.5, -lowered];
+
+/** Whether the atom is marked: the label cut at its end by a level number, which a place cannot tell from a count. */
+const marked = (parts: [string, number, number][], given: (l: string) => boolean = reads) => labelParts(wordsOf(label(parts))[0], given).taken;
+
+describe("an atom's number stands at the end of its label, and a number left out by its place is said", () => {
+  it("is never left out with a letter of the label after it: inside a label it is a count or the mass number of the next letter", () => {
+    // (a reader that reads the label without it and not with it: the counts lowered 0.05 stay)
+    const stubborn = (l: string) => READS.has(l) && !/\d/.test(l);
+    expect(read([["N", 10, 0], count("2", 0.5)], stubborn)).toBe("N");
+    expect(read([["NH", 10, 0], count("4", 0.5), ["Cl", 10, 0]], stubborn)).toBe("NH4Cl");
+    expect(read([["MePPh", 10, 0], count("3", 0.5), ["Br", 10, 0]], stubborn)).toBe("MePPh3Br");
+    expect(read([["O", 10, 0], ["13", 7.7, 4], ["CH", 10, 0], count("3", 0.5)], stubborn)).toBe("O13CH3");
+    expect(read([["H", 10, 0], count("3", 0.5), ["13", 7.7, 4], ["C", 10, 0]], stubborn)).toBe("H313C");
+  });
+
+  it("is judged one run at a time: CO2Me with a level 7 after it is CO2Me", () => {
+    expect(read([["CO", 10, 0], count("2", 0.5), ["Me", 10, 0], ["7", 6.5, 0]])).toBe("CO2Me");
+  });
+
+  it("marks the atom where a level number was left out - O14, Me7, N2 - and not where the number was clearly high", () => {
+    expect(marked([["Me", 10, 0], ["7", 6.5, 0]])).toBe(true);
+    expect(marked([["O", 10, 0], ["14", 6.5, 0]])).toBe(true);
+    expect(marked([["Me", 10, 0], number("7")])).toBe(false);
+    expect(marked([["O", 10, 0], ["14", 6, 4]])).toBe(false);
+    // (kept: nothing to say)
+    expect(marked([["N", 10, 0], count("3", 0.5)])).toBe(false);
+    // (and the 7 left out of CO2Me7 is said, the 2 kept)
+    expect(marked([["CO", 10, 0], count("2", 0.5), ["Me", 10, 0], ["7", 6.5, 0]])).toBe(true);
+  });
+});
 
 describe("a number beside an atom's label (the small atom numbers of a drawing)", () => {
   it("is an atom's number, left out, where it is set clearly high: Me7, O14, C7, N1, H3 - and N3 with its 3 set high, an atom's number and no azide", () => {
@@ -187,9 +217,9 @@ describe("a number beside an atom's label (the small atom numbers of a drawing)"
     expect(read([["O", 10, 0], ["1", 6, 4], ["+", 10, 0]])).toBe("O+");
   });
 
-  it("ends its run at a digit set low - a count - and at a letter", () => {
+  it("ends its run at a digit set low - a count - and keeps a number with a letter of the label after it: a mass number", () => {
     expect(read([["O", 10, 0], ["1", 6, 4], ["4", 6, -2.5]])).toBe("O4");
-    expect(read([["C", 10, 0], ["1", 6, 4], ["Me", 10, 0]])).toBe("CMe");
+    expect(read([["C", 10, 0], ["1", 6, 4], ["Me", 10, 0]])).toBe("C1Me");
   });
 
   it("leaves what a label's own numbers are: a charge's digits, a mass number, a count set low", () => {

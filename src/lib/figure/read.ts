@@ -367,18 +367,21 @@ export type LabelReads = (label: string) => boolean;
 /** How far a letter is raised, in the label's letter size, at the least, to be set high - a charge, a mass number, an atom's number: labelText's own constant. */
 const HIGH = 0.25;
 
+/** A run of small digits beside a label that may be an atom's number: its places in `w.letters`, and whether it is set clearly high. */
+type Run = { from: number; to: number; high: boolean };
+
 /**
- * Where a small digit is an atom's number and not a count, a charge's or a name's (the small numbers beside atoms in a drawing):
- *  - `locants`: digits set clearly HIGH (raised `HIGH` of the letter size or more), after anything but a variable's name and with no charge's sign
- *    after them: an atom's number. A count is never set high.
- *  - `uncertain`: digits set about level or a little low - not more than a tenth of the letter size below - where the place cannot say: left out only
- *    if the label reads as nothing with them and reads without them (`labelText`).
- * A digit after a variable's name (VARIABLE_NAMES: R, X, Ar, Het1 ...) is part of it, wherever it is set; one with a charge's sign after it is the
- * charge's (Ca2+); one before the label's first letter a mass number (13C). Their places in `w.letters`.
+ * Where a small digit is an atom's number and not a count, a charge's, a mass number or a name's (the small numbers beside atoms in a drawing),
+ * as the runs of digits it may be (their places in `w.letters`):
+ *  - an atom's number stands at the END of its label: a run with a letter of the label after it - a count, or the mass number of the letter after
+ *    it (CO2Me, NH4Cl, O13CH3) - is never one; primes after it are no letters;
+ *  - one after a variable's name (VARIABLE_NAMES: R, X, Ar, Het1 ...) is part of it, wherever it is set; one with a charge's sign after it is the charge's
+ *    (Ca2+); one before the label's first letter a mass number (13C);
+ *  - one set clearly HIGH (raised `HIGH` of the letter size or more) is an atom's number: a count is never set high; one set about level or a little
+ *    low - not more than a tenth of the letter size below - cannot be told by its place (`labelParts` decides).
  */
-function locantsOf(w: Word, base: number): { locants: Set<number>; uncertain: Set<number> } {
-  const locants = new Set<number>();
-  const uncertain = new Set<number>();
+function runsOf(w: Word, base: number): Run[] {
+  const runs: Run[] = [];
   const small = (l: FigureLetter) => l.size < 0.85 * w.size;
   const digit = (l: FigureLetter) => /^\d$/.test(l.c);
   const y = (l: FigureLetter) => l.at?.[1] ?? l.box[3];
@@ -401,13 +404,11 @@ function locantsOf(w: Word, base: number): { locants: Set<number>; uncertain: Se
     while (j + 1 < w.letters.length && small(w.letters[j + 1]) && digit(w.letters[j + 1]) && level(w.letters[j + 1])) j++;
     const next = w.letters[j + 1];
     const charge = !!next && small(next) && /^[+\-\u2212\u2013]$/.test(next.c);
-    if (!named && !charge) {
-      const run = w.letters.slice(i, j + 1);
-      for (let k = i; k <= j; k++) (run.every(high) ? locants : uncertain).add(k);
-    }
+    const inside = w.letters.slice(j + 1).some((x) => /[A-Za-z]/.test(x.c));
+    if (!named && !charge && !inside) runs.push({ from: i, to: j, high: w.letters.slice(i, j + 1).every(high) });
     i = j;
   }
-  return { locants, uncertain };
+  return runs;
 }
 
 /**
@@ -417,20 +418,36 @@ function locantsOf(w: Word, base: number): { locants: Set<number>; uncertain: Se
  * Meno reads it as it reads a label typed. A count set low before any
  * letter is a letter's left out of the word (the H of an H3N, a box cut
  * across it), and is left out with it: never a mass number. A number set
- * small by an atom's label - the locants beside atoms, "Me7" for a Me and its
- * number 7 - is left out where it is clearly high (and no variable's name
- * or charge's sign is by it: `locantsOf`), and where it is about level or a
- * little low only if the label reads as nothing with it and reads without it
- * (`reads`: no reader given, none is taken for a locant - a count is kept).
+ * small at the end of an atom's label - the locants beside atoms, "Me7" for a
+ * Me and its number 7 - is left out (`runsOf`) where it is clearly high, and
+ * where it is about level or a little low only if the label reads as nothing
+ * with it and reads without it (`reads`: no reader given, none is taken for
+ * a locant - a count is kept); `taken` says the label was cut so, for the
+ * atom to be marked - a place cannot tell a count from an atom's number.
  */
-export function labelText(w: Word, reads: LabelReads = () => true): string {
+export function labelParts(w: Word, reads: LabelReads = () => true): { text: string; taken: boolean } {
   const main = w.letters.filter((l) => l.size >= 0.85 * w.size);
   const base = main.length ? main.map((l) => l.at?.[1] ?? l.box[3]).sort((a, b) => a - b)[Math.floor(main.length / 2)] : 0;
-  const { locants, uncertain } = locantsOf(w, base);
-  const plain = typed(w, base, locants);
-  if (!uncertain.size) return plain;
-  const without = typed(w, base, new Set([...locants, ...uncertain]));
-  return !reads(plain) && reads(without) ? without : plain;
+  const left = new Set<number>();
+  const runs = runsOf(w, base);
+  const places = (r: Run) => Array.from({ length: r.to - r.from + 1 }, (_, k) => r.from + k);
+  for (const r of runs) if (r.high) for (const k of places(r)) left.add(k);
+  // (the others one at a time, as the label stands)
+  let taken = false;
+  for (const r of runs) {
+    if (r.high) continue;
+    const without = new Set([...left, ...places(r)]);
+    if (!reads(typed(w, base, left)) && reads(typed(w, base, without))) {
+      for (const k of places(r)) left.add(k);
+      taken = true;
+    }
+  }
+  return { text: typed(w, base, left), taken };
+}
+
+/** A word as a label is typed (`labelParts`). */
+export function labelText(w: Word, reads: LabelReads = () => true): string {
+  return labelParts(w, reads).text;
 }
 
 /** A word's letters as a label is typed, those at `left` out (`labelText`). */
@@ -467,9 +484,11 @@ function boxOfBoxes(bs: readonly Box[]): Box {
  * next likeliest; unsure where one of them matched its letter weakly.
  */
 function labelOf(w: Word, reads: LabelReads = () => true): Pick<ReadAtom, "label" | "alts" | "unsure"> {
-  const label = labelText(w, reads);
+  const { text: label, taken } = labelParts(w, reads);
+  // (a level number cut from the end of the label: its place cannot tell a count from an atom's number, so the atom says so)
+  const cut = taken ? [`A small number by it was taken as the atom's number, not a count: read as "${label}".`] : [];
   const shaped = w.letters.filter((l): l is ShapeLetter => "sure" in l);
-  if (!shaped.length) return { label };
+  if (!shaped.length) return { label, ...(cut.length ? { unsure: cut } : {}) };
   const as = (swap: Map<number, string>) => labelText({ ...w, letters: w.letters.map((l, k) => (swap.has(k) ? { ...l, c: swap.get(k)! } : l)) }, reads);
   const open = w.letters.map((l, i) => ({ i, alts: "alts" in l ? (l as ShapeLetter).alts : [] })).filter((o) => o.alts.length);
   const alts: string[] = [];
@@ -477,7 +496,8 @@ function labelOf(w: Word, reads: LabelReads = () => true): Pick<ReadAtom, "label
   for (let a = 0; a < open.length; a++) for (let b = a + 1; b < open.length; b++) alts.push(as(new Map([[open[a].i, open[a].alts[0]], [open[b].i, open[b].alts[0]]])));
   const others = [...new Set(alts)].filter((x) => x !== label).slice(0, 12);
   const weak = shaped.some((l) => !sureEnough(l));
-  return { label, ...(others.length ? { alts: others } : {}), ...(weak ? { unsure: [`Its letters are drawn as shapes: read as "${label}".`] } : {}) };
+  const unsure = [...cut, ...(weak ? [`Its letters are drawn as shapes: read as "${label}".`] : [])];
+  return { label, ...(others.length ? { alts: others } : {}), ...(unsure.length ? { unsure } : {}) };
 }
 
 /** The middle of a box. */
