@@ -68,6 +68,8 @@ export function workerOf(p: PythonPlugin): Promise<PluginWorker> {
 
 /** Stops a plugin's worker, where it runs: as the plugin is taken away - or, held on a question past its time, to be started afresh (`reason` says which to what was waiting on it). */
 export async function stopWorker(plugin: string, reason = `${plugin} was taken away`): Promise<void> {
+  // (TEMPORARY PROBE, not for merge: why a worker is stopped)
+  console.warn(`[probe] worker ${plugin} stopped by Meno at ${new Date().toISOString()}: ${reason}`);
   const worker = running.get(plugin);
   if (!worker) return;
   running.delete(plugin);
@@ -153,6 +155,8 @@ async function start(p: PythonPlugin, mine: () => boolean): Promise<PluginWorker
     const told = errs.filter((m) => m.id === id && m.line.trim());
     const why = told.length ? told[told.length - 1].line.trim() : null;
     const said = wasReady ? `${p.name} stopped` : `${p.name} stopped as it started${why ? `: ${why}` : ""}`;
+    // (TEMPORARY PROBE, not for merge: a worker gone, and what it last wrote to its errors)
+    console.warn(`[probe] worker ${p.id} exited at ${new Date().toISOString()} (ready ${wasReady}): ${said}${why ? ` | last stderr: ${why}` : ""}`);
     reader.close(said);
     chem.close(said);
     unhear();
