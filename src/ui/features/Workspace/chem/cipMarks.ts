@@ -61,9 +61,50 @@ export function cipJobsOf(model: Model): CipJob[] {
     const part = labelsDrawnOut(endpointsHeld(gathered));
     const { input } = identityInputOf(part);
     const centres = part.atoms.flatMap((a, at) => (askedAtoms.has(a.id) ? [{ at, id: a.id }] : []));
-    const bonds = part.bonds.flatMap((b, at) => (askedBonds.has(b.id) ? [{ at, id: b.id }] : []));
-    return { input, centres, bonds };
+    const asked = part.bonds.flatMap((b, at) => (askedBonds.has(b.id) ? [{ at, id: b.id }] : []));
+    return { input, centres, bonds: oneForEachRun(input, asked) };
   });
+}
+
+/**
+ * One bond for each run of cumulated double bonds among those asked for: an allene's axis, a butatriene's cis or trans, is one unit, shown
+ * once - on the run's middle double bond (the first of the two middle ones where the run has an even number) - never once for each of its
+ * double bonds. A bond that is in no run is its own.
+ */
+export function oneForEachRun(input: IdentityInput, asked: readonly { at: number; id: number }[]): { at: number; id: number }[] {
+  const doubles = (x: number) => input.bonds.flatMap((d, k) => (d.order === 2 && (d.a === x || d.b === x) ? [k] : []));
+  // (the bonds of the run a double bond is in, in order from one end: each atom between two double bonds, with no others, passes it on)
+  const runOf = (at: number): number[] => {
+    // (from atom `x`, having come from `from`: on through each atom with two double bonds and no others)
+    const walk = (from: number, x: number): number[] => {
+      const out: number[] = [];
+      for (let steps = 0; doubles(x).length === 2 && steps < input.atoms.length; steps++) {
+        const k = doubles(x).find((d) => (input.bonds[d].a === x ? input.bonds[d].b : input.bonds[d].a) !== from);
+        if (k == null) break;
+        out.push(k);
+        [from, x] = [x, input.bonds[k].a === x ? input.bonds[k].b : input.bonds[k].a];
+      }
+      return out;
+    };
+    const { a, b } = input.bonds[at];
+    return [...walk(b, a).reverse(), at, ...walk(a, b)];
+  };
+  const kept = new Set<number>();
+  const out: { at: number; id: number }[] = [];
+  for (const unit of asked) {
+    if (input.bonds[unit.at].order !== 2) {
+      out.push(unit);
+      continue;
+    }
+    const run = runOf(unit.at);
+    if (kept.has(run[0])) continue;
+    kept.add(run[0]);
+    // (the middle of the run, among those asked: the one nearest the middle of the run's bonds)
+    const middle = (run.length - 1) / 2;
+    const ofRun = asked.filter((u) => run.includes(u.at));
+    out.push(ofRun.reduce((best, u) => (Math.abs(run.indexOf(u.at) - middle) < Math.abs(run.indexOf(best.at) - middle) ? u : best)));
+  }
+  return out;
 }
 
 /** The answers for a job's units, in its order: its centres', then its bonds'. A protonated amine's N that keeps no configuration is not asked of the CIP. */

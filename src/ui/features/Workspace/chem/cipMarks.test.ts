@@ -129,3 +129,33 @@ describe("an allene's Ra or Sa and an odd cumulene's E or Z on the drawing", () 
     expect(cipMarksOf(none.model).said.get(`bond-${none.id}`)).toBe(cipSaid("undrawn", "axis"));
   });
 });
+
+describe("one mark for each run of cumulated double bonds", () => {
+  /** A structure drawn from its SMILES by the engine, every atom and bond asked for its R or S, E or Z - as Show R/S and E/Z asks. */
+  const asked = (smiles: string): Model => {
+    const m = drawnFromSmiles(smiles);
+    return { ...m, atoms: m.atoms.map((a) => ({ ...a, stereoShown: true as const })), bonds: m.bonds.map((b) => ({ ...b, stereoShown: true as const })) };
+  };
+
+  it("gives an allene's axis one mark, not one under each of its double bonds - and each handedness its own", () => {
+    const marks = ["OC(C)=[C@]=C(Cl)C", "OC(C)=[C@@]=C(Cl)C"].map((smi) => cipMarksOf(asked(smi)).doubleBonds);
+    for (const m of marks) expect(m.size).toBe(1);
+    expect(new Set(marks.map((m) => [...m.values()][0]))).toEqual(new Set(["Ra", "Sa"]));
+  });
+
+  it("gives a butatriene's cis or trans one mark, on its middle double bond, not one on each of its three", () => {
+    for (const [smi, label] of [["C/C=C=C=C/C", "E"], ["C/C=C=C=C\\C", "Z"]] as const) {
+      const m = asked(smi);
+      const marks = cipMarksOf(m).doubleBonds;
+      // (alike groups at an end say none: 2-butatriene's ends have a methyl and an H each, so there is a mark)
+      expect([...marks.values()], smi).toEqual([label]);
+      const middle = m.bonds.find((b) => b.a === 3 && b.b === 4)!;
+      expect([...marks.keys()], smi).toEqual([middle.id]);
+    }
+  });
+
+  it("leaves a plain double bond its own mark, and an allene's with a plain one beside it", () => {
+    const marks = cipMarksOf(asked("C/C=C/C=[C@]=C(Cl)C")).doubleBonds;
+    expect(marks.size).toBe(2);
+  });
+});
