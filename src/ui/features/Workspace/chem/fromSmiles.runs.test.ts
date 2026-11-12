@@ -86,6 +86,15 @@ describe("what the plugin leaves open of a run the SMILES gives", () => {
     expect(givenRunsOf("OC(C)=C=C(Cl)C", block)).toBeNull();
   });
 
+  it("are none where the block's atoms are the SMILES's elements in order but its bonds are not: no hand is drawn that was not read", () => {
+    // (the same seven atoms, the allene's ends' groups joined otherwise: the Cl and the methyl on the other end's carbon)
+    const other = molblock(["O", "C", "C", "C", "C", "Cl", "C"], [[1, 2, 1], [2, 3, 1], [2, 4, 2], [4, 5, 2], [2, 6, 1], [5, 7, 1]]);
+    expect(givenRunsOf("OC(C)=[C@]=C(Cl)C", other)).toBeNull();
+    // (the same bonds, one a Kekule form's other order: still the structure)
+    const kekule = molblock(["O", "C", "C", "C", "C", "Cl", "C"], [[1, 2, 1], [2, 3, 1], [2, 4, 2], [4, 5, 2], [5, 6, 1], [5, 7, 1]]);
+    expect(givenRunsOf("OC(C)=[C@]=C(Cl)C", kekule)).not.toBeNull();
+  });
+
   it("are no longer open once given: the axis the plugin left open is not said not specified", () => {
     const graph = stereoGraphOf([block])!;
     const open = { atoms: [], bonds: [2, 3], cumulenes: [2, 3], cumulated: [[2, 3]], notEnumerated: [], said: null };

@@ -128,7 +128,7 @@ export function asCameSaid(drawn: { asCame?: string }): string | null {
 /**
  * The allenes' axes and odd cumulenes' cis or trans a SMILES gives (lib/chem/smiles), by the atoms of the MOL block the plugin read it to - the
  * same atoms, in the same order, or none - and the double bonds of the MOL block each run is made of (what the plugin left open of them is then
- * given, `specified`). None where the SMILES has none, or reads otherwise.
+ * given, `specified`). None where the SMILES has none, or reads otherwise, or where the block's atoms or bonds are not the SMILES's - then what it leaves open stays said open.
  */
 export function givenRunsOf(smiles: string, molblock: string): { runs: GivenRuns; bonds: number[] } | null {
   let own;
@@ -141,6 +141,11 @@ export function givenRunsOf(smiles: string, molblock: string): { runs: GivenRuns
   if (!runs.axes.length && !runs.cumulated.length) return null;
   const graph = stereoGraphOf([molblock]);
   if (!graph || graph.atoms.length !== own.atoms.length || graph.atoms.some((a, i) => a.el !== own.atoms[i].el)) return null;
+  // (the same bonds between the same atoms - orders may differ by a Kekule form - or the atoms are only alike: a hand read for other groups would be drawn on a structure it was not read of)
+  const pair = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
+  const wanted = own.bonds.map((b) => pair(b.a1, b.a2)).sort();
+  const had = graph.bonds.map((b) => pair(b.a, b.b)).sort();
+  if (wanted.length !== had.length || wanted.some((k, i) => k !== had[i])) return null;
   // (each run's double bonds: along double bonds from one end to the other)
   const bonds: number[] = [];
   for (const [i, j] of [...runs.axes, ...runs.cumulated].map((r) => r.atoms)) {

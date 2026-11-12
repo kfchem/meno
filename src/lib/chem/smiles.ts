@@ -179,9 +179,9 @@ export function readSmiles(text: string): Smiles {
   const order = (a: number, b: number) => orderOf.get(a < b ? `${a},${b}` : `${b},${a}`) ?? 0;
   const axes: Axial[] = [];
   for (const [at, mark] of chiral) {
-    // (an @ between two double bonds: an allene's middle atom)
+    // (an @ between two double bonds: an allene's middle atom - a carbon or an N+, not a sulfur's: C=S=C is bent)
     const next = around[at].filter((n) => n >= 0);
-    if (next.length === 2 && next.every((n) => order(at, n) === 2)) {
+    if (linearMiddle(atoms[at]) && next.length === 2 && next.every((n) => order(at, n) === 2)) {
       axes.push(alleneAxis(at, mark, atoms, around, order, text));
       continue;
     }
@@ -206,7 +206,7 @@ export function readSmiles(text: string): Smiles {
   // and an odd cumulene's, likewise, at its two ends (OpenSMILES, *Cis/Trans
   // configuration of double bonds*: F/C=C=C=C/F trans, F/C=C=C=C\F cis)
   const cumulated: Cumulated[] = [];
-  for (const run of cumulatedRuns(atoms.length, around, order)) {
+  for (const run of cumulatedRuns(atoms, around, order)) {
     // (an odd number of double bonds: an even number of atoms)
     if (run.length % 2 === 1) continue;
     const [t1, c1] = [run[0], run[1]];
@@ -217,15 +217,19 @@ export function readSmiles(text: string): Smiles {
   return { atoms, bonds, ...(axes.length ? { axes } : {}), ...(cumulated.length ? { cumulated } : {}) };
 }
 
+/** Whether an atom between two double bonds is drawn straight through: a carbon, or an N+ - a sulfur's C=S=C is bent, and has no axis (the rule the restraints' linear-by-bonds has). */
+const linearMiddle = (a: SmilesAtom) => a.el === "C" || (a.el === "N" && a.charge === 1);
+
 /**
  * Each run of cumulated double bonds, by its atoms end to end (an
  * allene's three, a butatriene's four), its first end the one whose atom
  * comes first; a run is two or more double bonds, each atom between its
  * ends with no other neighbour.
  */
-function cumulatedRuns(n: number, around: readonly number[][], order: (a: number, b: number) => number): number[][] {
+function cumulatedRuns(atoms: readonly SmilesAtom[], around: readonly number[][], order: (a: number, b: number) => number): number[][] {
+  const n = atoms.length;
   const near = (a: number) => (around[a] ?? []).filter((m) => m >= 0);
-  const middle = (a: number) => near(a).length === 2 && near(a).every((m) => order(a, m) === 2);
+  const middle = (a: number) => linearMiddle(atoms[a]) && near(a).length === 2 && near(a).every((m) => order(a, m) === 2);
   const runs: number[][] = [];
   for (let a = 0; a < n; a++) {
     if (middle(a)) continue;
@@ -259,7 +263,7 @@ function alleneAxis(at: number, mark: string, atoms: readonly SmilesAtom[], arou
   // (each way along the run to its end: the end, and the atom before it)
   const end = (from: number) => {
     let [prev, x, steps] = [at, from, 1];
-    while (near(x).length === 2 && near(x).every((m) => order(x, m) === 2)) {
+    while (linearMiddle(atoms[x]) && near(x).length === 2 && near(x).every((m) => order(x, m) === 2)) {
       [prev, x] = [x, near(x).find((m) => m !== prev)!];
       steps++;
     }
