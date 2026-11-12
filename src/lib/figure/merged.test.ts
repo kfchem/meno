@@ -116,4 +116,34 @@ describe("two labels set close, read as one word or two", () => {
     const labels = labelsOf({ ...d, paths: [...d.paths, ...ringBonds()] });
     expect(labels).toEqual(expect.arrayContaining(["Me", "O"]));
   });
+
+  it("is one label, one bond, unmarked, for PMBO on its one bond with a ring corner lying under the PMB letters, within reach: where two bonds meet is no bond's end to a label", () => {
+    // (the label's own bond into the O from the right; a ring corner - two bonds meeting - just under the P and M, the bonds' lines pointing up into the letters)
+    const letters = word([{ c: "P", gap: 0 }, { c: "M", gap: 0.1 }, { c: "B", gap: 0.1 }, { c: "O", gap: 0.1 }], 100, 100);
+    const end = letters[letters.length - 1].box[2];
+    const corner: P = [104, 102];
+    const ring: FigurePath[] = [line([116, 108], corner), line([96, 108], corner), line([116, 108], [122, 120]), line([96, 108], [90, 120])];
+    const own = line([end + 14, 96], [end + 3, 96]);
+    const read = readFigure(figure([...ring, own, ...ringBonds()], letters), (l) => reads(l) || l === "PMB");
+    expect(read.atoms.some((a) => a.label === "O")).toBe(false);
+    expect(read.atoms.every((a) => !a.unsure?.some((t) => t.startsWith("Two labels")))).toBe(true);
+  });
+
+  it("undoes a cut that leaves a piece with no bond of its own in what is read: a free end at the Me that is no bond - a stub too short for one - and a bond at the O: one label", () => {
+    const stub: P[] = [[97, 96], [93.5, 96]];
+    const d = meo(0.11, 0.15, { up: 0.09 }, [stub, ...intoO]);
+    const labels = labelsOf({ ...d, paths: [...d.paths, ...ringBonds()] });
+    expect(labels).toContain("MeO");
+    expect(labels).not.toContain("Me");
+  });
+
+  it("keeps a cut whose pieces each have a bond of their own in what is read", () => {
+    const d = meo(0.11, 0.15, { up: 0.09 }, [intoM, ...intoO]);
+    const read = readFigure({ ...d, paths: [...d.paths, ...ringBonds()] }, reads);
+    for (const label of ["Me", "O"]) {
+      const i = read.atoms.findIndex((a) => a.label === label);
+      expect(i).toBeGreaterThanOrEqual(0);
+      expect(read.bonds.some((b) => b.a === i || b.b === i)).toBe(true);
+    }
+  });
 });
