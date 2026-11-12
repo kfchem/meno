@@ -14,7 +14,7 @@ import { askArea } from "../pageGl/askField";
 import { connectionFor } from "./connections";
 import { CARD, cardBlocks, cardLayout, clampScroll, scrollMax, type CardLayout } from "../pageGl/conversationCard";
 import { cardParts, cardView, cardWidth, SCROLL_ICONS } from "../pageGl/conversationCardParts";
-import { earlierOf, glideAt, gliding, newBelow, offsetByKey, offsetByThumb, pagedByPress, TRACK, type Glide } from "../pageGl/conversationScroll";
+import { cardForKey, earlierOf, glideAt, gliding, newBelow, offsetByKey, offsetByThumb, pagedByPress, TRACK, type Glide } from "../pageGl/conversationScroll";
 import { PAGE_PX } from "../utils/pageScale";
 import type { PageIcon } from "../pageGl/icons";
 import { useEasedValues } from "../pageGl/faded";
@@ -204,7 +204,8 @@ export default function ConversationFrames() {
       if (e.defaultPrevented) return;
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
-      const id = pointedNow.current ?? store.getState().conversationShown;
+      const st = store.getState();
+      const id = cardForKey(pointedNow.current, st.conversationShown, st.hoveredPdf != null);
       const at = id != null ? nowOf.current.get(id) : undefined;
       const to = id != null && at ? offsetByKey(e, at.height, at.view, at.shown) : null;
       if (id == null || to == null) return;

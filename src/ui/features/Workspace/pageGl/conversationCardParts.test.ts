@@ -90,6 +90,36 @@ describe("a conversation's card as drawn", () => {
     expect(shown(1)).toEqual([false, false]);
   });
 
+  it("takes the pointer on a chip from half present - a chip fading out at an edge does not take a press, its card taking it instead", () => {
+    // (filler either side of the changes bar, so the bar can be scrolled to the top edge)
+    const filler = (n: number) => Array.from({ length: n }, (_, k) => reply(`line ${k}`));
+    const blocks = [...filler(40), { kind: "changes" } as CardBlock, ...filler(40)];
+    const laid = card(blocks);
+    const chip = laid.layout.chips[0];
+    // (the chip's top `room` px from the view's top, with more above it: present room / 19)
+    const parts = (room: number) => cardParts({ ...laid, offset: chip.y - room }).regions.map((r) => r.part);
+    expect(parts(0.4 * 19)).not.toContain("keep");
+    expect(parts(0.49 * 19)).not.toContain("keep");
+    expect(parts(0.5 * 19)).toContain("keep");
+    expect(parts(0.5 * 19)).toContain("discard");
+  });
+
+  it("sets its ask area off with a hairline as present as its words and its card", () => {
+    const hair = (over: Partial<CardOf>) => cardParts(card([reply("hello")], over)).shapes.find((s) => s.key === "conversation:1:ask")!.opacity;
+    expect(hair({})).toBe(1);
+    expect(hair({ words: 0.5 })).toBe(0.5);
+    expect(hair({ opacity: 0.5 })).toBe(0.5);
+    expect(hair({ words: 0.5, opacity: 0.5 })).toBe(0.25);
+  });
+
+  it("makes a line of a question of each line it was written on, whichever way the new line was written - none lost, none doubled", () => {
+    const lines = (text: string) => cardLayout([{ kind: "question", text }]).lines.map((l) => l.runs.map((r) => r.text).join(""));
+    expect(lines("a\nb")).toEqual(["a", "b"]);
+    expect(lines("a\r\nb")).toEqual(["a", "b"]);
+    expect(lines("a\rb")).toEqual(["a", "b"]);
+    expect(lines("a\r\n\r\nb")).toEqual(["a", "", "b"]);
+  });
+
   it("draws the changes' chips under their line, Keep in Meno's colour and Discard quiet, each taking the pointer over its box as a pointer", () => {
     const d = cardParts(card([reply("hello"), { kind: "changes" }]));
     // (the chips at 63 to 85 below the card's top, 14 in)

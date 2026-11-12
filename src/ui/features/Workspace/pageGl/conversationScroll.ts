@@ -39,6 +39,14 @@ export function pagedByPress(trackPx: number, height: number, view: number, offs
   return clampScroll(offset + (pressPx < thumb.top ? -view : view), height, view);
 }
 
+/**
+ * The card the keys scroll: the one the pointer is on or, where it is on none, the one read in the column - unless a PDF lies under the
+ * pointer, whose pages the same keys turn (Page Up, Page Down), and then the pointer's alone.
+ */
+export function cardForKey(pointed: number | null, shown: number | null, pdfHovered: boolean): number | null {
+  return pointed ?? (pdfHovered ? null : shown);
+}
+
 /** What a key does to a card at `offset`: a screen up or down (Page Up, Page Down), to the start or the end (Home, End), a line up or down (Alt and the arrows) - the offset it comes to, clamped; none for any other key, plain arrows included, which stay with the field's text. */
 export function offsetByKey(e: { key: string; altKey?: boolean; ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean }, height: number, view: number, offset: number): number | null {
   if (e.ctrlKey || e.metaKey || e.shiftKey) return null;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CARD } from "./conversationCard";
-import { earlierOf, glideAt, gliding, latestOf, newBelow, offsetByKey, offsetByThumb, pagedByPress, SCROLL_MS, thumbOf, TRACK } from "./conversationScroll";
+import { cardForKey, earlierOf, glideAt, gliding, latestOf, newBelow, offsetByKey, offsetByThumb, pagedByPress, SCROLL_MS, thumbOf, TRACK } from "./conversationScroll";
 
 // (a history 1000 tall seen through a view 250 tall: scrolled at most 750; a track 500 long)
 const H = 1000;
@@ -97,5 +97,15 @@ describe("a scroll glided", () => {
 
   it("is under way till its time is up, and not at all where it goes nowhere", () => {
     expect([gliding({ from: 0, to: 10, start: 0 }, SCROLL_MS - 1), gliding({ from: 0, to: 10, start: 0 }, SCROLL_MS), gliding({ from: 5, to: 5, start: 0 }, 1)]).toEqual([true, false, false]);
+  });
+});
+
+describe("the card the keys scroll", () => {
+  it("is the one the pointer is on, else the one read in the column - and, with a PDF under the pointer, whose pages the keys turn, only the pointer's", () => {
+    expect(cardForKey(3, 7, false)).toBe(3);
+    expect(cardForKey(3, 7, true)).toBe(3);
+    expect(cardForKey(null, 7, false)).toBe(7);
+    expect(cardForKey(null, 7, true)).toBeNull();
+    expect(cardForKey(null, null, false)).toBeNull();
   });
 });

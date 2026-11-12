@@ -42,6 +42,19 @@ describe("what is typed in lines", () => {
     expect(lines.map((l) => [l.from, l.to])).toEqual([[0, 10], [10, 20], [20, 30]]);
   });
 
+  it("breaks a word wider than a line even where it is less than two lines wide, after the words before it", () => {
+    const room = w("x".repeat(10)) + 0.01;
+    expect(askLines("x".repeat(15), room).map((l) => [l.from, l.to])).toEqual([[0, 10], [10, 15]]);
+    expect(askLines("ab " + "x".repeat(15), room).map((l) => [l.from, l.to])).toEqual([[0, 3], [3, 13], [13, 18]]);
+  });
+
+  it("keeps a line that comes to exactly the room on one line, and breaks the first that is a letter over", () => {
+    expect(askLines("ab cd", w("ab ") + w("cd"))).toHaveLength(1);
+    expect(askLines("ab cd", w("ab ") + w("cd") - 0.01).map((l) => [l.from, l.to])).toEqual([[0, 3], [3, 5]]);
+    // (one word exactly the room's width: not broken)
+    expect(askLines("x".repeat(10), w("x".repeat(10)))).toHaveLength(1);
+  });
+
   it("breaks after a hyphen inside a word, as the page's words do - and keeps a minus with its figure", () => {
     const room = w("GFN2-") + 1;
     expect(askLines("GFN2-xTB", room).map((l) => [l.from, l.to])).toEqual([[0, 5], [5, 8]]);
@@ -106,6 +119,20 @@ describe("what is selected, as boxes", () => {
   });
 });
 
+describe("what is selected across a soft break", () => {
+  it("ends at its line's last letter where the line runs on to the next without a newline - a newline alone is a letter's width past", () => {
+    const value = "alpha beta gamma";
+    const lines = askLines(value, w("alpha beta") + 1);
+    const soft = selectionBoxes(value, lines, 0, value.length);
+    expect(soft).toHaveLength(2);
+    expect(soft[0].x1).toBeCloseTo(w("alpha beta "), 9);
+    // (the same words with a newline between the lines: its letter's width more)
+    const hard = "alpha beta\ngamma";
+    const hardLines = askLines(hard, 400);
+    expect(selectionBoxes(hard, hardLines, 0, hard.length)[0].x1).toBeCloseTo(w("alpha beta") + ASK.size * 0.4, 9);
+  });
+});
+
 describe("how tall the field is", () => {
   it("is at least the card's 44, then 8 for each room round it, 8 inside, and 19 a line - to four lines, then scrolled", () => {
     expect([1, 2, 3, 4, 5, 20].map(askHeight)).toEqual([44, 62, 81, 100, 100, 100]);
@@ -117,6 +144,13 @@ describe("how tall the field is", () => {
     // (6 lines, 4 shown: the caret on line 5 - the last - shows lines 2 to 5; back on line 1 - above the first shown - from 1)
     expect([firstLineShown(6, 5, 0), firstLineShown(6, 3, 0), firstLineShown(6, 4, 0), firstLineShown(6, 1, 2), firstLineShown(6, 3, 2)]).toEqual([2, 0, 1, 1, 2]);
     expect(firstLineShown(6, 0, 5)).toBe(0);
+  });
+
+  it("keeps the first line shown inside the lines there are, where they have shrunk under it - a field never shown blank", () => {
+    // (it stood at 10 with more lines; now five lines hold the caret on the last)
+    expect(firstLineShown(5, 4, 10)).toBe(1);
+    expect(firstLineShown(5, 0, 10)).toBe(0);
+    expect(firstLineShown(6, 3, 9)).toBe(2);
   });
 
   it("gives its words the card's width less its room - and Stop's where the model works", () => {
@@ -150,6 +184,16 @@ describe("what the ask area holds", () => {
     // (the box 2 lines: 8 + 19 x 2 = 46 tall in a 62 area: 8 above; its first line 4 in, 9.5 to its middle)
     expect(caretSpot(value, lines, 4, 0, 432, askHeight(2))).toEqual({ x: 18 + w("c"), y: 8 + 4 + 19 + 9.5 });
     expect(caretSpot(value, lines, 0, 0, 432, askHeight(2))).toEqual({ x: 18, y: 8 + 4 + 9.5 });
+  });
+});
+
+describe("where the real field lies on a field scrolled inside", () => {
+  it("is on the caret's line counted from the first shown: a field scrolled two lines puts it two lines higher", () => {
+    const value = "a\nb\nc\nd\ne\nf";
+    const lines = askLines(value, 400);
+    const at = (first: number) => caretSpot(value, lines, value.length, first, 432, 100);
+    expect(at(0).y - at(2).y).toBe(2 * ASK.line);
+    expect(at(2).x).toBe(at(0).x);
   });
 });
 

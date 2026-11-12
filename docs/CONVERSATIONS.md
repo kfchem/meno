@@ -41,11 +41,14 @@ The same holds for the exchange as it is saved and opened again.
     pointed at - its thumb dragged, a press on the track paging a screen;
   - *Earlier* and *Latest* chips at its top and foot, only where there is
     more that way - a click moves a screen, eased, *Latest* to the end;
-  - keys, for the card the pointer is on or the one read in the column:
+  - keys, for the card the pointer is on or the one read in the column
+    (not with a PDF under the pointer, whose pages the same keys turn):
     Page Up and Page Down, Home and End, and Alt with the up and down
     arrows by a line (plain arrows stay with the text of a field);
   - at its latest, it follows what is said; scrolled up, it stays, and
-    *Latest* carries a dot for what is new below.
+    *Latest* carries a dot for what is new below; asking in it - from
+    its field or the column's - brings it to its latest, where the question
+    and what follows are.
   Where it was left is the view's: saved with the file, no step of undo,
   none for a card left at its latest.
 - **Its ask field is at the card's foot**, drawn on the page, typed into

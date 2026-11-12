@@ -40,6 +40,22 @@ describe("a conversation, talked to from the page", () => {
     expect(doc.getState().conversations![0].said).toEqual([]);
   });
 
+  it("brings a card left scrolled up to its latest as it is asked in, and leaves it where it is where nothing is sent", async () => {
+    const { store, doc, id } = page();
+    store.getState().scrollConversation(id, 120);
+    expect(doc.getState().conversations![0].scroll).toBe(120);
+    // (no model plugin: nothing is asked, the card stays where it was)
+    await store.getState().sendToConversation(id, "Hello");
+    expect(doc.getState().conversations![0].scroll).toBe(120);
+    // (nothing typed: likewise)
+    setConnectionMaker(() => scriptedModel([{ text: "Hi." }]));
+    await store.getState().sendToConversation(id, "   ");
+    expect(doc.getState().conversations![0].scroll).toBe(120);
+    await store.getState().sendToConversation(id, "Hello");
+    expect(doc.getState().conversations![0].scroll).toBeUndefined();
+    expect(doc.getState().conversations![0].said.length).toBeGreaterThan(0);
+  });
+
   it("keeps a turn's changes, or discards them - one step - and says what a change makes run again", async () => {
     const { store, doc, id } = page([{ text: "", calls: [{ tool: "put_structure", args: { smiles: "CCO" } }] }, { text: "There." }]);
     store.getState().updateConversation(id, { rights: { propose: true } });

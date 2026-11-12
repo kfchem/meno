@@ -78,6 +78,8 @@ export function createConversationsSlice(doc: DocumentStore<WorkspaceDocument>, 
       talk(id, { running: true, stop: undefined, changed: undefined, runsAgain: undefined, said: undefined });
       let turn: Awaited<ReturnType<typeof runTurn>> = { sent: true };
       try {
+        // (asked from a card left scrolled up: it goes to its latest, where the question and what follows are)
+        doc.amend((d) => scrolledConversation(d, id, null));
         turn = await runTurn({ doc, calls: get(), id, words, connection, turn: `${Date.now()}`, stop: () => !!get().talking[id]?.stop });
       } finally {
         // (never left talking: whatever came of it, it may be sent to again, and taken away)
