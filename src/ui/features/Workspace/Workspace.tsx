@@ -142,7 +142,6 @@ import { useCheckingFiles, useDownloads } from "../../../lib/pyEnv";
 import { roleOptionsRole } from "../../../lib/plugins/roles";
 import { valuesOf } from "../../../lib/options";
 import { useAppSettings, WINDOW_3D } from "../../../lib/settings/appSettings";
-import { threadsOf } from "../../../lib/jobs";
 import { STEREO_LABELS } from "../../../lib/settings/stereoLabels";
 import { stereoItemFor, type StereoItem } from "./utils/stereoShown";
 import { CleanUpRefused, cleanUp, fragmentOf } from "./chem/cleanUp";
@@ -219,7 +218,7 @@ import { pictureRegion, readStructure } from "./components/readStructure";
 import { isFilm } from "../../../lib/picture/image";
 import { placedBeside, readMarks } from "./utils/figures";
 import { useNotices } from "../../notices";
-import { bareAtomsOf, bareWords, blocksOf, blocksStill, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, pageCount, pageRounds, placeRow, rowFrom, takenOnPage, turnedOver, withinWindow, type Block, type Box, type Open } from "./chem/make3d";
+import { bareAtomsOf, bareWords, blocksOf, blocksStill, boxOf, conformersOnPage, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, pageRounds, placeRow, rowFrom, takenOnPage, turnedOver, withinWindow, type Block, type Box, type Open } from "./chem/make3d";
 import { isomersToMake } from "./chem/openStereo";
 import { centredAt, clipItems } from "./utils/copyPaste";
 import { structureInOutput } from "./chem/fromClipboard";
@@ -557,7 +556,7 @@ function WorkspaceContent({
           const chosen = useAppSettings.getState().chemistry;
           const rounds = pageRounds(block, chosen, !!plugin?.roleDraws.includes("conformers"));
           if (rounds && "needs" in rounds) throw new Error(rounds.needs);
-          const isomersMade = (await conformersOf(chem, stereo, block, isomers, options, pageCount(block, chosen), rounds, threadsOf(useAppSettings.getState().calculations))).map((c) => withinWindow(c, window3d));
+          const isomersMade = (await conformersOnPage(chem, stereo, block, isomers, options, useAppSettings.getState(), rounds)).map((c) => withinWindow(c, window3d));
           // (several stereoisomers: their R and S shown, to tell them apart)
           const ms = isomersMade.map((c) => moleculeOf(c, block, isomersMade.length > 1));
           const model = store.getState().model;
