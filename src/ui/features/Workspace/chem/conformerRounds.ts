@@ -28,8 +28,8 @@ export const SEARCH_BUDGET_MS = 600_000;
 
 const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");
 
-/** How a search in rounds ended: no new conformer in its last round; the most tried; its time; asked once, its search taking no other draw; asked once, with no energies to judge by. */
-export type RoundsEnd = "settled" | "most" | "time" | "one" | "unjudged";
+/** How a search in rounds ended: no new conformer in its last round; the most tried; its time; asked once, its search taking no other draw; asked once, with no energies to judge by; stopped, what came kept. */
+export type RoundsEnd = "settled" | "most" | "time" | "one" | "unjudged" | "stopped";
 
 /** What a search in rounds did: how many it tried, in how many rounds, and how it ended. */
 export type RoundsRun = { tried: number; rounds: number; ended: RoundsEnd };
@@ -95,7 +95,7 @@ export class RoundsSeen {
 }
 
 /** What judges a search's rounds: how many of a round's conformers are new (`RoundsSeen.add`), done where it is done - a worker, or here - and let go at the end. */
-export type RoundsJudge = { add(frames: readonly (readonly number[])[], energies: readonly number[]): Promise<number>; end(): void };
+export type RoundsJudge = { add(frames: readonly (readonly number[])[], energies: readonly number[], got?: Conformers): Promise<number>; end(): void };
 
 /** A judge that does it here, on the thread that asks: where there are no workers (tests), and for a few conformers. */
 export function judgeHere(atoms: ConstructorParameters<typeof RoundsSeen>[0], bonds: ConstructorParameters<typeof RoundsSeen>[1], window: number): RoundsJudge {
@@ -104,7 +104,7 @@ export function judgeHere(atoms: ConstructorParameters<typeof RoundsSeen>[0], bo
 }
 
 /** Two rounds' conformers as one: their frames, and their energies where both rounds give them, in the order made. */
-function joined(a: Conformers, b: Conformers): Conformers {
+export function joined(a: Conformers, b: Conformers): Conformers {
   const both = (x?: number[], y?: number[]) => (x && y ? [...x, ...y] : undefined);
   const energies = both(a.energies?.length === a.frames.length ? a.energies : undefined, b.energies?.length === b.frames.length ? b.energies : undefined);
   const modelEnergies = both(a.modelEnergies?.length === a.frames.length ? a.modelEnergies : undefined, b.modelEnergies?.length === b.frames.length ? b.modelEnergies : undefined);
@@ -126,63 +126,115 @@ export function roundsHow(hows: readonly (readonly { label: string; text: string
   });
 }
 
-/** How a search in rounds is asked: its first round, the most it tries, its window (kcal/mol), whether its plugin gives another set for each draw, and the time it may take (ms), where it has a limit. */
-export type RoundsAsked = { first: number; most: number; window: number; draws: boolean; budget?: number; now?: () => number };
+/**
+ * How a search in rounds is asked: its first round, the most it tries, its
+ * window (kcal/mol), whether its plugin gives another set for each draw,
+ * and the time it may take (ms), where it has a limit - or what is left of
+ * it as each round is to start, where several share it. `onRound`: told,
+ * after each round, all made so far and how far it has got - for what is
+ * shown to grow as it goes. `stopped`: asked before each round after the
+ * first, ending the search where it says so, what came kept.
+ */
+export type RoundsAsked = {
+  first: number;
+  most: number;
+  window: number;
+  draws: boolean;
+  budget?: number | (() => number);
+  now?: () => number;
+  onRound?: (made: Conformers, so: Omit<RoundsRun, "ended">) => void;
+  stopped?: () => boolean;
+};
 
 /**
- * A conformer search asked for in rounds (above): `ask` the plugin for a
- * round's count and draw, judged by `judge` (a worker's, else `judgeHere`).
- * Every conformer of every round, in the order made, and what was done.
+ * A conformer search asked for in rounds (above), a round at a time: `ask`
+ * the plugin for a round's count and draw, judged by `judge` (a worker's,
+ * else `judgeHere`). `next` asks and judges the next round, saying whether
+ * the search goes on; `made` is every conformer of every round so far, in
+ * the order made; `ended` how it ended, once it has. Its time is the time
+ * its rounds take, not any it waits between them - so that a search taken
+ * up again later is held to the time it ran.
+ */
+export class RoundsSearch {
+  made: Conformers | null = null;
+  tried = 0;
+  rounds = 0;
+  ended: RoundsEnd | null = null;
+  private judging: RoundsJudge | null = null;
+  /** The time its rounds have taken, in ms. */
+  spent = 0;
+  private readonly sizes: number[];
+  private readonly hows: Conformers["how"][] = [];
+  private readonly now: () => number;
+
+  constructor(
+    private readonly ask: (count: number, draw: number) => Promise<Conformers>,
+    private readonly o: RoundsAsked,
+    private readonly judge: (c: Conformers) => RoundsJudge = (c) => judgeHere(c.atoms, c.bonds, o.window),
+  ) {
+    this.sizes = roundSizes(o.first, o.most);
+    this.now = o.now ?? (() => Date.now());
+  }
+
+  /** The next round asked and judged: true where the search goes on, false where it has ended (`ended`). Its judge let go once it ends - and where a round fails. */
+  async next(): Promise<boolean> {
+    if (this.ended) return false;
+    const n = this.sizes[this.rounds];
+    if (n == null) return this.end("most");
+    // (stopped: what came kept, its first round always)
+    if (this.rounds && this.o.stopped?.()) return this.end("stopped");
+    // (past its time, or where the next round, as long for each try as those before, would take it past: ended)
+    const budget = typeof this.o.budget === "function" ? this.o.budget() : this.o.budget;
+    if (this.rounds && budget != null && (this.spent >= budget || this.spent + (n * this.spent) / this.tried > budget)) return this.end("time");
+    const t0 = this.now();
+    try {
+      const got = await this.ask(n, this.rounds);
+      this.tried += n;
+      this.rounds++;
+      this.hows.push(got.how);
+      this.made = this.made ? joined(this.made, got) : got;
+      if (!this.o.draws) return this.end("one");
+      const energies = roundEnergies(got);
+      if (!energies) return this.end("unjudged");
+      this.judging ??= this.judge(got);
+      if (!(await this.judging.add(got.frames, energies, got)) && this.made.frames.length) return this.end("settled");
+      return this.rounds < this.sizes.length || this.end("most");
+    } catch (e) {
+      this.judging?.end();
+      throw e;
+    } finally {
+      this.spent += this.now() - t0;
+    }
+  }
+
+  /** Every conformer made, how it was made - each round's said: the first round's alone would be one round's count for the whole - and what was done. */
+  result(): { made: Conformers; run: RoundsRun } {
+    const made = this.made!;
+    const how = this.hows.length > 1 && this.hows.some((h) => h?.length) ? { how: roundsHow(this.hows) } : {};
+    return { made: { ...made, ...how }, run: { tried: this.tried, rounds: this.rounds, ended: this.ended ?? "most" } };
+  }
+
+  private end(how: RoundsEnd): false {
+    this.ended = how;
+    this.judging?.end();
+    return false;
+  }
+}
+
+/**
+ * A conformer search asked for in rounds (above), to its end: every
+ * conformer of every round, in the order made, and what was done - told
+ * after each round it goes on from (`RoundsAsked.onRound`).
  */
 export async function inRounds(
   ask: (count: number, draw: number) => Promise<Conformers>,
   o: RoundsAsked,
-  judge: (c: Conformers) => RoundsJudge = (c) => judgeHere(c.atoms, c.bonds, o.window),
+  judge?: (c: Conformers) => RoundsJudge,
 ): Promise<{ made: Conformers; run: RoundsRun }> {
-  const now = o.now ?? (() => Date.now());
-  const start = now();
-  let made: Conformers | null = null;
-  let judging: RoundsJudge | null = null;
-  let tried = 0;
-  let rounds = 0;
-  let ended: RoundsEnd = "most";
-  const hows: Conformers["how"][] = [];
-  try {
-    for (const n of roundSizes(o.first, o.most)) {
-      // (past its time, or where the next round, as long for each try as those before, would take it past: ended)
-      if (rounds && o.budget != null) {
-        const spent = now() - start;
-        if (spent >= o.budget || spent + (n * spent) / tried > o.budget) {
-          ended = "time";
-          break;
-        }
-      }
-      const got = await ask(n, rounds);
-      tried += n;
-      rounds++;
-      hows.push(got.how);
-      made = made ? joined(made, got) : got;
-      if (!o.draws) {
-        ended = "one";
-        break;
-      }
-      const energies = roundEnergies(got);
-      if (!energies) {
-        ended = "unjudged";
-        break;
-      }
-      judging ??= judge(got);
-      if (!(await judging.add(got.frames, energies)) && made.frames.length) {
-        ended = "settled";
-        break;
-      }
-    }
-  } finally {
-    judging?.end();
-  }
-  // (how it was made, each round's said: the first round's alone would be one round's count for the whole)
-  if (made && hows.length > 1 && hows.some((h) => h?.length)) made = { ...made, how: roundsHow(hows) };
-  return { made: made!, run: { tried, rounds, ended } };
+  const search = new RoundsSearch(ask, o, judge);
+  // (told how far it has got, where it goes on: what it ends with is the answer)
+  while (await search.next()) o.onRound?.(search.made!, { tried: search.tried, rounds: search.rounds });
+  return search.result();
 }
 
 /**
@@ -190,7 +242,7 @@ export async function inRounds(
  * rounds, 400 tried: the last brought no new conformer within 2.5
  * kcal/mol of the lowest".
  */
-export function roundsSaid(r: RoundsRun, o: Pick<RoundsAsked, "window" | "most" | "budget">): string {
+export function roundsSaid(r: RoundsRun, o: Pick<RoundsAsked, "window" | "most"> & { budget?: number }): string {
   const done = `${r.rounds} round${r.rounds === 1 ? "" : "s"}, ${r.tried.toLocaleString("en")} tried`;
   switch (r.ended) {
     case "settled":
@@ -203,5 +255,7 @@ export function roundsSaid(r: RoundsRun, o: Pick<RoundsAsked, "window" | "most" 
       return `${done}: its search gives no other conformers to a round after`;
     case "unjudged":
       return `${done}: no energies came with them to tell a new conformer by`;
+    case "stopped":
+      return `${done}: stopped, what came kept`;
   }
 }

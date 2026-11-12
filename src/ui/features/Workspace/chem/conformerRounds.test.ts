@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Conformers } from "../../../../lib/roles/client";
 import { factor } from "../../../../lib/units";
-import { inRounds, judgeHere, roundEnergies, roundsHow, roundSizes, RoundsSeen, roundsSaid, SEARCH_BUDGET_MS, type RoundsJudge } from "./conformerRounds";
+import { inRounds, judgeHere, roundEnergies, roundsHow, RoundsSearch, roundSizes, RoundsSeen, roundsSaid, SEARCH_BUDGET_MS, type RoundsJudge } from "./conformerRounds";
 
 const KCAL = factor("Eh", "kcal/mol");
 const ATOMS = [
@@ -180,6 +180,53 @@ describe("a search in rounds", () => {
     ]);
     const once = await inRounds(ask, { first: 10, most: 5000, window: 3, draws: false });
     expect(once.made.how).toEqual([{ label: "Embedded", text: "ETKDG" }, { label: "Kept", text: "10 of 10" }]);
+  });
+
+  it("goes a round at a time, told after each it goes on from, and ends where it is stopped - what came kept", async () => {
+    const p = plugin([[0], [1], [2], [3]], () => 0);
+    const told: number[] = [];
+    let stop = false;
+    const search = new RoundsSearch(p.ask, { first: 10, most: 5000, window: 3, draws: true, stopped: () => stop });
+    expect(await search.next()).toBe(true);
+    expect([search.rounds, search.tried, search.made?.frames.length]).toEqual([1, 10, 1]);
+    expect(await search.next()).toBe(true);
+    stop = true;
+    expect(await search.next()).toBe(false);
+    expect(search.ended).toBe("stopped");
+    expect(search.result()).toMatchObject({ run: { tried: 20, rounds: 2, ended: "stopped" } });
+    expect(search.result().made.frames).toEqual([0, 1].map(geo));
+    // (once ended, asked nothing more)
+    expect(await search.next()).toBe(false);
+    expect(p.asked).toHaveLength(2);
+    // (inRounds told after each round it goes on from)
+    await inRounds(plugin([[0], [1], [1]], () => 0).ask, { first: 10, most: 5000, window: 3, draws: true, onRound: (_, so) => told.push(so.rounds) });
+    expect(told).toEqual([1, 2]);
+    expect(roundsSaid({ tried: 20, rounds: 2, ended: "stopped" }, { window: 3, most: 5000 })).toBe("2 rounds, 20 tried: stopped, what came kept");
+  });
+
+  it("is held to the time its rounds take, not the time it waits between them; and to what others sharing its time leave it", async () => {
+    let clock = 0;
+    const p = plugin([[0], [1], [2], [3]], () => 0);
+    const ask = async (count: number, draw: number) => {
+      clock += count * 1000;
+      return p.ask(count, draw);
+    };
+    const search = new RoundsSearch(ask, { first: 10, most: 5000, window: 3, draws: true, budget: 30_000, now: () => clock });
+    await search.next();
+    // (an hour waited before it goes on: not its time - its next round, 10 s more, ends at 20 s)
+    clock += 3_600_000;
+    expect(await search.next()).toBe(true);
+    expect(search.spent).toBe(20_000);
+    // (the next, 20 tries, would end at 40 s: past 30)
+    expect(await search.next()).toBe(false);
+    expect(search.ended).toBe("time");
+    // (a time worked out as each round is to start: what another has left it)
+    let others = 0;
+    const shared = new RoundsSearch(ask, { first: 10, most: 5000, window: 3, draws: true, budget: () => 30_000 - others, now: () => clock });
+    await shared.next();
+    others = 15_000;
+    expect(await shared.next()).toBe(false);
+    expect(shared.ended).toBe("time");
   });
 
   it("says how it ended", () => {
