@@ -1228,7 +1228,7 @@ abstract*:
 | Spectrum type | **Changed**: a curve is a property; a measured one is a table | one less type, nothing lost |
 | *Pair*, with its side chosen by itself | **Changed**: *Re-bond* (one role); the direction is wired | choosing the side by conformer counts was a node deciding by itself |
 | *Take from path* (guess with two sides) | **Changed**: *Take frames*, one rule a node; three of them for the three structures | one role a node |
-| *Barriers* (lowest or ensemble, differences, ratio, diagram) | **Changed**: *Rank* or *Ensemble energy*, *Relative*, *Populations* (the ratio between competing paths), *Energy diagram* | four roles were bundled |
+| *Barriers* (lowest or ensemble, differences, ratio, diagram) | **Changed**: *Rank* or *Ensemble energy*, *Relative*, *Energy diagram*, and from v0.1.27 *Path shares* (the ratio between competing paths: not *Populations*, which takes minima) | four roles were bundled |
 | *Free energy* | **Changed**: *Add*, with a *Number* for the standard-state term | a sum is a sum |
 | *Check bonding*, *Match end points*, *Check the vibration* | **Changed**: *Compare bonding* and *Mode on atoms* (Meno), with *Take frames*, *Join* and *Filter* | the match was four roles in one |
 | An ACCeL plugin | **Changed**: none in this plan; *Atom map*, *Compare bonding*, *Duplicates* with symmetry and *Mode on atoms* are Meno's | the maintainer: mapping is basic to Meno, and the rest is easy in-house |
@@ -1434,14 +1434,18 @@ side together, on the *Atom map* card); set **P** holds the products drawn.
     correction to G, plus 42. Each part is worked out at the same geometry,
     so *Add* takes them; the result is G at the DFT level.
 43. **Duplicates** (Meno, with symmetry), then **Populations** (Meno) in each group
-    [`calc_distribution`].
+    of minima [`calc_distribution`]. For the saddle points of a path, ConfoTS's
+    `distribution` is the share within the path: the step of 46, from v0.1.27.
 44. **Rank** (Meno), the lowest in each group, or **Ensemble energy** (Meno)
     over each.
 45. **Relative** (Meno): each saddle point against the reactant, giving ΔG‡
     per path.
-46. **Populations** (Meno) over the saddle points of both paths, as one
-    group: the share of each path, which is the ratio of *b* to *c* at
-    298.15 K.
+46. *(From v0.1.27: **Path shares** (Meno) over the saddle points of both
+    paths: the share of the reaction through each, by transition state theory,
+    and each path's share, whose ratio is that of *b* to *c* at 298.15 K where
+    the reactant's conformers exchange faster than they react and the step is
+    not reversed. *Populations* is not this: a saddle point is no minimum,
+    and Meno refuses it.)*
 47. **Energy diagram** (Meno): a chart [310].
 
 **F7. IRC at the DFT level** (steps 4 and 5)
@@ -1492,7 +1496,9 @@ can be saved and put down again (question C).
    - *Mode on atoms*;
    - *Compare bonding* with *Join*.
 5. **Levels of theory**: properties with their geometry; *Add*.
-6. **Barriers and diagrams**: *Relative*, *Populations*, *Energy diagram*.
+6. **Barriers and diagrams**: *Relative*, *Energy diagram*, and from v0.1.27
+   *Path shares* for the ratio between paths (not *Populations*: a saddle
+   point is no minimum).
 7. **Failure and runs again**: the *failed* exit, drawn chains, *Merge*.
 8. **Where jobs run**: runners; job keys; cluster jobs submitted and taken
    up again.

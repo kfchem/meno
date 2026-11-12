@@ -77,11 +77,13 @@ function direction(d: "forward" | "backward", sides: { geometry: Source; bonding
     step({ key: k("geometry"), stage: pairs, kind: "tag", options: { name: sides.geometryTag }, in: { in: sides.geometry } }),
     step({ key: k("bonding"), stage: pairs, kind: "tag", options: { name: sides.bondingTag }, in: { in: sides.bonding } }),
     step({ key: k("ends"), stage: pairs, kind: "rebond", options: { pairs: "each" }, in: { geometry: k("geometry"), bonding: k("bonding") }, note: "Ends: one side's conformers with the other's bonding" }),
+    // (each end its own ID, as every end of one product shares the product's and every end of one start the start's: the torsions are held on it)
+    step({ key: k("end"), stage: pairs, kind: "tag", options: { name: `end-${d}` }, in: { in: k("ends") }, note: "Each end its own ID" }),
     step({ key: k("held"), stage: pairs, kind: "restraints", options: { on: sides.bondingTag, coordination: true, factor: "0.9", strength: "500" }, in: { in: k("bonding") }, note: "Coordination bonds held" }),
   ];
   // (the first minimisation, then each round: the torsions that turned from trans across the targets' double bonds held again, every earlier table wired in beside)
   let tables = [k("held")];
-  let again = k("ends");
+  let again = k("end");
   let min = k("min0");
   out.push(step({ key: min, stage: pairs, kind: "minimise", by: "rdkit", options: MINIMISE, in: { in: again, restraints: tables } }));
   ROUNDS.forEach((strength, r) => {
@@ -97,7 +99,7 @@ function direction(d: "forward" | "backward", sides: { geometry: Source; bonding
         key: table,
         stage: pairs,
         kind: "torsion-restraints",
-        options: { on: sides.bondingTag, torsions: "reference", at: "trans", reference: "property", property: sides.bondingTag, hold: "strength", strength },
+        options: { on: `end-${d}`, torsions: "reference", at: "trans", reference: "property", property: sides.bondingTag, hold: "strength", strength },
         in: { molecules: `${sorted}.rest`, reference: k("bonding") },
         note: `Torsions held, round ${r + 1}`,
       }),
@@ -181,12 +183,22 @@ function direction(d: "forward" | "backward", sides: { geometry: Source; bonding
  * is of is said now, in these words (CHEM, 2026-11-11); no equivalence of numbers is claimed.
  */
 export const NOTES: { stage: string; text: string }[] = [
-  { stage: STAGES.reaction, text: "Draw your reaction over this one, inside the frame: the set takes what lies in it, and each structure's role from the arrow." },
+  { stage: STAGES.reaction, text: "Draw your reaction over this one, inside the frame: the set takes what lies in it, and each structure's role from the arrow. The template takes one reactant structure (or reactants drawn as one); a second is not given a side of its own." },
+  { stage: STAGES.species, text: "Conformers take the count and the window Settings gives them: none is set on the card. Energies here are another force field's than ConfoTS's." },
+  {
+    stage: STAGES.conformers,
+    text: "The windows, 10 and 5 kcal/mol, and the limit of 64 are ConfoTS's; they are yours to change. Optimisations have no step limit of their own. An energy exactly at a window's edge is kept here; ConfoTS drops it.",
+  },
   {
     stage: `${STAGES.pairs} to the products`,
-    text: "Counted per entry: each torsion held in a pass takes that pass's value for its entry. ConfoTS counts each torsion's own failed passes, so a torsion here can be held more strongly than there. The strengths, 50, 100 and 150, are this template's to change; no equivalence to another program's force constant is claimed.",
+    text: "Counted per entry: each torsion held in a pass takes that pass's value for its entry. ConfoTS counts each torsion's own failed passes, so a torsion here can be held more strongly than there. The first round's strength, 50, is Meno's own measured one; 100 and 150, three rounds (ConfoTS allows ten) and 2000 minimisation steps (the plugin's default) have no basis of their own: they are yours to change. Ends still wrong after the last round are dropped.",
   },
   { stage: `${STAGES.pairs} to the reactant`, text: "The same rounds, from the products' conformers. Both directions are wired: take the paths of the one you want, or both." },
+  { stage: STAGES.diagram, text: "The share of the reaction through each path is not here: from v0.1.27. The barriers and the diagram show which path is lower." },
+  {
+    stage: STAGES.dft,
+    text: "The saddle point is optimised from the guess and the two ends of its reaction path (ends optimised in xTB, as they are not in ConfoTS), with the model Hessian: change it to computed if the route asks for force constants. Minima are optimised without ConfoTS's tight convergence, which the Gaussian plugin's Optimise does not offer. No standard-state term; the share of each path is from v0.1.27.",
+  },
 ];
 
 /** The DFT level the template starts from, the chemist's to change: the geometry's and the single point's. By convention of the protocol the template follows; no claim of it. */
@@ -197,7 +209,7 @@ const DFT_SINGLE_POINT = { ...DFT_GEOMETRY, basis: "6-311+G(d,p)" } as const;
  * The DFT stage: the saddle points of each direction optimised from the ends the reaction path found, the minima optimised, both with
  * frequencies at that level and checked (one imaginary vibration, and the reacting atoms moving most in it; none for a minimum), a larger single point
  * and the thermal correction summed to a free energy at the higher level, the lowest of each, the populations, the diagram and the barriers.
- * The standard-state term is left off: it cancels in every difference where each species is one system.
+ * The standard-state term is left off: it cancels in every difference where each species is one system. The share of each path is not here: from v0.1.27.
  */
 function dft(): RecipeStep[] {
   const stage = STAGES.dft;
@@ -220,7 +232,7 @@ function dft(): RecipeStep[] {
         stage,
         kind: "saddle-point",
         by: "gaussian",
-        options: { method: DFT_GEOMETRY.method, basis: DFT_GEOMETRY.basis, dispersion: DFT_GEOMETRY.dispersion, solvation: DFT_GEOMETRY.solvation, keywords: "", memory: "", hessian: "computed", tight: true, pairs: "property", property: `path-${d}` },
+        options: { method: DFT_GEOMETRY.method, basis: DFT_GEOMETRY.basis, dispersion: DFT_GEOMETRY.dispersion, solvation: DFT_GEOMETRY.solvation, keywords: "", memory: "", hessian: "model", tight: true, pairs: "property", property: `path-${d}` },
         in: { guesses: `${d}/ranked`, reactant: reactantSide, product: productSide },
         note: "The saddle point from the guess and the two ends, matched on the path",
       }),
@@ -235,8 +247,6 @@ function dft(): RecipeStep[] {
   r.push(
     step({ key: "dft-saddles", stage, kind: "merge", options: { keep: "all", property: "" }, in: { first: "dft-forward-g", second: "dft-backward-g" } }),
     step({ key: "dft-saddles-distinct", stage, kind: "duplicates", in: { in: "dft-saddles" } }),
-    step({ key: "dft-saddle-set", stage, kind: "as-conformers", in: { in: "dft-saddles-distinct" } }),
-    step({ key: "dft-shares", stage, kind: "populations", options: { temperature: 298.15 }, in: { in: "dft-saddle-set" }, note: "Share of each path" }),
     step({ key: "dft-levels", stage, kind: "merge", options: { keep: "all", property: "" }, in: { first: "dft-min-distinct", second: "dft-saddles-distinct" } }),
     step({
       key: "dft-diagram",
@@ -322,8 +332,6 @@ function body(): RecipeStep[] {
       in: { levels: "levels" },
       note: "Energy diagram",
     }),
-    step({ key: "saddle-set", stage: STAGES.diagram, kind: "as-conformers", in: { in: "saddles" }, note: "The saddle points of both paths as one conformer set" }),
-    step({ key: "shares", stage: STAGES.diagram, kind: "populations", options: { temperature: 298.15 }, in: { in: "saddle-set" }, note: "Share of each path" }),
     step({ key: "lowest", stage: STAGES.diagram, kind: "rank", options: { property: "thermo.free-energy", order: "lowest first", keep: 1, within: "each value", groupBy: "species" }, in: { in: "minima-freq" } }),
     step({ key: "barriers", stage: STAGES.diagram, kind: "barrier", options: { energy: "G", free: "thermo.free-energy", symmetry: "as-read", pairs: "each", property: "" }, in: { saddles: "saddles", starts: "lowest" }, note: "Barriers" }),
   ];

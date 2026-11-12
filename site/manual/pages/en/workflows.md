@@ -63,7 +63,7 @@ What it does, stage by stage. Each stage is a row, headed on the page:
 - **Conformers of each species.** A conformer search on every species, kept to those within 10 kcal/mol of the lowest, optimised, with those that are the same removed, those whose bonding is not the species' removed, and then those within 5 kcal/mol, at most 64.
 - **Pairs.** Each conformer of one side given the other side's bonding and minimised, the torsions that turned from trans across the other side's double bonds held again, in three rounds. Both directions are wired: to the products, and to the reactant.
 - **Paths.** A path search from each conformer to its ends, the highest point of each as a saddle point guess, kept where it has exactly one imaginary frequency; then the reaction path from it both ways, its two ends checked against the species, and only those saddle points kept whose ends are the reactant and the product they were made for.
-- **Diagram.** The minima and the saddle points, with their free energies, drawn as an *Energy diagram*: a column for the reactant, one for the saddle points, one for the products, a thin line for every conformer of a level, each saddle point joined to its two ends, zero at the reactant. The share of each path is worked out, and the barriers.
+- **Diagram.** The minima and the saddle points, with their free energies, drawn as an *Energy diagram*: a column for the reactant, one for the saddle points, one for the products, a thin line for every conformer of a level, each saddle point joined to its two ends, zero at the reactant. The barriers are worked out. The share of the reaction through each path is not in the template: from a later version.
 
 To use your own reaction, draw it over the example inside the frame called *The reaction: draw over it*, and delete the example. The set takes what lies in its frame. Two reactants of one reaction are taken as one side together.
 
@@ -72,7 +72,7 @@ The template uses the RDKit plugin (conformers, minimisation, descriptors) and t
 - **Torsions held again.** Counted per entry: each torsion held in a pass takes that pass's value for its entry. ConfoTS counts each torsion's own failed passes, so a torsion here can be held more strongly than there. The strengths, 50, 100 and 150, are yours to change; no equivalence to another program's force constant is claimed.
 - **Failed entries.** An entry a step could not do leaves by its *Failed* exit. To run it again with other options, wire *Failed* into a copy of the step (copy and paste it, change what you want) and merge its results with the first step's: a chain of runs again is yours to add where you meet the failures.
 - **Your own.** Right-click any step and choose *Save as procedure…*: it is offered under *Calculations* from then on, to put down again.
-- **Not in it.** An IRC at the DFT level is not in either file.
+- **Not in it.** An IRC at the DFT level, and the share of the reaction through each path, are not in either file. The template takes one reactant structure (or reactants drawn as one).
 
 ## Saving and sharing {#saving}
 
