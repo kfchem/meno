@@ -14,7 +14,8 @@ import type { DrawingStyle } from "../../../../lib/chem/style";
 import type { ChemClient, Conformers, Like } from "../../../../lib/roles/client";
 import type { OptionValues } from "../../../../lib/options";
 import { conformersSoughtOf, MOST_CONFORMERS, RING_CONFORMERS, roundsAsked, soughtNumber } from "../../../../lib/chem/conformersSought";
-import { inRounds, roundsSaid, SEARCH_BUDGET_MS } from "./conformerRounds";
+import { inRounds, roundsSaid, RoundsSearch, SEARCH_BUDGET_MS } from "./conformerRounds";
+import { growingJudge, type GrowingJudge, type ShownWith } from "./growing";
 import { roundsJudge } from "./roundsJudge";
 import { WITHIN_3D, type CalculationSettings, type ChemistrySettings } from "../../../../lib/settings/appSettings";
 import { threadsOf } from "../../../../lib/jobs";
@@ -660,6 +661,126 @@ export async function conformersOf(
   const holds = held(block.molblock);
   const checks = madeChecksOf(block.molblock, holds);
   return shownConformers(got.map((c) => partsSideBySide(keptMade(withChosen(c, made.open), checks), partsOf(c.atoms, c.bonds, holds?.eta))));
+}
+
+/** What a 3D structure's search that goes on gives at once, and what is left of it (`conformersGrowing`). */
+export type Growth = {
+  /** Each stereoisomer asked for, its conformers of the first round, as the page shows them: what is put on the page at once. */
+  first: Conformers[];
+  /** The rest of the search, each stereoisomer's in turn: each told as it grows (`grown`), by its place among `first`, how far it has got said - ending with what it found, how it ended said. Run once. */
+  rest: (grown: (k: number, c: Conformers) => void) => Promise<void>;
+  /** Every search let go, its worker with it, where the rest is not to be run - what came put on the page nowhere. */
+  drop: () => void;
+};
+
+/** A row of how they were made: how far a search that goes on has got. */
+const searchingRow = (s: RoundsSearch) => ({ label: "Rounds", text: `${s.rounds} round${s.rounds === 1 ? "" : "s"}, ${s.tried.toLocaleString("en")} tried so far: searching on` });
+
+/**
+ * A 3D structure made from a drawing, its search going on after its first
+ * round (docs/WORKSPACE.md, *As its search goes on*): as `conformersOf`
+ * makes it in rounds - each stereoisomer asked for, the one of two
+ * enantiomers made as the other's mirror image - but answering once each
+ * has had its first round (`Growth.first`), the rest run after, in turn,
+ * each round judged and made the page's off the page's thread
+ * (chem/growing), each told as it lands. All of them within the time a
+ * search takes at most (`SEARCH_BUDGET_MS`), the time they ran, not that
+ * they waited; `stopped`, asked before each round after the first, ends
+ * them, what came kept.
+ */
+export async function conformersGrowing(
+  chem: ChemClient,
+  stereo: ChemClient,
+  block: Block,
+  which: "one" | "all",
+  options: OptionValues,
+  settings: { calculations: Pick<CalculationSettings, "cores" | "coresAll"> },
+  rounds: PageRounds,
+  stopped: () => boolean,
+): Promise<Growth> {
+  const made = await isomersToMake(stereo, block.molblock, block.like, which, CONFORMERS_MS);
+  const sent = { ...options, threads: threadsOf(settings.calculations) };
+  const holds = metalHoldsOf(block.molblock);
+  const checks = madeChecksOf(block.molblock, holds);
+  // (each stereoisomer's search, and its judge, which makes what the page shows of it; those let go - a twin's reflection
+  //  that turned out not to have its configuration - none)
+  type Live = { search: RoundsSearch; judge: () => GrowingJudge | null; let: () => void; reflect: boolean };
+  const live: (Live | null)[] = [];
+  // (the time they have run, all together: each takes what the others have left of the most)
+  const spent = () => live.reduce((t, l) => t + (l?.search.spent ?? 0), 0);
+  const start = async (molblock: string, iso: Configuration, reflect: boolean): Promise<Live> => {
+    const asked = metalHoldsOf(molblock);
+    const ask = async (n: number, draw: number) => {
+      const [c] = (await chem.request("conformers", { molblock, isomers: [iso], count: n, draw, ...(asked ? { holds: asked } : {}), options: sent }, CONFORMERS_MS)).isomers;
+      if (!c) throw new Error("the search gave nothing for a round");
+      return c as Conformers;
+    };
+    let judge: GrowingJudge | null = null;
+    const self: { search?: RoundsSearch } = {};
+    const w = (c: Conformers): ShownWith => ({ open: made.open, checks, parts: partsOf(c.atoms, c.bonds, holds?.eta), reflect });
+    // (its judge kept past the search's end, to make what it found the page's: let go here, once that is done)
+    const search = new RoundsSearch(ask, { ...rounds, draws: true, stopped, budget: () => SEARCH_BUDGET_MS - (spent() - (self.search?.spent ?? 0)) }, (first) => {
+      judge = growingJudge(first, rounds.window, w(first));
+      return { add: judge.add, end: () => {} };
+    });
+    self.search = search;
+    await search.next();
+    return { search, judge: () => judge, let: () => judge?.end(), reflect };
+  };
+  const as = made.isomers.map((iso) => madeAs(block.part, iso));
+  const mirrorBlock = as.includes("mirror") ? chemMolblock(etaBound(mirroredPart(block.part))) : "";
+  try {
+    for (const [i, iso] of made.isomers.entries()) {
+      if (as[i] === "itself") live.push(await start(block.molblock, iso, false));
+      else {
+        // (of two enantiomers, the other's mirror image - made itself where its reflection has not its configuration after all)
+        const twin = await start(mirrorBlock, mirroredConfiguration(iso), true);
+        if (twin.search.made && hasConfiguration(reflectedConformers(twin.search.made), block.part, iso)) live.push(twin);
+        else {
+          twin.let();
+          live.push(await start(block.molblock, iso, false));
+        }
+      }
+    }
+  } catch (e) {
+    // (one whose first round failed: those begun let go, their workers with them)
+    live.forEach((l) => l?.let());
+    throw e;
+  }
+  // (what the page shows of each: its judge's - or, a search with no energies to judge by, made here as conformersOf makes it)
+  const shownOf = async (l: Live, more: { label: string; text: string }[]): Promise<Conformers> => {
+    const judge = l.judge();
+    const shown = judge ? await judge.shown(more) : null;
+    if (shown) return shown;
+    const { made: raw } = l.search.result();
+    const c = { ...(l.reflect ? reflectedConformers(raw) : raw), how: [...(raw.how ?? []), ...more] };
+    const w = { open: made.open, checks, parts: partsOf(c.atoms, c.bonds, holds?.eta) };
+    return (await shownConformers([partsSideBySide(keptMade(withChosen(c, w.open), w.checks), w.parts)]))[0];
+  };
+  const said = (l: Live) => (l.search.ended ? { label: "Rounds", text: roundsSaid(l.search.result().run, { ...rounds, budget: SEARCH_BUDGET_MS }) } : searchingRow(l.search));
+  const first = await Promise.all(live.map((l) => shownOf(l!, [said(l!)])));
+  let ran = false;
+  const rest = async (grown: (k: number, c: Conformers) => void) => {
+    if (ran) return;
+    ran = true;
+    for (const [k, l] of live.entries()) {
+      if (!l) continue;
+      try {
+        if (!l.search.ended) {
+          try {
+            while (await l.search.next()) grown(k, await shownOf(l, [searchingRow(l.search)]));
+          } catch {
+            // (a round that failed - its plugin stopped as the search was stopped, or gone - ends it there, what came kept)
+            l.search.ended ??= "stopped";
+          }
+          grown(k, await shownOf(l, [said(l)]));
+        }
+      } finally {
+        l.let();
+      }
+    }
+  };
+  return { first, rest, drop: () => live.forEach((l) => l?.let()) };
 }
 
 const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");

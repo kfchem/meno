@@ -11,7 +11,7 @@ import { MOST_CONFORMERS, RING_CONFORMERS } from "../../../../lib/chem/conformer
 import { WITHIN_3D, type ChemistrySettings } from "../../../../lib/settings/appSettings";
 import { covalentLength } from "../../../../lib/chem/metalHolds";
 import { vdwRadius } from "../../../../lib/chem/elements";
-import { bareAtomsOf, bareWords, blocksOf, blocksStill, conformersOf, conformersOnPage, pageCount, pageRounds, drawnBlocksOf, formulaOf, standsForMolecule, likeOf, linkOf, moleculeOf, placeRow, rowFrom, signatureOf, takenOnPage, turnedOver, withinWindow, type Box, type Turned } from "./make3d";
+import { bareAtomsOf, bareWords, blocksOf, blocksStill, conformersGrowing, conformersOf, conformersOnPage, pageCount, pageRounds, drawnBlocksOf, formulaOf, standsForMolecule, likeOf, linkOf, moleculeOf, placeRow, rowFrom, signatureOf, takenOnPage, turnedOver, withinWindow, type Box, type Turned } from "./make3d";
 
 /** Ethanol drawn: C1-C2-O3, a bond's length apart. */
 const ethanol: Model = {
@@ -605,6 +605,53 @@ describe("conformers made for the page", () => {
     } finally {
       now.mockRestore();
     }
+  });
+
+  it("growing: answers once its first round is in, and goes on after - ending as conformersOf ends, round for round", async () => {
+    // (each draw two conformers: the first two, then each round one new one further along - a conformer of its own - then none new)
+    const roundOf = (draw: number): Conformers =>
+      draw < 3 ? { ...answer, frames: [answer.frames[0], answer.frames[0].map((v, i) => (i === 13 ? v + 0.6 * (draw + 1) : v))], energies: [-0.001, 0.0005 + draw * 0.0001] } : answer;
+    const stereo = { request: async (op: string) => (op === "stereo_elements" ? { read: true, elements: [] } : Promise.reject(new Error(`no ${op} here`))) } as unknown as ChemClient;
+    const chem = { request: async (_op: string, args: Record<string, unknown>) => ({ isomers: [roundOf(Number(args.draw))] }) } as unknown as ChemClient;
+    const [block] = blocksOf(ethanol, [12]);
+    const rounds = { window: 3, first: 10, most: MOST_CONFORMERS };
+    const growth = await conformersGrowing(chem, stereo, block, "one", {}, { calculations: {} }, rounds, () => false);
+    // (at once: the first round's, as the page shows them - its search going on, said)
+    expect(growth.first).toHaveLength(1);
+    expect(growth.first[0].frames).toHaveLength(2);
+    expect(growth.first[0].how?.find((r) => r.label === "Rounds")?.text).toBe("1 round, 10 tried so far: searching on");
+    // (after: each round as it lands, then how it ended - as conformersOf, asked the same, ends)
+    const grown: Conformers[] = [];
+    await growth.rest((k, c) => {
+      expect(k).toBe(0);
+      grown.push(c);
+    });
+    const [whole] = await conformersOf(chem, stereo, block, "one", {}, 50, rounds);
+    const last = grown[grown.length - 1];
+    expect(last.how?.find((r) => r.label === "Rounds")?.text).toBe(whole.how?.find((r) => r.label === "Rounds")?.text);
+    expect(last.frames.length).toBe(whole.frames.length);
+    expect(last.energies).toEqual(whole.energies);
+    expect(grown.slice(0, -1).map((c) => c.how?.find((r) => r.label === "Rounds")?.text)).toEqual(["2 rounds, 20 tried so far: searching on", "3 rounds, 40 tried so far: searching on", "4 rounds, 80 tried so far: searching on"]);
+    expect(last.how?.find((r) => r.label === "Rounds")?.text).toBe("5 rounds, 160 tried: the last brought no new conformer within 3 kcal/mol of the lowest");
+    // (run once)
+    await growth.rest(() => grown.push(answer));
+    expect(grown[grown.length - 1]).toBe(last);
+  });
+
+  it("growing: stopped, ends where it is, what came kept and said", async () => {
+    let stop = false;
+    const stereo = { request: async (op: string) => (op === "stereo_elements" ? { read: true, elements: [] } : Promise.reject(new Error(`no ${op} here`))) } as unknown as ChemClient;
+    const chem = {
+      request: async (_op: string, args: Record<string, unknown>) => ({ isomers: [{ ...answer, frames: [answer.frames[0].map((v, i) => (i === 13 ? v + 0.5 * (Number(args.draw) + 1) : v))], energies: [-0.001 - 0.0016 * Number(args.draw)] }] }),
+    } as unknown as ChemClient;
+    const [block] = blocksOf(ethanol, [12]);
+    const growth = await conformersGrowing(chem, stereo, block, "one", {}, { calculations: {} }, { window: 3, first: 10, most: MOST_CONFORMERS }, () => stop);
+    const said: string[] = [];
+    await growth.rest((_, c) => {
+      said.push(c.how?.find((r) => r.label === "Rounds")?.text ?? "");
+      if (said.length === 2) stop = true;
+    });
+    expect(said).toEqual(["2 rounds, 20 tried so far: searching on", "3 rounds, 40 tried so far: searching on", "3 rounds, 40 tried: stopped, what came kept"]);
   });
 
   it("tries as many as Settings says: the chemist's number, or as many as the molecule needs", () => {
