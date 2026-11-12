@@ -204,6 +204,32 @@ describe("a search in rounds", () => {
     expect(roundsSaid({ tried: 20, rounds: 2, ended: "stopped" }, { window: 3, most: 5000 })).toBe("2 rounds, 20 tried: stopped, what came kept");
   });
 
+  it("always asks its first round, stopped or not; and a round after it that fails ends it failed, saying why - or stopped, where it was asked to stop", async () => {
+    const p = plugin([[0], [1]], () => 0);
+    const stopped = new RoundsSearch(p.ask, { first: 10, most: 5000, window: 3, draws: true, stopped: () => true });
+    expect(await stopped.next()).toBe(true);
+    expect(await stopped.next()).toBe(false);
+    expect(stopped.result().run).toEqual({ tried: 10, rounds: 1, ended: "stopped" });
+    let stop = false;
+    const failing = new RoundsSearch(async (n, draw) => (draw ? Promise.reject(new Error("the plugin's worker stopped")) : p.ask(n, draw)), { first: 10, most: 5000, window: 3, draws: true, stopped: () => stop });
+    await failing.next();
+    await failing.next().catch((e) => failing.failed(e));
+    expect(failing.result().run).toEqual({ tried: 10, rounds: 1, ended: "failed", why: "the plugin's worker stopped" });
+    expect(roundsSaid(failing.result().run, { window: 3, most: 5000 })).toBe("1 round, 10 tried: a round failed (the plugin's worker stopped), what came kept");
+    // (stopped as the round was under way: its plugin stopped with it - stopped, not failed)
+    const asked = new RoundsSearch(
+      async (n, draw) => {
+        if (!draw) return p.ask(n, draw);
+        stop = true;
+        throw new Error("killed");
+      },
+      { first: 10, most: 5000, window: 3, draws: true, stopped: () => stop },
+    );
+    await asked.next();
+    await asked.next().catch((e) => asked.failed(e));
+    expect(asked.result().run).toEqual({ tried: 10, rounds: 1, ended: "stopped" });
+  });
+
   it("is held to the time its rounds take, not the time it waits between them; and to what others sharing its time leave it", async () => {
     let clock = 0;
     const p = plugin([[0], [1], [2], [3]], () => 0);

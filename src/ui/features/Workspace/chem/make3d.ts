@@ -27,7 +27,7 @@ import { writeMolfile3d } from "../../../../lib/chem/molWriter";
 import { skeletonWhy } from "../../../../lib/chem/skeleton";
 import { isSkeleton } from "../utils/completeness";
 import { editorModelOf, processFileContent } from "../utils/io";
-import type { Arrow, Model, Molecule3D, Plus, Turn3D } from "../store/types";
+import type { Arrow, Grown3D, Model, Molecule3D, Plus, Turn3D } from "../store/types";
 import { turnOnto } from "../utils/align3d";
 import { signatureOf } from "../utils/drawnLink";
 import { groupShape } from "../utils/groupShape";
@@ -673,6 +673,30 @@ export type Growth = {
   drop: () => void;
 };
 
+/**
+ * Each search that goes on (`growths`, each its `Growth` and the molecules
+ * on the page its stereoisomers are, by id), run in turn: what each brings
+ * shown as it lands (`grow`, as `shownAs` makes it the page's), and each
+ * written once as it ends (`settle`) - every one of them, however the
+ * searches ended, one failing among them: none left shown as searching.
+ */
+export async function growOn(
+  growths: readonly { growth: Pick<Growth, "rest">; ids: readonly number[]; shownAs: (c: Conformers) => Grown3D }[],
+  to: { grow: (id: number, grown: Grown3D) => void; settle: (id: number) => void },
+): Promise<void> {
+  try {
+    for (const g of growths) {
+      try {
+        await g.growth.rest((k, c) => to.grow(g.ids[k], g.shownAs(c)));
+      } finally {
+        g.ids.forEach(to.settle);
+      }
+    }
+  } finally {
+    for (const g of growths) g.ids.forEach(to.settle);
+  }
+}
+
 /** A row of how they were made: how far a search that goes on has got. */
 const searchingRow = (s: RoundsSearch) => ({ label: "Rounds", text: `${s.rounds} round${s.rounds === 1 ? "" : "s"}, ${s.tried.toLocaleString("en")} tried so far: searching on` });
 
@@ -686,7 +710,10 @@ const searchingRow = (s: RoundsSearch) => ({ label: "Rounds", text: `${s.rounds}
  * (chem/growing), each told as it lands. All of them within the time a
  * search takes at most (`SEARCH_BUDGET_MS`), the time they ran, not that
  * they waited; `stopped`, asked before each round after the first, ends
- * them, what came kept.
+ * them, what came kept. Each stereoisomer's judge is a worker of its own
+ * (`judgeOf`: chem/growing `growingJudge`), kept until its search has
+ * ended - at most one for each stereoisomer asked for - and let go then,
+ * or where the rest is not run (`Growth.drop`).
  */
 export async function conformersGrowing(
   chem: ChemClient,
@@ -697,6 +724,7 @@ export async function conformersGrowing(
   settings: { calculations: Pick<CalculationSettings, "cores" | "coresAll"> },
   rounds: PageRounds,
   stopped: () => boolean,
+  judgeOf: typeof growingJudge = growingJudge,
 ): Promise<Growth> {
   const made = await isomersToMake(stereo, block.molblock, block.like, which, CONFORMERS_MS);
   const sent = { ...options, threads: threadsOf(settings.calculations) };
@@ -720,11 +748,17 @@ export async function conformersGrowing(
     const w = (c: Conformers): ShownWith => ({ open: made.open, checks, parts: partsOf(c.atoms, c.bonds, holds?.eta), reflect });
     // (its judge kept past the search's end, to make what it found the page's: let go here, once that is done)
     const search = new RoundsSearch(ask, { ...rounds, draws: true, stopped, budget: () => SEARCH_BUDGET_MS - (spent() - (self.search?.spent ?? 0)) }, (first) => {
-      judge = growingJudge(first, rounds.window, w(first));
+      judge = judgeOf(first, rounds.window, w(first));
       return { add: judge.add, end: () => {} };
     });
     self.search = search;
-    await search.next();
+    try {
+      await search.next();
+    } catch (e) {
+      // (its first round failed: its judge, where one was made, let go with it)
+      (judge as GrowingJudge | null)?.end();
+      throw e;
+    }
     return { search, judge: () => judge, let: () => judge?.end(), reflect };
   };
   const as = made.isomers.map((iso) => madeAs(block.part, iso));
@@ -769,9 +803,10 @@ export async function conformersGrowing(
         if (!l.search.ended) {
           try {
             while (await l.search.next()) grown(k, await shownOf(l, [searchingRow(l.search)]));
-          } catch {
-            // (a round that failed - its plugin stopped as the search was stopped, or gone - ends it there, what came kept)
-            l.search.ended ??= "stopped";
+          } catch (e) {
+            // (a round that failed ends it there, what came kept: stopped, where it was asked to stop - its plugin stopped with
+            //  it - else failed, saying why)
+            l.search.failed(e);
           }
           grown(k, await shownOf(l, [said(l)]));
         }

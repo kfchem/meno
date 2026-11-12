@@ -28,11 +28,11 @@ export const SEARCH_BUDGET_MS = 600_000;
 
 const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");
 
-/** How a search in rounds ended: no new conformer in its last round; the most tried; its time; asked once, its search taking no other draw; asked once, with no energies to judge by; stopped, what came kept. */
-export type RoundsEnd = "settled" | "most" | "time" | "one" | "unjudged" | "stopped";
+/** How a search in rounds ended: no new conformer in its last round; the most tried; its time; asked once, its search taking no other draw; asked once, with no energies to judge by; stopped, what came kept; a round after its first failed, what came kept. */
+export type RoundsEnd = "settled" | "most" | "time" | "one" | "unjudged" | "stopped" | "failed";
 
-/** What a search in rounds did: how many it tried, in how many rounds, and how it ended. */
-export type RoundsRun = { tried: number; rounds: number; ended: RoundsEnd };
+/** What a search in rounds did: how many it tried, in how many rounds, and how it ended - where a round failed, why. */
+export type RoundsRun = { tried: number; rounds: number; ended: RoundsEnd; why?: string };
 
 /** The sizes of the rounds, in order: `first`, `first` again, then each twice the one before - the last kept to what `most` leaves. */
 export function roundSizes(first: number, most: number): number[] {
@@ -160,6 +160,8 @@ export class RoundsSearch {
   tried = 0;
   rounds = 0;
   ended: RoundsEnd | null = null;
+  /** Why a round failed, where one did after the first and it was told so (`failed`). */
+  why: string | undefined;
   private judging: RoundsJudge | null = null;
   /** The time its rounds have taken, in ms. */
   spent = 0;
@@ -211,7 +213,17 @@ export class RoundsSearch {
   result(): { made: Conformers; run: RoundsRun } {
     const made = this.made!;
     const how = this.hows.length > 1 && this.hows.some((h) => h?.length) ? { how: roundsHow(this.hows) } : {};
-    return { made: { ...made, ...how }, run: { tried: this.tried, rounds: this.rounds, ended: this.ended ?? "most" } };
+    return { made: { ...made, ...how }, run: { tried: this.tried, rounds: this.rounds, ended: this.ended ?? "most", ...(this.why ? { why: this.why } : {}) } };
+  }
+
+  /** Ended where a round failed - stopped, where it was asked to stop; else failed, saying why - what came kept. */
+  failed(e: unknown): void {
+    if (this.ended) return;
+    if (this.o.stopped?.()) this.ended = "stopped";
+    else {
+      this.ended = "failed";
+      this.why = e instanceof Error ? e.message : String(e);
+    }
   }
 
   private end(how: RoundsEnd): false {
@@ -257,5 +269,7 @@ export function roundsSaid(r: RoundsRun, o: Pick<RoundsAsked, "window" | "most">
       return `${done}: no energies came with them to tell a new conformer by`;
     case "stopped":
       return `${done}: stopped, what came kept`;
+    case "failed":
+      return `${done}: a round failed${r.why ? ` (${r.why})` : ""}, what came kept`;
   }
 }

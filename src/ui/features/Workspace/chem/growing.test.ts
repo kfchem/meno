@@ -70,5 +70,21 @@ describe("what the page shows of a search going on", () => {
     now.frames[1].forEach((v, i) => expect(v).toBeCloseTo(was[i], 3));
     // (and the lowest laid over it, not turned a quarter away: its O-C along x as the first's)
     expect(Math.abs(now.frames[0][4] - now.frames[0][1])).toBeLessThan(0.2);
+    // (a third round, lower again and turned again: the first still where it was first shown - laid over that, not the lowest since)
+    const third = ROUND([4], [-1], Math.PI / 3);
+    g.add(third, third.energies!);
+    g.shown()!.frames[2].forEach((v, i) => expect(v).toBeCloseTo(was[i], 3));
+  });
+
+  it("says how each round was made where they said it otherwise, round by round", () => {
+    const g = new Growing(ROUND([], []).atoms, ROUND([], []).bonds, 5, PLAIN);
+    const one = { ...ROUND([0], [0]), how: [{ label: "Kept", text: "10 of 10" }] };
+    const two = { ...ROUND([1], [1]), how: [{ label: "Kept", text: "9 of 10" }] };
+    g.add(one, one.energies!);
+    g.add(two, two.energies!);
+    expect(g.shown([{ label: "Rounds", text: "searching on" }])!.how?.slice(0, 2)).toEqual([
+      { label: "Kept", text: "round 1: 10 of 10; round 2: 9 of 10" },
+      { label: "Rounds", text: "searching on" },
+    ]);
   });
 });

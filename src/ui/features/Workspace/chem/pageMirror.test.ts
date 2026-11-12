@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { readMolfile } from "../../../../lib/chem/ctfile";
 import type { ChemClient } from "../../../../lib/roles/client";
 import type { Model } from "../store/types";
-import { blocksOf, conformersOf } from "./make3d";
+import { blocksOf, conformersGrowing, conformersOf } from "./make3d";
 import { hasConfiguration, madeAs, mirroredConfiguration, mirroredPart, reflectedConformers } from "./pageMirror";
 
 /** Butan-2-ol drawn: C1-C2(-O5)-C3-C4, its O on a wedge out of C2, up or down - the same places, mirror images. */
@@ -325,6 +325,67 @@ describe("the page's mirror images", () => {
     } finally {
       now.mockRestore();
     }
+  });
+
+  it("growing, shares the ten minutes among its stereoisomers' rounds - the time each ran, not the time it waited for the others", async () => {
+    // (as above: each try a fake six seconds, each draw a new conformer of one energy - each first round shown at once, then the
+    //  first's rounds, then the second's, each held to what the other has left of the most)
+    const diol: Model = {
+      atoms: [...butanol("up").atoms, { id: 6, x: 2.6, y: -1.5, r: 0.9, el: "O" }],
+      bonds: [...butanol("up").bonds.map((b) => (b.id === 14 ? { ...b, stereo: undefined } : b)), { id: 15, a: 3, b: 6, order: 1 }],
+    };
+    const isomers = (
+      [
+        [1, -1],
+        [-1, 1],
+      ] as const
+    ).map(([p, q]) => ({ centres: [centre(1, [0, 2, 4], p), centre(2, [1, 3, 5], q)], doubles: [] as [] }));
+    let clock = 0;
+    const now = vi.spyOn(Date, "now").mockImplementation(() => clock);
+    try {
+      const base = shaper();
+      const chem = {
+        request: async (op: string, args: { count?: number; draw?: number }) => {
+          clock += (args.count ?? 0) * 6000;
+          const got = (await base.chem.request(op as never, args as never)) as unknown as { isomers: { frames: number[][] }[] };
+          return { isomers: got.isomers.map((c) => ({ ...c, frames: c.frames.map((f) => f.map((v, i) => (i === 0 ? v + 0.4 * (args.draw ?? 0) : v))), energies: c.frames.map(() => -1) })) };
+        },
+      } as unknown as ChemClient;
+      const [block] = blocksOf(diol, [1]);
+      const growth = await conformersGrowing(chem, opener([1, 2], isomers), block, "all", {}, { calculations: {} }, { window: 3, first: 10, most: 5000 }, () => false);
+      const last: string[] = [];
+      await growth.rest((k, c) => (last[k] = c.how?.find((r) => r.label === "Rounds")?.text ?? ""));
+      // (the first: 60 s of the second's first round taken from its 600 - three more rounds, 420 s in all, the next past 540; the
+      //  second: its 60 s, and what the first left, 120 s - one more round of 60 s, the next of 120 s past it)
+      expect(last).toEqual(["4 rounds, 80 tried: the 10 minutes a search takes at most", "2 rounds, 20 tried: the 10 minutes a search takes at most"]);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it("growing, gives each stereoisomer its own - one as its mirror image, reflected - as conformersOf gives them", async () => {
+    const open: Model = { ...butanol("up"), bonds: butanol("up").bonds.map((b) => (b.id === 14 ? { ...b, stereo: undefined } : b)) };
+    const isomers = ([1, -1] as const).map((s) => ({ centres: [centre(1, [0, 2, 4], s)], doubles: [] as [] }));
+    const withEnergy = (chem: ChemClient) =>
+      ({ request: async (op: string, args: never) => ({ isomers: ((await chem.request(op as never, args)) as unknown as { isomers: object[] }).isomers.map((c) => ({ ...c, energies: [-1] })) }) }) as unknown as ChemClient;
+    const grown = shaper();
+    const [block] = blocksOf(open, [1]);
+    const growth = await conformersGrowing(withEnergy(grown.chem), opener([1], isomers), block, "all", {}, { calculations: {} }, { window: 3, first: 10, most: 5000 }, () => false);
+    const whole = await conformersOf(withEnergy(shaper().chem), opener([1], isomers), block, "all", {}, 10, { window: 3, first: 10, most: 5000 });
+    // (one asked for itself, one as its mirror image: each its first round, shown at once)
+    expect(grown.asked).toEqual([1, 1]);
+    expect(growth.first.map((c) => c.frames[0])).toEqual(whole.map((c) => c.frames[0]));
+    growth.first.forEach((c, k) => expect(hasConfiguration(c, block.part, isomers[k])).toBe(true));
+  });
+
+  it("growing, makes one itself where the reflection of its mirror image has not its configuration after all", async () => {
+    const twin = (["up", "down"] as const).find((s) => madeAs(butanol(s), none) === "mirror")!;
+    const { chem, asked } = plugin(true);
+    const [block] = blocksOf(butanol(twin), [1]);
+    const growth = await conformersGrowing(chem, stereo, block, "one", {}, { calculations: {} }, { window: 3, first: 10, most: 5000 }, () => false);
+    expect(asked).toHaveLength(2);
+    expect(asked[1].molblock).toBe(block.molblock);
+    expect(hasConfiguration(growth.first[0], block.part, none)).toBe(true);
   });
 
   it("asks for each stereoisomer alone where the plugin answers fewer than it was asked for", async () => {
