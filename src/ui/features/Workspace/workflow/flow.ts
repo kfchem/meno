@@ -5,6 +5,7 @@
  */
 import type { WorkspaceDocument } from "../document";
 import type { DrawnModel, DrawnRecord, Molecule3D, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
+import { recordsWithRoles } from "./schemeRoles";
 import { conformersOfOne, drawnKey, entryOfSet, framesOf, hash, holdsOf, plainAmong, readingOrder, recordKey, setEntries, setMembers, setMolecules, type SetEntry } from "./entries";
 import type { Property } from "../../../../lib/entry";
 import { moleculesAsTable, WHAT_COLUMN, type Table } from "../../../../lib/table";
@@ -12,7 +13,7 @@ import { levelOf } from "../../../../lib/calc/output";
 import { exitOf, ONE_INPUT, optionsOf, readsAsTable, takenBy, takesNothing, type SetHolds, type SetKind, type ValueKind, isSetKind } from "./kinds";
 import { byOf, doerStamp, inputsFor, optionsFor, presetsStamp, setName, takesBy, takesNothingBy } from "./doers";
 
-export type Flow = Pick<WorkspaceDocument, "model" | "molecules3d" | "sets" | "steps" | "wires" | "pictures">;
+export type Flow = Pick<WorkspaceDocument, "model" | "molecules3d" | "sets" | "steps" | "wires" | "pictures"> & Partial<Pick<WorkspaceDocument, "arrows" | "pluses">>;
 
 export const stepOf = (doc: Flow, id: number): WorkflowStep | undefined => doc.steps?.find((s) => s.id === id);
 export const findSet = (doc: Flow, id: number): WorkflowSet | undefined => doc.sets?.find((b) => b.id === id);
@@ -176,7 +177,8 @@ export function inputOf(
   if (sources.length === 1) {
     const set = sources[0].set;
     const { structures, records } = setMembers(doc, set);
-    return { holds, molecules: setMolecules(doc, set), structures, records, ...(set.drawnCollection ? { held: set.drawnCollection } : {}) };
+    // (a drawn reaction in its frame: each structure's role and reaction, worked out as it is drawn now)
+    return { holds, molecules: setMolecules(doc, set), structures, records: recordsWithRoles(doc, set, structures, records), ...(set.drawnCollection ? { held: set.drawnCollection } : {}) };
   }
   const molecules: Molecule3D[] = [];
   const structures: number[][] = [];
@@ -187,7 +189,7 @@ export function inputOf(
     const members = setMembers(doc, set);
     molecules.push(...setMolecules(doc, set).map((m) => moleculeFrom(m, name)));
     structures.push(...members.structures);
-    records.push(...members.records.map((r) => ({ ...r, properties: { ...r?.properties, [CAME_FROM]: came } })));
+    records.push(...recordsWithRoles(doc, set, members.structures, members.records).map((r) => ({ ...r, properties: { ...r?.properties, [CAME_FROM]: came } })));
     held.push(...(set.drawnCollection ?? []).map((m) => ({ ...m, record: { ...m.record, properties: { ...m.record?.properties, [CAME_FROM]: came } } })));
   }
   return { holds, molecules, structures, records, ...(held.length ? { held } : {}) };

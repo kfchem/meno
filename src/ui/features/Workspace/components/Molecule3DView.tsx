@@ -216,6 +216,8 @@ export type Molecule3DViewProps = {
   inSet?: boolean;
   /** The foot of the set it is in, on the page: its frames chip, opened, goes down clear of it - never over the set's other molecules and their chips. */
   setFoot?: number;
+  /** Its frames chip hangs this far lower (page units): a stack chip hangs where it would (workflow/heldView). */
+  chipDrop?: number;
   onFrame: (frame: number) => void;
   /** Its measurement under the pointer, by id; null, none. */
   hoveredMeasure: number | null;
@@ -1625,7 +1627,7 @@ function Molecule3DView(props: Molecule3DViewProps) {
         low = Math.min(low, seen.y - r * mag * seen.k);
       }
       // (opened, clear of its set: from the set's foot down - followed there, and back up as it shuts)
-      const below = framesChipAt(low, framesOpened.current ? props.setFoot : undefined) - at.y;
+      const below = framesChipAt(low, framesOpened.current ? props.setFoot : undefined) - at.y - (props.chipDrop ?? 0);
       pillAt.current = pillAt.current == null || reshaped ? below : follow(pillAt.current, below, step, PILL_TAU);
       if (Math.abs(pillAt.current - below) > 1e-3) moving = true;
       // (shut and back where it hangs: no longer over the rest)

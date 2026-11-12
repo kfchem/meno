@@ -4,7 +4,7 @@ vi.mock("../../../../lib/calc/workers", () => ({ readerClient: () => Promise.rej
 import { addMolecule3d, emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
 import type { Member, Molecule3D } from "../store/types";
 import { collectionHash, setMembers } from "./entries";
-import { addSet, fitSets, markMade, membersSettled, resizeSet } from "./model";
+import { addSet, markMade, membersSettled, resizeSet } from "./model";
 
 /** Water at `at` on the page. */
 function water(at: { x: number; y: number }): Omit<Molecule3D, "id"> {
@@ -37,8 +37,8 @@ function page(...at: { x: number; y: number; id: number }[]): WorkspaceDocument 
   };
 }
 
-/** An edit as the document settles it: sets fitted to what they hold, then their members. */
-const settled = (next: WorkspaceDocument, before: WorkspaceDocument) => membersSettled(fitSets(next, before), before);
+/** An edit as the document settles its sets' members (the frames fitted to them: fitFrames.test). */
+const settled = (next: WorkspaceDocument, before: WorkspaceDocument) => membersSettled(next, before);
 /** The molecule `id` moved to `at`. */
 const movedTo = (doc: WorkspaceDocument, id: number, at: { x: number; y: number }) => ({ ...doc, molecules3d: doc.molecules3d!.map((m) => (m.id === id ? { ...m, at } : m)) });
 /** A set's members, each structure by its atoms alone: its record - its lasting id, and what it is of - left out (lasting ids: lasting.test). */

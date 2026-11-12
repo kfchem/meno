@@ -13,6 +13,8 @@ import MarkdownBody from "../TextEditor/MarkdownBody";
 import { isMarkdown } from "../../../lib/text/markdown";
 import { DURATION, EASE_SLIDE, FADE } from "../../theme/motion";
 import { useEditor, useEditorStore } from "./store";
+import { useLocked } from "../../../lib/doc/locked";
+import LockedPdf from "./LockedPdf";
 import type { LostText, PdfFind, PdfItem, PdfLens, PdfStructurePick, WordPlace, WorkflowSet, WorkspaceText } from "./store/types";
 import SetTableBody from "./workflow/SetTableBody";
 import Select from "../../controls/Select";
@@ -26,6 +28,9 @@ import { isPinch, wheelReader } from "../../../lib/input/wheel";
 import { QUIET_AFTER_MIN, useAppSettings } from "../../../lib/settings/appSettings";
 import { quietFor, quietShort } from "../../../lib/jobs";
 import { pageUnder, pointOn } from "../../../lib/pdf/column";
+import { printed } from "../../../lib/pdf/print";
+import PrintButton from "./components/PrintButton";
+import { usePrinting } from "./hooks/usePrinting";
 import { figureStructuresHad } from "./utils/pdfStructures";
 import { indexOnce, mentionUnder } from "./utils/compoundLens";
 import { PRESS_WIDENED, structureAt, type PageStructure } from "./utils/pageStructures";
@@ -222,6 +227,8 @@ function Column({
   const removeLostText = useEditor((s) => s.removeLostText);
   const showPdf = useEditor((s) => s.showPdf);
   const stopReadingPdf = useEditor((s) => s.stopReadingPdf);
+  // (a PDF locked with a password not given: asked for it, where its pages would be read)
+  const locked = useLocked((s) => s.shas);
   const find = useEditor((s) => s.pdfFind);
   const editText = useEditor((s) => s.editText);
   // (a text just made to be written in: given the keys as it shows)
@@ -253,6 +260,12 @@ function Column({
   const stoppable = !!shownJob && (jobsSeen[shownJob]?.state === "waiting" || jobsSeen[shownJob]?.state === "running");
   const markdown = !!shown && isMarkdown(shown.name);
   const source = useShowsSource(store, shown?.id ?? null);
+  const printing = usePrinting(pdf?.sha256);
+  const printPdf = async (p: PdfItem) => {
+    setError(null);
+    const said = await printed(p.sha256, p.pages);
+    if (said) setError(said);
+  };
   const exportText = async (t: WorkspaceText) => {
     try {
       setError(null);
@@ -329,6 +342,7 @@ function Column({
             <ArrowUpTrayIcon className="h-4 w-4" />
           </button>
         )}
+        {pdf && <PrintButton printing={printing} shortcut={shortcutLabel("P")} onPrint={() => void printPdf(pdf)} />}
         <button
           onClick={() => setFilled(!filled)}
           aria-label={filled ? "Back beside the canvas" : "Fill the workspace"}
@@ -371,7 +385,7 @@ function Column({
           )}
         </AnimatePresence>
         {talk && <ConversationBody key={`talk-${talk.id}`} conversation={talk} />}
-        {pdf && <PdfBody key={`pdf-${pdf.id}`} pdf={pdf} />}
+        {pdf && (locked.has(pdf.sha256) ? <LockedPdf key={`locked-${pdf.id}`} pdf={pdf} /> : <PdfBody key={`pdf-${pdf.id}`} pdf={pdf} />)}
         {table && (table.collection ? <SetTableBody key={`set-${table.id}`} set={table} /> : <StructuresTableBody key={`set-${table.id}`} set={table} />)}
         {lostShown && (
           <div key={`lost-${lostShown.id}`} role="status" className="absolute inset-0 flex items-start gap-2 px-4 py-3 bg-white text-xs text-gh-black">

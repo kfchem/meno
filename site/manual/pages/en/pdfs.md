@@ -57,6 +57,12 @@ Meno never changes a PDF it was given: each of these makes a new one, put beside
 - Choose two PDFs or more, right-click one of them, and choose *Combine into one PDF*.
 - *Save as PDF…* saves a PDF as a file, where you choose.
 
+## Printing {#printing}
+
+- With a PDF in the reading column, press ⌘P (Ctrl+P on Windows), press the printer button at the top of the column, or right-click the PDF and choose *Print…*. The system's own print dialog opens; where to print, how many copies and which pages are chosen there, and *Save as PDF* in it makes a file of every page.
+- A PDF whose author does not allow printing cannot be printed: the printer button is greyed and its tip says "Its author does not allow printing."
+- On a Mac, the first print asks to find devices on your local network. That is the system looking for printers: printing to a PDF file works whichever answer is given.
+
 ## Kept in the workspace {#kept}
 
 A PDF on the page is saved in the .meno file with the workspace, so the workspace opens again with it, wherever the PDF itself has gone.

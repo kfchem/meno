@@ -41,8 +41,7 @@ each is merged, this file describes what is built.
    conformer sets*, below).
 5. **A set holds its members, in order**: what lies inside its frame as
    it is made; a structure moved into it joins it, one moved out leaves
-   it; a frame resized takes in and lets go of what then lies inside it
-   or not.
+   it; the frame is always its members' room.
 6. **xTB first.** Programs installed separately - ORCA, Gaussian and
    others - are to be run later, through the same kinds of step.
 7. **This computer only**, for now. A cluster or a remote machine comes
@@ -153,8 +152,8 @@ in 3D, arrows, text - and is made of three things:
 
 - **Sets.** A thin rounded frame, its name along its top, inside it -
   *Input*, or what a step made (*Conformers*, *Optimised*, *Within 3
-  kcal/mol*) - and how many it holds (*1 structure*, *2 compounds*, *1
-  compound · 81*, *1 compound · 23 of 81*). It
+  kcal/mol*) - and how many it holds (*1 structure*, *2 compounds*, *81
+  conformers of 1 compound*). It
   gives from a port on its right edge, half-way down; a result set takes
   on its left edge too.
 - **Steps.** A small card: who does it (*xTB*), with the icon of what it
@@ -259,17 +258,30 @@ pointer does; put back by an undo, they glide back.
 - dragged into a set the chemist made, a structure or a molecule joins it,
   at its place in that order among the members; dragged out of any set,
   it leaves; moved within the frame, it keeps its place;
-- a frame resized takes in what then lies inside it and lets go of what
-  then lies outside it, as one step to undo; what joins or leaves is
-  marked a moment as it does;
+- what joins or leaves is marked a moment as it does;
 - deleted from the page, a member is gone from its set, with nothing
   asked; drawn on, a structure stays one member, and joined to another
-  the two are one; the frame grows to keep it inside if it would reach
-  past it;
+  the two are one;
 - a step's result set holds what its step made, in its order, and takes
   nothing in: dragged into it, a structure stays outside the set;
-- the frame is the set's own: its tab drags it, with all it holds; its
-  edges and corners drag to size it;
+- **the frame is its members' room** (the maintainer, 2026-11-11), never
+  sized by hand: each member's box as it is drawn - a structure's labels
+  and a molecule's frames chip below it included - and half a bond about
+  them, with room for the name above and never narrower than a name needs
+  (`workflow/fitFrames`). It grows and shrinks as they change - a structure
+  drawn on, a bigger look, a member deleted - its edges eased, in the same
+  step as the edit; a workspace saved with frames of other sizes is fitted
+  as it opens. Its tab drags it, with all it holds;
+- **nothing lies half over a frame.** While a member is dragged its frame
+  stays where it is, so that it can be dragged out. Let go, a thing with
+  its middle in the frame is its member, and the frame grows round it
+  whole; a thing no set holds, with its middle outside, is eased out to
+  just outside, on the nearest side, half a bond from the frame. A frame
+  that grows into a thing no set holds eases it out the same way, once:
+  where that leaves it over another frame, it stays. A step's result set
+  takes nothing in, so anything over it is eased out. All of it is part
+  of the gesture's step: one undo takes back the drag, the frame and what
+  was eased;
 - *Delete set* (right-click its tab) takes the frame away and leaves what
   it held; a set left empty stays, empty, until it is deleted;
 - *Don't keep in the file* (right-click a result set's tab): its molecules
@@ -282,6 +294,41 @@ pointer does; put back by an undo, they glide back.
 A set's entries are its members, in their order. A set the chemist makes is a
 **compound set**: each entry a compound of its own, however alike two
 are (*Compound sets and conformer sets*).
+
+**A set around a drawn reaction** says each structure's part in it
+(`workflow/schemeRoles.ts`). Where the set's frame holds an arrow, each
+structure carries two properties, worked out from the drawing each time it
+is asked - never stored, so a structure moved across the arrow changes its
+role at once:
+
+- `role`: `reactant`, `product` or `reagent`;
+- `reaction`: the arrow's number, from 1, in the order the set holds its
+  arrows (top to bottom, left to right), counting only arrows that mean a
+  reaction.
+
+A *Filter* `role = reactant` (or `product`) splits the set; an *Atom map*
+matched on `reaction` takes each reaction's products onto its reactants
+(STRUCTURE-STEPS.md, *Atom map*). The set's count line says the roles:
+"4 structures · 1 reaction: 2 reactants, 1 product, 1 reagent". A set with no
+arrow in its frame has no properties added and nothing said.
+
+- Which structures an arrow has is the page's own reaction rule (ATOM-MAPPING.md,
+  *On a drawn scheme*): reactants and products only near its tail and its
+  point, chained by a "+" - of the set's structures alone. A reagent is a
+  structure alongside the arrow's words, as near them as a reactant must be to
+  the tail (five bonds, as an RXN file reads a reaction).
+- A plain, dashed or bent arrow gives roles; an equilibrium too, as drawn (its
+  tail side the reactants), said once, with their number where there are several. A crossed-out arrow, a retrosynthetic
+  one (its tail holds the target), a line with no head and a two-headed arrow
+  (resonance forms) give none, and the count line says which.
+- A structure of two arrows has no role, said: a scheme of several steps is
+  drawn as one drawing for each reaction. A structure on no arrow, in a set
+  with an arrow, has none either, said.
+- A salt drawn as its ions is one molecule: each ion carries the role, and the
+  count line counts one ("1 product (2 ions)").
+- A number written before a structure ("2 A") is not a coefficient: draw the
+  structure twice. An Atom map refuses the unbalanced side, so nothing passes
+  silently. Reagents get a role and nothing uses it yet.
 
 ### Kinds of step
 
@@ -329,7 +376,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Barrier | a barrier's height above its start, measured (drawn) | *Saddle points* and *Starts*: molecules in 3D, or conformer sets - each conformer one - each saddle point paired with a start - in order, each with each, or matched on a property | **molecules in 3D**: each saddle point with its `barrier`, in kcal/mol, of its free energy G (by default) or its electronic energy E above its start's, out of *With barriers*; one it cannot give one, out of *Failed*, saying why (*Barrier*, below) |
 | Number | a number typed in a field (drawn) | nothing | **a number** with its unit and what worked it out: the standard-state term, 1 atm to 1 mol/L, at its temperature, by its formula - or one typed (*Add and Number*, below) |
 | Add | two values summed (drawn) | *Molecules*: molecules in 3D, or conformer sets; *Number*, where wanted: a number | each entry with the sum of the values named - each of its own geometry, at one temperature and pressure - and the number wired in, written under the name given, each part as it was; those it cannot be worked out for out of *Not added*, saying why (*Add and Number*, below) |
-| Atom map | an atom, an arrow, the same atom after it, mapped (drawn) | *Molecules* and *Reference*: molecules in 3D with every hydrogen, each input's entries each a side of its own or one side together; whether bonds may change (a reaction) or stay the same (conformers of the reference) | **the same kind**: each side in the reference's numbering, atom for atom - by its first map, or by every map - out of *Mapped*; one that does not map one to one, or changes a bond that was to stay the same, out of *Not mapped*, saying why; the bonds each map forms, breaks or changes in order, **a table**, out of *Bond changes* (STRUCTURE-STEPS.md, *Atom map*) |
+| Atom map | an atom, an arrow, the same atom after it, mapped (drawn) | *Molecules* and *Reference*: molecules in 3D with every hydrogen, each input's entries each a side of its own or one side together (matched on a property, one side for each value of it); against the one reference, in order or matched on a property; whether bonds may change (a reaction) or stay the same (conformers of the reference) | **the same kind**: each side in the reference's numbering, atom for atom - by its first map, or by every map - out of *Mapped*; one that does not map one to one, or changes a bond that was to stay the same, out of *Not mapped*, saying why; the bonds each map forms, breaks or changes in order, **a table**, out of *Bond changes* (STRUCTURE-STEPS.md, *Atom map*) |
 | Displace | an atom moved along, where it stood dashed (drawn) | molecules in 3D with vibrations, or a conformer set | **the same kind of set**: each geometry moved along its imaginary vibration - or one by number - the atom moving most by the amplitude (Å) given; one with no such vibration out of *Not displaced*, saying why (STRUCTURE-STEPS.md, *Displace*) |
 | Ensemble energy | levels made one (drawn) | molecules in 3D, or conformer sets | each group's free energy over its members, -RT ln Σ g exp(-G/RT) at the temperature they state, written on its lowest; the others out of *The rest*, each saying whose ensemble it is in (*Ensemble energy*, below) |
 
@@ -872,7 +919,7 @@ Conformers go through a workflow as any set does (decided):
   molecules, each its own.
 - **A set's count says what it holds**: a compound set of molecules in
   3D, its compounds (*2 compounds*); a conformer set, its compounds and
-  its conformers (*2 compounds · 81*); structures drawn, or a
+  its conformers (*81 conformers of 2 compounds*); structures drawn, or a
   Render step's pictures, how many (*3 structures*, *9 pictures*); a set
   with nothing in it, *Empty*; a step's exit whose step has not run, *Not
   run yet*. Its name is *Input* where the chemist made it, a second exit's
@@ -1088,10 +1135,13 @@ page, each as the step drew it, and feed a step that takes structures
 drawn - *Conformers* - as a set the chemist drew does.
 
 **A large result set** (2026-10-21, docs/WORKFLOWS-FOUNDATION.md, *What a
-set shows*): up to 50 entries are laid out on the page, as above. An exit
-that gives more - a search's 1,000 conformers, or what Duplicates set aside -
-puts none of them on the page: its set holds them itself, in the step's order, and its frame
-says what it holds ("400 conformers of 2 compounds"). The steps after it
+set shows*): up to 50 molecules in 3D are laid out on the page, as above -
+counted as the page would draw them, one for each molecule or conformer
+set, never by their frames: 3 compounds of 200 conformers each are 3
+molecules on the page, each with its frames chip. An exit that gives more
+- a search's 118 compounds, or what Duplicates set aside - puts none of
+them on the page: its set holds them itself, in the step's order, and its
+frame shows them one at a time (below). The steps after it
 take them from there, a run kept keeps them, and the workspace's file
 keeps them, with the outputs they were read from - or, with *Don't keep
 in the file*, only their count and hash. Opened from a file, a molecule
@@ -1100,50 +1150,40 @@ how many ("51 compounds · 2 not read") until the step runs again; saved
 again, the file says so too. So does a step's earlier run kept with the
 file, on its row of the step's card - what both its exits held - and in
 each exit's set once it is shown again. Its molecules are on no page,
-so deleting the set deletes them: its frame says so ("On no page:
-deleting the set deletes them"), and so does its menu, in words, last
+so deleting the set deletes them: its menu says so, in words, last
 ("Delete set and the 118 molecules it holds"), before it happens
-(2026-10-22). Deleted by the Delete key it is asked about first, as a
+(2026-10-22, 2026-11-11). Deleted by the Delete key it is asked about first, as a
 step running is - and so it is in a selection deleted: the rest goes, and
 it is asked about. A cut leaves it in place, since a copy does not carry
 its molecules, and says so.
 
-**Its frame sums it up** (2026-10-22, docs/WORKFLOWS-FOUNDATION.md, *What
-a set shows*): what it holds - that it is on no page, and *Open as a
-table* beside it - a grid of a sample of its structures, and a chart of
-its energies, each saying what it is of.
-- **The sample**: in a conformer set, each compound once - its first
-  conformer, since a drawing shows what its conformers share - the first
-  twelve compounds in the step's order; in a set of molecules, the first
-  twelve, each as it ends. A line under the grid says which ("The first
-  12 of 40 compounds, in the step's order, each drawn once").
-- **Drawn by Meno's engine**, as a molecule in 3D is drawn as a formula:
-  the plugin that draws molecules wedges its heavy atoms as it is in 3D,
-  and Meno lays them all out at once (docs/LAYOUT-2D.md, *Many at
-  once*), lined up on what they share, each read back against the
-  molecule it was given. One that does not show it as given is marked
-  *Not as given*, saying how on hover; one that could not be drawn says
-  *Not drawn*, and why on hover - never left out. All are drawn at one
-  scale, so their bonds are alike.
-- **The chart**: in a conformer set, each conformer's energy above its
-  compound's lowest, in kcal/mol, of the energies one method worked out
-  - a program, its version and a level; not a job, nor a charge - the
-  method most of them were (the first of those as many) - each
-  conformer counted once. Those by a method not stated are not charted,
-  since two such may be two methods; nor is an energy that is no finite
-  number. Its line says
-  the quantity, the unit, the method and how many; those worked out
-  another way, by a method not stated, or with no usable energy, are
-  counted and said, not charted - and so are those of a compound only a
-  part of whose conformers is here (*A part of a search*, below), whose
-  lowest may not be among them. Its bars are binned by Sturges's rule (⌈log₂ n⌉ + 1 bins,
-  Sturges 1926), and each says its range and count on hover. A set of
-  molecules has no chart: the energies of different compounds are not
-  set against one another.
-- The summary is drawn at its own size in a new frame, and smaller in a
-  frame made smaller, by hand or before it was this large.
+**Its frame shows one at a time** (2026-11-11; it was a summary card
+before, docs/WORKFLOWS-FOUNDATION.md, *What a set shows*): the frame holds
+the molecule it shows and its chips, and nothing else - no grid of a sample,
+no chart, no empty room. Its tab keeps the count ("Optimised - 118
+compounds"; "600 conformers of 3 compounds", as its exit's chip says it too), and beside it *Open as a
+table*.
+- **A stack chip**, as a stack's on the page (docs/WORKSPACE.md, *Stacks*): which of how many
+  ("3 / 118"), and the molecule's title - of a conformer set's, its
+  compound's letter - clicked, a slider through them. Going over to another
+  is the stack's own motion: the one let go of towards the viewer, the next
+  up from behind. A conformer set's molecule keeps its own frames chip,
+  under the stack chip, with the program line (program, method, phase) when
+  it is opened.
+- **A view of the set**, not a molecule of the page: it can be turned by a
+  drag across it and pointed at, but it is not selected, moved or deleted,
+  since it is on no page. Which one is shown is the view's, not a step of
+  the history (as a stack's is); a turn goes on to the next as a stack's
+  does. The file keeps it, with the set.
+- **The frame's size** is that of the largest molecule it holds - of the
+  first 500, where it holds more - with its chips, set when the step runs
+  and not changed as the stack goes over. A set not run again keeps the
+  frame the chemist gave it.
+- Structures drawn, held in a set (*Structures drawn as results*), say
+  how many in their frame, as they did; they are drawn one at a time by a
+  later change.
 
-*Open as a table*, on the set's menu or at the top of its summary, reads them in
+*Open as a table*, on the set's menu or in the line of its tab, reads them in
 the column beside the texts and PDFs, a tab of their own named as the
 set is (2026-10-21):
 - A row for each entry, in the step's order: its place; in a conformer
@@ -1157,9 +1197,7 @@ set is (2026-10-21):
   failure in words ("not converged", "refused"), or "marks not read" -
   and its energy above is blank: the lowest is taken among those that
   finished alone, and the line at the top says so ("ΔE above the lowest of
-  8 that finished; 2 not counted"). A large set's summary chart draws only
-  those that finished, its baseline among them, and names those left out;
-  none finished, it draws none and says why. An SD file written of such a
+  8 that finished; 2 not counted"). An SD file written of such a
   frame carries a *Failed* field beside its energy (2026-10-23).
 - Pressing a column's name sorts by it, again the other way; rows with no
   value go last. Only the rows in view are drawn, so 1,000 scroll as 10 do.
@@ -1169,7 +1207,7 @@ set is (2026-10-21):
   set's order: each one geometry with its energy and what worked it out,
   and of its calculation only what is of that frame. A compound's
   conformers chosen stay one conformer set, so that the new set counts
-  them as the step's did ("2 compounds · 5"). Where some of the
+  them as the step's did ("5 conformers of 2 compounds"). Where some of the
   compound's conformers are left out, the set is a part of a search
   (below), and the table shows no energy above the compound's lowest,
   which may not be among them. All of a compound's conformers chosen are
@@ -1224,15 +1262,15 @@ gave), and one can be shown again.
 
 A result set is laid out for the 3D look its molecules are drawn in.
 When a bigger look is chosen - a molecule switched to its other look, or
-another look in Settings - and its molecules no longer fit (one reaching
-past the frame or onto the set's name, or two over one another), the
-frame widens and they are laid out again, as a run in that look lays
-them out (decided, 2026-10-13) - or, where widening would reach over
-what stands beside the set (the next step's card), in rows as wide as
-the set was, the set growing downwards. The frame and the molecules
-glide there together, and nothing is left over another. A set never grows narrower
-or shorter for a smaller look; a chemist's own sets are left as they
-are. A molecule switched is one step to undo, with its set; a look
+another look in Settings - the frame is its molecules' room as they are
+drawn (*A set holds its members*). Where they come to lie over one
+another they are laid out again, as a run in that look lays them out
+(decided, 2026-10-13) - or, where that would reach over what stands
+beside the set (the next step's card), in rows as wide as the set was,
+the set growing downwards. The frame and the molecules glide there
+together, and nothing is left over another. A chemist's own sets are
+fitted to their members the same way, without laying them out again. A
+molecule switched is one step to undo, with its set; a look
 chosen in Settings is not a step of the workspace, and lays out the
 states an undo goes back to as well.
 
@@ -1538,8 +1576,8 @@ undone and saved with it; an input made from the selection's port, or
 *Use as input* in its menu; wires drawn from a port that gives or back from one
 that takes, picked up off a step and put into another, replaced, and
 deleted (Delete or Backspace on one, its menu, or picked up and let go
-on nothing); a set dragged by its tab with what it holds, sized by its
-edges and corners, chosen by a click on its tab; steps dragged, opened in
+on nothing); a set dragged by its tab with what it holds, its frame always its
+members' room, chosen by a click on its tab; steps dragged, opened in
 place to their options by a click; Quick Add's one button; Meno's *As
 conformers*, *Energy window*, *Duplicates* and *Populations*, run from a
 step's menu - the steps before it first, where they have not run or have
@@ -2182,10 +2220,10 @@ Built, as the maintainer chose from pictures (decided: 18, 19):
   zoom. While the zoom moves they are written only once it has gone half
   a per cent from the last written (`zoomWritten`) - half a pixel on a
   card two hundred wide, not seen - and, once it stands still, as it is.
-- **Quick Add** opens where it will stay as a panel opens below its row -
-  its calculations, or the field a SMILES is typed in: its side is chosen
-  once, for its largest, and it is held by its top left corner, so that
-  nothing in it moves as the panel grows (`quickAddPlace.ts`).
+- **Quick Add** opens at its point, up and to the right of it, whatever its
+  size - never moved for it: where it would lie past the canvas the view
+  eases along (docs/EDITOR-2D.md, *Menus on the page*), so nothing in it moves
+  as a panel opens below its row.
 - **No *3D structure* step**: *Conformers* takes structures drawn - RDKit's
   search, in its worker, as *3D structures* on the canvas makes them, with the step's
   own options - and *Choose one*, Meno's, takes one conformer of each
@@ -2245,16 +2283,17 @@ Decided while building it, for the maintainer to confirm:
   on the canvas, not as a job: it does not go on when Meno closes. A
   search on molecules in 3D is still a job.
 - **The conformers it chose from are set aside**, kept with the set as
-  any step's are: the set's count says *1 compound · 1 of 9*.
+  any step's are: the set's count says *1 conformer of 1 compound*.
 
 Then, of the leftovers the maintainer chose:
 
-- **A set grows to keep a structure drawn on in it inside it** - an atom
-  added past its edge, one moved on its own, one made another element -
-  as part of the same edit, one step to undo (`fitSets`, settled on each
-  edit of the workspace's document). A structure moved whole, and a frame
-  sized anew, leave it as it is: one is dragged out of a set, and a set
-  made smaller than what it holds, on purpose.
+- **A set's frame is its members' room** - an atom added past its edge,
+  one moved on its own, one made another element, a member deleted - as
+  part of the same edit, one step to undo (`framesFitted`, settled on each
+  edit of the workspace's document). A member moved whole leaves it as it
+  is until the pointer is let go (`framesSettled`, joined to the
+  gesture's step), so that it can be dragged out. Frames are no longer
+  sized by hand (the maintainer, 2026-11-11).
 - **Sets, steps and wires fade out as they go**, as they fade in; a
   deleted one is left as it was, taking no pointer, for the fade.
 - **A thin bar on a running card** fills as its jobs end, where it runs
@@ -2442,7 +2481,7 @@ wired on, not one frame for every result.
   frame was, where that is clear, its line from its port.
 - **Said by its port**: the pointer on a held exit's port says what its
   set holds, beside the port - its name, then its count in the words a
-  large set's summary says it in ("Failed · 3 molecules") - in a chip as
+  large set's tab says it in ("Failed · 3 molecules") - in a chip as
   a molecule's frames chip is drawn, but whole: it stands on the port's
   wire (workflow/exitNames `exitChip`, by WebGL). Nothing where it holds
   nothing. Its step's exit names go while it is said; a first name cut
@@ -3436,7 +3475,7 @@ the build settled:
   those whose SMILES are product n's. No case differs by design so far.
 - **Not yet.**
   - A set of structures drawn held off the page can't yet be opened as a
-    table or shown with a sample of its structures, as a large set of
+    table or shown one at a time, as a large set of
     molecules in 3D is (6b, 6c). Its frame says how many it holds, and that
     they are on no page.
   - Copied without its step, such a set pastes as an empty frame of the
@@ -3962,9 +4001,9 @@ for each structure).
   back, does not switch them back and forth (utils/pageScale
   `wordsReadAt`, utils/zoomSwitch `switchedAt`). Switched, they fade over
   Meno's quick time, 120 ms, on its curve (`--words` on the page's layer,
-  a CSS transition), as a molecule's chips do; a step's card's large icons,
-  which stand for its words where they are gone, fade in as they go
-  (`--stand-in`). What is pressed on them switches with them.
+  a CSS transition), as a molecule's chips do; a step's card's name and
+  state mark, which stand for its words where they are gone, fade in as
+  they go (docs/WORKSPACE.md, *A workflow*: named, then marked). What is pressed on them switches with them.
 - Its set's count line says its points. It is kept in the workspace's
   file. A chart goes into no step.
 - A point dragged reports where to in the axes' own units (`ChartBody`
@@ -4069,9 +4108,42 @@ molecules of one geometry - which a step that works on entries refuses
   level is joined to the next, in the order they come. A row naming no
   other level is counted and said. A conformer of a level with no energy,
   where the level has others, is counted and said too.
+- **Levels by** (a list of property names, one to a line; blank is the
+  rule above): the first of these properties an entry carries names its
+  level, else the rule above. A workflow's minima and saddle points are
+  named so - *species*, then *path*, where minima carry the one and saddle
+  points the other. A name no entry carries refuses the step, saying so.
+- **Joined by** (property names, one to a line; blank is *Connects*, else
+  each level to the next): each level is joined to the level each property's
+  value names - by its name or its shown name - read from the level's lowest
+  entry. **The first property names the level before it, the rest the levels
+  after it** (*first end*, then *last end*): the card says so. Where a level's
+  entries name different levels, the lowest's is taken and the line says so;
+  a value naming no level, or its own, is counted and said as a row of
+  *Connects* is. *Connects* wired and *Joined by* written together refuse
+  the step ("Links from both Connects and Joined by: take one").
+- **Columns from the lines**: wherever lines are given - *Connects* or
+  *Joined by* - a level's column is its signed distance from the reference
+  along them, +1 along a line and -1 against it, all shifted so that the
+  leftmost is 0. A reaction keeps its direction: A, TS1, I, TS2, P relative
+  to I are columns 0, 1, 2, 3, 4 - distance taken both ways would put A and
+  P in one. Levels in one column share it, side by side, in the order they
+  are listed. A level reached at two different distances (a cycle) stands at
+  the nearest to the reference (at equal distance, the first line listed), and is said; a level no line reaches comes
+  after the last column, and is said. With no lines given, one level to a
+  column, as before.
+- **Conformers**: *The lowest* (as before), or *Every one*: each other entry
+  of a level is a thin line at its own value, in the same unit and relative
+  to the same reference, under the level's bold bar at its lowest. Pointed at,
+  a thin line says its number and value and its own imaginary frequencies
+  (a saddle point's other conformers can differ in them); pressed, its entry
+  is shown. An entry with no value of the energy is counted and said ("not
+  drawn"); a level of several compounds draws its sum alone, said once. The
+  thin lines fade in and out with the option.
 - Its card says how many levels, relative to which; its set's count line
   says its levels. It is kept in the workspace's file, and has changed when
-  either input, a level's name, or its options have.
+  either input, a level's name, or its options have. A diagram kept without
+  columns, thin lines or a naming property reads as before.
 
 ## Questions
 

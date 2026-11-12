@@ -211,6 +211,16 @@ describe("a step's result set held off the page (docs/WORKFLOWS.md, *Held result
     expect(back.molecules3d!.find((m) => m.id === named.molecule)?.drawnFrom).toEqual([7, 8, 9]);
   });
 
+  it("is laid out again as it is let go of where it holds as many as a page lays out, 50 - and stays held, one at a time in its frame, at 51", () => {
+    for (const [n, laidOut] of [[50, true], [51, false]] as const) {
+      const ran = placeResults(page(), page().steps![0], molecules(Array.from({ length: n }, (_, k) => water(k))), W);
+      const wired = heldSettled(connect(ran, { set: KEPT }, ENERGY), ran, extentOf);
+      expect(setOf(wired, KEPT).collection).toHaveLength(n);
+      const back = heldSettled(removeWire(wired, wired.wires![0].id), wired, extentOf);
+      expect([back.molecules3d?.length ?? 0, setOf(back, KEPT).collection?.length]).toEqual(laidOut ? [n + 0, undefined] : [0, n]);
+    }
+  });
+
   it("is filled by its step's run off the page, however few it is given - 1, 50 or 51 - its frame where it was", () => {
     for (const n of [1, 50, 51]) {
       const doc = heldSettled(connect(page(), { set: KEPT }, ENERGY), undefined, extentOf);

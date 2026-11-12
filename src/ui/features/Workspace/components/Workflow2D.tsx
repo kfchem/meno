@@ -15,6 +15,7 @@ import { MEMBER_MS, memberMarkBox, memberPulse, positionBadge, recordLabel } fro
 import StepCard, { Port, shareOf, type PortLook, type RunRow, type RunView } from "../workflow/StepCard";
 import { clickedOpen, type CardClick } from "../workflow/cardOpen";
 import { positionMarks } from "../workflow/substituents";
+import { schemeSaid } from "../workflow/schemeRoles";
 import { countOf, countSaid, numberedOn, recordHow, recordNumber, recordWhy, type Frame } from "../workflow/entries";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { lookEvery } from "../workflow/lookEvery";
@@ -28,7 +29,7 @@ import { useDrawnLayout } from "./drawnLayoutContext";
 import { useShownFrames } from "./useShownFrames";
 import { useMemberMarks } from "./useMemberMarks";
 import { reachOverFrames } from "../utils/molecule3d";
-import { hairWritten, wordsReadAt, zoomWritten } from "../utils/pageScale";
+import { hairWritten, pageScale, wordsReadAt, zoomWritten } from "../utils/pageScale";
 import { usePresence } from "../../../theme/presence";
 import { DURATION, EASE, eased } from "../../../theme/motion";
 import { canWire, entryOnPage, givesOf, newestWire, sourcesInto, stateOf, stepsRun, wiresInto, wireRefusal } from "../workflow/flow";
@@ -48,12 +49,13 @@ import { dragSelection } from "../utils/dragSelection";
 import PageField from "../pageGl/PageField";
 import PageLayer from "../pageGl/PageLayer";
 import { FRAME_PX, tabStart } from "../pageGl/frameParts";
-import { cardFace, TONE, type CardFaceOf } from "../pageGl/cardFace";
+import { CARD, cardFace, nameBoxOf, nameFits, TONE, type CardFaceOf } from "../pageGl/cardFace";
+import { bandAt, inReadingOrder, namesKept, type Band } from "../pageGl/cardBands";
 import { dropOn, portCount, portOfKey, portParts, sourcesSaid, type PortAt } from "../pageGl/ports";
 import { PAGE_GL_ORDER } from "../pageGl/PageShapes";
 import { useAges, useEasedValues, useFaded } from "../pageGl/faded";
 import { useHitAt, type HitHandlers, type PagePointer } from "../pageGl/PageHits";
-import type { Region, Side as Edge } from "../pageGl/hits";
+import type { Region } from "../pageGl/hits";
 import type { PageIcon } from "../pageGl/icons";
 import type { PageTipAt } from "../pageGl/PagePlaced";
 import type { Shape } from "../pageGl/shapes";
@@ -61,9 +63,6 @@ import { cardState, refusedState } from "../workflow/cardState";
 import { useEasedTo } from "../../../theme/opening";
 
 type Pt = { x: number; y: number };
-
-/** The least a set is sized to, each way. */
-const LEAST = 48 * PX;
 
 /**
  * A wire's colours, from Meno's palette (docs/WORKFLOWS.md, *How it looks*):
@@ -549,6 +548,8 @@ export default function Workflow2D() {
   const model = useEditor((s) => s.model);
   const molecules3d = useEditor((s) => s.molecules3d);
   const pictures = useEditor((s) => s.pictures);
+  const arrows = useEditor((s) => s.arrows);
+  const pluses = useEditor((s) => s.pluses);
   const hoveredSet = useEditor((s) => s.hoveredSet);
   const chosenSet = useEditor((s) => s.chosenSet);
   const hoveredWire = useEditor((s) => s.hoveredWire);
@@ -565,7 +566,6 @@ export default function Workflow2D() {
     toldOpen.current(openStep);
   }, [openStep]);
   const wireDrag = useEditor((s) => s.wireDrag);
-  const docStyle = useEditor((s) => s.docStyle);
   const wireRefused = useEditor((s) => s.wireRefused);
   const sel = useEditor((s) => s.sel);
   const sel3d = useEditor((s) => s.sel3d);
@@ -631,6 +631,11 @@ export default function Workflow2D() {
   const [compact, setCompact] = useState(false);
   // (the cards' words, faded as the page's are past the zoom they are read at: their icons alone and large below it)
   const words = useEasedTo(compact ? 0 : 1);
+  // (zoomed out: named - the box, its kind's icon and its name - or only marked, below a quarter: switched with a little hysteresis - pageGl/cardBands - and eased)
+  const [band, setBand] = useState<Band>("read");
+  const bandNow = useRef<Band>("read");
+  const named = useEasedTo(band === "marked" ? 0 : 1);
+  const hoveredStep = useEditor((s) => s.hoveredStep);
   // (a chemist's set being named anew, by two presses on its tab)
   const [renaming, setRenaming] = useState<number | null>(null);
   // (a shut card's state pointed at: its words in full, in the page's tip)
@@ -682,6 +687,8 @@ export default function Workflow2D() {
     const z = (camera as THREE.OrthographicCamera).zoom || 1;
     // (its words read, or too small: switched past their threshold - utils/pageScale `wordsReadAt` - and faded over a short time by CSS)
     read.current = wordsReadAt(z, read.current);
+    bandNow.current = bandAt(pageScale(z), bandNow.current);
+    if (bandNow.current !== band) setBand(bandNow.current);
     const small = !read.current;
     if (small !== compact) setCompact(small);
     if (Math.abs(Math.log(z / zoom)) > 0.03) setZoom(z);
@@ -894,28 +901,6 @@ export default function Workflow2D() {
     );
   };
 
-  /** A set sized by an edge or a corner: what it holds is what then lies inside it. */
-  const sizeSet = (edge: Edge, e: ReactPointerEvent, set: WorkflowSet) => {
-    if (e.button !== 0) return;
-    const start = worldOf(e.clientX, e.clientY);
-    const was = { x0: set.x0, y0: set.y0, x1: set.x1, y1: set.y1 };
-    const gesture = `${performance.now()}`;
-    follow(
-      e,
-      (p) => {
-        const dx = p.x - start.x;
-        const dy = p.y - start.y;
-        const f = { ...was };
-        if (edge.includes("e")) f.x1 = Math.max(was.x1 + dx, was.x0 + LEAST);
-        if (edge.includes("w")) f.x0 = Math.min(was.x0 + dx, was.x1 - LEAST);
-        if (edge.includes("n")) f.y1 = Math.max(was.y1 + dy, was.y0 + LEAST);
-        if (edge.includes("s")) f.y0 = Math.min(was.y0 + dy, was.y1 - LEAST);
-        store.getState().resizeSet(set.id, f, gesture);
-      },
-      () => {},
-    );
-  };
-
   /** A step dragged by its card; clicked, opened to its options, or shut. */
   const dragStep = (e: ReactPointerEvent, step: WorkflowStep) => {
     if (e.button !== 0) return;
@@ -985,7 +970,7 @@ export default function Workflow2D() {
   }, [chosenSet, store, gl]);
 
   // --- what is drawn ---------------------------------------------------------
-  const flow = useMemo(() => ({ model, molecules3d, sets, steps, wires, pictures }), [model, molecules3d, sets, steps, wires, pictures]);
+  const flow = useMemo(() => ({ model, molecules3d, sets, steps, wires, pictures, arrows, pluses }), [model, molecules3d, sets, steps, wires, pictures, arrows, pluses]);
   const stepById = useMemo(() => new Map(steps.map((s) => [s.id, s])), [steps]);
   const setById = useMemo(() => new Map(sets.map((b) => [b.id, b])), [sets]);
   // (each step's exits' sets, by step and exit: a port drawn for each)
@@ -1058,7 +1043,7 @@ export default function Workflow2D() {
       new Map(
         sets.map((b) => {
           const count = countOf(flow, b);
-          const counted = countSaid(b, count);
+          const counted = countSaid(b, count, count.holds === "structures" ? schemeSaid(flow, b) : []);
           // (a large result set: what it holds, said large in its frame)
           // (structures drawn held, none of them on the page: summed up in its frame too - those it shows are on the page, and it says how many)
           const summary =
@@ -1073,16 +1058,14 @@ export default function Workflow2D() {
                           ? "structure"
                           : "structures"
                         : count.entries === 1
-                          ? "molecule"
-                          : "molecules",
-                  holds: count.holds === "conformers" ? ("conformers" as const) : count.holds === "structures" ? ("structures" as const) : ("molecules" as const),
-                  style: docStyle,
+                          ? "compound"
+                          : "compounds",
                 }
               : undefined;
           return [b.id, { name: setName(b, steps), count: `${counted}${b.unread ? ` · ${b.unread.toLocaleString("en-US")} not read` : ""}${b.keep === false && count.entries ? " · not kept" : ""}`, summary }];
         }),
       ),
-    [flow, sets, steps, docStyle],
+    [flow, sets, steps],
   );
 
   // while a wire is drawn: the ports that would take it lit, the others faint
@@ -1158,6 +1141,11 @@ export default function Workflow2D() {
   }, [saying, setInfo, steps]);
   // sets and steps, each drawn as it is - and those just gone, as they last were, fading out; the steps' cards shut drawn by WebGL
   const faceList: CardFaceOf[] = [];
+  // (how many entries of a step failed, where it counts them: those in its Failed exit's set)
+  const failedOf = (step: number): number => {
+    const b = exitSets.get(`${step}:failed`);
+    return b ? countOf(flow, b).entries : 0;
+  };
   const parts = [
     // (what a set holds - a summary, a table, a chart - in HTML: its frame and tab by WebGL, `setTabs`; its name written anew too, `PageField`;
     //  a step's result set's folding into its exit's port as it is held, and growing out of it as it is shown again)
@@ -1214,6 +1202,9 @@ export default function Workflow2D() {
           stateTip: [line.text, s.ran?.named].filter(Boolean).join("\n"),
           selected: selFlow.steps.has(s.id),
           words,
+          scale: pageScale(zoom),
+          named,
+          ...(failedOf(s.id) ? { failed: failedOf(s.id) } : {}),
           inputs: inputs.length > 1 && !under ? inputs.map((p) => p.name) : [],
         });
       }
@@ -1322,7 +1313,6 @@ export default function Workflow2D() {
       // (its words left to the field over its tab while it is named anew)
       tab: renaming === b.id ? { icon: maker ? kindInfo(maker.kind).icon : "copies", name: "" } : { icon: maker ? kindInfo(maker.kind).icon : "copies", name: info.name, status: info.count },
       iconWhenSmall: true,
-      edges: true,
     };
   });
   // (a step's result set folding into its exit's port as it comes to be drawn nowhere - held, or an exit's for what its step sets
@@ -1354,10 +1344,6 @@ export default function Workflow2D() {
       }
       dragSet(asPress(e), b);
     },
-    edgeDown: (key, side, e) => {
-      const b = setById.get(stepOfKey(key));
-      if (b) sizeSet(side as Edge, asPress(e), b);
-    },
     hover: (key, on) => {
       const id = stepOfKey(key);
       if (on) hover({ hoveredSet: id });
@@ -1367,12 +1353,16 @@ export default function Workflow2D() {
   };
   // the shut cards, coming and going as their HTML did, drawn by WebGL in one layer over the wires (pageGl/cardFace)
   const faces = useFaded(faceList, (f) => f.key);
+  // (zoomed out, the names that stay where two cards' names would overlap: in the order the cards are read, the later left out)
+  const scaleNow = pageScale(zoom);
+  // (where it is only marked, one that would be cut short is left out, and does not keep another from showing)
+  const keptNames = band === "read" ? null : namesKept(inReadingOrder(faceList).filter((f) => band !== "marked" || nameFits(f.who, scaleNow)).map((f) => nameBoxOf(f, scaleNow, band !== "marked")));
   // (how far its jobs are, eased as its HTML bar's width was, and its state's colour eased from one tone to the next, as its words' were)
   const cardEased = useEasedValues(
     new Map(
       faceList.flatMap((f) => {
         const [r, g, b] = rgbOf(TONE[f.state.tone]);
-        return [[`${f.key}:r`, r], [`${f.key}:g`, g], [`${f.key}:b`, b], ...(f.progress != null ? [[`${f.key}:bar`, Math.min(1, f.progress)] as [string, number]] : [])] as [string, number][];
+        return [[`${f.key}:r`, r], [`${f.key}:g`, g], [`${f.key}:b`, b], [`${f.key}:label`, !keptNames || keptNames.has(f.key) ? 1 : 0], ...(f.progress != null ? [[`${f.key}:bar`, Math.min(1, f.progress)] as [string, number]] : [])] as [string, number][];
       }),
     ),
     200,
@@ -1383,7 +1373,7 @@ export default function Workflow2D() {
     const rgb = [eased("r"), eased("g"), eased("b")];
     const bar = eased("bar");
     const d = cardFace(
-      { ...item, opacity, ...(rgb.every((v) => v != null) ? { toneColour: colourHex(rgb[0]!, rgb[1]!, rgb[2]!) } : {}), ...(item.progress != null && bar != null ? { progress: bar } : {}) },
+      { ...item, opacity, ...(rgb.every((v) => v != null) ? { toneColour: colourHex(rgb[0]!, rgb[1]!, rgb[2]!) } : {}), ...(item.progress != null && bar != null ? { progress: bar } : {}), ...(eased("label") != null ? { label: eased("label") } : {}) },
       statePointed === stepOfKey(item.key),
     );
     cards.shapes.push(...d.shapes);
@@ -1392,6 +1382,11 @@ export default function Workflow2D() {
     // (going: drawn as it last was, taking nothing)
     if (!leaving) cards.regions.push(...d.regions);
     if (d.tip) cards.tip = d.tip;
+    // (a name left out where it lies over one before it: its card pointed at, the page's tip says it)
+    else if (!leaving && keptNames && !keptNames.has(item.key) && hoveredStep === stepOfKey(item.key) && !cards.tip) {
+      const n = nameBoxOf(item, scaleNow, band !== "marked");
+      cards.tip = { key: `${item.key}:name`, text: item.who, x: (n.x0 + n.x1) / 2, y: (n.y0 + n.y1) / 2, w: n.x1 - n.x0, h: n.y1 - n.y0 };
+    }
   }
   const onCard: HitHandlers = {
     down: (key, _part, e) => {
@@ -1577,7 +1572,7 @@ export default function Workflow2D() {
       {/* the marks of what joined a set or left it, positions numbered, structures numbered: by WebGL, under the frames (MARKS_ORDER) */}
       <PageLayer shapes={marks.shapes} texts={marks.texts} regions={marks.regions} on={onMarks} tip={marks.tip} order={MARKS_ORDER} />
       {/* the sets' frames and tabs, by WebGL: under the cards (FrameTabs `FRAMES_ORDER`) */}
-      <FrameTabs items={tabsShown} on={onSetTabs} />
+      <FrameTabs items={tabsShown} on={onSetTabs} clear={faceList.map((f) => ({ x0: f.x, x1: f.x + CARD.w * PX, y0: f.y - CARD.h * PX, y1: f.y }))} />
       {/* the steps' cards, shut, by WebGL: over the wires and the drawing, under the molecules' chips (CARDS_ORDER) */}
       <PageLayer shapes={cards.shapes} texts={cards.texts} icons={cards.icons} regions={cards.regions} on={onCard} tip={cards.tip} order={CARDS_ORDER} />
       {/* Sets and steps drawn in HTML on one layer laid on the page at its

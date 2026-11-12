@@ -41,7 +41,8 @@ import { readerLine, sameAtoms, type Found, type Unread } from "../../../lib/cal
 import { readResults } from "../../../lib/calc/results";
 import { inMenosForm, type CalcInfo } from "../../../lib/calc/output";
 import { newTextName } from "./utils/texts";
-import { fitSets, membersSettled } from "./workflow/model";
+import { membersSettled } from "./workflow/model";
+import { framesFitted } from "./workflow/fitFrames";
 import { heldSettled } from "./workflow/held";
 import type { RunWith } from "./workflow/run";
 import type { Conversation } from "./conversation/types";
@@ -186,6 +187,15 @@ export function emptyWorkspaceDocument(style: StyleChoice = DEFAULT_STYLE_CHOICE
  * 3D, with Settings' - what a set held off the page needs to be laid out
  * on it again (workflow/held); none, its molecules stay held.
  */
+/**
+ * The documents of canvases opened for PDFs from outside Meno (`data.readFilled`, App): their first PDF is read in the column, which
+ * fills the workspace (store `columnFilled`) - what the canvas shows as it opens, not part of its document.
+ */
+const opensFilled = new WeakSet<object>();
+
+/** Whether `doc` was made for a PDF opened from outside Meno, to show it filling the workspace. */
+export const opensReadingFilled = (doc: object): boolean => opensFilled.has(doc);
+
 export function createWorkspaceDocument(
   data?: unknown,
   style: StyleChoice = DEFAULT_STYLE_CHOICE,
@@ -202,22 +212,30 @@ export function createWorkspaceDocument(
   const held = (data as { pdfs?: unknown } | null | undefined)?.pdfs;
   let doc = addTexts(emptyWorkspaceDocument(style, style3d), texts).doc;
   for (const p of pdfsInRow(Array.isArray(held) ? held : [], { x: 0, y: 0 })) doc = addPdf(doc, p);
+  // (a canvas made for a PDF opened from outside: the first is read in the column - where the document starts, as its pages are)
+  const readFilled = !!(data as { readFilled?: unknown } | null | undefined)?.readFilled && !!doc.pdfs?.length;
+  if (readFilled) doc = { ...doc, pdfs: doc.pdfs!.map((p, i) => (i ? p : { ...p, reading: { at: p.page, zoom: 1 } })) };
   const pictures = (data as { pictures?: unknown } | null | undefined)?.pictures;
   for (const p of picturesInRow(Array.isArray(pictures) ? (pictures as PictureToAdd[]) : [], { x: 0, y: 0 })) doc = addPicture(doc, p);
-  // (each edit's sets grown to keep what is drawn on in them inside them, as
+  // (each edit's sets fitted to their members, as
   // part of it - and its stacks of drawings kept whole: utils/stacks; its
   // result sets held off the page or laid out on it as it wires them,
   // workflow/held, in the same step)
   // (its history held to about 100 MB: what a step costs is the atoms and
   // bonds it copies - the lists a drawing's edit makes anew, not those it
   // shares with the step before; the maintainer, 2026-10-13)
-  return createDocument<WorkspaceDocument>(doc, {
+  const made = createDocument<WorkspaceDocument>(doc, {
     settle: (next, before) => {
-      const held = heldSettled(next, before, extentIn?.(next));
-      return mapsSettled(joinsDocSettled(withRecordsSettled(membersSettled(fitSets(withOneMagnification(held, before), before), before), before)), before);
+      const extentOf = extentIn?.(next);
+      const held = heldSettled(next, before, extentOf);
+      // (members as the edit leaves them, then each frame its members' room - where none is being dragged: workflow/fitFrames)
+      const members = membersSettled(withOneMagnification(held, before), before);
+      return framesFitted(mapsSettled(joinsDocSettled(withRecordsSettled(members, before)), before), before, extentOf);
     },
     cost: stepCost,
   });
+  if (readFilled) opensFilled.add(made);
+  return made;
 }
 
 /** What keeping a workspace's state in its history costs beyond the one before it: the atom and bond lists it does not share with it. */
@@ -2196,6 +2214,23 @@ export function updateCaption(
 export function addPdf(doc: WorkspaceDocument, pdf: Omit<PdfItem, "id">): WorkspaceDocument {
   const id = doc.nextPdfId ?? 1;
   return { ...doc, pdfs: [...(doc.pdfs ?? []), { ...pdf, id }], nextPdfId: id + 1 };
+}
+
+/**
+ * `doc` with every PDF of one file given the sizes of its pages: a PDF put down locked, its pages unknown, and opened with its
+ * password. The page on top stays on top where it is still a page; pages laid out each in a place of its own (`placed`) go back in
+ * rows, for those places were made for pages that were not these.
+ */
+export function setPdfPages(doc: WorkspaceDocument, sha256: string, pages: [number, number][]): WorkspaceDocument {
+  if (!doc.pdfs?.some((p) => p.sha256 === sha256)) return doc;
+  return {
+    ...doc,
+    pdfs: doc.pdfs.map((p) => {
+      if (p.sha256 !== sha256) return p;
+      const { placed: _placed, ...rest } = p;
+      return { ...rest, pages, page: Math.min(p.page, Math.max(0, pages.length - 1)) };
+    }),
+  };
 }
 
 /** `doc` with a PDF moved, turned to another page, spread, its pages put back in their rows (`placed: null`), or made an icon - unchanged where it has no such PDF, or the page is none of its. */

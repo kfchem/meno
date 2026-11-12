@@ -174,6 +174,16 @@ describe("the right-click menu", () => {
     expect(menu(target({ kind: "pdf", id: 1 }), { pdf: { ...spread, onRows: none } }).listed).toEqual(expect.arrayContaining(["Gather pages", "Put pages in rows"]));
   });
 
+  it("offers to print a PDF - and where its author does not allow it, says so beside the command, which cannot be pressed", () => {
+    const pdf = { spread: false, icon: false, onSpread: none, onIcon: none, onRead: none, onNumbers: none, onPages: none, onSave: none, onPrint: none };
+    const allowed = menu(target({ kind: "pdf", id: 1 }), { pdf });
+    expect(allowed.listed.slice(allowed.listed.indexOf("Save as PDF…"))).toEqual(["Save as PDF…", "Print…"]);
+    expect(allowed.html).not.toMatch(/<button[^>]*disabled=""[^>]*><span>Print…/);
+    const refused = menu(target({ kind: "pdf", id: 1 }), { pdf: { ...pdf, printNot: true } });
+    expect(refused.listed).toContain("Print… (its author does not allow printing)");
+    expect(refused.html).toMatch(/<button[^>]*disabled=""[^>]*><span>Print… \(its author does not allow printing\)/);
+  });
+
   it("offers a new PDF from a PDF - its pages numbered, or arranged - and it written to a file; several selected, made one", () => {
     const pdf = { spread: false, icon: false, onSpread: none, onIcon: none, onRead: none, onNumbers: none, onPages: none, onSave: none };
     const one = menu(target({ kind: "pdf", id: 1 }), { pdf });
@@ -183,6 +193,8 @@ describe("the right-click menu", () => {
     expect(one.html).toMatch(/role="separator"[^>]*><\/div><button[^>]*><span>Page numbers…/);
     const two = menu(target({ kind: "pdf", id: 1 }), { pdf, onCombinePdfs: none });
     expect(two.listed.slice(two.listed.indexOf("Page numbers…"))).toEqual(["Page numbers…", "Pages…", "Combine into one PDF", "Save as PDF…"]);
+    // (printing is offered where the PDF's pages can be printed)
+    expect(one.listed).not.toContain("Print…");
   });
 
   it("offers words' bold, italic and a list among their icons - ticked as they are - their size, line spacing and typeface under them, and how their lines lie listed", () => {
