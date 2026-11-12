@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
 import QuickAdd, { DrawAs } from "./QuickAdd";
-import { LABEL_MOST, labelWidth } from "./quickAddLabel";
+import { CALC_MOST, CALC_ROW, LIST_LEAST, LIST_MOST, listWidth, stepsMost } from "./quickAddLabel";
 import { pastedAs } from "./quickAddPaste";
 import { toggledPanel } from "./quickAddPanel";
 import { registerKinds } from "../../../lib/io/kinds";
@@ -27,7 +27,7 @@ function rows() {
 describe("Quick Add", () => {
   it("has in its first row what makes a structure and a scheme's words and arrow, then two groups - each opening a row of its own (layout A, 2026-10-29)", () => {
     const { first, scheme, marks } = rows();
-    expect(first).toEqual(["Bond", "Chain", "SMILES", "Text", "Arrow", "Scheme", "Marks on the page"]);
+    expect(first).toEqual(["Bond", "Chain", "SMILES", "Text", "Arrow", "Scheme", "Marks on the page", "Conversation"]);
     // (Scheme: the "+", the electron-pushing arrow, the catalytic cycle and the slide; one arrow on the page, the Arrow, in the first row)
     expect(scheme).toEqual(["Plus", "Electron-pushing arrow", "Catalytic cycle", "Slide"]);
     // (Marks on the page: the shapes - a rectangle, its corners rounded from its menu, an ellipse and a line - and the pen)
@@ -128,14 +128,18 @@ describe("what is pasted in the SMILES field", () => {
   });
 });
 
-describe("the names of who does each row of steps", () => {
-  it("stand as wide as the widest of them, with its padding - whoever's it is, no width sized to one name", () => {
-    expect(labelWidth([])).toBe(12);
-    const short = labelWidth(["Tight"]);
-    const long = labelWidth(["Tight", "A plugin with a long name"]);
-    expect(long).toBeGreaterThan(short);
-    expect(labelWidth(["A plugin with a long name", "Tight"])).toBe(long);
-    // (but never wider than the most: a longer name is cut, said whole on hover)
-    expect(labelWidth(["A plugin whose name runs on and on, far past what a row can hold"])).toBe(LABEL_MOST);
+describe("how the calculations' list stands", () => {
+  it("as wide as its widest name, with what stands about it - whoever's it is - between the least and the most", () => {
+    expect(listWidth([])).toBe(LIST_LEAST);
+    const long = listWidth(["Tight", "A plugin with a long name that goes on"]);
+    expect(long).toBeGreaterThan(LIST_LEAST);
+    expect(listWidth(["A plugin with a long name that goes on", "Tight"])).toBe(long);
+    // (never wider than the most: a longer name is cut, said whole on hover)
+    expect(listWidth(["A plugin whose name runs on and on, far past what a row can hold"])).toBe(LIST_MOST);
+  });
+
+  it("shows never fewer than six of the steps of the one open, however many rows there are", () => {
+    expect(stepsMost(40)).toBe(6 * CALC_ROW);
+    expect(stepsMost(2)).toBe(CALC_MOST - 2 * CALC_ROW);
   });
 });

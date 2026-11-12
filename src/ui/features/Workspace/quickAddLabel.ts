@@ -1,18 +1,28 @@
-/** How wide the names of who does each row of Quick Add's steps stand (./QuickAdd). */
+/** How wide Quick Add's calculations stand (./QuickAddCalculations): as their names need, whatever the row above them holds. */
 
-/** The space either side of a row's name (`px-1.5`), in px. */
-const LABEL_PAD = 6;
-/** The widest the names stand, in px: about twenty-five letters of the card's small text, so that a long name never makes the card as wide as itself - cut, and said whole on hover. */
-export const LABEL_MOST = 160;
+/** What stands about a name in a row of the list: a step's indent and icon and the gaps before it, and a count or its room after it, in px. */
+const ROW_AROUND = 20 + 18 + 8 + 8 + 28;
+/** The least and the most the list stands wide, in px: a name longer than the most is cut, and said whole on hover. */
+export const LIST_LEAST = 220;
+export const LIST_MOST = 340;
 
 /**
- * How wide the names of who does each row of steps stand, beside its kinds: the widest of `names` as it is drawn - the card's
- * small text, 12 px - with its padding, so each stands whole, whoever's it is, up to `LABEL_MOST`. Measured as drawn where a
- * page draws text; elsewhere, as wide as 0.6 of the size for each letter.
+ * How wide the list stands for `names` - who does steps, and the steps - the widest as it is drawn in the card's small text,
+ * 12 px, with what stands about it in its row, between `LIST_LEAST` and `LIST_MOST`. Measured as drawn where a page draws
+ * text; elsewhere, as wide as 0.6 of the size for each letter.
  */
-export function labelWidth(names: readonly string[]): number {
+export function listWidth(names: readonly string[]): number {
   const ctx = typeof document !== "undefined" && typeof HTMLCanvasElement !== "undefined" && !/jsdom/i.test(navigator.userAgent) ? document.createElement("canvas").getContext("2d") : null;
   if (ctx) ctx.font = `12px ${getComputedStyle(document.body).fontFamily}`;
   const widest = Math.max(0, ...names.map((n) => (ctx ? ctx.measureText(n).width : n.length * 12 * 0.6)));
-  return Math.min(LABEL_MOST, Math.ceil(widest) + 2 * LABEL_PAD);
+  return Math.min(LIST_MOST, Math.max(LIST_LEAST, Math.ceil(widest) + ROW_AROUND));
 }
+
+/** How tall a row of Quick Add's calculations stands, in px; and the most the list stands, its rows and the steps of the one open, before those scroll (the maintainer, 2026-11-04: as the mock had it). */
+export const CALC_ROW = 28;
+export const CALC_MOST = 560;
+/** The fewest steps of the one open that show, however many rows there are. */
+const SHOWN_LEAST = 6;
+
+/** The most the steps of the one open stand before they scroll, with `rows` rows: what the rows leave, never less than `SHOWN_LEAST` of them. */
+export const stepsMost = (rows: number) => Math.max(SHOWN_LEAST * CALC_ROW, CALC_MOST - rows * CALC_ROW);

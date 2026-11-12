@@ -75,7 +75,12 @@ export async function entryFiles(
   return [];
 }
 
-export function pluginEntry(e: SetEntry): PluginEntry {
+/**
+ * An entry as a plugin is given it - with `wired`, the restraints its step
+ * holds for it (workflow/heldRows), in place of any it carries; none given,
+ * those it carries (Torsion restraints'), as they ride.
+ */
+export function pluginEntry(e: SetEntry, wired?: readonly Restraint[]): PluginEntry {
   const molecule: WrittenMolecule = {
     ...(e.name ? { name: e.name } : {}),
     atoms: e.atoms.map((a, i) => ({
@@ -114,7 +119,7 @@ export function pluginEntry(e: SetEntry): PluginEntry {
     ...(e.end ? { end: pluginEntry(e.end) } : {}),
     // (its sides, where it is a guess paired with them: each given as it is - Optimise to a saddle point's)
     ...(e.sides ? { sides: { reactant: pluginEntry(e.sides.reactant), product: pluginEntry(e.sides.product) } } : {}),
-    ...(restraints?.restraints.length ? { restraints: restraints.restraints.map((r) => ({ ...r, atoms: [...r.atoms] })) } : {}),
+    ...(wired ? { restraints: wired.map((r) => ({ ...r, atoms: [...r.atoms] })) } : restraints?.restraints.length ? { restraints: restraints.restraints.map((r) => ({ ...r, atoms: [...r.atoms] })) } : {}),
     ...(restraints?.start ? { start: [...restraints.start] } : {}),
   };
 }
@@ -434,7 +439,7 @@ function keptAnew(entry: SetEntry, xyz: readonly number[], charge?: number | nul
  * geometry, as far as it came, is the entry of the step's Failed exit -
  * never passed on as a minimum (until 2026-10-22 it was).
  */
-export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, readers: readonly string[], source?: CalcSource): Worked | Failure {
+export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, readers: readonly string[], source?: CalcSource, held: readonly number[] = [], restrained = false): Worked | Failure {
   const n = entry.atoms.length;
   if (out.atoms.length !== n || out.atoms.some((el, i) => el !== entry.atoms[i].el)) return { kind: "wrong-molecule", why: "What came back is not the molecule that went" };
   const frames = out.frames.filter((f) => f.length === 3 * n && f.every(Number.isFinite));
@@ -444,7 +449,14 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
   // (an optimisation's way there - to a minimum, or to a saddle point - its frames before its last)
   const optimising = kind === "optimise" || kind === "saddle-point";
   const path = optimising && frames.length > 1 ? frames.slice(0, -1) : undefined;
-  const calc = calcOf(out, readers, source);
+  // (atoms held where they stood as it optimised, where it was asked to: said in its calculation's line - and in how it converged)
+  const holding = (kind === "optimise" || kind === "saddle-point") && held.length ? [...held] : undefined;
+  const read = calcOf(out, readers, source);
+  const calc = read && holding ? { ...read, held: holding } : read;
+  // (each atom held where it stood, as the program gave it back: one moved - its program, or its optimiser, not holding it -
+  //  fails the entry, never passed on as held)
+  const moved = holding?.find((a) => Math.hypot(last[3 * a] - entry.xyz[3 * a], last[3 * a + 1] - entry.xyz[3 * a + 1], last[3 * a + 2] - entry.xyz[3 * a + 2]) > HELD_MOVED_MOST);
+  if (moved != null) return { kind: "failed", why: `Atom ${moved + 1} moved though held` };
   if (kind === "path-search") return pathWorked(entry, out, frames, energies, calc);
   if (kind === "energy") return singlePointWorked(entry, last, energies, calc);
   if (kind === "reaction-path") return reactionPathWorked(entry, out, frames, energies, calc);
@@ -461,11 +473,15 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
   const converged = failed
     ? undefined
     : kind === "optimise" && out.optimised === true
-      ? convergedAt("optimisation", last)
+      ? holding
+        ? convergedAt("optimisation with atoms held", last, holding)
+        : convergedAt("optimisation", last)
       : kind === "saddle-point" && out.optimised === true
-        ? convergedAt("saddle point optimisation", last)
+        ? holding
+          ? convergedAt("saddle point optimisation with atoms held", last, holding)
+          : convergedAt("saddle point optimisation", last)
         : kind === "frequencies" && was && sameShape(entry.xyz, last)
-          ? convergedAt(was.how, last)
+          ? convergedAt(was.how, last, was.held)
           : undefined;
   return {
     // (a failed run's entry taken as a start geometry alone: nothing of it a result - its energy, calculation and mark dropped)
@@ -478,7 +494,7 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
     calc,
     ...(failed ? { failed } : {}),
     ...(out.optimised === false && kind === "minimise" ? { failed: { kind: "not-converged" as const, why: "The minimisation did not converge in the steps it was given" } } : {}),
-    ...(kind === "minimise" ? firstHeld(entry) : {}),
+    ...(kind === "minimise" ? firstHeld(entry, restrained) : {}),
     ...(converged ? { converged } : {}),
   };
 }
@@ -500,17 +516,20 @@ export function stoppedAt(kind: StepKind, entry: SetEntry, out: ReaderOutput, re
 }
 
 /**
- * An entry's restraints once a minimisation has held them, saying where
- * they were first held (`start`): where they already say, as they say;
- * else where the entry stood as it came - so that a later minimisation,
- * asked to, starts again from there, as case F's rounds each start from the
- * geometry before the first (docs/WORKFLOWS-FOUNDATION.md, F15). Nothing
- * where it held none.
+ * An entry's restraints once a minimisation has held them - those it
+ * carries, or those wired in for it (`restrained`) - saying where they were
+ * first held (`start`): where they already say, as they say; else where
+ * the entry stood as it came - so that a later minimisation, asked to,
+ * starts again from there, as case F's rounds each start from the geometry
+ * before the first (docs/WORKFLOWS-FOUNDATION.md, F15). Rows wired in are
+ * not carried on: the next step holds what is wired into it. Nothing where
+ * it held none.
  */
-function firstHeld(entry: SetEntry): Pick<SetEntry, "properties"> | Record<string, never> {
+function firstHeld(entry: SetEntry, restrained: boolean): Pick<SetEntry, "properties"> | Record<string, never> {
   const held = entry.properties?.restraints;
-  if (held?.status !== "computed" || typeof held.value !== "object" || held.value === null || !("restraints" in held.value) || held.value.start) return {};
-  return { properties: { ...anew(entry).properties, restraints: { ...held, value: { ...held.value, start: [...entry.xyz] } } } };
+  const was = held?.status === "computed" && typeof held.value === "object" && held.value !== null && "restraints" in held.value ? held.value : undefined;
+  if (was?.start || (!was?.restraints.length && !restrained)) return {};
+  return { properties: { ...anew(entry).properties, restraints: { value: { restraints: was?.restraints ?? [], start: [...entry.xyz] }, unit: "none", status: "computed" } } };
 }
 
 /** How far, in Å, a distance between two atoms may differ in what a single point printed back - its program's rounding - before an atom is taken to have moved. */
@@ -686,6 +705,16 @@ export function passedSaid(kind: StepKind, count: number): string | null {
 }
 
 /**
+ * How far, in Å, an atom held where it stood may end from where it was before it is taken for one that moved (`workedOf`):
+ * 1e-4 Å - far above what the programs' printed coordinates round to (six decimals or more), far below any step an
+ * optimisation takes (found in review, 2026-11-06).
+ */
+const HELD_MOVED_MOST = 1e-4;
+
+/** The atoms `rows` fix where they stand, from 0, each once and in order: none where they fix none. */
+export const fixedAtoms = (rows: readonly Restraint[]): number[] => [...new Set(rows.flatMap((r) => (r.kind === "fixed" ? r.atoms : [])))].sort((a, b) => a - b);
+
+/**
  * The solvation a step's options ask for, in the words its program says
  * one it ran in (`SolvationDecl`): "none" where they ask for none, the
  * gas phase; else its `says` with each option's value put in - "ALPB(water)".
@@ -787,7 +816,7 @@ export function conformersWorked(entry: SetEntry, out: ReaderOutput, readers: re
 export function programEntries(d: Flow, step: number, kind: StepKind, options: OptionValues): { entries: SetEntry[]; holds: Holds3D; refused: { entry: number; why: string }[]; paired?: string } | { why: string } | null {
   const ports = inputsOf(kind);
   if (kind === "saddle-point") return guessesWithSides(d, step, options);
-  if (kindInfo(kind).runs === "program" && ports.length === 2) {
+  if (kind === "path-search") {
     const [start, end] = ports.map((p) => inputOf(d, step, p.id));
     if (!start || start.holds === "structures") return null;
     if (!end || end.holds === "structures") return { why: `Nothing comes into ${ports[1].name}` };
@@ -943,8 +972,11 @@ export function readKept(raw: unknown, count: number): number[] | string {
   return [...new Set(kept as number[])].sort((a, b) => a - b);
 }
 
-/** How many SMILES not read a step's line names, the rest counted. */
-export const NOT_READ_NAMED = 5;
+/** How many SMILES not read a step names where its line is pointed at, the rest counted there. */
+export const NOT_READ_NAMED = 30;
+
+/** The most characters of what a step names where its line is pointed at (`StepRan.named`) a saved page keeps (workflow/saved). */
+export const NAMED_KEPT = 4000;
 
 /** Why a SMILES could not be read, from what the roles' `from_smiles` said: its words after "could not be read", else none known. */
 export function unreadWhy(said: string): string {
@@ -953,15 +985,37 @@ export function unreadWhy(said: string): string {
 }
 
 /**
- * The SMILES a step could not read, as its line says them: how many, and the
- * first few (`NOT_READ_NAMED`) each with why - long ones cut short - the rest
- * counted: *2 not read: C1CC (a ring left open), Xx (no element Xx)*.
+ * The SMILES a step could not read, as its line says them: how many - *3
+ * not read* - never dropped unsaid; each one, as it was given, and why, is
+ * named where the line is pointed at (`notReadNamed`). Named on the line
+ * itself, a few long SMILES with their reasons made a card's line a
+ * paragraph, cut short where it mattered.
  */
 export function notReadSaid(notRead: readonly { smiles: string; why: string }[]): string {
-  const cut = (s: string) => (s.length > 40 ? `${s.slice(0, 39)}\u2026` : s);
-  const named = notRead.slice(0, NOT_READ_NAMED).map((x) => `${cut(x.smiles)} (${x.why})`);
+  return `${notRead.length} not read`;
+}
+
+/**
+ * Each SMILES a step could not read, as it was given, and why - one to a
+ * line, the first `NOT_READ_NAMED`, the rest counted - for where its line
+ * is pointed at (`StepRan.named`): *C1CC: a ring left open*. Never more
+ * than `room` characters, so a saved page keeps every line whole
+ * (`NAMED_KEPT`): where long SMILES fill it first, fewer are named and the
+ * rest counted.
+ */
+export function notReadNamed(notRead: readonly { smiles: string; why: string }[], room = NAMED_KEPT): string {
+  const tail = (more: number) => (more ? `\nand ${more} more not read` : "");
+  const named: string[] = [];
+  let used = 0;
+  for (const x of notRead.slice(0, NOT_READ_NAMED)) {
+    const line = `${x.smiles}: ${x.why}`;
+    const after = used + (named.length ? 1 : 0) + line.length;
+    if (after + tail(notRead.length - named.length - 1).length > room) break;
+    named.push(line);
+    used = after;
+  }
   const more = notRead.length - named.length;
-  return `${notRead.length} not read: ${named.join(", ")}${more ? `, and ${more} more` : ""}`;
+  return named.length ? named.join("\n") + tail(more) : `${more} not read`;
 }
 
 /** The most a step that makes them (Generate) brings in from one run. */

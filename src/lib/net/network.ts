@@ -99,6 +99,9 @@ export function purposeName(purpose: string): string {
   if (plugin) return `Setting up ${plugin.name}`;
   if (purpose.startsWith("python-env:"))
     return `Setting up Python (${purpose.slice("python-env:".length)})`;
+  // (a model's plugin, by the hosts it was allowed for: conversation/modelConnection `modelPurpose`)
+  const model = /^model:([^@]+)@(.+)$/.exec(purpose);
+  if (model) return `Conversations through ${model[1]}, to ${model[2].split(",").join(", ")}`;
   return purpose;
 }
 
@@ -252,8 +255,9 @@ function askNow(request: ConsentRequest): Promise<boolean> {
       if (answered) return;
       answered = true;
       useNetwork.setState({ asking: null });
-      if (yes) for (const purpose of request.grants ?? [request.purpose]) void grant(purpose);
-      resolve(yes);
+      if (!yes) return resolve(false);
+      // (a yes counts once its purposes are allowed - the app's side, then the page's: what was asked for, used at once, is not asked of again - "Look them up?" answered, then "List the plugins online?" too, as Meno was upgraded. A grant the app refused is said by what it then fetches, as one allowed before is)
+      void Promise.allSettled((request.grants ?? [request.purpose]).map(grant)).then(() => resolve(true));
     };
     useNetwork.setState({ asking: { ...request, answer } });
   });

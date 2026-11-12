@@ -33,7 +33,7 @@
 use crate::pixienv;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fs::{self, File, OpenOptions, TryLockError};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Component, Path, PathBuf};
@@ -226,11 +226,20 @@ fn is_false(b: &bool) -> bool {
 }
 
 /// What this computer's jobs may use at once (docs/WORKFLOWS-FOUNDATION.md,
-/// *This computer's runner knows its resources*): cores, and memory in MiB.
+/// *This computer's runner knows its resources*): cores, and memory in MiB;
+/// and whether the computer is kept awake while a job's program runs
+/// (awake.rs) - so unless Settings turned it off, as where nothing says.
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Limits {
     pub cores: u32,
     pub memory: u64,
+    #[serde(default = "kept_awake")]
+    pub awake: bool,
+}
+
+/// The computer kept awake while jobs run, unless Settings says otherwise.
+fn kept_awake() -> bool {
+    true
 }
 
 /// What this computer has: its cores - each a thread its system runs at once, two to a physical core where it
@@ -263,7 +272,7 @@ fn taken(spec: &JobSpec, here: Resources) -> u32 {
 /// What jobs may use, Settings unsaid: all the cores, and three quarters of the memory.
 fn default_limits() -> Limits {
     let here = computer();
-    Limits { cores: here.cores.max(1), memory: here.memory / 4 * 3 }
+    Limits { cores: here.cores.max(1), memory: here.memory / 4 * 3, awake: true }
 }
 
 /// What the jobs in `root` may use at once, as last written there; the defaults where nothing is.
@@ -437,6 +446,25 @@ fn stop_asked(dir: &Path) -> bool {
     GOING.load(Ordering::SeqCst) || dir.join(STOP).exists()
 }
 
+/// What its `stop` file says where the job alone is stopped, not its step (`ask_stop_alone`).
+const ALONE: &str = "alone";
+/// Why a job stopped alone is recorded failed (lib's `STOPPED_ALONE`).
+const STOPPED_ALONE: &str = "stopped by you";
+
+/// Whether the stop asked of a job was of it alone - its step to go on without it - and not of Meno going.
+fn stopped_alone(dir: &Path) -> bool {
+    !GOING.load(Ordering::SeqCst) && fs::read_to_string(dir.join(STOP)).is_ok_and(|t| t.trim() == ALONE)
+}
+
+/// How a job stopped ends: failed, saying why, where it alone was stopped - its step bringing in the rest - else stopped.
+fn stopped_as(dir: &Path) -> (JobState, Option<String>) {
+    if stopped_alone(dir) {
+        (JobState::Failed, Some(STOPPED_ALONE.into()))
+    } else {
+        (JobState::Stopped, None)
+    }
+}
+
 /// Set once the runner is asked to go (macOS, Linux: SIGTERM, SIGINT or
 /// SIGHUP - a logout, `kill`, Activity Monitor's Quit): it stops its job as
 /// a stop does, and goes.
@@ -485,6 +513,17 @@ fn sleep_watching(dir: &Path, long: Duration) {
 /// Ask a job to stop: its runner stops its program and everything it started - or, not started yet, lets it go.
 pub fn ask_stop(dir: &Path) -> std::io::Result<()> {
     fs::write(dir.join(STOP), b"")
+}
+
+/// Ask a job alone to stop, as `ask_stop` - recorded failed, "stopped by you" (`STOPPED_ALONE`), so that its step
+/// brings in what its other jobs gave. A stop of its step asked after it is a stop as ever.
+pub fn ask_stop_alone(dir: &Path) -> std::io::Result<()> {
+    // (its step's stop asked already - an empty stop file - stays a stop of its step, never made one of it alone: the
+    //  step would otherwise bring in the rest of what it was stopped from)
+    if fs::read(dir.join(STOP)).is_ok_and(|b| b.is_empty()) {
+        return Ok(());
+    }
+    fs::write(dir.join(STOP), ALONE)
 }
 
 /// Meno's executable started as a job's runner (`--job <folder>`): the job
@@ -562,18 +601,23 @@ pub fn run_job(dir: &Path, allowed: &dyn Fn(&JobSpec) -> Result<(), String>) -> 
     let mut at_head: Option<Instant> = None;
     let slots = dir.parent().map(|root| slots_for(limits_in(root), &spec)).unwrap_or(1);
     let mut unsure = 0;
+    // (the jobs this runner has seen finished: passed over on each look after)
+    let mut finished = HashSet::new();
     loop {
         if stop_asked(dir) {
-            end(JobState::Stopped, None, None, None);
+            let (state, why) = stopped_as(dir);
+            end(state, None, None, why);
             return 0;
         }
         // (its folder taken away, or its record ended by another - written gone, say: no turn to wait for)
         if waits_no_more(&mut unsure, dir.join(SPEC).is_file(), read_record(dir).as_ref()) {
             return 1;
         }
-        match take_turn(dir, &spec, &base) {
+        match take_turn(dir, &spec, &base, slots, &mut finished) {
             Ok(Turn::Taken) => break,
             Ok(Turn::Next) => sleep_watching(dir, step_at(at_head.get_or_insert_with(Instant::now).elapsed(), WAIT_STEP)),
+            // (its stop seen as it waited for the queue's lock: ended as the loop begins again)
+            Ok(Turn::Asked) => {}
             Ok(Turn::Behind(ahead)) => {
                 // (how long it has been near the head, not how long it has waited: one that came there from far back is new to it)
                 let near = if near_head(ahead, slots) {
@@ -591,6 +635,8 @@ pub fn run_job(dir: &Path, allowed: &dyn Fn(&JobSpec) -> Result<(), String>) -> 
         }
     }
     let started = Some(now_ms());
+    // (the computer kept awake from now until it and those after it have ended, unless Settings says not: awake.rs)
+    let _awake = dir.parent().filter(|root| limits_in(root).awake).map(|_| crate::awake::hold());
 
     // its program, in its work folder, what it says going into its log
     let input = spec.stdin.as_deref();
@@ -604,7 +650,8 @@ pub fn run_job(dir: &Path, allowed: &dyn Fn(&JobSpec) -> Result<(), String>) -> 
     let (status, stopped) = wait_program(dir, &mut program);
     let code = status.and_then(|s| s.code());
     if stopped {
-        end(JobState::Stopped, started, code, None);
+        let (state, why) = stopped_as(dir);
+        end(state, started, code, why);
     } else if !status.is_some_and(|s| s.success()) {
         end(JobState::Failed, started, code, None);
     } else {
@@ -620,7 +667,8 @@ pub fn run_job(dir: &Path, allowed: &dyn Fn(&JobSpec) -> Result<(), String>) -> 
                 }
             };
             if wait_program(dir, &mut after).1 {
-                end(JobState::Stopped, started, code, None);
+                let (state, why) = stopped_as(dir);
+                end(state, started, code, why);
                 drop(lock);
                 return 0;
             }
@@ -684,6 +732,35 @@ enum Turn {
     Taken,
     Next,
     Behind(u32),
+    /// Asked to stop while it waited for the queue's lock: none taken.
+    Asked,
+}
+
+/// How often a runner tries again for the queue's lock while another holds it: only those near the head try, so
+/// it may be often - the head takes the lock within moments of its being let go, as it did waiting on it.
+const LOCK_STEP: Duration = Duration::from_millis(10);
+
+/// The queue's lock taken for the job `dir` - or, asked to stop while
+/// another holds it, none (false): tried again every `LOCK_STEP`, its stop
+/// looked for between, never waited on blind. A runner waiting on the lock
+/// itself saw no stop until the lock came to it, and each before it looked
+/// at every job's folder under it: on a computer whose files open slowly,
+/// a step's Stop left hundreds of runners waiting their turn at the lock
+/// for many minutes, only to stop as each came to it.
+fn lock_watching(dir: &Path, queue: &File) -> std::io::Result<bool> {
+    loop {
+        match queue.try_lock() {
+            Ok(()) => return Ok(true),
+            Err(TryLockError::WouldBlock) => {}
+            // (one given on a system that does, after a signal heard: tried again)
+            Err(TryLockError::Error(e)) if e.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(TryLockError::Error(e)) => return Err(e),
+        }
+        if stop_asked(dir) {
+            return Ok(false);
+        }
+        std::thread::sleep(LOCK_STEP);
+    }
 }
 
 /// Whether a job `ahead` places back in a queue running `slots` at once is
@@ -724,59 +801,108 @@ const NEAR_MORE: u32 = 4;
 const BEHIND_MOST: Duration = Duration::from_secs(10);
 const PLACE_STEP: Duration = Duration::from_millis(300);
 
-/// Whether it is this job's turn - the first waiting, and fitting beside
-/// those running within what jobs may use (`fits`): a job never starts
-/// ahead of one asked for before it, however small - and, where it is, the
-/// job recorded running. Asked by one runner at a time.
-fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord) -> std::io::Result<Turn> {
-    let root = dir.parent().ok_or_else(|| std::io::Error::other("a job's folder has no parent"))?;
-    let queue = OpenOptions::new().create(true).truncate(false).write(true).open(root.join(QUEUE_LOCK))?;
-    // (a runner asked to go takes its wait up again of itself - its signals
-    // are heard with SA_RESTART, `listen_for_going` - so Unix gives no
-    // Interrupted here; one given, on a system that does, is waited again)
-    while let Err(e) = queue.lock() {
-        if e.kind() != std::io::ErrorKind::Interrupted {
-            return Err(e);
-        }
-    }
-    let mut running = 0u32;
-    let mut used = (0u32, 0u64);
-    // (this computer's cores and physical cores, asked once: what a job running as processes is counted by)
-    let here = computer();
-    let mut first: Option<(u64, PathBuf)> = None;
+/// What a look at the queue saw: the jobs running and the cores and memory they take, the first waiting, and how many
+/// wait before this one.
+struct Seen {
+    running: u32,
+    used: (u32, u64),
+    first: Option<(u64, PathBuf)>,
+    ahead: u32,
+}
+
+/// The queue in `root` as it is, from the job `dir`'s place in it (`base`): each job's folder looked at but those
+/// `finished` names - jobs this runner saw finished before, which never wait or run again - and those it finds finished
+/// added to them, so that a long queue's runners do not read every finished job's record on every look.
+fn look(root: &Path, dir: &Path, base: &JobRecord, here: Resources, finished: &mut HashSet<std::ffi::OsString>) -> std::io::Result<Seen> {
+    let mut seen = Seen { running: 0, used: (0, 0), first: None, ahead: 0 };
     // (those waiting before it: asked for before it, or at once and by name)
     let mine_key = (base.created, dir.to_path_buf());
-    let mut ahead = 0u32;
     for entry in fs::read_dir(root)?.flatten() {
-        let other = entry.path();
-        // (one being taken away is none of the queue's, whatever is left of it)
-        if !other.is_dir() || entry.file_name().to_string_lossy().starts_with(TAKEN) {
+        let name = entry.file_name();
+        if finished.contains(&name) {
             continue;
         }
-        // (a finished job - most, after a few runs - as its own record says: nothing more read of it)
+        let other = entry.path();
+        // (one being taken away is none of the queue's, whatever is left of it)
+        if !other.is_dir() || name.to_string_lossy().starts_with(TAKEN) {
+            continue;
+        }
+        // (a finished job - most, after a few runs - as its own record says: nothing more read of it, now or again)
         if read_record(&other).is_some_and(|r| r.state.finished()) {
+            finished.insert(name);
             continue;
         }
         let Some(record) = current_record(&other) else { continue };
         match record.state {
             JobState::Running => {
-                running += 1;
+                seen.running += 1;
                 // (one whose spec cannot be read counted as a core: what any job takes at least)
                 let (cores, memory) = read_spec(&other).map(|s| (taken(&s, here), s.memory)).unwrap_or((1, 0));
-                used = (used.0 + cores, used.1 + memory);
+                seen.used = (seen.used.0 + cores, seen.used.1 + memory);
             }
             JobState::Waiting => {
                 let key = (record.created, other);
                 if key < mine_key && key.1.file_name() != dir.file_name() {
-                    ahead += 1;
+                    seen.ahead += 1;
                 }
-                if first.as_ref().is_none_or(|f| key < *f) {
-                    first = Some(key);
+                if seen.first.as_ref().is_none_or(|f| key < *f) {
+                    seen.first = Some(key);
                 }
             }
             _ => {}
         }
     }
+    Ok(seen)
+}
+
+/// Where the job `dir` stands among those waiting in `root`, seen from their records alone - none written, nothing but
+/// a record read of each - for a runner far back to know it is far back: how many wait before it. A job with no record
+/// yet (its runner starting) is not counted: it is looked at again under the lock, if near. Nor is one whose runner is
+/// gone (`runner_there`: tried, never waited on) - a queue left by a Meno that was ended: so a live job is never held
+/// back for ever behind dead ones far ahead of it; near the head, the look under the lock (`current_record`) records
+/// them gone.
+fn glance(root: &Path, dir: &Path, base: &JobRecord, finished: &mut HashSet<std::ffi::OsString>) -> std::io::Result<u32> {
+    let mine_key = (base.created, dir.to_path_buf());
+    let mut ahead = 0u32;
+    for entry in fs::read_dir(root)?.flatten() {
+        let name = entry.file_name();
+        if finished.contains(&name) || name.to_string_lossy().starts_with(TAKEN) || name == dir.file_name().unwrap_or_default() {
+            continue;
+        }
+        let Some(record) = read_record(&entry.path()) else { continue };
+        if record.state.finished() {
+            finished.insert(name);
+        } else if record.state == JobState::Waiting && (record.created, entry.path()) < mine_key && runner_there(&entry.path()) {
+            ahead += 1;
+        }
+    }
+    Ok(ahead)
+}
+
+/// Whether it is this job's turn - the first waiting, and fitting beside
+/// those running within what jobs may use (`fits`): a job never starts
+/// ahead of one asked for before it, however small - and, where it is, the
+/// job recorded running. Where it stands is looked at first without the
+/// queue's lock: one far back (not `near_head`, its queue running `slots`
+/// at once) is told so and waits on no lock - only those near the head
+/// look again under it, one at a time, and only the head takes its turn.
+/// So the head of a queue of hundreds never waits behind them all for the
+/// lock as one ends: on a computer whose files open slowly, each look at
+/// hundreds of folders under the one lock held it most of the time, and
+/// the next job started seconds after one ended.
+fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord, slots: u32, finished: &mut HashSet<std::ffi::OsString>) -> std::io::Result<Turn> {
+    let root = dir.parent().ok_or_else(|| std::io::Error::other("a job's folder has no parent"))?;
+    // (this computer's cores and physical cores, asked once: what a job running as processes is counted by)
+    let here = computer();
+    let behind = glance(root, dir, base, finished)?;
+    if !near_head(behind, slots) {
+        return Ok(Turn::Behind(behind));
+    }
+    let queue = OpenOptions::new().create(true).truncate(false).write(true).open(root.join(QUEUE_LOCK))?;
+    if !lock_watching(dir, &queue)? {
+        return Ok(Turn::Asked);
+    }
+    let Seen { running, used, first, ahead } = look(root, dir, base, here, finished)?;
     let mine = first.is_some_and(|(_, p)| p.file_name() == dir.file_name());
     if !mine {
         return Ok(Turn::Behind(ahead));
@@ -2634,11 +2760,58 @@ pub struct JobListed {
     pub key: Option<String>,
     #[serde(flatten)]
     pub record: JobRecord,
+    /// When its program last wrote anything - its log, or a file of its work folder - in ms since 1970: a running
+    /// job's alone, for the page to say one that has written nothing for long (`lastWritten`).
+    #[serde(rename = "lastWritten", skip_serializing_if = "Option::is_none")]
+    pub last_written: Option<u64>,
 }
 
 fn listed(id: &str, dir: &Path) -> Option<JobListed> {
     let spec = read_spec(dir)?;
-    Some(JobListed { id: id.to_string(), plugin: spec.plugin, program: spec.name, key: spec.key, record: current_record(dir)? })
+    let record = current_record(dir)?;
+    let last_written = (record.state == JobState::Running).then(|| last_written(dir)).flatten();
+    Some(JobListed { id: id.to_string(), plugin: spec.plugin, program: spec.name, key: spec.key, record, last_written })
+}
+
+/// How many entries of a work folder `last_written` looks at, at most: past them it says nothing, never a time older
+/// than a write it did not reach.
+const WRITTEN_MOST: usize = 5000;
+/// A log written this recently is taken as when its job last wrote anything, its work folder not walked: the quiet a
+/// page says is counted in minutes, so a minute is never missed for it - and a job writing to its log costs one look.
+const WRITTEN_RECENTLY: u64 = 60_000;
+
+/// When the job in `dir` last wrote anything: its log, what ran after it, or any file or folder of its work folder,
+/// the newest, in ms since 1970 - a folder's own time counted, which a file made or removed in it changes. None where
+/// none can be read, or where its work folder holds more than `WRITTEN_MOST` entries.
+fn last_written(dir: &Path) -> Option<u64> {
+    let ms = |p: &Path| fs::metadata(p).ok()?.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok().map(|d| d.as_millis() as u64);
+    let logged = [LOG, AFTER_LOG].iter().filter_map(|l| ms(&dir.join(l))).max();
+    if logged.is_some_and(|t| now_ms().saturating_sub(t) < WRITTEN_RECENTLY) {
+        return logged;
+    }
+    let mut newest = logged.max(ms(&dir.join(WORK)));
+    let mut todo = vec![dir.join(WORK)];
+    let mut seen = 0;
+    while let Some(d) = todo.pop() {
+        let Ok(entries) = fs::read_dir(&d) else { continue };
+        for e in entries.flatten() {
+            seen += 1;
+            if seen > WRITTEN_MOST {
+                return None;
+            }
+            let p = e.path();
+            // (never followed out of the folder: a link is taken as itself)
+            match e.file_type() {
+                Ok(t) if t.is_dir() => {
+                    newest = newest.max(ms(&p));
+                    todo.push(p);
+                }
+                Ok(t) if t.is_file() => newest = newest.max(ms(&p)),
+                _ => {}
+            }
+        }
+    }
+    newest
 }
 
 #[tauri::command]
@@ -2782,6 +2955,12 @@ pub async fn job_stop(app: AppHandle, id: String) -> Result<(), String> {
     ask_stop(&job_dir(&app, &id)?).map_err(|e| e.to_string())
 }
 
+/// A job alone stopped, its step going on without it (`ask_stop_alone`).
+#[tauri::command]
+pub async fn job_stop_alone(app: AppHandle, id: String) -> Result<(), String> {
+    ask_stop_alone(&job_dir(&app, &id)?).map_err(|e| e.to_string())
+}
+
 /// What a job's folder taken away is named first: no job's id.
 const TAKEN: &str = ".taken-";
 
@@ -2843,9 +3022,38 @@ pub fn computer_resources() -> Resources {
 /// runner reads it as it looks for its turn - those waiting take it up at once. At least a core; memory within what
 /// the computer has, nought counting none.
 #[tauri::command]
-pub fn jobs_limits(app: AppHandle, cores: u32, memory: u64) -> Result<(), String> {
+pub fn jobs_limits(app: AppHandle, cores: u32, memory: u64, awake: Option<bool>) -> Result<(), String> {
     let root = jobs_root(&app)?;
-    write_limits(&root, Limits { cores: cores.clamp(1, 1024), memory: memory.min(MEMORY_MOST) }).map_err(|e| e.to_string())
+    write_limits(&root, Limits { cores: cores.clamp(1, 1024), memory: memory.min(MEMORY_MOST), awake: awake.unwrap_or(true) }).map_err(|e| e.to_string())
+}
+
+/// The computer kept awake while a plugin's worker works on what it was asked (lib/plugins/awake), as while a job
+/// runs - unless Settings says not, as the jobs' limits say it: held from the first ask to the last let go.
+#[derive(Default)]
+pub struct WorkerAwake(std::sync::Mutex<Option<crate::awake::Awake>>);
+
+/// Hold the computer awake for a plugin's worker at work (`held`), or let it go. Held already, or let go already, it
+/// is left as it is.
+#[tauri::command]
+pub fn worker_awake(app: AppHandle, state: tauri::State<'_, WorkerAwake>, held: bool) -> Result<(), String> {
+    let root = jobs_root(&app)?;
+    hold_for_worker(&state.0, held, || limits_in(&root).awake);
+    Ok(())
+}
+
+/// The hold for workers let go, whatever held it: the page that took it is gone (lib.rs, a page loaded anew).
+pub fn worker_let_go(state: &WorkerAwake) {
+    hold_for_worker(&state.0, false, || false);
+}
+
+/// The hold `kept` taken where `held` and Settings let it (`allowed`, asked only then), else let go.
+fn hold_for_worker(kept: &std::sync::Mutex<Option<crate::awake::Awake>>, held: bool, allowed: impl Fn() -> bool) {
+    let mut kept = kept.lock().unwrap_or_else(|e| e.into_inner());
+    if !held {
+        *kept = None;
+    } else if kept.is_none() && allowed() {
+        *kept = Some(crate::awake::hold());
+    }
 }
 
 /// Limits written whole: a runner never reads half of them.
@@ -2948,7 +3156,7 @@ mod tests {
     /// A job running a script of the system's shell, of a core, in a queue whose jobs may use `slots` cores in all:
     /// so many at once.
     fn shell(root: &Path, script: &str, slots: u32) -> PathBuf {
-        write_limits(root, Limits { cores: slots, memory: 0 }).unwrap();
+        write_limits(root, Limits { cores: slots, memory: 0, awake: true }).unwrap();
         sized(root, script, 1, 0)
     }
 
@@ -3006,14 +3214,144 @@ mod tests {
         write_record(&head, &base(&head)).unwrap();
         write_record(&after, &base(&after)).unwrap();
         // (the one slot taken: the head of the queue next, the other behind it)
-        assert_eq!(take_turn(&head, &read_spec(&head).unwrap(), &base(&head)).unwrap(), Turn::Next);
-        assert_eq!(take_turn(&after, &read_spec(&after).unwrap(), &base(&after)).unwrap(), Turn::Behind(1));
+        assert_eq!(take_turn(&head, &read_spec(&head).unwrap(), &base(&head), 1, &mut HashSet::new()).unwrap(), Turn::Next);
+        assert_eq!(take_turn(&after, &read_spec(&after).unwrap(), &base(&after), 1, &mut HashSet::new()).unwrap(), Turn::Behind(1));
         // (the slot free: the head's turn taken, and it recorded running)
         write_record(&running, &JobRecord { state: JobState::Done, ..base(&running) }).unwrap();
-        assert_eq!(take_turn(&head, &read_spec(&head).unwrap(), &base(&head)).unwrap(), Turn::Taken);
+        assert_eq!(take_turn(&head, &read_spec(&head).unwrap(), &base(&head), 1, &mut HashSet::new()).unwrap(), Turn::Taken);
         assert_eq!(current_record(&head).unwrap().state, JobState::Running);
-        assert_eq!(take_turn(&after, &read_spec(&after).unwrap(), &base(&after)).unwrap(), Turn::Next);
+        assert_eq!(take_turn(&after, &read_spec(&after).unwrap(), &base(&after), 1, &mut HashSet::new()).unwrap(), Turn::Next);
         drop(held);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_job_far_back_in_the_queue_is_told_so_without_waiting_on_its_lock_and_reads_a_finished_one_once() {
+        let root = temp();
+        let mk = || {
+            std::thread::sleep(Duration::from_millis(3));
+            shell(&root, "true", 1)
+        };
+        let done = mk();
+        let waiting: Vec<PathBuf> = (0..4).map(|_| mk()).collect();
+        let base = |dir: &Path| JobRecord::new(JobState::Waiting, read_spec(dir).unwrap().created);
+        write_record(&done, &JobRecord { state: JobState::Done, ..base(&done) }).unwrap();
+        // (each with its runner there, holding its lock)
+        let runners: Vec<_> = waiting
+            .iter()
+            .map(|w| {
+                write_record(w, &base(w)).unwrap();
+                let lock = OpenOptions::new().create(true).truncate(false).write(true).open(w.join(RUNNER_LOCK)).unwrap();
+                lock.lock().unwrap();
+                lock
+            })
+            .collect();
+        // (the queue's lock held - by the head, say, as it takes its turn)
+        let lock = OpenOptions::new().create(true).truncate(false).write(true).open(root.join(QUEUE_LOCK)).unwrap();
+        lock.lock().unwrap();
+        // (one slot: the last of four waiting is 3 places back, past the head's 2 - told so at once, the lock still held)
+        let last = &waiting[3];
+        let mut finished = HashSet::new();
+        let (tx, rx) = std::sync::mpsc::channel();
+        {
+            let (last, spec, record) = (last.clone(), read_spec(last).unwrap(), base(last));
+            std::thread::spawn(move || {
+                let mut seen = HashSet::new();
+                let _ = tx.send((take_turn(&last, &spec, &record, 1, &mut seen).unwrap(), seen));
+            });
+        }
+        let (turn, seen) = rx.recv_timeout(Duration::from_secs(5)).expect("a job far back waited on the queue's lock");
+        assert_eq!(turn, Turn::Behind(3));
+        // (the finished one remembered, and not read again: its record gone now, it is still passed over)
+        assert!(seen.contains(done.file_name().unwrap()));
+        finished.extend(seen);
+        fs::remove_file(done.join(RECORD)).unwrap();
+        assert_eq!(glance(&root, last, &base(last), &mut finished).unwrap(), 3);
+        // (its record back: a folder with none is a job starting, to a look that has not seen it finished)
+        write_record(&done, &JobRecord { state: JobState::Done, ..base(&done) }).unwrap();
+        // (one near the head waits on the lock: it looks again under it)
+        let (tx, rx) = std::sync::mpsc::channel();
+        {
+            let (near, spec, record) = (waiting[1].clone(), read_spec(&waiting[1]).unwrap(), base(&waiting[1]));
+            std::thread::spawn(move || {
+                let _ = tx.send(take_turn(&near, &spec, &record, 1, &mut HashSet::new()).unwrap());
+            });
+        }
+        assert!(rx.recv_timeout(Duration::from_millis(300)).is_err());
+        drop(lock);
+        assert_eq!(rx.recv_timeout(Duration::from_secs(5)).unwrap(), Turn::Behind(1));
+        drop(runners);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_worker_at_work_holds_the_computer_awake_once_where_settings_let_it_and_lets_go() {
+        let kept = std::sync::Mutex::new(None);
+        // (Settings saying to let it sleep: nothing held)
+        hold_for_worker(&kept, true, || false);
+        assert!(kept.lock().unwrap().is_none());
+        hold_for_worker(&kept, true, || true);
+        assert!(kept.lock().unwrap().is_some());
+        // (held already: kept as it is, Settings not asked again)
+        hold_for_worker(&kept, true, || unreachable!("asked again while held"));
+        assert!(kept.lock().unwrap().is_some());
+        hold_for_worker(&kept, false, || unreachable!("asked as it lets go"));
+        assert!(kept.lock().unwrap().is_none());
+        hold_for_worker(&kept, false, || true);
+        assert!(kept.lock().unwrap().is_none());
+        // (the page loaded anew: whatever was held let go, Settings not asked)
+        let state = WorkerAwake::default();
+        hold_for_worker(&state.0, true, || true);
+        worker_let_go(&state);
+        assert!(state.0.lock().unwrap().is_none());
+    }
+
+    #[test]
+    fn a_waiting_job_asked_to_stop_ends_while_another_holds_the_queues_lock() {
+        let root = temp();
+        let dir = shell(&root, ECHO, 1);
+        // (the queue's lock held, as by a look at hundreds of folders on a disk that opens them slowly)
+        let lock = OpenOptions::new().create(true).truncate(false).write(true).open(root.join(QUEUE_LOCK)).unwrap();
+        lock.lock().unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        {
+            let d = dir.clone();
+            std::thread::spawn(move || {
+                let _ = tx.send(run_job(&d));
+            });
+        }
+        // (the head of the queue, at the lock: waiting, and still so a while on)
+        wait_for(|| current_record(&dir).is_some_and(|r| r.state == JobState::Waiting));
+        assert!(rx.recv_timeout(Duration::from_millis(300)).is_err());
+        // (its step stopped: it ends, the lock still held by the other, and runs nothing)
+        ask_stop(&dir).unwrap();
+        assert_eq!(rx.recv_timeout(Duration::from_secs(5)).expect("a stop went unseen while it waited for the queue's lock"), 0);
+        let record = current_record(&dir).unwrap();
+        assert_eq!((record.state, record.started), (JobState::Stopped, None));
+        drop(lock);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_live_job_behind_waiting_ones_whose_runners_are_gone_takes_its_turn() {
+        let root = temp();
+        let mk = || {
+            std::thread::sleep(Duration::from_millis(3));
+            shell(&root, "true", 1)
+        };
+        // (five said waiting, asked for first - their runners gone with a Meno that was ended - and one live behind them)
+        let dead: Vec<PathBuf> = (0..5).map(|_| mk()).collect();
+        let live = mk();
+        let base = |dir: &Path| JobRecord::new(JobState::Waiting, read_spec(dir).unwrap().created);
+        for d in dead.iter().chain([&live]) {
+            write_record(d, &base(d)).unwrap();
+        }
+        let runner = OpenOptions::new().create(true).truncate(false).write(true).open(live.join(RUNNER_LOCK)).unwrap();
+        runner.lock().unwrap();
+        // (not told it is 5 back: its turn taken, the dead ones recorded gone as it looked under the lock)
+        assert_eq!(take_turn(&live, &read_spec(&live).unwrap(), &base(&live), 1, &mut HashSet::new()).unwrap(), Turn::Taken);
+        assert!(dead.iter().all(|d| current_record(d).unwrap().state == JobState::Gone));
+        drop(runner);
         let _ = fs::remove_dir_all(&root);
     }
 
@@ -3243,6 +3581,30 @@ mod tests {
     #[cfg(windows)]
     const PAUSE: &str = "ping -n 2 127.0.0.1 > nul";
 
+    // (a long queue's gaps - run by hand, `--ignored`: MENO_QUEUE_N jobs (300) of a pause each, one at a time, every
+    //  runner waiting at once as a step's are; says the mean and largest gap from one's end to the next one's start)
+    #[test]
+    #[ignore]
+    fn a_long_queue_starts_the_next_job_as_one_ends() {
+        let n: usize = std::env::var("MENO_QUEUE_N").ok().and_then(|v| v.parse().ok()).unwrap_or(300);
+        let root = temp();
+        #[cfg(unix)]
+        let pause = "sleep 0.3";
+        #[cfg(windows)]
+        let pause = "ping -n 1 127.0.0.1 > nul";
+        let dirs: Vec<PathBuf> = (0..n).map(|_| shell(&root, pause, 1)).collect();
+        let runs: Vec<_> = dirs.iter().cloned().map(|d| std::thread::spawn(move || run_job(&d))).collect();
+        for r in runs {
+            r.join().unwrap();
+        }
+        let mut spans: Vec<(u64, u64)> = dirs.iter().map(|d| current_record(d).unwrap()).map(|r| (r.started.unwrap(), r.ended.unwrap())).collect();
+        spans.sort();
+        let gaps: Vec<u64> = spans.windows(2).map(|w| w[1].0.saturating_sub(w[0].1)).collect();
+        let mean = gaps.iter().sum::<u64>() as f64 / gaps.len().max(1) as f64;
+        println!("QUEUE {n} jobs: gap mean {mean:.0} ms, largest {} ms", gaps.iter().max().unwrap_or(&0));
+        let _ = fs::remove_dir_all(root);
+    }
+
     #[test]
     fn waits_its_turn_in_the_order_jobs_were_asked_for() {
         let root = temp();
@@ -3337,7 +3699,7 @@ mod tests {
 
     #[test]
     fn starts_a_job_where_its_cores_and_memory_fit_beside_those_running_and_never_one_ahead_of_its_turn() {
-        let l = Limits { cores: 8, memory: 16_000 };
+        let l = Limits { cores: 8, memory: 16_000, awake: true };
         // (nothing running: any job, a larger one than the limits included, runs alone)
         assert!(fits(l, (0, 0), 0, 32, 64_000));
         assert!(fits(l, (4, 8_000), 1, 4, 8_000));
@@ -3346,7 +3708,7 @@ mod tests {
         // (a job that declares no memory is counted by its cores alone; and limits with none - the computer's memory
         //  not told - count none)
         assert!(fits(l, (4, 16_000), 1, 4, 0));
-        assert!(fits(Limits { cores: 8, memory: 0 }, (4, 16_000), 1, 4, 8_000));
+        assert!(fits(Limits { cores: 8, memory: 0, awake: true }, (4, 16_000), 1, 4, 8_000));
         // (more than the computer has: refused, in plain words; within it, though over the limits, not)
         let here = Resources { cores: 10, physical: 10, memory: 32 * 1024 };
         assert_eq!(beyond(here, 12, 0).as_deref(), Some("it asks for 12 cores, and this computer has 10"));
@@ -3357,7 +3719,7 @@ mod tests {
 
         // in the queue: two of 4 cores in 6 - the second waits, though a core-sized job behind it would fit
         let root = temp();
-        write_limits(&root, Limits { cores: 6, memory: 0 }).unwrap();
+        write_limits(&root, Limits { cores: 6, memory: 0, awake: true }).unwrap();
         let first = sized(&root, PAUSE, 4, 0);
         std::thread::sleep(Duration::from_millis(5));
         let second = sized(&root, PAUSE, 4, 0);
@@ -3412,7 +3774,7 @@ mod tests {
         let data = temp();
         let scratch = temp();
         assert_eq!(jobs_roots(&data), vec![jobs_in(&data)]);
-        write_limits(&jobs_in(&data), Limits { cores: 3, memory: 4096 }).unwrap();
+        write_limits(&jobs_in(&data), Limits { cores: 3, memory: 4096, awake: true }).unwrap();
         // (one made in Meno's own before)
         let before = sized(&jobs_in(&data), ECHO, 1, 0);
         write_record(&before, &JobRecord { ended: Some(now_ms()), ..JobRecord::new(JobState::Done, now_ms()) }).unwrap();
@@ -3420,7 +3782,7 @@ mod tests {
         let chosen = scratch.join(IN_CHOSEN);
         assert_eq!(jobs_roots(&data), vec![chosen.clone(), jobs_in(&data)]);
         // (what jobs may use goes with it)
-        assert_eq!(limits_in(&chosen), Limits { cores: 3, memory: 4096 });
+        assert_eq!(limits_in(&chosen), Limits { cores: 3, memory: 4096, awake: true });
         // (a job made there: its runner takes it, as one in Meno's own; one elsewhere, never)
         let (_, dir) = make_job(&chosen, &read_spec(&before).unwrap(), &[]).unwrap();
         assert!(runner_folder(&data, &dir).is_ok());
@@ -3481,8 +3843,14 @@ mod tests {
         let root = temp();
         assert_eq!(limits_in(&root), default_limits());
         assert!(default_limits().cores >= 1);
-        write_limits(&root, Limits { cores: 3, memory: 2048 }).unwrap();
-        assert_eq!(limits_in(&root), Limits { cores: 3, memory: 2048 });
+        write_limits(&root, Limits { cores: 3, memory: 2048, awake: true }).unwrap();
+        assert_eq!(limits_in(&root), Limits { cores: 3, memory: 2048, awake: true });
+        // (the computer kept awake unless Settings turned it off - and so where limits written before it say nothing of it)
+        assert!(default_limits().awake);
+        write_limits(&root, Limits { cores: 3, memory: 2048, awake: false }).unwrap();
+        assert!(!limits_in(&root).awake);
+        fs::write(root.join(LIMITS), r#"{"cores": 2, "memory": 1024}"#).unwrap();
+        assert_eq!(limits_in(&root), Limits { cores: 2, memory: 1024, awake: true });
         // (the computer's memory told: three quarters of it, by default)
         let here = computer();
         assert!(here.memory > 0, "{here:?}");
@@ -3576,6 +3944,121 @@ mod tests {
         let r = current_record(&dir).unwrap();
         assert_eq!((r.state, r.started), (JobState::Stopped, None));
         assert!(!dir.join(WORK).join("result.txt").exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_job_stopped_alone_ends_failed_saying_so_running_or_waiting_and_a_stop_of_its_step_after_is_a_stop() {
+        let root = temp();
+        // (running: its program stopped, and it recorded failed, "stopped by you")
+        let dir = shell(&root, LONG, 1);
+        let runner = {
+            let d = dir.clone();
+            std::thread::spawn(move || run_job(&d))
+        };
+        wait_for(|| current_record(&dir).is_some_and(|r| r.state == JobState::Running));
+        let t = Instant::now();
+        ask_stop_alone(&dir).unwrap();
+        runner.join().unwrap();
+        let r = current_record(&dir).unwrap();
+        assert_eq!((r.state, r.why.as_deref()), (JobState::Failed, Some(STOPPED_ALONE)));
+        assert!(r.started.is_some() && t.elapsed() < Duration::from_secs(10));
+        // (waiting: never started, failed so too)
+        let waiting = shell(&root, ECHO, 1);
+        ask_stop_alone(&waiting).unwrap();
+        run_job(&waiting);
+        let r = current_record(&waiting).unwrap();
+        assert_eq!((r.state, r.started, r.why.as_deref()), (JobState::Failed, None, Some(STOPPED_ALONE)));
+        // (its step stopped after: stopped, as ever)
+        let both = shell(&root, ECHO, 1);
+        ask_stop_alone(&both).unwrap();
+        ask_stop(&both).unwrap();
+        run_job(&both);
+        assert_eq!(current_record(&both).unwrap().state, JobState::Stopped);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    /// A file's write time set back `ago` ms, as `touch -t` would.
+    fn written_ago(p: &Path, ago: u64) {
+        let at = std::time::SystemTime::now() - Duration::from_millis(ago);
+        File::options().write(true).open(p).unwrap().set_modified(at).unwrap();
+    }
+
+    #[test]
+    fn a_running_job_says_when_it_last_wrote_anything_and_a_finished_one_does_not() {
+        let root = temp();
+        let dir = shell(&root, ECHO, 1);
+        let id = dir.file_name().unwrap().to_string_lossy().into_owned();
+        let runner = OpenOptions::new().create(true).truncate(false).write(true).open(dir.join(RUNNER_LOCK)).unwrap();
+        runner.lock().unwrap();
+        write_record(&dir, &JobRecord { state: JobState::Running, started: Some(1), ..JobRecord::new(JobState::Waiting, 1) }).unwrap();
+        // (its log and a file at the top of its work folder written an hour ago; a file deep in it, written last: that one -
+        //  its folders made before it, their times no later than its)
+        fs::write(dir.join(LOG), "ran\n").unwrap();
+        written_ago(&dir.join(LOG), 3_600_000);
+        written_ago(&dir.join(WORK).join("input.txt"), 3_600_000);
+        fs::create_dir_all(dir.join(WORK).join("a/b")).unwrap();
+        std::thread::sleep(Duration::from_millis(20));
+        fs::write(dir.join(WORK).join("a/b/step.tmp"), "x").unwrap();
+        let deep = fs::metadata(dir.join(WORK).join("a/b/step.tmp")).unwrap().modified().unwrap().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
+        assert_eq!(listed(&id, &dir).unwrap().last_written, Some(deep));
+        // (said to the page as lastWritten)
+        assert!(serde_json::to_string(&listed(&id, &dir).unwrap()).unwrap().contains("\"lastWritten\":"));
+        // (a folder made since, empty: its own time counts)
+        std::thread::sleep(Duration::from_millis(20));
+        fs::create_dir_all(dir.join(WORK).join("c")).unwrap();
+        assert!(last_written(&dir).unwrap() > deep);
+        // (its log written just now: that, the folder not walked)
+        std::thread::sleep(Duration::from_millis(20));
+        fs::write(dir.join(LOG), "more\n").unwrap();
+        let log = fs::metadata(dir.join(LOG)).unwrap().modified().unwrap().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
+        assert_eq!(last_written(&dir), Some(log));
+        // (more entries than it looks at: nothing said, never an older time)
+        written_ago(&dir.join(LOG), 3_600_000);
+        let many = dir.join(WORK).join("many");
+        fs::create_dir_all(&many).unwrap();
+        for k in 0..=WRITTEN_MOST {
+            fs::write(many.join(k.to_string()), "").unwrap();
+        }
+        assert_eq!(last_written(&dir), None);
+        // (finished: none)
+        write_record(&dir, &JobRecord { state: JobState::Done, ended: Some(2), ..JobRecord::new(JobState::Done, 1) }).unwrap();
+        assert_eq!(listed(&id, &dir).unwrap().last_written, None);
+        drop(runner);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_stop_of_its_step_asked_first_stays_a_stop_though_the_job_is_then_stopped_alone() {
+        let root = temp();
+        let dir = shell(&root, ECHO, 1);
+        ask_stop(&dir).unwrap();
+        ask_stop_alone(&dir).unwrap();
+        assert_eq!(fs::read(dir.join(STOP)).unwrap(), b"");
+        run_job(&dir);
+        assert_eq!(current_record(&dir).unwrap().state, JobState::Stopped);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    /// A job stopped alone while a program it runs after its own runs: failed, saying so, as while its own runs.
+    #[cfg(unix)]
+    #[test]
+    fn a_job_stopped_alone_while_a_program_after_its_own_runs_ends_failed_saying_so() {
+        let root = temp();
+        let dir = shell(&root, ECHO, 1);
+        let mut spec = read_spec(&dir).unwrap();
+        spec.then = vec![Then { name: "sh".into(), program: "/bin/sh".into(), args: vec!["-c".into(), LONG.into()] }];
+        fs::write(dir.join(SPEC), serde_json::to_string(&spec).unwrap()).unwrap();
+        let runner = {
+            let d = dir.clone();
+            std::thread::spawn(move || run_job(&d))
+        };
+        wait_for(|| read_work_file(&dir, "child.pid").is_ok_and(|s| s.ends_with('\n')));
+        ask_stop_alone(&dir).unwrap();
+        runner.join().unwrap();
+        let r = current_record(&dir).unwrap();
+        assert_eq!((r.state, r.why.as_deref()), (JobState::Failed, Some(STOPPED_ALONE)));
+        assert!(r.started.is_some());
         let _ = fs::remove_dir_all(root);
     }
 
@@ -3846,7 +4329,7 @@ mod tests {
         let _ = fs::remove_file(taken.join(RECORD));
         assert_eq!(current_record(&taken).map(|r| r.state), Some(JobState::Waiting));
         let spec = read_spec(&mine).unwrap();
-        assert!(matches!(take_turn(&mine, &spec, &JobRecord::new(JobState::Waiting, spec.created)).unwrap(), Turn::Taken));
+        assert!(matches!(take_turn(&mine, &spec, &JobRecord::new(JobState::Waiting, spec.created), 1, &mut HashSet::new()).unwrap(), Turn::Taken));
         let _ = fs::remove_dir_all(root);
     }
 
@@ -4534,7 +5017,7 @@ mod tests {
         let tool = away.join("tool");
         fs::write(&tool, "#!/bin/sh\necho needed program ran\n").unwrap();
         fs::set_permissions(&tool, fs::Permissions::from_mode(0o755)).unwrap();
-        write_limits(&root, Limits { cores: 1, memory: 0 }).unwrap();
+        write_limits(&root, Limits { cores: 1, memory: 0, awake: true }).unwrap();
         let spec = JobSpec {
             plugin: "test".into(),
             name: "shell".into(),
@@ -4680,7 +5163,7 @@ mod tests {
     fn a_runner_runs_a_job_needing_another_plugins_program_linked_in_its_folder_and_no_other_link() {
         let (base, data, plugins) = needing(true);
         let jobs = data.join("jobs");
-        write_limits(&jobs, Limits { cores: 1, memory: 0 }).unwrap();
+        write_limits(&jobs, Limits { cores: 1, memory: 0, awake: true }).unwrap();
         let found = plugin_program(&data, &crate::installed::dir(&plugins, "asker").unwrap(), "asker", "main", &[]).unwrap();
         let (env, needed) = needs_given(&data, &manifest_of(&crate::installed::dir(&plugins, "asker").unwrap(), "asker").unwrap(), "asker", &["helper".into()], &|p| crate::installed::dir(&plugins, p)).unwrap();
         assert_eq!(env, BTreeMap::from([("TOOLEXE".to_string(), "./tool".to_string())]));

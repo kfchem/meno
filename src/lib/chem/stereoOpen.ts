@@ -7,6 +7,7 @@
  */
 import { smallestRings } from "../layout/rings";
 import { flatRingAtoms } from "./conformersSought";
+import { valenceOrders } from "./kekulize";
 import { readMolfile } from "./ctfile";
 import { lonePairCentres, lonePairOfThree } from "./lonePairCentres";
 import { implicitHydrogens } from "./molecule";
@@ -27,14 +28,15 @@ export const MOVING_CN = {
 } as const;
 export type MovingWhy = keyof typeof MOVING_CN;
 
-/** Each atom's hydrogens that are no atoms of their own: those given, or those its valence leaves (lib/chem/molecule). */
+/** Each atom's hydrogens that are no atoms of their own: those given, or those its valence leaves (lib/chem/molecule), aromatic bonds as a Kekulé structure has them (lib/chem/kekulize `valenceOrders`). */
 function implicitOf(atoms: readonly StereoAtom[], bonds: readonly StereoBond[]): number[] {
   const sum = atoms.map(() => 0);
-  for (const b of bonds) {
-    const o = b.order === 4 ? 1.5 : b.order <= 3 ? b.order : 0;
+  const orders = valenceOrders(atoms, bonds);
+  bonds.forEach((b, k) => {
+    const o = orders[k] <= 3 ? orders[k] : 0;
     sum[b.a] += o;
     sum[b.b] += o;
-  }
+  });
   return atoms.map((a, i) => a.hs ?? implicitHydrogens(a.el, Math.round(sum[i]), a.charge ?? 0));
 }
 
@@ -63,18 +65,14 @@ function notCentres(atoms: readonly StereoAtom[], bonds: readonly StereoBond[]):
   return (at) => lonePairOfThree(atoms[at].el, atoms[at].charge ?? 0, around[at], orders[at], hs[at]) && !keeps(at);
 }
 
-/** Each atom's hydrogens: those given, or those its valence leaves (lib/chem/molecule), and the hydrogen atoms bonded to it. */
+/** Each atom's hydrogens: those given, or those its valence leaves (`implicitOf`), and the hydrogen atoms bonded to it. */
 function hydrogensOf(atoms: readonly StereoAtom[], bonds: readonly StereoBond[]): number[] {
-  const sum = atoms.map(() => 0);
   const explicit = atoms.map(() => 0);
   for (const b of bonds) {
-    const o = b.order === 4 ? 1.5 : b.order <= 3 ? b.order : 0;
-    sum[b.a] += o;
-    sum[b.b] += o;
     if (atoms[b.a]?.el === "H") explicit[b.b]++;
     if (atoms[b.b]?.el === "H") explicit[b.a]++;
   }
-  return atoms.map((a, i) => (a.hs ?? implicitHydrogens(a.el, Math.round(sum[i]), a.charge ?? 0)) + explicit[i]);
+  return implicitOf(atoms, bonds).map((n, i) => n + explicit[i]);
 }
 
 /**
@@ -215,6 +213,63 @@ export type ConfiguredCentre = { atom: number; neighbours: number[]; sense: 1 | 
 export type ConfiguredDouble = { bond: number; ends: [number, number]; cis: boolean };
 /** Some of a structure's elements given configurations, in Meno's terms: the plugin makes them its own toolkit's. */
 export type Configuration = { centres: ConfiguredCentre[]; doubles: ConfiguredDouble[] };
+
+/**
+ * One configuration, as a string that two of the same give: each centre by
+ * its atom and its sense taken over its neighbours in ascending order (the
+ * sense turns with the parity of the order they were named in), each double
+ * bond by its bond, its ends (in ascending order: a pair has no first) and
+ * whether they are cis - the elements in the order of their atoms and bonds.
+ */
+export function configurationKey(c: Configuration): string {
+  const centres = [...c.centres]
+    .sort((p, q) => p.atom - q.atom)
+    .map((x) => {
+      const sorted = [...x.neighbours].sort((p, q) => p - q);
+      // (the swaps that put the neighbours in order, counted as inversions)
+      let odd = false;
+      for (let i = 0; i < x.neighbours.length; i++) for (let j = i + 1; j < x.neighbours.length; j++) if (x.neighbours[i] > x.neighbours[j]) odd = !odd;
+      return [x.atom, sorted, odd ? -x.sense : x.sense];
+    });
+  const doubles = [...c.doubles].sort((p, q) => p.bond - q.bond).map((x) => [x.bond, [...x.ends].sort((p, q) => p - q), x.cis]);
+  return JSON.stringify([centres, doubles]);
+}
+
+/**
+ * Whether a configuration tells apart all that the plugin enumerates
+ * (`open`: the centres and double bonds it was asked of): every open centre
+ * and every open double bond has its configuration in it - but an axis's
+ * (`cumulenes`), which a configuration never gives.
+ */
+function configuresAllOf(c: Configuration, open: Pick<StereoLeft, "atoms" | "bonds" | "cumulenes">): boolean {
+  if (!c.centres.length && !c.doubles.length) return false;
+  const atoms = new Set(c.centres.map((x) => x.atom));
+  const bonds = new Set(c.doubles.map((x) => x.bond));
+  return open.atoms.every((i) => atoms.has(i)) && open.bonds.every((i) => bonds.has(i) && !open.cumulenes.includes(i));
+}
+
+/**
+ * Stereoisomers each once, by their configuration, the first of each kept:
+ * the toolkit enumerates what Meno does not see, by its own rules, and its
+ * isomers then differ only there: a lone pair's inversion at an aziridine's
+ * N, with a carbon centre beside it, and the inversion of an enhanced
+ * stereo group (AND, OR: its atoms are specified, so a configuration never
+ * shows them; made as drawn). An
+ * isomer whose configuration leaves some of what the toolkit enumerates
+ * out (`open`: an allene's axis, or a centre it gives none of) is kept
+ * whatever - the others could differ there, and merged would be dropped
+ * unseen - and so is one that gives no configuration at all.
+ */
+export function distinctIsomers<T extends { configured: Configuration }>(isomers: readonly T[], open: Pick<StereoLeft, "atoms" | "bonds" | "cumulenes">): T[] {
+  const seen = new Set<string>();
+  return isomers.filter((i) => {
+    if (!configuresAllOf(i.configured, open)) return true;
+    const key = configurationKey(i.configured);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 
 /** What the plugin made of a structure's stereoisomers, as Meno asked for them (Workspace/chem/openStereo `stereoisomersOf`). */
 export type IsomersMade =

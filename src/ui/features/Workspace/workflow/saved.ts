@@ -15,7 +15,7 @@ import type { KeptRole } from "../../../../lib/jobs";
 import { KINDS, type SetHolds, type SetKind, type StepKind } from "./kinds";
 import { SET_KINDS } from "../../../../lib/plugins/steps";
 import { readDrawnRecord, structureMember } from "./entries";
-import { readRefused } from "./programs";
+import { NAMED_KEPT, readRefused } from "./programs";
 import { leftOut, readEach } from "../utils/readNotes";
 import { isJobKey } from "../../../../lib/jobKeys";
 
@@ -122,6 +122,10 @@ function readSet(v: unknown): WorkflowSet | null {
     })(),
     // (a result set kept out of its file, and what it held when it was saved)
     ...(b.keep === false && made ? { keep: false as const } : {}),
+    // (which of its molecules a large set showed, one at a time: its place in its collection - what the view is kept in range by)
+    ...(Array.isArray(b.collection) && Number.isInteger(b.shown) && (b.shown as number) > 0 ? { shown: b.shown as number } : {}),
+    // (a result set wired on that the chemist opened, to be seen on the page: workflow/held)
+    ...(b.opened === true && made ? { opened: true as const } : {}),
     ...(() => {
       const n = b.notKept as { count?: unknown; hash?: unknown } | undefined;
       return n && Number.isInteger(n.count) && (n.count as number) >= 0 && typeof n.hash === "string" ? { notKept: { count: n.count as number, hash: n.hash } } : {};
@@ -176,8 +180,8 @@ function readRan(v: unknown): StepRan | undefined {
     ...(Object.keys(options).length ? { options } : {}),
     // (a run the chemist keeps: never dropped while kept)
     ...(r.keep === true ? { keep: true as const } : {}),
-    // (every seed its line counts but does not name)
-    ...(typeof (r as { named?: unknown }).named === "string" && (r as { named: string }).named ? { named: (r as { named: string }).named.slice(0, 4000) } : {}),
+    // (every seed its line counts but does not name, and each SMILES it could not read)
+    ...(typeof (r as { named?: unknown }).named === "string" && (r as { named: string }).named ? { named: (r as { named: string }).named.slice(0, NAMED_KEPT) } : {}),
     ...(() => {
       const kept = readKeptJobs(r.kept, new Set(jobs));
       return kept.length ? { kept } : {};

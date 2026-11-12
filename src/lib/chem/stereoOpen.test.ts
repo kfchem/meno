@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readSmiles } from "./smiles";
 import { v2000 } from "./testdata/v2000";
-import { configuredFrom, cumulatedRuns, leftOver, movingCN, movingSaid, openCumulenes, stereoGraphOf, stereoLeft, type StereoAtom, type StereoBond } from "./stereoOpen";
+import { configuredFrom, configurationKey, type Configuration, cumulatedRuns, distinctIsomers, leftOver, movingCN, movingSaid, openCumulenes, stereoGraphOf, stereoLeft, type StereoAtom, type StereoBond } from "./stereoOpen";
 
 /** A molecule as the rules read it, from SMILES written with its double bonds. */
 function mol(smiles: string): { atoms: StereoAtom[]; bonds: StereoBond[] } {
@@ -23,6 +23,19 @@ describe("C=N double bonds whose E/Z is none of their own", () => {
     expect(moving("CC(N(C)C)=[N+](C)C")).toEqual(["cation"]);
     // (an amidinium whose N beside it is a pyrrole's, its lone pair the ring's: no bond it shares)
     expect(moving("CC(n1cccc1)=[N+](C)CC")).toEqual([]);
+  });
+
+  it("are one beside a ring's N-H whose ring bonds are given as aromatic, no hydrogens stated - counted as a Kekulé structure has it", () => {
+    // (CN=c1cccc[nH]1, its ring's bonds as a file gives them: type 4, and no H on its N)
+    const atoms: StereoAtom[] = ["C", "N", "C", "C", "C", "C", "C", "N"].map((el) => ({ el }));
+    const bonds: StereoBond[] = [
+      { a: 0, b: 1, order: 1 },
+      { a: 1, b: 2, order: 2 },
+      ...[[2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 2]].map(([a, b]) => ({ a, b, order: 4 })),
+    ];
+    expect([...movingCN(atoms, bonds)]).toEqual([[1, "shift"]]);
+    // (its N's hydrogen stated as none: a pyridinylidene with no H to move)
+    expect([...movingCN(atoms.map((a, i) => (i === 7 ? { ...a, hs: 0 } : a)), bonds)]).toEqual([]);
   });
 
   it("are not an imine whose N bears a carbon, an oxime's, a hydrazone's - nor one in a ring held flat", () => {
@@ -140,5 +153,95 @@ describe("what a structure leaves open, as Meno decides it", () => {
       "M  V30 1 Pd 0 0 0 0", "M  V30 2 C 1 0 0 0", "M  V30 3 C 2 0 0 0", "M  V30 4 C 3 0 0 0", "M  V30 5 * 2 1 0 0", "M  V30 END ATOM", "M  V30 BEGIN BOND",
       "M  V30 1 1 2 3", "M  V30 2 2 3 4", "M  V30 3 9 1 5 ENDPTS=(3 2 3 4) ATTACH=ALL", "M  V30 END BOND", "M  V30 END CTAB", "M  END"].join("\n");
     expect(stereoGraphOf([eta])!.bonds[2]).toEqual({ a: 0, b: 4, order: 0 });
+  });
+});
+
+describe("stereoisomers each once, by their configuration", () => {
+  const centre = (sense: 1 | -1, neighbours = [0, 2, 4], atom = 1) => ({ centres: [{ atom, neighbours, sense }], doubles: [] });
+  const only = { atoms: [1], bonds: [] as number[], cumulenes: [] as number[] };
+  it("keeps the first of each configuration, in order: an aziridine's four, as the toolkit flips its N too, are two", () => {
+    // (CN1CC1C: C1's sense +1, -1, +1, -1 - the plugin's four, observed)
+    const four = [1, -1, 1, -1].map((sense, i) => ({ configured: centre(sense as 1 | -1), smiles: `s${i}` }));
+    expect(distinctIsomers(four, only).map((i) => i.smiles)).toEqual(["s0", "s1"]);
+    // (none repeated: all kept; none at all: none)
+    expect(distinctIsomers(four.slice(0, 2), only)).toHaveLength(2);
+    expect(distinctIsomers([], only)).toEqual([]);
+  });
+
+  it("keeps every isomer that gives no configuration, having none to tell them by", () => {
+    const none = { centres: [], doubles: [] };
+    const list = [{ configured: none, smiles: "a" }, { configured: none, smiles: "b" }, { configured: centre(1), smiles: "c" }, { configured: centre(1), smiles: "d" }];
+    expect(distinctIsomers(list, only).map((i) => i.smiles)).toEqual(["a", "b", "c"]);
+    expect(distinctIsomers(list.slice(0, 2), { atoms: [], bonds: [], cumulenes: [] })).toHaveLength(2);
+  });
+
+  it("merges only where the configuration tells apart all that the toolkit enumerates: an allene's axis, a centre or a bond it gives none of keeps them", () => {
+    const twins = (open: { atoms: number[]; bonds: number[]; cumulenes: number[] }, of: Configuration = centre(1)) => distinctIsomers([{ configured: of, smiles: "a" }, { configured: of, smiles: "b" }], open).length;
+    expect(twins(only)).toBe(1);
+    // (an allene's axis, open: its bonds are no cis or trans, so the pair differs where nothing tells)
+    expect(twins({ atoms: [1], bonds: [2, 3], cumulenes: [2, 3] })).toBe(2);
+    // (even where one of its bonds is in the configuration)
+    const withBond = { centres: centre(1).centres, doubles: [{ bond: 2, ends: [0, 4] as [number, number], cis: true }] };
+    expect(twins({ atoms: [1], bonds: [2], cumulenes: [2] }, withBond)).toBe(2);
+    // (a second open centre it gives none of; an open bond it gives none of)
+    expect(twins({ atoms: [1, 6], bonds: [], cumulenes: [] })).toBe(2);
+    expect(twins({ atoms: [1], bonds: [5], cumulenes: [] })).toBe(2);
+    // (a bond it does give: merged)
+    expect(twins({ atoms: [1], bonds: [2], cumulenes: [] }, withBond)).toBe(1);
+  });
+
+  it("tells configurations apart: another sense, another atom, another bond's cis or trans, its bond, its ends", () => {
+    expect(configurationKey(centre(1))).not.toBe(configurationKey(centre(-1)));
+    expect(configurationKey(centre(1))).not.toBe(configurationKey(centre(1, [0, 2, 4], 3)));
+    const bond = (cis: boolean, at = 2, ends: [number, number] = [0, 4]) => ({ centres: [], doubles: [{ bond: at, ends, cis }] });
+    expect(configurationKey(bond(true))).not.toBe(configurationKey(bond(false)));
+    expect(configurationKey(bond(true))).toBe(configurationKey(bond(true)));
+    expect(configurationKey(bond(true))).not.toBe(configurationKey(bond(true, 3)));
+    expect(configurationKey(bond(true))).not.toBe(configurationKey(bond(true, 2, [0, 5])));
+    expect(configurationKey(bond(true))).not.toBe(configurationKey(bond(true, 2, [1, 4])));
+    // (a pair of ends has no first)
+    expect(configurationKey(bond(true))).toBe(configurationKey(bond(true, 2, [4, 0])));
+    // (a centre and a bond together: one that differs in either differs)
+    const both = (sense: 1 | -1, cis: boolean) => ({ centres: centre(sense).centres, doubles: bond(cis).doubles });
+    expect(new Set([both(1, true), both(1, false), both(-1, true), both(-1, false)].map(configurationKey)).size).toBe(4);
+  });
+
+  it("reads double bonds in the order of their bonds, whatever the list's", () => {
+    const d = (bond: number, ends: [number, number], cis: boolean) => ({ bond, ends, cis });
+    const list = [d(2, [0, 4], true), d(5, [6, 8], false), d(9, [10, 12], true)];
+    expect(configurationKey({ centres: [], doubles: [...list].reverse() })).toBe(configurationKey({ centres: [], doubles: list }));
+    expect(configurationKey({ centres: [], doubles: [list[1], list[2], list[0]] })).toBe(configurationKey({ centres: [], doubles: list }));
+    // (and two lists that differ in one bond's cis or trans differ)
+    expect(configurationKey({ centres: [], doubles: [list[0], d(5, [6, 8], true), list[2]] })).not.toBe(configurationKey({ centres: [], doubles: list }));
+  });
+
+  it("reads a centre by its neighbours in any order: its sense turns with the parity of the order, of three neighbours or four", () => {
+    expect(configurationKey(centre(1, [0, 2, 4]))).toBe(configurationKey(centre(-1, [2, 0, 4])));
+    expect(configurationKey(centre(1, [0, 2, 4]))).toBe(configurationKey(centre(1, [2, 4, 0])));
+    expect(configurationKey(centre(1, [0, 2, 4]))).not.toBe(configurationKey(centre(1, [2, 0, 4])));
+    // (every order of four, its parity counted by the cycles of the permutation, not as the key does: the same configuration for all of them)
+    const orders = (xs: number[]): number[][] => (xs.length < 2 ? [xs] : xs.flatMap((x, i) => orders([...xs.slice(0, i), ...xs.slice(i + 1)]).map((r) => [x, ...r])));
+    const parity = (p: number[]) => {
+      const sorted = [...p].sort((a, b) => a - b);
+      const to = p.map((x) => sorted.indexOf(x));
+      const seen = new Set<number>();
+      let cycles = 0;
+      for (let i = 0; i < to.length; i++) {
+        if (seen.has(i)) continue;
+        cycles++;
+        for (let j = i; !seen.has(j); j = to[j]) seen.add(j);
+      }
+      return (to.length - cycles) % 2 === 0 ? 1 : -1;
+    };
+    const base = configurationKey(centre(1, [1, 3, 5, 7]));
+    const all = orders([1, 3, 5, 7]);
+    expect(all).toHaveLength(24);
+    for (const o of all) {
+      expect(configurationKey(centre((parity(o) as 1 | -1), o))).toBe(base);
+      expect(configurationKey(centre((-parity(o) as 1 | -1), o))).not.toBe(base);
+    }
+    // (the order of the elements in a list does not matter)
+    const two = { centres: [...centre(1).centres, ...centre(-1, [5, 7, 9], 6).centres], doubles: [] };
+    expect(configurationKey(two)).toBe(configurationKey({ centres: [...two.centres].reverse(), doubles: [] }));
   });
 });

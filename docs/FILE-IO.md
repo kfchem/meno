@@ -1015,7 +1015,7 @@ work.meno (zip)
   never keeps a workspace from opening.
 - **Save never drops a file still to be had, and names what it could not
   keep.** A file the workspace has that is held nowhere this session - a
-  PDF Meno could not open (one locked with a password), a picture or an
+  PDF Meno could not open (one damaged past mending), a picture or an
   output held nowhere, an output not where it was, a text that could not
   be read - is taken from the
   workspace file the canvas was last saved to, or opened from, where that
@@ -1180,7 +1180,9 @@ left out, with its size.
 - **A size warning, not a choice made for you.** When a save would take a
   workspace past a size (Settings, General: 500 MB unless changed, at most
   1 GB) - it was not past it before, it is new, or it has grown by half of
-  that size or more since - Meno says about how large it will be, names its largest steps by what their jobs add, says that raw
+  that size or more since - Meno says about how large it will be, names its largest steps by what their jobs add (each job's file
+  as it comes to in the file, deflated: from its folder, or as the file
+  it is kept from again holds it - never its size unpacked), says that raw
   outputs can name this computer, and offers *Don't keep their raw
   outputs* for those steps, *Save it all*, or *Cancel*, which saves
   nothing. Meno never leaves anything out on its own. Past what a

@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   acceptAppSettings,
   DEFAULT_APP_SETTINGS,
+  JOB_FOLDERS_KEPT,
+  keepsJobFolders,
+  QUIET_AFTER_MIN,
+  QUIET_AFTER_MOST,
   loadAppSettings,
   settingsFileText,
   useAppSettings,
@@ -87,6 +91,19 @@ describe("the settings file", () => {
     expect(acceptAppSettings({ calculations: { largeWorkspaceMB: 1024 } }).calculations).toEqual({ largeWorkspaceMB: 1024 });
     // (past the most a workspace's file may come to at all: not taken)
     expect(acceptAppSettings({ calculations: { largeWorkspaceMB: 2048 } }).calculations).toEqual({});
+    // (after how many minutes a running job is said quiet: a whole number up to a day, else Meno's default)
+    expect(acceptAppSettings({ calculations: { quietAfterMin: 45 } }).calculations).toEqual({ quietAfterMin: 45 });
+    for (const v of [0, 1441, 2.5, "30"]) expect(acceptAppSettings({ calculations: { quietAfterMin: v } }).calculations).toEqual({});
+    expect([QUIET_AFTER_MIN, QUIET_AFTER_MOST]).toEqual([30, 1440]);
+    // (the computer kept awake while calculations run unless turned off: only the off kept)
+    expect(acceptAppSettings({ calculations: { sleepWhileJobsRun: true } }).calculations).toEqual({ sleepWhileJobsRun: true });
+    for (const v of [false, "yes", 1]) expect(acceptAppSettings({ calculations: { sleepWhileJobsRun: v } }).calculations).toEqual({});
+    // (job folders kept once saved, or not, as set; else as Meno's default - not kept, the maintainer's choice)
+    expect(acceptAppSettings({ calculations: { keepJobFolders: true } }).calculations).toEqual({ keepJobFolders: true });
+    expect(acceptAppSettings({ calculations: { keepJobFolders: false } }).calculations).toEqual({ keepJobFolders: false });
+    expect(acceptAppSettings({ calculations: { keepJobFolders: "yes" } }).calculations).toEqual({});
+    expect(JOB_FOLDERS_KEPT).toBe(false);
+    expect([keepsJobFolders({}), keepsJobFolders({ keepJobFolders: false }), keepsJobFolders({ keepJobFolders: true })]).toEqual([false, false, true]);
     expect(acceptAppSettings({ calcReaders: { chosen: { orca: "cclib", gaussian: 3, "x y": "cclib" } } }).files).toEqual({ read: { orca: "cclib" }, also: {} });
     expect(
       acceptAppSettings({ calcReaders: { chosen: { orca: "cclib" } }, files: { read: { orca: "pyscf" }, also: { orca: ["cclib", "cclib", 4], xtb: [] } } }).files,

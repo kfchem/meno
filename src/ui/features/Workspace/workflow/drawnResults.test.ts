@@ -4,7 +4,7 @@ import type { DrawnModel, DrawnRecord, Model, WorkflowSet } from "../store/types
 import { BEFORE_THE_EDIT, countOf, countSaid, heldOwn, drawnHash, holdsOf, numberedRecord, readDrawnRecord, recordNumber, setMembers } from "./entries";
 import { canWire, givesOf, inputKey, inputOf, resultOf, stateOf } from "./flow";
 import { runMenoDrawn } from "./meno";
-import { addSet, addStep, connect, membersSettled, removeStep } from "./model";
+import { addSet, addStep, connect, membersSettled, removeStep, removeWire } from "./model";
 import { drawnEntries, inputEntries, keepRun, placeResults, resultsNow, runStep, showRun, type RunResults, type RunWith } from "./run";
 import { DRAWN_ON_PAGE, PX } from "./look";
 import { boxOf } from "../chem/make3d";
@@ -374,7 +374,8 @@ const sampled: DrawnRecord = { from: ["seed-1"], properties: { nll: { value: 23.
 const aside: DrawnRecord = { status: { aside: "a radical" } };
 
 /** Records as they are compared: without what each is of (`of`), which the page's numbering says. */
-const bare = (records: readonly (DrawnRecord | undefined)[]) => records.map((r) => r && (({ of: _of, ...rest }) => rest)(r));
+/** Records as their step gave them: what they are of, and their lasting ids, left out (lasting ids: lasting.test) - none where nothing else is left. */
+const bare = (records: readonly (DrawnRecord | undefined)[]) => records.map((r) => r && (({ of: _of, id: _id, ...rest }) => (Object.keys(rest).length ? rest : undefined))(r));
 
 /** A result set's records now, as its structures stand. */
 const recordsOf = (doc: WorkspaceDocument, exit = "out") => setMembers(doc, resultOf(doc, doc.steps![0].id, exit)!).records;
@@ -400,7 +401,8 @@ describe("structures drawn, each with its record", () => {
     doc = connect(doc, { set: out.id }, doc.steps![1].id);
     const input = inputOf(doc, doc.steps![1].id)!;
     expect(bare(drawnEntries(doc.model, input.structures, input.records).map((e) => e.record))).toEqual([numbered, undefined]);
-    // (a run kept keeps them, and gives them back when shown again)
+    // (a run kept keeps them, and gives them back when shown again - on the page: its exit not wired on, so not held off it, workflow/held)
+    doc = removeWire(doc, doc.wires![doc.wires!.length - 1]!.id);
     doc = { ...doc, steps: doc.steps!.map((s) => ({ ...s, ran: { at: 1, ok: true, said: "first", input: "k", kind: s.kind } })) };
     expect(bare(resultsNow(doc, step())!.drawn!.made.map((m) => m.record))).toEqual([numbered, undefined]);
     doc = keepRun(doc, step());
@@ -422,15 +424,15 @@ describe("structures drawn, each with its record", () => {
     const first = placeResults(page(), page().steps![0], drawn([{ ...chiral(), record: { ...sampled, status: "done" } }]), W);
     // (Br to I: another structure, whose NLL the model never gave)
     const edited = swapped(first, "Br", "I");
-    expect(recordsOf(edited)).toEqual([{ from: ["seed-1"], stale: BEFORE_THE_EDIT }]);
+    expect(bare(recordsOf(edited))).toEqual([{ from: ["seed-1"], stale: BEFORE_THE_EDIT }]);
     // (and so kept in the set itself, not only as it is read)
     const member = resultOf(edited, edited.steps![0].id, "out")!.members![0];
-    expect("structure" in member && member.record).toEqual({ from: ["seed-1"], stale: BEFORE_THE_EDIT });
+    expect("structure" in member && bare([member.record])[0]).toEqual({ from: ["seed-1"], stale: BEFORE_THE_EDIT });
     // (undone, the structure is the one it was for again: the record as it was)
     expect(bare(recordsOf(first))).toEqual([{ ...sampled, status: "done" }]);
     // (a wedge turned over is another structure too)
     const flipped = membersSettled({ ...first, model: { ...first.model, bonds: first.model.bonds.map((b) => (b.stereo === "up" ? { ...b, stereo: "down" } : b)) } }, first);
-    expect(recordsOf(flipped)).toEqual([{ from: ["seed-1"], stale: BEFORE_THE_EDIT }]);
+    expect(bare(recordsOf(flipped))).toEqual([{ from: ["seed-1"], stale: BEFORE_THE_EDIT }]);
   });
 
   it("joined by the chemist to a structure of their own, are another structure: the record keeps what it came from alone", () => {
@@ -443,7 +445,7 @@ describe("structures drawn, each with its record", () => {
     );
     const held = setMembers(joined, resultOf(joined, joined.steps![0].id, "out")!);
     expect(held.structures[0]).toContain(900);
-    expect(held.records).toEqual([{ from: ["seed-1"], stale: BEFORE_THE_EDIT }]);
+    expect(bare(held.records)).toEqual([{ from: ["seed-1"], stale: BEFORE_THE_EDIT }]);
   });
 
   it("two joined into one: what both came from kept, the properties of neither", () => {
@@ -452,7 +454,7 @@ describe("structures drawn, each with its record", () => {
     const br = first.model.atoms.find((x) => a.includes(x.id) && x.el === "Br")!;
     const cl = first.model.atoms.find((x) => b.includes(x.id) && x.el === "Cl")!;
     const one = membersSettled({ ...first, model: { ...first.model, bonds: [...first.model.bonds, { id: 950, a: br.id, b: cl.id, order: 1 } as never] } }, first);
-    expect(recordsOf(one)).toEqual([{ from: ["seed-1", "seed-2"], stale: BEFORE_THE_EDIT }]);
+    expect(bare(recordsOf(one))).toEqual([{ from: ["seed-1", "seed-2"], stale: BEFORE_THE_EDIT }]);
   });
 
   it("are in what a step after them is keyed by: a value changed before it, it has changed", () => {
@@ -500,7 +502,7 @@ describe("structures drawn, each with its record", () => {
     // (and of the structure as pasted: edited there, it is not)
     const br = held.structures[k].find((id) => elOf(id) === "Br")!;
     const edited = membersSettled({ ...pasted, model: { ...pasted.model, atoms: pasted.model.atoms.map((x) => (x.id === br ? { ...x, el: "I" } : x)) } }, pasted);
-    expect(setMembers(edited, edited.sets!.find((b) => b.id === sets[0])!).records[k]).toEqual({ from: ["seed-1"], stale: BEFORE_THE_EDIT });
+    expect(bare([setMembers(edited, edited.sets!.find((b) => b.id === sets[0])!).records[k]])[0]).toEqual({ from: ["seed-1"], stale: BEFORE_THE_EDIT });
   });
 
   it("are written with their records and read back - the members' and a run kept's alike", () => {

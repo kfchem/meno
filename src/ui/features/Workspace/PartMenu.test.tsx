@@ -108,6 +108,47 @@ describe("the right-click menu", () => {
     expect(menu({ ...here, kind: "atom", id: 1 }).icons).not.toContain("Paste");
   });
 
+  it("offers an atom map between the structures selected on the one right-clicked - and, on a structure in maps, what they do", () => {
+    const here = { ...target({ selection: "here", drawing: true }), kind: "atom" as const, id: 1 };
+    expect(menu(here, { pageMap: { onMake: none } }).listed).toEqual(["Atom map", "Copy as SMILES", "Turn over left to right", "Turn over top to bottom", "Save as abbreviation…"]);
+    const held = { standing: "ready" as const, shown: true, maps: 3, chosen: 0, onShow: none, onOther: none, onExport: none };
+    expect(menu(target({ kind: "atom", id: 1 }), { pageMap: { held } }).listed).toEqual(["Unpaired electron", "Hide atom map", "Other map", "Export reaction in 3D…", "Select this structure"]);
+    expect(menu(target({ kind: "atom", id: 1 }), { pageMap: { held: { ...held, shown: false, maps: 1 } } }).listed).toEqual(["Unpaired electron", "Show atom map", "Export reaction in 3D…", "Select this structure"]);
+    // (partial: shown, the atoms not paired named, its export said to need them all; of a structure edited since: said, and made again)
+    expect(menu(target({ kind: "bond", id: 2 }), { pageMap: { held: { ...held, standing: "incomplete", maps: 1, unpaired: "Not mapped: O of Before" } } }).listed).toEqual([
+      "Hide atom map",
+      "Not mapped: O of Before",
+      "Export reaction in 3D… (needs every atom mapped)",
+      "Select this structure",
+    ]);
+    expect(menu(target({ kind: "bond", id: 2 }), { pageMap: { held: { ...held, standing: "changed", onAgain: none } } }).listed).toEqual(["Atom map of the structure before its edit", "Map again", "Select this structure"]);
+  });
+
+  it("offers a map's conformers paired, the line saying how many", () => {
+    const held = { standing: "ready" as const, shown: true, maps: 1, chosen: 0, onShow: none, onOther: none, onExport: none, conformers: ["Conformers: 6 × 3 = 18 pairs"], pair: { name: "Pair conformers: 6 × 3 = 18 pairs", run: none } };
+    expect(menu(target({ kind: "atom", id: 1 }), { pageMap: { held } }).listed).toEqual(["Unpaired electron", "Hide atom map", "Export reaction in 3D…", "Conformers: 6 × 3 = 18 pairs", "Pair conformers: 6 × 3 = 18 pairs", "Select this structure"]);
+    // (paired: its export says how many it writes, and no pairing offered again)
+    const { pair: _pair, ...paired } = { ...held, paired: 18 };
+    expect(menu(target({ kind: "atom", id: 1 }), { pageMap: { held: paired } }).listed).toEqual(["Unpaired electron", "Hide atom map", "Export reaction in 3D… (18 pairs of conformers)", "Conformers: 6 × 3 = 18 pairs", "Select this structure"]);
+  });
+
+  it("offers a complete map renumbered, and says a partial one needs every atom mapped", () => {
+    const held = { standing: "ready" as const, shown: true, maps: 1, chosen: 0, onShow: none, onOther: none, onRenumber: none, onExport: none };
+    expect(menu(target({ kind: "atom", id: 1 }), { pageMap: { held } }).listed).toEqual(["Unpaired electron", "Hide atom map", "Renumber atoms", "Export reaction in 3D…", "Select this structure"]);
+    expect(menu(target({ kind: "atom", id: 1 }), { pageMap: { held: { ...held, standing: "incomplete" } } }).listed).toContain("Renumber atoms (needs every atom mapped)");
+  });
+
+  it("says on a mapped structure how many conformer pairs its sides make, and those not numbered", () => {
+    const held = { standing: "ready" as const, shown: true, maps: 1, chosen: 0, onShow: none, onOther: none, onExport: none, conformers: ["Conformers: 6 × 3 = 18 pairs", "Not numbered: 1 of 6 conformers of Before"] };
+    expect(menu(target({ kind: "atom", id: 1 }), { pageMap: { held } }).listed).toEqual(["Unpaired electron", "Hide atom map", "Export reaction in 3D…", "Conformers: 6 × 3 = 18 pairs", "Not numbered: 1 of 6 conformers of Before", "Select this structure"]);
+  });
+
+  it("offers the structures selected made one, and one of several parts taken apart", () => {
+    const here = { ...target({ selection: "here", drawing: true }), kind: "atom" as const, id: 1 };
+    expect(menu(here, { parts: { onJoin: none } }).listed[0]).toBe("Make one structure");
+    expect(menu(target({ kind: "atom", id: 1 }), { parts: { onSeparate: none } }).listed).toEqual(["Unpaired electron", "Separate", "Select this structure"]);
+  });
+
   it("offers a record of a stack of drawings its stack laid out as a grid - or, laid out, stacked again", () => {
     expect(menu(target({ kind: "atom", id: 1 }), { records: { spread: false, run: none } }).listed).toEqual(["Unpaired electron", "Select this structure", "Lay out as a grid"]);
     expect(menu(target({ kind: "bond", id: 2 }), { records: { spread: true, run: none } }).listed).toEqual(["Select this structure", "Stack again"]);
@@ -133,6 +174,16 @@ describe("the right-click menu", () => {
     expect(menu(target({ kind: "pdf", id: 1 }), { pdf: { ...spread, onRows: none } }).listed).toEqual(expect.arrayContaining(["Gather pages", "Put pages in rows"]));
   });
 
+  it("offers to print a PDF - and where its author does not allow it, says so beside the command, which cannot be pressed", () => {
+    const pdf = { spread: false, icon: false, onSpread: none, onIcon: none, onRead: none, onNumbers: none, onPages: none, onSave: none, onPrint: none };
+    const allowed = menu(target({ kind: "pdf", id: 1 }), { pdf });
+    expect(allowed.listed.slice(allowed.listed.indexOf("Save as PDF…"))).toEqual(["Save as PDF…", "Print…"]);
+    expect(allowed.html).not.toMatch(/<button[^>]*disabled=""[^>]*><span>Print…/);
+    const refused = menu(target({ kind: "pdf", id: 1 }), { pdf: { ...pdf, printNot: true } });
+    expect(refused.listed).toContain("Print… (its author does not allow printing)");
+    expect(refused.html).toMatch(/<button[^>]*disabled=""[^>]*><span>Print… \(its author does not allow printing\)/);
+  });
+
   it("offers a new PDF from a PDF - its pages numbered, or arranged - and it written to a file; several selected, made one", () => {
     const pdf = { spread: false, icon: false, onSpread: none, onIcon: none, onRead: none, onNumbers: none, onPages: none, onSave: none };
     const one = menu(target({ kind: "pdf", id: 1 }), { pdf });
@@ -142,6 +193,8 @@ describe("the right-click menu", () => {
     expect(one.html).toMatch(/role="separator"[^>]*><\/div><button[^>]*><span>Page numbers…/);
     const two = menu(target({ kind: "pdf", id: 1 }), { pdf, onCombinePdfs: none });
     expect(two.listed.slice(two.listed.indexOf("Page numbers…"))).toEqual(["Page numbers…", "Pages…", "Combine into one PDF", "Save as PDF…"]);
+    // (printing is offered where the PDF's pages can be printed)
+    expect(one.listed).not.toContain("Print…");
   });
 
   it("offers words' bold, italic and a list among their icons - ticked as they are - their size, line spacing and typeface under them, and how their lines lie listed", () => {
@@ -276,6 +329,20 @@ describe("a set's menu", () => {
     expect(menu(set, { keepInFile: { kept: true, set: none } }).listed).not.toContain("Open as a table");
   });
 
+  it("offers a result set wired on - held off the page, or shown - to be shown on the page, first; and no other set", () => {
+    const set = target({ kind: "set", id: 4 });
+    expect(menu(set, { shownOnPage: { shown: false, set: none }, onOpenAsTable: none }).listed.slice(0, 2)).toEqual(["Show on the page", "Open as a table"]);
+    expect(menu(set).listed).not.toContain("Show on the page");
+  });
+
+  it("offers on a wire from a result set held off the page to show its results, and Delete wire still", () => {
+    const wire = target({ kind: "wire", id: 9 });
+    const held = menu(wire, { shownOnPage: { shown: false, set: none } });
+    expect([...held.listed, ...held.icons]).toEqual(expect.arrayContaining(["Show its results on the page", "Delete wire"]));
+    const plain = menu(wire);
+    expect([...plain.listed, ...plain.icons]).not.toContain("Show its results on the page");
+  });
+
   it("says what goes with a set that holds its molecules itself, before it is deleted", () => {
     const set = target({ kind: "set", id: 7 });
     // (in words, listed - not an icon whose name shows only on hover)
@@ -283,5 +350,40 @@ describe("a set's menu", () => {
     expect([own.icons, own.listed[own.listed.length - 1]]).toEqual([[], "Delete set and the 118 molecules it holds"]);
     const plain = menu(set);
     expect([plain.icons, plain.listed.some((n) => n.includes("it holds"))]).toEqual([["Delete set"], false]);
+  });
+});
+
+describe("an arrow's menu and its atom map", () => {
+  const arrowMenu = (atomMap?: object) =>
+    menu(target({ kind: "arrow", id: 1 }), {
+      arrow: {
+        kind: null,
+        setKind: none,
+        heads: 1,
+        setHeads: none,
+        full: false,
+        setFull: none,
+        dash: false,
+        setDash: none,
+        weight: "regular",
+        setWeight: none,
+        ...(atomMap ? { atomMap } : {}),
+      } as never,
+    });
+  const map = (over: object = {}) => ({ standing: "none", shown: false, maps: 0, chosen: 0, onMake: none, onShow: none, onOther: none, onExport: none, ...over });
+
+  it("makes the map of an arrow that means a reaction, and has none for one that does not", () => {
+    expect(arrowMenu(map()).listed).toContain("Atom map");
+    // (an arrow that means none is given no map at all: its menu has no such row - nothing disabled to teach a rule)
+    expect(arrowMenu().listed).not.toContain("Atom map");
+  });
+
+  it("says a map from before is not a reaction's now, and takes it off - nothing else of it", () => {
+    const listed = arrowMenu(map({ standing: "refused", onRemove: none })).listed;
+    expect(listed).toContain("Not a reaction now");
+    expect(listed).toContain("Remove map");
+    expect(listed).not.toContain("Atom map");
+    expect(listed).not.toContain("Hide atom map");
+    expect(listed).not.toContain("Show atom map");
   });
 });

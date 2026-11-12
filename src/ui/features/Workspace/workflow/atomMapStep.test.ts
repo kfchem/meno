@@ -1,14 +1,17 @@
 import { describe, expect, it } from "vitest";
 import type { Molecule } from "../../../../lib/chem/molecule";
 import { dielsAlder, sn2 } from "../../../../lib/chem/reactionMap.fixtures";
-import { setEntries, type SetEntry } from "./entries";
-import { measuredSet } from "./structureSteps";
+import { calcRenumbered, keptRenumbered, setEntries, unlikeMade, type SetEntry } from "./entries";
+import { atomMapPlan, measuredSet } from "./structureSteps";
 import { kindInfo } from "./kinds";
-import { runMenoPair } from "./meno";
+import { runMeno, runMenoPair } from "./meno";
+import { energiesFrom } from "./setTable";
+import { convergedAt, convergedIn, convergedOf } from "./converged";
+import type { Molecule3D } from "../store/types";
 import { addMolecule3d, emptyWorkspaceDocument } from "../document";
 import { addSet, addStep, connect } from "./model";
 import { resultOf } from "./flow";
-import { runStep, type RunWith } from "./run";
+import { resultsOf, runStep, type RunWith } from "./run";
 import { setName } from "./doers";
 import { BETWEEN } from "./look";
 
@@ -67,15 +70,49 @@ describe("Atom map, as a step: a reaction's products onto its reactants", () => 
     ]);
   });
 
-  it("never passes on a product not finished as one that is; a finished one keeps its energy and imaginary frequencies, its calculation said not carried", () => {
+  it("never passes on a product not finished as one that is; a finished one keeps its energy, its imaginary frequencies and what they are of, its results renumbered, what cannot be said not carried", () => {
     const unfinished = { ...product, energy: -5.5, failed: { kind: "not-converged", why: "100 cycles" } } as SetEntry;
     const o = ok(runMenoPair("atom-map", { entries: [unfinished], holds: "molecules" }, { entries: [reactant], holds: "molecules" }, R));
     expect(o.kept).toEqual([]);
     expect(o.aside.map((e) => [String(e.properties?.set_aside?.value), e.energy])).toEqual([["not finished: not converged", -5.5]]);
-    const finished = { ...product, energy: -5.5, imaginary: [-412.3], calc: { program: "xtb", readers: ["xtb 1"] } } as unknown as SetEntry;
+    const calc = { program: "xtb", version: "6.7.1", method: "GFN2-xTB", readers: ["xtb 1"], charge: 0, multiplicity: 1, imaginary: [-412.3] };
+    // (a value of the molecule, one of each atom - atom i's, i / 10 - and one of a pair of atoms, 0 and 15)
+    const dipole = { id: "dipole", group: "Dipole", label: "Dipole", on: "molecule", value: 1.2, quantity: "dipole" } as const;
+    const charges = { id: "q", group: "Partial charges", label: "Mulliken", on: "atoms", values: product.atoms.map((_, i) => i / 10), quantity: "charge" } as const;
+    const bondOrder = { id: "bo", group: "Bond orders", label: "Wiberg", on: "pairs", pairs: [[0, 15, 0.9]] } as const;
+    const finished = { ...product, energy: -5.5, imaginary: [-412.3], calc: { ...calc, results: [dipole, charges, bondOrder], held: [0, 15] } } as unknown as SetEntry;
     const f = ok(runMenoPair("atom-map", { entries: [finished], holds: "molecules" }, { entries: [reactant], holds: "molecules" }, R));
-    expect([f.kept[0].energy, f.kept[0].imaginary, f.kept[0].calc]).toEqual([-5.5, [-412.3], undefined]);
-    expect(f.said).toBe("1 of 1 mapped, its calculation not carried");
+    // (what the calculation was, kept, and its results - each atom's value at its atom, the pair's atoms and those held as numbered now: nothing said not carried)
+    const order = f.kept[0].atoms.map((a) => da.product.atoms.findIndex((p) => p.x === a.x && p.y === a.y && p.z === a.z));
+    expect(order.some((j, at) => j !== at)).toBe(true);
+    const now = (a: number) => order.indexOf(a);
+    expect([f.kept[0].energy, f.kept[0].imaginary, f.kept[0].calc]).toEqual([
+      -5.5,
+      [-412.3],
+      { ...calc, results: [dipole, { ...charges, values: order.map((j) => j / 10) }, { ...bondOrder, pairs: [[now(0), now(15), 0.9]] }], held: [now(0), now(15)] },
+    ]);
+    expect(f.said).toBe("1 of 1 mapped");
+    // (the output or the wavefunction it was read from, or a list whose rows name atoms, left behind - and said)
+    const mappedWith = (c: object) => ok(runMenoPair("atom-map", { entries: [{ ...finished, calc: c } as unknown as SetEntry], holds: "molecules" }, { entries: [reactant], holds: "molecules" }, R));
+    const modes = { id: "modes", group: "Vibrations", label: "Modes", on: "list", columns: [{ label: "Wavenumber" }], rows: [{ cells: [100], atoms: [0, 1] }] };
+    for (const behind of [{ source: { name: "p.out", sha256: "ab" } }, { wavefunction: { name: "p.molden", sha256: "cd" } }, { results: [dipole, modes] }]) {
+      const f2 = mappedWith({ ...calc, ...behind });
+      expect([f2.kept[0].calc, f2.said]).toEqual(["results" in behind ? { ...calc, results: [dipole] } : calc, "1 of 1 mapped, part of its calculation not carried"]);
+    }
+  });
+
+  it("carries a run's ending converged at a renumbered product's geometry - the same places - the atoms it held numbered as now; one of another geometry not", () => {
+    const how = "optimisation with atoms held" as const;
+    const held = { ...product, converged: convergedAt(how, product.xyz, [0, 15]) } as SetEntry;
+    const [made] = ok(runMenoPair("atom-map", { entries: [held], holds: "molecules" }, { entries: [reactant], holds: "molecules" }, R)).kept;
+    const order = made.atoms.map((a) => da.product.atoms.findIndex((p) => p.x === a.x && p.y === a.y && p.z === a.z));
+    expect(order.some((j, at) => j !== at)).toBe(true);
+    expect(made.converged).toEqual(convergedAt(how, made.xyz, [order.indexOf(0), order.indexOf(15)]));
+    expect(convergedOf(made)).toEqual(made.converged);
+    // (as a file gives it back)
+    expect(convergedIn(JSON.parse(JSON.stringify(made.converged)))).toEqual(made.converged);
+    const elsewhere = { ...product, converged: convergedAt("optimisation", product.xyz.map((v) => v + 0.1)) } as SetEntry;
+    expect(ok(runMenoPair("atom-map", { entries: [elsewhere], holds: "molecules" }, { entries: [reactant], holds: "molecules" }, R)).kept[0].converged).toBeUndefined();
   });
 
   it("names each mapped product apart - two of one name by their places - under a name of Meno's own, replacing and saying one the product carried; its vibrations kept", () => {
@@ -225,6 +262,44 @@ describe("Atom map, as a step: conformers onto their species", () => {
     expect(o.kept).toEqual([]);
     expect(String(o.aside[0].properties?.set_aside?.value)).toMatch(/^The map has bonds .* formed, .* of another order, and its bonds are to stay the same\.$/);
   });
+
+  it("keeps a compound's energies where only some of its conformers are renumbered: each still of the one calculation, written as one molecule, and an Energy window after it runs", () => {
+    // (conformers as a search gives them: their energies of its calculation, and how they were made; a CIP label on C1=C2, bond 0)
+    const calc = { readers: ["meno"], program: "RDKit", version: "2026.03.6", method: "MMFF94" };
+    const keep = { drawnFrom: [1, 2, 3, null, null, null, null, null, null], drawnAs: "propene", made: { method: "ETKDG v3, MMFF94", how: [], energies: "MMFF94" }, stereo: { atoms: {}, bonds: { 0: "E" } } };
+    const conformer = (swapped: boolean, energy: number, number: number) => propene(swapped, { energy, number, calc, keep } as unknown as Partial<SetEntry>);
+    const o = ok(runMenoPair("atom-map", { entries: [conformer(false, -1.5, 1), conformer(true, -1.4, 2)], holds: "conformers" }, { entries: [propene()], holds: "molecules" }, same));
+    expect(o.said).toBe("2 of 2 mapped");
+    expect(o.kept.map((e) => [e.energy, e.calc, e.keep])).toEqual([
+      [-1.5, calc, keep],
+      [-1.4, calc, keep],
+    ]);
+    expect(unlikeMade(o.kept)).toBeNull();
+    // (as the step writes them to the page: one molecule, its two energies, what worked them out said)
+    const [m] = resultsOf(o, "atom-map").molecules;
+    expect([m.energies, energiesFrom(m), m.made]).toEqual([[-1.5, -1.4], energiesFrom({ calc, energies: [-1.5], made: keep.made }), keep.made]);
+    const window = runMeno("energy-window", setEntries([{ ...m, id: 1 } as Molecule3D], "conformers"), "conformers", { window: 3 });
+    expect(window).toMatchObject({ ok: true });
+  });
+
+  it("renumbers what a renumbered conformer keeps with it: the drawing's atom each atom is, its labels, the atoms its calculation held", () => {
+    // (H4 and H5 swapped: bond 2, C1-H4, now C1-H5, bond 3, and the other way round)
+    const now = [0, 1, 2, 4, 3, 5, 6, 7, 8];
+    const kept = { drawnFrom: [1, 2, 3, 4, 5, null, null, null, null], drawnAs: "d", made: { how: [] }, stereo: { atoms: { 3: "a" }, bonds: { 2: "b", 0: "E" }, shown: { atoms: [3], bonds: [2] } }, centres: [{ metal: 3, atoms: [0, 4] }] };
+    expect(keptRenumbered(kept, now, now, [0, 1, 3, 2, 4, 5, 6, 7])).toEqual({
+      drawnFrom: [1, 2, 3, 5, 4, null, null, null, null],
+      drawnAs: "d",
+      made: { how: [] },
+      stereo: { atoms: { 4: "a" }, bonds: { 3: "b", 0: "E" }, shown: { atoms: [4], bonds: [3] } },
+      centres: [{ metal: 4, atoms: [0, 3] }],
+    });
+    // (the swap its own inverse: `now` is the order too)
+    expect(calcRenumbered({ readers: ["meno"], method: "GFN2-xTB", held: [3, 0], results: [], source: { name: "a.out", sha256: "ab" } } as never, now)).toEqual({
+      calc: { readers: ["meno"], method: "GFN2-xTB", held: [4, 0] },
+      leftBehind: true,
+    });
+    expect(calcRenumbered({ readers: ["meno"], held: [3] }, now)).toEqual({ calc: { readers: ["meno"], held: [4] }, leftBehind: false });
+  });
 });
 
 describe("Atom map, as a step: sides of several structures", () => {
@@ -253,12 +328,163 @@ describe("Atom map, as a step: sides of several structures", () => {
     expect(k.needs?.({})).toBe("Choose how the molecules are taken");
     expect(k.needs?.({ moleculesAre: "each" })).toBe("Choose how the reference is taken");
     expect(k.needs?.({ moleculesAre: "each", referenceIs: "each" })).toBe("Choose whether bonds may change");
-    expect(k.needs?.({ moleculesAre: "together", referenceIs: "each", bonds: "change", reference: "property", property: "species" })).toBe(
-      "Matched on a property takes each entry on its own: set both inputs to each its own",
+    // (matched on a property, together is one side for each value of it)
+    expect(k.needs?.({ moleculesAre: "together", referenceIs: "together", bonds: "change", reference: "property", property: "" })).toBe("Name the property to pair them on");
+    expect(k.needs?.({ moleculesAre: "together", referenceIs: "together", bonds: "change", reference: "property", property: "reaction" })).toBeUndefined();
+    expect(k.how?.({ moleculesAre: "together", referenceIs: "together", bonds: "change", maps: "first", reference: "property", property: "reaction" })).toBe(
+      "molecules as one side per reaction, reference as one side per reaction, bonds may change, matched on reaction",
     );
+    expect(k.how?.({ moleculesAre: "each", referenceIs: "each", bonds: "change", maps: "first", reference: "order" })).toBe("bonds may change, in order");
     expect(k.how?.({ moleculesAre: "each", referenceIs: "together", bonds: "change", maps: "first", reference: "one" })).toBe("reference as one side, bonds may change");
     expect(k.how?.({ moleculesAre: "each", referenceIs: "each", bonds: "same", maps: "every", reference: "property", property: "species" })).toBe(
       "bonds stay the same, every map, matched on species",
     );
+  });
+});
+
+describe("Atom map, as a step: one side per reaction, and sides in order", () => {
+  const da = dielsAlder();
+  const { reactant: sn2Reactant, product: sn2Product } = sn2();
+  /** The atoms of a molecule at `idx`, as a molecule of its own (the bonds between them kept). */
+  const part = (m: Molecule, idx: number[], charged?: string): Molecule => ({
+    atoms: idx.map((i) => ({ ...m.atoms[i], ...(m.atoms[i].el === charged ? { charge: -1 } : {}) })),
+    bonds: m.bonds.filter((b) => idx.includes(b.a1) && idx.includes(b.a2)).map((b) => ({ ...b, a1: idx.indexOf(b.a1), a2: idx.indexOf(b.a2) })),
+  });
+  const upTo = (n: number) => Array.from({ length: n }, (_, i) => i);
+  const rest = (m: Molecule, n: number) => Array.from({ length: m.atoms.length - n }, (_, i) => n + i);
+  const tagged = (e: SetEntry, reaction: string, name: string): SetEntry =>
+    ({ ...e, name, properties: { ...e.properties, reaction: { value: reaction, unit: "none", status: "computed" } } }) as SetEntry;
+  // (butadiene's atoms are the first ten of the stack, ethylene's the last six; CH3Br the atoms but Cl, chloride alone)
+  const cl = sn2Reactant.atoms.findIndex((a) => a.el === "Cl");
+  const br = sn2Product.atoms.findIndex((a) => a.el === "Br");
+  const without = (m: Molecule, i: number) => m.atoms.map((_, k) => k).filter((k) => k !== i);
+  const reactants = (charge?: string) => [
+    tagged(entryOf(part(da.reactants[0], upTo(10))), "1", "butadiene"),
+    tagged(entryOf(part(da.reactants[0], rest(da.reactants[0], 10))), "1", "ethylene"),
+    tagged(entryOf(part(sn2Reactant, without(sn2Reactant, cl))), "2", "bromomethane"),
+    tagged(entryOf(part(sn2Reactant, [cl], charge)), "2", "chloride"),
+  ];
+  const products = (charge?: string) => [
+    tagged(entryOf(da.product), "1", "cyclohexene"),
+    tagged(entryOf(part(sn2Product, without(sn2Product, br))), "2", "chloromethane"),
+    tagged(entryOf(part(sn2Product, [br], charge)), "2", "bromide"),
+  ];
+  const together = { moleculesAre: "together", referenceIs: "together", bonds: "change", reference: "property", property: "reaction" };
+
+  it("maps each reaction's products as one side onto its reactants as one side, matched on a property: two reactions in one set", () => {
+    const [bd, eth, mebr, cl_] = reactants("Cl");
+    const [cyc, mecl, br_] = products("Br");
+    expect(atomMapPlan([cyc, mecl, br_], [bd, eth, mebr, cl_], together)).toEqual({
+      groups: [
+        { reference: [0, 1], sides: [[0]] },
+        { reference: [2, 3], sides: [[1, 2]] },
+      ],
+      aside: [],
+      sides: 2,
+    });
+    const o = ok(runMenoPair("atom-map", { entries: [cyc, mecl, br_], holds: "molecules" }, { entries: [bd, eth, mebr, cl_], holds: "molecules" }, together));
+    // (the tags of the parts are not carried onto the side they make: said)
+    expect(o.said).toBe("2 of 2 mapped, the parts' own values not carried");
+    expect(o.kept.map((e) => e.atoms.length)).toEqual([16, 6]);
+    expect(o.tables!.changes.rows.map((r) => r[0])).toContain("chloromethane + bromide");
+    expect(o.tables!.changes.rows.map((r) => r[0])).toContain("cyclohexene");
+  });
+
+  it("sets aside a side whose value no reference has, or that has none, saying why", () => {
+    const [bd, eth, mebr, cl_] = reactants("Cl");
+    const [cyc, mecl, br_] = products("Br");
+    const three = tagged(entryOf(da.product), "3", "orphan");
+    const none = entryOf(da.product, 0, { name: "untagged" } as Partial<SetEntry>);
+    const o = ok(runMenoPair("atom-map", { entries: [cyc, three, none, mecl, br_], holds: "molecules" }, { entries: [bd, eth, mebr, cl_], holds: "molecules" }, together));
+    expect(o.said).toBe("2 of 4 mapped, 2 not mapped, the parts' own values not carried");
+    expect(o.aside.map((e) => [e.name, e.properties?.set_aside?.value])).toEqual([
+      ["orphan", "not paired: no reference with reaction = 3"],
+      ["untagged", "not paired: it has no reaction"],
+    ]);
+  });
+
+  it("maps a side only onto a reference of its own charge: chloride and bromomethane against chloromethane and bromide maps, bromide drawn neutral does not", () => {
+    const refs = reactants("Cl");
+    const ok1 = ok(runMenoPair("atom-map", { entries: products("Br").slice(1), holds: "molecules" }, { entries: refs.slice(2), holds: "molecules" }, together));
+    expect(ok1.said).toBe("1 of 1 mapped, the parts' own values not carried");
+    const o = ok(runMenoPair("atom-map", { entries: products().slice(1), holds: "molecules" }, { entries: refs.slice(2), holds: "molecules" }, together));
+    expect(o.kept).toEqual([]);
+    expect(o.aside.map((e) => e.properties?.set_aside?.value)).toEqual(["charge 0 here, -1 in the reference", "charge 0 here, -1 in the reference"]);
+  });
+
+  it("does not filter the reagents: one left in Reference makes its side unbalanced, refused with the mapper's words", () => {
+    const [bd, eth] = reactants();
+    const reagent = tagged(entryOf(part(sn2Reactant, without(sn2Reactant, cl))), "1", "reagent");
+    const o = ok(runMenoPair("atom-map", { entries: [products()[0]], holds: "molecules" }, { entries: [bd, eth, reagent], holds: "molecules" }, together));
+    expect(o.kept).toEqual([]);
+    expect(String(o.aside[0].properties?.set_aside?.value)).toMatch(/^It has 16 atoms and the reference 21: every atom must map/);
+  });
+
+  it("takes the k-th side of Molecules onto the k-th of Reference, and refuses unequal counts saying both", () => {
+    const order = { moleculesAre: "each", referenceIs: "each", bonds: "change", reference: "order" };
+    const stack = entryOf(da.reactants[0]);
+    const sn = entryOf(sn2Reactant);
+    const dp = entryOf(da.product);
+    const sp = entryOf(sn2Product);
+    const o = ok(runMenoPair("atom-map", { entries: [dp, sp], holds: "molecules" }, { entries: [stack, sn], holds: "molecules" }, order));
+    expect(o.said).toBe("2 of 2 mapped");
+    expect(o.kept.map((e) => e.atoms.length)).toEqual([16, 6]);
+    // (by place, never by which one fits: the other way round, neither maps)
+    const swapped = ok(runMenoPair("atom-map", { entries: [sp, dp], holds: "molecules" }, { entries: [stack, sn], holds: "molecules" }, order));
+    expect(swapped.kept).toEqual([]);
+    expect(swapped.said).toBe("0 of 2 mapped, 2 not mapped");
+    expect(runMenoPair("atom-map", { entries: [dp, sp], holds: "molecules" }, { entries: [stack, sn, stack], holds: "molecules" }, order)).toEqual({
+      ok: false,
+      said: "Molecules holds 2 and Reference 3: in order, each side is paired with the reference side in its place",
+    });
+  });
+
+  it("offers the three ways to match: the one reference, in order, or on a property", () => {
+    const against = kindInfo("atom-map").options!.find((o) => o.id === "reference")!;
+    expect("choices" in against && against.choices.map((c) => c.value)).toEqual(["one", "order", "property"]);
+  });
+
+  it("refuses an empty Reference - a Filter may keep nothing - never crashing, with each way of matching and each side taking", () => {
+    const [cyc] = products();
+    const plan = (reference: string, referenceIs: string) => atomMapPlan([cyc], [], { moleculesAre: "together", referenceIs, bonds: "change", reference, property: "reaction" });
+    expect(plan("one", "together")).toEqual({ refused: "Nothing comes into Reference" });
+    expect(plan("one", "each")).toEqual({ refused: "Against the one reference, but 0 came into Reference: match them on a property, or take the reference as one side" });
+    for (const referenceIs of ["each", "together"]) {
+      expect(plan("order", referenceIs)).toEqual({ refused: "Nothing comes into Reference" });
+      // (matched on a property: no reference has its value, so its side is not mapped, saying why)
+      expect(plan("property", referenceIs)).toEqual({ groups: [], aside: [{ entry: 0, why: "not paired: no reference with reaction = 1" }], sides: 1 });
+    }
+  });
+
+  it("refuses a value held by several entries of Reference, each its own: no product is paired with whichever came first", () => {
+    const [bd, eth] = reactants();
+    const [cyc] = products();
+    const each = { moleculesAre: "each", referenceIs: "each", bonds: "change", reference: "property", property: "reaction" };
+    const o = ok(runMenoPair("atom-map", { entries: [cyc], holds: "molecules" }, { entries: [bd, eth], holds: "molecules" }, each));
+    expect(o.kept).toEqual([]);
+    expect(o.aside.map((e) => e.properties?.set_aside?.value)).toEqual(["not paired: 2 entries of Reference have its reaction, 1"]);
+  });
+
+  it("takes together or each its own on either input alone, matched on a property: two entries of one value one side, or two sides", () => {
+    const [bd, eth] = reactants();
+    const [cyc, mecl, br_] = products();
+    const [, , mebr, cl_] = reactants();
+    const whole = tagged(entryOf(sn2Reactant), "2", "SN2 reactants");
+    const wholeProduct = tagged(entryOf(sn2Product), "2", "SN2 products");
+    const on = { bonds: "change", reference: "property", property: "reaction" };
+    // (the products together onto the one reactant entry of their value; the reactants together onto the one product entry)
+    const a = ok(runMenoPair("atom-map", { entries: [mecl, br_], holds: "molecules" }, { entries: [whole], holds: "molecules" }, { ...on, moleculesAre: "together", referenceIs: "each" }));
+    expect(a.said).toBe("1 of 1 mapped, the parts' own values not carried");
+    const b = ok(runMenoPair("atom-map", { entries: [wholeProduct], holds: "molecules" }, { entries: [mebr, cl_], holds: "molecules" }, { ...on, moleculesAre: "each", referenceIs: "together" }));
+    expect(b.said).toBe("1 of 1 mapped");
+    // (each its own on Molecules: two products of one reaction are two sides, each onto the reactants together)
+    const c = ok(runMenoPair("atom-map", { entries: [cyc, tagged(entryOf(da.product), "1", "cyclohexene again")], holds: "molecules" }, { entries: [bd, eth], holds: "molecules" }, { ...on, moleculesAre: "each", referenceIs: "together" }));
+    expect(c.said).toBe("2 of 2 mapped");
+  });
+
+  it("counts what is not mapped by sides: two entries that are one unmapped side say 1, not 2", () => {
+    const o = ok(runMenoPair("atom-map", { entries: products().slice(1), holds: "molecules" }, { entries: [entryOf(da.reactants[0])], holds: "molecules" }, { moleculesAre: "together", referenceIs: "each", bonds: "change" }));
+    expect(o.aside).toHaveLength(2);
+    expect(o.said).toBe("0 of 1 mapped, 1 not mapped");
   });
 });

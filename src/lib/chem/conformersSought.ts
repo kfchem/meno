@@ -18,7 +18,7 @@
  * heavy atoms: hydrogens, carried or not, change nothing.
  */
 import type { Option, OptionValues } from "../options";
-import { symmetryClasses } from "../layout/canonical";
+import { symmetryOrbits } from "../layout/canonical";
 import { smallestRings } from "../layout/rings";
 import { readMolfile } from "./ctfile";
 import { aromaticIn } from "./aromaticity";
@@ -159,13 +159,17 @@ export function turningBonds(atoms: readonly SoughtAtom[], bonds: readonly Sough
   };
   const lonePair = (i: number) => ["N", "O", "S"].includes(atoms[i].el) && (atoms[i].charge ?? 0) <= 0;
   const acyl = (i: number) => atoms[i].el === "C" && around[i].some(([j, o]) => o === 2 && ["O", "N", "S"].includes(atoms[j].el));
-  // (a lone pair's atom carrying two alike - by the molecule's symmetry classes, worked out only where asked)
-  let classes: number[] | null = null;
+  // (a lone pair's atom carrying two alike - in one orbit of the symmetries that keep the flat bond itself in place: one of
+  //  them swaps the two, so the bond's two forms are one shape. The bond's own atoms marked apart from every other atom, so
+  //  an automorphism that moves it onto another bond is not one of them. Not by symmetry classes, which can join two atoms
+  //  no automorphism takes onto each other - fewer conformers sought, the unsafe way - while orbits are never coarser than
+  //  the true ones, and finer at worst where the search is cut short: more sought. Worked out only where asked)
   const twoAlike = (i: number, other: number) => {
     const rest = heavyAround(i).filter(([j]) => j !== other);
     if (rest.length !== 2) return false;
-    classes ??= symmetryClasses({ atoms, bonds });
-    return classes[rest[0][0]] === classes[rest[1][0]];
+    const marked = atoms.map((a, k) => (k === i || k === other ? { ...a, el: `${a.el}*` } : a));
+    const { orbit } = symmetryOrbits({ atoms: marked, bonds });
+    return orbit[rest[0][0]] === orbit[rest[1][0]];
   };
   const flat = (i: number, j: number) => (acyl(i) && lonePair(j) && twoAlike(j, i)) || (acyl(j) && lonePair(i) && twoAlike(i, j));
   // (an end N, O or S's hydrogens - those bonded to it as atoms, or those its valence leaves - whose turn gives conformers of
@@ -296,11 +300,34 @@ export function conformersSoughtOf(molblock: string): number | null {
 }
 
 /**
+ * What the window for new conformers in a search in rounds says under it,
+ * the window being the chemist's own: what it is for, a guide - not a
+ * default - and what energies it is of.
+ */
+export const WITHIN_GUIDE =
+  "Meno sets none: give your own. A round that brings no new conformer within this of the lowest is the last. As a guide, at 298.15 K one 2.73\u00a0kcal/mol above the lowest weighs 1/100 as much (RT\u00a0ln\u00a0100). The energies are the search's own force field's.";
+/** The window's guide in Settings, for the page: Meno's value said, the chemist's to change (lib/settings/appSettings `WITHIN_3D`); the guide as `WITHIN_GUIDE`'s. */
+export const pageWithinGuide = (within: number) => WITHIN_GUIDE.replace("Meno sets none: give your own.", `Meno's is ${within}\u00a0kcal/mol; yours to change.`);
+/** What a search in rounds given no window needs, wherever it is asked. */
+export const WITHIN_NEEDED = "Give the window for new conformers, in kcal/mol";
+
+/** A search in rounds' own values, where a chemist has set them (Settings, or a step): its window for new conformers, its first round, the most it tries. */
+export type RoundsChosen = { within?: number; first?: number; most?: number };
+/** Settings' values for a search in rounds (lib/settings/appSettings `ChemistrySettings`), as `soughtOptions` takes them. */
+export const roundsChosen = (s: { within3d?: number; first3d?: number; most3d?: number }): RoundsChosen => ({ within: s.within3d, first: s.first3d, most: s.most3d });
+
+/**
  * How many conformers are sought, Meno's choice for any conformer search
  * that takes a number of tries (a plugin's role says it does: `tries`) - on
  * the page, from Settings; on a *Conformers* step, from its own options.
+ * Where its search gives another set of tries for each draw (`draws`), as
+ * many as the molecule needs is asked in rounds (chem/conformerRounds),
+ * with their own options - `rounds`, from Settings: the window for new
+ * conformers, the chemist's own, none until given; the first round, 0 the
+ * molecule's own count; the most tried.
  */
-export function soughtOptions(sought: "needed" | "fixed" = "needed", count = RING_CONFORMERS): Option[] {
+export function soughtOptions(sought: "needed" | "fixed" = "needed", count = RING_CONFORMERS, rounds?: RoundsChosen): Option[] {
+  const needed = { when: { id: "sought", in: ["needed"] } };
   return [
     {
       id: "sought",
@@ -313,7 +340,43 @@ export function soughtOptions(sought: "needed" | "fixed" = "needed", count = RIN
       default: sought,
     },
     { id: "count", when: { id: "sought", in: ["fixed"] }, label: "How many", type: "number", default: count, min: 1, max: MOST_CONFORMERS, step: 1, whole: true },
+    ...(rounds
+      ? ([
+          { id: "within", ...needed, label: "New conformers within", type: "number", default: rounds.within ?? Number.NaN, min: 0, step: 0.5, unit: "kcal/mol", note: WITHIN_GUIDE },
+          {
+            id: "first",
+            ...needed,
+            label: "First round",
+            type: "number",
+            default: rounds.first ?? 0,
+            unset: 0,
+            min: 0,
+            max: MOST_CONFORMERS,
+            step: 1,
+            whole: true,
+            note: "0: the molecule's own count, by the bonds that turn. Then as many again, then each twice the one before.",
+          },
+          { id: "most", ...needed, label: "Tried at most", type: "number", default: rounds.most ?? MOST_CONFORMERS, min: 1, max: MOST_CONFORMERS, step: 1, whole: true },
+        ] satisfies Option[])
+      : []),
   ];
+}
+
+/**
+ * A search in rounds as its options ask it (`soughtOptions`): its window,
+ * its first round - the chemist's, else the molecule's own (`needed`) - and
+ * the most it tries, each kept to what it may be; or what it still needs
+ * (`WITHIN_NEEDED`), or null where it is not asked in rounds: a number of
+ * the chemist's own ("fixed"), or no window option offered.
+ */
+export function roundsAsked(values: OptionValues, needed: () => number | null): { window: number; first: number; most: number } | { needs: string } | null {
+  if (values.sought === "fixed" || !("within" in values)) return null;
+  const window = values.within;
+  if (typeof window !== "number" || !Number.isFinite(window) || window < 0) return { needs: WITHIN_NEEDED };
+  const most = typeof values.most === "number" && Number.isFinite(values.most) ? Math.min(Math.max(1, Math.round(values.most)), MOST_CONFORMERS) : MOST_CONFORMERS;
+  const chosen = typeof values.first === "number" && Number.isFinite(values.first) && values.first >= 1 ? Math.round(values.first) : null;
+  const first = Math.min(Math.max(1, chosen ?? needed() ?? RING_CONFORMERS), most);
+  return { window, first, most };
 }
 
 /** The number to try, as the choice (`soughtOptions`) gives it: the number asked for, kept to 1-`MOST_CONFORMERS`, or the molecule's (`needed`, worked out only then). */

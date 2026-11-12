@@ -1,7 +1,10 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import ConversationBody from "./conversation/ConversationBody";
+import { COLUMN_TAB } from "./conversation/tabs";
+import type { Conversation } from "./conversation/types";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import clsx from "clsx";
-import { ArrowsPointingInIcon, ArrowsPointingOutIcon, ArrowUpTrayIcon, ChevronDoubleRightIcon, ChevronDownIcon, ChevronUpIcon, CodeBracketIcon, ExclamationTriangleIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { ArrowsPointingInIcon, ArrowsPointingOutIcon, ArrowUpTrayIcon, ChatBubbleLeftRightIcon, ChevronDoubleRightIcon, ChevronDownIcon, ChevronUpIcon, CodeBracketIcon, ExclamationTriangleIcon, MagnifyingGlassIcon, StopCircleIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { exists } from "@tauri-apps/plugin-fs";
 import { writeDocument } from "../../../lib/io/writeDocument";
@@ -11,6 +14,8 @@ import MarkdownBody from "../TextEditor/MarkdownBody";
 import { isMarkdown } from "../../../lib/text/markdown";
 import { DURATION, EASE_SLIDE, FADE } from "../../theme/motion";
 import { useEditor, useEditorStore } from "./store";
+import { useLocked } from "../../../lib/doc/locked";
+import LockedPdf from "./LockedPdf";
 import type { LostText, PdfFind, PdfItem, PdfLens, PdfStructurePick, WordPlace, WorkflowSet, WorkspaceText } from "./store/types";
 import SetTableBody from "./workflow/SetTableBody";
 import Select from "../../controls/Select";
@@ -21,8 +26,12 @@ import { COLUMN_NARROWEST, COLUMN_WIDEST, columnWidthFor, jobStateSaid, lostSaid
 import { takenBeside } from "../../../lib/io/beside";
 import { shortcutLabel } from "../../../lib/doc/shortcuts";
 import { isPinch, wheelReader } from "../../../lib/input/wheel";
-import { useAppSettings } from "../../../lib/settings/appSettings";
+import { QUIET_AFTER_MIN, useAppSettings } from "../../../lib/settings/appSettings";
+import { quietFor, quietShort } from "../../../lib/jobs";
 import { pageUnder, pointOn } from "../../../lib/pdf/column";
+import { printed } from "../../../lib/pdf/print";
+import PrintButton from "./components/PrintButton";
+import { usePrinting } from "./hooks/usePrinting";
 import { figureStructuresHad } from "./utils/pdfStructures";
 import { indexOnce, mentionUnder } from "./utils/compoundLens";
 import { PRESS_WIDENED, structureAt, type PageStructure } from "./utils/pageStructures";
@@ -89,11 +98,14 @@ export default function TextColumn({ slideIn = false }: { slideIn?: boolean }) {
   // (molecules in 3D a set holds off the page; or structures drawn, on the page and off it)
   const page = useEditorStore();
   const tables = useMemo(() => setsRead.flatMap((id) => sets.filter((b) => b.id === id && readAsTable(page.getState(), b))), [sets, setsRead, page]);
-  const table = tables.find((b) => b.id === tableId);
-  const pdf = table ? undefined : read.find((p) => p.id === pdfShownId);
-  const shown = pdf || table ? undefined : texts.find((t) => t.id === shownId);
+  // (a conversation read here: over all else - conversation/ConversationBody)
+  const talkId = useEditor((s) => s.conversationShown);
+  const talk = useEditor((s) => (talkId == null ? undefined : s.conversations.find((c) => c.id === talkId)));
+  const table = talk ? undefined : tables.find((b) => b.id === tableId);
+  const pdf = talk || table ? undefined : read.find((p) => p.id === pdfShownId);
+  const shown = talk || pdf || table ? undefined : texts.find((t) => t.id === shownId);
   // (one that could not be read, shown as what it is: no words, nothing to edit or copy)
-  const lostShown = pdf || table || shown ? undefined : lost.find((t) => t.id === shownId);
+  const lostShown = talk || pdf || table || shown ? undefined : lost.find((t) => t.id === shownId);
   // as wide as it was dragged - a text's, as it first opened; a PDF's, most of the canvas
   const [room, setRoom] = useState(0);
   const [roomEl, setRoomEl] = useState<HTMLDivElement | null>(null);
@@ -119,7 +131,7 @@ export default function TextColumn({ slideIn = false }: { slideIn?: boolean }) {
   // (how much of the canvas it covers, as it slides and as it is dragged: what is in view is the rest)
   const store = useEditorStore();
   // (the width the canvas lays a PDF out at in it - not changed as it shuts on what it showed)
-  const showing = open && !!(shown || pdf || table || lostShown);
+  const showing = open && !!(talk || shown || pdf || table || lostShown);
   // (going over to filling the workspace, or back: what it shows laid out at its width as it eases there, frame by
   // frame - laid out at once at the width it goes to, a page jumped to its new size first, and the column then eased)
   const easing = useRef(false);
@@ -158,7 +170,7 @@ export default function TextColumn({ slideIn = false }: { slideIn?: boolean }) {
       {/* (the canvas's width, measured: what the column's share is of) */}
       <div ref={setRoomEl} aria-hidden className="absolute inset-0 pointer-events-none" />
       <AnimatePresence initial={slideIn}>
-        {open && (shown || pdf || table || lostShown) && (
+        {open && (talk || shown || pdf || table || lostShown) && (
           <motion.div
             key="texts"
             ref={setEl}
@@ -175,7 +187,7 @@ export default function TextColumn({ slideIn = false }: { slideIn?: boolean }) {
             }}
             className={clsx("absolute top-0 right-0 z-20 h-full overflow-hidden", dragging && "select-none")}
           >
-            <Column texts={texts} lost={lost} read={read} shown={shown} lostShown={lostShown} pdf={pdf} tables={tables} table={table} width={eased ?? width} />
+            <Column texts={texts} lost={lost} read={read} shown={shown} lostShown={lostShown} pdf={pdf} tables={tables} table={table} talk={talk} width={eased ?? width} />
             {!filled && <Edge width={width} widest={widest} setWidth={setWidth} setDragging={setDragging} />}
           </motion.div>
         )}
@@ -193,6 +205,7 @@ function Column({
   pdf,
   tables,
   table,
+  talk,
   width,
 }: {
   texts: WorkspaceText[];
@@ -203,6 +216,7 @@ function Column({
   pdf?: PdfItem;
   tables: WorkflowSet[];
   table?: WorkflowSet;
+  talk?: Conversation;
   width: number;
 }) {
   const store = useEditorStore();
@@ -214,6 +228,8 @@ function Column({
   const removeLostText = useEditor((s) => s.removeLostText);
   const showPdf = useEditor((s) => s.showPdf);
   const stopReadingPdf = useEditor((s) => s.stopReadingPdf);
+  // (a PDF locked with a password not given: asked for it, where its pages would be read)
+  const locked = useLocked((s) => s.shas);
   const find = useEditor((s) => s.pdfFind);
   const editText = useEditor((s) => s.editText);
   // (a text just made to be written in: given the keys as it shows)
@@ -232,9 +248,25 @@ function Column({
   const logJobs = logOf?.jobs && logOf.jobs.length > 1 ? { jobs: logOf.jobs, job: logOf.job ?? 0 } : null;
   // (how each job stands: as last looked at - or, none looked at, as the step's run said they ended, a workspace reopened)
   const logRan = useEditor((st) => (logOf ? st.steps.find((x) => x.id === logOf.step)?.ran : undefined));
-  const jobState = (id: string) => jobStateSaid(id, jobsSeen, logRan);
+  // (and, running and quiet past what Settings says: for how long it has written nothing)
+  const quietAfter = useAppSettings((st) => st.calculations.quietAfterMin ?? QUIET_AFTER_MIN);
+  const jobState = (id: string) => {
+    const said = jobStateSaid(id, jobsSeen, logRan);
+    const quiet = quietFor(jobsSeen[id], Date.now(), quietAfter);
+    // (in place of "running": the chooser's room is short)
+    return quiet != null ? quietShort(quiet) : said;
+  };
+  // (the job shown, where it waits or runs: one that may be stopped alone - its step going on without it)
+  const shownJob = logJobs ? logJobs.jobs[logJobs.job] : undefined;
+  const stoppable = !!shownJob && (jobsSeen[shownJob]?.state === "waiting" || jobsSeen[shownJob]?.state === "running");
   const markdown = !!shown && isMarkdown(shown.name);
   const source = useShowsSource(store, shown?.id ?? null);
+  const printing = usePrinting(pdf?.sha256);
+  const printPdf = async (p: PdfItem) => {
+    setError(null);
+    const said = await printed(p.sha256, p.pages);
+    if (said) setError(said);
+  };
   const exportText = async (t: WorkspaceText) => {
     try {
       setError(null);
@@ -263,6 +295,7 @@ function Column({
           {read.map((p) => (
             <Name key={`pdf-${p.id}`} name={p.name} title={p.name} chosen={p.id === pdf?.id} onShow={() => showPdf(p.id)} onClose={() => stopReadingPdf(p.id)} />
           ))}
+          {talk && <Name key={`talk-${talk.id}`} name={COLUMN_TAB.name} title={COLUMN_TAB.title} icon={<ChatBubbleLeftRightIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />} chosen onShow={() => {}} onClose={() => store.getState().stopReadingConversation()} />}
           {tables.map((b) => (
             <Name key={`set-${b.id}`} name={setName(b, steps)} title={setName(b, steps)} chosen={b.id === table?.id} onShow={() => showSetTable(b.id)} onClose={() => stopReadingSetTable(b.id)} />
           ))}
@@ -277,6 +310,17 @@ function Column({
             className="shrink-0 max-w-[11rem]"
             variant="quiet"
           />
+        )}
+        {/* (that job alone stopped: failed, "stopped by you" - the step brings in what its other jobs gave, where its Stop would bring in none) */}
+        {shown && stoppable && (
+          <button
+            onClick={() => store.getState().stopJobAlone(shownJob!)}
+            aria-label="Stop this job"
+            title="Stop this job"
+            className="h-7 w-7 shrink-0 rounded-md flex items-center justify-center hover:bg-gh-base"
+          >
+            <StopCircleIcon className="h-4 w-4" />
+          </button>
         )}
         {shown && markdown && (
           <button
@@ -299,6 +343,7 @@ function Column({
             <ArrowUpTrayIcon className="h-4 w-4" />
           </button>
         )}
+        {pdf && <PrintButton printing={printing} shortcut={shortcutLabel("P")} onPrint={() => void printPdf(pdf)} />}
         <button
           onClick={() => setFilled(!filled)}
           aria-label={filled ? "Back beside the canvas" : "Fill the workspace"}
@@ -340,7 +385,8 @@ function Column({
             </div>
           )}
         </AnimatePresence>
-        {pdf && <PdfBody key={`pdf-${pdf.id}`} pdf={pdf} />}
+        {talk && <ConversationBody key={`talk-${talk.id}`} conversation={talk} />}
+        {pdf && (locked.has(pdf.sha256) ? <LockedPdf key={`locked-${pdf.id}`} pdf={pdf} /> : <PdfBody key={`pdf-${pdf.id}`} pdf={pdf} />)}
         {table && (table.collection ? <SetTableBody key={`set-${table.id}`} set={table} /> : <StructuresTableBody key={`set-${table.id}`} set={table} />)}
         {lostShown && (
           <div key={`lost-${lostShown.id}`} role="status" className="absolute inset-0 flex items-start gap-2 px-4 py-3 bg-white text-xs text-gh-black">
@@ -537,7 +583,7 @@ function useTabsFade(row: React.RefObject<HTMLDivElement | null>): React.CSSProp
   return { maskImage: mask, WebkitMaskImage: mask };
 }
 
-function Name({ name, title, chosen, onShow, onClose, unread = false }: { name: string; title: string; chosen: boolean; onShow: () => void; onClose: () => void; unread?: boolean }) {
+function Name({ name, title, icon, chosen, onShow, onClose, unread = false }: { name: string; title: string; icon?: ReactNode; chosen: boolean; onShow: () => void; onClose: () => void; unread?: boolean }) {
   // (chosen - a log just opened, say, its tab past the row's end - its row scrolled, eased, until it is seen whole: the row alone, nothing round it)
   const tab = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -564,12 +610,13 @@ function Name({ name, title, chosen, onShow, onClose, unread = false }: { name: 
     >
       <button onClick={onShow} className="min-w-0 h-full flex items-center gap-1 pl-2 pr-1">
         {unread && <ExclamationTriangleIcon aria-label="Could not be read" className="h-3.5 w-3.5 shrink-0 text-accel-accent" />}
-        <span className="truncate">{name}</span>
+        {icon}
+        {name && <span className="truncate">{name}</span>}
       </button>
       <button
         onClick={onClose}
-        aria-label={`Close ${name}`}
-        title={`Close ${name}`}
+        aria-label={`Close ${name || title}`}
+        title={`Close ${name || title}`}
         className={clsx(
           "h-5 w-5 mr-1 shrink-0 rounded flex items-center justify-center hover:bg-gh-line transition-opacity duration-150 ease-meno",
           chosen ? "opacity-100" : "opacity-0 group-hover:opacity-100",

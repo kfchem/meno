@@ -134,8 +134,10 @@ merged; the step says so. A conformer set's compounds stay apart: *Second*'s
 are numbered on after *First*'s. *Keep* is *All*, or *One of each* value of
 a property: the first met is kept, and each later one is set aside, naming
 the one kept ("the same start as a #1, which was kept"). One with no value
-of it is set aside too, saying so. More than two sets are merged by chaining
-Merges. One input that holds nothing - a branch that gave none this time, a
+of it is set aside too, saying so. *All* does what several wires into one
+input do (WORKFLOWS.md, *Several wires into one input*), and the card says
+so; any number of sets wired into one input come in one after another,
+each entry naming the set it came from. One input that holds nothing - a branch that gave none this time, a
 step's second exit that none went out of - adds nothing: the other's
 entries come out, and the line says so ("nothing came from
 First"). Both empty, nothing is merged, and the step says so.
@@ -302,11 +304,26 @@ Checked:
 
 ## Restraints
 
-Each entry's restraints from itself (`restraintsOf`): the property
-`restraints`, rows of the entry record's `Restraint`, with atoms from 0,
-each held by the energy the record states (`src/lib/entry.ts`): a distance
-by E = k d²/2, k in kcal mol⁻¹ Å⁻²; atoms fixed with neither value nor
-strength. Restraints are a label: they name no geometry, and ride along.
+A table of restraints, a row for each, made of each entry from itself
+(`restraintRows`, `restraintsTable`): the rows of the entry record's
+`Restraint`, each held by the energy the record states (`src/lib/entry.ts`):
+a distance by E = k d²/2, k in kcal mol⁻¹ Å⁻²; atoms fixed with neither
+value nor strength. The entries are not passed on: a step that holds
+restraints takes the table in its *Restraints* input (WORKFLOWS.md,
+*Restraints wired in*), so the chemist reads exactly what will be held.
+
+- **The table's columns**, the restraint first: *Kind* (distance, torsion,
+  atoms fixed); *Atoms*, from 1; *Target*, a number, in Å for a distance and
+  in ° for a torsion, each in a column of its unit; *Strength* - the number
+  with its unit (kcal/mol/Å², kcal/mol/rad²), "exact" for a row held
+  exactly (said, never read from a blank), or "fixed where they stand";
+  *Why* - "coordination bond in contact, 0.9 × vdW (Alvarez)", "typed: kept
+  at its distance here". Then *For* and *Matched on* - the value, and the
+  name, of the property the row's entry has (an ID a step wrote, a Tag's,
+  named on the card: no default); and *Numbering* - *its own*, or the maps
+  *Atom map* numbered it anew by (the label `numbering` it writes on each
+  entry it renumbers). A table read from a file with these columns reads alike; one row
+  that does not read refuses the whole table, the row named.
 
 - **Coordination bonds**, the bonds the entry marks as such, are kept at a
   factor of their atoms' van der Waals radii together. The radii are
@@ -337,20 +354,22 @@ strength. Restraints are a label: they name no geometry, and ride along.
   0.9 of the van der Waals radii together holds an acid and a base in
   contact, about twice a bond's length (H3N→BH3: 3.21 Å; its B–N bond is
   about 1.6 Å).
-- **What an entry held before.** Its distances and atoms fixed - the kinds
-  this step makes - are replaced. Its torsions (*Torsion restraints*'),
-  with the strengths they reached in earlier rounds, are kept. The line
-  says both: "2 entries' earlier distances and atoms fixed replaced · 2
-  entries' torsions kept".
-- **Refused, with the reason** (out of *Failed*): an atom the entry does not
-  have, an element Alvarez gives no radius for, or an entry with no 3D
-  places or with frames.
-- **Its line** counts what it held: "12 entries restrained · 3 coordination
+- **In contact, not bonded**: 0.9 × the van der Waals radii holds a Lewis
+  pair in contact, about twice a bond's length; a metal's dative bond is
+  far shorter (Cu–N: 3.636 Å so held, about 1.83 Å by Pyykkö's single-bond
+  radii). The why says "in contact", so a bonded complex is never pulled
+  apart unseen: for a metal–ligand bond, type the distance.
+- **Refused, with the reason** (out of *Failed*): an entry without the
+  property its rows are for, or whose value another entry has too; an atom
+  the entry does not have, an element Alvarez gives no radius for, or an
+  entry with no 3D places or with frames.
+- **Its line** counts what it made: "12 rows for 12 entries · 3 coordination
   bonds held". Coordination bonds asked and none marked are said ("no
-  coordination bonds"), not passed over.
+  coordination bonds"), not passed over, and so are entries it made no row
+  for ("2 entries with none to hold").
 
 Checked: H3N→BH3's B–N coordination bond kept at 0.9 × (1.91 + 1.66) Å,
-from Alvarez's published radii; a 3-4-5 triangle's 5 Å; an atom the entry
+and Cu–N at 0.9 × (2.38 + 1.66) = 3.636 Å, from Alvarez's published radii; a 3-4-5 triangle's 5 Å; an atom the entry
 lacks, an element with no radius, and no strength each refused in words.
 
 ## Torsion restraints
@@ -426,9 +445,26 @@ conformers, case F, F2).
     an entry whose map forms, breaks or changes any bond is then not
     mapped, the bonds said.
 
-  *Against* is *The one reference* (the default), or *Matched on* a
-  property - a Tag's *species* - with both inputs each their own. *Maps* is
-  *First map* (the default) or *Every map*.
+  *Against* is *The one reference* (the default), *In order*, or *Matched
+  on* a property - a Tag's *reaction* or *species*. *Maps* is *First map*
+  (the default) or *Every map*. Two rules say which side goes onto which:
+  - *Matched on* a property, *One side together* is one side for each
+    value of it: the entries of a set holding several reactions, each
+    reaction's products as one side onto its reactants as one side (after
+    a *Filter* `role = reactant` on the reference: a reagent left in it
+    makes its side unbalanced, and the step refuses it with the mapper's
+    words). A value on one input and on none of the other, or an entry with
+    no value, is not mapped, saying why. *Each its own* takes each entry on
+    its own, as it always did: with one entry of *Reference* to a value.
+  - *In order*: the k-th side of *Molecules* onto the k-th side of
+    *Reference*, the sides as *Each its own* and *One side together* make
+    them - by place alone, never by which one fits (as *Path search*'s
+    *In order*). Unequal counts are refused, both said.
+
+  A side is mapped only onto a reference of the same total charge, atoms'
+  formal charges or the charge a calculation gave: the calculations after
+  take one charge for each system. One that differs is not mapped, both
+  charges said ("charge -1 here, 0 in the reference").
 - **Mapped.** Each entry the same entry renumbered (`renumberedEntry`,
   `src/lib/steps/reaction.ts`): its atoms where they stand in it, in the
   order of the reference atoms they map to, its bonds with them. What names
@@ -457,9 +493,24 @@ conformers, case F, F2).
   set aside as not finished, never passed on as one that is. An entry
   renumbered keeps its energy and its imaginary frequencies, which are of
   its geometry however it is numbered, and its thermochemistry and
-  vibrations as properties of its own, renumbered with it; its calculation
-  is not carried, and the step's line says so. One numbered as it was keeps
-  all it held.
+  vibrations as properties of its own, renumbered with it. It keeps what
+  its energy is of: the calculation's program, version, method, basis,
+  solvation, charge and spin, and how it was made (a conformer search's
+  method and force field). Where a run ended converged at its geometry,
+  so it still is: the same places, numbered otherwise. The atoms the
+  calculation held (and the run that converged, where it held any), the
+  drawing's atom each atom is, and its stereo labels are renumbered with
+  it. So a
+  compound's conformers, some renumbered and some not, are still of one
+  calculation, their energies in one list, and an *Energy window* after
+  the step runs on them. The calculation's results follow it: a value of
+  the molecule or of each frame as it was, each atom's value at its atom,
+  a pair's atoms as numbered now, and a list of values alone. A list whose
+  rows name atoms, move them or promise a value (asked of its plugin in the
+  old numbering), and the output and wavefunction the results were read
+  from, number its atoms as they were: they are not carried, and the
+  step's line says so ("part of its calculation not carried"). One
+  numbered as it was keeps all it held.
 - **Nothing in part.** An entry with no hydrogens, with no reference to
   pair with, or one whose atoms do not all map one to one, goes out of *Not
   mapped* with why written on it (`set_aside`). Not one reference where it

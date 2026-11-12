@@ -3,8 +3,46 @@ import { useCallback, useEffect, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { chooseJobsFolder, clearFinishedJobs, computerCores, coresCountedSaid, computerResources, finished, finishedJobsBytes, jobsFolder, keptText, limitsOf, listJobs, runningOf, type JobsFolder } from "../../../lib/jobs";
 import type { Option, OptionValues } from "../../../lib/options";
-import { useAppSettings } from "../../../lib/settings/appSettings";
+import { keepsJobFolders, QUIET_AFTER_MIN, QUIET_AFTER_MOST, useAppSettings, type CalculationSettings } from "../../../lib/settings/appSettings";
 import OptionRows from "../../options/OptionRows";
+
+/** What Cores for each job comes to while it is not set (lib/jobs `runningOf`). */
+export const CORES_SHARED_SAID = "Unless Cores for each job is set, a step's jobs share the cores jobs may use: all of them for one job, one each for as many jobs as there are cores.";
+/** That line, while Cores for each job is unset; none once it is set. */
+/**
+ * Cores for each job as the field leaves it: the number typed, held to 1 and
+ * the computer's cores; none where the field was emptied (NaN: unset again,
+ * the cores shared among a step's jobs); as it was (`kept`) where the field
+ * was not changed (`typed` the same as `shown`, NaN for NaN).
+ */
+export function coresChosen(typed: unknown, shown: unknown, kept: number | undefined, most: number): number | undefined {
+  if (Object.is(typed, shown)) return kept;
+  return typeof typed === "number" && Number.isFinite(typed) ? Math.min(Math.max(1, Math.round(typed)), most) : undefined;
+}
+
+/** The calculations settings after the rows were changed to `v` from `values`: each kept as it was set, or as it was where it was not changed - unset, the default, where it comes to that. */
+export function calculationsAfter(v: OptionValues, values: OptionValues, calculations: CalculationSettings, computer: { cores: number; memory: number }): CalculationSettings {
+  const whole = (n: unknown, most: number) => (typeof n === "number" && Number.isFinite(n) ? Math.min(Math.max(1, Math.round(n)), most) : undefined);
+  const cores = coresChosen(v.cores, values.cores, calculations.cores, computer.cores);
+  const all = v["cores-all"] !== values["cores-all"] ? whole(v["cores-all"], computer.cores) : calculations.coresAll;
+  const memory = v["memory-all"] !== values["memory-all"] && typeof v["memory-all"] === "number" ? whole(v["memory-all"] * MIB_PER_GB, computer.memory) : calculations.memoryAll;
+  const quietAfter = v["quiet-after"] !== values["quiet-after"] ? whole(v["quiet-after"], QUIET_AFTER_MOST) : calculations.quietAfterMin;
+  const { cores: _c, coresAll: _a, memoryAll: _m, sleepWhileJobsRun: _s, keepJobFolders: _k, quietAfterMin: _q, ...rest } = calculations;
+  return {
+    ...rest,
+    ...(cores != null ? { cores } : {}),
+    ...(all != null && all !== computer.cores ? { coresAll: all } : {}),
+    ...(memory != null ? { memoryAll: memory } : {}),
+    // (kept awake unless turned off: only the off is kept)
+    ...(v.awake === false ? { sleepWhileJobsRun: true as const } : {}),
+    // (as set once changed; else as it was - unset, Meno's default)
+    ...(v["keep-folders"] !== values["keep-folders"] ? { keepJobFolders: v["keep-folders"] === true } : calculations.keepJobFolders != null ? { keepJobFolders: calculations.keepJobFolders } : {}),
+    // (as set, where it is not Meno's default)
+    ...(quietAfter != null && quietAfter !== QUIET_AFTER_MIN ? { quietAfterMin: quietAfter } : {}),
+  };
+}
+
+export const coresSharedSaid = (c: { cores?: number }): string | null => (c.cores == null ? CORES_SHARED_SAID : null);
 
 /** A mebibyte's share of a gibibyte: memory is set in GB, kept in MiB. */
 const MIB_PER_GB = 1024;
@@ -13,9 +51,10 @@ const MIB_PER_GB = 1024;
  * Jobs in Settings, *Calculations* (docs/WORKFLOWS-FOUNDATION.md, *This
  * computer's runner knows its resources*): the cores each job takes, the
  * cores and memory this computer's jobs may use at once - all its cores and
- * three quarters of its memory unless set - and the files of those
- * finished - how many, and how much they hold - cleared. Jobs run as many
- * at once as fit.
+ * three quarters of its memory unless set - whether the computer is kept
+ * awake while their programs run - so unless turned off - and the files
+ * of those finished - how many, and how much they hold - cleared. Jobs run
+ * as many at once as fit.
  */
 export default function JobSettings() {
   const calculations = useAppSettings((s) => s.calculations);
@@ -34,22 +73,22 @@ export default function JobSettings() {
     ...(computer.memory > 0
       ? [{ id: "memory-all", label: "Memory jobs may use", type: "number" as const, default: gb((computer.memory * 3) / 4), min: 0.5, max: gb(computer.memory), step: 0.5, unit: `GB of ${gb(computer.memory)}` }]
       : []),
+    { id: "awake", label: "Keep the computer awake while calculations run", type: "switch", default: true },
+    // (a finished job's folder, once a workspace's file holds all of it: kept, or moved to the Trash - workflow/keptJobs `clearSavedJobs`)
+    { id: "keep-folders", label: "Keep job folders once saved", type: "switch", default: keepsJobFolders({}) },
+    // (a running job that has written nothing so long: said on its step, never ended for it - lib/jobs `quietFor`)
+    { id: "quiet-after", label: "Say a job is quiet after", type: "number", default: QUIET_AFTER_MIN, min: 1, max: QUIET_AFTER_MOST, step: 1, whole: true, unit: "min" },
   ];
-  const values: OptionValues = { cores: running.cores, "cores-all": limits.cores, ...(computer.memory > 0 ? { "memory-all": gb(limits.memory) } : {}) };
-  const change = (v: OptionValues) => {
-    const whole = (n: unknown, most: number) => (typeof n === "number" && Number.isFinite(n) ? Math.min(Math.max(1, Math.round(n)), most) : undefined);
-    // (each kept as it was set, or as it was where it was not changed - unset, the default, where it comes to that)
-    const cores = v.cores !== values.cores ? whole(v.cores, computer.cores) : calculations.cores;
-    const all = v["cores-all"] !== values["cores-all"] ? whole(v["cores-all"], computer.cores) : calculations.coresAll;
-    const memory = v["memory-all"] !== values["memory-all"] && typeof v["memory-all"] === "number" ? whole(v["memory-all"] * MIB_PER_GB, computer.memory) : calculations.memoryAll;
-    const { cores: _c, coresAll: _a, memoryAll: _m, ...rest } = calculations;
-    setCalculations({
-      ...rest,
-      ...(cores != null ? { cores } : {}),
-      ...(all != null && all !== computer.cores ? { coresAll: all } : {}),
-      ...(memory != null ? { memoryAll: memory } : {}),
-    });
+  const values: OptionValues = {
+    // (unset: empty - the number it comes to dimmed in it - until one is typed; emptied again, it is unset again)
+    cores: calculations.cores ?? NaN,
+    "cores-all": limits.cores,
+    ...(computer.memory > 0 ? { "memory-all": gb(limits.memory) } : {}),
+    awake: !calculations.sleepWhileJobsRun,
+    "keep-folders": keepsJobFolders(calculations),
+    "quiet-after": calculations.quietAfterMin ?? QUIET_AFTER_MIN,
   };
+  const change = (v: OptionValues) => setCalculations(calculationsAfter(v, values, calculations, computer));
 
   // where jobs are made: a working folder chosen, or Meno's own (changed only while none waits or runs) - one chosen
   // and not there said so, never another taken in its place
@@ -91,8 +130,10 @@ export default function JobSettings() {
 
   return (
     <div className="rounded-lg border border-gh-line bg-white divide-y divide-gh-line/60">
-      <OptionRows options={options} values={values} onChange={change} />
+      <OptionRows options={options} values={values} onChange={change} unsettable={["cores"]} />
       {/* (how the cores are counted, where the computer runs more than one thread on each: a program of processes takes more than one) */}
+      {/* (unset, a step's jobs share the cores - lib/jobs `runningOf`: said, as the number shown is one job's alone) */}
+      {coresSharedSaid(calculations) && <p className="py-2 pl-3 pr-3 text-xs text-gh-gray">{coresSharedSaid(calculations)}</p>}
       {coresCountedSaid(computer) && <p className="py-2 pl-3 pr-3 text-xs text-gh-gray">{coresCountedSaid(computer)}</p>}
       {folder && (
         <div className="py-2 pl-3 pr-3 flex items-center gap-3">

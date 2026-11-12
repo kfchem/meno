@@ -13,6 +13,7 @@ import { FONT, LINE_PX, TAB } from "./linePictures";
 import { hasEditContext, typingField, type TypingField } from "./typingField";
 import { fieldTarget, useTextMenu } from "./textMenu";
 import { selFrom, selTo } from "../../../lib/text/editing";
+import { BAR_HIT_PX, scrollOfThumb } from "./editor";
 
 /** `write`: a text just made to be written in, given the keys as it shows - `onWrite` told once it has them. */
 type Props = { entry: ColumnTextEntry; value: string; onChange: (v: string) => void; write?: boolean; onWrite?: () => void; name?: string };
@@ -24,6 +25,8 @@ export default function TextBody({ entry, value, onChange, write = false, onWrit
   const ec = useMemo(hasEditContext, []);
   const fieldRef = useRef<HTMLTextAreaElement & HTMLDivElement>(null);
   const field = useRef<TypingField | null>(null);
+  // (a scroll bar's thumb being dragged: let go of if the text closes under it)
+  const barDrag = useRef<(() => void) | null>(null);
   const changed = useRef(onChange);
   changed.current = onChange;
 
@@ -90,10 +93,45 @@ export default function TextBody({ entry, value, onChange, write = false, onWrit
     };
     box.addEventListener("wheel", onWheel, { passive: false });
     return () => {
+      barDrag.current?.();
       seen.disconnect();
       box.removeEventListener("wheel", onWheel);
     };
   }, [ed]);
+
+  // (a press on a scroll bar: its thumb taken and dragged, or the text paged towards the press where it is off the thumb)
+  const onBar = (e: ReactMouseEvent, box: DOMRect): boolean => {
+    const x = e.clientX - box.left;
+    const y = e.clientY - box.top;
+    const t = ed.thumbs;
+    const along = t.v && x >= ed.viewW - BAR_HIT_PX ? "v" : t.h && y >= ed.viewH - BAR_HIT_PX && x >= ed.gutter ? "h" : null;
+    if (!along) return false;
+    const thumb = t[along]!;
+    const pos = along === "v" ? y : x;
+    if (pos < thumb.start || pos > thumb.start + thumb.len) {
+      const dir = pos < thumb.start ? -1 : 1;
+      if (along === "v") ed.scrollTo(ed.scrollTop + dir * ed.viewH);
+      else ed.scrollTo(ed.scrollTop, ed.scrollLeft + dir * (ed.viewW - ed.gutter));
+      return true;
+    }
+    const grab = pos - thumb.start;
+    const onMove = (m: MouseEvent) => {
+      const now = along === "v" ? m.clientY - box.top : m.clientX - box.left;
+      const th = ed.thumbs[along];
+      if (!th) return;
+      if (along === "v") ed.scrollTo(scrollOfThumb(now - grab, th.len, th.track, ed.mostTop));
+      else ed.scrollTo(ed.scrollTop, scrollOfThumb(now - grab - ed.gutter, th.len, th.track, ed.mostLeft));
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      barDrag.current = null;
+    };
+    barDrag.current = onUp;
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return true;
+  };
 
   // (a press: the caret there, the field given the keys; a drag selects on, the text scrolling on past its edges)
   const onMouseDown = (e: ReactMouseEvent) => {
@@ -102,6 +140,7 @@ export default function TextBody({ entry, value, onChange, write = false, onWrit
     e.preventDefault();
     field.current?.focus();
     const box = boxRef.current!.getBoundingClientRect();
+    if (onBar(e, box)) return;
     const clicks = Math.min(e.detail || 1, 3);
     const from = ed.pressAt(e.clientX - box.left, e.clientY - box.top, clicks, e.shiftKey);
     field.current?.sync();

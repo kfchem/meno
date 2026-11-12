@@ -2,10 +2,10 @@ import type { Table } from "../../../../../lib/table";
 import { gestureStep } from "../../../../../lib/doc/document";
 import type { StoreApi } from "zustand";
 import type { DocumentStore } from "../../../../../lib/doc";
-import { valuesOf } from "../../../../../lib/options";
+import { givenOnly, valuesOf } from "../../../../../lib/options";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import type { WorkspaceDocument } from "../../document";
-import { style3dOf } from "../../style3d";
+import { extentIn, style3dOf } from "../../style3d";
 import { ONE_INPUT } from "../../workflow/kinds";
 import { reachOverFrames } from "../../utils/molecule3d";
 import { freePlace, pageBoxes } from "../../utils/freePlace";
@@ -14,12 +14,14 @@ import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
 import { byOf, kindsOf, optionsFor } from "../../workflow/doers";
 import type { StepKind } from "../../workflow/kinds";
 import * as wf from "../../workflow/model";
+import { heldSets } from "../../workflow/onPage";
 import { appendParts, partsBounds } from "../../workflow/parts";
 import { placeCard } from "../../workflow/place";
 import { proceduresSaved } from "../../workflow/procedures";
 import { fitResultSets, placeAsSet, type RunWith } from "../../workflow/run";
+import { framesSettled } from "../../workflow/fitFrames";
 import { holdsOwn, type Frame } from "../../workflow/entries";
-import type { EditorState, Molecule3D, WorkflowView } from "../types";
+import type { EditorState, Molecule3D, WireEnd, WorkflowView } from "../types";
 import { createStepRuns } from "./stepRuns";
 import { positionIds } from "../../workflow/substituents";
 
@@ -77,12 +79,38 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
       doc.edit("put table", (d) => wf.addTableSet(d, at, table, name));
       return id;
     },
-    resizeSet: (id: number, frame: { x0: number; y0: number; x1: number; y1: number }, gesture?: string) =>
-      doc.edit("size set", (d) => wf.resizeSet(d, id, frame), coalesce("set-size", id, gesture)),
+    watchFrames: () => {
+      // (the document as it was when a pointer went down, kept till it comes up: what it was let go on is settled then - after the gesture's own
+      //  last edit, which is made as the pointer comes up: on the next turn)
+      let down: WorkspaceDocument | null = null;
+      const press = () => {
+        down ??= doc.getState();
+      };
+      const release = () => {
+        const was = down;
+        down = null;
+        if (was) window.setTimeout(() => get().settleFrames(was), 0);
+      };
+      // (the release heard before anything under the window can stop it: a molecule in 3D's drag ends with a stopPropagation on the canvas, and
+      //  the settle - on the next turn, after the gesture's own last edit - would never be asked)
+      window.addEventListener("pointerdown", press, true);
+      window.addEventListener("pointerup", release, true);
+      window.addEventListener("pointercancel", release, true);
+      return () => {
+        window.removeEventListener("pointerdown", press, true);
+        window.removeEventListener("pointerup", release, true);
+        window.removeEventListener("pointercancel", release, true);
+      };
+    },
+    settleFrames: (down: WorkspaceDocument) => {
+      // (the state an undo or a redo came to - a press on a button of the history, let go - is one that was settled when it was made: nothing is eased, and what is to redo stays)
+      if (doc.travelled()) return;
+      doc.edit("fit frames", (d) => framesSettled(d, down, extentIn(d)), { joinTop: true });
+    },
     moveSet: (id: number, dx: number, dy: number, gesture?: string) => doc.edit("move set", (d) => wf.moveSet(d, id, dx, dy), coalesce("set-move", id, gesture)),
     // (the one asked for shown in the column - a PDF read there before giving way, as a text asked for does)
-    readSetTable: (id: number) => set((prev: EditorState) => ({ ...prev, setsRead: prev.setsRead.includes(id) ? prev.setsRead : [...prev.setsRead, id], setTableShown: id, textsOpen: true, pdfShown: null })),
-    showSetTable: (id: number) => set({ setTableShown: id, textsOpen: true, pdfShown: null }),
+    readSetTable: (id: number) => set((prev: EditorState) => ({ ...prev, setsRead: prev.setsRead.includes(id) ? prev.setsRead : [...prev.setsRead, id], setTableShown: id, textsOpen: true, pdfShown: null, conversationShown: null })),
+    showSetTable: (id: number) => set({ setTableShown: id, textsOpen: true, pdfShown: null, conversationShown: null }),
     stopReadingSetTable: (id: number) =>
       set((prev: EditorState) => {
         const setsRead = prev.setsRead.filter((s) => s !== id);
@@ -106,12 +134,15 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
           chosenSet: prev.chosenSet != null && ids.includes(prev.chosenSet) ? null : prev.chosenSet,
         }));
     },
-    addStep: (kind: StepKind, by: string, x: number, y: number) => {
+    addStep: (kind: StepKind, by: string, x: number, y: number, from?: WireEnd) => {
       const id = doc.getState().nextWorkflowId ?? 1;
-      // (with the defaults Settings has for its kind, done by it)
-      const options = valuesOf(optionsFor(kind, by), useAppSettings.getState().options[stepRole(kind, by)]);
-      // (where it was put down, or lower where something is there: never over a set, a card or a wire)
+      // (with the defaults Settings has for its kind, done by it - and, of one with no default, the chemist's own value
+      // there, else none: an Energy window's window)
+      const options = givenOnly(valuesOf(optionsFor(kind, by), useAppSettings.getState().options[stepRole(kind, by)]));
+      // (where it was put down, or lower where something is there: never over a set, a card or a wire - or, brought by a wire
+      //  from an exit's port, close by its card and wired, in the same step of the history: model `addStepFrom`)
       doc.edit("add step", (d) => {
+        if (from) return wf.addStepFrom(d, kind, from, x, y, options, by);
         const at = placeCard(d, x, y);
         return wf.addStep(d, kind, at.x, at.y, options, by);
       });
@@ -126,7 +157,7 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
         // (another kind its plugin fills: with the defaults Settings has for that one - those it shares with the step's, as the step has them)
         const kind = patch.kind;
         if (!kindsOf(by).includes(kind)) return;
-        const options = valuesOf(optionsFor(kind, by), { ...useAppSettings.getState().options[stepRole(kind, by)], ...step.options });
+        const options = givenOnly(valuesOf(optionsFor(kind, by), { ...useAppSettings.getState().options[stepRole(kind, by)], ...step.options }));
         doc.edit("change calculation", (d) => wf.updateStep(d, id, { kind, options }));
         return;
       }
@@ -202,6 +233,34 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
       const was = doc.getState();
       doc.edit("wire", (d) => wf.connect(d, from, to, port));
       return doc.getState() !== was;
+    },
+    /** A step's result set held off the page opened to be seen on it, or closed again (model `openedSet`, workflow/held): an edit, undone as one. */
+    openHeld: (id: number, open: boolean) => {
+      doc.edit(open ? "open results" : "close results", (d) => wf.openedSet(d, id, open));
+    },
+    exitPortClicked: (id: number) => {
+      const d = doc.getState();
+      const b = d.sets?.find((x) => x.id === id);
+      // (what the page draws the port with calls this alone: the rule is here, whatever draws it)
+      if (b?.made && d.wires?.some((w) => w.from.set === id)) get().openHeld(id, !b.opened);
+    },
+    exitPortHovered: (id: number, on: boolean) => {
+      if (on) set({ hoveredExit: id });
+      else if (get().hoveredExit === id) set({ hoveredExit: null });
+    },
+    /**
+     * A step's atoms chosen on the drawing, or no longer (`choosingAtoms`):
+     * what comes into it held off the page opened first, in one edit - its
+     * structures are where the atoms are chosen (workflow/held).
+     */
+    chooseAtomsFor: (step: number, option: string | null) => {
+      if (option) {
+        const d = doc.getState();
+        const held = heldSets(d);
+        const into = (d.wires ?? []).filter((w) => w.to.step === step && held.has(w.from.set)).map((w) => w.from.set);
+        if (into.length) doc.edit("open results", (s) => into.reduce((x, id) => wf.openedSet(x, id, true), s));
+      }
+      set({ choosingAtoms: option ? { step, option } : null });
     },
     removeWire: (id: number) => {
       if (doc.edit("delete wire", (d) => wf.removeWire(d, id)))

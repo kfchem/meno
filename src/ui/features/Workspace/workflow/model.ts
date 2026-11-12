@@ -7,16 +7,15 @@ import type { ChartValue } from "../../../../lib/chart";
 import type { DiagramValue } from "../../../../lib/energyDiagram";
 import type { NumberValue, Table } from "../../../../lib/table";
 import type { WorkspaceDocument } from "../document";
-import type { DrawnModel, Member, StepRunKept, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
+import type { DrawnModel, DrawnRecord, Member, StepRunKept, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import type { OptionValues } from "../../../../lib/options";
-import { inside, lyingIn, membersOf, placesOf, readingOrder, recordOn, setMembers, structureMember, structuresOf, type Frame } from "./entries";
-import { drawnBox } from "../../../../utils/importers";
+import { inside, lyingIn, membersOf, placesOf, readingOrder, setMembers, memberRecord, recordOn, structureMember, type Frame } from "./entries";
 import { CHART_PX, NAME_DOWN, PX, SET_PAD, SET_TOP, TABLE_PX, tableBodyPx } from "./look";
-import { canWire, resultOf, wireInto } from "./flow";
+import { canWire, resultOf, wiresInto } from "./flow";
 import { exitsOf, ONE_INPUT, type StepKind } from "./kinds";
 import { byOf, inputsFor } from "./doers";
 import { CARD_H, CARD_W, GAP, BETWEEN } from "./look";
-import { placeBelow } from "./place";
+import { frameAt, placeBelow, placeCard, placeNext } from "./place";
 
 const idOf = (doc: WorkspaceDocument) => doc.nextWorkflowId ?? 1;
 
@@ -27,7 +26,7 @@ export const framed = (f: Frame): Frame => ({ x0: Math.min(f.x0, f.x1), y0: Math
 export function addSet(doc: WorkspaceDocument, frame: Frame, made?: WorkflowSet["made"], name?: string): WorkspaceDocument {
   const id = idOf(doc);
   const f = framed(frame);
-  const set: WorkflowSet = { id, ...f, ...(made ? { made } : {}), ...(name ? { name } : {}), members: membersOf(lyingIn(doc, f)) };
+  const set: WorkflowSet = { id, ...f, ...(made ? { made } : {}), ...(name ? { name } : {}), members: membersOf(lyingWithIds(doc, f, id)) };
   return { ...doc, nextWorkflowId: id + 1, sets: [...(doc.sets ?? []), set] };
 }
 
@@ -53,7 +52,7 @@ export function addTableSet(doc: WorkspaceDocument, at: { x: number; y: number }
 
 /** A set's members, as given: a step's result set holding what the step made, in its order - on the page, so no collection of its own; and how many of them did not read, where some did not (`WorkflowSet.unread`). */
 export function holdMembers(doc: WorkspaceDocument, id: number, members: Member[], unread?: number): WorkspaceDocument {
-  return withSet(doc, id, ({ collection: _c, drawnCollection: _d, unread: _u, ...b }) => ({ ...b, members, ...(unread ? { unread } : {}) }));
+  return withSet(doc, id, ({ collection: _c, drawnCollection: _d, unread: _u, heldIds: _h, ...b }) => ({ ...b, members, ...(unread ? { unread } : {}) }));
 }
 
 /**
@@ -77,7 +76,7 @@ export function holdCollection(
   held: { collection: NonNullable<WorkflowSet["collection"]> } | { drawnCollection: NonNullable<WorkflowSet["drawnCollection"]> },
   unread?: number,
 ): WorkspaceDocument {
-  return withSet(doc, id, ({ unread: _u, collection: _c, drawnCollection: _d, ...b }) => ({ ...b, members: [], ...held, ...(unread ? { unread } : {}) }));
+  return withSet(doc, id, ({ unread: _u, collection: _c, drawnCollection: _d, heldIds: _h, ...b }) => ({ ...b, members: [], ...held, ...(unread ? { unread } : {}) }));
 }
 
 /** How large a set holding a chart is made, on the page: its axes, labels and points. */
@@ -129,6 +128,19 @@ export function keepSet(doc: WorkspaceDocument, id: number, keep: boolean): Work
   if (!set?.made || (set.keep !== false) === keep) return doc;
   const { keep: _was, ...rest } = set;
   return { ...doc, sets: (doc.sets ?? []).map((b) => (b.id === id ? (keep ? rest : { ...rest, keep: false as const }) : b)) };
+}
+
+/**
+ * `doc` with a step's result set opened to be seen on the page, or closed
+ * again (`WorkflowSet.opened`, workflow/held): its exit wired on, it is laid
+ * out as it opens and held as it closes, as the edit settles. A set no step
+ * made, as it was.
+ */
+export function openedSet(doc: WorkspaceDocument, id: number, open: boolean): WorkspaceDocument {
+  const set = doc.sets?.find((b) => b.id === id);
+  if (!set?.made || !!set.opened === open) return doc;
+  const { opened: _was, ...rest } = set;
+  return { ...doc, sets: (doc.sets ?? []).map((b) => (b.id === id ? (open ? { ...rest, opened: true as const } : rest) : b)) };
 }
 
 /** A chemist's set named anew - a step's set is named for what made it - its name taken away where the new one is empty. */
@@ -185,6 +197,25 @@ export function addStep(doc: WorkspaceDocument, kind: StepKind, x: number, y: nu
 }
 
 /**
+ * `doc` with a step of `kind` added from a set - a wire drawn out of it,
+ * `from`, let go on empty space at (x, y), the step chosen there - and
+ * wired from it into the first of its inputs that takes what it gives
+ * (`connect`), in one edit: its card close by the card it is wired from,
+ * where `from` is a step's exit (place `placeNext`); else where it was let
+ * go (place `placeCard`). Where none of its inputs takes it, unwired, where
+ * it was let go.
+ */
+export function addStepFrom(doc: WorkspaceDocument, kind: StepKind, from: WireEnd, x: number, y: number, options?: OptionValues, by?: string): WorkspaceDocument {
+  const id = idOf(doc);
+  // (the input it would be wired into, by the step alone - its exits are placed by where it goes)
+  const bare: WorkspaceDocument = { ...doc, nextWorkflowId: id + 1, steps: [...(doc.steps ?? []), { id, kind, x, y, ...(by ? { by } : {}) }] };
+  const port = connect(bare, from, id).wires?.find((w) => w.to.step === id)?.to.port;
+  const at = (port && placeNext(doc, from, kind, port)) || placeCard(doc, x, y);
+  const added = addStep(doc, kind, at.x, at.y, options, by);
+  return port ? connect(added, from, id, port) : added;
+}
+
+/**
  * `doc` with a set for each of a step's exits it has none for: every exit is
  * a result set of its own, made with the step and empty until it runs, so
  * that what a step will give can be wired on before it has run
@@ -202,11 +233,13 @@ export function withExits(doc: WorkspaceDocument, stepId: number): WorkspaceDocu
   for (const exit of exitsOf(step.kind)) {
     const high = exit.of ? CARD_H / 2 : CARD_H;
     const was = resultOf(next, step.id, exit.id);
-    // (holding nothing yet: what lies under a new frame is not what its step made)
+    // (holding nothing yet: what lies under a new frame is not what its step made - made first, then placed as itself, its line
+    //  from its own exit's port: place `lineFrom`)
     if (!was) {
       const setId = next.nextWorkflowId ?? 1;
-      const frame = placeBelow(next, step.x + CARD_W + GAP, top, CARD_W, high, { step: step.id });
-      next = holdMembers(addSet(next, frame, { step: step.id, exit: exit.id }), setId, []);
+      next = holdMembers(addSet(next, frameAt(step.x + CARD_W + GAP, top, CARD_W, high), { step: step.id, exit: exit.id }), setId, []);
+      const frame = placeBelow(next, step.x + CARD_W + GAP, top, CARD_W, high, { step: step.id, set: setId });
+      next = resizeSet(next, setId, frame);
       top = frame.y0 - BETWEEN;
     } else top = was.y0 - BETWEEN;
   }
@@ -290,7 +323,13 @@ export function removeStep(doc: WorkspaceDocument, id: number): WorkspaceDocumen
   };
 }
 
-/** `doc` with a wire from `from` into the step `to` - in place of one it had - where it may go there (flow `canWire`). */
+/**
+ * `doc` with a wire from `from` into the step `to`, beside any it has there
+ * already - several wires into one input give it what each set holds, in
+ * the order they lie on the page (flow `inputOf`) - where it may go there
+ * (flow `canWire`). The same set wired in again changes nothing; one wire
+ * takes another's place only as the chemist takes that one out.
+ */
 export function connect(doc: WorkspaceDocument, from: WireEnd, to: number, into?: string): WorkspaceDocument {
   // (no input named: the first of the step's that takes what comes)
   const step = doc.steps?.find((s) => s.id === to);
@@ -298,11 +337,9 @@ export function connect(doc: WorkspaceDocument, from: WireEnd, to: number, into?
   if (inputs && !inputs.length) return doc;
   const port = into ?? (inputs ? (inputs.find((p) => canWire(doc, from, to, p.id))?.id ?? inputs[0].id) : ONE_INPUT);
   if (!canWire(doc, from, to, port)) return doc;
-  const was = wireInto(doc, to, port);
-  if (was && JSON.stringify(was.from) === JSON.stringify(from)) return doc;
+  if (wiresInto(doc, to, port).some((w) => w.from.set === from.set)) return doc;
   const id = idOf(doc);
-  // (one wire to an input: a new one takes the place of what was there)
-  return { ...doc, nextWorkflowId: id + 1, wires: [...(doc.wires ?? []).filter((w) => !(w.to.step === to && w.to.port === port)), { id, from, to: { step: to, port } }] };
+  return { ...doc, nextWorkflowId: id + 1, wires: [...(doc.wires ?? []), { id, from, to: { step: to, port } }] };
 }
 
 export function removeWire(doc: WorkspaceDocument, id: number): WorkspaceDocument {
@@ -354,8 +391,8 @@ export function membersSettled(doc: WorkspaceDocument, before: WorkspaceDocument
       ...held.structures.map((ids, i) => {
         const at = nowAt.get(ids[0])!.at;
         const w = wasMiddle(ids);
-        // (with its record: a step's, which a structure keeps however it moves)
-        return { member: structureMember(ids, held.records[i]), at, wasIn: !!(prior && w && inside(prior, w)) };
+        // (with its record: a step's, which a structure keeps however it moves - and its lasting id, given where it has none)
+        return { member: structureMember(ids, memberRecord(held.records[i], doc.model, ids, set.id)), at, wasIn: !!(prior && w && inside(prior, w)) };
       }),
       ...held.molecules.map((id) => {
         const w = was.molecules.get(id);
@@ -386,7 +423,7 @@ export function membersSettled(doc: WorkspaceDocument, before: WorkspaceDocument
         const entry = { member, at, wasIn: false };
         kept = k < 0 ? [...kept, entry] : [...kept.slice(0, k), entry, ...kept.slice(k)];
       };
-      for (const s of now.structures) if (!s.ids.some((id) => heldAtoms.has(id))) add({ structure: s.ids }, s.at, wasMiddle(s.ids));
+      for (const s of now.structures) if (!s.ids.some((id) => heldAtoms.has(id))) add(structureMember(s.ids, memberRecord(undefined, doc.model, s.ids, set.id)), s.at, wasMiddle(s.ids));
       for (const [id, at] of now.molecules) if (!isMember.has(`m${id}`)) add({ molecule: id }, at, was.molecules.get(id));
       for (const [id, at] of now.pictures) if (!isMember.has(`p${id}`)) add({ picture: id }, at, was.pictures.get(id));
     }
@@ -407,16 +444,23 @@ export function membersFound(doc: WorkspaceDocument): WorkspaceDocument {
 /**
  * A set holding what lies inside its frame: each structure a copy carried a
  * record for (`WorkflowSet.carried`) - the same atoms - with that record,
- * of the structure as it is drawn now.
+ * of the structure as it is drawn now; each with a lasting id of its own (a
+ * copy carries none: workflow/parts `partsOf`).
  */
 function membersLying(doc: WorkspaceDocument, { carried, ...set }: WorkflowSet): WorkflowSet {
   const found = lyingIn(doc, set);
   const records = found.structures.map((ids) => {
     const of = new Set(ids);
     const c = carried?.find((x) => x.structure.length === ids.length && x.structure.every((id) => of.has(id)));
-    return c && (c.record.of ? recordOn(c.record, doc.model, ids) : c.record);
+    return memberRecord(c && (c.record.of ? recordOn(c.record, doc.model, ids) : c.record), doc.model, ids, set.id);
   });
   return { ...set, members: membersOf({ ...found, records }) };
+}
+
+/** What lies inside a frame (`lyingIn`), each structure with a lasting id of its own in set `id` (`memberRecord`). */
+function lyingWithIds(doc: WorkspaceDocument, frame: Frame, id: number): ReturnType<typeof lyingIn> & { records: DrawnRecord[] } {
+  const found = lyingIn(doc, frame);
+  return { ...found, records: found.structures.map((ids) => memberRecord(undefined, doc.model, ids, id)) };
 }
 
 /** Whether two lists of members are the same, in the same order. */
@@ -433,53 +477,4 @@ export function markMade(doc: WorkspaceDocument, id: number, made: NonNullable<W
 export function setForExit(doc: WorkspaceDocument, step: WorkflowStep, exit: string): { doc: WorkspaceDocument; id: number } {
   const next = withExits(doc, step.id);
   return { doc: next, id: resultOf(next, step.id, exit)!.id };
-}
-
-/**
- * `doc` after an edit, its sets grown to keep inside them the structures
- * drawn on in them (docs/WORKFLOWS.md, *An input: a set from the
- * selection*): a structure that was in a set before the edit - its middle
- * inside the frame - and whose shape the edit changed - an atom added,
- * moved on its own, or made another element - is kept inside its frame,
- * its labels and all, the frame growing as far as it must. A structure
- * moved whole, or a frame sized anew, leaves the frame as it is: a
- * structure is dragged out of a set, and a set made smaller than what it
- * holds, on purpose.
- */
-export function fitSets(doc: WorkspaceDocument, before: WorkspaceDocument): WorkspaceDocument {
-  if (!doc.sets?.length || doc.model === before.model) return doc;
-  const was = new Map(before.model.atoms.map((a) => [a.id, a]));
-  const now = new Map(doc.model.atoms.map((a) => [a.id, a]));
-  const shaped = structuresOf(doc.model).filter((ids) => {
-    const atoms = ids.map((id) => now.get(id)!);
-    if (atoms.some((a) => !was.has(a.id))) return true;
-    const first = was.get(atoms[0].id)!;
-    const dx = atoms[0].x - first.x;
-    const dy = atoms[0].y - first.y;
-    return atoms.some((a) => {
-      const b = was.get(a.id)!;
-      return a.el !== b.el || (a.charge ?? 0) !== (b.charge ?? 0) || Math.abs(a.x - b.x - dx) > 1e-9 || Math.abs(a.y - b.y - dy) > 1e-9;
-    });
-  });
-  if (!shaped.length) return doc;
-  let out = doc;
-  for (const set of doc.sets) {
-    const prior = before.sets?.find((b) => b.id === set.id);
-    if (!prior) continue;
-    const held = new Set(setMembers(before, prior).structures.flat());
-    let frame: Frame = set;
-    for (const ids of shaped) {
-      if (!ids.some((id) => held.has(id))) continue;
-      const atoms = new Set(ids);
-      const b = drawnBox({ atoms: doc.model.atoms.filter((a) => atoms.has(a.id)), bonds: doc.model.bonds.filter((x) => atoms.has(x.a) && atoms.has(x.b)) });
-      frame = {
-        x0: Math.min(frame.x0, b.minX - SET_PAD),
-        x1: Math.max(frame.x1, b.maxX + SET_PAD),
-        y0: Math.min(frame.y0, b.minY - SET_PAD),
-        y1: Math.max(frame.y1, b.maxY + SET_TOP),
-      };
-    }
-    out = resizeSet(out, set.id, frame);
-  }
-  return out;
 }

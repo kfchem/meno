@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { valueFault, type Entry, type EntryBond, type Restraint } from "../entry";
 import { speciesOf } from "../io/writers";
-import { restraintsHeld, restraintsOf, torsionsRestrained, transTorsions } from "./restraints";
+import { EXACT, OWN_NUMBERING, restraintKey, restraintRows, restraintRowsIn, restraintsHeld, restraintsTable, torsionsRestrained, transTorsions, type RestraintRow } from "./restraints";
 
 /** Restraints from entries whose distances and dihedrals are set by hand, and radii as published. */
 
@@ -14,10 +14,11 @@ const entry = (atoms: [string, number, number, number][], bonds: EntryBond[], pr
   properties,
   status: "done",
 });
-const rowsOf = (e: Entry, r: ReturnType<typeof restraintsOf>): Restraint[] => {
+const rowsOf = (e: Entry, r: ReturnType<typeof restraintRows>): Restraint[] => {
   if ("failed" in r) throw new Error(r.failed);
-  expect(valueFault(r.property.value, e)).toBeNull();
-  return (r.property.value as { restraints: Restraint[] }).restraints;
+  const rows = r.rows.map((x) => x.restraint);
+  expect(valueFault({ restraints: rows }, e)).toBeNull();
+  return rows;
 };
 
 // H3N->BH3, its B-N bond a coordination bond
@@ -56,15 +57,36 @@ const butene = (trans: boolean, properties: Entry["properties"] = {}) =>
     properties,
   );
 
+// Cu-N, a coordination bond, the copper's other ligand an ammonia's N: as CHEM's worked row
+const copper = entry(
+  [
+    ["Cu", 0, 0, 0],
+    ["N", 2.0, 0, 0],
+    ["H", 2.4, 0.95, 0],
+  ],
+  [
+    { a1: 0, a2: 1, order: 1, coordination: true },
+    { a1: 1, a2: 2, order: 1 },
+  ],
+);
+
 describe("Restraints", () => {
   it("keeps a coordination bond at the factor given of the van der Waals radii together, Alvarez's B (1.91 Å) and N (1.66 Å), at the strength given", () => {
-    const rows = rowsOf(borane, restraintsOf(borane, { coordination: 0.9, strength: 1000 }));
+    const rows = rowsOf(borane, restraintRows(borane, { coordination: 0.9, strength: 1000 }));
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ kind: "distance", atoms: [0, 1], strength: 1000 });
     expect(rows[0].value).toBeCloseTo(0.9 * (1.91 + 1.66), 12);
-    expect(rowsOf(borane, restraintsOf(borane, { coordination: 1, strength: 5 }))[0].value).toBeCloseTo(3.57, 12);
+    expect(rowsOf(borane, restraintRows(borane, { coordination: 1, strength: 5 }))[0].value).toBeCloseTo(3.57, 12);
     // (none asked: none held)
-    expect(rowsOf(borane, restraintsOf(borane, {}))).toEqual([]);
+    expect(rowsOf(borane, restraintRows(borane, {}))).toEqual([]);
+  });
+
+  it("holds Cu-N in contact: 0.9 × (2.38 + 1.66) = 3.636 Å at 500 kcal/mol/Å², and says so - not a bond's length", () => {
+    const r = restraintRows(copper, { coordination: 0.9, strength: 500 });
+    if ("failed" in r) throw new Error(r.failed);
+    expect(r.rows).toHaveLength(1);
+    expect(r.rows[0].restraint).toEqual({ kind: "distance", atoms: [0, 1], value: expect.closeTo(3.636, 12), strength: 500 });
+    expect(r.rows[0].why).toBe("coordination bond in contact, 0.9 \u00d7 vdW (Alvarez)");
   });
 
   it("keeps listed pairs at their distance in the entry, and fixes listed atoms with neither value nor strength", () => {
@@ -76,37 +98,19 @@ describe("Restraints", () => {
       ],
       [],
     );
-    const r = restraintsOf(t, { distances: [[1, 2]], fixed: [0, 0], strength: 200 });
-    expect(rowsOf(t, r)).toEqual([
+    expect(rowsOf(t, restraintRows(t, { distances: [[1, 2]], fixed: [0, 0], strength: 200 }))).toEqual([
       { kind: "distance", atoms: [1, 2], value: 5, strength: 200 },
       { kind: "fixed", atoms: [0] },
     ]);
-    expect("count" in r && r.count).toEqual({ coordination: 0, distances: 1, fixed: 1, replaced: 0, torsionsKept: 0 });
   });
 
-  it("replaces the distances and atoms fixed an entry held, and keeps its torsions at the strengths they reached", () => {
-    const held = {
-      value: {
-        restraints: [
-          { kind: "distance" as const, atoms: [0, 1], value: 2, strength: 10 },
-          { kind: "dihedral" as const, atoms: [0, 1, 2, 3], value: 180, strength: 150 },
-          { kind: "fixed" as const, atoms: [2] },
-        ],
-      },
-      unit: "none" as const,
-      status: "computed" as const,
-    };
-    const e = butene(false, { restraints: held });
-    const r = restraintsOf(e, { fixed: [0] });
-    expect(rowsOf(e, r)).toEqual([
-      { kind: "dihedral", atoms: [0, 1, 2, 3], value: 180, strength: 150 },
-      { kind: "fixed", atoms: [0] },
-    ]);
-    expect("count" in r && [r.count.replaced, r.count.torsionsKept]).toEqual([2, 1]);
+  it("makes its rows from the entry alone: whatever it carried is no row of its", () => {
+    const held = { value: { restraints: [{ kind: "dihedral" as const, atoms: [0, 1, 2, 3], value: 180, strength: 150 }] }, unit: "none" as const, status: "computed" as const };
+    expect(rowsOf(butene(false), restraintRows(butene(false, { restraints: held }), { fixed: [0] }))).toEqual([{ kind: "fixed", atoms: [0] }]);
   });
 
   it("fails, with the reason: an atom the entry has not, an element with no radius, no strength for a distance, no 3D places", () => {
-    expect(restraintsOf(borane, { fixed: [4] })).toEqual({ failed: "It has no atom 5: its atoms are 1 to 4." });
+    expect(restraintRows(borane, { fixed: [4] })).toEqual({ failed: "It has no atom 5: its atoms are 1 to 4." });
     const pm = entry(
       [
         ["Pm", 0, 0, 0],
@@ -114,10 +118,80 @@ describe("Restraints", () => {
       ],
       [{ a1: 0, a2: 1, order: 1, coordination: true }],
     );
-    expect(restraintsOf(pm, { coordination: 0.9, strength: 1000 })).toEqual({ failed: "No van der Waals radius is known for Pm, so its coordination bond cannot be kept." });
-    expect(restraintsOf(borane, { coordination: 0.9 })).toEqual({ failed: "A distance held needs a strength above 0." });
-    expect(restraintsOf({ ...borane, geometry: { kind: "none" } }, {})).toEqual({ failed: "It has no 3D places to take restraints from." });
-    expect(restraintsOf({ ...borane, geometry: { kind: "frames", frames: [] } }, {})).toEqual({ failed: "It holds frames: take one frame first (Take frames)." });
+    expect(restraintRows(pm, { coordination: 0.9, strength: 1000 })).toEqual({ failed: "No van der Waals radius is known for Pm, so its coordination bond cannot be kept." });
+    expect(restraintRows(borane, { coordination: 0.9 })).toEqual({ failed: "A distance held needs a strength above 0." });
+    expect(restraintRows({ ...borane, geometry: { kind: "none" } }, {})).toEqual({ failed: "It has no 3D places to take restraints from." });
+    expect(restraintRows({ ...borane, geometry: { kind: "frames", frames: [] } }, {})).toEqual({ failed: "It holds frames: take one frame first (Take frames)." });
+  });
+});
+
+describe("a restraints table", () => {
+  const made = (restraint: Restraint, why = "typed"): RestraintRow => ({ restraint, why, for: "p1", on: "start", numbering: OWN_NUMBERING });
+  const rows: RestraintRow[] = [
+    made({ kind: "distance", atoms: [0, 1], value: 0.9 * (2.38 + 1.66), strength: 500 }, "coordination bond in contact, 0.9 \u00d7 vdW (Alvarez)"),
+    made({ kind: "dihedral", atoms: [0, 1, 2, 3], value: 180, strength: 50 }),
+    made({ kind: "dihedral", atoms: [4, 1, 2, 5], value: 180, exact: true }),
+    made({ kind: "fixed", atoms: [6, 3] }),
+  ];
+
+  it("says each row as a chemist reads it: what it is for, its kind, atoms from 1, its target in its unit, its strength with its unit - or exact", () => {
+    const t = restraintsTable(rows);
+    const at = (name: string) => t.columns.findIndex((c) => c.name === name);
+    expect(t.columns.find((c) => c.name === "target distance")).toMatchObject({ kind: "number", unit: "\u00c5" });
+    expect(t.columns.find((c) => c.name === "target angle")).toMatchObject({ kind: "number", unit: "\u00b0" });
+    expect(t.rows.map((r) => [r[at("for")], r[at("on")], r[at("kind")], r[at("atoms")], r[at("strength")]])).toEqual([
+      ["p1", "start", "distance", "1-2", "500 kcal/mol/\u00c5\u00b2"],
+      ["p1", "start", "torsion", "1-2-3-4", "50 kcal/mol/rad\u00b2"],
+      ["p1", "start", "torsion", "5-2-3-6", EXACT],
+      ["p1", "start", "atoms fixed", "7, 4", "fixed where they stand"],
+    ]);
+    // (a target is always a number: in its kind's column, the other blank)
+    expect(t.rows[0][at("target distance")]).toBeCloseTo(3.636, 12);
+    expect(t.rows[1][at("target angle")]).toBe(180);
+    expect(t.rows[1][at("target distance")]).toBeNull();
+  });
+
+  it("reads back as it was made, exact said - never read from a strength left out", () => {
+    expect(restraintRowsIn(restraintsTable(rows))).toEqual({ rows });
+    // (no strength in a torsion's cell: no row - neither held exactly nor at some strength)
+    const t = restraintsTable(rows);
+    const k = t.columns.findIndex((c) => c.name === "strength");
+    const blank = { ...t, rows: t.rows.map((r, i) => (i === 1 ? r.map((c, j) => (j === k ? "" : c)) : r)) };
+    expect(restraintRowsIn(blank)).toEqual({ why: 'Row 2 of the restraints does not read: its strength "" is neither "exact" nor a number above 0 in kcal/mol/rad\u00b2' });
+    // (a strength in another kind's unit: not taken for this one's)
+    const wrong = { ...t, rows: t.rows.map((r, i) => (i === 1 ? r.map((c, j) => (j === k ? "50 kcal/mol/\u00c5\u00b2" : c)) : r)) };
+    expect("why" in restraintRowsIn(wrong)).toBe(true);
+  });
+
+  it("is refused, the row named, where a row's strength is not above 0, an atom is named twice, or atoms fixed say a strength", () => {
+    const t = restraintsTable(rows);
+    const at = (name: string) => t.columns.findIndex((c) => c.name === name);
+    const cell = (r: number, name: string, v: string) => ({ ...t, rows: t.rows.map((x, i) => (i === r ? x.map((c, j) => (j === at(name) ? v : c)) : x)) });
+    expect(restraintRowsIn(cell(1, "strength", "0 kcal/mol/rad\u00b2"))).toEqual({ why: 'Row 2 of the restraints does not read: its strength "0 kcal/mol/rad\u00b2" is neither "exact" nor a number above 0 in kcal/mol/rad\u00b2' });
+    expect(restraintRowsIn(cell(1, "strength", "-50 kcal/mol/rad\u00b2"))).toMatchObject({ why: expect.stringContaining("Row 2") });
+    expect(restraintRowsIn(cell(0, "atoms", "1-1"))).toEqual({ why: 'Row 1 of the restraints does not read: its atoms "1-1" are not 2 different atoms from 1' });
+    expect(restraintRowsIn(cell(3, "strength", "500 kcal/mol/\u00c5\u00b2"))).toEqual({ why: 'Row 4 of the restraints does not read: atoms fixed have no strength, not "500 kcal/mol/\u00c5\u00b2"' });
+  });
+
+  it("is refused, saying why, where it is no restraints table: a column missing, a target in another unit", () => {
+    const t = restraintsTable(rows);
+    expect(restraintRowsIn({ ...t, columns: t.columns.filter((c) => c.name !== "numbering") })).toEqual({ why: 'It is no table of restraints: it has no column "numbering"' });
+    expect(restraintRowsIn({ ...t, columns: t.columns.map((c) => (c.name === "target distance" ? { ...c, unit: "nm" as const } : c)) })).toEqual({ why: 'Its column "target distance" is not in \u00c5' });
+  });
+
+  it("knows two rows hold the same atoms as the same kind, either way round", () => {
+    expect(restraintKey({ kind: "dihedral", atoms: [0, 1, 2, 3], value: 0, strength: 1 })).toBe(restraintKey({ kind: "dihedral", atoms: [3, 2, 1, 0], value: 180, exact: true }));
+    expect(restraintKey({ kind: "distance", atoms: [0, 1], value: 0, strength: 1 })).not.toBe(restraintKey({ kind: "dihedral", atoms: [0, 1, 2, 3], value: 0, strength: 1 }));
+  });
+});
+
+describe("a restraint held exactly", () => {
+  it("says so, with no strength; one with neither strength nor exact is no restraint", () => {
+    const e = butene(true);
+    expect(valueFault({ restraints: [{ kind: "dihedral", atoms: [0, 1, 2, 3], value: 180, exact: true }] }, e)).toBeNull();
+    expect(valueFault({ restraints: [{ kind: "dihedral", atoms: [0, 1, 2, 3], value: 180 }] }, e)).toBe("Restraint 1 has a strength of undefined");
+    expect(valueFault({ restraints: [{ kind: "dihedral", atoms: [0, 1, 2, 3], value: 180, strength: 5, exact: true }] }, e)).toBe("Restraint 1 is held exactly, so it has no strength");
+    expect(valueFault({ restraints: [{ kind: "fixed", atoms: [0], exact: true }] }, e)).toBe("Restraint 1 fixes atoms, so it has neither value nor strength");
   });
 });
 

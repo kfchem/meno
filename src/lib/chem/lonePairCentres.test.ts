@@ -95,13 +95,44 @@ describe("lonePairCentres", () => {
     expect(centres("N12CC1CCC2")).toEqual([]);
   });
 
-  it("keeps no atom without a lone pair, or with an H", () => {
-    // (an iminium's N+, SO3's S, a phosphonium's P+ of four)
+  it("keeps no atom without a lone pair", () => {
+    // (an iminium's N+, SO3's S, a phosphonium's P+ of four, a phosphonium's P+ of three and an H)
     expect(centres("C[N+](C)=CC")).toEqual([]);
     expect(centres("O=S(=O)=O")).toEqual([]);
     expect(centres("C[P+](C)(C)C")).toEqual([]);
-    // (a secondary phosphine's P carries an H: three neighbours, not three and a lone pair)
-    expect(centres("C[PH]CC")).toEqual([]);
+    expect(centres("C[PH+](C)C")).toEqual([]);
+  });
+
+  it("keeps a P, As, Sb or Bi with an H as without one - and no N, S, Se or Te with an H, its ring or charge notwithstanding (the maintainer, 2026-11-06)", () => {
+    // (the H carried, as a drawing and a SMILES have it: a secondary phosphine's P, an arsine's, a stibine's, a bismuthine's)
+    expect(centres("C[PH]CC")).toEqual(["P1"]);
+    expect(centres("C[AsH]c1ccccc1")).toEqual(["As1"]);
+    expect(centres("C[SbH]CC")).toEqual(["Sb1"]);
+    expect(centres("C[BiH]CC")).toEqual(["Bi1"]);
+    // (but not a 1H-phosphole's: aromatic with its lone pair, as an N-alkyl phosphole's is)
+    expect(centres("[PH]1C=CC=C1")).toEqual([]);
+    // (an oxaziridine's and a diaziridine's N-H: their N-methyl's kept, the N-H not)
+    expect(centres("CC1ON1C")).toEqual(["N3"]);
+    expect(centres("CC1O[NH]1")).toEqual([]);
+    expect(centres("CN1C(C)[NH]1")).toEqual(["N1"]);
+    // (a sulfonium's, a selenonium's and a telluronium's with an H; a sulfoxide's with one)
+    expect(centres("C[S+](CC)CCC")).toEqual(["S1"]);
+    expect(centres("C[SH+]CC")).toEqual([]);
+    expect(centres("C[SeH+]CC")).toEqual([]);
+    expect(centres("C[TeH+]CC")).toEqual([]);
+    expect(centres("C[SH]=O")).toEqual([]);
+    // (the H an atom of its own, as every H is in 3D: the same)
+    const own = (els: string[], pairs: [number, number][], charge = 0) =>
+      lonePairCentres(
+        els.map((el, i) => ({ el, ...(i === 0 && charge ? { charge } : {}), hs: 0 })),
+        pairs.map(([a, b]) => ({ a, b, order: 1 })),
+      )(0);
+    expect(own(["P", "C", "C", "H"], [[0, 1], [0, 2], [0, 3]])).toBe(true);
+    expect(own(["As", "C", "C", "H"], [[0, 1], [0, 2], [0, 3]])).toBe(true);
+    expect(own(["N", "C", "O", "H"], [[0, 1], [0, 2], [1, 2], [0, 3]])).toBe(false);
+    expect(own(["N", "C", "O", "C"], [[0, 1], [0, 2], [1, 2], [0, 3]])).toBe(true);
+    expect(own(["S", "C", "C", "H"], [[0, 1], [0, 2], [0, 3]], 1)).toBe(false);
+    expect(own(["Se", "C", "C", "H"], [[0, 1], [0, 2], [0, 3]], 1)).toBe(false);
   });
 
   it("reads through no metal: an N whose ring closes at a metal is held by none", () => {
@@ -132,7 +163,12 @@ describe("pyramidal", () => {
     expect(pyramidal("O", 1, 3, 3, 0)).toBe(true);
     expect(pyramidal("N", 0, 3, 3, 0)).toBe(false);
     expect(pyramidal("S", 0, 3, 6, 0)).toBe(false);
-    expect(pyramidal("P", 0, 2, 2, 1)).toBe(false);
+    // (an H carried counted among its three: a secondary phosphine's P, a sulfonium's S+-H - a pyramid, kept or not)
+    expect(pyramidal("P", 0, 2, 2, 1)).toBe(true);
+    expect(pyramidal("S", 1, 2, 2, 1)).toBe(true);
+    expect(pyramidal("P", 0, 3, 3, 1)).toBe(false);
+    // (an S+ of a double bond, a single bond and an H: its H counted, no lone pair left)
+    expect(pyramidal("S", 1, 2, 3, 1)).toBe(false);
   });
 });
 

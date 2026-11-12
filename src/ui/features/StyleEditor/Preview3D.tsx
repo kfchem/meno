@@ -8,6 +8,7 @@ import Molecule3DView from "../Workspace/components/Molecule3DView";
 import { watchShaderErrors } from "../Workspace/utils/menoShader";
 import { solidOf } from "../Workspace/utils/molecule3d";
 import { SAMPLE_3D, SAMPLE_TURN } from "./sample3d";
+import { FOV, FRAMING_TAU, framedAt } from "./framing";
 import { idleClockWhileSeen } from "./idleClock";
 import { markTurning } from "./sampleTurn";
 
@@ -24,9 +25,6 @@ const IDLE_TAU = 0.8;
 /** How far, in pixels, a press goes before it turns the sample: short of it, it is a click, which picks it (`onTap`). */
 const TURN_PX = 4;
 
-/** The preview's field of view, in degrees, and how gently its camera goes to another look's distance, in seconds. */
-const FOV = 30;
-const FRAMING_TAU = 0.12;
 
 /**
  * The sample molecule drawn live in a style, as a molecule on the canvas is
@@ -84,9 +82,9 @@ function Framing({ style, look }: { style: Style3D; look: Role3D }) {
   const placed = useRef(false);
   useEffect(() => invalidate(), [look, invalidate]);
   useFrame((_, dt) => {
-    // (it stands as high as it reaches; seen from that far again, and as much once more to fit)
+    // (it stands as high as it reaches; seen from that far again, and as much once more to fit: ./framing)
     const reach = solid.reach[look];
-    const to = reach + (reach * 1.15) / Math.tan(((FOV / 2) * Math.PI) / 180);
+    const to = framedAt(reach);
     const z = camera.position.z;
     const next = placed.current ? to + (z - to) * Math.exp(-Math.min(dt, 1 / 30) / FRAMING_TAU) : to;
     placed.current = true;

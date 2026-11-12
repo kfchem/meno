@@ -419,13 +419,22 @@ alone. The ideal is that taking the .meno out takes everything out."
   says so, names the largest steps, and offers *Don't keep raw outputs* on
   them. It never drops anything by itself.
 
-**What a set shows** depends on its size:
-- **up to 50 entries, on the page**, as today (question 15, answered). An
-  entry with frames shows its frames chip;
-- **more, as a summary in its frame**: its count with nouns, a grid of a
-  sample of its structures (drawn in 2D by Meno's own layout where they have
-  no drawing), and histograms of the properties chosen. It also opens as a
-  table in the column, and any entries can be put on the page from there.
+**What a set shows** depends on its size - and on whether its exit is
+wired on: a step's result set wired on to another step is held, shown
+nowhere, what it holds kept as a large set keeps it (WORKFLOWS.md,
+*Held results*, 2026-11-05). An exit for what its step sets aside, wired
+on to none, shows nothing while it holds nothing: its port alone
+(WORKFLOWS.md, *Exits that set aside*). Otherwise, by its size:
+- **up to 50 molecules, on the page**, as today (question 15, answered):
+  one for each molecule or conformer set, never counted by its frames (3
+  compounds of 200 conformers are 3 molecules). An entry with frames shows
+  its frames chip;
+- **more, one at a time in its frame** (2026-11-11): its tab says the count
+  with nouns, and its frame shows one of them with a stack chip to go
+  through them - a view of the set, not a molecule of the page. It also
+  opens as a table in the column, and any entries can be put on the page
+  from there. (Superseded 2026-11-11: a summary in its frame - a grid of a
+  sample of its structures and histograms of the properties chosen.)
 
 **Members are explicit** (question 2, answered; refining decision 5):
 - a set's members are a list in order: its collection's;
@@ -464,7 +473,8 @@ pairing based on those IDs"):
 
 **Every exit is a result set** (question 1, answered; refining decision 9),
 made with the step, empty until it runs, to the right of the card. The
-card's own give port goes.
+card's own give port goes. (Each exit came to have a port of its own on
+the card, its set's, 2026-11-05: WORKFLOWS.md, *Exit ports*.)
 
 **Second exits.** A node that can fail entries, or set entries aside, has a
 second exit for them (revisiting question 19, question B below):
@@ -561,6 +571,15 @@ cores and memory fit what is free, and keeps the order they were asked
 for: a job never jumps ahead of an earlier one. A job's cores and memory
 are what its plugin declares; what the runner may use is capped in
 Settings, all cores and three quarters of the memory by default.
+It keeps the computer from sleeping for want of use while a job's
+program runs, so that a calculation left overnight is not cut short:
+each job's runner holds it from when its program starts until it and the
+programs after it end, whether Meno is open or not (macOS: the system's
+`caffeinate`; Windows: the runner's thread saying the system is needed;
+elsewhere nothing). The display may still turn off, and a lid closed or
+a sleep asked for is the person's. Settings, *Calculations*, can turn it
+off ("Keep the computer awake while calculations run";
+`src-tauri/src/awake.rs`).
 
 **Cluster jobs are submit-and-return.** Meno submits, keeps the job's record
 (scheduler, its job id, the key), and returns. It takes the job up again
@@ -763,7 +782,10 @@ Each option is read in one of three ways:
 - **an element's symbol** is that atom: `Cl`, `F`, `H`;
 - **a line with a `*` is SMILES**, read as a chemist's own abbreviation is
   (`structureProblem`): exactly one `*`, bonded by one single bond to the
-  atom the group is attached by.
+  atom the group is attached by. A double bond's cis or trans written in it
+  (`/` and `\`, `*/C=C/C` for (E)-prop-1-enyl) is kept in each product, its
+  side against the `*` taken as the atom it is attached to (`smilesGroup`):
+  so are a centre's `@` and `@@`.
 
 A line without a `*` is never read as SMILES, so `CO` is a label, and its
 reading is shown. Beside each line the step shows what it was read as: the

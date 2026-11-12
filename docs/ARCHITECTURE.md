@@ -178,6 +178,15 @@ its own history (Ctrl+Z belongs to the active tab, not the whole app), edits
 sharing a `coalesceKey` inside a short window collapse into one step (a drag
 must not need one undo per frame), and the stack is capped.
 
+On a Mac the app menu's Edit > Undo and Redo go the same way as the keys
+(`lib/doc/editMenu`, `src-tauri/src/editmenu.rs`): Tauri's own items undo only
+what the web view edits, so the two are Meno's. Choosing one tells the page,
+which undoes or redoes the active tab's document - or, with a field of the
+browser's own undo in focus (a single-line input, rich text, a text box that
+says so), that field - and the page tells the menu which has a step to take,
+the other greyed (both stay on in such a field). Windows and Linux show no
+app menu, so the keys are all there is.
+
 An edit may say who made it where it was not the person at the keyboard
 (`EditMeta.by`: "a conversation, by <its connection>"). The history keeps it
 with the step (`history().undoBy`, `redoBy`), and a step made by one is never
@@ -722,6 +731,31 @@ closes*).
   memory where there is none) - or where none runs, whatever its size.
   One behind it never starts first. How often a waiting job looks is
   reckoned as if as many of its size ran at once as fit.
+- **Only those near the head wait on the queue's lock** (2026-11-06). A
+  waiting runner first sees where it stands from the jobs' records alone,
+  without the lock and writing nothing (`glance`); one far back is told so
+  and sleeps, and only those near the head (`near_head`) look again under
+  the lock, where the head takes its turn. Each runner remembers the jobs
+  it has seen finished and reads them no more. A waiting job whose runner
+  is gone (a Meno ended with a queue) is not counted ahead in the glance,
+  so a live one behind is never held back for ever: near the head, the
+  look under the lock records it gone, as before. So the head of a queue of
+  hundreds never waits behind them all for the lock as a job ends: every
+  runner looking at hundreds of folders under the one lock held it most of
+  the time, and on a computer whose files open slowly the next job started
+  seconds after one ended. 300 jobs of 0.3 s one at a time, on a Mac: from
+  one's end to the next one's start 60 ms on average and 2.2 s at most
+  before, 42 ms and 0.2 s after (`a_long_queue_starts_the_next_job_as_one_ends`,
+  run by hand).
+- **A stop is seen at the queue's lock too** (2026-11-11). A runner near
+  the head never waits on the lock blind: it tries for it every 10 ms
+  (`lock_watching`), looking for its stop between tries, and asked to stop
+  it ends without taking it. Waiting on the lock itself, a runner saw no
+  stop until the lock came to it, after each before it had looked at every
+  job's folder under it: on a computer whose files open slowly, a step's
+  Stop left hundreds of runners waiting at the lock, each stopping only as
+  its turn at the lock came
+  (`a_waiting_job_asked_to_stop_ends_while_another_holds_the_queues_lock`).
 - **Looked at often while young** (2026-10-13). The runner looks for its
   turn every 400 ms, and at its program every 200 ms - but every 50 ms
   for the first 3 s of a program, and of a job at the head of the queue,
@@ -1361,8 +1395,10 @@ closing quits Meno once they have been asked to stop.
 | `plugin_stage`, `plugin_commit`, `plugin_discard` | `lib/plugins/online.ts` | A plugin's files from the catalogue: fetched, checked and unpacked into a stage; taken into use as its version, `current` naming it; or thrown away (`catalogue.rs`). |
 | `plugin_files_remove` | - | A plugin's files taken away: `current` first, then its folder (`catalogue.rs`). |
 | `ext_spawn_sidecar` | `lib/plugins/process.ts` | Spawn a process with piped stdio; returns an id. |
-| `ext_stdin` | `lib/plugins/process.ts` | Write to a sidecar's stdin. |
+| `ext_stdin` | `lib/plugins/process.ts` | Write to a sidecar's stdin: to a model plugin's worker, whole lines alone, each a JSON object and none a converse (`model.rs`). |
 | `ext_kill` | `lib/plugins/process.ts` | Kill a sidecar and emit `ext:exit`. |
+| `ext_converse` | `lib/plugins/process.ts` | A converse request to a model plugin's worker, the person's key added from the keychain; the one way such a request reaches it (`model.rs`). |
+| `model_key_set`, `model_key_forget`, `model_key_held` | `lib/roles/modelKey.ts` | A model plugin's key kept in the system's keychain, forgotten, or whether one is kept - never read back (`model.rs`). |
 | `pdf_hold_path`, `pdf_hold_bytes` | `lib/pdf/reader.ts` | A PDF held in Meno's cache by its SHA-256; its pages' sizes (`pdf.rs`). |
 | `pdf_bytes` | `utils/workspace.ts` | A PDF held, as its bytes, for a workspace's file. |
 | `pdf_render` | `lib/pdf/reader.ts` | A part of a page drawn by PDFium, as a PNG. |
@@ -1475,12 +1511,20 @@ page reads anything of them (`catalogue.rs`):
   (`HOSTS`); the proxy follows it to those alone. It is checked against
   Meno's own public keys (minisign, `minisign-verify`) - the one in use and
   the next, so that a key is changed by a Meno that carries both first -
-  before it is parsed at all. Then its form, and its serial against the one
-  kept: a lower one is refused and the one kept stays, so that an older list
-  replayed never undoes a plugin taken off it. None but a list checked is
-  kept: `catalogue.json`, its `.minisig` and `catalogue-state.json` (its
-  serial, and when it was fetched), each written whole. The one kept is
-  checked again each time it is read. Until a key is carried, no list is
+  before it is parsed at all. Then its form, and when it was issued against
+  the one kept: an earlier one is refused, and one of the same second only
+  taken where it is that very list, so that an older list replayed never
+  undoes a plugin taken off it. None but a list checked is kept:
+  `catalogue-2.json`, its `.minisig` and `catalogue-2-state.json` (when it
+  was issued, its SHA-256, and when it was fetched), each written whole. The
+  one kept is checked again each time it is read. This Meno fetches
+  `catalogue-2.json`, the whole list; an earlier Meno fetched
+  `catalogue.json`, the plugins every Meno in use reads whole (PLUGINS.md,
+  *Plugins online*). Until this Meno's is first fetched, the one an earlier
+  Meno kept is shown, and holds a fetched one to when it was issued, and
+  that alone: the two of one release are issued the same second, as
+  different files, and an older list, signed, served in this Meno's place
+  is still refused. Until a key is carried, no list is
   taken. Only minisign's own signatures, made over the list's hash, are
   taken - never its older form, made over the list itself.
 - **A plugin's files** (`plugin_stage`) are found by their id and version in

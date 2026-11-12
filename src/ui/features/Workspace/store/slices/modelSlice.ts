@@ -14,6 +14,7 @@ import { newBondFrom } from "../../utils/geometry";
 import { bondLengthFrom } from "../../utils/magnified";
 import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
+import { renumbered } from "../../chem/atomMap";
 import { useReadings } from "../../../../../lib/calc/readings";
 import type { ImportedScheme, WorkspaceDocument } from "../../document";
 import type { ArrowLook } from "../../../../../lib/chem/reactionArrow";
@@ -30,11 +31,13 @@ import type { SavedText, Workspace } from "../../utils/workspace";
 import { StoreApi } from "zustand";
 import { nextIdAfter } from "../../workflow/saved";
 import { membersFound } from "../../workflow/model";
+import { heldSettled } from "../../workflow/held";
+import { framesFitted } from "../../workflow/fitFrames";
 import { appendParts, carriedRenumbered, NO_PARTS, removeParts } from "../../workflow/parts";
 import { holdsOwn } from "../../workflow/entries";
 import { recordsShownAdded, recordsShownOf, shownModel } from "../../utils/stacks";
 import { editAtTrueSize } from "../../utils/trueSize";
-import { style3dOf } from "../../style3d";
+import { extentIn, style3dOf } from "../../style3d";
 import { hapticStars } from "../../chem/eta";
 import { workspace3dOf } from "../../../../../lib/chem/workspaceStyle3d";
 import { principalTurn } from "../../utils/align3d";
@@ -178,14 +181,14 @@ export const createModelSlice = (
     );
   },
 
-  bondOut: (id: number, toward: { x: number; y: number }) => {
+  bondOut: (id: number, toward: { x: number; y: number }, order: Bond["order"] = 1) => {
     const { model } = get();
     const end = newBondFrom(model.atoms, model.bonds, id, toward, bondLengthFrom(model.atoms, id));
     if (!end) return null;
     // (one gesture, one undo step: the atom and its bond together - or the bond alone, onto the atom it ends on)
     const near = get().findAtomNear(end.x, end.y, NOMINAL_BOND_LENGTH * 0.3, id);
-    if (near != null) return get().connectAtoms(id, near, 1) == null ? null : near;
-    return get().addAtomBonded(id, end.x, end.y, "C", 1);
+    if (near != null) return get().connectAtoms(id, near, order) == null ? null : near;
+    return get().addAtomBonded(id, end.x, end.y, "C", order);
   },
 
   findAtomNear: (
@@ -295,6 +298,56 @@ export const createModelSlice = (
 
   setAtomMap: (arrowId: number, map: ArrowAtomMap | null) => {
     doc.edit("atom map", (d) => ops.setAtomMap(d, arrowId, map));
+  },
+
+  addStructureMaps: (maps: readonly ArrowAtomMap[], replacing: readonly number[] = []) => {
+    if (maps.length) doc.edit("atom map", (d) => ops.addStructureMaps(d, maps, replacing).doc);
+  },
+
+  joinStructures: (ids: Iterable<number>) => {
+    const atoms = [...ids];
+    doc.edit("make one structure", (d) => ops.joinStructures(d, atoms));
+  },
+
+  separateStructures: (ids: Iterable<number>) => {
+    const atoms = [...ids];
+    doc.edit("separate", (d) => ops.separateStructures(d, atoms));
+  },
+
+  showStructureMaps: (ids: readonly number[], shown: boolean) => {
+    const of = new Set(ids);
+    doc.edit(shown ? "show atom map" : "hide atom map", (d) => ops.setStructureMaps(d, (d.structureMaps ?? []).map((m) => (of.has(m.id) ? { ...m, map: { ...m.map, shown } } : m))));
+  },
+
+  otherStructureMaps: (ids: readonly number[]) => {
+    const of = new Set(ids);
+    doc.edit("other atom map", (d) =>
+      ops.setStructureMaps(
+        d,
+        (d.structureMaps ?? []).map((m) => (of.has(m.id) && m.map.maps.length > 1 ? { ...m, map: { ...m.map, chosen: (m.map.chosen + 1) % m.map.maps.length, shown: true } } : m)),
+      ),
+    );
+  },
+
+  renumberStructureMaps: (ids: readonly number[]) => {
+    const of = new Set(ids);
+    doc.edit("renumber atoms", (d) => {
+      const drawn = new Map(d.model.atoms.map((a, i) => [a.id, i]));
+      return ops.setStructureMaps(
+        d,
+        (d.structureMaps ?? []).map((m) => (of.has(m.id) && m.map.complete ? { ...m, map: { ...m.map, numbers: renumbered(m.map, drawn), shown: true } } : m)),
+      );
+    });
+  },
+
+  pairStructureMap: (id: number, pairs: { before: number[]; after: number[] }) => {
+    doc.edit("pair conformers", (d) => ops.setStructureMaps(d, (d.structureMaps ?? []).map((m) => (m.id === id ? { ...m, map: { ...m.map, pairs } } : m))));
+  },
+
+  renumberAtomMap: (arrowId: number) => {
+    const map = get().arrows.find((a) => a.id === arrowId)?.atomMap;
+    if (!map?.complete) return;
+    doc.edit("renumber atoms", (d) => ops.setAtomMap(d, arrowId, { ...map, numbers: renumbered(map, new Map(d.model.atoms.map((a, i) => [a.id, i]))), shown: true }));
   },
 
   showAtomMap: (arrowId: number, shown: boolean) => {
@@ -470,8 +523,9 @@ export const createModelSlice = (
       const next = ops.withImportedScheme(ops.replaceModel(d, drawn), ops.schemeOf(drawn));
       // (a workflow's parts by their own ids, each set's members as the file said them: utils/workspace)
       const workflow = ws.workflow ? { ...ws.workflow, nextWorkflowId: nextIdAfter(ws.workflow) } : {};
-      // (sets of a file saved before sets kept their members: what lies inside each frame, read once)
-      return membersFound(ops.setDocumentStyle3d(ops.setDocumentStyle(
+      // (sets of a file saved before sets kept their members: what lies inside each frame, read once - and each result set
+      //  wired on held off the page, as every edit keeps them: workflow/held - here too where it opens with no edit, start)
+      const found = membersFound(ops.setDocumentStyle3d(ops.setDocumentStyle(
         {
           ...next,
           ...workflow,
@@ -490,6 +544,10 @@ export const createModelSlice = (
           nextSlideId: (drawn.slides ?? []).length + 1,
           inks: (drawn.inks ?? []).map((k, i) => ({ ...k, id: i + 1 })),
           nextInkId: (drawn.inks ?? []).length + 1,
+          // (its atom maps between structures, as it was saved: what they show is on its drawing and its molecules already)
+          ...(ws.structureMaps?.length ? { structureMaps: ws.structureMaps, nextStructureMapId: ws.structureMaps.length + 1 } : {}),
+          conversations: (ws.conversations ?? []).map((c, i) => ({ ...c, id: i + 1 })),
+          nextConversationId: (ws.conversations ?? []).length + 1,
         },
         // (a file saved without one: Settings' style, set as it is - fixed, not converted; opened in a tab, no change made)
         ws.style ?? useAppSettings.getState().drawingStyle,
@@ -497,6 +555,8 @@ export const createModelSlice = (
         // (and its styles in 3D - a file saved before workspaces carried them: Settings' as it opens, fixed from then on)
         ws.style3d ?? workspace3dOf(useAppSettings.getState().style3d),
       ));
+      // (and each frame its members' room, as an edit leaves it: a file saved with frames sized by hand, or before molecules were drawn as they are now, is fitted as it opens)
+      return framesFitted(heldSettled(found, undefined, extentIn(found)), undefined, extentIn(found));
     };
     if (start) doc.reset(opened(doc.getState()), "open workspace");
     else doc.edit("open workspace", opened);
@@ -510,6 +570,9 @@ export const createModelSlice = (
     // a stack of drawings, the record marked: utils/stacks)
     const recordsShown = recordsShownOf(drawn.atoms);
     const stacksShown: EditorState["stacksShown"] = {};
+    // (and each large result set's view the molecule it showed: workflow/heldView)
+    const heldShown: EditorState["heldShown"] = {};
+    for (const b of doc.getState().sets ?? []) if (b.collection && b.shown != null) heldShown[b.id] = b.shown;
     const opened3d = doc.getState().molecules3d ?? [];
     (drawn.molecules3d ?? []).forEach((m, i) => {
       const stack = opened3d[i]?.stack;
@@ -523,7 +586,7 @@ export const createModelSlice = (
     const pdfShown = ws.pdfShown != null ? ws.pdfShown + 1 : null;
     // (what its file held that could not be read: said on every save - and, opened as the document, its file kept beside the first saved over it; opened into one, never its file to keep)
     const leftOnOpen = start ? (ws.leftOut ? { left: ws.leftOut, kept: false } : null) : ws.leftOut ? { left: leftTogether(get().leftOnOpen?.left, ws.leftOut), kept: true } : get().leftOnOpen;
-    set((prev: EditorState) => ({ ...prev, turns3d, frames3d, lists3d, stacksShown, recordsShown, model: shownModel(prev.fullModel, recordsShown), textShown: shown ?? texts[0]?.id ?? textsLost[0]?.id ?? null, pdfShown, textsOpen: shown != null || pdfShown != null, leftOnOpen }));
+    set((prev: EditorState) => ({ ...prev, turns3d, frames3d, lists3d, stacksShown, heldShown, recordsShown, model: shownModel(prev.fullModel, recordsShown), textShown: shown ?? texts[0]?.id ?? textsLost[0]?.id ?? null, pdfShown, textsOpen: shown != null || pdfShown != null, leftOnOpen }));
   },
 
   /** A file opened over what the canvas holds: one step, arrow and all. */
@@ -552,6 +615,7 @@ export const createModelSlice = (
       selFlow: { sets: new Set<number>(), steps: new Set<number>() },
       chosen3d: null,
       hoveredSet: null,
+      hoveredExit: null,
       chosenSet: null,
       // (sets read as tables: of the old document's sets)
       setsRead: [],
@@ -563,6 +627,7 @@ export const createModelSlice = (
       wireDrag: null,
       wireRefused: null,
       workflowMenu: null,
+      chipOver: null,
       turns3d: {},
       frames3d: {},
       hovered3d: null,

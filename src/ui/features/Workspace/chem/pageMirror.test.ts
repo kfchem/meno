@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { readMolfile } from "../../../../lib/chem/ctfile";
 import type { ChemClient } from "../../../../lib/roles/client";
 import type { Model } from "../store/types";
@@ -293,6 +293,63 @@ describe("the page's mirror images", () => {
       expect(made).toHaveLength(2);
       made.forEach((c, k) => expect(hasConfiguration(c, block.part, isomers[k]), `${order} ${k}`).toBe(true));
       expect(made.map((c) => c.cip.atoms["1"])).toEqual(order.map((s) => (s > 0 ? "R" : "S")));
+    }
+  });
+
+  it("asks for each stereoisomer alone, in rounds of its own, where the search is asked in rounds", async () => {
+    // (butane-2,3-diol's two enantiomers and its meso form, as below: two made themselves, never asked together here)
+    const diol: Model = {
+      atoms: [...butanol("up").atoms, { id: 6, x: 2.6, y: -1.5, r: 0.9, el: "O" }],
+      bonds: [...butanol("up").bonds.map((b) => (b.id === 14 ? { ...b, stereo: undefined } : b)), { id: 15, a: 3, b: 6, order: 1 }],
+    };
+    const isomers = (
+      [
+        [1, -1],
+        [-1, 1],
+        [1, 1],
+      ] as const
+    ).map(([p, q]) => ({ centres: [centre(1, [0, 2, 4], p), centre(2, [1, 3, 5], q)], doubles: [] as [] }));
+    const { chem, asked } = shaper();
+    const [block] = blocksOf(diol, [1]);
+    const made = await conformersOf(chem, opener([1, 2], isomers), block, "all", {}, 10, { window: 3, first: 10, most: 5000 });
+    expect(asked).toEqual([1, 1, 1]);
+    expect(made).toHaveLength(3);
+    // (this plugin gives no energies: each asked once, and said why)
+    for (const c of made) expect(c.how?.find((r) => r.label === "Rounds")?.text).toBe("1 round, 10 tried: no energies came with them to tell a new conformer by");
+  });
+
+  it("gives each stereoisomer's rounds what is left of the ten minutes a search takes at most - all of them within it", async () => {
+    // (the two enantiomers of the diol below, each try a fake six seconds, each draw a new conformer of one energy: the first takes
+    //  4 rounds, 80 tries - 480 s, the next round past 600 - and the second the 120 s left, 2 rounds)
+    const diol: Model = {
+      atoms: [...butanol("up").atoms, { id: 6, x: 2.6, y: -1.5, r: 0.9, el: "O" }],
+      bonds: [...butanol("up").bonds.map((b) => (b.id === 14 ? { ...b, stereo: undefined } : b)), { id: 15, a: 3, b: 6, order: 1 }],
+    };
+    const isomers = (
+      [
+        [1, -1],
+        [-1, 1],
+      ] as const
+    ).map(([p, q]) => ({ centres: [centre(1, [0, 2, 4], p), centre(2, [1, 3, 5], q)], doubles: [] as [] }));
+    let clock = 0;
+    const now = vi.spyOn(Date, "now").mockImplementation(() => clock);
+    try {
+      const base = shaper();
+      const chem = {
+        request: async (op: string, args: { count?: number; draw?: number }) => {
+          clock += (args.count ?? 0) * 6000;
+          const got = (await base.chem.request(op as never, args as never)) as unknown as { isomers: { frames: number[][] }[] };
+          return { isomers: got.isomers.map((c) => ({ ...c, frames: c.frames.map((f) => f.map((v, i) => (i === 0 ? v + 0.4 * (args.draw ?? 0) : v))), energies: c.frames.map(() => -1) })) };
+        },
+      } as unknown as ChemClient;
+      const [block] = blocksOf(diol, [1]);
+      const made = await conformersOf(chem, opener([1, 2], isomers), block, "all", {}, 10, { window: 3, first: 10, most: 5000 });
+      expect(made.map((c) => c.how?.find((r) => r.label === "Rounds")?.text)).toEqual([
+        "4 rounds, 80 tried: the 10 minutes a search takes at most",
+        "2 rounds, 20 tried: the 10 minutes a search takes at most",
+      ]);
+    } finally {
+      now.mockRestore();
     }
   });
 

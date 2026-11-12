@@ -26,11 +26,15 @@ import type { PythonPlugin } from "../calc/catalog";
 import { counter, ReaderClient } from "../calc/client";
 import { workerQueue } from "./queue";
 import { idleWatch, watchAll } from "./idle";
+import { awake } from "./awake";
 import { liveJobsOf } from "../jobs";
 import { ChemClient } from "../roles/client";
 
 /** A plugin's worker, running: its clients - for files and steps, and for the roles it fills - its process, and its version. */
 export type PluginWorker = { reader: ReaderClient; chem: ChemClient; id: string; version: string };
+
+/** A converse request, as the clients write one (roles/client `request`): its id, then its op. */
+const CONVERSE = /^\{"id":\d+,"op":"converse"[,}]/;
 
 /** How long a worker's first import may take: a cold start is slow. */
 const READY_MS = 90_000;
@@ -101,7 +105,10 @@ async function start(p: PythonPlugin, mine: () => boolean): Promise<PluginWorker
   };
   const transport = {
     send: (line: string) => {
-      if (id !== null) void invoke("ext_stdin", { id, data: line + "\n" });
+      if (id === null) return;
+      // (a converse request goes by the one way the backend takes it, which adds the person's key: src-tauri/src/model.rs)
+      if (CONVERSE.test(line)) return invoke("ext_converse", { id, request: line });
+      void invoke("ext_stdin", { id, data: line + "\n" });
     },
     listen: (f: (line: string) => void) => {
       onLine.add(f);
@@ -120,7 +127,9 @@ async function start(p: PythonPlugin, mine: () => boolean): Promise<PluginWorker
     chem.handOver(async () => (await workerOf(p)).chem);
   };
   const idle = idleWatch(() => stopIfUnused(p, mine, idle, handOver));
-  const queue = watchAll(held, idle);
+  // (the computer kept awake while it works on a question long: ./awake)
+  const kept = awake.watch();
+  const queue = watchAll(held, idle, kept);
   const reader = new ReaderClient(p.name, transport, undefined, ids, queue);
   const chem = new ChemClient(transport, undefined, p.name, ids, queue);
   const errs: Line[] = [];
@@ -139,6 +148,7 @@ async function start(p: PythonPlugin, mine: () => boolean): Promise<PluginWorker
   const stopExit = await listen<string>("ext:exit", (e) => {
     if (JSON.parse(e.payload).id !== id) return;
     idle.end();
+    kept.end();
     // (gone as it started: why, as it said - a module it could not import, say)
     const told = errs.filter((m) => m.id === id && m.line.trim());
     const why = told.length ? told[told.length - 1].line.trim() : null;
@@ -157,6 +167,7 @@ async function start(p: PythonPlugin, mine: () => boolean): Promise<PluginWorker
   } catch (e) {
     // (not started: nothing left listening)
     idle.end();
+    kept.end();
     unhear();
     throw e;
   }
@@ -172,6 +183,7 @@ async function start(p: PythonPlugin, mine: () => boolean): Promise<PluginWorker
     return { reader, chem, id: worker, version };
   } catch (e) {
     idle.end();
+    kept.end();
     void invoke("ext_kill", { id: worker }).catch(() => undefined);
     throw e;
   }

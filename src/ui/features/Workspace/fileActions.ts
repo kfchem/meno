@@ -5,12 +5,13 @@ import { pushShapes } from "./utils/pushes";
 import { exists } from "@tauri-apps/plugin-fs";
 import { fileNow } from "../../../lib/jobs";
 import { writeDocument, type Appended } from "../../../lib/io/writeDocument";
-import { jobsToKeep, LARGE_WORKSPACE_MB, sizeAsk, type SizeAsk } from "./workflow/keptJobs";
+import { clearSavedJobs, jobsToKeep, LARGE_WORKSPACE_MB, sizeAsk, type SizeAsk } from "./workflow/keptJobs";
 import { MOST_FILE } from "../../../lib/doc/menoFile";
 import { truePath } from "../../../lib/io/truePath";
 import { turnsOf } from "../../../lib/doc/saveTurns";
 import { heldElsewhere } from "../../../lib/doc/savers";
-import { mapStanding, mappedPairSdf } from "./chem/atomMap";
+import { exportOf, mappedPairSdf } from "./chem/atomMap";
+import { pairedSdf } from "./chem/structureMaps";
 import { useCallback, useRef, useState } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { asBonds, bondLinePtOf, fillOutline, flattenedCurve, lineWidthOf, outlineCurve, shapeBounds, strokePieces } from "../../../lib/chem/shapes";
@@ -23,7 +24,7 @@ import { withRingStars, writeMolfile, writeMolfile3d, writeSdf, type Atom3D } fr
 import { forFlatReaders } from "./chem/drawing";
 import { reactionArrows, reactionFileText } from "./chem/reactionFile";
 import { styleOf, type DrawingStyle } from "../../../lib/chem/style";
-import { useAppSettings } from "../../../lib/settings/appSettings";
+import { keepsJobFolders, useAppSettings } from "../../../lib/settings/appSettings";
 import { editorLayoutOptions, layoutBonds } from "./layoutOptions";
 import { useEditorStore } from "./store";
 import type { Carried3D, Drawn, DrawnRecord, EditorState, Model } from "./store/types";
@@ -886,6 +887,11 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
       );
       store.getState().markSavedAs(kept, at.written);
       store.getState().markLeftKept();
+      // (its jobs' folders, every file of them held by the file just written as it reads back: moved to the Trash where
+      //  Settings does not keep them - not kept, by default - and, where any stayed though finished, said once:
+      //  docs/WORKFLOWS.md, *A job's folder*)
+      if (!keepsJobFolders(useAppSettings.getState().calculations))
+        void clearSavedJobs(kept, at.jobs).then(({ said }) => said && setError((e) => (e ? `${e} ${said}` : said)));
       naming.current?.(fileNameOf(kept));
       // (saved - new work is not lost for a file it could not keep - and each such file named, where Save's failures are, till dismissed; and, each time, what was left out as it opened)
       const keptAs = old && fileNameOf(old);
@@ -979,19 +985,24 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
 
   /**
    * A drawn reaction written in 3D, where its arrow's atom map is ready
-   * (chem/atomMap `mappedPairSdf`): an SD file of two records, the
-   * reactants and the product in the reactants' numbering, where the
-   * chemist says.
+   * (chem/atomMap `mappedPairSdf`) - or a map between structures on the
+   * page (chem/structureMaps), Before as the reactants, After as the
+   * product: an SD file of two records, the reactants and the product in
+   * the reactants' numbering, where the chemist says.
    */
   const exportReaction3d = useCallback(
-    (arrowId: number) =>
+    (of: { arrow: number } | { structureMap: number }) =>
       attempt("Export", async () => {
         const state = store.getState();
-        const map = state.arrows.find((a) => a.id === arrowId)?.atomMap;
-        if (!map || mapStanding({ atomMap: map }, state.model) !== "ready") throw new Error("The reaction has no atom map of it as it is drawn.");
+        const found = exportOf(state, of);
+        if ("refused" in found) throw new Error(found.refused);
+        const { map } = found;
         const from = state.savedPath ?? state.openedName;
         const base = from ? withExtension(from, "sdf").replace(/\.sdf$/i, "") : "reaction";
         const name = fileNameOf(base);
+        // (a map's conformers paired: each pair written, as the map's own two are - else the map's own two)
+        const paired = map.pairs ? pairedSdf(map, state.molecules3d, state.model, name) : null;
+        if (map.pairs && paired == null) throw new Error("The conformers paired have changed since they were paired: pair them again.");
         const picked = await saveDialog({
           title: "Export reaction in 3D",
           defaultPath: from ? `${base}-reaction.sdf` : "reaction.sdf",
@@ -999,7 +1010,7 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
         });
         if (!picked) return;
         const path = picked.toLowerCase().endsWith(".sdf") ? picked : `${picked}.sdf`;
-        await writeDocument(path, mappedPairSdf(map, name));
+        await writeDocument(path, paired ?? mappedPairSdf(map, name));
       }),
     [attempt, store],
   );

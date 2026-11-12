@@ -1,5 +1,5 @@
-/** The numbers a field takes: from `min` to `max`, each where given, whole ones alone where `whole`; `step` what an arrow key adds or takes away. */
-export type NumberRange = { min?: number; max?: number; step?: number; whole?: boolean };
+/** The numbers a field takes: from `min` to `max`, each where given, whole ones alone where `whole`; `step` what an arrow key adds or takes away. `unsettable`: the field may be left empty, which is no number (NaN), and says it is unset. */
+export type NumberRange = { min?: number; max?: number; step?: number; whole?: boolean; unsettable?: boolean };
 
 /**
  * A number field as it is (NumberField): the text in it, the last good
@@ -17,8 +17,20 @@ export type NumberEvent =
   | { kind: "set"; value: number };
 
 /** What a number field shows of `value`: nothing, where there is none. */
-function shown(value: number): string {
+export function shown(value: number): string {
   return Number.isFinite(value) ? String(value) : "";
+}
+
+/**
+ * Whether Escape, in a field with `text` in it standing for `value`, takes
+ * back what was typed: where the text is other than the field shows of the
+ * value - nothing, for none. Else it is left to close what the field is in.
+ */
+export const escapeTakes = (text: string, value: number): boolean => text !== shown(value);
+
+/** The range a number field takes, from what it is given: its bounds, step, whole, and whether it may be left unset. */
+export function rangeOf(r: NumberRange): NumberRange {
+  return { min: r.min, max: r.max, step: r.step, whole: r.whole, unsettable: r.unsettable };
 }
 
 /** A number field showing `value`. */
@@ -76,6 +88,8 @@ export function numberField(d: NumberDraft, e: NumberEvent, range: NumberRange =
     case "escape":
       return numberDraft(d.value);
     case "commit": {
+      // (an empty field of a number that may be unset: it is - none, not the last good number)
+      if (range.unsettable && d.text.trim() === "") return numberDraft(NaN);
       const n = typedNumber(d.text);
       if (inRange(n, range)) return numberDraft(n);
       return { ...numberDraft(d.value), refused: d.text !== shown(d.value) };

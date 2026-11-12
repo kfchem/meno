@@ -12,7 +12,8 @@
  * a job was given, what was read back of it, and its logs; what it leaves
  * out, or what is not to be had, each job's record names, with its size.
  */
-import { fileNow, jobKept, type KeptJobFile } from "../../../../lib/jobs";
+import { readTextFile } from "@tauri-apps/plugin-fs";
+import { clearSavedFolders, fileNow, jobKept, writeJobBack, type ClearedSaved, type KeptJobFile } from "../../../../lib/jobs";
 import type { Appended } from "../../../../lib/io/writeDocument";
 import { JOB_FILE_MEDIA, MOST_FILE, MOST_WORKSPACE_FILE, type KeptData, type KeptFile, type MenoFile } from "../../../../lib/doc/menoFile";
 import { kindInfo } from "./kinds";
@@ -35,24 +36,41 @@ export type JobsKept = {
   adds: number;
   /** The largest file kept, as it is: past what a workspace's file keeps of one (`MOST_FILE`), it cannot be saved as it is. */
   largest: number;
+  /** About how much each file kept comes to in the file, deflated, by SHA-256: held for the next save, where its folder goes once this one holds it. */
+  packed: Map<string, number>;
 };
 
 /** A step's jobs, of its run and the runs it keeps, each once. */
 export const jobsOfStep = (s: WorkflowStep): string[] => [...new Set([s.ran, ...(s.runs ?? [])].flatMap((r) => r?.jobs ?? []))];
 
-/** What the file a workspace was opened from kept of a job. */
-const recordOf = (s: WorkflowStep, job: string): KeptJob | undefined => [s.ran, ...(s.runs ?? [])].flatMap((r) => r?.kept ?? []).find((k) => k.job === job);
+/** The records of the jobs whose folders this session's saves took away once the file held them whole, by job id: read as a file opened keeps them. */
+const cleared = new Map<string, KeptJob>();
+
+/** What is kept of a job, where its folder is not here: what the file a workspace was opened from kept of it, or what a save this session kept of it before its folder was taken away. */
+export const recordOf = (s: WorkflowStep, job: string): KeptJob | undefined => [s.ran, ...(s.runs ?? [])].flatMap((r) => r?.kept ?? []).find((k) => k.job === job) ?? cleared.get(job);
 
 /** A workspace's file opened this session, where it was: its path, and its size and when it was written as it was opened. */
 export type OpenedFrom = { path: string; size: number; mtime: number | null };
 
-/** The job files the workspace files opened this session keep, by SHA-256: each read from the file held only when wanted - and where that file is. */
-const held = new Map<string, { read: () => Uint8Array | null; from?: OpenedFrom }>();
+/**
+ * The job files the workspace files opened this session keep, by SHA-256:
+ * each read from the file held only when wanted - where that file is, and
+ * how much the file kept it at, packed: what it comes to in the next file,
+ * deflated again as it is written (src-tauri keptjobs.rs).
+ */
+const held = new Map<string, { read: () => Uint8Array | null; from?: OpenedFrom; packed?: number }>();
 
 /** Holds the job files a workspace's file keeps, as it is opened - from where it was (`from`), where that is known: each read from it only when wanted. */
 export function holdJobFilesOf(file: MenoFile, from?: OpenedFrom): void {
-  for (const f of file.files) if (f.media === JOB_FILE_MEDIA && !held.has(f.sha256)) held.set(f.sha256, { read: () => file.data(f.sha256), ...(from ? { from } : {}) });
+  for (const f of file.files) {
+    if (f.media !== JOB_FILE_MEDIA || held.has(f.sha256)) continue;
+    const packed = file.packed(f.sha256);
+    held.set(f.sha256, { read: () => file.data(f.sha256), ...(from ? { from } : {}), ...(packed != null ? { packed } : {}) });
+  }
 }
+
+/** How much a job file held comes to in a workspace's file, packed: none where that is not known - then its size, unpacked, stands in. */
+export const heldJobPacked = (sha256: string): number | undefined => held.get(sha256)?.packed;
 
 /** A job file a workspace's file opened this session keeps, as its bytes; none where none is held, or it does not read. */
 export const heldJobFile = (sha256: string): Uint8Array | null => held.get(sha256)?.read() ?? null;
@@ -67,6 +85,69 @@ export async function heldJobSource(sha256: string, now: (path: string) => Promi
 
 
 /**
+ * The jobs a save holds every file of, each added from its folder: none of
+ * its files left out (a step's *Don't keep raw outputs*, or not had), and
+ * none kept again from another file - the jobs whose folders may go once
+ * the file is written (docs/WORKFLOWS.md, *A job's folder*).
+ */
+export function clearableJobs(jobs: JobsKept): string[] {
+  const fromFolder = new Set(jobs.appended.filter((a) => !a.from).map((a) => a.sha256));
+  return [...jobs.records.values()].filter((r) => !r.left?.length && r.files.length > 0 && r.files.every((f) => fromFolder.has(f.sha256))).map((r) => r.job);
+}
+
+/**
+ * After a save to `path`: the folders of the jobs it holds whole
+ * (`clearableJobs`) moved to the system's Trash by Meno's backend - each
+ * only where the file there, read back, holds every file of the job's
+ * record, to its size and SHA-256; where the job has finished, and its
+ * folder holds nothing the record does not (`clear`). For each that went,
+ * its record held for the session, and the file - as it was read back -
+ * noted as where its files are, so that the next save keeps them from it,
+ * and Show log and Show files read them there; nothing noted for one that
+ * stayed. The jobs whose folders went, and - once, whatever the number -
+ * why those that stayed though finished did.
+ */
+export async function clearSavedJobs(
+  path: string,
+  jobs: JobsKept,
+  clear: (path: string, jobs: { job: string; files: { name: string; sha256: string; size: number }[] }[]) => Promise<ClearedSaved> = clearSavedFolders,
+): Promise<{ gone: string[]; said: string | null }> {
+  const ids = clearableJobs(jobs);
+  if (!ids.length) return { gone: [], said: null };
+  const asked = ids.map((job) => ({ job, files: jobs.records.get(job)!.files.map(({ name, sha256, size }) => ({ name, sha256, size })) }));
+  const done = await clear(path, asked).catch((e: unknown): ClearedSaved => ({ gone: [], left: ids.map((job) => ({ job, why: String(e), quiet: false })), at: null }));
+  const at = done.at;
+  // (gone only as the backend says - and noted only where it says what the file was as it read it back)
+  const gone = at ? done.gone.filter((id) => ids.includes(id)) : [];
+  const from: OpenedFrom | null = at && { path, size: at.size, mtime: at.mtime };
+  for (const id of gone) {
+    const record = jobs.records.get(id)!;
+    cleared.set(id, record);
+    // (and how much each came to in it, deflated, as this save counted it)
+    for (const f of record.files) {
+      const packed = jobs.packed.get(f.sha256) ?? held.get(f.sha256)?.packed;
+      held.set(f.sha256, { read: held.get(f.sha256)?.read ?? (() => null), from: from!, ...(packed != null ? { packed } : {}) });
+    }
+  }
+  const loud = done.left.filter((l) => !l.quiet);
+  const said = loud.length ? `${loud.length === 1 ? "A job's folder was" : `${loud.length} jobs' folders were`} kept, though the workspace was saved: ${loud[0].why}.` : null;
+  return { gone, said };
+}
+
+/** A job's log as the workspace's file holds it, where the job's folder is not here: written back out (`jobs-kept`) and read; none where the file holds none, or it cannot be had. */
+export async function keptLogOf(job: string, record: KeptJob | undefined): Promise<string | null> {
+  const log = record?.files.find((f) => f.name === "log.txt");
+  if (!log) return null;
+  const from = await heldJobSource(log.sha256);
+  const bytes = from ? null : heldJobFile(log.sha256);
+  if (!from && !bytes) return null;
+  const back = await writeJobBack(job, log.name, log.sha256, from ? { from } : { bytes: bytes! }).catch(() => null);
+  if (!back) return null;
+  // (written beside its work folder, as its folder had it)
+  return readTextFile(back.work.replace(/[\\/]work[\\/]?$/, "") + (back.work.includes("\\") ? "\\" : "/") + "log.txt").catch(() => null);
+}
+
+/**
  * What a save keeps of `steps`' jobs: each job's files listed from its
  * folder (`read`) where it is on this computer, or else as the file it was
  * opened from kept them (`bytesOf`). A job with neither - its folder gone,
@@ -77,8 +158,9 @@ export async function jobsToKeep(
   read: (job: string) => Promise<KeptJobFile[] | null> = jobKept,
   bytesOf: (sha256: string) => Uint8Array | null = heldJobFile,
   sourceOf: (sha256: string) => Promise<string | null> = heldJobSource,
+  packedOf: (sha256: string) => number | undefined = heldJobPacked,
 ): Promise<JobsKept> {
-  const out: JobsKept = { records: new Map(), listed: [], appended: [], carried: [], steps: [], bytes: 0, adds: 0, largest: 0 };
+  const out: JobsKept = { records: new Map(), listed: [], appended: [], carried: [], steps: [], bytes: 0, adds: 0, largest: 0, packed: new Map() };
   const seen = new Set<string>();
   for (const step of steps) {
     const raw = step.keepRaw !== false;
@@ -100,6 +182,7 @@ export async function jobsToKeep(
           out.listed.push({ sha256: f.sha256, name: f.name, media: JOB_FILE_MEDIA, size: f.size });
           out.appended.push({ sha256: f.sha256, job, name: f.name });
           out.largest = Math.max(out.largest, f.size);
+          out.packed.set(f.sha256, f.deflated);
           bytes += f.deflated;
           out.adds += f.deflated;
         }
@@ -123,8 +206,11 @@ export async function jobsToKeep(
             out.listed.push({ sha256: f.sha256, name: f.name, media: JOB_FILE_MEDIA, size: f.size });
             out.appended.push({ sha256: f.sha256, job, name: f.name, from });
             out.largest = Math.max(out.largest, f.size);
-            bytes += f.size;
-            out.adds += f.size;
+            // (deflated again as it is written: about what the file it comes from kept it at - not its size, unpacked)
+            const packed = packedOf(f.sha256) ?? f.size;
+            out.packed.set(f.sha256, packed);
+            bytes += packed;
+            out.adds += packed;
             continue;
           }
           const data = bytesOf(f.sha256);
@@ -136,7 +222,10 @@ export async function jobsToKeep(
           seen.add(f.sha256);
           out.carried.push({ sha256: f.sha256, name: f.name, media: JOB_FILE_MEDIA, data });
           out.largest = Math.max(out.largest, data.length);
-          bytes += data.length;
+          // (deflated as the page writes it: about what the file it comes from kept it at)
+          const packed = packedOf(f.sha256) ?? data.length;
+          out.packed.set(f.sha256, packed);
+          bytes += packed;
         }
         // (what that file had left out, still left out - and said)
         left.push(...(was.left ?? []).filter((l) => !left.some((x) => x.name === l.name)));

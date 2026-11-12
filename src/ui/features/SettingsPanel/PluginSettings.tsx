@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { FADE } from "../../theme/motion";
 import ConfirmDiscard from "../../layouts/ConfirmDiscard";
+import QuestionLayer from "../../layouts/QuestionLayer";
 import { liveJobsOf, type Job } from "../../../lib/jobs";
-import { ALL_PLUGINS, anyPluginById, kindsNotTaken, manifestOf, PLUGINS, pluginsUsing, REFUSED, runs, stoppedOf, type Plugin as AnyPlugin } from "../../../lib/calc/catalog";
+import { ALL_PLUGINS, anyPluginById, kindsNotTaken, manifestOf, PLUGINS, pluginName, pluginsUsing, REFUSED, runs, stoppedOf, type Plugin as AnyPlugin } from "../../../lib/calc/catalog";
 import { rangeSaid } from "../../../lib/plugins/depends";
 import { presetsSaid } from "../../../lib/plugins/presets";
 import { addedReaders, addedUsing, addPlugin, removePlugin, skipSetUp, useReaders, waitingSaid } from "../../../lib/calc/workers";
@@ -14,10 +15,13 @@ import { ROLES } from "../../../lib/plugins/roles";
 import { forThisSystem, systemHere, SYSTEM_NAMES } from "../../../lib/plugins/here";
 import { locate, lookForAll, programKey, useInstalled } from "../../../lib/plugins/installed";
 import { SYSTEMS, type InstalledDecl } from "../../../lib/plugins/manifest";
+import { showSettingsSection } from "./section";
+import { usePluginsHere } from "../../../lib/plugins/known";
 import { KINDS } from "../Workspace/workflow/kinds";
 import { actOnFiles, filesCanGo, filesView, type FilesAsked } from "./pluginFiles";
 import { kindById } from "../../../lib/io/kinds";
 import { useCheckingFiles, useDownloads } from "../../../lib/pyEnv";
+import { updatable, updatedSaid, updateEach, updateOne as updateWith } from "./updateAll";
 
 /** A list in words: "a", "a and b", "a, b and c". */
 const listOf = (names: readonly string[]) => (names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`);
@@ -39,12 +43,30 @@ const when = (iso: string) => new Date(iso).toLocaleString(undefined, { year: "n
  * itself is not among them: what it reads and writes is in Files.
  */
 export default function PluginSettings() {
+  // (drawn again each time the plugins in place are taken anew: one whose files were taken away leaves the list at once, offered online again)
+  usePluginsHere((s) => s.taken);
   const states = useReaders((s) => s.state);
   const problems = useReaders((s) => s.problem);
   const online = useOnline();
   const here = new Map(ALL_PLUGINS.map((p) => [p.id, p.version]));
   const offers = online.catalogue ? offersOf(online.catalogue, here, systemHere()) : [];
   const elsewhere = offers.filter((o) => !here.has(o.entry.id));
+  // (those with a newer version online, all updated one after another from the one button)
+  const updates = updatable(offers, states);
+  const [updating, setUpdating] = useState(false);
+  const [updatedLine, setUpdatedLine] = useState<string | null>(null);
+  const updateAll = () => {
+    setUpdating(true);
+    setUpdatedLine(null);
+    // (each with the plugin it is of: one gone from the list since is passed over)
+    const each = updates.flatMap((o) => {
+      const was = ALL_PLUGINS.find((p) => p.id === o.entry.id);
+      return was ? [{ entry: o.entry, was }] : [];
+    });
+    updateEach(each, (u) => updateOne(u.entry, states[u.entry.id], u.was))
+      .then((out) => setUpdatedLine(updatedSaid(out)))
+      .finally(() => setUpdating(false));
+  };
   useEffect(() => {
     void listOnline();
     void addedReaders(ALL_PLUGINS);
@@ -56,10 +78,10 @@ export default function PluginSettings() {
   }, []);
   return (
     <div className="space-y-3">
-      <OnlineList online={online} offered={offers.length} />
+      <OnlineList online={online} offered={offers.length} updates={updates.length} updating={updating} updated={updatedLine} onUpdateAll={updateAll} />
       {/* (those that run nothing, first) */}
       {[...ALL_PLUGINS.filter((p) => !runs(p)), ...ALL_PLUGINS.filter(runs)].map((p) => (
-        <Plugin key={p.id} plugin={p} state={states[p.id]} problem={problems[p.id]} offer={offers.find((o) => o.entry.id === p.id)} />
+        <Plugin key={p.id} plugin={p} state={states[p.id]} problem={problems[p.id]} offer={offers.find((o) => o.entry.id === p.id)} locked={updating} />
       ))}
       {elsewhere.length > 0 && (
         <>
@@ -74,7 +96,7 @@ export default function PluginSettings() {
 }
 
 /** The list of plugins online: when it was fetched, or why it is not here, and the button that fetches it again - a line, not a card, as no plugin is. */
-function OnlineList({ online, offered }: { online: Online; offered: number }) {
+function OnlineList({ online, offered, updates, updating, updated, onUpdateAll }: { online: Online; offered: number; updates: number; updating: boolean; updated: string | null; onUpdateAll: () => void }) {
   const line =
     online.state === "listing"
       ? "Listing the plugins online…"
@@ -85,11 +107,21 @@ function OnlineList({ online, offered }: { online: Online; offered: number }) {
             ? `The list as it was${online.fetchedAt ? ` on ${when(online.fetchedAt)}` : ""}: a newer one could not be fetched (${online.kept}).`
             : `${offered === 1 ? "One plugin" : `${offered} plugins`} online${online.fetchedAt ? `, as listed on ${when(online.fetchedAt)}` : ""}${online.catalogue ? ` - the list of ${day(online.catalogue.issued)}` : ""}.`
           : "Plugins are got from a list online, which Meno checks is its own before reading it.";
+  const said = updated ? `${line} ${updated}` : line;
   return (
     <div className="flex items-center gap-4">
-      <p key={line} className={`flex-1 text-xs meno-fade-in ${online.state === "failed" ? "text-accel-accent" : "text-gh-gray"}`} aria-live="polite">
-        {line}
+      <p key={said} className={`flex-1 text-xs meno-fade-in ${online.state === "failed" ? "text-accel-accent" : "text-gh-gray"}`} aria-live="polite">
+        {said}
       </p>
+      {updates > 0 && (
+        <button
+          disabled={updating}
+          onClick={onUpdateAll}
+          className="h-7 shrink-0 rounded-md border border-gh-line bg-white px-3 text-xs text-gh-black hover:bg-gh-base disabled:opacity-50"
+        >
+          {updating ? "Updating…" : updates === 1 ? "Update all (1)" : `Update all (${updates})`}
+        </button>
+      )}
       <button
         disabled={online.state === "listing"}
         onClick={() => void listOnline(true)}
@@ -168,9 +200,15 @@ function OnlinePlugin({ offer }: { offer: Offer }) {
   );
 }
 
+/** A plugin's newer version got, then set up again only where it was added and its environment is no longer the one it needs. */
+const updateOne = (entry: CatalogueEntry, state: string | undefined, was: AnyPlugin) =>
+  updateWith(entry, state, was, { get: getPlugin, now: anyPluginById, setUp: addedReaders, add: addPlugin });
+
 /** A plugin: what it is and does, whether it is added, the button that adds it or takes it away - and the one that updates it, where the list online has a newer version. */
-function Plugin({ plugin: p, state, problem, offer }: { plugin: AnyPlugin; state?: string; problem?: string; offer?: Offer }) {
-  const [busy, setBusy] = useState(false);
+function Plugin({ plugin: p, state, problem, offer, locked = false }: { plugin: AnyPlugin; state?: string; problem?: string; offer?: Offer; locked?: boolean }) {
+  const [own, setBusy] = useState(false);
+  // (and while all are being updated: its own buttons wait too)
+  const busy = own || locked;
   // (whose set-up one waiting waits for: set-ups run one at a time, lib/calc/workers)
   const waiting = useReaders((s) => (state === "waiting" ? waitingSaid(s.state) : ""));
   // (its jobs that wait or run - and those of the plugins added that use it, taken away with it - as taking it away was asked:
@@ -191,12 +229,7 @@ function Plugin({ plugin: p, state, problem, offer }: { plugin: AnyPlugin; state
       .finally(() => setBusy(false));
   };
   // (the newer version got, then set up again only where it was added and its environment is no longer the one it needs)
-  const update = (entry: CatalogueEntry) =>
-    run(async (q) => {
-      await getPlugin(entry);
-      const now = anyPluginById(q.id) ?? q;
-      if (state === "added" && !(await addedReaders([now])).has(now.id)) await addPlugin(now);
-    });
+  const update = (entry: CatalogueEntry) => run((q) => updateOne(entry, state, q));
   const remove = (withUsing = false) => {
     const others = addedUsing(p.id);
     if (others.length && !withUsing) return setUsing(others);
@@ -258,16 +291,26 @@ function Plugin({ plugin: p, state, problem, offer }: { plugin: AnyPlugin; state
             {p.reads.length > 0 && <p className="text-xs text-gh-gray mt-1 max-w-2xl">Reads {p.reads.map(named).join(", ")}.</p>}
             {p.writes.length > 0 && <p className="text-xs text-gh-gray mt-1 max-w-2xl">Writes {p.writes.map((w) => `${w.name} (${w.extensions.join(", ")})`).join(", ")}.</p>}
             {p.roles.length > 0 && <p className="text-xs text-gh-gray mt-1 max-w-2xl">{p.roles.map((r) => ROLES[r].name).join("; ")}.</p>}
+            {/* (its options and its key are a conversation's: kept in Settings, Conversations) */}
+            {p.roles.includes("language-model") && (
+              <p className="text-xs text-gh-gray mt-1 max-w-2xl">
+                Its options and its key are in{" "}
+                <button type="button" className="underline hover:text-gh-black" onClick={() => showSettingsSection("conversations")}>
+                  Conversations
+                </button>
+                .
+              </p>
+            )}
             {stepNames(p).length > 0 && <p className="text-xs text-gh-gray mt-1 max-w-2xl">In a workflow: {stepNames(p).join(", ")}.</p>}
             {p.installed.map((d) => (
               <Installed key={d.name} plugin={p.id} decl={d} />
             ))}
           </>
         )}
-        {p.presets && <p className="text-xs text-gh-gray mt-1 max-w-2xl">{presetsSaid(p.presets, anyPluginById(p.presets.for)?.name ?? p.presets.for)}</p>}
+        {p.presets && <p className="text-xs text-gh-gray mt-1 max-w-2xl">{presetsSaid(p.presets, pluginName(p.presets.for))}</p>}
         {(p.depends ?? []).length > 0 && (
           <p className="text-xs text-gh-gray mt-1 max-w-2xl">
-            Uses the plugin{p.depends!.length === 1 ? "" : "s"} {p.depends!.map((d) => `${anyPluginById(d.plugin)?.name ?? d.plugin}, ${rangeSaid(d.range)}${(d.interfaces ?? []).map((i) => `, its ${i.id} interface ${rangeSaid(i.range)}`).join("")}${(d.kinds ?? []).map((k) => `, its kind ${manifestOf(d.plugin)?.kinds.find((x) => x.id === k)?.name ?? k}`).join("")}${d.optional ? ", for some steps, where it is added" : ""}`).join("; ")}.
+            Uses the plugin{p.depends!.length === 1 ? "" : "s"} {p.depends!.map((d) => `${pluginName(d.plugin)}, ${rangeSaid(d.range)}${(d.interfaces ?? []).map((i) => `, its ${i.id} interface ${rangeSaid(i.range)}`).join("")}${(d.kinds ?? []).map((k) => `, its kind ${manifestOf(d.plugin)?.kinds.find((x) => x.id === k)?.name ?? k}`).join("")}${d.optional ? ", for some steps, where it is added" : ""}`).join("; ")}.
           </p>
         )}
         {pluginsUsing(p.id).length > 0 && (
@@ -277,7 +320,7 @@ function Plugin({ plugin: p, state, problem, offer }: { plugin: AnyPlugin; state
         )}
         <p className="text-xs text-gh-gray mt-1 max-w-2xl">
           {p.licence} · {p.homepage.replace(/^https?:\/\//, "")}
-          {!runs(p) && " · Comes with Meno: nothing to download."}
+          {!runs(p) && " · Nothing to set up: its files only."}
         </p>
         {offer && <TermsAndCite entry={offer.entry} />}
         {refused.length > 0 && (
@@ -333,10 +376,11 @@ function Plugin({ plugin: p, state, problem, offer }: { plugin: AnyPlugin; state
         )}
         {filesCanGo(state, addedUsing(p.id)) && files.button}
       </div>
+      <QuestionLayer>
       <AnimatePresence>
         {using && (
-          // (over the whole window, as a question about the app is)
-          <motion.div key="using" {...FADE} className="fixed inset-0 z-[100]">
+          // (over the whole window, as a question about the app is: in its own layer - layouts/QuestionLayer)
+          <motion.div key="using" {...FADE} className="absolute inset-0">
             <ConfirmDiscard
               title={`Remove ${p.name}?`}
               message={`${listOf(using.map((q) => q.name))} ${using.length === 1 ? "uses" : "use"} it. Removing ${p.name} removes ${using.length === 1 ? "it" : "them"} too.`}
@@ -350,14 +394,14 @@ function Plugin({ plugin: p, state, problem, offer }: { plugin: AnyPlugin; state
           </motion.div>
         )}
         {files.question && (
-          // (over the whole window, as a question about the app is)
-          <motion.div key="files" {...FADE} className="fixed inset-0 z-[100]">
+          // (over the whole window, as a question about the app is: in its own layer - layouts/QuestionLayer)
+          <motion.div key="files" {...FADE} className="absolute inset-0">
             {files.question}
           </motion.div>
         )}
         {live && (
-          // (over the whole window, as a question about the app is)
-          <motion.div key="remove" {...FADE} className="fixed inset-0 z-[100]">
+          // (over the whole window, as a question about the app is: in its own layer - layouts/QuestionLayer)
+          <motion.div key="remove" {...FADE} className="absolute inset-0">
             <ConfirmDiscard
               title={`Remove ${p.name}?`}
               message={`${live.length === 1 ? "One of its jobs is" : `${live.length} of its jobs are`} running or waiting. Removing it stops ${live.length === 1 ? "that job" : "them"}, and what ${live.length === 1 ? "it" : "they"} would have made is lost.`}
@@ -372,6 +416,7 @@ function Plugin({ plugin: p, state, problem, offer }: { plugin: AnyPlugin; state
           </motion.div>
         )}
       </AnimatePresence>
+      </QuestionLayer>
     </div>
   );
 }

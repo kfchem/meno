@@ -67,9 +67,12 @@ export const FREQUENCY: Column = { name: "frequency", unit: "cm-1" };
  * - a **dihedral** of four atoms, `value` in degrees, held by
  *   E = k φ² / 2 (φ its angle from the value, the shorter way round, in
  *   radians), `strength` k in kcal mol⁻¹ rad⁻²;
+ * - a distance or dihedral held **exactly** at its value (`exact`), by a
+ *   program that constrains rather than restrains: no strength. Said so,
+ *   never read from a strength left out - a row with neither is no row;
  * - atoms **fixed** where they are: neither value nor strength.
  */
-export type Restraint = { kind: "distance" | "dihedral" | "fixed"; atoms: number[]; value?: number; strength?: number };
+export type Restraint = { kind: "distance" | "dihedral" | "fixed"; atoms: number[]; value?: number; strength?: number; exact?: true };
 
 /**
  * A property's value: a number, a text, true or false, another entry's id,
@@ -303,10 +306,14 @@ export function valueFault(value: PropertyValue, entry: Pick<Entry, "structure" 
     if (n != null ? r.atoms.length !== n : r.atoms.length < 1) return `Restraint ${k + 1}, a ${r.kind}, has ${r.atoms.length} atoms`;
     if (r.atoms.some((a) => !Number.isInteger(a) || a < 0 || a >= atoms)) return `Restraint ${k + 1} names an atom the entry does not have`;
     if (r.kind === "fixed") {
-      if (r.value != null || r.strength != null) return `Restraint ${k + 1} fixes atoms, so it has neither value nor strength`;
+      if (r.value != null || r.strength != null || r.exact) return `Restraint ${k + 1} fixes atoms, so it has neither value nor strength`;
       continue;
     }
     if (!Number.isFinite(r.value)) return `Restraint ${k + 1}, a ${r.kind}, has no value`;
+    if (r.exact) {
+      if (r.strength != null) return `Restraint ${k + 1} is held exactly, so it has no strength`;
+      continue;
+    }
     if (!(r.strength! > 0) || !Number.isFinite(r.strength)) return `Restraint ${k + 1} has a strength of ${r.strength}`;
   }
   return null;
@@ -341,8 +348,8 @@ function numberTableIn(v: unknown): PropertyValue | undefined {
  * minimisation first held them (`start`), each a finite number: each row a
  * distance, a dihedral or atoms fixed, as many atoms as its kind holds,
  * each a whole number from 0, a
- * finite value and a strength above 0 where its kind has them, none where
- * it has not. None where any row does not read - nothing held in part.
+ * finite value and a strength above 0 where its kind has them - or, held
+ * exactly, `exact` and no strength - none where it has not. None where any row does not read - nothing held in part.
  * Whether its atoms are the entry's is `valueFault`'s, as for any value.
  */
 function restraintsIn(v: unknown): { restraints: Restraint[]; start?: number[] } | undefined {
@@ -351,17 +358,25 @@ function restraintsIn(v: unknown): { restraints: Restraint[]; start?: number[] }
   if (start != null && (!Array.isArray(start) || !start.every((x) => typeof x === "number" && Number.isFinite(x)))) return undefined;
   if (!Array.isArray(rows)) return undefined;
   const out: Restraint[] = [];
-  for (const r of rows as { kind?: unknown; atoms?: unknown; value?: unknown; strength?: unknown }[]) {
+  for (const r of rows as { kind?: unknown; atoms?: unknown; value?: unknown; strength?: unknown; exact?: unknown }[]) {
     if (!r || typeof r !== "object" || (r.kind !== "distance" && r.kind !== "dihedral" && r.kind !== "fixed")) return undefined;
     if (!Array.isArray(r.atoms) || !r.atoms.length || !r.atoms.every((a) => Number.isInteger(a) && (a as number) >= 0)) return undefined;
     // (as many atoms as its kind holds: a distance two, a dihedral four, atoms fixed one or more)
     if (r.kind !== "fixed" && r.atoms.length !== RESTRAINT_ATOMS[r.kind]) return undefined;
+    if (r.exact != null && r.exact !== true) return undefined;
     if (r.kind === "fixed") {
-      if (r.value != null || r.strength != null) return undefined;
+      if (r.value != null || r.strength != null || r.exact) return undefined;
       out.push({ kind: "fixed", atoms: [...(r.atoms as number[])] });
       continue;
     }
-    if (typeof r.value !== "number" || !Number.isFinite(r.value) || typeof r.strength !== "number" || !Number.isFinite(r.strength) || !(r.strength > 0)) return undefined;
+    if (typeof r.value !== "number" || !Number.isFinite(r.value)) return undefined;
+    // (held exactly, said so: no strength - never read from one left out)
+    if (r.exact) {
+      if (r.strength != null) return undefined;
+      out.push({ kind: r.kind, atoms: [...(r.atoms as number[])], value: r.value, exact: true });
+      continue;
+    }
+    if (typeof r.strength !== "number" || !Number.isFinite(r.strength) || !(r.strength > 0)) return undefined;
     out.push({ kind: r.kind, atoms: [...(r.atoms as number[])], value: r.value, strength: r.strength });
   }
   return { restraints: out, ...(start != null ? { start: [...(start as number[])] } : {}) };

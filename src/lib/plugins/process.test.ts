@@ -8,6 +8,10 @@ const backend = {
   jobs: [] as { id: string; plugin: string; state: string }[],
   /** Each worker's answer to a question: at once, or held (none). */
   answering: true,
+  /** The converse requests sent the backend's own way, which adds the key (src-tauri/src/model.rs). */
+  conversed: [] as { id: string; request: string }[],
+  /** No key kept: the backend refuses a converse in words. */
+  keyless: false,
 };
 const listeners = new Map<string, Set<(e: { payload: string }) => void>>();
 const emit = (event: string, payload: unknown) => listeners.get(event)?.forEach((f) => f({ payload: JSON.stringify(payload) }));
@@ -25,6 +29,14 @@ vi.mock("@tauri-apps/api/core", () => ({
       backend.sent.push({ id: args.id!, data: args.data! });
       const q = JSON.parse(args.data!);
       if (backend.answering) setTimeout(() => emit("ext:stdout", { id: args.id, line: JSON.stringify({ id: q.id, ok: true, result: { yes: true } }) }), 10);
+      return undefined;
+    }
+    if (cmd === "ext_converse") {
+      const a = args as unknown as { id: string; request: string };
+      backend.conversed.push(a);
+      if (backend.keyless) throw new Error("No key is kept for cclib: add it in Settings, Conversations");
+      const q = JSON.parse(a.request);
+      setTimeout(() => emit("ext:stdout", { id: a.id, line: JSON.stringify({ id: q.id, ok: true, result: { text: "hello" } }) }), 10);
       return undefined;
     }
     if (cmd === "ext_kill") {
@@ -55,6 +67,41 @@ import { IDLE_MS } from "./idle";
 import { onWorkerStopped, stopWorker, workerOf, workerRunning } from "./process";
 
 const plugin = { id: "cclib", name: "cclib", profile: "plugin-cclib", worker: "plugins/cclib/0.2.1/worker.py" } as unknown as PythonPlugin;
+
+describe("a model plugin's worker asked to converse", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    Object.assign(backend, { spawned: [], killed: [], sent: [], jobs: [], answering: true, conversed: [], keyless: false });
+  });
+  afterEach(async () => {
+    await stopWorker(plugin.id);
+    vi.useRealTimers();
+  });
+
+  const asked = { told: "t", said: [{ by: "person", text: "hi", at: 1 }], tools: [{ name: "look", does: "looks" }], options: { model: "m" } };
+
+  it("is sent it the backend's own way, which adds the key - never through stdin, and never with a key of the page's", async () => {
+    const w = workerOf(plugin);
+    await vi.advanceTimersByTimeAsync(20);
+    const answer = (await w).chem.request("converse", asked);
+    await vi.advanceTimersByTimeAsync(20);
+    expect(await answer).toEqual({ text: "hello" });
+    expect(backend.sent).toEqual([]);
+    expect(backend.conversed).toHaveLength(1);
+    const sent = JSON.parse(backend.conversed[0].request);
+    expect(sent).toMatchObject({ op: "converse", ...asked });
+    expect("key" in sent).toBe(false);
+  });
+
+  it("fails at once, in the backend's words, where no key is kept - not after its time", async () => {
+    backend.keyless = true;
+    const w = workerOf(plugin);
+    await vi.advanceTimersByTimeAsync(20);
+    const answer = (await w).chem.request("converse", asked).catch((e: Error) => e.message);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(await answer).toBe("No key is kept for cclib: add it in Settings, Conversations");
+  });
+});
 
 describe("a plugin's worker gone unused", () => {
   beforeEach(() => {

@@ -42,7 +42,7 @@ describe("a kind's exits, as a list", () => {
       "mode-on-atoms": [first("With the mode on atoms", "same")],
       join: [first("Joined", "same"), rest("Not joined", "same")],
       barrier: [first("With barriers", "molecules"), failed()],
-      restraints: [first("Restrained", "same"), failed()],
+      restraints: [first("Restraints", "table"), failed()],
       "torsion-restraints": [first("Restrained", "same"), rest("Trans already", "same")],
       number: [first("Number", "number")],
       add: [first("{as}", "same"), rest("Not added", "same")],
@@ -50,6 +50,7 @@ describe("a kind's exits, as a list", () => {
       "reaction-path": [first("Reaction paths", "molecules"), { id: "failed", name: "Failed", gives: "same", of: "failed" }],
       "saddle-point": [first("Optimised structures", "molecules"), { id: "failed", name: "Failed", gives: "same", of: "failed" }],
       ensemble: [first("{as}", "same"), rest("The rest", "same")],
+      "onto-structures": [first("With 3D results", "same")],
     };
     // (every kind guarded: one added declares its exits here too)
     expect(KINDS.map((k) => k.kind).sort()).toEqual(Object.keys(had).sort());

@@ -252,6 +252,15 @@ const ICONS: Record<StepIcon, Icon | ReactNode> = {
       <path d="M8.5 10 H11.5" strokeWidth={2.2} />
     </>
   ),
+  // (what was found in 3D written back onto each structure's record: a molecule in 3D - a cube - and an arrow into a record's rows)
+  onto: (
+    <>
+      <path d="M1.8 7.4 L5.4 5.4 L9 7.4 V12.6 L5.4 14.6 L1.8 12.6 Z M1.8 7.4 L5.4 9.4 L9 7.4 M5.4 9.4 V14.6" />
+      <path d="M9.6 10 H12.6 M11.4 8.8 L12.6 10 L11.4 11.2" />
+      <rect x="13.4" y="3.5" width="5" height="13" rx="1.3" />
+      <path d="M13.4 7.8 H18.4 M13.4 12.2 H18.4" strokeWidth={1} />
+    </>
+  ),
   // (a barrier's height above its start, measured)
   height: (
     <>
@@ -301,6 +310,9 @@ const ICONS: Record<StepIcon, Icon | ReactNode> = {
     </>
   ),
 };
+
+/** Every kind of step's icon, by name: what the page draws in WebGL draws them too (pageGl/icons). */
+export const STEP_ICONS = Object.keys(ICONS) as StepIcon[];
 
 /** A kind of step's icon, `size` px square; `stroke`, its lines' weight, as Heroicons' 24-unit square has them (one drawn here on 20 units as heavy). */
 export function StepGlyph({ icon, size = 16, stroke = 1.5 }: { icon: StepIcon; size?: number; stroke?: number }) {

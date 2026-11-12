@@ -3,15 +3,23 @@ import { SHAPE_WIDTHS_PT } from "../../../lib/chem/shapes";
 import { AnimatePresence, motion } from "motion/react";
 import { RISE } from "../../theme/motion";
 import { useLeaving } from "../../theme/leaving";
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { CheckIcon } from "@heroicons/react/24/outline";
 import { BOND_ICONS, MENU_ICONS } from "./menuIcons";
 import { withRules } from "./menuRules";
 import { BOND_KIND_KEYS, BOND_KIND_NAMES, COMMON_BOND_KINDS, OTHER_BOND_KINDS, type BondKindName } from "./utils/bondKinds";
 import { swallowPress } from "./utils/press";
 import { guideNotice } from "../../../lib/guide/guide";
+import { NOT_ALLOWED } from "../../../lib/pdf/print";
 import { MAGNIFICATIONS, magnificationText } from "./utils/magnified";
 import { arrowMovesMenu, wheelClosesMenu } from "./utils/menuKeys";
+import { copying, writeClipboard } from "../../../lib/clipboard";
+import type { ChipCopy, CopyLine } from "./store/types";
+import { MENU_MARGIN, MENU_OFF } from "./menuAt";
+import { useMenuAt, type MenuAnchor } from "./useMenuAt";
+
+/** `text` put on the clipboard as words (a chip's Copy). */
+const copyText = (text: string) => copying(() => writeClipboard([{ flavor: "text", text }])).catch(() => {});
 
 /**
  * What was right-clicked, where in the canvas the menu opens, and how big
@@ -22,13 +30,17 @@ export type MenuTarget = {
    * The atom, bond, reaction arrow or "+" right-clicked, or a molecule in 3D
    * or a measurement on one; null, when it was nothing.
    */
-  kind: "atom" | "bond" | "arrow" | "plus" | "caption" | "pdf" | "picture" | "text" | "molecule3d" | "measure3d" | "set" | "step" | "wire" | "push" | "ring" | "slide" | "shape" | "ink" | "cycle" | null;
+  kind: "atom" | "bond" | "arrow" | "plus" | "caption" | "pdf" | "picture" | "text" | "molecule3d" | "measure3d" | "chip" | "set" | "step" | "wire" | "push" | "ring" | "slide" | "shape" | "ink" | "cycle" | null;
   /** Its id: for a measurement, its molecule's; for a ring, one of its atoms'. */
   id: number | null;
   /** A ring right-clicked inside: its key (utils/rings). */
   ring?: string;
   /** A measurement's own id. */
   measure?: number;
+  /** A molecule's frames chip's: what its Copy items put on the clipboard. */
+  copy?: ChipCopy;
+  /** A step's: what its card says that its menu copies, each an item of its own. */
+  lines?: CopyLine[];
   /** A molecule in 3D's atom under the pointer as it was right-clicked, by index: which of its ligands the menu is about. */
   atom?: number;
   /**
@@ -53,20 +65,15 @@ const MAC =
   /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 
 /**
- * The least width the menu takes, and each item's height, for keeping it
- * inside the canvas. It grows past that to fit its longest item on one line:
+ * The least width the menu takes. It grows past that to fit its longest item on one line:
  * a shortcut is written out on Windows (Ctrl+Shift+K) where a Mac has three
  * symbols, and an item that wrapped would spill into the one below it.
  */
 const WIDTH = 240;
-const ITEM = 32;
 /** Each icon's square along the top, as Quick Add's are, in px. */
 const ROW = 36;
 /** A compact row under the icons: the kinds of bond there are besides the common ones. */
 const ROW2 = 28;
-/** A note under a command: its line's height, and about how many of its letters a line of the menu holds. */
-const NOTE_LINE = 16;
-const NOTE_CHARS = 40;
 
 /** What the clipboard's items in the menu do. */
 export type MenuClipboard = {
@@ -150,6 +157,50 @@ export type MenuMolecule3D = {
  * listed under it (the maintainer, 2026-10-10: the menus had grown busy).
  * Closes on Escape, on a press anywhere else, and on a turn of the wheel.
  */
+/**
+ * What a map shown - complete or partial - offers: shown or hidden; the next
+ * map taken ("2 of 4": most differ only in where the hydrogens go, which the
+ * drawing does not show); and the reaction written in 3D, which needs every
+ * atom paired - a partial map's atoms that do not pair named instead, and its
+ * export said to need them all.
+ */
+function mapShownItems(
+  m: {
+    standing: "ready" | "incomplete";
+    shown: boolean;
+    maps: number;
+    chosen: number;
+    onShow: (shown: boolean) => void;
+    onOther: () => void;
+    onRenumber?: () => void;
+    onExport: () => void;
+    unpaired?: string;
+    conformers?: string[];
+    pair?: { name: string; run: () => void };
+    /** How many pairs of conformers it keeps, paired: what its export writes. */
+    paired?: number;
+  },
+  divider: boolean,
+): Item[] {
+  return [
+    { name: m.shown ? "Hide atom map" : "Show atom map", keys: "", run: () => m.onShow(!m.shown), divider },
+    ...(m.maps > 1 ? [{ name: "Other map", keys: `${m.chosen + 1} of ${m.maps}`, run: m.onOther, keep: true }] : []),
+    // (Before's atoms numbered by the drawing's order, the rest following: a complete map's only)
+    ...(m.onRenumber
+      ? [m.standing === "ready" ? { name: "Renumber atoms", keys: "", run: m.onRenumber } : { name: "Renumber atoms (needs every atom mapped)", keys: "", run: () => {}, disabled: true }]
+      : []),
+    ...(m.standing === "ready"
+      ? [{ name: m.paired ? `Export reaction in 3D… (${m.paired} ${m.paired === 1 ? "pair" : "pairs"} of conformers)` : "Export reaction in 3D…", keys: "", run: m.onExport }]
+      : [
+          { name: m.unpaired ?? "Not every atom mapped", keys: "", run: () => {}, disabled: true },
+          { name: "Export reaction in 3D… (needs every atom mapped)", keys: "", run: () => {}, disabled: true },
+        ]),
+    // (the sides' conformers, said: how many pairs there are, before any is made; those not numbered; then paired, as said)
+    ...(m.conformers ?? []).map((name) => ({ name, keys: "", run: () => {}, disabled: true })),
+    ...(m.pair ? [{ name: m.pair.name, keys: "", run: m.pair.run }] : []),
+  ];
+}
+
 export default function PartMenu({
   target,
   records,
@@ -183,6 +234,7 @@ export default function PartMenu({
   text,
   onSaveProcedure,
   keepInFile,
+  shownOnPage,
   onOpenAsTable,
   setHoldsOwn,
   onUseAsInput,
@@ -191,6 +243,8 @@ export default function PartMenu({
   onPush,
   push,
   arrow,
+  pageMap,
+  parts,
   onColour,
   onRender,
   picture,
@@ -207,8 +261,11 @@ export default function PartMenu({
   measure3d,
   magnify,
   onClose,
+  anchor,
 }: {
   target: MenuTarget;
+  /** The canvas, for the menu to stand at its point on the page and the view to ease along for it (useMenuAt). */
+  anchor?: MenuAnchor;
   /** The part deleted, or the selection when the menu is its. */
   onDelete: () => void;
   /** The part's structure cleaned up, or the selection's structures. */
@@ -305,6 +362,9 @@ export default function PartMenu({
     onPages: () => void;
     /** Its bytes written to a file. */
     onSave: () => void;
+    /** Its pages printed (docs/PDF.md, *Printing*); `printNot`: its author does not allow it, so the command is there and cannot be used. */
+    onPrint?: () => void;
+    printNot?: boolean;
   };
   /** The PDFs selected made one new PDF, in the order they are read on the page. */
   onCombinePdfs?: () => void;
@@ -318,6 +378,8 @@ export default function PartMenu({
   onSaveProcedure?: () => void;
   /** A step's result set right-clicked: whether its molecules are kept in the workspace's file, and that changed. */
   keepInFile?: { kept: boolean; set: (keep: boolean) => void };
+  /** A step's result set whose exit is wired on (workflow/held) - the set right-clicked, or the one a wire right-clicked comes from: shown on the page, opened, or held off it; and shown or held as asked. */
+  shownOnPage?: { shown: boolean; set: (show: boolean) => void };
   /** A large result set right-clicked (`WorkflowSet.collection`): read as a table in the column. */
   onOpenAsTable?: () => void;
   /** A set right-clicked that holds its molecules itself, on no page (a large set's `collection`): what it holds, said ("118 molecules"), since they go with it when it is deleted. */
@@ -364,7 +426,9 @@ export default function PartMenu({
      * shown or hidden, the next map taken, the reaction written in 3D.
      */
     atomMap?: {
-      standing: "none" | "changed" | "incomplete" | "ready";
+      standing: "none" | "refused" | "changed" | "incomplete" | "ready";
+      /** A map taken off its arrow: one of an arrow that no longer means a reaction. */
+      onRemove?: () => void;
       shown: boolean;
       maps: number;
       /** Which of them is in use, from 0: the best first. */
@@ -372,7 +436,45 @@ export default function PartMenu({
       onMake: () => void;
       onShow: (shown: boolean) => void;
       onOther: () => void;
+      /** Its reactants' atoms numbered by the drawing's order, the rest following. */
+      onRenumber?: () => void;
       onExport: () => void;
+      /** A partial map's atoms that do not pair, in words. */
+      unpaired?: string;
+    };
+  };
+  /**
+   * Atom maps between structures on the page (docs/ATOM-MAPPING.md,
+   * *Between structures on the page*): made, where two or more structures
+   * are selected and one of them right-clicked - it Before, each other After;
+   * and those its structure is in, as one: how they stand, whether shown, how
+   * many maps the first steps through - and shown or hidden, the next map
+   * taken, the first written in 3D.
+   */
+  /**
+   * One structure of several parts (docs/EDITOR-2D.md): the structures
+   * selected made one, where there are two or more of them; the structure
+   * right-clicked, one of several parts, taken apart.
+   */
+  parts?: { onJoin?: () => void; onSeparate?: () => void };
+  pageMap?: {
+    onMake?: () => void;
+    held?: {
+      standing: "changed" | "incomplete" | "ready";
+      shown: boolean;
+      maps: number;
+      chosen: number;
+      onShow: (shown: boolean) => void;
+      onOther: () => void;
+      onRenumber?: () => void;
+      onExport: () => void;
+      onAgain?: () => void;
+      unpaired?: string;
+      conformers?: string[];
+      /** Its conformers paired, the menu line saying how many (chem/structureMaps `conformerPairs`); unset, where those are paired already. */
+      pair?: { name: string; run: () => void };
+      /** How many pairs of conformers it keeps, paired. */
+      paired?: number;
     };
   };
   /** The part - an atom, a bond, a ring, the selection - given a colour, a highlight or a fill, in a card where the menu was. */
@@ -439,16 +541,8 @@ export default function PartMenu({
   const [more, setMore] = useState(() => !!bondKind?.current && OTHER_BOND_KINDS.includes(bondKind.current));
   // the magnifications offered, as "Magnification" is pressed
   const [magnifying, setMagnifying] = useState(false);
-  // the width and height it came out at, so that the whole of it stays in the canvas (before it is drawn: no jump)
-  const [width, setWidth] = useState(WIDTH);
-  const [tall, setTall] = useState<number | null>(null);
-  useLayoutEffect(() => {
-    // (the same again changes nothing: React leaves it be)
-    const w = ref.current?.offsetWidth;
-    if (w) setWidth(w);
-    const h = ref.current?.offsetHeight;
-    if (h) setTall(h);
-  }, [target, radical]);
+  // opened at its point on the page, up and to the right; the view eases along where it would lie past the canvas (useMenuAt)
+  useMenuAt(ref, target, anchor);
   // (going, chosen from or closed: it does nothing more as it fades - theme/leaving)
   const { leaving, held } = useLeaving();
   // (opened: a guide's step waiting for it goes on)
@@ -508,6 +602,24 @@ export default function PartMenu({
   const colour: Item[] = onColour ? [{ name: "Colour…", keys: "", run: onColour, icon: MENU_ICONS.colour }] : [];
   // (a record of a stack of drawings: its stack laid out as a grid, or stacked again)
   const stackItem: Item[] = records ? [{ name: records.spread ? "Stack again" : "Lay out as a grid", keys: "", run: records.run, divider: true }] : [];
+  // (atom maps between structures on the page: made from two or more selected; those its structure is in, shown or hidden, another taken, written in 3D)
+  const mapsHeld = pageMap?.held;
+  const partsItems: Item[] = [
+    ...(parts?.onJoin ? [{ name: "Make one structure", keys: "", run: parts.onJoin, divider: true }] : []),
+    ...(parts?.onSeparate ? [{ name: "Separate", keys: "", run: parts.onSeparate, divider: !parts.onJoin }] : []),
+  ];
+  const pageMapItems: Item[] = [
+    ...(pageMap?.onMake ? [{ name: "Atom map", keys: "", run: pageMap.onMake, divider: true }] : []),
+    ...(mapsHeld?.standing === "ready" || mapsHeld?.standing === "incomplete"
+      ? mapShownItems({ ...mapsHeld, standing: mapsHeld.standing }, !pageMap?.onMake)
+      : mapsHeld?.standing === "changed"
+          ? [
+              // (of the structure as it was before an edit: it shows nothing - said, and made again)
+              { name: "Atom map of the structure before its edit", keys: "", run: () => {}, disabled: true, divider: !pageMap?.onMake },
+              ...(mapsHeld.onAgain ? [{ name: "Map again", keys: "", run: mapsHeld.onAgain }] : []),
+            ]
+          : []),
+  ];
   const stereoItem: Item[] = [
     ...(stereo ? [{ name: stereo.name, keys: "", run: stereo.run, divider: true }] : []),
     ...(numbers
@@ -661,16 +773,16 @@ export default function PartMenu({
             : []),
           // (its reaction's atom map: made; shown or hidden, another taken, written in 3D - or said to be incomplete)
           ...(arrow?.atomMap
-            ? arrow.atomMap.standing === "ready"
+            ? arrow.atomMap.standing === "refused"
               ? [
-                  { name: arrow.atomMap.shown ? "Hide atom map" : "Show atom map", keys: "", run: () => arrow.atomMap!.onShow(!arrow.atomMap!.shown), divider: true },
-                  // (which of how many is in use: most differ only in where the hydrogens go, which the drawing does not show)
-                  ...(arrow.atomMap.maps > 1 ? [{ name: "Other map", keys: `${arrow.atomMap.chosen + 1} of ${arrow.atomMap.maps}`, run: arrow.atomMap.onOther, keep: true }] : []),
-                  { name: "Export reaction in 3D…", keys: "", run: arrow.atomMap.onExport },
+                  // (made while the arrow meant a reaction: kept, said not to be one now, never shown - taken off by the chemist)
+                  { name: "Not a reaction now", keys: "", run: () => {}, disabled: true, divider: true },
+                  ...(arrow.atomMap.onRemove ? [{ name: "Remove map", keys: "", run: arrow.atomMap.onRemove }] : []),
                 ]
+              : arrow.atomMap.standing === "ready" || arrow.atomMap.standing === "incomplete"
+              ? mapShownItems({ ...arrow.atomMap, standing: arrow.atomMap.standing }, true)
               : [
                   { name: "Atom map", keys: "", run: arrow.atomMap.onMake, divider: true },
-                  ...(arrow.atomMap.standing === "incomplete" ? [{ name: "Atom map incomplete", keys: "", run: () => {}, disabled: true }] : []),
                   // (one of a drawing changed since, still shown: taken off it)
                   ...(arrow.atomMap.standing === "changed" && arrow.atomMap.shown ? [{ name: "Hide atom map", keys: "", run: () => arrow.atomMap!.onShow(false) }] : []),
                 ]
@@ -745,6 +857,7 @@ export default function PartMenu({
                 { name: "Pages…", keys: "", run: pdf.onPages },
                 ...(onCombinePdfs ? [{ name: "Combine into one PDF", keys: "", run: onCombinePdfs }] : []),
                 { name: "Save as PDF…", keys: "", run: pdf.onSave },
+                ...(pdf.onPrint ? [{ name: pdf.printNot ? `Print… (${NOT_ALLOWED.toLowerCase()})` : "Print…", keys: "", run: pdf.onPrint, disabled: pdf.printNot }] : []),
               ]
             : []),
         ]
@@ -811,6 +924,7 @@ export default function PartMenu({
         ]
       : target.kind === "set"
       ? [
+          ...(shownOnPage ? [{ name: "Show on the page", keys: "", run: () => shownOnPage.set(!shownOnPage.shown), checked: shownOnPage.shown }] : []),
           ...(onOpenAsTable ? [{ name: "Open as a table", keys: "", run: onOpenAsTable }] : []),
           ...(setHoldsOwn ? [] : [{ ...del("Delete set"), divider: !!onOpenAsTable }]),
           ...(onSaveProcedure ? [{ name: "Save as procedure…", keys: "", run: onSaveProcedure }] : []),
@@ -826,6 +940,8 @@ export default function PartMenu({
           { name: "Options…", keys: "", run: onStepOptions, icon: MENU_ICONS.options },
           del("Delete step"),
           ...(step?.onShowLog ? [{ name: "Show log", keys: "", run: step.onShowLog }] : []),
+          // (what its card says that a chemist copies: no words on the page are selected)
+          ...(target.lines ?? []).map((l, i) => ({ name: l.name, keys: "", run: () => void copyText(l.text), ...(i === 0 ? { divider: true } : {}) })),
           ...(step?.adopt ?? []).map((a, i) => ({ name: `Adopt ${a.job}`, keys: "", run: a.run, ...(i === 0 ? { divider: true } : {}) })),
           ...(step?.onShowFiles ? [{ name: "Show files", keys: "", run: step.onShowFiles }] : []),
           ...(onSaveProcedure ? [{ name: "Save as procedure…", keys: "", run: onSaveProcedure, divider: !!step?.onShowLog }] : []),
@@ -834,7 +950,13 @@ export default function PartMenu({
             : []),
         ]
       : target.kind === "wire"
-      ? [del("Delete wire")]
+      ? [...(shownOnPage ? [{ name: "Show its results on the page", keys: "", run: () => shownOnPage.set(!shownOnPage.shown), checked: shownOnPage.shown }] : []), { ...del("Delete wire"), divider: !!shownOnPage }]
+      : target.kind === "chip"
+      ? [
+          // (what it says, as text - its results, why it failed - and its energies as a table: copied from here, as no words on the page are selected)
+          ...(target.copy ? [{ name: "Copy", keys: "", run: () => void copyText(target.copy!.all) }] : []),
+          ...(target.copy?.energies ? [{ name: "Copy energies", keys: "", run: () => void copyText(target.copy!.energies!) }] : []),
+        ]
       : target.selection === "here"
       ? [
           { name: "Cut", keys: shortcut("X"), run: clipboard.onCut, icon: MENU_ICONS.cut },
@@ -850,6 +972,8 @@ export default function PartMenu({
                 ...colour,
               ]
             : []),
+          ...partsItems,
+          ...pageMapItems,
           del("Delete selection"),
           // (an atom selected alone, right-clicked: its label, as on the atom's own menu)
           ...(target.kind === "atom" && onEditLabel ? [{ name: "Edit label", keys: "", run: onEditLabel }] : []),
@@ -929,6 +1053,8 @@ export default function PartMenu({
               ]
             : []),
           ...stereoItem,
+          ...partsItems,
+          ...pageMapItems,
           { name: "Select this structure", keys: "", run: onSelectStructure },
           ...(figure ? [{ name: figure.from, keys: "", run: () => {}, disabled: true, divider: true }, ...(figure.run ? [{ name: "Checked against the figure", keys: "", run: figure.run }] : [])] : []),
           ...stackItem,
@@ -938,15 +1064,9 @@ export default function PartMenu({
   const compact = items.filter((i) => i.icon && i.compact);
   const row2 = more ? compact : [];
   const list = withRules(items.filter((i) => !i.icon));
-  // (a note under a command, said in as many lines as it takes at the menu's width)
-  const noteOf = (text?: string) => (text ? Math.ceil(text.length / NOTE_CHARS) * NOTE_LINE + 6 : 0);
   const stepNote = target.kind === "step" ? step?.note : undefined;
   // (words' size, line spacing and typeface, under the icons)
   const font = target.kind === "caption" ? words?.font : undefined;
-  // (reckoned from its rows, and as it came out once laid out - the words' font rows, say - the larger: a row opened since, Magnification's, reckoned)
-  const reckoned =
-    (row.length ? ROW + 9 : 0) + noteOf(stepNote) + (compact.length ? ROW2 + 4 : 0) + (magnifying ? ROW2 + 4 : 0) + list.length * ITEM + list.reduce((n, i) => n + noteOf(i.note), 0) + list.filter((i) => i.divider).length * 9 + 12;
-  const height = Math.max(tall ?? 0, reckoned);
   const run = (item: Item) => () => {
     if (!item.keep) onClose();
     item.run();
@@ -985,6 +1105,8 @@ export default function PartMenu({
                     ? "Wire"
                   : target.kind === "molecule3d"
                     ? "Molecule"
+                  : target.kind === "chip"
+                    ? "Frames"
                     : target.kind === "measure3d"
                       ? "Measurement"
                     : target.kind === "push"
@@ -1004,8 +1126,11 @@ export default function PartMenu({
       tabIndex={-1}
       className="absolute z-50 rounded-md border border-gh-line bg-white py-1 shadow-lg text-sm text-gh-black outline-none"
       style={{
-        left: Math.max(0, Math.min(target.x, target.within.width - width - 8)),
-        top: Math.max(0, Math.min(target.y, target.within.height - height - 8)),
+        left: target.x + MENU_OFF,
+        top: target.y - MENU_OFF,
+        // (taller than the canvas: it scrolls inside)
+        maxHeight: target.within.height - 2 * MENU_MARGIN,
+        overflowY: "auto",
         minWidth: WIDTH,
       }}
       onMouseDown={(e) => e.stopPropagation()}
@@ -1040,7 +1165,7 @@ export default function PartMenu({
                     }
                   : undefined
               }
-              className={`${item.del ? "ml-auto " : ""}shrink-0 rounded-md flex items-center justify-center outline-none transition-colors duration-150 ease-meno disabled:text-gh-line disabled:hover:bg-transparent ${item.checked ? "bg-gh-base text-gh-black" : "text-gh-black hover:bg-gh-base focus:bg-gh-base"}`}
+              className={`${item.del ? "ml-auto " : ""}meno-press shrink-0 rounded-md flex items-center justify-center outline-none transition-colors duration-150 ease-meno disabled:text-gh-line disabled:hover:bg-transparent ${item.checked ? "bg-gh-base text-gh-black" : "text-gh-black hover:bg-gh-base focus:bg-gh-base"}`}
               style={{ width: ROW, height: ROW }}
             >
               {item.icon}
@@ -1080,7 +1205,7 @@ export default function PartMenu({
               aria-pressed={item.checked}
               title={item.name}
               onClick={run(item)}
-              className={`shrink-0 rounded-md flex items-center justify-center outline-none transition-colors duration-150 ease-meno ${item.checked ? "bg-gh-base text-gh-black" : "text-gh-black hover:bg-gh-base focus:bg-gh-base"}`}
+              className={`meno-press shrink-0 rounded-md flex items-center justify-center outline-none transition-colors duration-150 ease-meno ${item.checked ? "bg-gh-base text-gh-black" : "text-gh-black hover:bg-gh-base focus:bg-gh-base"}`}
               style={{ width: ROW2, height: ROW2 }}
             >
               <span className="scale-90">{item.icon}</span>

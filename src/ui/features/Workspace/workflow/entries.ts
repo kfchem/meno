@@ -11,27 +11,34 @@ import { COORDINATION_BOND, type ParsedAtom, type ParsedBond } from "../../../..
 import type { CalcInfo } from "../../../../lib/calc/output";
 import { FREQUENCY, geometryKey, propertyIn, type At, type By, type Entry, type EntryAtom, type EntryStatus, type EntryStereo, type Property } from "../../../../lib/entry";
 import { leftOut, readEach } from "../utils/readNotes";
-import { signatureOf } from "../utils/drawnLink";
+import { pageIndex, signatureOf } from "../utils/drawnLink";
 import { identityOfDrawn, labelsDrawnOut } from "../chem/identityOf";
 import { partOf } from "../chem/cleanUp";
 import { stereoKnown } from "./configurations";
 import { speciesOf } from "../../../../lib/io/writers";
 import { isSkeleton } from "../utils/completeness";
 import { groupLetter } from "../../../../lib/nodes/base";
-import { aboveText, numberText } from "../../../../lib/calc/results";
-import type { DrawnRecord, Member, Model, Molecule3D, PictureItem, WorkflowSet } from "../store/types";
+import { aboveText, numberText, resultsRenumbered } from "../../../../lib/calc/results";
+import type { Arrow, DrawnRecord, Member, Model, Molecule3D, PictureItem, Plus, WorkflowSet } from "../store/types";
 import { kindInfo, type SetHolds, type StepKind } from "./kinds";
 import { skeletonWhy } from "../../../../lib/chem/skeleton";
 import { PATH_FRAME, REFINED_SAID, STARTED_SAID } from "../../../../lib/calc/paths";
 
 type Pt = { x: number; y: number };
 export type Frame = Pick<WorkflowSet, "x0" | "y0" | "x1" | "y1">;
-export type Page = { model: Model; molecules3d?: readonly Molecule3D[]; pictures?: readonly Pick<PictureItem, "id" | "x" | "y">[] };
+export type Page = {
+  model: Model;
+  molecules3d?: readonly Molecule3D[];
+  pictures?: readonly Pick<PictureItem, "id" | "x" | "y">[];
+  /** The arrows and pluses drawn: what a set around a drawn reaction reads its structures' roles from (workflow/schemeRoles). */
+  arrows?: readonly Arrow[];
+  pluses?: readonly Plus[];
+};
 
 /** Whether `p` is inside a frame. */
 export const inside = (b: Frame, p: Pt) => p.x >= b.x0 && p.x <= b.x1 && p.y >= b.y0 && p.y <= b.y1;
 
-/** The structures drawn on the page, each its atoms' ids, as their bonds join them. */
+/** The structures drawn on the page, each its atoms' ids, as their bonds join them - and a structure of several parts (`Atom.joined`) as one, as Combine makes one entry of its parts. */
 export function structuresOf(model: Model): number[][] {
   const around = new Map<number, number[]>();
   const join = (p: number, q: number) => {
@@ -44,6 +51,14 @@ export function structuresOf(model: Model): number[][] {
     // walked by its bonds alone, the metal and the star were a structure
     // without the ring)
     for (const e of b.endpoints ?? []) join(b.a, e);
+  }
+  // (a structure of several parts: each of its atoms joined to the first of them - chem/cleanUp `neighboursIn` likewise)
+  const first = new Map<number, number>();
+  for (const a of model.atoms) {
+    if (a.joined == null) continue;
+    const f = first.get(a.joined);
+    if (f == null) first.set(a.joined, a.id);
+    else join(f, a.id);
   }
   const seen = new Set<number>();
   const out: number[][] = [];
@@ -86,7 +101,7 @@ export function middleOfAtoms(byId: ReadonlyMap<number, Pt>, ids: readonly numbe
  * each structure).
  */
 const drawnAt = new WeakMap<Model, { ids: number[]; at: Pt }[]>();
-function drawnIn(model: Model): { ids: number[]; at: Pt }[] {
+export function drawnIn(model: Model): { ids: number[]; at: Pt }[] {
   let found = drawnAt.get(model);
   if (!found) {
     const byId = new Map(model.atoms.map((a) => [a.id, a]));
@@ -208,8 +223,7 @@ export function membersOf(found: {
  */
 export function drawnHash(model: Model, ids: readonly number[]): string {
   // (worked out once for each structure as drawn: an edit elsewhere on the page leaves its drawing's key, and so this, as it was)
-  const labels = model.atoms.filter((a) => a.abbrev && ids.includes(a.id)).map((a) => `${a.id}:${JSON.stringify(a.abbrev)}`);
-  const drawn = `${drawnKey(model, ids)}|${labels.join(";")}`;
+  const drawn = drawingKey(model, ids);
   let key = identities.get(drawn);
   if (key == null) {
     // (wedges identity cannot read - crossed, or at an atom of three bonds that keeps no configuration, lib/chem/lonePairCentres - or a search it could not finish: its configuration
@@ -223,6 +237,13 @@ export function drawnHash(model: Model, ids: readonly number[]): string {
 }
 const identities = new Map<string, string>();
 const IDENTITIES_KEPT = 4096;
+
+/** A structure's drawing as one key (`drawnKey`), with what each of its labels holds: what its identity is kept by (`drawnHash`), and worked out at a fraction of its cost. */
+export function drawingKey(model: Model, ids: readonly number[]): string {
+  const { byId } = pageIndex(model);
+  const labels = ids.flatMap((id) => (byId.get(id)?.abbrev ? [byId.get(id)!] : [])).map((a) => `${a.id}:${JSON.stringify(a.abbrev)}`);
+  return `${drawnKey(model, ids)}|${labels.join(";")}`;
+}
 
 /** What a record says once the structure it was given for has been edited: its properties and status taken away. */
 export const BEFORE_THE_EDIT = "its properties were for the structure before the edit";
@@ -245,10 +266,55 @@ function joined(a: DrawnRecord | undefined, b: DrawnRecord): DrawnRecord | undef
   return Object.keys(out).length ? out : undefined;
 }
 
-/** A record as its structure stands now: as it is, where that is the structure it was given for (or it does not say); else its properties and status taken away (`joined`). */
+/** A record as its structure stands now: as it is, where that is the structure it was given for (or it does not say); else its properties and status taken away (`joined`) - and its lasting id, the structure being another. */
 export function recordNow(record: DrawnRecord | undefined, model: Model, ids: readonly number[]): DrawnRecord | undefined {
   if (!record?.of || record.of === drawnHash(model, ids)) return record;
   return joined(undefined, record);
+}
+
+/** How what is made of a structure drawn names it in its lineage (`SetEntry.madeOf`): by its lasting id (`DrawnRecord.id`). */
+export const structureLineage = (id: string): string => `structure:${id}`;
+
+/**
+ * A lasting id for a structure (`DrawnRecord.id`) given where it is put -
+ * `where`, a step's exit or a set, and `at`, its place there or its first
+ * atom - as it is drawn (`drawing`: `drawingKey`, or its identity's key):
+ * two hashes, wide enough that no two of a workspace's structures share one,
+ * and the same each time it is worked out, so that a step run again on what
+ * it ran on before gives its structures the ids it gave them then.
+ */
+export function structureIdAt(where: string, at: number, drawing: string): string {
+  const text = `${where}|${at}|${drawing}`;
+  return `${hash(text).toString(36)}-${hash(text, 0x01000193).toString(36)}`;
+}
+
+/**
+ * A set's member's record with its lasting id (`DrawnRecord.id`), as set
+ * `set` holds the structure drawn now:
+ * - one a step gave - its record says what it is of (`of`) - keeps the id it
+ *   has: edited into another, `recordNow` has taken that away with its
+ *   properties, and it is given one as the chemist's are;
+ * - one the chemist drew - its record says nothing of what it is of - is
+ *   given its id afresh each time, from the set, its first atom and its
+ *   drawing (`drawingKey`): the same while it is drawn the same, moved or
+ *   turned whole, another once it is drawn as another - its identity, which
+ *   costs far more, never worked out for it.
+ */
+export function memberRecord(record: DrawnRecord | undefined, model: Model, ids: readonly number[], set: number): DrawnRecord {
+  if (record?.of && record.id) return record;
+  return { ...record, id: structureIdAt(`set ${set}`, ids[0], drawingKey(model, ids)) };
+}
+
+/**
+ * The record of a structure a step gave, as it is put on the page
+ * (`recordOn`): of it as drawn there, its lasting id kept where it is still
+ * the structure the record was of, else `given`'s for what it is
+ * (`structureIdAt`, at the step's exit and its place).
+ */
+export function placedRecord(record: DrawnRecord, model: Model, ids: readonly number[], given: (now: string) => string): DrawnRecord {
+  const now = drawnHash(model, ids);
+  const id = record.id && (!record.of || record.of === now) ? record.id : given(now);
+  return { ...record, id, of: now };
 }
 
 /** What a record adds to a step's key (flow `inputKey`): all it says, but not what it is of - the structure's own key says that. */
@@ -317,10 +383,11 @@ export function drawnKey(model: Model, ids: readonly number[]): string {
   const name = ids.join(",");
   const had = known.get(name);
   if (had != null) return had;
-  const of = new Set(ids);
-  const at = new Map(model.atoms.filter((a) => of.has(a.id)).map((a) => [a.id, a]));
+  // (through the drawing's index: the structure's own atoms and bonds alone, however many others the page holds)
+  const { byId, bondsOf } = pageIndex(model);
+  const at = new Map(ids.flatMap((id) => (byId.has(id) ? [[id, byId.get(id)!] as const] : [])));
   const near = new Map<number, number[]>();
-  const bonds = model.bonds.filter((b) => at.has(b.a) && at.has(b.b));
+  const bonds = [...new Set(ids.flatMap((id) => bondsOf.get(id) ?? []))].filter((b) => at.has(b.a) && at.has(b.b));
   for (const b of bonds) {
     near.set(b.a, [...(near.get(b.a) ?? []), b.b]);
     near.set(b.b, [...(near.get(b.b) ?? []), b.a]);
@@ -375,7 +442,7 @@ function statusIn(v: unknown): EntryStatus | undefined {
  * nothing of it reads.
  */
 export function readDrawnRecord(v: unknown): DrawnRecord | undefined {
-  const r = v as { from?: unknown; properties?: unknown; status?: unknown; of?: unknown; stale?: unknown } | null;
+  const r = v as { id?: unknown; from?: unknown; properties?: unknown; status?: unknown; of?: unknown; stale?: unknown } | null;
   if (!r || typeof r !== "object") return undefined;
   const from = readEach(r.from, (id) => (isText(id) ? id : null), "madeFrom");
   const properties: Record<string, Property> = {};
@@ -388,6 +455,7 @@ export function readDrawnRecord(v: unknown): DrawnRecord | undefined {
   }
   const status = statusIn(r.status);
   const record: DrawnRecord = {
+    ...(isText(r.id) && r.id ? { id: r.id } : {}),
     ...(from.length ? { from } : {}),
     ...(Object.keys(properties).length ? { properties } : {}),
     ...(status ? { status } : {}),
@@ -408,18 +476,22 @@ export function placesOf(page: Page): { structures: { ids: number[]; at: Pt }[];
 
 export { before as readingOrder };
 
-/** What lies inside a frame: the structures drawn (each its atoms' ids), the molecules in 3D and the pictures (by id) whose middles are inside it, each in the order they lie. */
-export function lyingIn(page: Page, set: Frame): { structures: number[][]; molecules: number[]; pictures: number[] } {
+/**
+ * What lies inside a frame: the structures drawn (each its atoms' ids), the molecules in 3D and the pictures (by id) whose middles are inside it, each in the order they lie
+ * - but for those whose middles lie in `apart`, where one is given (a conversation's card: its room is never what it sees).
+ */
+export function lyingIn(page: Page, set: Frame, apart?: Frame): { structures: number[][]; molecules: number[]; pictures: number[] } {
+  const within = (p: Pt) => inside(set, p) && !(apart && inside(apart, p));
   const structures = drawnIn(page.model)
-    .filter((s) => inside(set, s.at))
+    .filter((s) => within(s.at))
     .sort((p, q) => before(p.at, q.at))
     .map((s) => s.ids);
   const molecules = (page.molecules3d ?? [])
-    .filter((m) => inside(set, m.at))
+    .filter((m) => within(m.at))
     .sort((p, q) => before(p.at, q.at))
     .map((m) => m.id);
   const pictures = (page.pictures ?? [])
-    .filter((p) => inside(set, p))
+    .filter((p) => within(p))
     .sort((p, q) => before(p, q))
     .map((p) => p.id);
   return { structures, molecules, pictures };
@@ -501,7 +573,7 @@ export function numberShown(n: { value: number; unit: string }): string {
 }
 
 /** A set's count line, as its frame says it: how many of what it holds - and, of structures drawn more than the page shows (look `DRAWN_ON_PAGE`), how many it shows of how many - or that it is empty, not run yet, or not kept. */
-export function countSaid(b: Pick<WorkflowSet, "notKept" | "made" | "number" | "chart" | "drawnCollection">, count: ReturnType<typeof countOf>): string {
+export function countSaid(b: Pick<WorkflowSet, "notKept" | "made" | "number" | "chart" | "drawnCollection">, count: ReturnType<typeof countOf>, scheme: readonly string[] = []): string {
   // (a result set the file did not keep: how many it held; one kept out of the file from now on, said so;
   // a step's exit not run yet, so - not empty, which would say it ran and gave nothing)
   return b.notKept && !count.entries
@@ -522,13 +594,15 @@ export function countSaid(b: Pick<WorkflowSet, "notKept" | "made" | "number" | "
         ? // (more than the page shows - look DRAWN_ON_PAGE - how many it shows of how many it holds)
           b.drawnCollection?.length && count.entries > b.drawnCollection.length
           ? `${(count.entries - b.drawnCollection.length).toLocaleString("en-US")} of ${plural(count.entries, "structure")} shown`
-          : plural(count.entries, "structure")
+          : // (and what a drawn reaction in its frame says of them: schemeRoles)
+            [plural(count.entries, "structure"), ...scheme].join(" \u00b7 ")
         : count.holds === "molecules"
           ? plural(count.compounds, "compound")
-          : `${plural(count.compounds, "compound")} · ${count.entries}`;
+          : // (a conformer set: as its exit's chip and its step's line say it - "1,800 conformers of 3 compounds")
+            `${plural(count.entries, "conformer", "conformers", true)} of ${plural(count.compounds, "compound")}`;
 }
 
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const plural = (n: number, one: string, many = `${one}s`, grouped = false) => `${grouped ? n.toLocaleString("en-US") : n} ${n === 1 ? one : many}`;
 
 /** How many frames a molecule in 3D has: its own geometry, and the rest. */
 export const framesOf = (m: Pick<Molecule3D, "frames">) => 1 + (m.frames?.length ?? 0);
@@ -702,6 +776,59 @@ export function keptOf(m: Kept): Kept {
   };
 }
 
+/**
+ * What an entry keeps of its calculation, its atoms renumbered (`order`:
+ * the atom each place now has): what the calculation was - the readers,
+ * program, version, method, basis, solvation, charge and spin, its
+ * imaginary frequencies - and the atoms it held, as numbered now; so that
+ * its energy is still one of that calculation, alike with its compound's
+ * others not renumbered (`unlikeMade`). Its results as numbered now, but
+ * those that cannot be (lib/calc/results `resultsRenumbered`); not the
+ * output and the wavefunction it was read from, which number its atoms as
+ * they were. `leftBehind`: whether any of it was left so.
+ */
+export function calcRenumbered(c: CalcInfo, order: readonly number[]): { calc: CalcInfo; leftBehind: boolean } {
+  const now = new Array<number>(order.length);
+  order.forEach((j, at) => (now[j] = at));
+  const { results, source, wavefunction, held, ...level } = c;
+  const r = results?.length ? resultsRenumbered(results, order) : { results: [], dropped: 0 };
+  return {
+    calc: { ...level, ...(r.results.length ? { results: r.results } : {}), ...(held ? { held: held.map((a) => now[a]) } : {}) },
+    leftBehind: r.dropped > 0 || !!source || !!wavefunction,
+  };
+}
+
+/**
+ * What an entry keeps besides (`Kept`), its atoms renumbered (`order`: the
+ * atom each place now has; `now`, each atom's new place) and its bonds with
+ * them (`bondNow`: each bond's new place, -1 where it has none): how it was
+ * made and what its drawing was, as they were; the drawing's atom each of
+ * its atoms is, its CIP labels and which are chosen and shown, and its bonds
+ * to ring centres, as numbered now - its compound's others alike with it
+ * still (`unlikeMade`, `keptAlike`).
+ */
+export function keptRenumbered(k: Kept, order: readonly number[], now: readonly number[], bondNow: readonly number[]): Kept {
+  const atoms = (as: readonly number[]) => as.map((a) => now[a]);
+  const bonds = (bs: readonly number[]) => bs.map((b) => bondNow[b] ?? -1).filter((b) => b >= 0);
+  const st = k.stereo;
+  return {
+    drawnFrom: k.drawnFrom?.length === order.length ? order.map((j) => k.drawnFrom![j]) : undefined,
+    drawnAs: k.drawnAs,
+    ...(st
+      ? {
+          stereo: {
+            atoms: Object.fromEntries(Object.entries(st.atoms).map(([a, l]) => [now[Number(a)], l])),
+            bonds: Object.fromEntries(Object.entries(st.bonds).flatMap(([b, l]) => ((bondNow[Number(b)] ?? -1) >= 0 ? [[bondNow[Number(b)], l]] : []))),
+            ...(st.chosen ? { chosen: { atoms: atoms(st.chosen.atoms), bonds: bonds(st.chosen.bonds) } } : {}),
+            ...(st.shown ? { shown: { atoms: atoms(st.shown.atoms), bonds: bonds(st.shown.bonds) } } : {}),
+          },
+        }
+      : {}),
+    ...(k.made ? { made: k.made } : {}),
+    ...(k.centres?.length ? { centres: k.centres.map((c) => ({ metal: now[c.metal], atoms: atoms(c.atoms) })) } : {}),
+  };
+}
+
 /** `v` as JSON with every object's keys in order: two values equal as data give the one text. */
 function stableJson(v: unknown): string {
   if (Array.isArray(v)) return `[${v.map(stableJson).join(",")}]`;
@@ -717,14 +844,14 @@ function stableJson(v: unknown): string {
 }
 
 /** What a calculation was, without what is each entry's own: its results, its output, its job among several, its wavefunction, the readers that could not read it. */
-function calcLevel(c: CalcInfo | undefined): string {
+export function calcLevel(c: CalcInfo | undefined): string {
   if (!c) return "";
   const { results: _results, source: _source, job: _job, wavefunction: _wavefunction, unread: _unread, ...level } = c;
   return stableJson(level);
 }
 
 /** A calculation, or a way of making, in a few words: its program, method and basis, or what its energies are from. */
-function madeWords(e: SetEntry): string {
+export function madeWords(e: SetEntry): string {
   const c = e.calc;
   return c ? [c.program, c.method, c.basis].filter(Boolean).join(" ") || "a calculation" : e.keep?.made?.energies ?? "no calculation";
 }

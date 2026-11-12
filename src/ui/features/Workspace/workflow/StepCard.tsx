@@ -12,7 +12,7 @@ import type { StepState } from "./flow";
 import { StepGlyph } from "./icons";
 import type { KindInfo, StepKind } from "./kinds";
 import { CARD_H, CARD_W, PORT_STEP, portDown, portSize, PX } from "./look";
-import { clock } from "./programs";
+import { cardState } from "./cardState";
 import { COPYABLE } from "../hooks/useKeepUnselected";
 
 /**
@@ -33,7 +33,13 @@ export const HAIR = "var(--hair, 1px)";
  * nothing inside moves.
  */
 export const HAIR_LINE = "inset-ring-[length:var(--hair,1px)]";
-/** A port, centred where it stands in its parent: a small ring, a pixel thick. `of`: its set's or card's height, on the page, in px. */
+/**
+ * A port, centred where it stands in its parent: a small ring, a pixel
+ * thick. `of`: its set's or card's height, on the page, in px. HTML, not
+ * drawn by WebGL as the page's placed objects are: the step cards are HTML
+ * over the page's canvas, and a port half on a card must be drawn, and
+ * taken hold of, over it.
+ */
 export function Port({
   look,
   style,
@@ -41,6 +47,8 @@ export function Port({
   data,
   label,
   of,
+  onContextMenu,
+  onHover,
 }: {
   look: PortLook;
   style: CSSProperties;
@@ -48,6 +56,10 @@ export function Port({
   data: Record<string, string>;
   label: string;
   of?: number;
+  /** Its menu, where it has one: an exit's port, its set's (a set held off the page has no frame to right-click). */
+  onContextMenu?: (e: ReactMouseEvent) => void;
+  /** The pointer come onto it, or gone off it: what an exit's port says of its set (`exitPortHovered`). */
+  onHover?: (on: boolean) => void;
 }) {
   const size = portSize(of);
   return (
@@ -56,6 +68,8 @@ export function Port({
       role="button"
       aria-label={label}
       onPointerDown={onPointerDown}
+      onContextMenu={onContextMenu}
+      {...(onHover ? { onPointerEnter: () => onHover(true), onPointerLeave: () => onHover(false) } : {})}
       className={clsx(
         // (a press on it begins no selection of the page's text: one left over turns a later drag on the drawing into the system's own drag-and-drop, Workspace.tsx)
         // (taken hold of over at least 12 px about its middle, however small it is drawn: meno-port)
@@ -86,7 +100,7 @@ export function Port({
  * their place among those waiting; where they run, since when, how many of
  * how many have ended, and what the log says last.
  */
-export type RunView = { place?: number; since?: number; ended: number; total: number; line?: string; share?: number };
+export type RunView = { place?: number; since?: number; ended: number; total: number; line?: string; share?: number; /** How many minutes the quietest of its running jobs has written nothing, where past what Settings says (lib/jobs `quietFor`). */ quiet?: number };
 
 /**
  * How far a run's jobs are, as a share - where a running one says how far
@@ -104,42 +118,15 @@ export function shareOf(seen: readonly (Pick<JobSeen, "state" | "progress"> | un
 /** A run as its card lists it: when, named apart from the step's other runs (workflow/earlierRuns `namesOf`); what it said; how it was set; whether it is shown, and kept. */
 export type RunRow = { at: number; name: string; said: string; how: string; shown: boolean; keep: boolean };
 
-/** A place in the queue, as it is said: 1st, 2nd, 3rd, 4th... */
-const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
+/** Each of a card's state icons by name (cardState), as Heroicons' outline set draws them. */
+const STATE_ICONS = { waiting: ClockIcon, running: ArrowPathIcon, stopped: StopCircleIcon, done: CheckCircleIcon, failed: ExclamationCircleIcon } as const;
+/** Each tone's words' colour (Meno's palette). */
+const TONE_CLASS = { quiet: "text-gh-gray", base: "text-accel-base", attention: "text-accel-accent" } as const;
 
-/** What a state says, with its icon and its words' colour (Meno's palette: the accent for done and running, the attention colour for failed). */
-function stateLine(
-  state: StepState,
-  said: string | undefined,
-  run: RunView | undefined,
-  now: number,
-  missing?: string,
-): { Icon?: typeof CheckCircleIcon; text: string; tone: string; turning?: true } {
-  // (a program installed separately that is found nowhere, or too old, or what its options still need: said where Ready would be)
-  if (missing && (state === "ready" || state === "changed")) return { Icon: ExclamationCircleIcon, text: missing, tone: "text-gh-gray" };
-  switch (state) {
-    case "no-input":
-      return { text: "No input", tone: "text-gh-gray" };
-    case "ready":
-      return { text: "Ready", tone: "text-gh-gray" };
-    case "waiting":
-      return { Icon: ClockIcon, text: run?.place ? `Waiting \u00b7 ${ordinal(run.place)}` : "Waiting", tone: "text-gh-gray" };
-    case "running":
-      return {
-        Icon: ArrowPathIcon,
-        turning: true,
-        text: run && run.total > 1 ? `Running \u00b7 ${run.ended} of ${run.total}` : `Running ${clock(run?.since != null ? now - run.since : 0)}`,
-        tone: "text-accel-base",
-      };
-    case "stopped":
-      return { Icon: StopCircleIcon, text: said ?? "Stopped", tone: "text-gh-gray" };
-    case "done":
-      return { Icon: CheckCircleIcon, text: said ?? "Done", tone: "text-accel-base" };
-    case "failed":
-      return { Icon: ExclamationCircleIcon, text: `Failed${said ? ` · ${said}` : ""}`, tone: "text-accel-accent" };
-    case "changed":
-      return { Icon: ArrowPathIcon, text: "Changed · run again", tone: "text-gh-gray" };
-  }
+/** What a state says, with its icon and its words' colour (cardState). */
+export function stateLine(...args: Parameters<typeof cardState>): { Icon?: typeof CheckCircleIcon; text: string; tone: string; turning?: true } {
+  const c = cardState(...args);
+  return { ...(c.icon ? { Icon: STATE_ICONS[c.icon] } : {}), text: c.text, tone: TONE_CLASS[c.tone], ...(c.turning ? { turning: true as const } : {}) };
 }
 
 export type StepCardProps = {
@@ -157,7 +144,7 @@ export type StepCardProps = {
   open: boolean;
   /** Its options shut: by its Close, or Escape - as by a double-click on it; never by themselves, while the page is worked on. */
   onClose: () => void;
-  /** Its inputs, in the kind's order: named beside their ports down its left side, where there is more than one (the ports themselves are on the workflow's ports layer, Workflow2D). What it gives is its exits' sets, beside it - it has no port of its own for that. */
+  /** Its inputs, in the kind's order: named beside their ports down its left side, where there is more than one (the ports themselves are on the workflow's ports layer, Workflow2D). What it gives is its exits' sets, beside it, each from a port of its own down its right side, its set's (on the same layer). */
   inputs: readonly { id: string; name: string; look: PortLook }[];
   /** How its jobs are getting on, where it runs any. */
   run?: RunView;
@@ -197,7 +184,7 @@ export type StepCardProps = {
  * does it fills - and its options.
  */
 export default function StepCard(p: StepCardProps) {
-  const line = p.refused ? { Icon: ExclamationCircleIcon, text: p.refused, tone: "text-accel-accent" } : stateLine(p.state, p.step.ran?.said, p.run, Date.now(), p.missing);
+  const line = p.refused ? { Icon: ExclamationCircleIcon, text: p.refused, tone: TONE_CLASS.attention } : stateLine(p.state, p.step.ran?.said, p.run, Date.now(), p.missing);
   // (what it does and how, under its name - its kind alone where its state line says the same: what it still needs, said once)
   const summary = [p.info.name, p.how && p.how !== line.text ? p.how : ""].filter(Boolean).join(" \u00b7 ");
   const said = p.state === "running" && p.run?.line ? p.run.line : undefined;

@@ -1,4 +1,5 @@
 import type { StoreApi } from "zustand";
+import { setsOnPage } from "../../workflow/onPage";
 import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
@@ -14,6 +15,7 @@ import { signatureOf } from "../../utils/drawnLink";
 import { resultKey } from "../../../../../lib/calc/results";
 import { gridPlaces, middleOf, shownOf, stackMembers } from "../../utils/stacks";
 import { fitResultSets } from "../../workflow/run";
+import { heldViewId, shownIn } from "../../workflow/heldView";
 
 type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
@@ -156,6 +158,19 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
         // (selected, the one shown now is, in place of the one out of sight)
         const sel3d = was != null && prev.sel3d.has(was) ? new Set([...prev.sel3d].filter((x) => x !== was).concat(id)) : prev.sel3d;
         return { ...prev, stacksShown: { ...prev.stacksShown, [stack]: id }, turns3d, sel3d };
+      }),
+    showHeld: (setId: number, index: number) =>
+      set((prev) => {
+        const b = prev.sets.find((x) => x.id === setId);
+        if (!b?.collection || !Number.isInteger(index) || index < 0 || index >= b.collection.length) return prev;
+        const was = shownIn(b, prev.heldShown);
+        if (index === was) return prev;
+        // (turned as the one it showed was, so that each is seen against the last as it was)
+        const turn = prev.turns3d[heldViewId(setId, was)];
+        const turns3d = { ...prev.turns3d };
+        if (turn) turns3d[heldViewId(setId, index)] = turn;
+        else delete turns3d[heldViewId(setId, index)];
+        return { ...prev, heldShown: { ...prev.heldShown, [setId]: index }, turns3d };
       }),
     spreadStack: (stack: number) => {
       const members = stackMembers(get().molecules3d, stack);
@@ -342,7 +357,8 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
       const own = reach({ ...copy, id: 0 });
       const y = m.at.y;
       let left = m.at.x + reach(m) + NOMINAL_BOND_LENGTH + own;
-      for (const b of doc.getState().sets ?? []) if (left >= b.x0 && left <= b.x1 && y >= b.y0 && y <= b.y1) left = b.x1 + NOMINAL_BOND_LENGTH + own;
+      // (a set drawn nowhere lies nowhere: workflow/held)
+      for (const b of setsOnPage(doc.getState(), doc.getState().sets ?? [])) if (left >= b.x0 && left <= b.x1 && y >= b.y0 && y <= b.y1) left = b.x1 + NOMINAL_BOND_LENGTH + own;
       const newId = doc.getState().nextMolecule3dId ?? 1;
       doc.edit(label, (d) => ops.addMolecule3d(d, { ...copy, at: { x: left, y } }), meta);
       const turn = get().turns3d[id];

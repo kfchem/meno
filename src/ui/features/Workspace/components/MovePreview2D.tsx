@@ -5,7 +5,9 @@ import { useEditor } from "../store";
 import { COLORS, ALPHA } from "../../../theme/colors";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { useDrawnLayout } from "./drawnLayoutContext";
-import { computeMoveSnap } from "../utils/moveSnap";
+import { computeMoveSnap, onAnotherAtom, snapAngleAbout } from "../utils/moveSnap";
+import { mergeTarget } from "../utils/dropMerge";
+import { bondLengthFrom } from "../utils/magnified";
 import { TAU, follow } from "../../../theme/motion";
 
 // Preview for moving an atom without mutating coordinates during drag.
@@ -50,6 +52,11 @@ export default function MovePreview2D() {
   const freeStartRef = useRef<{ x: number; y: number } | null>(null);
   const freeT0Ref = useRef(0);
   const FREE_DUR_MS = 180;
+  // Dropped where the pointer is on an atom it may become (utils/dropMerge),
+  // the dragged atom is shown there - what the drop will do - easing in and
+  // out of it; `mergeOnto` is the atom, kept while it eases out.
+  const mergeOnto = useRef<{ x: number; y: number } | null>(null);
+  const mergeSeenRef = useRef(0);
 
   useFrame((_, dtRaw) => {
     // Preview follows the pointer while dragging (on-demand rendering).
@@ -83,6 +90,8 @@ export default function MovePreview2D() {
       mThin.instanceMatrix.needsUpdate = true;
       angVelRef.current = 0;
       lastActiveRef.current = false;
+      mergeOnto.current = null;
+      mergeSeenRef.current = 0;
       return;
     }
 
@@ -102,6 +111,8 @@ export default function MovePreview2D() {
     const deg = nbrIds.length;
 
     const L = NOMINAL_BOND_LENGTH;
+    // (as the drop measures it - a magnified atom's bond is longer: utils/dropOutcome)
+    const bondL = bondLengthFrom(model.atoms, moving.id);
     const zoom = (camera as any)?.zoom || 1;
     const thinW = Math.max(lineWidthWorld, 1 / Math.max(zoom, 1e-6));
 
@@ -117,7 +128,8 @@ export default function MovePreview2D() {
       !lastActiveRef.current || lastAtomIdRef.current !== moving.id;
     let pxSnap = ptr.x,
       pySnap = ptr.y;
-    const isFree = (moveDrag as any).mode === "free";
+    // (free, but never on an atom: there it keeps to the snap, as the drop does)
+    const isFree = (moveDrag as any).mode === "free" && !onAnotherAtom(model as any, moving.id, ptr, bondL);
     if (deg === 1) {
       // simple: center at neighbor, angle snap + angle spring, fixed radius L
       const nb = model.atoms.find((a) => a.id === nbrIds[0]);
@@ -126,9 +138,7 @@ export default function MovePreview2D() {
           curAngRef.current = Math.atan2(ptr.y - nb.y, ptr.x - nb.x);
           angVelRef.current = 0;
         }
-        const step = Math.PI / 6;
-        const ang = Math.atan2(ptr.y - nb.y, ptr.x - nb.x);
-        const snapAng = Math.round(ang / step) * step;
+        const snapAng = snapAngleAbout(model as any, moving.id, nb, ptr, bondL);
         const dt = Math.min(Math.max(dtRaw || 0.016, 0.001), 0.05);
         const k = 800;
         const zeta = 0.5;
@@ -241,6 +251,21 @@ export default function MovePreview2D() {
       centerRef.current = null;
     }
     wasFreeRef.current = isFree;
+
+    // Where the pointer is on an atom it may become: shown there already
+    const target = mergeTarget(model, moving.id, ptr);
+    const targetAtom = target != null ? model.atoms.find((a) => a.id === target) : undefined;
+    if (targetAtom) mergeOnto.current = { x: targetAtom.x, y: targetAtom.y };
+    {
+      const to = targetAtom ? 1 : 0;
+      const n = follow(mergeSeenRef.current, to, Math.min(dtRaw, 1 / 20), TAU.quick);
+      mergeSeenRef.current = Math.abs(n - to) < 0.01 ? to : n;
+      if (mergeSeenRef.current !== to) invalidate();
+    }
+    if (mergeOnto.current && mergeSeenRef.current > 0) {
+      pxPrev += (mergeOnto.current.x - pxPrev) * mergeSeenRef.current;
+      pyPrev += (mergeOnto.current.y - pyPrev) * mergeSeenRef.current;
+    }
 
     // Draw preview lines
     // 1) thin neighbors -> cursor

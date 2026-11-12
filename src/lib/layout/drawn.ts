@@ -27,7 +27,7 @@
  */
 import { lonePairCentres, pyramidal } from "../chem/lonePairCentres";
 import { freeCorners, solidOf } from "./cage";
-import { isMetal, key, perceive, type CisTrans } from "./perceive";
+import { key, perceive, type CisTrans } from "./perceive";
 import { drawnAxisSense, drawnVolume, placeStereo, type Axial, type Cumulated, type Stereo, type Tetrahedral } from "./stereo";
 
 export type DrawnAtom = {
@@ -276,7 +276,11 @@ export function readStereo(
       const orders = neighbours[i].reduce((sum, n) => sum + (bondOf.get(key(i, n))!.order === 4 ? 1.5 : bondOf.get(key(i, n))!.order), 0);
       if (keepsPyramid(i) || pyramidal(atoms[i].el ?? "C", atoms[i].charge ?? 0, 3, orders, atoms[i].hs)) continue;
       const lifted = near.find((n) => lift(i, n) !== 0);
-      if (lifted == null || inRing(neighbours, i, j, (k) => isMetal(atoms[k].el ?? "C"))) continue;
+      // (an axis in a ring only where the ring is of seven atoms or more - a 2,2'-bridged biphenyl's, a BINOL phosphoric
+      // acid's: in five or six the rings are held all but flat, or turn over fast - fluorene, 9,10-dihydrophenanthrene)
+      // (a metal counted as any ring atom: BINAP's chelate ring through its axis is of seven, read; a 2,2'-bipyridine's on a
+      // metal, of five, held flat)
+      if (lifted == null || ringThrough(neighbours, i, j) < AXIS_RING) continue;
       const refs: [number, number] = [Math.min(...near), Math.min(...far)];
       const sense = drawnAxisSense((k) => atoms[k], { atoms: [i, j], refs }, lifted, lift(i, lifted) as 1 | -1);
       if (sense) axes.push({ atoms: [i, j], refs, sense });
@@ -358,7 +362,9 @@ const turned = (p: { x: number; y: number }, c: { x: number; y: number }, t: num
  * saying either; more groups round it than a tetrahedral centre's four; an
  * atom with three bonds that keeps no configuration of its own, where a
  * wedge states none (an amine's N, a plain N-alkyl aziridine's, a B: Meno's
- * rule, lib/chem/lonePairCentres); two of its bonds in line or on top of each other (a T, ST-1.2.12);
+ * rule, lib/chem/lonePairCentres); a centre by its lone pair drawn with
+ * two bonds, its H carried (a secondary phosphine's P), its H and its lone
+ * pair both left out; two of its bonds in line or on top of each other (a T, ST-1.2.12);
  * or else wedges and hashes that cancel, saying neither way round.
  */
 export function unreadWhy(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], c: number): string {
@@ -373,6 +379,9 @@ export function unreadWhy(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond
   const groups = around.length + atom.hs;
   if (groups > 4) return `it has ${groups} groups round it, more than the four of a tetrahedral centre`;
   if (around.length === 3 && atom.hs === 0 && !lonePairCentres(atoms, bonds)(c)) return "it has three bonds and keeps no configuration of its own, so a wedge at it states none";
+  // (a centre by its lone pair, two bonds drawn and its H carried: the two corners left are each other's mirror image, and
+  //  which holds the H, which the lone pair, is not drawn)
+  if (around.length === 2 && atom.hs === 1 && lonePairCentres(atoms, bonds)(c)) return "its H and its lone pair are both left out, so which way each points is not drawn: draw its H as an atom";
   // (as readStereo has it: a centre drawn with three bonds - its H, or its lone pair, left out)
   if (around.length === 3 && twoInLine(atom, around.map((n) => atoms[n]))) return "two of its bonds in line or on top of each other";
   return "they are drawn crossed, saying neither way round";
@@ -386,6 +395,9 @@ export function unreadWhy(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond
  * drawn so); and the double bonds whose cis or trans changes so, a group
  * on one in line with it. A reader - RDKit, a chemist - may take either
  * the other way (docs/LAYOUT-2D-TUNING.md, *A wedge that reads by luck*).
+ * A centre with a lone pair for its fourth group - a sulfoxide's S, a
+ * phosphine's P (lib/chem/lonePairCentres) - is asked so too: its
+ * configuration read as readStereo reads it, from its three groups.
  */
 export function unsureStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): { atoms: number[]; bonds: number[] } {
   const neighbours: number[][] = atoms.map(() => []);
@@ -400,12 +412,16 @@ export function unsureStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnB
     const w = bondOf.get(key(c, n))?.wedge;
     return w && w.narrow === c ? (w.stereo === "up" ? 1 : -1) : 0;
   };
+  // (which atoms of three bonds keep a configuration by their lone pair: Meno's rule, as readStereo asks it)
+  const keepsPyramid = lonePairCentres(atoms, [...bondOf.values()]);
   const centres: number[] = [];
   atoms.forEach((atom, c) => {
     const around = neighbours[c];
-    if (atom.centre || atom.hs > 1 || around.length + atom.hs !== 4) return;
+    const lonePair = atom.hs === 0 && around.length === 3 && keepsPyramid(c);
+    if (atom.centre || (!lonePair && (atom.hs > 1 || around.length + atom.hs !== 4))) return;
     if (around.some((n) => bondOf.get(key(c, n))!.either)) return;
     if (!around.some((n) => lift(c, n) !== 0)) return;
+    // (as readStereo reads it: an H left out a fourth group, a lone pair none - the volume of its three)
     const order = atom.hs ? [...around, -1] : around;
     const lifts = order.map((n) => (n === -1 ? 0 : lift(c, n)));
     const at = (n: number) => (n === -1 ? null : atoms[n]);
@@ -692,22 +708,21 @@ function inSmallRing(neighbours: readonly number[][], i: number, j: number): boo
   return level.includes(j);
 }
 
-/**
- * Whether the bond i-j is in a ring: j reached from i some other way - not
- * through a metal (BINAP's axis in its chelate's ring is still an axis).
- */
-function inRing(neighbours: readonly number[][], i: number, j: number, metal: (k: number) => boolean): boolean {
-  const seen = new Set([i]);
-  const todo = neighbours[i].filter((n) => n !== j && !metal(n));
-  for (const n of todo) seen.add(n);
-  while (todo.length) {
-    const u = todo.pop()!;
-    if (u === j) return true;
+/** The smallest ring a drawn axis may be in: seven atoms. */
+const AXIS_RING = 7;
+
+/** The size of the smallest ring through the bond i-j, in atoms - j reached from i some other way - or Infinity where it is in none. */
+function ringThrough(neighbours: readonly number[][], i: number, j: number): number {
+  const far = new Map<number, number>([[i, 0]]);
+  const queue = [i];
+  while (queue.length) {
+    const u = queue.shift()!;
     for (const v of neighbours[u]) {
-      if (seen.has(v) || metal(v)) continue;
-      seen.add(v);
-      todo.push(v);
+      if ((u === i && v === j) || far.has(v)) continue;
+      far.set(v, far.get(u)! + 1);
+      if (v === j) return far.get(v)! + 1;
+      queue.push(v);
     }
   }
-  return false;
+  return Infinity;
 }

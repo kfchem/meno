@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { STYLE_3D } from "../../../../lib/chem/style3d";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { layoutOptionsFor, MENO } from "../../../../lib/chem/style";
@@ -7,10 +7,11 @@ import { writeMolfile3d } from "../../../../lib/chem/molWriter";
 import { factor } from "../../../../lib/units";
 import type { Model } from "../store/types";
 import { solidOf } from "../utils/molecule3d";
-import { RING_CONFORMERS } from "../../../../lib/chem/conformersSought";
+import { MOST_CONFORMERS, RING_CONFORMERS } from "../../../../lib/chem/conformersSought";
+import { WITHIN_3D, type ChemistrySettings } from "../../../../lib/settings/appSettings";
 import { covalentLength } from "../../../../lib/chem/metalHolds";
 import { vdwRadius } from "../../../../lib/chem/elements";
-import { bareAtomsOf, bareWords, blocksOf, blocksStill, conformersOf, pageCount, drawnBlocksOf, formulaOf, standsForMolecule, likeOf, linkOf, moleculeOf, placeRow, rowFrom, signatureOf, takenOnPage, turnedOver, withinWindow, type Box, type Turned } from "./make3d";
+import { bareAtomsOf, bareWords, blocksOf, blocksStill, conformersOf, conformersOnPage, pageCount, pageRounds, drawnBlocksOf, formulaOf, standsForMolecule, likeOf, linkOf, moleculeOf, placeRow, rowFrom, signatureOf, takenOnPage, turnedOver, withinWindow, type Box, type Turned } from "./make3d";
 
 /** Ethanol drawn: C1-C2-O3, a bond's length apart. */
 const ethanol: Model = {
@@ -435,6 +436,49 @@ describe("conformers made for the page", () => {
     expect(asked[0].args).toEqual({ molblock: block.molblock, isomers: [none], count: 40, options: {} });
   });
 
+  it("tells the plugin how many threads it may use beside its options, in one asking and in rounds, the options themselves left as they are - and none where none is given", async () => {
+    const asked: { options: Record<string, unknown>; count?: number; draw?: number }[] = [];
+    const chem = { request: async (_op: string, args: { options: Record<string, unknown>; count?: number; draw?: number }) => (asked.push(args), { isomers: [] }) } as unknown as ChemClient;
+    const stereo = { request: async (op: string) => (op === "stereo_elements" ? { read: true, elements: [] } : Promise.reject(new Error(`no ${op} here`))) } as unknown as ChemClient;
+    const [block] = blocksOf(ethanol, [12]);
+    const options = { field: "UFF" };
+    await conformersOf(chem, stereo, block, "one", options, 40, null, 6);
+    expect(asked.map((a) => a.options)).toEqual([{ field: "UFF", threads: 6 }]);
+    expect(options).toEqual({ field: "UFF" });
+    // (none given: the options as they were, so that a plugin that never heard of threads is asked as it was)
+    asked.length = 0;
+    await conformersOf(chem, stereo, block, "one", options, 40);
+    expect(asked.map((a) => a.options)).toEqual([{ field: "UFF" }]);
+    expect(asked[0].options).toBe(options);
+    // (in rounds: every round told)
+    asked.length = 0;
+    await conformersOf(chem, stereo, block, "one", options, 50, { window: 3, first: 10, most: MOST_CONFORMERS }, 3).catch(() => undefined);
+    expect(asked.length).toBeGreaterThan(0);
+    expect(asked.every((a) => a.options.threads === 3 && a.options.field === "UFF" && a.draw != null)).toBe(true);
+  });
+
+  it("asks as the page does - how many to try from Chemistry and the cores from Calculations - in one place that both the 3D structure and the atom map use", async () => {
+    const asked: { options: Record<string, unknown>; count?: number; draw?: number }[] = [];
+    const chem = { request: async (_op: string, args: { options: Record<string, unknown>; count?: number; draw?: number }) => (asked.push(args), { isomers: [] }) } as unknown as ChemClient;
+    const stereo = { request: async (op: string) => (op === "stereo_elements" ? { read: true, elements: [] } : Promise.reject(new Error(`no ${op} here`))) } as unknown as ChemClient;
+    const [block] = blocksOf(ethanol, [12]);
+    // (a computer of eight cores, whatever this one is)
+    vi.stubGlobal("navigator", { hardwareConcurrency: 8 });
+    const settings = { chemistry: { sought3d: "fixed", count3d: 25 } as ChemistrySettings, calculations: { cores: 5, coresAll: 8 } };
+    await conformersOnPage(chem, stereo, block, "one", { field: "UFF" }, settings);
+    expect(asked).toEqual([{ molblock: block.molblock, isomers: [{ centres: [], doubles: [] }], count: 25, options: { field: "UFF", threads: 5 } }]);
+    // (all that jobs may use, where Settings gives no number)
+    asked.length = 0;
+    await conformersOnPage(chem, stereo, block, "one", {}, { ...settings, calculations: { coresAll: 3 } as typeof settings.calculations });
+    expect(asked[0].options.threads).toBe(3);
+    // (asked in rounds: each told)
+    asked.length = 0;
+    await conformersOnPage(chem, stereo, block, "one", {}, settings, { window: 3, first: 10, most: MOST_CONFORMERS }).catch(() => undefined);
+    expect(asked.length).toBeGreaterThan(0);
+    expect(asked.every((a) => a.options.threads === 5 && a.draw != null)).toBe(true);
+    vi.unstubAllGlobals();
+  });
+
   it("sends a metal complex's holds, and sets aside what Meno's checks find in what came back, saying so after the plugin's rows", async () => {
     // (Cl-Pd-P drawn; the plugin's answer its three atoms then the P's two H: a conformer at the bonds' lengths, then one with its P at 1.3)
     const pdModel: Model = {
@@ -510,6 +554,57 @@ describe("conformers made for the page", () => {
     // (the chloride no nearer either atom of the cation than their van der Waals contact)
     for (const i of [0, 1]) expect(apart(i)).toBeGreaterThanOrEqual(vdwRadius(made.atoms[i].el) + vdwRadius("Cl") - 1e-3);
     expect(made.how?.filter((r) => r.label === "Parts")).toEqual([{ label: "Parts", text: "2, side by side: where they lie against each other is not modelled" }]);
+  });
+
+  it("asks in rounds where Settings seeks as many as the molecule needs and its search takes draws - with fresh Settings too, its window Meno's until the chemist gives one", () => {
+    const [block] = blocksOf(ethanol, [12]);
+    expect(pageRounds(block, { within3d: 2.5 }, false)).toBeNull();
+    expect(pageRounds(block, { sought3d: "fixed", within3d: 2.5 }, true)).toBeNull();
+    // (fresh Settings: nothing asked first - Meno's window for new conformers, the chemist's where given)
+    expect(pageRounds(block, {}, true)).toEqual({ window: WITHIN_3D, first: 50, most: MOST_CONFORMERS });
+    // (ethanol's first round its own fifty - lib/chem/conformersSought - or the chemist's)
+    expect(pageRounds(block, { within3d: 2.5 }, true)).toEqual({ window: 2.5, first: 50, most: MOST_CONFORMERS });
+    expect(pageRounds(block, { within3d: 2.5, first3d: 120, most3d: 1000 }, true)).toEqual({ window: 2.5, first: 120, most: 1000 });
+  });
+
+  it("makes a 3D structure from fresh Settings, in rounds, no window asked - Meno's window for new conformers its own", async () => {
+    const chem = { request: async () => ({ isomers: [answer] }) } as unknown as ChemClient;
+    const stereo = { request: async (op: string) => (op === "stereo_elements" ? { read: true, elements: [] } : Promise.reject(new Error(`no ${op} here`))) } as unknown as ChemClient;
+    const [block] = blocksOf(ethanol, [12]);
+    const rounds = pageRounds(block, {}, true);
+    expect(rounds && "needs" in rounds).toBe(false);
+    const made = await conformersOf(chem, stereo, block, "one", {}, 50, rounds as Exclude<typeof rounds, { needs: string } | null>);
+    expect(made).toHaveLength(1);
+    expect(made[0].how?.find((r) => r.label === "Rounds")?.text).toBe(`2 rounds, 100 tried: the last brought no new conformer within ${WITHIN_3D} kcal/mol of the lowest`);
+  });
+
+  it("asks each stereoisomer alone in rounds, each with a draw of its own, until one brings no new conformer - and says how it ended", async () => {
+    const asked: Record<string, unknown>[] = [];
+    // (each draw the same two conformers: the second round brings none new)
+    const chem = { request: async (_op: string, args: Record<string, unknown>) => (asked.push(args), { isomers: [answer] }) } as unknown as ChemClient;
+    const stereo = { request: async (op: string) => (op === "stereo_elements" ? { read: true, elements: [] } : Promise.reject(new Error(`no ${op} here`))) } as unknown as ChemClient;
+    const [block] = blocksOf(ethanol, [12]);
+    const [made] = await conformersOf(chem, stereo, block, "one", {}, 50, { window: 3, first: 10, most: MOST_CONFORMERS });
+    expect(asked.map((a) => [a.count, a.draw, (a.isomers as unknown[]).length])).toEqual([
+      [10, 0, 1],
+      [10, 1, 1],
+    ]);
+    expect(made.how?.filter((r) => r.label === "Rounds")).toEqual([{ label: "Rounds", text: "2 rounds, 20 tried: the last brought no new conformer within 3 kcal/mol of the lowest" }]);
+  });
+
+  it("stops its rounds at the time a search takes at most, and says so", async () => {
+    let clock = 0;
+    const now = vi.spyOn(Date, "now").mockImplementation(() => clock);
+    try {
+      // (the first round takes nine and a half minutes: the next, as long, would end past ten)
+      const chem = { request: async () => ((clock += 570_000), { isomers: [answer] }) } as unknown as ChemClient;
+      const stereo = { request: async (op: string) => (op === "stereo_elements" ? { read: true, elements: [] } : Promise.reject(new Error(`no ${op} here`))) } as unknown as ChemClient;
+      const [block] = blocksOf(ethanol, [12]);
+      const [made] = await conformersOf(chem, stereo, block, "one", {}, 50, { window: 3, first: 10, most: MOST_CONFORMERS });
+      expect(made.how?.filter((r) => r.label === "Rounds")).toEqual([{ label: "Rounds", text: "1 round, 10 tried: the 10 minutes a search takes at most" }]);
+    } finally {
+      now.mockRestore();
+    }
   });
 
   it("tries as many as Settings says: the chemist's number, or as many as the molecule needs", () => {

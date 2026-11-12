@@ -9,25 +9,27 @@
  * entry still, what was worked out at another structure or state never
  * carried. Each says what it did; nothing it does not pass on goes unsaid.
  */
-import type { Entry } from "../../../../lib/entry";
+import { geometryKey, type Entry } from "../../../../lib/entry";
 import { tag } from "../../../../lib/nodes/tag";
 import { merge } from "../../../../lib/nodes/merge";
-import { matchedOn } from "../../../../lib/nodes/match";
+import { matchedOn, valuesOn } from "../../../../lib/nodes/match";
 import { rebonded } from "../../../../lib/steps/rebond";
 import { atomsFromOne, comparedBonding, matchingReference, type CompareOptions } from "../../../../lib/steps/compareBonding";
 import { combined } from "../../../../lib/steps/combine";
 import { measured, measurementName, measurementsTyped } from "../../../../lib/steps/measure";
 import { speciesNeeds, speciesTyped, withSpecies } from "../../../../lib/steps/species";
-import { restraintsOf, TORSION_STEP, torsionsRestrained } from "../../../../lib/steps/restraints";
+import { NUMBERING, OWN_NUMBERING, restraintRows, restraintsTable, TORSION_STEP, torsionsRestrained, type RestraintRow } from "../../../../lib/steps/restraints";
 import type { OptionValues } from "../../../../lib/options";
-import { atomMapNeeds, restraintsTyped, torsionsNeeds } from "./kinds";
+import { atomMapNeeds, ONE_EXIT, restraintsTyped, torsionsNeeds } from "./kinds";
 import { bondChangesTable, CHANGE, CHANGE_WORDS, MAPPED_ENTRY, renumberedEntry } from "../../../../lib/steps/reaction";
 import { MODE_NAMES, modeOnAtomsEntry } from "../../../../lib/steps/modeOnAtoms";
 import { mapOnto, type BondChangeRow } from "../../../../lib/chem/reactionMap";
 import type { Molecule } from "../../../../lib/chem/molecule";
 import { atomsOfRows, type Table } from "../../../../lib/table";
 import { displacedEntry } from "../../../../lib/steps/vibrations";
-import { CALC_CARRIED, compoundLetter, entryOfSet, entryState, FINISHED, setEntryOfEntry, type SetEntry } from "./entries";
+import { CALC_CARRIED, calcRenumbered, compoundLetter, entryOfSet, entryState, FINISHED, hash, keptRenumbered, setEntryOfEntry, type SetEntry } from "./entries";
+import { convergedOf } from "./converged";
+import { ATOM_MAP_PAIR, matchesOf } from "./pairs";
 import type { Holds3D } from "./kinds";
 import type { Outcome3D } from "./meno";
 
@@ -332,41 +334,55 @@ export function comparedSet(entries: readonly SetEntry[], references: readonly S
 const withRestraints = (e: SetEntry, restraints: NonNullable<SetEntry["properties"]>[string]): SetEntry => ({ ...e, properties: { ...e.properties, restraints } });
 
 /**
- * *Restraints* (lib/steps `restraintsOf`): each entry with its restraints
- * from itself - its coordination bonds at the factor given, the pairs
- * typed at their distance, the atoms typed fixed - whatever it held before
- * replaced; one it cannot have them out of *Failed*, saying why.
+ * *Restraints* (lib/steps `restraintRows`): a table of restraints, a row for
+ * each, made of each entry from itself - its coordination bonds at the
+ * factor given, the pairs typed at their distance, the atoms typed fixed -
+ * each row for that entry by the value of the property named (an ID a step
+ * wrote: question A), and in the numbering it has now (`NUMBERING`). The
+ * entries are not passed on: a step that holds restraints takes them in its
+ * *Restraints* input. One it cannot make rows for - no such ID, an ID
+ * another entry has too, an atom it has not - out of *Failed*, saying why.
  */
 export function restrainedSet(entries: readonly SetEntry[], holds: Holds3D, v: OptionValues): Outcome3D {
   const typed = restraintsTyped(v);
   if ("why" in typed) return { ok: false, said: typed.why };
-  const kept: SetEntry[] = [];
+  const { on } = typed;
   const aside: SetEntry[] = [];
-  const total = { coordination: 0, distances: 0, fixed: 0 };
-  let replaced = 0;
-  let torsionsKept = 0;
+  const rows: RestraintRow[] = [];
+  const total = { coordination: 0, distances: 0, fixed: 0, none: 0 };
+  // (each entry's ID - a text, a number, as it says it - and those two or more entries share: a row for one would be the other's too)
+  const idOf = (e: SetEntry) => {
+    const p = e.properties?.[on];
+    return p?.status === "computed" && (typeof p.value === "string" || typeof p.value === "number") ? String(p.value) : null;
+  };
+  const ids = entries.map(idOf);
+  const shared = new Set(ids.filter((id, i) => id != null && ids.indexOf(id) !== i));
   entries.forEach((was, i) => {
-    const r = restraintsOf(entryOfSet(was, String(i)), typed.asked);
-    if ("failed" in r) {
-      aside.push({ ...was, failed: { kind: "refused", why: r.failed } });
-      return;
+    const refuse = (why: string) => aside.push({ ...was, failed: { kind: "refused", why } });
+    const id = ids[i];
+    if (id == null) return refuse(`It has no ${on} to make its rows for: give it one (Tag)`);
+    if (shared.has(id)) return refuse(`Its ${on}, ${id}, is another entry's here too: rows made for it would be both's`);
+    const r = restraintRows(entryOfSet(was, String(i)), typed.asked);
+    if ("failed" in r) return refuse(r.failed);
+    const n = was.properties?.[NUMBERING];
+    const numbering = n?.status === "computed" && typeof n.value === "string" ? n.value : OWN_NUMBERING;
+    for (const row of r.rows) {
+      rows.push({ ...row, for: id, on, numbering });
+      if (row.restraint.kind === "fixed") total.fixed += row.restraint.atoms.length;
+      else if (row.why.startsWith("coordination")) total.coordination++;
+      else total.distances++;
     }
-    total.coordination += r.count.coordination;
-    total.distances += r.count.distances;
-    total.fixed += r.count.fixed;
-    if (r.count.replaced) replaced++;
-    if (r.count.torsionsKept) torsionsKept++;
-    kept.push(withRestraints(was, r.property));
+    if (!r.rows.length) total.none++;
   });
-  const said = [`${plural(kept.length, "entry", "entries")} restrained`];
+  const made = entries.length - aside.length;
+  const said = [`${plural(rows.length, "row")} for ${plural(made, "entry", "entries")}`];
   if (typed.asked.coordination != null) said.push(total.coordination ? `${plural(total.coordination, "coordination bond")} held` : "no coordination bonds");
   if (total.distances) said.push(`${plural(total.distances, "pair")} at their distance`);
   if (total.fixed) said.push(`${plural(total.fixed, "atom")} fixed`);
-  // (what an entry held before: its distances and atoms fixed replaced, its torsions - with the strengths they reached - kept; both said)
-  if (replaced) said.push(`${replaced} ${replaced === 1 ? "entry's" : "entries'"} earlier distances and atoms fixed replaced`);
-  if (torsionsKept) said.push(`${torsionsKept} ${torsionsKept === 1 ? "entry's" : "entries'"} torsions kept`);
+  // (an entry it made no row for: said - a step holding these takes none for it, and refuses it)
+  if (total.none) said.push(`${plural(total.none, "entry", "entries")} with none to hold`);
   if (aside.length) said.push(`${aside.length} failed`);
-  return { ok: true, holds, kept, aside, said: said.join(" \u00b7 ") };
+  return { ok: true, holds, kept: [], aside, said: said.join(" \u00b7 "), tables: { [ONE_EXIT]: restraintsTable(rows) } };
 }
 
 /**
@@ -430,47 +446,108 @@ export type EntriesMapped = ReturnType<typeof mapOnto>;
 /** An Atom map's mapping, one reference at a time: the reference's side (its entries, by place in *Reference*), and each side mapped onto it (each its entries, by place in *Molecules*). */
 export type AtomMapGroup = { reference: number[]; sides: number[][] };
 
+/** An entry's formal charge as it is in use - given, or as its atoms say it - a bare skeleton's none, counted 0 (an Atom map refuses it first). */
+const chargeIn = (e: SetEntry): number => entryOfSet(e, "").species?.charge ?? 0;
+
 /**
  * What an Atom map maps onto what (`AtomMapGroup`): each input's entries
- * each a side of its own, or all one side together - finished, and with
+ * each a side of its own, or all one side together - or, matched on a
+ * property, one side together for each value of it - finished, and with
  * their hydrogens - or why it cannot map at all: options it still needs,
- * not one reference where it is against the one, or a reference without
- * its hydrogens. A side it does not map, with why, is in `aside`: each of
- * its entries.
+ * not one reference where it is against the one, or the sides in order not
+ * as many on the two inputs. A side it does not map, with why, is in
+ * `aside`: each of its entries. `sides` is how many sides *Molecules* made,
+ * mapped or not. A side whose total charge is not its reference side's is
+ * not mapped: its reference is what it is mapped onto, one system to one.
  */
-export function atomMapPlan(entries: readonly SetEntry[], references: readonly SetEntry[], v: OptionValues): { groups: AtomMapGroup[]; aside: { entry: number; why: string }[] } | { refused: string } {
+export function atomMapPlan(entries: readonly SetEntry[], references: readonly SetEntry[], v: OptionValues): { groups: AtomMapGroup[]; aside: { entry: number; why: string }[]; sides: number } | { refused: string } {
   const needs = atomMapNeeds(v);
   if (needs) return { refused: needs };
   const together = { entries: v.moleculesAre === "together", reference: v.referenceIs === "together" };
-  const byProperty = v.reference === "property";
-  if (!byProperty && !together.reference && references.length !== 1)
+  const by = v.reference === "order" ? "order" : v.reference === "property" ? "property" : "one";
+  if (by === "one" && !together.reference && references.length !== 1)
     return { refused: `Against the one reference, but ${references.length} came into Reference: match them on a property, or take the reference as one side` };
-  const refSides = together.reference ? [references.map((_, i) => i)] : references.map((_, i) => [i]);
-  if (!byProperty && refSides[0].some((i) => references[i].skeleton)) return { refused: "The reference has no hydrogens: every atom must map, hydrogens included" };
-  const sides = together.entries ? [entries.map((_, i) => i)] : entries.map((_, i) => [i]);
-  // (each side's reference: the one, or - each its own - the one with the same value of the property)
-  const matched = byProperty
-    ? matchedOn(
-        entries.map((e, i) => entryOfSet(e, String(i))),
-        references.map((e, i) => entryOfSet(e, String(i))),
-        String(v.property).trim(),
-        "Reference",
-      )
-    : sides.map(() => ({ index: 0 }));
+  // (a reference taken as one side, none come into it: a side with nothing to map onto)
+  if (by === "one" && together.reference && !references.length) return { refused: "Nothing comes into Reference" };
+  const eachOf = (n: number) => Array.from({ length: n }, (_, i) => [i]);
+  const allOf = (n: number) => (n ? [Array.from({ length: n }, (_, i) => i)] : []);
+  // (a side: its entries, by place in *Molecules*, and the reference side it goes onto - by place in the reference's sides - or why it goes onto none)
+  type Side = { entries: number[]; to: { ref: number } | { why: string } };
+  let refSides: number[][];
+  let sides: Side[];
+  if (by === "property") {
+    const name = String(v.property).trim();
+    const valuesE = valuesOn(entries.map((e, i) => entryOfSet(e, String(i))), name);
+    const valuesR = valuesOn(references.map((e, i) => entryOfSet(e, String(i))), name);
+    // (the entries that have a value, each value's together - or each its own, the value still the one it is matched on)
+    const sidesOn = (values: typeof valuesE, apart: boolean) => {
+      const out: { entries: number[]; key?: string; said?: string; why?: string }[] = [];
+      const at = new Map<string, number>();
+      values.forEach((x, i) => {
+        if ("why" in x) return void out.push({ entries: [i], why: x.why });
+        const k = at.get(x.key);
+        if (apart || k == null) {
+          if (!apart) at.set(x.key, out.length);
+          out.push({ entries: [i], key: x.key, said: x.said });
+        } else out[k].entries.push(i);
+      });
+      return out;
+    };
+    const refs = sidesOn(valuesR, !together.reference).filter((x) => x.key != null);
+    refSides = refs.map((x) => x.entries);
+    sides = sidesOn(valuesE, !together.entries).map((x) => {
+      if (x.key == null) return { entries: x.entries, to: { why: `not paired: ${x.why}` } };
+      const found = refs.flatMap((r, k) => (r.key === x.key ? [k] : []));
+      if (found.length === 1) return { entries: x.entries, to: { ref: found[0] } };
+      const plain = !together.entries && !together.reference;
+      const why = found.length ? `${found.length} entries of Reference have its ${name}, ${x.said}` : plain ? `no entry of Reference has its ${name}, ${x.said}` : `no reference with ${name} = ${x.said}`;
+      return { entries: x.entries, to: { why: `not paired: ${why}` } };
+    });
+  } else {
+    refSides = together.reference ? allOf(references.length) : eachOf(references.length);
+    const own = (together.entries ? allOf(entries.length) : eachOf(entries.length)).map((side) => ({ entries: side }));
+    if (by === "order") {
+      // (the k-th side onto the k-th: Path search's pairing, and its words)
+      const m = matchesOf(own.map((x) => entries[x.entries[0]]), refSides.map((r) => references[r[0]]), "order", "", ATOM_MAP_PAIR);
+      if ("ends" in m === false) return { refused: (m as { why: string }).why };
+      sides = own.map((x, k) => ({ entries: x.entries, to: { ref: k } }));
+    } else {
+      if (refSides[0]?.some((i) => references[i].skeleton)) return { refused: "The reference has no hydrogens: every atom must map, hydrogens included" };
+      sides = own.map((x) => ({ entries: x.entries, to: { ref: 0 } }));
+    }
+  }
   const groups = new Map<number, number[][]>();
   const aside: { entry: number; why: string }[] = [];
-  sides.forEach((side, k) => {
-    const m = matched[k];
+  for (const { entries: side, to } of sides) {
     const said = (why: string) => side.forEach((entry) => aside.push({ entry, why }));
     const unfinished = side.find((i) => entryState(entries[i]) !== FINISHED);
-    if (unfinished != null) return said(`not finished: ${side.length > 1 ? `${named(entries[unfinished])} is ` : ""}${entryState(entries[unfinished])}`);
+    if (unfinished != null) {
+      said(`not finished: ${side.length > 1 ? `${named(entries[unfinished])} is ` : ""}${entryState(entries[unfinished])}`);
+      continue;
+    }
     const bare = side.find((i) => entries[i].skeleton);
-    if (bare != null) return said(`${side.length > 1 ? `${named(entries[bare])} has` : "it has"} no hydrogens: every atom must map, hydrogens included`);
-    if ("why" in m) return said(`not paired: ${m.why}`);
-    if (refSides[m.index].some((i) => references[i].skeleton)) return said("its reference has no hydrogens: every atom must map, hydrogens included");
-    groups.set(m.index, [...(groups.get(m.index) ?? []), side]);
-  });
-  return { groups: [...groups].map(([k, ss]) => ({ reference: refSides[k], sides: ss })), aside };
+    if (bare != null) {
+      said(`${side.length > 1 ? `${named(entries[bare])} has` : "it has"} no hydrogens: every atom must map, hydrogens included`);
+      continue;
+    }
+    if ("why" in to) {
+      said(to.why);
+      continue;
+    }
+    if (refSides[to.ref].some((i) => references[i].skeleton)) {
+      said("its reference has no hydrogens: every atom must map, hydrogens included");
+      continue;
+    }
+    // (one system onto one system: the charge it has is the charge its reference has - the calculations after take one charge each)
+    const here = side.reduce((n, i) => n + chargeIn(entries[i]), 0);
+    const there = refSides[to.ref].reduce((n, i) => n + chargeIn(references[i]), 0);
+    if (here !== there) {
+      said(`charge ${here} here, ${there} in the reference`);
+      continue;
+    }
+    groups.set(to.ref, [...(groups.get(to.ref) ?? []), side]);
+  }
+  return { groups: [...groups].map(([k, ss]) => ({ reference: refSides[k], sides: ss })), aside, sides: sides.length };
 }
 
 /**
@@ -486,9 +563,14 @@ export function atomMapPlan(entries: readonly SetEntry[], references: readonly S
  * that does not map one to one, is set aside with why - never passed on as
  * mapped. A mapped entry keeps its energy and its imaginary frequencies, of
  * its geometry however it is numbered, and one numbered as it was keeps all
- * it held; a calculation does not follow a renumbering, and the line says
- * so. Several entries mapped as one side come out as one, in the places the
- * map set them in, carrying none of their own values.
+ * it held. A renumbered one keeps what its energy is of - its calculation's
+ * program and level, how it was made - so that a compound's conformers,
+ * some renumbered and some not, stay one calculation's, their energies in
+ * one list; its calculation's results follow it, renumbered, but those
+ * that cannot be and the files they were read from, numbered as it was,
+ * and the line says so. Several entries mapped as one side come out as
+ * one, in the places the map set them in, carrying none of their own
+ * values.
  * `mapped`, where the mapping was worked out already (in a worker): for each
  * of `atomMapPlan`'s groups, its sides mapped, in order.
  */
@@ -541,13 +623,34 @@ export function atomMapSet(entries: readonly SetEntry[], references: readonly Se
       let held = e;
       if (side.length === 1 && moved) {
         // (renumbered, its energy and imaginary frequencies its geometry's, whatever its numbering: carried, and its thermochemistry
-        //  and vibrations as its own properties, renumbered with it; its calculation not)
+        //  and vibrations as its own properties, renumbered with it; and what its energy is of - its calculation's program and
+        //  level, how it was made - with what else it keeps, renumbered: alike with its compound's conformers not renumbered, as
+        //  one molecule writes them, its energy in their list; its calculation's results renumbered, but those that cannot be and
+        //  the files they were read from. Where a run ended converged at its geometry, that too: the same places, renumbered - the
+        //  atoms it held with them)
         const carried = Object.fromEntries(CALC_CARRIED.flatMap((key) => (r.properties[key] ? [[key, r.properties[key]]] : [])));
-        held = { ...e, properties: { ...e.properties, ...carried }, ...(first.energy != null ? { energy: first.energy } : {}), ...(first.imaginary ? { imaginary: [...first.imaginary] } : {}) };
-        if (first.calc) calc++;
+        const now = new Array<number>(m.order.length);
+        m.order.forEach((j, at) => (now[j] = at));
+        const converged = convergedOf(first);
+        const ran = first.calc ? calcRenumbered(first.calc, m.order) : undefined;
+        const bondAt = new Map(e.bonds.map((b, i) => [`${Math.min(b.a1, b.a2)}-${Math.max(b.a1, b.a2)}`, i]));
+        const bondNow = first.bonds.map((b) => bondAt.get(`${Math.min(now[b.a1], now[b.a2])}-${Math.max(now[b.a1], now[b.a2])}`) ?? -1);
+        held = {
+          ...e,
+          properties: { ...e.properties, ...carried },
+          ...(first.energy != null ? { energy: first.energy } : {}),
+          ...(first.imaginary ? { imaginary: [...first.imaginary] } : {}),
+          ...(ran ? { calc: ran.calc } : {}),
+          ...(first.keep ? { keep: keptRenumbered(first.keep, m.order, now, bondNow) } : {}),
+          ...(converged ? { converged: { ...converged, geometry: geometryKey(e.xyz), ...(converged.held ? { held: converged.held.map((a) => now[a]) } : {}) } } : {}),
+        };
+        if (ran?.leftBehind) calc++;
       }
       if (side.length > 1 && side.some((i) => entries[i].energy != null || entries[i].calc || Object.keys(entries[i].properties ?? {}).length)) partsOwn++;
       if (side.length === 1 && first.properties?.[MAPPED_ENTRY]) replaced++;
+      // (numbered anew - its atoms in another order, or several made one: said in a label that rides on, each such map after the
+      //  last, so that a restraint made in the numbering it had is never held on what are now other atoms - lib/steps NUMBERING)
+      if (moved || side.length > 1) held = numberedAnew(held, first, g.reference.map((i) => references[i]));
       kept.push(withSaid(held, MAPPED_ENTRY, sideKey(side, m.map)));
     }
   });
@@ -557,13 +660,27 @@ export function atomMapSet(entries: readonly SetEntry[], references: readonly Se
   const asideEntries = [...new Set([...plan.aside.map((a) => a.entry), ...unmapped])].sort((p, q) => p - q);
   const aside = asideEntries.map((i) => withSaid(entries[i], SET_ASIDE, (asideWhy.get(i) ?? []).join(" ")));
   const changes = bondChangesTable(done, (d) => sideKey(d.side, d.map));
-  const sideCount = (v.moleculesAre === "together" ? 1 : entries.length);
-  const line = [`${mappedSides.size} of ${sideCount} mapped`];
-  if (aside.length) line.push(`${v.moleculesAre === "together" ? 1 : aside.length} not mapped`);
-  if (calc) line.push(`${calc === 1 ? "its calculation" : "calculations"} not carried`);
+  const line = [`${mappedSides.size} of ${plan.sides} mapped`];
+  if (plan.sides > mappedSides.size) line.push(`${plan.sides - mappedSides.size} not mapped`);
+  if (calc) line.push(`part of ${calc === 1 ? "its calculation" : "their calculations"} not carried`);
   if (partsOwn) line.push("the parts' own values not carried");
   if (replaced) line.push(`the ${MAPPED_ENTRY} ${replaced === 1 ? "an entry" : `${replaced} entries`} carried replaced`);
   return { ok: true, holds, kept, aside, said: line.join(", "), tables: { changes } };
+}
+
+/**
+ * `e`, numbered anew by Atom map in `references`' numbering, with its
+ * numbering said (lib/steps `NUMBERING`): the one it had (`was`'s) and,
+ * after it, this one - the references by name and by what their atoms and
+ * bonds are, so that two references of one compound number alike, and two
+ * of different compounds never do. A label: it rides on as an ID does.
+ */
+function numberedAnew(e: SetEntry, was: SetEntry, references: readonly SetEntry[]): SetEntry {
+  const n = was.properties?.[NUMBERING];
+  const before = n?.status === "computed" && typeof n.value === "string" ? n.value : null;
+  const graph = references.map((r) => `${r.atoms.map((a) => a.el).join(",")}|${r.bonds.map((b) => `${b.a1}-${b.a2}:${b.order}`).join(",")}`).join(" + ");
+  const now = `as ${references.map((r) => r.name ?? named(r)).join(" + ")} (${hash(graph).toString(36)})`;
+  return { ...e, properties: { ...e.properties, [NUMBERING]: { value: before ? `${before}, then ${now}` : now, unit: "none", status: "computed", label: true } } };
 }
 
 /** Several step's entries as one entry record, their atoms one after another (lib/steps `combined`), or why not. */

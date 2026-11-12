@@ -1,6 +1,6 @@
 import type { ChemClient, Conformers, Like } from "../../../../lib/roles/client";
 import { cipIn3d } from "../../../../lib/chem/cip/in3d";
-import { configuredFrom, leftOver, MOST_ISOMERS, stereoGraphOf, stereoLeft, type Configuration, type IsomersMade, type StereoLeft } from "../../../../lib/chem/stereoOpen";
+import { configuredFrom, distinctIsomers, leftOver, MOST_ISOMERS, stereoGraphOf, stereoLeft, type Configuration, type IsomersMade, type StereoLeft } from "../../../../lib/chem/stereoOpen";
 
 /**
  * What a structure leaves open, as Meno decides it (lib/chem/stereoOpen) on
@@ -57,7 +57,7 @@ export type IsomersAsked = { most: number; whole?: boolean; withinMs?: number; d
  * leaves open.
  */
 export async function stereoisomersOf(chem: ChemClient, molblocks: readonly string[], open: OpenStereo, asked: IsomersAsked, ms?: number): Promise<IsomersMade> {
-  return chem.request(
+  const made = await chem.request(
     "stereoisomers",
     {
       molblocks: [...molblocks],
@@ -72,6 +72,8 @@ export async function stereoisomersOf(chem: ChemClient, molblocks: readonly stri
     },
     ms,
   );
+  // (each configuration once: the plugin's toolkit may enumerate what Meno's rules leave out, an aziridine's N - but isomers differing where a configuration does not tell stay)
+  return "isomers" in made ? { ...made, isomers: distinctIsomers(made.isomers, open.drawn) } : made;
 }
 
 /**

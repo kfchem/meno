@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Restraint } from "../../../../lib/entry";
 import type { SetEntry } from "./entries";
-import { kindInfo } from "./kinds";
+import { kindInfo, ONE_EXIT } from "./kinds";
+import { NUMBERING, restraintRowsIn } from "../../../../lib/steps/restraints";
 import { runMeno, runMenoPair } from "./meno";
 import { menoFileBytes, readMenoFile } from "../../../../lib/doc/menoFile";
 import { addMolecule3d, createWorkspaceDocument, emptyWorkspaceDocument } from "../document";
@@ -48,41 +49,71 @@ const held = (e: SetEntry): Restraint[] => {
 };
 const tagged = (e: SetEntry, name: string, value: string): SetEntry => ({ ...e, properties: { ...e.properties, [name]: { value, unit: "none", status: "computed" } } });
 
+/** The rows of the table a Restraints step gave. */
+const rowsGiven = (o: ReturnType<typeof runMeno>) => {
+  if (!o.ok) throw new Error(o.said);
+  const t = o.tables?.[ONE_EXIT];
+  if (!t) throw new Error("no table");
+  const read = restraintRowsIn(t);
+  if ("why" in read) throw new Error(read.why);
+  return read.rows;
+};
+
 describe("Restraints, as a step", () => {
-  it("holds the pairs typed at their distance in each entry, at the strength typed, and says what it held", () => {
-    const o = runMeno("restraints", [dce(true), dce(false)], "molecules", { factor: "0.9", distances: "3-4", strength: "1000" });
-    if (!o.ok) throw new Error(o.said);
+  it("gives a table of the pairs typed at their distance in each entry, at the strength typed, each row for its entry by its ID - and passes no molecule on", () => {
+    const o = runMeno("restraints", [tagged(dce(true), "start", "p1"), tagged(dce(false), "start", "p2")], "molecules", { on: "start", factor: "0.9", distances: "3-4", strength: "1000" });
     const cl = (cis: boolean) => (cis ? 1.33 + 1.73 : Math.hypot(1.33 + 1.73, 2 * 0.866 * 1.73));
-    expect(held(o.kept[0])).toEqual([{ kind: "distance", atoms: [2, 3], value: expect.closeTo(cl(true), 9), strength: 1000 }]);
-    expect(held(o.kept[1])[0].value).toBeCloseTo(cl(false), 9);
+    const rows = rowsGiven(o);
+    expect(rows.map((r) => [r.for, r.on, r.numbering, r.restraint.kind, r.restraint.atoms, r.restraint.strength, r.why])).toEqual([
+      ["p1", "start", "its own", "distance", [2, 3], 1000, "typed: kept at its distance here"],
+      ["p2", "start", "its own", "distance", [2, 3], 1000, "typed: kept at its distance here"],
+    ]);
+    expect(rows[0].restraint.value).toBeCloseTo(cl(true), 9);
+    expect(rows[1].restraint.value).toBeCloseTo(cl(false), 9);
+    expect(o.ok && o.kept).toEqual([]);
     // (coordination bonds asked, none marked: said, not passed over)
-    expect(o.said).toBe("2 entries restrained \u00b7 no coordination bonds \u00b7 2 pairs at their distance");
+    expect(o.ok && o.said).toBe("2 rows for 2 entries \u00b7 no coordination bonds \u00b7 2 pairs at their distance");
   });
 
   it("has no factor of its own, and a strength measured to hold: it says what it needs, and runs on nothing until it has them", () => {
     const needs = kindInfo("restraints").needs!;
-    expect(needs({})).toBe("Set the factor");
+    expect(needs({})).toBe("Name the property each row is for (an ID a Tag wrote)");
+    expect(needs({ on: "start" })).toBe("Set the factor");
     // (the strength 500 kcal/mol/Å² unless set - DISTANCE_STRENGTH's basis - and asked for where it is cleared)
-    expect(needs({ factor: "0.9" })).toBeUndefined();
-    expect(needs({ factor: "0.9", strength: "" })).toBe("Set the strength");
-    expect(needs({ factor: "-1", strength: "1000" })).toBe("The factor must be a number above 0");
-    expect(needs({ coordination: false })).toBe("Nothing to hold yet");
+    expect(needs({ on: "start", factor: "0.9" })).toBeUndefined();
+    expect(needs({ on: "start", factor: "0.9", strength: "" })).toBe("Set the strength");
+    expect(needs({ on: "start", factor: "-1", strength: "1000" })).toBe("The factor must be a number above 0");
+    expect(needs({ on: "start", coordination: false })).toBe("Nothing to hold yet");
     // (atoms fixed need no strength: they are fixed)
-    expect(needs({ coordination: false, fixed: "1-2" })).toBeUndefined();
-    expect(needs({ coordination: false, distances: "1-2-3", strength: "5" })).toBe('"1-2-3" is not a pair of atoms');
-    expect(runMeno("restraints", [borane], "molecules", {})).toEqual({ ok: false, said: "Set the factor" });
-    expect(kindInfo("restraints").how?.({ factor: "0.9", strength: "1000", fixed: "1" })).toBe("Coordination bonds at 0.9 × van der Waals (Alvarez 2013); 1 atom fixed; 1000 kcal/mol/Å²");
+    expect(needs({ on: "start", coordination: false, fixed: "1-2" })).toBeUndefined();
+    expect(needs({ on: "start", coordination: false, distances: "1-2-3", strength: "5" })).toBe('"1-2-3" is not a pair of atoms');
+    expect(runMeno("restraints", [borane], "molecules", { on: "start" })).toEqual({ ok: false, said: "Set the factor" });
+    expect(kindInfo("restraints").how?.({ on: "start", factor: "0.9", strength: "1000", fixed: "1" })).toBe("Coordination bonds at 0.9 × van der Waals (Alvarez 2013); 1 atom fixed; 1000 kcal/mol/Å²; for each start");
     // (the default strength unsaid)
-    expect(kindInfo("restraints").how?.({ factor: "0.9", strength: "500" })).toBe("Coordination bonds at 0.9 × van der Waals (Alvarez 2013)");
+    expect(kindInfo("restraints").how?.({ on: "start", factor: "0.9", strength: "500" })).toBe("Coordination bonds at 0.9 × van der Waals (Alvarez 2013); for each start");
   });
 
-  it("sets aside, saying why, an entry that has not the atom typed, and replaces what an entry held before", () => {
-    const before = { restraints: { value: { restraints: [{ kind: "fixed" as const, atoms: [0] }] }, unit: "none" as const, status: "computed" as const } };
-    const o = runMeno("restraints", [{ ...borane, properties: before }, entry(["He"], [0, 0, 0], [])], "molecules", { coordination: false, fixed: "2" });
+  it("sets aside, saying why, an entry that has not the atom typed, no ID, or an ID another has too", () => {
+    const o = runMeno(
+      "restraints",
+      [tagged(borane, "start", "b"), tagged(entry(["He"], [0, 0, 0], []), "start", "he"), borane, tagged(dce(true), "start", "x"), tagged(dce(false), "start", "x")],
+      "molecules",
+      { on: "start", coordination: false, fixed: "2" },
+    );
     if (!o.ok) throw new Error(o.said);
-    expect(held(o.kept[0])).toEqual([{ kind: "fixed", atoms: [1] }]);
-    expect(o.aside[0].failed).toEqual({ kind: "refused", why: "It has no atom 2: its atoms are 1 to 1." });
-    expect(o.said).toBe("1 entry restrained · 1 atom fixed · 1 entry's earlier distances and atoms fixed replaced · 1 failed");
+    expect(rowsGiven(o).map((r) => [r.for, r.restraint])).toEqual([["b", { kind: "fixed", atoms: [1] }]]);
+    expect(o.aside.map((e) => e.failed?.why)).toEqual([
+      "It has no atom 2: its atoms are 1 to 1.",
+      "It has no start to make its rows for: give it one (Tag)",
+      "Its start, x, is another entry's here too: rows made for it would be both's",
+      "Its start, x, is another entry's here too: rows made for it would be both's",
+    ]);
+    expect(o.said).toBe("1 row for 1 entry \u00b7 1 atom fixed \u00b7 4 failed");
+  });
+
+  it("writes in each row the numbering its entry is in: one Atom map numbered anew, by that map", () => {
+    const mapped = { ...tagged(borane, "start", "b"), properties: { ...tagged(borane, "start", "b").properties, [NUMBERING]: { value: "as a #1 (x)", unit: "none" as const, status: "computed" as const, label: true as const } } };
+    expect(rowsGiven(runMeno("restraints", [mapped], "molecules", { on: "start", coordination: false, fixed: "1" }))[0].numbering).toBe("as a #1 (x)");
   });
 });
 

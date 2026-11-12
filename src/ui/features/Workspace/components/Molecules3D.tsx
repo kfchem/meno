@@ -17,6 +17,7 @@ import { movedUnderPointer, pressMovedUnder, setViewGoal } from "./viewGoal";
 import { hiddenInStacks, placeInStack, STACK_SWAP_MS } from "../utils/stacks";
 import { stepTurnsOnce, stopTurnsOnce, turningOnce } from "../utils/turnOnce";
 import { Remake3D } from "./remake3d";
+import { moleculeHandlers, type MoleculeHandlers } from "../utils/moleculeHandlers";
 import { PageHtmlLayer } from "./coverLayer";
 import { linkOf } from "../chem/make3d";
 import { useProtonationMark } from "../chem/protonate";
@@ -35,6 +36,8 @@ import { stereoShownOf } from "../document";
 import { viewBack, viewShowingCopy } from "../utils/copySeen";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import StackChip3D from "./StackChip3D";
+import HeldViews3D from "./HeldViews3D";
+import { showsOneAtATime } from "../workflow/heldView";
 import { useDrawingStyle } from "../useDrawingStyle";
 import { editorLayoutOptions } from "../layoutOptions";
 import { MARK_SCALE } from "../chem/marks";
@@ -168,21 +171,22 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
   // record of a stack of drawings out of sight still there: utils/stacks)
   const drawing = useEditor((s) => s.fullModel);
   const remake = useContext(Remake3D);
+  // (each molecule's handlers made once and kept: the same functions every time they are drawn again - utils/moleculeHandlers)
+  const handlersKept = useRef(new Map<number, MoleculeHandlers>());
+  const remakeNow = useRef(remake);
+  remakeNow.current = remake;
+  // (and those of a molecule gone, let go)
+  if (handlersKept.current.size > molecules.length) {
+    const here = new Set(molecules.map((m) => m.id));
+    for (const id of handlersKept.current.keys()) if (!here.has(id)) handlersKept.current.delete(id);
+  }
   // (R and S on, every molecule's labels; off, a stereoisomer's own, which tell it from the others)
   // (R and S on them as large as on the drawing, and written as it writes them)
-  const drawingStyle = useDrawingStyle();
-  const stereoFont = useMemo(() => {
-    const opts = editorLayoutOptions(drawingStyle);
-    return {
-      size: opts.fontPx * MARK_SCALE,
-      units: opts.units === "px" ? ("px" as const) : ("world" as const),
-      family: fontStack(labelSetOf(opts).fontFamily ?? "Arial"),
-      parentheses: !!opts.stereoParentheses,
-      // (and set as the drawing's are: StereoInk3D)
-      opts,
-      gap: opts.stereoGap ?? 0.35,
-    };
-  }, [drawingStyle]);
+  const stereoFont = useStereoFont();
+  // the large result sets' views (workflow/heldView): whether the pointer is on one, and a drag is turning it
+  const [heldHover, setHeldHover] = useState<number | null>(null);
+  const [heldTurning, setHeldTurning] = useState(false);
+  const heldAny = useEditor((s) => s.sets.some(showsOneAtATime));
   const frames = useEditor((s) => s.frames3d);
   const hovered = useEditor((s) => s.hovered3d);
   const sel3d = useEditor((s) => s.sel3d);
@@ -689,15 +693,15 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
       dom,
       settingMoves && !active
         ? "sideways"
-        : active?.kind === "turn"
+        : active?.kind === "turn" || heldTurning
         ? "turning"
         : active?.kind === "move" || (hovered && sel3d.has(hovered.id))
           ? "move"
-          : hovered
+          : hovered || heldHover != null
             ? "turn"
             : null,
     );
-  }, [dom, hovered, active, sel3d, settingMoves]);
+  }, [dom, hovered, active, sel3d, settingMoves, heldHover, heldTurning]);
 
   // any press - on the page, in a talk, anywhere - or Escape stops the molecules turning once, gently (utils/turnOnce)
   useEffect(() => {
@@ -755,7 +759,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
     invalidate();
   };
 
-  if (!molecules.length && !leaving.length && !receding.length) return null;
+  if (!molecules.length && !leaving.length && !receding.length && !heldAny) return null;
   const litOf = (id: number): number => {
     if (active) return active.group.includes(id) ? (active.kind === "move" ? 2 : 1) : 0;
     return hovered?.id === id || freshCopy === id ? 1 : 0;
@@ -770,6 +774,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
         screen={style.primary.occlusionBy === "screen" || style.secondary.occlusionBy === "screen"}
       />
       <ScreenShade3D />
+      {heldAny && <HeldViews3D style={style} hover={heldHover} onHover={setHeldHover} onTurning={setHeldTurning} stereoFont={stereoFont} />}
       {molecules.map((m) => {
         if (hiddenStacked.has(m.id)) return null;
         const inStack = placeInStack(molecules, m);
@@ -792,6 +797,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
         // (and what colours it, where another grid does)
         const colourBy = list && row?.colour ? held(m.calc, list, row.colour.by, asks, wantAsked.current, readGrid, place) : undefined;
         const asking = [motion, surface, colourBy].find((h) => h?.state && h.state !== "given")?.state;
+        const on = moleculeHandlers(handlersKept.current, m.id, store, remakeNow);
         return (
           <Molecule3DView
             key={m.id}
@@ -809,35 +815,27 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
             framesOpen={hovered?.id === m.id || sel3d.has(m.id)}
             inSet={inSets.has(m.id)}
             setFoot={setFeet.get(m.id)?.foot}
-            onFrame={(f) => store.getState().setFrame3d(m.id, f)}
-            // (from its mark: it, and those selected with it - each about its own place)
-            onMagnify={(k, gesture) => {
-              const { sel3d } = store.getState();
-              store.getState().setMagnified3d(sel3d.has(m.id) ? [...sel3d] : [m.id], k, gesture);
-            }}
+            onFrame={on.onFrame}
+            onMagnify={on.onMagnify}
             hoveredMeasure={hoveredMeasure?.id === m.id ? hoveredMeasure.measure : null}
             rising={rising[m.id]}
             split={splits[m.id]}
-            onRisen={() => store.getState().risen3d(m.id)}
+            onRisen={on.onRisen}
             stereoShown={stereoShownOf(m)}
             atomNumbers={m.atomNumbers ?? null}
             stereoFont={stereoFont}
             overlay={!!overlay[m.id]}
             linkedAtom={hoveredDrawn != null && m.drawnFrom ? (m.drawnFrom.indexOf(hoveredDrawn) >= 0 ? m.drawnFrom.indexOf(hoveredDrawn) : null) : null}
-            onHoverAtom={(atom) => store.getState().setHoveredAtom3d(m.id, atom)}
-            onRemake={remake && changedSince.has(m.id) ? () => remake(m.id) : undefined}
+            onHoverAtom={on.onHoverAtom}
+            onRemake={remake && changedSince.has(m.id) ? on.onRemake : undefined}
             motion={motion?.value ?? null}
             surface={surface?.value ?? null}
             surfaceIso={open?.iso}
             surfaceColour={colourBy?.value && row?.colour ? { grid: colourBy.value, from: row.colour.from, to: row.colour.to } : null}
             marked={settingMoves?.id === m.id ? settingMoves.atoms : protonationMark?.id === m.id ? protonationMark.atoms : (pointed?.atoms ?? row?.atoms ?? NONE)}
             editingMeasure={measureEdit?.id === m.id ? measureEdit.measure : null}
-            onSetMeasure={(measure, value) => {
-              const st = store.getState();
-              st.editMeasure3d(null);
-              st.setMeasure3d(m.id, measure, value);
-            }}
-            onEditDone={() => store.getState().editMeasure3d(null)}
+            onSetMeasure={on.onSetMeasure}
+            onEditDone={on.onEditDone}
             stacked={!!inStack}
             swap={arrived != null && performance.now() - arrived < 1000 ? { dir: "in", start: arrived } : undefined}
             list={
@@ -942,6 +940,24 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
 }
 
 const NONE: number[] = [];
+
+/** How a molecule's stereo marks are written, as the drawing writes its own (StereoInk3D). */
+export function useStereoFont() {
+  const drawingStyle = useDrawingStyle();
+  return useMemo(() => {
+    const opts = editorLayoutOptions(drawingStyle);
+    return {
+      size: opts.fontPx * MARK_SCALE,
+      units: opts.units === "px" ? ("px" as const) : ("world" as const),
+      family: fontStack(labelSetOf(opts).fontFamily ?? "Arial"),
+      parentheses: !!opts.stereoParentheses,
+      // (and set as the drawing's are: StereoInk3D)
+      opts,
+      gap: opts.stereoGap ?? 0.35,
+    };
+  }, [drawingStyle]);
+}
+
 /** How much a measurement's value changes for each pixel a drag across it goes: in ångströms, and in degrees. */
 const SCRUB_ANGSTROM = 0.01;
 const SCRUB_DEGREES = 0.5;

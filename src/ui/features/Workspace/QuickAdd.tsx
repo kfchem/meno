@@ -1,36 +1,33 @@
 import RoleOffer from "./RoleOffer";
-import { NoPlugin } from "../../../lib/roles/worker";
 import type { RoleId } from "../../../lib/plugins/roles";
 import { motion } from "motion/react";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { RISE } from "../../theme/motion";
 import { useLeaving } from "../../theme/leaving";
-import { CalculationsGlyph, ProcedureGlyph, StepGlyph } from "./workflow/icons";
-import { placeQuickAdd } from "./quickAddPlace";
-import { labelWidth } from "./quickAddLabel";
+import { CalculationsGlyph } from "./workflow/icons";
+import { MENU_MARGIN, MENU_OFF } from "./menuAt";
+import { useMenuAt, type MenuAnchor } from "./useMenuAt";
+import { listWidth } from "./quickAddLabel";
+import QuickAddCalculations from "./QuickAddCalculations";
 import { guideNotice } from "../../../lib/guide/guide";
 import type { StepKind } from "./workflow/kinds";
 import type { QuickGroup } from "./workflow/offered";
 import { SHAPE_KINDS, SHAPE_NAMES, type ShapeKind } from "../../../lib/chem/shapes";
-import { swallowPress, togglesOn } from "./utils/press";
+import { togglesOn } from "./utils/press";
+import { quickAddLeaves } from "./quickAddLeave";
 import type { CoordinateStructure } from "../../../lib/io/coordinates";
 import { pastedAs } from "./quickAddPaste";
+import { afterAdded, readSmiles } from "./quickAddSmiles";
 import { toggledPanel, type QuickPanel } from "./quickAddPanel";
 import { resolve, sameFormula, type Reading } from "./chem/resolve";
 import { FormulaText } from "../../abbreviations/FormulaText";
 
 /** What Quick Add puts down where it was opened. */
-export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "cycle" | "slide" | "pen";
-
-/** What opens below Quick Add's row: nothing, the calculations, the field a SMILES is typed in, or the shapes. */
-const QUICK_PANELS: readonly QuickPanel[] = ["none", "calculations", "smiles", "scheme", "marks"];
+export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "cycle" | "slide" | "pen" | "conversation";
 
 /** Each icon's size, in px; and the gap between two in a row (gap-0.5). */
 const SIZE = 36;
 const GAP = 2;
-/** How tall the SMILES field stands below the row, its rule above it and room for its focus ring below, in px; and the row of shapes. */
-const SMILES_H = 32 + 9 + 2;
-const SHAPES_H = 36 + 9;
 
 /** Each shape's icon, drawn as Quick Add's are, on a 20-unit square (lib/chem/shapes). An arrow is not one: the row's own *Arrow* draws it. */
 const SHAPE_ICONS: Record<ShapeKind, ReactNode> = {
@@ -107,6 +104,12 @@ const ROW: { id: QuickAddChoice | "chain" | "smiles" | "scheme" | "marks"; name:
         <circle cx="13" cy="7.5" r="4.5" />
       </>
     ),
+  },
+  {
+    id: "conversation",
+    name: "Conversation",
+    // (a word balloon: what is said, in a frame of its own)
+    icon: <path d="M3.5 5 H16.5 V13 H9.5 L6 16 V13 H3.5 Z" />,
   },
 ];
 
@@ -200,7 +203,10 @@ export default function QuickAdd({
   onStep,
   onProcedure,
   onClose,
+  anchor,
 }: {
+  /** The canvas, for it to stand at its point on the page and the view to ease along for it (useMenuAt). */
+  anchor?: MenuAnchor;
   x: number;
   y: number;
   within: { width: number; height: number };
@@ -238,18 +244,8 @@ export default function QuickAdd({
   useEffect(() => guideNotice("quick-add"), []);
   useEffect(() => {
     if (leaving) return;
-    // (a press elsewhere only closes it - utils/press#swallowPress; a turn of the wheel closes it and zooms)
-    const outside = (e: Event) => {
-      if (ref.current?.contains(e.target as Node)) return;
-      if (e.type === "pointerdown") swallowPress(e);
-      onClose();
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      e.stopPropagation();
-      onClose();
-    };
+    // (a press elsewhere only closes it; a turn of the wheel closes it and zooms; Escape closes it - none while a question is asked: ./quickAddLeave)
+    const { outside, key: onKey } = quickAddLeaves((t) => !!ref.current?.contains(t as Node), onClose);
     window.addEventListener("pointerdown", outside, true);
     window.addEventListener("wheel", outside, true);
     window.addEventListener("keydown", onKey, true);
@@ -259,55 +255,15 @@ export default function QuickAdd({
       window.removeEventListener("keydown", onKey, true);
     };
   }, [onClose, leaving]);
-  // (a row for each who does steps: its name, then its kinds - and one for the procedures, after them)
+  // (a row for each who does steps, its steps under it - and one for the procedures, after them: as wide as their names need, whatever the row above holds)
   const offered = wired ? [] : procedures;
-  const most = Math.max(1, ...steps.map((g) => g.steps.length), offered.length);
-  const labelW = useMemo(() => labelWidth([...steps.map((g) => g.name), ...(offered.length ? ["Procedures"] : [])]), [steps, offered.length]);
-  const calcWidth = labelW + most * SIZE + 8;
+  const calcWidth = useMemo(() => listWidth([...steps.flatMap((g) => [g.name, ...g.steps.map((k) => k.name)]), ...(wired ? [] : procedures).map((p) => p.name)]), [steps, procedures, wired]);
   // (its icons, the Calculations one among them, the gaps between them, the divider before Calculations, the card's padding: the rules and the field below span it whole)
   const rowWidth = (ROW.length + 1) * (SIZE + GAP) + 8 + 9;
   // (a wire's: as wide as its rows, or the words saying there are none)
-  const width = wired ? (steps.length ? calcWidth : 200) : calcOpen ? Math.max(rowWidth, calcWidth) : rowWidth;
-  const rows = Math.max(1, steps.length) + (offered.length ? 1 : 0);
-  // (its size with each panel open below its row - a wire's, its calculations alone - and where it stands, chosen once, as it opens)
-  const sizeOf = (panel: QuickPanel): { width: number; height: number } => {
-    if (wired) return { width, height: Math.max(1, steps.length) * SIZE + 8 };
-    switch (panel) {
-      case "none":
-        return { width: rowWidth, height: SIZE + 8 };
-      case "calculations":
-        return { width: Math.max(rowWidth, calcWidth), height: SIZE + 8 + rows * SIZE + 9 };
-      case "smiles":
-        return { width: rowWidth, height: SIZE + 8 + SMILES_H };
-      case "scheme":
-      case "marks":
-        return { width: rowWidth, height: SIZE + 8 + SHAPES_H };
-    }
-  };
-  const [place] = useState(() => placeQuickAdd(x, y, within, sizeOf(wired ? "calculations" : "none"), QUICK_PANELS.map(sizeOf)));
-  // (as it is laid out - not as it was reckoned: a row wider than its sum, at a display scale, reaches past the canvas - it is eased back within it)
-  const [back, setBack] = useState({ dx: 0, dy: 0 });
-  useLayoutEffect(() => {
-    const el = ref.current;
-    const parent = el?.offsetParent;
-    if (!el || !parent) return;
-    const fit = () => {
-      const a = el.getBoundingClientRect();
-      const b = parent.getBoundingClientRect();
-      const dx = a.right > b.right - 4 ? Math.min(0, b.right - 4 - a.right) : 0;
-      const dy = a.bottom > b.bottom - 4 ? Math.min(0, b.bottom - 4 - a.bottom) : 0;
-      const l = a.left + dx < b.left + 4 ? b.left + 4 - (a.left + dx) : 0;
-      const t = a.top + dy < b.top + 4 ? b.top + 4 - (a.top + dy) : 0;
-      setBack((was) => {
-        const next = { dx: was.dx + dx + l, dy: was.dy + dy + t };
-        return next.dx === was.dx && next.dy === was.dy ? was : next;
-      });
-    };
-    fit();
-    const ro = new ResizeObserver(fit);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+  const width = wired ? (steps.length ? calcWidth + 8 : 200) : calcOpen ? Math.max(rowWidth, calcWidth + 8) : rowWidth;
+  // opened at its point on the page, up and to the right, whatever its size; the view eases along where it would lie past the canvas (useMenuAt)
+  useMenuAt(ref, { x, y }, anchor);
   return (
     <motion.div
       ref={ref}
@@ -317,7 +273,7 @@ export default function QuickAdd({
       aria-label="Add"
       data-guide="quick-add"
       className="absolute z-50 rounded-lg border border-gh-line bg-white p-1 shadow-lg"
-      style={{ left: place.left + back.dx, top: place.top + back.dy, transformOrigin: place.origin, transition: "left 150ms ease-out, top 150ms ease-out" }}
+      style={{ left: x + MENU_OFF, top: y - MENU_OFF, transformOrigin: "top left", maxHeight: within.height - 2 * MENU_MARGIN, overflowY: "auto" }}
     >
       {!wired && (
         <div className="flex items-center gap-0.5">
@@ -335,7 +291,7 @@ export default function QuickAdd({
                     ? (e) => togglesOn(e.detail) && setOpen((o) => toggledPanel(o, c.id as QuickPanel))
                     : () => onChoose(c.id as QuickAddChoice)
               }
-              className={`relative rounded-md flex items-center justify-center text-gh-black transition-colors duration-150 ease-meno ${opens(c.id) && open === c.id ? "bg-gh-base" : "hover:bg-gh-base"}`}
+              className={`meno-press relative rounded-md flex items-center justify-center text-gh-black transition-colors duration-150 ease-meno ${opens(c.id) && open === c.id ? "bg-gh-base" : "hover:bg-gh-base"}`}
               style={{ width: SIZE, height: SIZE }}
             >
               <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -355,7 +311,7 @@ export default function QuickAdd({
             aria-expanded={calcOpen}
             title="Calculations"
             onClick={(e) => togglesOn(e.detail) && setOpen((o) => (o === "calculations" ? "none" : "calculations"))}
-            className={`rounded-md flex items-center justify-center text-gh-black transition-colors duration-150 ease-meno ${calcOpen ? "bg-gh-base" : "hover:bg-gh-base"}`}
+            className={`meno-press rounded-md flex items-center justify-center text-gh-black transition-colors duration-150 ease-meno ${calcOpen ? "bg-gh-base" : "hover:bg-gh-base"}`}
             style={{ width: SIZE, height: SIZE }}
           >
             {/* (as heavy as the glyphs beside it, drawn on a 20-unit square) */}
@@ -400,49 +356,11 @@ export default function QuickAdd({
       {/* (opening below the row in a short ease, not at once) */}
       <div className="grid transition-[grid-template-rows,opacity] duration-200 ease-meno" style={{ gridTemplateRows: calcOpen ? "1fr" : "0fr", opacity: calcOpen ? 1 : 0 }}>
         <div className="overflow-hidden">
-          <div role="group" aria-label="Calculations" className={wired ? "" : "mt-1 pt-1 border-t border-gh-line"} style={{ width: wired ? undefined : width - 8 }}>
-            {steps.length ? (
-              steps.map((g) => (
-                <div key={g.by} role="group" aria-label={g.name} className="flex items-center">
-                  <span className="shrink-0 truncate px-1.5 text-xs text-gh-gray" style={{ width: labelW }} title={g.name}>
-                    {g.name}
-                  </span>
-                  {g.steps.map((k) => (
-                    <button
-                      key={k.kind}
-                      aria-label={`${k.name} \u00b7 ${g.name}`}
-                      title={k.name}
-                      onClick={() => onStep(k.kind, g.by)}
-                      className="rounded-md flex items-center justify-center text-gh-black hover:bg-gh-base"
-                      style={{ width: SIZE, height: SIZE }}
-                    >
-                      <StepGlyph icon={k.icon} size={20} stroke={2.1} />
-                    </button>
-                  ))}
-                </div>
-              ))
+          <div className={wired ? "" : "mt-1 pt-1 border-t border-gh-line"} style={{ width: width - 8 }}>
+            {steps.length || offered.length ? (
+              <QuickAddCalculations steps={steps} procedures={offered} width={width - 8} shown={calcOpen} onStep={onStep} onProcedure={onProcedure} />
             ) : (
               <div className="px-2 text-xs leading-9 text-gh-gray whitespace-nowrap">No step added takes this</div>
-            )}
-            {offered.length > 0 && (
-              <div role="group" aria-label="Procedures" className="flex items-center">
-                <span className="shrink-0 truncate px-1.5 text-xs text-gh-gray" style={{ width: labelW }}>
-                  Procedures
-                </span>
-                {offered.map((p) => (
-                  <button
-                    key={p.id}
-                    aria-label={`Procedure: ${p.name}`}
-                    title={p.needs.length ? `${p.name} - needs ${p.needs.join(" and ")}` : p.name}
-                    disabled={p.needs.length > 0}
-                    onClick={() => onProcedure?.(p.id)}
-                    className="rounded-md flex items-center justify-center text-gh-black hover:bg-gh-base disabled:opacity-35 disabled:hover:bg-transparent"
-                    style={{ width: SIZE, height: SIZE }}
-                  >
-                    <ProcedureGlyph size={20} stroke={2.1} />
-                  </button>
-                ))}
-              </div>
             )}
           </div>
         </div>
@@ -494,6 +412,23 @@ function SmilesField({
   useEffect(() => {
     if (open) input.current?.focus();
   }, [open]);
+  /** The SMILES read and drawn; or why not, and the plugins online that read it (./quickAddSmiles). */
+  const read = (smiles: string) => {
+    reading.current = true;
+    setBusy(true);
+    setError(null);
+    setNeeds(null);
+    void readSmiles(smiles, onSmiles)
+      .then((r) => {
+        if (!r) return;
+        setError(r.error);
+        setNeeds(r.needs);
+      })
+      .finally(() => {
+        reading.current = false;
+        setBusy(false);
+      });
+  };
   return (
     <form
       className="mt-1 pt-1 pb-0.5 border-t border-gh-line"
@@ -506,19 +441,7 @@ function SmilesField({
           onNamed!(chosen.label);
           return;
         }
-        reading.current = true;
-        setBusy(true);
-        setError(null);
-        setNeeds(null);
-        onSmiles(smiles)
-          .catch((err: unknown) => {
-            setError(err instanceof Error ? err.message : String(err));
-            if (err instanceof NoPlugin) setNeeds(err.role);
-          })
-          .finally(() => {
-            reading.current = false;
-            setBusy(false);
-          });
+        read(smiles);
       }}
     >
       <input
@@ -557,10 +480,13 @@ function SmilesField({
         <div className="flex flex-wrap items-center gap-1.5 px-0.5 pt-1 text-[11px]">
           <RoleOffer
             role={needs}
-            done={() => {
-              setError(null);
-              setNeeds(null);
-            }}
+            // (added: what was typed is read again, and drawn - not typed again)
+            done={() =>
+              afterAdded(text, reading.current, read, () => {
+                setError(null);
+                setNeeds(null);
+              })
+            }
           />
         </div>
       )}
@@ -610,7 +536,7 @@ function RowIcon({ name, icon, onClick, onPointerDown }: { name: string; icon: R
       title={name}
       onClick={onClick}
       onPointerDown={onPointerDown}
-      className="rounded-md flex items-center justify-center text-gh-black hover:bg-gh-base transition-colors duration-150 ease-meno"
+      className="meno-press rounded-md flex items-center justify-center text-gh-black hover:bg-gh-base transition-colors duration-150 ease-meno"
       style={{ width: SIZE, height: SIZE }}
     >
       <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>

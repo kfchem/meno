@@ -16,6 +16,14 @@ import { counter, type Watch } from "../calc/client";
 
 /** The requests the worker answers, and what each answers with. */
 export type ChemRequests = {
+  /**
+   * The language-model role's (docs/CONVERSATIONS.md, *Connections*): what
+   * Meno tells the model, what has been said, the tools it may call and the
+   * plugin's options - the person's key added on the way, by the backend
+   * alone (src-tauri/src/model.rs). Its answer is read by the caller, as
+   * whatever the plugin gave (conversation/modelConnection `replyOf`).
+   */
+  converse: { args: { told: string; said: readonly unknown[]; tools: readonly { name: string; does: string }[]; options: OptionValues }; result: unknown };
   to_smiles: { args: { molblock: string }; result: { smiles: string } };
   /** A reaction, as an RXN file holds it, as a reaction SMILES: "reactants>agents>products". */
   rxn_to_smiles: { args: { rxnblock: string }; result: { smiles: string } };
@@ -75,9 +83,13 @@ export type ChemRequests = {
   conformers: {
     /**
      * `options`: those the plugin declares for the role (its manifest's
-     * roleOptions), as chosen in Settings.
+     * roleOptions), as chosen in Settings. `draw`: which set of `count`
+     * tries, where the search is asked in rounds (chem/conformerRounds) -
+     * each draw another set, the same draw and options the same set; sent
+     * only to a plugin whose role says it takes draws (lib/plugins/manifest
+     * `draws`).
      */
-    args: { molblock: string; isomers?: Configuration[]; count?: number; holds?: MetalHolds; options?: OptionValues };
+    args: { molblock: string; isomers?: Configuration[]; count?: number; draw?: number; holds?: MetalHolds; options?: OptionValues };
     result: { isomers: Omit<Conformers, "chosen">[] };
   };
   /**
@@ -212,7 +224,8 @@ export type Analysis = {
 
 /** What carries lines to the worker and back. */
 export type ChemTransport = {
-  send(line: string): void;
+  /** Sends a line; where the sending can fail in words (a converse request: no key kept), the promise of it. */
+  send(line: string): unknown;
   /** Calls `onLine` for every line the worker writes; returns the unsubscribe. */
   listen(onLine: (line: string) => void): () => void;
 };
@@ -319,7 +332,16 @@ export class ChemClient {
         timer,
       });
       this.watch?.sent(id);
-      this.transport.send(JSON.stringify({ id, op, ...args }));
+      // (a sending refused - a converse with no key kept - fails the question at once, in the backend's words)
+      const sent = this.transport.send(JSON.stringify({ id, op, ...args }));
+      if (sent instanceof Promise) sent.catch((e: unknown) => {
+        const p = this.pending.get(id);
+        if (!p) return;
+        clearTimeout(p.timer);
+        this.pending.delete(id);
+        this.watch?.settled(id);
+        reject(new ChemError(e instanceof Error ? e.message : String(e)));
+      });
     });
   }
 

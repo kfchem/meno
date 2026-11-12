@@ -65,6 +65,24 @@ describe("a structure drawn, as identity reads it", () => {
     expect(identityOfDrawn(crossed).unread).toEqual([1]);
   });
 
+  it("says a secondary phosphine's P drawn with two bonds and its H carried is unread, its wedge stating no configuration - and reads it with its H drawn", () => {
+    const phosphine = (h: boolean) => ({
+      atoms: [
+        { id: 1, el: "P", x: 0, y: 0, r: 0.9 },
+        { id: 2, el: "C", x: 1.3, y: 0.75, r: 0.9 },
+        { id: 3, el: "C", x: -1.3, y: 0.75, r: 0.9 },
+        ...(h ? [{ id: 4, el: "H", x: 0, y: -1.5, r: 0.9 }] : []),
+      ],
+      bonds: [
+        { id: 6, a: 1, b: 2, order: 1 as const, stereo: "up" as const },
+        { id: 7, a: 1, b: 3, order: 1 as const },
+        ...(h ? [{ id: 8, a: 1, b: 4, order: 1 as const }] : []),
+      ],
+    });
+    expect(identityOfDrawn(phosphine(false)).unread).toEqual([1]);
+    expect(identityOfDrawn(phosphine(true)).unread).toEqual([]);
+  });
+
   it("ignores a double bond drawn bent where one end's two other groups are alike, and keeps one where they are not", () => {
     // (HO-CH2-CH=C(CH3)R, its C=C across: the CH2 drawn up or down off it, in line with it, or by a wave; R a methyl - prenol - or none)
     const drawn = (ch2: "up" | "down" | "straight" | "wavy", second = true) => {

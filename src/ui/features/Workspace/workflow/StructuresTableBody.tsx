@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/24/outline";
 import { numberText } from "../../../../lib/calc/results";
-import type { Cell, TableColumn } from "../../../../lib/table";
+import { WHAT_COLUMN, type Cell, type TableColumn } from "../../../../lib/table";
 import { useEditor, useEditorStore } from "../store";
 import type { WorkflowSet } from "../store/types";
 import { setName } from "./doers";
@@ -39,8 +39,8 @@ export default function StructuresTableBody({ set }: { set: WorkflowSet }) {
   const model = useEditor((s) => s.model);
   // (worked out again as the set changes, or the drawing it reads)
   const table = useMemo(() => setStructuresTable({ ...store.getState(), model }, set), [store, model, set]);
-  // (its id and what it is are for a chart's points: the place said once, as #)
-  const shown = useMemo(() => table.columns.map((c, i) => ({ c, i })).slice(2), [table]);
+  // (its id and what it is, said by # and on pointing: not columns of their own; which structure it is, a number a chart takes, is)
+  const shown = useMemo(() => table.columns.map((c, i) => ({ c, i })).filter(({ c }) => c.kind !== "entry" && c.name !== WHAT_COLUMN), [table]);
   const [sort, setSort] = useState<{ at: number; down: boolean } | null>(null);
   // (those with no value - none, or not worked out - last whichever way it is sorted)
   const order = useMemo(() => (sort ? sortedRows(table, sort.at, sort.down) : table.rows.map((_, k) => k)).map((k) => ({ r: table.rows[k], k })), [table, sort]);

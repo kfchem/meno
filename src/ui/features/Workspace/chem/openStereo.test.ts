@@ -8,9 +8,9 @@ const BUTANOL = v2000(["C", "C", "C", "C", "O"], [[0, 1, 1], [1, 2, 1], [2, 3, 1
 const CENTRE = { read: true, elements: [{ kind: "centre", at: 1, state: "unspecified" }] };
 
 /** The plugin that finds stereoisomers, scripted: the elements it perceives, and the stereoisomers it makes - each request kept. */
-function plugin(made: unknown = { isomers: [], free: true }) {
+function plugin(made: unknown = { isomers: [], free: true }, elements: unknown = CENTRE) {
   const asked: string[] = [];
-  const chem = { request: async (op: string) => (asked.push(op), op === "stereo_elements" ? CENTRE : made) } as unknown as ChemClient;
+  const chem = { request: async (op: string) => (asked.push(op), op === "stereo_elements" ? elements : made) } as unknown as ChemClient;
   return { chem, asked };
 }
 
@@ -38,6 +38,32 @@ describe("what a structure leaves open, and the stereoisomers to make of it", ()
     // (and refused, where it cannot be read)
     const unread = { request: async () => ({ read: false }) } as unknown as ChemClient;
     await expect(isomersToMake(unread, BUTANOL, undefined, "one")).rejects.toThrow("The plugin could not read it");
+  });
+
+  it("counts and makes each configuration once, where the toolkit enumerates what Meno's rules leave out: an aziridine's four are two", async () => {
+    // (CN1CC1C: only C1 open by Meno's rules, the plugin's isomers flip its N as well - four, C1's sense +1, -1, +1, -1)
+    const at = (sense: 1 | -1) => ({ configured: { centres: [{ atom: 1, neighbours: [0, 2, 4], sense }], doubles: [] } });
+    const four = plugin({ isomers: [at(1), at(-1), at(1), at(-1)].map((c, i) => ({ ...c, smiles: `s${i}` })), free: false });
+    const all = await isomersToMake(four.chem, BUTANOL, undefined, "all");
+    expect(all.count).toBe(2);
+    expect(all.isomers).toEqual([at(1).configured, at(-1).configured]);
+    const one = await isomersToMake(four.chem, BUTANOL, undefined, "one");
+    expect([one.count, one.isomers]).toEqual([2, [at(1).configured]]);
+  });
+
+  it("keeps the isomers that differ where a configuration does not tell: a centre and an allene's axis give four, not two", async () => {
+    // (CH3-CH(OH)-CH=C=CH-CH3: atom 1 a centre, bonds 2 and 3 an allene's axis, open; the plugin's four give the centre's sense twice each, the axis none)
+    const ALLENE = v2000(["C", "C", "C", "C", "C", "C", "O"], [[0, 1, 1], [1, 2, 1], [2, 3, 2], [3, 4, 2], [4, 5, 1], [1, 6, 1]]);
+    const elements = { read: true, elements: [{ kind: "centre", at: 1, state: "unspecified" }, { kind: "double", at: 2, state: "unspecified" }, { kind: "double", at: 3, state: "unspecified" }] };
+    const at = (sense: 1 | -1) => ({ centres: [{ atom: 1, neighbours: [0, 2, 6], sense }], doubles: [] });
+    const four = plugin({ isomers: [1, 1, -1, -1].map((sense, i) => ({ configured: at(sense as 1 | -1), smiles: `s${i}` })), free: false }, elements);
+    const all = await isomersToMake(four.chem, ALLENE, undefined, "all");
+    expect((await openStereo(four.chem, [ALLENE])).drawn.cumulenes).toEqual([2, 3]);
+    expect(all.count).toBe(4);
+    expect(all.isomers).toHaveLength(4);
+    // (the same centre alone, its N-like twin not seen by Meno: merged as before - the allene's axis was the difference)
+    const alone = plugin({ isomers: [at(1), at(1), at(-1), at(-1)].map((configured, i) => ({ configured, smiles: `s${i}` })), free: false });
+    expect((await isomersToMake(alone.chem, BUTANOL, undefined, "all")).count).toBe(2);
   });
 
   it("says which configurations were chosen: the CIP labels of the elements the drawing leaves open, no others", async () => {

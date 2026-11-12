@@ -57,7 +57,21 @@ export type CatalogueEntry = {
   source: { url: string; sha256: string; bytes: number };
   /** Its manifest's fingerprint, checked once its files are unpacked. */
   manifestSha256: string;
+  /**
+   * Where it says what this Meno does not know - a role, a kind, a system, a
+   * kind of file, a table, or the plugin it brings presets for, as a newer
+   * Meno writes them - what, in words: it is listed as for a newer Meno,
+   * never got, and nothing of what it says is taken (its roles, kinds and
+   * files left empty, no presets offered). The list is not refused for it: a
+   * newer plugin on offer never takes the list from an older Meno.
+   */
+  newer?: string;
+  /** The plugin it brings presets for, by id, as its manifest's `presets.for` says (lib/plugins/manifest `PresetsDecl`): offered with that one where it is got again (./usedBefore). */
+  presetsFor?: string;
 };
+
+/** A plugin no longer offered online, by its id and name, and why, in words: "Meno reads these files itself now". Said where one set up before is not got again (./usedBefore). */
+export type Retired = { id: string; name: string; why: string };
 
 /**
  * A kind of file a plugin on offer reads, as its manifest says it: what it
@@ -72,7 +86,7 @@ export type FileKind = { id: string; name: string; extensions: string[]; marks: 
  * (`issuedOk`), which only grows: Meno's backend takes none issued before
  * the one taken, nor another issued the same second - and its plugins.
  */
-export type Catalogue = { schema: number; issued: string; plugins: CatalogueEntry[] };
+export type Catalogue = { schema: number; issued: string; plugins: CatalogueEntry[]; retired?: Retired[] };
 
 /** When a catalogue was issued, as Meno takes it: `2026-11-05T13:04:09Z` - UTC, to the second, nothing else - and a real time. */
 const ISSUED = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})Z$/;
@@ -152,6 +166,9 @@ function sourceUrl(v: unknown): string | null {
   return u.protocol === "https:" && !u.username && !u.password && !u.port && CATALOGUE_HOSTS.includes(u.hostname) ? u.href : null;
 }
 
+/** Things in words: "a", "a and b", "a, b and c". */
+const listSaid = (names: readonly string[]) => (names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`);
+
 /** One plugin on offer, read strictly; why not, where it is not as a catalogue's entry is. */
 function entryOf(raw: unknown): CatalogueEntry | string {
   const e = raw as Record<string, unknown> | null;
@@ -163,17 +180,21 @@ function entryOf(raw: unknown): CatalogueEntry | string {
   const licence = text(e.licence, 200);
   const contract = typeof e.contract === "number" && Number.isInteger(e.contract) && e.contract > 0 ? e.contract : null;
   if (!version || !name || !licence || contract == null) return `${id}: its version, name, licence or contract missing`;
-  const systems = e.systems ?? [];
-  if (!Array.isArray(systems) || !systems.every((s) => SYSTEMS.includes(s as System))) return `${id}: a system Meno does not know`;
+  // (what it does - its systems, roles, kinds and files: one this Meno does not know is a newer Meno's, listed as such, never refusing the list)
+  const unknown: string[] = [];
+  const systemsRaw = e.systems ?? [];
+  const systems = Array.isArray(systemsRaw) && systemsRaw.every((s) => SYSTEMS.includes(s as System)) ? (systemsRaw as System[]) : null;
+  if (!systems) unknown.push("a system");
   const list = (v: unknown, ok: (s: string) => boolean): string[] | null => (v == null ? [] : Array.isArray(v) && v.every((s) => typeof s === "string" && ok(s)) ? [...new Set(v as string[])] : null);
   const roles = list(e.roles, isRole);
   const kinds = list(e.kinds, (k) => KIND.test(k));
   const reads = list(e.reads, (k) => KIND.test(k));
-  if (!roles || !kinds || !reads) return `${id}: a role or kind Meno does not take`;
+  if (!roles) unknown.push("a role");
+  if (!kinds || !reads) unknown.push("a kind");
   const fileKinds = fileKindsOf(e.fileKinds);
-  if (!fileKinds) return `${id}: a kind of file it reads not as Meno takes it`;
+  if (!fileKinds) unknown.push("a kind of file");
   const quotedTables = quotedTablesOf(e.quotedTables);
-  if (!quotedTables) return `${id}: a table of atoms not as Meno takes it`;
+  if (!quotedTables) unknown.push("a table of atoms");
   const s = e.source as Record<string, unknown> | null;
   const url = sourceUrl(s?.url);
   const sha256 = typeof s?.sha256 === "string" && HEX64.test(s.sha256) ? s.sha256 : null;
@@ -187,25 +208,47 @@ function entryOf(raw: unknown): CatalogueEntry | string {
   const cite = said("cite", 2000);
   const homepage = e.homepage == null ? undefined : typeof e.homepage === "string" && /^https:\/\/[^\s]{1,300}$/.test(e.homepage) ? e.homepage : null;
   if (description === null || terms === null || cite === null || homepage === null) return `${id}: a description, terms, cite or home page not as Meno takes them`;
+  // (the plugin it brings presets for: another's id - one not as this Meno takes it, a newer Meno's)
+  const presetsFor = e.presetsFor == null ? undefined : typeof e.presetsFor === "string" && ID.test(e.presetsFor) && e.presetsFor !== id ? e.presetsFor : null;
+  if (presetsFor === null) unknown.push("the plugin it brings presets for");
+  const newer = unknown.length ? `It says ${listSaid(unknown)} this Meno does not know` : undefined;
   return {
     id,
     version,
     name,
     licence,
     contract,
-    systems: systems as System[],
-    roles: roles as RoleId[],
-    kinds,
-    reads,
-    fileKinds,
-    quotedTables,
+    systems: systems ?? [],
+    roles: newer ? [] : (roles as RoleId[]),
+    kinds: newer ? [] : kinds!,
+    reads: newer ? [] : reads!,
+    fileKinds: newer ? [] : fileKinds!,
+    quotedTables: newer ? [] : quotedTables!,
+    ...(newer ? { newer } : {}),
     source: { url, sha256, bytes },
     manifestSha256,
     ...(description ? { description } : {}),
     ...(homepage ? { homepage } : {}),
     ...(terms ? { terms } : {}),
     ...(cite ? { cite } : {}),
+    ...(presetsFor && !newer ? { presetsFor } : {}),
   };
+}
+
+/** The plugins no longer offered, as a catalogue lists them: each by its id, name and why - all as Meno takes them, each once, or the list is not one. */
+function retiredOf(v: unknown): Retired[] | null {
+  if (v == null) return [];
+  if (!Array.isArray(v)) return null;
+  const out: Retired[] = [];
+  for (const raw of v) {
+    const r = raw as Record<string, unknown> | null;
+    const id = typeof r?.id === "string" && ID.test(r.id) ? r.id : null;
+    const name = text(r?.name, 60);
+    const why = text(r?.why, 160);
+    if (!id || !name || !why || out.some((o) => o.id === id)) return null;
+    out.push({ id, name, why });
+  }
+  return out;
 }
 
 /**
@@ -227,7 +270,10 @@ export function acceptCatalogue(raw: unknown): { catalogue: Catalogue } | { why:
     if (plugins.some((p) => p.id === e.id)) return { why: `It offers ${e.id} twice` };
     plugins.push(e);
   }
-  return { catalogue: { schema: CATALOGUE_SCHEMA, issued, plugins } };
+  const retired = retiredOf(c.retired);
+  if (!retired) return { why: "Its plugins no longer offered are not as Meno takes them" };
+  if (retired.some((r) => plugins.some((p) => p.id === r.id))) return { why: "It offers a plugin it says is no longer offered" };
+  return { catalogue: { schema: CATALOGUE_SCHEMA, issued, plugins, ...(retired.length ? { retired } : {}) } };
 }
 
 /**
@@ -244,6 +290,8 @@ export type Offer = { entry: CatalogueEntry; offer: "add" | "update" | "here" } 
 export function offersOf(catalogue: Catalogue, here: ReadonlyMap<string, string>, system: System | null, contracts: readonly number[] = CONTRACTS): Offer[] {
   return catalogue.plugins.map((entry): Offer => {
     const mine = here.get(entry.id);
+    // (one that says what this Meno does not know: a newer Meno's)
+    if (entry.newer) return { entry, offer: "not-here", why: mine ? "Its newer versions are for a newer Meno" : "It is for a newer Meno" };
     if (!contracts.includes(entry.contract)) return { entry, offer: "not-here", why: mine ? "Its newer versions are for a newer Meno" : "It is for a newer Meno" };
     if (system && entry.systems.length && !entry.systems.includes(system)) return { entry, offer: "not-here", why: `For ${entry.systems.map((s) => SYSTEM_NAMES[s]).join(" and ")} only` };
     if (mine == null) return { entry, offer: "add" };

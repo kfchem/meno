@@ -1,46 +1,68 @@
 import * as THREE from "three";
-import { Fragment, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import PageHtml from "./PageHtml";
 import { useEditor, useEditorStore } from "../store";
 import type { EditorState, StepRunKept, WireEnd, WireTo, WorkflowSet, WorkflowStep } from "../store/types";
 import { pageAt } from "../utils/page";
-import { COLORS } from "../../../theme/colors";
+import { colourHex, COLORS, rgbOf } from "../../../theme/colors";
 import { MOV_PX } from "../constants";
 import { useStyle3D } from "../style3d";
-import SetFrame, { type Edge } from "../workflow/SetFrame";
+import SetFrame from "../workflow/SetFrame";
+import FrameTabs, { FRAMES_ORDER, type FrameTab, type FrameTabsOn } from "../pageGl/FrameTabs";
+import { dashAdvance, runningTick } from "../pageGl/runningTick";
+import { MEMBER_MS, memberMarkBox, memberPulse, positionBadge, recordLabel } from "../pageGl/workflowMarks";
 import StepCard, { Port, shareOf, type PortLook, type RunRow, type RunView } from "../workflow/StepCard";
 import { clickedOpen, type CardClick } from "../workflow/cardOpen";
 import { positionMarks } from "../workflow/substituents";
+import { schemeSaid } from "../workflow/schemeRoles";
 import { countOf, countSaid, numberedOn, recordHow, recordNumber, recordWhy, type Frame } from "../workflow/entries";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { lookEvery } from "../workflow/lookEvery";
 import { labelReach, selectionFrame, selectionInSet } from "../workflow/selectionSet";
+import { unseenSets } from "../workflow/onPage";
+import { exitChip, exitNames } from "../workflow/exitNames";
+import type { Drawn } from "../pageGl/PagePlaced";
+import PagePlaced, { usePlaced } from "../pageGl/PagePlaced";
+import type { PageText } from "../pageGl/texts";
 import { useDrawnLayout } from "./drawnLayoutContext";
 import { useShownFrames } from "./useShownFrames";
 import { useMemberMarks } from "./useMemberMarks";
 import { reachOverFrames } from "../utils/molecule3d";
-import { wordsReadAt, zoomWritten } from "../utils/pageScale";
+import { hairWritten, pageScale, wordsReadAt, zoomWritten } from "../utils/pageScale";
 import { usePresence } from "../../../theme/presence";
 import { DURATION, EASE, eased } from "../../../theme/motion";
-import { canWire, entryOnPage, givesOf, stateOf, stepsRun, wireInto, wireRefusal } from "../workflow/flow";
+import { canWire, entryOnPage, givesOf, newestWire, sourcesInto, stateOf, stepsRun, wiresInto, wireRefusal } from "../workflow/flow";
 import { addHow } from "../workflow/addStep";
 import { droppedBy, namesOf } from "../workflow/earlierRuns";
-import { howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
+import { exitsOf, howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
+import { exitStart } from "../workflow/place";
 import { useReaders } from "../../../../lib/calc/workers";
-import { useAppSettings } from "../../../../lib/settings/appSettings";
-import { finished } from "../../../../lib/jobs";
-import { CARD_H, CARD_W, framesHash, HTML_DISTANCE, inputLead, nearWire, onLayer, PORTS_Z, portDown, PX, setGives, setTakes, shuttingCard, stepGives, stepTakes as portTakes, underCard, byTurn, FrameBudget, pointsFor, roundedWay, WIRE_LANE, WireEasing, wireLanes, wireRoute, wireKey, type WireRouted } from "../workflow/look";
+import { QUIET_AFTER_MIN, useAppSettings } from "../../../../lib/settings/appSettings";
+import { finished, quietFor } from "../../../../lib/jobs";
+import { CARD_H, CARD_W, framesHash, HTML_DISTANCE, inputLead, nearWire, onLayer, portDown, PORT_PAGE_PX, PX, setGives, setTakes, shuttingCard, stepTakes as portTakes, underCard, byTurn, FrameBudget, pointsFor, roundedWay, WIRE_LANE, WireEasing, wireLanes, wireRoute, wireKey, type WireRouted } from "../workflow/look";
 import { byOf, doerOf, inputsFor, installedFor, kindsOf, notReadyFor, optionsFor, setName, stepOptions } from "../workflow/doers";
 import { diagramKept, diagramNeeds, diagramOptions, diagramValues } from "../workflow/diagramOptions";
 import { lookFor, useInstalled } from "../../../../lib/plugins/installed";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { dragSelection } from "../utils/dragSelection";
+import PageField from "../pageGl/PageField";
+import PageLayer from "../pageGl/PageLayer";
+import { FRAME_PX, tabStart } from "../pageGl/frameParts";
+import { CARD, cardFace, nameBoxOf, nameFits, TONE, type CardFaceOf } from "../pageGl/cardFace";
+import { bandAt, inReadingOrder, namesKept, type Band } from "../pageGl/cardBands";
+import { dropOn, portCount, portOfKey, portParts, sourcesSaid, type PortAt } from "../pageGl/ports";
+import { PAGE_GL_ORDER } from "../pageGl/PageShapes";
+import { useAges, useEasedValues, useFaded } from "../pageGl/faded";
+import { useHitAt, type HitHandlers, type PagePointer } from "../pageGl/PageHits";
+import type { Region } from "../pageGl/hits";
+import type { PageIcon } from "../pageGl/icons";
+import type { PageTipAt } from "../pageGl/PagePlaced";
+import type { Shape } from "../pageGl/shapes";
+import { cardState, refusedState } from "../workflow/cardState";
+import { useEasedTo } from "../../../theme/opening";
 
 type Pt = { x: number; y: number };
-
-/** The least a set is sized to, each way. */
-const LEAST = 48 * PX;
 
 /**
  * A wire's colours, from Meno's palette (docs/WORKFLOWS.md, *How it looks*):
@@ -51,6 +73,7 @@ const WIRE = "rgb(89, 99, 110)";
 const ACCENT = "rgb(49, 118, 137)";
 const ATTENTION = "rgb(205, 69, 96)";
 /** A wire's width on the screen, in px, at any zoom; and the band round it the pointer takes. */
+/** A wire's width in page pixels (`wireWidth`); how wide it takes the pointer, in screen pixels. */
 const WIRE_PX = 1.25;
 const WIRE_HIT_PX = 10;
 /** The wire into a running step, dashed - its dashes and gaps, in px on the screen - and how fast they move along it, in px a second: slowly. */
@@ -234,9 +257,15 @@ function useWirePoints(items: readonly WireItem[], frames: readonly Frame[], zoo
 /** A zoom as the points a wire is drawn through are worked out at: by quarter steps of doubling, so that a wire is not worked out again for every frame of a zoom. */
 const zoomStep = (zoom: number) => 2 ** (Math.round(Math.log2(zoom) * 4) / 4);
 
-/** A wire through `pts` as a ribbon `width` wide. */
-function ribbon(pts: readonly Pt[], width: number): THREE.BufferGeometry {
+/**
+ * A wire through `pts` as a ribbon on its line: each point twice, one to
+ * either side of it by a unit normal (`normal`, signed), the ribbon's width
+ * given when it is drawn (`widened`) - so that a zoom, which changes how wide
+ * it is in the page's units, makes no geometry again.
+ */
+function ribbon(pts: readonly Pt[]): THREE.BufferGeometry {
   const positions: number[] = [];
+  const normals: number[] = [];
   const index: number[] = [];
   // (how far along it each point is, for a dash)
   const along: number[] = [];
@@ -247,24 +276,48 @@ function ribbon(pts: readonly Pt[], width: number): THREE.BufferGeometry {
     const a = pts[Math.max(0, i - 1)];
     const b = pts[Math.min(pts.length - 1, i + 1)];
     const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
-    const nx = (-(b.y - a.y) / len) * (width / 2);
-    const ny = ((b.x - a.x) / len) * (width / 2);
-    positions.push(pt.x + nx, pt.y + ny, 0, pt.x - nx, pt.y - ny, 0);
+    const nx = -(b.y - a.y) / len;
+    const ny = (b.x - a.x) / len;
+    positions.push(pt.x, pt.y, 0, pt.x, pt.y, 0);
+    normals.push(nx, ny, -nx, -ny);
     if (i < pts.length - 1) index.push(2 * i, 2 * i + 1, 2 * i + 2, 2 * i + 1, 2 * i + 3, 2 * i + 2);
   });
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  g.setAttribute("ribbonNormal", new THREE.Float32BufferAttribute(normals, 2));
   g.setAttribute("along", new THREE.Float32BufferAttribute(along, 1));
   g.setIndex(index);
   return g;
 }
 
+/** A ribbon's material widened in its vertex shader by half its width (`half.value`, world units), set as it is drawn. */
+function widened(material: THREE.Material, half: { value: number }): void {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.ribbonHalf = half;
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nattribute vec2 ribbonNormal;\nuniform float ribbonHalf;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\ntransformed.xy += ribbonNormal * ribbonHalf;");
+  };
+  material.customProgramCacheKey = () => "ribbon";
+}
+
+/**
+ * How wide a wire is, in world units, at `zoom` on a screen of `dpr`: a page
+ * pixel and a quarter, as wide as the page draws it, never thinner than a
+ * device pixel (the maintainer, 2026-11-05: page units, floored).
+ */
+export const wireWidth = (zoom: number, dpr: number) => Math.max(WIRE_PX * PX, 1 / (Math.max(zoom, 1e-9) * Math.max(dpr, 1)));
+
 const DASH_VERTEX = `
 attribute float along;
+attribute vec2 ribbonNormal;
+uniform float ribbonHalf;
 varying float vAlong;
 void main() {
   vAlong = along;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  vec3 p = position;
+  p.xy += ribbonNormal * ribbonHalf;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 }`;
 const DASH_FRAGMENT = `
 uniform vec3 color;
@@ -277,15 +330,15 @@ void main() {
   gl_FragColor = vec4(color, 1.0);
 }`;
 
-/** The wire into a running step: dashed, its dashes moving slowly towards the step - a frame drawn for each step they move. */
+/** The wire into a running step: dashed, its dashes moving slowly towards the step - a frame drawn thirty times a second. */
 function MovingWire({ target, color, zoom }: { target: Pt[]; color: string; zoom: number }) {
   const pts = useEasedPoints(target, zoom);
-  const line = useMemo(() => ribbon(pts, WIRE_PX / zoom), [pts, zoom]);
+  const line = useMemo(() => ribbon(pts), [pts]);
   useEffect(() => () => line.dispose(), [line]);
   const material = useMemo(
     () =>
       new THREE.ShaderMaterial({
-        uniforms: { color: { value: new THREE.Color(color) }, offset: { value: 0 }, dash: { value: 1 }, gap: { value: 1 } },
+        uniforms: { color: { value: new THREE.Color(color) }, offset: { value: 0 }, dash: { value: 1 }, gap: { value: 1 }, ribbonHalf: { value: 0 } },
         vertexShader: DASH_VERTEX,
         fragmentShader: DASH_FRAGMENT,
         depthTest: false,
@@ -294,13 +347,17 @@ function MovingWire({ target, color, zoom }: { target: Pt[]; color: string; zoom
     [color],
   );
   useEffect(() => () => material.dispose(), [material]);
-  const { invalidate } = useThree();
+  const { invalidate, camera, gl } = useThree();
+  // (a frame asked for thirty times a second, the dashes going by the time between frames: pageGl/runningTick)
+  const tick = useMemo(runningTick, []);
+  useEffect(() => tick.stop, [tick]);
   useFrame((_, dt) => {
     const u = material.uniforms;
+    u.ribbonHalf.value = wireWidth((camera as THREE.OrthographicCamera).zoom || 1, gl.getPixelRatio()) / 2;
     u.dash.value = DASH_PX / zoom;
     u.gap.value = GAP_PX / zoom;
-    u.offset.value = (u.offset.value + (Math.min(dt, 0.1) * DASH_SPEED) / zoom) % ((DASH_PX + GAP_PX) / zoom);
-    invalidate();
+    u.offset.value = dashAdvance(u.offset.value, dt, DASH_SPEED, zoom, DASH_PX, GAP_PX);
+    tick.ask(invalidate);
   });
   return (
     <group position={[0, 0, 0.012]}>
@@ -336,30 +393,54 @@ function useFade(material: React.RefObject<THREE.Material | null>, leaving: bool
 
 /** A wire drawn from `p` to `q`; where it can be pointed at, a wider band round it that the pointer takes. It fades in as it comes, and out as it goes (`leaving`). */
 function WireLine({ target, color, zoom, onHover, leaving = false }: { target: Pt[]; color: string; zoom: number; onHover?: (on: boolean) => void; leaving?: boolean }) {
-  // (as wide on the screen at any zoom: a hair, as the frames' lines are)
+  // (as wide as the page draws it, never thinner than a device pixel - `wireWidth`; taken by the pointer as wide on the screen at any zoom)
   const pts = useEasedPoints(target, zoom);
-  const line = useMemo(() => ribbon(pts, WIRE_PX / zoom), [pts, zoom]);
-  const hit = useMemo(() => (onHover && !leaving ? ribbon(pts, WIRE_HIT_PX / zoom) : null), [pts, zoom, !!onHover, leaving]); // eslint-disable-line react-hooks/exhaustive-deps
+  const line = useMemo(() => ribbon(pts), [pts]);
+  const hit = useMemo(() => (onHover && !leaving ? ribbon(pts) : null), [pts, !!onHover, leaving]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => line.dispose(), [line]);
   useEffect(() => () => hit?.dispose(), [hit]);
-  const material = useRef<THREE.MeshBasicMaterial>(null);
+  const half = useMemo(() => ({ value: 0 }), []);
+  const hitHalf = useMemo(() => ({ value: 0 }), []);
+  const drawn = useMemo(() => {
+    const m = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthTest: false, depthWrite: false, toneMapped: false });
+    widened(m, half);
+    return m;
+  }, [half]);
+  const taken = useMemo(() => {
+    const m = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthTest: false, depthWrite: false });
+    widened(m, hitHalf);
+    return m;
+  }, [hitHalf]);
+  useEffect(() => void drawn.color.set(color), [drawn, color]);
+  useEffect(
+    () => () => {
+      drawn.dispose();
+      taken.dispose();
+    },
+    [drawn, taken],
+  );
+  const material = useRef<THREE.MeshBasicMaterial>(drawn);
+  material.current = drawn;
   useFade(material, leaving);
+  const { camera, gl } = useThree();
+  useFrame(() => {
+    const z = (camera as THREE.OrthographicCamera).zoom || 1;
+    half.value = wireWidth(z, gl.getPixelRatio()) / 2;
+    hitHalf.value = WIRE_HIT_PX / z / 2;
+  });
   return (
     <group position={[0, 0, 0.012]}>
-      <mesh geometry={line} renderOrder={4}>
-        <meshBasicMaterial ref={material} color={color} transparent opacity={0} depthTest={false} depthWrite={false} toneMapped={false} />
-      </mesh>
+      <mesh geometry={line} material={drawn} renderOrder={4} />
       {hit && (
         <mesh
           geometry={hit}
+          material={taken}
           onPointerOver={(e) => {
             e.stopPropagation();
             onHover!(true);
           }}
           onPointerOut={() => onHover!(false)}
-        >
-          <meshBasicMaterial transparent opacity={0} depthTest={false} depthWrite={false} />
-        </mesh>
+        />
       )}
     </group>
   );
@@ -383,6 +464,66 @@ function runRows(s: WorkflowStep): RunRow[] {
   ];
 }
 
+/** The exits' names (workflow/exitNames), placed on the page as its other words by WebGL are (pageGl `usePlaced`), each where it is given. */
+function ExitNames({ items, chip }: { items: readonly PageText[]; chip: Drawn | null }) {
+  const [anchor, setAnchor] = useState<THREE.Group | null>(null);
+  const moved = <T extends { x: number; y: number }>(t: T, at: { x: number; y: number }): T => ({ ...t, x: t.x + at.x, y: t.y + at.y });
+  usePlaced(
+    anchor
+      ? {
+          key: "exit-names",
+          anchor,
+          words: true,
+          control: true,
+          draw: (at) => ({
+            // (and what a held exit's set holds, said beside its port as the pointer is on it: workflow/exitNames `exitChip`)
+            shapes: (chip?.shapes ?? []).map((s) => (s.kind === "box" ? { ...s, x0: s.x0 + at.x, x1: s.x1 + at.x, y0: s.y0 + at.y, y1: s.y1 + at.y } : moved(s, at))),
+            texts: [...items, ...(chip?.texts ?? [])].map((t) => moved(t, at)),
+          }),
+        }
+      : null,
+  );
+  return <group ref={setAnchor} />;
+}
+
+/** Where the steps' shut cards are drawn among the page's WebGL: over the sets' frames (FrameTabs `FRAMES_ORDER`), under the molecules' chips (PAGE_GL_ORDER) - as their HTML lay. */
+const CARDS_ORDER = PAGE_GL_ORDER - 6;
+/** How close two presses on a set's tab come to name it anew, in ms: a double-click's. */
+const DOUBLE_MS = 400;
+/** Where a workflow's small marks are drawn: under the sets' frames (FrameTabs `FRAMES_ORDER`), as their HTML lay before the sets. */
+const MARKS_ORDER = FRAMES_ORDER - 0.9;
+/** Where the ports are drawn: over the molecules' chips (PAGE_GL_ORDER, their words + 1), under a chip opened over the rest (pageGl/PagePlaced RAISED_ORDER). */
+const PORTS_ORDER = PAGE_GL_ORDER + 4;
+
+/** Frame `f` drawn `k` of the way out from `p` (1 itself, 0 the point): a result set folding into its exit's port. */
+const towards = (f: Frame, p: { x: number; y: number }, k: number): Frame => ({ x0: p.x + (f.x0 - p.x) * k, x1: p.x + (f.x1 - p.x) * k, y0: p.y + (f.y0 - p.y) * k, y1: p.y + (f.y1 - p.y) * k });
+
+/** A step's id from its card's key ("step:12"). */
+const stepOfKey = (key: string) => Number(key.slice(key.indexOf(":") + 1));
+
+/**
+ * A press on what WebGL draws on the page, as the handlers here take one
+ * from HTML: its button, where it is, its keys held, and its event's own
+ * stopping.
+ */
+function asPress(e: PagePointer): ReactPointerEvent {
+  const ev = e.event as PointerEvent;
+  return {
+    button: ev.button,
+    buttons: ev.buttons,
+    clientX: ev.clientX,
+    clientY: ev.clientY,
+    ctrlKey: ev.ctrlKey,
+    metaKey: ev.metaKey,
+    shiftKey: ev.shiftKey,
+    altKey: ev.altKey,
+    pointerId: ev.pointerId,
+    nativeEvent: ev,
+    stopPropagation: () => ev.stopPropagation(),
+    preventDefault: () => ev.preventDefault(),
+  } as unknown as ReactPointerEvent;
+}
+
 /**
  * A workflow on the page (docs/WORKFLOWS.md): its sets, its steps and the
  * wires between them, drawn at the page's scale - and the port on the
@@ -394,11 +535,21 @@ function runRows(s: WorkflowStep): RunRow[] {
 export default function Workflow2D() {
   const store = useEditorStore();
   const sets = useEditor((s) => s.sets);
+  const chipOver = useEditor((s) => s.chipOver);
   const steps = useEditor((s) => s.steps);
   const wires = useEditor((s) => s.wires);
+  // (the sets that lie on the page: all but those drawn nowhere - held off it, their exits wired on, or an exit's for what its step
+  //  sets aside, holding nothing: workflow/held - the same as long as those are, a card moved or not)
+  const unseen = useMemo(() => unseenSets({ sets, wires, steps }), [sets, wires, steps]);
+  const onPage = useMemo(() => (unseen.size ? sets.filter((b) => !unseen.has(b.id)) : sets), [sets, unseen]);
+  // (the sets on the page as last drawn, and when each came onto it: a step's result set come within a fold's time grows out of its port)
+  const seenSets = useRef<Set<number> | null>(null);
+  const cameAt = useRef(new Map<number, number>());
   const model = useEditor((s) => s.model);
   const molecules3d = useEditor((s) => s.molecules3d);
   const pictures = useEditor((s) => s.pictures);
+  const arrows = useEditor((s) => s.arrows);
+  const pluses = useEditor((s) => s.pluses);
   const hoveredSet = useEditor((s) => s.hoveredSet);
   const chosenSet = useEditor((s) => s.chosenSet);
   const hoveredWire = useEditor((s) => s.hoveredWire);
@@ -415,7 +566,6 @@ export default function Workflow2D() {
     toldOpen.current(openStep);
   }, [openStep]);
   const wireDrag = useEditor((s) => s.wireDrag);
-  const docStyle = useEditor((s) => s.docStyle);
   const wireRefused = useEditor((s) => s.wireRefused);
   const sel = useEditor((s) => s.sel);
   const sel3d = useEditor((s) => s.sel3d);
@@ -433,9 +583,9 @@ export default function Workflow2D() {
     store.getState().fitResultSets();
   }, [store, style3d]);
   // (each set's frame as it is drawn: on its way to where the document has it)
-  const shownSets = useShownFrames(sets);
+  const shownSets = useShownFrames(onPage);
   // (what has just joined a set or left it, marked a moment)
-  const memberMarks = useMemberMarks(sets, { model, molecules3d, pictures }, (m) => reachOverFrames(m, style3d, turns3d[m.id]));
+  const memberMarks = useMemberMarks(onPage, { model, molecules3d, pictures }, (m) => reachOverFrames(m, style3d, turns3d[m.id]));
   const shownOf = (b: WorkflowSet): Frame => shownSets.get(b.id) ?? b;
   // (each structure a step numbered - Enumerate's - its number under it, how it was made on pointing at it)
   const numbered = useMemo(() => numberedOn({ model }, sets), [model, sets]);
@@ -479,29 +629,66 @@ export default function Workflow2D() {
   // many of the screen's pixels its pixel is (`--scale`); and, by
   // steps of a few per cent, what the wires are made as wide on the screen for
   const [compact, setCompact] = useState(false);
+  // (the cards' words, faded as the page's are past the zoom they are read at: their icons alone and large below it)
+  const words = useEasedTo(compact ? 0 : 1);
+  // (zoomed out: named - the box, its kind's icon and its name - or only marked, below a quarter: switched with a little hysteresis - pageGl/cardBands - and eased)
+  const [band, setBand] = useState<Band>("read");
+  const bandNow = useRef<Band>("read");
+  const named = useEasedTo(band === "marked" ? 0 : 1);
+  const hoveredStep = useEditor((s) => s.hoveredStep);
+  // (a chemist's set being named anew, by two presses on its tab)
+  const [renaming, setRenaming] = useState<number | null>(null);
+  // (a shut card's state pointed at: its words in full, in the page's tip)
+  const [statePointed, setStatePointed] = useState<number | null>(null);
+  // (a structure's number pointed at: how it was made, in the page's tip)
+  const [recordPointed, setRecordPointed] = useState<string | null>(null);
+  // (the port under the pointer: lit a little, as its HTML was on hover)
+  const [portPointed, setPortPointed] = useState<string | null>(null);
   const read = useRef(true);
   const [zoom, setZoom] = useState((camera as THREE.OrthographicCamera).zoom || 1);
   // (what a hair was last written as, on which layers, and the zoom the frame before)
-  const hair = useRef<{ layer: HTMLDivElement | null; ports: HTMLDivElement | null; zoom: number; before: number }>({ layer: null, ports: null, zoom: NaN, before: NaN });
+  const hair = useRef<{ layer: HTMLDivElement | null; ports: HTMLDivElement | null; zoom: number; before: number; hair: number }>({ layer: null, ports: null, zoom: NaN, before: NaN, hair: NaN });
   const layer = useRef<HTMLDivElement>(null);
   const portsLayer = useRef<HTMLDivElement>(null);
   // the card opened over the rest - or shutting - as tall as it is now, in the page's units: the ports under it are not drawn
   const [cover, setCover] = useState<{ step: number; w: number; h: number } | null>(null);
   const over = openStep ?? shutting;
   useEffect(() => {
-    const el = over != null ? layer.current?.querySelector<HTMLElement>(`[data-step-card="${over}"] > *`) : null;
-    if (over == null || !el) return setCover(null);
-    // (followed as it opens, and as it shuts: it grows and shrinks)
-    const measure = () => setCover({ step: over, w: el.offsetWidth * PX, h: el.offsetHeight * PX });
-    measure();
-    const watch = new ResizeObserver(measure);
-    watch.observe(el);
-    return () => watch.disconnect();
+    if (over == null) return setCover(null);
+    // (its HTML put on the page a frame or two after it is opened - the page's HTML is mounted apart: looked for until it is there)
+    let watch: ResizeObserver | null = null;
+    let frame = 0;
+    let tries = 0;
+    const find = () => {
+      const el = layer.current?.querySelector<HTMLElement>(`[data-step-card="${over}"] > *`);
+      if (!el) {
+        if (tries++ < 60) frame = requestAnimationFrame(find);
+        else setCover(null);
+        return;
+      }
+      // (followed as it opens, and as it shuts: it grows and shrinks)
+      const measure = () => setCover({ step: over, w: el.offsetWidth * PX, h: el.offsetHeight * PX });
+      measure();
+      watch = new ResizeObserver(measure);
+      watch.observe(el);
+    };
+    find();
+    return () => {
+      cancelAnimationFrame(frame);
+      watch?.disconnect();
+    };
   }, [over]);
+  // (a port drawn among the cards, made after the scale was last told - a result set's Into, as its step finishes: told it too)
+  useLayoutEffect(() => {
+    const z = hair.current.zoom;
+    if (z > 0) layer.current?.querySelectorAll<HTMLElement>(".meno-port").forEach((el) => el.style.setProperty("--scale", `${z * PX}`));
+  });
   useFrame(() => {
     const z = (camera as THREE.OrthographicCamera).zoom || 1;
     // (its words read, or too small: switched past their threshold - utils/pageScale `wordsReadAt` - and faded over a short time by CSS)
     read.current = wordsReadAt(z, read.current);
+    bandNow.current = bandAt(pageScale(z), bandNow.current);
+    if (bandNow.current !== band) setBand(bandNow.current);
     const small = !read.current;
     if (small !== compact) setCompact(small);
     if (Math.abs(Math.log(z / zoom)) > 0.03) setZoom(z);
@@ -509,16 +696,29 @@ export default function Workflow2D() {
     const still = z === hair.current.before;
     hair.current.before = z;
     const h = hair.current;
-    if (h.layer !== layer.current || h.ports !== portsLayer.current || zoomWritten(h.zoom, z, still)) {
-      hair.current = { layer: layer.current, ports: portsLayer.current, zoom: z, before: z };
-      for (const el of [layer.current, portsLayer.current]) {
-        el?.style.setProperty("--hair", `${1 / (z * PX)}px`);
-        el?.style.setProperty("--scale", `${z * PX}`);
-      }
-    } else if (h.zoom !== z) invalidate();
+    // (a card's and a set's lines a page pixel, never thinner than a device pixel: written only while that floor holds,
+    //  in steps - utils/pageScale `hairWritten` - so that zoomed in the cards are never laid out again for them)
+    const fresh = h.layer !== layer.current || h.ports !== portsLayer.current;
+    const hairPx = hairWritten(fresh ? NaN : h.hair, z, gl.getPixelRatio());
+    if (hairPx != null) for (const el of [layer.current, portsLayer.current]) el?.style.setProperty("--hair", `${hairPx}px`);
+    // (the ports, laid out in the screen's pixels, their layer's scale undone on them: told it on their own layer only)
+    if (fresh || zoomWritten(h.zoom, z, still)) {
+      hair.current = { layer: layer.current, ports: portsLayer.current, zoom: z, before: z, hair: hairPx ?? h.hair };
+      portsLayer.current?.style.setProperty("--scale", `${z * PX}`);
+      // (and the ports drawn among the cards - a result set's Into - each on itself: the cards' layer told it would restyle them all)
+      layer.current?.querySelectorAll<HTMLElement>(".meno-port").forEach((el) => el.style.setProperty("--scale", `${z * PX}`));
+    } else {
+      if (hairPx != null) hair.current = { ...h, hair: hairPx };
+      if (h.zoom !== z) invalidate();
+    }
     layer.current?.style.setProperty("--words", read.current ? "1" : "0");
     layer.current?.style.setProperty("--stand-in", read.current ? "0" : "1");
   });
+
+  // (what is under a point on the screen among what the page's WebGL takes the pointer for - a port a wire is let go on, a set's tab)
+  const hitAt = useHitAt();
+  const hitNow = useRef(hitAt);
+  hitNow.current = hitAt;
 
   const worldOf = (cx: number, cy: number): Pt => {
     const r = gl.domElement.getBoundingClientRect();
@@ -579,15 +779,12 @@ export default function Workflow2D() {
 
   /** What lies under the pointer where a wire is let go: a port that takes or gives, empty space, or something else. */
   const dropTarget = (ev: PointerEvent): { take: WireTo } | { give: WireEnd } | "empty" | null => {
+    // (a port: a step's input, or a set's giving - found by its shape on the page, as the page's WebGL takes the pointer - or one
+    //  on a card opened over the rest, in its HTML)
+    const port = hitAt({ x: ev.clientX, y: ev.clientY }, (key) => key.startsWith("port:"));
     const el = document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null;
-    // (a step's input: "step:port")
-    const take = el?.closest("[data-take]")?.getAttribute("data-take");
-    if (take) {
-      const [step, port] = take.split(":");
-      return { take: { step: Number(step), port } };
-    }
-    const giveSet = el?.closest("[data-give-set]")?.getAttribute("data-give-set");
-    if (giveSet) return { give: { set: Number(giveSet) } };
+    const on = dropOn(port?.key ?? null, { take: el?.closest("[data-take]")?.getAttribute("data-take"), give: el?.closest("[data-give-set]")?.getAttribute("data-give-set") }, (x) => exitSets.get(`${x.step}:${x.exit}`)?.id);
+    if (on) return on;
     if (el !== gl.domElement) return null;
     const s = store.getState();
     const onSomething =
@@ -603,7 +800,7 @@ export default function Workflow2D() {
     else st.connect(from, step, port);
   };
 
-  /** A wire drawn out of a set: into a step's input, or - let go on empty space - Quick Add there, at the steps that take it. */
+  /** A wire drawn out of a set - a step's result set's from its exit's port on the card (place `wireStart`): into a step's input, or - let go on empty space - Quick Add there, at the steps that take it. */
   const drawFrom = (e: ReactPointerEvent, from: WireEnd) => {
     if (e.button !== 0) return;
     // (pictures - a Render step's - no step takes: no wire is drawn out of them)
@@ -615,7 +812,11 @@ export default function Workflow2D() {
       (moved, ev) => {
         const st = store.getState();
         st.setWorkflowView({ wireDrag: null });
-        if (!moved) return;
+        // (a click, no wire drawn: a step's result set whose exit is wired on shown on the page, or held off it again - workflow/held)
+        if (!moved) {
+          st.exitPortClicked(from.set);
+          return;
+        }
         const there = dropTarget(ev);
         if (there && there !== "empty" && "take" in there) wireTo(from, there.take.step, there.take.port);
         else if (there === "empty") {
@@ -626,11 +827,15 @@ export default function Workflow2D() {
     );
   };
 
-  /** A press on a step's input: the wire into it picked up - into another, or let go on nothing, deleted - or, with none, one drawn back from it to a set. */
+  /**
+   * A press on a step's input: the wire into it picked up - into another, or
+   * let go on nothing, deleted; of several, the one wired in last - or, with
+   * none, one drawn back from it to a set.
+   */
   const drawInto = (e: ReactPointerEvent, step: number, port: string) => {
     if (e.button !== 0) return;
     const st = store.getState();
-    const was = st.wires.find((w) => w.to.step === step && w.to.port === port);
+    const was = newestWire(st, step, port);
     const at = worldOf(e.clientX, e.clientY);
     const drag = (p: Pt) => (was ? { from: was.from, at: p, was: was.id } : { to: { step, port }, at: p });
     st.setWorkflowView({ wireDrag: drag(at), wireRefused: null });
@@ -696,28 +901,6 @@ export default function Workflow2D() {
     );
   };
 
-  /** A set sized by an edge or a corner: what it holds is what then lies inside it. */
-  const sizeSet = (edge: Edge, e: ReactPointerEvent, set: WorkflowSet) => {
-    if (e.button !== 0) return;
-    const start = worldOf(e.clientX, e.clientY);
-    const was = { x0: set.x0, y0: set.y0, x1: set.x1, y1: set.y1 };
-    const gesture = `${performance.now()}`;
-    follow(
-      e,
-      (p) => {
-        const dx = p.x - start.x;
-        const dy = p.y - start.y;
-        const f = { ...was };
-        if (edge.includes("e")) f.x1 = Math.max(was.x1 + dx, was.x0 + LEAST);
-        if (edge.includes("w")) f.x0 = Math.min(was.x0 + dx, was.x1 - LEAST);
-        if (edge.includes("n")) f.y1 = Math.max(was.y1 + dy, was.y0 + LEAST);
-        if (edge.includes("s")) f.y0 = Math.min(was.y0 + dy, was.y1 - LEAST);
-        store.getState().resizeSet(set.id, f, gesture);
-      },
-      () => {},
-    );
-  };
-
   /** A step dragged by its card; clicked, opened to its options, or shut. */
   const dragStep = (e: ReactPointerEvent, step: WorkflowStep) => {
     if (e.button !== 0) return;
@@ -771,7 +954,9 @@ export default function Workflow2D() {
     if (chosenSet == null) return;
     const letGo = () => store.getState().setWorkflowView({ chosenSet: null });
     const onPress = (e: PointerEvent) => {
-      if (!(e.target as HTMLElement | null)?.closest?.(`[data-set-tab="${chosenSet}"]`)) letGo();
+      // (its tab is drawn by WebGL: what is under the press asked of the page's regions)
+      const hit = e.target === gl.domElement ? hitNow.current({ x: e.clientX, y: e.clientY }) : null;
+      if (!(hit?.key === `set:${chosenSet}` && hit.part === "tab")) letGo();
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") letGo();
@@ -782,15 +967,41 @@ export default function Workflow2D() {
       window.removeEventListener("pointerdown", onPress, true);
       window.removeEventListener("keydown", onKey, true);
     };
-  }, [chosenSet, store]);
+  }, [chosenSet, store, gl]);
 
   // --- what is drawn ---------------------------------------------------------
-  const flow = useMemo(() => ({ model, molecules3d, sets, steps, wires, pictures }), [model, molecules3d, sets, steps, wires, pictures]);
+  const flow = useMemo(() => ({ model, molecules3d, sets, steps, wires, pictures, arrows, pluses }), [model, molecules3d, sets, steps, wires, pictures, arrows, pluses]);
   const stepById = useMemo(() => new Map(steps.map((s) => [s.id, s])), [steps]);
   const setById = useMemo(() => new Map(sets.map((b) => [b.id, b])), [sets]);
+  // (each step's exits' sets, by step and exit: a port drawn for each)
+  const exitSets = useMemo(() => new Map(sets.flatMap((b) => (b.made ? [[`${b.made.step}:${b.made.exit}`, b] as const] : []))), [sets]);
+  const renamed = renaming != null ? setById.get(renaming) : undefined;
+  // (each exit's name beside its port where its set is on no page beside it - held off it - to name it: workflow/exitNames)
+  // (and the exit whose port the pointer is on, where its set is held and holds anything: said beside its port, its step's names gone meanwhile)
+  const hoveredExit = useEditor((s) => s.hoveredExit);
+  const saying = useMemo(() => {
+    const b = hoveredExit != null ? sets.find((x) => x.id === hoveredExit) : undefined;
+    return b?.made && (b.collection?.length || b.drawnCollection?.length) && !onPage.some((x) => x.id === b.id) ? b : undefined;
+  }, [hoveredExit, sets, onPage]);
+  const names = useMemo(() => {
+    const shown = new Set(onPage.map((b) => b.id));
+    return exitNames(
+      steps.filter((s) => s.id !== saying?.made?.step),
+      (step, exit) => {
+        const b = exitSets.get(`${step}:${exit}`);
+        return b && !shown.has(b.id) ? setName(b, steps) : null;
+      },
+    );
+  }, [steps, exitSets, onPage, saying]);
+  /** Where a step's result set's exit gives on its card (place `exitStart`): the port its wires, and the line to the set where it is on the page, leave from. */
+  const exitGives = (b: WorkflowSet): Pt | null => {
+    const s = b.made ? stepById.get(b.made.step) : undefined;
+    return s && b.made ? exitStart(s, b.made.exit) : null;
+  };
+  /** Where a wire out of a set starts (place `wireStart`): a step's result set's at its exit's port on the card, held or not; a set the chemist made, at its frame's right side, as it is drawn. */
   const gives = (end: WireEnd): Pt | null => {
     const b = setById.get(end.set);
-    return b ? setGives(shownOf(b)) : null;
+    return b ? (exitGives(b) ?? setGives(shownOf(b))) : null;
   };
   // (a step whose options are its role's starts from Settings' choices for it: those changed, its card and state follow)
   const settingsOptions = useAppSettings((s) => s.options);
@@ -798,7 +1009,8 @@ export default function Workflow2D() {
   // (Settings' choices are read where the options are worked out, not passed in: a dependency all the same)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const states = useMemo(() => new Map(steps.map((s) => [s.id, menoWorking[s.id] ? ("running" as const) : stateOf(flow, s, byOf(s))])), [flow, steps, menoWorking, settingsOptions]);
-  // how each running step's jobs are getting on, as last looked at
+  // how each running step's jobs are getting on, as last looked at - and how long the quietest running one has written nothing, past what Settings says
+  const quietAfter = useAppSettings((s) => s.calculations.quietAfterMin ?? QUIET_AFTER_MIN);
   const runs = useMemo(() => {
     const out = new Map<number, { waiting: boolean; view: RunView }>();
     for (const s of steps) {
@@ -807,6 +1019,7 @@ export default function Workflow2D() {
       const places = seen.flatMap((x) => (x?.place ? [x.place] : []));
       const starts = seen.flatMap((x) => (x?.started != null ? [x.started] : []));
       const line = seen.find((x) => x?.state === "running" && x.line)?.line;
+      const quiet = Math.max(-1, ...seen.map((x) => quietFor(x, Date.now(), quietAfter) ?? -1));
       out.set(s.id, {
         waiting: seen.every((x) => !x || x.state === "waiting"),
         view: {
@@ -816,20 +1029,21 @@ export default function Workflow2D() {
           total: s.running.jobs.length,
           ...(line ? { line } : {}),
           ...(shareOf(seen) != null ? { share: shareOf(seen) } : {}),
+          ...(quiet >= 0 ? { quiet } : {}),
         },
       });
     }
     // (and Meno's working in turns: how many of its entries it has been through)
     for (const [id, m] of Object.entries(menoWorking)) out.set(Number(id), { waiting: false, view: { since: m.since, ended: m.done, total: m.total } });
     return out;
-  }, [steps, jobsSeen, menoWorking]);
+  }, [steps, jobsSeen, menoWorking, quietAfter]);
   // each set's name and count: what it holds, worked out as the page changes, not as the pointer moves
   const setInfo = useMemo(
     () =>
       new Map(
         sets.map((b) => {
           const count = countOf(flow, b);
-          const counted = countSaid(b, count);
+          const counted = countSaid(b, count, count.holds === "structures" ? schemeSaid(flow, b) : []);
           // (a large result set: what it holds, said large in its frame)
           // (structures drawn held, none of them on the page: summed up in its frame too - those it shows are on the page, and it says how many)
           const summary =
@@ -844,16 +1058,14 @@ export default function Workflow2D() {
                           ? "structure"
                           : "structures"
                         : count.entries === 1
-                          ? "molecule"
-                          : "molecules",
-                  holds: count.holds === "conformers" ? ("conformers" as const) : count.holds === "structures" ? ("structures" as const) : ("molecules" as const),
-                  style: docStyle,
+                          ? "compound"
+                          : "compounds",
                 }
               : undefined;
           return [b.id, { name: setName(b, steps), count: `${counted}${b.unread ? ` · ${b.unread.toLocaleString("en-US")} not read` : ""}${b.keep === false && count.entries ? " · not kept" : ""}`, summary }];
         }),
       ),
-    [flow, sets, steps, docStyle],
+    [flow, sets, steps],
   );
 
   // while a wire is drawn: the ports that would take it lit, the others faint
@@ -870,8 +1082,8 @@ export default function Workflow2D() {
   const drawing = useDrawnLayout();
   const labels = useMemo(() => labelReach(drawing.layout, drawing.atoms, drawing.opts), [drawing.layout, drawing.atoms, drawing.opts]);
   const asSet = useMemo(
-    () => (selectionInSet({ model, molecules3d, pictures }, sel.atoms, sel3d, sets) ? null : selectionFrame(model, sel.atoms, molecules3d, sel3d, style3d, turns3d, frames3d, labels)),
-    [sel, sel3d, model, molecules3d, pictures, sets, style3d, turns3d, frames3d, labels],
+    () => (selectionInSet({ model, molecules3d, pictures }, sel.atoms, sel3d, onPage) ? null : selectionFrame(model, sel.atoms, molecules3d, sel3d, style3d, turns3d, frames3d, labels)),
+    [sel, sel3d, model, molecules3d, pictures, onPage, style3d, turns3d, frames3d, labels],
   );
 
   /** The selection made a set, an input, and a wire drawn out of it. */
@@ -908,32 +1120,55 @@ export default function Workflow2D() {
     return s && wireDrag.to ? { p: wireDrag.at, q: stepTakes(s, wireDrag.to.port) } : null;
   })();
 
-  // sets and steps, each drawn as it is - and those just gone, as they last were, fading out
+  // (a step's result set folds into its exit's port as it is held off the page, and grows out of it as it is shown again: about
+  //  that port, where it stands on the layer - workflow/held; those come onto the page within the fold's time, growing)
+  const foldAbout = (b: WorkflowSet): CSSProperties | undefined => {
+    const p = exitGives(b);
+    if (!p) return undefined;
+    const at = onLayer(p.x, p.y);
+    return { position: "absolute", left: 0, top: 0, width: 0, height: 0, transformOrigin: `${at.left}px ${at.top}px` };
+  };
+  const now = performance.now();
+  if (seenSets.current) for (const b of onPage) if (b.made && !seenSets.current.has(b.id)) cameAt.current.set(b.id, now);
+  seenSets.current = new Set(onPage.map((b) => b.id));
+  const growing = (id: number) => now - (cameAt.current.get(id) ?? -Infinity) < DURATION.base * 1000;
+  // (what a held exit's set holds, in a large set's words: its frame's summary - workflow/exitNames `exitChip`)
+  const chip = useMemo(() => {
+    const info = saying ? setInfo.get(saying.id) : undefined;
+    const p = saying ? exitGives(saying) : null;
+    return saying && info?.summary && p ? exitChip(`exit-chip:${saying.id}`, info.name, `${info.summary.count} ${info.summary.nouns}`, p) : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- exitGives: of the steps, which are among these
+  }, [saying, setInfo, steps]);
+  // sets and steps, each drawn as it is - and those just gone, as they last were, fading out; the steps' cards shut drawn by WebGL
+  const faceList: CardFaceOf[] = [];
+  // (how many entries of a step failed, where it counts them: those in its Failed exit's set)
+  const failedOf = (step: number): number => {
+    const b = exitSets.get(`${step}:failed`);
+    return b ? countOf(flow, b).entries : 0;
+  };
   const parts = [
-    ...sets.map((b) => {
+    // (what a set holds - a summary, a table, a chart - in HTML: its frame and tab by WebGL, `setTabs`; its name written anew too, `PageField`;
+    //  a step's result set's folding into its exit's port as it is held, and growing out of it as it is shown again)
+    ...onPage.flatMap((b) => {
       const info = setInfo.get(b.id)!;
       const f = shownOf(b);
-      return (
-        <div key={`b${b.id}`} style={onLayer(f.x0, f.y1)}>
+      if (!info.summary && !b.table && !b.number && !b.chart) return [];
+      return [
+        <div key={`b${b.id}`} className={b.made && growing(b.id) ? "meno-fold-in" : undefined} style={b.made ? foldAbout(b) : undefined}>
+        <div style={onLayer(f.x0, f.y1)}>
           <SetFrame
             set={{ ...b, ...f }}
             name={info.name}
-            count={info.count}
             {...(info.summary ? { summary: info.summary, onOpenTable: () => store.getState().readSetTable(b.id) } : {})}
-            hovered={hoveredSet === b.id}
-            chosen={chosenSet === b.id || selFlow.sets.has(b.id)}
             compact={compact}
-            onTabDown={(e) => dragSet(e, b)}
-            onEdgeDown={(edge, e) => sizeSet(edge, e, b)}
             onContextMenu={menuOf("set", b.id)}
-            onHover={(on) => (on ? hover({ hoveredSet: b.id }) : unhover("hoveredSet", b.id))}
-            {...(!b.made ? { onRename: (name: string) => store.getState().renameSet(b.id, name) } : {})}
             {...(b.chart ? { onEntry: showEntry } : {})}
           />
         </div>
-      );
+        </div>,
+      ];
     }),
-    ...steps.map((s) => {
+    ...steps.flatMap((s) => {
       const info = kindInfo(s.kind);
       const doer = doerOf(s);
       // (an Energy diagram's: lists of what comes into its Levels)
@@ -941,19 +1176,50 @@ export default function Workflow2D() {
       const takes = diagram ? diagramOptions(flow, s, stepOptions(s)) : stepOptions(s);
       const own = diagram ? diagramValues(takes, s.options) : s.options;
       // (Add's: its formula, the number wired into its Number with it, where one is)
-      const how = s.kind === "add" ? addHow(optionsOf(takes, own), !!wireInto(flow, s.id, "number")) : howOf(takes, own, byOf(s) === "meno" ? info.how : undefined);
+      const how = s.kind === "add" ? addHow(optionsOf(takes, own), wiresInto(flow, s.id, "number").length > 0) : howOf(takes, own, byOf(s) === "meno" ? info.how : undefined);
       const run = runs.get(s.id);
-      return (
+      const state = run?.waiting ? "waiting" : (states.get(s.id) ?? "ready");
+      const missing = notReadyFor(s) ?? (diagram ? diagramNeeds(flow, s) : undefined);
+      const who = doer?.name ?? "Nothing added";
+      // (shut, drawn by WebGL - pageGl/cardFace; opened, or shrinking back once shut, its HTML over it: the one HTML on the page.
+      //  The face stays drawn under its HTML, whole, so that the HTML alone fades in over it and out off it - one layer
+      //  crossing, the card never paler than it is)
+      {
+        const line = wireRefused?.step === s.id ? refusedState(wireRefused.said) : cardState(state, s.ran?.said, run?.view, Date.now(), missing);
+        const inputs = inputsFor(s.kind, byOf(s));
+        // (under its opened HTML: its inputs' names are the HTML's, and its state's icon still - nothing drawn twice, nothing turning unseen)
+        const under = openStep === s.id || shutting === s.id;
+        faceList.push({
+          key: `step:${s.id}`,
+          x: s.x,
+          y: s.y,
+          icon: info.icon,
+          who,
+          summary: [info.name, how && how !== line.text ? how : ""].filter(Boolean).join(" \u00b7 "),
+          state: under ? { ...line, turning: false } : line,
+          ...(state === "running" && run?.view.line ? { said: run.view.line } : {}),
+          ...(state === "running" && run && (run.view.share != null || run.view.total > 1) ? { progress: run.view.share ?? run.view.ended / run.view.total } : {}),
+          stateTip: [line.text, s.ran?.named].filter(Boolean).join("\n"),
+          selected: selFlow.steps.has(s.id),
+          words,
+          scale: pageScale(zoom),
+          named,
+          ...(failedOf(s.id) ? { failed: failedOf(s.id) } : {}),
+          inputs: inputs.length > 1 && !under ? inputs.map((p) => p.name) : [],
+        });
+      }
+      if (openStep !== s.id && shutting !== s.id) return [];
+      return [
         // (its top at its place: the card grows downwards as it opens - over the cards below it)
         <div key={`s${s.id}`} data-step-card={s.id} style={onLayer(s.x, s.y, openStep === s.id || shutting === s.id)}>
           <StepCard
             step={s}
             info={info}
-            who={doer?.name ?? "Nothing added"}
+            who={who}
             how={how}
-            state={run?.waiting ? "waiting" : (states.get(s.id) ?? "ready")}
+            state={state}
             run={run?.view}
-            missing={notReadyFor(s) ?? (diagram ? diagramNeeds(flow, s) : undefined)}
+            missing={missing}
             {...(wireRefused?.step === s.id ? { refused: wireRefused.said } : {})}
             compact={compact}
             selected={selFlow.steps.has(s.id)}
@@ -967,7 +1233,7 @@ export default function Workflow2D() {
             drops={openStep === s.id ? droppedBy(flow, stepsRun(flow, [s.id])) : undefined}
             onOptions={(values) => store.getState().updateStep(s.id, { options: diagram ? diagramKept(values, optionsOf(takes, own), s.options) : values })}
             choosing={choosingAtoms?.step === s.id ? choosingAtoms.option : null}
-            onChoose={(option) => store.getState().setWorkflowView({ choosingAtoms: option ? { step: s.id, option } : null })}
+            onChoose={(option) => store.getState().chooseAtomsFor(s.id, option)}
             onKind={(kind) => store.getState().updateStep(s.id, { kind })}
             onShowRun={(index) => store.getState().showRun(s.id, index)}
             onKeepRun={(index, keep) => store.getState().keepRunOf(s.id, index, keep)}
@@ -975,18 +1241,273 @@ export default function Workflow2D() {
             onContextMenu={menuOf("step", s.id)}
             onHover={(on) => (on ? hover({ hoveredStep: s.id }) : unhover("hoveredStep", s.id))}
           />
-        </div>
-      );
+          {/* (its inputs' ports over it, as the page's other ports are over the cards: a wire drawn into it while it is open) */}
+          {inputsFor(s.kind, byOf(s)).map((p, k, all) => (
+            <Port
+              key={`take:${p.id}`}
+              look={portLook("take", { step: s.id, port: p.id })}
+              label={all.length > 1 ? `${p.name} into ${info.name}` : `Into ${info.name}`}
+              data={{ "data-take": `${s.id}:${p.id}` }}
+              onPointerDown={(e) => drawInto(e, s.id, p.id)}
+              style={{ left: 0, top: portDown(k) / PX }}
+              of={CARD_H / PX}
+            />
+          ))}
+          {/* (and its exits' ports down its right edge: a wire drawn out of one drawn out of that exit's set) */}
+          {exitsOf(s.kind).map((x, k, all) => {
+            const b = exitSets.get(`${s.id}:${x.id}`);
+            return b ? (
+              <Port
+                key={`exit:${x.id}`}
+                look={portLook("give", { set: b.id })}
+                label={all.length > 1 ? `${setInfo.get(b.id)?.name ?? x.name} out of ${info.name}` : `Out of ${info.name}`}
+                data={{ "data-give-set": String(b.id) }}
+                onPointerDown={(e) => drawFrom(e, { set: b.id })}
+                onContextMenu={(e) => {
+                  // (its menu over what the port says: that gone, said again as the pointer next comes onto it)
+                  store.getState().exitPortHovered(b.id, false);
+                  menuOf("set", b.id)(e);
+                }}
+                onHover={(on) => store.getState().exitPortHovered(b.id, on)}
+                style={{ left: CARD_W / PX, top: portDown(k) / PX }}
+                of={CARD_H / PX}
+              />
+            ) : null;
+          })}
+        </div>,
+      ];
     }),
   ];
-  const shownParts = usePresence(parts, (el) => String(el.key));
+  // (kept as long as a fold takes, the longest of what goes)
+  const shownParts = usePresence(parts, (el) => String(el.key), DURATION.base * 1000);
+  // what has just joined a set or left it - a moment, fading in and out - each position an Enumerate step chose, numbered, and each
+  // structure a step numbered, its number under it - how it was made in the page's tip as it is pointed at (pageGl/workflowMarks)
+  const markAges = useAges(memberMarks.map((k) => k.key), MEMBER_MS);
+  const marks = { shapes: [] as Shape[], texts: [] as PageText[], regions: [] as Region[], tip: null as PageTipAt | null };
+  for (const k of memberMarks) marks.shapes.push(memberMarkBox(`member:${k.key}`, k.frame, k.joined, memberPulse(markAges.get(k.key) ?? 0)));
+  for (const m of positions) {
+    const b = positionBadge(`position:${m.key}`, m.x, m.y, m.n, 2);
+    marks.shapes.push(b.shape);
+    marks.texts.push(b.text);
+  }
+  for (const n of numbered) {
+    const tip = [recordHow(n.record), recordWhy(n.record)].filter(Boolean).join(" \u00b7 ");
+    const r = recordLabel(`record:${n.key}`, n.x, n.y - NOMINAL_BOND_LENGTH / 2, `#${recordNumber(n.record)}`, !!tip);
+    marks.texts.push(r.text);
+    if (r.region) marks.regions.push(r.region);
+    if (recordPointed === r.text.key && r.region) {
+      const q = "rect" in r.region ? r.region.rect : null;
+      if (q) marks.tip = { key: r.text.key, text: tip, x: (q.x0 + q.x1) / 2, y: (q.y0 + q.y1) / 2, w: q.x1 - q.x0, h: q.y1 - q.y0 };
+    }
+  }
+  const onMarks: HitHandlers = { hover: (key, _part, on) => setRecordPointed((was) => (on ? key : was === key ? null : was)) };
+  // the sets' frames and tabs, by WebGL (pageGl/FrameTabs): a set's name and count along its top, its icon - what made it, or a set's
+  // own - standing in for them where they are too small to read; its line darker while its tab is pointed at, Meno's colour chosen
+  const setTabs: FrameTab[] = onPage.map((b) => {
+    const info = setInfo.get(b.id)!;
+    const maker = b.made ? stepById.get(b.made.step) : undefined;
+    return {
+      key: `set:${b.id}`,
+      box: shownOf(b),
+      tone: chosenSet === b.id || selFlow.sets.has(b.id) ? "chosen" : hoveredSet === b.id ? "hover" : "rest",
+      // (its words left to the field over its tab while it is named anew)
+      tab: renaming === b.id ? { icon: maker ? kindInfo(maker.kind).icon : "copies", name: "" } : { icon: maker ? kindInfo(maker.kind).icon : "copies", name: info.name, status: info.count },
+      iconWhenSmall: true,
+    };
+  });
+  // (a step's result set folding into its exit's port as it comes to be drawn nowhere - held, or an exit's for what its step sets
+  //  aside, given nothing - and growing out of it as it is shown again - about that port, as its HTML did: its frame drawn that far
+  //  from the port, as present as it is)
+  const tabsShown = useFaded(setTabs, (t) => t.key).map(({ item, opacity, leaving }) => {
+    const b = setById.get(stepOfKey(item.key));
+    const p = b?.made && (leaving ? unseen.has(b.id) : growing(b.id)) ? exitGives(b) : null;
+    return { ...item, ...(p ? { box: towards(item.box, p, opacity) } : {}), opacity, ...(leaving ? { noHits: true as const } : {}) };
+  });
+  // (two presses on a chemist's set's tab, close together: its name written anew, in a field over the tab)
+  const tabPressed = useRef<{ set: number; at: number } | null>(null);
+  const onSetTabs: FrameTabsOn = {
+    tabDown: (key, e) => {
+      const b = setById.get(stepOfKey(key));
+      if (!b) return;
+      const now = performance.now();
+      const twice = tabPressed.current?.set === b.id && now - tabPressed.current.at < DOUBLE_MS;
+      tabPressed.current = { set: b.id, at: now };
+      if (twice && !b.made) {
+        // (its field opened as the button comes up, as a double-click is: opened as it goes down, the press's own end took its focus)
+        (e.event as PointerEvent).stopPropagation();
+        const up = () => {
+          window.removeEventListener("pointerup", up, true);
+          window.setTimeout(() => setRenaming(b.id), 0);
+        };
+        window.addEventListener("pointerup", up, true);
+        return;
+      }
+      dragSet(asPress(e), b);
+    },
+    hover: (key, on) => {
+      const id = stepOfKey(key);
+      if (on) hover({ hoveredSet: id });
+      else unhover("hoveredSet", id);
+    },
+    menu: (key, e) => store.getState().setWorkflowView({ workflowMenu: { kind: "set", id: stepOfKey(key), clientX: e.screen.x, clientY: e.screen.y } }),
+  };
+  // the shut cards, coming and going as their HTML did, drawn by WebGL in one layer over the wires (pageGl/cardFace)
+  const faces = useFaded(faceList, (f) => f.key);
+  // (zoomed out, the names that stay where two cards' names would overlap: in the order the cards are read, the later left out)
+  const scaleNow = pageScale(zoom);
+  // (where it is only marked, one that would be cut short is left out, and does not keep another from showing)
+  const keptNames = band === "read" ? null : namesKept(inReadingOrder(faceList).filter((f) => band !== "marked" || nameFits(f.who, scaleNow)).map((f) => nameBoxOf(f, scaleNow, band !== "marked")));
+  // (how far its jobs are, eased as its HTML bar's width was, and its state's colour eased from one tone to the next, as its words' were)
+  const cardEased = useEasedValues(
+    new Map(
+      faceList.flatMap((f) => {
+        const [r, g, b] = rgbOf(TONE[f.state.tone]);
+        return [[`${f.key}:r`, r], [`${f.key}:g`, g], [`${f.key}:b`, b], [`${f.key}:label`, !keptNames || keptNames.has(f.key) ? 1 : 0], ...(f.progress != null ? [[`${f.key}:bar`, Math.min(1, f.progress)] as [string, number]] : [])] as [string, number][];
+      }),
+    ),
+    200,
+  );
+  const cards = { shapes: [] as Shape[], texts: [] as PageText[], icons: [] as PageIcon[], regions: [] as Region[], tip: null as PageTipAt | null };
+  for (const { item, opacity, leaving } of faces) {
+    const eased = (part: string) => cardEased.get(`${item.key}:${part}`);
+    const rgb = [eased("r"), eased("g"), eased("b")];
+    const bar = eased("bar");
+    const d = cardFace(
+      { ...item, opacity, ...(rgb.every((v) => v != null) ? { toneColour: colourHex(rgb[0]!, rgb[1]!, rgb[2]!) } : {}), ...(item.progress != null && bar != null ? { progress: bar } : {}), ...(eased("label") != null ? { label: eased("label") } : {}) },
+      statePointed === stepOfKey(item.key),
+    );
+    cards.shapes.push(...d.shapes);
+    cards.texts.push(...d.texts);
+    cards.icons.push(...d.icons);
+    // (going: drawn as it last was, taking nothing)
+    if (!leaving) cards.regions.push(...d.regions);
+    if (d.tip) cards.tip = d.tip;
+    // (a name left out where it lies over one before it: its card pointed at, the page's tip says it)
+    else if (!leaving && keptNames && !keptNames.has(item.key) && hoveredStep === stepOfKey(item.key) && !cards.tip) {
+      const n = nameBoxOf(item, scaleNow, band !== "marked");
+      cards.tip = { key: `${item.key}:name`, text: item.who, x: (n.x0 + n.x1) / 2, y: (n.y0 + n.y1) / 2, w: n.x1 - n.x0, h: n.y1 - n.y0 };
+    }
+  }
+  const onCard: HitHandlers = {
+    down: (key, _part, e) => {
+      const s = stepById.get(stepOfKey(key));
+      if (s) dragStep(asPress(e), s);
+    },
+    hover: (key, part, on) => {
+      const id = stepOfKey(key);
+      if (part === "state") setStatePointed((was) => (on ? id : was === id ? null : was));
+      if (on) hover({ hoveredStep: id });
+      else unhover("hoveredStep", id);
+    },
+    menu: (key, _part, e) => {
+      const s = stepById.get(stepOfKey(key));
+      if (!s) return;
+      // (what its card says that a chemist copies - a failure, a program's line - copied from its menu: no words on the page are selected)
+      const face = faceList.find((f) => f.key === key);
+      const lines = [
+        ...(face?.state.tone === "attention" ? [{ name: "Copy failure", text: face.stateTip ?? face.state.text }] : []),
+        ...(face?.said ? [{ name: "Copy log line", text: face.said }] : []),
+      ];
+      store.getState().setWorkflowView({ workflowMenu: { kind: "step", id: s.id, clientX: e.screen.x, clientY: e.screen.y, ...(lines.length ? { lines } : {}) } });
+    },
+  };
   // the card opened over the rest, on the page: what the ports under it are not drawn for; a port's reach, half its 9 hairs (a hair, 1 / zoom on the page)
   const coverStep = cover ? stepById.get(cover.step) : undefined;
   const coverFrame = coverStep && cover ? { x0: coverStep.x, x1: coverStep.x + cover.w, y0: coverStep.y - cover.h, y1: coverStep.y } : null;
   const portR = 4.5 / zoom;
+  // (and a molecule's frames chip opened over the rest: those under it not drawn either)
+  const underOpened = (p: { x: number; y: number }, notCover?: boolean) => (!notCover && underCard(p, coverFrame, portR)) || underCard(p, chipOver, portR);
+  // the ports, each where it stands: a chemist's set's that gives, half-way down its right edge; each of a step's inputs down
+  // its left, and each of its exits down its right - a wire drawn out of one drawn out of that exit's set; the selection's,
+  // while it holds what a set may - each as large as a hand takes it (pageGl/ports)
+  const portList: PortAt[] = [];
+  // (an input's port that several wires come into: the names of their sets, in order)
+  const wiredFrom = new Map<string, string[]>();
+  // (a set's own port: a set the chemist made's - a step's result set gives from its exit's port on the card, below)
+  for (const b of onPage) {
+    const f = shownOf(b);
+    const info = setInfo.get(b.id)!;
+    if (!b.made && !underOpened({ x: f.x1, y: (f.y0 + f.y1) / 2 })) portList.push({ key: `port:give:${b.id}`, x: f.x1, y: (f.y0 + f.y1) / 2, ofPx: (f.y1 - f.y0) / PX, label: `Out of ${info.name}` });
+    // (a set a step made: one that takes on its left - drawn only, where its step's wire comes in)
+    if (b.made && !underOpened({ x: f.x0, y: (f.y0 + f.y1) / 2 })) portList.push({ key: `port:into:${b.id}`, x: f.x0, y: (f.y0 + f.y1) / 2, ofPx: (f.y1 - f.y0) / PX, label: `Into ${info.name}`, noHits: true });
+  }
+  for (const s of steps) {
+    const ports = inputsFor(s.kind, byOf(s));
+    const name = kindInfo(s.kind).name;
+    ports.forEach((p, k) => {
+      // (the opened card's own: on it, in its HTML - WebGL draws under the page's HTML)
+      if (s.id !== over && !underOpened({ x: s.x, y: s.y - portDown(k) })) portList.push({ key: `port:take:${s.id}:${p.id}`, x: s.x, y: s.y - portDown(k), ofPx: CARD_H / PX, label: ports.length > 1 ? `${p.name} into ${name}` : `Into ${name}` });
+      // (several wires into it: the sets they come from, in the order it takes them - flow `wiresInto`)
+      const sources = sourcesInto(flow, s.id, ports.length > 1 ? p.id : undefined);
+      if (sources.length > 1) wiredFrom.set(`port:take:${s.id}:${p.id}`, sources.map((x) => setInfo.get(x.set.id)?.name ?? x.name));
+    });
+    const exits = exitsOf(s.kind);
+    exits.forEach((x, k) => {
+      const b = exitSets.get(`${s.id}:${x.id}`);
+      if (b && s.id !== over && !underOpened({ x: s.x + CARD_W, y: s.y - portDown(k) }))
+        portList.push({ key: `port:exit:${s.id}:${x.id}`, x: s.x + CARD_W, y: s.y - portDown(k), ofPx: CARD_H / PX, label: exits.length > 1 ? `${setInfo.get(b.id)?.name ?? x.name} out of ${name}` : `Out of ${name}` });
+    });
+  }
+  // (an exit's port by the set it made: the set wires are drawn out of)
+  const exitSet = (of: { step: number; exit: string }) => exitSets.get(`${of.step}:${of.exit}`);
+  if (asSet && !wireDrag) portList.push({ key: "port:selection", x: asSet.x1, y: (asSet.y0 + asSet.y1) / 2, ofPx: (asSet.y1 - asSet.y0) / PX, label: "Set as input" });
+  // (each port's tone - lit where a wire being drawn may join it, pointed at, at rest - eased as it changes)
+  const toneOf = (p: PortAt): number => {
+    const of = portOfKey(p.key);
+    const exit = of && "exit" in of ? exitSet(of.exit) : undefined;
+    const lit = of && "take" in of ? portLook("take", of.take) === "lit" : of && "give" in of ? portLook("give", of.give) === "lit" : exit ? portLook("give", { set: exit.id }) === "lit" : false;
+    return lit ? 2 : portPointed === p.key ? 1 : 0;
+  };
+  const portTones = useEasedValues(new Map(portList.map((p) => [p.key, toneOf(p)])));
+  const portsShown = useFaded(portList, (p) => p.key);
+  const portRings: Shape[] = [];
+  const portRegions: Region[] = [];
+  // (and beside one several wires come into, how many - the sets they come from, in order, in the page's tip as it is pointed at)
+  const portCounts: PageText[] = [];
+  let portTip: PageTipAt | null = null;
+  for (const { item, opacity, leaving } of portsShown) {
+    const tone = portTones.get(item.key) ?? 0;
+    const parts = portParts(item, tone, opacity);
+    portRings.push(parts.ring);
+    if (parts.region && !leaving) portRegions.push(parts.region);
+    const from = wiredFrom.get(item.key);
+    const count = from && portCount(item, from.length, tone, opacity);
+    if (count) portCounts.push(count);
+    if (from && !leaving && portPointed === item.key) portTip = { key: item.key, text: sourcesSaid(from), x: item.x, y: item.y, w: PORT_PAGE_PX * PX, h: PORT_PAGE_PX * PX };
+  }
+  const onPort: HitHandlers = {
+    down: (key, _part, e) => {
+      const of = portOfKey(key);
+      if (!of) return;
+      if ("take" in of) drawInto(asPress(e), of.take.step, of.take.port);
+      else if ("give" in of) drawFrom(asPress(e), of.give);
+      else if ("exit" in of) {
+        const b = exitSet(of.exit);
+        if (b) drawFrom(asPress(e), { set: b.id });
+      }
+      else setFromSelection(asPress(e));
+    },
+    hover: (key, _part, on) => {
+      setPortPointed((was) => (on ? key : was === key ? null : was));
+      // (an exit's port says what its set holds while the pointer is on it, where it is held: workflow/exitNames `exitChip`)
+      const of = portOfKey(key);
+      const b = of && "exit" in of ? exitSet(of.exit) : undefined;
+      if (b) store.getState().exitPortHovered(b.id, on);
+    },
+    // (an exit's port's menu is its set's - a set held off the page has no tab to right-click - over what the port says: that gone, said again as the pointer next comes onto it)
+    menu: (key, _part, e) => {
+      const of = portOfKey(key);
+      const b = of && "exit" in of ? exitSet(of.exit) : undefined;
+      if (!b) return;
+      const st = store.getState();
+      st.exitPortHovered(b.id, false);
+      st.setWorkflowView({ workflowMenu: { kind: "set", id: b.id, clientX: e.screen.x, clientY: e.screen.y } });
+    },
+  };
+
   // the wires: each drawn, and each step's to the set it made - each going round what it leaves and comes into, where it comes back (a step's card as it stands shut: where wires join it, look `wireCurve`)
   const cardFrame = (s: WorkflowStep): Frame => ({ x0: s.x, x1: s.x + CARD_W, y0: s.y - CARD_H, y1: s.y });
-  const around = [...sets.map(shownOf), ...steps.map(cardFrame)];
+  const around = [...onPage.map(shownOf), ...steps.map(cardFrame)];
 
   // (each wire with the sets and cards near it, which it may go round, and those as one number: worked out again only where it or they moved - look `nearWire`, `wireKey`)
   const endsNear = (p: Pt, q: Pt, e: Ends): Ends => {
@@ -1007,21 +1528,24 @@ export default function Workflow2D() {
       if (!p || !s) return [];
       const failed = states.get(s.id) === "failed";
       const from = setById.get(w.from.set);
+      // (leaving a card - a step's result set's, from its exit's port - or a set's frame)
+      const by = from?.made ? stepById.get(from.made.step) : undefined;
       return [
         {
           key: `w${w.id}`,
           p,
           q: stepTakes(s, w.to.port),
-          ends: endsNear(p, stepTakes(s, w.to.port), { ...(from ? { from: shownOf(from) } : {}), to: cardFrame(s), ...leadInto(s, w.to.port) }),
+          ends: endsNear(p, stepTakes(s, w.to.port), { ...(by ? { from: cardFrame(by) } : from ? { from: shownOf(from) } : {}), to: cardFrame(s), ...leadInto(s, w.to.port) }),
           moving: !!s.running && hoveredWire !== w.id,
           color: hoveredWire === w.id ? COLORS.highlight : failed ? ATTENTION : WIRE,
           onHover: (on: boolean) => (on ? hover({ hoveredWire: w.id }) : unhover("hoveredWire", w.id)),
         },
       ];
     }),
-    ...sets.flatMap((b) => {
+    ...onPage.flatMap((b) => {
       const s = b.made ? stepById.get(b.made.step) : undefined;
-      return s ? [{ key: `m${b.id}`, p: stepGives(s), q: setTakes(shownOf(b)), ends: endsNear(stepGives(s), setTakes(shownOf(b)), { from: cardFrame(s), to: shownOf(b) }), moving: false, color: WIRE, onHover: undefined }] : [];
+      const p = exitGives(b);
+      return s && p ? [{ key: `m${b.id}`, p, q: setTakes(shownOf(b)), ends: endsNear(p, setTakes(shownOf(b)), { from: cardFrame(s), to: shownOf(b) }), moving: false, color: WIRE, onHover: undefined }] : [];
     }),
   ];
   const shownWires = usePresence(wireParts, (w) => w.key);
@@ -1029,6 +1553,10 @@ export default function Workflow2D() {
 
   return (
     <group>
+      {/* the exits' names, as the page's words: gone where too small to read, and while a talk is given */}
+      <PagePlaced>
+        <ExitNames items={names} chip={chip} />
+      </PagePlaced>
       {/* wires: those drawn, and each step's to the set it made - and those just gone, fading */}
       {shownWires.map(({ key, item, leaving }) => {
         const target = wirePoints.get(item.key);
@@ -1041,94 +1569,54 @@ export default function Workflow2D() {
       })}
       {drawn && wirePoints.get("drawn") && <WireLine target={wirePoints.get("drawn")!} color={ACCENT} zoom={zoom} />}
 
+      {/* the marks of what joined a set or left it, positions numbered, structures numbered: by WebGL, under the frames (MARKS_ORDER) */}
+      <PageLayer shapes={marks.shapes} texts={marks.texts} regions={marks.regions} on={onMarks} tip={marks.tip} order={MARKS_ORDER} />
+      {/* the sets' frames and tabs, by WebGL: under the cards (FrameTabs `FRAMES_ORDER`) */}
+      <FrameTabs items={tabsShown} on={onSetTabs} clear={faceList.map((f) => ({ x0: f.x, x1: f.x + CARD.w * PX, y0: f.y - CARD.h * PX, y1: f.y }))} />
+      {/* the steps' cards, shut, by WebGL: over the wires and the drawing, under the molecules' chips (CARDS_ORDER) */}
+      <PageLayer shapes={cards.shapes} texts={cards.texts} icons={cards.icons} regions={cards.regions} on={onCard} tip={cards.tip} order={CARDS_ORDER} />
       {/* Sets and steps drawn in HTML on one layer laid on the page at its
           scale: one, so that what is under the pointer is found among them
           in the order they are drawn - sets, then steps, then the
           selection's port - and not behind a layer of another's. */}
       <PageHtml transform distanceFactor={HTML_DISTANCE} position={[0, 0, 0]} zIndexRange={[18, 18]} pointerEvents="none">
         <div ref={layer} style={{ position: "relative", width: 0, height: 0 }}>
-          {memberMarks.map((k) => (
-            <div key={k.key} style={onLayer(k.frame.x0, k.frame.y1)} className="meno-member-mark">
-              <div
-                className={k.joined ? "rounded-lg border border-accel-base bg-accel-base/5" : "rounded-lg border border-dashed border-gh-gray"}
-                style={{ width: (k.frame.x1 - k.frame.x0) / PX, height: (k.frame.y1 - k.frame.y0) / PX, pointerEvents: "none" }}
-              />
-            </div>
-          ))}
-          {positions.map((m) => (
-            <div key={`p${m.key}`} style={{ ...onLayer(m.x, m.y), transform: "translate(-50%, -50%)" }}>
-              <span className="block min-w-4 rounded-full border border-accel-base bg-white px-1 text-center text-[10px] leading-4 tabular-nums text-accel-base">{m.n}</span>
-            </div>
-          ))}
-          {numbered.map((n) => (
-            <div key={`n${n.key}`} style={{ ...onLayer(n.x, n.y - NOMINAL_BOND_LENGTH / 2), transform: "translateX(-50%)" }}>
-              <span
-                className="block whitespace-nowrap rounded px-1 text-[10px] leading-4 tabular-nums text-gh-gray"
-                style={{ pointerEvents: "auto" }}
-                title={[recordHow(n.record), recordWhy(n.record)].filter(Boolean).join(" \u00b7 ")}
-              >
-                #{recordNumber(n.record)}
-              </span>
-            </div>
-          ))}
-          {shownParts.map(({ key, item, leaving }) =>
-            leaving ? (
+          {shownParts.map(({ key, item, leaving }) => {
+            // (a step's result set drawn nowhere now - held off the page, or an exit's for what its step sets aside, given nothing:
+            //  folding into its exit's port, as it last was)
+            const set = leaving && key.startsWith("b") ? sets.find((x) => x.id === Number(key.slice(1))) : undefined;
+            const fold = set?.made && unseen.has(set.id) ? foldAbout(set) : undefined;
+            return leaving ? (
               // (gone: as it last was, fading, and no longer taking the pointer)
-              <div key={key} inert className="meno-fade-out">
+              <div key={key} inert className={fold ? "meno-fold-out" : "meno-fade-out"} style={fold}>
                 {item}
               </div>
             ) : (
               <Fragment key={key}>{item}</Fragment>
-            ),
-          )}
-        </div>
-      </PageHtml>
-      {/* The ports, on a layer of their own over the molecules' chips and
-          cards: a port is pressed, lit and let go on whatever lies over it
-          on the page - a chip below a molecule among many reaching over a
-          set's edge, say. Small as they are, they hide nothing. */}
-      {/* (but those under a step's card opened over the rest: it is over them, and takes the press) */}
-      <PageHtml transform distanceFactor={HTML_DISTANCE} position={[0, 0, 0]} zIndexRange={[PORTS_Z, PORTS_Z]} pointerEvents="none">
-        <div ref={portsLayer} style={{ position: "relative", width: 0, height: 0 }}>
-          {sets.map((b) => {
-            const f = shownOf(b);
-            const info = setInfo.get(b.id)!;
-            if (underCard({ x: f.x1, y: (f.y0 + f.y1) / 2 }, coverFrame, portR)) return null;
-            return (
-              <div key={`b${b.id}`} className="meno-fade-in" style={{ ...onLayer(f.x1, (f.y0 + f.y1) / 2), width: 0, height: 0 }}>
-                <Port look={portLook("give", { set: b.id })} label={`Out of ${info.name}`} data={{ "data-give-set": String(b.id) }} onPointerDown={(e) => drawFrom(e, { set: b.id })} style={{ left: 0, top: 0 }} of={(f.y1 - f.y0) / PX} />
-              </div>
             );
           })}
-          {steps.map((s) => {
-            const ports = inputsFor(s.kind, byOf(s));
-            const name = kindInfo(s.kind).name;
-            return (
-              <div key={`s${s.id}`} className="meno-fade-in" style={{ ...onLayer(s.x, s.y), width: 0, height: 0 }}>
-                {ports.map((p, k) =>
-                  s.id !== cover?.step && underCard({ x: s.x, y: s.y - portDown(k) }, coverFrame, portR) ? null : (
-                  <Port
-                    key={p.id}
-                    look={portLook("take", { step: s.id, port: p.id })}
-                    label={ports.length > 1 ? `${p.name} into ${name}` : `Into ${name}`}
-                    data={{ "data-take": `${s.id}:${p.id}` }}
-                    onPointerDown={(e) => drawInto(e, s.id, p.id)}
-                    style={{ left: 0, top: portDown(k) / PX }}
-                    of={CARD_H / PX}
-                  />
-                  ),
-                )}
-              </div>
-            );
-          })}
-          {/* the selection's port: pulled, the selection becomes an input set */}
-          {asSet && !wireDrag && (
-            <div className="meno-fade-in" style={{ ...onLayer(asSet.x1, (asSet.y0 + asSet.y1) / 2), width: 0, height: 0 }}>
-              <Port look="plain" label="Set as input" data={{}} onPointerDown={setFromSelection} style={{ left: 0, top: 0 }} of={(asSet.y1 - asSet.y0) / PX} />
-            </div>
-          )}
         </div>
       </PageHtml>
+      {/* a chemist's set's name written anew, where its tab says it: drawn by WebGL, typed into a field unseen (pageGl/PageField) */}
+      {renamed && (
+        <PageField
+          key={renamed.id}
+          fieldKey={`name:${renamed.id}`}
+          x={tabStart(shownOf(renamed)).x}
+          y={tabStart(shownOf(renamed)).y}
+          initial={renamed.name ?? setInfo.get(renamed.id)?.name ?? ""}
+          sizePx={FRAME_PX.words}
+          weight={500}
+          label="Set name"
+          onDone={(name) => {
+            if (name != null) store.getState().renameSet(renamed.id, name);
+            setRenaming(null);
+          }}
+        />
+      )}
+      {/* the ports, by WebGL: over the cards and the molecules' chips - a port is pressed, lit and let go on whatever lies
+          over it on the page - but those under a card or a chip opened over the rest, which takes the press (PORTS_ORDER) */}
+      <PageLayer shapes={portRings} texts={portCounts} regions={portRegions} on={onPort} tip={portTip} order={PORTS_ORDER} />
     </group>
   );
 }

@@ -10,6 +10,7 @@ import { openWhy } from "./slices/stepRuns";
 import { stereoOpenOf } from "../chem/fromSmiles";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readMolfile } from "../../../../lib/chem/ctfile";
+import { computerCores } from "../../../../lib/jobs";
 
 /** What Sketchkit's worker was asked: each structure's molblock, how many to try, and the options it was given. */
 const asked: { molblock: string; count?: number; options: Record<string, unknown> }[] = [];
@@ -104,12 +105,12 @@ import { drawnFromSmiles } from "../chem/testdata/identityCases";
 import { useReaders } from "../../../../lib/calc/workers";
 import { PLUGINS } from "../../../../lib/calc/catalog";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
-import { optionsFor } from "../workflow/doers";
-import { FEW_CONFORMERS } from "../../../../lib/chem/conformersSought";
+import { optionsFor, roundsNeed } from "../workflow/doers";
+import { FEW_CONFORMERS, WITHIN_NEEDED } from "../../../../lib/chem/conformersSought";
 import { kindInfo } from "../workflow/kinds";
-import { entryOfSet, setEntries, setMembers } from "../workflow/entries";
+import { entryOfSet, setEntries, setMembers, structureLineage } from "../workflow/entries";
 import { readWorkspace, workspaceText } from "../utils/workspace";
-import { bareLeft, notMade, partsLeft, stereoFree, stereoOpen } from "./slices/stepRuns";
+import { bareLeft, notMade, ONE_ROUND_AS_JOBS, oneRoundAsJobs, partsLeft, stereoFree, stereoOpen } from "./slices/stepRuns";
 
 useReaders.setState({ state: Object.fromEntries(PLUGINS.map((p) => [p.id, "added" as const])), problem: {} });
 
@@ -200,17 +201,28 @@ describe("Sketchkit's conformer search as a step, on structures drawn", () => {
     ]);
   });
 
-  it("carries what each structure drawn was made from onto each of its conformers - their lineage, as their entries give it - and keeps it in the workspace's file", async () => {
+  it("names each structure drawn itself, by the lasting id its set gave it, as what each of its conformers was made of - not what it was made from - and keeps it in the workspace's file", async () => {
+    // (what each was made from in turn, its record's `from`, is the structure's own lineage: not its conformers')
     const { st } = await searched(undefined, [{ from: ["a#1"] }, { from: ["b#1"] }, { from: ["c#2", "d#1"] }]);
+    const ids = setMembers(st(), st().sets.find((b) => !b.made)!).records.map((r) => r!.id!);
     const made = st().molecules3d.filter((m) => m.conformerSet);
-    // (water and methanol made - ethane cannot be here - each with its own structure's)
-    expect(made.map((m) => m.madeOf)).toEqual([["a#1"], ["c#2", "d#1"]]);
-    expect(setEntries(made, "conformers").map((e) => entryOfSet(e, "x").from)).toEqual([["a#1"], ["c#2", "d#1"]]);
+    // (water and methanol made - ethane cannot be here - each named by its own structure)
+    const lineage = [[structureLineage(ids[0])], [structureLineage(ids[2])]];
+    expect(lineage[0][0]).toBe(`structure:${ids[0]}`);
+    expect(made.map((m) => m.madeOf)).toEqual(lineage);
+    expect(setEntries(made, "conformers").map((e) => entryOfSet(e, "x").from)).toEqual(lineage);
     const again = createWorkspaceDocument();
     const opened = createEditorStore(again);
     connectStoreToDocument(opened, again);
     opened.getState().openWorkspace(readWorkspace(workspaceText(st()))!, true);
-    expect(opened.getState().molecules3d.filter((m) => m.conformerSet).map((m) => m.madeOf)).toEqual([["a#1"], ["c#2", "d#1"]]);
+    expect(opened.getState().molecules3d.filter((m) => m.conformerSet).map((m) => m.madeOf)).toEqual(lineage);
+  });
+
+  it("names a structure the chemist drew by the lasting id its set gave it", async () => {
+    const { st } = await searched();
+    const ids = setMembers(st(), st().sets.find((b) => !b.made)!).records.map((r) => r?.id);
+    expect(new Set(ids.filter(Boolean)).size).toBe(3);
+    expect(st().molecules3d.filter((m) => m.conformerSet).map((m) => m.madeOf)).toEqual([[structureLineage(ids[0]!)], [structureLineage(ids[2]!)]]);
   });
 
   it("writes what was worked out of each structure drawn into an SD file with each of its conformers, as its record says it", async () => {
@@ -279,8 +291,8 @@ describe("Sketchkit's conformer search as a step, on structures drawn", () => {
     expect(st().steps.find((s) => s.id === step)!.ran?.said).toMatch(/ · 51 conformers of 51 compounds$/);
     const made = st().sets.find((b) => b.made?.step === step && b.made.exit === "out")!.collection!;
     expect(made).toHaveLength(51);
-    // (those held made in 3D linked to no drawing: they are on no page)
-    expect(made.filter((m) => m.drawnFrom === undefined && m.drawnAs === undefined)).toHaveLength(51 - shown);
+    // (those held made in 3D linked to no drawing: they are on no page - all 51, Enumerate's exit wired on, all held off it: workflow/held)
+    expect(made.filter((m) => m.drawnFrom === undefined && m.drawnAs === undefined)).toHaveLength(51);
   });
 
 
@@ -322,12 +334,17 @@ describe("Sketchkit's conformer search as a step, on structures drawn", () => {
     const sodium = { atoms: [at(1, "Na", 0, 1)], bonds: [] };
     const salt = { atoms: [at(1, "C", 0), at(2, "N", 1.5, 1), at(3, "Cl", 4, -1)], bonds: [{ id: 4, a: 1, b: 2, order: 1 }] };
     const doc = createWorkspaceDocument();
-    doc.edit("held", (d) => ({ ...d, sets: [...(d.sets ?? []), { id: 900, x0: -50, y0: -50, x1: 50, y1: 50, made: { step: 899, exit: "out", holds: "structures" }, drawnCollection: [water, sodium, salt] as never }], nextWorkflowId: 901 }));
     const store = createEditorStore(doc);
     connectStoreToDocument(store, doc);
     const st = () => store.getState();
     const step = st().addStep("conformers", "sketchkit", 200, 0);
-    st().connect({ set: 900 }, step);
+    // (wired on as it is made: held off the page - a set not wired on lays out what it holds, workflow/held)
+    doc.edit("held", (d) => ({
+      ...d,
+      sets: [...(d.sets ?? []), { id: 900, x0: -50, y0: -50, x1: 50, y1: 50, made: { step: 899, exit: "out", holds: "structures" }, drawnCollection: [water, sodium, salt] as never }],
+      wires: [...(d.wires ?? []), { id: 901, from: { set: 900 }, to: { step, port: "in" } }],
+      nextWorkflowId: 902,
+    }));
     await st().runStep(step);
     // (the sodium ion never asked about; the salt asked about as its cation)
     expect(asked.map((a) => readMolfile(a.molblock)!.atoms.map((x) => x.symbol).join(""))).toEqual(["OHH", "CN"]);
@@ -364,7 +381,7 @@ describe("Sketchkit's conformer search as a step, on structures drawn", () => {
     // (methanol never asked for conformers: only water, and ethane, which Sketchkit cannot make here)
     expect(asked.map((a) => readMolfile(a.molblock)!.atoms.length)).toEqual([3, 2]);
     expect(step.ran?.ok).toBe(true);
-    expect(step.ran?.said).toMatch(/ · 1 conformer · structure 2 of 3 could not be made in 3D · structure 3 of 3 leaves stereo open: draw it, wedges and all$/);
+    expect(step.ran?.said).toMatch(/ · 1 conformer · structure 2 of 3 could not be made in 3D · structure 3 of 3 leaves stereo open: put Stereoisomers before Conformers$/);
   });
 
   it("makes one whose open stereo can go one way only in 3D - a bridgehead its rings fix: no choice was made", async () => {
@@ -388,14 +405,14 @@ describe("Sketchkit's conformer search as a step, on structures drawn", () => {
     worker.openAs = { atoms: [], bonds: [0, 1], isomers: 1 };
     const { step } = await searched(undefined, [], "allene");
     expect(asked.map((a) => readMolfile(a.molblock)!.atoms.length)).toEqual([3, 2]);
-    expect(step.ran?.said).toMatch(/ · structure 3 of 3 leaves stereo open: draw it, wedges and all$/);
+    expect(step.ran?.said).toMatch(/ · structure 3 of 3 leaves stereo open: put Stereoisomers before Conformers$/);
   });
 
   it("makes none where every structure leaves stereo open - no conformer asked for - each in its Failed exit as it came, saying what to put before it", async () => {
     worker.open = "all";
     const { step, st } = await searched();
     expect(asked).toHaveLength(0);
-    expect(step.ran).toMatchObject({ ok: true, said: expect.stringMatching(/0 conformers · structures 1, 2 and 3 of 3 leave stereo open: draw it, wedges and all$/) });
+    expect(step.ran).toMatchObject({ ok: true, said: expect.stringMatching(/0 conformers · structures 1, 2 and 3 of 3 leave stereo open: put Stereoisomers before Conformers$/) });
     const failed = st().sets.find((b) => b.made?.step === step.id && b.made.exit === "failed")!;
     expect(failed.made?.holds).toBe("structures");
     expect((failed.members ?? []).map((m) => ("structure" in m ? m.record?.status : null))).toEqual(Array(3).fill({ failed: "1 stereocentre not specified: put Stereoisomers before Conformers" }));
@@ -423,6 +440,24 @@ describe("Sketchkit's conformer search as a step, on structures drawn", () => {
     expect(st().sets.find((b) => b.made?.step === step.id && b.made.exit === "out")!.members!.length).toBeGreaterThan(0);
   });
 
+  it("is told how many threads it may use - the cores Settings gives a job, one search at a time - beside its options", async () => {
+    const was = useAppSettings.getState().calculations;
+    try {
+      useAppSettings.setState((s) => ({ ...s, calculations: { ...s.calculations, cores: 1, coresAll: undefined } }));
+      await searched();
+      expect(asked.length).toBeGreaterThan(0);
+      expect(asked.every((a) => a.options.threads === 1)).toBe(true);
+      // (none set for a job: all that jobs may use, the computer's at the most)
+      useAppSettings.setState((s) => ({ ...s, calculations: { ...s.calculations, cores: undefined, coresAll: 2 } }));
+      asked.length = 0;
+      await searched();
+      expect(asked.length).toBeGreaterThan(0);
+      expect(asked.every((a) => a.options.threads === Math.min(2, computerCores()))).toBe(true);
+    } finally {
+      useAppSettings.setState((s) => ({ ...s, calculations: was }));
+    }
+  });
+
   it("is given the options chosen in Settings, Chemistry, on its 3D card, as 3D structures on the canvas is", async () => {
     useAppSettings.setState((s) => ({ ...s, chemistry: { ...s.chemistry, sought3d: "fixed", count3d: 12 }, options: { ...s.options, "role:conformers": { field: "KF2" } } }));
     await searched();
@@ -436,6 +471,70 @@ describe("Sketchkit's conformer search as a step, on structures drawn", () => {
     expect(offered.find((o) => o.id === "count")?.default).toBe(12);
     // (a plugin whose search takes no number of tries is offered none)
     expect(optionsFor("conformers", "confsweep").map((o) => o.id)).not.toContain("sought");
+  });
+
+  it("asks each structure in rounds where its plugin's search takes draws - each round a draw of its own - until one brings none new, and says how it ended", async () => {
+    // (a search that takes draws: the window, Settings' own, the step starts from; the worker here gives the same one conformer each draw)
+    const search = PLUGINS.find((p) => p.id === "sketchkit") as unknown as { roleDraws: readonly string[] };
+    const was = search.roleDraws;
+    search.roleDraws = ["conformers"];
+    useAppSettings.setState((s) => ({ ...s, chemistry: { valenceWarnings: s.chemistry.valenceWarnings, within3d: 3 } }));
+    try {
+      const { st } = await searched();
+      const sent = asked as unknown as { count?: number; draw?: number }[];
+      // (water, then ethane - which cannot be made: its first round alone - then methanol, each its own count first, then as many again)
+      expect(sent.map((a) => [a.count, a.draw])).toEqual([
+        [FEW_CONFORMERS, 0],
+        [FEW_CONFORMERS, 1],
+        [FEW_CONFORMERS, 0],
+        [FEW_CONFORMERS, 0],
+        [FEW_CONFORMERS, 1],
+      ]);
+      const made = st().molecules3d.filter((m) => m.conformerSet);
+      expect(made.map((m) => m.made?.how.find((r) => r.label === "Rounds")?.text)).toEqual(
+        Array(2).fill(`2 rounds, ${2 * FEW_CONFORMERS} tried: the last brought no new conformer within 3 kcal/mol of the lowest`),
+      );
+    } finally {
+      search.roleDraws = was;
+      useAppSettings.setState((s) => ({ ...s, chemistry: { valenceWarnings: s.chemistry.valenceWarnings } }));
+    }
+  });
+
+  it("fails each structure, saying it needs its window, where it is run with none - its search taking draws", async () => {
+    const search = PLUGINS.find((p) => p.id === "sketchkit") as unknown as { roleDraws: readonly string[] };
+    const was = search.roleDraws;
+    search.roleDraws = ["conformers"];
+    try {
+      const { step, st } = await searched();
+      // (none asked, none made: each in its Failed exit as it came, saying why)
+      expect(asked).toHaveLength(0);
+      expect(st().molecules3d.filter((m) => m.conformerSet)).toHaveLength(0);
+      const failed = st().sets.find((b) => b.made?.step === step.id && b.made.exit === "failed")!;
+      expect((failed.members ?? []).map((m) => ("structure" in m ? m.record?.status : null))).toEqual(Array(3).fill({ failed: WITHIN_NEEDED }));
+    } finally {
+      search.roleDraws = was;
+    }
+  });
+
+  it("needs its window - its own, else Settings' - where its plugin's search takes draws; not where it takes none, nor for a number of the chemist's own", () => {
+    const needed = { sought: "needed", count: 200, within: Number.NaN, first: 0, most: 5000 };
+    expect(roundsNeed("conformers", true, needed)).toBe(WITHIN_NEEDED);
+    expect(roundsNeed("conformers", true, { ...needed, within: 2.5 })).toBeUndefined();
+    expect(roundsNeed("conformers", false, needed)).toBeUndefined();
+    expect(roundsNeed("conformers", true, { ...needed, sought: "fixed" })).toBeUndefined();
+    expect(roundsNeed("optimise", true, needed)).toBeUndefined();
+  });
+
+  it("says, run as jobs on molecules in 3D, that it asks each once where it was asked for as many as each needs in rounds", () => {
+    const needed = { sought: "needed", within: 3, first: 0, most: 5000 };
+    expect(oneRoundAsJobs(true, true, needed)).toBe(ONE_ROUND_AS_JOBS);
+    // (its window not given yet: rounds asked all the same)
+    expect(oneRoundAsJobs(true, true, { ...needed, within: Number.NaN })).toBe(ONE_ROUND_AS_JOBS);
+    expect(oneRoundAsJobs(true, true, { ...needed, sought: "fixed" })).toBeUndefined();
+    expect(oneRoundAsJobs(true, false, needed)).toBeUndefined();
+    expect(oneRoundAsJobs(false, true, needed)).toBeUndefined();
+    // (a search not offered rounds: no window among its options)
+    expect(oneRoundAsJobs(true, true, { sought: "needed", count: 50 })).toBeUndefined();
   });
 
   it("tries as many as each molecule needs, where the chemist asks for no number", async () => {
@@ -459,8 +558,8 @@ describe("Sketchkit's conformer search as a step, on structures drawn", () => {
   it("says the structures not made, one or several", () => {
     expect(notMade([3], 4)).toBe("structure 3 of 4 could not be made in 3D");
     expect(notMade([1, 2, 4], 5)).toBe("structures 1, 2 and 4 of 5 could not be made in 3D");
-    expect(stereoOpen([2], 3)).toBe("structure 2 of 3 leaves stereo open: draw it, wedges and all");
-    expect(stereoOpen([1, 3], 3)).toBe("structures 1 and 3 of 3 leave stereo open: draw it, wedges and all");
+    expect(stereoOpen([2], 3)).toBe("structure 2 of 3 leaves stereo open: put Stereoisomers before Conformers");
+    expect(stereoOpen([1, 3], 3)).toBe("structures 1 and 3 of 3 leave stereo open: put Stereoisomers before Conformers");
     expect(stereoFree([2], 3)).toBe("structure 2 of 3 made with its stereo free: no stereoisomer of it holds in 3D");
     expect(stereoFree([1, 2], 3)).toBe("structures 1 and 2 of 3 made with their stereo free: no stereoisomer of them holds in 3D");
     expect(bareLeft([2, 4], 5)).toBe("structures 2 and 4 of 5 left out: one atom alone has no 3D structure");

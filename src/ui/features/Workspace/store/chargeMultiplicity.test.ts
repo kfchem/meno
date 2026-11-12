@@ -423,7 +423,7 @@ const chem = {
 
 /**
  * Each kind of step and who fills it that takes molecules in 3D: every plugin the catalogue says fills it, and Meno.
- * Render gives pictures, and Chart and Energy diagram charts, which have no charge; a kind that takes nothing in (Generate) is given no
+ * Render gives pictures, Chart and Energy diagram charts, and Restraints a table of restraints, which have no charge; a kind that takes nothing in (Generate) is given no
  * entry to keep one of - the charges it gives are its own (stepRuns.test, *Generate*); Enumerate takes structures drawn
  * alone. Species sets them, as it is asked, and Combine makes the parts one complex, its charge and multiplicity theirs
  * together: each against its own known answers (lib/steps structures.test, workflow/structureSteps.test). Merge, Re-bond,
@@ -436,7 +436,7 @@ const chem = {
 const DOERS: readonly [StepKind, string][] = [
   ...PLUGINS.flatMap((p) => p.steps.map((s): [StepKind, string] => [s.kind, p.id])),
   ...MENO_DOES.map((k): [StepKind, string] => [k, "meno"]),
-].filter(([kind]) => kindInfo(kind).gives !== "pictures" && kindInfo(kind).gives !== "chart" && !takesNothing(kind) && kindInfo(kind).takes.some((h) => h !== "structures") && kind !== "species" && kind !== "mode-on-atoms" && kind !== "displace" && kind !== "combine" && !PAIRED.includes(kind) && kind !== "path-search" && kind !== "reaction-path" && kind !== "add" && kind !== "ensemble");
+].filter(([kind]) => kindInfo(kind).gives !== "pictures" && kindInfo(kind).gives !== "chart" && kindInfo(kind).gives !== "table" && !takesNothing(kind) && kindInfo(kind).takes.some((h) => h !== "structures") && kind !== "species" && kind !== "mode-on-atoms" && kind !== "displace" && kind !== "combine" && !PAIRED.includes(kind) && kind !== "onto-structures" && kind !== "path-search" && kind !== "reaction-path" && kind !== "add" && kind !== "ensemble");
 
 /** The kind of set a step gives, for what it took. */
 const givesFor = (kind: StepKind, holds: SetKind): SetKind => {
@@ -508,8 +508,8 @@ async function trip(input: Input, chain: readonly [StepKind, string][], seed: nu
     // (a Tag named, and a Measure asked a distance every entry has: neither runs without)
     if (kind === "tag") st().updateStep(id, { options: { name: `t${i}` } });
     if (kind === "measure") st().updateStep(id, { options: { measurements: "1-2" } });
-    // (Restraints asked an atom every entry has fixed: it has no default to run with)
-    if (kind === "restraints") st().updateStep(id, { options: { coordination: false, fixed: "1" } });
+    // (an Energy window given its window: it has no default to run with)
+    if (kind === "energy-window") st().updateStep(id, { options: { window: 3 } });
     st().connect(i ? { set: resultOf(st(), steps[i - 1])!.id } : { set }, id);
     steps.push(id);
   });
@@ -522,9 +522,9 @@ const SEEDS = 12;
 
 describe("a step keeps each entry's charge and multiplicity", () => {
   it("for every kind of step the catalogue has, and every plugin that fills one - and Meno's own", () => {
-    // (each kind Meno defines filled by something - left out here Render, Chart and Energy diagram, which give pictures and charts, Generate, given nothing, and those that take structures drawn alone, whose atoms are as drawn; Species and Combine change them by design, each tested on its own; the kinds of two inputs - Merge, Re-bond, Compare bonding, Join, Barrier - by their own tests; Number, given nothing; Add and Ensemble energy, which need values named, by their own tests, and change no atom; Reaction, which takes a reaction's two ends, tested on its own too; Displace, which needs vibrations, tested on its own too)
+    // (each kind Meno defines filled by something - left out here Render, Chart and Energy diagram, which give pictures and charts, Restraints, which gives a table of restraints, Generate, given nothing, and those that take structures drawn alone, whose atoms are as drawn; Species and Combine change them by design, each tested on its own; the kinds of two inputs - Merge, Re-bond, Compare bonding, Join, 3D results onto structures, Barrier - by their own tests; Number, given nothing; Add and Ensemble energy, which need values named, by their own tests, and change no atom; Reaction, which takes a reaction's two ends, tested on its own too; Displace, which needs vibrations, tested on its own too)
     const kinds = new Set(DOERS.map(([k]) => k));
-    expect(KINDS.filter((k) => !kinds.has(k.kind)).map((k) => k.kind)).toEqual(["generate", "path-search", "reaction-path", "render", "check-structures", "stereoisomers", "descriptors", "enumerate", "chart", "energy-diagram", "species", "combine", "mode-on-atoms", "merge", "rebond", "compare-bonding", "join", "barrier", "torsion-restraints", "number", "add", "atom-map", "displace", "ensemble"]);
+    expect(KINDS.filter((k) => !kinds.has(k.kind)).map((k) => k.kind)).toEqual(["generate", "path-search", "reaction-path", "render", "check-structures", "stereoisomers", "descriptors", "enumerate", "chart", "energy-diagram", "species", "combine", "mode-on-atoms", "merge", "rebond", "compare-bonding", "join", "onto-structures", "barrier", "restraints", "torsion-restraints", "number", "add", "atom-map", "displace", "ensemble"]);
     expect(DOERS.length).toBeGreaterThanOrEqual(19);
   });
 

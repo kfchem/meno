@@ -1,12 +1,12 @@
 import { jobStateSaid } from "../utils/texts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Job, JobAsk } from "../../../../lib/jobs";
+import { STOPPED_ALONE, type Job, type JobAsk } from "../../../../lib/jobs";
 
 /** The jobs, as the test has them: each one's record, its log and its files; and what was asked. */
 const jobs = new Map<string, Job & { log: string; files: Record<string, string> }>();
 /** Where set, how long a job's log takes to read, in ms: a log read late. */
 const logDelay = new Map<string, number>();
-const asked = { started: [] as JobAsk[], stopped: [] as string[], removed: [] as string[] };
+const asked = { started: [] as JobAsk[], stopped: [] as string[], stoppedAlone: [] as string[], removed: [] as string[] };
 let next = 1;
 /** A file's text, as the test has it, that stands for one too large to read. */
 const TOO_LARGE = "(too large)";
@@ -54,6 +54,7 @@ vi.mock("../../../../lib/jobs", async (actual) => ({
     return text;
   },
   stopJob: async (id: string) => void asked.stopped.push(id),
+  stopJobAlone: async (id: string) => void asked.stoppedAlone.push(id),
   removeJob: async (id: string) => void asked.removed.push(id),
   jobFolder: async (id: string) => `/jobs/${id}`,
   // (a computer of 8 cores and 32 GB: jobs may use 24 GB of it, Settings unsaid - its physical cores as a test has them)
@@ -89,7 +90,7 @@ const worker = {
     })),
   })),
   run: vi.fn(async (_step: string, entries: unknown[]) => ({ kept: entries.length > 1 ? [0] : [] })),
-  collect: vi.fn(async (_step: string, entries: { atoms: { el: string; x: number; y: number; z: number }[] }[], _o: unknown, files: Record<string, string>, _log: string, ended: string) =>
+  collect: vi.fn(async (_step: string, entries: { atoms: { el: string; x: number; y: number; z: number }[]; restraints?: { kind: string; atoms: number[] }[] }[], _o: unknown, files: Record<string, string>, _log: string, ended: string) =>
     ended !== "done"
       ? { why: "Some atoms are very close" }
       : {
@@ -99,7 +100,8 @@ const worker = {
             version: "1.0.0",
             method: "TB-2",
             atoms: e.atoms.map((a) => a.el),
-            frames: [e.atoms.flatMap((a) => [a.x, a.y, a.z]), e.atoms.flatMap((a) => [a.x, a.y + 0.01, a.z])],
+            // (each atom moved a little - but those its restraints fix, where it was given some: held, as a program asked to holds them)
+            frames: [e.atoms.flatMap((a) => [a.x, a.y, a.z]), e.atoms.flatMap((a, i) => [a.x, a.y + ((e.restraints ?? []).some((r) => r.kind === "fixed" && r.atoms.includes(i)) ? 0 : 0.01), a.z])],
             energies: [-5.0703, Number(files["tbopt.log"])],
             optimised: true,
           })),
@@ -174,7 +176,8 @@ import { canWire, resultOf, stateOf } from "../workflow/flow";
 import { MOST_PAIRS } from "../workflow/pairs";
 import { byOf, optionsFor } from "../workflow/doers";
 import { CARD_W } from "../workflow/look";
-import { countOf, entryOfSet, setEntries, setMembers } from "../workflow/entries";
+import { RESTRAINTS_INPUT } from "../workflow/kinds";
+import { countOf, entryOfSet, setEntries, setMembers, setMolecules } from "../workflow/entries";
 import { forgetStereo } from "../workflow/configurations";
 
 // (the plugins Meno carries, added: the kinds their outputs are read as registered)
@@ -226,6 +229,7 @@ describe("a step that runs a plugin's program", () => {
     next = 1;
     asked.started = [];
     asked.stopped = [];
+    asked.stoppedAlone = [];
     asked.removed = [];
     keepFails.length = 0;
     worker.prepare.mockClear();
@@ -341,6 +345,61 @@ describe("a step that runs a plugin's program", () => {
       await st().lookAtJobs();
       await ran;
     }
+  });
+
+  it("holds the atoms fixed a Restraints table wired in makes for each molecule - matched on its ID, sent with them, said on what it made - and refuses rows its plugin does not hold, naming them", async () => {
+    // (water tagged, given its restraints by Restraints as a table, the tagged water optimised by Tightbind - whose optimisation can
+    //  hold atoms fixed - with the table wired into its Restraints input)
+    const page = async (restraints: Record<string, unknown>) => {
+      const made = editor();
+      const t = made.st().addStep("tag", "meno", 3, 0);
+      made.st().updateStep(t, { options: { name: "start" } });
+      made.st().connect({ set: made.st().sets[0].id }, t);
+      await made.st().runStep(t);
+      const tagged = made.st().sets.find((b) => b.made?.step === t && b.made.exit === "out")!.id;
+      const r = made.st().addStep("restraints", "meno", 5, 0);
+      made.st().updateStep(r, { options: { on: "start", coordination: false, ...restraints } });
+      made.st().connect({ set: tagged }, r);
+      await made.st().runStep(r);
+      const table = made.st().sets.find((b) => b.made?.step === r && b.made.exit === "out")!;
+      expect(table.made?.holds).toBe("table");
+      const step = made.st().addStep("optimise", "tightbind", 20, 0);
+      made.st().connect({ set: tagged }, step);
+      made.st().connect({ set: table.id }, step, RESTRAINTS_INPUT.id);
+      return { ...made, step };
+    };
+    {
+      const { st, step } = await page({ fixed: "1, 3" });
+      const ran = st().runStep(step);
+      await settle();
+      await settle();
+      const [sent] = worker.prepare.mock.lastCall![1] as { restraints?: { kind: string; atoms: number[] }[] }[];
+      expect(sent.restraints).toEqual([{ kind: "fixed", atoms: [0, 2] }]);
+      expect((worker.prepare.mock.lastCall as unknown as unknown[])[2]).toMatchObject({ hold: "fixed" });
+      end(1);
+      await st().lookAtJobs();
+      await ran;
+      const out = setMembers(st(), st().sets.find((b) => b.made?.step === step && b.made.exit === "out")!).molecules.map((id) => st().molecules3d.find((m) => m.id === id)!);
+      expect(out).toHaveLength(1);
+      expect(out[0].calc?.held).toEqual([0, 2]);
+    }
+    worker.prepare.mockClear();
+    jobs.clear();
+    next = 1;
+    {
+      const { st, step } = await page({ fixed: "1", distances: "2-3" });
+      await st().runStep(step);
+      expect(worker.prepare).not.toHaveBeenCalled();
+      expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: expect.stringContaining("plugin holds no distances: distance 2-3") });
+    }
+  });
+
+  it("refuses a step of a page saved holding its atoms fixed, until a table of them is wired in", async () => {
+    const { st, step } = editor();
+    st().updateStep(step, { options: { hold: "fixed" } });
+    await st().runStep(step);
+    expect(worker.prepare).not.toHaveBeenCalled();
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "It was saved holding its atoms fixed (Hold its restraints): wire a Restraints table of them into Restraints" });
   });
 
   it("ends on what came in when it started - its wire undone while it runs - and is changed once its results are in", async () => {
@@ -1389,6 +1448,63 @@ describe("a step that runs a plugin's program", () => {
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:01 \u00b7 1 of 3 \u00b7 2 of 3 failed (2: the program stopped with an error)" });
   });
 
+  it("keeps when a running job last wrote anything, as its runner says - running jobs' alone", async () => {
+    const { st, step } = waters(2);
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    Object.assign(jobs.get(idOf(1))!, { state: "running", started: 1000, lastWritten: 5000 });
+    Object.assign(jobs.get(idOf(2))!, { lastWritten: 6000 });
+    await st().lookAtJobs();
+    expect([st().jobsSeen[idOf(1)]?.lastWritten, st().jobsSeen[idOf(2)]?.lastWritten]).toEqual([5000, undefined]);
+    end(1);
+    end(2);
+    await st().lookAtJobs();
+    await ran;
+    expect(st().jobsSeen[idOf(1)]?.lastWritten).toBeUndefined();
+  });
+
+  it("shares the cores among its jobs where Settings sets none for each: one entry all 8, four entries 2 each", async () => {
+    // (a computer of 8 cores, the webview telling 8, whatever computer the test runs on)
+    Object.defineProperty(globalThis.navigator, "hardwareConcurrency", { value: 8, configurable: true });
+    const calculations = useAppSettings.getState().calculations;
+    const { cores: _c, ...unset } = calculations;
+    useAppSettings.setState({ calculations: unset });
+    try {
+      for (const [n, each] of [[1, 8], [4, 2]] as const) {
+        jobs.clear();
+        asked.started = [];
+        const { st, step } = waters(n);
+        const ran = st().runStep(step);
+        for (let i = 0; i < 8 && asked.started.length < n; i++) await settle();
+        expect(asked.started.map((a) => a.cores), `${n} entries`).toEqual(Array(n).fill(each));
+        for (let k = 1; k <= n; k++) end(next - n + k - 1);
+        await st().lookAtJobs();
+        await ran;
+      }
+    } finally {
+      useAppSettings.setState({ calculations });
+    }
+  });
+
+  it("goes on without a job stopped alone - Stop this job - bringing in what the others gave, its entry failed, stopped by you", async () => {
+    const { st, step } = waters(2);
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    st().stopJobAlone(idOf(2));
+    expect([asked.stoppedAlone, asked.stopped]).toEqual([[idOf(2)], []]);
+    // (its runner records it failed, saying so - jobs.rs STOPPED_ALONE)
+    end(1);
+    end(2, "failed", { why: STOPPED_ALONE });
+    await st().lookAtJobs();
+    await ran;
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:01 \u00b7 1 of 2 \u00b7 1 of 2 failed (1: stopped before it finished)" });
+    expect(st().steps.find((s) => s.id === step)!.ran?.stopped).toBeUndefined();
+    // (the two waters, the one optimised, and the one stopped on the Failed exit)
+    expect(st().molecules3d).toHaveLength(2 + 1 + 1);
+  });
+
   it("runs the jobs its plugin prepared, and sends an entry it refused out of its Failed exit, with why - kept with the workspace while it runs", async () => {
     const { st, step } = waters(3);
     const one = { program: "tightbind", args: [], files: [], reads: ["tbopt.log"] };
@@ -1725,6 +1841,7 @@ function chain() {
   const a = st().addStep("as-conformers", "meno", 10, 0);
   st().connect({ set }, a);
   const b = st().addStep("energy-window", "meno", 30, 0);
+  st().updateStep(b, { options: { window: 3 } });
   // (each step's exit, the set it makes, into the next)
   st().connect({ set: resultOf(st(), a)!.id }, b);
   const c = st().addStep("populations", "meno", 50, 0);
@@ -1754,7 +1871,8 @@ describe("running a workflow's steps", () => {
     const { st, b, c } = chain();
     await st().runFrom(c);
     // (asked once, by As conformers, for all three, each its own geometry; Populations' two, the window's, known by then)
-    const kept = setEntries(st().molecules3d.filter((m) => setMembers(st(), st().sets.find((x) => x.made?.step === b)!).molecules.includes(m.id)), "conformers");
+    // (the window's kept, held in its set: its exit wired on, workflow/held)
+    const kept = setEntries(setMolecules(st(), st().sets.find((x) => x.made?.step === b && x.made.exit === "out")!), "conformers");
     expect(configured.map((blocks) => blocks.length)).toEqual([3]);
     expect(kept).toHaveLength(2);
     expect(kept.map((e) => (e.stereo?.perceived ? e.stereo.key : null))).toEqual(kept.map(() => `k${configured[0][0].split("\n").length}`));
@@ -1774,6 +1892,8 @@ describe("running a workflow's steps", () => {
     const { doc, st, a, b, c } = chain();
     const d = st().addStep("duplicates", "meno", 40, 0);
     st().connect({ set: resultOf(st(), b)!.id }, d);
+    // (Populations' wire from the window taken out, then wired from Duplicates: several wires into one input would take both)
+    st().removeWire(st().wires.find((w) => w.to.step === c)!.id);
     st().connect({ set: resultOf(st(), d)!.id }, c);
     await st().runFrom(a);
     const stepOf = (id: number) => st().steps.find((s) => s.id === id)!;

@@ -9,6 +9,7 @@ import type { Wire, WorkflowSet, WorkflowStep } from "../store/types";
 import { insidePolygon } from "../utils/selection";
 import { CARD_H, CARD_W } from "./look";
 import { removeSet, removeStep, withExits } from "./model";
+import { unseenSets } from "./onPage";
 import { greatest, least } from "../../../../lib/chem/lists";
 
 type Pt = { x: number; y: number };
@@ -46,9 +47,14 @@ export function partsOf(doc: Flow, sets: ReadonlySet<number>, steps: ReadonlySet
     sets: (doc.sets ?? [])
       .filter((b) => sets.has(b.id))
       // (a step's exit without its step is a set like the chemist's; with it, empty until that step runs again)
-      .map(({ members, keep: _k, notKept: _n, put: _p, collection: _c, drawnCollection, unread: _u, carried: _r, core: _co, ...b }) => {
-        // (the records of its structures drawn, by their atoms' ids: taken up by them again, put down)
-        const carried = (members ?? []).flatMap((m) => ("structure" in m && m.record ? [{ structure: m.structure, record: m.record }] : []));
+      .map(({ members, keep: _k, notKept: _n, put: _p, collection: _c, drawnCollection, unread: _u, carried: _r, core: _co, heldIds: _h, ...b }) => {
+        // (the records of its structures drawn, by their atoms' ids: taken up by them again, put down - each without its lasting id, a copy
+        //  being another structure that is given its own, and none where that and what it is of are all it says)
+        const carried = (members ?? []).flatMap((m) => {
+          if (!("structure" in m) || !m.record) return [];
+          const { id: _id, ...record } = m.record;
+          return Object.keys(record).some((k) => k !== "of") ? [{ structure: m.structure, record }] : [];
+        });
         const withStep = !!b.made && steps.has(b.made.step);
         // (and those it holds off the page: never a copy of the shown alone - and, with its step, what it holds said, as it was)
         const held = drawnCollection?.length ? { drawnCollection } : {};
@@ -140,9 +146,14 @@ export function flowIn(doc: Flow, kind: "box" | "lasso", points: readonly Pt[]):
     if (points.length < 3) return { sets: [], steps: [] };
     inside = (m) => insidePolygon(m, points);
   }
+  // (a set drawn nowhere lies nowhere - held off the page, or an exit's for what its step sets aside, holding nothing: workflow/held -
+  //  it goes with its step, chosen, so that a copy keeps the wires out of it, and its step's exits)
+  const steps = (doc.steps ?? []).filter((s) => inside(stepMiddle(s))).map((s) => s.id);
+  const unseen = unseenSets(doc);
+  const chosen = new Set(steps);
   return {
-    sets: (doc.sets ?? []).filter((b) => inside(setMiddle(b))).map((b) => b.id),
-    steps: (doc.steps ?? []).filter((s) => inside(stepMiddle(s))).map((s) => s.id),
+    sets: (doc.sets ?? []).filter((b) => (unseen.has(b.id) ? chosen.has(b.made!.step) : inside(setMiddle(b)))).map((b) => b.id),
+    steps,
   };
 }
 

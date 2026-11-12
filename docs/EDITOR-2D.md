@@ -42,8 +42,17 @@ and in particular:
   that way of drawing rather than for keys to learn: no keyboard shortcut
   builds a structure (agreed 2026-09-27); the bond keys only set a bond's
   kind (*Bond keys*, below; 2026-11-02).
-  - A drag on an atom moves it; it snaps as it goes, and dropped on another
-    atom it becomes that atom.
+  - A drag on an atom moves it; it snaps as it goes, never onto another atom
+    (a snap stands clear of every atom, so no drag merges where it only
+    meant to move; 2026-11-11, after dragging a tert-butyl's centre
+    collapsed its carbons). Dropped with the pointer on another atom it
+    becomes that atom - a ring closed, a chain joined - and the preview shows
+    it there before the button comes up, one undo step. It does not become an
+    atom it is bonded to or shares a neighbour with: that would lose a bond
+    (or the atom itself), so there the drag only moves it (`utils/dropMerge`, `utils/dropOutcome`).
+    Fusing two drawn rings by dragging atom onto atom therefore stops after
+    the first pair - the second shares a neighbour with it; fused and spiro
+    rings come from the ring templates.
   - A double-click on an atom draws one bond where there is room; a
     double-click that drags draws one bond where it is led. Near 120
     degrees from a bond already there it snaps to that, and an arc grows
@@ -299,6 +308,18 @@ molecule selects it. A right-click, or a press with two fingers,
 opens the menu for what is under the pointer; it waits for the button to
 come up, so a right drag is a move, not a menu.
 
+**Menus on the page** (the maintainer). Quick Add, and the menu a right-click
+opens - a part's, a step's card's, a frames chip's - stand where they were
+asked for: the menu's top left corner 14 px up and to the right of the point,
+whatever its size, and kept at that point on the page as the view moves. Where
+any of it would lie past the canvas - the column's width counted - the view
+eases along by just what it lies past and 16 px more, never zooming: a menu is
+a screen's size, not the page's. A panel opened in Quick Add, or a row in a
+menu, that makes it larger asks again. A menu taller than the canvas has its
+top brought in and scrolls inside. Once it has shut, the view stays where it
+went. The pan needed is one pure rule (`panFor`, `menuAt.ts`; the hook that
+anchors a menu and asks for it, `useMenuAt.ts`).
+
 **Bond keys** (users' wish, relayed by the maintainer on 2026-11-02; pressed
 again they go on as clicks do, 2026-11-04). With the pointer on a bond, 1, 2
 and 3 set its kind, and a key pressed again goes on round as a click would:
@@ -315,8 +336,14 @@ nothing is no step (`bondKey`, utils/bondKinds `bondKeyPatch`). The key the
 hand pressed is read (`code`, the top row or the keypad), so a keyboard
 whose digits take Shift and an input method that is on set it all the same.
 None is taken with Ctrl, ⌘ or Alt held (⌘1 fits the view), held down and
-coming again, over an atom - digits never begin a label - while a button
-is held (a drag going on), or while a label or any field is typed in. A bond's menu says each beside *Single bond*,
+coming again, while a button is held (a drag going on), or while a label or
+any field is typed in. **Over an atom** (on no bond) a key goes on a chain
+(2026-11-11): one bond of that order - single, double, triple - out of the
+atom where there is room, to a new carbon, as a click with Option held draws
+one (`bondOut`), one undo step; the new atom is the one the next key goes
+on from, so that 1 1 1 draws three bonds of a chain with the pointer where
+it was (a move of the pointer takes the atom under it again). Digits never
+begin a label. A bond's menu says each beside *Single bond*,
 *Double bond* and *Triple bond*. They are the only keys that change a structure;
 ring templates and the like are still not keys.
 
@@ -430,7 +457,10 @@ the first row's is. Opening a row closes any other below the first; each
 opens and closes in a short ease, and nothing of which was open is kept
 for the next time Quick Add opens. A choice puts it down where the
 double-click was; Escape, a press elsewhere or a turn of the wheel closes
-it. Going, it does nothing more as it fades - nor does the right-click
+it - but not while a question is asked over the window (a "List the
+plugins online?" or a "Download RDKit?" asked from its SMILES field): the
+press, the wheel and Escape are the question's, and Quick Add stays open,
+with what was typed in it, for the answer (`quickAddLeave`). Going, it does nothing more as it fades - nor does the right-click
 menu: an icon double-clicked put its choice down once, not a second time
 on the first (theme/leaving.ts) - and a press elsewhere as it fades is
 the next thing done, not one to close it. It opens as the second click's button comes up: a third click asks
@@ -500,8 +530,11 @@ molecule in 3D or a picture.
   `dragsSelection`); an atom that is not selected, or is selected alone,
   moves on its own as before.
 - Dragging the handle turns it about its middle, in steps of 15 degrees, or
-  freely after a pause - one undo step. While it turns, or a selection is
-  dragged, each frame only draws: a structure only carried keeps its
+  freely after a pause - one undo step. Molecules in 3D it turns by
+  themselves, one or several, or each with Shift, turn freely, never in
+  steps (the maintainer, 2026-11-11: a molecule in 3D has no grid to keep
+  to); with a drawing selected they turn in its steps. While it turns, or
+  a selection is dragged, each frame only draws: a structure only carried keeps its
   layout, turned and moved with it, its labels upright beside their atoms,
   and electron-pushing arrows on it are carried likewise; each is laid out
   again once, as it is let go (found on a Surface, 2026-10-24: a turn was
@@ -682,16 +715,17 @@ Both go together, because both touch every layer.
   (2026-10-27), and a style saved before the setting is drawn at the
   spacing.
 - **A hashed wedge's widest hash** stops a hash's clear gap short of a bare
-  atom at its wide end in Meno's own style, the bonds on from the atom
-  starting there on their own (the maintainer, 2026-10-29). In the journals'
-  styles it reaches the atom: none of their specifications says otherwise.
-  The setting is "Hashed wedge: widest hash" (At the atom, Short of the
-  atom). It holds only where bonds go on from the wide end: at a bare end
-  bonded to nothing else, the widest hash is the bond's end in every style,
-  or the wedge would have no end and look short (the maintainer,
-  2026-11-05). At a label the hashes stop at the label in every style. A style
-  saved before the setting reaches the atom, as it was drawn then; a
-  picture draws it as the canvas does.
+  atom at its wide end, the bonds on from the atom starting there on their
+  own: in Meno's own style (the maintainer, 2026-10-29) and, since
+  2026-11-11, in every style - none of the journals' specifications says
+  otherwise - and in a style that says nothing of it, as one saved before
+  the setting (which then draws it short, not at the atom as before). The
+  setting is "Hashed wedge: widest hash" (At the atom, Short of the atom).
+  It holds only where bonds go on from the wide end: at a bare end bonded
+  to nothing else, the widest hash is the bond's end in every style, or the
+  wedge would have no end and look short (the maintainer, 2026-11-05). At a
+  label the hashes stop at the label in every style. A picture draws it as
+  the canvas does.
 - **A bold bond's free end** is square, its corners rounded as a line's end
   is when ends are round - not a half circle (the maintainer, 2026-10-24).
 - **More bond types.** Besides single, double, triple, wedge, hashed wedge and
@@ -714,6 +748,9 @@ Both go together, because both touch every layer.
 - **Rounding is all or nothing.** When ends and joins are round, every end is
   round - double and triple bonds included, which today are not. When they
   are square, every one is square.
+  A wedge's wide end or a bold bar's end, where one bond carries straight on through it, is cut
+  square across and its two corners are rounded like any free corner (they
+  were left sharp).
 - **Units.** Every length can be given in points or as a fraction of the bond
   length, whichever the user prefers.
 - **Scope.** An application default; a document's own style over it; and
@@ -821,6 +858,13 @@ All hover-based, as above.
   that an input method's candidates show there - an input method's
   full-width letters are taken as the ordinary ones once it gives them;
   Cut, Copy, Paste and Select All work on its letters as on words.
+  - **Over an atom selected with others** (2026-11-11), a letter typed
+    begins the label, and the label kept is written on every atom selected,
+    as one undo step: atoms alone - a bond, words or a picture selected with
+    them has none. Typed over an atom that is not selected, or selected
+    alone, or begun from a menu (*Edit label*), it is that atom's alone; the
+    keys that already mean something - Delete, + and -, the bond keys - mean
+    it still.
   - A space typed is seen (2026-10-19: spaces typed were not, and piled
     up unseen): one between letters is set as typed, a run of them as
     wide as it is - a label may be a reagent's name, Grubbs II - and
@@ -1576,6 +1620,28 @@ All hover-based, as above.
     place for them, and does not keep them.
 - Copy and paste, within Meno and between tabs. (PR #68, as above; and
   between Meno and other programs, through the system clipboard.)
+- **One structure of several parts** (the maintainer, 2026-10-30; built
+  2026-11-05). Structures not bonded to one another can be one structure:
+  a salt, a complex, the reactants on one side of an atom map. With two or
+  more selected, the menu offers *Make one structure*. On one of them, it
+  offers *Separate*. Each is one undo step, and nothing moves.
+  - **How it is kept.** A number on its atoms (`Atom.joined`;
+    `utils/joinedParts`). The bonds stay as drawn: nothing reads a bond
+    that is not there.
+  - **What takes it as one:**
+    - *Select this structure*;
+    - copy and paste: a pasted one is given a number of its own, so it
+      joins nothing on the page;
+    - *3D structure*: one molecule in 3D, its parts embedded together and
+      set side by side, as a salt's are (`chem/partsApart`);
+    - a set's entries: one entry, as Combine makes one, its identity and
+      its charge and spin those of all its parts;
+    - an atom map's side.
+  - **What takes it in pieces:** Clean-up lays out each piece as it is, and
+    the parts keep where they stand.
+  - **How the number is kept true.** It is saved with the workspace. A
+    number left on one piece only, after a delete or as read from a file, is
+    dropped.
 
 ### 4a. A layout engine of Meno's own
 
@@ -1689,6 +1755,17 @@ lipids each have their own way of being drawn, which it should know.
        three atoms or fewer (Tröger's base, a quinuclidine, bicyclo[3.3.3]
        at most): it cannot turn over without breaking a bond. A larger cage
        can turn it in and out, and is left free.
+     With an H among its three - carried, or an atom of its own, as every
+     H is in 3D - a P, As, Sb or Bi keeps its configuration as it does
+     without one (a secondary phosphine's P); an N, or an S, Se or Te, never
+     does, its ring, cage or charge notwithstanding (an oxaziridine's N-H, a
+     sulfonium's S+-H) (the maintainer, 2026-11-06). A drawing states a
+     P-H's configuration with its H drawn as an atom: drawn with its H
+     carried and two bonds, the two corners left are each other's mirror
+     image and which holds the H is not drawn, so its wedge states none,
+     and Clean-up says so rather than lose it. A SMILES's [P@H] is
+     still refused: where its H and its lone pair each go in the text's
+     order is not yet measured against the reading libraries.
      An amine's N keeps none. One rule (`lib/chem/lonePairCentres.ts`)
      says which such atoms a drawing's wedge is read at, which a SMILES's @
      is read at, which centres a structure leaves open, and which a

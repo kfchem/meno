@@ -243,8 +243,11 @@ Taken on 2026-10-03:
   - **The selection's handle turns molecules in 3D** (agreed 2026-10-03;
     in the page's plane since 2026-10-24, the maintainer: the handle turns
     round, so it turns them round, as it does a drawing):
-    - selected alone, in the page's plane about the line of sight, in
-      steps of 15 degrees or freely after a pause, as a drawing turns:
+    - selected alone, in the page's plane about the line of sight, freely
+      and never in steps (the maintainer, 2026-11-11: a molecule in 3D has
+      no grid to keep to), the same with Shift, each about its own centre,
+      even with a drawing selected; selected with a drawing, they are
+      carried round with it, in its steps of 15 degrees:
       several as one body about their common middle - so that molecules
       placed together, a complex say, stay as they are to one another -
       which moves them; one about its own centre, where it stands. Either
@@ -537,7 +540,15 @@ Taken on 2026-10-13:
   number of the chemist's own, up to 5000: *Conformers sought*, in
   Settings, *Chemistry*, under *3D*, shown where the plugin chosen there
   takes a number of tries. A workflow's *Conformers* step says its own,
-  this choice its default.
+  this choice its default. Where the plugin's search takes draws, as many
+  as the molecule needs are asked in rounds, until a round brings no new
+  conformer within the chemist's window of the lowest, the most tried, or
+  ten minutes (PLUGINS.md, *As many as the molecule needs, in rounds*):
+  the window, *New conformers within*, Meno's 5 kcal/mol until the
+  chemist gives one (the maintainer's choice, 2026-11-08: a 3D structure
+  is made from fresh Settings with nothing asked first); its first round
+  and most tried are there too. How the rounds ended is said with how it
+  was made.
 - **Conformers kept** (2026-10-26). Those within 30 kcal/mol of the
   lowest are kept; those above are set aside. The window is set in
   Settings, *Chemistry*, under *3D*, and is said with how they were made
@@ -606,9 +617,14 @@ Taken on 2026-10-13:
   no wider (the maintainer, 2026-10-28). Opened, the card first grows to
   it, wider and taller together in 160 ms, and only then do its lines fade
   in, in 120 ms, as gently at first as at the end; shut, they fade out
-  first, the same way, and the card then shrinks back. It widens to the
-  right only as *How it was made* opens, and back, so the toggle at its
-  left stays under the pointer that pressed it.
+  first, the same way, and the card then shrinks back. It widens both
+  ways about its middle as *How it was made* opens, and back, as it does
+  opening at all (the maintainer, 2026-11-06; until then it widened to the
+  right only, the toggle at its left kept under the pointer). Its toggle
+  is a chevron alone, in the middle (the maintainer, 2026-11-06): pointing
+  down, turned up as it opens, it stays under the pointer as the card
+  widens about it; its name, *How it was made*, is said in the page's tip
+  as it is pointed at, shut.
   A frames chip opens to its details the same way. Opened or shut again
   part way, it goes back from where it is (the maintainer, 2026-10-29;
   `theme/opening`). An eta complex's
@@ -1105,6 +1121,13 @@ what it converts, the style's place and its card, and the molecules in
   to undo, eased. A workspace opened in another style is offered it too:
   the card is opened to change its styles (`settingsDiffer`,
   `DocumentStylePanel`).
+- **Opened, drawn in its own style at once** (2026-11-05). A workspace's
+  3D styles come with its molecules as it opens: with nothing drawn in 3D
+  before they came, there is nothing to go over from, and its molecules
+  are made in them at once - not made in the style the canvas had and
+  eased over, each made again at every step and its hollows worked out
+  twice (Workspace/style3d `styleGoesOver`). A change of style on a
+  canvas with molecules on it is eased as before.
 - **A change of style is one command,** from the canvas's Drawing style
   card. It sets the style and converts the page with it, so that every
   object on the page keeps its printed size and its place, and only the
@@ -1123,7 +1146,7 @@ what it converts, the style's place and its card, and the molecules in
   | A shape | x0, y0, x1, y1 | times k; its corners' radius and its line's width in pt are kept - a line as wide as the bonds' as wide as the new style's |
   | Ink | its strokes' points | x and y times k (not the pressure); its width in pt is kept |
   | A workflow step | x, y | times k |
-  | A workflow set | its frame | fitted round what it holds once that has moved (`fitSets`) |
+  | A workflow set | its frame | fitted round what it holds once that has moved (`framesFitted`) |
   | A print frame (later) | its frame | times k |
 
   What is given in points - words' sizes, shapes' weights, ink widths, a
@@ -1324,6 +1347,142 @@ their shade and their key light). A line's least width, picking and the
 pointer's reach are in the screen's own units and do not change. Pictures
 made of the drawing - exported, copied, rendered, a talk's - are drawn at
 their own sizes, whichever is chosen.
+
+## Drawn by WebGL
+
+What is placed on the page is drawn by WebGL, with the page, rather than
+laid over it in HTML (LOOK.md, rule 7): a page of 283 molecules in 3D held
+some 14 700 elements in their chips alone, and laying them out again at
+each frame of a zoom held it to a frame every 0.6 s (2026-11-05). What draws
+it, in `features/Workspace/pageGl/`:
+- **Its lengths** (`units`): in page pixels - a screen pixel at the zoom a
+  canvas opens at (utils/pageScale `PAGE_PX`) - so all of it grows and
+  shrinks with the page, its lines too, never thinner than one device
+  pixel. A control - a port - is its page pixels too, no more than its
+  share of what it belongs to, and never under its least on the screen
+  where the page is far (`Control`; 2026-11-11, the maintainer: a port's
+  dots were far too small zoomed in).
+- **Boxes and rings** (`PageShapes`): one instanced quad each, its shape
+  worked out from its distance to its edge in the fragment shader -
+  rounded corners, a line inside the edge as a CSS inset ring is, solid or
+  dashed - so that thousands are one draw call, smooth at any zoom; the
+  zoom told to the shader each frame, nothing packed again for it. They
+  are packed into the arrays they had while those have room; where more
+  come than those hold, the geometry is disposed before its new arrays
+  are put in, so that every shape is drawn, not only as many as it was
+  first drawn with (`fillShapesGeometry`).
+- **Words** (`PageTexts`): in IBM Plex Sans, the files the app's HTML is set
+  in - Regular from its TrueType file and Medium from IBM's WOFF of it, the
+  forms troika reads - in batches (components/textBatch); each placed by
+  its anchor and cut with an ellipsis past its width, how wide measured as
+  the app's text is measured (`textWidth`), so that what holds it is sized
+  in the same render it is drawn.
+- **Icons** (`PageIcons`): the steps' kinds and states and a warning, drawn
+  once into an atlas as the page's HTML draws them (workflow/icons,
+  Heroicons) and tinted as each is drawn; a part with icons of its own
+  adds them (`addPageIcon`).
+- **What the pointer is over** (`PageHits`, `usePageHits`, `useHitAt`): each
+  part names the places that take the pointer - a rectangle, a circle at
+  the size a hand takes it, a band of screen pixels along a frame's edge -
+  and they are asked before anything else on the canvas, the topmost
+  first, as the page's HTML was over the molecules and the drawing: a press
+  or a move on one is its own. Among circles that both reach the pointer,
+  the nearest; a frame's corner over the sides it joins. A drop asks the
+  same (`useHitAt`) where HTML asked `elementFromPoint`.
+- **Filled shapes** (`PagePolys`): a few polygons - a chip's energy
+  profile through many frames - triangulated again as they change.
+- **What is placed by what moves** (`PagePlaced`, `usePlaced`): a
+  molecule's or a stack's frames chip, hanging below what it is of as that
+  turns - every one drawn at once, each where its anchor is at each frame,
+  drawn again only where one moved, came or went. Its words go with the
+  page's below the size they are read at; one that works the page goes
+  while a talk is given (docs/PRESENTING.md); one opened is drawn over all
+  the rest of the page's WebGL - its neighbours' words, R and S beside
+  their molecules - as its HTML was laid over the rest.
+- **The frames chip** (`liveChip`, components/useFramesChip): shut, pointed
+  at and opened - a set's bars, on whole device pixels, or one profile
+  through a long run of frames; its slider; what its calculation was and
+  found; how it was made, folded under a chevron - laid out as its HTML
+  was, in page pixels, and opened the same way (theme/opening). A press on
+  its bars or its slider shows the frame under it, a drag goes through
+  them. Its words are copied from its menu (Copy, Copy energies), as no
+  words on the page are selected; opened, the workflow's ports under it
+  are not drawn. What goes under it - Make again, a list of results - is
+  HTML still, a control, as far down as the chip is tall.
+- **A conversation's card** (`conversationCard`, `conversationCardParts`,
+  drawn by `conversation/ConversationFrames`): what was said laid in
+  lines at the card's width, by the same rules as the other words on the
+  page - a question in a light ground against the right, a reply's
+  paragraphs, lists and `inline code` (Plex Mono), a tool call on one quiet
+  line, and, last, the changes waiting with their Keep and Discard chips -
+  its total height, and the part of it a scroll offset shows. The card lies
+  against its frame's right edge, 432 page pixels wide (9 bonds), the
+  frame's height less its padding; the ask field at its foot (`askField`,
+  typed into a real field unseen: `PageAsk`) takes 44 page pixels at
+  least, growing to four lines, and the history the rest. A line, a ground or a
+  chip at an edge that more lies past fades over one line as it nears it,
+  never cut in two; its words fade with the page's, and too small to read
+  it says its turns and state alone. It is scrolled by a track, *Earlier*
+  and *Latest* chips and keys (`conversationScroll`), never by the wheel:
+  no region of the page hears one, so a wheel over the card zooms. The
+  frame always holds the card (`framedForCard`: at least `FRAME_LEAST`, its
+  top and right edges kept, as it is put down, sized and opened, drawn
+  eased to it as a set's frame is - `useShownFrames`); the card's room is
+  never scope (`inScope`), what a conversation puts down goes left of it
+  (`placingFrameOf`), and a structure, molecule in 3D or picture let go
+  with its middle on it is eased off, to the left, in the gesture's step
+  (`workflow/fitFrames` `cardsCleared`, part of `framesSettled`).
+- **A workflow** (components/Workflow2D): its steps' cards shut
+  (`cardFace`) - who does it, what and how, its state in words and an icon
+  turning while it runs, a log's last line in Plex Mono and a bar of how
+  far its jobs are; zoomed out where its words are too small to read, in
+  two more bands (`pageGl/cardBands`: by the page's scale, a screen pixel
+  to a page pixel): from three quarters down to a quarter it is *named* -
+  its box at the page's size, its kind's icon and its name on one line
+  (the name 11 screen pixels high at any zoom, cut inside its box, clear
+  of its mark), a mark of its state at its top right (running
+  turns, in Meno's colour; done is filled, in the quiet ink; waiting is
+  hollow; failed is in the alert tone with how many of its entries failed,
+  where it counts them) - and none of its summary, state words, log line,
+  bar or port names; under a quarter it is *marked*: its box tinted by
+  its state, the mark, and its name only where it fits whole inside its
+  box and clear of the mark at both sides - never cut short, never over its
+  box's edge or its mark.
+  Where two names would overlap, the later in reading order fades out
+  (the earlier staying) and the page's tip says it as its card is
+  pointed at. The bands switch with a little hysteresis (5 % each way) and
+  fade over Meno's quick time. A set's tab follows the same rule: its name,
+  11 screen pixels high, stands in for its words (cut inside its frame's
+  width, a tab's inset from each side, and raised over its frame's top where
+  it, and a gap of three screen pixels under it, is higher than its tab's
+  band - wholly above it, far off - never down over, nor touching, what
+  the frame holds, and left out where it would lie over another
+  frame or a card) - laid out as their HTML was, and drawn on under a card
+  opened (HTML still, the one HTML on the page), which alone fades in over
+  it and out off it, so the card is never paler as it opens or shuts; what
+  its card says that a chemist copies - a failure, a program's line -
+  copied from its menu. Its sets' frames and tabs (`FrameTabs`): the tab
+  drags it (its frame is its members' room, never sized by hand), two presses on a chemist's
+  set's tab write its name anew where it stands (`PageField`): drawn in
+  its own size and weight, in a white box, with its caret, what is
+  selected and what an input method is composing underlined; typed into a
+  real field laid unseen at the caret, so that keys, the input method's
+  candidates beside the words, pasting, undoing and a screen reader are
+  the system's own - Enter or a press away keeps it, Escape leaves it as
+  it was; its name, 11 screen pixels high, stands in for its words where
+  they are too small to read (a conversation's tab: its icon); a tab's words start as far from the frame's left edge
+  as its icon stands from its top, a conversation's and a set's alike
+  (`TAB_INSET`); what a set holds (a summary, a table, a chart) is
+  HTML still, inside its frame. Its ports (`ports`): rings that grow with the
+  page, never under 5 screen pixels, lit where a wire being drawn may join them, a wire let
+  go on one found by its shape. And its small marks (`workflowMarks`):
+  what just joined a set or left it, an Enumerate step's positions, a
+  structure's number with how it was made in the tip. Frames under cards
+  under chips under ports, all over the molecules, as their HTML lay.
+- **The hover tip** (components/PageTip): not placed on the page, it may be
+  HTML (LOOK.md, rule 7) - one for all of the page's WebGL: what a mark
+  says, why a chip's bar did not finish, under what it is about or over
+  it, kept where it can be seen.
 
 ## Styles in 3D
 
@@ -1631,13 +1790,34 @@ slowing it - and in the pictures made of it.
   ribbons stand for (the maintainer's choice, 2026-10-13), so a large
   protein in ribbons is drawn lighter as it would be as atoms; those a
   look leaves out otherwise (hydrogens on carbon, water) are not.
-  Its balls are drawn with as many segments as their size on the screen
-  wants (the maintainer, 2026-10-13): the style's 32 from about 40 pixels
-  across, down to 8 under about 8 - within about 0.3 of a pixel of a
-  circle at each, so that the change is not seen; more at once as balls
-  grow, fewer once the zoom has settled (`utils/largeDrawing`
-  `ballSegmentsFor`). A box of 33 000 waters (100 000 atoms) turned at
-  183 ms a frame with 32, and turns at 33 ms.
+- **Balls as fine as their size on the screen needs**, on every canvas,
+  not only a very large drawing (the maintainer, 2026-10-13, for very
+  large drawings; every canvas since 2026-11-05): a molecule's balls are
+  drawn with as many segments as its largest ball's size on the screen
+  wants - the style's 32 from about 40 pixels across, down to 8 under
+  about 8, never more than the style's own - within about 0.3 of a pixel
+  of a circle at each, so that the change is not seen; more at once as
+  balls grow, fewer once the zoom has settled (`utils/largeDrawing`
+  `ballSegmentsFor`). The line round them follows them. What each ball
+  carries - its number, whether it is lined - goes with it to the new
+  number, moved, not shared: the old sphere, let go once the new one is
+  drawn, keeps none of it, so that letting it go takes nothing the new
+  balls draw with (`carriedSphere`; shared, the balls were lost after a
+  change of segments). Its size on the screen is the pixels a unit spans
+  at the molecule for either camera (`pxPerWorld`): the canvas's zoom, or
+  a perspective preview's - Settings' - by how far off the molecule stands. A box of 33 000 waters (100 000 atoms) turned
+  at 183 ms a frame with 32, and turns at 33 ms; a large workflow page,
+  283 molecules in 3D, drew about 17.8 million triangles a frame at Fit,
+  and draws 1.3 million.
+- **Sticks the same.** A molecule's sticks are given as many segments as
+  the widest stick's width on the screen wants - from 8 where thin, up to
+  the style's 32 close up - the fewest that keep its rim within 0.3 of a
+  pixel of a circle, so that a stick close up is round where it enters a
+  ball, not faceted. More at once as they grow, fewer once the zoom has
+  settled; never more than would pass a million triangles between a
+  molecule's sticks, and never under 8 (`utils/largeDrawing`
+  `stickSegmentsFor`). What a bent stick carries - its bend, its colours -
+  goes with it to the new number (`carriedInstanced`).
 - **In pictures too.** A picture of molecules in 3D shades their hollows
   and casts their shadows as the canvas does, with every ball and stick,
   in a finer shadow map, however many atoms; shaded on the screen, at the
@@ -1906,28 +2086,40 @@ same way.
   first. The record shown moved whole, every atom alike, takes its stack
   with it.
 - **Lined up as it is opened** (`alignedRecords`; the maintainer,
-  2026-11-04). Each record that is the same structure as the one before
-  it, atom for atom (`lib/layout/morph` `sameAtoms`: the same elements,
-  charges and labels bonded alike, two Kekulé structures one), is turned
-  about its middle to lie as nearly as it can on that one - moved, never
-  reshaped. It is mirrored where that lies nearer, only where it has no
-  mark a mirror would change: a wedge, a hash, a bold or dashed line, a
-  double bond drawn to one side, a mark put by hand. A record of another
-  structure keeps the file's orientation, and those after it line up on
-  it. Of the ways a symmetric structure matches, the one that moves its
-  atoms least is taken, so a ring turns the least it can.
+  2026-11-04). Each record that shares a core with the one before it is
+  turned about the middle of what they share to lie as nearly as it can on
+  that one - moved, never reshaped:
+  - the same structure, atom for atom (`lib/layout/morph` `sameAtoms`: the
+    same elements, charges and labels bonded alike, two Kekulé structures
+    one);
+  - or analogues, on the largest core they share (`commonAtoms`): connected,
+    its atoms alike and bonded alike in both, no hydrogen in it, holding at
+    least 60 % of the smaller record's other atoms. It is searched as
+    McGregor's backtracking does, a bounded number of steps (20,000 for two
+    records; 50,000 for a whole stack as it opens, shared out among its
+    records), the largest found by then taken.
+
+  It is mirrored where that lies nearer, only where it has no mark a mirror
+  would change: a wedge, a hash, a bold or dashed line, a double bond drawn
+  to one side, a mark put by hand. A record sharing too little keeps the
+  file's orientation, and those after it line up on it. Of the ways a
+  symmetric core lies, the one that lies best, with what is outside it
+  nearest what is outside the other's, then the one that moves its atoms
+  least, so a ring turns the least it can.
 - **Going over** (`StackSwap2D`, 0.42 s, eased). Where the record let go of
-  and the next are one structure atom for atom, each atom goes from where
-  it stood to where it stands in the next, the drawing turned as one the
-  shorter way round and what that leaves of each atom's way taken in a
-  straight line; the next comes in over the first half while the one let
-  go of stays, and that one fades over the second, so what the two share
-  stays solid all the way. Records with nothing to match - another
-  structure, or past 300 atoms - cross where they stand, never growing or
-  shrinking. Steps through a stack faster than one can follow fade alone.
-  Each record is drawn on a layer of its own in the drawing's style, and
-  the drawing draws the next once it is there. The record shown is kept
-  ready on that layer, out of sight, so its labels are set when it goes.
+  and the next share a core, each atom of it goes from where it stood to
+  where it stands in the next, the drawing turned as one the shorter way
+  round and what that leaves of each atom's way taken in a straight line;
+  what either has outside the core rides with it, turned as one with it.
+  The next comes in over the first half while the one let go of stays, and
+  that one fades over the second, so what the two share stays solid all the
+  way, and what differs grows in or fades where it rides. Records sharing
+  too little - or past 300 atoms, or 120 for a core - cross where they
+  stand, never growing or shrinking. Steps through a stack faster than one
+  can follow fade alone. Each record is drawn on a layer of its own in the
+  drawing's style, and the drawing draws the next once it is there. The
+  record shown is kept ready on that layer, out of sight, so its labels are
+  set when it goes.
 - **A grid.** *Lay out as a grid* on a record's menu lays the records out
   round their middle, in rows about as many as its columns, each cell as
   wide as the widest record and as tall as the tallest, two bonds' room
