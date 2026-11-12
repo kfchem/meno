@@ -113,6 +113,42 @@ const count = (digits: string, lowered = 0.4): [string, number, number] => [digi
 /** Whether the atom is marked: the label cut at its end by a level number, which a place cannot tell from a count. */
 const marked = (parts: [string, number, number][], given: (l: string) => boolean = reads) => labelParts(wordsOf(label(parts))[0], given).taken;
 
+describe("the limits of a small number's reading, each one a case either side", () => {
+  const word = (parts: [string, number, number][]) => wordsOf(label(parts))[0];
+
+  it("is clearly high from a quarter of the letter size up: raised 0.15 it is a level number, decided by the reader and said", () => {
+    // (the digit's baseline raised 1.5 points of a 10-point letter: between a tenth and a quarter)
+    const raised = (digits: string): [string, number, number] => [digits, 6.5, 1.5];
+    // (the reader reads O14 as nothing and O: a level number goes - and the atom says so, which a high one would not)
+    expect(labelParts(word([["O", 10, 0], raised("14")]), reads)).toEqual({ text: "O", taken: true });
+    // (and where the label reads with its number it stays, as a count may be set so)
+    expect(labelParts(word([["N", 10, 0], raised("3")]), reads)).toEqual({ text: "N3", taken: false });
+    // (raised more than 0.25: an atom's number whatever the reader says)
+    expect(labelParts(word([["N", 10, 0], ["3", 6.5, 2.6]]), reads)).toEqual({ text: "N", taken: false });
+  });
+
+  it("is a variable's number after its name with primes between: R'1 keeps its 1", () => {
+    expect(read([["R", 10, 0], ["'", 10, 0], ["1", 7.7, 4]], () => false)).toBe("R'1");
+    expect(read([["X", 10, 0], ["\u2032", 10, 0], ["1", 7.7, 4]], () => false)).toBe("X\u20321");
+    // (a prime after a label that is no variable's: its number is an atom's, as before)
+    expect(read([["O", 10, 0], ["'", 10, 0], ["1", 7.7, 4]], () => false)).toBe("O'");
+  });
+
+  it("is high only if every digit of its run is: a run of two with one digit high and one level is told by the reader, as a level run is", () => {
+    // (1 raised 0.4, 4 level: the label O14 reads - a count of two digits - and stays; were it taken high it would go)
+    const readsO14 = (l: string) => l === "O14" || reads(l);
+    expect(labelParts(word([["O", 10, 0], ["1", 6.5, 4], ["4", 6.5, 0]]), readsO14)).toEqual({ text: "O14", taken: false });
+    // (and read as nothing with it, it goes as a level run goes, said)
+    expect(labelParts(word([["O", 10, 0], ["1", 6.5, 4], ["4", 6.5, 0]]), reads)).toEqual({ text: "O", taken: true });
+  });
+
+  it("is judged one run at a time: of two level runs - a prime between - only the one that leaves a label that reads goes", () => {
+    // (O1'2: the reader reads O1' and not O1'2 nor O'2 nor O' - the 2 goes, and the 1 stays, which deciding both at once would not leave)
+    const only = (l: string) => l === "O1'";
+    expect(labelParts(word([["O", 10, 0], ["1", 6.5, 0], ["'", 10, 0], ["2", 6.5, 0]]), only)).toEqual({ text: "O1'", taken: true });
+  });
+});
+
 describe("an atom's number stands at the end of its label, and a number left out by its place is said", () => {
   it("is never left out with a letter of the label after it: inside a label it is a count or the mass number of the next letter", () => {
     // (a reader that reads the label without it and not with it: the counts lowered 0.05 stay)
