@@ -109,7 +109,7 @@ export function flipped(c: Solid): Solid {
  *  - a pyranose: O at 60 degrees (back right), C1 at 0 (right), C2 at -60 (front right), C3 at -120, C4 at 180 (left), C5 at 120;
  *  - a furanose: O at 90 (the back), C1 at 18 (right), C2 at -54, C3 at -126, C4 at 162.
  * The corners of a regular n-gon of side 1 lie on a circle of radius 1/(2 sin(180/n)): 1 for six, 0.85065 for five.
- * McNaught 1996, 2-Carb-5.4 (checked by CHEM): "viewed from slightly above so that the edge closer to the viewer is drawn below the more
+ * McNaught 1996, 2-Carb-5.4 (checked against the text): "viewed from slightly above so that the edge closer to the viewer is drawn below the more
  * distant edge, with the oxygen behind and C-1 at the right-hand end", the numbering then running clockwise; "the ring O at the back right"
  * of a pyranose is not in the words, it follows from them. 2-Carb-5.5 allows other orientations, in all of which the lower edge is still the
  * nearer: this is the tool's standard one, and a reader must not need the O at the back.
@@ -213,7 +213,7 @@ function ringArms(atoms: readonly V3[], bonds: readonly [number, number][], k: n
 const ringBonds = (n: number): [number, number][] => Array.from({ length: n }, (_, k): [number, number] => [k, (k + 1) % n]);
 
 /**
- * The ideal boat, C2v (Moss 1996, *Chair, Boat, Twist*). Calculated by CHEM, 2026-11-13: with bond length 1 and w = sqrt(8/3), the
+ * The ideal boat, C2v (Moss 1996, *Chair, Boat, Twist*). Calculated, 2026-11-13: with bond length 1 and w = sqrt(8/3), the
  * atoms (-1/3, w/2, sqrt(2)/3), (0, 0, 0), (1, 0, 0), (4/3, w/2, sqrt(2)/3), (1, w, 0), (0, w, 0) close exactly - every bond 1, every
  * angle 109.471 degrees, ring torsions 0, -60, 60, 0, -60, 60 - and the two out-of-plane atoms are 5/3 apart. Atoms 0 and 3 are the
  * out-of-plane ones. The axis is the plane's normal, toward the side they lie on. Each atom's two free positions complete its tetrahedron
@@ -330,7 +330,7 @@ export function envelope(): Solid {
  * fusions are mirror conformers of one compound on a bare chair, and different compounds on a ring that already carries a group or another
  * fused ring (cis-syn-cis against cis-anti-cis). Fused again on a ring bond of the result between two atoms that are not fusion atoms, it
  * builds the three-ring systems: on the bond opposite the first fusion perhydroanthracene (two trans fusions come out trans-syn-trans, the one whose
- * middle ring is a chair), on a bond beside it perhydrophenanthrene (trans-anti-trans, the all-chair one: CHEM, 2026-11-13).
+ * middle ring is a chair), on a bond beside it perhydrophenanthrene (trans-anti-trans, the all-chair one).
  * The new ring's free positions are its own; the fusion atoms keep the one place the new ring did not take (the ring-fusion hydrogen's), as the
  * first ring calls it.
  *
