@@ -81,26 +81,56 @@ export function outlineSegments(balls: number, atoms: number, fineMost: number, 
 }
 
 /**
- * A molecule's unit sphere for its balls at `segments` round and from pole
- * to pole, with what each ball carries on the sphere it had (`was`) - its
- * number, whether it is lined, where its number stands: every instanced
- * attribute - moved over, so that going to more or fewer segments changes
- * nothing else of how its balls are drawn. The old sphere keeps none of
- * them: three's dispose of a geometry deletes the buffers of every
- * attribute it still lists, and the old sphere is disposed once the new one
- * has been drawn - shared, the new sphere's balls were left drawing from
- * deleted buffers, and drew nothing.
+ * What a geometry carries per instance - every instanced attribute: a
+ * ball's number, whether it is lined, a stick's bend - moved from `was` to
+ * `to`, so that remaking the geometry at another number of segments changes
+ * nothing else of how it is drawn. `was` keeps none of them: three's dispose
+ * of a geometry deletes the buffers of every attribute it still lists, and
+ * the old geometry is disposed once the new one has been drawn - shared, the
+ * new one's instances were left drawing from deleted buffers, and drew
+ * nothing.
  */
-export function carriedSphere(segments: number, was: THREE.BufferGeometry | null): THREE.SphereGeometry {
-  const g = new THREE.SphereGeometry(1, segments, segments);
+export function carriedInstanced<G extends THREE.BufferGeometry>(to: G, was: THREE.BufferGeometry | null): G {
   if (was) {
     for (const [name, a] of Object.entries(was.attributes)) {
       if (!(a instanceof THREE.InstancedBufferAttribute)) continue;
-      g.setAttribute(name, a);
+      to.setAttribute(name, a);
       was.deleteAttribute(name);
     }
   }
-  return g;
+  return to;
+}
+
+/** A molecule's unit sphere for its balls at `segments` round and from pole to pole, with what each ball carries on the sphere it had (`was`) moved over (`carriedInstanced`). */
+export function carriedSphere(segments: number, was: THREE.BufferGeometry | null): THREE.SphereGeometry {
+  return carriedInstanced(new THREE.SphereGeometry(1, segments, segments), was);
+}
+
+/** How far a stick's rim may stray from a circle on the screen, in pixels: as a ball's (`ballSegmentsFor`). */
+export const STICK_EDGE_PX = 0.3;
+/** The segments round a stick, from the fewest to the most: a ladder, as the balls'. */
+const STICK_STEPS = [8, 12, 16, 24, 32] as const;
+/** How many triangles a molecule's sticks may come to between them: past it their segments are fewer, never under the fewest. */
+export const STICK_TRIANGLES = 1_000_000;
+
+/**
+ * How many segments round each stick of a molecule, by how many pixels
+ * across a stick is on the screen (`acrossPx`): the fewest that keep its rim
+ * within `STICK_EDGE_PX` of a circle - a stick's half width times one less
+ * the cosine of half a segment's angle, as a ball's - from 8 up to 32 as it
+ * grows, so that a stick close up is round where it enters a ball, as
+ * smooth as the balls are. Never more than the style's own (`most`), nor
+ * more than `STICK_TRIANGLES` allow its `sticks` (a stick of n segments is
+ * about 4n triangles, its ends included): a very large drawing stays as
+ * light as it was.
+ */
+export function stickSegmentsFor(acrossPx: number, most: number, sticks: number): number {
+  // (a width that is no number, or none: the fewest)
+  if (!(acrossPx > 0)) return Math.min(most, STICK_STEPS[0]);
+  const rim = (n: number) => (acrossPx / 2) * (1 - Math.cos(Math.PI / n));
+  const wanted = STICK_STEPS.find((n) => rim(n) <= STICK_EDGE_PX) ?? STICK_STEPS[STICK_STEPS.length - 1];
+  const afforded = Math.max(STICK_STEPS[0], Math.floor(STICK_TRIANGLES / (4 * Math.max(sticks, 1))));
+  return Math.min(most, wanted, afforded);
 }
 
 /**

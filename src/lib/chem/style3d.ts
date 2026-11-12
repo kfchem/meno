@@ -119,7 +119,7 @@ export type Scene3D = {
   turnPerHalfWidth: number;
   /** How much of its speed a turn left to itself loses each sixtieth of a second. */
   turnDamping: number;
-  /** How smooth a ball and a bond are: the segments round them. */
+  /** How smooth a ball and a bond are, at the most: the segments round them, fewer where they are small on the screen (utils/largeDrawing). */
   ballSegments: number;
   bondSegments: number;
   /** A surface's colours (an orbital's, a density's): an orbital's positive phase - a density's one - and its negative one. */
@@ -191,7 +191,7 @@ export const SCENE_3D: Scene3D = {
   turnPerHalfWidth: 3,
   turnDamping: 0.1,
   ballSegments: 32,
-  bondSegments: 8,
+  bondSegments: 32,
   // (a muted blue and orange: the maintainer's, 2026-10-05)
   surfacePlus: "#4f7cc4",
   surfaceMinus: "#d98a4b",

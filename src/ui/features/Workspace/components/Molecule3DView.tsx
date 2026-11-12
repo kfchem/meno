@@ -42,7 +42,7 @@ import { dollyAt, dollyMatrix, RISE_ACROSS_FROM, RISE_END, RISE_GROW, RISE_UP } 
 import { chainRuns } from "../../../../lib/chem/biopolymer";
 import { residueOnRay, ribbonMesh, ribbonSpheres, type RibbonSpheres } from "../utils/ribbon";
 import { sameMoleculeProps } from "../utils/moleculeHandlers";
-import { BALLS_NEAR, ballSegmentsFor, ballSegmentsNext, carriedSphere, outlineSegments, pxPerWorld } from "../utils/largeDrawing";
+import { BALLS_NEAR, ballSegmentsFor, ballSegmentsNext, carriedInstanced, carriedSphere, outlineSegments, pxPerWorld, stickSegmentsFor } from "../utils/largeDrawing";
 import { typedValue } from "../utils/typedValue";
 import { raycastCylinders, raycastSpheres } from "./raycast3d";
 import { commitInstanceMatrices } from "./instances";
@@ -426,11 +426,15 @@ function Molecule3DView(props: Molecule3DViewProps) {
   const ballGeo = useRef<THREE.SphereGeometry | null>(null);
   const ballGeometry = useMemo(() => (ballGeo.current = carriedSphere(segments, ballGeo.current)), [segments]);
   useEffect(() => () => ballGeometry.dispose(), [ballGeometry]);
+  // the segments round its sticks, by their size on the screen as its balls' are (utils/largeDrawing `stickSegmentsFor`)
+  const [stickSegments, setStickSegments] = useState(Math.min(style.bondSegments, 8));
   // (by a loop: spread over a hundred thousand atoms, Math.max overruns the stack)
   const biggest = useMemo(() => {
     const most = (r: Float32Array) => r.reduce((a, b) => Math.max(a, b), 0);
     return { primary: most(solid.radii.primary), secondary: most(solid.radii.secondary) };
   }, [solid]);
+  // (its widest stick's radius, in the scene's units: in either look)
+  const widestStick = Math.max(bondRadiusOf(style.primary), bondRadiusOf(style.secondary)) * WORLD_PER_ANGSTROM;
   const ballSizing = useRef({ zoom: 0, since: 0, timer: 0 });
   useEffect(() => () => void (ballSizing.current.timer && window.clearTimeout(ballSizing.current.timer)), []);
   const atomsMat = useRef<THREE.MeshStandardMaterial>(null!);
@@ -494,8 +498,27 @@ function Molecule3DView(props: Molecule3DViewProps) {
   const lineBond = useMemo(() => drawn.bonds.flatMap((b, i) => Array.from({ length: linesOf(b.order) }, () => i)), [drawn.bonds]);
   const bent = useMemo(() => bentLinesOf(drawn, solid), [drawn, solid]);
   const isBent = useMemo(() => (bent ? Uint8Array.from({ length: lineCount }, (_, k) => (bent.includes(k) ? 1 : 0)) : null), [bent, lineCount]);
-  const bentGeometry = useMemo(() => (bent ? bentStickGeometry(style.bondSegments) : null), [bent, style.bondSegments]);
-  const bentHullGeometry = useMemo(() => (bent ? bentStickGeometry(style.bondSegments) : null), [bent, style.bondSegments]);
+  // (made again at another number of segments with what each stick carries - its bend, its colours - moved over: `carriedInstanced`;
+  //  not where the lines that bend are others. Once for each geometry it carries from: a render that runs a memo twice, as React's
+  //  development builds do, keeps its first result, and a second carry would take the attributes from it)
+  const bentMade = useRef<{ bent: unknown; segments: number; stick: THREE.BufferGeometry | null; hull: THREE.BufferGeometry | null }>({ bent: null, segments: 0, stick: null, hull: null });
+  const bentGeometries = useMemo(() => {
+    const made = bentMade.current;
+    if (!bent) {
+      made.stick = made.hull = null;
+      made.bent = null;
+      return { stick: null, hull: null };
+    }
+    // (asked again of the same, no new carrying: what the first asking made)
+    if (made.bent === bent && made.segments === stickSegments && made.stick && made.hull) return { stick: made.stick, hull: made.hull };
+    const was = made.bent === bent ? { stick: made.stick, hull: made.hull } : { stick: null, hull: null };
+    const stick = carriedInstanced(bentStickGeometry(stickSegments), was.stick);
+    const hull = carriedInstanced(bentStickGeometry(stickSegments), was.hull);
+    Object.assign(made, { bent, segments: stickSegments, stick, hull });
+    return { stick, hull };
+  }, [bent, stickSegments]);
+  const bentGeometry = bentGeometries.stick;
+  const bentHullGeometry = bentGeometries.hull;
   const bentHullMat = useMemo(() => {
     return menoShader(new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, toneMapped: false }), "bent-hull", (shader) => withStickBend(shader));
   }, []);
@@ -767,13 +790,19 @@ function Molecule3DView(props: Molecule3DViewProps) {
         bs.since = performance.now();
       }
       const want = ballSegmentsFor(2 * biggest[look] * zoom * gl.getPixelRatio(), style.ballSegments);
-      const next = ballSegmentsNext(want, segments, first ? Infinity : performance.now() - bs.since);
+      const settled = first ? Infinity : performance.now() - bs.since;
+      const next = ballSegmentsNext(want, segments, settled);
+      // (its sticks likewise, by how wide the widest is on the screen)
+      const wantSticks = lineCount > 0 ? stickSegmentsFor(2 * widestStick * zoom * gl.getPixelRatio(), style.bondSegments, lineCount) : stickSegments;
+      const nextSticks = ballSegmentsNext(wantSticks, stickSegments, settled);
       if (next && "now" in next) setSegments(next.now);
-      else if (next && !bs.timer) {
+      if (nextSticks && "now" in nextSticks) setStickSegments(nextSticks.now);
+      const waitMs = Math.min(...[next, nextSticks].map((x) => (x && "waitMs" in x ? x.waitMs : Infinity)));
+      if (Number.isFinite(waitMs) && !bs.timer) {
         bs.timer = window.setTimeout(() => {
           bs.timer = 0;
           invalidate();
-        }, next.waitMs + 5);
+        }, waitMs + 5);
       }
     }
     // another frame: its atoms go there
@@ -1802,14 +1831,14 @@ function Molecule3DView(props: Molecule3DViewProps) {
             }
             onPointerOut={pairResults.length ? () => setHoverBond(null) : undefined}
           >
-            <cylinderGeometry args={[1, 1, 1, style.bondSegments]} />
+            <cylinderGeometry args={[1, 1, 1, stickSegments]} />
             <meshStandardMaterial ref={bondsMat} transparent opacity={1} />
           </instancedMesh>
         )}
         {lineCount > 0 && (
           // (and round every stick)
           <instancedMesh ref={bondLines3d} args={[undefined, outlines.bonds.material, lineCount]} renderOrder={OVER_PAGE} frustumCulled={false} visible={false} raycast={() => {}}>
-            <cylinderGeometry args={[1, 1, 1, style.bondSegments]} />
+            <cylinderGeometry args={[1, 1, 1, stickSegments]} />
           </instancedMesh>
         )}
         {bent && bentGeometry && (
@@ -1907,7 +1936,7 @@ function Molecule3DView(props: Molecule3DViewProps) {
             visible={false}
             raycast={() => {}}
           >
-            <cylinderGeometry args={[1, 1, 1, style.bondSegments]} />
+            <cylinderGeometry args={[1, 1, 1, stickSegments]} />
             <meshBasicMaterial transparent opacity={1} depthWrite={false} toneMapped={false} />
           </instancedMesh>
         )}
@@ -1957,7 +1986,7 @@ function Molecule3DView(props: Molecule3DViewProps) {
             visible={false}
             raycast={() => {}}
           >
-            <cylinderGeometry args={[1, 1, 1, style.bondSegments]} />
+            <cylinderGeometry args={[1, 1, 1, stickSegments]} />
             <meshBasicMaterial color={blue(CHOSEN_BLUE)} transparent opacity={1} depthWrite={false} toneMapped={false} />
           </instancedMesh>
         )}
