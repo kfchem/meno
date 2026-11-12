@@ -436,8 +436,9 @@ argon's symbol as well as aryl's (GR-9.2): typed alone, it is argon; drawn
 with a bond, which argon never has, it is aryl's - written as a label, a
 star atom with its alias, as is any element that forms no bonds (He, Ne)
 drawn with one. Y is yttrium's symbol and a variable's (the maintainer,
-2026-10-17): alone, or with several bonds, it is yttrium; with one bond, in
-a substituent's place, it stands for a group as X and Z do, and a file is
+2026-10-17; the charge CHEM's, 2026-11-13): alone, with several bonds, or with a
+charge (a variable carries none), it is yttrium; with one bond, in a
+substituent's place, it stands for a group as X and Z do, and a file is
 written with it as a label, a star atom with its alias. The groups
 named as an element is - Ac (acetyl), Pr (propyl), Ts (tosyl), Fm
 (fluorenylmethyl), At (HOAt's) - are the groups (the maintainer,

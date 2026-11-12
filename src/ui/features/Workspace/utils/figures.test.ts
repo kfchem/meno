@@ -733,6 +733,11 @@ describe("a figure's Ar and Y: a variable's name that is an element's symbol too
     expect(one.atoms.find((x) => x.el === "Y")?.unsure?.said).toEqual(["Taken as a variable, as X and Z are, not as yttrium: a Y with one bond stands for a group."]);
     expect(symbolsOf(one)).not.toContain("Y");
     expect(symbolsOf(one)).toContain("*");
+    // (a charge says it is the ion: Y+ with its one bond is yttrium's)
+    const charged = chainTo("Y+").atoms.find((x) => x.el === "Y");
+    expect(charged?.charge).toBe(1);
+    expect(charged?.unsure?.said.some((t) => t.startsWith("Taken as a variable")) ?? false).toBe(false);
+    expect(symbolsOf(chainTo("Y+"))).toContain("Y");
     const two = chainTo("Y", 2);
     expect(two.atoms.find((x) => x.el === "Y")?.unsure).toBeUndefined();
     expect(symbolsOf(two)).toContain("Y");
