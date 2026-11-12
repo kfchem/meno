@@ -80,9 +80,11 @@ export function isMenoFile(bytes: Uint8Array): boolean {
  * lists whose bytes are added to it after, from the disk (`listed`: a
  * step's job files, src-tauri keptjobs.rs). Throws, saying why, where it
  * would come to more than a workspace file is read with (`readMenoFile`):
- * a file that would not open again is not written.
+ * a file that would not open again is not written. `mtime` stamps its
+ * entries (a file made again from the same parts - a template - is then the
+ * same bytes); unsaid, each is stamped as it is written.
  */
-export function menoFileBytes(workspace: string, files: readonly KeptData[], listed: readonly KeptFile[] = []): Uint8Array {
+export function menoFileBytes(workspace: string, files: readonly KeptData[], listed: readonly KeptFile[] = [], mtime?: Date): Uint8Array {
   // (a string's UTF-8 is at least as long as the string: one far too long is not turned into bytes to be told so)
   const json = workspace.length <= MOST_WORKSPACE ? strToU8(workspace) : null;
   if (!json || json.length > MOST_WORKSPACE) {
@@ -90,8 +92,8 @@ export function menoFileBytes(workspace: string, files: readonly KeptData[], lis
   }
   const index: Record<string, Omit<KeptFile, "sha256">> = {};
   const entries: Zippable = {
-    mimetype: [strToU8(MENO_MEDIA_TYPE), { level: 0 }],
-    "workspace.json": [json, { level: 0 }],
+    mimetype: [strToU8(MENO_MEDIA_TYPE), { level: 0, ...(mtime ? { mtime } : {}) }],
+    "workspace.json": [json, { level: 0, ...(mtime ? { mtime } : {}) }],
   };
   const kept: Zippable = {};
   let count = 0;
@@ -110,7 +112,7 @@ export function menoFileBytes(workspace: string, files: readonly KeptData[], lis
   }
   if (count > MOST_FILES) throw new Error(`A workspace file keeps at most ${MOST_FILES.toLocaleString("en")} files; this workspace would keep ${count.toLocaleString("en")}.`);
   // (the list of them - a few hundred bytes a file - cannot come near the workspace's limit, which it is read with)
-  entries["files.json"] = [strToU8(JSON.stringify(index, null, 1)), { level: 0 }];
+  entries["files.json"] = [strToU8(JSON.stringify(index, null, 1)), { level: 0, ...(mtime ? { mtime } : {}) }];
   return zipSync({ ...entries, ...kept });
 }
 
