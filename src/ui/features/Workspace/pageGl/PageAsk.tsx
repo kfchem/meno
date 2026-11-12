@@ -219,6 +219,7 @@ export default function PageAsk({
             <textarea
               ref={attach}
               aria-label="Message"
+              data-native-undo=""
               defaultValue={value}
               wrap="off"
               spellCheck={false}

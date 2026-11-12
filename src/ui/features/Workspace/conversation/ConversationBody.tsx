@@ -131,6 +131,7 @@ export default function ConversationBody({ conversation: c }: { conversation: Co
       <div className="px-3 py-2 border-t border-gh-line flex items-end gap-2">
         <textarea
           aria-label="Message"
+          data-native-undo=""
           value={words}
           onChange={(e) => setWords(e.target.value)}
           onKeyDown={(e) => {

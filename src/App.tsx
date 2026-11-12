@@ -30,7 +30,8 @@ import type { PictureToAdd } from "./ui/features/Workspace/store/types";
 import { textTakerOf, type OpenedText } from "./ui/views/texts";
 import type { Action, State, TabInstance } from "./lib/core";
 import type { DocumentStore } from "./lib/doc";
-import { keepClipboard, keepPageUnselected, keepSystemMenuShut, openIntent, undoIntent } from "./lib/doc/shortcuts";
+import { IS_MAC, keepClipboard, keepPageUnselected, keepSystemMenuShut, openIntent, undoIntent } from "./lib/doc/shortcuts";
+import { editFromMenu, editMenuState, tellEditMenu, watchEditMenu } from "./lib/doc/editMenu";
 import { openEachOnce, saverOf, setTabsListed } from "./lib/doc/savers";
 import { useFilesAsked, useOpenAsked } from "./ui/layouts/commands";
 import { isBlankDocument, type WorkspaceDocument } from "./ui/features/Workspace/document";
@@ -216,6 +217,38 @@ export default function App() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
+
+  // The app menu's Edit > Undo and Redo (macOS) do what the keys do (lib/doc/editMenu), and are greyed where the active
+  // tab has none to do - the focus in a field of the browser's own undo leaves both on.
+  useEffect(() => {
+    if (!isTauri() || !IS_MAC) return;
+    return watchEditMenu((command) => {
+      const id = activeIdRef.current;
+      const doc = id ? documentsRef.current.get(id)?.doc : undefined;
+      editFromMenu(command, { active: document.activeElement, doc, field: (c) => document.execCommand(c) });
+    });
+  }, []);
+  useEffect(() => {
+    if (!isTauri() || !IS_MAC) return;
+    const doc = state.activeId ? documentsRef.current.get(state.activeId)?.doc : undefined;
+    let told = "";
+    const tell = () => {
+      const now = editMenuState(doc ? doc.history() : null, document.activeElement);
+      const key = `${now.undo}|${now.redo}`;
+      if (key === told) return;
+      told = key;
+      tellEditMenu(now);
+    };
+    tell();
+    const stop = doc?.subscribe(tell);
+    window.addEventListener("focusin", tell);
+    window.addEventListener("focusout", tell);
+    return () => {
+      stop?.();
+      window.removeEventListener("focusin", tell);
+      window.removeEventListener("focusout", tell);
+    };
+  }, [state.activeId]);
 
   // Ctrl/Cmd+A never selects the app's own words, and Ctrl/Cmd+C with
   // nothing to copy leaves the clipboard alone: see keepPageUnselected and
