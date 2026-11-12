@@ -26,6 +26,7 @@ import type { PythonPlugin } from "../calc/catalog";
 import { counter, ReaderClient } from "../calc/client";
 import { workerQueue } from "./queue";
 import { idleWatch, watchAll } from "./idle";
+import { awake } from "./awake";
 import { liveJobsOf } from "../jobs";
 import { ChemClient } from "../roles/client";
 
@@ -126,7 +127,9 @@ async function start(p: PythonPlugin, mine: () => boolean): Promise<PluginWorker
     chem.handOver(async () => (await workerOf(p)).chem);
   };
   const idle = idleWatch(() => stopIfUnused(p, mine, idle, handOver));
-  const queue = watchAll(held, idle);
+  // (the computer kept awake while it works on a question long: ./awake)
+  const kept = awake.watch();
+  const queue = watchAll(held, idle, kept);
   const reader = new ReaderClient(p.name, transport, undefined, ids, queue);
   const chem = new ChemClient(transport, undefined, p.name, ids, queue);
   const errs: Line[] = [];
@@ -145,6 +148,7 @@ async function start(p: PythonPlugin, mine: () => boolean): Promise<PluginWorker
   const stopExit = await listen<string>("ext:exit", (e) => {
     if (JSON.parse(e.payload).id !== id) return;
     idle.end();
+    kept.end();
     // (gone as it started: why, as it said - a module it could not import, say)
     const told = errs.filter((m) => m.id === id && m.line.trim());
     const why = told.length ? told[told.length - 1].line.trim() : null;
@@ -163,6 +167,7 @@ async function start(p: PythonPlugin, mine: () => boolean): Promise<PluginWorker
   } catch (e) {
     // (not started: nothing left listening)
     idle.end();
+    kept.end();
     unhear();
     throw e;
   }
@@ -178,6 +183,7 @@ async function start(p: PythonPlugin, mine: () => boolean): Promise<PluginWorker
     return { reader, chem, id: worker, version };
   } catch (e) {
     idle.end();
+    kept.end();
     void invoke("ext_kill", { id: worker }).catch(() => undefined);
     throw e;
   }

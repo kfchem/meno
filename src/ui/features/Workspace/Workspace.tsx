@@ -7,6 +7,8 @@ import { canTakeBond, valenceOrder } from "../../../lib/chem/molecule";
 import { usePresentingWindow } from "../../presenting";
 import { typefaceRead } from "../../fonts/typefaces";
 import { Canvas } from "@react-three/fiber";
+import { Vector3 } from "three";
+import type { MenuAnchor } from "./useMenuAt";
 import { useEditor, useEditorStore, EditorProvider } from "./store";
 import { selectedOf, selectionIsAtom } from "./store/slices/selectionSlice";
 import { useStructureEvents } from "./hooks/useStructureEvents";
@@ -226,7 +228,7 @@ import { addedBox } from "./store/slices/modelSlice";
 import { viewPanning } from "./components/viewGoal";
 import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gesture";
 import { Remake3D } from "./components/remake3d";
-import { mapAtoms, mapStanding, reactionOf, unpairedSaid } from "./chem/atomMap";
+import { mapAtoms, mapOffered, mapStanding, reactionOf, unpairedSaid } from "./chem/atomMap";
 import { structuresOf } from "./workflow/entries";
 import { conformerPairs, conformersSaid } from "./chem/structureMaps";
 import { partsOffered } from "./utils/joinedParts";
@@ -1084,6 +1086,33 @@ function WorkspaceContent({
     };
   }, [active, store]);
   const closeQuickAdd = useCallback(() => store.getState().setQuickAdd(null), [store]);
+  // the canvas, for a menu to stand at its point on the page, and the view to ease along for it (useMenuAt)
+  const menuAnchor = useMemo<MenuAnchor>(
+    () => ({
+      project: (at) => {
+        const cam = camRef.current;
+        const r = domRef.current?.getBoundingClientRect();
+        if (!cam || !r) return null;
+        // (the camera as it is now, not as it was last drawn: the menu goes with the page frame by frame)
+        cam.updateMatrixWorld();
+        const v = new Vector3(at.x, at.y, 0).project(cam);
+        return { x: ((v.x + 1) / 2) * r.width, y: ((1 - v.y) / 2) * r.height };
+      },
+      world: (px) => {
+        const r = domRef.current?.getBoundingClientRect();
+        // (it reads the camera and the canvas as they are when asked: the one this render has is as good as any)
+        const p = r && clientToWorld(r.left + px.x, r.top + px.y);
+        return p ?? null;
+      },
+      room: () => {
+        const r = domRef.current?.getBoundingClientRect();
+        return r ? { width: r.width, height: r.height, cover: store.getState().cover } : null;
+      },
+      pan: (dx, dy) => store.getState().requestPan(dx, dy),
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [store],
+  );
   // a molecule in 3D right-clicked: what its menu does to it
   const molecules3d = useEditor((s) => s.molecules3d);
   const chosen3d = useEditor((s) => s.chosen3d);
@@ -1943,6 +1972,7 @@ function WorkspaceContent({
               st.putDownProcedure(id, at.x, at.y);
             }}
             onClose={closeQuickAdd}
+            anchor={menuAnchor}
             onChain={(press) => {
               const { at } = quickAdd;
               store.getState().setQuickAdd(null);
@@ -2121,6 +2151,7 @@ function WorkspaceContent({
         <PartMenu
           key={`${menu.x},${menu.y}`}
           target={menu}
+          anchor={menuAnchor}
           onClose={closeMenu}
           onDelete={() => deleteFromMenu(store.getState(), menu, deletePart)}
           molecule3d={menu3d}
@@ -2586,13 +2617,14 @@ function WorkspaceContent({
               weight: a.weight ?? "regular",
               setWeight: (weight: ArrowWeight | "regular") => set({ weight }),
               ...(a.corners?.length ? { onStraighten: () => set({ corners: null }) } : {}),
-              // (an arrow with a reaction drawn on either side: its atom map)
+              // (an arrow that means a reaction, with one drawn on either side: its atom map - and one made before it came to mean none, said so and taken off)
               ...((() => {
                 const sides = reactionOf(st.model, a, st.pluses);
-                if (!sides.reactants.length || !sides.products.length) return {};
+                if (!mapOffered(a, sides)) return {};
                 return {
                   atomMap: {
                     standing: mapStanding(a, st.model),
+                    onRemove: () => store.getState().setAtomMap(a.id, null),
                     shown: !!a.atomMap?.shown,
                     maps: a.atomMap?.maps.length ?? 0,
                     chosen: a.atomMap?.chosen ?? 0,
@@ -2635,7 +2667,8 @@ function WorkspaceContent({
             const makes = menu.selection === "here" && picked.has(at) && afters.length > 0;
             const maps = st.structureMaps.filter((m) => [...mapAtoms(m.map)].some((id) => before.has(id)));
             const first = maps[0];
-            const standing = first ? mapStanding({ atomMap: first.map }, st.model) : "none";
+            // (a map between structures has no arrow: never refused)
+            const standing = first ? (mapStanding({ atomMap: first.map }, st.model) as Exclude<ReturnType<typeof mapStanding>, "refused">) : "none";
             if (!makes && (!first || standing === "none")) return undefined;
             const ids = maps.map((m) => m.id);
             return {

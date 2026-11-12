@@ -299,6 +299,21 @@ input[type="range"]::-moz-range-thumb {
   border: 1px solid rgb(209, 217, 224);
 }
 
+/* The shadow of a chip the page's HTML draws, as the chip WebGL draws has it (pageGl/chips `CHIP.shadow`: 2 px blur, 1 px down, alpha 0.05). */
+.meno-chip-shadow {
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+}
+
+/* A button of icons - a right-click menu's, Quick Add's - gives under the press: darker than it is hovered, a little smaller,
+   eased in as it is pressed and out as it is let go. Not one that cannot be pressed. */
+.meno-press {
+  transition-property: color, background-color, border-color, box-shadow, transform;
+}
+.meno-press:active:not(:disabled) {
+  background-color: var(--color-gh-line);
+  transform: scale(0.96);
+}
+
 @layer base {
   /* Every button's colours ease as it is hovered, pressed or chosen, rather
      than jump (src/ui/theme/motion.ts). Opacity and movement are left to

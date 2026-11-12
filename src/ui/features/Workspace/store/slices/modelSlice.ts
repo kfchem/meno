@@ -180,14 +180,14 @@ export const createModelSlice = (
     );
   },
 
-  bondOut: (id: number, toward: { x: number; y: number }) => {
+  bondOut: (id: number, toward: { x: number; y: number }, order: Bond["order"] = 1) => {
     const { model } = get();
     const end = newBondFrom(model.atoms, model.bonds, id, toward, bondLengthFrom(model.atoms, id));
     if (!end) return null;
     // (one gesture, one undo step: the atom and its bond together - or the bond alone, onto the atom it ends on)
     const near = get().findAtomNear(end.x, end.y, NOMINAL_BOND_LENGTH * 0.3, id);
-    if (near != null) return get().connectAtoms(id, near, 1) == null ? null : near;
-    return get().addAtomBonded(id, end.x, end.y, "C", 1);
+    if (near != null) return get().connectAtoms(id, near, order) == null ? null : near;
+    return get().addAtomBonded(id, end.x, end.y, "C", order);
   },
 
   findAtomNear: (

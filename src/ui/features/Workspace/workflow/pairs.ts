@@ -72,6 +72,9 @@ export type PairAs = { first: string; second: string; one: string; other: string
 /** A path search's start and end. */
 export const PATH_PAIR: PairAs = { first: "Start", second: "End", one: "start", other: "end", unlike };
 
+/** An Atom map's sides taken in order: the k-th side of *Molecules* onto the k-th of *Reference* - their charge and the rest judged by the map, not here. */
+export const ATOM_MAP_PAIR: PairAs = { first: "Molecules", second: "Reference", one: "side", other: "reference side", unlike: () => null };
+
 /**
  * Why a guess and one of its sides - `other`, "reactant side" - cannot be
  * one saddle point's, taken by its program as a geometry beside it: other

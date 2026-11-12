@@ -11,14 +11,40 @@
  * longer wanted before its turn is dropped.
  */
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { isLocked, markLocked, markUnlocked } from "../doc/locked";
 import { markHad, markNotHad } from "../doc/notHad";
 import { sha256Hex } from "../binary/sha256";
 
-/** A PDF held: what it is known by, its size, and each page's width and height, in points. */
-export type HeldPdf = { sha256: string; size: number; pages: [number, number][] };
+/**
+ * A PDF held: what it is known by, its size, and each page's width and height, in points. One locked with a password it was
+ * not opened with is held too (`locked`): its pages are not known, and it is given one page, as a sheet that stands for them,
+ * until it is opened (`unlockPdf`).
+ */
+export type HeldPdf = { sha256: string; size: number; pages: [number, number][]; locked?: boolean };
 
-/** A PDF held now: had, and so marked as not had no more (lib/doc/notHad). */
-const had = (h: HeldPdf) => (markHad(h.sha256), h);
+/** The sheet a locked PDF lies as: A4, in points - its pages unknown. */
+export const LOCKED_SHEET: [number, number] = [595, 842];
+
+/** A PDF held now: had, and so marked as not had no more (lib/doc/notHad); locked, or no more. */
+const had = (h: HeldPdf): HeldPdf => {
+  markHad(h.sha256);
+  if (!h.locked) {
+    markUnlocked(h.sha256);
+    return h;
+  }
+  markLocked(h.sha256);
+  return { ...h, pages: [LOCKED_SHEET] };
+};
+
+/**
+ * A PDF locked with a password, opened with the one given: it is not locked then, and its pages are known. A wrong one is
+ * refused in words (a rejection with that message). The password goes to Meno's reader and nowhere else.
+ */
+export async function unlockPdf(sha256: string, password: string): Promise<HeldPdf> {
+  const held = await invoke<HeldPdf>("pdf_unlock", { sha: sha256, password });
+  markUnlocked(sha256);
+  return held;
+}
 
 /** A PDF on the disk, held. */
 export const holdPdfPath = (path: string) => invoke<HeldPdf>("pdf_hold_path", { path }).then(had);
@@ -201,6 +227,8 @@ export function linksOf(sha256: string, page: number, came: () => void = () => {
   const key = `${sha256}:${page}`;
   const had = links.get(key);
   if (had && had !== "asked") return had;
+  // (a PDF locked with a password has none to read until it is opened: nothing asked, nothing kept as none)
+  if (isLocked(sha256)) return null;
   if (!had && isTauri()) {
     links.set(key, "asked");
     // (once the PDF is held, if it is being held)

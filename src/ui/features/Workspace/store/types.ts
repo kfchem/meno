@@ -1469,6 +1469,8 @@ export type EditorState = {
   pdfs: PdfItem[];
   /** PDFs held put on the page, as one step: the first where `at` is, the others beside it in a row. */
   addPdfs: (pdfs: { name: string; sha256: string; pages: [number, number][] }[], at: { x: number; y: number }) => void;
+  /** A PDF locked with a password opened with it: each of its items has its pages' real sizes (kept at the next save, no step to undo). */
+  setPdfPages: (sha256: string, pages: [number, number][]) => void;
   /** A PDF moved, its top page's middle to (x, y): one step for a drag (`gesture`). */
   movePdf: (id: number, x: number, y: number, gesture?: string) => void;
   /** Another page on top of a PDF's stack. */
@@ -1861,6 +1863,9 @@ export type EditorState = {
   showRequest: { box: ShowBox; n: number } | null;
   /** The view to show `box`, as what was just put down is shown (`showRequest`). */
   requestShow: (box: ShowBox) => void;
+  /** The page slid on the screen by so many px, right and down where positive: a menu opened past the canvas's edge (menuAt). */
+  panRequest: { dx: number; dy: number; n: number } | null;
+  requestPan: (dx: number, dy: number) => void;
   autoFitSuspended: boolean;
   aromaticEnabled: boolean; // legacy/global
   aromaticRings: Record<string, boolean>; // per-ring enabled flags by ringKey
@@ -1974,9 +1979,9 @@ export type EditorState = {
   connectAtoms: (a: number, b: number, order?: Bond["order"]) => number | null;
   /**
    * One bond out of atom `id`, where there is room (utils/geometry `newBondFrom`, `toward` the pointer), as one undo step:
-   * to the atom its end falls on, where it falls on one, else to a new carbon. The atom it ends at; null where none.
+   * to the atom its end falls on, where it falls on one, else to a new carbon; single, or of `order`. The atom it ends at; null where none.
    */
-  bondOut: (id: number, toward: { x: number; y: number }) => number | null;
+  bondOut: (id: number, toward: { x: number; y: number }, order?: Bond["order"]) => number | null;
   replaceDraggedAtomWith: (movingId: number, targetId: number) => void;
   moveAtom: (id: number, x: number, y: number) => void;
   /**

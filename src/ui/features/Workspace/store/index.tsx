@@ -403,6 +403,7 @@ export function createEditorStore(
     pressHold: null,
     fitNonce: 0,
     showRequest: null,
+    panRequest: null,
     autoFitSuspended: false,
     labelEdit: { active: false, atomId: null, value: "" },
     labelLeft: null,

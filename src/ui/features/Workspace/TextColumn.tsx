@@ -13,6 +13,8 @@ import MarkdownBody from "../TextEditor/MarkdownBody";
 import { isMarkdown } from "../../../lib/text/markdown";
 import { DURATION, EASE_SLIDE, FADE } from "../../theme/motion";
 import { useEditor, useEditorStore } from "./store";
+import { useLocked } from "../../../lib/doc/locked";
+import LockedPdf from "./LockedPdf";
 import type { LostText, PdfFind, PdfItem, PdfLens, PdfStructurePick, WordPlace, WorkflowSet, WorkspaceText } from "./store/types";
 import SetTableBody from "./workflow/SetTableBody";
 import Select from "../../controls/Select";
@@ -222,6 +224,8 @@ function Column({
   const removeLostText = useEditor((s) => s.removeLostText);
   const showPdf = useEditor((s) => s.showPdf);
   const stopReadingPdf = useEditor((s) => s.stopReadingPdf);
+  // (a PDF locked with a password not given: asked for it, where its pages would be read)
+  const locked = useLocked((s) => s.shas);
   const find = useEditor((s) => s.pdfFind);
   const editText = useEditor((s) => s.editText);
   // (a text just made to be written in: given the keys as it shows)
@@ -371,7 +375,7 @@ function Column({
           )}
         </AnimatePresence>
         {talk && <ConversationBody key={`talk-${talk.id}`} conversation={talk} />}
-        {pdf && <PdfBody key={`pdf-${pdf.id}`} pdf={pdf} />}
+        {pdf && (locked.has(pdf.sha256) ? <LockedPdf key={`locked-${pdf.id}`} pdf={pdf} /> : <PdfBody key={`pdf-${pdf.id}`} pdf={pdf} />)}
         {table && (table.collection ? <SetTableBody key={`set-${table.id}`} set={table} /> : <StructuresTableBody key={`set-${table.id}`} set={table} />)}
         {lostShown && (
           <div key={`lost-${lostShown.id}`} role="status" className="absolute inset-0 flex items-start gap-2 px-4 py-3 bg-white text-xs text-gh-black">

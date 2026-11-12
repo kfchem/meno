@@ -13,6 +13,7 @@ import * as THREE from "three";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { flushSync, useFrame, useThree } from "@react-three/fiber";
 import { COLORS } from "../../../theme/colors";
+import { TAU, follow } from "../../../theme/motion";
 import { selFrom, selTo } from "../../../../lib/text/editing";
 import { lineComposing } from "../../../../lib/text/field";
 import { colouringFor } from "../../../../lib/text/colouring";
@@ -20,14 +21,14 @@ import { useKinds } from "../../../../lib/io/kinds";
 import { useEditorStore } from "../store";
 import type { WorkspaceText } from "../store/types";
 import { columnText } from "../../TextEditor/columnText";
-import { GUTTER_PX, PAD_PX } from "../../TextEditor/editor";
+import { BAR_EDGE, BAR_PX, NUMBER_PAD, PAD_PX } from "../../TextEditor/editor";
 import { BAND_PX, INK, LINE_PX, linePicture, PAPER, typeReady, xAt } from "../../TextEditor/linePictures";
 
 /** The column of line numbers: its colour, and its numbers'. */
 const GUTTER = "rgb(246, 248, 250)";
 const NUMBER = "rgb(89, 99, 110)";
-/** How far in from the gutter's right edge its numbers end. */
-const NUMBER_PAD = 8;
+/** How plainly the scroll bars' thumbs show, in the numbers' colour. */
+const BAR_SEEN = 0.4;
 /** What is selected, lit as words selected in a PDF are; less, where the text has not the keys. */
 const SELECTED = 0.3;
 const SELECTED_AWAY = 0.15;
@@ -75,6 +76,22 @@ export default function ColumnText({ text, hidden = false }: { text: WorkspaceTe
     return () => window.clearInterval(t);
   }, [ed, invalidate]);
   const caretRef = useRef<THREE.Mesh>(null);
+  // (the scroll bars' thumbs: in and out of view as the text outgrows its view, or fits it again)
+  const bars = useRef({ v: 0, h: 0 });
+  const barMats = useRef<{ v: THREE.MeshBasicMaterial | null; h: THREE.MeshBasicMaterial | null }>({ v: null, h: null });
+  useFrame((_, dt) => {
+    // (the column of numbers easing to the width its last number needs: all drawn again at each step)
+    if (ed.easeGutter(dt)) ed.onChange();
+    const t = ed.thumbs;
+    for (const k of ["v", "h"] as const) {
+      const to = t[k] ? 1 : 0;
+      const n = follow(bars.current[k], to, Math.min(dt, 1 / 20), TAU.quick);
+      bars.current[k] = Math.abs(n - to) < 0.01 ? to : n;
+      const m = barMats.current[k];
+      if (m) m.opacity = BAR_SEEN * bars.current[k];
+      if (bars.current[k] !== to) invalidate();
+    }
+  });
   useFrame(() => {
     const since = performance.now() - ed.stirred;
     if (caretRef.current) caretRef.current.visible = ed.focused && (since < BLINK_MS || Math.floor(since / BLINK_MS) % 2 === 0);
@@ -89,7 +106,8 @@ export default function ColumnText({ text, hidden = false }: { text: WorkspaceTe
   if (!typeIn || hidden) return null;
   const first = Math.max(0, Math.floor(ed.scrollTop / LINE_PX));
   const last = Math.min(ed.lines.count - 1, Math.floor((ed.scrollTop + ed.viewH) / LINE_PX));
-  const left = GUTTER_PX + PAD_PX - ed.scrollLeft;
+  const gutter = ed.gutter;
+  const left = gutter + PAD_PX - ed.scrollLeft;
   const comp = ed.composing;
   const compLine = comp ? ed.lines.at(comp.from) : -1;
   const out: ReactNode[] = [];
@@ -161,15 +179,29 @@ export default function ColumnText({ text, hidden = false }: { text: WorkspaceTe
     );
   }
   // the line numbers, over what has scrolled under them
-  box("gutter", 0, 0, GUTTER_PX, ed.viewH, GUTTER, 1, 4);
+  box("gutter", 0, 0, gutter, ed.viewH, GUTTER, 1, 4);
   for (let i = first; i <= last; i++) {
     const p = linePicture(String(i + 1), 0, dpr, NUMBER, GUTTER);
     if (!p) continue;
     out.push(
-      <mesh key={`n${i}`} geometry={plane} position={at(GUTTER_PX - NUMBER_PAD - p.w, ed.topOf(i), p.w, p.h)} scale={[p.w, p.h, 1]} renderOrder={5}>
+      <mesh key={`n${i}`} geometry={plane} position={at(gutter - NUMBER_PAD - p.w, ed.topOf(i), p.w, p.h)} scale={[p.w, p.h, 1]} renderOrder={5}>
         <meshBasicMaterial map={p.texture} depthTest={false} depthWrite={false} toneMapped={false} />
       </mesh>,
     );
   }
+  // the scroll bars: a thumb down the right edge, and along the bottom beside the numbers
+  const thumbs = ed.thumbs;
+  const v = thumbs.v ?? { start: 0, len: 0 };
+  const h = thumbs.h ?? { start: 0, len: 0 };
+  const vAt = at(ed.viewW - BAR_EDGE - BAR_PX, v.start, BAR_PX, v.len);
+  const hAt = at(h.start, ed.viewH - BAR_EDGE - BAR_PX, h.len, BAR_PX);
+  out.push(
+    <mesh key="barV" geometry={plane} position={vAt} scale={[BAR_PX, v.len || 1, 1]} visible={!!thumbs.v || bars.current.v > 0} renderOrder={6}>
+      <meshBasicMaterial ref={(m) => void (barMats.current.v = m)} color={NUMBER} transparent opacity={BAR_SEEN * bars.current.v} depthTest={false} depthWrite={false} toneMapped={false} />
+    </mesh>,
+    <mesh key="barH" geometry={plane} position={hAt} scale={[h.len || 1, BAR_PX, 1]} visible={!!thumbs.h || bars.current.h > 0} renderOrder={6}>
+      <meshBasicMaterial ref={(m) => void (barMats.current.h = m)} color={NUMBER} transparent opacity={BAR_SEEN * bars.current.h} depthTest={false} depthWrite={false} toneMapped={false} />
+    </mesh>,
+  );
   return <>{out}</>;
 }

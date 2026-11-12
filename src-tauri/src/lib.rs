@@ -1182,6 +1182,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(ProcState(Mutex::new(HashMap::new())))
         .manage(net::Net::default())
+        .manage(jobs::WorkerAwake::default())
         .manage(model::Models::new(Box::new(model::SystemKeys)))
         .manage(pdf::PdfState::default())
         .manage(update::Updates::new(version))
@@ -1189,6 +1190,14 @@ pub fn run() {
         .manage(windowstate::Kept::default())
         // (the main window's size and place kept as it moves, resizes and closes: windowstate.rs)
         .on_window_event(windowstate::on_event)
+        // (its page loaded anew - reloaded while a worker held the computer awake - holds nothing yet: let go)
+        .on_page_load(|webview, payload| {
+            if payload.event() == tauri::webview::PageLoadEvent::Started && webview.label() == "main" {
+                if let Some(state) = webview.try_state::<jobs::WorkerAwake>() {
+                    jobs::worker_let_go(&state);
+                }
+            }
+        })
         .setup(move |app| {
             // the main window, made here rather than from tauri.conf.json (its "create" is
             // false): on Windows its pinch is let through before its page first loads (pinch.rs) -
@@ -1251,6 +1260,7 @@ pub fn run() {
             logfile::log_page,
             logfile::log_spot,
             pdf::pdf_hold_path,
+            pdf::pdf_unlock,
             pdf::pdf_hold_bytes,
             pdf::pdf_make,
             pdf::pdf_bytes,
@@ -1341,6 +1351,7 @@ pub fn run() {
             jobs::jobs_clear_finished,
             jobs::computer_resources,
             jobs::jobs_limits,
+            jobs::worker_awake,
             jobs::jobs_folder,
             jobs::jobs_folder_choose,
             jobs::job_digest,

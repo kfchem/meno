@@ -195,43 +195,68 @@ pub async fn download(url: &str, proxy: &str, most: u64) -> Result<Vec<u8>, Stri
     if rustls::crypto::CryptoProvider::get_default().is_none() {
         let _ = rustls::crypto::ring::default_provider().install_default();
     }
-    let client = reqwest::Client::builder()
-        .user_agent(concat!("Meno/", env!("CARGO_PKG_VERSION")))
-        .proxy(reqwest::Proxy::all(proxy).map_err(|e| format!("proxy: {e}"))?)
-        .build()
-        .map_err(|e| format!("client: {e}"))?;
-    fetch(&client, url, most, ASKED_AGAIN_AFTER).await
+    let proxy = reqwest::Proxy::all(proxy).map_err(|e| format!("proxy: {e}"))?;
+    let client = client_for(Some(proxy), CONNECT_MOST, SILENT_MOST)?;
+    fetch(&client, url, most, &ASKED_AGAIN_AFTER).await
 }
 
-/// How long Meno waits before asking a server that failed (a 5xx) once more.
-const ASKED_AGAIN_AFTER: std::time::Duration = std::time::Duration::from_secs(2);
+/// The client a download is fetched by, through `proxy` (Meno's own, its network watched): a server that takes the
+/// connection and then says nothing is given up on after `silent`, and asked again - never waited on without end; a
+/// slow line's large file still comes, as long as it keeps coming.
+fn client_for(proxy: Option<reqwest::Proxy>, connect: std::time::Duration, silent: std::time::Duration) -> Result<reqwest::Client, String> {
+    let builder = reqwest::Client::builder().user_agent(concat!("Meno/", env!("CARGO_PKG_VERSION"))).connect_timeout(connect).read_timeout(silent);
+    let builder = match proxy {
+        Some(p) => builder.proxy(p),
+        None => builder.no_proxy(),
+    };
+    builder.build().map_err(|e| format!("client: {e}"))
+}
+
+/// How long Meno waits before asking a server that failed once more - a 5xx, which a busy one gives now and then,
+/// or a connection that failed or went silent - and again: three asks in all, over some seconds.
+const ASKED_AGAIN_AFTER: [std::time::Duration; 2] = [std::time::Duration::from_secs(2), std::time::Duration::from_secs(5)];
+/// How long a connection may take to be made, and how long one made may go with nothing coming, before it is given up.
+const CONNECT_MOST: std::time::Duration = std::time::Duration::from_secs(30);
+const SILENT_MOST: std::time::Duration = std::time::Duration::from_secs(60);
 
 /// `url`'s body, by `client`, within `most` bytes. A server that fails - a
-/// 5xx, which a busy one gives now and then - is asked once more after
-/// `wait`; failing again, it is said in words, by its host, with what to do
-/// - never left as the client's own error, nor asked of without end.
-async fn fetch(client: &reqwest::Client, url: &str, most: u64, wait: std::time::Duration) -> Result<Vec<u8>, String> {
-    let mut again = true;
+/// 5xx - or a connection that fails or goes silent before it answers, is asked again after
+/// each of `waits`; failing still, it is said in words, by the host that
+/// answered (the one it was sent on to, where it was), with what to do -
+/// never left as the client's own error, nor asked of without end. A
+/// refusal of the server's own (a 4xx) is not asked again.
+async fn fetch(client: &reqwest::Client, url: &str, most: u64, waits: &[std::time::Duration]) -> Result<Vec<u8>, String> {
+    let mut waits = waits.iter();
     loop {
-        let response = client.get(url).send().await.map_err(|e| format!("fetching {url}: {e}"))?;
+        let response = match client.get(url).send().await {
+            Ok(r) => r,
+            Err(e) if e.is_connect() || e.is_timeout() || e.is_request() => match waits.next() {
+                Some(wait) => {
+                    tokio::time::sleep(*wait).await;
+                    continue;
+                }
+                None => return Err(format!("fetching {url}: {e}, and when Meno asked again: try again in a minute")),
+            },
+            Err(e) => return Err(format!("fetching {url}: {e}")),
+        };
         let status = response.status();
         if status.is_server_error() {
-            if std::mem::take(&mut again) {
-                tokio::time::sleep(wait).await;
+            if let Some(wait) = waits.next() {
+                tokio::time::sleep(*wait).await;
                 continue;
             }
-            return Err(server_failed(url, status));
+            return Err(server_failed(response.url().as_str(), status));
         }
         let response = response.error_for_status().map_err(|e| format!("fetching {url}: {e}"))?;
         return body_within(response, url, most).await;
     }
 }
 
-/// A server that failed twice, in words: by its host, and what it said.
+/// A server that failed each time it was asked, in words: by its host, and what it said.
 fn server_failed(url: &str, status: reqwest::StatusCode) -> String {
     let host = reqwest::Url::parse(url).ok().and_then(|u| u.host_str().map(str::to_string)).unwrap_or_else(|| url.to_string());
     let said = status.canonical_reason().map_or_else(|| status.as_u16().to_string(), |r| format!("{} {r}", status.as_u16()));
-    format!("{host} could not answer just then ({said}), nor when Meno asked once more: try again in a minute")
+    format!("{host} could not answer just then ({said}), nor when Meno asked again: try again in a minute")
 }
 
 /// A response's body, read piece by piece as it comes, never more than
@@ -521,31 +546,111 @@ mod tests {
     }
 
     #[test]
-    fn a_server_that_fails_is_asked_again_two_seconds_later() {
-        // (what `download` waits before asking once more: the test below waits 10 ms, as it may)
-        assert_eq!(ASKED_AGAIN_AFTER, std::time::Duration::from_secs(2));
+    fn a_server_that_fails_is_asked_again_two_then_five_seconds_later() {
+        // (what `download` waits before asking again: the test below waits 10 ms, as it may)
+        let s = std::time::Duration::from_secs;
+        assert_eq!(ASKED_AGAIN_AFTER, [s(2), s(5)]);
+        assert_eq!((CONNECT_MOST, SILENT_MOST), (s(30), s(60)));
     }
 
     #[tokio::test]
-    async fn a_server_that_fails_is_asked_once_more_then_said_in_words() {
+    async fn a_server_that_fails_is_asked_twice_more_then_said_in_words() {
         if rustls::crypto::CryptoProvider::get_default().is_none() {
             let _ = rustls::crypto::ring::default_provider().install_default();
         }
         let client = reqwest::Client::new();
-        let wait = std::time::Duration::from_millis(10);
-        // (it failed once, as GitHub now and then does: asked again, and got)
-        let (url, server) = answering(vec![502, 200]).await;
-        assert_eq!(fetch(&client, &url, 1000, wait).await.unwrap(), b"the list");
-        assert_eq!(server.await.unwrap(), 2);
-        // (failed twice: said by its host, what it said, and what to do - asked no more)
-        let (url, server) = answering(vec![503, 502, 200]).await;
-        let said = fetch(&client, &url, 1000, wait).await.unwrap_err();
-        assert_eq!(said, "127.0.0.1 could not answer just then (502 Bad Gateway), nor when Meno asked once more: try again in a minute");
+        let wait = [std::time::Duration::from_millis(10); 2];
+        // (it failed, as GitHub now and then does - a 504 twice: asked again, and got)
+        let (url, server) = answering(vec![504, 504, 200]).await;
+        assert_eq!(fetch(&client, &url, 1000, &wait).await.unwrap(), b"the list");
+        assert_eq!(server.await.unwrap(), 3);
+        // (failed each time: said by its host, what it said, and what to do - asked no more)
+        let (url, server) = answering(vec![503, 502, 504, 200]).await;
+        let said = fetch(&client, &url, 1000, &wait).await.unwrap_err();
+        assert_eq!(said, "127.0.0.1 could not answer just then (504 Gateway Timeout), nor when Meno asked again: try again in a minute");
         server.abort();
         // (a refusal of its own - not found - is not asked again)
-        let (url, server) = answering(vec![404, 200]).await;
-        assert!(fetch(&client, &url, 1000, wait).await.unwrap_err().contains("404"));
-        server.abort();
+        let (url, server) = answering(vec![404]).await;
+        assert!(fetch(&client, &url, 1000, &wait).await.unwrap_err().contains("404"));
+        assert_eq!(server.await.unwrap(), 1);
+    }
+
+    #[tokio::test]
+    async fn a_connection_that_fails_is_asked_again() {
+        if rustls::crypto::CryptoProvider::get_default().is_none() {
+            let _ = rustls::crypto::ring::default_provider().install_default();
+        }
+        let client = reqwest::Client::new();
+        let wait = [std::time::Duration::from_millis(10); 2];
+        // (a server that takes the first two connections and closes them unanswered, then answers)
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/list.json", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            for k in 0..3 {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut head = [0u8; 4096];
+                let _ = socket.read(&mut head).await;
+                if k == 2 {
+                    let _ = socket.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 8\r\nConnection: close\r\n\r\nthe list").await;
+                }
+            }
+        });
+        assert_eq!(fetch(&client, &url, 1000, &wait).await.unwrap(), b"the list");
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_server_that_says_nothing_is_given_up_on_and_asked_again() {
+        if rustls::crypto::CryptoProvider::get_default().is_none() {
+            let _ = rustls::crypto::ring::default_provider().install_default();
+        }
+        // (the client as a download builds it, its silence short for the test)
+        let client = client_for(None, CONNECT_MOST, std::time::Duration::from_millis(200)).unwrap();
+        let wait = [std::time::Duration::from_millis(10); 2];
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/list.json", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            // (the first connection taken, read, and left without a word; the second answered)
+            let (mut first, _) = listener.accept().await.unwrap();
+            let mut head = [0u8; 4096];
+            let _ = first.read(&mut head).await;
+            let (mut second, _) = listener.accept().await.unwrap();
+            let _ = second.read(&mut head).await;
+            let _ = second.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 8\r\nConnection: close\r\n\r\nthe list").await;
+            drop(first);
+        });
+        let got = tokio::time::timeout(std::time::Duration::from_secs(10), fetch(&client, &url, 1000, &wait)).await;
+        assert_eq!(got.expect("a silent server was waited on without end").unwrap(), b"the list");
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_server_that_hands_on_is_named_by_the_host_that_answered() {
+        if rustls::crypto::CryptoProvider::get_default().is_none() {
+            let _ = rustls::crypto::ring::default_provider().install_default();
+        }
+        let client = reqwest::Client::new();
+        // (the address asked sends it on to another host - "localhost" - which fails each time)
+        let (there, server) = answering(vec![504, 504, 504]).await;
+        let there = there.replace("127.0.0.1", "localhost");
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/list.json", listener.local_addr().unwrap());
+        let hands_on = tokio::spawn(async move {
+            for _ in 0..3 {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut head = [0u8; 4096];
+                let _ = socket.read(&mut head).await;
+                let reply = format!("HTTP/1.1 302 Found\r\nLocation: {there}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                let _ = socket.write_all(reply.as_bytes()).await;
+            }
+        });
+        let said = fetch(&client, &url, 1000, &[std::time::Duration::from_millis(10); 2]).await.unwrap_err();
+        assert!(said.starts_with("localhost could not answer just then (504 Gateway Timeout)"), "{said}");
+        hands_on.await.unwrap();
+        server.await.unwrap();
     }
 
     async fn direct(url: &str) -> Vec<u8> {
