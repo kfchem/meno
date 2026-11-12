@@ -171,3 +171,14 @@ describe("the names the page and the app share with the menu's Rust side (src-ta
 function tellSource(): string {
   return readFileSync(join(process.cwd(), "src/lib/doc/editMenu.ts"), "utf8");
 }
+
+describe("the text boxes whose words are not the document's keep the browser's own undo, in the menu as with the keys", () => {
+  // (a text box the document backs - the column of texts - is the one kind that does not: its undo is the document's)
+  const own = ["src/ui/features/Workspace/pageGl/PageAsk.tsx", "src/ui/features/Workspace/conversation/ConversationBody.tsx", "src/ui/options/OptionsForm.tsx"];
+  it.each(own)("%s", (file) => {
+    const source = readFileSync(join(process.cwd(), file), "utf8");
+    const boxes = [...source.matchAll(/<textarea\b[^>]*>/g)].map((m) => m[0]);
+    expect(boxes.length).toBeGreaterThan(0);
+    for (const box of boxes) expect(box).toContain('data-native-undo=""');
+  });
+});
