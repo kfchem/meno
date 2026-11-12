@@ -475,7 +475,7 @@ describe("conformers made for the page", () => {
     asked.length = 0;
     await conformersOnPage(chem, stereo, block, "one", {}, settings, { window: 3, first: 10, most: MOST_CONFORMERS }).catch(() => undefined);
     expect(asked.length).toBeGreaterThan(0);
-    expect(asked.every((a) => a.options.threads === 5)).toBe(true);
+    expect(asked.every((a) => a.options.threads === 5 && a.draw != null)).toBe(true);
     vi.unstubAllGlobals();
   });
 
