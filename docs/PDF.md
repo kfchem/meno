@@ -1367,10 +1367,22 @@ it where it lies out of view.
   WebKit prints one), and digits set high before the element its isotope's mass
   number (13C, 18F, 2H); a count set low before any letter - the H of an
   H3N left outside the box - is no one's. A number set smaller than the
-  label's letters, after the first of them, level with them or high, with
-  no charge's sign after it, is a locant - the small atom numbers a drawing
-  sets by its atoms ("Me" and its 7) - and no part of the label (2026-11-13);
-  an R group's number (R1) is part of its name. A charge drawn in a small circle - a "+" or a "-" in a ring,
+  label's letters, after the first of them, is an atom's number - the small
+  atom numbers a drawing sets by its atoms ("Me" and its 7) - and no part of
+  the label (2026-11-13), by three rules. (1) After the name of a point of
+  variability the number stays, high or level: the name is the unit just
+  before the digit, not the whole label (R1, X1, Ar1, Het1, OR2, NR1R2,
+  CO2R1, OAr1; the names are `VARIABLE_NAMES`, lib/chem/abbreviations, after
+  Brecher 2008, GR-9.1 and 9.2, with Meno's own class symbols; B and P stay
+  elements, so B1 and P1 lose their number - a stated limit). (2) A digit
+  set clearly high - a quarter of the letter size or more - with no charge's
+  sign after it, is an atom's number: a count is never set high. (3) A digit
+  set about level or a little low cannot be told by its place, for a
+  subscript is drawn so by many papers: it is left out only where the label
+  reads as nothing with it and reads without it (Meno's label reader decides:
+  O14, Me7, C7, N1 and H3 lose theirs; CH2Cl2, K2CO3, Et3N, N3 and CO2Me
+  keep theirs). A level number that also reads as a count stays (N3, O3, Me2:
+  a stated limit). A charge drawn in a small circle - a "+" or a "-" in a ring,
   as Meno draws one and as many papers do - is the charge of the atom it is
   by, however the page is turned and where a box drawn across it cuts some
   of its ring off; never a bond, nor a scheme's "+". A lone H at no

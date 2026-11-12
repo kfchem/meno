@@ -96,21 +96,86 @@ function label(parts: [string, number, number][], x = 100, y = 100): FigureLette
     }),
   );
 }
-const read = (parts: [string, number, number][]) => {
+/** Labels that read as an atom or a group, as Meno's label reader says (a stand-in for it: made labels only). */
+const READS = new Set(["O", "Me", "C", "N", "H", "CH2", "CH2Cl2", "K2CO3", "Et3N", "EtN", "H2O", "N3", "NH2", "CO2Me", "CF3", "Ca2+", "13C", "OR", "NRR", "Ca12+", "S2-", "O+", "CMe", "O4", "S", "OMe"]);
+const reads = (l: string) => READS.has(l);
+const read = (parts: [string, number, number][], given: (l: string) => boolean = reads) => {
   const words = wordsOf(label(parts));
   expect(words).toHaveLength(1);
-  return labelText(words[0]);
+  return labelText(words[0], given);
 };
 
-describe("a locant beside an atom's label (the small atom numbers of a drawing)", () => {
-  it("is no part of the label: a number set small and high after its letters - Me7, O14 - is left out", () => {
+// (sizes and offsets in letter sizes: a variable's number is 0.77 of a letter, set 0.4 high; a count 0.65, lowered 0.04 to 0.09; a locant
+//  high is 0.6 and 0.4 high - the lines of label() are 10 points: size 7.7 and up 4, size 6.5 and up -0.4 or -0.9)
+const number = (digits: string): [string, number, number] => [digits, 7.7, 4];
+const count = (digits: string, lowered = 0.4): [string, number, number] => [digits, 6.5, -lowered];
+
+describe("a number beside an atom's label (the small atom numbers of a drawing)", () => {
+  it("is an atom's number, left out, where it is set clearly high: Me7, O14, C7, N1, H3 - and N3 with its 3 set high, an atom's number and no azide", () => {
     expect(read([["Me", 10, 0], ["7", 6, 4]])).toBe("Me");
     expect(read([["O", 10, 0], ["14", 6, 4]])).toBe("O");
-    // (level with them, smaller: as a locant is set beside a label)
-    expect(read([["Me", 10, 0], ["7", 6.5, 0]])).toBe("Me");
+    expect(read([["C", 10, 0], number("7")])).toBe("C");
+    expect(read([["N", 10, 0], number("1")])).toBe("N");
+    expect(read([["H", 10, 0], number("3")])).toBe("H");
+    expect(read([["N", 10, 0], number("3")])).toBe("N");
+    // (set high whether or not a reader is there to ask: a count is never set high)
+    expect(read([["O", 10, 0], ["14", 6, 4]], () => true)).toBe("O");
   });
 
-  it("is a run of digits, whatever its length, dropped together - and kept, all of it, where a charge's sign follows the run", () => {
+  it("is left out, set level and smaller, only where the label reads as nothing with it and reads without it: O14 and Me7", () => {
+    expect(read([["Me", 10, 0], ["7", 6.5, 0]])).toBe("Me");
+    expect(read([["O", 10, 0], ["14", 6.5, 0]])).toBe("O");
+    // (and kept where the label reads with it, or does not read without it)
+    expect(read([["N", 10, 0], ["3", 6.5, 0]])).toBe("N3");
+    expect(read([["Zz", 10, 0], ["7", 6.5, 0]])).toBe("Zz7");
+    // (no reader to ask: kept)
+    expect(read([["Me", 10, 0], ["7", 6.5, 0]], () => true)).toBe("Me7");
+  });
+
+  it("keeps a count set a little low, as a subscript is drawn: CH2Cl2, K2CO3, Et3N, H2O, N3, NH2, CO2Me, CF3 - lowered 0.04 and 0.09 of the letter size", () => {
+    for (const lowered of [0.4, 0.9]) {
+      expect(read([["CH", 10, 0], count("2", lowered), ["Cl", 10, 0], count("2", lowered)])).toBe("CH2Cl2");
+      expect(read([["K", 10, 0], count("2", lowered), ["CO", 10, 0], count("3", lowered)])).toBe("K2CO3");
+      expect(read([["Et", 10, 0], count("3", lowered), ["N", 10, 0]])).toBe("Et3N");
+      expect(read([["H", 10, 0], count("2", lowered), ["O", 10, 0]])).toBe("H2O");
+      expect(read([["N", 10, 0], count("3", lowered)])).toBe("N3");
+      expect(read([["NH", 10, 0], count("2", lowered)])).toBe("NH2");
+      expect(read([["CO", 10, 0], count("2", lowered), ["Me", 10, 0]])).toBe("CO2Me");
+      expect(read([["CF", 10, 0], count("3", lowered)])).toBe("CF3");
+    }
+    // (a count lowered a quarter of the letter size: never taken for a locant, whatever the reader says)
+    expect(read([["NH", 10, 0], ["2", 7, -2.5]], () => false)).toBe("NH2");
+  });
+
+  it("is a variable's number, kept - high or level - after the name of a point of variability: R1, R1', X1, Y1, Z1, G1, Ar1, Het1, HetAr1, PG1, Nu1, E1, EWG1, M1, L1, Q1, A1, Alk1", () => {
+    const names = ["R", "X", "Y", "Z", "G", "Ar", "Aryl", "Het", "HetAr", "PG", "LG", "Nu", "E", "EWG", "EDG", "M", "L", "Q", "A", "Alk", "Alkyl", "Hal"];
+    for (const name of names) {
+      expect(read([[name, 10, 0], number("1")], () => false), name).toBe(`${name}1`);
+      expect(read([[name, 10, 0], ["2", 6.5, 0]], () => false), name).toBe(`${name}2`);
+    }
+    expect(read([["R", 10, 0], number("1"), ["'", 10, 0]], () => false)).toBe("R1'");
+  });
+
+  it("keeps a variable's number inside a label: OR1, OR2, NR1R2, OAr1, R2O, CO2R1", () => {
+    expect(read([["OR", 10, 0], number("2")], () => false)).toBe("OR2");
+    expect(read([["OR", 10, 0], number("1")], () => false)).toBe("OR1");
+    expect(read([["NR", 10, 0], number("1"), ["R", 10, 0], number("2")], () => false)).toBe("NR1R2");
+    expect(read([["OAr", 10, 0], number("1")], () => false)).toBe("OAr1");
+    expect(read([["R", 10, 0], number("2"), ["O", 10, 0]], () => false)).toBe("R2O");
+    expect(read([["CO", 10, 0], count("2", 2.5), ["R", 10, 0], number("1")], () => false)).toBe("CO2R1");
+    // (B and P stay elements: their number is a locant - a stated limit)
+    expect(read([["B", 10, 0], number("1")], () => false)).toBe("B");
+    expect(read([["P", 10, 0], number("1")], () => false)).toBe("P");
+  });
+
+  it("is the unit just before the digit that is a name: a name's letters at the end of a longer one are not it", () => {
+    // (Me, Ge, Cl and the like end in a letter that is a name by itself, and are not: the name is a capital with its small letters)
+    expect(read([["Me", 10, 0], number("7")], () => false)).toBe("Me");
+    expect(read([["Ge", 10, 0], number("2")], () => false)).toBe("Ge");
+    expect(read([["Cl", 10, 0], number("1")], () => false)).toBe("Cl");
+  });
+
+  it("is a run of digits, whatever its length, left out together - and kept, all of it, where a charge's sign follows the run", () => {
     expect(read([["O", 10, 0], ["14", 6, 4]])).toBe("O");
     expect(read([["O", 10, 0], ["123", 6, 4]])).toBe("O");
     // (a charge's digits, a sign after them in any of its forms: plus, hyphen, minus, en dash)
@@ -127,12 +192,11 @@ describe("a locant beside an atom's label (the small atom numbers of a drawing)"
     expect(read([["C", 10, 0], ["1", 6, 4], ["Me", 10, 0]])).toBe("CMe");
   });
 
-  it("leaves what a label's own numbers are: a count set low, a charge's digit, a mass number, an R group's number", () => {
+  it("leaves what a label's own numbers are: a charge's digits, a mass number, a count set low", () => {
     expect(read([["CO", 10, 0], ["2", 7, -2.5], ["Me", 10, 0]])).toBe("CO2Me");
     expect(read([["NH", 10, 0], ["2", 7, -2.5]])).toBe("NH2");
     expect(read([["Ca", 10, 0], ["2+", 7, 4]])).toBe("Ca2+");
     expect(read([["13", 6, 4], ["C", 10, 0]])).toBe("13C");
-    expect(read([["R", 10, 0], ["1", 6, 4]])).toBe("R1");
     expect(read([["O", 10, 0], ["Me", 10, 0]])).toBe("OMe");
   });
 });

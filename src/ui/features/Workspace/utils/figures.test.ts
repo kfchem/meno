@@ -8,11 +8,13 @@ import { readDrawn } from "./copyPaste";
 import { structureFileText } from "../fileActions";
 import esterification from "../../../../lib/figure/fixtures/esterification-rdkitrxn.json";
 import { WRITTEN_AS_WORDS } from "../../../../lib/figure/scheme";
+import { labelText, wordsOf } from "../../../../lib/figure/read";
+import { readDrawnLabel } from "../../../../lib/figure/structure";
 import { saysChargeTooMuch } from "../../../../lib/figure/structure";
 import { glyphShape, LETTERS, type GlyphShape } from "../../../../lib/figure/glyphs";
 import { plusMeasures, plusOutline } from "../../../../lib/chem/reactionScheme";
 import { DEFAULT_STYLE_CHOICE, styleOf } from "../../../../lib/chem/style";
-import { atomAs, atomAtSpot, bondAs, figureFrom, lettersAsShapes, framedPicture, placedBeside, readMarks, regionOf, wholeLabel, withoutOverBonded, type FigureResult, type Unread } from "./figures";
+import { atomAs, atomAtSpot, bondAs, figureFrom, lettersAsShapes, framedPicture, figureLabels, placedBeside, readMarks, regionOf, wholeLabel, withoutOverBonded, type FigureResult, type Unread } from "./figures";
 import { measured } from "../../../../testing/timeouts";
 import { readMolfile } from "../../../../lib/chem/ctfile";
 import { identityOfDrawn } from "../chem/identityOf";
@@ -865,5 +867,62 @@ describe("a picture in a frame is no drawing (framedPicture)", () => {
     expect(framedPicture(framed([rectangle], [[0, 0, 100, 49.9]]))).toBe(false);
     // (pictures that overlap count each its own box; none covering nothing)
     expect(framedPicture(framed([rectangle], [[0, 0, 0, 0]]))).toBe(false);
+  });
+});
+
+describe("a small number beside a label, read with Meno's own label reader (made labels)", () => {
+  /** A label as typeset: each part its text, its size in points and how far its baseline stands above the line's. */
+  const word = (parts: [string, number, number][]) => {
+    let at = 100;
+    const letters = parts.flatMap(([text, size, up]) =>
+      [...text].map((c): FigureLetter => {
+        const w = size * 0.6;
+        const base = 100 - up;
+        const l: FigureLetter = { c, box: [at, base - size * 0.72, at + w, base], at: [at, base], size, loose: [at, base - size, at + w + 0.2, base + 0.2 * size] };
+        at += w + 0.2;
+        return l;
+      }),
+    );
+    const [w] = wordsOf(letters);
+    return labelText(w, (l) => readDrawnLabel(l, figureLabels).read);
+  };
+  const raised = (d: string): [string, number, number] => [d, 7.7, 4];
+  const lowered = (d: string, by: number): [string, number, number] => [d, 6.5, -by];
+
+  it("keeps the counts of a formula set a little low, and an azide's N3", () => {
+    for (const by of [0.4, 0.9]) {
+      expect(word([["CH", 10, 0], lowered("2", by), ["Cl", 10, 0], lowered("2", by)])).toBe("CH2Cl2");
+      expect(word([["K", 10, 0], lowered("2", by), ["CO", 10, 0], lowered("3", by)])).toBe("K2CO3");
+      expect(word([["Et", 10, 0], lowered("3", by), ["N", 10, 0]])).toBe("Et3N");
+      expect(word([["H", 10, 0], lowered("2", by), ["O", 10, 0]])).toBe("H2O");
+      expect(word([["N", 10, 0], lowered("3", by)])).toBe("N3");
+      expect(word([["NH", 10, 0], lowered("2", by)])).toBe("NH2");
+      expect(word([["CO", 10, 0], lowered("2", by), ["Me", 10, 0]])).toBe("CO2Me");
+      expect(word([["CF", 10, 0], lowered("3", by)])).toBe("CF3");
+    }
+  });
+
+  it("leaves out an atom's number, set high or level and smaller where the label reads without it and not with it: O14, Me7, C7, N1, H3", () => {
+    for (const [letters, n] of [["O", "14"], ["Me", "7"], ["C", "7"], ["N", "1"], ["H", "3"]]) {
+      expect(word([[letters, 10, 0], raised(n)]), `${letters}${n} high`).toBe(letters);
+    }
+    expect(word([["O", 10, 0], ["14", 6.5, 0]])).toBe("O");
+    expect(word([["Me", 10, 0], ["7", 6.5, 0]])).toBe("Me");
+    // (an N3 with its 3 set high is an atom's number, not an azide)
+    expect(word([["N", 10, 0], raised("3")])).toBe("N");
+  });
+
+  it("keeps a variable's number, whatever it is named - and inside a label", () => {
+    for (const name of ["R", "X", "Y", "Z", "G", "Ar", "Het", "HetAr", "PG", "Nu", "E", "EWG", "M", "L", "Q", "A", "Alk"]) {
+      expect(word([[name, 10, 0], raised("1")]), name).toBe(`${name}1`);
+    }
+    expect(word([["OR", 10, 0], raised("2")])).toBe("OR2");
+    expect(word([["NR", 10, 0], raised("1"), ["R", 10, 0], raised("2")])).toBe("NR1R2");
+    expect(word([["OAr", 10, 0], raised("1")])).toBe("OAr1");
+    expect(word([["R", 10, 0], raised("2"), ["O", 10, 0]])).toBe("R2O");
+    expect(word([["CO", 10, 0], lowered("2", 2.5), ["R", 10, 0], raised("1")])).toBe("CO2R1");
+    // (and what is a label's own: a charge, a mass number)
+    expect(word([["Ca", 10, 0], ["2+", 7, 4]])).toBe("Ca2+");
+    expect(word([["13", 6, 4], ["C", 10, 0]])).toBe("13C");
   });
 });
