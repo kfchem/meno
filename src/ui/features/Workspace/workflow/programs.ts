@@ -21,7 +21,7 @@ import { angle, dihedral, distance } from "../../../../lib/steps/measure";
 import { LINE_WITHIN, restraintSaid } from "../../../../lib/steps/restraints";
 import type { JobFile } from "../../../../lib/jobs";
 import { CALC_CARRIED, calcProperties, setEntries, withoutCarried, type SetEntry } from "./entries";
-import { convergedAt, convergedOf } from "./converged";
+import { convergedAt, convergedOf, heldSaid } from "./converged";
 import { inputOf, type Flow } from "./flow";
 import { levelKey, levelSaid, matchesOf, mostOf, pairEntries, PATH_PAIR, sideUnlike, type PairAs } from "./pairs";
 import type { OptionValues } from "../../../../lib/options";
@@ -1175,10 +1175,11 @@ export function clock(ms: number): string {
 /** An energy in hartrees as a card says it, as everywhere Meno writes one: −42.108710 Eh. */
 export const hartrees = (e: number) => valueText(e, { quantity: "energy" });
 
-/** What a step that ran jobs says it did: how long, and the number it is for - its entry's energy, said to be its electronic energy (E), or how many came out of how many. */
+/** What a step that ran jobs says it did: how long, and the number it is for - its entry's energy, said to be its electronic energy (E), or how many came out of how many - and, where any converged holding atoms or restraints, so (converged `heldSaid`). */
 export function doneSaid(worked: readonly Worked[], total: number, took: number): string {
-  if (total === 1 && worked.length === 1 && worked[0].energy != null) return `${clock(took)} · E ${hartrees(worked[0].energy)}`;
-  return `${clock(took)} · ${worked.length} of ${total}`;
+  const held = heldSaid(worked);
+  const said = total === 1 && worked.length === 1 && worked[0].energy != null ? `${clock(took)} · E ${hartrees(worked[0].energy)}` : `${clock(took)} · ${worked.length} of ${total}`;
+  return held ? `${said} · ${held}` : said;
 }
 
 /** Whether what a job gave for an entry is why it failed, not what it made. */
