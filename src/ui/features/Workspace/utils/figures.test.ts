@@ -169,6 +169,9 @@ describe("a bond's open end drawn short", () => {
   });
 });
 
+/** What is said of a read that puts five bonds on one carbon. */
+const WHY_CARBON = "More bonds meet at a carbon than it takes: the drawing is misread, so none of it is taken.";
+
 describe("a structure read whose atoms have more bonds than they take", () => {
   const disc = ([cx, cy]: P, r: number): FigurePath => {
     const k = 0.5523 * r;
@@ -198,20 +201,19 @@ describe("a structure read whose atoms have more bonds than they take", () => {
     expect(centre.unsure?.said).toEqual(["A dot by it, but its bonds leave it no unpaired electron: no radical is read."]);
   });
 
-  it("marks a carbon unsure where a line with a dashed line drawn in two pieces beside it reads as three lines, its two other bonds besides", () => {
+  it("refuses a read that puts more bonds on a carbon than it takes - a line with a dashed line in two pieces beside it, read as three lines, its two other bonds besides - and says why", () => {
     const c: P = [150, 200];
     const end = step(c, 0);
     const [p, q] = beside(c, end, 1.8);
     const piece = (from: number, to: number): FigurePath => stroke([p[0] + (q[0] - p[0]) * from, p[1] + (q[1] - p[1]) * from], [p[0] + (q[0] - p[0]) * to, p[1] + (q[1] - p[1]) * to]);
     const others = [stroke(c, step(c, 150)), stroke(c, step(c, 210))];
     const m = structureFrom({ paths: [...others, stroke(c, end), piece(0, 0.3), piece(0.7, 1)], letters: [], pictures: [] }, SHA, 1) as Model;
-    // (as many bonds as a carbon takes, or said: never more, and sure)
-    const centre = m.atoms.find((a) => m.bonds.filter((b) => b.a === a.id || b.b === a.id).length === 3)!;
-    expect(bondsAt(m, centre.id) <= 4 || !!centre.unsure?.said.includes("More bonds meet here than a carbon has.")).toBe(true);
+    // (as many bonds as a carbon takes, or refused: never more put down)
+    if ("none" in m) expect(m.none).toBe(WHY_CARBON);
+    else expect(m.atoms.every((a) => bondsAt(m, a.id) <= 4)).toBe(true);
     const [x, y] = beside(c, end, -1.8);
-    const three = structureFrom({ paths: [...others, stroke(c, end), stroke(p, q), stroke(x, y)], letters: [], pictures: [] }, SHA, 1) as Model;
-    const c3 = three.atoms.find((a) => bondsAt(three, a.id) === 5)!;
-    expect(c3.unsure?.said).toEqual(["More bonds meet here than a carbon has."]);
+    const three = structureFrom({ paths: [...others, stroke(c, end), stroke(p, q), stroke(x, y)], letters: [], pictures: [] }, SHA, 1);
+    expect(three).toEqual({ none: WHY_CARBON });
   });
 
   it("keeps no more bonds to an oxygen's label than it takes, drawn with three, and marks it unsure", () => {
@@ -223,25 +225,22 @@ describe("a structure read whose atoms have more bonds than they take", () => {
     expect([bondsAt(m, ox.id), !!ox.unsure]).toEqual([2, true]);
   });
 
-  it("marks a group's label with more bonds than its atom takes past the group's own unsure: OMe with a double bond", () => {
+  it("refuses a group's label with more bonds than its atom takes past the group's own: OMe with a double bond", () => {
     const a: P = [100, 200];
     const b = step(a, 30);
     const o = step(b, -30);
     const end = towards(b, o, 0.55);
-    const m = structureFrom({ paths: [stroke(a, b), stroke(b, end), stroke(...beside(b, end, 1.8))], letters: letters("OMe", o), pictures: [] }, SHA, 1) as Model;
-    const g = m.atoms.find((x) => x.el === "OMe")!;
-    expect([bondsAt(m, g.id), g.unsure?.said]).toEqual([2, ['More bonds meet here than "OMe" has.']]);
+    const m = structureFrom({ paths: [stroke(a, b), stroke(b, end), stroke(...beside(b, end, 1.8))], letters: letters("OMe", o), pictures: [] }, SHA, 1);
+    expect(m).toEqual({ none: 'More bonds meet at "OMe" than it takes: the drawing is misread, so none of it is taken.' });
   });
 
-  it("marks an H drawn with a double bond to it unsure, checked as a file has the structure", () => {
+  it("refuses an H drawn with a double bond to it, checked as a file has the structure", () => {
     const a: P = [100, 200];
     const b = step(a, 30);
     const h = step(b, -30);
     const end = towards(b, h, 0.55);
-    const m = structureFrom({ paths: [stroke(a, b), stroke(b, end), stroke(...beside(b, end, 1.8))], letters: letters("H", h), pictures: [] }, SHA, 1) as Model;
-    const hydrogen = m.atoms.find((x) => x.el === "H");
-    // (read with its double bond, and said)
-    expect([hydrogen && bondsAt(m, hydrogen.id), hydrogen?.unsure?.said]).toEqual([2, ["More bonds meet here than hydrogen has."]]);
+    const m = structureFrom({ paths: [stroke(a, b), stroke(b, end), stroke(...beside(b, end, 1.8))], letters: letters("H", h), pictures: [] }, SHA, 1);
+    expect(m).toEqual({ none: "More bonds meet at hydrogen than it takes: the drawing is misread, so none of it is taken." });
   });
 
   it("marks a label read with a charge no atom carries unsure - a page's \"S188−\" taken for a sulfur", () => {
@@ -699,4 +698,39 @@ describe("a repeat unit in brackets, counted, read that many times (docs/PDF.md,
     const paradigm = unit.find((a) => a.sgroups![0].paradigm)!;
     expect(unit.every((a) => a.seen && a.seen.x === paradigm.seen!.x && a.seen.y === paradigm.seen!.y)).toBe(true);
   });
+});
+
+describe("a picture in a frame - a journal's cover thumbnail - is no structure", () => {
+  const frame = (x0: number, y0: number, x1: number, y1: number): FigurePath => stroke([x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]);
+
+  it("is none where the lines drawn are a rectangle round the picture: no square of its frame", () => {
+    const thumbnail: FigureDrawn = { paths: [frame(100, 100, 190, 190)], letters: [], pictures: [[101, 101, 189, 189]] };
+    expect(figureFrom(thumbnail, SHA, 1)).toEqual({ none: "This figure is a picture in a frame, not a drawing: there are no lines to read." });
+    // (its four sides drawn each alone, as some programs do)
+    const sides: FigureDrawn = { ...thumbnail, paths: [stroke([100, 100], [190, 100]), stroke([190, 100], [190, 190]), stroke([190, 190], [100, 190]), stroke([100, 190], [100, 100])] };
+    expect("none" in figureFrom(sides, SHA, 1)).toBe(true);
+  });
+
+  it("is still read where a structure's bonds are drawn by a picture: slanting lines are no frame", () => {
+    const a: P = [100, 200];
+    const b = step(a, 30);
+    const c = step(b, -30);
+    const withPicture: FigureDrawn = { paths: [stroke(a, b, c)], letters: [], pictures: [[200, 150, 260, 210]] };
+    const read = figureFrom(withPicture, SHA, 1);
+    expect("model" in read && read.model.atoms.length).toBe(3);
+  });
+});
+
+describe("a protecting group's label on the left of its bond", () => {
+  it.each([true, false])("reads PMBO as OPMB, as it reads OPMB on the right, its letters drawn as outlines (whole path: %s)", (whole) => {
+    const side = (word: string, right: boolean) => {
+      const a: P = right ? [100, 100] : [200, 100];
+      const b = right ? step(a, 30) : step(a, 150);
+      const c = right ? step(b, -30) : step(b, -150);
+      const f: FigureDrawn = { paths: [stroke(a, b), cut(b, c, 0, 0), ...outlinedWord(word, [c[0] + (right ? 17 : -17), c[1]], whole)], letters: [], pictures: [] };
+      return elementsOf(figureFrom(f, SHA, 0, KNOWN));
+    };
+    expect(side("PMBO", false)).toEqual(["C", "C", "OPMB"]);
+    expect(side("OPMB", true)).toEqual(["C", "C", "OPMB"]);
+  }, measured(300));
 });

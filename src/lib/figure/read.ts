@@ -196,10 +196,11 @@ function hashesOf(short: Stroke[], bond: number, filled: ReadonlySet<Stroke>): {
  * double bond, its second line inside and shorter), or of the line through
  * their middle where none is.
  */
-function multiples(lines: Stroke[], bond: number): { bonds: Drawn[]; used: Set<Stroke> } {
+function multiples(lines: Stroke[], bond: number, bold: (s: Stroke) => boolean = () => false): { bonds: Drawn[]; used: Set<Stroke> } {
   const used = new Set<Stroke>();
   const bonds: Drawn[] = [];
   const pair = (s: Stroke, t: Stroke) => {
+    if (bold(s) || bold(t)) return false;
     const u = unit(s.a, s.b);
     if (Math.abs(cross(u, unit(t.a, t.b))) > Math.sin((8 * Math.PI) / 180)) return false;
     const off = Math.abs(cross(u, { x: mid(t.a, t.b).x - s.a.x, y: mid(t.a, t.b).y - s.a.y }));
@@ -339,6 +340,37 @@ export function wordsOf(letters: readonly FigureLetter[]): Word[] {
 }
 
 /**
+ * The letters of a word that are a locant: the digits - one or more together - set smaller than the label's letters, after
+ * the first of them, level with them or higher (a count is set lower: NH2, CO2Me) and with no charge's sign after them
+ * (Ca2+). Their places in `w.letters`.
+ */
+function locantsOf(w: Word, base: number): Set<number> {
+  const out = new Set<number>();
+  const small = (l: FigureLetter) => l.size < 0.85 * w.size;
+  const digit = (l: FigureLetter) => /^\d$/.test(l.c);
+  const level = (l: FigureLetter) => (l.at?.[1] ?? l.box[3]) < base + 0.1 * w.size;
+  let letter = false;
+  for (let i = 0; i < w.letters.length; i++) {
+    const l = w.letters[i];
+    if (!small(l)) {
+      letter = true;
+      continue;
+    }
+    // (the number of an R group - R1, R2, drawn small and set high - is part of its name)
+    const named = w.letters.slice(0, i).filter((x) => !small(x)).map((x) => x.c).join("") === "R";
+    if (!letter || named || !digit(l) || !level(l)) continue;
+    // (the run of such digits, and what follows it)
+    let j = i;
+    while (j + 1 < w.letters.length && small(w.letters[j + 1]) && digit(w.letters[j + 1]) && level(w.letters[j + 1])) j++;
+    const next = w.letters[j + 1];
+    const charge = !!next && small(next) && /^[+\-\u2212\u2013]$/.test(next.c);
+    if (!charge) for (let k = i; k <= j; k++) out.add(k);
+    i = j;
+  }
+  return out;
+}
+
+/**
  * A word as a label is typed: a smaller letter set low a subscript's digit,
  * set high a charge - written as they are typed, NH2, N+, O- - and digits
  * set high before its first letter an isotope's mass number (13C), so that
@@ -350,8 +382,13 @@ export function labelText(w: Word): string {
   const main = w.letters.filter((l) => l.size >= 0.85 * w.size);
   const base = main.length ? main.map((l) => l.at?.[1] ?? l.box[3]).sort((a, b) => a - b)[Math.floor(main.length / 2)] : 0;
   let lead = true;
+  // (a number set small by an atom's label, not low as a count is and not followed by a charge - the red locants beside atoms,
+  // "Me7" for a Me and its number 7: no part of the label, left out. Before a label's first letter it is a mass number, and a
+  // charge's digit has its sign after it)
+  const locants = locantsOf(w, base);
   return w.letters
-    .map((l) => {
+    .map((l, k) => {
+      if (locants.has(k)) return "";
       // (a letter the PDF gives no character for - a control code - drawn flat, more than twice as wide as tall, is a minus: a
       // hyphen printed so by WebKit)
       const code = l.c.length === 1 ? l.c.charCodeAt(0) : -1;
@@ -984,11 +1021,12 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   const joined = joinedAcross([...lines, ...loose], bond);
   const whole = joined.filter((s) => !loose.includes(s));
   const used = loose.filter((s) => !joined.includes(s));
-  const { bonds: multi, used: inMulti } = multiples(whole, bond);
-  // (a line much thicker than most - a Haworth ring's front - is bold)
+  // (a line much thicker than most - a Haworth ring's front, a perspective drawing's front bond - is bold: a single bond drawn
+  // thick, toward the viewer; never a line of a double or triple bond, whatever thin lines run beside it)
   const widths = whole.map((s) => s.w).sort((a, b) => a - b);
   const thin = widths.length ? widths[Math.floor(widths.length / 2)] : 0;
   const bold = (s: Stroke) => s.w > 2.5 * thin && s.w > 0.12 * bond;
+  const { bonds: multi, used: inMulti } = multiples(whole, bond, bold);
   const drawnBonds: Drawn[] = [
     ...whole.filter((s) => !inMulti.has(s)).map((s): Drawn => ({ a: s.a, b: s.b, order: 1, ...(bold(s) ? { bold: true } : {}) })),
     ...multi,

@@ -204,6 +204,31 @@ export function schemeDrawn(given: FigureDrawn, known?: readonly GlyphShape[]): 
   return { drawn, back, read: readScheme(drawn, (l) => readDrawnLabel(l, figureLabels).read, glyphs, wholeLabel) };
 }
 
+/** The most paths a picture's frame is: its sides, or a rule under it. */
+const FRAME_PATHS = 8;
+/** How much of a figure's extent its pictures cover, at the least, for the lines about them to be their frame. */
+const FRAME_COVER = 0.5;
+
+/**
+ * Whether a figure is a picture in a frame: its pictures cover half of what it spans, and the little else drawn is straight
+ * lines, level and upright - a rectangle round it, a rule - never a structure's bonds round a picture.
+ */
+export function framedPicture(drawn: FigureDrawn): boolean {
+  if (!drawn.pictures.length || drawn.letters.length || drawn.paths.length > FRAME_PATHS) return false;
+  const pts = drawn.paths.flatMap((p) => p.d.flatMap((st): [number, number][] => (st[0] === "Z" ? [] : [[st[1], st[2]]])));
+  if (drawn.paths.some((p) => p.d.some((st) => st[0] === "C"))) return false;
+  const level = drawn.paths.every((p) => {
+    const q = p.d.flatMap((st): [number, number][] => (st[0] === "Z" ? [] : [[st[1], st[2]]]));
+    return q.every((v, i) => i === 0 || Math.abs(v[0] - q[i - 1][0]) < 0.01 || Math.abs(v[1] - q[i - 1][1]) < 0.01);
+  });
+  if (!level) return false;
+  const xs = [...pts.map((v) => v[0]), ...drawn.pictures.flatMap((b) => [b[0], b[2]])];
+  const ys = [...pts.map((v) => v[1]), ...drawn.pictures.flatMap((b) => [b[1], b[3]])];
+  const span = (Math.max(...xs) - Math.min(...xs)) * (Math.max(...ys) - Math.min(...ys));
+  const covered = drawn.pictures.reduce((t, b) => t + Math.max(0, b[2] - b[0]) * Math.max(0, b[3] - b[1]), 0);
+  return span > 0 && covered >= FRAME_COVER * span;
+}
+
 /**
  * What a figure as drawn reads as, tied to its PDF's page (`readBox`): its
  * structures, and - a scheme - its arrows, "+" signs and words (lib/figure/
@@ -213,6 +238,8 @@ export function schemeDrawn(given: FigureDrawn, known?: readonly GlyphShape[]): 
  * layout).
  */
 export function figureFrom(given: FigureDrawn, sha256: string, page: number, known?: readonly GlyphShape[]): FigureResult | Unread {
+  // (a picture in its frame - a journal's cover thumbnail: the frame's four lines are no cyclobutane)
+  if (framedPicture(given)) return { none: "This figure is a picture in a frame, not a drawing: there are no lines to read." };
   const { drawn, back, read } = schemeDrawn(given, known);
   if (read.tooMany) return { none: "This looks like a chart or a spectrum: too much is drawn there to read it as a structure." };
   const structure = read.figure.atoms.length > 0 && read.figure.bonds.length > 0;
@@ -223,6 +250,9 @@ export function figureFrom(given: FigureDrawn, sha256: string, page: number, kno
   const box = schemeBox(structure ? read : { ...read, figure: { ...read.figure, atoms: [] } })!;
   const about = { x: (box[0] + box[2]) / 2, y: (box[1] + box[3]) / 2 };
   const model = structure ? modelOf(read.figure, (x, y) => ({ sha256, page, ...back({ x, y }), bond: read.figure.bond }), about) : { atoms: [], bonds: [] };
+  // (an atom with more bonds than it takes: refused, with why - never placed)
+  const broken = structure ? overBondedWhy(model) : null;
+  if (broken) return { none: broken };
   const scheme = schemeOf(read, about);
   return { model, ...(scheme ? { scheme } : {}) };
 }
@@ -325,6 +355,20 @@ export function modelOf(read: FigureRead, spot: (x: number, y: number) => Figure
 }
 
 const ELEMENT_NAMES = new Map(ELEMENTS.map((e) => [e.symbol, e.name]));
+
+/**
+ * Why a structure read has an atom with more bonds than it takes - a bold front bond of a perspective drawing read as a triple
+ * bond, a line twice - and so is not taken, whole, as read (the maintainer, 2026-11-13: a read that breaks valence is refused, and
+ * says why, never put down): none where no atom has. An atom's label written out, a group's, counted as a file has it.
+ */
+export function overBondedWhy(model: Model): string | null {
+  // (a charge no atom carries is said by the atom, and is no valence: a page's "S188−" taken for a sulfur)
+  const over = new Set([...overBonded(model)].filter((id) => !model.atoms.find((x) => x.id === id)?.unsure?.said.some((t) => t.startsWith("A charge of"))));
+  if (!over.size) return null;
+  const a = model.atoms.find((x) => over.has(x.id))!;
+  const name = a.el === "C" ? "a carbon" : (ELEMENT_NAMES.get(a.el) ?? `"${a.el}"`);
+  return `More bonds meet at ${name} than it takes${over.size > 1 ? `, and at ${over.size - 1} more` : ""}: the drawing is misread, so none of it is taken.`;
+}
 
 type Region = { x0: number; y0: number; x1: number; y1: number };
 const overlaps = (a: Region, b: Region) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;

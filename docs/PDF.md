@@ -913,6 +913,7 @@ Built:
 - **Where a page's figures lie** (`pdf_objects`, `lib/pdf/figures`). PDFium lists what a page is made of - its words, paths, pictures, shadings and forms - each with its box, in points from the page's top left as it is drawn. From them:
   - A figure is where pictures and paths lie within 8 points of one another. It is at least 24 points one way and 4 the other (a chain drawn flat is a figure, a word's underline none), or it holds a picture. A smaller one is a figure where it is a small structure: at least 8 points one way and 4 the other, of three lines or more, its own labels taking it to 18 points - an acetate or a cisplatin drawn small - and not set in a line of running words, as an icon or an arrow in a sentence is. One line with an atom's label at an end of it, along it - CH3NH3+ - is one too, however thin: the label read as a structure's labels are (NH3+, OMe, CH3 - never a number nor a word), the line a bond and a half long at most (a bond drawn as long as its label's letters are tall and half again). A word's underline, its word over it, is none, nor a rule with a word or a number at its end ("Date ____", "____ 12", a leader).
   - A rule (at most 1.5 points thick and at least 150 long) is no part of one, nor is anything over most of the page, such as its frame, nor a filled shape across nearly all of the page's width - a panel's ground, behind an abstract's words and its figure.
+  - Nor is page furniture (2026-11-13): a banner or a button - one shape round words, the words a quarter of its area or more ("Read Online") - or anything no taller than 40 points in the page's header or footer band (the top or bottom twentieth of a page as high as a page of text, 400 points), a journal's logo; and a picture in a frame - its pictures half of what the figure spans, the little else drawn level and upright lines - a cover's thumbnail, is no drawing: its frame's lines are no structure (`framedPicture`).
   - Nor is a page scanned after all: a figure over most of the page, most of it picture, with the page's words within it - its picture in strips further apart than a scan is told by, the words read over them widening it (2026-10-14). A figure drawn with lines as large, on a page cut close round it - a scheme exported as a PDF of its own - is still one.
   - A reaction scheme is one figure (2026-10-13). An arrow is a long, thin part holding a straight line at least 25 points long, level or upright; it joins what lies beyond its ends, level with it, within 36 points. A "+" set alone (`pdf_objects` tells it from other words) joins what lies either side of it, level with it. A "+" drawn with lines - one filled cross, or a stroke each way - square, at least 2.5 points across and at most 14, by no word (a charge drawn with lines is as small, but by its label), joins them as a written one does; and a "+" written is never a line beside a structure (*Structures picked from a PDF*).
   - Words over a figure or within 6 points of it, each narrower than six tenths of it, are its labels, and its box takes them in. A short word under a figure or over it, such as a compound's number, can be up to 14 points off. The words over and under an arrow, its conditions, can be up to 24 points off, a line or two of them. A counter-ion - a short word with its charge drawn by it, a "+" or "-" in a ring or set high, as Na+ or Br- beside a structure - can be up to 30 points off, or as far from the ion before it in a row of them (three K+); a short word with no charge by it is not taken so far. Its caption is not a label, nor is a column's line beside it: no line wider than three tenths of the page (and than 150 points) is ever one.
@@ -1218,7 +1219,11 @@ it where it lies out of view.
   - a line stroked, or a thin box filled, is a single bond, and a line
     much thicker than the rest a bold one - but not one more than two and
     a half bonds long that meets others only square, or none: a frame's
-    side, a graph's axis, a page's rule;
+    side, a graph's axis, a page's rule. A bold line is one single bond,
+    drawn thick, toward the viewer, as a perspective drawing's front bond
+    is (2026-11-13): never a line of a double or triple bond, whatever thin
+    lines run beside it a third of a bond off, as a chair's do - read so, it
+    was a carbon with five bonds;
   - lines side by side - the second may be short, from three twentieths
     of a bond, where it lies alongside the first within its stretch - a fifth of a bond or so apart and alongside each
     other for most of the shorter (seven tenths: a cube's parallel edges,
@@ -1352,7 +1357,11 @@ it where it lies out of view.
   drawn flat - more than twice as wide as tall - a minus: a hyphen as
   WebKit prints one), and digits set high before the element its isotope's mass
   number (13C, 18F, 2H); a count set low before any letter - the H of an
-  H3N left outside the box - is no one's. A charge drawn in a small circle - a "+" or a "-" in a ring,
+  H3N left outside the box - is no one's. A number set smaller than the
+  label's letters, after the first of them, level with them or high, with
+  no charge's sign after it, is a locant - the small atom numbers a drawing
+  sets by its atoms ("Me" and its 7) - and no part of the label (2026-11-13);
+  an R group's number (R1) is part of its name. A charge drawn in a small circle - a "+" or a "-" in a ring,
   as Meno draws one and as many papers do - is the charge of the atom it is
   by, however the page is turned and where a box drawn across it cuts some
   of its ring off; never a bond, nor a scheme's "+". A lone H at no
@@ -1438,8 +1447,13 @@ it where it lies out of view.
     a halogen, O nor C - PhICl2 and Ph3I take theirs; one more for each
     positive charge: a diaryliodonium's iodine); a charge past four
     either way - marks the atom or
-    label drawn, so that nothing whose valence is broken is put down
-    looking sure;
+    label drawn. Where an atom has more bonds than it takes, written out as
+    a file has it - not a charge alone - the structure is not taken at all
+    (2026-11-13: a misread drawing is not put down, even marked unsure): a
+    structure picked from a page, or a figure read as one, gives none and says
+    why ("More bonds meet at a carbon than it takes: the drawing is misread,
+    so none of it is taken."). A picture read by the plugin that reads
+    pictures is that plugin's, and is not refused so;
   - a radical's dots by an atom whose bonds leave it no unpaired electron:
     no radical is read - a speck, or a letter's round shape, lies there
     as often ("A dot by it, but its bonds leave it no unpaired electron:

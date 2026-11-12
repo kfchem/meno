@@ -44,7 +44,7 @@ describe("a PDF page's figures", () => {
   });
 
   it("are each their own where they lie apart; a picture, however small, is one", () => {
-    const figures = figuresOf([...structureAt(100, 300), ...structureAt(100, 500), { kind: "image", box: [300, 100, 316, 112] }]);
+    const figures = figuresOf([...structureAt(100, 300), ...structureAt(100, 500), { kind: "image", box: [300, 400, 316, 412] }]);
     expect(figures).toHaveLength(3);
     expect(figureAt(figures, 120, 510)).toEqual(figures.find((f) => f[1] === 500));
     expect(figureAt(figures, 10, 10)).toBeNull();
@@ -205,3 +205,29 @@ describe("a PDF page's figures", () => {
   });
 });
 
+
+describe("page furniture is no figure: a journal's logo, its banner, its cover thumbnail", () => {
+  /** The words of a page of running text, from its top margin to its foot: what makes it as high as a page is. */
+  const body = (): PageObject[] => Array.from({ length: 30 }, (_, i) => text([60, 90 + i * 22, 540, 100 + i * 22]));
+  const frame = (box: Box): PageObject[] => [path(box)];
+
+  it("is none where a shape lies round words, the words most of what lies in it - a banner, a button", () => {
+    const banner: PageObject[] = [...frame([400, 300, 520, 328]), text([420, 308, 470, 320]), text([476, 308, 505, 320])];
+    expect(figuresOf([...body(), ...banner, ...structureAt(100, 300)])).toEqual([[91, 300, 180, 328]]);
+    // (a frame round a structure, its labels a few of what lies in it, is still a figure)
+    const boxed = figuresOf([...body(), path([85, 290, 190, 340]), ...structureAt(100, 300)]);
+    expect(boxed).toHaveLength(1);
+  });
+
+  it("is none within the header or footer band, as small as a logo - a picture or drawn - but a figure of the page's body is", () => {
+    const logo: PageObject = { kind: "image", box: [60, 24, 140, 56] };
+    const drawnLogo = [path([60, 30, 90, 50]), path([92, 30, 120, 50]), path([60, 52, 120, 56])];
+    const foot: PageObject = { kind: "image", box: [60, 790, 120, 810] };
+    const page = [...body(), ...structureAt(100, 300)];
+    expect(figuresOf([logo, foot, ...drawnLogo, ...page])).toEqual([[91, 300, 180, 328]]);
+    // (a tall thing at the top is the page's own: no logo)
+    expect(figuresOf([{ kind: "image", box: [60, 24, 300, 200] }, ...page])).toHaveLength(2);
+    // (a page of little: the band is none to speak of)
+    expect(figuresOf([logo, ...structureAt(100, 200)])).toHaveLength(2);
+  });
+});
