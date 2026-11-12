@@ -568,9 +568,10 @@ Taken on 2026-10-13:
     back what it brought, then the structure.
   - *Stop* ends it there, what came kept. Asking for another 3D structure
     ends it as its round in hand finishes. A round that fails ends it,
-    what came kept, its *Rounds* line saying it failed and why - never
-    taken for *Stop*. An undo that takes the structure away, the
-    structure made again, or an edit of its atoms meanwhile, ends it,
+    what came kept, its *Rounds* line saying it failed - never taken for
+    *Stop* - and its error in Meno's log. An undo that takes the structure away, the
+    structure made again, or an edit of it meanwhile - an atom moved, a
+    conformer taken away - ends it,
     nothing written: the edit is kept, never written over.
   - The document holds its first round as soon as it is shown, its
     *Rounds* line saying it was cut short - what it is, should the search
