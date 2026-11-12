@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../../../lib/calc/workers", () => ({ readerClient: () => Promise.reject(new Error("no workers in tests")) }));
 import { gestureStep } from "../../../../lib/doc/document";
-import { createWorkspaceDocument } from "../document";
+import { addMolecule3d, createWorkspaceDocument } from "../document";
+import { addConversation } from "../conversation/ops";
+import { cardRect } from "../pageGl/conversationCard";
 import { frameAround, structureBox } from "../workflow/fitFrames";
 import { addSet } from "../workflow/model";
 import { connectStoreToDocument, createEditorStore } from "./index";
@@ -26,12 +28,14 @@ const page = () => ({
 /** A stand-in for the window: the listeners it was given, to be fired by the test. */
 function windowStub() {
   const on = new Map<string, Set<(e?: unknown) => void>>();
+  // (how each was listened for: in the capture phase or not)
+  const captured = new Map<string, boolean>();
   const stub = {
-    addEventListener: (type: string, f: (e?: unknown) => void) => on.set(type, (on.get(type) ?? new Set()).add(f)),
+    addEventListener: (type: string, f: (e?: unknown) => void, capture?: boolean) => (captured.set(type, capture === true), on.set(type, (on.get(type) ?? new Set()).add(f))),
     removeEventListener: (type: string, f: (e?: unknown) => void) => on.get(type)?.delete(f),
     setTimeout: (f: () => void) => globalThis.setTimeout(f, 0),
   };
-  return { stub, fire: (type: string) => on.get(type)?.forEach((f) => f()), count: () => [...on.values()].reduce((n, s) => n + s.size, 0) };
+  return { stub, captured, fire: (type: string) => on.get(type)?.forEach((f) => f()), count: () => [...on.values()].reduce((n, s) => n + s.size, 0) };
 }
 
 afterEach(() => {
@@ -124,6 +128,35 @@ describe("frames settled as the pointer is let go (the store's watchFrames)", ()
     expect(w.count()).toBe(3);
     stop();
     expect(w.count()).toBe(0);
+  });
+
+  it("hears the release before anything under the window can stop it: a molecule in 3D's drag ends with a stopPropagation on the canvas, which a listener of the bubbling phase never hears", () => {
+    const { w } = setup();
+    expect(Object.fromEntries(w.captured)).toEqual({ pointerdown: true, pointerup: true, pointercancel: true });
+  });
+
+  it("eases a molecule in 3D dragged onto a conversation's card off it, to its left, in the drag's own step", () => {
+    vi.useFakeTimers();
+    const w = windowStub();
+    vi.stubGlobal("window", w.stub);
+    const doc = createWorkspaceDocument();
+    const frame = { x0: 0, y0: 0, x1: 36, y1: 21 };
+    doc.edit("conversation", (d) => addConversation(d, frame));
+    doc.edit("molecule", (d) => addMolecule3d(d, { atoms: [{ el: "O", x: 0, y: 0, z: 0 }, { el: "H", x: 0, y: 0.76, z: 0.59 }], bonds: [{ a1: 0, a2: 1, order: 1 }], at: { x: 5, y: 10 } } as never));
+    const store = createEditorStore(doc);
+    store.getState().watchFrames();
+    const room = cardRect(frame)!;
+    w.fire("pointerdown");
+    store.getState().moveMolecules3d([{ id: 1, at: { x: (room.x0 + room.x1) / 2, y: 10 } }], "drag");
+    const depth = doc.history().undoDepth;
+    w.fire("pointerup");
+    vi.runAllTimers();
+    expect(doc.getState().molecules3d![0].at.x).toBeLessThan(room.x0);
+    expect(doc.getState().molecules3d![0].at.y).toBe(10);
+    expect(doc.history().undoDepth).toBe(depth);
+    // (one undo takes back the drag and the ease: the molecule where it was)
+    doc.undo();
+    expect(doc.getState().molecules3d![0].at).toEqual({ x: 5, y: 10 });
   });
 });
 
