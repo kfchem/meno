@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { addAtom, createWorkspaceDocument } from "../features/Workspace/document";
-import { connectStoreToDocument, createEditorStore } from "../features/Workspace/store";
+import { connectStoreToDocument, createEditorStore, storeOf } from "../features/Workspace/store";
 import { suggestedSavePath } from "../features/Workspace/fileActions";
-import { openedPdfs, type OpenedPdf } from "./pdfs";
+import { openedPdfs, outsidePdfsPlan, pdfsDestination, type OpenedPdf } from "./pdfs";
+import { opensReadingFilled } from "../features/Workspace/document";
 
 const pdf = (name: string, c: string): OpenedPdf => ({ name, sha256: c.repeat(64), size: 9, pages: [[595, 842]] });
 
@@ -50,5 +51,90 @@ describe("PDFs opened on a canvas of their own", () => {
     expect(doc.history().dirty).toBe(false);
     store.getState().addPdfs([pdf("paper.pdf", "a")], { x: 0, y: 0 });
     expect(doc.history().dirty).toBe(true);
+  });
+});
+
+describe("PDFs opened from outside Meno", () => {
+  const opened = openedPdfs([pdf("paper.pdf", "a")], true);
+
+  it("are opened in a canvas of their own, the first read in the column, which fills the workspace - the document still clean", () => {
+    expect(opened.data).toMatchObject({ filename: "paper.pdf", readFilled: true });
+    const doc = createWorkspaceDocument(opened.data);
+    expect(opensReadingFilled(doc)).toBe(true);
+    expect(doc.getState().pdfs?.[0].reading).toEqual({ at: 0, zoom: 1 });
+    expect(doc.history().dirty).toBe(false);
+    expect(doc.history().undoDepth).toBe(0);
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const st = store.getState();
+    expect(st.columnFilled).toBe(true);
+    expect(st.textsOpen).toBe(true);
+    expect(st.pdfShown).toBe(st.pdfs[0].id);
+  });
+
+  it("are not read filled where they are opened some other way - Open, a drop: a canvas as it was", () => {
+    const doc = createWorkspaceDocument(openedPdfs([pdf("paper.pdf", "a")]).data);
+    expect(opensReadingFilled(doc)).toBe(false);
+    expect(doc.getState().pdfs?.[0].reading).toBeUndefined();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    expect(store.getState().columnFilled).toBe(false);
+    expect(store.getState().textsOpen).toBe(false);
+  });
+
+  it("only hide the workspace: it is there throughout, and the column's button and key switch between the two views", () => {
+    const doc = createWorkspaceDocument(opened.data);
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    doc.edit("add atom", (d) => addAtom(d, 0, 0));
+    for (const filled of [false, true, false]) {
+      store.getState().setColumnFilled(filled);
+      expect(store.getState().columnFilled).toBe(filled);
+      // (its document, and the drawing in it, held either way; the PDF still read in the column)
+      expect(store.getState().model.atoms).toHaveLength(1);
+      expect(store.getState().pdfs[0].reading).toBeTruthy();
+      expect(store.getState().textsOpen).toBe(true);
+    }
+  });
+
+  it("bring a tab that holds the PDF already forward, as it was left, and open the rest together", () => {
+    const tabs = [
+      { id: "t1", pdfs: [{ sha256: "a".repeat(64) }] },
+      { id: "t2", pdfs: undefined },
+      { id: "t3", pdfs: [{ sha256: "c".repeat(64) }, { sha256: "d".repeat(64) }] },
+    ];
+    const a = pdf("a.pdf", "a");
+    const b = pdf("b.pdf", "b");
+    const c = pdf("c.pdf", "c");
+    const d = pdf("d.pdf", "d");
+    expect(outsidePdfsPlan([a], tabs)).toEqual({ forward: ["t1"], fresh: [] });
+    expect(outsidePdfsPlan([b], tabs)).toEqual({ forward: [], fresh: [b] });
+    // (several in one go: each tab once, in the order they came; the new ones together; the same one twice, once)
+    expect(outsidePdfsPlan([c, b, a, d, b], tabs)).toEqual({ forward: ["t3", "t1"], fresh: [b] });
+    expect(outsidePdfsPlan([], tabs)).toEqual({ forward: [], fresh: [] });
+  });
+
+  it("have only the first PDF of a canvas read, and a canvas with none read nothing", () => {
+    const two = createWorkspaceDocument(openedPdfs([pdf("a.pdf", "a"), pdf("b.pdf", "b")], true).data);
+    expect(two.getState().pdfs?.map((p) => !!p.reading)).toEqual([true, false]);
+    const none = createWorkspaceDocument({ pdfs: [], readFilled: true });
+    expect(none.getState().pdfs ?? []).toEqual([]);
+    expect(opensReadingFilled(none)).toBe(false);
+  });
+
+  it("keep the view the chemist chose where the canvas is made again for the same document", () => {
+    const doc = createWorkspaceDocument(opened.data);
+    const store = storeOf(doc);
+    store.getState().setColumnFilled(false);
+    expect(storeOf(doc)).toBe(store);
+    expect(storeOf(doc).getState().columnFilled).toBe(false);
+  });
+
+  it("go where the way they were opened says: outside, to tabs and a canvas of their own; by Open or a drop, onto the workspace in front", () => {
+    const a = pdf("a.pdf", "a");
+    const b = pdf("b.pdf", "b");
+    const tabs = [{ id: "t1", pdfs: [{ sha256: "a".repeat(64) }] }];
+    expect(pdfsDestination(true, [a, b], tabs)).toEqual({ forward: ["t1"], fresh: [b], intoFront: [] });
+    expect(pdfsDestination(false, [a, b], tabs)).toEqual({ forward: [], fresh: [], intoFront: [a, b] });
   });
 });

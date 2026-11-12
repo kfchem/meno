@@ -187,6 +187,15 @@ export function emptyWorkspaceDocument(style: StyleChoice = DEFAULT_STYLE_CHOICE
  * 3D, with Settings' - what a set held off the page needs to be laid out
  * on it again (workflow/held); none, its molecules stay held.
  */
+/**
+ * The documents of canvases opened for PDFs from outside Meno (`data.readFilled`, App): their first PDF is read in the column, which
+ * fills the workspace (store `columnFilled`) - what the canvas shows as it opens, not part of its document.
+ */
+const opensFilled = new WeakSet<object>();
+
+/** Whether `doc` was made for a PDF opened from outside Meno, to show it filling the workspace. */
+export const opensReadingFilled = (doc: object): boolean => opensFilled.has(doc);
+
 export function createWorkspaceDocument(
   data?: unknown,
   style: StyleChoice = DEFAULT_STYLE_CHOICE,
@@ -203,6 +212,9 @@ export function createWorkspaceDocument(
   const held = (data as { pdfs?: unknown } | null | undefined)?.pdfs;
   let doc = addTexts(emptyWorkspaceDocument(style, style3d), texts).doc;
   for (const p of pdfsInRow(Array.isArray(held) ? held : [], { x: 0, y: 0 })) doc = addPdf(doc, p);
+  // (a canvas made for a PDF opened from outside: the first is read in the column - where the document starts, as its pages are)
+  const readFilled = !!(data as { readFilled?: unknown } | null | undefined)?.readFilled && !!doc.pdfs?.length;
+  if (readFilled) doc = { ...doc, pdfs: doc.pdfs!.map((p, i) => (i ? p : { ...p, reading: { at: p.page, zoom: 1 } })) };
   const pictures = (data as { pictures?: unknown } | null | undefined)?.pictures;
   for (const p of picturesInRow(Array.isArray(pictures) ? (pictures as PictureToAdd[]) : [], { x: 0, y: 0 })) doc = addPicture(doc, p);
   // (each edit's sets fitted to their members, as
@@ -212,7 +224,7 @@ export function createWorkspaceDocument(
   // (its history held to about 100 MB: what a step costs is the atoms and
   // bonds it copies - the lists a drawing's edit makes anew, not those it
   // shares with the step before; the maintainer, 2026-10-13)
-  return createDocument<WorkspaceDocument>(doc, {
+  const made = createDocument<WorkspaceDocument>(doc, {
     settle: (next, before) => {
       const extentOf = extentIn?.(next);
       const held = heldSettled(next, before, extentOf);
@@ -222,6 +234,8 @@ export function createWorkspaceDocument(
     },
     cost: stepCost,
   });
+  if (readFilled) opensFilled.add(made);
+  return made;
 }
 
 /** What keeping a workspace's state in its history costs beyond the one before it: the atom and bond lists it does not share with it. */

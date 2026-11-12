@@ -747,6 +747,7 @@ Built:
 - **Putting a PDF on the page.**
   - A PDF opened (*Open…*) goes onto the page of the workspace in front, at the middle of the view, or onto a canvas of its own where none is in front.
     - That canvas is made for the PDFs, and they are where its document starts: it is not changed, so it is not marked unsaved and closing it asks nothing, until anything on it is changed. Save suggests the first PDF's name with `.meno`. A PDF added to a workspace that is open is a change, as anything put on its page is.
+    - A PDF opened from outside Meno - double-clicked, or opened with Meno from the system - always takes a canvas of its own (in place of a blank one in front), never the page of a workspace in front. The PDF is placed on its page, and read in the column, which fills the workspace (*Fill the workspace*). The workspace is hidden by it, not gone: *Back beside the canvas*, or its key, shows the canvas with the PDF beside it, and *Fill the workspace* hides the canvas again. One a tab holds already (the same PDF, by its bytes) brings that tab forward, in the view it was left in. A PDF opened with *Open…* or dropped still goes onto the page of the workspace in front.
   - A PDF dropped goes where it is dropped.
   - The view eases to take it in where it was not all in view.
 - **Holding and saving it.**
