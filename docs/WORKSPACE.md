@@ -1421,8 +1421,28 @@ it, in `features/Workspace/pageGl/`:
 - **A workflow** (components/Workflow2D): its steps' cards shut
   (`cardFace`) - who does it, what and how, its state in words and an icon
   turning while it runs, a log's last line in Plex Mono and a bar of how
-  far its jobs are; its icons alone and large where its words are too
-  small to read - laid out as their HTML was, and drawn on under a card
+  far its jobs are; zoomed out where its words are too small to read, in
+  two more bands (`pageGl/cardBands`: by the page's scale, a screen pixel
+  to a page pixel): from three quarters down to a quarter it is *named* -
+  its box at the page's size, its kind's icon and its name on one line
+  (the name 11 screen pixels high at any zoom, cut inside its box, clear
+  of its mark), a mark of its state at its top right (running
+  turns, in Meno's colour; done is filled, in the quiet ink; waiting is
+  hollow; failed is in the alert tone with how many of its entries failed,
+  where it counts them) - and none of its summary, state words, log line,
+  bar or port names; under a quarter it is *marked*: its box tinted by
+  its state, the mark, and its name only where it fits whole inside its
+  box and clear of the mark at both sides - never cut short, never over its
+  box's edge or its mark.
+  Where two names would overlap, the later in reading order fades out
+  (the earlier staying) and the page's tip says it as its card is
+  pointed at. The bands switch with a little hysteresis (5 % each way) and
+  fade over Meno's quick time. A set's tab follows the same rule: its name,
+  11 screen pixels high, stands in for its words (cut inside its frame's
+  width, a tab's inset from each side, and raised over its frame's top where
+  it is higher than its tab's band - wholly above it, far off - never down
+  over what the frame holds, and left out where it would lie over another
+  frame or a card) - laid out as their HTML was, and drawn on under a card
   opened (HTML still, the one HTML on the page), which alone fades in over
   it and out off it, so the card is never paler as it opens or shuts; what
   its card says that a chemist copies - a failure, a program's line -
@@ -1434,8 +1454,8 @@ it, in `features/Workspace/pageGl/`:
   real field laid unseen at the caret, so that keys, the input method's
   candidates beside the words, pasting, undoing and a screen reader are
   the system's own - Enter or a press away keeps it, Escape leaves it as
-  it was; its icon - what made it - stands in for its words where they are
-  too small to read; a tab's words start as far from the frame's left edge
+  it was; its name, 11 screen pixels high, stands in for its words where
+  they are too small to read (a conversation's tab: its icon); a tab's words start as far from the frame's left edge
   as its icon stands from its top, a conversation's and a set's alike
   (`TAB_INSET`); what a set holds (a summary, a table, a chart) is
   HTML still, inside its frame. Its ports (`ports`): rings that grow with the
