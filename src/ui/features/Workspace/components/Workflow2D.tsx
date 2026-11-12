@@ -32,7 +32,7 @@ import { reachOverFrames } from "../utils/molecule3d";
 import { hairWritten, pageScale, wordsReadAt, zoomWritten } from "../utils/pageScale";
 import { usePresence } from "../../../theme/presence";
 import { DURATION, EASE, eased } from "../../../theme/motion";
-import { canWire, entryOnPage, givesOf, stateOf, stepsRun, wireInto, wireRefusal } from "../workflow/flow";
+import { canWire, entryOnPage, givesOf, newestWire, sourcesInto, stateOf, stepsRun, wiresInto, wireRefusal } from "../workflow/flow";
 import { addHow } from "../workflow/addStep";
 import { droppedBy, namesOf } from "../workflow/earlierRuns";
 import { exitsOf, howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
@@ -40,7 +40,7 @@ import { exitStart } from "../workflow/place";
 import { useReaders } from "../../../../lib/calc/workers";
 import { QUIET_AFTER_MIN, useAppSettings } from "../../../../lib/settings/appSettings";
 import { finished, quietFor } from "../../../../lib/jobs";
-import { CARD_H, CARD_W, framesHash, HTML_DISTANCE, inputLead, nearWire, onLayer, portDown, PX, setGives, setTakes, shuttingCard, stepTakes as portTakes, underCard, byTurn, FrameBudget, pointsFor, roundedWay, WIRE_LANE, WireEasing, wireLanes, wireRoute, wireKey, type WireRouted } from "../workflow/look";
+import { CARD_H, CARD_W, framesHash, HTML_DISTANCE, inputLead, nearWire, onLayer, portDown, PORT_PAGE_PX, PX, setGives, setTakes, shuttingCard, stepTakes as portTakes, underCard, byTurn, FrameBudget, pointsFor, roundedWay, WIRE_LANE, WireEasing, wireLanes, wireRoute, wireKey, type WireRouted } from "../workflow/look";
 import { byOf, doerOf, inputsFor, installedFor, kindsOf, notReadyFor, optionsFor, setName, stepOptions } from "../workflow/doers";
 import { diagramKept, diagramNeeds, diagramOptions, diagramValues } from "../workflow/diagramOptions";
 import { lookFor, useInstalled } from "../../../../lib/plugins/installed";
@@ -51,7 +51,7 @@ import PageLayer from "../pageGl/PageLayer";
 import { FRAME_PX, tabStart } from "../pageGl/frameParts";
 import { CARD, cardFace, nameBoxOf, nameFits, TONE, type CardFaceOf } from "../pageGl/cardFace";
 import { bandAt, inReadingOrder, namesKept, type Band } from "../pageGl/cardBands";
-import { dropOn, portOfKey, portParts, type PortAt } from "../pageGl/ports";
+import { dropOn, portCount, portOfKey, portParts, sourcesSaid, type PortAt } from "../pageGl/ports";
 import { PAGE_GL_ORDER } from "../pageGl/PageShapes";
 import { useAges, useEasedValues, useFaded } from "../pageGl/faded";
 import { useHitAt, type HitHandlers, type PagePointer } from "../pageGl/PageHits";
@@ -494,7 +494,6 @@ const DOUBLE_MS = 400;
 const MARKS_ORDER = FRAMES_ORDER - 0.9;
 /** Where the ports are drawn: over the molecules' chips (PAGE_GL_ORDER, their words + 1), under a chip opened over the rest (pageGl/PagePlaced RAISED_ORDER). */
 const PORTS_ORDER = PAGE_GL_ORDER + 4;
-const NO_TEXTS: readonly PageText[] = [];
 
 /** Frame `f` drawn `k` of the way out from `p` (1 itself, 0 the point): a result set folding into its exit's port. */
 const towards = (f: Frame, p: { x: number; y: number }, k: number): Frame => ({ x0: p.x + (f.x0 - p.x) * k, x1: p.x + (f.x1 - p.x) * k, y0: p.y + (f.y0 - p.y) * k, y1: p.y + (f.y1 - p.y) * k });
@@ -828,11 +827,15 @@ export default function Workflow2D() {
     );
   };
 
-  /** A press on a step's input: the wire into it picked up - into another, or let go on nothing, deleted - or, with none, one drawn back from it to a set. */
+  /**
+   * A press on a step's input: the wire into it picked up - into another, or
+   * let go on nothing, deleted; of several, the one wired in last - or, with
+   * none, one drawn back from it to a set.
+   */
   const drawInto = (e: ReactPointerEvent, step: number, port: string) => {
     if (e.button !== 0) return;
     const st = store.getState();
-    const was = st.wires.find((w) => w.to.step === step && w.to.port === port);
+    const was = newestWire(st, step, port);
     const at = worldOf(e.clientX, e.clientY);
     const drag = (p: Pt) => (was ? { from: was.from, at: p, was: was.id } : { to: { step, port }, at: p });
     st.setWorkflowView({ wireDrag: drag(at), wireRefused: null });
@@ -1173,7 +1176,7 @@ export default function Workflow2D() {
       const takes = diagram ? diagramOptions(flow, s, stepOptions(s)) : stepOptions(s);
       const own = diagram ? diagramValues(takes, s.options) : s.options;
       // (Add's: its formula, the number wired into its Number with it, where one is)
-      const how = s.kind === "add" ? addHow(optionsOf(takes, own), !!wireInto(flow, s.id, "number")) : howOf(takes, own, byOf(s) === "meno" ? info.how : undefined);
+      const how = s.kind === "add" ? addHow(optionsOf(takes, own), wiresInto(flow, s.id, "number").length > 0) : howOf(takes, own, byOf(s) === "meno" ? info.how : undefined);
       const run = runs.get(s.id);
       const state = run?.waiting ? "waiting" : (states.get(s.id) ?? "ready");
       const missing = notReadyFor(s) ?? (diagram ? diagramNeeds(flow, s) : undefined);
@@ -1418,6 +1421,8 @@ export default function Workflow2D() {
   // its left, and each of its exits down its right - a wire drawn out of one drawn out of that exit's set; the selection's,
   // while it holds what a set may - each as large as a hand takes it (pageGl/ports)
   const portList: PortAt[] = [];
+  // (an input's port that several wires come into: the names of their sets, in order)
+  const wiredFrom = new Map<string, string[]>();
   // (a set's own port: a set the chemist made's - a step's result set gives from its exit's port on the card, below)
   for (const b of onPage) {
     const f = shownOf(b);
@@ -1432,6 +1437,9 @@ export default function Workflow2D() {
     ports.forEach((p, k) => {
       // (the opened card's own: on it, in its HTML - WebGL draws under the page's HTML)
       if (s.id !== over && !underOpened({ x: s.x, y: s.y - portDown(k) })) portList.push({ key: `port:take:${s.id}:${p.id}`, x: s.x, y: s.y - portDown(k), ofPx: CARD_H / PX, label: ports.length > 1 ? `${p.name} into ${name}` : `Into ${name}` });
+      // (several wires into it: the sets they come from, in the order it takes them - flow `wiresInto`)
+      const sources = sourcesInto(flow, s.id, ports.length > 1 ? p.id : undefined);
+      if (sources.length > 1) wiredFrom.set(`port:take:${s.id}:${p.id}`, sources.map((x) => setInfo.get(x.set.id)?.name ?? x.name));
     });
     const exits = exitsOf(s.kind);
     exits.forEach((x, k) => {
@@ -1454,10 +1462,18 @@ export default function Workflow2D() {
   const portsShown = useFaded(portList, (p) => p.key);
   const portRings: Shape[] = [];
   const portRegions: Region[] = [];
+  // (and beside one several wires come into, how many - the sets they come from, in order, in the page's tip as it is pointed at)
+  const portCounts: PageText[] = [];
+  let portTip: PageTipAt | null = null;
   for (const { item, opacity, leaving } of portsShown) {
-    const parts = portParts(item, portTones.get(item.key) ?? 0, opacity);
+    const tone = portTones.get(item.key) ?? 0;
+    const parts = portParts(item, tone, opacity);
     portRings.push(parts.ring);
     if (parts.region && !leaving) portRegions.push(parts.region);
+    const from = wiredFrom.get(item.key);
+    const count = from && portCount(item, from.length, tone, opacity);
+    if (count) portCounts.push(count);
+    if (from && !leaving && portPointed === item.key) portTip = { key: item.key, text: sourcesSaid(from), x: item.x, y: item.y, w: PORT_PAGE_PX * PX, h: PORT_PAGE_PX * PX };
   }
   const onPort: HitHandlers = {
     down: (key, _part, e) => {
@@ -1600,7 +1616,7 @@ export default function Workflow2D() {
       )}
       {/* the ports, by WebGL: over the cards and the molecules' chips - a port is pressed, lit and let go on whatever lies
           over it on the page - but those under a card or a chip opened over the rest, which takes the press (PORTS_ORDER) */}
-      <PageLayer shapes={portRings} texts={NO_TEXTS} regions={portRegions} on={onPort} order={PORTS_ORDER} />
+      <PageLayer shapes={portRings} texts={portCounts} regions={portRegions} on={onPort} tip={portTip} order={PORTS_ORDER} />
     </group>
   );
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { COLORS } from "../../../theme/colors";
-import { dropOn, portColours, portControl, portOfKey, portParts } from "./ports";
+import { dropOn, portColours, portControl, portCount, portOfKey, portParts, sourcesSaid } from "./ports";
 
 describe("a workflow's port as WebGL draws it", () => {
   it("is 9 page pixels, nor more than a sixth of what it is on, but never under 5 screen pixels", () => {
@@ -48,5 +48,21 @@ describe("where a wire let go lands", () => {
     expect(dropOn("port:exit:4:failed", {}, exitSet)).toBeNull();
     expect(dropOn(null, {}, exitSet)).toBeNull();
     expect(dropOn("port:selection", {}, exitSet)).toBeNull();
+  });
+});
+
+describe("an input several wires come into", () => {
+  const port = { key: "port:take:4:in", x: 10, y: 20, label: "Into Duplicates" };
+
+  it("says how many beside its port - small, up and to its left where they come in, in its line's colour as it is lit - and nothing for one wire", () => {
+    expect(portCount(port, 1, 0)).toBeNull();
+    const at = portCount(port, 3, 0)!;
+    expect(at).toMatchObject({ key: "port:take:4:in:count", text: "3", anchor: "end", sizePx: 9, color: portColours(0).line });
+    expect([at.x < port.x, at.y > port.y]).toEqual([true, true]);
+    expect(portCount(port, 2, 2, 0.5)).toMatchObject({ color: portColours(2).line, opacity: 0.5 });
+  });
+
+  it("lists, pointed at, the sets wired in, numbered in the order it takes them", () => {
+    expect(sourcesSaid(["Round 1", "Round 2", "Trans already"])).toBe("1 Round 1 \u00b7 2 Round 2 \u00b7 3 Trans already");
   });
 });

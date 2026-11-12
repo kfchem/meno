@@ -240,13 +240,16 @@ describe("wires", () => {
     expect(canWire(doc, { set: rest.id }, lastStep(doc))).toBe(true);
   });
 
-  it("into a step replace the one it had; deleted, go", () => {
+  it("into a step stand beside the one it had - the same set again, nothing new; deleted, go", () => {
     let doc = addStep(page(), "duplicates", 5, 0);
     const step = lastStep(doc);
     doc = addSet(doc, { x0: 30, y0: 0, x1: 31, y1: 1 });
     const other = doc.sets![doc.sets!.length - 1].id;
     doc = connect(doc, { set: 1 }, step);
     doc = connect(doc, { set: other }, step);
+    expect(doc.wires!.map((w) => w.from)).toEqual([{ set: 1 }, { set: other }]);
+    expect(connect(doc, { set: other }, step)).toBe(doc);
+    doc = removeWire(doc, doc.wires![0].id);
     expect(doc.wires!.map((w) => w.from)).toEqual([{ set: other }]);
     doc = removeWire(doc, doc.wires![0].id);
     expect(doc.wires).toEqual([]);

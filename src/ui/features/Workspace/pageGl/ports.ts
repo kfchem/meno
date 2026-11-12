@@ -9,9 +9,10 @@
  * 12 screen pixels about its middle, however small it is drawn.
  */
 import { colourMix, COLORS } from "../../../theme/colors";
-import { PORT_LEAST_SCREEN_PX, PORT_PAGE_PX, PORT_SHARE } from "../workflow/look";
+import { PORT_LEAST_SCREEN_PX, PORT_PAGE_PX, PORT_SHARE, PX } from "../workflow/look";
 import type { Region } from "./hits";
 import type { Ring } from "./shapes";
+import type { PageText } from "./texts";
 import type { Control } from "./units";
 
 /** A port where it stands on the page; what it is on, how tall (page px); what it is called - for the page's tip and a screen reader, which say it from part 9 of drawing the page by WebGL: nothing reads it yet; whether it takes the pointer. */
@@ -43,6 +44,23 @@ export function portParts(p: PortAt, tone: number, opacity = 1): { ring: Ring; r
     region: p.noHits ? null : { key: p.key, part: "port", circle: { x: p.x, y: p.y, diameterPx: PORT_PX.taken, size }, z: 5, cursor: "crosshair" },
   };
 }
+
+/** How far up and to the left of a port's middle a count of the wires into it stands (page units: 6 page px), where they come in. */
+const COUNT_OFF = 6 * PX;
+
+/**
+ * How many wires come into a step's input, where two or more do
+ * (docs/WORKFLOWS.md, *Several wires into one input*): a small count beside
+ * its port, up and to the left where they come in, 9 page px, in the
+ * port's line's colour at `tone`. None for one wire or none.
+ */
+export function portCount(p: PortAt, count: number, tone: number, opacity = 1): PageText | null {
+  if (count < 2) return null;
+  return { key: `${p.key}:count`, x: p.x - COUNT_OFF, y: p.y + COUNT_OFF, anchor: "end", text: String(count), sizePx: 9, color: portColours(tone).line, weight: 500, z: 5, opacity };
+}
+
+/** What the page's tip says of an input several wires come into, pointed at: each set wired in, numbered in the order its entries are taken (flow `wiresInto`) - "1 Round 1 · 2 Round 2". */
+export const sourcesSaid = (names: readonly string[]): string => names.map((n, k) => `${k + 1} ${n}`).join(" \u00b7 ");
 
 /** What a port's key says it is: a step's input, one of its exits, a set's giving, the selection's. */
 export function portOfKey(key: string): { take: { step: number; port: string } } | { exit: { step: number; exit: string } } | { give: { set: number } } | { selection: true } | null {

@@ -85,9 +85,10 @@ describe("a step's result set held off the page (docs/WORKFLOWS.md, *Held result
     let doc = addSet(page(), { x0: -40, y0: -40, x1: -30, y1: -30 });
     const chemist = doc.sets![doc.sets!.length - 1]!.id;
     expect(heldSets(doc).size).toBe(0);
-    doc = connect(connect(doc, { set: KEPT }, ENERGY), { set: chemist }, ENERGY);
-    // (the chemist's set wired in place of the Filter's: one wire into an input)
+    doc = connect(doc, { set: chemist }, ENERGY);
+    // (the chemist's set wired in, not the Filter's)
     expect([isHeld(doc, setOf(doc, KEPT)), isHeld(doc, setOf(doc, chemist))]).toEqual([false, false]);
+    // (the Filter's wired in beside it: several wires into one input)
     doc = connect(doc, { set: KEPT }, ENERGY);
     expect([isHeld(doc, setOf(doc, KEPT)), isHeld(doc, setOf(doc, chemist))]).toEqual([true, false]);
     doc = { ...doc, sets: doc.sets!.map((b) => (b.id === KEPT ? { ...b, opened: true as const } : b)) };

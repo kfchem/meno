@@ -39,7 +39,7 @@ import { conformersSought, conformersSoughtOf, roundsAsked, soughtNumber } from 
 import type { Conformers } from "../../../../../lib/roles/client";
 import { inRounds, roundsSaid } from "../../chem/conformerRounds";
 import { roundsJudge } from "../../chem/roundsJudge";
-import { allToRun, chainTo, findSet, inputKey, inputOf, stepOf, stepsAfter, wiresInto } from "../../workflow/flow";
+import { allToRun, allWiresInto, chainTo, findSet, inputKey, inputOf, stepOf, stepsAfter } from "../../workflow/flow";
 import { kindInfo, optionsOf, takesNothing, type Holds3D, type SetKind, type StepKind, isSetKind } from "../../workflow/kinds";
 import { failuresSaid, type Failure, type FailureKind } from "../../workflow/failures";
 import { setRan, setRunning } from "../../workflow/model";
@@ -198,7 +198,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
 
   /** The steps before a step: each that gives what comes into one of its inputs, once - a step of two inputs may have two. */
   const before = (d: WorkspaceDocument, id: number) => {
-    const ids = new Set(wiresInto(d, id).flatMap((w) => findSet(d, w.from.set)?.made?.step ?? []));
+    const ids = new Set(allWiresInto(d, id).flatMap((w) => findSet(d, w.from.set)?.made?.step ?? []));
     return [...ids].flatMap((k) => stepOf(d, k) ?? []);
   };
 

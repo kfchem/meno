@@ -11,7 +11,7 @@ import type { DrawnModel, DrawnRecord, Member, StepRunKept, WireEnd, WorkflowSet
 import type { OptionValues } from "../../../../lib/options";
 import { inside, lyingIn, membersOf, placesOf, readingOrder, setMembers, memberRecord, recordOn, structureMember, type Frame } from "./entries";
 import { CHART_PX, NAME_DOWN, PX, SET_PAD, SET_TOP, TABLE_PX, tableBodyPx } from "./look";
-import { canWire, resultOf, wireInto } from "./flow";
+import { canWire, resultOf, wiresInto } from "./flow";
 import { exitsOf, ONE_INPUT, type StepKind } from "./kinds";
 import { byOf, inputsFor } from "./doers";
 import { CARD_H, CARD_W, GAP, BETWEEN } from "./look";
@@ -323,7 +323,13 @@ export function removeStep(doc: WorkspaceDocument, id: number): WorkspaceDocumen
   };
 }
 
-/** `doc` with a wire from `from` into the step `to` - in place of one it had - where it may go there (flow `canWire`). */
+/**
+ * `doc` with a wire from `from` into the step `to`, beside any it has there
+ * already - several wires into one input give it what each set holds, in
+ * the order they lie on the page (flow `inputOf`) - where it may go there
+ * (flow `canWire`). The same set wired in again changes nothing; one wire
+ * takes another's place only as the chemist takes that one out.
+ */
 export function connect(doc: WorkspaceDocument, from: WireEnd, to: number, into?: string): WorkspaceDocument {
   // (no input named: the first of the step's that takes what comes)
   const step = doc.steps?.find((s) => s.id === to);
@@ -331,11 +337,9 @@ export function connect(doc: WorkspaceDocument, from: WireEnd, to: number, into?
   if (inputs && !inputs.length) return doc;
   const port = into ?? (inputs ? (inputs.find((p) => canWire(doc, from, to, p.id))?.id ?? inputs[0].id) : ONE_INPUT);
   if (!canWire(doc, from, to, port)) return doc;
-  const was = wireInto(doc, to, port);
-  if (was && JSON.stringify(was.from) === JSON.stringify(from)) return doc;
+  if (wiresInto(doc, to, port).some((w) => w.from.set === from.set)) return doc;
   const id = idOf(doc);
-  // (one wire to an input: a new one takes the place of what was there)
-  return { ...doc, nextWorkflowId: id + 1, wires: [...(doc.wires ?? []).filter((w) => !(w.to.step === to && w.to.port === port)), { id, from, to: { step: to, port } }] };
+  return { ...doc, nextWorkflowId: id + 1, wires: [...(doc.wires ?? []), { id, from, to: { step: to, port } }] };
 }
 
 export function removeWire(doc: WorkspaceDocument, id: number): WorkspaceDocument {

@@ -429,7 +429,9 @@ are a *Frequencies* step's, wired after it.
   `%geom` block's MaxIter (4.5.13), ORCA's own unless said. Each is the
   chemist's to change on the card.
 - **Pairs.** Each start is paired with an end as the step's *Pairs* says:
-  *In order* (the k-th with the k-th; other numbers refused), *Each with
+  *In order* (the k-th with the k-th, as they come in - over several wires
+  into one input, by where their sets lie on the page, so moving a frame
+  past another changes the pairs; other numbers refused), *Each with
   each*, or *Matched on* a property typed, an ID a *Tag* gave. A start with
   no end to match, a pair of other atoms or another order of them, or of
   another charge or spin, goes out of *Failed* with why; only the rest are
@@ -748,10 +750,51 @@ one of the kinds of calculation it does (decided: 16):
   page;
   a compound set does not go into *Populations* - *As conformers* goes
   between, or a *Conformers* step.
-- **One set may feed several steps**; an input takes one wire. A wire
-  drawn to an input that has one replaces it.
+- **One set may feed several steps**, and an input may take several
+  wires (*Several wires into one input*). A wire drawn to an input that
+  has one stands beside it. The same set wired in again changes nothing.
+  To put one wire in another's place, take that one out first.
 - **Deleted** by Delete or Backspace with the pointer on it, or its menu;
   dragging its end off a port and letting go on nothing deletes it too.
+  Of several into one input, a press on the port picks up the one wired
+  in last.
+
+### Several wires into one input
+
+- **What comes in** is every set wired in, one after another. Nothing is
+  taken out twice; *Duplicates* does that.
+- **The order** is where the sets lie on the page: top to bottom, then
+  left to right, by each frame's top left corner, as a set's members are
+  ordered. A step's exit counts by the set it made. The order the wires
+  were drawn in is seen nowhere, so it orders nothing. Each set's entries
+  keep their own order. Structures drawn on the page come before those a
+  large result set holds off it, as for one set.
+- **Where each came from**: every entry carries `came from`, the name of
+  the set it came from as its frame says it (a step's exit, as the step
+  names what it makes). A *Filter* or a *Join* can use it. One wire alone
+  adds no such name.
+- **Drawn reactions**: each set around a drawn reaction gives its
+  structures their `role` and `reaction` from its own drawing (*A set
+  around a drawn reaction*), so two sets' reactions may both be number 1;
+  `came from` tells them apart.
+- **One kind**: the sets wired into one input hold one kind, as one set's
+  entries do. A wire that gives another kind than the one there is
+  refused, and a set that has come to hold another kind since is said
+  before the step runs. An input that takes a number takes one.
+- **Tables** wired into one input are read as one: the first's columns,
+  then each column a later one adds, by name. A row with no cell in a
+  column is empty there.
+- **Waiting**: a set wired in whose step has not run makes the step wait,
+  as one wire does. An empty set adds nothing, and the step's line says
+  so ("2 wires, 1 empty").
+- **Pairing inputs** (*Path search*'s Start and End, *In order* or *Each
+  with each*; any step of two inputs) count the entries over all their
+  wires, in that order.
+- **How it looks**: with two or more wires, a small count stands beside
+  the port, in the port's colour. Pointed at, the page's tip lists the
+  sets in order ("1 Round 1 · 2 Round 2 · 3 Trans already").
+- **Merge**'s *Keep: All* does what several wires into one input do; its
+  card says so.
 
 ### Its options
 
