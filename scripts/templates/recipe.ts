@@ -81,7 +81,10 @@ export const NOTES: { stage: string; text: string }[] = [
     text: "Counted per entry: each torsion held in a pass takes that pass's value for its entry. ConfoTS counts each torsion's own failed passes, so a torsion here can be held more strongly than there. The first round's strength, 50, is Meno's own measured one; 100 and 150, three rounds (ConfoTS allows ten) and 2000 minimisation steps (the plugin's default) have no basis of their own: they are yours to change. Ends still wrong after the last round are dropped.",
   },
   { stage: `${STAGES.pairs} to the reactant`, text: "The same rounds, from the products' conformers. Both directions are wired: take the paths of the one you want, or both." },
-  { stage: STAGES.diagram, text: "The share of the reaction through each path is not in Meno yet. The barriers and the diagram show which path is lower." },
+  {
+    stage: STAGES.diagram,
+    text: "Each direction keeps up to 16 saddle points of a path (ConfoTS's 16 is for the path); the two together are capped at the lowest 16 of each path. A saddle point found from both directions may appear twice: its two entries are bonded differently, as the product and as the reactant, and Duplicates does not take them as one. The share of the reaction through each path is not in Meno yet. The barriers and the diagram show which path is lower.",
+  },
   {
     stage: STAGES.dft,
     text: "The saddle point is optimised from the guess and the two ends of its reaction path (ends optimised in xTB, as they are not in ConfoTS), with the model Hessian: change it to computed if the route asks for force constants. Minima are optimised without ConfoTS's tight convergence, which the Gaussian plugin's Optimise does not offer. No standard-state term; the share of each path is not in Meno yet.",
@@ -266,6 +269,8 @@ function dft(): RecipeStep[] {
     step({ key: "dft-min-g", stage, kind: "add", options: sum, in: { in: "dft-min-sp" }, note: "G at the DFT level: the single point plus the thermal correction" }),
     step({ key: "dft-min-distinct", stage, kind: "duplicates", in: { in: "dft-min-g" } }),
   ];
+  // (the capped saddle points back by the direction they were found from: only a forward one carries the forward path's tag)
+  r.push(step({ key: "dft-split", stage, kind: "filter", options: { conditions: "path-forward != none", match: "all" }, in: { in: "saddles-16" }, note: "The saddle points found from the reactant, and the rest, from the products" }));
   for (const d of ["forward", "backward"] as const) {
     // (the ends of a reaction path: the reactant's is the first where the paths are made from the reactant's conformers, the last where from the products')
     const [reactantSide, productSide] = d === "forward" ? [`${d}/first-opt`, `${d}/last-opt`] : [`${d}/last-opt`, `${d}/first-opt`];
@@ -277,7 +282,7 @@ function dft(): RecipeStep[] {
         kind: "saddle-point",
         by: "gaussian",
         options: { method: DFT_GEOMETRY.method, basis: DFT_GEOMETRY.basis, dispersion: DFT_GEOMETRY.dispersion, solvation: DFT_GEOMETRY.solvation, keywords: "", memory: "", hessian: "model", tight: true, pairs: "property", property: `path-${d}` },
-        in: { guesses: `${d}/ranked`, reactant: reactantSide, product: productSide },
+        in: { guesses: d === "forward" ? "dft-split" : "dft-split.rest", reactant: reactantSide, product: productSide },
         note: "The saddle point from the guess and the two ends, matched on the path",
       }),
       step({ key: k("freq"), stage, kind: "frequencies", by: "gaussian", options: DFT_GEOMETRY, in: { in: k("saddle") } }),
@@ -366,11 +371,13 @@ function body(): RecipeStep[] {
     ...direction("forward", { geometry: "sides", geometryTag: "start", bonding: "product-species", bondingTag: "product", tagged: true, target: "product-species", reference: "species", pathsBy: "product" }),
     ...direction("backward", { geometry: "sides.rest", geometryTag: "pc", bonding: "reactant-species", bondingTag: "reactant", product: "product-species", reference: "species", pathsBy: "product" }),
     // The diagram at the xTB level
-    step({ key: "saddles", stage: STAGES.diagram, kind: "merge", options: { keep: "all", property: "" }, in: { first: "forward/ranked", second: "backward/ranked" }, note: "Validated saddle points" }),
+    step({ key: "saddles", stage: STAGES.diagram, kind: "merge", options: { keep: "all", property: "" }, in: { first: "forward/ranked", second: "backward/ranked" }, note: "Validated saddle points of both directions" }),
+    // (ConfoTS's 16 is for the path: the two directions together are capped at the lowest 16 of each path)
+    step({ key: "saddles-16", stage: STAGES.diagram, kind: "rank", options: { property: "energy", order: "lowest first", keep: 16, within: "each value", groupBy: "product" }, in: { in: "saddles" }, note: "At most 16 saddle points of each path, from both directions" }),
     step({ key: "minima-5", stage: STAGES.diagram, kind: "energy-window", options: { window: 5 }, in: { in: "bonded" } }),
     step({ key: "minima-16", stage: STAGES.diagram, kind: "rank", options: { property: "energy", order: "lowest first", keep: 16, within: "each group", groupBy: "" }, in: { in: "minima-5" } }),
     step({ key: "minima-freq", stage: STAGES.diagram, kind: "frequencies", by: "orca", options: XTB, in: { in: "minima-16" } }),
-    step({ key: "levels", stage: STAGES.diagram, kind: "merge", options: { keep: "all", property: "" }, in: { first: "minima-freq", second: "saddles" }, note: "Minima and saddle points" }),
+    step({ key: "levels", stage: STAGES.diagram, kind: "merge", options: { keep: "all", property: "" }, in: { first: "minima-freq", second: "saddles-16" }, note: "Minima and saddle points" }),
     step({
       key: "diagram",
       stage: STAGES.diagram,
@@ -380,7 +387,7 @@ function body(): RecipeStep[] {
       note: "Energy diagram",
     }),
     step({ key: "lowest", stage: STAGES.diagram, kind: "rank", options: { property: "thermo.free-energy", order: "lowest first", keep: 1, within: "each value", groupBy: "species" }, in: { in: "minima-freq" } }),
-    step({ key: "barriers", stage: STAGES.diagram, kind: "barrier", options: { energy: "G", free: "thermo.free-energy", symmetry: "as-read", pairs: "each", property: "" }, in: { saddles: "saddles", starts: "lowest" }, note: "Barriers" }),
+    step({ key: "barriers", stage: STAGES.diagram, kind: "barrier", options: { energy: "G", free: "thermo.free-energy", symmetry: "as-read", pairs: "each", property: "" }, in: { saddles: "saddles-16", starts: "lowest" }, note: "Barriers" }),
   ];
   return r;
 }
