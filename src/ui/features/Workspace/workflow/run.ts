@@ -18,7 +18,7 @@ export { chipWide };
 import { isHeld } from "./onPage";
 import { findSet, givesOf, inputKey, inputOf, moleculesSeen, resultOf, stateOf, stepOf, stepsBefore, tableInto, tableWired, wireInto, wiresInto } from "./flow";
 import { chartOfTable, chartSaid, type ChartValue } from "../../../../lib/chart";
-import { diagramOf, diagramSaid, levelNamer, type DiagramValue, type RowCompound } from "../../../../lib/energyDiagram";
+import { diagramOf, diagramSaid, levelNamer, propertiesTyped, type DiagramValue, type RowCompound } from "../../../../lib/energyDiagram";
 import { asideExit, exitsOf, inputsOf, kindInfo, modeRead, laterPortsNeed, MENO_DOES, optionsOf, ONE_INPUT, readsAsTable, takenBy, restHolds, type Holds3D, type SetHolds, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
 import { MENO_ONLY, VALUE_KINDS } from "../../../../lib/plugins/steps";
 import { doerName, inputsFor, MENO, takesBy, takesNothingBy } from "./doers";
@@ -320,23 +320,38 @@ function diagramRun(doc: WorkspaceDocument, step: WorkflowStep, w: RunWith, key:
   if (!seen) return setRan(keepRun(doc, step), step.id, said(false, "Nothing comes into Levels"));
   const levels = seen.table;
   // (a level stands on its entries' energies as results: one that failed, did not converge or whose marks did not read refuses it - never the lowest of the rest, which may not be its lowest)
-  const levelOf = levelNamer(levels);
+  const o = step.options ?? {};
+  const levelOf = levelNamer(levels, propertiesTyped(typeof o.levelsBy === "string" ? o.levelsBy : ""));
   const bad = notResults(seen.entries, (k) => levelOf(levels.rows[k]) || "A level");
   if (bad) return setRan(keepRun(doc, step), step.id, said(false, bad));
   const joined = wireInto(doc, step.id, "connects");
   const connects = joined ? tableWired(doc, step.id, "connects") : null;
   if (joined && !connects) return setRan(keepRun(doc, step), step.id, said(false, "Connects holds no table"));
-  const o = step.options ?? {};
   const text = (v: unknown) => (typeof v === "string" ? v : undefined);
   const d = diagramOf(
     levels,
-    { ...(text(o.quantity) ? { quantity: text(o.quantity) } : {}), ...(text(o.reference) ? { reference: text(o.reference) } : {}), ...(text(o.levels) ? { levels: text(o.levels) } : {}) },
+    {
+      ...(text(o.quantity) ? { quantity: text(o.quantity) } : {}),
+      ...(text(o.reference) ? { reference: text(o.reference) } : {}),
+      ...(text(o.levels) ? { levels: text(o.levels) } : {}),
+      ...(text(o.levelsBy) ? { levelsBy: text(o.levelsBy) } : {}),
+      ...(text(o.joinedBy) ? { joinedBy: text(o.joinedBy) } : {}),
+      ...(text(o.conformers) ? { conformers: text(o.conformers) } : {}),
+    },
     connects ?? undefined,
     rowCompounds(levels, seen.entries),
   );
   if ("why" in d) return setRan(keepRun(doc, step), step.id, said(false, d.why));
   // (each level with the imaginary frequencies of the entry it stands at: said, not judged)
-  const withFrequencies = { ...d, levels: d.levels.map((l) => ({ ...l, lowest: { ...l.lowest, imaginary: imaginaryOf(seen.entries[l.lowest.row]) } })) };
+  // (and each thin line, its own entry's: a saddle point's other conformers may differ in their count)
+  const withFrequencies = {
+    ...d,
+    levels: d.levels.map((l) => ({
+      ...l,
+      lowest: { ...l.lowest, imaginary: imaginaryOf(seen.entries[l.lowest.row]) },
+      ...(l.others ? { others: l.others.map((x) => ({ ...x, imaginary: imaginaryOf(seen.entries[x.row]) })) } : {}),
+    })),
+  };
   return setRan(placeChart(keepRun(doc, step), step, withFrequencies), step.id, said(true, diagramSaid(d)));
 }
 
