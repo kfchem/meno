@@ -40,6 +40,16 @@ const dce = (cis: boolean, properties: SetEntry["properties"] = {}) => {
   );
 };
 
+/** C-N=N-C, azobenzene with each N's phenyl as its one carbon: the C-N=N-C torsion at `phi` (0° cis, 180° trans). */
+const azo = (phi: number) => {
+  const r = (phi * Math.PI) / 180;
+  return entry(["C", "N", "N", "C"], [-0.7, 1.2, 0, 0, 0, 0, 1.25, 0, 0, 1.95, 1.2 * Math.cos(r), 1.2 * Math.sin(r)], [
+    [0, 1, 1],
+    [1, 2, 2],
+    [2, 3, 1],
+  ]);
+};
+
 /** H3N->BH3. */
 const borane = entry(["B", "N", "H", "H"], [0, 0, 0, 1.65, 0, 0, -0.4, 1, 0, 2.05, 1, 0], [[0, 1, 1], [0, 2, 1], [1, 3, 1]]);
 
@@ -155,6 +165,27 @@ describe("Torsion restraints, as a step", () => {
     expect(torsionsSet([dce(true)], null, "molecules", { ...TORSIONS, torsions: "reference" })).toEqual({ ok: false, said: "Nothing comes into Reference: wire the reference, or type the torsions" });
   });
 
+  it("sets aside, saying why, two entries with one ID; and writes in each row the numbering its entry is in", () => {
+    const o = torsionsSet([tagged(dce(true), "start", "x"), tagged(dce(false), "start", "x"), tagged(dce(true), "start", "y")], null, "molecules", { ...TORSIONS, torsions: "typed", atoms: "3-1-2-4", target: "180" });
+    if (!o.ok) throw new Error(o.said);
+    expect(rowsGiven(o).map((r) => [r.for, r.numbering])).toEqual([["y", "its own"]]);
+    expect(o.aside.map((e) => e.failed?.why)).toEqual(["Its start, x, is another entry's here too: rows made for it would be both's", "Its start, x, is another entry's here too: rows made for it would be both's"]);
+    const mapped = { ...tagged(dce(true), "start", "p1"), properties: { ...tagged(dce(true), "start", "p1").properties, [NUMBERING]: { value: "as a #1 (x)", unit: "none" as const, status: "computed" as const, label: true as const } } };
+    expect(rowsGiven(torsionsSet([mapped], null, "molecules", { ...TORSIONS, torsions: "typed", atoms: "3-1-2-4", target: "180" })).map((r) => r.numbering)).toEqual(["as a #1 (x)"]);
+    expect(rowsGiven(torsionsSet([mapped], [dce(false)], "molecules", { ...TORSIONS, torsions: "reference" })).map((r) => r.numbering)).toEqual(["as a #1 (x)", "as a #1 (x)"]);
+  });
+
+  it("says, at 180°, the entries with a double bond cis in the reference it does not hold, and what does hold it", () => {
+    const o = torsionsSet([tagged(azo(180), "start", "a"), tagged(azo(0), "start", "b")], [azo(0)], "molecules", { ...TORSIONS, torsions: "reference", at: "trans" });
+    expect(o.ok && o.said).toBe("0 rows for 2 entries \u00b7 2 entries with none to hold \u00b7 1 entry with a double bond cis in the reference not held: choose Held at: the reference's own angle");
+    expect(torsionsSet([tagged(azo(180), "start", "a")], [azo(0)], "molecules", { ...TORSIONS, torsions: "reference", at: "own" })).toMatchObject({ ok: true, said: "1 row for 1 entry" });
+  });
+
+  it("refuses an angle that is not written as a number in degrees: 0x10 is none", () => {
+    expect(kindInfo("torsion-restraints").needs!({ on: "start", atoms: "1-2-3-4", target: "0x10" })).toBe("The angle must be a number, in degrees");
+    expect(kindInfo("torsion-restraints").needs!({ on: "start", atoms: "1-2-3-4", target: "-1.5e2" })).toBeUndefined();
+  });
+
   it("says what it needs - no angle of its own - and its line, the strength unless held exactly: 50 kcal/mol/rad² unless set, measured", () => {
     const needs = kindInfo("torsion-restraints").needs!;
     expect(needs({})).toBe("Name the property each row is for (an ID a Tag wrote)");
@@ -187,6 +218,13 @@ describe("Compare torsions, as a step", () => {
     expect(o.said).toBe("2 entries compared \u00b7 1 with torsions unlike the reference's");
     expect(kindInfo("compare-torsions").how?.({})).toBe("trans in the reference, cis here \u00b7 trans: more than 90\u00b0 either way (Klyne\u2013Prelog)");
     expect(kindInfo("compare-torsions").others?.map((x) => x.id)).toEqual(["failed"]);
+  });
+
+  it("says the entries whose reference's double bond, with no trans torsion, it checked by a cis one", () => {
+    const o = runMenoPair("compare-torsions", { entries: [azo(180), azo(0)], holds: "molecules" }, { entries: [azo(0)], holds: "molecules" }, {});
+    if (!o.ok) throw new Error(o.said);
+    expect(o.kept.map((e) => e.properties?.[TORSIONS_UNLIKE_COUNT]?.value)).toEqual([1, 0]);
+    expect(o.said).toBe("2 entries compared \u00b7 1 with torsions unlike the reference's \u00b7 2 entries checked by a cis torsion where the reference has no trans one");
   });
 
   it("sets one it cannot set against a reference out of Failed, with why", () => {
