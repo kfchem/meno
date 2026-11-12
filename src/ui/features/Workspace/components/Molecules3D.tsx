@@ -7,6 +7,7 @@ import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { bondRadiusOf, STYLE_3D, type Style3D } from "../../../../lib/chem/style3d";
 import KeyLight3D from "./KeyLight3D";
 import ScreenShade3D from "./ScreenShade3D";
+import WarmShaders3D from "./WarmShaders3D";
 import { MOV_PX } from "../constants";
 import { useEditor, useEditorStore } from "../store";
 import type { EditorState, Molecule3D, Turn3D } from "../store/types";
@@ -774,6 +775,8 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
         screen={style.primary.occlusionBy === "screen" || style.secondary.occlusionBy === "screen"}
       />
       <ScreenShade3D />
+      {/* the shaders a molecule is drawn with, made ready as the page starts: the first one made never waits a frame on them */}
+      <WarmShaders3D style={style} stereoFont={stereoFont} />
       {heldAny && <HeldViews3D style={style} hover={heldHover} onHover={setHeldHover} onTurning={setHeldTurning} stereoFont={stereoFont} />}
       {molecules.map((m) => {
         if (hiddenStacked.has(m.id)) return null;
