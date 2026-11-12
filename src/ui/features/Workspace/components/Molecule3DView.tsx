@@ -3,6 +3,7 @@ import { longPressMs } from "../longPress";
 import PageHtml from "./PageHtml";
 import { useFrame, useThree } from "@react-three/fiber";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { noteEntry, timed } from "../../../../lib/core/frameProbe";
 import * as THREE from "three";
 import { COLORS } from "../../../theme/colors";
 import { DURATION, TAU } from "../../../theme/motion";
@@ -289,12 +290,14 @@ export type Molecule3DViewProps = {
 
 function Molecule3DView(props: Molecule3DViewProps) {
   const { m, style, look, frame, turn, lit, selected, chosen, chosenBonds, holding, following, leaving } = props;
-  const solid = solidOf(m, style);
+  const probeStart = performance.now();
+  useLayoutEffect(() => noteEntry(`Molecule3DView #${m.id} render->commit (${1 + (m.frames?.length ?? 0)} frames)`, performance.now() - probeStart));
+  const solid = timed(`Molecule3DView #${m.id}: solidOf`, () => solidOf(m, style), 1);
   const n = m.atoms.length;
   // the bonds drawn: its bonds - or, where they go frame by frame, every
   // bond any frame has, each drawn as far as the frame shown has it, growing
   // and shrinking as frames go (utils/molecule3d `frameBondsOf`)
-  const fb = useMemo(() => frameBondsOf(m), [m]);
+  const fb = useMemo(() => timed(`Molecule3DView #${m.id}: frameBondsOf`, () => frameBondsOf(m), 1), [m]);
   // (and a stick from a metal to each ring's or double bond's centre it is bound to, after them: withCentres)
   const drawn = useMemo(() => (fb || m.centres?.length ? { ...m, bonds: withCentres(m, fb ? fb.bonds : m.bonds) } : m), [m, fb]);
   const lineCount = useMemo(() => drawn.bonds.reduce((k, b) => k + linesOf(b.order), 0), [drawn.bonds]);
@@ -452,7 +455,7 @@ function Molecule3DView(props: Molecule3DViewProps) {
   //  under its name: that one left to its frames chip, which says its frames; the rest one short line, all of them as it
   //  is pointed at or selected - never over the set's name or a molecule beside it)
   const plain = useMemo(() => plainNoteOf(m), [m]);
-  const notesNow = useMemo(() => notesOf(m, solid, look).filter((t) => !(props.inSet && t === plain)), [m, solid, look, props.inSet, plain]);
+  const notesNow = useMemo(() => timed(`Molecule3DView #${m.id}: notesOf`, () => notesOf(m, solid, look), 1).filter((t) => !(props.inSet && t === plain)), [m, solid, look, props.inSet, plain]);
   const notesEver = useMemo(
     () => [...new Set([...notesOf(m, solid, "primary"), ...notesOf(m, solid, "secondary")])].filter((t) => !(props.inSet && t === plain)),
     [m, solid, props.inSet, plain],
@@ -498,7 +501,7 @@ function Molecule3DView(props: Molecule3DViewProps) {
   }, [holding, m.atoms, m.bonds, n]);
   // each bond's lines, by bond
   const lineBond = useMemo(() => drawn.bonds.flatMap((b, i) => Array.from({ length: linesOf(b.order) }, () => i)), [drawn.bonds]);
-  const bent = useMemo(() => bentLinesOf(drawn, solid), [drawn, solid]);
+  const bent = useMemo(() => timed(`Molecule3DView #${m.id}: bentLinesOf`, () => bentLinesOf(drawn, solid), 1), [drawn, solid]);
   const isBent = useMemo(() => (bent ? Uint8Array.from({ length: lineCount }, (_, k) => (bent.includes(k) ? 1 : 0)) : null), [bent, lineCount]);
   // (made again at another number of segments with what each stick carries - its bend, its colours - moved over: `carriedInstanced`;
   //  not where the lines that bend are others. Once for each geometry it carries from: a render that runs a memo twice, as React's
