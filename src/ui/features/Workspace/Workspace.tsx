@@ -6,7 +6,8 @@ import type { ArrowKind, ArrowWeight } from "../../../lib/chem/reactionArrow";
 import { canTakeBond, valenceOrder } from "../../../lib/chem/molecule";
 import { usePresentingWindow } from "../../presenting";
 import { typefaceRead } from "../../fonts/typefaces";
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { noteEntry, startProbe, timed } from "../../../lib/core/frameProbe";
 import { Vector3 } from "three";
 import type { MenuAnchor } from "./useMenuAt";
 import { useEditor, useEditorStore, EditorProvider } from "./store";
@@ -578,9 +579,9 @@ function WorkspaceContent({
           if (growth) growths.push({ growth, block, several: growth.first.length > 1, from: made.length, window3d });
           const isomersMade = (growth ? growth.first : await conformersOnPage(chem, stereo, block, isomers, options, useAppSettings.getState(), rounds)).map((c) => withinWindow(c, window3d));
           // (several stereoisomers: their R and S shown, to tell them apart)
-          const ms = isomersMade.map((c) => moleculeOf(c, block, isomersMade.length > 1));
+          const ms = timed("arrive: moleculeOf", () => isomersMade.map((c) => moleculeOf(c, block, isomersMade.length > 1)), 0);
           const model = store.getState().model;
-          const turned = ms.map((m) => turnedOver(m, model, look3d));
+          const turned = timed("arrive: turnedOver", () => ms.map((m) => turnedOver(m, model, look3d)), 0);
           // beside the drawing, where they can be seen as the view is now,
           // clear of what is on the page - or, made again, where the one
           // made before stood
@@ -605,7 +606,7 @@ function WorkspaceContent({
         }
         // (made with a key where a search goes on, so that what it brings joins this step where nothing came between)
         const key = `made3d:${++madeCount.current}`;
-        const ids = store.getState().riseMolecules3d(made, replacing ? [replacing.id] : [], growths.length ? key : undefined);
+        const ids = timed("arrive: riseMolecules3d", () => store.getState().riseMolecules3d(made, replacing ? [replacing.id] : [], growths.length ? key : undefined), 0);
         // (with no room for them in view, the view goes to them - along, or out as little as needed)
         if (!allInView && made3d) store.getState().requestShow(made3d);
         if (!growths.length) return;
@@ -625,7 +626,7 @@ function WorkspaceContent({
           try {
             await g.growth.rest((k, c) => {
               const id = ids[g.from + k];
-              if (store.getState().growing3d[id]) store.getState().grow3d(id, grownOf(moleculeOf(withinWindow(c, g.window3d), g.block, g.several)), key);
+              if (store.getState().growing3d[id]) timed("grow: moleculeOf+grow3d", () => store.getState().grow3d(id, grownOf(moleculeOf(withinWindow(c, g.window3d), g.block, g.several)), key), 0);
             });
           } finally {
             // (what it brought written, however it ended: never left shown as searching)
@@ -2871,6 +2872,7 @@ function WorkspaceContent({
         onCreated={onCreated}
       >
         <color attach="background" args={["#ffffff"]} />
+        <ProbeGl />
         {/* What WebGL draws on the page takes the pointer before anything else on the canvas, as the page's HTML did (pageGl/PageHits) */}
         <PageHits>
         {/* ... and what is placed on it by what moves - the molecules' and stacks' frames chips - drawn with it at once (pageGl/PagePlaced) */}
@@ -3295,4 +3297,18 @@ function AddToRead({ suggest, again }: { suggest: readonly string[]; again: () =
       {problem && <span className="text-accel-accent">{problem}</span>}
     </>
   );
+}
+
+/** TEMPORARY PROBE (not for merge): starts the frame probe, and notes each frame the renderer compiled a new WebGL program in. */
+function ProbeGl() {
+  const programs = useRef(-1);
+  useEffect(() => startProbe(), []);
+  useFrame(({ gl }) => {
+    const n = gl.info.programs?.length ?? 0;
+    if (n !== programs.current) {
+      if (programs.current >= 0) noteEntry(`gl: programs ${programs.current} -> ${n} (shader compile in this frame)`, 0);
+      programs.current = n;
+    }
+  });
+  return null;
 }

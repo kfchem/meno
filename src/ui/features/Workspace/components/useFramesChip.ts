@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { timed } from "../../../../lib/core/frameProbe";
 import { useEasedTo, useOpening, GROW_MS, SHOW_MS } from "../../../theme/opening";
 import { useEditorStoreIfAny } from "../store";
 import { chipCopy, chipEnergies, isSingle, type ChipFacts } from "../utils/chipSaid";
@@ -175,7 +176,7 @@ export function useFramesChip({
   const heightPx = says ? chipHeights(state).height : 0;
   // (where it was last drawn: its bars and slider, for what a pointer over them or a drag along them is at)
   const last = useRef<LiveDrawn | null>(null);
-  const draw = (at: { x: number; y: number }, view: PageView) => (last.current = liveChip(state, at, view));
+  const draw = (at: { x: number; y: number }, view: PageView) => (last.current = timed("chip: liveChip layout", () => liveChip(state, at, view), 1));
   const barsFrame = (x: number) => {
     const b = last.current?.bars;
     return b ? frameAtBars(b.laid, (x - b.left) / PAGE_PX) : null;
