@@ -1011,6 +1011,21 @@ describe("an N2 or N2+ beside a bond, read by its bonds (made drawings)", () => 
     expect(beside.atoms.every((x) => x.el !== "N2" && !x.unsure)).toBe(true);
   });
 
+  it("never reads a word N2 set close above a structure as a diazo or a diazonium group: where the reader takes it for the label of the atom beneath (as it does before and after), the atom is marked", () => {
+    const a: P = [100, 200];
+    const b = step(a, 30);
+    const c = step(b, -30);
+    const chain = [stroke(a, b, c)];
+    const without = structureFrom({ paths: chain, letters: [], pictures: [] }, SHA, 1) as Model;
+    for (const near of [4, 8, 12]) {
+      const beside = structureFrom({ paths: chain, letters: labelLetters(N2, b[0] - 3, b[1] - 4 - near), pictures: [] }, SHA, 1) as Model;
+      // (no group written out: as many atoms as the chain has, no N+ nor N-, every atom that is not a carbon said to be unsure)
+      expect(beside.atoms.length, `${near} pt off`).toBe(without.atoms.length);
+      expect(beside.atoms.some((x) => x.charge)).toBe(false);
+      expect(beside.atoms.filter((x) => x.el !== "C").every((x) => !!x.unsure)).toBe(true);
+    }
+  });
+
   it("leaves N2 on one single bond, uncharged, unread and marked", () => {
     const a: P = [100, 200];
     const b = step(a, 30);

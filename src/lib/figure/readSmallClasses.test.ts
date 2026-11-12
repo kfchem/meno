@@ -153,7 +153,8 @@ describe("an atom's number stands at the end of its label, and a number left out
   it("is never left out with a letter of the label after it: inside a label it is a count or the mass number of the next letter", () => {
     // (a reader that reads the label without it and not with it: the counts lowered 0.05 stay)
     const stubborn = (l: string) => READS.has(l) && !/\d/.test(l);
-    expect(read([["N", 10, 0], count("2", 0.5)], stubborn)).toBe("N");
+    // (an N2 is read by its bonds, not by its place or its letters - a diazo group, or an N and its number: `diazoRead` - so its 2 is kept here)
+    expect(read([["N", 10, 0], count("2", 0.5)], stubborn)).toBe("N2");
     expect(read([["NH", 10, 0], count("4", 0.5), ["Cl", 10, 0]], stubborn)).toBe("NH4Cl");
     expect(read([["MePPh", 10, 0], count("3", 0.5), ["Br", 10, 0]], stubborn)).toBe("MePPh3Br");
     expect(read([["O", 10, 0], ["13", 7.7, 4], ["CH", 10, 0], count("3", 0.5)], stubborn)).toBe("O13CH3");

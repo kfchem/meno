@@ -152,7 +152,7 @@ export function diazoRead(given: FigureRead): { read: FigureRead; parent: Map<nu
       atoms[i] = { ...a, label: "N", alts: undefined, unsure: [...(a.unsure ?? []), 'A small number by it was taken as the atom\'s number, not a count: read as "N".'] };
       return;
     }
-    atoms[i] = { ...a, unsure: [...(a.unsure ?? []), `"${a.label}" was not read as an element or a group.`] };
+    // (any other N2: a label not read, marked by the reader as any is)
   });
   return { read: { ...given, atoms, bonds }, parent };
 }

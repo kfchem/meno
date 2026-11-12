@@ -437,6 +437,8 @@ export function labelParts(w: Word, reads: LabelReads = () => true): { text: str
   for (const r of runs) {
     if (r.high) continue;
     const without = new Set([...left, ...places(r)]);
+    // (an N2 or N2+ is read by its bonds, not by its letters or its place: a diazo or diazonium group where they say so, else an N and its number - `diazoRead`, ./structure)
+    if (/^N2\+?$/.test(typed(w, base, left))) continue;
     if (!reads(typed(w, base, left)) && reads(typed(w, base, without))) {
       for (const k of places(r)) left.add(k);
       taken = true;
