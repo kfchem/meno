@@ -38,6 +38,7 @@ export const CARD = {
   question: { share: 0.85, padX: 10, padY: 8, radius: 10 },
   chip: { h: 22, padX: 10, gap: 6, size: 11, radius: 11 },
   ask: 44,
+  chipShadow: { blurPx: 2, offsetYPx: 1, alpha: 0.05 },
   radius: 12,
 } as const;
 
@@ -54,10 +55,11 @@ export type CardBlock =
   | { kind: "item"; marker: string; spans: Span[]; gap?: number }
   | { kind: "tool"; text: string; failed: boolean }
   | { kind: "note"; text: string }
-  | { kind: "changes" };
+  /** The changes waiting; `notes`, what is to be said of them in the attention colour - the steps they make run again, why Discard left them. */
+  | { kind: "changes"; notes?: string[] };
 
 /** What else the card says besides what was said: that the model is working, and that it changed the page, its changes waiting to be kept or discarded. */
-export type CardState = { running?: boolean; changed?: boolean };
+export type CardState = { running?: boolean; changed?: boolean; notes?: string[] };
 
 const BULLET = /^\s*(?:[-*•])\s+(.*)$/;
 const NUMBERED = /^\s*(\d+[.)])\s+(.*)$/;
@@ -120,7 +122,7 @@ export function replyBlocks(text: string): CardBlock[] {
 /**
  * What was said as blocks, in turn (`exchangeRows`): the person's words a question, the model's its paragraphs and lists, each of its
  * calls one line - what it did, and what came of it, in a line - Meno's own word a quiet line; then that it is working, and the
- * changes waiting - last, where the person looks for them.
+ * changes waiting, with what is said of them - last, where the person looks for them.
  */
 export function cardBlocks(said: readonly Said[], state: CardState = {}): CardBlock[] {
   const blocks: CardBlock[] = [];
@@ -135,7 +137,7 @@ export function cardBlocks(said: readonly Said[], state: CardState = {}): CardBl
     else if (s.by === "meno") blocks.push({ kind: "note", text: s.text });
   }
   if (state.running) blocks.push({ kind: "note", text: "Talking…" });
-  if (state.changed) blocks.push({ kind: "changes" });
+  if (state.changed) blocks.push({ kind: "changes", ...(state.notes?.length ? { notes: state.notes } : {}) });
   return blocks;
 }
 
@@ -165,7 +167,7 @@ export const CHIPS = [
 
 /**
  * `blocks` laid in a card `widthPx` wide: each block in its room, one under the other, their gap between them (`CARD.gap`, or
- * the block's own), the card's own room above the first and below the last. A question stands against the right, in a ground as wide as
+ * the block's own), the card's own room above the first and below the last. A question stands against the right - each line of it its own, as it was written -  in a ground as wide as
  * its widest line needs, at most `CARD.question.share` of the width inside; a list item hangs its words under its first line's, after its
  * marker.
  */
@@ -182,8 +184,14 @@ export function cardLayout(blocks: readonly CardBlock[], widthPx: number = CARD.
       lines.push({ runs, x, y: top, baseline: top + baselineIn(line, size), width, size, block });
     if (b.kind === "question") {
       const q = CARD.question;
-      const wrapped = wrapRuns([{ text: b.text, color: COLORS.ink }], CARD.size, Math.max(inner * q.share - 2 * q.padX, 1));
-      const text = wrapped.length ? wrapped : [{ runs: [] as Run[], width: 0 }];
+      // (each line the person wrote its own - the ask field starts one with Shift+Enter - an empty one kept as a line's room)
+      const text = b.text
+        .replace(/\r\n?/g, "\n")
+        .split("\n")
+        .flatMap((p) => {
+          const wrapped = wrapRuns([{ text: p, color: COLORS.ink }], CARD.size, Math.max(inner * q.share - 2 * q.padX, 1));
+          return wrapped.length ? wrapped : [{ runs: [] as Run[], width: 0 }];
+        });
       const w = Math.max(...text.map((l) => l.width)) + 2 * q.padX;
       const h = text.length * CARD.line + 2 * q.padY;
       const x = widthPx - CARD.side - w;
@@ -213,6 +221,12 @@ export function cardLayout(blocks: readonly CardBlock[], widthPx: number = CARD.
         x += w + CARD.chip.gap;
       }
       y += CARD.chip.h;
+      for (const note of b.notes ?? []) {
+        y += CARD.chip.gap;
+        const said = wrapRuns([{ text: note, color: TEXT_TONE.failed }], CARD.quietSize, inner);
+        said.forEach((l, k) => put(l.runs, CARD.side, y + k * CARD.quietLine, CARD.quietSize, CARD.quietLine, l.width));
+        y += said.length * CARD.quietLine;
+      }
     }
   });
   return { lines, boxes, chips, height: y + CARD.bottom };

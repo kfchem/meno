@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { acceptOptions, type Option } from "../../../../lib/options";
 import { createWorkspaceDocument, emptyWorkspaceDocument } from "../document";
 import { optionsChecked, settable, clearSpot } from "./change";
-import { addConversation, addSaid, clearSaid, removeConversations, updateConversation } from "./ops";
+import { addConversation, addSaid, clearSaid, removeConversations, scrolledConversation, updateConversation } from "./ops";
 import { readConversations } from "./saved";
 import { NEW_RIGHTS } from "./types";
 
@@ -13,9 +13,9 @@ describe("a conversation on the page", () => {
     expect(doc.getState().conversations).toEqual([{ id: 1, x0: 0, y0: 0, x1: 20, y1: 10, rights: NEW_RIGHTS, said: [], sent: [] }]);
     // (no frame of its own: none put down)
     expect(addConversation(doc.getState(), { x0: 5, y0: 0, x1: 5, y1: 10 })).toBe(doc.getState());
-    doc.edit("whole page", (d) => updateConversation(d, 1, { wholePage: true, rights: { propose: true }, connection: "a-model", name: "Ideas" }));
-    expect(doc.getState().conversations![0]).toMatchObject({ wholePage: true, rights: { read: true, propose: true }, connection: "a-model", name: "Ideas" });
-    doc.edit("back", (d) => updateConversation(d, 1, { wholePage: false, connection: null, name: null }));
+    doc.edit("whole page", (d) => updateConversation(d, 1, { wholePage: true, rights: { propose: true }, connection: "a-model" }));
+    expect(doc.getState().conversations![0]).toMatchObject({ wholePage: true, rights: { read: true, propose: true }, connection: "a-model" });
+    doc.edit("back", (d) => updateConversation(d, 1, { wholePage: false, connection: null }));
     expect(doc.getState().conversations![0]).toEqual({ id: 1, x0: 0, y0: 0, x1: 20, y1: 10, rights: { read: true, propose: true }, said: [], sent: [] });
     doc.edit("gone", (d) => removeConversations(d, [1]));
     expect(doc.getState().conversations).toEqual([]);
@@ -36,11 +36,71 @@ describe("a conversation on the page", () => {
   });
 });
 
+describe("a conversation's card left scrolled", () => {
+  const made = () => {
+    const doc = createWorkspaceDocument();
+    doc.edit("conversation", (d) => addConversation(d, { x0: 0, y0: 0, x1: 20, y1: 10 }));
+    return doc;
+  };
+
+  it("is the view's: kept on the conversation, no step of the page's history nor a change to save, and none when at its latest", () => {
+    const doc = made();
+    const before = doc.history().undoDepth;
+    doc.amend((d) => scrolledConversation(d, 1, 240.5));
+    expect(doc.getState().conversations![0].scroll).toBe(240.5);
+    expect(doc.history().undoDepth).toBe(before);
+    // (undo and redo of the page leave it where it was left)
+    doc.undo();
+    doc.redo();
+    expect(doc.getState().conversations![0].scroll).toBe(240.5);
+    // (at its latest: no offset kept at all)
+    doc.amend((d) => scrolledConversation(d, 1, null));
+    expect("scroll" in doc.getState().conversations![0]).toBe(false);
+  });
+
+  it("is kept only as a number from 0 - any other is the latest - and the same state returned where nothing changes", () => {
+    const d0 = made().getState();
+    const d1 = scrolledConversation(d0, 1, 10);
+    expect([0, 10].map((v) => scrolledConversation(d0, 1, v).conversations![0].scroll)).toEqual([0, 10]);
+    for (const bad of [-1, Number.NaN, Infinity, null]) expect("scroll" in scrolledConversation(d1, 1, bad).conversations![0]).toBe(false);
+    expect(scrolledConversation(d1, 1, 10)).toBe(d1);
+    expect(scrolledConversation(d0, 1, null)).toBe(d0);
+    expect(scrolledConversation(d0, 7, 10)).toBe(d0);
+  });
+
+  it("is let go of by Clear and kept by a frame moved, a right changed", () => {
+    const doc = made();
+    doc.amend((d) => scrolledConversation(d, 1, 50));
+    doc.edit("move", (d) => updateConversation(d, 1, { frame: { x0: 1, y0: 1, x1: 21, y1: 11 }, rights: { propose: true } }));
+    expect(doc.getState().conversations![0].scroll).toBe(50);
+    doc.amend((d) => clearSaid(d, 1), { unsaved: true });
+    expect("scroll" in doc.getState().conversations![0]).toBe(false);
+  });
+});
+
 describe("conversations as a file keeps them", () => {
   const saved = { x0: 0, y0: 0, x1: 20, y1: 10, rights: { read: true, propose: false }, connection: "a-model", said: [{ by: "person", text: "Hi", at: 1 }, { by: "model", text: "Hello", calls: [{ tool: "list" }], at: 2 }, { by: "tool", tool: "list", ok: true, answer: { things: [] }, at: 3 }], sent: [{ at: 2, to: "x", things: [{ id: "structure:1", chars: 10 }], chars: 30 }] };
 
   it("are read back as written", () => {
     expect(readConversations([saved])).toEqual([saved]);
+  });
+
+  it("keep where a card was left scrolled, as a number from 0; any other is not read, and the conversation opens at its latest", () => {
+    expect(readConversations([{ ...saved, scroll: 312.5 }])).toEqual([{ ...saved, scroll: 312.5 }]);
+    expect(readConversations([{ ...saved, scroll: 0 }])).toEqual([{ ...saved, scroll: 0 }]);
+    for (const scroll of [-3, "100", null, Number.NaN, {}]) {
+      let left = 0;
+      expect(readConversations([{ ...saved, scroll }], () => left++)).toEqual([saved]);
+      expect(left).toBe(0);
+    }
+  });
+
+  it("have no name: one an old file gives is not read, and the conversation opens without it - however odd that name was", () => {
+    for (const name of ["Esters", "", 7, { x: 1 }, "x".repeat(500)]) {
+      let left = 0;
+      expect(readConversations([{ ...saved, name }], () => left++)).toEqual([saved]);
+      expect(left).toBe(0);
+    }
   });
 
   it("leave out one not as Meno writes it, and a thing said that is not, the rest kept", () => {

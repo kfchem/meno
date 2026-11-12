@@ -3,7 +3,7 @@ import clsx from "clsx";
 import { ExclamationTriangleIcon } from "@heroicons/react/24/outline";
 import Switch from "../../../controls/Switch";
 import { useEditor } from "../store";
-import { kindInfo } from "../workflow/kinds";
+import { discardedSaid, runsAgainSaid } from "./changesSaid";
 import { connectionFor } from "./connections";
 import { LIMITS, NO_CONNECTION } from "./turn";
 import { writeClipboard } from "../../../../lib/clipboard";
@@ -75,10 +75,7 @@ export default function ConversationBody({ conversation: c }: { conversation: Co
     void send(c.id, words);
     setWords("");
   };
-  const runsAgain = (talking?.runsAgain ?? []).flatMap((id) => {
-    const s = steps.find((x) => String(x.id) === id);
-    return s ? [kindInfo(s.kind).name] : [];
-  });
+  const runsAgain = runsAgainSaid(talking?.runsAgain, steps);
   return (
     <div className="absolute inset-0 flex flex-col bg-white">
       <div className="px-4 py-3 border-b border-gh-line flex flex-col gap-2 text-xs">
@@ -120,14 +117,14 @@ export default function ConversationBody({ conversation: c }: { conversation: Co
             <button
               onClick={() => {
                 const r = discard(c.id);
-                setDiscardSaid(r === "running" ? "A step it added is running: stop it first." : r === "since" ? "The page has changed since: undo is yours, step by step." : null);
+                setDiscardSaid(discardedSaid(r));
               }}
               className="h-7 px-2.5 rounded-md border border-gh-line text-xs hover:bg-gh-base"
             >
               Discard
             </button>
           </div>
-          {runsAgain.length > 0 && <div className="text-accel-accent">This makes {runsAgain.join(", ")} run again, when you next run it.</div>}
+          {runsAgain && <div className="text-accel-accent">{runsAgain}</div>}
           {discardSaid && <div className="text-accel-accent">{discardSaid}</div>}
         </div>
       )}

@@ -131,6 +131,15 @@ describe("a card's blocks laid in lines", () => {
     expect(at(room + 1).lines.map(text)).toEqual(["alpha beta"]);
   });
 
+  it("lays each line of a question - a Shift+Enter in the ask field - on a line of its own, the ground as tall as all of them, an empty one a line's room", () => {
+    const l = cardLayout([{ kind: "question", text: "alpha\n\nbeta\r\ngamma" }]);
+    expect(l.lines.map(text)).toEqual(["alpha", "", "beta", "gamma"]);
+    // (alpha 8 below the ground's top, 12; the empty line 19 below it, beta 38, gamma 57; four lines, the ground 4 x 19 + 16)
+    expect(l.lines.map((x) => x.y)).toEqual([20, 39, 58, 77]);
+    expect(l.boxes[0].h).toBe(4 * 19 + 16);
+    expect(l.height).toBe(12 + 4 * 19 + 16 + 12);
+  });
+
   it("sets a call's line and Meno's word small and quiet - a failed call in the attention colour - in lines of 16", () => {
     const l = cardLayout([
       { kind: "tool", text: "Listed what lies in the frame \u00b7 2 things in the frame", failed: false },
@@ -241,5 +250,24 @@ describe("where a card lies in its frame", () => {
   it("gives its history the card's height less its ask field's, never under none; and a frame is least 456 by 130 to hold it", () => {
     expect([historyHeight(600), historyHeight(600, 80), historyHeight(30)]).toEqual([556, 520, 0]);
     expect(FRAME_LEAST).toEqual({ w: 456, h: 44 + 19 + 12 + 12 + 24 });
+  });
+});
+
+describe("what is said of the changes waiting", () => {
+  it("is each note a quiet line in the attention colour under the chips, 6 below them or the note before", () => {
+    const state = { changed: true, notes: ["This makes Filter run again, when you next run it.", "The page has changed since: undo is yours, step by step."] };
+    const blocks = cardBlocks([], state);
+    expect(blocks).toEqual<CardBlock[]>([{ kind: "changes", notes: state.notes }]);
+    const l = cardLayout(blocks, 2 * CARD.side + 1000);
+    // (the changes line at 12 to 28, 6, the chips at 34 to 56, then each note: 6 below, 16 high - 62, 84)
+    expect(l.chips.map((c) => c.y)).toEqual([34, 34]);
+    expect(l.lines.map((x) => [text(x), x.y, x.runs[0].color])).toEqual([
+      ["It changed the page, as one undo step.", 12, COLORS.ink],
+      [state.notes[0], 62, COLORS.attention],
+      [state.notes[1], 84, COLORS.attention],
+    ]);
+    expect(l.height).toBe(84 + 16 + 12);
+    expect(cardBlocks([], { changed: true })).toEqual<CardBlock[]>([{ kind: "changes" }]);
+    expect(cardBlocks([], { notes: ["x"] })).toEqual([]);
   });
 });

@@ -31,7 +31,7 @@ export type FrameTab = {
   outward?: true;
   /** How far its tone has come, eased (0 at rest, 1 pointed at, 2 chosen): an outward line's weight follows it. */
   level?: number;
-  tab: { icon: string; name: string; status?: string; warn?: string };
+  tab: { icon: string; name?: string; status?: string; warn?: string };
   /** Its icon only where its words are too small to read, standing in for them: a set's tab says its name alone, read. */
   iconWhenSmall?: true;
   edges?: true;
@@ -91,7 +91,7 @@ const farNameY = (box: Frame, scale: number): number => {
 /** Where a set's name lies on the page, zoomed out, in the world's units: from where its tab's words start, as wide as it is at its size on the screen, or as its frame allows. */
 export function tabNameBox(it: Pick<FrameTab, "key" | "box" | "tab">, scale: number): NameBox & { fits: boolean } {
   const size = onPage(NAME_PX, scale);
-  const natural = textWidth(it.tab.name, size, 500);
+  const natural = textWidth(it.tab.name ?? "", size, 500);
   const { x } = tabStart(it.box);
   const y = farNameY(it.box, scale);
   const wide = Math.min(natural, farWidest(it.box));
@@ -186,7 +186,7 @@ export function frameTabParts(items: readonly FrameTab[], read: boolean, far?: F
     // (zoomed out: its name, from where its words start, in its band or - larger than it - raised over its frame's top, cut at its frame's width inside its inset)
     if (far && it.iconWhenSmall && far.words < 1) {
       const opacity = (it.opacity ?? 1) * (1 - far.words) * (far.labels?.get(it.key) ?? 1);
-      if (opacity > 0) texts.push({ key: `${it.key}:nameFar`, x: left, y: farNameY(it.box, far.scale), anchor: "start", baseline: "middle", text: it.tab.name, sizePx: onPage(NAME_PX, far.scale), color: FRAME_COLORS.words, weight: 500, maxWidthPx: farWidest(it.box), opacity });
+      if (opacity > 0) texts.push({ key: `${it.key}:nameFar`, x: left, y: farNameY(it.box, far.scale), anchor: "start", baseline: "middle", text: it.tab.name ?? "", sizePx: onPage(NAME_PX, far.scale), color: FRAME_COLORS.words, weight: 500, maxWidthPx: farWidest(it.box), opacity });
     }
     // (what takes the pointer: its tab - along the frame's whole top, or its own box - and, where it is sized, its edges)
     if (it.noHits) continue;
