@@ -433,6 +433,12 @@ export type PictureToAdd = { name: string; sha256: string; media: PictureMedia; 
 export type PdfReading = { at: number; zoom: number };
 /** Which of the 3D style's two looks a molecule is drawn in (lib/chem/style3d). */
 export type Look3D = Role3D;
+
+/** What a 3D structure's search going on has brought so far (docs/WORKSPACE.md, *As its search goes on*): its conformers, shown over what the document holds of it until the search ends. */
+export type Grown3D = Pick<Molecule3D, "atoms" | "frames" | "energies" | "made">;
+
+/** A 3D structure whose search goes on: what it has brought so far, and the key its making was recorded with - for what the search brings to join that step where nothing came between. */
+export type Growing3D = { grown: Grown3D; key: string };
 /**
  * A measurement on a molecule in 3D, between its atoms by index, in the
  * order they were chosen: two, a distance; three, the angle at the middle
@@ -1287,6 +1293,18 @@ export type EditorState = {
    * undo, nothing unsaved.
    */
   talkLooks: Readonly<Record<number, Look3D>>;
+  /**
+   * 3D structures whose search goes on (docs/WORKSPACE.md, *As its search
+   * goes on*), by id: what each has brought so far, shown over what the
+   * document holds of it - the view's alone until the search ends, when it
+   * is written into the document once (`settleGrown3d`). Gone where its
+   * molecule is: an undo that took it away, a 3D structure made again.
+   */
+  growing3d: Readonly<Record<number, Growing3D>>;
+  /** What a 3D structure's search going on has brought so far shown (`growing3d`): the conformer shown kept shown, where it is still among them. None, to let it go. */
+  grow3d: (id: number, grown: Grown3D | null, key: string) => void;
+  /** What a 3D structure's search brought written into the document and let go: one step with its making, where nothing came between (its `key`). */
+  settleGrown3d: (id: number) => void;
   /** A molecule in 3D shown in its other look for the talk being given. */
   switchTalkLook3d: (id: number) => void;
   /** The looks a talk switched let go: each molecule as the document has it. */
@@ -1380,7 +1398,7 @@ export type EditorState = {
    * to rest, turned as `turn` says, rising out of the drawing from `from` -
    * in place of the molecules `replacing`, made from it before it changed.
    */
-  riseMolecules3d: (made: ({ m: Omit<Molecule3D, "id">; turn: Turn3D } & Omit<Rising3D, "start">)[], replacing?: number[]) => number[];
+  riseMolecules3d: (made: ({ m: Omit<Molecule3D, "id">; turn: Turn3D } & Omit<Rising3D, "start">)[], replacing?: number[], key?: string) => number[];
   /** A molecule in 3D has risen. */
   risen3d: (id: number) => void;
   /**
