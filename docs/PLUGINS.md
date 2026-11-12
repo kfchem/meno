@@ -1107,7 +1107,12 @@ The same for every plugin and for Meno's own parts:
     tried - Meno's number, where the role says `tries`; `draw`, which
     set of tries, where it also says `draws` - with the role's
     options, and `options.threads`, how many threads it may use: the
-    cores Settings, *Calculations*, gives a job (a plugin that does not
+    cores Settings, *Calculations*, gives a job - for a search made on
+    the page (a 3D structure made from a drawing, an atom map's), where
+    Settings sets no number, all but one of them, at least one, so that
+    the page is drawn on the one left while it searches (lib/jobs
+    `pageThreadsOf`; a search on every core starved the page of its
+    frames) - (a plugin that does not
     know it ignores it, and takes every core as it did): every one made, in the order made, each its energy - or,
     where the molecule's are none, those of the model it was optimised in,
     `modelEnergies` - each stereoisomer made itself);
