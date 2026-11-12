@@ -45,7 +45,7 @@ import {
   Selection2D,
 } from "./components";
 import { ArrowPathIcon, ExclamationTriangleIcon, XMarkIcon } from "@heroicons/react/24/outline";
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Profiler, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ProfilerOnRenderCallback, type ReactNode } from "react";
 import { chordedPress } from "./utils/press";
 import { labelReachOf } from "./utils/labelHits";
 import { AnimatePresence, motion } from "motion/react";
@@ -2877,6 +2877,7 @@ function WorkspaceContent({
         <PageHits>
         {/* ... and what is placed on it by what moves - the molecules' and stacks' frames chips - drawn with it at once (pageGl/PagePlaced) */}
         <PagePlaced>
+        <Profiler id="canvas tree (all on the page)" onRender={probeRender}>
         <FitToContent2D trigger={fitNonce} />
         {/* Conversations' frames, drawn as sets' are (docs/CONVERSATIONS.md) */}
         <ConversationFrames />
@@ -2971,13 +2972,16 @@ function WorkspaceContent({
         {/* where a guide's step points at a structure (lib/guide) */}
         <GuideStructure place={guideStructure} />
         {/* Molecules in 3D standing on the page (before PanZoom2D: a press on one is theirs) */}
-        <Molecules3D style={style3d} />
+        <Profiler id="Molecules3D" onRender={probeRender}>
+          <Molecules3D style={style3d} />
+        </Profiler>
         <PanZoom2D />
         {/* a talk given from the slides: the view, the molecules turned in it, the keys (docs/PRESENTING.md) */}
         <Presenter />
         {/* (the view following the column over the canvas's right side) */}
         <FollowCover />
         <FollowStyle />
+        </Profiler>
         </PagePlaced>
         </PageHits>
       </Canvas>
@@ -3299,16 +3303,28 @@ function AddToRead({ suggest, again }: { suggest: readonly string[]; again: () =
   );
 }
 
-/** TEMPORARY PROBE (not for merge): starts the frame probe, and notes each frame the renderer compiled a new WebGL program in. */
+/** TEMPORARY PROBE (not for merge): a React tree's commit, timed. */
+const probeRender: ProfilerOnRenderCallback = (id, phase, actualDuration) => {
+  if (actualDuration >= 1) noteEntry(`react: ${id} ${phase}`, actualDuration);
+};
+
+/**
+ * TEMPORARY PROBE (not for merge): starts the frame probe; draws the page
+ * itself (a frame callback of priority 1 takes the drawing over), timing
+ * the WebGL draw - buffers sent, shaders compiled, as the draw needs them -
+ * and notes each frame the renderer compiled a new WebGL program in.
+ */
 function ProbeGl() {
   const programs = useRef(-1);
   useEffect(() => startProbe(), []);
-  useFrame(({ gl }) => {
+  useFrame(({ gl, scene, camera }) => {
+    const before = gl.info.programs?.length ?? 0;
+    timed(`gl: render (${gl.info.render.calls} draw calls before)`, () => gl.render(scene, camera), 1);
     const n = gl.info.programs?.length ?? 0;
-    if (n !== programs.current) {
-      if (programs.current >= 0) noteEntry(`gl: programs ${programs.current} -> ${n} (shader compile in this frame)`, 0);
+    if (n !== before || n !== programs.current) {
+      if (programs.current >= 0 && n !== programs.current) noteEntry(`gl: programs ${programs.current} -> ${n} (shader compile in this frame)`, 0);
       programs.current = n;
     }
-  });
+  }, 1);
   return null;
 }
