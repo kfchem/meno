@@ -84,7 +84,8 @@ import { addPlugin, useReaders } from "../../../lib/calc/workers";
 import { addOnline } from "../../../lib/calc/addOnline";
 import { useOnline } from "../../../lib/plugins/online";
 import { knownOfMolecules } from "./utils/written";
-import { carriedOf } from "./utils/workspace";
+import { carriedOf, cutShort } from "./utils/workspace";
+import type { Conformers } from "../../../lib/roles/client";
 import { runAllNote, runNote } from "./workflow/earlierRuns";
 import PartMenu, { type CanvasCommand, type MenuMolecule3D, type MenuTarget } from "./PartMenu";
 import { deleteFromMenu } from "./menuDelete";
@@ -218,7 +219,7 @@ import { pictureRegion, readStructure } from "./components/readStructure";
 import { isFilm } from "../../../lib/picture/image";
 import { placedBeside, readMarks } from "./utils/figures";
 import { useNotices } from "../../notices";
-import { bareAtomsOf, bareWords, blocksOf, blocksStill, boxOf, conformersGrowing, conformersOnPage, formulaOf, type Growth, formulaPlace, likeOf, linkOf, moleculeOf, openIn, pageRounds, placeRow, rowFrom, takenOnPage, turnedOver, withinWindow, type Block, type Box, type Open } from "./chem/make3d";
+import { bareAtomsOf, bareWords, blocksOf, blocksStill, boxOf, conformersGrowing, conformersOnPage, formulaOf, growOn, type Growth, formulaPlace, likeOf, linkOf, moleculeOf, openIn, pageRounds, placeRow, rowFrom, takenOnPage, turnedOver, withinWindow, type Block, type Box, type Open } from "./chem/make3d";
 import { isomersToMake } from "./chem/openStereo";
 import { centredAt, clipItems } from "./utils/copyPaste";
 import { structureInOutput } from "./chem/fromClipboard";
@@ -605,7 +606,14 @@ function WorkspaceContent({
         }
         // (made with a key where a search goes on, so that what it brings joins this step where nothing came between)
         const key = `made3d:${++madeCount.current}`;
-        const ids = store.getState().riseMolecules3d(made, replacing ? [replacing.id] : [], growths.length ? key : undefined);
+        // (where a search goes on, the document holds its first round said cut short - what it is, should the search end with
+        //  nothing written: an undo, an edit, a failure - and the page shows it searching on: workspace `cutShort`)
+        const growing = new Set(growths.flatMap((g) => g.growth.first.map((_, k) => g.from + k)));
+        const ids = store.getState().riseMolecules3d(
+          made.map((x, i) => (growing.has(i) && x.m.made ? { ...x, m: { ...x.m, made: cutShort(x.m.made) } } : x)),
+          replacing ? [replacing.id] : [],
+          growths.length ? key : undefined,
+        );
         // (with no room for them in view, the view goes to them - along, or out as little as needed)
         if (!allInView && made3d) store.getState().requestShow(made3d);
         if (!growths.length) return;
@@ -613,7 +621,7 @@ function WorkspaceContent({
         //  until it ends, then written into the document once - docs/WORKSPACE.md, *As its search goes on*)
         const idsOf = (g: (typeof growths)[number]) => g.growth.first.map((_, k) => ids[g.from + k]);
         const grownOf = (m: Omit<Molecule3D, "id" | "at">): Grown3D => ({ atoms: m.atoms, frames: m.frames, energies: m.energies, made: m.made });
-        for (const g of growths) idsOf(g).forEach((id, k) => store.getState().grow3d(id, grownOf(made[g.from + k].m), key));
+        for (const g of growths) idsOf(g).forEach((id, k) => store.getState().startGrowing3d(id, grownOf(made[g.from + k].m), key));
         gone = () => growths.every((g) => idsOf(g).every((id) => !store.getState().growing3d[id]));
         setWorking3d("Searching for more conformers…");
         // (stopped by the next asked as it gets to its next round, what it brought kept: the plugin it asks is left to them both)
@@ -621,17 +629,13 @@ function WorkspaceContent({
           stopped = true;
         };
         on3d = true;
-        for (const g of [...growths]) {
-          try {
-            await g.growth.rest((k, c) => {
-              const id = ids[g.from + k];
-              if (store.getState().growing3d[id]) store.getState().grow3d(id, grownOf(moleculeOf(withinWindow(c, g.window3d), g.block, g.several)), key);
-            });
-          } finally {
-            // (what it brought written, however it ended: never left shown as searching)
-            for (const id of idsOf(g)) store.getState().settleGrown3d(id);
-          }
-        }
+        await growOn(
+          growths.map((g) => ({ growth: g.growth, ids: idsOf(g), shownAs: (c: Conformers) => grownOf(moleculeOf(withinWindow(c, g.window3d), g.block, g.several)) })),
+          {
+            grow: (id, grown) => store.getState().grow3d(id, grown),
+            settle: (id) => store.getState().settleGrown3d(id),
+          },
+        );
       } catch (e: unknown) {
         const why = e instanceof Error ? e.message : String(e);
         if (!stopped) setChemError(on3d ? `The search for more conformers stopped: ${why}` : `No 3D structure could be made: ${why}`);

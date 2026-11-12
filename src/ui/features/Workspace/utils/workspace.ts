@@ -91,7 +91,7 @@ type Saved = Pick<
 const NO_STACKS: Record<number, number> = {};
 
 /** A search's row of how far it has got, as a file carries it where its search was still going on: cut short where it was. */
-const cutShort = (made: Carried3D["made"]): Carried3D["made"] =>
+export const cutShort = (made: Carried3D["made"]): Carried3D["made"] =>
   made && { ...made, how: made.how.map((r) => (r.label === "Rounds" && r.text.endsWith(": searching on") ? { ...r, text: `${r.text.slice(0, -": searching on".length).replace(/ so far$/, "")}: cut short while it searched` } : r)) };
 
 export function carriedOf(state: Pick<Saved, "molecules3d" | "turns3d" | "frames3d"> & Partial<Pick<Saved, "lists3d" | "stacksShown" | "growing3d">>): Carried3D[] {

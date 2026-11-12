@@ -333,13 +333,22 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
       }),
     endTalkLooks: () =>
       set((prev) => (Object.keys(prev.talkLooks).length ? { ...prev, talkLooks: {}, molecules3d: withGrowth(doc.getState().molecules3d ?? [], prev.growing3d) } : prev)),
-    grow3d: (id: number, grown: Grown3D | null, key: string) =>
+    startGrowing3d: (id: number, grown: Grown3D, key: string) =>
       set((prev) => {
         const kept = doc.getState().molecules3d ?? [];
-        // (its molecule gone - undone, made again: nothing to grow)
-        if (!kept.some((m) => m.id === id)) return prev;
+        const there = kept.find((m) => m.id === id);
+        if (!there) return prev;
+        const growing: Record<number, Growing3D> = { ...prev.growing3d, [id]: { grown, key, base: there.atoms } };
+        return { ...prev, growing3d: growing, molecules3d: withGrowth(withLooks(kept, prev.talkLooks), growing) };
+      }),
+    grow3d: (id: number, grown: Grown3D | null) =>
+      set((prev) => {
+        const kept = doc.getState().molecules3d ?? [];
+        const going = prev.growing3d[id];
+        // (its search ended - its molecule gone, made again, edited: nothing to grow, never begun again)
+        if (!going || kept.find((m) => m.id === id)?.atoms !== going.base) return prev;
         const growing: Record<number, Growing3D> = { ...prev.growing3d };
-        if (grown) growing[id] = { grown, key };
+        if (grown) growing[id] = { ...going, grown };
         else delete growing[id];
         // (the conformer shown kept shown: the one nearest it among those it has now - a lower one found puts the rest after it)
         const was = prev.molecules3d.find((m) => m.id === id);
@@ -350,6 +359,8 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
       }),
     settleGrown3d: (id: number) => {
       const g = get().growing3d[id];
+      // (none going on: ended already - written, or its molecule gone or edited since it began, which lets it go as the document
+      //  changes (store `growingHeld`): the edit kept, nothing written over it)
       if (!g) return;
       // (written once, as its search ends: one step with its making where nothing came between, else one of its own)
       doc.edit(

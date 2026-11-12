@@ -567,11 +567,18 @@ Taken on 2026-10-13:
     where nothing was done between; else as a step of its own. Undo takes
     back what it brought, then the structure.
   - *Stop* ends it there, what came kept. Asking for another 3D structure
-    ends it as its round in hand finishes. An undo that takes the
-    structure away, or the structure made again, ends it, nothing written.
-  - Saved while it searches, the file holds what came so far, its
-    *Rounds* line saying it was cut short; opened again, the search is not
-    taken up again.
+    ends it as its round in hand finishes. A round that fails ends it,
+    what came kept, its *Rounds* line saying it failed and why - never
+    taken for *Stop*. An undo that takes the structure away, the
+    structure made again, or an edit of its atoms meanwhile, ends it,
+    nothing written: the edit is kept, never written over.
+  - The document holds its first round as soon as it is shown, its
+    *Rounds* line saying it was cut short - what it is, should the search
+    end with nothing more written - and the page shows it searching on.
+    Saved while it searches, the file holds what came so far, said cut
+    short; opened again, the search is not taken up again.
+  - Each stereoisomer's search is judged in a worker of its own, kept
+    until its search ends: at most one for each stereoisomer asked for.
   - An atom map's 3D structures are made as before: their search is asked
     to its end, the map waiting on it.
 - **Conformers kept** (2026-10-26). Those within 30 kcal/mol of the

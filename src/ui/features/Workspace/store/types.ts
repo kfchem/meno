@@ -437,8 +437,14 @@ export type Look3D = Role3D;
 /** What a 3D structure's search going on has brought so far (docs/WORKSPACE.md, *As its search goes on*): its conformers, shown over what the document holds of it until the search ends. */
 export type Grown3D = Pick<Molecule3D, "atoms" | "frames" | "energies" | "made">;
 
-/** A 3D structure whose search goes on: what it has brought so far, and the key its making was recorded with - for what the search brings to join that step where nothing came between. */
-export type Growing3D = { grown: Grown3D; key: string };
+/**
+ * A 3D structure whose search goes on: what it has brought so far; the key
+ * its making was recorded with - for what the search brings to join that
+ * step where nothing came between; and its atoms as the document holds
+ * them as it began (`base`): an edit that changes them ends the search,
+ * the edit kept - what it brings is never written over one.
+ */
+export type Growing3D = { grown: Grown3D; key: string; base: Molecule3D["atoms"] };
 /**
  * A measurement on a molecule in 3D, between its atoms by index, in the
  * order they were chosen: two, a distance; three, the angle at the middle
@@ -1301,8 +1307,10 @@ export type EditorState = {
    * molecule is: an undo that took it away, a 3D structure made again.
    */
   growing3d: Readonly<Record<number, Growing3D>>;
-  /** What a 3D structure's search going on has brought so far shown (`growing3d`): the conformer shown kept shown, where it is still among them. None, to let it go. */
-  grow3d: (id: number, grown: Grown3D | null, key: string) => void;
+  /** A 3D structure's search going on from now (`growing3d`): what it has brought so far shown, its making's `key`, its atoms as the document holds them now its `base`. */
+  startGrowing3d: (id: number, grown: Grown3D, key: string) => void;
+  /** What a 3D structure's search going on has brought since shown (`growing3d`): the conformer shown kept shown, where it is still among them. None, to let it go. Nothing where its search has ended - its molecule gone or edited: never begun again. */
+  grow3d: (id: number, grown: Grown3D | null) => void;
   /** What a 3D structure's search brought written into the document and let go: one step with its making, where nothing came between (its `key`). */
   settleGrown3d: (id: number) => void;
   /** A molecule in 3D shown in its other look for the talk being given. */
