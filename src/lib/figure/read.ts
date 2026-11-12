@@ -10,7 +10,7 @@
 import { shapeLetters, sureEnough, type GlyphShape, type ShapeLetter } from "./glyphs";
 import { chargeMarks, withoutMarks } from "./charges";
 import { ELEMENTS } from "../chem/elements";
-import { VARIABLE_NAMES } from "../chem/abbreviations";
+import { abbreviationStructure, VARIABLE_NAMES } from "../chem/abbreviations";
 import { narrowestBox, shapesOf, type Blob, type Box, type Curve, type FigureDrawn, type FigureLetter, type Point, type Shapes, type Stroke, type Wedge } from "./drawn";
 
 /**
@@ -317,7 +317,7 @@ const isElementSymbolLike = (text: string) => {
 export const COMPOUND_NUMBER = /^[([]?\d+[a-z]{0,2}['\u2032\u2033]*[)\]]?$/;
 
 /** A word: letters on a line side by side - its subscripts and superscripts with it - as drawn. */
-type Word = { letters: FigureLetter[]; box: Box; size: number };
+type Word = { letters: FigureLetter[]; box: Box; size: number; /** Said of the atom it becomes: how it was cut from its neighbour. */ cut?: string };
 
 /** Letters joined into words: each to the one before it on its line where they nearly touch. */
 export function wordsOf(letters: readonly FigureLetter[]): Word[] {
@@ -485,8 +485,9 @@ function boxOfBoxes(bs: readonly Box[]): Box {
  */
 function labelOf(w: Word, reads: LabelReads = () => true): Pick<ReadAtom, "label" | "alts" | "unsure"> {
   const { text: label, taken } = labelParts(w, reads);
+  const said = w.cut ? [w.cut] : [];
   // (a level number cut from the end of the label: its place cannot tell a count from an atom's number, so the atom says so)
-  const cut = taken ? [`A small number by it was taken as the atom's number, not a count: read as "${label}".`] : [];
+  const cut = [...said, ...(taken ? [`A small number by it was taken as the atom's number, not a count: read as "${label}".`] : [])];
   const shaped = w.letters.filter((l): l is ShapeLetter => "sure" in l);
   if (!shaped.length) return { label, ...(cut.length ? { unsure: cut } : {}) };
   const as = (swap: Map<number, string>) => labelText({ ...w, letters: w.letters.map((l, k) => (swap.has(k) ? { ...l, c: swap.get(k)! } : l)) }, reads);
@@ -993,6 +994,36 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   // (a repeat unit in brackets with its count: its brackets no bonds, its count no word - what is read of it, below)
   const repeats = repeatBrackets(shapes, written, bond, hashed);
   const words = written.filter((_, k) => !repeats.counts.has(k));
+  // (two labels set close - a group's name by an atom's, Me by an O - are two where the drawing says so, and one word where it does not: cut at a capital
+  // where both pieces read, one a group's name and the other an atom's label, by the bonds first - bond ends come to both parts: two atoms, each with its
+  // own bonds, a methoxy having its one bond at the O - then the size - a part at nine tenths of the other's or less - then the line - a part set off the
+  // other's by a twelfth of its size or more. One size on one line and no bond at both: one word, as MeOH is. Cut by the bonds alone, both are said)
+  const bondEnds: { p: Point; out: Point }[] = [...shapes.strokes.flatMap((t) => [{ p: t.a, out: unit(t.b, t.a) }, { p: t.b, out: unit(t.a, t.b) }]), ...shapes.wedges.flatMap((w) => [{ p: w.tip, out: unit(w.base, w.tip) }, { p: w.base, out: unit(w.tip, w.base) }]), ...hashed.flatMap((h) => [{ p: h.a, out: unit(h.b, h.a) }, { p: h.b, out: unit(h.a, h.b) }])];
+  const pieceOf = (ls: FigureLetter[]): Word => ({ letters: ls, box: boxOfBoxes(ls.map((l) => l.box)), size: Math.max(...ls.map((l) => l.size)) });
+  const baseline = (w: Word) => {
+    const ys = w.letters.filter((l) => l.size >= 0.85 * w.size).map((l) => l.at?.[1] ?? l.box[3]).sort((a, b) => a - b);
+    return ys.length ? ys[ys.length >> 1] : 0;
+  };
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    if (w.letters.length < 3) continue;
+    for (let j = 1; j < w.letters.length; j++) {
+      if (!/[A-Z]/.test(w.letters[j].c)) continue;
+      const [p, q] = [pieceOf(w.letters.slice(0, j)), pieceOf(w.letters.slice(j))];
+      const [tp, tq] = [labelText(p, reads), labelText(q, reads)];
+      // (a group's name and an atom's label, each read on its own: neither a lone H, a charge, nor a number)
+      const group = (t: string) => abbreviationStructure(t) != null;
+      if (!reads(tp) || !reads(tq) || tp === "H" || tq === "H" || group(tp) === group(tq)) continue;
+      const bonded = (b: Box) => bondEnds.some((e) => reaches(e.p, e.out, b, bond));
+      const byBonds = bonded(p.box) && bonded(q.box);
+      const bySize = Math.min(p.size, q.size) <= 0.9 * Math.max(p.size, q.size);
+      const byLine = Math.abs(baseline(p) - baseline(q)) >= (1 / 12) * Math.max(p.size, q.size);
+      if (!byBonds && !bySize && !byLine) continue;
+      const said = byBonds && !bySize && !byLine ? `Two labels, "${tp}" and "${tq}", set close: cut where the bonds come to both, nothing else says so.` : undefined;
+      words.splice(i, 1, { ...p, ...(said ? { cut: said } : {}) }, { ...q, ...(said ? { cut: said } : {}) });
+      break;
+    }
+  }
   // (two labels set touching, the first ending in its charge - Cl- HN+ - are two: a word that reads as nothing is cut after a
   // charge written before a capital, where both pieces read)
   const sign = (l: FigureLetter) => /^[+-]$/.test(labelText({ letters: [l], box: l.box, size: l.size }, reads));
