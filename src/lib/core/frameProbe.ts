@@ -38,10 +38,25 @@ function wrapAll(): void {
   }
 }
 
+/** How many changes to the page's own DOM - nodes, attributes, text - were made since the frame before: layout and paint follow each. */
+let mutations = 0;
+let mutationTargets = new Map<string, number>();
+function watchDom(): void {
+  new MutationObserver((records) => {
+    mutations += records.length;
+    for (const r of records) {
+      const el = r.target as Element;
+      const name = `${r.type}:${(el.nodeName || "").toLowerCase()}${el.id ? "#" + el.id : ""}${typeof el.className === "string" && el.className ? "." + el.className.split(" ")[0] : ""}`;
+      mutationTargets.set(name, (mutationTargets.get(name) ?? 0) + 1);
+    }
+  }).observe(document.documentElement, { subtree: true, childList: true, attributes: true, characterData: true });
+}
+
 export function startProbe(): void {
   if (started) return;
   started = true;
   wrapAll();
+  watchDom();
   let last = performance.now();
   const tick = (now: number) => {
     const gap = now - last;
@@ -52,8 +67,11 @@ export function startProbe(): void {
       const sum = named.reduce((s, e) => s + e.ms, 0);
       const js = inside.filter((e) => ["raf", "timeout", "message"].includes(e.label)).reduce((s, e) => s + e.ms, 0);
       const parts = named.map((e) => `${e.label}=${e.ms.toFixed(1)}`).join(" | ");
-      console.warn(`[probe] frame gap ${gap.toFixed(0)}ms, timed ${sum.toFixed(0)}ms, all callbacks ${js.toFixed(0)}ms: ${parts || "(nothing timed: React, other work or the browser's own)"}`);
+      const top = [...mutationTargets].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => `${k}x${v}`).join(",");
+      console.warn(`[probe] DOM changes ${mutations}${top ? " (" + top + ")" : ""}; frame gap ${gap.toFixed(0)}ms, timed ${sum.toFixed(0)}ms, all callbacks ${js.toFixed(0)}ms: ${parts || "(nothing timed: React, other work or the browser's own)"}`);
     }
+    mutations = 0;
+    mutationTargets = new Map();
     last = now;
     requestAnimationFrame(tick);
   };
