@@ -161,7 +161,11 @@ stops being part of the work.
   one), the way it is going first; one that has left the view a moment
   before its turn is dropped. A zoom still waits for the view to stop,
   the level changing. Tiles that come are shown one a frame, each put on
-  the graphics card as it is, so that none waits on several at once.
+  the graphics card as it is, so that none waits on several at once: one
+  picture a frame however many views draw (the column and the page both ask
+  each frame; a 1024 px picture is some milliseconds on the card), and a
+  page's small picture waits its turn with them - put on the card there,
+  not all together inside the frame's draw.
 - **Light on the graphics card** (found on Windows, 2026-10-16: a PDF
   scrolled in the column kept the graphics card full).
   - A picture of a page come and faded in is drawn opaque, and its tiles

@@ -165,10 +165,37 @@ describe("tiles come while the view moves", () => {
     expect(pics.fading(performance.now())).toBe(true);
     expect(pics.reveal(1)).toBe(true);
     expect(shown()).toBe(1);
+    // (the other view asking in the same frame: it puts none - one picture a frame, however many views draw)
+    expect(pics.reveal(1)).toBe(false);
+    expect(shown()).toBe(1);
+    // (the next frame)
+    await new Promise((r) => setTimeout(r, 20));
     pics.reveal(1);
     expect(shown()).toBe(2);
     pics.reveal(Infinity);
     expect(shown()).toBe(4);
     expect(pics.reveal(1)).toBe(false);
+  });
+
+  it("puts a page's small picture on the graphics card the same way: with the tiles, a frame at a time, never all in the frame they came in", async () => {
+    reader.hold = false;
+    const pics = new Pictures();
+    const pages = { sha256: "p", pages: [[612, 792], [612, 792], [612, 792]] as const };
+    for (let page = 0; page < 3; page++) pics.preview(pages, page);
+    await new Promise((r) => setTimeout(r, 0));
+    // (come, but not shown: none is had until it is revealed)
+    expect(pics.preview(pages, 0)).toBeNull();
+    const had = () => [0, 1, 2].filter((page) => pics.previews.get(`p:${page}`) && pics.previews.get(`p:${page}`) !== "asked").length;
+    expect(had()).toBe(0);
+    const uploaded: unknown[] = [];
+    pics.reveal(1, (t) => uploaded.push(t));
+    expect(uploaded).toHaveLength(1);
+    expect(pics.reveal(1, (t) => uploaded.push(t))).toBe(false);
+    expect(had()).toBe(1);
+    await new Promise((r) => setTimeout(r, 20));
+    pics.reveal(1, (t) => uploaded.push(t));
+    await new Promise((r) => setTimeout(r, 20));
+    pics.reveal(1, (t) => uploaded.push(t));
+    expect(had()).toBe(3);
   });
 });
