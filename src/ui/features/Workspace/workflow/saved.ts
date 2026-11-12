@@ -122,6 +122,8 @@ function readSet(v: unknown): WorkflowSet | null {
     })(),
     // (a result set kept out of its file, and what it held when it was saved)
     ...(b.keep === false && made ? { keep: false as const } : {}),
+    // (which of its molecules a large set showed, one at a time: its place in its collection - what the view is kept in range by)
+    ...(Array.isArray(b.collection) && Number.isInteger(b.shown) && (b.shown as number) > 0 ? { shown: b.shown as number } : {}),
     // (a result set wired on that the chemist opened, to be seen on the page: workflow/held)
     ...(b.opened === true && made ? { opened: true as const } : {}),
     ...(() => {

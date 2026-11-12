@@ -174,6 +174,16 @@ describe("the right-click menu", () => {
     expect(menu(target({ kind: "pdf", id: 1 }), { pdf: { ...spread, onRows: none } }).listed).toEqual(expect.arrayContaining(["Gather pages", "Put pages in rows"]));
   });
 
+  it("offers to print a PDF - and where its author does not allow it, says so beside the command, which cannot be pressed", () => {
+    const pdf = { spread: false, icon: false, onSpread: none, onIcon: none, onRead: none, onNumbers: none, onPages: none, onSave: none, onPrint: none };
+    const allowed = menu(target({ kind: "pdf", id: 1 }), { pdf });
+    expect(allowed.listed.slice(allowed.listed.indexOf("Save as PDF…"))).toEqual(["Save as PDF…", "Print…"]);
+    expect(allowed.html).not.toMatch(/<button[^>]*disabled=""[^>]*><span>Print…/);
+    const refused = menu(target({ kind: "pdf", id: 1 }), { pdf: { ...pdf, printNot: true } });
+    expect(refused.listed).toContain("Print… (its author does not allow printing)");
+    expect(refused.html).toMatch(/<button[^>]*disabled=""[^>]*><span>Print… \(its author does not allow printing\)/);
+  });
+
   it("offers a new PDF from a PDF - its pages numbered, or arranged - and it written to a file; several selected, made one", () => {
     const pdf = { spread: false, icon: false, onSpread: none, onIcon: none, onRead: none, onNumbers: none, onPages: none, onSave: none };
     const one = menu(target({ kind: "pdf", id: 1 }), { pdf });
@@ -183,6 +193,8 @@ describe("the right-click menu", () => {
     expect(one.html).toMatch(/role="separator"[^>]*><\/div><button[^>]*><span>Page numbers…/);
     const two = menu(target({ kind: "pdf", id: 1 }), { pdf, onCombinePdfs: none });
     expect(two.listed.slice(two.listed.indexOf("Page numbers…"))).toEqual(["Page numbers…", "Pages…", "Combine into one PDF", "Save as PDF…"]);
+    // (printing is offered where the PDF's pages can be printed)
+    expect(one.listed).not.toContain("Print…");
   });
 
   it("offers words' bold, italic and a list among their icons - ticked as they are - their size, line spacing and typeface under them, and how their lines lie listed", () => {
@@ -338,5 +350,40 @@ describe("a set's menu", () => {
     expect([own.icons, own.listed[own.listed.length - 1]]).toEqual([[], "Delete set and the 118 molecules it holds"]);
     const plain = menu(set);
     expect([plain.icons, plain.listed.some((n) => n.includes("it holds"))]).toEqual([["Delete set"], false]);
+  });
+});
+
+describe("an arrow's menu and its atom map", () => {
+  const arrowMenu = (atomMap?: object) =>
+    menu(target({ kind: "arrow", id: 1 }), {
+      arrow: {
+        kind: null,
+        setKind: none,
+        heads: 1,
+        setHeads: none,
+        full: false,
+        setFull: none,
+        dash: false,
+        setDash: none,
+        weight: "regular",
+        setWeight: none,
+        ...(atomMap ? { atomMap } : {}),
+      } as never,
+    });
+  const map = (over: object = {}) => ({ standing: "none", shown: false, maps: 0, chosen: 0, onMake: none, onShow: none, onOther: none, onExport: none, ...over });
+
+  it("makes the map of an arrow that means a reaction, and has none for one that does not", () => {
+    expect(arrowMenu(map()).listed).toContain("Atom map");
+    // (an arrow that means none is given no map at all: its menu has no such row - nothing disabled to teach a rule)
+    expect(arrowMenu().listed).not.toContain("Atom map");
+  });
+
+  it("says a map from before is not a reaction's now, and takes it off - nothing else of it", () => {
+    const listed = arrowMenu(map({ standing: "refused", onRemove: none })).listed;
+    expect(listed).toContain("Not a reaction now");
+    expect(listed).toContain("Remove map");
+    expect(listed).not.toContain("Atom map");
+    expect(listed).not.toContain("Hide atom map");
+    expect(listed).not.toContain("Show atom map");
   });
 });

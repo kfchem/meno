@@ -25,9 +25,48 @@ The same holds for the exchange as it is saved and opened again.
 
 ## The Conversation object
 
-- **A card on the page, inside a frame.** It opens in the right column, as
-  a text sheet or a PDF does. The column shows the exchange, what was
-  sent, and the changes waiting to be kept.
+- **A card on the page, inside a frame.** It lies against the frame's
+  right edge, drawn on the page: what was said in turn - each question in
+  a light ground against the right, each reply as paragraphs, lists and
+  `inline code` (in Plex Mono, on a light ground of its own), each tool call a quiet line - and, last, the changes
+  waiting to be kept, with *Keep* and *Discard*. Its words fade with the
+  page's; too small to read, it says how many turns it holds and whether
+  it works or has changes waiting. It opens in the right column, as a text
+  sheet or a PDF does. The column shows the exchange, what was sent, and
+  the changes waiting to be kept: the one conversation of the frame in
+  focus, never a list of them.
+- **Its card is scrolled without the wheel**, which on the page always
+  zooms and moves the view, over the card as anywhere:
+  - a track on its right edge, as thin as a hairline at rest and wider
+    pointed at - its thumb dragged, a press on the track paging a screen;
+  - *Earlier* and *Latest* chips at its top and foot, only where there is
+    more that way - a click moves a screen, eased, *Latest* to the end;
+  - keys, for the card the pointer is on or the one read in the column
+    (not with a PDF under the pointer, whose pages the same keys turn):
+    Page Up and Page Down, Home and End, and Alt with the up and down
+    arrows by a line (plain arrows stay with the text of a field);
+  - at its latest, it follows what is said; scrolled up, it stays, and
+    *Latest* carries a dot for what is new below; asking in it - from
+    its field or the column's - brings it to its latest, where the question
+    and what follows are.
+  Where it was left is the view's: saved with the file, no step of undo,
+  none for a card left at its latest.
+- **Its ask field is at the card's foot**, drawn on the page, typed into
+  a real field laid unseen at the caret, so that keys, an input method,
+  pasting and undoing are the system's own. Several lines: *Enter* asks,
+  *Shift+Enter* starts another (an Enter an input method takes, choosing a
+  candidate, is never an ask), *Escape* leaves it. It grows to four lines,
+  then scrolls inside, and the history gives up that room. Empty, it says
+  what it is for - or, with no model plugin, what it needs; while the model
+  works it says so, with *Stop* beside it. A press places the caret, a drag
+  selects, a double press selects a word; up, down, Home and End go by the
+  lines drawn. What is typed and not asked stays with the card, as the
+  card is looked away from. Each line of a question is a line of the card.
+  The words of the card's history are not selected by dragging: they are
+  drawn, not text.
+- **A conversation has no name.** Neither its frame nor its tab says one,
+  and the column's tab for it is its icon alone. One an older file gave is
+  not read.
 - **The frame is its scope.** What lies inside the frame is what the
   conversation may see and change. The rule is the one sets use: a thing
   lies inside where its middle does (`lyingIn`), extended to the kinds a

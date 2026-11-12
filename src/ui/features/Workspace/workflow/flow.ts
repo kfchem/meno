@@ -5,26 +5,66 @@
  */
 import type { WorkspaceDocument } from "../document";
 import type { DrawnModel, DrawnRecord, Molecule3D, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
-import { conformersOfOne, drawnKey, entryOfSet, hash, holdsOf, plainAmong, recordKey, setEntries, setMembers, setMolecules, type SetEntry } from "./entries";
+import { recordsWithRoles } from "./schemeRoles";
+import { conformersOfOne, drawnKey, entryOfSet, framesOf, hash, holdsOf, plainAmong, readingOrder, recordKey, setEntries, setMembers, setMolecules, type SetEntry } from "./entries";
+import type { Property } from "../../../../lib/entry";
 import { moleculesAsTable, WHAT_COLUMN, type Table } from "../../../../lib/table";
 import { levelOf } from "../../../../lib/calc/output";
 import { exitOf, ONE_INPUT, optionsOf, readsAsTable, RESTRAINTS_INPUT, severalInputs, takenBy, takesNothing, type SetHolds, type SetKind, type ValueKind, isSetKind } from "./kinds";
-import { byOf, doerStamp, inputsFor, optionsFor, presetsStamp, takesBy, takesNothingBy } from "./doers";
+import { byOf, doerStamp, inputsFor, optionsFor, presetsStamp, setName, takesBy, takesNothingBy } from "./doers";
 
-export type Flow = Pick<WorkspaceDocument, "model" | "molecules3d" | "sets" | "steps" | "wires" | "pictures">;
+export type Flow = Pick<WorkspaceDocument, "model" | "molecules3d" | "sets" | "steps" | "wires" | "pictures"> & Partial<Pick<WorkspaceDocument, "arrows" | "pluses">>;
 
 export const stepOf = (doc: Flow, id: number): WorkflowStep | undefined => doc.steps?.find((s) => s.id === id);
 export const findSet = (doc: Flow, id: number): WorkflowSet | undefined => doc.sets?.find((b) => b.id === id);
 
-/** The wire into a step's input, where it has one; its first input where none is named (of a step not there, any). */
-export function wireInto(doc: Flow, step: number, port?: string): Wire | undefined {
+/** The wires into a step, into every one of its inputs. */
+export const allWiresInto = (doc: Flow, step: number): Wire[] => (doc.wires ?? []).filter((w) => w.to.step === step);
+
+/**
+ * The wires into one of a step's inputs - where none is named, its first
+ * (of a step not there, the one the first wire found goes into): never its
+ * *Restraints* input, beside its first - in the order their sets lie on the page: top
+ * to bottom, then left to right, by each frame's top left corner, as a
+ * set's members are ordered (entries `readingOrder`); a step's exit by the
+ * set it made. The order they were wired in is seen nowhere, and orders
+ * nothing (docs/WORKFLOWS.md, *Several wires into one input*).
+ */
+export function wiresInto(doc: Flow, step: number, port?: string): Wire[] {
+  const all = allWiresInto(doc, step);
   const s = port == null ? stepOf(doc, step) : undefined;
-  const at = port ?? (s ? inputsFor(s.kind, byOf(s))[0]?.id : undefined);
-  return doc.wires?.find((w) => w.to.step === step && (at == null || w.to.port === at));
+  const at = port ?? (s ? inputsFor(s.kind, byOf(s))[0]?.id : undefined) ?? all[0]?.to.port;
+  const into = all.filter((w) => w.to.port === at);
+  if (into.length < 2) return into;
+  const corner = new Map(into.map((w) => [w.id, ((b) => (b ? { x: b.x0, y: b.y1 } : null))(findSet(doc, w.from.set))]));
+  return [...into].sort((p, q) => {
+    const [a, b] = [corner.get(p.id), corner.get(q.id)];
+    // (a wire from no set there: last)
+    return (a && b ? readingOrder(a, b) : a ? -1 : b ? 1 : 0) || p.id - q.id;
+  });
 }
 
-/** The wires into a step, one for each of its inputs that has one. */
-export const wiresInto = (doc: Flow, step: number): Wire[] => (doc.wires ?? []).filter((w) => w.to.step === step);
+/** The wire into a step's input wired in last - the one a press on its port picks up, of several - none where none is. */
+export const newestWire = (doc: Pick<Flow, "wires">, step: number, port: string): Wire | undefined =>
+  (doc.wires ?? []).reduce<Wire | undefined>((last, w) => (w.to.step === step && w.to.port === port && !(last && last.id > w.id) ? w : last), undefined);
+
+/** Whether a set holds no entries now - none on the page, none held off it; a table or a number is not empty - and is not a step's exit that has not run, which will hold what its step gives. */
+export function emptyNow(doc: Flow, set: WorkflowSet): boolean {
+  if (set.table || set.number != null || (set.made && !set.made.holds)) return false;
+  const m = setMembers(doc, set);
+  return !m.structures.length && !m.molecules.length && !set.collection?.length && !set.drawnCollection?.length;
+}
+
+/** The property each entry that comes into an input of several wires carries: the set it came from, by name (`inputOf`). */
+export const CAME_FROM = "came from";
+
+/** The sets wired into one of a step's inputs (`wiresInto`), in order, each with the name it goes by on the page (doers `setName`). */
+export function sourcesInto(doc: Flow, step: number, port?: string): { wire: Wire; set: WorkflowSet; name: string }[] {
+  return wiresInto(doc, step, port).flatMap((wire) => {
+    const set = findSet(doc, wire.from.set);
+    return set ? [{ wire, set, name: setName(set, doc.steps ?? []) }] : [];
+  });
+}
 
 /** The set a step's exit made - its first exit where none is named - which stands whether or not it has run. */
 export const resultOf = (doc: Flow, step: number, exit?: string): WorkflowSet | undefined =>
@@ -45,7 +85,7 @@ export function givesOf(doc: Flow, end: WireEnd, seen: ReadonlySet<number> = new
   if (!step || seen.has(step.id)) return null;
   const g = exitOf(step.kind, given.made.exit).gives;
   if (g !== "same") return g;
-  const into = wireInto(doc, step.id);
+  const into = wiresInto(doc, step.id)[0];
   return into ? givesOf(doc, into.from, new Set([...seen, step.id])) : null;
 }
 
@@ -53,13 +93,13 @@ export function givesOf(doc: Flow, end: WireEnd, seen: ReadonlySet<number> = new
 /** The steps before a step, nearest first, as its wires lead back. */
 export function stepsBefore(doc: Flow, step: number): number[] {
   const out: number[] = [];
-  const todo = wiresInto(doc, step).map((w) => w.from);
+  const todo = allWiresInto(doc, step).map((w) => w.from);
   for (let guard = 0; todo.length && guard < 1000; guard++) {
     const at = todo.shift()!;
     const made = findSet(doc, at.set)?.made?.step;
     if (made == null || out.includes(made) || made === step) continue;
     out.push(made);
-    todo.push(...wiresInto(doc, made).map((w) => w.from));
+    todo.push(...allWiresInto(doc, made).map((w) => w.from));
   }
   return out;
 }
@@ -103,9 +143,16 @@ export function wireRefusal(doc: Flow, from: WireEnd, to: number, port: string =
   // (restraints: a table of them, never molecules seen as one)
   if (into.id === RESTRAINTS_INPUT.id && holds !== "table") return "It takes a table of restraints, not molecules";
   // (molecules or conformer sets into a port that takes a table, seen as one: kinds `takenBy`)
-  if (takenBy(takes, holds)) return null;
-  const wants = takes.length ? takes.map((k) => SET_WORDS[k]).join(" or ") : "nothing that is given";
-  return `It takes ${wants}, not ${SET_WORDS[holds]}`;
+  if (!takenBy(takes, holds)) {
+    const wants = takes.length ? takes.map((k) => SET_WORDS[k]).join(" or ") : "nothing that is given";
+    return `It takes ${wants}, not ${SET_WORDS[holds]}`;
+  }
+  // (several wires into one input: what they give one kind, as one set's entries are - and a number, one alone; an empty set adds nothing, of no kind)
+  const others = wiresInto(doc, to, port).filter((w) => w.from.set !== from.set && !emptyNow(doc, findSet(doc, w.from.set)!));
+  if (!others.length || emptyNow(doc, set)) return null;
+  if (holds === "number") return "It takes one number: one is wired into it already";
+  const there = others.map((w) => givesOf(doc, w.from)).find((g): g is ValueKind => g != null && g !== holds && g in SET_WORDS);
+  return there ? `It gives ${SET_WORDS[holds]}, and what is wired into it already ${SET_WORDS[there]}: an input takes one kind` : null;
 }
 
 /**
@@ -115,27 +162,104 @@ export function wireRefusal(doc: Flow, from: WireEnd, to: number, port: string =
  * off the page, after them (`held`: more than it shows, look
  * `DRAWN_ON_PAGE`). Null where nothing does - or what would has not been
  * made yet, or is pictures, which no step takes.
+ *
+ * Several wires into the input: each set's, one after another in the order
+ * they lie on the page (`wiresInto`), each in its own order - those on the
+ * page of every set before those held off it, as of one set - nothing taken
+ * out twice (Duplicates does that); and each entry named by the set it came
+ * from (`CAME_FROM`), for a Filter or a Join to go by. The kind is the
+ * first set's: one of another kind the step does not run on (run `whyNot`).
  */
 export function inputOf(
   doc: Flow,
   step: number,
   port?: string,
 ): { holds: SetKind; molecules: Molecule3D[]; structures: number[][]; records: (DrawnRecord | undefined)[]; held?: readonly DrawnModel[] } | null {
-  const from = wireInto(doc, step, port)?.from;
-  if (!from) return null;
-  const set = findSet(doc, from.set);
-  if (!set) return null;
-  const holds = holdsOf(doc, set);
+  const sources = sourcesInto(doc, step, port);
+  if (!sources.length) return null;
+  const holds = holdsOf(doc, sources[0].set);
   // (a table, a number, a chart - no entries to give a step that works on them)
   if (!isSetKind(holds)) return null;
-  const { structures, records } = setMembers(doc, set);
-  return { holds, molecules: setMolecules(doc, set), structures, records, ...(set.drawnCollection ? { held: set.drawnCollection } : {}) };
+  if (sources.length === 1) {
+    const set = sources[0].set;
+    const { structures, records } = setMembers(doc, set);
+    // (a drawn reaction in its frame: each structure's role and reaction, worked out as it is drawn now)
+    return { holds, molecules: setMolecules(doc, set), structures, records: recordsWithRoles(doc, set, structures, records), ...(set.drawnCollection ? { held: set.drawnCollection } : {}) };
+  }
+  const molecules: Molecule3D[] = [];
+  const structures: number[][] = [];
+  const records: (DrawnRecord | undefined)[] = [];
+  const held: DrawnModel[] = [];
+  for (const { set, name } of sources) {
+    const came = cameFrom(name);
+    const members = setMembers(doc, set);
+    molecules.push(...setMolecules(doc, set).map((m) => moleculeFrom(m, name)));
+    structures.push(...members.structures);
+    records.push(...recordsWithRoles(doc, set, members.structures, members.records).map((r) => ({ ...r, properties: { ...r?.properties, [CAME_FROM]: came } })));
+    held.push(...(set.drawnCollection ?? []).map((m) => ({ ...m, record: { ...m.record, properties: { ...m.record?.properties, [CAME_FROM]: came } } })));
+  }
+  return { holds, molecules, structures, records, ...(held.length ? { held } : {}) };
 }
 
-/** The table a set holds that comes into a step - read from a file, or a step's: none where what comes in holds none. */
+/** An entry's `CAME_FROM`: the name of the set it came from, a label that rides any change to it. */
+const cameFrom = (name: string): Property => ({ value: name, unit: "none", label: true, status: "computed" });
+
+/**
+ * A molecule in 3D, each of its frames named by the set it came from
+ * (`CAME_FROM`): made once for each molecule and name - a molecule changed
+ * is a new one - so that what keys a step on it (`inputKey`) is not worked
+ * out anew on every edit.
+ */
+const named = new WeakMap<Molecule3D, Map<string, Molecule3D>>();
+function moleculeFrom(m: Molecule3D, name: string): Molecule3D {
+  let by = named.get(m);
+  if (!by) named.set(m, (by = new Map()));
+  let out = by.get(name);
+  if (!out) {
+    const n = framesOf(m);
+    // (its own properties where they are one to a frame, as entries read them: entries `setEntries`)
+    const own = m.properties?.length === n ? m.properties : undefined;
+    out = { ...m, properties: Array.from({ length: n }, (_, f) => ({ ...own?.[f], [CAME_FROM]: cameFrom(name) })) };
+    by.set(name, out);
+  }
+  return out;
+}
+
+/**
+ * The table a set holds that comes into a step - read from a file, or a
+ * step's: none where what comes in holds none. Several wires in: their
+ * tables one after another, in the order they lie on the page (`wiresInto`),
+ * as one (`tablesJoined`).
+ */
 export function tableWired(doc: Flow, step: number, port?: string): Table | null {
-  const from = wireInto(doc, step, port)?.from;
-  return (from && findSet(doc, from.set)?.table) || null;
+  const tables = sourcesInto(doc, step, port).flatMap(({ set }) => (set.table ? [set.table] : []));
+  return tables.length ? tablesJoined(tables) : null;
+}
+
+/** Tables one after another, as one: the first's columns, then each column a later one adds by name; a row with no cell in a column, empty there - and what did not read, row by row, where it now stands. */
+export function tablesJoined(tables: readonly Table[]): Table {
+  if (tables.length === 1) return tables[0];
+  const columns: Table["columns"] = [];
+  const at = new Map<string, number>();
+  for (const t of tables)
+    for (const c of t.columns) {
+      if (at.has(c.name)) continue;
+      at.set(c.name, columns.length);
+      columns.push(c);
+    }
+  const out: Table = { columns, rows: [], unread: [], left: [] };
+  for (const t of tables) {
+    const before = out.rows.length;
+    const places = t.columns.map((c) => at.get(c.name)!);
+    for (const r of t.rows) {
+      const row: Table["rows"][number] = columns.map(() => null);
+      places.forEach((k, i) => (row[k] = r[i] ?? null));
+      out.rows.push(row);
+    }
+    out.unread.push(...t.unread.map((u) => ({ ...u, row: u.row + before })));
+    out.left.push(...t.left.filter((l) => !out.left.some((x) => x.column === l.column)));
+  }
+  return out;
 }
 
 /**
@@ -235,7 +359,7 @@ export function inputKey(doc: Flow, step: WorkflowStep, by: string): string {
   // (and what of its plugin the results hang on: its version, the files it was set up with - another prior is another run)
   if (takesNothingBy(step.kind, by)) return hash(`${step.kind}|${by}|${doerStamp(by)}|${options}`).toString(36);
   // (a Restraints input with nothing wired into it: no input of its - a step that never had one keeps its key)
-  const ports = inputsFor(step.kind, by).filter((p) => p.id !== RESTRAINTS_INPUT.id || wireInto(doc, step.id, p.id));
+  const ports = inputsFor(step.kind, by).filter((p) => p.id !== RESTRAINTS_INPUT.id || wiresInto(doc, step.id, p.id).length > 0);
   // (a kind of several inputs: each one's own, in turn - none where its first has nothing coming in; the names its molecules go by too, which an energy diagram's levels are)
   if (ports.length > 1) {
     const keys = ports.map((p) => portKey(doc, step.id, p.id, true));
@@ -286,7 +410,7 @@ export function stateOf(doc: Flow, step: WorkflowStep, by: string): StepState {
   // (its jobs under way: the card says which, as they were last looked at)
   if (step.running) return "running";
   // (a step that takes nothing in is ready as it is)
-  const into = takesNothingBy(step.kind, by) || !!wireInto(doc, step.id);
+  const into = takesNothingBy(step.kind, by) || allWiresInto(doc, step.id).length > 0;
   if (!step.ran) return into ? "ready" : "no-input";
   // (what comes from a step not run yet, or run since, has changed)
   if (!into) return "changed";

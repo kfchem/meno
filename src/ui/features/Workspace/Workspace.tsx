@@ -7,6 +7,8 @@ import { canTakeBond, valenceOrder } from "../../../lib/chem/molecule";
 import { usePresentingWindow } from "../../presenting";
 import { typefaceRead } from "../../fonts/typefaces";
 import { Canvas } from "@react-three/fiber";
+import { Vector3 } from "three";
+import type { MenuAnchor } from "./useMenuAt";
 import { useEditor, useEditorStore, EditorProvider } from "./store";
 import { selectedOf, selectionIsAtom } from "./store/slices/selectionSlice";
 import { useStructureEvents } from "./hooks/useStructureEvents";
@@ -96,6 +98,8 @@ import SettingsStyleAsk from "./SettingsStyleAsk";
 import LargeWorkspaceAsk from "./LargeWorkspaceAsk";
 import { PdfNumbersCard, PdfPagesCard } from "./PdfMakeCards";
 import { combined, putBeside, savePdfFile } from "./pdfMake";
+import { printed, printingKnown } from "../../../lib/pdf/print";
+import { usePrinting } from "./hooks/usePrinting";
 import { listItem, stylesOf, wordsSet } from "../../../lib/chem/captions";
 import WordsFont from "./WordsFont";
 import { WordsEditor } from "./utils/wordsEditor";
@@ -124,7 +128,7 @@ import {
   isDeleteKey,
   isFitKey,
   isDeselectKey,
-  isFillKey, isFindKey,
+  isFillKey, isFindKey, isPrintKey,
   isSelectAllKey,
   IS_MAC,
   presentIntent,
@@ -138,6 +142,7 @@ import { useCheckingFiles, useDownloads } from "../../../lib/pyEnv";
 import { roleOptionsRole } from "../../../lib/plugins/roles";
 import { valuesOf } from "../../../lib/options";
 import { useAppSettings, WINDOW_3D } from "../../../lib/settings/appSettings";
+import { threadsOf } from "../../../lib/jobs";
 import { STEREO_LABELS } from "../../../lib/settings/stereoLabels";
 import { stereoItemFor, type StereoItem } from "./utils/stereoShown";
 import { CleanUpRefused, cleanUp, fragmentOf } from "./chem/cleanUp";
@@ -226,7 +231,7 @@ import { addedBox } from "./store/slices/modelSlice";
 import { viewPanning } from "./components/viewGoal";
 import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gesture";
 import { Remake3D } from "./components/remake3d";
-import { mapAtoms, mapStanding, reactionOf, unpairedSaid } from "./chem/atomMap";
+import { mapAtoms, mapOffered, mapStanding, reactionOf, unpairedSaid } from "./chem/atomMap";
 import { structuresOf } from "./workflow/entries";
 import { conformerPairs, conformersSaid } from "./chem/structureMaps";
 import { partsOffered } from "./utils/joinedParts";
@@ -367,6 +372,8 @@ function WorkspaceContent({
   setDrawnRatio(canvasRatio);
   // (no menu over a talk)
   const talking = useEditor((s) => s.presenting != null);
+  // (each frame its members' room, and what was let go over one eased out of it: as each pointer is let go - workflow/fitFrames)
+  useEffect(() => store.getState().watchFrames(), [store]);
   // (a structure selected: a guide's step waiting for it goes on)
   useEffect(() => store.subscribe((s, prev) => void (s.sel.atoms.size && !prev.sel.atoms.size && guideNotice("selected"))), [store]);
   // (a tab's own, unless it is a document's, holds texts opened while it is in front: ui/views/texts)
@@ -550,7 +557,7 @@ function WorkspaceContent({
           const chosen = useAppSettings.getState().chemistry;
           const rounds = pageRounds(block, chosen, !!plugin?.roleDraws.includes("conformers"));
           if (rounds && "needs" in rounds) throw new Error(rounds.needs);
-          const isomersMade = (await conformersOf(chem, stereo, block, isomers, options, pageCount(block, chosen), rounds)).map((c) => withinWindow(c, window3d));
+          const isomersMade = (await conformersOf(chem, stereo, block, isomers, options, pageCount(block, chosen), rounds, threadsOf(useAppSettings.getState().calculations))).map((c) => withinWindow(c, window3d));
           // (several stereoisomers: their R and S shown, to tell them apart)
           const ms = isomersMade.map((c) => moleculeOf(c, block, isomersMade.length > 1));
           const model = store.getState().model;
@@ -712,6 +719,8 @@ function WorkspaceContent({
     [store],
   );
   const [menu, setMenu] = useState<MenuTarget | null>(null);
+  // (what the author of the PDF its menu is of allows of printing: found as the menu opens)
+  usePrinting(menu?.kind === "pdf" ? store.getState().pdfs.find((x) => x.id === menu.id)?.sha256 : undefined);
   // a colour card opened from a menu, where the menu was (ColourCard)
   // (a card for a new PDF made from one held: its pages numbered, or put in order - docs/PDF.md, *A new PDF from pages*)
   const [pdfCard, setPdfCard] = useState<{ kind: "numbers" | "pages"; id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
@@ -999,6 +1008,11 @@ function WorkspaceContent({
         // the PDF or text in the column filling the workspace, or back beside the canvas
         e.preventDefault();
         st.setColumnFilled(!st.columnFilled);
+      } else if (isPrintKey(e) && st.textsOpen && st.pdfShown != null && st.pdfs.some((p) => p.id === st.pdfShown)) {
+        // the PDF in the column printed (docs/PDF.md, *Printing*)
+        e.preventDefault();
+        const p = st.pdfs.find((x) => x.id === st.pdfShown)!;
+        void printed(p.sha256, p.pages).then((said) => said && setChemError(said));
       } else if (isFindKey(e) && st.pdfs.length) {
         // looking for words in the PDFs (docs/PDF.md, *Search*)
         e.preventDefault();
@@ -1084,6 +1098,33 @@ function WorkspaceContent({
     };
   }, [active, store]);
   const closeQuickAdd = useCallback(() => store.getState().setQuickAdd(null), [store]);
+  // the canvas, for a menu to stand at its point on the page, and the view to ease along for it (useMenuAt)
+  const menuAnchor = useMemo<MenuAnchor>(
+    () => ({
+      project: (at) => {
+        const cam = camRef.current;
+        const r = domRef.current?.getBoundingClientRect();
+        if (!cam || !r) return null;
+        // (the camera as it is now, not as it was last drawn: the menu goes with the page frame by frame)
+        cam.updateMatrixWorld();
+        const v = new Vector3(at.x, at.y, 0).project(cam);
+        return { x: ((v.x + 1) / 2) * r.width, y: ((1 - v.y) / 2) * r.height };
+      },
+      world: (px) => {
+        const r = domRef.current?.getBoundingClientRect();
+        // (it reads the camera and the canvas as they are when asked: the one this render has is as good as any)
+        const p = r && clientToWorld(r.left + px.x, r.top + px.y);
+        return p ?? null;
+      },
+      room: () => {
+        const r = domRef.current?.getBoundingClientRect();
+        return r ? { width: r.width, height: r.height, cover: store.getState().cover } : null;
+      },
+      pan: (dx, dy) => store.getState().requestPan(dx, dy),
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [store],
+  );
   // a molecule in 3D right-clicked: what its menu does to it
   const molecules3d = useEditor((s) => s.molecules3d);
   const chosen3d = useEditor((s) => s.chosen3d);
@@ -1943,6 +1984,7 @@ function WorkspaceContent({
               st.putDownProcedure(id, at.x, at.y);
             }}
             onClose={closeQuickAdd}
+            anchor={menuAnchor}
             onChain={(press) => {
               const { at } = quickAdd;
               store.getState().setQuickAdd(null);
@@ -2121,6 +2163,7 @@ function WorkspaceContent({
         <PartMenu
           key={`${menu.x},${menu.y}`}
           target={menu}
+          anchor={menuAnchor}
           onClose={closeMenu}
           onDelete={() => deleteFromMenu(store.getState(), menu, deletePart)}
           molecule3d={menu3d}
@@ -2430,6 +2473,8 @@ function WorkspaceContent({
               onNumbers: () => setPdfCard({ kind: "numbers", id: p.id, x: menu.x, y: menu.y, within: menu.within }),
               onPages: () => setPdfCard({ kind: "pages", id: p.id, x: menu.x, y: menu.y, within: menu.within }),
               onSave: () => void savePdfFile(p).catch((e: unknown) => setChemError(`Save failed: ${e instanceof Error ? e.message : String(e)}`)),
+              onPrint: () => void printed(p.sha256, p.pages).then((said) => said && setChemError(said)),
+              ...(printingKnown(p.sha256) === "no" ? { printNot: true } : {}),
               ...(selects(st.pdfSel) && st.pdfSel.id === p.id ? { onCopy: () => void copyWords() } : {}),
               // (the coordinates in the words selected, or in the box drawn: the structures they hold, shown before they are placed)
               ...(selects(st.pdfSel) && st.pdfSel.id === p.id
@@ -2586,13 +2631,14 @@ function WorkspaceContent({
               weight: a.weight ?? "regular",
               setWeight: (weight: ArrowWeight | "regular") => set({ weight }),
               ...(a.corners?.length ? { onStraighten: () => set({ corners: null }) } : {}),
-              // (an arrow with a reaction drawn on either side: its atom map)
+              // (an arrow that means a reaction, with one drawn on either side: its atom map - and one made before it came to mean none, said so and taken off)
               ...((() => {
                 const sides = reactionOf(st.model, a, st.pluses);
-                if (!sides.reactants.length || !sides.products.length) return {};
+                if (!mapOffered(a, sides)) return {};
                 return {
                   atomMap: {
                     standing: mapStanding(a, st.model),
+                    onRemove: () => store.getState().setAtomMap(a.id, null),
                     shown: !!a.atomMap?.shown,
                     maps: a.atomMap?.maps.length ?? 0,
                     chosen: a.atomMap?.chosen ?? 0,
@@ -2635,7 +2681,8 @@ function WorkspaceContent({
             const makes = menu.selection === "here" && picked.has(at) && afters.length > 0;
             const maps = st.structureMaps.filter((m) => [...mapAtoms(m.map)].some((id) => before.has(id)));
             const first = maps[0];
-            const standing = first ? mapStanding({ atomMap: first.map }, st.model) : "none";
+            // (a map between structures has no arrow: never refused)
+            const standing = first ? (mapStanding({ atomMap: first.map }, st.model) as Exclude<ReturnType<typeof mapStanding>, "refused">) : "none";
             if (!makes && (!first || standing === "none")) return undefined;
             const ids = maps.map((m) => m.id);
             return {

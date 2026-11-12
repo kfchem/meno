@@ -28,7 +28,6 @@ describe("a conversation, talked to from the page", () => {
 
   it("keeps the column open on it as the page changes, and as what is said is kept", async () => {
     const { store, id } = page([{ text: "Hello." }]);
-    store.getState().updateConversation(id, { name: "Esters" });
     store.getState().addPlus(1, 1);
     await store.getState().sendToConversation(id, "Hi");
     expect(store.getState()).toMatchObject({ conversationShown: id, textsOpen: true });
@@ -39,6 +38,22 @@ describe("a conversation, talked to from the page", () => {
     await store.getState().sendToConversation(id, "Hello");
     expect(store.getState().talking[id]).toMatchObject({ running: false, said: "no-connection" });
     expect(doc.getState().conversations![0].said).toEqual([]);
+  });
+
+  it("brings a card left scrolled up to its latest as it is asked in, and leaves it where it is where nothing is sent", async () => {
+    const { store, doc, id } = page();
+    store.getState().scrollConversation(id, 120);
+    expect(doc.getState().conversations![0].scroll).toBe(120);
+    // (no model plugin: nothing is asked, the card stays where it was)
+    await store.getState().sendToConversation(id, "Hello");
+    expect(doc.getState().conversations![0].scroll).toBe(120);
+    // (nothing typed: likewise)
+    setConnectionMaker(() => scriptedModel([{ text: "Hi." }]));
+    await store.getState().sendToConversation(id, "   ");
+    expect(doc.getState().conversations![0].scroll).toBe(120);
+    await store.getState().sendToConversation(id, "Hello");
+    expect(doc.getState().conversations![0].scroll).toBeUndefined();
+    expect(doc.getState().conversations![0].said.length).toBeGreaterThan(0);
   });
 
   it("keeps a turn's changes, or discards them - one step - and says what a change makes run again", async () => {

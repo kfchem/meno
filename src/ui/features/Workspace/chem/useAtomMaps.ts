@@ -5,10 +5,11 @@ import { roleOptionsRole } from "../../../../lib/plugins/roles";
 import { chemWorker, rolePlugin } from "../../../../lib/roles/worker";
 import { stopWorker } from "../../../../lib/plugins/process";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
+import { threadsOf } from "../../../../lib/jobs";
 import { useNotices } from "../../../notices";
 import type { EditorState, Model } from "../store/types";
 import { linkOf, signatureOf } from "../utils/drawnLink";
-import { keptMap, reactionOf, type Side3D } from "./atomMap";
+import { keptMap, noMapSaid, reactionOf, type Side3D } from "./atomMap";
 import { bareAtomsOf, blocksOf, conformersOf, moleculeOf, pageCount } from "./make3d";
 import { mapAtoms, MappingStopped } from "./mapAtoms";
 
@@ -59,7 +60,7 @@ export function useAtomMaps(store: Store, setChemError: (e: string | null) => vo
       chem ??= await chemWorker("conformers");
       const declared = rolePlugin("conformers")?.roleOptions.conformers ?? [];
       const options = valuesOf(declared, useAppSettings.getState().options[roleOptionsRole("conformers")]);
-      const [c] = await conformersOf(chem, await chemWorker("stereoisomers"), block, "one", options, pageCount(block, useAppSettings.getState().chemistry));
+      const [c] = await conformersOf(chem, await chemWorker("stereoisomers"), block, "one", options, pageCount(block, useAppSettings.getState().chemistry), null, threadsOf(useAppSettings.getState().calculations));
       if (!c) throw new Error("A structure of the reaction has no 3D structure.");
       const m = moleculeOf(c, block);
       out.push({ molecule: { atoms: m.atoms, bonds: m.bonds }, drawnFrom: m.drawnFrom ?? [] });
@@ -76,6 +77,12 @@ export function useAtomMaps(store: Store, setChemError: (e: string | null) => vo
       const st = store.getState();
       const arrow = st.arrows.find((a) => a.id === arrowId);
       if (!arrow) return;
+      // (an arrow that means no reaction - crossed out, retrosynthetic, headless, two-headed - is mapped by no route)
+      const noMap = noMapSaid(arrow);
+      if (noMap) {
+        setChemError(noMap);
+        return;
+      }
       const model = st.model;
       const { reactants, products } = reactionOf(model, arrow, st.pluses);
       if (!reactants.length || !products.length) {

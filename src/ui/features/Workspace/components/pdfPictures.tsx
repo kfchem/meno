@@ -14,6 +14,7 @@ import * as THREE from "three";
 import { BAND_OF_DISC, DISC_OF_BOND } from "./selectionShade";
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
 import { drawPart, type DrawnPart } from "../../../../lib/pdf/reader";
+import { isLocked } from "../../../../lib/doc/locked";
 import type { Sheet } from "../../../../lib/pdf/layout";
 import { inkColour, inkWidthPt, markerColour } from "../../../../lib/chem/ink";
 import { bondLinePtOf } from "../../../../lib/chem/shapes";
@@ -21,6 +22,7 @@ import { useDrawnLayout } from "./drawnLayoutContext";
 import { setInUse } from "../../../../lib/chem/palette";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import type { PdfInk } from "../store/types";
+import { LockedMark } from "./lockedMark";
 import { NOT_HAD_COLOR, NOT_HAD_CROSS } from "./notHadCross";
 import { pageInkLook, strokesGeometry } from "./inkGeometry";
 
@@ -179,7 +181,7 @@ export class Pictures {
     const key = `${p.sha256}:${page}`;
     const had = this.previews.get(key);
     if (had && had !== "asked") return had;
-    if (!had && p.pages[page]) {
+    if (!had && p.pages[page] && !isLocked(p.sha256)) {
       this.previews.set(key, "asked");
       const [w] = p.pages[page];
       void drawPart({ sha256: p.sha256, page, scale: PREVIEW_PX / w }, () => -1)
@@ -195,6 +197,8 @@ export class Pictures {
 
   /** The tiles of a page's part asked for where they are not had, each marked as wanted now; whether any was asked for. */
   ask(a: TileAsk, now: number): boolean {
+    // (a PDF locked with a password is drawn by nothing, and asked of nothing, until it is opened)
+    if (isLocked(a.sha256)) return false;
     const { level, part } = a;
     const [w, h] = a.size;
     const left = Math.max(0, part.x0 * level);
@@ -393,6 +397,8 @@ export function Page(props: {
   ink?: readonly PdfInk[];
   /** Its PDF could not be had - damaged in its workspace's file, or not in it (lib/doc/notHad): the page crossed. */
   notHad?: boolean;
+  /** Its PDF is locked with a password it was not opened with (lib/doc/locked): a padlock on the sheet, nothing drawn. */
+  locked?: boolean;
 }) {
   const { s, lift, now, preview, tiles } = props;
   const opacity = props.opacity ?? 1;
@@ -495,6 +501,7 @@ export function Page(props: {
       <lineSegments geometry={edges} scale={[s.w, s.h, 1]} position={[0, 0, 0.003]}>
         <lineBasicMaterial color={LINE} transparent opacity={opacity} toneMapped={false} />
       </lineSegments>
+      {props.locked && <LockedMark w={s.w} opacity={opacity} />}
       {props.notHad && (
         <lineSegments geometry={NOT_HAD_CROSS} scale={[s.w, s.h, 1]} position={[0, 0, 0.003]}>
           <lineBasicMaterial color={NOT_HAD_COLOR} transparent opacity={opacity} toneMapped={false} />

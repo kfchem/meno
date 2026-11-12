@@ -6,6 +6,7 @@ import { resultOf } from "./flow";
 import { exitsOf, type StepKind } from "./kinds";
 import { BETWEEN } from "./look";
 import { addSet, addStep, connect } from "./model";
+import { framesFitted } from "./fitFrames";
 import { fitResultSets, runStep, type RunWith } from "./run";
 
 /** Each molecule reaching `r` Å about its middle, as a look draws it. */
@@ -64,9 +65,27 @@ describe("a step's two exits, each a conformer set", () => {
   it.each(KINDS)("lie apart after %s's sets are laid out again in a bigger look, the first grown down onto the second", (kind, options) => {
     const small = ran(kind, options, 1.2);
     const [first] = apart(small);
-    const big = fitResultSets(small, reaching(3.6));
+    // (laid out again where they lie over one another, then each frame its members' room - as the document settles a bigger look)
+    const big = framesFitted(fitResultSets(small, reaching(3.6)), undefined, reaching(3.6));
     const [grown] = apart(big);
     // (it did grow: the second was taken down with it)
     expect(grown.y0).toBeLessThan(first.y0);
+  });
+
+  it.each(KINDS)("keep the second under the first when %s's first is only fitted to its molecules, as they reach further - no layout again to do it", (kind, options) => {
+    const small = ran(kind, options, 1.2);
+    const [first] = apart(small);
+    // (the frames fitted alone, none laid out again: the first grows down, and takes the second with it)
+    const fitted = framesFitted(small, undefined, reaching(3.6));
+    const [grown] = apart(fitted);
+    expect(grown.y0).toBeLessThan(first.y0);
+    // (what the second holds went down with it: each of its molecules by the same amount)
+    const heldBy = (d: WorkspaceDocument, id: number) => (d.molecules3d ?? []).filter((m) => d.sets!.find((b) => b.id === id)!.members!.some((x) => "molecule" in x && x.molecule === m.id));
+    const before = heldBy(small, resultOf(small, 2, exitsOf(kind)[1].id)!.id);
+    const after = heldBy(fitted, resultOf(fitted, 2, exitsOf(kind)[1].id)!.id);
+    expect(before.length).toBeGreaterThan(0);
+    const dy = after[0].at.y - before[0].at.y;
+    expect(dy).toBeLessThan(0);
+    after.forEach((m, i) => expect(m.at.y - before[i].at.y).toBeCloseTo(dy, 9));
   });
 });

@@ -9,7 +9,7 @@ import type { CalcSource, ReaderOutput } from "../../../../../lib/calc/output";
 import { readOutput } from "../../../../../lib/calc/read";
 import { heldOutput, rememberOutput } from "../../../../../lib/calc/asks";
 import { addedNow, pluginClient } from "../../../../../lib/calc/workers";
-import { computerCores, computerResources, finished, jobDigest, jobFiles, jobFolder, jobOf, limitsOf, listJobs, overLimits, processesOf, programStamp, readJobFile, readJobLog, removeJob, runningOf, startJob, stopJob, stopJobAlone, STOPPED_ALONE, writeJobBack, type Job } from "../../../../../lib/jobs";
+import { computerCores, computerResources, finished, jobDigest, jobFiles, jobFolder, jobOf, limitsOf, listJobs, overLimits, processesOf, programStamp, readJobFile, readJobLog, removeJob, runningOf, startJob, stopJob, stopJobAlone, STOPPED_ALONE, threadsOf, writeJobBack, type Job } from "../../../../../lib/jobs";
 import { heldJobFile, heldJobSource, keptLogOf, recordOf, showFilesSaid } from "../../workflow/keptJobs";
 import { valuesOf, type OptionValues } from "../../../../../lib/options";
 import { lookFor, programKey, tooOld, useInstalled } from "../../../../../lib/plugins/installed";
@@ -36,12 +36,13 @@ import type { Restraint } from "../../../../../lib/entry";
 import { partOf } from "../../chem/cleanUp";
 import { compoundLetter, frameXyz, framesOf, madeFrom, recordNumber, setEntries, structureLineage, TAKEN_AT_THE_EDIT, skeletonEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
 import { convergedOf, heldWhy } from "../../workflow/converged";
+import { runTook } from "../../workflow/runTime";
 import { skeletonWhy } from "../../../../../lib/chem/skeleton";
 import { conformersSought, conformersSoughtOf, roundsAsked, soughtNumber } from "../../../../../lib/chem/conformersSought";
 import type { Conformers } from "../../../../../lib/roles/client";
 import { inRounds, roundsSaid } from "../../chem/conformerRounds";
 import { roundsJudge } from "../../chem/roundsJudge";
-import { allToRun, chainTo, findSet, inputKey, inputOf, stepOf, stepsAfter, wiresInto, type Flow } from "../../workflow/flow";
+import { allToRun, allWiresInto, chainTo, findSet, inputKey, inputOf, stepOf, stepsAfter, type Flow } from "../../workflow/flow";
 import { kindInfo, optionsOf, takesNothing, type Holds3D, type SetKind, type StepKind, isSetKind } from "../../workflow/kinds";
 import { failuresSaid, type Failure, type FailureKind } from "../../workflow/failures";
 import { setRan, setRunning } from "../../workflow/model";
@@ -222,7 +223,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
 
   /** The steps before a step: each that gives what comes into one of its inputs, once - a step of two inputs may have two. */
   const before = (d: WorkspaceDocument, id: number) => {
-    const ids = new Set(wiresInto(d, id).flatMap((w) => findSet(d, w.from.set)?.made?.step ?? []));
+    const ids = new Set(allWiresInto(d, id).flatMap((w) => findSet(d, w.from.set)?.made?.step ?? []));
     return [...ids].flatMap((k) => stepOf(d, k) ?? []);
   };
 
@@ -821,7 +822,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           // (a metal's holds, Meno's - and which of what was made stand: lib/chem/metalHolds)
           const holds = metalHoldsOf(block.molblock);
           const ask = async (count: number | null, draw?: number) =>
-            (await chem.request("conformers", { molblock: block.molblock, isomers: which.isomers, ...(count != null ? { count } : {}), ...(draw != null ? { draw } : {}), ...(holds ? { holds } : {}), options }, CONFORMERS_MS)).isomers[0];
+            (await chem.request("conformers", { molblock: block.molblock, isomers: which.isomers, ...(count != null ? { count } : {}), ...(draw != null ? { draw } : {}), ...(holds ? { holds } : {}), options: { ...options, threads: threadsOf(useAppSettings.getState().calculations) } }, CONFORMERS_MS)).isomers[0];
           let got = rounds ? undefined : await ask(tries);
           if (rounds) {
             const round = async (n: number, draw: number) => {
@@ -1616,9 +1617,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const by = byOf(step);
       const plugin = pluginById(by);
       const records = await Promise.all(run.jobs.map((j) => jobOf(j.id).catch((): Job | null => null)));
-      const starts = records.flatMap((r) => (r?.started != null ? [r.started] : []));
-      const ends = records.flatMap((r) => (r?.ended != null ? [r.ended] : []));
-      const took = ends.length && starts.length ? Math.max(...ends) - Math.min(...starts) : Date.now() - run.at;
+      // (the jobs this run ran, from the first starting to the last ending - not those taken up again: workflow/runTime)
+      const took = runTook(records, run.jobs, run.at, Date.now());
       const ids = run.jobs.map((j) => j.id);
       // (the kind and options it ran as: the step's may have changed since)
       const kind = run.kind ?? step.kind;

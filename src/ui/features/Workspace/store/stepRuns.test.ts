@@ -1892,6 +1892,8 @@ describe("running a workflow's steps", () => {
     const { doc, st, a, b, c } = chain();
     const d = st().addStep("duplicates", "meno", 40, 0);
     st().connect({ set: resultOf(st(), b)!.id }, d);
+    // (Populations' wire from the window taken out, then wired from Duplicates: several wires into one input would take both)
+    st().removeWire(st().wires.find((w) => w.to.step === c)!.id);
     st().connect({ set: resultOf(st(), d)!.id }, c);
     await st().runFrom(a);
     const stepOf = (id: number) => st().steps.find((s) => s.id === id)!;

@@ -738,6 +738,15 @@ closes*).
   one's end to the next one's start 60 ms on average and 2.2 s at most
   before, 42 ms and 0.2 s after (`a_long_queue_starts_the_next_job_as_one_ends`,
   run by hand).
+- **A stop is seen at the queue's lock too** (2026-11-11). A runner near
+  the head never waits on the lock blind: it tries for it every 10 ms
+  (`lock_watching`), looking for its stop between tries, and asked to stop
+  it ends without taking it. Waiting on the lock itself, a runner saw no
+  stop until the lock came to it, after each before it had looked at every
+  job's folder under it: on a computer whose files open slowly, a step's
+  Stop left hundreds of runners waiting at the lock, each stopping only as
+  its turn at the lock came
+  (`a_waiting_job_asked_to_stop_ends_while_another_holds_the_queues_lock`).
 - **Looked at often while young** (2026-10-13). The runner looks for its
   turn every 400 ms, and at its program every 200 ms - but every 50 ms
   for the first 3 s of a program, and of a job at the head of the queue,

@@ -26,9 +26,3 @@ const SHOWN_LEAST = 6;
 
 /** The most the steps of the one open stand before they scroll, with `rows` rows: what the rows leave, never less than `SHOWN_LEAST` of them. */
 export const stepsMost = (rows: number) => Math.max(SHOWN_LEAST * CALC_ROW, CALC_MOST - rows * CALC_ROW);
-
-/** The most the list stands: its rows (`counts`, how many steps each offers) and the steps of the largest, opened. */
-export function calcHeight(counts: readonly number[]): number {
-  const n = Math.max(0, ...counts);
-  return counts.length * CALC_ROW + (n ? Math.min(n * CALC_ROW + 4, stepsMost(counts.length)) : 0);
-}

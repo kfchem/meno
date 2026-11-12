@@ -10,6 +10,7 @@ import { openWhy } from "./slices/stepRuns";
 import { stereoOpenOf } from "../chem/fromSmiles";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readMolfile } from "../../../../lib/chem/ctfile";
+import { computerCores } from "../../../../lib/jobs";
 
 /** What Sketchkit's worker was asked: each structure's molblock, how many to try, and the options it was given. */
 const asked: { molblock: string; count?: number; options: Record<string, unknown> }[] = [];
@@ -437,6 +438,24 @@ describe("Sketchkit's conformer search as a step, on structures drawn", () => {
     expect(st().wires.some((w) => w.to.step === stereo && w.from.set === failed.id)).toBe(true);
     // (none of those made set aside: each of the others has its conformers)
     expect(st().sets.find((b) => b.made?.step === step.id && b.made.exit === "out")!.members!.length).toBeGreaterThan(0);
+  });
+
+  it("is told how many threads it may use - the cores Settings gives a job, one search at a time - beside its options", async () => {
+    const was = useAppSettings.getState().calculations;
+    try {
+      useAppSettings.setState((s) => ({ ...s, calculations: { ...s.calculations, cores: 1, coresAll: undefined } }));
+      await searched();
+      expect(asked.length).toBeGreaterThan(0);
+      expect(asked.every((a) => a.options.threads === 1)).toBe(true);
+      // (none set for a job: all that jobs may use, the computer's at the most)
+      useAppSettings.setState((s) => ({ ...s, calculations: { ...s.calculations, cores: undefined, coresAll: 2 } }));
+      asked.length = 0;
+      await searched();
+      expect(asked.length).toBeGreaterThan(0);
+      expect(asked.every((a) => a.options.threads === Math.min(2, computerCores()))).toBe(true);
+    } finally {
+      useAppSettings.setState((s) => ({ ...s, calculations: was }));
+    }
   });
 
   it("is given the options chosen in Settings, Chemistry, on its 3D card, as 3D structures on the canvas is", async () => {

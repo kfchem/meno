@@ -22,7 +22,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   },
 }));
 
-import { coresCountedSaid, finished, processesOf, quietFor, quietSaid, quietShort, followJob, keptText, liveJobsOf, runningOf, limitsOf, overLimits, startJob, stopJobsAndWait, type Job } from "./jobs";
+import { coresCountedSaid, finished, processesOf, quietFor, quietSaid, quietShort, followJob, keptText, liveJobsOf, runningOf, threadsOf, MOST_THREADS, limitsOf, overLimits, startJob, stopJobsAndWait, type Job } from "./jobs";
 
 describe("jobs", () => {
   beforeEach(() => {
@@ -43,6 +43,17 @@ describe("jobs", () => {
     // never more than jobs may use, nor than the computer has
     expect(runningOf({ cores: 7, coresAll: 4 }, 8)).toEqual({ cores: 4 });
     expect(runningOf({ cores: 32 }, 8)).toEqual({ cores: 8 });
+  });
+
+  it("gives a conformer search the threads one job would have: Settings' cores, or all that jobs may use, the share of searches side by side, never over what a plugin accepts", () => {
+    expect(threadsOf({}, 8)).toBe(8);
+    expect(threadsOf({ cores: 2 }, 8)).toBe(2);
+    expect(threadsOf({ coresAll: 6 }, 8)).toBe(6);
+    expect(threadsOf({ cores: 7, coresAll: 4 }, 8)).toBe(4);
+    expect(threadsOf({}, 28, 4)).toBe(7);
+    expect(threadsOf({}, 1)).toBe(1);
+    expect(MOST_THREADS).toBe(1024);
+    expect(threadsOf({}, 4096)).toBe(MOST_THREADS);
   });
 
   it("shares the cores jobs may use among a step's jobs where Settings sets none: all for one, one each for as many as there are cores", () => {

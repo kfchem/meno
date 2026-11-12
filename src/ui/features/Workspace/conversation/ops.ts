@@ -21,24 +21,22 @@ export function addConversation(doc: WorkspaceDocument, frame: { x0: number; y0:
   return { ...doc, conversations: [...(doc.conversations ?? []), made], nextConversationId: id + 1 };
 }
 
-/** What may be changed of a conversation: its frame, whether it sees the whole page, its name, its rights, its connection (null: none). */
-export type ConversationPatch = { frame?: { x0: number; y0: number; x1: number; y1: number }; wholePage?: boolean; name?: string | null; rights?: Partial<Rights>; connection?: string | null };
+/** What may be changed of a conversation: its frame, whether it sees the whole page, its rights, its connection (null: none). */
+export type ConversationPatch = { frame?: { x0: number; y0: number; x1: number; y1: number }; wholePage?: boolean; rights?: Partial<Rights>; connection?: string | null };
 
 /** `doc` with the conversation `id` changed as `patch` says. */
 export function updateConversation(doc: WorkspaceDocument, id: number, patch: ConversationPatch): WorkspaceDocument {
   const at = (doc.conversations ?? []).findIndex((c) => c.id === id);
   if (at < 0) return doc;
   const was = doc.conversations![at];
-  const { wholePage: _w, name: _n, connection: _c, ...rest } = was;
+  const { wholePage: _w, connection: _c, ...rest } = was;
   const frame = patch.frame && finite(patch.frame.x0, patch.frame.y0, patch.frame.x1, patch.frame.y1) && patch.frame.x1 > patch.frame.x0 && patch.frame.y1 > patch.frame.y0 ? patch.frame : undefined;
   const whole = patch.wholePage ?? !!was.wholePage;
-  const name = patch.name === undefined ? was.name : patch.name ?? undefined;
   const connection = patch.connection === undefined ? was.connection : patch.connection ?? undefined;
   const next: Conversation = {
     ...rest,
     ...(frame ?? {}),
     ...(whole ? { wholePage: true as const } : {}),
-    ...(name ? { name } : {}),
     ...(connection ? { connection } : {}),
     rights: { ...was.rights, ...patch.rights },
   };
@@ -57,8 +55,21 @@ export function addSaid(doc: WorkspaceDocument, id: number, said: readonly Said[
   return { ...doc, conversations: doc.conversations.map((c) => (c.id === id ? { ...c, said: [...c.said, ...said], sent: [...c.sent, ...sent] } : c)) };
 }
 
-/** `doc` with a conversation's exchange and its send log emptied (*Clear*). */
+/** `doc` with a conversation's exchange and its send log emptied (*Clear*) - and its card at its latest, there being nothing to scroll back to. */
 export function clearSaid(doc: WorkspaceDocument, id: number): WorkspaceDocument {
   if (!doc.conversations?.some((c) => c.id === id)) return doc;
-  return { ...doc, conversations: doc.conversations.map((c) => (c.id === id ? { ...c, said: [], sent: [] } : c)) };
+  return { ...doc, conversations: doc.conversations.map((c) => (c.id === id ? { ...withoutScroll(c), said: [], sent: [] } : c)) };
+}
+
+const withoutScroll = ({ scroll: _s, ...c }: Conversation): Conversation => c;
+
+/** `doc` with the card of the conversation `id` left scrolled to `offset` page px from the top of its history - or, null (or no offset past nothing), at its latest. */
+export function scrolledConversation(doc: WorkspaceDocument, id: number, offset: number | null): WorkspaceDocument {
+  const at = (doc.conversations ?? []).findIndex((c) => c.id === id);
+  if (at < 0) return doc;
+  const was = doc.conversations![at];
+  const to = offset != null && Number.isFinite(offset) && offset >= 0 ? offset : null;
+  if ((was.scroll ?? null) === to) return doc;
+  const next: Conversation = to == null ? withoutScroll(was) : { ...was, scroll: to };
+  return { ...doc, conversations: doc.conversations!.map((c, i) => (i === at ? next : c)) };
 }

@@ -20,7 +20,8 @@ import { factor } from "../../../../lib/units";
 
 const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");
 import { rmsd } from "./rmsd";
-import { addSet, addStep, connect, fitSets, moveSet, removeSet, removeStep, removeWire, resizeSet, updateStep } from "./model";
+import { addSet, addStep, connect, moveSet, removeSet, removeStep, removeWire, updateStep } from "./model";
+import { frameAround, framesFitted, framesSettled, structureBox } from "./fitFrames";
 import { energiesBy, laidOver, placeResults, resultsOf, runStep, type RunWith } from "./run";
 import { offeredFirst, offeredSteps } from "./offered";
 import { inputsOf, needsOf } from "./kinds";
@@ -110,7 +111,7 @@ describe("what a set holds", () => {
     expect(doc.molecules3d).toHaveLength(1);
   });
 
-  it("grows to keep a structure drawn on in it inside it - not one moved whole, nor where the frame is made smaller", () => {
+  it("is its members' room: grown to keep a structure drawn on in it inside it, never left narrower - and one moved whole is dragged out, the frame staying till it is let go", () => {
     const doc = createWorkspaceDocument();
     const drawn: WorkspaceDocument["model"] = { atoms: [{ id: 1, x: 0, y: 0, r: 0.9, el: "C" }, { id: 2, x: 1.5, y: 0, r: 0.9, el: "C" }], bonds: [{ id: 1, a: 1, b: 2, order: 1 }] };
     doc.edit("draw", (d) => addSet({ ...d, model: drawn, nextId: 3 }, { x0: -1, y0: -1, x1: 2.5, y1: 2 }));
@@ -118,19 +119,27 @@ describe("what a set holds", () => {
       const { x0, y0, x1, y1 } = doc.getState().sets![0];
       return { x0, y0, x1, y1 };
     };
-    // an O drawn on, past the right edge: the frame takes it in, its label and all
+    const around = () => {
+      const m = doc.getState().model;
+      return frameAround([structureBox(m, new Map(m.atoms.map((a) => [a.id, a])), m.atoms.map((a) => a.id))]);
+    };
+    // (a set made as it is drawn is as it was made)
+    expect(frame()).toEqual({ x0: -1, y0: -1, x1: 2.5, y1: 2 });
+    // an O drawn on, past the right edge: the frame is the structure's room, its label and all
     doc.edit("draw on", (d) => ({ ...d, model: { atoms: [...d.model.atoms, { id: 3, x: 3, y: 0.9, r: 0.9, el: "O" }], bonds: [...d.model.bonds, { id: 2, a: 2, b: 3, order: 1 }] }, nextId: 4 }));
+    expect(frame()).toEqual(around());
     expect(frame().x1).toBeGreaterThan(3);
-    expect(frame().x0).toBe(-1);
     // one step to undo
     doc.undo();
     expect(frame()).toEqual({ x0: -1, y0: -1, x1: 2.5, y1: 2 });
-    // moved whole, across its edge: it is dragged out, the frame stays
+    doc.redo();
+    // moved whole, across its edge: it is dragged out, the frame stays - till the pointer is let go
+    const held = frame();
+    const down = doc.getState();
     doc.edit("move", (d) => ({ ...d, model: { ...d.model, atoms: d.model.atoms.map((a) => ({ ...a, x: a.x + 1 })) } }));
-    expect(frame()).toEqual({ x0: -1, y0: -1, x1: 2.5, y1: 2 });
-    // made smaller than what it holds: as it was made
-    doc.edit("size", (d) => resizeSet(d, 1, { x0: 0, y0: -0.5, x1: 1.5, y1: 1 }));
-    expect(frame()).toEqual({ x0: 0, y0: -0.5, x1: 1.5, y1: 1 });
+    expect(frame()).toEqual(held);
+    doc.edit("settle", (d) => framesSettled(d, down, undefined));
+    expect(frame()).toEqual(around());
   });
 
   it("on a page of a thousand structures, is what it is on a page of one - its structures found once for the page, whichever set asks", () => {
@@ -153,14 +162,14 @@ describe("what a set holds", () => {
     // the last chain's end drawn on past the frame's right edge: it grows as it would for that chain alone
     const moved = (model: WorkspaceDocument["model"]) => ({ ...model, atoms: model.atoms.map((a) => (a.id === 1 ? { ...a, x: a.x + 5 } : a)) });
     const before = addSet(page, all);
-    const grown = fitSets({ ...before, model: moved(before.model) }, before);
+    const grown = framesFitted({ ...before, model: moved(before.model) }, before, undefined);
     const last = new Set(chains[999]);
-    const alone = addSet({ ...page, model: { atoms: drawn.atoms.filter((a) => last.has(a.id)), bonds: drawn.bonds.filter((b) => last.has(b.a)) } }, all);
-    const grownAlone = fitSets({ ...alone, model: moved(alone.model) }, alone);
+    expect(last.size).toBe(7);
     expect(grown.sets![0].x1).toBeGreaterThan(all.x1);
-    // (their frames: what each holds is its own - a thousand structures against one)
+    // (its frame: the room of all a thousand, as each reaches by itself)
     const frame = (s: WorkspaceDocument["sets"]) => s!.map(({ x0, y0, x1, y1 }) => ({ x0, y0, x1, y1 }));
-    expect(frame(grown.sets)).toEqual(frame(grownAlone.sets));
+    const atoms = new Map(grown.model.atoms.map((a) => [a.id, a]));
+    expect(frame(grown.sets)).toEqual(frame([frameAround(chains.map((ids) => structureBox(grown.model, atoms, ids)))].map((f, i) => ({ id: i, ...f }))));
     // (the very same structures for every set asking of the page: found once, not again for each set)
     const everything = setMembers(page, all).structures;
     expect(setMembers(page, left).structures.every((ids) => everything.includes(ids))).toBe(true);
@@ -231,13 +240,16 @@ describe("wires", () => {
     expect(canWire(doc, { set: rest.id }, lastStep(doc))).toBe(true);
   });
 
-  it("into a step replace the one it had; deleted, go", () => {
+  it("into a step stand beside the one it had - the same set again, nothing new; deleted, go", () => {
     let doc = addStep(page(), "duplicates", 5, 0);
     const step = lastStep(doc);
     doc = addSet(doc, { x0: 30, y0: 0, x1: 31, y1: 1 });
     const other = doc.sets![doc.sets!.length - 1].id;
     doc = connect(doc, { set: 1 }, step);
     doc = connect(doc, { set: other }, step);
+    expect(doc.wires!.map((w) => w.from)).toEqual([{ set: 1 }, { set: other }]);
+    expect(connect(doc, { set: other }, step)).toBe(doc);
+    doc = removeWire(doc, doc.wires![0].id);
     expect(doc.wires!.map((w) => w.from)).toEqual([{ set: other }]);
     doc = removeWire(doc, doc.wires![0].id);
     expect(doc.wires).toEqual([]);

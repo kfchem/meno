@@ -12,17 +12,18 @@ import { partOf } from "../chem/cleanUp";
 import { levelOf } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
-import { calcProperties, compoundLetter, entryOfSet, holdsOf, numberShown, setMembers, setMolecules, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, drawingKey, placedRecord, structureIdAt, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
+import { calcProperties, compoundLetter, entryOfSet, holdsOf, numberShown, setMembers, setMolecules, setEntries, frameXyz, framesOf, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, drawingKey, placedRecord, structureIdAt, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
 import { chipWide, hasChip } from "./selectionSet";
 export { chipWide };
 import { isHeld } from "./onPage";
-import { findSet, givesOf, inputKey, inputOf, moleculesSeen, resultOf, stateOf, stepOf, stepsBefore, tableInto, tableWired, wireInto, wiresInto } from "./flow";
+import { allWiresInto, emptyNow, findSet, givesOf, inputKey, inputOf, moleculesSeen, resultOf, sourcesInto, stateOf, stepOf, stepsBefore, tableInto, tableWired, tablesJoined, wiresInto } from "./flow";
 import { chartOfTable, chartSaid, type ChartValue } from "../../../../lib/chart";
-import { diagramOf, diagramSaid, levelNamer, type DiagramValue, type RowCompound } from "../../../../lib/energyDiagram";
-import { asideExit, exitsOf, inputsOf, kindInfo, modeRead, laterPortsNeed, MENO_DOES, optionsOf, ONE_INPUT, readsAsTable, RESTRAINTS_INPUT, severalInputs, takenBy, restHolds, type Holds3D, type SetHolds, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
+import { diagramOf, diagramSaid, levelNamer, propertiesTyped, type DiagramValue, type RowCompound } from "../../../../lib/energyDiagram";
+import { asideExit, exitsOf, inputsOf, kindInfo, modeRead, laterPortsNeed, MENO_DOES, optionsOf, ONE_INPUT, readsAsTable, RESTRAINTS_INPUT, severalInputs, takenBy, restHolds, type Holds3D, type SetHolds, type SetKind, type StepKind, type StepPort, type ValueKind, isSetKind } from "./kinds";
 import { MENO_ONLY, VALUE_KINDS } from "../../../../lib/plugins/steps";
-import { doerName, inputsFor, MENO, takesBy, takesNothingBy } from "./doers";
+import { byOf, doerName, inputsFor, MENO, takesBy, takesNothingBy } from "./doers";
 import { pluginById } from "../../../../lib/calc/catalog";
+import { chipRows, HELD_LEAST_W, heldFrame } from "./heldView";
 import { BETWEEN, SET_PAD, SET_TOP, CHIP, drawnShown, PX, SUMMARY_PX } from "./look";
 import { clearOf, columnWidth, frameAt, placeAgain, placeBelow, placeFor } from "./place";
 
@@ -33,6 +34,7 @@ import { ontoStructures } from "./ontoStructures";
 import { measuredSet, modeOnAtomsSet } from "./structureSteps";
 import { addSet, CHART_SET, heldPut, holdChart, holdNumber, NUMBER_SET, holdCollection, holdTable, TABLE_SET, holdMembers, holdNothing, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
+import { recordsWithRoles } from "./schemeRoles";
 import { notFinishedRows, structuresAsTable } from "./structuresTable";
 import { diagramNeeds } from "./diagramOptions";
 import type { NumberValue, Table } from "../../../../lib/table";
@@ -60,7 +62,7 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
     return !!s && stateOf(doc, s, w.byOf(s)) !== "done";
   };
   // (into each of its inputs, where it has several)
-  for (const wire of wiresInto(doc, id)) {
+  for (const wire of allWiresInto(doc, id)) {
     const before = findSet(doc, wire.from.set)?.made?.step;
     const prior = before != null ? stepOf(doc, before) : undefined;
     if (prior && [prior.id, ...stepsBefore(doc, prior.id)].some(stale)) doc = runStep(doc, prior.id, w, depth + 1);
@@ -104,7 +106,7 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   if (step.kind === "add") {
     const into = inputOf(doc, id, "in");
     if (!into) return fail("Nothing comes into Molecules");
-    const numberSet = wireInto(doc, id, "number")?.from;
+    const numberSet = wiresInto(doc, id, "number")[0]?.from;
     const number = numberSet ? findSet(doc, numberSet.set)?.number : undefined;
     if (numberSet && !number) return fail("Number holds no number yet");
     const o = optionsOf(kindInfo(step.kind).options ?? [], step.options);
@@ -123,7 +125,7 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
     if ("why" in r) return ranAs(doc, id, { ok: false, said: r.why }, key, w);
     const entries = setEntries(input.molecules, input.holds as Holds3D);
     const outcome = modeOnAtomsSet(entries, input.holds as Holds3D, { ...r, table: r.atoms ? undefined : tableInto(doc, id, "atoms"), which: o.which === "every" ? "every" : "made", rows: String(o.rows ?? "") });
-    return ranAs(doc, id, r.atoms && wireInto(doc, id, "atoms") && outcome.ok ? { ...outcome, said: `${outcome.said} \u00b7 the table wired into Atoms not read: atoms typed` } : outcome, key, w);
+    return ranAs(doc, id, r.atoms && wiresInto(doc, id, "atoms").length && outcome.ok ? { ...outcome, said: `${outcome.said} \u00b7 the table wired into Atoms not read: atoms typed` } : outcome, key, w);
   }
   // (Measure's atoms from a table wired into Atoms, where its card says so - and, typed, a table wired in said not read, never passed over unsaid;
   //  what comes in is molecules: it takes nothing else)
@@ -132,7 +134,7 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
     const entries = setEntries(input.molecules, input.holds as Holds3D);
     if (o.from === "table") return ranAs(doc, id, measuredSet(entries, input.holds as Holds3D, "", { table: tableInto(doc, id, "atoms"), rows: String(o.rows ?? "") }), key, w);
     const typed = measuredSet(entries, input.holds as Holds3D, String(o.measurements ?? ""));
-    const unread = wireInto(doc, id, "atoms") && typed.ok ? { ...typed, said: `${typed.said} \u00b7 the table wired into Atoms not read: atoms typed` } : typed;
+    const unread = wiresInto(doc, id, "atoms").length && typed.ok ? { ...typed, said: `${typed.said} \u00b7 the table wired into Atoms not read: atoms typed` } : typed;
     return ranAs(doc, id, unread, key, w);
   }
   const outcome =
@@ -153,8 +155,26 @@ export function ranAs(doc: WorkspaceDocument, id: number, outcome: Outcome, key:
   if (!step) return doc;
   const as = { kind: step.kind, ...(step.options ? { options: step.options } : {}) };
   if (!outcome.ok) return setRan(keepRun(doc, step, false), id, { at: w.now, ok: false, said: outcome.said, input: key, ...as });
-  return setRan(withResults(keepRun(doc, step), step, outcome, w), id, { at: w.now, ok: true, said: outcome.said, input: key, ...as });
+  return setRan(withResults(keepRun(doc, step), step, outcome, w), id, { at: w.now, ok: true, said: withWiresSaid(doc, step, outcome.said), input: key, ...as });
 }
+
+/**
+ * What a step that ran says, and of each of its inputs that several wires
+ * come into and a set wired in gave nothing this time, how many (docs/WORKFLOWS.md,
+ * *Several wires into one input*): "2 wires, 1 empty" - an empty set adds
+ * nothing, and is never passed over unsaid.
+ */
+export function withWiresSaid(doc: WorkspaceDocument, step: WorkflowStep, said: string): string {
+  const ports = inputsFor(step.kind, byOf(step));
+  const notes = ports.flatMap((port) => {
+    const sources = sourcesInto(doc, step.id, ports.length > 1 ? port.id : undefined);
+    if (sources.length < 2) return [];
+    const empty = sources.filter(({ set }) => emptyNow(doc, set)).length;
+    return empty ? [`${ports.length > 1 ? `${port.name}: ` : ""}${sources.length} wires, ${empty} empty`] : [];
+  });
+  return notes.length ? `${said} \u00b7 ${notes.join(" \u00b7 ")}` : said;
+}
+
 
 /** Names in words: "Molecules", "Molecules and Reference", "First, Second and Third". */
 const namesSaid = (names: readonly string[]) => (names.length < 2 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`);
@@ -180,16 +200,16 @@ export function emptyIn(doc: WorkspaceDocument, step: WorkflowStep, by: string):
     // (restraints, a table: no entries of their own to give)
     if (port.id === RESTRAINTS_INPUT.id) continue;
     const at = ports.length > 1 ? port.id : undefined;
-    const wire = wireInto(doc, step.id, at);
-    const input = wire ? inputOf(doc, step.id, at) : null;
+    const sources = sourcesInto(doc, step.id, at);
+    const input = sources.length ? inputOf(doc, step.id, at) : null;
     // (not wired, or a table or a number: no entries of its own to give)
-    if (!wire || !input) continue;
+    if (!input) continue;
     if (input.molecules.length || input.structures.length || input.held?.length) {
       full++;
       continue;
     }
-    const made = findSet(doc, wire.from.set)?.made;
-    if (!made || stepOf(doc, made.step)?.ran?.ok !== true) return null;
+    // (every set wired in empty: each a step's, run ok this time)
+    if (sources.some(({ set }) => !set.made || stepOf(doc, set.made.step)?.ran?.ok !== true)) return null;
     empty.push(port.name);
   }
   if (!empty.length || (step.kind === "merge" && full)) return null;
@@ -229,9 +249,29 @@ const HOLD_WAS = "hold";
 /** Whether what a set holds flows along a wire into a step - a set's kind, a table, a number - and not a chart or pictures, which none takes. */
 const isValueKind = (h: SetHolds): h is ValueKind => (VALUE_KINDS as readonly string[]).includes(h);
 
+/**
+ * Why what several wires bring into one input - `port`, of a step of
+ * several; its one, where none is named - is not one input's: sets of
+ * different kinds, which one set's entries never are, or more than one
+ * number. None where it is, or one wire or none comes in.
+ */
+function severalWhyNot(doc: WorkspaceDocument, step: number, port?: StepPort): string | null {
+  // (an empty set adds nothing, of no kind)
+  const sources = sourcesInto(doc, step, port?.id);
+  if (sources.length < 2) return null;
+  const gives = sources.map(({ wire, set }) => (emptyNow(doc, set) ? null : givesOf(doc, wire.from)));
+  if (gives.includes("number")) return `${port ? port.name : "It"} takes one number: ${sources.length} are wired into it`;
+  const k = gives.findIndex((g) => g != null);
+  const j = gives.findIndex((g) => g != null && g !== gives[k]);
+  if (j < 0) return null;
+  const [a, b] = [gives[k]!, gives[j]!];
+  const words = (g: SetHolds) => (isValueKind(g) ? SET_NAMES[g] : g);
+  return `${sources[k].name} holds ${words(a)} and ${sources[j].name} ${words(b)}: one input takes one kind`;
+}
+
 export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): string | null {
   // (not on what a step before it gave on an earlier run: it failed this time - before any of its inputs)
-  const failed = wiresInto(doc, step.id).some((wire) => {
+  const failed = allWiresInto(doc, step.id).some((wire) => {
     const before = findSet(doc, wire.from.set)?.made?.step;
     return before != null && stepOf(doc, before)?.ran?.ok === false;
   });
@@ -242,13 +282,20 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
   const ports = inputsFor(step.kind, by);
   // (its first named where it takes another besides restraints)
   const first = severalInputs(ports) ? ports[0] : undefined;
+  // (several wires into one input: sets of one kind, and one number alone)
+  for (const port of ports) {
+    const several = severalWhyNot(doc, step.id, ports.length > 1 ? port : undefined);
+    if (several) return several;
+  }
   const input = inputOf(doc, step.id, first?.id);
   // (a table wired in - a set's, or molecules seen as one: no entries of its own to give)
   const holds = input?.holds ?? (tableWired(doc, step.id, first?.id) ? "table" : null);
   if (!holds) return first ? `Nothing comes into ${first.name}` : "Nothing comes into it";
   // (a set that came to mix conformer sets with other molecules after it was wired)
-  const from = wireInto(doc, step.id, first?.id)?.from;
-  const mixed = input?.holds === "molecules" && from && !findSet(doc, from.set)?.made && !readsAsTable(step.kind, first?.id ?? ONE_INPUT) ? plainAmong(input.molecules) : null;
+  const mixed =
+    input?.holds === "molecules" && !readsAsTable(step.kind, first?.id ?? ONE_INPUT)
+      ? sourcesInto(doc, step.id, first?.id).reduce<string | null>((why, { set }) => why ?? (set.made ? null : plainAmong(setMolecules(doc, set))), null)
+      : null;
   if (mixed) return mixed;
   if (first && !takenBy(first.takes, holds)) return `${first.name} takes ${first.takes.map((s) => SET_NAMES[s]).join(" or ")}`;
   if (!first && !takesBy(step.kind, by, holds)) return `Takes ${kindInfo(step.kind).takes.filter((s) => takesBy(step.kind, by, s)).map((s) => SET_NAMES[s]).join(" or ")}`;
@@ -260,24 +307,24 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
   if (plugin && !plugin.steps.some((d) => d.kind === step.kind)) return `${doerName(plugin)} does not do ${kindInfo(step.kind).name}`;
   // (a step of a page saved when it held what its molecules carried, asked on its card: no longer so - what it holds is wired in, and
   //  it is never run now holding nothing unsaid)
-  if (step.options?.[HOLD_WAS] === "fixed" && !wireInto(doc, step.id, RESTRAINTS_INPUT.id))
+  if (step.options?.[HOLD_WAS] === "fixed" && !wiresInto(doc, step.id, RESTRAINTS_INPUT.id).length)
     return ports.some((p) => p.id === RESTRAINTS_INPUT.id)
       ? "It was saved holding its atoms fixed (Hold its restraints): wire a Restraints table of them into Restraints"
       : `It was saved holding its atoms fixed (Hold its restraints), which ${kindInfo(step.kind).name} no longer does`;
   // (its later inputs: each it cannot run without wired, an optional one where wanted - two that go together, both or neither -
   //  and each wired one taking what comes into it; Merge's second of the kind its first is)
-  const missing = laterPortsNeed(ports, (port) => !!wireInto(doc, step.id, port));
+  const missing = laterPortsNeed(ports, (port) => wiresInto(doc, step.id, port).length > 0);
   if (missing) return missing;
   // (a wired one - optional or not - giving what it takes, by what its set gives, run or not yet: a wire that gives nothing it can use
   //  is never passed as if it were not there, nor as if it gave something)
   for (const port of ports.slice(1)) {
-    const wire = wireInto(doc, step.id, port.id);
-    if (!wire) continue;
-    const gives = givesOf(doc, wire.from);
-    if (!gives) return `Nothing comes into ${port.name}`;
-    if (!isValueKind(gives) || !takenBy(port.takes, gives)) return `${port.name} takes ${port.takes.map((s) => SET_NAMES[s]).join(" or ")}`;
-    if (port.id === RESTRAINTS_INPUT.id && gives !== "table") return "Restraints takes a table of restraints, not molecules";
-    if (step.kind === "merge" && gives !== holds) return `${ports[0].name} holds ${SET_NAMES[holds]} and ${port.name} ${SET_NAMES[gives]}: Merge makes one set of two of one kind`;
+    for (const wire of wiresInto(doc, step.id, port.id)) {
+      const gives = givesOf(doc, wire.from);
+      if (!gives) return `Nothing comes into ${port.name}`;
+      if (!isValueKind(gives) || !takenBy(port.takes, gives)) return `${port.name} takes ${port.takes.map((s) => SET_NAMES[s]).join(" or ")}`;
+      if (port.id === RESTRAINTS_INPUT.id && gives !== "table") return "Restraints takes a table of restraints, not molecules";
+      if (step.kind === "merge" && gives !== holds) return `${ports[0].name} holds ${SET_NAMES[holds]} and ${port.name} ${SET_NAMES[gives]}: Merge makes one set of two of one kind`;
+    }
   }
   if (step.kind === "energy-diagram") return diagramNeeds(doc, step) ?? null;
   return null;
@@ -294,12 +341,14 @@ function chartRun(doc: WorkspaceDocument, step: WorkflowStep, w: RunWith, key: s
   const as = { kind: step.kind, ...(step.options ? { options: step.options } : {}) };
   const said = (ok: boolean, text: string) => ({ at: w.now, ok, said: text, input: key, ...as });
   // (structures drawn come in: seen as a table, a row each (structuresTable) - a point stands on its record's values as results: a row
-  //  failed, or edited since its values were given, refuses the chart, each named, as molecules' do; one set aside is finished, and charted)
-  const from = wireInto(doc, step.id)?.from;
-  const set = from && !tableWired(doc, step.id) ? findSet(doc, from.set) : undefined;
-  const drawn = set && holdsOf(doc, set) === "structures" ? setStructuresTable(doc, set) : null;
+  //  failed, or edited since its values were given, refuses the chart, each named, as molecules' do; one set aside is finished, and charted -
+  //  several sets wired in, one after another, each's rows checked as it shows them)
+  const wired = sourcesInto(doc, step.id).map(({ set }) => set);
+  const drawnSets = !tableWired(doc, step.id) && wired.length && holdsOf(doc, wired[0]) === "structures" ? wired : [];
+  const drawnTables = drawnSets.map((set) => setStructuresTable(doc, set));
   // (those it shows on the page first, then those it holds off it: these said to be, where named)
-  const notFinished = drawn && set && notFinishedRows(drawn, setMembers(doc, set).structures.length);
+  const notFinished = drawnSets.reduce<string | null>((why, set, k) => why ?? notFinishedRows(drawnTables[k], setMembers(doc, set).structures.length), null);
+  const drawn = drawnTables.length ? tablesJoined(drawnTables) : null;
   if (notFinished) return setRan(keepRun(doc, step), step.id, said(false, notFinished));
   const table = drawn ?? tableInto(doc, step.id);
   if (!table) return setRan(keepRun(doc, step), step.id, said(false, "Nothing comes into it"));
@@ -312,11 +361,10 @@ function chartRun(doc: WorkspaceDocument, step: WorkflowStep, w: RunWith, key: s
   const chart = chartOfTable(table, typeof o.x === "string" && o.x.trim() ? o.x.trim() : undefined, typeof o.y === "string" && o.y.trim() ? o.y.trim() : undefined);
   if ("why" in chart) return setRan(keepRun(doc, step), step.id, said(false, chart.why));
   // (and what of the set wired in did not read from its step's files - never charted round unsaid)
-  const wired = from ? findSet(doc, from.set) : undefined;
-  const unread = wired?.unread ?? 0;
-  const noun = wired && holdsOf(doc, wired) === "structures" ? ["structure", "structures"] : ["molecule", "molecules"];
+  const unread = wired.reduce((n, set) => n + (set.unread ?? 0), 0);
+  const noun = wired.length && holdsOf(doc, wired[0]) === "structures" ? ["structure", "structures"] : ["molecule", "molecules"];
   const notRead = unread ? ` \u00b7 ${unread} ${unread === 1 ? `${noun[0]} could` : `${noun[1]} could`} not be read and ${unread === 1 ? "is" : "are"} not charted` : "";
-  return setRan(placeChart(keepRun(doc, step), step, chart), step.id, said(true, `${chartSaid(chart)}${notRead}`));
+  return setRan(placeChart(keepRun(doc, step), step, chart), step.id, said(true, withWiresSaid(doc, step, `${chartSaid(chart)}${notRead}`)));
 }
 
 /**
@@ -334,24 +382,39 @@ function diagramRun(doc: WorkspaceDocument, step: WorkflowStep, w: RunWith, key:
   if (!seen) return setRan(keepRun(doc, step), step.id, said(false, "Nothing comes into Levels"));
   const levels = seen.table;
   // (a level stands on its entries' energies as results: one that failed, did not converge or whose marks did not read refuses it - never the lowest of the rest, which may not be its lowest)
-  const levelOf = levelNamer(levels);
+  const o = step.options ?? {};
+  const levelOf = levelNamer(levels, propertiesTyped(typeof o.levelsBy === "string" ? o.levelsBy : ""));
   const bad = notResults(seen.entries, (k) => levelOf(levels.rows[k]) || "A level");
   if (bad) return setRan(keepRun(doc, step), step.id, said(false, bad));
-  const joined = wireInto(doc, step.id, "connects");
+  const joined = wiresInto(doc, step.id, "connects").length > 0;
   const connects = joined ? tableWired(doc, step.id, "connects") : null;
   if (joined && !connects) return setRan(keepRun(doc, step), step.id, said(false, "Connects holds no table"));
-  const o = step.options ?? {};
   const text = (v: unknown) => (typeof v === "string" ? v : undefined);
   const d = diagramOf(
     levels,
-    { ...(text(o.quantity) ? { quantity: text(o.quantity) } : {}), ...(text(o.reference) ? { reference: text(o.reference) } : {}), ...(text(o.levels) ? { levels: text(o.levels) } : {}) },
+    {
+      ...(text(o.quantity) ? { quantity: text(o.quantity) } : {}),
+      ...(text(o.reference) ? { reference: text(o.reference) } : {}),
+      ...(text(o.levels) ? { levels: text(o.levels) } : {}),
+      ...(text(o.levelsBy) ? { levelsBy: text(o.levelsBy) } : {}),
+      ...(text(o.joinedBy) ? { joinedBy: text(o.joinedBy) } : {}),
+      ...(text(o.conformers) ? { conformers: text(o.conformers) } : {}),
+    },
     connects ?? undefined,
     rowCompounds(levels, seen.entries),
   );
   if ("why" in d) return setRan(keepRun(doc, step), step.id, said(false, d.why));
   // (each level with the imaginary frequencies of the entry it stands at: said, not judged)
-  const withFrequencies = { ...d, levels: d.levels.map((l) => ({ ...l, lowest: { ...l.lowest, imaginary: imaginaryOf(seen.entries[l.lowest.row]) } })) };
-  return setRan(placeChart(keepRun(doc, step), step, withFrequencies), step.id, said(true, diagramSaid(d)));
+  // (and each thin line, its own entry's: a saddle point's other conformers may differ in their count)
+  const withFrequencies = {
+    ...d,
+    levels: d.levels.map((l) => ({
+      ...l,
+      lowest: { ...l.lowest, imaginary: imaginaryOf(seen.entries[l.lowest.row]) },
+      ...(l.others ? { others: l.others.map((x) => ({ ...x, imaginary: imaginaryOf(seen.entries[x.row]) })) } : {}),
+    })),
+  };
+  return setRan(placeChart(keepRun(doc, step), step, withFrequencies), step.id, said(true, withWiresSaid(doc, step, diagramSaid(d))));
 }
 
 /**
@@ -439,13 +502,13 @@ export function inputEntries(model: Model, input: { structures: readonly (readon
 }
 
 /** Every structure drawn a set holds, as a step after it takes them (`inputEntries`): those on the page, then those it holds off it. */
-export function setStructures(doc: Pick<WorkspaceDocument, "model" | "molecules3d" | "pictures">, set: WorkflowSet): DrawnEntry[] {
+export function setStructures(doc: Pick<WorkspaceDocument, "model" | "molecules3d" | "pictures"> & Partial<Pick<WorkspaceDocument, "arrows" | "pluses">>, set: WorkflowSet): DrawnEntry[] {
   const { structures, records } = set.members ? setMembers(doc, set) : { structures: [], records: [] };
-  return inputEntries(doc.model, { structures, records, ...(set.drawnCollection ? { held: set.drawnCollection } : {}) });
+  return inputEntries(doc.model, { structures, records: recordsWithRoles(doc, set, structures, records), ...(set.drawnCollection ? { held: set.drawnCollection } : {}) });
 }
 
 /** A set of structures drawn as a table (structuresTable): every structure it holds (`setStructures`), each row's id the set's and its place. */
-export function setStructuresTable(doc: Pick<WorkspaceDocument, "model" | "molecules3d" | "pictures">, set: WorkflowSet): Table {
+export function setStructuresTable(doc: Pick<WorkspaceDocument, "model" | "molecules3d" | "pictures"> & Partial<Pick<WorkspaceDocument, "arrows" | "pluses">>, set: WorkflowSet): Table {
   return structuresAsTable(setStructures(doc, set), (k) => `structure:${set.id}#${k}`);
 }
 
@@ -568,7 +631,10 @@ export const LEAST_W = 120 * PX;
 /** The room a numbered structure's number takes under it (Workflow2D `numbered`): half a bond, and a line of 16 px. */
 const NUMBER_ROOM = NOMINAL_BOND_LENGTH / 2 + 16 * PX;
 
-/** A large result set's frame (`LARGE_SET`), as wide and as tall as its summary takes. */
+/** How many of a large result set's molecules are measured to size its frame (`heldFrame`): a run of thousands is not measured through, each. */
+export const HELD_SIZED = 500;
+
+/** A large result set's structures drawn: a frame as wide and as tall as the count it says takes. */
 export const SUMMARY_W = SUMMARY_PX.w * PX + 2 * SET_PAD;
 export const SUMMARY_H = SET_TOP + SUMMARY_PX.h * PX + SET_PAD;
 
@@ -710,7 +776,7 @@ function fillTable(doc: WorkspaceDocument, step: WorkflowStep, exit: string, tab
  * made (`withExits`): each moved down, with what it holds, where the one
  * above it has grown onto it - never up, nor sideways.
  */
-function keepExitsUnder(doc: WorkspaceDocument, step: Pick<WorkflowStep, "id" | "kind">): WorkspaceDocument {
+export function keepExitsUnder(doc: WorkspaceDocument, step: Pick<WorkflowStep, "id" | "kind">): WorkspaceDocument {
   const exits = exitsOf(step.kind);
   // (a set held off the page lies nowhere: workflow/held - those under it kept under the one above it, or the first shown; an empty
   //  exit's for what its step sets aside, drawn nowhere too, kept under all the same: there it is laid out, once given anything)
@@ -760,7 +826,11 @@ function fillExit(
 ): WorkspaceDocument {
   // (more than are laid out on the page - or its exit wired on, held off the page whatever it holds: workflow/held - held in the set, its frame summing them up, or drawn nowhere - docs/WORKFLOWS-FOUNDATION.md, *What a set shows*)
   const was = resultOf(doc, step.id, exit);
-  if (made.reduce((n, m) => n + entriesIn(m), 0) > LARGE_SET || (was && isHeld(doc, was))) return filled(doc, step, { exit, holds, unread, collection: [...made] }, [], () => ({ doc, members: [] }));
+  if (made.length > LARGE_SET || (was && isHeld(doc, was))) {
+    // (its frame as large as the largest of them - of the first `HELD_SIZED`, as many as can be measured as a run is made - and their chips need: it shows one at a time)
+    const sized = made.slice(0, HELD_SIZED).map((m, i) => roomOf(m, w.extentOf({ ...m, at: { x: 0, y: 0 } }, turns?.[i])));
+    return filled(doc, step, { exit, holds, unread, collection: [...made], view: heldFrame(sized, chipRows(made), HELD_LEAST_W) }, [], () => ({ doc, members: [] }));
+  }
   const rooms = made.map((m, i) => roomOf(m, w.extentOf({ ...m, at: { x: 0, y: 0 } }, turns?.[i])));
   return filled(doc, step, { exit, holds, unread }, rooms, (d, at) => {
     // (all put on the page at once: one at a time copied the page's molecules again for each)
@@ -867,7 +937,7 @@ function drawnPut(
 function filled(
   doc: WorkspaceDocument,
   step: WorkflowStep,
-  of: { exit: string; holds: SetKind; unread?: number; collection?: NonNullable<WorkflowSet["collection"]>; drawnCollection?: NonNullable<WorkflowSet["drawnCollection"]>; core?: SeriesCore },
+  of: { exit: string; holds: SetKind; unread?: number; collection?: NonNullable<WorkflowSet["collection"]>; drawnCollection?: NonNullable<WorkflowSet["drawnCollection"]>; core?: SeriesCore; view?: { width: number; height: number } },
   rooms: readonly (Frame & { chip: number })[],
   place: (doc: WorkspaceDocument, at: readonly { x: number; y: number }[]) => { doc: WorkspaceDocument; members: Member[]; put?: number[] },
 ): WorkspaceDocument {
@@ -877,7 +947,8 @@ function filled(
   if (of.collection || of.drawnCollection) {
     // (held off the page - its exit wired on: workflow/held - its frame as it was, drawn nowhere; else as large as its summary)
     const held = !!was && isHeld(doc, was);
-    const frame = was && !held ? placeAgain(doc, step, was, SUMMARY_W, SUMMARY_H) : was ? was : placeFor(doc, step, of.exit, SUMMARY_W, SUMMARY_H);
+    const { width, height } = of.view ?? { width: SUMMARY_W, height: SUMMARY_H };
+    const frame = was && !held ? placeAgain(doc, step, was, width, height) : was ? was : placeFor(doc, step, of.exit, width, height);
     const id = was ? was.id : (doc.nextWorkflowId ?? 1);
     doc = was ? markMade(held ? doc : resizeSet(doc, id, frame), id, madeBy) : markMade(addSet(doc, frame, madeBy), id, madeBy);
     return withCore(holdCollection(doc, id, of.collection ? { collection: of.collection } : { drawnCollection: of.drawnCollection! }, of.unread), id, of.core);
@@ -1050,7 +1121,7 @@ export function placeAsSet(
  * wider than the molecule (centred under it: "4 / 4 · 0.00 kcal/mol" is
  * wider than a water).
  */
-function roomOf(m: Pick<Molecule3D, "frames" | "calc" | "energies" | "shares" | "numbers" | "conformerSet"> & Partial<Pick<Molecule3D, "title" | "stack" | "partOf" | "degeneracies">>, e: Frame): Frame & { chip: number } {
+export function roomOf(m: Pick<Molecule3D, "frames" | "calc" | "energies" | "shares" | "numbers" | "conformerSet"> & Partial<Pick<Molecule3D, "title" | "stack" | "partOf" | "degeneracies">>, e: Frame): Frame & { chip: number } {
   const least = NOMINAL_BOND_LENGTH / 4;
   const half = chipWide(m) / 2;
   return { x0: Math.min(e.x0, -least, -half), x1: Math.max(e.x1, least, half), y0: Math.min(e.y0, -least), y1: Math.max(e.y1, least), chip: hasChip(m) ? CHIP : 0 };
@@ -1092,17 +1163,18 @@ export function laidOut(rooms: readonly (Frame & { chip: number })[], least = LE
 }
 
 /**
- * `doc` with each result set whose molecules no longer fit it laid out
- * again (the maintainer, 2026-10-13): a molecule reaching past its frame
- * or onto its name, or two over one another, as each is drawn now
- * (`extentOf`, in its look and turned as `turnOf` says) - a bigger 3D look
- * chosen, say. The frame widens as far as they need, its top left where it
- * was, never narrower or shorter than it was; they lie in it as a run lays
- * them, in the order the run gave them - or, where the set would then
- * reach over something beside it (the next step's card), in rows no wider
- * than it was, the set growing downwards. A set they fit, a chemist's set and a set
- * of pictures are left as they are - and, where `only` says, a set holding
- * none of those molecules.
+ * `doc` with each result set whose molecules lie over one another laid out
+ * again (the maintainer, 2026-10-13): two over one another, as each is
+ * drawn now (`extentOf`, in its look and turned as `turnOf` says) - a
+ * bigger 3D look chosen, say. The frame is theirs as it is laid out, its
+ * top left where it was, never narrower or shorter than it was; they lie in
+ * it as a run lays them, in the order the run gave them - or, where the set
+ * would then reach over something beside it (the next step's card), in
+ * rows no wider than it was, the set growing downwards. A set whose
+ * molecules lie clear of one another, a chemist's set and a set of
+ * pictures are left as they are - and, where `only` says, a set holding none
+ * of those molecules; a frame is its members' room whatever they are
+ * (workflow/fitFrames), as the document settles.
  */
 export function fitResultSets(
   doc: WorkspaceDocument,
@@ -1121,9 +1193,8 @@ export function fitResultSets(
     const rooms = ms.map((m) => roomOf(m, extentOf(m, turnOf(m.id))));
     // (each where it is: its reach, and its chip below it)
     const boxes = ms.map((m, i) => ({ x0: m.at.x + rooms[i].x0, x1: m.at.x + rooms[i].x1, y0: m.at.y + rooms[i].y0 - rooms[i].chip, y1: m.at.y + rooms[i].y1 }));
-    const within = boxes.every((b) => b.x0 >= set.x0 - EPS && b.x1 <= set.x1 + EPS && b.y0 >= set.y0 - EPS && b.y1 <= set.y1 - SET_TOP + EPS);
     const apart = boxes.every((a, i) => boxes.every((b, j) => j <= i || !(a.x0 < b.x1 - EPS && b.x0 < a.x1 - EPS && a.y0 < b.y1 - EPS && b.y0 < a.y1 - EPS)));
-    if (within && apart) continue;
+    if (apart) continue;
     const least = Math.max(LEAST_W, set.x1 - set.x0 - 2 * SET_PAD);
     const frameOf = (l: { width: number; height: number }) => frameAt(set.x0, set.y1, l.width, Math.max(l.height, set.y1 - set.y0));
     // (its step's other exits' sets are no hindrance: they move down with it)

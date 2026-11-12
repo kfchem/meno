@@ -3,10 +3,8 @@ import type { MouseEvent as ReactMouseEvent } from "react";
 import type { WorkflowSet } from "../store/types";
 import type { ChartPoint } from "../../../../lib/chart";
 import type { DiagramLevel } from "../../../../lib/energyDiagram";
-import type { StyleChoice } from "../../../../lib/chem/style";
-import { CHART_PX, NAME_DOWN, SET_PAD, PX, SUMMARY_PX, TABLE_PX, tableBodyPx } from "./look";
+import { CHART_PX, NAME_DOWN, SET_PAD, PX, TABLE_PX, tableBodyPx } from "./look";
 import { ChartBody, DiagramBody, NumberBody, TableBody } from "./ValueBody";
-import SummaryBody from "./SummaryBody";
 
 export type SetFrameProps = {
   set: WorkflowSet;
@@ -16,14 +14,14 @@ export type SetFrameProps = {
   compact: boolean;
   onContextMenu: (e: ReactMouseEvent) => void;
   /**
-   * A large result set's (`WorkflowSet.collection`, `drawnCollection`): what it holds, said in its frame
-   * where they would lie - molecules in 3D with a sample of them drawn and a chart of their energies
-   * (SummaryBody); structures drawn, how many, as yet.
+   * A large result set's (`WorkflowSet.collection`, `drawnCollection`): what it holds, said in its frame.
+   * Molecules in 3D are drawn in it, one at a time (workflow/heldView), by WebGL: its words are the count
+   * in its tab and *Open as a table*; structures drawn, how many, as yet.
    */
-  summary?: { count: string; nouns: string; holds: "molecules" | "conformers" | "structures"; style: StyleChoice };
+  summary?: { count: string; nouns: string };
   /** A chart it holds: a point or a level pressed - the entry it is of shown, where that is on the page. */
   onEntry?: (entry: string | undefined) => void;
-  /** Its summary's *Open as a table*: what it holds read in the column. */
+  /** Its *Open as a table*: what it holds read in the column. */
   onOpenTable?: () => void;
 };
 
@@ -39,30 +37,27 @@ export default function SetFrame(p: SetFrameProps) {
   const h = (p.set.y1 - p.set.y0) / PX;
   return (
     <div className="meno-fade-in relative select-none" style={{ width: w, height: h, pointerEvents: "none" }} onContextMenu={p.onContextMenu}>
-      {p.summary && (
-        <div
-          className="meno-words absolute overflow-hidden"
-          style={{ left: SET_PAD / PX, right: SET_PAD / PX, top: (2 * NAME_DOWN) / PX, bottom: SET_PAD / PX }}
+      {/* (molecules in 3D held in the set: drawn one at a time by WebGL, its count in its tab - and what it holds read as a table, from a chip in the tab's line) */}
+      {p.set.collection && p.onOpenTable && (
+        <button
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={p.onOpenTable}
+          className="meno-words absolute h-6 rounded-md px-2 text-xs leading-4 text-gh-black bg-white ring-1 ring-gh-line transition-colors duration-150 ease-meno hover:bg-gh-base"
+          style={{ right: SET_PAD / PX, top: NAME_DOWN / PX - 12, pointerEvents: p.compact ? "none" : "auto" }}
         >
-          {/* (made at its own size, and made smaller to fit a frame sized smaller - by hand, or before it was this large) */}
-          {p.set.collection && (
-            <div
-              className="origin-top-left"
-              style={{ width: SUMMARY_PX.w, height: SUMMARY_PX.h, transform: `scale(${Math.min(1, (w - (2 * SET_PAD) / PX) / SUMMARY_PX.w, (h - (2 * NAME_DOWN + SET_PAD) / PX) / SUMMARY_PX.h)})` }}
-            >
-              <SummaryBody count={p.summary.count} nouns={p.summary.nouns} collection={p.set.collection} holds={p.summary.holds === "conformers" ? "conformers" : "molecules"} style={p.summary.style} onOpenTable={p.onOpenTable} compact={p.compact} />
+          Open as a table
+        </button>
+      )}
+      {/* (structures drawn held in the set: how many, and that they are on no page - none of them drawn yet) */}
+      {p.summary && p.set.drawnCollection && (
+        <div className="meno-words absolute overflow-hidden" style={{ left: SET_PAD / PX, right: SET_PAD / PX, top: (2 * NAME_DOWN) / PX, bottom: SET_PAD / PX }}>
+          <div className="flex flex-col gap-2" data-set-summary="">
+            <div className="flex items-center gap-1.5">
+              <span className="text-2xl leading-8 font-medium text-gh-black tabular-nums">{p.summary.count}</span>
+              <span className="flex-1 text-xs leading-4 text-gh-gray">{p.summary.nouns}</span>
             </div>
-          )}
-          {/* (structures drawn held in the set: how many, and that they are on no page - no sample of them drawn yet) */}
-          {p.set.drawnCollection && (
-            <div className="flex flex-col gap-2" data-set-summary="">
-              <div className="flex items-center gap-1.5">
-                <span className="text-2xl leading-8 font-medium text-gh-black tabular-nums">{p.summary.count}</span>
-                <span className="flex-1 text-xs leading-4 text-gh-gray">{p.summary.nouns}</span>
-              </div>
-              <span className="-mt-2 text-[10px] leading-4 text-gh-gray">On no page: deleting the set deletes them</span>
-            </div>
-          )}
+            <span className="-mt-2 text-[10px] leading-4 text-gh-gray">On no page: deleting the set deletes them</span>
+          </div>
         </div>
       )}
       {/* (a table, a number or a chart it holds: what it is, inside it - made smaller to fit a frame sized smaller; a chart's

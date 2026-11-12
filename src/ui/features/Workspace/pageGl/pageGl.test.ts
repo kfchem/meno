@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { PAGE_PX } from "../utils/pageScale";
-import { controlLine, controlMost, controlSize, lineWidth, pagePx, type Control } from "./units";
+import { controlLine, controlOnPage, controlSize, lineWidth, pagePx, type Control } from "./units";
 import * as THREE from "three";
-import { fillShapesGeometry, inDrawOrder, packShapes, PER, SHAPE_ATTRIBUTES, type Shape } from "./shapes";
+import { CONTROL_SIZE_GLSL, fillShapesGeometry, inDrawOrder, packShapes, PER, SHAPE_ATTRIBUTES, type Shape } from "./shapes";
 import { cursorChange, hitAt, type Hit, type Region } from "./hits";
 import { fitted, placed, textWidth, wrapText } from "./texts";
 import { cellOf } from "./icons";
@@ -17,17 +17,19 @@ describe("the page's own lengths", () => {
     expect(lineWidth(1, zoom, 2)).toBeGreaterThan(pagePx(1));
   });
 
-  it("keep a control as large as a hand needs it: its screen pixels near, no more than its own page pixels, nor its share of what it belongs to", () => {
-    const port: Control = { screenPx: 9, mostPagePx: 11, leastOfPx: { of: 60, share: 1 / 6 } };
-    expect(controlMost(port)).toBeCloseTo(pagePx(10), 12);
-    // (near: 9 screen pixels)
+  it("grow a control with the page: its page pixels, no more than its share of what it belongs to, never under its least on the screen", () => {
+    const port: Control = { leastScreenPx: 5, onPagePx: 11, leastOfPx: { of: 120, share: 1 / 6 } };
+    expect(controlOnPage(port)).toBeCloseTo(pagePx(11), 12);
+    expect(controlOnPage({ ...port, leastOfPx: { of: 60, share: 1 / 6 } })).toBeCloseTo(pagePx(10), 12);
+    // (zoomed in: as the page has it, larger on the screen)
     const near = 4 / PAGE_PX;
-    expect(controlSize(port, near)).toBeCloseTo(9 / near, 12);
-    // (far: its own most)
-    const far = 0.5 / PAGE_PX;
-    expect(controlSize(port, far)).toBeCloseTo(pagePx(10), 12);
+    expect(controlSize(port, near)).toBeCloseTo(pagePx(11), 12);
+    expect(controlSize(port, near) * near).toBeGreaterThan(5);
+    // (far: five screen pixels, no less)
+    const far = 0.1 / PAGE_PX;
+    expect(controlSize(port, far)).toBeCloseTo(5 / far, 12);
     // (its line: a screen pixel, a fifth of it where it is tiny, never under a device pixel)
-    expect(controlLine(9 / near, near, 2)).toBeCloseTo(1 / near, 12);
+    expect(controlLine(controlSize(port, near), near, 2)).toBeCloseTo(1 / near, 12);
     const tiny = 3 / far;
     expect(controlLine(tiny, far, 1)).toBeCloseTo(Math.max(tiny / 5, 1 / far), 12);
   });
@@ -53,13 +55,17 @@ describe("shapes packed for the shader", () => {
     expect(p.kindOpacity[0]).toBe(0);
   });
 
+  it("size a control in the shader as controlSize does: the larger of its least on the screen and its size on the page", () => {
+    expect(CONTROL_SIZE_GLSL).toBe("max(aControl.x * uScreen, aControl.y)");
+  });
+
   it("carry a control's screen pixels and most for the shader to size it by the zoom, and none for a ring of fixed size", () => {
-    const port: Control = { screenPx: 9, mostPagePx: 11 };
+    const port: Control = { leastScreenPx: 5, onPagePx: 11 };
     const p = packShapes([
       { kind: "ring", key: "port", x: 3, y: 4, diameterPx: 9, size: port, fill: "#ffffff", line: { widthPx: 1, color: "#6e7781" } },
       { kind: "ring", key: "dot", x: 0, y: 0, diameterPx: 6, fill: "#000000" },
     ]);
-    expect([...p.control.slice(0, 3)]).toEqual([9, controlMost(port), 1].map((v) => Math.fround(v)));
+    expect([...p.control.slice(0, 3)]).toEqual([5, controlOnPage(port), 1].map((v) => Math.fround(v)));
     expect([...p.control.slice(PER.control, 2 * PER.control)]).toEqual([0, 0, 0]);
     expect(p.half[PER.half]).toBeCloseTo(pagePx(3), 6);
     expect(p.kindOpacity[0]).toBe(1);
@@ -175,7 +181,7 @@ describe("what is under the pointer, at its edges", () => {
   });
 
   it("takes a control where it is drawn, where that is larger than its grab size", () => {
-    const big: Region[] = [{ key: "c", part: "take", circle: { x: 0, y: 0, diameterPx: 12, size: { screenPx: 40, mostPagePx: 100 } } }];
+    const big: Region[] = [{ key: "c", part: "take", circle: { x: 0, y: 0, diameterPx: 12, size: { leastScreenPx: 40, onPagePx: 1 } } }];
     // (15 screen pixels out: past its grab size's 6, within its 20 drawn)
     expect(hitAt([big], 15 / zoom, 0, zoom)?.key).toBe("c");
     expect(hitAt([big], 21 / zoom, 0, zoom)).toBeNull();
@@ -257,6 +263,28 @@ describe("a line of runs", () => {
     expect(start[1]).toMatchObject({ color: "#cd4560", weight: 500 });
     const middle = lineOf("chip", 2, 1, "middle", runs, 11);
     expect(middle[0].x).toBeCloseTo(2 - pagePx(widthOfRuns(runs, 11)) / 2, 9);
+  });
+
+
+  it("sets a run in Plex Mono where it says so - wide by Mono's advance, 0.6 of its size, and kept apart from the words beside it where lines break", async () => {
+    const { lineOf, widthOfRuns, wrapRuns } = await import("./texts");
+    const runs = [{ text: "see ", color: "#000000" }, { text: "abcdefghij", color: "#000000", mono: true as const }];
+    // (ten letters of 0.6 x 10 px: 60 px)
+    expect(widthOfRuns(runs.slice(1), 10)).toBeCloseTo(60, 9);
+    const line = lineOf("code", 0, 0, "start", runs, 10);
+    expect(line.map((t) => !!t.mono)).toEqual([false, true]);
+    expect(line[1].x).toBeCloseTo(pagePx(textWidth("see ", 10)), 9);
+    // (and the run after one in Mono starts where Mono's width ends it: 60 px on)
+    const after = lineOf("code", 0, 0, "start", [runs[1], { text: "end", color: "#000000" }], 10);
+    expect(after[1].x).toBeCloseTo(pagePx(60), 9);
+    expect(lineOf("code", 0, 0, "end", [runs[1]], 10)[0].x).toBeCloseTo(-pagePx(60), 9);
+    // (the same colour and weight, but not the same face: two runs in a line that is long enough, one that is mono wide by Mono's own)
+    const lines = wrapRuns([...runs, { text: " end", color: "#000000" }], 10, 1000);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].runs.map((r) => [r.text, !!r.mono])).toEqual([["see ", false], ["abcdefghij", true], [" end", false]]);
+    expect(lines[0].width).toBeCloseTo(textWidth("see ", 10) + 60 + textWidth(" end", 10), 9);
+    // (a mono word of ten, 60 px, in a line of 35: broken where it runs out, 5 letters each)
+    expect(wrapRuns([runs[1]], 10, 35).map((l) => l.runs.map((r) => r.text).join(""))).toEqual(["abcde", "fghij"]);
   });
 });
 

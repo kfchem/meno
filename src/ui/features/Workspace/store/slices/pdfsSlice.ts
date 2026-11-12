@@ -6,6 +6,9 @@ import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
 import type { EditorState } from "../types";
 
+/** Whether two lists of pages' sizes are the same. */
+const samePages = (a: readonly (readonly [number, number])[], b: readonly (readonly [number, number])[]) => a.length === b.length && a.every((p, i) => p[0] === b[i][0] && p[1] === b[i][1]);
+
 type SetState = StoreApi<EditorState>["setState"];
 
 /**
@@ -99,6 +102,10 @@ export function createPdfsSlice(doc: DocumentStore<WorkspaceDocument>, set: SetS
       // (clear of the PDFs already there, not over them)
       const row = ops.clearOfPdfs(ops.pdfsInRow(pdfs, at, pointOfStyle(doc.getState().style)), doc.getState().pdfs ?? []);
       if (row.length) doc.edit(row.length > 1 ? "add PDFs" : "add PDF", (d) => row.reduce(ops.addPdf, d));
+    },
+    setPdfPages: (sha256: string, pages: [number, number][]) => {
+      const unsaved = (doc.getState().pdfs ?? []).some((p) => p.sha256 === sha256 && !samePages(p.pages, pages));
+      if (unsaved) doc.amend((d) => ops.setPdfPages(d, sha256, pages), { unsaved: true });
     },
     movePdf: (id: number, x: number, y: number, gesture?: string) =>
       doc.edit("move PDF", (d) => ops.updatePdf(d, id, { x, y }), gesture ? gestureStep(`pdf:${id}:${gesture}`) : {}),
