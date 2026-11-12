@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FigureDrawn, FigureLetter, FigurePath, PathStep } from "./drawn";
-import { labelText, readFigure, wordsOf } from "./read";
+import { labelText, lyingAlong, readFigure, wordsOf } from "./read";
 
 // Made samples, drawn as a drawing program draws (bonds 14.4 points, lines 0.6 thick, 10-point letters): the small ways a
 // perspective drawing or a page of a paper is misread, each with what Meno's own drawing would be.
@@ -110,6 +110,23 @@ describe("a locant beside an atom's label (the small atom numbers of a drawing)"
     expect(read([["Me", 10, 0], ["7", 6.5, 0]])).toBe("Me");
   });
 
+  it("is a run of digits, whatever its length, dropped together - and kept, all of it, where a charge's sign follows the run", () => {
+    expect(read([["O", 10, 0], ["14", 6, 4]])).toBe("O");
+    expect(read([["O", 10, 0], ["123", 6, 4]])).toBe("O");
+    // (a charge's digits, a sign after them in any of its forms: plus, hyphen, minus, en dash)
+    expect(read([["Ca", 10, 0], ["12", 6, 4], ["+", 6, 4]])).toBe("Ca12+");
+    expect(read([["S", 10, 0], ["2", 6, 4], ["-", 6, 4]])).toBe("S2-");
+    expect(read([["S", 10, 0], ["2", 6, 4], ["\u2212", 6, 4]])).toBe("S2-");
+    expect(read([["S", 10, 0], ["2", 6, 4], ["\u2013", 6, 4]])).toBe("S2-");
+    // (the sign must be as small as the digits: a sign of the label's own size is not a charge's, and the locant before it goes)
+    expect(read([["O", 10, 0], ["1", 6, 4], ["+", 10, 0]])).toBe("O+");
+  });
+
+  it("ends its run at a digit set low - a count - and at a letter", () => {
+    expect(read([["O", 10, 0], ["1", 6, 4], ["4", 6, -2.5]])).toBe("O4");
+    expect(read([["C", 10, 0], ["1", 6, 4], ["Me", 10, 0]])).toBe("CMe");
+  });
+
   it("leaves what a label's own numbers are: a count set low, a charge's digit, a mass number, an R group's number", () => {
     expect(read([["CO", 10, 0], ["2", 7, -2.5], ["Me", 10, 0]])).toBe("CO2Me");
     expect(read([["NH", 10, 0], ["2", 7, -2.5]])).toBe("NH2");
@@ -134,5 +151,125 @@ describe("a protecting group's label on the left of its bond, its letters writte
       expect(right(on).atoms.map((x) => x.label)).toContain(on);
       expect(left(off).atoms.map((x) => x.label)).toContain(off);
     }
+  });
+});
+
+describe("the thresholds of a bold bond and its thin neighbours, each one just over and one just under", () => {
+  const thin = 0.073 * L;
+  /** A ring of thin bonds - the figure's usual width, and its bond length - and, apart from it, what is under test. */
+  const ringOfThin = (): FigurePath[] => hex(60, 60).map((p, i, all) => line(p, all[(i + 1) % 6], thin));
+  const at: P = [300, 300];
+  const end: P = [at[0] + L, at[1]];
+  const read = (extra: FigurePath[]) => readFigure(figure([...ringOfThin(), ...extra]));
+  /** The bonds the test's own part of the figure reads as: those to the right of the ring. */
+  const own = (r: ReturnType<typeof readFigure>) => r.bonds.filter((b) => Math.min(r.atoms[b.a].x, r.atoms[b.b].x) > 200);
+
+  it("is bold at 1.8 times the thin lines' width, no less - and a bond long enough over a tenth of its own", () => {
+    // (a bar 1.8 times 0.073 of a bond, a hair over it and a hair under it: the line's width, not a drawing program's rounding, tells)
+    expect(own(read([bar(at, end, 1.8 * thin * 1.01)])).map((b) => !!b.bold)).toEqual([true]);
+    expect(own(read([bar(at, end, 1.8 * thin * 0.99)])).map((b) => !!b.bold)).toEqual([false]);
+  });
+
+  it("is bold only above 0.12 of a bond across, however thin the thin lines are", () => {
+    const finer = hex(60, 60).map((p, i, all) => line(p, all[(i + 1) % 6], 0.04 * L));
+    const fine = (w: number) => readFigure(figure([...finer, bar(at, end, w * L)]));
+    expect(own(fine(0.121)).map((b) => !!b.bold)).toEqual([true]);
+    expect(own(fine(0.119)).map((b) => !!b.bold)).toEqual([false]);
+  });
+
+  it("is a double bond where the thin line beside it is shorter than 0.85 of it, two bonds where it is as long: a chair's back bond beside its front one", () => {
+    const [p, q] = beside(at, end, 0.2);
+    const shorter = (ratio: number): FigurePath => {
+      const mid: P = [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
+      return line([mid[0] - (ratio * L) / 2, mid[1]], [mid[0] + (ratio * L) / 2, mid[1]], thin);
+    };
+    const wide = 0.15 * L;
+    const under = own(read([bar(at, end, wide), shorter(0.84)]));
+    expect(under).toHaveLength(1);
+    expect(under[0]).toMatchObject({ order: 2, bold: true });
+    const over = own(read([bar(at, end, wide), shorter(0.86)]));
+    expect(over).toHaveLength(2);
+    expect(over.every((b) => b.order === 1)).toBe(true);
+    expect(over.filter((b) => b.bold)).toHaveLength(1);
+  });
+
+  it("is at most two lines with a bold one - a double bond - where three thin lines are a triple bond", () => {
+    const [p, q] = beside(at, end, 0.2);
+    const [r, s] = beside(at, end, -0.2);
+    const inner = (a: P, b: P): FigurePath => line([a[0] + 0.2 * L, a[1]], [b[0] - 0.2 * L, b[1]], thin);
+    const withBold = own(read([bar(at, end, 0.15 * L), inner(p, q), inner(r, s)]));
+    expect(withBold.map((b) => [b.order, !!b.bold]).sort()).toEqual([[1, false], [2, true]]);
+    const triple = own(read([line(at, end, thin), line(p, q, thin), line(r, s, thin)]));
+    expect(triple.map((b) => b.order)).toEqual([3]);
+  });
+
+  it("lies along a line within 3 degrees of its direction, no more - the hairline of a bold bar is the bar's own line", () => {
+    // (a bar a bond long on level, a line half a bond long about its middle, turned by `deg`)
+    const bold = { a: { x: 0, y: 0 }, b: { x: L, y: 0 }, w: 0.15 * L };
+    const hair = (deg: number) => {
+      const [dx, dy] = [Math.cos((deg * Math.PI) / 180) * 0.25 * L, Math.sin((deg * Math.PI) / 180) * 0.25 * L];
+      return { a: { x: L / 2 - dx, y: -dy }, b: { x: L / 2 + dx, y: dy }, w: 0.009 * L };
+    };
+    expect(lyingAlong(hair(2.9), bold, L)).toBe(true);
+    expect(lyingAlong(hair(3.1), bold, L)).toBe(false);
+  });
+
+  it("lies along a line with its middle within 0.06 of a bond of it, no more", () => {
+    const bold = { a: { x: 0, y: 0 }, b: { x: L, y: 0 }, w: 0.15 * L };
+    const at = (off: number) => ({ a: { x: 0.25 * L, y: off * L }, b: { x: 0.75 * L, y: off * L }, w: 0.009 * L });
+    expect(lyingAlong(at(0.059), bold, L)).toBe(true);
+    expect(lyingAlong(at(0.061), bold, L)).toBe(false);
+  });
+
+  it("lies along a line within its stretch, 0.05 of a bond past either end at the most", () => {
+    const bold = { a: { x: 0, y: 0 }, b: { x: L, y: 0 }, w: 0.15 * L };
+    // (half a bond long, its far end `past` of a bond beyond the bold line's end - and the other way, past its start)
+    const beyond = (past: number) => ({ a: { x: (1 + past) * L - 0.5 * L, y: 0 }, b: { x: (1 + past) * L, y: 0 }, w: 0.009 * L });
+    const before = (past: number) => ({ a: { x: -past * L, y: 0 }, b: { x: -past * L + 0.5 * L, y: 0 }, w: 0.009 * L });
+    expect(lyingAlong(beyond(0.049), bold, L)).toBe(true);
+    expect(lyingAlong(beyond(0.051), bold, L)).toBe(false);
+    expect(lyingAlong(before(0.049), bold, L)).toBe(true);
+    expect(lyingAlong(before(0.051), bold, L)).toBe(false);
+  });
+});
+
+describe("a hashed bond of round-capped marks: how thin a mark is at the most (THIN_MARK)", () => {
+  const stadium = (mid: P, length: number, width: number): FigurePath => {
+    const [h, r] = [length / 2, width / 2];
+    const k = 0.5523 * r;
+    const pt = (a: number, b: number): [number, number] => [mid[0] + a, mid[1] + b];
+    const d: PathStep[] = [
+      ["M", ...pt(-r, -h + r)], ["L", ...pt(-r, h - r)],
+      ["C", ...pt(-r, h - r + k)], ["C", ...pt(-k, h)], ["C", ...pt(0, h)],
+      ["C", ...pt(k, h)], ["C", ...pt(r, h - r + k)], ["C", ...pt(r, h - r)],
+      ["L", ...pt(r, -h + r)],
+      ["C", ...pt(r, -h + r - k)], ["C", ...pt(k, -h)], ["C", ...pt(0, -h)],
+      ["C", ...pt(-k, -h)], ["C", ...pt(-r, -h + r - k)], ["C", ...pt(-r, -h + r)], ["Z"],
+    ];
+    return { fill: "#000000ff", stroke: null, width: 0, d };
+  };
+  /** The bond length the figure's own bonds are read at: what a mark's width is measured against. */
+  const bondRead = readFigure(figure(hex(60, 60).map((p, i, all) => line(p, all[(i + 1) % 6], 0.073 * L)))).bond!;
+  /**
+   * A ring, and off its first atom a bond hashed with two round-capped marks across it and, at the ring atom, a round dot `dot` of a bond (as read)
+   * across. (A mark long enough to be a line - twice its width - and no more than 0.3 of a bond is thinner than 0.15 of a bond: the dot alone
+   * can be as thick as THIN_MARK lets it.)
+   */
+  const hashed = (dot: number) => {
+    const ring = hex(60, 60);
+    const out = ring.map((p, i) => line(p, ring[(i + 1) % 6], 0.073 * L));
+    const from = ring[0];
+    const marks = [stadium([from[0] + 0.14 * L, from[1]], dot * bondRead, dot * bondRead), stadium([from[0] + 0.33 * L, from[1]], 0.22 * L, 0.073 * L), stadium([from[0] + 0.52 * L, from[1]], 0.28 * L, 0.073 * L)];
+    return readFigure(figure([...out, ...marks]));
+  };
+
+  it("reads a dot 0.15 of a bond across as a mark of a hashed bond, and one 0.17 across as none: a hash with two marks only is no hash", () => {
+    const hashes = (dot: number) => hashed(dot).bonds.filter((b) => b.stereo === "down").length;
+    expect(hashes(0.1)).toBe(1);
+    expect(hashes(0.15)).toBe(1);
+    expect(hashes(0.17)).toBe(0);
+    // (a hair either side of 0.16)
+    expect(hashes(0.159)).toBe(1);
+    expect(hashes(0.161)).toBe(0);
   });
 });

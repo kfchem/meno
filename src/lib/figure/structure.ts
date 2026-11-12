@@ -95,6 +95,11 @@ const SHORT_END = 0.72;
  * between two corners, where it has two or more, its labels' bonds drawn to a label's middle - and not the figure's, whose
  * other structures may be drawn larger or smaller; with too few bonds to say, the figure's.
  */
+/** How what an atom says of a charge no atom carries begins: "A charge of 18− is more than sulfur carries." - one place for the words and for those that tell the sentence (`saysChargeTooMuch`). */
+const CHARGE_TOO_MUCH = "A charge of";
+/** Whether a thing said of an atom is that its charge is more than its element carries - no valence, whatever its bonds. */
+export const saysChargeTooMuch = (said: string): boolean => said.startsWith(CHARGE_TOO_MUCH);
+
 export function drawnBond(read: Pick<FigureRead, "atoms" | "bonds" | "bond">): number {
   const bare = (i: number) => !read.atoms[i].label && !read.atoms[i].el;
   const length = (b: FigureRead["bonds"][number]) => Math.hypot(read.atoms[b.a].x - read.atoms[b.b].x, read.atoms[b.a].y - read.atoms[b.b].y);
@@ -169,7 +174,7 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
   const tooMany = read.atoms.map((_, i): string | null => {
     const most = mostTaken(els[i], charges[i]);
     if (most == null || unbound[i] < valence[i]) return null;
-    if (most < 0 || Math.abs(charges[i]) > MOST_CHARGE) return `A charge of ${chargeText(charges[i])} is more than ${calledAs(els[i])} carries.`;
+    if (most < 0 || Math.abs(charges[i]) > MOST_CHARGE) return `${CHARGE_TOO_MUCH} ${chargeText(charges[i])} is more than ${calledAs(els[i])} carries.`;
     if (valence[i] > most) {
       return valence[i] > (mostTaken(els[i], 0) ?? most) ? `More bonds meet here than ${calledAs(els[i])} has.` : `Its charge, ${chargeText(charges[i])}, and its bonds are more than ${calledAs(els[i])} takes.`;
     }

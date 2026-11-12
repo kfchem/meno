@@ -22,7 +22,7 @@ import { setAtomLabel } from "../../../../lib/pdf/figures";
 import { chemWorker, rolePlugin } from "../../../../lib/roles/worker";
 import { ChemTimeout, type ChemClient } from "../../../../lib/roles/client";
 import { toBase64 } from "../../../../lib/clipboard";
-import { drawnBond, readDrawnLabel, structureOf, type LabelReader } from "../../../../lib/figure/structure";
+import { drawnBond, readDrawnLabel, saysChargeTooMuch, structureOf, type LabelReader } from "../../../../lib/figure/structure";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { regularised } from "../../../../lib/layout/regularise";
 import { sameStereo } from "../chem/engineLayout";
@@ -360,7 +360,7 @@ const ELEMENT_NAMES = new Map(ELEMENTS.map((e) => [e.symbol, e.name]));
 
 /** The atoms of a structure read that have more bonds than they take, written out as a file has it - not a charge alone: an atom's charge no atom carries is said by the atom, and is no valence (a page's "S188−" taken for a sulfur). */
 function overBondedAtoms(model: Model): Set<number> {
-  return new Set([...overBonded(model)].filter((id) => !model.atoms.find((x) => x.id === id)?.unsure?.said.some((t) => t.startsWith("A charge of"))));
+  return new Set([...overBonded(model)].filter((id) => !model.atoms.find((x) => x.id === id)?.unsure?.said.some(saysChargeTooMuch)));
 }
 
 /**
@@ -388,10 +388,19 @@ export function withoutOverBonded(model: Model): { kept: Model; left: number } {
   // (numbered again, from 1: atoms, then bonds, then the multiple groups' ids, as `modelOf` numbers them)
   const to = new Map(atoms.map((a, i) => [a.id, i + 1]));
   const groupIds = [...new Set(atoms.flatMap((a) => (a.sgroups ?? []).map((g) => g.id)))].sort((p, q) => p - q);
+  const groupId = (id: number) => atoms.length + bonds.length + groupIds.indexOf(id) + 1;
   const kept: Model = {
     ...model,
-    atoms: atoms.map((a, i) => ({ ...a, id: i + 1, ...(a.sgroups ? { sgroups: a.sgroups.map((g) => ({ ...g, id: atoms.length + bonds.length + groupIds.indexOf(g.id) + 1 })) } : {}) })),
-    bonds: bonds.map((b, i) => ({ ...b, id: atoms.length + i + 1, a: to.get(b.a)!, b: to.get(b.b)!, ...(b.narrow ? { narrow: to.get(b.narrow) } : {}) })),
+    atoms: atoms.map((a, i) => ({ ...a, id: i + 1, ...(a.sgroups ? { sgroups: a.sgroups.map((g) => ({ ...g, id: groupId(g.id), ...(g.parent != null && groupIds.includes(g.parent) ? { parent: groupId(g.parent) } : {}) })) } : {}) })),
+    bonds: bonds.map((b, i) => ({
+      ...b,
+      id: atoms.length + i + 1,
+      a: to.get(b.a)!,
+      b: to.get(b.b)!,
+      ...(b.narrow ? { narrow: to.get(b.narrow) } : {}),
+      // (a haptic bond's atoms, by id)
+      ...(b.endpoints ? { endpoints: b.endpoints.flatMap((e) => (to.has(e) ? [to.get(e)!] : [])) } : {}),
+    })),
   };
   return { kept, left: bad.length };
 }

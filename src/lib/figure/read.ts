@@ -271,6 +271,18 @@ function multiples(lines: Stroke[], bond: number, bold: (s: Stroke) => boolean =
   return { bonds, used };
 }
 
+/**
+ * Whether line `s` lies along line `t`: within 3 degrees of its direction, its middle within 0.06 of a bond of the line through `t`, and both its ends
+ * within `t`'s stretch, 0.05 of a bond past either end at the most (a bold bar's hairline: the same line, never a second one).
+ */
+export function lyingAlong(s: Stroke, t: Stroke, bond: number): boolean {
+  const u = unit(t.a, t.b);
+  if (Math.abs(cross(u, unit(s.a, s.b))) > Math.sin((3 * Math.PI) / 180)) return false;
+  const off = (p: Point) => Math.abs(cross(u, { x: p.x - t.a.x, y: p.y - t.a.y }));
+  const at = (p: Point) => dot(u, { x: p.x - t.a.x, y: p.y - t.a.y });
+  return off(mid(s.a, s.b)) < 0.06 * bond && [s.a, s.b].every((p) => at(p) > -0.05 * bond && at(p) < len(t) + 0.05 * bond);
+}
+
 /** A wavy line: a curve that goes to and fro across a line between its ends, a few times, not far. */
 function wavy(c: Curve, bond: number): Drawn | null {
   if (c.closed || c.pts.length < 6) return null;
@@ -1033,11 +1045,7 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   // is that line: a bold bar has a hairline drawn along it. It is never a second line of a multiple bond)
   const along = (s: Stroke, t: Stroke) => {
     if (s === t || len(t) < len(s) || (len(t) === len(s) && joined.indexOf(t) > joined.indexOf(s))) return false;
-    const u = unit(t.a, t.b);
-    if (Math.abs(cross(u, unit(s.a, s.b))) > Math.sin((3 * Math.PI) / 180)) return false;
-    const off = (p: Point) => Math.abs(cross(u, { x: p.x - t.a.x, y: p.y - t.a.y }));
-    const at = (p: Point) => dot(u, { x: p.x - t.a.x, y: p.y - t.a.y });
-    return off(mid(s.a, s.b)) < 0.06 * bond && [s.a, s.b].every((p) => at(p) > -0.05 * bond && at(p) < len(t) + 0.05 * bond);
+    return lyingAlong(s, t, bond);
   };
   const whole = joined.filter((s) => !loose.includes(s) && !joined.some((t) => along(s, t)));
   const used = loose.filter((s) => !joined.includes(s));
