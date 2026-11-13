@@ -178,7 +178,7 @@ describe("the shaders of a drawing, made ready as the page starts", () => {
     expect(group.visible).toBe(false);
     // (far off the page, never where a drawing is)
     expect(Math.min(group.position.x, group.position.y)).toBeGreaterThan(1e5);
-    // (the labels' typeface as Labels2D asks for it: the regular, not the bold)
+    // (its letter, an O, needs no fallback face: the typeface asked for without waiting for Plex Sans JP's letters - read at start for nothing otherwise)
     expect(fonts.asked.length).toBeGreaterThan(0);
     expect(fonts.asked.every((a) => a[1] === false)).toBe(true);
     expect(group.children.some((c) => c === (batches.made[0] as unknown as { root?: THREE.Group }).root || c.type === "Group")).toBe(true);
