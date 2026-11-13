@@ -24,6 +24,13 @@ export type ChemRequests = {
    * whatever the plugin gave (conversation/modelConnection `replyOf`).
    */
   converse: { args: { told: string; said: readonly unknown[]; tools: readonly { name: string; does: string }[]; options: OptionValues }; result: unknown };
+  /**
+   * The names role's (docs/PLUGINS.md, *Roles*): the compounds a database
+   * outside Meno holds under exactly this name, the first `most` in its own
+   * order. Its answer is read by the caller, strictly, as whatever the plugin
+   * gave (Workspace/chem/nameLookup `foundOf`).
+   */
+  find_name: { args: { name: string; most: number }; result: unknown };
   to_smiles: { args: { molblock: string }; result: { smiles: string } };
   /** A reaction, as an RXN file holds it, as a reaction SMILES: "reactants>agents>products". */
   rxn_to_smiles: { args: { rxnblock: string }; result: { smiles: string } };
