@@ -111,10 +111,16 @@ export const IN_LINE = (10 * Math.PI) / 180;
 /** How far apart two directions are, 0 to pi. */
 const apart = (t: number, u: number) => Math.abs(Math.atan2(Math.sin(t - u), Math.cos(t - u)));
 
-/** Whether a centre drawn flat with three bonds, its H left out, has two of them in line or on top of each other (`IN_LINE`). */
-function twoInLine(at: { x: number; y: number }, around: readonly { x: number; y: number }[]): boolean {
+/**
+ * Whether a centre drawn flat with three bonds, its H left out, says nothing by two of them (`IN_LINE`): two on top of each other, which cannot
+ * be told apart; or two in line, both in the page - a T (Brecher 2006, ST-1.2.12: two plain bonds 180 degrees apart with the wedge between them
+ * depict a T-shaped configuration, not a tetrahedral one). Two in line with the wedge on one of them say it: ST-1.2.4 draws that form and takes
+ * the H to stand in the widest gap, opposite to the wedge (ST-1.2.3: with three bonds drawn, the configuration is the same wherever the wedged
+ * bond stands). `wedged` says, for each bond, whether it is a wedge or hashes narrow at the centre.
+ */
+function twoInLine(at: { x: number; y: number }, around: readonly { x: number; y: number }[], wedged: readonly boolean[]): boolean {
   const t = around.map((p) => Math.atan2(p.y - at.y, p.x - at.x));
-  return t.some((u, i) => t.some((w, j) => j > i && (apart(u, w) < IN_LINE || apart(u, w) > Math.PI - IN_LINE)));
+  return t.some((u, i) => t.some((w, j) => j > i && (apart(u, w) < IN_LINE || (apart(u, w) > Math.PI - IN_LINE && !wedged[i] && !wedged[j]))));
 }
 
 /**
@@ -195,7 +201,7 @@ export function readStereo(
       if (!wedged && !atom.centre) return;
       const inSpace = atom.centre && atom.z != null;
       // (drawn flat, its H left out, two of its bonds in line or on top of each other: no configuration stated)
-      if (!inSpace && (atom.hs === 1 || lonePair) && twoInLine(atom, around.map((n) => atoms[n]))) return;
+      if (!inSpace && (atom.hs === 1 || lonePair) && twoInLine(atom, around.map((n) => atoms[n]), around.map((n) => lift(c, n) !== 0))) return;
       const order = atom.hs ? [...around, -1] : around;
       const volume = inSpace ? volumeInSpace(atoms, c, around, lift, fits.get(c)) : 0;
       const v =
@@ -385,7 +391,8 @@ export function unreadWhy(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond
   //  which holds the H, which the lone pair, is not drawn)
   if (around.length === 2 && atom.hs === 1 && lonePairCentres(atoms, bonds)(c)) return "its H and its lone pair are both left out, so which way each points is not drawn: draw its H as an atom";
   // (as readStereo has it: a centre drawn with three bonds - its H, or its lone pair, left out)
-  if (around.length === 3 && twoInLine(atom, around.map((n) => atoms[n]))) return "two of its bonds in line or on top of each other";
+  const lifted = (n: number) => mine.some((b) => b.wedge && b.wedge.narrow === c && (b.a === n || b.b === n));
+  if (around.length === 3 && twoInLine(atom, around.map((n) => atoms[n]), around.map(lifted))) return "two of its bonds in line or on top of each other";
   return "they are drawn crossed, saying neither way round";
 }
 
