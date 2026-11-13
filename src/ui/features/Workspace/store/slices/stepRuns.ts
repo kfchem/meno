@@ -29,7 +29,7 @@ import { stereoisomersAnswer } from "../../workflow/stereoisomers";
 import { EXAMINE_MS } from "../../../../../lib/chem/stereoOpen";
 import { holdsGraphOf3d, keptMade, madeChecks, madeChecksOf, metalHolds, metalHoldsOf } from "../../../../../lib/chem/metalHolds";
 import { COORDINATION_BOND } from "../../../../../lib/chem/molecule";
-import { byOf, doerName, installedFor, optionsFor, programsFor, renderPresets, takesNothingBy } from "../../workflow/doers";
+import { byOf, doerName, installedFor, optionsFor, programsFor, renderPresets, roundsNeed, takesNothingBy } from "../../workflow/doers";
 import { heldBy, heldRows, type HeldRows } from "../../workflow/heldRows";
 import { HOLDS_RESTRAINTS } from "../../../../../lib/plugins/steps";
 import type { Restraint } from "../../../../../lib/entry";
@@ -38,7 +38,7 @@ import { compoundLetter, frameXyz, framesOf, madeFrom, recordNumber, setEntries,
 import { convergedOf, heldWhy } from "../../workflow/converged";
 import { runTook } from "../../workflow/runTime";
 import { skeletonWhy } from "../../../../../lib/chem/skeleton";
-import { conformersSought, conformersSoughtOf, roundsAsked, soughtNumber, WITHIN_NEEDED } from "../../../../../lib/chem/conformersSought";
+import { conformersSought, conformersSoughtOf, roundsAsked, soughtNumber } from "../../../../../lib/chem/conformersSought";
 import type { Conformers } from "../../../../../lib/roles/client";
 import { inRounds, roundsSaid } from "../../chem/conformerRounds";
 import { roundsJudge } from "../../chem/roundsJudge";
@@ -134,15 +134,6 @@ function holdAsked(options: OptionValues, plugin: PythonPlugin | undefined, kind
 /** The structures that could not be made in 3D, by their places among `of`: "structure 3 of 4 could not be made in 3D". */
 export function notMade(places: readonly number[], of: number): string {
   return `${structuresAt(places)} of ${of} could not be made in 3D`;
-}
-
-/**
- * The structures not made because the step asks for as many conformers as each needs, in rounds, and has no window for
- * new conformers to end them by - its own, or Settings' - by their places among `of`: what it needs, said as its card
- * says it (`roundsNeed`), never that they could not be made in 3D.
- */
-export function windowNeeded(places: readonly number[], of: number): string {
-  return `${structuresAt(places)} of ${of} not made: ${WITHIN_NEEDED.charAt(0).toLowerCase()}${WITHIN_NEEDED.slice(1)}`;
 }
 
 /**
@@ -772,12 +763,14 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const free: number[] = [];
     // (those that are a lone atom or ion alone, by their places: one atom alone has no 3D structure - left out, and said so)
     const bareOnly: number[] = [];
-    // (those not made because the step has no window to end its rounds by, by their places: said as such, never as not made in 3D)
-    const windowless: number[] = [];
     // (those made without some of their parts - a salt's counter-ion, which has no 3D structure; any part past the first: said, each by its place)
     const partly: string[] = [];
     // (each structure drawn not made, as it came, with why: in the step's Failed exit, to be followed and wired on - into Stereoisomers, one left open)
     const notMadeDrawn: DrawnEntry[] = [];
+    // (asked for as many as each needs, in rounds, with no window to end them by: refused at once, in its card's words - nothing asked
+    //  of the plugin, no structure set aside for it)
+    const need = roundsNeed(step.kind, plugin.roleDraws.includes("conformers"), options);
+    if (need) return void fail(id, need, at, key);
     try {
       let chem = await pluginWorker(plugin);
       // (what each leaves open, and which stereoisomer is made: Meno's, on what the plugin that finds stereoisomers perceives - chem/openStereo)
@@ -824,12 +817,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           // (as many as the molecule needs, in rounds, where the plugin's search takes draws: until a round brings no conformer new within
           //  the step's window - chem/conformerRounds; a workflow's search has no time it must end in)
           const rounds = plugin.roleDraws.includes("conformers") ? roundsAsked(options, () => conformersSoughtOf(block.molblock)) : null;
-          // (its window not given - a step not ready, run all the same: each said so in Meno's words, never taken for what could not be made)
-          if (rounds && "needs" in rounds) {
-            windowless.push(place + 1);
-            asideAs(rounds.needs);
-            continue;
-          }
+          // (its window not given: refused before any was asked, above)
+          if (rounds && "needs" in rounds) throw new Error(rounds.needs);
           // (a metal's holds, Meno's - and which of what was made stand: lib/chem/metalHolds)
           const holds = metalHoldsOf(block.molblock);
           const ask = async (count: number | null, draw?: number) =>
@@ -900,8 +889,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       return void doc.edit("run", (x) => setRan(keepRun(x, still), id, { at, ok: false, stopped: true, said: `Stopped after ${clock(took)}`, input: key, took, ...as }));
     }
     const of = drawnIn(input);
-    // (each not made said: those that could not be, those the step had no window for, and those whose stereo is left open)
-    const unmade = [...(failed.length ? [notMade(failed, of)] : []), ...(windowless.length ? [windowNeeded(windowless, of)] : []), ...(open.length ? [stereoOpen(open, of)] : []), ...(bareOnly.length ? [bareLeft(bareOnly, of)] : [])];
+    // (each not made said: those that could not be, and those whose stereo is left open)
+    const unmade = [...(failed.length ? [notMade(failed, of)] : []), ...(open.length ? [stereoOpen(open, of)] : []), ...(bareOnly.length ? [bareLeft(bareOnly, of)] : [])];
     // (made, but said: their stereo not held - only those that were made)
     const freed = free.filter((p) => !failed.includes(p));
     // (none made, and none to set aside: nothing came that could be - else those not made, in the Failed exit, each saying why)

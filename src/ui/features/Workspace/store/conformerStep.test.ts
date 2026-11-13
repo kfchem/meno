@@ -500,20 +500,17 @@ describe("Sketchkit's conformer search as a step, on structures drawn", () => {
     }
   });
 
-  it("fails each structure, saying it needs its window, where it is run with none - its search taking draws", async () => {
+  it("is refused at once, in its card's words, where it is run with no window - its search taking draws: nothing asked, nothing set aside", async () => {
     const search = PLUGINS.find((p) => p.id === "sketchkit") as unknown as { roleDraws: readonly string[] };
     const was = search.roleDraws;
     search.roleDraws = ["conformers"];
     try {
       const { step, st } = await searched();
-      // (none asked, none made: each in its Failed exit as it came, saying why)
+      // (none asked, none made, none run through to its Failed exit: the step itself refused, saying what it needs - never that they could not be made in 3D)
       expect(asked).toHaveLength(0);
       expect(st().molecules3d.filter((m) => m.conformerSet)).toHaveLength(0);
-      const failed = st().sets.find((b) => b.made?.step === step.id && b.made.exit === "failed")!;
-      expect((failed.members ?? []).map((m) => ("structure" in m ? m.record?.status : null))).toEqual(Array(3).fill({ failed: WITHIN_NEEDED }));
-      // (and the card says what it needs, as its Ready line does - never that they could not be made in 3D)
-      expect(step.ran?.said).toMatch(/ · 0 conformers · structures 1, 2 and 3 of 3 not made: give the window for new conformers, in kcal\/mol$/);
-      expect(step.ran?.said).not.toMatch(/could not be made in 3D/);
+      expect(st().sets.filter((b) => b.made?.step === step.id).flatMap((b) => b.members ?? [])).toHaveLength(0);
+      expect(step.ran).toMatchObject({ ok: false, said: WITHIN_NEEDED });
     } finally {
       search.roleDraws = was;
     }

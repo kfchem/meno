@@ -610,10 +610,10 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
     kcal/mol until the chemist gives one, so that a 3D structure is made
     from fresh Settings with nothing asked first - the maintainer's choice
     (2026-11-08), no measured basis claimed. A step has none until given,
-    and is not ready until it has one; run without one, it makes nothing,
-    each structure set aside saying it needs the window, and its line says
-    the same ("structure 1 of 1 not made: give the window for new
-    conformers, in kcal/mol") - never that they could not be made in 3D.
+    and is not ready until it has one; run without one on structures
+    drawn, it is refused at once in its card's words ("Give the window for
+    new conformers, in kcal/mol"): nothing is asked of the plugin, and no
+    structure is set aside for it - never said as not made in 3D.
     A step keeps the options it was put down with (WORKFLOWS.md, decided:
     17): one put down before Settings asked for a number keeps asking for
     as many as the molecule needs. As a guide, 2.73 kcal/mol at 298.15
