@@ -79,8 +79,11 @@ function nothingDrawn(compileAsync: (o: THREE.Object3D) => Promise<unknown>): ob
 function held() {
   let id = 0;
   const waiting = new Map<number, () => void>();
+  // (what each was asked with: the idle time's longest wait)
+  const options: unknown[] = [];
   return {
-    ask: (f: () => void) => (waiting.set(++id, f), id),
+    options,
+    ask: (f: () => void, o?: unknown) => (options.push(o), waiting.set(++id, f), id),
     cancel: (k: number) => void waiting.delete(k),
     run: async () => {
       const now = [...waiting.values()];
@@ -158,6 +161,8 @@ describe("the shaders of a drawing, made ready as the page starts", () => {
   it("are made once the page is idle, its label's letter set, after a frame of the page's - and again with another typeface", async () => {
     const p = await drawn(<WarmShaders2D />);
     expect(batches.made).toHaveLength(0);
+    // (the page's idle time waited for two seconds at most: not at once)
+    expect(p.idle.options).toEqual([{ timeout: 2000 }]);
     await p.idle.run();
     // (the batch Labels2D draws by, in the page's typeface, one letter set)
     expect(batches.made.map((b) => b.font)).toEqual(["typeface-a.woff"]);
