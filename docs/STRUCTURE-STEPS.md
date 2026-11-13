@@ -367,6 +367,11 @@ restraints takes the table in its *Restraints* input (WORKFLOWS.md,
   bonds held". Coordination bonds asked and none marked are said ("no
   coordination bonds"), not passed over, and so are entries it made no row
   for ("2 entries with none to hold").
+- **Nothing to hold, said in the table**: each entry it looked at and
+  found nothing to hold for has a row of its own, "nothing to hold", for
+  it by its ID as a row is. A step its table is wired into tells it so
+  from one this step refused, or never saw (WORKFLOWS.md, *Nothing to
+  hold*). *Torsion restraints* does the same.
 
 Checked: H3N→BH3's B–N coordination bond kept at 0.9 × (1.91 + 1.66) Å,
 and Cu–N at 0.9 × (2.38 + 1.66) = 3.636 Å, from Alvarez's published radii; a 3-4-5 triangle's 5 Å; an atom the entry
