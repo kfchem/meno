@@ -29,6 +29,7 @@
  */
 
 import { piElectrons } from "./aromaticity";
+import { NOT_METALS } from "./elements";
 
 /** MDL bond type 4: aromatic. */
 export const AROMATIC_BOND = 4;
@@ -82,9 +83,17 @@ export function kekulized(atoms: readonly KekuleAtom[], bonds: readonly KekuleBo
 
   const degree = new Array<number>(atoms.length).fill(0);
   const hasMultiple = new Array<boolean>(atoms.length).fill(false);
+  // (a ring atom's bond to a metal is not one of its own: a pyridine bound to a platinum by its N lends the N's lone pair, and
+  // stays a pyridine - counted, it read as a pyrrole-type N, and the ring took an H on a carbon instead of its third double bond)
+  const metal = (i: number) => {
+    const el = canonical(atoms[i]?.el ?? "");
+    return /^[A-Z][a-z]?$/.test(el) && !NOT_METALS.has(el) && !QUERY_ATOMS.has(el);
+  };
   for (const b of bonds) {
-    degree[b.a1]++;
-    degree[b.a2]++;
+    if (metal(b.a1) === metal(b.a2)) {
+      degree[b.a1]++;
+      degree[b.a2]++;
+    }
     if (b.order === 2 || b.order === 3) {
       hasMultiple[b.a1] = true;
       hasMultiple[b.a2] = true;
