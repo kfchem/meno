@@ -3980,15 +3980,15 @@ function perspectiveCorners(atoms: Atom[], bonds: Bond[], opts: LayoutOptions, z
  * The clear space kept each side of a bond in front where a bond behind passes under it, in line widths: from the front bond's edge,
  * square to the front bond, to the cut end of the bond behind. Brecher 2006, ST-3.1: "the front-to-back ordering of crossing bonds must be
  * indicated. That ordering is depicted with a small discontinuity in the backmost bond"; for print the discontinuity is "at least twice as wide
- * as the width of a single bond". Two line widths of clear space each side is 4 widths with a plain front bond's own, never under that. The look
- * owner's: set so that a plain bond crossing a plain one at a right angle is cut as it always was (5 half widths each side of the crossing).
+ * as the width of a single bond". Two line widths of clear space each side is 4 widths with a plain front bond's own, never under that. By eye,
+ * a matter of look: set so that a plain bond crossing a plain one at a right angle is cut as it always was (5 half widths each side of the crossing).
  */
 export const CROSSING_CLEAR = 2;
 /** The least width of the break itself, square to the bond in front, in line widths (Brecher 2006, ST-3.1: at least twice a single bond's). */
 export const CROSSING_LEAST_BREAK = 2;
 /**
  * Bonds crossing at less than this angle (degrees) are all but along each other: nothing is cut, as nothing is for bonds exactly parallel.
- * By eye, the look owner's choice: the clear space is constant, so a shallower crossing cuts the bond behind over a longer way.
+ * By eye, a matter of look: the clear space is constant, so a shallower crossing cuts the bond behind over a longer way.
  */
 export const CROSSING_LEAST_ANGLE_DEG = 10;
 /** The clear space is never under this many device pixels on a page or in a picture of pixels (a floor, as a line's one device pixel is); a vector writer has none. */

@@ -130,6 +130,26 @@ describe("the gap where a bond passes behind another", () => {
       }
     });
 
+    it("breaks the bond behind a double bond whose second line is offset to one side, as a ring's is, across the whole of both lines, each side by the clear space, whichever side it is on", () => {
+      for (const sign of [1, -1]) {
+        const others = {
+          atoms: [{ id: 4, x: -1.5 * L, y: sign * 0.866 * L, el: "C" }, { id: 5, x: 1.5 * L, y: sign * 0.866 * L, el: "C" }] as Atom[],
+          bonds: [{ a1: 0, a2: 4, order: 1 }, { a1: 1, a2: 5, order: 1 }] as Bond[],
+        };
+        const { lines } = scene(90, { front: { order: 2 }, others });
+        const front = lines.filter((l) => Math.abs(l.y2 - l.y1) < 1e-9 && Math.abs(l.y1) < 0.5 && l.x2 - l.x1 > 2);
+        expect(front, `${sign}`).toHaveLength(2);
+        const [lo, hi] = [Math.min(...front.map((l) => l.y1)) - HALF, Math.max(...front.map((l) => l.y1)) + HALF];
+        // (not centred: the offset line is on one side only)
+        expect(Math.abs(Math.abs(lo) - Math.abs(hi))).toBeGreaterThan(0.1);
+        const pieces = lines.filter((l) => Math.abs(l.x1) < 1e-9 && Math.abs(l.x2) < 1e-9 && Math.abs(l.y2 - l.y1) > 0.4);
+        expect(pieces, `${sign}`).toHaveLength(2);
+        const [top, bottom] = [...inner(pieces)].sort((a, b) => b.y - a.y);
+        closeTo(top.y, hi + CLEAR);
+        closeTo(bottom.y, lo - CLEAR);
+      }
+    });
+
     it("breaks the bond behind a hashed bond in front where the stroke nearest the crossing reaches: the whole stroke and the clear space, drawn as lines or as shapes", () => {
       for (const joinStyle of ["round", "sharp"] as const) {
         const { lines } = scene(90, { front: { stereo: "down" }, over: { joinStyle } });
@@ -173,12 +193,37 @@ describe("the gap where a bond passes behind another", () => {
       for (const p of sharp.polys) expect(Math.min(...p.points.map((q) => Math.abs(q.y)))).toBeGreaterThanOrEqual(5 * HALF - 1e-9);
     });
 
-    it("cuts the shape of a bold bond behind into two, each ending at the clear space", () => {
-      const { polys } = scene(90, { back: { display: "bold" } });
-      expect(polys).toHaveLength(2);
-      for (const p of polys) {
-        const near = Math.min(...p.points.map((q) => Math.abs(q.y)));
-        closeTo(near, 5 * HALF);
+    it("cuts the shape of a bold or a wedge bond behind into two, one wholly each side of the gap, each ending at the clear space", () => {
+      for (const back of [{ display: "bold" as const }, { stereo: "up" as const }]) {
+        const { polys } = scene(90, { back });
+        expect(polys, JSON.stringify(back)).toHaveLength(2);
+        // (nothing of either lies inside the gap, -5 half widths to 5; the two are on opposite sides)
+        const sides = polys.map((p) => {
+          const ys = p.points.map((q) => q.y);
+          const below = ys.every((y) => y <= -5 * HALF + 1e-9);
+          const above = ys.every((y) => y >= 5 * HALF - 1e-9);
+          expect(below || above, JSON.stringify(back)).toBe(true);
+          return below ? -1 : 1;
+        });
+        expect([...sides].sort()).toEqual([-1, 1]);
+        for (const p of polys) closeTo(Math.min(...p.points.map((q) => Math.abs(q.y))), 5 * HALF);
+      }
+    });
+
+    it("draws no crumb of a shape either: a bold or wedge bond behind whose end is left under the clear space beyond the break is not drawn there, and over it, is", () => {
+      for (const stereo of [{ display: "bold" as const }, { stereo: "up" as const }]) {
+        const make = (top: number): ReturnType<typeof buildAllPrimitives> => {
+          const atoms: Atom[] = [
+            { id: 0, x: -L, y: 0, el: "C", z: 1 },
+            { id: 1, x: L, y: 0, el: "C", z: 1 },
+            { id: 2, x: 0, y: -1, el: "C", z: -1 },
+            { id: 3, x: 0, y: top, el: "C", z: -1 },
+          ];
+          return buildAllPrimitives(atoms, [{ a1: 0, a2: 1, order: 1 }, { a1: 2, a2: 3, order: 1, ...stereo }], style(), ZOOM);
+        };
+        // (the break takes the bond to 0.1875; the end at 0.25 leaves 0.0625, under the clear space 0.15; the end at 0.4 leaves 0.2125)
+        expect(make(0.25).polys, JSON.stringify(stereo)).toHaveLength(1);
+        expect(make(0.4).polys, JSON.stringify(stereo)).toHaveLength(2);
       }
     });
   });
