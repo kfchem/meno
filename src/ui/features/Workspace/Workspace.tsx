@@ -3322,10 +3322,10 @@ function ProbeGl() {
   const programs = useRef(-1);
   useEffect(() => startProbe(), []);
   useFrame(({ gl, scene, camera }) => {
-    probeNewPrograms(gl, "before this frame's render");
+    probeNewPrograms(gl as never, "before this frame's render");
     const before = gl.info.programs?.length ?? 0;
     timed(`gl: render (${gl.info.render.calls} draw calls before)`, () => gl.render(scene, camera), 1);
-    probeNewPrograms(gl, "in this frame's render");
+    probeNewPrograms(gl as never, "in this frame's render", scene as never);
     const n = gl.info.programs?.length ?? 0;
     if (n !== before || n !== programs.current) {
       if (programs.current >= 0 && n !== programs.current) noteEntry(`gl: programs ${programs.current} -> ${n} (shader compile in this frame)`, 0);

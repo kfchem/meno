@@ -39,11 +39,41 @@ export function startProbe(): void {
 
 /** TEMPORARY PROBE (not for merge): each WebGL program the renderer made, named once - where, and its cache key (what tells it from another). */
 const probeSeen = new WeakSet<object>();
-export function probeNewPrograms(gl: { info: { programs: unknown[] | null } }, where: string): void {
+type ProbeObject = {
+  type: string;
+  name: string;
+  renderOrder: number;
+  visible: boolean;
+  count?: number;
+  parent: ProbeObject | null;
+  material?: unknown;
+  geometry?: { type: string; attributes?: Record<string, unknown> };
+  traverse: (f: (o: ProbeObject) => void) => void;
+};
+export function probeNewPrograms(gl: { info: { programs: unknown[] | null }; properties?: { get: (o: object) => { currentProgram?: unknown } } }, where: string, scene?: ProbeObject): void {
+  const made: { name?: string; cacheKey?: string; id?: number }[] = [];
   for (const p of (gl.info.programs ?? []) as { name?: string; cacheKey?: string; id?: number }[]) {
     if (probeSeen.has(p)) continue;
     probeSeen.add(p);
+    made.push(p);
     console.warn(`[probe] program #${p.id} "${p.name}" made ${where} at ${performance.now().toFixed(0)}ms: key ${p.cacheKey}`);
   }
+  // (what on the page each was made for: every object drawn with it - its kind, order, geometry, and where it hangs)
+  if (!made.length || !scene || !gl.properties) return;
+  const ids = new Map(made.map((p) => [p as unknown, p.id]));
+  scene.traverse((o) => {
+    for (const m of [o.material].flat()) {
+      if (!m || typeof m !== "object") continue;
+      const id = ids.get(gl.properties!.get(m).currentProgram);
+      if (id == null) continue;
+      const path: string[] = [];
+      for (let q = o.parent; q && path.length < 5; q = q.parent) path.push(`${q.type}${q.name ? `:${q.name}` : ""}`);
+      const mat = m as { type?: string; name?: string; transparent?: boolean; depthTest?: boolean };
+      const attrs = Object.keys(o.geometry?.attributes ?? {}).join("+");
+      console.warn(
+        `[probe] program #${id} drawn for ${o.type}${o.name ? `:${o.name}` : ""} renderOrder ${o.renderOrder} visible ${o.visible}${o.count != null ? ` count ${o.count}` : ""} material ${mat.type}${mat.name ? `:${mat.name}` : ""} transparent ${mat.transparent} depthTest ${mat.depthTest} geometry ${o.geometry?.type}(${attrs}) under ${path.join(" < ")}`,
+      );
+    }
+  });
 }
 
