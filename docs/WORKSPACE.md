@@ -1743,6 +1743,11 @@ space-filling side by side is better science than either alone.
   put on it (components/WarmShaders3D): a molecule of no account, unseen
   and far off the page, drawn in the workspace's style, is compiled in the
   background once its colours are given, and again as the style changes.
+  It stands under the page's own lights, which are there with no molecule
+  in 3D on the page as well, and is compiled once a frame of the page's
+  has run with it: a shader is made for the lights it is lit by and for
+  whether the key light casts shadows, so one made without them would
+  not be the one the first molecule is drawn with.
   It is kept, so its shaders are kept: the first 3D structure made never
   waits a frame on a shader being made for it. Being kept, it does at each
   frame what a molecule on the page does at each frame (it is never drawn):

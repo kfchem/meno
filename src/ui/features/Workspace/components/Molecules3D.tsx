@@ -762,7 +762,8 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
     invalidate();
   };
 
-  if (!molecules.length && !leaving.length && !receding.length && !heldAny) return null;
+  // (with no molecule in 3D on the page as well: its lights, and the shaders made ready under them - WarmShaders3D -
+  //  so that the first one made is drawn as the page already stands, never waiting a frame on a shader)
   const litOf = (id: number): number => {
     if (active) return active.group.includes(id) ? (active.kind === "move" ? 2 : 1) : 0;
     return hovered?.id === id || freshCopy === id ? 1 : 0;
