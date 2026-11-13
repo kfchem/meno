@@ -4095,8 +4095,9 @@ function lineShape(l: LineSeg, half: number): Vec2[] {
  * double bond's two, a hashed bond's strokes) and every shape of it (a bold bond, a wedge) is cut along the band's edges: each cut end runs
  * PARALLEL to the bond in front, flat, with no cap; ends away from a cut keep the style's. A line that is cut is drawn as the shape it fills.
  * The break is a true gap - the pieces with nothing between - for every writer. A piece left shorter than the clear space is not drawn; bonds
- * all but along each other (`CROSSING_LEAST_ANGLE_DEG`) are not cut. Returns the lines and shapes, and the ends the breaks make (none: a cut
- * end is finished flat by the cut).
+ * all but along each other (`CROSSING_LEAST_ANGLE_DEG`) are not cut. The band runs the whole line of the bond in front, past its atoms: where
+ * a back bond crosses near the front bond's end, it is cut there as it would be at the middle. Returns the lines and shapes, and the ends the
+ * breaks make (none: a cut end is finished flat by the cut).
  */
 function brokenBehind(
   atoms: Atom[],

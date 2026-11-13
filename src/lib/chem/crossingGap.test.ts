@@ -205,6 +205,26 @@ describe("the gap where a bond passes behind another", () => {
       }
     });
 
+    it("draws a cut line as the shape it fills: a band of the line's width along the bond, its uncut end square and whole - for a plain and a double bond behind", () => {
+      for (const back of [{}, { order: 2 as const }]) {
+        for (const deg of [90, 45, 15]) {
+          const ps = pieces(scene(deg, { back }).polys);
+          const t = rad(deg);
+          const dir = { x: Math.cos(t), y: Math.sin(t) };
+          for (const p of ps) {
+            // (every corner within the line's half width of its own axis, and two of them exactly at it either side: a band, not tapered)
+            const across = p.points.map((q) => q.x * -dir.y + q.y * dir.x);
+            closeTo(Math.max(...across) - Math.min(...across), LINE, 9);
+            const far = Math.max(...p.points.map((q) => Math.abs(q.x * dir.x + q.y * dir.y)));
+            const end = p.points.filter((q) => Math.abs(Math.abs(q.x * dir.x + q.y * dir.y) - far) < 1e-9);
+            // (the uncut end: two corners, a line's width apart, square to the bond)
+            expect(end, JSON.stringify(back) + deg).toHaveLength(2);
+            closeTo(Math.abs((end[0].x - end[1].x) * -dir.y + (end[0].y - end[1].y) * dir.x), LINE, 9);
+          }
+        }
+      }
+    });
+
     it("draws a line no band reaches as the line it is", () => {
       const { lines, polys } = scene(90);
       expect(lines).toHaveLength(1);
