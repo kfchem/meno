@@ -13,7 +13,7 @@ import {
   type StereoGroup,
 } from "./molecule";
 import { italicUnits, labelRuns, labelUnits, namesRingFirst, reversedLabel, unitRuns } from "./abbreviations";
-import { ELEMENTS } from "./elements";
+import { ELEMENTS, NOT_METALS } from "./elements";
 import { greatest, least, pushAll } from "./lists";
 import { clearRowSide, namesLaid, rowClearer } from "../layout/names";
 
@@ -492,18 +492,25 @@ export function hapticRings(atoms: readonly Atom[], bonds: readonly Bond[]): num
 /**
  * The atoms, a carbon between two double bonds with its symbol drawn: the
  * middle of an allene, a ketene, CO2 or a carbodiimide, which its bonds run
- * straight through, hidden in a line as it would be (O=C=O read as O=O).
+ * straight through, hidden in a line as it would be (O=C=O read as O=O) -
+ * and a metal carbonyl's C, M-C≡O, its bonds in one line as well: shown,
+ * the ligand reads as the CO it is, its atoms atoms still.
  */
 export function cumulatedShown(atoms: Atom[], bonds: readonly Bond[]): Atom[] {
   const doubles = atoms.map(() => 0);
   const all = atoms.map(() => 0);
+  const tripleToO = atoms.map(() => false);
+  const toMetal = atoms.map(() => false);
+  const metal = (el: string | undefined) => !!el && ELEMENTS.some((e) => e.symbol === el) && !NOT_METALS.has(el);
   for (const b of bonds) {
-    for (const e of [b.a1, b.a2]) {
+    for (const [e, o] of [[b.a1, b.a2], [b.a2, b.a1]]) {
       all[e]++;
       if (b.order === 2) doubles[e]++;
+      if (b.order === 3 && atoms[o]?.el === "O") tripleToO[e] = true;
+      if (metal(atoms[o]?.el)) toMetal[e] = true;
     }
   }
-  return atoms.map((a, i) => (a.el === "C" && doubles[i] === 2 && all[i] === 2 ? { ...a, shown: true } : a));
+  return atoms.map((a, i) => (a.el === "C" && all[i] === 2 && (doubles[i] === 2 || (tripleToO[i] && toMetal[i])) ? { ...a, shown: true } : a));
 }
 
 function chargesAsDrawn(atoms: Atom[], bonds: readonly Bond[]): Atom[] {

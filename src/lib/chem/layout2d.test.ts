@@ -1864,6 +1864,34 @@ describe("a carbon between two double bonds", () => {
     const level = layout.lines.filter((l) => Math.abs(l.y1 - l.y2) < 1e-9 && Math.abs(l.y1) > 1e-9);
     expect(level.some((l) => l.y1 > 0) && level.some((l) => l.y1 < 0)).toBe(true);
   });
+
+  it("writes a metal carbonyl's C, its bonds to the metal and the O in one line - and an alkyne's or a nitrile's as ever, bare", () => {
+    const L = NOMINAL_BOND_LENGTH;
+    const ZOOM = 40;
+    // Ni-C≡O, and an acetylide's C-C≡C and a nitrile's C-C≡N beside it
+    const atoms: Atom[] = [
+      { id: 1, x: 0, y: 0, el: "Ni" },
+      { id: 2, x: L, y: 0, el: "C" },
+      { id: 3, x: 2 * L, y: 0, el: "O" },
+      { id: 4, x: 0, y: 3 * L, el: "C" },
+      { id: 5, x: L, y: 3 * L, el: "C" },
+      { id: 6, x: 2 * L, y: 3 * L, el: "C" },
+      { id: 7, x: 0, y: 6 * L, el: "C" },
+      { id: 8, x: L, y: 6 * L, el: "C" },
+      { id: 9, x: 2 * L, y: 6 * L, el: "N" },
+    ];
+    const bonds: Bond[] = [
+      { a1: 0, a2: 1, order: 1 },
+      { a1: 1, a2: 2, order: 3 },
+      { a1: 3, a2: 4, order: 1 },
+      { a1: 4, a2: 5, order: 3 },
+      { a1: 6, a2: 7, order: 1 },
+      { a1: 7, a2: 8, order: 3 },
+    ];
+    expect(cumulatedShown(atoms, bonds).map((a) => !!a.shown)).toEqual([false, true, false, false, false, false, false, false, false]);
+    const layout = layoutMolecule(atoms, bonds, opts(), ZOOM);
+    expect(layout.texts.filter((t) => t.text === "C")).toHaveLength(1);
+  });
 });
 
 describe("where bonds crowd each other", () => {
