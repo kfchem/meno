@@ -539,7 +539,8 @@ on a page); the Newman projection follows.
   tool's, each group moved onto the free position that states the configuration the flat drawing states (the reader's, asked of the solid's
   own places), what hangs from it carried as drawn, the ring's wedges gone (its configuration is in the depth now), as one step; *Flip chair*
   gives the other chair, *Draw flat* or Undo the flat drawing again. Which of the two chairs is drawn is this tool's convention, not a rule of
-  any text: the one with fewer groups axial (a tie: the group whose first atom ranks lowest in the canonical order equatorial), lying as near
+  any text and no statement of the favoured conformer (1-methyl-1-phenylcyclohexane comes out phenyl equatorial; 5 of the 16
+  D-aldohexopyranoses, alpha-D-ido and alpha-D-altro among them, come out 1C4, a CH2OH counting as one group like an OH): the one with fewer groups axial (a tie: the group whose first atom ranks lowest in the canonical order equatorial), lying as near
   to the flat drawing as it can, a tie to form 1; a pyranose's ring - its ring O beside a carbon carrying an O - with that O behind and that
   carbon at the right-hand end (McNaught 1996, Chart III). A ring centre the drawing leaves open keeps it open: its group equatorial, on a wavy
   bond. Where the ring has centres and the drawing gives the configuration of none, it is not drawn as a chair (IUPAC 2006 ST-3.2: a
