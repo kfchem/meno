@@ -161,7 +161,18 @@ stops being part of the work.
   one), the way it is going first; one that has left the view a moment
   before its turn is dropped. A zoom still waits for the view to stop,
   the level changing. Tiles that come are shown one a frame, each put on
-  the graphics card as it is, so that none waits on several at once.
+  the graphics card as it is, so that none waits on several at once: one
+  picture a frame however many views draw (the column and the page both ask
+  each frame; a 1024 px picture is some milliseconds on the card), and a
+  page's small picture waits its turn with them - put on the card there,
+  not all together inside the frame's draw.
+- **A page a fast scroll comes to is never white.** While the column is
+  still, the small pictures of the twelve pages either side of the one in
+  view are drawn ahead, nearest first, two at a time and behind every tile
+  of what is seen; a scroll stops them. A page the column then comes to
+  shows its small picture at once, and sharpens as its tiles come (before,
+  a page far from where the column rested was an empty frame until they
+  did).
 - **Light on the graphics card** (found on Windows, 2026-10-16: a PDF
   scrolled in the column kept the graphics card full).
   - A picture of a page come and faded in is drawn opaque, and its tiles
@@ -557,7 +568,41 @@ together, in short eased transitions.
   PDFium's pixels, in the order a WebGL texture takes them
   (`FPDF_REVERSE_BYTE_ORDER`), packed by the reader, a page being mostly
   white. They go to the window as bytes, not as text (Tauri's binary
-  response), and are unpacked off its main thread.
+  response), and are unpacked off its main thread: decoded whole in a
+  worker before they come back, so that putting one on the graphics card
+  is a copy and not a decode as well (the Mac's WebKit otherwise decodes a
+  picture at its first use, inside the frame that shows it).
+
+### Never in the way of a frame (2026-11-12)
+
+Drawing and input come first, always. What a PDF is read for besides being
+shown - its letters, its figures, its structures, its index of compounds'
+numbers - is background work, and it never stalls a frame:
+- **Off the drawing's thread.** A figure's structures are read in a worker
+  (`utils/structuresRead`, `structuresWorker`, `structuresOff`), two of them:
+  one for the figure the pointer is on, which is never kept waiting behind
+  the other, the one that reads a whole PDF's figures ahead, one after
+  another. A figure taking seconds - a large scheme drawn with thousands of
+  paths can - holds nothing up. Its drawn lines come from the reader as
+  bytes (`pdf_figure_raw`) and are unpacked in the worker, so that even
+  the parsing of megabytes of them is not done on the drawing's thread.
+  What is left there - handing a figure's page over, taking its structures
+  back - is milliseconds.
+- **It waits for the hands to rest** (`lib/core/calm`). Nothing read ahead
+  starts while a wheel turns (scroll, a touchpad's pinch), a button is
+  down on a drag or a pan, or a touch moves, and for 200 ms after the last
+  of it: the window's idle callback, where macOS' has none, was a fixed wait
+  that scrolling did not stop. The pointer coming to a figure begins its
+  reading at once, as it did - one still waiting for the hands is begun then;
+  a figure already begun in the background is not hurried: it goes on in its
+  own worker, which the pointer's never waits behind.
+- **The reader is not held up by a page's words.** Listing what a page is
+  made of (`pdf_objects`) asked each text object for its words, each
+  loading the page's text again, so that a page of a thousand words kept
+  the one reader that answers everything but pages' pictures busy for
+  seconds; the page's text is loaded once.
+- **Results land in small pieces:** a figure at a time, the page's own
+  letters and objects having come before it.
 
 ### One canvas
 
@@ -913,6 +958,7 @@ Built:
 - **Where a page's figures lie** (`pdf_objects`, `lib/pdf/figures`). PDFium lists what a page is made of - its words, paths, pictures, shadings and forms - each with its box, in points from the page's top left as it is drawn. From them:
   - A figure is where pictures and paths lie within 8 points of one another. It is at least 24 points one way and 4 the other (a chain drawn flat is a figure, a word's underline none), or it holds a picture. A smaller one is a figure where it is a small structure: at least 8 points one way and 4 the other, of three lines or more, its own labels taking it to 18 points - an acetate or a cisplatin drawn small - and not set in a line of running words, as an icon or an arrow in a sentence is. One line with an atom's label at an end of it, along it - CH3NH3+ - is one too, however thin: the label read as a structure's labels are (NH3+, OMe, CH3 - never a number nor a word), the line a bond and a half long at most (a bond drawn as long as its label's letters are tall and half again). A word's underline, its word over it, is none, nor a rule with a word or a number at its end ("Date ____", "____ 12", a leader).
   - A rule (at most 1.5 points thick and at least 150 long) is no part of one, nor is anything over most of the page, such as its frame, nor a filled shape across nearly all of the page's width - a panel's ground, behind an abstract's words and its figure.
+  - Nor is page furniture (2026-11-13): a banner or a button - one shape round words, the words a quarter of its area or more ("Read Online") - or anything no taller than 40 points in the page's header or footer band (the top or bottom twentieth of a page as high as a page of text, 400 points), a journal's logo; and a picture in a frame - its pictures half of what the figure spans, the little else drawn level and upright lines - a cover's thumbnail, is no drawing: its frame's lines are no structure (`framedPicture`).
   - Nor is a page scanned after all: a figure over most of the page, most of it picture, with the page's words within it - its picture in strips further apart than a scan is told by, the words read over them widening it (2026-10-14). A figure drawn with lines as large, on a page cut close round it - a scheme exported as a PDF of its own - is still one.
   - A reaction scheme is one figure (2026-10-13). An arrow is a long, thin part holding a straight line at least 25 points long, level or upright; it joins what lies beyond its ends, level with it, within 36 points. A "+" set alone (`pdf_objects` tells it from other words) joins what lies either side of it, level with it. A "+" drawn with lines - one filled cross, or a stroke each way - square, at least 2.5 points across and at most 14, by no word (a charge drawn with lines is as small, but by its label), joins them as a written one does; and a "+" written is never a line beside a structure (*Structures picked from a PDF*).
   - Words over a figure or within 6 points of it, each narrower than six tenths of it, are its labels, and its box takes them in. A short word under a figure or over it, such as a compound's number, can be up to 14 points off. The words over and under an arrow, its conditions, can be up to 24 points off, a line or two of them. A counter-ion - a short word with its charge drawn by it, a "+" or "-" in a ring or set high, as Na+ or Br- beside a structure - can be up to 30 points off, or as far from the ion before it in a row of them (three K+); a short word with no charge by it is not taken so far. Its caption is not a label, nor is a column's line beside it: no line wider than three tenths of the page (and than 150 points) is ever one.
@@ -1216,9 +1262,19 @@ it where it lies out of view.
   short of.
 - **Bonds**:
   - a line stroked, or a thin box filled, is a single bond, and a line
-    much thicker than the rest a bold one - but not one more than two and
-    a half bonds long that meets others only square, or none: a frame's
-    side, a graph's axis, a page's rule;
+    much thicker than the rest - at least 1.8 times: a perspective drawing's
+    near edge is a little over twice - a bold one - but not one more than two
+    and a half bonds long that meets others only square, or none: a frame's
+    side, a graph's axis, a page's rule. A bold line is a bond drawn thick,
+    toward the viewer (2026-11-13): single, or double where a thin line,
+    shorter than it (under 0.85 of its length), runs inside it within the
+    usual double-bond spacing - the double bond kept bold; never one line of
+    three, and never joined by a thin line as long as it, whatever its spacing,
+    as a chair's back bond beside its front one is not. A line lying along
+    another - the same middle line, within a sixteenth of a bond, within its
+    stretch: the hairline a program draws along a bold bar - is that line, never
+    a second line of a multiple bond. (Read as a triple bond, a near edge's double
+    bond was an alkene lost to a carbon with five bonds.);
   - lines side by side - the second may be short, from three twentieths
     of a bond, where it lies alongside the first within its stretch - a fifth of a bond or so apart and alongside each
     other for most of the shorter (seven tenths: a cube's parallel edges,
@@ -1248,7 +1304,10 @@ it where it lies out of view.
     of its own lines may be a dot: a small filled shape, or a line next to
     nothing long whose round ends make it one, as Meno's own style draws
     it) - one of them at least a line of some width: dots alone are a
-    joint's. Its
+    joint's. A line drawn as a filled round-capped mark, a stadium, or a dot
+    drawn so is one too, where it is thin (under 0.16 of a bond across) and
+    shorter than 0.3 of a bond (2026-11-13: a label's hashed bond of three such
+    marks was not read, and the label with it). Its
     lines all go one way, so two hashes meeting at an atom, joined there
     through its joints' dots, are two; and a hash's narrow end set off
     from its atom, its first line taken as a joint's or stopping short,
@@ -1352,7 +1411,25 @@ it where it lies out of view.
   drawn flat - more than twice as wide as tall - a minus: a hyphen as
   WebKit prints one), and digits set high before the element its isotope's mass
   number (13C, 18F, 2H); a count set low before any letter - the H of an
-  H3N left outside the box - is no one's. A charge drawn in a small circle - a "+" or a "-" in a ring,
+  H3N left outside the box - is no one's. A number set smaller than the
+  label's letters, after the first of them, is an atom's number - the small
+  atom numbers a drawing sets by its atoms ("Me" and its 7) - and no part of
+  the label (2026-11-13), by these rules: an atom's number stands at the END of its label - a small digit with a letter of the label after it is never one (inside a label it is a count, or the mass number of the letter after it: CO2Me, NH4Cl, O13CH3), each run judged on its own, primes after it no letters. (1) After the name of a point of
+  variability the number stays, high or level: the name is the unit just
+  before the digit, not the whole label (R1, X1, Ar1, Het1, OR2, NR1R2,
+  CO2R1, OAr1; the names are `VARIABLE_NAMES`, lib/chem/abbreviations, after
+  Brecher 2008, GR-9.1 and 9.2, with Meno's own class symbols; B and P stay
+  elements, so B1 and P1 lose their number - a stated limit). (2) A digit
+  set clearly high - a quarter of the letter size or more - with no charge's
+  sign after it, is an atom's number: a count is never set high. (3) A digit
+  set about level or a little low cannot be told by its place, for a
+  subscript is drawn so by many papers: it is left out only where the label
+  reads as nothing with it and reads without it (Meno's label reader decides:
+  O14, Me7, C7, N1 and H3 lose theirs; CH2Cl2, K2CO3, Et3N, N3 and CO2Me
+  keep theirs), and the atom says so - a level number's place cannot tell a count
+  from an atom's number - while one clearly high needs no mark. A level number
+  that also reads as a count stays (N3, O3, Me2: a stated limit; CH3 and a
+  level 7 after it are one run, CH37). A label that is a variable's name and an element's symbol too is read by Meno's own rule (docs/CTFILE.md): an Ar with a bond is an aryl group's, the atom unmarked and written to a MOL file as a star atom with its alias, never as argon; a Y with one bond is a variable's, as X and Z are, and the atom says it was taken so and not as yttrium (a label cannot tell them); a Y with two bonds or more, or a charge, is yttrium. A charge drawn in a small circle - a "+" or a "-" in a ring,
   as Meno draws one and as many papers do - is the charge of the atom it is
   by, however the page is turned and where a box drawn across it cuts some
   of its ring off; never a bond, nor a scheme's "+". A lone H at no
@@ -1438,8 +1515,15 @@ it where it lies out of view.
     a halogen, O nor C - PhICl2 and Ph3I take theirs; one more for each
     positive charge: a diaryliodonium's iodine); a charge past four
     either way - marks the atom or
-    label drawn, so that nothing whose valence is broken is put down
-    looking sure;
+    label drawn. Where an atom has more bonds than it takes, written out as
+    a file has it - not a charge alone - that structure is not taken
+    (2026-11-13: not put down, even marked unsure): a structure picked from a
+    page gives none and says why ("As read, more bonds meet at a carbon than it
+    takes: none of it is taken."); a figure read whole leaves out each such
+    structure on its own - the rest placed - and says how many it left out. A
+    drawing can itself show five bonds, a transition state's forming bond: the
+    words say "as read". A picture read by the plugin that reads pictures is
+    that plugin's, and is not refused so;
   - a radical's dots by an atom whose bonds leave it no unpaired electron:
     no radical is read - a speck, or a letter's round shape, lies there
     as often ("A dot by it, but its bonds leave it no unpaired electron:
@@ -1674,7 +1758,7 @@ words are: by itself, not by a box drawn round it.
 - **Never in a picture**: a picture of the drawing - copied as one, exported or printed - has no note, as R and S marks are Meno's.
 
 **In the column, as built** (`TextColumn`, `utils/pdfStructures`, `components/structureDrag`, `components/StructureFlight`):
-- a page's letters and figures, for a press on them, are read once it is shown - the column still, its tiles come - in idle time, one page at a time, and its figures worked out in idle time once its parts have come (`lib/core/idle`): never with its turn. A figure under the pointer, pressed, or looked for is asked for at once and worked out at once - one read ahead and waiting for idle time is hurried - and a page whose reading failed, or a PDF gone from the column and come back, is read again;
+- a page's letters and figures, for a press on them, are read once it is shown - the column still, its tiles come - once the hands rest, one page at a time, and its figures worked out once its parts have come (`lib/core/calm`; *Never in the way of a frame*): never with its turn, and never while it is scrolled. A figure under the pointer, pressed, or looked for is asked for at once and worked out at once - one read ahead and waiting for idle time is hurried - and a page whose reading failed, or a PDF gone from the column and come back, is read again;
 - a figure is read the first time the pointer comes over it (`pdf_figure`, as *Read as structure* reads it), with all of its page that does not reach into it beside it, and kept - but lines whose box holds all of a structure (a page's background, a frame round it, a coloured panel behind it and its neighbours) are no lines beside it; lines crossing into it are;
 - the structure under the pointer is lit along its bonds and over its labels, the cursor a hand; one picked is lit stronger;
 - a press within half a bond of a structure takes it, before any words about it (a scheme's conditions set close by);
@@ -1749,8 +1833,8 @@ mention a number, and the card.
   structure it is set by - its page, its figure and its key there - in the
   order of the pages, so that a compound drawn again in a later scheme keeps
   each place. Kept as figures are read, by the pointer on one or through the
-  whole PDF in idle time (`indexPdf`): a page, then the window's next idle
-  moment, then the next, each page's figures read as the column reads them
+  whole PDF once the hands rest (`indexPdf`): a page, then the next moment
+  they rest, then the next, each page's figures read as the column reads them
   (`pdfPageLabels`), never holding up what is shown; a page that could not
   be read is gone through again the next time. It starts the first time
   the pointer moves over the PDF's words, in the column or on the page
@@ -1771,18 +1855,32 @@ mention a number, and the card.
   mentioned (350 ms) whose structure the PDF's figures number, a calm card
   by its word - over its line, covering only what has been read, its left
   edge on the word's and a little gap above the letters; under the line
-  only where there is no room above - holds Meno's own drawing of the structure, its number, its page,
-  and the pages it is drawn on again ("12  p. 1 · also on p. 4"). It fades
-  in and out (`DURATION.base`), lingering a moment so the pointer can come
-  onto it. While the PDF is still being gone through for numbers, or the
-  number's figure is still being read, it says so ("12  Reading this PDF's
-  figures…") and grows into the drawing once it comes, its size and place
-  eased, never a jump (`cardHolds`); gone through whole and the number
-  drawn nowhere, no card. Its drawing dragged onto the canvas puts the structure there as
-  one dragged out of its figure is (*Structures picked from a PDF*: the same
-  reading, its note and unsure marks). Its page clicked shows the figure in
+  only where there is no room above - holds the PDF's own picture of the
+  region of its page where the compound is drawn, its number, its page, and
+  the pages it is drawn on again ("12  p. 1 · also on p. 4"). It never shows
+  the structure Meno read from there (the maintainer, 2026-11-13: where the
+  reading is wrong, the chemist would be shown a wrong structure): that
+  appears only once the compound is on the canvas, where it can be checked
+  and edited. The picture is the structure's own box in its figure - the
+  tightest the reader knows, not the whole scheme - drawn again from the
+  PDF by PDFium at the size the card shows it, a point a pixel and a little
+  enlarged where small, at the screen's own resolution, so it is crisp
+  (`utils/lensPicture`); PDFium draws it in its own process, so the window
+  is never held up, and the card is there at once with the picture's place
+  held, the picture fading in. Pictures are kept, the oldest let go
+  past 48. It fades in and out (`DURATION.base`), lingering a moment so the
+  pointer can come onto it. While the PDF is still being gone through for
+  numbers, or the number's figure is still being read, it says so ("12
+  Reading this PDF's figures…") and grows into the picture once it comes,
+  its size and place eased, never a jump (`cardHolds`); gone through whole
+  and the number drawn nowhere in it, it says so in words ("No drawing of
+  this compound was found in this PDF."), never a guess. The picture
+  dragged onto the canvas puts the structure there as one dragged out of its
+  figure is (*Structures picked from a PDF*: the same reading, its note and
+  unsure marks) - where it was read whole; a structure not read whole is
+  shown by its picture and not carried. Its page clicked shows the figure in
   the column, the structure marked a moment. A number no structure is set
-  by, or one of a structure not read, has no card.
+  by has the card's words above.
 - **In the column and on the page alike** (`utils/compoundLens`
   `mentionUnder`, read the same in both). On the page (`components/Pdfs2D`),
   a PDF's words bring a card where they can be read - at the size a long

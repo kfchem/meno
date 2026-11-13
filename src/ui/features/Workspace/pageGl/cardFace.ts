@@ -97,14 +97,19 @@ export function markOf(state: Pick<CardFaceOf["state"], "icon" | "turning">, fai
   }
 }
 
-/** Where a card's name lies on the page, in the world's units, as `cardFace` draws it at a page scale: for the names that overlap to be found (`cardBands namesKept`). Where it is only marked its name is in the middle of its box. */
-export function nameBoxOf(c: Pick<CardFaceOf, "key" | "x" | "y" | "who">, scale: number, named: boolean): NameBox {
+/** Where a card's name lies on the page, in the world's units, as `cardFace` draws it at a page scale: for the names that overlap to be found (`cardBands namesKept`). Where it is only marked its name is in the middle of its box - of its least height, a card its ports make taller too. */
+export function nameBoxOf(c: Pick<CardFaceOf, "key" | "x" | "y" | "who" | "high">, scale: number, named: boolean): NameBox {
   const P = pagePx;
   const size = onPage(NAME_PX, scale);
   const wide = Math.min(textWidth(c.who, size, NAME_WEIGHT), nameRoom(scale, named));
   const x0 = named ? nameLeft(scale) : (CARD.w - wide) / 2;
-  const mid = c.y - P(CARD.h / 2);
+  const mid = c.y - P((c.high ?? CARD.h) / 2);
   return { key: c.key, x0: c.x + P(x0), x1: c.x + P(x0 + wide), y0: mid - P(size) / 2, y1: mid + P(size) / 2 };
+}
+
+/** The box a card stands in on the page, in the world's units: as wide as a card and as tall as its least height - a card its ports make taller too. What is kept clear of the cards (Workflow2D's frame tabs). */
+export function cardBoxOf(c: Pick<CardFaceOf, "x" | "y" | "high">): { x0: number; x1: number; y0: number; y1: number } {
+  return { x0: c.x, x1: c.x + pagePx(CARD.w), y0: c.y - pagePx(c.high ?? CARD.h), y1: c.y };
 }
 
 /** What a card says, shut, and how it stands (Workflow2D, from what StepCard is told). */
@@ -141,6 +146,8 @@ export type CardFaceOf = {
   failed?: number;
   /** Its inputs' names, beside their ports on its left, where it takes more than one. */
   inputs: readonly string[];
+  /** How tall it is at least, in page px: as its kind's ports make it (workflow/kinds `cardHighOf`) - `CARD.h` where none is given. */
+  high?: number;
   opacity?: number;
   z?: number;
 };
@@ -155,13 +162,13 @@ export function clamped(text: string, sizePx: number, maxPx: number, most: numbe
 }
 
 /** How a card's words lie: each block's lines and the card's height, in page px (`cardFace`). */
-export function cardLines(c: Pick<CardFaceOf, "summary" | "state" | "said" | "progress">): { summary: string[]; state: string[]; height: number; words: number } {
+export function cardLines(c: Pick<CardFaceOf, "summary" | "state" | "said" | "progress" | "high">): { summary: string[]; state: string[]; height: number; words: number } {
   const col = CARD.w - 2 * CARD.hair - 2 * CARD.side - CARD.icon - CARD.gap;
   const summary = clamped(c.summary, 11, col, 2);
   const state = clamped(c.state.text, 11, col, 2);
   const words = CARD.top + CARD.whoLine + summary.length * CARD.line + CARD.stateTop + state.length * CARD.line + (c.said ? CARD.line : 0) + (c.progress != null ? CARD.barTop + CARD.bar : 0) + CARD.bottom;
   // (its words in a grid at least as tall as a card, inside its hair of padding: as its HTML, StepCard)
-  return { summary, state, height: Math.max(CARD.h, words) + 2 * CARD.hair, words };
+  return { summary, state, height: Math.max(c.high ?? CARD.h, words) + 2 * CARD.hair, words };
 }
 
 /** A card as drawn: its box, words, icons and the places that take the pointer, and how tall it is; the tip, where its state is pointed at. */
@@ -228,15 +235,17 @@ export function cardFace(c: CardFaceOf, statePointed = false): CardDrawn {
     const scale = c.scale ?? 1;
     const named = c.named ?? 1;
     const label = c.label ?? 1;
+    // (in the middle of its least height: a card its kind's ports make taller, too)
+    const mid = (c.high ?? CARD.h) / 2;
     const mark = markOf(c.state, c.failed);
     // (marked: its box tinted by its state)
     // (a state with none to tint by - waiting, ready - lightly, in the quiet ink, so that a box is not lost)
     if (named < 1) shapes.push({ kind: "box", key: `${c.key}:tint`, ...box, radiusPx: CARD.radius, fill: mark?.tint ? mark.colour : COLORS.quiet, fillAlpha: mark?.tint ? TINT_ALPHA : TINT_QUIET, opacity: o * far * (1 - named), z: z + 0.5 });
-    if (named > 0) icon("big", c.icon, nameLeft(scale) - onPage(ICON_PX, scale) / 2 - onPage(NAME_GAP, scale), CARD.h / 2, onPage(ICON_PX, scale), COLORS.ink, far * named);
+    if (named > 0) icon("big", c.icon, nameLeft(scale) - onPage(ICON_PX, scale) / 2 - onPage(NAME_GAP, scale), mid, onPage(ICON_PX, scale), COLORS.ink, far * named);
     // (its name: after its icon where it is named, in the middle of its box where it is only marked; cut inside its box, clear of its mark)
     const size = onPage(NAME_PX, scale);
     const nameText = (key: string, x: number, anchor: PageText["anchor"], opacity: number, room: number) => {
-      if (opacity > 0) texts.push({ key: `${c.key}:${key}`, x: c.x + P(x), y: c.y - P(CARD.h / 2), anchor, baseline: "middle", text: c.who, sizePx: size, color: COLORS.ink, weight: NAME_WEIGHT, maxWidthPx: room, opacity: o * opacity, z: z + 1 });
+      if (opacity > 0) texts.push({ key: `${c.key}:${key}`, x: c.x + P(x), y: c.y - P(mid), anchor, baseline: "middle", text: c.who, sizePx: size, color: COLORS.ink, weight: NAME_WEIGHT, maxWidthPx: room, opacity: o * opacity, z: z + 1 });
     };
     nameText("nameNamed", nameLeft(scale), "start", far * named * label, nameRoom(scale, true));
     nameText("nameMarked", CARD.w / 2, "middle", far * (1 - named) * label, nameRoom(scale, false));

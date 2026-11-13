@@ -12,7 +12,7 @@ import { createWorkspaceDocument, opensReadingFilled, type WorkspaceDocument } f
 import { extentIn } from "../style3d";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { DEFAULT_WORKSPACE_3D, workspace3dOf } from "../../../../lib/chem/workspaceStyle3d";
-import type { Caption, Cycle, EditorState, Model, PushArrow, PdfItem, PictureItem, RingFills, Sel, SelFlow, Shape, Ink, Slide, Wire, WireEnd, WorkflowSet, WorkflowStep, WorkspaceText, LostText } from "./types";
+import type { Caption, Cycle, EditorState, Growing3D, Model, PushArrow, PdfItem, PictureItem, RingFills, Sel, SelFlow, Shape, Ink, Slide, Wire, WireEnd, WorkflowSet, WorkflowStep, WorkspaceText, LostText } from "./types";
 import type { StructureMap } from "../chem/structureMaps";
 import { createModelSlice } from "./slices/modelSlice";
 import { createSelectionSlice } from "./slices/selectionSlice";
@@ -32,7 +32,7 @@ import { createConversationsSlice } from "./slices/conversationsSlice";
 import { createInksSlice } from "./slices/inksSlice";
 import { createRecordsSlice } from "./slices/recordsSlice";
 import { shownModel } from "../utils/stacks";
-import { withLooks, type Look } from "../utils/molecule3d";
+import { withGrowth, withLooks, type Look } from "../utils/molecule3d";
 import { turnsAcross } from "./turnJournal";
 import { COLUMN_WIDTH, columnOf, shownPdf, shownText } from "../utils/texts";
 import { readAsTable } from "../workflow/entries";
@@ -47,7 +47,7 @@ export type EditorStore = UseBoundStore<StoreApi<EditorState>>;
  * `model`, `arrows` and the aromatic flags from the store, while the document
  * is what actually holds them - which is how undo and redo reach the canvas.
  */
-function mirrorOf(doc: WorkspaceDocument, recordsShown: Readonly<Record<number, number>>, talkLooks: Readonly<Record<number, Look>> = NO_LOOKS) {
+function mirrorOf(doc: WorkspaceDocument, recordsShown: Readonly<Record<number, number>>, talkLooks: Readonly<Record<number, Look>> = NO_LOOKS, growing: Readonly<Record<number, Growing3D>> = NO_GROWING) {
   return {
     // (of each stack of drawings, the record it shows: the canvas works on
     // that, the whole kept beside it for what keeps the document - utils/stacks)
@@ -66,7 +66,8 @@ function mirrorOf(doc: WorkspaceDocument, recordsShown: Readonly<Record<number, 
     captions: doc.captions ?? NO_CAPTIONS,
     nextCaptionId: doc.nextCaptionId ?? 1,
     // (each in the look a talk switched it to, while it is given)
-    molecules3d: withLooks(doc.molecules3d ?? [], talkLooks),
+    // (and with what a search going on has brought so far: the view's, until it ends)
+    molecules3d: withGrowth(withLooks(doc.molecules3d ?? [], talkLooks), growing),
     sets: doc.sets ?? NO_SETS,
     steps: doc.steps ?? NO_STEPS,
     wires: doc.wires ?? NO_WIRES,
@@ -139,6 +140,16 @@ const NO_STEPS: WorkflowStep[] = [];
 const NO_WIRES: Wire[] = [];
 const NO_RECORDS: Record<number, number> = {};
 const NO_LOOKS: Readonly<Record<number, Look>> = {};
+const NO_GROWING: Readonly<Record<number, Growing3D>> = {};
+
+/** The searches going on whose molecules are still there as they began (`growing3d`): the rest let go - a molecule taken away, made again, or its atoms edited - the same object where none is. */
+function growingHeld(growing: Readonly<Record<number, Growing3D>>, molecules: readonly { id: number; atoms: unknown; frames?: unknown }[]): Readonly<Record<number, Growing3D>> {
+  const ids = Object.keys(growing).map(Number);
+  if (!ids.length) return growing;
+  const byId = new Map(molecules.map((m) => [m.id, m]));
+  const kept = ids.filter((id) => byId.get(id)?.atoms === growing[id].base.atoms && byId.get(id)?.frames === growing[id].base.frames);
+  return kept.length === ids.length ? growing : kept.length ? Object.fromEntries(kept.map((id) => [id, growing[id]])) : NO_GROWING;
+}
 
 /**
  * Mirrors the document into the store and keeps doing so. Returns the
@@ -218,7 +229,9 @@ export function connectStoreToDocument(
   const sync = () =>
     store.setState((prev) => {
       const now = doc.getState();
-      const mirrored = mirrorOf(now, prev.recordsShown, prev.talkLooks);
+      // (a search going on whose molecule is gone - an undo took it away, it was made again - let go: its search ends)
+      const growing = growingHeld(prev.growing3d, now.molecules3d ?? []);
+      const mirrored = { ...mirrorOf(now, prev.recordsShown, prev.talkLooks, growing), growing3d: growing };
       // (a turn of several as one body undone or redone: their turns too)
       const turns = turnsAcross(doc, was, now);
       was = now;
@@ -342,6 +355,7 @@ export function createEditorStore(
     heldShown: {},
     recordsShown: NO_RECORDS,
     talkLooks: NO_LOOKS,
+    growing3d: NO_GROWING,
     recordSwaps: {},
     sel3d: new Set<number>(),
     selFlow: { sets: new Set<number>(), steps: new Set<number>() },
