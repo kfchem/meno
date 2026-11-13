@@ -392,9 +392,15 @@ fn answer(docs: &mut HashMap<String, PdfDocument<'static>>, pdfium: &'static Pdf
             let page = doc.pages().get(ask["page"].as_i64().unwrap_or(0) as i32).map_err(|_| "no such page".to_string())?;
             let at = page_space(&page).ok_or("the page could not be measured")?;
             let mut bytes = Vec::new();
+            // (the page's text loaded once, for every object's words: an object's own `text()` loads it again each time - a page of a thousand words took seconds, the reader held up for all that while)
+            let page_text = page.text().ok();
+            let said = |t: &PdfPageTextObject| match &page_text {
+                Some(p) => p.for_object(t),
+                None => t.text(),
+            };
             for obj in page.objects().iter() {
                 let kind: u32 = match obj.object_type() {
-                    PdfPageObjectType::Text if obj.as_text_object().map(|t| t.text().trim() == "+").unwrap_or(false) => 6,
+                    PdfPageObjectType::Text if obj.as_text_object().map(|t| said(t).trim() == "+").unwrap_or(false) => 6,
                     PdfPageObjectType::Text => 1,
                     PdfPageObjectType::Path => 2,
                     PdfPageObjectType::Image => 3,
@@ -947,6 +953,13 @@ pub async fn pdf_figure(app: tauri::AppHandle, sha: String, page: u32, r#box: [f
     Ok(head)
 }
 
+/// A figure as `pdf_figure` gives it, as its JSON in bytes: for the figures read ahead in the background, which a worker unpacks - a figure holding thousands of paths is megabytes, and parsed on the thread the drawing runs on it would hold up a frame (`pdf_figure`'s answer is parsed there).
+#[tauri::command]
+pub async fn pdf_figure_raw(app: tauri::AppHandle, sha: String, page: u32, r#box: [f32; 4]) -> Result<tauri::ipc::Response, String> {
+    let (head, _) = ask(&app, json!({"op": "figure", "sha": sha, "page": page, "box": r#box})).await?;
+    Ok(tauri::ipc::Response::new(serde_json::to_vec(&head).map_err(|e| e.to_string())?))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1298,6 +1311,48 @@ mod tests {
         let n = head["n"].as_u64().unwrap() as usize;
         let kinds: Vec<u32> = (0..n).map(|i| u32::from_le_bytes(bytes[i * 20..i * 20 + 4].try_into().unwrap())).collect();
         assert_eq!(kinds, vec![1, 6]);
+        drop(docs);
+        let _ = std::fs::remove_dir_all(&cache);
+    }
+
+    // (a page of a thousand words and more was held up for seconds: each word's own text loaded the page's text again - the reader, which draws and reads for everything asked of it, waited on that)
+    #[test]
+    fn a_page_of_many_words_has_its_things_listed_at_once_and_its_plus_found() {
+        let Ok(bindings) = Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path(&library_dir())) else {
+            eprintln!("PDFium is not here: node scripts/fetch-pdfium.mjs");
+            return;
+        };
+        let pdfium: &'static Pdfium = Box::leak(Box::new(Pdfium::new(bindings)));
+        let cache = std::env::temp_dir().join(format!("meno-pdf-many-{}", std::process::id()));
+        std::fs::create_dir_all(&cache).unwrap();
+        let sha = "f".repeat(64);
+        // (1500 words, each a text object of its own in a grid; one "+" among them, and one longer word holding one)
+        let mut c = String::new();
+        for i in 0..1500 {
+            c.push_str(&format!("BT /F1 6 Tf {} {} Td (w{}) Tj ET\n", 20 + (i % 30) * 18, 800 - (i / 30) * 8, i));
+        }
+        c.push_str("BT /F1 10 Tf 300 20 Td (+) Tj ET\nBT /F1 10 Tf 400 20 Td (a+b) Tj ET\n");
+        let pdf = pdf_of(vec![
+            (1, "<< /Type /Catalog /Pages 2 0 R >>".into()),
+            (2, "<< /Type /Pages /Kids [10 0 R] /Count 1 >>".into()),
+            (3, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".into()),
+            (10, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 20 0 R >>".into()),
+            (20, format!("<< /Length {} >>\nstream\n{c}\nendstream", c.len())),
+        ]);
+        std::fs::write(cache.join(format!("{sha}.pdf")), pdf).unwrap();
+        let mut docs = HashMap::new();
+        let started = Instant::now();
+        let (head, bytes) = answer(&mut docs, pdfium, &cache, &json!({"op": "objects", "sha": sha, "page": 0})).unwrap();
+        let took = started.elapsed();
+        let n = head["n"].as_u64().unwrap() as usize;
+        let kinds: Vec<u32> = (0..n).map(|i| u32::from_le_bytes(bytes[i * 20..i * 20 + 4].try_into().unwrap())).collect();
+        assert_eq!(n, 1502);
+        // (the "+" alone is one, "a+b" is a word)
+        assert_eq!(kinds.iter().filter(|k| **k == 6).count(), 1);
+        assert_eq!(kinds[1500], 6);
+        assert_eq!(kinds[1501], 1);
+        // (the page's text loaded once: far inside what loading it for each of the 1500 took)
+        assert!(took < std::time::Duration::from_secs(2), "{took:?}");
         drop(docs);
         let _ = std::fs::remove_dir_all(&cache);
     }

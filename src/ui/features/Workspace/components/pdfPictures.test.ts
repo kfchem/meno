@@ -156,6 +156,8 @@ describe("the level a page's part seen is drawn at now", () => {
 describe("tiles come while the view moves", () => {
   it("are shown one a frame, so that they are put on the graphics card a frame apart", async () => {
     reader.hold = false;
+    // (the gap is the page's: an earlier test's upload must be a frame behind)
+    await new Promise((r) => setTimeout(r, 20));
     const pics = new Pictures();
     // (a part of four tiles asked for at once)
     pics.ask({ sha256: "r", page: 0, size: [3000, 3000], level: 2, part: { x0: 0, y0: 0, x1: 1000, y1: 1000 }, nearness: () => 0, stillSince: () => 0 }, performance.now());
@@ -165,10 +167,43 @@ describe("tiles come while the view moves", () => {
     expect(pics.fading(performance.now())).toBe(true);
     expect(pics.reveal(1)).toBe(true);
     expect(shown()).toBe(1);
+    // (the other view asking in the same frame: it puts none - one picture a frame, however many views draw)
+    expect(pics.reveal(1)).toBe(false);
+    expect(shown()).toBe(1);
+    // (and another PDF's pictures, drawn in the same frame, put none either: the gap is the page's, not each PDF's)
+    const other = new Pictures();
+    other.ask({ sha256: "s", page: 0, size: [3000, 3000], level: 2, part: { x0: 0, y0: 0, x1: 1000, y1: 1000 }, nearness: () => 0, stillSince: () => 0 }, performance.now());
+    await new Promise((r) => setTimeout(r, 0));
+    expect(other.reveal(1)).toBe(false);
+    // (the next frame)
+    await new Promise((r) => setTimeout(r, 20));
     pics.reveal(1);
     expect(shown()).toBe(2);
     pics.reveal(Infinity);
     expect(shown()).toBe(4);
     expect(pics.reveal(1)).toBe(false);
+  });
+
+  it("puts a page's small picture on the graphics card the same way: with the tiles, a frame at a time, never all in the frame they came in", async () => {
+    reader.hold = false;
+    await new Promise((r) => setTimeout(r, 20));
+    const pics = new Pictures();
+    const pages = { sha256: "p", pages: [[612, 792], [612, 792], [612, 792]] as const };
+    for (let page = 0; page < 3; page++) pics.preview(pages, page);
+    await new Promise((r) => setTimeout(r, 0));
+    // (come, but not shown: none is had until it is revealed)
+    expect(pics.preview(pages, 0)).toBeNull();
+    const had = () => [0, 1, 2].filter((page) => pics.previews.get(`p:${page}`) && pics.previews.get(`p:${page}`) !== "asked").length;
+    expect(had()).toBe(0);
+    const uploaded: unknown[] = [];
+    pics.reveal(1, (t) => uploaded.push(t));
+    expect(uploaded).toHaveLength(1);
+    expect(pics.reveal(1, (t) => uploaded.push(t))).toBe(false);
+    expect(had()).toBe(1);
+    await new Promise((r) => setTimeout(r, 20));
+    pics.reveal(1, (t) => uploaded.push(t));
+    await new Promise((r) => setTimeout(r, 20));
+    pics.reveal(1, (t) => uploaded.push(t));
+    expect(had()).toBe(3);
   });
 });
