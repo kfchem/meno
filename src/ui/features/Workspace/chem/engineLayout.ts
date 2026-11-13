@@ -766,9 +766,12 @@ export function nextFree(model: Model): number {
  * straight the drawing is - a transplatin put down with its N-Pt-N at 145
  * degrees is trans still - and none where another pairing is about as
  * near (within 20 degrees all told): the drawing does not say it, and the
- * layout's stands. Not at a metal drawn in perspective, nor by mirroring
- * a chelate drawn so, nor where a change would need a donor of a larger
- * chelate to move.
+ * layout's stands. Kept: each pair drawn across plainly across, and with
+ * six none drawn side by side; or six spokes drawn, laid out as two lines
+ * and two side by side, where that picture reads only as the isomer drawn
+ * (cis-[Co(en)2Cl2]+). Refused, saying so, where no move keeps it. Not at
+ * a metal drawn in perspective, nor by mirroring a chelate drawn so, nor
+ * where a change would need a donor of a larger chelate to move.
  */
 /** How near, in bonds, two atoms of a metal's different donors may lie before the one's groups are turned clear (`oppositesKept`). */
 const CROWDED = 0.75;
@@ -849,35 +852,77 @@ export function oppositesKept(was: readonly { x: number; y: number }[], input: L
     );
     if (!drawn) continue;
     const angleOf = (i: number) => Math.atan2(y[donors[i]] - y[m], x[donors[i]] - x[m]);
-    const now = pairing(x, y);
     const refused = () => new Error("the structure could not be laid out keeping its metal's donors opposite each other as drawn, so nothing was moved");
-    const straight = (i: number, j: number) => Math.abs(Math.PI - Math.abs(Math.atan2(Math.sin(angleOf(i) - angleOf(j)), Math.cos(angleOf(i) - angleOf(j))))) < Math.PI / 6;
-    // (what is handed back has each pair of the drawing's pairing plainly across - within 30 degrees of a line - or nothing is laid out:
-    // a pairing the layout matches only as the pairs left over, its "opposite" donors side by side - trans-[Co(en)2Cl2]+ laid out with
-    // its Cl 30 degrees apart - is not the drawing kept)
-    const plain = () => donors.every((_, i) => straight(i, drawn[i]));
-    if (now && now.every((p, i) => p === drawn[i])) {
-      if (!plain()) throw refused();
-      continue;
-    }
-    // (the layout's places round the metal, in turn: each unit - a single donor with all it carries, or a chelate's - may be turned
-    // round them, and a chelate of two mirrored, to put the donors opposite each other as drawn; the fewest units moved, then the
-    // shortest turns. Where no such move gives the drawing's pairing - trans-[Co(en)2Cl2]+ laid out cis - nothing is laid out, saying
-    // so: never another isomer)
-    // (the places round the metal in turn, and which is opposite which as the layout pairs them - a chelate's bite need not be a right angle,
-    // but each pair the layout's own pairing reads must be plainly across, within 30 degrees of a line: a layout that sets its donors
-    // otherwise - six of them bunched round a chelate's rings - has no opposite places to put donors into)
-    if (!now || donors.some((_, i) => !straight(i, now[i]))) throw refused();
+    const offOf = (p: number, q: number) => Math.abs(Math.PI - Math.abs(Math.atan2(Math.sin(p - q), Math.cos(p - q))));
+    // (what the drawing says: the pairs of its pairing drawn across - more than a right angle apart - and those drawn side by side, which
+    // it says are not: a flat cis-[Co(en)2Cl2]+'s two Cl, 30 degrees apart)
+    const drawnAngle = donors.map((d) => Math.atan2(was[d].y - was[m].y, was[d].x - was[m].x));
+    const pairsOf = (partner: readonly number[]) => partner.flatMap((j, i) => (i < j ? [[i, j] as const] : []));
+    const across = pairsOf(drawn).filter(([i, j]) => offOf(drawnAngle[i], drawnAngle[j]) < Math.PI / 2);
+    // (with four, the two left are across wherever the other two are: only six can be drawn with two beside each other and still say it)
+    const beside = n === 6 ? pairsOf(drawn).filter(([i, j]) => offOf(drawnAngle[i], drawnAngle[j]) >= Math.PI / 2) : [];
+    // (the layout's places round the metal, in turn, and which stands plainly across which - within 30 degrees of a line - as laid out;
+    // a place with none across, one of two set side by side, is loose)
     const slotOrder = donors.map((_, i) => i).sort((p, q) => angleOf(p) - angleOf(q));
     const slotAngle = slotOrder.map(angleOf);
     const slotOf = donors.map((_, i) => slotOrder.indexOf(i));
-    const across = slotOrder.map((i) => slotOf[now[i]]);
+    const opposite = slotAngle.map((a, s) => {
+      let t = -1;
+      slotAngle.forEach((b, u) => {
+        if (u !== s && offOf(a, b) < Math.PI / 6 && (t < 0 || offOf(a, b) < offOf(a, slotAngle[t]))) t = u;
+      });
+      return t;
+    });
+    const lines = opposite.flatMap((t, s) => (s < t && opposite[t] === s ? [[s, t] as const] : []));
+    const loose = slotAngle.map((_, s) => s).filter((s) => !lines.some(([p, q]) => p === s || q === s));
+    // (each donor's kind: what it is, read out from it through its unit, the metal left out - a chelate's two ends told apart where they
+    // differ (glycinate's N and O), alike where they do not (ethylenediamine's two N))
+    const kind = donors.map((d, i) => {
+      const seen = new Map([[d, 0]]);
+      const layers: string[][] = [[input.atoms[d].el]];
+      for (let todo = [d], depth = 1; todo.length; depth++) {
+        const next: number[] = [];
+        for (const a of todo) {
+          for (const v of near[a]) {
+            if (v === m || seen.has(v) || !reach[i].has(v)) continue;
+            seen.set(v, depth);
+            next.push(v);
+            (layers[depth] ??= []).push(input.atoms[v].el + (near[v].includes(m) ? "*" : ""));
+          }
+        }
+        todo = next;
+      }
+      return layers.map((l) => [...l].sort().join(",")).join("/");
+    });
+    const pairKind = (p: number, q: number) => [kind[p], kind[q]].sort().join("|");
+    const said = across.map(([i, j]) => pairKind(i, j)).sort().join(" ; ");
+    // (a picture keeps the drawing where each pair drawn across stands plainly across in it, and none drawn side by side does;
+    // or - six donors drawn as six spokes, the layout setting four of them as two lines and two side by side, as it lays out
+    // cis-[Co(en)2Cl2]+ - where the picture can be read only as the isomer drawn: one of its two lines truly across, the ends of the
+    // other each across one of the two side by side, read either way the same kinds across as the drawing (cis-[Co(en)2Cl2]+ drawn
+    // with six spokes, laid out so, is cis; trans-M(gly)2Cl2's or an N-across-N cis-M(gly)2Cl2's picture so laid out would not say it)
+    const keeps = (at: readonly number[]) => {
+      const donorAt = new Array<number>(n);
+      at.forEach((s, i) => (donorAt[s] = i));
+      if (across.every(([i, j]) => opposite[at[i]] === at[j]) && beside.every(([i, j]) => opposite[at[i]] !== at[j])) return true;
+      if (n !== 6 || across.length !== 3 || lines.length !== 2 || loose.length !== 2) return false;
+      const [u, v] = loose.map((s) => donorAt[s]);
+      return lines.every(([p, q], k) => {
+        const [r, t] = lines[1 - k].map((s) => donorAt[s]);
+        const one = [pairKind(donorAt[p], donorAt[q]), pairKind(u, r), pairKind(v, t)].sort().join(" ; ");
+        const other = [pairKind(donorAt[p], donorAt[q]), pairKind(u, t), pairKind(v, r)].sort().join(" ; ");
+        return one === said && other === said;
+      });
+    };
+    // (each unit - a single donor with all it carries, or a chelate's - may be turned round the places, and a chelate of two mirrored,
+    // for a picture that keeps the drawing; the fewest units moved, then the shortest turns. Where none does - trans-[Co(en)2Cl2]+,
+    // the layout having no two places across for its Cl - nothing is laid out, saying so: never another isomer)
     const groups = [...new Set(unit)].map((u) => donors.map((_, i) => i).filter((i) => unit[i] === u));
     type Move = { turn: number; mirror: boolean };
     let best: { moves: Move[]; cost: number } | null = null;
     const choose = (g: number, moves: Move[], taken: Set<number>, at: number[]) => {
       if (g === groups.length) {
-        if (!donors.every((_, i) => at[drawn[i]] === across[at[i]])) return;
+        if (!keeps(at)) return;
         const cost = moves.filter((v) => v.turn || v.mirror).length * 100 + moves.reduce((t, v) => t + Math.min(v.turn, n - v.turn), 0);
         if (!best || cost < best.cost) best = { moves: [...moves], cost };
         return;
@@ -897,6 +942,7 @@ export function oppositesKept(was: readonly { x: number; y: number }[], input: L
     choose(0, [], new Set(), donors.map(() => -1));
     if (!best) throw refused();
     const chosen: Move[] = (best as { moves: Move[] }).moves;
+    if (chosen.every((v) => !v.turn && !v.mirror)) continue;
     groups.forEach((members, g) => {
       const { turn, mirror } = chosen[g];
       if (!turn && !mirror) return;
@@ -925,7 +971,6 @@ export function oppositesKept(was: readonly { x: number; y: number }[], input: L
       for (const a of atoms) ({ x: x[a], y: y[a] } = turned(x[a], y[a]));
       hydrogens = hydrogens.map((h) => (atoms.has(h.on) ? { ...h, at: turned(h.at.x, h.at.y) } : h));
     });
-    if (!plain()) throw refused();
     const before: boolean = changed;
     changed = true;
     if (changed) moved.push({ m, donors, units: reach });
