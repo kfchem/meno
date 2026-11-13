@@ -22,13 +22,14 @@ import { setAtomLabel } from "../../../../lib/pdf/figures";
 import { chemWorker, rolePlugin } from "../../../../lib/roles/worker";
 import { ChemTimeout, type ChemClient } from "../../../../lib/roles/client";
 import { toBase64 } from "../../../../lib/clipboard";
-import { drawnBond, readDrawnLabel, structureOf, type LabelReader } from "../../../../lib/figure/structure";
+import { drawnBond, readDrawnLabel, saysChargeTooMuch, structureOf, type LabelReader } from "../../../../lib/figure/structure";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { regularised } from "../../../../lib/layout/regularise";
 import { sameStereo } from "../chem/engineLayout";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
 import { implicitHydrogens } from "../../../../lib/chem/molecule";
 import { overBonded } from "../../../../lib/chem/molWriter";
+import { structuresOf } from "../../../../lib/chem/magnified2d";
 import { ELEMENTS } from "../../../../lib/chem/elements";
 import { labelReading, readLabel } from "./labelTyping";
 import { systemGlyphs } from "./glyphShapes";
@@ -122,7 +123,7 @@ export function lettersAsShapes(drawn: FigureDrawn): boolean {
 export type Unread = { none: string };
 
 /** What a figure gives: its structure, and - a scheme - its arrows, "+" signs and words, in Meno's units, where they stand to it as the figure has them. */
-export type FigureResult = { model: Model; scheme?: ImportedScheme };
+export type FigureResult = { model: Model; scheme?: ImportedScheme; /** Where structures of the figure were left out - an atom with more bonds than it takes - what to say of them. */ left?: string };
 
 /**
  * A figure within a box of a PDF's page, read as a structure: its atoms
@@ -204,6 +205,31 @@ export function schemeDrawn(given: FigureDrawn, known?: readonly GlyphShape[]): 
   return { drawn, back, read: readScheme(drawn, (l) => readDrawnLabel(l, figureLabels).read, glyphs, wholeLabel) };
 }
 
+/** The most paths a picture's frame is: its sides, or a rule under it. */
+const FRAME_PATHS = 8;
+/** How much of a figure's extent its pictures cover, at the least, for the lines about them to be their frame. */
+const FRAME_COVER = 0.5;
+
+/**
+ * Whether a figure is a picture in a frame: its pictures cover half of what it spans, and the little else drawn is straight
+ * lines, level and upright - a rectangle round it, a rule - never a structure's bonds round a picture.
+ */
+export function framedPicture(drawn: FigureDrawn): boolean {
+  if (!drawn.pictures.length || drawn.letters.length || drawn.paths.length > FRAME_PATHS) return false;
+  const pts = drawn.paths.flatMap((p) => p.d.flatMap((st): [number, number][] => (st[0] === "Z" ? [] : [[st[1], st[2]]])));
+  if (drawn.paths.some((p) => p.d.some((st) => st[0] === "C"))) return false;
+  const level = drawn.paths.every((p) => {
+    const q = p.d.flatMap((st): [number, number][] => (st[0] === "Z" ? [] : [[st[1], st[2]]]));
+    return q.every((v, i) => i === 0 || Math.abs(v[0] - q[i - 1][0]) < 0.01 || Math.abs(v[1] - q[i - 1][1]) < 0.01);
+  });
+  if (!level) return false;
+  const xs = [...pts.map((v) => v[0]), ...drawn.pictures.flatMap((b) => [b[0], b[2]])];
+  const ys = [...pts.map((v) => v[1]), ...drawn.pictures.flatMap((b) => [b[1], b[3]])];
+  const span = (Math.max(...xs) - Math.min(...xs)) * (Math.max(...ys) - Math.min(...ys));
+  const covered = drawn.pictures.reduce((t, b) => t + Math.max(0, b[2] - b[0]) * Math.max(0, b[3] - b[1]), 0);
+  return span > 0 && covered >= FRAME_COVER * span;
+}
+
 /**
  * What a figure as drawn reads as, tied to its PDF's page (`readBox`): its
  * structures, and - a scheme - its arrows, "+" signs and words (lib/figure/
@@ -213,6 +239,8 @@ export function schemeDrawn(given: FigureDrawn, known?: readonly GlyphShape[]): 
  * layout).
  */
 export function figureFrom(given: FigureDrawn, sha256: string, page: number, known?: readonly GlyphShape[]): FigureResult | Unread {
+  // (a picture in its frame - a journal's cover thumbnail: the frame's four lines are no cyclobutane)
+  if (framedPicture(given)) return { none: "This figure is a picture in a frame, not a drawing: there are no lines to read." };
   const { drawn, back, read } = schemeDrawn(given, known);
   if (read.tooMany) return { none: "This looks like a chart or a spectrum: too much is drawn there to read it as a structure." };
   const structure = read.figure.atoms.length > 0 && read.figure.bonds.length > 0;
@@ -223,8 +251,12 @@ export function figureFrom(given: FigureDrawn, sha256: string, page: number, kno
   const box = schemeBox(structure ? read : { ...read, figure: { ...read.figure, atoms: [] } })!;
   const about = { x: (box[0] + box[2]) / 2, y: (box[1] + box[3]) / 2 };
   const model = structure ? modelOf(read.figure, (x, y) => ({ sha256, page, ...back({ x, y }), bond: read.figure.bond }), about) : { atoms: [], bonds: [] };
+  // (a structure with an atom with more bonds than it takes is left out, each on its own - the rest of the figure is read - and said)
+  const { kept, left } = structure ? withoutOverBonded(model) : { kept: model, left: 0 };
+  if (structure && !kept.atoms.length) return { none: overBondedWhy(model)! };
   const scheme = schemeOf(read, about);
-  return { model, ...(scheme ? { scheme } : {}) };
+  const said = left ? `${left === 1 ? "A structure of this figure was" : `${left} structures of this figure were`} left out: as read, ${left === 1 ? "an atom has" : "atoms have"} more bonds than ${left === 1 ? "it takes" : "they take"}.` : null;
+  return { model: kept, ...(scheme ? { scheme } : {}), ...(said ? { left: said } : {}) };
 }
 
 /**
@@ -325,6 +357,53 @@ export function modelOf(read: FigureRead, spot: (x: number, y: number) => Figure
 }
 
 const ELEMENT_NAMES = new Map(ELEMENTS.map((e) => [e.symbol, e.name]));
+
+/** The atoms of a structure read that have more bonds than they take, written out as a file has it - not a charge alone: an atom's charge no atom carries is said by the atom, and is no valence (a page's "S188−" taken for a sulfur). */
+function overBondedAtoms(model: Model): Set<number> {
+  return new Set([...overBonded(model)].filter((id) => !model.atoms.find((x) => x.id === id)?.unsure?.said.some(saysChargeTooMuch)));
+}
+
+/**
+ * Why a structure read is not taken: it has an atom with more bonds than it takes - a bold double bond of a perspective drawing read as a
+ * triple bond, a line twice (the maintainer, 2026-11-13: a read that breaks valence is refused, and says why, never put down). None where
+ * no atom has. As read: a drawing can itself show five bonds (a transition state's forming bond), which Meno does not take as one.
+ */
+export function overBondedWhy(model: Model): string | null {
+  const over = overBondedAtoms(model);
+  if (!over.size) return null;
+  const a = model.atoms.find((x) => over.has(x.id))!;
+  const name = a.el === "C" ? "a carbon" : (ELEMENT_NAMES.get(a.el) ?? `"${a.el}"`);
+  return `As read, more bonds meet at ${name} than it takes${over.size > 1 ? `, and at ${over.size - 1} more` : ""}: none of it is taken.`;
+}
+
+/** A figure's atoms and bonds without its structures that have an atom with more bonds than it takes, each structure on its own, and how many it left out. */
+export function withoutOverBonded(model: Model): { kept: Model; left: number } {
+  const over = overBondedAtoms(model);
+  if (!over.size) return { kept: model, left: 0 };
+  const groups = structuresOf(model.atoms, model.bonds);
+  const bad = groups.filter((g) => g.some((i) => over.has(model.atoms[i].id)));
+  const drop = new Set(bad.flat().map((i) => model.atoms[i].id));
+  const atoms = model.atoms.filter((a) => !drop.has(a.id));
+  const bonds = model.bonds.filter((b) => !drop.has(b.a) && !drop.has(b.b));
+  // (numbered again, from 1: atoms, then bonds, then the multiple groups' ids, as `modelOf` numbers them)
+  const to = new Map(atoms.map((a, i) => [a.id, i + 1]));
+  const groupIds = [...new Set(atoms.flatMap((a) => (a.sgroups ?? []).map((g) => g.id)))].sort((p, q) => p - q);
+  const groupId = (id: number) => atoms.length + bonds.length + groupIds.indexOf(id) + 1;
+  const kept: Model = {
+    ...model,
+    atoms: atoms.map((a, i) => ({ ...a, id: i + 1, ...(a.sgroups ? { sgroups: a.sgroups.map((g) => ({ ...g, id: groupId(g.id), ...(g.parent != null && groupIds.includes(g.parent) ? { parent: groupId(g.parent) } : {}) })) } : {}) })),
+    bonds: bonds.map((b, i) => ({
+      ...b,
+      id: atoms.length + i + 1,
+      a: to.get(b.a)!,
+      b: to.get(b.b)!,
+      ...(b.narrow ? { narrow: to.get(b.narrow) } : {}),
+      // (a haptic bond's atoms, by id)
+      ...(b.endpoints ? { endpoints: b.endpoints.flatMap((e) => (to.has(e) ? [to.get(e)!] : [])) } : {}),
+    })),
+  };
+  return { kept, left: bad.length };
+}
 
 type Region = { x0: number; y0: number; x1: number; y1: number };
 const overlaps = (a: Region, b: Region) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;

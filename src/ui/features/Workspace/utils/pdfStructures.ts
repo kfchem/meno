@@ -6,62 +6,86 @@
  * that each later point is found at once.
  */
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import type { Box, FigureDrawn } from "../../../../lib/figure/drawn";
+import type { Box } from "../../../../lib/figure/drawn";
+import { whenCalm } from "../../../../lib/core/calm";
 import { figuresHad, figuresOn, objectsHad } from "../../../../lib/pdf/figures";
 import type { PdfStructurePick } from "../store/types";
-import { textHad, type PageText } from "../../../../lib/pdf/text";
-import { pageStructuresOf, type CompoundLabel, type PageMarks, type PageStructure } from "./pageStructures";
+import { textHad } from "../../../../lib/pdf/text";
+import type { CompoundLabel, PageStructure } from "./pageStructures";
 import { labelsRead, type PageLabels } from "./compoundIndex";
+import { figureReadOff } from "./structuresOff";
+import type { FigureStructures } from "./structuresRead";
 
-/** One figure's structures, what else it has drawn, and the compounds' numbers by its structures. */
-export type FigureStructures = { structures: PageStructure[]; marks: PageMarks; labels: CompoundLabel[] };
+export type { FigureStructures } from "./structuresRead";
 
 const had = new Map<string, FigureStructures | "asked">();
-/** Those waiting for a figure being read (`figureStructuresOn`): each told what it read as, or none where it could not be read. */
+/** Those waiting for a figure being read (`figureStructuresOn`, and the pointer on a figure): each told what it read as, or none where it could not be read. */
 const waiting = new Map<string, ((read: FigureStructures | null) => void)[]>();
 const tell = (key: string, read: FigureStructures | null) => {
   for (const w of waiting.get(key) ?? []) w(read);
   waiting.delete(key);
 };
-
-/** The words a box of a page holds, as its letters say. */
-function wordsIn(t: PageText | null, box: Box): string {
-  if (!t) return "";
-  let out = "";
-  for (let i = 0; i < t.codes.length; i++) {
-    const [a, b, c, d] = [t.boxes[i * 4], t.boxes[i * 4 + 1], t.boxes[i * 4 + 2], t.boxes[i * 4 + 3]];
-    if (c > a && (a + c) / 2 >= box[0] && (a + c) / 2 <= box[2] && (b + d) / 2 >= box[1] && (b + d) / 2 <= box[3]) out += String.fromCodePoint(t.codes[i]);
-  }
-  return out.replace(/\s+/g, " ").trim();
-}
+/** Those that asked for a figure while it was being read, to be told once it has (`came`, a set: the pointer asks again at every move). */
+const told = new Map<string, Set<() => void>>();
+/** Figures asked for in the background and not begun - waiting for the hands to rest - each with what begins it at once, for the pointer on it. */
+const hurried = new Map<string, () => void>();
 
 /**
- * The structures of figure `k` of a page (its box among `figures`), if they
- * have been read - asked for, the first time, and `came` called once they
- * have. None where the page's objects are not known yet, or out of the app.
+ * The structures of figure `k` of a page, if they have been read - asked for,
+ * the first time, and `came` called once they have. None where the page's
+ * objects are not known yet, or out of the app.
+ *
+ * Read in a worker, never on the thread the drawing runs on (./structuresOff),
+ * the figure's bytes unpacked there too. Asked for by the pointer on it
+ * (`urgent`, the default) it is read at once, in the worker kept for that; asked
+ * for to be read ahead (`urgent` false) it waits for the hands to rest
+ * (lib/core/calm) - and is read at once, should the pointer come to it meanwhile.
  */
-export function figureStructuresHad(sha256: string, page: number, figures: readonly Box[], k: number, came: () => void = () => {}): FigureStructures | null {
+export function figureStructuresHad(sha256: string, page: number, figures: readonly Box[], k: number, came: () => void = () => {}, urgent = true): FigureStructures | null {
   const key = `${sha256}:${page}:${k}`;
   const h = had.get(key);
   if (h && h !== "asked") return h;
   const objects = objectsHad(sha256, page);
-  if (h || !objects || !isTauri()) return null;
+  if (h) {
+    // (being read already, or waiting for the hands to rest: the pointer on it begins it now)
+    if (urgent) {
+      hurried.get(key)?.();
+      (told.get(key) ?? told.set(key, new Set()).get(key)!).add(came);
+    }
+    return null;
+  }
+  if (!objects || !isTauri()) return null;
   had.set(key, "asked");
-  invoke<FigureDrawn>("pdf_figure", { sha: sha256, page, box: figures[k] })
-    .then((drawn) => {
-      const t = textHad(sha256, page);
-      const read = pageStructuresOf({ objects, wordsIn: (b) => wordsIn(t, b) }, figures, (j) => (j === k ? drawn : null), sha256, page);
-      const figure = { structures: read.structures, marks: read.marks[0] ?? { segments: [], points: [], boxes: [] }, labels: read.labels };
-      had.set(key, figure);
-      // (its compounds' numbers, for the PDF's index of them: ./compoundIndex)
-      labelsRead(sha256, page, figures[k], read.labels);
-      came();
-      tell(key, figure);
-    })
-    .catch(() => {
-      had.delete(key);
-      tell(key, null);
+  let begun = false;
+  const begin = (now: boolean) => {
+    if (begun) return;
+    begun = true;
+    hurried.delete(key);
+    invoke<ArrayBuffer>("pdf_figure_raw", { sha: sha256, page, box: figures[k] })
+      .then((drawn) => figureReadOff({ objects, text: textHad(sha256, page), figures: [...figures], k, drawn, sha256, page }, now))
+      .then((figure) => {
+        had.set(key, figure);
+        // (its compounds' numbers, for the PDF's index of them: ./compoundIndex)
+        labelsRead(sha256, page, figures[k], figure.labels);
+        came();
+        for (const c of told.get(key) ?? []) c();
+        told.delete(key);
+        tell(key, figure);
+      })
+      .catch(() => {
+        had.delete(key);
+        told.delete(key);
+        tell(key, null);
+      });
+  };
+  if (urgent) begin(true);
+  else {
+    const off = whenCalm(() => begin(false));
+    hurried.set(key, () => {
+      off();
+      begin(true);
     });
+  }
   return null;
 }
 
@@ -82,7 +106,8 @@ export function pickedStructure(sha256: string, pick: Pick<PdfStructurePick, "pa
 
 /** The structures of figure `k` of a page once they have been read: as `figureStructuresHad` reads them, waited for; none where they cannot be. */
 export function figureStructuresOn(sha256: string, page: number, figures: readonly Box[], k: number): Promise<FigureStructures | null> {
-  const now = figureStructuresHad(sha256, page, figures, k);
+  // (read ahead, in the background: the pointer on it, should it come, takes it first)
+  const now = figureStructuresHad(sha256, page, figures, k, undefined, false);
   if (now) return Promise.resolve(now);
   // (none to wait for: its page's objects not known, or out of the app)
   if (!objectsHad(sha256, page) || !isTauri()) return Promise.resolve(null);
