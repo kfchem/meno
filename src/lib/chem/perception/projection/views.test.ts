@@ -181,6 +181,7 @@ function systems(): [string, Solid][] {
     ["cis-decalin, face 1", fused(c, 0, "chair", { cis: 1 })],
     ["cis-decalin, face -1", fused(c, 0, "chair", { cis: -1 })],
     ["cis-decalin on another bond", fused(c, 3, "chair", { cis: 1 })],
+    ["cis-decalin as a textbook draws it", fused(c, 2, "chair", { cis: -1 })],
     ["perhydrophenanthrene", fused(decalin, bondIndex(decalin, 7, 8), "chair", "trans")],
     ["perhydroanthracene", fused(decalin, bondIndex(decalin, 8, 9), "chair", "trans")],
     ["trans, cis, cis", fused(fused(c, 0, "chair", "trans"), bondIndex(decalin, 7, 8), "chair", { cis: -1 })],
@@ -270,6 +271,45 @@ describe("the chair as the textbook draws it (ruled: a convention of one drawn l
     expect(lines(trans, 6).has(90)).toBe(false);
     expect(lines(cis, 6).has(90)).toBe(true);
     expect(lines(cis, 6).size).toBe(3);
+  });
+
+  describe("the cis fusions of one chair, as the textbook's figure has one", () => {
+    /** The drawn ring bonds that cross one another, away from their ends: pairs of bonds with no atom in common whose segments meet. */
+    function crossings(s: Solid): number {
+      const d = drawn(s)!;
+      const seg = ([a, b]: [number, number]) => [d.atoms[a], d.atoms[b]] as const;
+      const turn = (p: { x: number; y: number }, q: { x: number; y: number }, r: { x: number; y: number }) => Math.sign((q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x));
+      let n = 0;
+      for (let i = 0; i < s.bonds.length; i++) {
+        for (let j = i + 1; j < s.bonds.length; j++) {
+          if (s.bonds[i].some((x) => s.bonds[j].includes(x))) continue;
+          const [p, q] = seg(s.bonds[i]);
+          const [r, t] = seg(s.bonds[j]);
+          if (turn(p, q, r) !== turn(p, q, t) && turn(r, t, p) !== turn(r, t, q)) n++;
+        }
+      }
+      return n;
+    }
+
+    it("hangs the new ring clear where the first ring's steep bond at the foot's end (the foot to the far-left atom, atoms 3 and 2) takes it on the lower face: along the gentle direction, the steep one and the vertical, down", () => {
+      const s = fused(chair(), 2, "chair", { cis: -1 });
+      expect(crossings(s)).toBe(0);
+      const d = drawn(s)!;
+      const lines = s.bonds.slice(6).map(([a, b]) => ({ a, b, angle: Math.round(angleOf(...bondDrawn(d, a, b))) }));
+      expect(new Set(lines.map((l) => l.angle))).toEqual(new Set([15, 60, 90]));
+      // (the vertical bond of the new ring leaves the foot, downward: the axial at an atom below the mean plane)
+      const vertical = lines.find((l) => l.angle === 90)!;
+      const [x, y] = bondDrawn(d, vertical.a, vertical.b);
+      close(x, 0, 9);
+      expect(vertical.a === 3 || vertical.b === 3).toBe(true);
+      expect(vertical.a === 3 ? y : -y).toBeLessThan(0);
+    });
+
+    it("has, of the twelve cis fusions of one chair (each of six bonds, either face), four with a ring bond crossing another and eight without", () => {
+      const counts = [0, 1, 2, 3, 4, 5].flatMap((bond) => ([1, -1] as const).map((face) => crossings(fused(chair(), bond, "chair", { cis: face }))));
+      expect(counts.filter((n) => n > 0)).toHaveLength(4);
+      expect(counts.filter((n) => n === 0)).toHaveLength(8);
+    });
   });
 
   it("draws form 1 for the same solid seen from the other side of its mirror plane - the lines of the convention reflected, each atom's depth that of this view: the single chair's places with x turned about, atoms 1 and 5, 2 and 4 changing places", () => {
