@@ -16,15 +16,17 @@
  * - A molecule no row is for, a row naming an atom it has not, a row of a
  *   kind its plugin does not hold - restrained or exact, never swapped -
  *   refused with why before anything is sent.
- * - Tables with no rows at all - their steps found nothing to hold, a
- *   reaction with no coordination bond - refuse none: each molecule goes on
- *   holding nothing, and the line says "nothing to hold" (the maintainer,
- *   2026-11-13). A table with rows, none for a molecule, still refuses it.
+ * - A molecule its table's step looked at and found nothing to hold for - a
+ *   reaction with no coordination bond - goes on holding nothing, where no
+ *   table wired in holds a row at all, and the line says "nothing to hold"
+ *   (the maintainer, 2026-11-13). The table says which (lib/steps
+ *   `NothingRow`): one its step refused, or never saw, is refused as ever,
+ *   however empty the table; so is one where another molecule has rows.
  * - Rows for no molecule that came in are counted on the step's line.
  */
 import type { Restraint } from "../../../../lib/entry";
 import type { HeldKind } from "../../../../lib/plugins/steps";
-import { NUMBERING, OWN_NUMBERING, restraintKey, restraintRowsIn, restraintSaid, type RestraintRow } from "../../../../lib/steps/restraints";
+import { NUMBERING, OWN_NUMBERING, restraintKey, restraintRowsIn, restraintSaid, type NothingRow, type RestraintRow } from "../../../../lib/steps/restraints";
 import { findSet, stepsBefore, type Flow } from "./flow";
 import { RESTRAINTS_INPUT, type StepKind } from "./kinds";
 import type { SetEntry } from "./entries";
@@ -44,7 +46,7 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 export const RENUMBERED_WHY = "its restraints were made before Atom map numbered it anew";
 /** Why a molecule is refused that no row is for, while restraints are wired in (decision 1a). */
 export const NONE_MADE_WHY = "no restraints made for it";
-/** What a step's line says where the tables wired in have no rows at all: each molecule goes on, holding nothing. */
+/** What a step's line says where molecules found to have nothing to hold go on, holding nothing. */
 export const NOTHING_TO_HOLD = "nothing to hold";
 
 /** A row as it came: the row, and the step whose table it is (none: a table read from a file). */
@@ -98,15 +100,16 @@ export function heldRows(doc: Flow, step: number, entries: readonly SetEntry[], 
   const wires = (doc.wires ?? []).filter((w) => w.to.step === step && w.to.port === RESTRAINTS_INPUT.id);
   if (!wires.length) return null;
   const wired: Wired[] = [];
+  const nothing: NothingRow[] = [];
   for (const [t, w] of wires.entries()) {
     const set = findSet(doc, w.from.set);
     if (!set?.table) return { why: "What comes into Restraints is no table of restraints yet" };
     const read = restraintRowsIn(set.table);
     if ("why" in read) return { why: `Restraints: ${read.why}` };
     read.rows.forEach((row, at) => wired.push({ row, step: set.made?.step, table: t, at }));
+    nothing.push(...read.nothing);
   }
-  // (no row in any of them - nothing found to hold: none refused, each going on as it came)
-  if (!wired.length) return { each: entries.map(() => ({ rows: [] })), said: [NOTHING_TO_HOLD] };
+  let heldNothing = 0;
   // (whether table a's step comes after table b's in the flow: its rows the later round's)
   const before = new Map<number, number[]>();
   const after = (a: Wired, b: Wired) => a.step != null && b.step != null && a.step !== b.step && (before.get(a.step) ?? before.set(a.step, stepsBefore(doc, a.step)).get(a.step)!).includes(b.step);
@@ -114,7 +117,14 @@ export function heldRows(doc: Flow, step: number, entries: readonly SetEntry[], 
   let takenOver = 0;
   const each = entries.map((e): { rows: Restraint[] } | { why: string } => {
     const mine = wired.filter((w) => idOf(e, w.row.on) === w.row.for);
-    if (!mine.length) return { why: NONE_MADE_WHY };
+    if (!mine.length) {
+      // (found to have nothing to hold, by a table wired in, and no table holding a row for any: it goes on, holding nothing)
+      const found = wired.length ? undefined : nothing.find((x) => idOf(e, x.on) === x.for);
+      if (!found) return { why: NONE_MADE_WHY };
+      if (found.numbering !== numberingOf(e)) return { why: RENUMBERED_WHY };
+      heldNothing++;
+      return { rows: [] };
+    }
     mine.forEach((w) => used.add(w));
     if (mine.some((w) => w.row.numbering !== numberingOf(e))) return { why: RENUMBERED_WHY };
     const n = e.atoms.length;
@@ -146,6 +156,7 @@ export function heldRows(doc: Flow, step: number, entries: readonly SetEntry[], 
   });
   const unmatched = wired.filter((w) => !used.has(w)).length;
   const said = [
+    ...(heldNothing ? [NOTHING_TO_HOLD] : []),
     ...(takenOver ? [`${plural(takenOver, "row")} taken over by a later step's`] : []),
     ...(unmatched ? [`${plural(unmatched, "restraint row")} for no molecule here`] : []),
   ];

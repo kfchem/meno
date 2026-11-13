@@ -1313,12 +1313,15 @@ taller than the rest, its inputs a plain list down its left edge, each named
 - **Nothing silent**: a molecule no row is for is refused ("no restraints
   made for it"), and so is one a row names an atom it has not; rows for no
   molecule that came in are counted on the line.
-- **Nothing to hold**: where the tables wired in have no rows at all - their
-  steps found nothing to hold, as a coordination table does for a reaction
-  with no coordination bond - no molecule is refused: each goes on holding
-  nothing, and the line says "nothing to hold" (the maintainer,
-  2026-11-13). Where they have rows, none of them for a molecule, it is
-  still refused.
+- **Nothing to hold**: a molecule whose table's step looked at it and found
+  nothing to hold - as a coordination table does for a reaction with no
+  coordination bond - goes on holding nothing, where no table wired in
+  holds a row at all, and the line says "nothing to hold" (the maintainer,
+  2026-11-13). The table says which molecules those are, a row "nothing to
+  hold" for each (STRUCTURE-STEPS.md, *Restraints*). A molecule the step
+  refused - no ID, an ID another shares - or never saw is refused as ever,
+  however empty the table: a restraint asked for and not made is never
+  passed over. So is one with no row where another molecule has rows.
 - **As its plugin holds them**: each plugin says what it holds (PLUGINS.md,
   `steps`, `restraints`) - its program may hold more than the plugin sends:
   distances and torsions by a strength, or exactly; atoms fixed. A row it

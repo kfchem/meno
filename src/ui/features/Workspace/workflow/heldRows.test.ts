@@ -6,6 +6,8 @@ import type { SetEntry } from "./entries";
 import type { Flow } from "./flow";
 import { heldBy, heldRows, NONE_MADE_WHY, NOTHING_TO_HOLD, RENUMBERED_WHY } from "./heldRows";
 import { RESTRAINTS_INPUT, ONE_EXIT, ONE_INPUT } from "./kinds";
+import { restrainedSet, torsionsSet } from "./structureSteps";
+import type { Table } from "../../../../lib/table";
 
 // The restraints a step holds (workflow/heldRows): the rows of the tables wired into its Restraints input, each molecule taking those
 // made for it by the ID a step wrote on it - CHEM's known answers for the rounds, and for a molecule numbered anew.
@@ -31,7 +33,7 @@ const T1: number[] = [0, 1, 2, 3];
 const T2: number[] = [1, 2, 3, 4];
 
 /** A page: steps by id and kind, sets each made by a step's first exit (a table, where given), and wires `[set, step, port]`. */
-function page(steps: [number, WorkflowStep["kind"]][], sets: { id: number; by?: number; rows?: RestraintRow[] }[], wires: [number, number, string][]): Flow {
+function page(steps: [number, WorkflowStep["kind"]][], sets: { id: number; by?: number; rows?: RestraintRow[]; table?: Table }[], wires: [number, number, string][]): Flow {
   return {
     steps: steps.map(([id, kind]) => ({ id, kind, x: 0, y: 0 })),
     sets: sets.map(
@@ -41,8 +43,8 @@ function page(steps: [number, WorkflowStep["kind"]][], sets: { id: number; by?: 
         y0: 0,
         x1: 1,
         y1: 1,
-        ...(s.by != null ? { made: { step: s.by, exit: ONE_EXIT, ...(s.rows ? { holds: "table" as const } : {}) } } : {}),
-        ...(s.rows ? { table: restraintsTable(s.rows) } : {}),
+        ...(s.by != null ? { made: { step: s.by, exit: ONE_EXIT, ...(s.rows || s.table ? { holds: "table" as const } : {}) } } : {}),
+        ...(s.table ? { table: s.table } : s.rows ? { table: restraintsTable(s.rows) } : {}),
       }),
     ),
     wires: wires.map(([set, step, port], k): Wire => ({ id: 100 + k, from: { set }, to: { step, port } })),
@@ -158,17 +160,44 @@ describe("the restraints a step holds, wired in", () => {
     expect(NONE_MADE_WHY).toBe("no restraints made for it");
   });
 
-  it("lets every molecule go on holding nothing where the tables wired in have no rows at all - and refuses one no row is for where they have some", () => {
-    // (a table whose step found nothing to hold - a reaction with no coordination bond)
-    const empty = page([[10, "restraints"], [40, "minimise"]], [{ id: 11, by: 10, rows: [] }], [[11, 40, RESTRAINTS_INPUT.id]]);
-    expect(heldRows(empty, 40, [molecule("p1"), molecule()], RDKIT, "RDKit")).toEqual({ each: [{ rows: [] }, { rows: [] }], said: [NOTHING_TO_HOLD] });
+  it("lets a molecule its table's step found nothing to hold for go on holding nothing - never one its step refused, or never saw (CHEM's known answers)", () => {
+    // (the table a real step made, wired into a minimisation)
+    const wiredWith = (made: ReturnType<typeof restrainedSet>, ...more: Table[]) => {
+      if (!made.ok || !made.tables?.[ONE_EXIT]) throw new Error("no table made");
+      const tables = [made.tables[ONE_EXIT], ...more];
+      return page([[10, "restraints"], [40, "minimise"]], tables.map((table, k) => ({ id: 11 + k, by: 10, table })), tables.map((_, k) => [11 + k, 40, RESTRAINTS_INPUT.id]));
+    };
+    const COORDINATION = { on: "start", factor: "0.9" };
+    // (a) coordination asked, two molecules tagged, no coordination bond: the step found none to hold - both go on, holding nothing
+    const a = restrainedSet([molecule("p1"), molecule("p2")], "molecules", COORDINATION);
+    expect(a.ok && a.said).toContain("2 entries with none to hold");
+    expect(heldRows(wiredWith(a), 40, [molecule("p1"), molecule("p2")], RDKIT, "RDKit")).toEqual({ each: [{ rows: [] }, { rows: [] }], said: [NOTHING_TO_HOLD] });
     expect(NOTHING_TO_HOLD).toBe("nothing to hold");
-    // (two tables wired in, both empty: the same)
-    const both = page([[10, "restraints"], [20, "restraints"], [40, "minimise"]], [{ id: 11, by: 10, rows: [] }, { id: 21, by: 20, rows: [] }], [[11, 40, RESTRAINTS_INPUT.id], [21, 40, RESTRAINTS_INPUT.id]]);
-    expect(heldRows(both, 40, [molecule("p1")], RDKIT, "RDKit")).toEqual({ each: [{ rows: [] }], said: [NOTHING_TO_HOLD] });
-    // (one empty, the other with a row for another molecule: rows exist, none for this one - refused)
-    const some = page([[10, "restraints"], [20, "restraints"], [40, "minimise"]], [{ id: 11, by: 10, rows: [] }, { id: 21, by: 20, rows: [row(torsion(T1, 50), "p9")] }], [[11, 40, RESTRAINTS_INPUT.id], [21, 40, RESTRAINTS_INPUT.id]]);
-    expect(heldRows(some, 40, [molecule("p1")], RDKIT, "RDKit")).toEqual({ each: [{ why: NONE_MADE_WHY }], said: ["1 restraint row for no molecule here"] });
+    // (b1) the same, the molecules with no ID: the step refused both - its table empty - and they are refused here too
+    const b1 = restrainedSet([molecule(), molecule()], "molecules", COORDINATION);
+    expect(b1.ok && b1.said).toContain("2 failed");
+    expect(heldRows(wiredWith(b1), 40, [molecule(), molecule()], RDKIT, "RDKit")).toEqual({ each: [{ why: NONE_MADE_WHY }, { why: NONE_MADE_WHY }], said: [] });
+    // (b2) a torsion typed to hold, two molecules sharing an ID: the step refused both - a restraint asked, none made - refused here
+    const b2 = torsionsSet([molecule("p1"), molecule("p1")], null, "molecules", { on: "start", torsions: "typed", atoms: "1-2-3-4", target: "180", hold: "strength", strength: "50" });
+    expect(b2.ok && b2.said).toContain("2 failed");
+    expect(heldRows(wiredWith(b2), 40, [molecule("p1"), molecule("p1")], RDKIT, "RDKit")).toEqual({ each: [{ why: NONE_MADE_WHY }, { why: NONE_MADE_WHY }], said: [] });
+    // (c) one refused by the step (no ID), one found to have none to hold: the one goes on, the refused one is refused
+    const c = restrainedSet([molecule(), molecule("p2")], "molecules", COORDINATION);
+    expect(heldRows(wiredWith(c), 40, [molecule(), molecule("p2")], RDKIT, "RDKit")).toEqual({ each: [{ why: NONE_MADE_WHY }, { rows: [] }], said: [NOTHING_TO_HOLD] });
+    // (one the step never saw, among those it found none for: refused)
+    expect(heldRows(wiredWith(a), 40, [molecule("p3")], RDKIT, "RDKit")).toEqual({ each: [{ why: NONE_MADE_WHY }], said: [] });
+    // (rows for one molecule in a table wired in, none found for another: the other refused, until it is ruled otherwise)
+    expect(heldRows(wiredWith(a, restraintsTable([row(torsion(T1, 50), "p9")])), 40, [molecule("p1")], RDKIT, "RDKit")).toEqual({
+      each: [{ why: NONE_MADE_WHY }],
+      said: ["1 restraint row for no molecule here"],
+    });
+    // (numbered anew by Atom map since its step found nothing for it: refused, as a row would be)
+    expect(heldRows(wiredWith(a), 40, [molecule("p1", "as reactant #1 (k2)"), molecule("p2")], RDKIT, "RDKit")).toEqual({ each: [{ why: RENUMBERED_WHY }, { rows: [] }], said: [NOTHING_TO_HOLD] });
+  });
+
+  it("refuses every molecule where the tables wired in hold no row and name none as found to hold nothing - a table read from a file, say", () => {
+    const empty = page([[10, "restraints"], [40, "minimise"]], [{ id: 11, by: 10, rows: [] }], [[11, 40, RESTRAINTS_INPUT.id]]);
+    expect(heldRows(empty, 40, [molecule("p1"), molecule()], RDKIT, "RDKit")).toEqual({ each: [{ why: NONE_MADE_WHY }, { why: NONE_MADE_WHY }], said: [] });
   });
 
   it("is refused where what comes in is no restraints table", () => {
