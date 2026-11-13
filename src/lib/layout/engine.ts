@@ -1949,6 +1949,10 @@ function bladeHubs(mol: Molecule, piece: number[]): { x: number; rings: number[]
         if (!mol.ringsOf[c].some((r) => isAryl(mol, mol.rings[r]))) return false;
         const side = sideAtoms(mol, x, c);
         if (side.length * 2 >= piece.length) return false;
+        // (a ring with any group of its own besides its bond to the hub is never turned: so drawn it would state a
+        // configuration of hindered rotation, "not acceptable" on such a ring (Brecher 2008, GR-4.3.6; Brecher 2006,
+        // ST-1.7) - a tolyl's, a mesityl's; its crowding is cleared the other ways the layout has)
+        if (side.some((v) => mol.systemOf[v] !== mol.systemOf[c])) return false;
         return !side.some((v) => v !== c && mol.neighbours[x].includes(v));
       });
       return { x, rings };

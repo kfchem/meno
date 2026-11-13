@@ -920,7 +920,11 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
   only where it reads better by the benchmark's measures, at 45, 60 or 70
   degrees, whichever reads best - and only to rings that hang from the
   atom, not to what the atom hangs from (BINAP's naphthalene, beyond its
-  P, is the rest of the molecule). The structure is grown with its blades
+  P, is the rest of the molecule) - and only to a ring that carries nothing
+  but its bond to the atom: a tolyl's or a mesityl's ring, turned, would
+  state a configuration of hindered rotation, which it does not have (GR-4.3.6,
+  "not acceptable" on such a ring; ST-1.7), and lies flat, its crowding
+  cleared the other ways. The structure is grown with its blades
   so turned from the start, at each angle, as well as flat, and every
   start is set right and measured alike: grown flat, four PPh₃ round a
   metal lie phenyl on phenyl in pairs, every frame the same drawing
