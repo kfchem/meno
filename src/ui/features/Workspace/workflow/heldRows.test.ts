@@ -4,7 +4,7 @@ import { OWN_NUMBERING, NUMBERING, restraintsTable, type RestraintRow } from "..
 import type { Wire, WorkflowSet, WorkflowStep } from "../store/types";
 import type { SetEntry } from "./entries";
 import type { Flow } from "./flow";
-import { heldBy, heldRows, NONE_MADE_WHY, RENUMBERED_WHY } from "./heldRows";
+import { heldBy, heldRows, NONE_MADE_WHY, NOTHING_TO_HOLD, RENUMBERED_WHY } from "./heldRows";
 import { RESTRAINTS_INPUT, ONE_EXIT, ONE_INPUT } from "./kinds";
 
 // The restraints a step holds (workflow/heldRows): the rows of the tables wired into its Restraints input, each molecule taking those
@@ -156,6 +156,19 @@ describe("the restraints a step holds, wired in", () => {
       said: ["2 restraint rows for no molecule here"],
     });
     expect(NONE_MADE_WHY).toBe("no restraints made for it");
+  });
+
+  it("lets every molecule go on holding nothing where the tables wired in have no rows at all - and refuses one no row is for where they have some", () => {
+    // (a table whose step found nothing to hold - a reaction with no coordination bond)
+    const empty = page([[10, "restraints"], [40, "minimise"]], [{ id: 11, by: 10, rows: [] }], [[11, 40, RESTRAINTS_INPUT.id]]);
+    expect(heldRows(empty, 40, [molecule("p1"), molecule()], RDKIT, "RDKit")).toEqual({ each: [{ rows: [] }, { rows: [] }], said: [NOTHING_TO_HOLD] });
+    expect(NOTHING_TO_HOLD).toBe("nothing to hold");
+    // (two tables wired in, both empty: the same)
+    const both = page([[10, "restraints"], [20, "restraints"], [40, "minimise"]], [{ id: 11, by: 10, rows: [] }, { id: 21, by: 20, rows: [] }], [[11, 40, RESTRAINTS_INPUT.id], [21, 40, RESTRAINTS_INPUT.id]]);
+    expect(heldRows(both, 40, [molecule("p1")], RDKIT, "RDKit")).toEqual({ each: [{ rows: [] }], said: [NOTHING_TO_HOLD] });
+    // (one empty, the other with a row for another molecule: rows exist, none for this one - refused)
+    const some = page([[10, "restraints"], [20, "restraints"], [40, "minimise"]], [{ id: 11, by: 10, rows: [] }, { id: 21, by: 20, rows: [row(torsion(T1, 50), "p9")] }], [[11, 40, RESTRAINTS_INPUT.id], [21, 40, RESTRAINTS_INPUT.id]]);
+    expect(heldRows(some, 40, [molecule("p1")], RDKIT, "RDKit")).toEqual({ each: [{ why: NONE_MADE_WHY }], said: ["1 restraint row for no molecule here"] });
   });
 
   it("is refused where what comes in is no restraints table", () => {

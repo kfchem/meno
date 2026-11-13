@@ -16,6 +16,10 @@
  * - A molecule no row is for, a row naming an atom it has not, a row of a
  *   kind its plugin does not hold - restrained or exact, never swapped -
  *   refused with why before anything is sent.
+ * - Tables with no rows at all - their steps found nothing to hold, a
+ *   reaction with no coordination bond - refuse none: each molecule goes on
+ *   holding nothing, and the line says "nothing to hold" (the maintainer,
+ *   2026-11-13). A table with rows, none for a molecule, still refuses it.
  * - Rows for no molecule that came in are counted on the step's line.
  */
 import type { Restraint } from "../../../../lib/entry";
@@ -40,6 +44,8 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 export const RENUMBERED_WHY = "its restraints were made before Atom map numbered it anew";
 /** Why a molecule is refused that no row is for, while restraints are wired in (decision 1a). */
 export const NONE_MADE_WHY = "no restraints made for it";
+/** What a step's line says where the tables wired in have no rows at all: each molecule goes on, holding nothing. */
+export const NOTHING_TO_HOLD = "nothing to hold";
 
 /** A row as it came: the row, and the step whose table it is (none: a table read from a file). */
 type Wired = { row: RestraintRow; step?: number; table: number; at: number };
@@ -99,6 +105,8 @@ export function heldRows(doc: Flow, step: number, entries: readonly SetEntry[], 
     if ("why" in read) return { why: `Restraints: ${read.why}` };
     read.rows.forEach((row, at) => wired.push({ row, step: set.made?.step, table: t, at }));
   }
+  // (no row in any of them - nothing found to hold: none refused, each going on as it came)
+  if (!wired.length) return { each: entries.map(() => ({ rows: [] })), said: [NOTHING_TO_HOLD] };
   // (whether table a's step comes after table b's in the flow: its rows the later round's)
   const before = new Map<number, number[]>();
   const after = (a: Wired, b: Wired) => a.step != null && b.step != null && a.step !== b.step && (before.get(a.step) ?? before.set(a.step, stepsBefore(doc, a.step)).get(a.step)!).includes(b.step);
