@@ -1924,6 +1924,10 @@ describe("a carbon between two double bonds", () => {
       { id: 20, x: L, y: 15 * L, el: "C" },
       { id: 21, x: 2 * L, y: 15 * L, el: "C" },
       { id: 22, x: 3 * L, y: 15 * L, el: "C" },
+      // Fe-CH=O, a formyl: its double bond no triple, bare
+      { id: 23, x: 0, y: 18 * L, el: "Fe" },
+      { id: 24, x: L, y: 18 * L, el: "C" },
+      { id: 25, x: 1.5 * L, y: 18.866 * L, el: "O" },
     ];
     const bonds: Bond[] = [
       { a1: 0, a2: 1, order: 1 },
@@ -1942,6 +1946,8 @@ describe("a carbon between two double bonds", () => {
       { a1: 18, a2: 19, order: 1 },
       { a1: 19, a2: 20, order: 3 },
       { a1: 20, a2: 21, order: 1 },
+      { a1: 22, a2: 23, order: 1 },
+      { a1: 23, a2: 24, order: 2 },
     ];
     const shown = cumulatedShown(atoms, bonds).map((a) => !!a.shown);
     expect(shown[1], "Fe-C≡N").toBe(true);
@@ -1950,6 +1956,7 @@ describe("a carbon between two double bonds", () => {
     expect(shown[11], "Fe(mu-CO)Fe").toBe(false);
     expect(shown[15], "Fe(mu-C≡O)Fe").toBe(false);
     expect(shown[19], "Cu-C≡C-CH3").toBe(false);
+    expect(shown[23], "Fe-CH=O").toBe(false);
     expect(shown.filter(Boolean)).toHaveLength(2);
   });
 });
