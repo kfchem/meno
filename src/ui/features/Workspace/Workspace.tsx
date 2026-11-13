@@ -305,7 +305,7 @@ function WorkspaceContent({
   /** A reaction arrow's own style, in the panel beside the canvas. */
   openArrowStyle: (id: number) => void;
   /** The selected group saved as an abbreviation, in the panel beside the canvas. */
-  openSaveAbbreviation: (ids: number[], smiles: string) => void;
+  openSaveAbbreviation: (ids: number[], smiles: string, notKept?: string) => void;
   /** Whether it fades into view: made again after it failed (CanvasBoundary). */
   fadeIn?: boolean;
 }) {
@@ -2232,7 +2232,7 @@ function WorkspaceContent({
             const { model: m, sel } = store.getState();
             const made = abbreviationFromSelection(m, sel.atoms);
             if ("problem" in made) setChemError(`This selection cannot be saved as an abbreviation. ${made.problem}`);
-            else openSaveAbbreviation([...sel.atoms], made.smiles);
+            else openSaveAbbreviation([...sel.atoms], made.smiles, made.notKept);
           }}
           onRunStep={() => {
             if (menu.kind !== "step" || menu.id == null) return;
@@ -3158,7 +3158,7 @@ export default function Workspace({
   // panel beside the canvas rather than over it, so the drawing stays in
   // view while it changes. One panel at a time.
   const [panel, setPanel] = useState<
-    "style" | { arrow: number } | { abbreviation: { ids: number[]; smiles: string } } | null
+    "style" | { arrow: number } | { abbreviation: { ids: number[]; smiles: string; notKept?: string } } | null
   >(null);
   const styleOpen = panel === "style";
   // (a talk begun shuts the panel: the talk has the whole of the window, not what is left beside it)
@@ -3189,7 +3189,7 @@ export default function Workspace({
                   styleOpen={styleOpen}
                   toggleStyle={() => setPanel((p) => (p === "style" ? null : "style"))}
                   openArrowStyle={(id) => setPanel({ arrow: id })}
-                  openSaveAbbreviation={(ids, smiles) => setPanel({ abbreviation: { ids, smiles } })}
+                  openSaveAbbreviation={(ids, smiles, notKept) => setPanel({ abbreviation: { ids, smiles, notKept } })}
                   fadeIn={reloaded}
                 />
               )}
@@ -3222,6 +3222,7 @@ export default function Workspace({
                   key={panel.abbreviation.ids.join(",")}
                   ids={panel.abbreviation.ids}
                   smiles={panel.abbreviation.smiles}
+                  notKept={panel.abbreviation.notKept}
                   onClose={() => setPanel(null)}
                 />
               )}

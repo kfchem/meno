@@ -18,7 +18,7 @@ import { inRounds, roundsSaid, RoundsSearch, SEARCH_BUDGET_MS } from "./conforme
 import { growingJudge, type GrowingJudge, type ShownWith } from "./growing";
 import { roundsJudge } from "./roundsJudge";
 import { WITHIN_3D, type CalculationSettings, type ChemistrySettings } from "../../../../lib/settings/appSettings";
-import { threadsOf } from "../../../../lib/jobs";
+import { pageThreadsOf } from "../../../../lib/jobs";
 import { chemMolblock, isElementSymbol, molIndex } from "../../../../lib/roles/molblock";
 import { readMolfile } from "../../../../lib/chem/ctfile";
 import { COORDINATION_BOND } from "../../../../lib/chem/molecule";
@@ -551,7 +551,7 @@ export function conformersOnPage(
   settings: { chemistry: ChemistrySettings; calculations: Pick<CalculationSettings, "cores" | "coresAll"> },
   rounds: PageRounds | null = null,
 ): Promise<Conformers[]> {
-  return conformersOf(chem, stereo, block, which, options, pageCount(block, settings.chemistry), rounds, threadsOf(settings.calculations));
+  return conformersOf(chem, stereo, block, which, options, pageCount(block, settings.chemistry), rounds, pageThreadsOf(settings.calculations));
 }
 
 /** How the page's search is asked in rounds (chem/conformerRounds): its window (kcal/mol), its first round and the most it tries. */

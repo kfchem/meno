@@ -1279,6 +1279,7 @@ pub fn run() {
             pdf::pdf_text,
             pdf::pdf_objects,
             pdf::pdf_figure,
+            pdf::pdf_figure_raw,
             // a chemist's documents written where they chose, whole or not at all
             savefile::write_document,
             // Meno's own files - its settings - written whole or not at all, in its folders alone

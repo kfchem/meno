@@ -468,10 +468,13 @@ describe("conformers made for the page", () => {
     const settings = { chemistry: { sought3d: "fixed", count3d: 25 } as ChemistrySettings, calculations: { cores: 5, coresAll: 8 } };
     await conformersOnPage(chem, stereo, block, "one", { field: "UFF" }, settings);
     expect(asked).toEqual([{ molblock: block.molblock, isomers: [{ centres: [], doubles: [] }], count: 25, options: { field: "UFF", threads: 5 } }]);
-    // (all that jobs may use, where Settings gives no number)
+    // (where Settings gives no number: all that jobs may use but one, left to the page - every core but one, where it limits none)
     asked.length = 0;
     await conformersOnPage(chem, stereo, block, "one", {}, { ...settings, calculations: { coresAll: 3 } as typeof settings.calculations });
-    expect(asked[0].options.threads).toBe(3);
+    expect(asked[0].options.threads).toBe(2);
+    asked.length = 0;
+    await conformersOnPage(chem, stereo, block, "one", {}, { ...settings, calculations: {} as typeof settings.calculations });
+    expect(asked[0].options.threads).toBe(7);
     // (asked in rounds: each told)
     asked.length = 0;
     await conformersOnPage(chem, stereo, block, "one", {}, settings, { window: 3, first: 10, most: MOST_CONFORMERS }).catch(() => undefined);
