@@ -34,6 +34,12 @@ export const CONVERGED_HOW = [
 ] as const;
 export type ConvergedHow = (typeof CONVERGED_HOW)[number];
 
+/** What a run that converged held, as its step's line says it, of those it gave: "with restraints held" where any held a row exactly, else "with atoms held" where any held atoms - as their `converged` says it; none where none held anything. */
+export function heldSaid(given: readonly { converged?: Converged }[]): string | null {
+  const hows = given.map((g) => g.converged?.how ?? "");
+  return (["with restraints held", "with atoms held"] as const).find((held) => hows.some((h) => h.endsWith(held))) ?? null;
+}
+
 /** That a run ended converged, and the geometry it ended at, by its key (lib/entry `geometryKey`); the atoms it held where they stood, and the distances and dihedrals it held exactly, where it held any. */
 export type Converged = { how: ConvergedHow; geometry: string; held?: number[]; rows?: Restraint[] };
 

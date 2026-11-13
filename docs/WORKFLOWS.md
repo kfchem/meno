@@ -1339,8 +1339,11 @@ taller than the rest, its inputs a plain list down its left edge, each named
   said so: the same 1° bounds a torsion going in and coming out, as
   within it nearly any angle would pass. How it converged:
   "optimisation with restraints held", with the rows it held and any
-  atoms held besides. A run not converged is said so, as ever: it may
-  have stopped short of a value it was making for.
+  atoms held besides. The step's line says so after its time and
+  energy ("with restraints held"), as it says "with atoms held" where
+  any converged with atoms held alone - one rule, restraints first, so
+  that it is seen without opening the set. A run not converged is said
+  so, as ever: it may have stopped short of a value it was making for.
 - **No stationary point**: an entry optimised with atoms held, or with a
   distance or torsion held exactly, is refused by what takes one -
   Frequencies, Populations, Energy window, Choose one, Duplicates'
