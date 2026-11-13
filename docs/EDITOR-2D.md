@@ -530,7 +530,18 @@ molecule in 3D or a picture.
   `dragsSelection`); an atom that is not selected, or is selected alone,
   moves on its own as before.
 - Dragging the handle turns it about its middle, in steps of 15 degrees, or
-  freely after a pause - one undo step. Molecules in 3D it turns by
+  freely after a pause - one undo step. The steps are the drawing's own:
+  those of the direction of its first bond, so that a drawing laid out on
+  the 30 degree grid lands back on it, and one a little off it lands on it
+  at the first step (`turnReference`); with no bond to go by, the turn's
+  own, from where it began. The shown angle does not jump from step to
+  step: it springs to the one it snaps to, as a bond's angle and a moved
+  atom's do - one spring for all three (`utils/angleSpring`) - and a pause
+  of `FREE_MS` since the last move, the bond's own rule, lets it go of the
+  steps, easing from the snapped angle to the pointer's in the same short
+  ease-out. Let go of the button, the drawing is put where the spring is
+  heading - the step, or the pointer's angle once let go of them - never
+  an angle it is passing through. Molecules in 3D it turns by
   themselves, one or several, or each with Shift, turn freely, never in
   steps (the maintainer, 2026-11-11: a molecule in 3D has no grid to keep
   to); with a drawing selected they turn in its steps. While it turns, or

@@ -159,15 +159,34 @@ export const turnedBy = (angle: number) => (p: MarkAt): MarkAt => ({
   y: p.x * Math.sin(angle) + p.y * Math.cos(angle),
 });
 
-/** A drawing's turn snaps to steps of this many degrees, until a pause lets it go. */
+/** A drawing's turn snaps to steps of this many degrees, until a pause lets it go (FREE_MS, as a bond's angle does). */
 export const TURN_STEP = 15;
 
-/** The turn a drawing is given for the angle the pointer has gone round: on the steps of `TURN_STEP`, or as it is once let go of them. */
-export const turnSnapped = (angle: number, free: boolean) => {
+/**
+ * The turn a drawing is given for the angle the pointer has gone round: to
+ * the steps of `TURN_STEP`, or as it is once let go of them. The steps are
+ * the drawing's own: those of the direction `from` (radians) it lies in now,
+ * a bond's, so that a drawing laid out on Meno's 30-degree grid lands back on
+ * it, and one a little off it lands on it at the first step. With no
+ * direction to go by (`from` 0) they are the turn's own, from where it began.
+ */
+export const turnSnapped = (angle: number, free: boolean, from = 0) => {
   if (free) return angle;
   const step = (TURN_STEP * Math.PI) / 180;
-  return Math.round(angle / step) * step;
+  return Math.round((from + angle) / step) * step - from;
 };
+
+/** The direction, in radians, of the first bond lying wholly in the selected atoms: what a drawing's steps are measured from (0 where there is none). */
+export function turnReference(model: { atoms: readonly { id: number; x: number; y: number }[]; bonds: readonly { a: number; b: number }[] }, selected: ReadonlySet<number>): number {
+  const at = new Map(model.atoms.map((a) => [a.id, a] as const));
+  for (const bond of model.bonds) {
+    if (!selected.has(bond.a) || !selected.has(bond.b)) continue;
+    const a = at.get(bond.a);
+    const b = at.get(bond.b);
+    if (a && b) return Math.atan2(b.y - a.y, b.x - a.x);
+  }
+  return 0;
+}
 
 /** Where the selected atoms go, the selection turned by `angle` (radians, anticlockwise) about `about`. */
 export function turned(
