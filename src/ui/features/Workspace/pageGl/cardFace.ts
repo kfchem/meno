@@ -107,6 +107,11 @@ export function nameBoxOf(c: Pick<CardFaceOf, "key" | "x" | "y" | "who" | "high"
   return { key: c.key, x0: c.x + P(x0), x1: c.x + P(x0 + wide), y0: mid - P(size) / 2, y1: mid + P(size) / 2 };
 }
 
+/** The box a card stands in on the page, in the world's units: as wide as a card and as tall as its least height - a card its ports make taller too. What is kept clear of the cards (Workflow2D's frame tabs). */
+export function cardBoxOf(c: Pick<CardFaceOf, "x" | "y" | "high">): { x0: number; x1: number; y0: number; y1: number } {
+  return { x0: c.x, x1: c.x + pagePx(CARD.w), y0: c.y - pagePx(c.high ?? CARD.h), y1: c.y };
+}
+
 /** What a card says, shut, and how it stands (Workflow2D, from what StepCard is told). */
 export type CardFaceOf = {
   key: string;

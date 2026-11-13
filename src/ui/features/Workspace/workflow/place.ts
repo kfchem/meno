@@ -77,8 +77,8 @@ export function wireStart(steps: readonly Pick<WorkflowStep, "id" | "x" | "y" | 
   return s && set.made ? exitStart(s, set.made.exit) : setGives(set);
 }
 
-/** A step's card, shut: where it stands on the page, as tall as its kind's ports make it (kinds `cardHighOf`). */
-const cardOf = (s: { x: number; y: number; kind: StepKind }): Frame => frameAt(s.x, s.y, CARD_W, cardHighOf(s.kind));
+/** A step's card, shut: where it stands on the page, as tall as its kind's ports make it (kinds `cardHighOf`) - what wires go round, and where a step's text flies from (utils/textBody). */
+export const cardFrameOf = (s: { x: number; y: number; kind: StepKind }): Frame => frameAt(s.x, s.y, CARD_W, cardHighOf(s.kind));
 
 /** A wire as Workflow2D draws it: round its ends, and the sets and cards near it (look `nearWire`) - its whole path, close enough everywhere to stand for it (look `wirePath`). */
 const routed = (p: Pt, q: Pt, e: { from?: Frame; to?: Frame; lead?: number }, round: readonly Frame[]) => wirePath(p, q, e, nearWire(p, q, e, round));
@@ -116,7 +116,7 @@ function takenOn(doc: WorkspaceDocument, self?: Self, along?: { x0: number; x1: 
   const unseen = unseenSets(doc);
   const shown = (doc.sets ?? []).filter((b) => !own(b.id) && !unseen.has(b.id));
   // (what wires go round: the sets and cards, as Workflow2D has them go round - look `wireCurve`)
-  const round: Frame[] = [...shown, ...(doc.steps ?? []).map(cardOf)];
+  const round: Frame[] = [...shown, ...(doc.steps ?? []).map(cardFrameOf)];
   // (and what is kept clear of: each card as tall as its words can draw it closed - look `CARD_TALL`)
   const frames: Taken["frames"] = [...shown, ...(doc.steps ?? []).map((s) => ({ ...frameAt(s.x, s.y, CARD_W, CARD_TALL), card: s.id })), ...inkOf(doc, own, along)];
   const points: Pt[] = [...doc.model.atoms.map((a) => ({ x: a.x, y: a.y })), ...(doc.molecules3d ?? []).filter((m) => !self?.molecules?.has(m.id)).map((m) => m.at)];
@@ -128,9 +128,9 @@ function takenOn(doc: WorkspaceDocument, self?: Self, along?: { x0: number; x1: 
     const s = steps.get(w.to.step);
     if (!b || !s) continue;
     const by = b.made ? steps.get(b.made.step) : undefined;
-    if (b.id === self?.set && !by) to.push({ step: s.id, at: takes(s, w.to.port), card: cardOf(s), ...lead(s, w.to.port) });
+    if (b.id === self?.set && !by) to.push({ step: s.id, at: takes(s, w.to.port), card: cardFrameOf(s), ...lead(s, w.to.port) });
     else if (by || !own(b.id)) {
-      const e = { from: by ? cardOf(by) : b, to: cardOf(s), ...lead(s, w.to.port) };
+      const e = { from: by ? cardFrameOf(by) : b, to: cardFrameOf(s), ...lead(s, w.to.port) };
       const p = wireStart(steps, b);
       const q = takes(s, w.to.port);
       points.push(...wirePath(p, q, e, nearWire(p, q, e, round)));
@@ -139,14 +139,14 @@ function takenOn(doc: WorkspaceDocument, self?: Self, along?: { x0: number; x1: 
   for (const b of doc.sets ?? []) {
     const s = b.made ? steps.get(b.made.step) : undefined;
     if (s && !own(b.id) && !unseen.has(b.id)) {
-      const e = { from: cardOf(s), to: b };
+      const e = { from: cardFrameOf(s), to: b };
       const p = exitStart(s, b.made!.exit);
       points.push(...wirePath(p, setTakes(b), e, nearWire(p, setTakes(b), e, round)));
     }
   }
   const step = self?.step != null ? steps.get(self.step) : undefined;
   const at = lineFrom(doc, self);
-  return { frames, round, points, ...(step && at ? { from: { step: step.id, at, card: cardOf(step) } } : {}), to };
+  return { frames, round, points, ...(step && at ? { from: { step: step.id, at, card: cardFrameOf(step) } } : {}), to };
 }
 
 /**
