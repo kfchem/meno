@@ -23,7 +23,7 @@ function chainAngles(smiles: string): number[] {
   forgetLaidOut();
   const input = fromSmiles(smiles);
   const out = layout2D(input);
-  const carbons = input.atoms.map((a, i) => i).filter((i) => input.atoms[i].el === "C");
+  const carbons = input.atoms.map((_, i) => i).filter((i) => input.atoms[i].el === "C");
   const bonded = (i: number) => input.bonds.flatMap((b) => (b.a === i ? [b.b] : b.b === i ? [b.a] : [])).filter((j) => input.atoms[j].el === "C");
   return carbons.flatMap((i) => {
     const nb = bonded(i);
