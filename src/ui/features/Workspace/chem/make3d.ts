@@ -538,7 +538,7 @@ export function pageCount(block: Pick<Block, "molblock">, chosen: Pick<Chemistry
 /**
  * A block's conformers as the page asks for them, from Settings: how many to
  * try (Chemistry, `pageCount`) and the threads the search may use
- * (Calculations, `threadsOf`) - the one place the page's own searches (the 3D
+ * (Calculations, `pageThreadsOf`) - the one place the page's own searches (the 3D
  * structure made from a drawing, the atom map's) take both, so that neither
  * can be asked without them.
  */
@@ -727,7 +727,8 @@ export async function conformersGrowing(
   judgeOf: typeof growingJudge = growingJudge,
 ): Promise<Growth> {
   const made = await isomersToMake(stereo, block.molblock, block.like, which, CONFORMERS_MS);
-  const sent = { ...options, threads: threadsOf(settings.calculations) };
+  // (the page's own: one core left to the page where Settings sets none - lib/jobs `pageThreadsOf`, as conformersOnPage asks)
+  const sent = { ...options, threads: pageThreadsOf(settings.calculations) };
   const holds = metalHoldsOf(block.molblock);
   const checks = madeChecksOf(block.molblock, holds);
   // (each stereoisomer's search, and its judge, which makes what the page shows of it; those let go - a twin's reflection

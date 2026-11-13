@@ -480,6 +480,15 @@ describe("conformers made for the page", () => {
     await conformersOnPage(chem, stereo, block, "one", {}, settings, { window: 3, first: 10, most: MOST_CONFORMERS }).catch(() => undefined);
     expect(asked.length).toBeGreaterThan(0);
     expect(asked.every((a) => a.options.threads === 5 && a.draw != null)).toBe(true);
+    // (and a search that grows on the page after its first round: the same threads, each round - one core left to the page
+    //  where Settings sets none)
+    for (const [calculations, threads] of [[settings.calculations, 5], [{ coresAll: 3 }, 2], [{}, 7]] as const) {
+      asked.length = 0;
+      const growth = await conformersGrowing(chem, stereo, block, "one", { field: "UFF" }, { calculations: calculations as typeof settings.calculations }, { window: 3, first: 10, most: MOST_CONFORMERS }, () => false).catch(() => null);
+      await growth?.rest(() => {}).catch(() => undefined);
+      expect(asked.length, JSON.stringify(calculations)).toBeGreaterThan(0);
+      expect(asked.every((a) => a.options.threads === threads && a.options.field === "UFF"), JSON.stringify(calculations)).toBe(true);
+    }
     vi.unstubAllGlobals();
   });
 
