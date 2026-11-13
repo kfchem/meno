@@ -530,6 +530,18 @@ on a page); the Newman projection follows.
   a ring fused, bridged or spiro on it makes it no one chair of the tool's, and it is not flipped).
   *Draw flat* lays the structure out flat by Meno's engine, wedges for the depth, the configuration kept - refused in words as any Clean-up is where it
   would not be.
+- **Draw as chair** (a flat six-membered ring right-clicked, an atom or a bond of it; `projections/fromFlat`): the ring drawn as a chair of the
+  tool's, each group moved onto the free position that states the configuration the flat drawing states (the reader's, asked of the solid's
+  own places), what hangs from it carried as drawn, the ring's wedges gone (its configuration is in the depth now), as one step; *Flip chair*
+  gives the other chair, *Draw flat* or Undo the flat drawing again. Which of the two chairs is drawn is this tool's convention, not a rule of
+  any text: the one with fewer groups axial (a tie: the group whose first atom ranks lowest in the canonical order equatorial), lying as near
+  to the flat drawing as it can, a tie to form 1; a pyranose's ring - its ring O beside a carbon carrying an O - with that O behind and that
+  carbon at the right-hand end (McNaught 1996, Chart III). A ring centre the drawing leaves open keeps it open: its group equatorial, on a wavy
+  bond. Where the ring has centres and the drawing gives the configuration of none, it is not drawn as a chair (IUPAC 2006 ST-3.2: a
+  perspective drawing states every centre's configuration): the item is greyed with the reason, "Its configuration is not drawn: a chair would
+  state one." Guarded: if the chair would read as another compound, nothing is changed and Meno says it is its own fault. Offered on a single
+  ring of single bonds at saturated atoms, nothing fused, spiro or bridged on it, not yet drawn with depth: no cyclohexanone or cyclohexene,
+  no fused rings yet (they wait for the depth reader, with Fuse). Groups that come to lie over each other are left for the chemist.
 - **Clean-up leaves a chair as drawn** and says so (`CleanUpRefused`); *Draw flat* is `cleanUp` asked to lay it out. **3D** from a chair takes its
   configuration through the wedges a flat reader is given (`forFlatReaders`) - a 2D block with every z zero, the places of the picture a start for
   nothing - and the drawn conformation is neither a start nor a limit of the conformer search; a notice says so when it is made. Known answers

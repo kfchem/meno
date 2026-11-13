@@ -7,6 +7,8 @@ import type { ShowBox } from "../../utils/viewShow";
 import { bondPtOf, labelPtOf, wordsKept } from "../../restyle";
 import { centredAt, restyledDrawn } from "../../utils/copyPaste";
 import { chairDrawing, FIRST_FORM } from "../../projections/chair";
+import { CHAIR_CHANGED, withChair } from "../../projections/fromFlat";
+import { sameStereo } from "../../chem/engineLayout";
 import { haworthDrawing } from "../../projections/haworth";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import { bondKeyPatch, bondKindPatch, patchAlike, patchChangesNothing, type BondKey, type BondKindName } from "../../utils/bondKinds";
@@ -21,7 +23,7 @@ import { useReadings } from "../../../../../lib/calc/readings";
 import type { ImportedScheme, WorkspaceDocument } from "../../document";
 import type { ArrowLook } from "../../../../../lib/chem/reactionArrow";
 import { ARROW_LENGTH_BONDS } from "../../../../../lib/chem/reactionScheme";
-import { EditorState, Bond, Arrow, Model, Drawn, type ArrowAtomMap, type ArrowFormPatch, type MarkAt, type PushEnd } from "../types";
+import { EditorState, Atom, Bond, Arrow, Model, Drawn, type ArrowAtomMap, type ArrowFormPatch, type MarkAt, type PushEnd } from "../types";
 import { marksAtOf, turnedOver, turnedOverArrows } from "../../utils/selection";
 import { turnedOverRest, turnOverMiddle } from "../../utils/turnOver";
 import { endsRenamed } from "../../utils/cycles";
@@ -688,6 +690,14 @@ export const createModelSlice = (
     const ids = drawing.atoms.map((p) => added.reduce((best, a) => (Math.hypot(a.x - p.x - shift.x, a.y - p.y - shift.y) < Math.hypot(best.x - p.x - shift.x, best.y - p.y - shift.y) ? a : best)).id);
     if (new Set(ids).size !== 6) return;
     chairPuts.set(get().model, { ids, at: middle, form: FIRST_FORM, length: drawing.scale });
+  },
+
+  drawAsChair: (made: { atoms: Atom[]; bonds: Bond[] }) => {
+    // (the guard: the chair read as the compound the flat drawing was, or nothing done - Meno's fault, said)
+    const was = get().model;
+    if (!sameStereo(was, withChair(was, made))) return CHAIR_CHANGED;
+    doc.edit("draw as chair", (d) => ({ ...d, model: withChair(d.model, made) }));
+    return null;
   },
 
   putHaworth: (at: { x: number; y: number }) => {

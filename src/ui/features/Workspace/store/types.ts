@@ -2088,6 +2088,11 @@ export type EditorState = {
    */
   putChair: (at: { x: number; y: number }) => void;
   /**
+   * A flat ring drawn as a chair (projections/fromFlat `chairFromFlat`'s atoms and bonds) as one step - "draw as chair" - where the drawing
+   * reads as the same compound after it; else nothing changed and the words that say so returned (Meno's fault).
+   */
+  drawAsChair: (made: { atoms: Atom[]; bonds: Bond[] }) => string | null;
+  /**
    * A Haworth ring of six (a pyranose's) put down from Quick Add, its middle at `at`; or, where the ring this put down is still as it was,
    * nothing done since, that ring made a ring of five (a furanose's) in its place as one step - and back (docs/EDITOR-2D.md, *Projections*).
    */
