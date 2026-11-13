@@ -1810,18 +1810,32 @@ mention a number, and the card.
   mentioned (350 ms) whose structure the PDF's figures number, a calm card
   by its word - over its line, covering only what has been read, its left
   edge on the word's and a little gap above the letters; under the line
-  only where there is no room above - holds Meno's own drawing of the structure, its number, its page,
-  and the pages it is drawn on again ("12  p. 1 · also on p. 4"). It fades
-  in and out (`DURATION.base`), lingering a moment so the pointer can come
-  onto it. While the PDF is still being gone through for numbers, or the
-  number's figure is still being read, it says so ("12  Reading this PDF's
-  figures…") and grows into the drawing once it comes, its size and place
-  eased, never a jump (`cardHolds`); gone through whole and the number
-  drawn nowhere, no card. Its drawing dragged onto the canvas puts the structure there as
-  one dragged out of its figure is (*Structures picked from a PDF*: the same
-  reading, its note and unsure marks). Its page clicked shows the figure in
+  only where there is no room above - holds the PDF's own picture of the
+  region of its page where the compound is drawn, its number, its page, and
+  the pages it is drawn on again ("12  p. 1 · also on p. 4"). It never shows
+  the structure Meno read from there (the maintainer, 2026-11-13: where the
+  reading is wrong, the chemist would be shown a wrong structure): that
+  appears only once the compound is on the canvas, where it can be checked
+  and edited. The picture is the structure's own box in its figure - the
+  tightest the reader knows, not the whole scheme - drawn again from the
+  PDF by PDFium at the size the card shows it, a point a pixel and a little
+  enlarged where small, at the screen's own resolution, so it is crisp
+  (`utils/lensPicture`); PDFium draws it in its own process, so the window
+  is never held up, and the card is there at once with the picture's place
+  held, the picture fading in. Pictures are kept, the oldest let go
+  past 48. It fades in and out (`DURATION.base`), lingering a moment so the
+  pointer can come onto it. While the PDF is still being gone through for
+  numbers, or the number's figure is still being read, it says so ("12
+  Reading this PDF's figures…") and grows into the picture once it comes,
+  its size and place eased, never a jump (`cardHolds`); gone through whole
+  and the number drawn nowhere in it, it says so in words ("No drawing of
+  this compound was found in this PDF."), never a guess. The picture
+  dragged onto the canvas puts the structure there as one dragged out of its
+  figure is (*Structures picked from a PDF*: the same reading, its note and
+  unsure marks) - where it was read whole; a structure not read whole is
+  shown by its picture and not carried. Its page clicked shows the figure in
   the column, the structure marked a moment. A number no structure is set
-  by, or one of a structure not read, has no card.
+  by has the card's words above.
 - **In the column and on the page alike** (`utils/compoundLens`
   `mentionUnder`, read the same in both). On the page (`components/Pdfs2D`),
   a PDF's words bring a card where they can be read - at the size a long
