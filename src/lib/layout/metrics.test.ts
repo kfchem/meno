@@ -231,6 +231,21 @@ describe("layoutMetrics", () => {
     expect(layoutMetrics(cf3([-90, 0, 90])).angleError).toBeCloseTo(15, 6);
   });
 
+  it("takes a molecule of four ends as an upright cross, not a trident - tert-butanol - and a group on a stub that goes on as a trident - a CF3 laid out alone", () => {
+    const at = (deg: number) => ({ x: Math.cos((deg * Math.PI) / 180), y: Math.sin((deg * Math.PI) / 180) });
+    const g = (degs: number[], elements: string[], onward?: boolean[]) => {
+      const ps = [{ x: 0, y: 0 }, ...degs.map(at)];
+      return { x: ps.map((p) => p.x), y: ps.map((p) => p.y), edges: [[0, 1], [0, 2], [0, 3], [0, 4]] as [number, number][], elements, ...(onward ? { onward } : {}) };
+    };
+    // (tert-butanol drawn upright: four ends, its right angles right)
+    expect(layoutMetrics(g([180, -90, 0, 90], ["C", "O", "C", "C", "C"])).angleError).toBeCloseTo(0, 6);
+    // (a CF3 fanned on the carbon for its bond out, which goes on: on the 30-degree lattice, no grid error; read as four ends, an upright cross's
+    // 90-degree lattice, it would have one)
+    const cf3 = g([180, -60, 0, 60], ["C", "C", "F", "F", "F"], [false, true, false, false, false]);
+    expect(layoutMetrics(cf3).gridError).toBeCloseTo(0, 6);
+    expect(layoutMetrics(cf3).angleError).toBeCloseTo(0, 6);
+  });
+
   it("reads a cage's substituents the same whichever of its alike rings its smallest set holds", () => {
     // 3-vinylquinuclidine with a methyl on C2, its cage drawn in perspective
     // as quinine's is: N1 0, C2 1, C3 2, C4 3, C5 4, C6 5, C7 6, C8 7; the
