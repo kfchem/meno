@@ -18,17 +18,23 @@
  *   refused with why before anything is sent.
  * - A molecule its table's step looked at and found nothing to hold for - a
  *   reaction with no coordination bond - goes on holding nothing, where no
- *   table wired in holds a row at all, and the line says "nothing to hold"
- *   (the maintainer, 2026-11-13). The table says which (lib/steps
- *   `NothingRow`): one its step refused, or never saw, is refused as ever,
- *   however empty the table; so is one where another molecule has rows.
+ *   table wired in holds a row at all, and every table wired in says so of
+ *   it, and the line says "nothing to hold" (the maintainer, 2026-11-13).
+ *   Each table says which (lib/steps `NothingRow`): one a table's step
+ *   refused, or never saw, is refused as ever, however empty the tables;
+ *   so is one where another molecule has rows.
+ * - Every table wired in speaks of each molecule - a row for it, or found to
+ *   have nothing to hold - or it is refused, the table that did not named
+ *   where more than one is wired in: a molecule one table holds a row for
+ *   is never taken on holding that alone where another table's step
+ *   refused it, or never saw it.
  * - Rows for no molecule that came in are counted on the step's line.
  */
 import type { Restraint } from "../../../../lib/entry";
 import type { HeldKind } from "../../../../lib/plugins/steps";
 import { NUMBERING, OWN_NUMBERING, restraintKey, restraintRowsIn, restraintSaid, type NothingRow, type RestraintRow } from "../../../../lib/steps/restraints";
 import { findSet, stepsBefore, type Flow } from "./flow";
-import { RESTRAINTS_INPUT, type StepKind } from "./kinds";
+import { kindInfo, RESTRAINTS_INPUT, type StepKind } from "./kinds";
 import type { SetEntry } from "./entries";
 
 /** What a minimisation's plugin holds where its manifest names none: what *Minimise with restraints* is for - distances and torsions by their strengths, atoms fixed (docs/PLUGINS.md). Every other kind holds only what its plugin names. */
@@ -100,15 +106,23 @@ export function heldRows(doc: Flow, step: number, entries: readonly SetEntry[], 
   const wires = (doc.wires ?? []).filter((w) => w.to.step === step && w.to.port === RESTRAINTS_INPUT.id);
   if (!wires.length) return null;
   const wired: Wired[] = [];
-  const nothing: NothingRow[] = [];
+  // (each table's molecules found to have nothing to hold, table by table; and what made it, by its step's name)
+  const nothing: NothingRow[][] = [];
+  const madeBy: string[] = [];
   for (const [t, w] of wires.entries()) {
     const set = findSet(doc, w.from.set);
     if (!set?.table) return { why: "What comes into Restraints is no table of restraints yet" };
     const read = restraintRowsIn(set.table);
     if ("why" in read) return { why: `Restraints: ${read.why}` };
     read.rows.forEach((row, at) => wired.push({ row, step: set.made?.step, table: t, at }));
-    nothing.push(...read.nothing);
+    nothing.push(read.nothing);
+    const by = doc.steps?.find((x) => x.id === set.made?.step);
+    madeBy.push(by ? kindInfo(by.kind).name : "a table read from a file");
   }
+  // (why a molecule is refused that a table says nothing of: which table, where more than one is wired in - by its step's
+  //  name, and its place among them where two steps' names are alike)
+  const silentWhy = (t: number) =>
+    wires.length === 1 ? NONE_MADE_WHY : `${NONE_MADE_WHY} by ${madeBy[t]}${madeBy.filter((n) => n === madeBy[t]).length > 1 ? ` (table ${t + 1} of ${wires.length} wired in)` : ""}`;
   let heldNothing = 0;
   // (whether table a's step comes after table b's in the flow: its rows the later round's)
   const before = new Map<number, number[]>();
@@ -117,15 +131,20 @@ export function heldRows(doc: Flow, step: number, entries: readonly SetEntry[], 
   let takenOver = 0;
   const each = entries.map((e): { rows: Restraint[] } | { why: string } => {
     const mine = wired.filter((w) => idOf(e, w.row.on) === w.row.for);
+    // (its rows are for a molecule that came in, held or not)
+    mine.forEach((w) => used.add(w));
+    // (every table wired in speaks of it - a row for it, or found to have nothing to hold - or it is refused, saying which did
+    //  not: a restraint asked for and not made, by a step that refused it or never saw it, is never passed over)
+    const found = nothing.map((table) => table.find((x) => idOf(e, x.on) === x.for));
+    const silent = wires.findIndex((_, t) => !found[t] && !mine.some((w) => w.table === t));
+    if (silent >= 0) return { why: silentWhy(silent) };
+    if (found.some((x) => x && x.numbering !== numberingOf(e))) return { why: RENUMBERED_WHY };
     if (!mine.length) {
-      // (found to have nothing to hold, by a table wired in, and no table holding a row for any: it goes on, holding nothing)
-      const found = wired.length ? undefined : nothing.find((x) => idOf(e, x.on) === x.for);
-      if (!found) return { why: NONE_MADE_WHY };
-      if (found.numbering !== numberingOf(e)) return { why: RENUMBERED_WHY };
+      // (found to have nothing to hold by every table, and no table holding a row for any: it goes on, holding nothing)
+      if (wired.length) return { why: NONE_MADE_WHY };
       heldNothing++;
       return { rows: [] };
     }
-    mine.forEach((w) => used.add(w));
     if (mine.some((w) => w.row.numbering !== numberingOf(e))) return { why: RENUMBERED_WHY };
     const n = e.atoms.length;
     const out = mine.find((w) => w.row.restraint.atoms.some((a) => a >= n));

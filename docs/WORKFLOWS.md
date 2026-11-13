@@ -1321,7 +1321,17 @@ taller than the rest, its inputs a plain list down its left edge, each named
   hold" for each (STRUCTURE-STEPS.md, *Restraints*). A molecule the step
   refused - no ID, an ID another shares - or never saw is refused as ever,
   however empty the table: a restraint asked for and not made is never
-  passed over. So is one with no row where another molecule has rows.
+  passed over. So is one with no row where another molecule has rows. One
+  with a double bond its reference has cis, where 180° is asked, is no
+  "nothing to hold": something was found that cannot be held so, and it is
+  refused.
+- **Every table speaks of it**: with several tables wired in, a molecule is
+  taken on only where each of them has a row for it or says it has nothing
+  to hold. One a table's step refused, or never saw, is refused, and the
+  words say which table ("no restraints made for it by Torsion
+  restraints"): never taken on holding another table's rows alone. Case
+  F's rounds pass, each round's step seeing every molecule its
+  minimisation takes.
 - **As its plugin holds them**: each plugin says what it holds (PLUGINS.md,
   `steps`, `restraints`) - its program may hold more than the plugin sends:
   distances and torsions by a strength, or exactly; atoms fixed. A row it

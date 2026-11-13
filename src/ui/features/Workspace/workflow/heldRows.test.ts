@@ -188,11 +188,79 @@ describe("the restraints a step holds, wired in", () => {
     expect(heldRows(wiredWith(a), 40, [molecule("p3")], RDKIT, "RDKit")).toEqual({ each: [{ why: NONE_MADE_WHY }], said: [] });
     // (rows for one molecule in a table wired in, none found for another: the other refused, until it is ruled otherwise)
     expect(heldRows(wiredWith(a, restraintsTable([row(torsion(T1, 50), "p9")])), 40, [molecule("p1")], RDKIT, "RDKit")).toEqual({
+      each: [{ why: `${NONE_MADE_WHY} by Restraints (table 2 of 2 wired in)` }],
+      said: ["1 restraint row for no molecule here"],
+    });
+    // (the same, the second table naming it as found to have nothing too: rows for another molecule - refused, until it is ruled)
+    expect(heldRows(wiredWith(a, restraintsTable([row(torsion(T1, 50), "p9")], [{ for: "p1", on: "start", numbering: OWN_NUMBERING, why: "none found to hold" }])), 40, [molecule("p1")], RDKIT, "RDKit")).toEqual({
       each: [{ why: NONE_MADE_WHY }],
       said: ["1 restraint row for no molecule here"],
     });
     // (numbered anew by Atom map since its step found nothing for it: refused, as a row would be)
     expect(heldRows(wiredWith(a), 40, [molecule("p1", "as reactant #1 (k2)"), molecule("p2")], RDKIT, "RDKit")).toEqual({ each: [{ why: RENUMBERED_WHY }, { rows: [] }], said: [NOTHING_TO_HOLD] });
+  });
+
+  it("takes a molecule on only where every table wired in speaks of it - a row, or nothing found to hold - saying which did not (CHEM's known answers)", () => {
+    const tables = (steps: [number, WorkflowStep["kind"]][], made: Table[]) =>
+      page([...steps, [40, "minimise"]], made.map((table, k) => ({ id: 11 + k, by: steps[k][0], table })), made.map((_, k) => [11 + k, 40, RESTRAINTS_INPUT.id]));
+    const tableOf = (o: ReturnType<typeof restrainedSet>) => {
+      if (!o.ok || !o.tables?.[ONE_EXIT]) throw new Error("no table made");
+      return o.tables[ONE_EXIT];
+    };
+    const COORDINATION = { on: "start", factor: "0.9" };
+    const SHARED = { on: "start", torsions: "typed", atoms: "1-2-3-4", target: "180", hold: "strength", strength: "50" };
+    // (e) coordination finds none for both; a typed torsion's step refuses both (an ID shared): both refused, the torsions' named
+    const none = tableOf(restrainedSet([molecule("p1"), molecule("p2")], "molecules", COORDINATION));
+    const refused = tableOf(torsionsSet([molecule("p1"), molecule("p1"), molecule("p2"), molecule("p2")], null, "molecules", SHARED));
+    const e = tables([[10, "restraints"], [20, "torsion-restraints"]], [none, refused]);
+    expect(heldRows(e, 40, [molecule("p1"), molecule("p2")], RDKIT, "RDKit")).toEqual({
+      each: [{ why: `${NONE_MADE_WHY} by Torsion restraints` }, { why: `${NONE_MADE_WHY} by Torsion restraints` }],
+      said: [],
+    });
+    // (e2) a molecule one of the tables' steps never saw: refused, that table named
+    const onlyP1 = tableOf(restrainedSet([molecule("p1")], "molecules", COORDINATION));
+    const e2 = tables([[10, "restraints"], [20, "restraints"]], [none, onlyP1]);
+    expect(heldRows(e2, 40, [molecule("p1"), molecule("p2")], RDKIT, "RDKit")).toEqual({
+      each: [{ rows: [] }, { why: `${NONE_MADE_WHY} by Restraints (table 2 of 2 wired in)` }],
+      said: [NOTHING_TO_HOLD],
+    });
+    // (a row for it in one table, the other table's step refusing it: never taken on holding the one table's row alone)
+    const held = restraintsTable([row(torsion(T1, 50), "p1")]);
+    const mixed = tables([[10, "restraints"], [20, "torsion-restraints"]], [held, refused]);
+    expect(heldRows(mixed, 40, [molecule("p1")], RDKIT, "RDKit")).toEqual({ each: [{ why: `${NONE_MADE_WHY} by Torsion restraints` }], said: [] });
+    // (round 2's step seeing every molecule round 1's minimisation gave: a row in one, nothing found in the other - held, round 1's row)
+    const round2 = restraintsTable([], [{ for: "p1", on: "start", numbering: OWN_NUMBERING, why: "none found to hold" }]);
+    const rounds2 = tables([[10, "restraints"], [30, "restraints"]], [held, round2]);
+    expect(heldRows(rounds2, 40, [molecule("p1")], RDKIT, "RDKit")).toEqual({ each: [{ rows: [torsion(T1, 50)] }], said: [] });
+  });
+
+  it("refuses a molecule whose double bond its reference has cis, held at 180° where trans: something to hold found, not nothing (CHEM's (d))", () => {
+    // (C-N=N-C, the torsion at `phi`)
+    const azo = (phi: number, start: string): SetEntry => {
+      const r = (phi * Math.PI) / 180;
+      return {
+        ...molecule(start),
+        atoms: ["C", "N", "N", "C"].map((el) => ({ el })),
+        bonds: [
+          { a1: 0, a2: 1, order: 1 },
+          { a1: 1, a2: 2, order: 2 },
+          { a1: 2, a2: 3, order: 1 },
+        ],
+        xyz: [-0.7, 1.2, 0, 0, 0, 0, 1.25, 0, 0, 1.95, 1.2 * Math.cos(r), 1.2 * Math.sin(r)],
+      } as unknown as SetEntry;
+    };
+    const FROM = { on: "start", torsions: "reference", at: "trans", strength: "50" };
+    const d = torsionsSet([azo(180, "p1")], [azo(0, "r")], "molecules", FROM);
+    if (!d.ok || !d.tables?.[ONE_EXIT]) throw new Error("no table made");
+    expect(d.said).not.toContain("with none to hold");
+    const wired = page([[20, "torsion-restraints"], [40, "minimise"]], [{ id: 11, by: 20, table: d.tables[ONE_EXIT] }], [[11, 40, RESTRAINTS_INPUT.id]]);
+    expect(heldRows(wired, 40, [azo(180, "p1")], RDKIT, "RDKit")).toEqual({ each: [{ why: NONE_MADE_WHY }], said: [] });
+    // (d0) the same, nothing unlike its reference: nothing to hold - it goes on
+    const d0 = torsionsSet([azo(180, "p1")], [azo(180, "r")], "molecules", FROM);
+    if (!d0.ok || !d0.tables?.[ONE_EXIT]) throw new Error("no table made");
+    expect(d0.said).toContain("1 entry with none to hold");
+    const wired0 = page([[20, "torsion-restraints"], [40, "minimise"]], [{ id: 11, by: 20, table: d0.tables[ONE_EXIT] }], [[11, 40, RESTRAINTS_INPUT.id]]);
+    expect(heldRows(wired0, 40, [azo(180, "p1")], RDKIT, "RDKit")).toEqual({ each: [{ rows: [] }], said: [NOTHING_TO_HOLD] });
   });
 
   it("refuses every molecule where the tables wired in hold no row and name none as found to hold nothing - a table read from a file, say", () => {
