@@ -15,7 +15,11 @@ function farFromNear(smiles: string): { dx: number; dy: number } {
   const degree = (i: number) => input.bonds.filter((b) => (b.a === i && core.has(b.b)) || (b.b === i && core.has(b.a))).length;
   for (let pruned = true; pruned; ) {
     pruned = false;
-    for (const i of [...core]) if (degree(i) <= 1) (core.delete(i), (pruned = true));
+    for (const i of [...core]) {
+      if (degree(i) > 1) continue;
+      core.delete(i);
+      pruned = true;
+    }
   }
   const heads = [...core].filter((i) => degree(i) === 3);
   expect(heads, smiles).toHaveLength(2);
