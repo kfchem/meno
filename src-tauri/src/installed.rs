@@ -252,8 +252,9 @@ pub(crate) mod tests {
         fs::create_dir_all(root.join("alpha").join("0.9.0")).unwrap();
         fs::create_dir_all(root.join("alpha").join("1.1.0")).unwrap();
         fs::create_dir_all(root.join("beta").join("0.1.0")).unwrap();
-        // (and what is not a version's folder, or not a plugin's: left)
+        // (and what is not a version's folder, or not a plugin's: left - a file, a folder whose name is no version)
         fs::write(root.join("alpha").join("notes.txt"), "").unwrap();
+        fs::create_dir_all(root.join("alpha").join(".cache")).unwrap();
         fs::create_dir_all(root.join(".staging").join("x")).unwrap();
         let busy = |id: &str| id == "alpha";
         // (beta has no current: which version it uses is not known - kept, and said)
@@ -264,7 +265,7 @@ pub(crate) mod tests {
             tidy(&root, &none),
             ["alpha 0.9.0: no longer in use, taken away", "alpha 1.1.0: no longer in use, taken away", "beta: its current names no version in place, so none of its 1 version was taken away"]
         );
-        assert!(dir(&root, "alpha").is_ok() && root.join("alpha").join("notes.txt").exists() && root.join(".staging").join("x").exists());
+        assert!(dir(&root, "alpha").is_ok() && root.join("alpha").join("notes.txt").exists() && root.join("alpha").join(".cache").exists() && root.join(".staging").join("x").exists());
         let _ = fs::remove_dir_all(&root);
     }
 
