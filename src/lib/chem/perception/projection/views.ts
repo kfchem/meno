@@ -66,8 +66,10 @@ export const CHAIR_TURN_DEG = 30 - Math.atan(Math.sqrt(3) / 5) / DEG;
  *  - A chair: the ring's axis up the page, the eye `CHAIR_ELEVATION_DEG` over the mean plane and the solid turned `CHAIR_TURN_DEG` about the axis
  *    (Brecher 2006, ST-3.1: from above, the nearer atoms lower in the drawing); `form` 0 the chair with its first atom at the right end of the page.
  *    A chair whose first atom lies below the mean plane (the ring flip) is turned the other way, so that it is seen as the first chair's mirror
- *    picture, its first atom the low end at the right. `form` 1 is the mirror picture of the form seen: the reflection of the view in the
- *    chair's own mirror plane (through atoms 0 and 3), then in the page's x - the head at the left. Each solid's two forms are one another's mirror.
+ *    picture, its first atom the low end at the right. `form` 1 is the SAME solid seen from the other side of its own mirror plane through atoms 0
+ *    and 3: the eye turned about the axis to 180 degrees minus the turn of form 0 (from the opposite azimuth), the head at the left. The picture is
+ *    form 0's with x turned about, with atoms 1 and 5, 2 and 4 changing places, and each atom's depth is its depth in THAT view. It is never form 0's
+ *    picture mirrored with every atom keeping its own depth: that is the mirror image of the solid, and reads as the other configuration.
  *  - A boat, half-chair and envelope: seen as the first chair is.
  *  - A Haworth ring: from slightly above, so that the edge closer to the viewer is drawn below the more distant one, the oxygen behind and C-1
  *    at the right-hand end (McNaught 1996, 2-Carb-5.4) - which `haworth` has built: the ring O first, at the back; the elevation `HAWORTH_ELEVATION_DEG`.
@@ -118,7 +120,7 @@ const ORDERS: [number, number, number][] = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1,
  * atom's place is the sum of the drawn bonds from the first atom to it, then the first ring's centre is put at the page's origin; every ring
  * closes, since a chair goes along each of its three directions once each way. A free position is drawn along its own direction's image: an axial
  * one vertical, an equatorial one parallel to the ring bonds one removed, nothing more. DEPTH is the true view's: each atom's, and each free
- * direction's, in the standard view of the solid (`form` as `standardView`), so that the drawing is read back as the solid is - the nearer wins.
+ * direction's, in the standard view of the solid (`form` as `standardView`: for form 1 the solid seen from the other side of its mirror plane, the lines of the convention reflected, never the form-0 drawing mirrored with each atom's depth kept), so that the drawing is read back as the solid is - the nearer wins.
  *
  * Null for a solid with a bond or a free direction off the four (the boat, half-chair, envelope, a five-ring fused on, with its `miss`): those
  * are `seen`. The Haworth ring and the Newman pair are `seen` as well.

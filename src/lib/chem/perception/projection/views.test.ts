@@ -50,7 +50,7 @@ describe("the chair's standard view: its depth, and what `seen` shows", () => {
     expect(p[5].z).toBeGreaterThan(p[2].z);
   });
 
-  it("form 1 is the other textbook chair, each the other's mirror picture: the same six points with x turned about, atoms 1 and 5, 2 and 4 swapped (the chair's own mirror plane through atoms 0 and 3)", () => {
+  it("form 1 is the same solid seen from the other side of its own mirror plane (through atoms 0 and 3): the six points of form 0 with x turned about and atoms 1 and 5, 2 and 4 changing places, each atom the depth it has in THIS view", () => {
     const a = seen(chair(), standardView(chair(), 0));
     const b = seen(chair(), standardView(chair(), 1));
     const want = [
@@ -272,7 +272,7 @@ describe("the chair as the textbook draws it (ruled: a convention of one drawn l
     expect(lines(cis, 6).size).toBe(3);
   });
 
-  it("draws form 1 as the mirror picture - every angle mirrored, depth from the mirrored view: the single chair's places with x turned about, atoms 1 and 5, 2 and 4 swapped", () => {
+  it("draws form 1 for the same solid seen from the other side of its mirror plane - the lines of the convention reflected, each atom's depth that of this view: the single chair's places with x turned about, atoms 1 and 5, 2 and 4 changing places", () => {
     const a = drawn(chair(), 0)!;
     const b = drawn(chair(), 1)!;
     const swapped = [0, 5, 4, 3, 2, 1];
@@ -281,6 +281,9 @@ describe("the chair as the textbook draws it (ruled: a convention of one drawn l
       close(b.atoms[swapped[k]].y, p.y, 9);
       close(b.atoms[swapped[k]].z, p.z, 9);
     });
+    // (never form 0's picture mirrored with each atom keeping its own depth: atom 1 is the far-right atom in form 0 and a near atom in form 1)
+    expect(b.atoms[1].z).toBeGreaterThan(0.5);
+    expect(a.atoms[1].z).toBeLessThan(-0.5);
     // (the lower edge the nearer in form 1 too)
     expect(order(b.atoms)).toEqual([2, 1, 3, 0, 4, 5]);
     expect(new Set(drawn(chair(), 1)!.atoms.map((p) => Math.round(p.x * 1000) / 1000)).size).toBe(6);
