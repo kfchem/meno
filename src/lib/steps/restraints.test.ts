@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { valueFault, type Entry, type EntryBond, type Restraint } from "../entry";
 import { speciesOf } from "../io/writers";
-import { angleIn, EXACT, isTrans, linearBy, OWN_NUMBERING, restraintKey, restraintRows, restraintRowsIn, restraintsTable, torsionRowsFromReference, torsionRowsTyped, torsionsUnlike, torsionUnlikeText, transTorsions, type RestraintRow } from "./restraints";
+import { angleIn, EXACT, isTrans, linearBy, OWN_NUMBERING, restraintKey, restraintRows, NONE_FOUND, NOTHING_KIND, restraintRowsIn, restraintsTable, torsionRowsFromReference, torsionRowsTyped, torsionsUnlike, torsionUnlikeText, transTorsions, type RestraintRow } from "./restraints";
 
 /** Restraints from entries whose distances and dihedrals are set by hand, and radii as published. */
 
@@ -57,7 +57,7 @@ const butene = (trans: boolean, properties: Entry["properties"] = {}) =>
     properties,
   );
 
-// Cu-N, a coordination bond, the copper's other ligand an ammonia's N: as CHEM's worked row
+// Cu-N, a coordination bond, the copper's other ligand an ammonia's N: as the worked row of the chemistry check
 const copper = entry(
   [
     ["Cu", 0, 0, 0],
@@ -152,7 +152,18 @@ describe("a restraints table", () => {
   });
 
   it("reads back as it was made, exact said - never read from a strength left out", () => {
-    expect(restraintRowsIn(restraintsTable(rows))).toEqual({ rows });
+    expect(restraintRowsIn(restraintsTable(rows))).toEqual({ rows, nothing: [] });
+    // (a molecule found to have nothing to hold: a row of its own, after the rest, read back apart)
+    const nothing = [{ for: "p7", on: "start", numbering: OWN_NUMBERING, why: NONE_FOUND }];
+    const both = restraintsTable(rows, nothing);
+    expect(both.rows[rows.length].slice(0, 2)).toEqual([NOTHING_KIND, ""]);
+    expect(restraintRowsIn(both)).toEqual({ rows, nothing });
+    // (one read from a file with no numbering cell: in its own numbering, as a row with none is)
+    const unnumbered = { ...both, rows: both.rows.map((r, i) => (i === rows.length ? r.map((c, j) => (both.columns[j].name === "numbering" ? "" : c)) : r)) };
+    expect(restraintRowsIn(unnumbered)).toEqual({ rows, nothing });
+    // (one that names no molecule does not read)
+    const nobody = { ...both, rows: both.rows.map((r, i) => (i === rows.length ? r.map((c, j) => (both.columns[j].name === "for" ? "" : c)) : r)) };
+    expect(restraintRowsIn(nobody)).toEqual({ why: `Row ${rows.length + 1} of the restraints does not read: it does not say which molecule it is for` });
     // (no strength in a torsion's cell: no row - neither held exactly nor at some strength)
     const t = restraintsTable(rows);
     const k = t.columns.findIndex((c) => c.name === "strength");

@@ -223,6 +223,8 @@ export type Molecule3DViewProps = {
   leaving?: () => void;
   /** Rising out of its drawing: where it started, over the drawing, and when; and what is told once it has risen. */
   rising?: Rising3D;
+  /** Its search goes on (store `growing3d`): its chip says so, its conformers growing as they come. */
+  searching?: boolean;
   /** Splitting off the molecule it is a copy of, a value set on it (`Split3D`): over it at first, as it is, gliding out to its own place as its value goes over to the new one; or, `back`, undone, the other way, and gone. */
   split?: Split3D;
   /** Its atom whose drawing's atom is under the pointer: lit as if it were. */
@@ -1731,8 +1733,9 @@ function Molecule3DView(props: Molecule3DViewProps) {
       said: m.said,
       noShares: m.conformerSet ? sharesWithheld(m) || undefined : undefined,
       conformers: m.conformerSet,
+      ...(props.searching ? { searching: true } : {}),
     }),
-    [m, count, shares],
+    [m, count, shares, props.searching],
   );
   const chipOpened = useCallback(
     (o: boolean) => {
