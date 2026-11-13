@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { addMolecule3d, emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
 import { OWN_NUMBERING, restraintsTable } from "../../../../lib/steps/restraints";
-import { inputKey, wireInto, wireRefusal } from "./flow";
+import { inputKey, wiresInto, wireRefusal } from "./flow";
 import { holdTable, addSet, addStep, connect, setRan } from "./model";
 import { placeResults, whyNot, type RunWith } from "./run";
 import type { DrawnModel } from "../store/types";
@@ -34,10 +34,10 @@ describe("a step's Restraints input", () => {
   it("is never the input a step's wire is, where none is named: that is its first", () => {
     const only = connect(page(), { set: 5 }, 2, RESTRAINTS_INPUT.id);
     expect(only.wires?.map((w) => w.to.port)).toEqual([RESTRAINTS_INPUT.id]);
-    expect(wireInto(only, 2)).toBeUndefined();
+    expect(wiresInto(only, 2)).toEqual([]);
     const both = connect(only, { set: 1 }, 2, ONE_INPUT);
-    expect(wireInto(both, 2)?.from).toEqual({ set: 1 });
-    expect(wireInto(both, 2, RESTRAINTS_INPUT.id)?.from).toEqual({ set: 5 });
+    expect(wiresInto(both, 2).map((w) => w.from)).toEqual([{ set: 1 }]);
+    expect(wiresInto(both, 2, RESTRAINTS_INPUT.id).map((w) => w.from)).toEqual([{ set: 5 }]);
   });
 
   it("takes a table of restraints, never molecules seen as one", () => {

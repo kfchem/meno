@@ -51,6 +51,11 @@ describe("a line of the page's for Meno's log (lib/log)", () => {
     expect(text).toContain('[text] Meno: the tab "…" stopped working. [text] [Object] [Map] [Array]');
   });
 
+  it("keeps the words said of a workspace file that does not read - and none of a name that goes with them", () => {
+    expect(logText(["a workspace file could not be read"])).toContain("a workspace file could not be read");
+    expect(logText([`${FILE} could not be read: it is not a workspace Meno reads.`])).not.toContain(FILE);
+  });
+
   it("of a code error's message, what it quotes in single quotes left out too - an apostrophe in a word kept", () => {
     // (the message's line only, without the frames)
     const head = (e: Error) => logText([e]).split("\n")[0];

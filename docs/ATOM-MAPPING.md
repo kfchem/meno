@@ -411,6 +411,20 @@ A reaction drawn on the page is mapped from its arrow's right-click menu,
   (room for a "+"); the products, likewise from its point. Reagents written
   over or under the arrow are not of the reaction. The menu offers the map
   only where something stands on either side.
+- **Which arrows.** Only an arrow that means a reaction
+  (`lib/chem/reactionScheme` `reactionMeant`): a plain, dashed or bent
+  arrow, or an equilibrium, read as drawn with the tail side the reactants.
+  A crossed-out arrow says the reaction does not happen; a retrosynthetic
+  one has its target at the tail and its precursors at the point, the sides
+  the other way round; a line with no head does not say which way the
+  reaction goes; a two-headed arrow that is no equilibrium joins resonance
+  forms of one species. For those four the menu has no *Atom map*, none is
+  made by any other route (the reason is said), and an RXN file is not
+  written of them either - the same rule, said in the words of exporting
+  (`reactionMeant`, chem/reactionFile `notOneReaction`). A map made
+  before the arrow came to mean none - its kind changed after mapping - is
+  kept, shown as *Not a reaction now* with *Remove map*, and shows nothing on
+  the drawing until the arrow means a reaction again.
 - **In 3D, every hydrogen an atom.** Each structure is taken as a molecule
   in 3D made from it, where one is still its drawing's (the conformer
   shown); else one conformer is made, as *3D structure* makes it. A lone

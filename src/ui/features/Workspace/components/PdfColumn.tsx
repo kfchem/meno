@@ -51,6 +51,7 @@ import { layOut } from "../../TextEditor/markdownLayout";
 import { measureText } from "../../TextEditor/markdownType";
 import { spotMoving } from "./figureTie";
 import { inkOnPage } from "../utils/pdfInk";
+import { useLocked } from "../../../../lib/doc/locked";
 
 /** How long a page takes between the page and the column, in ms; and a text's lines, once settled, to hand over to the column's own. */
 export const FLIGHT_MS = 420;
@@ -210,6 +211,8 @@ function ColumnPass({
   const pdfSel = useEditor((s) => s.pdfSel);
   const pdfFind = useEditor((s) => s.pdfFind);
   const pdfFlash = useEditor((s) => s.pdfFlash);
+  // (those locked with a password not given: a padlock on each page)
+  const locked = useLocked((s) => s.shas);
   const pdfBox = useEditor((s) => s.pdfBox);
   // (structures picked, and the one under the pointer: docs/PDF.md, *Structures picked from a PDF*)
   const structureLit = useEditor((s) => s.pdfStructureLit);
@@ -481,6 +484,7 @@ function ColumnPass({
             tiles={pics.tilesOf(pdf.sha256, i, clock.current.levels.get(i) ?? 0)}
             marks={marksOn(pdf, i, pdfSel, pdfFind?.found ?? [], pdfFind ? (pdfFind.found[pdfFind.now] ?? null) : null, redraw, pdfFlash, pdfBox, structuresOnPage(pdf, i))}
             ink={inkOnPage(pdf, i)}
+            locked={locked.has(pdf.sha256)}
           />
         );
       });
@@ -513,6 +517,7 @@ function ColumnPass({
         px={1}
         preview={pics.preview(flown, flight.page)}
         tiles={pics.tilesOf(flown.sha256, flight.page, level)}
+        locked={locked.has(flown.sha256)}
       />
     );
   })();

@@ -21,6 +21,7 @@ function LinesField({ option, value, onChange }: { option: LinesOption; value: s
       {/* (20 px a line, as leading-5, and the box's own padding - and room all round for its focus ring, which the scroll would clip) */}
       <span className="-m-0.5 flex gap-2 overflow-y-auto p-0.5" style={{ maxHeight: MOST_ROWS * 20 + 10 + 4 }}>
         <textarea
+          data-native-undo=""
           value={value}
           rows={rows}
           wrap="off"

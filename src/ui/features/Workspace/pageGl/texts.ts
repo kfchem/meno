@@ -104,8 +104,8 @@ export function placed(t: PageText): { text: string; x: number; y: number; size:
   return { text, x, y, size: pagePx(t.sizePx) };
 }
 
-/** A run of words in one line, its own colour and weight (`lineOf`). */
-export type Run = { text: string; color: string; weight?: Weight };
+/** A run of words in one line, its own colour and weight - or in Plex Mono, as inline code is (`lineOf`). */
+export type Run = { text: string; color: string; weight?: Weight; mono?: true };
 
 /**
  * One line of runs, each its own colour and weight - a chip's "1 / 5 · Failed",
@@ -115,11 +115,11 @@ export type Run = { text: string; color: string; weight?: Weight };
  */
 export function lineOf(key: string, x: number, y: number, anchor: PageText["anchor"], runs: readonly Run[], sizePx: number, more?: Pick<PageText, "baseline" | "z" | "opacity">): PageText[] {
   const shown = runs.filter((r) => r.text.length > 0);
-  const widths = shown.map((r) => pagePx(textWidth(r.text, sizePx, r.weight ?? 400)));
+  const widths = shown.map((r) => pagePx(textWidth(r.text, sizePx, r.weight ?? 400, r.mono)));
   const whole = widths.reduce((a, w) => a + w, 0);
   let at = anchor === "start" ? x : anchor === "middle" ? x - whole / 2 : x - whole;
   return shown.map((r, i) => {
-    const t: PageText = { key: `${key}:${i}`, x: at, y, anchor: "start", text: r.text, sizePx, color: r.color, ...(r.weight ? { weight: r.weight } : {}), ...more };
+    const t: PageText = { key: `${key}:${i}`, x: at, y, anchor: "start", text: r.text, sizePx, color: r.color, ...(r.weight ? { weight: r.weight } : {}), ...(r.mono ? { mono: true as const } : {}), ...more };
     at += widths[i];
     return t;
   });
@@ -127,7 +127,7 @@ export function lineOf(key: string, x: number, y: number, anchor: PageText["anch
 
 /** How wide a line of runs is, in page pixels (`lineOf`). */
 export function widthOfRuns(runs: readonly Run[], sizePx: number): number {
-  return runs.reduce((a, r) => a + textWidth(r.text, sizePx, r.weight ?? 400), 0);
+  return runs.reduce((a, r) => a + textWidth(r.text, sizePx, r.weight ?? 400, r.mono), 0);
 }
 
 /** A run that may be broken across lines (`wrapRuns`); `atomic`, never - a title cut to its most, as an inline block. */
@@ -152,7 +152,7 @@ export function wrapRuns(runs: readonly WrapRun[], sizePx: number, maxPx: number
     // (a line may end after a space, or after a hyphen inside a word - "GFN2-xTB" - as CSS's lines do; never one before a figure, a minus)
     else for (const w of r.text.match(/[^\s-]+-(?=[^\s\d-])|\S*\s*/g) ?? []) if (w) pieces.push({ run: r, text: w, atomic: false });
   }
-  const width = (t: string, r: Run) => textWidth(t, sizePx, r.weight ?? 400);
+  const width = (t: string, r: Run) => textWidth(t, sizePx, r.weight ?? 400, r.mono);
   const lines: { run: Run; text: string }[][] = [[]];
   let at = 0;
   const put = (run: Run, text: string) => {
@@ -180,7 +180,7 @@ export function wrapRuns(runs: readonly WrapRun[], sizePx: number, maxPx: number
       const joined: Run[] = [];
       for (const { run, text } of line) {
         const last = joined[joined.length - 1];
-        if (last && last.color === run.color && (last.weight ?? 400) === (run.weight ?? 400)) last.text += text;
+        if (last && last.color === run.color && (last.weight ?? 400) === (run.weight ?? 400) && !last.mono === !run.mono) last.text += text;
         else joined.push({ ...run, text });
       }
       const end = joined[joined.length - 1];

@@ -1,6 +1,6 @@
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { writeRxnfile, type WriterModel } from "../../../../lib/chem/molWriter";
-import { arrowEnds, reactionRoles } from "../../../../lib/chem/reactionScheme";
+import { arrowEnds, reactionMeant, reactionRoles } from "../../../../lib/chem/reactionScheme";
 import type { Drawn } from "../store/types";
 import { mapMarks, mapStanding } from "./atomMap";
 import { forFlatReaders } from "./drawing";
@@ -11,8 +11,8 @@ const NEAR_BONDS = 5;
 /**
  * The drawing's arrows that show a reaction: those with a structure drawn
  * before their tail or past their point, near it - a reactant or a product
- * - whatever their kind, an RXN file holding none. An arrow alone, on a
- * slide, shows none.
+ * - whatever their kind, an RXN file holding none (`notOneReaction` says
+ * which of them are no reaction's). An arrow alone, on a slide, shows none.
  */
 export function reactionArrows(drawn: Drawn): NonNullable<Drawn["arrows"]> {
   const arrows = drawn.arrows ?? [];
@@ -32,8 +32,13 @@ export function reactionArrows(drawn: Drawn): NonNullable<Drawn["arrows"]> {
 
 /** Why the drawing cannot be written as an RXN file - it holds one reaction - or null if it can. */
 export function notOneReaction(drawn: Drawn): string | null {
-  const arrows = reactionArrows(drawn).length;
-  if (arrows === 1) return null;
+  const found = reactionArrows(drawn);
+  const arrows = found.length;
+  if (arrows === 1) {
+    // (an arrow that means no reaction - crossed out, retrosynthetic, headless, two-headed - is no reaction's: lib/chem/reactionScheme `reactionMeant`)
+    const meant = reactionMeant(found[0], "export");
+    return meant === true ? null : `No RXN file for this arrow: ${meant.why}.`;
+  }
   return arrows === 0
     ? "An RXN file holds a reaction: draw it with its arrow, and what reacts or what it gives beside it."
     : `An RXN file holds one reaction, and the drawing has ${arrows} arrows.`;
@@ -42,7 +47,7 @@ export function notOneReaction(drawn: Drawn): string | null {
 /**
  * The drawing as an RXN file: each molecule a reactant, a product or a
  * reagent by where it is drawn against the arrow (lib/chem/reactionScheme) -
- * a plain reaction, whatever the arrow's kind - its atom map's numbers and
+ * a reaction by the arrow's kind (`reactionMeant`) - its atom map's numbers and
  * reacting centres written, where its arrow has a map of it as drawn, shown
  * or not (chem/atomMap) -
  * a cage drawn in perspective given its wedges as a MOL file is; in V3000

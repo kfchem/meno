@@ -16,7 +16,8 @@ import type { OptionValues } from "../../../../lib/options";
 import { conformersSoughtOf, MOST_CONFORMERS, RING_CONFORMERS, roundsAsked, soughtNumber } from "../../../../lib/chem/conformersSought";
 import { inRounds, roundsSaid, SEARCH_BUDGET_MS } from "./conformerRounds";
 import { roundsJudge } from "./roundsJudge";
-import { WITHIN_3D, type ChemistrySettings } from "../../../../lib/settings/appSettings";
+import { WITHIN_3D, type CalculationSettings, type ChemistrySettings } from "../../../../lib/settings/appSettings";
+import { threadsOf } from "../../../../lib/jobs";
 import { chemMolblock, isElementSymbol, molIndex } from "../../../../lib/roles/molblock";
 import { readMolfile } from "../../../../lib/chem/ctfile";
 import { COORDINATION_BOND } from "../../../../lib/chem/molecule";
@@ -533,6 +534,25 @@ export function pageCount(block: Pick<Block, "molblock">, chosen: Pick<Chemistry
   return soughtNumber({ sought: chosen.sought3d ?? "needed", count: chosen.count3d ?? RING_CONFORMERS }, () => conformersSoughtOf(block.molblock));
 }
 
+/**
+ * A block's conformers as the page asks for them, from Settings: how many to
+ * try (Chemistry, `pageCount`) and the threads the search may use
+ * (Calculations, `threadsOf`) - the one place the page's own searches (the 3D
+ * structure made from a drawing, the atom map's) take both, so that neither
+ * can be asked without them.
+ */
+export function conformersOnPage(
+  chem: ChemClient,
+  stereo: ChemClient,
+  block: Block,
+  which: "one" | "all",
+  options: OptionValues,
+  settings: { chemistry: ChemistrySettings; calculations: Pick<CalculationSettings, "cores" | "coresAll"> },
+  rounds: PageRounds | null = null,
+): Promise<Conformers[]> {
+  return conformersOf(chem, stereo, block, which, options, pageCount(block, settings.chemistry), rounds, threadsOf(settings.calculations));
+}
+
 /** How the page's search is asked in rounds (chem/conformerRounds): its window (kcal/mol), its first round and the most it tries. */
 export type PageRounds = { window: number; first: number; most: number };
 
@@ -578,9 +598,12 @@ export async function conformersOf(
   options: OptionValues = {},
   count: number | null = null,
   rounds: PageRounds | null = null,
+  threads: number | null = null,
 ): Promise<Conformers[]> {
   const made = await isomersToMake(stereo, block.molblock, block.like, which, CONFORMERS_MS);
   const tries = count != null ? { count } : {};
+  // (the threads it may use, beside the plugin's options: one that does not know them takes every core, as it did)
+  const sent = threads != null ? { ...options, threads } : options;
   const start = Date.now();
   // (a metal's holds, Meno's - of the block asked for, the drawing or its mirror image - and which of what was made stand:
   //  lib/chem/metalHolds)
@@ -591,12 +614,12 @@ export async function conformersOf(
   };
   const once = async (molblock: string, isomers: Configuration[]) => {
     const holds = held(molblock);
-    if (!rounds) return (await chem.request("conformers", { molblock, isomers, ...tries, ...(holds ? { holds } : {}), options }, CONFORMERS_MS)).isomers;
+    if (!rounds) return (await chem.request("conformers", { molblock, isomers, ...tries, ...(holds ? { holds } : {}), options: sent }, CONFORMERS_MS)).isomers;
     // (in rounds: each alone, as many as it needs, in what is left of the time the search takes at most - its first round always)
     const out: Omit<Conformers, "chosen">[] = [];
     for (const iso of isomers) {
       const ask = async (n: number, draw: number) => {
-        const [c] = (await chem.request("conformers", { molblock, isomers: [iso], count: n, draw, ...(holds ? { holds } : {}), options }, CONFORMERS_MS)).isomers;
+        const [c] = (await chem.request("conformers", { molblock, isomers: [iso], count: n, draw, ...(holds ? { holds } : {}), options: sent }, CONFORMERS_MS)).isomers;
         if (!c) throw new Error("the search gave nothing for a round");
         return c as Conformers;
       };

@@ -12,7 +12,7 @@ import { useDrawingStyle } from "../useDrawingStyle";
 import { chemistry } from "../../../../lib/chem/molecule";
 import { style3dOf } from "../style3d";
 import { lookOf, poseOf, seenBounds, solidOf } from "../utils/molecule3d";
-import { eyeOf } from "../utils/page";
+import { eyeOf, middleAfterPan } from "../utils/page";
 import { setViewGoal } from "./viewGoal";
 import { viewToShow } from "../utils/viewShow";
 import { opensWith } from "./openingFit";
@@ -289,5 +289,15 @@ export default function FitToContent2D({
     setViewGoal(cam, { zoom: to.zoom, x: to.x, y: to.y });
     invalidate();
   }, [showRequest, camera, size.width, size.height, store, paddingPx, invalidate]);
+  // A menu opened past the canvas's edge: the page eased along by what it lay past (menuAt), the zoom as it is
+  const panRequest = useEditor((s) => s.panRequest);
+  const panned = useRef(panRequest?.n ?? 0);
+  useEffect(() => {
+    if (!panRequest || panRequest.n === panned.current) return;
+    panned.current = panRequest.n;
+    const cam = camera as THREE.OrthographicCamera;
+    setViewGoal(cam, { zoom: cam.zoom || 1, ...middleAfterPan(cam, size, panRequest.dx, panRequest.dy) });
+    invalidate();
+  }, [panRequest, camera, size.width, size.height, invalidate]);
   return null;
 }

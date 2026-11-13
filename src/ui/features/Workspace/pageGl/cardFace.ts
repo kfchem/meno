@@ -9,6 +9,7 @@
  * its place unseen.
  */
 import { COLORS } from "../../../theme/colors";
+import { ICON_PX, MARK_PX, NAME_PX, onPage, type NameBox } from "./cardBands";
 import { CARD_H, CARD_W, PORT_STEP, portDown, PX } from "../workflow/look";
 import type { Region } from "./hits";
 import type { PageIcon } from "./icons";
@@ -44,6 +45,68 @@ export const CARD = {
 export type CardTone = "quiet" | "base" | "attention";
 export const TONE: Record<CardTone, string> = { quiet: COLORS.quiet, base: COLORS.base, attention: COLORS.attention };
 
+/** The weight a card's name is drawn in, and so measured in. */
+const NAME_WEIGHT = 500;
+/** The gap between a card's icon and its name where it is named, in screen px. */
+const NAME_GAP = 5;
+/** How far a tinted box is tinted, a share of its state's colour. */
+const TINT_ALPHA = 0.12;
+/** How far a box with no state to tint it by is tinted: a share of the quiet ink. */
+const TINT_QUIET = 0.06;
+
+/** Where its name starts, from its left, in page px, where it is named: after its icon. */
+const nameLeft = (scale: number): number => CARD.hair + CARD.side + onPage(ICON_PX, scale) + onPage(NAME_GAP, scale);
+
+/** How large its state's mark is on the page, zoomed out, in page px: `MARK_PX` on the screen, never more than two fifths of its least height. */
+const markSize = (scale: number): number => Math.min(onPage(MARK_PX, scale), 0.4 * CARD.h);
+/** How far its mark is in from its box's corner, in page px: five on the screen, never more than a seventh of its least height. */
+const markInset = (scale: number): number => Math.min(onPage(5, scale), CARD.h / 7);
+
+/** The gap kept between a card's name and its mark, or its box's edge, in screen px. */
+const NAME_CLEAR = 4;
+/** How far in from a box's right edge its mark reaches, and a gap besides - what its name keeps clear of, in page px. */
+const markClear = (scale: number): number => markInset(scale) + markSize(scale) + onPage(NAME_CLEAR, scale);
+
+/**
+ * How wide a card's name may run at a page scale, in page px - never beyond its box, nor over its mark: centred where it is only marked (clear of
+ * the mark's width at both sides), after its icon where it is named (clear of the mark at its right).
+ */
+export const nameRoom = (scale: number, named: boolean): number => Math.max(0, named ? CARD.w - nameLeft(scale) - markClear(scale) : CARD.w - 2 * markClear(scale));
+
+/** Whether a card's name fits where it is only marked, whole inside its box and clear of its mark, at a page scale: where it does not, the name is left out - never cut short. */
+export const nameFits = (who: string, scale: number): boolean => textWidth(who, onPage(NAME_PX, scale), NAME_WEIGHT) <= nameRoom(scale, false);
+
+/** What the mark at a card's corner is, zoomed out: what it is of its state (running turns, done is filled in the quiet ink, failed in the alert tone with its count, waiting hollow), its colour, whether it tints a box that is only marked, and the count it says. */
+export type Mark = { kind: "running" | "done" | "failed" | "waiting"; colour: string; tint: boolean; count?: number };
+export function markOf(state: Pick<CardFaceOf["state"], "icon" | "turning">, failed?: number): Mark | null {
+  // (entries failed, counted: said, whatever else it is)
+  if (failed != null && failed > 0) return { kind: "failed", colour: COLORS.attention, tint: true, count: failed };
+  switch (state.icon) {
+    case "running":
+      // (one that is only changed, run again, is waiting to be run, not running)
+      return state.turning ? { kind: "running", colour: COLORS.base, tint: true } : { kind: "waiting", colour: COLORS.quiet, tint: false };
+    case "done":
+      return { kind: "done", colour: COLORS.quiet, tint: true };
+    case "failed":
+      return { kind: "failed", colour: COLORS.attention, tint: true };
+    case "waiting":
+    case "stopped":
+      return { kind: "waiting", colour: COLORS.quiet, tint: false };
+    default:
+      return null;
+  }
+}
+
+/** Where a card's name lies on the page, in the world's units, as `cardFace` draws it at a page scale: for the names that overlap to be found (`cardBands namesKept`). Where it is only marked its name is in the middle of its box - of its least height, a card its ports make taller too. */
+export function nameBoxOf(c: Pick<CardFaceOf, "key" | "x" | "y" | "who" | "high">, scale: number, named: boolean): NameBox {
+  const P = pagePx;
+  const size = onPage(NAME_PX, scale);
+  const wide = Math.min(textWidth(c.who, size, NAME_WEIGHT), nameRoom(scale, named));
+  const x0 = named ? nameLeft(scale) : (CARD.w - wide) / 2;
+  const mid = c.y - P((c.high ?? CARD.h) / 2);
+  return { key: c.key, x0: c.x + P(x0), x1: c.x + P(x0 + wide), y0: mid - P(size) / 2, y1: mid + P(size) / 2 };
+}
+
 /** What a card says, shut, and how it stands (Workflow2D, from what StepCard is told). */
 export type CardFaceOf = {
   key: string;
@@ -66,8 +129,16 @@ export type CardFaceOf = {
   /** Its full words, said in the tip as its state is pointed at: the state's, and the run's name. */
   stateTip?: string;
   selected: boolean;
-  /** How far its words are shown (1 read, 0 too small: its icons alone and large), faded as the page's words are. */
+  /** How far its words are shown (1 read, 0 zoomed out: its name and state's mark instead, `named`), faded as the page's words are. */
   words: number;
+  /** The page's scale, screen px to a page px (utils/pageScale): its name and its mark are as large on the screen whatever it is. 1 where none is said. */
+  scale?: number;
+  /** Zoomed out: how far it is named (1: its box, its icon and its name) rather than only marked (0: its box tinted by its state, its name where it lies clear), eased. 1 where none is said. */
+  named?: number;
+  /** Zoomed out: how far its name is shown (1) or left out (0), where it lies over a name before it (`cardBands namesKept`), eased. 1 where none is said. */
+  label?: number;
+  /** How many of its entries failed, where it counts them: its mark says so. */
+  failed?: number;
   /** Its inputs' names, beside their ports on its left, where it takes more than one. */
   inputs: readonly string[];
   /** How tall it is at least, in page px: as its kind's ports make it (workflow/kinds `cardHighOf`) - `CARD.h` where none is given. */
@@ -152,13 +223,39 @@ export function cardFace(c: CardFaceOf, statePointed = false): CardDrawn {
     shapes.push({ kind: "box", key: `${c.key}:bar`, ...bar, x1: bar.x0 + P(col), radiusPx: CARD.bar / 2, fill: COLORS.hairline, opacity: o * c.words, z: z + 1 });
     if (c.progress > 0) shapes.push({ kind: "box", key: `${c.key}:done`, ...bar, x1: bar.x0 + P(col * Math.min(1, c.progress)), radiusPx: CARD.bar / 2, fill: COLORS.base, opacity: o * c.words, z: z + 2 });
   }
-  // its icons alone and large, where its words are too small to read: in the middle of its least height
-  if (c.words < 1) {
+  // zoomed out, where its words are too small to read: its box tinted by its state, its state's mark, and its name - and, where it is named, its kind's icon
+  // beside it - each as large on the screen as it is at any zoom, fading in as its words fade out
+  const far = 1 - c.words;
+  if (far > 0) {
+    const scale = c.scale ?? 1;
+    const named = c.named ?? 1;
+    const label = c.label ?? 1;
+    // (in the middle of its least height: a card its kind's ports make taller, too)
     const mid = (c.high ?? CARD.h) / 2;
-    const both = CARD.big + (c.state.icon ? CARD.bigGap + CARD.bigState : 0);
-    const from = CARD.w / 2 - both / 2;
-    icon("big", c.icon, from + CARD.big / 2, mid, CARD.big, COLORS.ink, 1 - c.words);
-    if (c.state.icon) icon("bigState", c.state.icon, from + CARD.big + CARD.bigGap + CARD.bigState / 2, mid, CARD.bigState, tone, 1 - c.words, c.state.turning);
+    const mark = markOf(c.state, c.failed);
+    // (marked: its box tinted by its state)
+    // (a state with none to tint by - waiting, ready - lightly, in the quiet ink, so that a box is not lost)
+    if (named < 1) shapes.push({ kind: "box", key: `${c.key}:tint`, ...box, radiusPx: CARD.radius, fill: mark?.tint ? mark.colour : COLORS.quiet, fillAlpha: mark?.tint ? TINT_ALPHA : TINT_QUIET, opacity: o * far * (1 - named), z: z + 0.5 });
+    if (named > 0) icon("big", c.icon, nameLeft(scale) - onPage(ICON_PX, scale) / 2 - onPage(NAME_GAP, scale), mid, onPage(ICON_PX, scale), COLORS.ink, far * named);
+    // (its name: after its icon where it is named, in the middle of its box where it is only marked; cut inside its box, clear of its mark)
+    const size = onPage(NAME_PX, scale);
+    const nameText = (key: string, x: number, anchor: PageText["anchor"], opacity: number, room: number) => {
+      if (opacity > 0) texts.push({ key: `${c.key}:${key}`, x: c.x + P(x), y: c.y - P(mid), anchor, baseline: "middle", text: c.who, sizePx: size, color: COLORS.ink, weight: NAME_WEIGHT, maxWidthPx: room, opacity: o * opacity, z: z + 1 });
+    };
+    nameText("nameNamed", nameLeft(scale), "start", far * named * label, nameRoom(scale, true));
+    nameText("nameMarked", CARD.w / 2, "middle", far * (1 - named) * label, nameRoom(scale, false));
+    if (mark) {
+      const d = markSize(scale);
+      const inset = markInset(scale);
+      const cx = c.x + P(CARD.w - inset - d / 2);
+      const cy = c.y - P(inset + d / 2);
+      const key = `${c.key}:mark`;
+      if (mark.kind === "running") icons.push({ key, icon: "running", x: cx, y: cy, sizePx: d, color: mark.colour, opacity: o * far, z: z + 1, spin: 0.5 });
+      else if (mark.kind === "waiting") shapes.push({ kind: "ring", key, x: cx, y: cy, diameterPx: d, line: { widthPx: onPage(1.5, scale), color: mark.colour }, opacity: o * far, z: z + 1 });
+      else shapes.push({ kind: "ring", key, x: cx, y: cy, diameterPx: d, fill: mark.colour, opacity: o * far, z: z + 1 });
+      // (failed, the count of its entries in it)
+      if (mark.count != null) texts.push({ key: `${key}:count`, x: cx, y: cy, anchor: "middle", baseline: "middle", text: String(mark.count), sizePx: d * 0.7, color: COLORS.background, weight: 500, opacity: o * far, z: z + 2 });
+    }
   }
   // its inputs' names, outside it: right of them 8 px off its left edge, half a port's step above each port
   if (c.inputs.length > 1)

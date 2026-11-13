@@ -19,6 +19,8 @@ export const COLORS = {
   ink: "#1f2328",
   quiet: "#59636e",
   hairline: "#d1d9e0",
+  // A light ground a quiet box stands on, as a question in a conversation's card (--color-gh-base)
+  ground: "#f6f8fa",
   // A port pointed at, filled (--color-accel-lightbase; pageGl ports)
   lightBase: "#cfe7ee",
 

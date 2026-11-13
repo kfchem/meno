@@ -189,17 +189,17 @@ describe("the shortest hashed bond, a style's own setting", () => {
 });
 
 describe("a hashed wedge's widest hash, a style's own setting", () => {
-  it("stops short in Meno's own style, and reaches the atom in every journal's, whose specifications do not say", () => {
+  it("stops short of the atom in every style, Meno's own and every journal's", () => {
     const short = Object.fromEntries(STYLE_PRESETS.map((p) => [p.id, layoutOptionsFor(p.style, 1).hashedWedgeShort]));
-    expect(short).toEqual({ meno: true, acs1996: undefined, rsc: undefined, wiley: undefined, nature: undefined });
+    expect(short).toEqual({ meno: true, acs1996: true, rsc: true, wiley: true, nature: true });
     const end = Object.fromEntries(STYLE_PRESETS.map((p) => [p.id, p.style.hashedWedgeEnd]));
-    expect(end).toEqual({ meno: "short", acs1996: "atom", rsc: "atom", wiley: "atom", nature: "atom" });
-    expect(automaticValue("hashedWedgeEnd", ACS_1996)).toBe("atom");
+    expect(end).toEqual({ meno: "short", acs1996: "short", rsc: "short", wiley: "short", nature: "short" });
+    expect(automaticValue("hashedWedgeEnd", ACS_1996)).toBe("short");
   });
 
   it("comes back as it was through a save and an open: a workspace's style, an own style, and a change of it", () => {
     for (const p of STYLE_PRESETS) {
-      const want = p.id === "meno" ? true : undefined;
+      const want = true;
       // (a workspace drawn in the preset)
       const read = acceptStyleChoice(JSON.parse(JSON.stringify({ preset: p.id, changes: {} })));
       expect(layoutOptionsFor(styleOf(read), 1).hashedWedgeShort, p.id).toBe(want);
@@ -207,9 +207,12 @@ describe("a hashed wedge's widest hash, a style's own setting", () => {
       const own = acceptDrawingStyle(JSON.parse(JSON.stringify(p.style)));
       expect(layoutOptionsFor(own, 1).hashedWedgeShort, p.id).toBe(want);
     }
-    // (an own style saved before the setting reaches the atom, as it was drawn then - a journal's above all)
+    // (an own style saved before the setting, with none, stops short as every style does - what Automatic says)
     const before = { ...presetById("acs1996").style, hashedWedgeEnd: undefined };
-    expect(layoutOptionsFor(acceptDrawingStyle(JSON.parse(JSON.stringify(before))), 1).hashedWedgeShort).toBeUndefined();
+    expect(layoutOptionsFor(acceptDrawingStyle(JSON.parse(JSON.stringify(before))), 1).hashedWedgeShort).toBe(true);
+    expect(automaticValue("hashedWedgeEnd", ACS_1996)).toBe("short");
+    // (and a style object with no such field, as it comes before it is accepted: short too)
+    expect(layoutOptionsFor({ ...presetById("meno").style, hashedWedgeEnd: undefined }, 1).hashedWedgeShort).toBe(true);
     // (a change either way, kept)
     const toAtom = withSetting({ preset: "meno", changes: {} }, "hashedWedgeEnd", "atom");
     const back = acceptStyleChoice(JSON.parse(JSON.stringify(toAtom)));

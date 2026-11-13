@@ -3,7 +3,7 @@ import type { Property } from "../../../../lib/entry";
 import { addMolecule3d, addPicture, emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
 import type { DrawnModel, DrawnRecord } from "../store/types";
 import { inputKey, resultOf } from "./flow";
-import { addSet, addStep, connect, holdMembers, setRan } from "./model";
+import { addSet, addStep, connect, holdMembers, removeWire, setRan } from "./model";
 import { emptyIn, placeResults, ranEmpty, runStep, type RunWith } from "./run";
 
 const W: RunWith = { extentOf: () => ({ x0: -1, x1: 1, y0: -1, y1: 1 }), byOf: () => "meno", now: 1000 };
@@ -104,7 +104,8 @@ describe("A step on an empty set a step before it gave, having run ok", () => {
     doc = connect(doc, { set: 1 }, merge.id, "first");
     doc = connect(doc, { set: resultOf(doc, 2, "out")!.id }, merge.id, "second");
     expect(emptyIn(doc, doc.steps![1], "meno")).toBeNull();
-    // (and both empty: said which)
+    // (and both empty: said which - First's wire taken out, then wired from the empty set)
+    doc = removeWire(doc, doc.wires!.find((w) => w.to.step === merge.id && w.to.port === "first")!.id);
     doc = connect(doc, { set: resultOf(doc, 2, "out")!.id }, merge.id, "first");
     expect(emptyIn(doc, doc.steps![1], "meno")).toBe("Nothing came into First and Second");
   });

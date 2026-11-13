@@ -27,6 +27,7 @@ mod model;
 mod pdf;
 mod pdfmake;
 mod net;
+mod editmenu;
 mod opened;
 mod pinch;
 mod pixienv;
@@ -1173,6 +1174,11 @@ pub fn run() {
             opened::show(app);
         }));
     }
+    // macOS: the app menu's Edit > Undo and Redo reach the workspace's history, as the keys do (editmenu.rs)
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder.menu(editmenu::menu).on_menu_event(|app, event| editmenu::chosen(app, event.id().as_ref()));
+    }
     builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_os::init())
@@ -1182,6 +1188,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(ProcState(Mutex::new(HashMap::new())))
         .manage(net::Net::default())
+        .manage(jobs::WorkerAwake::default())
         .manage(model::Models::new(Box::new(model::SystemKeys)))
         .manage(pdf::PdfState::default())
         .manage(update::Updates::new(version))
@@ -1189,6 +1196,14 @@ pub fn run() {
         .manage(windowstate::Kept::default())
         // (the main window's size and place kept as it moves, resizes and closes: windowstate.rs)
         .on_window_event(windowstate::on_event)
+        // (its page loaded anew - reloaded while a worker held the computer awake - holds nothing yet: let go)
+        .on_page_load(|webview, payload| {
+            if payload.event() == tauri::webview::PageLoadEvent::Started && webview.label() == "main" {
+                if let Some(state) = webview.try_state::<jobs::WorkerAwake>() {
+                    jobs::worker_let_go(&state);
+                }
+            }
+        })
         .setup(move |app| {
             // the main window, made here rather than from tauri.conf.json (its "create" is
             // false): on Windows its pinch is let through before its page first loads (pinch.rs) -
@@ -1241,6 +1256,8 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            // the menu's Undo and Redo greyed where the page has nothing for them (macOS; editmenu.rs)
+            editmenu::edit_menu_state,
             // the plugins online: the catalogue, and a plugin's files got from it
             catalogue::catalogue_get,
             catalogue::plugin_stage,
@@ -1251,11 +1268,14 @@ pub fn run() {
             logfile::log_page,
             logfile::log_spot,
             pdf::pdf_hold_path,
+            pdf::pdf_unlock,
             pdf::pdf_hold_bytes,
             pdf::pdf_make,
             pdf::pdf_bytes,
             pdf::pdf_render,
             pdf::pdf_links,
+            pdf::pdf_printing,
+            pdf::pdf_print_window,
             pdf::pdf_text,
             pdf::pdf_objects,
             pdf::pdf_figure,
@@ -1341,6 +1361,7 @@ pub fn run() {
             jobs::jobs_clear_finished,
             jobs::computer_resources,
             jobs::jobs_limits,
+            jobs::worker_awake,
             jobs::jobs_folder,
             jobs::jobs_folder_choose,
             jobs::job_digest,

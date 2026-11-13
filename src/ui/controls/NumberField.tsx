@@ -1,7 +1,7 @@
 import clsx from "clsx";
 import { useEffect, useRef, useState } from "react";
 import { DURATION, EASE } from "../theme/motion";
-import { numberDraft, numberField, rangeSaid, setAsItGoes, type NumberEvent } from "./number";
+import { escapeTakes, numberDraft, numberField, rangeOf, rangeSaid, setAsItGoes, type NumberEvent } from "./number";
 
 /** How long a refused number's field is marked, the number it went back to fading in. */
 const REFUSED_MS = 1600;
@@ -24,6 +24,8 @@ export default function NumberField({
   max,
   step,
   whole,
+  unsettable,
+  placeholder,
   className,
 }: {
   value: number;
@@ -34,9 +36,13 @@ export default function NumberField({
   step?: number;
   /** A whole number alone, one with a fraction refused as one out of range is. */
   whole?: boolean;
+  /** The number may be left unset: emptying the field says so (`onChange` is given NaN), and `value` NaN shows it empty. */
+  unsettable?: boolean;
+  /** What an empty field shows, dimmed: what unset comes to. */
+  placeholder?: string;
   className?: string;
 }) {
-  const range = { min, max, step, whole };
+  const range = rangeOf({ min, max, step, whole, unsettable });
   const [draft, setDraft] = useState(() => numberDraft(value));
   const typing = useRef(false);
   const field = useRef<HTMLInputElement>(null);
@@ -76,6 +82,7 @@ export default function NumberField({
       aria-invalid={draft.refused || undefined}
       title={rangeSaid(range) || undefined}
       value={draft.text}
+      placeholder={draft.text === "" ? placeholder : undefined}
       spellCheck={false}
       autoComplete="off"
       onFocus={() => (typing.current = true)}
@@ -89,7 +96,7 @@ export default function NumberField({
         else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
           e.preventDefault();
           go({ kind: "step", by: e.key === "ArrowUp" ? 1 : -1 });
-        } else if (e.key === "Escape" && draft.text !== String(value)) {
+        } else if (e.key === "Escape" && escapeTakes(draft.text, value)) {
           // (what was typed taken back; the card it is in stays open)
           e.preventDefault();
           e.stopPropagation();
