@@ -111,19 +111,53 @@ export const IN_LINE = (10 * Math.PI) / 180;
 /** How far apart two directions are, 0 to pi. */
 const apart = (t: number, u: number) => Math.abs(Math.atan2(Math.sin(t - u), Math.cos(t - u)));
 
+/** Two bonds in line, or on top of each other: which of them is which cannot be told, or the drawing is a T. */
+const IN_LINE_WHY = "two of its bonds in line or on top of each other";
+
 /**
- * Whether a centre drawn flat with three bonds, its H left out, says nothing by two of them (`IN_LINE`): two on top of each other, which cannot
- * be told apart; or two in line, both in the page - a T (Brecher 2006, ST-1.2.12: two plain bonds 180 degrees apart with the wedge between them
- * depict a T-shaped configuration, not a tetrahedral one). Two in line with the ONE wedge of the centre on one of them say it: ST-1.2.4 draws
- * that form and takes the H to stand in the widest gap, opposite to the wedge (ST-1.2.3: with three bonds drawn, the configuration is the same
- * wherever the wedged bond stands). A centre with two or three wedges is read no further than that: ST-1.2.9 to ST-1.2.11 call such forms
- * ambiguous or not acceptable (CHEM, 11-13, measured them read the other way by another reader). `wedged` says, for each bond, whether it is a
- * wedge or hashes narrow at the centre.
+ * Why a centre drawn flat with three bonds, its H (or lone pair) left out, states no configuration - or null where it states one - by the
+ * forms the figures of Brecher 2006 (ST-1.2) draw and grade, `lifts` each bond's +1 (a wedge narrow at the centre), -1 (hashes) or 0:
+ * - two bonds on top of each other, within `IN_LINE` (ST-0.1): nothing, whatever is wedged;
+ * - one wedged: read (ST-1.2.1, 1.2.3; ST-1.2.4 with the wedge in line with a plain bond, its H in the widest gap opposite), but two plain
+ *   bonds in line with the wedge between them are a T (ST-1.2.12);
+ * - two wedged alike and one plain: read by the drawn volume (ST-1.2.5; nought, so nothing, where the two mirror each other);
+ * - a wedge, hashes and a plain bond: read only where the plain bond stands half a turn or more from one of them (ST-1.2.2), not where it lies
+ *   between them (ST-1.2.10, a trigonal planar picture);
+ * - three wedged alike: read only where every gap is under half a turn (ST-1.2.6), not with one of half a turn or more (ST-1.2.9);
+ * - two alike and one other: read only where the two alike are half a turn or more apart, the other between them on the narrower side
+ *   (ST-1.2.7); not where every gap is under half a turn (ST-1.2.11) nor where the wide gap is between the unlike pair (ST-1.2.8).
+ * A deciding gap within `IN_LINE` of half a turn says nothing: which side of the rule it is on cannot be told (CHEM, 11-13, from the figures).
  */
-function twoInLine(at: { x: number; y: number }, around: readonly { x: number; y: number }[], wedged: readonly boolean[]): boolean {
+function threeBondsSayNothing(at: { x: number; y: number }, around: readonly { x: number; y: number }[], lifts: readonly number[]): string | null {
   const t = around.map((p) => Math.atan2(p.y - at.y, p.x - at.x));
-  const oneWedge = wedged.filter(Boolean).length === 1;
-  return t.some((u, i) => t.some((w, j) => j > i && (apart(u, w) < IN_LINE || (apart(u, w) > Math.PI - IN_LINE && !(oneWedge && (wedged[i] || wedged[j]))))));
+  for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) if (apart(t[i], t[j]) < IN_LINE) return IN_LINE_WHY;
+  const wedged = [0, 1, 2].filter((k) => lifts[k] !== 0);
+  const turn = (a: number) => ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+  // (the bonds in order round the centre, and each gap from one to the next)
+  const order = [0, 1, 2].sort((a, b) => turn(t[a]) - turn(t[b]));
+  const gaps = order.map((k, m) => ({ from: k, to: order[(m + 1) % 3], size: turn(t[order[(m + 1) % 3]] - t[k]) }));
+  const halfTurn = (g: number) => Math.abs(g - Math.PI) <= IN_LINE;
+  if (wedged.length === 1) {
+    // (two plain bonds in line, the wedge between them: a T)
+    const plain = [0, 1, 2].filter((k) => !lifts[k]);
+    return apart(t[plain[0]], t[plain[1]]) > Math.PI - IN_LINE ? IN_LINE_WHY : null;
+  }
+  if (wedged.length === 2) {
+    if (lifts[wedged[0]] === lifts[wedged[1]]) return null;
+    const p = [0, 1, 2].find((k) => !lifts[k])!;
+    const wide = Math.max(...gaps.filter((g) => g.from === p || g.to === p).map((g) => g.size));
+    if (halfTurn(wide)) return IN_LINE_WHY;
+    return wide > Math.PI ? null : "its plain bond lies between its wedge and its hashes: draw it across from them";
+  }
+  if (wedged.length === 3) {
+    const wide = gaps.reduce((w, g) => (g.size > w.size ? g : w));
+    if (halfTurn(wide.size)) return IN_LINE_WHY;
+    const alike = lifts[0] === lifts[1] && lifts[1] === lifts[2];
+    if (alike) return wide.size < Math.PI ? null : "its three wedges leave half a turn or more open: draw one of them plain";
+    if (wide.size < Math.PI) return "its wedges and hashes are spread all round it: draw one of them plain";
+    return lifts[wide.from] === lifts[wide.to] ? null : "its wedge and its hashes are half a turn or more apart: draw one of them plain";
+  }
+  return null;
 }
 
 /**
@@ -204,7 +238,7 @@ export function readStereo(
       if (!wedged && !atom.centre) return;
       const inSpace = atom.centre && atom.z != null;
       // (drawn flat, its H left out, two of its bonds in line or on top of each other: no configuration stated)
-      if (!inSpace && (atom.hs === 1 || lonePair) && twoInLine(atom, around.map((n) => atoms[n]), around.map((n) => lift(c, n) !== 0))) return;
+      if (!inSpace && (atom.hs === 1 || lonePair) && around.length === 3 && threeBondsSayNothing(atom, around.map((n) => atoms[n]), around.map((n) => lift(c, n)))) return;
       const order = atom.hs ? [...around, -1] : around;
       const volume = inSpace ? volumeInSpace(atoms, c, around, lift, fits.get(c)) : 0;
       const v =
@@ -394,8 +428,12 @@ export function unreadWhy(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond
   //  which holds the H, which the lone pair, is not drawn)
   if (around.length === 2 && atom.hs === 1 && lonePairCentres(atoms, bonds)(c)) return "its H and its lone pair are both left out, so which way each points is not drawn: draw its H as an atom";
   // (as readStereo has it: a centre drawn with three bonds - its H, or its lone pair, left out)
-  const lifted = (n: number) => mine.some((b) => b.wedge && b.wedge.narrow === c && (b.a === n || b.b === n));
-  if (around.length === 3 && twoInLine(atom, around.map((n) => atoms[n]), around.map(lifted))) return "two of its bonds in line or on top of each other";
+  const liftOf = (n: number) => {
+    const w = mine.find((b) => b.wedge && b.wedge.narrow === c && (b.a === n || b.b === n))?.wedge;
+    return w ? (w.stereo === "up" ? 1 : -1) : 0;
+  };
+  const why = around.length === 3 ? threeBondsSayNothing(atom, around.map((n) => atoms[n]), around.map(liftOf)) : null;
+  if (why) return why;
   return "they are drawn crossed, saying neither way round";
 }
 

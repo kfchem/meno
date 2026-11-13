@@ -1748,6 +1748,18 @@ lipids each have their own way of being drawn, which it should know.
      ST-1.2.3 has the configuration the same wherever the wedged bond
      stands (drawings made from a SMILES often put a bridgehead so:
      cocaine's, camphor's, morphine's, sparteine's).
+     With two or three wedges at such a centre, it is read as the text's
+     figures read it, and only there: two alike and one plain (ST-1.2.5);
+     a wedge, hashes and a plain bond with the plain bond half a turn or
+     more from one of them (ST-1.2.2); three alike with every gap under
+     half a turn (ST-1.2.6); two alike half a turn or more apart, the other
+     between them (ST-1.2.7). The forms the text says state nothing - the
+     plain bond between the wedge and the hashes (ST-1.2.10), three alike
+     leaving half a turn open (ST-1.2.9), wedges spread all round
+     (ST-1.2.11), a wedge and hashes half a turn apart with the third
+     between them (ST-1.2.8) - are read as open, and the centre says what
+     to redraw. A deciding gap within 10 degrees of half a turn says
+     nothing either: which side of the rule it is on cannot be told.
      A double bond so drawn it lays out keeping the straight end straight -
      its one group straight on from it, as ST-4.4 draws a double bond of
      unspecified configuration - and the rest around it, so the new drawing

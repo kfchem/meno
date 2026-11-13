@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readStereo, sameConfiguration, unreadWhy, unsureStereo, wedgesForFlat, type DrawnAtom, type DrawnBond } from "./drawn";
 import { readSmiles } from "../chem/smiles";
+import { cipLabels } from "../chem/cip";
 import { kekuleOrders } from "../chem/kekulize";
 import { implicitHydrogens } from "../chem/molecule";
 import { layout2D } from "./engine";
@@ -450,21 +451,75 @@ describe("a centre with a lone pair for its fourth group", () => {
     expect(readStereo(t.atoms, t.bonds).tetra.has(0)).toBe(false);
   });
 
-  it("reads two bonds in line only where the centre's ONE wedge is one of them: with two or three wedges, as before - unread (ST-1.2.9 to ST-1.2.11)", () => {
-    // (a plain bond at 0 degrees, wedges at 30 and 172: the wedge at 172 in line with the plain one, a second wedge beside it)
-    const two: { atoms: DrawnAtom[]; bonds: DrawnBond[] } = {
-      atoms: [{ x: 0, y: 0, el: "C", hs: 1 }, { ...at(0), el: "F", hs: 0 }, { ...at(30), el: "Cl", hs: 0 }, { ...at(172), el: "Br", hs: 0 }],
-      bonds: [
-        { a: 0, b: 1, order: 1 },
-        { a: 0, b: 2, order: 1, wedge: { narrow: 0, stereo: "up" } },
-        { a: 0, b: 3, order: 1, wedge: { narrow: 0, stereo: "up" } },
-      ],
-    };
-    expect(readStereo(two.atoms, two.bonds).tetra.has(0)).toBe(false);
-    // (and three, two of them in line)
-    const three = { atoms: two.atoms, bonds: two.bonds.map((b, k) => (k === 0 ? { ...b, wedge: { narrow: 0, stereo: "down" as const } } : b)) };
-    expect(readStereo(three.atoms, three.bonds).tetra.has(0)).toBe(false);
+  it("reads a centre of three bonds with two or three wedges as the text's figures do, and nothing where they state none (ST-1.2.2, 1.2.5 to 1.2.11): CHEM's known answers", () => {
+    // (CHFClBr, its H left out: F at 0 degrees, Cl and Br at the angles given, counter-clockwise; +1 a wedge narrow at the C, -1 hashes, 0 plain.
+    //  CHEM, 11-13, from the figures' equal drawings)
+    // (counter-clockwise as the page is seen, its y down, as the drawing's places have it)
+    const at = (deg: number) => ({ x: Math.cos((deg * Math.PI) / 180), y: -Math.sin((deg * Math.PI) / 180) });
+    const rows: [string, number, [number, number], [number, number], "R" | "S" | null][] = [
+      ["ST-1.2.5", 0, [120, 1], [240, 1], "S"],
+      ["ST-1.2.5", 0, [120, -1], [240, -1], "R"],
+      ["ST-1.2.5", 0, [60, 1], [300, 1], "S"],
+      ["ST-1.2.5, in line", 0, [90, 1], [270, 1], "S"],
+      ["ST-1.2.5", 1, [120, 1], [240, 0], "S"],
+      ["ST-1.2.5, mirror-placed", 0, [30, 1], [150, 1], null],
+      ["ST-1.2.6", 1, [120, 1], [240, 1], "S"],
+      ["ST-1.2.6", -1, [120, -1], [240, -1], "R"],
+      ["ST-1.2.7", 1, [60, -1], [120, 1], "S"],
+      // (the two alike exactly half a turn apart: the deciding gap within IN_LINE of it - a hair less and it is ST-1.2.11, which states none -
+      //  so nothing is read, as for every deciding gap in that band)
+      ["ST-1.2.7, in line", 1, [30, -1], [210, -1], null],
+      ["ST-1.2.7, clear of the line", 1, [30, -1], [230, -1], "R"],
+      ["ST-1.2.9", 1, [60, 1], [120, 1], null],
+      ["ST-1.2.10", 0, [90, 1], [210, -1], null],
+      ["ST-1.2.10", 0, [150, 1], [240, -1], null],
+      ["ST-1.2.11", 1, [120, 1], [240, -1], null],
+      ["ST-1.2.11", 1, [60, -1], [210, 1], null],
+      ["ST-1.2.8", 1, [30, 1], [60, -1], null],
+    ];
+    const lifted = (stereo: number) => (stereo ? { wedge: { narrow: 0, stereo: stereo > 0 ? ("up" as const) : ("down" as const) } } : {});
+    for (const [form, f, [cl, clLift], [br, brLift], states] of rows) {
+      const d: { atoms: DrawnAtom[]; bonds: DrawnBond[] } = {
+        atoms: [{ x: 0, y: 0, el: "C", hs: 1 }, { ...at(0), el: "F", hs: 0 }, { ...at(cl), el: "Cl", hs: 0 }, { ...at(br), el: "Br", hs: 0 }],
+        bonds: [
+          { a: 0, b: 1, order: 1, ...lifted(f) },
+          { a: 0, b: 2, order: 1, ...lifted(clLift) },
+          { a: 0, b: 3, order: 1, ...lifted(brLift) },
+        ],
+      };
+      const tetra = readStereo(d.atoms, d.bonds).tetra.get(0);
+      const name = `${form}: F ${f}, Cl ${cl} ${clLift}, Br ${br} ${brLift}`;
+      if (!states) {
+        expect(tetra, name).toBeUndefined();
+        continue;
+      }
+      expect(tetra, name).toBeDefined();
+      const got = cipLabels({
+        atoms: [{ el: "C", hs: 1, tetra: tetra! }, { el: "F", hs: 0 }, { el: "Cl", hs: 0 }, { el: "Br", hs: 0 }],
+        bonds: [1, 2, 3].map((b) => ({ a: 0, b, order: 1 })),
+      }).centres.get(0);
+      expect(got && "label" in got ? got.label : null, name).toBe(states);
+    }
   });
+
+  it("says why a centre of three bonds and two or three wedges states nothing, with what to redraw", () => {
+    const at = (deg: number) => ({ x: Math.cos((deg * Math.PI) / 180), y: -Math.sin((deg * Math.PI) / 180) });
+    const d = (f: number, cl: [number, number], br: [number, number]): { atoms: DrawnAtom[]; bonds: DrawnBond[] } => {
+      const lifted = (stereo: number) => (stereo ? { wedge: { narrow: 0, stereo: stereo > 0 ? ("up" as const) : ("down" as const) } } : {});
+      return {
+        atoms: [{ x: 0, y: 0, el: "C", hs: 1 }, { ...at(0), el: "F", hs: 0 }, { ...at(cl[0]), el: "Cl", hs: 0 }, { ...at(br[0]), el: "Br", hs: 0 }],
+        bonds: [{ a: 0, b: 1, order: 1, ...lifted(f) }, { a: 0, b: 2, order: 1, ...lifted(cl[1]) }, { a: 0, b: 3, order: 1, ...lifted(br[1]) }],
+      };
+    };
+    const why = (x: { atoms: DrawnAtom[]; bonds: DrawnBond[] }) => unreadWhy(x.atoms, x.bonds, 0);
+    expect(why(d(0, [90, 1], [210, -1]))).toBe("its plain bond lies between its wedge and its hashes: draw it across from them");
+    expect(why(d(1, [60, 1], [120, 1]))).toBe("its three wedges leave half a turn or more open: draw one of them plain");
+    expect(why(d(1, [120, 1], [240, -1]))).toBe("its wedges and hashes are spread all round it: draw one of them plain");
+    expect(why(d(1, [30, 1], [60, -1]))).toBe("its wedge and its hashes are half a turn or more apart: draw one of them plain");
+    // (a deciding gap within IN_LINE of half a turn: which side of the rule it is on cannot be told)
+    expect(why(d(1, [30, -1], [172, 1]))).toBe("two of its bonds in line or on top of each other");
+  });
+
 
   it("reads one drawn with its wedge on one of the two bonds in line, as the same centre drawn with its bonds apart (ST-1.2.3, ST-1.2.4)", () => {
     // (the O and the wedged methyl straight across the S, the ring carbon to one side: the lone pair takes the widest gap, opposite the wedge -
