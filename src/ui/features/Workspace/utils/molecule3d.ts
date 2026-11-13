@@ -13,7 +13,7 @@ import { ribbonPoints } from "./ribbon";
 import { ADDED_MARK, atomsLeftOutMark, CCD_HYDROGENS_MARK, ESTIMATED_MARK, leftOutMark, NO_H_MARK, noHydrogensInFile, ORDERS_MARK, ordersUnknown, entriesMark, notConvergedMark, TOGETHER_MARK } from "./completeness";
 import type { MeasureMark, SolidMark } from "../../../../lib/chem/layout2d";
 import { seenAt, type Eye } from "./page";
-import type { Carried3D, Molecule3D, Turn3D } from "../store/types";
+import type { Carried3D, Growing3D, Molecule3D, Turn3D } from "../store/types";
 import type { ParsedBond } from "../../../../lib/chem/molecule";
 import { bondedPairs, bondRadii } from "../../../../utils/structureParsers";
 import { least } from "../../../../lib/chem/lists";
@@ -312,6 +312,17 @@ export function lookOf(m: Pick<Molecule3D, "look">): Look {
 export function withLooks<M extends Pick<Molecule3D, "id" | "look">>(list: readonly M[], looks: Readonly<Record<number, Look>>): M[] {
   if (!Object.keys(looks).length) return list as M[];
   return list.map((m) => (looks[m.id] && looks[m.id] !== lookOf(m) ? { ...m, look: looks[m.id] } : m));
+}
+
+/** Each molecule with what its search going on has brought so far (`grown`, by id) over what the document holds of it. */
+export function withGrowth<M extends Pick<Molecule3D, "id" | "frames">>(list: readonly M[], grown: Readonly<Record<number, Growing3D>>): M[] {
+  if (!Object.keys(grown).length) return list as M[];
+  return list.map((m) => {
+    const g = grown[m.id]?.grown;
+    if (!g) return m;
+    const { frames: _frames, ...rest } = m;
+    return { ...rest, ...g } as unknown as M;
+  });
 }
 
 /** A molecule in 3D as it is drawn, frame by frame: about its centre, in world units. */
