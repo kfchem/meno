@@ -126,7 +126,7 @@ const IN_LINE_WHY = "two of its bonds in line or on top of each other";
  * - three wedged alike: read only where every gap is under half a turn (ST-1.2.6), not with one of half a turn or more (ST-1.2.9);
  * - two alike and one other: read only where the two alike are half a turn or more apart, the other between them on the narrower side
  *   (ST-1.2.7); not where every gap is under half a turn (ST-1.2.11) nor where the wide gap is between the unlike pair (ST-1.2.8).
- * A deciding gap within `IN_LINE` of half a turn says nothing: which side of the rule it is on cannot be told (CHEM, 11-13, from the figures).
+ * A deciding gap within `IN_LINE` of half a turn says nothing: which side of the rule it is on cannot be told from the figures.
  */
 function threeBondsSayNothing(at: { x: number; y: number }, around: readonly { x: number; y: number }[], lifts: readonly number[]): string | null {
   const t = around.map((p) => Math.atan2(p.y - at.y, p.x - at.x));

@@ -451,9 +451,9 @@ describe("a centre with a lone pair for its fourth group", () => {
     expect(readStereo(t.atoms, t.bonds).tetra.has(0)).toBe(false);
   });
 
-  it("reads a centre of three bonds with two or three wedges as the text's figures do, and nothing where they state none (ST-1.2.2, 1.2.5 to 1.2.11): CHEM's known answers", () => {
+  it("reads a centre of three bonds with two or three wedges as the text's figures do, and nothing where they state none (ST-1.2.2, 1.2.5 to 1.2.11): known answers", () => {
     // (CHFClBr, its H left out: F at 0 degrees, Cl and Br at the angles given, counter-clockwise; +1 a wedge narrow at the C, -1 hashes, 0 plain.
-    //  CHEM, 11-13, from the figures' equal drawings)
+    //  the answers worked out from the figures' equal drawings)
     // (counter-clockwise as the page is seen, its y down, as the drawing's places have it)
     const at = (deg: number) => ({ x: Math.cos((deg * Math.PI) / 180), y: -Math.sin((deg * Math.PI) / 180) });
     const rows: [string, number, [number, number], [number, number], "R" | "S" | null][] = [
