@@ -158,6 +158,15 @@ describe("a crossing drawn by hand, which bond is in front said", () => {
     expect(bondOf(three.st().model, three.ac).behind).toEqual([three.bd]);
   });
 
+  it("is kept through the frames of a turn that carries drawing with molecules in 3D, apart and back across, until it ends", () => {
+    const { st, ac, bd, atoms } = editor();
+    st().orderCrossing(ac, bd, "behind");
+    st().turnMolecules3d([], "turn", [{ id: atoms.c, x: -1, y: 0.5 }]);
+    expect(bondOf(st().model, ac).behind).toEqual([bd]);
+    st().turnMolecules3d([], "turn", [{ id: atoms.c, x: 2, y: 2 }]);
+    expect(bondOf(st().model, ac).behind).toEqual([bd]);
+  });
+
   it("is left by a move that did not touch its bonds: only a mark with an atom the move moved is taken away", () => {
     const { st, ac, bd, atoms } = editor();
     st().orderCrossing(ac, bd, "behind");
