@@ -609,3 +609,58 @@ export function twoLonePairsOnFour(el: string, charge: number): boolean {
   const electrons = MAIN_GROUP_ELECTRONS[el];
   return electrons != null && electrons - charge - 4 === 4;
 }
+
+/** What a square-planar test reads of a structure, atom by atom (`squarePlanarMetal`): by index. */
+export type FourView = {
+  el: (i: number) => string;
+  charge: (i: number) => number;
+  hs: (i: number) => number;
+  neighbours: (i: number) => readonly number[];
+  order: (a: number, b: number) => number;
+};
+
+/** The metals, and the oxidation state in which, a four-coordinate centre is surely square planar (GR-4.1.3). */
+const SQUARE_PLANAR: Record<string, number> = { Pt: 2, Pd: 2, Au: 3, Rh: 1, Ir: 1 };
+
+/**
+ * A metal with four bonds - bound to no pi system's centre and to no other metal, and no chelate's (two of its donors joined other
+ * than through it) - as the drawing makes it: whether it is surely square planar (Pt(II), Pd(II), Au(III), Rh(I), Ir(I), the state
+ * counted plainly: a donor whose valence is full without its bond to the metal counts nought, one the bond completes one, the
+ * metal's own charge added; a state not counted plainly is not sure); whether its four donors are ends; and whether they can be
+ * arranged round it in more than one way (two and two, two and one and one, four different - by element, bonds, H's and charge).
+ * Null for any other atom.
+ */
+export function squarePlanarMetal(v: FourView, a: number, valence: (el: string, charge: number) => number | undefined): { sure: boolean; ends: boolean; open: boolean } | null {
+  const el = v.el(a);
+  const nb = v.neighbours(a);
+  if (!isMetal(el) || nb.length !== 4) return null;
+  if (nb.some((d) => v.el(d) === "*" || isMetal(v.el(d)))) return null;
+  const reached = new Set([nb[0]]);
+  for (const todo = [nb[0]]; todo.length; ) {
+    const u = todo.pop()!;
+    for (const w of v.neighbours(u)) {
+      if (w === a || reached.has(w)) continue;
+      reached.add(w);
+      todo.push(w);
+    }
+  }
+  if (nb.slice(1).some((d) => reached.has(d))) return null;
+  const ends = nb.every((d) => v.neighbours(d).length === 1);
+  const kinds = new Map<string, number>();
+  for (const d of nb) {
+    const k = `${v.el(d)}:${v.neighbours(d).length}:${v.hs(d)}:${v.charge(d)}`;
+    kinds.set(k, (kinds.get(k) ?? 0) + 1);
+  }
+  const counts = [...kinds.values()].sort((p, q) => q - p);
+  const open = !(counts[0] === 4 || (counts[0] === 3 && counts[1] === 1));
+  let state = v.charge(a);
+  for (const d of nb) {
+    const full = valence(v.el(d), v.charge(d));
+    if (full == null) return { sure: false, ends, open };
+    const others = v.neighbours(d).filter((e) => e !== a).reduce((s, e) => s + v.order(d, e), 0) + v.hs(d);
+    if (others >= full) continue;
+    if (others + 1 === full) state++;
+    else return { sure: false, ends, open };
+  }
+  return { sure: SQUARE_PLANAR[el] === state, ends, open };
+}

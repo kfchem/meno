@@ -11,7 +11,7 @@ import { atomDepth, boxesDepth, hydrogenSpot, isName, namesLaid, segmentMeetsBox
 
 // (where a label's H goes is the names' business too: there for all that ask here)
 export { hydrogenSpot } from "./names";
-import { isMetal, METAL_BOND, twoLonePairsOnFour } from "./perceive";
+import { isMetal, METAL_BOND, squarePlanarMetal, twoLonePairsOnFour } from "./perceive";
 import { valencesAt } from "../chem/molecule";
 import { ringsAlike, smallestRings, type Edge } from "./rings";
 
@@ -711,41 +711,27 @@ function readStructure(g: Geometry): Structure {
   // charge added - and every other such metal, an ambiguous one too (Ni(II), a state not counted plainly), the upright cross: the
   // text's form for four groups, stating no geometry, where the X states square planar)
   const metalFour = (a: number): "x" | "cross" | null => {
-    const el = g.elements?.[a];
-    if (!el || !isMetal(el) || neighbours[a].length !== 4 || inRing.has(a)) return null;
-    const nb = neighbours[a];
-    // (a chelate - two of its donors joined other than through it, a ring the rings measured may leave out through a metal: its own rules)
-    const reached = new Set([nb[0]]);
-    for (const todo = [nb[0]]; todo.length; ) {
-      const u = todo.pop()!;
-      for (const v of neighbours[u]) {
-        if (v === a || reached.has(v)) continue;
-        reached.add(v);
-        todo.push(v);
-      }
-    }
-    if (nb.slice(1).some((d) => reached.has(d))) return null;
-    if (nb.some((d) => g.elements?.[d] === "*" || isMetal(g.elements?.[d] ?? ""))) return null;
+    if (inRing.has(a)) return null;
+    const sq = squarePlanarMetal(
+      {
+        el: (i) => g.elements?.[i] ?? "",
+        charge: (i) => g.charges?.[i] ?? 0,
+        hs: (i) => g.hydrogens?.[i] ?? 0,
+        neighbours: (i) => neighbours[i],
+        order: (p, q) => orderOf.get(pair(p, q)) ?? 1,
+      },
+      a,
+      (el, charge) => valencesAt(el, charge)[0],
+    );
+    if (!sq) return null;
+    // (surely square planar: the X held where its four donors are ends and can lie round it one way only - PtCl4 2-, AuCl4-;
+    // where they can lie more ways and the input gave none, the upright cross - an arrangement nobody gave is not drawn, and
+    // Meno marks the centre (chem/engineLayout); where they go on, a phosphine's phenyls set on the lattice their own way, left
+    // as it grows: held to the X there, its angles bent between the two)
+    const chosen = !sq.sure || sq.open ? "cross" : sq.ends ? "x" : null;
     // (as the chemist drew it, where Clean-up keeps that, for any metal: drawn upright, held upright; drawn as an X, never turned
-    // upright - held to the X only where it would be anyway, left as it was drawn otherwise, a chelate's bite or not)
+    // upright - held to the X only where it would be anyway, left as it was drawn otherwise)
     const drawn = g.fourForm?.[a];
-    const chosen = ((): "x" | "cross" | null => {
-      let state = g.charges?.[a] ?? 0;
-      for (const d of nb) {
-        const del = g.elements?.[d] ?? "";
-        const [valence] = valencesAt(del, g.charges?.[d] ?? 0);
-        if (valence == null) return "cross";
-        const others = neighbours[d].filter((e) => e !== a).reduce((s, e) => s + (orderOf.get(pair(d, e)) ?? 1), 0) + (g.hydrogens?.[d] ?? 0);
-        if (neighbours[d].some((e) => e !== a && isMetal(g.elements?.[e] ?? ""))) return "cross";
-        if (others >= valence) continue;
-        if (others + 1 === valence) state++;
-        else return "cross";
-      }
-      // (surely square planar: the X held where its four donors are ends - PtCl4 2-, AuCl4- - and where they go on, a phosphine's
-      // phenyls set on the lattice their own way, left as it grows: held to the X there, its angles bent between the two)
-      if (SQUARE_PLANAR[el] === state) return nb.every((d) => neighbours[d].length === 1) ? "x" : null;
-      return "cross";
-    })();
     if (drawn === "cross") return "cross";
     if (drawn === "x") return chosen === "x" ? "x" : null;
     return chosen;
@@ -2194,6 +2180,4 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
   return { ...measures, score };
 }
 
-/** The metals, and the oxidation state in which, a four-coordinate centre is surely square planar: drawn as the X (GR-4.1.3). */
-const SQUARE_PLANAR: Record<string, number> = { Pt: 2, Pd: 2, Au: 3, Rh: 1, Ir: 1 };
 

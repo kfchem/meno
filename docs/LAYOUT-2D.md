@@ -481,8 +481,19 @@ they hang from.
   centre with four single bonds and two lone pairs - its valence electrons
   by its group, less its charge, less the four bonds, leaving four - is
   square planar too, and the X: XeF4 (GR-4.1.3's own figure), ICl4-,
-  BrF4-; SF4, one lone pair, is upright. The X is held where the four donors are ends (PtCl4 2-,
-  PdCl4 2-, AuCl4-, cisplatin with its NH3); where they go on - a
+  BrF4-; SF4, one lone pair, is upright. The X is held where the four
+  donors are ends and can lie round the centre one way only (PtCl4 2-,
+  PdCl4 2-, AuCl4-). Where they can lie more ways - two and two, two and
+  one and one, four different, by element, bonds, H's and charge - and the
+  input gives none (cisplatin from a SMILES, PdCl2(PPh3)2), drawing either
+  would say cis or trans, an isomer nobody gave: the centre is the upright
+  cross, and the editor marks it as it marks what it is unsure of - the
+  dashed ring, "Which donors are next to each other is not given." -
+  while its donors lie round it as they were laid out (`arrangementAs`):
+  moved round by the chemist, the arrangement is theirs and the mark goes;
+  a Clean-up that keeps the cross keeps the mark. A chemist's own X or
+  cross carries none. (A SMILES's square-planar marks, @SP1 to @SP3, are
+  not read: Meno's reader refuses them, saying so.) Where they go on - a
   phosphine's phenyls, set on the lattice their own way - the centre is
   left as it grows (PdCl2(PPh3)2 upright, RhCl(PPh3)3 as before), held to
   the X there its angles would bend between the two. Clean-up keeps a

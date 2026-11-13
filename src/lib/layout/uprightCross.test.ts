@@ -57,10 +57,12 @@ describe("four like groups", () => {
     }
     expect(directions(`[Pd](${P})(${P})(${P})${P}`, 0)).toEqual(cross);
     expect(directions(`Cl[Ni](Cl)(${P})${P}`, 1)).toEqual(cross);
-    // (surely square planar, four end donors: the X - PtCl4 2-, PdCl4 2-, AuCl4-, cisplatin drawn with its NH3)
-    for (const smiles of ["Cl[Pt-2](Cl)(Cl)Cl", "Cl[Pd-2](Cl)(Cl)Cl", "Cl[Au-](Cl)(Cl)Cl", "[NH3][Pt](Cl)(Cl)[NH3]"]) {
+    // (surely square planar, four end donors that lie round it one way only: the X - PtCl4 2-, PdCl4 2-, AuCl4-)
+    for (const smiles of ["Cl[Pt-2](Cl)(Cl)Cl", "Cl[Pd-2](Cl)(Cl)Cl", "Cl[Au-](Cl)(Cl)Cl"]) {
       expect(directions(smiles, 1), smiles).toEqual(X);
     }
+    // (and where they lie more ways and the input gives none - cisplatin with its NH3: the upright cross, marked by the editor)
+    expect(directions("[NH3][Pt](Cl)(Cl)[NH3]", 1)).toEqual(cross);
     // (counted plainly: an N drawn with two H's on a platinum is an amido, Pt(IV) - not surely square planar, so upright)
     expect(directions("N[Pt](N)(Cl)Cl", 1)).toEqual(cross);
     // (a main-group centre with four single bonds and two lone pairs is square planar: the X - XeF4, ICl4-, BrF4-; SF4's one pair, upright)

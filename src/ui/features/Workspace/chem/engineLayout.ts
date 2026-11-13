@@ -20,7 +20,9 @@ import type { DrawingStyle } from "../../../../lib/chem/style";
 import { readStereo, sameConfiguration, straightEnds, unreadWhy } from "../../../../lib/layout/drawn";
 import { lonePairCentres } from "../../../../lib/chem/lonePairCentres";
 import type { Layout2D, LayoutInput } from "../../../../lib/layout/engine";
-import { etaBondedAtomByAtom, isMetal, type CisTrans } from "../../../../lib/layout/perceive";
+import { etaBondedAtomByAtom, isMetal, squarePlanarMetal, type CisTrans } from "../../../../lib/layout/perceive";
+import { valencesAt } from "../../../../lib/chem/molecule";
+import { ARRANGED, arrangementAs } from "../utils/arrangement";
 import { allylCurve } from "../../../../lib/chem/allylArc";
 import { allylChain } from "./eta";
 import type { Tetrahedral } from "../../../../lib/layout/stereo";
@@ -262,11 +264,38 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: La
   const ny = mid(laid.y.slice(0, n));
   const place = (x: number, y: number) => ({ x: ox + (x - nx) * k, y: oy + (y - ny) * k });
 
+  // (a square-planar centre whose donors can lie round it more than one way, laid out with none given - not as the chemist drew
+  // it, or drawn so and still marked: the upright cross, marked "which donors are next to each other is not given")
+  const nbOf = input.atoms.map(() => [] as number[]);
+  const orders = new Map<string, number>();
+  for (const b of input.bonds) {
+    nbOf[b.a].push(b.b);
+    nbOf[b.b].push(b.a);
+    orders.set(pairKey(b.a, b.b), b.order);
+  }
+  const open = (i: number) => {
+    const was = byId.get(ids[i]);
+    const marked = !!was?.unsure && was.unsure.as.startsWith(ARRANGED) && was.unsure.as === arrangementAs(was, model.atoms, model.bonds);
+    if (input.atoms[i].fourForm && !marked) return false;
+    const sq = squarePlanarMetal(
+      {
+        el: (j) => input.atoms[j].el,
+        charge: (j) => input.atoms[j].charge ?? 0,
+        hs: (j) => input.atoms[j].hs ?? 0,
+        neighbours: (j) => nbOf[j],
+        order: (p, q) => orders.get(pairKey(p, q)) ?? 1,
+      },
+      i,
+      (el, charge) => valencesAt(el, charge)[0],
+    );
+    return !!sq && sq.sure && sq.open;
+  };
   const atoms: Relayout["atoms"] = ids.map((id, i) => ({
     id,
     ...place(laid.x[i], laid.y[i]),
     ...(laid.depth[i] != null ? { z: laid.depth[i]! * k } : {}),
     ...(laid.solid[i] && input.atoms[i].tetra ? { stereoCentre: true } : {}),
+    ...(open(i) ? { arrangementOpen: true } : {}),
   }));
   // each star at its pi system's centre, as a written-out label's: cod's
   // C=C, as well as a ring

@@ -28,6 +28,8 @@ import { regularised } from "../../../../lib/layout/regularise";
 import { sameStereo } from "../chem/engineLayout";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
 import { implicitHydrogens } from "../../../../lib/chem/molecule";
+import { atomAs } from "./atomAs";
+import { ARRANGED, arrangementAs } from "./arrangement";
 import { overBonded } from "../../../../lib/chem/molWriter";
 import { ELEMENTS } from "../../../../lib/chem/elements";
 import { labelReading, readLabel } from "./labelTyping";
@@ -68,15 +70,7 @@ export const figureLabels: LabelReader = (label) => {
 // (a page's figures take a one-bond structure by its label, read as these read one: lib/pdf/figures)
 setAtomLabel((text) => !/^[+\-−]*$/.test(text) && readDrawnLabel(text, figureLabels).read);
 
-/** What a part is now, as far as being right goes: an atom's element, charge and bonds; a bond's order and stereo. Its mark stays while this does. */
-export function atomAs(a: Pick<Atom, "id" | "el" | "charge">, bonds: readonly Bond[]): string {
-  const round = bonds
-    .filter((b) => b.a === a.id || b.b === a.id)
-    .map((b) => `${b.order}${b.stereo ?? ""}${b.stereo && b.stereo !== "none" ? (b.a === a.id ? "<" : ">") : ""}`)
-    .sort()
-    .join(",");
-  return `${a.el}|${a.charge ?? 0}|${round}`;
-}
+export { atomAs } from "./atomAs";
 export function bondAs(b: Pick<Bond, "a" | "b" | "order" | "stereo" | "narrow" | "display">): string {
   // (its narrow end by which end it is, not by id: a bond pasted is still as it was read)
   const narrow = b.narrow === b.a ? "a" : b.narrow === b.b ? "b" : "";
@@ -87,7 +81,12 @@ export function bondAs(b: Pick<Bond, "a" | "b" | "order" | "stereo" | "narrow" |
 export function readMarks(model: Model): { atoms: Map<number, string>; bonds: Map<number, string> } {
   const atoms = new Map<number, string>();
   const bonds = new Map<number, string>();
-  for (const a of model.atoms) if (a.unsure && a.unsure.as === atomAs(a, model.bonds)) atoms.set(a.id, a.unsure.said.join(" "));
+  // (an arrangement's mark - a square-planar centre's, "which donors are next to each other is not given" - while its neighbours lie as they did)
+  for (const a of model.atoms) {
+    if (!a.unsure) continue;
+    const now = a.unsure.as.startsWith(ARRANGED) ? arrangementAs(a, model.atoms, model.bonds) : atomAs(a, model.bonds);
+    if (a.unsure.as === now) atoms.set(a.id, a.unsure.said.join(" "));
+  }
   for (const b of model.bonds) if (b.unsure && b.unsure.as === bondAs(b)) bonds.set(b.id, b.unsure.said.join(" "));
   return { atoms, bonds };
 }
