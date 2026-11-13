@@ -4814,16 +4814,16 @@ function svgLabel(
 ): string {
   const fontFamily = xmlAttr(fontStack(set.fontFamily ?? "Arial"));
   let out = "";
-  for (const run of placeLabel(t, fontSize, set)) {
-    // (a mark is drawn with the lines and shapes)
-    if (run.mark) continue;
-    out +=
-      `<text x="${run.x}" y="${-run.y}" font-family="${fontFamily}"` +
-      ` font-size="${run.size}"${run.italic ? ' font-style="italic"' : ""}${run.bold ? ' font-weight="bold"' : ""} fill="${xmlAttr(svgColor(run.color, fill))}"` +
-      // (a halo: the stroke under the letters, as far out round them as the canvas's - an eighth of their size)
-      (t.halo ? ` stroke="${xmlAttr(svgColor(t.halo, "white"))}" stroke-width="${HALO_EMS * 2 * run.size}" stroke-linejoin="round" paint-order="stroke"` : ` stroke="none"`) +
-      ` text-anchor="start">${escapeXml(run.text)}</text>`;
-  }
+  const runs = placeLabel(t, fontSize, set).filter((run) => !run.mark);
+  const text = (run: (typeof runs)[number], paint: string) =>
+    `<text x="${run.x}" y="${-run.y}" font-family="${fontFamily}"` +
+    ` font-size="${run.size}"${run.italic ? ' font-style="italic"' : ""}${run.bold ? ' font-weight="bold"' : ""} ${paint}` +
+    ` text-anchor="start">${escapeXml(run.text)}</text>`;
+  // (a halo: a stroke round the letters, as far out round them as the canvas's outline - HALO_EMS of their size - every run's
+  // first, then every run's letters, so that no halo lies over the letters of the run before it: one outline, as the canvas sets it)
+  if (t.halo) for (const run of runs) out += text(run, `fill="none" stroke="${xmlAttr(svgColor(t.halo, "white"))}" stroke-width="${HALO_EMS * 2 * run.size}" stroke-linejoin="round"`);
+  // (a mark is drawn with the lines and shapes)
+  for (const run of runs) out += text(run, `fill="${xmlAttr(svgColor(run.color, fill))}" stroke="none"`);
   return out;
 }
 

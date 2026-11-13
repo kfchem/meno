@@ -4,6 +4,7 @@ import { drawingLayout } from "../../ui/features/Workspace/fileActions";
 import { ACS_1996 } from "./style";
 import { createSVG } from "./layout2d";
 import { NOMINAL_BOND_LENGTH } from "./acs";
+import { MARK_SCALE } from "../../ui/features/Workspace/chem/marks";
 import type { Model } from "../../ui/features/Workspace/store/types";
 
 const L = NOMINAL_BOND_LENGTH;
@@ -436,5 +437,14 @@ describe("layoutEmf with R and S on a molecule in 3D", () => {
     const at = last(records, 84);
     const colour = records[last(records.slice(0, at), 24)];
     expect(new DataView(colour.body.buffer, colour.body.byteOffset).getUint32(0, true)).toBe(colorRef("#1d4ed8"));
+    // (in an italic font MARK_SCALE the size of the drawing's own label's: its em, in the EMF's units, within one of them)
+    const fonts = records.filter((r) => r.type === 82).map((r) => {
+      const v = new DataView(r.body.buffer, r.body.byteOffset, r.body.byteLength);
+      return { em: -v.getInt32(4, true), italic: v.getUint8(24) === 1 };
+    });
+    const own = fonts.find((f) => !f.italic)!;
+    const italic = fonts.filter((f) => f.italic);
+    expect(italic).toHaveLength(1);
+    expect(Math.abs(italic[0].em - own.em * MARK_SCALE)).toBeLessThanOrEqual(1);
   });
 });

@@ -1243,7 +1243,7 @@ export function stereoSpot(
   gap: number,
   parentheses: boolean,
 ): LabelBox {
-  const way = widestWay(mark.around.flatMap((i) => (balls[i] ? [Math.atan2(balls[i].y - o.y, balls[i].x - o.x)] : [])));
+  const way = widestWay(mark.around.map((i) => Math.atan2(balls[i].y - o.y, balls[i].x - o.x)));
   const reach = own + (gap * font) / MARK_SCALE;
   // (the letters' box a capital's height, and a little for the halo)
   const half = { x: font * (stereoTextEms(mark.text, parentheses) / 2 + 0.1), y: font * 0.45 };

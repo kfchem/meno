@@ -17,7 +17,7 @@ import {
 import { optionsFor, WRITERS } from "../../../lib/io/writers";
 import { heldElsewhere } from "../../../lib/doc/savers";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
-import { labelBox, labelSetOf, measureLabelBox, runsWidth } from "../../../lib/chem/layout2d";
+import { HALO_EMS, labelBox, labelSetOf, measureLabelBox, runsWidth } from "../../../lib/chem/layout2d";
 import { MARK_HALF_HEIGHT, MARK_SCALE, MARKS_APART, STEREO_GAP, stereoPlaces, stereoTextEms } from "./chem/marks";
 import { ACS_1996, RSC } from "../../../lib/chem/style";
 import type { Model } from "./store/types";
@@ -298,16 +298,25 @@ describe("drawingSvg", () => {
     // (above its atom's ball, and the picture reaching to take it in)
     const c = layout.solids!.filter((m) => m.kind === "ball").reduce((best, m) => (m.kind === "ball" && best.kind === "ball" && m.c.y > best.c.y ? m : best));
     expect(c.kind === "ball" && r.y > c.c.y + c.r).toBe(true);
-    expect(layout.bounds.max.y).toBeGreaterThan(r.y);
-    // (written over the molecules, after them, on its halo)
+    // (with its halo: an eighth of its letters' size round them)
+    const rBox = labelBox(r, r.fontPx, labelSetOf(drawingLayout(model, aromatic, ACS_1996).opts));
+    expect(layout.bounds.max.y).toBeGreaterThanOrEqual(r.y + rBox.top + HALO_EMS * r.fontPx - 1e-9);
+    // (written over the molecules, after them: every run's halo first, then every run's letters, in the canvas's blue)
     const svg = drawingSvg({ ...model, molecules3d: [centre] } as unknown as Parameters<typeof drawingSvg>[0], aromatic, ACS_1996);
-    const at = svg.indexOf(">R</text>");
-    expect(at).toBeGreaterThan(svg.lastIndexOf("<circle"));
-    const tag = svg.slice(svg.lastIndexOf("<text", at), at);
-    expect(tag).toContain('fill="#1d4ed8"');
-    expect(tag).toContain('stroke="#ffffff"');
-    expect(tag).toContain('paint-order="stroke"');
-    expect(tag).toContain('font-style="italic"');
+    const texts = [...svg.matchAll(/<text [^>]*>([^<]*)<\/text>/g)].map((m) => ({ tag: m[0], text: m[1], at: m.index! }));
+    const label = texts.filter((t) => ["(", "R", ")"].includes(t.text) && t.at > svg.lastIndexOf("<circle"));
+    expect(label.map((t) => t.text)).toEqual(["(", "R", ")", "(", "R", ")"]);
+    for (const t of label.slice(0, 3)) {
+      expect(t.tag).toContain('fill="none" stroke="#ffffff"');
+      const size = Number(/font-size="([\d.e-]+)"/.exec(t.tag)![1]);
+      expect(Number(/stroke-width="([\d.e-]+)"/.exec(t.tag)![1])).toBeCloseTo(0.24 * size, 9);
+    }
+    for (const t of label.slice(3)) expect(t.tag).toContain('fill="#1d4ed8" stroke="none"');
+    expect(label[4].tag).toContain('font-style="italic"');
+    // (as large as the drawing's labels times MARK_SCALE: its O's)
+    const fontOf = (tag: string) => Number(/font-size="([\d.e-]+)"/.exec(tag)![1]);
+    const o = texts.find((t) => t.text === "OH" || t.text === "O")!;
+    expect(fontOf(label[4].tag)).toBeCloseTo(fontOf(o.tag) * MARK_SCALE, 9);
     // (clear of a measurement's value written where it would go: a distance to an atom straight above it, behind)
     const measured = { ...centre, atoms: [...centre.atoms, { el: "O", x: 0, y: 2, z: -1.5 }], measures: [{ id: 1, atoms: [0, 5] }] };
     const { layout: withValue, opts } = drawingLayout({ ...model, molecules3d: [measured] } as unknown as Parameters<typeof drawingLayout>[0], aromatic, ACS_1996);

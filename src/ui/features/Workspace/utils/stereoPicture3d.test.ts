@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { solidOf, stereoMarks3d, stereoPictureSpots3d, STEREO_APART } from "./molecule3d";
+import { solidOf, stereoMarks3d, stereoPictureSpots3d, STEREO_APART, WORLD_PER_ANGSTROM } from "./molecule3d";
+import { bondRadiusOf } from "../../../../lib/chem/style3d";
 import { style3dOf } from "../style3d";
 import { MARK_SCALE, stereoTextEms } from "../chem/marks";
 import type { Carried3D, Molecule3D } from "../store/types";
@@ -51,7 +52,15 @@ describe("stereoPictureSpots3d", () => {
     // (turned half round about the line of sight: its bonds now go up the page, and R goes down)
     const turned = { ...centre, turn: [0, 0, 1, 0] } as Carried3D;
     const [down] = stereoPictureSpots3d(turned, style, shown, FONT, GAP, false);
-    expect(down.y).toBeLessThan(centre.at.y - solid.frames[0][1]);
+    const reach = radius() + (GAP * FONT) / MARK_SCALE;
+    expect(down.x).toBeCloseTo(centre.at.x, 6);
+    expect(centre.at.y - solid.frames[0][1] - (down.y + FONT * 0.45)).toBeCloseTo(reach, 3);
+    // (a quarter turn, anticlockwise: its bonds now go right, and R stands to the left, its box's right edge `reach` off)
+    const quarter = { ...centre, turn: [0, 0, Math.SQRT1_2, Math.SQRT1_2] } as Carried3D;
+    const [left] = stereoPictureSpots3d(quarter, style, shown, FONT, GAP, false);
+    const halfWidth = FONT * (stereoTextEms("R", false) / 2 + 0.1);
+    expect(left.y).toBeCloseTo(centre.at.y, 6);
+    expect(centre.at.x - solid.frames[0][1] - (left.x + halfWidth)).toBeCloseTo(reach, 3);
     const big = { ...centre, magnified: 2 } as Carried3D;
     const [far] = stereoPictureSpots3d(big, style, shown, FONT, GAP, false);
     expect(far.y - FONT * 0.45 - atomY(2)).toBeCloseTo(2 * radius() + (GAP * FONT) / MARK_SCALE, 3);
@@ -78,7 +87,55 @@ describe("stereoPictureSpots3d", () => {
     const [a, b] = stereoPictureSpots3d(two, style, { atoms: [0, 1], bonds: [] }, font, GAP, false);
     const halfWide = font * (stereoTextEms("R", false) / 2 + 0.1);
     const apart = Math.max(Math.abs(a.x - b.x) - 2 * halfWide, Math.abs(a.y - b.y) - 2 * font * 0.45);
-    expect(apart).toBeGreaterThanOrEqual(STEREO_APART * font - 1e-6);
+    // (STEREO_APART: 0.6 ems)
+    expect(STEREO_APART).toBe(0.6);
+    expect(apart).toBeGreaterThanOrEqual(0.6 * font - 1e-6);
+  });
+
+  it("puts E off its double bond's middle by the bond's own radius and the gap, the widest way out - up, its groups going down", () => {
+    const alkene = {
+      name: "e",
+      atoms: [
+        { el: "C", x: -0.67, y: 0, z: 0 },
+        { el: "C", x: 0.67, y: 0, z: 0 },
+        { el: "F", x: -1.4, y: -1.1, z: 0 },
+        { el: "Cl", x: 1.4, y: -1.1, z: 0 },
+      ],
+      bonds: [
+        { a1: 0, a2: 1, order: 2 },
+        { a1: 0, a2: 2, order: 1 },
+        { a1: 1, a2: 3, order: 1 },
+      ],
+      at: { x: 0, y: 0 },
+      stereo: { atoms: {}, bonds: { 0: "E" } },
+    } as unknown as Carried3D;
+    const s = solidOf({ ...alkene, id: 0 } as Molecule3D, style);
+    const middle = { x: (s.frames[0][0] + s.frames[0][3]) / 2, y: (s.frames[0][1] + s.frames[0][4]) / 2 };
+    const [e] = stereoPictureSpots3d(alkene, style, { atoms: [], bonds: [0] }, FONT, GAP, false);
+    expect(e.text).toBe("E");
+    expect(e.x).toBeCloseTo(middle.x, 6);
+    expect(e.y - FONT * 0.45 - middle.y).toBeCloseTo(bondRadiusOf(style.primary) * WORLD_PER_ANGSTROM + (GAP * FONT) / MARK_SCALE, 3);
+  });
+
+  it("keeps off a bond crossing its widest way out", () => {
+    // (a bond of two atoms far either side, running across above the centre where R would stand)
+    const crossed = {
+      ...centre,
+      atoms: [...centre.atoms, { el: "C", x: -5, y: 0.75, z: 0 }, { el: "C", x: 5, y: 0.75, z: 0 }],
+      bonds: [...centre.bonds, { a1: 5, a2: 6, order: 1 }],
+    } as unknown as Carried3D;
+    const s = solidOf({ ...crossed, id: 0 } as Molecule3D, style);
+    const lineY = crossed.at.y + s.frames[0][16];
+    const [r] = stereoPictureSpots3d(crossed, style, shown, FONT, GAP, false);
+    const stick = bondRadiusOf(style.primary) * WORLD_PER_ANGSTROM;
+    expect(Math.abs(r.y - lineY)).toBeGreaterThanOrEqual(FONT * 0.45 + stick - 1e-6);
+    // (where it would stand without the bond: straight up, over the line)
+    const [free] = stereoPictureSpots3d({ ...crossed, bonds: centre.bonds } as Carried3D, style, shown, FONT, GAP, false);
+    expect(Math.abs(free.y - lineY)).toBeLessThan(FONT * 0.45 + stick);
+  });
+
+  it("gives none for a centre past the molecule's atoms", () => {
+    expect(stereoPictureSpots3d({ ...centre, stereo: { atoms: { 9: "R" }, bonds: {} } } as unknown as Carried3D, style, { atoms: [9], bonds: [] }, FONT, GAP, false)).toEqual([]);
   });
 
   it("gives none where none are shown", () => {
