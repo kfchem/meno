@@ -27,6 +27,7 @@ export default function NumberField({
   unsettable,
   placeholder,
   className,
+  autoFocus = false,
 }: {
   value: number;
   onChange: (n: number) => void;
@@ -41,11 +42,18 @@ export default function NumberField({
   /** What an empty field shows, dimmed: what unset comes to. */
   placeholder?: string;
   className?: string;
+  /** Focused as it is first shown: where what it holds is asked for at once (a step's card opened to ask for it). */
+  autoFocus?: boolean;
 }) {
   const range = rangeOf({ min, max, step, whole, unsettable });
   const [draft, setDraft] = useState(() => numberDraft(value));
   const typing = useRef(false);
   const field = useRef<HTMLInputElement>(null);
+  // (asked for at once: the field taken as it is first shown - the page left where it is)
+  useEffect(() => {
+    if (autoFocus) field.current?.focus({ preventScroll: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- (as it is first shown only)
+  }, []);
   // (the number set from outside shown, except over what is being typed)
   useEffect(() => {
     if (!typing.current) setDraft(numberDraft(value));

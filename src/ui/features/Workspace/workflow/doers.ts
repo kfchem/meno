@@ -191,10 +191,15 @@ export function missingFor(step: Pick<WorkflowStep, "kind" | "by">): string | un
   return d && `${d.label} ${tooOld(by, d.name) ? "too old" : "not found"}`;
 }
 
-/** What step `s`'s card says where it would say *Ready*, where it cannot run: a program it runs found nowhere or too old (`missingFor`), else what it still needs of its options (kinds `needsOf`, `roundsNeed`). */
+/** What step `s`'s card says where it would say *Ready*, where it cannot run: a program it runs found nowhere or too old (`missingFor`), else what it still needs of its options (`optionsNeed`). */
 export function notReadyFor(s: Pick<WorkflowStep, "kind" | "by" | "options">): string | undefined {
+  return missingFor(s) ?? optionsNeed(s);
+}
+
+/** What step `s` still needs of its options before it can run, in its card's words: a value the chemist gives (kinds `needsOf`) - an Energy window's window, a Conformers step's window for new conformers (`roundsNeed`). */
+export function optionsNeed(s: Pick<WorkflowStep, "kind" | "by" | "options">): string | undefined {
   const by = byOf(s);
-  return missingFor(s) ?? needsOf(s) ?? roundsNeed(s.kind, !!pluginById(by)?.roleDraws.includes("conformers"), optionsOf(optionsFor(s.kind, by), s.options));
+  return needsOf(s) ?? roundsNeed(s.kind, !!pluginById(by)?.roleDraws.includes("conformers"), optionsOf(optionsFor(s.kind, by), s.options));
 }
 
 /**

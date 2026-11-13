@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { acceptOptions, givenOnly, noDefault, rememberable, valuesOf, type Option, shownOptions } from "./options";
+import { acceptOptions, firstUnset, givenOnly, noDefault, rememberable, valuesOf, type Option, shownOptions } from "./options";
 
 const OPTIONS: Option[] = [
   { id: "version", label: "Version", type: "choice", choices: [{ value: "auto", label: "Auto" }, { value: "V3000", label: "V3000" }], default: "auto" },
@@ -181,5 +181,20 @@ describe("options the plugins declare", () => {
   it("leave out a whole number whose step is no whole one, as its arrows would step onto numbers it refuses", () => {
     expect(acceptOptions([{ id: "n", label: "N", type: "number", default: 2, step: 0.5, whole: true }])).toEqual([]);
     expect(acceptOptions([{ id: "n", label: "N", type: "number", default: 2, step: 2, whole: true }])).toEqual([{ id: "n", label: "N", type: "number", default: 2, step: 2, whole: true }]);
+  });
+});
+
+describe("the option a card opened to ask focuses", () => {
+  const ASKS: Option[] = [
+    { id: "mode", label: "Mode", type: "choice", choices: [{ value: "a", label: "A" }], default: "a" },
+    { id: "count", label: "Count", type: "number", default: 3 },
+    { id: "window", label: "Within", type: "number", default: Number.NaN, min: 0 },
+    { id: "other", label: "Other", type: "number", default: Number.NaN },
+  ];
+  it("is the first number shown that holds no value - none where each holds one", () => {
+    expect(firstUnset(ASKS, {})).toBe("window");
+    expect(firstUnset(ASKS, { window: 2.5 })).toBe("other");
+    expect(firstUnset(ASKS, { window: 2.5, other: 1 })).toBeUndefined();
+    expect(firstUnset(ASKS.slice(0, 2), {})).toBeUndefined();
   });
 });

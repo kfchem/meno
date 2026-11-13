@@ -610,7 +610,8 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
     kcal/mol until the chemist gives one, so that a 3D structure is made
     from fresh Settings with nothing asked first - the maintainer's choice
     (2026-11-08), no measured basis claimed. A step has none until given,
-    and is not ready until it has one. As a guide, 2.73 kcal/mol at 298.15
+    and is not ready until it has one: put down with none, its card opens
+    with the field focused (WORKFLOWS.md, *The window is the chemist's*). As a guide, 2.73 kcal/mol at 298.15
     K is a conformer a hundredth as populated as the lowest (RT ln 100).
   - A search that takes no draws is asked once, as before. So is one
     whose conformers come back with no energies: there is nothing to
