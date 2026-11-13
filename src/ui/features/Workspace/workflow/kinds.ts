@@ -201,7 +201,20 @@ const MOLECULES_IN: StepPort = { id: ONE_INPUT, name: "Molecules", takes: ["mole
 export const KINDS: readonly KindInfo[] = [
   // (new structures from nothing that comes in: a generative model's, as its plugin asks it, each drawn from the SMILES it gave - no input, so no port)
   { kind: "generate", name: "Generate", icon: "sparks", family: "structures", takes: [], inputs: [], gives: "structures", runs: "program", made: "Generated" },
-  { kind: "conformers", name: "Conformers", icon: "rings", family: "structures", takes: ["structures", "molecules", "conformers"], gives: "conformers", runs: "program", made: "Conformers", whole: true, others: [{ ...FAILED, gives: "molecules" }] },
+  // (each compound's conformers, every one its program gives - holding the restraints wired in for each molecule in 3D, where its plugin's search holds them)
+  {
+    kind: "conformers",
+    name: "Conformers",
+    icon: "rings",
+    family: "structures",
+    takes: ["structures", "molecules", "conformers"],
+    gives: "conformers",
+    runs: "program",
+    made: "Conformers",
+    whole: true,
+    inputs: [{ id: ONE_INPUT, name: "Structures", takes: ["structures", "molecules", "conformers"] }, RESTRAINTS_INPUT],
+    others: [{ ...FAILED, gives: "molecules" }],
+  },
   { kind: "optimise", name: "Optimise", icon: "curve", family: "energies", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Optimised", whole: true, inputs: [MOLECULES_IN, RESTRAINTS_INPUT], others: [FAILED] },
   // (each entry minimised in a force field with the restraints wired in for it held, as its plugin holds them: docs/PLUGINS.md)
   { kind: "minimise", name: "Minimise with restraints", icon: "heldMinimum", family: "energies", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Minimised", whole: true, inputs: [MOLECULES_IN, RESTRAINTS_INPUT], others: [FAILED] },

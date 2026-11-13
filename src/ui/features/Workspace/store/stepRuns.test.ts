@@ -394,6 +394,25 @@ describe("a step that runs a plugin's program", () => {
     }
   });
 
+  it("gives a conformer search the restraints wired in for each molecule - refused, in words, where its plugin says it holds none", async () => {
+    const made = editor();
+    const t = made.st().addStep("tag", "meno", 3, 0);
+    made.st().updateStep(t, { options: { name: "start" } });
+    made.st().connect({ set: made.st().sets[0].id }, t);
+    await made.st().runStep(t);
+    const tagged = made.st().sets.find((b) => b.made?.step === t && b.made.exit === "out")!.id;
+    const r = made.st().addStep("restraints", "meno", 5, 0);
+    made.st().updateStep(r, { options: { on: "start", coordination: false, distances: "2-3" } });
+    made.st().connect({ set: tagged }, r);
+    await made.st().runStep(r);
+    const c = made.st().addStep("conformers", "confsweep", 20, 0);
+    made.st().connect({ set: tagged }, c);
+    made.st().connect({ set: made.st().sets.find((b) => b.made?.step === r && b.made.exit === "out")!.id }, c, RESTRAINTS_INPUT.id);
+    await made.st().runStep(c);
+    expect(worker.prepare).not.toHaveBeenCalled();
+    expect(made.st().steps.find((s) => s.id === c)!.ran).toMatchObject({ ok: false, said: expect.stringContaining("The Confsweep plugin holds no distances: distance 2-3") });
+  });
+
   it("refuses a step of a page saved holding its atoms fixed, until a table of them is wired in", async () => {
     const { st, step } = editor();
     st().updateStep(step, { options: { hold: "fixed" } });
