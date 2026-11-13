@@ -16,7 +16,7 @@ import type { Model } from "../store/types";
 import { readDrawnLabel } from "../../../../lib/figure/structure";
 import { abbreviationStructure } from "../../../../lib/chem/abbreviations";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
-import { atomAs, figureLabels, modelOf, schemeDrawn, type FigureResult, type Unread } from "./figures";
+import { atomAs, figureLabels, modelOf, overBondedWhy, schemeDrawn, type FigureResult, type Unread } from "./figures";
 
 type Point = { x: number; y: number };
 
@@ -398,7 +398,9 @@ function structuresHere(f: FigureRead, back: (p: Point) => Point, figure: number
     const read: Model | null = line ? null : modelOf(part, (x, y) => ({ sha256, page, ...back({ x, y }), bond: f.bond }), mid);
     // (but a piece as small as SMALL_PART heavy atoms, letters within it not read: refused, as before)
     const small = read && within.length && heavyAtoms(read) <= SMALL_PART ? `Part of this structure could not be read ("${within.map((l) => l.c).join("")}"), so none of it is taken.` : null;
-    const model = small ? null : read;
+    // (an atom with more bonds than it takes: none of it taken, and why - a bold front bond read as a triple bond)
+    const broken = read ? overBondedWhy(read) : null;
+    const model = small || broken ? null : read;
     return {
       key: `${figure}:${k}`,
       bonds,
@@ -407,7 +409,7 @@ function structuresHere(f: FigureRead, back: (p: Point) => Point, figure: number
       box,
       ends,
       reach,
-      read: model ? { model } : { none: small ?? `It is a line of words (${line}), not a structure drawn, so none of it is taken.` },
+      read: model ? { model } : { none: small ?? broken ?? `It is a line of words (${line}), not a structure drawn, so none of it is taken.` },
     };
   });
 }
