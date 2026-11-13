@@ -1725,12 +1725,18 @@ lipids each have their own way of being drawn, which it should know.
      maintainer, 2026-10-27). Read by IUPAC's recommendations (Brecher,
      Pure Appl. Chem. 78, 1897, 2006), with "linear" within 10 degrees of
      a straight line (ST-0.1), a drawing states no configuration at a
-     centre with three bonds and its H left out whose two bonds are in
-     line - a T (ST-1.2.12) - or on top of each other, nor at a double bond
+     centre with three bonds and its H left out whose two plain bonds are
+     in line, the wedge between them - a T (ST-1.2.12) - or whose two bonds
+     are on top of each other, nor at a double bond
      with a group straight on from it (ST-4.4, the linear drawing of a
      double bond whose configuration is not given). At such a centre
      Clean-up would draw one or the other configuration, so it refuses, a
      wedge on it as a wedge it cannot carry (`lib/layout/drawn.ts#IN_LINE`).
+     Two bonds in line with the wedge on one of them do state it: ST-1.2.4
+     draws that form, its H in the widest gap opposite the wedge, and
+     ST-1.2.3 has the configuration the same wherever the wedged bond
+     stands (drawings made from a SMILES often put a bridgehead so:
+     cocaine's, camphor's, morphine's, sparteine's).
      A double bond so drawn it lays out keeping the straight end straight -
      its one group straight on from it, as ST-4.4 draws a double bond of
      unspecified configuration - and the rest around it, so the new drawing
