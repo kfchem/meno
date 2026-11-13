@@ -1962,7 +1962,35 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
     if (d === Math.sign(t.volume)) toward++;
     else away++;
   }
-  const face = Math.max(0, away - toward);
+  // and a bridged bicycle drawn in perspective seen from above and from the RIGHT - its far bridgehead right of its near one -
+  // as IUPAC prefers it (Brecher 2006, ST-3.1; from the left is acceptable): one seen from the left a breach. A cage of more
+  // bridgeheads than two goes as it is drawn.
+  let fromLeft = 0;
+  if (z) {
+    const seen = new Set<string>();
+    for (let i = 0; i < rings.length; i++) {
+      for (let j = i + 1; j < rings.length; j++) {
+        const [r1, r2] = [rings[i], rings[j]];
+        if (!solid(...r1, ...r2)) continue;
+        const shared = r1.filter((a) => r2.includes(a));
+        if (shared.length < 3) continue;
+        const ends = shared.filter((a) => neighbours[a].filter((b) => shared.includes(b)).length === 1);
+        if (ends.length !== 2) continue;
+        // (two bridgeheads only: no other ring reaching into this one but in part)
+        const union = new Set([...r1, ...r2]);
+        if (rings.some((r, k) => k !== i && k !== j && r.some((a) => union.has(a)) && !r.every((a) => union.has(a)))) continue;
+        const key = [...ends].sort((p, q) => p - q).join(",");
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const [p, q] = ends;
+        const [zp, zq] = [z[p], z[q]];
+        if (zp == null || zq == null || Math.abs(zp - zq) < 0.1) continue;
+        const [near, far] = zp > zq ? [p, q] : [q, p];
+        if (x[far] < x[near] - 0.05) fromLeft += CAGE_FROM_LEFT;
+      }
+    }
+  }
+  const face = Math.max(0, away - toward) + fromLeft;
 
   let wrongDoubles = 0;
   for (const { bond, refs, cis } of g.cisTrans ?? []) {
@@ -2116,3 +2144,9 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
   const score = Object.values(scoreParts(measures)).reduce((sum, v) => sum + v, 0);
   return { ...measures, score };
 }
+
+/**
+ * What a bridged bicycle seen from the left costs, in the face's breaches (`face`): two - more than the margin a cage's own textbook
+ * view keeps over another (camphor's), less than an atom laid on another. From the right is IUPAC's preferred view (ST-3.1).
+ */
+const CAGE_FROM_LEFT = 2;

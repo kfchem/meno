@@ -251,7 +251,19 @@ they hang from.
   adamantane), or a polyhedron (cubane), is drawn in perspective, as the
   solid it is, upright and seen from above - the higher on the page, the
   further back; a drawing that needs it the other way round has the cage
-  seen from its other side, never turned over or mirrored. The solid is
+  seen from its other side, never turned over or mirrored. A bridged
+  bicycle - two bridgeheads - is seen from the right where its views allow
+  it, its far bridgehead above and to the right of its near one (Brecher
+  2006, ST-3.1: preferred; from the left acceptable): a view from the left
+  costs two of the face's breaches (`CAGE_FROM_LEFT`), more than the margin
+  a cage's own textbook view keeps, less than an atom on another. So
+  7-oxanorbornane, quinuclidine, DABCO, tropinone and bicyclo[3.2.1]octane
+  turned; a pair of enantiomers - the two camphors - are each seen from the
+  right, no longer each other's mirror image on the page. Quinine's cage
+  stays from the left, as the maintainer's reference draws it, its right
+  view reading worse with what hangs from it; norbornene and norbornenone,
+  laid out with no chair or boat to draw from, are offered one side only
+  and stay as they were. A cage of more bridgeheads goes as before. The solid is
   found from the bonds (`cage.ts`): each atom's bonds at the angle its
   bonding gives - tetrahedral, 120 degrees with a double bond or beside
   one with a lone pair to share, straight through a triple bond, a small
