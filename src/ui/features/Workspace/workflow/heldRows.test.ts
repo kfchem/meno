@@ -10,7 +10,7 @@ import { restrainedSet, torsionsSet } from "./structureSteps";
 import type { Table } from "../../../../lib/table";
 
 // The restraints a step holds (workflow/heldRows): the rows of the tables wired into its Restraints input, each molecule taking those
-// made for it by the ID a step wrote on it - CHEM's known answers for the rounds, and for a molecule numbered anew.
+// made for it by the ID a step wrote on it - the known answers for the rounds, and for a molecule numbered anew.
 
 /** A molecule of six carbons in a row, as a step's entry, its ID `start` as given, and its numbering where Atom map gave one. */
 const molecule = (start?: string, numbering?: string, properties: SetEntry["properties"] = {}): SetEntry =>
@@ -160,7 +160,7 @@ describe("the restraints a step holds, wired in", () => {
     expect(NONE_MADE_WHY).toBe("no restraints made for it");
   });
 
-  it("lets a molecule its table's step found nothing to hold for go on holding nothing - never one its step refused, or never saw (CHEM's known answers)", () => {
+  it("lets a molecule its table's step found nothing to hold for go on holding nothing - never one its step refused, or never saw (the known answers)", () => {
     // (the table a real step made, wired into a minimisation)
     const wiredWith = (made: ReturnType<typeof restrainedSet>, ...more: Table[]) => {
       if (!made.ok || !made.tables?.[ONE_EXIT]) throw new Error("no table made");
@@ -198,6 +198,9 @@ describe("the restraints a step holds, wired in", () => {
     });
     // (numbered anew by Atom map since its step found nothing for it: refused, as a row would be)
     expect(heldRows(wiredWith(a), 40, [molecule("p1", "as reactant #1 (k2)"), molecule("p2")], RDKIT, "RDKit")).toEqual({ each: [{ why: RENUMBERED_WHY }, { rows: [] }], said: [NOTHING_TO_HOLD] });
+    // (numbered anew by Atom map before its step looked, and found to have nothing to hold: the step wrote that numbering - it goes on)
+    const mapped = restrainedSet([molecule("p1", "as reactant #1 (k2)")], "molecules", COORDINATION);
+    expect(heldRows(wiredWith(mapped), 40, [molecule("p1", "as reactant #1 (k2)")], RDKIT, "RDKit")).toEqual({ each: [{ rows: [] }], said: [NOTHING_TO_HOLD] });
   });
 
   it("lets a molecule found to have nothing to hold go on where its table holds rows for another - one its step refused or never saw refused (the maintainer, 2026-11-13)", () => {
@@ -218,7 +221,7 @@ describe("the restraints a step holds, wired in", () => {
     expect(heldRows(ab, 40, [molecule("pB")], RDKIT, "RDKit")).toEqual({ each: [{ rows: [] }], said: [NOTHING_TO_HOLD, "1 restraint row for no molecule here"] });
   });
 
-  it("takes a molecule on only where every table wired in speaks of it - a row, or nothing found to hold - saying which did not (CHEM's known answers)", () => {
+  it("takes a molecule on only where every table wired in speaks of it - a row, or nothing found to hold - saying which did not (the known answers)", () => {
     const tables = (steps: [number, WorkflowStep["kind"]][], made: Table[]) =>
       page([...steps, [40, "minimise"]], made.map((table, k) => ({ id: 11 + k, by: steps[k][0], table })), made.map((_, k) => [11 + k, 40, RESTRAINTS_INPUT.id]));
     const tableOf = (o: ReturnType<typeof restrainedSet>) => {
@@ -252,7 +255,7 @@ describe("the restraints a step holds, wired in", () => {
     expect(heldRows(rounds2, 40, [molecule("p1")], RDKIT, "RDKit")).toEqual({ each: [{ rows: [torsion(T1, 50)] }], said: [] });
   });
 
-  it("refuses a molecule whose double bond its reference has cis, held at 180° where trans: something to hold found, not nothing (CHEM's (d))", () => {
+  it("refuses a molecule whose double bond its reference has cis, held at 180° where trans: something to hold found, not nothing ((d))", () => {
     // (C-N=N-C, the torsion at `phi`)
     const azo = (phi: number, start: string): SetEntry => {
       const r = (phi * Math.PI) / 180;

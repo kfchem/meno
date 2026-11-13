@@ -48,7 +48,7 @@ export const heldKindOf = (r: Restraint): HeldKind => (r.kind === "fixed" ? "fix
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-/** Why a molecule is refused whose restraints were made in another numbering (CHEM's words). */
+/** Why a molecule is refused whose restraints were made in another numbering (the chemistry check's words). */
 export const RENUMBERED_WHY = "its restraints were made before Atom map numbered it anew";
 /** Why a molecule is refused that no row is for, while restraints are wired in (decision 1a). */
 export const NONE_MADE_WHY = "no restraints made for it";
