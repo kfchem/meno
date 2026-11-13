@@ -2,6 +2,8 @@ import { implicitHydrogens } from "../../../../lib/chem/molecule";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
 import { writeSmiles, type SmilesAtomOut } from "../../../../lib/chem/smiles";
 import type { Model } from "../store/types";
+import { readStereo } from "../../../../lib/layout/drawn";
+import { drawingOf } from "./drawing";
 
 /**
  * The selected atoms as an abbreviation's structure: SMILES from a "*" where
@@ -10,8 +12,9 @@ import type { Model } from "../store/types";
  * must be held together by their bonds, have exactly one bond to the rest
  * of the drawing, and be elements, none an abbreviation or other label.
  * Wedges are not kept: an abbreviation's structure has no stereo - and
- * where its bonds, or its bond out, show any, that is said (`notKept`),
- * never passed over.
+ * where its bonds, or its bond out, show any - marked, or a double bond's
+ * cis or trans by how it is drawn - that is said (`notKept`), never passed
+ * over.
  */
 export function abbreviationFromSelection(
   model: Model,
@@ -67,20 +70,38 @@ export function abbreviationFromSelection(
     })),
   ];
   const smiles = writeSmiles(atoms, bonds, 0);
-  const notKept = stereoNotKept([...inner, out]);
+  const notKept = stereoNotKept([...inner, out], cisTransDrawn(model, ids, [...inner, out]));
   return notKept ? { smiles, notKept } : { smiles };
+}
+
+/**
+ * Whether a double bond among `bonds` - or a cumulene whose atoms are all
+ * the group's - has its cis or trans stated by how it is drawn, as Meno
+ * reads a drawing's stereo (lib/layout/drawn `readStereo`: a group off the
+ * bond's line at each end, outside a ring of up to seven).
+ */
+function cisTransDrawn(model: Model, ids: ReadonlySet<number>, bonds: readonly Model["bonds"][number][]): boolean {
+  const drawing = drawingOf(model);
+  const stereo = readStereo(drawing.atoms, drawing.bonds);
+  const at = (id: number) => drawing.index.get(id);
+  const pairs = new Set(bonds.map((b) => [at(b.a), at(b.b)].sort().join("-")));
+  const stated = [...stereo.cisTrans.keys()].some((k) => pairs.has([drawing.bonds[k].a, drawing.bonds[k].b].sort().join("-")));
+  return stated || stereo.cumulated.some((c) => c.atoms.every((i) => ids.has(model.atoms[i].id)));
 }
 
 /**
  * What of the stereo its bonds show an abbreviation does not keep, in plain
  * words: "Its wedges are not kept: an abbreviation has no stereo." - its
- * wedges and hashes, its wavy bonds, its double bonds drawn crossed - or
- * none, where they show none.
+ * wedges and hashes, its wavy bonds, its double bonds drawn crossed, and
+ * the cis or trans its double bonds are drawn in (`cisTrans`) - or none,
+ * where they show none.
  */
-export function stereoNotKept(bonds: readonly Pick<Model["bonds"][number], "stereo">[]): string | null {
+export function stereoNotKept(bonds: readonly Pick<Model["bonds"][number], "stereo">[], cisTrans = false): string | null {
   const has = (...kinds: string[]) => bonds.some((b) => b.stereo != null && kinds.includes(b.stereo));
   const kinds = [has("up", "down") ? "wedges" : "", has("wavy") ? "wavy bonds" : "", has("either") ? "crossed double bonds" : ""].filter(Boolean);
-  if (!kinds.length) return null;
-  const said = kinds.length === 1 ? kinds[0] : `${kinds.slice(0, -1).join(", ")} and ${kinds[kinds.length - 1]}`;
-  return `Its ${said} are not kept: an abbreviation has no stereo.`;
+  const marks = kinds.length ? `Its ${kinds.length === 1 ? kinds[0] : `${kinds.slice(0, -1).join(", ")} and ${kinds[kinds.length - 1]}`}` : "";
+  const why = "not kept: an abbreviation has no stereo.";
+  if (marks && cisTrans) return `${marks} and the cis or trans of its double bonds are ${why}`;
+  if (marks) return `${marks} are ${why}`;
+  return cisTrans ? `The cis or trans of its double bonds is ${why}` : null;
 }

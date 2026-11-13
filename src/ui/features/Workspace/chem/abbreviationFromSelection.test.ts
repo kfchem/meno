@@ -44,6 +44,34 @@ describe("a selection saved as an abbreviation", () => {
     expect(stereoNotKept([{}, { stereo: "none" }])).toBeNull();
   });
 
+  it("says that a double bond's cis or trans, as it is drawn, is not kept - none where its drawing states none", () => {
+    const c = (id: number, x: number, y: number) => atom(id, x * L, y * L);
+    const chain = (places: [number, number][], double: number): Model => ({
+      atoms: places.map(([x, y], i) => c(i, x, y)),
+      bonds: places.slice(1).map((_, i) => ({ id: 100 + i, a: i, b: i + 1, order: (i === double ? 2 : 1) as 1 | 2 })),
+    });
+    const group = new Set([1, 2, 3, 4, 5]);
+    // (CC/C=C/CC, its group atoms 1-5, the bond out to atom 0: trans, as drawn - said, its SMILES as ever)
+    const trans = chain([[0, 0], [0.87, 0.5], [1.73, 0], [2.6, 0.5], [3.46, 0], [4.33, 0.5]], 2);
+    expect(abbreviationFromSelection(trans, group)).toEqual({ smiles: "*CC=CCC", notKept: "The cis or trans of its double bonds is not kept: an abbreviation has no stereo." });
+    // (CC/C=C\CC: cis, as drawn - said too)
+    const cis = chain([[0, 0], [0.87, 0.5], [1.73, 0], [2.6, 0.5], [2.6, 1.5], [3.46, 2]], 2);
+    expect(abbreviationFromSelection(cis, group)).toEqual({ smiles: "*CC=CCC", notKept: "The cis or trans of its double bonds is not kept: an abbreviation has no stereo." });
+    // (and with a wedge besides: both said, in one line)
+    const both = { ...trans, bonds: trans.bonds.map((b) => (b.id === 104 ? { ...b, stereo: "up" as const } : b)) };
+    expect(abbreviationFromSelection(both, group)).toMatchObject({ notKept: "Its wedges and the cis or trans of its double bonds are not kept: an abbreviation has no stereo." });
+    // (a terminal =CH2: no cis or trans to state - nothing said)
+    const terminal = chain([[0, 0], [0.87, 0.5], [1.73, 0], [2.6, 0.5]], 2);
+    expect(abbreviationFromSelection(terminal, new Set([1, 2, 3]))).toEqual({ smiles: "*CC=C" });
+    // (a cyclohexenyl's C=C, in its ring of six: none either)
+    const ring = Array.from({ length: 6 }, (_, k): [number, number] => [1 + Math.cos((k * Math.PI) / 3), Math.sin((k * Math.PI) / 3)]);
+    const cyclohexenyl: Model = {
+      atoms: [c(0, -1, 0), ...ring.map(([x, y], k) => c(k + 1, x, y))],
+      bonds: [{ id: 100, a: 0, b: 4, order: 1 }, ...ring.map((_, k) => ({ id: 101 + k, a: k + 1, b: ((k + 1) % 6) + 1, order: (k === 1 ? 2 : 1) as 1 | 2 }))],
+    };
+    expect(abbreviationFromSelection(cyclohexenyl, new Set([1, 2, 3, 4, 5, 6]))).not.toHaveProperty("notKept");
+  });
+
   it("says why where it cannot be one", () => {
     // three bonds out
     expect(abbreviationFromSelection(ester, new Set([1, 2]))).toMatchObject({ problem: expect.stringMatching(/3 bonds/) });
