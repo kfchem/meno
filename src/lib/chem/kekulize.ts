@@ -28,7 +28,7 @@
  * carbons as possible still get their double bond and the rest stay single.
  */
 
-import { piElectrons } from "./aromaticity";
+import { piElectrons } from "./perception/aromatic";
 
 /** MDL bond type 4: aromatic. */
 export const AROMATIC_BOND = 4;
@@ -143,7 +143,7 @@ export function kekulized(atoms: readonly KekuleAtom[], bonds: readonly KekuleBo
     .sort(byRank);
 
   // Each atom's pi electrons are counted as Meno counts them for its rule on
-  // aromatic rings (lib/chem/aromaticity `piElectrons`). How many N carry an
+  // aromatic rings (lib/chem/perception/aromatic `piElectrons`). How many N carry an
   // H is a count over each ring system whole: of the ways to give the double
   // bonds, those whose every system holding an atom that may take one counts
   // 4n + 2 come first - guanine's two N-H with its C=O, a tetrazine's none,
@@ -174,7 +174,7 @@ export function kekulized(atoms: readonly KekuleAtom[], bonds: readonly KekuleBo
     }
   }
   const inRing = (i: number, j: number) => system[i] >= 0 && system[i] === system[j];
-  /** An atom's pi electrons as the matching stands (lib/chem/aromaticity `piElectrons`); null where not known. */
+  /** An atom's pi electrons as the matching stands (lib/chem/perception/aromatic `piElectrons`); null where not known. */
   const electrons = (i: number): number | null => {
     if (QUERY_ATOMS.has(atoms[i]?.el ?? "")) return null;
     // (its double bond made already: in the ring, or out of it - a C=O, a C=S - to the element across it)
