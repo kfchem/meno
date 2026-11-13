@@ -159,21 +159,22 @@ describe("tiles come while the view moves", () => {
     // (the gap is the page's: an earlier test's upload must be a frame behind)
     await new Promise((r) => setTimeout(r, 20));
     const pics = new Pictures();
-    // (a part of four tiles asked for at once)
+    // (a part of four tiles asked for at once - and another PDF's, on the same page, its pictures come too)
     pics.ask({ sha256: "r", page: 0, size: [3000, 3000], level: 2, part: { x0: 0, y0: 0, x1: 1000, y1: 1000 }, nearness: () => 0, stillSince: () => 0 }, performance.now());
+    const other = new Pictures();
+    other.ask({ sha256: "s", page: 0, size: [3000, 3000], level: 2, part: { x0: 0, y0: 0, x1: 1000, y1: 1000 }, nearness: () => 0, stillSince: () => 0 }, performance.now());
     await new Promise((r) => setTimeout(r, 0));
     const shown = () => [...pics.tiles.values()].filter((t) => t !== "asked").length;
     expect(shown()).toBe(0);
     expect(pics.fading(performance.now())).toBe(true);
+    // (one frame: what draws calls these one after another, with no wait between - none here either, so the frame is the same frame
+    //  however slow the machine's timers are; a wait between them was the test's, and on Windows it could pass the gap)
     expect(pics.reveal(1)).toBe(true);
     expect(shown()).toBe(1);
     // (the other view asking in the same frame: it puts none - one picture a frame, however many views draw)
     expect(pics.reveal(1)).toBe(false);
     expect(shown()).toBe(1);
     // (and another PDF's pictures, drawn in the same frame, put none either: the gap is the page's, not each PDF's)
-    const other = new Pictures();
-    other.ask({ sha256: "s", page: 0, size: [3000, 3000], level: 2, part: { x0: 0, y0: 0, x1: 1000, y1: 1000 }, nearness: () => 0, stillSince: () => 0 }, performance.now());
-    await new Promise((r) => setTimeout(r, 0));
     expect(other.reveal(1)).toBe(false);
     // (the next frame)
     await new Promise((r) => setTimeout(r, 20));
