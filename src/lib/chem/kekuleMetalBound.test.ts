@@ -82,6 +82,8 @@ describe("an aromatic ring bound to a metal by its N", () => {
     const pc = "[Zn]369n1c%12c2c(c1nc4n3c(c5c4cccc5)nc7n6c(c8c7cccc8)nc%10n9c(c%11c%10cccc%11)n%12)cccc2";
     for (const [smiles, h, doubles] of [
       ["Cl[Pt](Cl)([NH3])n1ccncc1", 7, 3], // a pyrazine by one N
+      ["c1cnccn1[Pt](Cl)(Cl)[NH3]", 7, 3], // the same, its N written before the metal
+      ["n12ccncc1.[Pt]2(Cl)(Cl)[NH3]", 7, 3], // and closed on the metal by a ring number, N first
       ["Cl[Pt](Cl)([NH3])n1ccn([Pt](Cl)(Cl)[NH3])cc1", 10, 3], // and by both
       ["Cl[Pt](Cl)([NH3])n1cnccc1", 7, 3], // a pyrimidine by one N
       ["Cl[Pt](Cl)([NH3])n1cn([Pt](Cl)(Cl)[NH3])ccc1", 10, 3], // and by both
@@ -99,9 +101,24 @@ describe("an aromatic ring bound to a metal by its N", () => {
   });
 
   it("chooses no N-H for an N bound to a metal: the metal is where the H would be", () => {
-    for (const smiles of ["C1=Cc2cc3ccc4cc5nc(cc6ccc(cc1n2)[n]6[Zn][n]34)C=C5", "[Cu]n1ccnc1", "[Na]n1nnnc1C"]) {
+    // (the metal written first, and after its N - the N the bond's first atom)
+    for (const smiles of ["C1=Cc2cc3ccc4cc5nc(cc6ccc(cc1n2)[n]6[Zn][n]34)C=C5", "[Cu]n1ccnc1", "n1([Cu])ccnc1", "[Na]n1nnnc1C", "n1([Na])nnnc1C"]) {
       const s = readSmiles(smiles);
       expect(kekulized(s.atoms, s.bonds).hChosen, smiles).toEqual([]);
+    }
+  });
+
+  it("reads each ring system of a molecule with one that has no Kekule structure as it would be alone - its orders, and which N carries an H", () => {
+    for (const [mixed, alone, at] of [
+      ["c1cncn1.c1cccc1", "c1cncn1", 0], // an imidazole, no H written, beside a ring with none
+      ["c1cccc1.c1cncn1", "c1cccc1", 0], // the ring with none, as it is alone
+    ] as const) {
+      const m = readSmiles(mixed);
+      const a = readSmiles(alone);
+      const km = kekulized(m.atoms, m.bonds);
+      const ka = kekulized(a.atoms, a.bonds);
+      expect(km.orders.slice(at, at + a.bonds.length), mixed).toEqual(ka.orders);
+      expect(km.hChosen.filter((i) => i < a.atoms.length), mixed).toEqual(ka.hChosen);
     }
   });
 

@@ -74,7 +74,7 @@ export function valenceOrders(atoms: readonly KekuleAtom[], bonds: readonly { a:
  */
 export function kekulized(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[]): { orders: (1 | 2 | 3)[]; hChosen: number[] } {
   // (judged ring system by ring system - its aromatic bonds joined at their atoms, no atom in two - where the molecule as a whole
-  // has no Kekule structure: a ring with none leaves the others theirs)
+  // has no Kekule structure: a ring with none leaves the others theirs, and is itself as it would be alone)
   const whole = kekulizedAs(atoms, bonds);
   if (whole.solved) return whole;
   const orders = [...whole.orders];
@@ -82,7 +82,6 @@ export function kekulized(atoms: readonly KekuleAtom[], bonds: readonly KekuleBo
   for (const system of aromaticSystems(atoms.length, bonds)) {
     // (the system alone: the molecule's other aromatic bonds single, which leaves every atom's bonds as many as they were)
     const own = kekulizedAs(atoms, bonds.map((b, k) => (b.order === AROMATIC_BOND && !system.has(k) ? { ...b, order: 1 } : b)));
-    if (!own.solved) continue;
     const at = new Set([...system].flatMap((k) => [bonds[k].a1, bonds[k].a2]));
     for (const k of system) orders[k] = own.orders[k];
     hChosen = [...hChosen.filter((i) => !at.has(i)), ...own.hChosen.filter((i) => at.has(i))];
