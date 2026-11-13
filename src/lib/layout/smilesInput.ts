@@ -20,5 +20,7 @@ export function smilesInput(smiles: string): LayoutInput {
       ...(a.tetra ? { tetra: a.tetra } : {}),
     })),
     bonds: s.bonds.map((b, i) => ({ a: b.a1, b: b.a2, order: orders[i], ...(b.cisTrans ? { stereo: b.cisTrans } : {}) })),
+    ...(s.axes ? { axes: s.axes } : {}),
+    ...(s.cumulated ? { cumulated: s.cumulated } : {}),
   };
 }

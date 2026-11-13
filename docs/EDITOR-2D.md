@@ -564,7 +564,18 @@ molecule in 3D or a picture.
   `dragsSelection`); an atom that is not selected, or is selected alone,
   moves on its own as before.
 - Dragging the handle turns it about its middle, in steps of 15 degrees, or
-  freely after a pause - one undo step. Molecules in 3D it turns by
+  freely after a pause - one undo step. The steps are the drawing's own:
+  those of the direction of its first bond, so that a drawing laid out on
+  the 30 degree grid lands back on it, and one a little off it lands on it
+  at the first step (`turnReference`); with no bond to go by, the turn's
+  own, from where it began. The shown angle does not jump from step to
+  step: it springs to the one it snaps to, as a bond's angle and a moved
+  atom's do - one spring for all three (`utils/angleSpring`) - and a pause
+  of `FREE_MS` since the last move, the bond's own rule, lets it go of the
+  steps, easing from the snapped angle to the pointer's in the same short
+  ease-out. Let go of the button, the drawing is put where the spring is
+  heading - the step, or the pointer's angle once let go of them - never
+  an angle it is passing through. Molecules in 3D it turns by
   themselves, one or several, or each with Shift, turn freely, never in
   steps (the maintainer, 2026-11-11: a molecule in 3D has no grid to keep
   to); with a drawing selected they turn in its steps. While it turns, or
@@ -1116,6 +1127,18 @@ All hover-based, as above.
     they look further off at that, and the maintainer asked for them
     nearer (2026-10-05): 15% in Meno's style and the other bare ones. On a
     molecule in 3D, the same share beyond its ball.
+  - **Meno's own** (docs/CIP.md): each worked out by Meno's reading of the
+    CIP rules, off the drawing's thread, only for the atoms and bonds they
+    are asked for on - no plugin needed. One asked for that has none says
+    why while the pointer is on it - its groups alike, none drawn, a
+    structure too large to work it out - and a Z or E that turns in the
+    mirror image (seqCis, seqTrans) says so there too. A protonated
+    amine's N (R3NH+) has none: it gives its H up and takes one back,
+    turning over as it does - but where its amine's N keeps its
+    configuration, a small cage's bridgehead (lib/chem/lonePairCentres).
+    An axis's Ra or Sa - a biaryl's, an allene's, asked for on a bond of
+    it - and an odd cumulene's E or Z are Meno's too (docs/CIP.md, *Axes
+    and odd cumulenes*).
   - **Shown on what they are asked for on** (the maintainer, 2026-10-15;
     before, one switch showed them all). Hidden unless asked for. The
     right-click menu of an atom that can be a stereocentre says *Show

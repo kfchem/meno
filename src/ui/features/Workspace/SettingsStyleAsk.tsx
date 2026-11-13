@@ -4,7 +4,7 @@ import { useAppSettings } from "../../../lib/settings/appSettings";
 import { usePresentingWindow } from "../../presenting";
 import { useInFront } from "../../layouts/inFront";
 import { useEditor, useEditorStore } from "./store";
-import { keyOf, settingsStylesOf, styleAsk, type StyleAsk } from "./styleOffer";
+import { answeredWith, keyOf, settingsStylesOf, styleAsk, type StyleAsk } from "./styleOffer";
 
 /**
  * Asked over a workspace's canvas when a style in Settings - the drawing
@@ -26,8 +26,13 @@ export default function SettingsStyleAsk({ active }: { active: boolean }) {
   const style = useEditor((s) => s.docStyle);
   const docStyle3d = useEditor((s) => s.docStyle3d);
   const talking = usePresentingWindow((s) => s.on);
-  // (Settings' styles as the workspace was opened - and then as it last answered: a change from these is asked about)
-  const [answered, setAnswered] = useState(() => keyOf(settingsStylesOf(useAppSettings.getState().drawingStyle, useAppSettings.getState().style3d)));
+  const loaded = useAppSettings((s) => s.loaded);
+  // (Settings' styles as the workspace was opened - and then as it last answered: a change from these is asked about; held from when they are first read, where it was opened before that)
+  const [held, setAnswered] = useState<string | null>(() => answeredWith(null, loaded, settings));
+  const answered = answeredWith(held, loaded, settings);
+  useEffect(() => {
+    if (held === null && answered !== null) setAnswered(answered);
+  }, [held, answered]);
   const ask = styleAsk({ style, style3d: docStyle3d }, settings, answered);
   const shown = !!ask && active && !talking;
   const answer = (apply: boolean) => {

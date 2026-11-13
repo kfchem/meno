@@ -38,6 +38,8 @@ export type LayoutJob = {
   bound?: { metal: number; atoms: number[] }[];
   /** The H atoms taken as their centre's own H, by the centre's input index. */
   folded: Map<number, number[]>;
+  /** The axes and cumulenes of `input` are the structure's own text's, given in place of what its drawing says (`laidOut`): the drawing's reading of them is not to be kept. */
+  given?: true;
 };
 
 /**
@@ -71,8 +73,8 @@ export function unreadWedges(drawing: ReturnType<typeof drawingOf>, stereo: Retu
   const keepsPyramid = lonePairCentres(drawing.atoms, drawing.bonds);
   for (const b of drawing.bonds) {
     const c = b.wedge?.narrow;
-    // (an axis of chirality's end: its wedge says how the axis turns)
-    if (c == null || stereo.tetra.has(c) || stereo.axes.some((ax) => ax.atoms[0] === c)) continue;
+    // (an axis of chirality's end, either: its wedge says how the axis turns)
+    if (c == null || stereo.tetra.has(c) || stereo.axes.some((ax) => ax.atoms.includes(c))) continue;
     const n = bondsOf.get(c)?.length ?? 0;
     if ((n >= 3 && drawing.atoms[c].hs <= 1) || (n === 2 && drawing.atoms[c].hs === 1 && keepsPyramid(c))) out.add(c);
   }
@@ -98,7 +100,7 @@ export function piSystems(part: Model, drawing: ReturnType<typeof drawingOf>): M
 export function layoutJob(part: Model): LayoutJob {
   const drawing = drawingOf(part);
   const stereo = readStereo(drawing.atoms, drawing.bonds);
-  const { tetra, cisTrans, axes } = stereo;
+  const { tetra, cisTrans, axes, cumulated } = stereo;
   // (a double bond drawn straight at an end, its configuration not given: that end kept straight - IUPAC 2006 ST-4.4 - so that
   //  what is laid out leaves it unsaid too, rather than saying one or the other)
   const straight = straightEnds(drawing.atoms, drawing.bonds);
@@ -167,6 +169,15 @@ export function layoutJob(part: Model): LayoutJob {
             atoms: [at.get(ax.atoms[0])!, at.get(ax.atoms[1])!] as const,
             refs: [at.get(ax.refs[0])!, at.get(ax.refs[1])!] as const,
             sense: ax.sense,
+          })),
+        }
+      : {}),
+    ...(cumulated.length
+      ? {
+          cumulated: cumulated.map((x) => ({
+            atoms: [at.get(x.atoms[0])!, at.get(x.atoms[1])!] as const,
+            refs: [at.get(x.refs[0])!, at.get(x.refs[1])!] as const,
+            cis: x.cis,
           })),
         }
       : {}),
@@ -628,11 +639,18 @@ function drawnAs(m: Model, style: DrawingStyle) {
 function stereoDiffers(part: Model, change: Relayout, job: LayoutJob): "changed" | "gained" | null {
   const doc = { ...emptyWorkspaceDocument(), model: part, nextId: nextFree(part) };
   const pair = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
-  return stereoChange(part, relayout(doc, change).model, {
-    centres: new Set(job.input.atoms.flatMap((a, k) => (a.tetra ? [job.ids[k]] : []))),
-    doubles: new Set(job.input.bonds.flatMap((b) => (b.stereo ? [pair(job.ids[b.a], job.ids[b.b])] : []))),
-    axes: new Set((job.input.axes ?? []).map((ax) => pair(job.ids[ax.atoms[0]], job.ids[ax.atoms[1]]))),
-  });
+  const cumulated = new Set((job.input.cumulated ?? []).map((x) => pair(job.ids[x.atoms[0]], job.ids[x.atoms[1]])));
+  const axes = new Set((job.input.axes ?? []).map((ax) => pair(job.ids[ax.atoms[0]], job.ids[ax.atoms[1]])));
+  return stereoChange(
+    part,
+    relayout(doc, change).model,
+    {
+      centres: new Set(job.input.atoms.flatMap((a, k) => (a.tetra ? [job.ids[k]] : []))),
+      doubles: new Set([...job.input.bonds.flatMap((b) => (b.stereo ? [pair(job.ids[b.a], job.ids[b.b])] : [])), ...cumulated]),
+      axes,
+    },
+    job.given ? { doubles: cumulated, axes } : undefined,
+  );
 }
 
 /**
@@ -653,7 +671,7 @@ export function sameStereo(was: Model, after: Model): boolean {
  * shows the same. Only where `was` is drawn: atoms not yet placed - all on
  * one point, a SMILES's before it is laid out - state nothing to keep.
  */
-function stereoChange(was: Model, after: Model, asked?: { centres: Set<number>; doubles: Set<string>; axes: Set<string> }): "changed" | "gained" | null {
+function stereoChange(was: Model, after: Model, asked?: { centres: Set<number>; doubles: Set<string>; axes: Set<string> }, given?: { doubles: Set<string>; axes: Set<string> }): "changed" | "gained" | null {
   const place = new Map(was.atoms.map((a) => [a.id, a]));
   const drawnApart = (...ids: number[]) => ids.some((id) => ids.some((other) => Math.hypot(place.get(id)!.x - place.get(other)!.x, place.get(id)!.y - place.get(other)!.y) > 1e-6));
   const before = stereoOf(was);
@@ -663,11 +681,13 @@ function stereoChange(was: Model, after: Model, asked?: { centres: Set<number>; 
     if (!u || !sameConfiguration(t, u)) return "changed";
   }
   for (const [key, d] of before.doubles) {
+    // (an odd cumulene's cis or trans the structure's own text gives: what its drawing said of it is not kept)
+    if (given?.doubles.has(key)) continue;
     const e = now.doubles.get(key);
     // (read against the other group on an end, the reading turns)
     if (!e || (e.cis !== d.cis) !== ((e.refs[0] !== d.refs[0]) !== (e.refs[1] !== d.refs[1]))) return "changed";
   }
-  for (const [key, sense] of before.axes) if (now.axes.get(key) !== sense) return "changed";
+  for (const [key, sense] of before.axes) if (!given?.axes.has(key) && now.axes.get(key) !== sense) return "changed";
   const ends = (key: string) => key.split(",").map(Number).filter((id) => place.has(id));
   for (const [c, t] of now.centres) if (!before.centres.has(c) && !asked?.centres.has(c) && place.has(c) && drawnApart(c, ...t.neighbours.filter((n) => place.has(n)))) return "gained";
   for (const key of now.doubles.keys()) if (!before.doubles.has(key) && !asked?.doubles.has(key) && drawnApart(...ends(key))) return "gained";
@@ -684,7 +704,7 @@ function stereoChange(was: Model, after: Model, asked?: { centres: Set<number>; 
 function stereoOf(m: Model) {
   const d = drawingOf(m);
   const ids = m.atoms.map((a) => a.id);
-  const { tetra, cisTrans, axes: drawnAxes } = readStereo(d.atoms, d.bonds);
+  const { tetra, cisTrans, axes: drawnAxes, cumulated } = readStereo(d.atoms, d.bonds);
   const degree = degrees(m.bonds);
   const asId = (n: number) => (n === -1 || (m.atoms[n].el === "H" && degree.get(ids[n]) === 1) ? -1 : ids[n]);
   const centres = new Map<number, Tetrahedral>(
@@ -697,7 +717,23 @@ function stereoOf(m: Model) {
     const refs: [number, number] = a < z ? [ids[ct.refs[0]], ids[ct.refs[1]]] : [ids[ct.refs[1]], ids[ct.refs[0]]];
     doubles.set(a < z ? `${a},${z}` : `${z},${a}`, { refs, cis: ct.cis });
   }
-  const others = (x: number, not: number) => d.bonds.flatMap((b) => (b.a === x && b.b !== not ? [b.b] : b.b === x && b.a !== not ? [b.a] : []));
+  // (an odd cumulene's as a double bond's, by its ends)
+  for (const x of cumulated) {
+    const [a, z] = [ids[x.atoms[0]], ids[x.atoms[1]]];
+    const refs: [number, number] = a < z ? [ids[x.refs[0]], ids[x.refs[1]]] : [ids[x.refs[1]], ids[x.refs[0]]];
+    doubles.set(a < z ? `${a},${z}` : `${z},${a}`, { refs, cis: x.cis });
+  }
+  // (an end's other neighbours: but the other end, a biaryl's, or the cumulated double bond it runs on through, an allene's)
+  const bonded = (x: number, y: number) => d.bonds.some((b) => (b.a === x && b.b === y) || (b.a === y && b.b === x));
+  const through = (x: number, end: number) => {
+    if (bonded(x, end)) return end;
+    const run = d.bonds.find((b) => b.order >= 2 && (b.a === x || b.b === x));
+    return run ? (run.a === x ? run.b : run.a) : end;
+  };
+  const others = (x: number, end: number) => {
+    const skip = through(x, end);
+    return d.bonds.flatMap((b) => (b.a === x && b.b !== skip ? [b.b] : b.b === x && b.a !== skip ? [b.a] : []));
+  };
   const lowest = (x: number, not: number) => others(x, not).reduce((p, q) => (ids[p] < ids[q] ? p : q));
   const axes = new Map<string, number>();
   for (const ax of drawnAxes) {
