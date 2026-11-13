@@ -317,7 +317,7 @@ function bicycleAxes(mol: Molecule, sys: RingSystem, X: Vec3[], index: Map<numbe
   const along = dotV(c, e1);
   const e3 = normalise([c[0] - along * e1[0], c[1] - along * e1[1], c[2] - along * e1[2]]);
   const e2 = crossV(e3, e1);
-  return { e1, e2, e3 };
+  return { e1, e2, e3, ends: [index.get(ends[0])!, index.get(ends[1])!] as const };
 }
 
 /** The view along `toViewer`, the screen's up as near `up` as it can be. */
@@ -704,7 +704,14 @@ export function projectCage(mol: Molecule, given: RingSystem, rank = 0): CageVie
   if (readable) {
     // (kept)
   } else if (axes) {
-    const { e1, e2, e3 } = axes;
+    const { e1, e2, e3, ends } = axes;
+    // (seen from the left - its far bridgehead left of its near one - a little dearer: from above and from the right is the
+    // view IUPAC prefers, Brecher 2006 ST-3.1; from the left acceptable, taken where it reads clearly better)
+    const fromLeft = (v: { pts: Point[]; depth: number[] }) => {
+      const [p, q] = ends;
+      const [near, far] = v.depth[p] > v.depth[q] ? [p, q] : [q, p];
+      return Math.abs(v.depth[p] - v.depth[q]) > 0.1 && v.pts[far].x < v.pts[near].x - 0.05 ? FROM_LEFT_BIAS : 0;
+    };
     // (with either of its other two bridges in front)
     for (const front of [1, -1]) {
       for (const elev of [15, 20, 25, 30, 40]) {
@@ -715,7 +722,8 @@ export function projectCage(mol: Molecule, given: RingSystem, rank = 0): CageVie
           const sa = Math.sin((az * Math.PI) / 180);
           const toViewer = normalise([0, 1, 2].map((i) => ce * (ca * front * e2[i] + sa * e1[i]) + se * e3[i]) as Vec3);
           // a little above and to the side reads best; straight on hides the back
-          consider(look(X, toViewer, e3), 0.02 * Math.abs(elev - 25) + 0.01 * Math.abs(Math.abs(az) - 15));
+          const seen = look(X, toViewer, e3);
+          consider(seen, 0.02 * Math.abs(elev - 25) + 0.01 * Math.abs(Math.abs(az) - 15) + fromLeft(seen));
         }
       }
     }
@@ -2145,3 +2153,6 @@ function roomFault(mol: Molecule, sys: RingSystem, pos: Map<number, Point>, pts:
   });
   return fault;
 }
+
+/** What a bridged bicycle's view from the left costs among its own views (`projectCage`): a little, so that from the right is taken where it reads as well. */
+const FROM_LEFT_BIAS = 1;

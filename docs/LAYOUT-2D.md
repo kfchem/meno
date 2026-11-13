@@ -261,9 +261,10 @@ they hang from.
   turned; a pair of enantiomers - the two camphors - are each seen from the
   right, no longer each other's mirror image on the page. Quinine's cage
   stays from the left, as the maintainer's reference draws it, its right
-  view reading worse with what hangs from it; norbornene and norbornenone,
-  laid out with no chair or boat to draw from, are offered one side only
-  and stay as they were. A cage of more bridgeheads goes as before. The solid is
+  view reading worse with what hangs from it. A bicycle with no chair or
+  boat to draw from - norbornene, ST-3.1's own norbornenone - is seen the
+  way its own views read best, the view from the left a little dearer
+  among them (`FROM_LEFT_BIAS`, cage.ts), and so from the right. A cage of more bridgeheads goes as before. The solid is
   found from the bonds (`cage.ts`): each atom's bonds at the angle its
   bonding gives - tetrahedral, 120 degrees with a double bond or beside
   one with a lone pair to share, straight through a triple bond, a small

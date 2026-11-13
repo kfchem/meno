@@ -38,6 +38,9 @@ describe("a bridged bicycle in perspective", () => {
       "CC1(C)[C@@H]2CC[C@@]1(C)C(=O)C2", // (1R)-camphor
       "CC1(C)[C@H]2CC[C@]1(C)C(=O)C2", // (1S)-camphor, from the right before too
       "C1CC2CCC1C2", // norbornane
+      "C1=CC2CCC1C2", // norbornene, laid out with no chair or boat to draw from
+      "O=C1C[C@H]2C=C[C@@H]1C2", // (1S,4S)-bicyclo[2.2.1]hept-5-en-2-one: ST-3.1's own preferred picture
+      "O=C1C[C@@H]2C=C[C@H]1C2", // and its enantiomer
       "CN1[C@H]2CC[C@@H]1[C@@H](C(=O)OC)[C@@H](OC(=O)c1ccccc1)C2", // cocaine, from the right as the maintainer's reference has it
     ]) {
       const { dx, dy } = farFromNear(smiles);
