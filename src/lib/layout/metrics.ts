@@ -705,25 +705,37 @@ function readStructure(g: Geometry): Structure {
     const el = g.elements?.[a];
     if (!el || !isMetal(el) || neighbours[a].length !== 4 || inRing.has(a)) return null;
     const nb = neighbours[a];
-    if (nb.some((d) => g.elements?.[d] === "*" || isMetal(g.elements?.[d] ?? ""))) return null;
-    // (as the chemist drew it, where Clean-up keeps that: any metal, the five above among them)
-    const drawn = g.fourForm?.[a];
-    if (drawn) return drawn;
-    let state = g.charges?.[a] ?? 0;
-    for (const d of nb) {
-      const del = g.elements?.[d] ?? "";
-      const [valence] = valencesAt(del, g.charges?.[d] ?? 0);
-      if (valence == null) return "cross";
-      const others = neighbours[d].filter((e) => e !== a).reduce((s, e) => s + (orderOf.get(pair(d, e)) ?? 1), 0) + (g.hydrogens?.[d] ?? 0);
-      if (neighbours[d].some((e) => e !== a && isMetal(g.elements?.[e] ?? ""))) return "cross";
-      if (others >= valence) continue;
-      if (others + 1 === valence) state++;
-      else return "cross";
+    // (a chelate - two of its donors joined other than through it, a ring the rings measured may leave out through a metal: its own rules)
+    const reached = new Set([nb[0]]);
+    for (const todo = [nb[0]]; todo.length; ) {
+      const u = todo.pop()!;
+      for (const v of neighbours[u]) if (v !== a && !reached.has(v)) (reached.add(v), todo.push(v));
     }
-    // (surely square planar: the X held where its four donors are ends - PtCl4 2-, AuCl4- - and where they go on, a phosphine's
-    // phenyls set on the lattice their own way, left as it grows: held to the X there, its angles bent between the two)
-    if (SQUARE_PLANAR[el] === state) return nb.every((d) => neighbours[d].length === 1) ? "x" : null;
-    return "cross";
+    if (nb.slice(1).some((d) => reached.has(d))) return null;
+    if (nb.some((d) => g.elements?.[d] === "*" || isMetal(g.elements?.[d] ?? ""))) return null;
+    // (as the chemist drew it, where Clean-up keeps that, for any metal: drawn upright, held upright; drawn as an X, never turned
+    // upright - held to the X only where it would be anyway, left as it was drawn otherwise, a chelate's bite or not)
+    const drawn = g.fourForm?.[a];
+    const chosen = ((): "x" | "cross" | null => {
+      let state = g.charges?.[a] ?? 0;
+      for (const d of nb) {
+        const del = g.elements?.[d] ?? "";
+        const [valence] = valencesAt(del, g.charges?.[d] ?? 0);
+        if (valence == null) return "cross";
+        const others = neighbours[d].filter((e) => e !== a).reduce((s, e) => s + (orderOf.get(pair(d, e)) ?? 1), 0) + (g.hydrogens?.[d] ?? 0);
+        if (neighbours[d].some((e) => e !== a && isMetal(g.elements?.[e] ?? ""))) return "cross";
+        if (others >= valence) continue;
+        if (others + 1 === valence) state++;
+        else return "cross";
+      }
+      // (surely square planar: the X held where its four donors are ends - PtCl4 2-, AuCl4- - and where they go on, a phosphine's
+      // phenyls set on the lattice their own way, left as it grows: held to the X there, its angles bent between the two)
+      if (SQUARE_PLANAR[el] === state) return nb.every((d) => neighbours[d].length === 1) ? "x" : null;
+      return "cross";
+    })();
+    if (drawn === "cross") return "cross";
+    if (drawn === "x") return chosen === "x" ? "x" : null;
+    return chosen;
   };
 
   // (a ring drawn in depth - a cage's, or one a bridge makes across a ring

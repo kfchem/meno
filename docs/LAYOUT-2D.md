@@ -483,7 +483,11 @@ they hang from.
   left as it grows (PdCl2(PPh3)2 upright, RhCl(PPh3)3 as before), held to
   the X there its angles would bend between the two. Clean-up keeps a
   four-bond metal in the form it was drawn in, the cross or the X,
-  whichever its bonds lie nearer to, for every metal (`LayoutAtom.fourForm`).
+  whichever its bonds lie nearer to, for every metal (`LayoutAtom.fourForm`):
+  drawn upright, it is held upright; drawn as an X, it is never turned
+  upright, held to the X only where it would be anyway and otherwise left
+  as drawn. A chelate's metal (two of its donors joined other than through
+  it) goes by its own rules.
   The fan is compact,
   and once the rest of the drawing is set it is turned about its bond,
   five degrees at a time, to where the drawing reads best, its bonds kept

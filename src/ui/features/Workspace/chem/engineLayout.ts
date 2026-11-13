@@ -111,6 +111,17 @@ export function layoutJob(part: Model): LayoutJob {
   part.atoms.forEach((a, i) => {
     const mine = bondsOf.get(i) ?? [];
     if (!isMetal(a.el) || mine.length !== 4) return;
+    // (not a chelate's metal - two of its donors joined other than through it: its own rules lay it out)
+    const donors = mine.map((k) => (drawing.bonds[k].a === i ? drawing.bonds[k].b : drawing.bonds[k].a));
+    const reached = new Set([donors[0]]);
+    for (const todo = [donors[0]]; todo.length; ) {
+      const u = todo.pop()!;
+      for (const k of bondsOf.get(u) ?? []) {
+        const v = drawing.bonds[k].a === u ? drawing.bonds[k].b : drawing.bonds[k].a;
+        if (v !== i && !reached.has(v)) (reached.add(v), todo.push(v));
+      }
+    }
+    if (donors.slice(1).some((d) => reached.has(d))) return;
     const off = (offset: number) =>
       mine.reduce((sum, k) => {
         const b = drawing.bonds[k];
