@@ -24,7 +24,7 @@ export function chairExtension(model: { atoms: readonly Atom[]; bonds: readonly 
     if (!ring.includes(tip)) continue;
     const found = chairOf({ atoms }, ring);
     if (!found) continue;
-    const d = chairDrawing({ at: found.at, form: found.form, flip: found.flip, firstId: 1, firstBondId: 1 });
+    const d = chairDrawing({ at: found.at, form: found.form, flip: found.flip, firstId: 1, firstBondId: 1, length: found.scale });
     const k = found.index.get(tip)!;
     const here = atoms.find((a) => a.id === tip)!;
     // (the places a group holds already: a neighbour off the ring standing at one of the atom's free positions)

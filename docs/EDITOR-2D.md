@@ -509,10 +509,13 @@ canvas*), a double-click on empty space shuts it instead - the work comes
 back to the canvas (the maintainer, 2026-10-10) - and the next opens
 Quick Add.
 **Projections** (the maintainer, 2026-11-13: one Quick Add group, *Projections*, an icon each; Clean-up keeps a projection as drawn, *Draw flat* is in its menu; 3D takes the configuration only). A tool puts down a
-solid of lib/chem/perception/projection seen its standard way, as ordinary atoms and bonds that carry a depth (`Atom.z`, nearer larger), the flag that
-their configuration is the drawing's (`stereoCentre`) and the near edge bold (`Bond.display`); after that it is a drawing like any other - nothing
-remembers that a tool made it - and what Meno does with a structure works on it through its depth (`volumeInSpace`, lib/layout/drawn). The
-longest ring bond as drawn is the style's bond length (`chairScale`, one constant: by convention, no basis claimed). Built so far: the **chair**
+solid of lib/chem/perception/projection drawn as the textbook draws it (`drawn`: a chair's bonds on four directions, each the style's bond length,
+the axial ones vertical), as ordinary atoms and bonds that carry the depth of its true view (`Atom.z`, nearer larger) and the flag that their
+configuration is the drawing's (`stereoCentre`). Every bond is plain: a ring in perspective is drawn with plain bonds (IUPAC 2006 ST-3.3). After
+that it is a drawing like any other - nothing remembers that a tool made it - and what Meno does with a structure works on it through its depth
+(`volumeInSpace`, lib/layout/drawn). A chair is first drawn in form 1, seen from above and from the right, as ST-3.1 prefers; a second click on
+the icon, while the chair it put down is as it was with nothing done since, turns it to form 0, the view from the other side, as one step, and a
+third back (`putChair`; the icon's tip says so: "Click again for the view from the other side"). Built so far: the **chair**
 (`Workspace/projections/`: `chair`, `extend`, `flip`, `fuse`); the Haworth ring and the Newman projection follow.
 - **Groups are drawn by extension.** A bond led out of an atom of a chair goes to one of that atom's free positions, as the solid gives them seen as it is
   seen - the nearer the pointer's direction - and nowhere between, held or paused, so that nothing drawn on a chair is unread; a position a group holds is
@@ -540,7 +543,7 @@ longest ring bond as drawn is the style's bond length (`chairScale`, one constan
   "wherever it fits" has drawn one, meant or not, and the R and S shown are the check. To leave a centre open, make its bond wavy. An atom dragged by
   hand keeps its depth: what is read may change, and only the labels say so.
 - **Limits.** No five-ring or bridged ring from the tools; no boat or twist from a tool (one can be drawn bond by bond); flat to chair is not offered;
-  a fused system is not flipped by the tool; the chair's second standard view is the solids' (`standardView`, form 1), not yet a choice in the tool.
+  a fused system is not flipped by the tool; form 0 is reached only by the icon's second click, not on a chair already edited.
 
 *SMILES*, *Scheme*, *Projections*, *Marks on the page* and *Calculations* open and shut their panels a click
 at a time - a double-click's second click not counted (`togglesOn`,

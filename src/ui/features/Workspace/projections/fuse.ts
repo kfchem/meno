@@ -5,7 +5,7 @@
  */
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { chair, flipped, fused } from "../../../../lib/chem/perception/projection/solids";
-import { project, standardView } from "../../../../lib/chem/perception/projection/views";
+import { drawn } from "../../../../lib/chem/perception/projection/views";
 import type { Atom, Bond, Model } from "../store/types";
 import { chairOf, chairsIn, seenPlaces, chairDrawing } from "./chair";
 
@@ -15,7 +15,7 @@ export type FuseHow = "trans" | { cis: 1 | -1 };
 /** What a fusion adds: its new atoms, and its bonds - an end given as an atom already there (`id`) or one of the new ones (`new`, an index into `atoms`). */
 export type Fuse = {
   atoms: Omit<Atom, "id">[];
-  bonds: { a: { id: number } | { new: number }; b: { id: number } | { new: number }; display?: "bold" }[];
+  bonds: { a: { id: number } | { new: number }; b: { id: number } | { new: number } }[];
 };
 
 /** The three ways, as the menu words them. */
@@ -34,8 +34,8 @@ export function fusableBonds(model: Model, ids: ReadonlySet<number>): number[] {
 }
 
 /**
- * The ring fused on bond `bondId` of the structure's one chair, `how`: the four atoms and five bonds F9's `fused` adds, drawn as the first ring is
- * (its place, its depth, its views). `refused`, in words, where a group stands at a place the new ring would take, or another atom stands where one
+ * The ring fused on bond `bondId` of the structure's one chair, `how`: the four atoms and five bonds `fused` adds, drawn as the first ring is
+ * (`drawn`: chairs fused stay on the first ring's four directions, each bond one bond long, with the depth of the same view), every bond plain. `refused`, in words, where a group stands at a place the new ring would take, or another atom stands where one
  * of its own would go; none where the bond is on no chair of the tool's.
  */
 export function fusedOn(model: Model, ids: ReadonlySet<number>, bondId: number, how: FuseHow): Fuse | { refused: string } | null {
@@ -47,14 +47,13 @@ export function fusedOn(model: Model, ids: ReadonlySet<number>, bondId: number, 
   const found = chairOf(model, ring)!;
   const base = chair();
   const solid = found.flip ? flipped(base) : base;
-  const view = standardView(base, found.form);
   const [ka, kb] = [found.index.get(bond.a)!, found.index.get(bond.b)!];
   const at = solid.bonds.findIndex(([p, q]) => (p === ka && q === kb) || (p === kb && q === ka));
   const next = fused(solid, at, "chair", how);
   const [i, j] = solid.bonds[at];
   // (the places the new ring takes at the bond's two atoms: a group already standing at one is in its way)
   const taken = (k: number) => {
-    const d = chairDrawing({ at: found.at, form: found.form, flip: found.flip, firstId: 1, firstBondId: 1 });
+    const d = chairDrawing({ at: found.at, form: found.form, flip: found.flip, firstId: 1, firstBondId: 1, length: found.scale });
     const id = ring[[...found.index.values()].indexOf(k)];
     const here = model.atoms.find((a) => a.id === id)!;
     const out: string[] = [];
@@ -69,17 +68,15 @@ export function fusedOn(model: Model, ids: ReadonlySet<number>, bondId: number, 
   };
   const used = [...solid.free.filter((f) => (f.at === i || f.at === j) && !next.free.includes(f))];
   for (const f of used) if (taken(f.at).includes(`${f.face}:${f.kind}`)) return { refused: "A group stands where the new ring would go: fuse it on a bond whose places are free." };
-  // (the new atoms placed as the first ring's are: its middle where it is, scaled as it is)
-  const d0 = chairDrawing({ at: found.at, form: found.form, flip: found.flip, firstId: 1, firstBondId: 1 });
-  const shown = solid.atoms.map((p) => project(view, p));
-  const middle = { x: shown.reduce((s, p) => s + p.x, 0) / 6, y: shown.reduce((s, p) => s + p.y, 0) / 6 };
-  const newest = next.atoms.slice(6).map((p) => project(view, p));
-  const atoms = newest.map((p) => ({
+  // (the new atoms placed as the first ring's are: the drawing's first ring centred where the chair's middle is, each bond as long as its are)
+  const both = drawn(next, found.form);
+  if (!both) return null;
+  const atoms = both.atoms.slice(6).map((p) => ({
     el: "C",
     r: 0.9,
-    x: found.at.x + (p.x - middle.x) * d0.scale,
-    y: found.at.y + (p.y - middle.y) * d0.scale,
-    z: p.z * d0.scale,
+    x: found.at.x + p.x * found.scale,
+    y: found.at.y + p.y * found.scale,
+    z: p.z * found.scale,
     stereoCentre: true as const,
     stereoShown: true as const,
   }));
@@ -88,15 +85,7 @@ export function fusedOn(model: Model, ids: ReadonlySet<number>, bondId: number, 
     if (model.atoms.some((o) => Math.hypot(o.x - a.x, o.y - a.y, (o.z ?? 0) - a.z) < 0.5 * NOMINAL_BOND_LENGTH)) return { refused: "Another atom stands where the new ring would go." };
   }
   const idOf = (k: number): { id: number } | { new: number } => (k < 6 ? { id: ring[[...found.index.values()].indexOf(k)] } : { new: k - 6 });
-  // (the new ring's near edge bold, as the first ring's is: the two of its atoms nearest the viewer, where they are bonded and not the fusion bond)
-  const ringAtoms = [i, j, ...next.bonds.slice(6).flatMap(([p, q]) => [p, q])].filter((v, n, all) => all.indexOf(v) === n);
-  const depth = (k: number) => (k < 6 ? (model.atoms.find((a) => a.id === (idOf(k) as { id: number }).id)!.z ?? 0) : atoms[k - 6].z);
-  const nearest = [...ringAtoms].sort((p, q) => depth(q) - depth(p)).slice(0, 2);
-  const bonds = next.bonds.slice(6).map(([p, q]) => ({
-    a: idOf(p),
-    b: idOf(q),
-    ...(nearest.includes(p) && nearest.includes(q) ? { display: "bold" as const } : {}),
-  }));
+  const bonds = next.bonds.slice(6).map(([p, q]) => ({ a: idOf(p), b: idOf(q) }));
   return { atoms, bonds };
 }
 

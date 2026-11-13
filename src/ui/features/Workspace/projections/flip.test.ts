@@ -36,8 +36,10 @@ describe("Flip chair", () => {
     const after = apply(m, (flip as { moves: { id: number; x: number; y: number; z?: number }[] }).moves);
     expect(identityOfDrawn(after).text).toBe(identityOfDrawn(m).text);
     expect(identityOfDrawn(after).complete).toBe(true);
-    // (the ring is the other picture of the chair now, the groups on the same faces: and flipped again, it is as it was)
-    expect(chairOf(after, depthRings(after)[0])!.flip).toBe(true);
+    // (the ring is a chair of the tool's still - a bare chair's ring flip is its own picture again, its atoms counted round from the other
+    // end, so which of the two it is the ring alone does not say - each methyl moved, on the same face: and flipped again, it is as it was)
+    expect(chairOf(after, depthRings(after)[0])).not.toBeNull();
+    for (const id of [50, 51]) expect(Math.hypot(after.atoms.find((a) => a.id === id)!.x - m.atoms.find((a) => a.id === id)!.x, after.atoms.find((a) => a.id === id)!.y - m.atoms.find((a) => a.id === id)!.y)).toBeGreaterThan(0.1);
     const back = flipOf(after, everything(after)) as { moves: { id: number; x: number; y: number; z?: number }[] };
     const again = apply(after, back.moves);
     for (const a of m.atoms) {

@@ -227,7 +227,7 @@ import { leftOutSaid } from "./utils/readNotes";
 import { outputKindIn } from "../../../lib/calc/probe";
 import { NotRead } from "../../../lib/calc/read";
 import { namedDrawn, putDownSmiles } from "./utils/quickAddSmiles";
-import { chairDrawing, isProjection } from "./projections/chair";
+import { isProjection } from "./projections/chair";
 import { flipOf } from "./projections/flip";
 import { FUSE_WAYS, fusedOn, fusableBonds } from "./projections/fuse";
 import { addedBox } from "./store/slices/modelSlice";
@@ -2062,8 +2062,9 @@ function WorkspaceContent({
                 const id = st.addConversation({ x0: at.x - w / 2, y0: at.y - h / 2, x1: at.x + w / 2, y1: at.y + h / 2 });
                 if (id != null) st.readConversation(id);
               }
-              // (a chair put down where Quick Add was opened, as drawn atoms and bonds that carry their depth: the ids are the paste's own)
-              else if (what === "chair") st.pasteModel(centredAt(chairDrawing({ at, firstId: 1, firstBondId: 1 }), at));
+              // (a chair put down where Quick Add was opened, as drawn atoms and bonds that carry their depth; clicked again while it is as it was
+              // put down, the view from the other side)
+              else if (what === "chair") st.putChair(at);
               else st.addPlus(at.x, at.y);
             }}
           />
