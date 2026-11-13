@@ -1984,12 +1984,12 @@ mod tests {
         const KEY: &str = "sk-test-key-0123456789abcdef";
         let net = net::Net::default();
         let hosts = vec!["api.example.com".to_string()];
-        net.allow(&model::purpose("talker", &hosts));
+        net.allow(&model::Hosted::Model.purpose("talker", &hosts));
         let models = || {
             let keys = model::MemoryKeys(Mutex::new(HashMap::new()));
             model::Keys::set(&keys, "talker", KEY).unwrap();
             let m = model::Models::new(Box::new(keys));
-            m.started("w1", "talker", model::Hosted::Model, Some(net.begin(&model::purpose("talker", &hosts), "talker", Some(hosts.clone())).unwrap()));
+            m.started("w1", "talker", model::Hosted::Model, Some(net.begin(&model::Hosted::Model.purpose("talker", &hosts), "talker", Some(hosts.clone())).unwrap()));
             m.converse_line("w1", r#"{"op":"converse"}"#).unwrap();
             m
         };

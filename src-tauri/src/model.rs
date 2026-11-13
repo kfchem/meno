@@ -42,8 +42,11 @@ impl Hosted {
         }
     }
 
-    /// The purpose its worker goes out under, its hosts in it, in order
-    /// (`purpose`; lib's `modelPurpose` and `lookupPurpose`, the same).
+    /// The purpose its worker goes out under: allowed by the person once, as
+    /// any, and withdrawn in Settings, Network. The hosts are in it, in order:
+    /// a yes is for those hosts, and a plugin in place that names others -
+    /// updated - is asked of again (lib's `modelPurpose` and `lookupPurpose`,
+    /// the same).
     pub fn purpose(self, plugin: &str, hosts: &[String]) -> String {
         let mut hosts = hosts.to_vec();
         hosts.sort();
@@ -71,14 +74,6 @@ const HOSTS_MOST: usize = 8;
 #[cfg(not(any(target_os = "macos", windows)))]
 pub const NO_SAFE_PLACE: &str = "No safe place to keep a key on this system";
 
-/// The purpose a model's plugin uses the network under: allowed by the
-/// person once, as any, and withdrawn in Settings, Network. The hosts are in
-/// it, in order: a yes is for those hosts, and a plugin in place that names
-/// others - updated - is asked of again (lib's `modelPurpose`, the same).
-pub fn purpose(plugin: &str, hosts: &[String]) -> String {
-    Hosted::Model.purpose(plugin, hosts)
-}
-
 /// The one role naming hosts a manifest fills - talking with a model, or
 /// looking names up - and the hosts it names, read as the page reads them
 /// (lib/plugins/manifest.ts `hostsOf`): each a host's name exactly, 1 to 8.
@@ -93,11 +88,6 @@ pub fn hosted_of(manifest: &Value) -> Option<(Hosted, Vec<String>)> {
         _ => return None,
     };
     Some((kind, hosts_in(role)?))
-}
-
-/// The hosts a manifest's one role naming hosts names (`hosted_of`).
-pub fn hosts_of(manifest: &Value) -> Option<Vec<String>> {
-    hosted_of(manifest).map(|(_, hosts)| hosts)
 }
 
 /// The hosts a role names, each a host's name exactly, 1 to 8, each once.
@@ -468,8 +458,8 @@ mod tests {
     #[test]
     fn a_worker_ended_ends_its_network_task_and_is_given_no_other() {
         let net = crate::net::Net::default();
-        net.allow(&purpose("talker", &["api.example.com".to_string()]));
-        let task = net.begin(&purpose("talker", &["api.example.com".to_string()]), "talker: talking with a model", Some(vec!["api.example.com".into()])).unwrap();
+        net.allow(&Hosted::Model.purpose("talker", &["api.example.com".to_string()]));
+        let task = net.begin(&Hosted::Model.purpose("talker", &["api.example.com".to_string()]), "talker: talking with a model", Some(vec!["api.example.com".into()])).unwrap();
         let m = models();
         m.started("w1", "talker", Hosted::Model, Some(task));
         assert_eq!(net.running(), 1);
@@ -515,18 +505,17 @@ mod tests {
     #[test]
     fn a_yes_is_for_the_hosts_it_was_given_for() {
         let h = |hs: &[&str]| hs.iter().map(|s| s.to_string()).collect::<Vec<_>>();
-        assert_eq!(purpose("talker", &h(&["b.example.com", "a.example.com"])), "model:talker@a.example.com,b.example.com");
-        assert_eq!(purpose("talker", &h(&["a.example.com", "b.example.com"])), purpose("talker", &h(&["b.example.com", "a.example.com"])));
+        assert_eq!(Hosted::Model.purpose("talker", &h(&["b.example.com", "a.example.com"])), "model:talker@a.example.com,b.example.com");
+        assert_eq!(Hosted::Model.purpose("talker", &h(&["a.example.com", "b.example.com"])), Hosted::Model.purpose("talker", &h(&["b.example.com", "a.example.com"])));
         // (a plugin updated to name another host: another purpose, asked of again)
-        assert_ne!(purpose("talker", &h(&["api.example.com"])), purpose("talker", &h(&["api.example.com", "other.example.net"])));
+        assert_ne!(Hosted::Model.purpose("talker", &h(&["api.example.com"])), Hosted::Model.purpose("talker", &h(&["api.example.com", "other.example.net"])));
     }
 
     #[test]
     fn a_names_plugin_goes_out_under_its_own_purpose() {
         let h = |hs: &[&str]| hs.iter().map(|s| s.to_string()).collect::<Vec<_>>();
         assert_eq!(Hosted::Names.purpose("finder", &h(&["b.example.org", "a.example.org"])), "lookup:finder@a.example.org,b.example.org");
-        assert_eq!(Hosted::Model.purpose("finder", &h(&["a.example.org"])), purpose("finder", &h(&["a.example.org"])));
-        assert_ne!(Hosted::Names.purpose("finder", &h(&["a.example.org"])), Hosted::Model.purpose("finder", &h(&["a.example.org"])));
+                assert_ne!(Hosted::Names.purpose("finder", &h(&["a.example.org"])), Hosted::Model.purpose("finder", &h(&["a.example.org"])));
         assert_eq!(Hosted::Names.label("finder"), "finder: looking names up");
     }
 
@@ -541,13 +530,14 @@ mod tests {
 
     #[test]
     fn the_hosts_are_the_manifests_own_read_as_the_page_reads_them() {
+        let hosts = |m: &Value| hosted_of(m).map(|(_, h)| h);
         let m = |hosts: Value| json!({"roles": [{"role": "smiles"}, {"role": ROLE, "hosts": hosts}]});
-        assert_eq!(hosts_of(&m(json!(["api.example.com", "api.example.com", "files.example.com"]))), Some(vec!["api.example.com".to_string(), "files.example.com".to_string()]));
+        assert_eq!(hosts(&m(json!(["api.example.com", "api.example.com", "files.example.com"]))), Some(vec!["api.example.com".to_string(), "files.example.com".to_string()]));
         for bad in [json!([]), json!(["*.example.com"]), json!([".example.com"]), json!(["API.example.com"]), json!(["api.example.com:443"]), json!(["127.0.0.1"]), json!(["localhost"]), json!(["a.example.com", 3]), json!((0..9).map(|i| format!("h{i}.example.com")).collect::<Vec<_>>()), json!("api.example.com")] {
-            assert_eq!(hosts_of(&m(bad.clone())), None, "{bad}");
+            assert_eq!(hosts(&m(bad.clone())), None, "{bad}");
         }
-        assert_eq!(hosts_of(&json!({"roles": [{"role": "smiles", "hosts": ["api.example.com"]}]})), None);
-        assert_eq!(hosts_of(&json!({})), None);
+        assert_eq!(hosts(&json!({"roles": [{"role": "smiles", "hosts": ["api.example.com"]}]})), None);
+        assert_eq!(hosts(&json!({})), None);
         // (a structure found by its name: its hosts read the same, and what it goes out for said)
         let names = json!({"roles": [{"role": NAMES_ROLE, "hosts": ["pubchem.ncbi.nlm.nih.gov"]}]});
         assert_eq!(hosted_of(&names), Some((Hosted::Names, vec!["pubchem.ncbi.nlm.nih.gov".to_string()])));
@@ -555,7 +545,7 @@ mod tests {
         // (both roles naming hosts: what it goes out for in doubt - none, as the page takes it for none)
         let both = json!({"roles": [{"role": ROLE, "hosts": ["api.example.com"]}, {"role": NAMES_ROLE, "hosts": ["pubchem.ncbi.nlm.nih.gov"]}]});
         assert_eq!(hosted_of(&both), None);
-        assert_eq!(hosts_of(&both), None);
+        assert_eq!(hosts(&both), None);
     }
 
     #[cfg(not(any(target_os = "macos", windows)))]
