@@ -193,8 +193,8 @@ describe("the gap where a bond passes behind another", () => {
       for (const p of sharp.polys) expect(Math.min(...p.points.map((q) => Math.abs(q.y)))).toBeGreaterThanOrEqual(5 * HALF - 1e-9);
     });
 
-    it("cuts the shape of a bold or a wedge bond behind into two, one wholly each side of the gap, each ending at the clear space", () => {
-      for (const back of [{ display: "bold" as const }, { stereo: "up" as const }]) {
+    it("cuts the shape of a bold bar, a solid wedge or a wedge-shaped ring bond behind into two, one wholly each side of the gap, each ending at the clear space", () => {
+      for (const back of [{ display: "bold" as const }, { stereo: "up" as const }, { display: "wedge" as const }]) {
         const { polys } = scene(90, { back });
         expect(polys, JSON.stringify(back)).toHaveLength(2);
         // (nothing of either lies inside the gap, -5 half widths to 5; the two are on opposite sides)
