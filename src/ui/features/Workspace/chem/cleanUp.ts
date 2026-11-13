@@ -292,11 +292,15 @@ const givenFits = (job: LayoutJob, model: Model) => job.input.atoms.length === m
  * `model` laid out afresh by the engine as a whole - a salt's ions set out
  * together - for a structure that has only just arrived, before it is
  * added: a plugin's drawing of a SMILES. In `style` - the app's, unless
- * given - as Clean-up lays one out.
+ * given - as Clean-up lays one out. `asNew`: a drawing nobody made - a
+ * plugin's coordinates - whose forms are not kept as a chemist's are (a
+ * four-bond metal's cross or X: docs/LAYOUT-2D.md, *A metal with four
+ * bonds*), but laid out as from a SMILES.
  */
-export async function laidOut(model: Model, style: DrawingStyle = styleOf(useAppSettings.getState().drawingStyle), given?: GivenRuns): Promise<Model> {
+export async function laidOut(model: Model, style: DrawingStyle = styleOf(useAppSettings.getState().drawingStyle), given?: GivenRuns, asNew = false): Promise<Model> {
   if (!model.bonds.length) return model;
-  const read = layoutJob(model);
+  const job0 = layoutJob(model);
+  const read = asNew ? { ...job0, input: { ...job0.input, atoms: job0.input.atoms.map(({ fourForm: _form, ...a }) => a) } } : job0;
   // (an allene's axis and an odd cumulene's cis or trans the structure's own text says, which a plugin's drawing of it cannot: a MOL block has no way to say them - by atom, in the drawing's order)
   const job = given && givenFits(read, model) ? { ...read, given: true as const, input: { ...read.input, ...(given.axes.length ? { axes: given.axes } : {}), ...(given.cumulated.length ? { cumulated: given.cumulated } : {}) } } : read;
   const change = relayoutFrom(model, model, job, await layOut(job.input), style);

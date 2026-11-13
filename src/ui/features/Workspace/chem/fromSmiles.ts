@@ -100,13 +100,14 @@ export function withoutStereoOpen<T extends { stereoOpen?: StereoOpen; asCame?: 
  * stereo wedged - as Meno draws it: read as a file is, and laid out by
  * Meno's own engine in `style`, or as the plugin laid it out, should the
  * engine fail. One way for every such drawing: a SMILES's, and the
- * structures a step makes.
+ * structures a step makes - laid out as new, not kept in forms the
+ * plugin's coordinates happen to have (`laidOut`'s `asNew`).
  */
 export async function drawingOf(molblock: string, style?: DrawingStyle, given?: GivenRuns): Promise<Model & { asCame?: string }> {
   const result = await processFileContent("drawing.mol", molblock);
   const drawn = editorModelOf(result.model);
-  // (as it came, said why: put down, it is said - asCameSaid)
-  return laidOut(drawn, style, given).catch((e: unknown) => {
+  // (as it came, said why: put down, it is said - asCameSaid; its coordinates the plugin's, nobody's drawing: laid out as new)
+  return laidOut(drawn, style, given, true).catch((e: unknown) => {
     // (kept for whoever looks: what the sentence said plainly leaves out)
     console.warn("the structure is drawn as the plugin laid it out", e);
     return { ...drawn, asCame: e instanceof Error ? e.message : String(e) };
