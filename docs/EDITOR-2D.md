@@ -1313,7 +1313,11 @@ All hover-based, as above.
   panel *Save as abbreviation* opens is about the group as it was: it
   closes when the group changes under it - an undo taking an atom of it
   away, a bond among them, a charge (until 2026-10-13, Save then showed
-  the label on what was left: a "tBu" holding an isopropyl).
+  the label on what was left: a "tBu" holding an isopropyl). An
+  abbreviation's structure has no stereo: where the group's bonds, or
+  its one bond out, show any - a wedge or hash, a wavy bond, a double
+  bond drawn crossed - the panel says so ("Its wedges are not kept: an
+  abbreviation has no stereo."), never passing it over.
 - Reaction arrows, "+" and text: create, move, edit, delete. (An arrow or
   a "+" is added from Quick Add, where it was opened: the arrow pointing right, two and two-thirds of a bond long.
   Either is moved by dragging it and deleted by Delete or Backspace under

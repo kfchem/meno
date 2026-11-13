@@ -9,12 +9,14 @@ import type { Model } from "../store/types";
  * atom's hydrogens as the drawing has them. Or why they cannot be one: they
  * must be held together by their bonds, have exactly one bond to the rest
  * of the drawing, and be elements, none an abbreviation or other label.
- * Wedges are not kept: an abbreviation's structure has no stereo.
+ * Wedges are not kept: an abbreviation's structure has no stereo - and
+ * where its bonds, or its bond out, show any, that is said (`notKept`),
+ * never passed over.
  */
 export function abbreviationFromSelection(
   model: Model,
   ids: ReadonlySet<number>,
-): { smiles: string } | { problem: string } {
+): { smiles: string; notKept?: string } | { problem: string } {
   const inside = model.atoms.filter((a) => ids.has(a.id));
   if (!inside.length) return { problem: "Select the atoms the abbreviation stands for." };
   const crossing = model.bonds.filter((b) => ids.has(b.a) !== ids.has(b.b));
@@ -64,5 +66,21 @@ export function abbreviationFromSelection(
       ...(a.isotope ? { isotope: a.isotope } : {}),
     })),
   ];
-  return { smiles: writeSmiles(atoms, bonds, 0) };
+  const smiles = writeSmiles(atoms, bonds, 0);
+  const notKept = stereoNotKept([...inner, out]);
+  return notKept ? { smiles, notKept } : { smiles };
+}
+
+/**
+ * What of the stereo its bonds show an abbreviation does not keep, in plain
+ * words: "Its wedges are not kept: an abbreviation has no stereo." - its
+ * wedges and hashes, its wavy bonds, its double bonds drawn crossed - or
+ * none, where they show none.
+ */
+export function stereoNotKept(bonds: readonly Pick<Model["bonds"][number], "stereo">[]): string | null {
+  const has = (...kinds: string[]) => bonds.some((b) => b.stereo != null && kinds.includes(b.stereo));
+  const kinds = [has("up", "down") ? "wedges" : "", has("wavy") ? "wavy bonds" : "", has("either") ? "crossed double bonds" : ""].filter(Boolean);
+  if (!kinds.length) return null;
+  const said = kinds.length === 1 ? kinds[0] : `${kinds.slice(0, -1).join(", ")} and ${kinds[kinds.length - 1]}`;
+  return `Its ${said} are not kept: an abbreviation has no stereo.`;
 }

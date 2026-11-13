@@ -3,7 +3,7 @@ import { NOMINAL_BOND_LENGTH as L } from "../../../../lib/chem/acs";
 import { readSmiles } from "../../../../lib/chem/smiles";
 import { contractToAbbreviation, emptyWorkspaceDocument, expandAbbreviation } from "../document";
 import type { Model } from "../store/types";
-import { abbreviationFromSelection } from "./abbreviationFromSelection";
+import { abbreviationFromSelection, stereoNotKept } from "./abbreviationFromSelection";
 
 const atom = (id: number, x: number, y: number, el = "C") => ({ id, x, y, r: 0.9, el });
 // an ethyl ester's ethoxy, drawn out: C1-C2(=O3)-O4-C5-C6, and a methyl on C1's other side, C7
@@ -26,6 +26,22 @@ describe("a selection saved as an abbreviation", () => {
     expect(made).toEqual({ smiles: "*C(=O)OCC" });
     const read = readSmiles((made as { smiles: string }).smiles);
     expect(read.atoms.map((a) => a.el)).toEqual(["*", "C", "O", "O", "C", "C"]);
+  });
+
+  it("says that the stereo its bonds show is not kept, where they show any - its bond out too - and nothing where none", () => {
+    const marked = (marks: Record<number, "up" | "down" | "wavy" | "either">) => ({ ...ester, bonds: ester.bonds.map((b) => (marks[b.id] ? { ...b, stereo: marks[b.id] } : b)) });
+    const ethoxycarbonyl = new Set([2, 3, 4, 5, 6]);
+    // (a wedge, or a hash, inside the group: its SMILES as ever, the wedges said not kept)
+    expect(abbreviationFromSelection(marked({ 15: "up" }), ethoxycarbonyl)).toEqual({ smiles: "*C(=O)OCC", notKept: "Its wedges are not kept: an abbreviation has no stereo." });
+    expect(abbreviationFromSelection(marked({ 14: "down" }), ethoxycarbonyl)).toMatchObject({ notKept: "Its wedges are not kept: an abbreviation has no stereo." });
+    // (on its one bond out: that bond is the abbreviation's, and its wedge goes with it)
+    expect(abbreviationFromSelection(marked({ 11: "up" }), ethoxycarbonyl)).toMatchObject({ notKept: "Its wedges are not kept: an abbreviation has no stereo." });
+    // (a wavy bond, and a double bond drawn crossed: each by its own name)
+    expect(abbreviationFromSelection(marked({ 15: "wavy" }), ethoxycarbonyl)).toMatchObject({ notKept: "Its wavy bonds are not kept: an abbreviation has no stereo." });
+    expect(abbreviationFromSelection(marked({ 12: "either", 15: "up", 14: "wavy" }), ethoxycarbonyl)).toMatchObject({ notKept: "Its wedges, wavy bonds and crossed double bonds are not kept: an abbreviation has no stereo." });
+    // (one elsewhere in the drawing, none in the group or on its bond out: nothing said)
+    expect(abbreviationFromSelection(marked({ 16: "up" }), ethoxycarbonyl)).toEqual({ smiles: "*C(=O)OCC" });
+    expect(stereoNotKept([{}, { stereo: "none" }])).toBeNull();
   });
 
   it("says why where it cannot be one", () => {
