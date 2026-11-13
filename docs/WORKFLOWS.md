@@ -86,7 +86,9 @@ each is merged, this file describes what is built.
     holds no value of its own for an option - one put down otherwise than
     on the canvas, a template's, a file's - takes Settings' for its kind
     as it stands, else the option's own default: on its card, when it is
-    judged ready, and when it runs (`stepOptions`, workflow/doers).
+    judged ready, and when it runs (`stepOptions`, workflow/doers). A
+    change in Settings changes what such a step would run with, so its
+    card then says it has changed since its run.
 18. **No single 3D structure is made in a workflow** (the maintainer,
     2026-10-10): one geometry made of a drawing is one of its
     conformations taken at random, which a calculation on it cannot

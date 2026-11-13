@@ -408,7 +408,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const now = doc.getState();
     if (!stepOf(now, id)) return;
     // (made from the lists as they were checked: typed on meanwhile, they are what the card then says has changed)
-    const made = runMenoDrawn("enumerate", entries, stepValues(step), now.style, [checked]);
+    const made = runMenoDrawn("enumerate", entries, own, now.style, [checked]);
     menoStops.delete(id);
     const open = made.ok ? await leftOpen(id, at, made.kept) : "";
     // (stopped while its products were asked about: nothing put in, and the step says so, as Meno's say it)
