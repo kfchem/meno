@@ -8,10 +8,13 @@ import { readDrawn } from "./copyPaste";
 import { structureFileText } from "../fileActions";
 import esterification from "../../../../lib/figure/fixtures/esterification-rdkitrxn.json";
 import { WRITTEN_AS_WORDS } from "../../../../lib/figure/scheme";
+import { labelText, wordsOf } from "../../../../lib/figure/read";
+import { readDrawnLabel } from "../../../../lib/figure/structure";
+import { saysChargeTooMuch } from "../../../../lib/figure/structure";
 import { glyphShape, LETTERS, type GlyphShape } from "../../../../lib/figure/glyphs";
 import { plusMeasures, plusOutline } from "../../../../lib/chem/reactionScheme";
 import { DEFAULT_STYLE_CHOICE, styleOf } from "../../../../lib/chem/style";
-import { atomAs, atomAtSpot, bondAs, figureFrom, lettersAsShapes, placedBeside, readMarks, regionOf, wholeLabel, type FigureResult, type Unread } from "./figures";
+import { atomAs, atomAtSpot, bondAs, figureFrom, lettersAsShapes, framedPicture, figureLabels, placedBeside, readMarks, regionOf, wholeLabel, withoutOverBonded, type FigureResult, type Unread } from "./figures";
 import { measured } from "../../../../testing/timeouts";
 import { readMolfile } from "../../../../lib/chem/ctfile";
 import { identityOfDrawn } from "../chem/identityOf";
@@ -169,6 +172,9 @@ describe("a bond's open end drawn short", () => {
   });
 });
 
+/** What is said of a read that puts five bonds on one carbon. */
+const WHY_CARBON = "As read, more bonds meet at a carbon than it takes: none of it is taken.";
+
 describe("a structure read whose atoms have more bonds than they take", () => {
   const disc = ([cx, cy]: P, r: number): FigurePath => {
     const k = 0.5523 * r;
@@ -198,20 +204,60 @@ describe("a structure read whose atoms have more bonds than they take", () => {
     expect(centre.unsure?.said).toEqual(["A dot by it, but its bonds leave it no unpaired electron: no radical is read."]);
   });
 
-  it("marks a carbon unsure where a line with a dashed line drawn in two pieces beside it reads as three lines, its two other bonds besides", () => {
+  it("refuses a read that puts more bonds on a carbon than it takes - a line with a dashed line in two pieces beside it, read as three lines, its two other bonds besides - and says why", () => {
     const c: P = [150, 200];
     const end = step(c, 0);
     const [p, q] = beside(c, end, 1.8);
     const piece = (from: number, to: number): FigurePath => stroke([p[0] + (q[0] - p[0]) * from, p[1] + (q[1] - p[1]) * from], [p[0] + (q[0] - p[0]) * to, p[1] + (q[1] - p[1]) * to]);
     const others = [stroke(c, step(c, 150)), stroke(c, step(c, 210))];
     const m = structureFrom({ paths: [...others, stroke(c, end), piece(0, 0.3), piece(0.7, 1)], letters: [], pictures: [] }, SHA, 1) as Model;
-    // (as many bonds as a carbon takes, or said: never more, and sure)
-    const centre = m.atoms.find((a) => m.bonds.filter((b) => b.a === a.id || b.b === a.id).length === 3)!;
-    expect(bondsAt(m, centre.id) <= 4 || !!centre.unsure?.said.includes("More bonds meet here than a carbon has.")).toBe(true);
+    // (as many bonds as a carbon takes, or refused: never more put down)
+    if ("none" in m) expect(m.none).toBe(WHY_CARBON);
+    else expect(m.atoms.every((a) => bondsAt(m, a.id) <= 4)).toBe(true);
     const [x, y] = beside(c, end, -1.8);
-    const three = structureFrom({ paths: [...others, stroke(c, end), stroke(p, q), stroke(x, y)], letters: [], pictures: [] }, SHA, 1) as Model;
-    const c3 = three.atoms.find((a) => bondsAt(three, a.id) === 5)!;
-    expect(c3.unsure?.said).toEqual(["More bonds meet here than a carbon has."]);
+    const three = structureFrom({ paths: [...others, stroke(c, end), stroke(p, q), stroke(x, y)], letters: [], pictures: [] }, SHA, 1);
+    expect(three).toEqual({ none: WHY_CARBON });
+  });
+
+  it("leaves out only the structure that breaks valence where a figure holds others: each is its own, and the rest is read and said", () => {
+    // (a carbon with five bonds, and a chain of three beside it)
+    const c: P = [150, 200];
+    const five = [0, 72, 144, 216, 288].map((d) => stroke(c, step(c, d)));
+    const a: P = [300, 200];
+    const chain = stroke(a, step(a, 30), step(step(a, 30), -30));
+    const mixed = figureFrom({ paths: [...five, chain], letters: [], pictures: [] }, SHA, 1);
+    expect("model" in mixed && mixed.model.atoms).toHaveLength(3);
+    expect("model" in mixed && mixed.left).toBe("A structure of this figure was left out: as read, an atom has more bonds than it takes.");
+    expect("model" in mixed && mixed.model.atoms.map((x) => x.id)).toEqual([1, 2, 3]);
+    // (nothing to leave: the reason)
+    expect(figureFrom({ paths: five, letters: [], pictures: [] }, SHA, 1)).toEqual({ none: WHY_CARBON });
+  });
+
+  it("numbers what it keeps again whole - a hashed bond's narrow end, a group's id and the group it is within, a haptic bond's atoms - beside a structure it leaves out", () => {
+    const at = (id: number, x: number, y = 0) => ({ id, x, y, r: 0.9, el: "C" });
+    // (a carbon with five bonds - atoms 1 to 6, bonds 1 to 5 - and, kept, a chain of three: atoms 7 to 9, bonds 6 and 7, the first hashed and narrow at its second atom, the two atoms of a multiple group within another)
+    const model: Model = {
+      atoms: [at(1, 0), at(2, 1), at(3, 2), at(4, 3), at(5, 4), at(6, 5), at(7, 20), at(8, 21), { ...at(9, 22), sgroups: [{ id: 41, type: "MUL", multiplier: 2, parent: 40 }, { id: 40, type: "MUL", multiplier: 3 }] }],
+      bonds: [
+        ...[2, 3, 4, 5, 6].map((to, i) => ({ id: i + 1, a: 1, b: to, order: 1 as const })),
+        { id: 6, a: 7, b: 8, order: 1, stereo: "down", narrow: 8 },
+        { id: 7, a: 8, b: 9, order: 1, endpoints: [7, 9], attach: "all" },
+      ],
+    };
+    model.atoms[7] = { ...model.atoms[7], sgroups: [{ id: 40, type: "MUL", multiplier: 3 }] };
+    const { kept, left } = withoutOverBonded(model);
+    expect(left).toBe(1);
+    expect(kept.atoms.map((a) => a.id)).toEqual([1, 2, 3]);
+    // (the bonds numbered on from the atoms: 4 and 5; the narrow end is the second atom as renumbered, the endpoints renumbered with them)
+    expect(kept.bonds.map((b) => [b.id, b.a, b.b])).toEqual([[4, 1, 2], [5, 2, 3]]);
+    expect(kept.bonds[0].narrow).toBe(2);
+    expect(kept.bonds[1].endpoints).toEqual([1, 3]);
+    // (the groups numbered on from the bonds, in the order of their old ids; the parent follows its group)
+    expect(kept.atoms[1].sgroups).toEqual([{ id: 6, type: "MUL", multiplier: 3 }]);
+    expect(kept.atoms[2].sgroups).toEqual([{ id: 7, type: "MUL", multiplier: 2, parent: 6 }, { id: 6, type: "MUL", multiplier: 3 }]);
+    // (nothing refers to what is not there)
+    const ids = new Set(kept.atoms.map((a) => a.id));
+    expect(kept.bonds.every((b) => ids.has(b.a) && ids.has(b.b) && (b.narrow == null || ids.has(b.narrow)) && (b.endpoints ?? []).every((e) => ids.has(e)))).toBe(true);
   });
 
   it("keeps no more bonds to an oxygen's label than it takes, drawn with three, and marks it unsure", () => {
@@ -223,25 +269,22 @@ describe("a structure read whose atoms have more bonds than they take", () => {
     expect([bondsAt(m, ox.id), !!ox.unsure]).toEqual([2, true]);
   });
 
-  it("marks a group's label with more bonds than its atom takes past the group's own unsure: OMe with a double bond", () => {
+  it("refuses a group's label with more bonds than its atom takes past the group's own: OMe with a double bond", () => {
     const a: P = [100, 200];
     const b = step(a, 30);
     const o = step(b, -30);
     const end = towards(b, o, 0.55);
-    const m = structureFrom({ paths: [stroke(a, b), stroke(b, end), stroke(...beside(b, end, 1.8))], letters: letters("OMe", o), pictures: [] }, SHA, 1) as Model;
-    const g = m.atoms.find((x) => x.el === "OMe")!;
-    expect([bondsAt(m, g.id), g.unsure?.said]).toEqual([2, ['More bonds meet here than "OMe" has.']]);
+    const m = structureFrom({ paths: [stroke(a, b), stroke(b, end), stroke(...beside(b, end, 1.8))], letters: letters("OMe", o), pictures: [] }, SHA, 1);
+    expect(m).toEqual({ none: 'As read, more bonds meet at "OMe" than it takes: none of it is taken.' });
   });
 
-  it("marks an H drawn with a double bond to it unsure, checked as a file has the structure", () => {
+  it("refuses an H drawn with a double bond to it, checked as a file has the structure", () => {
     const a: P = [100, 200];
     const b = step(a, 30);
     const h = step(b, -30);
     const end = towards(b, h, 0.55);
-    const m = structureFrom({ paths: [stroke(a, b), stroke(b, end), stroke(...beside(b, end, 1.8))], letters: letters("H", h), pictures: [] }, SHA, 1) as Model;
-    const hydrogen = m.atoms.find((x) => x.el === "H");
-    // (read with its double bond, and said)
-    expect([hydrogen && bondsAt(m, hydrogen.id), hydrogen?.unsure?.said]).toEqual([2, ["More bonds meet here than hydrogen has."]]);
+    const m = structureFrom({ paths: [stroke(a, b), stroke(b, end), stroke(...beside(b, end, 1.8))], letters: letters("H", h), pictures: [] }, SHA, 1);
+    expect(m).toEqual({ none: "As read, more bonds meet at hydrogen than it takes: none of it is taken." });
   });
 
   it("marks a label read with a charge no atom carries unsure - a page's \"S188−\" taken for a sulfur", () => {
@@ -251,6 +294,9 @@ describe("a structure read whose atoms have more bonds than they take", () => {
     const m = structureFrom({ paths: [stroke(a, b), stroke(b, towards(b, s, 0.55))], letters: letters("S18−", s), pictures: [] }, SHA, 1) as Model;
     const sulfur = m.atoms.find((x) => x.el === "S");
     expect([sulfur?.charge, sulfur?.unsure?.said]).toEqual([-18, ["A charge of 18− is more than sulfur carries."]]);
+    // (the words and the test that tells them are one: `saysChargeTooMuch`)
+    expect(saysChargeTooMuch(sulfur!.unsure!.said[0])).toBe(true);
+    expect(saysChargeTooMuch("More bonds meet here than a carbon has.")).toBe(false);
   });
 
   it("leaves sure a group's label drawn with the bond its atom has left: =NOAc, an oxime's ester", () => {
@@ -765,5 +811,209 @@ describe("a figure's Ar and Y: a variable's name that is an element's symbol too
     const two = chainTo("Y", 2);
     expect(two.atoms.find((x) => x.el === "Y")?.unsure).toBeUndefined();
     expect(symbolsOf(two)).toContain("Y");
+  });
+});
+
+describe("a picture in a frame - a journal's cover thumbnail - is no structure", () => {
+  const frame = (x0: number, y0: number, x1: number, y1: number): FigurePath => stroke([x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]);
+
+  it("is none where the lines drawn are a rectangle round the picture: no square of its frame", () => {
+    const thumbnail: FigureDrawn = { paths: [frame(100, 100, 190, 190)], letters: [], pictures: [[101, 101, 189, 189]] };
+    expect(figureFrom(thumbnail, SHA, 1)).toEqual({ none: "This figure is a picture in a frame, not a drawing: there are no lines to read." });
+    // (its four sides drawn each alone, as some programs do)
+    const sides: FigureDrawn = { ...thumbnail, paths: [stroke([100, 100], [190, 100]), stroke([190, 100], [190, 190]), stroke([190, 190], [100, 190]), stroke([100, 190], [100, 100])] };
+    expect("none" in figureFrom(sides, SHA, 1)).toBe(true);
+  });
+
+  it("is still read where a structure's bonds are drawn by a picture: slanting lines are no frame", () => {
+    const a: P = [100, 200];
+    const b = step(a, 30);
+    const c = step(b, -30);
+    const withPicture: FigureDrawn = { paths: [stroke(a, b, c)], letters: [], pictures: [[200, 150, 260, 210]] };
+    const read = figureFrom(withPicture, SHA, 1);
+    expect("model" in read && read.model.atoms.length).toBe(3);
+  });
+});
+
+describe("a protecting group's label on the left of its bond", () => {
+  it.each([true, false])("reads PMBO as OPMB, as it reads OPMB on the right, its letters drawn as outlines (whole path: %s)", (whole) => {
+    const side = (word: string, right: boolean) => {
+      const a: P = right ? [100, 100] : [200, 100];
+      const b = right ? step(a, 30) : step(a, 150);
+      const c = right ? step(b, -30) : step(b, -150);
+      const f: FigureDrawn = { paths: [stroke(a, b), cut(b, c, 0, 0), ...outlinedWord(word, [c[0] + (right ? 17 : -17), c[1]], whole)], letters: [], pictures: [] };
+      return elementsOf(figureFrom(f, SHA, 0, KNOWN));
+    };
+    expect(side("PMBO", false)).toEqual(["C", "C", "OPMB"]);
+    expect(side("OPMB", true)).toEqual(["C", "C", "OPMB"]);
+  }, measured(300));
+});
+
+describe("a label's hashed bond drawn as three round-capped marks", () => {
+  const rad = (d: number) => (d * Math.PI) / 180;
+  /** A round-capped mark - a stadium, filled - `length` long and `width` across, its middle at `mid`, along `ang` degrees (screen, y down). */
+  const stadium = (mid: P, ang: number, length: number, width: number): FigurePath => {
+    const [ux, uy] = [Math.cos(rad(ang)), Math.sin(rad(ang))];
+    const [h, r] = [length / 2, width / 2];
+    const k = 0.5523 * r;
+    const pt = (a: number, b: number): [number, number] => [mid[0] + ux * a - uy * b, mid[1] + uy * a + ux * b];
+    const d: PathStep[] = [
+      ["M", ...pt(-h + r, -r)], ["L", ...pt(h - r, -r)],
+      ["C", ...pt(h - r + k, -r)], ["C", ...pt(h, -k)], ["C", ...pt(h, 0)],
+      ["C", ...pt(h, k)], ["C", ...pt(h - r + k, r)], ["C", ...pt(h - r, r)],
+      ["L", ...pt(-h + r, r)],
+      ["C", ...pt(-h + r - k, r)], ["C", ...pt(-h, k)], ["C", ...pt(-h, 0)],
+      ["C", ...pt(-h, -k)], ["C", ...pt(-h + r - k, -r)], ["C", ...pt(-h + r, -r)], ["Z"],
+    ];
+    return { fill: "#000000ff", stroke: null, width: 0, d };
+  };
+
+  // (measured on a real page, at bond length 1: the label PMBO as outlines, its O at the right; from 0.04 right of the O's edge a hashed bond runs
+  //  down to the right, 29 degrees below level - three marks 0.073 wide, set across it: 0.28 and 0.22 long, then a dot - their middles 0.19 apart, the
+  //  longest by the label, so that the narrow end is at the ring atom just past the dot, 0.65 from the O's edge, with two plain bonds leaving it)
+  it.each([false, true])("reads PMBO as OPMB with its bond hashed, narrow at the ring atom (whole path: %s), as five bars set so would read", (whole) => {
+    const word = "PMBO";
+    const width = [...word].reduce((w, c) => w + ((PLEX.charToGlyph(c).advanceWidth ?? 0) / PLEX.unitsPerEm) * 10, 0);
+    const label = outlinedWord(word, [100 - width / 2, 100], whole);
+    const ang = 29;
+    const along = (t: number): P => [100 + 0.04 * L + Math.cos(rad(ang)) * t, 100 + Math.sin(rad(ang)) * t];
+    const marks = [stadium(along(0.14 * L), ang + 90, 0.28 * L, 0.073 * L), stadium(along(0.33 * L), ang + 90, 0.22 * L, 0.073 * L), stadium(along(0.52 * L), ang + 90, 0.14 * L, 0.11 * L)];
+    const ringAtom = along(0.65 * L);
+    const bonds = [60, -60].map((d) => stroke(ringAtom, [ringAtom[0] + Math.cos(rad(ang + d)) * L, ringAtom[1] + Math.sin(rad(ang + d)) * L]));
+    const read = figureFrom({ paths: [...label, ...marks, ...bonds], letters: [], pictures: [] }, SHA, 0, KNOWN) as FigureResult & { model: Model };
+    const m = read.model;
+    expect(m.atoms.map((a) => a.el).sort()).toEqual(["C", "C", "C", "OPMB"]);
+    const o = m.atoms.find((a) => a.el === "OPMB")!;
+    const hashed = m.bonds.filter((b) => b.stereo === "down");
+    expect(hashed).toHaveLength(1);
+    // (to the label, its narrow end at the ring atom - the one with two other bonds)
+    expect(hashed[0].b === o.id || hashed[0].a === o.id).toBe(true);
+    const narrow = m.atoms.find((a) => a.id === hashed[0].narrow)!;
+    expect(m.bonds.filter((b) => b.a === narrow.id || b.b === narrow.id)).toHaveLength(3);
+  }, measured(300));
+});
+
+describe("a picture in a frame is no drawing (framedPicture)", () => {
+  /** A picture over (0, 0) to (100, 100), and what else is drawn. */
+  const framed = (paths: FigurePath[], pictures: [number, number, number, number][] = [[0, 0, 100, 100]], lettersGiven: FigureLetter[] = []): FigureDrawn => ({ paths, letters: lettersGiven, pictures });
+  const rectangle: FigurePath = { fill: null, stroke: "#000000ff", width: 0.6, d: [["M", 0, 0], ["L", 100, 0], ["L", 100, 100], ["L", 0, 100], ["Z"]] };
+  const rule = (y: number): FigurePath => stroke([0, y], [100, y]);
+
+  it("is a picture with a rectangle round it, or a rule under it", () => {
+    expect(framedPicture(framed([rectangle]))).toBe(true);
+    expect(framedPicture(framed([rule(104)]))).toBe(true);
+    expect(framedPicture(framed([]))).toBe(true);
+  });
+
+  it("is not a figure without a picture", () => {
+    expect(framedPicture(framed([rectangle], []))).toBe(false);
+  });
+
+  it("is not one with a line drawn slanting - a bond - or a curve", () => {
+    expect(framedPicture(framed([rectangle, stroke([0, 0], [100, 100])]))).toBe(false);
+    // (a line as nearly level as the sides of a frame are: one bond's turn is not)
+    expect(framedPicture(framed([stroke([0, 0], [100, 0.005])]))).toBe(true);
+    expect(framedPicture(framed([stroke([0, 0], [100, 0.5])]))).toBe(false);
+    const curve: FigurePath = { fill: null, stroke: "#000000ff", width: 0.6, d: [["M", 0, 0], ["C", 100, 0]] };
+    expect(framedPicture(framed([curve]))).toBe(false);
+  });
+
+  it("is not one with a letter on it", () => {
+    expect(framedPicture(framed([rectangle], [[0, 0, 100, 100]], letters("O", [50, 50])))).toBe(false);
+  });
+
+  it("is a frame of at most eight paths: its sides, a rule - a ninth is a drawing", () => {
+    const rules = (n: number) => Array.from({ length: n }, (_, k) => rule(100 + 0.001 * k));
+    expect(framedPicture(framed(rules(8)))).toBe(true);
+    expect(framedPicture(framed(rules(9)))).toBe(false);
+  });
+
+  it("is a picture covering half of what it spans, at the least", () => {
+    // (the pictures cover 100 x 50 of a span of 100 x 100 with the frame about the rest: exactly half; a hair less is a structure beside a picture)
+    expect(framedPicture(framed([rectangle], [[0, 0, 100, 50]]))).toBe(true);
+    expect(framedPicture(framed([rectangle], [[0, 0, 100, 49.9]]))).toBe(false);
+    // (pictures that overlap count each its own box; none covering nothing)
+    expect(framedPicture(framed([rectangle], [[0, 0, 0, 0]]))).toBe(false);
+  });
+});
+
+describe("a small number beside a label, read with Meno's own label reader (made labels)", () => {
+  /** A label as typeset: each part its text, its size in points and how far its baseline stands above the line's. */
+  const word = (parts: [string, number, number][]) => {
+    let at = 100;
+    const letters = parts.flatMap(([text, size, up]) =>
+      [...text].map((c): FigureLetter => {
+        const w = size * 0.6;
+        const base = 100 - up;
+        const l: FigureLetter = { c, box: [at, base - size * 0.72, at + w, base], at: [at, base], size, loose: [at, base - size, at + w + 0.2, base + 0.2 * size] };
+        at += w + 0.2;
+        return l;
+      }),
+    );
+    const [w] = wordsOf(letters);
+    return labelText(w, (l) => readDrawnLabel(l, figureLabels).read);
+  };
+  const raised = (d: string): [string, number, number] => [d, 7.7, 4];
+  const lowered = (d: string, by: number): [string, number, number] => [d, 6.5, -by];
+
+  it("keeps the counts of a formula set a little low, and an azide's N3", () => {
+    for (const by of [0.4, 0.9]) {
+      expect(word([["CH", 10, 0], lowered("2", by), ["Cl", 10, 0], lowered("2", by)])).toBe("CH2Cl2");
+      expect(word([["K", 10, 0], lowered("2", by), ["CO", 10, 0], lowered("3", by)])).toBe("K2CO3");
+      expect(word([["Et", 10, 0], lowered("3", by), ["N", 10, 0]])).toBe("Et3N");
+      expect(word([["H", 10, 0], lowered("2", by), ["O", 10, 0]])).toBe("H2O");
+      expect(word([["N", 10, 0], lowered("3", by)])).toBe("N3");
+      expect(word([["NH", 10, 0], lowered("2", by)])).toBe("NH2");
+      expect(word([["CO", 10, 0], lowered("2", by), ["Me", 10, 0]])).toBe("CO2Me");
+      expect(word([["CF", 10, 0], lowered("3", by)])).toBe("CF3");
+    }
+  });
+
+  it("leaves out an atom's number, set high or level and smaller where the label reads without it and not with it: O14, Me7, C7, N1, H3", () => {
+    for (const [letters, n] of [["O", "14"], ["Me", "7"], ["C", "7"], ["N", "1"], ["H", "3"]]) {
+      expect(word([[letters, 10, 0], raised(n)]), `${letters}${n} high`).toBe(letters);
+    }
+    expect(word([["O", 10, 0], ["14", 6.5, 0]])).toBe("O");
+    expect(word([["Me", 10, 0], ["7", 6.5, 0]])).toBe("Me");
+    // (an N3 with its 3 set high is an atom's number, not an azide)
+    expect(word([["N", 10, 0], raised("3")])).toBe("N");
+  });
+
+  it("says so on the atom where a level number was left out - and says nothing where it was clearly high", () => {
+    const a: P = [100, 200];
+    const b = step(a, 30);
+    const c = step(b, -30);
+    const end = step(c, 30);
+    const atomOf = (parts: [string, number, number][]) => {
+      // (a chain of three bonds, its last to a label set at its end)
+      let at = end[0] + 2;
+      const ls = parts.flatMap(([text, size, up]) =>
+        [...text].map((ch): FigureLetter => {
+          const w = size * 0.6;
+          const base = end[1] + 3.6 - up;
+          const l: FigureLetter = { c: ch, box: [at, base - size * 0.72, at + w, base], at: [at, base], size, loose: [at, base - size, at + w + 0.2, base + 0.2 * size] };
+          at += w + 0.2;
+          return l;
+        }),
+      );
+      const m = structureFrom({ paths: [stroke(a, b, c), stroke(c, [end[0] - 1, end[1] + 0.2])], letters: ls, pictures: [] }, SHA, 1) as Model;
+      return m.atoms.find((x) => x.el === "Me");
+    };
+    expect(atomOf([["Me", 10, 0], ["7", 6.5, 0]])?.unsure?.said).toEqual(['A small number by it was taken as the atom\'s number, not a count: read as "Me".']);
+    expect(atomOf([["Me", 10, 0], raised("7")])?.unsure).toBeUndefined();
+  });
+
+  it("keeps a variable's number, whatever it is named - and inside a label", () => {
+    for (const name of ["R", "X", "Y", "Z", "G", "Ar", "Het", "HetAr", "PG", "Nu", "E", "EWG", "M", "L", "Q", "A", "Alk"]) {
+      expect(word([[name, 10, 0], raised("1")]), name).toBe(`${name}1`);
+    }
+    expect(word([["OR", 10, 0], raised("2")])).toBe("OR2");
+    expect(word([["NR", 10, 0], raised("1"), ["R", 10, 0], raised("2")])).toBe("NR1R2");
+    expect(word([["OAr", 10, 0], raised("1")])).toBe("OAr1");
+    expect(word([["R", 10, 0], raised("2"), ["O", 10, 0]])).toBe("R2O");
+    expect(word([["CO", 10, 0], lowered("2", 2.5), ["R", 10, 0], raised("1")])).toBe("CO2R1");
+    // (and what is a label's own: a charge, a mass number)
+    expect(word([["Ca", 10, 0], ["2+", 7, 4]])).toBe("Ca2+");
+    expect(word([["13", 6, 4], ["C", 10, 0]])).toBe("13C");
   });
 });

@@ -508,6 +508,166 @@ describe("a centre with a lone pair for its fourth group", () => {
   });
 });
 
+describe("an allene's axis and an odd cumulene's cis or trans, drawn", () => {
+  // (penta-2,3-diene drawn straight through: CH3 0 - C1 = C2 = C3 - CH3 4, its middle C2; a wedge out of C1 to its methyl, or none)
+  const allene = (wedge?: "up" | "down") => {
+    const atoms: DrawnAtom[] = [
+      { x: -1.3, y: 0.75, hs: 3 },
+      { x: 0, y: 0, hs: 1 },
+      { x: 1.3, y: 0, hs: 0 },
+      { x: 2.6, y: 0, hs: 1 },
+      { x: 3.9, y: 0.75, hs: 3 },
+    ];
+    const bonds: DrawnBond[] = [
+      { a: 1, b: 0, order: 1, ...(wedge ? { wedge: { narrow: 1, stereo: wedge } } : {}) },
+      { a: 1, b: 2, order: 2 },
+      { a: 2, b: 3, order: 2 },
+      { a: 3, b: 4, order: 1 },
+    ];
+    return readStereo(atoms, bonds);
+  };
+  // (1,4-difluorobutatriene drawn straight through: F 0 - C1 = C2 = C3 = C4 - F 5, the far F at `y`; its bond to C4 wavy, or not)
+  const butatriene = (y: number, wavy = false) => {
+    const atoms: DrawnAtom[] = [
+      { x: -1.3, y: 0.75, hs: 0, el: "F" },
+      { x: 0, y: 0, hs: 1 },
+      { x: 1.3, y: 0, hs: 0 },
+      { x: 2.6, y: 0, hs: 0 },
+      { x: 3.9, y: 0, hs: 1 },
+      { x: 5.2, y, hs: 0, el: "F" },
+    ];
+    const bonds: DrawnBond[] = [
+      { a: 1, b: 0, order: 1 },
+      { a: 1, b: 2, order: 2 },
+      { a: 2, b: 3, order: 2 },
+      { a: 3, b: 4, order: 2 },
+      { a: 4, b: 5, order: 1, ...(wavy ? { either: true } : {}) },
+    ];
+    return readStereo(atoms, bonds);
+  };
+
+  it("takes only a carbon, or an N+, between two double bonds for an allene's middle: a sulfur's C=S=C is bent, and has no axis", () => {
+    const middle = (el: string, charge?: number) => {
+      const atoms: DrawnAtom[] = [
+        { x: -1.3, y: 0.75, hs: 3 },
+        { x: 0, y: 0, hs: 1 },
+        { x: 1.3, y: 0, hs: 0, el, ...(charge ? { charge } : {}) },
+        { x: 2.6, y: 0, hs: 1 },
+        { x: 3.9, y: 0.75, hs: 3 },
+      ];
+      const bonds: DrawnBond[] = [
+        { a: 1, b: 0, order: 1, wedge: { narrow: 1, stereo: "up" } },
+        { a: 1, b: 2, order: 2 },
+        { a: 2, b: 3, order: 2 },
+        { a: 3, b: 4, order: 1 },
+      ];
+      return readStereo(atoms, bonds);
+    };
+    expect(middle("C").axes).toHaveLength(1);
+    expect(middle("N", 1).axes).toHaveLength(1);
+    expect(middle("S").axes).toEqual([]);
+    expect(middle("S").cumulated).toEqual([]);
+    expect(middle("N").axes).toEqual([]);
+  });
+
+  it("reads an allene's axis from a wedge at one end, the other end's groups in the page, as a biaryl's: the other wedge, the other sense", () => {
+    const up = allene("up").axes;
+    const down = allene("down").axes;
+    expect(up).toHaveLength(1);
+    expect(up[0]).toMatchObject({ atoms: [1, 3], refs: [0, 4] });
+    expect(down[0].sense).toBe(-up[0].sense);
+    // (none drawn: open; and no double bond of it has a cis or trans of its own)
+    expect(allene().axes).toEqual([]);
+    expect(allene("up").cisTrans.size).toBe(0);
+  });
+
+  it("reads an allene wedged only at its far end: its axis from that wedge, the opposite wedge the opposite sense", () => {
+    const wedgedAtFar = (wedge: "up" | "down") => {
+      const atoms: DrawnAtom[] = [
+        { x: -1.3, y: 0.75, hs: 3 },
+        { x: 0, y: 0, hs: 1 },
+        { x: 1.3, y: 0, hs: 0 },
+        { x: 2.6, y: 0, hs: 1 },
+        { x: 3.9, y: 0.75, hs: 3 },
+      ];
+      const bonds: DrawnBond[] = [
+        { a: 1, b: 0, order: 1 },
+        { a: 1, b: 2, order: 2 },
+        { a: 2, b: 3, order: 2 },
+        { a: 3, b: 4, order: 1, wedge: { narrow: 3, stereo: wedge } },
+      ];
+      return readStereo(atoms, bonds).axes;
+    };
+    const [up, down] = [wedgedAtFar("up"), wedgedAtFar("down")];
+    expect(up).toHaveLength(1);
+    expect(down).toHaveLength(1);
+    expect(up[0].sense).toBe(-down[0].sense);
+  });
+
+  it("reads an odd cumulene's side from the group off its line, not one straight on from it - at either end", () => {
+    // (a butatriene, each end with a group straight on from the run - listed first - and another off it: the off-line one is the side)
+    const atoms: DrawnAtom[] = [
+      { x: -1.3, y: 0, hs: 0, el: "Cl" },
+      { x: 0, y: 0, hs: 0 },
+      { x: 1.3, y: 0, hs: 0 },
+      { x: 2.6, y: 0, hs: 0 },
+      { x: 3.9, y: 0, hs: 0 },
+      { x: 5.2, y: 0, hs: 0, el: "Cl" },
+      { x: 5.2, y: 0.75, hs: 0, el: "F" },
+      { x: -0.65, y: 1.1, hs: 0, el: "F" },
+    ];
+    const bonds: DrawnBond[] = [
+      { a: 1, b: 0, order: 1 },
+      { a: 1, b: 2, order: 2 },
+      { a: 2, b: 3, order: 2 },
+      { a: 3, b: 4, order: 2 },
+      { a: 4, b: 5, order: 1 },
+      { a: 4, b: 6, order: 1 },
+      { a: 1, b: 7, order: 1 },
+    ];
+    const read = readStereo(atoms, bonds).cumulated;
+    expect(read).toHaveLength(1);
+    expect(read[0].refs).toEqual([7, 6]);
+  });
+
+  it("reads an allene wedged at both ends where the two agree, and none where they say opposite ways - and says why", () => {
+    // (the far end's methyl wedged too: up or down, at its end C3)
+    const both = (near: "up" | "down", far: "up" | "down") => {
+      const atoms: DrawnAtom[] = [
+        { x: -1.3, y: 0.75, hs: 3 },
+        { x: 0, y: 0, hs: 1 },
+        { x: 1.3, y: 0, hs: 0 },
+        { x: 2.6, y: 0, hs: 1 },
+        { x: 3.9, y: 0.75, hs: 3 },
+      ];
+      const bonds: DrawnBond[] = [
+        { a: 1, b: 0, order: 1, wedge: { narrow: 1, stereo: near } },
+        { a: 1, b: 2, order: 2 },
+        { a: 2, b: 3, order: 2 },
+        { a: 3, b: 4, order: 1, wedge: { narrow: 3, stereo: far } },
+      ];
+      return { atoms, bonds, read: readStereo(atoms, bonds) };
+    };
+    const sense = (near: "up" | "down", far: "up" | "down") => both(near, far).read.axes.map((x) => x.sense);
+    // (each read alone, then together: where the two agree, the one sense; where they do not, none)
+    const alone = allene("up").axes[0].sense;
+    const agreeing = (["up", "down"] as const).find((far) => sense("up", far).length === 1)!;
+    expect(sense("up", agreeing)).toEqual([alone]);
+    const other = agreeing === "up" ? "down" : "up";
+    expect(sense("up", other)).toEqual([]);
+    const { atoms, bonds } = both("up", other);
+    expect(unreadWhy(atoms, bonds, 1)).toBe("the wedges at the allene's two ends say it turns opposite ways, or its groups are in line with it");
+  });
+
+  it("reads an odd cumulene's cis or trans from its ends' groups across the line through it, and none where an end is straight on or wavy", () => {
+    expect(butatriene(0.75).cumulated).toEqual([{ atoms: [1, 4], refs: [0, 5], cis: true }]);
+    expect(butatriene(-0.75).cumulated).toEqual([{ atoms: [1, 4], refs: [0, 5], cis: false }]);
+    expect(butatriene(0).cumulated).toEqual([]);
+    expect(butatriene(0.75, true).cumulated).toEqual([]);
+    expect(butatriene(0.75).cisTrans.size).toBe(0);
+  });
+});
+
 describe("an axis inside a ring, drawn", () => {
   /** A biphenyl bridged at 2 and 2' (`smiles`, its biaryl bond between atoms `i` and `j`), drawn by the engine with its axis given: the axis read back, or none. */
   const readBack = (smiles: string, [i, j]: [number, number]) => {

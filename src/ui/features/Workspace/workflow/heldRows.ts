@@ -20,7 +20,7 @@
  */
 import type { Restraint } from "../../../../lib/entry";
 import type { HeldKind } from "../../../../lib/plugins/steps";
-import { NUMBERING, OWN_NUMBERING, restraintKey, restraintRowsIn, restraintSaid, restraintsHeld, type RestraintRow } from "../../../../lib/steps/restraints";
+import { NUMBERING, OWN_NUMBERING, restraintKey, restraintRowsIn, restraintSaid, type RestraintRow } from "../../../../lib/steps/restraints";
 import { findSet, stepsBefore, type Flow } from "./flow";
 import { RESTRAINTS_INPUT, type StepKind } from "./kinds";
 import type { SetEntry } from "./entries";
@@ -109,8 +109,6 @@ export function heldRows(doc: Flow, step: number, entries: readonly SetEntry[], 
     if (!mine.length) return { why: NONE_MADE_WHY };
     mine.forEach((w) => used.add(w));
     if (mine.some((w) => w.row.numbering !== numberingOf(e))) return { why: RENUMBERED_WHY };
-    // (nothing an entry carries is held beside a table: Torsion restraints' rows, until it makes a table too)
-    if (restraintsHeld({ properties: e.properties ?? {} }).length) return { why: "It carries restraints of its own (Torsion restraints) as well as those wired in: hold one or the other" };
     const n = e.atoms.length;
     const out = mine.find((w) => w.row.restraint.atoms.some((a) => a >= n));
     if (out) return { why: `A row holds ${restraintSaid(out.row.restraint)}, and it has atoms 1 to ${n}` };

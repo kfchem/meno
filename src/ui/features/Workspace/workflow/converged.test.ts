@@ -7,7 +7,7 @@ import { framesMolecule } from "./setTable";
 import { readCarried3D } from "../utils/copyPaste";
 import type { Molecule3D } from "../store/types";
 import { runMeno } from "./meno";
-import { isFailure, workedOf } from "./programs";
+import { isFailure, stoppedAt, workedOf } from "./programs";
 import { resultsOf, type Worked } from "./run";
 
 /** Water, as a step's entry, at `xyz`. */
@@ -127,5 +127,33 @@ describe("where a run ended converged", () => {
   it("reads back from a file as it was written, and nothing else", () => {
     expect(convergedIn({ how: "optimisation", geometry: "g1" })).toEqual({ how: "optimisation", geometry: "g1" });
     for (const bad of [{ how: "minimum", geometry: "g1" }, { how: "optimisation" }, { how: "optimisation", geometry: "" }, "optimisation", null]) expect(convergedIn(bad)).toBeNull();
+  });
+});
+
+describe("where a run that stopped got to", () => {
+  it("keeps what its calculation says of each frame on that frame: none on the geometry it came in with, and as many values as the molecule has frames, read back whole", () => {
+    // (a saddle-point search stopped after three cycles, its RMS gradient one for each of its three geometries)
+    const A = [0, 0, 0, 0.965, 0, 0, -0.245, 0.935, 0];
+    const results = [
+      { id: "rms-gradient", on: "frames", group: "Optimisation", label: "RMS gradient", unit: "Eh/bohr", digits: 6, values: [0.03, 0.02, 0.01] },
+      // (and what it says of each atom, and of the molecule: left as they are - one value an atom, one value)
+      { id: "charges", on: "atoms", group: "Charges", label: "Mulliken", unit: "e", digits: 3, values: [-0.8, 0.4, 0.4] },
+      { id: "dipole", on: "molecule", group: "Dipole", label: "Dipole", unit: "D", digits: 2, value: 1.85 },
+    ];
+    const at = stoppedAt("saddle-point", water(), output([water().xyz, A, MIN], { optimised: false, results } as Partial<ReaderOutput>), ["orca 0.5.7"])!;
+    expect(at.path).toHaveLength(3);
+    const [m] = resultsOf({ ok: true, holds: "molecules", kept: [at], aside: [], said: "" }, "saddle-point").molecules;
+    const n = 1 + (m.frames?.length ?? 0);
+    expect(n).toBe(4);
+    const rms = m.calc?.results?.find((r) => r.id === "rms-gradient");
+    expect(rms && "values" in rms ? rms.values : null).toEqual([null, 0.03, 0.02, 0.01]);
+    const charges = m.calc?.results?.find((r) => r.id === "charges");
+    expect(charges && "values" in charges ? charges.values : null).toEqual([-0.8, 0.4, 0.4]);
+    expect(m.calc?.results?.find((r) => r.id === "dipole")).toMatchObject({ on: "molecule", value: 1.85 });
+    // (saved and opened again: the result kept, not left out for a count unlike its frames')
+    const back = readCarried3D(JSON.parse(JSON.stringify({ ...m, id: 1, at: { x: 0, y: 0 } })));
+    const again = back?.calc?.results?.find((r) => r.id === "rms-gradient");
+    expect(again && "values" in again ? again.values : null).toEqual([null, 0.03, 0.02, 0.01]);
+    expect(back?.calc?.results?.map((r) => r.id)).toEqual(["rms-gradient", "charges", "dipole"]);
   });
 });

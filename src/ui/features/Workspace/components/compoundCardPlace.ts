@@ -23,15 +23,16 @@ export function cardPlace(word: PdfLens["word"], card: { width: number; height: 
 }
 
 /**
- * What a number's card holds: its structure's drawing, once the number is
- * placed in its PDF's index (`placed`), that structure read (`read`) and read
- * whole (`drawn`); "reading" while its PDF's pages are still being gone
- * through for numbers (`whole` not yet), or the number placed and its
- * figure's structures still being read; else nothing - the number drawn
- * nowhere, or its structure not read whole.
+ * What a number's card holds: the region of its PDF's page where the
+ * compound is drawn, a picture (docs/PDF.md, *A compound's number*), once
+ * the number is placed in its PDF's index (`placed`) and its structure's box
+ * is known (`read`: the structure read, whole or not - only its box is
+ * wanted); "reading" while its PDF's pages are still being gone through for
+ * numbers (`whole` not yet), or the number placed and its figure's structures
+ * still being read; and where the PDF has been gone through whole and the
+ * number is drawn nowhere, "none": the card says so in words, never a guess.
  */
-export function cardHolds(c: { placed: boolean; read: boolean; drawn: boolean; whole: boolean }): "drawing" | "reading" | null {
-  // (read: drawn whole, or never to be - nothing to wait for)
-  if (c.placed && c.read) return c.drawn ? "drawing" : null;
-  return !c.whole || c.placed ? "reading" : null;
+export function cardHolds(c: { placed: boolean; read: boolean; whole: boolean }): "picture" | "reading" | "none" {
+  if (c.placed) return c.read ? "picture" : "reading";
+  return c.whole ? "none" : "reading";
 }

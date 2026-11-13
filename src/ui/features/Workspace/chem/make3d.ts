@@ -17,7 +17,7 @@ import { conformersSoughtOf, MOST_CONFORMERS, RING_CONFORMERS, roundsAsked, soug
 import { inRounds, roundsSaid, SEARCH_BUDGET_MS } from "./conformerRounds";
 import { roundsJudge } from "./roundsJudge";
 import { WITHIN_3D, type CalculationSettings, type ChemistrySettings } from "../../../../lib/settings/appSettings";
-import { threadsOf } from "../../../../lib/jobs";
+import { pageThreadsOf } from "../../../../lib/jobs";
 import { chemMolblock, isElementSymbol, molIndex } from "../../../../lib/roles/molblock";
 import { readMolfile } from "../../../../lib/chem/ctfile";
 import { COORDINATION_BOND } from "../../../../lib/chem/molecule";
@@ -38,7 +38,7 @@ import { drawnBox } from "../../../../utils/importers";
 import { etaBound } from "./etaBound";
 import { factor } from "../../../../lib/units";
 import { shownConformers } from "./shownConformers";
-import { isomersToMake, withChosen, type OpenStereo } from "./openStereo";
+import { isomersToMake, withChosen, withOwnCip, type OpenStereo } from "./openStereo";
 import { hasConfiguration, madeAs, mirroredConfiguration, mirroredPart, reflectedConformers } from "./pageMirror";
 import type { Configuration } from "../../../../lib/chem/stereoOpen";
 import { keptMade, madeChecksOf, metalHoldsOf } from "../../../../lib/chem/metalHolds";
@@ -550,7 +550,7 @@ export function conformersOnPage(
   settings: { chemistry: ChemistrySettings; calculations: Pick<CalculationSettings, "cores" | "coresAll"> },
   rounds: PageRounds | null = null,
 ): Promise<Conformers[]> {
-  return conformersOf(chem, stereo, block, which, options, pageCount(block, settings.chemistry), rounds, threadsOf(settings.calculations));
+  return conformersOf(chem, stereo, block, which, options, pageCount(block, settings.chemistry), rounds, pageThreadsOf(settings.calculations));
 }
 
 /** How the page's search is asked in rounds (chem/conformerRounds): its window (kcal/mol), its first round and the most it tries. */
@@ -659,7 +659,7 @@ export async function conformersOf(
   //  more than one part, its parts side by side - chem/partsApart)
   const holds = held(block.molblock);
   const checks = madeChecksOf(block.molblock, holds);
-  return shownConformers(got.map((c) => partsSideBySide(keptMade(withChosen(c, made.open), checks), partsOf(c.atoms, c.bonds, holds?.eta))));
+  return shownConformers(got.map((c) => partsSideBySide(keptMade(withChosen(withOwnCip(c), made.open), checks), partsOf(c.atoms, c.bonds, holds?.eta))));
 }
 
 const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");

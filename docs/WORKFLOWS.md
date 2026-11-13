@@ -340,14 +340,14 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Kind | Icon (Heroicons' outline, or drawn as Quick Add's are) | Takes | Gives |
 | --- | --- | --- | --- |
 | Generate | sparkles | nothing: no input, nothing wired in - or, where its plugin makes from seeds (CReM's), *Seeds*: structures drawn | **structures drawn**, each the SMILES the model gave, read as one pasted is - its stereo as written, what it leaves open counted on its record (`stereo_open`), never chosen - with the model's own values on its record, named (REINVENT 4's `nll` and `smiles_state`), and what made them (PLUGINS.md, *Generate*). How many and with what seed its options say. Nothing is made 3D here, nothing enumerated, nothing refused: the general steps after it do that. It is ready as it is put down, run on its options alone, and changed when they change; made from seeds, it waits for them, and each made one keeps its seed's values as the seed's (`made_from.<name>`). Its line counts what the model gave, what was made, what leaves stereo open, and what could not be read |
-| Conformers | a stack of layers | structures drawn, or molecules in 3D | **a conformer set**: each compound's conformers, every one the program gives - no energy window, as a structure made 3D on the canvas has (WORKSPACE.md, *Conformers kept*); only an *Energy window* step sets any aside. Where the program's search takes a number of tries, how many is Meno's, among the step's options: as many as each molecule needs, or a number (*Conformers sought*: PLUGINS.md, *How many conformers are tried is Meno's to say*) - as many as it needs asked in rounds, where the search takes draws, until a round brings no new conformer within the step's window, which has no default (PLUGINS.md, *As many as the molecule needs, in rounds*), each structure drawn's; molecules in 3D, run as jobs, each asked once, said; which of those made are kept is Meno's too (PLUGINS.md, *Which of what was made are kept is Meno's*) |
+| Conformers | a stack of layers | *Structures*: structures drawn, or molecules in 3D; *Restraints*, where wanted: restraints tables, held on molecules in 3D where its plugin says its search holds them (*Restraints wired in*) | **a conformer set**: each compound's conformers, every one the program gives - no energy window, as a structure made 3D on the canvas has (WORKSPACE.md, *Conformers kept*); only an *Energy window* step sets any aside. Where the program's search takes a number of tries, how many is Meno's, among the step's options: as many as each molecule needs, or a number (*Conformers sought*: PLUGINS.md, *How many conformers are tried is Meno's to say*) - as many as it needs asked in rounds, where the search takes draws, until a round brings no new conformer within the step's window, which has no default (PLUGINS.md, *As many as the molecule needs, in rounds*), each structure drawn's; molecules in 3D, run as jobs, each asked once, said; which of those made are kept is Meno's too (PLUGINS.md, *Which of what was made are kept is Meno's*) |
 | Optimise | a ball at the bottom of an energy well, an arrow down into it (drawn) | *Molecules*: molecules in 3D; *Restraints*, where wanted: restraints tables | each optimised, its path as frames, holding the restraints wired in for it as its plugin holds them (*Restraints wired in*) - the same kind of set |
-| Minimise with restraints | Optimise's well, its floor hatched as Restraints' wall (drawn) | *Molecules*: molecules in 3D, or conformer sets; *Restraints*: restraints tables | each minimised in a force field with the restraints wired in for it held (*Restraints wired in*) - or, none wired in, those it carries from Torsion restraints - from where it is, or from where its restraints were first held; one that does not converge out of *Failed* (PLUGINS.md, RDKit) |
+| Minimise with restraints | Optimise's well, its floor hatched as Restraints' wall (drawn) | *Molecules*: molecules in 3D, or conformer sets; *Restraints*: restraints tables | each minimised in a force field with the restraints wired in for it held (*Restraints wired in*) from where it is, or from where its restraints were first held; one that does not converge out of *Failed* (PLUGINS.md, RDKit) |
 | Energy | a level against an energy axis, measured up to (drawn) | molecules in 3D | each with its energy at its own geometry, kept as it came (its key with it, though the program turned it), and what it carried of the calculation it came from - a Frequencies step's correction to G, its vibrations - each with its own level; one whose atoms moved fails - the same kind of set |
 | Frequencies | two atoms on a spring (drawn) | molecules in 3D | each with its vibrations and thermal corrections - the same kind of set |
 | Path search | a way over a barrier between two structures, its top the point refined (drawn) | *Start* and *End*: molecules in 3D, or conformer sets - each conformer one - each start paired with an end - in order, each with each, or matched on a property - the two the same atoms in one numbering, of one charge and spin | **molecules in 3D**: one for each pair, its frames the path its program found, its entry the highest point it refined (*Path search*, below); a pair that cannot be worked out, or whose job failed, out of its second exit, *Failed*, saying why |
 | Follow the reaction path | from the top of a barrier, down both ways (drawn) | molecules in 3D: each a point to start from - a saddle point, as the chemist's *Filter* on its frequencies chose | **molecules in 3D**: one for each, its frames the path its program followed down both ways, one end to the other, its entry the point it started from (*Follow the reaction path*, below); one whose side stopped before its end, or whose job failed, out of its second exit, *Failed*, saying why |
-| Optimise to a saddle point | a ball at the top of a barrier, an arrow up into it (drawn) | *Guesses*: molecules in 3D; and *Reactant side* and *Product side*, both or neither, each guess paired with one of each - in order, each with each, or matched on a property - the same atoms in one numbering, of one charge and spin | **molecules in 3D**: each guess optimised by its program towards a saddle point, its way there as frames, its last its entry (*Optimise to a saddle point*, below); one that did not converge, at the last geometry it reached, or whose job failed, out of its second exit, *Failed*, saying why |
+| Optimise to a saddle point | a ball at the top of a barrier, an arrow up into it (drawn) | *Guesses*: molecules in 3D; and *Reactant side* and *Product side*, both or neither, each guess paired with one of each - in order, each with each, or matched on a property - the same atoms in one numbering, of one charge and spin; *Restraints*, where wanted: restraints tables (*Restraints wired in*) | **molecules in 3D**: each guess optimised by its program towards a saddle point, holding the restraints wired in for it as its plugin holds them, its way there as frames, its last its entry (*Optimise to a saddle point*, below); one that did not converge, at the last geometry it reached, or whose job failed, out of its second exit, *Failed*, saying why |
 | NCI | a cloud | molecules in 3D | each with its non-covalent interactions as a surface coloured by their strength (NCI.md) - the same kind of set |
 | Render | a picture | molecules in 3D | a set of pictures: each entry a picture of its own (RENDER.md, *Render as a step*); no step takes pictures |
 | Energy window | levels, the lowest few within a bracket (drawn) | a conformer set, with energies; or molecules, in each value of a property | those within the window of their compound's lowest, or of the lowest with their value of a property; the rest out of its second exit, *Outside it*, each saying why |
@@ -369,7 +369,8 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Merge | two lists made one (drawn) | *First* and *Second*: molecules in 3D, or conformer sets - both of one kind | **the same kind of set**: First's entries, then Second's - all, or one of each value of a property - a conformer set's compounds kept apart; those set aside out of *The rest*, each naming the one kept (STRUCTURE-STEPS.md, *Merge*) |
 | Re-bond | atoms, then the same atoms bonded (drawn) | *Geometry* and *Bonding*: molecules in 3D, or conformer sets | each geometry with a bonding entry's bonds and charges - each with each, or matched on a property - grouped by the two; one of other atoms, or with none to pair with, out of *Not re-bonded*, saying why (STRUCTURE-STEPS.md, *Re-bond*) |
 | Restraints | atoms held to a wall (drawn) | molecules in 3D, or conformer sets | **a table of restraints**, a row for each, made of each entry from itself - coordination bonds at a factor of their van der Waals radii together (Alvarez 2013), pairs kept at their distance, atoms fixed - each row for its entry by an ID a step wrote on it; the entries are not passed on. One it cannot make rows for out of *Failed*, saying why (STRUCTURE-STEPS.md, *Restraints*) |
-| Torsion restraints | four atoms anti, held (drawn) | *Molecules* and *Reference*: molecules in 3D, or conformer sets | each torsion trans across the reference's double bonds and not trans in the entry held at 180°, stronger by a step each time, out of *Restrained*; those trans already out of *Trans already* (STRUCTURE-STEPS.md, *Torsion restraints*) |
+| Torsion restraints | four atoms anti, held (drawn) | *Molecules*: molecules in 3D, or conformer sets; *Reference*, where wanted | **a table of torsion restraints**: torsions typed, at the angle typed; or, from the reference, each unlike here at 180° where trans or at the reference's own angle - by a strength or exactly, each row for its entry by an ID; one it cannot make rows for out of *Failed* (STRUCTURE-STEPS.md, *Torsion restraints*) |
+| Compare torsions | a torsion trans above one cis (drawn) | *Molecules* and *Reference*: molecules in 3D, or conformer sets | the same, each with how many torsions across its reference's double bonds are unlike here - trans there and cis here - and which, for a Filter to split on; one it cannot compare out of *Failed* (STRUCTURE-STEPS.md, *Compare torsions*) |
 | Compare bonding | a chain and its reference, equal (drawn) | *Molecules* and *Reference*: molecules in 3D, or conformer sets | those bonded as their reference out of *Same* - against each reference, the match written on it, or matched on a property - the rest out of *Different*, with their differences, or why they were not compared; bonds read within a reach of the covalent radii, 1.2 times unless set (STRUCTURE-STEPS.md, *Compare bonding*) |
 | Join | two tables, a row of each linked (drawn) | *Onto* and *From*: molecules in 3D, or conformer sets | *Onto*'s entries, each with properties of *From*'s put on - matched on a property both carry (an ID a Tag gave), each record as it was, under its own name or one given ("species as first end") - out of *Joined*; those with nothing put on out of *Not joined*, saying why (*Join*, below) |
 | 3D results onto structures | two tables, a row of each linked (drawn; its own to come) | *Structures*: structures drawn; *3D results*: molecules in 3D, or conformer sets | the same structures, none set aside, each with what was made of it in 3D - by its lasting id - written on its record: its conformers in the set, its lowest E and G, its share among the structures of its formula, its state in 3D (*3D results onto structures*, below) |
@@ -1280,15 +1281,17 @@ states an undo goes back to as well.
 
 ### Restraints wired in
 
-A step that may hold restraints - *Minimise with restraints*, *Optimise*,
-*Path search* - has a *Restraints* input,
+A step that may hold restraints - *Conformers*, *Minimise with
+restraints*, *Optimise*, *Path search*, *Optimise to a saddle point* - has
+a *Restraints* input,
 where wanted: wired, it holds the rows of the restraints tables that come
 in (*Restraints*, STRUCTURE-STEPS.md), each molecule those made for it; none
 wired, it holds none (2026-11-11). This replaced *Hold its restraints*, the
 card's choice to hold what an entry carried: a step of a page saved with it
-set to atoms fixed is refused, saying so, until a table of them is wired in
-(*Optimise to a saddle point*, whose card has room for its three inputs
-alone, holds none now: one saved holding atoms fixed is refused, saying so).
+set to atoms fixed is refused, saying so, until a table of them is wired in.
+A card of four inputs - *Optimise to a saddle point*'s - is one port's step
+taller than the rest, its inputs a plain list down its left edge, each named
+(*Exit ports*).
 
 - **Matched on an ID a step wrote** (WORKFLOWS-FOUNDATION.md, question A),
   never by lineage or place: each row names the property it was made for
@@ -1322,10 +1325,32 @@ alone, holds none now: one saved holding atoms fixed is refused, saying so).
   One that moved fails the entry ("Atom 3 moved though held"). Its
   calculation's line says them ("atoms 1, 4, 7 held"), and how it
   converged: "optimisation with atoms held".
-- **No stationary point**: an entry optimised with atoms held is refused by
-  what takes one - Frequencies, Populations, Energy window, Choose one,
-  Duplicates' ranking, Barrier - saying which atoms it held, until it is
-  optimised free of them.
+- **Distances and torsions held exactly, checked**: where a run that said
+  it converged ended, each must be at its value, on the same basis as an
+  atom held - a distance within 1e-4 Å; a torsion within the angle
+  through which moving an end atom 1e-4 Å turns it, 1e-4 Å / (r sin θ)
+  in radians, r the end bond and θ the angle at the inner atom, of the
+  nearer of its two ends - about 0.0056° for H-C-C-H at 1.09 Å and 110° -
+  compared the shorter way round, so that 179.999° and -179.999° are
+  0.002° apart. One that is not fails the entry, saying where it ended ("Torsion
+  1-2-3-4 ended at 59.980°, held at 60°"); a torsion three of whose atoms
+  ended in a line - a bond angle within 1° of 180° or of 0°, the guard a
+  torsion is refused by as it is made - has no angle to hold, and fails,
+  said so: the same 1° bounds a torsion going in and coming out, as
+  within it nearly any angle would pass. How it converged:
+  "optimisation with restraints held", with the rows it held and any
+  atoms held besides. The step's line says so after its time and
+  energy ("with restraints held"), as it says "with atoms held" where
+  any converged with atoms held alone - one rule, restraints first, so
+  that it is seen without opening the set. A run not converged is said
+  so, as ever: it may have stopped short of a value it was making for.
+- **No stationary point**: an entry optimised with atoms held, or with a
+  distance or torsion held exactly, is refused by what takes one -
+  Frequencies, Populations, Energy window, Choose one, Duplicates'
+  ranking, Barrier - saying what it held, until it is optimised free of
+  them. It is stationary only on the surface those constraints leave,
+  even where a row happens to sit where the molecule would rest: Meno
+  cannot know that without its gradient.
 - **Where they were first held** (`start`) stays on what a minimisation
   gives, for the next round to start from; the rows themselves are not
   carried on - the next step holds what is wired into it.
@@ -2425,7 +2450,12 @@ port is that exit's set's.
   its exits (`exitsOf`), each as far down as the input of the same place
   on its left (look `stepGives`, kinds `exitPlace`): the first level with
   the first input. A kind has three exits at most (*Atom map*), and three
-  fit on a card shut, as three inputs do.
+  fit on a card shut, as three inputs do. A kind of four inputs -
+  *Optimise to a saddle point*, its *Restraints* the fourth - has a card
+  one port's step taller (look `cardHigh`, kinds `cardHighOf`; 2026-11-11):
+  its inputs a plain list down its left edge, each on the card and named,
+  and its card's frame as tall wherever a card is measured - placing,
+  wires going round it, fitting the page, choosing by a box.
 - **The line to an exit's set** leaves from that exit's port (place
   `exitStart`), and placing a set keeps that line clear, as before: the
   exit is the set's own, read from it where it is made - run again, kept
@@ -2886,8 +2916,11 @@ for it:
   so *Take frames*' *first* starts it again from the beginning
   (a fault of the machine: memory, a floating point exception) and its
   *last* from where it stopped (an SCF that did not converge, a step the
-  optimiser could not take). A run that stopped before it was under way
-  goes out as it came in.
+  optimiser could not take). What its calculation says of each frame - an
+  RMS gradient - stays on the frame it is of: the geometry it came in with,
+  put first, has none of it, so that the frames and their values are as
+  many, saved and opened again whole. A run that stopped before it was
+  under way goes out as it came in.
 - **Never a result.** Neither the entry nor its frames carry an energy -
   the run's log keeps them - and the entry stays marked failed, so no step takes anything of
   it for a value, until a step succeeds from it.
@@ -3881,8 +3914,9 @@ in: a step, not a table's guess (the maintainer, 2026-10-29).
   from them.
 - Failed and unfinished conformers are never a minimum: they are left out
   of E min, G min and the shares, and counted in its state.
-- One optimised with atoms held where they stood (*Restraints wired in*)
-  is no stationary point either: it is left out of E min and G min, and
+- One optimised with atoms held where they stood, or with a distance or
+  torsion held exactly (*Restraints wired in*), is no stationary point
+  either: it is left out of E min and G min, and
   how many were is said in the step's line; where every finished
   conformer of a structure was, its E min and G min say so, naming them.
   The shares of its isomers are refused, naming it, as *Populations*
