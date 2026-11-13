@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ReaderOutput } from "../../../../lib/calc/output";
 import type { Restraint } from "../../../../lib/entry";
 import { dihedral } from "../../../../lib/steps/measure";
-import { convergedIn, convergedOf, heldAt, heldWhy } from "./converged";
+import { convergedAt, convergedIn, convergedOf, heldAt, heldWhy } from "./converged";
 import { readCarried3D } from "../utils/copyPaste";
 import type { Molecule3D } from "../store/types";
 import { notAllMinima } from "./meno";
@@ -17,14 +17,14 @@ type V = [number, number, number];
 const RAD = Math.PI / 180;
 
 /**
- * H-C-C-H at a torsion of `phi` degrees: C-C 1.54 Å, each C-H at `theta` degrees to the C-C bond, the first `r` Å long
- * and the last `r4` (as long, unless given) - the first three where they are whatever the torsion.
+ * H-C-C-H at a torsion of `phi` degrees: C-C 1.54 Å, the first C-H `r` Å long at `theta` degrees to the C-C bond and the
+ * last `r4` Å at `theta4` (as the first, unless given) - the first three where they are whatever the torsion.
  */
-function hcch(phi: number, r = 1.09, theta = 110, r4 = r): number[] {
+function hcch(phi: number, r = 1.09, theta = 110, r4 = r, theta4 = theta): number[] {
   const h1: V = [r * Math.cos(theta * RAD), r * Math.sin(theta * RAD), 0];
   const c2: V = [0, 0, 0];
   const c3: V = [1.54, 0, 0];
-  const h4: V = [1.54 - r4 * Math.cos(theta * RAD), r4 * Math.sin(theta * RAD) * Math.cos(phi * RAD), r4 * Math.sin(theta * RAD) * Math.sin(phi * RAD)];
+  const h4: V = [1.54 - r4 * Math.cos(theta4 * RAD), r4 * Math.sin(theta4 * RAD) * Math.cos(phi * RAD), r4 * Math.sin(theta4 * RAD) * Math.sin(phi * RAD)];
   return [...h1, ...c2, ...c3, ...h4];
 }
 const measured = (xyz: readonly number[]) => dihedral([xyz[0], xyz[1], xyz[2]], [xyz[3], xyz[4], xyz[5]], [xyz[6], xyz[7], xyz[8]], [xyz[9], xyz[10], xyz[11]]);
@@ -59,6 +59,8 @@ describe("a distance or dihedral held exactly", () => {
     const rows: Restraint[] = [{ kind: "fixed", atoms: [0] }, torsion(60), { kind: "distance", atoms: [1, 2], value: 1.5, strength: 500 }, cc(1.54)];
     expect(exactRows(rows)).toEqual([torsion(60), cc(1.54)]);
     expect(exactRows([])).toEqual([]);
+    // (a row held by a strength is never taken for one held exactly: never checked at its value, nor marking a run held)
+    expect(exactRows([{ kind: "distance", atoms: [1, 2], value: 1.5, strength: 500 }, { kind: "dihedral", atoms: [0, 1, 2, 3], value: 60, strength: 50 }])).toEqual([]);
   });
 
   it("holds a distance to within 1e-4 Å of its value, as atoms held stay within it", () => {
@@ -81,6 +83,18 @@ describe("a distance or dihedral held exactly", () => {
     const longer = hcch(60, 1.09, 110, 2.18);
     expect(exactMissed(torsion(measured(longer) + 0.004), longer)).toBeNull();
     expect(exactMissed(torsion(measured(longer) + 0.008), longer)).not.toBeNull();
+    // (each end's lever its bond times the sine of its angle: one end at 30° - or at 150° - and the other at 110°, its lever
+    //  1.09 sin 30° = 0.545 Å, so 1e-4 / 0.545 rad = 0.0105° - 0.008° off within, 0.012° not; without the sine, 0.0056°)
+    for (const [theta, theta4] of [
+      [30, 110],
+      [110, 30],
+      [150, 110],
+      [110, 150],
+    ]) {
+      const bentEnd = hcch(60, 1.09, theta, 1.09, theta4);
+      expect(exactMissed(torsion(measured(bentEnd) + 0.008), bentEnd), `${theta} ${theta4}`).toBeNull();
+      expect(exactMissed(torsion(measured(bentEnd) + 0.012), bentEnd), `${theta} ${theta4}`).not.toBeNull();
+    }
   });
 
   it("compares a dihedral with its value the shorter way round, across ±180°", () => {
@@ -94,7 +108,19 @@ describe("a distance or dihedral held exactly", () => {
   });
 
   it("is no dihedral where three of its atoms ended in a line, and is said so", () => {
-    expect(exactMissed(torsion(60), hcch(60, 1.09, 180))).toBe("Torsion 1-2-3-4 ended with three of its atoms in a line: no torsion to hold at 60°");
+    // (within LINE_WITHIN, 1°, of a line - the guard a torsion is refused by as it is made: 179.5° fails on the line, not on its
+    //  angle, however near its value; a straight 180° too)
+    for (const theta of [179.5, 180, 0.5]) {
+      const at = hcch(60, 1.09, theta);
+      expect(exactMissed(torsion(measured(at)), at), String(theta)).toBe(`Torsion 1-2-3-4 ended with three of its atoms in a line, within 1°: no torsion to hold at ${measured(at)}°`);
+    }
+    // (178.5°, outside it: judged by its lever - 1.09 sin 1.5° = 0.0285 Å, so about 0.2° - 0.1° off within, 0.3° not)
+    const bent = hcch(60, 1.09, 178.5);
+    expect(exactMissed(torsion(measured(bent) + 0.1), bent)).toBeNull();
+    expect(exactMissed(torsion(measured(bent) + 0.3), bent)).not.toBeNull();
+    // (an end atom ended within 1e-4 Å of its neighbour - no line, but no lever either: no torsion to hold, said so)
+    const onto = hcch(60, 0.00005, 110);
+    expect(exactMissed(torsion(measured(onto)), onto)).toBe(`Torsion 1-2-3-4 ended with an end atom within 0.0001 Å of its neighbour's axis: no torsion to hold at ${measured(onto)}°`);
   });
 
   it("says how a run that held one converged - no stationary point - with the rows, and any atoms held besides", () => {
@@ -113,6 +139,23 @@ describe("a distance or dihedral held exactly", () => {
     // (Frequencies at that geometry carry how it converged, and so what it held)
     const freq = worked(workedOf("frequencies", held, output(at, { frames: [at], optimised: undefined }), ["tightbind 0.2.0"]));
     expect(convergedOf(freq)?.rows).toEqual([torsion(phi)]);
+  });
+
+  it("is held by an optimisation alone: an energy or frequencies run given one neither checks it nor is said held", () => {
+    // (its output read as one that converged - an optimisation's, say - and the row 0.04 Å off where it ended: still neither)
+    const at = hcch(60);
+    for (const kind of ["energy", "frequencies"] as const) {
+      const w = workedOf(kind, entryAt(at), output(at, { frames: [at], energies: [-5.08], optimised: true }), ["tightbind 0.2.0"], undefined, [], true, [cc(1.5)]);
+      expect(isFailure(w), kind).toBe(false);
+      expect(convergedOf(w as Worked)?.rows, kind).toBeUndefined();
+    }
+  });
+
+  it("keeps its own copy of the rows it held, whatever is done to those it was given", () => {
+    const given = [cc(1.54)];
+    const c = convergedAt("optimisation with restraints held", hcch(60), undefined, given);
+    given[0].atoms[0] = 3;
+    expect(c.rows).toEqual([cc(1.54)]);
   });
 
   it("fails an entry whose row ended off its value, saying where - never passed on as held", () => {
@@ -144,7 +187,7 @@ describe("a distance or dihedral held exactly", () => {
     const g = held.converged!.geometry;
     const how = "optimisation with restraints held";
     // (rows not as the record writes one held exactly: none)
-    for (const bad of [[], [{ ...cc(1.54), exact: undefined }], [{ ...cc(1.54), strength: 500 }], [{ ...cc(1.54), atoms: [1] }], [{ ...cc(1.54), atoms: [1, 1] }], [{ ...cc(1.54), value: "1.54" }], [{ kind: "fixed", atoms: [0], exact: true }], "rows", null])
+    for (const bad of [[], [{ ...cc(1.54), exact: undefined }], [{ ...cc(1.54), strength: 500 }], [{ ...cc(1.54), atoms: [1] }], [{ ...cc(1.54), atoms: [1, 1] }], [{ ...cc(1.54), atoms: [0, 0, 2] }], [{ ...cc(1.54), atoms: [-1, 2] }], [{ ...cc(1.54), atoms: [1.5, 2] }], [{ ...cc(1.54), value: "1.54" }], [{ kind: "fixed", atoms: [0], exact: true }], "rows", null])
       expect(convergedIn({ how, geometry: g, rows: bad }), JSON.stringify(bad)).toBeNull();
     // (how and what it lists agree, or none: rows said only "with restraints held", which must list some)
     expect(convergedIn({ how, geometry: g })).toBeNull();
