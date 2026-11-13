@@ -13,6 +13,7 @@ import { ribbonPoints } from "./ribbon";
 import { ADDED_MARK, atomsLeftOutMark, CCD_HYDROGENS_MARK, ESTIMATED_MARK, leftOutMark, NO_H_MARK, noHydrogensInFile, ORDERS_MARK, ordersUnknown, entriesMark, notConvergedMark, TOGETHER_MARK } from "./completeness";
 import type { MeasureMark, SolidMark } from "../../../../lib/chem/layout2d";
 import { seenAt, type Eye } from "./page";
+import { MARK_SCALE, stereoTextEms } from "../chem/marks";
 import type { Carried3D, Molecule3D, Turn3D } from "../store/types";
 import type { ParsedBond } from "../../../../lib/chem/molecule";
 import { bondedPairs, bondRadii } from "../../../../utils/structureParsers";
@@ -1192,6 +1193,132 @@ export function pictureMarks(m: Carried3D, style: Style3D, eye?: Eye): SolidMark
     }
   }
   return marks.sort((x, y) => x.z - y.z).map(({ z: _z, ...mark }) => mark as SolidMark);
+}
+
+/**
+ * One of R, S, E and Z on a molecule in 3D: its atom - or a double bond's
+ * two - the atoms whose ways out it keeps clear of (a centre's neighbours,
+ * a double bond's two and theirs) and its text.
+ */
+export type StereoMark3D = { key: string; atoms: number[]; around: number[]; text: string };
+
+/** The R, S, E and Z a molecule in 3D shows: of those it has (`stereo`), those `only` names (document `stereoShownOf`); none where nothing is named. */
+export function stereoMarks3d(m: Pick<Molecule3D, "stereo" | "bonds">, only: { atoms: readonly number[]; bonds: readonly number[] } | null): StereoMark3D[] {
+  const st = m.stereo;
+  if (!st || !only) return [];
+  const near = (i: number) => m.bonds.flatMap((b) => (b.a1 === i ? [b.a2] : b.a2 === i ? [b.a1] : []));
+  const out: StereoMark3D[] = [];
+  for (const [i, text] of Object.entries(st.atoms)) {
+    if (only.atoms.includes(Number(i))) out.push({ key: `a${i}`, atoms: [Number(i)], around: near(Number(i)), text });
+  }
+  for (const [i, text] of Object.entries(st.bonds)) {
+    const b = m.bonds[Number(i)];
+    if (b && only.bonds.includes(Number(i))) out.push({ key: `b${i}`, atoms: [b.a1, b.a2], around: [...new Set([...near(b.a1), ...near(b.a2)])], text });
+  }
+  return out;
+}
+
+/** How far a stereo label keeps from the next, at the least, in ems of its letters: two side by side read as one, and as either atom's. */
+export const STEREO_APART = 0.6;
+
+/**
+ * Where one of R, S, E and Z goes about its point `o` - its atom, or a
+ * double bond's middle - as seen, y down: out past its ball (or its bond),
+ * `own` across, as far as the drawing's style sets R and S off its atoms
+ * (`gap`, in ems of the labels, whose letters are `font` large); the widest
+ * way out between its bonds, or the nearest way clear of the other balls,
+ * the sticks and the labels already `placed` (utils `labelSpot`). What the
+ * canvas does each frame (Molecule3DView) and a picture of it does once
+ * (`stereoPictureSpots3d`): every length in the same units, the canvas's
+ * pixels or the page's.
+ */
+export function stereoSpot(
+  mark: StereoMark3D,
+  o: { x: number; y: number },
+  balls: readonly { x: number; y: number; r: number }[],
+  sticks: readonly Stick[],
+  placed: readonly LabelBox[],
+  own: number,
+  font: number,
+  gap: number,
+  parentheses: boolean,
+): LabelBox {
+  const way = widestWay(mark.around.flatMap((i) => (balls[i] ? [Math.atan2(balls[i].y - o.y, balls[i].x - o.x)] : [])));
+  const reach = own + (gap * font) / MARK_SCALE;
+  // (the letters' box a capital's height, and a little for the halo)
+  const half = { x: font * (stereoTextEms(mark.text, parentheses) / 2 + 0.1), y: font * 0.45 };
+  // (every atom near it but its own - a double bond's two among them)
+  const self = mark.atoms.length === 1 ? mark.atoms[0] : -1;
+  const others = balls.filter((b, i) => i !== self && b.r > 0 && Math.hypot(b.x - o.x, b.y - o.y) < reach + 4 * half.x + b.r);
+  return labelSpot(o, reach, half, way, others, placed, sticks);
+}
+
+/** A stereo label's box as the next keeps clear of it: a little way off it, not just clear (`STEREO_APART`). */
+export const stereoKept = (spot: LabelBox, font: number): LabelBox => ({ ...spot, hx: spot.hx + STEREO_APART * font, hy: spot.hy + STEREO_APART * font });
+
+/**
+ * R, S, E and Z on a molecule in 3D as a picture of it shows them: those
+ * `only` names, where the canvas puts them (`stereoSpot`) - seen as the
+ * picture sees the molecule (`pictureMarks`), clear of its balls, its bonds
+ * and the boxes already written over it (`placed`: its measurements'
+ * values, on the page, y up) and of each other - with their letters `font`
+ * large, in the page's units, as the canvas has them at any zoom where it
+ * shows them. Each its middle on the page, y up, and its text.
+ */
+export function stereoPictureSpots3d(
+  m: Carried3D,
+  style: Style3D,
+  only: { atoms: readonly number[]; bonds: readonly number[] } | null,
+  font: number,
+  gap: number,
+  parentheses: boolean,
+  placed: readonly LabelBox[] = [],
+  eye?: Eye,
+): { x: number; y: number; text: string }[] {
+  const marks = stereoMarks3d(m, only);
+  if (!marks.length) return [];
+  const look = lookOf(m);
+  const drawn = style[look];
+  const solid = solidOf({ ...m, id: 0 } as Molecule3D, style);
+  const frame = frameOf(solid, m.frame);
+  const places = solid.frames[frame];
+  const radii = solid.radii[look];
+  const height = heightOf(m, solid, look);
+  const q = m.turn ? new THREE.Quaternion(...m.turn) : new THREE.Quaternion();
+  const mag = magnifiedOf(m);
+  const v = new THREE.Vector3();
+  // (as the picture sees it - pictureMarks - with y down, as on the screen)
+  const seen = (x: number, y: number, z: number) => {
+    v.set(x, y, z).applyQuaternion(q);
+    const s = seenAt(m.at.x + v.x * mag, m.at.y + v.y * mag, height + v.z * mag, eye);
+    return { x: s.x, y: -s.y, k: s.k * mag };
+  };
+  const n = m.atoms.length;
+  const balls = Array.from({ length: n }, (_, i) => {
+    const s = seen(places[3 * i], places[3 * i + 1], places[3 * i + 2]);
+    return { x: s.x, y: s.y, r: radii[i] * s.k };
+  });
+  // (every bond as drawn, the frame shown's: none when space-filling)
+  const bondR = bondRadiusOf(drawn) * WORLD_PER_ANGSTROM;
+  const sticks: Stick[] = [];
+  if (bondR > 1e-6) for (const b of bondsAt(m, frame)) if (balls[b.a1]?.r && balls[b.a2]?.r) sticks.push({ a: balls[b.a1], b: balls[b.a2], r: bondR * mag });
+  const kept: LabelBox[] = placed.map((p) => ({ ...p, y: -p.y }));
+  const out: { x: number; y: number; text: string }[] = [];
+  for (const mark of marks) {
+    if (!mark.atoms.every((i) => i >= 0 && i < n)) continue;
+    let x = 0, y = 0, z = 0;
+    for (const i of mark.atoms) {
+      x += places[3 * i];
+      y += places[3 * i + 1];
+      z += places[3 * i + 2];
+    }
+    const o = seen(x / mark.atoms.length, y / mark.atoms.length, z / mark.atoms.length);
+    const own = (mark.atoms.length === 1 ? radii[mark.atoms[0]] : bondR) * o.k;
+    const spot = stereoSpot(mark, o, balls, sticks, kept, own, font, gap, parentheses);
+    kept.push(stereoKept(spot, font));
+    out.push({ x: spot.x, y: -spot.y, text: mark.text });
+  }
+  return out;
 }
 
 /** Whether a molecule's last point, never converged, is an entry marked so (utils/io: an opened run stopped before it converged). */
