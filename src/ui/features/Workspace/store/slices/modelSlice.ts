@@ -445,6 +445,11 @@ export const createModelSlice = (
     doc.edit("change bond", (d) => ops.updateBond(d, id, patch));
   },
 
+  // (which of two crossing bonds is in front, said from the right-click menu: one step, named for what was done - chem/crossings)
+  orderCrossing: (bondId: number, otherId: number, how: "front" | "behind") => {
+    doc.edit(how === "front" ? "bond in front" : "bond behind", (d) => ops.orderCrossing(d, bondId, otherId, how));
+  },
+
   // (bonds chosen a kind from the right-click menu: all of them, one step)
   setBondsKind: (ids: readonly number[], kind: BondKindName) => {
     const patch = bondKindPatch(kind);

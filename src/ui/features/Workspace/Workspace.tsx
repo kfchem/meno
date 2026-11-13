@@ -2,6 +2,7 @@ import RoleOffer from "./RoleOffer";
 import { noPluginSaid, useRoleOffer } from "../../../lib/roles/worker";
 import { canvasAlerts } from "./utils/alerts";
 import { bondKindOf, type BondKindName } from "./utils/bondKinds";
+import { crossingsOf, orderBetween } from "./chem/crossings";
 import type { ArrowKind, ArrowWeight } from "../../../lib/chem/reactionArrow";
 import { canTakeBond, valenceOrder } from "../../../lib/chem/molecule";
 import { usePresentingWindow } from "../../presenting";
@@ -2600,6 +2601,20 @@ function WorkspaceContent({
             const ids = st.sel.bonds.has(menu.id) ? [...st.sel.bonds] : [menu.id];
             const bond = st.model.bonds.find((b) => b.id === menu.id);
             return bond ? { current: bondKindOf(bond), choose: (kind: BondKindName) => st.setBondsKind(ids, kind) } : undefined;
+          })()}
+          // (which of two crossing bonds is in front, where no depth says it: at the crossing nearest the pointer - chem/crossings)
+          crossing={(() => {
+            if (menu.kind !== "bond" || menu.id == null) return undefined;
+            const st = store.getState();
+            const nearest = crossingsOf(st.model, menu.id, menu.at)[0];
+            if (!nearest) return undefined;
+            const now = orderBetween(st.model, menu.id, nearest.other);
+            return {
+              front: now === "front",
+              behind: now === "behind",
+              onFront: () => st.orderCrossing(menu.id!, nearest.other, "front"),
+              onBehind: () => st.orderCrossing(menu.id!, nearest.other, "behind"),
+            };
           })()}
           canvas={canvasCommands(menu.at)}
           // (Export writes what is drawn: a selection of PDFs and texts' sheets alone has nothing for it)

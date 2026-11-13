@@ -142,6 +142,11 @@ export type Bond = BondChem & {
   display?: "plain" | "bold" | "hashed" | "dashed" | "wedge";
   /** A dative bond, drawn as an arrow from `a`, the donor, to `b`. */
   dative?: boolean;
+  /**
+   * The bonds (by id) it passes behind where they cross on the page, said by the chemist: drawn with a gap there (chem/crossings). A look; kept
+   * on the bond behind, never both ways, and only where the two bonds' atoms do not all carry a depth, which says it then.
+   */
+  behind?: number[];
   /** Where its E or Z - an axis's Ra or Sa - was put by hand, from the bond's middle (`MarkAt`). */
   stereoAt?: MarkAt;
   /** Its E or Z shown, where it has one, as an atom's R or S (`Atom.stereoShown`). */
@@ -2032,6 +2037,8 @@ export type EditorState = {
   updateBond: (id: number, patch: Partial<Bond>) => void;
   /** Each of the bonds made of `kind` (utils/bondKinds), as one step. */
   setBondsKind: (ids: readonly number[], kind: import("../utils/bondKinds").BondKindName) => void;
+  /** Bond `bondId` said to be in front of bond `otherId`, or behind it, where they cross; said again, taken away (chem/crossings). One step. */
+  orderCrossing: (bondId: number, otherId: number, how: "front" | "behind") => void;
   /**
    * A bond key (utils/bondKinds `bondKeyPatch`) with the pointer on bond `id`: what it makes of that bond, made of it and of
    * every bond selected where it is among them, as one step. False where it would change nothing.

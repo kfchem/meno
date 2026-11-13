@@ -212,6 +212,7 @@ export default function PartMenu({
   onMake3d,
   onSelectStructure,
   bondKind,
+  crossing,
   onTurnOver,
   onCharge,
   onRadical,
@@ -275,6 +276,11 @@ export default function PartMenu({
   onSelectStructure: () => void;
   /** The kind of the bond right-clicked - or of the bonds selected, where it is one of them - and a kind chosen for it (utils/bondKinds); `current` is null where the bond is none of them. */
   bondKind?: { current: BondKindName | null; choose: (kind: BondKindName) => void };
+  /**
+   * Where the bond right-clicked crosses another bond of its structure that no depth orders: which of the two is in front, said of the bond
+   * right-clicked at the crossing nearest the pointer (chem/crossings) - the one that holds now chosen, chosen again to take it away.
+   */
+  crossing?: { front: boolean; behind: boolean; onFront: () => void; onBehind: () => void };
   /** The selection turned over, left to right or top to bottom. */
   onTurnOver: (axis: "vertical" | "horizontal") => void;
   /** An atom's charge one up or one down. */
@@ -1043,6 +1049,12 @@ export default function PartMenu({
             ...colour,
           ].map((i): Item => (target.kind === "bond" && bondKind ? { ...i, icon: undefined } : i)),
           del(target.kind === "atom" ? "Delete atom" : "Delete bond", keys),
+          ...(target.kind === "bond" && crossing
+            ? [
+                { name: "In front", keys: "", run: crossing.onFront, checked: crossing.front, divider: true },
+                { name: "Behind", keys: "", run: crossing.onBehind, checked: crossing.behind },
+              ]
+            : []),
           ...(target.kind === "atom"
             ? [
                 ...(onEditLabel ? [{ name: "Edit label", keys: "", run: onEditLabel }] : []),

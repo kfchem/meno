@@ -7,6 +7,7 @@
  * one step; let go anywhere else, it goes back. One not read whole says why,
  * and nothing is taken.
  */
+import { behindRemapped } from "../chem/crossings";
 import { styleOf } from "../../../../lib/chem/style";
 import { DURATION } from "../../../theme/motion";
 import type { EditorStore } from "../store";
@@ -121,7 +122,7 @@ export function inRow(models: readonly Model[], gap: number): Model {
     for (const a of m.atoms) ids.set(a.id, next++);
     for (const b of m.bonds) ids.set(-b.id - 1, next++);
     atoms.push(...m.atoms.map((a) => ({ ...a, id: ids.get(a.id)!, x: a.x - x0 + x })));
-    bonds.push(...m.bonds.map((b) => ({ ...b, id: ids.get(-b.id - 1)!, a: ids.get(b.a)!, b: ids.get(b.b)!, ...(b.narrow != null ? { narrow: ids.get(b.narrow)! } : {}) })));
+    bonds.push(...m.bonds.map(({ behind, ...b }) => ({ ...b, id: ids.get(-b.id - 1)!, a: ids.get(b.a)!, b: ids.get(b.b)!, ...(b.narrow != null ? { narrow: ids.get(b.narrow)! } : {}), ...behindRemapped(behind, (id) => ids.get(-id - 1)) })));
     x += x1 - x0 + gap;
   }
   const xs = atoms.map((a) => a.x);

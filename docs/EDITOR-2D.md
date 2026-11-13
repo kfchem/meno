@@ -756,6 +756,31 @@ Both go together, because both touch every layer.
   narrow at the end with more bonds as the edit leaves it, and from then
   on keeps it. A click on a single bond runs plain, wedge, hashes, and
   plain again with the other end narrow next time round.
+- **A bond in front of another.** Where two bonds of one structure drawn
+  by hand cross, the chemist says which is in front: a right-click on
+  either bond, near the crossing, offers *In front* and *Behind*, said of
+  the bond clicked. The bond behind is drawn with a gap where it passes
+  the other (IUPAC 2006 ST-3.1: the front-to-back order of crossing bonds
+  shown by a small discontinuity in the one behind), the gap easing open
+  and closed as the page's changes do. The item that holds is shown as
+  chosen; choosing it again takes the mark away, and the other item turns
+  it round. Each is one step, undone and done again ("Bond in front",
+  "Bond behind").
+  - It is kept on the bond behind, by the other bond's id
+    (`Bond.behind`), never both ways round. So it holds while the atoms
+    move: bonds dragged apart show no gap and nothing is broken; dragged
+    back across each other, the gap is there again. Deleting either bond
+    takes it away. Copied and pasted, it follows the bonds' new ids; a
+    mark whose other bond was not copied is dropped. Turning a structure
+    over exchanges front and behind, as a depth would.
+  - Where all four atoms of the two bonds carry a depth (a cage as
+    Clean-up draws it, a tool's projection), the depth says which bond is
+    behind, and neither item is offered (`chem/crossings.ts`; the order in
+    `lib/chem/layout2d.ts` `brokenBehind`: the depth, then the mark, else
+    neither broken).
+  - It is a look: the drawing says no configuration by it alone.
+  - One crossing at a time: the items act on the bond clicked, not on a
+    selection.
 - **Rounding is all or nothing.** When ends and joins are round, every end is
   round - double and triple bonds included, which today are not. When they
   are square, every one is square.

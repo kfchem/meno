@@ -88,6 +88,18 @@ export type Bond = BondChem & {
   color?: string;
   /** The colour it is highlighted in, behind the drawing (`Atom.highlight`). */
   highlight?: string;
+  /** Its id in the drawing, where the drawing gives one: what another bond's `behind` names it by. */
+  id?: number;
+  /**
+   * The bonds (by `id`) it passes behind where they cross, said by the chemist: it is drawn broken there where the four atoms of the two do not
+   * all carry a depth (`brokenBehind`). A look.
+   */
+  behind?: number[];
+  /**
+   * How far open each of those gaps is, 0 to 1, by the front bond's `id`, where one is opening or closing (the page eases it, never at once);
+   * fully open where not given.
+   */
+  behindShare?: Record<number, number>;
 };
 export type Vec2 = { x: number; y: number };
 
@@ -4087,6 +4099,21 @@ function lineShape(l: LineSeg, half: number): Vec2[] {
 }
 
 /**
+ * Whether `bond` (from `a` to `c`) passes behind `o` (from `e` to `f`) where they cross, at `t` along the one and `u` along the other - in one
+ * place, three sources in turn: where all four atoms carry a depth, the depth says it (a ring drawn in perspective, a cage as Clean-up draws
+ * it); else the chemist's mark, where `bond` names `o` among those it is behind (`Bond.behind`); else neither is behind - a crossing drawn by
+ * hand is drawn whole until it is said.
+ */
+export function passesBehind(bond: Bond, a: Atom, c: Atom, o: Bond, e: Atom, f: Atom, t: number, u: number): boolean {
+  if (a.z != null && c.z != null && e.z != null && f.z != null) {
+    const mine = a.z + (c.z - a.z) * t;
+    const theirs = e.z + (f.z - e.z) * u;
+    return mine < theirs - 1e-6;
+  }
+  return o.id != null && !!bond.behind?.includes(o.id);
+}
+
+/**
  * A bond's lines and shapes, broken where the bond passes behind another - both drawn in perspective, their atoms' `z` saying which is
  * nearer where they cross. The gap is a band along the bond in front, of one width at every angle: the front bond's own width there and
  * `CROSSING_CLEAR` line widths each side of it (never under `CROSSING_CLEAR_FLOOR_PX` device pixels where pixels are drawn). What the front bond
@@ -4113,7 +4140,9 @@ function brokenBehind(
   const c = atoms[bond.a2];
   // (a bond to a pi system's centre goes into its ring, not over or under
   // its edges: neither is broken for the other)
-  if (a?.z == null || c?.z == null || bond.endpoints?.length) return { lines, polys, ends: [] };
+  if (!a || !c || bond.endpoints?.length) return { lines, polys, ends: [] };
+  // (nothing can put it behind: no depth at its ends, and nothing said of it)
+  if ((a.z == null || c.z == null) && !bond.behind?.length) return { lines, polys, ends: [] };
   const lineWidth = 2 * halfWidth;
   const halfWidthOf = (l: LineSeg) => pxToWorld(l.widthPx, how.zoom) / 2;
   const clear = Math.max(CROSSING_CLEAR * lineWidth, how.raster ? pxToWorld(CROSSING_CLEAR_FLOOR_PX, how.zoom) : 0);
@@ -4130,7 +4159,7 @@ function brokenBehind(
     if (o.a1 === bond.a1 || o.a1 === bond.a2 || o.a2 === bond.a1 || o.a2 === bond.a2) continue;
     const e = atoms[o.a1];
     const f = atoms[o.a2];
-    if (e?.z == null || f?.z == null) continue;
+    if (!e || !f) continue;
     const q = { x: e.x, y: e.y };
     const g = { x: f.x - e.x, y: f.y - e.y };
     const den = vcross(d, g);
@@ -4138,16 +4167,20 @@ function brokenBehind(
     const t = vcross(vsub(q, p), g) / den;
     const u = vcross(vsub(q, p), d) / den;
     if (t <= 0 || t >= 1 || u <= 0 || u >= 1) continue;
-    const mine = a.z + (c.z - a.z) * t;
-    const theirs = e.z + (f.z - e.z) * u;
-    if (!(mine < theirs - 1e-6)) continue;
+    if (!passesBehind(bond, a, c, o, e, f, t, u)) continue;
     const frontLength = vlen(g);
     const fd = { x: g.x / frontLength, y: g.y / frontLength };
     // (the angle between the two bonds: all but along each other, nothing is cut)
     if (Math.abs(vcross(fd, dir)) < sinLeast) continue;
     const span = acrossSpan(drawn.get(o)!, q, fd, u * frontLength, halfWidthOf) ?? { lo: -halfWidth, hi: halfWidth };
+    // (a gap said by the chemist on its way open or closed: as wide as it has come, about its middle)
+    const deep = a.z != null && c.z != null && e.z != null && f.z != null;
+    const share = deep || o.id == null ? 1 : Math.min(1, Math.max(0, bond.behindShare?.[o.id] ?? 1));
+    if (share <= 0) continue;
+    const [lo, hi] = [span.lo - clear, span.hi + clear];
+    const [middle, half] = [(lo + hi) / 2, ((hi - lo) / 2) * share];
     // (across the front bond as `vcross(fd, point - q)` measures it: the normal (-fd.y, fd.x))
-    bands.push({ origin: q, normal: { x: -fd.y, y: fd.x }, lo: span.lo - clear, hi: span.hi + clear });
+    bands.push({ origin: q, normal: { x: -fd.y, y: fd.x }, lo: middle - half, hi: middle + half });
   }
   if (!bands.length) return { lines, polys, ends: [] };
   const alongOf = (pt: Vec2) => vdot(vsub(pt, p), dir);

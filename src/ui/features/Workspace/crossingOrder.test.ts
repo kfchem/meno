@@ -1,0 +1,233 @@
+// Which bond is in front where two cross, said by the chemist (chem/crossings; docs/EDITOR-2D.md, *A bond in front of another*): the known
+// answers of the page - the gap where it was said, kept as the drawing is edited, saved, copied and turned over, and in every writer.
+import { describe, expect, it } from "vitest";
+import { connectStoreToDocument, createEditorStore } from "./store";
+import { createWorkspaceDocument } from "./document";
+import { readRecord, recordText } from "./utils/copyPaste";
+import { readWorkspace, workspaceText } from "./utils/workspace";
+import { layoutAtomOf, layoutBonds } from "./layoutOptions";
+import { buildAllPrimitives, createSVG, layoutMolecule, type LineSeg, type Poly } from "../../../lib/chem/layout2d";
+import { layoutEmf, emfRecords } from "../../../lib/chem/emf";
+import { acsWorldOptions } from "../../../lib/chem/acs";
+import { crossingsOf } from "./chem/crossings";
+import type { Model } from "./store/types";
+
+/** A norbornane-like crossing drawn by hand: a ring of four (A-B-C-D) with the bond A-C across it and B-D across that - the two cross at the middle. */
+function editor() {
+  const doc = createWorkspaceDocument();
+  const store = createEditorStore(doc);
+  connectStoreToDocument(store, doc);
+  const st = () => store.getState();
+  const a = st().addAtom(0, 0, "C");
+  const b = st().addAtom(2, 0, "C");
+  const c = st().addAtom(2, 2, "C");
+  const d = st().addAtom(0, 2, "C");
+  st().addBond(a, b);
+  st().addBond(b, c);
+  st().addBond(c, d);
+  st().addBond(d, a);
+  const ac = st().addBond(a, c);
+  const bd = st().addBond(b, d);
+  return { doc, store, st, ac, bd, atoms: { a, b, c, d } };
+}
+const bondOf = (m: Model, id: number) => m.bonds.find((x) => x.id === id)!;
+
+/** Whether a line runs along a diagonal: rising (AC, from (0, 0) to (2, 2)) or falling (BD, from (2, 0) to (0, 2)). */
+const along = (l: LineSeg, sign: 1 | -1) => Math.abs(l.x2 - l.x1) > 1e-9 && Math.sign((l.y2 - l.y1) / (l.x2 - l.x1)) === sign;
+/** Where a shape's points lie, on the mean. */
+const centreOf = (p: Poly) => ({ x: p.points.reduce((s, q) => s + q.x, 0) / p.points.length, y: p.points.reduce((s, q) => s + q.y, 0) / p.points.length });
+/** How far a shape reaches from end to end. */
+const reachOf = (p: Poly) => Math.max(...p.points.flatMap((q) => p.points.map((r) => Math.hypot(q.x - r.x, q.y - r.y))));
+/** Whether a shape is a piece of a diagonal: its centre on the rising line y = x, or the falling x + y = 2 - and a piece of a bond, not the small fill of a join at an atom. */
+const on = (p: Poly, sign: 1 | -1) => {
+  const c = centreOf(p);
+  return reachOf(p) > 0.3 && (sign === 1 ? Math.abs(c.y - c.x) < 0.05 : Math.abs(c.x + c.y - 2) < 0.05);
+};
+
+/**
+ * What the layout draws for the model, and each diagonal's pieces among it: a bond drawn whole is a line; one cut where it passes behind
+ * another is drawn as the shapes it fills, each piece of it one (the gap a band along the bond in front: lib/chem/layout2d).
+ */
+function drawn(model: Model) {
+  const index = new Map(model.atoms.map((a, i) => [a.id, i]));
+  const atoms = model.atoms.map((a) => layoutAtomOf(a));
+  const bonds = layoutBonds(model.bonds, index);
+  const opts = acsWorldOptions(atoms, bonds, { units: "world", minLinePx: 0 });
+  const { lines, polys } = buildAllPrimitives(atoms, bonds, opts, 40);
+  const pieces = (sign: 1 | -1) => [...lines.filter((l) => along(l, sign)), ...polys.filter((p) => on(p, sign))];
+  return { lines, polys, ac: pieces(1), bd: pieces(-1), atoms, bonds, opts };
+}
+
+describe("a crossing drawn by hand, which bond is in front said", () => {
+  it("is drawn whole until it is said; Behind on one breaks that one, In front on it breaks the other, the chosen again leaves no gap", () => {
+    const { st, ac, bd } = editor();
+    expect(drawn(st().model).ac).toHaveLength(1);
+    expect(drawn(st().model).bd).toHaveLength(1);
+    st().orderCrossing(ac, bd, "behind");
+    expect(drawn(st().model).ac).toHaveLength(2);
+    expect(drawn(st().model).bd).toHaveLength(1);
+    st().orderCrossing(ac, bd, "front");
+    expect(drawn(st().model).ac).toHaveLength(1);
+    expect(drawn(st().model).bd).toHaveLength(2);
+    st().orderCrossing(ac, bd, "front");
+    expect(drawn(st().model).ac).toHaveLength(1);
+    expect(drawn(st().model).bd).toHaveLength(1);
+    expect(st().model.bonds.some((b) => b.behind)).toBe(false);
+  });
+
+  it("is one step, undone and done again, named for what was done", () => {
+    const { doc, st, ac, bd } = editor();
+    st().orderCrossing(ac, bd, "behind");
+    expect(doc.history().undoLabel).toBe("bond behind");
+    st().orderCrossing(ac, bd, "front");
+    expect(doc.history().undoLabel).toBe("bond in front");
+    doc.undo();
+    expect(bondOf(st().model, ac).behind).toEqual([bd]);
+    doc.undo();
+    expect(st().model.bonds.some((b) => b.behind)).toBe(false);
+    doc.redo();
+    expect(bondOf(st().model, ac).behind).toEqual([bd]);
+  });
+
+  it("is kept while the atoms move: dragged apart, no gap and nothing broken; dragged back, the gap again", () => {
+    const { st, ac, bd, atoms } = editor();
+    st().orderCrossing(ac, bd, "behind");
+    // (C dragged up and left until AC no longer crosses BD)
+    st().moveAtoms([{ id: atoms.c, x: -1, y: 0.5 }], "apart");
+    expect(bondOf(st().model, ac).behind).toEqual([bd]);
+    const apart = drawn(st().model);
+    expect(apart.lines.length).toBe(st().model.bonds.length);
+    expect(apart.polys.filter((p) => reachOf(p) > 0.3)).toHaveLength(0);
+    st().moveAtoms([{ id: atoms.c, x: 2, y: 2 }], "back");
+    expect(drawn(st().model).ac).toHaveLength(2);
+  });
+
+  it("goes with either bond: the other deleted, the bond is whole and names no bond that is gone", () => {
+    const { store, st, ac, bd } = editor();
+    st().orderCrossing(ac, bd, "behind");
+    store.setState({ sel: { atoms: new Set(), bonds: new Set([bd]) } });
+    st().deleteSelection();
+    expect(st().model.bonds.find((b) => b.id === bd)).toBeUndefined();
+    expect(bondOf(st().model, ac).behind).toBeUndefined();
+    expect(drawn(st().model).ac).toHaveLength(1);
+  });
+
+  it("is saved and opened, and carried on the clipboard and pasted onto new ids, still between the same two bonds", () => {
+    const { st, ac, bd } = editor();
+    st().orderCrossing(ac, bd, "behind");
+    const ws = readWorkspace(workspaceText(st()))!;
+    expect(ws.drawn.bonds.find((b) => b.id === ac)?.behind).toEqual([bd]);
+    const record = readRecord(recordText({ atoms: st().model.atoms, bonds: st().model.bonds }))!;
+    expect(record.bonds.find((b) => b.id === ac)?.behind).toEqual([bd]);
+    // (pasted beside it: the copy's bond behind names the copy's other bond)
+    const before = new Set(st().model.bonds.map((b) => b.id));
+    st().pasteModel({ atoms: record.atoms.map((a) => ({ ...a, x: a.x + 10 })), bonds: record.bonds });
+    const added = st().model.bonds.filter((b) => !before.has(b.id));
+    const marked = added.filter((b) => b.behind?.length);
+    expect(marked).toHaveLength(1);
+    expect(added.map((b) => b.id)).toContain(marked[0].behind![0]);
+    expect(marked[0].behind![0]).not.toBe(bd);
+  });
+
+  it("reads from a file only ids of the record's own bonds, each once, one way", () => {
+    const { st, ac, bd } = editor();
+    const text = JSON.parse(recordText({ atoms: st().model.atoms, bonds: st().model.bonds }));
+    for (const b of text.bonds) {
+      if (b.id === ac) b.behind = [bd, bd, 999, "x", ac];
+      if (b.id === bd) b.behind = [ac];
+    }
+    const read = readRecord(JSON.stringify(text))!;
+    const said = read.bonds.filter((b) => b.behind);
+    expect(said).toHaveLength(1);
+    expect(said[0].behind).toHaveLength(1);
+  });
+
+  it("drops a mark whose other bond is not among what is copied", () => {
+    const { st, ac, bd, atoms } = editor();
+    st().orderCrossing(ac, bd, "behind");
+    // (AC and its atoms copied alone: BD did not come)
+    const part = { atoms: st().model.atoms.filter((a) => a.id === atoms.a || a.id === atoms.c), bonds: [bondOf(st().model, ac)] };
+    const before = new Set(st().model.bonds.map((b) => b.id));
+    st().pasteModel(part);
+    const added = st().model.bonds.filter((b) => !before.has(b.id));
+    expect(added).toHaveLength(1);
+    expect(added[0].behind).toBeUndefined();
+  });
+
+  it("is turned over with the structure: front and behind exchanged, as its depth would be", () => {
+    const { store, st, ac, bd, atoms } = editor();
+    st().orderCrossing(ac, bd, "behind");
+    store.setState({ sel: { atoms: new Set(Object.values(atoms)), bonds: new Set(st().model.bonds.map((b) => b.id)) } });
+    st().turnSelectionOver("vertical");
+    expect(bondOf(st().model, ac).behind).toBeUndefined();
+    expect(bondOf(st().model, bd).behind).toEqual([ac]);
+    // (mirrored left to right, BD now runs from (0, 0) to (2, 2): the rising diagonal, in two pieces; AC the falling one, whole)
+    expect(drawn(st().model).ac).toHaveLength(2);
+    expect(drawn(st().model).bd).toHaveLength(1);
+  });
+
+  it("is not offered where all four atoms carry a depth, and there the depth says which is behind, whatever is said", () => {
+    const { st, ac, bd } = editor();
+    st().orderCrossing(ac, bd, "behind");
+    // (the same drawing with depth: B and D near, A and C far - AC is behind by its depth; said behind too, it is the same; said in front, the depth still wins)
+    const deep: Model = { ...st().model, atoms: st().model.atoms.map((a) => ({ ...a, z: a.x === a.y ? -1 : 1 })) };
+    expect(crossingsOf(deep, ac)).toEqual([]);
+    const front: Model = { ...deep, bonds: deep.bonds.map((b) => (b.id === ac ? { ...b, behind: undefined } : b.id === bd ? { ...b, behind: [ac] } : b)) };
+    expect(drawn(front).ac).toHaveLength(2);
+    expect(drawn(front).bd).toHaveLength(1);
+  });
+
+  describe("in every writer: the marked crossing has its gap, and nothing is painted over it - five bonds drawn whole, the one behind in two pieces", () => {
+    const { st, ac, bd } = editor();
+    st().orderCrossing(ac, bd, "behind");
+    const { atoms, bonds } = drawn(st().model);
+    const opts = acsWorldOptions(atoms, bonds, { units: "world", bondColor: "#224466" });
+    const layout = layoutMolecule(atoms, bonds, opts, 40);
+
+    it("the layout the page draws: five lines and the two pieces of AC, and nothing over the gap at the middle", () => {
+      expect(layout.lines).toHaveLength(5);
+      expect(layout.lines.filter((l) => along(l, 1))).toHaveLength(0);
+      expect(layout.polys.filter((p) => on(p, 1))).toHaveLength(2);
+      expect(layout.polys.filter((p) => reachOf(p) > 0.3)).toHaveLength(2);
+      for (const p of layout.polys) for (const q of p.points) expect(Math.hypot(q.x - 1, q.y - 1)).toBeGreaterThan(0.1);
+      for (const f of layout.fills) expect(Math.hypot(f.c.x - 1, f.c.y - 1)).toBeGreaterThan(0.1);
+    });
+
+    it("the SVG: five lines, and a filled shape for each the layout has - AC's two pieces and the joins - in the bonds' colour", () => {
+      const svg = createSVG(layout, opts);
+      expect([...svg.matchAll(/<line /g)]).toHaveLength(5);
+      expect([...svg.matchAll(/<line [^>]*stroke="([^"]+)"/g)].every((m) => m[1] === "#224466")).toBe(true);
+      const shapes = [...svg.matchAll(/<path [^>]*fill="([^"]+)"[^>]*stroke="none"/g)];
+      expect(shapes).toHaveLength(layout.polys.length);
+      expect(shapes.every((m) => m[1] === "#224466")).toBe(true);
+    });
+
+    it("the EMF: five polylines, and a filled polygon for each shape the layout has", () => {
+      const types = emfRecords(layoutEmf(layout, opts).emf)!.map((r) => r.type);
+      expect(types.filter((t) => t === 4)).toHaveLength(5);
+      expect(types.filter((t) => t === 3)).toHaveLength(layout.polys.length);
+    });
+  });
+});
+
+describe("the gap on its way open or closed", () => {
+  it("is as wide as it has come: half open, half the break; not at all, none", () => {
+    const { st, ac, bd } = editor();
+    st().orderCrossing(ac, bd, "behind");
+    const { atoms, bonds, opts } = drawn(st().model);
+    // (the gap along AC: from the cut end of its lower piece to that of its upper, each measured along AC from the crossing at (1, 1))
+    const at = (share: number) => {
+      const eased = bonds.map((b) => (b.id === ac ? { ...b, behindShare: { [bd]: share } } : b));
+      const pieces = buildAllPrimitives(atoms, eased, opts, 40).polys.filter((p) => on(p, 1));
+      if (pieces.length < 2) return 0;
+      const t = (q: { x: number; y: number }) => (q.x - 1 + (q.y - 1)) / Math.SQRT2;
+      const below = pieces.filter((p) => t(centreOf(p)) < 0).flatMap((p) => p.points.map(t));
+      const above = pieces.filter((p) => t(centreOf(p)) > 0).flatMap((p) => p.points.map(t));
+      return Math.min(...above) - Math.max(...below);
+    };
+    const full = at(1);
+    expect(full).toBeGreaterThan(0.2);
+    expect(at(0.5)).toBeCloseTo(full / 2, 9);
+    expect(at(0)).toBe(0);
+  });
+});

@@ -22,6 +22,9 @@ export function layoutBond(b: Bond, a1: number, a2: number): LBond {
     ...(b.dative ? { dative: true } : {}),
     ...(b.color ? { color: b.color } : {}),
     ...(b.highlight ? { highlight: b.highlight } : {}),
+    // (its id - what another bond's `behind` names it by - and the bonds it is said to pass behind: drawn with a gap there, chem/crossings)
+    id: b.id,
+    ...(b.behind?.length ? { behind: b.behind } : {}),
     ...bondChem(b),
   };
 }

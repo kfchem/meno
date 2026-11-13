@@ -240,6 +240,11 @@ writer, whole or not at all (*Save and Export*, *A document is written
 whole or not at all*). Meno's own files, kept in its folders - its
 settings, its environments' notes - are not.
 
+Which bond is in front where two drawn by hand cross (`Bond.behind`,
+docs/EDITOR-2D.md) is kept in the .meno and carried by the Meno record -
+on the clipboard and in an Office picture or object. A MOL, SD or RXN
+file has no place for it: nothing of it is written there.
+
 Never written: PNG or EMF as files, anything printed or dragged out.
 Plugins write nothing that leaves them (a temporary copy of the output,
 deleted); the chemistry worker answers over its pipe.
