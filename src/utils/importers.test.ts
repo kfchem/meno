@@ -7,6 +7,8 @@ import {
 } from "./importers";
 import { NOMINAL_BOND_LENGTH } from "../lib/chem/acs";
 import { layoutMolecule } from "../lib/chem/layout2d";
+import { writeMolfile } from "../lib/chem/molWriter";
+import { implicitHydrogens, valenceOrder } from "../lib/chem/molecule";
 import { layoutOptionsFor, MENO } from "../lib/chem/style";
 import sampleSdf from "../samples/cholesterol.sdf?raw";
 import sampleRxn from "../samples/diels-alder.rxn?raw";
@@ -212,7 +214,7 @@ describe("aromatic bonds on import", () => {
 });
 
 describe("coordination bonds on import", () => {
-  it("come in as dative single bonds, from the first atom to the second", () => {
+  it("come in as plain single bonds, coordination bonds, the donor the first atom (IUPAC GR-1.7.1)", () => {
     // ammonia borane, H3N->BH3, with the MOL bond type for a coordination bond
     const mol = [
       "",
@@ -228,8 +230,52 @@ describe("coordination bonds on import", () => {
     expect(model.bonds).toHaveLength(1);
     const [b] = model.bonds;
     expect(b.order).toBe(1);
-    expect(b.dative).toBe(true);
+    expect(b.dative).toBeUndefined();
+    expect(b.coordination).toBe(true);
     const n = model.atoms.find((a) => a.el === "N")!;
     expect(b.a).toBe(n.id);
+    // (the hydrogens as an arrow gives them: H3N-BH3, neither atom's valence taken by the bond)
+    for (const kind of [{ coordination: true }, { dative: true }]) {
+      const bond = { order: 1, ...kind };
+      expect([implicitHydrogens("N", valenceOrder(bond, "N")), implicitHydrogens("B", valenceOrder(bond, "B"))]).toEqual([3, 3]);
+    }
+  });
+
+  it("come in as an arrow where the file asks for one (V3000 DISP=DATIVE), and keep what they are through a save and an open", () => {
+    const v3000 = (disp: string) =>
+      [
+        "",
+        "  test",
+        "",
+        "  0  0  0     0  0            999 V3000",
+        "M  V30 BEGIN CTAB",
+        "M  V30 COUNTS 2 1 0 0 0",
+        "M  V30 BEGIN ATOM",
+        "M  V30 1 N 0 0 0 0",
+        "M  V30 2 B 1.5 0 0 0",
+        "M  V30 END ATOM",
+        "M  V30 BEGIN BOND",
+        `M  V30 1 9 1 2${disp}`,
+        "M  V30 END BOND",
+        "M  V30 END CTAB",
+        "M  END",
+      ].join("\n");
+    const read = (text: string) => moleculesToEditorModel(readMoleculesFromText(text, "mol")).model;
+    const kind = (text: string) => {
+      const [b] = read(text).bonds;
+      return { dative: !!b.dative, coordination: !!b.coordination, order: b.order };
+    };
+    expect(kind(v3000(""))).toEqual({ dative: false, coordination: true, order: 1 });
+    expect(kind(v3000(" DISP=COORD"))).toEqual({ dative: false, coordination: true, order: 1 });
+    expect(kind(v3000(" DISP=DATIVE"))).toEqual({ dative: true, coordination: false, order: 1 });
+    // (saved and opened again: type 9 still, as it was - a plain one plain, an arrow an arrow, the donor first)
+    for (const disp of ["", " DISP=DATIVE"]) {
+      const model = read(v3000(disp));
+      const again = writeMolfile(model);
+      expect(again).toMatch(/M {2}V30 1 9 1 2( DISP=(COORD|DATIVE))?\n/);
+      expect(kind(again)).toEqual(kind(v3000(disp)));
+      const n = read(again).atoms.find((a) => a.el === "N")!;
+      expect(read(again).bonds[0].a).toBe(n.id);
+    }
   });
 });

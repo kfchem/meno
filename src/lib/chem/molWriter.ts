@@ -37,8 +37,9 @@ type Row = {
   second: number;
   type: number;
   stereo: "up" | "down" | "wavy" | "either" | "none";
-  /** V3000's DISP: a coordination bond drawn as a plain line. */
+  /** V3000's DISP: a coordination bond drawn as a plain line (COORD), or as an arrow (DATIVE). */
   coord?: boolean;
+  arrow?: boolean;
   /** Its reacting centre status. */
   centre?: number;
   /** A bond to several atoms at once (V3000 ENDPTS), 1-based, and to all of them or any. */
@@ -92,6 +93,7 @@ function rows(model: WriterModel, index: Map<number, number>): Row[] {
       type: bondType(b),
       stereo: stereo === "either" && !either ? "none" : stereo,
       ...(b.coordination && !b.dative ? { coord: true } : {}),
+      ...(b.dative && b.order === 1 ? { arrow: true } : {}),
       ...(b.reactingCentre ? { centre: b.reactingCentre } : {}),
       ...(b.endpoints?.length
         ? {
@@ -636,7 +638,7 @@ function ctabV3000(given: WriterModel): string[] {
       lines.push(
         `M  V30 ${i + 1} ${b.type} ${b.first} ${b.second}` +
           (c ? ` CFG=${c}` : "") +
-          (b.coord ? " DISP=COORD" : "") +
+          (b.coord ? " DISP=COORD" : b.arrow ? " DISP=DATIVE" : "") +
           (b.centre ? ` RXCTR=${b.centre}` : "") +
           (b.endpoints?.length ? ` ENDPTS=(${b.endpoints.length} ${b.endpoints.join(" ")}) ATTACH=${b.attach === "any" ? "ANY" : "ALL"}` : ""),
       );

@@ -47,7 +47,8 @@ describe("a coordination bond", () => {
   it("is the CTfile's type in a molecule made in 3D from a drawing, from the atom that lends its pair - a plain bond as it was", () => {
     const [block] = blocksOf(drawn, [1]);
     expect(block.coordination).toEqual([0]);
-    expect(block.molblock).toMatch(/M {2}V30 1 9 1 2\n/);
+    // (drawn as an arrow, said so - DISP=DATIVE, which a reader takes as type 9 all the same)
+    expect(block.molblock).toMatch(/M {2}V30 1 9 1 2 DISP=DATIVE\n/);
     const m = moleculeOf(answer, block);
     expect(m.bonds.slice(0, 2)).toEqual([
       { a1: 0, a2: 1, order: COORDINATION_BOND },

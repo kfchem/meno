@@ -520,9 +520,10 @@ function bondOf(
 ): Omit<EditorBond, "id" | "a" | "b"> {
   const b = m.bonds[i];
   const query = QUERY_OF[b.order];
-  // A coordination bond is a dative arrow unless the file says to show it
-  // plainly (V3000 DISP=COORD); a hydrogen bond is drawn dotted.
-  const coord = b.order === COORDINATION_BOND && m.ct?.bonds[i]?.display === "COORD";
+  // A coordination bond is a plain line (IUPAC GR-1.7.1), its donor kept as
+  // the bond's first atom - an arrow only where the file asks for one (V3000
+  // DISP=DATIVE); a hydrogen bond is drawn dotted.
+  const arrow = b.order === COORDINATION_BOND && m.ct?.bonds[i]?.display === "DATIVE";
   const centre = m.ct?.bonds[i]?.reactingCentre;
   const group = m.ct ? groupsOf(m.ct).bonds.get(i) : undefined;
   return {
@@ -531,7 +532,7 @@ function bondOf(
     stereo: mapStereo(b),
     // (a wedge narrow at its first atom, as MOL files have it)
     ...(b.stereoCode === 1 || b.stereoCode === 6 ? { narrow: first } : {}),
-    ...(b.order === COORDINATION_BOND ? (coord ? { coordination: true } : { dative: true }) : {}),
+    ...(b.order === COORDINATION_BOND ? (arrow ? { dative: true } : { coordination: true }) : {}),
     ...(b.order === HYDROGEN_BOND ? { hydrogen: true } : {}),
     ...(query ? { query } : {}),
     ...(centre ? { reactingCentre: centre } : {}),
