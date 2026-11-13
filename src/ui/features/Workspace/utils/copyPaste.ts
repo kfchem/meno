@@ -796,6 +796,7 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(drawnFrom && typeof m.drawnAs === "string" ? { drawnAs: m.drawnAs } : {}),
     ...(m.conformerSet === true ? { conformerSet: true } : {}),
     ...(m.partOf === true ? { partOf: true as const } : {}),
+    ...(m.partsAlone === true ? { partsAlone: true as const } : {}),
     ...(centresOf(m.centres, n) ? { centres: centresOf(m.centres, n) } : {}),
     ...(biopolymer ? { biopolymer } : {}),
     ...(bondOrders ? { bondOrders } : {}),

@@ -256,7 +256,10 @@ export function populations(energies: readonly number[], degeneracies?: readonly
  * of these alone would not be the compound's, nor where its energies are
  * not each frame's, nor where a frame is no minimum (`sharesWithheld`).
  */
-export function sharesOf(m: Pick<Molecule3D, "frames" | "shares" | "conformerSet" | "partOf" | "energies" | "degeneracies" | "failed" | "imaginary" | "numbers" | "marksUnread">): number[] | undefined {
+/** Why a structure of several parts, each searched alone, has no shares, nor Populations or Ensemble of it (docs/WORKSPACE.md, *A structure of several parts*). */
+export const PARTS_ALONE_WHY = "each part's conformers are its own: no shares of the whole are given";
+
+export function sharesOf(m: Pick<Molecule3D, "frames" | "shares" | "conformerSet" | "partOf" | "partsAlone" | "energies" | "degeneracies" | "failed" | "imaginary" | "numbers" | "marksUnread">): number[] | undefined {
   const n = 1 + (m.frames?.length ?? 0);
   if (sharesWithheld(m)) return undefined;
   if (m.shares?.length === n) return m.shares;
@@ -271,7 +274,9 @@ export function sharesOf(m: Pick<Molecule3D, "frames" | "shares" | "conformerSet
  * refuses (workflow/meno `notAllMinima`); or that its file's marks of that
  * did not read (`marksUnread`). None where each frame is one.
  */
-export function sharesWithheld(m: Pick<Molecule3D, "frames" | "failed" | "imaginary" | "numbers" | "marksUnread">): string | null {
+export function sharesWithheld(m: Pick<Molecule3D, "frames" | "failed" | "imaginary" | "numbers" | "marksUnread" | "partsAlone">): string | null {
+  // (a structure of several parts, each searched alone: one part varied at a time, the rest at their lowest - no compound's population)
+  if (m.partsAlone) return PARTS_ALONE_WHY;
   // (its file's marks of which frames failed did not read: whether each is a minimum is not known)
   if (m.marksUnread) return "its frames' marks could not be read, so whether each is a minimum is not known: no shares are given";
   const n = 1 + (m.frames?.length ?? 0);

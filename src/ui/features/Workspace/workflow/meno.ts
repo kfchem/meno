@@ -8,7 +8,7 @@
 import { speciesOf as speciesBy } from "../../../../lib/io/writers";
 import { stereoIdentity } from "../../../../lib/entry";
 import type { OptionValues } from "../../../../lib/options";
-import { compoundLetter, drawnAsEntry, entryOfSet, entryState, FINISHED, freeEnergyOf, imaginaryOf, madeFrom, MARKS_UNREAD, STATE_FINISHED, numberedRecord, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
+import { compoundLetter, drawnAsEntry, entryOfSet, entryState, FINISHED, freeEnergyOf, imaginaryOf, madeFrom, MARKS_UNREAD, PARTS_ALONE_REFUSED, STATE_FINISHED, numberedRecord, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
 import { conditionsIn, filter, type Condition } from "../../../../lib/nodes/filter";
 import { alikeIn, entries as countEntries, workedOutAs, workedOutDiffer } from "../../../../lib/nodes/base";
 import { enumerated } from "./enumerate";
@@ -924,6 +924,8 @@ function populations(entries: readonly SetEntry[], kelvin: number): Outcome3D {
   if (!(kelvin > 0 && Number.isFinite(kelvin))) return { ok: false, said: "The temperature must be above 0 K" };
   const basis = basisOf(entries, kelvin);
   if (!basis.free && !entries.every(hasEnergy)) return NO_ENERGY;
+  // (a structure of several parts, each searched alone: one part varied at a time, the rest at their lowest - no compound's)
+  if (entries.some((e) => e.partsAlone)) return { ok: false, said: PARTS_ALONE_REFUSED };
   // (a saddle point's energy weighed as a minimum's would be a population of nothing: refused, naming it)
   const saddle = notAllMinima(entries);
   if (saddle) return { ok: false, said: saddle };

@@ -690,6 +690,8 @@ export type SetEntry = {
   wholeWithoutH?: true;
   /** It is one of only a part of its compound's conformers that came from a search (`Molecule3D.partOf`): what a step makes of it is a part too. */
   partOf?: true;
+  /** It is a conformer of a structure of several parts, each searched alone (`Molecule3D.partsAlone`): never weighed as one compound's (`PARTS_ALONE_REFUSED`). */
+  partsAlone?: true;
   /**
    * What the calculation it was read from says - the program, the method
    * its energy is of - and what its molecule keeps besides (`keptOf`): the
@@ -994,6 +996,7 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
         ...(m.name ? { name: m.name } : {}),
         ...(properties && Object.keys(properties[f]).length ? { properties: properties[f] } : {}),
         ...(m.partOf ? { partOf: true as const } : {}),
+        ...(m.partsAlone ? { partsAlone: true as const } : {}),
         ...(m.calc ? { calc: f === calcFrame(m, n) ? calcOfFrame(m.calc, f, n) : calcBefore } : {}),
         ...(m.failed?.[f] ? { failed: m.failed[f]! } : {}),
         ...(m.converged?.length === n && m.converged[f] ? { converged: m.converged[f]! } : {}),
@@ -1464,3 +1467,6 @@ export function heldOwn(page: Page, set: WorkflowSet): string | undefined {
   const noun = holds === "conformers" ? "conformer" : "molecule";
   return `${entries.toLocaleString("en-US")} ${entries === 1 ? noun : `${noun}s`}`;
 }
+
+/** Why a step that weighs a set's frames as one compound's conformers - Populations, Ensemble - refuses those of a structure of several parts, each searched alone (`SetEntry.partsAlone`): one part varied at a time, the rest at their lowest, its shares would be of nothing. */
+export const PARTS_ALONE_REFUSED = "A structure of several parts, each searched alone: each part's conformers are its own, and no shares of the whole are given";
