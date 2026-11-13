@@ -46,6 +46,7 @@ import {
 import { ArrowPathIcon, ExclamationTriangleIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { chordedPress } from "./utils/press";
+import WarmShaders2D from "./components/WarmShaders2D";
 import { labelReachOf } from "./utils/labelHits";
 import { AnimatePresence, motion } from "motion/react";
 import { CANVAS_RESIZE, DURATION, EASE_SLIDE, FADE, LEAVE, RISE } from "../../theme/motion";
@@ -2872,6 +2873,8 @@ function WorkspaceContent({
           <Suspense fallback={null}>
             <Labels2D />
           </Suspense>
+          {/* the shaders a drawing is drawn with, made ready as the page starts: the first one drawn never waits a frame on them */}
+          <WarmShaders2D />
           {/* the plugin's marks: valence problems, R/S and E/Z */}
           <ChemMarks2D marks={marks} unsure={unsure} read={readUnsure} />
           {/* charges, each taken hold of on its own ink and moved by hand */}
