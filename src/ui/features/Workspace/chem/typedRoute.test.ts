@@ -34,7 +34,7 @@ function block(atoms: readonly Omit<A, "x" | "y">[], turn: number): string {
   return lines.join("\n");
 }
 
-const metalOf = (m: Model) => m.atoms.find((a) => ["Ti", "Pt", "Pd", "Au"].includes(a.el))!;
+const metalOf = (m: Model) => m.atoms.find((a) => ["Ti", "Pt", "Pd", "Au", "Zn", "Xe", "N"].includes(a.el) && m.bonds.filter((b) => b.a === a.id || b.b === a.id).length === 4)!;
 /** The directions of the metal's four bonds, in degrees from -180 up. */
 function directions(m: Model): number[] {
   const c = metalOf(m);
@@ -63,6 +63,22 @@ describe("a four-bond metal from a typed SMILES - the plugin's MOL block", () =>
     const cis = await drawingOf(block([{ el: "Pt" }, Cl, Cl, NH3, NH3], 45));
     expect(directions(cis)).toEqual(CROSS);
     expect(readMarks(cis).atoms.get(metalOf(cis).id)).toBe(ARRANGEMENT_SAID);
+    // (and the rest as from a SMILES, each given in the other form: [form, marked])
+    const OH2 = { el: "O", valence: 3 };
+    for (const [name, atoms, form, marked] of [
+      ["Pt(NH3)4 2+", [{ el: "Pt", charge: 2 }, NH3, NH3, NH3, NH3], X, false],
+      ["PtCl3(NH3)-", [{ el: "Pt", charge: -1 }, Cl, Cl, Cl, NH3], X, false],
+      ["PtCl2(NH3)(OH2)", [{ el: "Pt" }, Cl, Cl, NH3, OH2], CROSS, true],
+      ["AuCl2Br2-", [{ el: "Au", charge: -1 }, Cl, Cl, { el: "Br" }, { el: "Br" }], CROSS, true],
+      ["ZnCl2(NH3)2", [{ el: "Zn" }, Cl, Cl, NH3, NH3], CROSS, false],
+      ["cisplatin's N drawn with two H, an amido: Pt(IV)", [{ el: "Pt" }, Cl, Cl, { el: "N" }, { el: "N" }], CROSS, false],
+      ["XeF4", [{ el: "Xe" }, { el: "F" }, { el: "F" }, { el: "F" }, { el: "F" }], X, false],
+      ["tetramethylammonium", [{ el: "N", charge: 1 }, { el: "C" }, { el: "C" }, { el: "C" }, { el: "C" }], CROSS, false],
+    ] as const) {
+      const m = await drawingOf(block(atoms, form === X ? 0 : 45));
+      expect(directions(m), name).toEqual(form);
+      expect(readMarks(m).atoms.get(metalOf(m).id) === ARRANGEMENT_SAID, name).toBe(marked);
+    }
   });
 
   it("where a chemist's file has the form - the same blocks opened and cleaned up - keeps it", { timeout: 120000 }, async () => {

@@ -510,7 +510,10 @@ they hang from.
   whichever its bonds lie nearer to, for every metal (`LayoutAtom.fourForm`):
   drawn upright, it is held upright; drawn as an X, it is never turned
   upright, held to the X only where it would be anyway and otherwise left
-  as drawn. A chelate's metal (two of its donors joined other than through
+  as drawn. A drawing nobody made - the plugin's for a typed SMILES or a
+  step's structure, a molecule in 3D drawn as a formula - is laid out as
+  new: its metal by the rule above, not in whichever form its coordinates
+  happen to have (`laidOut`'s `asNew`). A chelate's metal (two of its donors joined other than through
   it) goes by its own rules.
   The fan is compact,
   and once the rest of the drawing is set it is turned about its bond,
