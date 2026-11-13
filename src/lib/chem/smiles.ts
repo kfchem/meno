@@ -54,24 +54,48 @@ const ORGANIC = ["Cl", "Br", "B", "C", "N", "O", "P", "S", "F", "I"];
 const AROMATIC = ["b", "c", "n", "o", "p", "s"];
 const BOND_ORDER: Record<string, number> = { "-": 1, "=": 2, "#": 3, $: 4, ":": 4, "/": 1, "\\": 1 };
 
-/** Whether bond `k` lies in a ring of aromatic bonds: its two atoms still joined without it, along aromatic bonds alone. */
-function inAromaticRing(bonds: readonly SmilesBond[], k: number): boolean {
-  const { a1, a2 } = bonds[k];
-  const seen = new Set([a1]);
-  const edge = [a1];
-  while (edge.length) {
-    const x = edge.pop()!;
-    for (const [j, b] of bonds.entries()) {
-      if (j === k || b.order !== 4 || (b.a1 !== x && b.a2 !== x)) continue;
-      const y = b.a1 === x ? b.a2 : b.a1;
-      if (y === a2) return true;
-      if (!seen.has(y)) {
-        seen.add(y);
-        edge.push(y);
+/**
+ * The aromatic bonds (order 4) that lie in no ring of aromatic bonds - each a
+ * bridge of the graph of aromatic bonds alone - found in one walk over it,
+ * as long as the molecule is large (Tarjan's bridges: a bond is one where no
+ * path back reaches above it).
+ */
+function aromaticBridges(atoms: number, bonds: readonly SmilesBond[]): Set<number> {
+  const near: { to: number; bond: number }[][] = Array.from({ length: atoms }, () => []);
+  bonds.forEach((b, k) => {
+    if (b.order !== 4) return;
+    near[b.a1].push({ to: b.a2, bond: k });
+    near[b.a2].push({ to: b.a1, bond: k });
+  });
+  const order = new Array<number>(atoms).fill(-1);
+  const low = new Array<number>(atoms).fill(0);
+  const bridges = new Set<number>();
+  let count = 0;
+  for (let root = 0; root < atoms; root++) {
+    if (order[root] >= 0 || !near[root].length) continue;
+    // (each step: an atom, the bond it was reached by, and how far through its neighbours the walk is)
+    const stack: { at: number; via: number; next: number }[] = [{ at: root, via: -1, next: 0 }];
+    order[root] = low[root] = count++;
+    while (stack.length) {
+      const top = stack[stack.length - 1];
+      if (top.next < near[top.at].length) {
+        const { to, bond } = near[top.at][top.next++];
+        if (bond === top.via) continue;
+        if (order[to] >= 0) low[top.at] = Math.min(low[top.at], order[to]);
+        else {
+          order[to] = low[to] = count++;
+          stack.push({ at: to, via: bond, next: 0 });
+        }
+        continue;
       }
+      stack.pop();
+      const up = stack[stack.length - 1];
+      if (!up) continue;
+      low[up.at] = Math.min(low[up.at], low[top.at]);
+      if (low[top.at] > order[up.at]) bridges.add(top.via);
     }
   }
-  return false;
+  return bridges;
 }
 
 /** A SMILES string's atoms and bonds; throws on what it cannot read. */
@@ -200,8 +224,8 @@ export function readSmiles(text: string): Smiles {
   // in a ring through the metal - is single, and each ring is its own system
   // (read as aromatic, the two were one system of twelve atoms, and two of
   // its N were read with an H nobody wrote)
-  const single = [...unwritten].filter((k) => !inAromaticRing(bonds, k));
-  for (const k of single) bonds[k] = { ...bonds[k], order: 1 };
+  const bridges = unwritten.size ? aromaticBridges(atoms.length, bonds) : new Set<number>();
+  for (const k of unwritten) if (bridges.has(k)) bonds[k] = { ...bonds[k], order: 1 };
   const keepsPyramid = chiral.size
     ? lonePairCentres(
         atoms.map((a) => ({ el: a.el, charge: a.charge, hs: a.hs ?? 0 })),

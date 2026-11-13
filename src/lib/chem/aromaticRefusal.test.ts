@@ -124,6 +124,30 @@ describe("a biaryl written with no bond symbol between its rings", () => {
     expect(smilesInput("c1ccc(nc1)c1ccccn1")).toEqual(smilesInput("c1ccc(nc1)-c1ccccn1"));
   });
 
+  it("keeps a bond written with its symbol between two rings as written - aromatic \":\" or double \"=\" - chain or ring closure", () => {
+    const between = (smiles: string, a1: number, a2: number) => readSmiles(smiles).bonds.find((b) => (b.a1 === a1 && b.a2 === a2) || (b.a1 === a2 && b.a2 === a1))?.order;
+    // (a chain bond written ":" between two benzene rings: aromatic, as written)
+    expect(between("c1ccccc1:c1ccccc1", 5, 6)).toBe(4);
+    // (written with no symbol: single)
+    expect(between("c1ccccc1c1ccccc1", 5, 6)).toBe(1);
+    // (a ring-closure bond between the two, its ":" on the opening digit, or before the closing one: aromatic, as written)
+    expect(between("c1ccc(cc1):2.c23ccccc3", 3, 6)).toBe(4);
+    expect(between("c1ccc(cc1)2.c:23ccccc3", 3, 6)).toBe(4);
+    // (and with no symbol on either: single)
+    expect(between("c1ccc(cc1)2.c23ccccc3", 3, 6)).toBe(1);
+    // ("=" between two rings: as written)
+    expect(between("c1ccc2c(c1)C=C2", 6, 7)).toBe(2);
+  });
+
+  it("reads a long chain of rings joined so in time that grows with its length, not faster", () => {
+    // (poly(p-phenylene), 60 rings - 360 atoms, two such chains in one text: each ring its own)
+    const chain = "c1ccc(cc1)" + "c1ccc(cc1)".repeat(58) + "c1ccccc1";
+    const t = performance.now();
+    const r = readSmiles(`${chain}.${chain}`);
+    expect(performance.now() - t).toBeLessThan(200);
+    expect(r.bonds.filter((b) => b.order === 1)).toHaveLength(2 * 59);
+  });
+
   it("keeps each ring its own where the bond between them closes a ring that is not aromatic - fluorene's, through its CH2", () => {
     // (fluorene, C13H10: the bond joining its benzene rings is a ring closure in its five-ring, which has a CH2 - not a ring
     //  of aromatic bonds: single, each benzene its own; carbazole's five-ring, its NH aromatic, one system of thirteen)
