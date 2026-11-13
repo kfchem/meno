@@ -682,7 +682,9 @@ export function wedgesForFlat(atoms: readonly DrawnAtom[], bonds: readonly Drawn
  * H drawn in the widest gap round it, `k` out, and wedged instead, the way
  * that says its configuration; where that reads no surer, or the centre
  * has no H of its own, as placed. Read as a reader of wedges alone reads
- * them, or with the drawing's depth (`depth`), as Meno reads the page.
+ * them: the drawing's depth, where it has one, is not read - it says no
+ * centre without the wedges' own drawing in space, which the page's atoms
+ * carry and these do not.
  */
 export function hydrogensWhereUnread(
   atoms: readonly DrawnAtom[],
@@ -690,7 +692,6 @@ export function hydrogensWhereUnread(
   shown: ReadonlyMap<number, Tetrahedral>,
   placed: Stereo,
   k: number,
-  depth = false,
 ): Stereo {
   const wedges = [...placed.wedges];
   const hydrogens = [...placed.hydrogens];
@@ -698,7 +699,7 @@ export function hydrogensWhereUnread(
   // projection can leave them, epibatidine's - its H drawn in the widest gap round it and wedged instead, the way that says its
   // configuration; where that reads no surer, as placed)
   const flatOf = (ws: Wedge[], hs: { on: number; at: Point }[]) => {
-    const fa: DrawnAtom[] = atoms.map(({ x, y, z, el, charge, hs: h }, i) => ({ x, y, el, ...(depth && z != null ? { z } : {}), ...(charge ? { charge } : {}), hs: h - hs.filter((q) => q.on === i).length }));
+    const fa: DrawnAtom[] = atoms.map(({ x, y, el, charge, hs: h }, i) => ({ x, y, el, ...(charge ? { charge } : {}), hs: h - hs.filter((q) => q.on === i).length }));
     const fb: DrawnBond[] = bonds.map(({ a, b, order, wedge, either }) => ({ a, b, order, ...(wedge ? { wedge } : {}), ...(either ? { either } : {}) }));
     hs.forEach((q) => {
       fa.push({ x: q.at.x, y: q.at.y, el: "H", hs: 0 });

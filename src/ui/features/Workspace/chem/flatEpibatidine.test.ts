@@ -7,9 +7,8 @@ import { laidOut } from "./cleanUp";
 import { MENO } from "../../../../lib/chem/style";
 import heldOut from "../../../../../scripts/layout/heldout.json";
 
-// A cage drawn in perspective is written for flat readers (a MOL file, RDKit) with a wedge at each centre; where its projection
-// leaves two of a centre's bonds in one line - epibatidine's C2, its pyridyl straight on from a bridgehead - a wedge there says
-// nothing surely, and Meno's own reader left it open: its H is drawn in the widest gap and wedged instead.
+// A cage drawn in perspective is written for flat readers (a MOL file, RDKit) with a wedge at each centre; where a wedge would not say
+// its centre to Meno's own reader, its H is drawn in the widest gap and wedged instead.
 
 /** Each centre's configuration as `model` is read, by atom id; an H drawn as an atom counted as the centre's own (-1). */
 function configurations(model: Model) {
@@ -51,23 +50,17 @@ describe("a cage written for flat readers", () => {
     });
   }
 
-  it("draws the H it wedges instead in the widest gap round the centre: epibatidine's C2, aconitine's C8", { timeout: 120000 }, () => {
-    // (the eighth atom written, in each: the centre whose own wedge said nothing)
+  it("leaves a centre's wedge on its bond where Meno's reader reads it so - in line with a ring bond, its only wedge - and adds no H: epibatidine's C2, aconitine's C8", { timeout: 120000 }, () => {
+    // (the eighth atom written, in each: the centre whose wedge stands in line with another of its bonds - read since Brecher 2006
+    // ST-1.2.4's form is read)
     for (const smiles of ["Clc1ccc(cn1)[C@H]1C[C@@H]2CC[C@H]1N2", aconitine]) {
       const drawn = drawnFromSmiles(smiles);
       const centre = drawn.atoms[7].id;
       const flat = forFlatReaders(drawn) as unknown as Model;
       const at = new Map(flat.atoms.map((a) => [a.id, a]));
-      const c = at.get(centre)!;
       const round = flat.bonds.filter((b) => b.a === centre || b.b === centre).map((b) => at.get(b.a === centre ? b.b : b.a)!);
-      const h = round.find((n) => n.el === "H" && !drawn.atoms.some((a) => a.id === n.id));
-      expect(h, smiles).toBeDefined();
-      const angle = (n: { x: number; y: number }) => Math.atan2(n.y - c.y, n.x - c.x);
-      const others = round.filter((n) => n !== h).map(angle).sort((p, q) => p - q);
-      const widest = Math.max(...others.map((v, i) => (i + 1 < others.length ? others[i + 1] : others[0] + 2 * Math.PI) - v));
-      const off = (p: number, q: number) => Math.abs((((p - q) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI);
-      const nearest = Math.min(...others.map((v) => off(angle(h!), v)));
-      expect(nearest).toBeCloseTo(widest / 2, 6);
+      expect(round.some((n) => n.el === "H" && !drawn.atoms.some((a) => a.id === n.id)), smiles).toBe(false);
+      expect(configurations(flatOf(drawn)).get(centre), smiles).toBeDefined();
     }
   });
 
