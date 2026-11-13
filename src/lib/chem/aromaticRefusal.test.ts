@@ -30,6 +30,41 @@ describe("an aromatic SMILES that cannot be given single and double bonds as wri
     for (const smiles of ["c1ccccc1", "c1ccncc1", "c1cc[nH]c1", "c1cc[cH-]c1", "c1ccoc1", "c1ccsc1", "c1cnc[nH]1", "c1ccc2ccccc2c1", "C[n+]1ccccc1", "c1cc[o+]cc1", "O=c1cc[nH]cc1", "c1ccc2[nH]ccc2c1"]) expect(refused(smiles), smiles).toBeNull();
   });
 
+  it("reads an azolide as written: its [n-] lends its pair and takes no double bond, as an N-H's N - every class of them", () => {
+    const anions = [
+      "c1c[n-]cn1", // imidazolide
+      "c1cnc[n-]1",
+      "c1[n-]cnc1",
+      "c1nc[n-]n1", // 1,2,4-triazolide
+      "c1ncn[n-]1",
+      "c1cn[n-]n1", // 1,2,3-triazolide
+      "c1nn[n-]n1", // tetrazolide
+      "[n-]1nnnc1",
+      "c1[n-]nnn1",
+      "[n-]1ccnc1",
+      "c1[n-]ncn1",
+      "[n-]1cnc2ccccc12", // benzimidazolide
+      "c1ccc2[n-]cnc2c1",
+      "c1ccc2c(c1)[n-]cn2",
+      "c1ccc2c(c1)[n-]nn2", // benzotriazolide
+      "c1cnc2[n-]cnc2n1", // a purine's anion
+      "[n-]1cccc1", // pyrrolide
+      "c1cn[n-]c1", // pyrazolide
+    ];
+    for (const smiles of anions) {
+      expect(refused(smiles), smiles).toBeNull();
+      // (its [n-] bare: no double bond on it)
+      const r = readSmiles(smiles);
+      const { orders } = kekulized(r.atoms, r.bonds);
+      const minus = r.atoms.findIndex((a) => a.el === "N" && a.charge === -1);
+      expect(r.bonds.some((b, k) => (b.a1 === minus || b.a2 === minus) && orders[k] === 2), smiles).toBe(false);
+    }
+  });
+
+  it("reads a ring of arsenic, silicon or boron as written, as nitrogen's and carbon's are - arsabenzene, a silabenzene, borabenzene", () => {
+    for (const smiles of ["c1cc[as]cc1", "c1cc[siH]cc1", "c1ccbcc1"]) expect(refused(smiles), smiles).toBeNull();
+  });
+
   it("is still read leniently from a file's aromatic bonds - the atoms left without their double bond said, the orders as before", () => {
     // (as a MOL file's bond type 4 gives c1ccnc1: the n read as an N-H, and named left)
     const r = readSmiles("c1ccnc1");

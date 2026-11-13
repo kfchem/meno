@@ -38,6 +38,9 @@ export type KekuleBond = { a1: number; a2: number; order: number };
 
 type Role = "needs" | "may" | "never";
 
+/** The ring atoms that take a double bond, or carry an H in its place, as nitrogen does: N, P, As, Sb. */
+const PNICTOGENS = new Set(["N", "P", "As", "Sb"]);
+
 /** A CTfile's query atoms that a ring of aromatic bonds may run through: A, Q, * and an atom list, L. */
 const QUERY_ATOMS = new Set(["A", "Q", "*", "L"]);
 
@@ -102,11 +105,13 @@ export function kekulized(atoms: readonly KekuleAtom[], bonds: readonly KekuleBo
     const el = canonical(atoms[i]?.el ?? "");
     const charge = atoms[i]?.charge ?? 0;
     const hs = atoms[i]?.hs;
-    // (a charged carbon, a tropylium's or a cyclopentadienide's: as the ring needs)
-    if (el === "C") return charge ? "may" : "needs";
-    if (el === "N" || el === "P") {
-      // a pyrrole-type N-H that says so takes none
+    // (a charged carbon, a tropylium's or a cyclopentadienide's: as the ring needs - and a silabenzene's Si, a germabenzene's
+    //  Ge, as carbon)
+    if (el === "C" || el === "Si" || el === "Ge") return charge ? "may" : "needs";
+    if (PNICTOGENS.has(el)) {
+      // a pyrrole-type N-H that says so takes none; nor an azolide's [n-], which lends its pair as that N-H's N does
       if (degree[i] === 2 && charge <= 0 && hs != null && hs > 0) return "never";
+      if (degree[i] === 2 && charge < 0) return "never";
       // two connections: pyridine-like, or a pyrrole-type N-H whose H the
       // file leaves implicit; the ring decides which. Three, as a cation: a
       // pyridinium's
@@ -114,6 +119,8 @@ export function kekulized(atoms: readonly KekuleAtom[], bonds: readonly KekuleBo
     }
     // a pyrylium's or a thiopyrylium's
     if ((el === "O" || el === "S") && degree[i] === 2 && charge > 0) return "may";
+    // (a borabenzene's B, of two ring bonds: as the ring needs, as a pyridine's N)
+    if (el === "B" && degree[i] === 2 && !charge) return "may";
     // a query atom - any atom (A, *), any but C (Q), one of a list (L) -
     // in a ring of aromatic bonds: as the ring needs, as a pyridine's N
     if (QUERY_ATOMS.has(atoms[i]?.el ?? "")) return "may";
@@ -322,7 +329,7 @@ export function kekulized(atoms: readonly KekuleAtom[], bonds: readonly KekuleBo
   }
   // (a neutral N or P of two bonds whose H the input did not state, left without its double bond, carries one;
   // where others of its ring system could have carried it, which does is a choice made here)
-  const carriers = willing.filter((i) => ["N", "P"].includes(canonical(atoms[i]?.el ?? "")) && degree[i] === 2 && (atoms[i]?.charge ?? 0) === 0 && atoms[i]?.hs == null);
+  const carriers = willing.filter((i) => PNICTOGENS.has(canonical(atoms[i]?.el ?? "")) && degree[i] === 2 && (atoms[i]?.charge ?? 0) === 0 && atoms[i]?.hs == null);
   const hChosen: number[] = [];
   // (each left without its double bond, with an H nobody wrote: a carbon that needs one; an N or P whose H was not stated)
   const left: number[] = [...needy.filter((a) => matched[a] < 0), ...carriers.filter((i) => matched[i] < 0)];
