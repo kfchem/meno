@@ -27,7 +27,7 @@ export const CONCEPTS: Record<string, RegExp> = {
   valence: /^(?:export )?(?:function|const) (VALENCE|VALENCES|HIGHER|OUTER|HIGHEST|PYRAMID_VALENCE|VALENCE_ELECTRONS|D_ORBITAL_VALENCE|NORMAL_VALENCES|BONDS_LEFT|CARRIERS)\b/,
   parity: /^(?:export )?(?:function|const) (parity|permutationParity)\b/,
   volume: /^(?:export )?(?:function|const) (drawnVolume|volumeSign|handedness|signedVolume)\b/,
-  "stereo types": /^(?:export )?type (Tetrahedral|CisTrans|Axial|ConfiguredCentre|ConfiguredDouble|NumberingCentre|RingDouble|StereoElement|Configuration)\b/,
+  "stereo types": /^(?:export )?type (Tetrahedral|CisTrans|Axial|Cumulated|ConfiguredCentre|ConfiguredDouble|NumberingCentre|RingDouble|StereoElement|Configuration)\b/,
 };
 
 /**
@@ -39,8 +39,8 @@ export const STILL_APART: Copy[] = [
   { concept: "rings", file: "lib/layout/rings.ts", name: "smallestRings", part: 2 },
   { concept: "rings", file: "lib/layout/rings.ts", name: "ringParts", part: 2 },
   { concept: "rings", file: "lib/layout/rings.ts", name: "ringsAlike", part: 2 },
-  { concept: "rings", file: "lib/layout/drawn.ts", name: "inSmallRing", part: 2 },
-  { concept: "rings", file: "lib/layout/drawn.ts", name: "ringThrough", part: 2 },
+  { concept: "rings", file: "lib/chem/perception/stereo/from2d.ts", name: "inSmallRing", part: 2 },
+  { concept: "rings", file: "lib/chem/perception/stereo/from2d.ts", name: "ringThrough", part: 2 },
   { concept: "rings", file: "lib/chem/cip/in3d.ts", name: "ringThrough", part: 2 },
   { concept: "rings", file: "lib/chem/conformersSought.ts", name: "ringBonds", part: 2 },
   { concept: "rings", file: "lib/chem/ordersFromGeometry.ts", name: "smallRings", part: 2 },
@@ -81,7 +81,6 @@ export const STILL_APART: Copy[] = [
   { concept: "parity", file: "lib/layout/ranks.ts", name: "parity", part: 4 },
   { concept: "parity", file: "lib/chem/cip/rank.ts", name: "parity", part: 4 },
   { concept: "parity", file: "ui/features/Workspace/workflow/stereoKept.ts", name: "parity", part: 4 },
-  { concept: "volume", file: "lib/layout/geometry.ts", name: "drawnVolume", part: 4 },
   { concept: "volume", file: "lib/chem/referenceNumbering.ts", name: "volumeSign", part: 4 },
   { concept: "volume", file: "lib/layout/cage.ts", name: "handedness", part: 4 },
   { concept: "volume", file: "lib/steps/compareBonding.ts", name: "handedness", part: 4 },
@@ -97,6 +96,7 @@ export const STILL_APART: Copy[] = [
   // the layout's names for what the core now defines: re-exports, staged, each going as its consumers move
   { concept: "stereo types", file: "lib/layout/stereo.ts", name: "Tetrahedral", part: 14, why: "re-exported from the core: no consumer's import line changes in the PR that made the core" },
   { concept: "stereo types", file: "lib/layout/stereo.ts", name: "Axial", part: 14, why: "re-exported from the core, as Tetrahedral" },
+  { concept: "stereo types", file: "lib/layout/stereo.ts", name: "Cumulated", part: 14, why: "re-exported from the core, as Tetrahedral (part 14 A)" },
   { concept: "stereo types", file: "lib/layout/perceive.ts", name: "CisTrans", part: 14, why: "re-exported from the core, as Tetrahedral" },
 ];
 

@@ -1,7 +1,7 @@
 /**
  * The stereochemistry a drawing shows, read back out of it: each
  * stereocentre's configuration and the side each double bond's groups are
- * on, in the form the layout engine takes them (perceive.ts).
+ * on, in the form the layout engine takes them (lib/layout/perceive).
  *
  * - A centre drawn flat shows its configuration by its wedges: a neighbour
  *   on a wedge stands out of the page, one on hashes behind it (as
@@ -24,14 +24,29 @@
  *   other neighbours (a biaryl's) - shows how it turns by a wedge out of an
  *   end, narrow there: that neighbour out of the page (or behind it, on
  *   hashes), the other end's neighbours in it.
+ *
+ * The rules it follows (IUPAC 2006, Brecher, Pure Appl. Chem. 78, 1897):
+ * - ST-0.3: a wedge is narrow at its stereocentre, and is read there only
+ *   (`lift`); a bond's bold or hashed look with no wedge states no centre.
+ * - ST-0.1, ST-1.2.12: two plain bonds in line with one wedge are a T, not a
+ *   tetrahedral centre: "in line" within `IN_LINE`; such a centre is unread
+ *   and `unreadWhy` says why.
+ * - ST-0.4, ST-4.4: a wavy bond, a double bond's "either": that centre or
+ *   bond is open.
+ * - ST-3.1 to ST-3.3: depth and crossings (`volumeInSpace`; a cage's solid
+ *   fitted to the drawing is the layout's, handed in as `fit`).
+ * - ST-1.1.9 to 1.1.11, four-bond depictions the text calls ambiguous: read
+ *   as drawn, as before this file moved here (a change of its own).
+ *
+ * The core's (lib/chem/perception): it imports nothing of the layout's. The
+ * layout's `lib/layout/drawn` reads through it with its cage fit handed in.
  */
-import { lonePairCentres, pyramidal } from "../chem/lonePairCentres";
-import { freeCorners, solidOf } from "./cage";
-import { key, perceive, type CisTrans, type LayoutInput } from "./perceive";
-import { symmetryOrbits } from "./canonical";
-import { huckelBonds } from "../chem/huckel";
-import { movingCN } from "../chem/stereoOpen";
-import { drawnAxisSense, drawnVolume, placeStereo, type Axial, type Cumulated, type Stereo, type Tetrahedral } from "./stereo";
+import { lonePairCentres, pyramidal } from "../../lonePairCentres";
+import { drawnAxisSense, drawnVolume, freeCorners } from "./senses";
+import type { Axial, CisTrans, Cumulated, Tetrahedral } from "./types";
+
+/** A pair of atoms as one key, the lower first. */
+const key = (a: number, b: number): string => (a < b ? `${a},${b}` : `${b},${a}`);
 
 export type DrawnAtom = {
   x: number;
@@ -71,7 +86,9 @@ export type DrawnStereo = {
   cumulated: Cumulated[];
 };
 
-type V3 = [number, number, number];
+/** A point or a direction in three dimensions. */
+export type Vec3 = [number, number, number];
+type V3 = Vec3;
 const sub3 = (p: V3, q: V3): V3 => [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
 const dot3 = (p: V3, q: V3) => p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
 const cross3 = (p: V3, q: V3): V3 => [
@@ -260,10 +277,12 @@ export function straightEnds(atoms: readonly DrawnAtom[], bonds: readonly DrawnB
   return out;
 }
 
-export function readStereo(
-  atoms: readonly DrawnAtom[],
-  bonds: readonly DrawnBond[],
-): DrawnStereo {
+/**
+ * The stereochemistry a drawing shows (this file's header). A drawing with depth is read by its bonds with depth; `fit`, where given, says
+ * for each atom of a cage the solid it is drawn from, fitted to the drawing (the layout's `cageFits`): asked once, and again with the
+ * centres the first reading fixed held.
+ */
+export function readStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], fit: CageFitter = () => new Map()): DrawnStereo {
   const neighbours: number[][] = atoms.map(() => []);
   const bondOf = new Map<string, DrawnBond>();
   bonds.forEach((b) => {
@@ -318,7 +337,7 @@ export function readStereo(
   // read again from it: a solid with no configuration at all can be
   // another isomer's, its free corners elsewhere - tetrodotoxin's C4, its
   // two corners drawn on one side, read by a hair)
-  const first = cageFits(atoms, bonds);
+  const first = fit(atoms, bonds);
   let tetra = centres(first);
   const fixed = new Map(
     [...tetra].filter(([c]) => {
@@ -327,7 +346,7 @@ export function readStereo(
     }),
   );
   if (fixed.size) {
-    const second = cageFits(atoms, bonds, fixed);
+    const second = fit(atoms, bonds, fixed);
     const nearer = new Map([...first].map(([a, f]) => [a, (second.get(a)?.miss ?? Infinity) < f.miss ? second.get(a)! : f]));
     if ([...nearer].some(([a, f]) => f !== first.get(a))) tetra = centres(nearer);
   }
@@ -573,54 +592,23 @@ export function unsureStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnB
 
 /**
  * A cage drawn in perspective, as the solid it is drawn from: the solid
- * the engine takes it to be (cage.ts), and the map that takes that solid to
+ * the engine takes it to be (lib/layout/cage), and the map that takes that solid to
  * where its atoms are drawn, their depth as the third coordinate - fitted,
  * as the engine may draw a cage the way textbooks do rather than exactly
  * as it is seen.
  */
-type CageFit = {
-  solid: Map<number, V3>;
-  map: (v: V3) => V3;
+export type CageFit = {
+  solid: Map<number, Vec3>;
+  map: (v: Vec3) => Vec3;
   /** How far the drawing is from the solid so mapped: the mean square of its atoms' misses, depth among them. */
   miss: number;
 };
 
-function cageFits(
-  atoms: readonly DrawnAtom[],
-  bonds: readonly DrawnBond[],
-  /** Centres the solid holds as they are read (`readStereo`). */
-  held: ReadonlyMap<number, Tetrahedral> = new Map(),
-): Map<number, CageFit> {
-  const out = new Map<number, CageFit>();
-  if (!atoms.some((a) => a.z != null)) return out;
-  const mol = perceive({
-    atoms: atoms.map((a, i) => ({ el: "C", hs: a.hs, ...(held.has(i) ? { tetra: held.get(i)! } : {}) })),
-    bonds: bonds.map(({ a, b, order }) => ({ a, b, order })),
-  });
-  for (const sys of mol.systems) {
-    if (sys.atoms.length < 4 || sys.atoms.some((a) => atoms[a].z == null)) continue;
-    const solid = solidOf(mol, sys);
-    const from = sys.atoms.map((a) => solid.get(a)!);
-    const to = sys.atoms.map((a): V3 => [atoms[a].x, atoms[a].y, atoms[a].z!]);
-    const map = fitLinear(from, to);
-    if (!map) continue;
-    // (the map is linear, the drawing's middle the solid's)
-    const n = from.length;
-    const mid = (ps: readonly V3[]): V3 => [0, 1, 2].map((k) => ps.reduce((s, p) => s + p[k], 0) / n) as V3;
-    const [pf, pt] = [mid(from), mid(to)];
-    const miss = from.reduce((s, p, i) => {
-      const q = sub3(to[i], pt);
-      const m = map(sub3(p, pf));
-      return s + dot3(sub3(q, m), sub3(q, m));
-    }, 0) / n;
-    const fit = { solid, map, miss };
-    for (const a of sys.atoms) out.set(a, fit);
-  }
-  return out;
-}
+/** How a cage's solid is fitted to a drawing, atom by atom (the layout's `cageFits`): the atoms, the bonds, and the centres it holds as read. */
+export type CageFitter = (atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[], held?: ReadonlyMap<number, Tetrahedral>) => Map<number, CageFit>;
 
 /** The linear part of the affine map that best takes `from` to `to`, or null where `from` is flat. */
-function fitLinear(from: readonly V3[], to: readonly V3[]): ((v: V3) => V3) | null {
+export function fitLinear(from: readonly V3[], to: readonly V3[]): ((v: V3) => V3) | null {
   const n = from.length;
   const mean = (ps: readonly V3[]): V3 => [0, 1, 2].map((k) => ps.reduce((s, p) => s + p[k], 0) / n) as V3;
   const pf = mean(from);
@@ -746,33 +734,6 @@ function volumeInSpace(
 }
 
 /**
- * What a drawing that shows some of its stereochemistry in perspective
- * needs to say it to a reader that knows only wedges - a MOL file, RDKit,
- * another program: a wedge on a bond out of each centre the perspective
- * shows (and an H, where the centre has no other bond to put it on, drawn
- * where the engine would), read as flat. A centre with a wedge of its own
- * says it already. The drawing is left as it is.
- */
-export function wedgesForFlat(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): Stereo {
-  const { tetra } = readStereo(atoms, bonds);
-  const wedged = new Set(bonds.flatMap((b) => (b.wedge ? [b.wedge.narrow] : [])));
-  const shown = new Map([...tetra].filter(([c]) => atoms[c].z != null && !wedged.has(c)));
-  if (!shown.size) return { wedges: [], hydrogens: [] };
-  const mol = perceive({
-    atoms: atoms.map((a) => ({ el: a.el ?? "C", hs: a.hs })),
-    bonds: bonds.map(({ a, b, order }) => ({ a, b, order })),
-  });
-  // (placed as the engine places them, at its bond length of 1)
-  const lengths = bonds.map(({ a, b }) => Math.hypot(atoms[a].x - atoms[b].x, atoms[a].y - atoms[b].y)).sort((p, q) => p - q);
-  const k = lengths[lengths.length >> 1] || 1;
-  const pos = new Map(atoms.map((a, i) => [i, { x: a.x / k, y: a.y / k }]));
-  // (on a bond no other centre's wedge is on: two on one bond, one is lost)
-  const taken = new Set(bonds.flatMap((b) => (b.wedge ? [key(b.a, b.b)] : [])));
-  const { wedges, hydrogens } = placeStereo(mol, pos, shown, taken);
-  return { wedges, hydrogens: hydrogens.map(({ on, at }) => ({ on, at: { x: at.x * k, y: at.y * k } })) };
-}
-
-/**
  * Whether two readings of a centre say the same: the same neighbours, in
  * orders an even number of swaps apart with the same volume, or an odd
  * number with the opposite one. Neighbours are matched through `as` where
@@ -800,70 +761,8 @@ export function sameConfiguration(
   return (swaps % 2 === 0) === (p.volume === q.volume);
 }
 
-/**
- * The double bonds of a structure that arrives with no drawing - a SMILES's, a name's, a file's with no places - that could have a cis or
- * trans and are given none, and how each is to be drawn so that it states none (Brecher 2006, ST-4.4; ST-6.2): where each end has one group,
- * each end kept STRAIGHT on from the bond (`straight`, by atom: the layout's `linear`); where an end has two, or the bond is in a ring (of
- * eight atoms or more: a ring atom cannot be kept straight on), a wavy bond on a group (`either`, by bond: the bond's "either", drawn as a
- * wavy bond on a single group, a ring's bond beside it - `layout2d` `unspecifiedDoubles`). Never bent as if stated. Which double bonds could
- * have one is the reader's own test (`readStereo`): a group on each end, not in a ring of seven atoms or fewer, not cumulated, not a bond of
- * a Hückel ring (an aromatic macrocycle's: `huckelBonds`), not a C=N whose E/Z is none of its own (`movingCN`: an amidine's) - and not an
- * end with two groups that are alike (`symmetryOrbits`), which has none either way. One given a configuration (`LayoutBond.stereo`) is left
- * as it is.
- */
-export function openDoubleBonds(input: LayoutInput): { straight: number[]; either: number[] } {
-  const n = input.atoms.length;
-  const neighbours: number[][] = Array.from({ length: n }, () => []);
-  const order = new Map<string, number>();
-  for (const b of input.bonds) {
-    if (b.a === b.b || order.has(key(b.a, b.b))) continue;
-    neighbours[b.a].push(b.b);
-    neighbours[b.b].push(b.a);
-    order.set(key(b.a, b.b), b.order);
-  }
-  const cumulated = (end: number, other: number) => neighbours[end].some((m) => m !== other && (order.get(key(end, m)) ?? 0) >= 2);
-  let orbits: number[] | null = null;
-  let huckel: Set<string> | null = null;
-  let moving: Map<number, unknown> | null = null;
-  const alike = (p: number, q: number) => (orbits ??= symmetryOrbits(input).orbit)[p] === orbits[q];
-  const straight = new Set<number>();
-  const either: number[] = [];
-  input.bonds.forEach((b, i) => {
-    if (b.order !== 2 || b.stereo) return;
-    const groups = (end: number, other: number) => neighbours[end].filter((m) => m !== other);
-    const [ga, gb] = [groups(b.a, b.b), groups(b.b, b.a)];
-    if (!ga.length || !gb.length || ga.length > 2 || gb.length > 2) return;
-    if (inSmallRing(neighbours, b.a, b.b) || cumulated(b.a, b.b) || cumulated(b.b, b.a)) return;
-    // (a bond of a Hückel ring - an aromatic macrocycle's, a porphyrin's - has no cis or trans: its Kekulé form is only one way of writing it)
-    if ((huckel ??= huckelBonds(n, input.bonds)).has(key(b.a, b.b))) return;
-    if ((moving ??= movingCN(input.atoms, input.bonds)).has(i)) return;
-    if ((ga.length === 2 && alike(ga[0], ga[1])) || (gb.length === 2 && alike(gb[0], gb[1]))) return;
-    if (ga.length === 1 && gb.length === 1 && !inRing(neighbours, b.a, b.b)) {
-      straight.add(b.a);
-      straight.add(b.b);
-    } else either.push(i);
-  });
-  return { straight: [...straight], either };
-}
-
-/** Whether the bond i-j is in a ring: j reached from i some other way. */
-function inRing(neighbours: readonly number[][], i: number, j: number): boolean {
-  const seen = new Set([i]);
-  const queue = neighbours[i].filter((n) => n !== j);
-  queue.forEach((n) => seen.add(n));
-  for (let h = 0; h < queue.length; h++) {
-    if (queue[h] === j) return true;
-    for (const m of neighbours[queue[h]]) {
-      if (seen.has(m)) continue;
-      seen.add(m);
-      queue.push(m);
-    }
-  }
-  return false;
-}
-
 /** Whether the bond i-j is in a ring of seven atoms or fewer: j reached from i some other way within six bonds. */
-function inSmallRing(neighbours: readonly number[][], i: number, j: number): boolean {
+export function inSmallRing(neighbours: readonly number[][], i: number, j: number): boolean {
   let level = neighbours[i].filter((n) => n !== j);
   const seen = new Set([i, ...level]);
   for (let step = 1; step < 6 && level.length; step++) {
