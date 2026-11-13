@@ -86,4 +86,15 @@ describe("a chair fused on a bond of a chair", () => {
       for (const b of m.bonds.filter((x) => x.id >= 600)) expect(Math.hypot(at.get(b.a)!.x - at.get(b.b)!.x, at.get(b.a)!.y - at.get(b.b)!.y)).toBeCloseTo(ringBond, 6);
     }
   });
+
+  it("leaves a fused pair - any of the eighteen - neither flipped nor fused again by the tool: it is no one chair of the tool's", async () => {
+    const { flipOf } = await import("./flip");
+    for (let bond = 100; bond < 106; bond++) {
+      for (const how of ["trans", { cis: 1 }, { cis: -1 }] as FuseHow[]) {
+        const m = fuse(bare, bond, how);
+        expect(flipOf(m, everything(m)), `${bond} ${JSON.stringify(how)}`).toBeNull();
+        expect(fusableBonds(m, everything(m)), `${bond} ${JSON.stringify(how)}`).toEqual([]);
+      }
+    }
+  });
 });

@@ -7,7 +7,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { chair, flipped, fused } from "../../../../lib/chem/perception/projection/solids";
 import { drawn } from "../../../../lib/chem/perception/projection/views";
 import type { Atom, Bond, Model } from "../store/types";
-import { chairOf, chairsIn, seenPlaces, chairDrawing } from "./chair";
+import { chairOf, chairsIn, ringAlone, seenPlaces, chairDrawing } from "./chair";
 
 /** How the new ring is fused: trans, or cis on the upper (1) or lower (-1) face of the first ring. */
 export type FuseHow = "trans" | { cis: 1 | -1 };
@@ -28,7 +28,8 @@ export const FUSE_WAYS: { how: FuseHow; name: string }[] = [
 /** The ring bonds of a structure's one chair: where a chair can be fused. None where it holds none or more than one (a fused system is not fused again by the tool yet). */
 export function fusableBonds(model: Model, ids: ReadonlySet<number>): number[] {
   const rings = chairsIn(model, ids);
-  if (rings.length !== 1) return [];
+  // (a chair that stands alone: one fused already is not fused again by the tool)
+  if (rings.length !== 1 || !ringAlone(model, rings[0])) return [];
   const ring = rings[0];
   return model.bonds.filter((b) => ring.includes(b.a) && ring.includes(b.b)).map((b) => b.id);
 }
