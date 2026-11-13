@@ -435,7 +435,8 @@ export function torsionsSet(entries: readonly SetEntry[], references: readonly S
     const made = "typed" in r ? torsionRowsTyped(es[i], r.typed, r.target, r.hold) : torsionRowsFromReference(es[i], rs[m.index], r.from, r.hold);
     if ("failed" in made) return refuse(made.failed);
     if ("notHeld" in made && made.notHeld) notHeld++;
-    if (!made.rows.length) {
+    // (none to hold - not one with something found that cannot be held here: that one is no "nothing to hold", and is refused)
+    else if (!made.rows.length) {
       none++;
       nothing.push({ for: id, on: r.on, numbering: numberingOf(e), why: NONE_FOUND });
     }
