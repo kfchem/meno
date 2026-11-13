@@ -1741,13 +1741,17 @@ lipids each have their own way of being drawn, which it should know.
      looked up, a file with no places - is drawn so as well (ST-4.4,
      ST-6.2): a double bond that could have a cis or trans and is given
      none has each end straight on where each end has one group, and a
-     wavy bond on a group where an end has two (on the group of an end
-     that has one, never toward a stereocentre); never bent as if it were
-     stated. Which double bonds could have one is, until Meno's stereo
-     units are in, the reader's own test: a group on each end, not in a
-     ring of seven atoms or fewer, not cumulated, and not an end with two
-     groups alike (`layout/drawn` `openDoubleBonds`). A double bond the
-     text gives E or Z is drawn as given.
+     wavy bond on a group where an end has two, or where the bond is in a
+     ring (of eight atoms or more: a ring's atom cannot be kept straight
+     on, and the wavy bond goes on a ring bond beside it). The wavy bond
+     goes on the group of an end that has one; never toward a
+     stereocentre, the other group of that end taking it instead. Never
+     bent as if it were stated. Which double bonds could have one is,
+     until Meno's stereo units are in, the reader's own test: a group on
+     each end, not in a ring of seven atoms or fewer, not cumulated, not a
+     C=N whose E/Z is none of its own (an amidine's), and not an end with
+     two groups alike (`layout/drawn` `openDoubleBonds`). A double bond
+     the text gives E or Z is drawn as given.
    - **Centres by a lone pair** (the maintainer, 2026-11-04 and 11-05).
      An atom of three neighbours and a lone pair is a pyramid that its
      lone pair can turn into its mirror image, through the plane of the

@@ -28,8 +28,9 @@
 import { lonePairCentres, pyramidal } from "../chem/lonePairCentres";
 import { freeCorners, solidOf } from "./cage";
 import { key, perceive, type CisTrans, type LayoutInput } from "./perceive";
-import { symmetryClasses } from "./canonical";
+import { symmetryOrbits } from "./canonical";
 import { huckelBonds } from "../chem/huckel";
+import { movingCN } from "../chem/stereoOpen";
 import { drawnAxisSense, drawnVolume, placeStereo, type Axial, type Cumulated, type Stereo, type Tetrahedral } from "./stereo";
 
 export type DrawnAtom = {
@@ -696,12 +697,13 @@ export function sameConfiguration(
 /**
  * The double bonds of a structure that arrives with no drawing - a SMILES's, a name's, a file's with no places - that could have a cis or
  * trans and are given none, and how each is to be drawn so that it states none (Brecher 2006, ST-4.4; ST-6.2): where each end has one group,
- * each end kept STRAIGHT on from the bond (`straight`, by atom: the layout's `linear`); where an end has two, a wavy bond on a group
- * (`either`, by bond: the bond's "either", drawn as a wavy bond on a single group - `layout2d` `unspecifiedDoubles`). Never bent as if stated.
- * Which double bonds could have one is the reader's own test (`readStereo`): a group on each end, not in a ring of seven atoms or fewer, not
- * cumulated, not a bond of a Hückel ring (an aromatic macrocycle's: `huckelBonds`) - and not an end with two groups that are alike
- * (`symmetryClasses`), which has none either way. One given a configuration
- * (`LayoutBond.stereo`) is left as it is.
+ * each end kept STRAIGHT on from the bond (`straight`, by atom: the layout's `linear`); where an end has two, or the bond is in a ring (of
+ * eight atoms or more: a ring atom cannot be kept straight on), a wavy bond on a group (`either`, by bond: the bond's "either", drawn as a
+ * wavy bond on a single group, a ring's bond beside it - `layout2d` `unspecifiedDoubles`). Never bent as if stated. Which double bonds could
+ * have one is the reader's own test (`readStereo`): a group on each end, not in a ring of seven atoms or fewer, not cumulated, not a bond of
+ * a Hückel ring (an aromatic macrocycle's: `huckelBonds`), not a C=N whose E/Z is none of its own (`movingCN`: an amidine's) - and not an
+ * end with two groups that are alike (`symmetryOrbits`), which has none either way. One given a configuration (`LayoutBond.stereo`) is left
+ * as it is.
  */
 export function openDoubleBonds(input: LayoutInput): { straight: number[]; either: number[] } {
   const n = input.atoms.length;
@@ -714,9 +716,10 @@ export function openDoubleBonds(input: LayoutInput): { straight: number[]; eithe
     order.set(key(b.a, b.b), b.order);
   }
   const cumulated = (end: number, other: number) => neighbours[end].some((m) => m !== other && (order.get(key(end, m)) ?? 0) >= 2);
-  let classes: number[] | null = null;
+  let orbits: number[] | null = null;
   let huckel: Set<string> | null = null;
-  const alike = (p: number, q: number) => (classes ??= symmetryClasses(input))[p] === classes[q];
+  let moving: Map<number, unknown> | null = null;
+  const alike = (p: number, q: number) => (orbits ??= symmetryOrbits(input).orbit)[p] === orbits[q];
   const straight = new Set<number>();
   const either: number[] = [];
   input.bonds.forEach((b, i) => {
@@ -727,13 +730,30 @@ export function openDoubleBonds(input: LayoutInput): { straight: number[]; eithe
     if (inSmallRing(neighbours, b.a, b.b) || cumulated(b.a, b.b) || cumulated(b.b, b.a)) return;
     // (a bond of a Hückel ring - an aromatic macrocycle's, a porphyrin's - has no cis or trans: its Kekulé form is only one way of writing it)
     if ((huckel ??= huckelBonds(n, input.bonds)).has(key(b.a, b.b))) return;
+    if ((moving ??= movingCN(input.atoms, input.bonds)).has(i)) return;
     if ((ga.length === 2 && alike(ga[0], ga[1])) || (gb.length === 2 && alike(gb[0], gb[1]))) return;
-    if (ga.length === 1 && gb.length === 1) {
+    if (ga.length === 1 && gb.length === 1 && !inRing(neighbours, b.a, b.b)) {
       straight.add(b.a);
       straight.add(b.b);
     } else either.push(i);
   });
   return { straight: [...straight], either };
+}
+
+/** Whether the bond i-j is in a ring: j reached from i some other way. */
+function inRing(neighbours: readonly number[][], i: number, j: number): boolean {
+  const seen = new Set([i]);
+  const queue = neighbours[i].filter((n) => n !== j);
+  queue.forEach((n) => seen.add(n));
+  for (let h = 0; h < queue.length; h++) {
+    if (queue[h] === j) return true;
+    for (const m of neighbours[queue[h]]) {
+      if (seen.has(m)) continue;
+      seen.add(m);
+      queue.push(m);
+    }
+  }
+  return false;
 }
 
 /** Whether the bond i-j is in a ring of seven atoms or fewer: j reached from i some other way within six bonds. */

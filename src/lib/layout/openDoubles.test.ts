@@ -78,3 +78,57 @@ describe("the wavy bond of a double bond left open with an end of two groups", (
     expect([wavy[0].a1, wavy[0].a2].sort()).toEqual([0, 1]);
   });
 });
+
+describe("a double bond in a ring of eight atoms or more, and the end of two groups one of which is a stereocentre", () => {
+  /** The structure laid out, its open bonds marked "either", drawn as the SVG writer draws them: the wavy bonds, and what the reader takes. */
+  const drawn = (smiles: string) => {
+    const input = smilesInput(smiles);
+    const laid = layout2D(input);
+    const o = openDoubleBonds(input);
+    const atoms: Atom[] = input.atoms.map((a, i) => ({ id: i, x: laid.x[i], y: laid.y[i], el: a.el }));
+    const bonds: Bond[] = input.bonds.map((b, i) => ({ a1: b.a, a2: b.b, order: b.order as 1 | 2 | 3, ...(o.either.includes(i) ? { stereo: "either" as const } : {}) }));
+    for (const w of laid.wedges) {
+      const k = bonds.findIndex((b) => (b.a1 === w.from && b.a2 === w.to) || (b.a1 === w.to && b.a2 === w.from));
+      if (k >= 0) bonds[k] = { ...bonds[k], a1: w.from, a2: w.to, stereo: w.stereo };
+    }
+    const shown = unspecifiedDoubles(atoms, bonds);
+    const wavy = shown.flatMap((b, k) => (b.stereo === "wavy" ? [k] : []));
+    const read = readStereo(
+      input.atoms.map((a, i) => ({ el: a.el, x: laid.x[i], y: laid.y[i], hs: a.hs ?? 0 })) as never,
+      input.bonds.map((b, k) => ({ a: b.a, b: b.b, order: b.order, ...(wavy.includes(k) ? { either: true } : {}) })),
+    );
+    return { input, o, wavy, read };
+  };
+
+  it("never keeps a ring's ends straight on: cyclooctene and cyclododecene with no marks get a wavy bond on a ring bond beside the C=C, and read as none", () => {
+    for (const s of ["C1CCCCCC=C1", "C1CCCCCCCCCC=C1"]) {
+      const { input, o, wavy, read } = drawn(s);
+      expect(o.straight, s).toEqual([]);
+      expect(o.either, s).toHaveLength(1);
+      expect(input.atoms.some((a) => a.linear), s).toBe(false);
+      expect(wavy, s).toHaveLength(1);
+      const d = input.bonds[o.either[0]];
+      const w = input.bonds[wavy[0]];
+      expect(w.order, s).toBe(1);
+      expect([w.a, w.b].some((x) => x === d.a || x === d.b), s).toBe(true);
+      expect(read.cisTrans.size, s).toBe(0);
+    }
+  });
+
+  it("leaves cyclooctene's C=C, given Z, as it is", () => {
+    expect(open("C1CCCCC/C=C\\1")).toEqual({ straight: [], either: [] });
+  });
+
+  it("puts the wavy bond on the free group of an end whose other group is a stereocentre: C[C@H](O)C=C(C)[C@@H](C)O's on C4's methyl", () => {
+    const { input, wavy, read } = drawn("C[C@H](O)C=C(C)[C@@H](C)O");
+    expect(wavy).toHaveLength(1);
+    const w = input.bonds[wavy[0]];
+    // (C4 is atom 4, its methyl atom 5)
+    expect([w.a, w.b].sort((p, q) => p - q)).toEqual([4, 5]);
+    expect(read.cisTrans.size).toBe(0);
+  });
+
+  it("leaves a C=N whose E/Z is none of its own as it is: CC(N)=NC, an amidine", () => {
+    expect(open("CC(N)=NC")).toEqual({ straight: [], either: [] });
+  });
+});
