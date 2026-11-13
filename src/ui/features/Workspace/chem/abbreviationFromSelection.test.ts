@@ -90,7 +90,7 @@ describe("a selection saved as an abbreviation", () => {
     expect(abbreviationFromSelection(butatriene, new Set([4, 5]))).toEqual({ smiles: "*=CC" });
   });
 
-  it("says that the configuration its atoms' places give is not kept - a cage drawn in depth, a centre a projection shows - and nothing where none does", () => {
+  it("says that its perspective drawing, and any configuration it shows, is not kept - a cage drawn in depth, a centre such a drawing shows - and nothing where none of its atoms is so drawn", () => {
     // (2-norbornyl, drawn in perspective as Clean-up draws a cage: its atoms' depth (z) gives its configuration, with no wedge;
     //  C2 bonded out to atom 0)
     const at = (id: number, x: number, y: number, z?: number) => ({ ...atom(id, x * L, y * L), ...(z != null ? { z: z * L } : {}) });
@@ -112,15 +112,18 @@ describe("a selection saved as an abbreviation", () => {
       };
     };
     const norbornyl = new Set([1, 2, 3, 4, 5, 6, 7]);
-    expect(abbreviationFromSelection(cage(true), norbornyl)).toMatchObject({ notKept: "The configuration its atoms' places give is not kept: an abbreviation has no stereo." });
+    expect(abbreviationFromSelection(cage(true), norbornyl)).toMatchObject({ notKept: "Its perspective drawing, and any configuration it shows, is not kept: an abbreviation has no stereo." });
     // (the same drawn flat, no atom with a depth: nothing said)
     expect(abbreviationFromSelection(cage(false), norbornyl)).not.toHaveProperty("notKept");
     // (with a wedge besides: both said, in one line)
     const wedged = { ...cage(true), bonds: cage(true).bonds.map((b) => (b.id === 307 ? { ...b, stereo: "up" as const } : b)) };
-    expect(abbreviationFromSelection(wedged, norbornyl)).toMatchObject({ notKept: "Its wedges and the configuration its atoms' places give are not kept: an abbreviation has no stereo." });
+    expect(abbreviationFromSelection(wedged, norbornyl)).toMatchObject({ notKept: "Its wedges and its perspective drawing, and any configuration it shows, are not kept: an abbreviation has no stereo." });
+    // (a flat substituent on a cage in depth, the substituent selected: the cage is not the group's - nothing said)
+    const onCage: Model = { ...cage(true), atoms: [...cage(true).atoms.filter((a) => a.id !== 0), at(0, -1.6, 0.4), at(20, -2.5, 0.9)], bonds: [...cage(true).bonds, { id: 320, a: 0, b: 20, order: 1 }] };
+    expect(abbreviationFromSelection(onCage, new Set([0, 20]))).toEqual({ smiles: "*CC" });
     // (a centre a projection shows, flat - no depth: said as well)
     const projected = { ...cage(false), atoms: cage(false).atoms.map((a) => (a.id === 2 ? { ...a, stereoCentre: true } : a)) };
-    expect(abbreviationFromSelection(projected, norbornyl)).toMatchObject({ notKept: "The configuration its atoms' places give is not kept: an abbreviation has no stereo." });
+    expect(abbreviationFromSelection(projected, norbornyl)).toMatchObject({ notKept: "Its perspective drawing, and any configuration it shows, is not kept: an abbreviation has no stereo." });
     // (bornyl - 1,7,7-trimethylbicyclo[2.2.1]heptan-2-yl - drawn as a cage in depth, its centres given by the drawing: said)
     const bornyl: Model = {
       atoms: [
@@ -152,11 +155,11 @@ describe("a selection saved as an abbreviation", () => {
       ],
     };
     const made = abbreviationFromSelection(bornyl, new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]));
-    expect(made).toMatchObject({ notKept: "The configuration its atoms' places give is not kept: an abbreviation has no stereo." });
+    expect(made).toMatchObject({ notKept: "Its perspective drawing, and any configuration it shows, is not kept: an abbreviation has no stereo." });
     // (its SMILES as ever: ten carbons, no configuration)
     expect(readSmiles((made as { smiles: string }).smiles).atoms.filter((a) => a.el === "C")).toHaveLength(10);
     // (all three kinds at once)
-    expect(stereoNotKept([{ stereo: "up" }], true, true)).toBe("Its wedges, the cis or trans of its double bonds and the configuration its atoms' places give are not kept: an abbreviation has no stereo.");
+    expect(stereoNotKept([{ stereo: "up" }], true, true)).toBe("Its wedges, the cis or trans of its double bonds and its perspective drawing, and any configuration it shows, are not kept: an abbreviation has no stereo.");
   });
 
   it("says why where it cannot be one", () => {

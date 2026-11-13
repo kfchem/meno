@@ -1318,12 +1318,13 @@ All hover-based, as above.
   its one bond out, show any - a wedge or hash, a wavy bond, a double
   bond drawn crossed, or a double bond's cis or trans as it is drawn
   (read as Meno reads a drawing's stereo: a group off the bond's line at
-  each end, outside a ring of up to seven) - or its atoms' places give
-  its configuration with no wedge (a cage drawn in depth, a centre a
-  perspective drawing or projection shows), the panel says so ("Its
-  wedges are not kept: an abbreviation has no stereo."; "The
-  configuration its atoms' places give is not kept: …"), never passing
-  it over.
+  each end, outside a ring of up to seven) - or it is drawn in
+  perspective (a cage in depth, a chair, a Haworth ring: an atom in
+  depth, or a centre such a drawing shows), the panel says so ("Its
+  wedges are not kept: an abbreviation has no stereo."; "Its
+  perspective drawing, and any configuration it shows, is not kept: …"),
+  never passing it over. A cage with no configuration of its own -
+  adamantyl - is told so too: on the safe side.
 - Reaction arrows, "+" and text: create, move, edit, delete. (An arrow or
   a "+" is added from Quick Add, where it was opened: the arrow pointing right, two and two-thirds of a bond long.
   Either is moved by dragging it and deleted by Delete or Backspace under

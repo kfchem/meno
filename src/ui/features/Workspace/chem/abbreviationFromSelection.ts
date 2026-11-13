@@ -13,9 +13,8 @@ import { drawingOf } from "./drawing";
  * of the drawing, and be elements, none an abbreviation or other label.
  * Wedges are not kept: an abbreviation's structure has no stereo - and
  * where its bonds, or its bond out, show any - marked, or a double bond's
- * cis or trans by how it is drawn - or its atoms' places give its
- * configuration with no wedge (a cage drawn in depth, a centre a
- * perspective drawing or projection shows: `z`, `stereoCentre`), that is
+ * cis or trans by how it is drawn - or it is drawn in perspective (an atom
+ * in depth, or a centre such a drawing shows: `z`, `stereoCentre`), that is
  * said (`notKept`), never passed over.
  */
 export function abbreviationFromSelection(
@@ -95,10 +94,12 @@ function cisTransDrawn(model: Model, ids: ReadonlySet<number>, bonds: readonly M
  * What of the stereo its drawing shows an abbreviation does not keep, in
  * plain words: "Its wedges are not kept: an abbreviation has no stereo." -
  * its wedges and hashes, its wavy bonds, its double bonds drawn crossed;
- * the cis or trans its double bonds are drawn in (`cisTrans`); and the
- * configuration its atoms' places give with no wedge - in depth, or a
- * centre a perspective drawing or projection shows (`placed`) - or none,
- * where it shows none.
+ * the cis or trans its double bonds are drawn in (`cisTrans`); and its
+ * perspective drawing - a cage in depth, a chair, a Haworth ring - and any
+ * configuration it shows with no wedge (`placed`: an atom of the group in
+ * depth, or a centre such a drawing shows; said too of a cage with no
+ * configuration, which errs on the safe side) - or none, where it shows
+ * none.
  */
 export function stereoNotKept(bonds: readonly Pick<Model["bonds"][number], "stereo">[], cisTrans = false, placed = false): string | null {
   const has = (...kinds: string[]) => bonds.some((b) => b.stereo != null && kinds.includes(b.stereo));
@@ -107,10 +108,10 @@ export function stereoNotKept(bonds: readonly Pick<Model["bonds"][number], "ster
   const said = [
     ...(kinds.length ? [`its ${and(kinds)}`] : []),
     ...(cisTrans ? ["the cis or trans of its double bonds"] : []),
-    ...(placed ? ["the configuration its atoms' places give"] : []),
+    ...(placed ? ["its perspective drawing, and any configuration it shows,"] : []),
   ];
   if (!said.length) return null;
-  // (one of its marks is many; the cis or trans, or the configuration, alone is one)
+  // (one of its marks is many; the cis or trans, or the perspective drawing, alone is one)
   const many = said.length > 1 || kinds.length > 0;
   const text = and(said);
   return `${text[0].toUpperCase()}${text.slice(1)} ${many ? "are" : "is"} not kept: an abbreviation has no stereo.`;
