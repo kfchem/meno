@@ -1,13 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 import type * as THREE from "three";
-import { FADE_MS, levelFor, OVERSAMPLE, Pictures, QUICK, PREVIEW_PX, TILE, UNDER_MOST, type Pic, type TileAsk } from "./pdfPictures";
+import { FADE_MS, levelFor, OVERSAMPLE, Pictures, PREVIEWS_AHEAD, QUICK, PREVIEW_PX, TILE, UNDER_MOST, type Pic, type TileAsk } from "./pdfPictures";
 import { measured } from "../../../../testing/timeouts";
 
 // (the reader: a tile drawn at once - or, while `hold` is set, never)
-const reader = vi.hoisted(() => ({ hold: false }));
+const reader = vi.hoisted(() => ({ hold: false, asked: [] as { page: number; nearness: number }[] }));
 vi.mock("../../../../lib/pdf/reader", () => ({
-  drawPart: (a: { w?: number; h?: number }) =>
-    reader.hold ? new Promise(() => {}) : Promise.resolve({ bitmap: { width: a.w ?? 360, height: a.h ?? 360 }, w: a.w ?? 360, h: a.h ?? 360, ms: 1 }),
+  drawPart: (a: { page: number; w?: number; h?: number }, nearness: () => number = () => 0) => {
+    reader.asked.push({ page: a.page, nearness: nearness() });
+    return reader.hold ? new Promise(() => {}) : Promise.resolve({ bitmap: { width: a.w ?? 360, height: a.h ?? 360 }, w: a.w ?? 360, h: a.h ?? 360, ms: 1 });
+  },
 }));
 
 describe("the level a page is drawn at", () => {
@@ -207,3 +209,37 @@ describe("tiles come while the view moves", () => {
     expect(had()).toBe(3);
   });
 });
+
+describe("the small pictures of the pages either side, drawn ahead", () => {
+  const pdf = { sha256: "q", pages: Array.from({ length: 40 }, (): [number, number] => [612, 792]) };
+
+  it("asks the nearest pages' first, a couple at a time, after what is seen: a fast scroll comes to a page drawn small", async () => {
+    reader.asked.length = 0;
+    reader.hold = true;
+    const pics = new Pictures();
+    pics.previewsAround(pdf, 10);
+    // (two at once, the pages next to it; behind every tile of what is seen in the reader's queue - theirs under 1)
+    expect(reader.asked.map((a) => a.page)).toEqual([11, 9]);
+    expect(reader.asked.every((a) => a.nearness >= 1)).toBe(true);
+    // (asked again while those are on their way: nothing more)
+    pics.previewsAround(pdf, 10);
+    expect(reader.asked).toHaveLength(2);
+    reader.hold = false;
+  });
+
+  it("goes on outward as each comes, as far as PREVIEWS_AHEAD either way, and no further, never past the PDF's ends", async () => {
+    reader.asked.length = 0;
+    const pics = new Pictures();
+    for (let k = 0; k < 40; k++) {
+      pics.previewsAround(pdf, 3);
+      await Promise.resolve();
+      await Promise.resolve();
+    }
+    const pages = reader.asked.map((a) => a.page);
+    expect(new Set(pages).size).toBe(pages.length);
+    expect([...pages].sort((a, b) => a - b)).toEqual([0, 1, 2, ...Array.from({ length: PREVIEWS_AHEAD }, (_, d) => 4 + d)]);
+    // (nearer ones first)
+    expect(pages.slice(0, 4).sort((a, b) => a - b)).toEqual([1, 2, 4, 5]);
+  });
+});
+
