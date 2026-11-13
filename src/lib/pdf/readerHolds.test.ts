@@ -10,12 +10,32 @@ const invoke = vi.fn((cmd: string, args: unknown) => {
   return new Promise(() => {});
 });
 vi.mock("@tauri-apps/api/core", () => ({ invoke: (cmd: string, args: unknown) => invoke(cmd, args), isTauri: () => true }));
+// (a hold that goes wrong after all, unlooked for: marking C's PDF as had throws)
+vi.mock("../doc/notHad", async (actual) => ({
+  ...(await actual<typeof import("../doc/notHad")>()),
+  markHad: (sha256: string) => {
+    if (sha256.startsWith("c")) throw new Error("not marked");
+  },
+}));
 
 import { drawPart, holdPdfsOf } from "./reader";
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
 describe("a workspace's PDFs, held one after another as it opens", () => {
+  it("settles a draw of a PDF whose hold went wrong, rather than leaving it waiting", async () => {
+    const c = "c".repeat(64);
+    holdPdfsOf({ files: [{ sha256: c, media: "application/pdf" }], data: () => new Uint8Array([3]) });
+    const drawn = drawPart({ sha256: c, page: 0, scale: 1 }).then(
+      () => "drawn",
+      () => "refused",
+    );
+    holds.get(3)!();
+    const settled = await Promise.race([drawn, flush().then(() => "waiting")]);
+    expect(settled).toBe("refused");
+    expect(invoke.mock.calls.some(([cmd]) => cmd === "pdf_render")).toBe(false);
+  });
+
   it("draws the pictures of a PDF held as soon as it is held, not after those of a PDF still being taken in", async () => {
     // (two PDFs a workspace keeps: A, taken in slowly, and B; A's pictures asked first - more than are drawn at once - then B's)
     const [a, b] = ["a".repeat(64), "b".repeat(64)];
