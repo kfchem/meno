@@ -34,6 +34,8 @@ export type Geometry = {
   charges?: readonly number[];
   /** A four-bond metal's form as the chemist drew it, where it is kept (`LayoutAtom.fourForm`): over the form chosen. */
   fourForm?: readonly ("x" | "cross" | undefined)[];
+  /** The atoms that stand for the structure a group goes on into, no ends though bonded to nothing else (`LayoutAtom.onward`). */
+  onward?: readonly boolean[];
   /** The rings, where the caller has them already (they depend only on the bonds). */
   rings?: readonly (readonly number[])[];
   /**
@@ -624,7 +626,7 @@ const structures = new WeakMap<readonly Edge[], { from: readonly unknown[]; stru
 
 /** What a measure reads of a drawing's structure alone, worked out once for the same arrays. */
 function structureOf(g: Geometry): Structure {
-  const from = [g.x.length, g.orders, g.wedged, g.labelled, g.elements, g.hydrogens, g.charges, g.fourForm, g.rings, g.cisTrans, g.perspective, g.depth, g.tetra];
+  const from = [g.x.length, g.orders, g.wedged, g.labelled, g.elements, g.hydrogens, g.charges, g.fourForm, g.onward, g.rings, g.cisTrans, g.perspective, g.depth, g.tetra];
   const known = structures.get(g.edges);
   if (known && known.from.every((v, i) => v === from[i])) return known.structure;
   const structure = readStructure(g);
@@ -698,7 +700,7 @@ function readStructure(g: Geometry): Structure {
     const el = g.elements?.[a];
     if (!el || isMetal(el) || neighbours[a].length !== 4 || inRing.has(a) || g.tetra?.[a] || squareMain(a)) return false;
     const nb = neighbours[a];
-    const end = (b: number) => neighbours[b].length === 1;
+    const end = (b: number) => neighbours[b].length === 1 && !g.onward?.[b];
     const elOf = (b: number) => g.elements?.[b] ?? "";
     const trident = ["C", "Si", "N"].includes(el) && !nb.every(end) && ["C", "F", "Cl", "Br", "I"].some((k) => nb.filter((b) => end(b) && elOf(b) === k).length === 3);
     if (trident) return false;
@@ -1032,7 +1034,8 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
     if ((el !== "C" && el !== "Si" && el !== "N") || neighbours[a].length !== 4 || inRing.has(a)) return null;
     for (const k of ["C", "F", "Cl", "Br", "I"]) {
       const ends = neighbours[a].filter((b) => endKind(b) === k);
-      if (ends.length === 3) return neighbours[neighbours[a].find((b) => !ends.includes(b))!].length > 1 ? ends : null;
+      const on = neighbours[a].find((b) => !ends.includes(b))!;
+      if (ends.length === 3) return neighbours[on].length > 1 || g.onward?.[on] ? ends : null;
     }
     return null;
   };

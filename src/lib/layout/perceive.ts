@@ -37,6 +37,11 @@ export type LayoutAtom = {
    * *At an atom in no ring*): taken over the form Meno would choose.
    */
   fourForm?: "x" | "cross";
+  /**
+   * An atom standing for the structure a group goes on into - a group laid out alone, the carbon for its bond out: not an end,
+   * though bonded to nothing else (a CF3 on it is a group on a skeleton, its trident fanned).
+   */
+  onward?: true;
 };
 export type LayoutBond = { a: number; b: number; order: number; stereo?: CisTrans };
 export type LayoutInput = {
@@ -82,6 +87,8 @@ export type Molecule = {
   straight: Set<number>;
   /** The four-bond metals asked to be drawn as an upright cross or an X (`LayoutAtom.fourForm`). */
   fourForm: Map<number, "x" | "cross">;
+  /** The atoms that stand for the structure a group goes on into (`LayoutAtom.onward`). */
+  onward: Set<number>;
   /**
    * The rings bound face-on to a metal through all their atoms (η⁵-Cp,
    * η⁶-arene): each one's star - at its centre, a member of its ring
@@ -373,6 +380,7 @@ export function perceive(input: LayoutInput): Molecule {
     ),
     straight: new Set(input.atoms.flatMap((a, i) => (a.linear && neighbours[i].length === 2 ? [i] : []))),
     fourForm: new Map(input.atoms.flatMap((a, i): [number, "x" | "cross"][] => (a.fourForm && neighbours[i].length === 4 ? [[i, a.fourForm]] : []))),
+    onward: new Set(input.atoms.flatMap((a, i) => (a.onward ? [i] : []))),
     ...(input.cumulated?.length ? { cumulated: input.cumulated } : {}),
     eta,
     units,

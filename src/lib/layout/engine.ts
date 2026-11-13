@@ -282,6 +282,7 @@ function measureDrawing(input: LayoutInput, mol: Molecule, out: Layout2D): Layou
     hydrogens,
     charges: mol.charge.slice(0, input.atoms.length),
     fourForm: input.atoms.map((_, i) => mol.fourForm.get(i)),
+    onward: input.atoms.map((_, i) => mol.onward.has(i)),
     cisTrans: input.bonds.flatMap((b, i) => (b.stereo ? [{ bond: i, refs: b.stereo.refs, cis: b.stereo.cis }] : [])),
     perspective: [...out.solid, ...out.hydrogens.map(() => false)],
     depth: [...out.depth, ...out.hydrogens.map(() => null)],
@@ -2053,7 +2054,8 @@ function stereoScore(
   const straight = piece.map((a) => mol.straight.has(a));
   const charges = piece.map((a) => mol.charge[a]);
   const fourForm = piece.map((a) => mol.fourForm.get(a));
-  return layoutMetrics({ x, y, edges, orders, straight, wedged, elements, hydrogens, charges, fourForm, labelled, perspective, depth: depths, tetra, hydrogenRoom: 1 }).score;
+  const onward = piece.map((a) => mol.onward.has(a));
+  return layoutMetrics({ x, y, edges, orders, straight, wedged, elements, hydrogens, charges, fourForm, onward, labelled, perspective, depth: depths, tetra, hydrogenRoom: 1 }).score;
 }
 
 /** The measures a piece is drawn by, as it has its depth: blades turned as a propeller's (`lift`) or none. */
@@ -2555,6 +2557,7 @@ export function scorer(
   const hydrogens = piece.map((a) => mol.hs[a]);
   const charges = piece.map((a) => mol.charge[a]);
   const fourForm = piece.map((a) => mol.fourForm.get(a));
+  const onward = piece.map((a) => mol.onward.has(a));
   // (a star at a pi system's centre is drawn as nothing)
   const labelled = piece.map((a) => (mol.el[a] !== "C" && mol.el[a] !== "*") || mol.charge[a] !== 0);
   const perspective = piece.map((a) => solid[a] ?? false);
@@ -2574,6 +2577,7 @@ export function scorer(
       hydrogens,
       charges,
       fourForm,
+      onward,
       labelled,
       rings,
       cisTrans,

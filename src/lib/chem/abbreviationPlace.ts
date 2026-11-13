@@ -125,7 +125,8 @@ function inputFor(s: ReturnType<typeof drawnAsSaid>): LayoutInput {
         ...(a.tetra ? { tetra: a.tetra } : {}),
         ...(stars.has(i) ? { pi: stars.get(i)! } : {}),
       })),
-      { el: "C" },
+      // (the carbon for its bond out: the structure it goes on into, no end of it)
+      { el: "C", onward: true as const },
     ],
     bonds: [
       // (a double bond's cis or trans, as the engine places a drawing's: a ref to the atom outside, the carbon for its bond out)

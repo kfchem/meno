@@ -793,7 +793,8 @@ export function tridentEnds(mol: Molecule, a: number): number[] | null {
   const kind = (v: number) => (mol.neighbours[v].length === 1 && TRIDENT_ENDS.has(mol.el[v]) ? mol.el[v] : null);
   for (const el of TRIDENT_ENDS) {
     const ends = mol.neighbours[a].filter((v) => kind(v) === el);
-    if (ends.length === 3) return mol.neighbours[mol.neighbours[a].find((v) => !ends.includes(v))!].length > 1 ? ends : null;
+    const on = mol.neighbours[a].find((v) => !ends.includes(v))!;
+    if (ends.length === 3) return mol.neighbours[on].length > 1 || mol.onward.has(on) ? ends : null;
   }
   return null;
 }
