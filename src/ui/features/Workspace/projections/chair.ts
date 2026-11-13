@@ -234,6 +234,39 @@ export function flipChairMoves(model: { atoms: Atom[]; bonds: Bond[] }, ring: re
   return moves;
 }
 
+/**
+ * Whether a ring of a drawing stands alone: nothing off it comes back to it another way - no ring fused on it, no bridge across it, no chain
+ * from one of its atoms to another. What the tool flips and fuses on is a chair that stands alone (a fused pair is not one chair of the tool's).
+ */
+export function ringAlone(model: { atoms: Atom[]; bonds: Bond[] }, ring: readonly number[]): boolean {
+  const inRing = new Set(ring);
+  const near = new Map<number, number[]>();
+  for (const b of model.bonds) {
+    near.set(b.a, [...(near.get(b.a) ?? []), b.b]);
+    near.set(b.b, [...(near.get(b.b) ?? []), b.a]);
+  }
+  for (const from of ring) {
+    for (const first of near.get(from) ?? []) {
+      if (inRing.has(first)) continue;
+      // (everything reached from this neighbour without passing its own ring atom: another ring atom among it, and the ring is not alone)
+      const seen = new Set([from, first]);
+      const todo = [first];
+      while (todo.length) {
+        const at = todo.pop()!;
+        for (const n of near.get(at) ?? []) {
+          if (n === from && at === first) continue;
+          if (inRing.has(n) && n !== from) return false;
+          if (n === from) return false;
+          if (seen.has(n)) continue;
+          seen.add(n);
+          todo.push(n);
+        }
+      }
+    }
+  }
+  return true;
+}
+
 /** The chairs among the atoms `ids` (a structure's) of a drawing: the rings of it that are the tool's chair, each as atom ids in order round it. */
 export function chairsIn(model: { atoms: Atom[]; bonds: Bond[] }, ids: ReadonlySet<number>): number[][] {
   const part = { atoms: model.atoms.filter((a) => ids.has(a.id)), bonds: model.bonds.filter((b) => ids.has(b.a) && ids.has(b.b)) };

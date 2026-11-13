@@ -4,19 +4,20 @@
  */
 import { sameStereo } from "../chem/engineLayout";
 import type { Model } from "../store/types";
-import { chairsIn, flipChairMoves } from "./chair";
+import { chairsIn, flipChairMoves, ringAlone } from "./chair";
 
 export type Flip = { moves: { id: number; x: number; y: number; z?: number }[] } | { refused: string };
 
 /**
  * The flip of the one chair in the structure `ids`: every ring atom's place and depth as the flipped solid has them, each group from axial to
- * equatorial or back on its own face. None where the structure holds no chair or more than one (the fused systems: cis flips as a whole, trans not,
- * and the tool does not offer either yet), or a group stands at neither of its atom's free positions (drawn by hand: nothing is guessed). `refused`
+ * equatorial or back on its own face. None where the structure holds no chair or more than one, or its chair does not stand alone (`ringAlone`:
+ * a fused pair - cis flips as a whole, trans not, and the tool does not offer either yet), or a group stands at neither of its atom's free
+ * positions (drawn by hand: nothing is guessed). `refused`
  * where the flip would have changed the compound - a fault of Meno's, said as one and nothing moved.
  */
 export function flipOf(model: Model, ids: ReadonlySet<number>): Flip | null {
   const rings = chairsIn(model, ids);
-  if (rings.length !== 1) return null;
+  if (rings.length !== 1 || !ringAlone(model, rings[0])) return null;
   const moved = flipChairMoves(model, rings[0]);
   if (!moved) return null;
   const after: Model = { atoms: model.atoms.map((a) => (moved.has(a.id) ? { ...a, ...moved.get(a.id)! } : a)), bonds: model.bonds };

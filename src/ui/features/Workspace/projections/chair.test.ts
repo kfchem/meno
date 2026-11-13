@@ -251,3 +251,32 @@ describe("cyclohexane's chair with its twelve hydrogens drawn at the tool's plac
     }
   });
 });
+
+describe("a chair at a bond length other than the nominal one - a page's own, or a chair scaled", () => {
+  const short = 0.7 * L;
+  const bondsOf = (m: { atoms: Atom[]; bonds: Bond[] }) => {
+    const at = new Map(m.atoms.map((a) => [a.id, a]));
+    return m.bonds.map((b) => Math.hypot(at.get(b.a)!.x - at.get(b.b)!.x, at.get(b.a)!.y - at.get(b.b)!.y));
+  };
+
+  it("is drawn, found, given its groups' places, flipped and extended at that length, each bond and each depth to scale", async () => {
+    const { chairExtension } = await import("./extend");
+    const d = chairDrawing({ at: { x: 1, y: 2 }, form: 1, firstId: 1, firstBondId: 100, length: short });
+    for (const length of bondsOf(d)) expect(length).toBeCloseTo(short, 9);
+    const nominal = draw(false, 1);
+    d.atoms.forEach((a, i) => expect(a.z).toBeCloseTo((nominal.atoms[i].z! * short) / L, 9));
+    // (found on a page as drawn, its own scale)
+    const found = chairOf(d, d.ring)!;
+    expect(found.scale).toBeCloseTo(short, 9);
+    // (a group's place one bond of the page's from its atom)
+    for (const k of [0, 1, 2, 3, 4, 5]) for (const p of seenPlaces(d, k)) expect(Math.hypot(p.place.x - d.atoms[k].x, p.place.y - d.atoms[k].y)).toBeCloseTo(short, 9);
+    // (a bond led out of an atom: ends one bond of the page's away)
+    const tip = d.atoms[0];
+    const ext = chairExtension(d, tip.id, { x: tip.x, y: tip.y + 5 })!;
+    expect(Math.hypot(ext.end.x - tip.x, ext.end.y - tip.y)).toBeCloseTo(short, 9);
+    // (flipped: every ring bond still that length)
+    const moves = flipChairMoves(d, d.ring)!;
+    const flipped = { atoms: d.atoms.map((a) => (moves.has(a.id) ? { ...a, ...moves.get(a.id)! } : a)), bonds: d.bonds };
+    for (const length of bondsOf(flipped)) expect(length).toBeCloseTo(short, 9);
+  });
+});

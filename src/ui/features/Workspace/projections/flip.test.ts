@@ -76,4 +76,22 @@ describe("Flip chair", () => {
     expect(isProjection(m, everything(m))).toBe(true);
     expect(isProjection({ atoms: m.atoms.map((a) => ({ ...a, z: undefined })), bonds: m.bonds }, everything(m))).toBe(false);
   });
+
+  it("is not offered on a chair that does not stand alone: a ring built onto two of its atoms, a chain from one to another", () => {
+    const m = methylated([]);
+    // (four carbons from atom 1 to atom 2 of the chair, drawn by hand: a ring fused on it - the pair is no one chair of the tool's)
+    const fused: Model = {
+      atoms: [...m.atoms, ...[0, 1, 2, 3].map((i) => ({ id: 60 + i, el: "C", r: 0.9, x: 3 + i, y: 3 }))],
+      bonds: [...m.bonds, { id: 300, a: m.atoms[0].id, b: 60, order: 1 as const }, { id: 301, a: 60, b: 61, order: 1 as const }, { id: 302, a: 61, b: 62, order: 1 as const }, { id: 303, a: 62, b: 63, order: 1 as const }, { id: 304, a: 63, b: m.atoms[1].id, order: 1 as const }],
+    };
+    expect(flipOf(fused, everything(fused))).toBeNull();
+    // (and a chain back to the same atom: a ring spiro on it)
+    const spiro: Model = {
+      atoms: [...m.atoms, ...[0, 1, 2].map((i) => ({ id: 70 + i, el: "C", r: 0.9, x: 3 + i, y: -3 }))],
+      bonds: [...m.bonds, { id: 310, a: m.atoms[0].id, b: 70, order: 1 as const }, { id: 311, a: 70, b: 71, order: 1 as const }, { id: 312, a: 71, b: 72, order: 1 as const }, { id: 313, a: 72, b: m.atoms[0].id, order: 1 as const }],
+    };
+    expect(flipOf(spiro, everything(spiro))).toBeNull();
+    // (alone, it flips)
+    expect(flipOf(m, everything(m))).not.toBeNull();
+  });
 });
