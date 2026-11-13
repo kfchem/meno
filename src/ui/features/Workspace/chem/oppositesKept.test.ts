@@ -6,6 +6,8 @@ import { forgetLaidOut, type Layout2D, type LayoutInput } from "../../../../lib/
 import { oppositesKept } from "./engineLayout";
 import { drawingOf } from "./drawing";
 import { readStereo, sameConfiguration } from "../../../../lib/layout/drawn";
+import { drawnFromSmiles } from "../utils/smilesDrawn";
+import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 
 // Clean-up keeps a four-bond metal's donors opposite each other as they were drawn: transplatin cleaned up is transplatin, not
 // cisplatin - a different compound - whatever order its atoms were drawn in, as an X or upright (chem/engineLayout `oppositesKept`).
@@ -187,6 +189,70 @@ describe("a four-bond metal cleaned up", () => {
   });
 });
 
+describe("a metal with bulky donors put side by side as drawn", () => {
+  it("keeps cis-PtCl2(PCy3)2 and cis-PdCl2(PPh3)2 cis, the phosphines' groups turned clear of each other - or, where they cannot be, leaves the drawing as it is: never the trans", { timeout: 180000 }, async () => {
+    forgetLaidOut();
+    for (const [el, L, clears] of [
+      ["Pt", "P(C1CCCCC1)(C1CCCCC1)C1CCCCC1", true],
+      // (two PPh3 side by side: their rings cannot be turned clear of each other here - Clean-up then lays nothing out, saying so)
+      ["Pd", "P(c1ccccc1)(c1ccccc1)c1ccccc1", false],
+    ] as const) {
+      // (the engine's own drawing, P opposite P, made cis by hand: a Cl and a P turned into each other's places)
+      const m = drawnFromSmiles(`Cl[${el}](Cl)(${L})${L}`);
+      const metal = m.atoms.find((a) => a.el === el)!;
+      const units = donorUnits(m, metal.id);
+      const donorOf = (u: Set<number>) => m.atoms.find((a) => u.has(a.id) && m.bonds.some((b) => (b.a === a.id && b.b === metal.id) || (b.b === a.id && b.a === metal.id)))!;
+      const angle = (a: { x: number; y: number }) => Math.atan2(a.y - metal.y, a.x - metal.x);
+      const cl = units.find((u) => donorOf(u).el === "Cl")!;
+      const p = units.find((u) => donorOf(u).el === "P")!;
+      const t = angle(donorOf(p)) - angle(donorOf(cl));
+      const turned = (a: { x: number; y: number }, r: number) => ({
+        x: metal.x + (a.x - metal.x) * Math.cos(r) - (a.y - metal.y) * Math.sin(r),
+        y: metal.y + (a.x - metal.x) * Math.sin(r) + (a.y - metal.y) * Math.cos(r),
+      });
+      const drawn: Model = { ...m, atoms: m.atoms.map((a) => (cl.has(a.id) ? { ...a, ...turned(a, t) } : p.has(a.id) ? { ...a, ...turned(a, -t) } : a)) };
+      const names = new Map(units.map((u) => [donorOf(u).id, donorOf(u).el]));
+      expect(spokes(drawn, names, metal.id), `${el} as drawn`).toEqual(["Cl-P", "Cl-P"]);
+      if (!clears) {
+        await expect(laidOut(drawn, MENO), el).rejects.toThrow(/one atom on another/);
+        continue;
+      }
+      const out = await laidOut(drawn, MENO);
+      expect(spokes(out, names, metal.id), el).toEqual(["Cl-P", "Cl-P"]);
+      // (no two atoms of different donors within half a bond of each other)
+      const at = new Map(out.atoms.map((a) => [a.id, a]));
+      const after = donorUnits(out, metal.id);
+      let closest = Infinity;
+      after.forEach((u, i) =>
+        after.slice(i + 1).forEach((v) => {
+          for (const a of u) for (const b of v) closest = Math.min(closest, Math.hypot(at.get(a)!.x - at.get(b)!.x, at.get(a)!.y - at.get(b)!.y) / NOMINAL_BOND_LENGTH);
+        }),
+      );
+      expect(closest, el).toBeGreaterThan(0.5);
+    }
+  });
+});
+
+/** The atoms each of the metal's donors carries, reached not through the metal, by id. */
+function donorUnits(m: Model, metal: number): Set<number>[] {
+  const near = new Map<number, number[]>();
+  for (const b of m.bonds) {
+    near.set(b.a, [...(near.get(b.a) ?? []), b.b]);
+    near.set(b.b, [...(near.get(b.b) ?? []), b.a]);
+  }
+  return (near.get(metal) ?? []).map((d) => {
+    const seen = new Set([d]);
+    for (const todo = [d]; todo.length; ) {
+      for (const v of near.get(todo.pop()!) ?? []) {
+        if (v === metal || seen.has(v)) continue;
+        seen.add(v);
+        todo.push(v);
+      }
+    }
+    return seen;
+  });
+}
+
 type Chelate = { tag: string; methyl?: true };
 const gly = (tag: string): Chelate => ({ tag });
 const ala = (tag: string): Chelate => ({ tag, methyl: true });
@@ -253,9 +319,9 @@ function complex(el: string, charge: number, parts: readonly (string | Chelate)[
   return { model: { atoms, bonds } as Model, names: named };
 }
 
-/** Which donors stand opposite which round the metal (id 1), by their names: the pairing nearest straight lines, each pair sorted. */
-function spokes(model: Model, names: ReadonlyMap<number, string>): string[] {
-  const m = model.atoms.find((a) => a.id === 1)!;
+/** Which donors stand opposite which round the metal (`metal`, by id), by their names: the pairing nearest straight lines, each pair sorted. */
+function spokes(model: Model, names: ReadonlyMap<number, string>, metal = 1): string[] {
+  const m = model.atoms.find((a) => a.id === metal)!;
   const ids = [...names.keys()];
   const angle = (id: number) => {
     const a = model.atoms.find((x) => x.id === id)!;
