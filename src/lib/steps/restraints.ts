@@ -274,7 +274,7 @@ export const LINE_WITHIN = 1;
  * between planes 1-2-3 and 2-3-4, Moss 1996) over such an atom has no
  * meaning, however little bent it stands.
  */
-function linearBy(e: Entry, i: number): string | null {
+export function linearBy(e: Entry, i: number): string | null {
   const orders = e.structure.bonds.filter((b) => b.a1 === i || b.a2 === i).map((b) => b.order);
   if (orders.includes(3)) return "a triple bond";
   const a = e.structure.atoms[i];

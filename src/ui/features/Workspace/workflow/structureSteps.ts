@@ -435,7 +435,8 @@ export function torsionsSet(entries: readonly SetEntry[], references: readonly S
   });
   const made = entries.length - aside.length;
   const said = [`${plural(rows.length, "row")} for ${plural(made, "entry", "entries")}`];
-  // (one whose torsions are all as the reference's: none to hold - said; a step holding these refuses it, as one no row is for)
+  // (one given no row - its torsions all as the reference's, or, at 180°, unlike only across a double bond cis there, not held:
+  //  none to hold - said; a step holding these refuses it, as one no row is for)
   if (none) said.push(`${plural(none, "entry", "entries")} with none to hold`);
   // (a double bond with no trans torsion in its reference, unlike here: 180° where trans cannot hold it - said, with what can)
   if (notHeld) said.push(`${plural(notHeld, "entry", "entries")} with a double bond cis in the reference not held: choose Held at: the reference's own angle`);
