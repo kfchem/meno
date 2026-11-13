@@ -264,17 +264,22 @@ export function angleIn(phi: number): number {
 export const LINE_WITHIN = 1;
 
 /**
- * Why atom `i` of `e` is linear by its bonds - a triple bond on it, or two
- * double bonds (an alkyne's, a nitrile's or an isonitrile's carbon, a
- * cumulene's centre, CO2's carbon, an azide's central N): sp, and linear by
- * VSEPR, whatever its places say - or none. A torsion (IUPAC: the angle
+ * Why atom `i` of `e` is linear by its bonds - a triple bond on it (an
+ * alkyne's, a nitrile's or an isonitrile's carbon); or two double bonds and
+ * no other neighbour where no lone pair sits at the centre: a carbon (a
+ * cumulene's or a ketene's centre, CO2's, CS2's, an isocyanate's) or an N
+ * of charge +1 (an azide's central N, nitronium) - sp, and linear by VSEPR,
+ * whatever its places say - or none. A sulfone's S (two S=O, tetrahedral)
+ * and SO2's (bent by its lone pair) are not. A torsion (IUPAC: the angle
  * between planes 1-2-3 and 2-3-4, Moss 1996) over such an atom has no
  * meaning, however little bent it stands.
  */
 function linearBy(e: Entry, i: number): string | null {
   const orders = e.structure.bonds.filter((b) => b.a1 === i || b.a2 === i).map((b) => b.order);
   if (orders.includes(3)) return "a triple bond";
-  return orders.filter((o) => o === 2).length >= 2 ? "two double bonds" : null;
+  const a = e.structure.atoms[i];
+  const noLonePair = a.el === "C" || (a.el === "N" && a.charge === 1);
+  return noLonePair && orders.length === 2 && orders.every((o) => o === 2) ? "two double bonds" : null;
 }
 
 type Torsion = [number, number, number, number];
