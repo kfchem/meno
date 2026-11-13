@@ -295,15 +295,17 @@ they hang from.
   ring, seen nearly edge on, came out with its C=N a zigzag. Adamantane is then a chair with its three axial bonds
   rising to the fourth bridgehead; bicyclo[2.2.2]octane a boat with its
   third bridge rising from both bridgeheads. A bond passing behind another
-  is drawn broken there, with the same clear space either side of the bond
-  in front at every angle: two line widths from the edge of what is drawn
-  there, square to the bond in front, to the cut end of the bond behind (a
+  is drawn broken there: the gap is a band along the bond in front, with the
+  same clear space either side of it at every angle - two line widths from
+  the edge of what is drawn there, square to the bond in front, to the cut
+  end of the bond behind, which runs parallel to the bond in front, flat
+  and with no cap (a
   plain line its width, a bold bond or a wedge the width it has where they
   cross, a double or triple bond the whole of it in one break, a hashed
   bond the stroke nearest; Brecher 2006, ST-3.1: the front-to-back order of
   crossing bonds is shown by a small discontinuity in the backmost bond, at
   least twice a single bond's width). Every line, hash and shape of the
-  bond behind is cut over the same span, the pieces left have nothing
+  bond behind is cut by the same band, the pieces left have nothing
   between them in the page, the SVG and the EMF alike, and a piece left
   shorter than the clear space is not drawn; on a page of pixels the clear
   space is never under three device pixels, and bonds crossing at under ten

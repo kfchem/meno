@@ -3977,14 +3977,15 @@ function perspectiveCorners(atoms: Atom[], bonds: Bond[], opts: LayoutOptions, z
 }
 
 /**
- * The clear space kept each side of a bond in front where a bond behind passes under it, in line widths: from the front bond's edge,
- * square to the front bond, to the cut end of the bond behind. Brecher 2006, ST-3.1: "the front-to-back ordering of crossing bonds must be
- * indicated. That ordering is depicted with a small discontinuity in the backmost bond"; for print the discontinuity is "at least twice as wide
- * as the width of a single bond". Two line widths of clear space each side is 4 widths with a plain front bond's own, never under that. By eye,
- * a matter of look: set so that a plain bond crossing a plain one at a right angle is cut as it always was (5 half widths each side of the crossing).
+ * The clear space kept each side of a bond in front where a bond behind passes under it, in line widths: from the front bond's edge, square to
+ * it, to the cut end of the bond behind, which runs PARALLEL to the front bond - the gap is a band of one width along the bond in front. Brecher
+ * 2006, ST-3.1: "the front-to-back ordering of crossing bonds must be indicated. That ordering is depicted with a small discontinuity in the
+ * backmost bond"; for print the discontinuity is "at least twice as wide as the width of a single bond". Two line widths of clear space each side
+ * is 4 widths with a plain front bond's own, never under that. By eye, a matter of look: a plain bond crossing a plain one at a right angle is
+ * cut where it always was (5 half widths each side of the crossing).
  */
 export const CROSSING_CLEAR = 2;
-/** The least width of the break itself, square to the bond in front, in line widths (Brecher 2006, ST-3.1: at least twice a single bond's). */
+/** The least width of the break itself, square to the bond in front, in line widths (Brecher 2006, ST-3.1: at least twice a single bond's): the band holds it by itself. */
 export const CROSSING_LEAST_BREAK = 2;
 /**
  * Bonds crossing at less than this angle (degrees) are all but along each other: nothing is cut, as nothing is for bonds exactly parallel.
@@ -4070,16 +4071,32 @@ function clipPoly(points: Vec2[], at: Vec2, dir: Vec2, keep: 1 | -1): Vec2[] {
   return out;
 }
 
+/** A band across the page along a bond in front: where `vdot(p - origin, normal)` lies between `lo` and `hi`. */
+type Band = { origin: Vec2; normal: Vec2; lo: number; hi: number };
+
+/** A line of a bond as the shape it fills: its width across it, flat at both ends. */
+function lineShape(l: LineSeg, half: number): Vec2[] {
+  const d = vnorm({ x: l.x2 - l.x1, y: l.y2 - l.y1 });
+  const n = { x: -d.y * half, y: d.x * half };
+  return [
+    { x: l.x1 + n.x, y: l.y1 + n.y },
+    { x: l.x2 + n.x, y: l.y2 + n.y },
+    { x: l.x2 - n.x, y: l.y2 - n.y },
+    { x: l.x1 - n.x, y: l.y1 - n.y },
+  ];
+}
+
 /**
  * A bond's lines and shapes, broken where the bond passes behind another - both drawn in perspective, their atoms' `z` saying which is
- * nearer where they cross. The back bond is cut, either side of the front bond, so that the clear space left between the front bond's edge
- * and each cut end, square to the front bond, is `CROSSING_CLEAR` line widths however the two cross (never under `CROSSING_CLEAR_FLOOR_PX`
- * device pixels where pixels are drawn): over (the front's half width there + the clear space) / sin(the angle between them) along the back
- * bond. What the front bond fills is what is drawn: a plain line, a bold bond, a wedge at the crossing, a double or triple bond from
- * its outer edge to its outer edge - one break across all of it, no stub of the back bond left between its lines. Every line of the back bond
- * (a double bond's two, a hashed bond's strokes) and every shape of it is cut over the same span along it; the break is a true gap - the pieces
- * with nothing between - for every writer. Breaks that overlap are one; a piece left shorter than the clear space is not drawn; bonds
- * all but along each other (`CROSSING_LEAST_ANGLE_DEG`) are not cut. Returns the lines, the shapes, and the ends the breaks make.
+ * nearer where they cross. The gap is a band along the bond in front, of one width at every angle: the front bond's own width there and
+ * `CROSSING_CLEAR` line widths each side of it (never under `CROSSING_CLEAR_FLOOR_PX` device pixels where pixels are drawn). What the front bond
+ * fills is what is drawn: a plain line, a bold bond, a wedge at the crossing, a double or triple bond from its outer edge to its outer edge - one
+ * break across all of it, no stub of the back bond left between its lines - a hashed bond the stroke nearest. Every line of the back bond (a
+ * double bond's two, a hashed bond's strokes) and every shape of it (a bold bond, a wedge) is cut along the band's edges: each cut end runs
+ * PARALLEL to the bond in front, flat, with no cap; ends away from a cut keep the style's. A line that is cut is drawn as the shape it fills.
+ * The break is a true gap - the pieces with nothing between - for every writer. A piece left shorter than the clear space is not drawn; bonds
+ * all but along each other (`CROSSING_LEAST_ANGLE_DEG`) are not cut. Returns the lines and shapes, and the ends the breaks make (none: a cut
+ * end is finished flat by the cut).
  */
 function brokenBehind(
   atoms: Atom[],
@@ -4105,8 +4122,8 @@ function brokenBehind(
   if (length < 1e-9) return { lines, polys, ends: [] };
   const dir = { x: d.x / length, y: d.y / length };
   const sinLeast = Math.sin((CROSSING_LEAST_ANGLE_DEG * Math.PI) / 180);
-  // where the bond crosses the ones in front of it: the stretch of the bond, along it from its first atom, to leave clear
-  const breaks: [number, number][] = [];
+  // where the bond crosses the ones in front of it: a band along each, to leave clear
+  const bands: Band[] = [];
   for (const o of bonds) {
     if (o === bond || o.endpoints?.length) continue;
     if (o.a1 === bond.a1 || o.a1 === bond.a2 || o.a2 === bond.a1 || o.a2 === bond.a2) continue;
@@ -4125,91 +4142,57 @@ function brokenBehind(
     if (!(mine < theirs - 1e-6)) continue;
     const frontLength = vlen(g);
     const fd = { x: g.x / frontLength, y: g.y / frontLength };
-    // (the angle between the two bonds: the back one moves `sin` across the front one for each step along it)
-    const sin = vcross(fd, dir);
-    if (Math.abs(sin) < sinLeast) continue;
+    // (the angle between the two bonds: all but along each other, nothing is cut)
+    if (Math.abs(vcross(fd, dir)) < sinLeast) continue;
     const span = acrossSpan(drawn.get(o)!, q, fd, u * frontLength, halfWidthOf) ?? { lo: -halfWidth, hi: halfWidth };
-    // (a flat cut end's corner leans toward the front bond by the back bond's half width times the cosine; a round end's cap reaches the same everywhere)
-    const extra = how.round ? 0 : halfWidth * Math.abs(vdot(fd, dir));
-    const need = clear + extra;
-    const near = [(span.lo - need) / sin, (span.hi + need) / sin].sort((x, y) => x - y);
-    const at = t * length;
-    // (the break at least twice a single bond's width across the front bond)
-    const widest = Math.max(near[1] - near[0], (CROSSING_LEAST_BREAK * lineWidth) / Math.abs(sin));
-    const centre = (near[0] + near[1]) / 2;
-    breaks.push([at + centre - widest / 2, at + centre + widest / 2]);
+    // (across the front bond as `vcross(fd, point - q)` measures it: the normal (-fd.y, fd.x))
+    bands.push({ origin: q, normal: { x: -fd.y, y: fd.x }, lo: span.lo - clear, hi: span.hi + clear });
   }
-  if (!breaks.length) return { lines, polys, ends: [] };
-  // (breaks that overlap are one break)
-  breaks.sort((x, y) => x[0] - y[0]);
-  const merged: [number, number][] = [];
-  for (const br of breaks) {
-    const last = merged[merged.length - 1];
-    if (last && br[0] <= last[1]) last[1] = Math.max(last[1], br[1]);
-    else merged.push([br[0], br[1]]);
-  }
-  const out: LineSeg[] = [];
-  const ends: Vec2[] = [];
+  if (!bands.length) return { lines, polys, ends: [] };
   const alongOf = (pt: Vec2) => vdot(vsub(pt, p), dir);
+  const acrossOf = (band: Band, pt: Vec2) => vdot(vsub(pt, band.origin), band.normal);
+  /** The bands a shape reaches into. */
+  const reaching = (pts: readonly Vec2[]) =>
+    bands.filter((band) => {
+      const across = pts.map((pt) => acrossOf(band, pt));
+      return Math.max(...across) > band.lo && Math.min(...across) < band.hi;
+    });
+  /** A shape with every band it reaches taken out of it: the pieces left either side, each cut along the band's edge; crumbs left out. */
+  const cut = (pts: Vec2[], reached: readonly Band[]): Vec2[][] => {
+    let pieces: Vec2[][] = [pts];
+    for (const band of reached) {
+      const [below, above] = [
+        { x: band.origin.x + band.normal.x * band.lo, y: band.origin.y + band.normal.y * band.lo },
+        { x: band.origin.x + band.normal.x * band.hi, y: band.origin.y + band.normal.y * band.hi },
+      ];
+      pieces = pieces.flatMap((piece) => [clipPoly(piece, below, band.normal, -1), clipPoly(piece, above, band.normal, 1)]).filter((piece) => piece.length >= 3);
+    }
+    // (a piece left shorter than the clear space, along the bond, is a crumb: not drawn)
+    return pieces.filter((piece) => {
+      const along = piece.map(alongOf);
+      return Math.max(...along) - Math.min(...along) >= clear;
+    });
+  };
+  const outLines: LineSeg[] = [];
   const outPolys: Poly[] = [];
   for (const l of lines) {
-    const from = { x: l.x1, y: l.y1 };
-    const to = { x: l.x2, y: l.y2 };
-    const ll = vlen(vsub(to, from));
+    const ll = Math.hypot(l.x2 - l.x1, l.y2 - l.y1);
     if (ll < 1e-9) {
-      out.push(l);
+      outLines.push(l);
       continue;
     }
-    const [s1, s2] = [alongOf(from), alongOf(to)];
-    if (Math.abs(s2 - s1) < 0.3 * ll) {
-      // a stroke across the bond (a hashed bond's): out where any of it lies in a break
-      const [lo, hi] = [Math.min(s1, s2), Math.max(s1, s2)];
-      if (!merged.some(([b0, b1]) => hi > b0 && lo < b1)) out.push(l);
-      continue;
-    }
-    // each line of the bond, cut over the same span along the bond: as fractions of the line
-    let pieces: [number, number][] = [[0, 1]];
-    for (const [b0, b1] of merged) {
-      const [t0, t1] = [(b0 - s1) / (s2 - s1), (b1 - s1) / (s2 - s1)].sort((x, y) => x - y);
-      pieces = pieces.flatMap(([q0, q1]): [number, number][] => {
-        if (t1 <= q0 || t0 >= q1) return [[q0, q1]];
-        const kept: [number, number][] = [];
-        if (t0 > q0) kept.push([q0, t0]);
-        if (t1 < q1) kept.push([t1, q1]);
-        return kept;
-      });
-    }
-    const at = (s: number) => ({ x: l.x1 + (l.x2 - l.x1) * s, y: l.y1 + (l.y2 - l.y1) * s });
-    for (const [q0, q1] of pieces) {
-      // (a piece left shorter than the clear space beside a break is a crumb: not drawn)
-      if ((q0 > 0 || q1 < 1) && (q1 - q0) * ll < clear) continue;
-      const [f0, f1] = [at(q0), at(q1)];
-      out.push({ ...l, x1: f0.x, y1: f0.y, x2: f1.x, y2: f1.y });
-      if (q0 > 0) ends.push(f0);
-      if (q1 < 1) ends.push(f1);
-    }
+    const shape = lineShape(l, halfWidthOf(l));
+    const reached = reaching(shape);
+    // (a line no band reaches, whole; one cut, the shape it fills, cut)
+    if (!reached.length) outLines.push(l);
+    else for (const piece of cut(shape, reached)) outPolys.push({ points: piece, ...(l.color ? { color: l.color } : {}) });
   }
   for (const poly of polys) {
-    // (a shape of the bond - a bold bond, a wedge - clipped to what lies outside every break it reaches)
-    const extent = poly.points.map(alongOf);
-    const [lo, hi] = [Math.min(...extent), Math.max(...extent)];
-    const reached = merged.filter(([b0, b1]) => hi > b0 && lo < b1);
-    if (!reached.length) {
-      outPolys.push(poly);
-      continue;
-    }
-    let pieces: Vec2[][] = [poly.points];
-    for (const [b0, b1] of reached) {
-      const [at0, at1] = [{ x: p.x + dir.x * b0, y: p.y + dir.y * b0 }, { x: p.x + dir.x * b1, y: p.y + dir.y * b1 }];
-      pieces = pieces.flatMap((pts) => [clipPoly(pts, at0, dir, -1), clipPoly(pts, at1, dir, 1)]).filter((pts) => pts.length >= 3);
-    }
-    for (const pts of pieces) {
-      // (a piece left shorter than the clear space is a crumb: not drawn)
-      const along = pts.map(alongOf);
-      if (Math.max(...along) - Math.min(...along) >= clear) outPolys.push({ ...poly, points: pts });
-    }
+    const reached = reaching(poly.points);
+    if (!reached.length) outPolys.push(poly);
+    else for (const piece of cut(poly.points, reached)) outPolys.push({ ...poly, points: piece });
   }
-  return { lines: out, polys: outPolys, ends };
+  return { lines: outLines, polys: outPolys, ends: [] };
 }
 
 /**
