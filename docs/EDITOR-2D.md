@@ -1042,6 +1042,13 @@ All hover-based, as above.
   2026-10-27. A structure Clean-up cannot lay out - its stereochemistry not
   kept, an atom put on another - is left as drawn and named by its formula
   and why, the others laid out all the same, as one undo step.)
+  - **A four-bond metal keeps its donors opposite each other as drawn**
+    (`oppositesKept`): which two pairs stand opposite is its isomer -
+    transplatin and cisplatin are two compounds - so where the engine set
+    them otherwise (like donors side by side), two donors change places,
+    each turned about the metal with all it carries. Kept where the
+    drawing says it plainly, each pair within 30 degrees of a line; a
+    chelate's donors go by its ring.
 - Valence warnings, and R/S shown on request (RDKit). (PR #53: a ring round
   an atom with too many bonds, saying what is wrong under the pointer; R/S
   and E/Z from a button on the canvas, later shown on what they are asked
