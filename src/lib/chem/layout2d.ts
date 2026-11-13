@@ -2426,6 +2426,13 @@ export function buildTextLabels(
     .map((b) => Math.hypot(atoms[b.a1].x - atoms[b.a2].x, atoms[b.a1].y - atoms[b.a2].y))
     .filter((d) => d > 1e-9)
     .sort((p, q) => p - q);
+  // (each atom's H as its label writes it: by a valence the file sets, what its bonds leave of it - else by its own valence)
+  const hydrogensAt = (a: Atom, i: number) =>
+    opts.showImplicitHydrogens === false
+      ? 0
+      : a.valence != null
+        ? Math.max(0, a.valence - (setSum.get(i) ?? 0))
+        : implicitHydrogens(a.el, orderSum.get(i) ?? 0, a.charge ?? 0, a.radical);
   const names = namesLaid(
     {
       x: atoms.map((a) => a.x),
@@ -2433,13 +2440,7 @@ export function buildTextLabels(
       edges: bonds.filter((b) => atoms[b.a1] && atoms[b.a2]).map((b) => [b.a1, b.a2] as const),
       elements: atoms.map((a) => a.el),
       // (each label's H, counted as the label writes it below)
-      hydrogens: atoms.map((a, i) =>
-        opts.showImplicitHydrogens === false
-          ? 0
-          : a.valence != null
-            ? Math.max(0, a.valence - (setSum.get(i) ?? 0))
-            : implicitHydrogens(a.el, orderSum.get(i) ?? 0, a.charge ?? 0, a.radical),
-      ),
+      hydrogens: atoms.map(hydrogensAt),
     },
     lengths.length ? lengths[lengths.length >> 1] : 1,
   );
@@ -2522,13 +2523,7 @@ export function buildTextLabels(
       });
       continue;
     }
-    const h =
-      opts.showImplicitHydrogens === false
-        ? 0
-        : a.valence != null
-          ? // (a valence the file sets: what the bonds leave of it)
-            Math.max(0, a.valence - (setSum.get(i) ?? 0))
-          : implicitHydrogens(a.el, orderSum.get(i) ?? 0, a.charge ?? 0, a.radical);
+    const h = hydrogensAt(a, i);
     const centreSymbol =
       straightLeft.has(i) && straightRight.has(i) ? { centreSymbol: true } : {};
     if (h <= 0) {

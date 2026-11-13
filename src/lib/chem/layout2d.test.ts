@@ -120,6 +120,14 @@ describe("buildTextLabels", () => {
     expect(labels.find((l) => l.atom === 0)?.text).toBe("Pt");
     // (each NH3: three H, as ever - the pair it lends takes none)
     for (const n of [1, 2]) expect(labels.find((l) => l.atom === n)?.text).toMatch(/^(NH3|H3N)$/);
+    // (the same with the metal listed first in each coordination bond: its end counted alike)
+    const first = buildTextLabels(atoms, opts(), [
+      { a1: 0, a2: 1, order: 1, coordination: true },
+      { a1: 0, a2: 2, order: 1, coordination: true },
+      { a1: 0, a2: 3, order: 1 },
+      { a1: 0, a2: 4, order: 1 },
+    ]);
+    expect(first.find((l) => l.atom === 0)?.text).toBe("Pt");
   });
 
   it("writes the hydrogens below when bonds rise on both sides, above when they fall", () => {
