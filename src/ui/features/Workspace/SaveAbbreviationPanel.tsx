@@ -9,15 +9,19 @@ import Checkbox from "../../controls/Checkbox";
 /**
  * The selected group saved as an abbreviation of the user's own, beside the
  * canvas: its structure as the selection has it, a label and a name to give
- * it - and, unless asked not to, the group shown as that label here.
+ * it - and, unless asked not to, the group shown as that label here. What
+ * of the stereo its bonds show it does not keep is said (`notKept`).
  */
 export default function SaveAbbreviationPanel({
   ids,
   smiles,
+  notKept,
   onClose,
 }: {
   ids: number[];
   smiles: string;
+  /** What of the stereo the selection's bonds show it does not keep, in words (chem/abbreviationFromSelection `stereoNotKept`). */
+  notKept?: string;
   onClose: () => void;
 }) {
   const mine = useAppSettings((s) => s.abbreviations);
@@ -53,6 +57,7 @@ export default function SaveAbbreviationPanel({
           The selected atoms, as a label of your own: kept in Settings › Dictionary, and read on every canvas
           as Meno&apos;s own abbreviations are. The * is where the group is attached.
         </p>
+        {notKept && <p className="mb-3 text-xs leading-snug text-gh-black">{notKept}</p>}
         <AbbreviationForm
           initial={{ smiles }}
           saveText="Save"
