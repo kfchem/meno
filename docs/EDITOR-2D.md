@@ -1045,14 +1045,19 @@ All hover-based, as above.
   - **A four- or six-bond metal keeps its donors opposite each other as
     drawn** (`oppositesKept`): which pairs stand opposite is its isomer -
     transplatin and cisplatin are two compounds, as are trans- and
-    cis-[CoCl2(NH3)4]+ - so where the engine set them otherwise (like
-    donors side by side), donors change places, a pair at a time: two
-    single donors each turned about the metal with all it carries; a
-    chelate's two donors by mirroring the chelate across the line between
-    them, its wedges turned over with it, so its centres keep their
-    configuration (trans-Pt(gly)2). The drawing's pairing is the one
-    nearest straight lines, however bent (N-Pt-N at 145 degrees is trans);
-    where another is about as near it says none, and the layout's stands.
+    cis-[CoCl2(NH3)4]+ - so where the engine set them otherwise, the
+    donors' units are moved round the metal into the layout's places:
+    each turned about it whole with all it carries, a chelate of two also
+    mirrored across the line between its donors, its wedges turned over,
+    so its centres keep their configuration - the fewest units moved,
+    then the shortest turns (trans-Pt(gly)2, trans-[Co(en)2Cl2]+). The
+    drawing's pairing is the one whose straightest pair is straightest,
+    then its next: a pair drawn straight across decides however the
+    others lean; where the straightest pairs of two pairings are within
+    20 degrees of each other it says none, and the layout's stands. Where
+    no move gives the drawing's pairing - a chelate's two donors drawn
+    opposite, a layout with no plain opposite places (cis-[Co(en)2Cl2]+)
+    - Clean-up lays nothing out and says so: never another isomer.
 - Valence warnings, and R/S shown on request (RDKit). (PR #53: a ring round
   an atom with too many bonds, saying what is wrong under the pointer; R/S
   and E/Z from a button on the canvas, later shown on what they are asked
