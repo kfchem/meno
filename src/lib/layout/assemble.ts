@@ -205,11 +205,21 @@ export function grow(
                   ? [(-150 * Math.PI) / 180, (-30 * Math.PI) / 180, Math.PI / 2]
                   : splitWidestGap([], deg, Math.PI);
     if (cross) others.sort((u, v) => orderOf(mol, middle, v) - orderOf(mol, middle, u));
-    const order = fan >= 0 ? [fan, ...mol.neighbours[middle].filter((v) => v !== fan)] : [...along, ...others];
-    order.forEach((v, k) => {
-      const t = slots[k] ?? slots[slots.length - 1];
-      placeChild(mol, pos, local, queue, middle, v, setFrameAngle(frame, t), transforms, hints, upright);
-    });
+    let order = fan >= 0 ? [fan, ...mol.neighbours[middle].filter((v) => v !== fan)] : [...along, ...others];
+    let ways = order.map((_, k) => setFrameAngle(frame, slots[k] ?? slots[slots.length - 1]));
+    if (deg === 4 && isFourCentre(mol, middle)) {
+      // a stereocentre's four bonds (ST-1.1.1): the two in the page below,
+      // a third of a turn apart, the two to be wedged above, a sixth apart;
+      // turned the least way, a twelfth of a turn at a time, that keeps
+      // all four off the page's axes as the frame sets them
+      const { plain, wedged } = centreRoles(mol, sides, middle);
+      order = [...plain, ...wedged];
+      const at = [(-150 * Math.PI) / 180, (-30 * Math.PI) / 180, (60 * Math.PI) / 180, (120 * Math.PI) / 180];
+      const turns = [0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6].map((k) => (k * Math.PI) / 6);
+      const set = (r: number) => at.map((t) => setFrameAngle(frame, t + r));
+      ways = set(turns.find((r) => onAxes(set(r)) < 1) ?? 0);
+    }
+    order.forEach((v, k) => placeChild(mol, pos, local, queue, middle, v, ways[k], transforms, hints, upright));
     queue.push(...order);
   }
 
@@ -559,6 +569,36 @@ function assign(
   // (straight through - and the O of a P-O-P, so that a run of crosses is one line)
   const straight = deg === 2 && (straightThrough(mol, a) || (isCross(mol, parent) && isCross(mol, children[0])));
   if (straight) return [[children[0], p + Math.PI]];
+  if (deg === 4 && isFourCentre(mol, a)) {
+    // a stereocentre's four bonds (ST-1.1.1): the two in the page a third
+    // of a turn apart, the two to be wedged a sixth apart opposite them,
+    // the way round that keeps all four off the page's axes - of two as
+    // clear, the one that runs the chain on nearest level
+    const { plain, wedged } = centreRoles(mol, sides, a);
+    const inPage = plain.includes(parent);
+    const ways = (s: number): [number, number][] => {
+      if (inPage) {
+        const other = plain.find((v) => v !== parent)!;
+        return [
+          [other, p + (s * 2 * Math.PI) / 3],
+          [wedged[0], p + (s * 7 * Math.PI) / 6],
+          [wedged[1], p + (s * 3 * Math.PI) / 2],
+        ];
+      }
+      const other = wedged.find((v) => v !== parent)!;
+      return [
+        [other, p + (s * Math.PI) / 3],
+        [plain[0], p + (s * 5 * Math.PI) / 6],
+        [plain[1], p + (s * 3 * Math.PI) / 2],
+      ];
+    };
+    const level = (w: [number, number][]) => Math.abs(Math.sin(w[0][1]));
+    const [one, two] = [ways(1), ways(-1)];
+    const a1 = onAxes([p, ...one.map(([, t]) => t)]);
+    const a2 = onAxes([p, ...two.map(([, t]) => t)]);
+    const pick = Math.abs(a1 - a2) > 1e-9 ? (a1 < a2 ? one : two) : level(one) <= level(two) + 1e-9 ? one : two;
+    return pick.filter(([c]) => children.includes(c));
+  }
   if (deg === 4) {
     const slots = [p + Math.PI, p + Math.PI / 2, p - Math.PI / 2];
     if (isCross(mol, a)) {
@@ -742,6 +782,62 @@ function placements(
   };
   go(0, free.map(() => false), []);
   return out;
+}
+
+/**
+ * A stereocentre of four bonds in no ring - CH3-CFClBr's carbon, a
+ * quaternary carbon in a chain: drawn as its configuration is best shown
+ * (Brecher 2006, ST-1.1.1; Brecher 2008, GR-4.1.3), two bonds in the page
+ * a third of a turn apart and, opposite them, the two that will carry a
+ * solid and a hashed wedge, a sixth of a turn apart - never as a cross,
+ * which with one wedge is the form ST-1.1.4 rules out for four acyclic
+ * groups, and on the page's axes reads as a Fischer projection.
+ */
+export function isFourCentre(mol: Molecule, a: number): boolean {
+  return (
+    mol.tetra.has(a) &&
+    mol.systemOf[a] < 0 &&
+    mol.neighbours[a].length === 4 &&
+    !isMetal(mol.el[a]) &&
+    !mol.neighbours[a].some((v) => isMetal(mol.el[v])) &&
+    !isCross(mol, a)
+  );
+}
+
+/**
+ * Of a four-bond stereocentre's neighbours, the two in the page and the two
+ * to be wedged: the wedges on the two smaller groups - an end before a
+ * group that goes on, of ends a heteroatom before a carbon (GR-4.1.3: a
+ * carbon end at the third of a turn from the chain), then the one written
+ * smaller - so that the chain runs on through the two in the page and no
+ * wedge joins two centres.
+ */
+export function centreRoles(mol: Molecule, sides: Map<string, number>, a: number): { plain: [number, number]; wedged: [number, number] } {
+  const weight = (v: number) => sides.get(`${a}>${v}`) ?? 1;
+  const written = (v: number) => mol.el[v].length + (mol.hs[v] > 0 ? (mol.hs[v] > 1 ? 2 : 1) : 0);
+  const same = byStructure(mol);
+  const larger = [...mol.neighbours[a]].sort(
+    (p, q) =>
+      weight(q) - weight(p) ||
+      Number(mol.tetra.has(q)) - Number(mol.tetra.has(p)) ||
+      Number(mol.el[q] === "C") - Number(mol.el[p] === "C") ||
+      written(q) - written(p) ||
+      same(q, p),
+  );
+  return { plain: [larger[0], larger[1]], wedged: [larger[2], larger[3]] };
+}
+
+/** How near the page's axes a set of directions comes: the count within a twelfth of a right angle of one, then how near the nearest is. */
+function onAxes(ts: readonly number[]): number {
+  let count = 0;
+  let nearest = Math.PI / 4;
+  for (const t of ts) {
+    const q = Math.PI / 2;
+    const off = Math.abs(t / q - Math.round(t / q)) * q;
+    if (off < Math.PI / 24) count++;
+    nearest = Math.min(nearest, off);
+  }
+  return count + (Math.PI / 4 - nearest) / Math.PI;
 }
 
 /**
