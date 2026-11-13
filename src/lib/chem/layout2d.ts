@@ -404,6 +404,11 @@ export type TextItem = {
    * labels': words on the page given one (docs/EDITOR-2D.md, *Text*).
    */
   family?: string;
+  /**
+   * A ground of this colour round its letters, as the canvas sets R and S on
+   * a molecule in 3D against the balls under them (StereoInk3D's halo).
+   */
+  halo?: string;
 };
 
 /** Whether two sets of texts are drawn alike: the same letters, set the same way, in the same places. */
@@ -618,6 +623,8 @@ export type Layout = {
   solidsImage?: { href: string; bounds: { min: Vec2; max: Vec2 } };
   /** Measurements on the molecules in 3D, drawn over them. */
   measures?: MeasureMark[];
+  /** R, S, E and Z on the molecules in 3D, written over them as the canvas writes them. */
+  solidsTexts?: TextItem[];
   bounds: { min: Vec2; max: Vec2 };
   /**
    * Pixels per coordinate unit this layout was built for. Sizes the layout
@@ -4796,6 +4803,9 @@ export function fontStack(family: string): string {
 }
 
 /** A label as the canvas draws it: set by `placeLabel`, run by run. */
+/** How far a text's halo reaches out round its letters, in ems of them: as the canvas's (StereoInk3D, its outline's width). */
+export const HALO_EMS = 0.12;
+
 function svgLabel(
   t: TextItem,
   fontSize: number,
@@ -4809,7 +4819,9 @@ function svgLabel(
     if (run.mark) continue;
     out +=
       `<text x="${run.x}" y="${-run.y}" font-family="${fontFamily}"` +
-      ` font-size="${run.size}"${run.italic ? ' font-style="italic"' : ""}${run.bold ? ' font-weight="bold"' : ""} fill="${xmlAttr(svgColor(run.color, fill))}" stroke="none"` +
+      ` font-size="${run.size}"${run.italic ? ' font-style="italic"' : ""}${run.bold ? ' font-weight="bold"' : ""} fill="${xmlAttr(svgColor(run.color, fill))}"` +
+      // (a halo: the stroke under the letters, as far out round them as the canvas's - an eighth of their size)
+      (t.halo ? ` stroke="${xmlAttr(svgColor(t.halo, "white"))}" stroke-width="${HALO_EMS * 2 * run.size}" stroke-linejoin="round" paint-order="stroke"` : ` stroke="none"`) +
       ` text-anchor="start">${escapeXml(run.text)}</text>`;
   }
   return out;
@@ -4920,6 +4932,10 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
     ? `<image href="${xmlAttr(img.href)}" x="${img.bounds.min.x}" y="${-img.bounds.max.y}"` +
       ` width="${img.bounds.max.x - img.bounds.min.x}" height="${img.bounds.max.y - img.bounds.min.y}" preserveAspectRatio="none" />`
     : svgSolids(layout.solids ?? []);
+  // (R, S, E and Z on them, over them)
+  for (const t of layout.solidsTexts ?? []) {
+    s += svgLabel(t, t.ownSize ? toWorld(t.fontPx, zoom, opts.units) : fontSize, t.family ? { ...set, fontFamily: t.family } : set, svgColor(t.color, fill));
+  }
   // (with the molecules an image, their measurements' lines and fans are in
   // it, in depth among the atoms: only the values are written over it)
   for (const m of layout.measures ?? []) s += svgMeasure(m, set.fontFamily, !img);

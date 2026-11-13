@@ -676,7 +676,17 @@ Taken on 2026-10-13:
   value or on a bond in some frames as the molecule turned). As the
   molecule turns and the best way changes, a label glides round its atom
   to it, the shorter way, on a 70 ms time constant - never across the
-  atom, never in a jump (the maintainer, 2026-10-15).
+  atom, never in a jump (the maintainer, 2026-10-15). A picture of the
+  molecule - copied, saved as SVG, or with the drawing it is on - has
+  the same labels where the canvas puts them, kept clear in the same way
+  of the balls, the bonds, the measurements' values and each other
+  (`utils/molecule3d`, `stereoSpot`, which the canvas and the picture
+  share), as large as the drawing's in print. In SVG, and the PNG drawn
+  from it, they stand on a white halo as on the canvas; in an EMF the
+  letters are written without one. As in a picture of the drawing, a view
+  zoomed so far out that the canvas leaves them out does not leave them
+  out of the picture (the maintainer, 2026-10-21: in every picture, as
+  the canvas shows them).
 - **Measurements' values keep apart.** Each value stands on its point
   while that is clear of the values before it; where another is in its
   way it moves off - square to a distance's line, out from an angle's
