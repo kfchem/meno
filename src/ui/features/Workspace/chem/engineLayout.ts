@@ -118,7 +118,9 @@ export function layoutJob(part: Model): LayoutJob {
       const u = todo.pop()!;
       for (const k of bondsOf.get(u) ?? []) {
         const v = drawing.bonds[k].a === u ? drawing.bonds[k].b : drawing.bonds[k].a;
-        if (v !== i && !reached.has(v)) (reached.add(v), todo.push(v));
+        if (v === i || reached.has(v)) continue;
+        reached.add(v);
+        todo.push(v);
       }
     }
     if (donors.slice(1).some((d) => reached.has(d))) return;

@@ -709,7 +709,11 @@ function readStructure(g: Geometry): Structure {
     const reached = new Set([nb[0]]);
     for (const todo = [nb[0]]; todo.length; ) {
       const u = todo.pop()!;
-      for (const v of neighbours[u]) if (v !== a && !reached.has(v)) (reached.add(v), todo.push(v));
+      for (const v of neighbours[u]) {
+        if (v === a || reached.has(v)) continue;
+        reached.add(v);
+        todo.push(v);
+      }
     }
     if (nb.slice(1).some((d) => reached.has(d))) return null;
     if (nb.some((d) => g.elements?.[d] === "*" || isMetal(g.elements?.[d] ?? ""))) return null;
