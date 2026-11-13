@@ -4,7 +4,7 @@
  * sharing an atom or more, laid out together as one piece.
  */
 import { smallestRings } from "./rings";
-import type { Tetrahedral } from "./stereo";
+import type { Cumulated, Tetrahedral } from "./stereo";
 import type { ChemAtom, ChemBond, ChemGraph } from "../chem/perception/graph";
 
 export type { CisTrans } from "../chem/perception/stereo/types";
@@ -21,7 +21,11 @@ export type LayoutAtom = ChemAtom & {
   linear?: boolean;
 };
 export type LayoutBond = ChemBond;
-export type LayoutInput = Omit<ChemGraph, "atoms"> & { atoms: readonly LayoutAtom[] };
+export type LayoutInput = Omit<ChemGraph, "atoms"> & {
+  atoms: readonly LayoutAtom[];
+  /** Its odd runs of cumulated double bonds set cis or trans (a butatriene's: stereo.ts). */
+  cumulated?: readonly Cumulated[];
+};
 
 export type RingSystem = {
   /** Its atoms, in no particular order. */
@@ -51,6 +55,8 @@ export type Molecule = {
   pieces: number[][];
   /** Each stereocentre's configuration, as given. */
   tetra: Map<number, Tetrahedral>;
+  /** Each odd cumulene's cis or trans, as given (`LayoutInput.cumulated`). */
+  cumulated?: readonly Cumulated[];
   /** The atoms asked to be drawn straight through (`LayoutAtom.linear`), each with two bonds. */
   straight: Set<number>;
   /**
@@ -343,6 +349,7 @@ export function perceive(input: LayoutInput): Molecule {
       input.atoms.flatMap((a, i): [number, Tetrahedral][] => (a.tetra ? [[i, a.tetra]] : [])),
     ),
     straight: new Set(input.atoms.flatMap((a, i) => (a.linear && neighbours[i].length === 2 ? [i] : []))),
+    ...(input.cumulated?.length ? { cumulated: input.cumulated } : {}),
     eta,
     units,
     dienes,

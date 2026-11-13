@@ -38,7 +38,8 @@ export const LONG_PRESS_SHOW_MS = 120;
 
 /**
  * How long a pause in a drag takes to let a bond or a moved atom go where
- * the pointer is, off the grid - or to lay down the bond a chain is on. A
+ * the pointer is, off the grid - or a selection turned by its handle go of
+ * its steps - or to lay down the bond a chain is on. A
  * drag slows down as it arrives, and should not let go of the grid on its
  * way there.
  */

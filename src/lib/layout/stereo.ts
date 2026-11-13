@@ -23,6 +23,15 @@ export { drawnVolume };
 // (the types are the core's: lib/chem/perception/stereo/types)
 export type { Axial, Tetrahedral };
 
+/**
+ * An odd run of cumulated double bonds' cis or trans (a butatriene's,
+ * C=C=C=C): its two ends, `atoms`, not bonded to each other, each with two
+ * other neighbours, all of them in one plane; an atom bonded to each end
+ * (`refs`, the first to `atoms[0]`), and whether the two are on the same
+ * side.
+ */
+export type Cumulated = { atoms: readonly [number, number]; refs: readonly [number, number]; cis: boolean };
+
 /** The sign of the torsion p-q-r-s, IUPAC's: + where, looking from q to r, p turns clockwise onto s. */
 export function torsionSense(p: readonly number[], q: readonly number[], r: readonly number[], s: readonly number[]): 1 | -1 | 0 {
   const b1 = [q[0] - p[0], q[1] - p[1], q[2] - p[2]];

@@ -2886,8 +2886,11 @@ for it:
   so *Take frames*' *first* starts it again from the beginning
   (a fault of the machine: memory, a floating point exception) and its
   *last* from where it stopped (an SCF that did not converge, a step the
-  optimiser could not take). A run that stopped before it was under way
-  goes out as it came in.
+  optimiser could not take). What its calculation says of each frame - an
+  RMS gradient - stays on the frame it is of: the geometry it came in with,
+  put first, has none of it, so that the frames and their values are as
+  many, saved and opened again whole. A run that stopped before it was
+  under way goes out as it came in.
 - **Never a result.** Neither the entry nor its frames carry an energy -
   the run's log keeps them - and the entry stays marked failed, so no step takes anything of
   it for a value, until a step succeeds from it.

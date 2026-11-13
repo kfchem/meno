@@ -45,6 +45,7 @@ export function identityInputOf(part: Model): { input: IdentityInput; unread: nu
       return { a: b.a, b: b.b, order: b.order, ...(ct ? { stereo: { refs: ct.refs, cis: ct.cis } } : {}) };
     }),
     ...(stereo.axes.length ? { axes: stereo.axes.map((x) => ({ atoms: x.atoms, refs: x.refs, sense: x.sense })) } : {}),
+    ...(stereo.cumulated.length ? { cumulated: stereo.cumulated.map((x) => ({ atoms: x.atoms, refs: x.refs, cis: x.cis })) } : {}),
   };
   return { input, unread: unreadWedges(drawing, stereo).map((i) => part.atoms[i].id) };
 }

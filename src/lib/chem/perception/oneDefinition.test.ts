@@ -41,6 +41,7 @@ export const STILL_APART: Copy[] = [
   { concept: "rings", file: "lib/layout/rings.ts", name: "ringsAlike", part: 2 },
   { concept: "rings", file: "lib/layout/drawn.ts", name: "inSmallRing", part: 2 },
   { concept: "rings", file: "lib/layout/drawn.ts", name: "ringThrough", part: 2 },
+  { concept: "rings", file: "lib/chem/cip/in3d.ts", name: "ringThrough", part: 2 },
   { concept: "rings", file: "lib/chem/conformersSought.ts", name: "ringBonds", part: 2 },
   { concept: "rings", file: "lib/chem/ordersFromGeometry.ts", name: "smallRings", part: 2 },
   { concept: "rings", file: "lib/chem/protonation.ts", name: "smallRings", part: 2 },
@@ -78,7 +79,7 @@ export const STILL_APART: Copy[] = [
   // permutation parity and signed volume from places
   { concept: "parity", file: "lib/layout/canonical.ts", name: "parity", part: 4 },
   { concept: "parity", file: "lib/layout/ranks.ts", name: "parity", part: 4 },
-  { concept: "parity", file: "lib/chem/cip/index.ts", name: "parity", part: 4 },
+  { concept: "parity", file: "lib/chem/cip/rank.ts", name: "parity", part: 4 },
   { concept: "parity", file: "ui/features/Workspace/workflow/stereoKept.ts", name: "parity", part: 4 },
   { concept: "volume", file: "lib/layout/geometry.ts", name: "drawnVolume", part: 4 },
   { concept: "volume", file: "lib/chem/referenceNumbering.ts", name: "volumeSign", part: 4 },

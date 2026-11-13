@@ -60,7 +60,7 @@ src/
   lib/chem/elements.ts    the one element table: symbol, number, name, colour, van der Waals and covalent radii, each column's source cited
   lib/chem/reactionMap.ts a reaction's full atom map in 3D, hydrogens included (accelMapper.ts: ACCeL's mapper, ported; docs/ATOM-MAPPING.md)
   lib/chem/cip/           R/S and E/Z by Meno's own reading of the CIP rules: prepare.ts (the 1966 conventions), digraph.ts,
-                          rank.ts (rules 1a to 3) - docs/CIP.md; not wired in yet
+                          rank.ts (rules 1a to 5), in3d.ts (a molecule in 3D's) - docs/CIP.md; on the drawing by Workspace/chem/cipMarks (cipWorker.ts)
   lib/chem/perception/    the core of what the chemistry reads of a structure (one definition per concept): graph.ts (the graph the core
                           reads), facts.ts (a graph's neighbours, bonds and pieces, worked out once per graph object), stereo/types.ts (the
                           types for a centre, a double bond and an axis). Two rules, each kept by a test: it imports nothing of the layout's,
