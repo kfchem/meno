@@ -5,16 +5,18 @@
  * moves it. The test fails (a) where a listed copy is no longer declared where the table says - the line must be deleted with the copy, so the list
  * only shrinks - and (b) where a declaration of one of these concepts stands outside the core and outside the table: a copy made anew.
  *
- * What it does not catch: a copy under a name that is none of the patterns, one declared inside another function, one as a method; a copy of the
- * rule with no name of its own. That is a reviewer's to see. A new entry in the table needs a reason a reviewer accepts: a copy that stays by design
+ * What it does not catch: a copy under a name that is none of the patterns, one declared inside another function, one as a method, an `interface X`
+ * or an `export default`; a copy of the rule with no name of its own. That is a reviewer's to see. A new entry in the table needs a reason a reviewer accepts: a copy that stays by design
  * says why (`why`), the layout's own choice of ring set, a display.
  */
 import { describe, expect, it } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 
 const SRC = resolve(__dirname, "../../..");
 const CORE = __dirname;
+/** A path with forward slashes, as the table writes one, on Windows too. */
+const slash = (p: string) => p.split(sep).join("/");
 
 export type Copy = { concept: string; file: string; name: string; part: number | string; why?: string };
 
@@ -146,7 +148,7 @@ describe("one definition per concept: the ratchet", () => {
     const listed = new Set(STILL_APART.map((c) => `${c.file}|${c.name}`));
     const found = files(SRC).flatMap((f) => {
       const text = readFileSync(f, "utf8");
-      const file = relative(SRC, f);
+      const file = slash(relative(SRC, f));
       return Object.values(CONCEPTS).flatMap((re) => declarationsIn(text, re).map((d) => ({ file, ...d })));
     });
     const unlisted = found.filter((d) => !listed.has(`${d.file}|${d.name}`)).map((d) => `${d.file}:${d.line} ${d.name}`);
