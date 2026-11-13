@@ -1,13 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 import type * as THREE from "three";
+import { markLocked } from "../../../../lib/doc/locked";
 import { FADE_MS, levelFor, OVERSAMPLE, Pictures, PREVIEWS_AHEAD, QUICK, PREVIEW_PX, TILE, UNDER_MOST, type Pic, type TileAsk } from "./pdfPictures";
 import { measured } from "../../../../testing/timeouts";
 
 // (the reader: a tile drawn at once - or, while `hold` is set, never)
-const reader = vi.hoisted(() => ({ hold: false, asked: [] as { page: number; nearness: number }[] }));
+const reader = vi.hoisted(() => ({ hold: false, fail: null as "reject" | "none" | null, asked: [] as { page: number; nearness: number }[] }));
 vi.mock("../../../../lib/pdf/reader", () => ({
   drawPart: (a: { page: number; w?: number; h?: number }, nearness: () => number = () => 0) => {
     reader.asked.push({ page: a.page, nearness: nearness() });
+    if (reader.fail === "reject") return Promise.reject(new Error("the page could not be drawn"));
+    if (reader.fail === "none") return Promise.resolve(null);
     return reader.hold ? new Promise(() => {}) : Promise.resolve({ bitmap: { width: a.w ?? 360, height: a.h ?? 360 }, w: a.w ?? 360, h: a.h ?? 360, ms: 1 });
   },
 }));
@@ -241,5 +244,64 @@ describe("the small pictures of the pages either side, drawn ahead", () => {
     // (nearer ones first)
     expect(pages.slice(0, 4).sort((a, b) => a - b)).toEqual([1, 2, 4, 5]);
   });
-});
 
+  it("goes on past a page whose reading fails - an error or nothing drawn - its place freed, the page not asked ahead again but asked when it is seen", async () => {
+    for (const fail of ["reject", "none"] as const) {
+      reader.asked.length = 0;
+      reader.fail = fail;
+      const pics = new Pictures();
+      pics.previewsAround(pdf, 10);
+      expect(reader.asked.map((a) => a.page), fail).toEqual([11, 9]);
+      await new Promise((r) => setTimeout(r, 0));
+      // (neither kept as asked)
+      expect(pics.previews.has(`${pdf.sha256}:11`), fail).toBe(false);
+      expect(pics.previews.has(`${pdf.sha256}:9`), fail).toBe(false);
+      reader.fail = null;
+      reader.hold = true;
+      pics.previewsAround(pdf, 10);
+      // (the next two, not the two that failed)
+      expect(reader.asked.slice(2).map((a) => a.page), fail).toEqual([12, 8]);
+      // (seen, the one that failed is asked again, first in the queue)
+      pics.preview(pdf, 11);
+      expect(reader.asked[reader.asked.length - 1], fail).toEqual({ page: 11, nearness: -1 });
+      reader.hold = false;
+    }
+  });
+
+  it("never asks past the PDF's last page, nor anything of a PDF locked with a password", async () => {
+    reader.asked.length = 0;
+    const pics = new Pictures();
+    for (let k = 0; k < 40; k++) {
+      pics.previewsAround(pdf, 38);
+      await Promise.resolve();
+      await Promise.resolve();
+    }
+    expect(Math.max(...reader.asked.map((a) => a.page))).toBe(39);
+    // (from page 38 of 40: the one page after it, and the twelve before it)
+    expect([...reader.asked.map((a) => a.page)].sort((a, b) => a - b)).toEqual([...Array.from({ length: PREVIEWS_AHEAD }, (_, d) => 26 + d), 39]);
+    reader.asked.length = 0;
+    const locked = { ...pdf, sha256: "locked-pdf" };
+    markLocked(locked.sha256);
+    new Pictures().previewsAround(locked, 10);
+    expect(reader.asked).toEqual([]);
+  });
+
+  it("asks twelve pages either way, a nearer page before a farther one, and every one after a page asked as it is seen", async () => {
+    expect(PREVIEWS_AHEAD).toBe(12);
+    reader.asked.length = 0;
+    reader.hold = true;
+    const pics = new Pictures();
+    for (let k = 0; k < 15; k++) {
+      pics.previewsAround(pdf, 20);
+      (pics as unknown as { aheadAsked: Set<string> }).aheadAsked.clear();
+    }
+    const near = reader.asked.find((a) => a.page === 21)!.nearness;
+    const far = reader.asked.find((a) => a.page === 32)!.nearness;
+    expect(near).toBeLessThan(far);
+    pics.preview(pdf, 5);
+    const seen = reader.asked[reader.asked.length - 1];
+    expect(seen.page).toBe(5);
+    expect(reader.asked.slice(0, -1).every((a) => seen.nearness < a.nearness)).toBe(true);
+    reader.hold = false;
+  });
+});

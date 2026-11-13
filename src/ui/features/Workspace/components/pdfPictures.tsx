@@ -175,6 +175,8 @@ export class Pictures {
   private arriving: { key: string; d: DrawnPart; preview?: true }[] = [];
   /** The previews asked ahead (`previewsAround`) not yet come. */
   private aheadAsked = new Set<string>();
+  /** The previews asked ahead whose reading failed (none drawn, or an error): not asked ahead again. */
+  private aheadFailed = new Set<string>();
   /** The part of each page last asked for as seen, by PDF and page: its level, and its pixels at it. */
   seen = new Map<string, { level: number; x0: number; y0: number; x1: number; y1: number }>();
   private listeners = new Set<() => void>();
@@ -197,21 +199,21 @@ export class Pictures {
     return null;
   }
 
-  /** A page's preview asked of the reader, `nearness` its place in the reader's queue (smaller first); `done` told once it is had or not. */
-  private askPreview(p: { sha256: string; pages: readonly (readonly [number, number])[] }, page: number, nearness: number, done?: () => void): void {
+  /** A page's preview asked of the reader, `nearness` its place in the reader's queue (smaller first); `done` told once it is had (true) or not. */
+  private askPreview(p: { sha256: string; pages: readonly (readonly [number, number])[] }, page: number, nearness: number, done?: (had: boolean) => void): void {
     const key = `${p.sha256}:${page}`;
     this.previews.set(key, "asked");
     const [w] = p.pages[page];
     void drawPart({ sha256: p.sha256, page, scale: PREVIEW_PX / w }, () => nearness)
       .then((d) => {
-        done?.();
+        done?.(!!d);
         if (!d) return void this.previews.delete(key);
         // (put on the graphics card as the tiles are, a frame at a time - not all in the frame they come in, nor inside the draw)
         this.arriving.push({ key, d, preview: true });
         this.came();
       })
       .catch(() => {
-        done?.();
+        done?.(false);
         this.previews.delete(key);
       });
   }
@@ -226,9 +228,13 @@ export class Pictures {
       for (const i of [page + d, page - d]) {
         if (i < 0 || i >= p.pages.length || this.aheadAsked.size >= AHEAD_AT_ONCE) continue;
         const key = `${p.sha256}:${i}`;
-        if (this.previews.has(key)) continue;
+        // (one whose reading failed is not asked ahead again: only when it is seen - else a page that always fails is asked each frame)
+        if (this.previews.has(key) || this.aheadFailed.has(key)) continue;
         this.aheadAsked.add(key);
-        this.askPreview(p, i, 1 + d, () => this.aheadAsked.delete(key));
+        this.askPreview(p, i, 1 + d, (had) => {
+          this.aheadAsked.delete(key);
+          if (!had) this.aheadFailed.add(key);
+        });
       }
     }
   }
