@@ -52,6 +52,21 @@ describe("a chain's C=O", () => {
     expect(carbonyls("OC(=O)CCC(=O)C(=O)O")).toEqual([90, -90, 90]);
   });
 
+  it("leaves a folded fatty acid, and its methyl ester, as it was: the carboxyl on the right, above its tail (the maintainer's lipid convention)", () => {
+    // (the C=O carbon, the tail's methyl - atom 0 - and the carboxyl's own C=O, as main draws them: pinned so)
+    const ends = (smiles: string) => {
+      forgetLaidOut();
+      const input = fromSmiles(smiles);
+      const out = layout2D(input);
+      const b = input.bonds.find((x) => x.order === 2 && (input.atoms[x.a].el === "O" || input.atoms[x.b].el === "O"))!;
+      const c = input.atoms[b.a].el === "O" ? b.b : b.a;
+      return { right: out.x[c] > out.x[0] - 1e-6, above: out.y[c] > out.y[0] + 1e-6 };
+    };
+    expect(ends("CCCCC/C=C\\C/C=C\\C/C=C\\C/C=C\\CCCC(=O)O")).toEqual({ right: true, above: true });
+    expect(ends("CCCCC/C=C\\C/C=C\\C/C=C\\CCCCC(=O)O")).toEqual({ right: true, above: true });
+    expect(ends("CCCCC/C=C\\C/C=C\\C/C=C\\C/C=C\\CCCC(=O)OC")).toEqual({ right: true, above: true });
+  });
+
   it("two that the zigzag lets both be up are both up; two that it does not, one up and one down, the chain a zigzag still - never bent to lay one level", () => {
     expect(carbonyls("CCC(=O)CC(C)=O")).toEqual([90, 90]);
     for (const smiles of ["CC(=O)CCC(C)=O", "CC(C)=O.CC(=O)CCC(C)=O".split(".")[1], "O=C(C)CCC(=O)C"]) {

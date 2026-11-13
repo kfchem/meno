@@ -1694,6 +1694,16 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
         }
       }
     }
+    // (a chain's own C=O - a ketone's, an ester's, an amide's, the chain running on through its carbon either side: below)
+    const chainCarbonyl = (a: number): number | null => {
+      if (el[a] !== "C" || inRing.has(a) || neighbours[a].length !== 3) return null;
+      const oxo = neighbours[a].filter((b) => el[b] === "O" && orderAt(a, b) === 2);
+      if (oxo.length !== 1) return null;
+      const on = neighbours[a].filter((b) => b !== oxo[0]);
+      if (on.some((b) => inRing.has(b) || (el[b] === "O" && ((g.hydrogens?.[b] ?? 0) > 0 || neighbours[b].length === 1)))) return null;
+      return oxo[0];
+    };
+    const competing = [...Array(n).keys()].some((a) => chainCarbonyl(a) != null);
     // an acid's C=O up: the way it is always drawn - at the end of a chain,
     // or on an aromatic ring, in its plane (one on a saturated ring's
     // stereocentre goes where its stereo bond puts it: penicillin's down)
@@ -1709,11 +1719,11 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
           ((g.hydrogens?.[b] ?? 0) > 0 || neighbours[b].length === 1),
       );
       if (oxo.length !== 1 || hydroxy.length !== 1) continue;
-      // (up, at the end of a chain: within 45 degrees of straight up, as a chain's own C=O below - one turned to lie
-      // level, the chain bent to put it there, is not; on a ring, in its plane, wherever the ring lets it rise)
-      const onRing = neighbours[a].some((b) => inRing.has(b));
+      // (where a chain's own C=O competes for the up place - a keto acid's - up at the end of a chain is within 45 degrees
+      // of straight up, as that C=O's is below: the acid's not laid level for it; else, as ever, anything not level)
+      const strict = competing && !neighbours[a].some((b) => inRing.has(b));
       if (y[oxo[0]] < y[a] - 0.2 * L) readingOrder++;
-      else if (y[oxo[0]] < y[a] + (onRing ? 0.2 : 0.7) * L) readingOrder += 0.5;
+      else if (y[oxo[0]] < y[a] + (strict ? 0.7 : 0.2) * L) readingOrder += 0.5;
     }
     // and a double-bonded O on a cross above the chain through it, as
     // IUPAC puts a double-bonded branch on a chain (GR-3.2.2, where below
@@ -1734,26 +1744,21 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
     // (levulinic acid), the acid's is, as the maintainer has it. One on a
     // ring's atom or beside a ring goes where the ring puts it.
     for (let a = 0; a < n; a++) {
-      if (el[a] !== "C" || inRing.has(a) || neighbours[a].length !== 3) continue;
-      const oxo = neighbours[a].filter((b) => el[b] === "O" && orderAt(a, b) === 2);
-      if (oxo.length !== 1) continue;
-      const on = neighbours[a].filter((b) => b !== oxo[0]);
-      if (on.some((b) => inRing.has(b) || (el[b] === "O" && ((g.hydrogens?.[b] ?? 0) > 0 || neighbours[b].length === 1)))) continue;
+      const oxo = chainCarbonyl(a);
       // (up: within 45 degrees of straight up - one laid level, the chain bent to put it there, is not)
-      if (y[oxo[0]] < y[a] + 0.7 * L) readingOrder += 0.25;
+      if (oxo != null && y[oxo] < y[a] + 0.7 * L) readingOrder += 0.25;
     }
     // A chain folded back on itself - a fatty acid drawn as a hairpin, a
     // prostaglandin's two chains from its ring, both running off to the
     // right - has its carboxyl end above its tail: read from the carboxyl,
-    // as arachidonic acid is drawn, and as IUPAC sets prostane.
+    // as arachidonic acid is drawn, and as IUPAC sets prostane. An ester's
+    // carboxyl so too (methyl arachidonate), as its acid is.
     for (let a = 0; a < n; a++) {
       if (el[a] !== "C" || inRing.has(a)) continue;
       const oxo = neighbours[a].filter((b) => el[b] === "O" && orderAt(a, b) === 2);
-      const hydroxy = neighbours[a].filter(
-        (b) => el[b] === "O" && orderAt(a, b) === 1 && ((g.hydrogens?.[b] ?? 0) > 0 || neighbours[b].length === 1),
-      );
+      const oxy = neighbours[a].filter((b) => el[b] === "O" && orderAt(a, b) === 1);
       const on = neighbours[a].filter((b) => el[b] === "C");
-      if (oxo.length !== 1 || hydroxy.length !== 1 || on.length !== 1) continue;
+      if (oxo.length !== 1 || oxy.length !== 1 || on.length !== 1) continue;
       // its tail: the methyl farthest from it along the bonds
       const far = new Array<number>(n).fill(-1);
       far[a] = 0;
