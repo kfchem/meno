@@ -1,10 +1,9 @@
-import { useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import type * as THREE from "three";
 import type { Style3D } from "../../../../lib/chem/style3d";
 import type { Molecule3D } from "../store/types";
 import Molecule3DView from "./Molecule3DView";
-import { probeNewPrograms } from "../../../../lib/core/frameProbe";
+import { useCompiledAfterFrame, useIdleStart } from "./warmShaders";
 
 /**
  * The page's shaders for molecules in 3D made ready before the first is put
@@ -21,21 +20,8 @@ import { probeNewPrograms } from "../../../../lib/core/frameProbe";
  * atoms' work.
  */
 export default function WarmShaders3D({ style, stereoFont }: { style: Style3D; stereoFont: Parameters<typeof Molecule3DView>[0]["stereoFont"] }) {
-  const [on, setOn] = useState(false);
-  useEffect(() => {
-    // (once the page is idle as it starts: never in the way of its first frames)
-    const idle = (globalThis as { requestIdleCallback?: (f: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
-    const cancel = (globalThis as { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
-    if (idle && cancel) {
-      const id = idle(() => setOn(true), { timeout: 2000 });
-      return () => cancel(id);
-    }
-    const id = setTimeout(() => setOn(true), 500);
-    return () => clearTimeout(id);
-  }, []);
-  useEffect(() => {
-    if (on) console.warn(`[probe] warm: unseen molecule put in at ${performance.now().toFixed(0)}ms`);
-  }, [on]);
+  // (once the page is idle as it starts: never in the way of its first frames)
+  const on = useIdleStart();
   return on ? <Warmed style={style} stereoFont={stereoFont} /> : null;
 }
 
@@ -75,37 +61,10 @@ const nothing = () => {};
  */
 function Warmed({ style, stereoFont }: { style: Style3D; stereoFont: Parameters<typeof Molecule3DView>[0]["stereoFont"] }) {
   const group = useRef<THREE.Group>(null!);
-  const { gl, camera, scene, invalidate } = useThree();
-  // (asked as it is put in and with each style; done after the next frame of the page's, never in it)
-  const asked = useRef(false);
-  const frame = useRef(0);
-  useEffect(() => {
-    asked.current = true;
-    invalidate();
-    return () => {
-      asked.current = false;
-      cancelAnimationFrame(frame.current);
-    };
-  }, [style, invalidate]);
-  useFrame(() => {
-    if (!asked.current) return;
-    asked.current = false;
-    frame.current = requestAnimationFrame(() => {
-      if (group.current) {
-        // TEMPORARY PROBE (not for merge): the warm-up's compile, its programs named
-        console.warn(`[probe] warm: compile asked at ${performance.now().toFixed(0)}ms, programs ${gl.info.programs?.length ?? 0}, shadowMap ${gl.shadowMap.enabled}`);
-        probeNewPrograms(gl as never, "before the warm-up's compile");
-        const at = performance.now();
-        void gl
-          .compileAsync(group.current, camera, scene)
-          .then(() => console.warn(`[probe] warm: compile done after ${(performance.now() - at).toFixed(0)}ms, programs ${gl.info.programs?.length ?? 0}`))
-          .catch((e) => console.warn(`[probe] warm: compile failed: ${String(e)}`));
-        probeNewPrograms(gl as never, "by the warm-up's compile");
-      }
-    });
-  });
+  // (as it is put in and with each style; after the next frame of the page's, never in it)
+  useCompiledAfterFrame(group, true, style);
   return (
-    <group ref={group} visible={false} position={[1e6, 1e6, 0]}>
+    <group ref={group} visible={false} position={[1e6, 1e6, 0]} userData={{ warm: "3d" }}>
       <Molecule3DView
         m={WARM}
         style={style}

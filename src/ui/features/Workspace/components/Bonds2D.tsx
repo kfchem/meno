@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { useDrawnLayout } from "./drawnLayoutContext";
-import { colorInstances, widenedMaterial } from "./instances";
+import { colorInstances, whiteInstances, widenedMaterial } from "./instances";
 import { lineWidening } from "../utils/largeZoom";
 
 /** The drawing's lines, from the shared layout: bonds, hashes, waves. */
@@ -30,6 +30,7 @@ export function Bonds2D() {
   const [countCap, setCountCap] = useState(() =>
     Math.max(layout.lines.length * 2, 64),
   );
+  const white = useMemo(() => whiteInstances(countCap), [countCap]);
 
   useEffect(() => {
     const m = inst.current;
@@ -81,6 +82,8 @@ export function Bonds2D() {
     >
       <planeGeometry args={[1, 1]} />
       <primitive object={drawn.material} attach="material" dispose={null} />
+      {/* (its colours there from the start: utils `whiteInstances`) */}
+      <instancedBufferAttribute attach="instanceColor" args={[white, 3]} />
     </instancedMesh>
   );
 }
