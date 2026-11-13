@@ -516,7 +516,7 @@ that it is a drawing like any other - nothing remembers that a tool made it - an
 (`volumeInSpace`, lib/layout/drawn). A chair is first drawn in form 1, seen from above and from the right, as ST-3.1 prefers; a second click on
 the icon, while the chair it put down is as it was with nothing done since, turns it to form 0, the view from the other side, as one step, and a
 third back (`putChair`; the icon's tip says so: "Click again for the view from the other side"). Built so far: the **chair**
-(`Workspace/projections/`: `chair`, `extend`, `flip`); the Haworth ring and the Newman projection follow.
+(`Workspace/projections/`: `chair`, `extend`, `flip`, `fuse`); the Haworth ring and the Newman projection follow.
 - **Groups are drawn by extension.** A bond led out of an atom of a chair goes to one of that atom's free positions, as the solid gives them seen as it is
   seen - the nearer the pointer's direction - and nowhere between, held or paused, so that nothing drawn on a chair is unread; a position a group holds is
   not offered; both held, the stroke goes as any. The pointer's tip says what the place is - "axial" or "equatorial" - not how it is read
@@ -525,21 +525,25 @@ third back (`putChair`; the icon's tip says so: "Click again for the view from t
 - **Right-click** (an atom or a bond of a structure holding a chair): *Flip chair* - every ring atom takes the flipped solid's place and depth and each group
   goes from axial to equatorial or back **on the same face**, what hangs from it carried with it; the compound is the same, and Meno's own guard
   (`sameStereo`) is asserted before anything moves - a failure is a fault of Meno's, said, nothing moved. Offered where the structure holds one chair
-  and every group stands at one of its atom's free positions (a group drawn by hand is not guessed at), and where the chair stands alone (`ringAlone`:
-  a ring fused, bridged or spiro on it makes it no one chair of the tool's, and it is not flipped).
+  and every group stands at one of its atom's free positions (a group drawn by hand is not guessed at; a fused system is not flipped by the tool yet).
   *Draw flat* lays the structure out flat by Meno's engine, wedges for the depth, the configuration kept - refused in words as any Clean-up is where it
   would not be.
+- **Fusing** (a ring bond of the chair right-clicked): three ways, never two - *trans*, *cis on the upper face* and *cis on the lower face* (`fused` of
+  the solids). On a bare chair the two cis are one compound; on a ring that carries a group, or another fused ring, they are different compounds
+  (cis-syn-cis against cis-anti-cis), so the tool does not choose between them. Refused, in words, where a group stands at a place the new ring
+  would take or another atom where one of its own would go. (The look owner's drag of the icon onto the bond, with a preview of the three ways, is not
+  built: the menu is the way in November.)
 - **Clean-up leaves a chair as drawn** and says so (`CleanUpRefused`); *Draw flat* is `cleanUp` asked to lay it out. **3D** from a chair takes its
   configuration through the wedges a flat reader is given (`forFlatReaders`) - a 2D block with every z zero, the places of the picture a start for
   nothing - and the drawn conformation is neither a start nor a limit of the conformer search; a notice says so when it is made. Known answers
   (tests): every pair of groups on a chair, in either view and either flip, read back from the MOL a flat reader is given as the same identity; trans-
-  1,2-dimethylcyclohexane diequatorial and flipped diaxial are one compound, cis another.
+  1,2-dimethylcyclohexane diequatorial and flipped diaxial are one compound, cis another; trans- and cis-decalin by fusing are two, and on a ring
+  with one methyl the two cis fusions and trans are three.
 - **What a chair states.** A projection always states a configuration (Brecher 2008, ST-3.2: every centre without a wavy bond): a group led out
   "wherever it fits" has drawn one, meant or not, and the R and S shown are the check. To leave a centre open, make its bond wavy. An atom dragged by
   hand keeps its depth: what is read may change, and only the labels say so.
-- **Limits.** No five-ring or bridged ring from the tools; no ring fused on a chair by the tool yet (it waits for the depth reader, which reads a
-  fused pair's groups right); no boat or twist from a tool (one can be drawn bond by bond); flat to chair is not offered; a fused system is not
-  flipped by the tool; form 0 is reached only by the icon's second click, not on a chair already edited.
+- **Limits.** No five-ring or bridged ring from the tools; no boat or twist from a tool (one can be drawn bond by bond); flat to chair is not offered;
+  a fused system is not flipped by the tool; form 0 is reached only by the icon's second click, not on a chair already edited.
 
 *SMILES*, *Scheme*, *Projections*, *Marks on the page* and *Calculations* open and shut their panels a click
 at a time - a double-click's second click not counted (`togglesOn`,
