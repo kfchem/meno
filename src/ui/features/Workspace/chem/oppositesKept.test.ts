@@ -4,6 +4,8 @@ import { laidOut } from "./cleanUp";
 import { MENO } from "../../../../lib/chem/style";
 import { forgetLaidOut, type Layout2D, type LayoutInput } from "../../../../lib/layout/engine";
 import { oppositesKept } from "./engineLayout";
+import { drawingOf } from "./drawing";
+import { readStereo, sameConfiguration } from "../../../../lib/layout/drawn";
 
 // Clean-up keeps a four-bond metal's donors opposite each other as they were drawn: transplatin cleaned up is transplatin, not
 // cisplatin - a different compound - whatever order its atoms were drawn in, as an X or upright (chem/engineLayout `oppositesKept`).
@@ -151,4 +153,133 @@ describe("a four-bond metal cleaned up", () => {
     // (the H on N2's C turned with it)
     expect(Math.round((Math.atan2(out.hydrogens[0].at.y, out.hydrogens[0].at.x) * 180) / Math.PI)).toBe(deg(6));
   });
+
+  it("keeps it for a chelate's donors and for six spokes: trans- and cis-Pt(gly)2, both Pt(gly)(NH3)Cl, trans- and cis-[CoCl2(NH3)4]+, trans-[PtCl2(NH3)4]2+", { timeout: 180000 }, async () => {
+    forgetLaidOut();
+    for (const [name, model, want] of [
+      ["trans-Pt(gly)2", complex("Pt", 0, [gly("a"), gly("b")], [0, 1, 2, 3], ["Na", "Oa", "Nb", "Ob"]), ["Na-Nb", "Oa-Ob"]],
+      ["cis-Pt(gly)2", complex("Pt", 0, [gly("a"), gly("b")], [0, 1, 2, 3], ["Na", "Oa", "Ob", "Nb"]), ["Na-Ob", "Nb-Oa"]],
+      ["Pt(gly)(NH3)Cl, Cl opposite N", complex("Pt", 0, [gly("a"), "Cl", "NH3"], [0, 1, 2, 3], ["Na", "Oa", "Cl", "NH3"]), ["Cl-Na", "NH3-Oa"]],
+      ["Pt(gly)(NH3)Cl, Cl opposite O", complex("Pt", 0, [gly("a"), "Cl", "NH3"], [0, 1, 2, 3], ["Na", "Oa", "NH3", "Cl"]), ["Cl-Oa", "NH3-Na"]],
+      ["trans-[CoCl2(NH3)4]+", complex("Co", 1, ["Cl", "Cl", "NH3", "NH3", "NH3", "NH3"], [0, 1, 2, 3, 4, 5], ["Cl", "NH3", "NH3", "Cl", "NH3", "NH3"]), ["Cl-Cl", "NH3-NH3", "NH3-NH3"]],
+      ["cis-[CoCl2(NH3)4]+", complex("Co", 1, ["Cl", "Cl", "NH3", "NH3", "NH3", "NH3"], [0, 1, 2, 3, 4, 5], ["Cl", "Cl", "NH3", "NH3", "NH3", "NH3"]), ["Cl-NH3", "Cl-NH3", "NH3-NH3"]],
+      ["trans-[PtCl2(NH3)4]2+", complex("Pt", 2, ["Cl", "Cl", "NH3", "NH3", "NH3", "NH3"], [0, 1, 2, 3, 4, 5], ["Cl", "NH3", "NH3", "Cl", "NH3", "NH3"]), ["Cl-Cl", "NH3-NH3", "NH3-NH3"]],
+    ] as const) {
+      const out = await laidOut(model.model, MENO);
+      expect(spokes(out, model.names), name).toEqual(want);
+    }
+  });
+
+  it("keeps a chelate's centres as they were when it is mirrored: trans- and cis-Pt(L-ala)2", { timeout: 120000 }, async () => {
+    forgetLaidOut();
+    for (const [order, want] of [
+      [["Na", "Oa", "Nb", "Ob"], ["Na-Nb", "Oa-Ob"]],
+      [["Na", "Oa", "Ob", "Nb"], ["Na-Ob", "Nb-Oa"]],
+    ] as const) {
+      const { model, names } = complex("Pt", 0, [ala("a"), ala("b")], [0, 1, 2, 3], order);
+      const before = configurations(model);
+      expect(before.size).toBe(2);
+      const out = await laidOut(model, MENO);
+      expect(spokes(out, names), want.join(", ")).toEqual(want);
+      const after = configurations(out);
+      for (const [c, t] of before) expect(sameConfiguration(after.get(c)!, t), `${want.join(", ")}: centre ${c}`).toBe(true);
+    }
+  });
 });
+
+type Chelate = { tag: string; methyl?: true };
+const gly = (tag: string): Chelate => ({ tag });
+const ala = (tag: string): Chelate => ({ tag, methyl: true });
+
+/**
+ * A metal with its donors drawn round it as spokes, `slots[k]` the k-th spoke's place (in steps of 360/n degrees, n the spokes),
+ * a little askew as by hand: `parts` - a Cl, an NH3, or a glycinate (alaninate, its methyl on a wedge) taking two neighbouring
+ * spokes, its N first - and `names`, each spoke's donor named as `spokes` reports it.
+ */
+function complex(el: string, charge: number, parts: readonly (string | Chelate)[], slots: readonly number[], names: readonly string[]) {
+  const n = names.length;
+  const atoms: Model["atoms"] = [{ id: 1, x: 0, y: 0, r: 0.9, el, ...(charge ? { charge } : {}) }] as Model["atoms"];
+  const bonds: Model["bonds"] = [];
+  const named = new Map<number, string>();
+  let id = 2;
+  const add = (a: Record<string, unknown>) => {
+    const k = id++;
+    atoms.push({ id: k, r: 0.9, ...a } as Model["atoms"][number]);
+    return k;
+  };
+  const bond = (a: number, b: number, order: 1 | 2 = 1, wedge?: number) =>
+    bonds.push({ id: 1000 + bonds.length, a, b, order, stereo: wedge != null ? "up" : "none", ...(wedge != null ? { narrow: wedge } : {}) } as Model["bonds"][number]);
+  const at = (slot: number, r = 1.5) => {
+    const t = ((360 / n) * slots[slot] + 4) * (Math.PI / 180);
+    return { x: r * Math.cos(t), y: r * Math.sin(t) };
+  };
+  // (each donor at the first spoke named for it not yet taken: a chelate's N and O at theirs)
+  const taken = new Set<number>();
+  for (const part of parts) {
+    if (typeof part === "string") {
+      const k = names.findIndex((x, j) => x === part && !taken.has(j));
+      taken.add(k);
+      const d = add({ ...at(k), el: part === "Cl" ? "Cl" : "N", ...(part === "NH3" ? { valence: 4 } : {}) });
+      named.set(d, names[k]);
+      bond(1, d);
+      continue;
+    }
+    // (the chelate's N at one spoke, its O at the next named for it, its ring outward between them)
+    const ni = names.indexOf(`N${part.tag}`);
+    const oi = names.indexOf(`O${part.tag}`);
+    const N = add({ ...at(ni), el: "N" });
+    const O = add({ ...at(oi), el: "O" });
+    named.set(N, names[ni]);
+    named.set(O, names[oi]);
+    const mid = { x: (at(ni).x + at(oi).x) / 2, y: (at(ni).y + at(oi).y) / 2 };
+    const out = Math.hypot(mid.x, mid.y) || 1;
+    const u = { x: mid.x / out, y: mid.y / out };
+    const ca = add({ x: at(ni).x + 1.2 * u.x, y: at(ni).y + 1.2 * u.y, el: "C" });
+    const co = add({ x: at(oi).x + 1.2 * u.x, y: at(oi).y + 1.2 * u.y, el: "C" });
+    const o2 = add({ x: at(oi).x + 2.4 * u.x, y: at(oi).y + 2.4 * u.y, el: "O" });
+    bond(1, N);
+    bond(1, O);
+    bond(N, ca);
+    bond(ca, co);
+    bond(co, O);
+    bond(co, o2, 2);
+    if (part.methyl) {
+      const me = add({ x: at(ni).x + 2.2 * u.x, y: at(ni).y + 2.2 * u.y + 0.6, el: "C" });
+      bond(ca, me, 1, ca);
+    }
+    taken.add(ni);
+    taken.add(oi);
+  }
+  return { model: { atoms, bonds } as Model, names: named };
+}
+
+/** Which donors stand opposite which round the metal (id 1), by their names: the pairing nearest straight lines, each pair sorted. */
+function spokes(model: Model, names: ReadonlyMap<number, string>): string[] {
+  const m = model.atoms.find((a) => a.id === 1)!;
+  const ids = [...names.keys()];
+  const angle = (id: number) => {
+    const a = model.atoms.find((x) => x.id === id)!;
+    return Math.atan2(a.y - m.y, a.x - m.x);
+  };
+  const off = (p: number, q: number) => Math.abs(Math.PI - Math.abs(Math.atan2(Math.sin(angle(p) - angle(q)), Math.cos(angle(p) - angle(q)))));
+  let best: { pairs: [number, number][]; off: number } = { pairs: [], off: Infinity };
+  const pair = (left: number[], pairs: [number, number][], sum: number) => {
+    if (!left.length) {
+      if (sum < best.off) best = { pairs: [...pairs], off: sum };
+      return;
+    }
+    const [i, ...rest] = left;
+    for (const j of rest) pair(rest.filter((k) => k !== j), [...pairs, [i, j]], sum + off(i, j));
+  };
+  pair(ids, [], 0);
+  return best.pairs.map((p) => p.map((d) => names.get(d)!).sort().join("-")).sort();
+}
+
+/** Each centre's configuration as `model` is read, by atom id. */
+function configurations(model: Model) {
+  const d = drawingOf(model);
+  const ids = model.atoms.map((a) => a.id);
+  const out = new Map<number, { neighbours: number[]; volume: 1 | -1 }>();
+  for (const [c, t] of readStereo(d.atoms, d.bonds).tetra) out.set(ids[c], { neighbours: t.neighbours.map((n) => (n < 0 ? -1 : ids[n])), volume: t.volume });
+  return out;
+}
