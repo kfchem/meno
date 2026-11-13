@@ -115,6 +115,62 @@ const apart = (t: number, u: number) => Math.abs(Math.atan2(Math.sin(t - u), Mat
 const IN_LINE_WHY = "two of its bonds in line or on top of each other";
 
 /**
+ * Why a centre drawn flat with four bonds states no configuration - or null where it states one - by the forms Brecher 2006 (ST-1.1) calls
+ * ambiguous or the picture of another shape (read as open, never guessed), `lifts` each bond's
+ * +1 (a wedge narrow at the centre), -1 (hashes) or 0. "Half a turn" with `IN_LINE`'s tolerance either way (ST-0.1): a deciding gap in that band
+ * says nothing either. Open:
+ * - four wedges of one kind (ST-1.1.20);
+ * - three of one kind and one other, the other in the space of half a turn or more between two of the three (ST-1.1.9);
+ * - two plain, a wedge and hashes: the plain bonds not next to each other (ST-1.1.10, 1.1.15), or next to each other and half a turn or more
+ *   apart (ST-1.1.13, 1.1.14);
+ * - two of one kind of wedge and two plain, like next to like: every gap under half a turn (ST-1.1.11) or the plain bonds more than half a turn
+ *   apart (ST-1.1.19);
+ * - three plain and a wedge, two plain bonds next to each other half a turn or more apart and the wedge not in that space (ST-1.1.16);
+ * - two wedges and two hashes, like next to like (ST-1.1.17, 1.1.18).
+ * Read as before: the forms the text gives a configuration, ST-1.1.4's (three plain, two half a turn or more apart, the wedge in that space) and
+ * ST-1.1.12's among them.
+ */
+function fourBondsSayNothing(at: { x: number; y: number }, around: readonly { x: number; y: number }[], lifts: readonly number[]): string | null {
+  const t = around.map((p) => Math.atan2(p.y - at.y, p.x - at.x));
+  const turn = (a: number) => ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+  const order = [0, 1, 2, 3].sort((a, b) => turn(t[a]) - turn(t[b]));
+  // (each gap from a bond to the next round the centre)
+  const gaps = order.map((k, m) => ({ from: k, to: order[(m + 1) % 4], size: turn(t[order[(m + 1) % 4]] - t[k]) }));
+  const atLeastHalf = (g: number) => g > Math.PI - IN_LINE;
+  const next = (a: number, b: number) => gaps.some((g) => (g.from === a && g.to === b) || (g.from === b && g.to === a));
+  const kinds = [0, 1, -1].map((k) => [0, 1, 2, 3].filter((i) => lifts[i] === k));
+  const [plain, up, down] = kinds;
+  const WHY = "its four bonds are not drawn as a tetrahedral centre's: draw two of them in the page side by side, a wedge and hashes on the far side";
+  if (up.length === 4 || down.length === 4) return WHY;
+  // (three of one wedge kind and one other: the other in the wide space between two of the three)
+  for (const three of [up, down]) {
+    if (three.length !== 3) continue;
+    const odd = [0, 1, 2, 3].find((i) => !three.includes(i))!;
+    const m = order.indexOf(odd);
+    const [before, after] = [order[(m + 3) % 4], order[(m + 1) % 4]];
+    if (atLeastHalf(turn(t[after] - t[before]))) return WHY;
+  }
+  if (plain.length === 2 && up.length === 1 && down.length === 1) {
+    if (!next(plain[0], plain[1])) return WHY;
+    const between = gaps.find((g) => plain.includes(g.from) && plain.includes(g.to))!;
+    if (atLeastHalf(between.size)) return WHY;
+  }
+  if (plain.length === 2 && (up.length === 2 || down.length === 2)) {
+    const like = up.length === 2 ? up : down;
+    if (next(plain[0], plain[1]) && next(like[0], like[1])) {
+      const between = gaps.find((g) => plain.includes(g.from) && plain.includes(g.to))!;
+      if (gaps.every((g) => g.size < Math.PI + IN_LINE) || atLeastHalf(between.size)) return WHY;
+    }
+  }
+  if (plain.length === 3) {
+    const wide = gaps.find((g) => plain.includes(g.from) && plain.includes(g.to) && atLeastHalf(g.size));
+    if (wide) return WHY;
+  }
+  if (up.length === 2 && down.length === 2 && next(up[0], up[1])) return WHY;
+  return null;
+}
+
+/**
  * Why a centre drawn flat with three bonds, its H (or lone pair) left out, states no configuration - or null where it states one - by the
  * forms the figures of Brecher 2006 (ST-1.2) draw and grade, `lifts` each bond's +1 (a wedge narrow at the centre), -1 (hashes) or 0:
  * - two bonds on top of each other, within `IN_LINE` (ST-0.1): nothing, whatever is wedged;
@@ -239,6 +295,7 @@ export function readStereo(
       const inSpace = atom.centre && atom.z != null;
       // (drawn flat, its H left out, two of its bonds in line or on top of each other: no configuration stated)
       if (!inSpace && (atom.hs === 1 || lonePair) && around.length === 3 && threeBondsSayNothing(atom, around.map((n) => atoms[n]), around.map((n) => lift(c, n)))) return;
+      if (!inSpace && around.length === 4 && fourBondsSayNothing(atom, around.map((n) => atoms[n]), around.map((n) => lift(c, n)))) return;
       const order = atom.hs ? [...around, -1] : around;
       const volume = inSpace ? volumeInSpace(atoms, c, around, lift, fits.get(c)) : 0;
       const v =
@@ -432,7 +489,8 @@ export function unreadWhy(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond
     const w = mine.find((b) => b.wedge && b.wedge.narrow === c && (b.a === n || b.b === n))?.wedge;
     return w ? (w.stereo === "up" ? 1 : -1) : 0;
   };
-  const why = around.length === 3 ? threeBondsSayNothing(atom, around.map((n) => atoms[n]), around.map(liftOf)) : null;
+  const why =
+    around.length === 3 ? threeBondsSayNothing(atom, around.map((n) => atoms[n]), around.map(liftOf)) : around.length === 4 ? fourBondsSayNothing(atom, around.map((n) => atoms[n]), around.map(liftOf)) : null;
   if (why) return why;
   return "they are drawn crossed, saying neither way round";
 }
