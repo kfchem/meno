@@ -2025,10 +2025,11 @@ function buildHashes(
   for (let k = 0; k < count; k++) {
     const at = even ? base + ((last - base) * (k + 1)) / count : count > 1 ? first + ((last - first) * k) / (count - 1) : last;
     if (round) {
-      const half = Math.max(0, halfAt(at) - lineWidth / 2);
+      // (a line across, a line width thick - as thick as the hash is deep, where three were squeezed in: `widthPx` its share of a line's)
+      const half = Math.max(0, halfAt(at) - depth / 2);
       const a = point(at, half);
       const b = point(at, -half);
-      out.lines.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, widthPx: 0 });
+      out.lines.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, widthPx: depth / lineWidth });
       out.ends.push(a, b);
     } else {
       const near = at - depth / 2;
@@ -2068,14 +2069,24 @@ function buildDashes(p1: Vec2, p2: Vec2, dash: number, gap: number, lineWidth = 
   // (three dashes at least, GR-1.3: on a short bond the gaps give way first, to a line width seen between two, then the dashes)
   const count = Math.max(FEWEST_HASHES, Math.floor((L + gap) / (dash + gap) + 1e-9));
   const least = lineWidth + 2 * cap;
-  // (the dashes kept whole where they fit at the style's gap, or with a line width seen between them; else shortened to that)
+  // (the dashes kept whole where they fit at the style's gap, or with a line width seen between them; else shortened to that -
+  // never shorter than they are wide where their ends are square, a round end's dot at the least - and where not even that
+  // fits, the line thinner, dashes and gaps alike: three marks seen apart, however short)
+  const shortest = cap > 0 ? 0 : lineWidth;
   const whole = count * dash + (count - 1) * gap <= L + 1e-9 || (L - count * dash) / (count - 1) >= least;
-  const size = whole ? dash : Math.max(0, (L - (count - 1) * least) / count);
+  let size = whole ? dash : Math.max(shortest, (L - (count - 1) * least) / count);
+  let thin = 1;
+  if (!whole && count * size + (count - 1) * least > L + 1e-9 && lineWidth > 0) {
+    // (round: dots a width w across, w seen between two - L = 4w past the ends' caps; square: dashes and gaps w - L = 5w)
+    const w = cap > 0 ? L / (2 * count - 2) : L / (2 * count - 1);
+    thin = Math.min(1, w / lineWidth);
+    size = cap > 0 ? 0 : w;
+  }
   const g = (L - count * size) / (count - 1);
   const out: LineSeg[] = [];
   for (let k = 0; k < count; k++) {
     const at = k * (size + g);
-    out.push(seg(at, at + size));
+    out.push({ ...seg(at, at + size), widthPx: thin });
   }
   return out;
 }
@@ -2951,7 +2962,7 @@ export function buildBondPrimitives(
       opts.fewestHashes,
       tStart > 0 ? tStart : 0,
     );
-    for (const l of hashes.lines) l.widthPx = lwPx;
+    for (const l of hashes.lines) l.widthPx = lwPx * (l.widthPx || 1);
     lines.push(...hashes.lines);
     polys.push(...hashes.polys);
     return { lines, polys, ends: hashes.ends };
@@ -2973,7 +2984,7 @@ export function buildBondPrimitives(
       opts.dashGapPx != null ? toWorld(opts.dashGapPx, zoom, units) : spacing * 0.4;
     const lw = pxToWorld(lwPx, zoom);
     const dashes = buildDashes(p1, p2, dash, gap, lw, round ? lw / 2 : 0);
-    for (const l of dashes) l.widthPx = lwPx;
+    for (const l of dashes) l.widthPx = lwPx * (l.widthPx || 1);
     lines.push(...dashes);
     // every dash's ends are free, bar the ones on an atom, whose join sees to
     // them
@@ -3076,7 +3087,7 @@ export function buildBondPrimitives(
       const count = (h: { lines: unknown[]; polys: unknown[] }) => h.lines.length + h.polys.length;
       const least = Math.max(1, Math.min(count(reaching), opts.fewestHashes ?? 1));
       const hashes = count(stopped) >= least ? stopped : reaching;
-      for (const l of hashes.lines) l.widthPx = lwPx;
+      for (const l of hashes.lines) l.widthPx = lwPx * (l.widthPx || 1);
       lines.push(...hashes.lines);
       polys.push(...hashes.polys);
       return { lines, polys, ends: hashes.ends };

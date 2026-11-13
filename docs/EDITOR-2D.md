@@ -727,11 +727,14 @@ Both go together, because both touch every layer.
   spacing. Where a style asks for three and not even three fit a line width
   clear - a bond to a label under about half a style bond - three are drawn
   still, the gaps as deep as the hashes and both thinner where they must be
-  (IUPAC GR-1.3: at least three).
+  - a round-ended hash's line as thick as the hash is deep - three marks
+  seen apart (IUPAC GR-1.3: at least three).
 - **A dashed bond** has three dashes at least, in every style (GR-1.3): a
   short one's gaps close up first, to a line width seen between two past
-  their ends, then the dashes shorten - never one solid line, which would
-  read as a single bond, nor two. **A wavy bond** shows three half-waves at
+  their ends, then the dashes shorten - never shorter than they are wide
+  where their ends are square, to round dots where they are round - and
+  where not even that fits, the line thins, dashes and gaps alike: never
+  one solid line, which would read as a single bond, nor two, nor none. **A wavy bond** shows three half-waves at
   least: where the style's period gives fewer - a short bond, or one a label
   cuts - the period shortens to a whole number of half-waves, the amplitude
   with it.
