@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { readStereo, sameConfiguration, wedgesForFlat } from "../../../../lib/layout/drawn";
+import { openDoubleBonds, readStereo, sameConfiguration, wedgesForFlat } from "../../../../lib/layout/drawn";
 import { layout2D, type LayoutInput } from "../../../../lib/layout/engine";
 import { layoutMetrics } from "../../../../lib/layout/metrics";
 import cages from "../../../../lib/layout/testdata/cages.json";
@@ -117,6 +117,12 @@ const centroid = (m: Model, ids: Set<number>) => {
  * engine, and a cage it draws in perspective given the wedges that say its
  * stereochemistry instead.
  */
+/** How many double bonds a drawing states cis or trans of, as the reader reads it. */
+function drawingCisTrans(m: Model): number {
+  const d = drawingOf(m);
+  return readStereo(d.atoms, d.bonds).cisTrans.size;
+}
+
 function flatDrawing(input: LayoutInput): Model {
   const out = layout2D(input);
   const k = NOMINAL_BOND_LENGTH;
@@ -487,6 +493,49 @@ describe("cleanUp", () => {
     expect(laid.atoms.some((a) => a.z != null)).toBe(true);
     const [s0, s1] = [stereo(flat), stereo(laid)];
     for (const [c, t] of s0) expect(sameConfiguration(t, s1.get(c)!), `${c}`).toBe(true);
+  });
+
+  describe("a double bond its text leaves open, drawn open (Brecher 2006, ST-4.4)", () => {
+    /** A plugin's drawing of a SMILES as it may come - laid out flat by the engine, its open double bond bent one way (no end kept straight). */
+    const arrived = (smiles: string) => {
+      const input = fromSmiles(smiles);
+      return flatDrawing({ ...input, atoms: input.atoms.map(({ linear: _l, ...a }) => a) });
+    };
+    const dbl = (m: Model) => m.bonds.find((b) => b.order === 2)!;
+    const angleAt = (m: Model, end: number, other: number, group: number) => {
+      const at = (id: number) => m.atoms.find((a) => a.id === id)!;
+      const [e, o, g] = [at(end), at(other), at(group)];
+      const u = Math.atan2(g.y - e.y, g.x - e.x);
+      const v = Math.atan2(e.y - o.y, e.x - o.x);
+      return (Math.abs(Math.atan2(Math.sin(u - v), Math.cos(u - v))) * 180) / Math.PI;
+    };
+
+    it("lays out but-2-ene from CC=CC with each end straight on, read as no configuration", async () => {
+      const m = arrived("CC=CC");
+      // (as it came: bent, read as one of them)
+      expect(drawingCisTrans(m)).toBe(1);
+      const laid = await laidOut(m, undefined, undefined, openDoubleBonds(fromSmiles("CC=CC")));
+      const b = dbl(laid);
+      expect(drawingCisTrans(laid)).toBe(0);
+      expect(angleAt(laid, b.a, b.b, b.a === 2 ? 1 : 4)).toBeLessThan(10);
+      expect(angleAt(laid, b.b, b.a, b.b === 3 ? 4 : 1)).toBeLessThan(10);
+    });
+
+    it("gives 3-methylpent-2-ene from a SMILES with no marks a wavy bond: its double bond 'either', read as no configuration", async () => {
+      const m = arrived("CC=C(C)CC");
+      const laid = await laidOut(m, undefined, undefined, openDoubleBonds(fromSmiles("CC=C(C)CC")));
+      expect(dbl(laid).stereo).toBe("either");
+      expect(drawingCisTrans(laid)).toBe(0);
+    });
+
+    it("keeps a double bond the SMILES gives E or Z bent as given", async () => {
+      for (const s of ["C/C=C/C", "C/C=C\\C"]) {
+        const open = openDoubleBonds(fromSmiles(s));
+        expect(open).toEqual({ straight: [], either: [] });
+        const laid = await laidOut(arrived(s), undefined, undefined, open);
+        expect(drawingCisTrans(laid), s).toBe(1);
+      }
+    });
   });
 
   it("lays out phenyl azide that has just arrived with its azide bent: no cis or trans to keep there", async () => {
