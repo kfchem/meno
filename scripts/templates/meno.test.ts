@@ -8,6 +8,9 @@ import { resultOf } from "../../src/ui/features/Workspace/workflow/flow";
 import { addSet, addStep, connect } from "../../src/ui/features/Workspace/workflow/model";
 import { runStep, type RunWith } from "../../src/ui/features/Workspace/workflow/run";
 import { dftRecipe, xtbRecipe } from "./recipe";
+import { dftTemplate, xtbTemplate } from "./build";
+import { conditionsIn } from "../../src/lib/nodes/filter";
+import type { Unit } from "../../src/lib/units";
 
 // Meno's own steps of the template, run on made entries that stand in for what the plugins give (no plugin is run): the path results' validity
 // filters and the energy diagram's levels, with the recipe's own options. What a plugin's output carries from step to step is read in
@@ -286,5 +289,30 @@ describe("the barriers' pairing, run on made saddle points of two paths and the 
       const species = ends.map((e) => String(starts[e[0]].properties?.species?.value));
       expect(new Set(species), key).toEqual(new Set(["species-1"]));
     }
+  });
+});
+
+describe("the Filter steps' conditions", () => {
+  // (the unit of each column a Filter compares with a number, as the step that writes it gives it: Descriptors' molecular weight in g/mol;
+  // a count - imaginary frequencies, torsions unlike the reference, atoms moving outside the reacting ones - of no unit. A number given
+  // in another unit than its column's is refused when it runs, and what it would have kept goes nowhere)
+  const UNIT_OF: Record<string, Unit | "none"> = { mw: "g/mol", imaginary: "none", "torsions unlike reference": "none", "mode.outside": "none" };
+
+  it("give every number the unit of its column, in both templates", () => {
+    const filters = [...xtbRecipe(), ...dftRecipe()].filter((s) => s.kind === "filter");
+    expect(filters.length).toBeGreaterThan(0);
+    for (const s of filters) {
+      const read = conditionsIn(String(s.options?.conditions));
+      if (!("conditions" in read)) throw new Error(`${s.key}: ${read.why}`);
+      for (const c of read.conditions) {
+        if (!("value" in c) || typeof c.value !== "number") continue;
+        expect(Object.keys(UNIT_OF), `${s.key}: ${c.property}`).toContain(c.property);
+        expect(c.unit, `${s.key}: ${c.property}`).toBe(UNIT_OF[c.property]);
+      }
+    }
+  });
+
+  it("are written so in the templates built: the reactants weighed in g/mol", { timeout: 120000 }, () => {
+    for (const t of [xtbTemplate(), dftTemplate()]) expect(t.text).toContain("mw <= 512 g/mol");
   });
 });

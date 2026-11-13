@@ -329,7 +329,7 @@ function body(): RecipeStep[] {
     step({ key: "reactants", stage: STAGES.reaction, kind: "filter", options: { conditions: "role = reactant", match: "all" }, in: { in: "@reaction" }, note: "Reactants" }),
     step({ key: "products", stage: STAGES.reaction, kind: "filter", options: { conditions: "role = product", match: "all" }, in: { in: "@reaction" }, note: "Products" }),
     step({ key: "weighed", stage: STAGES.reaction, kind: "descriptors", by: "rdkit", in: { in: "reactants" } }),
-    step({ key: "light", stage: STAGES.reaction, kind: "filter", options: { conditions: "mw <= 512", match: "all" }, in: { in: "weighed" } }),
+    step({ key: "light", stage: STAGES.reaction, kind: "filter", options: { conditions: "mw <= 512 g/mol", match: "all" }, in: { in: "weighed" } }),
     // 3D for each species: one structure each, every hydrogen there
     step({ key: "reactant-conformers", stage: STAGES.species, kind: "conformers", by: "rdkit", in: { in: "light" } }),
     step({ key: "reactant-3d", stage: STAGES.species, kind: "rank", options: { property: "energy", order: "lowest first", keep: 1, within: "each group", groupBy: "" }, in: { in: "reactant-conformers" }, note: "Reactant in 3D" }),
