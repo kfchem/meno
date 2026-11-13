@@ -125,32 +125,66 @@ export type DrawnPart = { bitmap: ImageBitmap; w: number; h: number; ms: number 
 /** What is asked to be drawn: a page's part at a scale, in pixels a point. */
 export type PartAsk = { sha256: string; page: number; scale: number; x?: number; y?: number; w?: number; h?: number };
 
+/** A picture's PNG decoded here, on the drawing's thread: where there is no worker, or the worker cannot decode it. */
+const decodedHere = (body: Uint8Array): Promise<ImageBitmap> =>
+  createImageBitmap(new Blob([body as BlobPart], { type: "image/png" }), { imageOrientation: "flipY", premultiplyAlpha: "none" });
+
+let decoder: Worker | null = null;
+/** The worker could not be started, or failed: every picture decoded here from then on, as before. */
+let decoderDead = false;
+let decodes = 0;
+const decoding = new Map<number, { body: Uint8Array; resolve: (b: ImageBitmap) => void; reject: (e: unknown) => void }>();
+
+/** The worker gone: the pictures waiting on it decoded here, and every one after. */
+function decoderFailed(): void {
+  decoderDead = true;
+  decoder?.terminate();
+  decoder = null;
+  for (const [id, w] of [...decoding]) {
+    decoding.delete(id);
+    decodedHere(w.body).then(w.resolve, w.reject);
+  }
+}
+
 /**
  * A picture's PNG decoded in a worker (./decodeWorker), all of it, before it comes back: none of its decoding left for the frame it is put on
  * the graphics card in. The Mac's WebKit can leave a picture made on the main thread undecoded until its first use, which was the upload
- * inside a frame: the long frames of a heavy PDF's scroll.
+ * inside a frame: the long frames of a heavy PDF's scroll. Where the worker cannot be had, or cannot decode one, it is decoded here, as
+ * before: a PDF is never left without its pictures.
  */
-let decoder: Worker | null = null;
-let decodes = 0;
-const decoding = new Map<number, { resolve: (b: ImageBitmap) => void; reject: (e: unknown) => void }>();
-function decodedOff(body: Uint8Array): Promise<ImageBitmap> {
-  // (where there are no workers - the tests' Node - decoded here, as before)
-  if (typeof Worker === "undefined") return createImageBitmap(new Blob([body as BlobPart], { type: "image/png" }), { imageOrientation: "flipY", premultiplyAlpha: "none" });
+export function decodedOff(body: Uint8Array): Promise<ImageBitmap> {
+  if (typeof Worker === "undefined" || decoderDead) return decodedHere(body);
   if (!decoder) {
-    decoder = new Worker(new URL("./decodeWorker.ts", import.meta.url), { type: "module" });
+    try {
+      decoder = new Worker(new URL("./decodeWorker.ts", import.meta.url), { type: "module" });
+    } catch {
+      decoderDead = true;
+      return decodedHere(body);
+    }
     decoder.onmessage = (e: MessageEvent<{ id: number; bitmap?: ImageBitmap; error?: string }>) => {
       const w = decoding.get(e.data.id);
+      if (!w) return;
       decoding.delete(e.data.id);
-      if (e.data.bitmap) w?.resolve(e.data.bitmap);
-      else w?.reject(new Error(e.data.error));
+      // (one the worker could not decode: decoded here)
+      if (e.data.bitmap) w.resolve(e.data.bitmap);
+      else decodedHere(w.body).then(w.resolve, w.reject);
     };
+    decoder.onerror = decoderFailed;
+    decoder.onmessageerror = decoderFailed;
   }
   const id = ++decodes;
   return new Promise((resolve, reject) => {
-    decoding.set(id, { resolve, reject });
+    decoding.set(id, { body, resolve, reject });
     const copy = body.slice();
     decoder!.postMessage({ id, body: copy }, [copy.buffer]);
   });
+}
+
+/** For the tests: the worker let go, as a fresh start has it. */
+export function decoderForgotten(): void {
+  decoder = null;
+  decoderDead = false;
+  decoding.clear();
 }
 
 async function draw(ask: PartAsk): Promise<DrawnPart> {
