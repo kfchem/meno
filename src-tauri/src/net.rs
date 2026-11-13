@@ -746,6 +746,11 @@ impl Net {
     pub fn running(&self) -> usize {
         self.0.tasks.lock().unwrap().len()
     }
+
+    /// The tasks not yet ended: each one's purpose, and the hosts it may reach.
+    pub fn tasks_running(&self) -> Vec<(String, Option<Vec<String>>)> {
+        self.0.tasks.lock().unwrap().values().map(|t| (t.purpose.clone(), t.hosts.clone())).collect()
+    }
 }
 
 #[tauri::command]

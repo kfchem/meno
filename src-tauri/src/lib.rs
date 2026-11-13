@@ -828,12 +828,13 @@ async fn ext_spawn_sidecar(
     }
     // A plugin's worker runs no one's code and needs no network: it is
     // pointed at the proxy with no task, so an attempt is refused and on the
-    // record - never left to go out on its own. But a model plugin's: it
-    // talks to the hosts its manifest in place names - read here, never
-    // taken from the page - and those alone, under its own purpose, once
-    // the person has allowed that (model.rs).
-    let talks = plugin.as_deref().and_then(|id| model_hosts(&data, id).map(|hosts| (id.to_string(), hosts)));
-    let task = talks.as_ref().and_then(|(id, hosts)| net.begin(&model::purpose(id, hosts), &format!("{id}: talking with a model"), Some(hosts.clone())).ok());
+    // record - never left to go out on its own. But one whose plugin fills a
+    // role naming hosts - a model's, or one that looks names up: it goes to
+    // the hosts its manifest in place names - read here, never taken from
+    // the page - and those alone, under its own purpose, once the person has
+    // allowed that (model.rs).
+    let talks = plugin.as_deref().and_then(|id| installed_manifest(&data, id).and_then(|m| model::hosted_of(&m)).map(|(kind, hosts)| (id.to_string(), kind, hosts)));
+    let task = talks.as_ref().and_then(|(id, kind, hosts)| hosted_task(&net, id, *kind, hosts));
     match &task {
         Some(task) => task.route(&mut cmd),
         None => net.route_nowhere(&mut cmd),
@@ -852,8 +853,8 @@ async fn ext_spawn_sidecar(
     // Register before the reader threads start so an immediate exit can be
     // reaped.
     state.lock().insert(id.clone(), (child, stdin));
-    if let Some((plugin, _)) = talks {
-        models.started(&id, &plugin, task);
+    if let Some((plugin, kind, _)) = talks {
+        models.started(&id, &plugin, kind, task);
     }
 
     // stdout -> ext:stdout; EOF means the sidecar is gone: reap it, then
@@ -976,12 +977,18 @@ fn model_key_held(models: State<'_, model::Models>, plugin: String) -> Result<bo
     models.keys().get(&plugin).map(|k| k.is_some())
 }
 
-/// The hosts a plugin in place talks to, as its manifest's `language-model`
-/// role names them (model.rs `hosts_of`); none where it fills no such role.
-fn model_hosts(data: &Path, id: &str) -> Option<Vec<String>> {
+/// The manifest of a plugin in place, as it is on disk.
+fn installed_manifest(data: &Path, id: &str) -> Option<serde_json::Value> {
     let path = installed::dir(&installed::root(data), id).ok()?.join("manifest.json");
-    let manifest: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()?;
-    model::hosts_of(&manifest)
+    serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()
+}
+
+/// The network task a worker of plugin `id` goes out under, filling the role
+/// naming hosts `kind` names, to `hosts` alone: none - so it goes nowhere -
+/// till the person has allowed that purpose, for those very hosts, or where
+/// Meno is offline.
+fn hosted_task(net: &net::Net, id: &str, kind: model::Hosted, hosts: &[String]) -> Option<net::TaskHandle> {
+    net.begin(&kind.purpose(id, hosts), &kind.label(id), Some(hosts.to_vec())).ok()
 }
 
 #[tauri::command]
@@ -1847,16 +1854,51 @@ mod tests {
     }
 
     #[test]
-    fn a_model_plugins_hosts_are_those_its_manifest_in_place_names() {
+    fn a_plugins_hosts_are_those_its_manifest_in_place_names() {
         let data = std::env::temp_dir().join(format!("meno-test-{}", Uuid::new_v4()));
         let root = installed::root(&data);
         installed::tests::in_place(&root, "talker", "1.0.0", r#"{"roles": [{"role": "language-model", "hosts": ["api.example.com"]}]}"#);
+        installed::tests::in_place(&root, "finder", "1.0.0", r#"{"roles": [{"role": "names", "hosts": ["names.example.org"]}]}"#);
         installed::tests::in_place(&root, "reader", "1.0.0", r#"{"roles": [{"role": "smiles"}]}"#);
-        assert_eq!(model_hosts(&data, "talker"), Some(vec!["api.example.com".to_string()]));
+        let hosted = |id: &str| installed_manifest(&data, id).and_then(|m| model::hosted_of(&m));
+        assert_eq!(hosted("talker"), Some((model::Hosted::Model, vec!["api.example.com".to_string()])));
+        assert_eq!(hosted("finder"), Some((model::Hosted::Names, vec!["names.example.org".to_string()])));
         // (one that fills no such role, or is not in place, talks to none: its worker goes nowhere)
-        assert_eq!(model_hosts(&data, "reader"), None);
-        assert_eq!(model_hosts(&data, "absent"), None);
+        assert_eq!(hosted("reader"), None);
+        assert_eq!(hosted("absent"), None);
         let _ = fs::remove_dir_all(&data);
+    }
+
+    #[test]
+    fn a_names_plugins_worker_goes_out_only_once_allowed_only_to_its_hosts_and_is_asked_of_again_when_they_change() {
+        let net = net::Net::default();
+        let hosts = vec!["names.example.org".to_string()];
+        // (before the yes: no task - its worker is pointed nowhere, a connection refused and on the record)
+        assert!(hosted_task(&net, "finder", model::Hosted::Names, &hosts).is_none());
+        // (a yes for talking with a model is not one for looking names up)
+        net.allow(&model::Hosted::Model.purpose("finder", &hosts));
+        assert!(hosted_task(&net, "finder", model::Hosted::Names, &hosts).is_none());
+        // (after the yes: a task to the hosts named, those alone, under its own purpose)
+        net.allow(&model::Hosted::Names.purpose("finder", &hosts));
+        let task = hosted_task(&net, "finder", model::Hosted::Names, &hosts).expect("its task, once allowed");
+        assert_eq!(net.tasks_running(), vec![("lookup:finder@names.example.org".to_string(), Some(hosts.clone()))]);
+        task.finish(true);
+        // (the plugin updated to name another host: another purpose, not allowed till asked of again)
+        assert!(hosted_task(&net, "finder", model::Hosted::Names, &["names.example.org".to_string(), "other.example.net".to_string()]).is_none());
+        assert_eq!(net.running(), 0);
+    }
+
+    #[test]
+    fn a_names_plugins_worker_is_given_no_key_and_no_converse() {
+        let keys = model::MemoryKeys(Mutex::new(HashMap::new()));
+        model::Keys::set(&keys, "finder", "sk-test-key-0123456789abcdef").unwrap();
+        let m = model::Models::new(Box::new(keys));
+        m.started("w1", "finder", model::Hosted::Names, None);
+        // (a converse sent the backend's way: refused, no key added - even one kept under its id)
+        assert!(m.converse_line("w1", r#"{"op":"converse"}"#).is_err());
+        // (nor the page's way: a converse line written to it is refused, its other requests written)
+        assert!(m.refuses("w1", "{\"op\":\"converse\"}\n"));
+        assert!(!m.refuses("w1", "{\"id\":1,\"op\":\"find_name\",\"name\":\"aspirin\"}\n"));
     }
 
     #[test]
@@ -1887,7 +1929,7 @@ mod tests {
             let keys = model::MemoryKeys(Mutex::new(HashMap::new()));
             model::Keys::set(&keys, "talker", KEY).unwrap();
             let models = Arc::new(model::Models::new(Box::new(keys)));
-            models.started("w1", "talker", None);
+            models.started("w1", "talker", model::Hosted::Model, None);
             // (what the page is given of what the worker said, read as ext_spawn_sidecar reads it: each stream on its own thread)
             let seen = Arc::new(Mutex::new(Vec::<String>::new()));
             let reader = |stream: Box<dyn Read + Send>, main: bool| {
@@ -1947,7 +1989,7 @@ mod tests {
             let keys = model::MemoryKeys(Mutex::new(HashMap::new()));
             model::Keys::set(&keys, "talker", KEY).unwrap();
             let m = model::Models::new(Box::new(keys));
-            m.started("w1", "talker", Some(net.begin(&model::purpose("talker", &hosts), "talker", Some(hosts.clone())).unwrap()));
+            m.started("w1", "talker", model::Hosted::Model, Some(net.begin(&model::purpose("talker", &hosts), "talker", Some(hosts.clone())).unwrap()));
             m.converse_line("w1", r#"{"op":"converse"}"#).unwrap();
             m
         };
