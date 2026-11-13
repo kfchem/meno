@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { acceptOptions, givenOnly, noDefault, rememberable, valuesOf, type Option, shownOptions } from "./options";
+import { acceptOptions, defaultsFrom, givenOnly, noDefault, rememberable, valuesOf, type Option, shownOptions } from "./options";
 
 const OPTIONS: Option[] = [
   { id: "version", label: "Version", type: "choice", choices: [{ value: "auto", label: "Auto" }, { value: "V3000", label: "V3000" }], default: "auto" },
@@ -19,6 +19,24 @@ describe("a role's options", () => {
     expect(valuesOf(OPTIONS, { version: "V3000", scale: 2, title: "run 3", hydrogens: true })).toEqual({ version: "V3000", scale: 2, title: "run 3", hydrogens: true });
     // (a choice no longer offered, a number out of range, a value of the wrong sort: the default)
     expect(valuesOf(OPTIONS, { version: "V9000", scale: 40, title: 3, hydrogens: "yes", gone: 1 })).toEqual({ version: "auto", scale: 1, title: "", hydrogens: false });
+  });
+});
+
+describe("options whose defaults are those remembered", () => {
+  it("take each remembered value that still fits as its default, and keep their own where none does", () => {
+    const got = defaultsFrom(OPTIONS, { version: "V3000", scale: 40, title: 3, gone: 1 });
+    expect(got.map((o) => o.default)).toEqual(["V3000", 1, "", false]);
+    // (what has no value of its own takes them: the remembered, where one fits; else its own)
+    expect(valuesOf(got)).toEqual({ version: "V3000", scale: 1, title: "", hydrogens: false });
+    expect(defaultsFrom(OPTIONS, undefined)).toEqual(OPTIONS);
+  });
+
+  it("never give one that starts from what is written a remembered default", () => {
+    const WRITE: Option[] = [
+      { id: "charge", label: "Charge", type: "number", default: 0, from: "charge" },
+      { id: "method", label: "Method", type: "text", default: "B3LYP" },
+    ];
+    expect(defaultsFrom(WRITE, { charge: 2, method: "M062X" }).map((o) => o.default)).toEqual([0, "M062X"]);
   });
 });
 

@@ -128,6 +128,20 @@ function fitting(o: Option, v: unknown): string | number | boolean | undefined {
 }
 
 /**
+ * `options`, each one's default the value `remembered` holds for it where
+ * that still fits it - and it is not one that starts from what is written
+ * (`from`), nor a step's own atoms: so that whatever has no value of its own
+ * for an option takes the remembered one, else the option's own default.
+ */
+export function defaultsFrom(options: readonly Option[], remembered: Readonly<Record<string, unknown>> | undefined): Option[] {
+  return options.map((o) => {
+    if (!remembered || o.type === "atoms" || ((o.type === "number" || o.type === "text") && o.from)) return o;
+    const v = fitting(o, remembered[o.id]);
+    return v === undefined ? o : ({ ...o, default: v } as Option);
+  });
+}
+
+/**
  * The values of `options`: an option that starts from what Meno knows of
  * what is written, that (`known`); else those remembered, where each still
  * fits its option; else each one's default.
