@@ -255,7 +255,7 @@ describe("the restraints a step holds, wired in", () => {
     expect(heldRows(rounds2, 40, [molecule("p1")], RDKIT, "RDKit")).toEqual({ each: [{ rows: [torsion(T1, 50)] }], said: [] });
   });
 
-  it("refuses a molecule whose double bond its reference has cis, held at 180° where trans: something to hold found, not nothing ((d))", () => {
+  it("refuses a molecule whose double bond its reference has cis, held at 180° where trans: something to hold found, not nothing (case d)", () => {
     // (C-N=N-C, the torsion at `phi`)
     const azo = (phi: number, start: string): SetEntry => {
       const r = (phi * Math.PI) / 180;
