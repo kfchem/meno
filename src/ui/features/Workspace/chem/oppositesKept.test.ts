@@ -244,6 +244,143 @@ describe("oppositesKept, left as laid out", () => {
   });
 });
 
+describe("oppositesKept, its parts", () => {
+  const at = (deg: number, r = 1) => ({ x: r * Math.cos((deg * Math.PI) / 180), y: r * Math.sin((deg * Math.PI) / 180) });
+  const laidAt = (pts: { x: number; y: number }[], extra: Partial<Layout2D> = {}): Layout2D =>
+    ({ x: pts.map((p) => p.x), y: pts.map((p) => p.y), depth: pts.map(() => null), solid: pts.map(() => false), bold: [], toward: [], dashed: [], wedges: [], hydrogens: [], ...extra }) as Layout2D;
+  const bonds = (pairs: number[][]) => pairs.map(([a, b]) => ({ a, b, order: 1 }));
+  const deg = (o: Layout2D, i: number, about = 0) => Math.round((Math.atan2(o.y[i] - o.y[about], o.x[i] - o.x[about]) * 180) / Math.PI);
+
+  // (a Pt with two Cl, 1 and 2, and a glycinate-like chelate: N 3 and O 4 joined through C 5 and C 6. Laid out with Cl 1 opposite N; drawn
+  // with Cl 1 opposite O - the chelate's two donors to change places, the chelate mirrored)
+  const chelate: LayoutInput = {
+    atoms: [{ el: "Pt" }, { el: "Cl" }, { el: "Cl" }, { el: "N" }, { el: "O" }, { el: "C" }, { el: "C" }],
+    bonds: bonds([[0, 1], [0, 2], [0, 3], [0, 4], [3, 5], [5, 6], [6, 4]]),
+  };
+  const chelateLaid = [{ x: 0, y: 0 }, at(180), at(270), at(0), at(90), at(20, 2), at(70, 2)];
+  const chelateDrawn = [{ x: 0, y: 0 }, at(180), at(270), at(90), at(0), at(70, 2), at(20, 2)];
+
+  it("mirrors a chelate's placed H with it", () => {
+    const laid = laidAt(chelateLaid, { hydrogens: [{ on: 5, at: at(10, 2.6) }] });
+    const out = oppositesKept(chelateDrawn, chelate, laid);
+    expect(out).not.toBe(laid);
+    // (N and O changed places: N now at 90, O at 0; the H on N's ring C still as far from it, mirrored with it across 45 degrees)
+    expect([deg(out, 3), deg(out, 4)]).toEqual([90, 0]);
+    const h = out.hydrogens[0].at;
+    expect(Math.hypot(h.x - out.x[5], h.y - out.y[5])).toBeCloseTo(Math.hypot(at(10, 2.6).x - chelateLaid[5].x, at(10, 2.6).y - chelateLaid[5].y), 6);
+    expect(Math.round((Math.atan2(h.y, h.x) * 180) / Math.PI)).toBe(80);
+  });
+
+  it("does not mirror a chelate drawn in perspective - it would show its other face - but turns the single donors instead", () => {
+    const laid = laidAt(chelateLaid, { depth: [null, null, null, null, null, 0.3, 0.1] });
+    const out = oppositesKept(chelateDrawn, chelate, laid);
+    // (the chelate where it was laid, N at 0 and O at 90; the two Cl changed places: Cl 1 opposite O, as drawn)
+    expect([deg(out, 3), deg(out, 4)]).toEqual([0, 90]);
+    expect((deg(out, 1) - deg(out, 4) + 720) % 360).toBe(180);
+  });
+
+  it("does not mirror a chelate of three donors", () => {
+    // (N 1, O 2 and N 3 joined through C 5 and C 6: a tridentate; Cl 4)
+    const tri: LayoutInput = {
+      atoms: [{ el: "Pt" }, { el: "N" }, { el: "O" }, { el: "N" }, { el: "Cl" }, { el: "C" }, { el: "C" }],
+      bonds: bonds([[0, 1], [0, 2], [0, 3], [0, 4], [1, 5], [5, 2], [2, 6], [6, 3]]),
+    };
+    const laid = laidAt([{ x: 0, y: 0 }, at(0), at(90), at(180), at(270), at(45, 2), at(135, 2)]);
+    // (drawn with N 1 and O 2 changed places: N 1 opposite Cl 4's place)
+    expect(oppositesKept([{ x: 0, y: 0 }, at(90), at(0), at(180), at(270), at(45, 2), at(135, 2)], tri, laid)).toBe(laid);
+  });
+
+  it("keeps the changes at the first of two metals where the second needs none", () => {
+    // (Pt 0 with N 1, N 2, Cl 3, Cl 4, laid cis and drawn trans; Pd 5 with Cl 6, 7, 8 and the bridge to Pt through Cl 3? - no: its own four
+    // Cl 6 to 9, laid and drawn alike)
+    const two: LayoutInput = {
+      atoms: [{ el: "Pt" }, { el: "N" }, { el: "N" }, { el: "Cl" }, { el: "Cl" }, { el: "Pd" }, { el: "Cl" }, { el: "Cl" }, { el: "Cl" }, { el: "Cl" }],
+      bonds: bonds([[0, 1], [0, 2], [0, 3], [0, 4], [5, 6], [5, 7], [5, 8], [5, 9]]),
+    };
+    const off = (p: { x: number; y: number }) => ({ x: p.x + 10, y: p.y });
+    const laid = laidAt([{ x: 0, y: 0 }, at(45), at(135), at(225), at(315), off({ x: 0, y: 0 }), off(at(0)), off(at(90)), off(at(180)), off(at(270))]);
+    const drawn = [{ x: 0, y: 0 }, at(0), at(180), at(90), at(270), off({ x: 0, y: 0 }), off(at(0)), off(at(90)), off(at(180)), off(at(270))];
+    const out = oppositesKept(drawn, two, laid);
+    expect(out).not.toBe(laid);
+    expect((deg(out, 1) - deg(out, 2) + 720) % 360).toBe(180);
+  });
+
+  it("turns a crowded single donor's group clear, its H with it, and leaves one 0.9 of a bond off", () => {
+    // (Pt; Cl 1, Cl 2, P 3 with its group atom C 5 and an H on C 5, N 4 with its group atom C 6. Laid: Cl 1 at 0, Cl 2 at 180, P 3 at 90,
+    // N 4 at 270. Drawn: Cl 1 at 0, Cl 2 at 90, P 3 at 180, N 4 at 270: P and Cl 2 change places, P's C 5 coming out at 180, two bonds off -
+    // `near` of a bond from N's C 6)
+    const input: LayoutInput = {
+      atoms: [{ el: "Pt" }, { el: "Cl" }, { el: "Cl" }, { el: "P" }, { el: "N" }, { el: "C" }, { el: "C" }],
+      bonds: bonds([[0, 1], [0, 2], [0, 3], [0, 4], [3, 5], [4, 6]]),
+    };
+    const c6 = (near: number) => ({ x: -2 + near * Math.cos((-60 * Math.PI) / 180), y: near * Math.sin((-60 * Math.PI) / 180) });
+    const run = (near: number) => {
+      const laid = laidAt([{ x: 0, y: 0 }, at(0), at(180), at(90), at(270), at(90, 2), c6(near)], { hydrogens: [{ on: 5, at: at(90, 3) }] });
+      return oppositesKept([{ x: 0, y: 0 }, at(0), at(90), at(180), at(270), at(180, 2), c6(near)], input, laid);
+    };
+    const crowded = run(0.6);
+    // (P at 180; its C 5 turned off 180 - its bond to P as it was - clear of C 6 by more than it was; the H on C 5 turned with it)
+    expect(deg(crowded, 3)).toBe(180);
+    expect(deg(crowded, 5)).not.toBe(180);
+    expect(Math.hypot(crowded.x[5] - crowded.x[3], crowded.y[5] - crowded.y[3])).toBeCloseTo(1, 6);
+    expect(Math.hypot(crowded.x[5] - crowded.x[6], crowded.y[5] - crowded.y[6])).toBeGreaterThan(0.6);
+    const h = crowded.hydrogens[0].at;
+    expect(Math.hypot(h.x - crowded.x[5], h.y - crowded.y[5])).toBeCloseTo(1, 6);
+    // (0.9 of a bond off: clear enough, not turned)
+    const clear = run(0.9);
+    expect(deg(clear, 5)).toBe(180);
+  });
+
+  it("turns a crowded group as far as 60 degrees where nearer is not clear", () => {
+    // (Pt; Cl 1, P 2 with its group atom C 5, and a chelate N 3 - O 4 through C 6 and C 7, its ring atoms put round P's circle 15 and 35
+    // degrees either side of C 5 once the chelate is mirrored - a chelate is never turned, so P's group must go 60 degrees to clear them.
+    // Laid: Cl 1 at 180, P 2 at 90, N 3 at 270, O 4 at 0; drawn with Cl opposite N: the chelate mirrored across 315 degrees)
+    const input: LayoutInput = {
+      atoms: [{ el: "Pt" }, { el: "Cl" }, { el: "P" }, { el: "N" }, { el: "O" }, { el: "C" }, { el: "C" }, { el: "C" }],
+      bonds: bonds([[0, 1], [0, 2], [0, 3], [0, 4], [2, 5], [3, 6], [6, 7], [7, 4]]),
+    };
+    const p = at(90);
+    const round = (a: number) => ({ x: p.x + Math.cos((a * Math.PI) / 180), y: p.y + Math.sin((a * Math.PI) / 180) });
+    // (where the ring atoms must lie before the mirror across 315 degrees, to come out at P's 105 and 55)
+    const across = (q: { x: number; y: number }) => {
+      const [c, s2] = [Math.cos((630 * Math.PI) / 180), Math.sin((630 * Math.PI) / 180)];
+      return { x: q.x * c + q.y * s2, y: q.x * s2 - q.y * c };
+    };
+    const laid = laidAt([{ x: 0, y: 0 }, at(180), p, at(270), at(0), at(90, 2), across(round(105)), across(round(55))]);
+    const out = oppositesKept([{ x: 0, y: 0 }, at(180), p, at(0), at(270), at(90, 2), round(105), round(55)], input, laid);
+    expect(out).not.toBe(laid);
+    const off = (a: number) => Math.hypot(out.x[5] - out.x[a], out.y[5] - out.y[a]);
+    expect(Math.min(off(6), off(7))).toBeGreaterThan(0.75);
+  });
+
+  it("never turns a chelate's atoms about one of its donors to clear it", () => {
+    // (Pt; Cl 1, then a chelate N 3 - O 4 through C 5 and C 6, then P 2 with its group atom C 7 lying by the chelate's ring - so that the
+    // chelate is the first unit looked at for room. Laid: N 3 at 0, O 4 at 270, Cl 1 at 180, P 2 at 90; drawn with Cl opposite O: the chelate
+    // mirrored, its ring where it was, C 7 within 0.75 of a bond of it)
+    const input: LayoutInput = {
+      atoms: [{ el: "Pt" }, { el: "Cl" }, { el: "P" }, { el: "N" }, { el: "O" }, { el: "C" }, { el: "C" }, { el: "C" }],
+      bonds: bonds([[0, 1], [0, 3], [0, 4], [0, 2], [3, 5], [5, 6], [6, 4], [2, 7]]),
+    };
+    const laid = laidAt([{ x: 0, y: 0 }, at(180), at(90), at(0), at(270), at(340, 2), at(290, 2), at(330, 2)]);
+    const out = oppositesKept([{ x: 0, y: 0 }, at(180), at(90), at(270), at(0), at(290, 2), at(340, 2), at(330, 2)], input, laid);
+    expect(out).not.toBe(laid);
+    expect([deg(out, 3), Math.abs(deg(out, 4))]).toEqual([-90, 0]);
+    // (the chelate's donors each a bond from the metal, and its ring's bonds as they were)
+    for (const d of [3, 4]) expect(Math.hypot(out.x[d], out.y[d]), `donor ${d}`).toBeCloseTo(1, 6);
+    const len = (o: { x: number[]; y: number[] }, a: number, b: number) => Math.hypot(o.x[a] - o.x[b], o.y[a] - o.y[b]);
+    for (const [a, b] of [[3, 5], [5, 6], [6, 4]]) expect(len(out, a, b), `${a}-${b}`).toBeCloseTo(len(laid, a, b), 6);
+  });
+
+  it("takes the drawing's pairing where the next is 25 degrees less straight all told, and leaves the layout's where it is 15", () => {
+    const four: LayoutInput = { atoms: [{ el: "Pt" }, { el: "N" }, { el: "N" }, { el: "Cl" }, { el: "Cl" }], bonds: bonds([[0, 1], [0, 2], [0, 3], [0, 4]]) };
+    const laid = laidAt([{ x: 0, y: 0 }, at(45), at(135), at(225), at(315)]);
+    // (N at 0 and 100, Cl at 30 and 187.5: N with N 102.5 against 117.5 - 15 apart; with the Cl at 192.5, 97.5 against 122.5 - 25 apart)
+    expect(oppositesKept([{ x: 0, y: 0 }, at(0), at(100), at(30), at(187.5)], four, laid)).toBe(laid);
+    const out = oppositesKept([{ x: 0, y: 0 }, at(0), at(100), at(30), at(192.5)], four, laid);
+    expect((deg(out, 1) - deg(out, 2) + 720) % 360).toBe(180);
+  });
+});
+
 describe("a metal with bulky donors put side by side as drawn", () => {
   it("keeps cis-PtCl2(PCy3)2 and cis-PdCl2(PPh3)2 cis, the phosphines' groups turned clear of each other - or, where they cannot be, leaves the drawing as it is: never the trans", { timeout: 180000 }, async () => {
     forgetLaidOut();
