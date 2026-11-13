@@ -3,6 +3,8 @@ import { layout2D, type Layout2D } from "./engine";
 import type { LayoutInput } from "./perceive";
 import { drawnVolume, placeStereo } from "./stereo";
 import { perceive } from "./perceive";
+import { centreRoles, FRAMES, fourCentreRoot, fourCentreWays, sidesOf } from "./assemble";
+import { layoutMetrics } from "./metrics";
 import { fromSmiles } from "./testdata/fromSmiles";
 
 // A stereocentre with four bonds drawn (Brecher 2006, ST-1.1.1, ST-1.1.4, ST-1.3.4, ST-0.2, ST-0.5; Brecher 2008, GR-4.1.3).
@@ -197,5 +199,78 @@ describe("a ring atom whose only bond out of its rings goes to another centre (S
     expect(at.some((w) => (w.from === 3 && w.to === 1) || (w.from === 1 && w.to === 3))).toBe(false);
     expect(agrees(input, out, 3)).toBe(true);
     expect(agrees(input, out, 1)).toBe(true);
+  });
+});
+
+describe("the rules a four-bond stereocentre is drawn by, one at a time", () => {
+  const deg = (t: number) => ((((t / DEG) % 360) + 360) % 360);
+
+  it("takes, from any bond into it on the lattice not itself on an axis, the way round that keeps all four bonds off the axes (`fourCentreWays`)", () => {
+    for (let k = 0; k < 12; k++) {
+      const p = k * 30 * DEG;
+      if (offAxes(k * 30) < 7.5) continue;
+      for (const inPage of [true, false]) {
+        const ways = fourCentreWays(p, inPage);
+        for (const t of [p, ...ways]) expect(offAxes(deg(t)), `from ${k * 30}, ${inPage}: ${deg(t).toFixed(0)}`).toBeGreaterThan(7.5);
+        // (the form: from the bond into it, a third and a sixth of a turn as its kind says, and a quarter)
+        expect(apart(deg(ways[0]), k * 30)).toBeCloseTo(inPage ? 120 : 60, 9);
+      }
+    }
+  });
+
+  it("puts a centre that is placed first off the axes in every frame the layout tries (`fourCentreRoot`)", () => {
+    for (const frame of FRAMES) {
+      const set = (t: number) => (frame.mirrored ? Math.PI - t : t) + frame.turn;
+      const ways = fourCentreRoot(set);
+      for (const t of ways) expect(offAxes(deg(t)), `${frame.turn / DEG} ${frame.mirrored}: ${deg(t).toFixed(0)}`).toBeGreaterThan(7.5);
+      const sorted = ways.map(deg).sort((p, q) => p - q);
+      const gaps = sorted.map((t, i) => (i + 1 < 4 ? sorted[i + 1] : sorted[0] + 360) - t).sort((p, q) => p - q);
+      expect(gaps.map((g) => Math.round(g))).toEqual([60, 90, 90, 120]);
+    }
+  });
+
+  it("puts in the page the heavier group, a neighbouring centre before a group as heavy, and a carbon end before another end written as large (`centreRoles`)", () => {
+    const roles = (smiles: string, centre: number) => {
+      const mol = perceive(fromSmiles(smiles));
+      return centreRoles(mol, sidesOf(mol), centre);
+    };
+    // (an ethoxy, three atoms, in the page before the ends - methyl, F, Cl - though its O is no carbon)
+    expect(roles("C[C@](F)(OCC)Cl", 1).plain).toContain(3);
+    // (C3's neighbouring centre C1, as heavy as its propyl and its 2-hydroxyethyl and written smaller than either: in the page, the bond
+    // between the two centres plain - ST-0.5)
+    expect(roles("C[C@@H](F)[C@](F)(CCC)CCO", 3).plain).toContain(1);
+    // (the methyl and the NH2 written as large: the carbon end in the page, the NH2 wedged - GR-4.1.3)
+    const r = roles("CC[C@](C)(N)F", 2);
+    expect(r.plain.sort()).toEqual([1, 3]);
+    expect(r.wedged).toContain(4);
+  });
+
+  it("scores such a centre against its own gaps - a third, a quarter, a sixth, a quarter - not a cross's", () => {
+    const star = (degs: number[]) =>
+      layoutMetrics({
+        x: [0, ...degs.map((d) => Math.cos(d * DEG))],
+        y: [0, ...degs.map((d) => Math.sin(d * DEG))],
+        edges: degs.map((_, i) => [0, i + 1] as [number, number]),
+        elements: ["C", "C", "F", "Cl", "Br"],
+        hydrogens: [0, 3, 0, 0, 0],
+        tetra: [{ neighbours: [1, 2, 3, 4], volume: 1 }, null, null, null, null],
+      }).angleError;
+    expect(star([210, 330, 60, 120])).toBeLessThan(1e-6);
+    expect(star([30, 120, 210, 300])).toBeGreaterThan(10);
+  });
+
+  it("puts no pair of wedges where the two bonds in the page run in one line, and of two pairs takes the closer (`wedgePairs`)", () => {
+    const input = fromSmiles("C[C@](F)(Cl)Br");
+    const mol = perceive(input);
+    const at = (d: number) => ({ x: Math.cos(d * DEG), y: Math.sin(d * DEG) });
+    const wedgesFor = (places: [number, number][]) => {
+      const pos = new Map<number, { x: number; y: number }>([[1, { x: 0, y: 0 }], ...places.map(([a, d]): [number, { x: number; y: number }] => [a, at(d)])]);
+      return placeStereo(mol, pos, new Map([[1, input.atoms[1].tetra!]])).wedges.filter((w) => w.from === 1);
+    };
+    // (the methyl at 0, F at 60, Cl at 120 and Br at 300: the only pair a sixth apart, F and the methyl, has its two in the page in one line)
+    expect(wedgesFor([[0, 0], [2, 60], [3, 120], [4, 300]])).toHaveLength(1);
+    // (two pairs closer than the bonds opposite them: the methyl and F, 90 apart; F and Cl, 50 apart - the closer taken)
+    const two = wedgesFor([[0, -170], [2, -80], [3, -30], [4, 80]]);
+    expect(two.map((w) => w.to).sort()).toEqual([2, 3]);
   });
 });

@@ -214,10 +214,7 @@ export function grow(
       // all four off the page's axes as the frame sets them
       const { plain, wedged } = centreRoles(mol, sides, middle);
       order = [...plain, ...wedged];
-      const at = [(-150 * Math.PI) / 180, (-30 * Math.PI) / 180, (60 * Math.PI) / 180, (120 * Math.PI) / 180];
-      const turns = [0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6].map((k) => (k * Math.PI) / 6);
-      const set = (r: number) => at.map((t) => setFrameAngle(frame, t + r));
-      ways = set(turns.find((r) => onAxes(set(r)) < 1) ?? 0);
+      ways = fourCentreRoot((t) => setFrameAngle(frame, t));
     }
     order.forEach((v, k) => placeChild(mol, pos, local, queue, middle, v, ways[k], transforms, hints, upright));
     queue.push(...order);
@@ -570,34 +567,16 @@ function assign(
   const straight = deg === 2 && (straightThrough(mol, a) || (isCross(mol, parent) && isCross(mol, children[0])));
   if (straight) return [[children[0], p + Math.PI]];
   if (deg === 4 && isFourCentre(mol, a)) {
-    // a stereocentre's four bonds (ST-1.1.1): the two in the page a third
-    // of a turn apart, the two to be wedged a sixth apart opposite them,
-    // the way round that keeps all four off the page's axes - of two as
-    // clear, the one that runs the chain on nearest level
+    // a stereocentre's four bonds (ST-1.1.1), from the bond into it: the
+    // two in the page a third of a turn apart, the two to be wedged a sixth
+    // apart opposite them, the way round that keeps them off the page's axes
     const { plain, wedged } = centreRoles(mol, sides, a);
     const inPage = plain.includes(parent);
-    const ways = (s: number): [number, number][] => {
-      if (inPage) {
-        const other = plain.find((v) => v !== parent)!;
-        return [
-          [other, p + (s * 2 * Math.PI) / 3],
-          [wedged[0], p + (s * 7 * Math.PI) / 6],
-          [wedged[1], p + (s * 3 * Math.PI) / 2],
-        ];
-      }
-      const other = wedged.find((v) => v !== parent)!;
-      return [
-        [other, p + (s * Math.PI) / 3],
-        [plain[0], p + (s * 5 * Math.PI) / 6],
-        [plain[1], p + (s * 3 * Math.PI) / 2],
-      ];
-    };
-    const level = (w: [number, number][]) => Math.abs(Math.sin(w[0][1]));
-    const [one, two] = [ways(1), ways(-1)];
-    const a1 = onAxes([p, ...one.map(([, t]) => t)]);
-    const a2 = onAxes([p, ...two.map(([, t]) => t)]);
-    const pick = Math.abs(a1 - a2) > 1e-9 ? (a1 < a2 ? one : two) : level(one) <= level(two) + 1e-9 ? one : two;
-    return pick.filter(([c]) => children.includes(c));
+    const [t1, t2, t3] = fourCentreWays(p, inPage);
+    const out: [number, number][] = inPage
+      ? [[plain.find((v) => v !== parent)!, t1], [wedged[0], t2], [wedged[1], t3]]
+      : [[wedged.find((v) => v !== parent)!, t1], [plain[0], t2], [plain[1], t3]];
+    return out.filter(([c]) => children.includes(c));
   }
   if (deg === 4) {
     const slots = [p + Math.PI, p + Math.PI / 2, p - Math.PI / 2];
@@ -828,6 +807,38 @@ export function centreRoles(mol: Molecule, sides: Map<string, number>, a: number
       same(q, p),
   );
   return { plain: [larger[0], larger[1]], wedged: [larger[2], larger[3]] };
+}
+
+/**
+ * The directions of a four-bond stereocentre's other three bonds, from the
+ * direction `p` of the bond into it: where that bond is one of the two in
+ * the page (`inPage`), the other in the page a third of a turn from it and
+ * the two to be wedged; else the other to be wedged a sixth of a turn from
+ * it and the two in the page. Of the two ways round, the one whose four
+ * bonds keep further off the page's axes (`onAxes`): a picture on them
+ * reads as a Fischer projection.
+ */
+export function fourCentreWays(p: number, inPage: boolean): [number, number, number] {
+  const ways = (s: number): [number, number, number] =>
+    inPage
+      ? [p + (s * 2 * Math.PI) / 3, p + (s * 7 * Math.PI) / 6, p + (s * 3 * Math.PI) / 2]
+      : [p + (s * Math.PI) / 3, p + (s * 5 * Math.PI) / 6, p + (s * 3 * Math.PI) / 2];
+  const [one, two] = [ways(1), ways(-1)];
+  return onAxes([p, ...one]) <= onAxes([p, ...two]) ? one : two;
+}
+
+/**
+ * A four-bond stereocentre's four directions where it is the first atom
+ * placed (a chain's middle): the two in the page below, a third of a turn
+ * apart, the two to be wedged above, a sixth apart - turned the least way,
+ * a twelfth of a turn at a time, that keeps all four off the page's axes
+ * as `set` (the frame's turn and mirror) puts them.
+ */
+export function fourCentreRoot(set: (t: number) => number): number[] {
+  const at = [(-150 * Math.PI) / 180, (-30 * Math.PI) / 180, (60 * Math.PI) / 180, (120 * Math.PI) / 180];
+  const turns = [0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6].map((k) => (k * Math.PI) / 6);
+  const turned = (r: number) => at.map((t) => set(t + r));
+  return turned(turns.find((r) => onAxes(turned(r)) < 1) ?? 0);
 }
 
 /** How near the page's axes a set of directions comes: the count within a twelfth of a right angle of one, then how near the nearest is. */
