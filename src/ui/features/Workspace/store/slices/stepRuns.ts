@@ -38,7 +38,7 @@ import { compoundLetter, frameXyz, framesOf, madeFrom, recordNumber, setEntries,
 import { convergedOf, heldWhy } from "../../workflow/converged";
 import { runTook } from "../../workflow/runTime";
 import { skeletonWhy } from "../../../../../lib/chem/skeleton";
-import { conformersSought, conformersSoughtOf, roundsAsked, soughtNumber } from "../../../../../lib/chem/conformersSought";
+import { conformersSought, conformersSoughtOf, roundsAsked, soughtNumber, WITHIN_NEEDED } from "../../../../../lib/chem/conformersSought";
 import type { Conformers } from "../../../../../lib/roles/client";
 import { inRounds, roundsSaid } from "../../chem/conformerRounds";
 import { roundsJudge } from "../../chem/roundsJudge";
@@ -134,6 +134,15 @@ function holdAsked(options: OptionValues, plugin: PythonPlugin | undefined, kind
 /** The structures that could not be made in 3D, by their places among `of`: "structure 3 of 4 could not be made in 3D". */
 export function notMade(places: readonly number[], of: number): string {
   return `${structuresAt(places)} of ${of} could not be made in 3D`;
+}
+
+/**
+ * The structures not made because the step asks for as many conformers as each needs, in rounds, and has no window for
+ * new conformers to end them by - its own, or Settings' - by their places among `of`: what it needs, said as its card
+ * says it (`roundsNeed`), never that they could not be made in 3D.
+ */
+export function windowNeeded(places: readonly number[], of: number): string {
+  return `${structuresAt(places)} of ${of} not made: ${WITHIN_NEEDED.charAt(0).toLowerCase()}${WITHIN_NEEDED.slice(1)}`;
 }
 
 /**
@@ -763,6 +772,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const free: number[] = [];
     // (those that are a lone atom or ion alone, by their places: one atom alone has no 3D structure - left out, and said so)
     const bareOnly: number[] = [];
+    // (those not made because the step has no window to end its rounds by, by their places: said as such, never as not made in 3D)
+    const windowless: number[] = [];
     // (those made without some of their parts - a salt's counter-ion, which has no 3D structure; any part past the first: said, each by its place)
     const partly: string[] = [];
     // (each structure drawn not made, as it came, with why: in the step's Failed exit, to be followed and wired on - into Stereoisomers, one left open)
@@ -815,7 +826,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           const rounds = plugin.roleDraws.includes("conformers") ? roundsAsked(options, () => conformersSoughtOf(block.molblock)) : null;
           // (its window not given - a step not ready, run all the same: each said so in Meno's words, never taken for what could not be made)
           if (rounds && "needs" in rounds) {
-            failed.push(place + 1);
+            windowless.push(place + 1);
             asideAs(rounds.needs);
             continue;
           }
@@ -889,8 +900,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       return void doc.edit("run", (x) => setRan(keepRun(x, still), id, { at, ok: false, stopped: true, said: `Stopped after ${clock(took)}`, input: key, took, ...as }));
     }
     const of = drawnIn(input);
-    // (each not made said: those that could not be, and those whose stereo is left open)
-    const unmade = [...(failed.length ? [notMade(failed, of)] : []), ...(open.length ? [stereoOpen(open, of)] : []), ...(bareOnly.length ? [bareLeft(bareOnly, of)] : [])];
+    // (each not made said: those that could not be, those the step had no window for, and those whose stereo is left open)
+    const unmade = [...(failed.length ? [notMade(failed, of)] : []), ...(windowless.length ? [windowNeeded(windowless, of)] : []), ...(open.length ? [stereoOpen(open, of)] : []), ...(bareOnly.length ? [bareLeft(bareOnly, of)] : [])];
     // (made, but said: their stereo not held - only those that were made)
     const freed = free.filter((p) => !failed.includes(p));
     // (none made, and none to set aside: nothing came that could be - else those not made, in the Failed exit, each saying why)
