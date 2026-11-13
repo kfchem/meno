@@ -176,7 +176,13 @@ export function decodedOff(body: Uint8Array): Promise<ImageBitmap> {
   return new Promise((resolve, reject) => {
     decoding.set(id, { body, resolve, reject });
     const copy = body.slice();
-    decoder!.postMessage({ id, body: copy }, [copy.buffer]);
+    try {
+      decoder!.postMessage({ id, body: copy }, [copy.buffer]);
+    } catch {
+      // (it could not be sent: decoded here)
+      decoding.delete(id);
+      decodedHere(body).then(resolve, reject);
+    }
   });
 }
 

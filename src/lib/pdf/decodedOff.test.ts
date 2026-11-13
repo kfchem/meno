@@ -95,6 +95,35 @@ describe("a PDF's pictures decoded in a worker", () => {
     }
   });
 
+  it("lets go of each picture the worker has answered: a worker failing after decodes none of them again", async () => {
+    const done = [decodedOff(new Uint8Array([1])), decodedOff(new Uint8Array([2]))];
+    const waiting = decodedOff(new Uint8Array([3]));
+    const w = workers[0];
+    w.answer(w.asked[0].id, { bitmap: bitmap(1) });
+    w.answer(w.asked[1].id, { bitmap: bitmap(2) });
+    expect(await Promise.all(done)).toEqual([bitmap(1), bitmap(2)]);
+    w.onerror?.();
+    expect(await waiting).toEqual({ from: "here", first: 3 });
+    // (only the one still waiting decoded here)
+    expect(here).toHaveBeenCalledTimes(1);
+  });
+
+  it("decodes on the drawing thread a picture that cannot be sent to the worker", async () => {
+    vi.stubGlobal(
+      "Worker",
+      class extends FakeWorker {
+        postMessage() {
+          throw new Error("DataCloneError");
+        }
+      },
+    );
+    expect(await decodedOff(new Uint8Array([4]))).toEqual({ from: "here", first: 4 });
+    // (and nothing is left waiting on the worker for it: its failure after decodes nothing again)
+    workers[0].onerror?.();
+    await flush();
+    expect(here).toHaveBeenCalledTimes(1);
+  });
+
   it("decodes on the drawing thread where the worker cannot be started, or where there are no workers at all", async () => {
     vi.stubGlobal(
       "Worker",
