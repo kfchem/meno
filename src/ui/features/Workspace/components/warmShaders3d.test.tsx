@@ -6,7 +6,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import { act } from "react";
-import { createRoot, extend } from "@react-three/fiber";
+import { _roots, advance, createRoot, extend, type RootState } from "@react-three/fiber";
 import { STYLE_3D, type Style3D } from "../../../../lib/chem/style3d";
 import WarmShaders3D from "./WarmShaders3D";
 
@@ -77,13 +77,16 @@ async function page(compileAsync = vi.fn(async (..._: unknown[]) => undefined), 
     await root.configure({ gl: nothingDrawn(compileAsync) as never, size: { width: 800, height: 600, top: 0, left: 0 }, frameloop: "never", orthographic: true });
     draw(STYLE_3D);
   });
+  const state = () => (_roots as unknown as Map<HTMLCanvasElement, { store: { getState(): RootState } }>).get(canvas)!.store.getState();
+  // (a frame of the page's: its callbacks run, the key light's among them)
+  const tick = () => act(async () => advance(performance.now(), true, state()));
   let gone = false;
   const unmount = async () => {
     if (!gone) await act(async () => void root.unmount());
     gone = true;
   };
   mounted.push(unmount);
-  return { idle, frame, compileAsync, redraw: (style: Style3D) => act(async () => draw(style)), unmount };
+  return { idle, frame, tick, compileAsync, redraw: (style: Style3D) => act(async () => draw(style)), unmount };
 }
 
 describe("the shaders of molecules in 3D, made ready as the page starts", () => {
@@ -95,8 +98,12 @@ describe("the shaders of molecules in 3D, made ready as the page starts", () => 
     await p.idle.run();
     expect(drawn.molecules.length).toBeGreaterThan(0);
     expect(drawn.molecules[0].style).toBe(STYLE_3D);
-    // (compiled a frame after it is put in - its effects run - and not before)
+    // (compiled after the page's next frame - its effects run, the key light's state set - never in it, nor before)
     expect(p.compileAsync).not.toHaveBeenCalled();
+    expect(p.frame.count).toBe(0);
+    await p.tick();
+    expect(p.compileAsync).not.toHaveBeenCalled();
+    expect(p.frame.count).toBe(1);
     await p.frame.run();
     expect(p.compileAsync).toHaveBeenCalledTimes(1);
     const [group, camera, scene] = p.compileAsync.mock.calls[0] as [THREE.Group, THREE.Camera, THREE.Scene];
@@ -107,11 +114,13 @@ describe("the shaders of molecules in 3D, made ready as the page starts", () => 
     expect(scene).toBeInstanceOf(THREE.Scene);
     // (the same style drawn again: nothing more)
     await p.redraw(STYLE_3D);
+    await p.tick();
     await p.frame.run();
     expect(p.compileAsync).toHaveBeenCalledTimes(1);
     // (another style: compiled again, the same unseen molecule in it)
     const other = { ...STYLE_3D, ballSegments: STYLE_3D.ballSegments + 4 };
     await p.redraw(other);
+    await p.tick();
     await p.frame.run();
     expect(p.compileAsync).toHaveBeenCalledTimes(2);
     expect(p.compileAsync.mock.calls[1][0]).toBe(group);
@@ -125,6 +134,7 @@ describe("the shaders of molecules in 3D, made ready as the page starts", () => 
     expect(drawn.molecules).toHaveLength(0);
     const after = await page();
     await after.idle.run();
+    await after.tick();
     expect(after.frame.count).toBe(1);
     await after.unmount();
     expect(after.frame.count).toBe(0);
@@ -143,6 +153,7 @@ describe("the shaders of molecules in 3D, made ready as the page starts", () => 
       }),
     );
     await p.idle.run();
+    await p.tick();
     await p.frame.run();
     expect(p.compileAsync).toHaveBeenCalledTimes(1);
     expect(handled[0]).toHaveBeenCalledTimes(1);
@@ -153,6 +164,7 @@ describe("the shaders of molecules in 3D, made ready as the page starts", () => 
     expect(drawn.molecules).toHaveLength(0);
     await act(async () => new Promise((r) => setTimeout(r, 600)));
     expect(drawn.molecules.length).toBeGreaterThan(0);
+    await p.tick();
     await p.frame.run();
     expect(p.compileAsync).toHaveBeenCalledTimes(1);
   });

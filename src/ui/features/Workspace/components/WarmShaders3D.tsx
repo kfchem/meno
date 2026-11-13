@@ -1,4 +1,4 @@
-import { useThree } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useRef, useState } from "react";
 import type * as THREE from "three";
 import type { Style3D } from "../../../../lib/chem/style3d";
@@ -64,21 +64,32 @@ const WARM: Molecule3D = {
 const NONE: number[] = [];
 const nothing = () => {};
 
-/** The unseen molecule, and its shaders compiled once it has come to stand as one shown does - after its own effects, its colours given among them - and again with each style. */
+/**
+ * The unseen molecule, and its shaders compiled once it has come to stand as one shown does - after its own effects,
+ * its colours given among them - and once the page's own frame has run with it: the key light has then cast its
+ * shadows or not (KeyLight3D), which every shader lit by it is made for. Again with each style.
+ */
 function Warmed({ style, stereoFont }: { style: Style3D; stereoFont: Parameters<typeof Molecule3DView>[0]["stereoFont"] }) {
   const group = useRef<THREE.Group>(null!);
-  const { gl, camera, scene } = useThree();
+  const { gl, camera, scene, invalidate } = useThree();
+  // (asked as it is put in and with each style; done after the next frame of the page's, never in it)
+  const asked = useRef(false);
+  const frame = useRef(0);
   useEffect(() => {
-    let live = true;
-    // (a frame after it is put in: every effect of it has run, and each part of it holds what it is drawn with)
-    const frame = requestAnimationFrame(() => {
-      if (live && group.current) void gl.compileAsync(group.current, camera, scene).catch(() => undefined);
-    });
+    asked.current = true;
+    invalidate();
     return () => {
-      live = false;
-      cancelAnimationFrame(frame);
+      asked.current = false;
+      cancelAnimationFrame(frame.current);
     };
-  }, [gl, camera, scene, style]);
+  }, [style, invalidate]);
+  useFrame(() => {
+    if (!asked.current) return;
+    asked.current = false;
+    frame.current = requestAnimationFrame(() => {
+      if (group.current) void gl.compileAsync(group.current, camera, scene).catch(() => undefined);
+    });
+  });
   return (
     <group ref={group} visible={false} position={[1e6, 1e6, 0]}>
       <Molecule3DView
