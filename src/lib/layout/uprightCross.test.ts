@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { forgetLaidOut, layout2D } from "./engine";
 import { fromSmiles } from "./testdata/fromSmiles";
+import { layoutMetrics } from "./metrics";
+import { placedAbbreviation } from "../chem/abbreviationPlace";
 
 // An atom of four like groups, no stereocentre, is an upright cross (Brecher 2008, GR-4.1.3): its bonds level and upright, as
 // neopentane's always were - never the X, four bonds turned 45 degrees to the page; so is one of four ends, alike or not. A
@@ -87,5 +89,49 @@ describe("four like groups", () => {
     // (a main-group centre with four single bonds and two lone pairs is square planar: the X - XeF4, ICl4-, BrF4-; SF4's one pair, upright)
     for (const smiles of ["F[Xe](F)(F)F", "Cl[I-](Cl)(Cl)Cl", "F[Br-](F)(F)F"]) expect(directions(smiles, 1), smiles).toEqual(X);
     expect(directions("FS(F)(F)F", 1)).toEqual(cross);
+  });
+});
+
+describe("a group laid out alone - its bond out to a carbon that stands for what it goes on into", () => {
+  /** The angles between the three F of a CF3 round its carbon (atom 0), in degrees, smallest first. */
+  const fluorineGaps = (x: readonly number[], y: readonly number[], f: number[]) => {
+    const d = f.map((i) => (Math.atan2(y[i] - y[0], x[i] - x[0]) * 180) / Math.PI).sort((p, q) => p - q);
+    return [d[1] - d[0], d[2] - d[1]].map(Math.round).sort((p, q) => p - q);
+  };
+
+  it("is a trident, fanned, where the carbon for its bond out is marked as going on - not the upright cross of four ends", () => {
+    forgetLaidOut();
+    // (a CF3 with the carbon for its bond out, 4, marked `onward`: through perceive and the engine's growth)
+    const out = layout2D({
+      atoms: [{ el: "C" }, { el: "F" }, { el: "F" }, { el: "F" }, { el: "C", onward: true }],
+      bonds: [1, 2, 3, 4].map((b) => ({ a: 0, b, order: 1 })),
+    });
+    expect(fluorineGaps(out.x, out.y, [1, 2, 3])).toEqual([60, 60]);
+  });
+
+  it("is so as an abbreviation's group is laid out: CF3 written as a label, its F fanned 60 degrees apart", () => {
+    const placed = placedAbbreviation("CF3", { x: -1, y: 0 }, 1)!;
+    const c = placed.atoms.findIndex((a) => a.el === "C");
+    const f = placed.atoms.map((a, i) => (a.el === "F" ? i : -1)).filter((i) => i >= 0);
+    const x = placed.atoms.map((a) => a.x);
+    const y = placed.atoms.map((a) => a.y);
+    // (the carbon first, as the gaps are measured round atom 0)
+    const order = [c, ...f];
+    expect(fluorineGaps(order.map((i) => x[i]), order.map((i) => y[i]), [1, 2, 3])).toEqual([60, 60]);
+  });
+
+  it("is measured afresh where only the going-on mark differs: the measure keeps no structure for the same bonds across it", () => {
+    // (one edge list, measured with the stub marked going on and then not: a fan on the 30-degree lattice, then four ends' 90)
+    const at = (deg: number) => ({ x: Math.cos((deg * Math.PI) / 180), y: Math.sin((deg * Math.PI) / 180) });
+    const ps = [{ x: 0, y: 0 }, at(180), at(-60), at(0), at(60)];
+    const edges: [number, number][] = [
+      [0, 1],
+      [0, 2],
+      [0, 3],
+      [0, 4],
+    ];
+    const g = { x: ps.map((p) => p.x), y: ps.map((p) => p.y), edges, elements: ["C", "C", "F", "F", "F"] };
+    expect(layoutMetrics({ ...g, onward: [false, true, false, false, false] }).gridError).toBeCloseTo(0, 6);
+    expect(layoutMetrics(g).gridError).toBeGreaterThan(1);
   });
 });
