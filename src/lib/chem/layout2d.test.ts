@@ -2693,6 +2693,41 @@ describe("charges, radicals and isotopes", () => {
       for (const d of dotsOf(hc, [single(0, 1)])) expect(d.c.x).toBeCloseTo(symbolMiddle(t), 9);
     });
 
+    /** The ink of a label's symbol, alone where it sits: its left, right, bottom and top. */
+    const symbolInk = (t: ReturnType<typeof labelOf>) => {
+      const alone = { ...t, runs: [t.runs![t.anchorRun ?? 0]], anchorRun: 0, twoElectrons: undefined };
+      const pts = labelHulls(alone, opts().fontPx, labelSetOf(opts())).flat().map((p) => ({ x: p.x + t.x, y: p.y + t.y }));
+      return { left: Math.min(...pts.map((p) => p.x)), right: Math.max(...pts.map((p) => p.x)), bottom: Math.min(...pts.map((p) => p.y)), top: Math.max(...pts.map((p) => p.y)) };
+    };
+
+    it("sets the left and right dots at the symbol's mid-height, three dot radii clear of its letters either side - a triplet nitrene with its bond up", () => {
+      const nitrene = [atom(0, 0, 0, "N", { radical: "triplet" }), atom(1, 0, L, "C")];
+      const t = labelOf(nitrene, [single(0, 1)], 0);
+      const ink = symbolInk(t);
+      const dots = dotsOf(nitrene, [single(0, 1)]);
+      const [left, right] = [...dots].sort((p, q) => p.c.x - q.c.x);
+      for (const d of dots) expect(d.c.y).toBeCloseTo((ink.bottom + ink.top) / 2, 9);
+      expect(left.c.x).toBeCloseTo(ink.left - 3 * left.r, 9);
+      expect(right.c.x).toBeCloseTo(ink.right + 3 * right.r, 9);
+    });
+
+    it("draws a singlet's pair as two distinct dots a little over a dot's width apart - above, and upright at a side", () => {
+      const above = [atom(0, 0, 0, "C", { radical: "singlet" }), atom(1, -L * 0.866, -L / 2, "Cl"), atom(2, L * 0.866, -L / 2, "Cl")];
+      const side = [atom(0, 0, 0, "C", { radical: "singlet" }), atom(1, 0, L, "Cl"), atom(2, 0, -L, "Cl")];
+      for (const atoms of [above, side]) {
+        const [p, q] = dotsOf(atoms, [single(0, 1), single(0, 2)]);
+        const apart = Math.hypot(p.c.x - q.c.x, p.c.y - q.c.y);
+        expect(apart).toBeGreaterThanOrEqual(2 * p.r);
+        expect(apart).toBeCloseTo(2.2 * p.r, 9);
+      }
+    });
+
+    it("keeps a charged singlet's pair off the charge after its symbol: a C+ with its bond to the left has the pair below", () => {
+      const cation = [atom(0, 0, 0, "C", { radical: "singlet", charge: 1 }), atom(1, -L, 0, "C")];
+      const t = labelOf(cation, [single(0, 1)], 0);
+      expect(t.twoElectrons).toEqual({ kind: "singlet", sides: ["down"] });
+    });
+
     it("draws the dots in the label's colour, as a doublet's dot is", () => {
       const coloured = [atom(0, 0, 0, "N", { radical: "triplet", color: "#2050c0" }), atom(1, -L, 0, "C")];
       const dots = dotsOf(coloured, [single(0, 1)]);
