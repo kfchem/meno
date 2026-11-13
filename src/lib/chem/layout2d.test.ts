@@ -971,9 +971,14 @@ describe("a label must not change how a bond is drawn", () => {
       expect(g).toBeLessThan(o.hashSpacingPx);
       expect(g).toBeGreaterThanOrEqual(2 * o.lineWidthPx - 1e-9);
     }
-    // (with no room for three so, as many as there is room for)
+    // (with no room for three a line width clear: three still, the count winning (GR-1.3) - evenly, apart, the gaps as deep as the hashes)
     const tight = opts({ fewestHashes: FEWEST_HASHES, lineWidthPx: o.hashSpacingPx * 0.9 });
-    expect(hashesOf(buildBondPrimitives(pair("O"), bond, tight, ZOOM, deg).polys).length).toBeLessThan(3);
+    const squeezed = hashesOf(buildBondPrimitives(pair("O"), bond, tight, ZOOM, deg).polys);
+    expect(squeezed).toHaveLength(3);
+    for (let k = 1; k < squeezed.length; k++) expect(squeezed[k].near).toBeGreaterThan(squeezed[k - 1].far + 1e-9);
+    for (const g of spacing(squeezed)) expect(g).toBeCloseTo(spacing(squeezed)[0], 9);
+    // (a journal's style, which asks for none, as many as the spacing gives: two - the maintainer kept them so)
+    expect(hashesOf(buildBondPrimitives(pair("O"), bond, opts({ lineWidthPx: o.hashSpacingPx * 0.9 }), ZOOM, deg).polys).length).toBeLessThan(3);
   });
 
   it("stops a hashed wedge's widest hash short of a bare atom at its wide end that bonds go on from, where the style asks", () => {
@@ -1052,7 +1057,7 @@ describe("a label must not change how a bond is drawn", () => {
     }
   });
 
-  it("draws a short hashed wedge from a label as many hashes as before, flush with it, and from a bare atom never fewer, at any length", () => {
+  it("draws a short hashed wedge from a label as many hashes as before but never fewer than three, flush with it, and from a bare atom never fewer, at any length", () => {
     // every length from 0.30 to 1.00 of a bond: the hashes at the spacing tell where the first and the last stand
     const lw = opts().lineWidthPx;
     const bond: Bond = { a1: 0, a2: 1, order: 1, stereo: "down" };
@@ -1075,9 +1080,10 @@ describe("a label must not change how a bond is drawn", () => {
         const spaced = hashesOf(buildBondPrimitives(atoms, bond, opts(), ZOOM, deg).polys);
         const three = hashesOf(buildBondPrimitives(atoms, bond, opts({ fewestHashes: FEWEST_HASHES }), ZOOM, deg).polys);
         if (narrow === "N") {
-          // (from a label: as many as before, the first flush with it, the rest even after it)
+          // (from a label: as many as before - three where fewer fitted a line width clear, the count winning (GR-1.3) -
+          // the first flush with it, the rest even after it)
           const before = asBefore(atoms, spaced);
-          expect(three, `${k}%`).toHaveLength(before.count);
+          expect(three, `${k}%`).toHaveLength(Math.max(before.count, FEWEST_HASHES));
           if (three.length > 1) expect(three[0].near).toBeCloseTo(before.from, 9);
           for (const g of spacing(three)) expect(g).toBeCloseTo(spacing(three)[0], 9);
         } else {
@@ -1701,6 +1707,23 @@ describe("bold, hashed, dashed and dative bonds", () => {
     for (const g of gaps) {
       expect(g).toBeCloseTo(gaps[0], 9);
       expect(g).toBeGreaterThanOrEqual(o.dashGapPx! - 1e-9);
+    }
+  });
+
+  it("dashes a short dashed bond with three dashes at least, in every style, never one solid line (GR-1.3): the gaps give way first, then the dashes", () => {
+    const o = opts();
+    for (const share of [0.6, 0.4, 0.25, 0.15, 0.1]) {
+      const short: Atom[] = [pair[0], { ...pair[1], x: share * L }];
+      const { lines } = buildBondPrimitives(short, one({ display: "dashed" }), o, ZOOM, deg);
+      expect(lines.length, `${share}`).toBeGreaterThanOrEqual(3);
+      expect(lines[0].x1).toBeCloseTo(0, 9);
+      expect(lines[lines.length - 1].x2).toBeCloseTo(share * L, 9);
+      const gaps = lines.slice(1).map((l, i) => l.x1 - lines[i].x2);
+      for (const g of gaps) {
+        expect(g).toBeCloseTo(gaps[0], 9);
+        // (apart: at least half a dash between two)
+        expect(g).toBeGreaterThanOrEqual((lines[0].x2 - lines[0].x1) / 2 - 1e-9);
+      }
     }
   });
 

@@ -724,7 +724,14 @@ Both go together, because both touch every layer.
   a pair of lines (the maintainer, 2026-10-24). Meno's own style asks for
   it; a journal's keeps its spacing exactly, as its specification has it
   (2026-10-27), and a style saved before the setting is drawn at the
-  spacing.
+  spacing. Where a style asks for three and not even three fit a line width
+  clear - a bond to a label under about half a style bond - three are drawn
+  still, the gaps as deep as the hashes and both thinner where they must be
+  (IUPAC GR-1.3: at least three).
+- **A dashed bond** has three dashes at least, in every style (GR-1.3): a
+  short one's gaps close up first, down to half a dash, then the dashes
+  shorten with them - never one solid line, which would read as a single
+  bond, nor two.
 - **A hashed wedge's widest hash** stops a hash's clear gap short of a bare
   atom at its wide end, the bonds on from the atom starting there on their
   own: in Meno's own style (the maintainer, 2026-10-29) and, since

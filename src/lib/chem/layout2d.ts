@@ -129,7 +129,7 @@ export type LayoutOptions = {
   wedgeWidthPx: number;
   /** Least distance between the hashes of a hashed wedge, centre to centre. */
   hashSpacingPx: number;
-  /** The fewest hashes a short hashed bond or wedge is drawn with, room allowing (`FEWEST_HASHES`, where the style asks); unset, as the spacing gives. */
+  /** The fewest hashes a short hashed bond or wedge is drawn with, where the style asks (`FEWEST_HASHES`); unset, as the spacing gives. */
   fewestHashes?: number;
   /** A hashed wedge's widest hash stops short of a bare atom at its wide end, by a hash's clear gap; unset, it reaches the atom. */
   hashedWedgeShort?: boolean;
@@ -1946,11 +1946,14 @@ function buildBoldBar(
 }
 
 /**
- * The fewest hashes a hashed bond or wedge is drawn with, room allowing,
- * where the style asks for it (`fewestHashes`; Meno's own styles, the
- * maintainer, 2026-10-24): two read as a pair of lines - an equals sign -
- * and three are the fewest that read as a row along the bond, a wedge's
- * widening from hash to hash. A journal's style keeps its spacing exactly.
+ * The fewest hashes a hashed bond or wedge is drawn with where the style asks
+ * for it (`fewestHashes`; Meno's own styles, the maintainer, 2026-10-24; a
+ * journal's style keeps its spacing exactly, the maintainer, 2026-10-27),
+ * and the fewest dashes of a dashed bond in every style (IUPAC GR-1.3): two
+ * read as a pair of lines - an equals sign - and three are the fewest that
+ * read as a row along the bond, a wedge's widening from hash to hash. Where
+ * the spacing gives fewer, they come closer; where not even a line width's
+ * gap is left, the gaps give way and the count stands.
  */
 export const FEWEST_HASHES = 3;
 
@@ -1963,9 +1966,9 @@ export const FEWEST_HASHES = 3;
  * `wideHalf` at `end`, and each hash the part of it one line width deep - a trapezoid, its ends following the
  * outline. The first hash sits flush with `start` and the last with `end`,
  * and as many lie between as fit at least the hash spacing apart, spread
- * evenly - but, where the style asks, never fewer than `fewest` where that
- * many fit a line width clear of each other: a short one, to a label, still
- * reads as hashed. Those it is given so, from a bare narrow atom (`root`),
+ * evenly - but, where the style asks, never fewer than `fewest`: as many a
+ * line width clear of each other, and where not even that fits, the gaps and
+ * the hashes narrower together: a short one, to a label, still reads as hashed. Those it is given so, from a bare narrow atom (`root`),
  * are set at even steps from it - each gap the same, the first from the
  * atom as well, the last flush with `end` (the maintainer, 2026-10-28): not
  * the first a hash spacing out and the rest crowded after it. From a label,
@@ -1990,9 +1993,9 @@ function buildHashes(
   // Too short for more than one: a single hash, flush with the wide end.
   const from = Math.max(0, Math.min(start, end - lineWidth));
   const n = vperp(dir);
-  const depth = Math.min(lineWidth, end - from);
-  const first = from + depth / 2;
-  const last = end - depth / 2;
+  let depth = Math.min(lineWidth, end - from);
+  let first = from + depth / 2;
+  let last = end - depth / 2;
   const spaced = spacing > 0 ? 1 + Math.floor((last - first) / spacing + 1e-9) : 1;
   // (more than the spacing gives: as many as fit, each a line width deep and a line width clear - from the first on, or,
   // where the first would stand off the root - a bare atom's spacing - from the root on, never fewer that way)
@@ -2000,9 +2003,19 @@ function buildHashes(
   const offRoot = from > base + 1e-9;
   const fromFirst = 1 + Math.floor((last - first) / (2 * lineWidth) + 1e-9);
   const fit = offRoot ? Math.max(fromFirst, Math.floor((last - base) / (2 * lineWidth) + 1e-9)) : fromFirst;
-  const count = Math.max(spaced, Math.min(fewest, fit));
+  let count = Math.max(spaced, Math.min(fewest, fit));
+  // (and where not even that many fit a line width clear, the count still wins (GR-1.3: three at least): the gaps give way,
+  // each as deep as a hash, the hashes thinner where they must be to stay apart - from the first on)
+  let squeezed = false;
+  if (count < fewest && end - from > 0) {
+    count = fewest;
+    depth = Math.min(lineWidth, (end - from) / (2 * fewest - 1));
+    first = from + depth / 2;
+    last = end - depth / 2;
+    squeezed = true;
+  }
   // (set from the root where it stands off it: at a label the first is flush, and the rest even after it)
-  const even = count > spaced && offRoot;
+  const even = !squeezed && count > spaced && offRoot;
   // half the outline's width, a distance `at` from the narrow atom: from where the hashes start
   const o = even ? base : from;
   const halfAt = (at: number) =>
@@ -2036,7 +2049,7 @@ function buildHashes(
 /**
  * A dashed bond: dashes of `dash` along the line from `p1` to `p2`, one flush
  * with each end and as many between as leave gaps of at least `gap`, spread
- * evenly.
+ * evenly - three at least, however short (IUPAC GR-1.3).
  */
 function buildDashes(p1: Vec2, p2: Vec2, dash: number, gap: number): LineSeg[] {
   const d = vsub(p2, p1);
@@ -2048,13 +2061,15 @@ function buildDashes(p1: Vec2, p2: Vec2, dash: number, gap: number): LineSeg[] {
     const e = vadd(p1, vscale(u, b));
     return { x1: s.x, y1: s.y, x2: e.x, y2: e.y, widthPx: 0 };
   };
-  if (!(dash > 0) || L <= dash + Math.max(gap, 0) + dash) return [seg(0, L)];
-  const count = Math.max(2, Math.floor((L + gap) / (dash + gap) + 1e-9));
-  const g = (L - count * dash) / (count - 1);
+  if (!(dash > 0)) return [seg(0, L)];
+  // (three dashes at least, GR-1.3: on a short bond the gaps give way first, down to half a dash, then the dashes with them)
+  const count = Math.max(FEWEST_HASHES, Math.floor((L + gap) / (dash + gap) + 1e-9));
+  const size = count * dash + (count - 1) * (dash / 2) > L ? L / (count + (count - 1) / 2) : dash;
+  const g = (L - count * size) / (count - 1);
   const out: LineSeg[] = [];
   for (let k = 0; k < count; k++) {
-    const at = k * (dash + g);
-    out.push(seg(at, at + dash));
+    const at = k * (size + g);
+    out.push(seg(at, at + size));
   }
   return out;
 }
