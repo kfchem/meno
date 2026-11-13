@@ -73,27 +73,45 @@ export function valenceOrders(atoms: readonly KekuleAtom[], bonds: readonly { a:
  * be said where the structure is shown).
  */
 export function kekulized(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[]): { orders: (1 | 2 | 3)[]; hChosen: number[] } {
+  // (a ring atom's bond to a metal counted as one of its own, as ever - a porphyrin's pyrrole N, a pyrrolide's: the metal bond its
+  // third - and only where that leaves the ring without a Kekule structure, not counted: a pyridine bound to a platinum by its N,
+  // an imidazole by its N3, lend the N's lone pair - counted, the N read as pyrrole-type and the ring took an H on a carbon instead
+  // of a double bond, another compound)
+  const counted = kekulizedAs(atoms, bonds, false);
+  if (counted.solved || !bonds.some((b) => b.order === AROMATIC_BOND && (metalBonded(atoms, bonds, b.a1) || metalBonded(atoms, bonds, b.a2)))) return counted;
+  const lent = kekulizedAs(atoms, bonds, true);
+  return lent.solved ? lent : counted;
+}
+
+/** A metal, by its symbol: an element not among the nonmetals and metalloids (`NOT_METALS`). */
+function isMetalEl(el: string | undefined): boolean {
+  const s = canonical(el ?? "");
+  return /^[A-Z][a-z]?$/.test(s) && !NOT_METALS.has(s) && !QUERY_ATOMS.has(s);
+}
+
+/** Whether atom `i`, no metal itself, is bonded to one. */
+function metalBonded(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[], i: number): boolean {
+  return !isMetalEl(atoms[i]?.el) && bonds.some((b) => (b.a1 === i && isMetalEl(atoms[b.a2]?.el)) || (b.a2 === i && isMetalEl(atoms[b.a1]?.el)));
+}
+
+/** `kekulized`, a ring atom's bonds to metals counted as its own or not (`lend`); and whether every atom that needs a double bond has one. */
+function kekulizedAs(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[], lend: boolean): { orders: (1 | 2 | 3)[]; hChosen: number[]; solved: boolean } {
   const out: (1 | 2 | 3)[] = bonds.map((b) =>
     b.order === 2 ? 2 : b.order === 3 ? 3 : 1,
   );
   const aromatic = bonds
     .map((b, i) => (b.order === AROMATIC_BOND ? i : -1))
     .filter((i) => i >= 0);
-  if (aromatic.length === 0) return { orders: out, hChosen: [] };
+  if (aromatic.length === 0) return { orders: out, hChosen: [], solved: true };
 
   const degree = new Array<number>(atoms.length).fill(0);
   const hasMultiple = new Array<boolean>(atoms.length).fill(false);
-  // (a ring atom's bond to a metal is not one of its own: a pyridine bound to a platinum by its N lends the N's lone pair, and
-  // stays a pyridine - counted, it read as a pyrrole-type N, and the ring took an H on a carbon instead of its third double bond)
-  const metal = (i: number) => {
-    const el = canonical(atoms[i]?.el ?? "");
-    return /^[A-Z][a-z]?$/.test(el) && !NOT_METALS.has(el) && !QUERY_ATOMS.has(el);
-  };
+  // (a ring atom's bond to a metal not counted, where asked: see kekulized)
+  const aromaticAt = new Set(bonds.flatMap((b) => (b.order === AROMATIC_BOND ? [b.a1, b.a2] : [])));
+  const lends = (i: number, other: number) => lend && aromaticAt.has(i) && isMetalEl(atoms[other]?.el) && !isMetalEl(atoms[i]?.el);
   for (const b of bonds) {
-    if (metal(b.a1) === metal(b.a2)) {
-      degree[b.a1]++;
-      degree[b.a2]++;
-    }
+    if (!lends(b.a1, b.a2)) degree[b.a1]++;
+    if (!lends(b.a2, b.a1)) degree[b.a2]++;
     if (b.order === 2 || b.order === 3) {
       hasMultiple[b.a1] = true;
       hasMultiple[b.a2] = true;
@@ -288,7 +306,10 @@ export function kekulized(atoms: readonly KekuleAtom[], bonds: readonly KekuleBo
     return false;
   };
 
-  if (!solved()) {
+  // (solved: every ring atom that needs a double bond has one - one with no atom beside it that could take one, too, is not)
+  const stranded = aromatic.some((k) => [bonds[k].a1, bonds[k].a2].some((i) => roles[i] === "needs" && partners[i].length === 0));
+  const ok = solved() && !stranded;
+  if (!ok) {
     // Nothing satisfies every atom, or the search ran out: give as many
     // carbons as will take one a double bond, and leave the rest single.
     matched.fill(-1);
@@ -331,7 +352,7 @@ export function kekulized(atoms: readonly KekuleAtom[], bonds: readonly KekuleBo
     const left = here.filter((i) => matched[i] < 0);
     if (left.length && left.length < here.length) hChosen.push(...left);
   }
-  return { orders: out, hChosen: hChosen.sort((p, q) => p - q) };
+  return { orders: out, hChosen: hChosen.sort((p, q) => p - q), solved: ok };
 }
 
 function canonical(el: string): string {

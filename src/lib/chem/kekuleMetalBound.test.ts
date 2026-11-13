@@ -33,6 +33,26 @@ describe("an aromatic ring bound to a metal by its N", () => {
     }
   });
 
+  it("leaves an N whose bond to a metal is its own third - a zinc porphine's pyrrole N - as it was: 11 double bonds, those N three bonds, no CH2", () => {
+    const smiles = "c1cc2cc3ccc(n3[Zn]n3c(cc4ccc(cc1n2)n4)ccc3c1)c1";
+    const { s, orders, hs } = kekule(smiles);
+    expect(orders.filter((o) => o === 2)).toHaveLength(11);
+    s.atoms.forEach((a, i) => {
+      const sum = s.bonds.reduce((t, b, k) => t + (b.a1 === i || b.a2 === i ? orders[k] : 0), 0);
+      if (a.el === "N" && s.bonds.some((b) => (b.a1 === i || b.a2 === i) && [b.a1, b.a2].some((j) => s.atoms[j].el === "Zn"))) expect(sum, `N${i}`).toBe(3);
+      if (a.el === "C") expect(hs[i], `C${i}`).toBeLessThan(2);
+    });
+  });
+
+  it("takes an imidazole bound by its N3, its N1 an N-H, as an imidazole: the N3 lends its pair", () => {
+    const { s, orders, hs } = kekule("c1c[nH]cn1[Zn](Cl)Cl");
+    const n3 = s.atoms.findIndex((a, i) => a.el === "N" && s.bonds.some((b) => (b.a1 === i || b.a2 === i) && [b.a1, b.a2].some((j) => s.atoms[j].el === "Zn")));
+    expect(s.bonds.some((b, k) => (b.a1 === n3 || b.a2 === n3) && orders[k] === 2)).toBe(true);
+    s.atoms.forEach((a, i) => {
+      if (a.el === "C") expect(hs[i], `C${i}`).toBe(1);
+    });
+  });
+
   it("leaves a ring bound by none as it was: pyridine, pyridinium, pyrrole", () => {
     expect(kekule("n1ccccc1").orders.filter((o) => o === 2)).toHaveLength(3);
     expect(kekule("C[n+]1ccccc1").orders.filter((o) => o === 2)).toHaveLength(3);
