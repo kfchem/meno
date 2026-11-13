@@ -1,13 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // A plugin's environment set up or not, its worker running or not, and whether it starts: as each test says.
-const env = { ready: true, running: false, fails: false, setUp: 0, started: 0 };
+const env = { ready: true as boolean | "throws", running: false, fails: false, setUp: 0, started: 0 };
 vi.mock("../pyEnv", () => ({
   ensurePyEnv: async () => {
     env.setUp++;
     return "";
   },
-  pyEnvReady: async () => env.ready,
+  pyEnvReady: async () => {
+    if (env.ready === "throws") throw new Error("the environment could not be looked at");
+    return env.ready;
+  },
 }));
 vi.mock("../plugins/process", () => ({
   onWorkerStopped: () => {},
@@ -49,6 +52,13 @@ describe("what reads a SMILES, started before a SMILES is typed", () => {
     env.ready = false;
     await startAhead("smiles");
     expect(env.setUp).toBe(0);
+    expect(env.started).toBe(0);
+    expect(useChem.getState().state).toBe("idle");
+  });
+
+  it("is not started, and nothing escapes, where whether its plugin is set up cannot be told", async () => {
+    env.ready = "throws";
+    await expect(startAhead("smiles")).resolves.toBeUndefined();
     expect(env.started).toBe(0);
     expect(useChem.getState().state).toBe("idle");
   });
