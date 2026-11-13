@@ -109,6 +109,19 @@ const HAIR = 0.2;
  */
 export const IN_LINE = (10 * Math.PI) / 180;
 
+/** How far an H drawn at a centre keeps from every other atom - its label - and from every bond, in bonds: past these it is clear. */
+const H_CLEAR_ATOM = 0.75;
+const H_CLEAR_BOND = 0.4;
+
+/** How far `p` is from the segment `u`-`v`. */
+function toSegment(p: Point, u: Point, v: Point): number {
+  const dx = v.x - u.x;
+  const dy = v.y - u.y;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 > 0 ? Math.max(0, Math.min(1, ((p.x - u.x) * dx + (p.y - u.y) * dy) / len2)) : 0;
+  return Math.hypot(p.x - (u.x + t * dx), p.y - (u.y + t * dy));
+}
+
 /** How far apart two directions are, 0 to pi. */
 const apart = (t: number, u: number) => Math.abs(Math.atan2(Math.sin(t - u), Math.cos(t - u)));
 
@@ -711,6 +724,32 @@ export function hydrogensWhereUnread(
     }
     return { atoms: fa, bonds: fb };
   };
+  // (where in the gap round `c` - about its middle `mid`, `gap` wide - its H stands clearest of every other atom, H and bond: the middle at
+  // a bond's length where that is clear, else the place the farthest from them, turned within the gap up to 25 degrees short of its
+  // bonds and drawn as short as 0.6 of a bond - an H laid on another label, or on a bond, reads as another's: GR-2.1.6, GR-4.3)
+  const clearestIn = (c: number, mid: number, gap: number): Point => {
+    const at = atoms[c];
+    const others = [...atoms.flatMap((a, i) => (i === c ? [] : [a])), ...hydrogens.map((q) => q.at)];
+    const segs = bonds.filter(({ a, b }) => a !== c && b !== c).map(({ a, b }) => [atoms[a], atoms[b]] as const);
+    const room = (p: Point) => Math.min(...others.map((o) => Math.hypot(o.x - p.x, o.y - p.y) / (H_CLEAR_ATOM * k)), ...segs.map(([u, v]) => toSegment(p, u, v) / (H_CLEAR_BOND * k)));
+    const spot = (turn: number, len: number) => ({ x: at.x + len * k * Math.cos(mid + turn), y: at.y + len * k * Math.sin(mid + turn) });
+    let best = { p: spot(0, 1), r: room(spot(0, 1)) };
+    if (best.r >= 1) return best.p;
+    const most = Math.max(0, gap / 2 - (25 * Math.PI) / 180);
+    for (const len of [1, 0.85, 0.7, 0.6]) {
+      for (let deg = 0; deg <= 90; deg += 5) {
+        const turn = (deg * Math.PI) / 180;
+        if (turn > most + 1e-9) break;
+        for (const t of deg ? [turn, -turn] : [0]) {
+          const p = spot(t, len);
+          const r = room(p);
+          if (r > best.r + 1e-9) best = { p, r };
+        }
+      }
+      if (best.r >= 1) break;
+    }
+    return best.p;
+  };
   const first = flatOf(wedges, hydrogens);
   const byLuck = new Set(unsureStereo(first.atoms, first.bonds).atoms);
   const readFirst = readStereo(first.atoms, first.bonds).tetra;
@@ -719,9 +758,17 @@ export function hydrogensWhereUnread(
     const r = readFirst.get(c);
     return !!r && sameConfiguration(r, t);
   };
+  // (a centre of three bonds whose wedge stands in line with another of its bonds, within IN_LINE: read or not, a form the text grades
+  // not acceptable - Brecher 2006, ST-1.2.4 - which a drawing of Meno's own is not to show)
+  const inLine = (c: number) => {
+    const near = bonds.flatMap(({ a, b }) => (a === c ? [b] : b === c ? [a] : []));
+    if (near.length !== 3) return false;
+    const way = (n: number) => Math.atan2(atoms[n].y - atoms[c].y, atoms[n].x - atoms[c].x);
+    return wedges.some((w) => w.from === c && w.to >= 0 && near.some((n) => n !== w.to && apart(way(n), way(w.to)) > Math.PI - IN_LINE));
+  };
   for (const [c, t] of shown) {
     // (a centre with no H of its own gets none: drawn, it would have five bonds, which reads as no centre)
-    if (hydrogens.some((q) => q.on === c) || (says(c, t) && !byLuck.has(c)) || atoms[c].hs < 1) continue;
+    if (hydrogens.some((q) => q.on === c) || (says(c, t) && !byLuck.has(c) && !inLine(c)) || atoms[c].hs < 1) continue;
     const at = atoms[c];
     const dirs = bonds.flatMap(({ a, b }) => (a === c ? [b] : b === c ? [a] : [])).map((n) => Math.atan2(atoms[n].y - at.y, atoms[n].x - at.x)).sort((p, q) => p - q);
     let gap = -1;
@@ -730,7 +777,7 @@ export function hydrogensWhereUnread(
       const next = i + 1 < dirs.length ? dirs[i + 1] : dirs[0] + 2 * Math.PI;
       if (next - d > gap) [gap, mid] = [next - d, (d + next) / 2];
     });
-    const h = { on: c, at: { x: at.x + k * Math.cos(mid), y: at.y + k * Math.sin(mid) } };
+    const h = { on: c, at: clearestIn(c, mid, gap) };
     const others = wedges.filter((w) => w.from !== c);
     for (const stereo of ["up", "down"] as const) {
       const ws = [...others, { from: c, to: -1, stereo }];

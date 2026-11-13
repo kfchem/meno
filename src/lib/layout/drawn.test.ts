@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readStereo, sameConfiguration, unreadWhy, unsureStereo, wedgesForFlat, type DrawnAtom, type DrawnBond } from "./drawn";
+import { hydrogensWhereUnread, readStereo, sameConfiguration, unreadWhy, unsureStereo, wedgesForFlat, type DrawnAtom, type DrawnBond } from "./drawn";
 import { readSmiles } from "../chem/smiles";
 import { kekuleOrders } from "../chem/kekulize";
 import { implicitHydrogens } from "../chem/molecule";
@@ -774,5 +774,68 @@ describe("an axis inside a ring, drawn", () => {
   it("reads none in a ring of five or six: fluorene and 9,10-dihydrophenanthrene are held all but flat, or turn over fast", () => {
     expect(readBack("C1c2ccccc2-c2ccccc12", [6, 7]).read).toEqual([]);
     expect(readBack("C1Cc2ccccc2-c2ccccc12", [7, 8]).read).toEqual([]);
+  });
+});
+
+describe("hydrogensWhereUnread: a centre of three bonds whose wedge is in line with another", () => {
+  const at = (deg: number, r = 1) => ({ x: r * Math.cos((deg * Math.PI) / 180), y: r * Math.sin((deg * Math.PI) / 180) });
+  // (a centre with its H left out and three bonds - to 1 at 0 degrees, wedged, to 2 at `b` and to 3 at 100 - and, where given, a
+  // bond of another molecule, 4-5, lying below it)
+  const centre = (b: number, below: "atom" | "bond" | "arc" | null = null) => {
+    const atoms: DrawnAtom[] = [{ x: 0, y: 0, hs: 1 }, { ...at(0), hs: 3 }, { ...at(b), hs: 3, el: "O" }, { ...at(100), hs: 3, el: "N" }];
+    const bonds: DrawnBond[] = [1, 2, 3].map((n) => ({ a: 0, b: n, order: 1 }));
+    // (another molecule below it: an atom in the gap's middle; a long bond across the gap, its atoms far off; atoms all along the
+    // gap a bond and a half out, which only a short H clears)
+    if (below === "atom") {
+      atoms.push({ x: 0, y: -1.1, hs: 3 }, { x: 0.9, y: -1.6, hs: 3 });
+      bonds.push({ a: 4, b: 5, order: 1 });
+    }
+    if (below === "bond") {
+      atoms.push({ x: -3, y: -1, hs: 3 }, { x: 3, y: -1, hs: 3 });
+      bonds.push({ a: 4, b: 5, order: 1 });
+    }
+    if (below === "arc") for (let d = -170; d <= -10; d += 10) atoms.push({ ...at(d, 1.5), hs: 0, el: "Ar" });
+    const wedged = bonds.map((x, i) => (i === 0 ? { ...x, wedge: { narrow: 0, stereo: "up" as const } } : x));
+    const shown = readStereo(atoms, wedged).tetra;
+    return { atoms, bonds, shown, placed: { wedges: [{ from: 0, to: 1, stereo: "up" as const }], hydrogens: [] } };
+  };
+  const deg = (p: { x: number; y: number }) => Math.round((Math.atan2(p.y, p.x) * 180) / Math.PI);
+
+  it("draws its H in the widest gap and wedges it instead, though the wedge read: in line within 10 degrees (ST-1.2.4)", () => {
+    for (const b of [180, 172]) {
+      const c = centre(b);
+      expect(c.shown.has(0), `${b}`).toBe(true);
+      const out = hydrogensWhereUnread(c.atoms, c.bonds, c.shown, c.placed, 1);
+      expect(out.hydrogens.map((h) => h.on), `${b}`).toEqual([0]);
+      expect(out.wedges, `${b}`).toEqual([{ from: 0, to: -1, stereo: expect.any(String) }]);
+      // (in the widest gap, below: between 180 and 360)
+      expect(deg(out.hydrogens[0].at), `${b}`).toBeLessThan(0);
+    }
+  });
+
+  it("leaves it as placed where the wedge is 11 degrees or more off the line", () => {
+    const c = centre(169);
+    expect(hydrogensWhereUnread(c.atoms, c.bonds, c.shown, c.placed, 1)).toEqual(c.placed);
+  });
+
+  it("stands the H clear of another atom and bond in its gap: turned from the gap's middle", () => {
+    const c = centre(180, "atom");
+    const out = hydrogensWhereUnread(c.atoms, c.bonds, c.shown, c.placed, 1);
+    const h = out.hydrogens[0].at;
+    expect(deg(h)).not.toBe(-90);
+    expect(Math.hypot(h.x - 0, h.y + 1.1)).toBeGreaterThanOrEqual(0.75);
+  });
+
+  it("stands the H clear of a bond across its gap, its atoms far off: 0.4 of a bond from it", () => {
+    const c = centre(180, "bond");
+    const h = hydrogensWhereUnread(c.atoms, c.bonds, c.shown, c.placed, 1).hydrogens[0].at;
+    expect(Math.abs(h.y + 1)).toBeGreaterThanOrEqual(0.4 - 1e-9);
+  });
+
+  it("draws the H shorter where only a shorter one is clear: three quarters of a bond from atoms all round its gap", () => {
+    const c = centre(180, "arc");
+    const h = hydrogensWhereUnread(c.atoms, c.bonds, c.shown, c.placed, 1).hydrogens[0].at;
+    expect(Math.hypot(h.x, h.y)).toBeLessThan(1);
+    for (const a of c.atoms.slice(4)) expect(Math.hypot(a.x - h.x, a.y - h.y)).toBeGreaterThanOrEqual(0.75 - 1e-9);
   });
 });

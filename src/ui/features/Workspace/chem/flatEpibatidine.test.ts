@@ -51,7 +51,7 @@ describe("a cage written for flat readers", () => {
     });
   }
 
-  it("draws the H it wedges instead in the widest gap round the centre: epibatidine's C2, aconitine's C8", { timeout: 120000 }, () => {
+  it("draws the H it wedges instead in the widest gap round the centre, clear of every other atom and bond: epibatidine's C2, aconitine's C8", { timeout: 120000 }, () => {
     // (the eighth atom written, in each: the centre whose own wedge said nothing)
     for (const smiles of ["Clc1ccc(cn1)[C@H]1C[C@@H]2CC[C@H]1N2", aconitine]) {
       const drawn = drawnFromSmiles(smiles);
@@ -67,7 +67,14 @@ describe("a cage written for flat readers", () => {
       const widest = Math.max(...others.map((v, i) => (i + 1 < others.length ? others[i + 1] : others[0] + 2 * Math.PI) - v));
       const off = (p: number, q: number) => Math.abs((((p - q) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI);
       const nearest = Math.min(...others.map((v) => off(angle(h!), v)));
-      expect(nearest).toBeCloseTo(widest / 2, 6);
+      // (in the widest gap, 30 degrees or more from its bonds - at its middle where that is clear)
+      expect(nearest, smiles).toBeGreaterThanOrEqual(Math.min(widest / 2, Math.PI / 6) - 1e-6);
+      // (and clear: three quarters of a bond from every other atom, 0.4 of one from every bond not its centre's)
+      const bond = median(flat.bonds.map((b) => Math.hypot(at.get(b.a)!.x - at.get(b.b)!.x, at.get(b.a)!.y - at.get(b.b)!.y)));
+      const fromAtoms = Math.min(...flat.atoms.filter((a) => a.id !== h!.id && a.id !== centre).map((a) => Math.hypot(a.x - h!.x, a.y - h!.y)));
+      const fromBonds = Math.min(...flat.bonds.filter((b) => b.a !== centre && b.b !== centre).map((b) => toSegment(h!, at.get(b.a)!, at.get(b.b)!)));
+      expect(fromAtoms / bond, smiles).toBeGreaterThanOrEqual(0.75 - 1e-6);
+      expect(fromBonds / bond, smiles).toBeGreaterThanOrEqual(0.4 - 1e-6);
     }
   });
 
@@ -92,3 +99,14 @@ describe("a cage written for flat readers", () => {
     }
   });
 });
+
+const median = (xs: number[]) => [...xs].sort((p, q) => p - q)[xs.length >> 1];
+
+/** How far `p` is from the segment `u`-`v`. */
+function toSegment(p: { x: number; y: number }, u: { x: number; y: number }, v: { x: number; y: number }): number {
+  const dx = v.x - u.x;
+  const dy = v.y - u.y;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 > 0 ? Math.max(0, Math.min(1, ((p.x - u.x) * dx + (p.y - u.y) * dy) / len2)) : 0;
+  return Math.hypot(p.x - (u.x + t * dx), p.y - (u.y + t * dy));
+}
