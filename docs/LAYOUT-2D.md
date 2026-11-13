@@ -575,7 +575,13 @@ one C=O onto the lattice at the other's cost.
     a lipid with its carbonyl on the right and its tail to the left; an
     acid's C=O points up - at the end of a chain or on an aromatic ring,
     in its plane; one on a saturated ring goes where the ring's stereo
-    puts it (penicillin's points down);
+    puts it (penicillin's points down); and so does a chain's own C=O -
+    a ketone's, an ester's, an amide's, the chain running on through its
+    carbon - straight up wherever the zigzag lets it (GR-3.2.2, where
+    below is acceptable): butanone's, methyl butanoate's. Where two cannot
+    both be up (hexane-2,5-dione) one is down, the chain still a zigzag -
+    one laid level by bending the chain counts as no more up - and which
+    is the canonical order's;
   - peptides from N-terminus to C-terminus, left to right, as their
     sequences are written, the backbone carrying straight on through each
     alpha carbon and the side chains branching off; an amino acid then

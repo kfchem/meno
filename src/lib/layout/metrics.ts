@@ -1721,6 +1721,22 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
       const oxo = neighbours[a].filter((b) => el[b] === "O" && orderAt(a, b) === 2);
       if (oxo.length === 1 && y[oxo[0]] < y[a] - 0.2 * L) readingOrder += 0.5;
     }
+    // and so a chain's own C=O - a ketone's, an ester's, an amide's, the
+    // chain running on through its carbon either side - above the chain
+    // (GR-3.2.2), wherever the zigzag lets it: two that cannot both be up
+    // (hexane-2,5-dione) cost the same either way - one turned level by
+    // bending the chain is no more up than one below - and the drawing
+    // taken is the one the canonical order reaches first. An acid's is counted
+    // above; one on a ring's atom or beside a ring goes where the ring puts it.
+    for (let a = 0; a < n; a++) {
+      if (el[a] !== "C" || inRing.has(a) || neighbours[a].length !== 3) continue;
+      const oxo = neighbours[a].filter((b) => el[b] === "O" && orderAt(a, b) === 2);
+      if (oxo.length !== 1) continue;
+      const on = neighbours[a].filter((b) => b !== oxo[0]);
+      if (on.some((b) => inRing.has(b) || (el[b] === "O" && ((g.hydrogens?.[b] ?? 0) > 0 || neighbours[b].length === 1)))) continue;
+      // (up: within 45 degrees of straight up - one laid level, the chain bent to put it there, is not)
+      if (y[oxo[0]] < y[a] + 0.7 * L) readingOrder += 0.5;
+    }
     // A chain folded back on itself - a fatty acid drawn as a hairpin, a
     // prostaglandin's two chains from its ring, both running off to the
     // right - has its carboxyl end above its tail: read from the carboxyl,
