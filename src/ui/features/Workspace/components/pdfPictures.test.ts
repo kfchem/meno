@@ -183,6 +183,9 @@ describe("tiles come while the view moves", () => {
     pics.reveal(Infinity);
     expect(shown()).toBe(4);
     expect(pics.reveal(1)).toBe(false);
+    // (and the other PDF, a frame later: it had a picture all along, held back only by the page's gap)
+    await new Promise((r) => setTimeout(r, 20));
+    expect(other.reveal(1)).toBe(true);
   });
 
   it("puts a page's small picture on the graphics card the same way: with the tiles, a frame at a time, never all in the frame they came in", async () => {
