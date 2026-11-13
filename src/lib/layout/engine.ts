@@ -1663,6 +1663,9 @@ const SMALL_SIDE = 10;
  */
 function squareUp(mol: Molecule, piece: number[], pos: Grown, ref: Grown = pos): void {
   const here = new Set(piece);
+  // A six-bond atom drawn as three lines through it is stood with one of them upright, as the text draws an octahedron (Brecher 2006,
+  // ST-2.11; its own samples, SF6 and PCl6-): the piece turned the least way that does it, before anything else would set it.
+  if (octahedronUpright(mol, piece, pos)) return;
   const square = mol.rings.some(
     (r) =>
       here.has(r[0]) &&
@@ -1715,6 +1718,44 @@ function squareUp(mol: Molecule, piece: number[], pos: Grown, ref: Grown = pos):
     const p = pos.get(a)!;
     pos.set(a, { x: p.x * c - p.y * sn, y: p.x * sn + p.y * c });
   }
+}
+
+/** How far from 60 degrees apart a six-bond metal's neighbours may stand and still be three lines through it, as laid out. */
+const SPOKES_EVEN = rad(10);
+
+/**
+ * A six-bond atom of `piece` - a metal, or SF6's S - whose neighbours
+ * stand round it 60 degrees apart - three lines through it - turned the
+ * least way that stands one of them upright, the whole piece with it (the
+ * first such atom by its place in the molecule). Whether it did.
+ */
+function octahedronUpright(mol: Molecule, piece: number[], pos: Grown): boolean {
+  for (const m of piece) {
+    if (mol.neighbours[m].length !== 6) continue;
+    const at = pos.get(m);
+    if (!at || mol.neighbours[m].some((v) => !pos.has(v))) continue;
+    const spokes = mol.neighbours[m].map((v) => Math.atan2(pos.get(v)!.y - at.y, pos.get(v)!.x - at.x)).sort((p, q) => p - q);
+    const even = spokes.every((t, i) => {
+      const next = i + 1 < spokes.length ? spokes[i + 1] : spokes[0] + 2 * Math.PI;
+      return Math.abs(next - t - Math.PI / 3) <= SPOKES_EVEN;
+    });
+    if (!even) continue;
+    // (the turn that brings the spoke nearest upright onto it: within half a spoke's step either way)
+    const turn = spokes
+      .map((t) => Math.atan2(Math.sin(Math.PI / 2 - t), Math.cos(Math.PI / 2 - t)))
+      .reduce((best, u) => (Math.abs(u) < Math.abs(best) ? u : best));
+    if (Math.abs(turn) > 1e-9) {
+      const c = Math.cos(turn);
+      const sn = Math.sin(turn);
+      for (const a of piece) {
+        const p = pos.get(a)!;
+        const [dx, dy] = [p.x - at.x, p.y - at.y];
+        pos.set(a, { x: at.x + dx * c - dy * sn, y: at.y + dx * sn + dy * c });
+      }
+    }
+    return true;
+  }
+  return false;
 }
 
 /**
