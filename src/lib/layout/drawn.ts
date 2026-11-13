@@ -114,13 +114,16 @@ const apart = (t: number, u: number) => Math.abs(Math.atan2(Math.sin(t - u), Mat
 /**
  * Whether a centre drawn flat with three bonds, its H left out, says nothing by two of them (`IN_LINE`): two on top of each other, which cannot
  * be told apart; or two in line, both in the page - a T (Brecher 2006, ST-1.2.12: two plain bonds 180 degrees apart with the wedge between them
- * depict a T-shaped configuration, not a tetrahedral one). Two in line with the wedge on one of them say it: ST-1.2.4 draws that form and takes
- * the H to stand in the widest gap, opposite to the wedge (ST-1.2.3: with three bonds drawn, the configuration is the same wherever the wedged
- * bond stands). `wedged` says, for each bond, whether it is a wedge or hashes narrow at the centre.
+ * depict a T-shaped configuration, not a tetrahedral one). Two in line with the ONE wedge of the centre on one of them say it: ST-1.2.4 draws
+ * that form and takes the H to stand in the widest gap, opposite to the wedge (ST-1.2.3: with three bonds drawn, the configuration is the same
+ * wherever the wedged bond stands). A centre with two or three wedges is read no further than that: ST-1.2.9 to ST-1.2.11 call such forms
+ * ambiguous or not acceptable (CHEM, 11-13, measured them read the other way by another reader). `wedged` says, for each bond, whether it is a
+ * wedge or hashes narrow at the centre.
  */
 function twoInLine(at: { x: number; y: number }, around: readonly { x: number; y: number }[], wedged: readonly boolean[]): boolean {
   const t = around.map((p) => Math.atan2(p.y - at.y, p.x - at.x));
-  return t.some((u, i) => t.some((w, j) => j > i && (apart(u, w) < IN_LINE || (apart(u, w) > Math.PI - IN_LINE && !wedged[i] && !wedged[j]))));
+  const oneWedge = wedged.filter(Boolean).length === 1;
+  return t.some((u, i) => t.some((w, j) => j > i && (apart(u, w) < IN_LINE || (apart(u, w) > Math.PI - IN_LINE && !(oneWedge && (wedged[i] || wedged[j]))))));
 }
 
 /**

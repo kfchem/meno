@@ -450,6 +450,22 @@ describe("a centre with a lone pair for its fourth group", () => {
     expect(readStereo(t.atoms, t.bonds).tetra.has(0)).toBe(false);
   });
 
+  it("reads two bonds in line only where the centre's ONE wedge is one of them: with two or three wedges, as before - unread (ST-1.2.9 to ST-1.2.11)", () => {
+    // (a plain bond at 0 degrees, wedges at 30 and 172: the wedge at 172 in line with the plain one, a second wedge beside it)
+    const two: { atoms: DrawnAtom[]; bonds: DrawnBond[] } = {
+      atoms: [{ x: 0, y: 0, el: "C", hs: 1 }, { ...at(0), el: "F", hs: 0 }, { ...at(30), el: "Cl", hs: 0 }, { ...at(172), el: "Br", hs: 0 }],
+      bonds: [
+        { a: 0, b: 1, order: 1 },
+        { a: 0, b: 2, order: 1, wedge: { narrow: 0, stereo: "up" } },
+        { a: 0, b: 3, order: 1, wedge: { narrow: 0, stereo: "up" } },
+      ],
+    };
+    expect(readStereo(two.atoms, two.bonds).tetra.has(0)).toBe(false);
+    // (and three, two of them in line)
+    const three = { atoms: two.atoms, bonds: two.bonds.map((b, k) => (k === 0 ? { ...b, wedge: { narrow: 0, stereo: "down" as const } } : b)) };
+    expect(readStereo(three.atoms, three.bonds).tetra.has(0)).toBe(false);
+  });
+
   it("reads one drawn with its wedge on one of the two bonds in line, as the same centre drawn with its bonds apart (ST-1.2.3, ST-1.2.4)", () => {
     // (the O and the wedged methyl straight across the S, the ring carbon to one side: the lone pair takes the widest gap, opposite the wedge -
     // ST-1.2.4's form; and wherever the wedged bond stands within that gap, the same configuration - ST-1.2.3)
