@@ -31,7 +31,7 @@ export { frameAt, placeFor } from "./place";
 import { keptNames, takeFrames, type Which } from "./takeFrames";
 import { notResults, PAIRED, pushTo, runMeno, runMenoDrawn, runMenoPair, type CalcLevel, type Outcome, type Outcome3D } from "./meno";
 import { ontoStructures } from "./ontoStructures";
-import { measuredSet, modeOnAtomsSet } from "./structureSteps";
+import { measuredSet, modeOnAtomsSet, torsionsSet } from "./structureSteps";
 import { addSet, CHART_SET, heldPut, holdChart, holdNumber, NUMBER_SET, holdCollection, holdTable, TABLE_SET, holdMembers, holdNothing, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
 import { recordsWithRoles } from "./schemeRoles";
@@ -88,6 +88,13 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
     const [p, q] = inputsOf(step.kind).map((port) => inputOf(doc, id, port.id)!);
     const entriesOf = (x: typeof p) => ({ entries: setEntries(x.molecules, x.holds as Holds3D), holds: x.holds as Holds3D });
     return ranAs(doc, id, runMenoPair(step.kind, entriesOf(p), entriesOf(q), step.options), key, w);
+  }
+  // (torsion restraints: of what comes into Molecules - against what comes into Reference, where it is wired)
+  if (step.kind === "torsion-restraints") {
+    const [p, q] = ["molecules", "reference"].map((port) => inputOf(doc, id, port));
+    if (!p) return fail("Nothing comes into Molecules");
+    const of = (x: NonNullable<typeof p>) => setEntries(x.molecules, x.holds as Holds3D);
+    return ranAs(doc, id, torsionsSet(of(p), q ? of(q) : null, p.holds as Holds3D, optionsOf(kindInfo(step.kind).options ?? [], step.options)), key, w);
   }
   // (structures drawn, each with what the 3D set wired in holds made of it, by its lasting id: workflow/ontoStructures)
   if (step.kind === "onto-structures") {
@@ -297,6 +304,8 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
       ? sourcesInto(doc, step.id, first?.id).reduce<string | null>((why, { set }) => why ?? (set.made ? null : plainAmong(setMolecules(doc, set))), null)
       : null;
   if (mixed) return mixed;
+  // (restraints wired into a step given structures drawn: they are held on molecules in 3D, each by its ID - none drawn has one)
+  if (holds === "structures" && wiresInto(doc, step.id, RESTRAINTS_INPUT.id).length) return "Restraints are held on molecules in 3D: make the structures 3D first, then wire them in";
   if (first && !takenBy(first.takes, holds)) return `${first.name} takes ${first.takes.map((s) => SET_NAMES[s]).join(" or ")}`;
   if (!first && !takesBy(step.kind, by, holds)) return `Takes ${kindInfo(step.kind).takes.filter((s) => takesBy(step.kind, by, s)).map((s) => SET_NAMES[s]).join(" or ")}`;
   if (!by) return "Nothing added does this step";
@@ -305,6 +314,10 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
   const plugin = by !== MENO.id ? pluginById(by) : undefined;
   if (plugin && MENO_ONLY.includes(step.kind)) return `${kindInfo(step.kind).name} is Meno's own step: add it again`;
   if (plugin && !plugin.steps.some((d) => d.kind === step.kind)) return `${doerName(plugin)} does not do ${kindInfo(step.kind).name}`;
+  // (a step of a page saved when it gave a set at an exit its kind no longer has - Torsion restraints' Trans already: said, never run
+  //  with that set left standing as if it were still given)
+  const gone = (doc.sets ?? []).find((b) => b.made?.step === step.id && !exitsOf(step.kind).some((x) => x.id === b.made!.exit));
+  if (gone) return `It was saved giving a set it no longer gives${gone.name ? ` (${gone.name})` : ""}: delete that set${step.kind === "torsion-restraints" ? " - Compare torsions and a Filter split what is trans already" : ""}`;
   // (a step of a page saved when it held what its molecules carried, asked on its card: no longer so - what it holds is wired in, and
   //  it is never run now holding nothing unsaid)
   if (step.options?.[HOLD_WAS] === "fixed" && !wiresInto(doc, step.id, RESTRAINTS_INPUT.id).length)

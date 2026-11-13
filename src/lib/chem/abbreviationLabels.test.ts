@@ -250,6 +250,12 @@ describe("what a file is written with", () => {
     expect(read(text).atoms.map((a) => a.el)).toEqual(["C", "Y", "Y", "Y", "Cl", "Cl"]);
   });
 
+  it("a Y with one bond and a charge is the ion, yttrium: a variable carries no charge", () => {
+    const text = writeMolfile({ atoms: [{ id: 1, x: 0, y: 0, el: "C" }, { id: 2, x: L, y: 0, el: "Y", charge: 1 }], bonds: [{ a: 1, b: 2, order: 1 }] });
+    expect(text.split("\n")[5].slice(31, 34).trim()).toBe("Y");
+    expect(text).not.toContain("A    2\nY\n");
+  });
+
   it("a CD3 written out with its deuterium: hydrogens of mass 2, as CTfile writes an isotope", () => {
     const text = writeMolfile({ atoms: [{ id: 1, x: 0, y: 0, el: "C" }, { id: 2, x: L, y: 0, el: "CD3" }], bonds: [{ a: 1, b: 2, order: 1 }] });
     const iso = text.split("\n").filter((l) => l.startsWith("M  ISO"));

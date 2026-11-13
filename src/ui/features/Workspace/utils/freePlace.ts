@@ -4,7 +4,8 @@ import type { DrawingStyle } from "../../../../lib/chem/style";
 import { buildTextLabels, labelHulls, labelSetOf } from "../../../../lib/chem/layout2d";
 import { chemistry } from "../../../../lib/chem/molecule";
 import { editorLayoutOptions, layoutBonds } from "../layoutOptions";
-import { CARD_H, CARD_W } from "../workflow/look";
+import { CARD_W } from "../workflow/look";
+import { cardHighOf } from "../workflow/kinds";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import type { ImportedScheme } from "../document";
 import { style3dOf } from "../style3d";
@@ -102,7 +103,7 @@ export function pageBoxes(st: EditorState, style: DrawingStyle): Box[] {
   out.push(...(st.renderFrames ?? []));
   for (const b of st.sets ?? []) out.push({ x0: Math.min(b.x0, b.x1), y0: Math.min(b.y0, b.y1), x1: Math.max(b.x0, b.x1), y1: Math.max(b.y0, b.y1) });
   // (each as far as its card closed reaches, as workflow/parts measures them)
-  for (const s of st.steps ?? []) out.push({ x0: s.x, y0: s.y - CARD_H, x1: s.x + CARD_W, y1: s.y });
+  for (const s of st.steps ?? []) out.push({ x0: s.x, y0: s.y - cardHighOf(s.kind), x1: s.x + CARD_W, y1: s.y });
   // (and what each molecule in 3D shows besides its atoms: its frames chip, its notes)
   const style3d = style3dOf(st);
   for (const m of st.molecules3d) out.push(...shownBeside(m, seenBox(m, style3d, st.turns3d[m.id], st.frames3d[m.id]), style3d));
