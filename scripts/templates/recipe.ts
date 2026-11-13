@@ -69,9 +69,19 @@ const STAGES = {
  * Words on the page beside a stage's heading: what a chemist opening the template needs to read there. The difference from the program the template
  * is of is said now, in these words (CHEM, 2026-11-11); no equivalence of numbers is claimed.
  */
+/**
+ * The Conformers steps' own options, set on each card: a step keeps the options it was put down with, so none is left to Settings
+ * (kfchem/ConfoTS, template/mm_cs.com and default.ini: one search for each species, what goes on from it within 10 kcal/mol).
+ * - the first, a 3D structure of each species: "This many", 200 tries (Meno's own: ConfoTS is given 3D structures);
+ * - the search: "As many as the molecule needs", in rounds until one brings no new conformer within 10 kcal/mol, at most 5000 tries
+ *   (ConfoTS's window; its up to 10000 search steps are of another kind, no count of these).
+ */
+export const ONE_OF_EACH = { sought: "fixed", count: 200 } as const;
+export const SEARCH = { sought: "needed", within: 10, first: 0, most: 5000 } as const;
+
 export const NOTES: { stage: string; text: string }[] = [
   { stage: STAGES.reaction, text: "Draw your reaction over this one, inside the frame: the set takes what lies in it, and each structure's role from the arrow. The template takes one reactant structure (or reactants drawn as one); a second is not given a side of its own." },
-  { stage: STAGES.species, text: "Conformers take the count and the window Settings gives them: none is set on the card. Energies here are another force field's than ConfoTS's." },
+  { stage: STAGES.species, text: "The first Conformers make one 3D structure of each species from 200 tries (ConfoTS is given its 3D structures). The search runs in rounds until one brings no new conformer within 10 kcal/mol, ConfoTS's window for what it keeps, at most 5000 tries (ConfoTS's up to 10000 steps are of another kind: the two counts are not the same). Energies here are the search's force field's, another than ConfoTS's." },
   {
     stage: STAGES.conformers,
     text: "The windows, 10 and 5 kcal/mol, and the limit of 64 are ConfoTS's; they are yours to change. Optimisations have no step limit of their own. An energy exactly at a window's edge is kept here; ConfoTS drops it.",
@@ -331,9 +341,9 @@ function body(): RecipeStep[] {
     step({ key: "weighed", stage: STAGES.reaction, kind: "descriptors", by: "rdkit", in: { in: "reactants" } }),
     step({ key: "light", stage: STAGES.reaction, kind: "filter", options: { conditions: "mw <= 512 g/mol", match: "all" }, in: { in: "weighed" } }),
     // 3D for each species: one structure each, every hydrogen there
-    step({ key: "reactant-conformers", stage: STAGES.species, kind: "conformers", by: "rdkit", in: { in: "light" } }),
+    step({ key: "reactant-conformers", stage: STAGES.species, kind: "conformers", by: "rdkit", options: ONE_OF_EACH, in: { in: "light" } }),
     step({ key: "reactant-3d", stage: STAGES.species, kind: "rank", options: { property: "energy", order: "lowest first", keep: 1, within: "each group", groupBy: "" }, in: { in: "reactant-conformers" }, note: "Reactant in 3D" }),
-    step({ key: "product-conformers", stage: STAGES.species, kind: "conformers", by: "rdkit", in: { in: "products" } }),
+    step({ key: "product-conformers", stage: STAGES.species, kind: "conformers", by: "rdkit", options: ONE_OF_EACH, in: { in: "products" } }),
     step({ key: "product-3d", stage: STAGES.species, kind: "rank", options: { property: "energy", order: "lowest first", keep: 1, within: "each group", groupBy: "" }, in: { in: "product-conformers" }, note: "Products in 3D" }),
     step({
       key: "mapped",
@@ -347,7 +357,7 @@ function body(): RecipeStep[] {
     step({ key: "species-set", stage: STAGES.conformers, kind: "merge", options: { keep: "all", property: "" }, in: { first: "reactant-3d", second: "mapped" } }),
     step({ key: "species", stage: STAGES.conformers, kind: "tag", options: { name: "species" }, in: { in: "species-set" }, note: "Each species" }),
     step({ key: "coordination", stage: STAGES.conformers, kind: "restraints", options: { on: "species", coordination: true, factor: "0.9", strength: "500" }, in: { in: "species" } }),
-    step({ key: "search", stage: STAGES.conformers, kind: "conformers", by: "rdkit", in: { in: "species", restraints: "coordination" } }),
+    step({ key: "search", stage: STAGES.conformers, kind: "conformers", by: "rdkit", options: SEARCH, in: { in: "species", restraints: "coordination" } }),
     step({
       key: "numbered",
       stage: STAGES.conformers,

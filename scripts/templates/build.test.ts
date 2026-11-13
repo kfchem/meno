@@ -9,6 +9,7 @@ import { inputsOf, kindInfo, needsOf } from "../../src/ui/features/Workspace/wor
 import { schemeRoles } from "../../src/ui/features/Workspace/workflow/schemeRoles";
 import { buildPage, STAMP, templateFile } from "./build";
 import { dftRecipe, PLUGIN_OPTIONS, xtbRecipe } from "./recipe";
+import { soughtOptions } from "../../src/lib/chem/conformersSought";
 
 // The templates are built, in memory, from their recipes through the store's own actions, and checked as the kinds and the file reader see
 // them. A kind that changes so that the recipe no longer fits fails here, not in a chemist's hands.
@@ -56,7 +57,8 @@ describe.each([
       const known = PLUGIN_OPTIONS[r.by!]?.[r.kind];
       expect([r.key, known !== undefined]).toEqual([r.key, true]);
       // (those the plugin has, and those the kind has of its own: a path search's pairs)
-      const own = [...(kindInfo(r.kind).options ?? []).map((o) => o.id), "pairs", "property", "most"];
+      // (and a conformer search's, which Meno gives the role whoever does it: lib/chem/conformersSought soughtOptions)
+      const own = [...(kindInfo(r.kind).options ?? []).map((o) => o.id), ...(r.kind === "conformers" ? soughtOptions("needed", 1, {}).map((o) => o.id) : []), "pairs", "property", "most"];
       for (const id of Object.keys(r.options ?? {})) expect([r.key, id, known!.includes(id) || own.includes(id)]).toEqual([r.key, id, true]);
     }
   });

@@ -10,6 +10,7 @@ import { runStep, type RunWith } from "../../src/ui/features/Workspace/workflow/
 import { dftRecipe, xtbRecipe } from "./recipe";
 import { dftTemplate, xtbTemplate } from "./build";
 import { conditionsIn } from "../../src/lib/nodes/filter";
+import { roundsAsked, soughtNumber } from "../../src/lib/chem/conformersSought";
 import type { Unit } from "../../src/lib/units";
 
 // Meno's own steps of the template, run on made entries that stand in for what the plugins give (no plugin is run): the path results' validity
@@ -314,5 +315,25 @@ describe("the Filter steps' conditions", () => {
 
   it("are written so in the templates built: the reactants weighed in g/mol", { timeout: 120000 }, () => {
     for (const t of [xtbTemplate(), dftTemplate()]) expect(t.text).toContain("mw <= 512 g/mol");
+  });
+});
+
+describe("the Conformers steps", () => {
+  // (a step keeps the options it was put down with: each Conformers step must be runnable as stored, with nothing from Settings)
+  it("are each runnable as stored, in both templates: a number of tries, or a search with its window and its most", () => {
+    const steps = [...xtbRecipe(), ...dftRecipe()].filter((s) => s.kind === "conformers");
+    expect(steps.length).toBeGreaterThan(0);
+    for (const s of steps) {
+      const values = (s.options ?? {}) as Record<string, unknown>;
+      expect(["needed", "fixed"], s.key).toContain(values.sought);
+      if (values.sought === "fixed") expect(soughtNumber(values as never, () => null), s.key).toBe(200);
+      else expect(roundsAsked(values as never, () => 30), s.key).toEqual({ window: 10, first: 30, most: 5000 });
+    }
+  });
+
+  it("make one 3D structure of each species from 200 tries, then search within 10 kcal/mol, at most 5000 tries", () => {
+    expect(recipe("reactant-conformers").options).toMatchObject({ sought: "fixed", count: 200 });
+    expect(recipe("product-conformers").options).toMatchObject({ sought: "fixed", count: 200 });
+    expect(recipe("search").options).toMatchObject({ sought: "needed", within: 10, first: 0, most: 5000 });
   });
 });
