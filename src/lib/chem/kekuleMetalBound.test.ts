@@ -33,15 +33,21 @@ describe("an aromatic ring bound to a metal by its N", () => {
     }
   });
 
-  it("leaves an N whose bond to a metal is its own third - a zinc porphine's pyrrole N - as it was: 11 double bonds, those N three bonds, no CH2", () => {
-    const smiles = "c1cc2cc3ccc(n3[Zn]n3c(cc4ccc(cc1n2)n4)ccc3c1)c1";
-    const { s, orders, hs } = kekule(smiles);
-    expect(orders.filter((o) => o === 2)).toHaveLength(11);
-    s.atoms.forEach((a, i) => {
-      const sum = s.bonds.reduce((t, b, k) => t + (b.a1 === i || b.a2 === i ? orders[k] : 0), 0);
-      if (a.el === "N" && s.bonds.some((b) => (b.a1 === i || b.a2 === i) && [b.a1, b.a2].some((j) => s.atoms[j].el === "Zn"))) expect(sum, `N${i}`).toBe(3);
-      if (a.el === "C") expect(hs[i], `C${i}`).toBeLessThan(2);
-    });
+  it("leaves an N whose bond to a metal is its own third - a zinc porphine's pyrrole N - as it was: 11 double bonds, those N three bonds, no CH2; so too beside another ring with no Kekule structure", () => {
+    const porphine = "c1cc2cc3ccc(n3[Zn]n3c(cc4ccc(cc1n2)n4)ccc3c1)c1";
+    for (const smiles of [porphine, `${porphine}.c1cccc1`]) {
+      const { s, orders, hs } = kekule(smiles);
+      // (the porphine's atoms first, the other ring's five after)
+      const end = s.atoms.length - (smiles === porphine ? 0 : 5);
+      const own = s.bonds.map((_, k) => k).filter((k) => s.bonds[k].a1 < end && s.bonds[k].a2 < end);
+      expect(own.filter((k) => orders[k] === 2), smiles).toHaveLength(11);
+      s.atoms.forEach((a, i) => {
+        if (i >= end) return;
+        const sum = s.bonds.reduce((t, b, k) => t + (b.a1 === i || b.a2 === i ? orders[k] : 0), 0);
+        if (a.el === "N" && s.bonds.some((b) => (b.a1 === i || b.a2 === i) && [b.a1, b.a2].some((j) => s.atoms[j].el === "Zn"))) expect(sum, `${smiles} N${i}`).toBe(3);
+        if (a.el === "C") expect(hs[i], `${smiles} C${i}`).toBeLessThan(2);
+      });
+    }
   });
 
   it("takes an imidazole bound by its N3, its N1 an N-H, as an imidazole: the N3 lends its pair", () => {
@@ -51,6 +57,22 @@ describe("an aromatic ring bound to a metal by its N", () => {
     s.atoms.forEach((a, i) => {
       if (a.el === "C") expect(hs[i], `C${i}`).toBe(1);
     });
+  });
+
+  it("takes a pyridine bound by its N as a pyridine beside another ring of the molecule that has no Kekule structure either way", () => {
+    for (const smiles of ["Cl[Pt](Cl)(n1ccccc1)Cc1cccc1", "Cl[Pt](Cl)n1ccccc1.c1cccc1"]) {
+      const { s, orders } = kekule(smiles);
+      const n = s.atoms.findIndex((a) => a.el === "N");
+      expect(s.bonds.some((b, k) => (b.a1 === n || b.a2 === n) && orders[k] === 2), smiles).toBe(true);
+      // (the six ring bonds: three double)
+      const six = s.bonds.map((_, k) => k).filter((k) => s.bonds[k].order === 4 && [s.bonds[k].a1, s.bonds[k].a2].every((i) => i >= n && i <= n + 5));
+      expect(six.filter((k) => orders[k] === 2), smiles).toHaveLength(3);
+    }
+  });
+
+  it("writes out each ring system of a molecule with one that has no Kekule structure: a naphthalene beside it its five double bonds", () => {
+    const { s, orders } = kekule("c1ccc2ccccc2c1.c1cccc1");
+    expect(s.bonds.map((_, k) => k).filter((k) => s.bonds[k].a1 < 10 && s.bonds[k].a2 < 10 && orders[k] === 2)).toHaveLength(5);
   });
 
   it("leaves a ring bound by none as it was: pyridine, pyridinium, pyrrole", () => {

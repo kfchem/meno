@@ -77,10 +77,38 @@ export function kekulized(atoms: readonly KekuleAtom[], bonds: readonly KekuleBo
   // third - and only where that leaves the ring without a Kekule structure, not counted: a pyridine bound to a platinum by its N,
   // an imidazole by its N3, lend the N's lone pair - counted, the N read as pyrrole-type and the ring took an H on a carbon instead
   // of a double bond, another compound)
+  // (judged ring system by ring system - its aromatic bonds joined at their atoms, no atom in two - where the molecule as a whole
+  // has none: a ring with no Kekule structure either way leaves the others theirs, a pyridine its lent one, a porphine its own)
   const counted = kekulizedAs(atoms, bonds, false);
-  if (counted.solved || !bonds.some((b) => b.order === AROMATIC_BOND && (metalBonded(atoms, bonds, b.a1) || metalBonded(atoms, bonds, b.a2)))) return counted;
-  const lent = kekulizedAs(atoms, bonds, true);
-  return lent.solved ? lent : counted;
+  if (counted.solved) return counted;
+  const orders = [...counted.orders];
+  let hChosen = counted.hChosen;
+  for (const system of aromaticSystems(atoms.length, bonds)) {
+    // (the system alone: the molecule's other aromatic bonds single, which leaves every atom's bonds as many as they were)
+    const alone = bonds.map((b, k) => (b.order === AROMATIC_BOND && !system.has(k) ? { ...b, order: 1 } : b));
+    let own = kekulizedAs(atoms, alone, false);
+    if (!own.solved && [...system].some((k) => metalBonded(atoms, bonds, bonds[k].a1) || metalBonded(atoms, bonds, bonds[k].a2))) own = kekulizedAs(atoms, alone, true);
+    if (!own.solved) continue;
+    const at = new Set([...system].flatMap((k) => [bonds[k].a1, bonds[k].a2]));
+    for (const k of system) orders[k] = own.orders[k];
+    hChosen = [...hChosen.filter((i) => !at.has(i)), ...own.hChosen.filter((i) => at.has(i))];
+  }
+  return { orders, hChosen };
+}
+
+/** The aromatic bonds by ring system: those joined at their atoms, by bond index. */
+function aromaticSystems(n: number, bonds: readonly KekuleBond[]): Set<number>[] {
+  const root = Array.from({ length: n }, (_, i) => i);
+  const find = (i: number): number => (root[i] === i ? i : (root[i] = find(root[i])));
+  for (const b of bonds) if (b.order === AROMATIC_BOND) root[find(b.a1)] = find(b.a2);
+  const by = new Map<number, Set<number>>();
+  bonds.forEach((b, k) => {
+    if (b.order !== AROMATIC_BOND) return;
+    const r = find(b.a1);
+    if (!by.has(r)) by.set(r, new Set());
+    by.get(r)!.add(k);
+  });
+  return [...by.values()];
 }
 
 /** A metal, by its symbol: an element not among the nonmetals and metalloids (`NOT_METALS`). */
