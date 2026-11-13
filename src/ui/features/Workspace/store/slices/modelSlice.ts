@@ -217,10 +217,12 @@ export const createModelSlice = (
     doc.drop(`move-atoms:${gesture}`);
   },
 
-  settleMove: (gesture: string) => {
-    // (a mark between two bonds the move has left apart taken away, in the move's own step: chem/crossings `crossingsApart`)
-    if (crossingsApart(get().model) === get().model) return;
-    doc.edit("move atoms", (d) => ({ ...d, model: crossingsApart(d.model) }), gestureStep(`move-atoms:${gesture}`));
+  settleMove: (gesture: string, atoms: Iterable<number>) => {
+    // (a mark between two bonds the move has left apart - one with an atom it moved - taken away, in the move's own step: chem/crossings
+    // `crossingsApart`)
+    const moved = new Set(atoms);
+    if (!moved.size || crossingsApart(get().model, moved) === get().model) return;
+    doc.edit("move atoms", (d) => ({ ...d, model: crossingsApart(d.model, moved) }), gestureStep(`move-atoms:${gesture}`));
   },
 
   turnSelectionOver: (axis: "vertical" | "horizontal") => {

@@ -110,6 +110,9 @@ describe("which bond is in front where two cross, said by the chemist", () => {
       expect(of(crossingsApart(apart), 10).behind).toBeUndefined();
       expect(crossingsApart(marked)).toBe(marked);
       expect(crossingsApart(base)).toBe(base);
+      // (only where the move moved an atom of either bond: atom 1, of bond 10, moved; atom 5, of neither, moved - the mark left)
+      expect(of(crossingsApart(apart, new Set([1])), 10).behind).toBeUndefined();
+      expect(crossingsApart(apart, new Set([5]))).toBe(apart);
     });
 
     it("takes the mark away once all four atoms of the two carry a depth - the depth says it from then on - and keeps it where only some do", () => {
@@ -118,5 +121,14 @@ describe("which bond is in front where two cross, said by the chemist", () => {
       const some: Model = { ...marked, atoms: marked.atoms.map((a) => (a.id <= 2 ? { ...a, z: a.id } : a)) };
       expect(of(crossingsHeld(some, marked), 10).behind).toEqual([11]);
     });
+  });
+
+  it("keeps, of two bonds each said to be behind the other, the one this edit said: a file's mark and a new one the other way", () => {
+    const before = orderedCrossing(base, 10, 11, "behind");
+    // (the edit adds 11 behind 10 by hand, the file's 10 behind 11 still there: the newer, 11's, kept)
+    const both: Model = { ...before, bonds: before.bonds.map((b) => (b.id === 11 ? { ...b, behind: [10] } : b)) };
+    const held = crossingsHeld(both, before);
+    expect(of(held, 11).behind).toEqual([10]);
+    expect(of(held, 10).behind).toBeUndefined();
   });
 });

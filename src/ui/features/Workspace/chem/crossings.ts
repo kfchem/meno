@@ -90,10 +90,11 @@ export function crossingsHeld(model: Model, before?: Model): Model {
 }
 
 /**
- * The model's marks with those whose two bonds no longer cross on the page taken away: what a move does as it ENDS (never while it goes on), so
- * that a gap coming back where the bonds are dragged across again later says nothing nobody said again. The same model where none is.
+ * The model's marks with those whose two bonds no longer cross on the page taken away - of those between bonds with an atom among `moved`, the
+ * atoms a move moved: what a move does as it ENDS (never while it goes on), so that a gap coming back where the bonds are dragged across again
+ * later says nothing nobody said again. A mark the move did not touch is left as it is. The same model where none is taken.
  */
-export function crossingsApart(model: Model): Model {
+export function crossingsApart(model: Model, moved?: ReadonlySet<number>): Model {
   if (!model.bonds.some((b) => b.behind?.length)) return model;
   const atom = new Map(model.atoms.map((a) => [a.id, a]));
   const bondOf = new Map(model.bonds.map((b) => [b.id, b]));
@@ -106,7 +107,9 @@ export function crossingsApart(model: Model): Model {
     if (!b.behind?.length) return b;
     const kept = b.behind.filter((id) => {
       const o = bondOf.get(id);
-      return !!o && cross(b, o);
+      if (!o) return false;
+      if (moved && ![b.a, b.b, o.a, o.b].some((a) => moved.has(a))) return true;
+      return cross(b, o);
     });
     if (kept.length === b.behind.length) return b;
     changed = true;

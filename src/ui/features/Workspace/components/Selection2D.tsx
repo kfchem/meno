@@ -457,7 +457,7 @@ export default function Selection2D() {
       selectionMoving.active = false;
       const s = store.getState();
       // (a mark between two bonds the turn has left apart taken away, in its own step - chem/crossings)
-      if (!carried.length) s.settleMove(gesture);
+      if (!carried.length) s.settleMove(gesture, from.map((a) => a.id));
       s.endPanHold(ev.pointerId);
       // (and its end is no click on nothing, which would let it go)
       s.suppressDoubleClick(DOUBLE_CLICK_MS);

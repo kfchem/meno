@@ -591,8 +591,8 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
       store.getState().endPanHold(e.pointerId);
       if (g.kind === "move") {
         g.guide.end();
-        // (a mark between two bonds the move has left apart taken away, in its own step - chem/crossings)
-        store.getState().settleMove(g.key);
+        // (a mark between two bonds the move has left apart taken away, in its own step - of the drawing it carried, if any - chem/crossings)
+        if (g.drawn.atoms.length) store.getState().settleMove(g.key, g.drawn.atoms.map((a) => a.id));
       }
       setActive(null);
       setHold(null);

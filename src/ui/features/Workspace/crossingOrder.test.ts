@@ -10,6 +10,8 @@ import { buildAllPrimitives, createSVG, layoutMolecule, type LineSeg, type Poly 
 import { layoutEmf, emfRecords } from "../../../lib/chem/emf";
 import { acsWorldOptions } from "../../../lib/chem/acs";
 import { crossingsOf } from "./chem/crossings";
+import { numberedApart } from "./workflow/run";
+import { inRow } from "./components/structureDrag";
 import type { Model } from "./store/types";
 
 /** A norbornane-like crossing drawn by hand: a ring of four (A-B-C-D) with the bond A-C across it and B-D across that - the two cross at the middle. */
@@ -99,12 +101,12 @@ describe("a crossing drawn by hand, which bond is in front said", () => {
     expect(apart.lines.length).toBe(st().model.bonds.length);
     expect(apart.polys.filter((p) => reachOf(p) > 0.3)).toHaveLength(0);
     st().moveAtoms([{ id: atoms.c, x: 2, y: 2 }], "one");
-    st().settleMove("one");
+    st().settleMove("one", [atoms.c]);
     expect(bondOf(st().model, ac).behind).toEqual([bd]);
     expect(drawn(st().model).ac).toHaveLength(2);
     // (a drag that ends with them apart: the mark gone with it, one step; undone, both back - C where it was and the mark)
     st().moveAtoms([{ id: atoms.c, x: -1, y: 0.5 }], "two");
-    st().settleMove("two");
+    st().settleMove("two", [atoms.c]);
     expect(bondOf(st().model, ac).behind).toBeUndefined();
     expect(doc.history().undoLabel).toBe("move atoms");
     doc.undo();
@@ -112,10 +114,24 @@ describe("a crossing drawn by hand, which bond is in front said", () => {
     expect(st().model.atoms.find((a) => a.id === atoms.c)).toMatchObject({ x: 2, y: 2 });
     // (dragged across again later, no gap comes back that nobody said)
     st().moveAtoms([{ id: atoms.c, x: -1, y: 0.5 }], "three");
-    st().settleMove("three");
+    st().settleMove("three", [atoms.c]);
     st().moveAtoms([{ id: atoms.c, x: 2, y: 2 }], "four");
-    st().settleMove("four");
+    st().settleMove("four", [atoms.c]);
     expect(drawn(st().model).ac).toHaveLength(1);
+  });
+
+  it("is left by a move that did not touch its bonds: only a mark with an atom the move moved is taken away", () => {
+    const { st, ac, bd, atoms } = editor();
+    st().orderCrossing(ac, bd, "behind");
+    // (C dragged apart and the drag not ended - a mark between bonds apart, as a file may hold one)
+    st().moveAtoms([{ id: atoms.c, x: -1, y: 0.5 }], "held");
+    // (another structure moved and let go: the mark is not its, and stays)
+    const o = st().addAtom(20, 20, "C");
+    st().moveAtoms([{ id: o, x: 25, y: 20 }], "other");
+    st().settleMove("other", [o]);
+    expect(bondOf(st().model, ac).behind).toEqual([bd]);
+    st().settleMove("held", [atoms.c]);
+    expect(bondOf(st().model, ac).behind).toBeUndefined();
   });
 
   it("goes when an edit gives all four atoms a depth, in that edit's step, and does not come back when the depth goes; with only some deep, the mark says it", () => {
@@ -265,5 +281,64 @@ describe("the gap on its way open or closed", () => {
     expect(full).toBeGreaterThan(0.2);
     expect(at(0.5)).toBeCloseTo(full / 2, 9);
     expect(at(0)).toBe(0);
+  });
+});
+
+describe("a mark carried onto new ids, between the same two bonds", () => {
+  /** A model with its crossing marked, its ids shifted by `k`: AC behind BD. */
+  const marked = (k: number): Model => {
+    const { st, ac, bd } = editor();
+    st().orderCrossing(ac, bd, "behind");
+    const m = st().model;
+    return { atoms: m.atoms.map((a) => ({ ...a, id: a.id + k })), bonds: m.bonds.map((b) => ({ ...b, id: b.id + k, a: b.a + k, b: b.b + k, ...(b.behind ? { behind: b.behind.map((x) => x + k) } : {}) })) };
+  };
+  /** Each mark of `out` as the two bonds' atom pairs, by where those atoms lie: the same crossing whatever the ids. */
+  const marks = (out: Model) => {
+    const at = new Map(out.atoms.map((a) => [a.id, a]));
+    const ends = (id: number) => {
+      const b = out.bonds.find((x) => x.id === id)!;
+      return [at.get(b.a)!, at.get(b.b)!].map((a) => `${Math.round(a.y * 10)}`).sort().join("-");
+    };
+    return out.bonds.flatMap((b) => (b.behind ?? []).map((o) => `${ends(b.id)} behind ${ends(o)}`));
+  };
+
+  it("through a run's structures numbered apart (workflow/run `numberedApart`)", () => {
+    const out = numberedApart([marked(0), marked(100)]);
+    const ms = marks(out);
+    expect(ms).toHaveLength(2);
+    // (AC rises from y 0 to y 2, BD falls from y 2 to y 0: each mark AC behind BD, its bond named by its new id)
+    for (const m of ms) expect(m).toBe("0-20 behind 0-20");
+    for (const b of out.bonds.filter((x) => x.behind)) {
+      const other = out.bonds.find((x) => x.id === b.behind![0])!;
+      expect(other).toBeDefined();
+      // (the other is the same structure's: an atom in common with this bond's neighbours, none with the other copy)
+      expect(Math.abs(other.id - b.id)).toBeLessThan(10);
+    }
+  });
+
+  it("through structures dragged into a row (structureDrag `inRow`)", () => {
+    const out = inRow([marked(0), marked(100)], 2);
+    expect(marks(out)).toHaveLength(2);
+    for (const b of out.bonds.filter((x) => x.behind)) {
+      const other = out.bonds.find((x) => x.id === b.behind![0])!;
+      const at = new Map(out.atoms.map((a) => [a.id, a]));
+      // (the other bond crosses this one on the page: the same copy's)
+      const xs = (id: number) => [at.get(out.bonds.find((x) => x.id === id)!.a)!.x, at.get(out.bonds.find((x) => x.id === id)!.b)!.x];
+      expect(Math.max(...xs(b.id))).toBeGreaterThan(Math.min(...xs(other.id)));
+      expect(Math.min(...xs(b.id))).toBeLessThan(Math.max(...xs(other.id)));
+    }
+  });
+});
+
+describe("where only some of the four atoms carry a depth", () => {
+  it("draws the gap the mark says, the back bond's atoms deep and the front's not, and the other way round", () => {
+    for (const deep of [["a", "c"], ["b", "d"]] as const) {
+      const { st, ac, bd, atoms } = editor();
+      st().orderCrossing(ac, bd, "behind");
+      const ids = new Set(deep.map((k) => atoms[k]));
+      const m: Model = { ...st().model, atoms: st().model.atoms.map((a) => (ids.has(a.id) ? { ...a, z: 1 } : a)) };
+      expect(drawn(m).ac, deep.join("")).toHaveLength(2);
+      expect(drawn(m).bd, deep.join("")).toHaveLength(1);
+    }
   });
 });

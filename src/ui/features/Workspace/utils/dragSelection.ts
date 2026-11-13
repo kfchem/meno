@@ -149,7 +149,7 @@ export function dragSelection(
     if (last.x !== p0.x || last.y !== p0.y) {
       ontoCycle();
       // (and its end: a mark between two bonds it has left apart taken away, in its own step - chem/crossings)
-      store.getState().settleMove(gesture);
+      store.getState().settleMove(gesture, takenAtoms);
     }
     done(ev, last.x !== p0.x || last.y !== p0.y);
   };
