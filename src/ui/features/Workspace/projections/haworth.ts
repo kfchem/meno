@@ -10,10 +10,25 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import type { Atom, Bond } from "../store/types";
 import { depthRings, drawSolid, type ChairDrawing } from "./chair";
 
-/** A Haworth ring of `size` 6 (a pyranose) or 5 (a furanose), its middle at `at`: atom k of the solid (the ring O first, then C-1 on) is `firstId + k`, its bond k `firstBondId + k`; the front edge bold. */
+/**
+ * A Haworth ring of `size` 6 (a pyranose) or 5 (a furanose), its middle at `at`: atom k of the solid (the ring O first, then C-1 on) is
+ * `firstId + k`, its bond k `firstBondId + k`. Its near edge as the text prefers it (Brecher 2006, ST-1.9, the Haworth form its figure marks
+ * preferred): the bottommost ring bond bold, and the two ring bonds that run to it wedge-shaped, broad at its ends - always the two with the
+ * bold one, never wedge shapes without it, which the text rejects. A look (`Bond.display`): it states nothing the depth does not.
+ */
 export function haworthDrawing(opts: { at: { x: number; y: number }; size?: 5 | 6; firstId: number; firstBondId: number; length?: number }): ChairDrawing {
   const solid = haworth(opts.size ?? 6);
-  return drawSolid({ solid, view: standardView(solid), at: opts.at, firstId: opts.firstId, firstBondId: opts.firstBondId, length: opts.length, element: (k) => (k === 0 ? "O" : "C") });
+  const d = drawSolid({ solid, view: standardView(solid), at: opts.at, firstId: opts.firstId, firstBondId: opts.firstBondId, length: opts.length, element: (k) => (k === 0 ? "O" : "C") });
+  const front = d.bonds.find((b) => b.display === "bold");
+  if (!front) return d;
+  const bonds = d.bonds.map((b) => {
+    if (b === front) return b;
+    const at = b.a === front.a || b.a === front.b ? b.a : b.b === front.a || b.b === front.b ? b.b : null;
+    if (at == null) return b;
+    // (broad at the bold bond's end, narrow at the far one)
+    return { ...b, display: "wedge" as const, narrow: at === b.a ? b.b : b.a };
+  });
+  return { ...d, bonds };
 }
 
 /** A Haworth ring found on a page: its size, where its middle is, and each ring atom's place in the solid. */

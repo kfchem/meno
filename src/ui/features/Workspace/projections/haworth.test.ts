@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { measured } from "../../../../testing/timeouts";
 import type { Atom, Bond, Model } from "../store/types";
 import { seenPlaces, snapTo } from "./chair";
 import { chairExtension } from "./extend";
@@ -41,6 +42,20 @@ describe("the Haworth tool's drawing", () => {
     expect(c2.y).toBeLessThan(o.y);
     expect(c3.y).toBeLessThan(c5.y);
     expect(six.bonds.filter((b) => b.display === "bold").map((b) => [b.a, b.b])).toEqual([[3, 4]]);
+    // (and the two ring bonds that run to it wedge-shaped, broad at its ends - C-1 to C-2 and C-3 to C-4 - narrow at C-1 and C-4: ST-1.9's
+    // preferred Haworth form; the other bonds plain)
+    for (const ring of [six, haworthDrawing({ at: { x: 0, y: 0 }, size: 5, firstId: 1, firstBondId: 1 })]) {
+      const bold = ring.bonds.filter((b) => b.display === "bold");
+      const wedges = ring.bonds.filter((b) => b.display === "wedge");
+      expect(bold).toHaveLength(1);
+      expect(wedges).toHaveLength(2);
+      for (const w of wedges) {
+        const broad = w.narrow === w.a ? w.b : w.a;
+        expect([bold[0].a, bold[0].b]).toContain(broad);
+        expect([bold[0].a, bold[0].b]).not.toContain(w.narrow);
+      }
+      expect(ring.bonds.filter((b) => b.display == null)).toHaveLength(ring.bonds.length - 3);
+    }
     const five = haworthDrawing({ at: { x: 0, y: 0 }, size: 5, firstId: 1, firstBondId: 1 });
     expect(five.atoms).toHaveLength(5);
     expect(five.atoms[0].el).toBe("O");
@@ -117,6 +132,8 @@ describe("a Haworth ring put down from Quick Add", () => {
       expect((Math.min(...xs) + Math.max(...xs)) / 2).toBeCloseTo(at.x, 6);
       expect((Math.min(...ys) + Math.max(...ys)) / 2).toBeCloseTo(at.y, 6);
       expect(m.bonds.filter((b) => b.display === "bold")).toHaveLength(1);
+      // (pasted, the wedge shapes kept with the bold one, each narrow at its far end: never wedge shapes without it)
+      expect(m.bonds.filter((b) => b.display === "wedge" && b.narrow != null)).toHaveLength(2);
     }
-  });
+  }, measured(2400));
 });
