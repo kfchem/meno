@@ -391,6 +391,11 @@ export type TextItem = {
   beside?: boolean;
   /** Set beside: the atom, by index, whose charge it is. */
   markOf?: number;
+  /**
+   * Two unpaired electrons on its atom (a triplet carbene's, a nitrene's): drawn as one dot above its symbol and one below, well apart - Brecher
+   * 2008, GR-5.3: two dots next to each other stand for a lone pair (GR-5.2), so two unpaired electrons are kept well separated.
+   */
+  unpaired?: true;
   /** Its colour, where it is not the labels' (as CSS). */
   color?: string;
   /**
@@ -894,6 +899,36 @@ export function markCircle(run: PlacedRun): { c: Vec2; r: number } {
 }
 
 /**
+ * Where a label's two unpaired electrons go (`TextItem.unpaired`): one dot above its symbol and one below, each a dot's width clear
+ * of the letters, at the symbol's middle - Brecher 2008, GR-5.3: two unpaired electrons "well separated", never next to each other. In the
+ * label's own places, with how large each dot is.
+ */
+export function unpairedDots(t: TextItem, fontSize: number, set: LabelSet, lineWorld: number): { c: Vec2; r: number }[] {
+  if (!t.unpaired) return [];
+  const anchor = t.anchorRun ?? 0;
+  const run = placeLabel(t, fontSize, set)[anchor];
+  if (!run || run.mark) return [];
+  const font = labelFont(set.fontFamily);
+  let pen = run.x;
+  const xs: number[] = [];
+  const ys: number[] = [];
+  for (const ch of run.text) {
+    for (const p of font.hull(ch)) {
+      xs.push(pen + p.x * run.size);
+      ys.push(run.y + p.y * run.size);
+    }
+    pen += font.advance(ch) * run.size;
+  }
+  if (!xs.length) return [];
+  const r = Math.max(lineWorld * 1.25, fontSize * set.subscriptSize * 0.075);
+  const x = (Math.min(...xs) + Math.max(...xs)) / 2;
+  return [
+    { c: { x, y: Math.max(...ys) + 3 * r }, r },
+    { c: { x, y: Math.min(...ys) - 3 * r }, r },
+  ];
+}
+
+/**
  * The marks of the labels, drawn: a charge of one as its sign in a circle,
  * a radical as a dot, or two for a carbene's pair - in lines, shapes and
  * filled circles, as the rest of the drawing is, a little lighter than a
@@ -911,6 +946,8 @@ function labelMarks(
   const fills: Circle[] = [];
   const w = lineWorld * 0.8;
   for (const t of texts) {
+    // (a triplet's two unpaired electrons, apart: above and below its symbol)
+    for (const dot of unpairedDots(t, fontSize, set, lineWorld)) fills.push({ ...dot, ...(t.color ? { color: t.color } : {}) });
     for (const run of placeLabel(t, fontSize, set)) {
       if (!run.mark) continue;
       const { c, r } = markCircle(run);
@@ -979,6 +1016,12 @@ export function labelHulls(
       }));
       if (hull.length > 0) out.push(hull);
       pen += font.advance(ch) * run.size;
+    }
+  }
+  // (a triplet's two dots, above and below its symbol, as its charge's circle is: a bond is kept clear of them where they are put)
+  if (tail) {
+    for (const { c, r } of unpairedDots(t, fontSize, set, 0)) {
+      out.push(Array.from({ length: 12 }, (_, k) => ({ x: c.x - t.x + r * Math.cos((k * Math.PI) / 6), y: c.y - t.y + r * Math.sin((k * Math.PI) / 6) })));
     }
   }
   return out;
@@ -2183,7 +2226,10 @@ export function showsLabel(
     !!a.isotope ||
     // (a carbon of other than four bonds' valence says so: its hydrogens with it)
     (a.valence != null && a.valence !== 4) ||
-    (!!opts.showChargedCarbons && (!!a.charge || !!a.radical))
+    (!!opts.showChargedCarbons && (!!a.charge || !!a.radical)) ||
+    // (two electrons of its own, paired or not, sit on a symbol: Brecher 2008, GR-5.3's carbenes all have their C)
+    a.radical === "singlet" ||
+    a.radical === "triplet"
   );
 }
 
@@ -2342,7 +2388,9 @@ function tailRuns(a: Atom, opts: Pick<LayoutOptions, "circleCharges">): TextRun[
         : { text: chargeText(q), sup: true },
     );
   }
-  if (a.radical) out.push({ text: a.radical === "doublet" ? "\u2022" : "\u2022\u2022", mark: "radical" });
+  // (one unpaired electron a dot; a singlet's pair two dots together, a lone pair's form - GR-5.2; a triplet's two set apart, above and below
+  // its symbol, not here: `TextItem.unpaired`)
+  if (a.radical === "doublet" || a.radical === "singlet") out.push({ text: a.radical === "doublet" ? "\u2022" : "\u2022\u2022", mark: "radical" });
   return out;
 }
 
@@ -2603,7 +2651,8 @@ export function buildTextLabels(
       atom: i,
     });
   }
-  return out;
+  // (an atom's two unpaired electrons, a triplet's: one dot above its symbol and one below - `TextItem.unpaired`)
+  return out.map((t) => (t.atom != null && !t.beside && atoms[t.atom]?.radical === "triplet" ? { ...t, unpaired: true as const } : t));
 }
 
 /**

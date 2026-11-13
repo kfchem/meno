@@ -2577,6 +2577,76 @@ describe("charges, radicals and isotopes", () => {
     expect(withDot.fills.length - without.fills.length).toBe(1);
   });
 
+  describe("two electrons of an atom's own (Brecher 2008, GR-5.3; GR-5.2)", () => {
+    /** The dots drawn, by layout: the fills of `atoms` less those of the same atoms with no radical. */
+    const dotsOf = (atoms: Atom[], bonds: Bond[]) => {
+      const a = layoutMolecule(atoms, bonds, opts(), 30).fills;
+      const b = layoutMolecule(atoms.map((x) => ({ ...x, radical: undefined })), bonds, opts(), 30).fills;
+      const seen = new Set(b.map((f) => `${f.c.x.toFixed(6)},${f.c.y.toFixed(6)}`));
+      return a.filter((f) => !seen.has(`${f.c.x.toFixed(6)},${f.c.y.toFixed(6)}`));
+    };
+
+    it("draws a triplet's two unpaired electrons one dot above its symbol and one below, well apart - triplet methylene, CH2", () => {
+      const methylene = [atom(0, 0, 0, "C", { radical: "triplet" })];
+      const t = labelOf(methylene, [], 0);
+      expect(t.unpaired).toBe(true);
+      // (no dots after the symbol: GR-5.3 takes two dots side by side for a lone pair)
+      expect(t.runs!.some((r) => r.mark === "radical")).toBe(false);
+      expect(t.runs!.map((r) => r.text)).toEqual(["C", "H", "2"]);
+      const dots = dotsOf(methylene, []);
+      expect(dots).toHaveLength(2);
+      const [up, down] = [...dots].sort((p, q) => q.c.y - p.c.y);
+      // (one above the C and one below it, on one upright line through the C's middle)
+      expect(up.c.x).toBeCloseTo(down.c.x, 9);
+      expect(up.c.y).toBeGreaterThan(0);
+      expect(down.c.y).toBeLessThan(0);
+      expect(Math.abs(up.c.x - t.x)).toBeLessThan(0.5 * opts().fontPx);
+      // (well apart: more than the C is tall)
+      expect(up.c.y - down.c.y).toBeGreaterThan(0.7 * opts().fontPx);
+    });
+
+    it("draws a nitrene's N, a triplet with a bond, the same way: above and below the N", () => {
+      const nitrene = [atom(0, 0, 0, "N", { radical: "triplet" }), atom(1, -L, 0, "C")];
+      const dots = dotsOf(nitrene, [single(0, 1)]);
+      expect(dots).toHaveLength(2);
+      expect(dots[0].c.x).toBeCloseTo(dots[1].c.x, 9);
+      expect(Math.sign(dots[0].c.y)).toBe(-Math.sign(dots[1].c.y));
+    });
+
+    it("draws a singlet's pair - a singlet carbene's, a lone pair in GR-5.2's sense - as two dots together beside the symbol: singlet dichlorocarbene", () => {
+      const carbene = [atom(0, 0, 0, "C", { radical: "singlet" }), atom(1, -L * 0.866, -L / 2, "Cl"), atom(2, L * 0.866, -L / 2, "Cl")];
+      const t = labelOf(carbene, [single(0, 1), single(0, 2)], 0);
+      expect(t.unpaired).toBeUndefined();
+      const dots = dotsOf(carbene, [single(0, 1), single(0, 2)]);
+      expect(dots).toHaveLength(2);
+      // (together: side by side, at one height, closer than a letter is wide)
+      expect(dots[0].c.y).toBeCloseTo(dots[1].c.y, 9);
+      expect(Math.abs(dots[0].c.x - dots[1].c.x)).toBeLessThan(0.4 * opts().fontPx);
+    });
+
+    it("shows the C of a carbon with two electrons of its own, whatever the style says of a charged carbon; one unpaired electron as before", () => {
+      const triplet = [atom(0, 0, 0, "C", { radical: "triplet" }), atom(1, L, 0, "C"), atom(2, -L, 0, "C")];
+      const singlet = triplet.map((a, i) => (i === 0 ? { ...a, radical: "singlet" as const } : a));
+      const doublet = triplet.map((a, i) => (i === 0 ? { ...a, radical: "doublet" as const } : a));
+      const bonds = [single(0, 1), single(0, 2)];
+      for (const atoms of [triplet, singlet]) expect(labelOf(atoms, bonds, 0, { showChargedCarbons: false })?.runs?.[0]?.text).toBe("C");
+      expect(labelOf(doublet, bonds, 0, { showChargedCarbons: false })).toBeUndefined();
+      expect(dotsOf(doublet, bonds)).toHaveLength(1);
+    });
+
+    it("keeps a triplet's dots inside its label's reach: the label is that much taller", () => {
+      const methylene = [atom(0, 0, 0, "C", { radical: "triplet" })];
+      const t = labelOf(methylene, [], 0);
+      const top = (x: typeof t) => Math.max(...labelHulls(x, opts().fontPx, labelSetOf(opts())).flat().map((p) => p.y));
+      const bottom = (x: typeof t) => Math.min(...labelHulls(x, opts().fontPx, labelSetOf(opts())).flat().map((p) => p.y));
+      // (higher by the dot above, lower by the dot below - past the H2's subscript)
+      expect(top(t)).toBeGreaterThan(top({ ...t, unpaired: undefined }) + 0.1 * opts().fontPx);
+      expect(bottom(t)).toBeLessThanOrEqual(bottom({ ...t, unpaired: undefined }));
+      // (and not where a bond stops short of a label: kept clear by where they are put, as a charge is)
+      expect(labelHulls(t, opts().fontPx, labelSetOf(opts()), false).length).toBe(labelHulls({ ...t, unpaired: undefined }, opts().fontPx, labelSetOf(opts()), false).length);
+    });
+  });
+
   it("counts the H a charge leaves: NH3+ on a methyl, none on O-", () => {
     expect(implicitHydrogens("N", 1, 1)).toBe(3);
     expect(implicitHydrogens("O", 1, -1)).toBe(0);
