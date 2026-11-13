@@ -91,16 +91,27 @@ pub fn list(root: &Path) -> Vec<Installed> {
     out
 }
 
+/// The version plugin `id`'s `current` names, where that version is in place - its folder there, its manifest
+/// read - and none otherwise: no `current`, one that cannot be read, or one naming a version not there.
+fn in_use(root: &Path, id: &str) -> Option<String> {
+    let version = current(root, id)?;
+    fs::read(root.join(id).join(&version).join("manifest.json")).ok()?;
+    Some(version)
+}
+
 /// The versions in `root` no plugin uses taken away, as Meno starts: each version's folder its plugin's `current`
 /// does not name - one replaced by an update, one half put in place - however it came there; but none of a plugin a
-/// job of which runs (`running`): left for the next start. What was taken away, a line each, for Meno's log.
+/// job of which runs (`running`): left for the next start. And none of a plugin whose `current` names no version in
+/// place - none, one that cannot be read (a file held a moment, as a virus scanner holds one), or one naming a
+/// folder not there: which version it uses is not known, so none is taken for unused; each of its versions is kept,
+/// and that is said. What was taken away, or kept so, a line each, for Meno's log.
 pub fn tidy(root: &Path, running: &dyn Fn(&str) -> bool) -> Vec<String> {
     let mut said = Vec::new();
     let Ok(entries) = fs::read_dir(root) else { return said };
     let mut ids: Vec<String> = entries.flatten().filter(|e| e.path().is_dir()).filter_map(|e| e.file_name().to_str().map(str::to_string)).collect();
     ids.sort();
     for id in ids.into_iter().filter(|id| crate::plugin_id_ok(id)) {
-        let now = current(root, &id);
+        let now = in_use(root, &id);
         let Ok(versions) = fs::read_dir(root.join(&id)) else { continue };
         let mut gone: Vec<PathBuf> = versions
             .flatten()
@@ -111,6 +122,11 @@ pub fn tidy(root: &Path, running: &dyn Fn(&str) -> bool) -> Vec<String> {
         if gone.is_empty() || running(&id) {
             continue;
         }
+        // (which version is in use not known: every one kept, and said - never all of a plugin taken for unused)
+        if now.is_none() {
+            said.push(format!("{id}: its current names no version in place, so none of its {} taken away", plural_versions(gone.len())));
+            continue;
+        }
         gone.sort();
         for dir in gone {
             if fs::remove_dir_all(&dir).is_ok() {
@@ -119,6 +135,11 @@ pub fn tidy(root: &Path, running: &dyn Fn(&str) -> bool) -> Vec<String> {
         }
     }
     said
+}
+
+/// "1 version was", "3 versions were": as many as were kept.
+fn plural_versions(n: usize) -> String {
+    if n == 1 { "1 version was".to_string() } else { format!("{n} versions were") }
 }
 
 /// What a plugin in place gives the page (`plugins_installed`): its id, version and folder, its manifest as it is
@@ -235,11 +256,88 @@ pub(crate) mod tests {
         fs::write(root.join("alpha").join("notes.txt"), "").unwrap();
         fs::create_dir_all(root.join(".staging").join("x")).unwrap();
         let busy = |id: &str| id == "alpha";
-        assert_eq!(tidy(&root, &busy), ["beta 0.1.0: no longer in use, taken away"]);
-        assert!(root.join("alpha").join("0.9.0").exists());
+        // (beta has no current: which version it uses is not known - kept, and said)
+        assert_eq!(tidy(&root, &busy), ["beta: its current names no version in place, so none of its 1 version was taken away"]);
+        assert!(root.join("alpha").join("0.9.0").exists() && root.join("beta").join("0.1.0").exists());
         let none = |_: &str| false;
-        assert_eq!(tidy(&root, &none), ["alpha 0.9.0: no longer in use, taken away", "alpha 1.1.0: no longer in use, taken away"]);
+        assert_eq!(
+            tidy(&root, &none),
+            ["alpha 0.9.0: no longer in use, taken away", "alpha 1.1.0: no longer in use, taken away", "beta: its current names no version in place, so none of its 1 version was taken away"]
+        );
         assert!(dir(&root, "alpha").is_ok() && root.join("alpha").join("notes.txt").exists() && root.join(".staging").join("x").exists());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn every_version_is_kept_where_current_names_none_in_place() {
+        let none = |_: &str| false;
+        let kept = |root: &Path, id: &str, versions: &[&str]| versions.iter().all(|v| root.join(id).join(v).join("manifest.json").exists());
+        let two = |root: &Path, id: &str| {
+            for v in ["0.1.21", "0.1.24"] {
+                fs::create_dir_all(root.join(id).join(v)).unwrap();
+                fs::write(root.join(id).join(v).join("manifest.json"), "{}").unwrap();
+            }
+        };
+        // (current naming a version whose folder is gone - set back by hand to one an earlier start took away: none taken)
+        let root = temp("dangling");
+        two(&root, "rdkit");
+        fs::write(root.join("rdkit").join(CURRENT), "0.1.20").unwrap();
+        assert_eq!(tidy(&root, &none), ["rdkit: its current names no version in place, so none of its 2 versions were taken away"]);
+        assert!(kept(&root, "rdkit", &["0.1.21", "0.1.24"]));
+        let _ = fs::remove_dir_all(&root);
+        // (no current at all, or one that names no version Meno takes - empty: none taken)
+        for written in [None, Some(""), Some("../x")] {
+            let root = temp("nocurrent");
+            two(&root, "rdkit");
+            if let Some(w) = written {
+                fs::write(root.join("rdkit").join(CURRENT), w).unwrap();
+            }
+            assert_eq!(tidy(&root, &none).len(), 1, "{written:?}");
+            assert!(kept(&root, "rdkit", &["0.1.21", "0.1.24"]), "{written:?}");
+            let _ = fs::remove_dir_all(&root);
+        }
+        // (current naming a version whose folder is there but whose manifest is missing: not in place - none taken)
+        let root = temp("nomanifest");
+        two(&root, "rdkit");
+        fs::create_dir_all(root.join("rdkit").join("0.1.25")).unwrap();
+        fs::write(root.join("rdkit").join(CURRENT), "0.1.25").unwrap();
+        assert_eq!(tidy(&root, &none).len(), 1);
+        assert!(kept(&root, "rdkit", &["0.1.21", "0.1.24"]) && root.join("rdkit").join("0.1.25").exists());
+        // (and once current names a version in place again: the others taken away, as ever)
+        fs::write(root.join("rdkit").join(CURRENT), "0.1.24").unwrap();
+        assert_eq!(tidy(&root, &none), ["rdkit 0.1.21: no longer in use, taken away", "rdkit 0.1.25: no longer in use, taken away"]);
+        assert!(kept(&root, "rdkit", &["0.1.24"]));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn every_version_is_kept_where_current_cannot_be_read_or_the_manifest_it_names() {
+        use std::os::unix::fs::PermissionsExt;
+        let none = |_: &str| false;
+        let root = temp("unreadable");
+        for v in ["0.1.21", "0.1.24"] {
+            fs::create_dir_all(root.join("rdkit").join(v)).unwrap();
+            fs::write(root.join("rdkit").join(v).join("manifest.json"), "{}").unwrap();
+        }
+        let current = root.join("rdkit").join(CURRENT);
+        fs::write(&current, "0.1.24").unwrap();
+        // (current held, unreadable for the moment: none taken)
+        fs::set_permissions(&current, fs::Permissions::from_mode(0o000)).unwrap();
+        // (a root that reads it anyway cannot test this: then it is in place, and 0.1.21 is taken as unused)
+        if fs::read(&current).is_err() {
+            assert_eq!(tidy(&root, &none).len(), 1);
+            assert!(root.join("rdkit").join("0.1.21").exists() && root.join("rdkit").join("0.1.24").exists());
+        }
+        fs::set_permissions(&current, fs::Permissions::from_mode(0o644)).unwrap();
+        // (current read, the manifest of the version it names held: none taken)
+        let manifest = root.join("rdkit").join("0.1.24").join("manifest.json");
+        fs::set_permissions(&manifest, fs::Permissions::from_mode(0o000)).unwrap();
+        if fs::read(&manifest).is_err() {
+            assert_eq!(tidy(&root, &none).len(), 1);
+            assert!(root.join("rdkit").join("0.1.21").exists());
+        }
+        fs::set_permissions(&manifest, fs::Permissions::from_mode(0o644)).unwrap();
         let _ = fs::remove_dir_all(&root);
     }
 
