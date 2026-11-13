@@ -54,7 +54,7 @@ export const CHAIR_ELEVATION_DEG = 15;
 export const HAWORTH_ELEVATION_DEG = 30;
 
 /**
- * How far a chair is turned about its axis in its standard view, in degrees: the eye is atan(sqrt(3)/5) = 19.107 degrees from the line through
+ * How far a chair is turned about its axis in its form-0 view, in degrees: the eye is atan(sqrt(3)/5) = 19.107 degrees from the line through
  * two opposite atoms, which puts the head - atom 0, at the right - 30 - 19.107 = 10.893 degrees from the page's right. Derived, not chosen:
  * at that turn the six atoms, atoms 0 to 5, stand across the page at x = R cos(60 k + turn) in the ratio 3, 1, -2, -3, -1, 2, so -3, -2, -1, 1, 2
  * and 3 in order of x, equally spaced, which is the textbook's far seat line offset toward the foot.
@@ -64,13 +64,16 @@ export const CHAIR_TURN_DEG = 30 - Math.atan(Math.sqrt(3) / 5) / DEG;
 /**
  * A solid's textbook view: the view that gives the DEPTH of a chair, and what `seen` shows.
  *  - A chair: the ring's axis up the page, the eye `CHAIR_ELEVATION_DEG` over the mean plane and the solid turned `CHAIR_TURN_DEG` about the axis
- *    (Brecher 2006, ST-3.1: from above, the nearer atoms lower in the drawing); `form` 0 the chair with its first atom at the right end of the page.
- *    A chair whose first atom lies below the mean plane (the ring flip) is turned the other way, so that it is seen as the first chair's mirror
- *    picture, its first atom the low end at the right. `form` 1 is the SAME solid seen from the other side of its own mirror plane through atoms 0
- *    and 3: the eye turned about the axis to 180 degrees minus the turn of form 0 (from the opposite azimuth), the head at the left. The picture is
- *    form 0's with x turned about, with atoms 1 and 5, 2 and 4 changing places, and each atom's depth is its depth in THAT view. It is never form 0's
- *    picture mirrored with every atom keeping its own depth: that is the mirror image of the solid, and reads as the other configuration.
- *  - A boat, half-chair and envelope: seen as the first chair is.
+ *    (Brecher 2006, ST-3.1: from above, the nearer atoms lower in the drawing). A chair has two forms, numbered here and not ranked: which a tool
+ *    offers is the tool's. `form` 0 has the chair's atom 0 at the right end of the page; seen so, the far seat line is shifted to the LEFT of the
+ *    near one - the view from the left. `form` 1 is the SAME solid seen from the other side of its own mirror plane through atoms 0 and 3: the eye
+ *    turned about the axis to 180 degrees minus the turn of form 0 (from the opposite azimuth), atom 0 at the left end, the far seat line shifted
+ *    to the RIGHT - the view from the right (ST-3.1 prefers "from above and from the right"; "from the left" is acceptable). The picture of form 1
+ *    is form 0's with x turned about, with atoms 1 and 5, 2 and 4 changing places, and each atom's depth is its depth in THAT view. It is never
+ *    form 0's picture mirrored with every atom keeping its own depth: that is the mirror image of the solid, and reads as the other configuration.
+ *    A chair whose atom 0 lies below the mean plane (the ring flip) is turned the other way, so that each of its forms is the mirror picture of
+ *    the unflipped chair's form of the same number, its atom 0 the low end.
+ *  - A boat, half-chair and envelope: seen as an unflipped chair is.
  *  - A Haworth ring: from slightly above, so that the edge closer to the viewer is drawn below the more distant one, the oxygen behind and C-1
  *    at the right-hand end (McNaught 1996, 2-Carb-5.4) - which `haworth` has built: the ring O first, at the back; the elevation `HAWORTH_ELEVATION_DEG`.
  *  - A Newman pair: along its line of sight, the front atom nearer.
@@ -135,7 +138,7 @@ export function drawn(solid: Solid, form = 0): Drawn | null {
   // (where the view puts each of the ring's three, as an angle on the page; the axis stands vertical)
   const true2d = ring.map((v) => project(view, v));
   const angles = true2d.map((p) => Math.atan2(p.y, p.x) / DEG);
-  // (the lines of the convention, or - for a chair seen as the first one's mirror picture - their reflection in the page's vertical: whichever
+  // (the lines of the convention, or - for a chair seen in a mirror picture of them - their reflection in the page's vertical: whichever
   // the view's own picture lies nearer; one line to each of the three, the pairing that leaves the least total gap)
   const lines = [CHAIR_GENTLE_DEG, CHAIR_SEAT_DEG, CHAIR_STEEP_DEG];
   const choices = [lines, lines.map((a) => 180 - a)].flatMap((set) => ORDERS.map((o) => ({ set, o, gap: o.reduce((sum, line, k) => sum + lineGap(angles[k], set[line]), 0) })));

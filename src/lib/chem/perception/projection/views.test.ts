@@ -7,7 +7,7 @@ const order = (s: { z: number }[]) => s.map((p, k) => [p.z, k] as const).sort((a
 const R = (2 * Math.SQRT2) / 3;
 const H = 1 / 6;
 
-describe("the chair's standard view: its depth, and what `seen` shows", () => {
+describe("the chair's two views: its depth, and what `seen` shows", () => {
   it("is seen from 15 degrees over the mean plane (a matter of look, no basis claimed), turned atan(sqrt(3)/5) = 19.107 degrees from the line through two opposite atoms: the head 10.893 from the page's right", () => {
     expect(CHAIR_ELEVATION_DEG).toBe(15);
     close(CHAIR_TURN_DEG, 30 - 19.1066, 3);
@@ -80,6 +80,27 @@ describe("the chair's standard view: its depth, and what `seen` shows", () => {
     expect(b[0].x).toBeGreaterThan(0);
     expect(standardView(f, 0).right[1]).toBeGreaterThan(0);
     expect(standardView(chair(), 0).right[1]).toBeLessThan(0);
+  });
+
+  it("numbers the two forms without ranking them, and names which is the view from the right (Brecher 2006, ST-3.1): form 1, its far seat line shifted to the right of the near one; form 0 the view from the left", () => {
+    /** How far the far seat line is shifted along the page from the near one: the two ring bonds that touch neither end atom, the far one the less deep. */
+    const shift = (pts: { x: number; y: number; z: number }[]) => {
+      const ring = pts.slice(0, 6);
+      const xs = ring.map((p) => p.x);
+      const ends = [xs.indexOf(Math.max(...xs)), xs.indexOf(Math.min(...xs))];
+      const seats = [0, 1, 2, 3, 4, 5].map((k) => [k, (k + 1) % 6]).filter(([a, b]) => !ends.includes(a) && !ends.includes(b));
+      expect(seats).toHaveLength(2);
+      const mid = ([a, b]: number[]) => ({ x: (ring[a].x + ring[b].x) / 2, z: (ring[a].z + ring[b].z) / 2 });
+      const [far, near] = seats.map(mid).sort((p, q) => p.z - q.z);
+      return far.x - near.x;
+    };
+    for (const pictures of [(form: number) => seen(chair(), standardView(chair(), form)), (form: number) => drawn(chair(), form)!.atoms]) {
+      expect(shift(pictures(1))).toBeGreaterThan(0.3);
+      expect(shift(pictures(0))).toBeLessThan(-0.3);
+    }
+    // (the ring flip's forms are the unflipped chair's mirrored: its form 0 is the view from the right)
+    expect(shift(drawn(flipped(chair()), 0)!.atoms)).toBeGreaterThan(0.3);
+    expect(shift(drawn(flipped(chair()), 1)!.atoms)).toBeLessThan(-0.3);
   });
 
   it("is a rotation: its three rows are unit and at right angles, right-handed", () => {
