@@ -97,4 +97,15 @@ describe("a chair fused on a bond of a chair", () => {
       }
     }
   });
+
+  it("draws the new ring at the first ring's own bond length and depth scale, on a chair drawn at another length than the nominal one", async () => {
+    const { NOMINAL_BOND_LENGTH: L } = await import("../../../../lib/chem/acs");
+    const short = 0.7 * L;
+    const d = chairDrawing({ at: { x: 0, y: 0 }, firstId: 1, firstBondId: 100, length: short });
+    const nominal = fuse(bare, 100, "trans");
+    const m = fuse({ atoms: d.atoms, bonds: d.bonds }, 100, "trans");
+    const at = new Map(m.atoms.map((a) => [a.id, a]));
+    for (const b of m.bonds.filter((x) => x.id >= 600)) expect(Math.hypot(at.get(b.a)!.x - at.get(b.b)!.x, at.get(b.a)!.y - at.get(b.b)!.y)).toBeCloseTo(short, 6);
+    m.atoms.slice(6).forEach((a, i) => expect(a.z).toBeCloseTo((nominal.atoms[6 + i].z! * short) / L, 6));
+  });
 });
