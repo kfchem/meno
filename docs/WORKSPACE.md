@@ -549,6 +549,39 @@ Taken on 2026-10-13:
   is made from fresh Settings with nothing asked first); its first round
   and most tried are there too. How the rounds ended is said with how it
   was made.
+- **As its search goes on** (2026-11-13, the maintainer's ruling). Asked
+  in rounds, the 3D structure is put on the page as soon as each
+  stereoisomer has had its first round, and its search goes on after:
+  each round's conformers join it as they come - each once, lowest first,
+  laid over what it first showed, so that it never turns as a lower one
+  is found - and its chip says *searching*, the line under *3D* says
+  *Searching for more conformers*, until the search ends as above (or at
+  the ten minutes its rounds may take, all of them together: the time
+  they ran, not the time they waited). Everything a round brings is
+  judged and made the page's off the page's thread (`chem/growing`):
+  the page never waits on it.
+  - The conformer shown stays shown as more come: where a lower one is
+    found before it, the chip moves on with it.
+  - What the search brings is the view's until it ends, then written
+    into the document once - as one step with the 3D structure's making,
+    where nothing was done between; else as a step of its own. Undo takes
+    back what it brought, then the structure.
+  - *Stop* ends it there, what came kept. Asking for another 3D structure
+    ends it as its round in hand finishes. A round that fails ends it,
+    what came kept, its *Rounds* line saying it failed - never taken for
+    *Stop* - and its error in Meno's log. An undo that takes the structure away, the
+    structure made again, or an edit of it meanwhile - an atom moved, a
+    conformer taken away - ends it,
+    nothing written: the edit is kept, never written over.
+  - The document holds its first round as soon as it is shown, its
+    *Rounds* line saying it was cut short - what it is, should the search
+    end with nothing more written - and the page shows it searching on.
+    Saved while it searches, the file holds what came so far, said cut
+    short; opened again, the search is not taken up again.
+  - Each stereoisomer's search is judged in a worker of its own, kept
+    until its search ends: at most one for each stereoisomer asked for.
+  - An atom map's 3D structures are made as before: their search is asked
+    to its end, the map waiting on it.
 - **Conformers kept** (2026-10-26). Those within 30 kcal/mol of the
   lowest are kept; those above are set aside. The window is set in
   Settings, *Chemistry*, under *3D*, and is said with how they were made
