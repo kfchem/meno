@@ -496,7 +496,35 @@ field as it is typed (a label that is the formula itself, PdCl2, once). Where th
 BrCN - both are offered there, the SMILES first (the field is for
 SMILES), and Enter draws the one chosen, by a
 click or the up and down arrows; never one of them without the other
-shown. A SMILES alone is drawn as before, nothing said under it. Text is
+shown. A SMILES alone is drawn as before, nothing said under it.
+**A name looked up** (where a plugin fills *A structure found by its name*,
+PLUGINS.md *Roles*; the icon is then named *SMILES or name*): one more row
+is offered under the field, last - `Look up "aspirin" at` the service, by
+its plugin's name - and first only where nothing else reads the text. Nothing
+goes out while typing: the name is sent only when that row is chosen, by
+Enter or a click, so that a name not yet published stays on the computer,
+and the requests come at a person's pace. The first time, the person is
+asked whether names may go to the service's hosts ("Each name you choose to
+look up goes there. Nothing else does."), remembered as any purpose and
+withdrawn in Settings, *Network*; a no sends nothing, and says so. While it
+is looked up the row says *Looking up…*; Escape or a press elsewhere lets it
+go, and an answer that comes after is dropped. One compound found is drawn
+at once, as a typed SMILES is, one step to undo named by its title and id
+("Add aspirin (CID 2244)"); several are offered in the service's order, none
+chosen for the chemist - each by its title, formula and id, and in words
+what is not plain about it (*1 of 3 stereocentres not defined*, *2 parts*,
+a charge) - with how many more the service has; none is said ("has no
+compound by this name"), and so is an error, in the plugin's words. Before
+anything is drawn the structure Meno reads from the SMILES given must have
+the formula and charge given, compared as element counts: unlike, it is
+not drawn ("Meno reads …'s structure for aspirin as C9H8O3; …'s formula is
+C9H8O4. Not drawn."). Stereocentres or double bonds the service leaves
+undefined are drawn open, and said, never given a configuration. Offline,
+the row is dimmed and says the service needs the network. Where no plugin
+looks names up and nothing reads the text, a quiet *Look it up as a name…*
+under what went wrong offers the plugins that do; once one is added, what
+was typed is looked up only on the chemist's Enter. Nothing is kept on
+disk: the same name looked up twice goes out twice. Text is
 read as a structure by one reader wherever it is typed (`chem/resolve`):
 here as a whole molecule, in Enumerate's lists and Substituents' groups
 as a group (docs/WORKFLOWS-FOUNDATION.md, *Enumerate*); a label typed on
