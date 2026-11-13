@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { addMolecule3d, emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
 import { OWN_NUMBERING, restraintsTable } from "../../../../lib/steps/restraints";
-import { inputKey, wiresInto, wireRefusal } from "./flow";
+import { givesOf, inputKey, wiresInto, wireRefusal } from "./flow";
 import { holdTable, addSet, addStep, connect, setRan } from "./model";
 import { placeResults, whyNot, type RunWith } from "./run";
 import type { DrawnModel } from "../store/types";
@@ -38,6 +38,13 @@ describe("a step's Restraints input", () => {
     const both = connect(only, { set: 1 }, 2, ONE_INPUT);
     expect(wiresInto(both, 2).map((w) => w.from)).toEqual([{ set: 1 }]);
     expect(wiresInto(both, 2, RESTRAINTS_INPUT.id).map((w) => w.from)).toEqual([{ set: 5 }]);
+  });
+
+  it("gives, out of its exit not yet run, what comes into its first input - never the table wired into Restraints before it", () => {
+    const doc = connect(connect(page(), { set: 5 }, 2, RESTRAINTS_INPUT.id), { set: 1 }, 2, ONE_INPUT);
+    expect(doc.wires?.map((w) => w.to.port)).toEqual([RESTRAINTS_INPUT.id, ONE_INPUT]);
+    expect(doc.sets?.find((b) => b.id === 3)?.made).toMatchObject({ step: 2 });
+    expect(givesOf(doc, { set: 3 })).toBe("molecules");
   });
 
   it("takes a table of restraints, never molecules seen as one", () => {
