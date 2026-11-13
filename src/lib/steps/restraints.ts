@@ -255,11 +255,27 @@ export function angleIn(phi: number): number {
 
 /**
  * How near a straight line three atoms may lie before a torsion over them
- * has no angle to hold: within 1° of 180° (or of 0°). The maintainer's
- * choice, no measured basis claimed: a torsion across an alkyne's three
- * atoms in a row is refused, never held at a number that means nothing.
+ * has no angle to hold - Meno's numerical guard, for what its bonds do not
+ * already say is linear (`linearBy`): within 1° of 180° (or of 0°). A
+ * torsion turns by about Δx / (r sin δ) for an end atom moved Δx: at r =
+ * 1.5 Å and δ = 1°, 0.01 Å turns it by about 22°, so there is no plane
+ * worth holding.
  */
 export const LINE_WITHIN = 1;
+
+/**
+ * Why atom `i` of `e` is linear by its bonds - a triple bond on it, or two
+ * double bonds (an alkyne's, a nitrile's or an isonitrile's carbon, a
+ * cumulene's centre, CO2's carbon, an azide's central N): sp, and linear by
+ * VSEPR, whatever its places say - or none. A torsion (IUPAC: the angle
+ * between planes 1-2-3 and 2-3-4, Moss 1996) over such an atom has no
+ * meaning, however little bent it stands.
+ */
+function linearBy(e: Entry, i: number): string | null {
+  const orders = e.structure.bonds.filter((b) => b.a1 === i || b.a2 === i).map((b) => b.order);
+  if (orders.includes(3)) return "a triple bond";
+  return orders.filter((o) => o === 2).length >= 2 ? "two double bonds" : null;
+}
 
 type Torsion = [number, number, number, number];
 
@@ -364,8 +380,9 @@ const held = (h: TorsionHold) => ("exact" in h ? { exact: true as const } : { st
 /**
  * *Torsion restraints*, its torsions typed: a row for each, each four
  * different atoms (from 0) held at `target` (°, taken into (−180°, 180°]),
- * as `hold` says. Or why not: an atom the entry has not, or three of them
- * on a line here (`LINE_WITHIN`), where the torsion has no angle.
+ * as `hold` says. Or why not: an atom the entry has not, a middle atom
+ * linear by its bonds (`linearBy`), or three of them on a line here
+ * (`LINE_WITHIN`) - where the torsion has no angle.
  */
 export function torsionRowsTyped(e: Entry, torsions: readonly (readonly number[])[], target: number, hold: TorsionHold): { rows: RowMade[] } | { failed: string } {
   if (e.geometry.kind !== "3d") return { failed: e.geometry.kind === "frames" ? "It holds frames: take one frame first (Take frames)." : "It has no 3D places to hold torsions in." };
@@ -375,6 +392,8 @@ export function torsionRowsTyped(e: Entry, torsions: readonly (readonly number[]
   if (missing !== undefined) return { failed: `It has no atom ${missing + 1}: its atoms are 1 to ${n}.` };
   const rows: RowMade[] = [];
   for (const t of torsions) {
+    const sp = [t[1], t[2]].find((i) => linearBy(e, i));
+    if (sp !== undefined) return { failed: `${e.structure.atoms[sp].el}${sp + 1} is linear by its bonds (${linearBy(e, sp)}): the torsion ${t.map((a) => a + 1).join("-")} has no angle to hold.` };
     const line = [[t[0], t[1], t[2]], [t[1], t[2], t[3]]].find(([a, b, c]) => onLine(xyz, a, b, c));
     if (line) return { failed: `Atoms ${line.map((a) => a + 1).join(", ")} lie on a line here, within ${LINE_WITHIN}\u00b0: the torsion ${t.map((a) => a + 1).join("-")} has no angle to hold.` };
     const value = angleIn(target);

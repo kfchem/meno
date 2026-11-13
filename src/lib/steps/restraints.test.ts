@@ -314,23 +314,61 @@ describe("Torsion restraints", () => {
     expect(valueFault({ restraints: rows.rows.map((r) => r.restraint) }, z)).toBeNull();
   });
 
-  it("refuses a torsion whose three atoms lie on a line here - across an alkyne - and an atom the entry has not", () => {
-    // (but-2-yne: C1-C2#C3-C4 on a line)
-    const yne = entry(
+  it("refuses a torsion over an atom linear by its bonds - but-2-yne, even bent to 178.5°; propyne's H-C1-C2#C3 - three atoms on a line, and an atom the entry has not", () => {
+    // (but-2-yne: C1-C2#C3-C4, bent at C2 to `at` degrees)
+    const yne = (at: number) => {
+      const r = ((180 - at) * Math.PI) / 180;
+      return entry(
+        [
+          ["C", -1.46 * Math.cos(r), 1.46 * Math.sin(r), 0],
+          ["C", 0, 0, 0],
+          ["C", 1.2, 0, 0],
+          ["C", 2.66, 0, 0],
+          ["H", -1.46 * Math.cos(r) - 0.5, 1.46 * Math.sin(r) + 0.9, 0],
+        ],
+        [
+          { a1: 0, a2: 1, order: 1 },
+          { a1: 1, a2: 2, order: 3 },
+          { a1: 2, a2: 3, order: 1 },
+          { a1: 0, a2: 4, order: 1 },
+        ],
+      );
+    };
+    expect(torsionRowsTyped(yne(180), [[0, 1, 2, 3]], 180, { strength: 50 })).toEqual({ failed: "C2 is linear by its bonds (a triple bond): the torsion 1-2-3-4 has no angle to hold." });
+    expect(torsionRowsTyped(yne(178.5), [[0, 1, 2, 3]], 180, { strength: 50 })).toEqual({ failed: "C2 is linear by its bonds (a triple bond): the torsion 1-2-3-4 has no angle to hold." });
+    // (H-C1-C2#C3: its third atom is the alkyne's)
+    expect(torsionRowsTyped(yne(178.5), [[4, 0, 1, 2]], 180, { strength: 50 })).toEqual({ failed: "C2 is linear by its bonds (a triple bond): the torsion 5-1-2-3 has no angle to hold." });
+    // (a cumulene's centre: two double bonds)
+    const allene = entry(
       [
-        ["C", -1.46, 0, 0],
+        ["H", -0.9, 0.5, 0],
         ["C", 0, 0, 0],
-        ["C", 1.2, 0, 0],
-        ["C", 2.66, 0, 0],
+        ["C", 1.31, 0, 0],
+        ["C", 2.62, 0, 0],
       ],
       [
         { a1: 0, a2: 1, order: 1 },
-        { a1: 1, a2: 2, order: 3 },
+        { a1: 1, a2: 2, order: 2 },
+        { a1: 2, a2: 3, order: 2 },
+      ],
+    );
+    expect(torsionRowsTyped(allene, [[0, 1, 2, 3]], 90, { strength: 50 })).toEqual({ failed: "C3 is linear by its bonds (two double bonds): the torsion 1-2-3-4 has no angle to hold." });
+    // (three single-bonded atoms within 1° of a line: Meno's numerical guard)
+    const flat = entry(
+      [
+        ["C", -1.5, 0.01, 0],
+        ["C", 0, 0, 0],
+        ["C", 1.5, 0.01, 0],
+        ["C", 2.5, 1.2, 0],
+      ],
+      [
+        { a1: 0, a2: 1, order: 1 },
+        { a1: 1, a2: 2, order: 1 },
         { a1: 2, a2: 3, order: 1 },
       ],
     );
-    expect(torsionRowsTyped(yne, [[0, 1, 2, 3]], 180, { strength: 50 })).toEqual({ failed: "Atoms 1, 2, 3 lie on a line here, within 1\u00b0: the torsion 1-2-3-4 has no angle to hold." });
-    expect(torsionRowsTyped(yne, [[0, 1, 2, 7]], 180, { strength: 50 })).toEqual({ failed: "It has no atom 8: its atoms are 1 to 4." });
+    expect(torsionRowsTyped(flat, [[0, 1, 2, 3]], 180, { strength: 50 })).toEqual({ failed: "Atoms 1, 2, 3 lie on a line here, within 1\u00b0: the torsion 1-2-3-4 has no angle to hold." });
+    expect(torsionRowsTyped(yne(180), [[0, 1, 2, 7]], 180, { strength: 50 })).toEqual({ failed: "It has no atom 8: its atoms are 1 to 5." });
   });
 
   it("from the reference, 180° where trans: rows only for the torsions trans there and cis here - (Z)- against (E)-but-2-ene's two", () => {
