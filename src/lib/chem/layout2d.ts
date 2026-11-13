@@ -1945,6 +1945,9 @@ function buildBoldBar(
   };
 }
 
+/** A free end of a line, rounded where ends are: `share` of a whole line's round end, where its line was thinned (a squeezed hash's or dash's). */
+type FreeEnd = Vec2 & { share?: number };
+
 /**
  * The fewest hashes a hashed bond or wedge is drawn with where the style asks
  * for it (`fewestHashes`; Meno's own styles, the maintainer, 2026-10-24; a
@@ -2030,7 +2033,11 @@ function buildHashes(
       const a = point(at, half);
       const b = point(at, -half);
       out.lines.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, widthPx: depth / lineWidth });
-      out.ends.push(a, b);
+      // (its round ends as thin as its line)
+      const share = depth / lineWidth;
+      const ea: FreeEnd = { ...a, share };
+      const eb: FreeEnd = { ...b, share };
+      out.ends.push(ea, eb);
     } else {
       const near = at - depth / 2;
       const far = at + depth / 2;
@@ -2988,10 +2995,17 @@ export function buildBondPrimitives(
     lines.push(...dashes);
     // every dash's ends are free, bar the ones on an atom, whose join sees to
     // them
-    const ends: Vec2[] = [...labelEnds];
+    // (each as round as its line is thick: a squeezed dash's thinner - at a label too)
+    const ends: Vec2[] = labelEnds.map((e) => {
+      const at: FreeEnd = { ...e, share: dashes.length ? dashes[0].widthPx / lwPx : 1 };
+      return at;
+    });
     dashes.forEach((l, i) => {
-      if (i > 0) ends.push({ x: l.x1, y: l.y1 });
-      if (i < dashes.length - 1) ends.push({ x: l.x2, y: l.y2 });
+      const share = l.widthPx / lwPx;
+      const start: FreeEnd = { x: l.x1, y: l.y1, share };
+      const end: FreeEnd = { x: l.x2, y: l.y2, share };
+      if (i > 0) ends.push(start);
+      if (i < dashes.length - 1) ends.push(end);
     });
     return { lines, polys, ends };
   }
@@ -3927,7 +3941,7 @@ export function buildAllPrimitives(
   const colored = (color?: string) => (color ? { color } : {});
   if (roundJoins) {
     for (const m of meets) fills.push({ c: m.at, r: rWorld, ...colored(m.color) });
-    for (const e of freeEnds) fills.push({ c: { x: e.x, y: e.y }, r: rWorld, ...colored(e.color) });
+    for (const e of freeEnds) fills.push({ c: { x: e.x, y: e.y }, r: rWorld * ((e as FreeEnd).share ?? 1), ...colored(e.color) });
     for (const b of bends) fills.push({ c: b.at, r: rWorld, ...colored(b.color) });
   } else {
     const byPoint = new Map<string, { at: Vec2; dirs: Vec2[]; color?: string }>();

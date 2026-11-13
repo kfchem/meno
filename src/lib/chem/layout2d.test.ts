@@ -1162,6 +1162,48 @@ describe("a label must not change how a bond is drawn", () => {
   });
 });
 
+describe("a squeezed mark's round ends", () => {
+  // (as drawn whole: a structure laid out, its fills - the round ends and joins - with the lines they finish)
+  const drawnAt = (share: number, el: string, bond: Bond) => {
+    const atoms: Atom[] = [
+      { id: 1, x: 0, y: 0, el: "C" },
+      { id: 2, x: 1.5 * share, y: 0, el },
+      { id: 3, x: -1.3, y: 0.75, el: "C" },
+      { id: 4, x: -1.3, y: -0.75, el: "C" },
+    ];
+    const bonds: Bond[] = [bond, { a1: 0, a2: 2, order: 1 }, { a1: 0, a2: 3, order: 1 }];
+    const o = acsWorldOptions(atoms, bonds, { units: "world", joinStyle: "round", fewestHashes: FEWEST_HASHES });
+    return layoutMolecule(atoms, bonds, o, 40);
+  };
+
+  it("are as thin as their lines: no round end wider than the line it finishes, at a label too, so three marks stay three (GR-1.3)", () => {
+    for (const bond of [
+      { a1: 0, a2: 1, order: 1, stereo: "down" },
+      { a1: 0, a2: 1, order: 1, display: "dashed" },
+    ] as Bond[]) {
+      for (const share of [0.5, 0.35, 0.25]) {
+        const { lines, fills } = drawnAt(share, "O", bond);
+        // (a whole line's width as drawn, in pixels and across: a plain bond's, and its round end's radius)
+        const plain = lines.find((l) => l.x2 < -1)!;
+        const across = 2 * fills.find((f) => Math.hypot(f.c.x + 1.3, f.c.y - 0.75) < 1e-9)!.r;
+        // (the bond's marks: off the C at the origin, toward the O)
+        const marks = lines.filter((l) => Math.min(l.x1, l.x2) > -1e-9 && Math.abs(l.y1) < 0.3 && Math.abs(l.y2) < 0.3);
+        const what = `${share} ${bond.display ?? bond.stereo}`;
+        expect(marks.length, what).toBeGreaterThanOrEqual(3);
+        for (const f of fills) {
+          if (f.c.x < 1e-6) continue;
+          const own = marks.filter((l) => Math.hypot(f.c.x - l.x1, f.c.y - l.y1) < 1e-9 || Math.hypot(f.c.x - l.x2, f.c.y - l.y2) < 1e-9);
+          if (!own.length) continue;
+          // (its round end no wider than the thickest line it finishes)
+          const widest = Math.max(...own.map((l) => (l.widthPx / plain.widthPx) * across));
+          expect(2 * f.r, what).toBeLessThanOrEqual(widest + 1e-9);
+        }
+      }
+    }
+  });
+
+});
+
 describe("labels and the room they need", () => {
   const atoms: Atom[] = [
     { id: 1, x: 0, y: 0, el: "C" },
