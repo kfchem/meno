@@ -661,13 +661,34 @@ export function wedgesForFlat(atoms: readonly DrawnAtom[], bonds: readonly Drawn
   // (on a bond no other centre's wedge is on: two on one bond, one is lost)
   const taken = new Set(bonds.flatMap((b) => (b.wedge ? [key(b.a, b.b)] : [])));
   const placed = placeStereo(mol, pos, shown, taken);
+  return hydrogensWhereUnread(atoms, bonds, shown, { wedges: placed.wedges, hydrogens: placed.hydrogens.map(({ on, at }) => ({ on, at: { x: at.x * k, y: at.y * k } })) }, k);
+}
+
+/**
+ * The wedges and H's `placed` for the centres `shown`, where a centre's
+ * wedge does not say it - left unread, or read only by luck: two of its
+ * bonds in one line, as a cage's projection can leave them (epibatidine's
+ * C2) or a flat drawing's ring (doxorubicin's C1 of its sugar) - with its
+ * H drawn in the widest gap round it, `k` out, and wedged instead, the way
+ * that says its configuration; where that reads no surer, or the centre
+ * has no H of its own, as placed. Read as a reader of wedges alone reads
+ * them, or with the drawing's depth (`depth`), as Meno reads the page.
+ */
+export function hydrogensWhereUnread(
+  atoms: readonly DrawnAtom[],
+  bonds: readonly DrawnBond[],
+  shown: ReadonlyMap<number, Tetrahedral>,
+  placed: Stereo,
+  k: number,
+  depth = false,
+): Stereo {
   const wedges = [...placed.wedges];
-  const hydrogens = placed.hydrogens.map(({ on, at }) => ({ on, at: { x: at.x * k, y: at.y * k } }));
+  const hydrogens = [...placed.hydrogens];
   // (a centre its wedge does not say read flat - left unread, or read only by luck: two of its bonds in one line, as a cage's
   // projection can leave them, epibatidine's - its H drawn in the widest gap round it and wedged instead, the way that says its
   // configuration; where that reads no surer, as placed)
   const flatOf = (ws: Wedge[], hs: { on: number; at: Point }[]) => {
-    const fa: DrawnAtom[] = atoms.map(({ x, y, el, charge, hs: h }, i) => ({ x, y, el, ...(charge ? { charge } : {}), hs: h - hs.filter((q) => q.on === i).length }));
+    const fa: DrawnAtom[] = atoms.map(({ x, y, z, el, charge, hs: h }, i) => ({ x, y, el, ...(depth && z != null ? { z } : {}), ...(charge ? { charge } : {}), hs: h - hs.filter((q) => q.on === i).length }));
     const fb: DrawnBond[] = bonds.map(({ a, b, order, wedge, either }) => ({ a, b, order, ...(wedge ? { wedge } : {}), ...(either ? { either } : {}) }));
     hs.forEach((q) => {
       fa.push({ x: q.at.x, y: q.at.y, el: "H", hs: 0 });
