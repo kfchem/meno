@@ -129,7 +129,7 @@ const ELEMENT_SYMBOLS = new Set(ELEMENTS.map((e) => e.symbol));
 const NO_BONDS = new Set(["He", "Ne", "Ar"]);
 /**
  * The elements whose symbol is a variable's too (the maintainer, 2026-10-17): Y with one bond, in a substituent's place, stands
- * for a group as X and Z do; alone, or with several bonds, it is yttrium.
+ * for a group as X and Z do; alone, with several bonds, or with a charge - a variable carries none: the ion - it is yttrium.
  */
 const VARIABLES = new Set(["Y"]);
 
@@ -160,7 +160,7 @@ function prepared(model: WriterModel): { model: WriterModel; sups: Sup[]; aliase
     // with one - Ar, an aryl group's symbol as well as argon's (IUPAC GR-9.2) - is no element: its label, as any other; nor is a
     // variable named as an element is - Y with one bond, a substituent's place, as X and Z are)
     const bondless = NO_BONDS.has(a.el) && touching.length > 0;
-    const variable = VARIABLES.has(a.el) && touching.length === 1;
+    const variable = VARIABLES.has(a.el) && touching.length === 1 && !a.charge;
     if ((ELEMENT_SYMBOLS.has(a.el) && !a.abbrev && !bondless && !variable) || RESERVED.has(a.el) || a.list) continue;
     const first = touching[0] ? byId.get(touching[0].a === a.id ? touching[0].b : touching[0].a) : undefined;
     // (bonded more than once - an NMe in a chain - laid out away from all its bonds, as a drawn substituent is)

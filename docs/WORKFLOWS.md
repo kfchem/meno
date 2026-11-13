@@ -1313,6 +1313,27 @@ taller than the rest, its inputs a plain list down its left edge, each named
 - **Nothing silent**: a molecule no row is for is refused ("no restraints
   made for it"), and so is one a row names an atom it has not; rows for no
   molecule that came in are counted on the line.
+- **Nothing to hold**: a molecule whose table's step looked at it and found
+  nothing to hold - as a coordination table does for a reaction with no
+  coordination bond - goes on holding nothing, and the line says "nothing
+  to hold" (the maintainer, 2026-11-13). So it does where the table holds
+  rows for another molecule - one species of a reaction with a
+  coordination bond, another with none - and the line says how many ("1
+  entry with nothing to hold"). The table says which molecules those are,
+  a row "nothing to hold" for each (STRUCTURE-STEPS.md, *Restraints*). A
+  molecule the step refused - no ID, an ID another shares - or never saw
+  is refused as ever, however empty the table: a restraint asked for and
+  not made is never passed over. One
+  with a double bond its reference has cis, where 180° is asked, is no
+  "nothing to hold": something was found that cannot be held so, and it is
+  refused.
+- **Every table speaks of it**: with several tables wired in, a molecule is
+  taken on only where each of them has a row for it or says it has nothing
+  to hold. One a table's step refused, or never saw, is refused, and the
+  words say which table ("no restraints made for it by Torsion
+  restraints"): never taken on holding another table's rows alone. Case
+  F's rounds pass, each round's step seeing every molecule its
+  minimisation takes.
 - **As its plugin holds them**: each plugin says what it holds (PLUGINS.md,
   `steps`, `restraints`) - its program may hold more than the plugin sends:
   distances and torsions by a strength, or exactly; atoms fixed. A row it
