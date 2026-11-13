@@ -372,14 +372,15 @@ describe("oppositesKept, its parts", () => {
 });
 
 describe("a metal's donors kept opposite as drawn, or the drawing refused", () => {
-  it("keeps trans-[Co(en)2Cl2]+ trans, and cis cis or refuses it - never the other isomer", { timeout: 180000 }, async () => {
+  it("refuses trans- and cis-[Co(en)2Cl2]+ drawn flat, the layout having no six places three lines through the metal - never hands back its Cl side by side", { timeout: 180000 }, async () => {
     forgetLaidOut();
-    const trans = complex("Co", 1, [en("a"), en("b"), "Cl", "Cl"], [0, 1, 2, 3, 4, 5], ["Cl", "Na", "Oa", "Cl", "Nb", "Ob"]);
-    expect(spokes(await laidOut(trans.model, MENO), trans.names)).toEqual(["Cl-Cl", "Na-Nb", "Oa-Ob"]);
-    const cis = complex("Co", 1, [en("a"), en("b"), "Cl", "Cl"], [0, 1, 2, 3, 4, 5], ["Cl", "Cl", "Na", "Oa", "Nb", "Ob"]);
-    const out = await laidOut(cis.model, MENO).catch((e: Error) => e);
-    if (!(out instanceof Error)) expect(spokes(out, cis.names)).toEqual(["Cl-Nb", "Cl-Oa", "Na-Ob"]);
-    else expect(out.message).toMatch(/opposite each other as drawn/);
+    for (const names of [
+      ["Cl", "Na", "Oa", "Cl", "Nb", "Ob"],
+      ["Cl", "Cl", "Na", "Oa", "Nb", "Ob"],
+    ]) {
+      const m = complex("Co", 1, [en("a"), en("b"), "Cl", "Cl"], [0, 1, 2, 3, 4, 5], names);
+      await expect(laidOut(m.model, MENO), names.join(" ")).rejects.toThrow(/opposite each other as drawn/);
+    }
   });
 
   it("puts opposite the two drawn straightest across, the other two beside them on one side: Br 0, Cl 180, N 250, O 290 - and Br 0, N 60, O 120, Cl 185", () => {
@@ -550,7 +551,8 @@ function spokes(model: Model, names: ReadonlyMap<number, string>, metal = 1): st
     for (const j of rest) pair(rest.filter((k) => k !== j), [...pairs, [i, j]], sum + off(i, j));
   };
   pair(ids, [], 0);
-  return best.pairs.map((p) => p.map((d) => names.get(d)!).sort().join("-")).sort();
+  // (a pair the nearest pairing leaves that is not plainly across - within 30 degrees of a line - is said so: never read as opposite)
+  return best.pairs.map((p) => p.map((d) => names.get(d)!).sort().join("-") + (off(p[0], p[1]) > Math.PI / 6 ? " (not across)" : "")).sort();
 }
 
 /** Each centre's configuration as `model` is read, by atom id. */

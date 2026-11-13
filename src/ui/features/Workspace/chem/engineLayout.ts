@@ -850,16 +850,23 @@ export function oppositesKept(was: readonly { x: number; y: number }[], input: L
     if (!drawn) continue;
     const angleOf = (i: number) => Math.atan2(y[donors[i]] - y[m], x[donors[i]] - x[m]);
     const now = pairing(x, y);
-    if (now && now.every((p, i) => p === drawn[i])) continue;
+    const refused = () => new Error("the structure could not be laid out keeping its metal's donors opposite each other as drawn, so nothing was moved");
+    const straight = (i: number, j: number) => Math.abs(Math.PI - Math.abs(Math.atan2(Math.sin(angleOf(i) - angleOf(j)), Math.cos(angleOf(i) - angleOf(j))))) < Math.PI / 6;
+    // (what is handed back has each pair of the drawing's pairing plainly across - within 30 degrees of a line - or nothing is laid out:
+    // a pairing the layout matches only as the pairs left over, its "opposite" donors side by side - trans-[Co(en)2Cl2]+ laid out with
+    // its Cl 30 degrees apart - is not the drawing kept)
+    const plain = () => donors.every((_, i) => straight(i, drawn[i]));
+    if (now && now.every((p, i) => p === drawn[i])) {
+      if (!plain()) throw refused();
+      continue;
+    }
     // (the layout's places round the metal, in turn: each unit - a single donor with all it carries, or a chelate's - may be turned
     // round them, and a chelate of two mirrored, to put the donors opposite each other as drawn; the fewest units moved, then the
     // shortest turns. Where no such move gives the drawing's pairing - trans-[Co(en)2Cl2]+ laid out cis - nothing is laid out, saying
     // so: never another isomer)
-    const refused = () => new Error("the structure could not be laid out keeping its metal's donors opposite each other as drawn, so nothing was moved");
     // (the places round the metal in turn, and which is opposite which as the layout pairs them - a chelate's bite need not be a right angle,
     // but each pair the layout's own pairing reads must be plainly across, within 30 degrees of a line: a layout that sets its donors
     // otherwise - six of them bunched round a chelate's rings - has no opposite places to put donors into)
-    const straight = (i: number, j: number) => Math.abs(Math.PI - Math.abs(Math.atan2(Math.sin(angleOf(i) - angleOf(j)), Math.cos(angleOf(i) - angleOf(j))))) < Math.PI / 6;
     if (!now || donors.some((_, i) => !straight(i, now[i]))) throw refused();
     const slotOrder = donors.map((_, i) => i).sort((p, q) => angleOf(p) - angleOf(q));
     const slotAngle = slotOrder.map(angleOf);
@@ -918,6 +925,7 @@ export function oppositesKept(was: readonly { x: number; y: number }[], input: L
       for (const a of atoms) ({ x: x[a], y: y[a] } = turned(x[a], y[a]));
       hydrogens = hydrogens.map((h) => (atoms.has(h.on) ? { ...h, at: turned(h.at.x, h.at.y) } : h));
     });
+    if (!plain()) throw refused();
     const before: boolean = changed;
     changed = true;
     if (changed) moved.push({ m, donors, units: reach });

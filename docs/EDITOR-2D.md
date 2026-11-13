@@ -1054,10 +1054,12 @@ All hover-based, as above.
     drawing's pairing is the one whose straightest pair is straightest,
     then its next: a pair drawn straight across decides however the
     others lean; where the straightest pairs of two pairings are within
-    20 degrees of each other it says none, and the layout's stands. Where
-    no move gives the drawing's pairing - a chelate's two donors drawn
-    opposite, a layout with no plain opposite places (cis-[Co(en)2Cl2]+)
-    - Clean-up lays nothing out and says so: never another isomer.
+    20 degrees of each other it says none, and the layout's stands. Each
+    pair of the drawing's pairing must stand plainly across in what is
+    handed back, within 30 degrees of a line. Where no move gives that -
+    a chelate's two donors drawn opposite, a layout with no plain
+    opposite places (trans- and cis-[Co(en)2Cl2]+ drawn flat) - Clean-up
+    lays nothing out and says so: never another isomer.
 - Valence warnings, and R/S shown on request (RDKit). (PR #53: a ring round
   an atom with too many bonds, saying what is wrong under the pointer; R/S
   and E/Z from a button on the canvas, later shown on what they are asked
