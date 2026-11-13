@@ -1115,6 +1115,40 @@ describe("a label must not change how a bond is drawn", () => {
       expect(plain.some((p) => Math.abs(p - x) < 0.02)).toBe(true);
     }
   });
+
+  it("shows three half-waves at least on a wavy bond, however short or cut by a label (GR-1.3): a shorter period, the amplitude with it, and a long one as it was", () => {
+    const o = opts();
+    const bond: Bond = { a1: 0, a2: 1, order: 1, stereo: "wavy" };
+    // (the half-waves seen: runs of the line on one side of the bond's own line, each swinging out at least a third of the most)
+    const halfWaves = (atoms: Atom[]) => {
+      const ys = buildBondPrimitives(atoms, bond, o, ZOOM, deg).lines.flatMap((l) => [l.y1, l.y2]);
+      const most = Math.max(...ys.map(Math.abs));
+      let runs = 0;
+      let side = 0;
+      let reached = false;
+      for (const y of ys) {
+        const s = Math.sign(y);
+        if (s !== 0 && s !== side) {
+          if (reached) runs++;
+          side = s;
+          reached = false;
+        }
+        if (Math.abs(y) >= most / 3) reached = true;
+      }
+      return runs + (reached ? 1 : 0);
+    };
+    const at = (share: number, el: string): Atom[] => [
+      { id: 1, x: 0, y: 0, el: "C" },
+      { id: 2, x: 1.5 * share, y: 0, el },
+    ];
+    for (const share of [1, 0.6, 0.4, 0.25, 0.15]) {
+      for (const el of ["C", "O"]) expect(halfWaves(at(share, el)), `${share} ${el}`).toBeGreaterThanOrEqual(3);
+    }
+    // (a whole bond's wave as the style's period has it: the crossings half a wavelength apart)
+    const lines = buildBondPrimitives(at(1, "C"), bond, o, ZOOM, deg).lines;
+    const crossings = lines.filter((l) => l.y1 * l.y2 < 0).map((l) => l.x1 + ((l.x2 - l.x1) * l.y1) / (l.y1 - l.y2));
+    for (let k = 1; k < crossings.length; k++) expect(crossings[k] - crossings[k - 1]).toBeCloseTo(o.wavyPeriodPx / 2, 2);
+  });
 });
 
 describe("labels and the room they need", () => {
@@ -1710,22 +1744,30 @@ describe("bold, hashed, dashed and dative bonds", () => {
     }
   });
 
-  it("dashes a short dashed bond with three dashes at least, in every style, never one solid line (GR-1.3): the gaps give way first, then the dashes", () => {
-    const o = opts();
-    for (const share of [0.6, 0.4, 0.25, 0.15, 0.1]) {
-      const short: Atom[] = [pair[0], { ...pair[1], x: share * L }];
-      const { lines } = buildBondPrimitives(short, one({ display: "dashed" }), o, ZOOM, deg);
-      expect(lines.length, `${share}`).toBeGreaterThanOrEqual(3);
-      expect(lines[0].x1).toBeCloseTo(0, 9);
-      expect(lines[lines.length - 1].x2).toBeCloseTo(share * L, 9);
-      const gaps = lines.slice(1).map((l, i) => l.x1 - lines[i].x2);
-      for (const g of gaps) {
-        expect(g).toBeCloseTo(gaps[0], 9);
-        // (apart: at least half a dash between two)
-        expect(g).toBeGreaterThanOrEqual((lines[0].x2 - lines[0].x1) / 2 - 1e-9);
+  it("dashes a short dashed bond with three dashes at least, in every style, never one solid line (GR-1.3): the gaps give way first, to a line width seen between two past their caps, then the dashes", () => {
+    for (const joinStyle of ["sharp", "round"] as const) {
+      const o = opts({ joinStyle });
+      const lw = o.lineWidthPx;
+      const cap = joinStyle === "round" ? lw / 2 : 0;
+      for (const share of [0.6, 0.4, 0.25, 0.15, 0.1]) {
+        const short: Atom[] = [pair[0], { ...pair[1], x: share * L }];
+        const { lines } = buildBondPrimitives(short, one({ display: "dashed" }), o, ZOOM, deg);
+        const what = `${joinStyle} ${share}`;
+        expect(lines.length, what).toBeGreaterThanOrEqual(3);
+        expect(lines[0].x1).toBeCloseTo(0, 9);
+        expect(lines[lines.length - 1].x2).toBeCloseTo(share * L, 9);
+        const sizes = lines.map((l) => l.x2 - l.x1);
+        for (const d of sizes) expect(d, what).toBeCloseTo(sizes[0], 9);
+        const gaps = lines.slice(1).map((l, i) => l.x1 - lines[i].x2);
+        for (const g of gaps) expect(g, what).toBeCloseTo(gaps[0], 9);
+        // (a line width seen between two, past the caps, wherever three dots of the caps alone leave room for it)
+        if (share * L >= 2 * (lw + 2 * cap)) expect(gaps[0], what).toBeGreaterThanOrEqual(lw + 2 * cap - 1e-9);
+        // (and the dashes whole where that leaves them so)
+        if (share * L >= 3 * o.dashLengthPx! + 2 * (lw + 2 * cap)) expect(sizes[0], what).toBeCloseTo(o.dashLengthPx!, 9);
       }
     }
   });
+
 
   it("draws a dative bond as an arrow from the first atom to the second", () => {
     const o = opts();

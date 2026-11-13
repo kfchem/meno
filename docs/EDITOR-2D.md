@@ -729,9 +729,12 @@ Both go together, because both touch every layer.
   still, the gaps as deep as the hashes and both thinner where they must be
   (IUPAC GR-1.3: at least three).
 - **A dashed bond** has three dashes at least, in every style (GR-1.3): a
-  short one's gaps close up first, down to half a dash, then the dashes
-  shorten with them - never one solid line, which would read as a single
-  bond, nor two.
+  short one's gaps close up first, to a line width seen between two past
+  their ends, then the dashes shorten - never one solid line, which would
+  read as a single bond, nor two. **A wavy bond** shows three half-waves at
+  least: where the style's period gives fewer - a short bond, or one a label
+  cuts - the period shortens to a whole number of half-waves, the amplitude
+  with it.
 - **A hashed wedge's widest hash** stops a hash's clear gap short of a bare
   atom at its wide end, the bonds on from the atom starting there on their
   own: in Meno's own style (the maintainer, 2026-10-29) and, since

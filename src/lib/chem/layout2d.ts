@@ -2049,9 +2049,12 @@ function buildHashes(
 /**
  * A dashed bond: dashes of `dash` along the line from `p1` to `p2`, one flush
  * with each end and as many between as leave gaps of at least `gap`, spread
- * evenly - three at least, however short (IUPAC GR-1.3).
+ * evenly - three at least, however short (IUPAC GR-1.3). Where three do not
+ * fit so, the gaps close up first, to a line width `lineWidth` seen between
+ * two dashes - past the round caps (`cap`, each dash's end reaching that far
+ * beyond it) - then the dashes shorten, down to the caps alone, round dots.
  */
-function buildDashes(p1: Vec2, p2: Vec2, dash: number, gap: number): LineSeg[] {
+function buildDashes(p1: Vec2, p2: Vec2, dash: number, gap: number, lineWidth = 0, cap = 0): LineSeg[] {
   const d = vsub(p2, p1);
   const L = vlen(d);
   if (!(L > 0)) return [];
@@ -2062,9 +2065,12 @@ function buildDashes(p1: Vec2, p2: Vec2, dash: number, gap: number): LineSeg[] {
     return { x1: s.x, y1: s.y, x2: e.x, y2: e.y, widthPx: 0 };
   };
   if (!(dash > 0)) return [seg(0, L)];
-  // (three dashes at least, GR-1.3: on a short bond the gaps give way first, down to half a dash, then the dashes with them)
+  // (three dashes at least, GR-1.3: on a short bond the gaps give way first, to a line width seen between two, then the dashes)
   const count = Math.max(FEWEST_HASHES, Math.floor((L + gap) / (dash + gap) + 1e-9));
-  const size = count * dash + (count - 1) * (dash / 2) > L ? L / (count + (count - 1) / 2) : dash;
+  const least = lineWidth + 2 * cap;
+  // (the dashes kept whole where they fit at the style's gap, or with a line width seen between them; else shortened to that)
+  const whole = count * dash + (count - 1) * gap <= L + 1e-9 || (L - count * dash) / (count - 1) >= least;
+  const size = whole ? dash : Math.max(0, (L - (count - 1) * least) / count);
   const g = (L - count * size) / (count - 1);
   const out: LineSeg[] = [];
   for (let k = 0; k < count; k++) {
@@ -2126,22 +2132,38 @@ function waveSteps(amp: number, half: number, zoom: number): number {
  * right going out. The wave is made of quarter turns, as many as fit between
  * the two atoms, so it ends either back on the line or at the top of a turn.
  * Only `start`..`end` of it is drawn, measured from `from`: a label cuts the
- * wave where it is rather than squeezing it into less room.
+ * wave where it is rather than squeezing it into less room - unless fewer
+ * than three half-waves would be seen, when the period shortens (GR-1.3).
  */
 function buildWavySegments(
   from: Vec2,
   to: Vec2,
   start: number,
   end: number,
-  amp: number,
+  styleAmp: number,
   period: number,
   zoom: number,
 ): LineSeg[] {
   const dir = vnorm(vsub(to, from));
   // to the right, going out
   const right = vscale(vperp(dir), -1);
-  const half = period / 2;
+  let amp = styleAmp;
+  let half = period / 2;
   if (!(half > 0)) return [];
+  // (three half-waves at least seen between `start` and `end`, IUPAC GR-1.3: where the style's period gives fewer - a short
+  // bond, or one a label cuts - a shorter period, a whole number of half-waves to the end, the amplitude in proportion)
+  const reach = Math.min(end, vlen(vsub(to, from)));
+  const seen = (h: number) => Math.floor(reach / h + 1e-9) - Math.ceil(start / h - 1e-9);
+  if (reach > start && seen(half) < FEWEST_HASHES) {
+    for (let n = FEWEST_HASHES; n <= 64; n++) {
+      const h = reach / n;
+      if (seen(h) >= FEWEST_HASHES) {
+        amp *= h / half;
+        half = h;
+        break;
+      }
+    }
+  }
   const quarters = Math.floor(vlen(vsub(to, from)) / (half / 2) + 1e-9);
   const last = Math.min(end, (quarters * half) / 2);
   if (!(last > start)) return [];
@@ -2949,7 +2971,8 @@ export function buildBondPrimitives(
         : spacing * 0.6;
     const gap =
       opts.dashGapPx != null ? toWorld(opts.dashGapPx, zoom, units) : spacing * 0.4;
-    const dashes = buildDashes(p1, p2, dash, gap);
+    const lw = pxToWorld(lwPx, zoom);
+    const dashes = buildDashes(p1, p2, dash, gap, lw, round ? lw / 2 : 0);
     for (const l of dashes) l.widthPx = lwPx;
     lines.push(...dashes);
     // every dash's ends are free, bar the ones on an atom, whose join sees to
