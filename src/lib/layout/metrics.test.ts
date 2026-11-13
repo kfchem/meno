@@ -388,10 +388,13 @@ describe("how a drawing sits", () => {
       elements: [...elements, "O", "O"],
       hydrogens: [...elements.map(() => 2), 0, 1],
     };
-    expect(layoutMetrics(acid).readingOrder).toBe(1);
-    // mirrored, the acid is on the right, its C=O still up
+    // (its C=O 30 degrees above the chain's line, on along the zigzag: not within 45 degrees of up, so level - half a breach)
+    expect(layoutMetrics(acid).readingOrder).toBe(1.5);
+    // mirrored, the acid is on the right, its C=O as it was
     const mirrored = { ...acid, x: acid.x.map((v) => -v) };
-    expect(layoutMetrics(mirrored).readingOrder).toBe(0);
+    expect(layoutMetrics(mirrored).readingOrder).toBe(0.5);
+    // and the mirrored one turned a sixth round: its C=O straight up, the acid still on the right - no breach
+    expect(layoutMetrics(turned(mirrored, 60)).readingOrder).toBe(0);
     // turned half round, it is on the right but its C=O is down
     expect(layoutMetrics(turned(acid, 180)).readingOrder).toBe(1);
   });

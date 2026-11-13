@@ -1709,8 +1709,11 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
           ((g.hydrogens?.[b] ?? 0) > 0 || neighbours[b].length === 1),
       );
       if (oxo.length !== 1 || hydroxy.length !== 1) continue;
+      // (up, at the end of a chain: within 45 degrees of straight up, as a chain's own C=O below - one turned to lie
+      // level, the chain bent to put it there, is not; on a ring, in its plane, wherever the ring lets it rise)
+      const onRing = neighbours[a].some((b) => inRing.has(b));
       if (y[oxo[0]] < y[a] - 0.2 * L) readingOrder++;
-      else if (y[oxo[0]] < y[a] + 0.2 * L) readingOrder += 0.5;
+      else if (y[oxo[0]] < y[a] + (onRing ? 0.2 : 0.7) * L) readingOrder += 0.5;
     }
     // and a double-bonded O on a cross above the chain through it, as
     // IUPAC puts a double-bonded branch on a chain (GR-3.2.2, where below
@@ -1727,7 +1730,9 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
     // (hexane-2,5-dione) cost the same either way - one turned level by
     // bending the chain is no more up than one below - and the drawing
     // taken is the one the canonical order reaches first. An acid's is counted
-    // above; one on a ring's atom or beside a ring goes where the ring puts it.
+    // above, and weighs more: where an acid's and a ketone's cannot both be up
+    // (levulinic acid), the acid's is, as the maintainer has it. One on a
+    // ring's atom or beside a ring goes where the ring puts it.
     for (let a = 0; a < n; a++) {
       if (el[a] !== "C" || inRing.has(a) || neighbours[a].length !== 3) continue;
       const oxo = neighbours[a].filter((b) => el[b] === "O" && orderAt(a, b) === 2);
@@ -1735,7 +1740,7 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
       const on = neighbours[a].filter((b) => b !== oxo[0]);
       if (on.some((b) => inRing.has(b) || (el[b] === "O" && ((g.hydrogens?.[b] ?? 0) > 0 || neighbours[b].length === 1)))) continue;
       // (up: within 45 degrees of straight up - one laid level, the chain bent to put it there, is not)
-      if (y[oxo[0]] < y[a] + 0.7 * L) readingOrder += 0.5;
+      if (y[oxo[0]] < y[a] + 0.7 * L) readingOrder += 0.25;
     }
     // A chain folded back on itself - a fatty acid drawn as a hairpin, a
     // prostaglandin's two chains from its ring, both running off to the

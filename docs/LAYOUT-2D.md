@@ -581,7 +581,10 @@ one C=O onto the lattice at the other's cost.
     below is acceptable): butanone's, methyl butanoate's. Where two cannot
     both be up (hexane-2,5-dione) one is down, the chain still a zigzag -
     one laid level by bending the chain counts as no more up - and which
-    is the canonical order's;
+    is the canonical order's; where an acid's and a ketone's cannot both
+    be (levulinic acid, 2-oxoglutaric acid), the acid's is up and the
+    ketone's down, the acid's never laid level for it. Only a C=O is
+    counted so: a C=N, a C=C or an S=O branch goes where the rest puts it;
   - peptides from N-terminus to C-terminus, left to right, as their
     sequences are written, the backbone carrying straight on through each
     alpha carbon and the side chains branching off; an amino acid then
