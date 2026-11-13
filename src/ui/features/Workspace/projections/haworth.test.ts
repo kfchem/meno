@@ -137,3 +137,49 @@ describe("a Haworth ring put down from Quick Add", () => {
     }
   }, measured(2400));
 });
+
+describe("the Haworth icon clicked again", () => {
+  it("makes the ring it put down, unchanged, a ring of five in its place - and a third click a ring of six - each one step, the near edge as ST-1.9 has it every time", async () => {
+    const { createWorkspaceDocument } = await import("../document");
+    const { connectStoreToDocument, createEditorStore } = await import("../store");
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const st = () => store.getState();
+    const mid = () => {
+      const m = doc.getState().model;
+      return { x: m.atoms.reduce((t, a) => t + a.x, 0) / m.atoms.length, y: m.atoms.reduce((t, a) => t + a.y, 0) / m.atoms.length };
+    };
+    const nearEdge = () => {
+      const bonds = doc.getState().model.bonds;
+      expect(bonds.filter((b) => b.display === "bold")).toHaveLength(1);
+      expect(bonds.filter((b) => b.display === "wedge" && b.narrow != null)).toHaveLength(2);
+    };
+    st().putHaworth({ x: 4, y: -2 });
+    expect(doc.getState().model.atoms.map((a) => a.el)).toEqual(["O", "C", "C", "C", "C", "C"]);
+    nearEdge();
+    const where = mid();
+    const depth = doc.history().undoDepth;
+    st().putHaworth({ x: 40, y: 40 });
+    expect(doc.getState().model.atoms.map((a) => a.el).sort()).toEqual(["C", "C", "C", "C", "O"]);
+    expect(doc.getState().model.bonds).toHaveLength(5);
+    expect(doc.history().undoDepth).toBe(depth + 1);
+    expect(doc.history().undoLabel).toBe("a ring of five");
+    nearEdge();
+    // (in its place: its middle where the six's was, near enough - a ring of five's middle is not a six's)
+    expect(Math.hypot(mid().x - where.x, mid().y - where.y)).toBeLessThan(0.5);
+    st().putHaworth({ x: 0, y: 0 });
+    expect(doc.getState().model.atoms).toHaveLength(6);
+    nearEdge();
+    // (undone, the five; clicked from there, the six again)
+    doc.undo();
+    expect(doc.getState().model.atoms).toHaveLength(5);
+    nearEdge();
+    st().putHaworth({ x: 0, y: 0 });
+    expect(doc.getState().model.atoms).toHaveLength(6);
+    // (anything done since: another ring put down)
+    st().addAtom(30, 30, "N");
+    st().putHaworth({ x: 20, y: 0 });
+    expect(doc.getState().model.atoms).toHaveLength(13);
+  }, measured(2400));
+});

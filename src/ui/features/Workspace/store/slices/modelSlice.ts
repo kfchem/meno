@@ -7,6 +7,7 @@ import type { ShowBox } from "../../utils/viewShow";
 import { bondPtOf, labelPtOf, wordsKept } from "../../restyle";
 import { centredAt, restyledDrawn } from "../../utils/copyPaste";
 import { chairDrawing, FIRST_FORM } from "../../projections/chair";
+import { haworthDrawing } from "../../projections/haworth";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import { bondKeyPatch, bondKindPatch, patchAlike, patchChangesNothing, type BondKey, type BondKindName } from "../../utils/bondKinds";
 import { gestureStep } from "../../../../../lib/doc/document";
@@ -131,6 +132,10 @@ const pressNotes = new WeakMap<DocumentStore<WorkspaceDocument>, PressNote>();
  */
 type ChairPut = { ids: number[]; at: { x: number; y: number }; form: 0 | 1; length: number };
 const chairPuts = new WeakMap<Model, ChairPut>();
+
+/** A Haworth ring the Quick Add icon put down, by the model it left: its atoms' ids, its middle and its size - the same way as `chairPuts`. */
+type HaworthPut = { ids: number[]; at: { x: number; y: number }; size: 5 | 6 };
+const haworthPuts = new WeakMap<Model, HaworthPut>();
 
 export const createModelSlice = (
   doc: DocumentStore<WorkspaceDocument>,
@@ -683,6 +688,25 @@ export const createModelSlice = (
     const ids = drawing.atoms.map((p) => added.reduce((best, a) => (Math.hypot(a.x - p.x - shift.x, a.y - p.y - shift.y) < Math.hypot(best.x - p.x - shift.x, best.y - p.y - shift.y) ? a : best)).id);
     if (new Set(ids).size !== 6) return;
     chairPuts.set(get().model, { ids, at: middle, form: FIRST_FORM, length: drawing.scale });
+  },
+
+  putHaworth: (at: { x: number; y: number }) => {
+    // (the ring just put down, unchanged: the other size in its place - a ring of five for one of six, and back - as one step)
+    const was = haworthPuts.get(get().model);
+    const size: 5 | 6 = was ? (was.size === 6 ? 5 : 6) : 6;
+    const middle = was ? was.at : at;
+    const drawing = haworthDrawing({ at: middle, size, firstId: 1, firstBondId: 1 });
+    const before = new Set(get().model.atoms.map((a) => a.id));
+    if (was) doc.edit(size === 5 ? "a ring of five" : "a ring of six", (d) => ops.appendModel(ops.deleteParts(d, was.ids, []), drawing));
+    else get().pasteModel(centredAt(drawing, at));
+    const added = get().model.atoms.filter((a) => !before.has(a.id));
+    if (added.length !== size) return;
+    // (each new atom matched to the drawing's of the same place, by the shift it was put down with)
+    const mid = { x: added.reduce((sum, a) => sum + a.x, 0) / size, y: added.reduce((sum, a) => sum + a.y, 0) / size };
+    const dm = { x: drawing.atoms.reduce((sum, a) => sum + a.x, 0) / size, y: drawing.atoms.reduce((sum, a) => sum + a.y, 0) / size };
+    const shift = { x: mid.x - dm.x, y: mid.y - dm.y };
+    const ids = drawing.atoms.map((p) => added.reduce((best, a) => (Math.hypot(a.x - p.x - shift.x, a.y - p.y - shift.y) < Math.hypot(best.x - p.x - shift.x, best.y - p.y - shift.y) ? a : best)).id);
+    haworthPuts.set(get().model, { ids, at: { x: middle.x + shift.x, y: middle.y + shift.y }, size });
   },
 
   pasteModel: (given: Drawn) => {

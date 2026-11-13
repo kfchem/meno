@@ -538,8 +538,9 @@ on a page); the Newman projection follows.
 - **What a chair states.** A projection always states a configuration (Brecher 2008, ST-3.2: every centre without a wavy bond): a group led out
   "wherever it fits" has drawn one, meant or not, and the R and S shown are the check. To leave a centre open, make its bond wavy. An atom dragged by
   hand keeps its depth: what is read may change, and only the labels say so.
-- **The Haworth ring** (Quick Add, *Projections*: a ring of six, a pyranose's, and of five, a furanose's - two icons, the look owner to say whether one icon
-  with a second click is better). Seen from slightly above so that the nearer edge is drawn lower - its bottommost bond bold and the two ring bonds that run to it
+- **The Haworth ring** (Quick Add, *Projections*: one icon - a ring of six, a pyranose's; a second click, while the ring it put down is as it was
+  with nothing done since, makes it a ring of five, a furanose's, in its place as one step, and a third back - `putHaworth`, the icon's tip saying
+  so, as the chair's does). Seen from slightly above so that the nearer edge is drawn lower - its bottommost bond bold and the two ring bonds that run to it
   wedge-shaped, broad at its ends, as IUPAC 2006 ST-1.9 prefers (never the wedge shapes without the bold bond) - the ring O behind - at the back right for the six,
   at the back for the five - and C-1 at the right-hand end (McNaught 1996, 2-Carb-5.4); the ring O is an atom like any and can be changed. The free
   positions are *up* and *down* at each ring atom, vertical on the page: groups are led out to them as a chair's are, the tip saying "up" or "down". The

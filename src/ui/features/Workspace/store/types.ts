@@ -2087,6 +2087,11 @@ export type EditorState = {
    * was, nothing done since, that chair turned to the view from the other side as one step - and back (docs/EDITOR-2D.md, *Projections*).
    */
   putChair: (at: { x: number; y: number }) => void;
+  /**
+   * A Haworth ring of six (a pyranose's) put down from Quick Add, its middle at `at`; or, where the ring this put down is still as it was,
+   * nothing done since, that ring made a ring of five (a furanose's) in its place as one step - and back (docs/EDITOR-2D.md, *Projections*).
+   */
+  putHaworth: (at: { x: number; y: number }) => void;
   setHoveredFromId: (id: number) => void;
   clearHovered: () => void;
   setHoveredArrow: (id: number | null) => void;

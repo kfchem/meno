@@ -42,7 +42,7 @@ Double-click empty space and open *Projections*, then choose *Chair*: a cyclohex
 - A chair states the configuration of every centre in it. To leave one open, make its bond wavy.
 - A 3D structure made from a chair takes the drawing's configuration, not the conformation it is drawn in.
 
-Beside *Chair*, *Projections* has a Haworth ring of six atoms (a pyranose) and one of five (a furanose), seen from slightly above with the ring oxygen behind and the front edge bold. A bond led out of a ring atom goes straight up or straight down the page, and the tip says which.
+Beside *Chair*, *Projections* has a Haworth ring of six atoms (a pyranose); click it again, before doing anything else, for one of five (a furanose). It is seen from slightly above with the ring oxygen behind, its front bond bold and the two bonds beside it wedge-shaped. A bond led out of a ring atom goes straight up or straight down the page, and the tip says which.
 
 ## Labels {#labels}
 

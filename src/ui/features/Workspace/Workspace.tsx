@@ -227,7 +227,6 @@ import { leftOutSaid } from "./utils/readNotes";
 import { outputKindIn } from "../../../lib/calc/probe";
 import { NotRead } from "../../../lib/calc/read";
 import { namedDrawn, putDownSmiles } from "./utils/quickAddSmiles";
-import { haworthDrawing } from "./projections/haworth";
 import { isProjection } from "./projections/rings";
 import { flipOf } from "./projections/flip";
 import { addedBox } from "./store/slices/modelSlice";
@@ -2065,8 +2064,8 @@ function WorkspaceContent({
               // (a chair put down where Quick Add was opened, as drawn atoms and bonds that carry their depth; clicked again while it is as it was
               // put down, the view from the other side)
               else if (what === "chair") st.putChair(at);
-              // (and a Haworth ring, a pyranose's of six or a furanose's of five: as drawn atoms and bonds that carry their depth)
-              else if (what === "pyranose" || what === "furanose") st.pasteModel(centredAt(haworthDrawing({ at, size: what === "pyranose" ? 6 : 5, firstId: 1, firstBondId: 1 }), at));
+              // (and a Haworth ring, a pyranose's of six; clicked again while it is as it was put down, a furanose's of five)
+              else if (what === "haworth") st.putHaworth(at);
               else st.addPlus(at.x, at.y);
             }}
           />
