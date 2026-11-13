@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import { createWorkspaceDocument } from "../document";
-import { centredAt } from "../utils/copyPaste";
-import { chairDrawing, chairOf, depthRings } from "./chair";
+import { chairOf, depthRings } from "./chair";
 
 /** A page, its store and document. */
 function page() {
@@ -85,29 +84,13 @@ describe("the chair's icon clicked again", () => {
   });
 });
 
-describe("a chair fused, flipped and drawn flat on a page", () => {
-  it("is each one undo step: the fusion, the flip", async () => {
-    const { fusedOn } = await import("./fuse");
+describe("a chair flipped on a page", () => {
+  it("is one undo step", async () => {
     const { flipOf } = await import("./flip");
-    const doc = createWorkspaceDocument();
-    const store = createEditorStore(doc);
-    connectStoreToDocument(store, doc);
-    const st = () => store.getState();
-    st().pasteModel(centredAt(chairDrawing({ at: { x: 0, y: 0 }, firstId: 1, firstBondId: 1 }), { x: 0, y: 0 }));
-    const ids = () => new Set(doc.getState().model.atoms.map((a) => a.id));
-    const bond = doc.getState().model.bonds[0].id;
-    const made = fusedOn(doc.getState().model, ids(), bond, "trans");
-    expect(made && !("refused" in made)).toBe(true);
-    const depth = doc.history().undoDepth;
-    const fused = made as Exclude<typeof made, null | { refused: string }>;
-    st().addSolid(fused.atoms, fused.bonds, "fuse chair");
-    expect(doc.history().undoDepth).toBe(depth + 1);
-    expect(doc.getState().model.atoms).toHaveLength(10);
-    expect(doc.getState().model.bonds).toHaveLength(11);
-    doc.undo();
-    expect(doc.getState().model.atoms).toHaveLength(6);
-    // (a chair alone flips; fused, the tool does not flip it)
-    const flip = flipOf(doc.getState().model, ids());
+    const { doc, st } = page();
+    st().putChair({ x: 0, y: 0 });
+    const ids = new Set(doc.getState().model.atoms.map((a) => a.id));
+    const flip = flipOf(doc.getState().model, ids);
     expect(flip && "moves" in flip).toBe(true);
     const before = doc.history().undoDepth;
     st().placeSolid((flip as { moves: { id: number; x: number; y: number; z?: number }[] }).moves, "flip chair");

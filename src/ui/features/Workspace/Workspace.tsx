@@ -229,7 +229,6 @@ import { NotRead } from "../../../lib/calc/read";
 import { namedDrawn, putDownSmiles } from "./utils/quickAddSmiles";
 import { isProjection } from "./projections/chair";
 import { flipOf } from "./projections/flip";
-import { FUSE_WAYS, fusedOn, fusableBonds } from "./projections/fuse";
 import { addedBox } from "./store/slices/modelSlice";
 import { viewPanning } from "./components/viewGoal";
 import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gesture";
@@ -2551,23 +2550,8 @@ function WorkspaceContent({
             const ids = fragmentOf(st.model, at);
             if (!isProjection(st.model, ids)) return undefined;
             const flip = flipOf(st.model, ids);
-            const bondId = menu.kind === "bond" && menu.id != null && fusableBonds(st.model, ids).includes(menu.id) ? menu.id : null;
             return {
               flat: () => runCleanUp(at, true),
-              ...(bondId != null
-                ? {
-                    fuse: FUSE_WAYS.map(({ how, name }) => ({
-                      name,
-                      run: () => {
-                        const now = store.getState();
-                        const made = fusedOn(now.model, fragmentOf(now.model, at), bondId, how);
-                        if (!made) return;
-                        if ("refused" in made) setChemError(made.refused);
-                        else now.addSolid(made.atoms, made.bonds, "fuse chair");
-                      },
-                    })),
-                  }
-                : {}),
               ...(flip
                 ? {
                     flip: () => {

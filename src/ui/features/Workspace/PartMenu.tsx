@@ -523,7 +523,7 @@ export default function PartMenu({
   /** R and S, E and Z shown on what was right-clicked - or the selection there - or hidden from it, in the words it says (utils/stereoShown); unset, where it has none. */
   stereo?: { name: string; run: () => void };
   /** The structure right-clicked is a projection (a chair the Projections tool put down: ../projections): laid out flat on the page, wedges for the depth - and, a chair that can be flipped, flipped; unset where it is none. */
-  projection?: { flat: () => void; flip?: () => void; fuse?: { name: string; run: () => void }[] };
+  projection?: { flat: () => void; flip?: () => void };
   /** The structure right-clicked read from a figure (utils/figureNotes): where it came from - and, not yet said to be checked against it, saying so. */
   figure?: { from: string; run?: () => void };
   /** Atom numbers on the molecules in 3D right-clicked, or chosen or selected there - or the atom right-clicked: shown or hidden, in the words each says, and the kinds offered (utils/atomNumbersShown); unset, where there is none. */
@@ -1059,8 +1059,6 @@ export default function PartMenu({
           ...(projection
             ? [
                 ...(projection.flip ? [{ name: "Flip chair", keys: "", run: projection.flip }] : []),
-                // (the three ways, never two: the two cis are different compounds on a ring that carries a group)
-                ...(projection.fuse ?? []).map((f) => ({ name: f.name, keys: "", run: f.run })),
                 { name: "Draw flat", keys: "", run: projection.flat },
               ]
             : []),
