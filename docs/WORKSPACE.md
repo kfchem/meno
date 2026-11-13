@@ -582,6 +582,34 @@ Taken on 2026-10-13:
     until its search ends: at most one for each stereoisomer asked for.
   - An atom map's 3D structures are made as before: their search is asked
     to its end, the map waiting on it.
+- **A structure of several parts** (2026-11-13; the chemistry check's ruling, the
+  maintainer's idea) - a salt, a mixture, drawn as one structure: each
+  part's conformers are searched as the part alone, in rounds of its own
+  (`chem/partsAlone`) - its own charge and electrons, its own lowest, Meno's
+  one definition of the same conformer - for nothing between parts is
+  modelled, and a search of the whole found each embedding's parts at a
+  place of their own, every one new, to its most. A part alike to one
+  before it - written alike, atom for atom, configured alike - is searched
+  once; a one-atom part (Na+) not at all.
+  - Its conformers are put together of its parts': the first every part at
+    its lowest; then, part by part, each other conformer of a part not
+    alike to one before, the rest at their lowest - never every
+    combination. They are set side by side as before (*Parts*: where they
+    lie against each other is not modelled).
+  - Each energy is its parts', summed, and said so (*Energies*: nothing
+    between parts is counted): above the first, a conformer's is its own
+    part's.
+  - No share of the whole is given - on its chip, nor by a *Populations*
+    or *Ensemble* step it goes into, which refuse it, saying why: one part
+    varied at a time, its frames are no compound's population
+    (`Molecule3D.partsAlone`, kept in its file and through the steps it
+    passes).
+  - Its rows say how each part was searched (*Part 1: Rounds*, *Part 2*:
+    "Na+: one atom, no search").
+  - Searched whole, as before: a structure of several parts one of which
+    holds a ring bound to a metal through all its atoms; one made with a
+    number of conformers of the chemist's own, not in rounds; and a
+    workflow's *Conformers* step.
 - **Conformers kept** (2026-10-26). Those within 30 kcal/mol of the
   lowest are kept; those above are set aside. The window is set in
   Settings, *Chemistry*, under *3D*, and is said with how they were made

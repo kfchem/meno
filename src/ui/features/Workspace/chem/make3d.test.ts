@@ -6,7 +6,7 @@ import type { ChemClient, Conformers } from "../../../../lib/roles/client";
 import { writeMolfile3d } from "../../../../lib/chem/molWriter";
 import { factor } from "../../../../lib/units";
 import type { Model } from "../store/types";
-import { solidOf } from "../utils/molecule3d";
+import { PARTS_ALONE_WHY, sharesOf, sharesWithheld, solidOf } from "../utils/molecule3d";
 import { MOST_CONFORMERS, RING_CONFORMERS } from "../../../../lib/chem/conformersSought";
 import { WITHIN_3D, type ChemistrySettings } from "../../../../lib/settings/appSettings";
 import { covalentLength } from "../../../../lib/chem/metalHolds";
@@ -637,6 +637,75 @@ describe("conformers made for the page", () => {
     // (run once)
     await growth.rest(() => grown.push(answer));
     expect(grown[grown.length - 1]).toBe(last);
+  });
+
+  it("growing, of several parts: each part searched alone - a one-atom part not at all - the whole put together of them, no shares of it", async () => {
+    // (sodium acetate as one structure: its acetate searched, two conformers, then none new; Na+ never asked about)
+    const salt = {
+      atoms: [
+        { id: 1, x: 0, y: 0, r: 0.9, el: "C", joined: 1 },
+        { id: 2, x: 1.3, y: 0.75, r: 0.9, el: "C", joined: 1 },
+        { id: 3, x: 1.3, y: 2.25, r: 0.9, el: "O", joined: 1 },
+        { id: 4, x: 2.6, y: 0, r: 0.9, el: "O", charge: -1, joined: 1 },
+        { id: 5, x: 5, y: 0, r: 0.9, el: "Na", charge: 1, joined: 1 },
+      ],
+      bonds: [
+        { id: 1, a: 1, b: 2, order: 1 },
+        { id: 2, a: 2, b: 3, order: 2 },
+        { id: 3, a: 2, b: 4, order: 1 },
+      ],
+    } as Model;
+    const frame = (twist: number) => [0, 0, 0, 1.5, 0, 0, 2.1, 1.1, 0, 2.1, -1.1, 0, -0.4, 1, twist, -0.4, -0.5, -0.9, -0.4, -0.5, 0.9];
+    const acetateIs = (draw: number): Conformers => ({
+      atoms: ["C", "C", "O", "O", "H", "H", "H"].map((el, i) => ({ el, charge: i === 3 ? -1 : 0 })),
+      bonds: [
+        { a1: 0, a2: 1, order: 1 },
+        { a1: 1, a2: 2, order: 2 },
+        { a1: 1, a2: 3, order: 1 },
+        { a1: 0, a2: 4, order: 1 },
+        { a1: 0, a2: 5, order: 1 },
+        { a1: 0, a2: 6, order: 1 },
+      ],
+      frames: draw === 0 ? [frame(0)] : [frame(0), frame(0.6)],
+      energies: draw === 0 ? [-0.05] : [-0.05, -0.0495],
+      field: "MMFF94",
+      cip: { atoms: {}, bonds: {} },
+      chosen: { atoms: {}, bonds: {} },
+      smiles: "CC(=O)[O-]",
+    });
+    const asked: string[] = [];
+    const chem = {
+      request: async (_op: string, args: Record<string, unknown>) => {
+        asked.push(String(args.molblock));
+        return { isomers: [acetateIs(Number(args.draw))] };
+      },
+    } as unknown as ChemClient;
+    const stereo = { request: async (op: string) => (op === "stereo_elements" ? { read: true, elements: [] } : Promise.reject(new Error(`no ${op} here`))) } as unknown as ChemClient;
+    const [block] = blocksOf(salt, [1]);
+    const growth = await conformersGrowing(chem, stereo, block, "one", {}, { calculations: {} }, { window: 5, first: 10, most: MOST_CONFORMERS }, () => false);
+    const [first] = growth.first as (Conformers & { partsAlone?: true })[];
+    expect(first.partsAlone).toBe(true);
+    expect(first.atoms.map((a) => a.el)).toEqual(["C", "C", "O", "O", "Na", "H", "H", "H"]);
+    expect(first.frames).toHaveLength(1);
+    expect(first.how?.filter((r) => ["Searched", "Part 1: Rounds", "Part 2", "Parts"].includes(r.label))).toEqual([
+      { label: "Searched", text: "each of its 2 parts alone" },
+      { label: "Part 1: Rounds", text: "1 round, 10 tried so far: searching on" },
+      { label: "Part 2", text: "Na+: one atom, no search" },
+      { label: "Parts", text: "2, side by side: where they lie against each other is not modelled" },
+    ]);
+    // (never Na+ asked about: one atom; every asking the acetate alone - no Na in it)
+    expect(asked.every((m) => !/\bNa\b/.test(m))).toBe(true);
+    const grown: Conformers[] = [];
+    await growth.rest((_, c) => grown.push(c));
+    const last = grown[grown.length - 1];
+    expect(last.frames).toHaveLength(2);
+    expect(last.how?.find((r) => r.label === "Part 1: Rounds")?.text).toMatch(/: the last brought no new conformer within 5 kcal\/mol of the lowest$/);
+    expect(last.how?.some((r) => r.label === "Energies")).toBe(true);
+    // (on the page: no shares of the whole)
+    const m = moleculeOf(last, block);
+    expect(m.partsAlone).toBe(true);
+    expect(sharesOf({ ...m, conformerSet: true })).toBeUndefined();
+    expect(sharesWithheld(m)).toBe(PARTS_ALONE_WHY);
   });
 
   it("growing: stopped, ends where it is, what came kept and said", async () => {

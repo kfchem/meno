@@ -583,6 +583,14 @@ export type Molecule3D = {
    */
   partOf?: true;
   /**
+   * Its conformers a structure of several parts', each part searched alone
+   * (docs/WORKSPACE.md, *A structure of several parts*): each frame one
+   * part's conformer, the others at their lowest - its frames weighed as one
+   * compound's conformers would be shares of nothing. No share is shown of
+   * it, and Populations and Ensemble refuse it, saying why.
+   */
+  partsAlone?: true;
+  /**
    * How it was made, where something made it - its conformers' method and
    * force field - as rows to show, in the words of what made it; and what
    * its energies are (`energies`), where it gave them: the force field's
