@@ -28,7 +28,8 @@
 import { lonePairCentres, pyramidal } from "../chem/lonePairCentres";
 import { freeCorners, solidOf } from "./cage";
 import { key, perceive, type CisTrans } from "./perceive";
-import { drawnAxisSense, drawnVolume, placeStereo, type Axial, type Cumulated, type Stereo, type Tetrahedral } from "./stereo";
+import { drawnAxisSense, drawnVolume, placeStereo, type Axial, type Cumulated, type Stereo, type Tetrahedral, type Wedge } from "./stereo";
+import type { Point } from "./geometry";
 
 export type DrawnAtom = {
   x: number;
@@ -659,8 +660,60 @@ export function wedgesForFlat(atoms: readonly DrawnAtom[], bonds: readonly Drawn
   const pos = new Map(atoms.map((a, i) => [i, { x: a.x / k, y: a.y / k }]));
   // (on a bond no other centre's wedge is on: two on one bond, one is lost)
   const taken = new Set(bonds.flatMap((b) => (b.wedge ? [key(b.a, b.b)] : [])));
-  const { wedges, hydrogens } = placeStereo(mol, pos, shown, taken);
-  return { wedges, hydrogens: hydrogens.map(({ on, at }) => ({ on, at: { x: at.x * k, y: at.y * k } })) };
+  const placed = placeStereo(mol, pos, shown, taken);
+  const wedges = [...placed.wedges];
+  const hydrogens = placed.hydrogens.map(({ on, at }) => ({ on, at: { x: at.x * k, y: at.y * k } }));
+  // (a centre its wedge does not say read flat - left unread, or read only by luck: two of its bonds in one line, as a cage's
+  // projection can leave them, epibatidine's - its H drawn in the widest gap round it and wedged instead, the way that says its
+  // configuration; where that reads no surer, as placed)
+  const flatOf = (ws: Wedge[], hs: { on: number; at: Point }[]) => {
+    const fa: DrawnAtom[] = atoms.map(({ x, y, el, charge, hs: h }, i) => ({ x, y, el, ...(charge ? { charge } : {}), hs: h - hs.filter((q) => q.on === i).length }));
+    const fb: DrawnBond[] = bonds.map(({ a, b, order, wedge, either }) => ({ a, b, order, ...(wedge ? { wedge } : {}), ...(either ? { either } : {}) }));
+    hs.forEach((q) => {
+      fa.push({ x: q.at.x, y: q.at.y, el: "H", hs: 0 });
+      fb.push({ a: q.on, b: fa.length - 1, order: 1 });
+    });
+    for (const w of ws) {
+      const to = w.to === -1 ? atoms.length + hs.findIndex((q) => q.on === w.from) : w.to;
+      const i = fb.findIndex((b) => (b.a === w.from && b.b === to) || (b.b === w.from && b.a === to));
+      if (i >= 0) fb[i] = { ...fb[i], wedge: { narrow: w.from, stereo: w.stereo } };
+    }
+    return { atoms: fa, bonds: fb };
+  };
+  const first = flatOf(wedges, hydrogens);
+  const byLuck = new Set(unsureStereo(first.atoms, first.bonds).atoms);
+  const readFirst = readStereo(first.atoms, first.bonds).tetra;
+  const hIndexOf = (hs: { on: number }[], c: number) => atoms.length + hs.findIndex((q) => q.on === c);
+  const says = (c: number, t: Tetrahedral, read: Map<number, Tetrahedral>, hs: { on: number }[]) => {
+    const r = read.get(c);
+    return !!r && sameConfiguration(r, t, (n) => (n === hIndexOf(hs, c) ? -1 : n));
+  };
+  for (const [c, t] of shown) {
+    if ((says(c, t, readFirst, hydrogens) && !byLuck.has(c)) || atoms[c].hs < 1 || hydrogens.some((q) => q.on === c)) continue;
+    const at = atoms[c];
+    const dirs = bonds.flatMap(({ a, b }) => (a === c ? [b] : b === c ? [a] : [])).map((n) => Math.atan2(atoms[n].y - at.y, atoms[n].x - at.x)).sort((p, q) => p - q);
+    let gap = -1;
+    let mid = 0;
+    dirs.forEach((d, i) => {
+      const next = i + 1 < dirs.length ? dirs[i + 1] : dirs[0] + 2 * Math.PI;
+      if (next - d > gap) [gap, mid] = [next - d, (d + next) / 2];
+    });
+    const h = { on: c, at: { x: at.x + k * Math.cos(mid), y: at.y + k * Math.sin(mid) } };
+    const others = wedges.filter((w) => w.from !== c);
+    for (const stereo of ["up", "down"] as const) {
+      const ws = [...others, { from: c, to: -1, stereo }];
+      const hs = [...hydrogens, h];
+      const f = flatOf(ws, hs);
+      const read = readStereo(f.atoms, f.bonds).tetra.get(c);
+      const hIndex = atoms.length + hs.length - 1;
+      if (!read || !sameConfiguration(read, t, (n) => (n === hIndex ? -1 : n))) continue;
+      if (new Set(unsureStereo(f.atoms, f.bonds).atoms).has(c)) break;
+      wedges.splice(0, wedges.length, ...ws);
+      hydrogens.push(h);
+      break;
+    }
+  }
+  return { wedges, hydrogens };
 }
 
 /**
