@@ -675,6 +675,29 @@ describe("conformers made for the page", () => {
     }
   });
 
+  it("growing: Stop asked while a round is out - its plugin stopping with it - ends it stopped, nothing logged as an error", async () => {
+    let stop = false;
+    const stereo = { request: async (op: string) => (op === "stereo_elements" ? { read: true, elements: [] } : Promise.reject(new Error(`no ${op} here`))) } as unknown as ChemClient;
+    const chem = {
+      request: async (_op: string, args: Record<string, unknown>) => {
+        if (Number(args.draw) === 0) return { isomers: [{ ...answer, energies: [-0.001, 0.002] }] };
+        stop = true;
+        throw new Error("the plugin was stopped");
+      },
+    } as unknown as ChemClient;
+    const [block] = blocksOf(ethanol, [12]);
+    const growth = await conformersGrowing(chem, stereo, block, "one", {}, { calculations: {} }, { window: 3, first: 10, most: MOST_CONFORMERS }, () => stop);
+    const said: string[] = [];
+    const warned = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      await growth.rest((_, c) => said.push(c.how?.find((r) => r.label === "Rounds")?.text ?? ""));
+      expect(said).toEqual(["1 round, 10 tried: stopped, what came kept"]);
+      expect(warned).not.toHaveBeenCalled();
+    } finally {
+      warned.mockRestore();
+    }
+  });
+
   it("growing: runs its rest once, asked twice at once; lets each judge go as its search ends, or all of them where the rest is not run", async () => {
     const stereo = { request: async (op: string) => (op === "stereo_elements" ? { read: true, elements: [] } : Promise.reject(new Error(`no ${op} here`))) } as unknown as ChemClient;
     const chem = { request: async (_op: string, args: Record<string, unknown>) => ({ isomers: [{ ...answer, frames: [answer.frames[Number(args.draw) % 2]], energies: [-0.001] }] }) } as unknown as ChemClient;
