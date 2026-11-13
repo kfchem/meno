@@ -683,13 +683,14 @@ export function wedgesForFlat(atoms: readonly DrawnAtom[], bonds: readonly Drawn
   const first = flatOf(wedges, hydrogens);
   const byLuck = new Set(unsureStereo(first.atoms, first.bonds).atoms);
   const readFirst = readStereo(first.atoms, first.bonds).tetra;
-  const hIndexOf = (hs: { on: number }[], c: number) => atoms.length + hs.findIndex((q) => q.on === c);
-  const says = (c: number, t: Tetrahedral, read: Map<number, Tetrahedral>, hs: { on: number }[]) => {
-    const r = read.get(c);
-    return !!r && sameConfiguration(r, t, (n) => (n === hIndexOf(hs, c) ? -1 : n));
+  // (a centre with an H placed already is as placed: its H is no other centre's, and a wedge on it says the centre)
+  const says = (c: number, t: Tetrahedral) => {
+    const r = readFirst.get(c);
+    return !!r && sameConfiguration(r, t);
   };
   for (const [c, t] of shown) {
-    if ((says(c, t, readFirst, hydrogens) && !byLuck.has(c)) || atoms[c].hs < 1 || hydrogens.some((q) => q.on === c)) continue;
+    // (a centre with no H of its own gets none: drawn, it would have five bonds, which reads as no centre)
+    if (hydrogens.some((q) => q.on === c) || (says(c, t) && !byLuck.has(c)) || atoms[c].hs < 1) continue;
     const at = atoms[c];
     const dirs = bonds.flatMap(({ a, b }) => (a === c ? [b] : b === c ? [a] : [])).map((n) => Math.atan2(atoms[n].y - at.y, atoms[n].x - at.x)).sort((p, q) => p - q);
     let gap = -1;
