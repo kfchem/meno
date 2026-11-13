@@ -474,7 +474,7 @@ export const STYLE_FIELDS: StyleField[] = [
     group: "Labels",
     label: "R and S: distance from the atom",
     description:
-      "How far R or S stands off its stereocentre, from the atom to the nearest of its letters. About half a capital's height is IUPAC's; written bare, they can come nearer.",
+      "How far R or S stands off its stereocentre, from the atom to the nearest of its letters. About half a capital's height is IUPAC's, and every shipped style's.",
     kind: share("font size", 0, 1, 0.01),
   },
 

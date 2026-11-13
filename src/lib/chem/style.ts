@@ -178,8 +178,9 @@ export type DrawingStyle = {
   /**
    * How far R or S stands off its stereocentre, from the atom to the nearest
    * of its letters, as a fraction of the labels' font size. IUPAC's
-   * recommendations for structure diagrams put it about half a capital's
-   * height off (GR-11.1); written bare, it can come nearer.
+   * recommendations for structure diagrams put it about half the height of
+   * a C or an H of the labels' font off, rarely as much as the whole height
+   * (GR-11.1): 0.35, in every shipped style; a chemist's own may differ.
    */
   stereoDescriptorGap: number;
 
@@ -241,9 +242,10 @@ const RULES = {
   chargeCircles: "single",
   chargedCarbonLabel: "hidden",
   // (bare, as IUPAC's recommendations for structure diagrams draw them,
-  // GR-11.1; the journals below say nothing of them in drawings)
+  // and about half a capital's height off their atom, GR-11.1; the
+  // journals below say nothing of them in drawings)
   stereoDescriptors: "plain",
-  stereoDescriptorGap: 0.15,
+  stereoDescriptorGap: 0.35,
   aromaticCircleSize: 0.5,
   reactionArrowHeadInset: 0,
   // (a small barbed head, as a chemist draws one by hand)
@@ -387,7 +389,8 @@ export const MENO: DrawingStyle = {
   shortHashes: "three",
   fontFamily: "IBM Plex Sans",
   stereoDescriptors: "plain",
-  stereoDescriptorGap: 0.15,
+  // (half a capital's height off, as IUPAC's GR-11.1 has it, bare as in parentheses)
+  stereoDescriptorGap: 0.35,
   // (a reaction arrow's head a little barbed, nearer an arrowhead than a bare triangle: the maintainer, 2026-11-11)
   reactionArrowHeadInset: 0.2,
 };
