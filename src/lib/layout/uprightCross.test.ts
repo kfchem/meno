@@ -18,7 +18,7 @@ function directions(smiles: string, centre: number): number[] {
 }
 
 describe("four like groups", () => {
-  it("are an upright cross: tetramethylammonium, tetramethylsilane, CCl4, BF4-, tetraethylammonium - and neopentane and a sulfate, as they were", () => {
+  it("are an upright cross: tetramethylammonium, tetramethylsilane, CCl4, CF2Cl2, BF4-, tetraethylammonium, tetraphenylborate and -methane - and neopentane and a sulfate, as they were", { timeout: 60000 }, () => {
     for (const [smiles, centre] of [
       ["C[N+](C)(C)C", 1],
       ["C[Si](C)(C)C", 1],
@@ -28,14 +28,22 @@ describe("four like groups", () => {
       ["CC(C)(C)C", 1],
       ["O=S(=O)([O-])[O-]", 1],
       ["[O-]Cl(=O)(=O)=O", 1],
+      // (four ends not alike, and four that go on through rings)
+      ["FC(F)(Cl)Cl", 1],
+      ["[B-](c1ccccc1)(c1ccccc1)(c1ccccc1)c1ccccc1", 0],
+      ["C(c1ccccc1)(c1ccccc1)(c1ccccc1)c1ccccc1", 0],
     ] as const) {
       expect(directions(smiles, centre), smiles).toEqual([-180, -90, 0, 90]);
     }
   });
 
-  it("leave a square-planar metal its own form, and a trident fanned", () => {
+  it("leave a square-planar metal its own form, and a trident fanned", { timeout: 60000 }, () => {
     expect(directions("Cl[Pt-2](Cl)(Cl)Cl", 1)).toEqual([-135, -45, 45, 135]);
-    // (a tert-butyl's three methyls fanned about the fourth bond, as ever)
+    // (a trident - three like ends and a fourth bond - fanned about that bond, as the maintainer has it: a tert-butyl's, a CFCl3's,
+    // tert-butanol's, chlorotrimethylsilane's)
     expect(directions("CCC(C)(C)C", 2)).toEqual([-60, 0, 60, 180].map((d) => (d === 180 ? -180 : d)).sort((p, q) => p - q));
+    expect(directions("FC(Cl)(Cl)Cl", 1)).toEqual([-180, -60, 0, 60]);
+    expect(directions("CC(C)(C)O", 1)).toEqual([-180, -120, 0, 120]);
+    expect(directions("C[Si](C)(C)Cl", 1)).toEqual([-180, -120, 0, 120]);
   });
 });
