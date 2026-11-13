@@ -139,15 +139,17 @@ const HYDROGEN_ISOTOPES = new Set(["D", "T"]);
  * A formula as a database writes one - Hill order or any other, the charge
  * after it ("C2H3O2-", "Fe+2", "SO4-2"), parts after dots with a count
  * before each ("C2H3O2.Na", "CuO4S.5H2O") - read as counts, never as text.
- * D and T count as hydrogen. Null where it does not read so: a symbol that
- * is no element, brackets, anything else.
+ * D and T count as hydrogen: no isotope is told apart. Null where it does
+ * not read so: a number at its very start ("13CH4" - a count stands only
+ * before a part after a dot), a symbol that is no element, brackets,
+ * anything else.
  */
 export function formulaRead(written: string): Formula | null {
   const counts = new Map<string, number>();
   let charge = 0;
-  for (const part of written.split(".")) {
+  for (const [i, part] of written.split(".").entries()) {
     const m = /^(\d*)((?:[A-Z][a-z]?\d*)+)([+-]\d*)?$/.exec(part);
-    if (!m) return null;
+    if (!m || (i === 0 && m[1])) return null;
     const times = m[1] ? Number(m[1]) : 1;
     if (!times) return null;
     for (const [, symbol, n] of m[2].matchAll(/([A-Z][a-z]?)(\d*)/g)) {
@@ -196,15 +198,19 @@ const alike = (a: Formula, b: Formula) => a.charge === b.charge && a.counts.size
  * Meno cannot read is said so, never "unlike".
  */
 export function notDrawnWhy(drawn: Model, found: NamedStructure, service: string): string | null {
-  const theirs = formulaRead(found.formula);
-  if (!theirs) return `Meno does not read ${service}'s formula for ${found.title}, ${found.formula}: not drawn.`;
+  // (their formula quoted as they wrote it - spaces about it aside - never as Meno would write it)
+  const written = found.formula.trim();
+  const theirs = formulaRead(written);
+  if (!theirs) return `Meno does not read ${service}'s formula for ${found.title}, ${written}: not drawn.`;
   const ours = formulaOfDrawn(drawn);
   if (!ours) return `Meno does not read ${service}'s structure for ${found.title} as a formula: not drawn.`;
   const given = { counts: theirs.counts, charge: found.charge };
   // (the charge the formula writes, where it writes one, is the record's too)
-  if (theirs.charge !== found.charge && theirs.charge !== 0) return `${service} gives ${found.title} the formula ${found.formula} and the charge ${chargeSaid(found.charge)}: not drawn.`;
+  if (theirs.charge !== found.charge && theirs.charge !== 0) return `${service} gives ${found.title} the formula ${written} and the charge ${chargeSaid(found.charge)}: not drawn.`;
   if (alike(ours, given)) return null;
-  return `Meno reads ${service}'s structure for ${found.title} as ${formulaWritten(ours)}; ${service}'s formula is ${formulaWritten(given)}. Not drawn.`;
+  // (a charge the record gives that its formula does not write: said beside it)
+  const charge = found.charge && !theirs.charge ? `, charge ${chargeSaid(found.charge)}` : "";
+  return `Meno reads ${service}'s structure for ${found.title} as ${formulaWritten(ours)}; ${service}'s formula is ${written}${charge}. Not drawn.`;
 }
 
 /** A charge as a chemist says it: "+1", "−2", "0". */

@@ -95,7 +95,9 @@ describe("a structure found by its name", () => {
     expect(read("CuO4S.5H2O")).toEqual({ counts: { Cu: 1, O: 9, S: 1, H: 10 }, charge: 0 });
     expect(read("CDCl3")).toEqual({ counts: { C: 1, H: 1, Cl: 3 }, charge: 0 });
     expect(read("C2H5T")).toEqual({ counts: { C: 2, H: 6 }, charge: 0 });
-    for (const f of ["", "c9h8o4", "C9H8O4 ", "C9(H8)O4", "Xx2", "C0H4", "0H2O", "C9H8O4..", "[2H]Cl"]) expect(read(f), f).toBeNull();
+    for (const f of ["", "c9h8o4", "C9H8O4 ", "C9(H8)O4", "Xx2", "C0H4", "0H2O", "C9H8O4..", "[2H]Cl", "13CH4", "2H2O"]) expect(read(f), f).toBeNull();
+    // (a count stands before a part after a dot alone)
+    expect(read("CH4.2H2O")).toEqual({ counts: { C: 1, H: 8, O: 2 }, charge: 0 });
     expect(formulaWritten({ counts: new Map([["O", 2], ["H", 3], ["C", 2]]), charge: -1 })).toBe("C2H3O2-");
     expect(formulaWritten({ counts: new Map([["S", 1], ["O", 4]]), charge: -2 })).toBe("O4S-2");
     expect(formulaWritten({ counts: new Map([["Na", 1]]), charge: 1 })).toBe("Na+");
@@ -115,8 +117,16 @@ describe("a structure found by its name", () => {
     const acetate = chain(["C", "C", "O"], [1, 1], { 2: -1 });
     expect(notDrawnWhy(acetate, { ...aspirin, title: "ethoxide", formula: "C2H5O-", charge: -1 }, "S")).toBeNull();
     expect(notDrawnWhy(ethanol, { ...aspirin, title: "ethoxide", formula: "C2H5O-", charge: -1 }, "S")).toBe("Meno reads S's structure for ethoxide as C2H6O; S's formula is C2H5O-. Not drawn.");
+    // ("Fe2+", as some write an ion: two irons and +1 - unlike a record of +2, refused, both said)
+    expect(notDrawnWhy(chain(["Fe"], [], { 0: 2 }), { ...aspirin, title: "iron(2+)", formula: "Fe2+", charge: 2 }, "S")).toBe("S gives iron(2+) the formula Fe2+ and the charge +2: not drawn.");
     // (a formula that writes one charge for a record of another: refused, both said)
     expect(notDrawnWhy(acetate, { ...aspirin, title: "ethoxide", formula: "C2H5O-", charge: 0 }, "S")).toBe("S gives ethoxide the formula C2H5O- and the charge 0: not drawn.");
+    // (their formula quoted as they wrote it, never as Meno writes one: a hydrate, and a charge the formula leaves out said beside it)
+    expect(notDrawnWhy(ethanol, { ...found, formula: "CuO4S.5H2O" }, "S")).toBe("Meno reads S's structure for ethanol as C2H6O; S's formula is CuO4S.5H2O. Not drawn.");
+    expect(notDrawnWhy(ethanol, { ...found, formula: "C2H5O", charge: -1 }, "S")).toBe("Meno reads S's structure for ethanol as C2H6O; S's formula is C2H5O, charge \u22121. Not drawn.");
+    // (spaces about it: taken off, as quoted; "13CH4" not read, never a count of the whole)
+    expect(notDrawnWhy(ethanol, { ...found, formula: " C2H6O " }, "S")).toBeNull();
+    expect(notDrawnWhy(ethanol, { ...found, formula: " 13CH4 " }, "S")).toBe("Meno does not read S's formula for ethanol, 13CH4: not drawn.");
     // (a formula Meno does not read: said so, never "unlike")
     expect(notDrawnWhy(ethanol, { ...found, formula: "C2H6O(?)" }, "S")).toBe("Meno does not read S's formula for ethanol, C2H6O(?): not drawn.");
     // (a deuterated one: D counted as hydrogen on both sides)

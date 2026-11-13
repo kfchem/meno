@@ -518,7 +518,11 @@ compound by this name"), and so is an error, in the plugin's words. Before
 anything is drawn the structure Meno reads from the SMILES given must have
 the formula and charge given, compared as element counts: unlike, it is
 not drawn ("Meno reads …'s structure for aspirin as C9H8O3; …'s formula is
-C9H8O4. Not drawn."). Stereocentres or double bonds the service leaves
+C9H8O4. Not drawn."), the service's formula quoted as it wrote it. The
+counts tell no isotope apart: D and T count as hydrogen on both sides. A
+formula is read as a database writes one, its charge at the end ("Fe+2");
+written as some write an ion ("Fe2+"), it reads as two irons and +1, and
+unlike the record's charge it is not drawn. Stereocentres or double bonds the service leaves
 undefined are drawn open, and said, never given a configuration. Offline,
 the row is dimmed and says the service needs the network. Where no plugin
 looks names up and nothing reads the text, a quiet *Look it up as a name…*
