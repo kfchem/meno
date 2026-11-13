@@ -129,7 +129,7 @@ export function haworth(size: 5 | 6): Solid {
 
 /**
  * How far the back atom's bonds are turned from the front's in an eclipsed Newman projection, in degrees, so that both show.
- * By eye: the look owner's choice, no basis claimed. Positive turns the back set counter-clockwise on the page.
+ * By eye: a matter of look, no basis claimed. Positive turns the back set counter-clockwise on the page.
  */
 export const ECLIPSED_OFFSET_DEG = 12;
 
@@ -140,7 +140,7 @@ export const ECLIPSED_OFFSET_DEG = 12;
  * and -1/3 on the back atom. On the page: the front atom's bonds meet at the circle's centre and the back atom's start at its rim
  * (Moss 1996, *Newman Projection*: the circle represents the nearer atom). Staggered, the front at 90, 210 and 330 degrees
  * (counter-clockwise from the right, y up) and the back at 30, 150 and 270; eclipsed, the back set at the front's plus
- * `ECLIPSED_OFFSET_DEG`. No text gives these angles: by convention, the look owner's choice.
+ * `ECLIPSED_OFFSET_DEG`. No text gives these angles: by convention, a matter of look.
  */
 export function newman(form: "staggered" | "eclipsed"): Solid {
   const spoke = (page: number, front: boolean): V3 => [CHAIR_R * Math.cos(page * DEG), CHAIR_R * Math.sin(page * DEG), front ? EQUATORIAL_Z : -EQUATORIAL_Z];
@@ -213,7 +213,7 @@ function ringArms(atoms: readonly V3[], bonds: readonly [number, number][], k: n
 const ringBonds = (n: number): [number, number][] => Array.from({ length: n }, (_, k): [number, number] => [k, (k + 1) % n]);
 
 /**
- * The ideal boat, C2v (Moss 1996, *Chair, Boat, Twist*). Calculated, 2026-11-13: with bond length 1 and w = sqrt(8/3), the
+ * The ideal boat, C2v (Moss 1996, *Chair, Boat, Twist*). Calculated: with bond length 1 and w = sqrt(8/3), the
  * atoms (-1/3, w/2, sqrt(2)/3), (0, 0, 0), (1, 0, 0), (4/3, w/2, sqrt(2)/3), (1, w, 0), (0, w, 0) close exactly - every bond 1, every
  * angle 109.471 degrees, ring torsions 0, -60, 60, 0, -60, 60 - and the two out-of-plane atoms are 5/3 apart. Atoms 0 and 3 are the
  * out-of-plane ones. The axis is the plane's normal, toward the side they lie on. Each atom's two free positions complete its tetrahedron
@@ -251,7 +251,7 @@ export function boat(): Solid {
 
 /**
  * How far the two out-of-plane atoms of the half-chair stand from the plane of the other four, in bond lengths. By convention, no ideal
- * numbers in the texts and none claimed: a stated amount, the look owner's.
+ * numbers in the texts and none claimed: a stated amount, a matter of look.
  */
 export const HALF_CHAIR_OUT = 0.25;
 
@@ -337,7 +337,7 @@ export function envelope(): Solid {
  * A five-ring (`envelope`) does not close with ideal angles: it is built on the four atoms in a row and its fifth atom placed tetrahedrally
  * from the bond's second atom, turned about the bond to come nearest the first; the solid's `miss` is how far from 1 that closing bond comes out
  * (1.50, and an angle of some 85 degrees). It is stated, not hidden, but it is NOT a usable five-ring shape: nothing is to be drawn or fitted from
- * it until a five-ring is built another way (a hydrindane's or a steroid's D ring needs strained angles, which the engine's cage solids or a
+ * it, and nothing but code that reads `miss` may take it, until a five-ring is built another way (a hydrindane's or a steroid's D ring needs strained angles, which the engine's cage solids or a
  * fit's tolerance carry).
  */
 export function fused(a: Solid, bond: number, ring: SolidKind, how: "trans" | { cis: 1 | -1 }): Solid {
