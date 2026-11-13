@@ -134,6 +134,30 @@ describe("a crossing drawn by hand, which bond is in front said", () => {
     expect(bondOf(st().model, ac).behind).toEqual([bd]);
   });
 
+  it("goes with an edit that gives a marked bond's end another atom - a new one, or one already there - leaving the two apart", () => {
+    // (C's bond to A given a new end out to the left: AC no longer crosses BD)
+    const one = editor();
+    one.st().orderCrossing(one.ac, one.bd, "behind");
+    one.doc.edit("new end", (d) => ({
+      ...d,
+      nextId: d.nextId + 1,
+      model: { atoms: [...d.model.atoms, { id: d.nextId, el: "C", r: 0.9, x: -1, y: 0.5 }], bonds: d.model.bonds.map((b) => (b.id === one.ac ? { ...b, b: d.nextId } : b)) },
+    }));
+    expect(bondOf(one.st().model, one.ac).behind).toBeUndefined();
+    // (AC's end C put on E, an atom already there at (-2, 0), none of the four atoms moved: A-E runs clear of BD)
+    const two = editor();
+    two.st().orderCrossing(two.ac, two.bd, "behind");
+    const e = two.st().addAtom(-2, 0, "C");
+    two.doc.edit("re-attach", (d) => ({ ...d, model: { ...d.model, bonds: d.model.bonds.map((b) => (b.id === two.ac ? { ...b, b: e } : b)) } }));
+    expect(bondOf(two.st().model, two.ac).behind).toBeUndefined();
+    // (and one that leaves them crossing, an end given another atom across: kept)
+    const three = editor();
+    three.st().orderCrossing(three.ac, three.bd, "behind");
+    const f = three.st().addAtom(3, 3, "C");
+    three.doc.edit("further", (d) => ({ ...d, model: { ...d.model, bonds: d.model.bonds.map((b) => (b.id === three.ac ? { ...b, b: f } : b)) } }));
+    expect(bondOf(three.st().model, three.ac).behind).toEqual([three.bd]);
+  });
+
   it("is left by a move that did not touch its bonds: only a mark with an atom the move moved is taken away", () => {
     const { st, ac, bd, atoms } = editor();
     st().orderCrossing(ac, bd, "behind");

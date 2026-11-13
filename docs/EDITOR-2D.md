@@ -772,8 +772,9 @@ Both go together, because both touch every layer.
     bonds dragged apart are drawn whole, and dragged back across, the gap
     is there again. A move that ENDS with the two no longer crossing takes
     it away, in the move's own step (undone, both come back), and so does
-    any other edit that moves an atom of either and leaves them apart -
-    Clean-up, a command that sets places - in its own step. Deleting
+    any other edit that takes them from crossing to not crossing - an atom
+    moved by Clean-up or a command, an end given another atom - in its own
+    step. Deleting
     either bond takes it away. Copied and pasted, it follows the bonds'
     new ids; a mark whose other bond was not copied is dropped. Turning a
     structure over exchanges front and behind, as a depth would.
