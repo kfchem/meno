@@ -51,7 +51,25 @@ export function fromAbove(elevation: number, turn = 0): View {
  * 2-Carb-5.4, for the Haworth ring: "viewed from slightly above so that the edge closer to the viewer is drawn below the more distant edge").
  */
 export const CHAIR_ELEVATION_DEG = 15;
-export const HAWORTH_ELEVATION_DEG = 30;
+
+/**
+ * The Haworth ring's view, as the sine of the eye's height over the ring's plane: 2/3 (41.8 degrees). MEASURED on Brecher 2006's figure
+ * under ST-1.9 (its three pyranose rings and three furanose rings): a six-ring 1.153 level bonds tall, a five-ring's side atoms 0.63 of one
+ * above its front edge; a regular ring seen from this height is 1.1547 and 0.634. One number fits both rings, and the ring is a true view.
+ * (Seen from 30 degrees, a six-ring is as tall as an up bond is long, and a front atom's up group lands on the back atom above it.)
+ */
+export const HAWORTH_SIN = 2 / 3;
+export const HAWORTH_ELEVATION_DEG = Math.asin(HAWORTH_SIN) / DEG;
+
+/**
+ * How long a Haworth ring's group is drawn, as a share of a bond, NOT a true view: straight up or down, `HAWORTH_OUT` - the true view's own
+ * length, the cosine - where the bond leaves the ring's picture (both groups of a side atom, the down group of a front atom, the up group of a
+ * back atom), and `HAWORTH_IN` where it goes into it (the up group of a front atom, the down group of a back atom), so that two on one
+ * vertical - a front atom's up group and the back atom's down group above it - pass clear of each other. Read off the same figure (0.38 to
+ * 0.44 into the ring): a matter of look, the look check's to settle.
+ */
+export const HAWORTH_OUT = Math.sqrt(1 - HAWORTH_SIN * HAWORTH_SIN);
+export const HAWORTH_IN = 0.4;
 
 /**
  * How far a chair is turned about its axis in its form-0 view, in degrees: the eye is atan(sqrt(3)/5) = 19.107 degrees from the line through
@@ -126,9 +144,12 @@ const ORDERS: [number, number, number][] = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1,
  * direction's, in the standard view of the solid (`form` as `standardView`: for form 1 the solid seen from the other side of its mirror plane, the lines of the convention reflected, never the form-0 drawing mirrored with each atom's depth kept), so that the drawing is read back as the solid is - the nearer wins.
  *
  * Null for a solid with a bond or a free direction off the four (the boat, half-chair, envelope, a five-ring fused on, with its `miss`): those
- * are `seen`. The Haworth ring and the Newman pair are `seen` as well.
+ * are `seen`. The Newman pair is `seen` as well.
+ *
+ * A Haworth ring is drawn as it is seen in its view (`haworthDrawn`), its groups by the two drawn lengths.
  */
 export function drawn(solid: Solid, form = 0): Drawn | null {
+  if (solid.kind === "haworth") return haworthDrawn(solid);
   if (solid.kind !== "chair" || solid.miss != null || solid.atoms.length < 6) return null;
   const view = standardView(solid, form);
   // (the ring's three bond directions, by the first six atoms in order, and the axis: the four of the lattice)
@@ -190,5 +211,31 @@ export function drawn(solid: Solid, form = 0): Drawn | null {
     if (!d) return null;
     free.push({ free: f, x: d[0], y: d[1], z: dot(view.toward, f.direction) });
   }
+  return { atoms, free };
+}
+
+/**
+ * A Haworth ring as drawn (rule (H)): its atoms the regular planar ring seen in its view (`standardView`: the eye's height `HAWORTH_SIN`, an
+ * edge level at the front, the ring O at the back), their depth that view's; each group straight up or down the page, the ring's normal, at
+ * `HAWORTH_OUT` of a bond where its bond leaves the ring's picture and `HAWORTH_IN` where it goes into it - into it is up from an atom with
+ * another ring atom straight above it or on the front edge, and down from an atom on the back edge. Its depth is the normal's (toward the
+ * viewer for up) times that length, as a group's depth is read.
+ */
+function haworthDrawn(solid: Solid): Drawn {
+  const view = standardView(solid);
+  const atoms = seen(solid, view);
+  const ys = atoms.map((p) => p.y);
+  const [lo, hi] = [Math.min(...ys), Math.max(...ys)];
+  const near = (a: number, b: number) => Math.abs(a - b) < 1e-9;
+  const inside = (k: number, up: boolean) => {
+    const p = atoms[k];
+    return up ? near(p.y, lo) || atoms.some((q, j) => j !== k && near(q.x, p.x) && q.y > p.y) : near(p.y, hi);
+  };
+  const free = solid.free.map((f) => {
+    const up = f.direction[2] > 0;
+    const length = inside(f.at, up) ? HAWORTH_IN : HAWORTH_OUT;
+    const normal = project(view, f.direction);
+    return { free: f, x: 0, y: (up ? 1 : -1) * length, z: normal.z * length };
+  });
   return { atoms, free };
 }

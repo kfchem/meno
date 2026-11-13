@@ -66,7 +66,7 @@ src/
   utils/importers         readMoleculesFromText, RXN grouping/layout, EditorModel conversion
   lib/chem/perception/projection/  the solids the projection tools draw and read (pure geometry, bond length 1): solids.ts - the ideal chair and its flip, boat,
                           half-chair, envelope, Haworth ring, Newman pair, rings fused on a chair - and views.ts - the standard views, the textbook's
-                          chair as drawn (`drawn`) and its depth. It imports nothing outside its folder.
+                          chair and Haworth ring as drawn (`drawn`) and their depth. It imports nothing outside its folder.
   samples/                textbook structures and reactions for the tests and the workflow's 3D node
                           (see samples/README.md)
   ui/layouts/TopBar       custom title bar: tabs, "+" (a new workspace), online/offline, Save (the workspace in front), Settings,
