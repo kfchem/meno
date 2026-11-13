@@ -18,7 +18,7 @@ import { atomsFromOne, comparedBonding, matchingReference, type CompareOptions }
 import { combined } from "../../../../lib/steps/combine";
 import { measured, measurementName, measurementsTyped } from "../../../../lib/steps/measure";
 import { speciesNeeds, speciesTyped, withSpecies } from "../../../../lib/steps/species";
-import { NUMBERING, OWN_NUMBERING, restraintRows, restraintsTable, torsionRowsFromReference, torsionRowsTyped, torsionsUnlike, torsionUnlikeText, type RestraintRow } from "../../../../lib/steps/restraints";
+import { NONE_FOUND, NUMBERING, OWN_NUMBERING, restraintRows, restraintsTable, torsionRowsFromReference, torsionRowsTyped, torsionsUnlike, torsionUnlikeText, type NothingRow, type RestraintRow } from "../../../../lib/steps/restraints";
 import type { OptionValues } from "../../../../lib/options";
 import { atomMapNeeds, compareTorsionsNeeds, ONE_EXIT, restraintsTyped, torsionsRead } from "./kinds";
 import { bondChangesTable, CHANGE, CHANGE_WORDS, MAPPED_ENTRY, renumberedEntry } from "../../../../lib/steps/reaction";
@@ -358,6 +358,7 @@ export function restrainedSet(entries: readonly SetEntry[], holds: Holds3D, v: O
   const aside: SetEntry[] = [];
   const rows: RestraintRow[] = [];
   const total = { coordination: 0, distances: 0, fixed: 0, none: 0 };
+  const nothing: NothingRow[] = [];
   // (each entry's ID - a text, a number, as it says it - and those two or more entries share: a row for one would be the other's too)
   const ids = entries.map((e) => rowIdOf(e, on));
   const shared = new Set(ids.filter((id, i) => id != null && ids.indexOf(id) !== i));
@@ -374,7 +375,10 @@ export function restrainedSet(entries: readonly SetEntry[], holds: Holds3D, v: O
       else if (row.why.startsWith("coordination")) total.coordination++;
       else total.distances++;
     }
-    if (!r.rows.length) total.none++;
+    if (!r.rows.length) {
+      total.none++;
+      nothing.push({ for: id, on, numbering: numberingOf(was), why: NONE_FOUND });
+    }
   });
   const made = entries.length - aside.length;
   const said = [`${plural(rows.length, "row")} for ${plural(made, "entry", "entries")}`];
@@ -384,7 +388,7 @@ export function restrainedSet(entries: readonly SetEntry[], holds: Holds3D, v: O
   // (an entry it made no row for: said - a step holding these takes none for it, and refuses it)
   if (total.none) said.push(`${plural(total.none, "entry", "entries")} with none to hold`);
   if (aside.length) said.push(`${aside.length} failed`);
-  return { ok: true, holds, kept: [], aside, said: said.join(" \u00b7 "), tables: { [ONE_EXIT]: restraintsTable(rows) } };
+  return { ok: true, holds, kept: [], aside, said: said.join(" \u00b7 "), tables: { [ONE_EXIT]: restraintsTable(rows, nothing) } };
 }
 
 /** Each entry's reference among `references`, as the step's *Against* says: the one there is, or the one with the same value of a property - or why not. */
@@ -420,6 +424,7 @@ export function torsionsSet(entries: readonly SetEntry[], references: readonly S
   const rows: RestraintRow[] = [];
   let none = 0;
   let notHeld = 0;
+  const nothing: NothingRow[] = [];
   entries.forEach((e, i) => {
     const refuse = (why: string) => aside.push({ ...e, failed: { kind: "refused", why } });
     const id = ids[i];
@@ -430,7 +435,11 @@ export function torsionsSet(entries: readonly SetEntry[], references: readonly S
     const made = "typed" in r ? torsionRowsTyped(es[i], r.typed, r.target, r.hold) : torsionRowsFromReference(es[i], rs[m.index], r.from, r.hold);
     if ("failed" in made) return refuse(made.failed);
     if ("notHeld" in made && made.notHeld) notHeld++;
-    if (!made.rows.length) none++;
+    // (none to hold - not one with something found that cannot be held here: that one is no "nothing to hold", and is refused)
+    else if (!made.rows.length) {
+      none++;
+      nothing.push({ for: id, on: r.on, numbering: numberingOf(e), why: NONE_FOUND });
+    }
     for (const x of made.rows) rows.push({ ...x, for: id, on: r.on, numbering: numberingOf(e) });
   });
   const made = entries.length - aside.length;
@@ -441,7 +450,7 @@ export function torsionsSet(entries: readonly SetEntry[], references: readonly S
   // (a double bond with no trans torsion in its reference, unlike here: 180° where trans cannot hold it - said, with what can)
   if (notHeld) said.push(`${plural(notHeld, "entry", "entries")} with a double bond cis in the reference not held: choose Held at: the reference's own angle`);
   if (aside.length) said.push(`${aside.length} failed`);
-  return { ok: true, holds, kept: [], aside, said: said.join(" \u00b7 "), tables: { [ONE_EXIT]: restraintsTable(rows) } };
+  return { ok: true, holds, kept: [], aside, said: said.join(" \u00b7 "), tables: { [ONE_EXIT]: restraintsTable(rows, nothing) } };
 }
 
 /** The properties *Compare torsions* writes on each entry: how many torsions are unlike its reference's, and which. */

@@ -125,6 +125,18 @@ export function restraintRows(e: Entry, o: RestraintsAsked): { rows: RowMade[] }
  * numbered anew since is never held on the wrong atoms.
  */
 export type RestraintRow = RowMade & { for: string; on: string; numbering: string };
+/**
+ * A molecule its step looked at and found nothing to hold for - no
+ * coordination bond, no torsion unlike its reference's - said in the table
+ * as a row of its own, for it as a row is: so that a step it is wired into
+ * tells it from one its step refused, or never saw (the maintainer,
+ * 2026-11-13: one found to have nothing to hold goes on holding nothing).
+ */
+export type NothingRow = { for: string; on: string; numbering: string; why: string };
+/** The kind cell of a row that holds nothing: its molecule was found to have nothing to hold. */
+export const NOTHING_KIND = "nothing to hold";
+/** Why a molecule's row holds nothing, as its step found it. */
+export const NONE_FOUND = "none found to hold";
 
 /** The property *Atom map* writes on each entry it numbers anew, a label naming the map: a restraint's atoms are in one numbering. */
 export const NUMBERING = "numbering";
@@ -160,13 +172,17 @@ const atomsText = (r: Restraint) => r.atoms.map((a) => a + 1).join(r.kind === "f
 const strengthText = (r: Restraint) => (r.kind === "fixed" ? FIXED_CELL : r.exact ? EXACT : `${r.strength} ${STRENGTH_UNIT[r.kind]}`);
 
 /** A restraints table: a row for each restraint, said as a chemist reads it (docs/STRUCTURE-STEPS.md, *Restraints*). */
-export function restraintsTable(rows: readonly RestraintRow[]): Table {
+export function restraintsTable(rows: readonly RestraintRow[], nothing: readonly NothingRow[] = []): Table {
   return {
     columns: COLUMNS.map((c) => ({ ...c })),
-    rows: rows.map((x) => {
-      const r = x.restraint;
-      return [KIND_WORDS[r.kind], atomsText(r), r.kind === "distance" ? r.value! : null, r.kind === "dihedral" ? r.value! : null, strengthText(r), x.why, x.for, x.on, x.numbering];
-    }),
+    rows: [
+      ...rows.map((x) => {
+        const r = x.restraint;
+        return [KIND_WORDS[r.kind], atomsText(r), r.kind === "distance" ? r.value! : null, r.kind === "dihedral" ? r.value! : null, strengthText(r), x.why, x.for, x.on, x.numbering];
+      }),
+      // (each molecule found to have nothing to hold, after: a row for it, holding nothing)
+      ...nothing.map((x) => [NOTHING_KIND, "", null, null, "", x.why, x.for, x.on, x.numbering]),
+    ],
     unread: [],
     left: [],
   };
@@ -177,9 +193,10 @@ export function restraintsTable(rows: readonly RestraintRow[]): Table {
  * or one read from a file with the same columns: each row's kind, atoms
  * (from 1), target in its column's unit, and strength - a number in the
  * unit of its kind, "exact", or atoms fixed's. Why not, the row named,
- * where any row does not read: nothing held in part, nothing guessed.
+ * where any row does not read: nothing held in part, nothing guessed. The
+ * molecules it says have nothing to hold, apart (`NothingRow`).
  */
-export function restraintRowsIn(table: Table): { rows: RestraintRow[] } | { why: string } {
+export function restraintRowsIn(table: Table): { rows: RestraintRow[]; nothing: NothingRow[] } | { why: string } {
   const col = (name: string) => table.columns.findIndex((c) => c.name === name);
   const k = Object.fromEntries(COLUMNS.map((c) => [c.name, col(c.name)]));
   const lacking = COLUMNS.find((c) => k[c.name] < 0);
@@ -190,14 +207,20 @@ export function restraintRowsIn(table: Table): { rows: RestraintRow[] } | { why:
     if (c.kind !== "number" || c.unit !== unit) return { why: `Its column "${name}" is not in ${unit}` };
   }
   const rows: RestraintRow[] = [];
+  const nothing: NothingRow[] = [];
   for (const [i, row] of table.rows.entries()) {
     const text = (name: string) => {
       const v = row[k[name]];
       return typeof v === "string" ? v.trim() : typeof v === "number" ? String(v) : "";
     };
     const bad = (what: string) => ({ why: `Row ${i + 1} of the restraints does not read: ${what}` });
+    if (text("kind") === NOTHING_KIND) {
+      if (!text("for") || !text("on")) return bad("it does not say which molecule it is for");
+      nothing.push({ for: text("for"), on: text("on"), numbering: text("numbering") || OWN_NUMBERING, why: text("why") });
+      continue;
+    }
     const kind = (Object.keys(KIND_WORDS) as Restraint["kind"][]).find((x) => KIND_WORDS[x] === text("kind"));
-    if (!kind) return bad(`its kind "${text("kind")}" is none of distance, torsion, atoms fixed`);
+    if (!kind) return bad(`its kind "${text("kind")}" is none of distance, torsion, atoms fixed, ${NOTHING_KIND}`);
     const atoms = text("atoms")
       .split(kind === "fixed" ? /\s*,\s*/ : "-")
       .map((a) => (/^[0-9]+$/.test(a.trim()) ? Number(a) - 1 : NaN));
@@ -226,7 +249,7 @@ export function restraintRowsIn(table: Table): { rows: RestraintRow[] } | { why:
     if (!m || m[2] !== STRENGTH_UNIT[kind] || !(k2 > 0) || !Number.isFinite(k2)) return bad(`its strength "${strength}" is neither "exact" nor a number above 0 in ${STRENGTH_UNIT[kind]}`);
     rows.push({ for: forWhat, on, numbering, why, restraint: { kind, atoms, value, strength: k2 } });
   }
-  return { rows };
+  return { rows, nothing };
 }
 
 /** A restraint's atoms and kind, as two rows hold the same (a distance and a torsion either way round; atoms fixed as a set). */
