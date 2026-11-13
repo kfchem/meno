@@ -21,7 +21,7 @@ import {
   type Point,
 } from "./geometry";
 import { metalSlots } from "./hapto";
-import { isMetal, key, METAL_BOND, orderOf, straightThrough, type Molecule } from "./perceive";
+import { isMetal, key, METAL_BOND, orderOf, straightThrough, twoLonePairsOnFour, type Molecule } from "./perceive";
 import { MACROCYCLE } from "./ringSystem";
 import { byStructure, ringKey, ringRank } from "./ranks";
 
@@ -183,6 +183,8 @@ export function grow(
     // (a cross, or the O between two, square to the page, the chain straight
     // through it and a double-bonded O above)
     const cross = isCross(mol, middle);
+    // (a main-group centre of four single bonds and two lone pairs, square planar - XeF4: the X, its bonds 45 degrees off the axes)
+    const squareX = deg === 4 && mol.neighbours[middle].every((v) => orderOf(mol, middle, v) === 1) && twoLonePairsOnFour(mol.el[middle], mol.charge[middle]);
     const between = deg === 2 && along.length === 2 && along.every((v) => isCross(mol, v));
     // (an atom straight through - between two double bonds, or by a triple
     // one: an allene's, a ketene's, CO2's middle - as it is in a chain)
@@ -203,7 +205,9 @@ export function grow(
                 ? [(-150 * Math.PI) / 180, (-30 * Math.PI) / 180]
                 : deg === 3
                   ? [(-150 * Math.PI) / 180, (-30 * Math.PI) / 180, Math.PI / 2]
-                  : splitWidestGap([], deg, Math.PI);
+                  : squareX
+                    ? splitWidestGap([], deg, (5 * Math.PI) / 4)
+                    : splitWidestGap([], deg, Math.PI);
     if (cross) others.sort((u, v) => orderOf(mol, middle, v) - orderOf(mol, middle, u));
     const order = fan >= 0 ? [fan, ...mol.neighbours[middle].filter((v) => v !== fan)] : [...along, ...others];
     order.forEach((v, k) => {

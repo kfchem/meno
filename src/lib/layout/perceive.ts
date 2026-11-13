@@ -593,3 +593,19 @@ export function orderOf(mol: Molecule, a: number, b: number): number {
   const i = mol.bondIndex.get(key(a, b));
   return i == null ? 0 : mol.bonds[i].order;
 }
+
+/** A main-group element's valence electrons, by its group: a square-planar centre's two lone pairs are counted from them. */
+const MAIN_GROUP_ELECTRONS: Record<string, number> = {
+  B: 3, Al: 3, C: 4, Si: 4, Ge: 4, Sn: 4, N: 5, P: 5, As: 5, Sb: 5, O: 6, S: 6, Se: 6, Te: 6,
+  F: 7, Cl: 7, Br: 7, I: 7, At: 7, Kr: 8, Xe: 8, Rn: 8,
+};
+
+/**
+ * Whether a main-group atom of `el` at `charge` with four single bonds keeps two lone pairs - its valence electrons by its group,
+ * less its charge, less the four bonds, leave four: XeF4, ICl4-, BrF4-, square planar (GR-4.1.3 draws XeF4 as the X). SF4's
+ * one lone pair, or CCl4's none, is not.
+ */
+export function twoLonePairsOnFour(el: string, charge: number): boolean {
+  const electrons = MAIN_GROUP_ELECTRONS[el];
+  return electrons != null && electrons - charge - 4 === 4;
+}

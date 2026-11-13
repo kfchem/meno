@@ -477,7 +477,11 @@ they hang from.
   one too (Ni(II), a state not counted plainly), is the upright cross: the
   text's form for four groups, which states no geometry, where the X
   states square planar (TiCl4, ZnCl4 2-, FeCl4-, NiCl4 2-, Ni(CO)4,
-  Pd(PPh3)4). The X is held where the four donors are ends (PtCl4 2-,
+  Pd(PPh3)4; Cu(II) and Co(II) are ambiguous as Ni(II) is). A main-group
+  centre with four single bonds and two lone pairs - its valence electrons
+  by its group, less its charge, less the four bonds, leaving four - is
+  square planar too, and the X: XeF4 (GR-4.1.3's own figure), ICl4-,
+  BrF4-; SF4, one lone pair, is upright. The X is held where the four donors are ends (PtCl4 2-,
   PdCl4 2-, AuCl4-, cisplatin with its NH3); where they go on - a
   phosphine's phenyls, set on the lattice their own way - the centre is
   left as it grows (PdCl2(PPh3)2 upright, RhCl(PPh3)3 as before), held to

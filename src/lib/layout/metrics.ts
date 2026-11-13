@@ -11,7 +11,7 @@ import { atomDepth, boxesDepth, hydrogenSpot, isName, namesLaid, segmentMeetsBox
 
 // (where a label's H goes is the names' business too: there for all that ask here)
 export { hydrogenSpot } from "./names";
-import { isMetal, METAL_BOND } from "./perceive";
+import { isMetal, METAL_BOND, twoLonePairsOnFour } from "./perceive";
 import { valencesAt } from "../chem/molecule";
 import { ringsAlike, smallestRings, type Edge } from "./rings";
 
@@ -684,9 +684,18 @@ function readStructure(g: Geometry): Structure {
   // go on alike - each the same element with as many bonds, in a ring or not: an upright cross, as IUPAC draws one (GR-4.1.3) -
   // tetramethylammonium, tetramethylsilane, CCl4, CF2Cl2, BF4-, tetraphenylborate; a square-planar metal keeps its own form, and
   // a trident - three like ends and a fourth bond, a tert-butyl's, a CFCl3's - its fan, as the maintainer has it)
+  // (a main-group centre with four single bonds and two lone pairs - XeF4, ICl4-, BrF4-, counted plainly: its valence electrons
+  // by its group, less its charge, less its four bonds, leaving four - is square planar: the X, as GR-4.1.3's own figure draws
+  // XeF4; with one lone pair (SF4) or none, not)
+  const squareMain = (a: number) => {
+    const el = g.elements?.[a];
+    if (!el || neighbours[a].length !== 4 || inRing.has(a)) return false;
+    if (neighbours[a].some((b) => (orderOf.get(pair(a, b)) ?? 1) !== 1)) return false;
+    return twoLonePairsOnFour(el, g.charges?.[a] ?? 0);
+  };
   const fourAlike = (a: number) => {
     const el = g.elements?.[a];
-    if (!el || isMetal(el) || neighbours[a].length !== 4 || inRing.has(a) || g.tetra?.[a]) return false;
+    if (!el || isMetal(el) || neighbours[a].length !== 4 || inRing.has(a) || g.tetra?.[a] || squareMain(a)) return false;
     const nb = neighbours[a];
     const end = (b: number) => neighbours[b].length === 1;
     const elOf = (b: number) => g.elements?.[b] ?? "";
@@ -798,7 +807,7 @@ function readStructure(g: Geometry): Structure {
     ].map(([a, b]) => pair(a, b)),
   );
   // (and a square-planar metal's four bonds square to the page turned 45 degrees: the X)
-  const xBonds = new Set(edges.filter(([a, b]) => metalFour(a) === "x" || metalFour(b) === "x").map(([a, b]) => pair(a, b)));
+  const xBonds = new Set(edges.filter(([a, b]) => metalFour(a) === "x" || metalFour(b) === "x" || squareMain(a) || squareMain(b)).map(([a, b]) => pair(a, b)));
   const fitting = live.filter((sys) => rings.some((r) => square(r) && r.every((a) => sys.has(a))));
   const frameSize = Math.max(0, ...fitting.map((sys) => sys.size));
   const frames = fitting.filter((sys) => sys.size === frameSize);
@@ -2187,3 +2196,4 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
 
 /** The metals, and the oxidation state in which, a four-coordinate centre is surely square planar: drawn as the X (GR-4.1.3). */
 const SQUARE_PLANAR: Record<string, number> = { Pt: 2, Pd: 2, Au: 3, Rh: 1, Ir: 1 };
+

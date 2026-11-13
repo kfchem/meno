@@ -63,5 +63,8 @@ describe("four like groups", () => {
     }
     // (counted plainly: an N drawn with two H's on a platinum is an amido, Pt(IV) - not surely square planar, so upright)
     expect(directions("N[Pt](N)(Cl)Cl", 1)).toEqual(cross);
+    // (a main-group centre with four single bonds and two lone pairs is square planar: the X - XeF4, ICl4-, BrF4-; SF4's one pair, upright)
+    for (const smiles of ["F[Xe](F)(F)F", "Cl[I-](Cl)(Cl)Cl", "F[Br-](F)(F)F"]) expect(directions(smiles, 1), smiles).toEqual(X);
+    expect(directions("FS(F)(F)F", 1)).toEqual(cross);
   });
 });
