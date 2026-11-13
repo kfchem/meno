@@ -17,10 +17,14 @@ import { togglesOn } from "./utils/press";
 import { quickAddLeaves } from "./quickAddLeave";
 import type { CoordinateStructure } from "../../../lib/io/coordinates";
 import { pastedAs } from "./quickAddPaste";
-import { afterAdded, readSmiles } from "./quickAddSmiles";
+import { afterAdded, enterDoes, fieldRows, readSmiles } from "./quickAddSmiles";
 import { toggledPanel, type QuickPanel } from "./quickAddPanel";
 import { resolve, sameFormula, type Reading } from "./chem/resolve";
 import { FormulaText } from "../../abbreviations/FormulaText";
+import { rolePlugin } from "../../../lib/roles/worker";
+import { useNetwork } from "../../../lib/net/network";
+import { foundNotes, type NameFound, type NamedStructure } from "./chem/nameLookup";
+import { lookUpName, offlineSaid } from "./chem/nameLookupRun";
 
 /** What Quick Add puts down where it was opened. */
 export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "cycle" | "slide" | "pen" | "conversation";
@@ -198,6 +202,7 @@ export default function QuickAdd({
   onShape,
   onSmiles,
   onNamed,
+  onFound,
   onCoordinates,
   onOutput,
   onStep,
@@ -227,6 +232,8 @@ export default function QuickAdd({
   onSmiles: (smiles: string) => Promise<void>;
   /** A molecule the dictionary has, typed in the SMILES field and drawn as the dictionary's (chem/resolve): by its label. */
   onNamed?: (label: string) => void;
+  /** A compound found by its name through the plugin filling the names role (`service`, its name), chosen to be drawn: done, or failing with what to say (chem/nameLookup). */
+  onFound?: (found: NamedStructure, service: string) => Promise<void>;
   /** Coordinates pasted in the SMILES field - a paper's, copied from a PDF: the structures they hold, shown before they are placed (lib/io/coordinates). */
   onCoordinates?: (structures: CoordinateStructure[]) => void;
   /** A calculation's output pasted whole in the SMILES field (lib/calc/probe `outputKindIn`): read as one opened is, put down where Quick Add was opened. */
@@ -236,6 +243,8 @@ export default function QuickAdd({
   onClose: () => void;
 }) {
   const [open, setOpen] = useState<QuickPanel>(wired ? "calculations" : "none");
+  // (the SMILES icon named for names too, once a plugin looks them up)
+  const rowName = (c: { id: string; name: string }) => (c.id === "smiles" && onFound && rolePlugin("names") ? "SMILES or name" : c.name);
   const calcOpen = open === "calculations";
   const ref = useRef<HTMLDivElement>(null);
   // (going, chosen from or closed: it does nothing more as it fades - theme/leaving)
@@ -280,8 +289,8 @@ export default function QuickAdd({
           {ROW.map((c) => (
             <button
               key={c.id}
-              aria-label={c.name}
-              title={c.name}
+              aria-label={rowName(c)}
+              title={rowName(c)}
               aria-expanded={opens(c.id) ? open === c.id : undefined}
               onPointerDown={c.id === "chain" ? (e) => e.button === 0 && onChain(e) : c.id === "arrow" && onArrow ? (e) => e.button === 0 && onArrow(e) : undefined}
               onClick={
@@ -324,7 +333,7 @@ export default function QuickAdd({
         <div className="grid transition-[grid-template-rows,opacity] duration-200 ease-meno" style={{ gridTemplateRows: open === "smiles" ? "1fr" : "0fr", opacity: open === "smiles" ? 1 : 0 }}>
           {/* (clipped for the ease - but over the card's padding, so the field's focus ring shows whole) */}
           <div className="-mx-1 px-1 overflow-hidden" inert={open !== "smiles"}>
-            <SmilesField width={width - 8} open={open === "smiles"} onSmiles={onSmiles} onNamed={onNamed} onCoordinates={onCoordinates} onOutput={onOutput} />
+            <SmilesField width={width - 8} open={open === "smiles"} onSmiles={onSmiles} onNamed={onNamed} onFound={onFound} onCoordinates={onCoordinates} onOutput={onOutput} />
           </div>
         </div>
       )}
@@ -379,12 +388,18 @@ export default function QuickAdd({
  * where the text is that and a SMILES too (NBS), each is offered there, the
  * SMILES first, and Enter draws the one chosen - by a click, or the up and
  * down arrows (chem/resolve).
+ *
+ * Where a plugin looks names up (the names role), one more row is offered,
+ * last - first only where nothing else reads: the text looked up there.
+ * Nothing goes out while typing: only that row chosen, by Enter or a click,
+ * sends it (chem/nameLookup, docs/EDITOR-2D.md *Quick Add*).
  */
 function SmilesField({
   width,
   open,
   onSmiles,
   onNamed,
+  onFound,
   onCoordinates,
   onOutput,
 }: {
@@ -392,6 +407,7 @@ function SmilesField({
   open: boolean;
   onSmiles: (smiles: string) => Promise<void>;
   onNamed?: (label: string) => void;
+  onFound?: (found: NamedStructure, service: string) => Promise<void>;
   onCoordinates?: (structures: CoordinateStructure[]) => void;
   onOutput?: (text: string) => void;
 }) {
@@ -403,9 +419,24 @@ function SmilesField({
   // (what the text reads as - offered only where the dictionary has it: a SMILES alone is drawn as it was - and which is chosen)
   const named = onNamed != null;
   const readings = useMemo(() => (named ? resolve(text, "molecule").readings : []), [text, named]);
-  const offered = readings.some((r) => r.as === "label") ? readings : [];
+  // (the plugin that looks names up, where one does; the network's state, for a lookup that cannot go out)
+  const finder = onFound ? rolePlugin("names") : undefined;
+  const offline = useNetwork((n) => n.offline);
+  const lookable = !!finder && text.trim().length > 0;
+  // (with a lookup offered, every reading is offered beside it - a SMILES alone too - and the lookup last: ./quickAddSmiles)
+  const shown = fieldRows(readings, lookable);
+  const { offered, rows } = shown;
   const [choice, setChoice] = useState(0);
-  const chosen: Reading | undefined = offered[Math.min(choice, offered.length - 1)];
+  const at = Math.min(choice, Math.max(0, rows - 1));
+  const lookupChosen = lookable && at === offered.length;
+  const chosen: Reading | undefined = lookupChosen ? undefined : offered[at];
+  // (what a lookup came to - going, found several to choose from, or said - for the text it was asked for; and which found is chosen)
+  const [looked, setLooked] = useState<{ name: string; going: true } | { name: string; found: NameFound } | null>(null);
+  const [pick, setPick] = useState(0);
+  const several = looked && "found" in looked && "found" in looked.found && looked.found.found.length > 1 ? looked.found : null;
+  // (each lookup's own number: one asked again, or the text changed, and an answer that comes after is dropped)
+  const asked = useRef(0);
+  useEffect(() => () => void (asked.current += 1), []);
   // (a SMILES being read: a second Enter as quick as the first finds it so, though React has not drawn the first's yet)
   const reading = useRef(false);
   const input = useRef<HTMLInputElement>(null);
@@ -429,6 +460,36 @@ function SmilesField({
         setBusy(false);
       });
   };
+  /** A compound found drawn; or why not, said under the field. */
+  const draw = (f: NamedStructure) => {
+    if (!finder || !onFound) return;
+    reading.current = true;
+    setBusy(true);
+    setError(null);
+    void onFound(f, finder.name)
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .finally(() => {
+        reading.current = false;
+        setBusy(false);
+      });
+  };
+  /** The text looked up, as the chemist chose: one found drawn at once, several offered, none or an error said. */
+  const lookUp = (name: string) => {
+    if (!finder || offline) return;
+    const mine = ++asked.current;
+    setError(null);
+    setNeeds(null);
+    setPick(0);
+    setLooked({ name, going: true });
+    void lookUpName(finder, name)
+      .catch((e: unknown): NameFound => ({ error: e instanceof Error ? e.message : String(e) }))
+      .then((found) => {
+        if (asked.current !== mine) return;
+        setLooked({ name, found });
+        if ("found" in found && found.found.length === 1) draw(found.found[0]);
+      });
+  };
+  const going = !!looked && "going" in looked;
   return (
     <form
       className="mt-1 pt-1 pb-0.5 border-t border-gh-line"
@@ -436,12 +497,12 @@ function SmilesField({
       onSubmit={(e) => {
         e.preventDefault();
         const smiles = text.trim();
-        if (!smiles || busy || reading.current) return;
-        if (chosen?.as === "label") {
-          onNamed!(chosen.label);
-          return;
-        }
-        read(smiles);
+        if (!smiles || busy || going || reading.current) return;
+        const does = enterDoes(shown, choice, !!several);
+        if (does === "found") draw(several!.found[Math.min(pick, several!.found.length - 1)]);
+        else if (does === "look up") lookUp(smiles);
+        else if (does === "named" && chosen?.as === "label") onNamed!(chosen.label);
+        else read(smiles);
       }}
     >
       <input
@@ -452,12 +513,22 @@ function SmilesField({
           setChoice(0);
           setError(null);
           setNeeds(null);
+          // (another text: a lookup under way for the last is let go, and what it found with it)
+          asked.current += 1;
+          setLooked(null);
         }}
         onKeyDown={(e) => {
-          if (offered.length < 2 || (e.key !== "ArrowDown" && e.key !== "ArrowUp")) return;
+          if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+          const step = e.key === "ArrowDown" ? 1 : -1;
+          if (several) {
+            e.preventDefault();
+            const n = several.found.length;
+            setPick((p) => (Math.min(p, n - 1) + step + n) % n);
+            return;
+          }
+          if (rows < 2) return;
           e.preventDefault();
-          const at = Math.min(choice, offered.length - 1);
-          setChoice((at + (e.key === "ArrowDown" ? 1 : offered.length - 1)) % offered.length);
+          setChoice((at + step + rows) % rows);
         }}
         onPaste={(e) => {
           const as = pastedAs(e.clipboardData.getData("text/plain"), { output: !!onOutput, coordinates: !!onCoordinates });
@@ -466,31 +537,114 @@ function SmilesField({
           if ("output" in as) onOutput!(as.output);
           else onCoordinates!(as.structures);
         }}
-        placeholder={onCoordinates ? "SMILES or coordinates" : "SMILES"}
-        aria-label="SMILES"
+        placeholder={finder ? (onCoordinates ? "SMILES, name or coordinates" : "SMILES or name") : onCoordinates ? "SMILES or coordinates" : "SMILES"}
+        aria-label={finder ? "SMILES or name" : "SMILES"}
         spellCheck={false}
         autoCorrect="off"
         autoCapitalize="off"
         autoComplete="off"
         className="w-full h-8 rounded-md border border-gh-line px-2 font-mono text-xs outline-none focus:border-accel-base focus:ring-2 focus:ring-accel-lightbase"
       />
-      {offered.length > 0 && <DrawAs offered={offered} chosen={chosen} onChoose={setChoice} />}
+      {rows > 0 && !several && (
+        <DrawAs
+          offered={offered}
+          chosen={chosen}
+          onChoose={setChoice}
+          lookup={
+            lookable && finder
+              ? {
+                  text: going ? "Looking up…" : offline ? offlineSaid(finder) : `Look up “${text.trim()}” at ${finder.name}`,
+                  chosen: lookupChosen,
+                  dim: offline && !going,
+                  onChoose: () => {
+                    setChoice(offered.length);
+                    if (!busy && !going && !reading.current) lookUp(text.trim());
+                  },
+                }
+              : undefined
+          }
+        />
+      )}
+      {several && finder && (
+        <FoundRows
+          found={several}
+          chosen={Math.min(pick, several.found.length - 1)}
+          service={finder.name}
+          onChoose={(i) => {
+            setPick(i);
+            draw(several.found[i]);
+          }}
+        />
+      )}
+      {looked && "found" in looked && finder && "none" in looked.found && <div className="px-0.5 pt-1 text-[11px] leading-snug text-gh-gray">{finder.name} has no compound by this name</div>}
+      {looked && "found" in looked && "error" in looked.found && <div className="px-0.5 pt-1 text-[11px] leading-snug text-accel-accent break-words">{looked.found.error}</div>}
       {error && <div className="px-0.5 pt-1 text-[11px] leading-snug text-accel-accent break-words">{error}</div>}
+      {/* (no plugin looks names up and nothing here reads the text: the role offered, quietly - looked up later only on the chemist's Enter) */}
+      {error && !needs && onFound && !finder && !readings.length && (
+        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setNeeds("names")} className="px-0.5 pt-1 text-[11px] text-gh-gray hover:text-gh-black transition-colors duration-150 ease-meno">
+          Look it up as a name…
+        </button>
+      )}
       {needs && (
         <div className="flex flex-wrap items-center gap-1.5 px-0.5 pt-1 text-[11px]">
           <RoleOffer
             role={needs}
-            // (added: what was typed is read again, and drawn - not typed again)
-            done={() =>
-              afterAdded(text, reading.current, read, () => {
+            // (added: what was typed is read again, and drawn - not typed again; a name is looked up only on the chemist's Enter)
+            done={() => {
+              const letGo = () => {
                 setError(null);
                 setNeeds(null);
-              })
-            }
+              };
+              if (needs === "names") letGo();
+              else afterAdded(text, reading.current, read, letGo);
+            }}
           />
         </div>
       )}
     </form>
+  );
+}
+
+/**
+ * The compounds a name was found as, in the service's order, none chosen for
+ * the chemist: each by its title, formula and id, and in words what is not
+ * plain about it; how many more the service has, where it has more. Enter,
+ * or a click, draws the one chosen.
+ */
+function FoundRows({ found, chosen, service, onChoose }: { found: { found: NamedStructure[]; more: number }; chosen: number; service: string; onChoose: (i: number) => void }) {
+  return (
+    <div className="pt-1">
+      <div role="radiogroup" aria-label={`Found at ${service}`} className="flex flex-col gap-0.5">
+        {found.found.map((f, i) => {
+          const notes = foundNotes(f);
+          return (
+            <button
+              key={f.id}
+              type="button"
+              role="radio"
+              aria-checked={i === chosen}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => onChoose(i)}
+              className={`w-full rounded-md border px-2 py-1 text-left text-[11px] leading-snug transition-colors duration-150 ease-meno ${i === chosen ? "border-accel-base bg-accel-lightbase text-gh-black" : "border-gh-line text-gh-gray hover:bg-gh-base"}`}
+            >
+              <span className="block truncate">
+                {f.title}
+                {" · "}
+                <FormulaText text={f.formula} />
+                {" · "}
+                {f.id}
+              </span>
+              {notes.length > 0 && <span className="block truncate text-gh-gray">{notes.join(", ")}</span>}
+            </button>
+          );
+        })}
+      </div>
+      {found.more > 0 && (
+        <div className="px-0.5 pt-1 text-[11px] text-gh-gray">
+          and {found.more} more at {service}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -500,7 +654,18 @@ function SmilesField({
  * its formula (once, where the label is the formula), the one chosen in
  * Meno's colour; a click chooses another.
  */
-export function DrawAs({ offered, chosen, onChoose }: { offered: readonly Reading[]; chosen: Reading | undefined; onChoose: (i: number) => void }) {
+export function DrawAs({
+  offered,
+  chosen,
+  onChoose,
+  lookup,
+}: {
+  offered: readonly Reading[];
+  chosen: Reading | undefined;
+  onChoose: (i: number) => void;
+  /** The text looked up as a name, last: what the row says, whether it is chosen, dimmed where it cannot go out. */
+  lookup?: { text: string; chosen: boolean; dim: boolean; onChoose: () => void };
+}) {
   return (
     <div role="radiogroup" aria-label="Draw as" className="flex flex-wrap gap-1 pt-1">
       {offered.map((r, i) => (
@@ -524,6 +689,19 @@ export function DrawAs({ offered, chosen, onChoose }: { offered: readonly Readin
           )}
         </button>
       ))}
+      {lookup && (
+        <button
+          type="button"
+          role="radio"
+          aria-checked={lookup.chosen}
+          aria-disabled={lookup.dim || undefined}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={lookup.onChoose}
+          className={`h-6 max-w-full truncate rounded-full border px-2 text-[11px] leading-6 transition-colors duration-150 ease-meno ${lookup.dim ? "border-gh-line text-gh-gray opacity-60" : lookup.chosen ? "border-accel-base bg-accel-lightbase text-gh-black" : "border-gh-line text-gh-gray hover:bg-gh-base"}`}
+        >
+          {lookup.text}
+        </button>
+      )}
     </div>
   );
 }

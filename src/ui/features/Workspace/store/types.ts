@@ -2079,7 +2079,8 @@ export type EditorState = {
   /** The selection deleted, as one undo step. */
   deleteSelection: () => void;
   /** A structure from the clipboard added where it already stands, selected, as one undo step. */
-  pasteModel: (next: Drawn) => void;
+  /** What was copied, or read, put down - one step to undo, named `step` where it is not a paste ("Add aspirin (CID 2244)"). */
+  pasteModel: (next: Drawn, step?: string) => void;
   setHoveredFromId: (id: number) => void;
   clearHovered: () => void;
   setHoveredArrow: (id: number | null) => void;

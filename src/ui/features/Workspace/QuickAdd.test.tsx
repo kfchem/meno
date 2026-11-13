@@ -91,6 +91,17 @@ describe("what the SMILES field's text will be drawn as", () => {
     expect(drawAs("NBS", 1).match(/aria-checked="true"[^>]*>N-bromosuccinimide/)).not.toBeNull();
   });
 
+  it("the text looked up as a name: a row of its own, last; chosen in Meno's colour; dimmed where it cannot go out", () => {
+    const { readings } = resolve("CCO", "molecule");
+    const row = (chosen: boolean, dim: boolean, text = "Look up \u201cCCO\u201d at Names Service") =>
+      renderToString(<DrawAs offered={readings} chosen={chosen ? undefined : readings[0]} onChoose={none} lookup={{ text, chosen, dim, onChoose: none }} />);
+    const html = row(false, false);
+    expect([...html.matchAll(/role="radio" aria-checked="(\w+)"/g)].map((m) => m[1])).toEqual(["true", "false"]);
+    expect(html).toMatch(/aria-checked="false"[^>]*>Look up \u201cCCO\u201d at Names Service<\/button><\/div>$/);
+    expect(row(true, false)).toMatch(/aria-checked="true"[^>]*class="[^"]*border-accel-base[^"]*">Look up/);
+    expect(row(false, true, "Names Service needs the network; Meno is offline")).toMatch(/aria-disabled="true"[^>]*class="[^"]*opacity-60[^"]*">Names Service needs the network; Meno is offline/);
+  });
+
   it("a formula's counts set below the line at the drawing's size, never a font's subscript digits", () => {
     const html = drawAs("DMF");
     expect(html).toContain("N,N-dimethylformamide");

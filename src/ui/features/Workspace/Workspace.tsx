@@ -226,6 +226,7 @@ import { leftOutSaid } from "./utils/readNotes";
 import { outputKindIn } from "../../../lib/calc/probe";
 import { NotRead } from "../../../lib/calc/read";
 import { namedDrawn, putDownSmiles } from "./utils/quickAddSmiles";
+import { addedName, notDrawnWhy } from "./chem/nameLookup";
 import { addedBox } from "./store/slices/modelSlice";
 import { viewPanning } from "./components/viewGoal";
 import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gesture";
@@ -2010,6 +2011,15 @@ function WorkspaceContent({
             onNamed={(label) => {
               // (a molecule the dictionary has, drawn from it - no plugin asked - and put down as a SMILES read is: chem/resolve)
               putDownSmiles(store, quickAdd, namedDrawn(label));
+            }}
+            onFound={async (found, service) => {
+              // (a compound found by its name: its SMILES drawn as a typed one is - but only where Meno reads it as the service's
+              //  formula and charge; its stereo left undefined there drawn open, and said, never given: chem/nameLookup)
+              const read = await structureFromSmiles(found.smiles, style);
+              const why = notDrawnWhy(read, found, service);
+              if (why) throw new Error(why);
+              const said = [stereoOpenSaid(read.stereoOpen), asCameSaid(read)].filter(Boolean).join(" ");
+              if (putDownSmiles(store, quickAdd, withoutStereoOpen(read), addedName(found)) && said) setChemError(said);
             }}
             onCoordinates={(structures) => {
               const { at } = quickAdd;
