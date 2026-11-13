@@ -19,11 +19,11 @@ import WarmShaders2D from "./WarmShaders2D";
 import { whiteInstances } from "./instances";
 
 // (the label's typeface, as the page has it once read; and a batch of labels that sets its letters when told)
-const fonts = vi.hoisted(() => ({ url: "typeface-a.woff" as string | null, heard: new Set<() => void>() }));
+const fonts = vi.hoisted(() => ({ url: "typeface-a.woff" as string | null, heard: new Set<() => void>(), asked: [] as unknown[][] }));
 vi.mock("../../../fonts/typefaces", async () => {
   const { useSyncExternalStore } = await import("react");
   const subscribe = (f: () => void) => (fonts.heard.add(f), () => void fonts.heard.delete(f));
-  return { useLabelFontUrl: () => useSyncExternalStore(subscribe, () => fonts.url) };
+  return { useLabelFontUrl: (...a: unknown[]) => (fonts.asked.push(a), useSyncExternalStore(subscribe, () => fonts.url)) };
 });
 /** The page's typeface read anew, as its store tells those that use it. */
 const typeface = (url: string | null) => {
@@ -97,14 +97,16 @@ afterEach(async () => {
   batches.made.length = 0;
   fonts.url = "typeface-a.woff";
   fonts.heard.clear();
+  fonts.asked.length = 0;
+  vi.useRealTimers();
 });
 
 /** `layer` drawn for an empty drawing; the scene, a page frame, the idle time and next frame held, and each compile asked. */
-async function drawn(layer: ReactNode) {
+async function drawn(layer: ReactNode, idleCallback = true) {
   const idle = held();
   const frame = held();
-  vi.stubGlobal("requestIdleCallback", idle.ask);
-  vi.stubGlobal("cancelIdleCallback", idle.cancel);
+  vi.stubGlobal("requestIdleCallback", idleCallback ? idle.ask : undefined);
+  vi.stubGlobal("cancelIdleCallback", idleCallback ? idle.cancel : undefined);
   vi.stubGlobal("requestAnimationFrame", frame.ask);
   vi.stubGlobal("cancelAnimationFrame", frame.cancel);
   const compileAsync = vi.fn(async (..._: unknown[]) => undefined);
@@ -174,6 +176,11 @@ describe("the shaders of a drawing, made ready as the page starts", () => {
     // (unseen, far off: the label's batch and a plain disc in it)
     const group = p.compileAsync.mock.calls[0][0] as THREE.Group;
     expect(group.visible).toBe(false);
+    // (far off the page, never where a drawing is)
+    expect(Math.min(group.position.x, group.position.y)).toBeGreaterThan(1e5);
+    // (the labels' typeface as Labels2D asks for it: the regular, not the bold)
+    expect(fonts.asked.length).toBeGreaterThan(0);
+    expect(fonts.asked.every((a) => a[1] === false)).toBe(true);
     expect(group.children.some((c) => c === (batches.made[0] as unknown as { root?: THREE.Group }).root || c.type === "Group")).toBe(true);
     const disc = group.children.find((c) => (c as THREE.Mesh).isMesh) as THREE.Mesh;
     expect(disc.geometry).toBeInstanceOf(THREE.CircleGeometry);
@@ -190,6 +197,15 @@ describe("the shaders of a drawing, made ready as the page starts", () => {
     await p.tick();
     await p.frame.run();
     expect(p.compileAsync).toHaveBeenCalledTimes(2);
+  });
+
+  it("wait a moment where the browser tells no idle time: nothing before it, the batch after", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    await drawn(<WarmShaders2D />, false);
+    await act(async () => void vi.advanceTimersByTime(499));
+    expect(batches.made).toHaveLength(0);
+    await act(async () => void vi.advanceTimersByTime(1));
+    expect(batches.made.map((b) => b.font)).toEqual(["typeface-a.woff"]);
   });
 
   it("wait for the typeface: none read yet, no batch, nothing compiled", async () => {
