@@ -51,17 +51,9 @@ export const STILL_APART: Copy[] = [
   { concept: "rings", file: "lib/layout/cage.ts", name: "smallestSets", part: 2, why: "the layout's own choice of ring set for a cage" },
   { concept: "rings", file: "lib/layout/cage.ts", name: "sixCycles", part: 2, why: "the six-cycles of a cage, the layout's own search" },
   { concept: "rings", file: "lib/layout/ringSets.ts", name: "ringSetsToTry", part: 2, why: "the layout's own choice of ring sets to try" },
-  // metals: every list in one file under its name
-  { concept: "metals", file: "lib/layout/perceive.ts", name: "METALS", part: 3 },
-  { concept: "metals", file: "lib/layout/perceive.ts", name: "isMetal", part: 3 },
-  { concept: "metals", file: "lib/layout/perceive.ts", name: "BRIDGED_TO", part: 3 },
-  { concept: "metals", file: "lib/chem/ligands.ts", name: "METALS", part: 3 },
-  { concept: "metals", file: "lib/chem/metalHolds.ts", name: "isMetal", part: 3 },
-  { concept: "metals", file: "lib/chem/elements.ts", name: "NOT_METALS", part: 3 },
-  { concept: "metals", file: "lib/chem/condensed.ts", name: "IONIC", part: 3 },
-  { concept: "metals", file: "lib/chem/smilesWhy.ts", name: "IONIC", part: 3 },
-  { concept: "metals", file: "lib/chem/protonation.ts", name: "COUNTED", part: 3 },
-  { concept: "metals", file: "lib/chem/ordersFromGeometry.ts", name: "COUNTED", part: 3 },
+  // metals: every list in one file under its name (perception/elements.ts); what stands apart is a name for a set of it, or a test of its own
+  { concept: "metals", file: "lib/layout/perceive.ts", name: "isMetal", part: 3, why: "the core's drawnRoundMetal under the name its importers use: a re-export, going as they move" },
+  { concept: "metals", file: "lib/chem/conformersSought.ts", name: "metalByBonds", part: 3, why: "a test of its own (no most bonds), not a list: it becomes the core's metal in part 3's fixes (B4)" },
   // valence tables: one count, one table (hydrogens and valence)
   { concept: "valence", file: "lib/chem/molecule.ts", name: "VALENCE", part: 12 },
   { concept: "valence", file: "lib/chem/molecule.ts", name: "HIGHEST", part: 12 },

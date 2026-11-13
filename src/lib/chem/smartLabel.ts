@@ -51,7 +51,8 @@
  * rules 3 and 4 are applied as it is kept (`keptLabel`).
  */
 import { abbreviationOf, byRule, customAbbreviations, GENERIC_SYMBOLS, GROUPS, labelUnitNames, labelUnits, reversedLabel } from "./abbreviations";
-import { ELEMENTS, NOT_METALS } from "./elements";
+import { ELEMENTS } from "./elements";
+import { notMetal } from "./perception/elements";
 import { ligandOf } from "./ligands";
 
 /**
@@ -101,7 +102,7 @@ function vocabulary(): Vocabulary {
     );
     const words: Token[] = [
       // (by symbol, as ever: ties among writings keep this order)
-      ...symbols.map((text) => (NOT_METALS.has(text) || unitSet.has(text) ? { text } : { text, metal: true as const })),
+      ...symbols.map((text) => (notMetal.has(text) || unitSet.has(text) ? { text } : { text, metal: true as const })),
       ...units.map((text) => ({ text })),
       // (an Rgroup's R; an electrophile's E, a name one letter long)
       { text: "R" },

@@ -5,6 +5,7 @@
  */
 import { smallestRings } from "./rings";
 import type { Tetrahedral } from "./stereo";
+import { bridgesToMetal, drawnRoundMetal } from "../chem/perception/elements";
 import type { ChemAtom, ChemBond, ChemGraph } from "../chem/perception/graph";
 
 export type { CisTrans } from "../chem/perception/stereo/types";
@@ -232,7 +233,7 @@ export function perceive(input: LayoutInput): Molecule {
     const r = rings[sys.rings[0]];
     // (a main-group metal bridged to one - the Tebbe reagent's aluminium -
     // as much as a second of them)
-    const metal = (a: number) => isMetal(input.atoms[a].el) || BRIDGED_TO.has(input.atoms[a].el);
+    const metal = (a: number) => isMetal(input.atoms[a].el) || bridgesToMetal.has(input.atoms[a].el);
     const k = metal(r[0]) && metal(r[2]) ? 0 : 1;
     if (!metal(r[k]) || !metal(r[k + 2]) || metal(r[k + 1]) || metal(r[(k + 3) % 4])) return;
     if (!isMetal(input.atoms[r[k]].el) && !isMetal(input.atoms[r[k + 2]].el)) return;
@@ -365,18 +366,6 @@ export function perceive(input: LayoutInput): Molecule {
 export const METAL_BOND = 1.4;
 
 /**
- * The metals: the d block and the lanthanides, as a complex's formula has
- * them (chem/ligands) - Pr aside, being propyl's label as well.
- */
-const METALS = new Set(
-  "Sc Ti V Cr Mn Fe Co Ni Cu Zn Y Zr Nb Mo Tc Ru Rh Pd Ag Cd Hf Ta W Re Os Ir Pt Au Hg La Ce Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu".split(" "),
-);
-
-/** Main-group metals bridged to a transition metal by two atoms as a second one is (Cp2Ti(μ-Cl)(μ-CH2)AlMe2). */
-const BRIDGED_TO = new Set(["Li", "Na", "K", "Mg", "Ca", "Zn", "Al", "Ga", "In"]);
-
-/** Whether an atom is a metal's: one ligands are drawn round (docs/LAYOUT-2D.md, section 7). */
-/**
  * The rings a drawing binds to a metal atom by atom - a bond from the
  * metal to each of the ring's atoms, as ferrocene or bis(benzene)chromium
  * is drawn by hand, with no haptic bond to draw - each with its metal, its
@@ -488,8 +477,12 @@ export function etaBondedAtomByAtom(input: LayoutInput): { metal: number; ring: 
   return out;
 }
 
+/**
+ * Whether an atom is a metal's: one ligands are drawn round (docs/LAYOUT-2D.md, section 7) - the core's `drawnRoundMetal`, under the name its
+ * importers use.
+ */
 export function isMetal(el: string): boolean {
-  return METALS.has(el);
+  return drawnRoundMetal.has(el);
 }
 
 /**

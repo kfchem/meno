@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { readSmiles } from "./smiles";
 import { vdwRadius } from "./elements";
+import { transitionMetal } from "./perception/elements";
 import {
   covalentLength,
   dElectrons,
   FLOORS,
   floorPairs,
-  isMetal,
   keptFrames,
   keptMade,
   ligandAnions,
@@ -109,8 +109,8 @@ describe("what Meno holds a metal complex to", () => {
   });
 
   it("takes the d and f blocks for metals, none beside them: Sc to Zn, Y to Cd, La to Hg, Ac to Cn", () => {
-    for (const el of ["Sc", "Zn", "Y", "Cd", "La", "Eu", "Lu", "Hf", "Hg", "Ac", "U", "Cn"]) expect(isMetal(el), el).toBe(true);
-    for (const el of ["Ca", "Ga", "Sr", "In", "Ba", "Tl", "Ra", "Nh"]) expect(isMetal(el), el).toBe(false);
+    for (const el of ["Sc", "Zn", "Y", "Cd", "La", "Eu", "Lu", "Hf", "Hg", "Ac", "U", "Cn"]) expect(transitionMetal.has(el), el).toBe(true);
+    for (const el of ["Ca", "Ga", "Sr", "In", "Ba", "Tl", "Ra", "Nh"]) expect(transitionMetal.has(el), el).toBe(false);
   });
 
   it("gives the plugin the rules' numbers as they are: bond slack, eta bounds, square-planar angles, a bridge's slack", () => {

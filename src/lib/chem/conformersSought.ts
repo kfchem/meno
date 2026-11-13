@@ -61,6 +61,14 @@ export const MOST_CONFORMERS = 5000;
 
 const heavy = (a: SoughtAtom | undefined) => a != null && a.el !== "H" && a.el !== "*";
 
+/**
+ * A metal, to a ring bound to one (`flatRingAtoms`): a heavy atom with no
+ * most bonds (./molecule `mostBonds`). Not the core's `metal`
+ * (lib/chem/perception/elements): Ge, As, Sb, Te, At, Ts and the noble
+ * gases are metals here, which foundation part 3 (B4) mends.
+ */
+const metalByBonds = (a: SoughtAtom) => heavy(a) && mostBonds(a.el) === null;
+
 /** Each atom's bonds, as [other atom, order]. */
 function neighboursOf(atoms: readonly SoughtAtom[], bonds: readonly SoughtBond[]): [number, number][][] {
   const out: [number, number][][] = atoms.map(() => []);
@@ -239,7 +247,7 @@ export function flatRingAtoms(
   held: readonly (readonly number[])[] = [],
 ): Set<number> {
   const around = neighboursOf(atoms, bonds);
-  const metal = (i: number) => heavy(atoms[i]) && mostBonds(atoms[i].el) === null;
+  const metal = (i: number) => metalByBonds(atoms[i]);
   const aromatic = aromaticIn(atoms, bonds, rings);
   const out = new Set<number>();
   for (const ring of rings) {

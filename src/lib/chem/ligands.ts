@@ -5,6 +5,7 @@ import { kekuleOrders } from "./kekulize";
 import { implicitHydrogens, valenceOrder } from "./molecule";
 import { readSmiles, type SmilesAtom, type SmilesBond } from "./smiles";
 import { ELEMENTS } from "./elements";
+import { drawnRoundMetal } from "./perception/elements";
 import { movedBond } from "./structureBonds";
 
 /**
@@ -418,15 +419,11 @@ export function structureFormula(s: GroupStructure): string {
 
 // --- complexes ---------------------------------------------------------------
 
-/** The metals a complex's formula may have: the d block and the lanthanides (Pr, propyl here, aside). */
-const METALS = new Set(
-  "Sc Ti V Cr Mn Fe Co Ni Cu Zn Y Zr Nb Mo Tc Ru Rh Pd Ag Cd Hf Ta W Re Os Ir Pt Au Hg La Ce Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu".split(" "),
-);
 const NAME = new Map(ELEMENTS.map((e) => [e.symbol, e.name]));
 
-/** Whether a metal's symbol is written anywhere in `text`: what any complex's formula has. */
+/** Whether a metal's symbol (the core's `drawnRoundMetal`: Pr, propyl here, aside) is written anywhere in `text`: what any complex's formula has. */
 function hasMetal(text: string): boolean {
-  for (const m of METALS) if (text.includes(m)) return true;
+  for (const m of drawnRoundMetal) if (text.includes(m)) return true;
   return false;
 }
 
@@ -611,7 +608,7 @@ function plainToken(t: string, names: Names): Item | null {
     const bridge = plainToken(mu[1], names);
     return bridge && (bridge.kind === "ligand" || bridge.kind === "x") ? { ...bridge, bridging: true } : null;
   }
-  if (METALS.has(t)) return { kind: "metal", el: t, n: 1 };
+  if (drawnRoundMetal.has(t)) return { kind: "metal", el: t, n: 1 };
   const own = Object.prototype.hasOwnProperty.call(names.local, t) ? names.local[t] : undefined;
   // (a formula's own ligand as its SMILES has it: whose configuration it is, the reagent says)
   if (own) return { kind: "ligand", ligand: { ...own, enantiomers: own.enantiomers ?? { as: [], mirror: [], plain: true } }, descriptor: null, n: 1 };

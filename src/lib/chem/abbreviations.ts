@@ -24,7 +24,8 @@ import { complexStructure, forgetComplexReadings, LIGAND_UNITS, ligandStructure,
 import { precatalystPicture, precatalystStructure, REAGENT_UNITS, reagentOf, reagentStructure } from "./reagents";
 import { kekuleOrders } from "./kekulize";
 import type { TextRun } from "./layout2d";
-import { ELEMENTS as TABLE, NOT_METALS } from "./elements";
+import { ELEMENTS as TABLE } from "./elements";
+import { notMetal } from "./perception/elements";
 import { VALENCE } from "./formula";
 import { movedBond } from "./structureBonds";
 
@@ -546,7 +547,7 @@ function prefixedGroupOf(label: string): Abbreviation | undefined {
 function carriesOf(el: string): number | null {
   const v = VALENCE[el];
   const e = TABLE.find((x) => x.symbol === el);
-  if (v == null || v < 3 || !e || !NOT_METALS.has(el)) return null;
+  if (v == null || v < 3 || !e || !notMetal.has(el)) return null;
   return v - 2;
 }
 

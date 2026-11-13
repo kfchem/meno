@@ -50,6 +50,7 @@
  * Pure: over atoms and bonds, as lib/chem/skeleton.
  */
 import { implicitHydrogens, type Radical } from "./molecule";
+import { inValenceSums } from "./perception/elements";
 
 export type ProtonAtom = { el: string; charge?: number; radical?: Radical };
 export type ProtonBond = { a1: number; a2: number; order: number };
@@ -120,9 +121,6 @@ export function hydrogensOf(a: ProtonAtom, sum: number): number {
   return implicitHydrogens(a.el, sum, charge, a.radical);
 }
 
-/** The elements whose bonds count in their neighbours' valences - the nonmetals and the metalloids; not a metal. */
-const COUNTED = new Set(["H", "B", "C", "N", "O", "F", "Si", "P", "S", "Cl", "Ge", "As", "Se", "Br", "Sb", "Te", "I"]);
-
 /**
  * The elements that may give a metal a pair of electrons of their own: a
  * bond of theirs to a metal (a zinc ion's, a heme's iron's, a sodium salt's
@@ -132,8 +130,8 @@ const COUNTED = new Set(["H", "B", "C", "N", "O", "F", "Si", "P", "S", "Cl", "Ge
  */
 const DONORS = new Set(["N", "P", "As", "O", "S", "Se", "Te"]);
 
-/** Whether an element's bonds count in its neighbours' valences (`COUNTED`): not a metal's. */
-export const countsInValence = (el: string) => COUNTED.has(el);
+/** Whether an element's bonds count in its neighbours' valences (the core's `inValenceSums`): not a metal's. */
+export const countsInValence = (el: string) => inValenceSums.has(el);
 
 /** Whether a bond counts in the valence of its atom `i`: one to an atom that counts, or to a metal from one that cannot give it a pair of its own. */
 const countsFor = (atoms: readonly ProtonAtom[], b: ProtonBond, i: number) => countsInValence(atoms[b.a1 === i ? b.a2 : b.a1].el) || !DONORS.has(atoms[i].el);
