@@ -177,6 +177,8 @@ import { MOST_PAIRS } from "../workflow/pairs";
 import { byOf, optionsFor } from "../workflow/doers";
 import { CARD_W } from "../workflow/look";
 import { RESTRAINTS_INPUT } from "../workflow/kinds";
+import { holdTable } from "../workflow/model";
+import { restraintRowsIn, restraintsTable } from "../../../../lib/steps/restraints";
 import { countOf, entryOfSet, setEntries, setMembers, setMolecules } from "../workflow/entries";
 import { forgetStereo } from "../workflow/configurations";
 
@@ -390,7 +392,60 @@ describe("a step that runs a plugin's program", () => {
       const { st, step } = await page({ fixed: "1", distances: "2-3" });
       await st().runStep(step);
       expect(worker.prepare).not.toHaveBeenCalled();
-      expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: expect.stringContaining("plugin holds no distances: distance 2-3") });
+      expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: expect.stringContaining("plugin holds a distance only exactly, not by a strength: distance 2-3") });
+    }
+  });
+
+  it("holds a distance exactly where its plugin says it can - its molecule no stationary point after - and fails one whose distance ended off its value", async () => {
+    // (water tagged, given a Restraints table, its row then made one holding O-H exactly - as a table read from a file
+    //  says one - and optimised by Tightbind, whose optimisation holds a distance exactly; the test's program moves every
+    //  atom alike, so O-H ends where it began)
+    const exactly = async (value: number) => {
+      const made = editor();
+      const t = made.st().addStep("tag", "meno", 3, 0);
+      made.st().updateStep(t, { options: { name: "start" } });
+      made.st().connect({ set: made.st().sets[0].id }, t);
+      await made.st().runStep(t);
+      const tagged = made.st().sets.find((b) => b.made?.step === t && b.made.exit === "out")!.id;
+      const r = made.st().addStep("restraints", "meno", 5, 0);
+      made.st().updateStep(r, { options: { on: "start", coordination: false, fixed: "1" } });
+      made.st().connect({ set: tagged }, r);
+      await made.st().runStep(r);
+      const table = made.st().sets.find((b) => b.made?.step === r && b.made.exit === "out")!;
+      const read = restraintRowsIn(table.table!);
+      if ("why" in read) throw new Error(read.why);
+      const row = { ...read.rows[0], restraint: { kind: "distance" as const, atoms: [0, 1], value, exact: true as const } };
+      made.doc.amend((x) => holdTable(x, table.id, restraintsTable([row])));
+      const step = made.st().addStep("optimise", "tightbind", 20, 0);
+      made.st().connect({ set: tagged }, step);
+      made.st().connect({ set: table.id }, step, RESTRAINTS_INPUT.id);
+      const ran = made.st().runStep(step);
+      await settle();
+      await settle();
+      const [sent] = worker.prepare.mock.lastCall![1] as { restraints?: unknown[] }[];
+      expect(sent.restraints).toEqual([{ kind: "distance", atoms: [0, 1], value, exact: true }]);
+      end(1);
+      await made.st().lookAtJobs();
+      await ran;
+      worker.prepare.mockClear();
+      jobs.clear();
+      next = 1;
+      return { st: made.st, step };
+    };
+    const oh = Math.hypot(0.76, 0.59);
+    {
+      const { st, step } = await exactly(oh);
+      const out = setMembers(st(), st().sets.find((b) => b.made?.step === step && b.made.exit === "out")!).molecules.map((id) => st().molecules3d.find((m) => m.id === id)!);
+      expect(out).toHaveLength(1);
+      // (the record on its last frame: the frames before it its way there)
+      const converged = out[0].converged ?? [];
+      expect(converged[converged.length - 1]).toMatchObject({ how: "optimisation with restraints held", rows: [{ kind: "distance", atoms: [0, 1], value: oh, exact: true }] });
+    }
+    {
+      const { st, step } = await exactly(1.0);
+      const failed = setMembers(st(), st().sets.find((b) => b.made?.step === step && b.made.exit === "failed")!).molecules;
+      expect(failed).toHaveLength(1);
+      expect(st().steps.find((s) => s.id === step)!.ran?.said).toContain(`Distance 1-2 ended at ${oh.toFixed(5)} \u00c5, held at 1 \u00c5`);
     }
   });
 
