@@ -241,7 +241,7 @@ import { turnOnto } from "./utils/align3d";
 import type { ArrowFormPatch, Caption, Drawn, Grown3D, Molecule3D, PictureFrom, WordsFrom } from "./store/types";
 import { resultKey, resultsOn } from "../../../lib/calc/results";
 import { titled } from "../../../lib/calc/sources";
-import { byOf, MENO, missingFor, optionsNeed } from "./workflow/doers";
+import { byOf, MENO, missingFor } from "./workflow/doers";
 import { tableOfText } from "../../../lib/table";
 import { TABLE_SET } from "./workflow/model";
 import { heldOwn, holdsOf, holdsOwn } from "./workflow/entries";
@@ -2026,13 +2026,10 @@ function WorkspaceContent({
               st.setQuickAdd(null);
               // (its port that takes where Quick Add was opened - where the wire was let go; brought from an exit's port, close
               //  by that step's card instead, and wired in the same edit: model `addStepFrom`)
-              const id = st.addStep(kind, by, at.x, at.y + PORT_DOWN, wire);
+              // (its card opened where it still needs a value of its options: store `putDownStep`)
+              const id = st.putDownStep(kind, by, at.x, at.y + PORT_DOWN, wire);
               // (and brought into view, with the sets it will give, where they are not: put down near the window's edge, or moved lower)
               const now = store.getState();
-              // (one that cannot run until a value of its options is given - a window, the chemist's own: its card opened, the field asking for it
-              //  focused, so that the ask is seen as it is put down - workflow/doers `optionsNeed`)
-              const put = now.steps.find((s) => s.id === id);
-              if (put && optionsNeed(put)) now.setWorkflowView({ openStep: id });
               const box = partsBounds({ sets: now.sets.filter((b) => b.made?.step === id), steps: now.steps.filter((s) => s.id === id), wires: [] });
               if (box) now.requestShow(box);
             }}

@@ -11,7 +11,7 @@ import { reachOverFrames } from "../../utils/molecule3d";
 import { freePlace, pageBoxes } from "../../utils/freePlace";
 import { styleOf } from "../../../../../lib/chem/style";
 import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
-import { byOf, kindsOf, optionsFor } from "../../workflow/doers";
+import { byOf, kindsOf, optionsFor, optionsNeed } from "../../workflow/doers";
 import type { StepKind } from "../../workflow/kinds";
 import * as wf from "../../workflow/model";
 import { heldSets } from "../../workflow/onPage";
@@ -146,6 +146,14 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
         const at = placeCard(d, x, y);
         return wf.addStep(d, kind, at.x, at.y, options, by);
       });
+      return id;
+    },
+    putDownStep: (kind: StepKind, by: string, x: number, y: number, from?: WireEnd) => {
+      const id = get().addStep(kind, by, x, y, from);
+      // (one that cannot run until a value of its options is given - a window, the chemist's own: its card opened, the field asking
+      //  for it focused, so that the ask is seen as it is put down)
+      const put = doc.getState().steps?.find((s) => s.id === id);
+      if (put && optionsNeed(put)) get().setWorkflowView({ openStep: id });
       return id;
     },
     moveStep: (id: number, x: number, y: number, gesture?: string) => doc.edit("move step", (d) => wf.moveStep(d, id, x, y), coalesce("step-move", id, gesture)),

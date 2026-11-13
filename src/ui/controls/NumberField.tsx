@@ -1,10 +1,11 @@
 import clsx from "clsx";
 import { useEffect, useRef, useState } from "react";
 import { DURATION, EASE } from "../theme/motion";
-import { escapeTakes, numberDraft, numberField, rangeOf, rangeSaid, setAsItGoes, type NumberEvent } from "./number";
+import { askedFocus, escapeTakes, numberDraft, numberField, rangeOf, rangeSaid, setAsItGoes, type NumberEvent } from "./number";
 
 /** How long a refused number's field is marked, the number it went back to fading in. */
 const REFUSED_MS = 1600;
+
 
 /**
  * A number to type (docs/LOOK.md, Controls). While it is typed in it holds
@@ -51,7 +52,7 @@ export default function NumberField({
   const field = useRef<HTMLInputElement>(null);
   // (asked for at once: the field taken as it is first shown - the page left where it is)
   useEffect(() => {
-    if (autoFocus) field.current?.focus({ preventScroll: true });
+    if (autoFocus) askedFocus(field.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- (as it is first shown only)
   }, []);
   // (the number set from outside shown, except over what is being typed)
@@ -88,6 +89,7 @@ export default function NumberField({
       inputMode="decimal"
       aria-label={label}
       aria-invalid={draft.refused || undefined}
+      data-asked={autoFocus || undefined}
       title={rangeSaid(range) || undefined}
       value={draft.text}
       placeholder={draft.text === "" ? placeholder : undefined}

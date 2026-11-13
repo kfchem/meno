@@ -27,3 +27,24 @@ describe("what a step put down still needs of its options", () => {
     expect(optionsNeed(putDown("duplicates"))).toBeUndefined();
   });
 });
+
+describe("a step put down from Quick Add", () => {
+  const editor = () => {
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    return store.getState;
+  };
+  it("that still needs a value of its options has its card opened at once; one that needs none, not", () => {
+    const st = editor();
+    const asks = st().putDownStep("energy-window", "meno", 0, 0);
+    expect(st().openStep).toBe(asks);
+    const other = editor();
+    other().putDownStep("duplicates", "meno", 0, 0);
+    expect(other().openStep).toBeNull();
+    // (put down otherwise - a paste, a procedure: nothing opened)
+    const pasted = editor();
+    pasted().addStep("energy-window", "meno", 0, 0);
+    expect(pasted().openStep).toBeNull();
+  });
+});
