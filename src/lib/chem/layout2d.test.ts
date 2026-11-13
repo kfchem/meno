@@ -14,6 +14,7 @@ import {
   labelSetOf,
   layoutMolecule,
   markExtent,
+  markCircle,
   mitreJoinPolys,
   placeLabel,
   roundPolyCorners,
@@ -2585,43 +2586,90 @@ describe("charges, radicals and isotopes", () => {
       const seen = new Set(b.map((f) => `${f.c.x.toFixed(6)},${f.c.y.toFixed(6)}`));
       return a.filter((f) => !seen.has(`${f.c.x.toFixed(6)},${f.c.y.toFixed(6)}`));
     };
+    /** Where a dot is from its atom at (0, 0): "up", "down", "left" or "right". */
+    const sideOf = (c: { x: number; y: number }) => (Math.abs(c.y) > Math.abs(c.x) ? (c.y > 0 ? "up" : "down") : c.x > 0 ? "right" : "left");
+    /** A dot on a bond from (0, 0) toward `to`: within a dot's reach of the bond's line, and along it. */
+    const onBond = (c: { x: number; y: number }, r: number, to: { x: number; y: number }) => {
+      const len = Math.hypot(to.x, to.y);
+      const along = (c.x * to.x + c.y * to.y) / len;
+      const across = Math.abs(c.x * to.y - c.y * to.x) / len;
+      return along > 0 && across < 2 * r;
+    };
 
     it("draws a triplet's two unpaired electrons one dot above its symbol and one below, well apart - triplet methylene, CH2", () => {
       const methylene = [atom(0, 0, 0, "C", { radical: "triplet" })];
       const t = labelOf(methylene, [], 0);
-      expect(t.unpaired).toBe(true);
-      // (no dots after the symbol: GR-5.3 takes two dots side by side for a lone pair)
+      expect(t.twoElectrons).toEqual({ kind: "triplet", sides: ["up", "down"] });
+      // (nothing after the symbol for them: GR-5.3 takes two dots side by side for a lone pair)
       expect(t.runs!.some((r) => r.mark === "radical")).toBe(false);
-      expect(t.runs!.map((r) => r.text)).toEqual(["C", "H", "2"]);
       const dots = dotsOf(methylene, []);
-      expect(dots).toHaveLength(2);
-      const [up, down] = [...dots].sort((p, q) => q.c.y - p.c.y);
-      // (one above the C and one below it, on one upright line through the C's middle)
-      expect(up.c.x).toBeCloseTo(down.c.x, 9);
-      expect(up.c.y).toBeGreaterThan(0);
-      expect(down.c.y).toBeLessThan(0);
-      expect(Math.abs(up.c.x - t.x)).toBeLessThan(0.5 * opts().fontPx);
-      // (well apart: more than the C is tall)
-      expect(up.c.y - down.c.y).toBeGreaterThan(0.7 * opts().fontPx);
-    });
-
-    it("draws a nitrene's N, a triplet with a bond, the same way: above and below the N", () => {
-      const nitrene = [atom(0, 0, 0, "N", { radical: "triplet" }), atom(1, -L, 0, "C")];
-      const dots = dotsOf(nitrene, [single(0, 1)]);
-      expect(dots).toHaveLength(2);
+      expect(dots.map((d) => sideOf(d.c)).sort()).toEqual(["down", "up"]);
       expect(dots[0].c.x).toBeCloseTo(dots[1].c.x, 9);
-      expect(Math.sign(dots[0].c.y)).toBe(-Math.sign(dots[1].c.y));
+      expect(Math.abs(dots[0].c.y - dots[1].c.y)).toBeGreaterThan(0.7 * opts().fontPx);
     });
 
-    it("draws a singlet's pair - a singlet carbene's, a lone pair in GR-5.2's sense - as two dots together beside the symbol: singlet dichlorocarbene", () => {
+    it("draws a nitrene's two on the pair of opposite sides its one bond leaves free: above and below with the bond to a side, left and right with it up or down - never on the bond", () => {
+      for (const [to, want] of [
+        [{ x: -L, y: 0 }, ["down", "up"]],
+        [{ x: L, y: 0 }, ["down", "up"]],
+        [{ x: 0, y: L }, ["left", "right"]],
+        [{ x: 0, y: -L }, ["left", "right"]],
+      ] as const) {
+        const nitrene = [atom(0, 0, 0, "N", { radical: "triplet" }), atom(1, to.x, to.y, "C")];
+        const dots = dotsOf(nitrene, [single(0, 1)]);
+        expect(dots.map((d) => sideOf(d.c)).sort(), JSON.stringify(to)).toEqual(want);
+        for (const d of dots) expect(onBond(d.c, d.r, to), JSON.stringify(to)).toBe(false);
+      }
+    });
+
+    it("draws an upright dihalocarbene's two, a triplet's, left and right of the C: its bonds up and down", () => {
+      const carbene = [atom(0, 0, 0, "C", { radical: "triplet" }), atom(1, 0, L, "Cl"), atom(2, 0, -L, "Cl")];
+      const dots = dotsOf(carbene, [single(0, 1), single(0, 2)]);
+      expect(dots.map((d) => sideOf(d.c)).sort()).toEqual(["left", "right"]);
+      for (const d of dots) for (const to of [{ x: 0, y: L }, { x: 0, y: -L }]) expect(onBond(d.c, d.r, to)).toBe(false);
+    });
+
+    it("keeps a triplet cation's dots clear of its charge's circle: a nitrenium ion, its bonds to both sides - bent, and straight across", () => {
+      for (const y of [-L / 2, 0]) {
+      const x = y ? L * 0.866 : L;
+      const nitrenium = [atom(0, 0, 0, "N", { radical: "triplet", charge: 1 }), atom(1, -x, y, "C"), atom(2, x, y, "C")];
+      const bonds = [single(0, 1), single(0, 2)];
+      const t = labelOf(nitrenium, bonds, 0);
+      const placed = placeLabel(t, opts().fontPx, labelSetOf(opts()));
+      const charge = placed.find((r) => r.mark === "charge");
+      const circles = charge ? [markCircle(charge)] : buildTextLabels(nitrenium, opts(), bonds).filter((x) => x.beside).flatMap((x) => placeLabel(x, opts().fontPx, labelSetOf(opts())).filter((r) => r.mark === "charge").map(markCircle));
+      expect(circles).toHaveLength(1);
+      const dots = dotsOf(nitrenium, bonds).filter((d) => d.r < 0.5 * circles[0].r);
+      expect(dots).toHaveLength(2);
+      for (const d of dots) expect(Math.hypot(d.c.x - circles[0].c.x, d.c.y - circles[0].c.y), `${y}`).toBeGreaterThanOrEqual(circles[0].r + 2 * d.r - 1e-9);
+      }
+    });
+
+    it("draws a singlet's pair - a lone pair in GR-5.2's sense - square above the symbol, two dots together side by side: singlet dichlorocarbene", () => {
       const carbene = [atom(0, 0, 0, "C", { radical: "singlet" }), atom(1, -L * 0.866, -L / 2, "Cl"), atom(2, L * 0.866, -L / 2, "Cl")];
       const t = labelOf(carbene, [single(0, 1), single(0, 2)], 0);
-      expect(t.unpaired).toBeUndefined();
+      expect(t.twoElectrons).toEqual({ kind: "singlet", sides: ["up"] });
+      expect(t.runs!.some((r) => r.mark === "radical")).toBe(false);
       const dots = dotsOf(carbene, [single(0, 1), single(0, 2)]);
       expect(dots).toHaveLength(2);
-      // (together: side by side, at one height, closer than a letter is wide)
+      // (together, at one height, above the C and about its middle)
       expect(dots[0].c.y).toBeCloseTo(dots[1].c.y, 9);
+      expect(dots[0].c.y).toBeGreaterThan(0);
       expect(Math.abs(dots[0].c.x - dots[1].c.x)).toBeLessThan(0.4 * opts().fontPx);
+      const mid = (dots[0].c.x + dots[1].c.x) / 2;
+      expect(Math.abs(mid)).toBeLessThan(0.15 * opts().fontPx);
+    });
+
+    it("sets a singlet's pair on another side where a bond is in the way above: below, then the sides, the two dots along that side", () => {
+      const up = [atom(0, 0, 0, "N", { radical: "singlet" }), atom(1, 0, L, "C")];
+      const dots = dotsOf(up, [single(0, 1)]);
+      expect(dots.map((d) => sideOf(d.c))).toEqual(["down", "down"]);
+      const upDown = [atom(0, 0, 0, "C", { radical: "singlet" }), atom(1, 0, L, "Cl"), atom(2, 0, -L, "Cl")];
+      const side = dotsOf(upDown, [single(0, 1), single(0, 2)]);
+      expect(new Set(side.map((d) => sideOf(d.c))).size).toBe(1);
+      expect(["left", "right"]).toContain(sideOf(side[0].c));
+      // (upright along the side)
+      expect(side[0].c.x).toBeCloseTo(side[1].c.x, 9);
     });
 
     it("shows the C of a carbon with two electrons of its own, whatever the style says of a charged carbon; one unpaired electron as before", () => {
@@ -2634,16 +2682,14 @@ describe("charges, radicals and isotopes", () => {
       expect(dotsOf(doublet, bonds)).toHaveLength(1);
     });
 
-    it("keeps a triplet's dots inside its label's reach: the label is that much taller", () => {
+    it("keeps the dots inside the label's reach, and not where a bond stops short of a label", () => {
       const methylene = [atom(0, 0, 0, "C", { radical: "triplet" })];
       const t = labelOf(methylene, [], 0);
       const top = (x: typeof t) => Math.max(...labelHulls(x, opts().fontPx, labelSetOf(opts())).flat().map((p) => p.y));
       const bottom = (x: typeof t) => Math.min(...labelHulls(x, opts().fontPx, labelSetOf(opts())).flat().map((p) => p.y));
-      // (higher by the dot above, lower by the dot below - past the H2's subscript)
-      expect(top(t)).toBeGreaterThan(top({ ...t, unpaired: undefined }) + 0.1 * opts().fontPx);
-      expect(bottom(t)).toBeLessThanOrEqual(bottom({ ...t, unpaired: undefined }));
-      // (and not where a bond stops short of a label: kept clear by where they are put, as a charge is)
-      expect(labelHulls(t, opts().fontPx, labelSetOf(opts()), false).length).toBe(labelHulls({ ...t, unpaired: undefined }, opts().fontPx, labelSetOf(opts()), false).length);
+      expect(top(t)).toBeGreaterThan(top({ ...t, twoElectrons: undefined }) + 0.1 * opts().fontPx);
+      expect(bottom(t)).toBeLessThanOrEqual(bottom({ ...t, twoElectrons: undefined }));
+      expect(labelHulls(t, opts().fontPx, labelSetOf(opts()), false).length).toBe(labelHulls({ ...t, twoElectrons: undefined }, opts().fontPx, labelSetOf(opts()), false).length);
     });
   });
 

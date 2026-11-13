@@ -852,10 +852,12 @@ All hover-based, as above.
   bond runs there, beside it; a charged carbon a bare vertex with its
   charge beside it; a radical a dot; a mass number before the symbol.
   Two electrons of an atom's own (Brecher 2008, GR-5.3): a triplet's two
-  unpaired electrons one dot above the symbol and one below, well apart; a
-  singlet's pair - a singlet carbene's, a lone pair in GR-5.2's sense -
-  two dots together beside it; either way the C is shown, whatever the
-  style says of a charged carbon.
+  unpaired electrons on two opposite sides of the symbol, well apart -
+  above and below, or left and right where a bond or its H is in the way;
+  a singlet's pair - a singlet carbene's, a lone pair in GR-5.2's sense -
+  two dots together square on one side, above where it is free, parallel
+  to that side. A charge set beside the symbol keeps off their sides.
+  Either way the C is shown, whatever the style says of a charged carbon.
   Circled or plain, and a charged carbon's C, are the style's. Set by
   typing - N+, NH3+, O-, Fe2+, 13C, or a charge alone - by + and - over
   an atom, or from its menu, which also gives or takes an unpaired
