@@ -85,6 +85,16 @@ describe("a four-bond metal cleaned up", () => {
     }
   });
 
+  it("keeps transplatin drawn bent, its N-Pt-N at 145 degrees, trans", { timeout: 120000 }, async () => {
+    forgetLaidOut();
+    const m = drawn({ el: "Pt" }, [Cl, NH3, Cl, NH3], 45);
+    // (the second NH3 moved round from 315 to 280 degrees: N-Pt-N 145, Cl-Pt-Cl still 180)
+    const n2 = m.atoms[4];
+    const t = ((280 + 4) * Math.PI) / 180;
+    m.atoms[4] = { ...n2, x: 1.5 * Math.cos(t), y: 1.5 * Math.sin(t) };
+    expect(opposites(await laidOut(m, MENO), [Cl, NH3, Cl, NH3])).toEqual(["Cl-Cl", "NH3-NH3"]);
+  });
+
   it("keeps it for trans- and cis-PtCl2Br2 2-, trans-PdCl2I2 2-, and each of PtBrCl(NH3)(py)'s three arrangements", { timeout: 120000 }, async () => {
     forgetLaidOut();
     for (const [metal, donors, want] of [
@@ -100,7 +110,7 @@ describe("a four-bond metal cleaned up", () => {
     }
   });
 
-  it("is left as laid out where the drawing does not say plainly which stand opposite, or its donors are a chelate's", () => {
+  it("is left as laid out where the drawing does not say which stand opposite, or its donors are a chelate's - and kept where it is bent", () => {
     // (a metal and four Cl, laid out cis-wise as an X: 1 and 2 side by side)
     const at = (deg: number) => ({ x: Math.cos((deg * Math.PI) / 180), y: Math.sin((deg * Math.PI) / 180) });
     const laid = (pts: { x: number; y: number }[]): Layout2D =>
@@ -114,8 +124,11 @@ describe("a four-bond metal cleaned up", () => {
     const trans = [{ x: 0, y: 0 }, at(0), at(180), at(90), at(270)];
     expect(oppositesKept(trans, input(false), cisLaid)).not.toBe(cisLaid);
     expect(oppositesKept(trans, input(true), cisLaid)).toBe(cisLaid);
-    // (drawn with no pair within 30 degrees of a line - the N at 0 and 140, the Cl at 50 and 230: as laid out)
-    expect(oppositesKept([{ x: 0, y: 0 }, at(0), at(140), at(50), at(230)], input(false), cisLaid)).toBe(cisLaid);
+    // (drawn bent - the N at 0 and 140, the Cl at 50 and 230: still N opposite N, the pairing nearest two lines)
+    expect(oppositesKept([{ x: 0, y: 0 }, at(0), at(140), at(50), at(230)], input(false), cisLaid)).not.toBe(cisLaid);
+    // (drawn so that two pairings are as near - the N at 0 and 120, the Cl at 60 and 180: N with N, or each N with a Cl, alike; it
+    // does not say, and the layout's stands)
+    expect(oppositesKept([{ x: 0, y: 0 }, at(0), at(120), at(60), at(180)], input(false), cisLaid)).toBe(cisLaid);
   });
 
   it("swaps two donors whole, each turned about the metal, its bonds still at right angles and its H with it", () => {

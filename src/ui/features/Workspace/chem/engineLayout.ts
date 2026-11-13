@@ -758,10 +758,13 @@ export function nextFree(model: Model): number {
  * set them otherwise - like donors side by side, cisplatin for a
  * transplatin drawn - two of them change places, each with all it carries,
  * turned about the metal (a turn, so every wedge on them says what it
- * said). Only where the drawing says which stand opposite plainly - each
- * pair within 30 degrees of a straight line - and the donors are joined
- * through nothing but the metal (a chelate's, cis by its ring, goes by its
- * own rules); and not at a metal drawn in perspective.
+ * said). Which stand opposite is the pairing of the three nearest two
+ * straight lines, however far from straight the drawing is - a transplatin
+ * put down with its N-Pt-N at 145 degrees is trans still - and none where
+ * two pairings are about as near (within 20 degrees all told): the drawing
+ * does not say it, and the layout's stands. Not where the donors are
+ * joined through anything but the metal (a chelate's, cis by its ring,
+ * goes by its own rules), nor at a metal drawn in perspective.
  */
 export function oppositesKept(was: readonly { x: number; y: number }[], input: LayoutInput, laid: Layout2D): Layout2D {
   const near = input.atoms.map(() => [] as number[]);
@@ -788,14 +791,21 @@ export function oppositesKept(was: readonly { x: number; y: number }[], input: L
       return seen;
     });
     if (branches.some((b, i) => donors.some((d, j) => j !== i && b.has(d)))) continue;
-    // (which stands opposite which, by the angles round the metal: none where it is not plain)
+    // (which stands opposite which, by the angles round the metal: the first donor's partner in the pairing nearest two straight
+    // lines; none where another pairing is about as near)
     const opposites = (px: readonly number[], py: readonly number[]) => {
       const angle = donors.map((d) => Math.atan2(py[d] - py[m], px[d] - px[m]));
       if (donors.some((d) => Math.hypot(px[d] - px[m], py[d] - py[m]) < 1e-6)) return null;
       const off = (i: number, j: number) => Math.abs(Math.PI - Math.abs(Math.atan2(Math.sin(angle[i] - angle[j]), Math.cos(angle[i] - angle[j]))));
-      const across = [1, 2, 3].reduce((best, j) => (off(0, j) < off(0, best) ? j : best), 1);
-      const [p, q] = [1, 2, 3].filter((j) => j !== across);
-      return off(0, across) < Math.PI / 6 && off(p, q) < Math.PI / 6 ? across : null;
+      const pairings = [1, 2, 3]
+        .map((j) => {
+          const [p, q] = [1, 2, 3].filter((k) => k !== j);
+          return { across: j, off: off(0, j) + off(p, q) };
+        })
+        .sort((a, b) => a.off - b.off);
+      // (a tie leaves the layout's pairing, saying nothing - an isomer nobody gave, where the centre is surely square planar: there
+      // it is to be the cross marked "Which donors are next to each other is not given", as a centre laid out with none given is)
+      return pairings[1].off - pairings[0].off > (20 * Math.PI) / 180 ? pairings[0].across : null;
     };
     const drawn = opposites(
       was.map((a) => a.x),
