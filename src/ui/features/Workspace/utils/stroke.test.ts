@@ -271,3 +271,51 @@ describe("a bond stroke out of an atom of a chair", () => {
     expect(node.y).toBeCloseTo(axial.place.y, 9);
   });
 });
+
+describe("a bond stroke out of an atom of a Haworth ring", () => {
+  it("joins another atom only where the pointer is let go ON it, never by the join's reach: up from C-3 and from C-2 along the vertical, a group until the pointer is on the atom above (at the ring's scale and at 1.25)", async () => {
+    const { haworthDrawing, HAWORTH_SCALE } = await import("../projections/haworth");
+    expect(HAWORTH_SCALE).toBeGreaterThanOrEqual(1.25);
+    for (const scale of [HAWORTH_SCALE, 1.25]) {
+      const d = haworthDrawing({ at: { x: 0, y: 0 }, size: 6, firstId: 1, firstBondId: 1, length: scale * L });
+      const model = { atoms: d.atoms, bonds: d.bonds };
+      // (C-3 up: the vertical through C-5 above it; C-2 up: through the ring O - atoms 3 and 5, 2 and 0)
+      for (const [k, above] of [[3, 5], [2, 0]]) {
+        const at = d.atoms[k];
+        const top = d.atoms[above];
+        // (and just short of the atom above and just past it, within the join's reach of it but not on it: 0.35 of a bond either side)
+        for (const y of [...[0.3, 0.6, 1, 1.33, 1.6].map((f) => at.y + f * L), top.y - 0.35 * L, top.y + 0.35 * L]) {
+          // (a point that is ON the atom above - within its pick radius - is let go on it: that one joins, rightly)
+          if (Math.abs(y - top.y) < 0.3 * L) continue;
+          const t = strokeTarget(model, startStroke("bond", d.ring[k]), { x: at.x, y }, L)!;
+          expect(t.atomId, `${scale} from ${k} at ${y.toFixed(2)}`).toBeUndefined();
+          expect(t.position).toBe("up");
+        }
+        // (let go on the atom above: a bond to it)
+        expect(strokeTarget(model, startStroke("bond", d.ring[k]), { x: top.x, y: top.y }, L)!.atomId).toBe(top.id);
+      }
+    }
+  }, measured(400));
+
+  it("goes, from every atom of the ring of six and of five, to each of its two places - a new atom there, never joined onto another ring atom - however far the pointer is led", async () => {
+    const { haworthDrawing } = await import("../projections/haworth");
+    for (const size of [6, 5] as const) {
+      const d = haworthDrawing({ at: { x: 0, y: 0 }, size, firstId: 1, firstBondId: 1 });
+      const model = { atoms: d.atoms, bonds: d.bonds };
+      for (let k = 0; k < size; k++) {
+        const at = d.atoms[k];
+        for (const p of seenPlaces(d, k)) {
+          // (the pointer led a little, to the place, and on past it - up to three style bonds, past the ring atom above an inside place)
+          const reach = Math.hypot(p.place.x - at.x, p.place.y - at.y);
+          for (const share of [0.5, 1, 1.5, (2 * L) / reach, (3 * L) / reach]) {
+            const t = strokeTarget(model, startStroke("bond", d.ring[k]), { x: at.x + (p.place.x - at.x) * share, y: at.y + (p.place.y - at.y) * share }, L)!;
+            expect(t.atomId, `${size}: atom ${k} ${p.free.kind} at ${share}`).toBeUndefined();
+            expect(t.position, `${size}: atom ${k} ${p.free.kind}`).toBe(p.free.kind);
+            expect(t.end.x).toBeCloseTo(p.place.x, 9);
+            expect(t.end.y).toBeCloseTo(p.place.y, 9);
+          }
+        }
+      }
+    }
+  }, measured(400));
+});

@@ -8,14 +8,11 @@
  */
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { chair, flipped, type FreePosition, type Solid } from "../../../../lib/chem/perception/projection/solids";
-import { drawn, project, type Drawn, type View } from "../../../../lib/chem/perception/projection/views";
+import { drawn, type Drawn } from "../../../../lib/chem/perception/projection/views";
 import type { Atom, Bond } from "../store/types";
 
-/**
- * The drawing a tool makes: its atoms and bonds, the ring atoms' ids in the solid's order (atom 0 first), the solid drawn, and how long a bond
- * is drawn - and how: a chair as the textbook draws one (`drawing`), a Haworth ring seen (`view`).
- */
-export type ChairDrawing = { atoms: Atom[]; bonds: Bond[]; ring: number[]; solid: Solid; scale: number; drawing?: Drawn; view?: View };
+/** The drawing a tool makes: its atoms and bonds, the ring atoms' ids in the solid's order (atom 0 first), the solid as drawn (`drawn`), and how long a bond is drawn. */
+export type ChairDrawing = { atoms: Atom[]; bonds: Bond[]; ring: number[]; solid: Solid; scale: number; drawing: Drawn };
 
 /**
  * The form a chair is first drawn in: form 1, the view from above and from the right, which the text prefers (Brecher 2006, ST-3.1). Form 0,
@@ -47,61 +44,19 @@ export function chairDrawing(opts: { at: { x: number; y: number }; form?: 0 | 1;
   return { atoms, bonds, ring: atoms.map((a) => a.id), solid, drawing, scale };
 }
 
-/**
- * How a solid seen in `view` is scaled: the longest of its ring bonds as drawn is the style's bond length (`NOMINAL_BOND_LENGTH`), one constant:
- * by convention, no basis claimed.
- */
-export function seenScale(solid: Solid, view: View, length = NOMINAL_BOND_LENGTH): number {
-  const seen = solid.atoms.map((p) => project(view, p));
-  const longest = Math.max(...solid.bonds.map(([a, b]) => Math.hypot(seen[a].x - seen[b].x, seen[a].y - seen[b].y)));
-  return length / longest;
-}
-
-/**
- * A solid seen in `view` as a drawing - a Haworth ring's: atom k of the solid is `firstId + k`, its bond k `firstBondId + k`, its middle at `at`,
- * scaled so that the longest of its ring bonds as drawn is `length`; the atoms carry their depth, the flag that their configuration is the
- * drawing's and R and S shown where a group makes a centre. The near edge - the two atoms nearest the viewer, where they are bonded - is bold.
- * `element` names atom k's element (carbon).
- */
-export function drawSolid(opts: { solid: Solid; view: View; at: { x: number; y: number }; firstId: number; firstBondId: number; length?: number; element?: (k: number) => string }): ChairDrawing {
-  const { solid, view } = opts;
-  const scale = seenScale(solid, view, opts.length);
-  const seen = solid.atoms.map((p) => project(view, p));
-  const n = seen.length;
-  const middle = { x: seen.reduce((s, p) => s + p.x, 0) / n, y: seen.reduce((s, p) => s + p.y, 0) / n };
-  const atoms: Atom[] = seen.map((p, k) => ({
-    id: opts.firstId + k,
-    el: opts.element?.(k) ?? "C",
-    r: 0.9,
-    x: opts.at.x + (p.x - middle.x) * scale,
-    y: opts.at.y + (p.y - middle.y) * scale,
-    z: p.z * scale,
-    stereoCentre: true,
-    stereoShown: true,
-  }));
-  const near = [...seen.keys()].sort((a, b) => seen[b].z - seen[a].z).slice(0, 2);
-  const bonds: Bond[] = solid.bonds.map(([a, b], k) => ({
-    id: opts.firstBondId + k,
-    a: opts.firstId + a,
-    b: opts.firstId + b,
-    order: 1,
-    ...(near.includes(a) && near.includes(b) ? { display: "bold" as const } : {}),
-  }));
-  return { atoms, bonds, ring: atoms.map((a) => a.id), solid, view, scale };
-}
-
 /** A free position as the page sees it from atom `k` of a drawing: where a group's atom goes (page units), and what the position is. */
 export type SeenPlace = { place: { x: number; y: number }; direction: { x: number; y: number; z: number }; free: FreePosition };
 
 /**
- * The free positions of atom `k` of a drawing, each as the page has it: a chair's group one bond along its drawn direction (an axial one
- * vertical, an equatorial one parallel to the ring bonds one removed), a seen solid's at the bond's seen vector, scaled as the ring is.
+ * The free positions of atom `k` of a drawing, each as the page has it: the group's atom along its drawn direction (`drawn`: a chair's axial
+ * one vertical and its equatorial one parallel to the ring bonds one removed; a Haworth ring's straight up or down, at its drawn length),
+ * scaled as the ring is, with its depth.
  */
 export function seenPlaces(d: ChairDrawing, k: number): SeenPlace[] {
   const atom = d.atoms[k];
-  const at = (free: FreePosition, v: { x: number; y: number; z: number }): SeenPlace => ({ place: { x: atom.x + v.x * d.scale, y: atom.y + v.y * d.scale }, direction: v, free });
-  if (d.drawing) return d.drawing.free.filter((f) => f.free.at === k).map((f) => at(f.free, { x: f.x, y: f.y, z: f.z }));
-  return d.solid.free.filter((f) => f.at === k).map((free) => at(free, project(d.view!, free.direction)));
+  return d.drawing.free
+    .filter((f) => f.free.at === k)
+    .map((f) => ({ place: { x: atom.x + f.x * d.scale, y: atom.y + f.y * d.scale }, direction: { x: f.x, y: f.y, z: f.z }, free: f.free }));
 }
 
 /**

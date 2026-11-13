@@ -183,3 +183,21 @@ describe("the Haworth icon clicked again", () => {
     expect(doc.getState().model.atoms).toHaveLength(13);
   }, measured(2400));
 });
+
+describe("a Haworth ring at another scale", () => {
+  it("is found on the page at its own scale - 0.7 of the ring's, or the style's bond - and its places are drawn to that scale", async () => {
+    const { NOMINAL_BOND_LENGTH: L } = await import("../../../../lib/chem/acs");
+    for (const length of [0.7 * L, L]) {
+      for (const size of [6, 5] as const) {
+        const d = haworthDrawing({ at: { x: 3, y: -1 }, size, firstId: 1, firstBondId: 1, length });
+        const found = haworthOf(d, d.ring)!;
+        expect(found, `${size} at ${length}`).not.toBeNull();
+        expect(found.scale).toBeCloseTo(length, 9);
+        expect(isProjection(d, new Set(d.atoms.map((a) => a.id)))).toBe(true);
+        // (an up place out of a side atom: the true view's length of the ring's own bond)
+        const side = seenPlaces(d, 1).find((p) => p.free.kind === "down")!;
+        expect(Math.hypot(side.place.x - d.atoms[1].x, side.place.y - d.atoms[1].y)).toBeCloseTo(Math.sqrt(5) / 3 * length, 9);
+      }
+    }
+  });
+});

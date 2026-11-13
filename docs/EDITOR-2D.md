@@ -522,6 +522,8 @@ on a page); the Newman projection follows.
   seen - the nearer the pointer's direction - and nowhere between, held or paused, so that nothing drawn on a chair is unread; a position a group holds is
   not offered; both held, the stroke goes as any. The pointer's tip says what the place is - "axial" or "equatorial" - not how it is read
   (`chairExtension`, `PositionTip`). The new atom lies where the free position puts it and carries no depth. A label is typed on it as anywhere.
+  Such a bond joins another atom only where the pointer is let go ON that atom, never by the reach that joins other strokes (`JOIN_REACH`): a
+  group led up into a Haworth ring's picture toward the atom above it stays a group.
 - **R and S** are shown at once on the ring's atoms (`stereoShown`): none while there is no centre, each as a group makes one.
 - **Right-click** (an atom or a bond of a structure holding a chair): *Flip chair* - every ring atom takes the flipped solid's place and depth and each group
   goes from axial to equatorial or back **on the same face**, what hangs from it carried with it; the compound is the same, and Meno's own guard
@@ -540,10 +542,15 @@ on a page); the Newman projection follows.
   hand keeps its depth: what is read may change, and only the labels say so.
 - **The Haworth ring** (Quick Add, *Projections*: one icon - a ring of six, a pyranose's; a second click, while the ring it put down is as it was
   with nothing done since, makes it a ring of five, a furanose's, in its place as one step, and a third back - `putHaworth`, the icon's tip saying
-  so, as the chair's does). Seen from slightly above so that the nearer edge is drawn lower - its bottommost bond bold and the two ring bonds that run to it
-  wedge-shaped, broad at its ends, as IUPAC 2006 ST-1.9 prefers (never the wedge shapes without the bold bond) - the ring O behind - at the back right for the six,
-  at the back for the five - and C-1 at the right-hand end (McNaught 1996, 2-Carb-5.4); the ring O is an atom like any and can be changed. The free
-  positions are *up* and *down* at each ring atom, vertical on the page: groups are led out to them as a chair's are, the tip saying "up" or "down". The
+  so, as the chair's does). Drawn as the figure under IUPAC 2006 ST-1.9 draws one - Meno's choice, as the chair's drawing is; IUPAC's
+  carbohydrate text's own figures are drawn otherwise - a true view of the regular ring from above, the eye's height the angle whose sine is
+  2/3, so that the nearer edge is drawn lower: its bottommost bond bold and the two ring bonds that run to it wedge-shaped, broad at its ends,
+  as ST-1.9 prefers (never the wedge shapes without the bold bond); the ring O behind - at the back right for the six, at the back for the
+  five - and C-1 at the right-hand end (McNaught 1996, 2-Carb-5.4); the ring O is an atom like any and can be changed. The ring is drawn
+  larger than the style's bond (`HAWORTH_SCALE`, 1.8: the look check's to settle; never under 1.25). The free positions are *up* and *down*
+  at each ring atom, straight up and down the page, a group's bond drawn 0.745 of a bond out of the ring's picture and 0.40 into it (a front
+  atom's up group, a back atom's down group), so that every place stands clear of the ring and of every other place: Meno's own lengths, no
+  text gives one. Groups are led out to them as a chair's are, the tip saying "up" or "down". The
   right-click *Draw flat*, Clean-up leaving it as drawn and the 3D notice are the chair's. It is not flipped or fused. **What reads a Haworth ring is F8's:**
   today a ring all of whose atoms carry a depth is taken as a cage's solid (`cageFits`, lib/layout/drawn) and a planar ring read so states no
   configuration at its centres (measured: the same ring with one atom's depth left out reads each) - so until the depth read of F8 is in, a Haworth

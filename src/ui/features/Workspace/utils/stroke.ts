@@ -348,7 +348,11 @@ export function strokeTarget(
   let bestFar = reach;
   let join: { atomId?: number; pathIndex?: number; at: Pt } | null = null;
   // (a bond goes to the atom the pointer is on, however far that is: a
-  // ring is closed with a long bond as well as a short one)
+  // ring is closed with a long bond as well as a short one - but from a
+  // projection's atom, which goes to a free position, only to the atom the
+  // pointer is let go ON, never by the join's reach: a group led up into a
+  // Haworth ring's picture toward the atom above it stays a group)
+  if (chair) bestFar = ATOM_PICK_RADIUS_RATIO * length;
   if (s.kind === "bond") {
     for (const a of model.atoms) {
       if (a.id === t.tipAtom || t.bonded.has(a.id)) continue;
@@ -366,7 +370,8 @@ export function strokeTarget(
       if (eta) return { tip: t.tip, end: eta.centre, ring: eta.ring };
     }
   }
-  for (const a of model.atoms) {
+  // (and where the bond's end comes near an atom: not from a projection's atom, whose end is its free position)
+  for (const a of chair ? [] : model.atoms) {
     if (a.id === t.tipAtom || t.bonded.has(a.id)) continue;
     const far = Math.hypot(a.x - end.x, a.y - end.y);
     if (far < bestFar) {

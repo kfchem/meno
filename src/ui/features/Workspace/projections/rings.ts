@@ -20,7 +20,7 @@ export function projectionsIn(model: { atoms: Atom[]; bonds: Bond[] }, ids: Read
   }
   for (const ring of haworthsIn(model, ids)) {
     const h = haworthOf(model, ring)!;
-    out.push({ kind: "haworth", ring, drawing: haworthDrawing({ at: h.at, size: h.size, firstId: 1, firstBondId: 1 }), index: h.index });
+    out.push({ kind: "haworth", ring, drawing: haworthDrawing({ at: h.at, size: h.size, firstId: 1, firstBondId: 1, length: h.scale }), index: h.index });
   }
   return out;
 }
