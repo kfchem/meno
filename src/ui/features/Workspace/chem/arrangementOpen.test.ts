@@ -11,7 +11,7 @@ import { layoutJob, relayoutFrom } from "./engineLayout";
 // from a SMILES - is drawn as the upright cross and marked: which donors are next to each other is not given (docs/LAYOUT-2D.md).
 // Drawing nobody's isomer would say cis or trans; the cross alone still reads as one to a chemist who knows Pt(II).
 
-const metalOf = (m: Model) => m.atoms.find((a) => a.el === "Pt" || a.el === "Pd")!;
+const metalOf = (m: Model) => m.atoms.find((a) => a.el === "Pt" || a.el === "Pd" || a.el === "Rh")!;
 /** The directions of the metal's four bonds, in degrees from -180 up. */
 function directions(m: Model): number[] {
   const c = metalOf(m);
@@ -26,7 +26,8 @@ function directions(m: Model): number[] {
 describe("a square-planar centre with no arrangement given", () => {
   it("is the upright cross, marked, from a SMILES: cisplatin, PdCl2(PPh3)2 - and the X, unmarked, where the donors lie one way only", { timeout: 120000 }, () => {
     forgetLaidOut();
-    for (const smiles of ["[NH3][Pt](Cl)(Cl)[NH3]", "Cl[Pd](Cl)(P(c1ccccc1)(c1ccccc1)c1ccccc1)P(c1ccccc1)(c1ccccc1)c1ccccc1"]) {
+    // (a carbonyl among the donors counts nought, a neutral donor: Vaska's-type RhCl(CO)(PMe3)2 is Rh(I))
+    for (const smiles of ["[NH3][Pt](Cl)(Cl)[NH3]", "Cl[Pd](Cl)(P(c1ccccc1)(c1ccccc1)c1ccccc1)P(c1ccccc1)(c1ccccc1)c1ccccc1", "Cl[Rh](C#O)(P(C)(C)C)P(C)(C)C"]) {
       const m = drawnFromSmiles(smiles);
       expect(directions(m), smiles).toEqual([-180, -90, 0, 90]);
       expect(readMarks(m).atoms.get(metalOf(m).id), smiles).toBe(ARRANGEMENT_SAID);

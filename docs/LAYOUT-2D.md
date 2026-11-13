@@ -473,7 +473,10 @@ they hang from.
   state counted plainly from the drawing - a donor whose valence is full
   without its bond to the metal counts nought, one the bond completes one,
   the metal's own charge added (an NH3 counts nought; an N drawn with two
-  H's is an amido and counts one). Every other such metal, an ambiguous
+  H's is an amido and counts one; a carbonyl's or an isocyanide's C -
+  triple-bonded to an O, or to an N that goes on - lends its pair and
+  counts nought, as drawn its bonds would have it count one; a cyanide's,
+  its N bare, counts one). Every other such metal, an ambiguous
   one too (Ni(II), a state not counted plainly), is the upright cross: the
   text's form for four groups, which states no geometry, where the X
   states square planar (TiCl4, ZnCl4 2-, FeCl4-, NiCl4 2-, Ni(CO)4,
@@ -483,7 +486,9 @@ they hang from.
   square planar too, and the X: XeF4 (GR-4.1.3's own figure), ICl4-,
   BrF4-; SF4, one lone pair, is upright. The X is held where the four
   donors are ends and can lie round the centre one way only (PtCl4 2-,
-  PdCl4 2-, AuCl4-). Where they can lie more ways - two and two, two and
+  PdCl4 2-, AuCl4-, and three alike and one other: PtCl3(NH3)-,
+  AuCl3Br-), grown so and never turned off it to bring its bonds onto the
+  page's lattice (`squareXAt`). Where they can lie more ways - two and two, two and
   one and one, four different, by element, bonds, H's and charge - and the
   input gives none (cisplatin from a SMILES, PdCl2(PPh3)2), drawing either
   would say cis or trans, an isomer nobody gave: the centre is the upright

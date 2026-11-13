@@ -655,6 +655,10 @@ export function squarePlanarMetal(v: FourView, a: number, valence: (el: string, 
   const open = !(counts[0] === 4 || (counts[0] === 3 && counts[1] === 1));
   let state = v.charge(a);
   for (const d of nb) {
+    // (a carbonyl's C, or an isocyanide's - triple-bonded to an O, or to an N that goes on: a neutral donor, its pair lent, counts
+    // nought, though drawn its bonds would have the metal's complete it; a cyanide's, its N bare, counts as drawn)
+    const lends = v.el(d) === "C" && v.neighbours(d).some((e) => e !== a && v.order(d, e) === 3 && (v.el(e) === "O" || (v.el(e) === "N" && v.neighbours(e).length > 1)));
+    if (lends) continue;
     const full = valence(v.el(d), v.charge(d));
     if (full == null) return { sure: false, ends, open };
     const others = v.neighbours(d).filter((e) => e !== a).reduce((s, e) => s + v.order(d, e), 0) + v.hs(d);

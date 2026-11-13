@@ -21,6 +21,7 @@ import {
   turnSide,
   type Frame,
   type Grown,
+  squareXAt,
 } from "./assemble";
 import { angleOf, dist, mirror, mirrorLines, MIRROR_TOL, rad, segmentsCross, sub } from "./geometry";
 import { hydrogenRunsInto, hydrogenSpot, hydrogenWritten, LABEL_ROOM, labelsCrowding, labelsOnVertices, layoutMetrics, type LayoutMetrics } from "./metrics";
@@ -1673,19 +1674,24 @@ function squareUp(mol: Molecule, piece: number[], pos: Grown, ref: Grown = pos):
   );
   if (square) return;
   const dirs: number[] = [];
+  const steps: number[] = [];
+  // (a centre drawn as the X - XeF4, PtCl3(NH3)- - its bonds measured 45 degrees round, a right angle apart: on its own lattice
+  // so, not turned off it)
+  const xs = new Set(piece.filter((a) => squareXAt(mol, a)));
   for (const [k] of mol.bondIndex) {
     const [a, b] = k.split(",").map(Number);
     if (!here.has(a) || mol.ringBonds.has(k)) continue;
     const p = ref.get(a)!;
     const q = ref.get(b)!;
-    dirs.push(Math.atan2(q.y - p.y, q.x - p.x));
+    const x = xs.has(a) || xs.has(b);
+    dirs.push(Math.atan2(q.y - p.y, q.x - p.x) - (x ? Math.PI / 4 : 0));
+    steps.push(x ? Math.PI / 2 : Math.PI / 6);
   }
   if (!dirs.length) return;
-  const step = Math.PI / 6;
   const off = (turn: number) =>
-    dirs.reduce((sum, t) => {
+    dirs.reduce((sum, t, i) => {
       const u = t - turn;
-      return sum + Math.abs(u - step * Math.round(u / step));
+      return sum + Math.abs(u - steps[i] * Math.round(u / steps[i]));
     }, 0);
   let turn = 0;
   let least = off(0);

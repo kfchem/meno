@@ -21,7 +21,8 @@ import {
   type Point,
 } from "./geometry";
 import { metalSlots } from "./hapto";
-import { isMetal, key, METAL_BOND, orderOf, straightThrough, twoLonePairsOnFour, type Molecule } from "./perceive";
+import { isMetal, key, METAL_BOND, orderOf, squarePlanarMetal, straightThrough, twoLonePairsOnFour, type Molecule } from "./perceive";
+import { valencesAt } from "../chem/molecule";
 import { MACROCYCLE } from "./ringSystem";
 import { byStructure, ringKey, ringRank } from "./ranks";
 
@@ -184,7 +185,7 @@ export function grow(
     // through it and a double-bonded O above)
     const cross = isCross(mol, middle);
     // (a main-group centre of four single bonds and two lone pairs, square planar - XeF4: the X, its bonds 45 degrees off the axes)
-    const squareX = deg === 4 && mol.neighbours[middle].every((v) => orderOf(mol, middle, v) === 1) && twoLonePairsOnFour(mol.el[middle], mol.charge[middle]);
+    const squareX = deg === 4 && squareXAt(mol, middle);
     const between = deg === 2 && along.length === 2 && along.every((v) => isCross(mol, v));
     // (an atom straight through - between two double bonds, or by a triple
     // one: an allene's, a ketene's, CO2's middle - as it is in a chain)
@@ -746,6 +747,26 @@ function placements(
   };
   go(0, free.map(() => false), []);
   return out;
+}
+
+/** A centre drawn as the X, its four bonds 45 degrees off the axes: a main-group one with two lone pairs, or a metal surely square planar. */
+export function squareXAt(mol: Molecule, a: number): boolean {
+  return mainGroupSquare(mol, a) || metalSquareX(mol, a);
+}
+
+/** A main-group centre of four single bonds and two lone pairs - XeF4, ICl4-: square planar, drawn as the X (GR-4.1.3). */
+function mainGroupSquare(mol: Molecule, a: number): boolean {
+  return mol.neighbours[a].length === 4 && mol.neighbours[a].every((v) => orderOf(mol, a, v) === 1) && twoLonePairsOnFour(mol.el[a], mol.charge[a]);
+}
+
+/** A metal surely square planar whose four end donors lie round it one way only - PtCl4 2-, PtCl3(NH3)-: drawn as the X (metrics `metalFour`). */
+function metalSquareX(mol: Molecule, a: number): boolean {
+  const sq = squarePlanarMetal(
+    { el: (i) => mol.el[i], charge: (i) => mol.charge[i], hs: (i) => mol.hs[i], neighbours: (i) => mol.neighbours[i], order: (p, q) => orderOf(mol, p, q) },
+    a,
+    (el, charge) => valencesAt(el, charge)[0],
+  );
+  return !!sq && sq.sure && sq.ends && !sq.open;
 }
 
 /**

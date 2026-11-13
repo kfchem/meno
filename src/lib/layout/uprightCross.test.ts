@@ -61,6 +61,9 @@ describe("four like groups", () => {
     for (const smiles of ["Cl[Pt-2](Cl)(Cl)Cl", "Cl[Pd-2](Cl)(Cl)Cl", "Cl[Au-](Cl)(Cl)Cl"]) {
       expect(directions(smiles, 1), smiles).toEqual(X);
     }
+    // (three alike and one other lie round it one way only: the X too, not turned off it - PtCl3(NH3)-, AuCl3Br-; a cyanide counted as drawn)
+    for (const smiles of ["Cl[Pt-](Cl)(Cl)[NH3]", "Cl[Au-](Cl)(Cl)Br"]) expect(directions(smiles, 1), smiles).toEqual(X);
+    expect(directions("N#C[Pt-2](C#N)(C#N)C#N", 2)).toEqual(X);
     // (and where they lie more ways and the input gives none - cisplatin with its NH3: the upright cross, marked by the editor)
     expect(directions("[NH3][Pt](Cl)(Cl)[NH3]", 1)).toEqual(cross);
     // (counted plainly: an N drawn with two H's on a platinum is an amido, Pt(IV) - not surely square planar, so upright)
