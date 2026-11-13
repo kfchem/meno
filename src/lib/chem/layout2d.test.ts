@@ -1892,6 +1892,66 @@ describe("a carbon between two double bonds", () => {
     const layout = layoutMolecule(atoms, bonds, opts(), ZOOM);
     expect(layout.texts.filter((t) => t.text === "C")).toHaveLength(1);
   });
+
+  it("writes a cyanide's and an isocyanide's C on a metal - and leaves an acylium's, a bridging carbonyl's and an acetylide's bare", () => {
+    const L = NOMINAL_BOND_LENGTH;
+    const atoms: Atom[] = [
+      // Fe-C≡N, the C written
+      { id: 1, x: 0, y: 0, el: "Fe" },
+      { id: 2, x: L, y: 0, el: "C" },
+      { id: 3, x: 2 * L, y: 0, el: "N" },
+      // Ni-C≡N-CH3, the isocyanide's C written
+      { id: 4, x: 0, y: 3 * L, el: "Ni" },
+      { id: 5, x: L, y: 3 * L, el: "C" },
+      { id: 6, x: 2 * L, y: 3 * L, el: "N" },
+      { id: 7, x: 3 * L, y: 3 * L, el: "C" },
+      // CH3-C≡O+, an acylium: no metal, bare
+      { id: 8, x: 0, y: 6 * L, el: "C" },
+      { id: 9, x: L, y: 6 * L, el: "C" },
+      { id: 10, x: 2 * L, y: 6 * L, el: "O", charge: 1 },
+      // Fe(mu-CO)Fe: a third bond, bare
+      { id: 11, x: 0, y: 9 * L, el: "Fe" },
+      { id: 12, x: L, y: 9.5 * L, el: "C" },
+      { id: 13, x: 2 * L, y: 9 * L, el: "Fe" },
+      { id: 14, x: L, y: 10.5 * L, el: "O" },
+      // Fe(mu-C≡O)Fe, drawn with a triple bond: a third bond, bare
+      { id: 15, x: 0, y: 12 * L, el: "Fe" },
+      { id: 16, x: L, y: 12.5 * L, el: "C" },
+      { id: 17, x: 2 * L, y: 12 * L, el: "Fe" },
+      { id: 18, x: L, y: 13.5 * L, el: "O" },
+      // Cu-C≡C-CH3, an acetylide: bare
+      { id: 19, x: 0, y: 15 * L, el: "Cu" },
+      { id: 20, x: L, y: 15 * L, el: "C" },
+      { id: 21, x: 2 * L, y: 15 * L, el: "C" },
+      { id: 22, x: 3 * L, y: 15 * L, el: "C" },
+    ];
+    const bonds: Bond[] = [
+      { a1: 0, a2: 1, order: 1 },
+      { a1: 1, a2: 2, order: 3 },
+      { a1: 3, a2: 4, order: 1 },
+      { a1: 4, a2: 5, order: 3 },
+      { a1: 5, a2: 6, order: 1 },
+      { a1: 7, a2: 8, order: 1 },
+      { a1: 8, a2: 9, order: 3 },
+      { a1: 10, a2: 11, order: 1 },
+      { a1: 11, a2: 12, order: 1 },
+      { a1: 11, a2: 13, order: 2 },
+      { a1: 14, a2: 15, order: 1 },
+      { a1: 15, a2: 16, order: 1 },
+      { a1: 15, a2: 17, order: 3 },
+      { a1: 18, a2: 19, order: 1 },
+      { a1: 19, a2: 20, order: 3 },
+      { a1: 20, a2: 21, order: 1 },
+    ];
+    const shown = cumulatedShown(atoms, bonds).map((a) => !!a.shown);
+    expect(shown[1], "Fe-C≡N").toBe(true);
+    expect(shown[4], "Ni-C≡N-CH3").toBe(true);
+    expect(shown[8], "CH3-C≡O+").toBe(false);
+    expect(shown[11], "Fe(mu-CO)Fe").toBe(false);
+    expect(shown[15], "Fe(mu-C≡O)Fe").toBe(false);
+    expect(shown[19], "Cu-C≡C-CH3").toBe(false);
+    expect(shown.filter(Boolean)).toHaveLength(2);
+  });
 });
 
 describe("where bonds crowd each other", () => {
