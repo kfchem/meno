@@ -183,7 +183,9 @@ export function placeStereo(
     const nb = mol.neighbours[c];
     const at = pos.get(c)!;
     if (nb.length !== 4 || nb.some((n) => !pos.has(n))) return [];
-    const free = (n: number) => !used.has(key(c, n)) && !tetra.has(n);
+    // (and never a double bond: a phosphine oxide's P=O stays plain - ST-1.5)
+    const single = (n: number) => (mol.bonds[mol.bondIndex.get(key(c, n)) ?? -1]?.order ?? 1) === 1;
+    const free = (n: number) => !used.has(key(c, n)) && !tetra.has(n) && single(n);
     const toward = (n: number) => angleOf(sub(pos.get(n)!, at));
     const ccw = (u: number, v: number) => (((toward(v) - toward(u)) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
     let pairs: { pair: [number, number]; size: number; gap: number }[] = [];

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { layout2D, type Layout2D } from "./engine";
 import type { LayoutInput } from "./perceive";
-import { drawnVolume } from "./stereo";
+import { drawnVolume, placeStereo } from "./stereo";
+import { perceive } from "./perceive";
 import { fromSmiles } from "./testdata/fromSmiles";
 
 // A stereocentre with four bonds drawn (Brecher 2006, ST-1.1.1, ST-1.1.4, ST-1.3.4, ST-0.2, ST-0.5; Brecher 2008, GR-4.1.3).
@@ -109,6 +110,46 @@ describe("an acyclic stereocentre with four bonds drawn (ST-1.1.1)", () => {
     const out = layout2D(input);
     expect(out.wedges.filter((w) => w.from === 1)).toHaveLength(1);
     expect(agrees(input, out, 1)).toBe(true);
+  });
+});
+
+describe("a phosphorus or sulfur stereocentre with a double bond (ST-1.5)", () => {
+  it("draws a phosphine oxide's P, each way round, with a solid and a hashed wedge on two singly bonded ligands, its P=O plain", () => {
+    for (const s of ["C[P@](=O)(CC)c1ccccc1", "C[P@@](=O)(CC)c1ccccc1"]) {
+      const input = fromSmiles(s);
+      const out = layout2D(input);
+      const r = round(input, out, 1);
+      expect(r.wedged.has(2), s).toBe(false);
+      expectPreferred(input, out, 1, [...r.wedged.keys()]);
+    }
+  });
+
+  it("draws a sulfoximine's S with its S=O and S=N plain, 120 degrees apart, the wedges on its methyl and its phenyl", () => {
+    for (const s of ["C[S@](=O)(=N)c1ccccc1", "C[S@@](=O)(=N)c1ccccc1"]) {
+      const input = fromSmiles(s);
+      const out = layout2D(input);
+      expectPreferred(input, out, 1, [0, 4]);
+    }
+  });
+
+  it("never wedges a double bond, though it is drawn next to a single one a sixth of a turn away: the P=O stays plain", () => {
+    const input = fromSmiles("C[P@](=O)(CC)c1ccccc1");
+    const mol = perceive(input);
+    const at = (deg: number) => ({ x: Math.cos(deg * DEG), y: Math.sin(deg * DEG) });
+    // (the P at the origin; its O at 60 degrees and its methyl at 120 - the pair a sixth of a turn apart - its ethyl and phenyl below)
+    const pos = new Map<number, { x: number; y: number }>([[1, { x: 0, y: 0 }], [2, at(60)], [0, at(120)], [3, at(-30)], [5, at(-150)]]);
+    input.atoms.forEach((_, i) => pos.has(i) || pos.set(i, { x: 5 + i, y: 5 }));
+    const { wedges } = placeStereo(mol, pos, new Map([[1, input.atoms[1].tetra!]]));
+    expect(wedges.some((w) => w.from === 1 && w.to === 2)).toBe(false);
+  });
+
+  it("leaves a phosphate that is no stereocentre a cross, square to the page, with no wedge", () => {
+    const input = fromSmiles("COP(=O)(OC)OC");
+    const out = layout2D(input);
+    const r = round(input, out, 2);
+    expect(r.wedged.size).toBe(0);
+    const t = [...r.toward.values()].sort((p, q) => p - q);
+    for (let i = 0; i < 4; i++) expect(apart(t[i], t[(i + 1) % 4])).toBeCloseTo(90, 0);
   });
 });
 

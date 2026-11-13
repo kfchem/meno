@@ -952,8 +952,9 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
 
   // A phosphorus or sulfur with four bonds - a phosphate, a sulfonyl - is
   // drawn as a cross, square to the page, the chain straight through it
+  // (not one that is a stereocentre: drawn as its configuration is best shown, below)
   const cross = (a: number) =>
-    (g.elements?.[a] === "P" || g.elements?.[a] === "S") && neighbours[a].length === 4 && !inRing.has(a);
+    (g.elements?.[a] === "P" || g.elements?.[a] === "S") && neighbours[a].length === 4 && !inRing.has(a) && !g.tetra?.[a];
 
   // A trident's middle atom - a tert-butyl's, a trimethylsilyl's, a
   // trimethylammonium's, a CF3's or a CCl3's (assemble.ts `tridentEnds`):
@@ -1019,7 +1020,7 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
       }).length;
       angleSum +=
         Math.min(...[0, 1, 2, 3].map((k) => gaps.reduce((sum, gap, i) => sum + Math.abs(deg(gap - want[(i + k) % 4])), 0) / 4)) +
-        (onAxis * FOUR_CENTRE_AXIS_DEG) / 4;
+        (onAxis * FOUR_CENTRE_AXIS_COST) / 4;
     } else {
       for (const gap of gaps) angleSum += Math.abs(deg(gap - ideal)) / gaps.length;
     }
@@ -2133,5 +2134,8 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
   return { ...measures, score };
 }
 
-/** How near the page's axes, in degrees, a bond of a four-bond stereocentre counts as on one; each counts as that many degrees of angle error, shared over its four bonds. */
+/** How near the page's axes, in degrees, a bond of a four-bond stereocentre counts as on one. */
 const FOUR_CENTRE_AXIS_DEG = 7.5;
+
+/** What each such bond on an axis costs, in degrees of angle error shared over its four bonds: as much as a bond turned a third of a turn off its place - a branch is not turned onto the axes to make room for a label. */
+const FOUR_CENTRE_AXIS_COST = 120;

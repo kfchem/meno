@@ -467,14 +467,18 @@ they hang from.
   double-bonded O above it, as IUPAC puts double-bonded substituents on a
   chain. The O between two crosses runs straight on, so that ATP's
   triphosphate is one line; the bond joining a cross to a zigzag gives way,
-  to 150 degrees.
+  to 150 degrees. One that is a stereocentre is drawn as one (below), not
+  as a cross.
 - **A stereocentre with four bonds, in no ring** (CH3-CFClBr's carbon, a
-  quaternary carbon in a chain): two of its bonds in the page a third of a
+  quaternary carbon in a chain, a phosphine oxide's P, a sulfoximine's S):
+  two of its bonds in the page a third of a
   turn apart, and opposite them the two that carry a solid and a hashed
   wedge, a sixth of a turn apart, a quarter turn between each and the
   bond beside it (IUPAC 2006 ST-1.1.1; IUPAC 2008 GR-4.1.3) - never a
   cross, which with one wedge is the form ST-1.1.4 rules out for four
-  acyclic groups. The wedged two are the smaller groups: an end before a
+  acyclic groups. A double bond is never wedged: a P=O, an S=O and an S=N
+  are among the two in the page (ST-1.5). The wedged two are the smaller
+  groups: an end before a
   group that goes on, a heteroatom end before a carbon one, then the one
   written smaller; the chain runs on through the two in the page, and the
   bond to another centre is one of them. Of the two ways round, the one

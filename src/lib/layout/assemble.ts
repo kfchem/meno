@@ -806,7 +806,9 @@ export function isFourCentre(mol: Molecule, a: number): boolean {
 
 /**
  * Of a four-bond stereocentre's neighbours, the two in the page and the two
- * to be wedged: the wedges on the two smaller groups - an end before a
+ * to be wedged: a double bond never wedged (a phosphine oxide's P=O, a
+ * sulfoximine's S=O and S=N: ST-1.5, the wedges on two singly bonded
+ * ligands), then the wedges on the two smaller groups - an end before a
  * group that goes on, of ends a heteroatom before a carbon (GR-4.1.3: a
  * carbon end at the third of a turn from the chain), then the one written
  * smaller - so that the chain runs on through the two in the page and no
@@ -818,6 +820,7 @@ export function centreRoles(mol: Molecule, sides: Map<string, number>, a: number
   const same = byStructure(mol);
   const larger = [...mol.neighbours[a]].sort(
     (p, q) =>
+      Number(orderOf(mol, a, q) > 1) - Number(orderOf(mol, a, p) > 1) ||
       weight(q) - weight(p) ||
       Number(mol.tetra.has(q)) - Number(mol.tetra.has(p)) ||
       Number(mol.el[q] === "C") - Number(mol.el[p] === "C") ||
@@ -842,10 +845,12 @@ function onAxes(ts: readonly number[]): number {
 
 /**
  * A phosphorus or sulfur with four bonds, in no ring - a phosphate, a
- * sulfonyl: drawn as a cross, square to the page.
+ * sulfonyl: drawn as a cross, square to the page. Not one that is a
+ * stereocentre: that is drawn as its configuration is best shown
+ * (`isFourCentre`; Brecher 2006, ST-1.5).
  */
 export function isCross(mol: Molecule, a: number): boolean {
-  return (mol.el[a] === "P" || mol.el[a] === "S") && mol.neighbours[a].length === 4 && mol.systemOf[a] < 0;
+  return (mol.el[a] === "P" || mol.el[a] === "S") && mol.neighbours[a].length === 4 && mol.systemOf[a] < 0 && !mol.tetra.has(a);
 }
 
 /**
