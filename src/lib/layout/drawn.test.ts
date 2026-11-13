@@ -470,6 +470,12 @@ describe("a centre with a lone pair for its fourth group", () => {
       //  so nothing is read, as for every deciding gap in that band)
       ["ST-1.2.7, in line", 1, [30, -1], [210, -1], null],
       ["ST-1.2.7, clear of the line", 1, [30, -1], [230, -1], "R"],
+      // (a wedge, hashes and a plain bond, the plain bond's wider gap 15 degrees past half a turn: read; 5 degrees past it, within IN_LINE
+      //  of half a turn: nothing)
+      ["ST-1.2.2, clear of the line", 1, [90, -1], [165, 0], "S"],
+      ["ST-1.2.2, in line", 1, [90, -1], [175, 0], null],
+      // (the plain bond between the wedge and the hashes, the widest gap between those two: still nothing)
+      ["ST-1.2.10, the wedges far apart", 0, [60, 1], [260, -1], null],
       ["ST-1.2.9", 1, [60, 1], [120, 1], null],
       ["ST-1.2.10", 0, [90, 1], [210, -1], null],
       ["ST-1.2.10", 0, [150, 1], [240, -1], null],
