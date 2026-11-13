@@ -54,6 +54,26 @@ const ORGANIC = ["Cl", "Br", "B", "C", "N", "O", "P", "S", "F", "I"];
 const AROMATIC = ["b", "c", "n", "o", "p", "s"];
 const BOND_ORDER: Record<string, number> = { "-": 1, "=": 2, "#": 3, $: 4, ":": 4, "/": 1, "\\": 1 };
 
+/** Whether bond `k` lies in a ring of aromatic bonds: its two atoms still joined without it, along aromatic bonds alone. */
+function inAromaticRing(bonds: readonly SmilesBond[], k: number): boolean {
+  const { a1, a2 } = bonds[k];
+  const seen = new Set([a1]);
+  const edge = [a1];
+  while (edge.length) {
+    const x = edge.pop()!;
+    for (const [j, b] of bonds.entries()) {
+      if (j === k || b.order !== 4 || (b.a1 !== x && b.a2 !== x)) continue;
+      const y = b.a1 === x ? b.a2 : b.a1;
+      if (y === a2) return true;
+      if (!seen.has(y)) {
+        seen.add(y);
+        edge.push(y);
+      }
+    }
+  }
+  return false;
+}
+
 /** A SMILES string's atoms and bonds; throws on what it cannot read. */
 export function readSmiles(text: string): Smiles {
   const atoms: SmilesAtom[] = [];
@@ -75,6 +95,8 @@ export function readSmiles(text: string): Smiles {
   // (the atoms written first, with no atom before them: their H, or lone pair, is the one looked from; and those
   // that carry a ring-closure digit themselves)
   const first = new Set<number>();
+  // (the bonds written with no symbol between two aromatic atoms, taken as aromatic for now: one in no ring is single, below)
+  const unwritten = new Set<number>();
   const closes = new Set<number>();
   const connect = (a: number, mark = "") => {
     if (prev < 0) first.add(a);
@@ -83,6 +105,7 @@ export function readSmiles(text: string): Smiles {
     if (atoms[a].hs === 1) around[a].push(-1);
     if (prev >= 0) {
       const both = atoms[prev].aromatic && atoms[a].aromatic;
+      if (pending == null && both) unwritten.add(bonds.length);
       bonds.push({ a1: prev, a2: a, order: pending ?? (both ? 4 : 1) });
       around[prev].push(a);
       if (pendingDir) directed.push({ from: prev, to: a, up: pendingDir === "/" });
@@ -122,6 +145,7 @@ export function readSmiles(text: string): Smiles {
       const open = rings.get(n);
       if (open) {
         const both = atoms[open.atom].aromatic && atoms[prev].aromatic;
+        if (pending == null && open.order == null && both) unwritten.add(bonds.length);
         bonds.push({ a1: open.atom, a2: prev, order: pending ?? open.order ?? (both ? 4 : 1) });
         around[open.atom][open.slot] = prev;
         around[prev].push(open.atom);
@@ -169,6 +193,15 @@ export function readSmiles(text: string): Smiles {
     throw new Error(`Cannot read "${c}" at ${i} in ${text}`);
   }
   if (rings.size) throw new Error(`Unclosed ring in ${text}`);
+  // An unwritten bond between two aromatic atoms is aromatic only where it is
+  // in a ring of them (OpenSMILES, *Aromaticity*): one that joins two rings
+  // - a biaryl written c1ccccc1c1ccccc1, 2,2'-bipyridine as
+  // c1ccc(nc1)c1ccccn1, or that bipyridine chelating a metal, its two rings
+  // in a ring through the metal - is single, and each ring is its own system
+  // (read as aromatic, the two were one system of twelve atoms, and two of
+  // its N were read with an H nobody wrote)
+  const single = [...unwritten].filter((k) => !inAromaticRing(bonds, k));
+  for (const k of single) bonds[k] = { ...bonds[k], order: 1 };
   const keepsPyramid = chiral.size
     ? lonePairCentres(
         atoms.map((a) => ({ el: a.el, charge: a.charge, hs: a.hs ?? 0 })),

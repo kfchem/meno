@@ -503,7 +503,10 @@ c1cccc1 (cyclopentadiene's ring written aromatic), c1ccnc1 (pyrrole
 without its [nH]), c1cncn1 - "its aromatic ring of 5 atoms (1, 2, 3, 4
 and 5) cannot have alternating double bonds: is a charge or an H
 missing?" (lib/chem/kekulize `aromaticRefusal`; the same words where the
-plugin that reads SMILES refuses it). Text is
+plugin that reads SMILES refuses it). A bond written with no symbol between
+two aromatic atoms is aromatic only in a ring of aromatic bonds: one that
+joins two rings - a biaryl written c1ccc(nc1)c1ccccn1, without the "-" -
+is single, and each ring is read as its own. Text is
 read as a structure by one reader wherever it is typed (`chem/resolve`):
 here as a whole molecule, in Enumerate's lists and Substituents' groups
 as a group (docs/WORKFLOWS-FOUNDATION.md, *Enumerate*); a label typed on

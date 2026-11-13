@@ -82,6 +82,62 @@ describe("an aromatic SMILES that cannot be given single and double bonds as wri
   });
 });
 
+describe("a biaryl written with no bond symbol between its rings", () => {
+  // (each with the H its formula has: 2,2'-bipyridine C10H8N2, biphenyl C12H10, and so on)
+  const BIARYLS: [string, number][] = [
+    ["c1ccc(nc1)c1ccccn1", 8], // 2,2'-bipyridine
+    ["n1ccccc1c1ccccn1", 8],
+    ["c1cnccc1c1ccncc1", 8], // 4,4'-bipyridine
+    ["c1ccc(cc1)c1ccccn1", 9],
+    ["c1ccc(cc1)c1ccncc1", 9],
+    ["c1cnc(nc1)c1ncccn1", 6], // 2,2'-bipyrimidine
+    ["c1ccc(cc1)c1ncccn1", 8],
+    ["c1ccc(nc1)c1cccc(n1)c1ccccn1", 11], // terpyridine
+    ["c1c[nH]c(n1)c1ncc[nH]1", 6], // 2,2'-biimidazole
+    ["c1ccc(nc1)c1nc2ccccc2[nH]1", 9],
+    ["c1ccc(cc1)c1ccccc1", 10], // biphenyl
+    ["c1ccc(cc1)c1cccs1", 8],
+    ["c1ccc(cc1)c1ccco1", 8],
+    ["c1csc(c1)c1cccs1", 6], // 2,2'-bithiophene
+    ["c1ccc(cc1)c1cc[nH]c1", 9],
+    ["c1ccc(cc1)c1cnc[nH]1", 8],
+    ["c1ccc(cc1)c1nnc(o1)c1ccccc1", 10],
+    ["c1ccc(cc1)c1ccc(cc1)c1ccccc1", 14], // p-terphenyl
+    ["c1ccc2c(c1)ccc1ccccc21", 10], // phenanthrene: its unwritten bonds in its rings, aromatic
+    ["c1ccc(cc1)n1cccc1", 9],
+    ["c1ccc(cc1)n1ccnc1", 8],
+    ["c1ccc(cc1)n1cccn1", 8],
+    ["Cc1ccc(cc1)c1ccc(nc1)c1ccccn1", 14],
+    ["c1cc(ccn1)c1nc(nc(n1)c1ccncc1)c1ccncc1", 12],
+    ["c1ccc(nc1)c1ccc(cn1)c1ccccn1", 11],
+    ["O=c1[nH]cccc1c1ccccn1", 8],
+    ["c1ccc(cc1)c1cnccn1", 8], // 2-phenylpyrazine
+    ["c1ccc(cc1)c1cccnn1", 8], // 3-phenylpyridazine
+  ];
+
+  it("is read ring by ring, the bond between them single: each with the H its formula has, none refused", () => {
+    for (const [smiles, h] of BIARYLS) {
+      expect(refused(smiles), smiles).toBeNull();
+      expect(smilesInput(smiles).atoms.reduce((n, a) => n + (a.hs ?? 0), 0), smiles).toBe(h);
+    }
+    // (the bond between the rings single; written as "-" or not, alike)
+    expect(smilesInput("c1ccc(nc1)c1ccccn1")).toEqual(smilesInput("c1ccc(nc1)-c1ccccn1"));
+  });
+
+  it("keeps each ring its own where the bond between them closes a ring that is not aromatic - fluorene's, through its CH2", () => {
+    // (fluorene, C13H10: the bond joining its benzene rings is a ring closure in its five-ring, which has a CH2 - not a ring
+    //  of aromatic bonds: single, each benzene its own; carbazole's five-ring, its NH aromatic, one system of thirteen)
+    expect(refused("c1ccc2c(c1)Cc1ccccc21")).toBeNull();
+    expect(smilesInput("c1ccc2c(c1)Cc1ccccc21").atoms.reduce((n, a) => n + (a.hs ?? 0), 0)).toBe(10);
+    expect(smilesInput("c1ccc2c(c1)Cc1ccccc21").bonds.filter((b) => b.order === 2)).toHaveLength(6);
+    expect(smilesInput("c1ccc2c(c1)[nH]c1ccccc12").atoms.reduce((n, a) => n + (a.hs ?? 0), 0)).toBe(9);
+    // (4,5-diazafluorene, C11H8N2: read as one system of twelve its count is 4n, and two N were given an H nobody wrote - each
+    //  pyridine its own, none refused, its own eight H)
+    expect(refused("c1cnc2c(c1)Cc1cccnc21")).toBeNull();
+    expect(smilesInput("c1cnc2c(c1)Cc1cccnc21").atoms.reduce((n, a) => n + (a.hs ?? 0), 0)).toBe(8);
+  });
+});
+
 describe("Meno's own tables", () => {
   it("hold no SMILES that would now be refused: every abbreviation, reagent, ligand and counter-ion", () => {
     const tables: [string, string][] = [
