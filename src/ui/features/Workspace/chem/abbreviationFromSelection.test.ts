@@ -70,6 +70,24 @@ describe("a selection saved as an abbreviation", () => {
       bonds: [{ id: 100, a: 0, b: 4, order: 1 }, ...ring.map((_, k) => ({ id: 101 + k, a: k + 1, b: ((k + 1) % 6) + 1, order: (k === 1 ? 2 : 1) as 1 | 2 }))],
     };
     expect(abbreviationFromSelection(cyclohexenyl, new Set([1, 2, 3, 4, 5, 6]))).not.toHaveProperty("notKept");
+    // (a trans double bond elsewhere in the drawing, the group saturated: nothing said of it)
+    expect(abbreviationFromSelection(trans, new Set([4, 5]))).toEqual({ smiles: "*CC" });
+    // (the group's bond out itself a double bond drawn trans: its cis or trans goes with it - said)
+    expect(abbreviationFromSelection(trans, new Set([3, 4, 5]))).toEqual({ smiles: "*=CCC", notKept: "The cis or trans of its double bonds is not kept: an abbreviation has no stereo." });
+    // (a butatriene drawn with its cis or trans, wholly in the group: said; one only half in it: not the group's to say)
+    const butatriene: Model = {
+      atoms: [c(6, -0.87, 0.5), c(0, 0, 0), c(1, 0.87, 0.5), c(2, 1.87, 0.5), c(3, 2.87, 0.5), c(4, 3.87, 0.5), c(5, 4.73, 0)],
+      bonds: [
+        { id: 200, a: 6, b: 0, order: 1 },
+        { id: 201, a: 0, b: 1, order: 1 },
+        { id: 202, a: 1, b: 2, order: 2 },
+        { id: 203, a: 2, b: 3, order: 2 },
+        { id: 204, a: 3, b: 4, order: 2 },
+        { id: 205, a: 4, b: 5, order: 1 },
+      ],
+    };
+    expect(abbreviationFromSelection(butatriene, new Set([0, 1, 2, 3, 4, 5]))).toMatchObject({ notKept: "The cis or trans of its double bonds is not kept: an abbreviation has no stereo." });
+    expect(abbreviationFromSelection(butatriene, new Set([4, 5]))).toEqual({ smiles: "*=CC" });
   });
 
   it("says why where it cannot be one", () => {
