@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { NOMINAL_BOND_LENGTH as L } from "../../../../lib/chem/acs";
 import { chair } from "../../../../lib/chem/perception/projection/solids";
-import { project, standardView } from "../../../../lib/chem/perception/projection/views";
+import { drawn } from "../../../../lib/chem/perception/projection/views";
 import { identityOfDrawn } from "../chem/identityOf";
 import type { Atom, Bond, Model } from "../store/types";
-import { chairDrawing, chairOf, depthRings, flipChairMoves, seenPlaces, snapTo, type ChairDrawing } from "./chair";
+import { chairDrawing, chairOf, depthRings, FIRST_FORM, flipChairMoves, seenPlaces, snapTo, type ChairDrawing } from "./chair";
 
 const draw = (flip = false, form: 0 | 1 = 0) => chairDrawing({ at: { x: 0, y: 0 }, form, flip, firstId: 1, firstBondId: 100, length: L });
 
@@ -23,28 +23,25 @@ function methylated(d: ChairDrawing, groups: [number, 1 | -1][]): Model {
 }
 
 describe("the chair tool's drawing", () => {
-  it("is F9's chair in its standard view, scaled so that the longest ring bond is the style's bond length, its middle at the point given", () => {
+  it("is the chair as the textbook draws it, in form 1 (from above and from the right) first: every ring bond the style's bond length, its middle at the point given, each atom's depth its true view's", () => {
+    expect(FIRST_FORM).toBe(1);
     const d = chairDrawing({ at: { x: 10, y: -4 }, firstId: 1, firstBondId: 100 });
-    const view = standardView(chair());
-    const seen = chair().atoms.map((p) => project(view, p));
-    const k = d.scale;
+    const want = drawn(chair(), 1)!;
     const bondLengths = d.bonds.map((b) => Math.hypot(d.atoms[b.a - 1].x - d.atoms[b.b - 1].x, d.atoms[b.a - 1].y - d.atoms[b.b - 1].y));
-    expect(Math.max(...bondLengths)).toBeCloseTo(L, 9);
+    for (const length of bondLengths) expect(length).toBeCloseTo(L, 9);
     d.atoms.forEach((a, i) => {
-      expect(a.x).toBeCloseTo(10 + (seen[i].x - seen.reduce((s, p) => s + p.x, 0) / 6) * k, 9);
-      expect(a.z).toBeCloseTo(seen[i].z * k, 9);
+      expect(a.x).toBeCloseTo(10 + want.atoms[i].x * L, 9);
+      expect(a.y).toBeCloseTo(-4 + want.atoms[i].y * L, 9);
+      expect(a.z).toBeCloseTo(want.atoms[i].z * L, 9);
     });
+    expect(d.atoms.reduce((s, a) => s + a.x, 0) / 6).toBeCloseTo(10, 9);
+    expect(d.atoms.reduce((s, a) => s + a.y, 0) / 6).toBeCloseTo(-4, 9);
     expect([d.atoms.length, d.bonds.length, d.ring]).toEqual([6, 6, [1, 2, 3, 4, 5, 6]]);
     expect(d.atoms.every((a) => a.stereoCentre && a.el === "C")).toBe(true);
   });
 
-  it("draws the near edge bold: the bond between the two atoms nearest the viewer, and no other", () => {
-    const d = draw();
-    const bold = d.bonds.filter((b) => b.display === "bold");
-    expect(bold).toHaveLength(1);
-    const [a, b] = [d.atoms[bold[0].a - 1], d.atoms[bold[0].b - 1]];
-    const nearest = [...d.atoms].sort((p, q) => q.z! - p.z!).slice(0, 2);
-    expect([a, b].sort((p, q) => p.id - q.id)).toEqual(nearest.sort((p, q) => p.id - q.id));
+  it("draws every bond plain: a ring in perspective is drawn with plain bonds (Brecher 2006, ST-3.3)", () => {
+    for (const flip of [false, true]) for (const form of [0, 1] as const) expect(draw(flip, form).bonds.every((b) => b.display == null && b.stereo == null)).toBe(true);
   });
 
   it("is the other textbook chair in its second form, and the ring flip's own picture when flipped", () => {
@@ -52,9 +49,9 @@ describe("the chair tool's drawing", () => {
     const two = draw(false, 1);
     // (each the other's mirror picture: the same points with x turned about)
     for (const p of one.atoms) expect(two.atoms.some((q) => Math.abs(q.x + p.x) < 1e-9 && Math.abs(q.y - p.y) < 1e-9)).toBe(true);
-    // (the ring flip takes each atom's height to its other side: each atom keeps its x, and its y and depth change by the heights)
-    const flip = draw(true);
-    flip.atoms.forEach((a, i) => expect(a.x).toBeCloseTo(one.atoms[i].x, 9));
+    // (the ring flip takes each atom's height to its other side: the two end atoms keep their x, and every atom's y changes by the heights)
+    const flip = draw(true, 0);
+    for (const i of [0, 3]) expect(flip.atoms[i].x).toBeCloseTo(one.atoms[i].x, 9);
     flip.atoms.forEach((a, i) => expect(a.y - one.atoms[i].y).not.toBeCloseTo(0, 3));
     expect(flip.atoms.map((a, i) => Math.sign(a.y - one.atoms[i].y))).toEqual([-1, 1, -1, 1, -1, 1]);
   });
@@ -211,5 +208,46 @@ describe("a bond dragged out of a chair's atom", () => {
     expect(chairExtension(both, d.ring[k], pointer(axial))).toBeNull();
     // (an atom of no chair: none)
     expect(chairExtension({ atoms: [{ id: 1, el: "C", r: 0.9, x: 0, y: 0 }], bonds: [] }, 1, { x: 5, y: 5 })).toBeNull();
+  });
+});
+
+describe("cyclohexane's chair with its twelve hydrogens drawn at the tool's places", () => {
+  /** How many pairs of the drawing's bonds cross on the page, away from their ends. */
+  function crossings(m: Model): number {
+    const at = new Map(m.atoms.map((a) => [a.id, a]));
+    const cross = (p: Atom, q: Atom, r: Atom, s: Atom) => {
+      const d = { x: q.x - p.x, y: q.y - p.y };
+      const e = { x: s.x - r.x, y: s.y - r.y };
+      const den = d.x * e.y - d.y * e.x;
+      if (Math.abs(den) < 1e-12) return false;
+      const t = ((r.x - p.x) * e.y - (r.y - p.y) * e.x) / den;
+      const u = ((r.x - p.x) * d.y - (r.y - p.y) * d.x) / den;
+      return t > 1e-9 && t < 1 - 1e-9 && u > 1e-9 && u < 1 - 1e-9;
+    };
+    let n = 0;
+    m.bonds.forEach((b, i) =>
+      m.bonds.slice(i + 1).forEach((o) => {
+        if ([o.a, o.b].includes(b.a) || [o.a, o.b].includes(b.b)) return;
+        if (cross(at.get(b.a)!, at.get(b.b)!, at.get(o.a)!, at.get(o.b)!)) n++;
+      }),
+    );
+    return n;
+  }
+
+  it("has exactly two crossings, in either form and either flip (F8's known answer; which of each two is behind is read once a group carries its depth)", () => {
+    for (const flip of [false, true]) {
+      for (const form of [0, 1] as const) {
+        const d = draw(flip, form);
+        const atoms: Atom[] = [...d.atoms];
+        const bonds: Bond[] = [...d.bonds];
+        d.solid.free.forEach((free, i) => {
+          const place = seenPlaces(d, free.at).find((p) => p.free === free)!;
+          atoms.push({ id: 50 + i, el: "H", r: 0.9, x: place.place.x, y: place.place.y });
+          bonds.push({ id: 200 + i, a: d.ring[free.at], b: 50 + i, order: 1 });
+        });
+        expect(atoms).toHaveLength(18);
+        expect(crossings({ atoms, bonds }), `flip ${flip} form ${form}`).toBe(2);
+      }
+    }
   });
 });

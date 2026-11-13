@@ -26,7 +26,7 @@ const added = (m: Model, f: Fuse): Model => {
   const end = (e: { id: number } | { new: number }) => ("id" in e ? e.id : ids[e.new]);
   return {
     atoms: [...m.atoms, ...f.atoms.map((a, n) => ({ ...a, id: ids[n] }))],
-    bonds: [...m.bonds, ...f.bonds.map((b, n) => ({ id: 600 + n, a: end(b.a), b: end(b.b), order: 1 as const, ...(b.display ? { display: b.display } : {}) }))],
+    bonds: [...m.bonds, ...f.bonds.map((b, n) => ({ id: 600 + n, a: end(b.a), b: end(b.b), order: 1 as const }))],
   };
 };
 const fuse = (m: Model, bond: number, how: FuseHow) => {
@@ -77,8 +77,13 @@ describe("a chair fused on a bond of a chair", () => {
     expect(fusedOn(bare, everything(bare), 999, "trans")).toBeNull();
   });
 
-  it("draws the new ring's near edge bold as the first ring's is", () => {
-    const m = fuse(bare, 100, "trans");
-    expect(m.bonds.filter((b) => b.display === "bold").length).toBeGreaterThanOrEqual(2);
+  it("draws the new ring's bonds plain, as the first ring's are, each one bond long", () => {
+    for (const how of ["trans", { cis: 1 }, { cis: -1 }] as FuseHow[]) {
+      const m = fuse(bare, 100, how);
+      expect(m.bonds.every((b) => b.display == null)).toBe(true);
+      const at = new Map(m.atoms.map((a) => [a.id, a]));
+      const ringBond = Math.hypot(at.get(1)!.x - at.get(2)!.x, at.get(1)!.y - at.get(2)!.y);
+      for (const b of m.bonds.filter((x) => x.id >= 600)) expect(Math.hypot(at.get(b.a)!.x - at.get(b.b)!.x, at.get(b.a)!.y - at.get(b.b)!.y)).toBeCloseTo(ringBond, 6);
+    }
   });
 });

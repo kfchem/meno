@@ -1,35 +1,71 @@
 /**
- * The chair tool's drawing (docs/EDITOR-2D.md, *Projections*; foundation part 10): a chair of F9's solids (lib/chem/perception/projection) seen its
- * standard way, as ordinary atoms and bonds that carry their depth (`z`, nearer larger), the flag that their configuration is the drawing's
- * (`stereoCentre`), R and S shown where a group makes a centre (`stereoShown`) and the near edge bold. Pure: nothing here knows a page or a store; the tool puts what it makes where the pointer was.
+ * The chair tool's drawing (docs/EDITOR-2D.md, *Projections*; foundation part 10): a chair of the solids (lib/chem/perception/projection) drawn
+ * as the textbook draws one (`drawn`: its bonds on four directions, each one bond long, with the depth of its true view), as ordinary atoms and
+ * bonds that carry their depth (`z`, nearer larger), the flag that their configuration is the drawing's (`stereoCentre`) and R and S shown where a
+ * group makes a centre (`stereoShown`). Every bond plain: a ring in perspective is drawn with plain bonds (Brecher 2006, ST-3.3). Pure: nothing
+ * here knows a page or a store; the tool puts what it makes where the pointer was.
  * After it is made it is a drawing like any other: nothing remembers that a tool made it.
  */
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { chair, flipped, type FreePosition, type Solid } from "../../../../lib/chem/perception/projection/solids";
-import { project, standardView, type View } from "../../../../lib/chem/perception/projection/views";
+import { drawn, project, type Drawn, type View } from "../../../../lib/chem/perception/projection/views";
 import type { Atom, Bond } from "../store/types";
 
-/** The drawing a tool makes: its atoms and bonds, and the ring atoms' ids in the solid's order (atom 0 first). */
-export type ChairDrawing = { atoms: Atom[]; bonds: Bond[]; ring: number[]; solid: Solid; view: View; scale: number };
+/**
+ * The drawing a tool makes: its atoms and bonds, the ring atoms' ids in the solid's order (atom 0 first), the solid drawn, and how long a bond
+ * is drawn - and how: a chair as the textbook draws one (`drawing`), a Haworth ring seen (`view`).
+ */
+export type ChairDrawing = { atoms: Atom[]; bonds: Bond[]; ring: number[]; solid: Solid; scale: number; drawing?: Drawn; view?: View };
 
 /**
- * How a chair is scaled: the longest of its ring bonds as drawn is the style's bond length (`NOMINAL_BOND_LENGTH`), one constant: the look
- * owner may set another rule. By convention, no basis claimed.
+ * The form a chair is first drawn in: form 1, the view from above and from the right, which the text prefers (Brecher 2006, ST-3.1). Form 0,
+ * "from the left", which the text accepts, is the icon's second click (`putChair`).
  */
-export function chairScale(solid: Solid, view: View, length = NOMINAL_BOND_LENGTH): number {
+export const FIRST_FORM = 1;
+
+/**
+ * A chair in one of its two forms (`form` 0 or 1, `drawn`), or its ring flip (`flip`), its ring's middle at `at`, each bond `length` long (the
+ * style's bond length): atom k of the solid is `firstId + k`, its bond k `firstBondId + k`.
+ */
+export function chairDrawing(opts: { at: { x: number; y: number }; form?: 0 | 1; flip?: boolean; firstId: number; firstBondId: number; length?: number }): ChairDrawing {
+  const base = chair();
+  const solid = opts.flip ? flipped(base) : base;
+  const drawing = drawn(solid, opts.form ?? FIRST_FORM)!;
+  const scale = opts.length ?? NOMINAL_BOND_LENGTH;
+  const atoms: Atom[] = drawing.atoms.map((p, k) => ({
+    id: opts.firstId + k,
+    el: "C",
+    r: 0.9,
+    x: opts.at.x + p.x * scale,
+    y: opts.at.y + p.y * scale,
+    z: p.z * scale,
+    stereoCentre: true,
+    // (R and S shown at once on a centre a group makes: the chemist's check that the drawing says what is meant; none where there is none)
+    stereoShown: true,
+  }));
+  const bonds: Bond[] = solid.bonds.map(([a, b], k) => ({ id: opts.firstBondId + k, a: opts.firstId + a, b: opts.firstId + b, order: 1 }));
+  return { atoms, bonds, ring: atoms.map((a) => a.id), solid, drawing, scale };
+}
+
+/**
+ * How a solid seen in `view` is scaled: the longest of its ring bonds as drawn is the style's bond length (`NOMINAL_BOND_LENGTH`), one constant:
+ * by convention, no basis claimed.
+ */
+export function seenScale(solid: Solid, view: View, length = NOMINAL_BOND_LENGTH): number {
   const seen = solid.atoms.map((p) => project(view, p));
   const longest = Math.max(...solid.bonds.map(([a, b]) => Math.hypot(seen[a].x - seen[b].x, seen[a].y - seen[b].y)));
   return length / longest;
 }
 
 /**
- * A solid seen in `view` as a drawing: atom k of the solid is `firstId + k`, its bond k `firstBondId + k`, its middle at `at`, scaled so that the longest of
- * its ring bonds as drawn is `length`; the atoms carry their depth, the flag that their configuration is the drawing's and R and S shown where a group
- * makes a centre. The near edge - the two atoms nearest the viewer, where they are bonded - is bold. `element` names atom k's element (carbon).
+ * A solid seen in `view` as a drawing - a Haworth ring's: atom k of the solid is `firstId + k`, its bond k `firstBondId + k`, its middle at `at`,
+ * scaled so that the longest of its ring bonds as drawn is `length`; the atoms carry their depth, the flag that their configuration is the
+ * drawing's and R and S shown where a group makes a centre. The near edge - the two atoms nearest the viewer, where they are bonded - is bold.
+ * `element` names atom k's element (carbon).
  */
 export function drawSolid(opts: { solid: Solid; view: View; at: { x: number; y: number }; firstId: number; firstBondId: number; length?: number; element?: (k: number) => string }): ChairDrawing {
   const { solid, view } = opts;
-  const scale = chairScale(solid, view, opts.length);
+  const scale = seenScale(solid, view, opts.length);
   const seen = solid.atoms.map((p) => project(view, p));
   const n = seen.length;
   const middle = { x: seen.reduce((s, p) => s + p.x, 0) / n, y: seen.reduce((s, p) => s + p.y, 0) / n };
@@ -41,7 +77,6 @@ export function drawSolid(opts: { solid: Solid; view: View; at: { x: number; y: 
     y: opts.at.y + (p.y - middle.y) * scale,
     z: p.z * scale,
     stereoCentre: true,
-    // (R and S shown at once on a centre a group makes: the chemist's check that the drawing says what is meant; none where there is none)
     stereoShown: true,
   }));
   const near = [...seen.keys()].sort((a, b) => seen[b].z - seen[a].z).slice(0, 2);
@@ -55,27 +90,18 @@ export function drawSolid(opts: { solid: Solid; view: View; at: { x: number; y: 
   return { atoms, bonds, ring: atoms.map((a) => a.id), solid, view, scale };
 }
 
-/**
- * A chair in one of its two standard views (`form` 0 or 1, F9 `standardView`), or its ring flip (`flip`), its middle at `at`: atom k of the solid is
- * `firstId + k`, its bond k `firstBondId + k`.
- */
-export function chairDrawing(opts: { at: { x: number; y: number }; form?: 0 | 1; flip?: boolean; firstId: number; firstBondId: number; length?: number }): ChairDrawing {
-  const base = chair();
-  return drawSolid({ solid: opts.flip ? flipped(base) : base, view: standardView(base, opts.form ?? 0), at: opts.at, firstId: opts.firstId, firstBondId: opts.firstBondId, length: opts.length });
-}
-
 /** A free position as the page sees it from atom `k` of a drawing: where a group's atom goes (page units), and what the position is. */
 export type SeenPlace = { place: { x: number; y: number }; direction: { x: number; y: number; z: number }; free: FreePosition };
 
-/** The free positions of atom `k` of a chair drawing, each as the page has it: the group's atom at the bond's seen vector, scaled as the ring is. */
+/**
+ * The free positions of atom `k` of a drawing, each as the page has it: a chair's group one bond along its drawn direction (an axial one
+ * vertical, an equatorial one parallel to the ring bonds one removed), a seen solid's at the bond's seen vector, scaled as the ring is.
+ */
 export function seenPlaces(d: ChairDrawing, k: number): SeenPlace[] {
   const atom = d.atoms[k];
-  return d.solid.free
-    .filter((f) => f.at === k)
-    .map((free) => {
-      const v = project(d.view, free.direction);
-      return { place: { x: atom.x + v.x * d.scale, y: atom.y + v.y * d.scale }, direction: v, free };
-    });
+  const at = (free: FreePosition, v: { x: number; y: number; z: number }): SeenPlace => ({ place: { x: atom.x + v.x * d.scale, y: atom.y + v.y * d.scale }, direction: v, free });
+  if (d.drawing) return d.drawing.free.filter((f) => f.free.at === k).map((f) => at(f.free, { x: f.x, y: f.y, z: f.z }));
+  return d.solid.free.filter((f) => f.at === k).map((free) => at(free, project(d.view!, free.direction)));
 }
 
 /**
@@ -95,7 +121,7 @@ export function snapTo(d: ChairDrawing, k: number, pointer: { x: number; y: numb
   return best?.place ?? null;
 }
 
-/** A chair found on a page: which of its two standard views and whether flipped, how it is scaled and where its middle is, and each ring atom's place in the solid. */
+/** A chair found on a page: which of its two forms and whether flipped, how long its bonds are drawn and where its middle is, and each ring atom's place in the solid. */
 export type FoundChair = { form: 0 | 1; flip: boolean; scale: number; at: { x: number; y: number }; index: Map<number, number> };
 
 /** The rings of `size` of a drawing whose atoms all carry a depth, each as atom ids in order round it. */
@@ -129,9 +155,10 @@ export function chairOf(model: { atoms: Atom[] }, ring: readonly number[]): Foun
   if (atoms.length !== 6 || atoms.some((a) => !a || a.z == null)) return null;
   const places = atoms as Atom[];
   const middle = { x: places.reduce((s, a) => s + a.x, 0) / 6, y: places.reduce((s, a) => s + a.y, 0) / 6 };
+  const length = Math.hypot(places[0].x - places[1].x, places[0].y - places[1].y);
   for (const form of [0, 1] as const) {
     for (const flip of [false, true]) {
-      const d = chairDrawing({ at: middle, form, flip, firstId: 1, firstBondId: 1 });
+      const d = chairDrawing({ at: middle, form, flip, firstId: 1, firstBondId: 1, length });
       for (let turn = 0; turn < 6; turn++) {
         for (const way of [1, -1]) {
           const mine = places.map((_, i) => d.atoms[(turn + way * i + 6) % 6]);
@@ -148,15 +175,20 @@ export function chairOf(model: { atoms: Atom[] }, ring: readonly number[]): Foun
 export type Moves = Map<number, { x: number; y: number; z?: number }>;
 
 /**
- * The ring flip of a chair on a page (F9 `flipped`): every ring atom takes the other picture's place and depth, and each group moves from
- * axial to equatorial or back **on the same face** - a group and everything beyond it carried by the same step. None where the ring is no chair
- * of the tool's, or where a group of it stands at neither of its atom's free positions (drawn by hand: nothing is guessed).
+ * The ring flip of a chair on a page (`flipped`): every ring atom takes the other picture's place and depth - drawn in the form whose end atoms
+ * are the ends they were, so the chair stays where it is - and each group moves from axial to equatorial or back **on the same face**, a group
+ * and everything beyond it carried by the same step. None where the ring is no chair of the tool's, or where a group of it stands at neither of
+ * its atom's free positions (drawn by hand: nothing is guessed).
  */
 export function flipChairMoves(model: { atoms: Atom[]; bonds: Bond[] }, ring: readonly number[]): Moves | null {
   const found = chairOf(model, ring);
   if (!found) return null;
-  const was = chairDrawing({ at: found.at, form: found.form, flip: found.flip, firstId: 1, firstBondId: 1 });
-  const now = chairDrawing({ at: found.at, form: found.form, flip: !found.flip, firstId: 1, firstBondId: 1 });
+  const was = chairDrawing({ at: found.at, form: found.form, flip: found.flip, firstId: 1, firstBondId: 1, length: found.scale });
+  // (of the flipped chair's two forms, the one whose two end atoms - 0 and 3 - are nearest where they were)
+  const ends = (d: ChairDrawing) => [0, 3].reduce((sum, k) => sum + Math.hypot(d.atoms[k].x - was.atoms[k].x, d.atoms[k].y - was.atoms[k].y), 0);
+  const now = ([0, 1] as const)
+    .map((form) => chairDrawing({ at: found.at, form, flip: !found.flip, firstId: 1, firstBondId: 1, length: found.scale }))
+    .sort((p, q) => ends(p) - ends(q))[0];
   const byId = new Map(model.atoms.map((a) => [a.id, a]));
   const moves: Moves = new Map();
   for (const id of ring) {

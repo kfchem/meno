@@ -8,6 +8,7 @@ import { strokeTarget } from "../utils/stroke";
 import { useDrawnLayout } from "./drawnLayoutContext";
 import { TAU, follow } from "../../../theme/motion";
 import { bondLengthFrom } from "../utils/magnified";
+import { FREE_BLEND_S, SNAP_SPRING, easeOutCubic, freedAngle, springAngle } from "../utils/angleSpring";
 
 // Preview for a stroke drawn out of an atom (see utils/stroke).
 // - Works out where the bond the pointer is leading ends - springing round
@@ -89,10 +90,9 @@ export default function ExtendPreview2D() {
       if (!wasFree.current) freeing.current = { t: 0, ang: curAngRef.current };
       const f = freeing.current;
       if (f && f.t < 1) {
-        f.t = Math.min(1, f.t + dt / 0.18);
-        const s = 1 - Math.pow(1 - f.t, 3); // ease out
-        const d = Math.atan2(Math.sin(toPtr - f.ang), Math.cos(toPtr - f.ang));
-        const ang = f.ang + d * s;
+        f.t = Math.min(1, f.t + dt / FREE_BLEND_S);
+        const s = easeOutCubic(f.t);
+        const ang = freedAngle(f.ang, toPtr, f.t);
         const len = L + (lenPtr - L) * s;
         end = { x: tip.x + len * Math.cos(ang), y: tip.y + len * Math.sin(ang) };
       } else {
@@ -102,14 +102,9 @@ export default function ExtendPreview2D() {
       angVelRef.current = 0;
     } else {
       // Angle-only spring: snappy, with a little bounce
-      const k = 800;
-      const c = 2 * Math.sqrt(k) * 0.5;
-      const err = Math.atan2(
-        Math.sin(curAngRef.current - want),
-        Math.cos(curAngRef.current - want),
-      );
-      angVelRef.current += (-k * err - c * angVelRef.current) * dt;
-      curAngRef.current += angVelRef.current * dt;
+      const sprung = springAngle(curAngRef.current, angVelRef.current, want, dt, SNAP_SPRING);
+      curAngRef.current = sprung.angle;
+      angVelRef.current = sprung.velocity;
       end = {
         x: tip.x + L * Math.cos(curAngRef.current),
         y: tip.y + L * Math.sin(curAngRef.current),

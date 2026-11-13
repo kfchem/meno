@@ -2074,7 +2074,7 @@ export type EditorState = {
   moveAtoms: (moves: { id: number; x: number; y: number }[], gesture: string, marks?: MarkPlaces) => void;
   /** Atoms put at the places and depths of another picture of the same solid - a chair flipped (../projections/chair) - as one undo step. */
   /** Atoms with their depth, and bonds to them or from them to atoms already there, added together - a ring fused on a chair (../projections/fuse) - as one undo step. */
-  addSolid: (atoms: Omit<Atom, "id">[], bonds: { a: { id: number } | { new: number }; b: { id: number } | { new: number }; display?: "bold" }[], name: string) => void;
+  addSolid: (atoms: Omit<Atom, "id">[], bonds: { a: { id: number } | { new: number }; b: { id: number } | { new: number } }[], name: string) => void;
   placeSolid: (moves: { id: number; x: number; y: number; z?: number }[], name: string) => void;
   /** A move or a turn made with moveAtoms (`gesture`) let go of by Escape: taken back, nothing left to redo. */
   dropMoveAtoms: (gesture: string) => void;
@@ -2084,6 +2084,11 @@ export type EditorState = {
   deleteSelection: () => void;
   /** A structure from the clipboard added where it already stands, selected, as one undo step. */
   pasteModel: (next: Drawn) => void;
+  /**
+   * A chair put down from Quick Add, its ring's middle at `at`, seen from the right (form 1); or, where the chair this put down is still as it
+   * was, nothing done since, that chair turned to the view from the other side as one step - and back (docs/EDITOR-2D.md, *Projections*).
+   */
+  putChair: (at: { x: number; y: number }) => void;
   setHoveredFromId: (id: number) => void;
   clearHovered: () => void;
   setHoveredArrow: (id: number | null) => void;

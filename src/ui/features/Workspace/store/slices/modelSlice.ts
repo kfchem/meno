@@ -5,7 +5,8 @@ import { wordsSet } from "../../../../../lib/chem/captions";
 import { labelSetOf } from "../../../../../lib/chem/layout2d";
 import type { ShowBox } from "../../utils/viewShow";
 import { bondPtOf, labelPtOf, wordsKept } from "../../restyle";
-import { restyledDrawn } from "../../utils/copyPaste";
+import { centredAt, restyledDrawn } from "../../utils/copyPaste";
+import { chairDrawing, FIRST_FORM } from "../../projections/chair";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import { bondKeyPatch, bondKindPatch, patchAlike, patchChangesNothing, type BondKey, type BondKindName } from "../../utils/bondKinds";
 import { gestureStep } from "../../../../../lib/doc/document";
@@ -123,6 +124,14 @@ type PressNote = { depth: number; state: WorkspaceDocument; selection: Pick<Edit
 /** The press noted last, by its document: none once taken back. */
 const pressNotes = new WeakMap<DocumentStore<WorkspaceDocument>, PressNote>();
 
+/**
+ * A chair the Quick Add icon put down, by the model it left: its ring atoms' ids in the solid's order, its ring's middle, its form and its
+ * bond's length. A click on the icon while the model is still one of these - the chair the last step put down or turned, nothing since -
+ * turns that chair to its other form instead of putting down another (`putChair`).
+ */
+type ChairPut = { ids: number[]; at: { x: number; y: number }; form: 0 | 1; length: number };
+const chairPuts = new WeakMap<Model, ChairPut>();
+
 export const createModelSlice = (
   doc: DocumentStore<WorkspaceDocument>,
   set: SetState,
@@ -212,7 +221,7 @@ export const createModelSlice = (
     doc.edit("move atoms", (d) => ops.placeMarks(ops.placeAtoms(d, moves), marks), gestureStep(`move-atoms:${gesture}`));
   },
 
-  addSolid: (atoms: Omit<Atom, "id">[], bonds: { a: { id: number } | { new: number }; b: { id: number } | { new: number }; display?: "bold" }[], name: string) => {
+  addSolid: (atoms: Omit<Atom, "id">[], bonds: { a: { id: number } | { new: number }; b: { id: number } | { new: number } }[], name: string) => {
     doc.edit(name, (d) => {
       const ids = atoms.map((_, n) => d.nextId + n);
       const end = (e: { id: number } | { new: number }) => ("id" in e ? e.id : ids[e.new]);
@@ -221,7 +230,7 @@ export const createModelSlice = (
         nextId: d.nextId + atoms.length + bonds.length,
         model: {
           atoms: [...d.model.atoms, ...atoms.map((a, n) => ({ ...a, id: ids[n] }))],
-          bonds: [...d.model.bonds, ...bonds.map((b, n): Bond => ({ id: d.nextId + atoms.length + n, a: end(b.a), b: end(b.b), order: 1, ...(b.display ? { display: b.display } : {}) }))],
+          bonds: [...d.model.bonds, ...bonds.map((b, n): Bond => ({ id: d.nextId + atoms.length + n, a: end(b.a), b: end(b.b), order: 1 }))],
         },
       };
     });
@@ -665,6 +674,30 @@ export const createModelSlice = (
       extend: { active: false, atomId: null, pointer: null, mode: "snap" },
       fitNonce: prev.fitNonce + 1,
     }));
+  },
+
+  putChair: (at: { x: number; y: number }) => {
+    // (the chair just put down, unchanged: turned to its other form - the view from the other side - as one step; again, back)
+    const was = chairPuts.get(get().model);
+    if (was) {
+      const form: 0 | 1 = was.form === 1 ? 0 : 1;
+      const d = chairDrawing({ at: was.at, form, firstId: 1, firstBondId: 1, length: was.length });
+      const moves = was.ids.map((id, k) => ({ id, x: d.atoms[k].x, y: d.atoms[k].y, z: d.atoms[k].z }));
+      doc.edit("the chair's other view", (dd) => ops.placeAtoms(dd, moves));
+      chairPuts.set(get().model, { ...was, form });
+      return;
+    }
+    const drawing = chairDrawing({ at, firstId: 1, firstBondId: 1 });
+    const before = new Set(get().model.atoms.map((a) => a.id));
+    get().pasteModel(centredAt(drawing, at));
+    const added = get().model.atoms.filter((a) => !before.has(a.id));
+    if (added.length !== 6) return;
+    // (each new atom matched to the drawing's atom of the same place, by the shift the paste gave them all)
+    const middle = { x: added.reduce((sum, a) => sum + a.x, 0) / 6, y: added.reduce((sum, a) => sum + a.y, 0) / 6 };
+    const shift = { x: middle.x - at.x, y: middle.y - at.y };
+    const ids = drawing.atoms.map((p) => added.reduce((best, a) => (Math.hypot(a.x - p.x - shift.x, a.y - p.y - shift.y) < Math.hypot(best.x - p.x - shift.x, best.y - p.y - shift.y) ? a : best)).id);
+    if (new Set(ids).size !== 6) return;
+    chairPuts.set(get().model, { ids, at: middle, form: FIRST_FORM, length: drawing.scale });
   },
 
   pasteModel: (given: Drawn) => {

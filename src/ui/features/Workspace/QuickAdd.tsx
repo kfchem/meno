@@ -45,7 +45,7 @@ const SHAPE_ICONS: Record<ShapeKind, ReactNode> = {
  * *Marks on the page* - the shapes and the pen, which draw on the page and
  * say nothing chemical.
  */
-const ROW: { id: QuickAddChoice | "chain" | "smiles" | "scheme" | "marks" | "projections"; name: string; icon: ReactNode }[] = [
+const ROW: { id: QuickAddChoice | "chain" | "smiles" | "scheme" | "marks" | "projections"; name: string; icon: ReactNode; tip?: string }[] = [
   {
     id: "bond",
     name: "Bond",
@@ -168,14 +168,10 @@ const PROJECTIONS: typeof ROW = [
   {
     id: "chair",
     name: "Chair",
-    // (the chair of the row's icon, its near edge heavier)
-    icon: (
-      <>
-        <path d="M16.6 9 L13.3 8.7 L6.7 6.5 L3.4 11 L6.7 11.3" />
-        <path d="M6.7 11.3 L13.3 13.5" strokeWidth={2.8} />
-        <path d="M13.3 13.5 L16.6 9" />
-      </>
-    ),
+    // (what it does a second time, said as the pointer rests on it: the view from the other side)
+    tip: "Chair. Click again for the view from the other side",
+    // (a chair as it is first put down, seen from the right: its up end at the left, every bond plain)
+    icon: <path d="M3.4 9 L6.7 8.7 L13.3 6.5 L16.6 11 L13.3 11.3 L6.7 13.5 Z" />,
   },
   {
     id: "pyranose",
@@ -390,7 +386,7 @@ export default function QuickAdd({
           <div className="overflow-hidden" inert={open !== "projections"}>
             <div role="group" aria-label="Projections" className="mt-1 pt-1 border-t border-gh-line flex items-center gap-0.5" style={{ width: width - 8 }}>
               {PROJECTIONS.map((c) => (
-                <RowIcon key={c.id} name={c.name} icon={c.icon} onClick={() => onChoose(c.id as QuickAddChoice)} />
+                <RowIcon key={c.id} name={c.name} tip={c.tip} icon={c.icon} onClick={() => onChoose(c.id as QuickAddChoice)} />
               ))}
             </div>
           </div>
@@ -585,11 +581,11 @@ export function DrawAs({ offered, chosen, onChoose }: { offered: readonly Readin
 }
 
 /** An icon of a row Quick Add opens below its own: as the row's icons are, named as the pointer rests on it. */
-function RowIcon({ name, icon, onClick, onPointerDown }: { name: string; icon: ReactNode; onClick?: () => void; onPointerDown?: (e: React.PointerEvent) => void }) {
+function RowIcon({ name, tip, icon, onClick, onPointerDown }: { name: string; tip?: string; icon: ReactNode; onClick?: () => void; onPointerDown?: (e: React.PointerEvent) => void }) {
   return (
     <button
       aria-label={name}
-      title={name}
+      title={tip ?? name}
       onClick={onClick}
       onPointerDown={onPointerDown}
       className="meno-press rounded-md flex items-center justify-center text-gh-black hover:bg-gh-base transition-colors duration-150 ease-meno"

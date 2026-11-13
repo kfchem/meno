@@ -16,7 +16,7 @@ export function projectionsIn(model: { atoms: Atom[]; bonds: Bond[] }, ids: Read
   const out: FoundProjection[] = [];
   for (const ring of chairsIn(model, ids)) {
     const c = chairOf(model, ring)!;
-    out.push({ kind: "chair", ring, drawing: chairDrawing({ at: c.at, form: c.form, flip: c.flip, firstId: 1, firstBondId: 1 }), index: c.index });
+    out.push({ kind: "chair", ring, drawing: chairDrawing({ at: c.at, form: c.form, flip: c.flip, firstId: 1, firstBondId: 1, length: c.scale }), index: c.index });
   }
   for (const ring of haworthsIn(model, ids)) {
     const h = haworthOf(model, ring)!;
