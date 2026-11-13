@@ -314,6 +314,8 @@ export async function laidOut(model: Model, style: DrawingStyle = styleOf(useApp
       input: {
         ...job.input,
         atoms: job.input.atoms.map((a, k) => (linear.has(k) ? { ...a, linear: true } : a)),
+        // (nor asked of the engine to lay out the cis or trans the plugin's drawing read: with its ends straight on it could show none, and
+        //  `opened` keeps it from being taken as the drawing's - so this keeps the engine's input to what the text says, not a case of its own)
         bonds: job.input.bonds.map((b) => (b.stereo && b.order === 2 && linear.has(b.a) && linear.has(b.b) ? { a: b.a, b: b.b, order: b.order } : b)),
       },
     };

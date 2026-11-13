@@ -132,3 +132,24 @@ describe("a double bond in a ring of eight atoms or more, and the end of two gro
     expect(open("CC(N)=NC")).toEqual({ straight: [], either: [] });
   });
 });
+
+describe("the wavy bond's end, where both ends have two groups", () => {
+  it("is the end with a free group, though the end listed first has none: the bond to each centre kept plain", () => {
+    // (C0=C1; C0's groups 2 and 3 and C1's group 5 each a stereocentre - a wedge narrow there - C1's group 4 a methyl)
+    const atoms: Atom[] = [
+      [0, 0], [1.3, 0], [-0.7, 1.1], [-0.7, -1.1], [2, 1.1], [2, -1.1], [-0.2, 2.2], [-0.2, -2.2], [1.5, -2.2],
+    ].map(([x, y], i) => ({ id: i, x, y, el: "C" }));
+    const bonds: Bond[] = [
+      { a1: 0, a2: 1, order: 2, stereo: "either" },
+      { a1: 0, a2: 2, order: 1 },
+      { a1: 0, a2: 3, order: 1 },
+      { a1: 1, a2: 4, order: 1 },
+      { a1: 1, a2: 5, order: 1 },
+      { a1: 2, a2: 6, order: 1, stereo: "up", narrow: 2 },
+      { a1: 3, a2: 7, order: 1, stereo: "down", narrow: 3 },
+      { a1: 5, a2: 8, order: 1, stereo: "up", narrow: 5 },
+    ];
+    const wavy = unspecifiedDoubles(atoms, bonds).flatMap((b, k) => (b.stereo === "wavy" ? [k] : []));
+    expect(wavy).toEqual([3]);
+  });
+});
