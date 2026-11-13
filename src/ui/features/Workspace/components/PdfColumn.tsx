@@ -43,7 +43,8 @@ import { columnSettingAt, sheetSetting } from "./textFlightSetting";
 import { drawnSheetBox, iconScaleOf, sheetOfText } from "../utils/textSheets";
 import { lookOf, poseOf, seenBounds, solidOf } from "../utils/molecule3d";
 import { style3dOf } from "../style3d";
-import { CARD_H, CARD_W } from "../workflow/look";
+import { CARD_W } from "../workflow/look";
+import { cardHighOf } from "../workflow/kinds";
 import { columnText, keepColumnTexts, markdownReaderOf, useShowsSource } from "../../TextEditor/columnText";
 import { isMarkdown, readMarkdown } from "../../../../lib/text/markdown";
 import { layOut } from "../../TextEditor/markdownLayout";
@@ -71,7 +72,7 @@ function bodyBoxOf(st: EditorState, t: WorkspaceText): { x0: number; x1: number;
   if (!of) return null;
   if ("step" in of) {
     const s = st.steps.find((x) => x.id === of.step);
-    return s ? { x0: s.x, x1: s.x + CARD_W, y0: s.y - CARD_H, y1: s.y } : null;
+    return s ? { x0: s.x, x1: s.x + CARD_W, y0: s.y - cardHighOf(s.kind), y1: s.y } : null;
   }
   const m = st.molecules3d.find((x) => x.id === of.molecule);
   if (!m) return null;

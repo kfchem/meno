@@ -72,7 +72,8 @@ export const CARD_H = 76 * PX;
  * what its program said, and its bar - 2 + 8 + 20 + 32 + 6 + 32 + 16 + 9 +
  * 10. What placing keeps clear of a card and gives a card put down (place):
  * its words can draw it taller than `CARD_H`, never than this. Its ports,
- * its wires and fitting the page keep to `CARD_H`.
+ * its wires and fitting the page keep to `CARD_H` (`cardHigh`, for a card of
+ * more ports).
  */
 export const CARD_TALL = 135 * PX;
 /** How far below its top a step's ports stand: wires join where they always did as its card opens. */
@@ -81,6 +82,16 @@ export const PORT_DOWN = 28 * PX;
 export const PORT_STEP = 20 * PX;
 /** How far down a card's top its `k`th input is (from 0). */
 export const portDown = (k: number) => PORT_DOWN + k * PORT_STEP;
+/** How many ports down either edge a card `CARD_H` tall has room for. */
+export const CARD_PORTS = 3;
+/**
+ * How tall a step's card is closed, about, with `ports` ports down an edge
+ * (workflow/kinds `cardHighOf`): `CARD_H`, one port's step taller for each
+ * past `CARD_PORTS` - its ports a plain list down its edge, the last as
+ * far above its foot as a third is on a card `CARD_H` tall (2026-11-11).
+ * Its ports, its wires and fitting the page keep to it as to `CARD_H`.
+ */
+export const cardHigh = (ports: number) => CARD_H + Math.max(0, ports - CARD_PORTS) * PORT_STEP;
 /**
  * How far to the left of its input a wire comes in level, where the card
  * names its inputs (more than one, StepCard): past the name - 10 px

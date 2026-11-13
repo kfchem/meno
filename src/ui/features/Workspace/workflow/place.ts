@@ -12,7 +12,7 @@ import type { WorkflowSet, WorkflowStep } from "../store/types";
 import { inside, setMembers, structuresOf, type Frame } from "./entries";
 import { boxOf } from "../chem/make3d";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { exitPlace, exitsOf, inputsOf, ONE_EXIT, type StepKind } from "./kinds";
+import { cardHighOf, exitPlace, exitsOf, inputsOf, ONE_EXIT, type StepKind } from "./kinds";
 import { unseenSets } from "./onPage";
 import { BETWEEN, CARD_H, CARD_TALL, CARD_W, GAP, inputLead, nearWire, portDown, setGives, setTakes, stepGives, stepTakes, wirePath } from "./look";
 
@@ -77,8 +77,8 @@ export function wireStart(steps: readonly Pick<WorkflowStep, "id" | "x" | "y" | 
   return s && set.made ? exitStart(s, set.made.exit) : setGives(set);
 }
 
-/** A step's card, shut: where it stands on the page. */
-const cardOf = (s: { x: number; y: number }): Frame => frameAt(s.x, s.y, CARD_W, CARD_H);
+/** A step's card, shut: where it stands on the page, as tall as its kind's ports make it (kinds `cardHighOf`). */
+const cardOf = (s: { x: number; y: number; kind: StepKind }): Frame => frameAt(s.x, s.y, CARD_W, cardHighOf(s.kind));
 
 /** A wire as Workflow2D draws it: round its ends, and the sets and cards near it (look `nearWire`) - its whole path, close enough everywhere to stand for it (look `wirePath`). */
 const routed = (p: Pt, q: Pt, e: { from?: Frame; to?: Frame; lead?: number }, round: readonly Frame[]) => wirePath(p, q, e, nearWire(p, q, e, round));
@@ -116,7 +116,7 @@ function takenOn(doc: WorkspaceDocument, self?: Self, along?: { x0: number; x1: 
   const unseen = unseenSets(doc);
   const shown = (doc.sets ?? []).filter((b) => !own(b.id) && !unseen.has(b.id));
   // (what wires go round: the sets and cards, as Workflow2D has them go round - look `wireCurve`)
-  const round: Frame[] = [...shown, ...(doc.steps ?? []).map((s) => frameAt(s.x, s.y, CARD_W, CARD_H))];
+  const round: Frame[] = [...shown, ...(doc.steps ?? []).map(cardOf)];
   // (and what is kept clear of: each card as tall as its words can draw it closed - look `CARD_TALL`)
   const frames: Taken["frames"] = [...shown, ...(doc.steps ?? []).map((s) => ({ ...frameAt(s.x, s.y, CARD_W, CARD_TALL), card: s.id })), ...inkOf(doc, own, along)];
   const points: Pt[] = [...doc.model.atoms.map((a) => ({ x: a.x, y: a.y })), ...(doc.molecules3d ?? []).filter((m) => !self?.molecules?.has(m.id)).map((m) => m.at)];
@@ -276,8 +276,8 @@ export function placeNext(doc: WorkspaceDocument, from: { set: number }, kind: S
  * so that the steps after it have their lines clear; none (Infinity) where
  * there is no such card.
  */
-export function columnWidth(doc: WorkspaceDocument, step: { id: number; x: number; y: number }): number {
+export function columnWidth(doc: WorkspaceDocument, step: { id: number; x: number; y: number; kind: StepKind }): number {
   const x = step.x + CARD_W + GAP;
-  const next = (doc.steps ?? []).filter((s) => s.id !== step.id && s.x > step.x && s.y - CARD_H < step.y && s.y > step.y - CARD_H).map((s) => s.x);
+  const next = (doc.steps ?? []).filter((s) => s.id !== step.id && s.x > step.x && s.y - cardHighOf(s.kind) < step.y && s.y > step.y - cardHighOf(step.kind)).map((s) => s.x);
   return next.length ? Math.min(...next) - BETWEEN - x : Infinity;
 }
