@@ -1253,7 +1253,10 @@ taller than the rest, its inputs a plain list down its left edge, each named
   compared the shorter way round, so that 179.999° and -179.999° are
   0.002° apart. One that is not fails the entry, saying where it ended ("Torsion
   1-2-3-4 ended at 59.980°, held at 60°"); a torsion three of whose atoms
-  ended in a line is no torsion, and is said so. How it converged:
+  ended in a line - a bond angle within 1° of 180° or of 0°, the guard a
+  torsion is refused by as it is made - has no angle to hold, and fails,
+  said so: the same 1° bounds a torsion going in and coming out, as
+  within it nearly any angle would pass. How it converged:
   "optimisation with restraints held", with the rows it held and any
   atoms held besides. A run not converged is said so, as ever: it may
   have stopped short of a value it was making for.
