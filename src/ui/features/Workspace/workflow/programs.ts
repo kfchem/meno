@@ -79,8 +79,7 @@ export async function entryFiles(
 
 /**
  * An entry as a plugin is given it - with `wired`, the restraints its step
- * holds for it (workflow/heldRows), in place of any it carries; none given,
- * those it carries (Torsion restraints'), as they ride.
+ * holds for it (workflow/heldRows), and where they were first held.
  */
 export function pluginEntry(e: SetEntry, wired?: readonly Restraint[]): PluginEntry {
   const molecule: WrittenMolecule = {
@@ -107,7 +106,7 @@ export function pluginEntry(e: SetEntry, wired?: readonly Restraint[]): PluginEn
   // (a skeleton is refused before anything is sent - stepRuns, `skeletonsRefused` - so none comes here)
   if (!species) throw new Error(skeletonWhy());
   const { charge, multiplicity } = species;
-  // (its restraints, as Restraints and Torsion restraints left them: what a plugin that minimises with them holds - and where they were first held)
+  // (where the restraints wired in for it were first held, where a minimisation has held them)
   const held = e.properties?.restraints;
   const restraints = held?.status === "computed" && typeof held.value === "object" && held.value !== null && "restraints" in held.value ? held.value : undefined;
   return {
@@ -121,7 +120,7 @@ export function pluginEntry(e: SetEntry, wired?: readonly Restraint[]): PluginEn
     ...(e.end ? { end: pluginEntry(e.end) } : {}),
     // (its sides, where it is a guess paired with them: each given as it is - Optimise to a saddle point's)
     ...(e.sides ? { sides: { reactant: pluginEntry(e.sides.reactant), product: pluginEntry(e.sides.product) } } : {}),
-    ...(wired ? { restraints: wired.map((r) => ({ ...r, atoms: [...r.atoms] })) } : restraints?.restraints.length ? { restraints: restraints.restraints.map((r) => ({ ...r, atoms: [...r.atoms] })) } : {}),
+    ...(wired?.length ? { restraints: wired.map((r) => ({ ...r, atoms: [...r.atoms] })) } : {}),
     ...(restraints?.start ? { start: [...restraints.start] } : {}),
   };
 }
@@ -528,20 +527,19 @@ export function stoppedAt(kind: StepKind, entry: SetEntry, out: ReaderOutput, re
 }
 
 /**
- * An entry's restraints once a minimisation has held them - those it
- * carries, or those wired in for it (`restrained`) - saying where they were
- * first held (`start`): where they already say, as they say; else where
- * the entry stood as it came - so that a later minimisation, asked to,
- * starts again from there, as case F's rounds each start from the geometry
- * before the first (docs/WORKFLOWS-FOUNDATION.md, F15). Rows wired in are
- * not carried on: the next step holds what is wired into it. Nothing where
- * it held none.
+ * Where an entry's restraints - those wired in for it (`restrained`) -
+ * were first held, once a minimisation has held them (`start`): where it
+ * already says, as it says; else where the entry stood as it came - so
+ * that a later minimisation, asked to, starts again from there, as case F's
+ * rounds each start from the geometry before the first
+ * (docs/WORKFLOWS-FOUNDATION.md, F15). The rows are not carried on: the next
+ * step holds what is wired into it. Nothing where it held none.
  */
 function firstHeld(entry: SetEntry, restrained: boolean): Pick<SetEntry, "properties"> | Record<string, never> {
   const held = entry.properties?.restraints;
   const was = held?.status === "computed" && typeof held.value === "object" && held.value !== null && "restraints" in held.value ? held.value : undefined;
-  if (was?.start || (!was?.restraints.length && !restrained)) return {};
-  return { properties: { ...anew(entry).properties, restraints: { value: { restraints: was?.restraints ?? [], start: [...entry.xyz] }, unit: "none", status: "computed" } } };
+  if (was?.start || !restrained) return {};
+  return { properties: { ...anew(entry).properties, restraints: { value: { restraints: [], start: [...entry.xyz] }, unit: "none", status: "computed" } } };
 }
 
 /** How far, in Å, a distance between two atoms may differ in what a single point printed back - its program's rounding - before an atom is taken to have moved. */

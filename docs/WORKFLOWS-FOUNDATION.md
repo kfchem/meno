@@ -623,9 +623,11 @@ way:
 Charge and multiplicity are each entry's *species*, not options. A *Species*
 node sets them where the atoms do not say it.
 
-**Restraints are a property** (`restraints`), made by the *Restraints* and
-*Torsion restraints* nodes, riding with each entry to the steps whose
-plugins apply them. Each row is one restraint:
+**Restraints are a table** (2026-11-11, v0.1.26; until then a property
+riding with each entry), made by the *Restraints* and *Torsion restraints*
+nodes and wired into the *Restraints* input of the steps whose plugins
+apply them, each row for its entry by an ID a node wrote (question A; see
+WORKFLOWS.md, *Restraints wired in*). Each row is one restraint:
 - distance, torsion, or fixed atoms;
 - the atoms, in the entry's numbering;
 - the target, with its unit;
@@ -677,8 +679,9 @@ of highest weight stands for it, carrying the results.
 | **Compare bonding** | molecules, 3D, and *reference* (molecules) | *same* and *different*: bonds read from the geometry, and R or S, E or Z and every centre by its atoms' numbers where asked, compared with the reference matched on a property; or with each reference, naming the one it matches. Coordination bonds, and atoms, elements or bonds the chemist lists, are passed over |
 | **Mode on atoms** | molecules with vibrations, and a table of atoms (from *bond changes*), or atoms typed | every entry, each with where its imaginary vibration ranks those atoms - the window, each one's rank, how many fall outside - for a *Filter* to keep on (built 2026-11-02, STRUCTURE-STEPS.md) |
 | **Atom map** | *molecules* and a *reference* (3D, every hydrogen present), each input's entries each a side of its own or one side together; matched on a property, or one reference for all; whether bonds may change (a reaction) or stay the same (conformers of the reference) | *mapped*: each side a complete 3D structure in the reference's numbering, every atom mapped one to one, hydrogens included (the first map, or every map) - a reaction's products in its reactants' numbering, or a species' conformers with their equivalent atoms (a methylene's hydrogens) where the species has them; *bond changes*: a table of each bond formed, broken or changed in order, with its atoms and orders before and after |
-| **Restraints** | molecules | the same, each with its restraints from itself: coordination bonds kept at a factor of the van der Waals distance, listed pairs kept at their distance, listed atoms fixed |
-| **Torsion restraints** | molecules, 3D, and *reference* (molecules) | *restrained*: each torsion trans across the reference's double bonds and not trans here held at 180°, stronger by a step each time; *trans already*: the rest, as they came |
+| **Restraints** | molecules | a table of restraints, each from its entry: coordination bonds kept at a factor of the van der Waals distance, listed pairs kept at their distance, listed atoms fixed |
+| **Torsion restraints** | molecules, 3D, and *reference* where wanted (molecules) | a table of torsion restraints: typed, or each torsion unlike the reference's, at 180° where trans or at its own angle, by a strength or exactly |
+| **Compare torsions** | molecules, 3D, and *reference* (molecules) | the same, each with how many torsions are trans in the reference and cis here, and which |
 | **Measure** | molecules | the same, with distances, angles or dihedrals between numbered atoms, listed or from a table |
 | **Take frames** | molecules with frames | molecules, 3D, one frame each: the highest or lowest by a property, the first, the last, by number, or *k* frames before or after the highest |
 | **Displace** | molecules with vibrations | the same, the geometry moved along a vibration (the imaginary one, or a chosen one) by an amplitude |
@@ -1338,24 +1341,29 @@ side together, on the *Atom map* card); set **P** holds the products drawn.
     second *Re-bond* (*geometry* PC, *bonding* R) and the same chain after
     it, merged before F4. ConfoTS chooses the direction from the conformer
     counts [`path_flag`]; here it is wired.
-12. **Restraints** (Meno): on P′, its coordination bonds as in step 3. They
-    ride through *Re-bond* onto E, which takes the bonding entry's
-    restraints.
-13. **Minimise with restraints** (a force-field plugin): E, its coordination
-    bonds held, no torsions yet. Its result records where its restraints
-    were first held.
-14. **Torsion restraints** (Meno) against P′, matched on *product*: each
-    torsion trans across P′'s double bonds (hydrogens' included) and not
-    trans after the minimisation is held at 180°, at the step the workflow
-    sets. *Trans already* goes on [ConfoTS's trans-torsion check].
-15. **Its *restrained*, again, drawn:** **Minimise with restraints** from
-    the geometry the first minimisation started from (*Start from: where
-    its restraints were first held*), then **Torsion
-    restraints**, each torsion still not trans a step stronger (a
-    torsion held once stays held), and a **Merge** with 14's *trans
-    already*. Pasted once more for each further attempt; the last
-    attempt's *restrained* goes on too, as ConfoTS passes it on
-    [`max_cycle_of_force_mini`, 10; the showcase used three rounds,
+12. **Restraints** (Meno): on P′, its coordination bonds as in step 3, each
+    row for its entry by its *start* (Tag). The ID rides through *Re-bond*
+    onto E, so E takes P′'s rows (v0.1.26: a table, wired in; until then
+    the restraints rode on the entries).
+13. **Minimise with restraints** (a force-field plugin): E, 12's table
+    wired into its *Restraints*, its coordination bonds held, no torsions
+    yet. Its result records where its restraints were first held.
+14. **Compare torsions** (Meno) against P′, matched on *product*: how many
+    torsions are trans across P′'s double bonds (hydrogens' included) and
+    cis after the minimisation; a **Filter** on `torsions unlike reference
+    = 0` splits those done from those to go again [ConfoTS's trans-torsion
+    check].
+15. **Again, drawn:** **Torsion restraints** from the reference, 180° where
+    trans, at the strength typed for this round; **Minimise with
+    restraints** from the geometry the first minimisation started from
+    (*Start from: where its restraints were first held*), every earlier
+    round's table wired in beside this one's, so a torsion held once stays
+    held (the later round's row held where two hold one torsion); then
+    **Compare torsions** and a **Filter** again. Pasted once more for each
+    further attempt, each round's strength typed (50, 100, 150: one value a
+    round for every torsion it holds, where ConfoTS adds to each torsion's
+    own as it fails); the last attempt's goes on too, as ConfoTS passes it
+    on [`max_cycle_of_force_mini`, 10; the showcase used three rounds,
     120_recalc0-2].
 16. **Optimise** (xTB) [122].
 17. **Compare bonding** (Meno) against P′, on *product*, with R or S, E or Z

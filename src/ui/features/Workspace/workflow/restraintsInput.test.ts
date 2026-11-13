@@ -74,3 +74,13 @@ describe("a conformer search's Restraints input", () => {
     expect(whyNot(d, d.steps!.find((s) => s.id === c.id)!, "rdkit")).toBe("Restraints are held on molecules in 3D: make the structures 3D first, then wire them in");
   });
 });
+
+describe("Torsion restraints on a page saved before it made a table", () => {
+  it("is refused while the set its Trans already exit gave stands, saying so - never run with it left as if still given", () => {
+    let d = addStep(page(), "torsion-restraints", 10, 20, { on: "start", atoms: "1-2-3-4", target: "180" });
+    const t = d.steps!.find((s) => s.kind === "torsion-restraints")!.id;
+    d = connect(d, { set: 1 }, t, "molecules");
+    d = addSet(d, { x0: 30, y0: 20, x1: 36, y1: 26 }, { step: t, exit: "rest" }, "Trans already");
+    expect(whyNot(d, d.steps!.find((s) => s.id === t)!, "meno")).toBe("It was saved giving a set it no longer gives (Trans already): delete that set - Compare torsions and a Filter split what is trans already");
+  });
+});

@@ -18,9 +18,9 @@ import { atomsFromOne, comparedBonding, matchingReference, type CompareOptions }
 import { combined } from "../../../../lib/steps/combine";
 import { measured, measurementName, measurementsTyped } from "../../../../lib/steps/measure";
 import { speciesNeeds, speciesTyped, withSpecies } from "../../../../lib/steps/species";
-import { NUMBERING, OWN_NUMBERING, restraintRows, restraintsTable, TORSION_STEP, torsionsRestrained, type RestraintRow } from "../../../../lib/steps/restraints";
+import { NUMBERING, OWN_NUMBERING, restraintRows, restraintsTable, torsionRowsFromReference, torsionRowsTyped, torsionsUnlike, torsionUnlikeText, type RestraintRow } from "../../../../lib/steps/restraints";
 import type { OptionValues } from "../../../../lib/options";
-import { atomMapNeeds, ONE_EXIT, restraintsTyped, torsionsNeeds } from "./kinds";
+import { atomMapNeeds, compareTorsionsNeeds, ONE_EXIT, restraintsTyped, torsionsRead } from "./kinds";
 import { bondChangesTable, CHANGE, CHANGE_WORDS, MAPPED_ENTRY, renumberedEntry } from "../../../../lib/steps/reaction";
 import { MODE_NAMES, modeOnAtomsEntry } from "../../../../lib/steps/modeOnAtoms";
 import { mapOnto, type BondChangeRow } from "../../../../lib/chem/reactionMap";
@@ -329,8 +329,16 @@ export function comparedSet(entries: readonly SetEntry[], references: readonly S
   return { ok: true, holds, kept, aside, said: line.join(" \u00b7 ") };
 }
 
-/** An entry with its restraints as a step left them. */
-const withRestraints = (e: SetEntry, restraints: NonNullable<SetEntry["properties"]>[string]): SetEntry => ({ ...e, properties: { ...e.properties, restraints } });
+
+/** The ID of an entry its rows are made for (`on`), and the numbering it is in (lib/steps `NUMBERING`): none where it has no such ID. */
+function rowIdOf(e: SetEntry, on: string): string | null {
+  const p = e.properties?.[on];
+  return p?.status === "computed" && (typeof p.value === "string" || typeof p.value === "number") ? String(p.value) : null;
+}
+function numberingOf(e: SetEntry): string {
+  const n = e.properties?.[NUMBERING];
+  return n?.status === "computed" && typeof n.value === "string" ? n.value : OWN_NUMBERING;
+}
 
 /**
  * *Restraints* (lib/steps `restraintRows`): a table of restraints, a row for
@@ -350,11 +358,7 @@ export function restrainedSet(entries: readonly SetEntry[], holds: Holds3D, v: O
   const rows: RestraintRow[] = [];
   const total = { coordination: 0, distances: 0, fixed: 0, none: 0 };
   // (each entry's ID - a text, a number, as it says it - and those two or more entries share: a row for one would be the other's too)
-  const idOf = (e: SetEntry) => {
-    const p = e.properties?.[on];
-    return p?.status === "computed" && (typeof p.value === "string" || typeof p.value === "number") ? String(p.value) : null;
-  };
-  const ids = entries.map(idOf);
+  const ids = entries.map((e) => rowIdOf(e, on));
   const shared = new Set(ids.filter((id, i) => id != null && ids.indexOf(id) !== i));
   entries.forEach((was, i) => {
     const refuse = (why: string) => aside.push({ ...was, failed: { kind: "refused", why } });
@@ -363,10 +367,8 @@ export function restrainedSet(entries: readonly SetEntry[], holds: Holds3D, v: O
     if (shared.has(id)) return refuse(`Its ${on}, ${id}, is another entry's here too: rows made for it would be both's`);
     const r = restraintRows(entryOfSet(was, String(i)), typed.asked);
     if ("failed" in r) return refuse(r.failed);
-    const n = was.properties?.[NUMBERING];
-    const numbering = n?.status === "computed" && typeof n.value === "string" ? n.value : OWN_NUMBERING;
     for (const row of r.rows) {
-      rows.push({ ...row, for: id, on, numbering });
+      rows.push({ ...row, for: id, on, numbering: numberingOf(was) });
       if (row.restraint.kind === "fixed") total.fixed += row.restraint.atoms.length;
       else if (row.why.startsWith("coordination")) total.coordination++;
       else total.distances++;
@@ -384,53 +386,99 @@ export function restrainedSet(entries: readonly SetEntry[], holds: Holds3D, v: O
   return { ok: true, holds, kept: [], aside, said: said.join(" \u00b7 "), tables: { [ONE_EXIT]: restraintsTable(rows) } };
 }
 
+/** Each entry's reference among `references`, as the step's *Against* says: the one there is, or the one with the same value of a property - or why not. */
+function referencesOf(es: readonly Entry[], rs: readonly Entry[], property?: string): ({ index: number } | { why: string })[] | { why: string } {
+  // (a match's why as a why of its own, as Failed says it: begun with a capital)
+  if (property) return matchedOn(es, rs, property, "Reference").map((m) => ("why" in m ? { why: m.why.charAt(0).toUpperCase() + m.why.slice(1) } : m));
+  if (rs.length !== 1) return { why: `Against the one reference, but ${rs.length} came into Reference: match them on a property` };
+  return es.map(() => ({ index: 0 }));
+}
+
 /**
- * *Torsion restraints* (lib/steps `torsionsRestrained`): each entry against
- * its reference - the one of *Reference*, or the one with the same value of
- * a property - each torsion trans there and not trans here held at 180°,
- * stronger by the step each time; out of *Restrained*. One with every such
- * torsion trans already out of *Trans already*, as it came - counted apart
- * where its reference has no trans torsion at all. Where any entry cannot
- * be set against a reference, nothing is done, each such entry named with
- * why: its only other exit is *Trans already*, and none is passed on as
- * trans that was never looked at.
+ * *Torsion restraints*: a table of torsion restraints (lib/steps
+ * `torsionRowsTyped`, `torsionRowsFromReference`), a row for each, each for
+ * its entry by the ID named, in the numbering it has: the torsions typed,
+ * each at the angle typed; or, `references` wired, each torsion across its
+ * reference's double bonds unlike here - at 180° where trans there, or at
+ * the reference's own angle. Each held by its strength, or exactly. One it
+ * cannot make rows for - no ID, an ID another has too, no reference, three
+ * atoms on a line - out of *Failed*, saying why.
  */
-export function torsionsSet(entries: readonly SetEntry[], references: readonly SetEntry[], holds: Holds3D, v: OptionValues): Outcome3D {
-  const needs = torsionsNeeds(v);
+export function torsionsSet(entries: readonly SetEntry[], references: readonly SetEntry[] | null, holds: Holds3D, v: OptionValues): Outcome3D {
+  const r = torsionsRead(v);
+  if ("why" in r) return { ok: false, said: r.why };
+  if ("from" in r && !references) return { ok: false, said: "Nothing comes into Reference: wire the reference, or type the torsions" };
+  if ("typed" in r && references) return { ok: false, said: "A reference is wired, and the torsions are typed: choose From the reference, or take its wire away" };
+  const es = entries.map((e, i) => entryOfSet(e, String(i)));
+  const rs = (references ?? []).map((e, i) => entryOfSet(e, String(i)));
+  const matched = "from" in r ? referencesOf(es, rs, r.property) : es.map(() => ({ index: -1 }));
+  if (!Array.isArray(matched)) return { ok: false, said: matched.why };
+  const ids = entries.map((e) => rowIdOf(e, r.on));
+  const shared = new Set(ids.filter((id, i) => id != null && ids.indexOf(id) !== i));
+  const aside: SetEntry[] = [];
+  const rows: RestraintRow[] = [];
+  let none = 0;
+  let notHeld = 0;
+  entries.forEach((e, i) => {
+    const refuse = (why: string) => aside.push({ ...e, failed: { kind: "refused", why } });
+    const id = ids[i];
+    if (id == null) return refuse(`It has no ${r.on} to make its rows for: give it one (Tag)`);
+    if (shared.has(id)) return refuse(`Its ${r.on}, ${id}, is another entry's here too: rows made for it would be both's`);
+    const m = matched[i];
+    if ("why" in m) return refuse(m.why);
+    const made = "typed" in r ? torsionRowsTyped(es[i], r.typed, r.target, r.hold) : torsionRowsFromReference(es[i], rs[m.index], r.from, r.hold);
+    if ("failed" in made) return refuse(made.failed);
+    if ("notHeld" in made && made.notHeld) notHeld++;
+    if (!made.rows.length) none++;
+    for (const x of made.rows) rows.push({ ...x, for: id, on: r.on, numbering: numberingOf(e) });
+  });
+  const made = entries.length - aside.length;
+  const said = [`${plural(rows.length, "row")} for ${plural(made, "entry", "entries")}`];
+  // (one whose torsions are all as the reference's: none to hold - said; a step holding these refuses it, as one no row is for)
+  if (none) said.push(`${plural(none, "entry", "entries")} with none to hold`);
+  // (a double bond with no trans torsion in its reference, unlike here: 180° where trans cannot hold it - said, with what can)
+  if (notHeld) said.push(`${plural(notHeld, "entry", "entries")} with a double bond cis in the reference not held: choose Held at: the reference's own angle`);
+  if (aside.length) said.push(`${aside.length} failed`);
+  return { ok: true, holds, kept: [], aside, said: said.join(" \u00b7 "), tables: { [ONE_EXIT]: restraintsTable(rows) } };
+}
+
+/** The properties *Compare torsions* writes on each entry: how many torsions are unlike its reference's, and which. */
+export const TORSIONS_UNLIKE_COUNT = "torsions unlike reference";
+export const TORSIONS_UNLIKE = "torsions unlike";
+
+/**
+ * *Compare torsions* (lib/steps `torsionsUnlike`): each entry against its
+ * reference - the one of *Reference*, or the one with the same value of a
+ * property - its torsions across the reference's double bonds unlike here,
+ * counted and named on it, for a *Filter* to split on (the maintainer,
+ * 2026-10-27: Meno writes the count, the chemist filters). Every entry
+ * passes on; one it cannot set against a reference out of *Failed*.
+ */
+export function comparedTorsionsSet(entries: readonly SetEntry[], references: readonly SetEntry[], holds: Holds3D, v: OptionValues): Outcome3D {
+  const needs = compareTorsionsNeeds(v);
   if (needs) return { ok: false, said: needs };
-  const step = Number(String(v.step ?? TORSION_STEP).trim());
-  const byProperty = v.reference === "property";
-  if (!byProperty && references.length !== 1) return { ok: false, said: `Against the one reference, but ${references.length} came into Reference: match them on a property` };
   const es = entries.map((e, i) => entryOfSet(e, String(i)));
   const rs = references.map((e, i) => entryOfSet(e, String(i)));
-  const matched = byProperty ? matchedOn(es, rs, String(v.property).trim(), "Reference") : es.map(() => ({ index: 0 }));
+  const matched = referencesOf(es, rs, v.reference === "property" ? String(v.property).trim() : undefined);
+  if (!Array.isArray(matched)) return { ok: false, said: matched.why };
   const kept: SetEntry[] = [];
   const aside: SetEntry[] = [];
-  const problems: string[] = [];
-  let added = 0;
-  let raised = 0;
-  let noTrans = 0;
+  let unlike = 0;
+  let cisOnly = 0;
   entries.forEach((e, i) => {
     const m = matched[i];
-    if ("why" in m) return problems.push(`${named(e)}: ${m.why}`);
-    const r = torsionsRestrained(es[i], rs[m.index], step);
-    if ("failed" in r) return problems.push(`${named(e)}: ${r.failed}`);
-    if (!r.count.trans) noTrans++;
-    if (!r.count.wrong) return aside.push(e);
-    added += r.count.added;
-    raised += r.count.raised;
-    kept.push(withRestraints(e, r.property));
+    const u = "why" in m ? { failed: m.why } : torsionsUnlike(es[i], rs[m.index]);
+    if ("failed" in u) return aside.push({ ...e, failed: { kind: "refused", why: u.failed } });
+    if (u.unlike.length) unlike++;
+    if (u.cisOnly) cisOnly++;
+    const text = u.unlike.map((x) => torsionUnlikeText(es[i], x)).join("; ");
+    kept.push({ ...e, properties: { ...e.properties, [TORSIONS_UNLIKE_COUNT]: { value: u.unlike.length, unit: "none", status: "computed" }, [TORSIONS_UNLIKE]: said(text || "none") } });
   });
-  if (problems.length) return { ok: false, said: `${plural(problems.length, "entry", "entries")} could not be set against a reference: ${problems.join("; ")}` };
-  // (a count of none left unsaid: the set it would name shows it empty)
-  const said: string[] = [];
-  if (kept.length) said.push(`${kept.length} restrained`);
-  if (aside.length - noTrans) said.push(`${aside.length - noTrans} trans already`);
-  if (noTrans) said.push(`${noTrans} with no trans torsion in ${noTrans === 1 ? "its" : "their"} reference`);
-  if (!said.length) said.push("0 restrained");
-  if (added) said.push(`${plural(added, "torsion")} newly held`);
-  if (raised) said.push(`${plural(raised, "torsion")} held stronger`);
-  return { ok: true, holds, kept, aside, said: said.join(" \u00b7 ") };
+  const line = [`${plural(kept.length, "entry", "entries")} compared`, `${unlike} with torsions unlike the reference's`];
+  // (a reference's double bond with no trans torsion, checked by its cis ones: said, never passed over)
+  if (cisOnly) line.push(`${plural(cisOnly, "entry", "entries")} checked by a cis torsion where the reference has no trans one`);
+  if (aside.length) line.push(`${aside.length} failed`);
+  return { ok: true, holds, kept, aside, said: line.join(" \u00b7 ") };
 }
 
 /** A step's entry as the atom mapper reads a structure: its atoms where its places are, its bonds. */

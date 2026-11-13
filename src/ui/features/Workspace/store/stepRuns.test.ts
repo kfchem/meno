@@ -1002,14 +1002,14 @@ describe("a step that runs a plugin's program", () => {
     // (the last round's own: a program's step, then a step of two inputs - nothing comes into either)
     const o3 = st().addStep("optimise", "tightbind", 90, 0);
     st().connect({ set: exit(r3, "out") }, o3);
-    const t3 = st().addStep("torsion-restraints", "meno", 110, 0);
+    const t3 = st().addStep("compare-torsions", "meno", 110, 0);
     expect(st().connect({ set: exit(o3, "out") }, t3, "molecules")).toBe(true);
     expect(st().connect({ set: st().sets[0].id }, t3, "reference")).toBe(true);
-    // (the Merge after the rounds - each round's empty out, the last's restraints and what came into them: nothing from either)
+    // (the Merge after the rounds - each round's empty out, the last's comparison and what came into it: nothing from either)
     const merge = st().addStep("merge", "meno", 130, 0);
     expect(st().connect({ set: exit(r3, "out") }, merge, "first")).toBe(true);
     expect(st().connect({ set: exit(t3, "out") }, merge, "second")).toBe(true);
-    // (and the Merge of the rounds' rests - what the first round gave, not empty - with the last round's restraints, empty:
+    // (and the Merge of the rounds' rests - what the first round gave, not empty - with the last round's comparison, empty:
     //  Merge's own rule, the rests' entries, never ended at once)
     const rests = st().addStep("merge", "meno", 130, 20);
     expect(st().connect({ set: exit(r1, "out") }, rests, "first")).toBe(true);
