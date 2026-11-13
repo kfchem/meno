@@ -905,6 +905,21 @@ export function oppositesKept(was: readonly { x: number; y: number }[], input: L
       const donorAt = new Array<number>(n);
       at.forEach((s, i) => (donorAt[s] = i));
       if (across.every(([i, j]) => opposite[at[i]] === at[j]) && beside.every(([i, j]) => opposite[at[i]] !== at[j])) return true;
+      // (a drawing in the picture an earlier layout gave - four donors as two lines, two side by side - laid out as three lines: kept
+      // where that picture reads only one way, either of its lines truly across and the other's ends each across one of the two side
+      // by side, and the three lines laid out say the same donors across)
+      if (n === 6 && across.length === 2 && beside.length === 1 && lines.length === 3) {
+        const [u, v] = beside[0];
+        const read = across.flatMap(([p, q], k) => {
+          const [r, t] = across[1 - k];
+          return [
+            [pairKind(p, q), pairKind(u, r), pairKind(v, t)].sort().join(" ; "),
+            [pairKind(p, q), pairKind(u, t), pairKind(v, r)].sort().join(" ; "),
+          ];
+        });
+        const laidOut = lines.map(([p, q]) => pairKind(donorAt[p], donorAt[q])).sort().join(" ; ");
+        if (read.every((x) => x === read[0]) && laidOut === read[0]) return true;
+      }
       if (n !== 6 || across.length !== 3 || lines.length !== 2 || loose.length !== 2) return false;
       const [u, v] = loose.map((s) => donorAt[s]);
       return lines.every(([p, q], k) => {
