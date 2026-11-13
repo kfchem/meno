@@ -8,7 +8,7 @@ const R = (2 * Math.SQRT2) / 3;
 const H = 1 / 6;
 
 describe("the chair's standard view: its depth, and what `seen` shows", () => {
-  it("is seen from 15 degrees over the mean plane (the look owner's choice, no basis claimed), turned atan(sqrt(3)/5) = 19.107 degrees from the line through two opposite atoms: the head 10.893 from the page's right", () => {
+  it("is seen from 15 degrees over the mean plane (a matter of look, no basis claimed), turned atan(sqrt(3)/5) = 19.107 degrees from the line through two opposite atoms: the head 10.893 from the page's right", () => {
     expect(CHAIR_ELEVATION_DEG).toBe(15);
     close(CHAIR_TURN_DEG, 30 - 19.1066, 3);
     close(Math.atan(Math.sqrt(3) / 5) * (180 / Math.PI), 19.1066, 3);
@@ -192,7 +192,7 @@ const angleOf = (x: number, y: number) => (((Math.atan2(y, x) * 180) / Math.PI) 
 const bondDrawn = (d: NonNullable<ReturnType<typeof drawn>>, a: number, b: number) => [d.atoms[b].x - d.atoms[a].x, d.atoms[b].y - d.atoms[a].y] as const;
 
 describe("the chair as the textbook draws it (ruled: a convention of one drawn length, not a view)", () => {
-  it("draws the seat at -15, the steep bond at 60 and the gentle one at 15 degrees (by eye from two figures, the look owner's: no basis claimed)", () => {
+  it("draws the seat at -15, the steep bond at 60 and the gentle one at 15 degrees (by eye from two figures, a matter of look: no basis claimed)", () => {
     expect([CHAIR_SEAT_DEG, CHAIR_STEEP_DEG, CHAIR_GENTLE_DEG]).toEqual([-15, 60, 15]);
   });
 
@@ -336,6 +336,13 @@ describe("the chair as the textbook draws it (ruled: a convention of one drawn l
     for (const p of a.atoms) expect(b.atoms.some((q) => Math.abs(q.x + p.x) < 1e-9 && Math.abs(q.y - p.y) < 1e-9 && Math.abs(q.z - p.z) < 1e-9)).toBe(true);
     close(b.atoms[0].x, 1.216, 3);
     close(b.atoms[0].y, -0.433, 3);
+  });
+
+  it("answers null for a chair that is no longer on the four directions, a bond 1e-3 off: the lattice is exact to 1e-6", () => {
+    const s = chair();
+    const off = { ...s, atoms: s.atoms.map((p, k): V3 => (k === 2 ? [p[0] + 1e-3, p[1], p[2]] : p)) };
+    expect(drawn(s)).not.toBeNull();
+    expect(drawn(off)).toBeNull();
   });
 
   it("answers null for what is not on the four directions - the boat, half-chair, envelope, a five-ring fused on, the Haworth ring and the Newman pair - which are `seen`", () => {

@@ -45,7 +45,7 @@ export function fromAbove(elevation: number, turn = 0): View {
 }
 
 /**
- * The elevation a ring is seen from, in degrees, over the ring's MEAN plane: the look owner's choice, no basis claimed. What the texts say
+ * The elevation a ring is seen from, in degrees, over the ring's MEAN plane: a matter of look, no basis claimed. What the texts say
  * is only that the ring is seen from above, so that the nearer edge is drawn lower (Brecher 2006, ST-3.1, for a ring system in perspective:
  * drawn "from above and from the right", so that the nearer atoms of a mostly-horizontal ring are lower in the drawing; McNaught 1996,
  * 2-Carb-5.4, for the Haworth ring: "viewed from slightly above so that the edge closer to the viewer is drawn below the more distant edge").
@@ -91,7 +91,7 @@ export function standardView(solid: Solid, form = 0): View {
 /**
  * The three lines a chair's ring bonds are drawn along in the textbook's chair, as angles on the page in degrees (a line is the angle and its
  * half turn): the seat, falling toward the head's end; the steep bond, 60; the gentle one, rising toward the head. Read by eye from two textbook
- * figures: the look owner's choice, no basis claimed. The axial bond is vertical and the equatorial one is drawn along the ring bond one removed.
+ * figures: a matter of look, no basis claimed. The axial bond is vertical and the equatorial one is drawn along the ring bond one removed.
  */
 export const CHAIR_SEAT_DEG = -15;
 export const CHAIR_STEEP_DEG = 60;
@@ -112,7 +112,7 @@ function lineGap(direction: number, line: number): number {
 const ORDERS: [number, number, number][] = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
 
 /**
- * A chair, and chairs fused, as the textbook DRAWS them - a convention, not a view of the solid (ruled, 11-13): an ideal chair's bonds, ring and
+ * A chair, and chairs fused, as the textbook DRAWS them - a convention, not a view of the solid (as ruled): an ideal chair's bonds, ring and
  * free, lie along four directions in space: out of an atom above the mean plane, to its two ring neighbours, its equatorial bond and its axial
  * one (the four sum to nothing); out of an atom below, the same four reversed. Chairs fused by `fused`, trans or cis, stay on the same four.
  * Each is drawn one way, ONE BOND LONG: the ring's three directions along the three lines `CHAIR_SEAT_DEG`, `CHAIR_STEEP_DEG` and `CHAIR_GENTLE_DEG`
