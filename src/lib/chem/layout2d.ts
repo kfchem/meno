@@ -6,6 +6,7 @@ import { ringSidesOf } from "./aromaticSides";
 import {
   chargeText,
   implicitHydrogens,
+  setValenceOrder,
   valenceOrder,
   type AtomChem,
   type BondChem,
@@ -2371,6 +2372,8 @@ export function buildTextLabels(
   const band = Math.sin(((opts.hydrogenBandDeg ?? 10) * Math.PI) / 180);
   const sideways = Math.cos(((opts.symbolCentringDeg ?? 25) * Math.PI) / 180);
   const orderSum = new Map<number, number>();
+  // (toward a valence a file sets: a metal's coordination bonds counted, as the file counts them - molecule `setValenceOrder`)
+  const setSum = new Map<number, number>();
   const away = new Map<number, Vec2>();
   const bonded = new Set<number>();
   // which sides of each atom its bonds leave from, outside the vertical band
@@ -2406,6 +2409,8 @@ export function buildTextLabels(
     const order = valenceOrder(kind);
     note(b.a1, b.a2, order, valenceOrder(kind, atoms[b.a1]?.el));
     note(b.a2, b.a1, order, valenceOrder(kind, atoms[b.a2]?.el));
+    setSum.set(b.a1, (setSum.get(b.a1) ?? 0) + setValenceOrder(kind, atoms[b.a1]?.el));
+    setSum.set(b.a2, (setSum.get(b.a2) ?? 0) + setValenceOrder(kind, atoms[b.a2]?.el));
   }
 
   const hapticCentres = new Set<number>();
@@ -2432,7 +2437,7 @@ export function buildTextLabels(
         opts.showImplicitHydrogens === false
           ? 0
           : a.valence != null
-            ? Math.max(0, a.valence - (orderSum.get(i) ?? 0))
+            ? Math.max(0, a.valence - (setSum.get(i) ?? 0))
             : implicitHydrogens(a.el, orderSum.get(i) ?? 0, a.charge ?? 0, a.radical),
       ),
     },
@@ -2522,7 +2527,7 @@ export function buildTextLabels(
         ? 0
         : a.valence != null
           ? // (a valence the file sets: what the bonds leave of it)
-            Math.max(0, a.valence - (orderSum.get(i) ?? 0))
+            Math.max(0, a.valence - (setSum.get(i) ?? 0))
           : implicitHydrogens(a.el, orderSum.get(i) ?? 0, a.charge ?? 0, a.radical);
     const centreSymbol =
       straightLeft.has(i) && straightRight.has(i) ? { centreSymbol: true } : {};
