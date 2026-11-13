@@ -24,6 +24,30 @@ const butanol = (stereo: "up" | "down"): Model => ({
 const none = { centres: [], doubles: [] };
 
 /**
+ * A conformer's atoms, bonds and places with each atom of three neighbours given a fourth, an H - as a plugin
+ * makes them, its hydrogens atoms of their own - placed opposite its three: so that Meno reads its centres
+ * from the places, as it does a plugin's (chem/openStereo `withOwnCip`).
+ */
+function withHydrogens(atoms: { el: string; charge: number }[], bonds: { a1: number; a2: number; order: 1 }[], f: number[]) {
+  const around = atoms.map(() => 0);
+  for (const b of bonds) {
+    around[b.a1]++;
+    around[b.a2]++;
+  }
+  const hs = atoms.flatMap((a, i) => (a.el === "C" && around[i] === 3 ? [i] : []));
+  const out = { atoms: [...atoms], bonds: [...bonds], f: [...f] };
+  for (const c of hs) {
+    const ns = bonds.flatMap((b) => (b.a1 === c ? [b.a2] : b.a2 === c ? [b.a1] : []));
+    const d = [0, 1, 2].map((k) => -ns.reduce((t, n) => t + f[3 * n + k] - f[3 * c + k], 0));
+    const len = Math.hypot(...d) || 1;
+    out.f.push(...d.map((v, k) => f[3 * c + k] + v / len));
+    out.bonds.push({ a1: c, a2: out.atoms.length, order: 1 });
+    out.atoms.push({ el: "H", charge: 0 });
+  }
+  return out;
+}
+
+/**
  * A plugin that makes a block's one conformer where its drawing puts its
  * atoms - each wedged atom lifted out of the page, each hashed one behind
  * it - so that it has the configuration drawn; labelled R where the wedge
@@ -40,13 +64,19 @@ function plugin(wrongWhenMirrored = false) {
       const turn = wrongWhenMirrored && asked.length === 1 ? -1 : 1;
       for (const b of ct.bonds) if (b.stereo === "up" || b.stereo === "down") z[b.a2] = (b.stereo === "up" ? 1 : -1) * turn;
       const up = ct.bonds.some((b) => b.stereo === "up");
+      const h = withHydrogens(
+        ct.atoms.map((a) => ({ el: a.symbol, charge: 0 })),
+        ct.bonds.map((b) => ({ a1: b.a1, a2: b.a2, order: 1 as const })),
+        ct.atoms.flatMap((a, i) => [a.x, a.y, z[i]]),
+      );
       return {
         isomers: args.isomers.map(() => ({
-          atoms: ct.atoms.map((a) => ({ el: a.symbol, charge: 0 })),
-          bonds: ct.bonds.map((b) => ({ a1: b.a1, a2: b.a2, order: 1 })),
-          frames: [ct.atoms.flatMap((a, i) => [a.x, a.y, z[i]])],
+          atoms: h.atoms,
+          bonds: h.bonds,
+          frames: [h.f],
           field: "MMFF94",
-          cip: { atoms: { "1": up ? "R" : "S" }, bonds: {} },
+          // (the plugin's own label - which Meno never reads: its own are read from the places)
+          cip: { atoms: { "1": "plugin's" }, bonds: {} },
           smiles: up ? "CC[C@@H](C)O" : "CC[C@H](C)O",
         })),
       };
@@ -144,17 +174,16 @@ describe("the page's mirror images", () => {
     expect(hasConfiguration(c, block.part, none)).toBe(true);
   });
 
-  it("reflects conformers through a plane and turns R and S, M and P - not r and s, nor E and Z", () => {
+  it("reflects conformers through a plane - their R and S read from the places after, as anyone's are", () => {
     const c = reflectedConformers({
       atoms: [],
       bonds: [],
       frames: [[1, 2, 3, -4, 5, 6]],
       field: "UFF",
-      cip: { atoms: { "0": "R", "1": "s", "2": "M" }, bonds: { "3": "E" } },
+      cip: { atoms: {}, bonds: {} },
       smiles: "C[C@@H](O)[C@H](N)C",
     });
     expect(c.frames).toEqual([[-1, 2, 3, 4, 5, 6]]);
-    expect(c.cip).toEqual({ atoms: { "0": "S", "1": "s", "2": "P" }, bonds: { "3": "E" } });
     expect(c.smiles).toBe("C[C@H](O)[C@@H](N)C");
   });
 
@@ -202,9 +231,8 @@ describe("the page's mirror images", () => {
 
   /**
    * A plugin that makes each stereoisomer it is asked for with the configuration asked: the drawing's places,
-   * each centre's last neighbour lifted out of the page or put behind it as the sense asks - labelled R where
-   * the first centre's sense is 1, a stand-in for the toolkit's label. Asked for more than one at once where
-   * `firstOnly`, it answers the first alone.
+   * each centre's last neighbour lifted out of the page or put behind it as the sense asks, its hydrogens
+   * atoms of their own. Asked for more than one at once where `firstOnly`, it answers the first alone.
    */
   function shaper(firstOnly = false) {
     const asked: number[] = [];
@@ -223,14 +251,12 @@ describe("the page's mirror images", () => {
             f[3 * o + 2] = 1;
             if (Math.sign(vol()) !== c.sense) f[3 * o + 2] = -1;
           }
-          return {
-            atoms: ct.atoms.map((a) => ({ el: a.symbol, charge: 0 })),
-            bonds: ct.bonds.map((b) => ({ a1: b.a1, a2: b.a2, order: 1 })),
-            frames: [f],
-            field: "MMFF94",
-            cip: { atoms: { "1": iso.centres[0]?.sense > 0 ? "R" : "S" }, bonds: {} },
-            smiles: "",
-          };
+          const h = withHydrogens(
+            ct.atoms.map((a) => ({ el: a.symbol, charge: 0 })),
+            ct.bonds.map((b) => ({ a1: b.a1, a2: b.a2, order: 1 as const })),
+            f,
+          );
+          return { atoms: h.atoms, bonds: h.bonds, frames: [h.f], field: "MMFF94", cip: { atoms: {}, bonds: {} }, smiles: "" };
         };
         const isomers = firstOnly && args.isomers.length > 1 ? args.isomers.slice(0, 1) : args.isomers;
         return { isomers: isomers.map(one) };

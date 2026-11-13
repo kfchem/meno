@@ -832,6 +832,20 @@ function stereoSides(
   const i = mol.bondIndex.get(key(parent, a));
   if (i == null) return null;
   const bond = mol.bonds[i];
+  // (an odd cumulene's far end, its run drawn straight: its groups set against the near end's reference, across the run)
+  const run = bond.order === 2 ? mol.cumulated?.find((x) => x.atoms.includes(a) && pos.has(x.atoms[x.atoms[0] === a ? 1 : 0])) : undefined;
+  if (run) {
+    const k = run.atoms[0] === a ? 1 : 0;
+    const pp = pos.get(run.refs[k]);
+    if (!pp) return null;
+    const line = sub(pos.get(a)!, pos.get(parent)!);
+    const refSide = Math.sign(cross(line, sub(pp, pos.get(run.atoms[k])!)));
+    if (!refSide) return null;
+    const wantRef = run.cis ? refSide : -refSide;
+    const out = new Map<number, number>();
+    for (const c of children) out.set(c, c === run.refs[1 - k] ? wantRef : -wantRef);
+    return out;
+  }
   if (bond.order !== 2 || !bond.stereo) return null;
   const [r1, r2] = bond.stereo.refs;
   const onParent = mol.neighbours[parent].includes(r1) && r1 !== a ? r1 : r2;

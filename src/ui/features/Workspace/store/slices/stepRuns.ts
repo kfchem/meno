@@ -23,7 +23,7 @@ import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
 import { bareAtomsOf, bareNames, blocksOf, CONFORMERS_MS, drawnBlocksOf, moleculeOf } from "../../chem/make3d";
-import { anyOpen, isomersToMake, openStereo, withChosen } from "../../chem/openStereo";
+import { anyOpen, isomersToMake, openStereo, withChosen, withOwnCip } from "../../chem/openStereo";
 import { partsOf, partsSideBySide } from "../../chem/partsApart";
 import { stereoisomersAnswer } from "../../workflow/stereoisomers";
 import { EXAMINE_MS } from "../../../../../lib/chem/stereoOpen";
@@ -833,7 +833,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
             const { made: all, run } = await inRounds(round, { ...rounds, draws: true }, (first) => roundsJudge(first, rounds.window));
             got = { ...all, how: [...(all.how ?? []), { label: "Rounds", text: roundsSaid(run, rounds) }] };
           }
-          made = got && partsSideBySide(keptMade(withChosen(got, which.open), madeChecksOf(block.molblock, holds)), partsOf(got.atoms, got.bonds, holds?.eta));
+          made = got && partsSideBySide(keptMade(withChosen(withOwnCip(got), which.open), madeChecksOf(block.molblock, holds)), partsOf(got.atoms, got.bonds, holds?.eta));
         } catch {
           if (menoStops.has(id)) break;
           // (said by its place, in words: what the plugin's library says of it is none of the chemist's to read)
