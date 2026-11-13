@@ -561,7 +561,10 @@ together, in short eased transitions.
   PDFium's pixels, in the order a WebGL texture takes them
   (`FPDF_REVERSE_BYTE_ORDER`), packed by the reader, a page being mostly
   white. They go to the window as bytes, not as text (Tauri's binary
-  response), and are unpacked off its main thread.
+  response), and are unpacked off its main thread: decoded whole in a
+  worker before they come back, so that putting one on the graphics card
+  is a copy and not a decode as well (the Mac's WebKit otherwise decodes a
+  picture at its first use, inside the frame that shows it).
 
 ### Never in the way of a frame (2026-11-12)
 

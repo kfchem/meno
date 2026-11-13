@@ -125,6 +125,34 @@ export type DrawnPart = { bitmap: ImageBitmap; w: number; h: number; ms: number 
 /** What is asked to be drawn: a page's part at a scale, in pixels a point. */
 export type PartAsk = { sha256: string; page: number; scale: number; x?: number; y?: number; w?: number; h?: number };
 
+/**
+ * A picture's PNG decoded in a worker (./decodeWorker), all of it, before it comes back: none of its decoding left for the frame it is put on
+ * the graphics card in. The Mac's WebKit can leave a picture made on the main thread undecoded until its first use, which was the upload
+ * inside a frame: the long frames of a heavy PDF's scroll.
+ */
+let decoder: Worker | null = null;
+let decodes = 0;
+const decoding = new Map<number, { resolve: (b: ImageBitmap) => void; reject: (e: unknown) => void }>();
+function decodedOff(body: Uint8Array): Promise<ImageBitmap> {
+  // (where there are no workers - the tests' Node - decoded here, as before)
+  if (typeof Worker === "undefined") return createImageBitmap(new Blob([body as BlobPart], { type: "image/png" }), { imageOrientation: "flipY", premultiplyAlpha: "none" });
+  if (!decoder) {
+    decoder = new Worker(new URL("./decodeWorker.ts", import.meta.url), { type: "module" });
+    decoder.onmessage = (e: MessageEvent<{ id: number; bitmap?: ImageBitmap; error?: string }>) => {
+      const w = decoding.get(e.data.id);
+      decoding.delete(e.data.id);
+      if (e.data.bitmap) w?.resolve(e.data.bitmap);
+      else w?.reject(new Error(e.data.error));
+    };
+  }
+  const id = ++decodes;
+  return new Promise((resolve, reject) => {
+    decoding.set(id, { resolve, reject });
+    const copy = body.slice();
+    decoder!.postMessage({ id, body: copy }, [copy.buffer]);
+  });
+}
+
 async function draw(ask: PartAsk): Promise<DrawnPart> {
   await holding.get(ask.sha256);
   const buf = await invoke<ArrayBuffer>("pdf_render", {
@@ -144,7 +172,7 @@ async function draw(ask: PartAsk): Promise<DrawnPart> {
   const packed = view.getUint32(12, true) === 1;
   const body = new Uint8Array(buf, 16);
   const bitmap = packed
-    ? await createImageBitmap(new Blob([body], { type: "image/png" }), { imageOrientation: "flipY", premultiplyAlpha: "none" })
+    ? await decodedOff(body)
     : await createImageBitmap(new ImageData(new Uint8ClampedArray(body.buffer, body.byteOffset, body.byteLength), w, h), { imageOrientation: "flipY" });
   return { bitmap, w, h, ms };
 }
