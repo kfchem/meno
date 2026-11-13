@@ -271,3 +271,113 @@ describe("a bond stroke out of an atom of a chair", () => {
     expect(node.y).toBeCloseTo(axial.place.y, 9);
   });
 });
+
+describe("a bond stroke out of an atom of a Haworth ring", () => {
+  it("joins another atom only where the pointer is let go ON it, never by the join's reach: up from C-3 and from C-2 along the vertical, a group until the pointer is on the atom above (at the ring's scale and at 1.25)", async () => {
+    const { haworthDrawing, HAWORTH_SCALE } = await import("../projections/haworth");
+    expect(HAWORTH_SCALE).toBeGreaterThanOrEqual(1.25);
+    for (const scale of [HAWORTH_SCALE, 1.25]) {
+      const d = haworthDrawing({ at: { x: 0, y: 0 }, size: 6, firstId: 1, firstBondId: 1, length: scale * L });
+      const model = { atoms: d.atoms, bonds: d.bonds };
+      // (C-3 up: the vertical through C-5 above it; C-2 up: through the ring O - atoms 3 and 5, 2 and 0)
+      for (const [k, above] of [[3, 5], [2, 0]]) {
+        const at = d.atoms[k];
+        const top = d.atoms[above];
+        // (and just short of the atom above and just past it, within the join's reach of it but not on it: 0.35 of a bond either side)
+        for (const y of [...[0.3, 0.6, 1, 1.33, 1.6].map((f) => at.y + f * L), top.y - 0.35 * L, top.y + 0.35 * L]) {
+          // (a point that is ON the atom above - within its pick radius - is let go on it: that one joins, rightly)
+          if (Math.abs(y - top.y) < 0.3 * L) continue;
+          const t = strokeTarget(model, startStroke("bond", d.ring[k]), { x: at.x, y }, L)!;
+          expect(t.atomId, `${scale} from ${k} at ${y.toFixed(2)}`).toBeUndefined();
+          expect(t.position).toBe("up");
+        }
+        // (let go on the atom above: a bond to it)
+        expect(strokeTarget(model, startStroke("bond", d.ring[k]), { x: top.x, y: top.y }, L)!.atomId).toBe(top.id);
+      }
+    }
+  }, measured(400));
+
+  it("goes, from every atom of the ring of six and of five, to each of its two places - a new atom there, never joined onto another ring atom - however far the pointer is led", async () => {
+    const { haworthDrawing } = await import("../projections/haworth");
+    for (const size of [6, 5] as const) {
+      const d = haworthDrawing({ at: { x: 0, y: 0 }, size, firstId: 1, firstBondId: 1 });
+      const model = { atoms: d.atoms, bonds: d.bonds };
+      for (let k = 0; k < size; k++) {
+        const at = d.atoms[k];
+        for (const p of seenPlaces(d, k)) {
+          // (the pointer led a little, to the place, and on past it - up to three style bonds, past the ring atom above an inside place)
+          const reach = Math.hypot(p.place.x - at.x, p.place.y - at.y);
+          for (const share of [0.5, 1, 1.5, (2 * L) / reach, (3 * L) / reach]) {
+            const t = strokeTarget(model, startStroke("bond", d.ring[k]), { x: at.x + (p.place.x - at.x) * share, y: at.y + (p.place.y - at.y) * share }, L)!;
+            expect(t.atomId, `${size}: atom ${k} ${p.free.kind} at ${share}`).toBeUndefined();
+            expect(t.position, `${size}: atom ${k} ${p.free.kind}`).toBe(p.free.kind);
+            expect(t.end.x).toBeCloseTo(p.place.x, 9);
+            expect(t.end.y).toBeCloseTo(p.place.y, 9);
+          }
+        }
+      }
+    }
+  }, measured(400));
+});
+
+describe("a bond stroke out of a projection's group", () => {
+  /** A projection with one group - its first atom, id 900 - at atom k's `kind` place. */
+  async function withGroup(kind: "up" | "down" | "axial" | "equatorial", k: number, size: 5 | 6 = 6) {
+    const { haworthDrawing } = await import("../projections/haworth");
+    const d = kind === "up" || kind === "down" ? haworthDrawing({ at: { x: 0, y: 0 }, size, firstId: 1, firstBondId: 1 }) : chairDrawing({ at: { x: 0, y: 0 }, firstId: 1, firstBondId: 1 });
+    const p = seenPlaces(d, k).find((f) => f.free.kind === kind)!;
+    const atoms = [...d.atoms, { ...d.atoms[k], id: 900, el: "C", x: p.place.x, y: p.place.y }];
+    const plain = d.bonds.find((b) => !b.display && b.stereo == null) ?? d.bonds[0];
+    const bonds = [...d.bonds, { ...plain, id: 900, a: d.ring[k], b: 900, display: undefined, narrow: undefined, stereo: undefined }];
+    return { model: { atoms, bonds }, at: atoms[atoms.length - 1], root: d.atoms[k] };
+  }
+  const angleAt = (at: Pt, a: Pt, b: Pt) => {
+    const u = Math.atan2(a.y - at.y, a.x - at.x);
+    const v = Math.atan2(b.y - at.y, b.x - at.x);
+    return Math.abs(Math.atan2(Math.sin(u - v), Math.cos(u - v)));
+  };
+
+  it("bends 120 degrees from the group's bond wherever the pointer is - straight on, held still or not - never on along its line, a style bond long, to the pointer's side", async () => {
+    // (C-5's CH2OH up and the L-sugar's down, inside; a furanose's C-4 up; a chair's axial and equatorial)
+    const cases = [await withGroup("up", 5), await withGroup("down", 5), await withGroup("up", 4, 5), await withGroup("axial", 3), await withGroup("equatorial", 3)];
+    for (const { model, at, root } of cases) {
+      const line = { x: at.x + 3 * (at.x - root.x), y: at.y + 3 * (at.y - root.y) };
+      const across = { x: -(at.y - root.y), y: at.x - root.x };
+      for (const side of [-0.3, -0.01, 0, 0.01, 0.3]) {
+        const pointer = { x: line.x + side * across.x * 3, y: line.y + side * across.y * 3 };
+        for (const s of [startStroke("bond", 900), holdStroke(model, startStroke("bond", 900), pointer, L)]) {
+          const t = strokeTarget(model, s, pointer, L)!;
+          expect(t.atomId).toBeUndefined();
+          expect(angleAt(at, root, t.end)).toBeCloseTo((2 * Math.PI) / 3, 9);
+          expect(Math.hypot(t.end.x - at.x, t.end.y - at.y)).toBeCloseTo(L, 9);
+          expect(t.trigonalTo).toBeDefined();
+          // (to the pointer's side of the group's line, where it is off it)
+          const sideOf = (q: Pt) => Math.sign((at.x - root.x) * (q.y - at.y) - (at.y - root.y) * (q.x - at.x));
+          if (Math.abs(side) > 0.005) expect(sideOf(t.end)).toBe(sideOf(pointer));
+        }
+      }
+      // (laid down there too)
+      const [node] = finishStroke(model, startStroke("bond", 900), line, L);
+      expect(angleAt(at, root, node)).toBeCloseTo((2 * Math.PI) / 3, 9);
+    }
+  });
+
+  it("goes as any bond from an atom that is not a group at a free place: one moved off it, or one with two bonds", async () => {
+    const { model, at, root } = await withGroup("up", 5);
+    const moved = { ...model, atoms: model.atoms.map((a) => (a.id === 900 ? { ...a, x: a.x + 0.4 } : a)) };
+    const off = moved.atoms.find((a) => a.id === 900)!;
+    const t = strokeTarget(moved, startStroke("bond", 900), { x: off.x + 3 * (off.x - root.x), y: off.y + 3 * (off.y - root.y) }, L)!;
+    expect(t.trigonalTo).toBeUndefined();
+    const more = { atoms: [...model.atoms, { ...at, id: 901, x: at.x + 0.87, y: at.y + 0.5 }], bonds: [...model.bonds, { ...model.bonds[model.bonds.length - 1], id: 901, a: 900, b: 901 }] };
+    const u = strokeTarget(more, startStroke("bond", 900), { x: at.x + 3 * (at.x - root.x), y: at.y + 3 * (at.y - root.y) }, L)!;
+    expect(angleAt(at, root, u.end)).not.toBeCloseTo((2 * Math.PI) / 3, 3);
+  });
+
+  it("and a chain out of the group zigzags from it: its first bond 120 degrees from the group's", async () => {
+    const { model, at, root } = await withGroup("up", 5);
+    let s = startStroke("chain", 900, model, undefined, L);
+    for (let f = 0.1; f <= 2.5; f += 0.1) s = advanceStroke(model, s, { x: at.x + f * (at.x - root.x), y: at.y + f * (at.y - root.y) * 2 }, L);
+    expect(s.nodes.length).toBeGreaterThanOrEqual(1);
+    expect(angleAt(at, root, s.nodes[0])).toBeCloseTo((2 * Math.PI) / 3, 6);
+  });
+});
