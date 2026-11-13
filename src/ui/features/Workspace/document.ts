@@ -46,6 +46,7 @@ import { framesFitted } from "./workflow/fitFrames";
 import { heldSettled } from "./workflow/held";
 import type { RunWith } from "./workflow/run";
 import type { Conversation } from "./conversation/types";
+import { straightenedGroup } from "./projections/extend";
 
 export type WorkspaceDocument = {
   model: Model;
@@ -957,7 +958,15 @@ export function updateBond(
   }
   const next = bonds.slice();
   next[index] = merged;
-  return { ...doc, model: { atoms: doc.model.atoms, bonds: next } };
+  // (a projection's group made linear by this order - a nitrile, an alkyne on a ring atom of the tool's - drawn straight on: projections/extend)
+  let atoms = doc.model.atoms;
+  if ("order" in patch && merged.order !== bond.order && merged.order >= 2) {
+    for (const end of [merged.a, merged.b]) {
+      const moved = straightenedGroup({ atoms, bonds: next }, end);
+      if (moved) atoms = atoms.map((a) => (moved.has(a.id) ? { ...a, ...moved.get(a.id)! } : a));
+    }
+  }
+  return { ...doc, model: { atoms, bonds: next } };
 }
 
 /**

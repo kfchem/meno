@@ -526,7 +526,12 @@ on a page); the Newman projection follows.
   group led up into a Haworth ring's picture toward the atom above it stays a group. The bond after a group - out of its first atom while that
   atom has that one bond and stands at its free position - turns 120 degrees from the group's bond, to the pointer's side, held or paused, and
   never goes on along the group's line (`groupBend`): two bonds in one line hide the atom between them, and a CH2OH drawn straight up would read
-  as one bond to an OH. A chain led out of it zigzags from it as from any atom.
+  as one bond to an OH. A chain led out of it zigzags from it as from any atom. No saturated atom has two bonds in one line (Brecher 2008,
+  GR-4.1.1, GR-2.1.2); an atom with a triple bond or two double bonds has (GR-4.1.1), and the order is set after the stroke: where a group's
+  first atom is made linear so - a nitrile, an alkyne on a ring atom - what lies beyond it is turned about it, as drawn, until it is straight
+  on (`straightenedGroup`, from the document's `updateBond`). A group pointing into a Haworth ring's picture - the inside places - has room
+  for one label at the end of its short bond: the carbohydrate convention writes such a group as one label there (a CH2OH on C-5 pointing
+  down, McNaught 1996, 2-Carb-5.5, Chart II), nothing else moved; drawn atom by atom, its further atoms are the chemist's to place.
 - **R and S** are shown at once on the ring's atoms (`stereoShown`): none while there is no centre, each as a group makes one.
 - **Right-click** (an atom or a bond of a structure holding a chair): *Flip chair* - every ring atom takes the flipped solid's place and depth and each group
   goes from axial to equatorial or back **on the same face**, what hangs from it carried with it; the compound is the same, and Meno's own guard
