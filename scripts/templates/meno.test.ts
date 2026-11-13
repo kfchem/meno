@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { Property } from "../../src/lib/entry";
 import { addMolecule3d, emptyWorkspaceDocument, type WorkspaceDocument } from "../../src/ui/features/Workspace/document";
 import type { Molecule3D } from "../../src/ui/features/Workspace/store/types";
-import { setMembers } from "../../src/ui/features/Workspace/workflow/entries";
+import { setEntries, setMembers } from "../../src/ui/features/Workspace/workflow/entries";
+import { matchesOf } from "../../src/ui/features/Workspace/workflow/pairs";
 import { resultOf } from "../../src/ui/features/Workspace/workflow/flow";
 import { addSet, addStep, connect } from "../../src/ui/features/Workspace/workflow/model";
 import { runStep, type RunWith } from "../../src/ui/features/Workspace/workflow/run";
@@ -248,5 +249,42 @@ describe("the cap after the two directions are merged, and the split back by dir
     const split = b.run("dft-split", { in: { set: resultOf(b.doc, capped)!.id } });
     expect(b.titles(split, "out", "path-name")).toEqual(["s01", "s03", "s05", "s07", "s09", "s11", "s13", "s15", "t0"]);
     expect(b.titles(split, "rest", "path-name")).toEqual(["s00", "s02", "s04", "s06", "s08", "s10", "s12", "s14", "t1"]);
+  });
+});
+
+describe("the barriers' pairing, run on made saddle points of two paths and the lowest conformer of three species", () => {
+  it("sets each saddle point against the lowest conformer of the reactant it was made from, never a product's: 16 of each of two paths, 32 pairs, each with species-1", () => {
+    const b = builder();
+    // (one conformer of each species; 16 saddle points of each path, each carrying its reactant end as the paths' steps leave it)
+    const minimum = (title: string, energy: number, species: string) => entry(title, 0, [energy], [{ species }]);
+    const minima = b.set([minimum("a", -76.4, "species-1"), minimum("b", -76.45, "species-2"), minimum("c", -76.5, "species-3")]);
+    const ts = (path: string, product: string, i: number) =>
+      entry(`${path}-${i}`, 0, [-76.37 - 0.0001 * i], [{ product: path, species: "species-1", "reactant end": "species-1", "product end": product }]);
+    const saddles = b.set([...Array.from({ length: 16 }, (_, i) => ts("product-1", "species-2", i)), ...Array.from({ length: 16 }, (_, i) => ts("product-2", "species-3", i))]);
+    // (the lowest of each species - by E, as the made entries have no free energy - each named as a reactant end, both by the recipe's own steps)
+    const lowest = b.run("lowest", { in: { set: minima } }, { property: "energy" });
+    const named = b.run("lowest-named", { onto: { set: resultOf(b.doc, lowest)!.id }, from: { set: resultOf(b.doc, lowest)!.id } });
+    expect(b.titles(named, "out", "reactant end")).toEqual(["species-1", "species-2", "species-3"]);
+    // (paired as the recipe's Barrier steps pair them - xTB and DFT alike: the saddle points first, the starts second)
+    const entriesOf = (step: number) =>
+      setEntries(
+        setMembers(b.doc, resultOf(b.doc, step)!).molecules.map((m) => b.doc.molecules3d!.find((x) => x.id === m)!),
+        "molecules",
+      );
+    const saddleEntries = setEntries(
+      setMembers(b.doc, b.doc.sets!.find((x) => x.id === saddles)!).molecules.map((m) => b.doc.molecules3d!.find((x) => x.id === m)!),
+      "molecules",
+    );
+    for (const key of ["barriers", "dft-barriers"]) {
+      const o = recipe(key).options!;
+      expect([o.pairs, o.property], key).toEqual(["property", "reactant end"]);
+      const starts = entriesOf(named);
+      const m = matchesOf(saddleEntries, starts, "property", String(o.property), { first: "Saddle points", second: "Starts", one: "saddle point", other: "start", unlike: () => null });
+      expect("ends" in m, key).toBe(true);
+      const ends = (m as { ends: number[][] }).ends;
+      expect(ends.filter((e) => e.length === 1), key).toHaveLength(32);
+      const species = ends.map((e) => String(starts[e[0]].properties?.species?.value));
+      expect(new Set(species), key).toEqual(new Set(["species-1"]));
+    }
   });
 });

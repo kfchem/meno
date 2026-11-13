@@ -4,7 +4,7 @@
  * workspace's own actions, so the page always matches the current kinds and is made again, never edited by hand.
  *
  * A source is `"@reaction"` - the chemist's set round the drawn reaction - or a step's key, `"key"` for its first exit, `"key.rest"` for another.
- * Every number here is the chemist's to change; the values are the recipe's starting ones (docs/CONFOTS-TEMPLATE.md names where each comes from).
+ * Every number here is the chemist's to change; the values are the recipe's starting ones (docs/WORKFLOWS.md, *The ConfoTS-type templates*).
  */
 import type { OptionValues } from "../../src/lib/options";
 import type { StepKind } from "../../src/ui/features/Workspace/workflow/kinds";
@@ -272,7 +272,9 @@ function dft(): RecipeStep[] {
   // (the capped saddle points back by the direction they were found from: only a forward one carries the forward path's tag)
   r.push(step({ key: "dft-split", stage, kind: "filter", options: { conditions: "path-forward != none", match: "all" }, in: { in: "saddles-16" }, note: "The saddle points found from the reactant, and the rest, from the products" }));
   for (const d of ["forward", "backward"] as const) {
-    // (the ends of a reaction path: the reactant's is the first where the paths are made from the reactant's conformers, the last where from the products')
+    // (the ends of a reaction path, taken by place: the first where the paths are made from the reactant's conformers, the last where from the
+    // products'. Which end the reaction path gives first is not set (the filters above take either order), so this is the reactant's side only
+    // where the program keeps the order of the path it was given; QST3 is given both ends either way)
     const [reactantSide, productSide] = d === "forward" ? [`${d}/first-opt`, `${d}/last-opt`] : [`${d}/last-opt`, `${d}/first-opt`];
     const k = (name: string) => `dft-${d}-${name}`;
     r.push(
@@ -305,7 +307,8 @@ function dft(): RecipeStep[] {
       in: { levels: "dft-levels" },
     }),
     step({ key: "dft-lowest", stage, kind: "rank", options: { property: "G-DFT", order: "lowest first", keep: 1, within: "each value", groupBy: "species" }, in: { in: "dft-min-distinct" } }),
-    step({ key: "dft-barriers", stage, kind: "barrier", options: { energy: "G", free: "G-DFT", symmetry: "as-read", pairs: "each", property: "" }, in: { saddles: "dft-saddles-distinct", starts: "dft-lowest" } }),
+    step({ key: "dft-lowest-named", stage, kind: "join", options: { on: "species", carry: "species as reactant end" }, in: { onto: "dft-lowest", from: "dft-lowest" } }),
+    step({ key: "dft-barriers", stage, kind: "barrier", options: { energy: "G", free: "G-DFT", symmetry: "as-read", pairs: "property", property: "reactant end" }, in: { saddles: "dft-saddles-distinct", starts: "dft-lowest-named" } }),
   );
   return r;
 }
@@ -387,7 +390,10 @@ function body(): RecipeStep[] {
       note: "Energy diagram",
     }),
     step({ key: "lowest", stage: STAGES.diagram, kind: "rank", options: { property: "thermo.free-energy", order: "lowest first", keep: 1, within: "each value", groupBy: "species" }, in: { in: "minima-freq" } }),
-    step({ key: "barriers", stage: STAGES.diagram, kind: "barrier", options: { energy: "G", free: "thermo.free-energy", symmetry: "as-read", pairs: "each", property: "" }, in: { saddles: "saddles-16", starts: "lowest" }, note: "Barriers" }),
+    // (each saddle point less the lowest conformer of the reactant it was made from: matched on its reactant end, the reactant's name - put on each
+    // lowest conformer as its own species - so that a saddle point is never set against a product, nor every species' lowest)
+    step({ key: "lowest-named", stage: STAGES.diagram, kind: "join", options: { on: "species", carry: "species as reactant end" }, in: { onto: "lowest", from: "lowest" }, note: "Each lowest conformer named as a reactant end" }),
+    step({ key: "barriers", stage: STAGES.diagram, kind: "barrier", options: { energy: "G", free: "thermo.free-energy", symmetry: "as-read", pairs: "property", property: "reactant end" }, in: { saddles: "saddles-16", starts: "lowest-named" }, note: "Barriers: each saddle point above the reactant's lowest conformer" }),
   ];
   return r;
 }
