@@ -523,7 +523,10 @@ on a page); the Newman projection follows.
   not offered; both held, the stroke goes as any. The pointer's tip says what the place is - "axial" or "equatorial" - not how it is read
   (`chairExtension`, `PositionTip`). The new atom lies where the free position puts it and carries no depth. A label is typed on it as anywhere.
   Such a bond joins another atom only where the pointer is let go ON that atom, never by the reach that joins other strokes (`JOIN_REACH`): a
-  group led up into a Haworth ring's picture toward the atom above it stays a group.
+  group led up into a Haworth ring's picture toward the atom above it stays a group. The bond after a group - out of its first atom while that
+  atom has that one bond and stands at its free position - turns 120 degrees from the group's bond, to the pointer's side, held or paused, and
+  never goes on along the group's line (`groupBend`): two bonds in one line hide the atom between them, and a CH2OH drawn straight up would read
+  as one bond to an OH. A chain led out of it zigzags from it as from any atom.
 - **R and S** are shown at once on the ring's atoms (`stereoShown`): none while there is no centre, each as a group makes one.
 - **Right-click** (an atom or a bond of a structure holding a chair): *Flip chair* - every ring atom takes the flipped solid's place and depth and each group
   goes from axial to equatorial or back **on the same face**, what hangs from it carried with it; the compound is the same, and Meno's own guard

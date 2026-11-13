@@ -43,3 +43,36 @@ export function chairExtension(model: { atoms: readonly Atom[]; bonds: readonly 
   }
   return null;
 }
+
+/**
+ * Where the bond after a projection's group goes, out of `tip`, its first atom - an atom whose one bond is to an atom of a projection of the
+ * tool's, standing at one of that atom's free positions: 120 degrees from that bond, to the side nearer the pointer, `length` long. Never on
+ * along the group's own line: two bonds in one line hide the atom between them, and a CH2OH drawn straight up reads as one bond to an OH
+ * (docs/EDITOR-2D.md, *Projections*). None where `tip` is no such atom, and the stroke goes as any.
+ */
+export function groupBend(model: { atoms: readonly Atom[]; bonds: readonly Bond[] }, tip: number, pointer: { x: number; y: number }, length: number): { end: { x: number; y: number }; from: number } | null {
+  const atoms = model.atoms as Atom[];
+  const bonds = model.bonds as Bond[];
+  const own = bonds.filter((b) => b.a === tip || b.b === tip);
+  if (own.length !== 1) return null;
+  const stem = own[0].a === tip ? own[0].b : own[0].a;
+  const byId = new Map(atoms.map((a) => [a.id, a]));
+  const here = byId.get(tip);
+  const root = byId.get(stem);
+  if (!here || !root) return null;
+  for (const found of projectionsIn({ atoms, bonds })) {
+    if (!found.ring.includes(stem) || found.ring.includes(tip)) continue;
+    const d = found.drawing;
+    const k = found.index.get(stem)!;
+    // (the group stands at one of the ring atom's free positions: a bond drawn elsewhere by hand is the chemist's own)
+    const at = seenPlaces(d, k).some((p) => Math.hypot(here.x - root.x - (p.place.x - d.atoms[k].x), here.y - root.y - (p.place.y - d.atoms[k].y)) < NEAR * 100);
+    if (!at) return null;
+    const back = Math.atan2(root.y - here.y, root.x - here.x);
+    const want = Math.atan2(pointer.y - here.y, pointer.x - here.x);
+    const off = (a: number) => Math.abs(Math.atan2(Math.sin(a - want), Math.cos(a - want)));
+    const turns = [back + (2 * Math.PI) / 3, back - (2 * Math.PI) / 3];
+    const angle = off(turns[0]) <= off(turns[1]) ? turns[0] : turns[1];
+    return { end: { x: here.x + length * Math.cos(angle), y: here.y + length * Math.sin(angle) }, from: back };
+  }
+  return null;
+}

@@ -20,7 +20,7 @@ import { cellOf, nearestCell, neighboursOf } from "./honeycomb";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { etaBondAt, etaRingAt } from "../chem/eta";
 import { ATOM_PICK_RADIUS_RATIO } from "../constants";
-import { chairExtension } from "../projections/extend";
+import { chairExtension, groupBend } from "../projections/extend";
 import type { Atom, Bond } from "../store/types";
 
 /**
@@ -326,8 +326,13 @@ export function strokeTarget(
   let turn: 1 | -1 | undefined;
   // (a bond out of an atom of a chair goes to one of its free positions, held or not by a pause: a group is never left between two)
   const chair = s.kind === "bond" && s.nodes.length === 0 && t.tipAtom != null ? chairExtension({ atoms: model.atoms as Atom[], bonds: model.bonds as unknown as Bond[] }, t.tipAtom, pointer) : null;
+  // (and the bond after a projection's group bends, 120 degrees, held or not: never on along the group's line, which would hide its atom)
+  const bend = !chair && s.kind === "bond" && s.nodes.length === 0 && t.tipAtom != null ? groupBend({ atoms: model.atoms as Atom[], bonds: model.bonds as unknown as Bond[] }, t.tipAtom, pointer, length) : null;
   if (chair) {
     end = chair.end;
+  } else if (bend) {
+    end = bend.end;
+    trigonalTo = bend.from;
   } else if (s.free) {
     end = pointer;
   } else {
