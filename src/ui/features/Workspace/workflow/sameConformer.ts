@@ -312,7 +312,7 @@ const pairKey = (x: number, y: number) => (x < y ? `${x},${y}` : `${y},${x}`);
 
 /** The order a Hückel ring's bonds are all taken as (`huckelBonds`): none a bond is given. */
 const IN_TURN = 1.5;
-/** A bond's order where it is aromatic, as the symmetry classes take it (lib/chem/identity `aromaticForm`'s). */
+/** A bond's order where it lies on a Hückel ring (`huckelBonds`, the aromatic form for geometry), as the symmetry classes take it: 4, as both aromatic forms give it. */
 const AROMATIC = 4;
 /** Whether `atoms` of a geometry lie other than in a line: else they could be turned about that line and lay over all the same. */
 function spread(xyz: readonly number[], atoms: readonly number[]): boolean {

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { aromaticAtoms, MOST_PI, piElectrons, type PiState } from "./aromatic";
+import { aromaticAtoms, aromaticForm, huckelBonds, huckelForm, MOST_PI, piElectrons, type PiState } from "./aromatic";
+import type { ChemGraph } from "./graph";
+import { kekuleOrders } from "../kekulize";
+import { readSmiles } from "../smiles";
 
 /** The atoms on an aromatic ring, in order, of rings given by hand and each atom's electrons by hand. */
 const on = (rings: number[][], electrons: (number | null)[]) => [...aromaticAtoms(rings, (a) => electrons[a])].sort((p, q) => p - q);
@@ -79,5 +82,71 @@ describe("an atom's pi electrons", () => {
     // (a CH2's, an N+ with no double bond: not known)
     expect(piElectrons(atom({}))).toBeNull();
     expect(piElectrons(atom({ el: "N", charge: 1 }))).toBeNull();
+  });
+});
+
+/** A structure from its SMILES, its aromatic bonds given Kekulé orders first, as every reader gives them. */
+function kekule(smiles: string): ChemGraph {
+  const r = readSmiles(smiles);
+  const orders = kekuleOrders(r.atoms, r.bonds);
+  return { atoms: r.atoms.map((a) => ({ el: a.el, charge: a.charge, hs: a.hs })), bonds: r.bonds.map((b, i) => ({ a: b.a1, b: b.a2, order: orders[i] })) };
+}
+/** How many bonds each form makes aromatic, of how many: [bonds, `aromaticForm`'s, `huckelBonds`']. */
+function counts(smiles: string): [number, number, number] {
+  const g = kekule(smiles);
+  return [g.bonds.length, aromaticForm(g).bonds.filter((b) => b.order === 4).length, huckelBonds(g.atoms.length, g.bonds).size];
+}
+
+describe("the two aromatic forms: identity's (every alternating cycle) and geometry's (4n + 2 only)", () => {
+  it("make the same bonds aromatic where every alternating cycle is of 4n + 2: benzene, pyridine, naphthalene, pyrene, [18]annulene", () => {
+    expect(counts("c1ccccc1")).toEqual([6, 6, 6]);
+    expect(counts("c1ccncc1")).toEqual([6, 6, 6]);
+    expect(counts("c1ccc2ccccc2c1")).toEqual([11, 11, 11]);
+    expect(counts("c1cc2ccc3cccc4ccc(c1)c2c34")).toEqual([19, 19, 19]);
+    expect(counts(`C1${"=CC".repeat(8)}=C1`)).toEqual([18, 18, 18]);
+  });
+
+  it("part over a 4n cycle: cyclobutadiene's and cyclooctatetraene's ring aromatic for identity, single and double for geometry", () => {
+    expect(counts("C1=CC=C1")).toEqual([4, 4, 0]);
+    expect(counts("C1=CC=CC=CC=C1")).toEqual([8, 8, 0]);
+    const cot = kekule("C1=CC=CC=CC=C1");
+    expect(huckelForm(cot)).toBe(cot);
+    expect(new Set(aromaticForm(cot).bonds.map((b) => b.order))).toEqual(new Set([4]));
+  });
+
+  it("take a perimeter as a ring: azulene's ten both ways, pentalene's and heptalene's (4n) for identity only, the bond across the middle single in all", () => {
+    expect(counts("c1ccc2cccc2cc1")).toEqual([11, 10, 10]);
+    expect(counts("C1=CC2=CC=CC2=C1")).toEqual([9, 8, 0]);
+    expect(counts("C1=CC=C2C=CC=CC=C2C=C1")).toEqual([13, 12, 0]);
+  });
+
+  it("give identity biphenylene's two bonds between its rings as well (a Kekulé structure has them double), geometry its two benzenes alone", () => {
+    expect(counts("c1ccc2c(c1)-c1ccccc1-2")).toEqual([14, 14, 12]);
+  });
+
+  it("leave what every Kekulé structure has: acenaphthylene's five-ring C=C, indole's and pyrrole's five-ring, a quinone, an open chain", () => {
+    expect(counts("C1=Cc2cccc3cccc1c23")).toEqual([14, 11, 11]);
+    expect(counts("c1ccc2[nH]ccc2c1")).toEqual([10, 6, 6]);
+    expect(counts("c1cc[nH]c1")).toEqual([5, 0, 0]);
+    expect(counts("O=C1C=CC(=O)C=C1")).toEqual([8, 0, 0]);
+    expect(counts("C=CC=C")).toEqual([3, 0, 0]);
+    expect(counts("C=CC=CC=C")).toEqual([5, 0, 0]);
+  });
+
+  it("come to one form from either of benzene's Kekulé structures, and give a structure with nothing to join back as it was", () => {
+    const one: ChemGraph = { atoms: Array.from({ length: 6 }, () => ({ el: "C" })), bonds: [0, 1, 2, 3, 4, 5].map((k) => ({ a: k, b: (k + 1) % 6, order: k % 2 ? 1 : 2 })) };
+    const other: ChemGraph = { ...one, bonds: one.bonds.map((b) => ({ ...b, order: 3 - b.order })) };
+    for (const form of [aromaticForm, huckelForm]) expect(form(one)).toEqual(form(other));
+    const butadiene = kekule("C=CC=C");
+    expect(aromaticForm(butadiene)).toBe(butadiene);
+    expect(huckelForm(butadiene)).toBe(butadiene);
+  });
+
+  it("keep what else the graph carries, and drop a side said on a bond made aromatic", () => {
+    const g = { ...kekule("C1=CC=CC=CC=C1"), extra: "kept" };
+    g.bonds = g.bonds.map((b) => (b.order === 2 ? { ...b, stereo: { refs: [b.a, b.b] as [number, number], cis: true } } : b));
+    const form = aromaticForm(g);
+    expect(form.extra).toBe("kept");
+    expect(form.bonds.filter((b) => b.stereo)).toEqual([]);
   });
 });

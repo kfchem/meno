@@ -21,6 +21,10 @@ import { canonicalWritten, symmetryClasses, symmetryOrbits as orbitsAsDrawn } fr
 import { isMetal, type LayoutAtom, type LayoutBond, type LayoutInput } from "../layout/perceive";
 import type { Axial, Tetrahedral } from "../layout/stereo";
 import type { Radical } from "./molecule";
+import { aromaticForm } from "./perception/aromatic";
+
+// (the aromatic form identity and symmetry compare structures in: the core's, where the two forms are said apart)
+export { aromaticForm };
 
 /**
  * An atom as identity reads it: as the layout does, and besides, its mass
@@ -31,99 +35,6 @@ import type { Radical } from "./molecule";
  */
 export type IdentityAtom = LayoutAtom & { isotope?: number; radical?: Radical; mapped?: true };
 export type IdentityInput = { atoms: readonly IdentityAtom[]; bonds: readonly LayoutBond[]; axes?: readonly Axial[] };
-
-/** The bond order a bond its Kekulé structures disagree on is given for identity and symmetry, beside 1, 2 and 3. */
-const AROMATIC = 4;
-
-/**
- * The structure with every bond whose order its Kekulé structures disagree
- * on given one order, whichever of them was drawn: Meno's rule for identity
- * and symmetry. A structure's double bonds pair its atoms off (a perfect
- * matching of those with one); another Kekulé structure of it differs by
- * an alternating cycle - single and double bonds in turn, round a ring.
- * So a bond is drawn now single, now double exactly where it lies on such a
- * cycle, and those bonds become `AROMATIC`: benzene's, naphthalene's,
- * phenanthrene's and azulene's ring bonds, a pyridine's, cyclooctatetraene's.
- * A bond on no such cycle keeps its order, as every Kekulé structure has it:
- * pyrrole's, furan's and thiophene's (they have one Kekulé structure), a
- * quinone's (its C=O is no part of a cycle), azulene's middle bond. Which
- * bonds lie on an alternating cycle is the structure's, not the drawing's,
- * so every Kekulé structure of one structure comes to the same form, and
- * its identity cannot split by how its rings were drawn. It follows that
- * bond-shift isomers are one structure: 1,2-disubstituted cyclooctatetraene
- * with its substituents across a double bond and across a single one - two
- * compounds, a barrier apart - has one identity, as joins and duplicates
- * want it. A bond so made one order says no cis or trans of its own: it is
- * single in some of the structure's Kekulé structures, so a drawing's side
- * on it - a cyclooctatetraene's ring bonds, drawn cis - is dropped with its
- * order. That holds for a real trans bond too: in a large annulene (a
- * [14]- or [18]annulene, with E bonds in its ring), configurational
- * isomers that differ by such a bond are one structure, as the rule
- * states.
- */
-export function aromaticForm(input: LayoutInput): LayoutInput {
-  const n = input.atoms.length;
-  // (each atom's partner by its one double bond, where it has exactly one and no triple bond)
-  const mate = new Array<number>(n).fill(-1);
-  const doubles = new Array<number>(n).fill(0);
-  const triple = new Array<boolean>(n).fill(false);
-  for (const b of input.bonds) {
-    if (b.order === 2) {
-      doubles[b.a]++;
-      doubles[b.b]++;
-      mate[b.a] = b.b;
-      mate[b.b] = b.a;
-    } else if (b.order === 3) triple[b.a] = triple[b.b] = true;
-  }
-  const paired = (i: number) => doubles[i] === 1 && !triple[i] && mate[i] >= 0 && doubles[mate[i]] === 1 && !triple[mate[i]];
-  // (the single bonds between paired atoms: what an alternating cycle's other half runs along)
-  const singles: number[][] = input.atoms.map(() => []);
-  for (const b of input.bonds) {
-    if (b.order === 1 && paired(b.a) && paired(b.b)) {
-      singles[b.a].push(b.b);
-      singles[b.b].push(b.a);
-    }
-  }
-  const key = (a: number, b: number) => `${Math.min(a, b)}-${Math.max(a, b)}`;
-  const aromatic = new Set<string>();
-  // a single bond u-v lies on an alternating cycle where, from v's partner, single and double bonds in
-  // turn reach a single bond into u's partner (u - v = v' - ... - u' = u)
-  for (const b of input.bonds) {
-    if (b.order !== 1 || !paired(b.a) || !paired(b.b) || mate[b.a] === b.b) continue;
-    const [u, v] = [b.a, b.b];
-    const goal = mate[u];
-    const seen = new Set<number>([mate[v]]);
-    const queue = [mate[v]];
-    let found = false;
-    while (queue.length && !found) {
-      const x = queue.shift()!;
-      for (const y of singles[x]) {
-        if (y === goal) {
-          found = true;
-          break;
-        }
-        if (y === u || y === v) continue;
-        const next = mate[y];
-        if (next === u || next === v || seen.has(next)) continue;
-        seen.add(next);
-        queue.push(next);
-      }
-    }
-    if (!found) continue;
-    aromatic.add(key(u, v));
-    aromatic.add(key(u, mate[u]));
-    aromatic.add(key(v, mate[v]));
-  }
-  if (!aromatic.size) return input;
-  return {
-    ...input,
-    bonds: input.bonds.map((b) => {
-      if (!aromatic.has(key(b.a, b.b))) return b;
-      const { stereo: _side, ...rest } = b;
-      return { ...rest, order: AROMATIC };
-    }),
-  };
-}
 
 /**
  * The structure with each plain hydrogen atom counted as one of its
