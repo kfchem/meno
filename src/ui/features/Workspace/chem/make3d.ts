@@ -39,7 +39,7 @@ import { drawnBox } from "../../../../utils/importers";
 import { etaBound } from "./etaBound";
 import { factor } from "../../../../lib/units";
 import { shownConformers } from "./shownConformers";
-import { isomersToMake, withChosen, type OpenStereo } from "./openStereo";
+import { isomersToMake, withChosen, withOwnCip, type OpenStereo } from "./openStereo";
 import { hasConfiguration, madeAs, mirroredConfiguration, mirroredPart, reflectedConformers } from "./pageMirror";
 import type { Configuration } from "../../../../lib/chem/stereoOpen";
 import { keptMade, madeChecksOf, metalHoldsOf } from "../../../../lib/chem/metalHolds";
@@ -660,7 +660,7 @@ export async function conformersOf(
   //  more than one part, its parts side by side - chem/partsApart)
   const holds = held(block.molblock);
   const checks = madeChecksOf(block.molblock, holds);
-  return shownConformers(got.map((c) => partsSideBySide(keptMade(withChosen(c, made.open), checks), partsOf(c.atoms, c.bonds, holds?.eta))));
+  return shownConformers(got.map((c) => partsSideBySide(keptMade(withChosen(withOwnCip(c), made.open), checks), partsOf(c.atoms, c.bonds, holds?.eta))));
 }
 
 /** What a 3D structure's search that goes on gives at once, and what is left of it (`conformersGrowing`). */
