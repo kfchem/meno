@@ -189,6 +189,61 @@ describe("a four-bond metal cleaned up", () => {
   });
 });
 
+describe("oppositesKept, left as laid out", () => {
+  const at = (deg: number, r = 1) => ({ x: r * Math.cos((deg * Math.PI) / 180), y: r * Math.sin((deg * Math.PI) / 180) });
+  const laidAt = (pts: { x: number; y: number }[], depth: (number | null)[] = pts.map(() => null)): Layout2D =>
+    ({ x: pts.map((p) => p.x), y: pts.map((p) => p.y), depth, solid: pts.map(() => false), bold: [], toward: [], dashed: [], wedges: [], hydrogens: [] }) as Layout2D;
+  // (a centre and four donors: two N and two Cl, the N side by side as laid out)
+  const cis = [{ x: 0, y: 0 }, at(45), at(135), at(225), at(315)];
+  const trans = [{ x: 0, y: 0 }, at(0), at(180), at(90), at(270)];
+  const four = (el: string, extra: { el: string }[] = []): LayoutInput => ({
+    atoms: [{ el }, { el: "N" }, { el: "N" }, { el: "Cl" }, { el: "Cl" }, ...extra],
+    bonds: [[0, 1], [0, 2], [0, 3], [0, 4], ...extra.map((_, k) => [0, 5 + k])].map(([a, b]) => ({ a, b, order: 1 })),
+  });
+
+  it("at no metal: a carbon with four bonds drawn otherwise is the engine's", () => {
+    const laid = laidAt(cis);
+    expect(oppositesKept(trans, four("C"), laid)).toBe(laid);
+  });
+
+  it("where the layout's own pairing is not plain, without failing", () => {
+    // (laid out so that two pairings are as near: 0, 120, 60, 180)
+    const laid = laidAt([{ x: 0, y: 0 }, at(0), at(120), at(60), at(180)]);
+    expect(oppositesKept(trans, four("Pt"), laid)).toBe(laid);
+  });
+
+  it("at a metal drawn in perspective", () => {
+    const laid = laidAt(cis, [0.5, null, null, null, null]);
+    expect(oppositesKept(trans, four("Pt"), laid)).toBe(laid);
+  });
+
+  it("where a donor is a star of a ring bound face-on, past the drawing's own atoms", () => {
+    const laid = laidAt(cis);
+    expect(oppositesKept(trans.slice(0, 4), four("Pt"), laid)).toBe(laid);
+  });
+
+  it("at a metal with five bonds", () => {
+    const laid = laidAt([...cis, at(0, 1.5)]);
+    expect(oppositesKept([...trans, at(45, 1.5)], four("Pt", [{ el: "F" }]), laid)).toBe(laid);
+  });
+
+  it("where a donor was drawn on the metal itself", () => {
+    const laid = laidAt(cis);
+    expect(oppositesKept([{ x: 0, y: 0 }, { x: 0, y: 0 }, at(180), at(90), at(270)], four("Pt"), laid)).toBe(laid);
+  });
+
+  it("where the drawing's two nearest pairings are within 20 degrees of each other all told - and not where they are 30 apart", () => {
+    const laid = laidAt(cis);
+    // (each pairing's degrees off two straight lines, summed: N at 0 and 125, Cl at 60 and 185 - N with N 110, N with the Cl at 185
+    // 120, 10 apart: as laid out; N at 0 and 140, Cl at 55 and 195 - N with N 80, the next 110, 30 apart: N put opposite N)
+    expect(oppositesKept([{ x: 0, y: 0 }, at(0), at(125), at(60), at(185)], four("Pt"), laid)).toBe(laid);
+    const far = oppositesKept([{ x: 0, y: 0 }, at(0), at(140), at(55), at(195)], four("Pt"), laid);
+    expect(far).not.toBe(laid);
+    const deg = (i: number) => Math.round((Math.atan2(far.y[i], far.x[i]) * 180) / Math.PI);
+    expect((deg(1) - deg(2) + 720) % 360).toBe(180);
+  });
+});
+
 describe("a metal with bulky donors put side by side as drawn", () => {
   it("keeps cis-PtCl2(PCy3)2 and cis-PdCl2(PPh3)2 cis, the phosphines' groups turned clear of each other - or, where they cannot be, leaves the drawing as it is: never the trans", { timeout: 180000 }, async () => {
     forgetLaidOut();
