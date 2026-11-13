@@ -119,6 +119,13 @@ export type Stereo = {
   hydrogens: { on: number; at: Point }[];
 };
 
+/** The lengths an H drawn on a centre is tried at, in bonds: a bond's, then shorter where it is cramped there (`H_CRAMPED`). */
+const H_LENGTHS = [1, 0.85, 0.7, 0.6];
+/** Nearer than this to another atom or a bond at a bond's length, in bonds, and a shorter H is tried. */
+const H_CRAMPED = 0.6;
+/** How much clearer a shorter H must be, in bonds, to be drawn instead. */
+const H_GAIN = 0.1;
+
 export function placeStereo(
   mol: Molecule,
   pos: Map<number, Point>,
@@ -242,8 +249,8 @@ export function placeStereo(
           }),
         };
       });
-      const room = (angle: number) => {
-        const p = { x: at.x + Math.cos(angle), y: at.y + Math.sin(angle) };
+      const room = (angle: number, len = 1) => {
+        const p = { x: at.x + len * Math.cos(angle), y: at.y + len * Math.sin(angle) };
         let r = Infinity;
         // (a label half by the distance, half by the paper between its ink
         // and the H's, as the drawing measures two labels' ink: an H a bond
@@ -299,8 +306,16 @@ export function placeStereo(
       }
       const fusion = mol.systemOf[c] >= 0 && !mol.neighbours[c].some((n) => !ringBond(c, n));
       const preferred = fusion && sense ? (sense > 0 ? Math.PI / 2 : -Math.PI / 2) : t0;
+      // (how far an H at `p` is from every other atom and every bond, plainly: what a reader sees crowd it)
+      const plain = (p: Point) =>
+        Math.min(
+          ...others.map((o) => Math.hypot(o.p.x - p.x, o.p.y - p.y)),
+          ...bonds.map(([u, v]) => toSegment(p, u, v)),
+        );
+      const spot = (angle: number, len: number) => ({ x: at.x + len * Math.cos(angle), y: at.y + len * Math.sin(angle) });
       let bestT = t0;
       let bestRoom = -Infinity;
+      let bestLen = 1;
       for (let k = 0; k < 24; k++) {
         const angle = (k * Math.PI) / 12;
         // (upright, or straight out of the rings, first among equals)
@@ -311,7 +326,22 @@ export function placeStereo(
           bestT = angle;
         }
       }
-      hPos = { x: at.x + Math.cos(bestT), y: at.y + Math.sin(bestT) };
+      // (a bond's length, unless it is cramped there plainly - a cage's H hemmed in, gelsemine's C5 a third of a bond from an atom -
+      // and a shorter H, down to 0.6 of a bond, is clearer by both measures by a tenth of a bond or more: an H on another label reads
+      // as that label's, GR-2.1.6)
+      const atLength = Math.min(bestRoom, plain(spot(bestT, 1)));
+      if (plain(spot(bestT, 1)) < H_CRAMPED) {
+        let better = atLength + H_GAIN;
+        for (const len of H_LENGTHS.slice(1)) {
+          for (let k = 0; k < 24; k++) {
+            const angle = (k * Math.PI) / 12;
+            const lean = Math.abs(Math.atan2(Math.sin(angle - preferred), Math.cos(angle - preferred)));
+            const r = Math.min(room(angle, len), plain(spot(angle, len))) - 0.02 * lean;
+            if (r > better + 1e-9) [better, bestT, bestLen, bestRoom] = [r, angle, len, room(angle, len)];
+          }
+        }
+      }
+      hPos = { x: at.x + bestLen * Math.cos(bestT), y: at.y + bestLen * Math.sin(bestT) };
       hRoom = bestRoom;
       // (and, at a fusion, how far off upright it leans)
       if (fusion) hLean = Math.asin(Math.min(1, Math.abs(Math.cos(bestT))));

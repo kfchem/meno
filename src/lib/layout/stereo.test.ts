@@ -275,3 +275,59 @@ describe("an H drawn by a label", () => {
     expect(h.x).toBeLessThan(0);
   });
 });
+
+describe("an H drawn where a bond's length has no room", () => {
+  // a centre with its three bonds below, taken by other centres' wedges, and other atoms all round above it, a bond and a half out:
+  // an H a bond long lies half a bond from one of them whichever way it points
+  const at = (deg: number, r = 1) => ({ x: r * Math.cos((deg * Math.PI) / 180), y: r * Math.sin((deg * Math.PI) / 180) });
+  const arc = Array.from({ length: 10 }, (_, k) => 20 * k);
+  const input: LayoutInput = {
+    atoms: [{ el: "C", tetra: { neighbours: [1, 2, 3, -1], volume: 1 } }, { el: "C" }, { el: "C" }, { el: "C" }, ...arc.map(() => ({ el: "C" }))],
+    bonds: [1, 2, 3].map((b) => ({ a: 0, b, order: 1 })),
+  };
+  const mol = perceive(input);
+  const pos = new Map([
+    [0, { x: 0, y: 0 }],
+    [1, at(215)],
+    [2, at(325)],
+    [3, at(270)],
+    ...arc.map((deg, k): [number, { x: number; y: number }] => [4 + k, at(deg, 1.5)]),
+  ]);
+
+  it("is drawn shorter, where that gives it room: three quarters of a bond from every other atom", () => {
+    const h = placeStereo(mol, pos, mol.tetra, new Set([key(0, 1), key(0, 2), key(0, 3)])).hydrogens.find((x) => x.on === 0)!.at;
+    expect(Math.hypot(h.x, h.y)).toBeLessThan(1);
+    expect(Math.hypot(h.x, h.y)).toBeGreaterThanOrEqual(0.6 - 1e-9);
+    for (const k of arc.keys()) expect(Math.hypot(h.x - pos.get(4 + k)!.x, h.y - pos.get(4 + k)!.y)).toBeGreaterThanOrEqual(0.75);
+  });
+
+  // (the same centre with other atoms set elsewhere: `others`, each at a radius and an angle)
+  const around = (others: [number, number][]) => {
+    const extra: { x: number; y: number }[] = others.map(([r, deg]) => at(deg, r));
+    const inp: LayoutInput = {
+      atoms: [{ el: "C", tetra: { neighbours: [1, 2, 3, -1], volume: 1 } }, { el: "C" }, { el: "C" }, { el: "C" }, ...extra.map(() => ({ el: "C" }))],
+      bonds: [1, 2, 3].map((b) => ({ a: 0, b, order: 1 })),
+    };
+    const p = new Map<number, { x: number; y: number }>([[0, { x: 0, y: 0 }], [1, at(215)], [2, at(325)], [3, at(270)], ...extra.map((q, k): [number, { x: number; y: number }] => [4 + k, q])]);
+    const m = perceive(inp);
+    return placeStereo(m, p, m.tetra, new Set([key(0, 1), key(0, 2), key(0, 3)])).hydrogens.find((x) => x.on === 0)!.at;
+  };
+
+  it("stays a bond long where it is not cramped there, though a shorter one would stand clearer", () => {
+    // (atoms all round above, a bond and two thirds out: 0.65 of a bond from an H a bond long)
+    const h = around(arc.map((deg): [number, number] => [1.65, deg]));
+    expect(Math.hypot(h.x, h.y)).toBeCloseTo(1, 9);
+  });
+
+  it("stays a bond long where a shorter one would stand no clearer", () => {
+    // (atoms close in all round above, three quarters of a bond out: a shorter H only nearer them)
+    const h = around([20, 40, 60, 70, 110, 120, 140, 160].map((deg): [number, number] => [0.75, deg]));
+    expect(Math.hypot(h.x, h.y)).toBeCloseTo(1, 9);
+  });
+
+  it("is drawn a bond long where that has room", () => {
+    const open = new Map([...pos].filter(([a]) => a < 4));
+    const h = placeStereo(mol, open, mol.tetra, new Set([key(0, 1), key(0, 2), key(0, 3)])).hydrogens.find((x) => x.on === 0)!.at;
+    expect(Math.hypot(h.x, h.y)).toBeCloseTo(1, 9);
+  });
+});
