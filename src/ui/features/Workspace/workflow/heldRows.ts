@@ -17,12 +17,12 @@
  *   kind its plugin does not hold - restrained or exact, never swapped -
  *   refused with why before anything is sent.
  * - A molecule its table's step looked at and found nothing to hold for - a
- *   reaction with no coordination bond - goes on holding nothing, where no
- *   table wired in holds a row at all, and every table wired in says so of
- *   it, and the line says "nothing to hold" (the maintainer, 2026-11-13).
- *   Each table says which (lib/steps `NothingRow`): one a table's step
- *   refused, or never saw, is refused as ever, however empty the tables;
- *   so is one where another molecule has rows.
+ *   reaction with no coordination bond - goes on holding nothing, where
+ *   every table wired in says so of it, rows for other molecules or none,
+ *   and the line says "nothing to hold" (the maintainer, 2026-11-13) - how
+ *   many, where others hold rows. Each table says which (lib/steps
+ *   `NothingRow`): one a table's step refused, or never saw, is refused as
+ *   ever, however empty the tables.
  * - Every table wired in speaks of each molecule - a row for it, or found to
  *   have nothing to hold - or it is refused, the table that did not named
  *   where more than one is wired in: a molecule one table holds a row for
@@ -140,8 +140,7 @@ export function heldRows(doc: Flow, step: number, entries: readonly SetEntry[], 
     if (silent >= 0) return { why: silentWhy(silent) };
     if (found.some((x) => x && x.numbering !== numberingOf(e))) return { why: RENUMBERED_WHY };
     if (!mine.length) {
-      // (found to have nothing to hold by every table, and no table holding a row for any: it goes on, holding nothing)
-      if (wired.length) return { why: NONE_MADE_WHY };
+      // (found to have nothing to hold by every table - rows for other molecules or none: it goes on, holding nothing)
       heldNothing++;
       return { rows: [] };
     }
@@ -174,8 +173,10 @@ export function heldRows(doc: Flow, step: number, entries: readonly SetEntry[], 
     return { rows: rows.sort(byKindAndAtoms).map((r) => ({ ...r, atoms: [...r.atoms] })) };
   });
   const unmatched = wired.filter((w) => !used.has(w)).length;
+  // (how many hold nothing, where others hold rows: the line never reads as though none held any)
+  const heldSome = each.some((x) => "rows" in x && x.rows.length);
   const said = [
-    ...(heldNothing ? [NOTHING_TO_HOLD] : []),
+    ...(heldNothing ? [heldSome ? `${plural(heldNothing, "entry", "entries")} with ${NOTHING_TO_HOLD}` : NOTHING_TO_HOLD] : []),
     ...(takenOver ? [`${plural(takenOver, "row")} taken over by a later step's`] : []),
     ...(unmatched ? [`${plural(unmatched, "restraint row")} for no molecule here`] : []),
   ];

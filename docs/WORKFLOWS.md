@@ -1315,13 +1315,15 @@ taller than the rest, its inputs a plain list down its left edge, each named
   molecule that came in are counted on the line.
 - **Nothing to hold**: a molecule whose table's step looked at it and found
   nothing to hold - as a coordination table does for a reaction with no
-  coordination bond - goes on holding nothing, where no table wired in
-  holds a row at all, and the line says "nothing to hold" (the maintainer,
-  2026-11-13). The table says which molecules those are, a row "nothing to
-  hold" for each (STRUCTURE-STEPS.md, *Restraints*). A molecule the step
-  refused - no ID, an ID another shares - or never saw is refused as ever,
-  however empty the table: a restraint asked for and not made is never
-  passed over. So is one with no row where another molecule has rows. One
+  coordination bond - goes on holding nothing, and the line says "nothing
+  to hold" (the maintainer, 2026-11-13). So it does where the table holds
+  rows for another molecule - one species of a reaction with a
+  coordination bond, another with none - and the line says how many ("1
+  entry with nothing to hold"). The table says which molecules those are,
+  a row "nothing to hold" for each (STRUCTURE-STEPS.md, *Restraints*). A
+  molecule the step refused - no ID, an ID another shares - or never saw
+  is refused as ever, however empty the table: a restraint asked for and
+  not made is never passed over. One
   with a double bond its reference has cis, where 180° is asked, is no
   "nothing to hold": something was found that cannot be held so, and it is
   refused.

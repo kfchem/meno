@@ -186,18 +186,36 @@ describe("the restraints a step holds, wired in", () => {
     expect(heldRows(wiredWith(c), 40, [molecule(), molecule("p2")], RDKIT, "RDKit")).toEqual({ each: [{ why: NONE_MADE_WHY }, { rows: [] }], said: [NOTHING_TO_HOLD] });
     // (one the step never saw, among those it found none for: refused)
     expect(heldRows(wiredWith(a), 40, [molecule("p3")], RDKIT, "RDKit")).toEqual({ each: [{ why: NONE_MADE_WHY }], said: [] });
-    // (rows for one molecule in a table wired in, none found for another: the other refused, until it is ruled otherwise)
+    // (a second table with rows for another molecule that says nothing of this one - its step never saw it: refused, that table named)
     expect(heldRows(wiredWith(a, restraintsTable([row(torsion(T1, 50), "p9")])), 40, [molecule("p1")], RDKIT, "RDKit")).toEqual({
       each: [{ why: `${NONE_MADE_WHY} by Restraints (table 2 of 2 wired in)` }],
       said: ["1 restraint row for no molecule here"],
     });
-    // (the same, the second table naming it as found to have nothing too: rows for another molecule - refused, until it is ruled)
+    // (the same, the second table naming it as found to have nothing too: rows for another molecule - it goes on, holding nothing)
     expect(heldRows(wiredWith(a, restraintsTable([row(torsion(T1, 50), "p9")], [{ for: "p1", on: "start", numbering: OWN_NUMBERING, why: "none found to hold" }])), 40, [molecule("p1")], RDKIT, "RDKit")).toEqual({
-      each: [{ why: NONE_MADE_WHY }],
-      said: ["1 restraint row for no molecule here"],
+      each: [{ rows: [] }],
+      said: [NOTHING_TO_HOLD, "1 restraint row for no molecule here"],
     });
     // (numbered anew by Atom map since its step found nothing for it: refused, as a row would be)
     expect(heldRows(wiredWith(a), 40, [molecule("p1", "as reactant #1 (k2)"), molecule("p2")], RDKIT, "RDKit")).toEqual({ each: [{ why: RENUMBERED_WHY }, { rows: [] }], said: [NOTHING_TO_HOLD] });
+  });
+
+  it("lets a molecule found to have nothing to hold go on where its table holds rows for another - one its step refused or never saw refused (the maintainer, 2026-11-13)", () => {
+    const nothingFor = (id: string) => ({ for: id, on: "start", numbering: OWN_NUMBERING, why: "none found to hold" });
+    const one = (table: Table) => page([[10, "restraints"], [40, "minimise"]], [{ id: 11, by: 10, table }], [[11, 40, RESTRAINTS_INPUT.id]]);
+    // (molecule A with a row, molecule B looked at and found to have none: A holds its row, B goes on holding nothing, counted)
+    const ab = one(restraintsTable([row(torsion(T1, 50), "pA")], [nothingFor("pB")]));
+    expect(heldRows(ab, 40, [molecule("pA"), molecule("pB")], RDKIT, "RDKit")).toEqual({ each: [{ rows: [torsion(T1, 50)] }, { rows: [] }], said: ["1 entry with nothing to hold"] });
+    // (one the table neither has a row for nor names - its step refused it, or never saw it - and one with no ID: refused, as ever)
+    expect(heldRows(ab, 40, [molecule("pA"), molecule("pC"), molecule()], RDKIT, "RDKit")).toEqual({ each: [{ rows: [torsion(T1, 50)] }, { why: NONE_MADE_WHY }, { why: NONE_MADE_WHY }], said: [] });
+    // (two found to have nothing, beside A: counted as two)
+    const abd = one(restraintsTable([row(torsion(T1, 50), "pA")], [nothingFor("pB"), nothingFor("pD")]));
+    expect(heldRows(abd, 40, [molecule("pB"), molecule("pA"), molecule("pD")], RDKIT, "RDKit")).toEqual({
+      each: [{ rows: [] }, { rows: [torsion(T1, 50)] }, { rows: [] }],
+      said: ["2 entries with nothing to hold"],
+    });
+    // (only B came in: none held any, said as such; A's row for no molecule here, counted)
+    expect(heldRows(ab, 40, [molecule("pB")], RDKIT, "RDKit")).toEqual({ each: [{ rows: [] }], said: [NOTHING_TO_HOLD, "1 restraint row for no molecule here"] });
   });
 
   it("takes a molecule on only where every table wired in speaks of it - a row, or nothing found to hold - saying which did not (CHEM's known answers)", () => {
