@@ -99,7 +99,7 @@ export function layout2D(input: LayoutInput): Layout2D {
     laidOutBefore.set(key, laid);
     if (laidOutBefore.size > LAID_OUT_KEPT) laidOutBefore.delete(laidOutBefore.keys().next().value!);
   }
-  const out = restored(structuredClone(laid), to);
+  const out = onSpokes(input, restored(structuredClone(laid), to));
   laidOutAsGiven.set(given, structuredClone(out));
   if (laidOutAsGiven.size > LAID_OUT_KEPT) laidOutAsGiven.delete(laidOutAsGiven.keys().next().value!);
   return out;
@@ -113,6 +113,47 @@ const laidOutBefore = new Map<string, Layout2D>();
 
 /** How many molecules `layout2D` keeps laid out, the least recently asked for going first. */
 const LAID_OUT_KEPT = 64;
+
+/**
+ * Each six-bond atom laid out as three lines through it (`octahedronUpright`) with its donors back on their spokes: a single donor a
+ * little off its spoke - a step after the lines were set gave it room - turned back onto it, with all it carries (Brecher 2006,
+ * ST-2.11: a spoke is never off its line). `out` itself, changed.
+ */
+function onSpokes(input: LayoutInput, out: Layout2D): Layout2D {
+  const near = input.atoms.map(() => [] as number[]);
+  for (const { a, b } of input.bonds) {
+    near[a].push(b);
+    near[b].push(a);
+  }
+  near.forEach((round, m) => {
+    if (round.length !== 6 || out.depth[m] != null) return;
+    const angle = (v: number) => Math.atan2(out.y[v] - out.y[m], out.x[v] - out.x[m]);
+    const t = round.map(angle).sort((p, q) => p - q);
+    if (!t.every((u, i) => Math.abs((i + 1 < t.length ? t[i + 1] : t[0] + 2 * Math.PI) - u - Math.PI / 3) <= SPOKES_SNAP)) return;
+    // (the spokes as the upright line sets them: one of them straight up)
+    for (const v of round) {
+      const a = angle(v);
+      const spoke = Math.PI / 2 + (Math.PI / 3) * Math.round((a - Math.PI / 2) / (Math.PI / 3));
+      const off = Math.atan2(Math.sin(spoke - a), Math.cos(spoke - a));
+      if (Math.abs(off) < 1e-9) continue;
+      // (what it carries, reached not through the atom; none where that reaches another of its donors - a chelate's, held by its ring)
+      const side = new Set([v]);
+      for (const todo = [v]; todo.length; ) for (const w of near[todo.pop()!]) if (w !== m && !side.has(w)) (side.add(w), todo.push(w));
+      if (round.some((w) => w !== v && side.has(w))) continue;
+      const [c, sn] = [Math.cos(off), Math.sin(off)];
+      for (const w of side) {
+        const [dx, dy] = [out.x[w] - out.x[m], out.y[w] - out.y[m]];
+        [out.x[w], out.y[w]] = [out.x[m] + dx * c - dy * sn, out.y[m] + dx * sn + dy * c];
+      }
+      out.hydrogens = out.hydrogens.map((h) => {
+        if (!side.has(h.on)) return h;
+        const [dx, dy] = [h.at.x - out.x[m], h.at.y - out.y[m]];
+        return { ...h, at: { x: out.x[m] + dx * c - dy * sn, y: out.y[m] + dx * sn + dy * c } };
+      });
+    }
+  });
+  return out;
+}
 
 /** Forget the molecules `layout2D` keeps laid out (for tests that lay the same molecule out in several orders). */
 export function forgetLaidOut(): void {
@@ -1722,6 +1763,8 @@ function squareUp(mol: Molecule, piece: number[], pos: Grown, ref: Grown = pos):
 
 /** How far from 60 degrees apart a six-bond metal's neighbours may stand and still be three lines through it, as laid out. */
 const SPOKES_EVEN = rad(10);
+/** How far off its spoke a single donor of such a metal may have been moved, at the most, and be turned back onto it (`onSpokes`). */
+const SPOKES_SNAP = rad(15);
 
 /**
  * A six-bond atom of `piece` - a metal, or SF6's S - whose neighbours
@@ -1744,14 +1787,28 @@ function octahedronUpright(mol: Molecule, piece: number[], pos: Grown): boolean 
     const turn = spokes
       .map((t) => Math.atan2(Math.sin(Math.PI / 2 - t), Math.cos(Math.PI / 2 - t)))
       .reduce((best, u) => (Math.abs(u) < Math.abs(best) ? u : best));
-    if (Math.abs(turn) > 1e-9) {
-      const c = Math.cos(turn);
-      const sn = Math.sin(turn);
-      for (const a of piece) {
+    const turnAbout = (atoms: Iterable<number>, t: number) => {
+      const c = Math.cos(t);
+      const sn = Math.sin(t);
+      for (const a of atoms) {
         const p = pos.get(a)!;
         const [dx, dy] = [p.x - at.x, p.y - at.y];
         pos.set(a, { x: at.x + dx * c - dy * sn, y: at.y + dx * sn + dy * c });
       }
+    };
+    if (Math.abs(turn) > 1e-9) turnAbout(piece, turn);
+    // (and each donor a little off its spoke - moved there to give room - turned back onto it with all it carries, where that is a
+    // donor of its own: a spoke is never off its line, Brecher 2006 ST-2.11's form)
+    const here = new Set(piece);
+    for (const v of mol.neighbours[m]) {
+      const p = pos.get(v)!;
+      const t = Math.atan2(p.y - at.y, p.x - at.x);
+      const spoke = Math.PI / 2 + (Math.PI / 3) * Math.round((t - Math.PI / 2) / (Math.PI / 3));
+      const off = Math.atan2(Math.sin(spoke - t), Math.cos(spoke - t));
+      if (Math.abs(off) < 1e-6) continue;
+      const side = sideAtoms(mol, m, v);
+      if (side.some((a) => a !== v && mol.neighbours[m].includes(a)) || side.some((a) => !here.has(a))) continue;
+      turnAbout(side, off);
     }
     return true;
   }
