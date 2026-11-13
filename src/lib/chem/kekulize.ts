@@ -64,21 +64,28 @@ export function valenceOrders(atoms: readonly KekuleAtom[], bonds: readonly { a:
 }
 
 /**
- * Per bond, the order to draw it with (`kekuleOrders`); and the atoms read
+ * Per bond, the order to draw it with (`kekuleOrders`); the atoms read
  * as carrying an H the input did not state, where another atom of their
  * ring system could have carried it instead (`hChosen`, by index): which
  * nitrogen of an imidazole, a tetrazole, a purine or a porphine has it is
  * Meno's choice there, and not the input's (the maintainer, 2026-10-22: to
- * be said where the structure is shown).
+ * be said where the structure is shown); and the atoms of its aromatic
+ * bonds left without the double bond they need, so read with an H nobody
+ * wrote (`left`, by index): a carbon no Kekulé structure gives one -
+ * c1cccc1's fifth - and a neutral N or P of two bonds, its H not stated,
+ * left without one - c1ccnc1's n, read as pyrrole's N-H; an imidazole's,
+ * c1cncn1, which of its two is Meno's choice (`hChosen` too). A file's
+ * aromatic bonds are read so, leniently; typed input is refused on it
+ * (`aromaticRefusal`).
  */
-export function kekulized(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[]): { orders: (1 | 2 | 3)[]; hChosen: number[] } {
+export function kekulized(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[]): { orders: (1 | 2 | 3)[]; hChosen: number[]; left: number[] } {
   const out: (1 | 2 | 3)[] = bonds.map((b) =>
     b.order === 2 ? 2 : b.order === 3 ? 3 : 1,
   );
   const aromatic = bonds
     .map((b, i) => (b.order === AROMATIC_BOND ? i : -1))
     .filter((i) => i >= 0);
-  if (aromatic.length === 0) return { orders: out, hChosen: [] };
+  if (aromatic.length === 0) return { orders: out, hChosen: [], left: [] };
 
   const degree = new Array<number>(atoms.length).fill(0);
   const hasMultiple = new Array<boolean>(atoms.length).fill(false);
@@ -317,12 +324,38 @@ export function kekulized(atoms: readonly KekuleAtom[], bonds: readonly KekuleBo
   // where others of its ring system could have carried it, which does is a choice made here)
   const carriers = willing.filter((i) => ["N", "P"].includes(canonical(atoms[i]?.el ?? "")) && degree[i] === 2 && (atoms[i]?.charge ?? 0) === 0 && atoms[i]?.hs == null);
   const hChosen: number[] = [];
+  // (each left without its double bond, with an H nobody wrote: a carbon that needs one; an N or P whose H was not stated)
+  const left: number[] = [...needy.filter((a) => matched[a] < 0), ...carriers.filter((i) => matched[i] < 0)];
   for (const k of new Set(carriers.map((i) => system[i]))) {
     const here = carriers.filter((i) => system[i] === k);
-    const left = here.filter((i) => matched[i] < 0);
-    if (left.length && left.length < here.length) hChosen.push(...left);
+    const without = here.filter((i) => matched[i] < 0);
+    if (without.length && without.length < here.length) hChosen.push(...without);
   }
-  return { orders: out, hChosen: hChosen.sort((p, q) => p - q) };
+  return { orders: out, hChosen: hChosen.sort((p, q) => p - q), left: left.sort((p, q) => p - q) };
+}
+
+/**
+ * Where typed input's aromatic bonds cannot be given single and double
+ * bonds as written - an atom left without the double bond it needs, so read
+ * with an H nobody wrote (`kekulized`'s `left`) - the atoms of the ring
+ * system it is in, by index, in order: what refuses it, with smilesWhy's
+ * sentence for them (`ringCannotAlternate`). None where every atom has its
+ * double bond, or carries the H it was written with.
+ */
+export function aromaticRefusal(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[]): number[] | null {
+  const { left } = kekulized(atoms, bonds);
+  if (!left.length) return null;
+  // (the system of aromatic bonds the first of them is in)
+  const ring = new Set([left[0]]);
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const b of bonds) {
+      if (b.order !== AROMATIC_BOND || ring.has(b.a1) === ring.has(b.a2)) continue;
+      ring.add(ring.has(b.a1) ? b.a2 : b.a1);
+      grew = true;
+    }
+  }
+  return [...ring].sort((p, q) => p - q);
 }
 
 function canonical(el: string): string {

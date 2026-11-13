@@ -496,7 +496,14 @@ field as it is typed (a label that is the formula itself, PdCl2, once). Where th
 BrCN - both are offered there, the SMILES first (the field is for
 SMILES), and Enter draws the one chosen, by a
 click or the up and down arrows; never one of them without the other
-shown. A SMILES alone is drawn as before, nothing said under it. Text is
+shown. A SMILES alone is drawn as before, nothing said under it. An
+aromatic SMILES that cannot be given single and double bonds as written
+is refused wherever it is typed, never read by adding an H nobody wrote:
+c1cccc1 (cyclopentadiene's ring written aromatic), c1ccnc1 (pyrrole
+without its [nH]), c1cncn1 - "its aromatic ring of 5 atoms (1, 2, 3, 4
+and 5) cannot have alternating double bonds: is a charge or an H
+missing?" (lib/chem/kekulize `aromaticRefusal`; the same words where the
+plugin that reads SMILES refuses it). Text is
 read as a structure by one reader wherever it is typed (`chem/resolve`):
 here as a whole molecule, in Enumerate's lists and Substituents' groups
 as a group (docs/WORKFLOWS-FOUNDATION.md, *Enumerate*); a label typed on
