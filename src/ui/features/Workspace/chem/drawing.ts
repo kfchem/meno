@@ -10,7 +10,7 @@
  * (and H) that say it.
  */
 import { wedgeNarrowAtom } from "../../../../lib/chem/layout2d";
-import { implicitHydrogens, valenceOrder } from "../../../../lib/chem/molecule";
+import { implicitHydrogens, setValenceOrder, valenceOrder } from "../../../../lib/chem/molecule";
 import type { WriterModel } from "../../../../lib/chem/molWriter";
 import { unsureStereo, wedgesForFlat, type DrawnAtom, type DrawnBond } from "../../../../lib/layout/drawn";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
@@ -67,12 +67,16 @@ export function wedgesHeld(model: Model, before?: Model): Model {
 /** The H an atom carries and the drawing does not show: by its valence, for an element; none for a label. */
 export function undrawnHydrogens(model: Model): Map<number, number> {
   const sum = new Map<number, number>();
+  // (and toward a valence a file sets: a metal's coordination bonds counted, as the file counts them - lib/chem/molecule `setValenceOrder`)
+  const setSum = new Map<number, number>();
   const el = new Map(model.atoms.map((a) => [a.id, a.el]));
   for (const b of model.bonds) {
     // (a dative bond lends a pair, and takes no H from either end - but a
     // carbon lending it; nor does a coordination or a hydrogen bond)
     sum.set(b.a, (sum.get(b.a) ?? 0) + valenceOrder(b, el.get(b.a)));
     sum.set(b.b, (sum.get(b.b) ?? 0) + valenceOrder(b, el.get(b.b)));
+    setSum.set(b.a, (setSum.get(b.a) ?? 0) + setValenceOrder(b, el.get(b.a)));
+    setSum.set(b.b, (setSum.get(b.b) ?? 0) + setValenceOrder(b, el.get(b.b)));
   }
   return new Map(
     model.atoms.map((a) => [
@@ -81,7 +85,7 @@ export function undrawnHydrogens(model: Model): Map<number, number> {
         ? 0
         : a.valence != null
           ? // (a valence a file sets: what the bonds leave of it)
-            Math.max(0, a.valence - (sum.get(a.id) ?? 0))
+            Math.max(0, a.valence - (setSum.get(a.id) ?? 0))
           : implicitHydrogens(a.el, sum.get(a.id) ?? 0, a.charge ?? 0, a.radical),
     ]),
   );

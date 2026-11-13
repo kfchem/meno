@@ -40,10 +40,8 @@ import ColumnText from "./ColumnText";
 import MarkdownText from "./MarkdownText";
 import TextFlight, { MarkdownFlight } from "./TextFlight";
 import { columnSettingAt, sheetSetting } from "./textFlightSetting";
-import { drawnSheetBox, iconScaleOf, sheetOfText } from "../utils/textSheets";
-import { lookOf, poseOf, seenBounds, solidOf } from "../utils/molecule3d";
-import { style3dOf } from "../style3d";
-import { CARD_H, CARD_W } from "../workflow/look";
+import { iconScaleOf, sheetOfText } from "../utils/textSheets";
+import { bodyBoxOf } from "../utils/textBody";
 import { columnText, keepColumnTexts, markdownReaderOf, useShowsSource } from "../../TextEditor/columnText";
 import { isMarkdown, readMarkdown } from "../../../../lib/text/markdown";
 import { layOut } from "../../TextEditor/markdownLayout";
@@ -59,27 +57,6 @@ const HANDOVER_MS = 140;
 const OUT_FADE = 0.35;
 /** How long a text's flight waits at most for its lines to be laid out, in ms. */
 const READY_MOST_MS = 250;
-
-/**
- * Where a text's body lies on the page: its sheet - or, what it is the text
- * of (`of`): a step's log, its step's card; an output shown from a
- * molecule, that molecule as it is seen; none, a text with none of them, or
- * whose body has gone.
- */
-function bodyBoxOf(st: EditorState, t: WorkspaceText): { x0: number; x1: number; y0: number; y1: number } | null {
-  if (t.at) return drawnSheetBox(t);
-  const of = t.of;
-  if (!of) return null;
-  if ("step" in of) {
-    const s = st.steps.find((x) => x.id === of.step);
-    return s ? { x0: s.x, x1: s.x + CARD_W, y0: s.y - CARD_H, y1: s.y } : null;
-  }
-  const m = st.molecules3d.find((x) => x.id === of.molecule);
-  if (!m) return null;
-  const style = style3dOf(st);
-  const b = seenBounds(poseOf(m, solidOf(m, style), lookOf(m), st.turns3d[m.id], st.frames3d[m.id]));
-  return { x0: b.minX, x1: b.maxX, y0: b.minY, y1: b.maxY };
-}
 
 /** A rectangle on the canvas, in CSS pixels from its top left. */
 type Rect = { x: number; y: number; w: number; h: number };
@@ -424,6 +401,11 @@ function ColumnPass({
           now,
         ) || asked;
       for (const t of pics.tilesOf(pdf.sha256, i, level)) held.add(t.key);
+    }
+    // (and, the column still, the small pictures of the pages either side: a fast scroll then comes to a page drawn small, not white)
+    if (!moving) {
+      const inView = pagesInView(l, top, tall);
+      if (inView.length) pics.previewsAround(pdf, inView[Math.floor(inView.length / 2)]);
     }
     // the next screen's worth the way it went, after all in view: there when it goes on
     const way = clock.current.way;

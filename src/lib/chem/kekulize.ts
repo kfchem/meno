@@ -29,6 +29,7 @@
  */
 
 import { piElectrons } from "./aromaticity";
+import { NOT_METALS } from "./elements";
 
 /** MDL bond type 4: aromatic. */
 export const AROMATIC_BOND = 4;
@@ -82,19 +83,69 @@ export function valenceOrders(atoms: readonly KekuleAtom[], bonds: readonly { a:
  * (`aromaticRefusal`).
  */
 export function kekulized(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[]): { orders: (1 | 2 | 3)[]; hChosen: number[]; left: number[] } {
+  // (judged ring system by ring system - its aromatic bonds joined at their atoms, no atom in two - where the molecule as a whole
+  // has no Kekule structure: a ring with none leaves the others theirs, and is itself as it would be alone)
+  const whole = kekulizedAs(atoms, bonds);
+  if (whole.solved) return { orders: whole.orders, hChosen: whole.hChosen, left: whole.left };
+  const orders = [...whole.orders];
+  let hChosen = whole.hChosen;
+  // (and those left without the double bond they need, each system's as it is alone)
+  const left: number[] = [];
+  for (const system of aromaticSystems(atoms.length, bonds)) {
+    // (the system alone: the molecule's other aromatic bonds single, which leaves every atom's bonds as many as they were)
+    const own = kekulizedAs(atoms, bonds.map((b, k) => (b.order === AROMATIC_BOND && !system.has(k) ? { ...b, order: 1 } : b)));
+    const at = new Set([...system].flatMap((k) => [bonds[k].a1, bonds[k].a2]));
+    for (const k of system) orders[k] = own.orders[k];
+    hChosen = [...hChosen.filter((i) => !at.has(i)), ...own.hChosen.filter((i) => at.has(i))];
+    left.push(...own.left.filter((i) => at.has(i)));
+  }
+  return { orders, hChosen, left: left.sort((p, q) => p - q) };
+}
+
+/** A metal, by its symbol: an element not among the nonmetals and metalloids (`NOT_METALS`). */
+function isMetalEl(el: string | undefined): boolean {
+  const s = canonical(el ?? "");
+  return /^[A-Z][a-z]?$/.test(s) && !NOT_METALS.has(s) && !QUERY_ATOMS.has(s);
+}
+
+/** The aromatic bonds by ring system: those joined at their atoms, by bond index. */
+function aromaticSystems(n: number, bonds: readonly KekuleBond[]): Set<number>[] {
+  const root = Array.from({ length: n }, (_, i) => i);
+  const find = (i: number): number => (root[i] === i ? i : (root[i] = find(root[i])));
+  for (const b of bonds) if (b.order === AROMATIC_BOND) root[find(b.a1)] = find(b.a2);
+  const by = new Map<number, Set<number>>();
+  bonds.forEach((b, k) => {
+    if (b.order !== AROMATIC_BOND) return;
+    const r = find(b.a1);
+    if (!by.has(r)) by.set(r, new Set());
+    by.get(r)!.add(k);
+  });
+  return [...by.values()];
+}
+
+/** `kekulized` of the molecule whole; and whether every atom that needs a double bond has one. */
+function kekulizedAs(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[]): { orders: (1 | 2 | 3)[]; hChosen: number[]; left: number[]; solved: boolean } {
   const out: (1 | 2 | 3)[] = bonds.map((b) =>
     b.order === 2 ? 2 : b.order === 3 ? 3 : 1,
   );
   const aromatic = bonds
     .map((b, i) => (b.order === AROMATIC_BOND ? i : -1))
     .filter((i) => i >= 0);
-  if (aromatic.length === 0) return { orders: out, hChosen: [], left: [] };
+  if (aromatic.length === 0) return { orders: out, hChosen: [], left: [], solved: true };
 
   const degree = new Array<number>(atoms.length).fill(0);
   const hasMultiple = new Array<boolean>(atoms.length).fill(false);
+  // (a ring atom bound to a metal: that bond is not among the ring's - the atom may take a double bond in its ring, lending its
+  // pair to the metal as a pyridine's N does, or be left without one, the bond its own as a pyrrolide's or a porphyrin's N-metal
+  // is; which, the ring decides, as it does a pyrrole-type N's H - and left without, it carries no H: the metal is where one would be)
+  const aromaticAt = new Set(bonds.flatMap((b) => (b.order === AROMATIC_BOND ? [b.a1, b.a2] : [])));
+  const lends = (i: number, other: number) => aromaticAt.has(i) && isMetalEl(atoms[other]?.el) && !isMetalEl(atoms[i]?.el);
+  const bound = new Set<number>();
   for (const b of bonds) {
-    degree[b.a1]++;
-    degree[b.a2]++;
+    if (lends(b.a1, b.a2)) bound.add(b.a1);
+    if (lends(b.a2, b.a1)) bound.add(b.a2);
+    if (!lends(b.a1, b.a2)) degree[b.a1]++;
+    if (!lends(b.a2, b.a1)) degree[b.a2]++;
     if (b.order === 2 || b.order === 3) {
       hasMultiple[b.a1] = true;
       hasMultiple[b.a2] = true;
@@ -217,15 +268,20 @@ export function kekulized(atoms: readonly KekuleAtom[], bonds: readonly KekuleBo
     return true;
   };
 
+  // (a neutral N, P, As or Sb of two bonds whose H the input did not state, bound to no metal: left without its double bond, it carries one)
+  const supplies = (i: number) => PNICTOGENS.has(canonical(atoms[i]?.el ?? "")) && degree[i] === 2 && (atoms[i]?.charge ?? 0) === 0 && atoms[i]?.hs == null && !bound.has(i);
+  const carriers = willing.filter(supplies);
+
   const matched = new Array<number>(atoms.length).fill(-1);
   const free = (i: number) => partners[i].filter((p) => matched[p.other] < 0);
   let budget = 200_000;
 
   // Most constrained atom first - every one that needs a double bond, then
-  // those that may take one, `slack` of them at most left without; a partner
+  // those that may take one, `slack` of them at most left without and of
+  // those `supplied` at most carrying an H the input does not state; a partner
   // that needs a double bond before one that merely may take it; between
   // equals, the lower rank.
-  const solve = (slack: number, rule: boolean): boolean => {
+  const solve = (slack: number, rule: boolean, supplied: number): boolean => {
     if (--budget < 0) return false;
     let pick = -1;
     let options: { bond: number; other: number }[] = [];
@@ -241,11 +297,12 @@ export function kekulized(atoms: readonly KekuleAtom[], bonds: readonly KekuleBo
     if (pick < 0) {
       // (each that needs one has it: now those that may)
       let left = 0;
+      let h = 0;
       for (const a of willing) {
         if (matched[a] >= 0) continue;
         const f = free(a);
         if (f.length === 0) {
-          if (++left > slack) return false;
+          if (++left > slack || (supplies(a) && ++h > supplied)) return false;
           continue;
         }
         if (pick < 0 || f.length < options.length) {
@@ -257,15 +314,15 @@ export function kekulized(atoms: readonly KekuleAtom[], bonds: readonly KekuleBo
       for (const p of options) {
         matched[pick] = p.bond;
         matched[p.other] = p.bond;
-        if (solve(slack, rule)) return true;
+        if (solve(slack, rule, supplied)) return true;
         matched[pick] = -1;
         matched[p.other] = -1;
       }
       // (or this one left without, where there is slack for it: counted with those left below)
-      if (left + 1 > slack) return false;
+      if (left + 1 > slack || (supplies(pick) && h + 1 > supplied)) return false;
       const was = partners[pick];
       partners[pick] = [];
-      const ok = solve(slack, rule);
+      const ok = solve(slack, rule, supplied);
       partners[pick] = was;
       return ok;
     }
@@ -276,24 +333,29 @@ export function kekulized(atoms: readonly KekuleAtom[], bonds: readonly KekuleBo
     for (const p of options) {
       matched[pick] = p.bond;
       matched[p.other] = p.bond;
-      if (solve(slack, rule)) return true;
+      if (solve(slack, rule, supplied)) return true;
       matched[pick] = -1;
       matched[p.other] = -1;
     }
     return false;
   };
+  // (the fewest left without first; of those, where a ring atom bound to a metal could be one of them, the fewest carrying an H the
+  // input does not state - a pyrazine on a platinum lends its bound N's pair rather than take an H on its other N)
   const solved = () => {
     for (const rule of [true, false]) {
       for (let slack = 0; slack <= willing.length; slack++) {
-        matched.fill(-1);
-        if (solve(slack, rule)) return true;
-        if (budget < 0) return false;
+        for (let supplied = bound.size ? 0 : slack; supplied <= slack; supplied++) {
+          matched.fill(-1);
+          if (solve(slack, rule, supplied)) return true;
+          if (budget < 0) return false;
+        }
       }
     }
     return false;
   };
 
-  if (!solved()) {
+  const ok = solved();
+  if (!ok) {
     // Nothing satisfies every atom, or the search ran out: give as many
     // carbons as will take one a double bond, and leave the rest single.
     matched.fill(-1);
@@ -327,9 +389,8 @@ export function kekulized(atoms: readonly KekuleAtom[], bonds: readonly KekuleBo
     const { a1, a2 } = bonds[i];
     out[i] = matched[a1] === i && matched[a2] === i ? 2 : 1;
   }
-  // (a neutral N or P of two bonds whose H the input did not state, left without its double bond, carries one;
-  // where others of its ring system could have carried it, which does is a choice made here)
-  const carriers = willing.filter((i) => PNICTOGENS.has(canonical(atoms[i]?.el ?? "")) && degree[i] === 2 && (atoms[i]?.charge ?? 0) === 0 && atoms[i]?.hs == null);
+  // (a carrier left without its double bond carries an H; where others of its ring system could have carried it, which does is a
+  // choice made here)
   const hChosen: number[] = [];
   // (each left without its double bond, with an H nobody wrote: a carbon that needs one; an N or P whose H was not stated)
   const left: number[] = [...needy.filter((a) => matched[a] < 0), ...carriers.filter((i) => matched[i] < 0)];
@@ -338,7 +399,7 @@ export function kekulized(atoms: readonly KekuleAtom[], bonds: readonly KekuleBo
     const without = here.filter((i) => matched[i] < 0);
     if (without.length && without.length < here.length) hChosen.push(...without);
   }
-  return { orders: out, hChosen: hChosen.sort((p, q) => p - q), left: left.sort((p, q) => p - q) };
+  return { orders: out, hChosen: hChosen.sort((p, q) => p - q), left: left.sort((p, q) => p - q), solved: ok };
 }
 
 /**

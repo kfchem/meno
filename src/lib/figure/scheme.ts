@@ -367,6 +367,20 @@ export function arrowsOf(shapes: Shapes, letters: readonly FigureLetter[], bond:
     }
   }
   const heads = [...filled, ...chevrons];
+  // (each head's box, for those that can be one at a line's end: headAt takes a head only with its point ahead of the end by under 1.4 of
+  // its length, itself under 1.1 bonds, and its point off the line by under 0.18 of that or 1.5 of the line's width - so one whose box
+  // stands further off is none, and asking it takes long on a page of thousands of lines)
+  const boxOf = (pts: readonly Point[]) => pts.reduce((b, p) => [Math.min(b[0], p.x), Math.min(b[1], p.y), Math.max(b[2], p.x), Math.max(b[3], p.y)], [Infinity, Infinity, -Infinity, -Infinity]);
+  const headBox = new Map(heads.map((h) => [h, boxOf(h.pts)]));
+  const fromBox = (p: Point, b: readonly number[]) => Math.hypot(Math.max(b[0] - p.x, 0, p.x - b[2]), Math.max(b[1] - p.y, 0, p.y - b[3]));
+  const headReach = (w: number) => {
+    const tol = Math.max(0.06 * bond, 2 * w);
+    return Math.hypot(1.54 * bond + tol, Math.max(0.198 * bond, 1.5 * w)) * (1 + 1e-9) + 1e-9;
+  };
+  const headsNear = (e: Point, w: number, among: readonly HeadShape[]) => {
+    const r = headReach(w);
+    return among.filter((h) => fromBox(e, headBox.get(h)!) <= r);
+  };
   // (a barb ends in the open: a short stroke both of whose ends meet others - or go on across a gap, as a bond broken where another passes
   // in front of it does - is a bond's)
   const goesOn = (p: Point, s: Stroke, t: Stroke) => {
@@ -410,8 +424,10 @@ export function arrowsOf(shapes: Shapes, letters: readonly FigureLetter[], bond:
     ] as const) {
       if (taken(l)) break;
       const u = unit(from, e);
-      const free = heads.filter((h) => !h.of.some((o) => used.has(o) || l.of.includes(o)));
-      const head = headAt(e, u, l.w, free, barbs.filter((b) => !used.has(b) && !l.of.includes(b)), bond);
+      const free = headsNear(e, l.w, heads).filter((h) => !h.of.some((o) => used.has(o) || l.of.includes(o)));
+      // (a barb only by the end: headAt takes one with an end within its tolerance of it)
+      const barbTol = Math.max(0.06 * bond, 2 * l.w) * (1 + 1e-9) + 1e-9;
+      const head = headAt(e, u, l.w, free, barbs.filter((b) => !used.has(b) && !l.of.includes(b) && Math.min(dist(b.a, e), dist(b.b, e)) <= barbTol), bond);
       if (!head || sharedOpenHead(l, e, u, head)) continue;
       // (nothing but its head where its line ends there - another line ending by it there too: an atom, its bonds a structure's)
       const own = (m: Line) => head.of.some((o) => m.of.includes(o)) || (!!head.outline && onOutline(m.a, head.outline) && onOutline(m.b, head.outline));
@@ -435,7 +451,7 @@ export function arrowsOf(shapes: Shapes, letters: readonly FigureLetter[], bond:
       const pts = path.filter((p, i) => i === 0 || i === path.length - 1 || Math.abs(cross(unit(path[i - 1], p), unit(p, path[i + 1]))) > Math.sin((4 * Math.PI) / 180));
       // its point is the head's; a head at its tail too, where it has one
       const t0 = unit(pts[1], pts[0]);
-      const tailHead = headAt(pts[0], t0, l.w, heads.filter((h) => !h.of.some((o) => used.has(o) || head.of.includes(o) || chain.some((c) => c.of.includes(o)))), [], bond);
+      const tailHead = headAt(pts[0], t0, l.w, headsNear(pts[0], l.w, heads).filter((h) => !h.of.some((o) => used.has(o) || head.of.includes(o) || chain.some((c) => c.of.includes(o)))), [], bond);
       for (const c of chain) for (const o of c.of) used.add(o);
       for (const o of head.of) used.add(o);
       for (const o of tailHead?.of ?? []) used.add(o);
@@ -448,9 +464,39 @@ export function arrowsOf(shapes: Shapes, letters: readonly FigureLetter[], bond:
   for (const h of chevrons.concat(filled.filter((f) => f.open))) {
     if (h.of.some((o) => used.has(o))) continue;
     const free = lines.filter((l) => !taken(l) && len(l) > 0.8 * bond);
+    // (only pairs whose ends by the head have their middle near it: the point must lie ahead of that middle by under 1.2 of the lines'
+    // gap and half a bond, the gap under 0.6 of a bond, and off their middle line by under 0.3 of the gap and a line's reach - so a
+    // middle further from every corner of the head is none, and every pair of a page of thousands of lines asked for each head takes long)
+    const hc = { x: h.pts.reduce((t, x) => t + x.x, 0) / h.pts.length, y: h.pts.reduce((t, x) => t + x.y, 0) / h.pts.length };
+    const nearEnd = free.map((l) => (dist(l.a, hc) < dist(l.b, hc) ? l.a : l.b));
+    const reach = Math.hypot(1.22 * bond, 0.18 * bond + near) * (1 + 1e-9) + 1e-9;
+    const hb = boxOf(h.pts);
+    const [x0, y0, x1, y1] = [2 * (hb[0] - reach), 2 * (hb[1] - reach), 2 * (hb[2] + reach), 2 * (hb[3] + reach)];
+    const byX = free.map((_, i) => i).sort((a, b) => nearEnd[a].x - nearEnd[b].x);
+    const xs = byX.map((i) => nearEnd[i].x);
+    const firstAtLeast = (v: number) => {
+      let [lo, hi] = [0, xs.length];
+      while (lo < hi) {
+        const m = (lo + hi) >> 1;
+        if (xs[m] < v) lo = m + 1;
+        else hi = m;
+      }
+      return lo;
+    };
+    const partners = (i: number) => {
+      const e = nearEnd[i];
+      const out: number[] = [];
+      for (let k = firstAtLeast(x0 - e.x); k < xs.length && xs[k] <= x1 - e.x; k++) {
+        const j = byX[k];
+        const sy = e.y + nearEnd[j].y;
+        if (j > i && sy >= y0 && sy <= y1 && fromBox({ x: (e.x + nearEnd[j].x) / 2, y: sy / 2 }, hb) <= reach) out.push(j);
+      }
+      return out.sort((a, b) => a - b);
+    };
     let done = false;
     for (let i = 0; i < free.length && !done; i++) {
-      for (let j = i + 1; j < free.length && !done; j++) {
+      for (const j of partners(i)) {
+        if (done) break;
         const p = free[i];
         const q = free[j];
         if (Math.abs(cross(unit(p.a, p.b), unit(q.a, q.b))) > Math.sin((5 * Math.PI) / 180)) continue;

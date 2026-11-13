@@ -52,6 +52,8 @@ export async function readStructure(
     const placed = placedBeside(read, region, pageBoxes(st, style), style);
     // (selected and shown - the view moved to take it in, where the column or the view's edge hides it: modelSlice `putRead`)
     store.getState().putRead(placed.model, placed.scheme);
+    // (structures left out for an atom with more bonds than it takes: said, with the rest placed)
+    if (read.left) ui.say(read.left);
   } catch (e: unknown) {
     ui.say(`The figure could not be read: ${e instanceof Error ? e.message : String(e)}`);
   } finally {

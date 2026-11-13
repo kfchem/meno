@@ -177,6 +177,8 @@ import { MOST_PAIRS } from "../workflow/pairs";
 import { byOf, optionsFor } from "../workflow/doers";
 import { CARD_W } from "../workflow/look";
 import { RESTRAINTS_INPUT } from "../workflow/kinds";
+import { holdTable } from "../workflow/model";
+import { restraintRowsIn, restraintsTable } from "../../../../lib/steps/restraints";
 import { countOf, entryOfSet, setEntries, setMembers, setMolecules } from "../workflow/entries";
 import { forgetStereo } from "../workflow/configurations";
 
@@ -382,6 +384,123 @@ describe("a step that runs a plugin's program", () => {
       const out = setMembers(st(), st().sets.find((b) => b.made?.step === step && b.made.exit === "out")!).molecules.map((id) => st().molecules3d.find((m) => m.id === id)!);
       expect(out).toHaveLength(1);
       expect(out[0].calc?.held).toEqual([0, 2]);
+    }
+    worker.prepare.mockClear();
+    jobs.clear();
+    next = 1;
+    {
+      const { st, step } = await page({ fixed: "1", distances: "2-3" });
+      await st().runStep(step);
+      expect(worker.prepare).not.toHaveBeenCalled();
+      expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: expect.stringContaining("plugin holds a distance only exactly, not by a strength: distance 2-3") });
+    }
+  });
+
+  it("holds a distance exactly where its plugin says it can - its molecule no stationary point after - and fails one whose distance ended off its value", async () => {
+    // (water tagged, given a Restraints table, its row then made one holding O-H exactly - as a table read from a file
+    //  says one - and optimised by Tightbind, whose optimisation holds a distance exactly; the test's program moves every
+    //  atom alike, so O-H ends where it began)
+    const exactly = async (value: number) => {
+      const made = editor();
+      const t = made.st().addStep("tag", "meno", 3, 0);
+      made.st().updateStep(t, { options: { name: "start" } });
+      made.st().connect({ set: made.st().sets[0].id }, t);
+      await made.st().runStep(t);
+      const tagged = made.st().sets.find((b) => b.made?.step === t && b.made.exit === "out")!.id;
+      const r = made.st().addStep("restraints", "meno", 5, 0);
+      made.st().updateStep(r, { options: { on: "start", coordination: false, fixed: "1" } });
+      made.st().connect({ set: tagged }, r);
+      await made.st().runStep(r);
+      const table = made.st().sets.find((b) => b.made?.step === r && b.made.exit === "out")!;
+      const read = restraintRowsIn(table.table!);
+      if ("why" in read) throw new Error(read.why);
+      const row = { ...read.rows[0], restraint: { kind: "distance" as const, atoms: [0, 1], value, exact: true as const } };
+      made.doc.amend((x) => holdTable(x, table.id, restraintsTable([row])));
+      const step = made.st().addStep("optimise", "tightbind", 20, 0);
+      made.st().connect({ set: tagged }, step);
+      made.st().connect({ set: table.id }, step, RESTRAINTS_INPUT.id);
+      const ran = made.st().runStep(step);
+      await settle();
+      await settle();
+      const [sent] = worker.prepare.mock.lastCall![1] as { restraints?: unknown[] }[];
+      expect(sent.restraints).toEqual([{ kind: "distance", atoms: [0, 1], value, exact: true }]);
+      end(1);
+      await made.st().lookAtJobs();
+      await ran;
+      worker.prepare.mockClear();
+      jobs.clear();
+      next = 1;
+      return { st: made.st, step };
+    };
+    const oh = Math.hypot(0.76, 0.59);
+    {
+      const { st, step } = await exactly(oh);
+      const out = setMembers(st(), st().sets.find((b) => b.made?.step === step && b.made.exit === "out")!).molecules.map((id) => st().molecules3d.find((m) => m.id === id)!);
+      expect(out).toHaveLength(1);
+      // (the record on its last frame: the frames before it its way there)
+      const converged = out[0].converged ?? [];
+      expect(converged[converged.length - 1]).toMatchObject({ how: "optimisation with restraints held", rows: [{ kind: "distance", atoms: [0, 1], value: oh, exact: true }] });
+    }
+    {
+      const { st, step } = await exactly(1.0);
+      const failed = setMembers(st(), st().sets.find((b) => b.made?.step === step && b.made.exit === "failed")!).molecules;
+      expect(failed).toHaveLength(1);
+      expect(st().steps.find((s) => s.id === step)!.ran?.said).toContain(`Distance 1-2 ended at ${oh.toFixed(5)} \u00c5, held at 1 \u00c5`);
+    }
+  });
+
+  it("gives a conformer search the restraints wired in for each molecule - refused, in words, where its plugin says it holds none", async () => {
+    const made = editor();
+    const t = made.st().addStep("tag", "meno", 3, 0);
+    made.st().updateStep(t, { options: { name: "start" } });
+    made.st().connect({ set: made.st().sets[0].id }, t);
+    await made.st().runStep(t);
+    const tagged = made.st().sets.find((b) => b.made?.step === t && b.made.exit === "out")!.id;
+    const r = made.st().addStep("restraints", "meno", 5, 0);
+    made.st().updateStep(r, { options: { on: "start", coordination: false, distances: "2-3" } });
+    made.st().connect({ set: tagged }, r);
+    await made.st().runStep(r);
+    const c = made.st().addStep("conformers", "confsweep", 20, 0);
+    made.st().connect({ set: tagged }, c);
+    made.st().connect({ set: made.st().sets.find((b) => b.made?.step === r && b.made.exit === "out")!.id }, c, RESTRAINTS_INPUT.id);
+    await made.st().runStep(c);
+    expect(worker.prepare).not.toHaveBeenCalled();
+    expect(made.st().steps.find((s) => s.id === c)!.ran).toMatchObject({ ok: false, said: expect.stringContaining("The Confsweep plugin holds no distances: distance 2-3") });
+  });
+
+  it("gives an optimisation to a saddle point the restraints wired into its fourth input for each guess - refused, in words, where its plugin holds none of their kind", async () => {
+    useReaders.setState({ state: { quanta: "added" }, problem: {} });
+    installedAt.quanta = "/Applications/quanta_4/quanta";
+    // (water tagged, given its restraints by Restraints as a table; the tagged water the guess Quanta - which holds atoms fixed - optimises)
+    const page = async (restraints: Record<string, unknown>) => {
+      const made = editor();
+      const t = made.st().addStep("tag", "meno", 3, 0);
+      made.st().updateStep(t, { options: { name: "start" } });
+      made.st().connect({ set: made.st().sets[0].id }, t);
+      await made.st().runStep(t);
+      const tagged = made.st().sets.find((b) => b.made?.step === t && b.made.exit === "out")!.id;
+      const r = made.st().addStep("restraints", "meno", 5, 0);
+      made.st().updateStep(r, { options: { on: "start", coordination: false, ...restraints } });
+      made.st().connect({ set: tagged }, r);
+      await made.st().runStep(r);
+      const step = made.st().addStep("saddle-point", "quanta", 20, 0);
+      made.st().connect({ set: tagged }, step, "guesses");
+      made.st().connect({ set: made.st().sets.find((b) => b.made?.step === r && b.made.exit === "out")!.id }, step, RESTRAINTS_INPUT.id);
+      return { ...made, step };
+    };
+    {
+      const { st, step } = await page({ fixed: "1, 3" });
+      worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "quanta", args: ["input.inp"], files: [{ name: "input.inp", text: "# SADDLE\n" }], reads: [] }] }) as never);
+      const ran = st().runStep(step);
+      await settle();
+      await settle();
+      const sent = worker.prepare.mock.lastCall as unknown as unknown[];
+      expect(sent[0]).toBe("saddle-point");
+      expect((sent[1] as { restraints?: { kind: string; atoms: number[] }[] }[])[0].restraints).toEqual([{ kind: "fixed", atoms: [0, 2] }]);
+      expect(sent[2]).toMatchObject({ hold: "fixed" });
+      Object.assign(jobs.get(idOf(1))!, { state: "failed", started: 1000, ended: 2000, files: {} });
+      await st().lookAtJobs();
+      await ran;
     }
     worker.prepare.mockClear();
     jobs.clear();
@@ -883,14 +1002,14 @@ describe("a step that runs a plugin's program", () => {
     // (the last round's own: a program's step, then a step of two inputs - nothing comes into either)
     const o3 = st().addStep("optimise", "tightbind", 90, 0);
     st().connect({ set: exit(r3, "out") }, o3);
-    const t3 = st().addStep("torsion-restraints", "meno", 110, 0);
+    const t3 = st().addStep("compare-torsions", "meno", 110, 0);
     expect(st().connect({ set: exit(o3, "out") }, t3, "molecules")).toBe(true);
     expect(st().connect({ set: st().sets[0].id }, t3, "reference")).toBe(true);
-    // (the Merge after the rounds - each round's empty out, the last's restraints and what came into them: nothing from either)
+    // (the Merge after the rounds - each round's empty out, the last's comparison and what came into it: nothing from either)
     const merge = st().addStep("merge", "meno", 130, 0);
     expect(st().connect({ set: exit(r3, "out") }, merge, "first")).toBe(true);
     expect(st().connect({ set: exit(t3, "out") }, merge, "second")).toBe(true);
-    // (and the Merge of the rounds' rests - what the first round gave, not empty - with the last round's restraints, empty:
+    // (and the Merge of the rounds' rests - what the first round gave, not empty - with the last round's comparison, empty:
     //  Merge's own rule, the rests' entries, never ended at once)
     const rests = st().addStep("merge", "meno", 130, 20);
     expect(st().connect({ set: exit(r1, "out") }, rests, "first")).toBe(true);
