@@ -162,6 +162,24 @@ describe("a biaryl written with no bond symbol between its rings", () => {
   });
 });
 
+describe("a ring N bound to a metal, typed", () => {
+  it("lends its pair to the metal, as a pyridine's does: a chelate read as written, none refused, every ring its double bonds", () => {
+    // (2,2'-bipyridine on a ruthenium, C10H8N2 as a ligand: both N bound, six double bonds, its eight H - its rings joined with
+    //  "-" or with no symbol)
+    for (const smiles of ["[Ru]1n2ccccc2-c2ccccn21", "[Ru]1n2ccccc2c2ccccn21"]) {
+      expect(refused(smiles), smiles).toBeNull();
+      expect(smilesInput(smiles).bonds.filter((b) => b.order === 2), smiles).toHaveLength(6);
+      expect(smilesInput(smiles).atoms.reduce((n, a) => n + (a.hs ?? 0), 0), smiles).toBe(8);
+    }
+    // (2,2'-bipyrimidine bridging two rutheniums, every N bound: C8H6N4 as alone - six double bonds, its six H, as the free ligand)
+    for (const smiles of ["[Ru]1n2cccn3[Ru]n4cccn1c4c23", "c1cnc(nc1)-c1ncccn1"]) {
+      expect(refused(smiles), smiles).toBeNull();
+      expect(smilesInput(smiles).bonds.filter((b) => b.order === 2), smiles).toHaveLength(6);
+      expect(smilesInput(smiles).atoms.reduce((n, a) => n + (a.hs ?? 0), 0), smiles).toBe(6);
+    }
+  });
+});
+
 describe("Meno's own tables", () => {
   it("hold no SMILES that would now be refused: every abbreviation, reagent, ligand and counter-ion", () => {
     const tables: [string, string][] = [
