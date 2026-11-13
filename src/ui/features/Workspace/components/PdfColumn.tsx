@@ -402,6 +402,11 @@ function ColumnPass({
         ) || asked;
       for (const t of pics.tilesOf(pdf.sha256, i, level)) held.add(t.key);
     }
+    // (and, the column still, the small pictures of the pages either side: a fast scroll then comes to a page drawn small, not white)
+    if (!moving) {
+      const inView = pagesInView(l, top, tall);
+      if (inView.length) pics.previewsAround(pdf, inView[Math.floor(inView.length / 2)]);
+    }
     // the next screen's worth the way it went, after all in view: there when it goes on
     const way = clock.current.way;
     const level = quick;
