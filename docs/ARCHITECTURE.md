@@ -1603,8 +1603,11 @@ path it is given:
   `ext_spawn_sidecar`, a script in the plugin's folder. Its input files must lie inside its folder. A program
   installed separately, and each program beside it, is given as arguments
   only the files written for its job (or one by its name without its
-  extension, as orca_2aim takes `input`), options (`-nt`) and numbers
-  (`names_only_written`). It is given its
+  extension, as orca_2aim takes `input`), those its plugin reads back of
+  the job once it is done (its `reads`, by name exactly: Gaussian 16W takes
+  the output it writes by name, `input.log`), each inside its work folder,
+  options (`-nt`) and numbers (`names_only_written`; the runner reads the
+  files read back from the job's kept roles). It is given its
   environment's activation, and is pointed at the proxy with no task, as
   a worker is. A job's id must be one of Meno's (a UUID) whose folder holds
   a `job.json`; a file read from it must lie inside it, reached by no
