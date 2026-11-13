@@ -462,8 +462,29 @@ they hang from.
   like groups (each the same element with as many bonds, in no ring) that
   is no stereocentre and no metal is an upright cross, its bonds level and
   upright, never an X turned 45 degrees to the page (GR-4.1.3):
-  tetramethylammonium, tetramethylsilane, CCl4, BF4-, tetraethylammonium.
-  A square-planar metal keeps its own form (PtCl4 2-). The fan is compact,
+  tetramethylammonium, tetramethylsilane, CCl4, BF4-, tetraethylammonium;
+  and so are four ends not alike (CF2Cl2) and four groups that go on alike
+  through rings (tetraphenylborate, tetraphenylmethane). A trident - three
+  like ends and a fourth bond, as the maintainer has it - keeps its fan
+  (tert-butanol, CFCl3, chlorotrimethylsilane).
+- **A metal with four bonds** (in no chelate's ring, bound to no pi
+  system's centre and to no other metal) is the X only where it is surely
+  square planar: Pt(II), Pd(II), Au(III), Rh(I) or Ir(I), its oxidation
+  state counted plainly from the drawing - a donor whose valence is full
+  without its bond to the metal counts nought, one the bond completes one,
+  the metal's own charge added (an NH3 counts nought; an N drawn with two
+  H's is an amido and counts one). Every other such metal, an ambiguous
+  one too (Ni(II), a state not counted plainly), is the upright cross: the
+  text's form for four groups, which states no geometry, where the X
+  states square planar (TiCl4, ZnCl4 2-, FeCl4-, NiCl4 2-, Ni(CO)4,
+  Pd(PPh3)4). The X is held where the four donors are ends (PtCl4 2-,
+  PdCl4 2-, AuCl4-, cisplatin with its NH3); where they go on - a
+  phosphine's phenyls, set on the lattice their own way - the centre is
+  left as it grows (PdCl2(PPh3)2 upright, RhCl(PPh3)3 as before), held to
+  the X there its angles would bend between the two. Clean-up keeps a
+  four-bond metal in the form it was drawn in, the cross or the X,
+  whichever its bonds lie nearer to, for every metal (`LayoutAtom.fourForm`).
+  The fan is compact,
   and once the rest of the drawing is set it is turned about its bond,
   five degrees at a time, to where the drawing reads best, its bonds kept
   clear of the whole letter of an H beside it (ginkgolide B's OH).

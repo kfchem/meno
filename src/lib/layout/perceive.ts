@@ -32,6 +32,11 @@ export type LayoutAtom = {
    * only by an atom with two bonds.
    */
   linear?: boolean;
+  /**
+   * A metal with four bonds as the chemist drew it - an upright cross or an X - where Clean-up keeps it so (docs/LAYOUT-2D.md,
+   * *At an atom in no ring*): taken over the form Meno would choose.
+   */
+  fourForm?: "x" | "cross";
 };
 export type LayoutBond = { a: number; b: number; order: number; stereo?: CisTrans };
 export type LayoutInput = {
@@ -75,6 +80,8 @@ export type Molecule = {
   cumulated?: readonly Cumulated[];
   /** The atoms asked to be drawn straight through (`LayoutAtom.linear`), each with two bonds. */
   straight: Set<number>;
+  /** The four-bond metals asked to be drawn as an upright cross or an X (`LayoutAtom.fourForm`). */
+  fourForm: Map<number, "x" | "cross">;
   /**
    * The rings bound face-on to a metal through all their atoms (η⁵-Cp,
    * η⁶-arene): each one's star - at its centre, a member of its ring
@@ -365,6 +372,7 @@ export function perceive(input: LayoutInput): Molecule {
       input.atoms.flatMap((a, i): [number, Tetrahedral][] => (a.tetra ? [[i, a.tetra]] : [])),
     ),
     straight: new Set(input.atoms.flatMap((a, i) => (a.linear && neighbours[i].length === 2 ? [i] : []))),
+    fourForm: new Map(input.atoms.flatMap((a, i): [number, "x" | "cross"][] => (a.fourForm && neighbours[i].length === 4 ? [[i, a.fourForm]] : []))),
     ...(input.cumulated?.length ? { cumulated: input.cumulated } : {}),
     eta,
     units,

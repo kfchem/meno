@@ -279,6 +279,8 @@ function measureDrawing(input: LayoutInput, mol: Molecule, out: Layout2D): Layou
     labelled,
     elements,
     hydrogens,
+    charges: mol.charge.slice(0, input.atoms.length),
+    fourForm: input.atoms.map((_, i) => mol.fourForm.get(i)),
     cisTrans: input.bonds.flatMap((b, i) => (b.stereo ? [{ bond: i, refs: b.stereo.refs, cis: b.stereo.cis }] : [])),
     perspective: [...out.solid, ...out.hydrogens.map(() => false)],
     depth: [...out.depth, ...out.hydrogens.map(() => null)],
@@ -2043,7 +2045,9 @@ function stereoScore(
   // tied by `scorer`, the straight end counted alike in each, so it keeps the
   // measure the same rather than deciding between them - no test can tell it apart)
   const straight = piece.map((a) => mol.straight.has(a));
-  return layoutMetrics({ x, y, edges, orders, straight, wedged, elements, hydrogens, labelled, perspective, depth: depths, tetra, hydrogenRoom: 1 }).score;
+  const charges = piece.map((a) => mol.charge[a]);
+  const fourForm = piece.map((a) => mol.fourForm.get(a));
+  return layoutMetrics({ x, y, edges, orders, straight, wedged, elements, hydrogens, charges, fourForm, labelled, perspective, depth: depths, tetra, hydrogenRoom: 1 }).score;
 }
 
 /** The measures a piece is drawn by, as it has its depth: blades turned as a propeller's (`lift`) or none. */
@@ -2543,6 +2547,8 @@ export function scorer(
     .map((r) => r.map((a) => index.get(a)!));
   const elements = piece.map((a) => mol.el[a]);
   const hydrogens = piece.map((a) => mol.hs[a]);
+  const charges = piece.map((a) => mol.charge[a]);
+  const fourForm = piece.map((a) => mol.fourForm.get(a));
   // (a star at a pi system's centre is drawn as nothing)
   const labelled = piece.map((a) => (mol.el[a] !== "C" && mol.el[a] !== "*") || mol.charge[a] !== 0);
   const perspective = piece.map((a) => solid[a] ?? false);
@@ -2560,6 +2566,8 @@ export function scorer(
       straight: piece.map((a) => mol.straight.has(a)),
       elements,
       hydrogens,
+      charges,
+      fourForm,
       labelled,
       rings,
       cisTrans,

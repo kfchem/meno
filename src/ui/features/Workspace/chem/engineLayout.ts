@@ -105,6 +105,21 @@ export function layoutJob(part: Model): LayoutJob {
   //  what is laid out leaves it unsaid too, rather than saying one or the other)
   const straight = straightEnds(drawing.atoms, drawing.bonds);
   const bondsOf = bondsAt(drawing.bonds);
+  // (a metal with four bonds kept as drawn - an upright cross or an X, whichever its bonds lie nearer to: Clean-up never turns
+  //  one into the other, for any metal - docs/LAYOUT-2D.md, *At an atom in no ring*)
+  const fourForm = new Map<number, "x" | "cross">();
+  part.atoms.forEach((a, i) => {
+    const mine = bondsOf.get(i) ?? [];
+    if (!isMetal(a.el) || mine.length !== 4) return;
+    const off = (offset: number) =>
+      mine.reduce((sum, k) => {
+        const b = drawing.bonds[k];
+        const o = part.atoms[b.a === i ? b.b : b.a];
+        const t = (Math.atan2(o.y - a.y, o.x - a.x) * 180) / Math.PI - offset;
+        return sum + Math.abs(t - 90 * Math.round(t / 90));
+      }, 0);
+    fourForm.set(i, off(45) < off(0) ? "x" : "cross");
+  });
   // A wedge at an atom that could be a stereocentre, but says nothing the
   // engine can take: laid out, it would be lost, so it is not laid out.
   const unread = unreadWedges(drawing, stereo);
@@ -152,6 +167,7 @@ export function layoutJob(part: Model): LayoutJob {
         ...(t ? { tetra: t } : {}),
         ...(pi.has(i) ? { pi: pi.get(i)! } : {}),
         ...(straight.has(i) ? { linear: true } : {}),
+        ...(fourForm.has(i) ? { fourForm: fourForm.get(i)! } : {}),
       };
     }),
     bonds: drawing.bonds.flatMap((b, k) => {

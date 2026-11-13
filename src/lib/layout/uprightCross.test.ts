@@ -46,4 +46,22 @@ describe("four like groups", () => {
     expect(directions("CC(C)(C)O", 1)).toEqual([-180, -120, 0, 120]);
     expect(directions("C[Si](C)(C)Cl", 1)).toEqual([-180, -120, 0, 120]);
   });
+
+  it("on a metal: the X only where the centre is surely square planar - Pt(II), Pd(II), Au(III), Rh(I), Ir(I), counted plainly from the drawing - and every other the upright cross, an ambiguous Ni(II) too", { timeout: 120000 }, () => {
+    const P = "P(c1ccccc1)(c1ccccc1)c1ccccc1";
+    const X = [-135, -45, 45, 135];
+    const cross = [-180, -90, 0, 90];
+    // (tetrahedral, or not surely square planar: upright)
+    for (const smiles of ["Cl[Ti](Cl)(Cl)Cl", "Cl[Zn-2](Cl)(Cl)Cl", "Cl[Fe-](Cl)(Cl)Cl", "Cl[Ni-2](Cl)(Cl)Cl", "O#C[Ni](C#O)(C#O)C#O"]) {
+      expect(directions(smiles, smiles.startsWith("O#C") ? 2 : 1), smiles).toEqual(cross);
+    }
+    expect(directions(`[Pd](${P})(${P})(${P})${P}`, 0)).toEqual(cross);
+    expect(directions(`Cl[Ni](Cl)(${P})${P}`, 1)).toEqual(cross);
+    // (surely square planar, four end donors: the X - PtCl4 2-, PdCl4 2-, AuCl4-, cisplatin drawn with its NH3)
+    for (const smiles of ["Cl[Pt-2](Cl)(Cl)Cl", "Cl[Pd-2](Cl)(Cl)Cl", "Cl[Au-](Cl)(Cl)Cl", "[NH3][Pt](Cl)(Cl)[NH3]"]) {
+      expect(directions(smiles, 1), smiles).toEqual(X);
+    }
+    // (counted plainly: an N drawn with two H's on a platinum is an amido, Pt(IV) - not surely square planar, so upright)
+    expect(directions("N[Pt](N)(Cl)Cl", 1)).toEqual(cross);
+  });
 });

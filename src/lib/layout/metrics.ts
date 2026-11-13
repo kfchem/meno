@@ -12,6 +12,7 @@ import { atomDepth, boxesDepth, hydrogenSpot, isName, namesLaid, segmentMeetsBox
 // (where a label's H goes is the names' business too: there for all that ask here)
 export { hydrogenSpot } from "./names";
 import { isMetal, METAL_BOND } from "./perceive";
+import { valencesAt } from "../chem/molecule";
 import { ringsAlike, smallestRings, type Edge } from "./rings";
 
 export type Geometry = {
@@ -29,6 +30,10 @@ export type Geometry = {
   /** Element symbols and hydrogen counts, where known: an acid is told by them. */
   elements?: readonly string[];
   hydrogens?: readonly number[];
+  /** Each atom's formal charge, where given: a four-coordinate metal's oxidation state is counted with it. */
+  charges?: readonly number[];
+  /** A four-bond metal's form as the chemist drew it, where it is kept (`LayoutAtom.fourForm`): over the form chosen. */
+  fourForm?: readonly ("x" | "cross" | undefined)[];
   /** The rings, where the caller has them already (they depend only on the bonds). */
   rings?: readonly (readonly number[])[];
   /**
@@ -582,7 +587,7 @@ type Structure = {
   macrocycles: number[][];
   ringBonds: Set<number>;
   /** The bonds that can lie on the lattice, each in the frame or not, and the step of its lattice. */
-  latticeBonds: { a: number; b: number; frame: boolean; step: number }[];
+  latticeBonds: { a: number; b: number; frame: boolean; step: number; offset?: number }[];
   frames: Set<number>[];
   inFrame: number[];
   ringNeighbours: number[][];
@@ -619,7 +624,7 @@ const structures = new WeakMap<readonly Edge[], { from: readonly unknown[]; stru
 
 /** What a measure reads of a drawing's structure alone, worked out once for the same arrays. */
 function structureOf(g: Geometry): Structure {
-  const from = [g.x.length, g.orders, g.wedged, g.labelled, g.elements, g.hydrogens, g.rings, g.cisTrans, g.perspective, g.depth, g.tetra];
+  const from = [g.x.length, g.orders, g.wedged, g.labelled, g.elements, g.hydrogens, g.charges, g.fourForm, g.rings, g.cisTrans, g.perspective, g.depth, g.tetra];
   const known = structures.get(g.edges);
   if (known && known.from.every((v, i) => v === from[i])) return known.structure;
   const structure = readStructure(g);
@@ -691,6 +696,35 @@ function readStructure(g: Geometry): Structure {
     const kind = (b: number) => `${elOf(b)}:${neighbours[b].length}:${inRing.has(b) ? "r" : ""}`;
     return nb.every((b) => kind(b) === kind(nb[0]));
   };
+  // (a metal with four bonds, in no ring - no chelate's - bound to no pi system's centre and to no other metal: the X only where it
+  // is surely square planar - four donors on Pt(II), Pd(II), Au(III), Rh(I) or Ir(I), the oxidation state counted plainly from the
+  // drawing, a donor whose valence is full without the bond to the metal nought and one the bond completes one, the metal's own
+  // charge added - and every other such metal, an ambiguous one too (Ni(II), a state not counted plainly), the upright cross: the
+  // text's form for four groups, stating no geometry, where the X states square planar)
+  const metalFour = (a: number): "x" | "cross" | null => {
+    const el = g.elements?.[a];
+    if (!el || !isMetal(el) || neighbours[a].length !== 4 || inRing.has(a)) return null;
+    const nb = neighbours[a];
+    if (nb.some((d) => g.elements?.[d] === "*" || isMetal(g.elements?.[d] ?? ""))) return null;
+    // (as the chemist drew it, where Clean-up keeps that: any metal, the five above among them)
+    const drawn = g.fourForm?.[a];
+    if (drawn) return drawn;
+    let state = g.charges?.[a] ?? 0;
+    for (const d of nb) {
+      const del = g.elements?.[d] ?? "";
+      const [valence] = valencesAt(del, g.charges?.[d] ?? 0);
+      if (valence == null) return "cross";
+      const others = neighbours[d].filter((e) => e !== a).reduce((s, e) => s + (orderOf.get(pair(d, e)) ?? 1), 0) + (g.hydrogens?.[d] ?? 0);
+      if (neighbours[d].some((e) => e !== a && isMetal(g.elements?.[e] ?? ""))) return "cross";
+      if (others >= valence) continue;
+      if (others + 1 === valence) state++;
+      else return "cross";
+    }
+    // (surely square planar: the X held where its four donors are ends - PtCl4 2-, AuCl4- - and where they go on, a phosphine's
+    // phenyls set on the lattice their own way, left as it grows: held to the X there, its angles bent between the two)
+    if (SQUARE_PLANAR[el] === state) return nb.every((d) => neighbours[d].length === 1) ? "x" : null;
+    return "cross";
+  };
 
   // (a ring drawn in depth - a cage's, or one a bridge makes across a ring
   // - is seen in perspective, not as a polygon)
@@ -735,7 +769,7 @@ function readStructure(g: Geometry): Structure {
   // square to - of those with rings that can lie on the lattice, and all of
   // the largest where several are as large. A ring hung off it askew is then
   // askew, rather than the frame tilted. Without a ring, every bond counts.
-  const latticeBonds: { a: number; b: number; frame: boolean; step: number }[] = [];
+  const latticeBonds: { a: number; b: number; frame: boolean; step: number; offset?: number }[] = [];
   // (a four-membered ring is a square with its sides level and upright - a
   // beta-lactam's, an oxetane's - not merely on the lattice)
   // (and so is a cross)
@@ -744,9 +778,11 @@ function readStructure(g: Geometry): Structure {
       ...rings
         .filter((r) => r.length === 4)
         .flatMap((r) => edges.filter(([a, b]) => r.includes(a) && r.includes(b))),
-      ...edges.filter(([a, b]) => cross(a) || cross(b) || fourAlike(a) || fourAlike(b)),
+      ...edges.filter(([a, b]) => cross(a) || cross(b) || fourAlike(a) || fourAlike(b) || metalFour(a) === "cross" || metalFour(b) === "cross"),
     ].map(([a, b]) => pair(a, b)),
   );
+  // (and a square-planar metal's four bonds square to the page turned 45 degrees: the X)
+  const xBonds = new Set(edges.filter(([a, b]) => metalFour(a) === "x" || metalFour(b) === "x").map(([a, b]) => pair(a, b)));
   const fitting = live.filter((sys) => rings.some((r) => square(r) && r.every((a) => sys.has(a))));
   const frameSize = Math.max(0, ...fitting.map((sys) => sys.size));
   const frames = fitting.filter((sys) => sys.size === frameSize);
@@ -758,7 +794,7 @@ function readStructure(g: Geometry): Structure {
     const frame = frames.length
       ? fitsLattice.has(k) && frames.some((sys) => sys.has(a) && sys.has(b))
       : true;
-    latticeBonds.push({ a, b, frame, step: squareBonds.has(k) ? 90 : 30 });
+    latticeBonds.push(xBonds.has(k) ? { a, b, frame, step: 90, offset: 45 } : { a, b, frame, step: squareBonds.has(k) ? 90 : 30 });
   }
   const inFrame = [...new Set(frames.flatMap((sys) => [...sys]))];
 
@@ -1198,7 +1234,7 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
   // it), which is drawn in perspective. The turn that brings those bonds
   // nearest to it is how far the drawing is tilted, and what is left after
   // that turn how far its parts are askew.
-  const latticeDirs = latticeBonds.map(({ a, b, frame, step }) => ({ t: deg(Math.atan2(y[b] - y[a], x[b] - x[a])), frame, step }));
+  const latticeDirs = latticeBonds.map(({ a, b, frame, step, offset }) => ({ t: deg(Math.atan2(y[b] - y[a], x[b] - x[a])) - (offset ?? 0), frame, step }));
   // (the frame's own bonds picked out once: the tilt is sought among 300 turns)
   const frameDirs = latticeDirs.filter((d) => d.frame);
   const offBy = (turn: number, frameOnly: boolean) => {
@@ -2132,3 +2168,6 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
   const score = Object.values(scoreParts(measures)).reduce((sum, v) => sum + v, 0);
   return { ...measures, score };
 }
+
+/** The metals, and the oxidation state in which, a four-coordinate centre is surely square planar: drawn as the X (GR-4.1.3). */
+const SQUARE_PLANAR: Record<string, number> = { Pt: 2, Pd: 2, Au: 3, Rh: 1, Ir: 1 };
