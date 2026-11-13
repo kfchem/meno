@@ -53,10 +53,12 @@ export function fromAbove(elevation: number, turn = 0): View {
 export const CHAIR_ELEVATION_DEG = 15;
 
 /**
- * The Haworth ring's view, as the sine of the eye's height over the ring's plane: 2/3 (41.8 degrees). MEASURED on Brecher 2006's figure
- * under ST-1.9 (its three pyranose rings and three furanose rings): a six-ring 1.153 level bonds tall, a five-ring's side atoms 0.63 of one
- * above its front edge; a regular ring seen from this height is 1.1547 and 0.634. One number fits both rings, and the ring is a true view.
- * (Seen from 30 degrees, a six-ring is as tall as an up bond is long, and a front atom's up group lands on the back atom above it.)
+ * The Haworth ring's view, as the sine of the eye's height over the ring's plane: 2/3 (41.8 degrees) - Meno's drawn choice, as the chair's
+ * drawing is, taken from ONE figure: Brecher 2006's under ST-1.9 (MEASURED: its three pyranose rings and three furanose rings, a six-ring
+ * 1.153 level bonds tall, a five-ring's side atoms 0.63 of one above its front edge; a regular ring seen from this height is 1.1547 and
+ * 0.634: one number fits both, and the ring is a true view). Not "the" Haworth view: McNaught 1996's own figures (2-Carb-5) draw the rings
+ * otherwise - a pyranose about 1.4 tall, a furanose no regular pentagon - and the texts say only "from slightly above". (Seen from 30
+ * degrees, as first built, a six-ring is as tall as an up bond is long, and a front atom's up group lands on the back atom above it.)
  */
 export const HAWORTH_SIN = 2 / 3;
 export const HAWORTH_ELEVATION_DEG = Math.asin(HAWORTH_SIN) / DEG;
@@ -65,8 +67,9 @@ export const HAWORTH_ELEVATION_DEG = Math.asin(HAWORTH_SIN) / DEG;
  * How long a Haworth ring's group is drawn, as a share of a bond, NOT a true view: straight up or down, `HAWORTH_OUT` - the true view's own
  * length, the cosine - where the bond leaves the ring's picture (both groups of a side atom, the down group of a front atom, the up group of a
  * back atom), and `HAWORTH_IN` where it goes into it (the up group of a front atom, the down group of a back atom), so that two on one
- * vertical - a front atom's up group and the back atom's down group above it - pass clear of each other. Read off the same figure (0.38 to
- * 0.44 into the ring): a matter of look, the look check's to settle.
+ * vertical - a front atom's up group and the back atom's down group above it - pass clear of each other. Meno's own numbers: no text gives a
+ * group's length (Brecher 2006 ST-1.9, Brecher 2008 GR-4.2.6 and McNaught 1996 2-Carb-5.4 say none); read off the same figure (0.38 to 0.44
+ * into the ring), a matter of look, the look check's to settle.
  */
 export const HAWORTH_OUT = Math.sqrt(1 - HAWORTH_SIN * HAWORTH_SIN);
 export const HAWORTH_IN = 0.4;
