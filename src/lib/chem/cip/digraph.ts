@@ -40,8 +40,8 @@ export type CipNode = {
   /** Its root distance, for rule 1b. */
   distance: number;
   parent: CipNode | null;
-  /** The digraph it is part of. */
-  graph: Digraph;
+  /** The digraph it is part of, or the view of one it is seen in (`rootwardOf`). */
+  graph: Tree;
   /** Its ligands but the one toward the root, once asked for. */
   kids?: CipNode[];
 };
@@ -49,13 +49,33 @@ export type CipNode = {
 /** Thrown where a unit's digraph grows past what is worked out (`NODE_BUDGET`). */
 export class TooLarge extends Error {}
 
-/** The most nodes one unit's digraphs are grown to: past it, the unit gets no label rather than freezing. */
-export const NODE_BUDGET = 200_000;
+/**
+ * The most nodes one unit's digraphs are grown to, its auxiliary units'
+ * ways back to the root with them: past it, the unit gets no label rather
+ * than freezing. The validation suite's costliest labelled case in 3D, its
+ * hydrogens drawn (VS218), needs past 200,000.
+ */
+export const NODE_BUDGET = 400_000;
 
-/** A count of nodes made, shared by the digraphs of one unit. */
-export type Budget = { left: number };
+/**
+ * The most comparisons of two nodes one unit's ranking makes: past it, the
+ * unit gets no label rather than freezing. Rules 4 and 5 read every
+ * auxiliary unit in a digraph, each ranked on it in turn, so a cage of
+ * centres or a macrocycle of them is costly: the validation suite's
+ * costliest labelled case (VS218) needs some 600,000 for each of its two
+ * units, half a second or so; a million keeps every one of its cases.
+ */
+export const STEP_BUDGET = 1_000_000;
 
-export class Digraph {
+/** The nodes one unit's digraphs may yet make, and the comparisons of two nodes its ranking may yet make (`STEP_BUDGET`). */
+export type Budget = { left: number; steps: number };
+
+/** What gives a node's ligands but the one toward its root. */
+export interface Tree {
+  children(n: CipNode): CipNode[];
+}
+
+export class Digraph implements Tree {
   readonly p: Prepared;
   readonly roots: CipNode[];
   private readonly budget: Budget;
@@ -120,11 +140,6 @@ export class Digraph {
     return out;
   }
 
-  /** A root atom's ligand toward its neighbour `atom`: the branch an auxiliary centre's root-ward ligand is ranked by. */
-  branchToward(root: CipNode, atom: number): CipNode {
-    return this.toward(root, atom);
-  }
-
   /** A node's ligands but the one toward the root: none for a duplicate, a hydrogen or a phantom. */
   children(n: CipNode): CipNode[] {
     if (n.kids) return n.kids;
@@ -142,3 +157,41 @@ export class Digraph {
     return kids;
   }
 }
+
+/**
+ * The ligand of an auxiliary unit's node `n` back toward the root: the
+ * same digraph seen from `n` - its parent, then each node's neighbours in
+ * the digraph but the one it was reached from, the root's ligands and
+ * (a double bond's) the other root among them; its duplicates where the
+ * digraph has them. Ranked against `n`'s other ligands by rule 1a alone
+ * (Hanson et al. 2018 p. 1757: the path back to the root is unique in its
+ * atoms).
+ */
+export function rootwardOf(n: CipNode, budget: Budget): CipNode {
+  const known = rootwards.get(n);
+  if (known) return known;
+  const roots = (n.graph as Digraph).roots;
+  const seen = new Map<CipNode, { node: CipNode; from: CipNode }>();
+  const view: Tree = {
+    children(v: CipNode): CipNode[] {
+      if (v.kids) return v.kids;
+      const o = seen.get(v)!;
+      const around = o.node.parent ? [...o.node.graph.children(o.node), o.node.parent] : [...(o.node.kids ?? []), ...roots.filter((r) => r !== o.node)];
+      v.kids = o.node.dup || o.node.atom < 0 ? [] : around.filter((x) => x !== o.from).map((x) => seenAs(x, o.node, v));
+      return v.kids;
+    },
+  };
+  const seenAs = (x: CipNode, from: CipNode, parent: CipNode): CipNode => {
+    if (--budget.left < 0) throw new TooLarge();
+    const v: CipNode = { atom: x.atom, z: x.z, mass: x.mass, dup: x.dup, sphere: parent.sphere + 1, distance: parent.sphere + 1, parent, graph: view };
+    seen.set(v, { node: x, from });
+    return v;
+  };
+  const top: CipNode = { atom: n.atom, z: n.z, mass: n.mass, dup: false, sphere: 0, distance: 0, parent: null, graph: view };
+  const out = seenAs(n.parent!, n, top);
+  rootwards.set(n, out);
+  return out;
+}
+
+/** Each node's ligand back toward the root, once made: the same for the structure and its mirror image. */
+const rootwards = new WeakMap<CipNode, CipNode>();

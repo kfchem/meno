@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { lonePairCentres, pyramidal, type PyramidAtom, type PyramidBond } from "./lonePairCentres";
+import { lonePairCentres, protonatedAmineHeld, pyramidal, type PyramidAtom, type PyramidBond } from "./lonePairCentres";
 import { readSmiles } from "./smiles";
 
 /** A structure from its SMILES, as the rule reads it: bracket atoms' hydrogens as written, the rest by Meno's SMILES reader. */
@@ -169,5 +169,27 @@ describe("pyramidal", () => {
     expect(pyramidal("P", 0, 3, 3, 1)).toBe(false);
     // (an S+ of a double bond, a single bond and an H: its H counted, no lone pair left)
     expect(pyramidal("S", 1, 2, 3, 1)).toBe(false);
+  });
+});
+
+describe("protonatedAmineHeld", () => {
+  const held = (smiles: string, at: number) => {
+    const { atoms, bonds } = graph(smiles);
+    return protonatedAmineHeld(atoms, bonds)(at);
+  };
+
+  it("keeps a protonated amine's N only where its amine's N is held: a quinuclidinium's, not a triethylammonium's", () => {
+    // (quinuclidine, its N at a bridgehead of bicyclo[2.2.2]; protonated, as drawn [NH+])
+    expect(held("C1C[NH+]2CCC1CC2", 2)).toBe(true);
+    expect(held("CC[NH+](CC)CC", 2)).toBe(false);
+    // (an H drawn as an atom, the same)
+    expect(held("C1C[N+]2([H])CCC1CC2", 2)).toBe(true);
+    expect(held("CC[N+]([H])(CC)CC", 2)).toBe(false);
+  });
+
+  it("asks nothing of any other atom: a quaternary N+, an iminium's, a neutral amine's", () => {
+    expect(held("C[N+](C)(C)C", 1)).toBeNull();
+    expect(held("C=[NH+]C", 1)).toBeNull();
+    expect(held("CN(C)C", 1)).toBeNull();
   });
 });

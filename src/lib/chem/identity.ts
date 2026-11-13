@@ -19,7 +19,7 @@
  */
 import { canonicalWritten, symmetryClasses, symmetryOrbits as orbitsAsDrawn } from "../layout/canonical";
 import { isMetal, type LayoutAtom, type LayoutBond, type LayoutInput } from "../layout/perceive";
-import type { Axial, Tetrahedral } from "../layout/stereo";
+import type { Axial, Cumulated, Tetrahedral } from "../layout/stereo";
 import type { Radical } from "./molecule";
 
 /**
@@ -30,7 +30,7 @@ import type { Radical } from "./molecule";
  * hydrogens not drawn as atoms.
  */
 export type IdentityAtom = LayoutAtom & { isotope?: number; radical?: Radical; mapped?: true };
-export type IdentityInput = { atoms: readonly IdentityAtom[]; bonds: readonly LayoutBond[]; axes?: readonly Axial[] };
+export type IdentityInput = { atoms: readonly IdentityAtom[]; bonds: readonly LayoutBond[]; axes?: readonly Axial[]; cumulated?: readonly Cumulated[] };
 
 /** The bond order a bond its Kekulé structures disagree on is given for identity and symmetry, beside 1, 2 and 3. */
 const AROMATIC = 4;
@@ -155,7 +155,7 @@ export function hydrogensFolded(input: IdentityInput): IdentityInput {
     around[b.b].push({ to: b.a, order: b.order });
   }
   const inPi = new Set(input.atoms.flatMap((a) => a.pi ?? []));
-  const onAxis = new Set((input.axes ?? []).flatMap((x) => x.atoms));
+  const onAxis = new Set([...(input.axes ?? []), ...(input.cumulated ?? [])].flatMap((x) => x.atoms));
   const plain = (i: number): boolean => {
     const a = input.atoms[i];
     if (a.el !== "H" || a.charge || a.isotope || a.radical || a.mapped || a.hs || a.tetra || a.pi || inPi.has(i) || onAxis.has(i)) return false;
@@ -214,19 +214,36 @@ export function hydrogensFolded(input: IdentityInput): IdentityInput {
     }
     return [{ ...bond, stereo: { refs: [at.get(p)!, at.get(q)!], cis } }];
   });
+  // (the atom an axis's or a cumulene's end runs on through: its cumulated double bond's)
+  const runsOn = (end: number) => around[end].find((e) => e.order >= 2)?.to ?? -1;
   const axes = (input.axes ?? []).flatMap((x): Axial[] => {
     const refs = [...x.refs];
     let sense = x.sense;
     for (const k of [0, 1] as const) {
       if (!folded[refs[k]]) continue;
-      const by = instead(x.atoms[k], refs[k], x.atoms[1 - k]);
+      // (the other end, a biaryl's; an allene's end runs on through its cumulated double bond)
+      const end = x.atoms[k];
+      const by = instead(end, refs[k], around[end].some((e) => e.to === x.atoms[1 - k]) ? x.atoms[1 - k] : runsOn(end));
       if (by == null) return [];
       refs[k] = by;
       sense = -sense as 1 | -1;
     }
     return [{ atoms: [at.get(x.atoms[0])!, at.get(x.atoms[1])!], refs: [at.get(refs[0])!, at.get(refs[1])!], sense }];
   });
-  return { atoms, bonds, ...(input.axes ? { axes } : {}) };
+  // (an odd cumulene's, as a double bond's)
+  const cumulated = (input.cumulated ?? []).flatMap((x): Cumulated[] => {
+    const refs = [...x.refs];
+    let cis = x.cis;
+    for (const k of [0, 1] as const) {
+      if (!folded[refs[k]]) continue;
+      const by = instead(x.atoms[k], refs[k], runsOn(x.atoms[k]));
+      if (by == null) return [];
+      refs[k] = by;
+      cis = !cis;
+    }
+    return [{ atoms: [at.get(x.atoms[0])!, at.get(x.atoms[1])!], refs: [at.get(refs[0])!, at.get(refs[1])!], cis }];
+  });
+  return { atoms, bonds, ...(input.axes ? { axes } : {}), ...(input.cumulated ? { cumulated } : {}) };
 }
 
 /**
@@ -255,13 +272,14 @@ export function identity(input: IdentityInput): { text: string; complete: boolea
 }
 
 /** A configuration a structure carries: a centre's, by its atom; a double bond's, by its bond; an axis's, by its place among the axes. */
-type StereoUnit = { centre: number } | { bond: number } | { axis: number };
+type StereoUnit = { centre: number } | { bond: number } | { axis: number } | { cumulated: number };
 
 /**
  * The structure with only the configurations that make a stereo unit: a
  * wedge on a centre two of whose neighbours are alike, or a double bond
- * drawn bent, or an axis, whose end has its two other neighbours alike,
- * sets nothing - an isopropyl's CH, a prenyl's C=C(CH3)2 - and is taken
+ * drawn bent, an axis or an odd cumulene, whose end has its two other
+ * neighbours alike (an allene's or a cumulene's, its groups but the run it
+ * is on), sets nothing - an isopropyl's CH, a prenyl's C=C(CH3)2 - and is taken
  * out, so that the structure is one whether drawn so or not. Alike means
  * in one orbit of the structure with that configuration left out and
  * every other one kept, under the symmetries that keep the unit's own
@@ -275,22 +293,33 @@ type StereoUnit = { centre: number } | { bond: number } | { axis: number };
  */
 export function stereoUnitsOnly(input: LayoutInput): { input: LayoutInput; complete: boolean } {
   const around: number[][] = input.atoms.map(() => []);
+  const multiple = new Map<number, number>();
   for (const b of input.bonds) {
     around[b.a].push(b.b);
     around[b.b].push(b.a);
+    if (b.order >= 2) {
+      multiple.set(b.a, b.b);
+      multiple.set(b.b, b.a);
+    }
   }
-  // (the groups whose two alike would set nothing: a centre's neighbours; each end's others, a double bond's or an axis's)
-  const ends = (a: number, b: number) => [around[a].filter((m) => m !== b), around[b].filter((m) => m !== a)];
+  // (the groups whose two alike would set nothing: a centre's neighbours; each end's others, a double bond's or an
+  // axis's - but the atom it runs on through: the other end, bonded to it, or an allene's or a cumulene's next one)
+  // (the atom a run goes on through is left out of an end's groups. Were it counted, it could never be alike with one of them: a cumulated
+  //  carbon has bonds no substituent of the end has - so this changes no result, and says what the groups are)
+  const across = (end: number, other: number) => (around[end].includes(other) ? other : (multiple.get(end) ?? other));
+  const ends = (a: number, b: number) => [around[a].filter((m) => m !== across(a, b)), around[b].filter((m) => m !== across(b, a))];
   const sides = (g: LayoutInput, u: StereoUnit): number[][] => {
     if ("centre" in u) return [g.atoms[u.centre].tetra!.neighbours.filter((m) => m >= 0)];
     if ("bond" in u) return ends(g.bonds[u.bond].a, g.bonds[u.bond].b);
-    return ends(...g.axes![u.axis].atoms);
+    if ("axis" in u) return ends(...g.axes![u.axis].atoms);
+    return ends(...g.cumulated![u.cumulated].atoms);
   };
   const alike = (of: readonly number[], side: readonly number[]) => new Set(side.map((m) => of[m])).size < side.length;
   const without = (g: LayoutInput, u: StereoUnit): LayoutInput => {
     if ("centre" in u) return { ...g, atoms: g.atoms.map((a, i) => (i === u.centre ? (({ tetra: _tetra, ...rest }) => rest)(a) : a)) };
     if ("bond" in u) return { ...g, bonds: g.bonds.map((b, i) => (i === u.bond ? (({ stereo: _stereo, ...rest }) => rest)(b) : b)) };
-    return { ...g, axes: g.axes!.filter((_, i) => i !== u.axis) };
+    if ("axis" in u) return { ...g, axes: g.axes!.filter((_, i) => i !== u.axis) };
+    return { ...g, cumulated: g.cumulated!.filter((_, i) => i !== u.cumulated) };
   };
   let g = input;
   let complete = true;
@@ -299,6 +328,7 @@ export function stereoUnitsOnly(input: LayoutInput): { input: LayoutInput; compl
       ...g.atoms.flatMap((a, i) => (a.tetra ? [{ centre: i }] : [])),
       ...g.bonds.flatMap((b, i) => (b.stereo ? [{ bond: i }] : [])),
       ...(g.axes ?? []).map((_, i) => ({ axis: i })),
+      ...(g.cumulated ?? []).map((_, i) => ({ cumulated: i })),
     ];
     if (!units.length) return { input: g, complete };
     // (atoms the ranks tell apart are apart in every orbit: only those they leave alike are searched)
@@ -309,7 +339,7 @@ export function stereoUnitsOnly(input: LayoutInput): { input: LayoutInput; compl
       const left = without(g, u);
       // (the unit's own atoms marked, for the search only: the orbits of what keeps it where it is, not of what takes it
       // onto another atom alike - 1,3-dichloro-2,4-dimethylcyclobutane's two CHCl, one open, swapped by a half turn)
-      const own = new Set("centre" in u ? [u.centre] : "bond" in u ? [g.bonds[u.bond].a, g.bonds[u.bond].b] : g.axes![u.axis].atoms);
+      const own = new Set("centre" in u ? [u.centre] : "bond" in u ? [g.bonds[u.bond].a, g.bonds[u.bond].b] : "axis" in u ? g.axes![u.axis].atoms : g.cumulated![u.cumulated].atoms);
       const found = orbitsAsDrawn({ ...left, atoms: left.atoms.map((a, i) => (own.has(i) ? { ...a, el: `${a.el}*` } : a)) });
       if (sides(g, u).some((side) => alike(found.orbit, side))) {
         next = left;

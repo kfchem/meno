@@ -43,9 +43,11 @@ const STEREO_ORDER = 35;
 
 
 /**
- * The plugin's marks on the structure: a ring round each atom with more bonds
- * than it can have - saying what is wrong while the pointer is on it - and
- * R, S, E and Z beside stereocentres and double bonds, each placed clear of
+ * The marks on the structure: a ring round each atom with more bonds than it
+ * can have - saying what is wrong while the pointer is on it - and R, S, E
+ * and Z beside stereocentres and double bonds (one asked for with none
+ * saying why while the pointer is on it, and a Z or E that turns in the
+ * mirror image saying so), each placed clear of
  * the bonds and labels, and written as the drawing's labels are - in its
  * typeface and its colour, in italics, in parentheses if its style says
  * so. They are the editor's, drawn by WebGL with the page - never lagging
@@ -76,7 +78,7 @@ export default function ChemMarks2D({
   // every frame of a drag over a large drawing - and R, S, E and Z only
   // where there are any)
   const stereoWanted = !!marks && (marks.centres.size > 0 || marks.doubleBonds.size > 0);
-  const wanted = stereoWanted || !!marks?.valence.size || !!unsure?.atoms.size || !!unsure?.bonds.size || !!read?.atoms.size || !!read?.bonds.size;
+  const wanted = stereoWanted || !!marks?.said?.size || !!marks?.valence.size || !!unsure?.atoms.size || !!unsure?.bonds.size || !!read?.atoms.size || !!read?.bonds.size;
   // (the view's zoom, where there is anything to mark: with nothing, a zoom
   // draws nothing here again - and marks fading out keep the size they had)
   const zoomWanted = useRef(1);
@@ -286,7 +288,21 @@ export default function ChemMarks2D({
   const boxesLeaving = useMemo(() => new Set(valenceShown.filter((s) => s.leaving).map((s) => s.key)), [valenceShown]);
   const boxesNow = useMemo(() => valenceShown.map(({ item }) => item), [valenceShown]);
   const pointed = valenceShown.find(({ item: m, leaving }) => !leaving && (m.bond ? hoveredBond === m.id : hoveredAtom === m.id))?.item;
-  if (!valenceShown.length && !stereoShown.length) return null;
+  // (a stereocentre or double bond asked for, pointed at, with words of its own - why it has no R or S, E or Z, or that its Z or E
+  //  turns in the mirror image: said under it as a box's words are, with no box)
+  const saidPointed = (() => {
+    if (pointed || !marks?.said?.size || !marksRead) return null;
+    const atom = hoveredAtom != null ? model.atoms.find((a) => a.id === hoveredAtom && a.stereoShown) : undefined;
+    const bond = !atom && hoveredBond != null ? model.bonds.find((b) => b.id === hoveredBond && b.stereoShown) : undefined;
+    const key = atom ? `centre-${atom.id}` : bond ? `bond-${bond.id}` : null;
+    const text = key && marks.said.get(key);
+    if (!text) return null;
+    const p = atom ? at.get(atom.id) : bond ? at.get(bond.a) : undefined;
+    const q = bond ? at.get(bond.b) : p;
+    if (!p || !q) return null;
+    return { key, text, x: (p.x + q.x) / 2, y: (p.y + q.y) / 2, size: 0.6 * labelFont };
+  })();
+  if (!valenceShown.length && !stereoShown.length && !saidPointed) return null;
 
   return (
     <group>
@@ -311,6 +327,7 @@ export default function ChemMarks2D({
       {boxesNow.length > 0 && <MarkBoxes2D boxes={boxesNow} leaving={boxesLeaving} zoom={z} />}
       {/* what the box pointed at says, under it: words over the page, while it is pointed at */}
       {pointed && <PageTip tipKey={pointed.key} x={pointed.x} y={pointed.y} w={pointed.w} h={pointed.h} zoom={z} text={pointed.message} zIndexRange={Z_RANGE} />}
+      {saidPointed && <PageTip tipKey={`said-${saidPointed.key}`} x={saidPointed.x} y={saidPointed.y} w={saidPointed.size} h={saidPointed.size} zoom={z} text={saidPointed.text} zIndexRange={Z_RANGE} />}
       {stereoTexts.length > 0 && (
         <Texts2D
           texts={stereoTexts}

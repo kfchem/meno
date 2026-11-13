@@ -15,6 +15,7 @@ import type { Model } from "../store/types";
 import { drawingOf } from "./drawing";
 import { layoutJob, nextFree, relayoutFrom, type LayoutJob } from "./engineLayout";
 import { layOut } from "./layOut";
+import type { Axial, Cumulated } from "../../../../lib/layout/stereo";
 import { atTrueSize } from "../../../../lib/chem/magnified2d";
 import { formulaOf } from "../../../../lib/io/coordinates";
 
@@ -281,15 +282,23 @@ export function partFormula(part: Model): string {
   return formulaOf(atoms) + (charge ? `${Math.abs(charge) > 1 ? ` ${Math.abs(charge)}` : ""}${charge > 0 ? "+" : "-"}` : "");
 }
 
+/** An allene's axes and an odd cumulene's cis or trans, as a structure's own text gives them (lib/chem/smiles), by atom index. */
+export type GivenRuns = { axes: readonly Axial[]; cumulated: readonly Cumulated[] };
+
+/** Whether `given`'s atom indices are the job's: none of the drawing's atoms folded into another's. */
+const givenFits = (job: LayoutJob, model: Model) => job.input.atoms.length === model.atoms.length;
+
 /**
  * `model` laid out afresh by the engine as a whole - a salt's ions set out
  * together - for a structure that has only just arrived, before it is
  * added: a plugin's drawing of a SMILES. In `style` - the app's, unless
  * given - as Clean-up lays one out.
  */
-export async function laidOut(model: Model, style: DrawingStyle = styleOf(useAppSettings.getState().drawingStyle)): Promise<Model> {
+export async function laidOut(model: Model, style: DrawingStyle = styleOf(useAppSettings.getState().drawingStyle), given?: GivenRuns): Promise<Model> {
   if (!model.bonds.length) return model;
-  const job = layoutJob(model);
+  const read = layoutJob(model);
+  // (an allene's axis and an odd cumulene's cis or trans the structure's own text says, which a plugin's drawing of it cannot: a MOL block has no way to say them - by atom, in the drawing's order)
+  const job = given && givenFits(read, model) ? { ...read, given: true as const, input: { ...read.input, ...(given.axes.length ? { axes: given.axes } : {}), ...(given.cumulated.length ? { cumulated: given.cumulated } : {}) } } : read;
   const change = relayoutFrom(model, model, job, await layOut(job.input), style);
   return relayout({ ...emptyWorkspaceDocument(), model, nextId: nextFree(model) }, change).model;
 }
