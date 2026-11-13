@@ -15,7 +15,7 @@ import { bondLengthFrom } from "../../utils/magnified";
 import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
 import { renumbered } from "../../chem/atomMap";
-import { crossingsApart } from "../../chem/crossings";
+import { crossingsApart, whileMoving } from "../../chem/crossings";
 import { useReadings } from "../../../../../lib/calc/readings";
 import type { ImportedScheme, WorkspaceDocument } from "../../document";
 import type { ArrowLook } from "../../../../../lib/chem/reactionArrow";
@@ -210,7 +210,8 @@ export const createModelSlice = (
   },
 
   moveAtoms: (moves: { id: number; x: number; y: number }[], gesture: string, marks?: ops.MarkPlaces) => {
-    doc.edit("move atoms", (d) => ops.placeMarks(ops.placeAtoms(d, moves), marks), gestureStep(`move-atoms:${gesture}`));
+    // (a frame of a drag or a turn: a mark between bonds it leaves apart kept until it ends - `settleMove`)
+    whileMoving(() => doc.edit("move atoms", (d) => ops.placeMarks(ops.placeAtoms(d, moves), marks), gestureStep(`move-atoms:${gesture}`)));
   },
 
   dropMoveAtoms: (gesture: string) => {

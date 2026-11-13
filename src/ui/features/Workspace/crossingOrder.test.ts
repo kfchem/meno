@@ -2,7 +2,7 @@
 // answers of the page - the gap where it was said, kept as the drawing is edited, saved, copied and turned over, and in every writer.
 import { describe, expect, it } from "vitest";
 import { connectStoreToDocument, createEditorStore } from "./store";
-import { createWorkspaceDocument } from "./document";
+import { createWorkspaceDocument, placeAtoms } from "./document";
 import { readRecord, recordText } from "./utils/copyPaste";
 import { readWorkspace, workspaceText } from "./utils/workspace";
 import { layoutAtomOf, layoutBonds } from "./layoutOptions";
@@ -118,6 +118,20 @@ describe("a crossing drawn by hand, which bond is in front said", () => {
     st().moveAtoms([{ id: atoms.c, x: 2, y: 2 }], "four");
     st().settleMove("four", [atoms.c]);
     expect(drawn(st().model).ac).toHaveLength(1);
+  });
+
+  it("goes with any command that sets places and leaves the two apart - no drag, so in that command's own step - and is kept by one that leaves them crossing", () => {
+    const { doc, st, ac, bd, atoms } = editor();
+    st().orderCrossing(ac, bd, "behind");
+    // (C put elsewhere at once, as Clean-up or a tool puts atoms: still crossing - kept)
+    doc.edit("place", (d) => placeAtoms(d, [{ id: atoms.c, x: 2.2, y: 1.8 }]));
+    expect(bondOf(st().model, ac).behind).toEqual([bd]);
+    // (put clear of BD: gone, in that step; undone, back)
+    doc.edit("place", (d) => placeAtoms(d, [{ id: atoms.c, x: -1, y: 0.5 }]));
+    expect(bondOf(st().model, ac).behind).toBeUndefined();
+    expect(doc.history().undoLabel).toBe("place");
+    doc.undo();
+    expect(bondOf(st().model, ac).behind).toEqual([bd]);
   });
 
   it("is left by a move that did not touch its bonds: only a mark with an atom the move moved is taken away", () => {

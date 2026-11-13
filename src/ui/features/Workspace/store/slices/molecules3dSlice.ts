@@ -16,6 +16,7 @@ import { resultKey } from "../../../../../lib/calc/results";
 import { gridPlaces, middleOf, shownOf, stackMembers } from "../../utils/stacks";
 import { fitResultSets } from "../../workflow/run";
 import { heldViewId, shownIn } from "../../workflow/heldView";
+import { whileMoving } from "../../chem/crossings";
 
 type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
@@ -220,7 +221,7 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
       // whole step, and with nothing less)
       const meta = { coalesceKey: gesture, coalesceWithinMs: Infinity };
       if (drawing?.length || marks)
-        doc.edit("turn selection", (d) => ops.placeMarks(ops.placeAtoms(d, drawing ?? []), { ...marks, molecules3d: places }), meta);
+        whileMoving(() => doc.edit("turn selection", (d) => ops.placeMarks(ops.placeAtoms(d, drawing ?? []), { ...marks, molecules3d: places }), meta));
       else doc.edit("turn molecules", (d) => ops.moveMolecules3d(d, places), meta);
       const turnsAfter: Record<number, Turn3D> = {};
       for (const m of moves) turnsAfter[m.id] = m.turn;
