@@ -89,17 +89,53 @@ describe("a crossing drawn by hand, which bond is in front said", () => {
     expect(bondOf(st().model, ac).behind).toEqual([bd]);
   });
 
-  it("is kept while the atoms move: dragged apart, no gap and nothing broken; dragged back, the gap again", () => {
-    const { st, ac, bd, atoms } = editor();
+  it("is kept while a move goes on - drawn whole while the bonds are apart, the gap again where they cross - and goes with a move that ENDS with them apart, in the move's own step", () => {
+    const { doc, st, ac, bd, atoms } = editor();
     st().orderCrossing(ac, bd, "behind");
-    // (C dragged up and left until AC no longer crosses BD)
-    st().moveAtoms([{ id: atoms.c, x: -1, y: 0.5 }], "apart");
+    // (C dragged up and left until AC no longer crosses BD, and back across it, in one drag: the mark held all the way)
+    st().moveAtoms([{ id: atoms.c, x: -1, y: 0.5 }], "one");
     expect(bondOf(st().model, ac).behind).toEqual([bd]);
     const apart = drawn(st().model);
     expect(apart.lines.length).toBe(st().model.bonds.length);
     expect(apart.polys.filter((p) => reachOf(p) > 0.3)).toHaveLength(0);
-    st().moveAtoms([{ id: atoms.c, x: 2, y: 2 }], "back");
+    st().moveAtoms([{ id: atoms.c, x: 2, y: 2 }], "one");
+    st().settleMove("one");
+    expect(bondOf(st().model, ac).behind).toEqual([bd]);
     expect(drawn(st().model).ac).toHaveLength(2);
+    // (a drag that ends with them apart: the mark gone with it, one step; undone, both back - C where it was and the mark)
+    st().moveAtoms([{ id: atoms.c, x: -1, y: 0.5 }], "two");
+    st().settleMove("two");
+    expect(bondOf(st().model, ac).behind).toBeUndefined();
+    expect(doc.history().undoLabel).toBe("move atoms");
+    doc.undo();
+    expect(bondOf(st().model, ac).behind).toEqual([bd]);
+    expect(st().model.atoms.find((a) => a.id === atoms.c)).toMatchObject({ x: 2, y: 2 });
+    // (dragged across again later, no gap comes back that nobody said)
+    st().moveAtoms([{ id: atoms.c, x: -1, y: 0.5 }], "three");
+    st().settleMove("three");
+    st().moveAtoms([{ id: atoms.c, x: 2, y: 2 }], "four");
+    st().settleMove("four");
+    expect(drawn(st().model).ac).toHaveLength(1);
+  });
+
+  it("goes when an edit gives all four atoms a depth, in that edit's step, and does not come back when the depth goes; with only some deep, the mark says it", () => {
+    const { doc, st, ac, bd } = editor();
+    st().orderCrossing(ac, bd, "behind");
+    // (three of the four given a depth: the mark still says it, and is drawn)
+    doc.edit("some depth", (d) => ({ ...d, model: { ...d.model, atoms: d.model.atoms.map((a, i) => (i < 3 ? { ...a, z: 0 } : a)) } }));
+    expect(bondOf(st().model, ac).behind).toEqual([bd]);
+    expect(drawn(st().model).ac).toHaveLength(2);
+    // (all four: the depth says it, the mark gone in that step)
+    doc.edit("all depth", (d) => ({ ...d, model: { ...d.model, atoms: d.model.atoms.map((a) => ({ ...a, z: 0 })) } }));
+    expect(st().model.bonds.some((b) => b.behind)).toBe(false);
+    // (the depth taken away again: the mark does not come back)
+    doc.edit("no depth", (d) => ({ ...d, model: { ...d.model, atoms: d.model.atoms.map(({ z: _z, ...a }) => a) } }));
+    expect(st().model.bonds.some((b) => b.behind)).toBe(false);
+    expect(drawn(st().model).ac).toHaveLength(1);
+    // (undone to before the depth: back)
+    doc.undo();
+    doc.undo();
+    expect(bondOf(st().model, ac).behind).toEqual([bd]);
   });
 
   it("goes with either bond: the other deleted, the bond is whole and names no bond that is gone", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Atom, Bond, Model } from "../store/types";
-import { behindRemapped, crossingsHeld, crossingsOf, orderBetween, orderedCrossing, turnedOverCrossings } from "./crossings";
+import { behindRemapped, crossingsApart, crossingsHeld, crossingsOf, orderBetween, orderedCrossing, turnedOverCrossings } from "./crossings";
 
 // Two bonds drawn across each other by hand: 10 from (0, 0) to (2, 2) and 11 from (0, 2) to (2, 0), crossing at (1, 1); a third, 12, from
 // atom 4 at (2, 1) to atom 1, that crosses neither; and a bond 13 of another structure (atoms 5 and 6) lying over the crossing.
@@ -98,6 +98,25 @@ describe("which bond is in front where two cross, said by the chemist", () => {
       const more: Model = { atoms: [...base.atoms, atom(7, 1.4, 1.8), atom(8, 1.8, 1.4)], bonds: [...base.bonds, bond(15, 7, 8), bond(16, 8, 4)] };
       expect(crossingsOf(more, 10, { x: 1.7, y: 1.7 }).map((c) => c.other)).toEqual([15, 11]);
       expect(crossingsOf(more, 10, { x: 0.9, y: 0.9 }).map((c) => c.other)).toEqual([11, 15]);
+    });
+  });
+
+  describe("nothing silent says it again where nobody said it", () => {
+    const marked = orderedCrossing(base, 10, 11, "behind");
+
+    it("takes the mark away where the two no longer cross (what a move does as it ends), and keeps it where they do", () => {
+      // (atom 1 moved from (2, 2) to (-1, 0.5): bond 10 runs from (0, 0) to there, clear of 11)
+      const apart: Model = { ...marked, atoms: marked.atoms.map((a) => (a.id === 1 ? { ...a, x: -1, y: 0.5 } : a)) };
+      expect(of(crossingsApart(apart), 10).behind).toBeUndefined();
+      expect(crossingsApart(marked)).toBe(marked);
+      expect(crossingsApart(base)).toBe(base);
+    });
+
+    it("takes the mark away once all four atoms of the two carry a depth - the depth says it from then on - and keeps it where only some do", () => {
+      const deep: Model = { ...marked, atoms: marked.atoms.map((a) => (a.id <= 3 ? { ...a, z: a.id } : a)) };
+      expect(of(crossingsHeld(deep, marked), 10).behind).toBeUndefined();
+      const some: Model = { ...marked, atoms: marked.atoms.map((a) => (a.id <= 2 ? { ...a, z: a.id } : a)) };
+      expect(of(crossingsHeld(some, marked), 10).behind).toEqual([11]);
     });
   });
 });

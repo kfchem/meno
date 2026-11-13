@@ -146,7 +146,11 @@ export function dragSelection(
     }
     guide.end();
     selectionMoving.active = false;
-    if (last.x !== p0.x || last.y !== p0.y) ontoCycle();
+    if (last.x !== p0.x || last.y !== p0.y) {
+      ontoCycle();
+      // (and its end: a mark between two bonds it has left apart taken away, in its own step - chem/crossings)
+      store.getState().settleMove(gesture);
+    }
     done(ev, last.x !== p0.x || last.y !== p0.y);
   };
   window.addEventListener("pointermove", onMove);

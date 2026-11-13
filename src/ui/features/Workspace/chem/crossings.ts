@@ -5,8 +5,10 @@
  * discontinuity in the backmost bond"). Where all four atoms of the two bonds carry a depth, the depth says it and nothing is asked: a cage as
  * Clean-up draws it, a tool's projection.
  *
- * Kept by bond id, so it holds while the atoms move: where the two no longer cross it is kept and draws nothing, and where they cross again it
- * draws again. It never runs both ways, and it names no bond that is gone.
+ * Kept by bond id, so it holds while the atoms move. Nothing silent ever says it again where nobody said it: a move that ENDS with the two no
+ * longer crossing takes it away, in the move's own step (`crossingsApart`; while the move goes on it is kept and draws nothing), and so does an
+ * edit that gives all four atoms a depth (`crossingsHeld`: the depth says it from then on, and the mark does not come back if the depth goes).
+ * Where only some of the four carry a depth, the mark says it. It never runs both ways, and it names no bond that is gone.
  */
 import type { Atom, Bond, Model } from "../store/types";
 
@@ -46,18 +48,21 @@ export function orderedCrossing(model: Model, bondId: number, otherId: number, h
 }
 
 /**
- * The model's marks kept whole after an edit: an id of a bond that is gone, of the bond itself or given twice taken away; and where two bonds
- * each say they are behind the other, the one said by this edit kept (`before`, the bonds by id, says which is new), else the one on the bond
- * with the smaller id.
+ * The model's marks kept whole after an edit: an id of a bond that is gone, of the bond itself or given twice taken away; one between two bonds
+ * whose four atoms all carry a depth now taken away (the depth says it); and where two bonds each say they are behind the other, the one said by
+ * this edit kept (`before`, the bonds by id, says which is new), else the one on the bond with the smaller id.
  */
 export function crossingsHeld(model: Model, before?: Model): Model {
-  if (model.bonds === before?.bonds || !model.bonds.some((b) => b.behind)) return model;
+  if ((model.bonds === before?.bonds && model.atoms === before?.atoms) || !model.bonds.some((b) => b.behind)) return model;
   const ids = new Set(model.bonds.map((b) => b.id));
+  const atom = new Map(model.atoms.map((a) => [a.id, a]));
+  const bondOf = new Map(model.bonds.map((b) => [b.id, b]));
+  const deep = (b: Bond, o: Bond) => [b.a, b.b, o.a, o.b].every((id) => atom.get(id)?.z != null);
   const was = new Map((before?.bonds ?? []).map((b) => [b.id, b]));
   const said = new Map<number, number[]>();
   for (const b of model.bonds) {
     if (!b.behind) continue;
-    const kept = [...new Set(b.behind)].filter((id) => Number.isInteger(id) && id !== b.id && ids.has(id));
+    const kept = [...new Set(b.behind)].filter((id) => Number.isInteger(id) && id !== b.id && ids.has(id) && !deep(b, bondOf.get(id)!));
     said.set(b.id, kept);
   }
   // (both ways: the newer kept)
@@ -77,6 +82,33 @@ export function crossingsHeld(model: Model, before?: Model): Model {
     if (!b.behind) return b;
     const kept = said.get(b.id) ?? [];
     if (kept.length === b.behind.length && kept.every((id, i) => id === b.behind![i])) return b;
+    changed = true;
+    const { behind: _was, ...rest } = b;
+    return kept.length ? { ...rest, behind: kept } : rest;
+  });
+  return changed ? { ...model, bonds } : model;
+}
+
+/**
+ * The model's marks with those whose two bonds no longer cross on the page taken away: what a move does as it ENDS (never while it goes on), so
+ * that a gap coming back where the bonds are dragged across again later says nothing nobody said again. The same model where none is.
+ */
+export function crossingsApart(model: Model): Model {
+  if (!model.bonds.some((b) => b.behind?.length)) return model;
+  const atom = new Map(model.atoms.map((a) => [a.id, a]));
+  const bondOf = new Map(model.bonds.map((b) => [b.id, b]));
+  const cross = (b: Bond, o: Bond) => {
+    const [p, q, r, s] = [atom.get(b.a), atom.get(b.b), atom.get(o.a), atom.get(o.b)];
+    return !!p && !!q && !!r && !!s && crossingPoint(p, q, r, s) != null;
+  };
+  let changed = false;
+  const bonds = model.bonds.map((b) => {
+    if (!b.behind?.length) return b;
+    const kept = b.behind.filter((id) => {
+      const o = bondOf.get(id);
+      return !!o && cross(b, o);
+    });
+    if (kept.length === b.behind.length) return b;
     changed = true;
     const { behind: _was, ...rest } = b;
     return kept.length ? { ...rest, behind: kept } : rest;
