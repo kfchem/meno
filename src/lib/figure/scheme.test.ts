@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { FigureDrawn, FigureLetter, FigurePath, PathStep } from "./drawn";
-import { MOST_LINES, readScheme, WRITTEN_AS_WORDS, type SchemeRead } from "./scheme";
+import { arrowsOf, MOST_LINES, readScheme, WRITTEN_AS_WORDS, type SchemeRead } from "./scheme";
+import { shapesOf } from "./drawn";
+import { measured } from "../../testing/timeouts";
 import aldol from "./fixtures/aldol-rdkitrxn.json";
 import dielsAlder from "./fixtures/diels-alder-rdkitrxn.json";
 import esterification from "./fixtures/esterification-rdkitrxn.json";
@@ -551,3 +553,56 @@ describe("a table drawn in a scheme's figure", () => {
     expect(s.words.map((w) => w.text).sort()).toEqual(["1a", "2b"]);
   });
 });
+
+describe("a scheme's arrows, found by what is near each line's end and each head", () => {
+  // (the heads, barbs and retrosynthesis pairs looked at for a line's end are those that can be one there: these stand as far off as each
+  // rule lets one stand, and are read still)
+  it("reads a head standing as far ahead of its line's end as a head may: its back a third of its length and a little past the end", () => {
+    // (a head 15.5 long, 5.6 wide, its back 6.4 past the line's end, its point 21.9 past it)
+    const s = read(scheme([stroke([[60, 95], [120, 95]]), filled([[141.9, 95], [126.4, 92.2], [126.4, 97.8]])]));
+    expect(s.arrows).toHaveLength(1);
+    expect(near(s.arrows[0].point, [141.9, 95])).toBe(true);
+  });
+
+  it("reads a half head drawn as one barb starting a hair short of its line's end", () => {
+    // (a barb 7 long, back from a point 1.1 short of the end - its tolerance 1.2, twice the line's width - at 30 degrees off the line)
+    const end: P = [120, 95];
+    const from: P = [end[0] + 1.1, end[1]];
+    const s = read(scheme([stroke([[60, 95], end]), stroke([from, [from[0] - 7 * Math.cos(Math.PI / 6), from[1] - 7 * Math.sin(Math.PI / 6)]])]));
+    expect(s.arrows).toHaveLength(1);
+  });
+
+  it("reads a retrosynthesis's arrow with its lines as far apart, and its point as far ahead of them, as one may be", () => {
+    // (the lines 8.4 apart - under 0.6 of a bond - its open head 10 long, its point 16.8 ahead of their ends: too far for either line's own head)
+    const s = read(scheme([stroke([[60, 90.8], [136, 90.8]]), stroke([[60, 99.2], [136, 99.2]]), stroke([[142.8, 90], [152.8, 95], [142.8, 100]])]));
+    expect(s.arrows).toHaveLength(1);
+    expect(s.arrows[0].form).toEqual({ kind: "retrosynthetic" });
+    expect(near(s.arrows[0].point, [152.8, 95])).toBe(true);
+  });
+
+  it("takes, of three lines ending within one open head, the first two as its retrosynthesis's arrow, as they come", () => {
+    // (none of the three off the head's point by less than a head's own line may be: the first and second 2.5 off, the third 4.5)
+    const s = read(scheme([stroke([[60, 92.5], [136, 92.5]]), stroke([[60, 97.5], [136, 97.5]]), stroke([[60, 99.5], [136, 99.5]]), stroke([[134, 88], [141, 95], [134, 102]])]));
+    const retro = s.arrows.filter((x) => x.form.kind === "retrosynthetic");
+    expect(retro).toHaveLength(1);
+    expect(retro[0].tail.y).toBeCloseTo(95, 6);
+  });
+
+  // (measured at 0.8 s alone on a quiet Mac: asked of every line's end and every head against all the page, it took over a minute)
+  it("finds the arrows of a page of many schemes - thousands of lines, a retrosynthesis's arrow in each - each one", { timeout: measured(800) }, () => {
+    // (forty rows of five schemes: a chain either side of a retrosynthesis's arrow, and rings of six about each)
+    const paths: FigurePath[] = [];
+    const ring = ([x, y]: P): FigurePath => stroke(Array.from({ length: 7 }, (_, i): P => [x + L * Math.cos((Math.PI / 3) * i), y + L * Math.sin((Math.PI / 3) * i)]));
+    for (let r = 0; r < 40; r++)
+      for (let c = 0; c < 5; c++) {
+        const [x, y] = [c * 260, r * 90];
+        paths.push(chain([x, y + 100]), chain([x + 200, y + 100]), ring([x + 20, y + 60]), ring([x + 230, y + 60]));
+        paths.push(stroke([[x + 60, y + 93.5], [x + 136, y + 93.5]]), stroke([[x + 60, y + 96.5], [x + 136, y + 96.5]]), stroke([[x + 134, y + 89], [x + 141, y + 95], [x + 134, y + 101]]));
+      }
+    const { arrows } = arrowsOf(shapesOf({ paths, letters: [], pictures: [] }), [], L, 0.6);
+    expect(arrows).toHaveLength(200);
+    expect(arrows.every((a) => a.form.kind === "retrosynthetic")).toBe(true);
+  });
+
+});
+
