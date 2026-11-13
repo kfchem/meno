@@ -77,21 +77,35 @@ describe("Flip chair", () => {
     expect(isProjection({ atoms: m.atoms.map((a) => ({ ...a, z: undefined })), bonds: m.bonds }, everything(m))).toBe(false);
   });
 
-  it("is not offered on a chair that does not stand alone: a ring built onto two of its atoms, a chain from one to another", () => {
-    const m = methylated([]);
-    // (four carbons from atom 1 to atom 2 of the chair, drawn by hand: a ring fused on it - the pair is no one chair of the tool's)
-    const fused: Model = {
-      atoms: [...m.atoms, ...[0, 1, 2, 3].map((i) => ({ id: 60 + i, el: "C", r: 0.9, x: 3 + i, y: 3 }))],
-      bonds: [...m.bonds, { id: 300, a: m.atoms[0].id, b: 60, order: 1 as const }, { id: 301, a: 60, b: 61, order: 1 as const }, { id: 302, a: 61, b: 62, order: 1 as const }, { id: 303, a: 62, b: 63, order: 1 as const }, { id: 304, a: 63, b: m.atoms[1].id, order: 1 as const }],
+  it("is not offered on a chair that does not stand alone - a ring spiro on one atom, a ring fused through a bond, a chain from one atom to another - but is on one with a ring of its own hung from it", () => {
+    const d = draw();
+    /** The chair with an atom at each (atom, kind) place given, ids from 60, and bonds among them and to their ring atoms as said. */
+    const built = (places: [number, "axial" | "equatorial"][], extra: [number, number][], more: Atom[] = []): Model => {
+      const atoms: Atom[] = [...d.atoms];
+      const bonds: Bond[] = [...d.bonds];
+      places.forEach(([k, kind], i) => {
+        const place = seenPlaces(d, k).find((p) => p.free.kind === kind)!;
+        atoms.push({ id: 60 + i, el: "C", r: 0.9, x: place.place.x, y: place.place.y });
+        bonds.push({ id: 300 + i, a: d.ring[k], b: 60 + i, order: 1 });
+      });
+      atoms.push(...more);
+      extra.forEach(([a, b], i) => bonds.push({ id: 400 + i, a, b, order: 1 }));
+      return { atoms, bonds };
     };
-    expect(flipOf(fused, everything(fused))).toBeNull();
-    // (and a chain back to the same atom: a ring spiro on it)
-    const spiro: Model = {
-      atoms: [...m.atoms, ...[0, 1, 2].map((i) => ({ id: 70 + i, el: "C", r: 0.9, x: 3 + i, y: -3 }))],
-      bonds: [...m.bonds, { id: 310, a: m.atoms[0].id, b: 70, order: 1 as const }, { id: 311, a: 70, b: 71, order: 1 as const }, { id: 312, a: 71, b: 72, order: 1 as const }, { id: 313, a: 72, b: m.atoms[0].id, order: 1 as const }],
-    };
-    expect(flipOf(spiro, everything(spiro))).toBeNull();
-    // (alone, it flips)
-    expect(flipOf(m, everything(m))).not.toBeNull();
+    const far = (id: number): Atom => ({ id, el: "C", r: 0.9, x: 9, y: 9 });
+    // (atom 0's two places joined through a third atom: a ring of four spiro on it)
+    const spiro = built([[0, "axial"], [0, "equatorial"]], [[60, 70], [70, 61]], [far(70)]);
+    // (the equatorial places of atoms 0 and 1 bonded: a ring of four fused on the bond 0-1)
+    const fused = built([[0, "equatorial"], [1, "equatorial"]], [[60, 61]]);
+    // (from atom 0's axial place to atom 3's, through a third atom: a chain across the ring)
+    const across = built([[0, "axial"], [3, "axial"]], [[60, 70], [70, 61]], [far(70)]);
+    for (const [name, m] of [["spiro", spiro], ["fused", fused], ["across", across]] as const) {
+      expect(isProjection(m, everything(m)), name).toBe(true);
+      expect(flipOf(m, everything(m)), name).toBeNull();
+    }
+    // (a phenyl at atom 0's equatorial place: a ring of its own, touching the chair at one bond - it flips)
+    const ring = [0, 1, 2, 3, 4, 5].map((k) => ({ id: 80 + k, el: "C", r: 0.9, x: 20 + Math.cos((k * Math.PI) / 3), y: 20 + Math.sin((k * Math.PI) / 3) }));
+    const phenyl = built([[0, "equatorial"]], [[60, 80], ...[0, 1, 2, 3, 4, 5].map((k): [number, number] => [80 + k, 80 + ((k + 1) % 6)])], ring);
+    expect(flipOf(phenyl, everything(phenyl))).not.toBeNull();
   });
 });

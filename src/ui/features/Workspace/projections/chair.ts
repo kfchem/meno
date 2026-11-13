@@ -248,14 +248,14 @@ export function ringAlone(model: { atoms: Atom[]; bonds: Bond[] }, ring: readonl
   for (const from of ring) {
     for (const first of near.get(from) ?? []) {
       if (inRing.has(first)) continue;
-      // (everything reached from this neighbour without passing its own ring atom: another ring atom among it, and the ring is not alone)
+      // (everything reached from this neighbour but by its own bond to the ring atom: the ring atom among it - by another ring atom, round the
+      // ring, or straight back - and the ring is not alone)
       const seen = new Set([from, first]);
       const todo = [first];
       while (todo.length) {
         const at = todo.pop()!;
         for (const n of near.get(at) ?? []) {
           if (n === from && at === first) continue;
-          if (inRing.has(n) && n !== from) return false;
           if (n === from) return false;
           if (seen.has(n)) continue;
           seen.add(n);
