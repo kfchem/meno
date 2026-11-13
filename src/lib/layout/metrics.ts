@@ -675,6 +675,16 @@ function readStructure(g: Geometry): Structure {
   });
   const cross = (a: number) =>
     (g.elements?.[a] === "P" || g.elements?.[a] === "S") && neighbours[a].length === 4 && !inRing.has(a);
+  // (and an atom of four like groups - each the same element with as many bonds, in no ring - that is no stereocentre and no
+  // metal: an upright cross, as IUPAC draws one (GR-4.1.3) - tetramethylammonium, tetramethylsilane, CCl4, BF4-; a square-planar
+  // metal keeps its own form)
+  const fourAlike = (a: number) => {
+    const el = g.elements?.[a];
+    if (!el || isMetal(el) || neighbours[a].length !== 4 || inRing.has(a) || g.tetra?.[a]) return false;
+    const [first, ...rest] = neighbours[a];
+    const kind = (b: number) => `${g.elements?.[b]}:${neighbours[b].length}`;
+    return !inRing.has(first) && rest.every((b) => !inRing.has(b) && kind(b) === kind(first));
+  };
 
   // (a ring drawn in depth - a cage's, or one a bridge makes across a ring
   // - is seen in perspective, not as a polygon)
@@ -728,7 +738,7 @@ function readStructure(g: Geometry): Structure {
       ...rings
         .filter((r) => r.length === 4)
         .flatMap((r) => edges.filter(([a, b]) => r.includes(a) && r.includes(b))),
-      ...edges.filter(([a, b]) => cross(a) || cross(b)),
+      ...edges.filter(([a, b]) => cross(a) || cross(b) || fourAlike(a) || fourAlike(b)),
     ].map(([a, b]) => pair(a, b)),
   );
   const fitting = live.filter((sys) => rings.some((r) => square(r) && r.every((a) => sys.has(a))));

@@ -458,7 +458,12 @@ they hang from.
   that bond - and so is any such trident, a carbon, silicon or nitrogen
   with three like ends and a fourth bond: a trimethylsilyl, a
   trimethylammonium (choline's), a CF3, a CCl3. Neopentane's middle
-  carbon, four methyls, stays a cross, as CF4 does. The fan is compact,
+  carbon, four methyls, stays a cross, as CF4 does - and any atom of four
+  like groups (each the same element with as many bonds, in no ring) that
+  is no stereocentre and no metal is an upright cross, its bonds level and
+  upright, never an X turned 45 degrees to the page (GR-4.1.3):
+  tetramethylammonium, tetramethylsilane, CCl4, BF4-, tetraethylammonium.
+  A square-planar metal keeps its own form (PtCl4 2-). The fan is compact,
   and once the rest of the drawing is set it is turned about its bond,
   five degrees at a time, to where the drawing reads best, its bonds kept
   clear of the whole letter of an H beside it (ginkgolide B's OH).
