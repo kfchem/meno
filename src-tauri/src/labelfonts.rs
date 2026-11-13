@@ -47,20 +47,37 @@ fn font_places() -> Vec<PathBuf> {
     places
 }
 
-/// Copies each face from `from` into `to` that is not there yet, and gives the files it put there. A file of the
-/// face's name already there - put there by anyone, holding anything - is left.
-fn copy_missing(from: &Path, to: &Path) -> Result<Vec<PathBuf>, String> {
-    std::fs::create_dir_all(to).map_err(|e| format!("{}: {e}", to.display()))?;
+/// Copies each face from `from` into `to` that is not there yet, and gives the files it put there - those it put
+/// before a copy failed too, with why it failed. A file of the face's name already there - put there by anyone,
+/// holding anything - is left.
+fn copy_missing(from: &Path, to: &Path) -> (Vec<PathBuf>, Result<(), String>) {
     let mut put = Vec::new();
+    if let Err(e) = std::fs::create_dir_all(to) {
+        return (put, Err(format!("{}: {e}", to.display())));
+    }
     for (file, _) in FACES {
         let dest = to.join(file);
         if dest.exists() {
             continue;
         }
-        std::fs::copy(from.join(file), &dest).map_err(|e| format!("{file}: {e}"))?;
+        if let Err(e) = std::fs::copy(from.join(file), &dest) {
+            return (put, Err(format!("{file}: {e}")));
+        }
         put.push(dest);
     }
-    Ok(put)
+    (put, Ok(()))
+}
+
+/// Whether `recorded` - a path Meno's list holds for the face `file` - is one Meno could have put there: exactly
+/// that face's file in this user's fonts folder `fonts`. Anything else the list may hold (another program's edit, a
+/// mistaken one) is never taken out. (Windows paths: the same letters in any case.)
+pub fn ours(recorded: &str, file: &str, fonts: &Path) -> bool {
+    let expected = fonts.join(file).to_string_lossy().to_string();
+    if cfg!(windows) {
+        recorded.eq_ignore_ascii_case(&expected)
+    } else {
+        recorded == expected
+    }
 }
 
 /// Whether all four faces are installed, for this user or for everyone.
@@ -79,7 +96,8 @@ pub fn label_fonts_installed() -> bool {
 #[cfg(target_os = "macos")]
 pub fn install_quietly(resources: &Path) -> Result<usize, String> {
     let to = user_fonts().ok_or("no folder for this user's fonts")?;
-    Ok(copy_missing(&carried(resources), &to)?.len())
+    let (put, done) = copy_missing(&carried(resources), &to);
+    done.map(|()| put.len()).map_err(|e| format!("{e} ({} put before)", put.len()))
 }
 
 #[cfg(windows)]
@@ -146,44 +164,58 @@ mod windows_fonts {
         }
     }
 
-    /// The faces Meno carries next to the exe put in this user's fonts, each listed where Windows lists fonts and kept in
-    /// Meno's own list, and made known to this session.
+    /// The faces Meno carries next to the exe put in this user's fonts, each kept in Meno's own list, listed where
+    /// Windows lists fonts - where nothing of that name is listed already - and made known to this session. Those put
+    /// before a copy failed are kept in the list too, so that they are taken out again.
     pub fn install() -> Result<(), String> {
         let exe = std::env::current_exe().map_err(|e| e.to_string())?;
         let dir = exe.parent().ok_or("no folder for Meno")?;
         let to = user_fonts().ok_or("no folder for this user's fonts")?;
-        for path in copy_missing(&super::carried(dir), &to)? {
+        let (put, done) = copy_missing(&super::carried(dir), &to);
+        for path in put {
             let file = path.file_name().and_then(|f| f.to_str()).unwrap_or_default().to_string();
             let Some((_, name)) = FACES.iter().find(|(f, _)| *f == file) else { continue };
             let shown = path.to_string_lossy().to_string();
-            write_sz(FONTS_KEY, name, &shown)?;
             write_sz(MENO_KEY, &file, &shown)?;
+            // (a listing of that name already there - the user's own - is left as it is)
+            if read_sz(FONTS_KEY, name).is_none() {
+                write_sz(FONTS_KEY, name, &shown)?;
+            }
             let w = wide(&shown);
             // SAFETY: a NUL-terminated wide string.
             unsafe {
                 AddFontResourceW(PCWSTR(w.as_ptr()));
             }
         }
-        Ok(())
+        done
     }
 
-    /// The faces Meno put in this user's fonts taken out again - their files, their listing, Meno's list - and no others.
+    /// The faces Meno put in this user's fonts taken out again - their files, their listing, Meno's list - and no
+    /// others: only a path that is that face's own file in this user's fonts folder, and the record of it only once
+    /// the file is gone (a font in use - PowerPoint open while Meno is updated - stays, and stays in the list).
     pub fn remove() -> Result<(), String> {
+        let fonts_dir = user_fonts().ok_or("no folder for this user's fonts")?;
         for (file, name) in FACES {
             let Some(path) = read_sz(MENO_KEY, file) else { continue };
+            if !super::ours(&path, file, &fonts_dir) {
+                continue;
+            }
             let w = wide(&path);
             // SAFETY: a NUL-terminated wide string.
             unsafe {
                 let _ = RemoveFontResourceW(PCWSTR(w.as_ptr()));
             }
+            let _ = std::fs::remove_file(Path::new(&path));
+            if Path::new(&path).exists() {
+                continue;
+            }
             // (the listing only where it is still Meno's file)
             if read_sz(FONTS_KEY, name).as_deref() == Some(path.as_str()) {
                 delete_value(FONTS_KEY, name);
             }
-            let _ = std::fs::remove_file(Path::new(&path));
             delete_value(MENO_KEY, file);
         }
-        // SAFETY: Meno's list deleted, empty of what it named; one not there is fine.
+        // SAFETY: Meno's list deleted where it is empty; with a value left in it, the call fails and the list stays.
         unsafe {
             let _ = RegDeleteKeyW(HKEY_CURRENT_USER, &HSTRING::from(MENO_KEY));
         }
@@ -210,12 +242,40 @@ mod tests {
         }
         // (one face already there, holding something else: left as it is)
         std::fs::write(to.join(FACES[2].0), b"someone else's").unwrap();
-        let put = copy_missing(&carried(&base), &to).unwrap();
+        let (put, done) = copy_missing(&carried(&base), &to);
+        assert!(done.is_ok());
         assert_eq!(put.len(), 3);
         assert_eq!(std::fs::read(to.join(FACES[2].0)).unwrap(), b"someone else's");
         assert_eq!(std::fs::read(to.join(FACES[0].0)).unwrap(), b"face");
         // (a second time, nothing to put)
-        assert!(copy_missing(&carried(&base), &to).unwrap().is_empty());
+        assert!(copy_missing(&carried(&base), &to).0.is_empty());
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn gives_what_it_put_before_a_copy_failed() {
+        let base = std::env::temp_dir().join(format!("meno-labelfonts-fail-{}", std::process::id()));
+        let from = base.join("resources").join("fonts");
+        let to = base.join("user-fonts");
+        std::fs::create_dir_all(&from).unwrap();
+        // (the third face missing from what Meno carries: the first two are put, then the copy fails)
+        for (file, _) in &FACES[..2] {
+            std::fs::write(from.join(file), b"face").unwrap();
+        }
+        let (put, done) = copy_missing(&carried(&base), &to);
+        assert_eq!(put.iter().map(|p| p.file_name().unwrap().to_string_lossy().to_string()).collect::<Vec<_>>(), [FACES[0].0, FACES[1].0]);
+        assert!(done.is_err());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn takes_out_only_a_path_that_is_the_face_s_own_file_in_the_user_s_fonts() {
+        let fonts = Path::new("/home/user/fonts");
+        let own = fonts.join(FACES[0].0).to_string_lossy().to_string();
+        assert!(ours(&own, FACES[0].0, fonts));
+        // (another face's file, another folder, a file elsewhere the list was made to name: none taken out)
+        assert!(!ours(&own, FACES[1].0, fonts));
+        assert!(!ours(&Path::new("/home/user/other").join(FACES[0].0).to_string_lossy(), FACES[0].0, fonts));
+        assert!(!ours("/home/user/Documents/thesis.docx", FACES[0].0, fonts));
     }
 }
