@@ -580,6 +580,34 @@ describe("a scheme's arrows, found by what is near each line's end and each head
     expect(near(s.arrows[0].point, [152.8, 95])).toBe(true);
   });
 
+  it("reads that farthest retrosynthesis's arrow pointing any way: right, left, up, down and aslant", () => {
+    // (the same arrow turned about its middle: the pairs are looked for in a window on the page, which must not lean one way)
+    const turn = (deg: number) => {
+      const [c, sn] = [Math.cos((deg * Math.PI) / 180), Math.sin((deg * Math.PI) / 180)];
+      return ([x, y]: P): P => [100 + (x - 100) * c - (y - 95) * sn, 95 + (x - 100) * sn + (y - 95) * c];
+    };
+    // (its open head 10 long, and a short wide one, 3 long, its point as far ahead: the whole of that head stands off the lines' ends)
+    const heads: P[][] = [
+      [[142.8, 90], [152.8, 95], [142.8, 100]],
+      [[149.8, 90.5], [152.8, 95], [149.8, 99.5]],
+    ];
+    for (const deg of [0, 90, 180, 270, 45, 225])
+      for (const [k, h] of heads.entries()) {
+        const t = turn(deg);
+        const s = read(scheme([stroke([t([60, 90.8]), t([136, 90.8])]), stroke([t([60, 99.2]), t([136, 99.2])]), stroke(h.map(t))]));
+        const retro = s.arrows.filter((x) => x.form.kind === "retrosynthetic");
+        expect(retro, `${deg} degrees, head ${k}`).toHaveLength(1);
+        expect(near(retro[0].point, t([152.8, 95])), `${deg} degrees, head ${k}`).toBe(true);
+      }
+  });
+
+  it("reads a head as long as a head may be (1.1 bonds), standing as far ahead of its line's end as it may", () => {
+    // (15.8 long, 5.6 wide: its back 0.35 of its length and a little past the end, its point 1.37 of its length past it)
+    const s = read(scheme([stroke([[60, 95], [110, 95]]), filled([[131.6, 95], [115.8, 92.2], [115.8, 97.8]])]));
+    expect(s.arrows).toHaveLength(1);
+    expect(near(s.arrows[0].point, [131.6, 95])).toBe(true);
+  });
+
   it("takes, of three lines ending within one open head, the first two as its retrosynthesis's arrow, as they come", () => {
     // (none of the three off the head's point by less than a head's own line may be: the first and second 2.5 off, the third 4.5)
     const s = read(scheme([stroke([[60, 92.5], [136, 92.5]]), stroke([[60, 97.5], [136, 97.5]]), stroke([[60, 99.5], [136, 99.5]]), stroke([[134, 88], [141, 95], [134, 102]])]));
