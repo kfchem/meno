@@ -4,6 +4,7 @@ import { OWN_NUMBERING, restraintsTable } from "../../../../lib/steps/restraints
 import { inputKey, wireInto, wireRefusal } from "./flow";
 import { holdTable, addSet, addStep, connect } from "./model";
 import { ONE_INPUT, RESTRAINTS_INPUT } from "./kinds";
+import { whyNot } from "./run";
 
 // The Restraints input on a step that holds restraints (docs/WORKFLOWS.md, *Restraints wired in*): what "its input" means where a
 // step has it beside its first, what goes into it, and a step with nothing wired into it keeping the key it had before it had one.
@@ -54,3 +55,13 @@ describe("a step's Restraints input", () => {
 
 /** The step's key as main gave it, before Minimise had a Restraints input (45cd584c). */
 const KEY_BEFORE = "brjkm4";
+
+describe("Torsion restraints on a page saved before it made a table", () => {
+  it("is refused while the set its Trans already exit gave stands, saying so - never run with it left as if still given", () => {
+    let d = addStep(page(), "torsion-restraints", 10, 20, { on: "start", atoms: "1-2-3-4", target: "180" });
+    const t = d.steps!.find((s) => s.kind === "torsion-restraints")!.id;
+    d = connect(d, { set: 1 }, t, "molecules");
+    d = addSet(d, { x0: 30, y0: 20, x1: 36, y1: 26 }, { step: t, exit: "rest" }, "Trans already");
+    expect(whyNot(d, d.steps!.find((s) => s.id === t)!, "meno")).toBe("It was saved giving a set it no longer gives (Trans already): delete that set - Compare torsions and a Filter split what is trans already");
+  });
+});

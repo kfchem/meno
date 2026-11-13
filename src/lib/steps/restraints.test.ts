@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { valueFault, type Entry, type EntryBond, type Restraint } from "../entry";
 import { speciesOf } from "../io/writers";
-import { EXACT, OWN_NUMBERING, restraintKey, restraintRows, restraintRowsIn, restraintsHeld, restraintsTable, torsionsRestrained, transTorsions, type RestraintRow } from "./restraints";
+import { angleIn, EXACT, isTrans, OWN_NUMBERING, restraintKey, restraintRows, restraintRowsIn, restraintsTable, torsionRowsFromReference, torsionRowsTyped, torsionsUnlike, torsionUnlikeText, transTorsions, type RestraintRow } from "./restraints";
 
 /** Restraints from entries whose distances and dihedrals are set by hand, and radii as published. */
 
@@ -209,7 +209,7 @@ describe("the torsions trans across a reference's double bonds", () => {
     ]);
   });
 
-  it("takes a ring double bond's exocyclic torsions, which are trans, and not its own in the ring, which is cis", () => {
+  it("takes a flat cyclobutene's two ring C-C=C-H torsions, which are trans - not its ring's own C4-C1=C2-C3 nor its H-C1=C2-H, which are cis", () => {
     // (cyclobutene, flat: C1=C2 in the ring, a hydrogen on each)
     const ring = entry(
       [
@@ -245,45 +245,113 @@ describe("the torsions trans across a reference's double bonds", () => {
   });
 });
 
-describe("Torsion restraints", () => {
-  it("holds each torsion trans in the reference and not trans here at 180°, at the step, then the step more each time it is still not", () => {
+/** C1-C2=C3-C4, its double bond C2=C3 along x, C1 in the xy plane, C4 turned about the bond by `phi` from it: its torsion `phi`. */
+const fourAt = (phi: number, els = ["C", "C", "C", "C"]) => {
+  const r = (phi * Math.PI) / 180;
+  return entry(
+    [
+      [els[0], -0.75, 1.299, 0],
+      [els[1], 0, 0, 0],
+      [els[2], 1.34, 0, 0],
+      [els[3], 2.09, 1.299 * Math.cos(r), 1.299 * Math.sin(r)],
+    ],
+    [
+      { a1: 0, a2: 1, order: 1 },
+      { a1: 1, a2: 2, order: 2 },
+      { a1: 2, a2: 3, order: 1 },
+    ],
+  );
+};
+
+describe("trans and cis (Klyne and Prelog)", () => {
+  it("is trans more than 90° either way, cis at 90° and within: 90.0° cis, 90.1° and -179.9° trans; -180° is 180°", () => {
+    expect([90, 90.1, -90, -90.1, -179.9, 0].map(isTrans)).toEqual([false, true, false, true, true, false]);
+    expect([-180, 540, -190, 190].map(angleIn)).toEqual([180, 180, 170, -170]);
+  });
+});
+
+describe("Compare torsions' rule", () => {
+  it("counts each torsion trans in the reference and cis here: (Z)- against (E)-but-2-ene, 2 - Me-Me and H-H - named with their angles", () => {
     const z = butene(false);
-    const first = torsionsRestrained(z, butene(true), 50);
-    if ("failed" in first) throw new Error(first.failed);
-    expect(first.count).toEqual({ trans: 2, wrong: 2, added: 2, raised: 0 });
-    expect(valueFault(first.property.value, z)).toBeNull();
-    expect(restraintsHeld({ properties: { restraints: first.property } })).toEqual([
-      { kind: "dihedral", atoms: [0, 1, 2, 3], value: 180, strength: 50 },
-      { kind: "dihedral", atoms: [4, 1, 2, 5], value: 180, strength: 50 },
+    const u = torsionsUnlike(z, butene(true));
+    if ("failed" in u) throw new Error(u.failed);
+    expect(u.unlike.map((x) => x.atoms)).toEqual([
+      [0, 1, 2, 3],
+      [4, 1, 2, 5],
     ]);
-    // (still Z after a round: each raised to 100)
-    const second = torsionsRestrained(butene(false, { restraints: first.property }), butene(true), 50);
-    if ("failed" in second) throw new Error(second.failed);
-    expect(second.count).toEqual({ trans: 2, wrong: 2, added: 0, raised: 2 });
-    expect(restraintsHeld({ properties: { restraints: second.property } }).map((r) => r.strength)).toEqual([100, 100]);
+    expect(u.unlike.map((x) => torsionUnlikeText(z, x))).toEqual(["C1-C2=C3-C4: 0.0\u00b0 (reference 180.0\u00b0)", "H5-C2=C3-H6: 0.0\u00b0 (reference 180.0\u00b0)"]);
+    expect(u.cisOnly).toBe(0);
+    // (E against E: none)
+    expect(torsionsUnlike(butene(true), butene(true))).toEqual({ unlike: [], cisOnly: 0 });
   });
 
-  it("keeps a torsion held that is trans now at the strength it reached, and what else the entry holds, as it was", () => {
-    const held = {
-      value: {
-        restraints: [
-          { kind: "distance" as const, atoms: [0, 3], value: 3.9, strength: 1000 },
-          { kind: "dihedral" as const, atoms: [3, 2, 1, 0], value: 180, strength: 150 },
-        ],
-      },
-      unit: "none" as const,
-      status: "computed" as const,
-    };
-    const r = torsionsRestrained(butene(true, { restraints: held }), butene(true), 50);
-    if ("failed" in r) throw new Error(r.failed);
-    expect(r.count).toEqual({ trans: 2, wrong: 0, added: 0, raised: 0 });
-    expect(r.property.value).toEqual(held.value);
+  it("judges the side alone: 95° against 180° is alike; 90° is cis, so unlike", () => {
+    expect(torsionsUnlike(fourAt(95), fourAt(180))).toEqual({ unlike: [], cisOnly: 0 });
+    expect(torsionsUnlike(fourAt(90), fourAt(180))).toMatchObject({ unlike: [{ atoms: [0, 1, 2, 3], transThere: true }] });
+  });
+
+  it("checks a double bond with no trans torsion in the reference by its cis one: (E)- against (Z)-azobenzene's N=N, 1 (each N's phenyl as its one carbon)", () => {
+    const azo = (phi: number) => fourAt(phi, ["C", "N", "N", "C"]);
+    expect(torsionsUnlike(azo(180), azo(0))).toMatchObject({ unlike: [{ atoms: [0, 1, 2, 3], transThere: false }], cisOnly: 1 });
+    expect(torsionsUnlike(azo(0), azo(0))).toEqual({ unlike: [], cisOnly: 1 });
   });
 
   it("fails, with the reason, for another numbering, or no 3D places", () => {
     const other = { ...butene(true), structure: { ...butene(true).structure, atoms: butene(true).structure.atoms.map((a, i) => (i === 4 ? { el: "F" } : a)) } };
-    expect(torsionsRestrained(butene(false), other, 50)).toEqual({ failed: "Atom 5 is H here and F in the reference: both must hold the same atoms in one numbering." });
-    expect(torsionsRestrained({ ...butene(false), geometry: { kind: "none" } }, butene(true), 50)).toEqual({ failed: "It has no 3D places to compare torsions in." });
-    expect(torsionsRestrained(butene(false), { ...butene(true), geometry: { kind: "none" } }, 50)).toEqual({ failed: "The reference has no 3D places, so which torsions are trans in it is not known." });
+    expect(torsionsUnlike(butene(false), other)).toEqual({ failed: "Atom 5 is H here and F in the reference: both must hold the same atoms in one numbering." });
+    expect(torsionsUnlike({ ...butene(false), geometry: { kind: "none" } }, butene(true))).toEqual({ failed: "It has no 3D places to compare torsions in." });
+    expect(torsionsUnlike(butene(false), { ...butene(true), geometry: { kind: "none" } })).toEqual({ failed: "The reference has no 3D places, so which torsions are trans in it is not known." });
+  });
+});
+
+describe("Torsion restraints", () => {
+  it("holds the torsions typed at the angle typed, by a strength or exactly, -180° written 180°", () => {
+    const z = butene(false);
+    expect(torsionRowsTyped(z, [[0, 1, 2, 3]], 180, { strength: 50 })).toEqual({ rows: [{ restraint: { kind: "dihedral", atoms: [0, 1, 2, 3], value: 180, strength: 50 }, why: "typed: held at 180\u00b0" }] });
+    expect(torsionRowsTyped(z, [[0, 1, 2, 3]], -180, { exact: true })).toEqual({ rows: [{ restraint: { kind: "dihedral", atoms: [0, 1, 2, 3], value: 180, exact: true }, why: "typed: held at 180\u00b0" }] });
+    const rows = torsionRowsTyped(z, [[0, 1, 2, 3]], 180, { exact: true });
+    if ("failed" in rows) throw new Error(rows.failed);
+    expect(valueFault({ restraints: rows.rows.map((r) => r.restraint) }, z)).toBeNull();
+  });
+
+  it("refuses a torsion whose three atoms lie on a line here - across an alkyne - and an atom the entry has not", () => {
+    // (but-2-yne: C1-C2#C3-C4 on a line)
+    const yne = entry(
+      [
+        ["C", -1.46, 0, 0],
+        ["C", 0, 0, 0],
+        ["C", 1.2, 0, 0],
+        ["C", 2.66, 0, 0],
+      ],
+      [
+        { a1: 0, a2: 1, order: 1 },
+        { a1: 1, a2: 2, order: 3 },
+        { a1: 2, a2: 3, order: 1 },
+      ],
+    );
+    expect(torsionRowsTyped(yne, [[0, 1, 2, 3]], 180, { strength: 50 })).toEqual({ failed: "Atoms 1, 2, 3 lie on a line here, within 1\u00b0: the torsion 1-2-3-4 has no angle to hold." });
+    expect(torsionRowsTyped(yne, [[0, 1, 2, 7]], 180, { strength: 50 })).toEqual({ failed: "It has no atom 8: its atoms are 1 to 4." });
+  });
+
+  it("from the reference, 180° where trans: rows only for the torsions trans there and cis here - (Z)- against (E)-but-2-ene's two", () => {
+    const r = torsionRowsFromReference(butene(false), butene(true), "trans", { strength: 50 });
+    if ("failed" in r) throw new Error(r.failed);
+    expect(r.rows.map((x) => x.restraint)).toEqual([
+      { kind: "dihedral", atoms: [0, 1, 2, 3], value: 180, strength: 50 },
+      { kind: "dihedral", atoms: [4, 1, 2, 5], value: 180, strength: 50 },
+    ]);
+    expect(r.rows[0].why).toBe("trans across C2=C3 of the reference (180.0\u00b0); here 0.0\u00b0");
+    expect(r.notHeld).toBe(0);
+    // (E against E: none to hold)
+    expect(torsionRowsFromReference(butene(true), butene(true), "trans", { strength: 50 })).toEqual({ rows: [], notHeld: 0 });
+  });
+
+  it("cannot hold at 180° a double bond with no trans torsion in its reference, and says so; at the reference's own angle, it does", () => {
+    const azo = (phi: number) => fourAt(phi, ["C", "N", "N", "C"]);
+    expect(torsionRowsFromReference(azo(180), azo(0), "trans", { strength: 50 })).toEqual({ rows: [], notHeld: 1 });
+    const own = torsionRowsFromReference(azo(180), azo(0), "own", { exact: true });
+    if ("failed" in own) throw new Error(own.failed);
+    expect(own.rows.map((x) => x.restraint)).toEqual([{ kind: "dihedral", atoms: [0, 1, 2, 3], value: expect.closeTo(0, 9), exact: true }]);
+    expect(own.notHeld).toBe(0);
   });
 });

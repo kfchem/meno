@@ -158,12 +158,6 @@ describe("the restraints a step holds, wired in", () => {
     expect(NONE_MADE_WHY).toBe("no restraints made for it");
   });
 
-  it("refuses a molecule that carries restraints of its own besides those wired in", () => {
-    const d = page([[10, "restraints"], [40, "minimise"]], [{ id: 11, by: 10, rows: [row(torsion(T1, 50))] }], [[11, 40, RESTRAINTS_INPUT.id]]);
-    const carries = molecule("p1", undefined, { restraints: { value: { restraints: [torsion(T2, 50)] }, unit: "none", status: "computed" } });
-    expect(heldRows(d, 40, [carries], RDKIT, "RDKit")).toMatchObject({ each: [{ why: "It carries restraints of its own (Torsion restraints) as well as those wired in: hold one or the other" }] });
-  });
-
   it("is refused where what comes in is no restraints table", () => {
     const d = page([[40, "minimise"]], [{ id: 11 }], [[11, 40, RESTRAINTS_INPUT.id]]);
     expect(heldRows(d, 40, [molecule("p1")], RDKIT, "RDKit")).toEqual({ why: "What comes into Restraints is no table of restraints yet" });
