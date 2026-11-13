@@ -13,8 +13,10 @@ import { drawingOf } from "./drawing";
  * of the drawing, and be elements, none an abbreviation or other label.
  * Wedges are not kept: an abbreviation's structure has no stereo - and
  * where its bonds, or its bond out, show any - marked, or a double bond's
- * cis or trans by how it is drawn - that is said (`notKept`), never passed
- * over.
+ * cis or trans by how it is drawn - or its atoms' places give its
+ * configuration with no wedge (a cage drawn in depth, a centre a
+ * perspective drawing or projection shows: `z`, `stereoCentre`), that is
+ * said (`notKept`), never passed over.
  */
 export function abbreviationFromSelection(
   model: Model,
@@ -70,7 +72,7 @@ export function abbreviationFromSelection(
     })),
   ];
   const smiles = writeSmiles(atoms, bonds, 0);
-  const notKept = stereoNotKept([...inner, out], cisTransDrawn(model, ids, [...inner, out]));
+  const notKept = stereoNotKept([...inner, out], cisTransDrawn(model, ids, [...inner, out]), inside.some((a) => a.z != null || a.stereoCentre));
   return notKept ? { smiles, notKept } : { smiles };
 }
 
@@ -90,18 +92,26 @@ function cisTransDrawn(model: Model, ids: ReadonlySet<number>, bonds: readonly M
 }
 
 /**
- * What of the stereo its bonds show an abbreviation does not keep, in plain
- * words: "Its wedges are not kept: an abbreviation has no stereo." - its
- * wedges and hashes, its wavy bonds, its double bonds drawn crossed, and
- * the cis or trans its double bonds are drawn in (`cisTrans`) - or none,
- * where they show none.
+ * What of the stereo its drawing shows an abbreviation does not keep, in
+ * plain words: "Its wedges are not kept: an abbreviation has no stereo." -
+ * its wedges and hashes, its wavy bonds, its double bonds drawn crossed;
+ * the cis or trans its double bonds are drawn in (`cisTrans`); and the
+ * configuration its atoms' places give with no wedge - in depth, or a
+ * centre a perspective drawing or projection shows (`placed`) - or none,
+ * where it shows none.
  */
-export function stereoNotKept(bonds: readonly Pick<Model["bonds"][number], "stereo">[], cisTrans = false): string | null {
+export function stereoNotKept(bonds: readonly Pick<Model["bonds"][number], "stereo">[], cisTrans = false, placed = false): string | null {
   const has = (...kinds: string[]) => bonds.some((b) => b.stereo != null && kinds.includes(b.stereo));
   const kinds = [has("up", "down") ? "wedges" : "", has("wavy") ? "wavy bonds" : "", has("either") ? "crossed double bonds" : ""].filter(Boolean);
-  const marks = kinds.length ? `Its ${kinds.length === 1 ? kinds[0] : `${kinds.slice(0, -1).join(", ")} and ${kinds[kinds.length - 1]}`}` : "";
-  const why = "not kept: an abbreviation has no stereo.";
-  if (marks && cisTrans) return `${marks} and the cis or trans of its double bonds are ${why}`;
-  if (marks) return `${marks} are ${why}`;
-  return cisTrans ? `The cis or trans of its double bonds is ${why}` : null;
+  const and = (xs: readonly string[]) => (xs.length === 1 ? xs[0] : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+  const said = [
+    ...(kinds.length ? [`its ${and(kinds)}`] : []),
+    ...(cisTrans ? ["the cis or trans of its double bonds"] : []),
+    ...(placed ? ["the configuration its atoms' places give"] : []),
+  ];
+  if (!said.length) return null;
+  // (one of its marks is many; the cis or trans, or the configuration, alone is one)
+  const many = said.length > 1 || kinds.length > 0;
+  const text = and(said);
+  return `${text[0].toUpperCase()}${text.slice(1)} ${many ? "are" : "is"} not kept: an abbreviation has no stereo.`;
 }
