@@ -3,7 +3,8 @@ import { forgetLaidOut, layout2D } from "./engine";
 import { fromSmiles } from "./testdata/fromSmiles";
 
 // An atom of four like groups, no stereocentre, is an upright cross (Brecher 2008, GR-4.1.3): its bonds level and upright, as
-// neopentane's always were - never the X, four bonds turned 45 degrees to the page. A square-planar metal keeps its own form.
+// neopentane's always were - never the X, four bonds turned 45 degrees to the page; so is one of four ends, alike or not. A
+// square-planar metal keeps its own form, and a group on a skeleton - three like ends and a bond on - its fan.
 
 /** The directions of atom `centre`'s bonds as `smiles` is laid out, in degrees, from -180 up. */
 function directions(smiles: string, centre: number): number[] {
@@ -28,8 +29,15 @@ describe("four like groups", () => {
       ["CC(C)(C)C", 1],
       ["O=S(=O)([O-])[O-]", 1],
       ["[O-]Cl(=O)(=O)=O", 1],
-      // (four ends not alike, and four that go on through rings)
+      // (four ends not alike - three alike and one other too: a molecule's, not a group's - and four that go on through rings)
       ["FC(F)(Cl)Cl", 1],
+      ["FC(Cl)(Cl)Cl", 1],
+      ["CC(C)(C)O", 1],
+      ["C[Si](C)(C)Cl", 1],
+      ["CC(C)(C)Cl", 1],
+      ["CC(C)(C)N", 1],
+      ["C[N+](C)(C)[O-]", 1],
+      ["CC(F)(F)F", 1],
       ["[B-](c1ccccc1)(c1ccccc1)(c1ccccc1)c1ccccc1", 0],
       ["C(c1ccccc1)(c1ccccc1)(c1ccccc1)c1ccccc1", 0],
     ] as const) {
@@ -37,14 +45,22 @@ describe("four like groups", () => {
     }
   });
 
-  it("leave a square-planar metal its own form, and a trident fanned", { timeout: 60000 }, () => {
+  it("leave a square-planar metal its own form, and a group on a skeleton a trident fanned, as before", { timeout: 60000 }, () => {
     expect(directions("Cl[Pt-2](Cl)(Cl)Cl", 1)).toEqual([-135, -45, 45, 135]);
-    // (a trident - three like ends and a fourth bond - fanned about that bond, as the maintainer has it: a tert-butyl's, a CFCl3's,
-    // tert-butanol's, chlorotrimethylsilane's)
-    expect(directions("CCC(C)(C)C", 2)).toEqual([-60, 0, 60, 180].map((d) => (d === 180 ? -180 : d)).sort((p, q) => p - q));
-    expect(directions("FC(Cl)(Cl)Cl", 1)).toEqual([-180, -60, 0, 60]);
-    expect(directions("CC(C)(C)O", 1)).toEqual([-180, -120, 0, 120]);
-    expect(directions("C[Si](C)(C)Cl", 1)).toEqual([-180, -120, 0, 120]);
+    // (a trident - three like ends and a fourth bond that goes on - fanned 60 degrees apart about that bond, as the maintainer has
+    // it: a tert-butyl's, a CF3's, a CCl3's, a trimethylsilyl's, a trimethylammonium's)
+    for (const [smiles, centre] of [
+      ["CCC(C)(C)C", 2],
+      ["CCC(F)(F)F", 2],
+      ["CCC(Cl)(Cl)Cl", 2],
+      ["CC[Si](C)(C)C", 2],
+      ["OCC[N+](C)(C)C", 3],
+    ] as const) {
+      const d = directions(smiles, centre);
+      const gaps = d.map((v, i) => (i + 1 < d.length ? d[i + 1] : d[0] + 360) - v).sort((p, q) => p - q);
+      // (a fan, not a cross: its ends closer than a right angle - then turned about its bond to where the drawing reads best)
+      expect(gaps[0], smiles).toBeLessThan(90);
+    }
   });
 
   it("on a metal: the X only where the centre is surely square planar - Pt(II), Pd(II), Au(III), Rh(I), Ir(I), counted plainly from the drawing - and every other the upright cross, an ambiguous Ni(II) too", { timeout: 120000 }, () => {

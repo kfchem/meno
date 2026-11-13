@@ -456,17 +456,21 @@ they hang from.
   four at 90. A tert-butyl is drawn as it always is: its three methyls
   fanned 60 degrees apart about the line of the bond into it, 120 from
   that bond - and so is any such trident, a carbon, silicon or nitrogen
-  with three like ends and a fourth bond: a trimethylsilyl, a
-  trimethylammonium (choline's), a CF3, a CCl3. Neopentane's middle
+  with three like ends and a fourth bond to an atom that goes on - a
+  group on a skeleton: a trimethylsilyl, a trimethylammonium (choline's),
+  a CF3, a CCl3. Neopentane's middle
   carbon, four methyls, stays a cross, as CF4 does - and any atom of four
   like groups (each the same element with as many bonds, in no ring) that
   is no stereocentre and no metal is an upright cross, its bonds level and
   upright, never an X turned 45 degrees to the page (GR-4.1.3):
   tetramethylammonium, tetramethylsilane, CCl4, BF4-, tetraethylammonium;
-  and so are four ends not alike (CF2Cl2) and four groups that go on alike
-  through rings (tetraphenylborate, tetraphenylmethane). A trident - three
-  like ends and a fourth bond, as the maintainer has it - keeps its fan
-  (tert-butanol, CFCl3, chlorotrimethylsilane).
+  and so are four ends not alike (CF2Cl2) - three alike and one other
+  among them, a molecule of four ends being no group on a skeleton
+  (tert-butanol, CFCl3, chlorotrimethylsilane, tert-butyl chloride,
+  tert-butylamine, trimethylamine oxide: GR-4.1.3's first case, none of
+  the four bonded to anything else) - and four groups that go on alike
+  through rings (tetraphenylborate, tetraphenylmethane). A trident keeps
+  its fan where its fourth bond goes on, as the maintainer has it.
 - **A metal with four bonds** (in no chelate's ring, bound to no pi
   system's centre and to no other metal) is the X only where it is surely
   square planar: Pt(II), Pd(II), Au(III), Rh(I) or Ir(I), its oxidation

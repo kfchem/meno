@@ -782,16 +782,18 @@ export function isCross(mol: Molecule, a: number): boolean {
  * a tert-butyl's methyls, a trimethylsilyl's, a trimethylammonium's
  * (choline's), a CF3's or a CCl3's halogens. Its middle a carbon, a
  * silicon or a nitrogen in no ring, with four bonds - three to like ends,
- * each bonded to nothing else, and the fourth to anything but another
- * such end (neopentane's middle carbon, four methyls, is a cross; CF4's
- * likewise). Null for any other atom.
+ * each bonded to nothing else, and the fourth to an atom that goes on: a
+ * group on a skeleton. Four ends, alike or not - neopentane's middle
+ * carbon, CF4, tert-butanol, CFCl3, chlorotrimethylsilane - are a
+ * molecule's upright cross, not a trident (GR-4.1.3). Null for any other
+ * atom.
  */
 export function tridentEnds(mol: Molecule, a: number): number[] | null {
   if (!TRIDENT_MIDDLES.has(mol.el[a]) || mol.systemOf[a] >= 0 || mol.neighbours[a].length !== 4) return null;
   const kind = (v: number) => (mol.neighbours[v].length === 1 && TRIDENT_ENDS.has(mol.el[v]) ? mol.el[v] : null);
   for (const el of TRIDENT_ENDS) {
     const ends = mol.neighbours[a].filter((v) => kind(v) === el);
-    if (ends.length === 3) return ends;
+    if (ends.length === 3) return mol.neighbours[mol.neighbours[a].find((v) => !ends.includes(v))!].length > 1 ? ends : null;
   }
   return null;
 }

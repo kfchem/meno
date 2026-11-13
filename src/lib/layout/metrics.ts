@@ -683,7 +683,8 @@ function readStructure(g: Geometry): Structure {
   // (and an atom in no ring, no stereocentre and no metal whose four neighbours are all ends - bonded to nothing else - or all
   // go on alike - each the same element with as many bonds, in a ring or not: an upright cross, as IUPAC draws one (GR-4.1.3) -
   // tetramethylammonium, tetramethylsilane, CCl4, CF2Cl2, BF4-, tetraphenylborate; a square-planar metal keeps its own form, and
-  // a trident - three like ends and a fourth bond, a tert-butyl's, a CFCl3's - its fan, as the maintainer has it)
+  // a trident - three like ends and a fourth bond that goes on, a group on a skeleton: a tert-butyl's, a CF3's - its fan, as the
+  // maintainer has it; four ends, a tert-butanol's, a CFCl3's, are the upright cross)
   // (a main-group centre with four single bonds and two lone pairs - XeF4, ICl4-, BrF4-, counted plainly: its valence electrons
   // by its group, less its charge, less its four bonds, leaving four - is square planar: the X, as GR-4.1.3's own figure draws
   // XeF4; with one lone pair (SF4) or none, not)
@@ -699,7 +700,7 @@ function readStructure(g: Geometry): Structure {
     const nb = neighbours[a];
     const end = (b: number) => neighbours[b].length === 1;
     const elOf = (b: number) => g.elements?.[b] ?? "";
-    const trident = ["C", "Si", "N"].includes(el) && ["C", "F", "Cl", "Br", "I"].some((k) => nb.filter((b) => end(b) && elOf(b) === k).length === 3);
+    const trident = ["C", "Si", "N"].includes(el) && !nb.every(end) && ["C", "F", "Cl", "Br", "I"].some((k) => nb.filter((b) => end(b) && elOf(b) === k).length === 3);
     if (trident) return false;
     if (nb.every(end)) return true;
     const kind = (b: number) => `${elOf(b)}:${neighbours[b].length}:${inRing.has(b) ? "r" : ""}`;
@@ -1031,7 +1032,7 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
     if ((el !== "C" && el !== "Si" && el !== "N") || neighbours[a].length !== 4 || inRing.has(a)) return null;
     for (const k of ["C", "F", "Cl", "Br", "I"]) {
       const ends = neighbours[a].filter((b) => endKind(b) === k);
-      if (ends.length === 3) return ends;
+      if (ends.length === 3) return neighbours[neighbours[a].find((b) => !ends.includes(b))!].length > 1 ? ends : null;
     }
     return null;
   };
