@@ -1752,6 +1752,15 @@ space-filling side by side is better science than either alone.
   waits a frame on a shader being made for it. Being kept, it does at each
   frame what a molecule on the page does at each frame (it is never drawn):
   the work of a molecule of nine atoms.
+  A drawing's are made ready so too (components/WarmShaders2D): its bonds
+  and their caps have their colours from the start, white until a drawing
+  gives them its own (components/instances `whiteInstances`) - a shader is
+  made for whether an instanced mesh has colours of its own, and they came
+  only with the first drawing - and what comes only with a drawing, a
+  label and a plain disc, is made unseen and far off the page once the page
+  is idle: the label set as the page's labels are, in its typeface, and
+  compiled once its letters are set, again as the typeface changes. Its
+  typeface is read then too, before any label asks for it.
 - **Pictures as the canvas.** A copied or exported picture of a molecule
   in 3D draws its style's colours, lines and depth fade as the canvas
   does - its lines in proportion to the molecule at any size, being in
