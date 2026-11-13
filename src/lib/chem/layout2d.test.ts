@@ -2672,6 +2672,40 @@ describe("charges, radicals and isotopes", () => {
       expect(side[0].c.x).toBeCloseTo(side[1].c.x, 9);
     });
 
+    /** The middle of a label's symbol's ink, across: the symbol alone, where it sits. */
+    const symbolMiddle = (t: ReturnType<typeof labelOf>) => {
+      const alone = { ...t, runs: [t.runs![t.anchorRun ?? 0]], anchorRun: 0, twoElectrons: undefined };
+      const xs = labelHulls(alone, opts().fontPx, labelSetOf(opts())).flat().map((p) => p.x + t.x);
+      return (Math.min(...xs) + Math.max(...xs)) / 2;
+    };
+
+    it("centres a triplet's two dots on the symbol's own ink - a C, an N, a Cl - and on the symbol where its H come first: HC with its bond to the right", () => {
+      for (const el of ["C", "N", "Cl"]) {
+        const lone = [atom(0, 0, 0, el, { radical: "triplet" })];
+        const t = labelOf(lone, [], 0);
+        for (const d of dotsOf(lone, [])) expect(d.c.x, el).toBeCloseTo(symbolMiddle(t), 9);
+      }
+      // (a carbene's C with its bond to the right: its H written first, HC, the C not the first run)
+      const hc = [atom(0, 5, 7, "C", { radical: "triplet" }), atom(1, 5 + L, 7, "C")];
+      const t = labelOf(hc, [single(0, 1)], 0);
+      expect(t.runs!.map((r) => r.text)).toEqual(["H", "C"]);
+      expect(t.anchorRun).toBe(1);
+      for (const d of dotsOf(hc, [single(0, 1)])) expect(d.c.x).toBeCloseTo(symbolMiddle(t), 9);
+    });
+
+    it("draws the dots in the label's colour, as a doublet's dot is", () => {
+      const coloured = [atom(0, 0, 0, "N", { radical: "triplet", color: "#2050c0" }), atom(1, -L, 0, "C")];
+      const dots = dotsOf(coloured, [single(0, 1)]);
+      expect(dots).toHaveLength(2);
+      for (const d of dots) expect(d.color).toBe("#2050c0");
+    });
+
+    it("keeps the dots in the label's reach where its atom is off the origin: the hulls in the label's own places", () => {
+      const away = [atom(0, 5, 7, "C", { radical: "triplet" })];
+      const t = labelOf(away, [], 0);
+      for (const p of labelHulls(t, opts().fontPx, labelSetOf(opts())).flat()) expect(Math.hypot(p.x, p.y)).toBeLessThan(3 * opts().fontPx);
+    });
+
     it("shows the C of a carbon with two electrons of its own, whatever the style says of a charged carbon; one unpaired electron as before", () => {
       const triplet = [atom(0, 0, 0, "C", { radical: "triplet" }), atom(1, L, 0, "C"), atom(2, -L, 0, "C")];
       const singlet = triplet.map((a, i) => (i === 0 ? { ...a, radical: "singlet" as const } : a));

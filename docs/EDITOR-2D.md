@@ -857,7 +857,8 @@ All hover-based, as above.
   a singlet's pair - a singlet carbene's, a lone pair in GR-5.2's sense -
   two dots together square on one side, above where it is free, parallel
   to that side. A charge set beside the symbol keeps off their sides.
-  Either way the C is shown, whatever the style says of a charged carbon.
+  Either way the C is shown, whatever the style says of a charged carbon:
+  GR-5.3 finds leaving it out acceptable and showing it preferable.
   Circled or plain, and a charged carbon's C, are the style's. Set by
   typing - N+, NH3+, O-, Fe2+, 13C, or a charge alone - by + and - over
   an atom, or from its menu, which also gives or takes an unpaired

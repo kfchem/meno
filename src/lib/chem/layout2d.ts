@@ -2236,7 +2236,7 @@ export function showsLabel(
     // (a carbon of other than four bonds' valence says so: its hydrogens with it)
     (a.valence != null && a.valence !== 4) ||
     (!!opts.showChargedCarbons && (!!a.charge || !!a.radical)) ||
-    // (two electrons of its own, paired or not, sit round a symbol: Brecher 2008, GR-5.3's carbenes all have their C)
+    // (two electrons of its own, paired or not, sit round a symbol: Brecher 2008, GR-5.3 finds the C preferable, and its carbenes all have it)
     a.radical === "singlet" ||
     a.radical === "triplet"
   );
