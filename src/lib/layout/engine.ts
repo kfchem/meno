@@ -130,13 +130,30 @@ function onSpokes(input: LayoutInput, out: Layout2D): Layout2D {
   near.forEach((round, m) => {
     if (round.length !== 6 || out.depth[m] != null) return;
     const angle = (v: number) => Math.atan2(out.y[v] - out.y[m], out.x[v] - out.x[m]);
-    const t = round.map(angle).sort((p, q) => p - q);
-    if (!t.every((u, i) => Math.abs((i + 1 < t.length ? t[i + 1] : t[0] + 2 * Math.PI) - u - Math.PI / 3) <= SPOKES_SNAP)) return;
-    // (the spokes as the upright line sets them: one of them straight up)
+    // (the spokes as the upright line sets them: one of them straight up - the six, by their index round from straight up)
+    const spokeOf = (t: number) => (((Math.round((t - Math.PI / 2) / (Math.PI / 3)) % 6) + 6) % 6);
+    const offOf = (t: number) => {
+      const spoke = Math.PI / 2 + (Math.PI / 3) * Math.round((t - Math.PI / 2) / (Math.PI / 3));
+      return Math.atan2(Math.sin(spoke - t), Math.cos(spoke - t));
+    };
+    // (laid out as three lines: four donors or more on their spokes already, each on its own; the others turned onto the spokes left -
+    // however far a step after the lines were set moved them, an NH2's H given room, say)
+    const onIt = round.filter((v) => Math.abs(offOf(angle(v))) <= SPOKES_SNAP);
+    const usedSpokes = new Set(onIt.map((v) => spokeOf(angle(v))));
+    if (onIt.length < 4 || usedSpokes.size !== onIt.length) return;
+    const freeSpokes = [0, 1, 2, 3, 4, 5].filter((k) => !usedSpokes.has(k));
+    const target = new Map<number, number>();
+    for (const v of round.filter((w) => !onIt.includes(w)).sort((p, q) => Math.abs(offOf(angle(p))) - Math.abs(offOf(angle(q))))) {
+      const a = angle(v);
+      const k = freeSpokes.sort((p, q) => Math.abs(Math.atan2(Math.sin(Math.PI / 2 + (p * Math.PI) / 3 - a), Math.cos(Math.PI / 2 + (p * Math.PI) / 3 - a))) - Math.abs(Math.atan2(Math.sin(Math.PI / 2 + (q * Math.PI) / 3 - a), Math.cos(Math.PI / 2 + (q * Math.PI) / 3 - a))))[0];
+      if (k == null) return;
+      freeSpokes.splice(freeSpokes.indexOf(k), 1);
+      target.set(v, Math.PI / 2 + (k * Math.PI) / 3);
+    }
     for (const v of round) {
       const a = angle(v);
-      const spoke = Math.PI / 2 + (Math.PI / 3) * Math.round((a - Math.PI / 2) / (Math.PI / 3));
-      const off = Math.atan2(Math.sin(spoke - a), Math.cos(spoke - a));
+      const to = target.get(v);
+      const off = to == null ? offOf(a) : Math.atan2(Math.sin(to - a), Math.cos(to - a));
       if (Math.abs(off) < 1e-9) continue;
       // (what it carries, reached not through the atom; none where that reaches another of its donors - a chelate's, held by its ring)
       const side = new Set([v]);
@@ -1800,7 +1817,7 @@ function squareUp(mol: Molecule, piece: number[], pos: Grown, ref: Grown = pos):
 
 /** How far from 60 degrees apart a six-bond metal's neighbours may stand and still be three lines through it, as laid out. */
 const SPOKES_EVEN = rad(10);
-/** How far off its spoke a single donor of such a metal may have been moved, at the most, and be turned back onto it (`onSpokes`). */
+/** How far off its spoke a donor of such a metal may lie and still count as on it, its slip turned back (`onSpokes`). */
 const SPOKES_SNAP = rad(15);
 
 /**
