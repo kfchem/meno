@@ -124,6 +124,18 @@ describe("a step with no options of its own, run", () => {
     expect(planned[0]).toMatchObject({ reference: "property", property: "tag" });
   });
 
+  it("Number, from its options alone: Settings' value", async () => {
+    settings("number", { what: "typed", value: 4.25, unit: "kcal/mol" });
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const step = store.getState().addStep("number", "meno", 0, 0);
+    doc.edit("bare", (d) => ({ ...d, steps: d.steps!.map((x) => (x.id === step ? { ...x, options: undefined } : x)) }));
+    await store.getState().runStep(step);
+    expect(store.getState().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true });
+    expect(store.getState().steps.find((s) => s.id === step)!.ran?.said).toContain("4.25");
+  });
+
   it("is keyed by those values: a change to Settings changes its key, as it changes what it would run with - one with its own, not", () => {
     const { doc, step } = page("energy-window");
     const bare = doc.getState().steps!.find((s) => s.id === step)! as WorkflowStep;
