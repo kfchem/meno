@@ -19,7 +19,7 @@
  */
 import { canonicalRanks, canonicalWritten, symmetryClasses, symmetryOrbits as orbitsAsDrawn } from "../layout/canonical";
 import { lonePairCentres } from "./lonePairCentres";
-import { isMetal, type LayoutAtom, type LayoutBond, type LayoutInput } from "../layout/perceive";
+import { isMetal, type Arranged, type LayoutAtom, type LayoutBond, type LayoutInput } from "../layout/perceive";
 import type { Axial, Cumulated, Tetrahedral } from "../layout/stereo";
 import type { Radical } from "./molecule";
 
@@ -31,7 +31,7 @@ import type { Radical } from "./molecule";
  * hydrogens not drawn as atoms.
  */
 export type IdentityAtom = LayoutAtom & { isotope?: number; radical?: Radical; mapped?: true };
-export type IdentityInput = { atoms: readonly IdentityAtom[]; bonds: readonly LayoutBond[]; axes?: readonly Axial[]; cumulated?: readonly Cumulated[] };
+export type IdentityInput = { atoms: readonly IdentityAtom[]; bonds: readonly LayoutBond[]; axes?: readonly Axial[]; cumulated?: readonly Cumulated[]; arrangements?: readonly Arranged[] };
 
 /** The bond order a bond its Kekulé structures disagree on is given for identity and symmetry, beside 1, 2 and 3. */
 const AROMATIC = 4;
@@ -244,7 +244,9 @@ export function hydrogensFolded(input: IdentityInput): IdentityInput {
     }
     return [{ atoms: [at.get(x.atoms[0])!, at.get(x.atoms[1])!], refs: [at.get(refs[0])!, at.get(refs[1])!], cis }];
   });
-  return { atoms, bonds, ...(input.axes ? { axes } : {}), ...(input.cumulated ? { cumulated } : {}) };
+  // (a metal's donors by their new places: no plain hydrogen is one - a hydride on a metal is kept)
+  const arrangements = input.arrangements?.map((x) => ({ metal: at.get(x.metal)!, pairs: x.pairs.map(([p, q]) => [at.get(p)!, at.get(q)!] as const) }));
+  return { atoms, bonds, ...(input.axes ? { axes } : {}), ...(input.cumulated ? { cumulated } : {}), ...(arrangements ? { arrangements } : {}) };
 }
 
 /**
@@ -280,6 +282,13 @@ const CENTRES = new Set(["B", "C", "Si", "Ge", "Sn", "Pb", "N", "P", "As", "Sb",
 const SMALL_RING = 7;
 
 /**
+ * Two donors of one metal that its ligand joins by a ring of this many atoms or fewer, the metal counted, are never
+ * across: a chelate's five- or six-membered ring cannot span the metal (CHEM, 11-14). Larger rings may - a porphyrin's
+ * opposite N, joined only by a ring of ten - so a filled arrangement may put those across; one read stands as read.
+ */
+const CHELATE_RING = 7;
+
+/**
  * A place that could carry a configuration and carries none: a centre (its
  * neighbours in the order the configuration names them, a lone pair or an
  * implicit H last), a double bond, an allene's axis or an odd cumulene's
@@ -291,6 +300,7 @@ type Blank = (
   | { kind: "biaryl"; at: number }
   | { kind: "bond"; at: number; refs: [number, number] }
   | { kind: "axis" | "cumulated"; ends: [number, number]; refs: [number, number] }
+  | { kind: "metal"; at: number; pairings: (readonly [number, number])[][] }
 ) & { own: number[]; sides: number[][] };
 
 /**
@@ -369,6 +379,18 @@ function blanksOf(g: LayoutInput): Blank[] {
     if (!p.length || !q.length) continue;
     out.push({ kind: count % 2 ? "cumulated" : "axis", ends: [e, f], refs: [p[0], q[0]], own: [e, f], sides: [p, q] });
   }
+  // (a metal of four or six donors whose arrangement is not given, with the pairings that can be: none with two donors
+  //  across that the ligand joins by a ring of `CHELATE_RING` atoms or fewer, the metal counted - a chelate's two ends
+  //  are never across, a porphyrin's opposite N may be. Bonds through the metal are not the ligand's: `ligandNear` from a
+  //  donor walks no further than the metal)
+  const arranged = new Set((g.arrangements ?? []).map((x) => x.metal));
+  for (let m = 0; m < n; m++) {
+    const donors = around[m];
+    if (!isMetal(element(m)) || arranged.has(m) || hs(m) || (donors.length !== 4 && donors.length !== 6)) continue;
+    const joined = (p: number, q: number) => ligandNear(around, m, p, q, CHELATE_RING - 2);
+    const pairings = pairingsOf(donors).filter((pairing) => pairing.every(([p, q]) => !joined(p, q)));
+    if (pairings.length) out.push({ kind: "metal", at: m, pairings, own: [m], sides: [donors] });
+  }
   // (a biaryl's axis drawn: no place of its own when blank - only a drawing states one - so where it sets nothing, its
   //  plain form is no axis at all, as a biaryl drawn with none)
   (g.axes ?? []).forEach((x, k) => {
@@ -379,12 +401,46 @@ function blanksOf(g: LayoutInput): Blank[] {
 }
 
 /** The structure with `b` given a configuration: one sense or the other (a biaryl's axis turned, or as drawn). */
-function given(g: LayoutInput, b: Blank, up: boolean): LayoutInput {
+function given(g: LayoutInput, b: Exclude<Blank, { kind: "metal" }>, up: boolean): LayoutInput {
   if (b.kind === "biaryl") return up ? g : { ...g, axes: g.axes!.map((x, i) => (i === b.at ? { ...x, sense: x.sense === 1 ? -1 : 1 } : x)) };
   if (b.kind === "centre") return { ...g, atoms: g.atoms.map((a, i) => (i === b.at ? { ...a, tetra: { neighbours: b.neighbours, volume: up ? 1 : -1 } } : a)) };
   if (b.kind === "bond") return { ...g, bonds: g.bonds.map((x, i) => (i === b.at ? { ...x, stereo: { refs: b.refs, cis: up } } : x)) };
   if (b.kind === "axis") return { ...g, axes: [...(g.axes ?? []), { atoms: b.ends, refs: b.refs, sense: up ? 1 : -1 }] };
   return { ...g, cumulated: [...(g.cumulated ?? []), { atoms: b.ends, refs: b.refs, cis: up }] };
+}
+
+/**
+ * The structure with `b` given each value it can have: a centre's, a double bond's, an axis's or a cumulene's two
+ * senses (a biaryl's: as drawn, then turned); a metal's every pairing that can be.
+ */
+function valuesOf(g: LayoutInput, b: Blank): LayoutInput[] {
+  if (b.kind !== "metal") return [given(g, b, true), given(g, b, false)];
+  return b.pairings.map((pairs) => ({ ...g, arrangements: [...(g.arrangements ?? []), { metal: b.at, pairs }] }));
+}
+
+/** Every way of pairing off `donors` (four: three ways; six: fifteen), each pair lower first. */
+function pairingsOf(donors: readonly number[]): (readonly [number, number])[][] {
+  if (!donors.length) return [[]];
+  const [first, ...rest] = donors;
+  return rest.flatMap((q) => pairingsOf(rest.filter((r) => r !== q)).map((more) => [[Math.min(first, q), Math.max(first, q)] as const, ...more]));
+}
+
+/** Whether two donors `p` and `q` of metal `m` are joined, not through the metal, within `most` bonds. */
+function ligandNear(around: readonly number[][], m: number, p: number, q: number, most: number): boolean {
+  let at = [p];
+  const seen = new Set([p, m]);
+  for (let d = 1; d <= most && at.length; d++) {
+    const next: number[] = [];
+    for (const x of at)
+      for (const y of around[x]) {
+        if (y === q) return true;
+        if (seen.has(y)) continue;
+        seen.add(y);
+        next.push(y);
+      }
+    at = next;
+  }
+  return false;
 }
 
 /** The structure with no configuration at all: what its symmetry by constitution alone is asked of (`filledIn`'s prefilter). */
@@ -422,6 +478,12 @@ function unconfigured(g: LayoutInput): LayoutInput {
  * at all): alike told apart, never two unlike joined, and only where no
  * single compound is stated.
  *
+ * A metal of four or six donors whose arrangement is not given - which of
+ * its donors are across from each other - is such a place too, its values
+ * every pairing that can be (none with a chelate's two ends across): filled
+ * where all of them write one text (PtCl4 2-, Pt(en)Cl2, [Co(en)3]3+), open
+ * where they do not (cisplatin with none given).
+ *
  * A biaryl's axis is no such place when blank - only a drawing states one -
  * so one drawn that sets nothing (a 2,6-dimethylphenyl's) is the one thing
  * taken out: its plain form is a biaryl drawn with none.
@@ -444,7 +506,7 @@ export function filledIn(input: LayoutInput): { input: LayoutInput; complete: bo
   //  C=C(CH3)2 - sets nothing whatever else is given: swapping the two turns it over and leaves all else. Filled first,
   //  with no search; and as it sets nothing in every completion, it changes no other place's two senses)
   const ends = endsAlike(g);
-  for (const b of blanksOf(g)) if (b.kind !== "biaryl" && b.sides.some((side) => ends(side))) g = given(g, b, true);
+  for (const b of blanksOf(g)) if (b.kind !== "biaryl" && b.kind !== "metal" && b.sides.some((side) => ends(side))) g = given(g, b, true);
   // (the classes of the constitution alone, coarser than every orbit of the structure with any configuration given)
   let classes: number[] | null = null;
   for (;;) {
@@ -462,11 +524,19 @@ export function filledIn(input: LayoutInput): { input: LayoutInput; complete: bo
     });
     let next: LayoutInput | null = null;
     for (const b of tried) {
-      const [up, down] = [given(g, b, true), given(g, b, false)];
-      const [u, d] = [canonicalWritten(up), canonicalWritten(down)];
+      const values = valuesOf(g, b);
+      const u = canonicalWritten(values[0]);
+      // (the first value that writes another text, if any: a metal's fifteen pairings are not all written where two differ)
+      let d: ReturnType<typeof canonicalWritten> | null = null;
+      for (const v of values.slice(1)) {
+        const w = canonicalWritten(v);
+        if (w.text === u.text) continue;
+        d = w;
+        break;
+      }
       // (one text is one structure, whether the search finished or not: it writes the whole of it)
-      if (u.text === d.text) {
-        next = b.kind === "biaryl" ? { ...g, axes: g.axes!.filter((_, i) => i !== b.at) } : up;
+      if (!d) {
+        next = b.kind === "biaryl" ? { ...g, axes: g.axes!.filter((_, i) => i !== b.at) } : values[0];
         text = b.kind === "biaryl" ? undefined : u.complete ? u.text : undefined;
         break;
       }

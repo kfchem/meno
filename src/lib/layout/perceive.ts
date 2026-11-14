@@ -41,7 +41,18 @@ export type LayoutInput = {
   axes?: readonly Axial[];
   /** Its odd runs of cumulated double bonds set cis or trans (a butatriene's: stereo.ts). */
   cumulated?: readonly Cumulated[];
+  /** Which of a metal's donors are across from each other, where that is given (`Arranged`): identity's, not the layout's. */
+  arrangements?: readonly Arranged[];
 };
+
+/**
+ * Which of a metal's four or six donors are across from each other - a
+ * square-planar centre's two pairs, an octahedral centre's three - as read
+ * from a drawing or from places in 3D (lib/chem/arrangement): cisplatin and
+ * transplatin, fac and mer, are told apart by it (Brecher 2006, ST-2.6,
+ * ST-2.11). Each pair by its two donors' atoms; every donor in one pair.
+ */
+export type Arranged = { metal: number; pairs: readonly (readonly [number, number])[] };
 
 export type RingSystem = {
   /** Its atoms, in no particular order. */

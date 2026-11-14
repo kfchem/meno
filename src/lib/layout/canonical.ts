@@ -136,9 +136,16 @@ function classedNow(input: LayoutInput): Classed {
     stereoAt[b.a].push(b);
     stereoAt[b.b].push(b);
   }
+  // (each donor of a metal whose arrangement is given, and the donor across from it: `Arranged`)
+  const partnerOf = new Map<number, number[]>();
+  for (const x of input.arrangements ?? [])
+    for (const [p, q] of x.pairs) {
+      partnerOf.set(p, [...(partnerOf.get(p) ?? []), q]);
+      partnerOf.set(q, [...(partnerOf.get(q) ?? []), p]);
+    }
   const stereoKeys = (r: number[]): string[] =>
     input.atoms.map((a, i) => {
-      const parts: number[] = [];
+      const parts: (number | string)[] = [];
       if (a.tetra) {
         const ns = a.tetra.neighbours.map((m) => (m < 0 ? -1 : r[m]));
         parts.push(new Set(ns).size === ns.length ? a.tetra.volume * parity(ns) : 0);
@@ -162,6 +169,8 @@ function classedNow(input: LayoutInput): Classed {
         const [u, v] = x.atoms;
         parts.push((x.cis ? 1 : -1) * endSet(adj, r, u, across(adj, u, v), p) * endSet(adj, r, v, across(adj, v, u), q));
       }
+      // (and a metal's donor, by the rank of the donor across from it: PtCl2Br(NH3)-'s Cl across Br is not its Cl across N)
+      for (const q of partnerOf.get(i) ?? []) parts.push(`x${r[q]}`);
       return parts.join(",");
     });
   const withStereo = (r: number[]): number[] => {
@@ -405,7 +414,12 @@ function written(input: LayoutInput, what: readonly string[], r: readonly number
       return `${pad(r[a])}${pad(r[b])}:${set > 0 ? "c" : "t"}`;
     })
     .sort();
-  return `${atoms.join(";")}|${bonds.join(" ")}|${pis}|${axes.join(" ")}${cumulated.length ? `|${cumulated.join(" ")}` : ""}`;
+  // (a metal's donors across from each other, each pair by its places, lower first: written only where given, so a
+  //  structure with none is written as it always was)
+  const arranged = (input.arrangements ?? [])
+    .map((x) => `${pad(r[x.metal])}:${x.pairs.map(([p, q]) => (r[p] < r[q] ? pad(r[p]) + pad(r[q]) : pad(r[q]) + pad(r[p]))).sort().join(".")}`)
+    .sort();
+  return `${atoms.join(";")}|${bonds.join(" ")}|${pis}|${axes.join(" ")}${cumulated.length ? `|${cumulated.join(" ")}` : ""}${arranged.length ? `|m${arranged.join(" ")}` : ""}`;
 }
 
 /** The input with its atoms in the given order (old index to new), its bonds sorted by their atoms there. */
@@ -431,7 +445,8 @@ export function reordered(input: LayoutInput, to: readonly number[]): LayoutInpu
     .sort((p, q) => p.a - q.a || p.b - q.b);
   const axes = input.axes?.map((x) => ({ ...x, atoms: [to[x.atoms[0]], to[x.atoms[1]]] as const, refs: [to[x.refs[0]], to[x.refs[1]]] as const }));
   const cumulated = input.cumulated?.map((x) => ({ ...x, atoms: [to[x.atoms[0]], to[x.atoms[1]]] as const, refs: [to[x.refs[0]], to[x.refs[1]]] as const }));
-  return { atoms, bonds, ...(axes ? { axes } : {}), ...(cumulated ? { cumulated } : {}) };
+  const arrangements = input.arrangements?.map((x) => ({ metal: to[x.metal], pairs: x.pairs.map(([p, q]) => [to[p], to[q]] as const) }));
+  return { atoms, bonds, ...(axes ? { axes } : {}), ...(cumulated ? { cumulated } : {}), ...(arrangements ? { arrangements } : {}) };
 }
 
 /** A drawing of the reordered input handed back in the order of the input itself (`to`: old index to new). */

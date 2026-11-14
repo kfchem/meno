@@ -873,7 +873,9 @@ which is the same in every product.
   `src/lib/chem/identity.ts`);
 - the canonical text of the structure's aromatic form;
 - with each stereocentre's and each double bond's configuration as drawn,
-  and each axis of chirality.
+  and each axis of chirality;
+- and, for a square-planar or an octahedral metal, which of its donors are
+  across from each other (`src/lib/chem/arrangement.ts`).
 
 The texts are compared, not their hashed keys. The set states the method:
 *Duplicates judged by Meno's identity: constitution and configurations as
@@ -901,6 +903,25 @@ drawn, aromatic rings as one form.* What that means, plainly:
   The order matters, so it is always that one. The filled form is
   identity's own: the drawing keeps its wedges as drawn, and nothing filled
   in is shown, drawn or saved;
+- **a metal's isomers by which donors are across are two structures:**
+  cisplatin and transplatin, fac and mer, the cis and trans forms of
+  [Co(en)2Cl2]+ (Brecher 2006, ST-2.6 and ST-2.11). A drawing states
+  them for a metal of six donors however drawn, and for a metal of four
+  drawn as the X or in ST-2.6's wedge form. The upright cross states no
+  geometry and is read as none. In 3D the places decide, for any metal
+  of four or six donors. Two donors are across where the angle between
+  them at the metal is at least 150 degrees (four donors) or 135 (six:
+  a terpyridine holds its outer donors short of a line), with no other
+  donor within 15 degrees of that angle. A flattened tetrahedron and a
+  trigonal prism have none. As for a centre, an arrangement that sets
+  nothing is filled in: PtCl4 2-, PtCl3(NH3)-, [Co(NH3)6]3+, Pt(en)Cl2
+  and [Co(en)3]3+ are one structure each, given or not. A chelate's two
+  ends, joined by a ring of seven atoms or fewer with the metal, are
+  never taken as across. A complex whose arrangement can be more than
+  one and is not given (cisplatin from a SMILES) is a third structure,
+  matching neither isomer until it is given. The hand of an octahedral
+  centre is not yet told: the two enantiomers of [Co(en)3]3+ are one
+  structure;
 - **a limit, on the safe side:** some writings that leave the same thing
   unsaid in different ways get two identities. (4-Methylcyclohexylidene)
   acetic acid drawn with its double bond bent and its centre plain, and
