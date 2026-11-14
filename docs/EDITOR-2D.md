@@ -299,10 +299,27 @@ held still before it is let go stays where it was put. (It used to glide on
 by its last move whatever came after - a drag held still went on drifting
 when it was let go.)
 
-**A click keeps each view's own meaning**: in 2D a click on an atom selects
-it and a click on a bond changes its kind, as drawing wants - and
-the bond's right-click menu chooses its kind outright (the maintainer,
-2026-10-14: both), for every bond selected at once, as one step; in 3D a
+**A click keeps each view's own meaning**: in 2D a click selects what is
+under the pointer, an atom or a bond alike - a bond with its two atoms,
+alone, what was selected let go - and a single click never changes the
+compound (the maintainer, 2026-11-14: a click on a bond had gone round its
+kinds, and a click meant to select it could put a wedge in, a statement of
+configuration, with nothing said). Ctrl or ⌘ and a click adds a bond or
+takes it out; Shift and a click, the box and the lasso are as before. A
+double-click on a bond makes it double and, on a double bond, moves its
+second line - its own side, the middle, the other side - its first click
+having selected it, which stays selected. A bond's kind is otherwise set by
+the bond keys (*Bond keys*, below) and by its right-click menu, which
+chooses its kind outright (2026-10-14), for every bond selected at once, as
+one step. In the menu's row of kinds, the icon of the kind the bond already
+has is drawn as the bond lies - a wedge narrow at the end it is narrow at,
+its left or upper atom at the icon's left; a double bond's second line on
+its side, shorter - and pressed again goes one step on in that kind's
+round: a wedge or hashed wedge narrow at its other end, a double bond's
+second line on its next side (`bondKindStepPatch`, `bondLie`). A single or
+a triple pressed again changes nothing. With several bonds selected, each
+of that kind steps on about itself, and the others are set to it, one
+step. In 3D a
 click on an atom chooses it, for a measurement, and a click elsewhere on the
 molecule selects it. A right-click, or a press with two fingers,
 opens the menu for what is under the pointer; it waits for the button to
@@ -321,18 +338,23 @@ went. The pan needed is one pure rule (`panFor`, `menuAt.ts`; the hook that
 anchors a menu and asks for it, `useMenuAt.ts`).
 
 **Bond keys** (users' wish, relayed by the maintainer on 2026-11-02; pressed
-again they go on as clicks do, 2026-11-04). With the pointer on a bond, 1, 2
-and 3 set its kind, and a key pressed again goes on round as a click would:
+again they go on round, 2026-11-04). With the pointer on a bond, 1, 2
+and 3 set its kind, and a key pressed again goes on round:
 - **1** makes a double or triple bond single; on a single bond it goes round
-  as a click does - wedge, hashed wedge, plain with the other end narrow.
+  - wedge, hashed wedge, plain with the other end narrow (`singleRoundPatch`;
+  a click on a bond went this round until 2026-11-14).
 - **2** makes a bond double; on a double bond it moves the second line to
   the next side as a double-click does - its own side, the middle, the
   other side (`doubleClickPatch`, shared with the double-click).
 - **3** makes it triple.
 
-Where the bond is among those selected, every bond selected takes what the
-one under the pointer becomes, as one step; a key that would change
-nothing is no step (`bondKey`, utils/bondKinds `bondKeyPatch`). The key the
+A key changes the one bond under the pointer and no other, selected or not,
+whatever is selected (the maintainer, 2026-11-14): the bond keys follow the
+pointer, the bond's menu follows the selection and says its scope. One bond,
+one step; a key that would change nothing is no step (`bondKey`,
+utils/bondKinds `bondKeyPatch`). Each kind's key is shown beside it in a
+bond's menu only where the menu acts on that one bond: where it acts on
+several selected, the key would change one and the row changes all. The key the
 hand pressed is read (`code`, the top row or the keypad), so a keyboard
 whose digits take Shift and an input method that is on set it all the same.
 None is taken with Ctrl, ⌘ or Alt held (⌘1 fits the view), held down and
@@ -764,8 +786,9 @@ Both go together, because both touch every layer.
   the other atom, turning one configuration into another with nothing
   said. A wedge given no narrow end - chosen from the menu, say - is
   narrow at the end with more bonds as the edit leaves it, and from then
-  on keeps it. A click on a single bond runs plain, wedge, hashes, and
-  plain again with the other end narrow next time round.
+  on keeps it. The key 1 on a single bond runs plain, wedge, hashes, and
+  plain again with the other end narrow next time round; the wedge's icon
+  in its menu, pressed again, turns its narrow end to the other atom.
 - **Rounding is all or nothing.** When ends and joins are round, every end is
   round - double and triple bonds included, which today are not. When they
   are square, every one is square.
