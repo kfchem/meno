@@ -508,6 +508,9 @@
       "programs": [
         "quanta"
       ],
+      "restraints": [
+        "fixed"
+      ],
       "options": [
         {
           "id": "method",

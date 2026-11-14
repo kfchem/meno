@@ -31,6 +31,8 @@ export type SetChip = {
   warnings?: readonly Warning[];
   imaginary?: readonly (readonly number[] | null)[];
   fromStart?: boolean;
+  /** Its search goes on: more of its conformers may come (docs/WORKSPACE.md, *As its search goes on*). */
+  searching?: boolean;
 };
 
 /** The marks said on the frame told: why it failed, its imaginary frequencies, how many warnings - as the chip says them. */
@@ -55,7 +57,7 @@ export function setChipRuns(c: SetChip): SaidRun[] {
   const marks = chipMarks(c, told);
   const runs: SaidRun[] = [];
   if (c.numbers?.[told] != null && c.numbers.some((k, i) => k !== i + 1)) runs.push({ text: `#${c.numbers[told]} · `, tone: "ink" });
-  runs.push({ text: `${told + 1} / ${c.count}`, tone: "quiet" });
+  runs.push({ text: `${told + 1} / ${c.count}${c.searching ? " · searching" : ""}`, tone: "quiet" });
   if (c.title) runs.push({ text: c.title, tone: "ink", gapPx: 8, mostPx: 224 });
   if (above) {
     const at = above[told];

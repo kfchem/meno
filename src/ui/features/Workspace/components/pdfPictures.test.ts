@@ -1,13 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
 import type * as THREE from "three";
-import { FADE_MS, levelFor, OVERSAMPLE, Pictures, QUICK, PREVIEW_PX, TILE, UNDER_MOST, type Pic, type TileAsk } from "./pdfPictures";
+import { markLocked } from "../../../../lib/doc/locked";
+import { FADE_MS, levelFor, OVERSAMPLE, Pictures, PREVIEWS_AHEAD, QUICK, PREVIEW_PX, TILE, UNDER_MOST, type Pic, type TileAsk } from "./pdfPictures";
 import { measured } from "../../../../testing/timeouts";
 
 // (the reader: a tile drawn at once - or, while `hold` is set, never)
-const reader = vi.hoisted(() => ({ hold: false }));
+const reader = vi.hoisted(() => ({ hold: false, fail: null as "reject" | "none" | null, asked: [] as { page: number; nearness: number }[] }));
 vi.mock("../../../../lib/pdf/reader", () => ({
-  drawPart: (a: { w?: number; h?: number }) =>
-    reader.hold ? new Promise(() => {}) : Promise.resolve({ bitmap: { width: a.w ?? 360, height: a.h ?? 360 }, w: a.w ?? 360, h: a.h ?? 360, ms: 1 }),
+  drawPart: (a: { page: number; w?: number; h?: number }, nearness: () => number = () => 0) => {
+    reader.asked.push({ page: a.page, nearness: nearness() });
+    if (reader.fail === "reject") return Promise.reject(new Error("the page could not be drawn"));
+    if (reader.fail === "none") return Promise.resolve(null);
+    return reader.hold ? new Promise(() => {}) : Promise.resolve({ bitmap: { width: a.w ?? 360, height: a.h ?? 360 }, w: a.w ?? 360, h: a.h ?? 360, ms: 1 });
+  },
 }));
 
 describe("the level a page is drawn at", () => {
@@ -154,21 +159,175 @@ describe("the level a page's part seen is drawn at now", () => {
 });
 
 describe("tiles come while the view moves", () => {
+  /**
+   * `run` with the clock standing still within a frame and moved a frame's worth by each `nextFrame`: a runner that stalls between two calls
+   * of one frame - a CI machine can, past the gap - does not make them two frames. Never ahead of the real clock, so the tests after find
+   * the gap behind them.
+   */
+  const inFrames = async (run: (nextFrame: () => Promise<void>) => Promise<void>) => {
+    let clock = performance.now();
+    const time = vi.spyOn(performance, "now").mockImplementation(() => clock);
+    try {
+      await run(async () => {
+        await new Promise((r) => setTimeout(r, 20));
+        clock += 20;
+      });
+    } finally {
+      time.mockRestore();
+    }
+  };
+
   it("are shown one a frame, so that they are put on the graphics card a frame apart", async () => {
     reader.hold = false;
+    // (the gap is the page's: an earlier test's upload must be a frame behind)
+    await new Promise((r) => setTimeout(r, 20));
+    await inFrames(async (nextFrame) => {
+      const pics = new Pictures();
+      // (a part of four tiles asked for at once - and another PDF's, on the same page, its pictures come too)
+      pics.ask({ sha256: "r", page: 0, size: [3000, 3000], level: 2, part: { x0: 0, y0: 0, x1: 1000, y1: 1000 }, nearness: () => 0, stillSince: () => 0 }, performance.now());
+      const other = new Pictures();
+      other.ask({ sha256: "s", page: 0, size: [3000, 3000], level: 2, part: { x0: 0, y0: 0, x1: 1000, y1: 1000 }, nearness: () => 0, stillSince: () => 0 }, performance.now());
+      await new Promise((r) => setTimeout(r, 0));
+      const shown = () => [...pics.tiles.values()].filter((t) => t !== "asked").length;
+      expect(shown()).toBe(0);
+      expect(pics.fading(performance.now())).toBe(true);
+      // (one frame: what draws calls these one after another, with no wait between - none here either, so the frame is the same frame
+      //  however slow the machine's timers are; a wait between them was the test's, and on Windows it could pass the gap)
+      expect(pics.reveal(1)).toBe(true);
+      expect(shown()).toBe(1);
+      // (the other view asking in the same frame: it puts none - one picture a frame, however many views draw)
+      expect(pics.reveal(1)).toBe(false);
+      expect(shown()).toBe(1);
+      // (and another PDF's pictures, drawn in the same frame, put none either: the gap is the page's, not each PDF's)
+      expect(other.reveal(1)).toBe(false);
+      // (the next frame)
+      await nextFrame();
+      pics.reveal(1);
+      expect(shown()).toBe(2);
+      pics.reveal(Infinity);
+      expect(shown()).toBe(4);
+      expect(pics.reveal(1)).toBe(false);
+      // (and the other PDF, a frame later: it had a picture all along, held back only by the page's gap)
+      await nextFrame();
+      expect(other.reveal(1)).toBe(true);
+    });
+  });
+
+  it("puts a page's small picture on the graphics card the same way: with the tiles, a frame at a time, never all in the frame they came in", async () => {
+    reader.hold = false;
+    await new Promise((r) => setTimeout(r, 20));
+    await inFrames(async (nextFrame) => {
+      const pics = new Pictures();
+      const pages = { sha256: "p", pages: [[612, 792], [612, 792], [612, 792]] as const };
+      for (let page = 0; page < 3; page++) pics.preview(pages, page);
+      await new Promise((r) => setTimeout(r, 0));
+      // (come, but not shown: none is had until it is revealed)
+      expect(pics.preview(pages, 0)).toBeNull();
+      const had = () => [0, 1, 2].filter((page) => pics.previews.get(`p:${page}`) && pics.previews.get(`p:${page}`) !== "asked").length;
+      expect(had()).toBe(0);
+      const uploaded: unknown[] = [];
+      pics.reveal(1, (t) => uploaded.push(t));
+      expect(uploaded).toHaveLength(1);
+      expect(pics.reveal(1, (t) => uploaded.push(t))).toBe(false);
+      expect(had()).toBe(1);
+      await nextFrame();
+      pics.reveal(1, (t) => uploaded.push(t));
+      await nextFrame();
+      pics.reveal(1, (t) => uploaded.push(t));
+      expect(had()).toBe(3);
+    });
+  });
+});
+
+describe("the small pictures of the pages either side, drawn ahead", () => {
+  const pdf = { sha256: "q", pages: Array.from({ length: 40 }, (): [number, number] => [612, 792]) };
+
+  it("asks the nearest pages' first, a couple at a time, after what is seen: a fast scroll comes to a page drawn small", async () => {
+    reader.asked.length = 0;
+    reader.hold = true;
     const pics = new Pictures();
-    // (a part of four tiles asked for at once)
-    pics.ask({ sha256: "r", page: 0, size: [3000, 3000], level: 2, part: { x0: 0, y0: 0, x1: 1000, y1: 1000 }, nearness: () => 0, stillSince: () => 0 }, performance.now());
-    await new Promise((r) => setTimeout(r, 0));
-    const shown = () => [...pics.tiles.values()].filter((t) => t !== "asked").length;
-    expect(shown()).toBe(0);
-    expect(pics.fading(performance.now())).toBe(true);
-    expect(pics.reveal(1)).toBe(true);
-    expect(shown()).toBe(1);
-    pics.reveal(1);
-    expect(shown()).toBe(2);
-    pics.reveal(Infinity);
-    expect(shown()).toBe(4);
-    expect(pics.reveal(1)).toBe(false);
+    pics.previewsAround(pdf, 10);
+    // (two at once, the pages next to it; behind every tile of what is seen in the reader's queue - theirs under 1)
+    expect(reader.asked.map((a) => a.page)).toEqual([11, 9]);
+    expect(reader.asked.every((a) => a.nearness >= 1)).toBe(true);
+    // (asked again while those are on their way: nothing more)
+    pics.previewsAround(pdf, 10);
+    expect(reader.asked).toHaveLength(2);
+    reader.hold = false;
+  });
+
+  it("goes on outward as each comes, as far as PREVIEWS_AHEAD either way, and no further, never past the PDF's ends", async () => {
+    reader.asked.length = 0;
+    const pics = new Pictures();
+    for (let k = 0; k < 40; k++) {
+      pics.previewsAround(pdf, 3);
+      await Promise.resolve();
+      await Promise.resolve();
+    }
+    const pages = reader.asked.map((a) => a.page);
+    expect(new Set(pages).size).toBe(pages.length);
+    expect([...pages].sort((a, b) => a - b)).toEqual([0, 1, 2, ...Array.from({ length: PREVIEWS_AHEAD }, (_, d) => 4 + d)]);
+    // (nearer ones first)
+    expect(pages.slice(0, 4).sort((a, b) => a - b)).toEqual([1, 2, 4, 5]);
+  });
+
+  it("goes on past a page whose reading fails - an error or nothing drawn - its place freed, the page not asked ahead again but asked when it is seen", async () => {
+    for (const fail of ["reject", "none"] as const) {
+      reader.asked.length = 0;
+      reader.fail = fail;
+      const pics = new Pictures();
+      pics.previewsAround(pdf, 10);
+      expect(reader.asked.map((a) => a.page), fail).toEqual([11, 9]);
+      await new Promise((r) => setTimeout(r, 0));
+      // (neither kept as asked)
+      expect(pics.previews.has(`${pdf.sha256}:11`), fail).toBe(false);
+      expect(pics.previews.has(`${pdf.sha256}:9`), fail).toBe(false);
+      reader.fail = null;
+      reader.hold = true;
+      pics.previewsAround(pdf, 10);
+      // (the next two, not the two that failed)
+      expect(reader.asked.slice(2).map((a) => a.page), fail).toEqual([12, 8]);
+      // (seen, the one that failed is asked again, first in the queue)
+      pics.preview(pdf, 11);
+      expect(reader.asked[reader.asked.length - 1], fail).toEqual({ page: 11, nearness: -1 });
+      reader.hold = false;
+    }
+  });
+
+  it("never asks past the PDF's last page, nor anything of a PDF locked with a password", async () => {
+    reader.asked.length = 0;
+    const pics = new Pictures();
+    for (let k = 0; k < 40; k++) {
+      pics.previewsAround(pdf, 38);
+      await Promise.resolve();
+      await Promise.resolve();
+    }
+    expect(Math.max(...reader.asked.map((a) => a.page))).toBe(39);
+    // (from page 38 of 40: the one page after it, and the twelve before it)
+    expect([...reader.asked.map((a) => a.page)].sort((a, b) => a - b)).toEqual([...Array.from({ length: PREVIEWS_AHEAD }, (_, d) => 26 + d), 39]);
+    reader.asked.length = 0;
+    const locked = { ...pdf, sha256: "locked-pdf" };
+    markLocked(locked.sha256);
+    new Pictures().previewsAround(locked, 10);
+    expect(reader.asked).toEqual([]);
+  });
+
+  it("asks twelve pages either way, a nearer page before a farther one, and every one after a page asked as it is seen", async () => {
+    expect(PREVIEWS_AHEAD).toBe(12);
+    reader.asked.length = 0;
+    reader.hold = true;
+    const pics = new Pictures();
+    for (let k = 0; k < 15; k++) {
+      pics.previewsAround(pdf, 20);
+      (pics as unknown as { aheadAsked: Set<string> }).aheadAsked.clear();
+    }
+    const near = reader.asked.find((a) => a.page === 21)!.nearness;
+    const far = reader.asked.find((a) => a.page === 32)!.nearness;
+    expect(near).toBeLessThan(far);
+    pics.preview(pdf, 5);
+    const seen = reader.asked[reader.asked.length - 1];
+    expect(seen.page).toBe(5);
+    expect(reader.asked.slice(0, -1).every((a) => seen.nearness < a.nearness)).toBe(true);
+    reader.hold = false;
   });
 });

@@ -90,6 +90,11 @@ const calledAs = (el: string) => (el === "C" ? "a carbon" : (NAMES.get(el) ?? `"
 /** How short a bond's open end may be drawn, for the figure's bond, before it is taken to have been drawn to something not read. */
 const SHORT_END = 0.72;
 
+/** How what an atom says of a charge no atom carries begins: "A charge of 18− is more than sulfur carries." - one place for the words and for those that tell the sentence (`saysChargeTooMuch`). */
+const CHARGE_TOO_MUCH = "A charge of";
+/** Whether a thing said of an atom is that its charge is more than its element carries - no valence, whatever its bonds. */
+export const saysChargeTooMuch = (said: string): boolean => said.startsWith(CHARGE_TOO_MUCH);
+
 /**
  * How long a bond of a structure read is drawn, in the page's points: the length most of its own bonds are drawn at - those
  * between two corners, where it has two or more, its labels' bonds drawn to a label's middle - and not the figure's, whose
@@ -169,7 +174,7 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
   const tooMany = read.atoms.map((_, i): string | null => {
     const most = mostTaken(els[i], charges[i]);
     if (most == null || unbound[i] < valence[i]) return null;
-    if (most < 0 || Math.abs(charges[i]) > MOST_CHARGE) return `A charge of ${chargeText(charges[i])} is more than ${calledAs(els[i])} carries.`;
+    if (most < 0 || Math.abs(charges[i]) > MOST_CHARGE) return `${CHARGE_TOO_MUCH} ${chargeText(charges[i])} is more than ${calledAs(els[i])} carries.`;
     if (valence[i] > most) {
       return valence[i] > (mostTaken(els[i], 0) ?? most) ? `More bonds meet here than ${calledAs(els[i])} has.` : `Its charge, ${chargeText(charges[i])}, and its bonds are more than ${calledAs(els[i])} takes.`;
     }
@@ -190,6 +195,9 @@ export function structureOf(given: FigureRead, reads: LabelReader, about?: { x: 
         if (left !== drawn) unsure.push(`Drawn as ${as}, but its bonds leave it ${left === 0 ? "no hydrogen" : left === 1 ? "one hydrogen" : `${left} hydrogens`}.`);
       }
     }
+    // (a Y with one bond and no charge is a variable, as X and Z are - Meno's rule, as the writer has it (docs/CTFILE.md): a label cannot tell it from
+    // yttrium's symbol, so the atom says it was taken so. An Ar with a bond is an aryl group's by the same rule, its reading not in doubt)
+    if (!a.el && a.label === "Y" && degree[i] === 1 && !charges[i]) unsure.push("Taken as a variable, as X and Z are, not as yttrium: a Y with one bond stands for a group.");
     const over = tooMany[i];
     if (over) unsure.push(over);
     const isotope = label && "isotope" in label ? label.isotope : undefined;

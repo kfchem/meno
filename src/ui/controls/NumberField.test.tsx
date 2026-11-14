@@ -3,7 +3,8 @@ import { renderToString } from "react-dom/server";
 import type { Option } from "../../lib/options";
 import OptionRows, { numberFieldOf } from "../options/OptionRows";
 import OptionsForm from "../options/OptionsForm";
-import { escapeTakes, numberDraft, numberField, rangeOf, rangeSaid, setAsItGoes, shown, typedNumber, type NumberDraft, type NumberEvent, type NumberRange } from "./number";
+import NumberField from "./NumberField";
+import { askedFocus, escapeTakes, numberDraft, numberField, rangeOf, rangeSaid, setAsItGoes, shown, typedNumber, type NumberDraft, type NumberEvent, type NumberRange } from "./number";
 
 // Vitest runs in Node, with no page to mount on: the field's keys as the
 // steps they make (number.ts), and the forms as the server's renderer writes them.
@@ -190,5 +191,18 @@ describe("a number among a role's options", () => {
       expect(html).toContain('title="A whole number from 1 to 5000"');
       expect(html).toContain('value="600"');
     }
+  });
+});
+
+describe("a number asked for at once", () => {
+  it("is marked as the field asked for, and only it", () => {
+    expect(renderToString(<NumberField value={Number.NaN} unsettable autoFocus onChange={() => {}} />)).toContain('data-asked="true"');
+    expect(renderToString(<NumberField value={Number.NaN} unsettable onChange={() => {}} />)).not.toContain("data-asked");
+  });
+  it("is taken with nothing scrolled to it: the card it is in opens as it grows, never jumped in", () => {
+    const asked: (FocusOptions | undefined)[] = [];
+    askedFocus({ focus: (o) => void asked.push(o) });
+    expect(asked).toEqual([{ preventScroll: true }]);
+    expect(() => askedFocus(null)).not.toThrow();
   });
 });

@@ -11,7 +11,8 @@ import { MOST_CONFORMERS, RING_CONFORMERS } from "../../../../lib/chem/conformer
 import { WITHIN_3D, type ChemistrySettings } from "../../../../lib/settings/appSettings";
 import { covalentLength } from "../../../../lib/chem/metalHolds";
 import { vdwRadius } from "../../../../lib/chem/elements";
-import { bareAtomsOf, bareWords, blocksOf, blocksStill, conformersOf, conformersOnPage, pageCount, pageRounds, drawnBlocksOf, formulaOf, standsForMolecule, likeOf, linkOf, moleculeOf, placeRow, rowFrom, signatureOf, takenOnPage, turnedOver, withinWindow, type Box, type Turned } from "./make3d";
+import { growingJudge } from "./growing";
+import { bareAtomsOf, bareWords, blocksOf, blocksStill, conformersGrowing, conformersOf, conformersOnPage, growOn, pageCount, pageRounds, drawnBlocksOf, formulaOf, standsForMolecule, likeOf, linkOf, moleculeOf, placeRow, rowFrom, signatureOf, takenOnPage, turnedOver, withinWindow, type Box, type Turned } from "./make3d";
 
 /** Ethanol drawn: C1-C2-O3, a bond's length apart. */
 const ethanol: Model = {
@@ -467,15 +468,27 @@ describe("conformers made for the page", () => {
     const settings = { chemistry: { sought3d: "fixed", count3d: 25 } as ChemistrySettings, calculations: { cores: 5, coresAll: 8 } };
     await conformersOnPage(chem, stereo, block, "one", { field: "UFF" }, settings);
     expect(asked).toEqual([{ molblock: block.molblock, isomers: [{ centres: [], doubles: [] }], count: 25, options: { field: "UFF", threads: 5 } }]);
-    // (all that jobs may use, where Settings gives no number)
+    // (where Settings gives no number: all that jobs may use but one, left to the page - every core but one, where it limits none)
     asked.length = 0;
     await conformersOnPage(chem, stereo, block, "one", {}, { ...settings, calculations: { coresAll: 3 } as typeof settings.calculations });
-    expect(asked[0].options.threads).toBe(3);
+    expect(asked[0].options.threads).toBe(2);
+    asked.length = 0;
+    await conformersOnPage(chem, stereo, block, "one", {}, { ...settings, calculations: {} as typeof settings.calculations });
+    expect(asked[0].options.threads).toBe(7);
     // (asked in rounds: each told)
     asked.length = 0;
     await conformersOnPage(chem, stereo, block, "one", {}, settings, { window: 3, first: 10, most: MOST_CONFORMERS }).catch(() => undefined);
     expect(asked.length).toBeGreaterThan(0);
     expect(asked.every((a) => a.options.threads === 5 && a.draw != null)).toBe(true);
+    // (and a search that grows on the page after its first round: the same threads, each round - one core left to the page
+    //  where Settings sets none)
+    for (const [calculations, threads] of [[settings.calculations, 5], [{ coresAll: 3 }, 2], [{}, 7]] as const) {
+      asked.length = 0;
+      const growth = await conformersGrowing(chem, stereo, block, "one", { field: "UFF" }, { calculations: calculations as typeof settings.calculations }, { window: 3, first: 10, most: MOST_CONFORMERS }, () => false).catch(() => null);
+      await growth?.rest(() => {}).catch(() => undefined);
+      expect(asked.length, JSON.stringify(calculations)).toBeGreaterThan(0);
+      expect(asked.every((a) => a.options.threads === threads && a.options.field === "UFF"), JSON.stringify(calculations)).toBe(true);
+    }
     vi.unstubAllGlobals();
   });
 
@@ -605,6 +618,150 @@ describe("conformers made for the page", () => {
     } finally {
       now.mockRestore();
     }
+  });
+
+  it("growing: answers once its first round is in, and goes on after - ending as conformersOf ends, round for round", async () => {
+    // (each draw two conformers: the first two, then each round one new one further along - a conformer of its own - then none new)
+    const roundOf = (draw: number): Conformers =>
+      draw < 3 ? { ...answer, frames: [answer.frames[0], answer.frames[0].map((v, i) => (i === 13 ? v + 0.6 * (draw + 1) : v))], energies: [-0.001, 0.0005 + draw * 0.0001] } : answer;
+    const stereo = { request: async (op: string) => (op === "stereo_elements" ? { read: true, elements: [] } : Promise.reject(new Error(`no ${op} here`))) } as unknown as ChemClient;
+    const chem = { request: async (_op: string, args: Record<string, unknown>) => ({ isomers: [roundOf(Number(args.draw))] }) } as unknown as ChemClient;
+    const [block] = blocksOf(ethanol, [12]);
+    const rounds = { window: 3, first: 10, most: MOST_CONFORMERS };
+    const growth = await conformersGrowing(chem, stereo, block, "one", {}, { calculations: {} }, rounds, () => false);
+    // (at once: the first round's, as the page shows them - its search going on, said)
+    expect(growth.first).toHaveLength(1);
+    expect(growth.first[0].frames).toHaveLength(2);
+    expect(growth.first[0].how?.find((r) => r.label === "Rounds")?.text).toBe("1 round, 10 tried so far: searching on");
+    // (after: each round as it lands, then how it ended - as conformersOf, asked the same, ends)
+    const grown: Conformers[] = [];
+    await growth.rest((k, c) => {
+      expect(k).toBe(0);
+      grown.push(c);
+    });
+    const [whole] = await conformersOf(chem, stereo, block, "one", {}, 50, rounds);
+    const last = grown[grown.length - 1];
+    expect(last.how?.find((r) => r.label === "Rounds")?.text).toBe(whole.how?.find((r) => r.label === "Rounds")?.text);
+    expect(last.frames.length).toBe(whole.frames.length);
+    expect(last.energies).toEqual(whole.energies);
+    expect(grown.slice(0, -1).map((c) => c.how?.find((r) => r.label === "Rounds")?.text)).toEqual(["2 rounds, 20 tried so far: searching on", "3 rounds, 40 tried so far: searching on", "4 rounds, 80 tried so far: searching on"]);
+    expect(last.how?.find((r) => r.label === "Rounds")?.text).toBe("5 rounds, 160 tried: the last brought no new conformer within 3 kcal/mol of the lowest");
+    // (run once)
+    await growth.rest(() => grown.push(answer));
+    expect(grown[grown.length - 1]).toBe(last);
+  });
+
+  it("growing: stopped, ends where it is, what came kept and said", async () => {
+    let stop = false;
+    const stereo = { request: async (op: string) => (op === "stereo_elements" ? { read: true, elements: [] } : Promise.reject(new Error(`no ${op} here`))) } as unknown as ChemClient;
+    const chem = {
+      request: async (_op: string, args: Record<string, unknown>) => ({ isomers: [{ ...answer, frames: [answer.frames[0].map((v, i) => (i === 13 ? v + 0.5 * (Number(args.draw) + 1) : v))], energies: [-0.001 - 0.0016 * Number(args.draw)] }] }),
+    } as unknown as ChemClient;
+    const [block] = blocksOf(ethanol, [12]);
+    const growth = await conformersGrowing(chem, stereo, block, "one", {}, { calculations: {} }, { window: 3, first: 10, most: MOST_CONFORMERS }, () => stop);
+    const said: string[] = [];
+    await growth.rest((_, c) => {
+      said.push(c.how?.find((r) => r.label === "Rounds")?.text ?? "");
+      if (said.length === 2) stop = true;
+    });
+    expect(said).toEqual(["2 rounds, 20 tried so far: searching on", "3 rounds, 40 tried so far: searching on", "3 rounds, 40 tried: stopped, what came kept"]);
+  });
+
+  it("growing: a round that fails ends it failed, saying why, what came kept - never taken for Stop", async () => {
+    const stereo = { request: async (op: string) => (op === "stereo_elements" ? { read: true, elements: [] } : Promise.reject(new Error(`no ${op} here`))) } as unknown as ChemClient;
+    const chem = {
+      request: async (_op: string, args: Record<string, unknown>) =>
+        Number(args.draw) > 0 ? Promise.reject(new Error("the plugin could not read its answer")) : { isomers: [{ ...answer, energies: [-0.001, 0.002] }] },
+    } as unknown as ChemClient;
+    const [block] = blocksOf(ethanol, [12]);
+    const growth = await conformersGrowing(chem, stereo, block, "one", {}, { calculations: {} }, { window: 3, first: 10, most: MOST_CONFORMERS }, () => false);
+    const said: string[] = [];
+    const warned = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      await growth.rest((_, c) => said.push(c.how?.find((r) => r.label === "Rounds")?.text ?? ""));
+      // (said failed; why logged, as Meno's log keeps an error)
+      expect(said).toEqual(["1 round, 10 tried: a round failed, what came kept"]);
+      expect(warned).toHaveBeenCalledWith("Meno: a 3D structure's search ended: a round failed.", expect.objectContaining({ message: "the plugin could not read its answer" }));
+    } finally {
+      warned.mockRestore();
+    }
+  });
+
+  it("growing: Stop asked while a round is out - its plugin stopping with it - ends it stopped, nothing logged as an error", async () => {
+    let stop = false;
+    const stereo = { request: async (op: string) => (op === "stereo_elements" ? { read: true, elements: [] } : Promise.reject(new Error(`no ${op} here`))) } as unknown as ChemClient;
+    const chem = {
+      request: async (_op: string, args: Record<string, unknown>) => {
+        if (Number(args.draw) === 0) return { isomers: [{ ...answer, energies: [-0.001, 0.002] }] };
+        stop = true;
+        throw new Error("the plugin was stopped");
+      },
+    } as unknown as ChemClient;
+    const [block] = blocksOf(ethanol, [12]);
+    const growth = await conformersGrowing(chem, stereo, block, "one", {}, { calculations: {} }, { window: 3, first: 10, most: MOST_CONFORMERS }, () => stop);
+    const said: string[] = [];
+    const warned = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      await growth.rest((_, c) => said.push(c.how?.find((r) => r.label === "Rounds")?.text ?? ""));
+      expect(said).toEqual(["1 round, 10 tried: stopped, what came kept"]);
+      expect(warned).not.toHaveBeenCalled();
+    } finally {
+      warned.mockRestore();
+    }
+  });
+
+  it("growing: runs its rest once, asked twice at once; lets each judge go as its search ends, or all of them where the rest is not run", async () => {
+    const stereo = { request: async (op: string) => (op === "stereo_elements" ? { read: true, elements: [] } : Promise.reject(new Error(`no ${op} here`))) } as unknown as ChemClient;
+    const chem = { request: async (_op: string, args: Record<string, unknown>) => ({ isomers: [{ ...answer, frames: [answer.frames[Number(args.draw) % 2]], energies: [-0.001] }] }) } as unknown as ChemClient;
+    const [block] = blocksOf(ethanol, [12]);
+    let ended = 0;
+    const counted: typeof growingJudge = (c, w, s) => {
+      const j = growingJudge(c, w, s);
+      return { ...j, end: () => void ended++ };
+    };
+    const rounds = { window: 3, first: 10, most: MOST_CONFORMERS };
+    const growth = await conformersGrowing(chem, stereo, block, "one", {}, { calculations: {} }, rounds, () => false, counted);
+    const grown: Conformers[] = [];
+    await Promise.all([growth.rest((_, c) => grown.push(c)), growth.rest((_, c) => grown.push(c))]);
+    expect(grown.filter((c) => !c.how?.some((r) => r.text.endsWith("searching on")))).toHaveLength(1);
+    expect(ended).toBe(1);
+    ended = 0;
+    const dropped = await conformersGrowing(chem, stereo, block, "one", {}, { calculations: {} }, rounds, () => false, counted);
+    dropped.drop();
+    expect(ended).toBe(1);
+    // (one whose first round's judging failed: its judge let go, the failure said)
+    ended = 0;
+    const failing: typeof growingJudge = (c, w, s) => ({ ...counted(c, w, s), add: async () => Promise.reject(new Error("its worker could not judge it")) });
+    await expect(conformersGrowing(chem, stereo, block, "one", {}, { calculations: {} }, rounds, () => false, failing)).rejects.toThrow("its worker could not judge it");
+    expect(ended).toBe(1);
+  });
+
+  it("grows each search in turn, written as each ends - every one of them, one failing among them", async () => {
+    const grown: number[] = [];
+    const settled: number[] = [];
+    const growth = (fail: boolean) => ({ rest: async (g: (k: number, c: Conformers) => void) => (g(0, answer), fail ? Promise.reject(new Error("gone")) : undefined) });
+    const shownAs = (c: Conformers) => ({ atoms: [], energies: c.energies });
+    await expect(
+      growOn(
+        [
+          { growth: growth(true), ids: [1], shownAs },
+          { growth: growth(false), ids: [2, 3], shownAs },
+        ],
+        { grow: (id) => grown.push(id), settle: (id) => settled.push(id) },
+      ),
+    ).rejects.toThrow("gone");
+    expect(grown).toEqual([1]);
+    expect([...new Set(settled)].sort()).toEqual([1, 2, 3]);
+    // (each written as it ends, before the next one goes on)
+    const order: string[] = [];
+    await growOn(
+      [
+        { growth: { rest: async () => void order.push("rest 1") }, ids: [1], shownAs },
+        { growth: { rest: async () => void order.push("rest 2") }, ids: [2], shownAs },
+      ],
+      { grow: () => undefined, settle: (id) => order.push(`settle ${id}`) },
+    );
+    expect(order.slice(0, 3)).toEqual(["rest 1", "settle 1", "rest 2"]);
   });
 
   it("tries as many as Settings says: the chemist's number, or as many as the molecule needs", () => {

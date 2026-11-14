@@ -105,7 +105,7 @@ import { drawnFromSmiles } from "../chem/testdata/identityCases";
 import { useReaders } from "../../../../lib/calc/workers";
 import { PLUGINS } from "../../../../lib/calc/catalog";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
-import { optionsFor, roundsNeed } from "../workflow/doers";
+import { notReadyFor, optionsFor, roundsNeed, stepRole, stepValues } from "../workflow/doers";
 import { FEW_CONFORMERS, WITHIN_NEEDED } from "../../../../lib/chem/conformersSought";
 import { kindInfo } from "../workflow/kinds";
 import { entryOfSet, setEntries, setMembers, structureLineage } from "../workflow/entries";
@@ -115,7 +115,7 @@ import { bareLeft, notMade, ONE_ROUND_AS_JOBS, oneRoundAsJobs, partsLeft, stereo
 useReaders.setState({ state: Object.fromEntries(PLUGINS.map((p) => [p.id, "added" as const])), problem: {} });
 
 /** Three structures drawn side by side - water, ethane (which Sketchkit, here, cannot make) and methanol - and a conformer search by Sketchkit on them. */
-async function searched(meanwhile?: (st: () => ReturnType<ReturnType<typeof createEditorStore>["getState"]>, step: number) => Promise<void>, records: (DrawnRecord | undefined)[] = [], third: "methanol" | "allene" = "methanol") {
+async function searched(meanwhile?: (st: () => ReturnType<ReturnType<typeof createEditorStore>["getState"]>, step: number) => Promise<void>, records: (DrawnRecord | undefined)[] = [], third: "methanol" | "allene" = "methanol", bare = false) {
   const doc = createWorkspaceDocument();
   const parts: { el: string; at: [number, number] }[][] = [
     [{ el: "O", at: [0, 0] }],
@@ -159,6 +159,8 @@ async function searched(meanwhile?: (st: () => ReturnType<ReturnType<typeof crea
       sets: d.sets!.map((b) => (b.id === set ? { ...b, members: b.members!.map((m, i) => ("structure" in m && records[i] ? { ...m, record: records[i] } : m)) } : b)),
     }));
   const step = st().addStep("conformers", "sketchkit", 0, 0);
+  // (one put down otherwise than on the canvas - a template's, a file's: no options of its own)
+  if (bare) doc.edit("bare", (d) => ({ ...d, steps: d.steps!.map((x) => (x.id === step ? { ...x, options: undefined } : x)) }));
   st().connect({ set }, step);
   const run = st().runStep(step);
   await meanwhile?.(st, step);
@@ -500,17 +502,41 @@ describe("Sketchkit's conformer search as a step, on structures drawn", () => {
     }
   });
 
-  it("fails each structure, saying it needs its window, where it is run with none - its search taking draws", async () => {
+  it("holding no options of its own - a template's - runs with those Settings, Calculations, keeps for its kind, shown and judged ready by them", async () => {
+    const search = PLUGINS.find((p) => p.id === "sketchkit") as unknown as { roleDraws: readonly string[] };
+    const was = search.roleDraws;
+    search.roleDraws = ["conformers"];
+    useAppSettings.setState((s) => ({ ...s, options: { ...s.options, [stepRole("conformers", "sketchkit")]: { sought: "fixed", count: 6, within: 10, field: "KF2" } } }));
+    try {
+      const { step } = await searched(undefined, [], "methanol", true);
+      expect(step.options).toBeUndefined();
+      // (ready - a number asked for, so no window needed - and its card shows Settings' values)
+      expect(notReadyFor(step)).toBeUndefined();
+      expect(stepValues(step)).toMatchObject({ sought: "fixed", count: 6, within: 10, field: "KF2" });
+      expect(asked.map((a) => a.count)).toEqual([6, 6, 6]);
+      expect(asked[0].options).toMatchObject({ sought: "fixed", count: 6, field: "KF2" });
+      // (its own values, where it has them, stay its own: a step put down on the canvas keeps what it started with)
+      expect(stepValues({ ...step, options: { sought: "needed", within: 2 } })).toMatchObject({ sought: "needed", within: 2, field: "KF2" });
+      // (and with nothing kept in Settings for it, as on a fresh install: as many as needed, no window - not ready, as the card says)
+      useAppSettings.setState((s) => ({ ...s, options: {} }));
+      expect(notReadyFor(step)).toBe(WITHIN_NEEDED);
+    } finally {
+      search.roleDraws = was;
+      useAppSettings.setState((s) => ({ ...s, options: {} }));
+    }
+  });
+
+  it("is refused at once, in its card's words, where it is run with no window - its search taking draws: nothing asked, nothing set aside", async () => {
     const search = PLUGINS.find((p) => p.id === "sketchkit") as unknown as { roleDraws: readonly string[] };
     const was = search.roleDraws;
     search.roleDraws = ["conformers"];
     try {
       const { step, st } = await searched();
-      // (none asked, none made: each in its Failed exit as it came, saying why)
+      // (none asked, none made, none run through to its Failed exit: the step itself refused, saying what it needs - never that they could not be made in 3D)
       expect(asked).toHaveLength(0);
       expect(st().molecules3d.filter((m) => m.conformerSet)).toHaveLength(0);
-      const failed = st().sets.find((b) => b.made?.step === step.id && b.made.exit === "failed")!;
-      expect((failed.members ?? []).map((m) => ("structure" in m ? m.record?.status : null))).toEqual(Array(3).fill({ failed: WITHIN_NEEDED }));
+      expect(st().sets.filter((b) => b.made?.step === step.id).flatMap((b) => b.members ?? [])).toHaveLength(0);
+      expect(step.ran).toMatchObject({ ok: false, said: WITHIN_NEEDED });
     } finally {
       search.roleDraws = was;
     }

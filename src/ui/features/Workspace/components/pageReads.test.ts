@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-// (idle time at once; a page's letters and figures that fail to read, every time)
-vi.mock("../../../../lib/core/idle", () => ({ whenIdle: (work: () => void) => work() }));
+// (the hands at rest at once; a page's letters and figures that fail to read, every time)
+vi.mock("../../../../lib/core/calm", () => ({ whenCalm: (work: () => void) => (work(), () => {}) }));
 const asked: string[] = [];
 vi.mock("../../../../lib/pdf/text", () => ({
   textHad: (sha: string, page: number, _came: unknown, failed: () => void) => (asked.push(`text ${sha}:${page}`), failed(), null),
