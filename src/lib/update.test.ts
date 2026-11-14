@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useNetwork } from "./net/network";
-import { EVERY_MS, lookDue, looksDaily, mayLook, noticeShown, readySaid, UPDATE_CONSENT, UPDATE_PURPOSE, useUpdate, useUpdateDownloads, type UpdateState } from "./update";
+import { answerUpdateQuestion, EVERY_MS, lookDue, looksDaily, mayLook, noticeShown, readySaid, UPDATE_CONSENT, UPDATE_PURPOSE, useUpdate, useUpdateDownloads, useUpdateQuestion, type UpdateState } from "./update";
+import { DEFAULT_APP_SETTINGS, useAppSettings } from "./settings/appSettings";
 
 describe("keeping Meno up to date", () => {
   afterEach(() => {
@@ -178,4 +179,20 @@ describe("looking once a day, by the wall clock", () => {
     await vi.advanceTimersByTimeAsync(10 * 60_000);
     expect(looks).toBe(1);
   });
+
+  it("is asked on the card: a yes allows what it named and is kept; Not now is kept; a yes offline is not, and is asked again", async () => {
+    const asked = () => useAppSettings.getState().updates.asked;
+    for (const [offline, yes, granted, kept] of [
+      [false, true, [UPDATE_PURPOSE], true],
+      [false, false, [], true],
+      [true, true, [], false],
+    ] as const) {
+      useAppSettings.setState({ updates: { ...DEFAULT_APP_SETTINGS.updates } });
+      useNetwork.setState({ offline, granted: [] });
+      useUpdateQuestion.setState({ asking: true });
+      await answerUpdateQuestion(yes);
+      expect([useUpdateQuestion.getState().asking, useNetwork.getState().granted, !!asked()]).toEqual([false, granted, kept]);
+    }
+  });
 });
+

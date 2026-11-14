@@ -15,10 +15,13 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { create } from "zustand";
-import { askToConnect, useNetwork, type ConsentRequest, type NetTask } from "./net/network";
+import { allowAnswered, askToConnect, useNetwork, type ConsentRequest, type NetTask } from "./net/network";
 import { useAppSettings } from "./settings/appSettings";
 import { useGuide } from "./guide/guide";
 import { afterFirstAction } from "./firstAction";
+import { useFirstSetUp } from "./plugins/firstSetUp";
+import { useChem } from "./roles/worker";
+import { settingUp, useReaders } from "./calc/workers";
 
 /** The purpose Meno's network knows updating by. */
 export const UPDATE_PURPOSE = "app-update";
@@ -200,6 +203,38 @@ export async function restartIntoUpdate(): Promise<void> {
 }
 
 /**
+ * Meno's own question about keeping itself up to date, asked on the card at
+ * the edge of the window (ui/network/FirstSetUpCard), never over the page:
+ * whether it shows.
+ */
+export const useUpdateQuestion = create<{ asking: boolean }>(() => ({ asking: false }));
+
+/**
+ * The card's question answered: a yes allows what it named (`UPDATE_CONSENT`'s hosts) and Meno looks at once; *Not now*
+ * nothing. Either is kept, so it is not asked again of itself; a yes offline is not, and it is asked again.
+ */
+export async function answerUpdateQuestion(yes: boolean): Promise<void> {
+  useUpdateQuestion.setState({ asking: false });
+  if (yes && !(await allowAnswered([UPDATE_PURPOSE]))) return;
+  const now = useAppSettings.getState();
+  now.setUpdates({ ...now.updates, asked: true });
+}
+
+/**
+ * Whether something is under way on the page, so that Meno's own question waits for it to rest (lib/firstAction): the
+ * pointer held (`pressed`), a guide open, a text field or Quick Add or a menu open, a plugin being set up or started,
+ * the first start's card or a question over the page showing.
+ */
+function pageBusy(pressed: boolean): boolean {
+  if (pressed || useGuide.getState().open != null) return true;
+  const typing = document.activeElement instanceof HTMLElement && (document.activeElement.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName));
+  if (typing || document.querySelector('[data-guide="quick-add"], [role="menu"]')) return true;
+  const chem = useChem.getState().state;
+  if (chem === "setting-up" || chem === "starting" || settingUp() != null) return true;
+  return useFirstSetUp.getState().phase !== "none" || useNetwork.getState().asking != null;
+}
+
+/**
  * Starts keeping Meno up to date, once the settings are in: asks the once -
  * after the user's first action (lib/firstAction), once it has ended, never
  * before - looks after a little while, then once a day by the wall clock
@@ -219,34 +254,35 @@ export function startUpdates(): () => void {
       const settings = useAppSettings.getState();
       const net = useNetwork.getState();
       if (net.offline || net.granted.includes(UPDATE_PURPOSE) || settings.updates.asked) return;
-      // (kept as asked once answered - yes or not now: a question left open as Meno quits is asked again, after the next run's first action)
-      void askToConnect(UPDATE_CONSENT).then(() => {
-        const now = useAppSettings.getState();
-        now.setUpdates({ ...now.updates, asked: true });
-      });
+      // (on the card - answered, kept as asked: answerUpdateQuestion; left open as Meno quits, asked again after the next run's first action)
+      useUpdateQuestion.setState({ asking: true });
     };
-    // (not in the middle of what the user is doing - the pointer held - nor over a guide being gone through)
+    // (only once the page has rested - nothing done, nothing under way: pageBusy - each thing done starting the stretch again)
     let pressed = false;
     const ask = afterFirstAction(
       askNow,
-      () => pressed || useGuide.getState().open != null,
+      () => pageBusy(pressed),
       (changed) => {
         const down = () => {
           pressed = true;
+          changed();
         };
         const up = () => {
           pressed = false;
           changed();
         };
+        const events = ["keydown", "wheel", "focusin", "focusout"] as const;
         window.addEventListener("pointerdown", down, true);
         window.addEventListener("pointerup", up, true);
         window.addEventListener("pointercancel", up, true);
-        const unguided = useGuide.subscribe(changed);
+        for (const e of events) window.addEventListener(e, changed, true);
+        const stops = [useGuide, useChem, useReaders, useFirstSetUp, useNetwork].map((store) => (store.subscribe as (f: () => void) => () => void)(changed));
         return () => {
           window.removeEventListener("pointerdown", down, true);
           window.removeEventListener("pointerup", up, true);
           window.removeEventListener("pointercancel", up, true);
-          unguided();
+          for (const e of events) window.removeEventListener(e, changed, true);
+          stops.forEach((s) => s());
         };
       },
     );
