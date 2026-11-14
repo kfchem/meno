@@ -29,7 +29,7 @@ import { stereoisomersAnswer } from "../../workflow/stereoisomers";
 import { EXAMINE_MS } from "../../../../../lib/chem/stereoOpen";
 import { holdsGraphOf3d, keptMade, madeChecks, madeChecksOf, metalHolds, metalHoldsOf } from "../../../../../lib/chem/metalHolds";
 import { COORDINATION_BOND } from "../../../../../lib/chem/molecule";
-import { byOf, doerName, installedFor, optionsFor, programsFor, renderPresets, takesNothingBy } from "../../workflow/doers";
+import { byOf, doerName, installedFor, optionsFor, programsFor, renderPresets, roundsNeed, takesNothingBy } from "../../workflow/doers";
 import { heldBy, heldRows, type HeldRows } from "../../workflow/heldRows";
 import { HOLDS_RESTRAINTS } from "../../../../../lib/plugins/steps";
 import type { Restraint } from "../../../../../lib/entry";
@@ -767,6 +767,10 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const partly: string[] = [];
     // (each structure drawn not made, as it came, with why: in the step's Failed exit, to be followed and wired on - into Stereoisomers, one left open)
     const notMadeDrawn: DrawnEntry[] = [];
+    // (asked for as many as each needs, in rounds, with no window to end them by: refused at once, in its card's words - nothing asked
+    //  of the plugin, no structure set aside for it)
+    const need = roundsNeed(step.kind, plugin.roleDraws.includes("conformers"), options);
+    if (need) return void fail(id, need, at, key);
     try {
       let chem = await pluginWorker(plugin);
       // (what each leaves open, and which stereoisomer is made: Meno's, on what the plugin that finds stereoisomers perceives - chem/openStereo)
@@ -813,12 +817,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           // (as many as the molecule needs, in rounds, where the plugin's search takes draws: until a round brings no conformer new within
           //  the step's window - chem/conformerRounds; a workflow's search has no time it must end in)
           const rounds = plugin.roleDraws.includes("conformers") ? roundsAsked(options, () => conformersSoughtOf(block.molblock)) : null;
-          // (its window not given - a step not ready, run all the same: each said so in Meno's words, never taken for what could not be made)
-          if (rounds && "needs" in rounds) {
-            failed.push(place + 1);
-            asideAs(rounds.needs);
-            continue;
-          }
+          // (its window not given: refused before any was asked, above)
+          if (rounds && "needs" in rounds) throw new Error(rounds.needs);
           // (a metal's holds, Meno's - and which of what was made stand: lib/chem/metalHolds)
           const holds = metalHoldsOf(block.molblock);
           const ask = async (count: number | null, draw?: number) =>
