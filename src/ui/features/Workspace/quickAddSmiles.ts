@@ -1,5 +1,5 @@
 /** A SMILES read from Quick Add's field (./QuickAdd), plain, to be tested without a page. */
-import { NoPlugin } from "../../../lib/roles/worker";
+import { NoPlugin, type ChemState } from "../../../lib/roles/worker";
 import type { RoleId } from "../../../lib/plugins/roles";
 
 /** What came of it: drawn (null), or why not - and, where no plugin here reads it, the role the plugins online are offered for (./RoleOffer). */
@@ -28,4 +28,15 @@ export function afterAdded(typed: string, reading: boolean, read: (smiles: strin
   const smiles = typed.trim();
   if (smiles && !reading) read(smiles);
   else letGo();
+}
+
+/**
+ * The one line under the SMILES field saying where chemistry stands, where it is not ready: being set up, with how far it has come
+ * (`share`, 0 to 1, where it is known), and - where a SMILES typed waits for it (`waiting`) - that it is drawn when ready; or being
+ * started. None where it is ready, or nothing has asked for it yet (what is said of a plugin missing, or offline, is said as before).
+ */
+export function chemistryLine(chem: ChemState, share: number | undefined, waiting: boolean): string | null {
+  if (chem.state === "setting-up") return `Setting up chemistry${share != null ? `: ${Math.floor(share * 100)}%` : ""}.${waiting ? " This is drawn when it is ready." : ""}`;
+  if (chem.state === "starting") return "Starting chemistry. The first one takes a moment.";
+  return null;
 }

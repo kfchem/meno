@@ -10,15 +10,16 @@ import { useMenuAt, type MenuAnchor } from "./useMenuAt";
 import { listWidth } from "./quickAddLabel";
 import QuickAddCalculations from "./QuickAddCalculations";
 import { guideNotice } from "../../../lib/guide/guide";
-import { startAhead } from "../../../lib/roles/worker";
+import { startAhead, useChem } from "../../../lib/roles/worker";
 import type { StepKind } from "./workflow/kinds";
 import type { QuickGroup } from "./workflow/offered";
 import { SHAPE_KINDS, SHAPE_NAMES, type ShapeKind } from "../../../lib/chem/shapes";
 import { togglesOn } from "./utils/press";
-import { quickAddLeaves } from "./quickAddLeave";
+import { quickAddLeaves, typedIntoQuickAdd } from "./quickAddLeave";
 import type { CoordinateStructure } from "../../../lib/io/coordinates";
 import { pastedAs } from "./quickAddPaste";
-import { afterAdded, readSmiles } from "./quickAddSmiles";
+import { afterAdded, chemistryLine, readSmiles } from "./quickAddSmiles";
+import { useDownloads } from "../../../lib/pyEnv";
 import { toggledPanel, type QuickPanel } from "./quickAddPanel";
 import { resolve, sameFormula, type Reading } from "./chem/resolve";
 import { FormulaText } from "../../abbreviations/FormulaText";
@@ -260,6 +261,26 @@ export default function QuickAdd({
       window.removeEventListener("keydown", onKey, true);
     };
   }, [onClose, leaving]);
+  // (a key typed with no icon chosen: the SMILES field opens with it - typing is what a first-time chemist tries - an input
+  //  method's composing there: ./quickAddLeave `typedIntoQuickAdd`)
+  const field = useRef<HTMLInputElement>(null);
+  const [seed, setSeed] = useState<{ text: string; n: number } | null>(null);
+  useEffect(() => {
+    if (leaving || wired) return;
+    const onType = (e: KeyboardEvent) => {
+      const what = typedIntoQuickAdd(e, open !== "none");
+      if (!what) return;
+      e.stopPropagation();
+      if ("seed" in what) {
+        e.preventDefault();
+        setSeed((s) => ({ text: what.seed, n: (s?.n ?? 0) + 1 }));
+      }
+      setOpen("smiles");
+      field.current?.focus();
+    };
+    window.addEventListener("keydown", onType, true);
+    return () => window.removeEventListener("keydown", onType, true);
+  }, [leaving, wired, open]);
   // (a row for each who does steps, its steps under it - and one for the procedures, after them: as wide as their names need, whatever the row above holds)
   const offered = wired ? [] : procedures;
   const calcWidth = useMemo(() => listWidth([...steps.flatMap((g) => [g.name, ...g.steps.map((k) => k.name)]), ...(wired ? [] : procedures).map((p) => p.name)]), [steps, procedures, wired]);
@@ -329,7 +350,7 @@ export default function QuickAdd({
         <div className="grid transition-[grid-template-rows,opacity] duration-200 ease-meno" style={{ gridTemplateRows: open === "smiles" ? "1fr" : "0fr", opacity: open === "smiles" ? 1 : 0 }}>
           {/* (clipped for the ease - but over the card's padding, so the field's focus ring shows whole) */}
           <div className="-mx-1 px-1 overflow-hidden" inert={open !== "smiles"}>
-            <SmilesField width={width - 8} open={open === "smiles"} onSmiles={onSmiles} onNamed={onNamed} onCoordinates={onCoordinates} onOutput={onOutput} />
+            <SmilesField width={width - 8} open={open === "smiles"} field={field} seed={seed} onSmiles={onSmiles} onNamed={onNamed} onCoordinates={onCoordinates} onOutput={onOutput} />
           </div>
         </div>
       )}
@@ -388,6 +409,8 @@ export default function QuickAdd({
 function SmilesField({
   width,
   open,
+  field,
+  seed,
   onSmiles,
   onNamed,
   onCoordinates,
@@ -395,6 +418,10 @@ function SmilesField({
 }: {
   width: number;
   open: boolean;
+  /** The field itself, for Quick Add to give it the focus as a key is typed. */
+  field?: React.RefObject<HTMLInputElement | null>;
+  /** A key typed in Quick Add with no icon chosen: the field begun with it (each its own `n`). */
+  seed?: { text: string; n: number } | null;
   onSmiles: (smiles: string) => Promise<void>;
   onNamed?: (label: string) => void;
   onCoordinates?: (structures: CoordinateStructure[]) => void;
@@ -405,6 +432,9 @@ function SmilesField({
   // (a SMILES no plugin here reads: the plugins online that do, each to add - RoleOffer)
   const [needs, setNeeds] = useState<RoleId | null>(null);
   const [busy, setBusy] = useState(false);
+  // (where chemistry stands while it is got ready or started: one line under the field - a SMILES typed meanwhile waits, and is drawn)
+  const chem = useChem();
+  const share = useDownloads((d) => (chem.state === "setting-up" ? d[chem.id] : undefined));
   // (what the text reads as - offered only where the dictionary has it: a SMILES alone is drawn as it was - and which is chosen)
   const named = onNamed != null;
   const readings = useMemo(() => (named ? resolve(text, "molecule").readings : []), [text, named]);
@@ -413,10 +443,19 @@ function SmilesField({
   const chosen: Reading | undefined = offered[Math.min(choice, offered.length - 1)];
   // (a SMILES being read: a second Enter as quick as the first finds it so, though React has not drawn the first's yet)
   const reading = useRef(false);
-  const input = useRef<HTMLInputElement>(null);
+  const own = useRef<HTMLInputElement>(null);
+  const input = field ?? own;
   useEffect(() => {
     if (open) input.current?.focus();
-  }, [open]);
+  }, [open, input]);
+  // (begun with the key typed in Quick Add: what is there now, as typed, the caret after it)
+  useEffect(() => {
+    if (!seed) return;
+    setText(seed.text);
+    setChoice(0);
+    setError(null);
+    setNeeds(null);
+  }, [seed]);
   /** The SMILES read and drawn; or why not, and the plugins online that read it (./quickAddSmiles). */
   const read = (smiles: string) => {
     reading.current = true;
@@ -480,6 +519,12 @@ function SmilesField({
         className="w-full h-8 rounded-md border border-gh-line px-2 font-mono text-xs outline-none focus:border-accel-base focus:ring-2 focus:ring-accel-lightbase"
       />
       {offered.length > 0 && <DrawAs offered={offered} chosen={chosen} onChoose={setChoice} />}
+      {/* (where chemistry stands, while it is got ready or started - many seconds on a first start: said here, where it is typed) */}
+      {!error && !needs && chemistryLine(chem, share, busy) && (
+        <div role="status" className="meno-fade-in px-0.5 pt-1 text-[11px] leading-snug text-gh-gray">
+          {chemistryLine(chem, share, busy)}
+        </div>
+      )}
       {error && <div className="px-0.5 pt-1 text-[11px] leading-snug text-accel-accent break-words">{error}</div>}
       {needs && (
         <div className="flex flex-wrap items-center gap-1.5 px-0.5 pt-1 text-[11px]">

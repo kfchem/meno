@@ -440,7 +440,15 @@ A double-click and a drag that starts on an atom draws one bond out of it.
 
 **Quick Add** (the maintainer, 2026-10-08). A double-click on empty space
 opens, up and to the right of it, what can be put down there, each an
-icon - named as the pointer rests on it - and none in words: a bond
+icon - named as the pointer rests on it - and none in words. A key typed
+with none of them chosen opens the SMILES field with it (2026-11-14: a
+first-time chemist types, and nothing happened): its letter is the field's
+first, the caret after it; from an input method the field opens for it to
+compose in. Under the field, one line says where chemistry stands while it
+is not ready: "Setting up chemistry: 42%." as it is set up - and, where a
+SMILES typed waits for it, "This is drawn when it is ready." - and
+"Starting chemistry. The first one takes a moment." as it starts; a
+SMILES no plugin here reads says what does, as before. The icons: a bond
 (across at 30 degrees, as a chain from empty space begins), a chain, a
 SMILES, text and an arrow (*Arrows* below); then two groups, each with a
 small mark at its corner, each opening a row of its own below the first,
