@@ -184,7 +184,11 @@ describe("a metal's donors across, in identity", () => {
     expect(open(CIS)).toBe(true);
     expect(open("Cl[Co+]12(Cl)(NCCN1)NCCN2")).toBe(true);
     // (one arrangement, or every pairing one text: not open)
-    for (const smiles of ["Cl[Pt-2](Cl)(Cl)Cl", "Cl[Pt-](Cl)(Cl)N", "Cl[Pt]1(Cl)NCCN1", "N[Co+3](N)(N)(N)(N)N", "[Co+3]123(NCCN1)(NCCN2)NCCN3", "[Zn]123N(CCN1)(CCN2)CCN3"]) expect([smiles, open(smiles)]).toEqual([smiles, false]);
+    for (const smiles of ["Cl[Pt-2](Cl)(Cl)Cl", "Cl[Pt-](Cl)(Cl)N", "Cl[Pt]1(Cl)NCCN1", "N[Co+3](N)(N)(N)(N)N", "[Co+3]123(NCCN1)(NCCN2)NCCN3", "[Zn]123N(CCN1)(CCN2)CCN3", "[Co-]12345N(CC(=O)O1)(CC(=O)O2)CCN5(CC(=O)O3)CC(=O)O4"]) expect([smiles, open(smiles)]).toEqual([smiles, false]);
+    // ([Co(EDTA)]- read as six donors on the Co, not fewer)
+    expect(metalOf(fromSmiles("[Co-]12345N(CC(=O)O1)(CC(=O)O2)CCN5(CC(=O)O3)CC(=O)O4")).donors).toHaveLength(6);
+    // (a chelated square-planar centre that can be arranged two ways: Pt(gly)2)
+    expect(open("[Pt]12([NH2]CC(=O)O1)[NH2]CC(=O)O2")).toBe(true);
     // (an arrangement given for it is set aside: asked of the structure as if none were; no metal, no unit)
     expect(arrangementOpen(arranged(CIS, [[0, 2], [1, 3]]), metalOf(fromSmiles(CIS)).m)).toBe(true);
     expect(arrangementOpen(fromSmiles("CC(C)O"), 1)).toBe(false);
