@@ -22,6 +22,7 @@ import { pageThreadsOf } from "../../../../lib/jobs";
 import { chemMolblock, isElementSymbol, molIndex } from "../../../../lib/roles/molblock";
 import { readMolfile } from "../../../../lib/chem/ctfile";
 import { COORDINATION_BOND } from "../../../../lib/chem/molecule";
+import { ofTheStructure } from "../../../../lib/chem/perception/graph";
 import { abbreviationOf } from "../../../../lib/chem/abbreviations";
 import { writeMolfile3d } from "../../../../lib/chem/molWriter";
 import { skeletonWhy } from "../../../../lib/chem/skeleton";
@@ -181,6 +182,17 @@ export function blocksOf(model: Model, atoms: Iterable<number>, keep: (part: Mod
 /** The parts of a structure drawn, as a step on structures drawn is asked about them (`asDrawn`): a bare atom's too. */
 export function drawnBlocksOf(model: Model, atoms: Iterable<number>): Block[] {
   return blocksOf(model, atoms, asDrawn);
+}
+
+/**
+ * How many structures these atoms are in, as `drawnBlocksOf` takes them but joined by the structure's bonds alone (perception/graph
+ * `ofTheStructure`): two molecules a hydrogen bond alone joins are two - *Check structures*' parts.
+ */
+export function drawnPartsOf(model: Model, atoms: Iterable<number>): number {
+  const structure = { ...model, bonds: model.bonds.filter(ofTheStructure) };
+  return fragmentsHolding(structure, atoms)
+    .map((ids) => partOf(structure, ids))
+    .filter(asDrawn).length;
 }
 
 /** What a structure leaves open: its stereocentres and double bonds drawn without a configuration, by id, and how many stereoisomers they make. */

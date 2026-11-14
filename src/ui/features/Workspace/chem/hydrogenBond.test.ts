@@ -7,6 +7,7 @@ import { laidOut } from "./cleanUp";
 import { cipMarksOf } from "./cipMarks";
 import { drawingOf } from "./drawing";
 import { layoutJob } from "./engineLayout";
+import { drawnBlocksOf, drawnPartsOf } from "./make3d";
 import { identityInputOf, identityOfDrawn } from "./identityOf";
 
 // A hydrogen bond drawn (a file's type 10, dotted) is no bond of the structure: it closes no ring, joins no two molecules, and is laid out
@@ -108,5 +109,36 @@ describe("a hydrogen bond to an ether's O", () => {
     });
     expect(identityInputOf(ether(false)).unread).toEqual([]);
     expect(identityInputOf(ether(true)).unread).toEqual([]);
+  });
+});
+
+describe("Check structures' parts, by the structure's bonds", () => {
+  const all = (m: Model) => m.atoms.map((a) => a.id);
+  // (two acetic acids, each one's O-H bonded to the other's C=O)
+  const dimer = (hBonds: boolean): Model => ({
+    atoms: [atom(1, [0, 0]), atom(2, [1, 0]), atom(3, [1.5, 0.87], "O"), atom(4, [1.5, -0.87], "O"), atom(5, [2.4, -0.87], "H"), atom(6, [5, 0]), atom(7, [4, 0]), atom(8, [3.5, -0.87], "O"), atom(9, [3.5, 0.87], "O"), atom(10, [2.6, 0.87], "H")],
+    bonds: [bond(11, 1, 2), bond(12, 2, 3, 2), bond(13, 2, 4), bond(14, 4, 5), bond(15, 6, 7), bond(16, 7, 8, 2), bond(17, 7, 9), bond(18, 9, 10), ...(hBonds ? [bond(19, 5, 8, 1, { hydrogen: true }), bond(20, 10, 3, 1, { hydrogen: true })] : [])],
+  });
+  // (PtCl2(NH3)2: its N bound by coordination bonds)
+  const platin: Model = {
+    atoms: [atom(1, [0, 0], "Pt"), atom(2, [1, 0], "Cl"), atom(3, [-1, 0], "Cl"), atom(4, [0, 1], "N"), atom(5, [0, -1], "N")],
+    bonds: [bond(11, 1, 2), bond(12, 1, 3), bond(13, 4, 1, 1, { coordination: true }), bond(14, 5, 1, 1, { coordination: true })],
+  };
+  const salt: Model = { atoms: [{ ...atom(1, [0, 0], "Na"), charge: 1 }, { ...atom(2, [2, 0], "Cl"), charge: -1 }], bonds: [] };
+
+  it("counts the enol alone one part, the enol and a water it binds two, an acid dimer two, a complex one, a salt two", () => {
+    expect(drawnPartsOf(enol(true), all(enol(true)))).toBe(1);
+    const bound = withWater(enol(true), 8, true);
+    expect(drawnPartsOf(bound, all(bound))).toBe(2);
+    expect(drawnPartsOf(dimer(true), all(dimer(true)))).toBe(2);
+    expect(drawnPartsOf(platin, all(platin))).toBe(1);
+    expect(drawnPartsOf(salt, all(salt))).toBe(2);
+  });
+
+  it("counts as many parts as the plugin is given structures, where no hydrogen bond is drawn", () => {
+    // (and a label standing alone, which stands for no structure: none)
+    const label: Model = { atoms: [...salt.atoms, atom(3, [4, 0], "R")], bonds: [] };
+    for (const m of [enol(false), withWater(enol(false), 8, false), dimer(false), platin, salt, label]) expect(drawnPartsOf(m, all(m))).toBe(drawnBlocksOf(m, all(m)).length);
+    expect(drawnPartsOf(label, all(label))).toBe(2);
   });
 });

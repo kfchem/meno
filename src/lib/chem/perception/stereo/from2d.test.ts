@@ -1067,6 +1067,17 @@ describe("a hydrogen bond is no bond of the structure", () => {
     }
   });
 
+  it("reads a biaryl's axis whose rings a hydrogen bond bridges, O to N, as without it: the bond closes no ring of five round the axis", () => {
+    // (2-(2-hydroxy-6-methylphenyl)-3-methylpyridine: its biaryl bond atoms 7 and 8, its O 6 and N 9)
+    const g = fromSmiles("Cc1cccc(O)c1-c1ncccc1C");
+    const given = { atoms: [7, 8] as const, refs: [1, 9] as const, sense: 1 as const };
+    const drawn = drawing({ ...g, axes: [given] });
+    const plainAtoms = drawn.atoms.map((a, k) => (k < g.atoms.length ? { ...a, el: g.atoms[k].el } : { ...a, el: "H" }));
+    const axesOf = (bs: DrawnBond[]) => readStereo(plainAtoms, bs).axes.map((x) => x.sense);
+    expect(axesOf(drawn.bonds)).toHaveLength(1);
+    expect(axesOf([...drawn.bonds, { a: 6, b: 9, order: 1, hydrogen: true }])).toEqual(axesOf(drawn.bonds));
+  });
+
   it("says a bond by its place in the caller's list, the hydrogen bond first in it", () => {
     const { cisTrans } = readStereo(atoms, [hBond, ...bonds]);
     expect([...cisTrans.keys()]).toEqual([4]);
