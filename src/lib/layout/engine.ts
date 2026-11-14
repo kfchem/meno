@@ -140,7 +140,13 @@ function onSpokes(input: LayoutInput, out: Layout2D): Layout2D {
       if (Math.abs(off) < 1e-9) continue;
       // (what it carries, reached not through the atom; none where that reaches another of its donors - a chelate's, held by its ring)
       const side = new Set([v]);
-      for (const todo = [v]; todo.length; ) for (const w of near[todo.pop()!]) if (w !== m && !side.has(w)) (side.add(w), todo.push(w));
+      for (const todo = [v]; todo.length; ) {
+        for (const w of near[todo.pop()!]) {
+          if (w === m || side.has(w)) continue;
+          side.add(w);
+          todo.push(w);
+        }
+      }
       if (round.some((w) => w !== v && side.has(w))) continue;
       const [c, sn] = [Math.cos(off), Math.sin(off)];
       for (const w of side) {
