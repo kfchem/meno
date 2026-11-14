@@ -1229,6 +1229,18 @@ describe("a step that runs a plugin's program", () => {
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Some atoms are very close" });
   });
 
+  it("says a why the program broke over lines on one line, where its one structure failed", async () => {
+    worker.collect.mockImplementationOnce((async () => ({ why: "Some atoms\nare  very close\n" })) as never);
+    const { st, step } = editor();
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    Object.assign(jobs.get(idOf(1))!, { state: "failed", started: 1000, ended: 2000, code: 1 });
+    await st().lookAtJobs();
+    await ran;
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Some atoms are very close" });
+  });
+
   it("fails where its plugin read back a geometry it could not read - and holds up no other step, nor itself", async () => {
     const { st, step } = editor();
     const other = st().addStep("energy", "tightbind", 10, 20);
@@ -1564,7 +1576,19 @@ describe("a step that runs a plugin's program", () => {
     end(4);
     await st().lookAtJobs();
     await again;
-    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:01 \u00b7 1 of 3 \u00b7 2 of 3 failed (2: the program stopped with an error)" });
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:01 \u00b7 1 of 3 \u00b7 2 of 3 failed (2: the program stopped with an error: Some atoms are very close)" });
+    // (every one failed, each with the same words: said once, in the count - not again after it)
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0, 1, 2], ...two }] }) as never);
+    const none = st().runStep(step);
+    await settle();
+    await settle();
+    end(5, "failed");
+    await st().lookAtJobs();
+    await none;
+    const said = st().steps.find((s) => s.id === step)!.ran!.said!;
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false });
+    expect(said).toContain("3 of 3 failed (3: the program stopped with an error: Some atoms are very close)");
+    expect(said.split("Some atoms are very close")).toHaveLength(2);
   });
 
   it("keeps when a running job last wrote anything, as its runner says - running jobs' alone", async () => {

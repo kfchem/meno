@@ -2854,6 +2854,14 @@ them again*; the maintainer's rulings of 2026-10-22):
   finished, the program stopped with an error, refused, another molecule
   came back, no geometry came back, not converged - and *failed* for any
   other. A plugin names one of them; its own words are always kept beside.
+  Where the program stopped with an error, its words are said with it on
+  the step's line, the chip and its tip: *1 of 1 failed (1: the program
+  stopped with an error: <why>)*, on one line however the program broke
+  them over lines, a chip's cut at 80 characters with an ellipsis, whole
+  in its tip and its record; the line says them once, where every such
+  failure gave the same words. A conformer table's cell and Filter's
+  states say the kind alone. The other kinds say what happened already:
+  their words are in the record.
 - **An optimisation that did not converge is not done** (until
   2026-10-22 it was passed on as a minimum): its path and the last
   geometry it reached go out of *Failed*, the failure on that geometry,
