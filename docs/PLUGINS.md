@@ -224,8 +224,15 @@ alone.
   documents is one there. As Meno starts, each version's folder its
   plugin's `current` does not name - one an update replaced, one half put
   in place - is taken away, but none of a plugin a job of which is waiting
-  or running (`tidy`; `plugin_jobs_running` asks the same). `.staging/` and
-  `catalogue*` in `plugins/` are the catalogue's.
+  or running (`tidy`; `plugin_jobs_running` asks the same). Nor any of a
+  plugin whose `current` names no version in place - none, one that cannot
+  be read at that moment (a file a virus scanner holds), or one naming a
+  folder that is not there or holds no readable manifest: which version
+  it uses is then not known, so every one is kept, and Meno's log says so
+  ("rdkit: its current names no version in place, so none of its 2
+  versions were taken away"). Until 2026-11-13 every folder was taken for
+  unused there, the one in use too. `.staging/` and `catalogue*` in
+  `plugins/` are the catalogue's.
 - **Kinds are shared by id, not by code.** Two plugins that read Gaussian's
   output each bring the kind `gaussian`, with its name and marks, and Meno
   puts them together. A plugin reads only the kinds it brings and Meno's

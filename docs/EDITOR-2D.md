@@ -1042,6 +1042,17 @@ All hover-based, as above.
   2026-10-27. A structure Clean-up cannot lay out - its stereochemistry not
   kept, an atom put on another - is left as drawn and named by its formula
   and why, the others laid out all the same, as one undo step.)
+  - **A four- or six-bond metal keeps its donors opposite each other as
+    drawn** (`oppositesKept`): which pairs stand opposite is its isomer -
+    transplatin and cisplatin are two compounds, as are trans- and
+    cis-[CoCl2(NH3)4]+ - so where the engine set them otherwise (like
+    donors side by side), donors change places, a pair at a time: two
+    single donors each turned about the metal with all it carries; a
+    chelate's two donors by mirroring the chelate across the line between
+    them, its wedges turned over with it, so its centres keep their
+    configuration (trans-Pt(gly)2). The drawing's pairing is the one
+    nearest straight lines, however bent (N-Pt-N at 145 degrees is trans);
+    where another is about as near it says none, and the layout's stands.
 - Valence warnings, and R/S shown on request (RDKit). (PR #53: a ring round
   an atom with too many bonds, saying what is wrong under the pointer; R/S
   and E/Z from a button on the canvas, later shown on what they are asked
@@ -1736,12 +1747,18 @@ lipids each have their own way of being drawn, which it should know.
      maintainer, 2026-10-27). Read by IUPAC's recommendations (Brecher,
      Pure Appl. Chem. 78, 1897, 2006), with "linear" within 10 degrees of
      a straight line (ST-0.1), a drawing states no configuration at a
-     centre with three bonds and its H left out whose two bonds are in
-     line - a T (ST-1.2.12) - or on top of each other, nor at a double bond
+     centre with three bonds and its H left out whose two plain bonds are
+     in line, the wedge between them - a T (ST-1.2.12) - or whose two bonds
+     are on top of each other, nor at a double bond
      with a group straight on from it (ST-4.4, the linear drawing of a
      double bond whose configuration is not given). At such a centre
      Clean-up would draw one or the other configuration, so it refuses, a
      wedge on it as a wedge it cannot carry (`lib/layout/drawn.ts#IN_LINE`).
+     Two bonds in line with the wedge on one of them do state it: ST-1.2.4
+     draws that form, its H in the widest gap opposite the wedge, and
+     ST-1.2.3 has the configuration the same wherever the wedged bond
+     stands (drawings made from a SMILES often put a bridgehead so:
+     cocaine's, camphor's, morphine's, sparteine's).
      A double bond so drawn it lays out keeping the straight end straight -
      its one group straight on from it, as ST-4.4 draws a double bond of
      unspecified configuration - and the rest around it, so the new drawing

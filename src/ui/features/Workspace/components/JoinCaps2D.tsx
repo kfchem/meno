@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useDrawnLayout } from "./drawnLayoutContext";
-import { colorInstances, widenedMaterial } from "./instances";
+import { colorInstances, whiteInstances, widenedMaterial } from "./instances";
 import { lineWidening } from "../utils/largeZoom";
 
 /**
@@ -35,6 +35,7 @@ export default function JoinCaps2D() {
   const room = useRef(64);
   while (room.current < layout.fills.length) room.current *= 2;
   const countCap = room.current;
+  const white = useMemo(() => whiteInstances(countCap), [countCap]);
   const placed = useRef<{ mesh: THREE.InstancedMesh | null; caps: unknown[] }>({ mesh: null, caps: [] });
 
   useLayoutEffect(() => {
@@ -68,6 +69,8 @@ export default function JoinCaps2D() {
     >
       <circleGeometry args={[1, 24]} />
       <primitive object={drawn.material} attach="material" dispose={null} />
+      {/* (its colours there from the start: utils `whiteInstances`) */}
+      <instancedBufferAttribute attach="instanceColor" args={[white, 3]} />
     </instancedMesh>
   );
 }
