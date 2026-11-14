@@ -33,7 +33,7 @@ import { signatureOf } from "../utils/drawnLink";
 import { groupShape } from "../utils/groupShape";
 import { bondsAt, lookOf, solidOf } from "../utils/molecule3d";
 import { fragmentsHolding, laidOut, partOf } from "./cleanUp";
-import { arrangementsMarked } from "./engineLayout";
+import { arrangementsMarked } from "./arrangementsMarked";
 import { forFlatReaders, undrawnHydrogens } from "./drawing";
 import { greatest, least } from "../../../../lib/chem/lists";
 import { drawnBox } from "../../../../utils/importers";

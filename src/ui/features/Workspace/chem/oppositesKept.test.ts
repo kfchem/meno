@@ -99,18 +99,19 @@ describe("a four-bond metal cleaned up", () => {
     expect(opposites(await laidOut(m, MENO), [Cl, NH3, Cl, NH3])).toEqual(["Cl-Cl", "NH3-NH3"]);
   });
 
-  it("keeps it for trans- and cis-PtCl2Br2 2-, trans-PdCl2I2 2-, and each of PtBrCl(NH3)(py)'s three arrangements", { timeout: 120000 }, async () => {
+  it("keeps it for trans- and cis-PtCl2Br2 2-, trans-PdCl2I2 2-; PtBrCl(NH3)(py) drawn as the X, which the layout would make a cross, is refused and left as drawn", { timeout: 120000 }, async () => {
     forgetLaidOut();
     for (const [metal, donors, want] of [
       [{ el: "Pt", charge: -2 }, [Cl, Br, Cl, Br], ["Br-Br", "Cl-Cl"]],
       [{ el: "Pt", charge: -2 }, [Cl, Cl, Br, Br], ["Br-Cl", "Br-Cl"]],
       [{ el: "Pd", charge: -2 }, [Cl, I, Cl, I], ["Cl-Cl", "I-I"]],
-      [{ el: "Pt" }, [Br, NH3, Cl, py], ["Br-Cl", "NH3-py"]],
-      [{ el: "Pt" }, [Br, Cl, NH3, py], ["Br-NH3", "Cl-py"]],
-      [{ el: "Pt" }, [Br, Cl, py, NH3], ["Br-py", "Cl-NH3"]],
     ] as const) {
       const out = await laidOut(drawn(metal, donors, 45), MENO);
       expect(opposites(out, donors), want.join(", ")).toEqual(want);
+    }
+    // (its pyridine goes on, so the layout grows the cross; the X it was drawn as is kept by refusing - laid out as the X: backlog 118)
+    for (const donors of [[Br, NH3, Cl, py], [Br, Cl, NH3, py], [Br, Cl, py, NH3]] as const) {
+      await expect(laidOut(drawn({ el: "Pt" }, donors, 45), MENO)).rejects.toThrow(/Pt drawn as an X could not be laid out as one/);
     }
   });
 

@@ -5,7 +5,9 @@ import { readMarks } from "../utils/figures";
 import { ARRANGEMENT_SAID } from "../utils/arrangement";
 import { MENO } from "../../../../lib/chem/style";
 import { laidOut } from "./cleanUp";
-import { arrangementsMarked } from "./engineLayout";
+import { arrangementsMarked } from "./arrangementsMarked";
+import { layoutJob, relayoutFrom } from "./engineLayout";
+import type { Layout2D } from "../../../../lib/layout/engine";
 import { drawingOf, metalsArrangedIn } from "./fromSmiles";
 import { editorModelOf, processFileContent } from "../utils/io";
 
@@ -124,5 +126,122 @@ describe("a square-planar centre nobody gave the arrangement of", () => {
     // (the same block from a SMILES with no mark: the engine's own way, marked)
     const open = await drawingOf(block, MENO, undefined, metalsArrangedIn("Cl[Pt-2](Br)(Cl)Br", block));
     expect(metalMarked(open, "Pt")).toBe(ARRANGEMENT_SAID);
+  });
+});
+
+describe("a metal of six donors nobody gave the arrangement of", () => {
+  /** A metal and six donors on spokes 60 degrees apart, `els` in that order (each N its valence four: an amine, its pair lent); `chelates` joining two by two C's. */
+  function six(els: string[], chelates: [number, number][] = [], metal = "Co"): Model {
+    const atoms: Model["atoms"] = [{ id: 1, x: 0, y: 0, r: 0.9, el: metal }];
+    const bonds: Model["bonds"] = [];
+    els.forEach((el, k) => {
+      atoms.push({ id: k + 2, x: 1.5 * Math.cos((k * Math.PI) / 3), y: 1.5 * Math.sin((k * Math.PI) / 3), r: 0.9, el, ...(el === "N" ? { valence: 4 } : {}) });
+      bonds.push({ id: 100 + k, a: 1, b: k + 2, order: 1 });
+    });
+    for (const [p, q] of chelates) {
+      const [a, b] = [atoms[1 + p], atoms[1 + q]];
+      const c1 = atoms.length + 1;
+      atoms.push({ id: c1, x: a.x * 1.8, y: a.y * 1.8, r: 0.9, el: "C" }, { id: c1 + 1, x: b.x * 1.8, y: b.y * 1.8, r: 0.9, el: "C" });
+      bonds.push({ id: 200 + c1, a: a.id, b: c1, order: 1 }, { id: 201 + c1, a: c1, b: c1 + 1, order: 1 }, { id: 202 + c1, a: c1 + 1, b: b.id, order: 1 });
+    }
+    return { atoms, bonds } as Model;
+  }
+  const open = (m: Model) => readMarks(arrangementsMarked(m)).atoms.has(1);
+
+  it("is marked where its donors could be set round it with other pairs across: cis or trans, fac or mer, a chelate's", () => {
+    // (CHEM's five)
+    expect(open(six(["Cl", "Cl", "N", "N", "N", "N"]))).toBe(true);
+    expect(open(six(["Cl", "Cl", "Cl", "N", "N", "N"]))).toBe(true);
+    expect(open(six(["Cl", "Cl", "Br", "Br", "N", "N"]))).toBe(true);
+    expect(open(six(["Cl", "Cl", "N", "N", "N", "N"], [[2, 3], [4, 5]]))).toBe(true);
+    expect(open(six(["N", "O", "N", "O", "N", "O"], [[0, 1], [2, 3], [4, 5]]))).toBe(true);
+  });
+
+  it("tells its donors apart as ligands, not by the atom on the metal alone: [Co(NH2Me)4(NH2Et)2]3+ is MA4B2, marked", () => {
+    const m = six(["N", "N", "N", "N", "N", "N"]);
+    // (a methyl on each of the first four N, an ethyl on the last two)
+    let id = 50;
+    m.atoms.slice(1).forEach((n, k) => {
+      const c = ++id;
+      m.atoms.push({ id: c, x: n.x * 1.8, y: n.y * 1.8, r: 0.9, el: "C" });
+      m.bonds.push({ id: 300 + c, a: n.id, b: c, order: 1 });
+      if (k < 4) return;
+      const c2 = ++id;
+      m.atoms.push({ id: c2, x: n.x * 2.6, y: n.y * 2.6, r: 0.9, el: "C" });
+      m.bonds.push({ id: 300 + c2, a: c, b: c2, order: 1 });
+    });
+    expect(open(m)).toBe(true);
+  });
+
+  it("is not marked where every way sets the same pairs across: six alike, five and one, three like chelates, a chelate and four alike", () => {
+    expect(open(six(["N", "N", "N", "N", "N", "N"]))).toBe(false);
+    expect(open(six(["Cl", "N", "N", "N", "N", "N"]))).toBe(false);
+    expect(open(six(["N", "N", "N", "N", "N", "N"], [[0, 1], [2, 3], [4, 5]]))).toBe(false);
+    expect(open(six(["N", "N", "Cl", "Cl", "Cl", "Cl"], [[0, 1]]))).toBe(false);
+  });
+
+  it("from a plugin's drawing, laid out, is marked; with its arrangement given, or drawn by the chemist, it is not", { timeout: 120000 }, async () => {
+    forgetLaidOut();
+    const m = six(["Cl", "Cl", "N", "N", "N", "N"]);
+    const block = ["", "  test", "", `${String(m.atoms.length).padStart(3)}${String(m.bonds.length).padStart(3)}  0  0  0  0  0  0  0  0999 V2000`,
+      ...m.atoms.map((a) => `${a.x.toFixed(4).padStart(10)}${a.y.toFixed(4).padStart(10)}${(0).toFixed(4).padStart(10)} ${a.el.padEnd(3)} 0  0  0  0  0  0  0  0  0  0  0  0`),
+      ...m.bonds.map((b) => `${String(b.a).padStart(3)}${String(b.b).padStart(3)}  1  0`), "M  CHG  1   1   1", "M  END", ""].join("\n");
+    expect(metalMarked(await drawingOf(block, MENO), "Co")).toBe(ARRANGEMENT_SAID);
+    expect(metalMarked(await drawingOf(block, MENO, undefined, [0]), "Co")).toBeUndefined();
+    const chemist = await laidOut(editorModelOf((await processFileContent("drawn.mol", block)).model), MENO);
+    expect(metalMarked(chemist, "Co")).toBeUndefined();
+  });
+});
+
+describe("a four-bond metal drawn as an X, where the layout would make it a cross", () => {
+  it("is refused, saying so, and left as drawn - nickel with phosphines (laid out as the X: backlog 118)", { timeout: 120000 }, async () => {
+    forgetLaidOut();
+    const atoms: Model["atoms"] = [{ id: 1, x: 0, y: 0, r: 0.9, el: "Ni" }];
+    const bonds: Model["bonds"] = [];
+    ["Cl", "P", "Cl", "P"].forEach((el, k) => {
+      const t = ((45 + 90 * k) * Math.PI) / 180;
+      const d = atoms.length + 1;
+      atoms.push({ id: d, x: 1.5 * Math.cos(t), y: 1.5 * Math.sin(t), r: 0.9, el });
+      bonds.push({ id: 100 + bonds.length, a: 1, b: d, order: 1 });
+      if (el !== "P") return;
+      for (const s of [-1, 0, 1]) {
+        const u = t + (s * Math.PI) / 3;
+        atoms.push({ id: atoms.length + 1, x: 1.5 * Math.cos(t) + 1.5 * Math.cos(u), y: 1.5 * Math.sin(t) + 1.5 * Math.sin(u), r: 0.9, el: "C" });
+        bonds.push({ id: 100 + bonds.length, a: d, b: atoms.length, order: 1 });
+      }
+    });
+    await expect(laidOut({ atoms, bonds } as Model, MENO)).rejects.toThrow(/Ni drawn as an X could not be laid out as one/);
+  });
+});
+
+describe("a square-planar centre whose donors differ only further out", () => {
+  it("is open: [Pt(NH2Me)2(NH2Et)2]2+ is two and two, marked, not four alike", () => {
+    const atoms: Model["atoms"] = [{ id: 1, x: 0, y: 0, r: 0.9, el: "Pt", charge: 2 }];
+    const bonds: Model["bonds"] = [];
+    ["Me", "Me", "Et", "Et"].forEach((g, k) => {
+      const t = (k * Math.PI) / 2 + 0.3;
+      const n = k + 2;
+      atoms.push({ id: n, x: 1.5 * Math.cos(t), y: 1.5 * Math.sin(t), r: 0.9, el: "N", valence: 4 });
+      bonds.push({ id: 100 + k, a: 1, b: n, order: 1 });
+      atoms.push({ id: 10 + k, x: 2.7 * Math.cos(t), y: 2.7 * Math.sin(t), r: 0.9, el: "C" });
+      bonds.push({ id: 200 + k, a: n, b: 10 + k, order: 1 });
+      if (g === "Et") {
+        atoms.push({ id: 20 + k, x: 3.9 * Math.cos(t), y: 3.9 * Math.sin(t), r: 0.9, el: "C" });
+        bonds.push({ id: 300 + k, a: 10 + k, b: 20 + k, order: 1 });
+      }
+    });
+    expect(readMarks(arrangementsMarked({ atoms, bonds } as Model)).atoms.get(1)).toBe(ARRANGEMENT_SAID);
+  });
+});
+
+describe("a four-bond metal drawn as an upright cross, where the layout would make it the X", () => {
+  it("is refused, saying so: the form drawn is kept either way", () => {
+    const at = (deg: number) => ({ x: 1.5 * Math.cos((deg * Math.PI) / 180), y: 1.5 * Math.sin((deg * Math.PI) / 180) });
+    const pts = [{ x: 0, y: 0 }, at(0), at(90), at(180), at(270)];
+    const m = { atoms: pts.map((p, i) => ({ id: i + 1, ...p, r: 0.9, el: i ? "Cl" : "Pt", ...(i ? {} : { charge: -2 }) })), bonds: [2, 3, 4, 5].map((b, k) => ({ id: 10 + k, a: 1, b, order: 1 })) } as Model;
+    const job = layoutJob(m);
+    const xs = [{ x: 0, y: 0 }, at(45), at(135), at(225), at(315)].map((p) => ({ x: p.x / 1.5, y: p.y / 1.5 }));
+    const laid = { x: xs.map((p) => p.x), y: xs.map((p) => p.y), depth: xs.map(() => null), solid: xs.map(() => false), bold: [], toward: [], dashed: [], wedges: [], hydrogens: [] } as unknown as Layout2D;
+    expect(() => relayoutFrom(m, m, job, laid)).toThrow(/Pt drawn as an upright cross could not be laid out as one/);
   });
 });

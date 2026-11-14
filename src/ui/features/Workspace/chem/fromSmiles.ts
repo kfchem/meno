@@ -4,7 +4,7 @@ import { NOT_READ, notReadSaid } from "../../../../lib/chem/smilesWhy";
 import type { Model } from "../store/types";
 import { editorModelOf, processFileContent } from "../utils/io";
 import { laidOut, type GivenRuns } from "./cleanUp";
-import { arrangementsMarked } from "./engineLayout";
+import { arrangementsMarked } from "./arrangementsMarked";
 import { readSmiles } from "../../../../lib/chem/smiles";
 import { leftOver, stereoGraphOf } from "../../../../lib/chem/stereoOpen";
 import { openStereo } from "./openStereo";

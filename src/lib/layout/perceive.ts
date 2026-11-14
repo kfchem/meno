@@ -627,6 +627,36 @@ export type FourView = {
   order: (a: number, b: number) => number;
 };
 
+/**
+ * What each of metal `a`'s donors is, as a ligand - not only the atom bonded to the metal but all it carries, reached not through
+ * the metal: MeNH2 and EtNH2 told apart, two ends of one chelate alike where the chelate is. Each atom's element, charge, H's and
+ * bonds refined round its neighbours until the kinds no longer split (as a canonical ranking does), the bond to the metal said.
+ */
+export function donorKinds(v: FourView, a: number): string[] {
+  const nb = v.neighbours(a);
+  const atoms = new Set<number>();
+  for (const todo = [...nb]; todo.length; ) {
+    const u = todo.pop()!;
+    if (atoms.has(u)) continue;
+    atoms.add(u);
+    for (const w of v.neighbours(u)) if (w !== a && !atoms.has(w)) todo.push(w);
+  }
+  const list = [...atoms];
+  const round = (u: number) => v.neighbours(u).filter((w) => w !== a);
+  let label = new Map(list.map((u) => [u, `${v.el(u)}|${v.charge(u)}|${v.hs(u)}|${v.neighbours(u).length}|${nb.includes(u) ? v.order(a, u) : 0}`]));
+  let kinds = new Set(label.values()).size;
+  for (let k = 0; k < list.length; k++) {
+    const next = new Map(list.map((u) => [u, `${label.get(u)}(${round(u).map((w) => `${v.order(u, w)}${label.get(w)}`).sort().join(",")})`]));
+    // (each kind a short name again, by the order of the long ones: the same name for the same kind in every donor)
+    const names = new Map([...new Set(next.values())].sort().map((t, i) => [t, `k${i}`]));
+    label = new Map(list.map((u) => [u, names.get(next.get(u)!)!]));
+    const now = new Set(label.values()).size;
+    if (now === kinds) break;
+    kinds = now;
+  }
+  return nb.map((d) => label.get(d)!);
+}
+
 /** The metals, and the oxidation state in which, a four-coordinate centre is surely square planar (GR-4.1.3). */
 const SQUARE_PLANAR: Record<string, number> = { Pt: 2, Pd: 2, Au: 3, Rh: 1, Ir: 1 };
 
@@ -635,7 +665,7 @@ const SQUARE_PLANAR: Record<string, number> = { Pt: 2, Pd: 2, Au: 3, Rh: 1, Ir: 
  * than through it) - as the drawing makes it: whether it is surely square planar (Pt(II), Pd(II), Au(III), Rh(I), Ir(I), the state
  * counted plainly: a donor whose valence is full without its bond to the metal counts nought, one the bond completes one, the
  * metal's own charge added; a state not counted plainly is not sure); whether its four donors are ends; and whether they can be
- * arranged round it in more than one way (two and two, two and one and one, four different - by element, bonds, H's and charge).
+ * arranged round it in more than one way (two and two, two and one and one, four different - told apart as ligands, `donorKinds`).
  * Null for any other atom.
  */
 export function squarePlanarMetal(v: FourView, a: number, valence: (el: string, charge: number) => number | undefined): { sure: boolean; ends: boolean; open: boolean } | null {
@@ -654,11 +684,9 @@ export function squarePlanarMetal(v: FourView, a: number, valence: (el: string, 
   }
   if (nb.slice(1).some((d) => reached.has(d))) return null;
   const ends = nb.every((d) => v.neighbours(d).length === 1);
+  // (the donors told apart as ligands: [Pt(NH2Me)2(NH2Et)2]2+ is two and two, not four alike)
   const kinds = new Map<string, number>();
-  for (const d of nb) {
-    const k = `${v.el(d)}:${v.neighbours(d).length}:${v.hs(d)}:${v.charge(d)}`;
-    kinds.set(k, (kinds.get(k) ?? 0) + 1);
-  }
+  for (const k of donorKinds(v, a)) kinds.set(k, (kinds.get(k) ?? 0) + 1);
   const counts = [...kinds.values()].sort((p, q) => q - p);
   const open = !(counts[0] === 4 || (counts[0] === 3 && counts[1] === 1));
   let state = v.charge(a);
@@ -675,4 +703,61 @@ export function squarePlanarMetal(v: FourView, a: number, valence: (el: string, 
     else return { sure: false, ends, open };
   }
   return { sure: SQUARE_PLANAR[el] === state, ends, open };
+}
+
+/**
+ * A metal with six bonds - bound to no pi system's centre and to no other metal - whose donors can be set round an octahedron with
+ * other pairs across from each other: [CoCl2(NH3)4]+ cis or trans, CoCl3(NH3)3 fac or mer, [Co(en)2Cl2]+, Co(gly)3. Donors told
+ * apart as ligands (`donorKinds`); two of one chelate (joined other than through the metal) never across. Of each way, the
+ * pairs across by kind: more than one set of them, and which donors are across is a choice the drawing would state. False where
+ * every way gives one set (MA6, MA5B, M(en)3 - its hands are no pairs across), and for any other atom.
+ */
+export function octahedralOpen(v: FourView, a: number): boolean {
+  const nb = v.neighbours(a);
+  if (!isMetal(v.el(a)) || nb.length !== 6) return false;
+  if (nb.some((d) => v.el(d) === "*" || isMetal(v.el(d)))) return false;
+  const kind = donorKinds(v, a);
+  // (two donors of one chelate: joined other than through the metal, and only those two of its donors in that unit)
+  const unit = nb.map(() => -1);
+  nb.forEach((d, i) => {
+    if (unit[i] >= 0) return;
+    unit[i] = i;
+    const seen = new Set([d]);
+    for (const todo = [d]; todo.length; ) {
+      for (const w of v.neighbours(todo.pop()!)) {
+        if (w === a || seen.has(w)) continue;
+        seen.add(w);
+        todo.push(w);
+      }
+    }
+    nb.forEach((e, j) => {
+      if (j !== i && seen.has(e)) unit[j] = i;
+    });
+  });
+  const size = (u: number) => unit.filter((x) => x === u).length;
+  const twoOf = (i: number, j: number) => unit[i] === unit[j] && size(unit[i]) === 2;
+  // (the octahedron's places 0..5, across: 0-1, 2-3, 4-5)
+  const across = [1, 0, 3, 2, 5, 4];
+  const seen = new Set<string>();
+  const place = new Array<number>(6).fill(-1);
+  const used = new Array<boolean>(6).fill(false);
+  const go = (p: number): void => {
+    if (seen.size > 1) return;
+    if (p === 6) {
+      const pairs = [0, 2, 4].map((q) => [kind[place[q]], kind[place[across[q]]]].sort().join("~")).sort().join(",");
+      seen.add(pairs);
+      return;
+    }
+    for (let i = 0; i < 6; i++) {
+      if (used[i]) continue;
+      // (a chelate's two never across)
+      if (p % 2 === 1 && twoOf(i, place[p - 1])) continue;
+      used[i] = true;
+      place[p] = i;
+      go(p + 1);
+      used[i] = false;
+    }
+  };
+  go(0);
+  return seen.size > 1;
 }

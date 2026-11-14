@@ -20,9 +20,9 @@ import type { DrawingStyle } from "../../../../lib/chem/style";
 import { readStereo, sameConfiguration, straightEnds, unreadWhy } from "../../../../lib/layout/drawn";
 import { lonePairCentres } from "../../../../lib/chem/lonePairCentres";
 import type { Layout2D, LayoutInput } from "../../../../lib/layout/engine";
-import { etaBondedAtomByAtom, isMetal, squarePlanarMetal, type CisTrans } from "../../../../lib/layout/perceive";
-import { valencesAt } from "../../../../lib/chem/molecule";
-import { ARRANGED, ARRANGEMENT_SAID, arrangementAs } from "../utils/arrangement";
+import { etaBondedAtomByAtom, isMetal, type CisTrans } from "../../../../lib/layout/perceive";
+import { ARRANGED, arrangementAs } from "../utils/arrangement";
+import { arrangementNotGiven } from "./arrangementsMarked";
 import { allylCurve } from "../../../../lib/chem/allylArc";
 import { allylChain } from "./eta";
 import type { Tetrahedral } from "../../../../lib/layout/stereo";
@@ -240,38 +240,6 @@ export function layoutJob(part: Model): LayoutJob {
 const pairKey = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
 
 /**
- * `model` kept as it came - a plugin's drawing of a typed SMILES or of a molecule in 3D, which could not be laid out anew - with each
- * surely square-planar centre whose donors can lie round it more than one way marked "which donors are next to each other is not
- * given", as a layout of it would mark it (`relayoutFrom`): nobody gave its arrangement, wherever the plugin put its donors. The
- * same model where there is none.
- */
-export function arrangementsMarked(model: Model, arranged: ReadonlySet<number> = new Set()): Model {
-  const drawing = drawingOf(model);
-  const nb = model.atoms.map(() => [] as number[]);
-  const orders = new Map<string, number>();
-  for (const b of drawing.bonds) {
-    nb[b.a].push(b.b);
-    nb[b.b].push(b.a);
-    orders.set(pairKey(b.a, b.b), b.order);
-  }
-  const view = {
-    el: (i: number) => model.atoms[i].el,
-    charge: (i: number) => model.atoms[i].charge ?? 0,
-    hs: (i: number) => drawing.atoms[i].hs,
-    neighbours: (i: number) => nb[i],
-    order: (p: number, q: number) => orders.get(pairKey(p, q)) ?? 1,
-  };
-  let marked = false;
-  const atoms = model.atoms.map((a, i) => {
-    const sq = squarePlanarMetal(view, i, (el, charge) => valencesAt(el, charge)[0]);
-    if (!sq?.sure || !sq.open || arranged.has(a.id)) return a;
-    marked = true;
-    return { ...a, unsure: { said: [ARRANGEMENT_SAID], as: arrangementAs(a, model.atoms, model.bonds) } };
-  });
-  return marked ? { ...model, atoms } : model;
-}
-
-/**
  * The engine's layout of `job` as edits to `model`: the part where it was
  * - its middle kept - but laid out afresh, at the style's bond length;
  * its wedges, and only those, the ones the engine draws; each H the engine
@@ -289,6 +257,22 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
   // (a four-bond metal's donors opposite each other as they were drawn: transplatin cleaned up is transplatin - but not a plugin's drawing, which gives none)
   const kept = job.asNew ? new Set(ids.flatMap((id, i) => (job.arranged?.has(id) ? [i] : []))) : undefined;
   const laid = kept && !kept.size ? given : oppositesKept(ids.map((id) => byId.get(id)!), input, given, kept);
+  // (a four-bond metal drawn in one form - the X or the upright cross, by the chemist, or a plugin's for an arrangement its input
+  // gave - laid out in the other would say another thing of its arrangement: refused, saying so, its donors left as drawn; the X
+  // grown as the X where its donors go on is backlog 118)
+  for (const [i, a] of input.atoms.entries()) {
+    if (!a.fourForm || i >= n) continue;
+    const round = input.bonds.flatMap((b) => (b.a === i ? [b.b] : b.b === i ? [b.a] : []));
+    const off = (turn: number) =>
+      round.reduce((sum, o) => {
+        const t = (Math.atan2(laid.y[o] - laid.y[i], laid.x[o] - laid.x[i]) * 180) / Math.PI - turn;
+        return sum + Math.abs(t - 90 * Math.round(t / 90));
+      }, 0);
+    // (not one bound to a pi system's centre or to another metal: its form is no X or cross)
+    if (round.length !== 4 || round.some((o) => input.atoms[o].el === "*" || isMetal(input.atoms[o].el))) continue;
+    if (a.fourForm === "x" && off(0) <= off(45)) throw new Error(`the ${a.el} drawn as an X could not be laid out as one, so nothing was moved`);
+    if (a.fourForm === "cross" && off(45) < off(0)) throw new Error(`the ${a.el} drawn as an upright cross could not be laid out as one, so nothing was moved`);
+  }
   // at the style's bond length, whatever the drawing's was - a structure put
   // down too large or too small, read from a figure at a wrong scale, comes
   // to the workspace's one style (the maintainer, 2026-10-27): the engine's
@@ -315,8 +299,11 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
   const open = (i: number) => {
     const was = byId.get(ids[i]);
     const marked = !!was?.unsure && was.unsure.as.startsWith(ARRANGED) && was.unsure.as === arrangementAs(was, model.atoms, model.bonds);
-    if (input.atoms[i].fourForm && !marked) return false;
-    const sq = squarePlanarMetal(
+    // (a metal as the chemist drew it - four donors in their form, six on a chemist's spokes - or whose arrangement the input gave:
+    // never marked, but where it was marked already and is still as it was)
+    const drawnSo = nbOf[i].length === 6 ? !job.asNew : !!input.atoms[i].fourForm;
+    if ((drawnSo && !marked) || job.arranged?.has(ids[i])) return false;
+    return arrangementNotGiven(
       {
         el: (j) => input.atoms[j].el,
         charge: (j) => input.atoms[j].charge ?? 0,
@@ -325,9 +312,7 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
         order: (p, q) => orders.get(pairKey(p, q)) ?? 1,
       },
       i,
-      (el, charge) => valencesAt(el, charge)[0],
     );
-    return !!sq && sq.sure && sq.open;
   };
   const atoms: Relayout["atoms"] = ids.map((id, i) => ({
     id,

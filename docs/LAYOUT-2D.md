@@ -493,7 +493,7 @@ they hang from.
   PdCl4 2-, AuCl4-, and three alike and one other: PtCl3(NH3)-,
   AuCl3Br-), grown so and never turned off it to bring its bonds onto the
   page's lattice (`squareXAt`). Where they can lie more ways - two and two, two and
-  one and one, four different, by element, bonds, H's and charge - and the
+  one and one, four different, told apart as ligands (`donorKinds`) - and the
   input gives none (cisplatin from a SMILES, PdCl2(PPh3)2), drawing either
   would say cis or trans, an isomer nobody gave: the centre is the upright
   cross, and the editor marks it as it marks what it is unsure of - the
@@ -519,7 +519,21 @@ they hang from.
   plugin's drawing carries it, and its places and its form are kept: the
   isomer typed, no mark (`metalsArrangedIn`); and where it cannot be laid
   out and is kept as it came, its square-planar centres whose arrangement
-  is not given are marked all the same (`arrangementsMarked`). A chelate's metal (two of its donors joined other than through
+  is not given are marked all the same (`arrangementsMarked`). A metal of
+  six donors in such a drawing is marked so too where its donors could be
+  set round it with other pairs across - [CoCl2(NH3)4]+ cis or trans,
+  CoCl3(NH3)3 fac or mer, [Co(en)2Cl2]+, Co(gly)3, the two of a chelate
+  never across - and not where every way sets the same pairs across (MA6,
+  MA5B, M(en)3: its hands are no pairs across) (`octahedralOpen`); how its
+  spokes are laid out is section 7's. Donors are told apart, here and for
+  four, as ligands - all each carries, not only the atom on the metal:
+  [Pt(NH2Me)2(NH2Et)2]2+ is two and two, [Co(NH2Me)4(NH2Et)2]3+ four and
+  two (`donorKinds`). A four-bond metal drawn in one form - the X or the
+  upright cross, by the chemist, or by the plugin for an arrangement its
+  input gave - that the layout would set in the other is refused, saying
+  so, its donors left as drawn: the other form would say another thing of
+  its arrangement. (A chemist's X whose donors go on - a phosphine's, a
+  pyridine's - is so refused until the layout grows it as the X.) A chelate's metal (two of its donors joined other than through
   it) goes by its own rules.
   The fan is compact,
   and once the rest of the drawing is set it is turned about its bond,
