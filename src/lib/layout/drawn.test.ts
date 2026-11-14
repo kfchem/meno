@@ -508,6 +508,43 @@ describe("a centre with a lone pair for its fourth group", () => {
     }
   });
 
+  it("reads a centre of four bonds open where the text calls the form ambiguous or another shape's, and as before where it gives one (ST-1.1)", () => {
+    // (CFClBrI: F, Cl, Br, I at the angles given, counter-clockwise as the page is seen, its y down; +1 a wedge narrow at the C, -1 hashes, 0 plain)
+    const at = (deg: number) => ({ x: Math.cos((deg * Math.PI) / 180), y: -Math.sin((deg * Math.PI) / 180) });
+    const drawing = (bonds: [number, number][]): { atoms: DrawnAtom[]; bonds: DrawnBond[] } => ({
+      atoms: [{ x: 0, y: 0, el: "C", hs: 0 }, ...bonds.map(([deg], k) => ({ ...at(deg), el: ["F", "Cl", "Br", "I"][k], hs: 0 }))],
+      bonds: bonds.map(([, lift], k) => ({ a: 0, b: k + 1, order: 1, ...(lift ? { wedge: { narrow: 0, stereo: lift > 0 ? ("up" as const) : ("down" as const) } } : {}) })),
+    });
+    const open: [string, [number, number][]][] = [
+      ["ST-1.1.20, four wedges alike", [[0, 1], [90, 1], [180, 1], [270, 1]]],
+      ["ST-1.1.9, three alike, the odd one in their wide space", [[0, 1], [60, 1], [180, 0], [300, 1]]],
+      ["ST-1.1.10, plain bonds apart, not across", [[0, 0], [60, 1], [150, 0], [270, -1]]],
+      ["ST-1.1.15, plain bonds across", [[0, 0], [90, 1], [180, 0], [270, -1]]],
+      ["ST-1.1.13, plain bonds side by side, half a turn apart", [[0, 0], [180, 0], [240, 1], [300, -1]]],
+      ["ST-1.1.13, at 175 degrees: within the band", [[0, 0], [175, 0], [240, 1], [300, -1]]],
+      ["ST-1.1.14, plain bonds side by side, more than half a turn apart", [[0, 0], [200, 0], [250, 1], [310, -1]]],
+      ["ST-1.1.11, two alike side by side, two plain side by side, every gap under half a turn", [[0, 0], [90, 0], [180, 1], [270, 1]]],
+      ["ST-1.1.19, the plain bonds more than half a turn apart, the wedges between them", [[0, 0], [60, 1], [120, 1], [200, 0]]],
+      ["ST-1.1.16, three plain, the wedge not in their wide space", [[0, 0], [60, 1], [120, 0], [300, 0]]],
+      ["ST-1.1.17, two wedges and two hashes, like by like", [[0, 1], [90, 1], [180, -1], [270, -1]]],
+    ];
+    for (const [form, bonds] of open) {
+      const d = drawing(bonds);
+      expect(readStereo(d.atoms, d.bonds).tetra.has(0), form).toBe(false);
+      expect(unreadWhy(d.atoms, d.bonds, 0), form).toBe("its four bonds are not drawn as a tetrahedral centre's: draw two of them in the page side by side, a wedge and hashes on the far side");
+    }
+    const read: [string, [number, number][]][] = [
+      ["ST-1.1.1, two plain side by side, a wedge and hashes on the far side", [[0, 0], [120, 0], [210, 1], [300, -1]]],
+      ["ST-1.1.13's line at 165 degrees: side by side under half a turn, read", [[0, 0], [165, 0], [240, 1], [300, -1]]],
+      ["ST-1.1.4, three plain, the wedge in their wide space", [[0, 0], [90, 0], [180, 0], [270, 1]]],
+      ["ST-1.1.12, one plain, two alike with the other between them", [[0, 0], [90, 1], [180, -1], [270, 1]]],
+    ];
+    for (const [form, bonds] of read) {
+      const d = drawing(bonds);
+      expect(readStereo(d.atoms, d.bonds).tetra.has(0), form).toBe(true);
+    }
+  });
+
   it("says why a centre of three bonds and two or three wedges states nothing, with what to redraw", () => {
     const at = (deg: number) => ({ x: Math.cos((deg * Math.PI) / 180), y: -Math.sin((deg * Math.PI) / 180) });
     const d = (f: number, cl: [number, number], br: [number, number]): { atoms: DrawnAtom[]; bonds: DrawnBond[] } => {
@@ -573,7 +610,8 @@ describe("a centre with a lone pair for its fourth group", () => {
       ],
     };
     expect(readStereo(crossed.atoms, crossed.bonds).tetra.has(0)).toBe(false);
-    expect(unreadWhy(crossed.atoms, crossed.bonds, 0)).toBe("they are drawn crossed, saying neither way round");
+    // (the two plain bonds across from each other, the wedge and the hashes across from each other: ST-1.1.15, no tetrahedral centre's picture)
+    expect(unreadWhy(crossed.atoms, crossed.bonds, 0)).toBe("its four bonds are not drawn as a tetrahedral centre's: draw two of them in the page side by side, a wedge and hashes on the far side");
     // (a wavy bond at it: either, whatever else is drawn)
     const wavy = sulfoxide("Se", "up");
     wavy.bonds[2] = { ...wavy.bonds[2], either: true };
