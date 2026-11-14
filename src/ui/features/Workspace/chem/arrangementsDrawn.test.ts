@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Model } from "../store/types";
-import { arrangementsDrawn, identityOfDrawn } from "./identityOf";
+import { arrangementsDrawn, identityInputOf, identityOfDrawn } from "./identityOf";
+import { identity } from "../../../../lib/chem/identity";
 import { drawingOf } from "./drawing";
 import { drawnStereo } from "../workflow/structuresTable";
 import { ARRANGEMENT_SAID, arrangementAs } from "../utils/arrangement";
@@ -65,6 +66,43 @@ describe("a metal's donors across, read from a drawing", () => {
     const marked: Model = { ...six, atoms: [{ ...metal, unsure: { said: [ARRANGEMENT_SAID], as: arrangementAs(metal, six.atoms, six.bonds) } }, ...six.atoms.slice(1)] };
     expect(arrangementsDrawn(drawingOf(six), six)).toHaveLength(1);
     expect(arrangementsDrawn(drawingOf(marked), marked)).toEqual([]);
+  });
+
+  it("CHEM's five typed with no arrangement, laid out with like donors side by side and marked: each open, not the isomer of its lines", () => {
+    // (six spokes round Co; a chelate's two ends joined by its own atoms, laid outward)
+    const six = (els: string[], chelates: [number, number, string[]][] = []): Model => {
+      const m = drawn("Co", els.map((el, k) => ({ el, at: 60 * k, ...(el === "N" ? { valence: chelates.some(([p, q]) => p === k || q === k) ? 3 : 4 } : {}) })));
+      let id = 100;
+      for (const [p, q, chain] of chelates) {
+        const [a, b] = [m.atoms[1 + p], m.atoms[1 + q]];
+        let last = a.id;
+        chain.forEach((el, k) => {
+          const t = (k + 1) / (chain.length + 1);
+          const x = (a.x + (b.x - a.x) * t) * 1.8;
+          const y = (a.y + (b.y - a.y) * t) * 1.8;
+          const at = ++id;
+          m.atoms.push({ id: at, x, y, r: 0.9, el } as Model["atoms"][number]);
+          m.bonds.push({ id: 1000 + at, a: last, b: at, order: 1, stereo: "none" } as Model["bonds"][number]);
+          last = at;
+        });
+        m.bonds.push({ id: 2000 + id, a: last, b: b.id, order: 1, stereo: "none" } as Model["bonds"][number]);
+      }
+      return m;
+    };
+    const cases: [string, Model][] = [
+      ["[CoCl2(NH3)4]+", six(["Cl", "Cl", "N", "N", "N", "N"])],
+      ["CoCl3(NH3)3", six(["Cl", "Cl", "Cl", "N", "N", "N"])],
+      ["[CoCl2Br2(NH3)2]-", six(["Cl", "Cl", "Br", "Br", "N", "N"])],
+      ["[Co(en)2Cl2]+", six(["Cl", "Cl", "N", "N", "N", "N"], [[2, 3, ["C", "C"]], [4, 5, ["C", "C"]]])],
+      ["Co(gly)3", six(["N", "O", "N", "O", "N", "O"], [[0, 1, ["C", "C"]], [2, 3, ["C", "C"]], [4, 5, ["C", "C"]]])],
+    ];
+    for (const [name, laid] of cases) {
+      const metal = laid.atoms[0];
+      const marked: Model = { ...laid, atoms: [{ ...metal, unsure: { said: [ARRANGEMENT_SAID], as: arrangementAs(metal, laid.atoms, laid.bonds) } }, ...laid.atoms.slice(1)] };
+      expect([name, arrangementsDrawn(drawingOf(marked), marked)]).toEqual([name, []]);
+      const { arrangements: _read, ...none } = identityInputOf(laid).input;
+      expect([name, identityOfDrawn(marked).text === identity(none).text, identityOfDrawn(marked).text === identityOfDrawn(laid).text]).toEqual([name, true, false]);
+    }
   });
 
   it("the upright cross on a metal not surely square planar states no geometry: cis and trans drawn so are one structure, matching neither X", () => {
