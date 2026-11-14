@@ -124,6 +124,15 @@ describe("a six-bond metal laid out from its SMILES", () => {
     }
   });
 
+  it("keeps every donor on its spoke where its chelates' donors are NH2: a single donor beside an NH2 is turned back onto its line, however far a later step moved it", { timeout: 120000 }, async () => {
+    forgetLaidOut();
+    for (const smiles of ["Cl[Co+]1234Cl.[NH2]1CC[NH2]2.[NH2]3CC[NH2]4", "Cl[Co+2]1234[NH3].[NH2]1CC[NH2]2.[NH2]3CC[NH2]4", "Cl[Ru]1234Cl.[NH2]1CC[OH]2.[NH2]3CC[OH]4"]) {
+      const laid = await laidOut(drawnFromSmiles(smiles), MENO, undefined, undefined, true);
+      const metal = laid.atoms.find((a) => a.el === "Co" || a.el === "Ru")!.el;
+      expect(ways(laid, metal), smiles).toEqual([30, 90, 150, 210, 270, 330]);
+    }
+  });
+
   it("with no arrangement given, draws one and marks the metal: [Co(en)2Cl2]+", { timeout: 120000 }, async () => {
     forgetLaidOut();
     const laid = await laidOut(drawnFromSmiles("Cl[Co+]1234Cl.N1CCN2.N3CCN4"), MENO, undefined, undefined, true);
