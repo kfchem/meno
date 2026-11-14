@@ -521,8 +521,11 @@ they hang from.
   donors are joined other than through it, a chelate or a bridge: there the
   plugin's picture was found not to carry the pairs the mark states
   (trans-[Co(en)2Cl2]+ drawn cis, mer-Co(gly)3 drawn fac), and until the
-  pairs are read from the mark itself it is laid out and marked as not
-  given, never an isomer the input did not write; and where it cannot be laid
+  pairs are read from the mark itself it is laid out as new, never an
+  isomer the input did not write: a chelated metal marked as not given
+  where its donors could lie more ways than one, as above. (A metal held
+  by bridges to another, as in [Pt2Cl4(NH3)2], is not yet marked, though
+  its identity reads no pairs.) And where it cannot be laid
   out and is kept as it came, its square-planar centres whose arrangement
   is not given are marked all the same (`arrangementsMarked`). A metal of
   six donors in such a drawing is marked so too where its donors could be
