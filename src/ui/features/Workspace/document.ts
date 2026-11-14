@@ -15,6 +15,7 @@ import { isElementSymbol } from "../../../lib/roles/molblock";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { DEFAULT_STYLE_CHOICE, styleOf, type StyleChoice } from "../../../lib/chem/style";
 import { groupTurn } from "./utils/expandPlace";
+import { ARRANGEMENT_SAID, arrangementAs } from "./utils/arrangement";
 import { mayBecome } from "./utils/dropMerge";
 import { magnificationWithin } from "./utils/magnified";
 import { magnifiedTo, oneMagnificationEach } from "../../../lib/chem/magnified2d";
@@ -593,7 +594,7 @@ export function withoutAtoms(doc: WorkspaceDocument, ids: Iterable<number>): Wor
  * taken away with their bonds where no longer drawn.
  */
 export type Relayout = {
-  atoms: { id: number; x: number; y: number; z?: number; stereoCentre?: boolean }[];
+  atoms: { id: number; x: number; y: number; z?: number; stereoCentre?: boolean; arrangementOpen?: boolean }[];
   bonds: (Pick<Bond, "id" | "stereo" | "narrow"> & { display?: Bond["display"] })[];
   /** H atoms to add, each bonded to `on`, the bond wedged as given. */
   added?: {
@@ -629,7 +630,7 @@ export function relayout(doc: WorkspaceDocument, change: Relayout): WorkspaceDoc
     if (gone.has(a.id)) return [];
     const p = to.get(a.id);
     if (!p) return [a];
-    if (p.x === a.x && p.y === a.y && p.z === a.z && !!p.stereoCentre === !!a.stereoCentre && !a.chargeAt && !a.stereoAt) return [a];
+    if (p.x === a.x && p.y === a.y && p.z === a.z && !!p.stereoCentre === !!a.stereoCentre && !a.chargeAt && !a.stereoAt && !p.arrangementOpen) return [a];
     changed = true;
     const { z: _z, stereoCentre: _c, chargeAt: _q, stereoAt: _s, ...rest } = a;
     return [
@@ -663,6 +664,12 @@ export function relayout(doc: WorkspaceDocument, change: Relayout): WorkspaceDoc
     return [{ ...rest, stereo, ...(narrow != null ? { narrow } : {}), ...(display ? { display } : {}) }];
   });
   if (!changed) return doc;
+  // (a square-planar centre laid out with no arrangement given: marked "which donors are next to each other is not given", while
+  // its neighbours lie round it as they do now - docs/LAYOUT-2D.md, *A metal with four bonds*)
+  for (const [i, a] of atoms.entries()) {
+    if (!to.get(a.id)?.arrangementOpen) continue;
+    atoms[i] = { ...a, unsure: { said: [ARRANGEMENT_SAID], as: arrangementAs(a, atoms, bonds) } };
+  }
   let nextId = doc.nextId;
   for (const h of change.added ?? []) {
     const id = nextId++;

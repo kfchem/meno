@@ -11,7 +11,7 @@ type Answer = { kind: "done"; isomers: Conformers[] } | { kind: "failed"; error:
 
 /** Each stereoisomer's conformers as the page shows them (`asThePageShows`). */
 export function shownConformers(isomers: Conformers[]): Promise<Conformers[]> {
-  if (typeof Worker === "undefined") return Promise.resolve().then(() => isomers.map(asThePageShows));
+  if (typeof Worker === "undefined") return Promise.resolve().then(() => isomers.map((c) => asThePageShows(c)));
   const w = new Worker(new URL("./pageConformersWorker.ts", import.meta.url), { type: "module" });
   return new Promise<Conformers[]>((done, failWith) => {
     w.onmessage = (e: MessageEvent<Answer>) => {

@@ -97,7 +97,7 @@
   },
   {
    "name": "a stereocentre's R1, bulky groups #3",
-   "molfile": "a88cce5af318a89160125c34042608d5662d87c533b351b3e16f8ea97717bff4",
+   "molfile": "f059ee0a5cf7a7aedbd0d63e6fc0881d740d12fc134e1e213373fbf10096ee4a",
    "smiles": "CC(C)(O)[C@@H](F)Cl",
    "expected": "CC(C)(O)[C@@H](F)Cl"
   },
@@ -253,13 +253,13 @@
   },
   {
    "name": "substituents: a drawn H #1",
-   "molfile": "2752d4ed8952b763a23ee69a49c58aa894dcb6a8e7de55aa83051c3985818c57",
+   "molfile": "4afbe393839a3b7543fce077ebac53e91040231d121260396a06f0bbca11a000",
    "smiles": "C[C@@](F)(Cl)Br",
    "expected": "C[C@@](F)(Cl)Br"
   },
   {
    "name": "substituents: a drawn H #2",
-   "molfile": "1ffe17fecfdfefdc405a4d428898cc77b252156f8ae81351c5ffd4103aa71d19",
+   "molfile": "6bef236fc066e7d0adb4be5b1e208d247119e1bfb1af970c9fd382d255cd8dc6",
    "smiles": "CO[C@@](F)(Cl)Br",
    "expected": "CO[C@@](F)(Cl)Br"
   },

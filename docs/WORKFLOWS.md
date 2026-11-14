@@ -82,7 +82,13 @@ each is merged, this file describes what is built.
 17. **Settings holds the defaults; a step customises them** (the
     maintainer, 2026-10-08): Settings, *Calculations*, sets each kind's
     default options, by plugin; a step starts with them, and its options
-    changed are its own - never written back as the defaults.
+    changed are its own - never written back as the defaults. A step that
+    holds no value of its own for an option - one put down otherwise than
+    on the canvas, a template's, a file's - takes Settings' for its kind
+    as it stands, else the option's own default: on its card, when it is
+    judged ready, and when it runs (`stepOptions`, workflow/doers). A
+    change in Settings changes what such a step would run with, so its
+    card then says it has changed since its run.
 18. **No single 3D structure is made in a workflow** (the maintainer,
     2026-10-10): one geometry made of a drawing is one of its
     conformations taken at random, which a calculation on it cannot
@@ -1051,7 +1057,12 @@ beside its edge - being drawn over all of it.
 - **The window is the chemist's** (2026-11-05): *Energy window* sets
   none. Its field is empty until the chemist gives one, and until then
   the card says what it needs ("Give the window, in kcal/mol") and the
-  step does not run; run without one, its line says the same. No window
+  step does not run; run without one, its line says the same. Put down
+  from Quick Add with none, its card opens at once with that field
+  focused, so that the ask is seen as it is put down - as does any step
+  that still needs a value of its options (a Conformers step's window for
+  new conformers: PLUGINS.md); opened later, its card focuses the field
+  too. No window
   has a basis that holds for every set of energies, so none stands as a
   default. The field gives a guide, not a default: at 298.15 K a
   conformer ΔE above the lowest weighs exp(-ΔE/RT) as much, 1/100 at
@@ -1062,7 +1073,10 @@ beside its edge - being drawn over all of it.
     until given, with the same guide under it. Each new Energy window
     step starts with it, as each step starts with the options set there;
     a step's own window is then its own, and changing Settings later
-    changes no step put down before. *Clear*, beside it, empties it
+    changes no step put down before with one. A step that holds none of
+    its own - put down while Settings had none, or a template's - takes
+    the one Settings keeps when it is next shown or run (decided: 17).
+    *Clear*, beside it, empties it
     again: each new step then asks. It is the chemist's value, never
     Meno's.
   - A new step holds no window until one is given: an option with no
@@ -1313,6 +1327,27 @@ taller than the rest, its inputs a plain list down its left edge, each named
 - **Nothing silent**: a molecule no row is for is refused ("no restraints
   made for it"), and so is one a row names an atom it has not; rows for no
   molecule that came in are counted on the line.
+- **Nothing to hold**: a molecule whose table's step looked at it and found
+  nothing to hold - as a coordination table does for a reaction with no
+  coordination bond - goes on holding nothing, and the line says "nothing
+  to hold" (the maintainer, 2026-11-13). So it does where the table holds
+  rows for another molecule - one species of a reaction with a
+  coordination bond, another with none - and the line says how many ("1
+  entry with nothing to hold"). The table says which molecules those are,
+  a row "nothing to hold" for each (STRUCTURE-STEPS.md, *Restraints*). A
+  molecule the step refused - no ID, an ID another shares - or never saw
+  is refused as ever, however empty the table: a restraint asked for and
+  not made is never passed over. One
+  with a double bond its reference has cis, where 180° is asked, is no
+  "nothing to hold": something was found that cannot be held so, and it is
+  refused.
+- **Every table speaks of it**: with several tables wired in, a molecule is
+  taken on only where each of them has a row for it or says it has nothing
+  to hold. One a table's step refused, or never saw, is refused, and the
+  words say which table ("no restraints made for it by Torsion
+  restraints"): never taken on holding another table's rows alone. Case
+  F's rounds pass, each round's step seeing every molecule its
+  minimisation takes.
 - **As its plugin holds them**: each plugin says what it holds (PLUGINS.md,
   `steps`, `restraints`) - its program may hold more than the plugin sends:
   distances and torsions by a strength, or exactly; atoms fixed. A row it

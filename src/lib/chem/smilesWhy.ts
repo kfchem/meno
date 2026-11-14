@@ -172,14 +172,26 @@ export async function whyNotRead(smiles: string, read: (smiles: string) => Promi
       }
       return `its ${ordinal(k + 1)} atom, ${(problem.symbol ?? "").toLowerCase()}, is written aromatic, in lowercase, but is in no ring`;
     }
-    if (problem.kind === "KekulizeException" && problem.atoms?.length) {
-      const ring = [...problem.atoms].sort((a, b) => a - b);
-      const listed = ring.slice(0, -1).map((a) => String(a + 1)).join(", ") + ` and ${ring[ring.length - 1] + 1}`;
-      return `its aromatic ring of ${ring.length} atoms (${listed}) cannot have alternating double bonds`;
-    }
+    if (problem.kind === "KekulizeException" && problem.atoms?.length) return typedRingRefused(problem.atoms);
   }
   return null;
 }
+
+/**
+ * Why an aromatic ring - its atoms by their places among the SMILES's (0
+ * the first) - cannot be read as written: "its aromatic ring of 5 atoms
+ * (1, 2, 3, 4 and 5) cannot have alternating double bonds". One sentence,
+ * whoever finds it: the toolkit (`KekulizeException`) or Meno's own reader
+ * (lib/chem/kekulize `aromaticRefusal`).
+ */
+export function ringCannotAlternate(atoms: readonly number[]): string {
+  const ring = [...atoms].sort((a, b) => a - b);
+  const listed = ring.length === 1 ? String(ring[0] + 1) : ring.slice(0, -1).map((a) => String(a + 1)).join(", ") + ` and ${ring[ring.length - 1] + 1}`;
+  return `its aromatic ring of ${ring.length} ${ring.length === 1 ? "atom" : "atoms"} (${listed}) cannot have alternating double bonds`;
+}
+
+/** What typed input is told where Meno's own reader refuses its aromatic ring (`ringCannotAlternate`): what is likely left out of it. */
+export const typedRingRefused = (atoms: readonly number[]) => `${ringCannotAlternate(atoms)}: is a charge or an H missing?`;
 
 /** What the plugin that fills the SMILES role says when it cannot read one: its words, before Meno's why. */
 export const NOT_READ = "This SMILES could not be read.";

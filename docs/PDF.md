@@ -166,6 +166,13 @@ stops being part of the work.
   each frame; a 1024 px picture is some milliseconds on the card), and a
   page's small picture waits its turn with them - put on the card there,
   not all together inside the frame's draw.
+- **A page a fast scroll comes to is never white.** While the column is
+  still, the small pictures of the twelve pages either side of the one in
+  view are drawn ahead, nearest first, two at a time and behind every tile
+  of what is seen; a scroll stops them. A page the column then comes to
+  shows its small picture at once, and sharpens as its tiles come (before,
+  a page far from where the column rested was an empty frame until they
+  did).
 - **Light on the graphics card** (found on Windows, 2026-10-16: a PDF
   scrolled in the column kept the graphics card full).
   - A picture of a page come and faded in is drawn opaque, and its tiles
@@ -561,7 +568,10 @@ together, in short eased transitions.
   PDFium's pixels, in the order a WebGL texture takes them
   (`FPDF_REVERSE_BYTE_ORDER`), packed by the reader, a page being mostly
   white. They go to the window as bytes, not as text (Tauri's binary
-  response), and are unpacked off its main thread.
+  response), and are unpacked off its main thread: decoded whole in a
+  worker before they come back, so that putting one on the graphics card
+  is a copy and not a decode as well (the Mac's WebKit otherwise decodes a
+  picture at its first use, inside the frame that shows it).
 
 ### Never in the way of a frame (2026-11-12)
 
@@ -1419,7 +1429,7 @@ it where it lies out of view.
   keep theirs), and the atom says so - a level number's place cannot tell a count
   from an atom's number - while one clearly high needs no mark. A level number
   that also reads as a count stays (N3, O3, Me2: a stated limit; CH3 and a
-  level 7 after it are one run, CH37). A charge drawn in a small circle - a "+" or a "-" in a ring,
+  level 7 after it are one run, CH37). A label that is a variable's name and an element's symbol too is read by Meno's own rule (docs/CTFILE.md): an Ar with a bond is an aryl group's, the atom unmarked and written to a MOL file as a star atom with its alias, never as argon; a Y with one bond is a variable's, as X and Z are, and the atom says it was taken so and not as yttrium (a label cannot tell them); a Y with two bonds or more, or a charge, is yttrium. A charge drawn in a small circle - a "+" or a "-" in a ring,
   as Meno draws one and as many papers do - is the charge of the atom it is
   by, however the page is turned and where a box drawn across it cuts some
   of its ring off; never a bond, nor a scheme's "+". A lone H at no

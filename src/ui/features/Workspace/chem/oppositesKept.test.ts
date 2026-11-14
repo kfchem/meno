@@ -99,7 +99,7 @@ describe("a four-bond metal cleaned up", () => {
     expect(opposites(await laidOut(m, MENO), [Cl, NH3, Cl, NH3])).toEqual(["Cl-Cl", "NH3-NH3"]);
   });
 
-  it("keeps it for trans- and cis-PtCl2Br2 2-, trans-PdCl2I2 2-, and each of PtBrCl(NH3)(py)'s three arrangements", { timeout: 120000 }, async () => {
+  it("keeps it for trans- and cis-PtCl2Br2 2-, trans-PdCl2I2 2-, and each of PtBrCl(NH3)(py)'s three arrangements - as the X it was drawn as", { timeout: 120000 }, async () => {
     forgetLaidOut();
     for (const [metal, donors, want] of [
       [{ el: "Pt", charge: -2 }, [Cl, Br, Cl, Br], ["Br-Br", "Cl-Cl"]],
@@ -111,6 +111,13 @@ describe("a four-bond metal cleaned up", () => {
     ] as const) {
       const out = await laidOut(drawn(metal, donors, 45), MENO);
       expect(opposites(out, donors), want.join(", ")).toEqual(want);
+      // (the X, though its pyridine goes on: its four bonds on the diagonals)
+      const m = out.atoms.find((a) => a.id === 1)!;
+      for (const b of out.bonds.filter((x) => x.a === 1 || x.b === 1)) {
+        const o = out.atoms.find((a) => a.id === (b.a === 1 ? b.b : b.a))!;
+        const t = (Math.atan2(o.y - m.y, o.x - m.x) * 180) / Math.PI;
+        expect(Math.abs((((t % 90) + 90) % 90) - 45), want.join(", ")).toBeLessThan(1);
+      }
     }
   });
 

@@ -312,6 +312,9 @@ describe("abbreviations of the user's own", () => {
   it("are given a structure with one * bonded to the atom they are attached by", () => {
     expect(structureProblem(npe.smiles)).toBeNull();
     expect(structureProblem("CC")).toMatch(/one "\*"/);
+    // (an aromatic ring that cannot be given single and double bonds as written: refused, said - never an H nobody wrote)
+    expect(structureProblem("*c1ccnc1")).toBe("The SMILES cannot be read: its aromatic ring of 5 atoms (2, 3, 4, 5 and 6) cannot have alternating double bonds: is a charge or an H missing?");
+    expect(structureProblem("*c1cc[nH]c1")).toBeNull();
     expect(structureProblem("*C*")).toMatch(/one "\*"/);
     expect(structureProblem("C(*)(*)")).toMatch(/one "\*"/);
     expect(structureProblem("*")).toMatch(/at least one atom/);

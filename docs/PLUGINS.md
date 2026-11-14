@@ -224,8 +224,15 @@ alone.
   documents is one there. As Meno starts, each version's folder its
   plugin's `current` does not name - one an update replaced, one half put
   in place - is taken away, but none of a plugin a job of which is waiting
-  or running (`tidy`; `plugin_jobs_running` asks the same). `.staging/` and
-  `catalogue*` in `plugins/` are the catalogue's.
+  or running (`tidy`; `plugin_jobs_running` asks the same). Nor any of a
+  plugin whose `current` names no version in place - none, one that cannot
+  be read at that moment (a file a virus scanner holds), or one naming a
+  folder that is not there or holds no readable manifest: which version
+  it uses is then not known, so every one is kept, and Meno's log says so
+  ("rdkit: its current names no version in place, so none of its 2
+  versions were taken away"). Until 2026-11-13 every folder was taken for
+  unused there, the one in use too. `.staging/` and `catalogue*` in
+  `plugins/` are the catalogue's.
 - **Kinds are shared by id, not by code.** Two plugins that read Gaussian's
   output each bring the kind `gaussian`, with its name and marks, and Meno
   puts them together. A plugin reads only the kinds it brings and Meno's
@@ -603,8 +610,16 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
     kcal/mol until the chemist gives one, so that a 3D structure is made
     from fresh Settings with nothing asked first - the maintainer's choice
     (2026-11-08), no measured basis claimed. A step has none until given,
-    and is not ready until it has one. As a guide, 2.73 kcal/mol at 298.15
-    K is a conformer a hundredth as populated as the lowest (RT ln 100).
+    and is not ready until it has one: put down with none, its card opens
+    with the field focused (WORKFLOWS.md, *The window is the chemist's*);
+    run without one on structures drawn, it is refused at once in its
+    card's words ("Give the window for new conformers, in kcal/mol"):
+    nothing is asked of the plugin, and no structure is set aside for it -
+    never said as not made in 3D. A step keeps the options it was put down
+    with (WORKFLOWS.md, decided: 17): one put down before Settings asked for
+    a number keeps asking for as many as the molecule needs. As a guide,
+    2.73 kcal/mol at 298.15 K is a conformer a hundredth as populated as
+    the lowest (RT ln 100).
   - A search that takes no draws is asked once, as before. So is one
     whose conformers come back with no energies: there is nothing to
     tell a new low one by. A *Conformers* step on molecules in 3D, run
@@ -939,8 +954,12 @@ fills.
 - **Starting it.** Once set up, the worker starts the first time it is
   asked for, not when Meno starts. In practice that is as soon as a
   structure is drawn, since the chemical checks run by themselves once
-  it is at hand (`useChemMarks`, `chemAtHand`). Its first import may
-  take a while; up to 90 s is allowed.
+  it is at hand (`useChemMarks`, `chemAtHand`). Quick Add, opened, starts
+  what reads a SMILES the same way, so that the first SMILES typed waits
+  for no start (`startAhead`): only a plugin set up and not taken away,
+  never set up or offered from there, and never when a wire's
+  calculations open it. Its first import may take a while; up to 90 s is
+  allowed.
 - **Keeping it.** It is then kept while it is used. If it stops, the next
   request starts it again.
 - **Stopped when unused** (the maintainer, 2026-10-13;
