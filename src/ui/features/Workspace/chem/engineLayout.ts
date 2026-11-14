@@ -97,6 +97,9 @@ export function piSystems(part: Model, drawing: ReturnType<typeof drawingOf>): M
   return pi;
 }
 
+/** An H that is only an H: no mass number, charge or anything more a centre's count of its H's would lose. */
+const plainH = (a: Model["atoms"][number]) => a.el === "H" && !Object.keys(chemistry(a)).length;
+
 export function layoutJob(part: Model): LayoutJob {
   const drawing = drawingOf(part);
   const stereo = readStereo(drawing.atoms, drawing.bonds);
@@ -114,11 +117,12 @@ export function layoutJob(part: Model): LayoutJob {
         `(${unreadWhy(drawing.atoms, drawing.bonds, unread[0])}), so nothing was moved`,
     );
   }
-  // an H on a stereocentre, bonded to nothing else: the centre's own
+  // an H on a stereocentre, bonded to nothing else: the centre's own - but an H that is more than an H (a 2H, a 3H), which folded
+  // into its centre's count would be lost, and would leave the centre two H's alike where its groups differ only by isotope
   const foldedInto = new Map<number, number>();
   part.atoms.forEach((a, h) => {
     const mine = bondsOf.get(h) ?? [];
-    if (a.el !== "H" || mine.length !== 1) return;
+    if (!plainH(a) || mine.length !== 1) return;
     const b = drawing.bonds[mine[0]];
     const c = b.a === h ? b.b : b.a;
     if (b.order === 1 && part.atoms[c].el !== "H" && tetra.has(c)) foldedInto.set(h, c);

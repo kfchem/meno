@@ -1748,7 +1748,12 @@ lipids each have their own way of being drawn, which it should know.
      Clean-up no longer needs RDKit, and works before it is set up.
    - An H drawn on a stereocentre is taken as the centre's own: kept if
      the engine draws one there, taken away if not, and one added where the
-     engine draws an H the drawing had not.
+     engine draws an H the drawing had not. An H that is more than an H -
+     a 2H or a 3H, an H with a charge - is not: folded into its centre's
+     count it would be lost, so it is laid out as an atom of its own, and
+     a centre whose groups differ only by isotope (ethanol-1-d, glycine-2-d,
+     cyclohexane-1,2-d2) is laid out keeping its configuration, as it is a
+     centre to its identity.
    - A cage comes out in perspective, as the engine draws one: its atoms
      keep a depth (`Atom.z`), and a bond passing behind another is drawn
      broken there. Its stereocentres (`Atom.stereoCentre`) show their
