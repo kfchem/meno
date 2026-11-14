@@ -4,7 +4,7 @@ import { fromSmiles } from "../layout/testdata/fromSmiles";
 import { SHUFFLE_SEEDS, shuffled, tiedCages } from "../layout/testdata/shuffled";
 import type { LayoutAtom, LayoutBond, LayoutInput } from "../layout/perceive";
 import type { Axial } from "../layout/stereo";
-import { aromaticForm, automorphismGroup, hydrogensFolded, identity, identityKey, identityText, stereoUnitsOnly, symmetryOrbits, type IdentityAtom, type IdentityInput } from "./identity";
+import { aromaticForm, automorphismGroup, hydrogensFolded, identity, identityKey, identityText, symmetryOrbits, type IdentityAtom, type IdentityInput } from "./identity";
 
 /** How many distinct values a list has. */
 const distinct = (xs: readonly number[]) => new Set(xs).size;
@@ -382,7 +382,18 @@ describe("a configuration that makes no stereo unit, in a structure's identity",
     expect(one("C[C@H](C)O", "C[C@@H](C)O", "CC(C)O")).toBe(true);
     expect(one("C/C(C)=C/CO", "C/C(C)=C\\CO", "C\\C(C)=C/CO", "CC(C)=CCO")).toBe(true);
     expect(one("C/C=C1/CCCCC1", "C/C=C1\\CCCCC1", "CC=C1CCCCC1")).toBe(true);
-    expect(one("C/C=C1/CCC(C)CC1", "CC=C1CCC(C)CC1", "C[C@H]1CCC(=CC)CC1")).toBe(true);
+  });
+
+  it("tells apart, on the safe side, writings that leave one thing unsaid in two ways: (4-methylcyclohexylidene)ethane", () => {
+    // (its centre alone sets nothing, and its double bond alone; once either is written the other decides between
+    // the two enantiomers. Drawn with its double bond, with its centre, or with neither: each means "either
+    // enantiomer", and nothing is filled in the first two. The third is filled in the canonical order - as one of
+    // them. Alike told apart, never unlike joined, and only where no single compound is stated: found in the chemistry check)
+    const [bond, centre, neither] = ["C/C=C1/CCC(C)CC1", "C[C@H]1CCC(=CC)CC1", "CC=C1CCC(C)CC1"].map((x) => identityText(fromSmiles(x)));
+    expect(bond).not.toBe(centre);
+    expect([bond, centre]).toContain(neither);
+    expect(one("C/C=C1/CCC(C)CC1", "C/C=C1\\CCC(C)CC1")).toBe(true);
+    expect(one("C[C@H]1CCC(=CC)CC1", "C[C@@H]1CCC(=CC)CC1")).toBe(true);
   });
 
   it("keeps every stereo unit: a centre's two alike arms set apart by another configuration, a pseudoasymmetric centre, E and Z", () => {
@@ -440,11 +451,14 @@ describe("a configuration that makes no stereo unit, in a structure's identity",
   });
 
   it("is kept, and the identity says it may not be the only one, where the search for alike groups ran out of steps before it found them", () => {
-    // (forty methanes beside the isopropanol: the search cannot finish, and the methyls' swap is not among what it found)
+    // (forty methanes beside pentan-3-ol: the search cannot finish, and the ethyls' swap is not among what it found. Its
+    // groups are no end atoms, so it is searched: two alike end atoms - an isopropanol's methyls - need no search)
     const methanes = Array(40).fill("C").join(".");
-    const found = identity(fromSmiles(`${methanes}.C[C@H](C)O`));
+    const found = identity(fromSmiles(`${methanes}.CC[C@H](CC)O`));
     expect(found.complete).toBe(false);
-    expect(found.text).not.toBe(identity(fromSmiles(`${methanes}.CC(C)O`)).text);
+    expect(found.text).not.toBe(identity(fromSmiles(`${methanes}.CCC(CC)O`)).text);
+    // (and with two alike end atoms, nothing is searched: the isopropanol is one structure, and complete as far as that goes)
+    expect(identity(fromSmiles(`${methanes}.C[C@H](C)O`)).text).toBe(identity(fromSmiles(`${methanes}.CC(C)O`)).text);
   });
 
   it("is set aside where a search that ran out of steps still found its groups alike: what it finds alike is", () => {
@@ -635,18 +649,21 @@ describe("an allene's axis and an odd cumulene's cis or trans, in a structure's 
 });
 
 describe("an allene's or a cumulene's end with two alike groups sets nothing", () => {
-  it("drops an allene's axis where one end has two alike groups, and keeps it where neither has", () => {
-    // (3-methylpenta-2,3-diene's cousin: (CH3)2C=C=CHCH3 - an end with two methyls - against CH3CH=C=CHCH3, each end a methyl and an H)
+  it("joins an allene drawn with its axis to the same left plain where one end has two alike groups, and keeps them apart where neither has", () => {
+    // ((CH3)2C=C=CHCH3 - an end with two methyls - against CH3CH=C=CHCH3, each end a methyl and an H)
     expect(fromSmiles("CC(C)=[C@]=CC").axes).toHaveLength(1);
-    expect(stereoUnitsOnly(fromSmiles("CC(C)=[C@]=CC")).input.axes ?? []).toHaveLength(0);
+    expect(identityText(fromSmiles("CC(C)=[C@]=CC"))).toBe(identityText(fromSmiles("CC(C)=C=CC")));
+    expect(identityText(fromSmiles("CC(C)=[C@]=CC"))).toBe(identityText(fromSmiles("CC(C)=[C@@]=CC")));
     expect(fromSmiles("CC=[C@]=CC").axes).toHaveLength(1);
-    expect(stereoUnitsOnly(fromSmiles("CC=[C@]=CC")).input.axes ?? []).toHaveLength(1);
+    expect(identityText(fromSmiles("CC=[C@]=CC"))).not.toBe(identityText(fromSmiles("CC=C=CC")));
+    expect(identityText(fromSmiles("CC=[C@]=CC"))).not.toBe(identityText(fromSmiles("CC=[C@@]=CC")));
   });
 
-  it("drops an odd cumulene's cis or trans likewise, and keeps it where its ends' groups differ", () => {
+  it("joins an odd cumulene's cis or trans likewise, and keeps it where its ends' groups differ", () => {
     expect(fromSmiles("F/C(F)=C=C=C/F").cumulated ?? []).toHaveLength(1);
-    expect(stereoUnitsOnly(fromSmiles("F/C(F)=C=C=C/F")).input.cumulated ?? []).toHaveLength(0);
+    expect(identityText(fromSmiles("F/C(F)=C=C=C/F"))).toBe(identityText(fromSmiles("FC(F)=C=C=CF")));
     expect(fromSmiles("F/C=C=C=C/F").cumulated).toHaveLength(1);
-    expect(stereoUnitsOnly(fromSmiles("F/C=C=C=C/F")).input.cumulated ?? []).toHaveLength(1);
+    expect(identityText(fromSmiles("F/C=C=C=C/F"))).not.toBe(identityText(fromSmiles("FC=C=C=CF")));
+    expect(identityText(fromSmiles("F/C=C=C=C/F"))).not.toBe(identityText(fromSmiles("F/C=C=C=C\\F")));
   });
 });

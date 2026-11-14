@@ -13,7 +13,7 @@
  *   saying so: what is not known to stand is never shown as standing.
  */
 import type { Entry, Property } from "../entry";
-import { identityKey } from "../chem/identity";
+import { constitutionKey } from "../chem/identity";
 import { constitutionOf } from "../nodes/group";
 
 /**
@@ -22,7 +22,7 @@ import { constitutionOf } from "../nodes/group";
  * atoms are numbered. No stereochemistry, which the entry's record does not
  * hold.
  */
-export const structureKey = (e: Pick<Entry, "structure">): string => identityKey(constitutionOf(e as Entry));
+export const structureKey = (e: Pick<Entry, "structure">): string => constitutionKey(constitutionOf(e as Entry));
 
 /** Whether a property rides a change of bonding as it is: a value of a geometry, a label, restraints, or a value of the structure `now`. */
 const rides = (p: Property, now: string): boolean =>

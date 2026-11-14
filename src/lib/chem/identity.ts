@@ -17,7 +17,8 @@
  * plain hydrogen atom as one of its neighbour's hydrogens
  * (`hydrogensFolded`).
  */
-import { canonicalWritten, symmetryClasses, symmetryOrbits as orbitsAsDrawn } from "../layout/canonical";
+import { canonicalRanks, canonicalWritten, symmetryClasses, symmetryOrbits as orbitsAsDrawn } from "../layout/canonical";
+import { lonePairCentres } from "./lonePairCentres";
 import { isMetal, type LayoutAtom, type LayoutBond, type LayoutInput } from "../layout/perceive";
 import type { Axial, Cumulated, Tetrahedral } from "../layout/stereo";
 import type { Radical } from "./molecule";
@@ -266,90 +267,238 @@ function compared(input: IdentityInput): LayoutInput {
  * bond-shift isomers, hydrogens folded in).
  */
 export function identity(input: IdentityInput): { text: string; complete: boolean } {
-  const units = stereoUnitsOnly(compared(input));
-  const found = canonicalWritten(units.input);
-  return { text: found.text, complete: found.complete && units.complete };
+  const filled = filledIn(compared(input));
+  if (filled.text != null) return { text: filled.text, complete: filled.complete };
+  const found = canonicalWritten(filled.input);
+  return { text: found.text, complete: found.complete && filled.complete };
 }
 
-/** A configuration a structure carries: a centre's, by its atom; a double bond's, by its bond; an axis's, by its place among the axes. */
-type StereoUnit = { centre: number } | { bond: number } | { axis: number } | { cumulated: number };
+/** The elements a centre of four groups may be (as the chemistry check ruled them: never a metal). */
+const CENTRES = new Set(["B", "C", "Si", "Ge", "Sn", "Pb", "N", "P", "As", "Sb", "Bi", "S", "Se", "Te"]);
+
+/** A double bond in a ring of this many atoms or fewer states no cis or trans (the reader's and the CIP's number). */
+const SMALL_RING = 7;
 
 /**
- * The structure with only the configurations that make a stereo unit: a
- * wedge on a centre two of whose neighbours are alike, or a double bond
- * drawn bent, an axis or an odd cumulene, whose end has its two other
- * neighbours alike (an allene's or a cumulene's, its groups but the run it
- * is on), sets nothing - an isopropyl's CH, a prenyl's C=C(CH3)2 - and is taken
- * out, so that the structure is one whether drawn so or not. Alike means
- * in one orbit of the structure with that configuration left out and
- * every other one kept, under the symmetries that keep the unit's own
- * atoms where they are: 1,4-dimethylcyclohexane's ring arms at one centre
- * are alike until the other centre's configuration is counted, and its cis
- * and trans stay apart. Each is tried in turn, again after each one taken
- * out, until none is. A search for the orbits that ran out of steps still
- * joins only atoms an automorphism found takes onto each other, so groups
- * it finds alike are; where it did not find them alike, the configuration
- * is kept, as drawn, and `complete` says so.
+ * A place that could carry a configuration and carries none: a centre (its
+ * neighbours in the order the configuration names them, a lone pair or an
+ * implicit H last), a double bond, an allene's axis or an odd cumulene's
+ * cis or trans - each with its own atoms and, for the search's prefilter,
+ * the groups whose two alike would let it set nothing.
  */
-export function stereoUnitsOnly(input: LayoutInput): { input: LayoutInput; complete: boolean } {
-  const around: number[][] = input.atoms.map(() => []);
-  const multiple = new Map<number, number>();
-  for (const b of input.bonds) {
+type Blank = (
+  | { kind: "centre"; at: number; neighbours: number[] }
+  | { kind: "biaryl"; at: number }
+  | { kind: "bond"; at: number; refs: [number, number] }
+  | { kind: "axis" | "cumulated"; ends: [number, number]; refs: [number, number] }
+) & { own: number[]; sides: number[][] };
+
+/**
+ * Where a structure could carry a configuration and carries none, by shape
+ * alone (the candidates; no symmetry asked): an atom of B, C, Si, Ge,
+ * Sn, Pb, N, P, As, Sb, Bi, S, Se or Te with four groups, at most one of
+ * them a plain hydrogen, or three and a lone pair it keeps
+ * (./lonePairCentres); a double bond, each end with a group but the other
+ * end and no other double bond, in no ring of `SMALL_RING` or fewer; and a
+ * run of cumulated double bonds between two carbons, each with a group -
+ * even, an axis; odd, a cis or trans. A biaryl's axis is none: only a
+ * drawing states one (ST-1.7).
+ */
+function blanksOf(g: LayoutInput): Blank[] {
+  const n = g.atoms.length;
+  const around: number[][] = g.atoms.map(() => []);
+  const doubles: number[][] = g.atoms.map(() => []);
+  for (const b of g.bonds) {
     around[b.a].push(b.b);
     around[b.b].push(b.a);
-    if (b.order >= 2) {
-      multiple.set(b.a, b.b);
-      multiple.set(b.b, b.a);
+    if (b.order === 2) {
+      doubles[b.a].push(b.b);
+      doubles[b.b].push(b.a);
     }
   }
-  // (the groups whose two alike would set nothing: a centre's neighbours; each end's others, a double bond's or an
-  // axis's - but the atom it runs on through: the other end, bonded to it, or an allene's or a cumulene's next one)
-  // (the atom a run goes on through is left out of an end's groups. Were it counted, it could never be alike with one of them: a cumulated
-  //  carbon has bonds no substituent of the end has - so this changes no result, and says what the groups are)
-  const across = (end: number, other: number) => (around[end].includes(other) ? other : (multiple.get(end) ?? other));
-  const ends = (a: number, b: number) => [around[a].filter((m) => m !== across(a, b)), around[b].filter((m) => m !== across(b, a))];
-  const sides = (g: LayoutInput, u: StereoUnit): number[][] => {
-    if ("centre" in u) return [g.atoms[u.centre].tetra!.neighbours.filter((m) => m >= 0)];
-    if ("bond" in u) return ends(g.bonds[u.bond].a, g.bonds[u.bond].b);
-    if ("axis" in u) return ends(...g.axes![u.axis].atoms);
-    return ends(...g.cumulated![u.cumulated].atoms);
+  for (const a of around) a.sort((x, y) => x - y);
+  // (its element as written: identity's own marks - a mass number, an unpaired electron - taken off: `compared`)
+  const element = (i: number) => g.atoms[i].el.replace(/[\^.].*$/, "");
+  const hs = (i: number) => g.atoms[i].hs ?? 0;
+  const pyramid = lonePairCentres(
+    g.atoms.map((a, i) => ({ el: element(i), charge: a.charge ?? 0, hs: a.hs ?? 0 })),
+    g.bonds,
+  );
+  const out: Blank[] = [];
+  for (let i = 0; i < n; i++) {
+    if (g.atoms[i].tetra || !CENTRES.has(element(i)) || hs(i) > 1) continue;
+    if (around[i].length + hs(i) === 4) out.push({ kind: "centre", at: i, neighbours: [...around[i], ...(hs(i) ? [-1] : [])], own: [i], sides: [around[i]] });
+    else if (around[i].length === 3 && !hs(i) && pyramid(i)) out.push({ kind: "centre", at: i, neighbours: [...around[i]], own: [i], sides: [around[i]] });
+  }
+  // (whether a and b are joined but through their own bond within `most` bonds: a ring of `most` + 1 atoms or fewer)
+  const near = (a: number, b: number, most: number) => {
+    let at = [a];
+    const seen = new Set([a]);
+    for (let d = 1; d <= most && at.length; d++) {
+      const next: number[] = [];
+      for (const x of at)
+        for (const y of around[x]) {
+          if (seen.has(y) || (x === a && y === b)) continue;
+          if (y === b) return true;
+          seen.add(y);
+          next.push(y);
+        }
+      at = next;
+    }
+    return false;
   };
-  const alike = (of: readonly number[], side: readonly number[]) => new Set(side.map((m) => of[m])).size < side.length;
-  const without = (g: LayoutInput, u: StereoUnit): LayoutInput => {
-    if ("centre" in u) return { ...g, atoms: g.atoms.map((a, i) => (i === u.centre ? (({ tetra: _tetra, ...rest }) => rest)(a) : a)) };
-    if ("bond" in u) return { ...g, bonds: g.bonds.map((b, i) => (i === u.bond ? (({ stereo: _stereo, ...rest }) => rest)(b) : b)) };
-    if ("axis" in u) return { ...g, axes: g.axes!.filter((_, i) => i !== u.axis) };
-    return { ...g, cumulated: g.cumulated!.filter((_, i) => i !== u.cumulated) };
+  const others = (end: number, partner: number) => around[end].filter((m) => m !== partner);
+  g.bonds.forEach((b, k) => {
+    if (b.order !== 2 || b.stereo || doubles[b.a].length !== 1 || doubles[b.b].length !== 1) return;
+    const [p, q] = [others(b.a, b.b), others(b.b, b.a)];
+    if (!p.length || !q.length || near(b.a, b.b, SMALL_RING - 1)) return;
+    out.push({ kind: "bond", at: k, refs: [p[0], q[0]], own: [b.a, b.b], sides: [p, q] });
+  });
+  // (a run: from an end of one double bond through atoms of two to the other end of one)
+  const given = new Set([...(g.axes ?? []), ...(g.cumulated ?? [])].map((x) => [...x.atoms].sort((u, v) => u - v).join(",")));
+  for (let e = 0; e < n; e++) {
+    if (doubles[e].length !== 1 || doubles[doubles[e][0]].length !== 2) continue;
+    let [before, at, count] = [e, doubles[e][0], 1];
+    while (doubles[at].length === 2 && count <= n) {
+      const next = doubles[at].find((m) => m !== before)!;
+      [before, at, count] = [at, next, count + 1];
+    }
+    const f = at;
+    if (f <= e || doubles[f].length !== 1 || element(e) !== "C" || element(f) !== "C" || given.has(`${e},${f}`)) continue;
+    const [p, q] = [others(e, doubles[e][0]), others(f, doubles[f][0])];
+    if (!p.length || !q.length) continue;
+    out.push({ kind: count % 2 ? "cumulated" : "axis", ends: [e, f], refs: [p[0], q[0]], own: [e, f], sides: [p, q] });
+  }
+  // (a biaryl's axis drawn: no place of its own when blank - only a drawing states one - so where it sets nothing, its
+  //  plain form is no axis at all, as a biaryl drawn with none)
+  (g.axes ?? []).forEach((x, k) => {
+    const [u, v] = x.atoms;
+    if (around[u].includes(v)) out.push({ kind: "biaryl", at: k, own: [u, v], sides: [others(u, v), others(v, u)] });
+  });
+  return out;
+}
+
+/** The structure with `b` given a configuration: one sense or the other (a biaryl's axis turned, or as drawn). */
+function given(g: LayoutInput, b: Blank, up: boolean): LayoutInput {
+  if (b.kind === "biaryl") return up ? g : { ...g, axes: g.axes!.map((x, i) => (i === b.at ? { ...x, sense: x.sense === 1 ? -1 : 1 } : x)) };
+  if (b.kind === "centre") return { ...g, atoms: g.atoms.map((a, i) => (i === b.at ? { ...a, tetra: { neighbours: b.neighbours, volume: up ? 1 : -1 } } : a)) };
+  if (b.kind === "bond") return { ...g, bonds: g.bonds.map((x, i) => (i === b.at ? { ...x, stereo: { refs: b.refs, cis: up } } : x)) };
+  if (b.kind === "axis") return { ...g, axes: [...(g.axes ?? []), { atoms: b.ends, refs: b.refs, sense: up ? 1 : -1 }] };
+  return { ...g, cumulated: [...(g.cumulated ?? []), { atoms: b.ends, refs: b.refs, cis: up }] };
+}
+
+/** The structure with no configuration at all: what its symmetry by constitution alone is asked of (`filledIn`'s prefilter). */
+function unconfigured(g: LayoutInput): LayoutInput {
+  return {
+    atoms: g.atoms.map(({ tetra: _tetra, ...a }) => a),
+    bonds: g.bonds.map(({ stereo: _stereo, ...b }) => b),
   };
+}
+
+/**
+ * The structure with every configuration that sets nothing filled in, so
+ * that it is one structure whether that configuration is drawn or not
+ * (a rule of the chemistry check): nothing drawn is ever taken out. A
+ * place that could carry a configuration and carries none (`blanksOf`) is
+ * given one where both senses write the same text: such a place sets
+ * nothing, so writing it changes no compound - an isopropyl's CH, a
+ * prenyl's C=C(CH3)2, the third centre of the cis,trans
+ * 1,2,3-trimethylcyclopropane written with its trans pair. A place whose
+ * two senses write two texts is open, and stays so: the cis pair's third
+ * centre, which decides between two compounds.
+ *
+ * One at a time: the lowest in the canonical order of the structure as it
+ * then is, then asked again. The order matters - filling one place can
+ * leave another open ((4-methylcyclohexylidene)acetic acid with nothing
+ * given: its centre alone sets nothing, and its double bond alone, but
+ * once either is filled the other decides) - so it is always the
+ * canonical order, and the text does not depend on the order the atoms
+ * came in. That this order gives one form for every structure is not
+ * proved: it is held by the chemistry check's known answers and, over every writing of
+ * fourteen structures, by the tests: never one identity for two meanings,
+ * and a writing that states one compound has that compound's text. Some
+ * writings that leave the same thing unsaid in different ways get two
+ * identities (that acid, drawn with its double bond bent and with nothing
+ * at all): alike told apart, never two unlike joined, and only where no
+ * single compound is stated.
+ *
+ * A biaryl's axis is no such place when blank - only a drawing states one -
+ * so one drawn that sets nothing (a 2,6-dimethylphenyl's) is the one thing
+ * taken out: its plain form is a biaryl drawn with none.
+ *
+ * Its filled form is identity's own - never shown, drawn or saved.
+ * A place no two of whose groups (on one side, for a double bond's or a
+ * run's ends) share a class of the structure's constitution is not tried:
+ * every symmetry then keeps each place's sense, so how many places are
+ * written one way is kept, and its two senses could only write two texts
+ * (found in the chemistry check). Two texts the same are one
+ * structure, whether the search finished or not; where it ran out of steps
+ * and wrote two, that place is left as it is, and `complete` says so.
+ */
+export function filledIn(input: LayoutInput): { input: LayoutInput; complete: boolean; text?: string } {
   let g = input;
   let complete = true;
+  // (the text of the structure as it now is, where the last fill wrote it: `identity` asks for no search again)
+  let text: string | undefined;
+  // (a place two of whose groups are end atoms alike - a gem-dimethyl's, an isopropyl's, a tert-butyl's, a prenyl's
+  //  C=C(CH3)2 - sets nothing whatever else is given: swapping the two turns it over and leaves all else. Filled first,
+  //  with no search; and as it sets nothing in every completion, it changes no other place's two senses)
+  const ends = endsAlike(g);
+  for (const b of blanksOf(g)) if (b.kind !== "biaryl" && b.sides.some((side) => ends(side))) g = given(g, b, true);
+  // (the classes of the constitution alone, coarser than every orbit of the structure with any configuration given)
+  let classes: number[] | null = null;
   for (;;) {
-    const units: StereoUnit[] = [
-      ...g.atoms.flatMap((a, i) => (a.tetra ? [{ centre: i }] : [])),
-      ...g.bonds.flatMap((b, i) => (b.stereo ? [{ bond: i }] : [])),
-      ...(g.axes ?? []).map((_, i) => ({ axis: i })),
-      ...(g.cumulated ?? []).map((_, i) => ({ cumulated: i })),
-    ];
-    if (!units.length) return { input: g, complete };
-    // (atoms the ranks tell apart are apart in every orbit: only those they leave alike are searched)
-    const classes = symmetryClasses(g);
+    const blanks = blanksOf(g);
+    if (!blanks.length) return { input: g, complete, text };
+    classes ??= symmetryClasses(unconfigured(input));
+    const cs = classes;
+    const tried = blanks.filter((b) => b.sides.some((side) => new Set(side.map((m) => cs[m])).size < side.length));
+    if (!tried.length) return { input: g, complete, text };
+    const rank = tried.length > 1 ? canonicalRanks(g) : [];
+    const place = (b: Blank) => b.own.map((a) => rank[a]).sort((x, y) => x - y);
+    tried.sort((p, q) => {
+      const [x, y] = [place(p), place(q)];
+      return x[0] - y[0] || (x[1] ?? -1) - (y[1] ?? -1);
+    });
     let next: LayoutInput | null = null;
-    for (const u of units) {
-      if (!sides(g, u).some((side) => alike(classes, side))) continue;
-      const left = without(g, u);
-      // (the unit's own atoms marked, for the search only: the orbits of what keeps it where it is, not of what takes it
-      // onto another atom alike - 1,3-dichloro-2,4-dimethylcyclobutane's two CHCl, one open, swapped by a half turn)
-      const own = new Set("centre" in u ? [u.centre] : "bond" in u ? [g.bonds[u.bond].a, g.bonds[u.bond].b] : "axis" in u ? g.axes![u.axis].atoms : g.cumulated![u.cumulated].atoms);
-      const found = orbitsAsDrawn({ ...left, atoms: left.atoms.map((a, i) => (own.has(i) ? { ...a, el: `${a.el}*` } : a)) });
-      if (sides(g, u).some((side) => alike(found.orbit, side))) {
-        next = left;
+    for (const b of tried) {
+      const [up, down] = [given(g, b, true), given(g, b, false)];
+      const [u, d] = [canonicalWritten(up), canonicalWritten(down)];
+      // (one text is one structure, whether the search finished or not: it writes the whole of it)
+      if (u.text === d.text) {
+        next = b.kind === "biaryl" ? { ...g, axes: g.axes!.filter((_, i) => i !== b.at) } : up;
+        text = b.kind === "biaryl" ? undefined : u.complete ? u.text : undefined;
         break;
       }
-      if (!found.complete) complete = false;
+      if (!u.complete || !d.complete) complete = false;
     }
-    if (!next) return { input: g, complete };
+    if (!next) return { input: g, complete, text: undefined };
     g = next;
   }
+}
+
+/**
+ * Whether a group of atoms bonded to one atom holds two end atoms alike: each bonded to nothing else, of one element
+ * as identity reads it (its mass number and unpaired electrons part of it), charge and hydrogens, by bonds of one
+ * order - two methyls, two fluorines. Swapping them is a symmetry of the structure whatever else is given.
+ */
+function endsAlike(g: LayoutInput): (side: readonly number[]) => boolean {
+  const degree = g.atoms.map(() => 0);
+  const order = new Map<number, number>();
+  for (const b of g.bonds) {
+    degree[b.a]++;
+    degree[b.b]++;
+    order.set(b.a, b.order);
+    order.set(b.b, b.order);
+  }
+  const key = (i: number) => {
+    const a = g.atoms[i];
+    return degree[i] === 1 && !a.tetra && !a.pi ? `${a.el}|${a.charge ?? 0}|${a.hs ?? 0}|${order.get(i)}` : null;
+  };
+  return (side) => {
+    const keys = side.map(key).filter((k): k is string => k != null);
+    return new Set(keys).size < keys.length;
+  };
 }
 
 /**
@@ -370,7 +519,28 @@ export function identityText(input: IdentityInput): string {
  * whether the search was complete; `identity` does.
  */
 export function identityKey(input: IdentityInput): string {
-  const text = identityText(input);
+  return hashed(identityText(input));
+}
+
+/**
+ * A structure's constitution as a short key: its identity with no
+ * configuration given and none filled in (`filledIn` is for what a
+ * configuration drawn or not drawn means, and a constitution has none) -
+ * the key Meno has always written for it, so that a value saved with the
+ * key of the structure it was worked out on (lib/steps/restructure
+ * `structureKey`) still finds it. Grouping and tables by constitution ask
+ * this.
+ */
+export function constitutionKey(input: IdentityInput): string {
+  const bare = {
+    atoms: input.atoms.map(({ tetra: _tetra, ...a }) => a),
+    bonds: input.bonds.map(({ stereo: _stereo, ...b }) => b),
+  };
+  return hashed(canonicalWritten(compared(bare)).text);
+}
+
+/** A text hashed (FNV-1a, twice over, 64 bits as hex). */
+function hashed(text: string): string {
   let a = 0x811c9dc5;
   let b = 0x01000193;
   for (let i = 0; i < text.length; i++) {
