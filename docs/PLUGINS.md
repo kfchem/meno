@@ -56,7 +56,7 @@ manifest, the guide and the catalogue were tidied and added on 2026-10-10
 | Group | Role | Filled today by |
 | --- | --- | --- |
 | Files | read a kind; write a kind | Meno (MOL, SDF, RXN, XYZ, cube; MOL, SDF, RXN, SVG); each program's own plugin, for its program's outputs; cclib, as a reading of its own; PySCF - see FILE-IO.md |
-| Chemistry (core) | SMILES to a structure, and back | RDKit (its worker's `from_smiles`, `to_smiles`) |
+| Chemistry (core) | Structures from SMILES, and SMILES from structures | RDKit (its worker's `from_smiles`, `to_smiles`) |
 | Chemistry (core) | the checks: hydrogens, valence, aromatic rings (one role since 2026-10-10: one request gives them all). R/S, E/Z and an axis's Ra/Sa are Meno's own (docs/CIP.md), on the drawing and in 3D: what the plugin sends of them is never read | RDKit (`analyse`) |
 | Chemistry (core) | stereoisomers: the elements that could be stereogenic, and the stereoisomers of what Meno says is left open | RDKit (`stereo_elements`, `stereoisomers`) |
 | Workflows | new structures from a generative model: the step *Generate* (WORKFLOWS.md) | REINVENT 4 (`run` with no entries; its prior trained on PubChem downloaded besides, `downloads`), sampling on the CPU with the seed set - a whole number from 1 (REINVENT 4 takes 0 as no seed given) - so that the same asking gives the same SMILES; each handed on as sampled, with its NLL and SMILES_state - every one it samples, those it marks a duplicate or could not read among them (its own filter left off, `unique_molecules = false`: which are the same and which are kept are Meno's *Duplicates* and *Filter*), nothing made of it, nothing refused. An option outside what it may be is refused in words, never run as another (2026-11-02) (*Generate*, below) |
@@ -1774,8 +1774,8 @@ comes in its own pull request.
   and it is gone at once. It can be got again from the list.
 - **Offered where it is needed** (2026-11-05). Where a role is asked of -
   a SMILES drawn, a structure made in 3D - and no plugin here fills it,
-  the line that says so ("Needs a plugin: SMILES to a structure, and
-  back.") offers the plugins online that fill it, each to
+  the line that says so ("Needs a plugin: Structures from SMILES, and
+  SMILES from structures.") offers the plugins online that fill it, each to
   add: got, then set up as any plugin is, asking first. Where the list is
   not here yet, it offers to list them, asking first too; offline, it says
   the list needs the network. The list is fetched only with the
@@ -1822,6 +1822,41 @@ starts with none in place. As it first starts, it offers to get those again
   where there is nothing to get. Offline, where the list could not be
   fetched, or where one could not be got, it says so and asks again as
   Meno next starts, for those not in place.
+
+### First start
+
+Where no plugin here reads and writes SMILES, nothing was set up here
+before (that is *Plugins used before*), the card was never answered and
+Meno is online, a card at the edge of the window asks once: *Set up
+chemistry?*, with *Set up* and *Not now* (`lib/plugins/firstSetUp`,
+`ui/network/FirstSetUpCard`). It holds up nothing and takes no key: the
+page works whether or not it is answered.
+
+- **Which question goes where.** A question Meno asks of its own accord
+  comes on the card; a question that answers the chemist's own click comes
+  over the page, as ever. A card left unanswered holds up no other
+  question.
+- **What the one yes covers, and nothing more.** The card names, before
+  the click, every host its yes lets the set-up reach: the list of plugins
+  online and the plugin's files (the list's hosts), uv and Python from
+  Astral, the packages from the Python Package Index - one list with the
+  lines it shows (`lib/plugins/setUpSources`). The plugin is found on the
+  list by its role, never by a name in the core; the card names it, its
+  licence and its size once the list has them, and says each step as it
+  goes, with *Stop*.
+- **Anything beyond it stops the card**, which shows that question in its
+  place and waits: a host the card did not name, a file beside the
+  plugin's packages, terms, or another plugin it uses first. Where the list
+  offers more than one plugin for the role here, or none, the card shows
+  each to add, or why not, as the line under the SMILES field does.
+- **A SMILES typed meanwhile waits** for the set-up, and is drawn when it
+  is ready, while Quick Add stays open.
+- **Not now** is kept: never asked again of itself. Chemistry is then set
+  up from the line under the SMILES field, or in Settings, *Plugins*.
+- **A failure** is said on the card, with *Try again*. A yes whose set-up
+  did not finish is taken up again as Meno next starts, with no question.
+  *Stop* ends it for good. A step under way (a download, uv building the
+  environment) runs to its end, as nothing can cut it short today.
 
 ## Decided
 

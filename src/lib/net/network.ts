@@ -217,6 +217,16 @@ async function grant(purpose: string): Promise<void> {
   );
 }
 
+/**
+ * Purposes allowed by a yes given on a card of Meno's own (lib/plugins/firstSetUp), where the card named, before the
+ * click, all they fetch and every host: remembered as any yes is. Not offline: no leave is given while Meno is.
+ */
+export async function allowAnswered(purposes: readonly string[]): Promise<boolean> {
+  if (useNetwork.getState().offline) return false;
+  await Promise.allSettled(purposes.map(grant));
+  return true;
+}
+
 /** The questions waiting their turn: the last's answer, the next asked after it - and each purpose's, while it is asked or waits. */
 let questions: Promise<unknown> = Promise.resolve();
 const waiting = new Map<string, Promise<boolean>>();

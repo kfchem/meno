@@ -81,7 +81,7 @@ describe("a SMILES typed in Quick Add that no plugin here reads", () => {
       if (!added) throw new NoPlugin("smiles");
     });
     const first = await readSmiles("CCO", onSmiles);
-    expect(first).toEqual({ error: "Needs a plugin: SMILES to a structure, and back.", needs: "smiles" });
+    expect(first).toEqual({ error: "Needs a plugin: Structures from SMILES, and SMILES from structures.", needs: "smiles" });
     // (the offer's Add: got and set up, then done - Quick Add reads what was typed again: QuickAdd's RoleOffer `done`)
     let again: Awaited<ReturnType<typeof readSmiles>> | undefined;
     const entry = { id: "rdkit", name: "RDKit" } as CatalogueEntry;
