@@ -2060,7 +2060,8 @@ export type EditorState = {
   justExpanded: () => ReadonlySet<number>;
   updateBond: (id: number, patch: Partial<Bond>) => void;
   /** Each of the bonds made of `kind` (utils/bondKinds), as one step. */
-  setBondsKind: (ids: readonly number[], kind: import("../utils/bondKinds").BondKindName) => void;
+  /** Bonds given a kind from a bond's menu, one step - with `stepOn`, each already of that kind one step on in its round instead; false where nothing changed. */
+  setBondsKind: (ids: readonly number[], kind: import("../utils/bondKinds").BondKindName, stepOn?: boolean) => boolean;
   /**
    * A bond key (utils/bondKinds `bondKeyPatch`) with the pointer on bond `id`: what it makes of that bond, made of it and of
    * every bond selected where it is among them, as one step. False where it would change nothing.
@@ -2079,6 +2080,8 @@ export type EditorState = {
    * selection as it was, its shade drawn back in (`clickTakeBack`).
    */
   clickSelectAtom: (id: number) => void;
+  /** A click on a bond: it selected, alone, with its atoms (docs/EDITOR-2D.md, *How it is worked*). */
+  clickSelectBond: (id: number) => void;
   /** The click on `id` taken back by a double-click's second (`clickSelectAtom`): false where nothing was. */
   clickTakeBack: (id: number) => boolean;
   /**

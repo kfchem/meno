@@ -1,7 +1,7 @@
 import RoleOffer from "./RoleOffer";
 import { noPluginSaid, useRoleOffer } from "../../../lib/roles/worker";
 import { canvasAlerts } from "./utils/alerts";
-import { bondKindOf, type BondKindName } from "./utils/bondKinds";
+import { bondKindOf, bondLie, type BondKindName } from "./utils/bondKinds";
 import type { ArrowKind, ArrowWeight } from "../../../lib/chem/reactionArrow";
 import { canTakeBond, valenceOrder } from "../../../lib/chem/molecule";
 import { usePresentingWindow } from "../../presenting";
@@ -2657,7 +2657,10 @@ function WorkspaceContent({
             const st = store.getState();
             const ids = st.sel.bonds.has(menu.id) ? [...st.sel.bonds] : [menu.id];
             const bond = st.model.bonds.find((b) => b.id === menu.id);
-            return bond ? { current: bondKindOf(bond), choose: (kind: BondKindName) => st.setBondsKind(ids, kind) } : undefined;
+            if (!bond) return undefined;
+            const current = bondKindOf(bond);
+            // (the right-clicked bond's own kind, chosen again: one step on in its round - each bond selected of that kind, about itself)
+            return { current, lie: bondLie(bond, st.model.atoms, st.model.bonds), one: ids.length === 1, choose: (kind: BondKindName) => st.setBondsKind(ids, kind, kind === current) };
           })()}
           canvas={canvasCommands(menu.at)}
           // (Export writes what is drawn: a selection of PDFs and texts' sheets alone has nothing for it)

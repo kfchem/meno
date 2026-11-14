@@ -76,14 +76,15 @@ export function bondKindOf(b: Pick<Bond, "order" | "stereo" | "display" | "dativ
 }
 
 /**
- * What a click on a single bond makes of it, the cycle drawing wants: plain,
- * wedge, hashed wedge, plain again with the wedge's other end narrow. A
+ * What the key 1 makes of a single bond, pressed again and again: plain,
+ * wedge, hashed wedge, plain again with the wedge's other end narrow (a
+ * click on a bond did this until 2026-11-14; it now selects the bond). A
  * bond that is another kind - wavy, or bold, hashed, dashed or dative, as
- * its menu or a file made it - is taken out of it into the cycle's plain,
- * not left as it was (a wavy bond clicked stayed wavy). `narrowNow` is the
- * end a wedge is narrow at as drawn (chem/drawing `narrowEnd`).
+ * its menu or a file made it - is taken out of it into the round's plain,
+ * not left as it was. `narrowNow` is the end a wedge is narrow at as drawn
+ * (chem/drawing `narrowEnd`).
  */
-export function singleClickPatch(b: Pick<Bond, "a" | "b" | "stereo" | "display" | "dative">, narrowNow: number): Partial<Bond> {
+export function singleRoundPatch(b: Pick<Bond, "a" | "b" | "stereo" | "display" | "dative">, narrowNow: number): Partial<Bond> {
   const stereo = b.stereo ?? "none";
   // (another kind of single: the plain one first)
   const other = stereo === "wavy" || stereo === "either" || b.dative || b.display === "bold" || b.display === "hashed" || b.display === "dashed";
@@ -154,28 +155,51 @@ export function doubleClickPatch(b: Link & Pick<Bond, "order" | "doubleMode">, a
 export type BondKey = 1 | 2 | 3;
 
 /**
- * What a bond key makes of a bond (the maintainer, 2026-11-04: pressed again, it goes on as clicks do), as all it is, so
- * that every bond selected can take it alike: 1, a single - on a single, the click's cycle (`singleClickPatch`); 2, a
- * double - on a double, the double-click's sides (`doubleClickPatch`); 3, a triple.
+ * What a bond key makes of the bond under the pointer (the maintainer, 2026-11-04: pressed again, it goes on round), as all
+ * it is: 1, a single - on a single, its round (`singleRoundPatch`); 2, a double - on a double, the double-click's sides
+ * (`doubleClickPatch`); 3, a triple.
  */
 export function bondKeyPatch(key: BondKey, b: Link & Pick<Bond, "order" | "doubleMode" | "stereo" | "narrow" | "display" | "dative">, atoms: readonly At[], bonds: readonly Link[]): Partial<Bond> {
   const plain = { stereo: "none" as const, display: undefined, dative: undefined };
   if (key === 3) return { order: 3, ...plain };
   if (key === 2) return b.order === 2 ? { order: 2, ...plain, ...doubleClickPatch(b, atoms, bonds) } : doubleClickPatch(b, atoms, bonds);
-  return b.order === 1 ? { order: 1, display: undefined, dative: undefined, ...singleClickPatch(b, narrowEnd(b, degrees(bonds))) } : { order: 1, ...plain };
+  return b.order === 1 ? { order: 1, display: undefined, dative: undefined, ...singleRoundPatch(b, narrowEnd(b, degrees(bonds))) } : { order: 1, ...plain };
 }
 
 /**
- * `patch`, made of the bond `from`, for another bond selected with it, `to`: the same, but where it says which end is
- * narrow (`Bond.narrow`, an atom's id) - that end of `to` as it is now where the patch keeps `from`'s, its other end
- * where the patch turns `from`'s round.
+ * What a kind chosen from a bond's menu makes of a bond: that kind - or, where the bond already has it, one step on in the
+ * kind's own round (the maintainer, 2026-11-14): a wedge or a hashed wedge narrow at its other end; a double bond's second
+ * line on its next side, as a double-click puts it; a single, a triple or any other kind as it is (nothing).
  */
-export function patchAlike(patch: Partial<Bond>, from: Pick<Bond, "a" | "b" | "narrow">, to: Pick<Bond, "a" | "b" | "narrow">, bonds: readonly Link[]): Partial<Bond> {
-  if (patch.narrow == null) return patch;
-  const degree = degrees(bonds);
-  const kept = patch.narrow === narrowEnd(from, degree);
-  const now = narrowEnd(to, degree);
-  return { ...patch, narrow: kept ? now : now === to.a ? to.b : to.a };
+export function bondKindStepPatch(kind: BondKindName, b: Link & Pick<Bond, "order" | "doubleMode" | "stereo" | "narrow" | "display" | "dative">, atoms: readonly At[], bonds: readonly Link[]): Partial<Bond> {
+  if (bondKindOf(b) !== kind) return bondKindPatch(kind);
+  if (kind === "wedge" || kind === "hashed-wedge") {
+    const now = narrowEnd(b, degrees(bonds));
+    return { narrow: now === b.a ? b.b : b.a };
+  }
+  if (kind === "double") return doubleClickPatch(b, atoms, bonds);
+  return {};
+}
+
+/**
+ * How a bond lies on the page, as its kind's icon shows it (the icons run from lower left up to the right): whether a wedge is
+ * narrow at the icon's left end - the bond's left atom, or its upper one where it stands upright - and on which side of the
+ * line a double bond's second line is drawn, seen so: "upper" (the icon's upper left), "lower" or "center".
+ */
+export function bondLie(b: Link & Pick<Bond, "narrow" | "doubleMode">, atoms: readonly At[], bonds: readonly Link[]): { narrowLeft: boolean; side: "upper" | "lower" | "center" } {
+  const p = atoms.find((x) => x.id === b.a);
+  const q = atoms.find((x) => x.id === b.b);
+  if (!p || !q) return { narrowLeft: true, side: "center" };
+  // (the atom at the icon's left: the bond's left one - the upper one, y up, where it stands all but upright)
+  const aLeft = Math.abs(q.x - p.x) > 1e-6 * Math.max(1, Math.abs(q.y - p.y)) ? p.x < q.x : p.y > q.y;
+  const left = aLeft ? b.a : b.b;
+  const narrowLeft = narrowEnd(b, degrees(bonds)) === left;
+  // (the side its second line is on, from a to b - "left" turning anticlockwise, y up - seen from the icon's left end)
+  const dm = b.doubleMode ?? "auto";
+  const side = dm === "auto" ? doubleSideAuto(b, atoms, bonds) : dm;
+  if (side === "center") return { narrowLeft, side: "center" };
+  const anticlockwise = (side === "left") === aLeft;
+  return { narrowLeft, side: anticlockwise ? "upper" : "lower" };
 }
 
 /** Whether `patch` would change nothing of `b`: each field as it reads where it is not set. */

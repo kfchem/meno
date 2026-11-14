@@ -7,7 +7,7 @@ import type { ShowBox } from "../../utils/viewShow";
 import { bondPtOf, labelPtOf, wordsKept } from "../../restyle";
 import { restyledDrawn } from "../../utils/copyPaste";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
-import { bondKeyPatch, bondKindPatch, patchAlike, patchChangesNothing, type BondKey, type BondKindName } from "../../utils/bondKinds";
+import { bondKeyPatch, bondKindPatch, bondKindStepPatch, patchChangesNothing, type BondKey, type BondKindName } from "../../utils/bondKinds";
 import { gestureStep } from "../../../../../lib/doc/document";
 import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
 import { newBondFrom } from "../../utils/geometry";
@@ -445,27 +445,31 @@ export const createModelSlice = (
     doc.edit("change bond", (d) => ops.updateBond(d, id, patch));
   },
 
-  // (bonds chosen a kind from the right-click menu: all of them, one step)
-  setBondsKind: (ids: readonly number[], kind: BondKindName) => {
-    const patch = bondKindPatch(kind);
-    doc.edit("change bonds' kind", (d) => ids.reduce((acc, id) => ops.updateBond(acc, id, patch), d));
+  // (bonds chosen a kind from the right-click menu: all of them, one step - each that already has it one step on in that kind's
+  //  round, about itself, where the kind is the right-clicked bond's own: utils/bondKinds `bondKindStepPatch`; nothing, where
+  //  it would change nothing)
+  setBondsKind: (ids: readonly number[], kind: BondKindName, stepOn = false) => {
+    const { model } = get();
+    const patches = ids.flatMap((id) => {
+      const bond = model.bonds.find((b) => b.id === id);
+      if (!bond) return [];
+      const patch = stepOn ? bondKindStepPatch(kind, bond, model.atoms, model.bonds) : bondKindPatch(kind);
+      return patchChangesNothing(bond, patch) ? [] : [[id, patch] as const];
+    });
+    if (!patches.length) return false;
+    doc.edit("change bonds' kind", (d) => patches.reduce((acc, [id, patch]) => ops.updateBond(acc, id, patch), d));
+    return true;
   },
 
-  // (a bond key with the pointer on a bond: what it makes of that bond, made of it - and of every bond selected, where it is
-  //  among them - one step; nothing, where it would change nothing)
+  // (a bond key with the pointer on a bond: what it makes of that bond, and of no other - selected or not, whatever is selected
+  //  (the maintainer, 2026-11-14: the bond keys act only on what the pointer is over) - one step; nothing, where it would change nothing)
   bondKey: (id: number, key: BondKey) => {
-    const { model, sel } = get();
+    const { model } = get();
     const bond = model.bonds.find((b) => b.id === id);
     if (!bond) return false;
     const patch = bondKeyPatch(key, bond, model.atoms, model.bonds);
-    const ids = sel.bonds.has(id) ? [...sel.bonds] : [id];
-    // (each bond's own narrow end kept, or turned round, as the one pressed on has its: utils/bondKinds `patchAlike`)
-    const patchOf = (i: number) => {
-      const other = model.bonds.find((b) => b.id === i);
-      return other ? patchAlike(patch, bond, other, model.bonds) : patch;
-    };
-    if (ids.every((i) => patchChangesNothing(model.bonds.find((b) => b.id === i) ?? patch, patchOf(i)))) return false;
-    doc.edit("change bonds' kind", (d) => ids.reduce((acc, i) => ops.updateBond(acc, i, patchOf(i)), d));
+    if (patchChangesNothing(bond, patch)) return false;
+    doc.edit("change bond", (d) => ops.updateBond(d, id, patch));
     return true;
   },
 
