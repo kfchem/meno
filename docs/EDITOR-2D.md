@@ -855,6 +855,13 @@ All hover-based, as above.
   typing - N+, NH3+, O-, Fe2+, 13C, or a charge alone - by + and - over
   an atom, or from its menu, which also gives or takes an unpaired
   electron.)
+- **A carbon whose bonds run straight through it is written** (`cumulatedShown`):
+  between two double bonds - an allene's middle, a ketene's, CO2's (O=C=O
+  would read as O=O) - and the C of a carbonyl, a cyanide or an isocyanide
+  on a metal, M-C≡O, M-C≡N, M-C≡N-R, whose two bonds lie in one line:
+  written, the ligand reads as CO, CN or CNR, its atoms atoms still. An
+  alkyne's carbons, a nitrile's C, an acylium's (R-C≡O+, on no metal) and a
+  bridging carbonyl's (three bonds) stay bare vertices.
 - **Labels typed in place** (the maintainer, 2026-10-10: no HTML box;
   2026-10-18, as it is now). A label is written where it stands, drawn by
   Meno as words on the page are (*Text*, below; `LabelTyping2D`): set as a
