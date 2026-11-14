@@ -15,7 +15,7 @@ import type { LayoutInput } from "../layout/perceive";
 import { fromSmiles } from "../layout/testdata/fromSmiles";
 import { SHUFFLE_SEEDS, shuffled } from "../layout/testdata/shuffled";
 import { measured } from "../../testing/timeouts";
-import { identityText } from "./identity";
+import { constitutionKey, identityKey, identityText } from "./identity";
 
 /** Each place written up (1), down (-1) or left blank (0). */
 type Writing = (1 | -1 | 0)[];
@@ -197,5 +197,21 @@ describe("identity filled in: CHEM's known answers", () => {
       const blank = s.identityOf(s.every(true)[0]);
       for (const w of s.every(false)) expect(s.identityOf(w), smiles).not.toBe(blank);
     }
+  });
+});
+
+describe("a constitution's key", () => {
+  it("is the key Meno wrote for it before identity filled anything in, so that a value saved with it still finds its structure", () => {
+    // (the keys written by identityKey before part 13's fill, for these constitutions: a value's `of` holds them)
+    const bare = (smiles: string) => {
+      const g = fromSmiles(smiles);
+      return { atoms: g.atoms.map(({ tetra: _tetra, ...a }) => a), bonds: g.bonds.map(({ stereo: _stereo, ...b }) => b) };
+    };
+    expect(constitutionKey(bare("CC(C)O"))).toBe("67fcfad66e6e6c8e");
+    expect(constitutionKey(bare("CC(C)Cc1ccc(cc1)C(C)C(=O)O"))).toBe("ba27f66b9b1619e3");
+    expect(constitutionKey(bare("OC1C(O)C(O)C(O)C(O)C1O"))).toBe("b28395fd12924b6f");
+    // (whatever configuration it is given, and though identity itself now fills propan-2-ol's centre in)
+    expect(constitutionKey(fromSmiles("C[C@H](C)O"))).toBe("67fcfad66e6e6c8e");
+    expect(identityKey(bare("CC(C)O"))).not.toBe("67fcfad66e6e6c8e");
   });
 });

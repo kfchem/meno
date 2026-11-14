@@ -519,7 +519,28 @@ export function identityText(input: IdentityInput): string {
  * whether the search was complete; `identity` does.
  */
 export function identityKey(input: IdentityInput): string {
-  const text = identityText(input);
+  return hashed(identityText(input));
+}
+
+/**
+ * A structure's constitution as a short key: its identity with no
+ * configuration given and none filled in (`filledIn` is for what a
+ * configuration drawn or not drawn means, and a constitution has none) -
+ * the key Meno has always written for it, so that a value saved with the
+ * key of the structure it was worked out on (lib/steps/restructure
+ * `structureKey`) still finds it. Grouping and tables by constitution ask
+ * this.
+ */
+export function constitutionKey(input: IdentityInput): string {
+  const bare = {
+    atoms: input.atoms.map(({ tetra: _tetra, ...a }) => a),
+    bonds: input.bonds.map(({ stereo: _stereo, ...b }) => b),
+  };
+  return hashed(canonicalWritten(compared(bare)).text);
+}
+
+/** A text hashed (FNV-1a, twice over, 64 bits as hex). */
+function hashed(text: string): string {
   let a = 0x811c9dc5;
   let b = 0x01000193;
   for (let i = 0; i < text.length; i++) {
