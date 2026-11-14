@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { NOMINAL_BOND_LENGTH as L } from "../../../../lib/chem/acs";
-import { blocksOf } from "../chem/make3d";
+import { blocksOf, drawnBlocksOf } from "../chem/make3d";
 import type { Atom, Bond, Model } from "../store/types";
 import { drawnHash, setMembers, structuresOf } from "./entries";
 import { runMenoDrawn } from "./meno";
@@ -59,5 +59,28 @@ describe("a hydrogen bond drawn, as a set's entries have it", () => {
     const enol = [1, 2, 3, 4, 5, 6, 7, 8];
     expect(drawnHash(page({ water: false }), enol)).toBe(drawnHash(page({ own: false, water: false }), enol));
     expect(drawnHash(page(), enol)).toBe(drawnHash(page({ own: false, water: false }), enol));
+  });
+
+  it("gives every entry of a page as one structure: one block each, so what a step asks of an entry's first block it asks of all of it", () => {
+    // (the page above, and beside it: sodium acetate made one structure of two parts (Atom.joined), a lone Na+, and ammonia bound to a
+    //  platinum by a dative bond)
+    const at = (id: number, el: string, x: number, y: number, extra: Partial<Atom> = {}) => ({ id, el, x: (x + 20) * L, y: y * L, r: 0.9, ...extra }) as Atom;
+    const bond = (id: number, a: number, b: number, order: 1 | 2 = 1, extra: Partial<Bond> = {}) => ({ id, a, b, order, ...extra }) as Bond;
+    const m = page();
+    const all: Model = {
+      atoms: [
+        ...m.atoms,
+        ...[at(41, "C", 0, 0, { joined: 1 }), at(42, "C", 0.87, 0.5, { joined: 1 }), at(43, "O", 1.73, 0, { joined: 1 }), at(44, "O", 0.87, 1.5, { joined: 1, charge: -1 })],
+        ...[at(45, "Na", 3, 0.5, { joined: 1, charge: 1 }), at(46, "Na", 6, 0.5, { charge: 1 }), at(47, "Pt", 9, 0), at(48, "N", 10, 0), at(49, "Cl", 8, 0)],
+      ],
+      bonds: [...m.bonds, bond(51, 41, 42), bond(52, 42, 43, 2), bond(53, 42, 44), bond(54, 48, 47, 1, { dative: true }), bond(55, 47, 49)],
+    };
+    const entries = drawnEntries(all, structuresOf(all));
+    expect(entries).toHaveLength(7);
+    for (const e of entries) {
+      const ids = e.drawn.atoms.map((a) => a.id);
+      expect(drawnBlocksOf(e.drawn, ids), ids.join(" ")).toHaveLength(1);
+      expect(blocksOf(e.drawn, ids).length, ids.join(" ")).toBeLessThanOrEqual(1);
+    }
   });
 });
