@@ -1,7 +1,6 @@
 /**
  * Which of a metal's donors are across from each other (lib/chem/arrangement),
- * and identity told by it: CHEM's known answers for the brief's step 1
- * (11-14) - cisplatin and transplatin, a place that sets nothing filled in,
+ * and identity told by it: the chemistry check's known answers - cisplatin and transplatin, a place that sets nothing filled in,
  * a chelate's two ends never across - and its count of arrangements for
  * each kind of square-planar and octahedral complex, counted by identity
  * over every pairing that can be.
@@ -131,7 +130,7 @@ describe("a metal's donors across, in identity", () => {
     expect(identityText(arranged("Cl[Pt]1(Cl)NCCCCCCCN1", [[0, 1], [2, 3]]))).not.toBe(identityText(arranged("Cl[Pt]1(Cl)NCCCCCCCN1", [[0, 2], [1, 3]])));
   });
 
-  it("CHEM's counts of arrangements by pairs (11-14), every kind of square-planar and octahedral complex", () => {
+  it("the chemistry check's counts of arrangements by pairs, every kind of square-planar and octahedral complex", () => {
     const cases: [string, string, number][] = [
       // square planar
       ["A2B2", "N[Pt](N)(Cl)Cl", 2],
@@ -166,7 +165,7 @@ describe("a metal's donors across, in identity", () => {
     expect(symmetryClasses(arranged("Cl[Pt-](Cl)(Br)N", null))[donors[0]]).toBe(symmetryClasses(arranged("Cl[Pt-](Cl)(Br)N", null))[donors[1]]);
   });
 
-  it("CHEM's known answers for the fill offered to every metal (11-14): Pt2Cl6 2-, Ni(cyclam) 2+ and Pt(dien)Cl+ filled - their chelates leave one pairing", () => {
+  it("the chemistry check's known answers for the fill offered to every metal: Pt2Cl6 2-, Ni(cyclam) 2+ and Pt(dien)Cl+ filled - their chelates leave one pairing", () => {
     for (const smiles of ["Cl[Pt-]1(Cl)Cl[Pt-](Cl)(Cl)Cl1", "[Ni+2]123N4CCN1CCCN2CCN3CCC4", "Cl[Pt+]12NCCN1CCN2"]) {
       const text = identityText(fromSmiles(smiles));
       expect([smiles, text.includes("|m")]).toEqual([smiles, true]);
@@ -178,7 +177,7 @@ describe("a metal's donors across, in identity", () => {
       const g = fromSmiles(smiles);
       return arrangementOpen(g, metalOf(g).m);
     };
-    // (CHEM's two: four N alike next to the metal, two ligands further out)
+    // (the chemistry check's two: four N alike next to the metal, two ligands further out)
     expect(open("CN[Pt+2](NC)(NCC)NCC")).toBe(true);
     expect(open("CN[Co+3](NC)(NC)(NC)(NCC)NCC")).toBe(true);
     expect(open(CIS)).toBe(true);

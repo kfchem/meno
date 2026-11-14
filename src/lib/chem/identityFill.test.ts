@@ -1,11 +1,11 @@
 /**
- * Identity's fill (`filledIn`, part 13's U1) tried on every writing of
+ * Identity's fill (`filledIn`) tried on every writing of
  * fourteen structures - each place that can carry a configuration written one
  * way, the other way or left blank - against what each writing stands for:
- * the compounds among its completions. CHEM's three tests (11-13, third
- * check): never one identity for two meanings; a writing that stands for one
+ * the compounds among its completions. The chemistry check's three tests:
+ * never one identity for two meanings; a writing that stands for one
  * compound has that compound's identity; and filled in the canonical order,
- * the identity is the same whatever order the atoms are given in. And CHEM's
+ * the identity is the same whatever order the atoms are given in. And its
  * known answers: how many stereoisomers each structure has, counted by
  * identity over every full writing, and the writings with one centre left
  * plain.
@@ -132,7 +132,7 @@ describe("identity filled in, over every writing of fourteen structures", () => 
   );
 });
 
-describe("identity filled in: CHEM's known answers", () => {
+describe("identity filled in: the chemistry check's known answers", () => {
   it("counts each structure's stereoisomers by identity over every full writing", () => {
     const count = (smiles: string) => {
       const s = writingsOf(smiles);
@@ -202,7 +202,7 @@ describe("identity filled in: CHEM's known answers", () => {
 
 describe("a constitution's key", () => {
   it("is the key Meno wrote for it before identity filled anything in, so that a value saved with it still finds its structure", () => {
-    // (the keys written by identityKey before part 13's fill, for these constitutions: a value's `of` holds them)
+    // (the keys written by identityKey before the fill, for these constitutions: a value's `of` holds them)
     const bare = (smiles: string) => {
       const g = fromSmiles(smiles);
       return { atoms: g.atoms.map(({ tetra: _tetra, ...a }) => a), bonds: g.bonds.map(({ stereo: _stereo, ...b }) => b) };

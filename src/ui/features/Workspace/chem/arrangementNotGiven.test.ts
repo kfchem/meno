@@ -149,7 +149,7 @@ describe("a metal of six donors nobody gave the arrangement of", () => {
   const open = (m: Model) => readMarks(arrangementsMarked(m)).atoms.has(1);
 
   it("is marked where its donors could be set round it with other pairs across: cis or trans, fac or mer, a chelate's", () => {
-    // (CHEM's five)
+    // (the chemistry check's five)
     expect(open(six(["Cl", "Cl", "N", "N", "N", "N"]))).toBe(true);
     expect(open(six(["Cl", "Cl", "Cl", "N", "N", "N"]))).toBe(true);
     expect(open(six(["Cl", "Cl", "Br", "Br", "N", "N"]))).toBe(true);

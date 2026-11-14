@@ -22,11 +22,11 @@ import { isMetal, type Arranged } from "../layout/perceive";
 
 /** How near, in degrees, the next pairing's pairs may each come to the straightest's before a drawing says neither (`pairingDrawn`). */
 export const DRAWN_TIE = 20;
-/** The least angle at the metal, in degrees, between two of four donors across in 3D: lower would take a flattened tetrahedron's (CHEM, 11-14). */
+/** The least angle at the metal, in degrees, between two of four donors across in 3D: lower would take a flattened tetrahedron's (found in the chemistry check). */
 export const ACROSS_FOUR = 150;
-/** The least angle at the metal, in degrees, between two of six donors across in 3D: a terpyridine's outer donors are held short of 180 (CHEM, 11-14). */
+/** The least angle at the metal, in degrees, between two of six donors across in 3D: a terpyridine's outer donors are held short of 180 (found in the chemistry check). */
 export const ACROSS_SIX = 135;
-/** How far, in degrees, every other donor must stay from a donor's partner's angle in 3D: a trigonal prism's donors each have two at about 136 (CHEM, 11-14). */
+/** How far, in degrees, every other donor must stay from a donor's partner's angle in 3D: a trigonal prism's donors each have two at about 136 (found in the chemistry check). */
 export const ACROSS_MARGIN = 15;
 
 /**
