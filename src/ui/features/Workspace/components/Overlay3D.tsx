@@ -1,5 +1,5 @@
 import { useFrame, useThree } from "@react-three/fiber";
-import { useLayoutEffect, useMemo, useRef } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { ParsedBond } from "../../../../lib/chem/molecule";
 import type { Solid } from "../utils/molecule3d";
@@ -19,6 +19,10 @@ const up = new THREE.Vector3(0, 1, 0);
  * shows: their bonds between heavy atoms, thin and grey, each as dark as its
  * conformer is likely (`weights`, by Boltzmann; all alike, without). They
  * fade in and out. In the molecule's own frame, about its centre.
+ *
+ * Made only while they are shown, or fading out: off - as they nearly always
+ * are - a molecule of a thousand frames, or a conformer set growing as its
+ * search goes on, costs nothing as it is put on the page or grows.
  */
 export default function Overlay3D({
   solid,
@@ -42,14 +46,22 @@ export default function Overlay3D({
   const level = useRef(0);
   const heavy = useMemo(() => bonds.filter((b) => els[b.a1] !== "H" && els[b.a2] !== "H"), [bonds, els]);
   const others = useMemo(() => solid.frames.map((_, i) => i).filter((i) => i !== frame), [solid, frame]);
-  const count = Math.max(1, others.length * heavy.length);
+  // (made while shown or fading out; let go once faded out)
+  const [made, setMade] = useState(on);
+  if (on && !made) setMade(true);
+  const count = made ? Math.max(1, others.length * heavy.length) : 1;
   useLayoutEffect(() => {
+    if (!made) {
+      mesh.current.count = 0;
+      return;
+    }
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
     const a = new THREE.Vector3();
     const b = new THREE.Vector3();
     const mid = new THREE.Vector3();
     const s = new THREE.Vector3();
+    const along = new THREE.Vector3();
     const colour = new THREE.Color();
     const most = weights ? Math.max(greatest(weights), 1e-12) : 1;
     let k = 0;
@@ -61,7 +73,7 @@ export default function Overlay3D({
       for (const bond of heavy) {
         a.set(p[3 * bond.a1], p[3 * bond.a1 + 1], p[3 * bond.a1 + 2]);
         b.set(p[3 * bond.a2], p[3 * bond.a2 + 1], p[3 * bond.a2 + 2]);
-        const along = b.clone().sub(a);
+        along.subVectors(b, a);
         const length = along.length();
         q.setFromUnitVectors(up, length > 1e-9 ? along.divideScalar(length) : up);
         m.compose(mid.addVectors(a, b).multiplyScalar(0.5), q, s.set(radius * THIN, length, radius * THIN));
@@ -74,7 +86,7 @@ export default function Overlay3D({
     mesh.current.instanceMatrix.needsUpdate = true;
     if (mesh.current.instanceColor) mesh.current.instanceColor.needsUpdate = true;
     invalidate();
-  }, [solid, heavy, others, weights, radius, invalidate]);
+  }, [made, solid, heavy, others, weights, radius, invalidate]);
   useFrame((_, dt) => {
     const to = on ? 1 : 0;
     const v = to + (level.current - to) * Math.exp(-Math.min(dt, 1 / 30) / TAU);
@@ -82,6 +94,7 @@ export default function Overlay3D({
     (mesh.current.material as THREE.MeshBasicMaterial).opacity = 0.85 * level.current;
     mesh.current.visible = level.current > 0;
     if (level.current !== to) invalidate();
+    else if (!on && made) setMade(false);
   });
   return (
     <instancedMesh ref={mesh} args={[undefined, undefined, count]} frustumCulled={false} raycast={() => {}} renderOrder={99}>

@@ -24,6 +24,6 @@ export type ChemBond = { a: number; b: number; order: number; stereo?: CisTrans 
 export type ChemGraph = {
   atoms: readonly ChemAtom[];
   bonds: readonly ChemBond[];
-  /** Its axes of chirality (BINAP's), each shown by a wedge. */
+  /** Its axes of chirality (BINAP's, an allene's), a biaryl's shown by a wedge. */
   axes?: readonly Axial[];
 };

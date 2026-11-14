@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { measured } from "../../../testing/timeouts";
 import { readStereo, type DrawnAtom, type DrawnBond } from "../../layout/drawn";
 import type { IdentityInput } from "../identity";
 import { cipLabels, MOST_VARIANTS } from "./index";
@@ -83,6 +84,62 @@ describe("rule 3: seqcis (Z) precedes seqtrans (E), which precedes a double bond
   });
 });
 
+describe("rules 4a, 4b, 4c and 5: configurations in the ligands", () => {
+  it("4a: a configured centre in a ligand precedes an unconfigured one - the two ligands' places swapped, the label turns", () => {
+    expect(cipOf("O[C@H]([C@H](C)Cl)C(C)Cl")).toEqual(["C1:S", "C2:S"]);
+    expect(cipOf("O[C@H](C(C)Cl)[C@H](C)Cl")).toEqual(["C1:R", "C5:S"]);
+  });
+
+  it("4b: a ligand whose two centres are like (R,R or S,S) precedes one whose are unlike - a chiral centre, R or S", () => {
+    expect(cipOf("O[C@H]([C@H](Cl)[C@H](C)Cl)[C@H](Cl)[C@@H](C)Cl")).toEqual(["C1:S", "C2:S", "C4:S", "C7:S", "C9:R"]);
+  });
+
+  it("4c: a ligand with an r centre precedes one with an s - and with two s centres, none", () => {
+    expect(cipOf("O[C@H]([C@H]([C@H](C)Cl)[C@@H](C)Cl)[C@@H]([C@H](C)Cl)[C@@H](C)Cl")).toEqual(["C1:S", "C2:r", "C3:S", "C6:R", "C9:s", "C10:S", "C13:R"]);
+    expect(cipOf("O[C@H]([C@@H]([C@H](C)Cl)[C@@H](C)Cl)[C@@H]([C@H](C)Cl)[C@@H](C)Cl")[0]).toEqual("C1:alike");
+  });
+
+  it("5: an R group precedes its mirror image, S - a pseudoasymmetric centre, r or s, the same in the mirror image; R and R, none", () => {
+    expect(cipOf("C[C@@H](Cl)[C@H](O)[C@@H](Cl)C")).toEqual(["C1:R", "C3:r", "C5:S"]);
+    expect(cipOf("C[C@H](Cl)[C@@H](O)[C@H](Cl)C")).toEqual(["C1:S", "C3:r", "C5:R"]);
+    expect(cipOf("C[C@@H](Cl)[C@H](O)[C@H](Cl)C")).toEqual(["C1:R", "C3:alike", "C5:R"]);
+    // (two enantiomorphic ligands, each the other's mirror image, against a like and an unlike pair: rule 5, r or s)
+    expect(cipOf("O[C@H]([C@@H](Cl)[C@H](C)Cl)[C@H](Cl)[C@@H](C)Cl")[0]).toEqual("C1:s");
+  });
+
+  it("5 at a double bond: its two groups each other's mirror image - seqTrans or seqCis, Z or E that turns in the mirror image", () => {
+    expect(cipOf("Cl[C@H](C)/C(=C/C)[C@H](C)Cl")).toEqual(["C1:R", "C6:S", "C3=C4:E turns"]);
+    expect(cipOf("Cl[C@@H](C)/C(=C/C)[C@@H](C)Cl")).toEqual(["C1:S", "C6:R", "C3=C4:Z turns"]);
+  });
+
+  it("3 leaves a double bond that turns in the mirror image to rules 4a and 5, reading it as none: here it goes on to the Z bonds further out", () => {
+    // (the first ligand's double bond seqTrans, its groups CH(Cl)CH=CHCH3 with E bonds, R and S; the second's, unconfigured, with Z bonds, no unit)
+    expect(cipOf(String.raw`O[C@H](/C=C(\[C@H](Cl)/C=C/C)[C@@H](Cl)/C=C/C)C=C(C(Cl)/C=C\C)C(Cl)/C=C\C`).slice(0, 4)).toEqual(["C1:R", "C4:R", "C9:S", "C2=C3:E turns"]);
+  });
+});
+
+describe("an allene's axis and an odd cumulene's cis or trans", () => {
+  it("names an allene's axis by its ends' groups, the near end's first: M or P, the same from either end", () => {
+    expect(cipOf("CC=[C@]=CC")).toEqual(["C1~C3:M"]);
+    expect(cipOf("CC=[C@@]=CC")).toEqual(["C1~C3:P"]);
+    expect(cipOf("NC(Br)=[C@]=C(O)C")).toEqual(["C1~C4:M"]);
+    expect(cipOf("CC(O)=[C@]=C(Br)N")).toEqual(["C1~C4:M"]);
+    expect(cipOf("CC(O)=[C@@]=C(Br)N")).toEqual(["C1~C4:P"]);
+    // (an even run of four double bonds, likewise)
+    expect(cipOf("CC=C=[C@]=C=CC")).toEqual(["C1~C5:M"]);
+    // (an end with two alike groups: no axis)
+    expect(cipOf("CC(C)=[C@]=CC")).toEqual(["C1~C4:alike"]);
+  });
+
+  it("names an odd cumulene's cis or trans E or Z by its ends' groups ranked, as a double bond's", () => {
+    expect(cipOf("C/C=C=C=C/C")).toEqual(["C1=..=C4:E"]);
+    expect(cipOf("C/C=C=C=C\\C")).toEqual(["C1=..=C4:Z"]);
+    // (Cl over F at the first end: Cl trans to the far F, so E)
+    expect(cipOf("Cl/C(F)=C=C=C/F")).toEqual(["C1=..=C5:E"]);
+    expect(cipOf("F/C(Cl)=C=C=C/F")).toEqual(["C1=..=C5:Z"]);
+  });
+});
+
 describe("what gives no label, and why", () => {
   it("says a ligand's double bond left open in the drawing, by its bond", () => {
     const input = cipInput("CC=C[C@H](O)/C=C/C");
@@ -93,25 +150,18 @@ describe("what gives no label, and why", () => {
     });
   });
 
-  it("says a tie only rules 4 and 5 could break is not worked out yet: a pseudoasymmetric centre between an R and an S group", () => {
-    expect(cipOf("C[C@@H](Cl)[C@H](O)[C@@H](Cl)C")).toEqual(["C1:R", "C3:later", "C5:S"]);
-  });
-
-  it("says so too where the tie is met in a ligand: a double bond whose two groups differ only by their centres", () => {
-    // (the first double bond's groups, each CH(Cl)CH=CHCH3 with an E bond, R against S: rule 3 cannot read it; the second's, unconfigured
-    //  and with Z bonds, is no unit - without the first's 'later', rule 3 would go on to the Z bonds further out and give a label)
-    expect(cipOf(String.raw`O[C@H](/C=C(\[C@H](Cl)/C=C/C)[C@@H](Cl)/C=C/C)C=C(C(Cl)/C=C\C)C(Cl)/C=C\C`).slice(0, 4)).toEqual(["C1:later", "C4:R", "C9:S", "C2=C3:later"]);
-  });
-
-  it("says so where an axis is drawn in two alike ligands, and calls them alike where none is", () => {
+  it("reads an axis in a ligand as its M or P: two alike ligands but for their axes' senses, a pseudoasymmetric centre; their axes alike, no centre", () => {
     // (two 2'-methylbiphenyl-2-yl groups, each with its axis between its rings: bonds 7-8 and 20-21)
     const input = cipInput("O[C@H](c1ccccc1-c1ccccc1C)c1ccccc1-c1ccccc1C");
     expect(cipSaid(input)).toEqual(["C1:alike"]);
-    const axes = [
-      { atoms: [7, 8] as const, refs: [6, 13] as const, sense: 1 as const },
-      { atoms: [20, 21] as const, refs: [19, 26] as const, sense: -1 as const },
+    const axes = (a: 1 | -1, b: 1 | -1) => [
+      { atoms: [7, 8] as const, refs: [6, 13] as const, sense: a },
+      { atoms: [20, 21] as const, refs: [19, 26] as const, sense: b },
     ];
-    expect(cipSaid({ ...input, axes })).toEqual(["C1:later"]);
+    // (M precedes P, as R precedes S: rule 5, Hanson et al. 2018 p. 1761; the axes the other way round, the other)
+    expect(cipSaid({ ...input, axes: axes(1, -1) })).toEqual(["C1:s", "C7~C8:M", "C20~C21:P"]);
+    expect(cipSaid({ ...input, axes: axes(-1, 1) })).toEqual(["C1:r", "C7~C8:P", "C20~C21:M"]);
+    expect(cipSaid({ ...input, axes: axes(1, 1) })).toEqual(["C1:alike", "C7~C8:M", "C20~C21:M"]);
   });
 
   it("says a ligand it would have to look past cannot be told from the drawing: a metal's, a star's", () => {
@@ -134,15 +184,20 @@ describe("what gives no label, and why", () => {
     expect(three("F[CH+]Cl")).toEqual(["C1:unsure"]);
   });
 
-  it("says where only the proposed rule 6 could tell: a spiro atom between two alike rings - but not a ring atom with two ways round its one ring", () => {
-    expect(cipOf("C1=CC[C@]2(C1)CCCCC2")).toEqual(["C3:symmetric"]);
+  it("6, the 2018 proposal: a spiro atom between two rings each with an N and a C=O - its N alike, its C alike - R or S, the other in the mirror image", () => {
+    expect(cipOf("O=C1CCN[C@@]12NCCC2=O")).toEqual(["C5:R"]);
+    expect(cipOf("O=C1CCN[C@]12NCCC2=O")).toEqual(["C5:S"]);
+  });
+
+  it("6 leaves alike what promotion does not tell apart, as drawn and in the mirror image: a spiro atom between two rings each alike in itself, a ring atom with two ways round its one ring", () => {
+    expect(cipOf("C1=CC[C@]2(C1)CCCCC2")).toEqual(["C3:alike"]);
     expect(cipOf("O[C@H]1CCCCC1")).toEqual(["C1:alike"]);
   });
 
   it("gives up past its node budget, and says so, rather than freezing: a centre between two cages tied far out", () => {
     expect(prismsCentre(4)).toEqual({ why: "alike" });
     expect(prismsCentre(12)).toEqual({ why: "large" });
-  });
+  }, measured(1100));
 });
 
 describe("charged and radical mesomeric systems: a label only where every usual structure gives it", () => {

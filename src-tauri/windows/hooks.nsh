@@ -12,6 +12,12 @@
 
 !macro NSIS_HOOK_POSTINSTALL
   ExecWait '"$INSTDIR\${MAINBINARYNAME}.exe" --register-ole'
+  ; The fonts a copied picture's labels are set in (IBM Plex Sans, OFL;
+  ; resources\fonts): put in this user's fonts, so that Word and PowerPoint
+  ; draw the labels in them. Meno puts in only the faces not there yet and
+  ; keeps which it put, in its own key, to take out exactly those
+  ; (src/labelfonts.rs).
+  ExecWait '"$INSTDIR\${MAINBINARYNAME}.exe" --install-label-fonts'
   ; A workspace file's own icon (icons\document, docs/FILE-IO.md): the
   ; installer associates .meno with Meno (tauri.windows.conf.json,
   ; fileAssociations) under the ProgID Meno.Workspace, with Meno's own icon;
@@ -132,6 +138,9 @@
 
 !macro NSIS_HOOK_PREUNINSTALL
   ExecWait '"$INSTDIR\${MAINBINARYNAME}.exe" --unregister-ole'
+  ; The label fonts Meno put in this user's fonts, and only those, taken out;
+  ; before the line below, which takes Meno's own key away once it is empty.
+  ExecWait '"$INSTDIR\${MAINBINARYNAME}.exe" --remove-label-fonts'
   ; Meno's listing in Default apps, for the formats the user had it offered
   ; for in Settings (src/defaults.rs): Meno takes out exactly what it wrote,
   ; its one value in the shared RegisteredApplications key and its own keys

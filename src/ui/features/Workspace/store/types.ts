@@ -433,6 +433,19 @@ export type PictureToAdd = { name: string; sha256: string; media: PictureMedia; 
 export type PdfReading = { at: number; zoom: number };
 /** Which of the 3D style's two looks a molecule is drawn in (lib/chem/style3d). */
 export type Look3D = Role3D;
+
+/** What a 3D structure's search going on has brought so far (docs/WORKSPACE.md, *As its search goes on*): its conformers, shown over what the document holds of it until the search ends. */
+export type Grown3D = Pick<Molecule3D, "atoms" | "frames" | "energies" | "made">;
+
+/**
+ * A 3D structure whose search goes on: what it has brought so far; the key
+ * its making was recorded with - for what the search brings to join that
+ * step where nothing came between; and its atoms and frames as the
+ * document holds them as it began (`base`): an edit that changes either -
+ * an atom moved, a conformer taken away - ends the search, the edit kept:
+ * what it brings is never written over one.
+ */
+export type Growing3D = { grown: Grown3D; key: string; base: Pick<Molecule3D, "atoms" | "frames"> };
 /**
  * A measurement on a molecule in 3D, between its atoms by index, in the
  * order they were chosen: two, a distance; three, the angle at the middle
@@ -1287,6 +1300,20 @@ export type EditorState = {
    * undo, nothing unsaved.
    */
   talkLooks: Readonly<Record<number, Look3D>>;
+  /**
+   * 3D structures whose search goes on (docs/WORKSPACE.md, *As its search
+   * goes on*), by id: what each has brought so far, shown over what the
+   * document holds of it - the view's alone until the search ends, when it
+   * is written into the document once (`settleGrown3d`). Gone where its
+   * molecule is: an undo that took it away, a 3D structure made again.
+   */
+  growing3d: Readonly<Record<number, Growing3D>>;
+  /** A 3D structure's search going on from now (`growing3d`): what it has brought so far shown, its making's `key`, its atoms as the document holds them now its `base`. */
+  startGrowing3d: (id: number, grown: Grown3D, key: string) => void;
+  /** What a 3D structure's search going on has brought since shown (`growing3d`): the conformer shown kept shown, where it is still among them. None, to let it go. Nothing where its search has ended - its molecule gone or edited: never begun again. */
+  grow3d: (id: number, grown: Grown3D | null) => void;
+  /** What a 3D structure's search brought written into the document and let go: one step with its making, where nothing came between (its `key`). */
+  settleGrown3d: (id: number) => void;
   /** A molecule in 3D shown in its other look for the talk being given. */
   switchTalkLook3d: (id: number) => void;
   /** The looks a talk switched let go: each molecule as the document has it. */
@@ -1380,7 +1407,7 @@ export type EditorState = {
    * to rest, turned as `turn` says, rising out of the drawing from `from` -
    * in place of the molecules `replacing`, made from it before it changed.
    */
-  riseMolecules3d: (made: ({ m: Omit<Molecule3D, "id">; turn: Turn3D } & Omit<Rising3D, "start">)[], replacing?: number[]) => number[];
+  riseMolecules3d: (made: ({ m: Omit<Molecule3D, "id">; turn: Turn3D } & Omit<Rising3D, "start">)[], replacing?: number[], key?: string) => number[];
   /** A molecule in 3D has risen. */
   risen3d: (id: number) => void;
   /**
@@ -1805,6 +1832,8 @@ export type EditorState = {
    * it is wired from, where the set is a step's exit's.
    */
   addStep: (kind: StepKind, by: string, x: number, y: number, from?: WireEnd) => number;
+  /** A step put down from Quick Add (`addStep`): and, where it cannot run until a value of its options is given (doers `optionsNeed`), its card opened at once to ask for it. */
+  putDownStep: (kind: StepKind, by: string, x: number, y: number, from?: WireEnd) => number;
   moveStep: (id: number, x: number, y: number, gesture?: string) => void;
   /** A step's options changed - its own, the defaults left as they are - or its kind, to another who does it fills. */
   updateStep: (id: number, patch: { options?: OptionValues; kind?: StepKind }) => void;
