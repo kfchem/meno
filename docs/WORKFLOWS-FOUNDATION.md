@@ -924,7 +924,10 @@ drawn, aromatic rings as one form.* What that means, plainly:
   ends, joined by a ring of seven atoms or fewer with the metal, are
   never taken as across. A complex whose arrangement can be more than
   one and is not given (cisplatin from a SMILES) is a third structure,
-  matching neither isomer until it is given. The hand of an octahedral
+  matching neither isomer until it is given. Two metals held by bridges,
+  whose cis and trans dimers differ only together ([Pt2Cl4(NH3)2]), are
+  each taken as not given alike, not only the one the canonical order
+  fills last (`arrangementOpen`). The hand of an octahedral
   centre is not yet told: the two enantiomers of [Co(en)3]3+ are one
   structure;
 - **a limit, on the safe side:** some writings that leave the same thing

@@ -709,7 +709,14 @@ export function squarePlanarMetal(v: FourView, a: number, valence: (el: string, 
     if (lends) continue;
     const full = valence(v.el(d), v.charge(d));
     if (full == null) return { sure: false, ends, open };
-    const others = v.neighbours(d).filter((e) => e !== a).reduce((s, e) => s + v.order(d, e), 0) + v.hs(d);
+    // (a donor that bridges metals - a halide between two - its bonds but the metals' its own: what it lacks shared among them,
+    //  each [Pt2Cl4(NH3)2]'s Pt given a half of each of its two Cl bridges, Pt(II))
+    const metals = v.neighbours(d).filter((e) => e !== a && isMetal(v.el(e)));
+    const others = v.neighbours(d).filter((e) => e !== a && !metals.includes(e)).reduce((s, e) => s + v.order(d, e), 0) + v.hs(d);
+    if (metals.length) {
+      if (others < full) state += (full - others) / (metals.length + 1);
+      continue;
+    }
     if (others >= full) continue;
     if (others + 1 === full) state++;
     else return { sure: false, ends, open };

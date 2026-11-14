@@ -9,6 +9,7 @@ import { arrangementsMarked } from "./arrangementsMarked";
 import { layoutJob, relayoutFrom } from "./engineLayout";
 import type { Layout2D } from "../../../../lib/layout/engine";
 import { drawingOf, metalsArrangedIn } from "./fromSmiles";
+import { drawnFromSmiles } from "../utils/smilesDrawn";
 import { editorModelOf, processFileContent } from "../utils/io";
 
 // A drawing nobody made - a plugin's of a typed SMILES or a step's structure - says nothing of which donors of a square-planar centre
@@ -244,6 +245,29 @@ describe("a metal its SMILES marks, with a chelate", () => {
     const smiles = "[Co@OH1+]123456.Cl1.[NH2]2CC[NH2]3.[NH2]4CC[NH2]5.Cl6";
     const b = enCl([1, 10], [2, 6]);
     expect(metalMarked(await drawingOf(b, MENO, undefined, metalsArrangedIn(smiles, b)), "Co")).toBe(ARRANGEMENT_SAID);
+  });
+});
+
+describe("two square-planar metals held by two bridges", () => {
+  it("are each surely Pt(II) or Pd(II), a bridge's charge shared, and marked where their dimers could be cis or trans", { timeout: 120000 }, async () => {
+    forgetLaidOut();
+    const marks = (m: Model) => [...readMarks(m).atoms.values()].filter((said) => said === ARRANGEMENT_SAID).length;
+    // (kept as they came: [Pt2Cl4(NH3)2] and [Pd2Cl4(PMe3)2] marked at both metals; [Pt2Cl6]2- and [(NH3)2Pt(Cl)2PtCl2] at neither)
+    for (const [smiles, n] of [
+      ["[NH3][Pt]1(Cl)[Cl][Pt]([NH3])(Cl)[Cl]1", 2],
+      ["C[P](C)(C)[Pd]1(Cl)[Cl][Pd]([P](C)(C)C)(Cl)[Cl]1", 2],
+      ["Cl[Pt-]1(Cl)[Cl][Pt-](Cl)(Cl)[Cl]1", 0],
+      ["[NH3][Pt+]1([NH3])[Cl][Pt-](Cl)(Cl)[Cl]1", 0],
+    ] as const)
+      expect([smiles, marks(arrangementsMarked(drawnFromSmiles(smiles)))]).toEqual([smiles, n]);
+    // (laid out as new, as a typed SMILES's drawing is: the Pd dimer marked at both)
+    const pd = drawnFromSmiles("C[P](C)(C)[Pd]1(Cl)[Cl][Pd]([P](C)(C)C)(Cl)[Cl]1");
+    const f = (v: number) => v.toFixed(4).padStart(10);
+    const index = new Map(pd.atoms.map((a, i) => [a.id, i + 1]));
+    const block = ["", "  test", "", `${String(pd.atoms.length).padStart(3)}${String(pd.bonds.length).padStart(3)}  0  0  0  0  0  0  0  0999 V2000`,
+      ...pd.atoms.map((a) => `${f(a.x)}${f(-a.y)}${f(0)} ${a.el.padEnd(3)} 0  0  0  0  0  0  0  0  0  0  0  0`),
+      ...pd.bonds.map((b) => `${String(index.get(b.a)).padStart(3)}${String(index.get(b.b)).padStart(3)}${String(b.order).padStart(3)}  0`), "M  END", ""].join("\n");
+    expect(marks(await drawingOf(block, MENO))).toBe(2);
   });
 });
 

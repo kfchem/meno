@@ -197,6 +197,23 @@ describe("a metal's donors across, in identity", () => {
     expect(arrangementOpen(h, h.atoms.findIndex((a) => a.el === "Pt"))).toBe(true);
   });
 
+  it("two metals held by two bridges, whose cis and trans dimers differ only together: each asked alike, whatever order the atoms come in", () => {
+    // ([Pt2Cl4(NH3)2] and [Pd2Cl4(PMe3)2]: open at both metals; [Pt2Cl6]2- and [(NH3)2Pt(Cl)2PtCl2]: one way only, open at neither)
+    const at = (smiles: string) => {
+      const g = fromSmiles(smiles);
+      return g.atoms.flatMap((a, i) => (["Pt", "Pd"].includes(a.el) ? [arrangementOpen(g, i)] : []));
+    };
+    for (const smiles of [
+      "N[Pt]1(Cl)Cl[Pt](N)(Cl)Cl1",
+      "Cl[Pt]1(N)Cl[Pt](Cl)(N)Cl1",
+      "Cl1[Pt](Cl)(N)Cl[Pt]1(N)Cl",
+      "CP(C)(C)[Pd]1(Cl)Cl[Pd](P(C)(C)C)(Cl)Cl1",
+      "Cl[Pd]1(P(C)(C)C)Cl[Pd](Cl)(P(C)(C)C)Cl1",
+    ])
+      expect([smiles, at(smiles)]).toEqual([smiles, [true, true]]);
+    for (const smiles of ["Cl[Pt-]1(Cl)Cl[Pt-](Cl)(Cl)Cl1", "N[Pt+]1(N)Cl[Pt-](Cl)(Cl)Cl1"]) expect([smiles, at(smiles)]).toEqual([smiles, [false, false]]);
+  });
+
   it("a structure with no metal of four or six donors is written as it always was", () => {
     // (ferrocene's iron has two stars; a tripod's pairings all put a chelate across: nothing filled, nothing written)
     for (const smiles of ["CC(C)O", "[Zn]123N(CCN1)(CCN2)CCN3"]) expect(identityText(fromSmiles(smiles))).not.toContain("|m");

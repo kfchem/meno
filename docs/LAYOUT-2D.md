@@ -523,9 +523,10 @@ they hang from.
   (trans-[Co(en)2Cl2]+ drawn cis, mer-Co(gly)3 drawn fac), and until the
   pairs are read from the mark itself it is laid out as new, never an
   isomer the input did not write: a chelated metal marked as not given
-  where its donors could lie more ways than one, as above. (A metal held
-  by bridges to another, as in [Pt2Cl4(NH3)2], is not yet marked, though
-  its identity reads no pairs.) And where it cannot be laid
+  where its donors could lie more ways than one, as above - two metals
+  held by bridges among them, as in [Pt2Cl4(NH3)2], whose cis and trans
+  dimers differ only together, each marked alike (a bridge's charge
+  shared between its metals, each Pt(II)). And where it cannot be laid
   out and is kept as it came, its square-planar centres whose arrangement
   is not given are marked all the same (`arrangementsMarked`). A metal of
   six donors in such a drawing is marked so too where its donors could be

@@ -287,9 +287,19 @@ function openNow(input: IdentityInput, m: number): boolean {
   // (the metal's place once the plain hydrogens are folded in: none of them is it)
   const at = m - folded.slice(0, m).filter(Boolean).length;
   const g = compared(others);
-  if (!blanksOf(g).some((b) => b.kind === "metal" && b.at === at)) return false;
-  return !(filledIn(g).input.arrangements ?? []).some((x) => x.metal === at);
+  const blanks = blanksOf(g);
+  if (!blanks.some((b) => b.kind === "metal" && b.at === at)) return false;
+  const leftOpen = (h: LayoutInput) => !(filledIn(h).input.arrangements ?? []).some((x) => x.metal === at);
+  if (leftOpen(g)) return true;
+  // (two metals that set something only together - [Pd2Cl4(PMe3)2]'s cis and trans dimers - are filled in canonical order:
+  //  the first alone sets nothing and is filled, the second is then left open. Each is asked alike: with another metal not
+  //  given given each of its pairings in turn, is this one then left open. Up to `METALS_ASKED` others)
+  const metals = blanks.filter((b) => b.kind === "metal" && b.at !== at);
+  if (metals.length > METALS_ASKED) return false;
+  return metals.some((b) => valuesOf(g, b).some(leftOpen));
 }
+/** How many other metals not given `arrangementOpen` sets in turn: more, and only the canonical order's fill is asked. */
+const METALS_ASKED = 4;
 
 /**
  * The structure as identity compares it: its plain hydrogens folded in
