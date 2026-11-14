@@ -388,7 +388,7 @@ describe("a configuration that makes no stereo unit, in a structure's identity",
     // (its centre alone sets nothing, and its double bond alone; once either is written the other decides between
     // the two enantiomers. Drawn with its double bond, with its centre, or with neither: each means "either
     // enantiomer", and nothing is filled in the first two. The third is filled in the canonical order - as one of
-    // them. Alike told apart, never unlike joined, and only where no single compound is stated: CHEM, 11-13, 5a)
+    // them. Alike told apart, never unlike joined, and only where no single compound is stated: found in the chemistry check)
     const [bond, centre, neither] = ["C/C=C1/CCC(C)CC1", "C[C@H]1CCC(=CC)CC1", "CC=C1CCC(C)CC1"].map((x) => identityText(fromSmiles(x)));
     expect(bond).not.toBe(centre);
     expect([bond, centre]).toContain(neither);

@@ -886,7 +886,7 @@ drawn, aromatic rings as one form.* What that means, plainly:
   prenyl's C=C(CH3)2). Identity never takes a configuration out: where
   one could stand and none is drawn, it fills one in wherever both
   senses write the same text, since such a place sets nothing
-  (`filledIn`, part 13's rule). That joins mirror writings of one ring
+  (`filledIn`). That joins mirror writings of one ring
   compound: the cis,trans 1,2,3-trimethylcyclopropane drawn in full, and
   drawn with its trans pair and its third centre plain, are one
   structure. A place whose two senses write two texts is open and stays
