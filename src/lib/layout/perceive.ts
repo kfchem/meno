@@ -4,26 +4,13 @@
  * sharing an atom or more, laid out together as one piece.
  */
 import { smallestRings } from "./rings";
-import type { Axial, Cumulated, Tetrahedral } from "./stereo";
+import type { Cumulated, Tetrahedral } from "./stereo";
+import type { ChemAtom, ChemBond, ChemGraph } from "../chem/perception/graph";
 
-export type CisTrans = {
-  /** An atom on each end of the double bond, each bonded to its end. */
-  refs: readonly [number, number];
-  /** Whether those two are on the same side. */
-  cis: boolean;
-};
+export type { CisTrans } from "../chem/perception/stereo/types";
 
-export type LayoutAtom = {
-  el: string;
-  charge?: number;
-  hs?: number;
-  /** Its configuration, where it is a stereocentre. */
-  tetra?: Tetrahedral;
-  /**
-   * For a star ("*") at the centre of a pi system bound to a metal through
-   * all its atoms (a haptic bond): the system's atoms.
-   */
-  pi?: readonly number[];
+/** An atom as the layout reads it: the core's atom, and what is an instruction to the layout. */
+export type LayoutAtom = ChemAtom & {
   /**
    * Drawn straight through, its two bonds in one line: an end of a double
    * bond whose configuration is not given, its one group kept straight on
@@ -33,12 +20,9 @@ export type LayoutAtom = {
    */
   linear?: boolean;
 };
-export type LayoutBond = { a: number; b: number; order: number; stereo?: CisTrans };
-export type LayoutInput = {
+export type LayoutBond = ChemBond;
+export type LayoutInput = Omit<ChemGraph, "atoms"> & {
   atoms: readonly LayoutAtom[];
-  bonds: readonly LayoutBond[];
-  /** Its axes of chirality (BINAP's, an allene's), a biaryl's shown by a wedge (stereo.ts). */
-  axes?: readonly Axial[];
   /** Its odd runs of cumulated double bonds set cis or trans (a butatriene's: stereo.ts). */
   cumulated?: readonly Cumulated[];
 };

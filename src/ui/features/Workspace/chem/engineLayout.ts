@@ -40,6 +40,11 @@ export type LayoutJob = {
   folded: Map<number, number[]>;
   /** The axes and cumulenes of `input` are the structure's own text's, given in place of what its drawing says (`laidOut`): the drawing's reading of them is not to be kept. */
   given?: true;
+  /**
+   * The double bonds the structure's own text leaves without a configuration, drawn straight on so that they state none (`laidOut`), by their
+   * atoms' ids ("a,b", the smaller first): what a plugin's drawing of them said is not to be kept.
+   */
+  opened?: readonly string[];
 };
 
 /**
@@ -651,7 +656,7 @@ function stereoDiffers(part: Model, change: Relayout, job: LayoutJob): "changed"
       doubles: new Set([...job.input.bonds.flatMap((b) => (b.stereo ? [pair(job.ids[b.a], job.ids[b.b])] : [])), ...cumulated]),
       axes,
     },
-    job.given ? { doubles: cumulated, axes } : undefined,
+    job.given || job.opened?.length ? { doubles: new Set([...(job.given ? cumulated : []), ...(job.opened ?? [])]), axes: job.given ? axes : new Set<string>() } : undefined,
   );
 }
 

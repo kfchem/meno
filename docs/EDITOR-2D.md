@@ -864,6 +864,14 @@ All hover-based, as above.
   larger ones plainly (2+), after the label and above the line or, where a
   bond runs there, beside it; a charged carbon a bare vertex with its
   charge beside it; a radical a dot; a mass number before the symbol.
+  Two electrons of an atom's own (Brecher 2008, GR-5.3): a triplet's two
+  unpaired electrons on two opposite sides of the symbol, well apart -
+  above and below, or left and right where a bond or its H is in the way;
+  a singlet's pair - a singlet carbene's, a lone pair in GR-5.2's sense -
+  two dots together square on one side, above where it is free, parallel
+  to that side. A charge set beside the symbol keeps off their sides.
+  Either way the C is shown, whatever the style says of a charged carbon:
+  GR-5.3 finds leaving it out acceptable and showing it preferable.
   Circled or plain, and a charged carbon's C, are the style's. Set by
   typing - N+, NH3+, O-, Fe2+, 13C, or a charge alone - by + and - over
   an atom, or from its menu, which also gives or takes an unpaired
@@ -952,6 +960,31 @@ All hover-based, as above.
     input method on Windows gives every key, "Process" with the key
     pressed in its code, nothing being composed (pageField `enterKey`) -
     and one that confirms what an input method composes is not.
+  - **A carbon written out.** C typed over a carbon - alone, or with its
+    hydrogens, CH2, CH3, CH, H2C, H3C, in any case - writes that carbon
+    out, labelled with its hydrogens (`AtomChem.shown`). The compound
+    stays the same. A carbon is left unlabelled by default, and writing
+    one out is the chemist's choice (Brecher 2008, GR-2.1.2). The label
+    is drawn by GR-2.1.5 to GR-2.1.7: the C on the vertex. At a chain's
+    end it reads CH3, or H3C where the bond comes in from the right, on
+    one line. Between bonds it is the C, with its H stacked above it at a
+    peak or below it in a valley; in a ring, its H outside. A carbon of
+    three bonds, one of them upright, has its H on the side away from
+    that bond. C typed alone is written CH2, CH3 or CH as its bonds give
+    it: a bare C would say it has no hydrogens (GR-2.1.1). The hydrogens
+    drawn are always the bonds' own. Where those typed are not -
+    CH2 on a carbon of three bonds, CH on a chain's inner carbon - it is
+    drawn with the bonds' count, and Meno says so in words ("CH2 was
+    typed on a carbon whose bonds leave it one H: it is drawn CH, as its
+    bonds have it"). A label's H count states what the atom has, so a
+    label never changes the compound. A carbon written out keeps its
+    charge and its mass number, as it keeps an unpaired electron: CH
+    typed over the 2-propyl cation's carbon is that cation's CH+, its
+    count right; CH3 over a 13C methyl stays 13C. Another is given by
+    typing it: CH+, CH2-, 13CH3. Anything else typed over a written
+    carbon - N, OMe - makes it that again, and Undo makes it plain. The
+    C that *Edit label* opens with on a corner carbon, left as it is
+    with nothing typed, leaves the carbon unlabelled.
   - The drawing's labels are drawn each by its atom (`Labels2D` `keyOf`):
     a label added or taken away sets no other label's letters again. A
     label taken away - undone, redone away, deleted with its atom, its
@@ -1004,7 +1037,15 @@ All hover-based, as above.
      element's symbol or a name as it is written: SnBu3, Me4tBuXPhos and
      FmBoc stay. iPr stays upright. A reagent's name sets its prefix in
      italics as a group does: m-CPBA, p-TSA, n-hexane.
-  5. What reads as nothing stays exactly as typed - no capital made.
+  5. What reads as nothing stays exactly as typed - no capital made - and
+     is drawn in the order typed at either end of a bond, never turned
+     round as a group on a bond's left is (CH2CH2 is CH2CH2 there, not
+     H2CH2C), its counts set as subscripts as they were typed. Typed
+     over an atom that was an element or a group, it takes that atom out
+     of the structure, and Meno says so: "CH2CH2 is not an element or a
+     group Meno reads, so it is kept as words, and this atom is no longer
+     a carbon. Undo brings the carbon back." Over an atom that was words
+     already, nothing is said.
   6. A reagent's or a ligand's name comes before a metal's formula (the
      maintainer, 2026-10-13), however many letters it makes capitals. No
      metal's symbol is read from letters typed small across the name of a
@@ -1809,16 +1850,38 @@ lipids each have their own way of being drawn, which it should know.
      between them (ST-1.2.8) - are read as open, and the centre says what
      to redraw. A deciding gap within 10 degrees of half a turn says
      nothing either: which side of the rule it is on cannot be told.
+     A centre with four bonds drawn is read as open, likewise, in the forms
+     the text calls ambiguous or the picture of another shape (ST-1.1.9,
+     1.1.10, 1.1.11, 1.1.13 to 1.1.20): four wedges alike, three alike with
+     the fourth in their wide space, two plain bonds with a wedge and hashes
+     where the plain ones are not side by side or are half a turn or more
+     apart, two like wedges beside two plain bonds, three plain with the
+     wedge outside their wide space, two wedges and two hashes like by like.
+     ST-1.1.4's cross with one wedge and ST-1.1.12 stay read.
      A double bond so drawn it lays out keeping the straight end straight -
      its one group straight on from it, as ST-4.4 draws a double bond of
      unspecified configuration - and the rest around it, so the new drawing
      leaves it unsaid as the old one did (the maintainer's ruling;
      `straightEnds`, `LayoutAtom.linear`). An end with two
      groups is not one of these: its other group states the bond. A
-     structure not yet drawn - its
-     atoms all on one point, as a SMILES's are before it is laid out - is
-     not held to this: it is laid out as before, a double bond whose
-     configuration the SMILES does not give drawn one way or the other.
+     structure that arrives with no drawing of its own - a SMILES, a name
+     looked up, a file with no places - is drawn so as well (ST-4.4,
+     ST-6.2): a double bond that could have a cis or trans and is given
+     none has each end straight on where each end has one group, and a
+     wavy bond on a group where an end has two, or where the bond is in a
+     ring (of eight atoms or more: a ring's atom cannot be kept straight
+     on, and the wavy bond goes on a ring bond beside it). The wavy bond
+     goes on the group of an end that has one; never toward a
+     stereocentre, the other group of that end taking it instead. Never
+     bent as if it were stated. Which double bonds could have one is,
+     until Meno's stereo units are in, the reader's own test: a group on
+     each end, not in a ring of seven atoms or fewer, not cumulated, not a
+     C=N whose E/Z is none of its own (an amidine's), and not an end with
+     two groups alike (`layout/drawn` `openDoubleBonds`). A double bond
+     the text gives E or Z is drawn as given. A double bond drawn straight
+     on carries no other mark of being open - not a plugin's either
+     configuration for it - so Clean-up keeps it straight, as it keeps any
+     double bond drawn so.
    - **Centres by a lone pair** (the maintainer, 2026-11-04 and 11-05).
      An atom of three neighbours and a lone pair is a pyramid that its
      lone pair can turn into its mirror image, through the plane of the
@@ -1863,7 +1926,15 @@ lipids each have their own way of being drawn, which it should know.
      pyramid of three that keeps none - an O+ - is read as no axis's end
      either: Clean-up refuses it rather than lose it. An N's wedge may
      still be an axis's, where its lone pair lies in a ring or a carbonyl
-     beside it (an N-aryl pyrrole, an anilide).
+     beside it (an N-aryl pyrrole, an anilide). A wedge out of an
+     allene's end - narrow there, on either of its groups - states the
+     allene's axis (IUPAC 2006 ST-1.6) and nothing else, so it is read as
+     no axis's end about the end's bond to an aryl or a carbonyl: that
+     bond's axis is read from wedges at its other end, as a hindered
+     biaryl's is (ST-1.7's form, by analogy). An aryl allene drawn with its
+     wedge on either group of an end is then one structure, as its SMILES
+     is. The end of a butatriene, or an alkene's carbon, is read as before:
+     its double bonds lie in the page.
    - A SMILES is still read by RDKit, whose drawing says what it means;
      the engine then draws it (RDKit's drawing stands, should the engine
      fail).
