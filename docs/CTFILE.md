@@ -111,6 +111,18 @@ holds whole: the file is read (before, either failed as it was read).
 Neither a hydrogen bond nor a coordination bond takes a hydrogen from the
 atoms at its ends, as a dative bond does not: an ammine stays NH3.
 
+Nor is a hydrogen bond given to the plugin as a bond of a structure, on any
+way to 3D (*Make 3D*, a step's conformers, the atom maps): what it alone
+joins - an enol and a water, an acid's dimer - is two structures, made side
+by side, both of them where only one is selected, and a counter-ion it alone
+holds - a chloride to an ammonium's N-H - is told of as left out, as one
+drawn apart is; one inside a molecule - an enol's own - is left out of it, so
+the H is placed by the molecule's own bonds. *Check structures* counts such
+a pair two parts. Until 2026-11-15 the hydrogen bond went to the plugin as
+a bond, and the embedding made it a covalent one: the H bonded to both
+atoms. A hydrogen bond drawn or taken away after a molecule is made in 3D
+leaves it its drawing's.
+
 ### Atoms that are not elements
 
 | What | How | Why |
