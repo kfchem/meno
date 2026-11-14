@@ -8,7 +8,9 @@
  */
 import { identity, type IdentityInput } from "../../../../lib/chem/identity";
 import { pairingDrawn, pairsOf } from "../../../../lib/chem/arrangement";
-import { isMetal, type Arranged } from "../../../../lib/layout/perceive";
+import { isMetal, squarePlanarMetal, type Arranged } from "../../../../lib/layout/perceive";
+import { valencesAt } from "../../../../lib/chem/molecule";
+import { ARRANGED, arrangementAs } from "../utils/arrangement";
 import { readStereo } from "../../../../lib/layout/drawn";
 import type { Model } from "../store/types";
 import { drawingOf } from "./drawing";
@@ -49,7 +51,7 @@ export function identityInputOf(part: Model): { input: IdentityInput; unread: nu
     ...(stereo.axes.length ? { axes: stereo.axes.map((x) => ({ atoms: x.atoms, refs: x.refs, sense: x.sense })) } : {}),
     ...(stereo.cumulated.length ? { cumulated: stereo.cumulated.map((x) => ({ atoms: x.atoms, refs: x.refs, cis: x.cis })) } : {}),
   };
-  const arrangements = arrangementsDrawn(drawing);
+  const arrangements = arrangementsDrawn(drawing, part);
   return { input: arrangements.length ? { ...input, arrangements } : input, unread: unreadWedges(drawing, stereo).map((i) => part.atoms[i].id) };
 }
 
@@ -102,11 +104,16 @@ const X_SLACK = 20;
  * (Brecher 2006, ST-2.11: three lines, plain or with wedges); a metal of
  * four only where the drawing states it square planar - as the X, each
  * bond within `X_SLACK` degrees of a diagonal of the page, or in ST-2.6's
- * wedge form, two bonds wedged and two hashed, each narrow at the metal. A
- * four-donor metal drawn as the upright cross states no geometry, and is
- * read as none. None where the drawing does not say which pairing.
+ * wedge form, two bonds wedged and two hashed, each narrow at the metal -
+ * or where it is surely square planar (lib/layout/perceive
+ * `squarePlanarMetal`: Pt(II), Pd(II), Au(III), Rh(I), Ir(I)) and drawn as
+ * the upright cross (ST-2.6's acceptable form) by the chemist: not still
+ * marked "Which donors are next to each other is not given", as Meno lays
+ * one out where nothing gave its arrangement. Any other upright cross
+ * states no geometry, and is read as none. None where the drawing does not
+ * say which pairing.
  */
-export function arrangementsDrawn(drawing: ReturnType<typeof drawingOf>): Arranged[] {
+export function arrangementsDrawn(drawing: ReturnType<typeof drawingOf>, part?: Model): Arranged[] {
   const around: number[][] = drawing.atoms.map(() => []);
   for (const b of drawing.bonds) {
     around[b.a].push(b.b);
@@ -118,7 +125,7 @@ export function arrangementsDrawn(drawing: ReturnType<typeof drawingOf>): Arrang
     if (!isMetal(a.el ?? "") || (donors.length !== 4 && donors.length !== 6) || a.hs) return;
     if (donors.some((d) => Math.hypot(drawing.atoms[d].x - a.x, drawing.atoms[d].y - a.y) < 1e-6)) return;
     const angle = donors.map((d) => Math.atan2(drawing.atoms[d].y - a.y, drawing.atoms[d].x - a.x));
-    if (donors.length === 4 && !squarePlanarDrawn(drawing, m, angle)) return;
+    if (donors.length === 4 && !squarePlanarDrawn(drawing, m, angle) && !(crossDrawn(angle) && surelySquare(drawing, m, around) && !marked(part, m))) return;
     const partner = pairingDrawn(angle);
     if (partner) out.push({ metal: m, pairs: pairsOf(donors, partner) });
   });
@@ -135,3 +142,36 @@ function squarePlanarDrawn(drawing: ReturnType<typeof drawingOf>, m: number, ang
   const wedges = drawing.bonds.filter((b) => (b.a === m || b.b === m) && b.wedge?.narrow === m).map((b) => b.wedge!.stereo);
   return wedges.length === 4 && wedges.filter((w) => w === "up").length === 2;
 }
+
+/** Whether a four-donor metal's bonds, at `angle`, are the upright cross: each within `X_SLACK` degrees of the page's axes. */
+function crossDrawn(angle: readonly number[]): boolean {
+  return angle.every((t) => {
+    const q = (((t % (Math.PI / 2)) + Math.PI / 2) % (Math.PI / 2));
+    return (Math.min(q, Math.PI / 2 - q) * 180) / Math.PI <= X_SLACK;
+  });
+}
+
+/** Whether metal `m` is surely square planar as the drawing makes it (lib/layout/perceive `squarePlanarMetal`). */
+function surelySquare(drawing: ReturnType<typeof drawingOf>, m: number, around: readonly number[][]): boolean {
+  const order = new Map(drawing.bonds.map((b) => [b.a < b.b ? `${b.a},${b.b}` : `${b.b},${b.a}`, b.order]));
+  const sq = squarePlanarMetal(
+    {
+      el: (j) => drawing.atoms[j].el ?? "",
+      charge: (j) => drawing.atoms[j].charge ?? 0,
+      hs: (j) => drawing.atoms[j].hs ?? 0,
+      neighbours: (j) => around[j],
+      order: (p, q) => order.get(p < q ? `${p},${q}` : `${q},${p}`) ?? 1,
+    },
+    m,
+    (el, charge) => valencesAt(el, charge)[0],
+  );
+  return !!sq?.sure;
+}
+
+/** Whether atom `m` of `part` still carries the mark Meno puts on an arrangement nobody gave (utils/arrangement): moved round since, it is the chemist's. */
+function marked(part: Model | undefined, m: number): boolean {
+  const a = part?.atoms[m];
+  if (!a) return true;
+  return !!a.unsure && a.unsure.as.startsWith(ARRANGED) && a.unsure.as === arrangementAs(a, part!.atoms, part!.bonds);
+}
+

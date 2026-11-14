@@ -907,8 +907,11 @@ drawn, aromatic rings as one form.* What that means, plainly:
   cisplatin and transplatin, fac and mer, the cis and trans forms of
   [Co(en)2Cl2]+ (Brecher 2006, ST-2.6 and ST-2.11). A drawing states
   them for a metal of six donors however drawn, and for a metal of four
-  drawn as the X or in ST-2.6's wedge form. The upright cross states no
-  geometry and is read as none. In 3D the places decide, for any metal
+  drawn as the X or in ST-2.6's wedge form, or as the upright cross where
+  it is surely square planar (Pt(II), Pd(II), Au(III), Rh(I), Ir(I)) and
+  not marked "Which donors are next to each other is not given", as Meno
+  marks one it laid out with nothing given. Any other upright cross states
+  no geometry and is read as none. In 3D the places decide, for any metal
   of four or six donors. Two donors are across where the angle between
   them at the metal is at least 150 degrees (four donors) or 135 (six:
   a terpyridine holds its outer donors short of a line), with no other
