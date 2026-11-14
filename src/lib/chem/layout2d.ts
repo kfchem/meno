@@ -4386,9 +4386,12 @@ export function unspecifiedDoubles(atoms: Atom[], bonds: Bond[]): Bond[] {
       return { subs, straight, free };
     });
     if (ends.some((e) => e.subs.length === 0 || e.straight)) return;
+    // (on the group of an end that has one; else on both groups of an end, where neither leads to a stereocentre; else on the group of an
+    //  end of two that does not, the bond to the centre kept plain - Brecher 2006, ST-4.4)
     const single = ends.find((e) => e.subs.length === 1 && e.free(e.subs[0]));
     const both = ends.find((e) => e.subs.length === 2 && e.subs.every(e.free));
-    for (const k of single ? single.subs : (both?.subs ?? [])) out[k] = { ...out[k], stereo: "wavy" };
+    const one = ends.find((e) => e.subs.length === 2 && e.subs.some(e.free));
+    for (const k of single ? single.subs : both ? both.subs : (one?.subs.filter(one.free) ?? [])) out[k] = { ...out[k], stereo: "wavy" };
   });
   return out;
 }
