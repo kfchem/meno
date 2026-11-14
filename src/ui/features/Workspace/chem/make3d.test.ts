@@ -822,4 +822,23 @@ describe("a hydrogen bond drawn, made in 3D", () => {
     expect(signatureOf(blocks[0].part, blocks[0].atoms)).toBe(signatureOf(drawn(true), blocks[0].atoms));
     expect(signatureOf(blocks[0].part, blocks[0].atoms)).toBe(signatureOf(without, blocks[0].atoms));
   });
+
+  it("tells of a counter-ion a hydrogen bond alone holds, as of one drawn apart: Cl- left out, and still a part of what was drawn", () => {
+    // (methylammonium, one N-H drawn, and a chloride held to that H by a hydrogen bond - a salt drawn with its hydrogen bond)
+    const salt = (bond: boolean): Model => ({
+      atoms: [at(1, 180, 1), at(2, 0, 0, "N"), at(3, 0, 1, "H"), at(4, 0, 2, "Cl")].map((a) => (a.id === 2 ? { ...a, charge: 1 } : a.id === 4 ? { ...a, charge: -1 } : a)),
+      bonds: [
+        { id: 11, a: 1, b: 2, order: 1 },
+        { id: 12, a: 2, b: 3, order: 1 },
+        ...(bond ? [{ id: 13, a: 3, b: 4, order: 1 as const, hydrogen: true as const }] : []),
+      ],
+    });
+    for (const bond of [true, false]) {
+      expect(blocksOf(salt(bond), [1]).map((b) => b.atoms)).toEqual([[1, 2, 3]]);
+      const bare = bareAtomsOf(salt(bond), bond ? [1] : [1, 4]);
+      expect(bare.map((a) => a.id)).toEqual([4]);
+      expect(bareWords(bare, true)).toBe("Cl\u2212 was left out: one atom alone has no 3D structure.");
+    }
+    expect(drawnBlocksOf(salt(true), [1]).map((b) => b.atoms)).toEqual([[1, 2, 3], [4]]);
+  });
 });
