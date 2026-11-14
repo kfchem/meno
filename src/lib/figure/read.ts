@@ -10,6 +10,7 @@
 import { shapeLetters, sureEnough, type GlyphShape, type ShapeLetter } from "./glyphs";
 import { chargeMarks, withoutMarks } from "./charges";
 import { ELEMENTS } from "../chem/elements";
+import { VARIABLE_NAMES } from "../chem/abbreviations";
 import { narrowestBox, shapesOf, type Blob, type Box, type Curve, type FigureDrawn, type FigureLetter, type Point, type Shapes, type Stroke, type Wedge } from "./drawn";
 
 /**
@@ -196,10 +197,14 @@ function hashesOf(short: Stroke[], bond: number, filled: ReadonlySet<Stroke>): {
  * double bond, its second line inside and shorter), or of the line through
  * their middle where none is.
  */
-function multiples(lines: Stroke[], bond: number): { bonds: Drawn[]; used: Set<Stroke> } {
+function multiples(lines: Stroke[], bond: number, bold: (s: Stroke) => boolean = () => false): { bonds: Drawn[]; used: Set<Stroke> } {
   const used = new Set<Stroke>();
   const bonds: Drawn[] = [];
   const pair = (s: Stroke, t: Stroke) => {
+    // (a bold line is the near edge of a double bond - its second line a thin one, shorter, inside it - or a single bond; a thin line as
+    // long as it, a chair's back bond beside its front one, is another bond's, and a bold line is never one of three)
+    const [longer, shorter] = len(s) >= len(t) ? [s, t] : [t, s];
+    if (bold(shorter) || (bold(longer) && len(shorter) >= 0.85 * len(longer))) return false;
     const u = unit(s.a, s.b);
     if (Math.abs(cross(u, unit(t.a, t.b))) > Math.sin((8 * Math.PI) / 180)) return false;
     const off = Math.abs(cross(u, { x: mid(t.a, t.b).x - s.a.x, y: mid(t.a, t.b).y - s.a.y }));
@@ -216,7 +221,7 @@ function multiples(lines: Stroke[], bond: number): { bonds: Drawn[]; used: Set<S
     left.delete(s);
     for (let i = 0; i < group.length && group.length < 3; i++) {
       for (const t of [...left]) {
-        if (group.length < 3 && pair(group[i], t)) {
+        if (group.length < (group.some(bold) ? 2 : 3) && pair(group[i], t)) {
           group.push(t);
           left.delete(t);
         }
@@ -262,9 +267,21 @@ function multiples(lines: Stroke[], bond: number): { bonds: Drawn[]; used: Set<S
       const p1 = { x: s0.a.x + u.x * hi, y: s0.a.y + u.y * hi };
       ends = [f(p0), f(p1)];
     }
-    bonds.push({ a: ends[0], b: ends[1], order: group.length as 2 | 3 });
+    bonds.push({ a: ends[0], b: ends[1], order: group.length as 2 | 3, ...(group.some(bold) ? { bold: true } : {}) });
   }
   return { bonds, used };
+}
+
+/**
+ * Whether line `s` lies along line `t`: within 3 degrees of its direction, its middle within 0.06 of a bond of the line through `t`, and both its ends
+ * within `t`'s stretch, 0.05 of a bond past either end at the most (a bold bar's hairline: the same line, never a second one).
+ */
+export function lyingAlong(s: Stroke, t: Stroke, bond: number): boolean {
+  const u = unit(t.a, t.b);
+  if (Math.abs(cross(u, unit(s.a, s.b))) > Math.sin((3 * Math.PI) / 180)) return false;
+  const off = (p: Point) => Math.abs(cross(u, { x: p.x - t.a.x, y: p.y - t.a.y }));
+  const at = (p: Point) => dot(u, { x: p.x - t.a.x, y: p.y - t.a.y });
+  return off(mid(s.a, s.b)) < 0.06 * bond && [s.a, s.b].every((p) => at(p) > -0.05 * bond && at(p) < len(t) + 0.05 * bond);
 }
 
 /** A wavy line: a curve that goes to and fro across a line between its ends, a few times, not far. */
@@ -282,6 +299,12 @@ function wavy(c: Curve, bond: number): Drawn | null {
   for (let i = 1; i < offs.length; i++) if (Math.sign(offs[i]) !== Math.sign(offs[i - 1]) && Math.abs(offs[i]) > most * 0.2) turns++;
   return turns >= 2 ? { a, b, order: 1, stereo: "wavy" } : null;
 }
+
+/** How thin a round-capped mark is at the most, in bonds, to be a hash's: its line or its dot. */
+const THIN_MARK = 0.16;
+
+/** How many times the thin lines' width a line is, at the least, to be bold: a perspective drawing's near edge is a little over twice it. */
+const BOLD_TIMES = 1.8;
 
 const SYMBOLS = new Set(ELEMENTS.map((e) => e.symbol));
 /** Whether a label is an element's symbol alone, with its H and charge (N, OH, Cl-): no group's name (Me is one). */
@@ -338,32 +361,113 @@ export function wordsOf(letters: readonly FigureLetter[]): Word[] {
   return words;
 }
 
+/** What tells whether a label reads as an atom or a group (Meno's label reader): the figure reader is given it, and asks it where a small number is a count or an atom's. */
+export type LabelReads = (label: string) => boolean;
+
+/** How far a letter is raised, in the label's letter size, at the least, to be set high - a charge, a mass number, an atom's number: labelText's own constant. */
+const HIGH = 0.25;
+
+/** A run of small digits beside a label that may be an atom's number: its places in `w.letters`, and whether it is set clearly high. */
+type Run = { from: number; to: number; high: boolean };
+
+/**
+ * Where a small digit is an atom's number and not a count, a charge's, a mass number or a name's (the small numbers beside atoms in a drawing),
+ * as the runs of digits it may be (their places in `w.letters`):
+ *  - an atom's number stands at the END of its label: a run with a letter of the label after it - a count, or the mass number of the letter after
+ *    it (CO2Me, NH4Cl, O13CH3) - is never one; primes after it are no letters;
+ *  - one after a variable's name (VARIABLE_NAMES: R, X, Ar, Het1 ...) is part of it, wherever it is set; one with a charge's sign after it is the charge's
+ *    (Ca2+); one before the label's first letter a mass number (13C);
+ *  - one set clearly HIGH (raised `HIGH` of the letter size or more) is an atom's number: a count is never set high; one set about level or a little
+ *    low - not more than a tenth of the letter size below - cannot be told by its place (`labelParts` decides).
+ */
+function runsOf(w: Word, base: number): Run[] {
+  const runs: Run[] = [];
+  const small = (l: FigureLetter) => l.size < 0.85 * w.size;
+  const digit = (l: FigureLetter) => /^\d$/.test(l.c);
+  const y = (l: FigureLetter) => l.at?.[1] ?? l.box[3];
+  const high = (l: FigureLetter) => y(l) < base - HIGH * w.size;
+  const level = (l: FigureLetter) => y(l) < base + 0.1 * w.size;
+  let letter = false;
+  for (let i = 0; i < w.letters.length; i++) {
+    const l = w.letters[i];
+    if (!small(l)) {
+      letter = true;
+      continue;
+    }
+    if (!letter || !digit(l) || !level(l)) continue;
+    // (the unit just before the digit - the last capital with its small letters, the label's own size, a number after the one before it and primes left out - is a variable's name: R1, OR2, NR1R2, CO2R1, OAr1, R2O)
+    const before = w.letters.slice(0, i).filter((x) => !small(x)).map((x) => x.c).join("").replace(/['\u2032\u2033]+$/, "");
+    const name = /[A-Z][a-z]*$/.exec(before)?.[0];
+    const named = !!name && VARIABLE_NAMES.has(name);
+    // (the run of such digits, and what follows it)
+    let j = i;
+    while (j + 1 < w.letters.length && small(w.letters[j + 1]) && digit(w.letters[j + 1]) && level(w.letters[j + 1])) j++;
+    const next = w.letters[j + 1];
+    const charge = !!next && small(next) && /^[+\-\u2212\u2013]$/.test(next.c);
+    const inside = w.letters.slice(j + 1).some((x) => /[A-Za-z]/.test(x.c));
+    if (!named && !charge && !inside) runs.push({ from: i, to: j, high: w.letters.slice(i, j + 1).every(high) });
+    i = j;
+  }
+  return runs;
+}
+
 /**
  * A word as a label is typed: a smaller letter set low a subscript's digit,
  * set high a charge - written as they are typed, NH2, N+, O- - and digits
  * set high before its first letter an isotope's mass number (13C), so that
  * Meno reads it as it reads a label typed. A count set low before any
  * letter is a letter's left out of the word (the H of an H3N, a box cut
- * across it), and is left out with it: never a mass number.
+ * across it), and is left out with it: never a mass number. A number set
+ * small at the end of an atom's label - the locants beside atoms, "Me7" for a
+ * Me and its number 7 - is left out (`runsOf`) where it is clearly high, and
+ * where it is about level or a little low only if the label reads as nothing
+ * with it and reads without it (`reads`: no reader given, none is taken for
+ * a locant - a count is kept); `taken` says the label was cut so, for the
+ * atom to be marked - a place cannot tell a count from an atom's number.
  */
-export function labelText(w: Word): string {
+export function labelParts(w: Word, reads: LabelReads = () => true): { text: string; taken: boolean } {
   const main = w.letters.filter((l) => l.size >= 0.85 * w.size);
   const base = main.length ? main.map((l) => l.at?.[1] ?? l.box[3]).sort((a, b) => a - b)[Math.floor(main.length / 2)] : 0;
+  const left = new Set<number>();
+  const runs = runsOf(w, base);
+  const places = (r: Run) => Array.from({ length: r.to - r.from + 1 }, (_, k) => r.from + k);
+  for (const r of runs) if (r.high) for (const k of places(r)) left.add(k);
+  // (the others one at a time, as the label stands)
+  let taken = false;
+  for (const r of runs) {
+    if (r.high) continue;
+    const without = new Set([...left, ...places(r)]);
+    if (!reads(typed(w, base, left)) && reads(typed(w, base, without))) {
+      for (const k of places(r)) left.add(k);
+      taken = true;
+    }
+  }
+  return { text: typed(w, base, left), taken };
+}
+
+/** A word as a label is typed (`labelParts`). */
+export function labelText(w: Word, reads: LabelReads = () => true): string {
+  return labelParts(w, reads).text;
+}
+
+/** A word's letters as a label is typed, those at `left` out (`labelText`). */
+function typed(w: Word, base: number, left: ReadonlySet<number>): string {
   let lead = true;
   return w.letters
-    .map((l) => {
+    .map((l, k) => {
+      if (left.has(k)) return "";
       // (a letter the PDF gives no character for - a control code - drawn flat, more than twice as wide as tall, is a minus: a
       // hyphen printed so by WebKit)
       const code = l.c.length === 1 ? l.c.charCodeAt(0) : -1;
       const flat = (code >= 0 && code < 0x20) || code === 0xfffd ? l.box[2] - l.box[0] > 2 * (l.box[3] - l.box[1]) : false;
-      const c = l.c === "−" || l.c === "–" || flat ? "-" : l.c;
+      const c = l.c === "\u2212" || l.c === "\u2013" || flat ? "-" : l.c;
       if (l.size >= 0.85 * w.size) {
         lead = false;
         return c;
       }
       const y = l.at?.[1] ?? l.box[3];
       // (set high: a charge, or a mass number; set low, or as low: a count - one before any letter, no one's here)
-      if (y < base - 0.25 * w.size) return c === "+" || c === "-" ? c : `^${c}`;
+      if (y < base - HIGH * w.size) return c === "+" || c === "-" ? c : `^${c}`;
       return lead && /\d/.test(c) ? "" : c;
     })
     .join("")
@@ -379,18 +483,21 @@ function boxOfBoxes(bs: readonly Box[]): Box {
  * shapes - what else it might read as, one or two letters read as the
  * next likeliest; unsure where one of them matched its letter weakly.
  */
-function labelOf(w: Word): Pick<ReadAtom, "label" | "alts" | "unsure"> {
-  const label = labelText(w);
+function labelOf(w: Word, reads: LabelReads = () => true): Pick<ReadAtom, "label" | "alts" | "unsure"> {
+  const { text: label, taken } = labelParts(w, reads);
+  // (a level number cut from the end of the label: its place cannot tell a count from an atom's number, so the atom says so)
+  const cut = taken ? [`A small number by it was taken as the atom's number, not a count: read as "${label}".`] : [];
   const shaped = w.letters.filter((l): l is ShapeLetter => "sure" in l);
-  if (!shaped.length) return { label };
-  const as = (swap: Map<number, string>) => labelText({ ...w, letters: w.letters.map((l, k) => (swap.has(k) ? { ...l, c: swap.get(k)! } : l)) });
+  if (!shaped.length) return { label, ...(cut.length ? { unsure: cut } : {}) };
+  const as = (swap: Map<number, string>) => labelText({ ...w, letters: w.letters.map((l, k) => (swap.has(k) ? { ...l, c: swap.get(k)! } : l)) }, reads);
   const open = w.letters.map((l, i) => ({ i, alts: "alts" in l ? (l as ShapeLetter).alts : [] })).filter((o) => o.alts.length);
   const alts: string[] = [];
   for (const o of open) for (const c of o.alts) alts.push(as(new Map([[o.i, c]])));
   for (let a = 0; a < open.length; a++) for (let b = a + 1; b < open.length; b++) alts.push(as(new Map([[open[a].i, open[a].alts[0]], [open[b].i, open[b].alts[0]]])));
   const others = [...new Set(alts)].filter((x) => x !== label).slice(0, 12);
   const weak = shaped.some((l) => !sureEnough(l));
-  return { label, ...(others.length ? { alts: others } : {}), ...(weak ? { unsure: [`Its letters are drawn as shapes: read as "${label}".`] } : {}) };
+  const unsure = [...cut, ...(weak ? [`Its letters are drawn as shapes: read as "${label}".`] : [])];
+  return { label, ...(others.length ? { alts: others } : {}), ...(unsure.length ? { unsure } : {}) };
 }
 
 /** The middle of a box. */
@@ -447,7 +554,7 @@ function bitsLeft(short: readonly Stroke[], inHashes: ReadonlySet<Stroke>, lines
  */
 function lineGoesOn(w: Word, words: readonly Word[], right: boolean, reads: (label: string) => boolean): boolean {
   return words.some((v) => {
-    if (v === w || Math.abs(v.box[3] - w.box[3]) > 0.3 * w.size || reads(labelText(v))) return false;
+    if (v === w || Math.abs(v.box[3] - w.box[3]) > 0.3 * w.size || reads(labelText(v, reads))) return false;
     const gap = right ? v.box[0] - w.box[2] : w.box[0] - v.box[2];
     return gap > -0.1 * w.size && gap < 1.2 * w.size;
   });
@@ -860,7 +967,8 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   // (small filled shapes - a hash's first strokes drawn filled - as strokes too)
   const blobOf = new Map<Stroke, object>();
   const bits = shapes.blobs
-    .filter((b) => !b.curved && Math.max(b.box[2] - b.box[0], b.box[3] - b.box[1]) < 0.3 * bond)
+    // (a round-capped mark - a hash's lines drawn as filled stadiums, or its dot - too: thin, no letter's shape)
+    .filter((b) => Math.max(b.box[2] - b.box[0], b.box[3] - b.box[1]) < 0.3 * bond && (!b.curved || narrowestBox(b.pts).short < THIN_MARK * bond))
     .map((b): Stroke => {
       const n = narrowestBox(b.pts);
       const s = { a: { x: n.mid.x - (n.u.x * n.long) / 2, y: n.mid.y - (n.u.y * n.long) / 2 }, b: { x: n.mid.x + (n.u.x * n.long) / 2, y: n.mid.y + (n.u.y * n.long) / 2 }, w: n.short };
@@ -887,24 +995,24 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   const words = written.filter((_, k) => !repeats.counts.has(k));
   // (two labels set touching, the first ending in its charge - Cl- HN+ - are two: a word that reads as nothing is cut after a
   // charge written before a capital, where both pieces read)
-  const sign = (l: FigureLetter) => /^[+-]$/.test(labelText({ letters: [l], box: l.box, size: l.size }));
+  const sign = (l: FigureLetter) => /^[+-]$/.test(labelText({ letters: [l], box: l.box, size: l.size }, reads));
   const wordFrom = (ls: FigureLetter[]): Word => ({ letters: ls, box: boxOfBoxes(ls.map((l) => l.box)), size: Math.max(...ls.map((l) => l.size)) });
   for (let i = 0; i < words.length; i++) {
     const w = words[i];
-    if (reads(labelText(w))) continue;
+    if (reads(labelText(w, reads))) continue;
     const k = w.letters.findIndex((l, j) => j > 0 && j < w.letters.length - 1 && sign(l) && /[A-Z]/.test(w.letters[j + 1].c));
     if (k < 0) continue;
     const [p, q] = [wordFrom(w.letters.slice(0, k + 1)), wordFrom(w.letters.slice(k + 1))];
-    if (reads(labelText(p)) && reads(labelText(q))) words.splice(i, 1, p, q);
+    if (reads(labelText(p, reads)) && reads(labelText(q, reads))) words.splice(i, 1, p, q);
   }
   // (an H set right over or under an element's letter - an NH with its H stacked, as Meno sets one between two bonds - is
   // that label's: one word, NH, a bond to either part its atom's)
   for (let i = words.length - 1; i >= 0; i--) {
     const h = words[i];
-    if (!/^H\d?$/.test(labelText(h))) continue;
+    if (!/^H\d?$/.test(labelText(h, reads))) continue;
     const hc = centre(h.box);
     const k = words.findIndex((w, j) => {
-      if (j === i || !/^[NOSP]$/.test(labelText(w))) return false;
+      if (j === i || !/^[NOSP]$/.test(labelText(w, reads))) return false;
       const c = centre(w.box);
       const gap = Math.max(w.box[1] - h.box[3], h.box[1] - w.box[3]);
       return Math.abs(c.x - hc.x) < 0.3 * w.size && gap > -0.1 * w.size && gap < 0.3 * w.size;
@@ -982,13 +1090,20 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   // (a line broken where another passes in front, one piece short - a cage's back edge - joined again too; a short piece joined to nothing stays out)
   const loose = shapes.strokes.filter((s) => !repeats.strokes.has(s) && !inHashes.has(s) && !inLetters.has(s) && !lines.includes(s) && !ruled(s) && !table.has(s) && len(s) > 0.04 * bond);
   const joined = joinedAcross([...lines, ...loose], bond);
-  const whole = joined.filter((s) => !loose.includes(s));
+  // (a line lying along another - the same middle line, within a sixteenth of a bond, as long as the other or shorter, within its stretch -
+  // is that line: a bold bar has a hairline drawn along it. It is never a second line of a multiple bond)
+  const along = (s: Stroke, t: Stroke) => {
+    if (s === t || len(t) < len(s) || (len(t) === len(s) && joined.indexOf(t) > joined.indexOf(s))) return false;
+    return lyingAlong(s, t, bond);
+  };
+  const whole = joined.filter((s) => !loose.includes(s) && !joined.some((t) => along(s, t)));
   const used = loose.filter((s) => !joined.includes(s));
-  const { bonds: multi, used: inMulti } = multiples(whole, bond);
-  // (a line much thicker than most - a Haworth ring's front - is bold)
+  // (a line much thicker than most - a Haworth ring's front, a perspective drawing's near edge - is bold: a bond drawn thick, toward
+  // the viewer, single or double - the double with a thin inner line, shorter, beside it - never one line of three)
   const widths = whole.map((s) => s.w).sort((a, b) => a - b);
   const thin = widths.length ? widths[Math.floor(widths.length / 2)] : 0;
-  const bold = (s: Stroke) => s.w > 2.5 * thin && s.w > 0.12 * bond;
+  const bold = (s: Stroke) => s.w > BOLD_TIMES * thin && s.w > 0.12 * bond;
+  const { bonds: multi, used: inMulti } = multiples(whole, bond, bold);
   const drawnBonds: Drawn[] = [
     ...whole.filter((s) => !inMulti.has(s)).map((s): Drawn => ({ a: s.a, b: s.b, order: 1, ...(bold(s) ? { bold: true } : {}) })),
     ...multi,
@@ -1045,7 +1160,7 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     meeting.set(e, ends.filter((f) => f.bond !== e.bond && dist(f.p, e.p) < tol && dist(f.p, e.p) <= dist(f.p, otherEnd(e)) && !into.get(e)!.some((k) => into.get(f)!.includes(k))).length);
   const wordOf = new Map<End, number>();
   // (a compound's number set close under a bond - 1, 2a, 3' - is no atom's label)
-  const isNumber = words.map((w) => COMPOUND_NUMBER.test(labelText(w)));
+  const isNumber = words.map((w) => COMPOUND_NUMBER.test(labelText(w, reads)));
   for (const e of ends) {
     const d = drawnBonds[e.bond];
     const out = unit(e.side === 0 ? d.b : d.a, e.p);
@@ -1096,7 +1211,7 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   for (let k = 0; k < words.length; k++) {
     const w = words[k];
     const at = ends.filter((e) => wordOf.get(e) === k);
-    if (at.length < 2 || reads(labelText(w)) || (labelOf(w).alts ?? []).some(reads)) continue;
+    if (at.length < 2 || reads(labelText(w, reads)) || (labelOf(w, reads).alts ?? []).some(reads)) continue;
     const caps = w.letters.map((l, i) => ({ l, i })).filter(({ l }) => /[A-Z]/.test(l.c) && l.size >= 0.85 * w.size);
     // (no capital to cut it at - its letters read as small ones, as a turned page's may be: one word)
     if (!caps.length) continue;
@@ -1106,7 +1221,7 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     const cuts = caps.map((c) => c.i).filter((i) => starts.includes(i) || i === caps[0].i);
     // (two of them: cut where both read - a label on its bond's left starts before the capital its bond comes to, NH2 H2N)
     if (starts.length === 2) {
-      const piece = (from: number, to: number) => labelText({ ...w, letters: w.letters.slice(from, to) });
+      const piece = (from: number, to: number) => labelText({ ...w, letters: w.letters.slice(from, to) }, reads);
       const at = caps.map((c) => c.i).find((c) => c > starts[0] && c <= starts[1] && reads(piece(caps[0].i, c)) && reads(piece(c, w.letters.length)));
       if (at != null) cuts.splice(0, cuts.length, caps[0].i, at);
     }
@@ -1125,7 +1240,7 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   // An NH's bonds are counted as one each: a ring's, its charge drawn by it, may be double)
   const overFull = new Set<number>();
   words.forEach((w, k) => {
-    const m = /^(?:H(\d*))?([A-Z][a-z]?)(?:H(\d*))?$/.exec(labelText(w));
+    const m = /^(?:H(\d*))?([A-Z][a-z]?)(?:H(\d*))?$/.exec(labelText(w, reads));
     if (!m || !(m[2] in BONDS_LEFT)) return;
     const bare = m[1] == null && m[3] == null;
     if (bare && m[2] !== "O") return;
@@ -1151,7 +1266,7 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   });
   // (a lone H takes one bond: a wedge's or a hash's first, else the nearest)
   words.forEach((w, k) => {
-    if (labelText(w) !== "H") return;
+    if (labelText(w, reads) !== "H") return;
     const at = ends.filter((e) => wordOf.get(e) === k);
     if (at.length < 2) return;
     const rank = (e: End) => (drawnBonds[e.bond].stereo ? 0 : 1) * 1e6 + fromBox(e.p, w.box);
@@ -1167,7 +1282,7 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     if (k != null) {
       if (!atomOfWord.has(k)) {
         atomOfWord.set(k, atoms.length);
-        const read = labelOf(words[k]);
+        const read = labelOf(words[k], reads);
         const said = overFull.has(k) ? ["More bonds come to it than it takes: those nearest its letter kept."] : [];
         atoms.push({ x: 0, y: 0, ...read, ...(said.length || read.unsure ? { unsure: [...(read.unsure ?? []), ...said] } : {}), box: words[k].box });
       }
@@ -1238,7 +1353,7 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   // the joint at the atom and the H itself: its bond, behind)
   const spare = bitsLeft(short, inHashes, [...lines, ...used]);
   words.forEach((w, k) => {
-    if (atomOfWord.has(k) || labelText(w) !== "H") return;
+    if (atomOfWord.has(k) || labelText(w, reads) !== "H") return;
     const h = centre(w.box);
     let best: { i: number; across: Stroke[] } | null = null;
     atoms.forEach((a, i) => {
@@ -1255,7 +1370,7 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     if (!best) return;
     const found: { i: number; across: Stroke[] } = best;
     atomOfWord.set(k, atoms.length);
-    atoms.push({ x: h.x, y: h.y, ...labelOf(w), box: w.box });
+    atoms.push({ x: h.x, y: h.y, ...labelOf(w, reads), box: w.box });
     bonds.push({ a: found.i, b: atoms.length - 1, order: 1, stereo: "down" });
   });
   // words at no bond's end but by the structure, with a charge - written, or drawn in a ring beside them: ions,
@@ -1264,10 +1379,10 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   const placed = atoms.length ? boxOfBoxes(atoms.map((a): Box => a.box ?? [a.x, a.y, a.x, a.y])) : null;
   // (an H right by an atom's label - set under an N - is that label's, never an ion; an element's ion set close is still one)
   const labels = atoms.flatMap((a) => (a.box ? [a.box] : []));
-  const byLabel = (w: Word) => /^H\d*[+-]/.test(labelText(w)) && labels.some((b) => fromBox(centre(w.box), b) < 0.6 * bond);
+  const byLabel = (w: Word) => /^H\d*[+-]/.test(labelText(w, reads)) && labels.some((b) => fromBox(centre(w.box), b) < 0.6 * bond);
   // (or several, counted: (Cl-)2)
   const charged = (w: Word) =>
-    /^[A-Z][A-Za-z0-9]*[+-]$/.test(labelText(w)) || /^\([A-Z][A-Za-z0-9]*[+-]\)\d$/.test(labelText(w)) || (/^[A-Z][A-Za-z0-9]*$/.test(labelText(w)) && marks.some((m) => fromBox(m.at, w.box) < m.r + 0.3 * bond));
+    /^[A-Z][A-Za-z0-9]*[+-]$/.test(labelText(w, reads)) || /^\([A-Z][A-Za-z0-9]*[+-]\)\d$/.test(labelText(w, reads)) || (/^[A-Z][A-Za-z0-9]*$/.test(labelText(w, reads)) && marks.some((m) => fromBox(m.at, w.box) < m.r + 0.3 * bond));
   // (measured by bonds - or, all of them drawn short to labels, by the labels' letters: a bond is drawn half as long again as they are set)
   const sizes = drawn.letters.map((l) => l.size).sort((a, b) => a - b);
   const ionBy = ION_BY * Math.max(bond, sizes.length ? BOND_PER_SIZE * sizes[Math.floor(sizes.length / 2)] : 0);
@@ -1293,7 +1408,7 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
       return overlap > 0.5 * Math.min(w.box[3] - w.box[1], v.box[3] - v.box[1]) && gap < Math.max(w.size, v.size);
     });
   words.forEach((w, k) => {
-    const text = labelText(w);
+    const text = labelText(w, reads);
     if (atomOfWord.has(k) || ions.has(k) || isElementSymbolLike(text) || !reads(text) || onLineWith(w, k)) return;
     const c = centre(w.box);
     const width = w.box[2] - w.box[0];
@@ -1306,7 +1421,7 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     });
     if (i < 0) return;
     atomOfWord.set(k, atoms.length);
-    atoms.push({ x: c.x, y: c.y, ...labelOf(w), box: w.box });
+    atoms.push({ x: c.x, y: c.y, ...labelOf(w, reads), box: w.box });
     bonds.push({ a: i, b: atoms.length - 1, order: 1 });
   });
   const left: FigureLetter[] = [];
@@ -1314,7 +1429,7 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     if (atomOfWord.has(k)) return;
     if (ions.has(k)) {
       const c = centre(w.letters.find((l) => /[A-Z]/.test(l.c))?.box ?? w.box);
-      atoms.push({ x: c.x, y: c.y, ...labelOf(w), box: w.box });
+      atoms.push({ x: c.x, y: c.y, ...labelOf(w, reads), box: w.box });
     } else left.push(...w.letters);
   });
   // (each charge drawn in a ring, the nearest atom's - a labelled one's measured from its label, as the ring is set by it)

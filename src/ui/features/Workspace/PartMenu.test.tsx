@@ -57,6 +57,11 @@ describe("a bond's menu", () => {
     const other = open.match(/aria-label="Other kinds"[^>]*>(.*?)<\/div>/)?.[1] ?? "";
     expect([...other.matchAll(/aria-label="([^"]+)"/g)].map((x) => x[1])).toEqual(["Wavy bond", "Bold bond", "Bold dashed bond", "Dashed bond", "Dative bond"]);
     expect(open).toMatch(/aria-label="Dashed bond" aria-pressed="true"/);
+    // (each as large as the first row's, its icon as large: the same square, nothing scaled down)
+    const size = (html: string, name: string) => html.match(new RegExp(`aria-label="${name}"[^>]*style="([^"]+)"`))?.[1];
+    expect(size(open, "Dashed bond")).toBe(size(open, "Single bond"));
+    expect(size(open, "Wavy bond")).toBe("width:36px;height:36px");
+    expect(other).not.toContain("scale-90");
     expect(m.listed).toEqual(["Clean up this structure", "3D structure", "Select this structure"]);
     // (the current kind marked)
     expect(m.html).toMatch(/aria-label="Double bond" aria-pressed="true"/);

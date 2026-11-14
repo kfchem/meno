@@ -40,6 +40,9 @@ const TABLE: [string, Where, string[]][] = [
   ["Me", "molecule", []],
   ["Qqx", "molecule", []],
   ["c1cccc1", "molecule", []],
+  // (pyrrole without its [nH]: the n would carry an H nobody wrote - no SMILES reading; the plugin says why)
+  ["c1ccnc1", "molecule", []],
+  ["c1cc[nH]c1", "molecule", ["smiles c1cc[nH]c1 C4H5N"]],
   ["*CC", "molecule", []],
 ];
 
