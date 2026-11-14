@@ -1,7 +1,7 @@
 /**
  * A structure drawn, as identity reads it (lib/chem/identity): every atom
  * drawn - its element, charge, mass number, unpaired electrons, mapping to
- * a reaction's atom, and its hydrogens not drawn - every bond, and the
+ * a reaction's atom, and its hydrogens not drawn - every bond of the structure (a hydrogen bond is none), and the
  * configurations the drawing shows, read as Clean-up reads them
  * (lib/layout/drawn `readStereo`). No hydrogen is folded in here: identity
  * does that, by its own rule (`hydrogensFolded`).
@@ -10,6 +10,7 @@ import { identity, type IdentityInput } from "../../../../lib/chem/identity";
 import { readStereo } from "../../../../lib/layout/drawn";
 import type { Model } from "../store/types";
 import { drawingOf } from "./drawing";
+import { ofTheStructure } from "../../../../lib/chem/perception/graph";
 import { piSystems, unreadWedges } from "./engineLayout";
 import { placedAbbreviation } from "../../../../lib/chem/abbreviationPlace";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
@@ -20,9 +21,10 @@ import { isElementSymbol } from "../../../../lib/roles/molblock";
  * by id, whose wedges say nothing that can be read (drawn crossed, or at an
  * atom of three bonds that keeps no configuration of its own,
  * lib/chem/lonePairCentres), so whose configuration the input does not
- * hold.
+ * hold - and, for each of the drawing's bonds by its place, its place among
+ * the input's bonds: -1 for a hydrogen bond, which the input leaves out.
  */
-export function identityInputOf(part: Model): { input: IdentityInput; unread: number[] } {
+export function identityInputOf(part: Model): { input: IdentityInput; unread: number[]; bondAt: number[] } {
   const drawing = drawingOf(part);
   const stereo = readStereo(drawing.atoms, drawing.bonds);
   const pi = piSystems(part, drawing);
@@ -40,14 +42,19 @@ export function identityInputOf(part: Model): { input: IdentityInput; unread: nu
         ...(pi.has(i) ? { pi: pi.get(i)! } : {}),
       };
     }),
-    bonds: drawing.bonds.map((b, k) => {
+    // (the structure's bonds: a hydrogen bond is none, so two molecules it joins are two parts - each bond's cis or trans taken by its
+    //  place in the drawing, before those are left out)
+    bonds: drawing.bonds.flatMap((b, k) => {
+      if (!ofTheStructure(b)) return [];
       const ct = stereo.cisTrans.get(k);
-      return { a: b.a, b: b.b, order: b.order, ...(ct ? { stereo: { refs: ct.refs, cis: ct.cis } } : {}) };
+      return [{ a: b.a, b: b.b, order: b.order, ...(ct ? { stereo: { refs: ct.refs, cis: ct.cis } } : {}) }];
     }),
     ...(stereo.axes.length ? { axes: stereo.axes.map((x) => ({ atoms: x.atoms, refs: x.refs, sense: x.sense })) } : {}),
     ...(stereo.cumulated.length ? { cumulated: stereo.cumulated.map((x) => ({ atoms: x.atoms, refs: x.refs, cis: x.cis })) } : {}),
   };
-  return { input, unread: unreadWedges(drawing, stereo).map((i) => part.atoms[i].id) };
+  let kept = 0;
+  const bondAt = drawing.bonds.map((b) => (ofTheStructure(b) ? kept++ : -1));
+  return { input, unread: unreadWedges(drawing, stereo).map((i) => part.atoms[i].id), bondAt };
 }
 
 /** A structure drawn's identity (lib/chem `identity`), and the atoms whose wedges it could not read (`identityInputOf`). */

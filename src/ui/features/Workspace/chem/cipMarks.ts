@@ -59,9 +59,10 @@ export function cipJobsOf(model: Model): CipJob[] {
   return parts.map((gathered) => {
     // (a haptic bond whose ring is not all in the part binds none in it: document endpointsHeld, as cleanUp `partOf`)
     const part = labelsDrawnOut(endpointsHeld(gathered));
-    const { input } = identityInputOf(part);
+    const { input, bondAt } = identityInputOf(part);
     const centres = part.atoms.flatMap((a, at) => (askedAtoms.has(a.id) ? [{ at, id: a.id }] : []));
-    const asked = part.bonds.flatMap((b, at) => (askedBonds.has(b.id) ? [{ at, id: b.id }] : []));
+    // (by its place among the input's bonds, which a hydrogen bond is not among)
+    const asked = part.bonds.flatMap((b, k) => (askedBonds.has(b.id) && bondAt[k] >= 0 ? [{ at: bondAt[k], id: b.id }] : []));
     return { input, centres, bonds: oneForEachRun(input, asked) };
   });
 }
