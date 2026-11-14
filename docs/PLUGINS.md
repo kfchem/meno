@@ -610,14 +610,16 @@ What Blender and NCI bring fits this spec as it is; the rest comes with them:
     kcal/mol until the chemist gives one, so that a 3D structure is made
     from fresh Settings with nothing asked first - the maintainer's choice
     (2026-11-08), no measured basis claimed. A step has none until given,
-    and is not ready until it has one; run without one on structures
-    drawn, it is refused at once in its card's words ("Give the window for
-    new conformers, in kcal/mol"): nothing is asked of the plugin, and no
-    structure is set aside for it - never said as not made in 3D.
-    A step keeps the options it was put down with (WORKFLOWS.md, decided:
-    17): one put down before Settings asked for a number keeps asking for
-    as many as the molecule needs. As a guide, 2.73 kcal/mol at 298.15
-    K is a conformer a hundredth as populated as the lowest (RT ln 100).
+    and is not ready until it has one: put down with none, its card opens
+    with the field focused (WORKFLOWS.md, *The window is the chemist's*);
+    run without one on structures drawn, it is refused at once in its
+    card's words ("Give the window for new conformers, in kcal/mol"):
+    nothing is asked of the plugin, and no structure is set aside for it -
+    never said as not made in 3D. A step keeps the options it was put down
+    with (WORKFLOWS.md, decided: 17): one put down before Settings asked for
+    a number keeps asking for as many as the molecule needs. As a guide,
+    2.73 kcal/mol at 298.15 K is a conformer a hundredth as populated as
+    the lowest (RT ln 100).
   - A search that takes no draws is asked once, as before. So is one
     whose conformers come back with no energies: there is nothing to
     tell a new low one by. A *Conformers* step on molecules in 3D, run

@@ -1057,7 +1057,12 @@ beside its edge - being drawn over all of it.
 - **The window is the chemist's** (2026-11-05): *Energy window* sets
   none. Its field is empty until the chemist gives one, and until then
   the card says what it needs ("Give the window, in kcal/mol") and the
-  step does not run; run without one, its line says the same. No window
+  step does not run; run without one, its line says the same. Put down
+  from Quick Add with none, its card opens at once with that field
+  focused, so that the ask is seen as it is put down - as does any step
+  that still needs a value of its options (a Conformers step's window for
+  new conformers: PLUGINS.md); opened later, its card focuses the field
+  too. No window
   has a basis that holds for every set of energies, so none stands as a
   default. The field gives a guide, not a default: at 298.15 K a
   conformer ΔE above the lowest weighs exp(-ΔE/RT) as much, 1/100 at

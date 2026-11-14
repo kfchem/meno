@@ -1832,6 +1832,8 @@ export type EditorState = {
    * it is wired from, where the set is a step's exit's.
    */
   addStep: (kind: StepKind, by: string, x: number, y: number, from?: WireEnd) => number;
+  /** A step put down from Quick Add (`addStep`): and, where it cannot run until a value of its options is given (doers `optionsNeed`), its card opened at once to ask for it. */
+  putDownStep: (kind: StepKind, by: string, x: number, y: number, from?: WireEnd) => number;
   moveStep: (id: number, x: number, y: number, gesture?: string) => void;
   /** A step's options changed - its own, the defaults left as they are - or its kind, to another who does it fills. */
   updateStep: (id: number, patch: { options?: OptionValues; kind?: StepKind }) => void;

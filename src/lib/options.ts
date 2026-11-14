@@ -111,6 +111,11 @@ export const MANY_CHOICES = 5;
 /** A role's options' values, by their ids. */
 export type OptionValues = Record<string, string | number | boolean>;
 
+/** Of the options shown (`shownOptions`), the first number that holds no value - one the chemist gives, a window: what a card opened to ask for what it needs focuses. None where each holds one. */
+export function firstUnset(shown: readonly Option[], values: OptionValues): string | undefined {
+  return shown.find((o) => o.type === "number" && !Number.isFinite(Number(values[o.id] ?? o.default)))?.id;
+}
+
 /** An option's value, where `v` is one it takes; else none. */
 function fitting(o: Option, v: unknown): string | number | boolean | undefined {
   switch (o.type) {

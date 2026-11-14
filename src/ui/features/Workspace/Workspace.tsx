@@ -2026,7 +2026,8 @@ function WorkspaceContent({
               st.setQuickAdd(null);
               // (its port that takes where Quick Add was opened - where the wire was let go; brought from an exit's port, close
               //  by that step's card instead, and wired in the same edit: model `addStepFrom`)
-              const id = st.addStep(kind, by, at.x, at.y + PORT_DOWN, wire);
+              // (its card opened where it still needs a value of its options: store `putDownStep`)
+              const id = st.putDownStep(kind, by, at.x, at.y + PORT_DOWN, wire);
               // (and brought into view, with the sets it will give, where they are not: put down near the window's edge, or moved lower)
               const now = store.getState();
               const box = partsBounds({ sets: now.sets.filter((b) => b.made?.step === id), steps: now.steps.filter((s) => s.id === id), wires: [] });
