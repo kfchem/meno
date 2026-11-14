@@ -39,6 +39,9 @@ export type KekuleBond = { a1: number; a2: number; order: number };
 
 type Role = "needs" | "may" | "never";
 
+/** The ring atoms that take a double bond, or carry an H in its place, as nitrogen does: N, P, As, Sb. */
+const PNICTOGENS = new Set(["N", "P", "As", "Sb"]);
+
 /** A CTfile's query atoms that a ring of aromatic bonds may run through: A, Q, * and an atom list, L. */
 const QUERY_ATOMS = new Set(["A", "Q", "*", "L"]);
 
@@ -65,28 +68,38 @@ export function valenceOrders(atoms: readonly KekuleAtom[], bonds: readonly { a:
 }
 
 /**
- * Per bond, the order to draw it with (`kekuleOrders`); and the atoms read
+ * Per bond, the order to draw it with (`kekuleOrders`); the atoms read
  * as carrying an H the input did not state, where another atom of their
  * ring system could have carried it instead (`hChosen`, by index): which
  * nitrogen of an imidazole, a tetrazole, a purine or a porphine has it is
  * Meno's choice there, and not the input's (the maintainer, 2026-10-22: to
- * be said where the structure is shown).
+ * be said where the structure is shown); and the atoms of its aromatic
+ * bonds left without the double bond they need, so read with an H nobody
+ * wrote (`left`, by index): a carbon no Kekulé structure gives one -
+ * c1cccc1's fifth - and a neutral N or P of two bonds, its H not stated,
+ * left without one - c1ccnc1's n, read as pyrrole's N-H; an imidazole's,
+ * c1cncn1, which of its two is Meno's choice (`hChosen` too). A file's
+ * aromatic bonds are read so, leniently; typed input is refused on it
+ * (`aromaticRefusal`).
  */
-export function kekulized(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[]): { orders: (1 | 2 | 3)[]; hChosen: number[] } {
+export function kekulized(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[]): { orders: (1 | 2 | 3)[]; hChosen: number[]; left: number[] } {
   // (judged ring system by ring system - its aromatic bonds joined at their atoms, no atom in two - where the molecule as a whole
   // has no Kekule structure: a ring with none leaves the others theirs, and is itself as it would be alone)
   const whole = kekulizedAs(atoms, bonds);
-  if (whole.solved) return whole;
+  if (whole.solved) return { orders: whole.orders, hChosen: whole.hChosen, left: whole.left };
   const orders = [...whole.orders];
   let hChosen = whole.hChosen;
+  // (and those left without the double bond they need, each system's as it is alone)
+  const left: number[] = [];
   for (const system of aromaticSystems(atoms.length, bonds)) {
     // (the system alone: the molecule's other aromatic bonds single, which leaves every atom's bonds as many as they were)
     const own = kekulizedAs(atoms, bonds.map((b, k) => (b.order === AROMATIC_BOND && !system.has(k) ? { ...b, order: 1 } : b)));
     const at = new Set([...system].flatMap((k) => [bonds[k].a1, bonds[k].a2]));
     for (const k of system) orders[k] = own.orders[k];
     hChosen = [...hChosen.filter((i) => !at.has(i)), ...own.hChosen.filter((i) => at.has(i))];
+    left.push(...own.left.filter((i) => at.has(i)));
   }
-  return { orders, hChosen };
+  return { orders, hChosen, left: left.sort((p, q) => p - q) };
 }
 
 /** A metal, by its symbol: an element not among the nonmetals and metalloids (`NOT_METALS`). */
@@ -111,14 +124,14 @@ function aromaticSystems(n: number, bonds: readonly KekuleBond[]): Set<number>[]
 }
 
 /** `kekulized` of the molecule whole; and whether every atom that needs a double bond has one. */
-function kekulizedAs(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[]): { orders: (1 | 2 | 3)[]; hChosen: number[]; solved: boolean } {
+function kekulizedAs(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[]): { orders: (1 | 2 | 3)[]; hChosen: number[]; left: number[]; solved: boolean } {
   const out: (1 | 2 | 3)[] = bonds.map((b) =>
     b.order === 2 ? 2 : b.order === 3 ? 3 : 1,
   );
   const aromatic = bonds
     .map((b, i) => (b.order === AROMATIC_BOND ? i : -1))
     .filter((i) => i >= 0);
-  if (aromatic.length === 0) return { orders: out, hChosen: [], solved: true };
+  if (aromatic.length === 0) return { orders: out, hChosen: [], left: [], solved: true };
 
   const degree = new Array<number>(atoms.length).fill(0);
   const hasMultiple = new Array<boolean>(atoms.length).fill(false);
@@ -143,11 +156,13 @@ function kekulizedAs(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[])
     const el = canonical(atoms[i]?.el ?? "");
     const charge = atoms[i]?.charge ?? 0;
     const hs = atoms[i]?.hs;
-    // (a charged carbon, a tropylium's or a cyclopentadienide's: as the ring needs)
-    if (el === "C") return charge ? "may" : "needs";
-    if (el === "N" || el === "P") {
-      // a pyrrole-type N-H that says so takes none
+    // (a charged carbon, a tropylium's or a cyclopentadienide's: as the ring needs - and a silabenzene's Si, a germabenzene's
+    //  Ge, as carbon)
+    if (el === "C" || el === "Si" || el === "Ge") return charge ? "may" : "needs";
+    if (PNICTOGENS.has(el)) {
+      // a pyrrole-type N-H that says so takes none; nor an azolide's [n-], which lends its pair as that N-H's N does
       if (degree[i] === 2 && charge <= 0 && hs != null && hs > 0) return "never";
+      if (degree[i] === 2 && charge < 0) return "never";
       // two connections: pyridine-like, or a pyrrole-type N-H whose H the
       // file leaves implicit; the ring decides which. Three, as a cation: a
       // pyridinium's
@@ -155,6 +170,8 @@ function kekulizedAs(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[])
     }
     // a pyrylium's or a thiopyrylium's
     if ((el === "O" || el === "S") && degree[i] === 2 && charge > 0) return "may";
+    // (a borabenzene's B, of two ring bonds: as the ring needs, as a pyridine's N)
+    if (el === "B" && degree[i] === 2 && !charge) return "may";
     // a query atom - any atom (A, *), any but C (Q), one of a list (L) -
     // in a ring of aromatic bonds: as the ring needs, as a pyridine's N
     if (QUERY_ATOMS.has(atoms[i]?.el ?? "")) return "may";
@@ -251,8 +268,8 @@ function kekulizedAs(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[])
     return true;
   };
 
-  // (a neutral N or P of two bonds whose H the input did not state, bound to no metal: left without its double bond, it carries one)
-  const supplies = (i: number) => ["N", "P"].includes(canonical(atoms[i]?.el ?? "")) && degree[i] === 2 && (atoms[i]?.charge ?? 0) === 0 && atoms[i]?.hs == null && !bound.has(i);
+  // (a neutral N, P, As or Sb of two bonds whose H the input did not state, bound to no metal: left without its double bond, it carries one)
+  const supplies = (i: number) => PNICTOGENS.has(canonical(atoms[i]?.el ?? "")) && degree[i] === 2 && (atoms[i]?.charge ?? 0) === 0 && atoms[i]?.hs == null && !bound.has(i);
   const carriers = willing.filter(supplies);
 
   const matched = new Array<number>(atoms.length).fill(-1);
@@ -375,12 +392,38 @@ function kekulizedAs(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[])
   // (a carrier left without its double bond carries an H; where others of its ring system could have carried it, which does is a
   // choice made here)
   const hChosen: number[] = [];
+  // (each left without its double bond, with an H nobody wrote: a carbon that needs one; an N or P whose H was not stated)
+  const left: number[] = [...needy.filter((a) => matched[a] < 0), ...carriers.filter((i) => matched[i] < 0)];
   for (const k of new Set(carriers.map((i) => system[i]))) {
     const here = carriers.filter((i) => system[i] === k);
-    const left = here.filter((i) => matched[i] < 0);
-    if (left.length && left.length < here.length) hChosen.push(...left);
+    const without = here.filter((i) => matched[i] < 0);
+    if (without.length && without.length < here.length) hChosen.push(...without);
   }
-  return { orders: out, hChosen: hChosen.sort((p, q) => p - q), solved: ok };
+  return { orders: out, hChosen: hChosen.sort((p, q) => p - q), left: left.sort((p, q) => p - q), solved: ok };
+}
+
+/**
+ * Where typed input's aromatic bonds cannot be given single and double
+ * bonds as written - an atom left without the double bond it needs, so read
+ * with an H nobody wrote (`kekulized`'s `left`) - the atoms of the ring
+ * system it is in, by index, in order: what refuses it, with smilesWhy's
+ * sentence for them (`ringCannotAlternate`). None where every atom has its
+ * double bond, or carries the H it was written with.
+ */
+export function aromaticRefusal(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[]): number[] | null {
+  const { left } = kekulized(atoms, bonds);
+  if (!left.length) return null;
+  // (the system of aromatic bonds the first of them is in)
+  const ring = new Set([left[0]]);
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const b of bonds) {
+      if (b.order !== AROMATIC_BOND || ring.has(b.a1) === ring.has(b.a2)) continue;
+      ring.add(ring.has(b.a1) ? b.a2 : b.a1);
+      grew = true;
+    }
+  }
+  return [...ring].sort((p, q) => p - q);
 }
 
 function canonical(el: string): string {
