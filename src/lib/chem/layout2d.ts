@@ -392,6 +392,13 @@ export type TextItem = {
   beside?: boolean;
   /** Set beside: the atom, by index, whose charge it is. */
   markOf?: number;
+  /**
+   * Two electrons of its atom's own, and where they go round its symbol: a triplet's two unpaired electrons on two opposite sides, well
+   * apart - above and below, or left and right where a bond or its H are in the way (Brecher 2008, GR-5.3: two dots next to each other stand
+   * for a lone pair); a singlet's pair - a lone pair in GR-5.2's sense - two dots together on one side, square above, below, left or right of
+   * the symbol and parallel to that side. The sides are those its bonds, its H and a charge set beside it leave free.
+   */
+  twoElectrons?: { kind: "triplet" | "singlet"; sides: readonly ("up" | "down" | "left" | "right")[] };
   /** Its colour, where it is not the labels' (as CSS). */
   color?: string;
   /**
@@ -912,6 +919,43 @@ export function markCircle(run: PlacedRun): { c: Vec2; r: number } {
 }
 
 /**
+ * Where a label's two electrons of its atom's own are drawn (`TextItem.twoElectrons`), in the label's own places, each with how large it is:
+ * a triplet's two on two opposite sides of its symbol, one each; a singlet's pair both on its one side, together, side by side along it. Each
+ * a dot's width clear of the letters, at the symbol's middle. A charge set beside the symbol is kept off their sides where it is placed.
+ */
+export function unpairedDots(t: TextItem, fontSize: number, set: LabelSet, lineWorld: number): { c: Vec2; r: number }[] {
+  const two = t.twoElectrons;
+  if (!two) return [];
+  const run = placeLabel(t, fontSize, set)[t.anchorRun ?? 0];
+  if (!run || run.mark) return [];
+  const font = labelFont(set.fontFamily);
+  let pen = run.x;
+  const xs: number[] = [];
+  const ys: number[] = [];
+  for (const ch of run.text) {
+    for (const p of font.hull(ch)) {
+      xs.push(pen + p.x * run.size);
+      ys.push(run.y + p.y * run.size);
+    }
+    pen += font.advance(ch) * run.size;
+  }
+  if (!xs.length) return [];
+  const r = Math.max(lineWorld * 1.25, fontSize * set.subscriptSize * 0.075);
+  const [left, right, bottom, top] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+  const [cx, cy] = [(left + right) / 2, (bottom + top) / 2];
+  const at = (side: "up" | "down" | "left" | "right") =>
+    side === "up" ? { x: cx, y: top + 3 * r } : side === "down" ? { x: cx, y: bottom - 3 * r } : side === "left" ? { x: left - 3 * r, y: cy } : { x: right + 3 * r, y: cy };
+  const dots: { c: Vec2; r: number }[] = [];
+  for (const side of two.sides) {
+    const base = at(side);
+    const along = side === "up" || side === "down" ? { x: 1, y: 0 } : { x: 0, y: 1 };
+    // (a singlet's pair side by side along its side, a triplet's one on each side)
+    for (const k of two.kind === "singlet" ? [-1.1, 1.1] : [0]) dots.push({ c: { x: base.x + along.x * k * r, y: base.y + along.y * k * r }, r });
+  }
+  return dots;
+}
+
+/**
  * The marks of the labels, drawn: a charge of one as its sign in a circle,
  * a radical as a dot, or two for a carbene's pair - in lines, shapes and
  * filled circles, as the rest of the drawing is, a little lighter than a
@@ -929,6 +973,8 @@ function labelMarks(
   const fills: Circle[] = [];
   const w = lineWorld * 0.8;
   for (const t of texts) {
+    // (two electrons of the atom's own: a triplet's apart, a singlet's pair together)
+    for (const dot of unpairedDots(t, fontSize, set, lineWorld)) fills.push({ ...dot, ...(t.color ? { color: t.color } : {}) });
     for (const run of placeLabel(t, fontSize, set)) {
       if (!run.mark) continue;
       const { c, r } = markCircle(run);
@@ -997,6 +1043,12 @@ export function labelHulls(
       }));
       if (hull.length > 0) out.push(hull);
       pen += font.advance(ch) * run.size;
+    }
+  }
+  // (two electrons of the atom's own round its symbol, as a charge's circle is: a bond is kept clear of them by where they are put)
+  if (tail) {
+    for (const { c, r } of unpairedDots(t, fontSize, set, 0)) {
+      out.push(Array.from({ length: 12 }, (_, k) => ({ x: c.x - t.x + r * Math.cos((k * Math.PI) / 6), y: c.y - t.y + r * Math.sin((k * Math.PI) / 6) })));
     }
   }
   return out;
@@ -2205,7 +2257,10 @@ export function showsLabel(
     !!a.isotope ||
     // (a carbon of other than four bonds' valence says so: its hydrogens with it)
     (a.valence != null && a.valence !== 4) ||
-    (!!opts.showChargedCarbons && (!!a.charge || !!a.radical))
+    (!!opts.showChargedCarbons && (!!a.charge || !!a.radical)) ||
+    // (two electrons of its own, paired or not, sit round a symbol: Brecher 2008, GR-5.3 finds the C preferable, and its carbenes all have it)
+    a.radical === "singlet" ||
+    a.radical === "triplet"
   );
 }
 
@@ -2353,6 +2408,33 @@ function besideAt(a: Atom, at: Vec2, runs: TextRun[], opts: Pick<LayoutOptions, 
   };
 }
 
+/**
+ * Where an atom's two electrons of its own go round its label `t` (`TextItem.twoElectrons`): on the sides its bonds (`ways`, as angles in
+ * radians) and what the label writes beside its symbol leave free - its H on the row before or after it, a line of H above or below it, a
+ * charge after it above the line. A triplet's two on the clearer pair of opposite sides, above and below where that is as clear (GR-5.3's
+ * figure); a singlet's pair on the clearest side, above where that is as clear. None for any other atom.
+ */
+function twoElectronsAt(a: Atom, t: TextItem, ways: readonly number[]): TextItem["twoElectrons"] {
+  if (a.radical !== "triplet" && a.radical !== "singlet") return undefined;
+  const taken = [...ways];
+  const runs = t.runs ?? [];
+  const anchor = t.anchorRun ?? 0;
+  const tailFrom = runs.findIndex((_, k) => k > anchor && isTail(runs, k, anchor));
+  if (runs.some((r, k) => k < anchor && !r.sup)) taken.push(Math.PI);
+  if (runs.some((r, k) => k > anchor && (tailFrom < 0 || k < tailFrom) && !r.mark)) taken.push(t.stack === "above" ? Math.PI / 2 : t.stack === "below" ? -Math.PI / 2 : 0);
+  // (a charge after the symbol, above its line: up and to the right)
+  if (tailFrom >= 0) taken.push(Math.PI / 4);
+  const angle = { up: Math.PI / 2, down: -Math.PI / 2, left: Math.PI, right: 0 } as const;
+  const clear = (side: keyof typeof angle) => Math.min(Math.PI, ...taken.map((u) => Math.abs(Math.atan2(Math.sin(u - angle[side]), Math.cos(u - angle[side])))));
+  if (a.radical === "triplet") {
+    const upright = Math.min(clear("up"), clear("down"));
+    const across = Math.min(clear("left"), clear("right"));
+    return { kind: "triplet", sides: across > upright + 1e-6 ? ["left", "right"] : ["up", "down"] };
+  }
+  const order = ["up", "down", "right", "left"] as const;
+  return { kind: "singlet", sides: [order.reduce((best, side) => (clear(side) > clear(best) + 1e-6 ? side : best), order[0] as (typeof order)[number])] };
+}
+
 /** What a label writes after its symbol, on the symbol's line: its charge, then its radical's dots. */
 function tailRuns(a: Atom, opts: Pick<LayoutOptions, "circleCharges">): TextRun[] {
   const out: TextRun[] = [];
@@ -2364,7 +2446,9 @@ function tailRuns(a: Atom, opts: Pick<LayoutOptions, "circleCharges">): TextRun[
         : { text: chargeText(q), sup: true },
     );
   }
-  if (a.radical) out.push({ text: a.radical === "doublet" ? "\u2022" : "\u2022\u2022", mark: "radical" });
+  // (one unpaired electron a dot, after the symbol; two of the atom's own - a triplet's, a singlet's pair - round the symbol, not here:
+  // `TextItem.twoElectrons`)
+  if (a.radical === "doublet") out.push({ text: "\u2022", mark: "radical" });
   return out;
 }
 
@@ -2484,7 +2568,10 @@ export function buildTextLabels(
     // leave most room.
     // (put by hand: where it was put, whatever the drawing would do)
     const nudged = tail.length > 0 && a.chargeAt ? a.chargeAt : null;
-    const push = (item: TextItem) => {
+    const push = (given: TextItem) => {
+      // (its two electrons of its own, a triplet's or a singlet's pair: their sides chosen first, so that a charge set beside keeps clear of them)
+      const two = twoElectronsAt(a, given, (ways.get(i) ?? []).map((w) => Math.atan2(w.dir.y, w.dir.x)));
+      const item = two ? { ...given, twoElectrons: two } : given;
       const clash = tail.length > 0 && (!!nudged || tailClashes(item, tail, ways.get(i) ?? [], a, opts));
       if (!clash) {
         out.push(item);
@@ -2505,8 +2592,11 @@ export function buildTextLabels(
       // on its N; out by that much more across)
       const wide = tail.reduce((w, r) => w + (r.mark ? MARK_WIDTH : 0.6 * r.text.length), 0) * size;
       const more = Math.max(0, wide / 2 - (MARK_WIDTH / 2) * size);
+      // (the sides its two electrons of its own take, as bonds would: the charge kept off them)
+      const unit = { up: { x: 0, y: 1 }, down: { x: 0, y: -1 }, left: { x: -1, y: 0 }, right: { x: 1, y: 0 } } as const;
+      const occupied = [...(ways.get(i) ?? []), ...(two?.sides ?? []).map((side) => ({ dir: unit[side], len: ways.get(i)?.[0]?.len ?? 1 }))];
       out.push({
-        ...besideVertex(a, ways.get(i) ?? [], tail, opts, (dir) => {
+        ...besideVertex(a, occupied, tail, opts, (dir) => {
           let far = 0;
           for (const hull of labelHulls(bare, opts.fontPx, set, false)) {
             for (const p of hull) far = Math.max(far, p.x * dir.x + p.y * dir.y);
