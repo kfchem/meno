@@ -712,7 +712,8 @@ function stereoOf(m: Model) {
   const ids = m.atoms.map((a) => a.id);
   const { tetra, cisTrans, axes: drawnAxes, cumulated } = readStereo(d.atoms, d.bonds);
   const degree = degrees(m.bonds);
-  const asId = (n: number) => (n === -1 || (m.atoms[n].el === "H" && degree.get(ids[n]) === 1) ? -1 : ids[n]);
+  // (an H that is more than an H - a 2H, a 3H - is an atom of its own here too: two on one centre told apart)
+  const asId = (n: number) => (n === -1 || (plainH(m.atoms[n]) && degree.get(ids[n]) === 1) ? -1 : ids[n]);
   const centres = new Map<number, Tetrahedral>(
     [...tetra].map(([c, t]) => [ids[c], { neighbours: t.neighbours.map(asId), volume: t.volume }]),
   );

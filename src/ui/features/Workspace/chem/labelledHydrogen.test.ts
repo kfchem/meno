@@ -4,7 +4,7 @@ import { connectStoreToDocument, createEditorStore } from "../store";
 import type { Bond, Model } from "../store/types";
 import { cleanUp } from "./cleanUp";
 import { cipMarksOf } from "./cipMarks";
-import { sameStereo } from "./engineLayout";
+import { layoutJob, sameStereo } from "./engineLayout";
 import { measured } from "../../../../testing/timeouts";
 
 // An H with a mass number - a 2H, a 3H - on a stereocentre, through Clean-up (docs/EDITOR-2D.md, Clean-up on the engine): kept, as drawn,
@@ -93,6 +93,25 @@ describe("an H with a mass number on a stereocentre, through Clean-up", () => {
     const reordered: Model = { ...ethanolD, bonds: [...ethanolD.bonds].reverse() };
     expect(sameStereo(ethanolD, reordered)).toBe(true);
     expect(sameStereo(ethanolD, { ...turned, bonds: [...turned.bonds].reverse() })).toBe(false);
+    // (two labelled H's on one centre, a 2H and a 3H: told apart however the bonds are listed - the same drawing the same, the
+    // wedge on the other the other hand)
+    const otherHand: Model = { ...ethanolDT, bonds: ethanolDT.bonds.map((b) => (b.id === 12 ? { ...b, stereo: undefined } : b.id === 13 ? { ...b, stereo: "up" as const } : b)) };
+    expect(rs(otherHand)).not.toEqual(rs(ethanolDT));
+    const orders = [[10, 11, 12, 13], [10, 11, 13, 12], [13, 12, 11, 10], [12, 10, 13, 11], [11, 13, 10, 12]];
+    const listed = (m: Model, order: number[]) => ({ ...m, bonds: order.map((id) => m.bonds.find((b) => b.id === id)!) });
+    for (const order of orders) {
+      expect(sameStereo(ethanolDT, listed(ethanolDT, order)), `same, ${order}`).toBe(true);
+      expect(sameStereo(ethanolDT, listed(otherHand, order)), `other hand, ${order}`).toBe(false);
+    }
+  });
+
+  it("keeps an H with a charge, or anything more than an H, as an atom of its own: not folded into its centre", () => {
+    const charged: Model = { ...butanolH, atoms: butanolH.atoms.map((a) => (a.id === 4 ? { ...a, charge: 1 } : a)) };
+    const job = layoutJob(charged);
+    expect(job.ids).toContain(4);
+    expect([...job.folded.values()].flat()).not.toContain(4);
+    // (the H that is only an H, folded)
+    expect(layoutJob(butanolH).ids).not.toContain(4);
   });
 
   it(
