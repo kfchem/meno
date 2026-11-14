@@ -81,7 +81,7 @@ type Saved = Pick<
   Partial<Pick<EditorState, "docStyle" | "docStyle3d">> &
   Partial<Pick<EditorState, "pushes">> &
   Partial<Pick<EditorState, "ringFills">> &
-  Partial<Pick<EditorState, "sets" | "steps" | "wires" | "texts" | "textsLost" | "textShown" | "textsOpen" | "pdfs" | "pdfShown" | "pictures" | "slides" | "shapes" | "inks" | "cycles" | "structureMaps" | "conversations" | "stacksShown" | "heldShown" | "fullModel" | "recordsShown">>;
+  Partial<Pick<EditorState, "sets" | "steps" | "wires" | "texts" | "textsLost" | "textShown" | "textsOpen" | "pdfs" | "pdfShown" | "pictures" | "slides" | "shapes" | "inks" | "cycles" | "structureMaps" | "conversations" | "stacksShown" | "heldShown" | "fullModel" | "recordsShown" | "growing3d">>;
 
 /**
  * The canvas's molecules in 3D as a file carries them: each turned, and
@@ -90,7 +90,11 @@ type Saved = Pick<
  */
 const NO_STACKS: Record<number, number> = {};
 
-export function carriedOf(state: Pick<Saved, "molecules3d" | "turns3d" | "frames3d"> & Partial<Pick<Saved, "lists3d" | "stacksShown">>): Carried3D[] {
+/** A search's row of how far it has got, as a file carries it where its search was still going on: cut short where it was. */
+export const cutShort = (made: Carried3D["made"]): Carried3D["made"] =>
+  made && { ...made, how: made.how.map((r) => (r.label === "Rounds" && r.text.endsWith(": searching on") ? { ...r, text: `${r.text.slice(0, -": searching on".length).replace(/ so far$/, "")}: cut short while it searched` } : r)) };
+
+export function carriedOf(state: Pick<Saved, "molecules3d" | "turns3d" | "frames3d"> & Partial<Pick<Saved, "lists3d" | "stacksShown" | "growing3d">>): Carried3D[] {
   // (and, of a stack, the one it shows: utils/stacks)
   const hidden = hiddenInStacks(state.molecules3d, state.stacksShown ?? NO_STACKS);
   return state.molecules3d.map(({ id, ...m }) => {
@@ -102,6 +106,8 @@ export function carriedOf(state: Pick<Saved, "molecules3d" | "turns3d" | "frames
       ...(state.turns3d[id] ? { turn: state.turns3d[id] } : {}),
       ...(state.frames3d[id] ? { frame: state.frames3d[id] } : {}),
       ...(open ? { list: { id: open.list, row: open.row, ...(open.iso != null ? { iso: open.iso } : {}) } } : {}),
+      // (its search still going on: what it has brought so far, said cut short where it was - never resumed)
+      ...(state.growing3d?.[id] && m.made ? { made: cutShort(m.made) } : {}),
     };
   });
 }

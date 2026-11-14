@@ -22,7 +22,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   },
 }));
 
-import { coresCountedSaid, finished, processesOf, quietFor, quietSaid, quietShort, followJob, keptText, liveJobsOf, runningOf, threadsOf, MOST_THREADS, limitsOf, overLimits, startJob, stopJobsAndWait, type Job } from "./jobs";
+import { coresCountedSaid, finished, processesOf, quietFor, quietSaid, quietShort, followJob, keptText, liveJobsOf, runningOf, threadsOf, pageThreadsOf, MOST_THREADS, limitsOf, overLimits, startJob, stopJobsAndWait, type Job } from "./jobs";
 
 describe("jobs", () => {
   beforeEach(() => {
@@ -54,6 +54,15 @@ describe("jobs", () => {
     expect(threadsOf({}, 1)).toBe(1);
     expect(MOST_THREADS).toBe(1024);
     expect(threadsOf({}, 4096)).toBe(MOST_THREADS);
+  });
+
+  it("gives a search made on the page all but one of them where Settings sets no number, at least one - the chemist's number as it is", () => {
+    expect(pageThreadsOf({}, 8)).toBe(7);
+    expect(pageThreadsOf({ coresAll: 6 }, 8)).toBe(5);
+    expect(pageThreadsOf({}, 1)).toBe(1);
+    expect(pageThreadsOf({ cores: 8 }, 8)).toBe(8);
+    expect(pageThreadsOf({ cores: 2 }, 8)).toBe(2);
+    expect(pageThreadsOf({ cores: 7, coresAll: 4 }, 8)).toBe(4);
   });
 
   it("shares the cores jobs may use among a step's jobs where Settings sets none: all for one, one each for as many as there are cores", () => {

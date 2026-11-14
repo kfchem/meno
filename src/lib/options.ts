@@ -111,6 +111,11 @@ export const MANY_CHOICES = 5;
 /** A role's options' values, by their ids. */
 export type OptionValues = Record<string, string | number | boolean>;
 
+/** Of the options shown (`shownOptions`), the first number that holds no value - one the chemist gives, a window: what a card opened to ask for what it needs focuses. None where each holds one. */
+export function firstUnset(shown: readonly Option[], values: OptionValues): string | undefined {
+  return shown.find((o) => o.type === "number" && !Number.isFinite(Number(values[o.id] ?? o.default)))?.id;
+}
+
 /** An option's value, where `v` is one it takes; else none. */
 function fitting(o: Option, v: unknown): string | number | boolean | undefined {
   switch (o.type) {
@@ -125,6 +130,20 @@ function fitting(o: Option, v: unknown): string | number | boolean | undefined {
     case "switch":
       return typeof v === "boolean" ? v : undefined;
   }
+}
+
+/**
+ * `options`, each one's default the value `remembered` holds for it where
+ * that still fits it - and it is not one that starts from what is written
+ * (`from`), nor a step's own atoms: so that whatever has no value of its own
+ * for an option takes the remembered one, else the option's own default.
+ */
+export function defaultsFrom(options: readonly Option[], remembered: Readonly<Record<string, unknown>> | undefined): Option[] {
+  return options.map((o) => {
+    if (!remembered || o.type === "atoms" || ((o.type === "number" || o.type === "text") && o.from)) return o;
+    const v = fitting(o, remembered[o.id]);
+    return v === undefined ? o : ({ ...o, default: v } as Option);
+  });
 }
 
 /**
