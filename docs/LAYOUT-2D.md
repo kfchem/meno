@@ -1012,6 +1012,19 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
   its two Cl on one line. The wedge forms of the text are never made by
   Meno - they state the hand, which Meno holds no record of - but one
   drawn so is read and kept (EDITOR-2D.md, *Clean-up*).
+  Where a chelate's two donors are labelled and carry H - ethane-1,2-
+  diamine's NH2 - and stand on neighbouring spokes, their H would meet
+  each other and the metal's label: the two bonds to the metal are drawn
+  longer, to 1.8 bonds (`CHELATE_OPENED`), each donor still on its own
+  spoke, and the ring's other atoms set again with its own bonds one long
+  and its angles opened (Brecher 2008, GR-4.3.5: of rings sharing an atom,
+  only the bonds to it lengthened; GR-4.3.7: no further than needed). A
+  chelate ring of other atoms - a glycinate's carbonyl, a bipyridine's
+  aromatic rings - is left as it is. A metal of four bonds with one
+  chelate is laid out square: the chelate's two ends side by side, its
+  other two ligands on the right angles left. A tridentate that cannot
+  be set on three lines (a terpyridine's metal, its rings fused) is
+  refused by Clean-up, saying so, until the layout can.
 - **A donor bonded to a metal** (a phosphine's P) spreads what it carries
   away from the metal, as a tripod's legs, 75 degrees apart.
 - **A chelate that closes at a metal** - dppf's two P on Pd, through the
