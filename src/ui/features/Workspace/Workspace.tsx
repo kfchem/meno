@@ -266,6 +266,8 @@ import { freePlace, pageBoxes } from "./utils/freePlace";
 import { sheetRoom } from "./utils/textSheets";
 import { styleOf } from "../../../lib/chem/style";
 import Presenter from "./presenting/Presenter";
+import EmptyPageLine from "./components/EmptyPageLine";
+import { emptyPageLineShown, pageHoldsNothing } from "./utils/emptyPage";
 import PresentLayer from "./presenting/PresentLayer";
 import { isStandard, reshaped, slideAround, slideInView, slideOfView, STANDARD, WIDE } from "./presenting/slides";
 import { selectedBox } from "./utils/extent";
@@ -328,6 +330,7 @@ function WorkspaceContent({
     handleWrapperClick,
     dropZone,
     dropping,
+    draggedOver,
     openFilesAt,
     importError,
     dismissImportError,
@@ -373,6 +376,8 @@ function WorkspaceContent({
   setDrawnRatio(canvasRatio);
   // (no menu over a talk)
   const talking = useEditor((s) => s.presenting != null);
+  // (a page that holds nothing at all: its one quiet line - components/EmptyPageLine)
+  const pageEmpty = useEditor(pageHoldsNothing);
   // (each frame its members' room, and what was let go over one eased out of it: as each pointer is let go - workflow/fitFrames)
   useEffect(() => store.getState().watchFrames(), [store]);
   // (a structure selected: a guide's step waiting for it goes on)
@@ -1801,6 +1806,9 @@ function WorkspaceContent({
       ))}
       </AnimatePresence>
       </div>
+      {/* an empty page: one quiet line in the middle of what is seen - not while Quick Add or a menu is open, something is dragged
+          over, or a talk is given (docs/WORKSPACE.md, *First steps*) */}
+      <EmptyPageLine show={emptyPageLineShown({ active, empty: pageEmpty, quickAdd: !!quickAdd, menu: !!menu, draggedOver, dropping: !!dropping, talking })} right={cover} />
       {/* a file dropped being read: a quiet mark where it was dropped - come after a moment, so that a quick one shows
           none - until what it brings is placed, or the card saying why not takes its place */}
       <AnimatePresence>

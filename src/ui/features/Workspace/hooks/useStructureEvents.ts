@@ -66,6 +66,8 @@ export function useStructureEvents(
   const [importError, setImportError] = useState<ImportError | null>(null);
   // (a drop being read: where it was dropped, in the window's pixels - marked there until what it brings is placed, or fails)
   const [dropping, setDropping] = useState<{ x: number; y: number; key: number } | null>(null);
+  // (something dragged over the drawing, until it leaves or is dropped: the empty page's line steps aside for it)
+  const [draggedOver, setDraggedOver] = useState(false);
   const reportImportError = (what: string, err: unknown, again?: () => void) => {
     console.warn(`${what} import failed`, err);
     const text = err instanceof Error ? err.message : String(err);
@@ -374,15 +376,20 @@ export function useStructureEvents(
   const dropZone: DropZone = {
     takes: () => store.getState().presenting == null,
     enter: (drag) => {
+      setDraggedOver(true);
       // (a file from the Finder or Explorer is read when dropped, as ever)
       if (dropReading.current || drag.files) return;
       dropReading.current = structureInDrop().catch(() => null);
     },
     // off the drawing: the drag may end anywhere now
     leave: () => {
+      setDraggedOver(false);
       dropReading.current = null;
     },
-    drop: (d) => void dropAppend(d),
+    drop: (d) => {
+      setDraggedOver(false);
+      void dropAppend(d);
+    },
   };
 
   const dropAppend = async (drop: Dropped) => {
@@ -573,6 +580,7 @@ export function useStructureEvents(
     handleWrapperClick,
     dropZone,
     dropping,
+    draggedOver,
     openFilesAt,
     importError,
     dismissImportError,
