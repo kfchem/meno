@@ -82,7 +82,13 @@ each is merged, this file describes what is built.
 17. **Settings holds the defaults; a step customises them** (the
     maintainer, 2026-10-08): Settings, *Calculations*, sets each kind's
     default options, by plugin; a step starts with them, and its options
-    changed are its own - never written back as the defaults.
+    changed are its own - never written back as the defaults. A step that
+    holds no value of its own for an option - one put down otherwise than
+    on the canvas, a template's, a file's - takes Settings' for its kind
+    as it stands, else the option's own default: on its card, when it is
+    judged ready, and when it runs (`stepOptions`, workflow/doers). A
+    change in Settings changes what such a step would run with, so its
+    card then says it has changed since its run.
 18. **No single 3D structure is made in a workflow** (the maintainer,
     2026-10-10): one geometry made of a drawing is one of its
     conformations taken at random, which a calculation on it cannot
@@ -1067,7 +1073,10 @@ beside its edge - being drawn over all of it.
     until given, with the same guide under it. Each new Energy window
     step starts with it, as each step starts with the options set there;
     a step's own window is then its own, and changing Settings later
-    changes no step put down before. *Clear*, beside it, empties it
+    changes no step put down before with one. A step that holds none of
+    its own - put down while Settings had none, or a template's - takes
+    the one Settings keeps when it is next shown or run (decided: 17).
+    *Clear*, beside it, empties it
     again: each new step then asks. It is the chemist's value, never
     Meno's.
   - A new step holds no window until one is given: an option with no

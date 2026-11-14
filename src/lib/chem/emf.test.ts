@@ -4,6 +4,7 @@ import { drawingLayout } from "../../ui/features/Workspace/fileActions";
 import { ACS_1996 } from "./style";
 import { createSVG } from "./layout2d";
 import { NOMINAL_BOND_LENGTH } from "./acs";
+import { MARK_SCALE } from "../../ui/features/Workspace/chem/marks";
 import type { Model } from "../../ui/features/Workspace/store/types";
 
 const L = NOMINAL_BOND_LENGTH;
@@ -403,5 +404,47 @@ describe("an electron-pushing arrow in a picture", () => {
     const { emf } = layoutEmf(layout, opts);
     expect(emfRecords(emf)!.filter((r) => r.type === 2)).toHaveLength(2); // EMR_POLYBEZIER
     expect(emfPlusRecords(emf).filter((r) => r.type === 0x4019)).toHaveLength(2); // EmfPlusDrawBeziers
+  });
+});
+
+describe("layoutEmf with R and S on a molecule in 3D", () => {
+  // (a stereocentre, its R shown)
+  const centre = {
+    atoms: [
+      { el: "C", x: 0, y: 0, z: 0 },
+      { el: "F", x: -1.2, y: -0.8, z: 0 },
+      { el: "Cl", x: 1.2, y: -0.8, z: 0 },
+      { el: "Br", x: 0, y: -0.6, z: 1.3 },
+      { el: "H", x: 0, y: -0.4, z: -1 },
+    ],
+    bonds: [1, 2, 3, 4].map((i) => ({ a1: 0, a2: i, order: 1 })),
+    at: { x: 6 * L, y: 0 },
+    stereo: { atoms: { 0: "R" }, bonds: {}, chosen: { atoms: [0], bonds: [] } },
+  };
+  const { layout, opts } = drawingLayout({ ...model, molecules3d: [centre] } as unknown as Model, aromatic, ACS_1996);
+  const records = emfRecords(layoutEmf(layout, opts).emf)!;
+
+  it("writes it over the molecule - after the drawing's own label - in the canvas's blue", () => {
+    const texts = records.filter((r) => r.type === 84).map((text) => {
+      const v = new DataView(text.body.buffer, text.body.byteOffset, text.body.byteLength);
+      const at = v.getUint32(40, true) - 8;
+      return String.fromCharCode(...Array.from({ length: v.getUint32(36, true) }, (_, i) => v.getUint16(at + 2 * i, true)));
+    });
+    // (in parentheses, as the style writes R and S)
+    expect(texts.join("")).toBe("OH(R)");
+    // (the colour set for its letters, last before them)
+    const last = (rs: typeof records, type: number) => rs.length - 1 - [...rs].reverse().findIndex((r) => r.type === type);
+    const at = last(records, 84);
+    const colour = records[last(records.slice(0, at), 24)];
+    expect(new DataView(colour.body.buffer, colour.body.byteOffset).getUint32(0, true)).toBe(colorRef("#1d4ed8"));
+    // (in an italic font MARK_SCALE the size of the drawing's own label's: its em, in the EMF's units, within one of them)
+    const fonts = records.filter((r) => r.type === 82).map((r) => {
+      const v = new DataView(r.body.buffer, r.body.byteOffset, r.body.byteLength);
+      return { em: -v.getInt32(4, true), italic: v.getUint8(24) === 1 };
+    });
+    const own = fonts.find((f) => !f.italic)!;
+    const italic = fonts.filter((f) => f.italic);
+    expect(italic).toHaveLength(1);
+    expect(Math.abs(italic[0].em - own.em * MARK_SCALE)).toBeLessThanOrEqual(1);
   });
 });

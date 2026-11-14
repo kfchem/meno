@@ -13,8 +13,8 @@ import type { Look3D, Measure3D, Molecule3D, Rising3D, Turn3D } from "../store/t
 import { menoShader } from "../utils/menoShader";
 import { notesSized, pagePx, pageScale, pageSized } from "../utils/pageScale";
 import { bentStickGeometry, stickBends, withStickBend } from "../utils/stickBend";
-import { FRAMES_CHIP_GAP, imaginaryShown, withCentres, fadeStep, bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, plainNoteOf, frameOf, framesChipAt, labelSpot, linesOf, magnifiedOf, seenShare, sharesOf, sharesWithheld, solidOf, spotFollowed, valueSpots, widestWay, WORLD_PER_ANGSTROM, type BondLine, type DrawnBond, type LabelBox, type LabelFade, type SpotAbout, type Stick, type ValueAt } from "../utils/molecule3d";
-import { MARK_MIN_PX, MARK_SCALE, marksReadAt, stereoTextEms } from "../chem/marks";
+import { FRAMES_CHIP_GAP, imaginaryShown, withCentres, fadeStep, bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, plainNoteOf, frameOf, framesChipAt, linesOf, magnifiedOf, seenShare, sharesOf, sharesWithheld, solidOf, spotFollowed, stereoKept, stereoMarks3d, stereoSpot, valueSpots, WORLD_PER_ANGSTROM, type BondLine, type DrawnBond, type LabelBox, type LabelFade, type SpotAbout, type Stick, type ValueAt } from "../utils/molecule3d";
+import { MARK_MIN_PX, marksReadAt } from "../chem/marks";
 import { switchFade, switchStep } from "../utils/zoomSwitch";
 import { LONG_PRESS_SHOW_MS } from "../constants";
 import { kindOf, MEASURE_FAN_OPACITY, MEASURE_RADIUS, measureMarks, measureText, measureValue, piecesOf } from "../utils/measure3d";
@@ -139,8 +139,6 @@ const NUMBERS_TAU = 0.08;
 const NUMBERS_PLACED_MOST = 600;
 /** Every atom's number in its ball's middle, at its full size, not shown: x, y, share, shown, for each. */
 const restingPlaces = (n: number) => Float32Array.from({ length: 4 * n }, (_, k) => (k % 4 === 2 ? 1 : 0));
-/** How far apart two stereo labels keep at the least, in ems of their size. */
-const STEREO_APART = 0.6;
 const easeOutCubic = (u: number) => 1 - (1 - Math.min(Math.max(u, 0), 1)) ** 3;
 const easeInOutCubic = (u: number) => {
   const t = Math.min(Math.max(u, 0), 1);
@@ -569,24 +567,7 @@ function Molecule3DView(props: Molecule3DViewProps) {
   const shownFrame = frameOf(solid, frame);
   const centre = useMemo(() => frameCentre({ atoms: m.atoms, frames: m.frames }, shownFrame), [m.atoms, m.frames, shownFrame]);
   // its stereocentres' and double bonds' labels: all, or those its drawing left open
-  const stereoMarks = useMemo(() => {
-    const st = m.stereo;
-    const only = props.stereoShown;
-    if (!st || !only) return [];
-    // (with the atoms whose ways out it keeps clear of: a centre's
-    // neighbours, a double bond's two and theirs)
-    const near = (i: number) => m.bonds.flatMap((b) => (b.a1 === i ? [b.a2] : b.a2 === i ? [b.a1] : []));
-    const out: { key: string; atoms: number[]; around: number[]; text: string }[] = [];
-    for (const [i, text] of Object.entries(st.atoms)) {
-      if (only.atoms.includes(Number(i))) out.push({ key: `a${i}`, atoms: [Number(i)], around: near(Number(i)), text });
-    }
-    for (const [i, text] of Object.entries(st.bonds)) {
-      const b = m.bonds[Number(i)];
-      if (b && only.bonds.includes(Number(i)))
-        out.push({ key: `b${i}`, atoms: [b.a1, b.a2], around: [...new Set([...near(b.a1), ...near(b.a2)])], text });
-    }
-    return out;
-  }, [m.stereo, m.bonds, props.stereoShown]);
+  const stereoMarks = useMemo(() => stereoMarks3d({ stereo: m.stereo, bonds: m.bonds }, props.stereoShown), [m.stereo, m.bonds, props.stereoShown]);
   // (and each hidden kept a while as it fades out - longer than its fade,
   // which counts the frames drawn rather than the time)
   const stereoPresent = usePresence(stereoMarks, (mark) => mark.key, 2 * STEREO_FADE * 1000);
@@ -1568,16 +1549,9 @@ function Molecule3DView(props: Molecule3DViewProps) {
           placedLabels.push(...valuesPlaced);
         }
         const o = onScreen(parent, at.x, at.y, at.z);
-        const way = widestWay(mark.around.map((i) => Math.atan2(balls![i].y - o.y, balls![i].x - o.x)));
-        // (out past the ball - or the bond - as far as the drawing's style
-        // sets its R and S off its atoms, of its labels' size; the letters'
-        // box a capital's height, and a little for the halo)
-        const reach = ((mark.atoms.length === 1 ? radius(mark.atoms[0]) : bondR) * g) / pxIn + (props.stereoFont.gap * font) / MARK_SCALE;
-        const half = { x: font * (stereoTextEms(mark.text, props.stereoFont.parentheses) / 2 + 0.1), y: font * 0.45 };
-        // (every atom near it but its own - a double bond's two among them)
-        const own = mark.atoms.length === 1 ? mark.atoms[0] : -1;
-        const others = balls.filter((b, i) => i !== own && b.r > 0 && Math.hypot(b.x - o.x, b.y - o.y) < reach + 4 * half.x + b.r);
-        const best = labelSpot(o, reach, half, way, others, placedLabels, sticks);
+        // (out past the ball - or the bond - as far as the drawing's style sets its R and S off its atoms: utils/molecule3d stereoSpot)
+        const own = ((mark.atoms.length === 1 ? radius(mark.atoms[0]) : bondR) * g) / pxIn;
+        const best = stereoSpot(mark, o, balls, sticks, placedLabels, own, font, props.stereoFont.gap, props.stereoFont.parentheses);
         // (not there at once where its best way changes as the molecule turns: glided round the atom to it, as everything moves)
         const goal = { a: Math.atan2(best.y - o.y, best.x - o.x), r: Math.hypot(best.x - o.x, best.y - o.y) };
         const was = stereoSpots.current.get(mark.key);
@@ -1585,9 +1559,8 @@ function Molecule3DView(props: Molecule3DViewProps) {
         stereoSpots.current.set(mark.key, about);
         if (about.a !== goal.a || about.r !== goal.r) moving = true;
         const spot = { ...best, x: o.x + about.r * Math.cos(about.a), y: o.y + about.r * Math.sin(about.a) };
-        // (the next keeps a little way off it, not just clear: two side by
-        // side read as one, and as either atom's)
-        placedLabels.push({ ...spot, hx: spot.hx + STEREO_APART * font, hy: spot.hy + STEREO_APART * font });
+        // (the next keeps a little way off it, not just clear)
+        placedLabels.push(stereoKept(spot, font));
         ink.place(spot, font, opacity);
       }
     }

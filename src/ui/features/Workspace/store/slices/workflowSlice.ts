@@ -11,7 +11,7 @@ import { reachOverFrames } from "../../utils/molecule3d";
 import { freePlace, pageBoxes } from "../../utils/freePlace";
 import { styleOf } from "../../../../../lib/chem/style";
 import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
-import { byOf, kindsOf, optionsFor, optionsNeed } from "../../workflow/doers";
+import { byOf, kindsOf, optionsFor, optionsNeed, stepRole } from "../../workflow/doers";
 import type { StepKind } from "../../workflow/kinds";
 import * as wf from "../../workflow/model";
 import { heldSets } from "../../workflow/onPage";
@@ -29,7 +29,7 @@ type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
 
 /** The role a kind of step's defaults are kept under, as who does it takes them - set in Settings, Calculations (lib/settings/appSettings `options`). */
-export const stepRole = (kind: StepKind, by: string) => `step:${by}:${kind}`;
+export { stepRole };
 
 /**
  * A workflow on the page (docs/WORKFLOWS.md): its sets, steps and wires,

@@ -357,7 +357,7 @@ rest is listed under them, a row each as before (`PartMenu`, `menuIcons`).
 | Right-clicked | Icons | Listed |
 |---|---|---|
 | An atom | charge one up, one down, clean up its structure, its structure in 3D, an electron-pushing arrow from it, a fishhook from it, colour; Delete | unpaired electron (or none), expand an abbreviation, as typed (where it was read as something else), select its structure, lay out as a grid or stack again (a record of a stack) |
-| A bond | its kind - single, double, triple, wedge, hashed wedge - and "more" (a second row, eased in: wavy, bold, bold dashed, dashed, dative; shown at once where the bond is one of those); Delete | clean up, 3D, an electron-pushing arrow from it, a fishhook from it, colour, select its structure, lay out as a grid or stack again (a record of a stack) |
+| A bond | its kind - single, double, triple, wedge, hashed wedge - and "more" (a second row, eased in, its icons as large as the first row's: wavy, bold, bold dashed, dashed, dative; shown at once where the bond is one of those); Delete | clean up, 3D, an electron-pushing arrow from it, a fishhook from it, colour, select its structure, lay out as a grid or stack again (a record of a stack) |
 | An electron-pushing arrow | full head, fishhook (the one it has marked), colour; Delete | from the charge or from a lone pair (from an atom with a negative charge), lone pair (where it leaves an atom that has one), bend as Meno does (where it was bent by hand) |
 | The selection | cut, copy, paste (opened on empty space), the other look and reset its turn (opened on a molecule in 3D), clean up, 3D, colour; Delete | that molecule's own (opened on a molecule in 3D), copy as SMILES, export, render (its molecules in 3D), turn over either way, lay out as a grid or stack again (opened on a record of a stack), a slide around it, a box around it, use as input, save as abbreviation |
 | Inside a ring, nothing selected | colour | select its structure |
@@ -770,7 +770,10 @@ Both go together, because both touch every layer.
   round - double and triple bonds included, which today are not. When they
   are square, every one is square.
   A wedge's wide end or a bold bar's end, where one bond carries straight on through it, is cut
-  square across and its two corners are rounded like any free corner (they
+  square across at the atom - past it by the bond's own line's half width,
+  never into a triple bond's or a nitrile's lines (a solid wedge into
+  efavirenz's alkyne stood 0.2 of a bond into the C≡C, a spike between its
+  outer lines) - and its two corners are rounded like any free corner (they
   were left sharp).
 - **Units.** Every length can be given in points or as a fraction of the bond
   length, whichever the user prefers.
@@ -1794,6 +1797,18 @@ lipids each have their own way of being drawn, which it should know.
      ST-1.2.3 has the configuration the same wherever the wedged bond
      stands (drawings made from a SMILES often put a bridgehead so:
      cocaine's, camphor's, morphine's, sparteine's).
+     With two or three wedges at such a centre, it is read as the text's
+     figures read it, and only there: two alike and one plain (ST-1.2.5);
+     a wedge, hashes and a plain bond with the plain bond half a turn or
+     more from one of them (ST-1.2.2); three alike with every gap under
+     half a turn (ST-1.2.6); two alike half a turn or more apart, the other
+     between them (ST-1.2.7). The forms the text says state nothing - the
+     plain bond between the wedge and the hashes (ST-1.2.10), three alike
+     leaving half a turn open (ST-1.2.9), wedges spread all round
+     (ST-1.2.11), a wedge and hashes half a turn apart with the third
+     between them (ST-1.2.8) - are read as open, and the centre says what
+     to redraw. A deciding gap within 10 degrees of half a turn says
+     nothing either: which side of the rule it is on cannot be told.
      A double bond so drawn it lays out keeping the straight end straight -
      its one group straight on from it, as ST-4.4 draws a double bond of
      unspecified configuration - and the rest around it, so the new drawing
