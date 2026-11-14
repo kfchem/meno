@@ -7,7 +7,7 @@ import { aboveText, chipLine, isMarked, resultsOn, unitsHeld, valueText, type Re
 import { imaginaryWords } from "../../../../lib/calc/output";
 import { cardGroupsOf, readerNameOf } from "../../../../lib/calc/sources";
 import { barsAbove, NO_LOWEST, NOT_FINISHED } from "./barsAbove";
-import { FAILURE_WORDS, WARNING_WORDS, type Failure, type Warning } from "../workflow/failures";
+import { FAILURE_WORDS, failureSaid, WARNING_WORDS, WHY_SHUT, type Failure, type Warning } from "../workflow/failures";
 import type { CardGroups } from "../components/PointedCard3D";
 
 /** A conformer's share of its set, as it is written: "62%", "<1%" - and ">99%" where others share the rest. */
@@ -39,7 +39,7 @@ export type SetChip = {
 export function chipMarks(c: Pick<SetChip, "failed" | "imaginary" | "warnings">, told: number): string {
   const failure = c.failed?.[told] ?? undefined;
   const saddle = c.imaginary?.[told];
-  return [failure ? FAILURE_WORDS[failure.kind] : "", saddle?.length ? imaginaryWords(saddle) : "", c.warnings?.length ? `${c.warnings.length} warning${c.warnings.length === 1 ? "" : "s"}` : ""]
+  return [failure ? failureSaid(failure, WHY_SHUT) : "", saddle?.length ? imaginaryWords(saddle) : "", c.warnings?.length ? `${c.warnings.length} warning${c.warnings.length === 1 ? "" : "s"}` : ""]
     .filter(Boolean)
     .join(" · ");
 }

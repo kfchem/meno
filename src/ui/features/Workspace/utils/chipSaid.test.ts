@@ -15,7 +15,7 @@ describe("a set's chip, shut, as runs to draw", () => {
     expect(said({ count: 3, frame: 1, energies: [0, kcal(0.42), kcal(1.3)], populations: [0.62, 0.3, 0.08] })).toBe("2 / 3 · 0.42 kcal/mol · 30%");
     expect(said({ count: 3, frame: 0, numbers: [4, 9, 12], title: "Conformer A" })).toBe("#4 · 1 / 3Conformer A");
     expect(said({ count: 3, frame: 1, energies: [0, kcal(0.4), kcal(0.9)], failed: [null, { kind: "program-error", why: "it stopped" }, null] })).toBe(
-      `2 / 3 · ${NOT_FINISHED} · ${FAILURE_WORDS["program-error"]}`,
+      `2 / 3 · ${NOT_FINISHED} · ${FAILURE_WORDS["program-error"]}: it stopped`,
     );
   });
 

@@ -1,6 +1,6 @@
 import { boltzmann } from "../../../../lib/boltzmann";
 import { imaginaryWords } from "../../../../lib/calc/output";
-import { FAILURE_WORDS } from "../workflow/failures";
+import { FAILURE_WORDS, failureSaid, WHY_SHUT } from "../workflow/failures";
 import { easeInOut, easeOut } from "../../../theme/motion";
 import { ROOM_TEMPERATURE } from "../../../../lib/units";
 import * as THREE from "three";
@@ -298,7 +298,7 @@ export function chipMarks(m: Pick<Molecule3D, "imaginary" | "calc"> & Partial<Pi
   const failure = m.failed?.length === n ? m.failed[k] : undefined;
   const saddle = imaginaryShown(m, n)?.[k];
   const warnings = m.calc?.warnings?.length ?? 0;
-  return [failure ? FAILURE_WORDS[failure.kind] : "", saddle?.length ? imaginaryWords(saddle) : "", warnings ? `${warnings} warning${warnings === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ");
+  return [failure ? failureSaid(failure, WHY_SHUT) : "", saddle?.length ? imaginaryWords(saddle) : "", warnings ? `${warnings} warning${warnings === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ");
 }
 
 /** How a molecule in 3D is drawn: in the 3D style's primary look, or its secondary. */

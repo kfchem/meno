@@ -1564,7 +1564,7 @@ describe("a step that runs a plugin's program", () => {
     end(4);
     await st().lookAtJobs();
     await again;
-    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:01 \u00b7 1 of 3 \u00b7 2 of 3 failed (2: the program stopped with an error)" });
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:01 \u00b7 1 of 3 \u00b7 2 of 3 failed (2: the program stopped with an error: Some atoms are very close)" });
   });
 
   it("keeps when a running job last wrote anything, as its runner says - running jobs' alone", async () => {
