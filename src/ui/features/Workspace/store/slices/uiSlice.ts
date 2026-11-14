@@ -52,7 +52,7 @@ export function createUiSlice(
     markOpenedOver: (name: string) =>
       set((prev: EditorState) => ({ ...prev, savedPath: null, openedName: name })),
 
-    beginLabelEdit: (atomId: number, initial = "", how?: { select?: boolean }) =>
+    beginLabelEdit: (atomId: number, initial = "", how?: { select?: boolean; atoms?: readonly number[] }) =>
       set((prev: EditorState) => {
         const base = prev.model.atoms.find((a) => a.id === atomId);
         // (an atom no longer drawn has no label to write)
@@ -69,6 +69,8 @@ export function createUiSlice(
             n: ++labelEdits,
             grow: initial.length > 0 && !how?.select,
             selectAll: !!how?.select,
+            // (on the selection's atoms: those of them still drawn, the one begun on among them)
+            ...(how?.atoms && how.atoms.length > 1 ? { atoms: [...new Set([atomId, ...how.atoms])].filter((x) => prev.model.atoms.some((a) => a.id === x)) } : {}),
           },
         };
       }),
@@ -117,8 +119,8 @@ export function createUiSlice(
         // (begun by a letter typed over an atom that is selected, it is written on every atom selected, in the one step: atoms
         // alone - bonds, words and the rest selected with them have no label; one begun from a menu is that atom's alone)
         const sel = get().sel.atoms;
-        const ids = labelEdit.grow && sel.has(id) && sel.size > 1 ? [id, ...[...sel].filter((x) => x !== id)] : [id];
-        changed = doc.edit("rename atom", (d) =>
+        const ids = labelEdit.atoms && labelEdit.atoms.length > 1 ? [id, ...labelEdit.atoms.filter((x) => x !== id)] : labelEdit.grow && sel.has(id) && sel.size > 1 ? [id, ...[...sel].filter((x) => x !== id)] : [id];
+        changed = doc.edit(ids.length > 1 ? `label ${ids.length} atoms: ${value}` : "rename atom", (d) =>
           ids.reduce((acc, i) => {
             const at = acc.model.atoms.find((a) => a.id === i);
             return at ? ops.setAtomChemistry(acc, i, chem(acc, at), as) : acc;

@@ -36,9 +36,11 @@ Double-click empty space and choose *Chain* from the icons, or choose *Chain fro
 
 Point at an atom and type: O, NH2, OMe, Ph. The label is written where it stands, and kept when the pointer moves on. To change a label, choose *Edit label* on the atom's right-click menu.
 
+With atoms chosen, just type: the label goes to every chosen atom, wherever the pointer is, and a small count says how many. Press Enter to keep it, Escape to let it go.
+
 ## Right-click: what an atom or a bond can be {#menus}
 
-Right-click an atom or a bond for what can be done to it: a row of icons, each saying its name as the pointer rests on it, then a list.
+Right-click an atom or a bond for what can be done to it: a row of icons, each saying its name as the pointer rests on it, then a list. A right-click chooses what it is on; the menu's first line says what it acts on - *This atom*, or *3 atoms, 2 bonds* when you right-click one of several chosen. Then an atom's charge, or a bond's kind, is set on every chosen atom or bond at once, and *Cut* and *Copy* take everything chosen.
 
 - An atom: the icons are *Charge one up*, *Charge one down*, *Clean up this structure*, *3D structure*, *Electron-pushing arrow*, *Fishhook arrow*, *Colour…* and *Delete atom*. The list holds *Edit label*, *Chain from here*, *Unpaired electron*, *Select this structure* and *Magnification*.
 - A bond: the icons are its kinds - *Single bond*, *Double bond*, *Triple bond*, *Wedge*, *Hashed wedge* - then *More kinds of bond*. The icon of the bond's own kind is drawn as the bond lies; press it again to turn a wedge's narrow end to the other atom, or to move a double bond's second line. With several bonds chosen, a kind is set on all of them. *More kinds of bond* which opens a second row of *Wavy bond*, *Bold bond*, *Bold dashed bond*, *Dashed bond* and *Dative bond*, and *Delete bond*. The list holds *Clean up this structure*, *3D structure*, the arrows from it, *Colour…*, *Select this structure* and the rest.

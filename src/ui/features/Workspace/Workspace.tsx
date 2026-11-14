@@ -10,7 +10,7 @@ import { Canvas } from "@react-three/fiber";
 import { Vector3 } from "three";
 import type { MenuAnchor } from "./useMenuAt";
 import { useEditor, useEditorStore, EditorProvider } from "./store";
-import { selectedOf, selectionIsAtom } from "./store/slices/selectionSlice";
+import { selectedOf } from "./store/slices/selectionSlice";
 import { useStructureEvents } from "./hooks/useStructureEvents";
 import { useCanvasSetup } from "./hooks/useCanvasSetup";
 import PageHits from "./pageGl/PageHits";
@@ -229,6 +229,8 @@ import { outputKindIn } from "../../../lib/calc/probe";
 import { NotRead } from "../../../lib/calc/read";
 import { namedDrawn, putDownSmiles } from "./utils/quickAddSmiles";
 import { addedBox } from "./store/slices/modelSlice";
+import type { SelectableKind } from "./store/slices/selectionSlice";
+import { isScopedKind, menuScope, selectionCount } from "./utils/menuScope";
 import { viewPanning } from "./components/viewGoal";
 import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gesture";
 import { Remake3D } from "./components/remake3d";
@@ -1424,25 +1426,22 @@ function WorkspaceContent({
       if (r?.down) r.pending = target; // macOS: open on the way up
       else if (!r?.moved) setMenu(target); // Windows, or a Ctrl-click on a Mac
     };
+    // (the menu of the thing right-clicked, always its kind's; not in the selection, it is selected alone first - whatever was
+    //  selected let go, as a file browser does - so that the menu acts on it and says so (the maintainer, 2026-11-14:
+    //  docs/EDITOR-2D.md, *Selecting*); the selection moves as the right-click comes, not when an item is chosen)
+    const onThing = (thing: SelectableKind, id: number, selected: boolean, more: Partial<MenuTarget> = {}) => {
+      if (!selected) store.getState().selectAlone(thing, id);
+      open({ kind: thing, id, selection: "here", drawing: selectedOf(store.getState()).drawing, ...more, ...place });
+    };
     // over a measurement's value, on a molecule in 3D: its own menu
     if (hoveredMeasure3d) {
       open({ kind: "measure3d", id: hoveredMeasure3d.id, measure: hoveredMeasure3d.measure, selection: "none", ...place });
       return;
     }
-    // on a molecule in 3D: its own menu, or the selection's when it is in it
+    // on a molecule in 3D: its own menu, it selected
     if (hovered3d) {
-      const { sel } = store.getState();
-      const drawing = sel.atoms.size > 0 || sel.bonds.size > 0;
-      const here = sel3d.has(hovered3d.id);
-      open({
-        kind: "molecule3d",
-        id: hovered3d.id,
-        selection: here ? "here" : drawing || sel3d.size ? "elsewhere" : "none",
-        drawing,
-        // (the atom under the pointer: which of its ligands the menu is about)
-        ...(hoveredAtom3d?.id === hovered3d.id && hoveredAtom3d.atom != null ? { atom: hoveredAtom3d.atom } : {}),
-        ...place,
-      });
+      // (the atom under the pointer: which of its ligands the menu is about)
+      onThing("molecule3d", hovered3d.id, sel3d.has(hovered3d.id), hoveredAtom3d?.id === hovered3d.id && hoveredAtom3d.atom != null ? { atom: hoveredAtom3d.atom } : {});
       return;
     }
     // on an electron-pushing arrow, and nothing else: its menu
@@ -1453,11 +1452,8 @@ function WorkspaceContent({
     }
     // on an arrow, and nothing else - or selected alone - the arrow's menu
     const { selArrows, selPluses } = store.getState();
-    const arrowWithMore = selectedOf({ ...store.getState(), selArrows: new Set() }).any || selArrows.size > 1;
-    if (!kind && hoveredArrow != null && arrows.some((a) => a.id === hoveredArrow) && !(selArrows.has(hoveredArrow) && arrowWithMore)) {
-      const target: MenuTarget = { kind: "arrow", id: hoveredArrow, selection: "none", ...place };
-      if (r?.down) r.pending = target;
-      else if (!r?.moved) setMenu(target);
+    if (!kind && hoveredArrow != null && arrows.some((a) => a.id === hoveredArrow)) {
+      onThing("arrow", hoveredArrow, selArrows.has(hoveredArrow));
       return;
     }
     // likewise a workflow's wire
@@ -1466,120 +1462,70 @@ function WorkspaceContent({
       open({ kind: "wire", id: hoveredWire, selection: "none", ...place });
       return;
     }
-    // likewise words on the page, unless they are selected with more
-    const wordsWithMore = (() => {
-      const s = store.getState();
-      return selectedOf({ ...s, selCaptions: new Set() }).any || s.selCaptions.size > 1;
-    })();
-    if (!kind && hoveredCaption != null && captions.some((c) => c.id === hoveredCaption) && !(store.getState().selCaptions.has(hoveredCaption) && wordsWithMore)) {
-      const target: MenuTarget = { kind: "caption", id: hoveredCaption, selection: "none", ...place };
-      if (r?.down) r.pending = target;
-      else if (!r?.moved) setMenu(target);
+    // likewise words on the page
+    if (!kind && hoveredCaption != null && captions.some((c) => c.id === hoveredCaption)) {
+      onThing("caption", hoveredCaption, store.getState().selCaptions.has(hoveredCaption));
       return;
     }
     // likewise a text's sheet, unless it is selected with more (docs/PDF.md, *A text*)
     const { hoveredText, texts, selTexts } = store.getState();
-    const withOthers = (() => {
-      const s = store.getState();
-      return selectedOf({ ...s, selTexts: new Set() }).any || selTexts.size > 1;
-    })();
-    if (!kind && hoveredText != null && texts.some((t) => t.id === hoveredText && t.at) && !(selTexts.has(hoveredText) && withOthers)) {
-      const target: MenuTarget = { kind: "text", id: hoveredText, selection: "none", ...place };
-      if (r?.down) r.pending = target;
-      else if (!r?.moved) setMenu(target);
+    if (!kind && hoveredText != null && texts.some((t) => t.id === hoveredText && t.at)) {
+      onThing("text", hoveredText, selTexts.has(hoveredText));
       return;
     }
     // likewise writing by hand, unless it is selected with more (docs/PRESENTING.md, *Handwriting*)
     const { hoveredInk, inks, selInks } = store.getState();
-    const inkWithMore = (() => {
-      const s = store.getState();
-      return selectedOf({ ...s, selInks: new Set() }).any || selInks.size > 1;
-    })();
-    if (!kind && hoveredInk != null && inks.some((k) => k.id === hoveredInk) && !(selInks.has(hoveredInk) && inkWithMore)) {
-      const target: MenuTarget = { kind: "ink", id: hoveredInk, selection: "none", ...place };
-      if (r?.down) r.pending = target;
-      else if (!r?.moved) setMenu(target);
+    if (!kind && hoveredInk != null && inks.some((k) => k.id === hoveredInk)) {
+      onThing("ink", hoveredInk, selInks.has(hoveredInk));
       return;
     }
     // likewise a catalytic cycle, on its line, unless it is selected with more (lib/chem/cycle)
     const { hoveredCycle, cycles, selCycles } = store.getState();
-    const cycleWithMore = (() => {
-      const s = store.getState();
-      return selectedOf({ ...s, selCycles: new Set() }).any || selCycles.size > 1;
-    })();
-    if (!kind && hoveredCycle != null && cycles.some((x) => x.id === hoveredCycle) && !(selCycles.has(hoveredCycle) && cycleWithMore)) {
-      const target: MenuTarget = { kind: "cycle", id: hoveredCycle, selection: "none", ...place };
-      if (r?.down) r.pending = target;
-      else if (!r?.moved) setMenu(target);
+    if (!kind && hoveredCycle != null && cycles.some((x) => x.id === hoveredCycle)) {
+      onThing("cycle", hoveredCycle, selCycles.has(hoveredCycle));
       return;
     }
     // likewise a shape, unless it is selected with more (docs/PRESENTING.md, *Shapes*)
     const { hoveredShape, shapes, selShapes } = store.getState();
-    const shapeWithMore = (() => {
-      const s = store.getState();
-      return selectedOf({ ...s, selShapes: new Set() }).any || selShapes.size > 1;
-    })();
-    if (!kind && hoveredShape != null && shapes.some((x) => x.id === hoveredShape) && !(selShapes.has(hoveredShape) && shapeWithMore)) {
-      const target: MenuTarget = { kind: "shape", id: hoveredShape, selection: "none", ...place };
-      if (r?.down) r.pending = target;
-      else if (!r?.moved) setMenu(target);
+    if (!kind && hoveredShape != null && shapes.some((x) => x.id === hoveredShape)) {
+      onThing("shape", hoveredShape, selShapes.has(hoveredShape));
       return;
     }
     // likewise a picture, unless it is selected with more (docs/PDF.md, *A picture*)
     const { hoveredPicture, pictures, selPictures } = store.getState();
-    const withMore = (() => {
-      const s = store.getState();
-      return selectedOf({ ...s, selPictures: new Set() }).any || selPictures.size > 1;
-    })();
-    if (!kind && hoveredPicture != null && pictures.some((p) => p.id === hoveredPicture) && !(selPictures.has(hoveredPicture) && withMore)) {
-      const target: MenuTarget = { kind: "picture", id: hoveredPicture, selection: "none", ...place };
-      if (r?.down) r.pending = target;
-      else if (!r?.moved) setMenu(target);
+    if (!kind && hoveredPicture != null && pictures.some((p) => p.id === hoveredPicture)) {
+      onThing("picture", hoveredPicture, selPictures.has(hoveredPicture));
       return;
     }
     // likewise a PDF, unless it is selected with more (docs/PDF.md)
     const { hoveredPdf, pdfs, selPdfs } = store.getState();
-    const pdfWithMore = (() => {
-      const s = store.getState();
-      return selectedOf({ ...s, selPdfs: new Set() }).any || selPdfs.size > 1;
-    })();
-    if (!kind && hoveredPdf != null && pdfs.some((p) => p.id === hoveredPdf) && !(selPdfs.has(hoveredPdf) && pdfWithMore)) {
-      const target: MenuTarget = { kind: "pdf", id: hoveredPdf, selection: "none", ...place };
-      if (r?.down) r.pending = target;
-      else if (!r?.moved) setMenu(target);
+    if (!kind && hoveredPdf != null && pdfs.some((p) => p.id === hoveredPdf)) {
+      onThing("pdf", hoveredPdf, selPdfs.has(hoveredPdf));
       return;
     }
     // likewise a slide's edge or number, unless it is selected with more (docs/PRESENTING.md)
     const { hoveredSlide, slides, selSlides } = store.getState();
-    const slideWithMore = (() => {
-      const s = store.getState();
-      return selectedOf({ ...s, selSlides: new Set() }).any || selSlides.size > 1;
-    })();
-    if (!kind && hoveredSlide != null && slides.some((x) => x.id === hoveredSlide) && !(selSlides.has(hoveredSlide) && slideWithMore)) {
-      const target: MenuTarget = { kind: "slide", id: hoveredSlide, selection: "none", ...place };
-      if (r?.down) r.pending = target;
-      else if (!r?.moved) setMenu(target);
+    if (!kind && hoveredSlide != null && slides.some((x) => x.id === hoveredSlide)) {
+      onThing("slide", hoveredSlide, selSlides.has(hoveredSlide));
       return;
     }
     // likewise a "+", unless it is selected with more
-    const plusWithMore = selectedOf({ ...store.getState(), selPluses: new Set() }).any || selPluses.size > 1;
-    if (!kind && hoveredPlus != null && pluses.some((p) => p.id === hoveredPlus) && !(selPluses.has(hoveredPlus) && plusWithMore)) {
-      const target: MenuTarget = { kind: "plus", id: hoveredPlus, selection: "none", ...place };
-      if (r?.down) r.pending = target;
-      else if (!r?.moved) setMenu(target);
+    if (!kind && hoveredPlus != null && pluses.some((p) => p.id === hoveredPlus)) {
+      onThing("plus", hoveredPlus, selPluses.has(hoveredPlus));
       return;
     }
     const id = kind === "atom" ? hovered.atomId : hovered.bondId;
-    // on something selected, or on nothing with a selection: the
-    // selection's menu; on nothing else, the canvas's (paste, select all)
+    // on an atom or a bond: its menu, it selected; on nothing, the page's (paste, select all) - the selection kept, and its
+    // rows added where there is one
     const { sel } = store.getState();
     const part = kind && id != null;
+    if (part) {
+      onThing(kind === "atom" ? "atom" : "bond", id, kind === "atom" ? sel.atoms.has(id) : sel.bonds.has(id));
+      return;
+    }
     const { drawing, any: selected } = selectedOf(store.getState());
-    const onSelected =
-      part &&
-      (kind === "atom" ? sel.atoms.has(id) : sel.bonds.has(id));
     // inside a ring, with nothing selected: the ring's own menu (its colour)
-    if (!part && !selected) {
+    if (!selected) {
       const m = store.getState().model;
       const ring = ringAt(m, place.at);
       if (ring) {
@@ -1587,15 +1533,40 @@ function WorkspaceContent({
         return;
       }
     }
-    const target: MenuTarget = {
-      kind: part ? kind : null,
-      id: part ? id : null,
-      selection: !selected ? "none" : onSelected || !part ? "here" : "elsewhere",
-      drawing,
-      ...place,
-    };
-    if (r?.down) r.pending = target; // macOS: open on the way up
-    else if (!r?.moved) setMenu(target); // Windows, or a Ctrl-click on a Mac
+    open({ kind: null, id: null, selection: selected ? "here" : "none", drawing, ...place });
+  };
+  // (a colour, a highlight or a ring's fill for what a menu is on: the selection where the menu is its, or the atom, bond, ring,
+  //  words or mark right-clicked alone)
+  const colourFor = (m: MenuTarget) => {
+    const st = store.getState();
+    const target: ColourTarget | null =
+      m.selection === "here"
+        ? m.drawing !== false || st.selCaptions.size || st.selShapes.size || st.selArrows.size || st.selInks.size || st.selCycles.size
+          ? { atoms: [...st.sel.atoms], bonds: [...st.sel.bonds], rings: ringsAmong(st.model, st.sel.atoms), captions: [...st.selCaptions], shapes: [...st.selShapes], arrows: [...st.selArrows], inks: [...st.selInks], cycles: [...st.selCycles] }
+          : null
+        : m.kind === "caption" && m.id != null
+          ? { atoms: [], bonds: [], rings: [], captions: [m.id] }
+        : m.kind === "shape" && m.id != null
+          ? { atoms: [], bonds: [], rings: [], shapes: [m.id] }
+        : m.kind === "ink" && m.id != null
+          ? { atoms: [], bonds: [], rings: [], inks: [m.id] }
+        : m.kind === "atom" && m.id != null
+          ? { atoms: [m.id], bonds: [], rings: [] }
+          : m.kind === "bond" && m.id != null
+            ? { atoms: [], bonds: [m.id], rings: [] }
+            : m.kind === "push" && m.id != null
+            ? { atoms: [], bonds: [], rings: [], pushes: [m.id] }
+            : m.kind === "arrow" && m.id != null
+            ? { atoms: [], bonds: [], rings: [], arrows: [m.id] }
+            : m.kind === "cycle" && m.id != null
+            ? { atoms: [], bonds: [], rings: [], cycles: [m.id] }
+            : m.kind === "ring" && m.ring
+              ? (() => {
+                  const ids = new Set(ringsOf(st.model).find((r) => r.key === m.ring)?.ids ?? []);
+                  return { atoms: [...ids], bonds: st.model.bonds.filter((b) => ids.has(b.a) && ids.has(b.b)).map((b) => b.id), rings: [m.ring] };
+                })()
+              : null;
+    return target ? () => setColourCard({ target, x: m.x, y: m.y, within: m.within }) : undefined;
   };
   // R and S, E and Z shown on what was asked (utils/stereoShown) - or hidden; shown on the drawing, what labels them set up
   // now, if it has not been
@@ -2223,6 +2194,16 @@ function WorkspaceContent({
           anchor={menuAnchor}
           onClose={closeMenu}
           onDelete={() => deleteFromMenu(store.getState(), menu, deletePart)}
+          // (what it acts on, said first; the thing alone deleted or coloured where its own items do not reach the selection)
+          scope={(() => {
+            const st = store.getState();
+            if (menu.selection !== "here") return undefined;
+            if (menu.kind != null && menu.id != null && isScopedKind(menu.kind)) return menuScope(st, menu.kind, menu.id);
+            const all = selectionCount(st);
+            return all ? { thing: all, count: all, more: true, ofKind: "" } : undefined;
+          })()}
+          onDeleteThis={() => deleteFromMenu(store.getState(), { ...menu, selection: "none" }, deletePart)}
+          onColourThis={colourFor({ ...menu, selection: "none" })}
           molecule3d={menu3d}
           records={menuRecords}
           measure3d={measure3dMenu}
@@ -2618,11 +2599,18 @@ function WorkspaceContent({
             };
           })()}
           onTurnOver={(axis) => store.getState().turnSelectionOver(axis)}
+          // (an atom's charge and unpaired electron: every atom selected with it, one step - docs/EDITOR-2D.md, *Selecting*)
           onCharge={(step) => {
-            if (menu.kind === "atom" && menu.id != null) chargeAtom(menu.id, step);
+            if (menu.kind !== "atom" || menu.id == null) return;
+            const { sel } = store.getState();
+            if (menu.selection === "here" && sel.atoms.has(menu.id) && sel.atoms.size > 1) store.getState().stepCharges(sel.atoms, step);
+            else chargeAtom(menu.id, step);
           }}
           onRadical={() => {
-            if (menu.kind === "atom" && menu.id != null) radicalAtom(menu.id);
+            if (menu.kind !== "atom" || menu.id == null) return;
+            const st = store.getState();
+            if (menu.selection === "here" && st.sel.atoms.has(menu.id) && st.sel.atoms.size > 1) st.setRadicals(st.sel.atoms, !st.model.atoms.find((a) => a.id === menu.id)?.radical);
+            else radicalAtom(menu.id);
           }}
           radical={!!model.atoms.find((a) => a.id === menu.id)?.radical}
           onChain={(() => {
@@ -2641,11 +2629,12 @@ function WorkspaceContent({
           onEditLabel={(() => {
             const a = menu.kind === "atom" && menu.id != null ? model.atoms.find((x) => x.id === menu.id) : undefined;
             if (!a) return undefined;
-            // (on the selection's menu: where the selection is that atom alone)
-            if (menu.selection === "here" && !selectionIsAtom(store.getState(), a.id)) return undefined;
+            // (an atom's own item: on a selected atom, written on every atom selected, the field opened on this one, holding what it says)
+            const { sel } = store.getState();
+            const atoms = menu.selection === "here" && sel.atoms.has(a.id) && sel.atoms.size > 1 ? [...sel.atoms] : undefined;
             // (a carbon drawn as a corner: a C, selected, to be typed over)
             const bare = labelTextOf(a) === "";
-            return () => store.getState().beginLabelEdit(a.id, bare ? "C" : "", { select: bare });
+            return () => store.getState().beginLabelEdit(a.id, bare ? "C" : "", { select: bare, ...(atoms ? { atoms } : {}) });
           })()}
           asTyped={(() => {
             const a = menu.kind === "atom" && menu.id != null ? model.atoms.find((x) => x.id === menu.id) : undefined;
@@ -2805,38 +2794,7 @@ function WorkspaceContent({
               ...(p.bend ? { onUnbend: () => st.updatePush(p.id, { bend: null }) } : {}),
             };
           })()}
-          onColour={(() => {
-            // what is drawn: the selection, or the atom, bond, ring or words right-clicked
-            const st = store.getState();
-            const target: ColourTarget | null =
-              menu.selection === "here"
-                ? menu.drawing !== false || st.selCaptions.size || st.selShapes.size || st.selArrows.size || st.selInks.size || st.selCycles.size
-                  ? { atoms: [...st.sel.atoms], bonds: [...st.sel.bonds], rings: ringsAmong(st.model, st.sel.atoms), captions: [...st.selCaptions], shapes: [...st.selShapes], arrows: [...st.selArrows], inks: [...st.selInks], cycles: [...st.selCycles] }
-                  : null
-                : menu.kind === "caption" && menu.id != null
-                  ? { atoms: [], bonds: [], rings: [], captions: [menu.id] }
-                : menu.kind === "shape" && menu.id != null
-                  ? { atoms: [], bonds: [], rings: [], shapes: [menu.id] }
-                : menu.kind === "ink" && menu.id != null
-                  ? { atoms: [], bonds: [], rings: [], inks: [menu.id] }
-                : menu.kind === "atom" && menu.id != null
-                  ? { atoms: [menu.id], bonds: [], rings: [] }
-                  : menu.kind === "bond" && menu.id != null
-                    ? { atoms: [], bonds: [menu.id], rings: [] }
-                    : menu.kind === "push" && menu.id != null
-                    ? { atoms: [], bonds: [], rings: [], pushes: [menu.id] }
-                    : menu.kind === "arrow" && menu.id != null
-                    ? { atoms: [], bonds: [], rings: [], arrows: [menu.id] }
-                    : menu.kind === "cycle" && menu.id != null
-                    ? { atoms: [], bonds: [], rings: [], cycles: [menu.id] }
-                    : menu.kind === "ring" && menu.ring
-                      ? (() => {
-                          const ids = new Set(ringsOf(st.model).find((r) => r.key === menu.ring)?.ids ?? []);
-                          return { atoms: [...ids], bonds: st.model.bonds.filter((b) => ids.has(b.a) && ids.has(b.b)).map((b) => b.id), rings: [menu.ring] };
-                        })()
-                      : null;
-            return target ? () => setColourCard({ target, x: menu.x, y: menu.y, within: menu.within }) : undefined;
-          })()}
+          onColour={colourFor(menu)}
           clipboard={{
             onCut: () => void clip.cut(),
             onCopy: () => void clip.copy(),

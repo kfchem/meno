@@ -1952,6 +1952,11 @@ export type EditorState = {
     grow?: boolean;
     /** Begun with what it says selected: the atom's menu's *Edit label* on a carbon drawn as a corner. */
     selectAll?: boolean;
+    /**
+     * Begun on the selection's atoms - a letter typed with atoms selected, wherever the pointer is: every atom it is written on,
+     * the one with the caret among them (docs/EDITOR-2D.md, *Labels typed in place*). Unset, the one atom's alone.
+     */
+    atoms?: number[];
   };
   /**
    * How the last label edit ended: kept and changed (`kept`),
@@ -2044,6 +2049,8 @@ export type EditorState = {
   stepCharges: (ids: Iterable<number>, step: 1 | -1) => void;
   /** An atom's unpaired electron given, or taken away. */
   toggleRadical: (id: number) => void;
+  /** An unpaired electron given to every atom of `ids`, or taken from each, one step. */
+  setRadicals: (ids: Iterable<number>, on: boolean) => void;
   deleteAtom: (id: number) => void;
   deleteBond: (id: number) => void;
   /**
@@ -2097,6 +2104,8 @@ export type EditorState = {
   selectStructure: (id: number) => void;
   selectAll: () => void;
   clearSel: () => void;
+  /** The thing right-clicked, selected alone, whatever was selected let go (docs/EDITOR-2D.md, *Selecting*). */
+  selectAlone: (kind: import("./slices/selectionSlice").SelectableKind, id: number) => void;
   setBoxSelect: (box: EditorState["boxSelect"]) => void;
   /** Atoms moved together - a selection dragged or turned - the moves of one gesture one undo step. */
   /**
@@ -2310,7 +2319,7 @@ export type EditorState = {
     excludeId?: number | null,
   ) => number | null;
   /** An atom's label opened to be written: as it is, or begun with `initial`, a letter typed over it. */
-  beginLabelEdit: (atomId: number, initial?: string, how?: { select?: boolean }) => void;
+  beginLabelEdit: (atomId: number, initial?: string, how?: { select?: boolean; atoms?: readonly number[] }) => void;
   setLabelEditValue: (value: string) => void;
   /** The label written kept; `typed`, what was typed for it, where it is read as something else; `byEnter`, where Enter kept it. */
   commitLabelEdit: (typed?: string, byEnter?: boolean) => void;

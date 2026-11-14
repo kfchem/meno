@@ -42,9 +42,14 @@ function menu(t: MenuTarget, extra: Partial<Parameters<typeof PartMenu>[0]> = {}
   );
   const row = html.match(/<div role="group" aria-label="Frequent"[^>]*>(.*?)<\/div>/)?.[1] ?? "";
   const icons = [...row.matchAll(/aria-label="([^"]+)"/g)].map((m) => m[1]);
-  const rest = html.replace(/<div role="group" aria-label="Frequent".*?<\/div>/, "");
+  // (the selection's own row of icons, under the thing's: cut and copy, and more where the thing's items do not reach it)
+  const selRow = html.match(/<div role="group" aria-label="Selection"[^>]*>(.*?)<\/div>/)?.[1] ?? "";
+  const selIcons = [...selRow.matchAll(/aria-label="([^"]+)"/g)].map((m) => m[1]);
+  const rest = html.replace(/<div role="group" aria-label="Frequent".*?<\/div>/, "").replace(/<div role="group" aria-label="Selection".*?<\/div>/, "");
   const listed = [...rest.matchAll(/<button[^>]*><span>([^<]+)<\/span>/g)].map((m) => m[1]);
-  return { icons, listed, html };
+  // (what it acts on: its lines saying so, in order)
+  const lines = [...html.matchAll(/<div role="note"[^>]*>([^<]+)<\/div>/g)].map((m) => m[1]);
+  return { icons, selIcons, listed, lines, html };
 }
 
 describe("a bond's menu", () => {
@@ -104,18 +109,20 @@ describe("the right-click menu", () => {
     ]);
   });
 
-  it("gives the selection its clipboard, clean-up and 3D as icons - Paste where it was opened on empty space - and Export among the rest", () => {
+  it("on empty space with a selection, is the page's menu - Paste, Select all - with the selection's own under it: cut, copy, clean-up, 3D, Delete, and Export among the rest", () => {
     const here = target({ selection: "here", drawing: true });
-    const { icons, listed } = menu(here, { onExport: none });
-    expect(icons).toEqual(["Cut", "Copy", "Paste", "Clean up these structures", "3D structures", "Delete selection"]);
+    const { icons, selIcons, listed, lines } = menu(here, { onExport: none, scope: { thing: "3 atoms", count: "3 atoms", more: true, ofKind: "" } });
+    expect(icons).toEqual(["Paste", "Select all"]);
+    expect(selIcons).toEqual(["Cut", "Copy", "Clean up these structures", "3D structures", "Delete selection"]);
     expect(listed).toEqual(["Copy as SMILES", "Export…", "Turn over left to right", "Turn over top to bottom", "Save as abbreviation…"]);
-    // (opened on an atom of it: no paste there)
+    expect(lines).toEqual(["3 atoms"]);
+    // (opened on an atom of it: the atom's menu, no paste there)
     expect(menu({ ...here, kind: "atom", id: 1 }).icons).not.toContain("Paste");
   });
 
   it("offers an atom map between the structures selected on the one right-clicked - and, on a structure in maps, what they do", () => {
     const here = { ...target({ selection: "here", drawing: true }), kind: "atom" as const, id: 1 };
-    expect(menu(here, { pageMap: { onMake: none } }).listed).toEqual(["Atom map", "Copy as SMILES", "Turn over left to right", "Turn over top to bottom", "Save as abbreviation…"]);
+    expect(menu(here, { pageMap: { onMake: none } }).listed).toEqual(["Unpaired electron", "Atom map", "Select this structure", "Copy as SMILES", "Turn over left to right", "Turn over top to bottom", "Save as abbreviation…"]);
     const held = { standing: "ready" as const, shown: true, maps: 3, chosen: 0, onShow: none, onOther: none, onExport: none };
     expect(menu(target({ kind: "atom", id: 1 }), { pageMap: { held } }).listed).toEqual(["Unpaired electron", "Hide atom map", "Other map", "Export reaction in 3D…", "Select this structure"]);
     expect(menu(target({ kind: "atom", id: 1 }), { pageMap: { held: { ...held, shown: false, maps: 1 } } }).listed).toEqual(["Unpaired electron", "Show atom map", "Export reaction in 3D…", "Select this structure"]);
@@ -150,7 +157,7 @@ describe("the right-click menu", () => {
 
   it("offers the structures selected made one, and one of several parts taken apart", () => {
     const here = { ...target({ selection: "here", drawing: true }), kind: "atom" as const, id: 1 };
-    expect(menu(here, { parts: { onJoin: none } }).listed[0]).toBe("Make one structure");
+    expect(menu(here, { parts: { onJoin: none } }).listed).toContain("Make one structure");
     expect(menu(target({ kind: "atom", id: 1 }), { parts: { onSeparate: none } }).listed).toEqual(["Unpaired electron", "Separate", "Select this structure"]);
   });
 
@@ -390,5 +397,44 @@ describe("an arrow's menu and its atom map", () => {
     expect(listed).not.toContain("Atom map");
     expect(listed).not.toContain("Hide atom map");
     expect(listed).not.toContain("Show atom map");
+  });
+});
+
+describe("the right-click's one rule (docs/EDITOR-2D.md, *Selecting*)", () => {
+  const atomHere = (scope: { thing: string; count: string; more: boolean; ofKind: string }) => ({ ...target({ selection: "here", drawing: true }), kind: "atom" as const, id: 1, scope });
+
+  it("on an atom selected alone - as a right-click on it leaves it - is the atom's menu, 'This atom', with cut and copy in a second row", () => {
+    const t = atomHere({ thing: "This atom", count: "This atom", more: false, ofKind: "1 atom" });
+    const m = menu(t, { scope: t.scope, onColour: none });
+    expect(m.lines).toEqual(["This atom"]);
+    expect(m.icons).toEqual(["Charge one up", "Charge one down", "Clean up this structure", "3D structure", "Colour…", "Delete atom"]);
+    expect(m.selIcons).toEqual(["Cut", "Copy"]);
+    expect(m.listed).toContain("Copy as SMILES");
+  });
+
+  it("on an atom selected with others is still the atom's menu, every icon in its place, its own items named for the atoms they reach and the first line counting them", () => {
+    const t = atomHere({ thing: "This atom", count: "3 atoms", more: true, ofKind: "3 atoms" });
+    const m = menu(t, { scope: t.scope, onColour: none });
+    expect(m.lines).toEqual(["3 atoms"]);
+    expect(m.icons).toEqual(["Charge one up on 3 atoms", "Charge one down on 3 atoms", "Clean up these structures", "3D structures", "Colour…", "Delete selection"]);
+    expect(m.selIcons).toEqual(["Cut", "Copy"]);
+    expect(m.listed).toContain("Unpaired electron on 3 atoms");
+    // (and its key, + : it acts on the selection as the item does)
+    expect(m.html).toContain('title="Charge one up on 3 atoms (+)"');
+  });
+
+  it("on a shape selected with more, whose own items reach only it, puts them under 'This shape' and the selection's under its count - the count covering none of the shape's", () => {
+    const shape = { onCorners: none, width: 2, onWidth: none, dash: false, onDash: none, onFront: none, onBack: none };
+    const scope = { thing: "This shape", count: "2 atoms, 1 shape", more: true, ofKind: "1 shape" };
+    const m = menu({ ...target({ selection: "here", drawing: true }), kind: "shape", id: 1 }, { scope, shape, onColour: none, onDeleteThis: none, onColourThis: none });
+    expect(m.lines).toEqual(["This shape", "2 atoms, 1 shape"]);
+    expect(m.icons).toEqual(["Colour…", "Delete shape"]);
+    expect(m.selIcons).toEqual(["Cut", "Copy", "Clean up these structures", "3D structures", "Colour…", "Delete selection"]);
+    // (the shape's own, before the count's line; its Delete without the key - the key deletes the selection)
+    const at = (s: string) => m.html.indexOf(s);
+    expect(at("Corners…")).toBeLessThan(at(">2 atoms, 1 shape<"));
+    expect(at('aria-label="Delete shape"')).toBeLessThan(at(">2 atoms, 1 shape<"));
+    expect(m.html).toMatch(/aria-label="Delete shape" title="Delete shape"/);
+    expect(at("Copy as SMILES")).toBeGreaterThan(at(">2 atoms, 1 shape<"));
   });
 });

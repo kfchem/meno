@@ -420,6 +420,17 @@ export const createModelSlice = (
     );
   },
 
+  // (an unpaired electron given to every atom of `ids`, or taken from each, as one step - an atom's menu reaching the atoms
+  //  selected with it: docs/EDITOR-2D.md, *Selecting*)
+  setRadicals: (ids: Iterable<number>, on: boolean) => {
+    const atoms = doc.getState().model.atoms;
+    const changing = [...new Set(ids)].map((id) => atoms.find((a) => a.id === id)).filter((a): a is NonNullable<typeof a> => !!a && !!a.radical !== on);
+    if (!changing.length) return;
+    doc.edit(on ? "unpaired electron" : "no unpaired electron", (d) =>
+      changing.reduce((acc, atom) => ops.setAtomChemistry(acc, atom.id, { ...atom, radical: on ? "doublet" : undefined }), d),
+    );
+  },
+
   deleteAtom: (id: number) => {
     if (doc.edit("delete atom", (d) => ops.deleteParts(d, [id], []))) {
       forgetDeleted(set);

@@ -36,9 +36,11 @@
 
 原子を指したまま文字を打ちます。O、NH2、OMe、Ph などです。ラベルはその場所に書かれ、ポインターをほかへ動かしても残ります。あとから変えるには、原子の右クリックメニューで「Edit label」を選びます。
 
+原子を選んでいるときは、そのまま打てば、ポインターがどこにあっても、選んだ原子すべてにラベルが入ります。いくつに入るかは小さな数で出ます。Enter で決め、Escape でやめます。
+
 ## 右クリック：原子や結合でできること {#menus}
 
-原子や結合を右クリックすると、できることが出ます。上にアイコンの列、その下に一覧が並びます。アイコンは、ポインターを載せると名前が出ます。
+原子や結合を右クリックすると、できることが出ます。上にアイコンの列、その下に一覧が並びます。アイコンは、ポインターを載せると名前が出ます。右クリックしたものは選ばれ、メニューの最初の行に、何に効くかが出ます。「This atom」、またはいくつか選んだうちの一つなら「3 atoms, 2 bonds」のようにです。そのとき原子の電荷や結合の種類は、選んだ原子や結合すべてに一度に効き、「Cut」と「Copy」は選んだものすべてに効きます。
 
 - 原子：アイコンは「Charge one up」「Charge one down」「Clean up this structure」「3D structure」「Electron-pushing arrow」「Fishhook arrow」「Colour…」「Delete atom」です。一覧には「Edit label」「Chain from here」「Unpaired electron」「Select this structure」「Magnification」があります。
 - 結合：アイコンは結合の種類の「Single bond」「Double bond」「Triple bond」「Wedge」「Hashed wedge」、次に「More kinds of bond」、そして「Delete bond」です。結合のいまの種類のアイコンは、結合の向きどおりに描かれます。もう一度押すと、くさびの細い端が反対側の原子に移り、二重結合は 2 本目の線が移ります。結合をいくつか選んでいるときは、選んだ結合すべてがその種類になります。「More kinds of bond」を押すと 2 段目が開き、「Wavy bond」「Bold bond」「Bold dashed bond」「Dashed bond」「Dative bond」が並びます。一覧には「Clean up this structure」「3D structure」、そこから出す矢印、「Colour…」「Select this structure」などがあります。
