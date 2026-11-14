@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { solidOf, stereoMarks3d, stereoPictureSpots3d, STEREO_APART, WORLD_PER_ANGSTROM } from "./molecule3d";
+import { solidOf, stereoMarks3d, stereoPictureSpots3d, stereoSpotsShown, STEREO_APART, WORLD_PER_ANGSTROM, type StereoMark3D } from "./molecule3d";
 import { bondRadiusOf } from "../../../../lib/chem/style3d";
 import { style3dOf } from "../style3d";
 import { MARK_SCALE, stereoTextEms } from "../chem/marks";
@@ -141,5 +141,111 @@ describe("stereoPictureSpots3d", () => {
   it("gives none where none are shown", () => {
     expect(stereoPictureSpots3d(centre, style, null, FONT, GAP, false)).toEqual([]);
     expect(stereoPictureSpots3d({ ...centre, stereo: undefined } as Carried3D, style, shown, FONT, GAP, false)).toEqual([]);
+  });
+});
+
+describe("the canvas's R, S, E and Z, against a picture of the molecule", () => {
+  // ((E)-hex-4-ene-3-ol, 2-chloro - C/C=C/[C@@H](O)[C@H](C)Cl - written by hand: its C-3 R, its C-2 S, its C=C E)
+  const mol: Carried3D = {
+    name: "chlorohexenol",
+    atoms: [
+      { el: "C", x: -3.8, y: 0.5, z: 0 },
+      { el: "C", x: -2.5, y: 0, z: 0 },
+      { el: "C", x: -1.3, y: 0.6, z: 0 },
+      { el: "C", x: 0, y: -0.1, z: 0 },
+      { el: "O", x: 0.2, y: -1.5, z: 0.3 },
+      { el: "C", x: 1.3, y: 0.6, z: 0 },
+      { el: "C", x: 2.5, y: -0.2, z: 0.3 },
+      { el: "Cl", x: 1.5, y: 2.2, z: -0.6 },
+      { el: "H", x: -0.1, y: 0.2, z: 1.05 },
+      { el: "H", x: 1.2, y: 0.8, z: 1.05 },
+      { el: "H", x: 1.0, y: -1.8, z: -0.1 },
+    ],
+    bonds: [
+      [0, 1, 1],
+      [1, 2, 2],
+      [2, 3, 1],
+      [3, 4, 1],
+      [3, 5, 1],
+      [5, 6, 1],
+      [5, 7, 1],
+      [3, 8, 1],
+      [5, 9, 1],
+      [4, 10, 1],
+    ].map(([a1, a2, order]) => ({ a1, a2, order })),
+    at: { x: 4, y: 3 },
+    stereo: { atoms: { 3: "R", 5: "S" }, bonds: { 1: "E" } },
+  } as unknown as Carried3D;
+  const all = { atoms: [3, 5], bonds: [1] };
+
+  /** The canvas's spots for `m`, its marks given in `given` order (by index into those named) and `going` beside them, at `zoom`; and the picture's on the canvas's pixels. */
+  const both = (m: Carried3D, shown: { atoms: number[]; bonds: number[] }, font: number, zoom: number, given: number[], going: StereoMark3D[] = []) => {
+    const picture = stereoPictureSpots3d(m, style, shown, font, GAP, false);
+    const solid = solidOf({ ...m, id: 0 } as Molecule3D, style);
+    const places = solid.frames[0];
+    const radii = solid.radii.primary;
+    const bondR = bondRadiusOf(style.primary) * WORLD_PER_ANGSTROM;
+    const named = stereoMarks3d(m, shown);
+    const screen = (x: number, y: number) => ({ x: (m.at.x + x) * zoom, y: -(m.at.y + y) * zoom });
+    const balls = m.atoms.map((_, i) => ({ ...screen(places[3 * i], places[3 * i + 1]), r: radii[i] * zoom }));
+    const sticks = m.bonds.map((b) => ({ a: balls[b.a1], b: balls[b.a2], r: bondR * zoom }));
+    const entry = (mark: StereoMark3D, leaving = false) => {
+      const p = mark.atoms.reduce((s, i) => ({ x: s.x + places[3 * i] / mark.atoms.length, y: s.y + places[3 * i + 1] / mark.atoms.length }), { x: 0, y: 0 });
+      return { mark, leaving, o: screen(p.x, p.y), own: (mark.atoms.length === 1 ? radii[mark.atoms[0]] : bondR) * zoom };
+    };
+    const canvas = stereoSpotsShown([...going.map((g) => entry(g, true)), ...given.map((k) => entry(named[k]))], named, balls, sticks, [], font * zoom, GAP, false);
+    return named.map((mark, k) => ({ text: mark.text, canvas: canvas.get(mark.key)!, picture: { x: picture[k].x * zoom, y: -picture[k].y * zoom }, pictureText: picture[k].text }));
+  };
+
+  it("stands two centres' labels as the picture does though shown the other way round, one going first beside them: each leaning to the other", () => {
+    // (two centres side by side, each's widest way out leaning toward the other's: which is placed first decides both)
+    const d = 1.2;
+    const hs = (side: number) => [140, 230, 300].map((deg) => ({ el: "H", x: side * (d / 2 - Math.cos((deg * Math.PI) / 180)), y: Math.sin((deg * Math.PI) / 180), z: 0 }));
+    const two = {
+      ...centre,
+      atoms: [{ el: "C", x: -d / 2, y: 0, z: 0 }, { el: "C", x: d / 2, y: 0, z: 0 }, ...hs(-1), ...hs(1)],
+      bonds: [{ a1: 0, a2: 1, order: 1 }, ...[2, 3, 4].map((i) => ({ a1: 0, a2: i, order: 1 })), ...[5, 6, 7].map((i) => ({ a1: 1, a2: i, order: 1 }))],
+      stereo: { atoms: { 0: "R", 1: "S" }, bonds: {} },
+    } as unknown as Carried3D;
+    // (an S going on the first centre's place, given before them: no obstacle to them)
+    const going: StereoMark3D = { key: "a2", atoms: [0], around: [1, 2, 3, 4], text: "S" };
+    for (const zoom of [20, 60]) {
+      for (const r of both(two, { atoms: [0, 1], bonds: [] }, 0.6, zoom, [1, 0], [going])) {
+        expect(Math.hypot(r.canvas.x - r.picture.x, r.canvas.y - r.picture.y), `${r.text} at ${zoom}`).toBeLessThan(1e-6 * zoom);
+      }
+    }
+  });
+
+  it("stands each where the picture stands it, whatever order they were shown in, one going beside them, at any zoom", () => {
+    const picture = stereoPictureSpots3d(mol, style, all, FONT, GAP, false);
+    const solid = solidOf({ ...mol, id: 0 } as Molecule3D, style);
+    const places = solid.frames[0];
+    const radii = solid.radii.primary;
+    const bondR = bondRadiusOf(style.primary) * WORLD_PER_ANGSTROM;
+    const named = stereoMarks3d(mol, all);
+    for (const zoom of [12, 40, 90]) {
+      // (as the canvas sees it: its pixels, y down)
+      const screen = (x: number, y: number) => ({ x: (mol.at.x + x) * zoom, y: -(mol.at.y + y) * zoom });
+      const balls = mol.atoms.map((_, i) => ({ ...screen(places[3 * i], places[3 * i + 1]), r: radii[i] * zoom }));
+      const sticks = mol.bonds.map((b) => ({ a: balls[b.a1], b: balls[b.a2], r: bondR * zoom }));
+      const entry = (mark: StereoMark3D, leaving = false) => {
+        const p = mark.atoms.reduce((s, i) => ({ x: s.x + places[3 * i] / mark.atoms.length, y: s.y + places[3 * i + 1] / mark.atoms.length }), { x: 0, y: 0 });
+        return { mark, leaving, o: screen(p.x, p.y), own: (mark.atoms.length === 1 ? radii[mark.atoms[0]] : bondR) * zoom };
+      };
+      // (shown in another order than named - E, then S, then R - and an R on the methyl's carbon going)
+      const going: StereoMark3D = { key: "a6", atoms: [6], around: [5], text: "R" };
+      const entries = [entry(named[2]), entry(named[1]), entry(named[0]), entry(going, true)];
+      const canvas = stereoSpotsShown(entries, named, balls, sticks, [], FONT * zoom, GAP, false);
+      named.forEach((mark, k) => {
+        const c = canvas.get(mark.key)!;
+        const o = entry(mark).o;
+        // (the picture's, its y up, on the canvas's pixels)
+        const want = { x: picture[k].x * zoom, y: -picture[k].y * zoom };
+        const side = (p: { x: number; y: number }) => Math.atan2(p.y - o.y, p.x - o.x);
+        expect(picture[k].text, `${zoom}`).toBe(mark.text);
+        expect(Math.abs(Math.atan2(Math.sin(side(c) - side(want)), Math.cos(side(c) - side(want)))), `${mark.text} at ${zoom}`).toBeLessThan(1e-6);
+        expect(Math.hypot(c.x - want.x, c.y - want.y), `${mark.text} at ${zoom}`).toBeLessThan(1e-6 * zoom);
+      });
+    }
   });
 });
