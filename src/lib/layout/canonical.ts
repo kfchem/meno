@@ -86,7 +86,7 @@ type Classed = { rank: number[]; first: string[]; withStereo: (r: number[]) => n
 /**
  * `classed` worked out once for each input, as it is (inputs are not
  * changed in place): identity asks for a structure's classes before its
- * order (lib/chem/identity `stereoUnitsOnly`), and both come from them.
+ * ranks and texts (lib/chem/identity `filledIn`), and all come from them.
  */
 const classedOnce = new WeakMap<LayoutInput, Classed>();
 

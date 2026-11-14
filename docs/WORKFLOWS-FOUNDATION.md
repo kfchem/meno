@@ -880,16 +880,36 @@ The texts are compared, not their hashed keys. The set states the method:
 drawn, aromatic rings as one form.* What that means, plainly:
 - **a chiral product and its mirror image are two structures.** So are two
   diastereomers, and E and Z;
-- **a configuration drawn where there is no stereo unit counts for
-  nothing.** That is a wedge on a centre two of whose groups are alike (an
-  isopropyl's CH), or a double bond drawn bent whose one end carries two
-  alike groups (a prenyl's C=C(CH3)2). The structure is the same whether
-  it was drawn so or not. "Alike" counts every other configuration in the
-  structure: the two ring arms at each centre of 1,4-dimethylcyclohexane
-  are alike only until the other centre is counted, so its cis and trans
-  stay two structures, and a pseudoasymmetric centre keeps its r or s
-  (`stereoUnitsOnly`). The drawing keeps its wedges; only identity sets
-  them aside;
+- **a configuration that sets nothing is the same drawn or not.** That is
+  a wedge on a centre two of whose groups are alike (an isopropyl's CH),
+  or a double bond drawn bent whose one end carries two alike groups (a
+  prenyl's C=C(CH3)2). Identity never takes a configuration out: where
+  one could stand and none is drawn, it fills one in wherever both
+  senses write the same text, since such a place sets nothing
+  (`filledIn`, part 13's rule). That joins mirror writings of one ring
+  compound: the cis,trans 1,2,3-trimethylcyclopropane drawn in full, and
+  drawn with its trans pair and its third centre plain, are one
+  structure. A place whose two senses write two texts is open and stays
+  so: the same compound with its cis pair drawn and the third plain
+  stands for two compounds, and is neither of them. "Alike" counts every
+  other configuration in the structure: the two ring arms at each centre
+  of 1,4-dimethylcyclohexane are alike only until the other centre is
+  counted, so its cis and trans stay two structures, a pseudoasymmetric
+  centre keeps its r or s, and the two enantiomers of a spirane such as
+  2,6-dimethylspiro[3.3]heptane are two structures. Places are filled one
+  at a time, the lowest in the canonical order first, then asked again.
+  The order matters, so it is always that one. The filled form is
+  identity's own: the drawing keeps its wedges as drawn, and nothing filled
+  in is shown, drawn or saved;
+- **a limit, on the safe side:** some writings that leave the same thing
+  unsaid in different ways get two identities. (4-Methylcyclohexylidene)
+  acetic acid drawn with its double bond bent and its centre plain, and
+  drawn with its centre wedged and its double bond straight, each mean
+  "either enantiomer", yet are two structures. Its centre alone sets
+  nothing, and its double bond alone, but once either is given the other
+  decides. Alike structures can be told apart this way; unlike ones are
+  never joined, and only writings that state no single compound are
+  affected;
 - **two Kekulé structures of one ring are one structure.** So are
   bond-shift isomers such as a 1,2-disubstituted cyclooctatetraene (the
   `aromaticForm` rule, as it is written there);

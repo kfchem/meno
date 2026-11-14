@@ -4,26 +4,24 @@ import { fromSmiles } from "../layout/testdata/fromSmiles";
 import type { LayoutInput } from "../layout/perceive";
 import { identity, identityText } from "./identity";
 
-// The search for alike groups (`stereoUnitsOnly`), with what it asks of the
-// canonical search changed: the ranks' shortcut taken away, or a search
-// that ran out of steps. Neither can be had from a structure small enough
-// to test - the ranks tell apart every such group met, and a search that
-// runs out on the unit runs out on the whole - so it is told so here.
+// Identity's fill (`filledIn`), with what it asks of the canonical search
+// changed: the prefilter by the constitution's classes taken away, or a
+// search that ran out of steps. Neither can be had from a structure small
+// enough to test - the classes tell apart every such group met, and a
+// search that runs out on a place runs out on the whole - so it is told so
+// here.
 const real = await vi.importActual<typeof import("../layout/canonical")>("../layout/canonical");
 vi.mock("../layout/canonical", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../layout/canonical")>();
-  return { ...actual, symmetryClasses: vi.fn(actual.symmetryClasses), symmetryOrbits: vi.fn(actual.symmetryOrbits) };
+  return { ...actual, symmetryClasses: vi.fn(actual.symmetryClasses), canonicalWritten: vi.fn(actual.canonicalWritten) };
 });
 afterEach(() => {
   vi.mocked(canonical.symmetryClasses).mockImplementation(real.symmetryClasses);
-  vi.mocked(canonical.symmetryOrbits).mockImplementation(real.symmetryOrbits);
+  vi.mocked(canonical.canonicalWritten).mockImplementation(real.canonicalWritten);
 });
 
-/** Whether an atom is a unit's own, as the search marks it. */
-const searched = (g: LayoutInput) => g.atoms.some((a) => a.el.endsWith("*"));
-
-describe("a configuration's groups, searched without the ranks' shortcut", () => {
-  // (every atom one class: every unit searched)
+describe("the places that could carry a configuration, tried without the prefilter", () => {
+  // (every atom one class: every place tried)
   const noShortcut = () => vi.mocked(canonical.symmetryClasses).mockImplementation((g) => g.atoms.map(() => 0));
 
   it("are weighed with the unit where it is: 1,3-dichloro-2,4-dimethylcyclobutane, one CHCl drawn and one open", () => {
@@ -74,20 +72,15 @@ describe("a configuration's groups, searched without the ranks' shortcut", () =>
   });
 });
 
-describe("a configuration whose search for alike groups ran out of steps", () => {
-  it("is kept where the search did not find its groups alike, and the identity says it may not be the only one", () => {
-    // (the unit's search finds no symmetry and stops; the structure's own search is complete)
-    vi.mocked(canonical.symmetryOrbits).mockImplementation((g) => (searched(g) ? { orbit: g.atoms.map((_, i) => i), automorphisms: [], complete: false } : real.symmetryOrbits(g)));
-    const found = identity(fromSmiles("C[C@H](C)O"));
+describe("a place whose two senses' searches ran out of steps", () => {
+  it("is left as it is where they wrote two texts, and the identity says it may not be the only one", () => {
+    // (each search with a centre in it stops short, its text telling the centre's sense apart)
+    vi.mocked(canonical.canonicalWritten).mockImplementation((g) =>
+      g.atoms.some((a) => a.tetra) ? { text: `${real.canonicalWritten(g).text}|${g.atoms.map((a) => a.tetra?.volume ?? 0).join(",")}`, complete: false } : real.canonicalWritten(g),
+    );
+    // (pentan-3-ol: its alike groups no end atoms, so its centre is searched)
+    const found = identity(fromSmiles("CCC(CC)O"));
     expect(found.complete).toBe(false);
-    expect(found.text).not.toBe(identity(fromSmiles("CC(C)O")).text);
-    expect(identity(fromSmiles("CC(C)O")).complete).toBe(true);
-  });
-
-  it("is set aside where the search found its groups alike before it stopped, and the identity is complete", () => {
-    vi.mocked(canonical.symmetryOrbits).mockImplementation((g) => (searched(g) ? { ...real.symmetryOrbits(g), complete: false } : real.symmetryOrbits(g)));
-    const found = identity(fromSmiles("C[C@H](C)O"));
-    expect(found.complete).toBe(true);
-    expect(found.text).toBe(identity(fromSmiles("CC(C)O")).text);
+    expect(found.text).toBe(real.canonicalWritten(fromSmiles("CCC(CC)O")).text);
   });
 });
