@@ -19,6 +19,7 @@ import { chemistry } from "../../../../lib/chem/molecule";
 import type { DrawingStyle } from "../../../../lib/chem/style";
 import { readStereo, sameConfiguration, straightEnds, unreadWhy } from "../../../../lib/layout/drawn";
 import { pairingDrawn } from "../../../../lib/chem/arrangement";
+import { arrangementOpen } from "../../../../lib/chem/identity";
 import { lonePairCentres } from "../../../../lib/chem/lonePairCentres";
 import type { Layout2D, LayoutInput } from "../../../../lib/layout/engine";
 import { etaBondedAtomByAtom, isMetal, squarePlanarMetal, type CisTrans } from "../../../../lib/layout/perceive";
@@ -291,7 +292,9 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
       i,
       (el, charge) => valencesAt(el, charge)[0],
     );
-    return !!sq && sq.sure && sq.open;
+    // (whether it can be arranged more than one way: identity's own test over the whole structure - two donors alike next to the
+    //  metal can be different ligands further out, [Pt(NH2Me)2(NH2Et)2]2+ - lib/chem/identity `arrangementOpen`)
+    return !!sq && sq.sure && arrangementOpen(input, i);
   };
   const atoms: Relayout["atoms"] = ids.map((id, i) => ({
     id,

@@ -11,7 +11,7 @@ import type { LayoutInput } from "../layout/perceive";
 import { fromSmiles } from "../layout/testdata/fromSmiles";
 import { SHUFFLE_SEEDS, shuffled } from "../layout/testdata/shuffled";
 import { ACROSS_FOUR, arrangementKey, arrangementsIn3d, pairingDrawn, pairingIn3d } from "./arrangement";
-import { constitutionKey, identityText } from "./identity";
+import { arrangementOpen, constitutionKey, identityText } from "./identity";
 import { symmetryClasses } from "../layout/canonical";
 
 /** The structure's one metal, and its donors in the order of its bonds. */
@@ -171,6 +171,27 @@ describe("a metal's donors across, in identity", () => {
       const text = identityText(fromSmiles(smiles));
       expect([smiles, text.includes("|m")]).toEqual([smiles, true]);
     }
+  });
+
+  it("identity's own test of 'not given' (arrangementOpen), the layout's mark's too: the whole structure tells, not the donors next to the metal", () => {
+    const open = (smiles: string) => {
+      const g = fromSmiles(smiles);
+      return arrangementOpen(g, metalOf(g).m);
+    };
+    // (CHEM's two: four N alike next to the metal, two ligands further out)
+    expect(open("CN[Pt+2](NC)(NCC)NCC")).toBe(true);
+    expect(open("CN[Co+3](NC)(NC)(NC)(NCC)NCC")).toBe(true);
+    expect(open(CIS)).toBe(true);
+    expect(open("Cl[Co+]12(Cl)(NCCN1)NCCN2")).toBe(true);
+    // (one arrangement, or every pairing one text: not open)
+    for (const smiles of ["Cl[Pt-2](Cl)(Cl)Cl", "Cl[Pt-](Cl)(Cl)N", "Cl[Pt]1(Cl)NCCN1", "N[Co+3](N)(N)(N)(N)N", "[Co+3]123(NCCN1)(NCCN2)NCCN3", "[Zn]123N(CCN1)(CCN2)CCN3"]) expect([smiles, open(smiles)]).toEqual([smiles, false]);
+    // (an arrangement given for it is set aside: asked of the structure as if none were; no metal, no unit)
+    expect(arrangementOpen(arranged(CIS, [[0, 2], [1, 3]]), metalOf(fromSmiles(CIS)).m)).toBe(true);
+    expect(arrangementOpen(fromSmiles("CC(C)O"), 1)).toBe(false);
+    // (the metal's place found past hydrogens folded in before it)
+    const h = fromSmiles("[H]C([H])([H])N[Pt+2](NC)(NCC)NCC");
+    expect(h.atoms.filter((a) => a.el === "H")).toHaveLength(3);
+    expect(arrangementOpen(h, h.atoms.findIndex((a) => a.el === "Pt"))).toBe(true);
   });
 
   it("a structure with no metal of four or six donors is written as it always was", () => {

@@ -72,4 +72,11 @@ describe("a square-planar centre with no arrangement given", () => {
     expect(readMarks(after).atoms.size).toBe(0);
     expect(directions(after)).toEqual([-135, -45, 45, 135]);
   });
+
+  it("is marked by identity's own test of the whole structure: four N alike next to the metal, two ligands further out - [Pt(NH2Me)2(NH2Et)2]2+", { timeout: 120000 }, () => {
+    forgetLaidOut();
+    const m = drawnFromSmiles("C[NH2][Pt+2]([NH2]C)([NH2]CC)[NH2]CC");
+    expect(readMarks(m).atoms.get(metalOf(m).id)).toBe(ARRANGEMENT_SAID);
+  });
 });
+

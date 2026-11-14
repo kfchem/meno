@@ -155,17 +155,7 @@ export function hydrogensFolded(input: IdentityInput): IdentityInput {
     around[b.a].push({ to: b.b, order: b.order });
     around[b.b].push({ to: b.a, order: b.order });
   }
-  const inPi = new Set(input.atoms.flatMap((a) => a.pi ?? []));
-  const onAxis = new Set([...(input.axes ?? []), ...(input.cumulated ?? [])].flatMap((x) => x.atoms));
-  const plain = (i: number): boolean => {
-    const a = input.atoms[i];
-    if (a.el !== "H" || a.charge || a.isotope || a.radical || a.mapped || a.hs || a.tetra || a.pi || inPi.has(i) || onAxis.has(i)) return false;
-    if (around[i].length !== 1 || around[i][0].order !== 1) return false;
-    const on = input.atoms[around[i][0].to];
-    return on.el !== "H" && !isMetal(on.el);
-  };
-  const folded = new Array<boolean>(n).fill(false);
-  for (let i = 0; i < n; i++) folded[i] = plain(i);
+  const folded = foldedOf(input);
   if (!folded.some(Boolean)) return input;
   const kept = input.atoms.map((_, i) => i).filter((i) => !folded[i]);
   const at = new Map(kept.map((i, k) => [i, k]));
@@ -247,6 +237,45 @@ export function hydrogensFolded(input: IdentityInput): IdentityInput {
   // (a metal's donors by their new places: no plain hydrogen is one - a hydride on a metal is kept)
   const arrangements = input.arrangements?.map((x) => ({ metal: at.get(x.metal)!, pairs: x.pairs.map(([p, q]) => [at.get(p)!, at.get(q)!] as const) }));
   return { atoms, bonds, ...(input.axes ? { axes } : {}), ...(input.cumulated ? { cumulated } : {}), ...(arrangements ? { arrangements } : {}) };
+}
+
+/** Which atoms `hydrogensFolded` folds in: each plain hydrogen (its own words). */
+function foldedOf(input: IdentityInput): boolean[] {
+  const around: { to: number; order: number }[][] = input.atoms.map(() => []);
+  for (const b of input.bonds) {
+    around[b.a].push({ to: b.b, order: b.order });
+    around[b.b].push({ to: b.a, order: b.order });
+  }
+  const inPi = new Set(input.atoms.flatMap((a) => a.pi ?? []));
+  const onAxis = new Set([...(input.axes ?? []), ...(input.cumulated ?? [])].flatMap((x) => x.atoms));
+  return input.atoms.map((a, i) => {
+    if (a.el !== "H" || a.charge || a.isotope || a.radical || a.mapped || a.hs || a.tetra || a.pi || inPi.has(i) || onAxis.has(i)) return false;
+    if (around[i].length !== 1 || around[i][0].order !== 1) return false;
+    const on = input.atoms[around[i][0].to];
+    return on.el !== "H" && !isMetal(on.el);
+  });
+}
+
+/**
+ * Whether identity's fill leaves the arrangement of metal `m` - which of
+ * its donors are across from each other - open: given none (any given for
+ * it set aside), every other place filled as identity fills it, more than
+ * one pairing that can be writes the structure differently. So the one
+ * test of "not given" for identity and for the layout's mark "Which donors
+ * are next to each other is not given": two donors alike next to the
+ * metal can be different ligands further out ([Pt(NH2Me)2(NH2Et)2]2+'s,
+ * [Co(NH2Me)4(NH2Et)2]3+'s), and only the whole structure tells. False
+ * for an atom that is no metal of four or six donors, and where no pairing
+ * can be (a tripod's).
+ */
+export function arrangementOpen(input: IdentityInput, m: number): boolean {
+  const others = { ...input, arrangements: (input.arrangements ?? []).filter((x) => x.metal !== m) };
+  const folded = foldedOf(others);
+  // (the metal's place once the plain hydrogens are folded in: none of them is it)
+  const at = m - folded.slice(0, m).filter(Boolean).length;
+  const g = compared(others);
+  if (!blanksOf(g).some((b) => b.kind === "metal" && b.at === at)) return false;
+  return !(filledIn(g).input.arrangements ?? []).some((x) => x.metal === at);
 }
 
 /**
