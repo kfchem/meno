@@ -266,6 +266,7 @@ import { freePlace, pageBoxes } from "./utils/freePlace";
 import { sheetRoom } from "./utils/textSheets";
 import { styleOf } from "../../../lib/chem/style";
 import Presenter from "./presenting/Presenter";
+import { shownWith } from "./utils/viewShow";
 import PresentLayer from "./presenting/PresentLayer";
 import { isStandard, reshaped, slideAround, slideInView, slideOfView, STANDARD, WIDE } from "./presenting/slides";
 import { selectedBox } from "./utils/extent";
@@ -615,9 +616,7 @@ function WorkspaceContent({
         );
         // (the drawing and what was made of it, together: where either lies outside the view, the view eases to take both in -
         //  along, or out as little as needed - as Fit to content would; nowhere where both are seen whole: utils/viewShow)
-        const drawn = blocks.map((b) => boxOf(b.part)).reduce((u, b) => ({ x0: Math.min(u.x0, b.x0), x1: Math.max(u.x1, b.x1), y0: Math.min(u.y0, b.y0), y1: Math.max(u.y1, b.y1) }));
-        const both = made3d ? { x0: Math.min(made3d.x0, drawn.x0), x1: Math.max(made3d.x1, drawn.x1), y0: Math.min(made3d.y0, drawn.y0), y1: Math.max(made3d.y1, drawn.y1) } : drawn;
-        if (!replacing) store.getState().requestShow(both);
+        if (!replacing) store.getState().requestShow(shownWith(blocks.map((b) => boxOf(b.part)), made3d));
         if (!growths.length) return;
         // (each stereoisomer's search goes on, in turn: what it brings shown as it lands, over what the page holds - the view's
         //  until it ends, then written into the document once - docs/WORKSPACE.md, *As its search goes on*)

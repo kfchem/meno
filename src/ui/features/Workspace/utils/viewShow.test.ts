@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { viewToShow } from "./viewShow";
+import { shownWith, viewToShow } from "./viewShow";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import { createWorkspaceDocument } from "../document";
 import type { Model } from "../store/types";
@@ -54,5 +54,25 @@ describe("a put-down asks to be shown", () => {
     st().putRead({ ...one, atoms: one.atoms.map((a) => ({ ...a, y: a.y + 50 })) });
     expect(st().showRequest?.n).toBe(n + 1);
     expect(st().showRequest?.box.y1).toBeGreaterThan(50);
+  });
+});
+
+describe("molecules made in 3D from a drawing, shown", () => {
+  const seen = (v: { x: number; y: number; zoom: number }, b: { x0: number; x1: number; y0: number; y1: number }) =>
+    b.x0 >= v.x - 50 / (v.zoom / 10) - 1e-9 && b.x1 <= v.x + 50 / (v.zoom / 10) + 1e-9 && b.y0 >= v.y - 30 / (v.zoom / 10) - 1e-9 && b.y1 <= v.y + 30 / (v.zoom / 10) + 1e-9;
+  it("are shown with the drawing they were made from: the view takes both in, never the one by leaving the other", () => {
+    // (the drawing at the view's left edge; what was made beyond its right edge)
+    const drawing = { x0: -48, x1: -38, y0: -5, y1: 5 };
+    const made = { x0: 45, x1: 70, y0: -5, y1: 5 };
+    const to = viewToShow(view, screen, shownWith([drawing], made))!;
+    expect(seen(to, drawing) && seen(to, made)).toBe(true);
+    // (the made one alone, as before: the view goes to it and the drawing leaves)
+    const alone = viewToShow(view, screen, made)!;
+    expect(seen(alone, drawing)).toBe(false);
+  });
+  it("leave the view as it is where both are seen whole; and with nothing placed, the drawing alone is what is shown", () => {
+    const drawing = { x0: -10, x1: 0, y0: -5, y1: 5 };
+    expect(viewToShow(view, screen, shownWith([drawing], { x0: 5, x1: 15, y0: -5, y1: 5 }))).toBeNull();
+    expect(shownWith([drawing, { x0: 20, x1: 30, y0: 0, y1: 8 }], null)).toEqual({ x0: -10, x1: 30, y0: -5, y1: 8 });
   });
 });

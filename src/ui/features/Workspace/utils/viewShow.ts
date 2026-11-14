@@ -41,3 +41,12 @@ export function viewToShow(view: View, screen: { w: number; h: number; cover: nu
   if (dx === 0 && dy === 0) return null;
   return { x: view.x + dx, y: view.y + dy, zoom: z };
 }
+
+/**
+ * What molecules made in 3D from a drawing are shown with (docs/WORKSPACE.md, *Putting things down*): the drawing they were made
+ * from - its parts' boxes - and what was made, `made`, where any was placed, as one box: shown together, so that the view never
+ * takes in the one by leaving the other.
+ */
+export function shownWith(drawn: readonly ShowBox[], made: ShowBox | null): ShowBox {
+  return [...drawn, ...(made ? [made] : [])].reduce((u, b) => ({ x0: Math.min(u.x0, b.x0), x1: Math.max(u.x1, b.x1), y0: Math.min(u.y0, b.y0), y1: Math.max(u.y1, b.y1) }));
+}
