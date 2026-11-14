@@ -1051,8 +1051,8 @@ describe("a hydrogen bond is no bond of the structure", () => {
   it("gives every reading of a drawing's bonds the same answer with the hydrogen bond drawn - each such function, whatever it is named", async () => {
     // (every function this file exports that takes a drawing's atoms and bonds, found in its source: one added later is asked too)
     const source = readFileSync(new URL("./from2d.ts", import.meta.url), "utf8");
-    const names = [...source.matchAll(/^export function (\w+)\(atoms: readonly DrawnAtom\[\], bonds: readonly DrawnBond\[\]/gm)].map((m) => m[1]);
-    expect(names.length).toBeGreaterThanOrEqual(4);
+    const names = [...source.matchAll(/^export function (\w+)\(\w+: readonly DrawnAtom\[\], \w+: readonly DrawnBond\[\]/gm)].map((m) => m[1]);
+    expect(names.length).toBeGreaterThanOrEqual(5);
     const core = (await import("./from2d")) as unknown as Record<string, (...args: unknown[]) => unknown>;
     // (Maps and Sets as lists, so that answers compare as values)
     const plain = (x: unknown): unknown =>

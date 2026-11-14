@@ -1766,9 +1766,119 @@ lipids each have their own way of being drawn, which it should know.
      and its structure in 3D are given the wedges that say it
      (`chem/drawing.ts#forFlatReaders`; until 2026-11-04 the structure in
      3D was not: its centres reached RDKit as left open, and tetrodotoxin's
-     nine were too many to be made in 3D in time);
-     the depth itself is not saved, so a cage opened again is flat, its
-     stereochemistry wedged.
+     nine were too many to be made in 3D in time).
+     The workspace file and the clipboard's own record keep the drawing as
+     it is - each atom's depth, its centres, a ring's near edge - so a cage
+     or a chair opened again, or pasted, is drawn and read as it was, its
+     bonds broken where they were; only files for other programs are given
+     wedges in its place.
+   - **Drawn in perspective** (F8, 2026-11-13): any centre of a drawing with
+     depth is read in space, not only a cage's - a chair, a Haworth ring, a
+     Newman projection - by one reader (`lib/layout/drawn`, `volumeInSpace`).
+     The model is said once: an atom's depth (`Atom.z`, nearer is larger);
+     `Atom.stereoCentre`, that its configuration is the drawing's own
+     (every atom of a projection that has depth; whether it is a stereo
+     unit is asked afterwards, by identity); a ring bond's near-edge look
+     (`display`). Nothing records what kind of projection a ring is.
+     Brecher 2006 (ST-3.2): "Perspective drawings must always be interpreted
+     as representing absolute configuration at all stereogenic centers
+     without attached wavy bonds".
+     - A ring atom with depth, its two ring neighbours with depth, one or
+       two groups without: each group takes the free direction it is drawn
+       nearer to (a chair's axial or equatorial, a Haworth ring's up or
+       down). Only a bridged system (two rings sharing three atoms or more) or
+       a cage is read against the engine's solid, fitted to the drawing; every
+       other ring system with depth - a chair, chairs fused (a decalin, a
+       steroid's rings), a Haworth ring - is read from its own ring bonds as
+       drawn, which asks nothing of which solid was drawn (the engine's solid
+       for a decalin is not two chairs, so it read about one group in four
+       the other way). A system both bridged and carrying fused chairs is
+       read through the fit: no tool makes one.
+     - A Newman projection's atom: the atom behind it, or before it, in the
+       same place on the page, with less (or more) depth; its groups
+       leave it away from that atom, each at the angle it is drawn at. The
+       front atom's bonds meet at the circle's middle, the back atom's start
+       at its rim (the circle stands for the nearer atom; Moss 1996). Two
+       groups of one atom drawn within twice `BETWEEN` of each other say
+       nothing, and the atom is unread. The reader goes by the places
+       alone: the bond seen end-on is the look's (F10), not the reader's.
+     - A group drawn within `BETWEEN` (12 degrees, by convention after the
+       turn a wedge's bond may be moved by: no text gives a number) of half
+       way between its two nearest free positions as seen - or between two
+       free positions seen less than twice that apart - is unread at that
+       centre, never given the nearer by a hair; the unread centre says why
+       (`unreadWhy`: its bond is drawn between its two free positions).
+       Applies to a ring alone; a cage's near-hair test is the engine's.
+     - A wedge or hashes out of such a centre are read as before (out,
+       behind), and where they contradict the direction drawn, the centre is
+       unread (ST-3.3). A wavy bond out of such a centre leaves it open
+       (ST-3.2): its other centres are read.
+     - A bond passing behind another is drawn with a gap (Brecher 2006,
+       ST-3.1), and a group out of such a ring takes part though it has no
+       depth of its own: the free direction its centre is read to send it -
+       the very choice that read the centre - says how far before or behind
+       its ring atom it lies (that direction's depth for a bond one long,
+       times the bond as drawn), and its further atoms lie at its first
+       atom's depth (`groupDepths`). A chair as the textbook draws it, a
+       group on each free position, has exactly two crossings: a near atom's
+       axial bond before the far seat line, a far atom's behind the near one.
+       A group on an unread centre, or bonded to two atoms with depth, has
+       none, and no gap. Nothing is kept: a group dragged round is read
+       again, and its gap follows.
+     - A flat reader is told what the perspective shows
+       (`wedgesForFlat`), for a chair, a Haworth ring and a Newman
+       projection as for a cage; a structure made in 3D from such a drawing
+       reaches the plugin by wedges, as a file does. Meno's own moves keep
+       depth: turned in the page and scaled (the compound is the same),
+       turned over (the page mirrored and the depth turned: the compound is
+       kept), mirrored in the page with the depth as it was (the mirror
+       image); an atom dragged keeps its depth.
+     - **A chair recognised where the drawing gives no depth** (F11,
+       2026-11-13): a six-ring on its own, drawn as a chair (opposite bonds
+       parallel, its outline not convex) with no wedge at its atoms, is a
+       ring in perspective; its depth is worked out by fitting the chair's
+       solid (`lib/chem/perception/projection`) to the drawn places, and its
+       centres are read in space as a tool's drawing is. Near and far, in
+       this order: a bold or near-edge ring bond marks which edge is the
+       nearer (Brecher 2006, ST-3.1, ST-3.3: the drawn order takes
+       precedence); else the convention - the lower atoms of a
+       mostly-horizontal ring are the nearer, the ring's long axis within
+       30 degrees of level (that angle is a convention, no text gives one);
+       else unread, and the words say what to draw: its near and far are
+       not marked: draw its near bonds bold. A fit that is not clearly one
+       shape is unread too, and a flat drawing - a regular hexagon - is read
+       as ever. The numbers of the fit were set on a corpus of every chair
+       view of the solid and every flat ring the engine draws, so that each
+       chair is read as the solid it was or not at all, and no flat ring is
+       read. A chair is fitted to the chair as a textbook
+       draws it (its bonds along four directions, the axis vertical), by a
+       turn, a scale and a shift in the page, beside the chair seen from
+       above. A ring of five or six is read as a Haworth ring by what the
+       texts' own figures share, not by its fit to a regular ring (McNaught
+       1996 draws a furanose 2.5 level bonds wide and a pyranose taller than
+       Brecher 2006 does): its lowest ring bond level (the front edge, and so
+       the nearer: ST-3.1, 2-Carb-5.4), every other ring atom above it, and
+       every group drawn straight up or down at any length, and the ring no
+       taller than 0.87 of the regular ring of its level bond standing on
+       that edge (1.5 level bonds for a six-ring, 1.34 for a five-ring): a
+       regular ring is a flat drawing that happens to lie so, and nothing is
+       guessed - or a near edge marked bold, at any height (a mark, ST-3.3).
+       Never the shape alone (Brecher 2006, ST-1.9: such a drawing is
+       ambiguous). No ring O at the back is needed: each of the
+       twelve representations 2-Carb-5.4 names, the ring turned and turned
+       over, reads as the same compound.
+       Fused systems, bridged systems and cages are not yet recognised.
+     - **Clean-up keeps a projection** (the maintainer, 2026-11-13): a ring
+       system the drawing shows with a depth that the engine would lay flat -
+       a chair, a Haworth ring - is left where it is, its atoms' places,
+       depth and being stereocentres unchanged, and what is flat on it is
+       laid out onto it: each group's first atom the way the drawing has it
+       from the ring, a bond long, the rest as the engine lays the group
+       out. No wedge is drawn and no H added for the ring's centres: the
+       perspective says them, and a wedge or an H already drawn there stays.
+       A piece joined to projections by more than one bond is kept as
+       drawn. The new drawing is read back as always: the same compound
+       (`chem/projectionKept`).
    - The new drawing is read back before anything moves: if it would not
      say the stereochemistry the old one said, Clean-up refuses. So it does
      for a wedge it cannot carry - wedge and hashes drawn opposite each

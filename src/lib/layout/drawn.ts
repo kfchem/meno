@@ -6,6 +6,7 @@
  */
 import {
   fitLinear,
+  groupDepths as groupDepthsFrom2d,
   OPEN_RING,
   readStereo as readFrom2d,
   type CageFit,
@@ -15,20 +16,30 @@ import {
   type Vec3,
 } from "../chem/perception/stereo/from2d";
 import type { Tetrahedral } from "../chem/perception/stereo/types";
-import { solidOf } from "./cage";
+import { isCage, solidOf } from "./cage";
 import { key, perceive, type LayoutInput } from "./perceive";
 import { symmetryOrbits } from "./canonical";
 import { huckelBonds } from "../chem/huckel";
 import { movingCN } from "../chem/stereoOpen";
 import { factsOf } from "../chem/perception/facts";
+import { withRecognisedDepth } from "./recognised";
 import { placeStereo, type Stereo } from "./stereo";
 
 export { IN_LINE, sameConfiguration, straightEnds, unreadWhy, unsureStereo } from "../chem/perception/stereo/from2d";
 export type { DrawnAtom, DrawnBond, DrawnStereo };
 
-/** The stereochemistry a drawing shows (lib/chem/perception/stereo/from2d `readStereo`), a cage in perspective read against its solid. */
+/**
+ * The stereochemistry a drawing shows (lib/chem/perception/stereo/from2d `readStereo`): a ring drawn in perspective with no depth given
+ * has its depth worked out first (lib/chem/perception/projection/recognise, as `withRecognisedDepth` asks it), and a bridged system or a
+ * cage in perspective is read against its solid.
+ */
 export function readStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): DrawnStereo {
-  return readFrom2d(atoms, bonds, cageFits);
+  return readFrom2d(withRecognisedDepth(atoms, bonds), bonds, cageFits);
+}
+
+/** The depth of each group drawn out of a ring in perspective, for where its bond passes behind another (from2d `groupDepths`), a bridged system or a cage read against its solid. */
+export function groupDepths(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): Map<number, number> {
+  return groupDepthsFrom2d(atoms, bonds, cageFits);
 }
 
 const sub3 = (p: Vec3, q: Vec3): Vec3 => [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
@@ -53,6 +64,10 @@ function cageFits(
   });
   for (const sys of mol.systems) {
     if (sys.atoms.length < 4 || sys.atoms.some((a) => atoms[a].z == null)) continue;
+    // (the engine's solid is the right one for a bridged system or a cage, wrong for chairs fused - a decalin's is a chair and a twist-boat - and no
+    //  use for a single ring, a Haworth ring drawn flat: every other system with depth is read from its own ring bonds as drawn, which says nothing of
+    //  which solid was drawn. A system both bridged and carrying fused chairs is read through the fit: no tool makes one)
+    if (!isCage(mol, sys) && !bridged(mol.rings, sys.rings)) continue;
     const solid = solidOf(mol, sys);
     const from = sys.atoms.map((a) => solid.get(a)!);
     const to = sys.atoms.map((a): Vec3 => [atoms[a].x, atoms[a].y, atoms[a].z!]);
@@ -71,6 +86,11 @@ function cageFits(
     for (const a of sys.atoms) out.set(a, fit);
   }
   return out;
+}
+
+/** Whether two rings of a system share three atoms or more: it is bridged (F2a's `sharesThreeAtoms`, to be that one's when it lands). */
+function bridged(rings: readonly (readonly number[])[], of: readonly number[]): boolean {
+  return of.some((r, i) => of.some((q, j) => j > i && rings[r].filter((a) => rings[q].includes(a)).length >= 3));
 }
 
 /**

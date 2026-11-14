@@ -30,6 +30,7 @@ import { degrees, drawingOf } from "./drawing";
 import { ofTheStructure } from "../../../../lib/chem/perception/graph";
 import { editorLayoutOptions, layoutBonds } from "../layoutOptions";
 import { greatest } from "../../../../lib/chem/lists";
+import { projectionsKept } from "./projectionKept";
 
 export type LayoutJob = {
   input: LayoutInput;
@@ -249,6 +250,16 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
     ...(laid.depth[i] != null ? { z: laid.depth[i]! * k } : {}),
     ...(laid.solid[i] && input.atoms[i].tetra ? { stereoCentre: true } : {}),
   }));
+  // a ring system the drawing shows in perspective, that the engine lays flat - a chair, a Haworth ring - kept where it is, depth and
+  // all, and what is flat on it laid out onto it (chem/projectionKept; the maintainer, 2026-11-13)
+  const kept = projectionsKept(
+    input,
+    was.map((a, i) => (i < n ? { x: a.x, y: a.y, ...(a.z != null ? { z: a.z } : {}), ...(a.stereoCentre ? { stereoCentre: true } : {}) } : undefined)),
+    (i) => laid.depth[i] == null,
+    (i) => place(laid.x[i], laid.y[i]),
+    k,
+  );
+  for (const [i, spot] of kept.places) atoms[i] = { id: ids[i], x: spot.x, y: spot.y, ...(spot.z != null ? { z: spot.z } : {}), ...(spot.stereoCentre ? { stereoCentre: true } : {}) };
   // each star at its pi system's centre, as a written-out label's: cod's
   // C=C, as well as a ring
   input.atoms.forEach((a, i) => {
@@ -259,6 +270,8 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
   const hydrogenOf = new Map<number, number | { added: number }>();
   const added: NonNullable<Relayout["added"]> = [];
   for (const h of laid.hydrogens) {
+    // (a centre of a projection says its configuration by the drawing: no H drawn to carry a wedge, and those it has stay as they are)
+    if (kept.projected.has(h.on)) continue;
     const own = spare.get(h.on)?.shift();
     const p = place(h.at.x, h.at.y);
     if (own != null) {
@@ -269,13 +282,14 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
       added.push({ ...p, on: ids[h.on], stereo: "none" });
     }
   }
-  const removed = [...spare.values()].flat();
+  const removed = [...spare].filter(([c]) => !kept.projected.has(c)).flatMap(([, hs]) => hs);
 
   // the wedges: those the engine draws, and no others in the part
   const gone = new Set(removed);
   const inPart = new Set(part.atoms.map((a) => a.id));
   const wedgeOn = new Map<number, { stereo: "up" | "down"; narrow: number }>();
   for (const w of laid.wedges) {
+    if (kept.projected.has(w.from)) continue;
     const from = ids[w.from];
     const to = w.to === -1 ? hydrogenOf.get(w.from)! : ids[w.to];
     if (typeof to === "object") {
@@ -312,7 +326,9 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
     const w = wedgeOn.get(b.id);
     const d = display(b);
     if (w) return [{ id: b.id, stereo: w.stereo, narrow: w.narrow, ...d }];
-    if (b.stereo === "up" || b.stereo === "down") return [{ id: b.id, stereo: "none", ...d }];
+    // (a wedge on a group of a projection's centre is read as it was drawn: out, behind)
+    const onProjection = kept.projected.has(indexOf.get(b.a) ?? -1) || kept.projected.has(indexOf.get(b.b) ?? -1);
+    if ((b.stereo === "up" || b.stereo === "down") && !onProjection) return [{ id: b.id, stereo: "none", ...d }];
     if (d) return [{ id: b.id, stereo: b.stereo, narrow: b.narrow, ...d }];
     return [];
   });
