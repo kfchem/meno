@@ -5,16 +5,18 @@
  * moves it. The test fails (a) where a listed copy is no longer declared where the table says - the line must be deleted with the copy, so the list
  * only shrinks - and (b) where a declaration of one of these concepts stands outside the core and outside the table: a copy made anew.
  *
- * What it does not catch: a copy under a name that is none of the patterns, one declared inside another function, one as a method; a copy of the
- * rule with no name of its own. That is a reviewer's to see. A new entry in the table needs a reason a reviewer accepts: a copy that stays by design
+ * What it does not catch: a copy under a name that is none of the patterns, one declared inside another function, one as a method, an `interface X`
+ * or an `export default`; a copy of the rule with no name of its own. That is a reviewer's to see. A new entry in the table needs a reason a reviewer accepts: a copy that stays by design
  * says why (`why`), the layout's own choice of ring set, a display.
  */
 import { describe, expect, it } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 
 const SRC = resolve(__dirname, "../../..");
 const CORE = __dirname;
+/** A path with forward slashes, as the table writes one, on Windows too. */
+const slash = (p: string) => p.split(sep).join("/");
 
 export type Copy = { concept: string; file: string; name: string; part: number | string; why?: string };
 
@@ -37,6 +39,7 @@ export const STILL_APART: Copy[] = [
   { concept: "rings", file: "lib/layout/rings.ts", name: "ringsAlike", part: 2, why: "the cycles beyond a smallest set: the layout's own question, not the set the core defines" },
   { concept: "rings", file: "lib/layout/drawn.ts", name: "inSmallRing", part: 2, why: "in drawn.ts, which the CIP chain rewrites: moved after it, with part 2b" },
   { concept: "rings", file: "lib/layout/drawn.ts", name: "ringThrough", part: 2, why: "in drawn.ts, which the CIP chain rewrites: moved after it, with part 2b" },
+  { concept: "rings", file: "lib/chem/cip/in3d.ts", name: "ringThrough", part: 2, why: "the size of the smallest ring through a bond, in the CIP's reading of a molecule in 3D (on main since this part was built): moved with the CIP chain, with part 2b" },
   { concept: "rings", file: "lib/chem/ordersFromGeometry.ts", name: "smallRings", part: 2, why: "every simple cycle of three to six atoms, not a smallest set: its flatness test is asked of each (not moved in part 2)" },
   { concept: "rings", file: "lib/chem/protonation.ts", name: "smallRings", part: 2, why: "returns the smallest ring through each bond, each once, its atoms in order: the core's set holds two of bicyclo[2.2.2]octane's three six-rings, this returns all three, so the lists are not the same sets (not moved in part 2)" },
   { concept: "rings", file: "ui/features/Workspace/utils/expandPlace.ts", name: "ringsThrough", part: 2, why: "the rings through two neighbours of one atom, the shortest way round from one to the other, their atoms in order: another question than a smallest set (not moved in part 2)" },
@@ -73,7 +76,7 @@ export const STILL_APART: Copy[] = [
   // permutation parity and signed volume from places
   { concept: "parity", file: "lib/layout/canonical.ts", name: "parity", part: 4 },
   { concept: "parity", file: "lib/layout/ranks.ts", name: "parity", part: 4 },
-  { concept: "parity", file: "lib/chem/cip/index.ts", name: "parity", part: 4 },
+  { concept: "parity", file: "lib/chem/cip/rank.ts", name: "parity", part: 4 },
   { concept: "parity", file: "ui/features/Workspace/workflow/stereoKept.ts", name: "parity", part: 4 },
   { concept: "volume", file: "lib/layout/geometry.ts", name: "drawnVolume", part: 4 },
   { concept: "volume", file: "lib/chem/referenceNumbering.ts", name: "volumeSign", part: 4 },
@@ -143,7 +146,7 @@ describe("one definition per concept: the ratchet", () => {
     const listed = new Set(STILL_APART.map((c) => `${c.file}|${c.name}`));
     const found = files(SRC).flatMap((f) => {
       const text = readFileSync(f, "utf8");
-      const file = relative(SRC, f);
+      const file = slash(relative(SRC, f));
       return Object.values(CONCEPTS).flatMap((re) => declarationsIn(text, re).map((d) => ({ file, ...d })));
     });
     const unlisted = found.filter((d) => !listed.has(`${d.file}|${d.name}`)).map((d) => `${d.file}:${d.line} ${d.name}`);

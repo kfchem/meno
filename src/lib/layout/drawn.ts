@@ -27,8 +27,11 @@
  */
 import { lonePairCentres, pyramidal } from "../chem/lonePairCentres";
 import { freeCorners, solidOf } from "./cage";
-import { key, perceive, type CisTrans } from "./perceive";
-import { drawnAxisSense, drawnVolume, placeStereo, type Axial, type Stereo, type Tetrahedral } from "./stereo";
+import { key, perceive, type CisTrans, type LayoutInput } from "./perceive";
+import { symmetryOrbits } from "./canonical";
+import { huckelBonds } from "../chem/huckel";
+import { movingCN } from "../chem/stereoOpen";
+import { drawnAxisSense, drawnVolume, placeStereo, type Axial, type Cumulated, type Stereo, type Tetrahedral } from "./stereo";
 
 export type DrawnAtom = {
   x: number;
@@ -62,8 +65,10 @@ export type DrawnStereo = {
   tetra: Map<number, Tetrahedral>;
   /** By bond index. */
   cisTrans: Map<number, CisTrans>;
-  /** Each axis's refs the lower-numbered neighbour at each end. */
+  /** Each axis's refs the lower-numbered neighbour at each end: a biaryl's, an allene's. */
   axes: Axial[];
+  /** Each odd cumulene set cis or trans, by its ends (a butatriene's). */
+  cumulated: Cumulated[];
 };
 
 type V3 = [number, number, number];
@@ -109,10 +114,109 @@ export const IN_LINE = (10 * Math.PI) / 180;
 /** How far apart two directions are, 0 to pi. */
 const apart = (t: number, u: number) => Math.abs(Math.atan2(Math.sin(t - u), Math.cos(t - u)));
 
-/** Whether a centre drawn flat with three bonds, its H left out, has two of them in line or on top of each other (`IN_LINE`). */
-function twoInLine(at: { x: number; y: number }, around: readonly { x: number; y: number }[]): boolean {
+/** Two bonds in line, or on top of each other: which of them is which cannot be told, or the drawing is a T. */
+const IN_LINE_WHY = "two of its bonds in line or on top of each other";
+
+/**
+ * Why a centre drawn flat with four bonds states no configuration - or null where it states one - by the forms Brecher 2006 (ST-1.1) calls
+ * ambiguous or the picture of another shape (read as open, never guessed), `lifts` each bond's
+ * +1 (a wedge narrow at the centre), -1 (hashes) or 0. "Half a turn" with `IN_LINE`'s tolerance either way (ST-0.1): a deciding gap in that band
+ * says nothing either. Open:
+ * - four wedges of one kind (ST-1.1.20);
+ * - three of one kind and one other, the other in the space of half a turn or more between two of the three (ST-1.1.9);
+ * - two plain, a wedge and hashes: the plain bonds not next to each other (ST-1.1.10, 1.1.15), or next to each other and half a turn or more
+ *   apart (ST-1.1.13, 1.1.14);
+ * - two of one kind of wedge and two plain, like next to like: every gap under half a turn (ST-1.1.11) or the plain bonds more than half a turn
+ *   apart (ST-1.1.19);
+ * - three plain and a wedge, two plain bonds next to each other half a turn or more apart and the wedge not in that space (ST-1.1.16);
+ * - two wedges and two hashes, like next to like (ST-1.1.17, 1.1.18).
+ * Read as before: the forms the text gives a configuration, ST-1.1.4's (three plain, two half a turn or more apart, the wedge in that space) and
+ * ST-1.1.12's among them.
+ */
+function fourBondsSayNothing(at: { x: number; y: number }, around: readonly { x: number; y: number }[], lifts: readonly number[]): string | null {
   const t = around.map((p) => Math.atan2(p.y - at.y, p.x - at.x));
-  return t.some((u, i) => t.some((w, j) => j > i && (apart(u, w) < IN_LINE || apart(u, w) > Math.PI - IN_LINE)));
+  const turn = (a: number) => ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+  const order = [0, 1, 2, 3].sort((a, b) => turn(t[a]) - turn(t[b]));
+  // (each gap from a bond to the next round the centre)
+  const gaps = order.map((k, m) => ({ from: k, to: order[(m + 1) % 4], size: turn(t[order[(m + 1) % 4]] - t[k]) }));
+  const atLeastHalf = (g: number) => g > Math.PI - IN_LINE;
+  const next = (a: number, b: number) => gaps.some((g) => (g.from === a && g.to === b) || (g.from === b && g.to === a));
+  const kinds = [0, 1, -1].map((k) => [0, 1, 2, 3].filter((i) => lifts[i] === k));
+  const [plain, up, down] = kinds;
+  const WHY = "its four bonds are not drawn as a tetrahedral centre's: draw two of them in the page side by side, a wedge and hashes on the far side";
+  if (up.length === 4 || down.length === 4) return WHY;
+  // (three of one wedge kind and one other: the other in the wide space between two of the three)
+  for (const three of [up, down]) {
+    if (three.length !== 3) continue;
+    const odd = [0, 1, 2, 3].find((i) => !three.includes(i))!;
+    const m = order.indexOf(odd);
+    const [before, after] = [order[(m + 3) % 4], order[(m + 1) % 4]];
+    if (atLeastHalf(turn(t[after] - t[before]))) return WHY;
+  }
+  if (plain.length === 2 && up.length === 1 && down.length === 1) {
+    if (!next(plain[0], plain[1])) return WHY;
+    const between = gaps.find((g) => plain.includes(g.from) && plain.includes(g.to))!;
+    if (atLeastHalf(between.size)) return WHY;
+  }
+  if (plain.length === 2 && (up.length === 2 || down.length === 2)) {
+    const like = up.length === 2 ? up : down;
+    if (next(plain[0], plain[1]) && next(like[0], like[1])) {
+      const between = gaps.find((g) => plain.includes(g.from) && plain.includes(g.to))!;
+      if (gaps.every((g) => g.size < Math.PI + IN_LINE) || atLeastHalf(between.size)) return WHY;
+    }
+  }
+  if (plain.length === 3) {
+    const wide = gaps.find((g) => plain.includes(g.from) && plain.includes(g.to) && atLeastHalf(g.size));
+    if (wide) return WHY;
+  }
+  if (up.length === 2 && down.length === 2 && next(up[0], up[1])) return WHY;
+  return null;
+}
+
+/**
+ * Why a centre drawn flat with three bonds, its H (or lone pair) left out, states no configuration - or null where it states one - by the
+ * forms the figures of Brecher 2006 (ST-1.2) draw and grade, `lifts` each bond's +1 (a wedge narrow at the centre), -1 (hashes) or 0:
+ * - two bonds on top of each other, within `IN_LINE` (ST-0.1): nothing, whatever is wedged;
+ * - one wedged: read (ST-1.2.1, 1.2.3; ST-1.2.4 with the wedge in line with a plain bond, its H in the widest gap opposite), but two plain
+ *   bonds in line with the wedge between them are a T (ST-1.2.12);
+ * - two wedged alike and one plain: read by the drawn volume (ST-1.2.5; nought, so nothing, where the two mirror each other);
+ * - a wedge, hashes and a plain bond: read only where the plain bond stands half a turn or more from one of them (ST-1.2.2), not where it lies
+ *   between them (ST-1.2.10, a trigonal planar picture);
+ * - three wedged alike: read only where every gap is under half a turn (ST-1.2.6), not with one of half a turn or more (ST-1.2.9);
+ * - two alike and one other: read only where the two alike are half a turn or more apart, the other between them on the narrower side
+ *   (ST-1.2.7); not where every gap is under half a turn (ST-1.2.11) nor where the wide gap is between the unlike pair (ST-1.2.8).
+ * A deciding gap within `IN_LINE` of half a turn says nothing: which side of the rule it is on cannot be told from the figures.
+ */
+function threeBondsSayNothing(at: { x: number; y: number }, around: readonly { x: number; y: number }[], lifts: readonly number[]): string | null {
+  const t = around.map((p) => Math.atan2(p.y - at.y, p.x - at.x));
+  for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) if (apart(t[i], t[j]) < IN_LINE) return IN_LINE_WHY;
+  const wedged = [0, 1, 2].filter((k) => lifts[k] !== 0);
+  const turn = (a: number) => ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+  // (the bonds in order round the centre, and each gap from one to the next)
+  const order = [0, 1, 2].sort((a, b) => turn(t[a]) - turn(t[b]));
+  const gaps = order.map((k, m) => ({ from: k, to: order[(m + 1) % 3], size: turn(t[order[(m + 1) % 3]] - t[k]) }));
+  const halfTurn = (g: number) => Math.abs(g - Math.PI) <= IN_LINE;
+  if (wedged.length === 1) {
+    // (two plain bonds in line, the wedge between them: a T)
+    const plain = [0, 1, 2].filter((k) => !lifts[k]);
+    return apart(t[plain[0]], t[plain[1]]) > Math.PI - IN_LINE ? IN_LINE_WHY : null;
+  }
+  if (wedged.length === 2) {
+    if (lifts[wedged[0]] === lifts[wedged[1]]) return null;
+    const p = [0, 1, 2].find((k) => !lifts[k])!;
+    const wide = Math.max(...gaps.filter((g) => g.from === p || g.to === p).map((g) => g.size));
+    if (halfTurn(wide)) return IN_LINE_WHY;
+    return wide > Math.PI ? null : "its plain bond lies between its wedge and its hashes: draw it across from them";
+  }
+  if (wedged.length === 3) {
+    const wide = gaps.reduce((w, g) => (g.size > w.size ? g : w));
+    if (halfTurn(wide.size)) return IN_LINE_WHY;
+    const alike = lifts[0] === lifts[1] && lifts[1] === lifts[2];
+    if (alike) return wide.size < Math.PI ? null : "its three wedges leave half a turn or more open: draw one of them plain";
+    if (wide.size < Math.PI) return "its wedges and hashes are spread all round it: draw one of them plain";
+    return lifts[wide.from] === lifts[wide.to] ? null : "its wedge and its hashes are half a turn or more apart: draw one of them plain";
+  }
+  return null;
 }
 
 /**
@@ -193,7 +297,8 @@ export function readStereo(
       if (!wedged && !atom.centre) return;
       const inSpace = atom.centre && atom.z != null;
       // (drawn flat, its H left out, two of its bonds in line or on top of each other: no configuration stated)
-      if (!inSpace && (atom.hs === 1 || lonePair) && twoInLine(atom, around.map((n) => atoms[n]))) return;
+      if (!inSpace && (atom.hs === 1 || lonePair) && around.length === 3 && threeBondsSayNothing(atom, around.map((n) => atoms[n]), around.map((n) => lift(c, n)))) return;
+      if (!inSpace && around.length === 4 && fourBondsSayNothing(atom, around.map((n) => atoms[n]), around.map((n) => lift(c, n)))) return;
       const order = atom.hs ? [...around, -1] : around;
       const volume = inSpace ? volumeInSpace(atoms, c, around, lift, fits.get(c)) : 0;
       const v =
@@ -286,7 +391,65 @@ export function readStereo(
     }
   });
 
-  return { tetra, cisTrans, axes };
+  // an allene's axis and an odd cumulene's cis or trans: each run of
+  // cumulated double bonds, end to end, drawn straight through
+  const odd: Cumulated[] = [];
+  // (a carbon, or an N+, between two double bonds: a sulfur's C=S=C is bent, no axis - the rule the restraints' linear-by-bonds has)
+  const linearMiddle = (x: number) => (atoms[x].el ?? "C") === "C" || ((atoms[x].el ?? "C") === "N" && (atoms[x].charge ?? 0) === 1);
+  const middle = (x: number) => linearMiddle(x) && neighbours[x].length === 2 && neighbours[x].every((n) => bondOf.get(key(x, n))!.order === 2);
+  atoms.forEach((_, i) => {
+    if (middle(i)) return;
+    for (const m of neighbours[i]) {
+      if (bondOf.get(key(i, m))!.order !== 2 || !middle(m)) continue;
+      const run = [i, m];
+      while (middle(run[run.length - 1]) && run.length <= atoms.length) run.push(neighbours[run[run.length - 1]].find((x) => x !== run[run.length - 2])!);
+      const j = run[run.length - 1];
+      if (j < i) continue;
+      const [ti, tj] = [run[1], run[run.length - 2]];
+      const near = neighbours[i].filter((n) => n !== ti);
+      const far = neighbours[j].filter((n) => n !== tj);
+      // (each end with two groups, an H among them at most)
+      if (!near.length || !far.length || near.length + (atoms[i].hs ?? 0) !== 2 || far.length + (atoms[j].hs ?? 0) !== 2) continue;
+      // a wavy bond at an end: either
+      if ([i, j].some((x) => neighbours[x].some((n) => bondOf.get(key(x, n))!.either))) continue;
+      if (run.length % 2 === 1) {
+        // an allene's (an even number of double bonds): a wedge out of one end
+        // to a group of it, the other end's groups in the page, read as a
+        // biaryl's axis is - its ends not bonded, the turn the same; wedged at
+        // both ends, the two read alike, else none (unreadWhy says why)
+        const read = ([e, f, en, fn]: readonly [number, number, number[], number[]]) => {
+          const lifted = en.find((n) => lift(e, n) !== 0);
+          if (lifted == null) return null;
+          const refs: [number, number] = [Math.min(...en), Math.min(...fn)];
+          return { atoms: [e, f] as [number, number], refs, sense: drawnAxisSense((k) => atoms[k], { atoms: [e, f], refs }, lifted, lift(e, lifted) as 1 | -1) };
+        };
+        const [one, two] = [read([i, j, near, far]), read([j, i, far, near])];
+        const first = one ?? two;
+        // (read from the other end, against the same two groups, an axis turns the same way)
+        const agree = !one || !two || one.sense === two.sense;
+        if (first && first.sense && agree) axes.push({ atoms: first.atoms, refs: first.refs, sense: first.sense });
+        continue;
+      }
+      // an odd cumulene's (an odd number of double bonds): each end's group
+      // off the line through the run, on one side of it or the other, as a
+      // double bond's are read
+      const along = { x: atoms[j].x - atoms[i].x, y: atoms[j].y - atoms[i].y };
+      const side = (r: number, from: number) => {
+        const v = { x: atoms[r].x - atoms[from].x, y: atoms[r].y - atoms[from].y };
+        const t = along.x * v.y - along.y * v.x;
+        return Math.abs(t) < 1e-6 * (Math.hypot(along.x, along.y) * Math.hypot(v.x, v.y) || 1) ? 0 : Math.sign(t);
+      };
+      const straightOn = (end: number, other: number, n: number) =>
+        apart(Math.atan2(atoms[n].y - atoms[end].y, atoms[n].x - atoms[end].x), Math.atan2(atoms[end].y - atoms[other].y, atoms[end].x - atoms[other].x)) < IN_LINE;
+      const ri = near.find((n) => !straightOn(i, ti, n));
+      const rj = far.find((n) => !straightOn(j, tj, n));
+      if (ri == null || rj == null) continue;
+      const [si, sj] = [side(ri, i), side(rj, j)];
+      if (si && sj) odd.push({ atoms: [i, j], refs: [ri, rj], cis: si === sj });
+    }
+  });
+
+  return { tetra, cisTrans, axes, cumulated: odd };
 }
 
 /** How far a bond in the page is turned, either way, to ask whether what the drawing says of a centre or a double bond stays the same. */
@@ -314,6 +477,10 @@ export function unreadWhy(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond
   const around = [...new Set(mine.map((b) => (b.a === c ? b.b : b.a)))];
   const atom = atoms[c];
   if (mine.some((b) => b.either)) return "a wavy bond at it says it is either";
+  // (an allene's end: its wedge says how the allene turns - or, wedged at both ends, the two say opposite ways)
+  const doubles = (x: number) => bonds.filter((b) => b.order === 2 && (b.a === x || b.b === x));
+  const run = doubles(c).map((b) => (b.a === c ? b.b : b.a)).find((m) => doubles(m).length === 2);
+  if (run != null) return "the wedges at the allene's two ends say it turns opposite ways, or its groups are in line with it";
   const groups = around.length + atom.hs;
   if (groups > 4) return `it has ${groups} groups round it, more than the four of a tetrahedral centre`;
   if (around.length === 3 && atom.hs === 0 && !lonePairCentres(atoms, bonds)(c)) return "it has three bonds and keeps no configuration of its own, so a wedge at it states none";
@@ -321,7 +488,13 @@ export function unreadWhy(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond
   //  which holds the H, which the lone pair, is not drawn)
   if (around.length === 2 && atom.hs === 1 && lonePairCentres(atoms, bonds)(c)) return "its H and its lone pair are both left out, so which way each points is not drawn: draw its H as an atom";
   // (as readStereo has it: a centre drawn with three bonds - its H, or its lone pair, left out)
-  if (around.length === 3 && twoInLine(atom, around.map((n) => atoms[n]))) return "two of its bonds in line or on top of each other";
+  const liftOf = (n: number) => {
+    const w = mine.find((b) => b.wedge && b.wedge.narrow === c && (b.a === n || b.b === n))?.wedge;
+    return w ? (w.stereo === "up" ? 1 : -1) : 0;
+  };
+  const why =
+    around.length === 3 ? threeBondsSayNothing(atom, around.map((n) => atoms[n]), around.map(liftOf)) : around.length === 4 ? fourBondsSayNothing(atom, around.map((n) => atoms[n]), around.map(liftOf)) : null;
+  if (why) return why;
   return "they are drawn crossed, saying neither way round";
 }
 
@@ -625,6 +798,68 @@ export function sameConfiguration(
     if (len) swaps += len - 1;
   }
   return (swaps % 2 === 0) === (p.volume === q.volume);
+}
+
+/**
+ * The double bonds of a structure that arrives with no drawing - a SMILES's, a name's, a file's with no places - that could have a cis or
+ * trans and are given none, and how each is to be drawn so that it states none (Brecher 2006, ST-4.4; ST-6.2): where each end has one group,
+ * each end kept STRAIGHT on from the bond (`straight`, by atom: the layout's `linear`); where an end has two, or the bond is in a ring (of
+ * eight atoms or more: a ring atom cannot be kept straight on), a wavy bond on a group (`either`, by bond: the bond's "either", drawn as a
+ * wavy bond on a single group, a ring's bond beside it - `layout2d` `unspecifiedDoubles`). Never bent as if stated. Which double bonds could
+ * have one is the reader's own test (`readStereo`): a group on each end, not in a ring of seven atoms or fewer, not cumulated, not a bond of
+ * a Hückel ring (an aromatic macrocycle's: `huckelBonds`), not a C=N whose E/Z is none of its own (`movingCN`: an amidine's) - and not an
+ * end with two groups that are alike (`symmetryOrbits`), which has none either way. One given a configuration (`LayoutBond.stereo`) is left
+ * as it is.
+ */
+export function openDoubleBonds(input: LayoutInput): { straight: number[]; either: number[] } {
+  const n = input.atoms.length;
+  const neighbours: number[][] = Array.from({ length: n }, () => []);
+  const order = new Map<string, number>();
+  for (const b of input.bonds) {
+    if (b.a === b.b || order.has(key(b.a, b.b))) continue;
+    neighbours[b.a].push(b.b);
+    neighbours[b.b].push(b.a);
+    order.set(key(b.a, b.b), b.order);
+  }
+  const cumulated = (end: number, other: number) => neighbours[end].some((m) => m !== other && (order.get(key(end, m)) ?? 0) >= 2);
+  let orbits: number[] | null = null;
+  let huckel: Set<string> | null = null;
+  let moving: Map<number, unknown> | null = null;
+  const alike = (p: number, q: number) => (orbits ??= symmetryOrbits(input).orbit)[p] === orbits[q];
+  const straight = new Set<number>();
+  const either: number[] = [];
+  input.bonds.forEach((b, i) => {
+    if (b.order !== 2 || b.stereo) return;
+    const groups = (end: number, other: number) => neighbours[end].filter((m) => m !== other);
+    const [ga, gb] = [groups(b.a, b.b), groups(b.b, b.a)];
+    if (!ga.length || !gb.length || ga.length > 2 || gb.length > 2) return;
+    if (inSmallRing(neighbours, b.a, b.b) || cumulated(b.a, b.b) || cumulated(b.b, b.a)) return;
+    // (a bond of a Hückel ring - an aromatic macrocycle's, a porphyrin's - has no cis or trans: its Kekulé form is only one way of writing it)
+    if ((huckel ??= huckelBonds(n, input.bonds)).has(key(b.a, b.b))) return;
+    if ((moving ??= movingCN(input.atoms, input.bonds)).has(i)) return;
+    if ((ga.length === 2 && alike(ga[0], ga[1])) || (gb.length === 2 && alike(gb[0], gb[1]))) return;
+    if (ga.length === 1 && gb.length === 1 && !inRing(neighbours, b.a, b.b)) {
+      straight.add(b.a);
+      straight.add(b.b);
+    } else either.push(i);
+  });
+  return { straight: [...straight], either };
+}
+
+/** Whether the bond i-j is in a ring: j reached from i some other way. */
+function inRing(neighbours: readonly number[][], i: number, j: number): boolean {
+  const seen = new Set([i]);
+  const queue = neighbours[i].filter((n) => n !== j);
+  queue.forEach((n) => seen.add(n));
+  for (let h = 0; h < queue.length; h++) {
+    if (queue[h] === j) return true;
+    for (const m of neighbours[queue[h]]) {
+      if (seen.has(m)) continue;
+      seen.add(m);
+      queue.push(m);
+    }
+  }
+  return false;
 }
 
 /** Whether the bond i-j is in a ring of seven atoms or fewer: j reached from i some other way within six bonds. */

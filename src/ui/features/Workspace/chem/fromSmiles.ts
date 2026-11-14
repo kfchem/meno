@@ -3,7 +3,11 @@ import type { ChemClient } from "../../../../lib/roles/client";
 import { NOT_READ, notReadSaid } from "../../../../lib/chem/smilesWhy";
 import type { Model } from "../store/types";
 import { editorModelOf, processFileContent } from "../utils/io";
-import { laidOut } from "./cleanUp";
+import { laidOut, type GivenRuns, type OpenDoubles } from "./cleanUp";
+import { smilesInput } from "../../../../lib/layout/smilesInput";
+import { openDoubleBonds } from "../../../../lib/layout/drawn";
+import { readSmiles } from "../../../../lib/chem/smiles";
+import { leftOver, stereoGraphOf } from "../../../../lib/chem/stereoOpen";
 import { openStereo } from "./openStereo";
 import type { DrawingStyle } from "../../../../lib/chem/style";
 
@@ -19,8 +23,12 @@ export async function structureFromSmiles(smiles: string, style?: DrawingStyle):
   // (and how many of its stereocentres and double bonds the SMILES leaves without a configuration - what the same plugin
   //  perceives in it, Meno's rules on it, as a step refusing a structure for it has them (chem/openStereo), while it is
   //  drawn: none said where it cannot be asked, or does not answer in time - the structure comes all the same)
-  const [open, drawn] = await Promise.all([withinTime(openStereo(c, [molblock]).then((o) => o.left), STEREO_ASK_MS).catch(() => null), drawingOf(molblock, style)]);
-  const stereoOpen = stereoOpenOf(open);
+  // (an allene's axis and an odd cumulene's cis or trans, which the SMILES says and a MOL block cannot: Meno's own reading of the text, where it is of the same atoms)
+  const given = givenRunsOf(smiles, molblock);
+  // (and the double bonds it leaves open drawn as open: straight on, or a wavy bond on a group - Brecher 2006, ST-4.4)
+  const opened = openDoublesOf(smiles, molblock);
+  const [open, drawn] = await Promise.all([withinTime(openStereo(c, [molblock]).then((o) => o.left), STEREO_ASK_MS).catch(() => null), drawingOf(molblock, style, given?.runs, opened ?? undefined)]);
+  const stereoOpen = stereoOpenOf(open && given ? specified(open, given.bonds, molblock) : open);
   return stereoOpen ? { ...drawn, stereoOpen } : drawn;
 }
 
@@ -98,11 +106,11 @@ export function withoutStereoOpen<T extends { stereoOpen?: StereoOpen; asCame?: 
  * engine fail. One way for every such drawing: a SMILES's, and the
  * structures a step makes.
  */
-export async function drawingOf(molblock: string, style?: DrawingStyle): Promise<Model & { asCame?: string }> {
+export async function drawingOf(molblock: string, style?: DrawingStyle, given?: GivenRuns, open?: OpenDoubles): Promise<Model & { asCame?: string }> {
   const result = await processFileContent("drawing.mol", molblock);
   const drawn = editorModelOf(result.model);
   // (as it came, said why: put down, it is said - asCameSaid)
-  return laidOut(drawn, style).catch((e: unknown) => {
+  return laidOut(drawn, style, given, open).catch((e: unknown) => {
     // (kept for whoever looks: what the sentence said plainly leaves out)
     console.warn("the structure is drawn as the plugin laid it out", e);
     return { ...drawn, asCame: e instanceof Error ? e.message : String(e) };
@@ -119,4 +127,72 @@ export function asCameSaid(drawn: { asCame?: string }): string | null {
   if (/one atom on another|on a bond/.test(drawn.asCame)) return "Drawn as it came: it could not be laid out without putting one atom on another.";
   if (/stereochemistry|configuration|wedge/.test(drawn.asCame)) return "Drawn as it came: it could not be laid out keeping its stereochemistry.";
   return "Drawn as it came: it could not be laid out.";
+}
+
+/**
+ * The allenes' axes and odd cumulenes' cis or trans a SMILES gives (lib/chem/smiles), by the atoms of the MOL block the plugin read it to - the
+ * same atoms, in the same order, or none - and the double bonds of the MOL block each run is made of (what the plugin left open of them is then
+ * given, `specified`). None where the SMILES has none, or reads otherwise, or where the block's atoms or bonds are not the SMILES's - then what it leaves open stays said open.
+ */
+export function givenRunsOf(smiles: string, molblock: string): { runs: GivenRuns; bonds: number[] } | null {
+  let own;
+  try {
+    own = readSmiles(smiles);
+  } catch {
+    return null;
+  }
+  const runs = { axes: own.axes ?? [], cumulated: own.cumulated ?? [] };
+  if (!runs.axes.length && !runs.cumulated.length) return null;
+  const graph = stereoGraphOf([molblock]);
+  if (!graph || graph.atoms.length !== own.atoms.length || graph.atoms.some((a, i) => a.el !== own.atoms[i].el)) return null;
+  // (the same bonds between the same atoms - orders may differ by a Kekule form - or the atoms are only alike: a hand read for other groups would be drawn on a structure it was not read of)
+  const pair = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
+  const wanted = own.bonds.map((b) => pair(b.a1, b.a2)).sort();
+  const had = graph.bonds.map((b) => pair(b.a, b.b)).sort();
+  if (wanted.length !== had.length || wanted.some((k, i) => k !== had[i])) return null;
+  // (each run's double bonds: along double bonds from one end to the other)
+  const bonds: number[] = [];
+  for (const [i, j] of [...runs.axes, ...runs.cumulated].map((r) => r.atoms)) {
+    const along = (at: number, to: number, seen: readonly number[]): number[] | null => {
+      if (at === to) return [];
+      for (const [k, b] of graph.bonds.entries()) {
+        if (b.order !== 2 || (b.a !== at && b.b !== at)) continue;
+        const next = b.a === at ? b.b : b.a;
+        if (seen.includes(next)) continue;
+        const rest = along(next, to, [...seen, next]);
+        if (rest) return [k, ...rest];
+      }
+      return null;
+    };
+    bonds.push(...(along(i, j, [i]) ?? []));
+  }
+  return { runs, bonds };
+}
+
+/**
+ * The double bonds a SMILES leaves without a configuration that could have one (layout/drawn `openDoubleBonds`), by the MOL block the plugin
+ * read it to - its atoms and bonds the SMILES's, or none: each end to keep straight on, by atom; each bond to give a wavy bond, by bond.
+ * None where nothing is open, or the block is not the SMILES's atoms and bonds (then it is drawn as the plugin's drawing says).
+ */
+export function openDoublesOf(smiles: string, molblock: string): OpenDoubles | null {
+  let input;
+  try {
+    input = smilesInput(smiles);
+  } catch {
+    return null;
+  }
+  const open = openDoubleBonds(input);
+  if (!open.straight.length && !open.either.length) return null;
+  const graph = stereoGraphOf([molblock]);
+  if (!graph || graph.atoms.length !== input.atoms.length || graph.atoms.some((a, i) => a.el !== input.atoms[i].el)) return null;
+  const pair = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
+  const blockBond = new Map(graph.bonds.map((b, k) => [pair(b.a, b.b), k]));
+  if (blockBond.size !== input.bonds.length || input.bonds.some((b) => !blockBond.has(pair(b.a, b.b)))) return null;
+  return { straight: open.straight, either: open.either.map((i) => blockBond.get(pair(input.bonds[i].a, input.bonds[i].b))!) };
+}
+
+/** What the plugin leaves open, less the double bonds of the runs the SMILES configures (`givenRunsOf`). */
+export function specified(open: Parameters<typeof leftOver>[0], bonds: readonly number[], molblock: string) {
+  const graph = stereoGraphOf([molblock]);
+  return graph ? leftOver(open, { centres: [], doubles: bonds.map((bond) => ({ bond, ends: [0, 0] as [number, number], cis: true })) }, graph.bonds) : open;
 }

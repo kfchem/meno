@@ -57,10 +57,10 @@ export function settingsDiffer(ws: { style: StyleChoice; style3d: Workspace3D },
  * What to ask a workspace in `ws`'s styles, Settings' being `settings`, and
  * answered (or opened) when Settings' were `answered` (`keyOf`): nothing
  * where Settings' are as they were then, or where they are now the
- * workspace's own.
+ * workspace's own - nor before Settings have been read (`answered` null).
  */
-export function styleAsk(ws: { style: StyleChoice; style3d: Workspace3D }, settings: SettingsStyles, answered: string): StyleAsk | null {
-  if (keyOf(settings) === answered) return null;
+export function styleAsk(ws: { style: StyleChoice; style3d: Workspace3D }, settings: SettingsStyles, answered: string | null): StyleAsk | null {
+  if (answered === null || keyOf(settings) === answered) return null;
   const differ = settingsDiffer(ws, settings);
   if (!differ) return null;
   const { drawing, d3 } = differ;
@@ -68,4 +68,15 @@ export function styleAsk(ws: { style: StyleChoice; style3d: Workspace3D }, setti
     ...(drawing ? { drawing: { now: drawingName(ws.style), settings: drawingName(settings.drawing) } } : {}),
     ...(d3 ? { d3: { now: rolesName(ws.style3d), settings: rolesName(settings.roles) } } : {}),
   };
+}
+
+/**
+ * Settings' styles as a workspace has them to compare: as it was opened -
+ * and, where it was opened before Settings were read (the defaults are in
+ * the store until then), as they were when first read - or as last
+ * answered (`held`). A change after they were read is the one asked about,
+ * never their being read.
+ */
+export function answeredWith(held: string | null, loaded: boolean, settings: SettingsStyles): string | null {
+  return held ?? (loaded ? keyOf(settings) : null);
 }

@@ -8,10 +8,12 @@
  */
 import { describe, expect, it } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 
 const CORE = __dirname;
 const SRC = resolve(CORE, "../../..");
+/** A path with forward slashes, as the list below writes one, on Windows too. */
+const slash = (p: string) => p.split(sep).join("/");
 
 /**
  * What a core file may import from outside it, by its path from `src/`: data tables, each with why. A new entry is a decision, made in a review.
@@ -19,7 +21,7 @@ const SRC = resolve(CORE, "../../..");
  */
 export const ALLOWED_OUTSIDE: { path: string; why: string }[] = [{ path: "lib/chem/elements", why: "the element table: data" }];
 
-/** The module names a file's code imports, from its static `import`s and `export ... from`s and its dynamic `import()`s, comments left out. */
+/** The module names a file's code imports, from its static `import`s and `export ... from`s and its dynamic `import()`s, comments left out: string-literal module names only. */
 export function importsOf(code: string): string[] {
   const bare = code.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
   const found = new Set<string>();
@@ -32,9 +34,9 @@ export function importsOf(code: string): string[] {
 /** Why a core file's import of `spec` is not allowed: none where it is. */
 export function refusedImport(file: string, spec: string): string | null {
   if (!spec.startsWith(".")) return `"${spec}" is no part of the core: a package (core imports none)`;
-  const target = resolve(dirname(file), spec);
-  if (target === CORE || target.startsWith(CORE + "/")) return null;
-  const path = relative(SRC, target).replace(/\.ts$/, "");
+  const target = slash(resolve(dirname(file), spec));
+  if (target === slash(CORE) || target.startsWith(slash(CORE) + "/")) return null;
+  const path = slash(relative(SRC, target)).replace(/\.ts$/, "");
   return ALLOWED_OUTSIDE.some((a) => a.path === path) ? null : `"${spec}" (src/${path}) is outside the core and on no list`;
 }
 
@@ -58,14 +60,14 @@ function files(dir: string): string[] {
 
 describe("the core's boundary", () => {
   it("imports nothing but itself, and the element table", () => {
-    const problems = files(CORE).flatMap((f) => importsOf(readFileSync(f, "utf8")).flatMap((spec) => refusedImport(f, spec) ?? []).map((why) => `${relative(SRC, f)}: ${why}`));
+    const problems = files(CORE).flatMap((f) => importsOf(readFileSync(f, "utf8")).flatMap((spec) => refusedImport(f, spec) ?? []).map((why) => `${slash(relative(SRC, f))}: ${why}`));
     expect(problems).toEqual([]);
   });
 
   it("reaches for no window, document, Tauri or network", () => {
     const problems = files(CORE).flatMap((f) => {
       const code = codeOnly(readFileSync(f, "utf8"));
-      return REACHES.filter((r) => r.test(code)).map((r) => `${relative(SRC, f)}: ${r}`);
+      return REACHES.filter((r) => r.test(code)).map((r) => `${slash(relative(SRC, f))}: ${r}`);
     });
     expect(problems).toEqual([]);
   });

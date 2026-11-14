@@ -56,6 +56,16 @@ describe("a graph's facts, by hand", () => {
     expect(factsOf(apart).pieces).toEqual([[0], [1, 2, 3, 4, 5, 6]]);
   });
 
+  it("takes a pi system that comes before its star in the order of atoms as one piece too: each atom reaches its star, whatever its index, and a bond is walked before a pi link", () => {
+    // (five ring atoms 0-4 first, the metal 5 and its star 6 after, the star bonded to the metal; walked from atom 0: its star, then what the star reaches by a bond - the metal - before the other ring atoms)
+    const atoms = [...[0, 1, 2, 3, 4].map(() => ({ el: "C" })), { el: "Fe" }, { el: "*", pi: [0, 1, 2, 3, 4] }];
+    const g = graph(["C", "C", "C", "C", "C", "Fe", "*"], [[5, 6]], { atoms });
+    expect(factsOf(g).pieces).toEqual([[0, 6, 5, 1, 2, 3, 4]]);
+    // (a pi entry that names no atom, or the star's own place, joins nothing and breaks nothing)
+    const odd = [...atoms.slice(0, 6), { el: "*", pi: [0, 1, 2, 3, 4, 6, 9, -1] }];
+    expect(factsOf(graph(["C", "C", "C", "C", "C", "Fe", "*"], [[5, 6]], { atoms: odd })).pieces).toEqual([[0, 6, 5, 1, 2, 3, 4]]);
+  });
+
   it("an empty graph has nothing", () => {
     const f = factsOf(graph([], []));
     expect([f.around, f.bondsAt, f.pieces]).toEqual([[], [], []]);

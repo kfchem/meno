@@ -60,7 +60,7 @@ src/
   lib/chem/elements.ts    the one element table: symbol, number, name, colour, van der Waals and covalent radii, each column's source cited
   lib/chem/reactionMap.ts a reaction's full atom map in 3D, hydrogens included (accelMapper.ts: ACCeL's mapper, ported; docs/ATOM-MAPPING.md)
   lib/chem/cip/           R/S and E/Z by Meno's own reading of the CIP rules: prepare.ts (the 1966 conventions), digraph.ts,
-                          rank.ts (rules 1a to 3) - docs/CIP.md; not wired in yet
+                          rank.ts (rules 1a to 5), in3d.ts (a molecule in 3D's) - docs/CIP.md; on the drawing by Workspace/chem/cipMarks (cipWorker.ts)
   lib/chem/perception/    the core of what the chemistry reads of a structure (one definition per concept): graph.ts (the graph the core
                           reads), facts.ts (a graph's neighbours, bonds, pieces and rings, worked out once per graph object), rings.ts (the smallest set of smallest rings, and what two rings share: spiro, fused, bridged), stereo/types.ts (the
                           types for a centre, a double bond and an axis). Two rules, each kept by a test: it imports nothing of the layout's,
@@ -70,6 +70,9 @@ src/
   lib/scene/              gltf.ts: a scene written as glTF 2.0, for a renderer; shapes.ts: the ball and stick it is made of (docs/RENDER.md)
   utils/structureParsers  parseSDF (V2000/V3000), parseXYZ (multi-frame, distance-based bonds)
   utils/importers         readMoleculesFromText, RXN grouping/layout, EditorModel conversion
+  lib/chem/perception/projection/  the solids the projection tools draw and read (pure geometry, bond length 1): solids.ts - the ideal chair and its flip, boat,
+                          half-chair, envelope, Haworth ring, Newman pair, rings fused on a chair - and views.ts - the standard views, the textbook's
+                          chair and Haworth ring as drawn (`drawn`) and their depth. It imports nothing outside its folder.
   samples/                textbook structures and reactions for the tests and the workflow's 3D node
                           (see samples/README.md)
   ui/layouts/TopBar       custom title bar: tabs, "+" (a new workspace), online/offline, Save (the workspace in front), Settings,
@@ -1412,6 +1415,7 @@ closing quits Meno once they have been asked to stop.
 | `pdf_text` | `lib/pdf/text.ts` | A page's letters, each with its box and whether it is set bold. |
 | `pdf_objects` | `lib/pdf/figures.ts` | What a page is made of - words, paths, pictures, shadings, forms - each with its box. |
 | `pdf_figure` | `ui/features/Workspace/utils/figures.ts` | What a figure within a box is drawn with: its paths' steps, its letters, its pictures' boxes. |
+| `pdf_figure_raw` | `ui/features/Workspace/utils/pdfStructures.ts` | The same as `pdf_figure`, as its JSON in bytes: a worker unpacks it (`structuresRead`), so that megabytes of paths are never parsed on the drawing's thread. |
 | `write_document` | `lib/io/writeDocument.ts` | A document the chemist chose where to put - saved, exported, a picture, a PDF - written whole or not at all: beside it first, then put in its place, the file there left as it was where anything fails, and what it had besides its bytes kept; with `keep-old`, the file there kept beside it first as `<name>.bak`; only where the fs plugin's scope lets the page write (`savefile.rs`; docs/FILE-IO.md, *Save and Export*). |
 | `write_app_file` | `lib/io/writeDocument.ts` | One of Meno's own files - its settings, its environments' notes - written whole or not at all, as a document is; only a path inside Meno's data folder or its local one (`savefile.rs`). |
 | `font_families` | `ui/fonts/typefaces.ts` | Every typeface installed (fontdb), for the label typeface picker. |
@@ -1608,8 +1612,11 @@ path it is given:
   `ext_spawn_sidecar`, a script in the plugin's folder. Its input files must lie inside its folder. A program
   installed separately, and each program beside it, is given as arguments
   only the files written for its job (or one by its name without its
-  extension, as orca_2aim takes `input`), options (`-nt`) and numbers
-  (`names_only_written`). It is given its
+  extension, as orca_2aim takes `input`), those its plugin reads back of
+  the job once it is done (its `reads`, by name exactly: Gaussian 16W takes
+  the output it writes by name, `input.log`), each inside its work folder,
+  options (`-nt`) and numbers (`names_only_written`; the runner reads the
+  files read back from the job's kept roles). It is given its
   environment's activation, and is pointed at the proxy with no task, as
   a worker is. A job's id must be one of Meno's (a UUID) whose folder holds
   a `job.json`; a file read from it must lie inside it, reached by no

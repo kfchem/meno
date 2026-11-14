@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readStereo, straightEnds, type DrawnAtom, type DrawnBond } from "../../../../lib/layout/drawn";
+import { readStereo, sameConfiguration, straightEnds, type DrawnAtom, type DrawnBond } from "../../../../lib/layout/drawn";
 import { moleculesToEditorModel, readMoleculesFromText } from "../../../../utils/importers";
 import { createWorkspaceDocument } from "../document";
 import { connectStoreToDocument, createEditorStore } from "../store";
@@ -79,10 +79,18 @@ describe("a configuration the drawing does not state", () => {
     }
   });
 
-  it("is not read from a centre with two of its three bonds in line, a T, or on top of each other", () => {
-    // (Cl and Br 180 - 5 degrees apart; Cl and Br 6 degrees apart: RDKit reads R from both, by its own tolerance)
-    expect(stereoOf(centre(90, 175, 0)).tetra.has(0)).toBe(false);
+  it("is not read from a centre with two of its three bonds plain and in line, a T, or two on top of each other", () => {
+    // (F and Cl plain, 180 - 5 degrees apart, the wedged Br between them: a T, ST-1.2.12; Cl and Br 6 degrees apart)
+    expect(stereoOf(centre(0, 175, 90)).tetra.has(0)).toBe(false);
     expect(stereoOf(centre(90, 210, 216)).tetra.has(0)).toBe(false);
+  });
+
+  it("is read from a centre with its wedge on one of two bonds in line, as the same centre drawn with its bonds apart (ST-1.2.3, ST-1.2.4)", () => {
+    // (Cl and the wedged Br 180 - 5 degrees apart, F to one side: the H in the widest gap, opposite the wedge; the Br anywhere in that gap the same)
+    const inLine = stereoOf(centre(90, 175, 0)).tetra.get(0);
+    const apart = stereoOf(centre(90, 175, 300)).tetra.get(0);
+    expect(inLine).toBeDefined();
+    expect(sameConfiguration(inLine!, apart!)).toBe(true);
   });
 
   it("is read from a double bond whose groups are clear of its line, and not from one with a group straight on", () => {
@@ -95,7 +103,7 @@ describe("a configuration the drawing does not state", () => {
   });
 
   it("stops Clean-up at a centre, which it would draw one way, moving nothing", async () => {
-    const t = canvas(modelOf(centre(90, 175, 0)));
+    const t = canvas(modelOf(centre(0, 175, 90)));
     const tBefore = t.getState().model;
     await expect(cleanUp(t)).rejects.toThrow(/two of its bonds in line or on top of each other/);
     expect(t.getState().model).toBe(tBefore);

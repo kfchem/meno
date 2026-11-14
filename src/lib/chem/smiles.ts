@@ -13,7 +13,9 @@
  * configuration is never dropped without a word. An atom class is kept: a
  * ligand's (./ligands) marks the atoms that bind a metal.
  */
+import { torsionSense, type Axial, type Cumulated } from "../layout/stereo";
 import { lonePairCentres } from "./lonePairCentres";
+import { implicitHydrogens } from "./molecule";
 
 export type SmilesAtom = {
   el: string;
@@ -40,11 +42,61 @@ export type Configuration = { neighbours: number[]; volume: 1 | -1 };
  * on the same side.
  */
 export type SmilesBond = { a1: number; a2: number; order: number; cisTrans?: { refs: [number, number]; cis: boolean } };
-export type Smiles = { atoms: SmilesAtom[]; bonds: SmilesBond[] };
+/**
+ * The atoms and bonds, and the configurations that are not an atom's or a
+ * bond's: an allene's axis, from an @ or @@ on its middle atom (`axes`),
+ * and an odd cumulene's cis or trans, from the directional bonds at its
+ * ends (`cumulated`) - each by atom index, as lib/layout/stereo has them.
+ */
+export type Smiles = { atoms: SmilesAtom[]; bonds: SmilesBond[]; axes?: Axial[]; cumulated?: Cumulated[] };
 
 const ORGANIC = ["Cl", "Br", "B", "C", "N", "O", "P", "S", "F", "I"];
 const AROMATIC = ["b", "c", "n", "o", "p", "s"];
 const BOND_ORDER: Record<string, number> = { "-": 1, "=": 2, "#": 3, $: 4, ":": 4, "/": 1, "\\": 1 };
+
+/**
+ * The aromatic bonds (order 4) that lie in no ring of aromatic bonds - each a
+ * bridge of the graph of aromatic bonds alone - found in one walk over it,
+ * as long as the molecule is large (Tarjan's bridges: a bond is one where no
+ * path back reaches above it).
+ */
+function aromaticBridges(atoms: number, bonds: readonly SmilesBond[]): Set<number> {
+  const near: { to: number; bond: number }[][] = Array.from({ length: atoms }, () => []);
+  bonds.forEach((b, k) => {
+    if (b.order !== 4) return;
+    near[b.a1].push({ to: b.a2, bond: k });
+    near[b.a2].push({ to: b.a1, bond: k });
+  });
+  const order = new Array<number>(atoms).fill(-1);
+  const low = new Array<number>(atoms).fill(0);
+  const bridges = new Set<number>();
+  let count = 0;
+  for (let root = 0; root < atoms; root++) {
+    if (order[root] >= 0 || !near[root].length) continue;
+    // (each step: an atom, the bond it was reached by, and how far through its neighbours the walk is)
+    const stack: { at: number; via: number; next: number }[] = [{ at: root, via: -1, next: 0 }];
+    order[root] = low[root] = count++;
+    while (stack.length) {
+      const top = stack[stack.length - 1];
+      if (top.next < near[top.at].length) {
+        const { to, bond } = near[top.at][top.next++];
+        if (bond === top.via) continue;
+        if (order[to] >= 0) low[top.at] = Math.min(low[top.at], order[to]);
+        else {
+          order[to] = low[to] = count++;
+          stack.push({ at: to, via: bond, next: 0 });
+        }
+        continue;
+      }
+      stack.pop();
+      const up = stack[stack.length - 1];
+      if (!up) continue;
+      low[up.at] = Math.min(low[up.at], low[top.at]);
+      if (low[top.at] > order[up.at]) bridges.add(top.via);
+    }
+  }
+  return bridges;
+}
 
 /** A SMILES string's atoms and bonds; throws on what it cannot read. */
 export function readSmiles(text: string): Smiles {
@@ -67,6 +119,8 @@ export function readSmiles(text: string): Smiles {
   // (the atoms written first, with no atom before them: their H, or lone pair, is the one looked from; and those
   // that carry a ring-closure digit themselves)
   const first = new Set<number>();
+  // (the bonds written with no symbol between two aromatic atoms, taken as aromatic for now: one in no ring is single, below)
+  const unwritten = new Set<number>();
   const closes = new Set<number>();
   const connect = (a: number, mark = "") => {
     if (prev < 0) first.add(a);
@@ -75,6 +129,7 @@ export function readSmiles(text: string): Smiles {
     if (atoms[a].hs === 1) around[a].push(-1);
     if (prev >= 0) {
       const both = atoms[prev].aromatic && atoms[a].aromatic;
+      if (pending == null && both) unwritten.add(bonds.length);
       bonds.push({ a1: prev, a2: a, order: pending ?? (both ? 4 : 1) });
       around[prev].push(a);
       if (pendingDir) directed.push({ from: prev, to: a, up: pendingDir === "/" });
@@ -114,6 +169,7 @@ export function readSmiles(text: string): Smiles {
       const open = rings.get(n);
       if (open) {
         const both = atoms[open.atom].aromatic && atoms[prev].aromatic;
+        if (pending == null && open.order == null && both) unwritten.add(bonds.length);
         bonds.push({ a1: open.atom, a2: prev, order: pending ?? open.order ?? (both ? 4 : 1) });
         around[open.atom][open.slot] = prev;
         around[prev].push(open.atom);
@@ -161,13 +217,31 @@ export function readSmiles(text: string): Smiles {
     throw new Error(`Cannot read "${c}" at ${i} in ${text}`);
   }
   if (rings.size) throw new Error(`Unclosed ring in ${text}`);
+  // An unwritten bond between two aromatic atoms is aromatic only where it is
+  // in a ring of them (OpenSMILES, *Aromaticity*): one that joins two rings
+  // - a biaryl written c1ccccc1c1ccccc1, 2,2'-bipyridine as
+  // c1ccc(nc1)c1ccccn1, or that bipyridine chelating a metal, its two rings
+  // in a ring through the metal - is single, and each ring is its own system
+  // (read as aromatic, the two were one system of twelve atoms, and two of
+  // its N were read with an H nobody wrote)
+  const bridges = unwritten.size ? aromaticBridges(atoms.length, bonds) : new Set<number>();
+  for (const k of unwritten) if (bridges.has(k)) bonds[k] = { ...bonds[k], order: 1 };
   const keepsPyramid = chiral.size
     ? lonePairCentres(
         atoms.map((a) => ({ el: a.el, charge: a.charge, hs: a.hs ?? 0 })),
         bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })),
       )
     : () => false;
+  const orderOf = new Map(bonds.map((b) => [b.a1 < b.a2 ? `${b.a1},${b.a2}` : `${b.a2},${b.a1}`, b.order]));
+  const order = (a: number, b: number) => orderOf.get(a < b ? `${a},${b}` : `${b},${a}`) ?? 0;
+  const axes: Axial[] = [];
   for (const [at, mark] of chiral) {
+    // (an @ between two double bonds: an allene's middle atom - a carbon or an N+, not a sulfur's: C=S=C is bent)
+    const next = around[at].filter((n) => n >= 0);
+    if (linearMiddle(atoms[at]) && next.length === 2 && next.every((n) => order(at, n) === 2)) {
+      axes.push(alleneAxis(at, mark, atoms, around, order, text));
+      continue;
+    }
     const double = bonds.some((b) => b.order === 2 && (b.a1 === at || b.a2 === at));
     atoms[at].tetra = configuration(atoms[at], around[at], mark, { first: first.has(at), closes: closes.has(at), double, lonePair: keepsPyramid(at) }, text);
   }
@@ -186,7 +260,100 @@ export function readSmiles(text: string): Smiles {
     const [p, q] = [side(b.a1, b.a2), side(b.a2, b.a1)];
     if (p && q) b.cisTrans = { refs: [p.n, q.n], cis: p.above === q.above };
   }
-  return { atoms, bonds };
+  // and an odd cumulene's, likewise, at its two ends (OpenSMILES, *Cis/Trans
+  // configuration of double bonds*: F/C=C=C=C/F trans, F/C=C=C=C\F cis)
+  const cumulated: Cumulated[] = [];
+  for (const run of cumulatedRuns(atoms, around, order)) {
+    // (an odd number of double bonds: an even number of atoms)
+    if (run.length % 2 === 1) continue;
+    const [t1, c1] = [run[0], run[1]];
+    const [t2, c2] = [run[run.length - 1], run[run.length - 2]];
+    const [p, q] = [side(t1, c1), side(t2, c2)];
+    if (p && q) cumulated.push({ atoms: [t1, t2], refs: [p.n, q.n], cis: p.above === q.above });
+  }
+  return { atoms, bonds, ...(axes.length ? { axes } : {}), ...(cumulated.length ? { cumulated } : {}) };
+}
+
+/** Whether an atom between two double bonds is drawn straight through: a carbon, or an N+ - a sulfur's C=S=C is bent, and has no axis (the rule the restraints' linear-by-bonds has). */
+const linearMiddle = (a: SmilesAtom) => a.el === "C" || (a.el === "N" && a.charge === 1);
+
+/**
+ * Each run of cumulated double bonds, by its atoms end to end (an
+ * allene's three, a butatriene's four), its first end the one whose atom
+ * comes first; a run is two or more double bonds, each atom between its
+ * ends with no other neighbour.
+ */
+function cumulatedRuns(atoms: readonly SmilesAtom[], around: readonly number[][], order: (a: number, b: number) => number): number[][] {
+  const n = atoms.length;
+  const near = (a: number) => (around[a] ?? []).filter((m) => m >= 0);
+  const middle = (a: number) => linearMiddle(atoms[a]) && near(a).length === 2 && near(a).every((m) => order(a, m) === 2);
+  const runs: number[][] = [];
+  for (let a = 0; a < n; a++) {
+    if (middle(a)) continue;
+    for (const m of near(a)) {
+      if (order(a, m) !== 2 || !middle(m)) continue;
+      const run = [a, m];
+      while (middle(run[run.length - 1])) run.push(near(run[run.length - 1]).find((x) => x !== run[run.length - 2])!);
+      if (run[0] < run[run.length - 1]) runs.push(run);
+    }
+  }
+  return runs;
+}
+
+/**
+ * An allene's axis from the @ or @@ on its middle atom (OpenSMILES,
+ * *Tetrahedral Allene-like Systems*): the run of cumulated double bonds
+ * "collapsed" into one tetrahedral centre, its neighbours the two ends'
+ * other neighbours - the end the middle atom is written from first, each
+ * end's in the order a centre's are read (the atom before it, its H, its
+ * ring closures, the atoms after it) - and the @ or @@ read of those four
+ * as of a centre's (*Tetrahedral Centers*). Put as an axis: the ends, a
+ * neighbour of each, and the sign of the torsion between them, the
+ * collapsed centre's turn kept, since pressing the run flat along its axis
+ * turns nothing. A mark not on the middle of an even run, or an end
+ * without two neighbours besides the run (a CH2), is refused.
+ */
+function alleneAxis(at: number, mark: string, atoms: readonly SmilesAtom[], around: readonly number[][], order: (a: number, b: number) => number, text: string): Axial {
+  const why = (reason: string) => new Error(`Cannot read the configuration at [${atoms[at].el}${mark}] in ${text}: ${reason}`);
+  if (mark !== "@" && mark !== "@@") throw why("only @ and @@ are read");
+  const near = (a: number) => around[a].filter((m) => m >= 0);
+  // (each way along the run to its end: the end, and the atom before it)
+  const end = (from: number) => {
+    let [prev, x, steps] = [at, from, 1];
+    while (linearMiddle(atoms[x]) && near(x).length === 2 && near(x).every((m) => order(x, m) === 2)) {
+      [prev, x] = [x, near(x).find((m) => m !== prev)!];
+      steps++;
+    }
+    return { end: x, before: prev, steps };
+  };
+  const [first, last] = near(at).map(end);
+  if (first.steps !== last.steps) throw why("it is not the middle atom of its run of cumulated double bonds");
+  // (an end's neighbours but the run, in the order a centre's are read: its H where a bracket's would be, after the atom before it)
+  const others = ({ end: e, before }: { end: number; before: number }): number[] => {
+    const a = atoms[e];
+    const sum = near(e).reduce((t, m) => t + order(e, m), 0);
+    const hs = a.hs ?? (a.aromatic ? 0 : implicitHydrogens(a.el, sum, a.charge ?? 0));
+    const listed = around[e].includes(-1) ? [...around[e]] : around[e].length && around[e][0] >= 0 && e > around[e][0] ? [around[e][0], ...Array(hs).fill(-1), ...around[e].slice(1)] : [...Array(hs).fill(-1), ...around[e]];
+    return listed.filter((m) => m !== before);
+  };
+  const ends = [first, last];
+  const four = ends.flatMap(others);
+  if (ends.some((x) => others(x).length !== 2) || ends.some((x) => others(x).every((m) => m < 0))) throw why("each end of an allene needs two neighbours besides it, not both hydrogens");
+  // (the collapsed centre's four corners: the first three span a positive volume for @, as a centre's do (`configuration`))
+  const corner = [
+    [1, 1, 1],
+    [1, -1, -1],
+    [-1, 1, -1],
+    [-1, -1, 1],
+  ];
+  if (mark === "@@") [corner[1], corner[2]] = [corner[2], corner[1]];
+  const mid = (u: number[], v: number[]) => u.map((x, k) => (x + v[k]) / 2);
+  const [near0, near1] = [mid(corner[0], corner[1]), mid(corner[2], corner[3])];
+  // (each end's reference: its first neighbour that is an atom)
+  const p = four[0] >= 0 ? 0 : 1;
+  const q = four[2] >= 0 ? 2 : 3;
+  const sense = torsionSense(corner[p], near0, near1, corner[q]);
+  return { atoms: [first.end, last.end], refs: [four[p], four[q]], sense: sense as 1 | -1 };
 }
 
 /**

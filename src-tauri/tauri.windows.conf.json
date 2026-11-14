@@ -9,6 +9,7 @@
   "bundle": {
     "resources": [
       "resources/licenses/*",
+      "resources/fonts/*",
       "pdfium/windows/pdfium.dll",
       "icons/document/meno-document.ico",
       "icons/formats/*.ico"

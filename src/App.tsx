@@ -153,15 +153,17 @@ export default function App() {
     });
   }, []);
 
-  // The application's settings - the drawing style among them - read once,
-  // and the network brought into line with them: offline or not, and what
-  // has been allowed. From then on, a change to either is saved.
+  // The application's settings - the drawing style among them - read once
+  // (main.tsx has done it before anything is drawn; here it is the same,
+  // and not behind the network), and the network brought into line with
+  // them: offline or not, and what has been allowed. From then on, a
+  // change to either is saved.
   useEffect(() => {
     let stopUpdates: (() => void) | undefined;
     let gone = false;
     void (async () => {
-      await startNetwork();
       await loadAppSettings();
+      await startNetwork();
       await applyNetworkSettings(useAppSettings.getState().network);
       // keeping Meno up to date, as the network now allows (lib/update)
       if (!gone) stopUpdates = startUpdates();
