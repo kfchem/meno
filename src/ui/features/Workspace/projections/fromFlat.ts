@@ -4,10 +4,14 @@
  * of each group carried with it as drawn. The configuration is the one the reader reads from the flat drawing (Brecher 2006, ST-0.3, ST-1.10);
  * nothing else is taken from it. Pure: the model in, the atoms and bonds to change out.
  *
- * Which of the two chairs is drawn is no rule of any text: it is this tool's convention, the one with fewer groups axial (a tie: the group
- * whose first atom ranks lowest in the canonical order equatorial), lying as near to the flat drawing as it can, a tie to form 1 (ST-3.1:
- * from above and from the right). A pyranose's ring - its ring O beside a carbon that carries an O - lies with that O at the back and that
- * carbon at the right-hand end (McNaught 1996, Chart III). *Flip chair* draws the other chair; 3D never takes the drawn conformation.
+ * Which of the two chairs is drawn is no rule of any text: it is this tool's convention, the one with fewer groups axial - a tie: the one
+ * whose axial group is the smaller, by its non-hydrogen atoms, so cis-4-tert-butylcyclohexanol has its tert-butyl equatorial and its OH
+ * axial; still tied, the group whose first atom ranks lowest in the canonical order equatorial - lying as near to the flat drawing as it
+ * can, a tie to form 1 (ST-3.1: from above and from the right). A pyranose's ring - its ring O beside a carbon that carries an O outside
+ * the ring, on a single bond - lies with that O at the back and that carbon at the right-hand end (McNaught 1996, 2-Carb-7, Chart III), in
+ * either chair: so a pyranose in its 1C4 chair is the picture with its up end at the right, not form 1. The chart draws it so; it is not to
+ * be mended to form 1. Where both carbons beside the ring O carry one (a 2,6-dialkoxyoxane), that rule does not choose, and the ring lies
+ * as any other. *Flip chair* draws the other chair; 3D never takes the drawn conformation.
  *
  * Offered on a single saturated six-ring in this build: no ring fused, spiro or bridged on it, no double bond at its atoms, no depth yet.
  * Not offered where the ring has stereocentres and the drawing gives the configuration of none (ST-3.2: a perspective drawing states the
@@ -141,10 +145,14 @@ export function chairFromFlat(part: Model, id: number): FromFlat | { refused: st
   const middle = { x: ring.reduce((s, r) => s + at.get(r)!.x, 0) / 6, y: ring.reduce((s, r) => s + at.get(r)!.y, 0) / 6 };
   const ringBonds = ring.map((r, i) => Math.hypot(at.get(r)!.x - at.get(ring[(i + 1) % 6])!.x, at.get(r)!.y - at.get(ring[(i + 1) % 6])!.y));
   const length = ringBonds.reduce((s, l) => s + l, 0) / 6 || NOMINAL_BOND_LENGTH;
-  // (a pyranose's ring: the ring O, and the ring carbon beside it that carries an O off the ring - C-1)
+  // (a pyranose's ring: the ring O, and the ring carbon beside it that carries an O off the ring, on a single bond, as every bond at the
+  //  ring's atoms is here - C-1; none where both carbons beside the ring O carry one, a 2,6-dialkoxyoxane: laid as any other ring)
   const ringO = ring.filter((r) => at.get(r)!.el === "O");
-  const c1 = ringO.length === 1 ? near(ringO[0]).find((n) => inRing.has(n) && at.get(n)!.el === "C" && groups.get(n)!.some((g) => at.get(g)!.el === "O")) : undefined;
-  // (the group whose first atom ranks lowest in the canonical order: equatorial where a tie of axial groups leaves the choice)
+  const carrying = ringO.length === 1 ? near(ringO[0]).filter((n) => inRing.has(n) && at.get(n)!.el === "C" && groups.get(n)!.some((g) => at.get(g)!.el === "O")) : [];
+  const c1 = carrying.length === 1 ? carrying[0] : undefined;
+  // (a group's non-hydrogen atoms, what hangs from it counted: of chairs with as many groups axial, the one whose axial groups are the
+  //  smaller; still tied, the group whose first atom ranks lowest in the canonical order equatorial)
+  const heavy = (r: number, g: number) => hanging(r, g).filter((h) => at.get(h)!.el !== "H").length;
   const allGroups = [...groups.values()].flat();
   const lowest = allGroups.length ? allGroups.reduce((m, g) => (ranks.get(g)! < ranks.get(m)! ? g : m)) : undefined;
   const ways: Way[] = [];
@@ -162,6 +170,7 @@ export function chairFromFlat(part: Model, id: number): FromFlat | { refused: st
           const wavy: number[] = [];
           let axial = 0;
           const onAxial = new Set<number>();
+          const axialSizes: number[] = [];
           let fits = true;
           for (const r of ring) {
             const free = seenPlaces(d, k.get(r)!);
@@ -201,7 +210,10 @@ export function chairFromFlat(part: Model, id: number): FromFlat | { refused: st
             if (onAx != null) {
               places.set(onAx, spot(ax));
               onAxial.add(onAx);
-              if (at.get(onAx)!.el !== "H") axial++;
+              if (at.get(onAx)!.el !== "H") {
+                axial++;
+                axialSizes.push(heavy(r, onAx));
+              }
             }
           }
           if (!fits) continue;
@@ -216,8 +228,10 @@ export function chairFromFlat(part: Model, id: number): FromFlat | { refused: st
             const behind = d.atoms[k.get(ringO[0])!].z! < d.atoms[k.get(other)!].z!;
             pyranose = right && behind ? 0 : 1;
           }
+          // (the axial groups' sizes, largest first, padded to six: compared place by place, the smaller wins)
+          const sizes = [...axialSizes.sort((p, q) => q - p), 0, 0, 0, 0, 0, 0].slice(0, 6);
           const tie = lowest != null && onAxial.has(lowest) ? 1 : 0;
-          ways.push({ d, at: k, places, wavy, key: [axial, tie, pyranose, Math.round(moved * 1e6) / 1e6, form === FIRST_FORM ? 0 : 1] });
+          ways.push({ d, at: k, places, wavy, key: [axial, ...sizes, tie, pyranose, Math.round(moved * 1e6) / 1e6, form === FIRST_FORM ? 0 : 1] });
         }
       }
     }

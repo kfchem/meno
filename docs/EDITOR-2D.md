@@ -545,12 +545,19 @@ on a page); the Newman projection follows.
   own places), what hangs from it carried as drawn, the ring's wedges gone (its configuration is in the depth now), as one step; *Flip chair*
   gives the other chair, *Draw flat* or Undo the flat drawing again. Which of the two chairs is drawn is this tool's convention, not a rule of
   any text and no statement of the favoured conformer (1-methyl-1-phenylcyclohexane comes out phenyl equatorial; 5 of the 16
-  D-aldohexopyranoses, alpha-D-ido and alpha-D-altro among them, come out 1C4, a CH2OH counting as one group like an OH): the one with fewer groups axial (a tie: the group whose first atom ranks lowest in the canonical order equatorial), lying as near
-  to the flat drawing as it can, a tie to form 1; a pyranose's ring - its ring O beside a carbon carrying an O - with that O behind and that
-  carbon at the right-hand end (McNaught 1996, Chart III). A ring centre the drawing leaves open keeps it open: its group equatorial, on a wavy
-  bond. Where the ring has centres and the drawing gives the configuration of none, it is not drawn as a chair (IUPAC 2006 ST-3.2: a
-  perspective drawing states every centre's configuration): the item is greyed with the reason, "Its configuration is not drawn: a chair would
-  state one." Guarded: if the chair would read as another compound, nothing is changed and Meno says it is its own fault. Offered on a single
+  D-aldohexopyranoses, alpha-D-ido and alpha-D-altro among them, come out 1C4, a CH2OH counting as one group like an OH): the one with fewer groups axial; a tie, the one whose axial group is the smaller by its non-hydrogen atoms (cis-4-tert-
+  butylcyclohexanol: its tert-butyl equatorial, its OH axial); still tied, the group whose first atom ranks lowest in the canonical order
+  equatorial. It lies as near to the flat drawing as it can, a tie to form 1. A pyranose's ring - its ring O beside a carbon carrying an O
+  outside the ring on a single bond - lies with that O behind and that carbon at the right-hand end, in either chair (McNaught 1996, 2-Carb-7,
+  Chart III): so a pyranose in its 1C4 chair is drawn with its up end at the right, not as form 1, as the chart draws it. Where both carbons
+  beside the ring O carry one (a 2,6-dialkoxyoxane), the ring lies as any other. A ring centre the drawing leaves open keeps it open: its group
+  equatorial, on a wavy bond. Where the ring has centres and the drawing gives the configuration of none, it is not drawn as a chair (IUPAC
+  2006 ST-3.2: a perspective drawing states every centre's configuration): the item is greyed with the reason, "Its configuration is not
+  drawn: a chair would state one." The centres counted are those of the whole ring together, so two ring atoms that are centres only to each
+  other count: 1,4-dimethylcyclohexane, 4-tert-butylcyclohexanol and scyllo-inositol drawn with no wedge are not drawn as chairs, and
+  4-methylcyclohexanol with a wedge on its OH alone - which sets nothing - has its methyl on a wavy bond. Guarded: if the chair would read
+  as another compound - a configuration changed, or one stated that the drawing leaves open - nothing is changed and Meno says it is its
+  own fault. Offered on a single
   ring of single bonds at saturated atoms, nothing fused, spiro or bridged on it, not yet drawn with depth: no cyclohexanone or cyclohexene,
   no fused rings yet (they wait for the depth reader, with Fuse). Groups that come to lie over each other are left for the chemist.
 - **Clean-up leaves a chair as drawn** and says so (`CleanUpRefused`); *Draw flat* is `cleanUp` asked to lay it out. **3D** from a chair takes its

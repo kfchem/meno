@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { identityOfDrawn } from "../chem/identityOf";
+import { identityInputOf, identityOfDrawn } from "../chem/identityOf";
 import type { Model } from "../store/types";
 import { drawnFromSmiles } from "../utils/smilesDrawn";
 import { chairsIn } from "./chair";
@@ -88,10 +88,36 @@ describe("a flat six-ring drawn as a chair (Draw as chair)", () => {
     const wavy = chair.bonds.filter((b) => b.stereo === "wavy");
     expect(wavy.map((b) => [b.a, b.b].sort())).toEqual([[1, 2]]);
     expect(identityOfDrawn(chair).text).toBe(identityOfDrawn(flat).text);
+    // (read on the chair, as on the flat drawing: the OH's carbon, atom 7, a configuration; the methyl's, atom 2, open)
+    for (const m of [flat, chair]) {
+      const { input } = identityInputOf(m);
+      const index = new Map(m.atoms.map((a, i) => [a.id, i]));
+      expect([!!input.atoms[index.get(7)!].tetra, !!input.atoms[index.get(2)!].tetra]).toEqual([true, false]);
+    }
+  }, measured(1000));
+
+  it("draws 4-methylcyclohexanol with a wedge on its OH alone - which sets nothing - with its methyl on a wavy bond, read as nothing given before and after", () => {
+    const plain = drawnFromSmiles("CC1CCC(O)CC1");
+    const o = plain.atoms.find((a) => a.el === "O")!;
+    const co = plain.bonds.find((b) => b.a === o.id || b.b === o.id)!;
+    const c = co.a === o.id ? co.b : co.a;
+    const flat: Model = { ...plain, bonds: plain.bonds.map((b) => (b === co ? { ...b, stereo: "up" as const, narrow: c } : b)) };
+    const chair = asChair(flat, c);
+    const methyl = plain.atoms.find((a) => a.el === "C" && plain.bonds.filter((b) => b.a === a.id || b.b === a.id).length === 1)!;
+    const wavy = chair.bonds.filter((b) => b.stereo === "wavy");
+    expect(wavy.map((b) => (b.a === methyl.id ? b.a : b.b === methyl.id ? b.b : -1))).toEqual([methyl.id]);
+    const nothing = identityOfDrawn(plain).text;
+    expect(identityOfDrawn(flat).text).toBe(nothing);
+    expect(identityOfDrawn(chair).text).toBe(nothing);
   }, measured(1000));
 
   it("is not offered where the ring's centres have no configuration drawn, and says why; nor on a ring it does not draw", () => {
     expect(chairFromFlat(drawnFromSmiles("CC1CCCCC1O"), 2)).toEqual({ refused: NOT_DRAWN });
+    // (ring atoms that are centres only together - two on one ring are cis or trans to each other: 1,4-dimethylcyclohexane,
+    //  4-tert-butylcyclohexanol, scyllo-inositol, none with a wedge)
+    expect(chairFromFlat(drawnFromSmiles("CC1CCC(C)CC1"), 2)).toEqual({ refused: NOT_DRAWN });
+    expect(chairFromFlat(drawnFromSmiles("CC(C)(C)C1CCC(O)CC1"), 5)).toEqual({ refused: NOT_DRAWN });
+    expect(chairFromFlat(drawnFromSmiles("OC1C(O)C(O)C(O)C(O)C1O"), 2)).toEqual({ refused: NOT_DRAWN });
     expect(chairFromFlat(drawnFromSmiles("O=C1CCCCC1"), 2)).toBeNull();
     expect(chairFromFlat(drawnFromSmiles("C1=CCCCC1"), 1)).toBeNull();
     expect(chairFromFlat(drawnFromSmiles("C1CCC2CCCC2C1"), 1)).toBeNull();
@@ -113,16 +139,30 @@ describe("the conventions, whichever way the flat drawing lies", () => {
     }
   }, measured(1000));
 
-  it("puts, of a chair either way with as many groups axial, the group whose first atom ranks lowest equatorial - the same, however the drawing lies", () => {
-    // (cis-1-ethyl-2-methylcyclohexane: one group axial in either chair)
-    const flat = drawnFromSmiles("CC[C@@H]1CCCC[C@@H]1C");
+  it("puts, of a chair either way with as many groups axial, the larger group equatorial: cis-4-tert-butylcyclohexanol's tert-butyl, its OH axial, however the drawing lies", () => {
+    const flat = drawnFromSmiles("CC(C)(C)[C@@H]1CC[C@H](O)CC1");
+    for (let k = 0; k < 4; k++) {
+      const chair = asChair(lying(flat, k), 5);
+      expect(axialOf(chair), `${k}`).toMatchObject({ axial: 1, equatorial: 1 });
+      const at = new Map(chair.atoms.map((a) => [a.id, a]));
+      const o = chair.atoms.find((a) => a.el === "O")!;
+      const co = chair.bonds.find((b) => b.a === o.id || b.b === o.id)!;
+      const c = at.get(co.a === o.id ? co.b : co.a)!;
+      // (the OH straight up or down from its carbon: axial)
+      expect(Math.abs(at.get(o.id)!.x - c.x), `${k}`).toBeLessThan(1e-6);
+    }
+  }, measured(1000));
+
+  it("puts, of a chair either way with as many groups axial and alike in size, the group whose first atom ranks lowest equatorial - the same, however the drawing lies", () => {
+    // (cis-2-methylcyclohexanol: one group axial in either chair, the methyl and the OH each of one non-hydrogen atom)
+    const flat = drawnFromSmiles("C[C@H]1CCCC[C@H]1O");
     const axialGroup = (m: Model) => {
       const at = new Map(m.atoms.map((a) => [a.id, a]));
       const ring = new Set(chairsIn(m, new Set(m.atoms.map((a) => a.id)))[0]);
       const b = m.bonds.find((x) => ring.has(x.a) !== ring.has(x.b) && Math.abs(at.get(x.a)!.x - at.get(x.b)!.x) < 1e-6)!;
       return ring.has(b.a) ? b.b : b.a;
     };
-    const seen = new Set([0, 1, 2, 3].map((k) => axialGroup(asChair(lying(flat, k), 3))));
+    const seen = new Set([0, 1, 2, 3].map((k) => axialGroup(asChair(lying(flat, k), 2))));
     expect(seen.size).toBe(1);
   }, measured(1000));
 });
@@ -180,6 +220,20 @@ describe("Draw as chair on a page", () => {
     const made = chairFromFlat(flat, ring.id) as Exclude<ReturnType<typeof chairFromFlat>, null | { refused: string }>;
     // (the chair's depth turned about, as a fault of Meno's might: the other enantiomer - the guard refuses)
     const bad = { atoms: made.atoms.map((a) => (a.z != null ? { ...a, z: -a.z } : a)), bonds: made.bonds };
+    const depth = doc.history().undoDepth;
+    expect(st().drawAsChair(bad)).toBe(CHAIR_CHANGED);
+    expect(doc.history().undoDepth).toBe(depth);
+    expect(doc.getState().model).toBe(flat);
+  }, measured(3000));
+
+  it("changes nothing where the chair would state a configuration the drawing leaves open: one gained is a difference too", async () => {
+    // (2-methylcyclohexanol with only the OH's centre given; the chair made with the methyl's wavy bond left off states the methyl's)
+    const { doc, st } = await page("CC1CCCC[C@H]1O");
+    const flat = doc.getState().model;
+    const ring = flat.atoms.find((a) => a.el === "C" && flat.bonds.filter((b) => b.a === a.id || b.b === a.id).length === 3)!;
+    const made = chairFromFlat(flat, ring.id) as Exclude<ReturnType<typeof chairFromFlat>, null | { refused: string }>;
+    expect(made.bonds.some((b) => b.stereo === "wavy")).toBe(true);
+    const bad = { atoms: made.atoms, bonds: made.bonds.map(({ stereo: _s, ...b }) => b) };
     const depth = doc.history().undoDepth;
     expect(st().drawAsChair(bad)).toBe(CHAIR_CHANGED);
     expect(doc.history().undoDepth).toBe(depth);
