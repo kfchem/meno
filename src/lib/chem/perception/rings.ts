@@ -16,6 +16,19 @@
  * costs a thousand small searches, not one the size of the whole page. The
  * rings come out exactly as a search over the whole graph would give them,
  * and in the same order.
+ *
+ * What the core's ring facts rest on: a smallest set of rings (a minimum
+ * cycle basis) holds, for every bond in a ring, a ring as small as the
+ * smallest through that bond - and so for every atom. Let C be a smallest
+ * ring through bond e, of size L. C is a sum (symmetric difference) of rings
+ * of the set none longer than C - in a minimum cycle basis every cycle is,
+ * else exchanging a longer one for C would give a lighter basis. e is in an
+ * odd number of them, so in at least one, of size at most L, and none
+ * through e is smaller than C. For an atom v: a smallest ring through v goes
+ * through a bond at v and is a smallest ring through that bond, so the set
+ * holds one of its size through v. It holds for the size: which ring of that
+ * size is picked among ties is the set's own choice. The seeded random check
+ * in rings.test.ts tests it against a plain breadth-first search.
  */
 
 import type { ChemGraph } from "./graph";
