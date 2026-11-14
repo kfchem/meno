@@ -1,4 +1,5 @@
 import RoleOffer from "./RoleOffer";
+import IconTips from "./components/IconTips";
 import { noPluginSaid, useRoleOffer } from "../../../lib/roles/worker";
 import { canvasAlerts } from "./utils/alerts";
 import { bondKindOf, type BondKindName } from "./utils/bondKinds";
@@ -2010,6 +2011,8 @@ function WorkspaceContent({
           />
         )}
       </AnimatePresence>
+      {/* the names of Quick Add's and the menus' icons, as the pointer rests on one (components/IconTips) */}
+      <IconTips />
       {/* a double-click on empty space: what can be put down there */}
       <AnimatePresence>
         {quickAdd && (

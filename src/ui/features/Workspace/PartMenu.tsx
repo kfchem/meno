@@ -1150,7 +1150,7 @@ export default function PartMenu({
               role="menuitem"
               aria-label={item.name}
               aria-pressed={item.checked}
-              title={item.keys ? `${item.name} (${item.keys})` : item.name}
+              data-tip={item.keys ? `${item.name} (${item.keys})` : item.name}
               disabled={item.disabled}
               // (one begun by its press is not begun again by its click - but by a key, it is)
               onClick={item.press ? (e) => e.detail === 0 && run(item)() : run(item)}
@@ -1203,7 +1203,7 @@ export default function PartMenu({
               role="menuitem"
               aria-label={item.name}
               aria-pressed={item.checked}
-              title={item.name}
+              data-tip={item.name}
               onClick={run(item)}
               className={`meno-press shrink-0 rounded-md flex items-center justify-center outline-none transition-colors duration-150 ease-meno ${item.checked ? "bg-gh-base text-gh-black" : "text-gh-black hover:bg-gh-base focus:bg-gh-base"}`}
               style={{ width: ROW, height: ROW }}
