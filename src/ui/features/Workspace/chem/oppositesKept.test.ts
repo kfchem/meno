@@ -114,7 +114,7 @@ describe("a four-bond metal cleaned up", () => {
     }
   });
 
-  it("is left as laid out where the drawing does not say which stand opposite, or its donors are a chelate's - and kept where it is bent", () => {
+  it("is left as laid out where the drawing does not say which stand opposite, refused where a chelate's donors are drawn opposite each other - and kept where it is bent", () => {
     // (a metal and four Cl, laid out cis-wise as an X: 1 and 2 side by side)
     const at = (deg: number) => ({ x: Math.cos((deg * Math.PI) / 180), y: Math.sin((deg * Math.PI) / 180) });
     const laid = (pts: { x: number; y: number }[]): Layout2D =>
@@ -127,12 +127,12 @@ describe("a four-bond metal cleaned up", () => {
     // (drawn trans: N opposite N - changed where plain and no chelate)
     const trans = [{ x: 0, y: 0 }, at(0), at(180), at(90), at(270)];
     expect(oppositesKept(trans, input(false), cisLaid)).not.toBe(cisLaid);
-    expect(oppositesKept(trans, input(true), cisLaid)).toBe(cisLaid);
+    // (a chelate's two N drawn opposite each other: no move puts them so - refused, never another isomer)
+    expect(() => oppositesKept(trans, input(true), cisLaid)).toThrow(/opposite each other as drawn/);
     // (drawn bent - the N at 0 and 140, the Cl at 50 and 230: still N opposite N, the pairing nearest two lines)
     expect(oppositesKept([{ x: 0, y: 0 }, at(0), at(140), at(50), at(230)], input(false), cisLaid)).not.toBe(cisLaid);
-    // (drawn so that two pairings are as near - the N at 0 and 120, the Cl at 60 and 180: N with N, or each N with a Cl, alike; it
-    // does not say, and the layout's stands)
-    expect(oppositesKept([{ x: 0, y: 0 }, at(0), at(120), at(60), at(180)], input(false), cisLaid)).toBe(cisLaid);
+    // (drawn bunched - the four at 0, 10, 20 and 30: every pairing as far from straight, pair by pair; it does not say, and the layout's stands)
+    expect(oppositesKept([{ x: 0, y: 0 }, at(0), at(10), at(20), at(30)], input(false), cisLaid)).toBe(cisLaid);
   });
 
   it("swaps two donors whole, each turned about the metal, its bonds still at right angles and its H with it", () => {
@@ -206,10 +206,9 @@ describe("oppositesKept, left as laid out", () => {
     expect(oppositesKept(trans, four("C"), laid)).toBe(laid);
   });
 
-  it("where the layout's own pairing is not plain, without failing", () => {
-    // (laid out so that two pairings are as near: 0, 120, 60, 180)
-    const laid = laidAt([{ x: 0, y: 0 }, at(0), at(120), at(60), at(180)]);
-    expect(oppositesKept(trans, four("Pt"), laid)).toBe(laid);
+  it("refuses where the layout's own pairing is not plain - laid out bunched - rather than guess which to move", () => {
+    const laid = laidAt([{ x: 0, y: 0 }, at(0), at(10), at(20), at(30)]);
+    expect(() => oppositesKept(trans, four("Pt"), laid)).toThrow(/opposite each other as drawn/);
   });
 
   it("at a metal drawn in perspective", () => {
@@ -232,14 +231,13 @@ describe("oppositesKept, left as laid out", () => {
     expect(oppositesKept([{ x: 0, y: 0 }, { x: 0, y: 0 }, at(180), at(90), at(270)], four("Pt"), laid)).toBe(laid);
   });
 
-  it("where the drawing's two nearest pairings are within 20 degrees of each other all told - and not where they are 30 apart", () => {
+  it("takes the pairing whose straightest pair is straightest by more than 20 degrees, and leaves the layout's where the straightest pairs of two are about as straight", () => {
     const laid = laidAt(cis);
-    // (each pairing's degrees off two straight lines, summed: N at 0 and 125, Cl at 60 and 185 - N with N 110, N with the Cl at 185
-    // 120, 10 apart: as laid out; N at 0 and 140, Cl at 55 and 195 - N with N 80, the next 110, 30 apart: N put opposite N)
-    expect(oppositesKept([{ x: 0, y: 0 }, at(0), at(125), at(60), at(185)], four("Pt"), laid)).toBe(laid);
-    const far = oppositesKept([{ x: 0, y: 0 }, at(0), at(140), at(55), at(195)], four("Pt"), laid);
-    expect(far).not.toBe(laid);
-    const deg = (i: number) => Math.round((Math.atan2(far.y[i], far.x[i]) * 180) / Math.PI);
+    // (N at 0 and 100, Cl at 30 and 192.5: N with the Cl at 192.5 is 12.5 off a line, Cl with Cl 17.5 - two pairings' straightest pairs
+    // 5 apart: it does not say, as laid out. With the Cl at 215: Cl with Cl 5 off, the next pairing's straightest 35 - N put opposite N)
+    expect(oppositesKept([{ x: 0, y: 0 }, at(0), at(100), at(30), at(192.5)], four("Pt"), laid)).toBe(laid);
+    const out = oppositesKept([{ x: 0, y: 0 }, at(0), at(100), at(30), at(215)], four("Pt"), laid);
+    const deg = (i: number) => Math.round((Math.atan2(out.y[i], out.x[i]) * 180) / Math.PI);
     expect((deg(1) - deg(2) + 720) % 360).toBe(180);
   });
 });
@@ -279,7 +277,57 @@ describe("oppositesKept, its parts", () => {
     expect((deg(out, 1) - deg(out, 4) + 720) % 360).toBe(180);
   });
 
-  it("does not mirror a chelate of three donors", () => {
+  it("moves the fewest units, then turns them least: two chelates turned rather than a chelate and two single donors", () => {
+    // (Co 0; chelates of donors 1, 2 (through C 7, 8) and 3, 4 (through C 9, 10); single donors Cl 5 and Br 6. Laid out round the metal
+    // in that order, 60 degrees apart; drawn with 1 across 6, 2 across 4, 3 across 5)
+    const input: LayoutInput = {
+      atoms: [{ el: "Co" }, { el: "N" }, { el: "N" }, { el: "N" }, { el: "N" }, { el: "Cl" }, { el: "Br" }, { el: "C" }, { el: "C" }, { el: "C" }, { el: "C" }],
+      bonds: bonds([[0, 1], [0, 2], [0, 3], [0, 4], [0, 5], [0, 6], [1, 7], [7, 8], [8, 2], [3, 9], [9, 10], [10, 4]]),
+    };
+    const laid = laidAt([{ x: 0, y: 0 }, at(1), at(61), at(121), at(181), at(241), at(301), at(11, 2), at(51, 2), at(131, 2), at(171, 2)]);
+    const drawn = [{ x: 0, y: 0 }, at(0), at(60), at(120), at(240), at(300), at(180), at(10, 2), at(50, 2), at(150, 2), at(210, 2)];
+    const out = oppositesKept(drawn, input, laid);
+    // (each drawn pair across as laid out now)
+    for (const [p, q] of [[1, 6], [2, 4], [3, 5]]) expect((deg(out, p) - deg(out, q) + 720) % 360, `${p}-${q}`).toBe(180);
+    // (the two single donors where they were laid: only the two chelates moved, the fewest units - not three or four units moved shorter)
+    expect([deg(out, 5), deg(out, 6)]).toEqual([deg(laid, 5), deg(laid, 6)]);
+  });
+
+  it("hands back the layout itself where it already keeps the drawing", () => {
+    const four: LayoutInput = { atoms: [{ el: "Pt" }, { el: "N" }, { el: "N" }, { el: "Cl" }, { el: "Cl" }], bonds: bonds([[0, 1], [0, 2], [0, 3], [0, 4]]) };
+    const laid = laidAt([{ x: 0, y: 0 }, at(0), at(180), at(90), at(270)]);
+    expect(oppositesKept([{ x: 0, y: 0 }, at(10), at(185), at(95), at(280)], four, laid)).toBe(laid);
+  });
+
+  it("reads a pair drawn more than a right angle apart as across: six donors, the third pair 110 degrees apart, kept across", () => {
+    const six: LayoutInput = {
+      atoms: [{ el: "Co" }, { el: "Cl" }, { el: "Cl" }, { el: "N" }, { el: "N" }, { el: "N" }, { el: "N" }],
+      bonds: bonds([[0, 1], [0, 2], [0, 3], [0, 4], [0, 5], [0, 6]]),
+    };
+    const laid = laidAt([{ x: 0, y: 0 }, at(0), at(60), at(120), at(180), at(240), at(300)]);
+    // (drawn: Cl across Cl and N 3 across N 4, straight; N 5 and N 6 110 degrees apart - across, not beside)
+    const out = oppositesKept([{ x: 0, y: 0 }, at(0), at(180), at(90), at(270), at(135), at(245)], six, laid);
+    for (const [p, q] of [[1, 2], [3, 4], [5, 6]]) expect((deg(out, p) - deg(out, q) + 720) % 360, `${p}-${q}`).toBe(180);
+    // (laid out flat - two lines, N 5 and N 6 side by side - that pair is not kept across: the drawing is refused, not handed back so)
+    const flat = laidAt([{ x: 0, y: 0 }, at(45), at(225), at(135), at(315), at(260), at(280)]);
+    expect(() => oppositesKept([{ x: 0, y: 0 }, at(0), at(180), at(90), at(270), at(135), at(245)], six, flat)).toThrow(/opposite each other as drawn/);
+  });
+
+  it("counts a pair as across as laid out only within 30 degrees of a line: N 35 degrees off a line is not across", () => {
+    const four: LayoutInput = { atoms: [{ el: "Pt" }, { el: "N" }, { el: "N" }, { el: "Cl" }, { el: "Cl" }], bonds: bonds([[0, 1], [0, 2], [0, 3], [0, 4]]) };
+    // (laid out with one plain line, 90 to 270, and its other two places 35 degrees off one; drawn trans: N across N, Cl across Cl)
+    const laid = laidAt([{ x: 0, y: 0 }, at(0), at(145), at(90), at(270)]);
+    expect(() => oppositesKept([{ x: 0, y: 0 }, at(0), at(180), at(90), at(270)], four, laid)).toThrow(/opposite each other as drawn/);
+  });
+
+  it("reads two pairings whose straightest pairs are 15 degrees apart as not saying which stand opposite", () => {
+    const four: LayoutInput = { atoms: [{ el: "Pt" }, { el: "N" }, { el: "N" }, { el: "Cl" }, { el: "Cl" }], bonds: bonds([[0, 1], [0, 2], [0, 3], [0, 4]]) };
+    const laid = laidAt([{ x: 0, y: 0 }, at(45), at(135), at(225), at(315)]);
+    // (N at 0 and 100, Cl at 30 and 187.5: N with the Cl at 187.5 7.5 off a line, Cl with Cl 22.5)
+    expect(oppositesKept([{ x: 0, y: 0 }, at(0), at(100), at(30), at(187.5)], four, laid)).toBe(laid);
+  });
+
+  it("refuses where two donors of a chelate of three would have to change places", () => {
     // (N 1, O 2 and N 3 joined through C 5 and C 6: a tridentate; Cl 4)
     const tri: LayoutInput = {
       atoms: [{ el: "Pt" }, { el: "N" }, { el: "O" }, { el: "N" }, { el: "Cl" }, { el: "C" }, { el: "C" }],
@@ -287,7 +335,7 @@ describe("oppositesKept, its parts", () => {
     };
     const laid = laidAt([{ x: 0, y: 0 }, at(0), at(90), at(180), at(270), at(45, 2), at(135, 2)]);
     // (drawn with N 1 and O 2 changed places: N 1 opposite Cl 4's place)
-    expect(oppositesKept([{ x: 0, y: 0 }, at(90), at(0), at(180), at(270), at(45, 2), at(135, 2)], tri, laid)).toBe(laid);
+    expect(() => oppositesKept([{ x: 0, y: 0 }, at(90), at(0), at(180), at(270), at(45, 2), at(135, 2)], tri, laid)).toThrow(/opposite each other as drawn/);
   });
 
   it("keeps the changes at the first of two metals where the second needs none", () => {
@@ -371,13 +419,94 @@ describe("oppositesKept, its parts", () => {
     for (const [a, b] of [[3, 5], [5, 6], [6, 4]]) expect(len(out, a, b), `${a}-${b}`).toBeCloseTo(len(laid, a, b), 6);
   });
 
-  it("takes the drawing's pairing where the next is 25 degrees less straight all told, and leaves the layout's where it is 15", () => {
-    const four: LayoutInput = { atoms: [{ el: "Pt" }, { el: "N" }, { el: "N" }, { el: "Cl" }, { el: "Cl" }], bonds: bonds([[0, 1], [0, 2], [0, 3], [0, 4]]) };
-    const laid = laidAt([{ x: 0, y: 0 }, at(45), at(135), at(225), at(315)]);
-    // (N at 0 and 100, Cl at 30 and 187.5: N with N 102.5 against 117.5 - 15 apart; with the Cl at 192.5, 97.5 against 122.5 - 25 apart)
-    expect(oppositesKept([{ x: 0, y: 0 }, at(0), at(100), at(30), at(187.5)], four, laid)).toBe(laid);
-    const out = oppositesKept([{ x: 0, y: 0 }, at(0), at(100), at(30), at(192.5)], four, laid);
-    expect((deg(out, 1) - deg(out, 2) + 720) % 360).toBe(180);
+});
+
+describe("a metal's donors kept opposite as drawn, or the drawing refused", () => {
+  it("keeps cis-[Co(en)2Cl2]+ drawn with six spokes, laid out with its Cl side by side; refuses the trans - the layout has no two places across for its Cl", { timeout: 180000 }, async () => {
+    forgetLaidOut();
+    for (const names of [
+      ["Cl", "Cl", "Na", "Oa", "Nb", "Ob"],
+      ["Na", "Oa", "Cl", "Cl", "Nb", "Ob"],
+    ]) {
+      const m = complex("Co", 1, [en("a"), en("b"), "Cl", "Cl"], [0, 1, 2, 3, 4, 5], names);
+      const out = await laidOut(m.model, MENO);
+      // (its four N two lines through the metal, its two Cl across nothing: side by side, the picture of the cis)
+      expect(lines(out, m.names).map((p) => p.replace(/[NO][ab]/g, "N")), names.join(" ")).toEqual(["N-N", "N-N"]);
+    }
+    for (const names of [
+      ["Cl", "Na", "Oa", "Cl", "Nb", "Ob"],
+      ["Na", "Oa", "Cl", "Nb", "Ob", "Cl"],
+    ]) {
+      const m = complex("Co", 1, [en("a"), en("b"), "Cl", "Cl"], [0, 1, 2, 3, 4, 5], names);
+      await expect(laidOut(m.model, MENO), names.join(" ")).rejects.toThrow(/opposite each other as drawn/);
+    }
+  });
+
+  it("keeps cis-[Co(en)2Cl2]+ drawn as it is laid out - its N an X, its Cl side by side", { timeout: 180000 }, async () => {
+    forgetLaidOut();
+    const m = complex("Co", 1, [en("a"), en("b"), "Cl", "Cl"], [0, 1, 2, 3, 4, 5], ["Na", "Oa", "Nb", "Ob", "Cl", "Cl"], [45, 135, 225, 315, 260, 280]);
+    const out = await laidOut(m.model, MENO);
+    expect(lines(out, m.names).map((p) => p.replace(/[NO][ab]/g, "N"))).toEqual(["N-N", "N-N"]);
+  });
+
+  it("never puts across two donors drawn side by side: a cis-[CoCl2(NH3)4]+ drawn with its NH3 an X and its Cl side by side is not handed back trans", { timeout: 180000 }, async () => {
+    forgetLaidOut();
+    const m = complex("Co", 1, ["Cl", "Cl", "NH3", "NH3", "NH3", "NH3"], [0, 1, 2, 3, 4, 5], ["NH3", "NH3", "NH3", "NH3", "Cl", "Cl"], [45, 135, 225, 315, 260, 280]);
+    const out = await laidOut(m.model, MENO).catch(() => null);
+    if (out) expect(lines(out, m.names)).not.toContain("Cl-Cl");
+  });
+
+  it("keeps a cis-M(gly)2Cl2 drawn with six spokes only where its picture says it - one N across an O - and refuses N across N, O across O and the trans", { timeout: 180000 }, async () => {
+    forgetLaidOut();
+    // (Cl at 0 and 60: the chelate ends at 120 and 300 are across each other, those at 180 and 240 across a Cl)
+    const nAcrossO = complex("Co", 1, [gly("a"), gly("b"), "Cl", "Cl"], [0, 1, 2, 3, 4, 5], ["Cl", "Cl", "Na", "Oa", "Nb", "Ob"]);
+    const out = await laidOut(nAcrossO.model, MENO);
+    expect(lines(out, nAcrossO.names)).toEqual(["Na-Ob", "Nb-Oa"]);
+    for (const [isomer, names] of [
+      ["N across N", ["Cl", "Cl", "Na", "Oa", "Ob", "Nb"]],
+      ["O across O", ["Cl", "Cl", "Oa", "Na", "Nb", "Ob"]],
+      ["trans", ["Cl", "Na", "Oa", "Cl", "Nb", "Ob"]],
+    ] as const) {
+      const m = complex("Co", 1, [gly("a"), gly("b"), "Cl", "Cl"], [0, 1, 2, 3, 4, 5], names);
+      await expect(laidOut(m.model, MENO), isomer).rejects.toThrow(/opposite each other as drawn/);
+    }
+  });
+
+  it("refuses a cis-M(gly)2XY drawn with six spokes whose picture could not say which of its two others is across which chelate end: Cl and Br; NH3 and MeNH2", { timeout: 180000 }, async () => {
+    forgetLaidOut();
+    // (N across O between the chelates, as kept for two Cl; the two others different: which stands across the N and which across the O
+    // is the isomer, and two lines and two side by side cannot show it)
+    for (const [x, y] of [["Cl", "Br"], ["NH3", "MeNH2"]]) {
+      const m = complex("Co", 1, [gly("a"), gly("b"), x, y], [0, 1, 2, 3, 4, 5], [x, y, "Na", "Oa", "Nb", "Ob"]);
+      await expect(laidOut(m.model, MENO), `${x} ${y}`).rejects.toThrow(/opposite each other as drawn/);
+    }
+  });
+
+  it("keeps a cis-M(gly)2Cl2 drawn as it is laid out with the lines through the metal it was drawn with - N to N and O to O, or N to O - never the other", { timeout: 180000 }, async () => {
+    forgetLaidOut();
+    for (const [names, want] of [
+      [["Na", "Oa", "Nb", "Ob", "Cl", "Cl"], ["Na-Nb", "Oa-Ob"]],
+      [["Na", "Oa", "Ob", "Nb", "Cl", "Cl"], ["Na-Ob", "Nb-Oa"]],
+    ] as const) {
+      const m = complex("Co", 1, [gly("a"), gly("b"), "Cl", "Cl"], [0, 1, 2, 3, 4, 5], names, [45, 135, 225, 315, 260, 280]);
+      expect(lines(await laidOut(m.model, MENO), m.names), names.join(" ")).toEqual(want);
+    }
+  });
+
+  it("puts opposite the two drawn straightest across, the other two beside them on one side: Br 0, Cl 180, N 250, O 290 - and Br 0, N 60, O 120, Cl 185", () => {
+    const at = (deg: number) => ({ x: Math.cos((deg * Math.PI) / 180), y: Math.sin((deg * Math.PI) / 180) });
+    const input: LayoutInput = { atoms: [{ el: "Pt" }, { el: "Br" }, { el: "Cl" }, { el: "N" }, { el: "O" }], bonds: [[0, 1], [0, 2], [0, 3], [0, 4]].map(([a, b]) => ({ a, b, order: 1 })) };
+    // (laid out with Br opposite N)
+    const pts = [{ x: 0, y: 0 }, at(45), at(135), at(225), at(315)];
+    const laid = { x: pts.map((p) => p.x), y: pts.map((p) => p.y), depth: pts.map(() => null), solid: pts.map(() => false), bold: [], toward: [], dashed: [], wedges: [], hydrogens: [] } as unknown as Layout2D;
+    for (const drawn of [
+      [{ x: 0, y: 0 }, at(0), at(180), at(250), at(290)],
+      [{ x: 0, y: 0 }, at(0), at(185), at(60), at(120)],
+    ]) {
+      const out = oppositesKept(drawn, input, laid);
+      const deg = (i: number) => Math.round((Math.atan2(out.y[i], out.x[i]) * 180) / Math.PI);
+      expect((deg(1) - deg(2) + 720) % 360).toBe(180);
+    }
   });
 });
 
@@ -445,16 +574,18 @@ function donorUnits(m: Model, metal: number): Set<number>[] {
   });
 }
 
-type Chelate = { tag: string; methyl?: true };
+type Chelate = { tag: string; methyl?: true; en?: true };
 const gly = (tag: string): Chelate => ({ tag });
 const ala = (tag: string): Chelate => ({ tag, methyl: true });
+// (an ethylenediamine: its second donor an N - named O<tag> by its place - its ring N-C-C-N, no C=O)
+const en = (tag: string): Chelate => ({ tag, en: true });
 
 /**
  * A metal with its donors drawn round it as spokes, `slots[k]` the k-th spoke's place (in steps of 360/n degrees, n the spokes),
- * a little askew as by hand: `parts` - a Cl, an NH3, or a glycinate (alaninate, its methyl on a wedge) taking two neighbouring
- * spokes, its N first - and `names`, each spoke's donor named as `spokes` reports it.
+ * a little askew as by hand: `parts` - a Cl, a Br, an NH3, a MeNH2, or a glycinate (alaninate, its methyl on a wedge) taking two neighbouring
+ * spokes, its N first - and `names`, each spoke's donor named as `spokes` reports it; or each at `degrees`, where given.
  */
-function complex(el: string, charge: number, parts: readonly (string | Chelate)[], slots: readonly number[], names: readonly string[]) {
+function complex(el: string, charge: number, parts: readonly (string | Chelate)[], slots: readonly number[], names: readonly string[], degrees?: readonly number[]) {
   const n = names.length;
   const atoms: Model["atoms"] = [{ id: 1, x: 0, y: 0, r: 0.9, el, ...(charge ? { charge } : {}) }] as Model["atoms"];
   const bonds: Model["bonds"] = [];
@@ -468,7 +599,7 @@ function complex(el: string, charge: number, parts: readonly (string | Chelate)[
   const bond = (a: number, b: number, order: 1 | 2 = 1, wedge?: number) =>
     bonds.push({ id: 1000 + bonds.length, a, b, order, stereo: wedge != null ? "up" : "none", ...(wedge != null ? { narrow: wedge } : {}) } as Model["bonds"][number]);
   const at = (slot: number, r = 1.5) => {
-    const t = ((360 / n) * slots[slot] + 4) * (Math.PI / 180);
+    const t = ((degrees ? degrees[slot] : (360 / n) * slots[slot]) + 4) * (Math.PI / 180);
     return { x: r * Math.cos(t), y: r * Math.sin(t) };
   };
   // (each donor at the first spoke named for it not yet taken: a chelate's N and O at theirs)
@@ -477,16 +608,18 @@ function complex(el: string, charge: number, parts: readonly (string | Chelate)[
     if (typeof part === "string") {
       const k = names.findIndex((x, j) => x === part && !taken.has(j));
       taken.add(k);
-      const d = add({ ...at(k), el: part === "Cl" ? "Cl" : "N", ...(part === "NH3" ? { valence: 4 } : {}) });
+      const d = add({ ...at(k), el: part === "Cl" || part === "Br" ? part : "N", ...(part === "NH3" ? { valence: 4 } : {}) });
       named.set(d, names[k]);
       bond(1, d);
+      // (a methylamine's C outward from its N)
+      if (part === "MeNH2") bond(d, add({ ...at(k, 2.7), el: "C" }));
       continue;
     }
     // (the chelate's N at one spoke, its O at the next named for it, its ring outward between them)
     const ni = names.indexOf(`N${part.tag}`);
     const oi = names.indexOf(`O${part.tag}`);
     const N = add({ ...at(ni), el: "N" });
-    const O = add({ ...at(oi), el: "O" });
+    const O = add({ ...at(oi), el: part.en ? "N" : "O" });
     named.set(N, names[ni]);
     named.set(O, names[oi]);
     const mid = { x: (at(ni).x + at(oi).x) / 2, y: (at(ni).y + at(oi).y) / 2 };
@@ -494,13 +627,13 @@ function complex(el: string, charge: number, parts: readonly (string | Chelate)[
     const u = { x: mid.x / out, y: mid.y / out };
     const ca = add({ x: at(ni).x + 1.2 * u.x, y: at(ni).y + 1.2 * u.y, el: "C" });
     const co = add({ x: at(oi).x + 1.2 * u.x, y: at(oi).y + 1.2 * u.y, el: "C" });
-    const o2 = add({ x: at(oi).x + 2.4 * u.x, y: at(oi).y + 2.4 * u.y, el: "O" });
+    const o2 = part.en ? -1 : add({ x: at(oi).x + 2.4 * u.x, y: at(oi).y + 2.4 * u.y, el: "O" });
     bond(1, N);
     bond(1, O);
     bond(N, ca);
     bond(ca, co);
     bond(co, O);
-    bond(co, o2, 2);
+    if (!part.en) bond(co, o2, 2);
     if (part.methyl) {
       const me = add({ x: at(ni).x + 2.2 * u.x, y: at(ni).y + 2.2 * u.y + 0.6, el: "C" });
       bond(ca, me, 1, ca);
@@ -530,7 +663,24 @@ function spokes(model: Model, names: ReadonlyMap<number, string>, metal = 1): st
     for (const j of rest) pair(rest.filter((k) => k !== j), [...pairs, [i, j]], sum + off(i, j));
   };
   pair(ids, [], 0);
-  return best.pairs.map((p) => p.map((d) => names.get(d)!).sort().join("-")).sort();
+  // (a pair the nearest pairing leaves that is not plainly across - within 30 degrees of a line - is said so: never read as opposite)
+  return best.pairs.map((p) => p.map((d) => names.get(d)!).sort().join("-") + (off(p[0], p[1]) > Math.PI / 6 ? " (not across)" : "")).sort();
+}
+
+/** The pairs of donors standing across each other round the metal (`metal`, by id) - each the other's nearest to a line, within 30 degrees of one - by their names, each sorted: none for a donor across nothing. */
+function lines(model: Model, names: ReadonlyMap<number, string>, metal = 1): string[] {
+  const m = model.atoms.find((a) => a.id === metal)!;
+  const ids = [...names.keys()];
+  const angle = (id: number) => {
+    const a = model.atoms.find((x) => x.id === id)!;
+    return Math.atan2(a.y - m.y, a.x - m.x);
+  };
+  const off = (p: number, q: number) => Math.abs(Math.PI - Math.abs(Math.atan2(Math.sin(angle(p) - angle(q)), Math.cos(angle(p) - angle(q)))));
+  // (each the other's nearest to a line: a donor squeezed in beside a line's end is across nothing)
+  const nearest = (p: number) => ids.filter((q) => q !== p).reduce((b, q) => (off(p, q) < off(p, b) ? q : b));
+  const out: string[] = [];
+  ids.forEach((p, i) => ids.slice(i + 1).forEach((q) => off(p, q) < Math.PI / 6 && nearest(p) === q && nearest(q) === p && out.push([names.get(p)!, names.get(q)!].sort().join("-"))));
+  return out.sort();
 }
 
 /** Each centre's configuration as `model` is read, by atom id. */

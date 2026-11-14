@@ -496,7 +496,17 @@ field as it is typed (a label that is the formula itself, PdCl2, once). Where th
 BrCN - both are offered there, the SMILES first (the field is for
 SMILES), and Enter draws the one chosen, by a
 click or the up and down arrows; never one of them without the other
-shown. A SMILES alone is drawn as before, nothing said under it. Text is
+shown. A SMILES alone is drawn as before, nothing said under it. An
+aromatic SMILES that cannot be given single and double bonds as written
+is refused wherever it is typed, never read by adding an H nobody wrote:
+c1cccc1 (cyclopentadiene's ring written aromatic), c1ccnc1 (pyrrole
+without its [nH]), c1cncn1 - "its aromatic ring of 5 atoms (1, 2, 3, 4
+and 5) cannot have alternating double bonds: is a charge or an H
+missing?" (lib/chem/kekulize `aromaticRefusal`; the same words where the
+plugin that reads SMILES refuses it). A bond written with no symbol between
+two aromatic atoms is aromatic only in a ring of aromatic bonds: one that
+joins two rings - a biaryl written c1ccc(nc1)c1ccccn1, without the "-" -
+is single, and each ring is read as its own. Text is
 read as a structure by one reader wherever it is typed (`chem/resolve`):
 here as a whole molecule, in Enumerate's lists and Substituents' groups
 as a group (docs/WORKFLOWS-FOUNDATION.md, *Enumerate*); a label typed on
@@ -855,6 +865,13 @@ All hover-based, as above.
   typing - N+, NH3+, O-, Fe2+, 13C, or a charge alone - by + and - over
   an atom, or from its menu, which also gives or takes an unpaired
   electron.)
+- **A carbon whose bonds run straight through it is written** (`cumulatedShown`):
+  between two double bonds - an allene's middle, a ketene's, CO2's (O=C=O
+  would read as O=O) - and the C of a carbonyl, a cyanide or an isocyanide
+  on a metal, M-C≡O, M-C≡N, M-C≡N-R, whose two bonds lie in one line:
+  written, the ligand reads as CO, CN or CNR, its atoms atoms still. An
+  alkyne's carbons, a nitrile's C, an acylium's (R-C≡O+, on no metal) and a
+  bridging carbonyl's (three bonds) stay bare vertices.
 - **Labels typed in place** (the maintainer, 2026-10-10: no HTML box;
   2026-10-18, as it is now). A label is written where it stands, drawn by
   Meno as words on the page are (*Text*, below; `LabelTyping2D`): set as a
@@ -1045,14 +1062,32 @@ All hover-based, as above.
   - **A four- or six-bond metal keeps its donors opposite each other as
     drawn** (`oppositesKept`): which pairs stand opposite is its isomer -
     transplatin and cisplatin are two compounds, as are trans- and
-    cis-[CoCl2(NH3)4]+ - so where the engine set them otherwise (like
-    donors side by side), donors change places, a pair at a time: two
-    single donors each turned about the metal with all it carries; a
-    chelate's two donors by mirroring the chelate across the line between
-    them, its wedges turned over with it, so its centres keep their
-    configuration (trans-Pt(gly)2). The drawing's pairing is the one
-    nearest straight lines, however bent (N-Pt-N at 145 degrees is trans);
-    where another is about as near it says none, and the layout's stands.
+    cis-[CoCl2(NH3)4]+ - so where the engine set them otherwise, the
+    donors' units are moved round the metal into the layout's places:
+    each turned about it whole with all it carries, a chelate of two also
+    mirrored across the line between its donors, its wedges turned over,
+    so its centres keep their configuration - the fewest units moved,
+    then the shortest turns (trans-Pt(gly)2). The drawing's pairing is
+    the one whose straightest pair is straightest, then its next: a pair
+    drawn straight across decides however the others lean; where the
+    straightest pairs of two pairings are within 20 degrees of each other
+    it says none, and the layout's stands. What is handed back keeps the
+    drawing where each pair drawn across (more than a right angle apart)
+    stands plainly across in it, within 30 degrees of a line, and - with
+    six - no two drawn side by side do: a cis-[Co(en)2Cl2]+ drawn as the
+    layout draws it, its N an X and its Cl side by side, is kept so, and a
+    cis-M(gly)2Cl2 drawn so keeps the lines it was drawn with (N to N and
+    O to O, or N to O), its chelates never mirrored into the other. Six
+    donors drawn as six spokes, which the layout sets as two lines and
+    two side by side, are kept where that picture can be read only as the
+    isomer drawn - one of its lines truly across, the other's two ends
+    each across one of the two side by side, either way the same donors
+    across as drawn: cis-[Co(en)2Cl2]+, and a cis-M(gly)2Cl2 with an N
+    across an O. Where no move gives a picture that keeps the drawing -
+    trans-[Co(en)2Cl2]+, which the layout has no two places across for
+    its Cl; a cis-M(gly)2Cl2 with N across N or O across O, which its
+    picture could not tell apart; a chelate's two donors drawn opposite -
+    Clean-up lays nothing out and says so: never another isomer.
 - Valence warnings, and R/S shown on request (RDKit). (PR #53: a ring round
   an atom with too many bonds, saying what is wrong under the pointer; R/S
   and E/Z from a button on the canvas, later shown on what they are asked
