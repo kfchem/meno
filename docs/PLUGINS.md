@@ -946,8 +946,12 @@ fills.
 - **Starting it.** Once set up, the worker starts the first time it is
   asked for, not when Meno starts. In practice that is as soon as a
   structure is drawn, since the chemical checks run by themselves once
-  it is at hand (`useChemMarks`, `chemAtHand`). Its first import may
-  take a while; up to 90 s is allowed.
+  it is at hand (`useChemMarks`, `chemAtHand`). Quick Add, opened, starts
+  what reads a SMILES the same way, so that the first SMILES typed waits
+  for no start (`startAhead`): only a plugin set up and not taken away,
+  never set up or offered from there, and never when a wire's
+  calculations open it. Its first import may take a while; up to 90 s is
+  allowed.
 - **Keeping it.** It is then kept while it is used. If it stops, the next
   request starts it again.
 - **Stopped when unused** (the maintainer, 2026-10-13;
