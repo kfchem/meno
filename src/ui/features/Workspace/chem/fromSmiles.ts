@@ -25,7 +25,7 @@ export async function structureFromSmiles(smiles: string, style?: DrawingStyle):
   //  drawn: none said where it cannot be asked, or does not answer in time - the structure comes all the same)
   // (an allene's axis and an odd cumulene's cis or trans, which the SMILES says and a MOL block cannot: Meno's own reading of the text, where it is of the same atoms)
   const given = givenRunsOf(smiles, molblock);
-  // (a metal the SMILES gives the arrangement of - its mark, @SP or @OH, at the metal: the plugin's drawing carries it, and it is kept)
+  // (a metal the SMILES gives the arrangement of - its mark, @SP or @OH, at the metal, and no chelate: the plugin's drawing carries it, and it is kept)
   const arranged = metalsArrangedIn(smiles, molblock);
   const [open, drawn] = await Promise.all([withinTime(openStereo(c, [molblock]).then((o) => o.left), STEREO_ASK_MS).catch(() => null), drawingOf(molblock, style, given?.runs, arranged)]);
   const stereoOpen = stereoOpenOf(open && given ? specified(open, given.bonds, molblock) : open);
@@ -176,7 +176,7 @@ export function givenRunsOf(smiles: string, molblock: string): { runs: GivenRuns
 /**
  * The metals a SMILES gives the arrangement of - a mark of a square-planar or octahedral (or any) configuration at the metal's own
  * atom, @SP1, @OH1, @TB1 or @/@@ - by the atoms of the MOL block the plugin read it to, which keep the SMILES's order. None where the
- * block's atoms are not the SMILES's, element by element: then nothing it gives is taken as given.
+ * block's atoms are not the SMILES's, element by element: then nothing it gives is taken as given. None with a chelate (`chelatedAt`).
  */
 export function metalsArrangedIn(smiles: string, molblock: string): number[] {
   // (the SMILES's atoms in order: each bracket atom, with whether it carries a mark of configuration; each one of the organic subset)
@@ -192,7 +192,37 @@ export function metalsArrangedIn(smiles: string, molblock: string): number[] {
   if (!atoms.some((a) => a.marked && isMetal(a.el))) return [];
   const graph = stereoGraphOf([molblock]);
   if (!graph || graph.atoms.length !== atoms.length || graph.atoms.some((a, i) => a.el !== atoms[i].el)) return [];
-  return atoms.flatMap((a, i) => (a.marked && isMetal(a.el) ? [i] : []));
+  return atoms.flatMap((a, i) => (a.marked && isMetal(a.el) && !chelatedAt(i, graph.bonds) ? [i] : []));
+}
+
+/**
+ * Whether two of the metal `m`'s donors are joined other than through it - a chelate's ring, or a bridge. Such a metal is not
+ * taken as given by its SMILES's mark: where donors sit in chelate rings the plugin's picture was found not to carry the mark's
+ * pairs, and nothing yet reads them from the mark itself (found in the chemistry check). It is laid out and marked as one
+ * nobody gave the arrangement of: never an isomer the input did not write.
+ */
+function chelatedAt(m: number, bonds: readonly { a: number; b: number }[]): boolean {
+  const around = new Map<number, number[]>();
+  for (const { a, b } of bonds) {
+    around.set(a, [...(around.get(a) ?? []), b]);
+    around.set(b, [...(around.get(b) ?? []), a]);
+  }
+  const donors = around.get(m) ?? [];
+  // (from each donor, through any atom but the metal: reaching another donor is a ring with the metal in it)
+  for (const d of donors) {
+    const seen = new Set([m, d]);
+    const queue = [d];
+    while (queue.length) {
+      const at = queue.shift()!;
+      for (const next of around.get(at) ?? []) {
+        if (seen.has(next)) continue;
+        if (donors.includes(next)) return true;
+        seen.add(next);
+        queue.push(next);
+      }
+    }
+  }
+  return false;
 }
 
 /** What the plugin leaves open, less the double bonds of the runs the SMILES configures (`givenRunsOf`). */
