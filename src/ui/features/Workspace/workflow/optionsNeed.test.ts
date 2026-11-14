@@ -5,7 +5,8 @@
 import { describe, expect, it } from "vitest";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import { createWorkspaceDocument } from "../document";
-import { notReadyFor, optionsNeed } from "./doers";
+import { notReadyFor, optionsNeed, stepRole } from "./doers";
+import { useAppSettings } from "../../../../lib/settings/appSettings";
 
 const putDown = (kind: Parameters<ReturnType<ReturnType<typeof createEditorStore>["getState"]>["addStep"]>[0], by = "meno") => {
   const doc = createWorkspaceDocument();
@@ -46,5 +47,28 @@ describe("a step put down from Quick Add", () => {
     const pasted = editor();
     pasted().addStep("energy-window", "meno", 0, 0);
     expect(pasted().openStep).toBeNull();
+  });
+});
+
+describe("a step whose window Settings keeps", () => {
+  it("put down otherwise than from Quick Add - a template's, with no options of its own - is ready, needing nothing", () => {
+    useAppSettings.setState((s) => ({ ...s, options: { [stepRole("energy-window", "meno")]: { window: 2.5 } } }));
+    try {
+      const bare = { kind: "energy-window" as const, by: "meno", options: undefined };
+      expect(optionsNeed(bare)).toBeUndefined();
+      expect(notReadyFor(bare)).toBeUndefined();
+      // (and put down from Quick Add, its card is not opened: it asks for nothing)
+      const doc = createWorkspaceDocument();
+      const store = createEditorStore(doc);
+      connectStoreToDocument(store, doc);
+      store.getState().putDownStep("energy-window", "meno", 0, 0);
+      expect(store.getState().openStep).toBeNull();
+    } finally {
+      useAppSettings.setState((s) => ({ ...s, options: {} }));
+    }
+  });
+
+  it("with no window anywhere - none of its own, none in Settings - needs one", () => {
+    expect(optionsNeed({ kind: "energy-window", by: "meno", options: undefined })).toBe("Give the window, in kcal/mol");
   });
 });
