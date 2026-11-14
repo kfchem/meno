@@ -159,7 +159,7 @@ function inkOf(doc: WorkspaceDocument, own: (id: number) => boolean, along?: { x
   const held = new Set((doc.sets ?? []).filter((b) => own(b.id)).flatMap((b) => setMembers(doc, b).structures.flat()));
   const byId = new Map(doc.model.atoms.map((a) => [a.id, a]));
   const out: Frame[] = [];
-  for (const ids of structuresOf(doc.model)) {
+  for (const ids of structuresOf(doc.model, true)) {
     if (ids.some((id) => held.has(id))) continue;
     const atoms = ids.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : []));
     if (along && !atoms.some((a) => a.x > along.x0 - INK_REACH && a.x < along.x1 + INK_REACH)) continue;
