@@ -772,3 +772,54 @@ describe("conformers made for the page", () => {
     expect(pageCount(block, { sought3d: "fixed" })).toBe(RING_CONFORMERS);
   });
 });
+
+describe("a hydrogen bond drawn, made in 3D", () => {
+  // ((Z)-4-hydroxypent-3-en-2-one, its O-H...O=C hydrogen bond drawn (a file's type 10), and a water whose H it binds - when `water`)
+  const L = NOMINAL_BOND_LENGTH;
+  const at = (id: number, deg: number, r: number, el = "C") => ({ id, x: r * L * Math.cos((deg * Math.PI) / 180), y: -r * L * Math.sin((deg * Math.PI) / 180), r: 0.9, el });
+  const drawn = (water: boolean): Model => ({
+    atoms: [at(1, 150, 2), at(2, 150, 1), at(3, -150, 1, "O"), at(4, 90, 1), at(5, 30, 1), at(6, -30, 1, "O"), at(7, 30, 2), at(8, -90, 1, "H"), ...(water ? [at(9, -90, 2, "O")] : [])],
+    bonds: [
+      { id: 11, a: 1, b: 2, order: 1 },
+      { id: 12, a: 2, b: 3, order: 2 },
+      { id: 13, a: 2, b: 4, order: 1 },
+      { id: 14, a: 4, b: 5, order: 2 },
+      { id: 15, a: 5, b: 6, order: 1 },
+      { id: 16, a: 5, b: 7, order: 1 },
+      { id: 17, a: 6, b: 8, order: 1 },
+      { id: 18, a: 8, b: 3, order: 1, hydrogen: true },
+      ...(water ? [{ id: 19, a: 9, b: 3, order: 1 as const, hydrogen: true as const }] : []),
+    ],
+  });
+  /** A V3000 MOL block's bonds, as its lines say them: type, first atom, second. */
+  const bondsIn = (molblock: string) => {
+    const lines = molblock.split("\n");
+    const [from, to] = [lines.indexOf("M  V30 BEGIN BOND"), lines.indexOf("M  V30 END BOND")];
+    return lines.slice(from + 1, to).map((l) => l.split(/\s+/).slice(3, 6).map(Number));
+  };
+
+  it("hands the embedding no hydrogen bond: the enol's block holds its seven bonds, none of them the hydrogen bond (type 10)", () => {
+    const blocks = blocksOf(drawn(false), [1]);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].bonds).toEqual([11, 12, 13, 14, 15, 16, 17]);
+    const bonds = bondsIn(blocks[0].molblock);
+    expect(bonds).toHaveLength(7);
+    expect(bonds.some(([type]) => type === 10)).toBe(false);
+  });
+
+  it("makes what a hydrogen bond alone joins two structures, side by side - the one asked of first - and counts two parts", () => {
+    const blocks = blocksOf(drawn(true), [1]);
+    expect(blocks.map((b) => b.atoms)).toEqual([[1, 2, 3, 4, 5, 6, 7, 8], [9]]);
+    expect(drawnBlocksOf(drawn(true), [9]).map((b) => b.atoms.length)).toEqual([1, 8]);
+    expect(drawnBlocksOf(drawn(true), drawn(true).atoms.map((a) => a.id))).toHaveLength(2);
+  });
+
+  it("keeps a molecule made so its drawing's: a hydrogen bond drawn or taken away since changes nothing made", () => {
+    const blocks = blocksOf(drawn(true), [1]);
+    expect(blocksStill(blocks, drawn(true))).toBe(true);
+    const without = { ...drawn(true), bonds: drawn(true).bonds.filter((b) => !b.hydrogen) };
+    expect(blocksStill(blocks, without)).toBe(true);
+    expect(signatureOf(blocks[0].part, blocks[0].atoms)).toBe(signatureOf(drawn(true), blocks[0].atoms));
+    expect(signatureOf(blocks[0].part, blocks[0].atoms)).toBe(signatureOf(without, blocks[0].atoms));
+  });
+});

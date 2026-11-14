@@ -84,7 +84,9 @@ export type Block = {
  * redoing. Edits elsewhere on the page do not count.
  */
 export function blocksStill(blocks: readonly Block[], model: Model): boolean {
-  return blocks.every((b) => groupShape(b.part, b.atoms) === groupShape(model, b.atoms));
+  // (a hydrogen bond drawn or taken away meanwhile changes no structure: no block holds one, `blocksOf`)
+  const structure = { ...model, bonds: model.bonds.filter((b) => !b.hydrogen) };
+  return blocks.every((b) => groupShape(b.part, b.atoms) === groupShape(structure, b.atoms));
 }
 
 /**
@@ -147,10 +149,17 @@ export function asDrawn(part: Model): boolean {
   return part.atoms.length === 1 && !a.abbrev && isElementSymbol(a.el);
 }
 
-/** The structures that hold these atoms, each as the plugin is asked about it; a bare atom's none (`standsForMolecule`). */
+/**
+ * The structures that hold these atoms, each as the plugin is asked about it; a bare atom's none (`standsForMolecule`). A hydrogen bond
+ * is no bond of a structure: what it alone joins - an enol and a water, an acid's dimer - is two structures, each asked about alone and
+ * made in 3D side by side, and it is in neither, so no embedding takes it for a bond (CTFILE.md, *Bonds*).
+ */
 export function blocksOf(model: Model, atoms: Iterable<number>, keep: (part: Model) => boolean = standsForMolecule): Block[] {
+  const structure = { ...model, bonds: model.bonds.filter((b) => !b.hydrogen) };
+  // (the drawing's pieces that hold these atoms, by every bond drawn - a water a hydrogen bond holds comes with them - each then split)
   return fragmentsHolding(model, atoms)
-    .map((ids) => partOf(model, ids))
+    .flatMap((ids) => fragmentsHolding(structure, ids))
+    .map((ids) => partOf(structure, ids))
     .filter(keep)
     .map((part) => {
       // (a ring or chain bound to a metal through all its atoms, as one multi-centre bond: etaBound. A bare atom - Na+, a

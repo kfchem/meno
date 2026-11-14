@@ -24,7 +24,8 @@ export function pageIndex(model: Model): PageIndex {
  * What a drawn structure is, as its molecules in 3D were made from it: its
  * atoms (by id: element, charge, mass), its bonds (order and wedge, and
  * what a haptic bond binds), and those that leave it - not where anything
- * is drawn. A molecule in 3D whose
+ * is drawn, nor a hydrogen bond, which is no bond of a structure (one drawn
+ * or taken away changes no molecule made from it). A molecule in 3D whose
  * drawing no longer says the same is its drawing's no longer. Read through
  * the drawing's index (`pageIndex`): the structure's own atoms and bonds
  * alone, however many others the page holds.
@@ -62,7 +63,7 @@ export function signatureOf(model: Model, ids: Iterable<number>): string {
     .map((a) => `${a.id}:${a.el}:${a.charge ?? 0}:${a.isotope ?? ""}`)
     .sort();
   const touching = new Set<Bond>();
-  for (const id of of) for (const b of bondsOf.get(id) ?? []) touching.add(b);
+  for (const id of of) for (const b of bondsOf.get(id) ?? []) if (!b.hydrogen) touching.add(b);
   const bonds = [...touching]
     .map((b) => {
       const ends = of.has(b.a) && of.has(b.b) ? `${b.a}-${b.b}` : of.has(b.a) ? `${b.a}-out` : `${b.b}-out`;
