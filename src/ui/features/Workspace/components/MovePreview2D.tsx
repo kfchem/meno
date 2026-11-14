@@ -8,6 +8,7 @@ import { useDrawnLayout } from "./drawnLayoutContext";
 import { computeMoveSnap, onAnotherAtom, snapAngleAbout } from "../utils/moveSnap";
 import { mergeTarget } from "../utils/dropMerge";
 import { bondLengthFrom } from "../utils/magnified";
+import { FREE_BLEND_S, MOVE_SPRING, SNAP_SPRING, easeOutCubic, springAngle } from "../utils/angleSpring";
 import { TAU, follow } from "../../../theme/motion";
 
 // Preview for moving an atom without mutating coordinates during drag.
@@ -51,7 +52,7 @@ export default function MovePreview2D() {
   const wasFreeRef = useRef(false);
   const freeStartRef = useRef<{ x: number; y: number } | null>(null);
   const freeT0Ref = useRef(0);
-  const FREE_DUR_MS = 180;
+  const FREE_DUR_MS = FREE_BLEND_S * 1000;
   // Dropped where the pointer is on an atom it may become (utils/dropMerge),
   // the dragged atom is shown there - what the drop will do - easing in and
   // out of it; `mergeOnto` is the atom, kept while it eases out.
@@ -140,17 +141,9 @@ export default function MovePreview2D() {
         }
         const snapAng = snapAngleAbout(model as any, moving.id, nb, ptr, bondL);
         const dt = Math.min(Math.max(dtRaw || 0.016, 0.001), 0.05);
-        const k = 800;
-        const zeta = 0.5;
-        const c = 2 * Math.sqrt(k) * zeta;
-        const wrapPi = (a: number) => {
-          const t = (a + Math.PI) % (2 * Math.PI);
-          return t < 0 ? t + 2 * Math.PI - Math.PI : t - Math.PI;
-        };
-        const err = wrapPi(curAngRef.current - snapAng);
-        const angAcc = -k * err - c * angVelRef.current;
-        angVelRef.current += angAcc * dt;
-        curAngRef.current += angVelRef.current * dt;
+        const sprung = springAngle(curAngRef.current, angVelRef.current, snapAng, dt, SNAP_SPRING);
+        curAngRef.current = sprung.angle;
+        angVelRef.current = sprung.velocity;
         pxSnap = nb.x + L * Math.cos(curAngRef.current);
         pySnap = nb.y + L * Math.sin(curAngRef.current);
         centerRef.current = { x: nb.x, y: nb.y };
@@ -204,17 +197,9 @@ export default function MovePreview2D() {
       }
       // integrate springs and compute snapped endpoint
       const dt = Math.min(Math.max(dtRaw || 0.016, 0.001), 0.05);
-      const kA = 1000;
-      const zA = 0.4;
-      const cA = 2 * Math.sqrt(kA) * zA;
-      const wrapPi = (a: number) => {
-        const t = (a + Math.PI) % (2 * Math.PI);
-        return t < 0 ? t + 2 * Math.PI - Math.PI : t - Math.PI;
-      };
-      const errA = wrapPi(curAngRef.current - targetAngRef.current);
-      const angAcc = -kA * errA - cA * angVelRef.current;
-      angVelRef.current += angAcc * dt;
-      curAngRef.current += angVelRef.current * dt;
+      const sprung = springAngle(curAngRef.current, angVelRef.current, targetAngRef.current, dt, MOVE_SPRING);
+      curAngRef.current = sprung.angle;
+      angVelRef.current = sprung.velocity;
       const kR = 1100;
       const zR = 0.85;
       const cR = 2 * Math.sqrt(kR) * zR;
@@ -243,7 +228,7 @@ export default function MovePreview2D() {
         freeT0Ref.current = now;
       }
       const t = Math.min(1, (now - freeT0Ref.current) / FREE_DUR_MS);
-      const s = 1 - Math.pow(1 - t, 3); // easeOutCubic
+      const s = easeOutCubic(t);
       const start = freeStartRef.current ?? { x: pxSnap, y: pySnap };
       pxPrev = start.x + (ptr.x - start.x) * s;
       pyPrev = start.y + (ptr.y - start.y) * s;

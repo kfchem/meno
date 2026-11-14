@@ -25,12 +25,14 @@ export type CisTrans = {
 
 /**
  * An axis of chirality: the single bond between `atoms`, each end with two
- * other neighbours (a biaryl's - BINAP's C1-C1'), and how the two `refs`,
- * one bonded to each end, are turned about it: the sign of the torsion
- * refs[0]-atoms[0]-atoms[1]-refs[1] (IUPAC's: + where, looking along the
- * axis, the near one turns clockwise onto the far one). Drawn flat, it is
- * shown by a wedge on a bond out of an end of it, narrow there, to the
- * neighbour that stands out of the page, the other end's neighbours in it -
- * as an atropisomer's wedge is read.
+ * other neighbours (a biaryl's - BINAP's C1-C1'), or an allene's two ends,
+ * not bonded to each other (an even run of cumulated double bonds, its
+ * ends each with two other neighbours, C=C=C, C=C=C=C=C); and how the two
+ * `refs`, one bonded to each end, are turned about it: the sign of the
+ * torsion refs[0]-atoms[0]-atoms[1]-refs[1] (IUPAC's: + where, looking
+ * along the axis, the near one turns clockwise onto the far one). Drawn
+ * flat, a biaryl's is shown by a wedge on a bond out of an end of it,
+ * narrow there, to the neighbour that stands out of the page, the other
+ * end's neighbours in it - as an atropisomer's wedge is read.
  */
 export type Axial = { atoms: readonly [number, number]; refs: readonly [number, number]; sense: 1 | -1 };
