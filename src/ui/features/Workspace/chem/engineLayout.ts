@@ -214,11 +214,13 @@ const pairKey = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
  * Throws, changing nothing, if the new drawing would not say the
  * stereochemistry the old one said.
  */
-export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: Layout2D, style?: DrawingStyle): Relayout {
+export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: Layout2D, style?: DrawingStyle): Relayout {
   const { input, ids } = job;
   // (the drawing's own atoms: the stars given for rings bound atom by atom are not)
   const n = ids.length;
   const byId = new Map(model.atoms.map((a) => [a.id, a]));
+  // (a four-bond metal's donors opposite each other as they were drawn: transplatin cleaned up is transplatin)
+  const laid = oppositesKept(ids.map((id) => byId.get(id)!), input, given);
   // at the style's bond length, whatever the drawing's was - a structure put
   // down too large or too small, read from a figure at a wrong scale, comes
   // to the workspace's one style (the maintainer, 2026-10-27): the engine's
@@ -748,4 +750,274 @@ function stereoOf(m: Model) {
 /** The first id no atom or bond of `model` has. */
 export function nextFree(model: Model): number {
   return Math.max(0, greatest(model.atoms.map((a) => a.id)), greatest(model.bonds.map((b) => b.id))) + 1;
+}
+
+/**
+ * `laid`, with each four- or six-bond metal's donors standing opposite each
+ * other as they do in the drawing (`was`, in the job's order): where the
+ * layout set them otherwise - like donors side by side, cisplatin for a
+ * transplatin drawn, a cis-[CoCl2(NH3)4]+ for the trans - donors change
+ * places, a pair at a time. Two donors of one atom each change places with
+ * all they carry, turned about the metal (a turn: every wedge on them says
+ * what it said); a chelate's two donors change places by mirroring the
+ * chelate across the line between them, its wedges turned over with it, so
+ * that each of its centres keeps its configuration (trans-Pt(gly)2). Which
+ * stand opposite is the pairing nearest straight lines, however far from
+ * straight the drawing is - a transplatin put down with its N-Pt-N at 145
+ * degrees is trans still - and none where another pairing is about as
+ * near (within 20 degrees all told): the drawing does not say it, and the
+ * layout's stands. Kept: each pair drawn across plainly across, and with
+ * six none drawn side by side; or six spokes drawn, laid out as two lines
+ * and two side by side, where that picture reads only as the isomer drawn
+ * (cis-[Co(en)2Cl2]+). Refused, saying so, where no move keeps it. Not at
+ * a metal drawn in perspective, nor by mirroring a chelate drawn so, nor
+ * where a change would need a donor of a larger chelate to move.
+ */
+/** How near, in bonds, two atoms of a metal's different donors may lie before the one's groups are turned clear (`oppositesKept`). */
+const CROWDED = 0.75;
+
+export function oppositesKept(was: readonly { x: number; y: number }[], input: LayoutInput, laid: Layout2D): Layout2D {
+  const near = input.atoms.map(() => [] as number[]);
+  for (const { a, b } of input.bonds) {
+    near[a].push(b);
+    near[b].push(a);
+  }
+  const x = [...laid.x];
+  const y = [...laid.y];
+  let hydrogens = laid.hydrogens;
+  let wedges = laid.wedges;
+  let changed = false;
+  // (each metal whose donors changed places, with its donors and their units: to clear any two put side by side that now lie on
+  // each other)
+  const moved: { m: number; donors: number[]; units: Set<number>[] }[] = [];
+  for (let m = 0; m < was.length; m++) {
+    const donors = near[m];
+    const n = donors.length;
+    if (!isMetal(input.atoms[m].el) || (n !== 4 && n !== 6) || laid.depth[m] != null || donors.some((d) => d >= was.length)) continue;
+    // (each donor's unit: what it carries, reached not through the metal - a chelate's, its donors' together)
+    const reach = donors.map((d) => {
+      const seen = new Set([d]);
+      for (const todo = [d]; todo.length; ) {
+        for (const v of near[todo.pop()!]) {
+          if (v === m || seen.has(v)) continue;
+          seen.add(v);
+          todo.push(v);
+        }
+      }
+      return seen;
+    });
+    const unit = donors.map((_, i) => donors.findIndex((e) => reach[i].has(e)));
+    // (a unit drawn in perspective - a phosphine's phenyls turned - is turned about the metal as any is; mirrored, it would show
+    // its other face, so a chelate drawn so is not)
+    const inDepth = (i: number) => [...reach[i]].some((a) => laid.depth[a] != null);
+    // (which stands opposite which, by the angles round the metal: each donor's partner in the pairing whose straightest pair is
+    // straightest - then its next, and with six its last; none where another pairing is about as straight, pair by pair)
+    const pairing = (px: readonly number[], py: readonly number[]): number[] | null => {
+      if (donors.some((d) => Math.hypot(px[d] - px[m], py[d] - py[m]) < 1e-6)) return null;
+      const angle = donors.map((d) => Math.atan2(py[d] - py[m], px[d] - px[m]));
+      const off = (i: number, j: number) => Math.abs(Math.PI - Math.abs(Math.atan2(Math.sin(angle[i] - angle[j]), Math.cos(angle[i] - angle[j]))));
+      const all: { partner: number[]; offs: number[] }[] = [];
+      const pair = (left: number[], partner: number[], offs: number[]) => {
+        if (!left.length) return void all.push({ partner: [...partner], offs: [...offs].sort((p, q) => p - q) });
+        const [i, ...rest] = left;
+        for (const j of rest) {
+          partner[i] = j;
+          partner[j] = i;
+          pair(
+            rest.filter((k) => k !== j),
+            partner,
+            [...offs, off(i, j)],
+          );
+        }
+      };
+      pair(
+        donors.map((_, i) => i),
+        donors.map(() => -1),
+        [],
+      );
+      const before = (p: number[], q: number[]) => {
+        for (let k = 0; k < p.length; k++) if (p[k] !== q[k]) return p[k] - q[k];
+        return 0;
+      };
+      all.sort((p, q) => before(p.offs, q.offs));
+      // (a tie - every pair of the next pairing within 20 degrees as straight as the best's - leaves the layout's pairing, saying
+      // nothing: an isomer nobody gave, where the centre is surely square planar; there it is to be the cross marked "Which donors are
+      // next to each other is not given", as a centre laid out with none given is)
+      const told = all[0].offs.some((v, k) => all[1].offs[k] - v > (20 * Math.PI) / 180);
+      return told ? all[0].partner : null;
+    };
+    const drawn = pairing(
+      was.map((a) => a.x),
+      was.map((a) => a.y),
+    );
+    if (!drawn) continue;
+    const angleOf = (i: number) => Math.atan2(y[donors[i]] - y[m], x[donors[i]] - x[m]);
+    const refused = () => new Error("the structure could not be laid out keeping its metal's donors opposite each other as drawn, so nothing was moved");
+    const offOf = (p: number, q: number) => Math.abs(Math.PI - Math.abs(Math.atan2(Math.sin(p - q), Math.cos(p - q))));
+    // (what the drawing says: the pairs of its pairing drawn across - more than a right angle apart - and those drawn side by side, which
+    // it says are not: a flat cis-[Co(en)2Cl2]+'s two Cl, 30 degrees apart)
+    const drawnAngle = donors.map((d) => Math.atan2(was[d].y - was[m].y, was[d].x - was[m].x));
+    const pairsOf = (partner: readonly number[]) => partner.flatMap((j, i) => (i < j ? [[i, j] as const] : []));
+    const across = pairsOf(drawn).filter(([i, j]) => offOf(drawnAngle[i], drawnAngle[j]) < Math.PI / 2);
+    // (with four, the two left are across wherever the other two are: only six can be drawn with two beside each other and still say it)
+    const beside = n === 6 ? pairsOf(drawn).filter(([i, j]) => offOf(drawnAngle[i], drawnAngle[j]) >= Math.PI / 2) : [];
+    // (the layout's places round the metal, in turn, and which stands plainly across which - within 30 degrees of a line - as laid out;
+    // a place with none across, one of two set side by side, is loose)
+    const slotOrder = donors.map((_, i) => i).sort((p, q) => angleOf(p) - angleOf(q));
+    const slotAngle = slotOrder.map(angleOf);
+    const slotOf = donors.map((_, i) => slotOrder.indexOf(i));
+    const opposite = slotAngle.map((a, s) => {
+      let t = -1;
+      slotAngle.forEach((b, u) => {
+        if (u !== s && offOf(a, b) < Math.PI / 6 && (t < 0 || offOf(a, b) < offOf(a, slotAngle[t]))) t = u;
+      });
+      return t;
+    });
+    const lines = opposite.flatMap((t, s) => (s < t && opposite[t] === s ? [[s, t] as const] : []));
+    const loose = slotAngle.map((_, s) => s).filter((s) => !lines.some(([p, q]) => p === s || q === s));
+    // (each donor's kind: what it is, read out from it through its unit, the metal left out - a chelate's two ends told apart where they
+    // differ (glycinate's N and O), alike where they do not (ethylenediamine's two N))
+    const kind = donors.map((d, i) => {
+      const seen = new Map([[d, 0]]);
+      const layers: string[][] = [[input.atoms[d].el]];
+      for (let todo = [d], depth = 1; todo.length; depth++) {
+        const next: number[] = [];
+        for (const a of todo) {
+          for (const v of near[a]) {
+            if (v === m || seen.has(v) || !reach[i].has(v)) continue;
+            seen.set(v, depth);
+            next.push(v);
+            (layers[depth] ??= []).push(input.atoms[v].el + (near[v].includes(m) ? "*" : ""));
+          }
+        }
+        todo = next;
+      }
+      return layers.map((l) => [...l].sort().join(",")).join("/");
+    });
+    const pairKind = (p: number, q: number) => [kind[p], kind[q]].sort().join("|");
+    const said = across.map(([i, j]) => pairKind(i, j)).sort().join(" ; ");
+    // (a picture keeps the drawing where each pair drawn across stands plainly across in it, and none drawn side by side does;
+    // or - six donors drawn as six spokes, the layout setting four of them as two lines and two side by side, as it lays out
+    // cis-[Co(en)2Cl2]+ - where the picture can be read only as the isomer drawn: one of its two lines truly across, the ends of the
+    // other each across one of the two side by side, read either way the same kinds across as the drawing (cis-[Co(en)2Cl2]+ drawn
+    // with six spokes, laid out so, is cis; trans-M(gly)2Cl2's or an N-across-N cis-M(gly)2Cl2's picture so laid out would not say it)
+    const keeps = (at: readonly number[]) => {
+      const donorAt = new Array<number>(n);
+      at.forEach((s, i) => (donorAt[s] = i));
+      if (across.every(([i, j]) => opposite[at[i]] === at[j]) && beside.every(([i, j]) => opposite[at[i]] !== at[j])) return true;
+      if (n !== 6 || across.length !== 3 || lines.length !== 2 || loose.length !== 2) return false;
+      const [u, v] = loose.map((s) => donorAt[s]);
+      return lines.every(([p, q], k) => {
+        const [r, t] = lines[1 - k].map((s) => donorAt[s]);
+        const one = [pairKind(donorAt[p], donorAt[q]), pairKind(u, r), pairKind(v, t)].sort().join(" ; ");
+        const other = [pairKind(donorAt[p], donorAt[q]), pairKind(u, t), pairKind(v, r)].sort().join(" ; ");
+        return one === said && other === said;
+      });
+    };
+    // (each unit - a single donor with all it carries, or a chelate's - may be turned round the places, and a chelate of two mirrored,
+    // for a picture that keeps the drawing; the fewest units moved, then the shortest turns. Where none does - trans-[Co(en)2Cl2]+,
+    // the layout having no two places across for its Cl - nothing is laid out, saying so: never another isomer)
+    const groups = [...new Set(unit)].map((u) => donors.map((_, i) => i).filter((i) => unit[i] === u));
+    type Move = { turn: number; mirror: boolean };
+    let best: { moves: Move[]; cost: number } | null = null;
+    const choose = (g: number, moves: Move[], taken: Set<number>, at: number[]) => {
+      if (g === groups.length) {
+        if (!keeps(at)) return;
+        const cost = moves.filter((v) => v.turn || v.mirror).length * 100 + moves.reduce((t, v) => t + Math.min(v.turn, n - v.turn), 0);
+        if (!best || cost < best.cost) best = { moves: [...moves], cost };
+        return;
+      }
+      const members = groups[g];
+      const mirrors = members.length === 2 && !inDepth(members[0]) ? [false, true] : [false];
+      for (const mirror of mirrors) {
+        for (let turn = 0; turn < n; turn++) {
+          const slots = members.map((i, k) => ((mirror ? slotOf[members[1 - k]] : slotOf[i]) + turn) % n);
+          if (slots.some((t) => taken.has(t))) continue;
+          const next = [...at];
+          members.forEach((i, k) => (next[i] = slots[k]));
+          choose(g + 1, [...moves, { turn, mirror }], new Set([...taken, ...slots]), next);
+        }
+      }
+    };
+    choose(0, [], new Set(), donors.map(() => -1));
+    if (!best) throw refused();
+    const chosen: Move[] = (best as { moves: Move[] }).moves;
+    if (chosen.every((v) => !v.turn && !v.mirror)) continue;
+    groups.forEach((members, g) => {
+      const { turn, mirror } = chosen[g];
+      if (!turn && !mirror) return;
+      const atoms = new Set(members.flatMap((i) => [...reach[i]]));
+      // (a chelate of two mirrored across the line between its donors, its wedges turned over: its two donors change places)
+      if (mirror) {
+        const a1 = angleOf(members[0]);
+        const phi = a1 + Math.atan2(Math.sin(angleOf(members[1]) - a1), Math.cos(angleOf(members[1]) - a1)) / 2;
+        const [c2, s2] = [Math.cos(2 * phi), Math.sin(2 * phi)];
+        const mirrored = (px: number, py: number) => {
+          const [vx, vy] = [px - x[m], py - y[m]];
+          return { x: x[m] + vx * c2 + vy * s2, y: y[m] + vx * s2 - vy * c2 };
+        };
+        for (const a of atoms) ({ x: x[a], y: y[a] } = mirrored(x[a], y[a]));
+        hydrogens = hydrogens.map((h) => (atoms.has(h.on) ? { ...h, at: mirrored(h.at.x, h.at.y) } : h));
+        wedges = wedges.map((w) => (atoms.has(w.from) ? { ...w, stereo: w.stereo === "up" ? "down" : "up" } : w));
+      }
+      // (then the unit turned about the metal, its first donor onto its place: a turn, so every wedge on it says what it said)
+      const first = members[0];
+      const target = ((mirror ? slotOf[members[1]] : slotOf[first]) + turn) % n;
+      const t = slotAngle[target] - angleOf(first);
+      const turned = (px: number, py: number) => ({
+        x: x[m] + (px - x[m]) * Math.cos(t) - (py - y[m]) * Math.sin(t),
+        y: y[m] + (px - x[m]) * Math.sin(t) + (py - y[m]) * Math.cos(t),
+      });
+      for (const a of atoms) ({ x: x[a], y: y[a] } = turned(x[a], y[a]));
+      hydrogens = hydrogens.map((h) => (atoms.has(h.on) ? { ...h, at: turned(h.at.x, h.at.y) } : h));
+    });
+    const before: boolean = changed;
+    changed = true;
+    if (changed) moved.push({ m, donors, units: reach });
+    changed ||= before;
+  }
+  if (!changed) return laid;
+  // (donors put side by side that were not - two phosphines' rings, cis-PtCl2(PCy3)2 - can lie on each other: each single donor's
+  // groups turned about it, its bond to the metal as it is, up to 60 degrees either way, to where they are clearest of the others)
+  for (const { m, donors, units } of moved) {
+    const room = (u: number) => {
+      let r = Infinity;
+      for (const a of units[u]) for (let v = 0; v < units.length; v++) if (v !== u) for (const b of units[v]) r = Math.min(r, Math.hypot(x[a] - x[b], y[a] - y[b]));
+      for (const a of units[u]) if (a !== donors[u]) r = Math.min(r, Math.hypot(x[a] - x[m], y[a] - y[m]));
+      return r;
+    };
+    for (let pass = 0; pass < 2; pass++) {
+      for (let u = 0; u < donors.length; u++) {
+        const d = donors[u];
+        if (units[u].size < 2 || donors.some((e, v) => v !== u && units[u].has(e)) || room(u) >= CROWDED) continue;
+        const group = [...units[u]].filter((a) => a !== d);
+        const home = group.map((a) => ({ x: x[a], y: y[a] }));
+        const turn = (t: number) =>
+          group.forEach((a, k) => {
+            const [vx, vy] = [home[k].x - x[d], home[k].y - y[d]];
+            x[a] = x[d] + vx * Math.cos(t) - vy * Math.sin(t);
+            y[a] = y[d] + vx * Math.sin(t) + vy * Math.cos(t);
+          });
+        let best = { t: 0, r: room(u) };
+        for (let deg = 10; deg <= 60; deg += 10) {
+          for (const t of [(deg * Math.PI) / 180, (-deg * Math.PI) / 180]) {
+            turn(t);
+            const r = room(u);
+            if (r > best.r + 1e-9) best = { t, r };
+          }
+        }
+        turn(best.t);
+        if (best.t) {
+          const inGroup = new Set(group);
+          // (an H turned with its atom, the same turn about the donor)
+          hydrogens = hydrogens.map((h) => {
+            if (!inGroup.has(h.on)) return h;
+            const [vx, vy] = [h.at.x - x[d], h.at.y - y[d]];
+            return { ...h, at: { x: x[d] + vx * Math.cos(best.t) - vy * Math.sin(best.t), y: y[d] + vx * Math.sin(best.t) + vy * Math.cos(best.t) } };
+          });
+        }
+      }
+    }
+  }
+  return { ...laid, x, y, hydrogens, wedges };
 }

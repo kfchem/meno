@@ -58,7 +58,7 @@ describe("holding an entry's restraints as it is optimised", () => {
     })!;
     expect(m.steps.map((s) => [s.kind, s.restraints])).toEqual([
       ["optimise", ["fixed", "distance-exact"]],
-      ["saddle-point", undefined],
+      ["saddle-point", ["fixed", "distance-exact"]],
       ["energy", undefined],
       ["frequencies", undefined],
       ["minimise", ["fixed"]],

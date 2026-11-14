@@ -6,8 +6,8 @@ import type { Model } from "../store/types";
 import { boxOf } from "../chem/make3d";
 import type { Frame } from "./entries";
 import { resultOf } from "./flow";
-import { exitPlace, exitsOf, inputsOf, KINDS } from "./kinds";
-import { BETWEEN, CARD_H, CARD_W, nearWire, portDown, PX, setTakes, stepGives, stepTakes, wirePath } from "./look";
+import { cardHighOf, exitPlace, exitsOf, inputsOf, KINDS } from "./kinds";
+import { BETWEEN, CARD_H, CARD_PORTS, CARD_TALL, CARD_W, nearWire, PORT_STEP, portDown, PX, setTakes, stepGives, stepTakes, wirePath } from "./look";
 import { addStep } from "./model";
 import { placeResults, type RunResults, type RunWith } from "./run";
 import type { Molecule3D } from "../store/types";
@@ -21,12 +21,21 @@ describe("a step's exits' ports (docs/WORKFLOWS.md, *Exit ports*)", () => {
       exits.forEach((x, k) => {
         const p = stepGives(s, exitPlace(kind, x.id));
         expect(p).toEqual({ x: s.x + CARD_W, y: stepTakes(s, k).y });
-        expect(p.y).toBeGreaterThan(s.y - CARD_H);
+        expect(p.y).toBeGreaterThan(s.y - cardHighOf(kind));
         expect(p.y).toBeLessThan(s.y);
       });
-      // (no more of them than a card shut has room for, as inputs)
-      expect(Math.max(exits.length, inputsOf(kind).length)).toBeLessThanOrEqual(3);
+      // (its inputs too: each on its card shut)
+      const inputs = inputsOf(kind);
+      inputs.forEach((_, k) => expect(stepTakes(s, k).y).toBeGreaterThan(s.y - cardHighOf(kind)));
+      const most = Math.max(exits.length, inputs.length, 1);
+      // (as tall as a card shut is, of three ports or fewer; one port's step taller for each past three - never taller than its words can draw a card)
+      expect(cardHighOf(kind)).toBeCloseTo(CARD_H + Math.max(0, most - CARD_PORTS) * PORT_STEP, 9);
+      expect(cardHighOf(kind)).toBeLessThanOrEqual(CARD_TALL);
     }
+    // (three at most on a card of the usual height; Optimise to a saddle point's four - its Restraints the fourth - on one a port's step taller)
+    expect(KINDS.filter(({ kind }) => cardHighOf(kind) > CARD_H).map(({ kind }) => [kind, inputsOf(kind).length])).toEqual([["saddle-point", 4]]);
+    // (its fourth input as far above its foot as a third is on a card of three)
+    expect(cardHighOf("saddle-point") - portDown(3)).toBeCloseTo(CARD_H - portDown(2), 9);
   });
 
   it("are placed by an exit's place among its kind's - the first's for one the kind has not", () => {

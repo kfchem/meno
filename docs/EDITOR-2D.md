@@ -357,7 +357,7 @@ rest is listed under them, a row each as before (`PartMenu`, `menuIcons`).
 | Right-clicked | Icons | Listed |
 |---|---|---|
 | An atom | charge one up, one down, clean up its structure, its structure in 3D, an electron-pushing arrow from it, a fishhook from it, colour; Delete | unpaired electron (or none), expand an abbreviation, as typed (where it was read as something else), select its structure, lay out as a grid or stack again (a record of a stack) |
-| A bond | its kind - single, double, triple, wedge, hashed wedge - and "more" (a second row, eased in: wavy, bold, bold dashed, dashed, dative; shown at once where the bond is one of those); Delete | clean up, 3D, an electron-pushing arrow from it, a fishhook from it, colour, select its structure, lay out as a grid or stack again (a record of a stack) |
+| A bond | its kind - single, double, triple, wedge, hashed wedge - and "more" (a second row, eased in, its icons as large as the first row's: wavy, bold, bold dashed, dashed, dative; shown at once where the bond is one of those); Delete | clean up, 3D, an electron-pushing arrow from it, a fishhook from it, colour, select its structure, lay out as a grid or stack again (a record of a stack) |
 | An electron-pushing arrow | full head, fishhook (the one it has marked), colour; Delete | from the charge or from a lone pair (from an atom with a negative charge), lone pair (where it leaves an atom that has one), bend as Meno does (where it was bent by hand) |
 | The selection | cut, copy, paste (opened on empty space), the other look and reset its turn (opened on a molecule in 3D), clean up, 3D, colour; Delete | that molecule's own (opened on a molecule in 3D), copy as SMILES, export, render (its molecules in 3D), turn over either way, lay out as a grid or stack again (opened on a record of a stack), a slide around it, a box around it, use as input, save as abbreviation |
 | Inside a ring, nothing selected | colour | select its structure |
@@ -496,7 +496,17 @@ field as it is typed (a label that is the formula itself, PdCl2, once). Where th
 BrCN - both are offered there, the SMILES first (the field is for
 SMILES), and Enter draws the one chosen, by a
 click or the up and down arrows; never one of them without the other
-shown. A SMILES alone is drawn as before, nothing said under it. Text is
+shown. A SMILES alone is drawn as before, nothing said under it. An
+aromatic SMILES that cannot be given single and double bonds as written
+is refused wherever it is typed, never read by adding an H nobody wrote:
+c1cccc1 (cyclopentadiene's ring written aromatic), c1ccnc1 (pyrrole
+without its [nH]), c1cncn1 - "its aromatic ring of 5 atoms (1, 2, 3, 4
+and 5) cannot have alternating double bonds: is a charge or an H
+missing?" (lib/chem/kekulize `aromaticRefusal`; the same words where the
+plugin that reads SMILES refuses it). A bond written with no symbol between
+two aromatic atoms is aromatic only in a ring of aromatic bonds: one that
+joins two rings - a biaryl written c1ccc(nc1)c1ccccn1, without the "-" -
+is single, and each ring is read as its own. Text is
 read as a structure by one reader wherever it is typed (`chem/resolve`):
 here as a whole molecule, in Enumerate's lists and Substituents' groups
 as a group (docs/WORKFLOWS-FOUNDATION.md, *Enumerate*); a label typed on
@@ -760,7 +770,10 @@ Both go together, because both touch every layer.
   round - double and triple bonds included, which today are not. When they
   are square, every one is square.
   A wedge's wide end or a bold bar's end, where one bond carries straight on through it, is cut
-  square across and its two corners are rounded like any free corner (they
+  square across at the atom - past it by the bond's own line's half width,
+  never into a triple bond's or a nitrile's lines (a solid wedge into
+  efavirenz's alkyne stood 0.2 of a bond into the C≡C, a spike between its
+  outer lines) - and its two corners are rounded like any free corner (they
   were left sharp).
 - **Units.** Every length can be given in points or as a fraction of the bond
   length, whichever the user prefers.
@@ -863,6 +876,13 @@ All hover-based, as above.
   typing - N+, NH3+, O-, Fe2+, 13C, or a charge alone - by + and - over
   an atom, or from its menu, which also gives or takes an unpaired
   electron.)
+- **A carbon whose bonds run straight through it is written** (`cumulatedShown`):
+  between two double bonds - an allene's middle, a ketene's, CO2's (O=C=O
+  would read as O=O) - and the C of a carbonyl, a cyanide or an isocyanide
+  on a metal, M-C≡O, M-C≡N, M-C≡N-R, whose two bonds lie in one line:
+  written, the ligand reads as CO, CN or CNR, its atoms atoms still. An
+  alkyne's carbons, a nitrile's C, an acylium's (R-C≡O+, on no metal) and a
+  bridging carbonyl's (three bonds) stay bare vertices.
 - **Labels typed in place** (the maintainer, 2026-10-10: no HTML box;
   2026-10-18, as it is now). A label is written where it stands, drawn by
   Meno as words on the page are (*Text*, below; `LabelTyping2D`): set as a
@@ -1050,6 +1070,35 @@ All hover-based, as above.
   2026-10-27. A structure Clean-up cannot lay out - its stereochemistry not
   kept, an atom put on another - is left as drawn and named by its formula
   and why, the others laid out all the same, as one undo step.)
+  - **A four- or six-bond metal keeps its donors opposite each other as
+    drawn** (`oppositesKept`): which pairs stand opposite is its isomer -
+    transplatin and cisplatin are two compounds, as are trans- and
+    cis-[CoCl2(NH3)4]+ - so where the engine set them otherwise, the
+    donors' units are moved round the metal into the layout's places:
+    each turned about it whole with all it carries, a chelate of two also
+    mirrored across the line between its donors, its wedges turned over,
+    so its centres keep their configuration - the fewest units moved,
+    then the shortest turns (trans-Pt(gly)2). The drawing's pairing is
+    the one whose straightest pair is straightest, then its next: a pair
+    drawn straight across decides however the others lean; where the
+    straightest pairs of two pairings are within 20 degrees of each other
+    it says none, and the layout's stands. What is handed back keeps the
+    drawing where each pair drawn across (more than a right angle apart)
+    stands plainly across in it, within 30 degrees of a line, and - with
+    six - no two drawn side by side do: a cis-[Co(en)2Cl2]+ drawn as the
+    layout draws it, its N an X and its Cl side by side, is kept so, and a
+    cis-M(gly)2Cl2 drawn so keeps the lines it was drawn with (N to N and
+    O to O, or N to O), its chelates never mirrored into the other. Six
+    donors drawn as six spokes, which the layout sets as two lines and
+    two side by side, are kept where that picture can be read only as the
+    isomer drawn - one of its lines truly across, the other's two ends
+    each across one of the two side by side, either way the same donors
+    across as drawn: cis-[Co(en)2Cl2]+, and a cis-M(gly)2Cl2 with an N
+    across an O. Where no move gives a picture that keeps the drawing -
+    trans-[Co(en)2Cl2]+, which the layout has no two places across for
+    its Cl; a cis-M(gly)2Cl2 with N across N or O across O, which its
+    picture could not tell apart; a chelate's two donors drawn opposite -
+    Clean-up lays nothing out and says so: never another isomer.
 - Valence warnings, and R/S shown on request (RDKit). (PR #53: a ring round
   an atom with too many bonds, saying what is wrong under the pointer; R/S
   and E/Z from a button on the canvas, later shown on what they are asked
@@ -1321,7 +1370,18 @@ All hover-based, as above.
   panel *Save as abbreviation* opens is about the group as it was: it
   closes when the group changes under it - an undo taking an atom of it
   away, a bond among them, a charge (until 2026-10-13, Save then showed
-  the label on what was left: a "tBu" holding an isopropyl).
+  the label on what was left: a "tBu" holding an isopropyl). An
+  abbreviation's structure has no stereo: where the group's bonds, or
+  its one bond out, show any - a wedge or hash, a wavy bond, a double
+  bond drawn crossed, or a double bond's cis or trans as it is drawn
+  (read as Meno reads a drawing's stereo: a group off the bond's line at
+  each end, outside a ring of up to seven) - or it is drawn in
+  perspective (a cage in depth, a chair, a Haworth ring: an atom in
+  depth, or a centre such a drawing shows), the panel says so ("Its
+  wedges are not kept: an abbreviation has no stereo."; "Its
+  perspective drawing, and any configuration it shows, is not kept: …"),
+  never passing it over. A cage with no configuration of its own -
+  adamantyl - is told so too: on the safe side.
 - Reaction arrows, "+" and text: create, move, edit, delete. (An arrow or
   a "+" is added from Quick Add, where it was opened: the arrow pointing right, two and two-thirds of a bond long.
   Either is moved by dragging it and deleted by Delete or Backspace under
@@ -1733,12 +1793,30 @@ lipids each have their own way of being drawn, which it should know.
      maintainer, 2026-10-27). Read by IUPAC's recommendations (Brecher,
      Pure Appl. Chem. 78, 1897, 2006), with "linear" within 10 degrees of
      a straight line (ST-0.1), a drawing states no configuration at a
-     centre with three bonds and its H left out whose two bonds are in
-     line - a T (ST-1.2.12) - or on top of each other, nor at a double bond
+     centre with three bonds and its H left out whose two plain bonds are
+     in line, the wedge between them - a T (ST-1.2.12) - or whose two bonds
+     are on top of each other, nor at a double bond
      with a group straight on from it (ST-4.4, the linear drawing of a
      double bond whose configuration is not given). At such a centre
      Clean-up would draw one or the other configuration, so it refuses, a
      wedge on it as a wedge it cannot carry (`lib/layout/drawn.ts#IN_LINE`).
+     Two bonds in line with the wedge on one of them do state it: ST-1.2.4
+     draws that form, its H in the widest gap opposite the wedge, and
+     ST-1.2.3 has the configuration the same wherever the wedged bond
+     stands (drawings made from a SMILES often put a bridgehead so:
+     cocaine's, camphor's, morphine's, sparteine's).
+     With two or three wedges at such a centre, it is read as the text's
+     figures read it, and only there: two alike and one plain (ST-1.2.5);
+     a wedge, hashes and a plain bond with the plain bond half a turn or
+     more from one of them (ST-1.2.2); three alike with every gap under
+     half a turn (ST-1.2.6); two alike half a turn or more apart, the other
+     between them (ST-1.2.7). The forms the text says state nothing - the
+     plain bond between the wedge and the hashes (ST-1.2.10), three alike
+     leaving half a turn open (ST-1.2.9), wedges spread all round
+     (ST-1.2.11), a wedge and hashes half a turn apart with the third
+     between them (ST-1.2.8) - are read as open, and the centre says what
+     to redraw. A deciding gap within 10 degrees of half a turn says
+     nothing either: which side of the rule it is on cannot be told.
      A double bond so drawn it lays out keeping the straight end straight -
      its one group straight on from it, as ST-4.4 draws a double bond of
      unspecified configuration - and the rest around it, so the new drawing

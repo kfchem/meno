@@ -1,10 +1,10 @@
 /**
  * The column's pages read ahead (docs/PDF.md, *In the column, as built*):
- * each page's letters and figures asked for once it is shown, in idle time,
+ * each page's letters and figures asked for once it is shown, once the hands rest,
  * once - again where the reading failed, a few times at most - and asked
  * for again once its PDF is shown again.
  */
-import { whenIdle } from "../../../../lib/core/idle";
+import { whenCalm } from "../../../../lib/core/calm";
 import { figuresHad } from "../../../../lib/pdf/figures";
 import { textHad } from "../../../../lib/pdf/text";
 
@@ -16,7 +16,7 @@ const READ_TRIES = 3;
 /** How many times each page's reading has failed, while its PDF is shown. */
 const readFailed = new Map<string, number>();
 
-/** A page's letters and figures read in idle time, once - after it is drawn, not with it (lib/core/idle); asked for again where the reading failed, READ_TRIES times at most. */
+/** A page's letters and figures read once the hands rest - after it is drawn, not with it, and not while it is scrolled (lib/core/calm); asked for again where the reading failed, READ_TRIES times at most. */
 export function readWhenIdle(sha256: string, page: number): void {
   const key = `${sha256}:${page}`;
   if (readAsked.has(key)) return;
@@ -30,7 +30,7 @@ export function readWhenIdle(sha256: string, page: number): void {
     readFailed.set(key, n);
     if (n < READ_TRIES) readAsked.delete(key);
   };
-  whenIdle(() => {
+  whenCalm(() => {
     textHad(sha256, page, undefined, failed);
     figuresHad(sha256, page, undefined, { failed });
   });
