@@ -3832,6 +3832,7 @@ export function buildAllPrimitives(
   const bends: (Bend & { color?: string })[] = [];
   const reach: BondReach[] = [];
   const crowded: Crowded[] = [];
+  const drawn = new Map<Bond, ReturnType<typeof buildBondPrimitives>>();
   for (const b of bonds) {
     const u = atoms[b.a1].id,
       v = atoms[b.a2].id;
@@ -3880,10 +3881,16 @@ export function buildAllPrimitives(
       }
       r.bends = [...(r.bends ?? []), ...arc.bends];
     }
-    const behind = brokenBehind(atoms, bonds, b, r.lines, rWorld);
+    drawn.set(b, r);
+  }
+  // (every bond is built before any is broken: a bond behind is cut by the width of what is drawn in front of it)
+  const breakWith = { zoom, round: roundJoins, raster: (opts.minLinePx ?? 1) > 0 };
+  for (const b of bonds) {
+    const r = drawn.get(b)!;
+    const behind = brokenBehind(atoms, bonds, b, r, drawn, rWorld, breakWith);
     const tint = <T extends object>(x: T): T & { color?: string } => (b.color ? { ...x, color: b.color } : x);
     lines.push(...behind.lines.map(tint));
-    polys.push(...r.polys.map(tint));
+    polys.push(...behind.polys.map(tint));
     meets.push(...(r.meets ?? []).map(tint));
     freeEnds.push(...[...(r.ends ?? []), ...behind.ends].map(tint));
     bends.push(...(r.bends ?? []).map(tint));
@@ -3991,28 +3998,154 @@ function perspectiveCorners(atoms: Atom[], bonds: Bond[], opts: LayoutOptions, z
 }
 
 /**
- * A bond's lines, broken where the bond passes behind another - both drawn
- * in perspective, their atoms' `z` saying which is nearer where they cross.
- * The gap is wide enough to read as the one bond going under the other.
- * Returns the lines, and the ends the breaks make.
+ * The clear space kept each side of a bond in front where a bond behind passes under it, in line widths: from the front bond's edge, square to
+ * it, to the cut end of the bond behind, which runs PARALLEL to the front bond - the gap is a band of one width along the bond in front. Brecher
+ * 2006, ST-3.1: "the front-to-back ordering of crossing bonds must be indicated. That ordering is depicted with a small discontinuity in the
+ * backmost bond"; for print the discontinuity is "at least twice as wide as the width of a single bond". Two line widths of clear space each side
+ * is 4 widths with a plain front bond's own, never under that. By eye, a matter of look: a plain bond crossing a plain one at a right angle is
+ * cut where it always was (5 half widths each side of the crossing).
+ */
+export const CROSSING_CLEAR = 2;
+/** The least width of the break itself, square to the bond in front, in line widths (Brecher 2006, ST-3.1: at least twice a single bond's): the band holds it by itself. */
+export const CROSSING_LEAST_BREAK = 2;
+/**
+ * Bonds crossing at less than this angle (degrees) are all but along each other: nothing is cut, as nothing is for bonds exactly parallel.
+ * By eye, a matter of look: the clear space is constant, so a shallower crossing cuts the bond behind over a longer way.
+ */
+export const CROSSING_LEAST_ANGLE_DEG = 10;
+/** The clear space is never under this many device pixels on a page or in a picture of pixels (a floor, as a line's one device pixel is); a vector writer has none. */
+export const CROSSING_CLEAR_FLOOR_PX = 3;
+
+type Built = ReturnType<typeof buildBondPrimitives>;
+
+/**
+ * Across a bond in front: the span, either side of the line through its atoms, that what is drawn there fills at `along` from its first atom -
+ * a plain line its width, a bold bond or a wedge the width it has there, a double or triple bond from the outer edge of one outer line to the
+ * outer edge of the other, a hashed bond the length of the stroke nearest. Signed as `vcross(dir, point - origin)`.
+ */
+function acrossSpan(front: Built, origin: Vec2, dir: Vec2, along: number, halfWidthOf: (l: LineSeg) => number): { lo: number; hi: number } | null {
+  const spans: [number, number][] = [];
+  let stroke: { gap: number; span: [number, number] } | null = null;
+  for (const l of front.lines) {
+    const p = { x: l.x1, y: l.y1 };
+    const q = { x: l.x2, y: l.y2 };
+    const len = vlen(vsub(q, p));
+    if (len < 1e-12) continue;
+    const half = halfWidthOf(l);
+    const a1 = vdot(vsub(p, origin), dir);
+    const a2 = vdot(vsub(q, origin), dir);
+    const across = (pt: Vec2) => vcross(dir, vsub(pt, origin));
+    if (Math.abs(a2 - a1) >= 0.7 * len) {
+      // a line along the bond
+      if (along < Math.min(a1, a2) - half || along > Math.max(a1, a2) + half) continue;
+      const t = Math.min(1, Math.max(0, (along - a1) / (a2 - a1)));
+      const c = across({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t });
+      spans.push([c - half, c + half]);
+    } else {
+      // a stroke across it (a hashed bond's): the nearest one's whole length
+      const gap = along < Math.min(a1, a2) ? Math.min(a1, a2) - along : along > Math.max(a1, a2) ? along - Math.max(a1, a2) : 0;
+      const [c1, c2] = [across(p), across(q)];
+      const span: [number, number] = [Math.min(c1, c2) - half, Math.max(c1, c2) + half];
+      if (!stroke || gap < stroke.gap) stroke = { gap, span };
+    }
+  }
+  for (const poly of front.polys) {
+    const hits: number[] = [];
+    const pts = poly.points;
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i];
+      const q = pts[(i + 1) % pts.length];
+      const ap = vdot(vsub(p, origin), dir) - along;
+      const aq = vdot(vsub(q, origin), dir) - along;
+      if (ap * aq > 0 || ap === aq) continue;
+      const t = ap / (ap - aq);
+      hits.push(vcross(dir, vsub({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t }, origin)));
+    }
+    if (hits.length) spans.push([Math.min(...hits), Math.max(...hits)]);
+    else {
+      // (the crossing falls between a hashed bond's strokes: the nearest stroke's whole width)
+      const alongs = pts.map((q) => vdot(vsub(q, origin), dir));
+      const gap = along < Math.min(...alongs) ? Math.min(...alongs) - along : along - Math.max(...alongs);
+      const acrosses = pts.map((q) => vcross(dir, vsub(q, origin)));
+      if (!stroke || gap < stroke.gap) stroke = { gap, span: [Math.min(...acrosses), Math.max(...acrosses)] };
+    }
+  }
+  if (stroke) spans.push(stroke.span);
+  if (!spans.length) return null;
+  return { lo: Math.min(...spans.map((x) => x[0])), hi: Math.max(...spans.map((x) => x[1])) };
+}
+
+/** A polygon clipped to the side of the line `vdot(p - at, dir) = 0` that `keep` (1 or -1) names. */
+function clipPoly(points: Vec2[], at: Vec2, dir: Vec2, keep: 1 | -1): Vec2[] {
+  const side = (p: Vec2) => keep * vdot(vsub(p, at), dir);
+  const out: Vec2[] = [];
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
+    const q = points[(i + 1) % points.length];
+    const [sp, sq] = [side(p), side(q)];
+    if (sp >= 0) out.push(p);
+    if ((sp > 0 && sq < 0) || (sp < 0 && sq > 0)) {
+      const t = sp / (sp - sq);
+      out.push({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t });
+    }
+  }
+  return out;
+}
+
+/** A band across the page along a bond in front: where `vdot(p - origin, normal)` lies between `lo` and `hi`. */
+type Band = { origin: Vec2; normal: Vec2; lo: number; hi: number };
+
+/** A line of a bond as the shape it fills: its width across it, flat at both ends. */
+function lineShape(l: LineSeg, half: number): Vec2[] {
+  const d = vnorm({ x: l.x2 - l.x1, y: l.y2 - l.y1 });
+  const n = { x: -d.y * half, y: d.x * half };
+  return [
+    { x: l.x1 + n.x, y: l.y1 + n.y },
+    { x: l.x2 + n.x, y: l.y2 + n.y },
+    { x: l.x2 - n.x, y: l.y2 - n.y },
+    { x: l.x1 - n.x, y: l.y1 - n.y },
+  ];
+}
+
+/**
+ * A bond's lines and shapes, broken where the bond passes behind another - both drawn in perspective, their atoms' `z` saying which is
+ * nearer where they cross. The gap is a band along the bond in front, of one width at every angle: the front bond's own width there and
+ * `CROSSING_CLEAR` line widths each side of it (never under `CROSSING_CLEAR_FLOOR_PX` device pixels where pixels are drawn). What the front bond
+ * fills is what is drawn: a plain line, a bold bond, a wedge at the crossing, a double or triple bond from its outer edge to its outer edge - one
+ * break across all of it, no stub of the back bond left between its lines - a hashed bond the stroke nearest. Every line of the back bond (a
+ * double bond's two, a hashed bond's strokes) and every shape of it (a bold bond, a wedge) is cut along the band's edges: each cut end runs
+ * PARALLEL to the bond in front, flat, with no cap; ends away from a cut keep the style's. A line that is cut is drawn as the shape it fills.
+ * The break is a true gap - the pieces with nothing between - for every writer. A piece left shorter than the clear space is not drawn; bonds
+ * all but along each other (`CROSSING_LEAST_ANGLE_DEG`) are not cut. The band runs the whole line of the bond in front, past its atoms: where
+ * a back bond crosses near the front bond's end, it is cut there as it would be at the middle. Returns the lines and shapes, and the ends the
+ * breaks make (none: a cut end is finished flat by the cut).
  */
 function brokenBehind(
   atoms: Atom[],
   bonds: Bond[],
   bond: Bond,
-  lines: LineSeg[],
+  built: Built,
+  drawn: Map<Bond, Built>,
   halfWidth: number,
-): { lines: LineSeg[]; ends: Vec2[] } {
+  how: { zoom: number; round: boolean; raster: boolean },
+): { lines: LineSeg[]; polys: Poly[]; ends: Vec2[] } {
+  const { lines, polys } = built;
   const a = atoms[bond.a1];
   const c = atoms[bond.a2];
   // (a bond to a pi system's centre goes into its ring, not over or under
   // its edges: neither is broken for the other)
-  if (a?.z == null || c?.z == null || bond.endpoints?.length) return { lines, ends: [] };
-  const gap = halfWidth * 5;
-  // where the bond crosses the ones in front of it, as fractions along it
-  const cuts: number[] = [];
+  if (a?.z == null || c?.z == null || bond.endpoints?.length) return { lines, polys, ends: [] };
+  const lineWidth = 2 * halfWidth;
+  const halfWidthOf = (l: LineSeg) => pxToWorld(l.widthPx, how.zoom) / 2;
+  const clear = Math.max(CROSSING_CLEAR * lineWidth, how.raster ? pxToWorld(CROSSING_CLEAR_FLOOR_PX, how.zoom) : 0);
   const p = { x: a.x, y: a.y };
   const d = { x: c.x - a.x, y: c.y - a.y };
+  const length = vlen(d);
+  if (length < 1e-9) return { lines, polys, ends: [] };
+  const dir = { x: d.x / length, y: d.y / length };
+  const sinLeast = Math.sin((CROSSING_LEAST_ANGLE_DEG * Math.PI) / 180);
+  // where the bond crosses the ones in front of it: a band along each, to leave clear
+  const bands: Band[] = [];
   for (const o of bonds) {
     if (o === bond || o.endpoints?.length) continue;
     if (o.a1 === bond.a1 || o.a1 === bond.a2 || o.a2 === bond.a1 || o.a2 === bond.a2) continue;
@@ -4028,42 +4161,60 @@ function brokenBehind(
     if (t <= 0 || t >= 1 || u <= 0 || u >= 1) continue;
     const mine = a.z + (c.z - a.z) * t;
     const theirs = e.z + (f.z - e.z) * u;
-    if (mine < theirs - 1e-6) cuts.push(t);
+    if (!(mine < theirs - 1e-6)) continue;
+    const frontLength = vlen(g);
+    const fd = { x: g.x / frontLength, y: g.y / frontLength };
+    // (the angle between the two bonds: all but along each other, nothing is cut)
+    if (Math.abs(vcross(fd, dir)) < sinLeast) continue;
+    const span = acrossSpan(drawn.get(o)!, q, fd, u * frontLength, halfWidthOf) ?? { lo: -halfWidth, hi: halfWidth };
+    // (across the front bond as `vcross(fd, point - q)` measures it: the normal (-fd.y, fd.x))
+    bands.push({ origin: q, normal: { x: -fd.y, y: fd.x }, lo: span.lo - clear, hi: span.hi + clear });
   }
-  if (!cuts.length) return { lines, ends: [] };
-  const out: LineSeg[] = [];
-  const ends: Vec2[] = [];
+  if (!bands.length) return { lines, polys, ends: [] };
+  const alongOf = (pt: Vec2) => vdot(vsub(pt, p), dir);
+  const acrossOf = (band: Band, pt: Vec2) => vdot(vsub(pt, band.origin), band.normal);
+  /** The bands a shape reaches into. */
+  const reaching = (pts: readonly Vec2[]) =>
+    bands.filter((band) => {
+      const across = pts.map((pt) => acrossOf(band, pt));
+      return Math.max(...across) > band.lo && Math.min(...across) < band.hi;
+    });
+  /** A shape with every band it reaches taken out of it: the pieces left either side, each cut along the band's edge; crumbs left out. */
+  const cut = (pts: Vec2[], reached: readonly Band[]): Vec2[][] => {
+    let pieces: Vec2[][] = [pts];
+    for (const band of reached) {
+      const [below, above] = [
+        { x: band.origin.x + band.normal.x * band.lo, y: band.origin.y + band.normal.y * band.lo },
+        { x: band.origin.x + band.normal.x * band.hi, y: band.origin.y + band.normal.y * band.hi },
+      ];
+      pieces = pieces.flatMap((piece) => [clipPoly(piece, below, band.normal, -1), clipPoly(piece, above, band.normal, 1)]).filter((piece) => piece.length >= 3);
+    }
+    // (a piece left shorter than the clear space, along the bond, is a crumb: not drawn)
+    return pieces.filter((piece) => {
+      const along = piece.map(alongOf);
+      return Math.max(...along) - Math.min(...along) >= clear;
+    });
+  };
+  const outLines: LineSeg[] = [];
+  const outPolys: Poly[] = [];
   for (const l of lines) {
-    // each line of the bond, cut where the crossing falls along it
-    const ld = { x: l.x2 - l.x1, y: l.y2 - l.y1 };
-    const ll = vlen(ld);
+    const ll = Math.hypot(l.x2 - l.x1, l.y2 - l.y1);
     if (ll < 1e-9) {
-      out.push(l);
+      outLines.push(l);
       continue;
     }
-    let pieces: [number, number][] = [[0, 1]];
-    for (const t0 of cuts) {
-      const cross = { x: p.x + d.x * t0, y: p.y + d.y * t0 };
-      const t = vdot(vsub(cross, { x: l.x1, y: l.y1 }), ld) / (ll * ll);
-      const half = gap / ll;
-      pieces = pieces.flatMap(([s0, s1]): [number, number][] => {
-        if (t + half <= s0 || t - half >= s1) return [[s0, s1]];
-        const kept: [number, number][] = [];
-        if (t - half > s0) kept.push([s0, t - half]);
-        if (t + half < s1) kept.push([t + half, s1]);
-        return kept;
-      });
-    }
-    const at = (s: number) => ({ x: l.x1 + (l.x2 - l.x1) * s, y: l.y1 + (l.y2 - l.y1) * s });
-    for (const [s0, s1] of pieces) {
-      const from = at(s0);
-      const to = at(s1);
-      out.push({ ...l, x1: from.x, y1: from.y, x2: to.x, y2: to.y });
-      if (s0 > 0) ends.push(from);
-      if (s1 < 1) ends.push(to);
-    }
+    const shape = lineShape(l, halfWidthOf(l));
+    const reached = reaching(shape);
+    // (a line no band reaches, whole; one cut, the shape it fills, cut)
+    if (!reached.length) outLines.push(l);
+    else for (const piece of cut(shape, reached)) outPolys.push({ points: piece, ...(l.color ? { color: l.color } : {}) });
   }
-  return { lines: out, ends };
+  for (const poly of polys) {
+    const reached = reaching(poly.points);
+    if (!reached.length) outPolys.push(poly);
+    else for (const piece of cut(poly.points, reached)) outPolys.push({ ...poly, points: piece });
+  }
+  return { lines: outLines, polys: outPolys, ends: [] };
 }
 
 /**

@@ -2550,14 +2550,13 @@ describe("a cage in perspective", () => {
   ];
 
   it("breaks the bond behind where it passes under the one in front", () => {
-    const { lines } = buildAllPrimitives(atoms(true), bonds, opts(), 40);
-    // the back bond in two pieces, neither reaching the middle; the front whole
-    const back = lines.filter((l) => Math.sign(l.x2 - l.x1) === Math.sign(l.y2 - l.y1));
-    const front = lines.filter((l) => Math.sign(l.x2 - l.x1) !== Math.sign(l.y2 - l.y1));
-    expect(back).toHaveLength(2);
-    expect(front).toHaveLength(1);
-    for (const l of back) {
-      const nearest = Math.min(Math.hypot(l.x1, l.y1), Math.hypot(l.x2, l.y2));
+    const { lines, polys } = buildAllPrimitives(atoms(true), bonds, opts(), 40);
+    // the back bond in two pieces (each cut along the front bond: drawn as the shape it fills), neither reaching the middle; the front whole
+    expect(lines).toHaveLength(1);
+    expect(Math.sign(lines[0].x2 - lines[0].x1)).not.toBe(Math.sign(lines[0].y2 - lines[0].y1));
+    expect(polys).toHaveLength(2);
+    for (const p of polys) {
+      const nearest = Math.min(...p.points.map((q) => Math.hypot(q.x, q.y)));
       expect(nearest).toBeGreaterThan(0.05);
     }
   });
