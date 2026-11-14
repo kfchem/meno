@@ -128,6 +128,22 @@ describe("the conventions, whichever way the flat drawing lies", () => {
   /** A flat drawing turned half round, mirrored, or both. */
   const lying = (m: Model, k: number): Model => ({ ...m, atoms: m.atoms.map((a) => ({ ...a, x: k & 1 ? -a.x : a.x, y: k & 2 ? -a.y : a.y })) });
 
+  it("lays a 2,6-dimethoxyoxane as any ring - both carbons beside its O carry one - not as a pyranose: as near the flat drawing as it can", () => {
+    for (const smiles of ["CO[C@H]1CCC[C@@H](OC)O1", "CO[C@H]1CCC[C@H](OC)O1"]) {
+      const flat = drawnFromSmiles(smiles);
+      const ring = chairsIn(asChair(flat, 3), new Set(flat.atoms.map((a) => a.id)))[0];
+      // (the ring atom at the right-hand end, at each lying: with the pyranose rule it would be the same carbon every time)
+      const rightmost = new Set(
+        [0, 1, 2, 3].map((k) => {
+          const chair = asChair(lying(flat, k), 3);
+          const at = new Map(chair.atoms.map((a) => [a.id, a]));
+          return ring.reduce((m, r) => (at.get(r)!.x > at.get(m)!.x ? r : m));
+        }),
+      );
+      expect(rightmost.size, smiles).toBeGreaterThan(1);
+    }
+  }, measured(1000));
+
   it("lays a pyranose's ring with C-1 at the right-hand end and its ring O behind, however the flat drawing lies", () => {
     const flat = drawnFromSmiles("OC[C@H]1O[C@@H](O)[C@H](O)[C@@H](O)[C@@H]1O");
     for (let k = 0; k < 4; k++) {
@@ -270,6 +286,9 @@ describe("which chair, by the kind of each group (published conformational energ
       ["C", "OS(=O)(=O)c2ccc(C)cc2"],
       ["C", "C#N"],
       ["C", "O"],
+      // (an O-first group against a C-first one: the methyl equatorial, though OMe and OAc have more atoms)
+      ["C", "OC"],
+      ["C", "OC(C)=O"],
       ["CC(C)(C)", "OS(=O)(=O)c2ccc(C)cc2"],
       ["CC(C)(C)", "O"],
       ["CC(C)", "C"],
