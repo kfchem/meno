@@ -273,7 +273,7 @@ export function identity(input: IdentityInput): { text: string; complete: boolea
   return { text: found.text, complete: found.complete && filled.complete };
 }
 
-/** The elements a centre of four groups may be (part 13's candidates, as CHEM ruled them: never a metal). */
+/** The elements a centre of four groups may be (as the chemistry check ruled them: never a metal). */
 const CENTRES = new Set(["B", "C", "Si", "Ge", "Sn", "Pb", "N", "P", "As", "Sb", "Bi", "S", "Se", "Te"]);
 
 /** A double bond in a ring of this many atoms or fewer states no cis or trans (the reader's and the CIP's number). */
@@ -295,7 +295,7 @@ type Blank = (
 
 /**
  * Where a structure could carry a configuration and carries none, by shape
- * alone (part 13's candidates; no symmetry asked): an atom of B, C, Si, Ge,
+ * alone (the candidates; no symmetry asked): an atom of B, C, Si, Ge,
  * Sn, Pb, N, P, As, Sb, Bi, S, Se or Te with four groups, at most one of
  * them a plain hydrogen, or three and a lone pair it keeps
  * (./lonePairCentres); a double bond, each end with a group but the other
@@ -398,7 +398,7 @@ function unconfigured(g: LayoutInput): LayoutInput {
 /**
  * The structure with every configuration that sets nothing filled in, so
  * that it is one structure whether that configuration is drawn or not
- * (part 13's U1; CHEM's rule, 11-13): nothing drawn is ever taken out. A
+ * (a rule of the chemistry check): nothing drawn is ever taken out. A
  * place that could carry a configuration and carries none (`blanksOf`) is
  * given one where both senses write the same text: such a place sets
  * nothing, so writing it changes no compound - an isopropyl's CH, a
@@ -414,7 +414,7 @@ function unconfigured(g: LayoutInput): LayoutInput {
  * once either is filled the other decides) - so it is always the
  * canonical order, and the text does not depend on the order the atoms
  * came in. That this order gives one form for every structure is not
- * proved: it is held by CHEM's known answers and, over every writing of
+ * proved: it is held by the chemistry check's known answers and, over every writing of
  * fourteen structures, by the tests: never one identity for two meanings,
  * and a writing that states one compound has that compound's text. Some
  * writings that leave the same thing unsaid in different ways get two
@@ -431,7 +431,7 @@ function unconfigured(g: LayoutInput): LayoutInput {
  * run's ends) share a class of the structure's constitution is not tried:
  * every symmetry then keeps each place's sense, so how many places are
  * written one way is kept, and its two senses could only write two texts
- * (CHEM, 11-14). Two texts the same are one
+ * (found in the chemistry check). Two texts the same are one
  * structure, whether the search finished or not; where it ran out of steps
  * and wrote two, that place is left as it is, and `complete` says so.
  */
