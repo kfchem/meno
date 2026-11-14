@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { solidOf, stereoMarks3d, stereoPictureSpots3d, stereoSpotsShown, STEREO_APART, WORLD_PER_ANGSTROM, type StereoMark3D } from "./molecule3d";
+import { labelSpot, solidOf, stereoMarks3d, stereoPictureSpots3d, stereoSpotsShown, STEREO_APART, WORLD_PER_ANGSTROM, type StereoMark3D } from "./molecule3d";
 import { bondRadiusOf } from "../../../../lib/chem/style3d";
 import { style3dOf } from "../style3d";
 import { MARK_SCALE, stereoTextEms } from "../chem/marks";
@@ -247,5 +247,24 @@ describe("the canvas's R, S, E and Z, against a picture of the molecule", () => 
         expect(Math.hypot(c.x - want.x, c.y - want.y), `${mark.text} at ${zoom}`).toBeLessThan(1e-6 * zoom);
       });
     }
+  });
+});
+
+describe("a label's place, at any scale", () => {
+  it("is the same in the canvas's pixels as in the page's units: what counts as clear is a share of the label's own size", () => {
+    // (a label tried first to the right of its point, a ball just touching that place: covered by a hundredth of the ball's size)
+    const half = { x: 0.5, y: 0.45 };
+    const first = labelSpot({ x: 0, y: 0 }, 1, half, { x: 1, y: 0 }, [], []);
+    const ball = { x: first.x + first.hx + 1 - 0.1, y: first.y, r: 1 };
+    const at = (k: number) => {
+      const s = labelSpot({ x: 0, y: 0 }, k, { x: half.x * k, y: half.y * k }, { x: 1, y: 0 }, [{ x: ball.x * k, y: ball.y * k, r: ball.r * k }], []);
+      return { x: s.x / k, y: s.y / k };
+    };
+    for (const k of [1, 12, 60, 200]) {
+      expect(at(k).x, `${k}`).toBeCloseTo(at(0.1).x, 9);
+      expect(at(k).y, `${k}`).toBeCloseTo(at(0.1).y, 9);
+    }
+    // (and that ball is not covered: the label went round it)
+    expect(at(1).y).not.toBeCloseTo(first.y, 6);
   });
 });

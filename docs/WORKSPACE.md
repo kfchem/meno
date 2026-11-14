@@ -721,8 +721,12 @@ Taken on 2026-10-13:
   molecule's atoms', then its double bonds'), not the order they came to
   be shown in; with every ball as at rest, none swollen under the
   pointer; and those going counted after those shown, no obstacle to
-  them (`stereoSpotsShown`). So a picture made now has each label where
-  the canvas has it, at any zoom. In SVG, and the PNG drawn
+  them (`stereoSpotsShown`). What counts as clear of the balls and bonds
+  is a share of the label's own size (a hundredth of its half height),
+  not a fixed length: a fixed 0.05 was nothing in the canvas's pixels and
+  much of a letter in the page's units, and a picture took another way
+  than the canvas. So a picture made now has each label where the canvas
+  has it, at any zoom. In SVG, and the PNG drawn
   from it, they stand on a white halo as on the canvas; in an EMF the
   letters are written without one. As in a picture of the drawing, a view
   zoomed so far out that the canvas leaves them out does not leave them

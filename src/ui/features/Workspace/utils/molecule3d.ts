@@ -53,6 +53,12 @@ export type LabelBox = { x: number; y: number; hx: number; hy: number };
 
 /** How far apart the ways round a point are that a label is tried in. */
 const LABEL_STEP = Math.PI / 12;
+/**
+ * How little of what is there a label may cover and still be clear, as a share of its half height: a length against the label's
+ * own size, so that the canvas, in its pixels, and a picture, in the page's units, take the same way (an absolute 0.05 did not:
+ * 0.05 px is nothing on the canvas, 0.05 of the page's units much of a letter in a picture).
+ */
+const CLEAR_SHARE = 0.01;
 
 /** How far from `o` a box of half size `half` stands, its middle the way `u` (a unit vector), for its nearest point to be `reach` from `o`. */
 function standOff(u: { x: number; y: number }, half: { x: number; y: number }, reach: number): number {
@@ -233,7 +239,7 @@ export function labelSpot(
         if (ox > 0 && oy > 0) hides += 2 * Math.min(ox, oy);
       }
       for (const st of sticks) hides += STICK_WEIGHT * coveredLength(box, st);
-      if (hides < 0.05) return box;
+      if (hides < CLEAR_SHARE * half.y) return box;
       if (!best || hides < best.hides) best = { box, hides };
     }
   }
