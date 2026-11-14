@@ -720,8 +720,10 @@ Taken on 2026-10-13:
   smaller than its least size; in the order a picture takes them (a
   molecule's atoms', then its double bonds'), not the order they came to
   be shown in; with every ball as at rest, none swollen under the
-  pointer; and those going counted after those shown, no obstacle to
-  them (`stereoSpotsShown`). What counts as clear of the balls and bonds
+  pointer; and those going counted after those shown, clear of them and
+  of what is written over the molecule, but no obstacle to them or to
+  each other, so a label going stands where it would alone
+  (`stereoSpotsShown`). What counts as clear of the balls and bonds
   is a share of the label's own size (a hundredth of its half height),
   not a fixed length: a fixed 0.05 was nothing in the canvas's pixels and
   much of a letter in the page's units, and a picture took another way

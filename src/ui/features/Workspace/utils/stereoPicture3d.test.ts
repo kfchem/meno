@@ -250,6 +250,64 @@ describe("the canvas's R, S, E and Z, against a picture of the molecule", () => 
   });
 });
 
+describe("the canvas's labels going", () => {
+  // (in pixels, y down: two centres 40 apart on a line, each with one bond out away from the other - so each one's widest way out is
+  // toward the other - and a third centre above them, its bond out going up; a label shown on the first; those on the second and the third going)
+  const font = 12;
+  const balls = [
+    { x: 0, y: 0, r: 8 },
+    { x: 40, y: 0, r: 8 },
+    { x: -40, y: 0, r: 6 },
+    { x: 80, y: 0, r: 6 },
+    { x: 30, y: -50, r: 8 },
+    { x: 30, y: -90, r: 6 },
+  ];
+  const sticks = [
+    { a: balls[0], b: balls[2], r: 3 },
+    { a: balls[1], b: balls[3], r: 3 },
+    { a: balls[4], b: balls[5], r: 3 },
+  ];
+  const mark = (i: number, around: number[], text: string): StereoMark3D => ({ key: `a${i}`, atoms: [i], around, text });
+  const shownMark = mark(0, [2], "R");
+  const going = mark(1, [3], "S");
+  const third = mark(4, [5], "R");
+  const entry = (m: StereoMark3D, leaving: boolean) => ({ mark: m, leaving, o: { x: balls[m.atoms[0]].x, y: balls[m.atoms[0]].y }, own: balls[m.atoms[0]].r });
+  const overlaps = (p: { x: number; y: number; hx: number; hy: number }, q: { x: number; y: number; hx: number; hy: number }) =>
+    Math.abs(p.x - q.x) < p.hx + q.hx - 1e-9 && Math.abs(p.y - q.y) < p.hy + q.hy - 1e-9;
+  const kept = (s: { x: number; y: number; hx: number; hy: number }) => ({ ...s, hx: s.hx + STEREO_APART * font, hy: s.hy + STEREO_APART * font });
+  const spots = (entries: ReturnType<typeof entry>[], placed: { x: number; y: number; hx: number; hy: number }[] = []) =>
+    stereoSpotsShown(entries, [shownMark], balls, sticks, placed, font, GAP, false);
+
+  it("each has a place, clear of those shown by the margin labels keep - and those shown stand as they would with none going", () => {
+    // (where it stands alone, the going label's place is over the shown one's: the case where keeping clear of it matters)
+    const alone = spots([entry(going, false)]).get(going.key)!;
+    const shown = spots([entry(shownMark, false)]).get(shownMark.key)!;
+    expect(overlaps(alone, kept(shown))).toBe(true);
+    const both = spots([entry(going, true), entry(shownMark, false)]);
+    expect(both.get(shownMark.key)).toEqual(shown);
+    const g = both.get(going.key);
+    expect(g).toBeDefined();
+    expect(overlaps(g!, kept(shown))).toBe(false);
+  });
+
+  it("keeps clear of what is already written over the molecule", () => {
+    // (a measurement's value written where the going label would stand, shown label or none)
+    const free = spots([entry(going, true), entry(shownMark, false)]).get(going.key)!;
+    const value = { x: free.x, y: free.y, hx: 14, hy: 8 };
+    const g = spots([entry(going, true), entry(shownMark, false)], [value]).get(going.key)!;
+    expect(overlaps(g, value)).toBe(false);
+  });
+
+  it("stands each where it would with no other going: those going are no obstacle to each other", () => {
+    const one = spots([entry(going, true), entry(shownMark, false)]).get(going.key)!;
+    const two = spots([entry(third, true), entry(going, true), entry(shownMark, false)]);
+    // (the two going stand over each other: were one an obstacle to the next, the second would move)
+    expect(overlaps(two.get(third.key)!, two.get(going.key)!)).toBe(true);
+    expect(two.get(going.key)).toEqual(one);
+    expect(two.get(third.key)).toEqual(spots([entry(third, true), entry(shownMark, false)]).get(third.key));
+  });
+});
+
 describe("a label's place, at any scale", () => {
   it("is the same in the canvas's pixels as in the page's units: what counts as clear is a share of the label's own size", () => {
     // (a label tried first to the right of its point, a ball just touching that place: covered by a hundredth of the ball's size)

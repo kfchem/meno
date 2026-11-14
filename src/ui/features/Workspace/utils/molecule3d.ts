@@ -1296,7 +1296,8 @@ export function stereoSpotsAmong(
 /**
  * Where the canvas places the R, S, E and Z of a molecule in 3D it shows (Molecule3DView), by key: those shown in the order they are
  * named (`named`, `stereoMarks3d`'s) - the order a picture takes them, whatever order they came to be shown in - each clear of
- * those before it (`stereoSpotsAmong`); those going, after them, clear of those shown and no obstacle to them. The balls given as at
+ * those before it (`stereoSpotsAmong`); those going, after them, clear of those shown and of `placed`, and no obstacle to them or to
+ * each other. The balls given as at
  * rest (none swollen under the pointer), so that a picture made now has each label where the canvas has it.
  */
 export function stereoSpotsShown(

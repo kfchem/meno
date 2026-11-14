@@ -120,6 +120,50 @@ describe("R/S and E/Z, shown on what they are asked for on", () => {
     expect(stereoItemFor(st(), at(2))).toMatchObject({ name: "Hide R/S and E/Z of 2 atoms and 1 bond", of: { molecules: [{ id: m3d, atoms: [0, 1], bonds: [1] }] } });
   });
 
+  it("in 3D: what is chosen in one molecule is not acted on from another - its atoms numbered alike", () => {
+    const { st, m3d } = editor();
+    st().pasteModel({ atoms: [], bonds: [], molecules3d: [{ ...st().molecules3d.map(({ id: _id, ...m }) => m)[0], at: { x: 60, y: 0 } }] });
+    const other = st().molecules3d[1].id;
+    expect(other).not.toBe(m3d);
+    st().chooseAtom3d(m3d, 0);
+    // (atom 0 of the second, right-clicked: the second whole, no count)
+    expect(stereoItemFor(st(), { kind: "molecule3d", id: other, selection: "none", atom: 0 })).toMatchObject({
+      name: "Hide R/S and E/Z",
+      of: { molecules: [{ id: other, atoms: [0, 1], bonds: [1] }] },
+    });
+  });
+
+  it("in 3D: a bond chosen is reached from either of its atoms", () => {
+    const { st, m3d } = editor();
+    st().chooseBond3d(m3d, 1);
+    for (const atom of [1, 2]) {
+      expect(stereoItemFor(st(), { kind: "molecule3d", id: m3d, selection: "none", atom }), `${atom}`).toMatchObject({
+        name: "Show E/Z of 1 bond",
+        of: { molecules: [{ id: m3d, atoms: [], bonds: [1] }] },
+      });
+    }
+  });
+
+  it("on a selection of the drawing's and a molecule in 3D: hidden only where all of it is shown, as the drawing's is", () => {
+    const { st, c2, double, m3d } = editor();
+    const sel3d = new Set([m3d]);
+    // (the molecule's R on atom 1 shown, the drawing's not: some of it shown, so shown - an atom drawn, or a bond drawn, with it)
+    for (const sel of [{ atoms: new Set([c2]), bonds: new Set<number>() }, { atoms: new Set<number>(), bonds: new Set([double]) }]) {
+      st().setSel(sel);
+      expect(stereoItemFor({ ...st(), sel3d }, { kind: null, id: null, selection: "here" })!.name).toMatch(/^Show /);
+    }
+  });
+
+  it("on several molecules in 3D: hidden where any of one of them is shown", () => {
+    const { st, m3d } = editor();
+    st().pasteModel({ atoms: [], bonds: [], molecules3d: [{ ...st().molecules3d.map(({ id: _id, ...m }) => m)[0], at: { x: 60, y: 0 } }] });
+    const other = st().molecules3d[1].id;
+    const whole = (id: number) => ({ id, atoms: [0, 1], bonds: [1] });
+    st().setStereoShown({ molecules: [whole(m3d), whole(other)] }, false);
+    st().setStereoShown({ molecules: [{ id: other, atoms: [], bonds: [1] }] }, true);
+    expect(stereoItemFor({ ...st(), sel3d: new Set([m3d, other]) }, { kind: null, id: null, selection: "here" })!.name).toBe("Hide R/S and E/Z");
+  });
+
   it("are kept by the workspace's file and carried by a copy - the drawing's and the 3D's apart", () => {
     const { st, c2, double, m3d } = editor();
     st().setStereoShown({ atoms: [c2], bonds: [double], molecules: [{ id: m3d, atoms: [0], bonds: [] }] }, true);
