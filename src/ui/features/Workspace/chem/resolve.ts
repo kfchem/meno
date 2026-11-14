@@ -18,7 +18,7 @@
  * and stays a label there: nothing here draws it out.
  */
 import { abbreviationOf, abbreviationStructure, smilesGroup, structureProblem } from "../../../../lib/chem/abbreviations";
-import { kekuleOrders } from "../../../../lib/chem/kekulize";
+import { aromaticRefusal, kekuleOrders } from "../../../../lib/chem/kekulize";
 import type { GroupStructure } from "../../../../lib/chem/ligands";
 import { structureFormula } from "../../../../lib/chem/ligands";
 import { readSmiles, type Smiles } from "../../../../lib/chem/smiles";
@@ -149,13 +149,10 @@ function smilesMolecule(text: string): GroupStructure | null {
     aromaticBonds[b.a2]++;
   }
   if (read.atoms.some((a, i) => a.aromatic && aromaticBonds[i] < 2)) return null;
+  // (and its aromatic rings given single and double bonds as written: c1cccc1 has none for one carbon, c1ccnc1 reads only with an
+  //  H on its n nobody wrote - none, then: the plugin that reads SMILES says why)
+  if (aromaticRefusal(read.atoms, read.bonds)) return null;
   const orders = kekuleOrders(read.atoms, read.bonds);
-  // (and each of its carbons takes a double bond there: c1cccc1 has none for one)
-  const doubled = read.atoms.map(() => false);
-  read.bonds.forEach((b, i) => {
-    if (b.order === 4 && orders[i] === 2) doubled[b.a1] = doubled[b.a2] = true;
-  });
-  if (read.atoms.some((a, i) => a.aromatic && a.el === "C" && !a.charge && !doubled[i])) return null;
   return {
     atoms: read.atoms.map(({ aromatic: _aromatic, cls: _cls, ...atom }) => atom),
     bonds: read.bonds.map((b, i) => ({ a1: b.a1, a2: b.a2, order: orders[i], ...(b.cisTrans ? { cisTrans: b.cisTrans } : {}) })),

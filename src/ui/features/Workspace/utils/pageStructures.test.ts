@@ -674,3 +674,22 @@ describe("structures of one figure drawn at different sizes", () => {
     for (const s of found) for (const l of bondsOf(s)) expect(l).toBeCloseTo(NOMINAL_BOND_LENGTH, 6);
   });
 });
+
+describe("a structure read that breaks valence is not taken (a bold front bond read as a triple bond)", () => {
+  const L = 14.4;
+  type P = [number, number];
+  const stroke = (...pts: P[]) => ({ fill: null, stroke: "#000000ff", width: 0.6, d: pts.map(([x, y], i) => [i ? "L" : "M", x, y]) }) as FigureDrawn["paths"][number];
+  const step = (p: P, deg: number): P => [p[0] + L * Math.cos((deg * Math.PI) / 180), p[1] - L * Math.sin((deg * Math.PI) / 180)];
+
+  it("is none, and says why, where an atom has more bonds than it takes; and is read as it was where no atom has", () => {
+    const c: P = [150, 200];
+    const four = [0, 90, 180, 270].map((d) => stroke(c, step(c, d)));
+    const ok = structuresOf({ paths: four, letters: [], pictures: [] }, 0, "pdf", 0, []);
+    expect(ok).toHaveLength(1);
+    expect("model" in ok[0].read).toBe(true);
+    // (a fifth line from the same carbon: no carbon has five bonds)
+    const five = structuresOf({ paths: [...four, stroke(c, step(c, 45))], letters: [], pictures: [] }, 0, "pdf", 0, []);
+    expect(five).toHaveLength(1);
+    expect(five[0].read).toEqual({ none: "As read, more bonds meet at a carbon than it takes: none of it is taken." });
+  });
+});

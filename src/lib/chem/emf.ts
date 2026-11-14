@@ -816,6 +816,14 @@ export function layoutEmf(
     select(NULL_BRUSH);
     for (const h of brushes.values()) remove(h);
   }
+  // R, S, E and Z on the molecules in 3D, over them (with no halo: GDI has none to give letters)
+  for (const t of layout.solidsTexts ?? []) {
+    const size = t.ownSize ? (opts.units === "world" ? t.fontPx : t.fontPx / zoom) : opts.units === "world" ? opts.fontPx : opts.fontPx / zoom;
+    for (const run of placeLabel(t, size, t.family ? { ...set, fontFamily: t.family } : set)) {
+      if (run.mark || !run.text) continue;
+      writeRun(run, run.color ? colorRef(run.color) : t.color ? colorRef(t.color) : ink, t.family);
+    }
+  }
   if (fonts.size) {
     w.add(EMR.SELECTOBJECT, 4, (v) => v.setUint32(0, 0x8000000d, true)); // SYSTEM_FONT
     for (const h of fonts.values()) remove(h);
