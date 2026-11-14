@@ -1409,6 +1409,7 @@ closing quits Meno once they have been asked to stop.
 | `pdf_text` | `lib/pdf/text.ts` | A page's letters, each with its box and whether it is set bold. |
 | `pdf_objects` | `lib/pdf/figures.ts` | What a page is made of - words, paths, pictures, shadings, forms - each with its box. |
 | `pdf_figure` | `ui/features/Workspace/utils/figures.ts` | What a figure within a box is drawn with: its paths' steps, its letters, its pictures' boxes. |
+| `pdf_figure_raw` | `ui/features/Workspace/utils/pdfStructures.ts` | The same as `pdf_figure`, as its JSON in bytes: a worker unpacks it (`structuresRead`), so that megabytes of paths are never parsed on the drawing's thread. |
 | `write_document` | `lib/io/writeDocument.ts` | A document the chemist chose where to put - saved, exported, a picture, a PDF - written whole or not at all: beside it first, then put in its place, the file there left as it was where anything fails, and what it had besides its bytes kept; with `keep-old`, the file there kept beside it first as `<name>.bak`; only where the fs plugin's scope lets the page write (`savefile.rs`; docs/FILE-IO.md, *Save and Export*). |
 | `write_app_file` | `lib/io/writeDocument.ts` | One of Meno's own files - its settings, its environments' notes - written whole or not at all, as a document is; only a path inside Meno's data folder or its local one (`savefile.rs`). |
 | `font_families` | `ui/fonts/typefaces.ts` | Every typeface installed (fontdb), for the label typeface picker. |
@@ -1605,8 +1606,11 @@ path it is given:
   `ext_spawn_sidecar`, a script in the plugin's folder. Its input files must lie inside its folder. A program
   installed separately, and each program beside it, is given as arguments
   only the files written for its job (or one by its name without its
-  extension, as orca_2aim takes `input`), options (`-nt`) and numbers
-  (`names_only_written`). It is given its
+  extension, as orca_2aim takes `input`), those its plugin reads back of
+  the job once it is done (its `reads`, by name exactly: Gaussian 16W takes
+  the output it writes by name, `input.log`), each inside its work folder,
+  options (`-nt`) and numbers (`names_only_written`; the runner reads the
+  files read back from the job's kept roles). It is given its
   environment's activation, and is pointed at the proxy with no task, as
   a worker is. A job's id must be one of Meno's (a UUID) whose folder holds
   a `job.json`; a file read from it must lie inside it, reached by no

@@ -125,6 +125,74 @@ export type DrawnPart = { bitmap: ImageBitmap; w: number; h: number; ms: number 
 /** What is asked to be drawn: a page's part at a scale, in pixels a point. */
 export type PartAsk = { sha256: string; page: number; scale: number; x?: number; y?: number; w?: number; h?: number };
 
+/** A picture's PNG decoded here, on the drawing's thread: where there is no worker, or the worker cannot decode it. */
+const decodedHere = (body: Uint8Array): Promise<ImageBitmap> =>
+  createImageBitmap(new Blob([body as BlobPart], { type: "image/png" }), { imageOrientation: "flipY", premultiplyAlpha: "none" });
+
+let decoder: Worker | null = null;
+/** The worker could not be started, or failed: every picture decoded here from then on, as before. */
+let decoderDead = false;
+let decodes = 0;
+const decoding = new Map<number, { body: Uint8Array; resolve: (b: ImageBitmap) => void; reject: (e: unknown) => void }>();
+
+/** The worker gone: the pictures waiting on it decoded here, and every one after. */
+function decoderFailed(): void {
+  decoderDead = true;
+  decoder?.terminate();
+  decoder = null;
+  for (const [id, w] of [...decoding]) {
+    decoding.delete(id);
+    decodedHere(w.body).then(w.resolve, w.reject);
+  }
+}
+
+/**
+ * A picture's PNG decoded in a worker (./decodeWorker), all of it, before it comes back: none of its decoding left for the frame it is put on
+ * the graphics card in. The Mac's WebKit can leave a picture made on the main thread undecoded until its first use, which was the upload
+ * inside a frame: the long frames of a heavy PDF's scroll. Where the worker cannot be had, or cannot decode one, it is decoded here, as
+ * before: a PDF is never left without its pictures.
+ */
+export function decodedOff(body: Uint8Array): Promise<ImageBitmap> {
+  if (typeof Worker === "undefined" || decoderDead) return decodedHere(body);
+  if (!decoder) {
+    try {
+      decoder = new Worker(new URL("./decodeWorker.ts", import.meta.url), { type: "module" });
+    } catch {
+      decoderDead = true;
+      return decodedHere(body);
+    }
+    decoder.onmessage = (e: MessageEvent<{ id: number; bitmap?: ImageBitmap; error?: string }>) => {
+      const w = decoding.get(e.data.id);
+      if (!w) return;
+      decoding.delete(e.data.id);
+      // (one the worker could not decode: decoded here)
+      if (e.data.bitmap) w.resolve(e.data.bitmap);
+      else decodedHere(w.body).then(w.resolve, w.reject);
+    };
+    decoder.onerror = decoderFailed;
+    decoder.onmessageerror = decoderFailed;
+  }
+  const id = ++decodes;
+  return new Promise((resolve, reject) => {
+    decoding.set(id, { body, resolve, reject });
+    const copy = body.slice();
+    try {
+      decoder!.postMessage({ id, body: copy }, [copy.buffer]);
+    } catch {
+      // (it could not be sent: decoded here)
+      decoding.delete(id);
+      decodedHere(body).then(resolve, reject);
+    }
+  });
+}
+
+/** For the tests: the worker let go, as a fresh start has it. */
+export function decoderForgotten(): void {
+  decoder = null;
+  decoderDead = false;
+  decoding.clear();
+}
+
 async function draw(ask: PartAsk): Promise<DrawnPart> {
   await holding.get(ask.sha256);
   const buf = await invoke<ArrayBuffer>("pdf_render", {
@@ -144,7 +212,7 @@ async function draw(ask: PartAsk): Promise<DrawnPart> {
   const packed = view.getUint32(12, true) === 1;
   const body = new Uint8Array(buf, 16);
   const bitmap = packed
-    ? await createImageBitmap(new Blob([body], { type: "image/png" }), { imageOrientation: "flipY", premultiplyAlpha: "none" })
+    ? await decodedOff(body)
     : await createImageBitmap(new ImageData(new Uint8ClampedArray(body.buffer, body.byteOffset, body.byteLength), w, h), { imageOrientation: "flipY" });
   return { bitmap, w, h, ms };
 }
@@ -182,8 +250,15 @@ function pump(): void {
  */
 export function drawPart(ask: PartAsk, nearness: () => number = () => 0, wanted: () => boolean = () => true): Promise<DrawnPart | null> {
   return new Promise((resolve, reject) => {
-    queue.push({ ask, nearness, wanted, resolve, reject });
-    pump();
+    const enter = () => {
+      queue.push({ ask, nearness, wanted, resolve, reject });
+      pump();
+    };
+    // (into the queue once its PDF is held: one still being taken in does not hold a place among the few drawn at once - a workspace's
+    //  first PDF's pictures are not kept waiting behind the parts of those held after it)
+    const held = holding.get(ask.sha256);
+    if (held) held.then(enter, enter);
+    else enter();
   });
 }
 

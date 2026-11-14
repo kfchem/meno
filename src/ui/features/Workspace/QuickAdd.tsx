@@ -10,6 +10,7 @@ import { useMenuAt, type MenuAnchor } from "./useMenuAt";
 import { listWidth } from "./quickAddLabel";
 import QuickAddCalculations from "./QuickAddCalculations";
 import { guideNotice } from "../../../lib/guide/guide";
+import { startAhead } from "../../../lib/roles/worker";
 import type { StepKind } from "./workflow/kinds";
 import type { QuickGroup } from "./workflow/offered";
 import { SHAPE_KINDS, SHAPE_NAMES, type ShapeKind } from "../../../lib/chem/shapes";
@@ -273,6 +274,10 @@ export default function QuickAdd({
   const { leaving, held } = useLeaving();
   // (opened: a guide's step waiting for it goes on)
   useEffect(() => guideNotice("quick-add"), []);
+  // (and what reads a SMILES started, should it be at hand, so that the first one typed waits for no start - not for a wire's calculations, which have no field)
+  useEffect(() => {
+    if (!wired) void startAhead("smiles");
+  }, [wired]);
   useEffect(() => {
     if (leaving) return;
     // (a press elsewhere only closes it; a turn of the wheel closes it and zooms; Escape closes it - none while a question is asked: ./quickAddLeave)

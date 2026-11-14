@@ -7,7 +7,8 @@
 import type { WorkspaceDocument } from "../document";
 import type { Wire, WorkflowSet, WorkflowStep } from "../store/types";
 import { insidePolygon } from "../utils/selection";
-import { CARD_H, CARD_W } from "./look";
+import { cardHighOf } from "./kinds";
+import { CARD_W } from "./look";
 import { removeSet, removeStep, withExits } from "./model";
 import { unseenSets } from "./onPage";
 import { greatest, least } from "../../../../lib/chem/lists";
@@ -130,7 +131,7 @@ export function removeParts(doc: WorkspaceDocument, sets: Iterable<number>, step
 }
 
 /** Where a step's card stands, as a point: its middle, closed. */
-export const stepMiddle = (s: Pick<WorkflowStep, "x" | "y">): Pt => ({ x: s.x + CARD_W / 2, y: s.y - CARD_H / 2 });
+export const stepMiddle = (s: Pick<WorkflowStep, "x" | "y" | "kind">): Pt => ({ x: s.x + CARD_W / 2, y: s.y - cardHighOf(s.kind) / 2 });
 /** Where a set stands, as a point: the middle of its frame. */
 export const setMiddle = (b: Pick<WorkflowSet, "x0" | "x1" | "y0" | "y1">): Pt => ({ x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 });
 
@@ -167,7 +168,7 @@ export function partsBounds(parts: FlowParts): { x0: number; y0: number; x1: num
   }
   for (const s of parts.steps) {
     xs.push(s.x, s.x + CARD_W);
-    ys.push(s.y - CARD_H, s.y);
+    ys.push(s.y - cardHighOf(s.kind), s.y);
   }
   return xs.length ? { x0: least(xs), x1: greatest(xs), y0: least(ys), y1: greatest(ys) } : null;
 }

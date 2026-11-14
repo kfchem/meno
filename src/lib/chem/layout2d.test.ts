@@ -102,6 +102,34 @@ describe("implicitHydrogens", () => {
 });
 
 describe("buildTextLabels", () => {
+  it("writes no H on a metal whose valence its file sets where coordination bonds take it - cisplatin's Pt, not PtH2", () => {
+    const L = NOMINAL_BOND_LENGTH;
+    const atoms: Atom[] = [
+      { id: 1, x: 0, y: 0, el: "Pt", valence: 4 },
+      { id: 2, x: L, y: 0, el: "N" },
+      { id: 3, x: -L, y: 0, el: "N" },
+      { id: 4, x: 0, y: L, el: "Cl" },
+      { id: 5, x: 0, y: -L, el: "Cl" },
+    ];
+    const labels = buildTextLabels(atoms, opts(), [
+      { a1: 1, a2: 0, order: 1, coordination: true },
+      { a1: 2, a2: 0, order: 1, coordination: true },
+      { a1: 0, a2: 3, order: 1 },
+      { a1: 0, a2: 4, order: 1 },
+    ]);
+    expect(labels.find((l) => l.atom === 0)?.text).toBe("Pt");
+    // (each NH3: three H, as ever - the pair it lends takes none)
+    for (const n of [1, 2]) expect(labels.find((l) => l.atom === n)?.text).toMatch(/^(NH3|H3N)$/);
+    // (the same with the metal listed first in each coordination bond: its end counted alike)
+    const first = buildTextLabels(atoms, opts(), [
+      { a1: 0, a2: 1, order: 1, coordination: true },
+      { a1: 0, a2: 2, order: 1, coordination: true },
+      { a1: 0, a2: 3, order: 1 },
+      { a1: 0, a2: 4, order: 1 },
+    ]);
+    expect(first.find((l) => l.atom === 0)?.text).toBe("Pt");
+  });
+
   it("writes the hydrogens below when bonds rise on both sides, above when they fall", () => {
     const L = NOMINAL_BOND_LENGTH;
     const v = (deg: number) => ({ x: L * Math.cos((deg * Math.PI) / 180), y: L * Math.sin((deg * Math.PI) / 180) });
@@ -1863,6 +1891,101 @@ describe("a carbon between two double bonds", () => {
     // (no second line off to one side: each pair straddles the axis, y = 0)
     const level = layout.lines.filter((l) => Math.abs(l.y1 - l.y2) < 1e-9 && Math.abs(l.y1) > 1e-9);
     expect(level.some((l) => l.y1 > 0) && level.some((l) => l.y1 < 0)).toBe(true);
+  });
+
+  it("writes a metal carbonyl's C, its bonds to the metal and the O in one line - and an alkyne's or a nitrile's as ever, bare", () => {
+    const L = NOMINAL_BOND_LENGTH;
+    const ZOOM = 40;
+    // Ni-C≡O, and an acetylide's C-C≡C and a nitrile's C-C≡N beside it
+    const atoms: Atom[] = [
+      { id: 1, x: 0, y: 0, el: "Ni" },
+      { id: 2, x: L, y: 0, el: "C" },
+      { id: 3, x: 2 * L, y: 0, el: "O" },
+      { id: 4, x: 0, y: 3 * L, el: "C" },
+      { id: 5, x: L, y: 3 * L, el: "C" },
+      { id: 6, x: 2 * L, y: 3 * L, el: "C" },
+      { id: 7, x: 0, y: 6 * L, el: "C" },
+      { id: 8, x: L, y: 6 * L, el: "C" },
+      { id: 9, x: 2 * L, y: 6 * L, el: "N" },
+    ];
+    const bonds: Bond[] = [
+      { a1: 0, a2: 1, order: 1 },
+      { a1: 1, a2: 2, order: 3 },
+      { a1: 3, a2: 4, order: 1 },
+      { a1: 4, a2: 5, order: 3 },
+      { a1: 6, a2: 7, order: 1 },
+      { a1: 7, a2: 8, order: 3 },
+    ];
+    expect(cumulatedShown(atoms, bonds).map((a) => !!a.shown)).toEqual([false, true, false, false, false, false, false, false, false]);
+    const layout = layoutMolecule(atoms, bonds, opts(), ZOOM);
+    expect(layout.texts.filter((t) => t.text === "C")).toHaveLength(1);
+  });
+
+  it("writes a cyanide's and an isocyanide's C on a metal - and leaves an acylium's, a bridging carbonyl's and an acetylide's bare", () => {
+    const L = NOMINAL_BOND_LENGTH;
+    const atoms: Atom[] = [
+      // Fe-C≡N, the C written
+      { id: 1, x: 0, y: 0, el: "Fe" },
+      { id: 2, x: L, y: 0, el: "C" },
+      { id: 3, x: 2 * L, y: 0, el: "N" },
+      // Ni-C≡N-CH3, the isocyanide's C written
+      { id: 4, x: 0, y: 3 * L, el: "Ni" },
+      { id: 5, x: L, y: 3 * L, el: "C" },
+      { id: 6, x: 2 * L, y: 3 * L, el: "N" },
+      { id: 7, x: 3 * L, y: 3 * L, el: "C" },
+      // CH3-C≡O+, an acylium: no metal, bare
+      { id: 8, x: 0, y: 6 * L, el: "C" },
+      { id: 9, x: L, y: 6 * L, el: "C" },
+      { id: 10, x: 2 * L, y: 6 * L, el: "O", charge: 1 },
+      // Fe(mu-CO)Fe: a third bond, bare
+      { id: 11, x: 0, y: 9 * L, el: "Fe" },
+      { id: 12, x: L, y: 9.5 * L, el: "C" },
+      { id: 13, x: 2 * L, y: 9 * L, el: "Fe" },
+      { id: 14, x: L, y: 10.5 * L, el: "O" },
+      // Fe(mu-C≡O)Fe, drawn with a triple bond: a third bond, bare
+      { id: 15, x: 0, y: 12 * L, el: "Fe" },
+      { id: 16, x: L, y: 12.5 * L, el: "C" },
+      { id: 17, x: 2 * L, y: 12 * L, el: "Fe" },
+      { id: 18, x: L, y: 13.5 * L, el: "O" },
+      // Cu-C≡C-CH3, an acetylide: bare
+      { id: 19, x: 0, y: 15 * L, el: "Cu" },
+      { id: 20, x: L, y: 15 * L, el: "C" },
+      { id: 21, x: 2 * L, y: 15 * L, el: "C" },
+      { id: 22, x: 3 * L, y: 15 * L, el: "C" },
+      // Fe-CH=O, a formyl: its double bond no triple, bare
+      { id: 23, x: 0, y: 18 * L, el: "Fe" },
+      { id: 24, x: L, y: 18 * L, el: "C" },
+      { id: 25, x: 1.5 * L, y: 18.866 * L, el: "O" },
+    ];
+    const bonds: Bond[] = [
+      { a1: 0, a2: 1, order: 1 },
+      { a1: 1, a2: 2, order: 3 },
+      { a1: 3, a2: 4, order: 1 },
+      { a1: 4, a2: 5, order: 3 },
+      { a1: 5, a2: 6, order: 1 },
+      { a1: 7, a2: 8, order: 1 },
+      { a1: 8, a2: 9, order: 3 },
+      { a1: 10, a2: 11, order: 1 },
+      { a1: 11, a2: 12, order: 1 },
+      { a1: 11, a2: 13, order: 2 },
+      { a1: 14, a2: 15, order: 1 },
+      { a1: 15, a2: 16, order: 1 },
+      { a1: 15, a2: 17, order: 3 },
+      { a1: 18, a2: 19, order: 1 },
+      { a1: 19, a2: 20, order: 3 },
+      { a1: 20, a2: 21, order: 1 },
+      { a1: 22, a2: 23, order: 1 },
+      { a1: 23, a2: 24, order: 2 },
+    ];
+    const shown = cumulatedShown(atoms, bonds).map((a) => !!a.shown);
+    expect(shown[1], "Fe-C≡N").toBe(true);
+    expect(shown[4], "Ni-C≡N-CH3").toBe(true);
+    expect(shown[8], "CH3-C≡O+").toBe(false);
+    expect(shown[11], "Fe(mu-CO)Fe").toBe(false);
+    expect(shown[15], "Fe(mu-C≡O)Fe").toBe(false);
+    expect(shown[19], "Cu-C≡C-CH3").toBe(false);
+    expect(shown[23], "Fe-CH=O").toBe(false);
+    expect(shown.filter(Boolean)).toHaveLength(2);
   });
 });
 

@@ -79,3 +79,4 @@ Copy what is chosen (⌘C, or Ctrl+C) and paste it into a Word document or a Pow
 
 - On a Mac: to change it, copy it in Word or PowerPoint - or drag it - back onto Meno's page. It comes back as the structure it was; change it, and copy it over again.
 - On Windows: double-click it in Word or PowerPoint, and Meno opens it. What you change there goes back into the document.
+- The labels are set in IBM Plex Sans, Meno's label font. Meno installs it for you - on Windows when Meno is installed, on a Mac when Meno first starts - and Settings, *Copied pictures*, says whether it is installed. To send a presentation to someone who does not have it, turn on PowerPoint's *Embed fonts in the file* (in *Options*, *Save*) before saving, and the labels look the same on their computer.
