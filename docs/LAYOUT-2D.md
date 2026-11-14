@@ -513,7 +513,10 @@ they hang from.
   as drawn. A drawing nobody made - the plugin's for a typed SMILES or a
   step's structure, a molecule in 3D drawn as a formula - is laid out as
   new: its metal by the rule above, not in whichever form its coordinates
-  happen to have (`laidOut`'s `asNew`). A chelate's metal (two of its donors joined other than through
+  happen to have, nor with its donors opposite each other as they happen
+  to lie there (`laidOut`'s `asNew`); and where it cannot be laid out and
+  is kept as it came, its square-planar centres whose arrangement is not
+  given are marked all the same (`arrangementsMarked`). A chelate's metal (two of its donors joined other than through
   it) goes by its own rules.
   The fan is compact,
   and once the rest of the drawing is set it is turned about its bond,

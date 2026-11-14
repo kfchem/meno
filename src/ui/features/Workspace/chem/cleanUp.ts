@@ -300,7 +300,7 @@ const givenFits = (job: LayoutJob, model: Model) => job.input.atoms.length === m
 export async function laidOut(model: Model, style: DrawingStyle = styleOf(useAppSettings.getState().drawingStyle), given?: GivenRuns, asNew = false): Promise<Model> {
   if (!model.bonds.length) return model;
   const job0 = layoutJob(model);
-  const read = asNew ? { ...job0, input: { ...job0.input, atoms: job0.input.atoms.map(({ fourForm: _form, ...a }) => a) } } : job0;
+  const read = asNew ? { ...job0, asNew: true as const, input: { ...job0.input, atoms: job0.input.atoms.map(({ fourForm: _form, ...a }) => a) } } : job0;
   // (an allene's axis and an odd cumulene's cis or trans the structure's own text says, which a plugin's drawing of it cannot: a MOL block has no way to say them - by atom, in the drawing's order)
   const job = given && givenFits(read, model) ? { ...read, given: true as const, input: { ...read.input, ...(given.axes.length ? { axes: given.axes } : {}), ...(given.cumulated.length ? { cumulated: given.cumulated } : {}) } } : read;
   const change = relayoutFrom(model, model, job, await layOut(job.input), style);

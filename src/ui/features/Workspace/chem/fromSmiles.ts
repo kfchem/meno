@@ -4,6 +4,7 @@ import { NOT_READ, notReadSaid } from "../../../../lib/chem/smilesWhy";
 import type { Model } from "../store/types";
 import { editorModelOf, processFileContent } from "../utils/io";
 import { laidOut, type GivenRuns } from "./cleanUp";
+import { arrangementsMarked } from "./engineLayout";
 import { readSmiles } from "../../../../lib/chem/smiles";
 import { leftOver, stereoGraphOf } from "../../../../lib/chem/stereoOpen";
 import { openStereo } from "./openStereo";
@@ -110,7 +111,8 @@ export async function drawingOf(molblock: string, style?: DrawingStyle, given?: 
   return laidOut(drawn, style, given, true).catch((e: unknown) => {
     // (kept for whoever looks: what the sentence said plainly leaves out)
     console.warn("the structure is drawn as the plugin laid it out", e);
-    return { ...drawn, asCame: e instanceof Error ? e.message : String(e) };
+    // (a square-planar centre nobody gave the arrangement of marked so, as it would be laid out: the plugin's drawing says none)
+    return { ...arrangementsMarked(drawn), asCame: e instanceof Error ? e.message : String(e) };
   });
 }
 

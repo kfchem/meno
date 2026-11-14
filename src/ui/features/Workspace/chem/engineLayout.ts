@@ -22,7 +22,7 @@ import { lonePairCentres } from "../../../../lib/chem/lonePairCentres";
 import type { Layout2D, LayoutInput } from "../../../../lib/layout/engine";
 import { etaBondedAtomByAtom, isMetal, squarePlanarMetal, type CisTrans } from "../../../../lib/layout/perceive";
 import { valencesAt } from "../../../../lib/chem/molecule";
-import { ARRANGED, arrangementAs } from "../utils/arrangement";
+import { ARRANGED, ARRANGEMENT_SAID, arrangementAs } from "../utils/arrangement";
 import { allylCurve } from "../../../../lib/chem/allylArc";
 import { allylChain } from "./eta";
 import type { Tetrahedral } from "../../../../lib/layout/stereo";
@@ -34,6 +34,8 @@ import { greatest } from "../../../../lib/chem/lists";
 
 export type LayoutJob = {
   input: LayoutInput;
+  /** A drawing nobody made - a plugin's (`laidOut`'s `asNew`): which donors of a metal lie opposite each other in it is not kept (`oppositesKept`), as it says nothing. */
+  asNew?: true;
   /** The model atom each of the input's atoms is - but the stars the engine is given for rings bound atom by atom, after them. */
   ids: number[];
   /** Each ring or chain bound so: its metal and its atoms, by id - made one bond to its centre as it is laid out. */
@@ -236,6 +238,38 @@ export function layoutJob(part: Model): LayoutJob {
 const pairKey = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
 
 /**
+ * `model` kept as it came - a plugin's drawing of a typed SMILES or of a molecule in 3D, which could not be laid out anew - with each
+ * surely square-planar centre whose donors can lie round it more than one way marked "which donors are next to each other is not
+ * given", as a layout of it would mark it (`relayoutFrom`): nobody gave its arrangement, wherever the plugin put its donors. The
+ * same model where there is none.
+ */
+export function arrangementsMarked(model: Model): Model {
+  const drawing = drawingOf(model);
+  const nb = model.atoms.map(() => [] as number[]);
+  const orders = new Map<string, number>();
+  for (const b of drawing.bonds) {
+    nb[b.a].push(b.b);
+    nb[b.b].push(b.a);
+    orders.set(pairKey(b.a, b.b), b.order);
+  }
+  const view = {
+    el: (i: number) => model.atoms[i].el,
+    charge: (i: number) => model.atoms[i].charge ?? 0,
+    hs: (i: number) => drawing.atoms[i].hs,
+    neighbours: (i: number) => nb[i],
+    order: (p: number, q: number) => orders.get(pairKey(p, q)) ?? 1,
+  };
+  let marked = false;
+  const atoms = model.atoms.map((a, i) => {
+    const sq = squarePlanarMetal(view, i, (el, charge) => valencesAt(el, charge)[0]);
+    if (!sq?.sure || !sq.open) return a;
+    marked = true;
+    return { ...a, unsure: { said: [ARRANGEMENT_SAID], as: arrangementAs(a, model.atoms, model.bonds) } };
+  });
+  return marked ? { ...model, atoms } : model;
+}
+
+/**
  * The engine's layout of `job` as edits to `model`: the part where it was
  * - its middle kept - but laid out afresh, at the style's bond length;
  * its wedges, and only those, the ones the engine draws; each H the engine
@@ -250,8 +284,8 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
   // (the drawing's own atoms: the stars given for rings bound atom by atom are not)
   const n = ids.length;
   const byId = new Map(model.atoms.map((a) => [a.id, a]));
-  // (a four-bond metal's donors opposite each other as they were drawn: transplatin cleaned up is transplatin)
-  const laid = oppositesKept(ids.map((id) => byId.get(id)!), input, given);
+  // (a four-bond metal's donors opposite each other as they were drawn: transplatin cleaned up is transplatin - but not a plugin's drawing, which gives none)
+  const laid = job.asNew ? given : oppositesKept(ids.map((id) => byId.get(id)!), input, given);
   // at the style's bond length, whatever the drawing's was - a structure put
   // down too large or too small, read from a figure at a wrong scale, comes
   // to the workspace's one style (the maintainer, 2026-10-27): the engine's
