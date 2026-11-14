@@ -3,7 +3,7 @@ import { renderToString } from "react-dom/server";
 import QuickAdd, { DrawAs } from "./QuickAdd";
 import { CALC_MOST, CALC_ROW, LIST_LEAST, LIST_MOST, listWidth, stepsMost } from "./quickAddLabel";
 import { pastedAs } from "./quickAddPaste";
-import { toggledPanel } from "./quickAddPanel";
+import { calcMadeWith, toggledPanel } from "./quickAddPanel";
 import { registerKinds } from "../../../lib/io/kinds";
 import { MANIFESTS } from "../../../lib/plugins/known";
 import { resolve } from "./chem/resolve";
@@ -162,5 +162,23 @@ describe("Quick Add's Calculations rows", () => {
   it("are made at once where Quick Add opens on them, from a wire: the steps, or the words that there are none", () => {
     expect(html(true)).toContain(">Optimise<");
     expect(html(true, [])).toContain("No step added takes this");
+  });
+
+  it("are made the first time Calculations is opened, and kept once it is shut again - and only then", () => {
+    // (shut, never opened: none; opened: made; shut again, or another row opened: kept)
+    expect(calcMadeWith("none", false)).toBe(false);
+    expect(calcMadeWith("scheme", false)).toBe(false);
+    expect(calcMadeWith("calculations", false)).toBe(true);
+    expect(calcMadeWith("none", true)).toBe(true);
+    expect(calcMadeWith("smiles", true)).toBe(true);
+    // (pressed open, pressed shut: a chemist's two presses, the rule asked after each)
+    const afterOpen = calcMadeWith(toggledPanel("none", "calculations"), false);
+    expect(calcMadeWith(toggledPanel("calculations", "calculations"), afterOpen)).toBe(true);
+  });
+
+  it("from a wire, Quick Add is as wide as its widest step's name and what stands about it, measured with its rows", () => {
+    // (the rows' box: the list's width of the names above - the card's own, less its 8 px)
+    const width = listWidth(STEPS.flatMap((g) => [g.name, ...g.steps.map((k) => k.name)]));
+    expect(html(true)).toContain(`style="width:${width}px"`);
   });
 });

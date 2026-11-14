@@ -19,7 +19,7 @@ import { quickAddLeaves } from "./quickAddLeave";
 import type { CoordinateStructure } from "../../../lib/io/coordinates";
 import { pastedAs } from "./quickAddPaste";
 import { afterAdded, readSmiles } from "./quickAddSmiles";
-import { toggledPanel, type QuickPanel } from "./quickAddPanel";
+import { calcMadeWith, toggledPanel, type QuickPanel } from "./quickAddPanel";
 import { resolve, sameFormula, type Reading } from "./chem/resolve";
 import { FormulaText } from "../../abbreviations/FormulaText";
 
@@ -240,8 +240,9 @@ export default function QuickAdd({
   const calcOpen = open === "calculations";
   // (the Calculations rows made the first time they are opened - not as Quick Add opens, where they are shut and would
   //  only add to its first frame - and kept from then on, so that they ease shut whole)
-  const [calcMade, setCalcMade] = useState(calcOpen);
-  if (calcOpen && !calcMade) setCalcMade(true);
+  const [madeBefore, setCalcMade] = useState(calcOpen);
+  const calcMade = calcMadeWith(open, madeBefore);
+  if (calcMade !== madeBefore) setCalcMade(calcMade);
   const ref = useRef<HTMLDivElement>(null);
   // (going, chosen from or closed: it does nothing more as it fades - theme/leaving)
   const { leaving, held } = useLeaving();
