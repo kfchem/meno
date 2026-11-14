@@ -3,7 +3,7 @@ import { askToConnect, useNetwork, type ConsentRequest } from "../net/network";
 import { DEFAULT_APP_SETTINGS, useAppSettings } from "../settings/appSettings";
 import { firstSetUpWait } from "../roles/worker";
 import { CATALOGUE_PURPOSE, type Catalogue, type CatalogueEntry } from "./catalogue";
-import { beyondCard, CARD_HOSTS, CARD_SOURCES, filledOtherwise, firstSetUpUnderWay, notNow, offerFirstSetUp, setUpChemistry, stopFirstSetUp, useFirstSetUp, type FirstSetUpDeps, type SetUpPlan } from "./firstSetUp";
+import { beyondCard, firstSetUpSaid, CARD_HOSTS, CARD_SOURCES, filledOtherwise, firstSetUpUnderWay, notNow, offerFirstSetUp, setUpChemistry, stopFirstSetUp, useFirstSetUp, type FirstSetUpDeps, type SetUpPlan } from "./firstSetUp";
 import { uvSetUp } from "./setUpSources";
 
 const HEX = "a".repeat(64);
@@ -113,11 +113,17 @@ describe("chemistry set up from one card as Meno first starts", () => {
   it("says each step as it goes, naming the plugin with its licence and size once the list has them", async () => {
     const seen: string[] = [];
     const stop = useFirstSetUp.subscribe((s) => {
-      if (s.phase === "going") seen.push(`${s.doing}${s.plugin ? ` | ${s.plugin.name} · ${s.plugin.licence} · ${s.plugin.size}` : ""}`);
+      if (s.phase === "going") seen.push(`${firstSetUpSaid(s.step, s.plugin?.name)}${s.plugin ? ` | ${s.plugin.licence} · ${s.plugin.size}` : ""}`);
     });
     await setUpChemistry(deps().d);
     stop();
-    expect([...new Set(seen)]).toEqual(["Listing the plugins online", "Getting chem plugin | chem plugin · BSD-3-Clause · 51 KB", "Setting up chem plugin | chem plugin · BSD-3-Clause · 51 KB"]);
+    expect([...new Set(seen)]).toEqual([
+      "Setting up chemistry: listing the plugins online.",
+      "Setting up chemistry: downloading chem plugin. | BSD-3-Clause · 51 KB",
+      "Setting up chemistry: setting up chem plugin's environment. | BSD-3-Clause · 51 KB",
+    ]);
+    // (a share only where the backend reports one, the same words under Quick Add's SMILES field)
+    expect(firstSetUpSaid("files", "chem plugin", 0.42)).toBe("Setting up chemistry: downloading chem plugin (42%).");
   });
 
   it("stops on what the card did not name - a host, a file beside, terms, another plugin first - and asks it in its place: never taken as answered", async () => {

@@ -68,12 +68,27 @@ export type CardQuestion = { title: string; detail: string; sources: readonly st
 export type FirstSetUpCard =
   | { phase: "none" }
   | { phase: "offered" }
-  | { phase: "going"; doing: string; plugin?: { name: string; licence: string; size: string }; stopping?: true }
+  | { phase: "going"; step: SetUpStep; plugin?: { id: string; name: string; licence: string; size: string }; stopping?: true }
   | { phase: "asking"; question: CardQuestion; answer: (yes: boolean) => void }
   | { phase: "choose" }
   | { phase: "failed"; why: string };
 
 export const useFirstSetUp = create<FirstSetUpCard>(() => ({ phase: "none" }));
+
+/** The steps the set-up says as it goes: the list of plugins, the plugin's files, its environment. */
+export type SetUpStep = "list" | "files" | "environment";
+
+/**
+ * The line that says where a set-up of chemistry stands, the same on the card and under Quick Add's SMILES field (ui
+ * quickAddSmiles `chemistryLine`): its step, with the plugin, and a share where Meno's backend reports one (a plugin's files
+ * as they download, lib/pyEnv `useDownloads`; none for uv's set-up).
+ */
+export function firstSetUpSaid(step: SetUpStep, plugin?: string, share?: number): string {
+  const done = share != null && Number.isFinite(share) ? ` (${Math.round(Math.min(1, Math.max(0, share)) * 100)}%)` : "";
+  if (step === "list" || !plugin) return "Setting up chemistry: listing the plugins online.";
+  if (step === "files") return `Setting up chemistry: downloading ${plugin}${done}.`;
+  return `Setting up chemistry: setting up ${plugin}'s environment${done}.`;
+}
 
 /** What the plugin got needs to be set up, as its own questions say it (lib/pyEnv `setUpQuestions`). */
 export type SetUpPlan = {
@@ -177,12 +192,12 @@ export function setUpChemistry(deps: FirstSetUpDeps): Promise<void> {
 }
 
 async function run(deps: FirstSetUpDeps): Promise<void> {
-  const going = (doing: string, plugin?: { name: string; licence: string; size: string }) => useFirstSetUp.setState({ phase: "going", doing, ...(plugin ? { plugin } : {}) }, true);
+  const going = (step: SetUpStep, plugin?: { id: string; name: string; licence: string; size: string }) => useFirstSetUp.setState({ phase: "going", step, ...(plugin ? { plugin } : {}) }, true);
   const failed = (why: string) => useFirstSetUp.setState({ phase: "failed", why }, true);
   // (stopped: the card goes, nothing more done)
   const end = () => useFirstSetUp.setState({ phase: "none" }, true);
   try {
-    going("Listing the plugins online");
+    going("list");
     if (!(await deps.allow([CATALOGUE_PURPOSE]))) return failed("Meno is offline: nothing was fetched.");
     const listed = await deps.list();
     if (stopped) return end();
@@ -191,8 +206,8 @@ async function run(deps: FirstSetUpDeps): Promise<void> {
     // (none, or more than one: the chemist chooses - each to add, or why not - as where the role is asked of)
     if (offered.length !== 1) return void useFirstSetUp.setState({ phase: "choose" }, true);
     const entry = offered[0];
-    const plugin = { name: entry.name, licence: entry.licence, size: formatBytes(entry.source.bytes) };
-    going(`Getting ${entry.name}`, plugin);
+    const plugin = { id: entry.id, name: entry.name, licence: entry.licence, size: formatBytes(entry.source.bytes) };
+    going("files", plugin);
     await deps.get(entry);
     if (stopped) return end();
     const plan = await deps.plan(entry);
@@ -205,7 +220,7 @@ async function run(deps: FirstSetUpDeps): Promise<void> {
         return end();
       }
     }
-    going(`Setting up ${entry.name}`, plugin);
+    going("environment", plugin);
     // (its questions allowed by the card's yes - or by the yes to the question in its place: none asked again)
     if (!(await deps.allow(plan.questions.map((q) => q.purpose)))) return failed("Meno is offline: it was not set up.");
     await deps.add(entry);

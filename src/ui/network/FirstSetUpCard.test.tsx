@@ -17,8 +17,8 @@ describe("the card that sets chemistry up as Meno first starts", () => {
   });
 
   it("says the step under way and the plugin once named, with Stop; a failure with Try again", () => {
-    const going = drawn({ phase: "going", doing: "Setting up chem plugin", plugin: { name: "chem plugin", licence: "BSD-3-Clause", size: "51 KB" } });
-    expect(going).toContain("Setting up chem plugin…");
+    const going = drawn({ phase: "going", step: "environment", plugin: { id: "chem", name: "chem plugin", licence: "BSD-3-Clause", size: "51 KB" } });
+    expect(going).toContain("Setting up chemistry: setting up chem plugin&#x27;s environment.");
     expect(going.replace(/<!-- -->/g, "")).toContain("chem plugin · BSD-3-Clause · 51 KB");
     expect(going).toContain(">Stop<");
     const failed = drawn({ phase: "failed", why: "The plugins online could not be listed." });

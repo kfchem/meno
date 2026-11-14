@@ -5,7 +5,8 @@ import { RISE } from "../theme/motion";
 import { Leaving } from "../theme/leaving";
 import { pluginsFilling } from "../../lib/calc/catalog";
 import { useReaders } from "../../lib/calc/workers";
-import { CARD_DETAIL, CARD_SOURCES, CARD_TITLE, DEPS, filledOtherwise, FIRST_ROLE, notNow, setUpChemistry, stopFirstSetUp, useFirstSetUp, type FirstSetUpCard as FirstSetUpCardState } from "../../lib/plugins/firstSetUp";
+import { CARD_DETAIL, CARD_SOURCES, CARD_TITLE, DEPS, filledOtherwise, FIRST_ROLE, firstSetUpSaid, notNow, setUpChemistry, stopFirstSetUp, useFirstSetUp, type FirstSetUpCard as FirstSetUpCardState } from "../../lib/plugins/firstSetUp";
+import { useDownloads } from "../../lib/pyEnv";
 import RoleOffer from "../features/Workspace/RoleOffer";
 import { Sources } from "./ConsentDialog";
 
@@ -41,6 +42,8 @@ export default function FirstSetUpCard() {
       }),
     [],
   );
+  // (the plugin's files, as they download: a share where the backend reports one)
+  const share = useDownloads((s) => (card.phase === "going" && card.plugin ? s[card.plugin.id] : undefined));
   const shown = card.phase !== "none" && !talking;
   return (
     <AnimatePresence>
@@ -53,7 +56,7 @@ export default function FirstSetUpCard() {
               role="status"
               className="fixed bottom-3 left-3 z-50 w-80 max-w-[calc(100vw-1.5rem)] rounded-md border border-gh-line bg-white/95 shadow-sm px-3 py-2.5 text-xs text-gh-black"
             >
-              <CardBody card={card} />
+              <CardBody card={card} share={share} />
             </motion.div>
           )}
         </Leaving>
@@ -63,7 +66,7 @@ export default function FirstSetUpCard() {
 }
 
 /** What the card says and offers as it stands (`useFirstSetUp`): drawn on its own for the card's tests. */
-export function CardBody({ card }: { card: FirstSetUpCardState }) {
+export function CardBody({ card, share }: { card: FirstSetUpCardState; share?: number }) {
   return (
     <>
     {card.phase === "offered" && (
@@ -83,7 +86,7 @@ export function CardBody({ card }: { card: FirstSetUpCardState }) {
     )}
     {card.phase === "going" && (
       <>
-        <p className="font-semibold">{card.stopping ? "Stopping once this step ends…" : `${card.doing}…`}</p>
+        <p className="font-semibold">{card.stopping ? "Stopping once this step ends." : firstSetUpSaid(card.step, card.plugin?.name, share)}</p>
         {card.plugin && (
           <p className="mt-1 text-gh-gray">
             {card.plugin.name} · {card.plugin.licence} · {card.plugin.size}
