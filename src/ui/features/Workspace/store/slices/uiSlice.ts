@@ -101,8 +101,9 @@ export function createUiSlice(
         // 2008 GR-2.1.1)
         const typedC = read.kind === "element" && read.el === "C" ? /^\d*C(H(\d*))?/.exec(value) : null;
         const typedH = typedC?.[1] ? typedC : null;
-        // (not the C a corner opens with from the menu, kept as it was with nothing typed: that carbon stays as it is drawn)
-        const untouched = !labelEdit.grow && labelEdit.selectAll && value === labelEdit.opened?.value;
+        // (not the C a corner opens with from the menu, kept as it was with nothing typed: that carbon stays as it is drawn - one
+        //  opened so is never one begun by a letter typed, `grow`)
+        const untouched = !!labelEdit.selectAll && value === labelEdit.opened?.value;
         const written = !!typedC && (!untouched || !!atom.shown);
         // (what of a charge and a mass number was typed: none typed, a carbon written out over a carbon keeps its own)
         const signTyped = /[+\-−]/.test(value);
