@@ -97,7 +97,7 @@
   },
   {
    "name": "a stereocentre's R1, bulky groups #3",
-   "molfile": "a88cce5af318a89160125c34042608d5662d87c533b351b3e16f8ea97717bff4",
+   "molfile": "f059ee0a5cf7a7aedbd0d63e6fc0881d740d12fc134e1e213373fbf10096ee4a",
    "smiles": "CC(C)(O)[C@@H](F)Cl",
    "expected": "CC(C)(O)[C@@H](F)Cl"
   },

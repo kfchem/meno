@@ -22,6 +22,7 @@ import {
   turnSide,
   type Frame,
   type Grown,
+  squareXAt,
 } from "./assemble";
 import { angleOf, dist, mirror, mirrorLines, MIRROR_TOL, rad, segmentsCross, sub } from "./geometry";
 import { hydrogenRunsInto, hydrogenSpot, hydrogenWritten, LABEL_ROOM, labelsCrowding, labelsOnVertices, layoutMetrics, type LayoutMetrics } from "./metrics";
@@ -280,6 +281,9 @@ function measureDrawing(input: LayoutInput, mol: Molecule, out: Layout2D): Layou
     labelled,
     elements,
     hydrogens,
+    charges: mol.charge.slice(0, input.atoms.length),
+    fourForm: input.atoms.map((_, i) => mol.fourForm.get(i)),
+    onward: input.atoms.map((_, i) => mol.onward.has(i)),
     cisTrans: input.bonds.flatMap((b, i) => (b.stereo ? [{ bond: i, refs: b.stereo.refs, cis: b.stereo.cis }] : [])),
     perspective: [...out.solid, ...out.hydrogens.map(() => false)],
     depth: [...out.depth, ...out.hydrogens.map(() => null)],
@@ -1664,6 +1668,27 @@ const SMALL_SIDE = 10;
  */
 function squareUp(mol: Molecule, piece: number[], pos: Grown, ref: Grown = pos): void {
   const here = new Set(piece);
+  // (a metal the chemist drew as the X: the piece turned so that its four bonds lie on the diagonals exactly - its ligands' rings
+  // set off the lattice as they come, a pyridine's, a phosphine's phenyls - whatever way it was grown; the X is what was drawn)
+  const held = piece.find((a) => mol.fourForm.get(a) === "x" && mol.neighbours[a].length === 4 && isMetal(mol.el[a]));
+  if (held != null) {
+    const c = ref.get(held)!;
+    const offs = mol.neighbours[held].map((v) => {
+      const q = ref.get(v)!;
+      const u = Math.atan2(q.y - c.y, q.x - c.x) - Math.PI / 4;
+      return u - (Math.PI / 2) * Math.round(u / (Math.PI / 2));
+    });
+    // (the four a right angle apart as grown: their mean is the turn off the X)
+    const turn = offs.reduce((s, u) => s + u, 0) / offs.length;
+    if (Math.abs(turn) < 1e-9) return;
+    const cs = Math.cos(-turn);
+    const sn = Math.sin(-turn);
+    for (const a of piece) {
+      const p = pos.get(a)!;
+      pos.set(a, { x: p.x * cs - p.y * sn, y: p.x * sn + p.y * cs });
+    }
+    return;
+  }
   const square = mol.rings.some(
     (r) =>
       here.has(r[0]) &&
@@ -1672,19 +1697,24 @@ function squareUp(mol: Molecule, piece: number[], pos: Grown, ref: Grown = pos):
   );
   if (square) return;
   const dirs: number[] = [];
+  const steps: number[] = [];
+  // (a centre drawn as the X - XeF4, PtCl3(NH3)- - its bonds measured 45 degrees round, a right angle apart: on its own lattice
+  // so, not turned off it)
+  const xs = new Set(piece.filter((a) => squareXAt(mol, a)));
   for (const [k] of mol.bondIndex) {
     const [a, b] = k.split(",").map(Number);
     if (!here.has(a) || mol.ringBonds.has(k)) continue;
     const p = ref.get(a)!;
     const q = ref.get(b)!;
-    dirs.push(Math.atan2(q.y - p.y, q.x - p.x));
+    const x = xs.has(a) || xs.has(b);
+    dirs.push(Math.atan2(q.y - p.y, q.x - p.x) - (x ? Math.PI / 4 : 0));
+    steps.push(x ? Math.PI / 2 : Math.PI / 6);
   }
   if (!dirs.length) return;
-  const step = Math.PI / 6;
   const off = (turn: number) =>
-    dirs.reduce((sum, t) => {
+    dirs.reduce((sum, t, i) => {
       const u = t - turn;
-      return sum + Math.abs(u - step * Math.round(u / step));
+      return sum + Math.abs(u - steps[i] * Math.round(u / steps[i]));
     }, 0);
   let turn = 0;
   let least = off(0);
@@ -2044,7 +2074,10 @@ function stereoScore(
   // tied by `scorer`, the straight end counted alike in each, so it keeps the
   // measure the same rather than deciding between them - no test can tell it apart)
   const straight = piece.map((a) => mol.straight.has(a));
-  return layoutMetrics({ x, y, edges, orders, straight, wedged, elements, hydrogens, labelled, perspective, depth: depths, tetra, hydrogenRoom: 1 }).score;
+  const charges = piece.map((a) => mol.charge[a]);
+  const fourForm = piece.map((a) => mol.fourForm.get(a));
+  const onward = piece.map((a) => mol.onward.has(a));
+  return layoutMetrics({ x, y, edges, orders, straight, wedged, elements, hydrogens, charges, fourForm, onward, labelled, perspective, depth: depths, tetra, hydrogenRoom: 1 }).score;
 }
 
 /** The measures a piece is drawn by, as it has its depth: blades turned as a propeller's (`lift`) or none. */
@@ -2546,6 +2579,9 @@ export function scorer(
     .map((r) => r.map((a) => index.get(a)!));
   const elements = piece.map((a) => mol.el[a]);
   const hydrogens = piece.map((a) => mol.hs[a]);
+  const charges = piece.map((a) => mol.charge[a]);
+  const fourForm = piece.map((a) => mol.fourForm.get(a));
+  const onward = piece.map((a) => mol.onward.has(a));
   // (a star at a pi system's centre is drawn as nothing)
   const labelled = piece.map((a) => (mol.el[a] !== "C" && mol.el[a] !== "*") || mol.charge[a] !== 0);
   const perspective = piece.map((a) => solid[a] ?? false);
@@ -2563,6 +2599,9 @@ export function scorer(
       straight: piece.map((a) => mol.straight.has(a)),
       elements,
       hydrogens,
+      charges,
+      fourForm,
+      onward,
       labelled,
       rings,
       cisTrans,

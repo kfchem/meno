@@ -292,9 +292,22 @@ const givenFits = (job: LayoutJob, model: Model) => job.input.atoms.length === m
  * `model` laid out afresh by the engine as a whole - a salt's ions set out
  * together - for a structure that has only just arrived, before it is
  * added: a plugin's drawing of a SMILES. In `style` - the app's, unless
- * given - as Clean-up lays one out.
+ * given - as Clean-up lays one out. `open`: the double bonds its text leaves
+ * open (`OpenDoubles`). `asNew`: a drawing nobody made - a
+ * plugin's coordinates - whose forms are not kept as a chemist's are (a
+ * four-bond metal's cross or X: docs/LAYOUT-2D.md, *A metal with four
+ * bonds*), but laid out as from a SMILES; `arranged`, of such a drawing, the
+ * metals (by id) whose arrangement its input gave: their donors kept
+ * opposite each other as it has them, and not marked as not given.
  */
-export async function laidOut(model: Model, style: DrawingStyle = styleOf(useAppSettings.getState().drawingStyle), given?: GivenRuns, open?: OpenDoubles): Promise<Model> {
+export async function laidOut(
+  model: Model,
+  style: DrawingStyle = styleOf(useAppSettings.getState().drawingStyle),
+  given?: GivenRuns,
+  open?: OpenDoubles,
+  asNew = false,
+  arranged: ReadonlySet<number> = new Set(),
+): Promise<Model> {
   if (!model.bonds.length) return model;
   // (a double bond the structure's own text leaves open, with an end of two groups: a wavy bond on a group - Brecher 2006, ST-4.4)
   const either = new Set(open?.either ?? []);
@@ -317,7 +330,11 @@ export async function laidOut(model: Model, style: DrawingStyle = styleOf(useApp
           }),
         }
       : model;
-  const read = layoutJob(m);
+  const job0 = layoutJob(m);
+  // (a drawing nobody made keeps no metal's form - but one whose arrangement its input gave keeps the form it carries, the X of a square-planar centre so arranged)
+  const read = asNew
+    ? { ...job0, asNew: true as const, ...(arranged.size ? { arranged } : {}), input: { ...job0.input, atoms: job0.input.atoms.map(({ fourForm, ...a }, i) => (fourForm && arranged.has(job0.ids[i]) ? { ...a, fourForm } : a)) } }
+    : job0;
   // (an allene's axis and an odd cumulene's cis or trans the structure's own text says, which a plugin's drawing of it cannot: a MOL block has no way to say them - by atom, in the drawing's order)
   let job: LayoutJob = given && givenFits(read, m) ? { ...read, given: true as const, input: { ...read.input, ...(given.axes.length ? { axes: given.axes } : {}), ...(given.cumulated.length ? { cumulated: given.cumulated } : {}) } } : read;
   // (and one left open with one group at each end: each end kept straight on from it, so that it states neither cis nor trans - ST-4.4 -

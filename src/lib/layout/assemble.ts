@@ -21,7 +21,8 @@ import {
   type Point,
 } from "./geometry";
 import { metalSlots } from "./hapto";
-import { isMetal, key, METAL_BOND, orderOf, straightThrough, type Molecule } from "./perceive";
+import { isMetal, key, METAL_BOND, orderOf, squarePlanarMetal, straightThrough, twoLonePairsOnFour, type Molecule } from "./perceive";
+import { valencesAt } from "../chem/molecule";
 import { MACROCYCLE } from "./ringSystem";
 import { byStructure, ringKey, ringRank } from "./ranks";
 
@@ -155,7 +156,9 @@ export function grow(
     pos.set(centre, { x: 0, y: 0 });
     const weight = (l: number) => sides.get(`${centre}>${l}`) ?? 1;
     const [first, ...rest] = [...mol.neighbours[centre]].sort((p, q) => weight(q) - weight(p) || byStructure(mol)(p, q));
-    const placed: [number, number][] = [[first, setFrameAngle(frame, 0)], ...atMetal(mol, sides, centre, first, setFrameAngle(frame, 0), rest)];
+    // (a centre held as the X - drawn so, or surely square planar - its first bond 45 degrees round: the X grown as the X)
+    const start = setFrameAngle(frame, squareXAt(mol, centre) ? Math.PI / 4 : 0);
+    const placed: [number, number][] = [[first, start], ...atMetal(mol, sides, centre, first, start, rest)];
     for (const [child, t] of placed) placeChild(mol, pos, local, queue, centre, child, t, transforms, hints, upright);
     queue.push(centre);
   } else if (root >= 0) {
@@ -183,6 +186,8 @@ export function grow(
     // (a cross, or the O between two, square to the page, the chain straight
     // through it and a double-bonded O above)
     const cross = isCross(mol, middle);
+    // (a main-group centre of four single bonds and two lone pairs, square planar - XeF4: the X, its bonds 45 degrees off the axes)
+    const squareX = deg === 4 && squareXAt(mol, middle);
     const between = deg === 2 && along.length === 2 && along.every((v) => isCross(mol, v));
     // (an atom straight through - between two double bonds, or by a triple
     // one: an allene's, a ketene's, CO2's middle - as it is in a chain)
@@ -203,7 +208,9 @@ export function grow(
                 ? [(-150 * Math.PI) / 180, (-30 * Math.PI) / 180]
                 : deg === 3
                   ? [(-150 * Math.PI) / 180, (-30 * Math.PI) / 180, Math.PI / 2]
-                  : splitWidestGap([], deg, Math.PI);
+                  : squareX
+                    ? splitWidestGap([], deg, (5 * Math.PI) / 4)
+                    : splitWidestGap([], deg, Math.PI);
     if (cross) others.sort((u, v) => orderOf(mol, middle, v) - orderOf(mol, middle, u));
     let order = fan >= 0 ? [fan, ...mol.neighbours[middle].filter((v) => v !== fan)] : [...along, ...others];
     let ways = order.map((_, k) => setFrameAngle(frame, slots[k] ?? slots[slots.length - 1]));
@@ -764,6 +771,31 @@ function placements(
 }
 
 /**
+ * A centre drawn as the X, its four bonds 45 degrees off the axes: a main-group one with two lone pairs, or a metal surely square
+ * planar - or a four-bond metal the chemist drew as the X, kept so (`LayoutAtom.fourForm`); not one drawn upright.
+ */
+export function squareXAt(mol: Molecule, a: number): boolean {
+  const drawn = mol.fourForm.get(a);
+  if (drawn) return drawn === "x";
+  return mainGroupSquare(mol, a) || metalSquareX(mol, a);
+}
+
+/** A main-group centre of four single bonds and two lone pairs - XeF4, ICl4-: square planar, drawn as the X (GR-4.1.3). */
+function mainGroupSquare(mol: Molecule, a: number): boolean {
+  return mol.neighbours[a].length === 4 && mol.neighbours[a].every((v) => orderOf(mol, a, v) === 1) && twoLonePairsOnFour(mol.el[a], mol.charge[a]);
+}
+
+/** A metal surely square planar whose four end donors lie round it one way only - PtCl4 2-, PtCl3(NH3)-: drawn as the X (metrics `metalFour`). */
+function metalSquareX(mol: Molecule, a: number): boolean {
+  const sq = squarePlanarMetal(
+    { el: (i) => mol.el[i], charge: (i) => mol.charge[i], hs: (i) => mol.hs[i], neighbours: (i) => mol.neighbours[i], order: (p, q) => orderOf(mol, p, q) },
+    a,
+    (el, charge) => valencesAt(el, charge)[0],
+  );
+  return !!sq && sq.sure && sq.ends && !sq.open;
+}
+
+/**
  * A stereocentre of four bonds in no ring - CH3-CFClBr's carbon, a
  * quaternary carbon in a chain: drawn as its configuration is best shown
  * (Brecher 2006, ST-1.1.1; Brecher 2008, GR-4.1.3), two bonds in the page
@@ -869,16 +901,19 @@ export function isCross(mol: Molecule, a: number): boolean {
  * a tert-butyl's methyls, a trimethylsilyl's, a trimethylammonium's
  * (choline's), a CF3's or a CCl3's halogens. Its middle a carbon, a
  * silicon or a nitrogen in no ring, with four bonds - three to like ends,
- * each bonded to nothing else, and the fourth to anything but another
- * such end (neopentane's middle carbon, four methyls, is a cross; CF4's
- * likewise). Null for any other atom.
+ * each bonded to nothing else, and the fourth to an atom that goes on: a
+ * group on a skeleton. Four ends, alike or not - neopentane's middle
+ * carbon, CF4, tert-butanol, CFCl3, chlorotrimethylsilane - are a
+ * molecule's upright cross, not a trident (GR-4.1.3). Null for any other
+ * atom.
  */
 export function tridentEnds(mol: Molecule, a: number): number[] | null {
   if (!TRIDENT_MIDDLES.has(mol.el[a]) || mol.systemOf[a] >= 0 || mol.neighbours[a].length !== 4) return null;
   const kind = (v: number) => (mol.neighbours[v].length === 1 && TRIDENT_ENDS.has(mol.el[v]) ? mol.el[v] : null);
   for (const el of TRIDENT_ENDS) {
     const ends = mol.neighbours[a].filter((v) => kind(v) === el);
-    if (ends.length === 3) return ends;
+    const on = mol.neighbours[a].find((v) => !ends.includes(v))!;
+    if (ends.length === 3) return mol.neighbours[on].length > 1 || mol.onward.has(on) ? ends : null;
   }
   return null;
 }

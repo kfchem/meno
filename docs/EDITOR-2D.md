@@ -1117,6 +1117,18 @@ All hover-based, as above.
     drawn as a plain line counts alike, from the atom it was drawn from.
     One with too many bonds besides is marked still (chem/marks
     `takesArrows`).
+  - **An arrangement not given**: a square-planar centre (Pt(II), Pd(II),
+    Au(III), Rh(I), Ir(I)) whose donors can lie round it more than one way,
+    laid out by Meno from an input that gives none - a SMILES, a label
+    written out, a Clean-up of one Meno laid out so - is drawn as the
+    upright cross and marked with the dashed ring, "Which donors are next
+    to each other is not given." (`arrangementAs`, docs/LAYOUT-2D.md, *A
+    metal with four bonds*). Moving its donors round - setting which lie
+    next to which - takes the mark away; one the chemist drew carries none.
+    A metal of six donors from such an input is marked the same where its
+    donors could be set round it with other pairs across (cis or trans, fac
+    or mer); one whose SMILES marks its arrangement at the metal (@SP1,
+    @OH1) is drawn as given, unmarked.
   - **Stereochemistry drawn by luck** (the maintainer, 2026-10-11): a
     stereocentre whose wedge says its configuration only as its bonds
     happen to fall - two of them in a line, or all of them in one half of
