@@ -26,6 +26,27 @@ function drawn(metal: string, spokes: readonly Spoke[], order = spokes.map((_, i
   return { atoms, bonds } as Model;
 }
 
+// (six spokes round Co; a chelate's two ends joined by its own atoms, laid outward)
+function sixWith(els: string[], chelates: [number, number, string[]][] = []): Model {
+  const m = drawn("Co", els.map((el, k) => ({ el, at: 60 * k, ...(el === "N" ? { valence: chelates.some(([p, q]) => p === k || q === k) ? 3 : 4 } : {}) })));
+  let id = 100;
+  for (const [p, q, chain] of chelates) {
+    const [a, b] = [m.atoms[1 + p], m.atoms[1 + q]];
+    let last = a.id;
+    chain.forEach((el, k) => {
+      const t = (k + 1) / (chain.length + 1);
+      const x = (a.x + (b.x - a.x) * t) * 1.8;
+      const y = (a.y + (b.y - a.y) * t) * 1.8;
+      const at = ++id;
+      m.atoms.push({ id: at, x, y, r: 0.9, el } as Model["atoms"][number]);
+      m.bonds.push({ id: 1000 + at, a: last, b: at, order: 1, stereo: "none" } as Model["bonds"][number]);
+      last = at;
+    });
+    m.bonds.push({ id: 2000 + id, a: last, b: b.id, order: 1, stereo: "none" } as Model["bonds"][number]);
+  }
+  return m;
+}
+
 // (an N bonded to the metal drawn as an ammine: four bonds, three of them its H's - not an amido)
 const square = (els: readonly string[], turn: number): Spoke[] => els.map((el, k) => ({ el, at: turn + 90 * k + 3, ...(el === "N" ? { valence: 4 } : {}) }));
 
@@ -68,33 +89,13 @@ describe("a metal's donors across, read from a drawing", () => {
     expect(arrangementsDrawn(drawingOf(marked), marked)).toEqual([]);
   });
 
-  it("CHEM's five typed with no arrangement, laid out with like donors side by side and marked: each open, not the isomer of its lines", () => {
-    // (six spokes round Co; a chelate's two ends joined by its own atoms, laid outward)
-    const six = (els: string[], chelates: [number, number, string[]][] = []): Model => {
-      const m = drawn("Co", els.map((el, k) => ({ el, at: 60 * k, ...(el === "N" ? { valence: chelates.some(([p, q]) => p === k || q === k) ? 3 : 4 } : {}) })));
-      let id = 100;
-      for (const [p, q, chain] of chelates) {
-        const [a, b] = [m.atoms[1 + p], m.atoms[1 + q]];
-        let last = a.id;
-        chain.forEach((el, k) => {
-          const t = (k + 1) / (chain.length + 1);
-          const x = (a.x + (b.x - a.x) * t) * 1.8;
-          const y = (a.y + (b.y - a.y) * t) * 1.8;
-          const at = ++id;
-          m.atoms.push({ id: at, x, y, r: 0.9, el } as Model["atoms"][number]);
-          m.bonds.push({ id: 1000 + at, a: last, b: at, order: 1, stereo: "none" } as Model["bonds"][number]);
-          last = at;
-        });
-        m.bonds.push({ id: 2000 + id, a: last, b: b.id, order: 1, stereo: "none" } as Model["bonds"][number]);
-      }
-      return m;
-    };
+  it("five complexes typed with no arrangement, laid out with like donors side by side and marked: each open, not the isomer of its lines", () => {
     const cases: [string, Model][] = [
-      ["[CoCl2(NH3)4]+", six(["Cl", "Cl", "N", "N", "N", "N"])],
-      ["CoCl3(NH3)3", six(["Cl", "Cl", "Cl", "N", "N", "N"])],
-      ["[CoCl2Br2(NH3)2]-", six(["Cl", "Cl", "Br", "Br", "N", "N"])],
-      ["[Co(en)2Cl2]+", six(["Cl", "Cl", "N", "N", "N", "N"], [[2, 3, ["C", "C"]], [4, 5, ["C", "C"]]])],
-      ["Co(gly)3", six(["N", "O", "N", "O", "N", "O"], [[0, 1, ["C", "C"]], [2, 3, ["C", "C"]], [4, 5, ["C", "C"]]])],
+      ["[CoCl2(NH3)4]+", sixWith(["Cl", "Cl", "N", "N", "N", "N"])],
+      ["CoCl3(NH3)3", sixWith(["Cl", "Cl", "Cl", "N", "N", "N"])],
+      ["[CoCl2Br2(NH3)2]-", sixWith(["Cl", "Cl", "Br", "Br", "N", "N"])],
+      ["[Co(en)2Cl2]+", sixWith(["Cl", "Cl", "N", "N", "N", "N"], [[2, 3, ["C", "C"]], [4, 5, ["C", "C"]]])],
+      ["Co(gly)3", sixWith(["N", "O", "N", "O", "N", "O"], [[0, 1, ["C", "C"]], [2, 3, ["C", "C"]], [4, 5, ["C", "C"]]])],
     ];
     for (const [name, laid] of cases) {
       const metal = laid.atoms[0];
@@ -103,6 +104,34 @@ describe("a metal's donors across, read from a drawing", () => {
       const { arrangements: _read, ...none } = identityInputOf(laid).input;
       expect([name, identityOfDrawn(marked).text === identity(none).text, identityOfDrawn(marked).text === identityOfDrawn(laid).text]).toEqual([name, true, false]);
     }
+  });
+
+  it("marked chelate complexes drawn with the pairs their marks say: trans and cis [Co(en)2Cl2]+, fac and mer Co(gly)3 each two structures", () => {
+    // (each chelate's two ends on spokes next to each other; the pairs across, by element, are those the SMILES marks @OH1 state)
+    const byEl = (m: Model) => {
+      const d = drawingOf(m);
+      const read = arrangementsDrawn(d, m);
+      expect(read).toHaveLength(1);
+      return read[0].pairs.map(([p, q]) => [d.atoms[p].el, d.atoms[q].el].sort().join("-")).sort();
+    };
+    const en = (p: number, q: number): [number, number, string[]] => [p, q, ["C", "C"]];
+    const transEn = sixWith(["Cl", "N", "N", "Cl", "N", "N"], [en(1, 2), en(4, 5)]);
+    const cisEn = sixWith(["Cl", "Cl", "N", "N", "N", "N"], [en(2, 3), en(4, 5)]);
+    const fac = sixWith(["N", "O", "N", "O", "N", "O"], [en(0, 1), en(2, 3), en(4, 5)]);
+    const mer = sixWith(["N", "O", "O", "N", "O", "N"], [en(0, 1), en(2, 3), en(4, 5)]);
+    expect(byEl(transEn)).toEqual(["Cl-Cl", "N-N", "N-N"]);
+    expect(byEl(cisEn)).toEqual(["Cl-N", "Cl-N", "N-N"]);
+    expect(byEl(fac)).toEqual(["N-O", "N-O", "N-O"]);
+    expect(byEl(mer)).toEqual(["N-N", "N-O", "O-O"]);
+    expect(identityOfDrawn(transEn).text).not.toBe(identityOfDrawn(cisEn).text);
+    expect(identityOfDrawn(fac).text).not.toBe(identityOfDrawn(mer).text);
+    // (the same drawings marked as not given - the input's pairs not shown - are one open structure each pair: no isomer read that was not written)
+    const unsure = (m: Model): Model => {
+      const metal = m.atoms[0];
+      return { ...m, atoms: [{ ...metal, unsure: { said: [ARRANGEMENT_SAID], as: arrangementAs(metal, m.atoms, m.bonds) } }, ...m.atoms.slice(1)] };
+    };
+    expect(identityOfDrawn(unsure(transEn)).text).toBe(identityOfDrawn(unsure(cisEn)).text);
+    expect(identityOfDrawn(unsure(fac)).text).toBe(identityOfDrawn(unsure(mer)).text);
   });
 
   it("the upright cross on a metal not surely square planar states no geometry: cis and trans drawn so are one structure, matching neither X", () => {
