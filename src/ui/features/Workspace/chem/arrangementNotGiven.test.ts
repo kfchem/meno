@@ -6,7 +6,7 @@ import { ARRANGEMENT_SAID } from "../utils/arrangement";
 import { MENO } from "../../../../lib/chem/style";
 import { laidOut } from "./cleanUp";
 import { arrangementsMarked } from "./engineLayout";
-import { drawingOf } from "./fromSmiles";
+import { drawingOf, metalsArrangedIn } from "./fromSmiles";
 import { editorModelOf, processFileContent } from "../utils/io";
 
 // A drawing nobody made - a plugin's of a typed SMILES or a step's structure - says nothing of which donors of a square-planar centre
@@ -77,6 +77,13 @@ describe("a square-planar centre nobody gave the arrangement of", () => {
     const [, br, cl] = kept.bonds.filter((b) => b.a === pt.id || b.b === pt.id).map((b) => kept.atoms.find((a) => a.id === (b.a === pt.id ? b.b : b.a))!);
     const swapped: Model = { ...kept, atoms: kept.atoms.map((a) => (a.id === br.id ? { ...a, x: cl.x, y: cl.y } : a.id === cl.id ? { ...a, x: br.x, y: br.y } : a)) };
     expect(readMarks(swapped).atoms.has(pt.id)).toBe(false);
+    // (the same, from a SMILES that gives its arrangement - its atoms in the block's order: kept as it came, and not marked)
+    const block = molblock("Pt", -2, ["Br", "Br", "Cl", "Cl"], [30, 110, 200, 290], amine);
+    const said = metalsArrangedIn("[Pt@SP1-2](Br)(Br)(Cl)Cl.N(C)(C)CC", block);
+    expect(said).toEqual([0]);
+    const keptGiven = await drawingOf(block, MENO, undefined, said);
+    expect(keptGiven.asCame).toBeDefined();
+    expect(metalMarked(keptGiven, "Pt")).toBeUndefined();
   });
 
   it("is marked only where surely square planar and its donors can lie more ways than one", () => {
@@ -91,5 +98,31 @@ describe("a square-planar centre nobody gave the arrangement of", () => {
     expect(marked(centre("Ni", ["Br", "Br", "Cl", "Cl"], -2))).toBe(false);
     const none = centre("Zn", ["Br", "Br", "Cl", "Cl"], -2);
     expect(arrangementsMarked(none)).toBe(none);
+  });
+
+  it("is drawn as the SMILES gives it where the SMILES marks it at the metal (@SP, @OH) - the plugin's places kept, no mark", { timeout: 120000 }, async () => {
+    forgetLaidOut();
+    // (trans-[PtCl2Br2]2- written Cl[Pt@SP1-2](Br)(Cl)Br: its block's atoms in the SMILES's order - Cl, Pt, Br, Cl, Br - the X
+    // as the plugin draws it, Cl across Cl)
+    const f = (v: number) => v.toFixed(4).padStart(10);
+    const line = (deg: number | null, el: string) => (deg == null ? `${f(0)}${f(0)}${f(0)} ${el.padEnd(3)} 0  0  0  0  0  0  0  0  0  0  0  0` : `${f(1.5 * Math.cos((deg * Math.PI) / 180))}${f(1.5 * Math.sin((deg * Math.PI) / 180))}${f(0)} ${el.padEnd(3)} 0  0  0  0  0  0  0  0  0  0  0  0`);
+    const block = ["", "  test", "", "  5  4  0  0  0  0  0  0  0  0999 V2000", line(45, "Cl"), line(null, "Pt"), line(135, "Br"), line(225, "Cl"), line(315, "Br"), "  2  1  1  0", "  2  3  1  0", "  2  4  1  0", "  2  5  1  0", "M  CHG  1   2  -2", "M  END", ""].join("\n");
+    expect(metalsArrangedIn("Cl[Pt@SP1-2](Br)(Cl)Br", block)).toEqual([1]);
+    expect(metalsArrangedIn("Cl[Pt-2](Br)(Cl)Br", block)).toEqual([]);
+    // (a block whose atoms are not the SMILES's, element by element: nothing taken as given)
+    expect(metalsArrangedIn("Br[Pt@SP1-2](Cl)(Cl)Br", block)).toEqual([]);
+    const given = await drawingOf(block, MENO, undefined, metalsArrangedIn("Cl[Pt@SP1-2](Br)(Cl)Br", block));
+    expect(round(given, "Pt")).toBe("Br,Cl,Br,Cl");
+    expect(metalMarked(given, "Pt")).toBeUndefined();
+    // (the X it came as, kept: the bonds on the diagonals)
+    const pt = given.atoms.find((a) => a.el === "Pt")!;
+    for (const b of given.bonds) {
+      const o = given.atoms.find((a) => a.id === (b.a === pt.id ? b.b : b.a))!;
+      const t = (Math.atan2(o.y - pt.y, o.x - pt.x) * 180) / Math.PI;
+      expect(Math.abs(((t % 90) + 90) % 90 - 45)).toBeLessThan(1);
+    }
+    // (the same block from a SMILES with no mark: the engine's own way, marked)
+    const open = await drawingOf(block, MENO, undefined, metalsArrangedIn("Cl[Pt-2](Br)(Cl)Br", block));
+    expect(metalMarked(open, "Pt")).toBe(ARRANGEMENT_SAID);
   });
 });

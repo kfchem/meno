@@ -34,8 +34,10 @@ import { greatest } from "../../../../lib/chem/lists";
 
 export type LayoutJob = {
   input: LayoutInput;
-  /** A drawing nobody made - a plugin's (`laidOut`'s `asNew`): which donors of a metal lie opposite each other in it is not kept (`oppositesKept`), as it says nothing. */
+  /** A drawing nobody made - a plugin's (`laidOut`'s `asNew`): which donors of a metal lie opposite each other in it is not kept (`oppositesKept`), as it says nothing - */
   asNew?: true;
+  /** - but at these metals, by id: those its input gave the arrangement of (a SMILES's mark at the metal, `metalsArrangedIn`), which the plugin's drawing carries, its form kept (`laidOut`) and so not marked. */
+  arranged?: ReadonlySet<number>;
   /** The model atom each of the input's atoms is - but the stars the engine is given for rings bound atom by atom, after them. */
   ids: number[];
   /** Each ring or chain bound so: its metal and its atoms, by id - made one bond to its centre as it is laid out. */
@@ -243,7 +245,7 @@ const pairKey = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
  * given", as a layout of it would mark it (`relayoutFrom`): nobody gave its arrangement, wherever the plugin put its donors. The
  * same model where there is none.
  */
-export function arrangementsMarked(model: Model): Model {
+export function arrangementsMarked(model: Model, arranged: ReadonlySet<number> = new Set()): Model {
   const drawing = drawingOf(model);
   const nb = model.atoms.map(() => [] as number[]);
   const orders = new Map<string, number>();
@@ -262,7 +264,7 @@ export function arrangementsMarked(model: Model): Model {
   let marked = false;
   const atoms = model.atoms.map((a, i) => {
     const sq = squarePlanarMetal(view, i, (el, charge) => valencesAt(el, charge)[0]);
-    if (!sq?.sure || !sq.open) return a;
+    if (!sq?.sure || !sq.open || arranged.has(a.id)) return a;
     marked = true;
     return { ...a, unsure: { said: [ARRANGEMENT_SAID], as: arrangementAs(a, model.atoms, model.bonds) } };
   });
@@ -285,7 +287,8 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
   const n = ids.length;
   const byId = new Map(model.atoms.map((a) => [a.id, a]));
   // (a four-bond metal's donors opposite each other as they were drawn: transplatin cleaned up is transplatin - but not a plugin's drawing, which gives none)
-  const laid = job.asNew ? given : oppositesKept(ids.map((id) => byId.get(id)!), input, given);
+  const kept = job.asNew ? new Set(ids.flatMap((id, i) => (job.arranged?.has(id) ? [i] : []))) : undefined;
+  const laid = kept && !kept.size ? given : oppositesKept(ids.map((id) => byId.get(id)!), input, given, kept);
   // at the style's bond length, whatever the drawing's was - a structure put
   // down too large or too small, read from a figure at a wrong scale, comes
   // to the workspace's one style (the maintainer, 2026-10-27): the engine's
@@ -868,7 +871,7 @@ export function nextFree(model: Model): number {
 /** How near, in bonds, two atoms of a metal's different donors may lie before the one's groups are turned clear (`oppositesKept`). */
 const CROWDED = 0.75;
 
-export function oppositesKept(was: readonly { x: number; y: number }[], input: LayoutInput, laid: Layout2D): Layout2D {
+export function oppositesKept(was: readonly { x: number; y: number }[], input: LayoutInput, laid: Layout2D, only?: ReadonlySet<number>): Layout2D {
   const near = input.atoms.map(() => [] as number[]);
   for (const { a, b } of input.bonds) {
     near[a].push(b);
@@ -885,7 +888,7 @@ export function oppositesKept(was: readonly { x: number; y: number }[], input: L
   for (let m = 0; m < was.length; m++) {
     const donors = near[m];
     const n = donors.length;
-    if (!isMetal(input.atoms[m].el) || (n !== 4 && n !== 6) || laid.depth[m] != null || donors.some((d) => d >= was.length)) continue;
+    if (!isMetal(input.atoms[m].el) || (n !== 4 && n !== 6) || laid.depth[m] != null || donors.some((d) => d >= was.length) || (only && !only.has(m))) continue;
     // (each donor's unit: what it carries, reached not through the metal - a chelate's, its donors' together)
     const reach = donors.map((d) => {
       const seen = new Set([d]);
