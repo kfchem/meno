@@ -18,6 +18,7 @@ import { MENO } from "../../../../lib/chem/style";
 import { moleculesToEditorModel, readMoleculesFromText } from "../../../../utils/importers";
 import { drawingLayout, drawnOf, structureFileText } from "../fileActions";
 import { editorModelOf } from "../utils/io";
+import { identityOfDrawn } from "./identityOf";
 import { blocksOf } from "./make3d";
 import messyTaxol from "../../../../../scripts/gui/fixtures/messy-taxol.mol?raw";
 import { measured } from "../../../../testing/timeouts";
@@ -527,6 +528,39 @@ describe("cleanUp", () => {
       expect(dbl(laid).stereo).toBe("either");
       expect(drawingCisTrans(laid)).toBe(0);
     });
+
+    it("keeps the straight form through Clean-up, once and twice, where the plugin's drawing marks the bond 'either' too: but-2-ene, hexa-2,4-diene, stilbene", async () => {
+      for (const s of ["CC=CC", "CC=CC=CC", "c1ccccc1C=Cc1ccccc1"]) {
+        // (as the plugin's drawing comes: bent, and each open double bond marked either configuration)
+        const came = arrived(s);
+        const open = openDoubleBonds(fromSmiles(s));
+        expect(open.straight.length, s).toBeGreaterThan(0);
+        const ends = new Set(open.straight.map((i) => came.atoms[i].id));
+        const m = { ...came, bonds: came.bonds.map((x) => (x.order === 2 && ends.has(x.a) && ends.has(x.b) ? { ...x, stereo: "either" as const } : x)) };
+        expect(m.bonds.filter((x) => x.stereo === "either").length, s).toBe(s === "CC=CC=CC" ? 2 : 1);
+        const laid = await laidOut(m, undefined, undefined, open);
+        const straightOn = (d: Model) =>
+          open.straight.every((i) => {
+            const id = came.atoms[i].id;
+            const bond = d.bonds.find((x) => x.order === 2 && (x.a === id || x.b === id) && open.straight.some((j) => came.atoms[j].id === (x.a === id ? x.b : x.a)))!;
+            const other = bond.a === id ? bond.b : bond.a;
+            const group = d.bonds.find((x) => x !== bond && (x.a === id || x.b === id))!;
+            return angleAt(d, id, other, group.a === id ? group.b : group.a) < 10;
+          });
+        expect(straightOn(laid), s).toBe(true);
+        expect(laid.bonds.some((x) => x.stereo === "either"), s).toBe(false);
+        const was = identityOfDrawn(laid).text;
+        const { store } = canvas(laid);
+        for (const time of [1, 2]) {
+          await cleanUp(store);
+          const now = store.getState().model;
+          expect(straightOn(now), `${s} ${time}`).toBe(true);
+          expect(now.bonds.some((x) => x.stereo === "either"), `${s} ${time}`).toBe(false);
+          expect(drawingCisTrans(now), `${s} ${time}`).toBe(0);
+          expect(identityOfDrawn(now).text, `${s} ${time}`).toBe(was);
+        }
+      }
+    }, 120000);
 
     it("keeps a double bond the SMILES gives E or Z bent as given", async () => {
       for (const s of ["C/C=C/C", "C/C=C\\C"]) {

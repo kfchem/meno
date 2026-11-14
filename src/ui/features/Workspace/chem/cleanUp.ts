@@ -298,15 +298,32 @@ export async function laidOut(model: Model, style: DrawingStyle = styleOf(useApp
   if (!model.bonds.length) return model;
   // (a double bond the structure's own text leaves open, with an end of two groups: a wavy bond on a group - Brecher 2006, ST-4.4)
   const either = new Set(open?.either ?? []);
-  const m = either.size ? { ...model, bonds: model.bonds.map((b, i) => (either.has(i) && b.order === 2 ? { ...b, stereo: "either" as const } : b)) } : model;
+  // (one left open with one group at each end, its ends kept straight on below: the plugin's own mark of either configuration taken off it,
+  //  so that the drawing says it once, by its straight ends, and Clean-up keeps them straight as it keeps any drawn so - layout/drawn
+  //  `straightEnds` reads no end of a bond so marked)
+  const straight = new Set((open?.straight ?? []).map((i) => model.atoms[i]?.id).filter((id): id is number => id != null));
+  const straightOn = (b: Model["bonds"][number]) => b.order === 2 && straight.has(b.a) && straight.has(b.b);
+  const m =
+    either.size || straight.size
+      ? {
+          ...model,
+          bonds: model.bonds.map((b, i) => {
+            if (either.has(i) && b.order === 2) return { ...b, stereo: "either" as const };
+            if (straightOn(b) && b.stereo === "either") {
+              const { stereo: _s, ...rest } = b;
+              return rest;
+            }
+            return b;
+          }),
+        }
+      : model;
   const read = layoutJob(m);
   // (an allene's axis and an odd cumulene's cis or trans the structure's own text says, which a plugin's drawing of it cannot: a MOL block has no way to say them - by atom, in the drawing's order)
   let job: LayoutJob = given && givenFits(read, m) ? { ...read, given: true as const, input: { ...read.input, ...(given.axes.length ? { axes: given.axes } : {}), ...(given.cumulated.length ? { cumulated: given.cumulated } : {}) } } : read;
   // (and one left open with one group at each end: each end kept straight on from it, so that it states neither cis nor trans - ST-4.4 -
   //  whatever the plugin's drawing of it said)
-  const straight = new Set((open?.straight ?? []).map((i) => model.atoms[i]?.id).filter((id): id is number => id != null));
   if (straight.size) {
-    const opened = model.bonds.filter((b) => b.order === 2 && straight.has(b.a) && straight.has(b.b)).map((b) => (b.a < b.b ? `${b.a},${b.b}` : `${b.b},${b.a}`));
+    const opened = model.bonds.filter(straightOn).map((b) => (b.a < b.b ? `${b.a},${b.b}` : `${b.b},${b.a}`));
     const linear = new Set(job.ids.flatMap((id, k) => (straight.has(id) ? [k] : [])));
     job = {
       ...job,

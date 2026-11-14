@@ -1829,7 +1829,10 @@ lipids each have their own way of being drawn, which it should know.
      each end, not in a ring of seven atoms or fewer, not cumulated, not a
      C=N whose E/Z is none of its own (an amidine's), and not an end with
      two groups alike (`layout/drawn` `openDoubleBonds`). A double bond
-     the text gives E or Z is drawn as given.
+     the text gives E or Z is drawn as given. A double bond drawn straight
+     on carries no other mark of being open - not a plugin's either
+     configuration for it - so Clean-up keeps it straight, as it keeps any
+     double bond drawn so.
    - **Centres by a lone pair** (the maintainer, 2026-11-04 and 11-05).
      An atom of three neighbours and a lone pair is a pyramid that its
      lone pair can turn into its mirror image, through the plane of the
