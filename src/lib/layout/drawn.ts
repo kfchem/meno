@@ -119,6 +119,8 @@ const IN_LINE_WHY = "two of its bonds in line or on top of each other";
  * ambiguous or the picture of another shape (read as open, never guessed), `lifts` each bond's
  * +1 (a wedge narrow at the centre), -1 (hashes) or 0. "Half a turn" with `IN_LINE`'s tolerance either way (ST-0.1): a deciding gap in that band
  * says nothing either. Open:
+ * - all four bonds within half the page - the largest gap between neighbours half a turn or more - whatever their kinds: a tetrahedron's four
+ *   bonds add up to nought, so their pictures never all point into one half (ST-1.1.12's figure, every drawing of it);
  * - four wedges of one kind (ST-1.1.20);
  * - three of one kind and one other, the other in the space of half a turn or more between two of the three (ST-1.1.9);
  * - two plain, a wedge and hashes: the plain bonds not next to each other (ST-1.1.10, 1.1.15), or next to each other and half a turn or more
@@ -127,8 +129,8 @@ const IN_LINE_WHY = "two of its bonds in line or on top of each other";
  *   apart (ST-1.1.19);
  * - three plain and a wedge, two plain bonds next to each other half a turn or more apart and the wedge not in that space (ST-1.1.16);
  * - two wedges and two hashes, like next to like (ST-1.1.17, 1.1.18).
- * Read as before: the forms the text gives a configuration, ST-1.1.4's (three plain, two half a turn or more apart, the wedge in that space) and
- * ST-1.1.12's among them.
+ * Read as before: the forms the text gives a configuration with bonds on both sides of the centre, ST-1.1.4's cross (three plain, two half a
+ * turn or more apart, the wedge in that space) and the upright cross with two like wedges across from each other among them.
  */
 function fourBondsSayNothing(at: { x: number; y: number }, around: readonly { x: number; y: number }[], lifts: readonly number[]): string | null {
   const t = around.map((p) => Math.atan2(p.y - at.y, p.x - at.x));
@@ -141,6 +143,8 @@ function fourBondsSayNothing(at: { x: number; y: number }, around: readonly { x:
   const kinds = [0, 1, -1].map((k) => [0, 1, 2, 3].filter((i) => lifts[i] === k));
   const [plain, up, down] = kinds;
   const WHY = "its four bonds are not drawn as a tetrahedral centre's: draw two of them in the page side by side, a wedge and hashes on the far side";
+  // (all four within half the page)
+  if (atLeastHalf(Math.max(...gaps.map((g) => g.size)))) return WHY;
   if (up.length === 4 || down.length === 4) return WHY;
   // (three of one wedge kind and one other: the other in the wide space between two of the three)
   for (const three of [up, down]) {

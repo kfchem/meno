@@ -1810,13 +1810,16 @@ lipids each have their own way of being drawn, which it should know.
      to redraw. A deciding gap within 10 degrees of half a turn says
      nothing either: which side of the rule it is on cannot be told.
      A centre with four bonds drawn is read as open, likewise, in the forms
-     the text calls ambiguous or the picture of another shape (ST-1.1.9,
-     1.1.10, 1.1.11, 1.1.13 to 1.1.20): four wedges alike, three alike with
+     the text calls ambiguous or the picture of another shape (ST-1.1.9 to
+     1.1.20): all four bonds within half the page, whatever they are drawn
+     as (a tetrahedron's four bonds never all point one way; ST-1.1.12's
+     drawings are all so); four wedges alike, three alike with
      the fourth in their wide space, two plain bonds with a wedge and hashes
      where the plain ones are not side by side or are half a turn or more
      apart, two like wedges beside two plain bonds, three plain with the
      wedge outside their wide space, two wedges and two hashes like by like.
-     ST-1.1.4's cross with one wedge and ST-1.1.12 stay read.
+     ST-1.1.4's cross with one wedge and the upright cross with two like
+     wedges across from each other stay read.
      A double bond so drawn it lays out keeping the straight end straight -
      its one group straight on from it, as ST-4.4 draws a double bond of
      unspecified configuration - and the rest around it, so the new drawing
