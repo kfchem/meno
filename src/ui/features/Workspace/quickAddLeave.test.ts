@@ -122,11 +122,13 @@ describe("a key typed in Quick Add with none of its icons chosen", () => {
 });
 
 describe("the line under the SMILES field", () => {
-  it("says where chemistry stands while it is set up - how far, and that a SMILES waiting is drawn when it is ready - or started", () => {
+  it("says where chemistry stands while it is set up - the step, how far where reported, and that a SMILES waiting is drawn when it is ready - or started", () => {
     const setting = { state: "setting-up" as const, plugin: "P", id: "p" };
-    expect(chemistryLine(setting, 0.426, false)).toBe("Setting up chemistry: 42%.");
-    expect(chemistryLine(setting, 0.426, true)).toBe("Setting up chemistry: 42%. This is drawn when it is ready.");
-    expect(chemistryLine(setting, undefined, true)).toBe("Setting up chemistry. This is drawn when it is ready.");
+    // (the plugin's files coming, their share reported; its environment, which reports none)
+    expect(chemistryLine(setting, 0.426, false)).toBe("Setting up chemistry: downloading P (42%).");
+    expect(chemistryLine(setting, 0.426, true)).toBe("Setting up chemistry: downloading P (42%). This is drawn when it is ready.");
+    expect(chemistryLine(setting, undefined, false)).toBe("Setting up chemistry: setting up P's environment.");
+    expect(chemistryLine(setting, undefined, true)).toBe("Setting up chemistry: setting up P's environment. This is drawn when it is ready.");
     expect(chemistryLine({ state: "starting", plugin: "P" }, undefined, true)).toBe("Starting chemistry. The first one takes a moment.");
   });
   it("says nothing where chemistry is ready, not yet asked for, or failed (said as before)", () => {
