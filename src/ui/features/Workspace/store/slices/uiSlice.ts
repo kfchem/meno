@@ -14,7 +14,9 @@ import { fitResultSets } from "../../workflow/run";
 import { reachOverFrames } from "../../utils/molecule3d";
 import { isElementSymbol } from "../../../../../lib/roles/molblock";
 import { labelTextOf, readLabel } from "../../utils/labelTyping";
-import { abbreviationOf } from "../../../../../lib/chem/abbreviations";
+import { abbreviationOf, abbreviationStructure, GENERIC_SYMBOLS, VARIABLE_NAMES } from "../../../../../lib/chem/abbreviations";
+import { implicitHydrogens } from "../../../../../lib/chem/molecule";
+import { useNotices } from "../../../../notices";
 import { restyledDocument } from "../../restyle";
 import { easeStyle } from "../../styleEase";
 
@@ -95,6 +97,13 @@ export function createUiSlice(
       if (value && atom) {
         const read = readLabel(value, isElementSymbol);
         const named = read.kind === "element" && isElementSymbol(value) && abbreviationOf(value);
+        // (a carbon typed - C alone, or with its H: how many were typed - written out: a bare C would say it has none, Brecher
+        // 2008 GR-2.1.1)
+        const typedC = read.kind === "element" && read.el === "C" ? /^\d*C(H(\d*))?/.exec(value) : null;
+        const typedH = typedC?.[1] ? typedC : null;
+        // (not the C a corner opens with from the menu, kept as it was with nothing typed: that carbon stays as it is drawn)
+        const untouched = !labelEdit.grow && labelEdit.selectAll && value === labelEdit.opened?.value;
+        const written = !!typedC && (!untouched || !!atom.shown);
         const chem = (d: WorkspaceDocument, at: Atom) =>
           named
             ? { el: value, abbrev: ops.groupHeldAt(d, at.id, value) }
@@ -107,6 +116,8 @@ export function createUiSlice(
                   isotope: read.isotope,
                   // (an unpaired electron stays with its element)
                   radical: read.el === at.el ? at.radical : undefined,
+                  // (a carbon typed - C, CH2, H2C, CH3 - written out with its hydrogens, not a bare vertex)
+                  ...(written ? { shown: true as const } : {}),
                 }
               : // R1, R2: an Rgroup, drawn R¹ (IUPAC GR-9.1)
                 /^R\d+$/.test(read.el)
@@ -118,12 +129,51 @@ export function createUiSlice(
         // alone - bonds, words and the rest selected with them have no label; one begun from a menu is that atom's alone)
         const sel = get().sel.atoms;
         const ids = labelEdit.grow && sel.has(id) && sel.size > 1 ? [id, ...[...sel].filter((x) => x !== id)] : [id];
+        // (what each atom was, where it was an element or a group: its symbol or its label)
+        const before = new Map(
+          ids.flatMap((i) => {
+            const a = get().model.atoms.find((x) => x.id === i);
+            return a && !readsAsNothing(a.el) ? [[i, a.el] as const] : [];
+          }),
+        );
         changed = doc.edit("rename atom", (d) =>
           ids.reduce((acc, i) => {
             const at = acc.model.atoms.find((a) => a.id === i);
             return at ? ops.setAtomChemistry(acc, i, chem(acc, at), as) : acc;
           }, d),
         );
+        // (the H typed are not what its bonds give - CH2 on a carbon of three bonds - said: it is drawn with its bonds' own, the
+        // compound as drawn; a label never changes it)
+        if (changed && typedH) {
+          const typedCount = typedH[2] ? Number(typedH[2]) : 1;
+          const model = get().model;
+          const off = ids.flatMap((i) => {
+            const a = model.atoms.find((x) => x.id === i);
+            if (!a) return [];
+            const has = carbonHydrogens(model, a);
+            return has === typedCount ? [] : [has];
+          });
+          if (off.length) {
+            const has = off[0];
+            useNotices.getState().show({
+              id: "carbon-written-hydrogens",
+              title: "Hydrogens as the bonds give them",
+              text: `${value} was typed on a carbon whose bonds leave it ${HYDROGENS[has] ?? `${has} H`}: it is drawn ${has === 0 ? "C" : has === 1 ? "CH" : `CH${has}`}, as its bonds have it.`,
+            });
+          }
+        }
+        // (letters that read as nothing - CH2CH2 - are kept as typed, as words: typed over an atom that was an element or a group, the
+        // structure has lost it, and that is said, never left silent)
+        if (changed && read.kind === "text" && !named && readsAsNothing(value)) {
+          const lost = ids.map((i) => before.get(i)).find((was) => was != null);
+          if (lost) {
+            useNotices.getState().show({
+              id: "label-read-as-nothing",
+              title: "Kept as words",
+              text: `${value} is not an element or a group Meno reads, so it is kept as words, and this atom is no longer ${lost === "C" ? "a carbon" : lost}. Undo brings the ${lost === "C" ? "carbon" : lost} back.`,
+            });
+          }
+        }
       }
       set((prev: EditorState) => ({
         ...prev,
@@ -289,4 +339,21 @@ export function createUiSlice(
         ),
       })),
   };
+}
+
+/** A count of H in words, as the notices say it. */
+const HYDROGENS = ["no H", "one H", "two H", "three H", "four H"];
+
+/**
+ * Whether a label reads as nothing - no element, no group, ligand, reagent or complex Meno knows, no Rgroup, no symbol for a kind of group or a
+ * point of variability: kept as typed, as words (docs/EDITOR-2D.md, *Labels read as they are meant*, rule 5).
+ */
+function readsAsNothing(label: string): boolean {
+  return !isElementSymbol(label) && label !== "R#" && !/^R\d+$/.test(label) && !GENERIC_SYMBOLS.has(label) && !VARIABLE_NAMES.has(label) && abbreviationStructure(label) == null;
+}
+
+/** How many H a carbon of `model` carries, as its bonds leave it (lib/chem/molecule `implicitHydrogens`). */
+function carbonHydrogens(model: { bonds: readonly { a: number; b: number; order: number }[] }, a: Pick<Atom, "id" | "charge" | "radical">): number {
+  const sum = model.bonds.reduce((t, b) => t + (b.a === a.id || b.b === a.id ? b.order : 0), 0);
+  return implicitHydrogens("C", sum, a.charge ?? 0, a.radical);
 }
