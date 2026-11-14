@@ -356,20 +356,33 @@ describe("which chair, by the kind of each group (published conformational energ
     }
   }, measured(3000));
 
-  it("compares two chairs' axial groups by their kinds, the largest first: two vinyls axial before a methyl and a fluorine", () => {
-    // (a 1,2,4,5-tetrasubstituted ring whose one chair has the two vinyls axial and the other the methyl and the fluorine: the largest
-    //  kind axial in the first is a vinyl's (2), in the second the methyl's (3) - so the first)
-    const smiles = "C=C[C@H]1[C@@H](C)C[C@@H](F)[C@@H](C=C)C1";
+  it("compares two chairs' axial groups by their kinds, the largest first: two vinyls axial before a phenyl and a hydroxyl", () => {
+    // (a 1,2,4,5-tetrasubstituted ring whose one chair has the two vinyls axial and the other the phenyl and the hydroxyl - the chair
+    //  the published conformational energies (A-values) favour too, the phenyl and the hydroxyl together the larger)
+    const smiles = "C=C[C@H]1[C@@H](c2ccccc2)C[C@@H](O)[C@@H](C=C)C1";
     const flat = drawnFromSmiles(smiles);
     for (let k = 0; k < 4; k++) {
       const chair = asChair(lying(flat, k), 3);
-      // (the methyl's C and the F, numbered as the SMILES writes them: atoms 5 and 8)
-      const methyl = { id: 5 };
-      const fluorine = { id: 8 };
-      expect([flat.atoms.find((a) => a.id === 5)!.el, flat.atoms.find((a) => a.id === 8)!.el]).toEqual(["C", "F"]);
-      expect(axialAt(chair, methyl.id), `${smiles} ${k}: the methyl`).toBe(false);
-      expect(axialAt(chair, fluorine.id), `${smiles} ${k}: the fluorine`).toBe(false);
+      // (the phenyl's first C and the O, numbered as the SMILES writes them: atoms 5 and 13)
+      const phenyl = { id: 5 };
+      const hydroxyl = { id: 13 };
+      expect([flat.atoms.find((a) => a.id === 5)!.el, flat.atoms.find((a) => a.id === 13)!.el]).toEqual(["C", "O"]);
+      expect(axialAt(chair, phenyl.id), `${smiles} ${k}: the phenyl`).toBe(false);
+      expect(axialAt(chair, hydroxyl.id), `${smiles} ${k}: the hydroxyl`).toBe(false);
       expect(axialOf(chair), `${smiles} ${k}`).toMatchObject({ axial: 2 });
+    }
+  }, measured(3000));
+
+  it("by the kinds where the sizes would say the other: cis-4-methylcyclohexanecarbaldehyde's formyl axial, of two atoms, before its methyl, of one", () => {
+    // (a formyl's kind (2) is smaller than a methyl's (3), its non-hydrogen atoms more: the kinds decide, as the published
+    //  conformational energies (A-values) do - the formyl's the smaller)
+    const smiles = "O=C[C@H]1CC[C@@H](C)CC1";
+    const flat = drawnFromSmiles(smiles);
+    expect([flat.atoms.find((a) => a.id === 2)!.el, flat.atoms.find((a) => a.id === 7)!.el]).toEqual(["C", "C"]);
+    for (let k = 0; k < 4; k++) {
+      const chair = asChair(lying(flat, k), 3);
+      expect(axialAt(chair, 2), `${smiles} ${k}: the formyl`).toBe(true);
+      expect(axialAt(chair, 7), `${smiles} ${k}: the methyl`).toBe(false);
     }
   }, measured(3000));
 });
