@@ -1098,7 +1098,13 @@ All hover-based, as above.
     trans-[Co(en)2Cl2]+, which the layout has no two places across for
     its Cl; a cis-M(gly)2Cl2 with N across N or O across O, which its
     picture could not tell apart; a chelate's two donors drawn opposite -
-    Clean-up lays nothing out and says so: never another isomer.
+    Clean-up lays nothing out and says so: never another isomer. Two
+    metals joined by two bridges (cis- and trans-[Pt2Cl4(NH3)2], the
+    three isomers of a dimer with a Cl and a Br bridge) keep, at each
+    metal, which bridge each of its other donors stands across: the
+    bridges, which carry the other metal, stay where the layout put them,
+    their ring seen a little from above, and each metal's other donors
+    change places round it.
 - Valence warnings, and R/S shown on request (RDKit). (PR #53: a ring round
   an atom with too many bonds, saying what is wrong under the pointer; R/S
   and E/Z from a button on the canvas, later shown on what they are asked

@@ -698,3 +698,74 @@ function configurations(model: Model) {
   for (const [c, t] of readStereo(d.atoms, d.bonds).tetra) out.set(ids[c], { neighbours: t.neighbours.map((n) => (n < 0 ? -1 : ids[n])), volume: t.volume });
   return out;
 }
+
+/**
+ * Two metals joined by two bridges, drawn by hand as the usual diamond: the metals left and right, the bridges `br` above and below,
+ * each metal's two other donors splayed out - the left one's `left` at 135 and 225 degrees, the right one's `right` at 45 and 315
+ * ("CO" a carbonyl, "NH3" an ammine) - all turned by `turn` degrees, the atoms written backwards where `reverse`.
+ */
+function bridged(metal: string, br: [string, string], left: [string, string], right: [string, string], turn = 0, reverse = false): Model {
+  const h = Math.SQRT1_2;
+  const atoms: [string, number, number][] = [[metal, -h, 0], [metal, h, 0], [br[0], 0, h], [br[1], 0, -h]];
+  const bonds: [number, number, number][] = [[0, 2, 1], [0, 3, 1], [1, 2, 1], [1, 3, 1]];
+  const end = (on: number, what: string, deg: number) => {
+    const [x, y] = [atoms[on][1] + Math.cos((deg * Math.PI) / 180), atoms[on][2] + Math.sin((deg * Math.PI) / 180)];
+    atoms.push([what === "CO" ? "C" : what === "NH3" ? "N" : what, x, y]);
+    bonds.push([on, atoms.length - 1, 1]);
+    if (what === "CO") {
+      atoms.push(["O", x + x - atoms[on][1], y + y - atoms[on][2]]);
+      bonds.push([atoms.length - 2, atoms.length - 1, 3]);
+    }
+  };
+  end(0, left[0], 135);
+  end(0, left[1], 225);
+  end(1, right[0], 45);
+  end(1, right[1], 315);
+  const t = (turn * Math.PI) / 180;
+  const n = atoms.length;
+  const at = (i: number) => (reverse ? n - 1 - i : i);
+  const placed = atoms.map(([el, x, y], i) => ({ id: at(i) + 1, x: 1.5 * (x * Math.cos(t) - y * Math.sin(t)), y: 1.5 * (x * Math.sin(t) + y * Math.cos(t)), r: 0.9, el, ...(el === "N" ? { valence: 4 } : {}) }));
+  return {
+    atoms: placed.sort((p, q) => p.id - q.id),
+    bonds: bonds.map(([a, b, order], i) => ({ id: 100 + i, a: at(a) + 1, b: at(b) + 1, order, stereo: "none" })),
+  } as unknown as Model;
+}
+
+/** For each metal, the bridge each of its donors of element `el` (not a bridge) stands across, by angle: "<bridge>@<its id>", sorted. */
+function acrossBridges(m: Model, metal: string, el: string): string[] {
+  const nbs = (id: number) => m.bonds.filter((b) => b.a === id || b.b === id).map((b) => m.atoms.find((a) => a.id === (b.a === id ? b.b : b.a))!);
+  const metals = m.atoms.filter((a) => a.el === metal);
+  const bridges = (mt: (typeof metals)[number]) => nbs(mt.id).filter((a) => metals.every((o) => nbs(o.id).some((b) => b.id === a.id)));
+  const out: string[] = [];
+  for (const mt of metals) {
+    const angle = (a: { x: number; y: number }) => Math.atan2(a.y - mt.y, a.x - mt.x);
+    const off = (p: { x: number; y: number }, q: { x: number; y: number }) => Math.abs(Math.PI - Math.abs(Math.atan2(Math.sin(angle(p) - angle(q)), Math.cos(angle(p) - angle(q)))));
+    for (const d of nbs(mt.id).filter((a) => a.el === el && !bridges(mt).includes(a))) {
+      const across = nbs(mt.id).filter((a) => a.id !== d.id).reduce((b, a) => (off(d, a) < off(d, b) ? a : b));
+      out.push(`${bridges(mt).includes(across) ? across.el : "no bridge"}@${across.id}`);
+    }
+  }
+  return out.sort();
+}
+
+describe("two metals bridged, drawn by hand", () => {
+  it("keeps which bridge each donor stands across as drawn: cis and trans [Pt2Cl4(NH3)2] however turned or written, [Rh2Cl2(CO)2(NH3)2], and the three [Pt2(Cl)(Br)Cl2(NH3)2]", { timeout: 180000 }, async () => {
+    forgetLaidOut();
+    const cases: [string, Model, string][] = [
+      ["trans-[Pt2Cl4(NH3)2]", bridged("Pt", ["Cl", "Cl"], ["NH3", "Cl"], ["Cl", "NH3"]), "N"],
+      ["cis-[Pt2Cl4(NH3)2]", bridged("Pt", ["Cl", "Cl"], ["NH3", "Cl"], ["NH3", "Cl"]), "N"],
+      ["cis-[Pt2Cl4(NH3)2], turned 37", bridged("Pt", ["Cl", "Cl"], ["NH3", "Cl"], ["NH3", "Cl"], 37), "N"],
+      ["cis-[Pt2Cl4(NH3)2], written backwards", bridged("Pt", ["Cl", "Cl"], ["NH3", "Cl"], ["NH3", "Cl"], 0, true), "N"],
+      ["trans-[Rh2Cl2(CO)2(NH3)2]", bridged("Rh", ["Cl", "Cl"], ["NH3", "CO"], ["CO", "NH3"]), "N"],
+      ["cis-[Rh2Cl2(CO)2(NH3)2]", bridged("Rh", ["Cl", "Cl"], ["NH3", "CO"], ["NH3", "CO"]), "N"],
+      ["[Pt2(Cl)(Br)Cl2(NH3)2], both N across Br", bridged("Pt", ["Cl", "Br"], ["NH3", "Cl"], ["NH3", "Cl"]), "N"],
+      ["[Pt2(Cl)(Br)Cl2(NH3)2], both N across Cl", bridged("Pt", ["Cl", "Br"], ["Cl", "NH3"], ["Cl", "NH3"]), "N"],
+      ["[Pt2(Cl)(Br)Cl2(NH3)2], one across each", bridged("Pt", ["Cl", "Br"], ["NH3", "Cl"], ["Cl", "NH3"]), "N"],
+    ];
+    for (const [name, m, el] of cases) {
+      const metal = m.atoms.find((a) => a.el === "Pt" || a.el === "Rh")!.el;
+      const drawnSo = acrossBridges(m, metal, el);
+      expect(acrossBridges(await laidOut(m, MENO), metal, el), name).toEqual(drawnSo);
+    }
+  });
+});
