@@ -714,7 +714,21 @@ Taken on 2026-10-13:
   the same labels where the canvas puts them, kept clear in the same way
   of the balls, the bonds, the measurements' values and each other
   (`utils/molecule3d`, `stereoSpot`, which the canvas and the picture
-  share), as large as the drawing's in print. In SVG, and the PNG drawn
+  share), as large as the drawing's in print. The canvas places them as
+  the picture does, by the one placing both share (`stereoSpotsAmong`):
+  at the drawing's own letter size, though it draws the letters no
+  smaller than its least size; in the order a picture takes them (a
+  molecule's atoms', then its double bonds'), not the order they came to
+  be shown in; with every ball as at rest, none swollen under the
+  pointer; and those going counted after those shown, clear of them and
+  of what is written over the molecule, but no obstacle to them or to
+  each other, so a label going stands where it would alone
+  (`stereoSpotsShown`). What counts as clear of the balls and bonds
+  is a share of the label's own size (a hundredth of its half height),
+  not a fixed length: a fixed 0.05 was nothing in the canvas's pixels and
+  much of a letter in the page's units, and a picture took another way
+  than the canvas. So a picture made now has each label where the canvas
+  has it, at any zoom. In SVG, and the PNG drawn
   from it, they stand on a white halo as on the canvas; in an EMF the
   letters are written without one. As in a picture of the drawing, a view
   zoomed so far out that the canvas leaves them out does not leave them

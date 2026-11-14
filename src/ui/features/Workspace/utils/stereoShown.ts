@@ -1,11 +1,15 @@
 /**
  * R and S, E and Z shown on what is asked (docs/EDITOR-2D.md, *R and S*):
- * what "Show" or "Hide" on a menu acts on - the atom, the bond or the
- * molecule in 3D right-clicked, or the selection there - and what it says.
- * A drawing's atom is offered where it could be a stereocentre (three bonds
- * or more), its bond where it is double; a molecule in 3D's, where it has a
- * label. Whatever the selection holds is taken together: "Hide" where all of
- * it is shown, else "Show".
+ * what "Show" or "Hide" on a menu acts on and what it says, worked out once
+ * as the menu opens (Workspace `stereoAtMenu`). In the drawing: the atom or
+ * the bond right-clicked, or the selection there - an atom where it could be
+ * a stereocentre (three bonds or more), a bond where it is double - "Hide"
+ * where all of it is shown, else "Show". On a molecule in 3D: the molecule
+ * right-clicked, whole - or, right-clicked on an atom or a bond chosen in
+ * it, what is chosen there, its count said; or the selection, right-clicked
+ * within it - never the atom under the pointer alone; "Hide" where any of
+ * it is shown, so one press clears what shows, else "Show". The words name
+ * only the kinds the target has: R/S, E/Z, or both.
  */
 import { stereoShownOf } from "../document";
 import type { Model, Molecule3D } from "../store/types";
@@ -38,6 +42,8 @@ export function stereoItemFor(st: Held, at: StereoMenuAt): StereoItem | null {
   const centre = (id: number) => (degree.get(id) ?? 0) >= 3;
   const double = (id: number) => bondById.get(id)?.order === 2;
   const of: StereoOf = { atoms: [], bonds: [], molecules: [] };
+  // (what is chosen in a molecule in 3D is the target: its count said)
+  let chosen = false;
   // (of a molecule in 3D: those given that have labels - all of them, given none)
   const in3d = (m: Molecule3D, atoms?: number[], bonds?: number[]) => {
     const st3 = m.stereo;
@@ -66,10 +72,13 @@ export function stereoItemFor(st: Held, at: StereoMenuAt): StereoItem | null {
     const m = molecule(at.id);
     const c = st.chosen3d;
     if (m?.stereo) {
-      // (the atom under the pointer, where it has a label; else what is chosen in it; else all of it)
-      if (at.atom != null && at.atom in m.stereo.atoms) in3d(m, [at.atom], []);
-      else if (c && c.id === m.id && (c.atoms.length || c.bonds.length)) in3d(m, c.atoms, c.bonds);
-      else in3d(m);
+      // (right-clicked on an atom chosen in it - or on either atom of a bond chosen - what is chosen there; else all of it)
+      const onChosen =
+        c && c.id === m.id && at.atom != null && (c.atoms.includes(at.atom) || c.bonds.some((i) => m.bonds[i]?.a1 === at.atom || m.bonds[i]?.a2 === at.atom));
+      if (onChosen && c) {
+        in3d(m, c.atoms, c.bonds);
+        chosen = true;
+      } else in3d(m);
     }
   }
   const atoms = of.atoms.length > 0 || of.molecules.some((g) => g.atoms?.length);
@@ -81,6 +90,16 @@ export function stereoItemFor(st: Held, at: StereoMenuAt): StereoItem | null {
   };
   const allShown =
     of.atoms.every((id) => atomById.get(id)?.stereoShown) && of.bonds.every((id) => bondById.get(id)?.stereoShown) && of.molecules.every(shown3d);
+  // (in 3D: any of it shown is hidden at once; the drawing's as before, hidden where all of it is shown)
+  const in3dOnly = !of.atoms.length && !of.bonds.length && of.molecules.length > 0;
+  const anyShown3d = of.molecules.some((g) => {
+    const s = stereoShownOf(molecule(g.id) ?? {}) ?? { atoms: [], bonds: [] };
+    return (g.atoms ?? []).some((i) => s.atoms.includes(i)) || (g.bonds ?? []).some((i) => s.bonds.includes(i));
+  });
+  const hide = in3dOnly ? anyShown3d : allShown;
   const what = atoms && bonds ? "R/S and E/Z" : atoms ? "R/S" : "E/Z";
-  return { name: `${allShown ? "Hide" : "Show"} ${what}`, show: !allShown, of };
+  // (what is chosen: "of 2 atoms", "of 1 bond", "of 2 atoms and 1 bond" - those of it with a label)
+  const count = (n: number, one: string) => (n ? [`${n} ${one}${n === 1 ? "" : "s"}`] : []);
+  const ofChosen = chosen ? ` of ${[...count(of.molecules[0]?.atoms?.length ?? 0, "atom"), ...count(of.molecules[0]?.bonds?.length ?? 0, "bond")].join(" and ")}` : "";
+  return { name: `${hide ? "Hide" : "Show"} ${what}${ofChosen}`, show: !hide, of };
 }

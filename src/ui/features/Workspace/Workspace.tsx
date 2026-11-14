@@ -775,6 +775,9 @@ function WorkspaceContent({
     [store],
   );
   const [menu, setMenu] = useState<MenuTarget | null>(null);
+  // (R/S and E/Z: what the menu's item acts on and its words, worked out once as the menu opens - so the words read are what is done, whatever
+  //  changes while it is open: utils/stereoShown)
+  const stereoAtMenu = useMemo(() => (menu ? stereoItemFor(store.getState(), menu) : null), [menu, store]);
   // (what the author of the PDF its menu is of allows of printing: found as the menu opens)
   usePrinting(menu?.kind === "pdf" ? store.getState().pdfs.find((x) => x.id === menu.id)?.sha256 : undefined);
   // a colour card opened from a menu, where the menu was (ColourCard)
@@ -2603,11 +2606,7 @@ function WorkspaceContent({
             const from = st.pdfs.find((p) => p.sha256 === note.sha256)?.name ?? st.pictures.find((p) => p.sha256 === note.sha256)?.name ?? "the figure";
             return { from: figureNoteSource(from, note.page), ...(note.checked ? {} : { run: () => st.setFigureChecked([...atoms], true) }) };
           })()}
-          stereo={(() => {
-            const st = store.getState();
-            const item = stereoItemFor(st, menu);
-            return item ? { name: item.name, run: () => showStereo(item) } : undefined;
-          })()}
+          stereo={stereoAtMenu ? { name: stereoAtMenu.name, run: () => showStereo(stereoAtMenu) } : undefined}
           numbers={(() => {
             const st = store.getState();
             const got = numbersItemsFor(st, menu);

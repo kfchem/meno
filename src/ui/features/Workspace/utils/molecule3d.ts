@@ -53,6 +53,12 @@ export type LabelBox = { x: number; y: number; hx: number; hy: number };
 
 /** How far apart the ways round a point are that a label is tried in. */
 const LABEL_STEP = Math.PI / 12;
+/**
+ * How little of what is there a label may cover and still be clear, as a share of its half height: a length against the label's
+ * own size, so that the canvas, in its pixels, and a picture, in the page's units, take the same way (an absolute 0.05 did not:
+ * 0.05 px is nothing on the canvas, 0.05 of the page's units much of a letter in a picture).
+ */
+const CLEAR_SHARE = 0.01;
 
 /** How far from `o` a box of half size `half` stands, its middle the way `u` (a unit vector), for its nearest point to be `reach` from `o`. */
 function standOff(u: { x: number; y: number }, half: { x: number; y: number }, reach: number): number {
@@ -233,7 +239,7 @@ export function labelSpot(
         if (ox > 0 && oy > 0) hides += 2 * Math.min(ox, oy);
       }
       for (const st of sticks) hides += STICK_WEIGHT * coveredLength(box, st);
-      if (hides < 0.05) return box;
+      if (hides < CLEAR_SHARE * half.y) return box;
       if (!best || hides < best.hides) best = { box, hides };
     }
   }
@@ -1264,6 +1270,56 @@ export function stereoSpot(
   return labelSpot(o, reach, half, way, others, placed, sticks);
 }
 
+/**
+ * R, S, E and Z placed about a molecule as it is seen, in the order given - each clear of the balls, the bonds, the boxes already
+ * `placed` and those placed before it (`stereoSpot`, `stereoKept`): the one placing the canvas and a picture of it share, so that a
+ * copy has each label where the canvas has it. Each mark with its point `o` and how far out its own ball or bond reaches (`own`),
+ * all lengths in one unit - the canvas's pixels or the page's - and y down.
+ */
+export function stereoSpotsAmong(
+  marks: readonly { mark: StereoMark3D; o: { x: number; y: number }; own: number }[],
+  balls: readonly { x: number; y: number; r: number }[],
+  sticks: readonly Stick[],
+  placed: readonly LabelBox[],
+  font: number,
+  gap: number,
+  parentheses: boolean,
+): LabelBox[] {
+  const kept = [...placed];
+  return marks.map(({ mark, o, own }) => {
+    const spot = stereoSpot(mark, o, balls, sticks, kept, own, font, gap, parentheses);
+    kept.push(stereoKept(spot, font));
+    return spot;
+  });
+}
+
+/**
+ * Where the canvas places the R, S, E and Z of a molecule in 3D it shows (Molecule3DView), by key: those shown in the order they are
+ * named (`named`, `stereoMarks3d`'s) - the order a picture takes them, whatever order they came to be shown in - each clear of
+ * those before it (`stereoSpotsAmong`); those going, after them, clear of those shown and of `placed`, and no obstacle to them or to
+ * each other. The balls given as at
+ * rest (none swollen under the pointer), so that a picture made now has each label where the canvas has it.
+ */
+export function stereoSpotsShown(
+  entries: readonly { mark: StereoMark3D; leaving: boolean; o: { x: number; y: number }; own: number }[],
+  named: readonly StereoMark3D[],
+  balls: readonly { x: number; y: number; r: number }[],
+  sticks: readonly Stick[],
+  placed: readonly LabelBox[],
+  font: number,
+  gap: number,
+  parentheses: boolean,
+): Map<string, LabelBox> {
+  const order = new Map(named.map((mark, k) => [mark.key, k]));
+  const shown = entries.filter((e) => !e.leaving).sort((x, y) => (order.get(x.mark.key) ?? Infinity) - (order.get(y.mark.key) ?? Infinity));
+  const spots = new Map<string, LabelBox>();
+  const laid = stereoSpotsAmong(shown, balls, sticks, placed, font, gap, parentheses);
+  shown.forEach((e, k) => spots.set(e.mark.key, laid[k]));
+  const kept = [...placed, ...laid.map((s) => stereoKept(s, font))];
+  for (const e of entries) if (e.leaving) spots.set(e.mark.key, stereoSpot(e.mark, e.o, balls, sticks, kept, e.own, font, gap, parentheses));
+  return spots;
+}
+
 /** A stereo label's box as the next keeps clear of it: a little way off it, not just clear (`STEREO_APART`). */
 export const stereoKept = (spot: LabelBox, font: number): LabelBox => ({ ...spot, hx: spot.hx + STEREO_APART * font, hy: spot.hy + STEREO_APART * font });
 
@@ -1313,23 +1369,20 @@ export function stereoPictureSpots3d(
   const bondR = bondRadiusOf(drawn) * WORLD_PER_ANGSTROM;
   const sticks: Stick[] = [];
   if (bondR > 1e-6) for (const b of bondsAt(m, frame)) if (balls[b.a1]?.r && balls[b.a2]?.r) sticks.push({ a: balls[b.a1], b: balls[b.a2], r: bondR * mag });
-  const kept: LabelBox[] = placed.map((p) => ({ ...p, y: -p.y }));
-  const out: { x: number; y: number; text: string }[] = [];
-  for (const mark of marks) {
-    if (!mark.atoms.every((i) => i >= 0 && i < n)) continue;
-    let x = 0, y = 0, z = 0;
-    for (const i of mark.atoms) {
-      x += places[3 * i];
-      y += places[3 * i + 1];
-      z += places[3 * i + 2];
-    }
-    const o = seen(x / mark.atoms.length, y / mark.atoms.length, z / mark.atoms.length);
-    const own = (mark.atoms.length === 1 ? radii[mark.atoms[0]] : bondR) * o.k;
-    const spot = stereoSpot(mark, o, balls, sticks, kept, own, font, gap, parentheses);
-    kept.push(stereoKept(spot, font));
-    out.push({ x: spot.x, y: -spot.y, text: mark.text });
-  }
-  return out;
+  const at = marks
+    .filter((mark) => mark.atoms.every((i) => i >= 0 && i < n))
+    .map((mark) => {
+      let x = 0, y = 0, z = 0;
+      for (const i of mark.atoms) {
+        x += places[3 * i];
+        y += places[3 * i + 1];
+        z += places[3 * i + 2];
+      }
+      const o = seen(x / mark.atoms.length, y / mark.atoms.length, z / mark.atoms.length);
+      return { mark, o, own: (mark.atoms.length === 1 ? radii[mark.atoms[0]] : bondR) * o.k };
+    });
+  const spots = stereoSpotsAmong(at, balls, sticks, placed.map((p) => ({ ...p, y: -p.y })), font, gap, parentheses);
+  return spots.map((spot, k) => ({ x: spot.x, y: -spot.y, text: at[k].mark.text }));
 }
 
 /** Whether a molecule's last point, never converged, is an entry marked so (utils/io: an opened run stopped before it converged). */
