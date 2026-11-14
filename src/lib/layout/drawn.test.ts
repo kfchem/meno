@@ -877,6 +877,19 @@ describe("a wedge out of an allene's end, read once: the allene's axis, and no a
     expect(drawing({ el: "N", wedge: [0, 1, "up"] }).read.axes).toEqual([]);
   });
 
+  it("says of a ketenimine's wedge that the run's other end has one group - and of an allene's wedges at both ends, opposite, what it said", () => {
+    const keten = drawing({ el: "N", wedge: [0, 1, "up"] });
+    expect(unreadWhy(keten.atoms, keten.bonds, 0)).toBe("the other end of these double bonds has one group, so there is no axis for a wedge to state");
+    // (the allene with its far end's methyl wedged too: the way that says the opposite of the near end's wedge)
+    const opposite = (["up", "down"] as const).map((stereo) => {
+      const { atoms, bonds, far } = drawing({ wedge: [0, 1, "up"] });
+      const methyl = bonds.find((b) => b.a === far && atoms[b.b].hs === 3)!;
+      methyl.wedge = { narrow: far, stereo };
+      return { atoms, bonds, read: readStereo(atoms, bonds) };
+    }).find((x) => x.read.axes.length === 0)!;
+    expect(unreadWhy(opposite.atoms, opposite.bonds, 0)).toBe("the wedges at the allene's two ends say it turns opposite ways, or its groups are in line with it");
+  });
+
   it("reads a neighbouring centre's wedge, wide at the allene's end, as that centre's, as before", () => {
     // (the methyl at E made a centre: an F, a Cl and an H on it, its wedge to E narrow at it)
     const { atoms, bonds } = drawing({ wedge: null });

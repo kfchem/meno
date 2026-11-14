@@ -437,7 +437,20 @@ export function unreadWhy(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond
   // (an allene's end: its wedge says how the allene turns - or, wedged at both ends, the two say opposite ways)
   const doubles = (x: number) => bonds.filter((b) => b.order === 2 && (b.a === x || b.b === x));
   const run = doubles(c).map((b) => (b.a === c ? b.b : b.a)).find((m) => doubles(m).length === 2);
-  if (run != null) return "the wedges at the allene's two ends say it turns opposite ways, or its groups are in line with it";
+  if (run != null) {
+    // (its other end with one group - a ketenimine's N: the run has no axis, so the wedge has none to state)
+    const path = [c, run];
+    while (doubles(path[path.length - 1]).length === 2 && path.length <= atoms.length) {
+      const [prev, at] = [path[path.length - 2], path[path.length - 1]];
+      const next = doubles(at).map((b) => (b.a === at ? b.b : b.a)).find((x) => x !== prev);
+      if (next == null) break;
+      path.push(next);
+    }
+    const end = path[path.length - 1];
+    const groups = bonds.filter((b) => b.a !== b.b && (b.a === end || b.b === end) && b.a !== path[path.length - 2] && b.b !== path[path.length - 2]).length + atoms[end].hs;
+    if (groups < 2) return "the other end of these double bonds has one group, so there is no axis for a wedge to state";
+    return "the wedges at the allene's two ends say it turns opposite ways, or its groups are in line with it";
+  }
   const groups = around.length + atom.hs;
   if (groups > 4) return `it has ${groups} groups round it, more than the four of a tetrahedral centre`;
   if (around.length === 3 && atom.hs === 0 && !lonePairCentres(atoms, bonds)(c)) return "it has three bonds and keeps no configuration of its own, so a wedge at it states none";
