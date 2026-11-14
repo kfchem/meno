@@ -196,6 +196,31 @@ describe("readStereo", () => {
     // a few times that on a machine busy with the rest of the tests)
   }, measured(1_900));
 
+  it("puts the H a flat reader gets as far out as the drawing's bonds are long, at any scale", () => {
+    // (tetrodotoxin drawn as a solid, as above: its wedges and H for a flat reader, the drawing as it is and twice as large)
+    const s = readSmiles("C([C@@]1([C@H]2[C@@H]3[C@H](N=C(N[C@@]34[C@@H]([C@@H]1O[C@]([C@H]4O)(O2)O)O)N)O)O)O");
+    const orders = kekuleOrders(s.atoms, s.bonds);
+    const sum = s.atoms.map(() => 0);
+    s.bonds.forEach((b, i) => ([sum[b.a1], sum[b.a2]] = [sum[b.a1] + orders[i], sum[b.a2] + orders[i]]));
+    const drawn = drawing({
+      atoms: s.atoms.map((a, i) => ({ el: a.el, hs: a.hs ?? implicitHydrogens(a.el, sum[i]), ...(a.tetra ? { tetra: a.tetra } : {}) })),
+      bonds: s.bonds.map((b, i) => ({ a: b.a1, b: b.a2, order: orders[i] })),
+    });
+    const atoms = drawn.atoms.map((a, i) => ({ ...a, el: s.atoms[i]?.el ?? "H" }));
+    const once = wedgesForFlat(atoms, drawn.bonds);
+    const twice = wedgesForFlat(
+      atoms.map((a) => ({ ...a, x: 2 * a.x, y: 2 * a.y, ...(a.z != null ? { z: 2 * a.z } : {}) })),
+      drawn.bonds,
+    );
+    expect(once.hydrogens.length).toBeGreaterThan(0);
+    expect(twice.hydrogens.map((h) => h.on)).toEqual(once.hydrogens.map((h) => h.on));
+    once.hydrogens.forEach((h, i) => {
+      const c = atoms[h.on];
+      const far = (p: { x: number; y: number }, k: number) => Math.hypot(p.x - k * c.x, p.y - k * c.y);
+      expect(far(twice.hydrogens[i].at, 2)).toBeCloseTo(2 * far(h.at, 1), 6);
+    });
+  }, measured(3_800));
+
   it("reads a centre with a wedge by its wedge, whatever depth it is drawn at", () => {
     // an atom of a ring laid across another's face, behind it - gibberellic
     // acid's 3-epimer's C3: its depth is a layer, not a place in space, and

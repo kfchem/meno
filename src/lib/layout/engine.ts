@@ -32,7 +32,7 @@ import { drawnRingSets, keptFlat } from "./ringSets";
 import { schlegel, schlegelFaces } from "./schlegel";
 import { affineFit, axialOut, cageCore, flatCost, isCage, keepsConfigurations, projectCage, solidOf, templateOnBond, tiedViews, type CageView } from "./cage";
 import { ringShape } from "./conformation";
-import { readStereo, sameConfiguration, type DrawnAtom, type DrawnBond } from "./drawn";
+import { hydrogensWhereUnread, readStereo, sameConfiguration, type DrawnAtom, type DrawnBond } from "./drawn";
 import { axisWedge, placeStereo, type Stereo, type Tetrahedral } from "./stereo";
 import { etaSpins, PAIR_DEPTH, placeEta, placeUnit, unitVariants } from "./hapto";
 import type { Point } from "./geometry";
@@ -909,7 +909,10 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
   input.atoms.forEach((a, i) => a.tetra && !solid[i] && tetra.set(i, a.tetra));
   const final = new Map(x.map((v, i) => [i, { x: v, y: y[i] }]));
   // and an axis of chirality, by a wedge at an end of it
-  const stereo = placeStereo(mol, final, tetra);
+  // (a centre its wedge does not say as Meno reads wedges - left unread, or read only by luck - its
+  // H drawn in the widest gap and wedged instead: drawn.ts hydrogensWhereUnread)
+  const drawnAtoms: DrawnAtom[] = input.atoms.map((a, i) => ({ x: x[i], y: y[i], el: a.el, hs: mol.hs[i], ...(a.charge ? { charge: a.charge } : {}) }));
+  const stereo = hydrogensWhereUnread(drawnAtoms, input.bonds.map(({ a, b, order }) => ({ a, b, order })), tetra, placeStereo(mol, final, tetra), 1);
   for (const axis of input.axes ?? []) {
     const w = axisWedge(mol, final, axis);
     if (w) stereo.wedges.push(w);
