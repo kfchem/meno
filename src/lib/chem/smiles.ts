@@ -54,6 +54,50 @@ const ORGANIC = ["Cl", "Br", "B", "C", "N", "O", "P", "S", "F", "I"];
 const AROMATIC = ["b", "c", "n", "o", "p", "s"];
 const BOND_ORDER: Record<string, number> = { "-": 1, "=": 2, "#": 3, $: 4, ":": 4, "/": 1, "\\": 1 };
 
+/**
+ * The aromatic bonds (order 4) that lie in no ring of aromatic bonds - each a
+ * bridge of the graph of aromatic bonds alone - found in one walk over it,
+ * as long as the molecule is large (Tarjan's bridges: a bond is one where no
+ * path back reaches above it).
+ */
+function aromaticBridges(atoms: number, bonds: readonly SmilesBond[]): Set<number> {
+  const near: { to: number; bond: number }[][] = Array.from({ length: atoms }, () => []);
+  bonds.forEach((b, k) => {
+    if (b.order !== 4) return;
+    near[b.a1].push({ to: b.a2, bond: k });
+    near[b.a2].push({ to: b.a1, bond: k });
+  });
+  const order = new Array<number>(atoms).fill(-1);
+  const low = new Array<number>(atoms).fill(0);
+  const bridges = new Set<number>();
+  let count = 0;
+  for (let root = 0; root < atoms; root++) {
+    if (order[root] >= 0 || !near[root].length) continue;
+    // (each step: an atom, the bond it was reached by, and how far through its neighbours the walk is)
+    const stack: { at: number; via: number; next: number }[] = [{ at: root, via: -1, next: 0 }];
+    order[root] = low[root] = count++;
+    while (stack.length) {
+      const top = stack[stack.length - 1];
+      if (top.next < near[top.at].length) {
+        const { to, bond } = near[top.at][top.next++];
+        if (bond === top.via) continue;
+        if (order[to] >= 0) low[top.at] = Math.min(low[top.at], order[to]);
+        else {
+          order[to] = low[to] = count++;
+          stack.push({ at: to, via: bond, next: 0 });
+        }
+        continue;
+      }
+      stack.pop();
+      const up = stack[stack.length - 1];
+      if (!up) continue;
+      low[up.at] = Math.min(low[up.at], low[top.at]);
+      if (low[top.at] > order[up.at]) bridges.add(top.via);
+    }
+  }
+  return bridges;
+}
+
 /** A SMILES string's atoms and bonds; throws on what it cannot read. */
 export function readSmiles(text: string): Smiles {
   const atoms: SmilesAtom[] = [];
@@ -75,6 +119,8 @@ export function readSmiles(text: string): Smiles {
   // (the atoms written first, with no atom before them: their H, or lone pair, is the one looked from; and those
   // that carry a ring-closure digit themselves)
   const first = new Set<number>();
+  // (the bonds written with no symbol between two aromatic atoms, taken as aromatic for now: one in no ring is single, below)
+  const unwritten = new Set<number>();
   const closes = new Set<number>();
   const connect = (a: number, mark = "") => {
     if (prev < 0) first.add(a);
@@ -83,6 +129,7 @@ export function readSmiles(text: string): Smiles {
     if (atoms[a].hs === 1) around[a].push(-1);
     if (prev >= 0) {
       const both = atoms[prev].aromatic && atoms[a].aromatic;
+      if (pending == null && both) unwritten.add(bonds.length);
       bonds.push({ a1: prev, a2: a, order: pending ?? (both ? 4 : 1) });
       around[prev].push(a);
       if (pendingDir) directed.push({ from: prev, to: a, up: pendingDir === "/" });
@@ -122,6 +169,7 @@ export function readSmiles(text: string): Smiles {
       const open = rings.get(n);
       if (open) {
         const both = atoms[open.atom].aromatic && atoms[prev].aromatic;
+        if (pending == null && open.order == null && both) unwritten.add(bonds.length);
         bonds.push({ a1: open.atom, a2: prev, order: pending ?? open.order ?? (both ? 4 : 1) });
         around[open.atom][open.slot] = prev;
         around[prev].push(open.atom);
@@ -169,6 +217,15 @@ export function readSmiles(text: string): Smiles {
     throw new Error(`Cannot read "${c}" at ${i} in ${text}`);
   }
   if (rings.size) throw new Error(`Unclosed ring in ${text}`);
+  // An unwritten bond between two aromatic atoms is aromatic only where it is
+  // in a ring of them (OpenSMILES, *Aromaticity*): one that joins two rings
+  // - a biaryl written c1ccccc1c1ccccc1, 2,2'-bipyridine as
+  // c1ccc(nc1)c1ccccn1, or that bipyridine chelating a metal, its two rings
+  // in a ring through the metal - is single, and each ring is its own system
+  // (read as aromatic, the two were one system of twelve atoms, and two of
+  // its N were read with an H nobody wrote)
+  const bridges = unwritten.size ? aromaticBridges(atoms.length, bonds) : new Set<number>();
+  for (const k of unwritten) if (bridges.has(k)) bonds[k] = { ...bonds[k], order: 1 };
   const keepsPyramid = chiral.size
     ? lonePairCentres(
         atoms.map((a) => ({ el: a.el, charge: a.charge, hs: a.hs ?? 0 })),

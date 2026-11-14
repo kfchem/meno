@@ -15,7 +15,7 @@ const scope = self as unknown as {
 
 scope.onmessage = (e) => {
   try {
-    scope.postMessage({ kind: "done", isomers: e.data.isomers.map(asThePageShows) });
+    scope.postMessage({ kind: "done", isomers: e.data.isomers.map((c) => asThePageShows(c)) });
   } catch (err) {
     scope.postMessage({ kind: "failed", error: err instanceof Error ? err.message : String(err) });
   }

@@ -73,7 +73,7 @@ describe("why a SMILES cannot be read, in Meno's words", () => {
   });
 
   it("says an aromatic ring cannot alternate", async () => {
-    expect(await said("c1cccc1")).toContain("its aromatic ring of 5 atoms (1, 2, 3, 4 and 5) cannot have alternating double bonds");
+    expect(await said("c1cccc1")).toContain("its aromatic ring of 5 atoms (1, 2, 3, 4 and 5) cannot have alternating double bonds: is a charge or an H missing?");
   });
 
   it("says an aromatic atom is in no ring, or an element was written without its brackets", async () => {

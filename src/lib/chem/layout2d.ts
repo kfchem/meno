@@ -6,6 +6,7 @@ import { ringSidesOf } from "./aromaticSides";
 import {
   chargeText,
   implicitHydrogens,
+  setValenceOrder,
   valenceOrder,
   type AtomChem,
   type BondChem,
@@ -13,7 +14,7 @@ import {
   type StereoGroup,
 } from "./molecule";
 import { italicUnits, labelRuns, labelUnits, namesRingFirst, reversedLabel, unitRuns } from "./abbreviations";
-import { ELEMENTS } from "./elements";
+import { ELEMENTS, NOT_METALS } from "./elements";
 import { greatest, least, pushAll } from "./lists";
 import { clearRowSide, namesLaid, rowClearer } from "../layout/names";
 
@@ -403,6 +404,11 @@ export type TextItem = {
    * labels': words on the page given one (docs/EDITOR-2D.md, *Text*).
    */
   family?: string;
+  /**
+   * A ground of this colour round its letters, as the canvas sets R and S on
+   * a molecule in 3D against the balls under them (StereoInk3D's halo).
+   */
+  halo?: string;
 };
 
 /** Whether two sets of texts are drawn alike: the same letters, set the same way, in the same places. */
@@ -492,18 +498,28 @@ export function hapticRings(atoms: readonly Atom[], bonds: readonly Bond[]): num
 /**
  * The atoms, a carbon between two double bonds with its symbol drawn: the
  * middle of an allene, a ketene, CO2 or a carbodiimide, which its bonds run
- * straight through, hidden in a line as it would be (O=C=O read as O=O).
+ * straight through, hidden in a line as it would be (O=C=O read as O=O) -
+ * and the C of a carbonyl, a cyanide or an isocyanide on a metal, M-C≡O,
+ * M-C≡N, M-C≡N-R, its two bonds in one line as well: shown, the ligand
+ * reads as the CO, CN or CNR it is, its atoms atoms still. (A carbon
+ * bonded to no metal - an acylium's, a nitrile's - and one with a third
+ * bond - a bridging carbonyl's - as ever.)
  */
 export function cumulatedShown(atoms: Atom[], bonds: readonly Bond[]): Atom[] {
   const doubles = atoms.map(() => 0);
   const all = atoms.map(() => 0);
+  const tripleToON = atoms.map(() => false);
+  const toMetal = atoms.map(() => false);
+  const metal = (el: string | undefined) => !!el && ELEMENTS.some((e) => e.symbol === el) && !NOT_METALS.has(el);
   for (const b of bonds) {
-    for (const e of [b.a1, b.a2]) {
+    for (const [e, o] of [[b.a1, b.a2], [b.a2, b.a1]]) {
       all[e]++;
       if (b.order === 2) doubles[e]++;
+      if (b.order === 3 && (atoms[o]?.el === "O" || atoms[o]?.el === "N")) tripleToON[e] = true;
+      if (metal(atoms[o]?.el)) toMetal[e] = true;
     }
   }
-  return atoms.map((a, i) => (a.el === "C" && doubles[i] === 2 && all[i] === 2 ? { ...a, shown: true } : a));
+  return atoms.map((a, i) => (a.el === "C" && all[i] === 2 && (doubles[i] === 2 || (tripleToON[i] && toMetal[i])) ? { ...a, shown: true } : a));
 }
 
 function chargesAsDrawn(atoms: Atom[], bonds: readonly Bond[]): Atom[] {
@@ -617,6 +633,8 @@ export type Layout = {
   solidsImage?: { href: string; bounds: { min: Vec2; max: Vec2 } };
   /** Measurements on the molecules in 3D, drawn over them. */
   measures?: MeasureMark[];
+  /** R, S, E and Z on the molecules in 3D, written over them as the canvas writes them. */
+  solidsTexts?: TextItem[];
   bounds: { min: Vec2; max: Vec2 };
   /**
    * Pixels per coordinate unit this layout was built for. Sizes the layout
@@ -1280,8 +1298,12 @@ function baseCut(
   // draw the end out into a spike. Square across the wedge is what carries
   // such a bond out of it, and the other side still follows its own bond.
   if (Math.abs(vcross(dir, axis)) < rule.minSin) {
+    // (past the atom by the bond's own line's half width, so that its butt end is under the cut: never by its outer lines' spread -
+    // a triple bond's, a nitrile's - which drove the wedge's end into the bond, a spike between its outer lines)
+    const lines = neighbours[key].lines;
+    const own = half - Math.max(0, ...lines.map((o) => Math.abs(o)));
     return {
-      on: vadd(atom, vscale(axis, -half)),
+      on: vadd(atom, vscale(axis, -own)),
       dir: vperp(axis),
       key,
       // square across the axis: the corner only has to come back as far as
@@ -2371,6 +2393,8 @@ export function buildTextLabels(
   const band = Math.sin(((opts.hydrogenBandDeg ?? 10) * Math.PI) / 180);
   const sideways = Math.cos(((opts.symbolCentringDeg ?? 25) * Math.PI) / 180);
   const orderSum = new Map<number, number>();
+  // (toward a valence a file sets: a metal's coordination bonds counted, as the file counts them - molecule `setValenceOrder`)
+  const setSum = new Map<number, number>();
   const away = new Map<number, Vec2>();
   const bonded = new Set<number>();
   // which sides of each atom its bonds leave from, outside the vertical band
@@ -2406,6 +2430,8 @@ export function buildTextLabels(
     const order = valenceOrder(kind);
     note(b.a1, b.a2, order, valenceOrder(kind, atoms[b.a1]?.el));
     note(b.a2, b.a1, order, valenceOrder(kind, atoms[b.a2]?.el));
+    setSum.set(b.a1, (setSum.get(b.a1) ?? 0) + setValenceOrder(kind, atoms[b.a1]?.el));
+    setSum.set(b.a2, (setSum.get(b.a2) ?? 0) + setValenceOrder(kind, atoms[b.a2]?.el));
   }
 
   const hapticCentres = new Set<number>();
@@ -2421,6 +2447,13 @@ export function buildTextLabels(
     .map((b) => Math.hypot(atoms[b.a1].x - atoms[b.a2].x, atoms[b.a1].y - atoms[b.a2].y))
     .filter((d) => d > 1e-9)
     .sort((p, q) => p - q);
+  // (each atom's H as its label writes it: by a valence the file sets, what its bonds leave of it - else by its own valence)
+  const hydrogensAt = (a: Atom, i: number) =>
+    opts.showImplicitHydrogens === false
+      ? 0
+      : a.valence != null
+        ? Math.max(0, a.valence - (setSum.get(i) ?? 0))
+        : implicitHydrogens(a.el, orderSum.get(i) ?? 0, a.charge ?? 0, a.radical);
   const names = namesLaid(
     {
       x: atoms.map((a) => a.x),
@@ -2428,13 +2461,7 @@ export function buildTextLabels(
       edges: bonds.filter((b) => atoms[b.a1] && atoms[b.a2]).map((b) => [b.a1, b.a2] as const),
       elements: atoms.map((a) => a.el),
       // (each label's H, counted as the label writes it below)
-      hydrogens: atoms.map((a, i) =>
-        opts.showImplicitHydrogens === false
-          ? 0
-          : a.valence != null
-            ? Math.max(0, a.valence - (orderSum.get(i) ?? 0))
-            : implicitHydrogens(a.el, orderSum.get(i) ?? 0, a.charge ?? 0, a.radical),
-      ),
+      hydrogens: atoms.map(hydrogensAt),
     },
     lengths.length ? lengths[lengths.length >> 1] : 1,
   );
@@ -2517,13 +2544,7 @@ export function buildTextLabels(
       });
       continue;
     }
-    const h =
-      opts.showImplicitHydrogens === false
-        ? 0
-        : a.valence != null
-          ? // (a valence the file sets: what the bonds leave of it)
-            Math.max(0, a.valence - (orderSum.get(i) ?? 0))
-          : implicitHydrogens(a.el, orderSum.get(i) ?? 0, a.charge ?? 0, a.radical);
+    const h = hydrogensAt(a, i);
     const centreSymbol =
       straightLeft.has(i) && straightRight.has(i) ? { centreSymbol: true } : {};
     if (h <= 0) {
@@ -4799,6 +4820,9 @@ export function fontStack(family: string): string {
 }
 
 /** A label as the canvas draws it: set by `placeLabel`, run by run. */
+/** How far a text's halo reaches out round its letters, in ems of them: as the canvas's (StereoInk3D, its outline's width). */
+export const HALO_EMS = 0.12;
+
 function svgLabel(
   t: TextItem,
   fontSize: number,
@@ -4807,14 +4831,16 @@ function svgLabel(
 ): string {
   const fontFamily = xmlAttr(fontStack(set.fontFamily ?? "Arial"));
   let out = "";
-  for (const run of placeLabel(t, fontSize, set)) {
-    // (a mark is drawn with the lines and shapes)
-    if (run.mark) continue;
-    out +=
-      `<text x="${run.x}" y="${-run.y}" font-family="${fontFamily}"` +
-      ` font-size="${run.size}"${run.italic ? ' font-style="italic"' : ""}${run.bold ? ' font-weight="bold"' : ""} fill="${xmlAttr(svgColor(run.color, fill))}" stroke="none"` +
-      ` text-anchor="start">${escapeXml(run.text)}</text>`;
-  }
+  const runs = placeLabel(t, fontSize, set).filter((run) => !run.mark);
+  const text = (run: (typeof runs)[number], paint: string) =>
+    `<text x="${run.x}" y="${-run.y}" font-family="${fontFamily}"` +
+    ` font-size="${run.size}"${run.italic ? ' font-style="italic"' : ""}${run.bold ? ' font-weight="bold"' : ""} ${paint}` +
+    ` text-anchor="start">${escapeXml(run.text)}</text>`;
+  // (a halo: a stroke round the letters, as far out round them as the canvas's outline - HALO_EMS of their size - every run's
+  // first, then every run's letters, so that no halo lies over the letters of the run before it: one outline, as the canvas sets it)
+  if (t.halo) for (const run of runs) out += text(run, `fill="none" stroke="${xmlAttr(svgColor(t.halo, "white"))}" stroke-width="${HALO_EMS * 2 * run.size}" stroke-linejoin="round"`);
+  // (a mark is drawn with the lines and shapes)
+  for (const run of runs) out += text(run, `fill="${xmlAttr(svgColor(run.color, fill))}" stroke="none"`);
   return out;
 }
 
@@ -4923,6 +4949,10 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
     ? `<image href="${xmlAttr(img.href)}" x="${img.bounds.min.x}" y="${-img.bounds.max.y}"` +
       ` width="${img.bounds.max.x - img.bounds.min.x}" height="${img.bounds.max.y - img.bounds.min.y}" preserveAspectRatio="none" />`
     : svgSolids(layout.solids ?? []);
+  // (R, S, E and Z on them, over them)
+  for (const t of layout.solidsTexts ?? []) {
+    s += svgLabel(t, t.ownSize ? toWorld(t.fontPx, zoom, opts.units) : fontSize, t.family ? { ...set, fontFamily: t.family } : set, svgColor(t.color, fill));
+  }
   // (with the molecules an image, their measurements' lines and fans are in
   // it, in depth among the atoms: only the values are written over it)
   for (const m of layout.measures ?? []) s += svgMeasure(m, set.fontFamily, !img);

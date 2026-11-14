@@ -1,12 +1,22 @@
 import { implicitHydrogens } from "../chem/molecule";
-import { kekuleOrders } from "../chem/kekulize";
+import { aromaticRefusal, kekuleOrders } from "../chem/kekulize";
+import { typedRingRefused } from "../chem/smilesWhy";
 import { readSmiles } from "../chem/smiles";
 import type { LayoutInput } from "./perceive";
 import { openDoubleBonds } from "./drawn";
 
-/** A molecule as its SMILES gives it, for the layout engine: its bonds Kekulé, each atom's H, each centre's configuration, and each end of a double bond it leaves open kept straight on. */
+/**
+ * A molecule as its SMILES gives it, for the layout engine: its bonds
+ * Kekulé, each atom's H, each centre's configuration, and each end of a
+ * double bond it leaves open kept straight on. Throws where it does not
+ * read - its aromatic rings too, where they cannot be given single and
+ * double bonds as written (lib/chem/kekulize `aromaticRefusal`), in
+ * smilesWhy's words.
+ */
 export function smilesInput(smiles: string): LayoutInput {
   const s = readSmiles(smiles);
+  const refused = aromaticRefusal(s.atoms, s.bonds);
+  if (refused) throw new Error(`This SMILES could not be read: ${typedRingRefused(refused)}`);
   const orders = kekuleOrders(s.atoms, s.bonds);
   const sum = s.atoms.map(() => 0);
   s.bonds.forEach((b, i) => {
