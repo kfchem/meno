@@ -3,7 +3,7 @@ import { identityInputOf, identityOfDrawn } from "../chem/identityOf";
 import type { Model } from "../store/types";
 import { drawnFromSmiles } from "../utils/smilesDrawn";
 import { chairsIn } from "./chair";
-import { CHAIR_CHANGED, chairFromFlat, NOT_DRAWN } from "./fromFlat";
+import { CHAIR_CHANGED, chairFromFlat, groupKind, NOT_DRAWN } from "./fromFlat";
 import { measured } from "../../../../testing/timeouts";
 
 // *Draw as chair* (docs/EDITOR-2D.md, *Projections*): the known answers of the brief, each a flat drawing of a SMILES as Clean-up draws it.
@@ -238,5 +238,123 @@ describe("Draw as chair on a page", () => {
     expect(st().drawAsChair(bad)).toBe(CHAIR_CHANGED);
     expect(doc.history().undoDepth).toBe(depth);
     expect(doc.getState().model).toBe(flat);
+  }, measured(3000));
+});
+
+describe("which chair, by the kind of each group (published conformational energies, A-values: their order only)", () => {
+  const lying = (m: Model, k: number): Model => ({ ...m, atoms: m.atoms.map((a) => ({ ...a, x: k & 1 ? -a.x : a.x, y: k & 2 ? -a.y : a.y })) });
+  /** Of a chair, whether the group bound through atom `g` stands axial: straight up or down from its ring atom. */
+  const axialAt = (m: Model, g: number) => {
+    const ring = new Set(chairsIn(m, new Set(m.atoms.map((a) => a.id)))[0]);
+    const b = m.bonds.find((x) => (x.a === g && ring.has(x.b)) || (x.b === g && ring.has(x.a)))!;
+    const r = b.a === g ? b.b : b.a;
+    const at = new Map(m.atoms.map((a) => [a.id, a]));
+    return Math.abs(at.get(g)!.x - at.get(r)!.x) < 1e-6;
+  };
+  /** A cis-1,4 pair, the group `first` written before the ring and `second` on it: the first group's atom bound to the ring, and the drawing. */
+  const pair = (first: string, second: string) => {
+    const smiles = `${first}[C@@H]1CC[C@H](${second})CC1`;
+    const flat = drawnFromSmiles(smiles);
+    // (atoms numbered as the SMILES writes them: the first group's come first, the ring's first atom after them - and the one of the
+    //  group's bound to it)
+    const firstRing = drawnFromSmiles(first).atoms.length + 1;
+    const g = flat.bonds.flatMap((x) => (x.a === firstRing && x.b < firstRing ? [x.b] : x.b === firstRing && x.a < firstRing ? [x.a] : []))[0];
+    return { smiles, flat, g, ringAtom: firstRing };
+  };
+
+  it("puts the first of each cis-1,4 pair equatorial and the second axial, however the flat drawing lies", () => {
+    const cases: [string, string][] = [
+      ["C", "Cl"],
+      ["C", "Br"],
+      ["C", "F"],
+      ["C", "OS(=O)(=O)c2ccc(C)cc2"],
+      ["C", "C#N"],
+      ["C", "O"],
+      ["CC(C)(C)", "OS(=O)(=O)c2ccc(C)cc2"],
+      ["CC(C)(C)", "O"],
+      ["CC(C)", "C"],
+      ["CC", "C"],
+      ["c2ccccc2", "C"],
+      ["c2ccccc2", "F"],
+      ["N", "O"],
+      ["OC(=O)", "O"],
+      ["C", "C(=O)OC"],
+      ["C", "O[Si](C)(C)C(C)(C)C"],
+      ["CC(C)(C)", "O[Si](C)(C)C(C)(C)C"],
+      ["CC(C)(C)", "OC(=O)c2ccccc2"],
+      // (the cases that must not come out wrong)
+      ["CO", "C#N"],
+      ["O", "C#C"],
+    ];
+    for (const [first, second] of cases) {
+      const { smiles, flat, g, ringAtom } = pair(first, second);
+      for (let k = 0; k < 4; k++) {
+        const chair = asChair(lying(flat, k), ringAtom);
+        expect(axialOf(chair), `${smiles} ${k}`).toMatchObject({ axial: 1 });
+        expect(axialAt(chair, g), `${smiles} ${k}: the first group axial`).toBe(false);
+      }
+    }
+  }, measured(3000));
+
+  it("puts an axial tert-butyl after any count of small groups axial; a CF3 by its kind among the rest", () => {
+    // (1-tert-butyl-2,5-difluoro, and its dimethyl relative: the tert-butyl equatorial, the two others axial)
+    for (const smiles of ["CC(C)(C)[C@H]1[C@@H](F)CC[C@H](F)C1", "CC(C)(C)[C@H]1[C@@H](C)CC[C@H](C)C1"]) {
+      const flat = drawnFromSmiles(smiles);
+      const chair = asChair(flat, 5);
+      expect(axialAt(chair, 2), smiles).toBe(false);
+      expect(axialOf(chair), smiles).toMatchObject({ axial: 2 });
+    }
+    // (the same with a CF3 in the tert-butyl's place: no tertiary alkyl, so the fewer axial - the CF3 axial, the methyls equatorial)
+    const cf3 = asChair(drawnFromSmiles("FC(F)(F)[C@H]1[C@@H](C)CC[C@H](C)C1"), 5);
+    expect(axialAt(cf3, 2)).toBe(true);
+    expect(axialOf(cf3)).toMatchObject({ axial: 1 });
+  }, measured(3000));
+});
+
+describe("a group's kind on a ring, by the atom bound to it", () => {
+  it("is as the table has it, each kind's examples - and the default for an atom it does not name", () => {
+    // (each group on cyclohexane's atom 1 - written first, so its atom bound to the ring is the one before the ring's first atom)
+    const kind = (first: string) => {
+      const m = drawnFromSmiles(`${first}C1CCCCC1`);
+      const ring = drawnFromSmiles(first).atoms.length + 1;
+      const x = m.bonds.flatMap((b) => (b.a === ring && b.b < ring ? [b.b] : b.b === ring && b.a < ring ? [b.a] : []))[0];
+      // (the phenyl's ring carbons aromatic, as the core's rule reads them)
+      const aromatic = new Set(first.startsWith("c") ? m.atoms.filter((a) => a.id < ring).map((a) => a.id) : []);
+      return groupKind(m, x, ring, aromatic);
+    };
+    const table: [string, number][] = [
+      ["CC(C)(C)", 5],
+      ["FC(F)(F)", 5],
+      ["CC(C)", 4],
+      ["c2ccccc2", 4],
+      ["C[Si](C)(C)", 4],
+      ["c2ccccc2S(=O)(=O)", 4],
+      ["C", 3],
+      ["CC", 3],
+      ["BrC", 3],
+      ["C=C", 2],
+      ["OC(=O)", 2],
+      ["N", 2],
+      ["CN(C)", 2],
+      ["[O-][N+](=O)", 2],
+      ["c2ccccc2S(=O)", 2],
+      ["O", 1],
+      ["CO", 1],
+      ["CC(=O)O", 1],
+      ["S", 1],
+      ["CS", 1],
+      ["F", 0],
+      ["Cl", 0],
+      ["Br", 0],
+      ["I", 0],
+      ["N#C", 0],
+      ["C#C", 0],
+      ["[C-]#[N+]", 0],
+      ["O=C=N", 0],
+      // (an atom the table does not name: the default, with no measured basis)
+      ["CP(C)", 2],
+      ["OB(O)", 2],
+    ];
+    for (const [first, k] of table) expect(kind(first), first).toBe(k);
   }, measured(3000));
 });

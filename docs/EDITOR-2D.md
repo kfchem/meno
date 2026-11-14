@@ -555,9 +555,17 @@ on a page); the Newman projection follows.
   own places), what hangs from it carried as drawn, the ring's wedges gone (its configuration is in the depth now), as one step; *Flip chair*
   gives the other chair, *Draw flat* or Undo the flat drawing again. Which of the two chairs is drawn is this tool's convention, not a rule of
   any text and no statement of the favoured conformer (1-methyl-1-phenylcyclohexane comes out phenyl equatorial; 5 of the 16
-  D-aldohexopyranoses, alpha-D-ido and alpha-D-altro among them, come out 1C4, a CH2OH counting as one group like an OH): the one with fewer groups axial; a tie, the one whose axial group is the smaller by its non-hydrogen atoms (cis-4-tert-
-  butylcyclohexanol: its tert-butyl equatorial, its OH axial); still tied, the group whose first atom ranks lowest in the canonical order
-  equatorial. It lies as near to the flat drawing as it can, a tie to form 1. A pyranose's ring - its ring O beside a carbon carrying an O
+  D-aldohexopyranoses, alpha-D-ido and alpha-D-altro among them, come out 1C4, a CH2OH counting as one group like an OH): each group given a kind by the atom bound to the ring, ordered after published conformational energies (A-values) -
+  no value of them is in Meno, only their order: 5, a carbon of four single bonds and no H (tert-butyl, CF3); 4, one with one H, an
+  aromatic carbon, Si, an S with two S=O (isopropyl, phenyl, SiMe3, SO2Ph); 3, one with two or three H (methyl, ethyl, CH2OTs); 2, a
+  carbon with a double bond, an N with single bonds only or a nitro N, an S with one S=O (CO2H, CO2CH3, NH2, NO2) - and any atom not
+  named here (P, B, Se, an azide's N, an aromatic N), a default with no measured basis; 1, O and an S with no S=O (OH, OTs, OSiMe3,
+  SMe); 0, a halogen, a carbon with a triple bond, an N whose one other neighbour is a carbon bound to it by a double or triple bond, Hg
+  (F, Cl, CN, ethynyl, NCO). The chair drawn is the first of: fewer tertiary alkyl groups axial (kind 5 with three carbons beside it -
+  tert-butyl, not CF3 or CMe2OH); fewer groups axial; the axial groups' kinds, the smaller axial; their sizes by their non-hydrogen
+  atoms; the group whose first atom ranks lowest in the canonical order equatorial. So cis-4-tert-butylcyclohexanol, its tosylate, its
+  TBS ether and its benzoate have the tert-butyl equatorial; cis-4-methylcyclohexyl chloride its methyl equatorial; 1-tert-butyl-
+  2,5-difluorocyclohexane the tert-butyl equatorial though the two F go axial. It lies as near to the flat drawing as it can, a tie to form 1. A pyranose's ring - its ring O beside a carbon carrying an O
   outside the ring on a single bond - lies with that O behind and that carbon at the right-hand end, in either chair (McNaught 1996, 2-Carb-7,
   Chart III): so a pyranose in its 1C4 chair is drawn with its up end at the right, not as form 1, as the chart draws it. Where both carbons
   beside the ring O carry one (a 2,6-dialkoxyoxane), the ring lies as any other. A ring centre the drawing leaves open keeps it open: its group

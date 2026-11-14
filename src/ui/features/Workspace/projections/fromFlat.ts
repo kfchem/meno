@@ -4,10 +4,13 @@
  * of each group carried with it as drawn. The configuration is the one the reader reads from the flat drawing (Brecher 2006, ST-0.3, ST-1.10);
  * nothing else is taken from it. Pure: the model in, the atoms and bonds to change out.
  *
- * Which of the two chairs is drawn is no rule of any text: it is this tool's convention, the one with fewer groups axial - a tie: the one
- * whose axial group is the smaller, by its non-hydrogen atoms, so cis-4-tert-butylcyclohexanol has its tert-butyl equatorial and its OH
- * axial; still tied, the group whose first atom ranks lowest in the canonical order equatorial - lying as near to the flat drawing as it
- * can, a tie to form 1 (ST-3.1: from above and from the right). A pyranose's ring - its ring O beside a carbon that carries an O outside
+ * Which of the two chairs is drawn is no rule of any text: it is this tool's convention, by the KIND of each group - the atom bound to
+ * the ring (`groupKind`), ordered after published conformational energies (A-values), with no value of them here - the first of: fewer
+ * axial tertiary alkyl groups (a carbon of four single bonds whose three other neighbours are carbons: an axial tert-butyl costs more
+ * than two small groups axial); fewer groups axial; the axial groups' kinds, largest first, the smaller axial; their sizes by their
+ * non-hydrogen atoms; the group whose first atom ranks lowest in the canonical order equatorial. So cis-4-tert-butylcyclohexanol and its
+ * tosylate both have the tert-butyl equatorial. It lies as near to the flat drawing as it can, a tie to form 1 (ST-3.1: from above and
+ * from the right). A pyranose's ring - its ring O beside a carbon that carries an O outside
  * the ring, on a single bond - lies with that O at the back and that carbon at the right-hand end (McNaught 1996, 2-Carb-7, Chart III), in
  * either chair: so a pyranose in its 1C4 chair is the picture with its up end at the right, not form 1. The chart draws it so; it is not to
  * be mended to form 1. Where both carbons beside the ring O carry one (a 2,6-dialkoxyoxane), that rule does not choose, and the ring lies
@@ -19,12 +22,70 @@
  * its group equatorial, on a wavy bond.
  */
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
+import { aromaticIn } from "../../../../lib/chem/aromaticity";
+import { implicitHydrogens } from "../../../../lib/chem/molecule";
+import { smallestRings } from "../../../../lib/layout/rings";
 import { stereoUnitsOnly } from "../../../../lib/chem/identity";
 import { canonicalRanks } from "../../../../lib/layout/canonical";
 import type { Tetrahedral } from "../../../../lib/layout/stereo";
 import { identityInputOf } from "../chem/identityOf";
 import type { Atom, Bond, Model } from "../store/types";
 import { chairDrawing, FIRST_FORM, ringAlone, seenPlaces, type ChairDrawing } from "./chair";
+
+/**
+ * A group's kind on a ring, by the atom X bound to the ring (`x`, its ring atom `ring`): 5, a carbon of four single bonds and no H
+ * (tert-butyl, CF3); 4, a carbon of four single bonds and one H, an aromatic carbon, Si, an S carrying two S=O; 3, a carbon of four
+ * single bonds and two or three H; 2, a carbon with a double bond, an N with single bonds only or a nitro N, an S with one S=O - and any
+ * atom not named here (P, B, Se, an azide's N, an aromatic N: that default has no measured basis); 1, an O, an S with no S=O; 0, a
+ * halogen, a carbon with a triple bond, an N whose one other neighbour is a carbon bound to it by a double or a triple bond (NC, NCO,
+ * NCS), Hg. A charged atom takes its element's kind. Ordered after published conformational energies (A-values): only the order here.
+ */
+export function groupKind(part: Model, x: number, ring: number, aromatic: ReadonlySet<number>): number {
+  const at = new Map(part.atoms.map((a) => [a.id, a]));
+  const a = at.get(x);
+  if (!a) return 2;
+  const links = part.bonds.filter((b) => b.a === x || b.b === x).map((b) => ({ to: b.a === x ? b.b : b.a, order: b.order }));
+  const other = links.filter((l) => l.to !== ring);
+  const toO = (order: number) => other.filter((l) => l.order === order && at.get(l.to)?.el === "O").length;
+  switch (a.el) {
+    case "F":
+    case "Cl":
+    case "Br":
+    case "I":
+    case "Hg":
+      return 0;
+    case "O":
+      return 1;
+    case "Si":
+      return 4;
+    case "S": {
+      const so = toO(2);
+      return so >= 2 ? 4 : so === 1 ? 2 : 1;
+    }
+    case "N": {
+      // (one other neighbour, a carbon, bound by a double or a triple bond: an isocyanide, an isocyanate, an isothiocyanate)
+      if (other.length === 1 && other[0].order >= 2 && at.get(other[0].to)?.el === "C") return 0;
+      return 2;
+    }
+    case "C": {
+      if (links.some((l) => l.order === 3)) return 0;
+      if (aromatic.has(x)) return 4;
+      if (links.some((l) => l.order !== 1)) return 2;
+      const sum = links.length;
+      const hs = implicitHydrogens("C", sum, a.charge ?? 0, a.radical) + links.filter((l) => at.get(l.to)?.el === "H").length;
+      return hs === 0 ? 5 : hs === 1 ? 4 : 3;
+    }
+    default:
+      return 2;
+  }
+}
+
+/** Whether an axial group counts first, before the count of axial groups: a tertiary alkyl - kind 5, its three other neighbours carbons. */
+export function tertiaryAlkyl(part: Model, x: number, ring: number, aromatic: ReadonlySet<number>): boolean {
+  if (groupKind(part, x, ring, aromatic) !== 5) return false;
+  const others = part.bonds.filter((b) => (b.a === x || b.b === x) && b.a !== ring && b.b !== ring).map((b) => (b.a === x ? b.b : b.a));
+  return others.length === 3 && others.every((o) => part.atoms.find((a) => a.id === o)?.el === "C");
+}
 
 /** What *Draw as chair* changes: the atoms moved (with their depth and flags) and the bonds whose look changes, whole. */
 export type FromFlat = { atoms: Atom[]; bonds: Bond[] };
@@ -153,6 +214,18 @@ export function chairFromFlat(part: Model, id: number): FromFlat | { refused: st
   // (a group's non-hydrogen atoms, what hangs from it counted: of chairs with as many groups axial, the one whose axial groups are the
   //  smaller; still tied, the group whose first atom ranks lowest in the canonical order equatorial)
   const heavy = (r: number, g: number) => hanging(r, g).filter((h) => at.get(h)!.el !== "H").length;
+  // (each group's kind, by the atom bound to the ring: the core's aromatic rule asked of the structure's rings)
+  const index = new Map(part.atoms.map((a, i) => [a.id, i]));
+  const aromatic = (() => {
+    const edges = part.bonds.map((b) => [index.get(b.a)!, index.get(b.b)!] as const);
+    const rings = smallestRings(part.atoms.length, edges);
+    const inner = aromaticIn(
+      part.atoms.map((a) => ({ el: a.el, charge: a.charge })),
+      part.bonds.map((b) => ({ a: index.get(b.a)!, b: index.get(b.b)!, order: b.order })),
+      rings,
+    );
+    return new Set([...inner].map((i) => part.atoms[i].id));
+  })();
   const allGroups = [...groups.values()].flat();
   const lowest = allGroups.length ? allGroups.reduce((m, g) => (ranks.get(g)! < ranks.get(m)! ? g : m)) : undefined;
   const ways: Way[] = [];
@@ -171,6 +244,8 @@ export function chairFromFlat(part: Model, id: number): FromFlat | { refused: st
           let axial = 0;
           const onAxial = new Set<number>();
           const axialSizes: number[] = [];
+          const axialKinds: number[] = [];
+          let tertiary = 0;
           let fits = true;
           for (const r of ring) {
             const free = seenPlaces(d, k.get(r)!);
@@ -213,6 +288,8 @@ export function chairFromFlat(part: Model, id: number): FromFlat | { refused: st
               if (at.get(onAx)!.el !== "H") {
                 axial++;
                 axialSizes.push(heavy(r, onAx));
+                axialKinds.push(groupKind(part, onAx, r, aromatic));
+                if (tertiaryAlkyl(part, onAx, r, aromatic)) tertiary++;
               }
             }
           }
@@ -229,9 +306,10 @@ export function chairFromFlat(part: Model, id: number): FromFlat | { refused: st
             pyranose = right && behind ? 0 : 1;
           }
           // (the axial groups' sizes, largest first, padded to six: compared place by place, the smaller wins)
-          const sizes = [...axialSizes.sort((p, q) => q - p), 0, 0, 0, 0, 0, 0].slice(0, 6);
+          // (the axial groups' kinds and sizes, largest first, padded to six: compared place by place, the smaller wins)
+          const padded = (xs: number[]) => [...xs.sort((p, q) => q - p), -1, -1, -1, -1, -1, -1].slice(0, 6);
           const tie = lowest != null && onAxial.has(lowest) ? 1 : 0;
-          ways.push({ d, at: k, places, wavy, key: [axial, ...sizes, tie, pyranose, Math.round(moved * 1e6) / 1e6, form === FIRST_FORM ? 0 : 1] });
+          ways.push({ d, at: k, places, wavy, key: [tertiary, axial, ...padded(axialKinds), ...padded(axialSizes), tie, pyranose, Math.round(moved * 1e6) / 1e6, form === FIRST_FORM ? 0 : 1] });
         }
       }
     }
