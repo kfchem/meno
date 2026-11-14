@@ -143,3 +143,24 @@ describe("how the calculations' list stands", () => {
     expect(stepsMost(2)).toBe(CALC_MOST - 2 * CALC_ROW);
   });
 });
+
+describe("Quick Add's Calculations rows", () => {
+  const STEPS = [
+    { by: "tight", name: "Tight", steps: [{ kind: "optimise" as const, name: "Optimise", icon: "curve" as const }] },
+    { by: "meno", name: "Meno", steps: [{ kind: "energy" as const, name: "Energy", icon: "level" as const }] },
+  ];
+  const html = (wired: boolean, steps = STEPS) =>
+    renderToString(
+      <QuickAdd x={10} y={10} within={{ width: 800, height: 600 }} wired={wired} steps={steps} onChoose={none} onChain={none} onArrow={none} onShape={none} onSmiles={async () => {}} onStep={none} onClose={none} />,
+    );
+
+  it("are not made as Quick Add opens shut on them: its first frame holds only what shows", () => {
+    expect(html(false)).not.toContain(">Optimise<");
+    expect(html(false)).not.toContain("No step added takes this");
+  });
+
+  it("are made at once where Quick Add opens on them, from a wire: the steps, or the words that there are none", () => {
+    expect(html(true)).toContain(">Optimise<");
+    expect(html(true, [])).toContain("No step added takes this");
+  });
+});
