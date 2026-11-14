@@ -557,7 +557,6 @@ function WorkspaceContent({
         const declared = rolePlugin("conformers")?.roleOptions.conformers ?? [];
         const options = valuesOf(declared, useAppSettings.getState().options[roleOptionsRole("conformers")]);
         const made: Parameters<ReturnType<typeof store.getState>["riseMolecules3d"]>[0] = [];
-        let allInView = true;
         // (where the rows made lie: shown, where they are not seen whole - utils/viewShow)
         let made3d: { x0: number; x1: number; y0: number; y1: number } | null = null;
         // (what they keep clear of: the molecules in 3D there already, as they are seen now - and each row made)
@@ -594,7 +593,6 @@ function WorkspaceContent({
             solids.push(row.box);
             made3d = made3d ? { x0: Math.min(made3d.x0, row.box.x0), x1: Math.max(made3d.x1, row.box.x1), y0: Math.min(made3d.y0, row.box.y0), y1: Math.max(made3d.y1, row.box.y1) } : row.box;
           }
-          allInView &&= row.inView;
           ms.forEach((m, i) =>
             made.push({ m: { ...m, at: row.at[i] }, turn: turned[i].turn, from: turned[i].start, flat: turned[i].flat }),
           );
@@ -615,8 +613,11 @@ function WorkspaceContent({
           replacing ? [replacing.id] : [],
           growths.length ? key : undefined,
         );
-        // (with no room for them in view, the view goes to them - along, or out as little as needed)
-        if (!allInView && made3d) store.getState().requestShow(made3d);
+        // (the drawing and what was made of it, together: where either lies outside the view, the view eases to take both in -
+        //  along, or out as little as needed - as Fit to content would; nowhere where both are seen whole: utils/viewShow)
+        const drawn = blocks.map((b) => boxOf(b.part)).reduce((u, b) => ({ x0: Math.min(u.x0, b.x0), x1: Math.max(u.x1, b.x1), y0: Math.min(u.y0, b.y0), y1: Math.max(u.y1, b.y1) }));
+        const both = made3d ? { x0: Math.min(made3d.x0, drawn.x0), x1: Math.max(made3d.x1, drawn.x1), y0: Math.min(made3d.y0, drawn.y0), y1: Math.max(made3d.y1, drawn.y1) } : drawn;
+        if (!replacing) store.getState().requestShow(both);
         if (!growths.length) return;
         // (each stereoisomer's search goes on, in turn: what it brings shown as it lands, over what the page holds - the view's
         //  until it ends, then written into the document once - docs/WORKSPACE.md, *As its search goes on*)
