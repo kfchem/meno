@@ -436,16 +436,29 @@ export function metalHub(mol: Molecule, rings: number[][]): { at: number; step: 
     // (each order of the chains round the six spokes, each but the first either way round, with the free spokes - the metal's other
     // ligands' - shared out among the gaps between them in every way: the arrangement that reads best kept, and Clean-up's own
     // check keeping which donors are opposite as drawn; -1 a free spoke)
+    // (a chain of three - a tridentate - also meridional: its two outer donors on one line, a free spoke between its middle donor and
+    // one end, so that the middle stands 60 degrees from one end and 120 from the other; laid flat round the metal, a terpyridine or a
+    // pincer has no other way - CHEM, the brief's point 2)
+    const waysOf = (c: number[]): number[][] => {
+      const turned = c.length > 1 ? [c, [...c].reverse()] : [c];
+      if (c.length !== 3) return turned;
+      return turned.flatMap((w) => [w, [w[0], w[1], -1, w[2]]]);
+    };
     const spread = (left: number[][], acc: number[], free: number) => {
       if (!left.length) return void orders.push([...acc, ...Array<number>(free).fill(-1)]);
       left.forEach((c, i) => {
         const rest = left.filter((_, j) => j !== i);
-        for (const way of c.length > 1 ? [c, [...c].reverse()] : [c]) {
-          for (let g = 0; g <= free; g++) spread(rest, [...acc, ...Array<number>(g).fill(-1), ...way], free - g);
+        for (const way of waysOf(c)) {
+          const uses = way.filter((d) => d < 0).length;
+          if (uses > free) continue;
+          for (let g = 0; g <= free - uses; g++) spread(rest, [...acc, ...Array<number>(g).fill(-1), ...way], free - uses - g);
         }
       });
     };
-    spread(chains.slice(1), chains[0], 6 - n);
+    for (const first of waysOf(chains[0])) {
+      const uses = first.filter((d) => d < 0).length;
+      if (uses <= 6 - n) spread(chains.slice(1), first, 6 - n - uses);
+    }
     return { at, step, orders };
   }
   go(chains.slice(1), chains[0]);
