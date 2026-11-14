@@ -3,7 +3,7 @@ import { isElementSymbol } from "../../../../lib/roles/molblock";
 import type { Model } from "../store/types";
 import { drawnFromSmiles } from "../chem/testdata/identityCases";
 import { drawnKey } from "../workflow/entries";
-import { pageIndex, signatureOf } from "./drawnLink";
+import { linkOf, pageIndex, signatureOf } from "./drawnLink";
 
 /** signatureOf as it was before it read through the drawing's index (`pageIndex`): what it gives now is held to it. */
 function signatureBefore(model: Model, ids: Iterable<number>): string {
@@ -88,6 +88,9 @@ const haptic: Model = {
   ] as never,
 };
 
+/** A signature's atoms and bonds, its configurations (`configurationsOf`) left off: what it was before they were in it. */
+const atomsAndBonds = (key: string) => key.split(",|,").slice(0, 2).join(",|,");
+
 describe("a drawn structure's signature, read through the drawing's index", () => {
   it("is what it was, structure by structure, on a page of many - stars, labels, wedges, charges, masses and all", () => {
     const { model, structures } = page(
@@ -97,14 +100,14 @@ describe("a drawn structure's signature, read through the drawing's index", () =
       drawnFromSmiles("C1CC[N+](C)(C)CC1.[Cl-]"),
       drawnFromSmiles("OC1=CC=CC=C1"),
     );
-    for (const ids of structures) expect(signatureOf(model, ids)).toBe(signatureBefore(model, ids));
+    for (const ids of structures) expect(atomsAndBonds(signatureOf(model, ids))).toBe(signatureBefore(model, ids));
     // (a label bonded to it but not asked for - Cp on the iron - and a star: reached as before)
     const iron = structures[2].filter((id) => model.atoms.find((a) => a.id === id)!.el !== "Cp");
     expect(iron.length).toBe(structures[2].length - 1);
-    expect(signatureOf(model, iron)).toBe(signatureBefore(model, iron));
+    expect(atomsAndBonds(signatureOf(model, iron))).toBe(signatureBefore(model, iron));
     // (and of a part of one, or of atoms not on the page: the same as before)
-    expect(signatureOf(model, structures[0].slice(0, 3))).toBe(signatureBefore(model, structures[0].slice(0, 3)));
-    expect(signatureOf(model, [999, ...structures[1]])).toBe(signatureBefore(model, [999, ...structures[1]]));
+    expect(atomsAndBonds(signatureOf(model, structures[0].slice(0, 3)))).toBe(signatureBefore(model, structures[0].slice(0, 3)));
+    expect(atomsAndBonds(signatureOf(model, [999, ...structures[1]]))).toBe(signatureBefore(model, [999, ...structures[1]]));
   });
 
   it("reads the drawing once: its index is the same for every structure asked of it, another for another drawing", () => {
@@ -129,6 +132,68 @@ describe("a drawn structure's signature, read through the drawing's index", () =
     // (a wedge's neighbours in order round it, and each neighbour's side of a double bond: there, and not where nothing is)
     expect(drawnKey(model, structures[0])).toMatch(/\|.*w\d+:/);
     expect(drawnKey(model, structures[1])).toMatch(/~\d+:-?1/);
-    expect(drawnKey(model, structures[0]).startsWith(`${signatureBefore(model, structures[0])}|`)).toBe(true);
+    expect(drawnKey(model, structures[0]).startsWith(`${signatureOf(model, structures[0])}|`)).toBe(true);
+    expect(atomsAndBonds(signatureOf(model, structures[0]))).toBe(signatureBefore(model, structures[0]));
   });
 });
+
+describe("each configuration a drawing states, in what it states to its molecules in 3D", () => {
+  type A = { id: number; el: string; x: number; y: number };
+  const model = (atoms: A[], bonds: [number, number, number, string?][]): Model =>
+    ({
+      atoms: atoms.map((a) => ({ ...a, r: 0.9 })),
+      bonds: bonds.map(([a, b, order, stereo], k) => ({ id: 100 + k, a, b, order, stereo: stereo ?? "none", ...(stereo && stereo !== "none" ? { narrow: a } : {}) })),
+    }) as Model;
+  const link = (drawn: Model, now: Model) => {
+    const ids = drawn.atoms.map((a) => a.id);
+    return linkOf({ drawnFrom: ids, drawnAs: signatureOf(drawn, ids) }, now);
+  };
+  const turn = (m: Model, t: number): Model => ({ ...m, atoms: m.atoms.map((a) => ({ ...a, x: a.x * Math.cos(t) - a.y * Math.sin(t), y: a.x * Math.sin(t) + a.y * Math.cos(t) })) });
+
+  it("(Z)-but-2-ene made (E) by moving a methyl is another; turned whole it is the same", () => {
+    const zMe = (x4: number, y4: number) =>
+      model(
+        [
+          { id: 1, el: "C", x: -1.3, y: 0.75 },
+          { id: 2, el: "C", x: -0.65, y: 0 },
+          { id: 3, el: "C", x: 0.65, y: 0 },
+          { id: 4, el: "C", x: x4, y: y4 },
+        ],
+        [
+          [1, 2, 1],
+          [2, 3, 2],
+          [3, 4, 1],
+        ],
+      );
+    const z = zMe(1.3, 0.75);
+    expect(link(z, z)).toBe("live");
+    expect(link(z, turn(z, 1))).toBe("live");
+    expect(link(z, zMe(1.3, -0.75))).toBe("changed");
+  });
+
+  it("butan-2-ol's methyl and ethyl exchanged in place, its OH wedged, is the other enantiomer; so is its OH hashed in place; turned whole it is the same", () => {
+    // (C2 at the origin: OH up on a wedge, H not drawn; C1 and C3 to either side, C4 on from C3)
+    const butanol = (me: [number, number], et: [number, number], oh: "up" | "down" = "up") =>
+      model(
+        [
+          { id: 1, el: "C", x: me[0], y: me[1] },
+          { id: 2, el: "C", x: 0, y: 0 },
+          { id: 3, el: "C", x: et[0], y: et[1] },
+          { id: 4, el: "C", x: et[0] * 2, y: et[1] },
+          { id: 5, el: "O", x: 0, y: 1.5 },
+        ],
+        [
+          [2, 1, 1],
+          [2, 3, 1],
+          [3, 4, 1],
+          [2, 5, 1, oh],
+        ],
+      );
+    const r = butanol([-1.3, -0.75], [1.3, -0.75]);
+    expect(link(r, r)).toBe("live");
+    expect(link(r, butanol([1.3, -0.75], [-1.3, -0.75]))).toBe("changed");
+    expect(link(r, butanol([-1.3, -0.75], [1.3, -0.75], "down"))).toBe("changed");
+    expect(link(r, turn(r, 2))).toBe("live");
+  });
+});
+

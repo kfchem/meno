@@ -1,4 +1,6 @@
 import { isElementSymbol } from "../../../../lib/roles/molblock";
+import { readStereo } from "../../../../lib/layout/drawn";
+import { drawingOf } from "../chem/drawing";
 import type { Model, Molecule3D } from "../store/types";
 
 type Atom = Model["atoms"][number];
@@ -23,8 +25,11 @@ export function pageIndex(model: Model): PageIndex {
 /**
  * What a drawn structure is, as its molecules in 3D were made from it: its
  * atoms (by id: element, charge, mass), its bonds (order and wedge, and
- * what a haptic bond binds), and those that leave it - not where anything
- * is drawn, nor a hydrogen bond, which is no bond of a structure (one drawn
+ * what a haptic bond binds), those that leave it, and each configuration
+ * its drawing states as identity reads it (`configurationsOf`: R or S,
+ * E or Z, an axis's sense, by its atoms' ids) - so that a configuration
+ * changed by moving atoms, not wedges, is a change - and not otherwise
+ * where anything is drawn, nor a hydrogen bond, which is no bond of a structure (one drawn
  * or taken away changes no molecule made from it). A molecule in 3D whose
  * drawing no longer says the same is its drawing's no longer. Read through
  * the drawing's index (`pageIndex`): the structure's own atoms and bonds
@@ -72,7 +77,62 @@ export function signatureOf(model: Model, ids: Iterable<number>): string {
       return `${ends}:${b.order}:${b.stereo ?? "none"}${binds}`;
     })
     .sort();
-  return [...atoms, "|", ...bonds].join(",");
+  const configured = configurationsOf(model, of);
+  return [...atoms, "|", ...bonds, ...(configured.length ? ["|", ...configured] : [])].join(",");
+}
+
+/**
+ * Each configuration a structure's drawing states, as identity reads it (lib/layout/drawn `readStereo`): a centre's sense,
+ * a double bond's or an odd cumulene's cis or trans, an axis's sense - each written against its atoms' lowest ids, so that
+ * one configuration is one text however it is drawn (a wedge on another bond, the drawing turned) and another is another
+ * ((Z)- and (E)-but-2-ene, a methyl moved; butan-2-ol's methyl and ethyl exchanged in place).
+ */
+function configurationsOf(model: Model, of: ReadonlySet<number>): string[] {
+  const atoms = model.atoms.filter((a) => of.has(a.id));
+  const bonds = model.bonds.filter((b) => of.has(b.a) && of.has(b.b) && !b.hydrogen);
+  // (nothing to state: no wedge, no double bond)
+  if (!bonds.some((b) => b.order === 2 || (b.stereo && b.stereo !== "none"))) return [];
+  const drawing = drawingOf({ atoms, bonds } as Model);
+  const read = readStereo(drawing.atoms, drawing.bonds);
+  const id = (i: number) => (i < 0 ? Infinity : atoms[i].id);
+  const near: number[][] = atoms.map(() => []);
+  for (const b of drawing.bonds) {
+    near[b.a].push(b.b);
+    near[b.b].push(b.a);
+  }
+  const order = new Map(drawing.bonds.map((b) => [b.a < b.b ? `${b.a},${b.b}` : `${b.b},${b.a}`, b.order]));
+  // (a reference at an end turned to the end's lowest other neighbour: the sense turned with it where it moves)
+  const turned = (end: number, ref: number, not: number) => {
+    const others = near[end].filter((n) => n !== not).map(id);
+    return id(ref) === Math.min(...others) ? 1 : -1;
+  };
+  // (the atom across an axis's or a run's end: its partner where bonded, else the one it is doubly bonded to)
+  const across = (u: number, v: number) => (near[u].includes(v) ? v : (near[u].find((n) => order.get(n < u ? `${n},${u}` : `${u},${n}`) === 2) ?? -1));
+  const out: string[] = [];
+  for (const [c, t] of read.tetra) {
+    const ns = t.neighbours.map(id);
+    // (the sense against the neighbours in id order: turned once for each swap that sorts them)
+    let sign: number = t.volume;
+    const sorted = [...ns];
+    for (let i = 0; i < sorted.length; i++)
+      for (let j = 0; j < sorted.length - 1 - i; j++)
+        if (sorted[j] > sorted[j + 1]) {
+          [sorted[j], sorted[j + 1]] = [sorted[j + 1], sorted[j]];
+          sign = -sign;
+        }
+    out.push(`c${id(c)}:${sign}`);
+  }
+  for (const [k, ct] of read.cisTrans) {
+    const b = drawing.bonds[k];
+    const sense = (ct.cis ? 1 : -1) * turned(b.a, ct.refs[0], b.b) * turned(b.b, ct.refs[1], b.a);
+    out.push(`d${Math.min(id(b.a), id(b.b))}-${Math.max(id(b.a), id(b.b))}:${sense}`);
+  }
+  for (const x of [...read.axes.map((a) => ({ ...a, kind: "a", set: a.sense })), ...read.cumulated.map((a) => ({ ...a, kind: "u", set: a.cis ? 1 : -1 }))]) {
+    const [u, v] = x.atoms;
+    const sense = x.set * turned(u, x.refs[0], across(u, v)) * turned(v, x.refs[1], across(v, u));
+    out.push(`${x.kind}${Math.min(id(u), id(v))}-${Math.max(id(u), id(v))}:${sense}`);
+  }
+  return out.sort();
 }
 
 /**
