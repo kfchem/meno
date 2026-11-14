@@ -96,17 +96,43 @@ export function wedgeOctahedron(drawing: ReturnType<typeof drawingOf>, at: numbe
   if (spokes.some((s) => s.stereo === null || s.order !== 1) || !spokes.some((s) => s.stereo)) return null;
   // (how far two spokes are from straight across)
   const off = (p: number, q: number) => Math.abs((((p - q) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI) - Math.PI);
-  const left = new Set(spokes.map((_, i) => i));
-  for (const i of [...left]) {
-    if (!left.has(i)) continue;
-    left.delete(i);
-    const j = [...left].sort((p, q) => off(spokes[i].angle, spokes[p].angle) - off(spokes[i].angle, spokes[q].angle))[0];
-    if (j == null || off(spokes[i].angle, spokes[j].angle) > Math.PI / 6) return null;
-    left.delete(j);
-    const kinds = [spokes[i].stereo ?? "plain", spokes[j].stereo ?? "plain"].sort().join(",");
-    if (kinds !== "plain,plain" && kinds !== "down,up") return null;
-  }
-  return { at, donors: spokes.map(({ d, angle, stereo }) => ({ d, angle, ...(stereo ? { stereo } : {}) })) };
+  const kinds = (i: number) => spokes[i].stereo ?? "plain";
+  // (of the fifteen ways to pair the six, those whose every pair is within 30 degrees of across and is two plain bonds or a solid and a
+  // hashed wedge: the straightest kept - not the first found)
+  let best: { worst: number } | null = null;
+  const pairings = (left: number[], acc: [number, number][]): void => {
+    if (!left.length) {
+      const worst = Math.max(...acc.map(([i, j]) => off(spokes[i].angle, spokes[j].angle)));
+      if (acc.every(([i, j]) => [kinds(i), kinds(j)].sort().join(",") === "plain,plain" || [kinds(i), kinds(j)].sort().join(",") === "down,up") && worst <= Math.PI / 6 && (!best || worst < best.worst)) best = { worst };
+      return;
+    }
+    const [i, ...rest] = left;
+    rest.forEach((j) => pairings(rest.filter((k) => k !== j), [...acc, [i, j]]));
+  };
+  pairings([0, 1, 2, 3, 4, 5], []);
+  if (!best) return null;
+  // (the order of the bonds' kinds round the metal one of the forms': the first, H P H S P S - its solid and hashed pairs each about
+  // a plain spoke - or the same solid and hashed changed round; the third, solid and hashed in turn; the fourth, P H P P S P. Two
+  // solid wedges on one side of the plain line, three side by side: none of them, and no hand is read from them)
+  const round = spokes.map((sp, i) => ({ t: sp.angle, k: kinds(i) === "up" ? "S" : kinds(i) === "down" ? "H" : "P" })).sort((p, q) => p.t - q.t);
+  const canonical = (seq: string) => {
+    const forms: string[] = [];
+    for (const w of [seq, [...seq].reverse().join("")]) for (const sw of [w, w.replace(/S/g, "x").replace(/H/g, "S").replace(/x/g, "H")]) for (let r = 0; r < 6; r++) forms.push(sw.slice(r) + sw.slice(0, r));
+    return forms.sort()[0];
+  };
+  const form = ["HPHSPS", "SHSHSH", "PHPPSP"].findIndex((f) => canonical(f) === canonical(round.map((x) => x.k).join("")));
+  if (form < 0) return null;
+  // (straightened as a whole onto its form's lines: 60 degrees apart for the first and third, 45 for the fourth - the set turned by the
+  // middle one of how far each spoke is off them, so that one spoke drawn astray moves none of the others, each then put on the nearest)
+  const step = form === 2 ? Math.PI / 4 : Math.PI / 3;
+  const offGrid = (t: number) => t - step * Math.round(t / step);
+  const offs = spokes.map((sp) => offGrid(sp.angle));
+  const middle = offs.reduce((b, u) => (offs.reduce((t, v) => t + Math.abs(offGrid(v - u)), 0) < offs.reduce((t, v) => t + Math.abs(offGrid(v - b)), 0) ? u : b), offs[0]);
+  // (and upright, as the text draws each form - a line straight up - where the set is drawn within 7.5 degrees of that)
+  const upright = form === 2 ? 0 : Math.PI / 6;
+  const turn = Math.abs(offGrid(middle - upright)) < Math.PI / 24 ? upright : middle;
+  const straight = (t: number) => turn + step * Math.round((t - turn) / step);
+  return { at, donors: spokes.map(({ d, angle, stereo }) => ({ d, angle: straight(angle), ...(stereo ? { stereo } : {}) })) };
 }
 
 /**
@@ -1170,12 +1196,9 @@ export function oppositesKept(was: readonly { x: number; y: number }[], input: L
   return { ...laid, x, y, hydrogens, wedges };
 }
 
-/** A spoke's way, drawn by hand, put on the nearest of every 15 degrees: the form's own angles, a hand's slip straightened out. */
-const onForm = (t: number) => Math.round(t / (Math.PI / 12)) * (Math.PI / 12);
-
 /**
  * `laid` with each octahedron drawn with wedges (`LayoutJob.octahedra`) kept as drawn: each donor on its drawn spoke, straightened
- * (`onForm`), at the length the layout gave it - the rest of its ligand turned with it about the metal - and its bond's wedge as
+ * onto its form's lines (`wedgeOctahedron`), at the length the layout gave it - the rest of its ligand turned with it about the metal - and its bond's wedge as
  * drawn, narrow at the metal; the order round the metal, and so its hand, as drawn. Refused, saying so, where one ligand holds two
  * of the metal's donors (a chelate drawn so is no case this keeps). The same layout where there is none.
  */
@@ -1205,7 +1228,7 @@ export function octahedraKept(job: Pick<LayoutJob, "input" | "octahedra">, laid:
       if ([...unit].some((v) => v !== d && donors.has(v))) {
         throw new Error("the structure could not be laid out keeping its metal's donors opposite each other as drawn, so nothing was moved");
       }
-      const turn = onForm(angle) - Math.atan2(y[d] - m.y, x[d] - m.x);
+      const turn = angle - Math.atan2(y[d] - m.y, x[d] - m.x);
       const cs = Math.cos(turn);
       const sn = Math.sin(turn);
       for (const v of unit) {

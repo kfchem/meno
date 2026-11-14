@@ -55,6 +55,9 @@ describe("an octahedron drawn with wedges", () => {
     // (a trigonal prism, ST-2.12: no three lines; a line of two solid wedges; a wedge narrow at its donor; no wedge at all)
     expect(read(octahedron([["F", 60], ["Cl", 120], ["Br", 240, "up"], ["I", 300, "up"], ["N", 0, "down"], ["O", 180, "down"]]))).toBeNull();
     expect(read(octahedron([["F", 90], ["Cl", 270], ["Br", 30, "up"], ["I", 150, "down"], ["N", 210, "up"], ["O", 330, "down"]]))).toBeNull();
+    // (wedges in an order none of the forms has: both solids on one side of the plain line; three solids side by side)
+    expect(read(octahedron([["F", 90], ["Cl", 270], ["Br", 30, "up"], ["I", 150, "down"], ["N", 210, "down"], ["O", 330, "up"]]))).toBeNull();
+    expect(read(octahedron([["F", 30, "up"], ["Cl", 90, "up"], ["Br", 150, "up"], ["I", 210, "down"], ["N", 270, "down"], ["O", 330, "down"]]))).toBeNull();
     // (a pair 140 degrees apart: more than 30 off a line, none of the forms)
     expect(read(octahedron([["F", 90], ["Cl", 230], ["Br", 30, "down"], ["I", 150, "down"], ["N", 210, "up"], ["O", 330, "up"]]))).toBeNull();
     const narrowOut = octahedron(FIRST);
@@ -80,6 +83,12 @@ describe("an octahedron drawn with wedges", () => {
     forgetLaidOut();
     const byHand = octahedron([["F", 93], ["Cl", 268], ["Br", 28, "down"], ["I", 155, "down"], ["N", 212, "up"], ["O", 326, "up"]]);
     expect(spokes(await laidOut(byHand, MENO))).toEqual(spokes(octahedron(FIRST)));
+  });
+
+  it("straightens a spoke drawn 11 degrees off its line onto it, the others where they are", { timeout: 120000 }, async () => {
+    forgetLaidOut();
+    const oneOff = octahedron(FIRST.map(([el, deg, st]) => [el, el === "Br" ? deg + 11 : deg, st] as [string, number, ("up" | "down")?]));
+    expect(spokes(await laidOut(oneOff, MENO))).toEqual(spokes(octahedron(FIRST)));
   });
 
   it("keeps its hand: drawn and drawn mirrored left to right, both kept, and the two results still each other's mirror image", { timeout: 120000 }, async () => {
