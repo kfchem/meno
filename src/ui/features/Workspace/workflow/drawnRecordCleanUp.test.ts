@@ -10,6 +10,7 @@ import messyTaxol from "../../../../../scripts/gui/fixtures/messy-taxol.mol?raw"
 import { placedAbbreviation } from "../../../../lib/chem/abbreviationPlace";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { BEFORE_THE_EDIT, drawnHash, drawnKey, setMembers } from "./entries";
+import { linkOf, signatureOf } from "../utils/drawnLink";
 import { resultOf } from "./flow";
 import { addStep, membersSettled } from "./model";
 import { placeResults, type RunWith } from "./run";
@@ -93,6 +94,7 @@ describe("a structure drawn's record, through Clean-up", () => {
     const random = seeded(20261022);
     let moved = 0;
     let cleaned = 0;
+    let live = 0;
     for (const smiles of SMILES) {
       const before = given([{ ...messy(drawnFromSmiles(smiles), random), record: sampled }]);
       const ids = setMembers(before, resultOf(before, before.steps![0].id)!).structures[0];
@@ -114,11 +116,19 @@ describe("a structure drawn's record, through Clean-up", () => {
           .join(" ");
       if (drawnKey(after.model, held.structures[0]) !== drawnKey(before.model, ids) || wedges(after.model, held.structures[0]) !== wedges(before.model, ids)) moved++;
       expect(bare(held.records[0]), smiles).toEqual(sampled);
+      // (a molecule in 3D made from it stays its drawing's: Clean-up's wedges, where it puts them, state what they stated -
+      //  where it kept every atom; one that takes an H drawn away is drawn otherwise)
+      const kept = (m: Model, of: readonly number[]) => of.filter((id) => m.atoms.some((x) => x.id === id)).length;
+      if (kept(after.model, ids) === ids.length) {
+        expect(linkOf({ drawnFrom: ids, drawnAs: signatureOf(before.model, ids) }, after.model), smiles).toBe("live");
+        live++;
+      }
       expect(held.records[0]!.of, smiles).toBe(drawnHash(after.model, held.structures[0]));
     }
     // (most cleaned up, and many drawn otherwise than they were: wedges moved or swapped, H taken away, groups written by name)
     expect(cleaned).toBeGreaterThanOrEqual(SMILES.length - 2);
     expect(moved).toBeGreaterThanOrEqual(cleaned / 2);
+    expect(live).toBeGreaterThanOrEqual(cleaned / 2);
   }, 60_000);
 
   it("is kept for taxol drawn any which way, cleaned up with its groups written NHBz, OAc and OBz", async () => {
