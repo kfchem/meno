@@ -31,7 +31,10 @@ export const failureKindOf = (v: unknown): FailureKind => ((FAILURE_KINDS as rea
 export { WORDS_MOST } from "../../../../lib/calc/warnings";
 export { WARNING_KINDS, WARNING_WORDS, warningKindOf, warningsOf, type Warning, type WarningKind } from "../../../../lib/calc/warnings";
 
-/** How much of a failure's why a chip says shut, in characters: the rest cut with an ellipsis - whole in its tip and its record. */
+/**
+ * How much of a failure's why a chip says shut, in characters: the rest cut with an ellipsis - whole in its tip and its
+ * record. A look number, with no other basis: a shut chip's line short enough to read at a glance.
+ */
 export const WHY_SHUT = 80;
 
 /**
@@ -40,9 +43,23 @@ export const WHY_SHUT = 80;
  * (a chip shut). The other kinds say what happened already; their why is in the record.
  */
 export function failureSaid(f: Failure, most?: number): string {
-  const why = f.kind === "program-error" ? (f.why ?? "").split(/\s+/).filter(Boolean).join(" ") : "";
+  const why = f.kind === "program-error" ? folded(f.why) : "";
   if (!why) return FAILURE_WORDS[f.kind];
   return `${FAILURE_WORDS[f.kind]}: ${most && why.length > most ? `${why.slice(0, most - 1).trimEnd()}\u2026` : why}`;
+}
+
+/** Words on one line: a program's text with its line breaks and runs of spaces each one space. */
+export const folded = (text: string | undefined): string => (text ?? "").split(/\s+/).filter(Boolean).join(" ");
+
+/**
+ * A step's failures as its line says them: the count by kind (`failuresSaid`), and - where every job failed (`whyToo`) -
+ * the first failure's why after it, folded to one line, unless the count says those words already: never twice.
+ */
+export function failuresLine(failures: readonly Failure[], of: number, whyToo: boolean): string[] {
+  if (!failures.length) return [];
+  const count = failuresSaid(failures, of);
+  const why = folded(failures[0].why);
+  return whyToo && why && !count.includes(why) ? [count, why] : [count];
 }
 
 /**
