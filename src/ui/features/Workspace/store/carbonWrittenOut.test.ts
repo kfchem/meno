@@ -78,7 +78,33 @@ describe("a carbon typed with its hydrogens", () => {
     expect(useNotices.getState().notices).toEqual([]);
   });
 
-  it("stays a bare vertex where its menu's Edit label is left with the C it opens with, nothing typed", { timeout: 60000 }, () => {
+  it("keeps its charge and its mass number, as it keeps an unpaired electron: the compound never changes", { timeout: 60000 }, () => {
+    // (the 2-propyl cation's carbon written CH: its C with the charge and its H - stacked between its bonds, the charge on the C's line -
+    //  the count right, nothing said; the carbanion's the same; C alone too)
+    for (const [smiles, typed, charge, drawn] of [
+      ["C[CH+]C", "CH", 1, /^C\+H$/],
+      ["C[CH-]C", "CH", -1, /^C[-−]H$/],
+      ["C[CH+]C", "C", 1, /^C\+H$/],
+    ] as const) {
+      useNotices.setState({ notices: [] });
+      const t = typing(smiles);
+      const atom = t.type(1, typed);
+      expect([atom.el, atom.shown, atom.charge], `${smiles} ${typed}`).toEqual(["C", true, charge]);
+      expect(t.labels().some((l) => drawn.test(l)), `${smiles} ${typed}: ${t.labels().join(" ")}`).toBe(true);
+      expect(useNotices.getState().notices, `${smiles} ${typed}`).toEqual([]);
+    }
+    // (a 13C methyl written CH3, or C: still 13C)
+    for (const typed of ["CH3", "C"]) {
+      const t = typing("[13CH3]CC");
+      const atom = t.type(0, typed);
+      expect([atom.shown, atom.isotope], typed).toEqual([true, 13]);
+    }
+    // (another is given by typing it: CH+ over a neutral carbon, CH2 with a sign over the cation's, 12C over the 13C)
+    expect(typing("CCC").type(1, "CH+").charge).toBe(1);
+    expect(typing("[13CH3]CC").type(0, "12CH3").isotope).toBe(12);
+  });
+
+  it("stays a bare vertex where its menu's Edit label is left with the C it opens with, nothing typed",{ timeout: 60000 }, () => {
     const t = typing("CCCCC");
     const id = t.s().model.atoms[2].id;
     t.s().beginLabelEdit(id, "C", { select: true });

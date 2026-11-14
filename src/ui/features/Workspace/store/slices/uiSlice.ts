@@ -104,6 +104,10 @@ export function createUiSlice(
         // (not the C a corner opens with from the menu, kept as it was with nothing typed: that carbon stays as it is drawn)
         const untouched = !labelEdit.grow && labelEdit.selectAll && value === labelEdit.opened?.value;
         const written = !!typedC && (!untouched || !!atom.shown);
+        // (what of a charge and a mass number was typed: none typed, a carbon written out over a carbon keeps its own)
+        const signTyped = /[+\-−]/.test(value);
+        const massTyped = /^\d/.test(value);
+        const keepsCarbon = (at: Atom) => written && at.el === "C";
         const chem = (d: WorkspaceDocument, at: Atom) =>
           named
             ? { el: value, abbrev: ops.groupHeldAt(d, at.id, value) }
@@ -112,8 +116,10 @@ export function createUiSlice(
             : read.kind === "element"
               ? {
                   el: read.el,
-                  charge: read.charge,
-                  isotope: read.isotope,
+                  // (a carbon written out over a carbon keeps its charge and its mass number, as it keeps an unpaired electron: CH over
+                  //  the 2-propyl cation's carbon is that cation's CH+ - another is given by typing it, CH2-, 13CH3)
+                  charge: keepsCarbon(at) && !signTyped ? at.charge : read.charge,
+                  isotope: keepsCarbon(at) && !massTyped ? at.isotope : read.isotope,
                   // (an unpaired electron stays with its element)
                   radical: read.el === at.el ? at.radical : undefined,
                   // (a carbon typed - C, CH2, H2C, CH3 - written out with its hydrogens, not a bare vertex)

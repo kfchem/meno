@@ -969,7 +969,11 @@ All hover-based, as above.
     drawn with the bonds' count, and Meno says so in words ("CH2 was
     typed on a carbon whose bonds leave it one H: it is drawn CH, as its
     bonds have it"). A label's H count states what the atom has, so a
-    label never changes the compound. Anything else typed over a written
+    label never changes the compound. A carbon written out keeps its
+    charge and its mass number, as it keeps an unpaired electron: CH
+    typed over the 2-propyl cation's carbon is that cation's CH+, its
+    count right; CH3 over a 13C methyl stays 13C. Another is given by
+    typing it: CH+, CH2-, 13CH3. Anything else typed over a written
     carbon - N, OMe - makes it that again, and Undo makes it plain. The
     C that *Edit label* opens with on a corner carbon, left as it is
     with nothing typed, leaves the carbon unlabelled.
