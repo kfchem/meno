@@ -447,8 +447,10 @@ export function unreadWhy(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond
       path.push(next);
     }
     const end = path[path.length - 1];
-    const groups = bonds.filter((b) => b.a !== b.b && (b.a === end || b.b === end) && b.a !== path[path.length - 2] && b.b !== path[path.length - 2]).length + atoms[end].hs;
-    if (groups < 2) return "the other end of these double bonds has one group, so there is no axis for a wedge to state";
+    const onEnd = bonds.filter((b) => b.a !== b.b && (b.a === end || b.b === end) && b.a !== path[path.length - 2] && b.b !== path[path.length - 2]).map((b) => (b.a === end ? b.b : b.a));
+    const hs = atoms[end].hs + onEnd.filter((n) => atoms[n].el === "H").length;
+    // (a ketene's O, with no group; a ketenimine's N, with one; a terminal allene's CH2, with two H: no axis for the wedge to state)
+    if (onEnd.length + atoms[end].hs < 2 || hs >= 2) return "the other end of these double bonds does not carry two different groups, so there is no axis for a wedge to state";
     return "the wedges at the allene's two ends say it turns opposite ways, or its groups are in line with it";
   }
   const groups = around.length + atom.hs;

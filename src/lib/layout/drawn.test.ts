@@ -877,9 +877,24 @@ describe("a wedge out of an allene's end, read once: the allene's axis, and no a
     expect(drawing({ el: "N", wedge: [0, 1, "up"] }).read.axes).toEqual([]);
   });
 
-  it("says of a ketenimine's wedge that the run's other end has one group - and of an allene's wedges at both ends, opposite, what it said", () => {
+  it("says of a wedge at a ketenimine's, a ketene's or a terminal allene's end that the run's other end does not carry two different groups - and of an allene's wedges at both ends, opposite, what it said", () => {
+    const NONE = "the other end of these double bonds does not carry two different groups, so there is no axis for a wedge to state";
+    // (a ketenimine: its N with one group)
     const keten = drawing({ el: "N", wedge: [0, 1, "up"] });
-    expect(unreadWhy(keten.atoms, keten.bonds, 0)).toBe("the other end of these double bonds has one group, so there is no axis for a wedge to state");
+    expect(keten.read.axes).toEqual([]);
+    expect(unreadWhy(keten.atoms, keten.bonds, 0)).toBe(NONE);
+    // (a ketene: its O with none)
+    const ketene = drawing({ el: "N", wedge: [0, 1, "up"] });
+    ketene.atoms[ketene.far] = { ...ketene.atoms[ketene.far], el: "O" };
+    const bare = ketene.bonds.filter((b) => b.order === 2 || (b.a !== ketene.far && b.b !== ketene.far));
+    expect(readStereo(ketene.atoms, bare).axes).toEqual([]);
+    expect(unreadWhy(ketene.atoms, bare, 0)).toBe(NONE);
+    // (a terminal allene: its CH2's two H carried)
+    const terminal = drawing({ wedge: [0, 1, "up"] });
+    terminal.atoms[terminal.far] = { ...terminal.atoms[terminal.far], hs: 2 };
+    const ch2 = terminal.bonds.filter((b) => b.order === 2 || (b.a !== terminal.far && b.b !== terminal.far));
+    expect(readStereo(terminal.atoms, ch2).axes).toEqual([]);
+    expect(unreadWhy(terminal.atoms, ch2, 0)).toBe(NONE);
     // (the allene with its far end's methyl wedged too: the way that says the opposite of the near end's wedge)
     const opposite = (["up", "down"] as const).map((stereo) => {
       const { atoms, bonds, far } = drawing({ wedge: [0, 1, "up"] });
