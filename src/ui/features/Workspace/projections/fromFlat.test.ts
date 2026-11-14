@@ -328,6 +328,50 @@ describe("which chair, by the kind of each group (published conformational energ
     expect(axialAt(cf3, 2)).toBe(true);
     expect(axialOf(cf3)).toMatchObject({ axial: 1 });
   }, measured(3000));
+
+  it("counts as a tertiary alkyl a tert-butyl only: a trimethylsilyl, or a carbon with a fluorine among its three, goes by its kind", () => {
+    // (each in the tert-butyl's place of the case above: no tertiary alkyl, so the fewer axial - it axial, the methyls equatorial)
+    for (const first of ["C[Si](C)(C)", "CC(C)(F)"]) {
+      const chair = asChair(drawnFromSmiles(`${first}[C@H]1[C@@H](C)CC[C@H](C)C1`), drawnFromSmiles(first).atoms.length + 1);
+      expect(axialOf(chair), first).toMatchObject({ axial: 1 });
+    }
+  }, measured(3000));
+
+  it("of groups of one kind, puts the larger equatorial, written either way - where the first atoms' ranks would say the other", () => {
+    // (each group as written before the ring - bound through its last atom - and on it: a propyl against a chloromethyl, an SMe against
+    //  an OH, a methyl ester against an acetyl)
+    const groups: [[string, string], [string, string]][] = [
+      [["CCC", "CCC"], ["ClC", "CCl"]],
+      [["CS", "SC"], ["O", "O"]],
+      [["COC(=O)", "C(=O)OC"], ["CC(=O)", "C(C)=O"]],
+    ];
+    for (const [larger, smaller] of groups) {
+      for (const [first, second, firstLarger] of [[larger[0], smaller[1], true], [smaller[0], larger[1], false]] as const) {
+        const { smiles, flat, g, ringAtom } = pair(first, second);
+        for (let k = 0; k < 4; k++) {
+          const chair = asChair(lying(flat, k), ringAtom);
+          expect(axialAt(chair, g), `${smiles} ${k}`).toBe(!firstLarger);
+        }
+      }
+    }
+  }, measured(3000));
+
+  it("compares two chairs' axial groups by their kinds, the largest first: two vinyls axial before a methyl and a fluorine", () => {
+    // (a 1,2,4,5-tetrasubstituted ring whose one chair has the two vinyls axial and the other the methyl and the fluorine: the largest
+    //  kind axial in the first is a vinyl's (2), in the second the methyl's (3) - so the first)
+    const smiles = "C=C[C@H]1[C@@H](C)C[C@@H](F)[C@@H](C=C)C1";
+    const flat = drawnFromSmiles(smiles);
+    for (let k = 0; k < 4; k++) {
+      const chair = asChair(lying(flat, k), 3);
+      // (the methyl's C and the F, numbered as the SMILES writes them: atoms 5 and 8)
+      const methyl = { id: 5 };
+      const fluorine = { id: 8 };
+      expect([flat.atoms.find((a) => a.id === 5)!.el, flat.atoms.find((a) => a.id === 8)!.el]).toEqual(["C", "F"]);
+      expect(axialAt(chair, methyl.id), `${smiles} ${k}: the methyl`).toBe(false);
+      expect(axialAt(chair, fluorine.id), `${smiles} ${k}: the fluorine`).toBe(false);
+      expect(axialOf(chair), `${smiles} ${k}`).toMatchObject({ axial: 2 });
+    }
+  }, measured(3000));
 });
 
 describe("a group's kind on a ring, by the atom bound to it", () => {
@@ -370,6 +414,10 @@ describe("a group's kind on a ring, by the atom bound to it", () => {
       ["C#C", 0],
       ["[C-]#[N+]", 0],
       ["O=C=N", 0],
+      ["Cl[Hg]", 0],
+      // (an N whose one other neighbour is a non-carbon by a double bond - a nitroso, an azide: the default)
+      ["O=N", 2],
+      ["[N-]=[N+]=N", 2],
       // (an atom the table does not name: the default, with no measured basis)
       ["CP(C)", 2],
       ["OB(O)", 2],
