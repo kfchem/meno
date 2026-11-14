@@ -72,8 +72,10 @@ describe("why a SMILES cannot be read, in Meno's words", () => {
     expect(await said("[1]")).toContain("[1] names no element");
   });
 
-  it("says an aromatic ring cannot alternate", async () => {
-    expect(await said("c1cccc1")).toContain("its aromatic ring of 5 atoms (1, 2, 3, 4 and 5) cannot have alternating double bonds: is a charge or an H missing?");
+  it("says an aromatic ring cannot alternate, ending on its question's own mark - no full stop after it", async () => {
+    expect(await said("c1cccc1")).toBe("This SMILES could not be read: its aromatic ring of 5 atoms (1, 2, 3, 4 and 5) cannot have alternating double bonds: is a charge or an H missing?");
+    // (a why that says, not asks, ends with a full stop)
+    expect(await said("[Xx]")).toMatch(/Xx is not an element[^.?!]*\.$/);
   });
 
   it("says an aromatic atom is in no ring, or an element was written without its brackets", async () => {

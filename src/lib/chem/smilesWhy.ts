@@ -204,5 +204,6 @@ export async function notReadSaid(smiles: string, read: (smiles: string) => Prom
   } catch {
     why = null;
   }
-  return why ? `This SMILES could not be read: ${why}.` : NOT_READ;
+  // (one mark at its end: a why that asks - "is a charge or an H missing?" - ends on its own question mark)
+  return why ? `This SMILES could not be read: ${why}${/[.?!]$/.test(why) ? "" : "."}` : NOT_READ;
 }
