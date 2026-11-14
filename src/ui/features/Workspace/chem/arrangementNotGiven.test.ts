@@ -83,7 +83,7 @@ describe("a square-planar centre nobody gave the arrangement of", () => {
     const block = molblock("Pt", -2, ["Br", "Br", "Cl", "Cl"], [30, 110, 200, 290], amine);
     const said = metalsArrangedIn("[Pt@SP1-2](Br)(Br)(Cl)Cl.N(C)(C)CC", block);
     expect(said).toEqual([0]);
-    const keptGiven = await drawingOf(block, MENO, undefined, said);
+    const keptGiven = await drawingOf(block, MENO, undefined, undefined, said);
     expect(keptGiven.asCame).toBeDefined();
     expect(metalMarked(keptGiven, "Pt")).toBeUndefined();
   });
@@ -113,7 +113,7 @@ describe("a square-planar centre nobody gave the arrangement of", () => {
     expect(metalsArrangedIn("Cl[Pt-2](Br)(Cl)Br", block)).toEqual([]);
     // (a block whose atoms are not the SMILES's, element by element: nothing taken as given)
     expect(metalsArrangedIn("Br[Pt@SP1-2](Cl)(Cl)Br", block)).toEqual([]);
-    const given = await drawingOf(block, MENO, undefined, metalsArrangedIn("Cl[Pt@SP1-2](Br)(Cl)Br", block));
+    const given = await drawingOf(block, MENO, undefined, undefined, metalsArrangedIn("Cl[Pt@SP1-2](Br)(Cl)Br", block));
     expect(round(given, "Pt")).toBe("Br,Cl,Br,Cl");
     expect(metalMarked(given, "Pt")).toBeUndefined();
     // (the X it came as, kept: the bonds on the diagonals)
@@ -124,7 +124,7 @@ describe("a square-planar centre nobody gave the arrangement of", () => {
       expect(Math.abs(((t % 90) + 90) % 90 - 45)).toBeLessThan(1);
     }
     // (the same block from a SMILES with no mark: the engine's own way, marked)
-    const open = await drawingOf(block, MENO, undefined, metalsArrangedIn("Cl[Pt-2](Br)(Cl)Br", block));
+    const open = await drawingOf(block, MENO, undefined, undefined, metalsArrangedIn("Cl[Pt-2](Br)(Cl)Br", block));
     expect(metalMarked(open, "Pt")).toBe(ARRANGEMENT_SAID);
   });
 });
@@ -187,7 +187,7 @@ describe("a metal of six donors nobody gave the arrangement of", () => {
       ...m.atoms.map((a) => `${a.x.toFixed(4).padStart(10)}${a.y.toFixed(4).padStart(10)}${(0).toFixed(4).padStart(10)} ${a.el.padEnd(3)} 0  0  0  0  0  0  0  0  0  0  0  0`),
       ...m.bonds.map((b) => `${String(b.a).padStart(3)}${String(b.b).padStart(3)}  1  0`), "M  CHG  1   1   1", "M  END", ""].join("\n");
     expect(metalMarked(await drawingOf(block, MENO), "Co")).toBe(ARRANGEMENT_SAID);
-    expect(metalMarked(await drawingOf(block, MENO, undefined, [0]), "Co")).toBeUndefined();
+    expect(metalMarked(await drawingOf(block, MENO, undefined, undefined, [0]), "Co")).toBeUndefined();
     const chemist = await laidOut(editorModelOf((await processFileContent("drawn.mol", block)).model), MENO);
     expect(metalMarked(chemist, "Co")).toBeUndefined();
   });

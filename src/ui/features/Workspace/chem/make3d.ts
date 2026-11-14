@@ -876,7 +876,7 @@ export function likeOf(block: Block, before: Pick<Molecule3D, "atoms" | "drawnFr
 export async function formulaOf(chem: ChemClient, m: Molecule3D, frame: number, style?: DrawingStyle): Promise<{ model: Model; link: (number | null)[]; ordersUnknown: boolean }> {
   const { drawn, ordersUnknown } = await drawnOf(chem, m, frame);
   // (its coordinates nobody's drawing: laid out as new - or, where it cannot be, kept as it came, its square-planar centres marked as a layout would mark them)
-  const model = await laidOut(drawn, style, undefined, true).catch(() => arrangementsMarked(drawn));
+  const model = await laidOut(drawn, style, undefined, undefined, true).catch(() => arrangementsMarked(drawn));
   // (its heavy atoms came back in their order)
   let k = 0;
   const link = m.atoms.map((a) => (a.el === "H" ? null : (drawn.atoms[k++]?.id ?? null)));

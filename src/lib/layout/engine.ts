@@ -14,6 +14,7 @@ import {
   framesFor,
   flippable,
   grow,
+  isFourCentre,
   tridentEnds,
   sideAtoms,
   sidesOf,
@@ -2337,7 +2338,9 @@ export function roomForHydrogens(
     // it is in the way of - and widely where it is a name's own
     const branches = new Map<string, { side: number[]; from: number; to: number; own: boolean; wide: boolean }>();
     const offer = (side: number[], from: number, to: number, own: boolean, wide: boolean) => {
-      if (fixed(side)) return;
+      // (nor a bond of a stereocentre's four, drawn as its configuration is
+      // best shown: turned, it is no longer that form - `isFourCentre`)
+      if (fixed(side) || isFourCentre(mol, from)) return;
       const k = `${from}>${to}`;
       const was = branches.get(k);
       branches.set(k, { side, from, to, own: own || !!was?.own, wide: wide || !!was?.wide });

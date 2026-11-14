@@ -292,22 +292,74 @@ const givenFits = (job: LayoutJob, model: Model) => job.input.atoms.length === m
  * `model` laid out afresh by the engine as a whole - a salt's ions set out
  * together - for a structure that has only just arrived, before it is
  * added: a plugin's drawing of a SMILES. In `style` - the app's, unless
- * given - as Clean-up lays one out. `asNew`: a drawing nobody made - a
+ * given - as Clean-up lays one out. `open`: the double bonds its text leaves
+ * open (`OpenDoubles`). `asNew`: a drawing nobody made - a
  * plugin's coordinates - whose forms are not kept as a chemist's are (a
  * four-bond metal's cross or X: docs/LAYOUT-2D.md, *A metal with four
  * bonds*), but laid out as from a SMILES; `arranged`, of such a drawing, the
  * metals (by id) whose arrangement its input gave: their donors kept
  * opposite each other as it has them, and not marked as not given.
  */
-export async function laidOut(model: Model, style: DrawingStyle = styleOf(useAppSettings.getState().drawingStyle), given?: GivenRuns, asNew = false, arranged: ReadonlySet<number> = new Set()): Promise<Model> {
+export async function laidOut(
+  model: Model,
+  style: DrawingStyle = styleOf(useAppSettings.getState().drawingStyle),
+  given?: GivenRuns,
+  open?: OpenDoubles,
+  asNew = false,
+  arranged: ReadonlySet<number> = new Set(),
+): Promise<Model> {
   if (!model.bonds.length) return model;
-  const job0 = layoutJob(model);
+  // (a double bond the structure's own text leaves open, with an end of two groups: a wavy bond on a group - Brecher 2006, ST-4.4)
+  const either = new Set(open?.either ?? []);
+  // (one left open with one group at each end, its ends kept straight on below: the plugin's own mark of either configuration taken off it,
+  //  so that the drawing says it once, by its straight ends, and Clean-up keeps them straight as it keeps any drawn so - layout/drawn
+  //  `straightEnds` reads no end of a bond so marked)
+  const straight = new Set((open?.straight ?? []).map((i) => model.atoms[i]?.id).filter((id): id is number => id != null));
+  const straightOn = (b: Model["bonds"][number]) => b.order === 2 && straight.has(b.a) && straight.has(b.b);
+  const m =
+    either.size || straight.size
+      ? {
+          ...model,
+          bonds: model.bonds.map((b, i) => {
+            if (either.has(i) && b.order === 2) return { ...b, stereo: "either" as const };
+            if (straightOn(b) && b.stereo === "either") {
+              const { stereo: _s, ...rest } = b;
+              return rest;
+            }
+            return b;
+          }),
+        }
+      : model;
+  const job0 = layoutJob(m);
   // (a drawing nobody made keeps no metal's form - but one whose arrangement its input gave keeps the form it carries, the X of a square-planar centre so arranged)
   const read = asNew
     ? { ...job0, asNew: true as const, ...(arranged.size ? { arranged } : {}), input: { ...job0.input, atoms: job0.input.atoms.map(({ fourForm, ...a }, i) => (fourForm && arranged.has(job0.ids[i]) ? { ...a, fourForm } : a)) } }
     : job0;
   // (an allene's axis and an odd cumulene's cis or trans the structure's own text says, which a plugin's drawing of it cannot: a MOL block has no way to say them - by atom, in the drawing's order)
-  const job = given && givenFits(read, model) ? { ...read, given: true as const, input: { ...read.input, ...(given.axes.length ? { axes: given.axes } : {}), ...(given.cumulated.length ? { cumulated: given.cumulated } : {}) } } : read;
-  const change = relayoutFrom(model, model, job, await layOut(job.input), style);
-  return relayout({ ...emptyWorkspaceDocument(), model, nextId: nextFree(model) }, change).model;
+  let job: LayoutJob = given && givenFits(read, m) ? { ...read, given: true as const, input: { ...read.input, ...(given.axes.length ? { axes: given.axes } : {}), ...(given.cumulated.length ? { cumulated: given.cumulated } : {}) } } : read;
+  // (and one left open with one group at each end: each end kept straight on from it, so that it states neither cis nor trans - ST-4.4 -
+  //  whatever the plugin's drawing of it said)
+  if (straight.size) {
+    const opened = model.bonds.filter(straightOn).map((b) => (b.a < b.b ? `${b.a},${b.b}` : `${b.b},${b.a}`));
+    const linear = new Set(job.ids.flatMap((id, k) => (straight.has(id) ? [k] : [])));
+    job = {
+      ...job,
+      opened,
+      input: {
+        ...job.input,
+        atoms: job.input.atoms.map((a, k) => (linear.has(k) ? { ...a, linear: true } : a)),
+        // (nor asked of the engine to lay out the cis or trans the plugin's drawing read: with its ends straight on it could show none, and
+        //  `opened` keeps it from being taken as the drawing's - so this keeps the engine's input to what the text says, not a case of its own)
+        bonds: job.input.bonds.map((b) => (b.stereo && b.order === 2 && linear.has(b.a) && linear.has(b.b) ? { a: b.a, b: b.b, order: b.order } : b)),
+      },
+    };
+  }
+  const change = relayoutFrom(m, m, job, await layOut(job.input), style);
+  return relayout({ ...emptyWorkspaceDocument(), model: m, nextId: nextFree(m) }, change).model;
 }
+
+/**
+ * The double bonds a structure's own text leaves without a configuration that could have one, by the drawing's indices (layout/drawn
+ * `openDoubleBonds`): the ends to keep straight on, by atom, and the bonds to give a wavy bond, by bond.
+ */
+export type OpenDoubles = { straight: readonly number[]; either: readonly number[] };

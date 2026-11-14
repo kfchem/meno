@@ -1018,8 +1018,9 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
 
   // A phosphorus or sulfur with four bonds - a phosphate, a sulfonyl - is
   // drawn as a cross, square to the page, the chain straight through it
+  // (not one that is a stereocentre: drawn as its configuration is best shown, below)
   const cross = (a: number) =>
-    (g.elements?.[a] === "P" || g.elements?.[a] === "S") && neighbours[a].length === 4 && !inRing.has(a);
+    (g.elements?.[a] === "P" || g.elements?.[a] === "S") && neighbours[a].length === 4 && !inRing.has(a) && !g.tetra?.[a];
 
   // A trident's middle atom - a tert-butyl's, a trimethylsilyl's, a
   // trimethylammonium's, a CF3's or a CCl3's (assemble.ts `tridentEnds`):
@@ -1071,6 +1072,22 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
         const beside = i === e || (i + 1) % gaps.length === e;
         angleSum += Math.abs(deg(gap - (beside ? (2 * Math.PI) / 3 : Math.PI / 3))) / gaps.length;
       });
+    } else if (nb.length === 4 && g.tetra?.[a] && !cross(a)) {
+      // a stereocentre's four bonds as its configuration is best shown
+      // (Brecher 2006, ST-1.1.1; assemble.ts `isFourCentre`): two in the
+      // page a third of a turn apart, the two wedged a sixth apart opposite
+      // them, a quarter between - read round from whichever gap fits best;
+      // and none on the page's axes, where it reads as a Fischer projection
+      // (a branch turned over on its bond, the same gaps mirrored, may put
+      // them there)
+      const want = [120, 90, 60, 90].map((d) => (d * Math.PI) / 180);
+      const onAxis = dirs.filter((t) => {
+        const r = Math.abs(t / (Math.PI / 2) - Math.round(t / (Math.PI / 2))) * 90;
+        return r < FOUR_CENTRE_AXIS_DEG;
+      }).length;
+      angleSum +=
+        Math.min(...[0, 1, 2, 3].map((k) => gaps.reduce((sum, gap, i) => sum + Math.abs(deg(gap - want[(i + k) % 4])), 0) / 4)) +
+        (onAxis * FOUR_CENTRE_AXIS_COST) / 4;
     } else {
       for (const gap of gaps) angleSum += Math.abs(deg(gap - ideal)) / gaps.length;
     }
@@ -2184,4 +2201,9 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
   return { ...measures, score };
 }
 
+/** How near the page's axes, in degrees, a bond of a four-bond stereocentre counts as on one. */
+const FOUR_CENTRE_AXIS_DEG = 7.5;
+
+/** What each such bond on an axis costs, in degrees of angle error shared over its four bonds: as much as a bond turned a third of a turn off its place - a branch is not turned onto the axes to make room for a label. */
+const FOUR_CENTRE_AXIS_COST = 120;
 

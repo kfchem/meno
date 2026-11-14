@@ -864,6 +864,14 @@ All hover-based, as above.
   larger ones plainly (2+), after the label and above the line or, where a
   bond runs there, beside it; a charged carbon a bare vertex with its
   charge beside it; a radical a dot; a mass number before the symbol.
+  Two electrons of an atom's own (Brecher 2008, GR-5.3): a triplet's two
+  unpaired electrons on two opposite sides of the symbol, well apart -
+  above and below, or left and right where a bond or its H is in the way;
+  a singlet's pair - a singlet carbene's, a lone pair in GR-5.2's sense -
+  two dots together square on one side, above where it is free, parallel
+  to that side. A charge set beside the symbol keeps off their sides.
+  Either way the C is shown, whatever the style says of a charged carbon:
+  GR-5.3 finds leaving it out acceptable and showing it preferable.
   Circled or plain, and a charged carbon's C, are the style's. Set by
   typing - N+, NH3+, O-, Fe2+, 13C, or a charge alone - by + and - over
   an atom, or from its menu, which also gives or takes an unpaired
@@ -1821,16 +1829,38 @@ lipids each have their own way of being drawn, which it should know.
      between them (ST-1.2.8) - are read as open, and the centre says what
      to redraw. A deciding gap within 10 degrees of half a turn says
      nothing either: which side of the rule it is on cannot be told.
+     A centre with four bonds drawn is read as open, likewise, in the forms
+     the text calls ambiguous or the picture of another shape (ST-1.1.9,
+     1.1.10, 1.1.11, 1.1.13 to 1.1.20): four wedges alike, three alike with
+     the fourth in their wide space, two plain bonds with a wedge and hashes
+     where the plain ones are not side by side or are half a turn or more
+     apart, two like wedges beside two plain bonds, three plain with the
+     wedge outside their wide space, two wedges and two hashes like by like.
+     ST-1.1.4's cross with one wedge and ST-1.1.12 stay read.
      A double bond so drawn it lays out keeping the straight end straight -
      its one group straight on from it, as ST-4.4 draws a double bond of
      unspecified configuration - and the rest around it, so the new drawing
      leaves it unsaid as the old one did (the maintainer's ruling;
      `straightEnds`, `LayoutAtom.linear`). An end with two
      groups is not one of these: its other group states the bond. A
-     structure not yet drawn - its
-     atoms all on one point, as a SMILES's are before it is laid out - is
-     not held to this: it is laid out as before, a double bond whose
-     configuration the SMILES does not give drawn one way or the other.
+     structure that arrives with no drawing of its own - a SMILES, a name
+     looked up, a file with no places - is drawn so as well (ST-4.4,
+     ST-6.2): a double bond that could have a cis or trans and is given
+     none has each end straight on where each end has one group, and a
+     wavy bond on a group where an end has two, or where the bond is in a
+     ring (of eight atoms or more: a ring's atom cannot be kept straight
+     on, and the wavy bond goes on a ring bond beside it). The wavy bond
+     goes on the group of an end that has one; never toward a
+     stereocentre, the other group of that end taking it instead. Never
+     bent as if it were stated. Which double bonds could have one is,
+     until Meno's stereo units are in, the reader's own test: a group on
+     each end, not in a ring of seven atoms or fewer, not cumulated, not a
+     C=N whose E/Z is none of its own (an amidine's), and not an end with
+     two groups alike (`layout/drawn` `openDoubleBonds`). A double bond
+     the text gives E or Z is drawn as given. A double bond drawn straight
+     on carries no other mark of being open - not a plugin's either
+     configuration for it - so Clean-up keeps it straight, as it keeps any
+     double bond drawn so.
    - **Centres by a lone pair** (the maintainer, 2026-11-04 and 11-05).
      An atom of three neighbours and a lone pair is a pyramid that its
      lone pair can turn into its mirror image, through the plane of the

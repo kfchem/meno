@@ -3,11 +3,13 @@ import { aromaticRefusal, kekuleOrders } from "../chem/kekulize";
 import { typedRingRefused } from "../chem/smilesWhy";
 import { readSmiles } from "../chem/smiles";
 import type { LayoutInput } from "./perceive";
+import { openDoubleBonds } from "./drawn";
 
 /**
  * A molecule as its SMILES gives it, for the layout engine: its bonds
- * Kekulé, each atom's H, each centre's configuration. Throws where it does
- * not read - its aromatic rings too, where they cannot be given single and
+ * Kekulé, each atom's H, each centre's configuration, and each end of a
+ * double bond it leaves open kept straight on. Throws where it does not
+ * read - its aromatic rings too, where they cannot be given single and
  * double bonds as written (lib/chem/kekulize `aromaticRefusal`), in
  * smilesWhy's words.
  */
@@ -21,7 +23,7 @@ export function smilesInput(smiles: string): LayoutInput {
     sum[b.a1] += orders[i];
     sum[b.a2] += orders[i];
   });
-  return {
+  const input: LayoutInput = {
     atoms: s.atoms.map((a, i) => ({
       el: a.el,
       hs: a.hs ?? implicitHydrogens(a.el, sum[i], a.charge ?? 0),
@@ -32,4 +34,8 @@ export function smilesInput(smiles: string): LayoutInput {
     ...(s.axes ? { axes: s.axes } : {}),
     ...(s.cumulated ? { cumulated: s.cumulated } : {}),
   };
+  // (a double bond the SMILES leaves open with one group at each end: each end kept straight on, so that the drawing states neither cis nor
+  //  trans - Brecher 2006, ST-4.4; one with an end of two groups is the drawing's to mark, with a wavy bond: drawn `openDoubleBonds`)
+  const straight = new Set(openDoubleBonds(input).straight);
+  return straight.size ? { ...input, atoms: input.atoms.map((a, i) => (straight.has(i) ? { ...a, linear: true } : a)) } : input;
 }
