@@ -100,6 +100,12 @@ export type AtomChem = {
   stereoGroup?: StereoGroup;
   /** The Sgroups it is in. */
   sgroups?: SgroupMark[];
+  /**
+   * A carbon written out, with its hydrogens - CH2, H2C on a bond's left -
+   * where the chemist typed it so: drawn labelled, not as a bare vertex. The
+   * hydrogens are its bonds' to give, as for any atom.
+   */
+  shown?: true;
 };
 
 /**
@@ -358,5 +364,6 @@ export function chemistry(a: AtomChem): Omit<AtomChem, "el"> {
     ...(a.exactChange ? { exactChange: true } : {}),
     ...(a.stereoGroup ? { stereoGroup: a.stereoGroup } : {}),
     ...(a.sgroups?.length ? { sgroups: a.sgroups } : {}),
+    ...(a.shown ? { shown: true } : {}),
   };
 }
