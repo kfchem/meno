@@ -15,7 +15,7 @@ import type { LayoutInput } from "../layout/perceive";
 import { fromSmiles } from "../layout/testdata/fromSmiles";
 import { SHUFFLE_SEEDS, shuffled } from "../layout/testdata/shuffled";
 import { measured } from "../../testing/timeouts";
-import { constitutionKey, identityKey, identityText } from "./identity";
+import { constitutionKey, identity, identityKey, identityText } from "./identity";
 
 /** Each place written up (1), down (-1) or left blank (0). */
 type Writing = (1 | -1 | 0)[];
@@ -213,5 +213,47 @@ describe("a constitution's key", () => {
     // (whatever configuration it is given, and though identity itself now fills propan-2-ol's centre in)
     expect(constitutionKey(fromSmiles("C[C@H](C)O"))).toBe("67fcfad66e6e6c8e");
     expect(identityKey(bare("CC(C)O"))).not.toBe("67fcfad66e6e6c8e");
+  });
+});
+
+describe("identity filled in: which groups are alike, and which atoms are places", () => {
+  /** `smiles` with its atom `i` changed by `atom`, and its bond `k` by `bond`: two groups made to differ in one thing only. */
+  function changed(smiles: string, i: number, atom: Partial<LayoutInput["atoms"][number]>, k = -1, bond: Partial<LayoutInput["bonds"][number]> = {}): LayoutInput {
+    const g = fromSmiles(smiles);
+    return { ...g, atoms: g.atoms.map((a, j) => (j === i ? { ...a, ...atom } : a)), bonds: g.bonds.map((b, j) => (j === k ? { ...b, ...bond } : b)) };
+  }
+  const identities = (gs: readonly LayoutInput[]) => new Set(gs.map((g) => identityText(g))).size;
+  // (a centre written plain, one way and the other)
+  const ways = (smiles: string) => [smiles.replace("@@", "").replace("@", ""), smiles.replace("@@", "@"), smiles.includes("@@") ? smiles : smiles.replace("@", "@@")];
+
+  it("two end atoms are alike only of one element, charge, hydrogen count and bond: else a centre plain, one way and the other is three structures", () => {
+    expect(identities(ways("F[C@H](Cl)Br").map((s) => fromSmiles(s)))).toBe(3);
+    // (CCC(F)Cl's Cl made a second F that differs from the first in one thing: its charge, its hydrogens, its bond to the centre)
+    const differ: [string, Partial<LayoutInput["atoms"][number]>, Partial<LayoutInput["bonds"][number]>][] = [
+      ["charge", { el: "F", charge: 1 }, {}],
+      ["hydrogens", { el: "F", hs: 1 }, {}],
+      ["bond", { el: "F" }, { order: 2 }],
+    ];
+    for (const [what, atom, bond] of differ) expect([what, identities(ways("CC[C@H](F)Cl").map((s) => changed(s, 4, atom, 3, bond)))]).toEqual([what, 3]);
+    // (and alike in all four: one structure, however written)
+    expect(identities(ways("CC[C@H](F)Cl").map((s) => changed(s, 4, { el: "F" })))).toBe(1);
+  });
+
+  it("an N or a P is a centre, of four groups or three and a lone pair; a metal never, nor an atom of five groups, nor a cumulene ending in another element", () => {
+    // (two methyls alike: one structure however written)
+    for (const smiles of ["C[N@+](C)(CC)CCC", "C[P@+](C)(CC)CCC", "C[P@](C)CC"]) expect([smiles, identities(ways(smiles).map((s) => fromSmiles(s)))]).toEqual([smiles, 1]);
+    // (no two alike: three)
+    for (const smiles of ["C[N@+](CC)(CCC)CCCC", "C[P@](CC)CCC"]) expect([smiles, identities(ways(smiles).map((s) => fromSmiles(s)))]).toEqual([smiles, 3]);
+    // (no place, so nothing filled in: the identity is the constitution's - a metal of three groups and an H, two of them alike;
+    //  PF3Cl2's P of five; a ketenimine whose run ends in an N, its C's two methyls alike)
+    for (const smiles of ["C[PtH-](C)Cl", "FP(F)(F)(Cl)Cl", "CC(C)=C=NC"]) {
+      const g = fromSmiles(smiles);
+      expect([smiles, identityKey(g)]).toEqual([smiles, constitutionKey(g)]);
+    }
+  });
+
+  it("the fill ends, complete: a place filled is never offered again, nor a double bond drawn with its configuration", () => {
+    // (a prenyl's C=C(CH3)2 and an isopropyl's CH filled; an E double bond and a centre drawn, kept)
+    for (const smiles of ["CC(C)=CCO", "CC(C)O", "C/C=C/CC(C)=C", "C[C@H](O)/C=C/C"]) expect([smiles, identity(fromSmiles(smiles)).complete]).toEqual([smiles, true]);
   });
 });

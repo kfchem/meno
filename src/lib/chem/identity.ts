@@ -447,9 +447,13 @@ export function filledIn(input: LayoutInput): { input: LayoutInput; complete: bo
   for (const b of blanksOf(g)) if (b.kind !== "biaryl" && b.sides.some((side) => ends(side))) g = given(g, b, true);
   // (the classes of the constitution alone, coarser than every orbit of the structure with any configuration given)
   let classes: number[] | null = null;
-  for (;;) {
+  // (each fill gives one place or takes out one drawn axis, so there are never more rounds than places at the start: a round
+  //  past that is a fault, and ends with what is filled so far, said incomplete, rather than running on)
+  const most = blanksOf(g).length;
+  for (let round = 0; ; round++) {
     const blanks = blanksOf(g);
     if (!blanks.length) return { input: g, complete, text };
+    if (round > most) return { input: g, complete: false, text: undefined };
     classes ??= symmetryClasses(unconfigured(input));
     const cs = classes;
     const tried = blanks.filter((b) => b.sides.some((side) => new Set(side.map((m) => cs[m])).size < side.length));
