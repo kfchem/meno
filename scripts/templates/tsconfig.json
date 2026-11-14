@@ -1,0 +1,6 @@
+{
+  "//": "The builder runs the app's own code, so it is typechecked with it, against the app's settings: drift there should break the build, not a template.",
+  "extends": "../../tsconfig.json",
+  "compilerOptions": { "noEmit": true },
+  "include": ["*.ts", "../../src"]
+}
