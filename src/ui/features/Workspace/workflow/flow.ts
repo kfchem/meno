@@ -10,8 +10,8 @@ import { conformersOfOne, drawnKey, entryOfSet, framesOf, hash, holdsOf, plainAm
 import type { Property } from "../../../../lib/entry";
 import { moleculesAsTable, WHAT_COLUMN, type Table } from "../../../../lib/table";
 import { levelOf } from "../../../../lib/calc/output";
-import { exitOf, ONE_INPUT, optionsOf, readsAsTable, RESTRAINTS_INPUT, severalInputs, takenBy, takesNothing, type SetHolds, type SetKind, type ValueKind, isSetKind } from "./kinds";
-import { byOf, doerStamp, inputsFor, optionsFor, presetsStamp, setName, takesBy, takesNothingBy } from "./doers";
+import { exitOf, ONE_INPUT, readsAsTable, RESTRAINTS_INPUT, severalInputs, takenBy, takesNothing, type SetHolds, type SetKind, type ValueKind, isSetKind } from "./kinds";
+import { byOf, doerStamp, inputsFor, presetsStamp, setName, stepValues, takesBy, takesNothingBy } from "./doers";
 
 export type Flow = Pick<WorkspaceDocument, "model" | "molecules3d" | "sets" | "steps" | "wires" | "pictures"> & Partial<Pick<WorkspaceDocument, "arrows" | "pluses">>;
 
@@ -352,7 +352,7 @@ function keyTexts(m: Molecule3D): readonly string[] {
 
 /** A key for what a step would run on: what comes into it, its options, and who does it - so that its card can say it has changed since its run. */
 export function inputKey(doc: Flow, step: WorkflowStep, by: string): string {
-  const values = optionsOf(optionsFor(step.kind, by), step.options);
+  const values = stepValues(step, by);
   // (and, a Render's, the plugins its look and studio are of, by version)
   const options = JSON.stringify(values) + presetsStamp(step.kind, by, values);
   // (a step that takes nothing in runs on its options alone, and who does it)

@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { cardHolds, cardPlace, REST_MS, restLeft } from "./compoundCardPlace";
 
@@ -28,17 +29,23 @@ describe("when a compound's card comes", () => {
 });
 
 describe("what a compound's card holds", () => {
-  it("is its drawing once its number is placed and its structure read whole; while its PDF is still read for numbers, or its figure, says so; else nothing", () => {
-    const at = (placed: boolean, read: boolean, drawn: boolean, whole: boolean) => cardHolds({ placed, read, drawn, whole });
-    expect(at(true, true, true, true)).toBe("drawing");
-    expect(at(true, true, true, false)).toBe("drawing");
+  it("is the PDF's own picture of where the compound is drawn once its number is placed and its structure's box known - read whole or not; while its PDF is still read for numbers, or its figure, says so; the number drawn nowhere, says so in words", () => {
+    const at = (placed: boolean, read: boolean, whole: boolean) => cardHolds({ placed, read, whole });
+    expect(at(true, true, true)).toBe("picture");
+    expect(at(true, true, false)).toBe("picture");
     // (its PDF's pages still gone through: the number may be on one not yet read)
-    expect(at(false, false, false, false)).toBe("reading");
+    expect(at(false, false, false)).toBe("reading");
     // (placed, its figure's structures still being read)
-    expect(at(true, false, false, true)).toBe("reading");
-    // (gone through whole and the number drawn nowhere, or its structure not read whole: no card)
-    expect(at(false, false, false, true)).toBeNull();
-    expect(at(true, true, false, true)).toBeNull();
-    expect(at(true, true, false, false)).toBeNull();
+    expect(at(true, false, true)).toBe("reading");
+    expect(at(true, false, false)).toBe("reading");
+    // (gone through whole and the number drawn nowhere: said so, nothing guessed)
+    expect(at(false, false, true)).toBe("none");
+  });
+
+  it("never draws the structure Meno read: it is placed on the canvas to be checked there", () => {
+    const source = readFileSync(new URL("./CompoundCard.tsx", import.meta.url), "utf8");
+    // (no drawing of a read model - nor of any structure - in the card: only its PDF's region as a picture)
+    expect(source).not.toMatch(/drawingSvg|image\/svg|aromaticRings/);
+    expect(source).toContain("lensPictureOf");
   });
 });

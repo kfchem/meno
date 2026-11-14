@@ -17,7 +17,7 @@ import {
 import { optionsFor, WRITERS } from "../../../lib/io/writers";
 import { heldElsewhere } from "../../../lib/doc/savers";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
-import { labelBox, labelSetOf, runsWidth } from "../../../lib/chem/layout2d";
+import { HALO_EMS, labelBox, labelSetOf, measureLabelBox, runsWidth } from "../../../lib/chem/layout2d";
 import { MARK_HALF_HEIGHT, MARK_SCALE, MARKS_APART, STEREO_GAP, stereoPlaces, stereoTextEms } from "./chem/marks";
 import { ACS_1996, RSC } from "../../../lib/chem/style";
 import type { Model } from "./store/types";
@@ -274,6 +274,65 @@ describe("drawingSvg", () => {
     expect(hidden).toContain(">C\u2013H hidden</text>");
     // (its other look, the secondary, keeps them)
     expect(drawingSvg({ ...model, molecules3d: [{ ...methane, look: "secondary" as const }] }, hiding, ACS_1996)).not.toContain("hidden");
+  });
+
+  it("writes a molecule in 3D's R, S, E and Z, those it shows, over it as the canvas writes them: off its atom, in its blue on a white halo", () => {
+    // (a stereocentre whose bonds all go down the page: R stands above it)
+    const centre = {
+      atoms: [
+        { el: "C", x: 0, y: 0, z: 0 },
+        { el: "F", x: -1.2, y: -0.8, z: 0 },
+        { el: "Cl", x: 1.2, y: -0.8, z: 0 },
+        { el: "Br", x: 0, y: -0.6, z: 1.3 },
+        { el: "H", x: 0, y: -0.4, z: -1 },
+      ],
+      bonds: [1, 2, 3, 4].map((i) => ({ a1: 0, a2: i, order: 1 })),
+      at: { x: 6 * L, y: 0 },
+      stereo: { atoms: { 0: "R" }, bonds: {}, chosen: { atoms: [0], bonds: [] } },
+    };
+    const { layout } = drawingLayout({ ...model, molecules3d: [centre] } as unknown as Parameters<typeof drawingLayout>[0], aromatic, ACS_1996);
+    // (in parentheses, as the style writes R and S)
+    expect(layout.solidsTexts?.map((t) => t.text)).toEqual(["(R)"]);
+    const r = layout.solidsTexts![0];
+    expect(r).toMatchObject({ color: "#1d4ed8", halo: "#ffffff", ownSize: true });
+    // (above its atom's ball, and the picture reaching to take it in)
+    const c = layout.solids!.filter((m) => m.kind === "ball").reduce((best, m) => (m.kind === "ball" && best.kind === "ball" && m.c.y > best.c.y ? m : best));
+    expect(c.kind === "ball" && r.y > c.c.y + c.r).toBe(true);
+    // (with its halo: an eighth of its letters' size round them)
+    const rBox = labelBox(r, r.fontPx, labelSetOf(drawingLayout(model, aromatic, ACS_1996).opts));
+    expect(layout.bounds.max.y).toBeGreaterThanOrEqual(r.y + rBox.top + HALO_EMS * r.fontPx - 1e-9);
+    // (written over the molecules, after them: every run's halo first, then every run's letters, in the canvas's blue)
+    const svg = drawingSvg({ ...model, molecules3d: [centre] } as unknown as Parameters<typeof drawingSvg>[0], aromatic, ACS_1996);
+    const texts = [...svg.matchAll(/<text [^>]*>([^<]*)<\/text>/g)].map((m) => ({ tag: m[0], text: m[1], at: m.index! }));
+    const label = texts.filter((t) => ["(", "R", ")"].includes(t.text) && t.at > svg.lastIndexOf("<circle"));
+    expect(label.map((t) => t.text)).toEqual(["(", "R", ")", "(", "R", ")"]);
+    for (const t of label.slice(0, 3)) {
+      expect(t.tag).toContain('fill="none" stroke="#ffffff"');
+      const size = Number(/font-size="([\d.e-]+)"/.exec(t.tag)![1]);
+      expect(Number(/stroke-width="([\d.e-]+)"/.exec(t.tag)![1])).toBeCloseTo(0.24 * size, 9);
+    }
+    for (const t of label.slice(3)) expect(t.tag).toContain('fill="#1d4ed8" stroke="none"');
+    expect(label[4].tag).toContain('font-style="italic"');
+    // (as large as the drawing's labels times MARK_SCALE: its O's)
+    const fontOf = (tag: string) => Number(/font-size="([\d.e-]+)"/.exec(tag)![1]);
+    const o = texts.find((t) => t.text === "OH" || t.text === "O")!;
+    expect(fontOf(label[4].tag)).toBeCloseTo(fontOf(o.tag) * MARK_SCALE, 9);
+    // (clear of a measurement's value written where it would go: a distance to an atom straight above it, behind)
+    const measured = { ...centre, atoms: [...centre.atoms, { el: "O", x: 0, y: 2, z: -1.5 }], measures: [{ id: 1, atoms: [0, 5] }] };
+    const { layout: withValue, opts } = drawingLayout({ ...model, molecules3d: [measured] } as unknown as Parameters<typeof drawingLayout>[0], aromatic, ACS_1996);
+    const set = labelSetOf(opts);
+    const value = measureLabelBox(withValue.measures![0], set.fontFamily);
+    const t = withValue.solidsTexts![0];
+    // (its middle, as stereoTextItem sets it from it, and its box as the canvas keeps it clear)
+    const size = opts.units === "px" ? t.fontPx / withValue.zoom : t.fontPx;
+    const middle = t.x + (runsWidth(t.runs!, size, set) - runsWidth([t.runs![0]], size, set)) / 2;
+    const half = { x: size * (stereoTextEms("R", true) / 2 + 0.1), y: size * 0.45 };
+    // (as the canvas's placing counts it clear: overlapping by less than it lets pass - utils/molecule3d labelSpot)
+    const over = Math.min(half.x + (value.max.x - value.min.x) / 2 - Math.abs(middle - (value.min.x + value.max.x) / 2), half.y + (value.max.y - value.min.y) / 2 - Math.abs(t.y - (value.min.y + value.max.y) / 2));
+    expect(over).toBeLessThan(0.025);
+    // (none, where it shows none)
+    const none = drawingLayout({ ...model, molecules3d: [{ ...centre, stereo: { atoms: { 0: "R" }, bonds: {} } }] } as unknown as Parameters<typeof drawingLayout>[0], aromatic, ACS_1996);
+    expect(none.layout.solidsTexts).toBeUndefined();
   });
 
   it("says over a molecule in 3D what its file left out - its hydrogens, its bond orders - one over the other", () => {
