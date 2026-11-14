@@ -1863,7 +1863,15 @@ lipids each have their own way of being drawn, which it should know.
      pyramid of three that keeps none - an O+ - is read as no axis's end
      either: Clean-up refuses it rather than lose it. An N's wedge may
      still be an axis's, where its lone pair lies in a ring or a carbonyl
-     beside it (an N-aryl pyrrole, an anilide).
+     beside it (an N-aryl pyrrole, an anilide). A wedge out of an
+     allene's end - narrow there, on either of its groups - states the
+     allene's axis (IUPAC 2006 ST-1.6) and nothing else, so it is read as
+     no axis's end about the end's bond to an aryl or a carbonyl: that
+     bond's axis is read from wedges at its other end, as a hindered
+     biaryl's is (ST-1.7's form, by analogy). An aryl allene drawn with its
+     wedge on either group of an end is then one structure, as its SMILES
+     is. The end of a butatriene, or an alkene's carbon, is read as before:
+     its double bonds lie in the page.
    - A SMILES is still read by RDKit, whose drawing says what it means;
      the engine then draws it (RDKit's drawing stands, should the engine
      fail).

@@ -790,6 +790,106 @@ describe("an allene's axis and an odd cumulene's cis or trans, drawn", () => {
   });
 });
 
+describe("a wedge out of an allene's end, read once: the allene's axis, and no axis about the end's single bond", () => {
+  /**
+   * A run straight through from end E (0) to its far end F, `doubles` double bonds long, F's two groups in the page: at E a methyl (1)
+   * and a ring of six (its ipso 2, then 3 to 7 round it, 3 an ortho carbon), with `el` at the far end's place and `ortho` on 3; a
+   * wedge or hashes as `wedge` puts them, narrow at the atom named.
+   */
+  const drawing = (opts: { doubles?: number; el?: string; ortho?: boolean; wedge: [number, number, "up" | "down"] | null }) => {
+    const doubles = opts.doubles ?? 2;
+    const c = Math.cos(Math.PI / 6);
+    const atoms: DrawnAtom[] = [
+      { x: 0, y: 0, hs: 0 },
+      { x: -0.5, y: c, hs: 3 },
+      { x: -0.5, y: -c, hs: 0 },
+    ];
+    // (the ring round its centre, the ipso at 30 degrees from it)
+    const centre = { x: -0.5 - c, y: -c - 0.5 };
+    for (let k = 1; k < 6; k++) {
+      const a = Math.PI / 6 - (k * Math.PI) / 3;
+      atoms.push({ x: centre.x + Math.cos(a), y: centre.y + Math.sin(a), hs: k === 1 && opts.ortho ? 0 : 1 });
+    }
+    const bonds: DrawnBond[] = [
+      { a: 0, b: 1, order: 1 },
+      { a: 0, b: 2, order: 1 },
+      ...[2, 3, 4, 5, 6, 7].map((p, k) => ({ a: p, b: k === 5 ? 2 : p + 1, order: k % 2 ? 1 : 2 })),
+    ];
+    // (the run: its middles, then F)
+    let last = 0;
+    for (let k = 1; k <= doubles; k++) {
+      const at = atoms.length;
+      atoms.push({ x: k, y: 0, hs: 0, ...(k === doubles && opts.el ? { el: opts.el } : {}) });
+      bonds.push({ a: last, b: at, order: 2 });
+      last = at;
+    }
+    const far = last;
+    // (F's groups: two methyls, one where F is an N)
+    atoms.push({ x: doubles + 0.5, y: -c, hs: 3 });
+    bonds.push({ a: far, b: atoms.length - 1, order: 1 });
+    if (opts.el !== "N") {
+      atoms.push({ x: doubles + 0.5, y: c, hs: 2 }, { x: doubles + 1.5, y: c, hs: 3 });
+      bonds.push({ a: far, b: atoms.length - 2, order: 1 }, { a: atoms.length - 2, b: atoms.length - 1, order: 1 });
+    }
+    if (opts.ortho) {
+      atoms.push({ x: atoms[3].x + 0.5, y: atoms[3].y - c, hs: 3 });
+      bonds.push({ a: 3, b: atoms.length - 1, order: 1 });
+    }
+    if (opts.wedge) {
+      const [narrow, other, stereo] = opts.wedge;
+      const b = bonds.find((x) => (x.a === narrow && x.b === other) || (x.b === narrow && x.a === other))!;
+      b.wedge = { narrow, stereo };
+    }
+    return { atoms, bonds, far, read: readStereo(atoms, bonds) };
+  };
+  const pair = (atoms: readonly number[]) => [...atoms].sort((p, q) => p - q).join("-");
+
+  it("reads a wedge at an allene's end, on the end's other group, as the allene's axis only - not also an axis about the end's bond to an aryl", () => {
+    for (const ortho of [false, true])
+      for (const stereo of ["up", "down"] as const) {
+        const { far, read } = drawing({ ortho, wedge: [0, 1, stereo] });
+        expect(read.axes.map((x) => pair(x.atoms)), `${ortho} ${stereo}`).toEqual([pair([0, far])]);
+      }
+  });
+
+  it("reads the same allene drawn either way at its end - the wedge on one group or the hashes on the other - the same", () => {
+    for (const ortho of [false, true]) {
+      const onMethyl = drawing({ ortho, wedge: [0, 1, "up"] }).read.axes;
+      const onAryl = drawing({ ortho, wedge: [0, 2, "down"] }).read.axes;
+      expect(onMethyl, `${ortho}`).toHaveLength(1);
+      expect(onAryl).toEqual(onMethyl);
+    }
+  });
+
+  it("still reads the aryl's own axis from a wedge in its ring, the allene's end plain (ST-1.7's form)", () => {
+    const { read } = drawing({ ortho: true, wedge: [2, 3, "up"] });
+    expect(read.axes.map((x) => pair(x.atoms))).toEqual([pair([0, 2])]);
+  });
+
+  it("reads a wedge at an alkene's carbon, or at a butatriene's end, as an axis about its bond to the aryl, as before: their runs lie in the page", () => {
+    for (const doubles of [1, 3]) {
+      const { read } = drawing({ doubles, ortho: true, wedge: [0, 1, "up"] });
+      expect(read.axes.map((x) => pair(x.atoms)), `${doubles}`).toEqual([pair([0, 2])]);
+    }
+  });
+
+  it("reads no axis about a ketenimine's carbon's bond to its aryl from a wedge at that carbon: it is the run's (whose N end has one group, so no axis is read)", () => {
+    expect(drawing({ el: "N", wedge: [0, 1, "up"] }).read.axes).toEqual([]);
+  });
+
+  it("reads a neighbouring centre's wedge, wide at the allene's end, as that centre's, as before", () => {
+    // (the methyl at E made a centre: an F, a Cl and an H on it, its wedge to E narrow at it)
+    const { atoms, bonds } = drawing({ wedge: null });
+    atoms[1] = { ...atoms[1], hs: 1 };
+    atoms.push({ x: -1.5, y: atoms[1].y, hs: 0, el: "F" }, { x: 0, y: atoms[1].y + 0.87, hs: 0, el: "Cl" });
+    bonds.push({ a: 1, b: atoms.length - 2, order: 1 }, { a: 1, b: atoms.length - 1, order: 1 });
+    bonds[0] = { ...bonds[0], a: 1, b: 0, wedge: { narrow: 1, stereo: "up" } };
+    const read = readStereo(atoms, bonds);
+    expect(read.tetra.has(1)).toBe(true);
+    expect(read.axes).toEqual([]);
+  });
+});
+
 describe("an axis inside a ring, drawn", () => {
   /** A biphenyl bridged at 2 and 2' (`smiles`, its biaryl bond between atoms `i` and `j`), drawn by the engine with its axis given: the axis read back, or none. */
   const readBack = (smiles: string, [i, j]: [number, number]) => {
