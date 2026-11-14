@@ -1565,6 +1565,18 @@ describe("a step that runs a plugin's program", () => {
     await st().lookAtJobs();
     await again;
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:01 \u00b7 1 of 3 \u00b7 2 of 3 failed (2: the program stopped with an error: Some atoms are very close)" });
+    // (every one failed, each with the same words: said once, in the count - not again after it)
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0, 1, 2], ...two }] }) as never);
+    const none = st().runStep(step);
+    await settle();
+    await settle();
+    end(5, "failed");
+    await st().lookAtJobs();
+    await none;
+    const said = st().steps.find((s) => s.id === step)!.ran!.said!;
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false });
+    expect(said).toContain("3 of 3 failed (3: the program stopped with an error: Some atoms are very close)");
+    expect(said.split("Some atoms are very close")).toHaveLength(2);
   });
 
   it("keeps when a running job last wrote anything, as its runner says - running jobs' alone", async () => {

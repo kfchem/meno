@@ -5,6 +5,9 @@
  */
 import { describe, expect, it } from "vitest";
 import { FAILURE_WORDS, failureSaid, failuresSaid, WHY_SHUT } from "./failures";
+import { unfinishedWhy } from "../pageGl/liveChip";
+import { chipMarks as setMarks, type ChipFacts } from "../utils/chipSaid";
+import { chipMarks as framesMarks } from "../utils/molecule3d";
 
 const error = (why: string) => ({ kind: "program-error" as const, why });
 
@@ -29,5 +32,17 @@ describe("a failure said", () => {
     expect(failuresSaid([error("A made-up reason.")], 1)).toBe("1 of 1 failed (1: the program stopped with an error: A made-up reason.)");
     expect(failuresSaid([error("A."), error("A.")], 3)).toBe("2 of 3 failed (2: the program stopped with an error: A.)");
     expect(failuresSaid([error("A."), error("B."), { kind: "not-converged", why: "" }], 5)).toBe("3 of 5 failed (2: the program stopped with an error; 1: not converged)");
+  });
+
+  it("is said so on a set's chip and a molecule's frames chip, cut; whole in the tip over its bar", () => {
+    const long = `${"y".repeat(WHY_SHUT)} and the rest`;
+    const cut = failureSaid(error(long), WHY_SHUT);
+    expect(setMarks({ failed: [null, error(long)] }, 1)).toBe(cut);
+    expect(setMarks({ failed: [null, error(long)] }, 0)).toBe("");
+    expect(framesMarks({ failed: [error("A."), error(long)] }, 1, 2)).toBe(cut);
+    expect(framesMarks({ failed: [error("A.")] }, 0, 1)).toBe(failureSaid(error("A.")));
+    const facts = { count: 2, frame: 0, failed: [null, error(long)] } as unknown as ChipFacts;
+    expect(unfinishedWhy(facts, 1)).toBe(`${FAILURE_WORDS["program-error"]}: ${long}`);
+    expect(unfinishedWhy({ ...facts, marksUnread: true }, 1)).toBe("its marks could not be read");
   });
 });
