@@ -250,8 +250,15 @@ function pump(): void {
  */
 export function drawPart(ask: PartAsk, nearness: () => number = () => 0, wanted: () => boolean = () => true): Promise<DrawnPart | null> {
   return new Promise((resolve, reject) => {
-    queue.push({ ask, nearness, wanted, resolve, reject });
-    pump();
+    const enter = () => {
+      queue.push({ ask, nearness, wanted, resolve, reject });
+      pump();
+    };
+    // (into the queue once its PDF is held: one still being taken in does not hold a place among the few drawn at once - a workspace's
+    //  first PDF's pictures are not kept waiting behind the parts of those held after it)
+    const held = holding.get(ask.sha256);
+    if (held) held.then(enter, enter);
+    else enter();
   });
 }
 
