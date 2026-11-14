@@ -219,6 +219,13 @@ describe("each configuration a drawing states, in what it states to its molecule
       );
     expect(link(withH("up", "none"), withH("none", "down"))).toBe("live");
     expect(link(withH("up", "none"), withH("none", "up"))).toBe("changed");
+    // (the molecule made from the drawing with no H drawn; Clean-up then draws one on the centre and hashes it: the same)
+    const noH = (m: Model): Model => ({ atoms: m.atoms.filter((a) => a.id !== 6), bonds: m.bonds.filter((b) => b.b !== 6) });
+    const made = noH(withH("up", "none"));
+    const madeIds = made.atoms.map((a) => a.id);
+    const keyed = { drawnFrom: madeIds, drawnAs: signatureOf(made, madeIds) };
+    expect(linkOf(keyed, withH("none", "down"))).toBe("live");
+    expect(linkOf(keyed, withH("none", "up"))).toBe("changed");
   });
 });
 

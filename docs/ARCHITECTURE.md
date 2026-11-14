@@ -1102,9 +1102,10 @@ keeps which drawing atom each of its atoms is and what the drawing was (`drawnFr
 its atoms and bonds, and each configuration the drawing states as identity
 reads it - so that (Z) made (E) by moving a methyl, or a centre's two
 groups exchanged in place, is a changed drawing too, and a wedge moved to
-another bond that states the same, as Clean-up moves one, is not. A wedge
-whose configuration is not read (at no centre, leaving the structure) is
-kept as drawn.
+another bond that states the same, as Clean-up moves one, is not; nor is
+a plain hydrogen Clean-up draws on a centre to wedge it, which is the
+structure's as identity folds it in. A wedge whose configuration is not
+read (at no centre, leaving the structure) is kept as drawn.
 `drawing_of` goes the other way: a molecule in 3D's heavy atoms in their
 order, wedged as they are in 3D, its bonds' orders found where a file of
 coordinates gave none - where it has its hydrogens, which the method

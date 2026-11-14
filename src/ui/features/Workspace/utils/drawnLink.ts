@@ -67,9 +67,25 @@ export function signatureOf(model: Model, ids: Iterable<number>): string {
     .flatMap((id) => (byId.has(id) ? [byId.get(id)!] : []))
     .map((a) => `${a.id}:${a.el}:${a.charge ?? 0}:${a.isotope ?? ""}`)
     .sort();
-  const read = configurationsOf(model, of);
+  // (a plain hydrogen drawn on one of its atoms and on nothing else - as Clean-up draws one on a centre to wedge it: the
+  //  structure's, as identity folds it in, so drawn or not it is the same structure and its wedge is read with the centre)
+  const plainH = new Set<number>();
+  for (const id of of)
+    for (const b of bondsOf.get(id) ?? []) {
+      const h = b.a === id ? b.b : b.a;
+      const atom = byId.get(h);
+      if (of.has(h) || b.order !== 1 || b.hydrogen || atom?.el !== "H" || atom.charge || atom.isotope || (bondsOf.get(h) ?? []).length !== 1) continue;
+      plainH.add(h);
+    }
+  const read = configurationsOf(model, new Set([...of, ...plainH]));
   const touching = new Set<Bond>();
-  for (const id of of) for (const b of bondsOf.get(id) ?? []) if (!b.hydrogen) touching.add(b);
+  for (const id of of)
+    for (const b of bondsOf.get(id) ?? []) {
+      if (b.hydrogen) continue;
+      // (to such a hydrogen: nothing of its own, but a wedge on it that is not read)
+      if ((plainH.has(b.a) || plainH.has(b.b)) && (!b.stereo || b.stereo === "none" || read.wedges.has(b.id))) continue;
+      touching.add(b);
+    }
   const bonds = [...touching]
     .map((b) => {
       const ends = of.has(b.a) && of.has(b.b) ? `${b.a}-${b.b}` : of.has(b.a) ? `${b.a}-out` : `${b.b}-out`;
@@ -98,7 +114,9 @@ function configurationsOf(model: Model, of: ReadonlySet<number>): { said: string
   if (!bonds.some((b) => b.order === 2 || (b.stereo && b.stereo !== "none"))) return { said: [], wedges: new Set() };
   const drawing = drawingOf({ atoms, bonds } as Model);
   const read = readStereo(drawing.atoms, drawing.bonds);
-  const id = (i: number) => (i < 0 ? Infinity : atoms[i].id);
+  // (a plain hydrogen - an end, of no charge or mass - as identity takes it: one of its centre's H, drawn or not)
+  const plain = atoms.map((a, i) => a.el === "H" && !a.charge && !a.isotope && drawing.bonds.filter((b) => b.a === i || b.b === i).length === 1);
+  const id = (i: number) => (i < 0 || plain[i] ? Infinity : atoms[i].id);
   const near: number[][] = atoms.map(() => []);
   for (const b of drawing.bonds) {
     near[b.a].push(b.b);
