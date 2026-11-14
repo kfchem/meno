@@ -213,6 +213,51 @@ describe("fragmentOf and partOf", () => {
   }, measured(1_200));
 });
 
+describe("cleanUp, a silyl group whose file set its Si's valence", () => {
+  // (a file's VAL=4 on Si - its element's own, as a typed SMILES's block has it: a hand-made drawing, not a program's)
+  const silyl = (valence: number | undefined, oxygen: boolean): Model => {
+    const at = (id: number, x: number, y: number, el = "C", more: object = {}) => ({ ...atom(id, x, y, el), ...more });
+    const atoms = [
+      at(1, 0, 0),
+      at(2, 1, 0.5),
+      at(3, 2, 0, oxygen ? "O" : "C"),
+      at(4, 3, 0.5, "Si", valence == null ? {} : { valence }),
+      at(5, 3, 1.5),
+      at(6, 4, 0.5),
+      at(7, 3, -0.5),
+    ];
+    const bonds: Bond[] = [
+      { id: 101, a: 1, b: 2, order: 2 },
+      { id: 102, a: 2, b: 3, order: 1 },
+      { id: 103, a: 3, b: 4, order: 1 },
+      { id: 104, a: 4, b: 5, order: 1 },
+      { id: 105, a: 4, b: 6, order: 1 },
+      { id: 106, a: 4, b: 7, order: 1 },
+    ];
+    // (TBS: one of the three a tert-butyl)
+    if (oxygen) {
+      atoms.push(at(8, 4, -0.5), at(9, 5, 0), at(10, 4, -1.5));
+      bonds.push({ id: 107, a: 7, b: 8, order: 1 }, { id: 108, a: 7, b: 9, order: 1 }, { id: 109, a: 7, b: 10, order: 1 });
+    }
+    return { atoms, bonds };
+  };
+  const labels = async (m: Model) => {
+    const { store } = canvas(m);
+    await cleanUp(store);
+    return store.getState().model.atoms.filter((a) => !["C", "O", "Si", "H"].includes(a.el)).map((a) => a.el);
+  };
+
+  it("writes it by name where the valence is its element's own: TMS, OTBS - as with none set", async () => {
+    expect(await labels(silyl(4, false))).toEqual(["TMS"]);
+    expect(await labels(silyl(undefined, false))).toEqual(["TMS"]);
+    expect(await labels(silyl(4, true))).toEqual(["OTBS"]);
+  });
+
+  it("leaves it drawn out where the valence says more than its name would", async () => {
+    expect(await labels(silyl(5, false))).toEqual([]);
+  });
+});
+
 describe("cleanUp", () => {
   it("lays each structure out afresh where it was, keeping its stereochemistry, in one step", async () => {
     const { doc, store } = canvas(model);

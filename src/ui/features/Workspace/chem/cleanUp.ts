@@ -5,7 +5,7 @@
  * as one undo step.
  */
 import { contractGraph, contractionTrials, hiddenIn } from "../../../../lib/chem/contract";
-import { chemistry, implicitHydrogens } from "../../../../lib/chem/molecule";
+import { chemistry, implicitHydrogens, valencesAt } from "../../../../lib/chem/molecule";
 import { styleOf, type DrawingStyle } from "../../../../lib/chem/style";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import type { Layout2D } from "../../../../lib/layout/engine";
@@ -128,16 +128,25 @@ export function fragmentsHolding(model: Model, atoms: Iterable<number>, joined =
  * in: those `expanded` holds - just drawn out of their label - a
  * stereocentre's, wedged, and any atom with more to it than its element and
  * charge (an isotope, a radical, an atom map...), which a label would not
- * say.
+ * say. A valence set to its element's own at its charge says nothing more
+ * (`saysMore`): a file's VAL=4 on every Si leaves TMS and OTBS to be
+ * written by name.
  */
 function keptDrawn(part: Model, expanded: ReadonlySet<number>): Set<number> {
   const keep = new Set([...expanded].filter((id) => part.atoms.some((a) => a.id === id)));
   for (const a of part.atoms) {
-    if (a.stereoCentre || Object.keys(chemistry(a)).some((k) => k !== "charge")) keep.add(a.id);
+    if (a.stereoCentre || Object.keys(chemistry(a)).some((k) => saysMore(a, k))) keep.add(a.id);
   }
   const drawing = drawingOf(part);
   for (const b of drawing.bonds) if (b.wedge) keep.add(part.atoms[b.wedge.narrow].id);
   return keep;
+}
+
+/** Whether `key` of an atom's chemistry says what a label would not: its charge never; its valence where it is not its element's own at that charge (the hydrogens the same either way). */
+function saysMore(a: Model["atoms"][number], key: string): boolean {
+  if (key === "charge") return false;
+  if (key === "valence") return a.valence !== valencesAt(a.el, a.charge ?? 0, a.radical)[0];
+  return true;
 }
 
 type Cleaned = { labels: WrittenAsLabel[]; part: Model; job: LayoutJob; laid: Layout2D };
