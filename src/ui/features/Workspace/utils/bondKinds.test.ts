@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createWorkspaceDocument } from "../document";
 import { connectStoreToDocument, createEditorStore } from "../store";
-import { bondKeyOf, bondKeyPatch, bondKindOf, bondKindPatch, bondLie, COMMON_BOND_KINDS, doubleClickPatch, doubleSideAuto, OTHER_BOND_KINDS, singleRoundPatch, type BondKindName } from "./bondKinds";
+import { bondKeyOf, bondKeyPatch, bondKindMenu, bondKindOf, bondKindPatch, bondLie, COMMON_BOND_KINDS, doubleClickPatch, doubleSideAuto, OTHER_BOND_KINDS, singleRoundPatch, type BondKindName } from "./bondKinds";
 
 const ALL: BondKindName[] = [...COMMON_BOND_KINDS, ...OTHER_BOND_KINDS];
 
@@ -287,5 +287,99 @@ describe("a bond's own kind chosen again from its menu", () => {
     expect(bondLie({ id: 10, a: 2, b: 1, doubleMode: "auto" }, atoms, bonds).side).toBe("upper");
     expect(bondLie({ ...bonds[0], doubleMode: "right" }, atoms, bonds).side).toBe("lower");
     expect(bondLie({ ...bonds[0], doubleMode: "center" }, atoms, bonds).side).toBe("center");
+  });
+});
+
+describe("clicks on a bond, so many in a row", () => {
+  it("the first selects it alone and changes nothing; the second makes it double, again its second line on its next side, the bond still selected; the third a triple", () => {
+    const { doc, st, ab, bc } = chain();
+    const bond = () => st().model.bonds.find((x) => x.id === ab)!;
+    st().setSel({ atoms: new Set(), bonds: new Set([bc]) });
+    const was = doc.getState().model;
+    st().bondClicked(ab, 1);
+    expect([...st().sel.bonds]).toEqual([ab]);
+    expect([...st().sel.atoms].sort()).toEqual([bond().a, bond().b].sort());
+    expect(doc.getState().model).toBe(was);
+    st().bondClicked(ab, 2);
+    expect(bondKindOf(bond())).toBe("double");
+    expect([...st().sel.bonds]).toEqual([ab]);
+    const side = bond().doubleMode ?? "auto";
+    st().bondClicked(ab, 2);
+    expect(bondKindOf(bond())).toBe("double");
+    expect(bond().doubleMode ?? "auto").not.toBe(side);
+    st().bondClicked(ab, 3);
+    expect(bondKindOf(bond())).toBe("triple");
+  });
+
+  it("the first sets where a Shift-click selects along the bonds from: the bond's first atom", () => {
+    const { st, ab, bc } = chain();
+    const [a, b, c] = [st().model.bonds.find((x) => x.id === ab)!.a, st().model.bonds.find((x) => x.id === ab)!.b, st().model.bonds.find((x) => x.id === bc)!.b];
+    st().setSel({ atoms: new Set(), bonds: new Set() }, null);
+    // (ab runs from a: a Shift-click on c then takes the path a to c - both bonds and their three atoms)
+    st().bondClicked(ab, 1);
+    st().selectPathTo(c);
+    expect([...st().sel.bonds].sort()).toEqual([ab, bc].sort());
+    expect([...st().sel.atoms].sort()).toEqual([a, b, c].sort());
+  });
+});
+
+describe("a bond's menu as it is opened", () => {
+  it("on a bond among those selected: their kind chosen for all, one step - its own kind again each of that kind one step on - its keys hidden", () => {
+    const { doc, st, ab, bc } = chain();
+    const bond = (id: number) => st().model.bonds.find((x) => x.id === id)!;
+    st().setBondsKind([ab], "wedge");
+    st().setSel({ atoms: new Set(), bonds: new Set([ab, bc]) });
+    const menu = bondKindMenu(st(), ab)!;
+    expect(menu.current).toBe("wedge");
+    expect(menu.one).toBe(false);
+    expect(menu.lie).toEqual(bondLie(bond(ab), st().model.atoms, st().model.bonds));
+    const narrow = menu.lie.narrowLeft;
+    const depth = doc.history().undoDepth;
+    menu.choose("wedge");
+    expect(doc.history().undoDepth).toBe(depth + 1);
+    expect([bondKindOf(bond(ab)), bondKindOf(bond(bc))]).toEqual(["wedge", "wedge"]);
+    expect(bondLie(bond(ab), st().model.atoms, st().model.bonds).narrowLeft).toBe(!narrow);
+    bondKindMenu(st(), ab)!.choose("double");
+    expect([bondKindOf(bond(ab)), bondKindOf(bond(bc))]).toEqual(["double", "double"]);
+  });
+
+  it("on a bond not selected: that bond alone, its keys shown; none on what is no bond", () => {
+    const { st, ab, bc } = chain();
+    const bond = (id: number) => st().model.bonds.find((x) => x.id === id)!;
+    st().setSel({ atoms: new Set(), bonds: new Set([bc]) });
+    const menu = bondKindMenu(st(), ab)!;
+    expect(menu.one).toBe(true);
+    expect(menu.current).toBe("single");
+    menu.choose("triple");
+    expect([bondKindOf(bond(ab)), bondKindOf(bond(bc))]).toEqual(["triple", "single"]);
+    expect(bondKindMenu(st(), 9999)).toBeUndefined();
+  });
+});
+
+describe("a kind's own round, by kind", () => {
+  it("a hashed wedge chosen again is narrow at its other end; a wavy, bold, hashed, dashed or dative bond chosen again, nothing", () => {
+    const { st, ab } = chain();
+    const bond = () => st().model.bonds.find((x) => x.id === ab)!;
+    st().setBondsKind([ab], "hashed-wedge");
+    const narrow = bondLie(bond(), st().model.atoms, st().model.bonds).narrowLeft;
+    expect(st().setBondsKind([ab], "hashed-wedge", true)).toBe(true);
+    expect(bondKindOf(bond())).toBe("hashed-wedge");
+    expect(bondLie(bond(), st().model.atoms, st().model.bonds).narrowLeft).toBe(!narrow);
+    for (const kind of OTHER_BOND_KINDS) {
+      st().setBondsKind([ab], kind);
+      expect(st().setBondsKind([ab], kind, true), kind).toBe(false);
+      expect(bondKindOf(bond()), kind).toBe(kind);
+    }
+  });
+
+  it("lies, for a bond standing upright, with its upper atom at the icon's left", () => {
+    const atoms = [
+      { id: 1, x: 0, y: 1 },
+      { id: 2, x: 0, y: 0 },
+    ];
+    const bonds = [{ id: 10, a: 1, b: 2 }];
+    expect(bondLie({ ...bonds[0], narrow: 1 }, atoms, bonds).narrowLeft).toBe(true);
+    expect(bondLie({ ...bonds[0], narrow: 2 }, atoms, bonds).narrowLeft).toBe(false);
+    expect(bondLie({ id: 10, a: 2, b: 1, narrow: 1 }, atoms, bonds).narrowLeft).toBe(true);
   });
 });

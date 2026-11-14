@@ -304,7 +304,7 @@ under the pointer, an atom or a bond alike - a bond with its two atoms,
 alone, what was selected let go - and a single click never changes the
 compound (the maintainer, 2026-11-14: a click on a bond had gone round its
 kinds, and a click meant to select it could put a wedge in, a statement of
-configuration, with nothing said). Ctrl or ⌘ and a click adds a bond or
+configuration, with nothing said). Cmd or Ctrl and a click adds a bond or
 takes it out; Shift and a click, the box and the lasso are as before. A
 double-click on a bond makes it double and, on a double bond, moves its
 second line - its own side, the middle, the other side - its first click

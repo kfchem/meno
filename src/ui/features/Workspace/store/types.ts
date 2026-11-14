@@ -2059,14 +2059,18 @@ export type EditorState = {
    */
   justExpanded: () => ReadonlySet<number>;
   updateBond: (id: number, patch: Partial<Bond>) => void;
-  /** Each of the bonds made of `kind` (utils/bondKinds), as one step. */
   /** Bonds given a kind from a bond's menu, one step - with `stepOn`, each already of that kind one step on in its round instead; false where nothing changed. */
   setBondsKind: (ids: readonly number[], kind: import("../utils/bondKinds").BondKindName, stepOn?: boolean) => boolean;
   /**
-   * A bond key (utils/bondKinds `bondKeyPatch`) with the pointer on bond `id`: what it makes of that bond, made of it and of
-   * every bond selected where it is among them, as one step. False where it would change nothing.
+   * A bond key (utils/bondKinds `bondKeyPatch`) with the pointer on bond `id`: what it makes of that bond, made of it alone,
+   * selected or not, as one step. False where it would change nothing.
    */
   bondKey: (id: number, key: import("../utils/bondKinds").BondKey) => boolean;
+  /**
+   * Clicks on bond `id`, `clicks` of them in a row (components/BondsPick2D): the first selects it alone (`clickSelectBond`) and
+   * changes nothing; the second makes it double, or a double's second line its next side; the third, a triple.
+   */
+  bondClicked: (id: number, clicks: number) => void;
   setBondOrder: (id: number, order: Bond["order"]) => void;
   setBondStereo: (id: number, stereo: NonNullable<Bond["stereo"]>) => void;
   setBondDoubleMode: (

@@ -202,6 +202,22 @@ export function bondLie(b: Link & Pick<Bond, "narrow" | "doubleMode">, atoms: re
   return { narrowLeft, side: anticlockwise ? "upper" : "lower" };
 }
 
+/**
+ * What a bond's right-click menu offers of its kinds (PartMenu `bondKind`), the menu opened on bond `id`: its kind, how it lies,
+ * whether the menu acts on it alone, and a kind chosen - for the bonds selected, where it is among them, one step for all; the
+ * bond's own kind chosen again, one step on in its round, each bond selected of that kind about itself. None where it is no bond.
+ */
+export function bondKindMenu(
+  st: { sel: { bonds: ReadonlySet<number> }; model: { atoms: readonly At[]; bonds: readonly (Link & Pick<Bond, "order" | "stereo" | "display" | "dative" | "narrow" | "doubleMode">)[] }; setBondsKind: (ids: readonly number[], kind: BondKindName, stepOn?: boolean) => boolean },
+  id: number,
+): { current: BondKindName | null; lie: ReturnType<typeof bondLie>; one: boolean; choose: (kind: BondKindName) => void } | undefined {
+  const bond = st.model.bonds.find((b) => b.id === id);
+  if (!bond) return undefined;
+  const ids = st.sel.bonds.has(id) ? [...st.sel.bonds] : [id];
+  const current = bondKindOf(bond);
+  return { current, lie: bondLie(bond, st.model.atoms, st.model.bonds), one: ids.length === 1, choose: (kind) => void st.setBondsKind(ids, kind, kind === current) };
+}
+
 /** Whether `patch` would change nothing of `b`: each field as it reads where it is not set. */
 export function patchChangesNothing(b: Partial<Bond>, patch: Partial<Bond>): boolean {
   const unset: Partial<Record<keyof Bond, unknown>> = { stereo: "none", doubleMode: "auto", dative: false };

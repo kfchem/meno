@@ -7,7 +7,7 @@ import type { ShowBox } from "../../utils/viewShow";
 import { bondPtOf, labelPtOf, wordsKept } from "../../restyle";
 import { restyledDrawn } from "../../utils/copyPaste";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
-import { bondKeyPatch, bondKindPatch, bondKindStepPatch, patchChangesNothing, type BondKey, type BondKindName } from "../../utils/bondKinds";
+import { bondKeyPatch, bondKindPatch, bondKindStepPatch, doubleClickPatch, patchChangesNothing, type BondKey, type BondKindName } from "../../utils/bondKinds";
 import { gestureStep } from "../../../../../lib/doc/document";
 import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
 import { newBondFrom } from "../../utils/geometry";
@@ -471,6 +471,22 @@ export const createModelSlice = (
     if (patchChangesNothing(bond, patch)) return false;
     doc.edit("change bond", (d) => ops.updateBond(d, id, patch));
     return true;
+  },
+
+  // (clicks on a bond, so many in a row: the first selects it alone - a click never changes the compound (the maintainer,
+  //  2026-11-14) - the second makes it double, a double's second line on its next side as the 2 key does, the third a triple)
+  bondClicked: (id: number, clicks: number) => {
+    const { model } = get();
+    const bond = model.bonds.find((b) => b.id === id);
+    if (!bond) return;
+    if (clicks <= 1) return get().clickSelectBond(id);
+    if (clicks === 2) {
+      const patch = doubleClickPatch(bond, model.atoms, model.bonds);
+      if (bond.order === 2) get().setBondDoubleMode(id, patch.doubleMode!);
+      else get().updateBond(id, patch);
+      return;
+    }
+    get().updateBond(id, { order: 3, stereo: "none" });
   },
 
   setBondOrder: (id: number, order: Bond["order"]) => {
