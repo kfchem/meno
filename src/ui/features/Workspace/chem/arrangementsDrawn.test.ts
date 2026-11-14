@@ -53,6 +53,20 @@ describe("a metal's donors across, read from a drawing", () => {
     expect(arrangementsDrawn(drawingOf(moved), moved)).toHaveLength(1);
   });
 
+  it("no drawing falls between the X and the cross: turned 22 degrees it is the cross, 23 the X - cis either way", () => {
+    const at = (turn: number) => identityOfDrawn(drawn("Pt", ["Cl", "Cl", "N", "N"].map((el, k) => ({ el, at: turn + 90 * k, ...(el === "N" ? { valence: 4 } : {}) })))).text;
+    const cis = at(45);
+    expect([at(22), at(23), at(-22)]).toEqual([cis, cis, cis]);
+  });
+
+  it("a six-donor metal Meno laid out with nothing given, still marked so, is read as none until a donor is moved round", () => {
+    const six = drawn("Co", ["Cl", "Cl", "N", "N", "N", "N"].map((el, k) => ({ el, at: 60 * k })));
+    const metal = six.atoms[0];
+    const marked: Model = { ...six, atoms: [{ ...metal, unsure: { said: [ARRANGEMENT_SAID], as: arrangementAs(metal, six.atoms, six.bonds) } }, ...six.atoms.slice(1)] };
+    expect(arrangementsDrawn(drawingOf(six), six)).toHaveLength(1);
+    expect(arrangementsDrawn(drawingOf(marked), marked)).toEqual([]);
+  });
+
   it("the upright cross on a metal not surely square planar states no geometry: cis and trans drawn so are one structure, matching neither X", () => {
     const cross = (els: string[]) => drawn("Ni", square(els, 0));
     expect(arrangementsDrawn(drawingOf(cross(["Cl", "Cl", "N", "N"])))).toEqual([]);

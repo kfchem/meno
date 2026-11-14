@@ -95,8 +95,12 @@ export function labelsDrawnOut(part: Model): Model {
   return { atoms, bonds };
 }
 
-/** How far, in degrees, each of a four-donor metal's bonds may lie from a diagonal of the page for the X to be read (`arrangementsDrawn`). */
-const X_SLACK = 20;
+/**
+ * How far, in degrees, each of a four-donor metal's bonds may lie from a diagonal of the page for the X to be read, and from
+ * the page's axes for the upright cross (`arrangementsDrawn`): half of the 45 between them, so that every drawing nearer the
+ * diagonals is the X and every one nearer the axes the cross - none falls between.
+ */
+const X_SLACK = 22.5;
 
 /**
  * Which of each metal's donors the drawing has across from each other
@@ -110,8 +114,9 @@ const X_SLACK = 20;
  * the upright cross (ST-2.6's acceptable form) by the chemist: not still
  * marked "Which donors are next to each other is not given", as Meno lays
  * one out where nothing gave its arrangement. Any other upright cross
- * states no geometry, and is read as none. None where the drawing does not
- * say which pairing.
+ * states no geometry, and is read as none; so is any metal still carrying
+ * that mark, of four donors or six. None where the drawing does not say
+ * which pairing.
  */
 export function arrangementsDrawn(drawing: ReturnType<typeof drawingOf>, part?: Model): Arranged[] {
   const around: number[][] = drawing.atoms.map(() => []);
@@ -125,7 +130,9 @@ export function arrangementsDrawn(drawing: ReturnType<typeof drawingOf>, part?: 
     if (!isMetal(a.el ?? "") || (donors.length !== 4 && donors.length !== 6) || a.hs) return;
     if (donors.some((d) => Math.hypot(drawing.atoms[d].x - a.x, drawing.atoms[d].y - a.y) < 1e-6)) return;
     const angle = donors.map((d) => Math.atan2(drawing.atoms[d].y - a.y, drawing.atoms[d].x - a.x));
-    if (donors.length === 4 && !squarePlanarDrawn(drawing, m, angle) && !(crossDrawn(angle) && surelySquare(drawing, m, around) && !marked(part, m))) return;
+    // (one Meno laid out with nothing given, still marked so: none, however drawn - four donors or six)
+    if (part && marked(part, m)) return;
+    if (donors.length === 4 && !squarePlanarDrawn(drawing, m, angle) && !(part && crossDrawn(angle) && surelySquare(drawing, m, around))) return;
     const partner = pairingDrawn(angle);
     if (partner) out.push({ metal: m, pairs: pairsOf(donors, partner) });
   });
@@ -138,7 +145,7 @@ function squarePlanarDrawn(drawing: ReturnType<typeof drawingOf>, m: number, ang
     const q = (((t % (Math.PI / 2)) + Math.PI / 2) % (Math.PI / 2)) - Math.PI / 4;
     return (Math.abs(q) * 180) / Math.PI;
   };
-  if (angle.every((t) => offDiagonal(t) <= X_SLACK)) return true;
+  if (angle.every((t) => offDiagonal(t) < X_SLACK)) return true;
   const wedges = drawing.bonds.filter((b) => (b.a === m || b.b === m) && b.wedge?.narrow === m).map((b) => b.wedge!.stereo);
   return wedges.length === 4 && wedges.filter((w) => w === "up").length === 2;
 }
@@ -169,9 +176,8 @@ function surelySquare(drawing: ReturnType<typeof drawingOf>, m: number, around: 
 }
 
 /** Whether atom `m` of `part` still carries the mark Meno puts on an arrangement nobody gave (utils/arrangement): moved round since, it is the chemist's. */
-function marked(part: Model | undefined, m: number): boolean {
-  const a = part?.atoms[m];
-  if (!a) return true;
-  return !!a.unsure && a.unsure.as.startsWith(ARRANGED) && a.unsure.as === arrangementAs(a, part!.atoms, part!.bonds);
+function marked(part: Model, m: number): boolean {
+  const a = part.atoms[m];
+  return !!a?.unsure && a.unsure.as.startsWith(ARRANGED) && a.unsure.as === arrangementAs(a, part.atoms, part.bonds);
 }
 

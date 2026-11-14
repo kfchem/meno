@@ -911,7 +911,9 @@ drawn, aromatic rings as one form.* What that means, plainly:
   it is surely square planar (Pt(II), Pd(II), Au(III), Rh(I), Ir(I)) and
   not marked "Which donors are next to each other is not given", as Meno
   marks one it laid out with nothing given. Any other upright cross states
-  no geometry and is read as none. In 3D the places decide, for any metal
+  no geometry and is read as none, and so is any metal, of four donors or
+  six, that still carries that mark. A drawing nearer the diagonals is the
+  X, one nearer the page's axes the cross. In 3D the places decide, for any metal
   of four or six donors. Two donors are across where the angle between
   them at the metal is at least 150 degrees (four donors) or 135 (six:
   a terpyridine holds its outer donors short of a line), with no other
