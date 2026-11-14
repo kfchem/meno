@@ -230,7 +230,7 @@ import { NotRead } from "../../../lib/calc/read";
 import { namedDrawn, putDownSmiles } from "./utils/quickAddSmiles";
 import { addedBox } from "./store/slices/modelSlice";
 import type { SelectableKind } from "./store/slices/selectionSlice";
-import { isScopedKind, menuScope, selectionCount } from "./utils/menuScope";
+import { isScopedKind, menuScope, reachedOf, selectionCount } from "./utils/menuScope";
 import { viewPanning } from "./components/viewGoal";
 import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gesture";
 import { Remake3D } from "./components/remake3d";
@@ -240,7 +240,7 @@ import { conformerPairs, conformersSaid } from "./chem/structureMaps";
 import { partsOffered } from "./utils/joinedParts";
 import { useAtomMaps } from "./chem/useAtomMaps";
 import { turnOnto } from "./utils/align3d";
-import type { ArrowFormPatch, Caption, Drawn, Grown3D, Molecule3D, PictureFrom, WordsFrom } from "./store/types";
+import type { ArrowFormPatch, Caption, Drawn, EditorState, Grown3D, Molecule3D, PictureFrom, WordsFrom } from "./store/types";
 import { resultKey, resultsOn } from "../../../lib/calc/results";
 import { titled } from "../../../lib/calc/sources";
 import { byOf, MENO, missingFor } from "./workflow/doers";
@@ -1247,12 +1247,22 @@ function WorkspaceContent({
         otherLook: (() => {
           const other = lookOf(menuMolecule) === "primary" ? "secondary" : "primary";
           // (sticks alone drawn as balls and sticks are, in the icon)
-          return { name: styleNames3d[other], atoms: style3d[other].atoms === "space" ? ("space" as const) : ("balls" as const), run: () => store.getState().switchLook3d(menuMolecule.id) };
+          // (the molecules selected with it, where it is among them: each given the other look of the one right-clicked, one step)
+          const { sel3d } = store.getState();
+          const ids = menu?.selection === "here" && sel3d.has(menuMolecule.id) ? [...sel3d] : null;
+          return {
+            name: styleNames3d[other],
+            atoms: style3d[other].atoms === "space" ? ("space" as const) : ("balls" as const),
+            run: () => (ids && ids.length > 1 ? store.getState().setLook3d(ids, other) : store.getState().switchLook3d(menuMolecule.id)),
+          };
         })(),
         chosen: chosen3d?.id === menuMolecule.id ? (chosenPath(menuMolecule, chosen3d)?.length ?? 0) : 0,
         onMeasure: () => store.getState().measureChosen3d(),
         ...(chosenSettable ? { onSetChosen: () => store.getState().setChosen3d() } : {}),
-        onResetTurn: () => store.getState().resetTurn3d(menuMolecule.id),
+        onResetTurn: () => {
+          const { sel3d } = store.getState();
+          for (const id of menu?.selection === "here" && sel3d.has(menuMolecule.id) ? [...sel3d] : [menuMolecule.id]) store.getState().resetTurn3d(id);
+        },
         // (with the others selected with it, where it is among them: each about its own centre)
         onTurnOnce: () => {
           const { sel3d } = store.getState();
@@ -1602,24 +1612,29 @@ function WorkspaceContent({
     const after = { ...c, ...next };
     return { y: top - wordsSet(after, layoutOpts, set).halfH };
   };
-  const sizeWords = (id: number, pt: number | null) => {
+  // (words given a size, a line spacing or a typeface: each of `ids`, one step - the words selected with those right-clicked)
+  // (each of the words `ids` given its own patch - its top kept, as the words would stand after it - as one step)
+  type WordsNext = Partial<Pick<Caption, "text" | "size" | "font" | "lines" | "marks">>;
+  const wordsEach = (ids: readonly number[], label: string, patchOf: (c: Caption) => { patch: Parameters<EditorState["updateCaption"]>[1]; after: WordsNext }) => {
     const st = store.getState();
-    const c = st.captions.find((x) => x.id === id);
-    if (c) st.updateCaption(id, { size: pt, ...keepTop(c, { size: pt ?? undefined }) });
+    st.updateCaptions(
+      ids.flatMap((id) => {
+        const c = st.captions.find((x) => x.id === id);
+        if (!c) return [];
+        const { patch, after } = patchOf(c);
+        return [[id, { ...patch, ...keepTop(c, after) }] as const];
+      }),
+      label,
+    );
   };
+  const sizeWords = (ids: readonly number[], pt: number | null) => wordsEach(ids, "size text", () => ({ patch: { size: pt }, after: { size: pt ?? undefined } }));
   // (their lines as far apart as asked - single, none of their own)
-  const spaceWords = (id: number, lines: number | null) => {
-    const st = store.getState();
-    const c = st.captions.find((x) => x.id === id);
-    if (c) st.updateCaption(id, { lines, ...keepTop(c, { lines: lines ?? undefined }) });
-  };
+  const spaceWords = (ids: readonly number[], lines: number | null) => wordsEach(ids, "change line spacing", () => ({ patch: { lines }, after: { lines: lines ?? undefined } }));
   // (in a typeface of their own - none, the drawing's - once its letters are read: set in it at once, not in another first)
-  const faceWords = (id: number, font: string | null) =>
-    void typefaceRead(font ?? style.fontFamily).then(() => {
-      const st = store.getState();
-      const c = st.captions.find((x) => x.id === id);
-      if (c) st.updateCaption(id, { font, ...keepTop(c, { font: font ?? undefined }) });
-    });
+  const faceWords = (ids: readonly number[], font: string | null) =>
+    void typefaceRead(font ?? style.fontFamily).then(() => wordsEach(ids, "change typeface", () => ({ patch: { font }, after: { font: font ?? undefined } })));
+  // (what a menu's own items reach: utils/menuScope `reachedOf`)
+  const ofKind = reachedOf;
   const [startZoom] = useState(() => startingZoom(style));
   // Drops on the drawing: files, and objects and pictures out of Office (lib/drop)
   const dropRef = useRef<HTMLDivElement>(null);
@@ -2193,8 +2208,14 @@ function WorkspaceContent({
           target={menu}
           anchor={menuAnchor}
           onClose={closeMenu}
-          onDelete={() => deleteFromMenu(store.getState(), menu, deletePart)}
-          // (what it acts on, said first; the thing alone deleted or coloured where its own items do not reach the selection)
+          // (the selection, where the menu reaches more than the thing right-clicked; else the thing - menuDelete)
+          onDelete={() => {
+            const st = store.getState();
+            const more = menu.selection === "here" && menu.kind != null && menu.id != null && isScopedKind(menu.kind) && menuScope(st, menu.kind, menu.id).more;
+            if (more) st.deleteSelection();
+            else deleteFromMenu(st, menu, deletePart);
+          }}
+          // (what it acts on, said first)
           scope={(() => {
             const st = store.getState();
             if (menu.selection !== "here") return undefined;
@@ -2202,8 +2223,7 @@ function WorkspaceContent({
             const all = selectionCount(st);
             return all ? { thing: all, count: all, more: true, ofKind: "" } : undefined;
           })()}
-          onDeleteThis={() => deleteFromMenu(store.getState(), { ...menu, selection: "none" }, deletePart)}
-          onColourThis={colourFor({ ...menu, selection: "none" })}
+
           molecule3d={menu3d}
           records={menuRecords}
           measure3d={measure3dMenu}
@@ -2321,30 +2341,43 @@ function WorkspaceContent({
             if (!c) return undefined;
             const styles = stylesOf(c.text.length, c.marks).filter((_, i) => /\S/.test(c.text[i]));
             const st = store.getState();
+            const ids = ofKind(menu, st.selCaptions, c.id);
             return {
               font: (
                 <WordsFont
                   id={c.id}
                   label={layoutOpts.pointPx ? layoutOpts.fontPx / layoutOpts.pointPx : 10}
                   drawing={style.fontFamily}
-                  onSize={(pt) => sizeWords(c.id, pt)}
-                  onLines={(lines) => spaceWords(c.id, lines)}
-                  onFont={(font) => faceWords(c.id, font)}
+                  onSize={(pt) => sizeWords(ids, pt)}
+                  onLines={(lines) => spaceWords(ids, lines)}
+                  onFont={(font) => faceWords(ids, font)}
                 />
               ),
               bold: styles.length > 0 && styles.every((x) => x?.bold),
               italic: styles.length > 0 && styles.every((x) => x?.italic),
               list: c.text.split("\n").every((l) => !l.trim() || listItem(l)),
-              onBold: () => st.styleWords([c.id], "bold"),
-              onItalic: () => st.styleWords([c.id], "italic"),
-              onSup: () => st.styleWords([c.id], "sup"),
-              onSub: () => st.styleWords([c.id], "sub"),
+              onBold: () => st.styleWords(ids, "bold"),
+              onItalic: () => st.styleWords(ids, "italic"),
+              onSup: () => st.styleWords(ids, "sup"),
+              onSub: () => st.styleWords(ids, "sub"),
               onList: () => {
-                // (as a list's lines are made so while written: all of them items, or plain again)
-                const ed = new WordsEditor(c.text, c.marks);
-                ed.sel = { anchor: 0, head: c.text.length };
-                ed.toggleList();
-                st.updateCaption(c.id, { text: ed.text, marks: ed.marks(), ...keepTop(c, { text: ed.text, marks: ed.marks() }) });
+                // (as a list's lines are made so while written: all of them items, or plain again - each as the one right-clicked goes)
+                const isList = (w: Caption) => w.text.split("\n").every((l) => !l.trim() || listItem(l));
+                const toList = !isList(c);
+                wordsEach(
+                  ids.filter((id) => {
+                    const w = st.captions.find((x) => x.id === id);
+                    return !!w && isList(w) !== toList;
+                  }),
+                  "edit text",
+                  (w) => {
+                    const ed = new WordsEditor(w.text, w.marks);
+                    ed.sel = { anchor: 0, head: w.text.length };
+                    ed.toggleList();
+                    const next = { text: ed.text, marks: ed.marks() };
+                    return { patch: next, after: next };
+                  },
+                );
               },
             };
           })()}
@@ -2408,7 +2441,7 @@ function WorkspaceContent({
               ccw: !!cy.ccw,
               onTurn: () => turnCycle(store, cy.id),
               gap: cy.gap ?? CYCLE_MARGIN,
-              setGap: (gap: number) => st.updateCycle(cy.id, { gap }),
+              setGap: (gap: number) => st.updateCycles(ofKind(menu, st.selCycles, cy.id), { gap }),
               // (ends set by hand: those of the arrow right-clicked, and all)
               ...(() => {
                 const set = Object.keys(cy.ends ?? {});
@@ -2428,11 +2461,11 @@ function WorkspaceContent({
             return {
               ...(sh.kind === "rect" ? { onCorners: () => setCornersCard({ id: sh.id, x: menu.x, y: menu.y, within: menu.within }) } : {}),
               width: sh.width ?? null,
-              onWidth: (width) => st.styleShapes([sh.id], { width }),
+              onWidth: (width) => st.styleShapes(ofKind(menu, st.selShapes, sh.id), { width }),
               dash: !!sh.dash,
-              onDash: () => st.styleShapes([sh.id], { dash: !sh.dash }),
-              onFront: () => st.orderShapes([sh.id], true),
-              onBack: () => st.orderShapes([sh.id], false),
+              onDash: () => st.styleShapes(ofKind(menu, st.selShapes, sh.id), { dash: !sh.dash }),
+              onFront: () => st.orderShapes(ofKind(menu, st.selShapes, sh.id), true),
+              onBack: () => st.orderShapes(ofKind(menu, st.selShapes, sh.id), false),
             };
           })()}
           onCombinePdfs={(() => {
@@ -2501,10 +2534,10 @@ function WorkspaceContent({
             return {
               spread: !!p.spread,
               icon: !!p.icon,
-              onSpread: () => st.spreadPdf(p.id, !p.spread),
+              onSpread: () => st.spreadPdfs(ofKind(menu, st.selPdfs, p.id), !p.spread),
               onWrite: () => st.setInkMode({ tool: "pen", color: null, width: 0 }),
               ...(p.spread && p.placed?.length ? { onRows: () => st.pdfPagesInRows(p.id) } : {}),
-              onIcon: () => st.iconPdf(p.id, !p.icon),
+              onIcon: () => st.iconPdfs(ofKind(menu, st.selPdfs, p.id), !p.icon),
               ...(!p.spread && !p.icon && p.page < p.pages.length - 1 ? { onNext: () => st.turnPdf(p.id, p.page + 1) } : {}),
               ...(!p.spread && !p.icon && p.page > 0 ? { onPrevious: () => st.turnPdf(p.id, p.page - 1) } : {}),
               onRead: () => st.readPdf(p.id),
@@ -2667,7 +2700,7 @@ function WorkspaceContent({
             const st = store.getState();
             const a = menu.kind === "arrow" && menu.id != null ? st.arrows.find((x) => x.id === menu.id) : undefined;
             if (!a) return undefined;
-            const set = (patch: ArrowFormPatch) => store.getState().setArrowForm([a.id], patch);
+            const set = (patch: ArrowFormPatch) => store.getState().setArrowForm(ofKind(menu, st.selArrows, a.id), patch);
             return {
               kind: a.kind ?? null,
               setKind: (kind: ArrowKind | null) => set({ kind }),

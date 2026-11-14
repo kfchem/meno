@@ -423,18 +423,13 @@ describe("the right-click's one rule (docs/EDITOR-2D.md, *Selecting*)", () => {
     expect(m.html).toContain('title="Charge one up on 3 atoms (+)"');
   });
 
-  it("on a shape selected with more, whose own items reach only it, puts them under 'This shape' and the selection's under its count - the count covering none of the shape's", () => {
+  it("on a shape selected with more is the shape's menu under one line counting the selection: its own items reaching the shapes selected, Delete the selection", () => {
     const shape = { onCorners: none, width: 2, onWidth: none, dash: false, onDash: none, onFront: none, onBack: none };
     const scope = { thing: "This shape", count: "2 atoms, 1 shape", more: true, ofKind: "1 shape" };
-    const m = menu({ ...target({ selection: "here", drawing: true }), kind: "shape", id: 1 }, { scope, shape, onColour: none, onDeleteThis: none, onColourThis: none });
-    expect(m.lines).toEqual(["This shape", "2 atoms, 1 shape"]);
-    expect(m.icons).toEqual(["Colour…", "Delete shape"]);
-    expect(m.selIcons).toEqual(["Cut", "Copy", "Clean up these structures", "3D structures", "Colour…", "Delete selection"]);
-    // (the shape's own, before the count's line; its Delete without the key - the key deletes the selection)
-    const at = (s: string) => m.html.indexOf(s);
-    expect(at("Corners…")).toBeLessThan(at(">2 atoms, 1 shape<"));
-    expect(at('aria-label="Delete shape"')).toBeLessThan(at(">2 atoms, 1 shape<"));
-    expect(m.html).toMatch(/aria-label="Delete shape" title="Delete shape"/);
-    expect(at("Copy as SMILES")).toBeGreaterThan(at(">2 atoms, 1 shape<"));
+    const m = menu({ ...target({ selection: "here", drawing: true }), kind: "shape", id: 1 }, { scope, shape, onColour: none });
+    expect(m.lines).toEqual(["2 atoms, 1 shape"]);
+    expect(m.icons).toEqual(["Colour…", "Delete selection"]);
+    expect(m.selIcons).toEqual(["Cut", "Copy"]);
+    expect(m.listed).toEqual(["Corners…", "Line as bonds", "1 pt line", "2 pt line", "Dashed line", "Bring to front", "Send to back", "Copy as SMILES", "Turn over left to right", "Turn over top to bottom", "Save as abbreviation…"]);
   });
 });

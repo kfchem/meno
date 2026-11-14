@@ -236,8 +236,6 @@ function IconRow({ label, items, run, below }: { label: string; items: Item[]; r
 export default function PartMenu({
   target,
   scope,
-  onDeleteThis,
-  onColourThis,
   records,
   stereo,
   figure,
@@ -308,10 +306,7 @@ export default function PartMenu({
    * (docs/EDITOR-2D.md, *Selecting*). Unset, a menu of a thing that is not selected (a measurement, a wire).
    */
   scope?: MenuScope;
-  /** The thing right-clicked alone deleted, the rest of the selection kept: its kind's own Delete, where its items do not yet reach the selection. */
-  onDeleteThis?: () => void;
-  /** The thing right-clicked alone coloured: its kind's own Colour…, likewise. */
-  onColourThis?: () => void;
+
   /** The part's structure cleaned up, or the selection's structures. */
   onCleanUp: () => void;
   /** The part's structure made in 3D, or the selection's structures. */
@@ -638,14 +633,9 @@ export default function PartMenu({
   const deleteKey = MAC ? "⌫" : "Del";
   const cleanUpKey = MAC ? "⇧⌘K" : "Ctrl+Shift+K";
   const shortcut = (key: string) => (MAC ? `⌘${key}` : `Ctrl+${key}`);
-  // (the kinds whose own items reach every selected thing of their kind - an atom's charge, a bond's kind - and so whose first
-  //  line counts the selection: the others' own items act on the one thing right-clicked, under a line saying so, until they too
-  //  reach the selection; docs/EDITOR-2D.md, *Selecting*)
-  const spreads = target.kind === "atom" || target.kind === "bond";
-  // (the selection holds more than the thing right-clicked, and its own items do not reach it: two parts, each under its line)
-  const split = !!scope?.more && !spreads && target.kind != null;
-  // (a key acts on the selection: shown beside an item only where the item acts on it too)
-  const keys = target.selection !== "elsewhere" && !split;
+  // (a key acts on the selection: shown beside an item only where the item acts on it too - as every menu's items do, the
+  //  thing's own reaching the selected of its kind: docs/EDITOR-2D.md, *Selecting*)
+  const keys = target.selection !== "elsewhere";
   const drawing = target.drawing !== false;
   const del = (name: string, withKey = true): Item => ({ name, keys: withKey ? deleteKey : "", run: onDelete, icon: MENU_ICONS.delete, del: true });
   // (an electron-pushing arrow from the atom or bond right-clicked: a pair's, or one electron's)
@@ -1085,41 +1075,37 @@ export default function PartMenu({
           ...stackItem,
           ...magnifyItems,
         ];
-  // (the thing's own items, said for what they reach: where they reach the selection, named for it - "Charge one up on 3 atoms",
-  //  "Delete selection"; where they do not, and the selection holds more, its Delete and Colour… for the one thing alone)
+  // (a thing's own items reach every selected thing of its kind - an atom's charge, a bond's kind, a shape's line, words' bold -
+  //  and what is about the one thing stays its own; clean up, 3D, colour and Delete reach the whole selection: each said for what
+  //  it reaches where the selection holds more - "Charge one up on 3 atoms", "Delete selection" - docs/EDITOR-2D.md, *Selecting*)
   const own: Item[] = items.map((i): Item => {
     if (!scope?.more || target.kind == null) return i;
-    if (spreads) {
-      if (i.del) return { ...i, name: "Delete selection" };
-      if (i.name === "Clean up this structure") return { ...i, name: "Clean up these structures" };
-      if (i.name === "3D structure") return { ...i, name: "3D structures" };
-      if (target.kind === "atom" && (i.name === "Charge one up" || i.name === "Charge one down" || i.name === "Unpaired electron" || i.name === "No unpaired electron")) return { ...i, name: `${i.name} on ${scope.ofKind}` };
-      return i;
-    }
-    if (i.del) return onDeleteThis ? { ...i, run: onDeleteThis, keys: "" } : i;
-    if (i.name === "Colour…") return onColourThis ? { ...i, run: onColourThis } : { ...i, disabled: true };
+    if (i.del) return { ...i, name: "Delete selection" };
+    if (i.name === "Clean up this structure") return { ...i, name: "Clean up these structures" };
+    if (i.name === "3D structure") return { ...i, name: "3D structures" };
+    if (target.kind === "atom" && (i.name === "Charge one up" || i.name === "Charge one down" || i.name === "Unpaired electron" || i.name === "No unpaired electron")) return { ...i, name: `${i.name} on ${scope.ofKind}` };
     return i;
   });
-  // (the selection's own: cut and copy, a second row of icons; where the thing's items do not reach it, its clean up, 3D,
-  //  colour and Delete beside them; and its listed items under a line - none twice)
+  // (the selection's own: cut and copy, a second row of icons - on empty space, its clean up, 3D, colour and Delete beside them -
+  //  and its listed items under a line; none twice)
   const here = target.selection === "here";
   const ownNames = new Set(own.map((i) => i.name));
   const selIcons: Item[] = (here
     ? [
-        { name: "Cut", keys: keys || split ? shortcut("X") : "", run: clipboard.onCut, icon: MENU_ICONS.cut },
-        { name: "Copy", keys: keys || split ? shortcut("C") : "", run: clipboard.onCopy, icon: MENU_ICONS.copy },
-        // (where the thing's items do not reach the selection, or on empty space: the selection's own clean up, 3D and colour)
-        ...((split || target.kind == null) && drawing
+        { name: "Cut", keys: keys ? shortcut("X") : "", run: clipboard.onCut, icon: MENU_ICONS.cut },
+        { name: "Copy", keys: keys ? shortcut("C") : "", run: clipboard.onCopy, icon: MENU_ICONS.copy },
+        // (on empty space: the selection's own clean up, 3D and colour)
+        ...(target.kind == null && drawing
           ? [
               { name: "Clean up these structures", keys: cleanUpKey, run: onCleanUp, icon: MENU_ICONS.cleanUp },
               { name: "3D structures", keys: "", run: onMake3d, icon: MENU_ICONS.make3d },
             ]
           : []),
-        ...(split || target.kind == null ? colour : []),
-        ...(split || target.kind == null ? [{ ...del("Delete selection"), keys: deleteKey }] : []),
+        ...(target.kind == null ? colour : []),
+        ...(target.kind == null ? [{ ...del("Delete selection"), keys: deleteKey }] : []),
       ]
     : []
-  ).filter((i) => split || !ownNames.has(i.name));
+  ).filter((i) => !ownNames.has(i.name));
   const selList: Item[] = here
     ? [
         ...partsItems,
@@ -1145,10 +1131,8 @@ export default function PartMenu({
   const row2 = more ? compact : [];
   const list = withRules(own.filter((i) => !i.icon));
   const selRules = withRules(selList);
-  // (the first line: what the menu acts on - the selection counted where the thing's items reach it, or the thing alone; a
-  //  second line over the selection's part where they do not)
-  const firstLine = scope ? (split ? scope.thing : scope.count) : null;
-  const secondLine = split ? scope!.count : null;
+  // (the first line: what the menu acts on - the thing alone, or the selection counted)
+  const firstLine = scope ? scope.count : null;
   const stepNote = target.kind === "step" ? step?.note : undefined;
   // (words' size, line spacing and typeface, under the icons)
   const font = target.kind === "caption" ? words?.font : undefined;
@@ -1302,7 +1286,7 @@ export default function PartMenu({
       )}
       </AnimatePresence>
       {/* the selection's cut and copy, a row of their own under the thing's - where its items reach it */}
-      {!split && selIcons.length > 0 && <IconRow label="Selection" items={selIcons} run={run} below={list.length + selRules.length > 0} />}
+      {selIcons.length > 0 && <IconRow label="Selection" items={selIcons} run={run} below={list.length + selRules.length > 0} />}
       {list.map((item) => [
         item.divider && <div key={`${item.name}-divider`} role="separator" className="my-1 border-t border-gh-line" />,
         <button
@@ -1335,16 +1319,9 @@ export default function PartMenu({
         ),
         item.after && <Fragment key={`${item.name}-after`}>{item.after}</Fragment>,
       ])}
-      {/* the selection's part: under its own line where the thing's items do not reach it, else after a rule */}
-      {split && secondLine && (
-        <>
-          <div role="separator" className="my-1 border-t border-gh-line" />
-          <ScopeLine text={secondLine} />
-          <IconRow label="Selection" items={selIcons} run={run} below={selRules.length > 0} />
-        </>
-      )}
+      {/* the selection's listed items, after a rule */}
       {selRules.map((item, k) => [
-        (item.divider || (k === 0 && !split && list.length > 0)) && <div key={`${item.name}-sel-divider`} role="separator" className="my-1 border-t border-gh-line" />,
+        (item.divider || (k === 0 && list.length > 0)) && <div key={`${item.name}-sel-divider`} role="separator" className="my-1 border-t border-gh-line" />,
         <button
           key={`sel-${item.name}`}
           role="menuitem"

@@ -602,16 +602,19 @@ molecule in 3D or a picture.
     step of the document: Undo does not bring the old selection back. Its
     first line: "This atom", "This bond", "This shape".
   - On a thing selected with more, its menu is the same, and its first
-    line counts the selection by kind ("3 atoms, 2 bonds"). An atom's and a
-    bond's own items reach every selected thing of their kind, one step,
-    named for it: *Charge one up on 3 atoms*, *Unpaired electron on 3
-    atoms*, a bond's kind on every selected bond; what is about the one
-    thing stays its own (an arrow from this atom, *Expand abbreviation*,
-    *Select this structure*); clean up, 3D, colour and Delete reach the
-    whole selection (*Clean up these structures*, *Delete selection*).
-    The other kinds' own items - a shape's line, words' size - reach only
-    the thing right-clicked so far: they stand under its line ("This
-    shape"), and the selection's items under a second line counting it.
+    line counts the selection by kind ("3 atoms, 2 bonds"). Its kind's own
+    items reach every selected thing of that kind, one step: an atom's
+    charge and unpaired electron (*Charge one up on 3 atoms*), a bond's
+    kind, a shape's line and its place among the shapes, an arrow's kind,
+    heads, dashes and weight, words' size, line spacing, typeface, bold,
+    italic, raising and lowering and list, a catalytic cycle's gap, a
+    PDF's pages spread or gathered and its icon, a molecule in 3D's other
+    look, its turn reset and its one turn round. What is about the one
+    thing stays its own: an arrow from this atom, *Expand abbreviation*,
+    *Select this structure*, a rectangle's corners, a cycle's arrows and
+    its turn, a PDF's pages turned, read or printed, a picture's copy and
+    save. Clean up, 3D, colour and Delete reach the whole selection
+    (*Clean up these structures*, *Delete selection*).
   - The selection's own are added to every such menu: *Cut* and *Copy* as
     a second row of icons, and under a line its listed items, each where
     it applies: *Copy as SMILES*, *Export…* (what is selected written),

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createWorkspaceDocument } from "../document";
 import { connectStoreToDocument, createEditorStore } from "../store";
-import { menuScope } from "./menuScope";
+import { menuScope, reachedOf } from "./menuScope";
 
 // A right-click menu's first line: what it acts on (docs/EDITOR-2D.md, *Selecting*).
 
@@ -43,5 +43,28 @@ describe("a right-click on a thing not selected", () => {
     expect([[...st().sel.atoms], [...st().sel.bonds]]).toEqual([[d], []]);
     st().selectAlone("bond", cd);
     expect([[...st().sel.atoms].sort(), [...st().sel.bonds]]).toEqual([[c, d].sort(), [cd]]);
+  });
+});
+
+describe("what a menu's own items reach", () => {
+  it("is the selected things of its kind where the menu is the selection's and the thing is among them; else the thing alone", () => {
+    expect(reachedOf({ selection: "here" }, new Set([3, 5, 7]), 5)).toEqual([5, 3, 7]);
+    expect(reachedOf({ selection: "here" }, new Set([3, 7]), 5)).toEqual([5]);
+    expect(reachedOf({ selection: "none" }, new Set([3, 5]), 5)).toEqual([5]);
+  });
+
+  it("as one undo step: words given a size together, each its own patch", () => {
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const st = () => store.getState();
+    const a = st().addCaption("one", 0, 0);
+    const b = st().addCaption("two", 5, 0);
+    const depth = doc.history().undoDepth;
+    st().updateCaptions(reachedOf({ selection: "here" }, new Set([a, b]), a).map((id) => [id, { size: 14 }] as const), "size text");
+    expect(doc.history().undoDepth).toBe(depth + 1);
+    expect(st().captions.map((c) => c.size)).toEqual([14, 14]);
+    doc.undo();
+    expect(st().captions.map((c) => c.size ?? null)).toEqual([null, null]);
   });
 });

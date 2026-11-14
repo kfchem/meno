@@ -84,3 +84,11 @@ export function selectionCount(st: Held): string | null {
   const held = counts(st);
   return held.length ? held.map(([k, n]) => `${n} ${NAMES[k][n === 1 ? 0 : 1]}`).join(", ") : null;
 }
+
+/**
+ * What a menu's own items reach: the selected things of its kind, the one right-clicked among them, where the menu is the
+ * selection's; else that one alone (docs/EDITOR-2D.md, *Selecting*).
+ */
+export function reachedOf(menu: { selection: "none" | "elsewhere" | "here" }, selected: ReadonlySet<number>, id: number): number[] {
+  return menu.selection === "here" && selected.has(id) ? [id, ...[...selected].filter((x) => x !== id)] : [id];
+}
