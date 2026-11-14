@@ -14,7 +14,7 @@ import { fitResultSets } from "../../workflow/run";
 import { reachOverFrames } from "../../utils/molecule3d";
 import { isElementSymbol } from "../../../../../lib/roles/molblock";
 import { labelTextOf, readLabel } from "../../utils/labelTyping";
-import { abbreviationOf, abbreviationStructure, GENERIC_SYMBOLS, VARIABLE_NAMES } from "../../../../../lib/chem/abbreviations";
+import { abbreviationOf, readsAsNothing } from "../../../../../lib/chem/abbreviations";
 import { implicitHydrogens } from "../../../../../lib/chem/molecule";
 import { useNotices } from "../../../../notices";
 import { restyledDocument } from "../../restyle";
@@ -350,14 +350,6 @@ export function createUiSlice(
 
 /** A count of H in words, as the notices say it. */
 const HYDROGENS = ["no H", "one H", "two H", "three H", "four H"];
-
-/**
- * Whether a label reads as nothing - no element, no group, ligand, reagent or complex Meno knows, no Rgroup, no symbol for a kind of group or a
- * point of variability: kept as typed, as words (docs/EDITOR-2D.md, *Labels read as they are meant*, rule 5).
- */
-function readsAsNothing(label: string): boolean {
-  return !isElementSymbol(label) && label !== "R#" && !/^R\d+$/.test(label) && !GENERIC_SYMBOLS.has(label) && !VARIABLE_NAMES.has(label) && abbreviationStructure(label) == null;
-}
 
 /** How many H a carbon of `model` carries, as its bonds leave it (lib/chem/molecule `implicitHydrogens`). */
 function carbonHydrogens(model: { bonds: readonly { a: number; b: number; order: number }[] }, a: Pick<Atom, "id" | "charge" | "radical">): number {

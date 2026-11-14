@@ -1029,7 +1029,10 @@ All hover-based, as above.
      element's symbol or a name as it is written: SnBu3, Me4tBuXPhos and
      FmBoc stay. iPr stays upright. A reagent's name sets its prefix in
      italics as a group does: m-CPBA, p-TSA, n-hexane.
-  5. What reads as nothing stays exactly as typed - no capital made. Typed
+  5. What reads as nothing stays exactly as typed - no capital made - and
+     is drawn in the order typed at either end of a bond, never turned
+     round as a group on a bond's left is (CH2CH2 is CH2CH2 there, not
+     H2CH2C), its counts set as subscripts as they were typed. Typed
      over an atom that was an element or a group, it takes that atom out
      of the structure, and Meno says so: "CH2CH2 is not an element or a
      group Meno reads, so it is kept as words, and this atom is no longer

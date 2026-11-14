@@ -179,6 +179,20 @@ describe("letters that read as nothing, typed over an atom", () => {
     expect(said()).toBe("CH2CH2 is not an element or a group Meno reads, so it is kept as words, and this atom is no longer N. Undo brings the N back.");
   }, measured(3000));
 
+  it("are drawn in the order typed at either end of a chain - never turned round as a group at a left end is", () => {
+    // (pentane's first carbon, its bond coming in from the right, and its last, its bond from the left)
+    for (const index of [0, 4]) {
+      const t = typing("CCCCC");
+      t.type(index, "CH2CH2");
+      expect(t.labels(), `${index}`).toContain("CH2CH2");
+      expect(t.labels(), `${index}`).not.toContain("H2CH2C");
+    }
+    // (a group Meno reads, at the left end: turned round as before - MeO)
+    const g = typing("CCCCC");
+    g.type(0, "OMe");
+    expect(g.labels()).toContain("MeO");
+  }, measured(3000));
+
   it("on several atoms selected, names the one begun on: N first, then a carbon - 'no longer N'", () => {
     const t = typing("CCNCC");
     const [c, n] = [t.s().model.atoms[1].id, t.s().model.atoms[2].id];
