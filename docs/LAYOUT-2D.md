@@ -515,7 +515,9 @@ they hang from.
   new: its metal by the rule above, not in whichever form its coordinates
   happen to have, nor with its donors opposite each other as they happen
   to lie there (`laidOut`'s `asNew`) - but at a metal whose arrangement
-  the SMILES gives, a mark at the metal's own atom (@SP1, @OH1), the
+  the SMILES gives, a mark at the metal's own atom (@SP1 to @SP3 on four
+  neighbours, @OH1 to @OH30 on six; a bare @ or any other mark states no
+  pairs, and the metal is not given), the
   plugin's drawing carries it, and its places and its form are kept: the
   isomer typed, no mark (`metalsArrangedIn`) - save a metal two of whose
   donors are joined other than through it, a chelate or a bridge: there the

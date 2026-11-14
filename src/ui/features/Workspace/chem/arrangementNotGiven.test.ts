@@ -240,6 +240,28 @@ describe("a metal its SMILES marks, with a chelate", () => {
     expect(metalsArrangedIn("[Co@OH1-](Cl)(Cl)(Cl)(Cl)(n1ccccc1)n1ccccc1", pys)).toEqual([0]);
   });
 
+  it("is given only by a square-planar mark on four neighbours or an octahedral one on six: a bare @, a tetrahedral one, one on the wrong count, none", () => {
+    // ([CoCl2(NH3)4]+ and [Co(NH3)(OH2)FClBrI]3-, six neighbours; cisplatin, four - each block's atoms in its SMILES's order)
+    const spokes = (els: string[], metal: number) => block(els, els.flatMap((_, k): [number, number][] => (k === metal ? [] : [[metal, k]])));
+    const co = spokes(["Cl", "Co", "N", "N", "N", "N", "Cl"], 1);
+    const six = spokes(["F", "Co", "Cl", "Br", "I", "N", "O"], 1);
+    const pt = spokes(["N", "Pt", "Cl", "N", "Cl"], 1);
+    expect(metalsArrangedIn("Cl[Co@OH1+]([NH3])([NH3])([NH3])([NH3])Cl", co)).toEqual([1]);
+    expect(metalsArrangedIn("[NH3][Pt@SP1](Cl)([NH3])Cl", pt)).toEqual([1]);
+    for (const [smiles, b] of [
+      ["Cl[Co@+]([NH3])([NH3])([NH3])([NH3])Cl", co],
+      ["F[Co@-3](Cl)(Br)(I)([NH3])[OH2]", six],
+      ["Cl[Co@TB1+]([NH3])([NH3])([NH3])([NH3])Cl", co],
+      ["Cl[Co@SP1+]([NH3])([NH3])([NH3])([NH3])Cl", co],
+      ["Cl[Co@OH31+]([NH3])([NH3])([NH3])([NH3])Cl", co],
+      ["[NH3][Pt@](Cl)([NH3])Cl", pt],
+      ["[NH3][Pt@TH1](Cl)([NH3])Cl", pt],
+      ["[NH3][Pt@SP4](Cl)([NH3])Cl", pt],
+      ["[NH3][Pt@OH1](Cl)([NH3])Cl", pt],
+    ] as const)
+      expect([smiles, metalsArrangedIn(smiles, b)]).toEqual([smiles, []]);
+  });
+
   it("is laid out and marked as one nobody gave the arrangement of", { timeout: 120000 }, async () => {
     forgetLaidOut();
     const smiles = "[Co@OH1+]123456.Cl1.[NH2]2CC[NH2]3.[NH2]4CC[NH2]5.Cl6";
