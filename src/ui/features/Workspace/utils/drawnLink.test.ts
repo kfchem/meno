@@ -4,6 +4,8 @@ import type { Model } from "../store/types";
 import { drawnFromSmiles } from "../chem/testdata/identityCases";
 import { drawnKey } from "../workflow/entries";
 import { linkOf, pageIndex, signatureOf } from "./drawnLink";
+import { laidOut } from "../chem/cleanUp";
+import { MENO } from "../../../../lib/chem/style";
 
 /** signatureOf as it was before it read through the drawing's index (`pageIndex`): what it gives now is held to it. */
 function signatureBefore(model: Model, ids: Iterable<number>): string {
@@ -226,6 +228,21 @@ describe("each configuration a drawing states, in what it states to its molecule
     const keyed = { drawnFrom: madeIds, drawnAs: signatureOf(made, madeIds) };
     expect(linkOf(keyed, withH("none", "down"))).toBe("live");
     expect(linkOf(keyed, withH("none", "up"))).toBe("changed");
+  });
+});
+
+describe("a cage Clean-up draws in perspective, its centres stated by depth with no wedge", () => {
+  it("borneol cleaned up is still the drawing its molecule in 3D was made from; mirrored, it is the other hand", { timeout: 120000 }, async () => {
+    const drawn = drawnFromSmiles("CC1(C)[C@@H]2CC[C@@]1(C)[C@H](O)C2");
+    const ids = drawn.atoms.map((a) => a.id);
+    const made = { drawnFrom: ids, drawnAs: signatureOf(drawn, ids) };
+    const cleaned = await laidOut(drawn, MENO);
+    // (drawn in perspective: places in depth, no wedge left)
+    expect(cleaned.atoms.some((a) => a.z != null)).toBe(true);
+    expect(cleaned.bonds.filter((b) => b.stereo === "up" || b.stereo === "down")).toEqual([]);
+    expect(linkOf(made, cleaned)).toBe("live");
+    const mirrored: Model = { ...cleaned, atoms: cleaned.atoms.map((a) => ({ ...a, x: -a.x })) };
+    expect(linkOf(made, mirrored)).toBe("changed");
   });
 });
 

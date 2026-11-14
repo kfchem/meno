@@ -110,8 +110,8 @@ export function signatureOf(model: Model, ids: Iterable<number>): string {
 function configurationsOf(model: Model, of: ReadonlySet<number>): { said: string[]; wedges: Set<number> } {
   const atoms = model.atoms.filter((a) => of.has(a.id));
   const bonds = model.bonds.filter((b) => of.has(b.a) && of.has(b.b) && !b.hydrogen);
-  // (nothing to state: no wedge, no double bond)
-  if (!bonds.some((b) => b.order === 2 || (b.stereo && b.stereo !== "none"))) return { said: [], wedges: new Set() };
+  // (nothing to state: no wedge, no double bond, nothing drawn in perspective - a cage Clean-up draws so states its centres by depth)
+  if (!bonds.some((b) => b.order === 2 || (b.stereo && b.stereo !== "none")) && !atoms.some((a) => a.z != null || a.stereoCentre)) return { said: [], wedges: new Set() };
   const drawing = drawingOf({ atoms, bonds } as Model);
   const read = readStereo(drawing.atoms, drawing.bonds);
   // (a plain hydrogen - an end, of no charge or mass - as identity takes it: one of its centre's H, drawn or not)
