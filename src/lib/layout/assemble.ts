@@ -156,7 +156,9 @@ export function grow(
     pos.set(centre, { x: 0, y: 0 });
     const weight = (l: number) => sides.get(`${centre}>${l}`) ?? 1;
     const [first, ...rest] = [...mol.neighbours[centre]].sort((p, q) => weight(q) - weight(p) || byStructure(mol)(p, q));
-    const placed: [number, number][] = [[first, setFrameAngle(frame, 0)], ...atMetal(mol, sides, centre, first, setFrameAngle(frame, 0), rest)];
+    // (a centre held as the X - drawn so, or surely square planar - its first bond 45 degrees round: the X grown as the X)
+    const start = setFrameAngle(frame, squareXAt(mol, centre) ? Math.PI / 4 : 0);
+    const placed: [number, number][] = [[first, start], ...atMetal(mol, sides, centre, first, start, rest)];
     for (const [child, t] of placed) placeChild(mol, pos, local, queue, centre, child, t, transforms, hints, upright);
     queue.push(centre);
   } else if (root >= 0) {
@@ -749,8 +751,13 @@ function placements(
   return out;
 }
 
-/** A centre drawn as the X, its four bonds 45 degrees off the axes: a main-group one with two lone pairs, or a metal surely square planar. */
+/**
+ * A centre drawn as the X, its four bonds 45 degrees off the axes: a main-group one with two lone pairs, or a metal surely square
+ * planar - or a four-bond metal the chemist drew as the X, kept so (`LayoutAtom.fourForm`); not one drawn upright.
+ */
 export function squareXAt(mol: Molecule, a: number): boolean {
+  const drawn = mol.fourForm.get(a);
+  if (drawn) return drawn === "x";
   return mainGroupSquare(mol, a) || metalSquareX(mol, a);
 }
 

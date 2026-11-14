@@ -532,8 +532,10 @@ they hang from.
   upright cross, by the chemist, or by the plugin for an arrangement its
   input gave - that the layout would set in the other is refused, saying
   so, its donors left as drawn: the other form would say another thing of
-  its arrangement. (A chemist's X whose donors go on - a phosphine's, a
-  pyridine's - is so refused until the layout grows it as the X.) A chelate's metal (two of its donors joined other than through
+  its arrangement. A chemist's X whose donors go on - a phosphine's, a
+  pyridine's - is laid out as the X: the piece is turned so that the
+  metal's four bonds lie on the diagonals, its ligands set off them as
+  they come, a ring of theirs off the page's lattice where it must be. A chelate's metal (two of its donors joined other than through
   it) goes by its own rules.
   The fan is compact,
   and once the rest of the drawing is set it is turned about its bond,

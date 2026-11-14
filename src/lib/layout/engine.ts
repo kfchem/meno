@@ -1667,6 +1667,27 @@ const SMALL_SIDE = 10;
  */
 function squareUp(mol: Molecule, piece: number[], pos: Grown, ref: Grown = pos): void {
   const here = new Set(piece);
+  // (a metal the chemist drew as the X: the piece turned so that its four bonds lie on the diagonals exactly - its ligands' rings
+  // set off the lattice as they come, a pyridine's, a phosphine's phenyls - whatever way it was grown; the X is what was drawn)
+  const held = piece.find((a) => mol.fourForm.get(a) === "x" && mol.neighbours[a].length === 4 && isMetal(mol.el[a]));
+  if (held != null) {
+    const c = ref.get(held)!;
+    const offs = mol.neighbours[held].map((v) => {
+      const q = ref.get(v)!;
+      const u = Math.atan2(q.y - c.y, q.x - c.x) - Math.PI / 4;
+      return u - (Math.PI / 2) * Math.round(u / (Math.PI / 2));
+    });
+    // (the four a right angle apart as grown: their mean is the turn off the X)
+    const turn = offs.reduce((s, u) => s + u, 0) / offs.length;
+    if (Math.abs(turn) < 1e-9) return;
+    const cs = Math.cos(-turn);
+    const sn = Math.sin(-turn);
+    for (const a of piece) {
+      const p = pos.get(a)!;
+      pos.set(a, { x: p.x * cs - p.y * sn, y: p.x * sn + p.y * cs });
+    }
+    return;
+  }
   const square = mol.rings.some(
     (r) =>
       here.has(r[0]) &&

@@ -193,13 +193,14 @@ describe("a metal of six donors nobody gave the arrangement of", () => {
   });
 });
 
-describe("a four-bond metal drawn as an X, where the layout would make it a cross", () => {
-  it("is refused, saying so, and left as drawn - nickel with phosphines (laid out as the X: backlog 118)", { timeout: 120000 }, async () => {
+describe("a four-bond metal drawn as an X, its donors going on", () => {
+  it("is cleaned up as the X, its pairs across kept - nickel with phosphines, cis or trans, turned or not; platinum", { timeout: 120000 }, async () => {
+    for (const [metal, els, turn] of [["Ni", ["Cl", "P", "Cl", "P"], 0], ["Ni", ["Cl", "Cl", "P", "P"], 0], ["Ni", ["Br", "P", "Br", "P"], 10], ["Pt", ["Cl", "Cl", "P", "P"], 0]] as const) {
     forgetLaidOut();
-    const atoms: Model["atoms"] = [{ id: 1, x: 0, y: 0, r: 0.9, el: "Ni" }];
+    const atoms: Model["atoms"] = [{ id: 1, x: 0, y: 0, r: 0.9, el: metal }];
     const bonds: Model["bonds"] = [];
-    ["Cl", "P", "Cl", "P"].forEach((el, k) => {
-      const t = ((45 + 90 * k) * Math.PI) / 180;
+    els.forEach((el, k) => {
+      const t = ((45 + 90 * k + turn) * Math.PI) / 180;
       const d = atoms.length + 1;
       atoms.push({ id: d, x: 1.5 * Math.cos(t), y: 1.5 * Math.sin(t), r: 0.9, el });
       bonds.push({ id: 100 + bonds.length, a: 1, b: d, order: 1 });
@@ -210,7 +211,16 @@ describe("a four-bond metal drawn as an X, where the layout would make it a cros
         bonds.push({ id: 100 + bonds.length, a: d, b: atoms.length, order: 1 });
       }
     });
-    await expect(laidOut({ atoms, bonds } as Model, MENO)).rejects.toThrow(/Ni drawn as an X could not be laid out as one/);
+    const drawnModel = { atoms, bonds } as Model;
+    const after = await laidOut(drawnModel, MENO);
+    const m = after.atoms.find((a) => a.id === 1)!;
+    for (const b of after.bonds.filter((x) => x.a === 1 || x.b === 1)) {
+      const o = after.atoms.find((a) => a.id === (b.a === 1 ? b.b : b.a))!;
+      const t = (Math.atan2(o.y - m.y, o.x - m.x) * 180) / Math.PI;
+      expect(Math.abs((((t % 90) + 90) % 90) - 45), `${metal} ${els.join(",")}`).toBeLessThan(1);
+    }
+    expect(round(after, metal), `${metal} ${els.join(",")}`).toBe(round(drawnModel, metal));
+    }
   });
 });
 
