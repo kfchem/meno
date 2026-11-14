@@ -32,14 +32,14 @@ export function afterAdded(typed: string, reading: boolean, read: (smiles: strin
 
 /**
  * The one line under the SMILES field saying where chemistry stands, where it is not ready: the step its set-up is at, in the words
- * the first start's card says it in - the plugin's files downloading, how far they have come (`share`, 0 to 1) where that is
- * reported, else its environment set up, which reports none - and, where a SMILES typed waits for it (`waiting`), that it is drawn
+ * the first start's card says it in - the plugin's files downloading, how far they have come (`share`, 0 to 1, rounded as the card
+ * rounds it) where that is reported, else its environment set up, which reports none - and, where a SMILES typed waits for it (`waiting`), that it is drawn
  * when ready; or being started. None where it is ready, or nothing has asked for it yet (what is said of a plugin missing, or
  * offline, is said as before).
  */
 export function chemistryLine(chem: ChemState, share: number | undefined, waiting: boolean): string | null {
   if (chem.state === "setting-up") {
-    const step = share != null ? `downloading ${chem.plugin} (${Math.floor(share * 100)}%)` : `setting up ${chem.plugin}'s environment`;
+    const step = share != null ? `downloading ${chem.plugin} (${Math.round(Math.min(1, Math.max(0, share)) * 100)}%)` : `setting up ${chem.plugin}'s environment`;
     return `Setting up chemistry: ${step}.${waiting ? " This is drawn when it is ready." : ""}`;
   }
   if (chem.state === "starting") return "Starting chemistry. The first one takes a moment.";
