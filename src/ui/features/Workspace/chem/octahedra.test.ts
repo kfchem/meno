@@ -173,3 +173,21 @@ describe("a four-bond metal with one chelate, laid out from its SMILES (backlog 
     }
   });
 });
+
+describe("a six-bond metal with a tridentate", () => {
+  it("is laid out on three lines where it can be - fac-Co(tacn)Cl3, Co(dien)Cl3 - and refused, saying so, where it cannot yet: Ru(terpy)Cl3 (backlog 125)", { timeout: 120000 }, async () => {
+    forgetLaidOut();
+    const ways = (m: Model) => {
+      const c = m.atoms.find((a) => a.el === "Co")!;
+      return m.bonds
+        .filter((b) => b.a === c.id || b.b === c.id)
+        .map((b) => m.atoms.find((a) => a.id === (b.a === c.id ? b.b : b.a))!)
+        .map((o) => (Math.round((Math.atan2(o.y - c.y, o.x - c.x) * 180) / Math.PI) + 360) % 360)
+        .sort((p, q) => p - q);
+    };
+    for (const smiles of ["Cl[Co]123(Cl)Cl.N14CCN2CCN3CC4", "Cl[Co]123(Cl)Cl.N1CCN2CCN3"]) {
+      expect(ways(await laidOut(drawnFromSmiles(smiles), MENO, undefined, undefined, true)), smiles).toEqual([30, 90, 150, 210, 270, 330]);
+    }
+    await expect((async () => laidOut(drawnFromSmiles("Cl[Ru]123(Cl)Cl.c4ccc(n1c4)-c5cccc(n25)-c6ccccn63"), MENO, undefined, undefined, true))()).rejects.toThrow(/tridentate could not be laid out as three lines/);
+  });
+});

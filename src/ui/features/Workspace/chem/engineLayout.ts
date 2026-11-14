@@ -336,6 +336,37 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
   // (a four-bond metal's donors opposite each other as they were drawn: transplatin cleaned up is transplatin - but not a plugin's drawing, which gives none)
   const kept = job.asNew ? new Set(ids.flatMap((id, i) => (job.arranged?.has(id) ? [i] : []))) : undefined;
   const laid = octahedraKept(job, kept && !kept.size ? given : oppositesKept(ids.map((id) => byId.get(id)!), input, given, kept));
+  // (a six-bond metal with a tridentate - three of its donors in one ligand - laid out other than as three lines through it: the
+  // layout cannot yet put a fused tridentate's metal on its spokes (backlog 125), and a picture off the lines can show two donors
+  // side by side that are across - refused, saying so, rather than drawn so)
+  for (const [i, a] of input.atoms.entries()) {
+    if (i >= n || !isMetal(a.el)) continue;
+    const round = input.bonds.flatMap((b) => (b.a === i ? [b.b] : b.b === i ? [b.a] : []));
+    if (round.length !== 6 || round.some((o) => input.atoms[o].el === "*" || isMetal(input.atoms[o].el))) continue;
+    const near = new Map<number, number[]>();
+    for (const b of input.bonds) {
+      near.set(b.a, [...(near.get(b.a) ?? []), b.b]);
+      near.set(b.b, [...(near.get(b.b) ?? []), b.a]);
+    }
+    const tridentate = round.some((d) => {
+      const seen = new Set([d]);
+      for (const todo = [d]; todo.length; ) {
+        for (const v of near.get(todo.pop()!) ?? []) {
+          if (v === i || seen.has(v)) continue;
+          seen.add(v);
+          todo.push(v);
+        }
+      }
+      return round.filter((e) => seen.has(e)).length >= 3;
+    });
+    if (!tridentate) continue;
+    const ways = round.map((o) => Math.atan2(laid.y[o] - laid.y[i], laid.x[o] - laid.x[i]));
+    const onLines = ways.every((t) => {
+      const u = (t - ways[0]) / (Math.PI / 3);
+      return Math.abs(u - Math.round(u)) * (Math.PI / 3) < (5 * Math.PI) / 180;
+    });
+    if (!onLines) throw new Error(`the ${a.el} with its tridentate could not be laid out as three lines through it, so nothing was moved`);
+  }
   // (a four-bond metal drawn in one form - the X or the upright cross, by the chemist, or a plugin's for an arrangement its input
   // gave - laid out in the other would say another thing of its arrangement: refused, saying so, its donors left as drawn; the X
   // grown as the X where its donors go on is backlog 118)
