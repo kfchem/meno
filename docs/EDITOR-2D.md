@@ -1915,7 +1915,10 @@ lipids each have their own way of being drawn, which it should know.
        is left drawn out for good;
      - a group holding a wedge's stereocentre, or an atom with more to it
        than its element and charge (an isotope, a radical, an atom map), is
-       drawn: its label would not say it.
+       drawn: its label would not say it. A valence a file sets to the
+       element's own at the atom's charge (VAL=4 on Si, as a typed
+       SMILES's structure has on every Si) says nothing more, and leaves
+       TMS and OTBS written by name; any other set valence keeps it drawn.
 
      It is one undo step with the layout. The dictionary's pictures of
      reagents, complexes and counter-anions (BArF's CF3) follow the same
