@@ -77,6 +77,9 @@ describe("a square-planar centre with no arrangement given", () => {
     forgetLaidOut();
     const m = drawnFromSmiles("C[NH2][Pt+2]([NH2]C)([NH2]CC)[NH2]CC");
     expect(readMarks(m).atoms.get(metalOf(m).id)).toBe(ARRANGEMENT_SAID);
+    // (and its donors laid out square round it, as the mark's centre is)
+    const d = directions(m);
+    expect(d.map((x, k) => (k ? x - d[k - 1] : 90))).toEqual([90, 90, 90, 90]);
   });
 });
 

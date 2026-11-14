@@ -269,6 +269,19 @@ function foldedOf(input: IdentityInput): boolean[] {
  * can be (a tripod's).
  */
 export function arrangementOpen(input: IdentityInput, m: number): boolean {
+  // (asked again and again of one structure as a layout is measured: worked out once)
+  const key = `${m}|${JSON.stringify(input)}`;
+  const known = openKnown.get(key);
+  if (known != null) return known;
+  if (openKnown.size >= OPEN_KEPT) openKnown.clear();
+  const open = openNow(input, m);
+  openKnown.set(key, open);
+  return open;
+}
+const openKnown = new Map<string, boolean>();
+const OPEN_KEPT = 1024;
+
+function openNow(input: IdentityInput, m: number): boolean {
   const others = { ...input, arrangements: (input.arrangements ?? []).filter((x) => x.metal !== m) };
   const folded = foldedOf(others);
   // (the metal's place once the plain hydrogens are folded in: none of them is it)
