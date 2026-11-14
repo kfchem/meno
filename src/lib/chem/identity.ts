@@ -266,9 +266,10 @@ function compared(input: IdentityInput): LayoutInput {
  * 2006, ST-4.3) - cyclohexene written C1CC/C=C\CC1 is cyclohexene, one
  * structure with C1CCC=CCC1 - as a drawing's reader and the CIP rules
  * already take it. A ring of eight or more keeps it: cis- and
- * trans-cyclooctene are two.
+ * trans-cyclooctene are two. Asked by the CIP labels too (lib/chem/cip
+ * `cipLabels`): such a bond has no E or Z, whoever wrote a side on it.
  */
-function smallRingSidesDropped(g: LayoutInput): LayoutInput {
+export function smallRingSidesDropped<T extends { atoms: readonly unknown[]; bonds: readonly LayoutBond[] }>(g: T): T {
   if (!g.bonds.some((b) => b.stereo)) return g;
   const around = aroundOf(g);
   if (!g.bonds.some((b) => b.stereo && ringWithin(around, b.a, b.b, SMALL_RING - 1))) return g;
@@ -276,7 +277,7 @@ function smallRingSidesDropped(g: LayoutInput): LayoutInput {
 }
 
 /** Each atom's neighbours. */
-function aroundOf(g: LayoutInput): number[][] {
+function aroundOf(g: { atoms: readonly unknown[]; bonds: readonly LayoutBond[] }): number[][] {
   const around: number[][] = g.atoms.map(() => []);
   for (const b of g.bonds) {
     around[b.a].push(b.b);

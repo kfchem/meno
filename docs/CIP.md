@@ -258,6 +258,11 @@ group of each, and whether the two are on one side (`Cumulated`).
   is not read in 3D: every biaryl is twisted there, whether or not its
   turn is held. A stereoisomer made as its mirror image's reflection is
   read after it is reflected.
+- **A double bond in a ring of seven atoms or fewer has no E or Z**,
+  whoever wrote a side on it: a SMILES's marks or a plugin's answer are
+  dropped before anything is labelled or ranked (lib/chem/identity
+  `smallRingSidesDropped`, the same test identity and the drawing's reader
+  ask). Cycloheptene written trans has no E; cyclooctene's Z and E stand.
 - **A protonated amine's N (R3NH+)** has none, on the drawing or in 3D:
   in solution it gives its H up and takes one back, turning over as it
   does - but where its amine's N keeps its configuration by Meno's rule on

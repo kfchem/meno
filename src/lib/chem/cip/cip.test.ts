@@ -374,3 +374,25 @@ function prismsCentre(n: number) {
   }
   return cipLabels({ atoms, bonds }).centres.get(0);
 }
+
+describe("no E or Z on a double bond in a ring of seven or fewer, whoever wrote a side on it", () => {
+  it("labels none of the ring bonds of six or seven written with marks; a ring of eight and an open chain as ever; centres as before", () => {
+    const cases: [string, string[]][] = [
+      ["C1CC/C=C\\CC1", []],
+      ["C1CC/C=C/CC1", []],
+      ["C1C/C=C\\CC1", []],
+      ["C/C1=C/CCCCC1", []],
+      ["C1CC/N=C\\CC1", []],
+      ["O[C@H](/C1=C\\CCCCC1)/C1=C/CCCCC1", ["C1:alike"]],
+      ["O[C@H](/C1=C\\CCCC1)/C1=C/CCCC1", ["C1:alike"]],
+      ["C[C@H]1/C=C\\CCCC1", ["C1:R"]],
+      ["C[C@H]1C=CCCCC1", ["C1:R"]],
+      ["C1CC/C=C\\CCC1", ["C3=C4:Z"]],
+      ["C1CC/C=C/CCC1", ["C3=C4:E"]],
+      ["O[C@H](/C1=C\\CCCCCC1)/C1=C/CCCCCC1", ["C1:S", "C2=C3:Z", "C10=C11:E"]],
+      ["C/C=C/C", ["C1=C2:E"]],
+    ];
+    for (const [smiles, labels] of cases) expect([smiles, cipOf(smiles)]).toEqual([smiles, labels]);
+  });
+});
+
