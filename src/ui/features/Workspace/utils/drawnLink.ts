@@ -24,8 +24,8 @@ export function pageIndex(model: Model): PageIndex {
 
 /**
  * What a drawn structure is, as its molecules in 3D were made from it: its
- * atoms (by id: element, charge, mass), its bonds (order and wedge, and
- * what a haptic bond binds), those that leave it, and each configuration
+ * atoms (by id: element, charge, mass), its bonds (order, and what a
+ * haptic bond binds; a wedge only on one that leaves it), and each configuration
  * its drawing states as identity reads it (`configurationsOf`: R or S,
  * E or Z, an axis's sense, by its atoms' ids) - so that a configuration
  * changed by moving atoms, not wedges, is a change - and not otherwise
@@ -67,6 +67,7 @@ export function signatureOf(model: Model, ids: Iterable<number>): string {
     .flatMap((id) => (byId.has(id) ? [byId.get(id)!] : []))
     .map((a) => `${a.id}:${a.el}:${a.charge ?? 0}:${a.isotope ?? ""}`)
     .sort();
+  const read = configurationsOf(model, of);
   const touching = new Set<Bond>();
   for (const id of of) for (const b of bondsOf.get(id) ?? []) if (!b.hydrogen) touching.add(b);
   const bonds = [...touching]
@@ -74,11 +75,14 @@ export function signatureOf(model: Model, ids: Iterable<number>): string {
       const ends = of.has(b.a) && of.has(b.b) ? `${b.a}-${b.b}` : of.has(b.a) ? `${b.a}-out` : `${b.b}-out`;
       // (and what a haptic bond binds)
       const binds = b.endpoints?.length ? `:${[...b.endpoints].sort((p, q) => p - q).join(" ")}` : "";
-      return `${ends}:${b.order}:${b.stereo ?? "none"}${binds}`;
+      // (a wedge whose configuration is read says nothing the configurations do not (`configurationsOf`): one moved to
+      //  another bond that states the same, as Clean-up moves one, is no change; one not read - at no centre, or leaving
+      //  the structure - is kept as drawn)
+      const wedge = !b.stereo || b.stereo === "none" || read.wedges.has(b.id) ? "" : `:${b.stereo}`;
+      return `${ends}:${b.order}${wedge}${binds}`;
     })
     .sort();
-  const configured = configurationsOf(model, of);
-  return [...atoms, "|", ...bonds, ...(configured.length ? ["|", ...configured] : [])].join(",");
+  return [...atoms, "|", ...bonds, ...(read.said.length ? ["|", ...read.said] : [])].join(",");
 }
 
 /**
@@ -87,11 +91,11 @@ export function signatureOf(model: Model, ids: Iterable<number>): string {
  * one configuration is one text however it is drawn (a wedge on another bond, the drawing turned) and another is another
  * ((Z)- and (E)-but-2-ene, a methyl moved; butan-2-ol's methyl and ethyl exchanged in place).
  */
-function configurationsOf(model: Model, of: ReadonlySet<number>): string[] {
+function configurationsOf(model: Model, of: ReadonlySet<number>): { said: string[]; wedges: Set<number> } {
   const atoms = model.atoms.filter((a) => of.has(a.id));
   const bonds = model.bonds.filter((b) => of.has(b.a) && of.has(b.b) && !b.hydrogen);
   // (nothing to state: no wedge, no double bond)
-  if (!bonds.some((b) => b.order === 2 || (b.stereo && b.stereo !== "none"))) return [];
+  if (!bonds.some((b) => b.order === 2 || (b.stereo && b.stereo !== "none"))) return { said: [], wedges: new Set() };
   const drawing = drawingOf({ atoms, bonds } as Model);
   const read = readStereo(drawing.atoms, drawing.bonds);
   const id = (i: number) => (i < 0 ? Infinity : atoms[i].id);
@@ -132,7 +136,12 @@ function configurationsOf(model: Model, of: ReadonlySet<number>): string[] {
     const sense = x.set * turned(u, x.refs[0], across(u, v)) * turned(v, x.refs[1], across(v, u));
     out.push(`${x.kind}${Math.min(id(u), id(v))}-${Math.max(id(u), id(v))}:${sense}`);
   }
-  return out.sort();
+  // (the wedges whose configuration was read: each at a centre read, narrow there)
+  const wedges = new Set<number>();
+  drawing.bonds.forEach((b, k) => {
+    if (b.wedge && read.tetra.has(b.wedge.narrow)) wedges.add(bonds[k].id);
+  });
+  return { said: out.sort(), wedges };
 }
 
 /**

@@ -88,8 +88,12 @@ const haptic: Model = {
   ] as never,
 };
 
-/** A signature's atoms and bonds, its configurations (`configurationsOf`) left off: what it was before they were in it. */
-const atomsAndBonds = (key: string) => key.split(",|,").slice(0, 2).join(",|,");
+/**
+ * A signature's atoms and bonds as they were before the configurations read from the drawing came into it: those left off,
+ * and each bond's wedge with them (a wedge whose configuration is read is no longer in it on its own).
+ */
+const atomsAndBonds = (key: string) => unwedged(key.split(",|,").slice(0, 2).join(",|,"));
+const unwedged = (key: string) => key.replace(/:(up|down|wavy|either|none)(?=[,:]|$)/g, "");
 
 describe("a drawn structure's signature, read through the drawing's index", () => {
   it("is what it was, structure by structure, on a page of many - stars, labels, wedges, charges, masses and all", () => {
@@ -100,14 +104,14 @@ describe("a drawn structure's signature, read through the drawing's index", () =
       drawnFromSmiles("C1CC[N+](C)(C)CC1.[Cl-]"),
       drawnFromSmiles("OC1=CC=CC=C1"),
     );
-    for (const ids of structures) expect(atomsAndBonds(signatureOf(model, ids))).toBe(signatureBefore(model, ids));
+    for (const ids of structures) expect(atomsAndBonds(signatureOf(model, ids))).toBe(unwedged(signatureBefore(model, ids)));
     // (a label bonded to it but not asked for - Cp on the iron - and a star: reached as before)
     const iron = structures[2].filter((id) => model.atoms.find((a) => a.id === id)!.el !== "Cp");
     expect(iron.length).toBe(structures[2].length - 1);
-    expect(atomsAndBonds(signatureOf(model, iron))).toBe(signatureBefore(model, iron));
+    expect(atomsAndBonds(signatureOf(model, iron))).toBe(unwedged(signatureBefore(model, iron)));
     // (and of a part of one, or of atoms not on the page: the same as before)
-    expect(atomsAndBonds(signatureOf(model, structures[0].slice(0, 3)))).toBe(signatureBefore(model, structures[0].slice(0, 3)));
-    expect(atomsAndBonds(signatureOf(model, [999, ...structures[1]]))).toBe(signatureBefore(model, [999, ...structures[1]]));
+    expect(atomsAndBonds(signatureOf(model, structures[0].slice(0, 3)))).toBe(unwedged(signatureBefore(model, structures[0].slice(0, 3))));
+    expect(atomsAndBonds(signatureOf(model, [999, ...structures[1]]))).toBe(unwedged(signatureBefore(model, [999, ...structures[1]])));
   });
 
   it("reads the drawing once: its index is the same for every structure asked of it, another for another drawing", () => {
@@ -133,7 +137,7 @@ describe("a drawn structure's signature, read through the drawing's index", () =
     expect(drawnKey(model, structures[0])).toMatch(/\|.*w\d+:/);
     expect(drawnKey(model, structures[1])).toMatch(/~\d+:-?1/);
     expect(drawnKey(model, structures[0]).startsWith(`${signatureOf(model, structures[0])}|`)).toBe(true);
-    expect(atomsAndBonds(signatureOf(model, structures[0]))).toBe(signatureBefore(model, structures[0]));
+    expect(atomsAndBonds(signatureOf(model, structures[0]))).toBe(unwedged(signatureBefore(model, structures[0])));
   });
 });
 
@@ -194,6 +198,27 @@ describe("each configuration a drawing states, in what it states to its molecule
     expect(link(r, butanol([1.3, -0.75], [-1.3, -0.75]))).toBe("changed");
     expect(link(r, butanol([-1.3, -0.75], [1.3, -0.75], "down"))).toBe("changed");
     expect(link(r, turn(r, 2))).toBe("live");
+    // (its H drawn: the OH wedged, or the H hashed in its place - one centre, one compound, as Clean-up may draw it)
+    const withH = (oh: string, h: string) =>
+      model(
+        [
+          { id: 1, el: "C", x: -1.3, y: -0.75 },
+          { id: 2, el: "C", x: 0, y: 0 },
+          { id: 3, el: "C", x: 1.3, y: -0.75 },
+          { id: 4, el: "C", x: 2.6, y: -0.75 },
+          { id: 5, el: "O", x: -0.5, y: 1.4 },
+          { id: 6, el: "H", x: 0.6, y: 1.3 },
+        ],
+        [
+          [2, 1, 1],
+          [2, 3, 1],
+          [3, 4, 1],
+          [2, 5, 1, oh],
+          [2, 6, 1, h],
+        ],
+      );
+    expect(link(withH("up", "none"), withH("none", "down"))).toBe("live");
+    expect(link(withH("up", "none"), withH("none", "up"))).toBe("changed");
   });
 });
 

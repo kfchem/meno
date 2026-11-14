@@ -105,7 +105,14 @@ describe("a structure drawn's record, through Clean-up", () => {
       }
       cleaned++;
       const held = setMembers(after, resultOf(after, after.steps![0].id)!);
-      if (drawnKey(after.model, held.structures[0]) !== drawnKey(before.model, ids)) moved++;
+      // (drawn otherwise: its key, or its wedges - one moved to another bond that states the same is no change of its key)
+      const wedges = (m: WorkspaceDocument["model"], of: readonly number[]) =>
+        m.bonds
+          .filter((x) => of.includes(x.a) && of.includes(x.b) && x.stereo && x.stereo !== "none")
+          .map((x) => `${Math.min(x.a, x.b)}-${Math.max(x.a, x.b)}:${x.stereo}:${x.narrow}`)
+          .sort()
+          .join(" ");
+      if (drawnKey(after.model, held.structures[0]) !== drawnKey(before.model, ids) || wedges(after.model, held.structures[0]) !== wedges(before.model, ids)) moved++;
       expect(bare(held.records[0]), smiles).toEqual(sampled);
       expect(held.records[0]!.of, smiles).toBe(drawnHash(after.model, held.structures[0]));
     }
