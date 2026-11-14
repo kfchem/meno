@@ -897,9 +897,10 @@ export function oppositesKept(was: readonly { x: number; y: number }[], input: L
     // (a unit drawn in perspective - a phosphine's phenyls turned - is turned about the metal as any is; mirrored, it would show
     // its other face, so a chelate drawn so is not)
     const inDepth = (i: number) => [...reach[i]].some((a) => laid.depth[a] != null);
-    // (a unit that holds another metal - two metals' bridges, with all the other metal carries - stays where it is: turned or
-    // mirrored, it would move the other metal and its donors, and say another thing of them; the metal's own donors change places
-    // round it instead)
+    // (a unit that holds another metal - two metals' bridges, with all the other metal carries - drawn in perspective, their ring seen
+    // a little from above, stays where it is: turned, it would carry the other metal round with its ring's depth; the metal's own
+    // donors change places round it instead. Laid flat - a chain of three metals' middle one - it is turned or mirrored as any
+    // unit is, the other metal's donors with it, their pairs as they were)
     const holdsMetal = (i: number) => [...reach[i]].some((a) => a !== donors[i] && isMetal(input.atoms[a].el));
     // (a metal drawn in perspective is not - save one in perspective only by its bridges to another metal, their ring seen a little
     // from above (placePair): its donors lie round it as drawn, in the page's plane, and its bridges stay)
@@ -1022,8 +1023,8 @@ export function oppositesKept(was: readonly { x: number; y: number }[], input: L
         return;
       }
       const members = groups[g];
-      const stays = holdsMetal(members[0]);
-      const mirrors = members.length === 2 && !inDepth(members[0]) && !stays ? [false, true] : [false];
+      const stays = holdsMetal(members[0]) && inDepth(members[0]);
+      const mirrors = members.length === 2 && !inDepth(members[0]) ? [false, true] : [false];
       for (const mirror of mirrors) {
         for (let turn = 0; turn < (stays ? 1 : n); turn++) {
           const slots = members.map((i, k) => ((mirror ? slotOf[members[1 - k]] : slotOf[i]) + turn) % n);

@@ -769,3 +769,51 @@ describe("two metals bridged, drawn by hand", () => {
     }
   });
 });
+
+/**
+ * Three metals in a chain, each two joined by two bridges of `br`, drawn by hand: the middle one at the centre, all its bonds bridges;
+ * the left one's other donors `left` at 135 and 225 degrees, the right one's `right` at 45 and 315 - all turned by `turn` degrees.
+ */
+function chainOfThree(metal: string, br: string, left: [string, string], right: [string, string], turn = 0): Model {
+  const h = Math.SQRT1_2;
+  const atoms: [string, number, number][] = [[metal, -2 * h, 0], [metal, 0, 0], [metal, 2 * h, 0], [br, -h, h], [br, -h, -h], [br, h, h], [br, h, -h]];
+  const bonds: [number, number][] = [[0, 3], [0, 4], [1, 3], [1, 4], [1, 5], [1, 6], [2, 5], [2, 6]];
+  const end = (on: number, what: string, deg: number) => {
+    atoms.push([what === "NH3" ? "N" : what, atoms[on][1] + Math.cos((deg * Math.PI) / 180), atoms[on][2] + Math.sin((deg * Math.PI) / 180)]);
+    bonds.push([on, atoms.length - 1]);
+  };
+  end(0, left[0], 135);
+  end(0, left[1], 225);
+  end(2, right[0], 45);
+  end(2, right[1], 315);
+  const t = (turn * Math.PI) / 180;
+  return {
+    atoms: atoms.map(([el, x, y], i) => ({ id: i + 1, x: 1.5 * (x * Math.cos(t) - y * Math.sin(t)), y: 1.5 * (x * Math.sin(t) + y * Math.cos(t)), r: 0.9, el, ...(el === "N" ? { valence: 4 } : {}) })),
+    bonds: bonds.map(([a, b], i) => ({ id: 100 + i, a: a + 1, b: b + 1, order: 1, stereo: "none" })),
+  } as unknown as Model;
+}
+
+/** At each atom of element `metal`, each donor and the one nearest straight across it, by id: "metal:donor-across", sorted. */
+function pairsAtMetals(m: Model, metal: string): string[] {
+  const out: string[] = [];
+  for (const mt of m.atoms.filter((a) => a.el === metal)) {
+    const nbs = m.bonds.filter((b) => b.a === mt.id || b.b === mt.id).map((b) => m.atoms.find((a) => a.id === (b.a === mt.id ? b.b : b.a))!);
+    const angle = (a: { x: number; y: number }) => Math.atan2(a.y - mt.y, a.x - mt.x);
+    const off = (p: (typeof nbs)[number], q: (typeof nbs)[number]) => Math.abs(Math.PI - Math.abs(Math.atan2(Math.sin(angle(p) - angle(q)), Math.cos(angle(p) - angle(q)))));
+    for (const d of nbs) out.push(`${mt.id}:${d.id}-${nbs.filter((a) => a.id !== d.id).reduce((b, a) => (off(d, a) < off(d, b) ? a : b)).id}`);
+  }
+  return out.sort();
+}
+
+describe("three metals in a chain, bridged, drawn by hand", () => {
+  it("keeps every metal's pairs as drawn - the middle one's bridges with the ends' metals turned or mirrored round it as any donors: [Pd3Cl6(NH3)2] cis and trans, turned", { timeout: 180000 }, async () => {
+    forgetLaidOut();
+    for (const turn of [0, 30, 75])
+      for (const [name, m] of [
+        ["trans", chainOfThree("Pd", "Cl", ["NH3", "Cl"], ["Cl", "NH3"], turn)],
+        ["cis", chainOfThree("Pd", "Cl", ["NH3", "Cl"], ["NH3", "Cl"], turn)],
+      ] as const) {
+        expect(pairsAtMetals(await laidOut(m, MENO), "Pd"), `${name}, turned ${turn}`).toEqual(pairsAtMetals(m, "Pd"));
+      }
+  });
+});

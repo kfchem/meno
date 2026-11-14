@@ -1104,7 +1104,11 @@ All hover-based, as above.
     metal, which bridge each of its other donors stands across: the
     bridges, which carry the other metal, stay where the layout put them,
     their ring seen a little from above, and each metal's other donors
-    change places round it.
+    change places round it. In a chain of three, the middle metal's
+    bridges - laid flat - turn or mirror round it with the end metals and
+    all they carry, whose own pairs stay as they were. Two square-planar
+    metals joined by one bridge, each drawn as an upright cross, are
+    refused, saying so.
 - Valence warnings, and R/S shown on request (RDKit). (PR #53: a ring round
   an atom with too many bonds, saying what is wrong under the pointer; R/S
   and E/Z from a button on the canvas, later shown on what they are asked
