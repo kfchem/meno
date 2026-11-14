@@ -1551,7 +1551,9 @@ function Molecule3DView(props: Molecule3DViewProps) {
         const o = onScreen(parent, at.x, at.y, at.z);
         // (out past the ball - or the bond - as far as the drawing's style sets its R and S off its atoms: utils/molecule3d stereoSpot)
         const own = ((mark.atoms.length === 1 ? radius(mark.atoms[0]) : bondR) * g) / pxIn;
-        const best = stereoSpot(mark, o, balls, sticks, placedLabels, own, font, props.stereoFont.gap, props.stereoFont.parentheses);
+        // (placed as a picture of it places it - at the drawing's own letters, not the least size they are drawn at - so a copy made now
+        //  has each where the canvas has it: utils/molecule3d stereoPictureSpots3d)
+        const best = stereoSpot(mark, o, balls, sticks, placedLabels, own, natural, props.stereoFont.gap, props.stereoFont.parentheses);
         // (not there at once where its best way changes as the molecule turns: glided round the atom to it, as everything moves)
         const goal = { a: Math.atan2(best.y - o.y, best.x - o.x), r: Math.hypot(best.x - o.x, best.y - o.y) };
         const was = stereoSpots.current.get(mark.key);
@@ -1560,7 +1562,7 @@ function Molecule3DView(props: Molecule3DViewProps) {
         if (about.a !== goal.a || about.r !== goal.r) moving = true;
         const spot = { ...best, x: o.x + about.r * Math.cos(about.a), y: o.y + about.r * Math.sin(about.a) };
         // (the next keeps a little way off it, not just clear)
-        placedLabels.push(stereoKept(spot, font));
+        placedLabels.push(stereoKept(spot, natural));
         ink.place(spot, font, opacity);
       }
     }

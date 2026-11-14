@@ -1160,8 +1160,18 @@ All hover-based, as above.
     R/S*, of a double bond *Show E/Z*, of a structure's selection or a
     molecule in 3D *Show R/S and E/Z* - *Hide* where all of it is shown
     already (named for what they show, the maintainer, 2026-10-13). On a
-    molecule in 3D, the atom under the pointer where it has a label, else
-    what is chosen in it, else all of it. Kept in the document - each
+    molecule in 3D (the maintainer's right-click rule, 2026-11-14: the menu's
+    thing, reaching the selection when the thing is in it): the molecule
+    right-clicked, all of it, wherever on it - right-clicked on an atom or
+    a bond chosen in it, what is chosen there, its count said (*Hide R/S
+    of 2 atoms*); right-clicked within the selection, the selection - and
+    *Hide* where any of it is shown, so that one press clears what shows,
+    else *Show*. The words name only the kinds it has: *R/S*, *E/Z* or
+    both. Never the atom under the pointer alone: before, an atom with a
+    label was taken alone, so the item's reach changed from atom to atom
+    of one molecule. The item is worked out once, as the menu opens, so
+    what it says is what it does, whatever changes while it is open.
+    Kept in the document - each
     atom's and bond's own, `stereoShown`, on a drawing; a molecule in 3D's
     `stereo.shown` - as one undo step, in the workspace's file and in a
     copy; a drawing and the molecule in 3D made from it each keep their
@@ -1190,7 +1200,7 @@ All hover-based, as above.
     a selection copied or exported - has its atoms' and bonds' descriptors
     in the molecule as drawn, not worked out again for the part on its own:
     an atom that is R in the molecule is R in the picture, though the part
-    alone might make it another or none. On a molecule in 3D, not yet.
+    alone might make it another or none. A molecule in 3D's: docs/WORKSPACE.md.
   - **Gone at a far zoom** (the maintainer, 2026-10-21: they stayed as large
     and floated round a structure a few pixels across). Their letters keep
     to 9 px at the least; past that they go once 9 px would be a third
