@@ -377,7 +377,9 @@ export function placeRingSystem(
 export function metalHub(mol: Molecule, rings: number[][]): { at: number; step: number; orders: number[][] } | null {
   const through = (a: number) => rings.filter((r) => r.includes(a));
   const metals = [...new Set(rings.flat())]
-    .filter((a) => isMetal(mol.el[a]) && (through(a).length >= 2 || ((mol.neighbours[a].length === 6 || mol.neighbours[a].length === 4) && through(a).length >= 1)))
+    // (a six-bond metal with a chelate; a four-bond one with a chelate of a small ring - six atoms or fewer, as an en's, a bpy's, an
+    // acac's: a larger one, BINAP's of seven, is laid out as before)
+    .filter((a) => isMetal(mol.el[a]) && (through(a).length >= 2 || (mol.neighbours[a].length === 6 && through(a).length >= 1) || (mol.neighbours[a].length === 4 && through(a).length >= 1 && through(a).every((r) => r.length <= 6))))
     .sort((p, q) => through(q).length - through(p).length || byStructure(mol)(p, q));
   const at = metals[0];
   if (at == null) return null;
@@ -423,7 +425,7 @@ export function metalHub(mol: Molecule, rings: number[][]): { at: number; step: 
   const six = mol.neighbours[at].length === 6;
   // (a metal of four bonds with one chelate - Pt(en)Cl2: its four spokes a right angle apart, the chelate's two ends side by side and
   // its other two ligands on the spokes left, as a square-planar metal is drawn - backlog 124)
-  const four = mol.neighbours[at].length === 4 && n < 4;
+  const four = mol.neighbours[at].length === 4 && n < 4 && through(at).every((r) => r.length <= 6);
   const spokes = six ? 6 : four ? 4 : 0;
   const step = six ? Math.PI / 3 : closed && chains.length === 1 ? (2 * Math.PI) / n : n <= 4 ? Math.PI / 2 : (2 * Math.PI) / n;
   // the first chain as it is; the others in every order, each either way round
