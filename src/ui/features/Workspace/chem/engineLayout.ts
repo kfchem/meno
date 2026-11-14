@@ -38,6 +38,8 @@ export type LayoutJob = {
   asNew?: true;
   /** - but at these metals, by id: those its input gave the arrangement of (a SMILES's mark at the metal, `metalsArrangedIn`), which the plugin's drawing carries, its form kept (`laidOut`) and so not marked. */
   arranged?: ReadonlySet<number>;
+  /** The octahedra drawn with wedges (Brecher 2006, ST-2.11's first, third and fourth forms), by input index: each kept as drawn - every donor on its drawn spoke, every wedge on its bond (`octahedraKept`). */
+  octahedra?: Octahedron[];
   /** The model atom each of the input's atoms is - but the stars the engine is given for rings bound atom by atom, after them. */
   ids: number[];
   /** Each ring or chain bound so: its metal and its atoms, by id - made one bond to its centre as it is laid out. */
@@ -66,6 +68,45 @@ function bondsAt(bonds: readonly { a: number; b: number }[]): Map<number, number
     bondsOf.set(b.b, [...(bondsOf.get(b.b) ?? []), k]);
   });
   return bondsOf;
+}
+
+/** An octahedron drawn with wedges: its metal and, for each donor, the way its spoke points (radians, the page's) and its bond's wedge. */
+export type Octahedron = { at: number; donors: { d: number; angle: number; stereo?: "up" | "down" }[] };
+
+/**
+ * A six-bond metal drawn as one of the octahedron's wedge forms (Brecher 2006, ST-2.11: the first, three hashed or solid pairs on the
+ * lines; the third, three solid and three hashed in turn; the fourth, a cross of plain bonds and a solid and a hashed wedge in one
+ * line, upright or turned): six spokes on three lines through it - each spoke within 30 degrees of straight across from its
+ * partner - each line two plain bonds or a solid wedge and a hashed one, every wedge narrow at the metal, at least one drawn. Its
+ * pairs across are the lines; its hand the order round it with the wedges. Null for any other six bonds - a trigonal prism's
+ * (ST-2.12), a line of two wedges alike - and for any other atom.
+ */
+export function wedgeOctahedron(drawing: ReturnType<typeof drawingOf>, at: number): Octahedron | null {
+  if (!isMetal(drawing.atoms[at].el ?? "")) return null;
+  const mine = drawing.bonds.flatMap((b, k) => (b.a === at || b.b === at ? [k] : []));
+  if (mine.length !== 6) return null;
+  const c = drawing.atoms[at];
+  const spokes = mine.map((k) => {
+    const b = drawing.bonds[k];
+    const d = b.a === at ? b.b : b.a;
+    const w = b.wedge;
+    return { d, angle: Math.atan2(drawing.atoms[d].y - c.y, drawing.atoms[d].x - c.x), stereo: w ? (w.narrow === at ? w.stereo : null) : undefined, order: b.order };
+  });
+  // (a wedge narrow at its donor, or on a bond of more than one order: none of the forms)
+  if (spokes.some((s) => s.stereo === null || s.order !== 1) || !spokes.some((s) => s.stereo)) return null;
+  // (how far two spokes are from straight across)
+  const off = (p: number, q: number) => Math.abs((((p - q) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI) - Math.PI);
+  const left = new Set(spokes.map((_, i) => i));
+  for (const i of [...left]) {
+    if (!left.has(i)) continue;
+    left.delete(i);
+    const j = [...left].sort((p, q) => off(spokes[i].angle, spokes[p].angle) - off(spokes[i].angle, spokes[q].angle))[0];
+    if (j == null || off(spokes[i].angle, spokes[j].angle) > Math.PI / 6) return null;
+    left.delete(j);
+    const kinds = [spokes[i].stereo ?? "plain", spokes[j].stereo ?? "plain"].sort().join(",");
+    if (kinds !== "plain,plain" && kinds !== "down,up") return null;
+  }
+  return { at, donors: spokes.map(({ d, angle, stereo }) => ({ d, angle, ...(stereo ? { stereo } : {}) })) };
 }
 
 /**
@@ -146,7 +187,11 @@ export function layoutJob(part: Model): LayoutJob {
   });
   // A wedge at an atom that could be a stereocentre, but says nothing the
   // engine can take: laid out, it would be lost, so it is not laid out.
-  const unread = unreadWedges(drawing, stereo);
+  // (an octahedron drawn in one of the text's wedge forms is read - its pairs across and its hand - and kept as drawn: its wedges
+  // say no tetrahedral centre's configuration, and are no reason to refuse)
+  const octahedra = drawing.atoms.flatMap((_, i) => wedgeOctahedron(drawing, i) ?? []);
+  const octahedral = new Set(octahedra.map((o) => o.at));
+  const unread = unreadWedges(drawing, stereo).filter((i) => !octahedral.has(i));
   if (unread.length) {
     throw new Error(
       `the wedges at ${part.atoms[unread[0]].el} do not say its configuration in a way Clean-up can keep ` +
@@ -164,6 +209,9 @@ export function layoutJob(part: Model): LayoutJob {
   });
   const kept = part.atoms.map((_, i) => i).filter((i) => !foldedInto.has(i));
   const at = new Map(kept.map((i, k) => [i, k]));
+  // (the octahedra drawn with wedges, by input index)
+  const octs = octahedra.map((o) => ({ at: at.get(o.at)!, donors: o.donors.map((x) => ({ ...x, d: at.get(x.d)! })) }));
+  const withOcts = octs.length ? { octahedra: octs } : {};
   const folded = new Map<number, number[]>();
   for (const [h, c] of foldedInto) folded.set(at.get(c)!, [...(folded.get(at.get(c)!) ?? []), part.atoms[h].id]);
 
@@ -230,7 +278,7 @@ export function layoutJob(part: Model): LayoutJob {
   // laid out, the bonds to its atoms become that one bond (chem/eta, the
   // maintainer, 2026-10-17).
   const bound = etaBondedAtomByAtom(input);
-  if (!bound.length) return { input, ids, folded };
+  if (!bound.length) return { input, ids, folded, ...withOcts };
   const dropped = new Set(bound.flatMap((r) => r.bonds));
   const atoms = [...input.atoms];
   const bonds = input.bonds.filter((_, i) => !dropped.has(i));
@@ -239,7 +287,7 @@ export function layoutJob(part: Model): LayoutJob {
     bonds.push({ a: atoms.length - 1, b: r.metal, order: 1 });
   }
   const systems = bound.map((r) => ({ metal: ids[r.metal], atoms: r.ring.map((a) => ids[a]) }));
-  return { input: { ...input, atoms, bonds }, ids, folded, bound: systems };
+  return { input: { ...input, atoms, bonds }, ids, folded, bound: systems, ...withOcts };
 }
 
 const pairKey = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
@@ -261,7 +309,7 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
   const byId = new Map(model.atoms.map((a) => [a.id, a]));
   // (a four-bond metal's donors opposite each other as they were drawn: transplatin cleaned up is transplatin - but not a plugin's drawing, which gives none)
   const kept = job.asNew ? new Set(ids.flatMap((id, i) => (job.arranged?.has(id) ? [i] : []))) : undefined;
-  const laid = kept && !kept.size ? given : oppositesKept(ids.map((id) => byId.get(id)!), input, given, kept);
+  const laid = octahedraKept(job, kept && !kept.size ? given : oppositesKept(ids.map((id) => byId.get(id)!), input, given, kept));
   // (a four-bond metal drawn in one form - the X or the upright cross, by the chemist, or a plugin's for an arrangement its input
   // gave - laid out in the other would say another thing of its arrangement: refused, saying so, its donors left as drawn; the X
   // grown as the X where its donors go on is backlog 118)
@@ -1120,4 +1168,54 @@ export function oppositesKept(was: readonly { x: number; y: number }[], input: L
     }
   }
   return { ...laid, x, y, hydrogens, wedges };
+}
+
+/** A spoke's way, drawn by hand, put on the nearest of every 15 degrees: the form's own angles, a hand's slip straightened out. */
+const onForm = (t: number) => Math.round(t / (Math.PI / 12)) * (Math.PI / 12);
+
+/**
+ * `laid` with each octahedron drawn with wedges (`LayoutJob.octahedra`) kept as drawn: each donor on its drawn spoke, straightened
+ * (`onForm`), at the length the layout gave it - the rest of its ligand turned with it about the metal - and its bond's wedge as
+ * drawn, narrow at the metal; the order round the metal, and so its hand, as drawn. Refused, saying so, where one ligand holds two
+ * of the metal's donors (a chelate drawn so is no case this keeps). The same layout where there is none.
+ */
+export function octahedraKept(job: Pick<LayoutJob, "input" | "octahedra">, laid: Layout2D): Layout2D {
+  if (!job.octahedra?.length) return laid;
+  const near = job.input.atoms.map(() => [] as number[]);
+  for (const { a, b } of job.input.bonds) {
+    near[a].push(b);
+    near[b].push(a);
+  }
+  const x = [...laid.x];
+  const y = [...laid.y];
+  let wedges = laid.wedges.filter((w) => !job.octahedra!.some((o) => w.from === o.at || w.to === o.at));
+  for (const o of job.octahedra) {
+    const m = { x: x[o.at], y: y[o.at] };
+    const donors = new Set(o.donors.map((d) => d.d));
+    for (const { d, angle, stereo } of o.donors) {
+      // (its ligand: what it carries, reached not through the metal)
+      const unit = new Set([d]);
+      for (const todo = [d]; todo.length; ) {
+        for (const v of near[todo.pop()!]) {
+          if (v === o.at || unit.has(v)) continue;
+          unit.add(v);
+          todo.push(v);
+        }
+      }
+      if ([...unit].some((v) => v !== d && donors.has(v))) {
+        throw new Error("the structure could not be laid out keeping its metal's donors opposite each other as drawn, so nothing was moved");
+      }
+      const turn = onForm(angle) - Math.atan2(y[d] - m.y, x[d] - m.x);
+      const cs = Math.cos(turn);
+      const sn = Math.sin(turn);
+      for (const v of unit) {
+        const px = x[v] - m.x;
+        const py = y[v] - m.y;
+        x[v] = m.x + px * cs - py * sn;
+        y[v] = m.y + px * sn + py * cs;
+      }
+      if (stereo) wedges = [...wedges, { from: o.at, to: d, stereo }];
+    }
+  }
+  return { ...laid, x, y, wedges };
 }
