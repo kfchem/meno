@@ -1229,6 +1229,18 @@ describe("a step that runs a plugin's program", () => {
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Some atoms are very close" });
   });
 
+  it("says a why the program broke over lines on one line, where its one structure failed", async () => {
+    worker.collect.mockImplementationOnce((async () => ({ why: "Some atoms\nare  very close\n" })) as never);
+    const { st, step } = editor();
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    Object.assign(jobs.get(idOf(1))!, { state: "failed", started: 1000, ended: 2000, code: 1 });
+    await st().lookAtJobs();
+    await ran;
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Some atoms are very close" });
+  });
+
   it("fails where its plugin read back a geometry it could not read - and holds up no other step, nor itself", async () => {
     const { st, step } = editor();
     const other = st().addStep("energy", "tightbind", 10, 20);
