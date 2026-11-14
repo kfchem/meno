@@ -22,7 +22,8 @@ import { anionStructure, condensedStructure } from "./condensed";
 import { chainGroup } from "./chain";
 import { complexStructure, forgetComplexReadings, LIGAND_UNITS, ligandStructure, namedLigand, type GroupStructure } from "./ligands";
 import { precatalystPicture, precatalystStructure, REAGENT_UNITS, reagentOf, reagentStructure } from "./reagents";
-import { kekuleOrders } from "./kekulize";
+import { aromaticRefusal, kekuleOrders } from "./kekulize";
+import { typedRingRefused } from "./smilesWhy";
 import type { TextRun } from "./layout2d";
 import { ELEMENTS as TABLE, NOT_METALS } from "./elements";
 import { VALENCE } from "./formula";
@@ -677,7 +678,9 @@ export function labelProblem(label: string, except?: CustomAbbreviation): string
 
 /**
  * Why a structure cannot be an abbreviation's, or null if it can: SMILES
- * Meno reads, with one "*" - where it is attached - bonded to one atom.
+ * Meno reads, with one "*" - where it is attached - bonded to one atom; and
+ * its aromatic rings given single and double bonds as written, never by an
+ * H nobody wrote (lib/chem/kekulize `aromaticRefusal`).
  */
 export function structureProblem(smiles: string): string | null {
   let read: Smiles;
@@ -686,6 +689,8 @@ export function structureProblem(smiles: string): string | null {
   } catch (e) {
     return `The SMILES cannot be read: ${e instanceof Error ? e.message : String(e)}`;
   }
+  const refused = aromaticRefusal(read.atoms, read.bonds);
+  if (refused) return `The SMILES cannot be read: ${typedRingRefused(refused)}`;
   const stars = read.atoms.flatMap((a, i) => (a.el === "*" ? [i] : []));
   if (stars.length !== 1) return 'Mark where it is attached with one "*".';
   if (read.atoms.length < 2) return "Give it at least one atom besides the *.";
@@ -818,6 +823,16 @@ export const GENERIC_SYMBOLS: ReadonlyMap<string, string> = new Map([
   ["Hal", "a halogen"],
   ["Het", "a heteroatom"],
 ]);
+/**
+ * The names of a point of variability, as a drawing writes one (Brecher 2008, GR-9.1 and GR-9.2 with Table GR-9.1): a number set after one is part
+ * of the name - X1 and X2 are two variables, as R1 and R2 are - never an atom's number. R (with its primes), X, Z and G are GR-9.1's, Alk, Alkyl,
+ * Ar, Aryl, E, EWG, M, Nu and Q Table GR-9.1's; PG, LG, EDG, Hal and Het are Meno's own class symbols; Y, A, L and HetAr are a judgement (common
+ * use: no text read names them). The figure reader asks of a label only its LAST capital with its small letters (the Ar of OAr, the G of EWG, the Ar
+ * of HetAr), so the compound names - EWG, EDG, PG, LG, HetAr - are listed for the record: it is their last capital that decides. B and P are left out: they stay elements (a nucleobase B1, a protecting group P1 are read as boron and
+ * phosphorus - a stated limit).
+ */
+export const VARIABLE_NAMES: ReadonlySet<string> = new Set(["R", "X", "Y", "Z", "G", "A", "L", "M", "Q", "E", "Ar", "Aryl", "Alk", "Alkyl", "Nu", "EWG", "EDG", "PG", "LG", "Hal", "Het", "HetAr"]);
+
 /**
  * What a label is read into: the groups the abbreviations name, longest
  * first - and "pin", for pinacolato - before element symbols.

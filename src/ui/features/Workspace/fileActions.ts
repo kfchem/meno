@@ -17,7 +17,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { asBonds, bondLinePtOf, fillOutline, flattenedCurve, lineWidthOf, outlineCurve, shapeBounds, strokePieces } from "../../../lib/chem/shapes";
 import { inkColour, inkWidth, markerColour, MARKER_OPACITY, strokeOutline, strokesBounds } from "../../../lib/chem/ink";
 import { setInUse } from "../../../lib/chem/palette";
-import { createSVG, labelBox, labelSetOf, measureLabelBox, type Layout, type LayoutOptions } from "../../../lib/chem/layout2d";
+import { createSVG, HALO_EMS, labelBox, labelSetOf, measureLabelBox, type Layout, type LayoutOptions } from "../../../lib/chem/layout2d";
 import { arrowsWithWords, wordsSet } from "../../../lib/chem/captions";
 import { arrowsOfCycles, cycleThings } from "./utils/cycles";
 import { withRingStars, writeMolfile, writeMolfile3d, writeSdf, type Atom3D } from "../../../lib/chem/molWriter";
@@ -34,12 +34,14 @@ import { partsOf } from "./workflow/parts";
 import { useNotices } from "../../notices";
 import { carriedOf, isWorkspaceFile, notKeptSaid, workspaceFile } from "./utils/workspace";
 import { leftOutSavedSaid } from "./utils/readNotes";
-import { bondsAt, notePictureMarks, pictureMarks } from "./utils/molecule3d";
+import { bondsAt, notePictureMarks, pictureMarks, stereoPictureSpots3d } from "./utils/molecule3d";
 import { isSkeleton } from "./utils/completeness";
 import { FAILURE_WORDS } from "./workflow/failures";
 import { skeletonWhy } from "../../../lib/chem/skeleton";
 import { measurePictureMarks } from "./utils/measure3d";
-import { MARK_SCALE, stereoPictureItems } from "./chem/marks";
+import { MARK_SCALE, STEREO_GAP, stereoPictureItems, stereoTextItem } from "./chem/marks";
+import { stereoShownOf } from "./document";
+import { COLORS } from "../../theme/colors";
 import { style3dOf } from "./style3d";
 import { withSolidsImage } from "./render3d";
 import { pictureSurface } from "./utils/surfaceMesh";
@@ -778,6 +780,39 @@ export function drawingLayout(
       const box = measureLabelBox(m, family);
       xs.push(box.min.x, box.max.x);
       ys.push(box.min.y, box.max.y);
+    }
+    take(xs, ys);
+  }
+  // and their R, S, E and Z, over them, as the canvas writes them: where it
+  // puts them, clear of the balls, the bonds, the measurements' values and
+  // each other (utils/molecule3d stereoPictureSpots3d), as large as the
+  // drawing's (without the canvas's least size, which has no meaning at a
+  // picture's size in print), in its blue on a white halo
+  const values = measures.map((m) => {
+    const box = measureLabelBox(m, family);
+    return { x: (box.min.x + box.max.x) / 2, y: (box.min.y + box.max.y) / 2, hx: (box.max.x - box.min.x) / 2, hy: (box.max.y - box.min.y) / 2 };
+  });
+  const parentheses = !!opts.stereoParentheses;
+  const gap = opts.stereoGap ?? STEREO_GAP;
+  const stereo = (model.molecules3d ?? []).flatMap((m) =>
+    stereoPictureSpots3d(m, style3dOf(aromatic), stereoShownOf(m), markSize, gap, parentheses, values).map((p) => ({
+      ...stereoTextItem(p, markSize, opts),
+      // (its size as the layout's texts give theirs: in pixels, where the layout's units are)
+      fontPx: opts.units === "px" ? markSize * layout.zoom : markSize,
+      color: COLORS.stereo3d,
+      halo: COLORS.background,
+    })),
+  );
+  if (stereo.length) {
+    layout.solidsTexts = stereo;
+    const xs: number[] = [];
+    const ys: number[] = [];
+    for (const t of stereo) {
+      const box = labelBox(t, markSize, labelSetOf(opts));
+      // (with its halo)
+      const h = HALO_EMS * markSize;
+      xs.push(t.x - box.left - h, t.x + box.right + h);
+      ys.push(t.y - box.bottom - h, t.y + box.top + h);
     }
     take(xs, ys);
   }

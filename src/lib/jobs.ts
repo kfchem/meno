@@ -225,6 +225,20 @@ export function threadsOf(c: Pick<CalculationSettings, "cores" | "coresAll">, co
 }
 
 /**
+ * How many threads a search made on the page may use - a 3D structure made
+ * from a drawing, an atom map's: the cores Settings, *Calculations*, gives
+ * a job, where the chemist set them; where not - every core, Settings' own -
+ * all but one of them, at least one, so that the page is drawn on the one
+ * left while it searches: a search on every core starved the page of its
+ * frames (docs/WORKSPACE.md, *Conformers tried*). A workflow's steps take
+ * theirs as ever (`threadsOf`).
+ */
+export function pageThreadsOf(c: Pick<CalculationSettings, "cores" | "coresAll">, cores = computerCores()): number {
+  const threads = threadsOf(c, cores);
+  return c.cores != null ? threads : Math.max(1, threads - 1);
+}
+
+/**
  * How Settings' cores are counted, in plain words, where it matters: on a
  * computer that runs more than one thread on each physical core, as its
  * threads - and a program running as processes takes one physical core,

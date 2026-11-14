@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { boat, chair, cross, dot, envelope, flipped, fused, halfChair, haworth, newman, sub, unit, type Solid, type V3 } from "./solids";
-import { CHAIR_ELEVATION_DEG, CHAIR_GENTLE_DEG, CHAIR_SEAT_DEG, CHAIR_STEEP_DEG, CHAIR_TURN_DEG, drawn, fromAbove, HAWORTH_ELEVATION_DEG, project, seen, seenFree, standardView } from "./views";
+import { CHAIR_ELEVATION_DEG, CHAIR_GENTLE_DEG, CHAIR_SEAT_DEG, CHAIR_STEEP_DEG, CHAIR_TURN_DEG, drawn, fromAbove, HAWORTH_ELEVATION_DEG, HAWORTH_IN, HAWORTH_OUT, project, seen, seenFree, standardView } from "./views";
 
 const close = (a: number, b: number, digits = 4) => expect(a).toBeCloseTo(b, digits);
 const order = (s: { z: number }[]) => s.map((p, k) => [p.z, k] as const).sort((a, b) => b[0] - a[0]).map(([, k]) => k);
@@ -122,8 +122,8 @@ describe("the chair's two views: its depth, and what `seen` shows", () => {
 });
 
 describe("the Haworth ring's standard view (McNaught 1996, 2-Carb-5.4)", () => {
-  it("is from slightly above - 30 degrees by eye - the edge closer to the viewer drawn below the more distant one", () => {
-    expect(HAWORTH_ELEVATION_DEG).toBe(30);
+  it("is from above, the eye's height over the ring's plane the angle whose sine is 2/3 (rule (H), measured on Brecher 2006's figure under ST-1.9), the edge closer to the viewer drawn below the more distant one", () => {
+    close(Math.sin((HAWORTH_ELEVATION_DEG * Math.PI) / 180), 2 / 3, 12);
     const p = seen(haworth(6), standardView(haworth(6)));
     // (the near edge, atoms 2 and 3 - the front - is lower than the far edge, atoms 5 and 0)
     expect(Math.max(p[2].y, p[3].y)).toBeLessThan(Math.min(p[5].y, p[0].y));
@@ -132,13 +132,16 @@ describe("the Haworth ring's standard view (McNaught 1996, 2-Carb-5.4)", () => {
 
   it("has the pyranose's six points as written out: the ring O at the back right, C1 at the right-hand end, C4 at the left", () => {
     const p = seen(haworth(6), standardView(haworth(6)));
+    // (rule (H)'s places: the level bond 1, the ring 1.1547 tall and 2 wide; each depth -cos e times how far back the atom is)
+    const back = Math.sqrt(3) / 2;
+    const cos = Math.sqrt(1 - 4 / 9);
     const want = [
-      [0.5, 0.433, -0.75],
+      [0.5, 0.577350269, -cos * back],
       [1, 0, 0],
-      [0.5, -0.433, 0.75],
-      [-0.5, -0.433, 0.75],
+      [0.5, -0.577350269, cos * back],
+      [-0.5, -0.577350269, cos * back],
       [-1, 0, 0],
-      [-0.5, 0.433, -0.75],
+      [-0.5, 0.577350269, -cos * back],
     ];
     p.forEach((q, k) => [q.x, q.y, q.z].forEach((v, i) => close(v, want[k][i])));
     // (C1 the right-hand end: the largest x; the oxygen behind: the least depth among those at the right)
@@ -161,6 +164,75 @@ describe("the Haworth ring's standard view (McNaught 1996, 2-Carb-5.4)", () => {
       expect(Math.sign(d.y)).toBe(free.face);
       close(Math.abs(d.y), Math.cos((HAWORTH_ELEVATION_DEG * Math.PI) / 180), 9);
     }
+  });
+});
+
+describe("the Haworth ring as drawn (rule (H)): a true view of the ring, its groups by two drawn lengths", () => {
+  /** How far a point is from the segment p-q. */
+  const toSegment = (x: number, y: number, p: { x: number; y: number }, q: { x: number; y: number }) => {
+    const [dx, dy] = [q.x - p.x, q.y - p.y];
+    const t = Math.max(0, Math.min(1, ((x - p.x) * dx + (y - p.y) * dy) / (dx * dx + dy * dy)));
+    return Math.hypot(x - p.x - t * dx, y - p.y - t * dy);
+  };
+
+  it("draws the six-ring 1.1547 level bonds tall and 2 wide, the five-ring's side atoms 0.634 above its front edge", () => {
+    const six = drawn(haworth(6))!;
+    const ys = six.atoms.map((p) => p.y);
+    close(Math.max(...ys) - Math.min(...ys), 2 / Math.sqrt(3), 9);
+    close(Math.max(...six.atoms.map((p) => p.x)) - Math.min(...six.atoms.map((p) => p.x)), 2, 9);
+    const five = drawn(haworth(5))!;
+    // (its side atoms, C-1 and C-4, atoms 1 and 4; its front edge, C-2 and C-3, atoms 2 and 3)
+    close(five.atoms[1].y - five.atoms[2].y, 0.634, 3);
+  });
+
+  it("puts each group straight up or down: 0.40 of a bond into the ring's picture - a front atom's up, a back atom's down - and 0.745 out of it", () => {
+    for (const size of [6, 5] as const) {
+      const d = drawn(haworth(size))!;
+      const ys = d.atoms.map((p) => p.y);
+      const [lo, hi] = [Math.min(...ys), Math.max(...ys)];
+      for (const f of d.free) {
+        expect(f.x).toBe(0);
+        const p = d.atoms[f.free.at];
+        const up = f.free.kind === "up";
+        const into = up ? Math.abs(p.y - lo) < 1e-9 || d.atoms.some((q, j) => j !== f.free.at && Math.abs(q.x - p.x) < 1e-9 && q.y > p.y) : Math.abs(p.y - hi) < 1e-9;
+        close(Math.abs(f.y), into ? HAWORTH_IN : HAWORTH_OUT, 12);
+        expect(Math.sign(f.y)).toBe(up ? 1 : -1);
+        // (its depth the normal's: toward the viewer for up, by the sine, times the length)
+        close(f.z, (up ? 1 : -1) * (2 / 3) * Math.abs(f.y), 12);
+      }
+    }
+    close(HAWORTH_OUT, Math.sqrt(5) / 3, 12);
+  });
+
+  it("leaves every group place clear - at least 0.3 of the level bond - of every other ring atom, every ring bond not at its own atom and every other group place; and no group's bond touches a ring bond but at its own atom", () => {
+    for (const size of [6, 5] as const) {
+      const d = drawn(haworth(size))!;
+      const n = d.atoms.length;
+      const places = d.free.map((f) => ({ at: f.free.at, x: d.atoms[f.free.at].x + f.x, y: d.atoms[f.free.at].y + f.y }));
+      for (const pl of places) {
+        for (let j = 0; j < n; j++) if (j !== pl.at) expect(Math.hypot(pl.x - d.atoms[j].x, pl.y - d.atoms[j].y), `${size} atom ${j}`).toBeGreaterThan(0.3);
+        for (let j = 0; j < n; j++) {
+          const k = (j + 1) % n;
+          if (j === pl.at || k === pl.at) continue;
+          expect(toSegment(pl.x, pl.y, d.atoms[j], d.atoms[k]), `${size} bond ${j}-${k}`).toBeGreaterThan(0.3);
+          // (the group's bond, from its atom to its place, meets no other ring bond: tried along it)
+          for (let s = 1; s <= 10; s++) {
+            const p = d.atoms[pl.at];
+            expect(toSegment(p.x, p.y + ((pl.y - p.y) * s) / 10, d.atoms[j], d.atoms[k])).toBeGreaterThan(1e-6);
+          }
+        }
+        for (const other of places) if (other.at !== pl.at) expect(Math.hypot(pl.x - other.x, pl.y - other.y)).toBeGreaterThan(0.3);
+      }
+    }
+  });
+
+  it("was not so in the 30-degree view, every group 0.866: a front atom's up place stood on the back atom above it - pinned so", () => {
+    const old = fromAbove(30);
+    const p = seen(haworth(6), old);
+    const up = (k: number) => ({ x: p[k].x, y: p[k].y + Math.cos(Math.PI / 6) });
+    // (C-2, atom 2, up: the ring O, atom 0; C-3, atom 3, up: C-5, atom 5)
+    close(Math.hypot(up(2).x - p[0].x, up(2).y - p[0].y), 0, 9);
+    close(Math.hypot(up(3).x - p[5].x, up(3).y - p[5].y), 0, 9);
   });
 });
 
@@ -366,8 +438,8 @@ describe("the chair as the textbook draws it (ruled: a convention of one drawn l
     expect(drawn(off)).toBeNull();
   });
 
-  it("answers null for what is not on the four directions - the boat, half-chair, envelope, a five-ring fused on, the Haworth ring and the Newman pair - which are `seen`", () => {
-    for (const s of [boat(), halfChair(), envelope(), haworth(6), haworth(5), newman("staggered"), fused(chair(), 0, "envelope", "trans")]) expect(drawn(s)).toBeNull();
+  it("answers null for what is not on the four directions - the boat, half-chair, envelope, a five-ring fused on and the Newman pair - which are `seen`", () => {
+    for (const s of [boat(), halfChair(), envelope(), newman("staggered"), fused(chair(), 0, "envelope", "trans")]) expect(drawn(s)).toBeNull();
   });
 
   describe("the free positions", () => {

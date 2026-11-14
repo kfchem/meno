@@ -72,7 +72,7 @@ const MAC =
 const WIDTH = 240;
 /** Each icon's square along the top, as Quick Add's are, in px. */
 const ROW = 36;
-/** A compact row under the icons: the kinds of bond there are besides the common ones. */
+/** A compact row under the icons: a molecule in 3D's magnifications. (The other kinds of bond, under the first row, are as large as it.) */
 const ROW2 = 28;
 
 /** What the clipboard's items in the menu do. */
@@ -1201,7 +1201,7 @@ export default function PartMenu({
           role="group"
           aria-label="Other kinds"
           initial={{ height: 0, opacity: 0 }}
-          animate={{ height: ROW2 + 4, opacity: 1 }}
+          animate={{ height: ROW + 4, opacity: 1 }}
           exit={{ height: 0, opacity: 0 }}
           transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
           className="flex items-center gap-0.5 px-1 overflow-hidden"
@@ -1215,9 +1215,9 @@ export default function PartMenu({
               title={item.name}
               onClick={run(item)}
               className={`meno-press shrink-0 rounded-md flex items-center justify-center outline-none transition-colors duration-150 ease-meno ${item.checked ? "bg-gh-base text-gh-black" : "text-gh-black hover:bg-gh-base focus:bg-gh-base"}`}
-              style={{ width: ROW2, height: ROW2 }}
+              style={{ width: ROW, height: ROW }}
             >
-              <span className="scale-90">{item.icon}</span>
+              {item.icon}
             </button>
           ))}
         </motion.div>

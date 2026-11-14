@@ -1104,22 +1104,22 @@ describe("a figure drawn in colour by another program", () => {
 describe("a figure's words", () => {
   it("joins letters side by side, a subscript with them, and writes them as a label is typed", () => {
     const ws = wordsOf([...word("CO_2Me", [20, 20]), ...word("OH", [80, 20])]);
-    expect(ws.map(labelText).sort()).toEqual(["CO2Me", "OH"]);
+    expect(ws.map((w) => labelText(w)).sort()).toEqual(["CO2Me", "OH"]);
   });
 
   it("reads two letters as large set over each other, their rooms well into each other, as two words", () => {
     // (two H's of stereocentres side by side as RDKit's ACS 1996 mode draws estradiol: on one line, a fifth of a letter over each other)
     const at = (c: string, box: Box, loose: Box): FigureLetter => ({ c, box, loose, at: [box[0], box[3]], size: 7.5 });
     const ws = wordsOf([at("H", [109.87, 74.87, 114.14, 80.25], [109.28, 74.47, 114.69, 81.97]), at("H", [113.92, 75.17, 118.18, 80.55], [113.33, 74.77, 118.74, 82.27])]);
-    expect(ws.map(labelText)).toEqual(["H", "H"]);
+    expect(ws.map((w) => labelText(w))).toEqual(["H", "H"]);
   });
 
   it("starts a word where a letter as large as the word's own stands off their line, however the word ends", () => {
     // (as RDKit's ACS 1996 mode sets them: oxytocin's carbonyl O against NH2's 2, five points lower; vancomycin's two H's side by
     // side, a quarter of a letter apart in height)
     const at = (c: string, x: number, base: number, size = 7.5): FigureLetter => ({ c, box: [x, base - 0.72 * size, x + 0.6 * size, base], at: [x, base], size });
-    expect(wordsOf([at("N", 100, 102.7), at("H", 104.6, 102.7), at("2", 109.2, 104.4, 4.5), at("O", 112, 107.6)]).map(labelText)).toEqual(["NH2", "O"]);
-    expect(wordsOf([at("H", 208, 138.4), at("H", 214.3, 140.1)]).map(labelText)).toEqual(["H", "H"]);
+    expect(wordsOf([at("N", 100, 102.7), at("H", 104.6, 102.7), at("2", 109.2, 104.4, 4.5), at("O", 112, 107.6)]).map((w) => labelText(w))).toEqual(["NH2", "O"]);
+    expect(wordsOf([at("H", 208, 138.4), at("H", 214.3, 140.1)]).map((w) => labelText(w))).toEqual(["H", "H"]);
   });
 
   it("joins letters set side by side as the PDF sets them, however far apart their ink: a 1's ink well inside its room", () => {
@@ -1130,7 +1130,7 @@ describe("a figure's words", () => {
       at("8", [125.69, 91.87, 127.86, 95.11], [125.55, 91.56, 128.05, 96.06], 4.5),
       at("F", [129.04, 92.65, 132.77, 98.03], [128.4, 92.25, 132.98, 99.75], 7.5),
     ]);
-    expect(ws.map(labelText)).toEqual(["18F"]);
+    expect(ws.map((w) => labelText(w))).toEqual(["18F"]);
   });
 
   it("reads a drawn label turned round, and HN before a group as NH", () => {

@@ -234,6 +234,22 @@ finds is kept as its own (`combine`); Meno checks every answer (`checked`,
 | **Copy as SMILES** | RDKit, then the clipboard as text | SMILES; a reaction SMILES, "reactants>agents>products", where the selection shows one reaction - its molecules in their roles as an RXN file has them (`reactionForSmiles`, the worker's `rxn_to_smiles`) - and refused, saying why, where it shows more than one arrow or nothing on one side of it: never its molecules as one mixture (2026-10-22) | the selection's structure |
 | **Office live link** (Windows) | TS, then Rust `ole_update` | the record and EMF in the object | as `.meno` does, the surface shown included |
 
+**The label fonts.** A copied picture's EMF names its labels' font -
+IBM Plex Sans, regular or bold, upright or italic (`lib/chem/emf.ts`) -
+and Office draws them in it only where it is installed. Meno carries the
+four faces (`src-tauri/resources/fonts`, SIL OFL 1.1, IBM's release
+v6.4.0) and installs them for this user: on Windows the installer runs
+`Meno.exe --install-label-fonts`, which puts each face not yet in
+`%LOCALAPPDATA%\Microsoft\Windows\Fonts` there and lists it under this
+user's fonts, keeping which it put under `Software\Meno\LabelFonts`;
+uninstalling runs `--remove-label-fonts`, which takes out those and no
+others. On the Mac Meno puts each face not yet in `~/Library/Fonts` there
+at start, quietly, a line in its log. A face of the same file already
+there is left as it is. Settings, *Copied pictures*, says whether the
+four are installed (`label_fonts_installed`; `src-tauri/src/labelfonts.rs`).
+To share a deck with someone without them, PowerPoint's *Embed fonts in
+the file* carries them in it (the manual says so).
+
 Every file a chemist chooses where to put - a workspace saved, an export,
 a text, a style, a procedure, a picture or film, a PDF - is written by one
 writer, whole or not at all (*Save and Export*, *A document is written

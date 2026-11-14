@@ -223,6 +223,13 @@ const ICONS: Record<StepIcon, Icon | ReactNode> = {
       <path d="M10 8.8 V17" strokeWidth={1} strokeDasharray="0.1 1.8" />
     </>
   ),
+  // (a torsion trans, above one cis: the same four atoms set against each other)
+  torsions: (
+    <>
+      <path d="M2.5 8 L7 3 L13 8 L17.5 3" />
+      <path d="M2.5 12 L7 17 L13 17 L17.5 12" />
+    </>
+  ),
   // (a gentle path, frames taken along it: one size, none at an end, the line thin under them)
   frames: (
     <>
