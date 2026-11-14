@@ -13,9 +13,9 @@ describe("a structure from its SMILES", () => {
     const { structureFromSmiles } = await import("./fromSmiles");
     const drawn = await structureFromSmiles("CCO", WILEY);
     expect(drawn.atoms.map((a) => a.el)).toEqual(["C", "C", "O"]);
-    expect(laidOut).toHaveBeenLastCalledWith(expect.objectContaining({ atoms: expect.any(Array) }), WILEY, undefined, true);
+    expect(laidOut).toHaveBeenLastCalledWith(expect.objectContaining({ atoms: expect.any(Array) }), WILEY, undefined, true, new Set());
     // (none given: the layout's own default, the app's style)
     await structureFromSmiles("CCO");
-    expect(laidOut).toHaveBeenLastCalledWith(expect.objectContaining({ atoms: expect.any(Array) }), undefined, undefined, true);
+    expect(laidOut).toHaveBeenLastCalledWith(expect.objectContaining({ atoms: expect.any(Array) }), undefined, undefined, true, new Set());
   }, measured(390));
 });
