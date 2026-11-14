@@ -427,9 +427,11 @@ function unconfigured(g: LayoutInput): LayoutInput {
  * taken out: its plain form is a biaryl drawn with none.
  *
  * Its filled form is identity's own - never shown, drawn or saved.
- * A place two of whose groups no symmetry of the structure's constitution
- * could make alike, and that no such symmetry moves, is not tried: both
- * its senses could only write two texts. Two texts the same are one
+ * A place no two of whose groups (on one side, for a double bond's or a
+ * run's ends) share a class of the structure's constitution is not tried:
+ * every symmetry then keeps each place's sense, so how many places are
+ * written one way is kept, and its two senses could only write two texts
+ * (CHEM, 11-14). Two texts the same are one
  * structure, whether the search finished or not; where it ran out of steps
  * and wrote two, that place is left as it is, and `complete` says so.
  */
@@ -445,13 +447,12 @@ export function filledIn(input: LayoutInput): { input: LayoutInput; complete: bo
   for (const b of blanksOf(g)) if (b.kind !== "biaryl" && b.sides.some((side) => ends(side))) g = given(g, b, true);
   // (the classes of the constitution alone, coarser than every orbit of the structure with any configuration given)
   let classes: number[] | null = null;
-  const lone = (cs: number[], xs: readonly number[]) => xs.every((x) => cs.filter((c) => c === cs[x]).length === 1);
   for (;;) {
     const blanks = blanksOf(g);
     if (!blanks.length) return { input: g, complete, text };
     classes ??= symmetryClasses(unconfigured(input));
     const cs = classes;
-    const tried = blanks.filter((b) => !lone(cs, b.own) || b.sides.some((side) => new Set(side.map((m) => cs[m])).size < side.length));
+    const tried = blanks.filter((b) => b.sides.some((side) => new Set(side.map((m) => cs[m])).size < side.length));
     if (!tried.length) return { input: g, complete, text };
     const rank = tried.length > 1 ? canonicalRanks(g) : [];
     const place = (b: Blank) => b.own.map((a) => rank[a]).sort((x, y) => x - y);
