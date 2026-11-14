@@ -347,7 +347,8 @@ export function placeRingSystem(
     const p = new Map<number, Point>([[metal.at, { x: 0, y: 0 }]]);
     const n = order.length;
     // (a six-bond metal's spokes from straight down, round; a free spoke's place left)
-    const start = mol.neighbours[metal.at].length === 6 ? -Math.PI / 2 : -Math.PI / 2 - ((n - 1) / 2) * metal.step;
+    // (a six-bond metal's spokes from straight down; a four-bond one with a free spoke, as the X: from 45 degrees off straight down)
+    const start = mol.neighbours[metal.at].length === 6 ? -Math.PI / 2 : mol.neighbours[metal.at].length === 4 && order.length === 4 && order.includes(-1) ? -Math.PI / 2 - Math.PI / 4 : -Math.PI / 2 - ((n - 1) / 2) * metal.step;
     order.forEach((d, k) => d >= 0 && p.set(d, dir(start + k * metal.step)));
     return placeRest(p, new Set());
   }
@@ -376,7 +377,7 @@ export function placeRingSystem(
 export function metalHub(mol: Molecule, rings: number[][]): { at: number; step: number; orders: number[][] } | null {
   const through = (a: number) => rings.filter((r) => r.includes(a));
   const metals = [...new Set(rings.flat())]
-    .filter((a) => isMetal(mol.el[a]) && (through(a).length >= 2 || (mol.neighbours[a].length === 6 && through(a).length >= 1)))
+    .filter((a) => isMetal(mol.el[a]) && (through(a).length >= 2 || ((mol.neighbours[a].length === 6 || mol.neighbours[a].length === 4) && through(a).length >= 1)))
     .sort((p, q) => through(q).length - through(p).length || byStructure(mol)(p, q));
   const at = metals[0];
   if (at == null) return null;
@@ -420,6 +421,10 @@ export function metalHub(mol: Molecule, rings: number[][]): { at: number; step: 
   // (a metal of six bonds: its six spokes three lines through it, 60 degrees apart, as the text draws an octahedron - Brecher 2006,
   // ST-2.11 - its chelates' donors on spokes side by side and the spokes between them left to its other ligands)
   const six = mol.neighbours[at].length === 6;
+  // (a metal of four bonds with one chelate - Pt(en)Cl2: its four spokes a right angle apart, the chelate's two ends side by side and
+  // its other two ligands on the spokes left, as a square-planar metal is drawn - backlog 124)
+  const four = mol.neighbours[at].length === 4 && n < 4;
+  const spokes = six ? 6 : four ? 4 : 0;
   const step = six ? Math.PI / 3 : closed && chains.length === 1 ? (2 * Math.PI) / n : n <= 4 ? Math.PI / 2 : (2 * Math.PI) / n;
   // the first chain as it is; the others in every order, each either way round
   const orders: number[][] = [];
@@ -432,7 +437,7 @@ export function metalHub(mol: Molecule, rings: number[][]): { at: number; step: 
     });
   };
   if (chains.length > 4) return null;
-  if (six && n < 6) {
+  if (spokes && n < spokes) {
     // (each order of the chains round the six spokes, each but the first either way round, with the free spokes - the metal's other
     // ligands' - shared out among the gaps between them in every way: the arrangement that reads best kept, and Clean-up's own
     // check keeping which donors are opposite as drawn; -1 a free spoke)
@@ -441,7 +446,7 @@ export function metalHub(mol: Molecule, rings: number[][]): { at: number; step: 
     // pincer has no other way - CHEM, the brief's point 2)
     const waysOf = (c: number[]): number[][] => {
       const turned = c.length > 1 ? [c, [...c].reverse()] : [c];
-      if (c.length !== 3) return turned;
+      if (c.length !== 3 || !six) return turned;
       return turned.flatMap((w) => [w, [w[0], w[1], -1, w[2]]]);
     };
     const spread = (left: number[][], acc: number[], free: number) => {
@@ -457,7 +462,7 @@ export function metalHub(mol: Molecule, rings: number[][]): { at: number; step: 
     };
     for (const first of waysOf(chains[0])) {
       const uses = first.filter((d) => d < 0).length;
-      if (uses <= 6 - n) spread(chains.slice(1), first, 6 - n - uses);
+      if (uses <= spokes - n) spread(chains.slice(1), first, spokes - n - uses);
     }
     return { at, step, orders };
   }

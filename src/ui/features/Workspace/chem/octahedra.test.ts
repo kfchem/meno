@@ -132,3 +132,26 @@ describe("a six-bond metal laid out from its SMILES", () => {
     expect(readMarks(laid).atoms.get(co.id)).toBe(ARRANGEMENT_SAID);
   });
 });
+
+describe("a four-bond metal with one chelate, laid out from its SMILES (backlog 124)", () => {
+  it("has its four bonds a right angle apart: the chelate's two ends side by side, its other two ligands on the two right angles left - Pt(en)Cl2, Pt(bpy)Cl2", { timeout: 120000 }, async () => {
+    forgetLaidOut();
+    for (const smiles of ["Cl[Pt]12Cl.N1CCN2", "Cl[Pt]12Cl.c3ccn1c(c3)-c4ccccn42"]) {
+      const laid = await laidOut(drawnFromSmiles(smiles), MENO, undefined, undefined, true);
+      const pt = laid.atoms.find((a) => a.el === "Pt")!;
+      const round = laid.bonds
+        .filter((b) => b.a === pt.id || b.b === pt.id)
+        .map((b) => laid.atoms.find((a) => a.id === (b.a === pt.id ? b.b : b.a))!)
+        .map((o) => ({ el: o.el, t: Math.atan2(o.y - pt.y, o.x - pt.x) }))
+        .sort((p, q) => p.t - q.t);
+      // (each next a right angle on, all round; the two Cl side by side, as are the two N)
+      round.forEach((o, k) => {
+        const next = round[(k + 1) % 4];
+        const gap = (((next.t - o.t) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+        expect(Math.abs(gap - Math.PI / 2), smiles).toBeLessThan(0.02);
+      });
+      const els = round.map((o) => o.el).join(",");
+      expect(["Cl,Cl,N,N", "N,Cl,Cl,N", "N,N,Cl,Cl", "Cl,N,N,Cl"], smiles).toContain(els);
+    }
+  });
+});

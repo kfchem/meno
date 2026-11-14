@@ -538,13 +538,16 @@ function assign(
     // methyl, the other side bare).
     const own = placed.filter((v) => mol.systemOf[v] === mol.systemOf[a]);
     // (a six-bond metal whose chelates' donors stand on its spokes - three lines through it, 60 degrees apart (ringSystem metalHub) -
-    // has its other ligands on the spokes left free: the heaviest first, nearest the middle of those left)
-    if (isMetal(mol.el[a]) && mol.systemOf[a] >= 0 && mol.neighbours[a].length === 6 && own.length >= 2) {
+    // has its other ligands on the spokes left free: the heaviest first, nearest the middle of those left;
+    // (and a four-bond one with a chelate - Pt(en)Cl2 - its other two on the right angles left: backlog 124)
+    const nSpokes = mol.neighbours[a].length;
+    if (isMetal(mol.el[a]) && mol.systemOf[a] >= 0 && (nSpokes === 6 || nSpokes === 4) && own.length >= 2) {
+      const grid = (2 * Math.PI) / nSpokes;
       const ownAt = own.map((v) => angleOf(sub(pos.get(v)!, at)));
-      const onGrid = ownAt.every((t) => Math.abs(wrap(t - ownAt[0] - (Math.PI / 3) * Math.round(wrap(t - ownAt[0]) / (Math.PI / 3)))) < 1e-3);
+      const onGrid = ownAt.every((t) => Math.abs(wrap(t - ownAt[0] - grid * Math.round(wrap(t - ownAt[0]) / grid))) < 1e-3);
       if (onGrid) {
         const taken = placed.map((v) => angleOf(sub(pos.get(v)!, at)));
-        const spokes = Array.from({ length: 6 }, (_, k) => ownAt[0] + (k * Math.PI) / 3).filter((t) => taken.every((u) => Math.abs(wrap(t - u)) > Math.PI / 6));
+        const spokes = Array.from({ length: nSpokes }, (_, k) => ownAt[0] + k * grid).filter((t) => taken.every((u) => Math.abs(wrap(t - u)) > grid / 2));
         if (spokes.length >= k) {
           const mid = Math.atan2(
             spokes.reduce((t, u) => t + Math.sin(u), 0),
