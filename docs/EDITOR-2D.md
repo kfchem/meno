@@ -760,7 +760,10 @@ Both go together, because both touch every layer.
   round - double and triple bonds included, which today are not. When they
   are square, every one is square.
   A wedge's wide end or a bold bar's end, where one bond carries straight on through it, is cut
-  square across and its two corners are rounded like any free corner (they
+  square across at the atom - past it by the bond's own line's half width,
+  never into a triple bond's or a nitrile's lines (a solid wedge into
+  efavirenz's alkyne stood 0.2 of a bond into the C≡C, a spike between its
+  outer lines) - and its two corners are rounded like any free corner (they
   were left sharp).
 - **Units.** Every length can be given in points or as a fraction of the bond
   length, whichever the user prefers.

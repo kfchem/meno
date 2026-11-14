@@ -1281,8 +1281,12 @@ function baseCut(
   // draw the end out into a spike. Square across the wedge is what carries
   // such a bond out of it, and the other side still follows its own bond.
   if (Math.abs(vcross(dir, axis)) < rule.minSin) {
+    // (past the atom by the bond's own line's half width, so that its butt end is under the cut: never by its outer lines' spread -
+    // a triple bond's, a nitrile's - which drove the wedge's end into the bond, a spike between its outer lines)
+    const lines = neighbours[key].lines;
+    const own = half - Math.max(0, ...lines.map((o) => Math.abs(o)));
     return {
-      on: vadd(atom, vscale(axis, -half)),
+      on: vadd(atom, vscale(axis, -own)),
       dir: vperp(axis),
       key,
       // square across the axis: the corner only has to come back as far as
