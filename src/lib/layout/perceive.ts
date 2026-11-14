@@ -32,6 +32,16 @@ export type LayoutAtom = {
    * only by an atom with two bonds.
    */
   linear?: boolean;
+  /**
+   * A metal with four bonds as the chemist drew it - an upright cross or an X - where Clean-up keeps it so (docs/LAYOUT-2D.md,
+   * *At an atom in no ring*): taken over the form Meno would choose.
+   */
+  fourForm?: "x" | "cross";
+  /**
+   * An atom standing for the structure a group goes on into - a group laid out alone, the carbon for its bond out: not an end,
+   * though bonded to nothing else (a CF3 on it is a group on a skeleton, its trident fanned).
+   */
+  onward?: true;
 };
 export type LayoutBond = { a: number; b: number; order: number; stereo?: CisTrans };
 export type LayoutInput = {
@@ -86,6 +96,10 @@ export type Molecule = {
   cumulated?: readonly Cumulated[];
   /** The atoms asked to be drawn straight through (`LayoutAtom.linear`), each with two bonds. */
   straight: Set<number>;
+  /** The four-bond metals asked to be drawn as an upright cross or an X (`LayoutAtom.fourForm`). */
+  fourForm: Map<number, "x" | "cross">;
+  /** The atoms that stand for the structure a group goes on into (`LayoutAtom.onward`). */
+  onward: Set<number>;
   /**
    * The rings bound face-on to a metal through all their atoms (η⁵-Cp,
    * η⁶-arene): each one's star - at its centre, a member of its ring
@@ -376,6 +390,8 @@ export function perceive(input: LayoutInput): Molecule {
       input.atoms.flatMap((a, i): [number, Tetrahedral][] => (a.tetra ? [[i, a.tetra]] : [])),
     ),
     straight: new Set(input.atoms.flatMap((a, i) => (a.linear && neighbours[i].length === 2 ? [i] : []))),
+    fourForm: new Map(input.atoms.flatMap((a, i): [number, "x" | "cross"][] => (a.fourForm && neighbours[i].length === 4 ? [[i, a.fourForm]] : []))),
+    onward: new Set(input.atoms.flatMap((a, i) => (a.onward ? [i] : []))),
     ...(input.cumulated?.length ? { cumulated: input.cumulated } : {}),
     eta,
     units,
@@ -595,4 +611,79 @@ export function straightThrough(mol: Molecule, a: number): boolean {
 export function orderOf(mol: Molecule, a: number, b: number): number {
   const i = mol.bondIndex.get(key(a, b));
   return i == null ? 0 : mol.bonds[i].order;
+}
+
+/** A main-group element's valence electrons, by its group: a square-planar centre's two lone pairs are counted from them. */
+const MAIN_GROUP_ELECTRONS: Record<string, number> = {
+  B: 3, Al: 3, C: 4, Si: 4, Ge: 4, Sn: 4, N: 5, P: 5, As: 5, Sb: 5, O: 6, S: 6, Se: 6, Te: 6,
+  F: 7, Cl: 7, Br: 7, I: 7, At: 7, Kr: 8, Xe: 8, Rn: 8,
+};
+
+/**
+ * Whether a main-group atom of `el` at `charge` with four single bonds keeps two lone pairs - its valence electrons by its group,
+ * less its charge, less the four bonds, leave four: XeF4, ICl4-, BrF4-, square planar (GR-4.1.3 draws XeF4 as the X). SF4's
+ * one lone pair, or CCl4's none, is not.
+ */
+export function twoLonePairsOnFour(el: string, charge: number): boolean {
+  const electrons = MAIN_GROUP_ELECTRONS[el];
+  return electrons != null && electrons - charge - 4 === 4;
+}
+
+/** What a square-planar test reads of a structure, atom by atom (`squarePlanarMetal`): by index. */
+export type FourView = {
+  el: (i: number) => string;
+  charge: (i: number) => number;
+  hs: (i: number) => number;
+  neighbours: (i: number) => readonly number[];
+  order: (a: number, b: number) => number;
+};
+
+/** The metals, and the oxidation state in which, a four-coordinate centre is surely square planar (GR-4.1.3). */
+const SQUARE_PLANAR: Record<string, number> = { Pt: 2, Pd: 2, Au: 3, Rh: 1, Ir: 1 };
+
+/**
+ * A metal with four bonds - bound to no pi system's centre and to no other metal, and no chelate's (two of its donors joined other
+ * than through it) - as the drawing makes it: whether it is surely square planar (Pt(II), Pd(II), Au(III), Rh(I), Ir(I), the state
+ * counted plainly: a donor whose valence is full without its bond to the metal counts nought, one the bond completes one, the
+ * metal's own charge added; a state not counted plainly is not sure); whether its four donors are ends; and whether they can be
+ * arranged round it in more than one way (two and two, two and one and one, four different - by element, bonds, H's and charge).
+ * Null for any other atom.
+ */
+export function squarePlanarMetal(v: FourView, a: number, valence: (el: string, charge: number) => number | undefined): { sure: boolean; ends: boolean; open: boolean } | null {
+  const el = v.el(a);
+  const nb = v.neighbours(a);
+  if (!isMetal(el) || nb.length !== 4) return null;
+  if (nb.some((d) => v.el(d) === "*" || isMetal(v.el(d)))) return null;
+  const reached = new Set([nb[0]]);
+  for (const todo = [nb[0]]; todo.length; ) {
+    const u = todo.pop()!;
+    for (const w of v.neighbours(u)) {
+      if (w === a || reached.has(w)) continue;
+      reached.add(w);
+      todo.push(w);
+    }
+  }
+  if (nb.slice(1).some((d) => reached.has(d))) return null;
+  const ends = nb.every((d) => v.neighbours(d).length === 1);
+  const kinds = new Map<string, number>();
+  for (const d of nb) {
+    const k = `${v.el(d)}:${v.neighbours(d).length}:${v.hs(d)}:${v.charge(d)}`;
+    kinds.set(k, (kinds.get(k) ?? 0) + 1);
+  }
+  const counts = [...kinds.values()].sort((p, q) => q - p);
+  const open = !(counts[0] === 4 || (counts[0] === 3 && counts[1] === 1));
+  let state = v.charge(a);
+  for (const d of nb) {
+    // (a carbonyl's C, or an isocyanide's - triple-bonded to an O, or to an N that goes on: a neutral donor, its pair lent, counts
+    // nought, though drawn its bonds would have the metal's complete it; a cyanide's, its N bare, counts as drawn)
+    const lends = v.el(d) === "C" && v.neighbours(d).some((e) => e !== a && v.order(d, e) === 3 && (v.el(e) === "O" || (v.el(e) === "N" && v.neighbours(e).length > 1)));
+    if (lends) continue;
+    const full = valence(v.el(d), v.charge(d));
+    if (full == null) return { sure: false, ends, open };
+    const others = v.neighbours(d).filter((e) => e !== a).reduce((s, e) => s + v.order(d, e), 0) + v.hs(d);
+    if (others >= full) continue;
+    if (others + 1 === full) state++;
+    else return { sure: false, ends, open };
+  }
+  return { sure: SQUARE_PLANAR[el] === state, ends, open };
 }
