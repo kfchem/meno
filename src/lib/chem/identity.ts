@@ -250,12 +250,57 @@ export function hydrogensFolded(input: IdentityInput): IdentityInput {
 /**
  * The structure as identity compares it: its plain hydrogens folded in
  * (`hydrogensFolded`), each atom's mass number and unpaired electrons made
- * part of what it is, and its aromatic form (`aromaticForm`).
+ * part of what it is, its aromatic form (`aromaticForm`), and no cis or
+ * trans on a double bond in a ring of `SMALL_RING` atoms or fewer
+ * (`smallRingSidesDropped`).
  */
 function compared(input: IdentityInput): LayoutInput {
   const folded = hydrogensFolded(input);
   const atoms = folded.atoms.map(({ isotope, radical, mapped: _mapped, ...a }) => ({ ...a, el: `${a.el}${isotope ? `^${isotope}` : ""}${radical ? `.${radical}` : ""}` }));
-  return aromaticForm({ ...folded, atoms });
+  return smallRingSidesDropped(aromaticForm({ ...folded, atoms }));
+}
+
+/**
+ * The structure with no cis or trans on a double bond in a ring of
+ * `SMALL_RING` atoms or fewer: written there, it states nothing (Brecher
+ * 2006, ST-4.3) - cyclohexene written C1CC/C=C\CC1 is cyclohexene, one
+ * structure with C1CCC=CCC1 - as a drawing's reader and the CIP rules
+ * already take it. A ring of eight or more keeps it: cis- and
+ * trans-cyclooctene are two.
+ */
+function smallRingSidesDropped(g: LayoutInput): LayoutInput {
+  if (!g.bonds.some((b) => b.stereo)) return g;
+  const around = aroundOf(g);
+  if (!g.bonds.some((b) => b.stereo && ringWithin(around, b.a, b.b, SMALL_RING - 1))) return g;
+  return { ...g, bonds: g.bonds.map(({ stereo, ...b }) => (stereo && !ringWithin(around, b.a, b.b, SMALL_RING - 1) ? { ...b, stereo } : b)) };
+}
+
+/** Each atom's neighbours. */
+function aroundOf(g: LayoutInput): number[][] {
+  const around: number[][] = g.atoms.map(() => []);
+  for (const b of g.bonds) {
+    around[b.a].push(b.b);
+    around[b.b].push(b.a);
+  }
+  return around;
+}
+
+/** Whether a and b are joined but through their own bond within `most` bonds: a ring of `most` + 1 atoms or fewer. */
+function ringWithin(around: readonly number[][], a: number, b: number, most: number): boolean {
+  let at = [a];
+  const seen = new Set([a]);
+  for (let d = 1; d <= most && at.length; d++) {
+    const next: number[] = [];
+    for (const x of at)
+      for (const y of around[x]) {
+        if (seen.has(y) || (x === a && y === b)) continue;
+        if (y === b) return true;
+        seen.add(y);
+        next.push(y);
+      }
+    at = next;
+  }
+  return false;
 }
 
 /**
@@ -330,28 +375,11 @@ function blanksOf(g: LayoutInput): Blank[] {
     if (around[i].length + hs(i) === 4) out.push({ kind: "centre", at: i, neighbours: [...around[i], ...(hs(i) ? [-1] : [])], own: [i], sides: [around[i]] });
     else if (around[i].length === 3 && !hs(i) && pyramid(i)) out.push({ kind: "centre", at: i, neighbours: [...around[i]], own: [i], sides: [around[i]] });
   }
-  // (whether a and b are joined but through their own bond within `most` bonds: a ring of `most` + 1 atoms or fewer)
-  const near = (a: number, b: number, most: number) => {
-    let at = [a];
-    const seen = new Set([a]);
-    for (let d = 1; d <= most && at.length; d++) {
-      const next: number[] = [];
-      for (const x of at)
-        for (const y of around[x]) {
-          if (seen.has(y) || (x === a && y === b)) continue;
-          if (y === b) return true;
-          seen.add(y);
-          next.push(y);
-        }
-      at = next;
-    }
-    return false;
-  };
   const others = (end: number, partner: number) => around[end].filter((m) => m !== partner);
   g.bonds.forEach((b, k) => {
     if (b.order !== 2 || b.stereo || doubles[b.a].length !== 1 || doubles[b.b].length !== 1) return;
     const [p, q] = [others(b.a, b.b), others(b.b, b.a)];
-    if (!p.length || !q.length || near(b.a, b.b, SMALL_RING - 1)) return;
+    if (!p.length || !q.length || ringWithin(around, b.a, b.b, SMALL_RING - 1)) return;
     out.push({ kind: "bond", at: k, refs: [p[0], q[0]], own: [b.a, b.b], sides: [p, q] });
   });
   // (a run: from an end of one double bond through atoms of two to the other end of one)

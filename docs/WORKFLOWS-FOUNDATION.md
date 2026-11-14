@@ -901,6 +901,10 @@ drawn, aromatic rings as one form.* What that means, plainly:
   The order matters, so it is always that one. The filled form is
   identity's own: the drawing keeps its wedges as drawn, and nothing filled
   in is shown, drawn or saved;
+- **a cis or trans written on a double bond in a ring of seven atoms or
+  fewer states nothing** (ST-4.3), and is not read: cyclohexene written
+  with its ring bond cis is cyclohexene. A ring of eight or more keeps it:
+  cis- and trans-cyclooctene are two structures;
 - **a limit, on the safe side:** some writings that leave the same thing
   unsaid in different ways get two identities. (4-Methylcyclohexylidene)
   acetic acid drawn with its double bond bent and its centre plain, and

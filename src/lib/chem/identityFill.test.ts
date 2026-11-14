@@ -215,3 +215,22 @@ describe("a constitution's key", () => {
     expect(identityKey(bare("CC(C)O"))).not.toBe("67fcfad66e6e6c8e");
   });
 });
+
+describe("a cis or trans written in a small ring states nothing (backlog 109)", () => {
+  it("a ring of seven or fewer (cycloheptene, cyclopentene, cyclohexene) is one structure whether its double bond is written cis, trans or not at all; a ring of eight keeps it", () => {
+    for (const [written, plain] of [
+      ["C1CC/C=C\\CC1", "C1CCC=CCC1"],
+      ["C1CC/C=C/CC1", "C1CCC=CCC1"],
+      ["C1C/C=C\\C1", "C1CC=CC1"],
+      ["C1C/C=C\\CC1", "C1CC=CCC1"],
+    ]) {
+      expect([written, identityText(fromSmiles(written))]).toEqual([written, identityText(fromSmiles(plain))]);
+      for (const seed of SHUFFLE_SEEDS) expect(identityText(shuffled(fromSmiles(written), seed))).toBe(identityText(fromSmiles(plain)));
+    }
+    // (cyclooctene: cis and trans two compounds, neither the one written with nothing)
+    const [cis, trans, plain] = ["C1CCC/C=C\\CCC1", "C1CCC/C=C/CCC1", "C1CCCC=CCCC1"].map((s) => identityText(fromSmiles(s)));
+    expect(new Set([cis, trans, plain]).size).toBe(3);
+    // (a double bond out of the ring, at a ring atom, keeps its own)
+    expect(identityText(fromSmiles("C/C=C/C1CC1"))).not.toBe(identityText(fromSmiles("C/C=C\\C1CC1")));
+  });
+});
