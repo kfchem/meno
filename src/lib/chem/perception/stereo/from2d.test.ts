@@ -1,18 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { readStereo, sameConfiguration, unreadWhy, unsureStereo, wedgesForFlat, type DrawnAtom, type DrawnBond } from "./drawn";
-import { readSmiles } from "../chem/smiles";
-import { cipLabels } from "../chem/cip";
-import { kekuleOrders } from "../chem/kekulize";
-import { implicitHydrogens } from "../chem/molecule";
-import { layout2D } from "./engine";
-import type { LayoutInput } from "./perceive";
-import cages from "./testdata/cages.json";
-import { measured } from "../../testing/timeouts";
-import { fromSmiles } from "./testdata/fromSmiles";
+import { readStereo as core, type CageFitter, type Vec3 } from "./from2d";
+import { readStereo, sameConfiguration, unreadWhy, unsureStereo, wedgesForFlat, type DrawnAtom, type DrawnBond } from "../../../layout/drawn";
+import { readSmiles } from "../../smiles";
+import { cipLabels } from "../../cip";
+import { kekuleOrders } from "../../kekulize";
+import { implicitHydrogens } from "../../molecule";
+import { layout2D } from "../../../layout/engine";
+import type { LayoutInput } from "../../../layout/perceive";
+import cages from "../../../layout/testdata/cages.json";
+import { measured } from "../../../../testing/timeouts";
+import { fromSmiles } from "../../../layout/testdata/fromSmiles";
 
 /** What a centre of three bonds that keeps no configuration of its own is said to lack (`unreadWhy`). */
 const KEEPS_NONE = "it has three bonds and keeps no configuration of its own, so a wedge at it states none";
-import { misreadCentres } from "./readBack";
+import { misreadCentres } from "../../../layout/readBack";
 
 const at = (deg: number, r = 1) => ({ x: r * Math.cos((deg * Math.PI) / 180), y: r * Math.sin((deg * Math.PI) / 180) });
 
@@ -873,5 +874,56 @@ describe("an axis inside a ring, drawn", () => {
   it("reads none in a ring of five or six: fluorene and 9,10-dihydrophenanthrene are held all but flat, or turn over fast", () => {
     expect(readBack("C1c2ccccc2-c2ccccc12", [6, 7]).read).toEqual([]);
     expect(readBack("C1Cc2ccccc2-c2ccccc12", [7, 8]).read).toEqual([]);
+  });
+});
+
+describe("the core's reader on its own: the cage's fit handed in, and the drawn line", () => {
+  // a centre drawn with three bonds into a cage, all but in one plane (their unit volume 0.10 as drawn, 0.83 drawn deeper), its H left out;
+  // the cage's solid, handed in, has them pyramidal the other way
+  const drawing = (depth: number): { atoms: DrawnAtom[]; bonds: DrawnBond[] } => ({
+    atoms: [
+      { x: 0, y: 0, z: 0, hs: 1, centre: true },
+      { x: 1, y: 0, z: depth, hs: 2 },
+      { x: -0.5, y: 0.866, z: depth, hs: 2 },
+      { x: -0.5, y: -0.866, z: depth, hs: 2 },
+    ],
+    bonds: [1, 2, 3].map((n) => ({ a: 0, b: n, order: 1 })),
+  });
+  const solid = new Map<number, Vec3>([
+    [0, [0, 0, 0]],
+    [1, [1, 0, -0.3]],
+    [2, [-0.5, 0.866, -0.3]],
+    [3, [-0.5, -0.866, -0.3]],
+  ]);
+  const fit: CageFitter = (atoms) => new Map(atoms.map((_, i) => [i, { solid, map: (v: Vec3) => v, miss: 0 }]));
+
+  it("reads a centre whose cage bonds are drawn all but flat from the cage's solid, as handed in; drawn clearly, from the drawing", () => {
+    const flat = drawing(0.04);
+    const [byDrawing, bySolid] = [core(flat.atoms, flat.bonds).tetra.get(0), core(flat.atoms, flat.bonds, fit).tetra.get(0)];
+    expect(byDrawing).toBeDefined();
+    expect(bySolid).toBeDefined();
+    expect(bySolid!.volume).toBe(-byDrawing!.volume);
+    // (drawn deep enough to say it, the drawing's own way: the solid is not asked)
+    const deep = drawing(0.4);
+    expect(core(deep.atoms, deep.bonds, fit).tetra.get(0)).toEqual(core(deep.atoms, deep.bonds).tetra.get(0));
+  });
+
+  it("reads no centre drawn as a T - two plain bonds within IN_LINE of a line, the wedge between them - and reads one bent further", () => {
+    const at = (deg: number): { atoms: DrawnAtom[]; bonds: DrawnBond[] } => ({
+      atoms: [
+        { x: 0, y: 0, hs: 1, el: "C" },
+        { x: 1, y: 0, hs: 3 },
+        { x: Math.cos((deg * Math.PI) / 180), y: Math.sin((deg * Math.PI) / 180), hs: 3 },
+        { x: 0, y: -1, hs: 2, el: "O" },
+      ],
+      bonds: [
+        { a: 0, b: 1, order: 1 },
+        { a: 0, b: 2, order: 1 },
+        { a: 0, b: 3, order: 1, wedge: { narrow: 0, stereo: "up" } },
+      ],
+    });
+    const t = at(174);
+    expect(core(t.atoms, t.bonds).tetra.has(0)).toBe(false);
+    expect(core(at(160).atoms, at(160).bonds).tetra.has(0)).toBe(true);
   });
 });
