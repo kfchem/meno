@@ -41,7 +41,7 @@ import { useReaders } from "../../../../lib/calc/workers";
 import { QUIET_AFTER_MIN, useAppSettings } from "../../../../lib/settings/appSettings";
 import { finished, quietFor } from "../../../../lib/jobs";
 import { CARD_H, CARD_W, framesHash, HTML_DISTANCE, inputLead, nearWire, onLayer, portDown, PORT_PAGE_PX, PX, setGives, setTakes, shuttingCard, stepTakes as portTakes, underCard, byTurn, FrameBudget, pointsFor, roundedWay, WIRE_LANE, WireEasing, wireLanes, wireRoute, wireKey, type WireRouted } from "../workflow/look";
-import { byOf, doerOf, inputsFor, installedFor, kindsOf, notReadyFor, optionsFor, setName, stepOptions } from "../workflow/doers";
+import { byOf, doerOf, inputsFor, installedFor, kindsOf, notReadyFor, optionsFor, optionsNeed, setName, stepOptions } from "../workflow/doers";
 import { diagramKept, diagramNeeds, diagramOptions, diagramValues } from "../workflow/diagramOptions";
 import { lookFor, useInstalled } from "../../../../lib/plugins/installed";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
@@ -1234,6 +1234,7 @@ export default function Workflow2D() {
             drops={openStep === s.id ? droppedBy(flow, stepsRun(flow, [s.id])) : undefined}
             onOptions={(values) => store.getState().updateStep(s.id, { options: diagram ? diagramKept(values, optionsOf(takes, own), s.options) : values })}
             choosing={choosingAtoms?.step === s.id ? choosingAtoms.option : null}
+            asks={!!optionsNeed(s)}
             onChoose={(option) => store.getState().chooseAtomsFor(s.id, option)}
             onKind={(kind) => store.getState().updateStep(s.id, { kind })}
             onShowRun={(index) => store.getState().showRun(s.id, index)}

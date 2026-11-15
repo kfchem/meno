@@ -177,7 +177,7 @@ describe("Torsion restraints, as a step", () => {
 
   it("says, at 180°, the entries with a double bond cis in the reference it does not hold, and what does hold it", () => {
     const o = torsionsSet([tagged(azo(180), "start", "a"), tagged(azo(0), "start", "b")], [azo(0)], "molecules", { ...TORSIONS, torsions: "reference", at: "trans" });
-    expect(o.ok && o.said).toBe("0 rows for 2 entries \u00b7 2 entries with none to hold \u00b7 1 entry with a double bond cis in the reference not held: choose Held at: the reference's own angle");
+    expect(o.ok && o.said).toBe("0 rows for 2 entries \u00b7 1 entry with none to hold \u00b7 1 entry with a double bond cis in the reference not held: choose Held at: the reference's own angle");
     expect(torsionsSet([tagged(azo(180), "start", "a")], [azo(0)], "molecules", { ...TORSIONS, torsions: "reference", at: "own" })).toMatchObject({ ok: true, said: "1 row for 1 entry" });
   });
 

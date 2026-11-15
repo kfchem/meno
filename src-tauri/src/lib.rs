@@ -18,6 +18,7 @@ mod defaults;
 mod folders;
 mod installed;
 mod fonts;
+mod labelfonts;
 #[cfg(windows)]
 mod drop;
 mod jobs;
@@ -1096,8 +1097,11 @@ fn ole_close(id: u32) -> Result<(), String> {
 
 /// `--register-ole` and `--unregister-ole`, which the installer runs: the
 /// class Office finds Meno's structures by, written or taken out, and then
-/// nothing else; and `--unregister-defaults`, which the uninstaller runs:
-/// what is left of Meno's listing in Default apps (defaults.rs), taken out.
+/// nothing else; `--unregister-defaults`, which the uninstaller runs:
+/// what is left of Meno's listing in Default apps (defaults.rs), taken out;
+/// and `--install-label-fonts` and `--remove-label-fonts`: the fonts a
+/// copied picture's labels are set in, put in this user's fonts or taken out
+/// (labelfonts.rs).
 /// Whether it worked is the exit code.
 #[cfg(windows)]
 fn registration_asked() -> Option<i32> {
@@ -1118,6 +1122,13 @@ fn registration_asked() -> Option<i32> {
     }
     if args.iter().any(|a| a == "--unregister-defaults") {
         return Some(done(defaults::unregister()));
+    }
+    // (the label fonts a copied picture names, put in this user's fonts and taken out again: labelfonts.rs)
+    if args.iter().any(|a| a == "--install-label-fonts") {
+        return Some(done(labelfonts::install()));
+    }
+    if args.iter().any(|a| a == "--remove-label-fonts") {
+        return Some(done(labelfonts::remove()));
     }
     None
 }
@@ -1253,6 +1264,16 @@ pub fn run() {
             update::tidy_after_updates(app.handle());
             // what Meno made in the roaming folder before 0.1.13 and no longer uses (Windows: roaming.rs)
             roaming::tidy(roaming_moved);
+            // the fonts a copied picture's labels are set in, put in this user's fonts where they are not there yet -
+            // quietly, said only in Meno's log (macOS; on Windows the installer puts them in: labelfonts.rs)
+            #[cfg(target_os = "macos")]
+            if let Ok(resources) = app.path().resource_dir() {
+                match labelfonts::install_quietly(&resources) {
+                    Ok(0) => {}
+                    Ok(n) => logfile::line("meno", &format!("label fonts: {n} put in this user's fonts")),
+                    Err(e) => logfile::line("meno", &format!("label fonts: not put in this user's fonts: {e}")),
+                }
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -1306,6 +1327,7 @@ pub fn run() {
             ole_in_use,
             // the system's fonts, for atom labels
             fonts::font_families,
+            labelfonts::label_fonts_installed,
             fonts::font_file,
             // uv + env
             py_env_python_path_uv,

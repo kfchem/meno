@@ -156,6 +156,8 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
   }, [sets]);
   const turns = useEditor((s) => s.turns3d);
   const rising = useEditor((s) => s.rising3d);
+  // (the 3D structures whose search goes on: their chips say so)
+  const growing = useEditor((s) => s.growing3d);
   const overlay = useEditor((s) => s.overlay3d);
   const lists = useEditor((s) => s.lists3d);
   // promises asked for: what each came to, or is coming to - and those
@@ -590,7 +592,11 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
       } catch {}
       gesture.current = null;
       store.getState().endPanHold(e.pointerId);
-      if (g.kind === "move") g.guide.end();
+      if (g.kind === "move") {
+        g.guide.end();
+        // (a mark between two bonds the move has left apart taken away, in its own step - of the drawing it carried, if any - chem/crossings)
+        if (g.drawn.atoms.length) store.getState().settleMove(g.key, g.drawn.atoms.map((a) => a.id));
+      }
       setActive(null);
       setHold(null);
       const st = store.getState();
@@ -823,6 +829,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
             onMagnify={on.onMagnify}
             hoveredMeasure={hoveredMeasure?.id === m.id ? hoveredMeasure.measure : null}
             rising={rising[m.id]}
+            searching={!!growing[m.id]}
             split={splits[m.id]}
             onRisen={on.onRisen}
             stereoShown={stereoShownOf(m)}

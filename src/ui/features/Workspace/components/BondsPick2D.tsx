@@ -1,5 +1,4 @@
-import { bondKeyOf, doubleClickPatch, singleClickPatch } from "../utils/bondKinds";
-import { degrees, narrowEnd } from "../chem/drawing";
+import { bondKeyOf } from "../utils/bondKinds";
 import { longPressMs } from "../longPress";
 import * as THREE from "three";
 import { pageAt } from "../utils/page";
@@ -76,8 +75,6 @@ export default function BondsPick2D() {
     setHoveredFromId,
     clearBondHover,
     moveDrag,
-    updateBond,
-    setBondDoubleMode,
     beginPanHold,
     endPanHold,
     suppressDoubleClick,
@@ -121,30 +118,6 @@ export default function BondsPick2D() {
   const CLICK_MS = 350;
   const SINGLE_DELAY_MS = 200;
   const TRIPLE_GRACE_MS = 180;
-
-  function applySingleCycle(b: (typeof model.bonds)[number]) {
-    if (b.order === 3) {
-      updateBond(b.id, { order: 2 as any, doubleMode: "auto" });
-      return;
-    }
-    if (b.order === 2) {
-      updateBond(b.id, {
-        order: 1 as any,
-        stereo: (b.stereo ?? "none") as any,
-      });
-      return;
-    }
-    updateBond(b.id, singleClickPatch(b, narrowEnd(b, degrees(model.bonds))));
-  }
-  function applyDoubleCycle(b: (typeof model.bonds)[number]) {
-    // (a double one: its next side; any other, a double - utils/bondKinds, as the "2" key does)
-    const patch = doubleClickPatch(b, model.atoms, model.bonds);
-    if (b.order === 2) setBondDoubleMode(b.id, patch.doubleMode!);
-    else updateBond(b.id, patch);
-  }
-  function applyTriple(b: (typeof model.bonds)[number]) {
-    updateBond(b.id, { order: 3 as any, stereo: "none" });
-  }
 
   const { atoms, bonds } = model;
   // (what each hit area was placed from: a bond whose bond and atoms are the
@@ -384,10 +357,11 @@ export default function BondsPick2D() {
           st.timer = null;
         }
         if (st.count === 1) {
+          // A click: the bond selected, alone, at once - it never changes the compound (the maintainer, 2026-11-14); a
+          // double-click's second click then makes it double, the bond staying selected (docs/EDITOR-2D.md, *How it is worked*)
+          store.getState().bondClicked(b.id, 1);
           const delay1 = SINGLE_DELAY_MS;
           st.timer = window.setTimeout(() => {
-            const bond = model.bonds.find((x) => x.id === st.bondId!);
-            if (bond) applySingleCycle(bond);
             try {
               if (st.pointerId != null) endPanHold(st.pointerId);
               else endPanHold(null);
@@ -402,8 +376,7 @@ export default function BondsPick2D() {
             st.graceUntil = null;
           }, delay1) as unknown as number;
         } else if (st.count === 2) {
-          const bond = model.bonds.find((x) => x.id === st.bondId!);
-          if (bond) applyDoubleCycle(bond);
+          store.getState().bondClicked(st.bondId!, 2);
           st.graceUntil = now + TRIPLE_GRACE_MS;
           if (st.graceTimer != null) {
             window.clearTimeout(st.graceTimer);
@@ -424,8 +397,7 @@ export default function BondsPick2D() {
             st.graceTimer = null;
           }, TRIPLE_GRACE_MS) as unknown as number;
         } else if (st.count >= 3) {
-          const bond = model.bonds.find((x) => x.id === st.bondId!);
-          if (bond) applyTriple(bond);
+          store.getState().bondClicked(st.bondId!, 3);
           if (st.graceTimer != null) {
             window.clearTimeout(st.graceTimer);
             st.graceTimer = null;

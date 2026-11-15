@@ -165,6 +165,8 @@ export type StepCardProps = {
   /** Its atoms option being chosen on the drawing, by id; and choosing begun or ended (OptionsForm `onChoose`). */
   choosing?: string | null;
   onChoose?: (id: string | null) => void;
+  /** It still needs a value of its options (doers `optionsNeed`): opened, its first number that holds none is focused, to be given at once. */
+  asks?: boolean;
   onKind: (kind: StepKind) => void;
   onShowRun: (index: number) => void;
   /** A run kept, or no longer: the one shown at -1, an earlier one by its place among them. */
@@ -278,7 +280,7 @@ export default function StepCard(p: StepCardProps) {
               </div>
             )}
             {p.optionList.length ? (
-              <OptionsForm options={p.optionList} values={p.options} onChange={p.onOptions} choosing={p.choosing} onChoose={p.onChoose} />
+              <OptionsForm options={p.optionList} values={p.options} onChange={p.onOptions} choosing={p.choosing} onChoose={p.onChoose} asks={p.asks} />
             ) : (
               <div className="text-xs text-gh-gray">No options</div>
             )}
