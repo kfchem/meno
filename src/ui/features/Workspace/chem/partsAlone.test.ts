@@ -96,6 +96,16 @@ describe("a structure's parts, each searched alone", () => {
     expect(alikeOf(together(drawnFromSmiles("C/C=C/C"), drawnFromSmiles("C/C=C/C")))).toEqual([undefined, 0]);
   });
 
+  it("are alike only where each atom is configured as the same atom of the other: a meso diol and its mirror drawing each searched", () => {
+    // (meso-pentane-2,4-diol: its mirror drawing is the same compound, its R and S on each other's atoms - copied, they would be on the wrong ones)
+    const meso = drawnFromSmiles("C[C@@H](O)C[C@@H](O)C");
+    expect(alikeOf(together(meso, mirrored(meso)))).toEqual([undefined, undefined]);
+    // (the same drawing turned round in its plane is configured alike, atom for atom: searched once)
+    const turned = (m: Model): Model => ({ ...m, atoms: m.atoms.map((a) => ({ ...a, x: -a.x, y: -a.y })) });
+    expect(alikeOf(together(meso, turned(meso)))).toEqual([undefined, 0]);
+    expect(alikeOf(together(drawnFromSmiles("C[C@@H](O)CC"), turned(drawnFromSmiles("C[C@@H](O)CC"))))).toEqual([undefined, 0]);
+  });
+
   it("take no search only where a part is one bare atom: Na+, Ca2+, Cl-; a water or a methane drawn as its one atom, or a label, is searched", () => {
     const one = (el: string, charge = 0, abbrev?: string) => ({ block: { part: { atoms: [{ id: 1, x: 0, y: 0, r: 0.9, el, ...(charge ? { charge } : {}), ...(abbrev ? { abbrev } : {}) }], bonds: [] } as unknown as Model } }) as Pick<PartAlone, "block">;
     for (const [el, q] of [["Na", 1], ["Ca", 2], ["Cl", -1]] as const) expect(takesNoSearch(one(el, q)), el).toBe(true);

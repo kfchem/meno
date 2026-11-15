@@ -15,7 +15,7 @@ import type { Configuration } from "../../../../lib/chem/stereoOpen";
 import type { Model } from "../store/types";
 import { fragmentsHolding, partOf } from "./cleanUp";
 import { blockOf, standsForMolecule, type Block } from "./make3d";
-import { identityOfDrawn, labelsDrawnOut } from "./identityOf";
+import { identityInputOf, labelsDrawnOut } from "./identityOf";
 
 /** A part of a structure, as the plugin is asked about it alone: its block, and where its atoms and bonds stand in the whole's. */
 export type PartAlone = {
@@ -32,13 +32,16 @@ export type PartAlone = {
 export const takesNoSearch = (part: Pick<PartAlone, "block">) => !standsForMolecule(part.block.part);
 
 /**
- * A part's configuration as its drawing gives it: its identity (chem/identityOf), which reads the wedges and the places - (R)- and
- * (S)-butan-2-ol, (E)- and (Z)-but-2-ene drawn side by side write the same table but are two compounds. None where identity cannot
- * say it in full: such a part is alike to no other (found in the chemistry check).
+ * A part's configuration as its drawing gives it, atom for atom: what identity is given of it (chem/identityOf `identityInputOf`) -
+ * each centre's neighbours in order and the hand they make, each double bond's sides, read from the wedges and places, in the part's
+ * own order of atoms and bonds. (R)- and (S)-butan-2-ol, (E)- and (Z)-but-2-ene drawn side by side write the same table and differ
+ * here; so does a meso compound drawn twice, the second its mirror drawing - one compound, but its R and S on each other's atoms, so
+ * one part's conformers copied for the other would put them on the wrong atoms. None where a wedge says nothing that can be read: such
+ * a part is alike to no other (found in the chemistry check).
  */
 const drawnAs = (part: PartAlone): string | null => {
-  const { text, complete, unread } = identityOfDrawn(labelsDrawnOut(part.block.part));
-  return complete && !unread.length ? text : null;
+  const { input, unread } = identityInputOf(labelsDrawnOut(part.block.part));
+  return unread.length ? null : JSON.stringify(input);
 };
 
 /** A part's table of atoms and bonds as its file writes it, its places left out: two parts that write the same are alike, atom for atom. */
@@ -64,7 +67,7 @@ export function partsAlone(model: Model, block: Block): PartAlone[] | null {
   // (each bond of the whole in one part, and each atom: else it is not as it was drawn - searched whole)
   if (parts.reduce((n, p) => n + p.atoms.length, 0) !== block.atoms.length || parts.some((p) => p.atoms.some((i) => i == null) || p.bonds.some((i) => i == null))) return null;
   const tables = parts.map((p) => tableOf(p.block.molblock));
-  // (alike: written alike atom for atom, and the same compound as the drawing configures it - worked out only where the tables agree)
+  // (alike: written alike atom for atom, and configured alike atom for atom as drawn - read only where the tables agree)
   const drawn = new Map<number, string | null>();
   const as = (k: number) => (drawn.has(k) ? drawn.get(k)! : (drawn.set(k, drawnAs(parts[k])), drawn.get(k)!));
   return parts.map((p, k) => {

@@ -589,11 +589,12 @@ Taken on 2026-10-13:
   one definition of the same conformer - for nothing between parts is
   modelled, and a search of the whole found each embedding's parts at a
   place of their own, every one new, to its most. A part alike to one
-  before it - written alike, atom for atom, and the same compound as
-  drawn, its wedges and places read by identity, and configured alike
-  where its drawing leaves anything open - is searched once: (R)- and
+  before it - written alike, atom for atom, and configured alike atom
+  for atom, as its wedges and places say and as the page chose where its
+  drawing leaves anything open - is searched once. (R)- and
   (S)-butan-2-ol, or (E)- and (Z)-but-2-ene, drawn side by side are each
-  searched. A bare atom with no hydrogens (Na+, Ca2+, Cl-) is not searched
+  searched; so is a meso compound drawn beside its mirror drawing - one
+  compound, its R and S on each other's atoms. A bare atom with no hydrogens (Na+, Ca2+, Cl-) is not searched
   at all; a water or a methane drawn as its one O or C is.
   - Its conformers are put together of its parts': the first every part at
     its lowest; then, part by part, each other conformer of a part not
