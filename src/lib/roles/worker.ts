@@ -133,6 +133,23 @@ export async function chemAtHand(role: RoleId = "checks"): Promise<boolean> {
   return workerRunning(plugin.id) || (await pyEnvReady(plugin.profile));
 }
 
+/**
+ * The worker of what fills `role` started before it is asked anything, where
+ * a question of it may soon come: Quick Add opened, where a SMILES may be
+ * typed, so that the first one read waits for no start. Only where it can be
+ * had without asking anything (`chemAtHand`) and was not taken away: nothing
+ * is set up, offered or chosen from here. A start that fails is said as any
+ * start's failure is, and met again by the question itself.
+ */
+export async function startAhead(role: RoleId): Promise<void> {
+  const plugin = rolePlugin(role);
+  if (!plugin || takenAway(plugin) || !(await chemAtHand(role).catch(() => false))) return;
+  await pluginWorker(plugin).then(
+    () => undefined,
+    () => undefined,
+  );
+}
+
 async function start(plugin: PythonPlugin): Promise<ChemClient> {
   if (takenAway(plugin) && !(await pyEnvReady(plugin.profile))) {
     throw new TakenAway(`${plugin.name} was taken away: add it in Settings, Plugins.`);

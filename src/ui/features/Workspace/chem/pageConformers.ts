@@ -18,7 +18,7 @@ import type { Conformers } from "../../../../lib/roles/client";
 import { bestTurn, SAME_CONFORMER, Sameness } from "../workflow/sameConformer";
 import { settleEquivalents } from "./settle";
 
-export function asThePageShows(c: Conformers): Conformers {
+export function asThePageShows(c: Conformers, onto?: readonly number[]): Conformers {
   const { frames } = c;
   if (!frames.length) return c;
   const given = (e?: number[]) => (e?.length === frames.length ? e : undefined);
@@ -30,10 +30,11 @@ export function asThePageShows(c: Conformers): Conformers {
   const marks = frames.map((f) => same.signature(f));
   const kept: number[] = [];
   for (const i of order) if (!kept.some((k) => same.bound(marks[i], marks[k]) <= SAME_CONFORMER && same.same(frames[i], frames[k]))) kept.push(i);
-  // (each laid over the lowest by its heavy atoms, for the overlay)
+  // (each laid over the lowest by its heavy atoms, for the overlay - or over `onto`, where the lowest was laid before: a search
+  //  that goes on keeps them where they were shown, however low a later round's lowest)
   const heavy = c.atoms.flatMap((a, i) => (a.el !== "H" && a.el !== "*" ? [i] : []));
   const first = frames[kept[0]];
-  const laid = kept.map((i, k) => (k === 0 ? [...first] : laidOver(frames[i], first, heavy)));
+  const laid = onto?.length === first.length ? kept.map((i) => laidOver(frames[i], onto, heavy)) : kept.map((i, k) => (k === 0 ? [...first] : laidOver(frames[i], first, heavy)));
   // (the equivalent hydrogens and branches in the same places in each, as in the lowest)
   const settled = settleEquivalents(c.atoms, c.bonds, laid).map((f) => f.map((v) => Math.round(v * 1e4) / 1e4));
   const aside = frames.length - kept.length;

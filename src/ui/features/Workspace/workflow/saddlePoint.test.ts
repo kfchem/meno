@@ -23,11 +23,12 @@ const optts = (frames: readonly (readonly number[])[], optimised: boolean): Read
   ({ schema: 1, program: "ORCA", method: "GFN2-xTB", atoms: ["N", "H", "H", "H"], frames: frames.map((f) => [...f]), energies: frames.map((_, k) => -4.4169 + k * 1e-4), optimised }) as unknown as ReaderOutput;
 
 describe("Optimise to a saddle point", () => {
-  it("takes guesses, and a reactant and a product side - both or neither", () => {
+  it("takes guesses, and a reactant and a product side - both or neither - and restraints, where wanted", () => {
     expect(inputsOf("saddle-point").map((p) => [p.id, p.optional ?? false, p.together ?? null])).toEqual([
       ["guesses", false, null],
       ["reactant", true, "product"],
       ["product", true, "reactant"],
+      ["restraints", true, null],
     ]);
   });
 

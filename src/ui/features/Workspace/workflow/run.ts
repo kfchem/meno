@@ -19,9 +19,9 @@ import { isHeld } from "./onPage";
 import { allWiresInto, emptyNow, findSet, givesOf, inputKey, inputOf, moleculesSeen, resultOf, sourcesInto, stateOf, stepOf, stepsBefore, tableInto, tableWired, tablesJoined, wiresInto } from "./flow";
 import { chartOfTable, chartSaid, type ChartValue } from "../../../../lib/chart";
 import { diagramOf, diagramSaid, levelNamer, propertiesTyped, type DiagramValue, type RowCompound } from "../../../../lib/energyDiagram";
-import { asideExit, exitsOf, inputsOf, kindInfo, modeRead, laterPortsNeed, MENO_DOES, optionsOf, ONE_INPUT, readsAsTable, RESTRAINTS_INPUT, severalInputs, takenBy, restHolds, type Holds3D, type SetHolds, type SetKind, type StepKind, type StepPort, type ValueKind, isSetKind } from "./kinds";
+import { asideExit, exitsOf, inputsOf, kindInfo, modeRead, laterPortsNeed, MENO_DOES, ONE_INPUT, readsAsTable, RESTRAINTS_INPUT, severalInputs, takenBy, restHolds, type Holds3D, type SetHolds, type SetKind, type StepKind, type StepPort, type ValueKind, isSetKind } from "./kinds";
 import { MENO_ONLY, VALUE_KINDS } from "../../../../lib/plugins/steps";
-import { byOf, doerName, inputsFor, MENO, takesBy, takesNothingBy } from "./doers";
+import { byOf, doerName, inputsFor, MENO, stepValues, takesBy, takesNothingBy } from "./doers";
 import { pluginById } from "../../../../lib/calc/catalog";
 import { chipRows, HELD_LEAST_W, heldFrame } from "./heldView";
 import { BETWEEN, SET_PAD, SET_TOP, CHIP, drawnShown, PX, SUMMARY_PX } from "./look";
@@ -31,7 +31,7 @@ export { frameAt, placeFor } from "./place";
 import { keptNames, takeFrames, type Which } from "./takeFrames";
 import { notResults, PAIRED, pushTo, runMeno, runMenoDrawn, runMenoPair, type CalcLevel, type Outcome, type Outcome3D } from "./meno";
 import { ontoStructures } from "./ontoStructures";
-import { measuredSet, modeOnAtomsSet } from "./structureSteps";
+import { measuredSet, modeOnAtomsSet, torsionsSet } from "./structureSteps";
 import { addSet, CHART_SET, heldPut, holdChart, holdNumber, NUMBER_SET, holdCollection, holdTable, TABLE_SET, holdMembers, holdNothing, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
 import { recordsWithRoles } from "./schemeRoles";
@@ -79,6 +79,8 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   const none = emptyIn(doc, step, by);
   if (none) return ranEmpty(doc, id, none, key, w);
   if (by !== "meno" || !MENO_DOES.includes(step.kind)) return fail("Nothing added does this step");
+  // (its options' values: its own, else Settings' for its kind, else each option's default - doers `stepValues`)
+  const values = stepValues(step);
   // (a chart: a table's columns, one against the other)
   if (step.kind === "chart") return chartRun(doc, step, w, key);
   // (an energy diagram: molecules' energies as levels, joined as a table says)
@@ -87,18 +89,25 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   if (PAIRED.includes(step.kind)) {
     const [p, q] = inputsOf(step.kind).map((port) => inputOf(doc, id, port.id)!);
     const entriesOf = (x: typeof p) => ({ entries: setEntries(x.molecules, x.holds as Holds3D), holds: x.holds as Holds3D });
-    return ranAs(doc, id, runMenoPair(step.kind, entriesOf(p), entriesOf(q), step.options), key, w);
+    return ranAs(doc, id, runMenoPair(step.kind, entriesOf(p), entriesOf(q), values), key, w);
+  }
+  // (torsion restraints: of what comes into Molecules - against what comes into Reference, where it is wired)
+  if (step.kind === "torsion-restraints") {
+    const [p, q] = ["molecules", "reference"].map((port) => inputOf(doc, id, port));
+    if (!p) return fail("Nothing comes into Molecules");
+    const of = (x: NonNullable<typeof p>) => setEntries(x.molecules, x.holds as Holds3D);
+    return ranAs(doc, id, torsionsSet(of(p), q ? of(q) : null, p.holds as Holds3D, values), key, w);
   }
   // (structures drawn, each with what the 3D set wired in holds made of it, by its lasting id: workflow/ontoStructures)
   if (step.kind === "onto-structures") {
     const [into, results] = [inputOf(doc, id, "structures"), inputOf(doc, id, "results")];
     if (!into || !results) return fail(!into ? "Nothing comes into Structures" : "Nothing comes into 3D results");
-    const o = optionsOf(kindInfo(step.kind).options ?? [], step.options);
+    const o = values;
     return ranAs(doc, id, ontoStructures(inputEntries(doc.model, into), setEntries(results.molecules, results.holds as Holds3D), Number(o.temperature)), key, w);
   }
   // (a number from its options alone: nothing comes in)
   if (step.kind === "number") {
-    const n = numberOf(optionsOf(kindInfo(step.kind).options ?? [], step.options));
+    const n = numberOf(values);
     if ("why" in n) return fail(n.why);
     return setRan(placeNumber(keepRun(doc, step), step, { ...n, by: { ...n.by, step: String(step.id) } }), id, { at: w.now, ok: true, said: numberShown(n), input: key, ...as });
   }
@@ -109,18 +118,18 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
     const numberSet = wiresInto(doc, id, "number")[0]?.from;
     const number = numberSet ? findSet(doc, numberSet.set)?.number : undefined;
     if (numberSet && !number) return fail("Number holds no number yet");
-    const o = optionsOf(kindInfo(step.kind).options ?? [], step.options);
+    const o = values;
     return ranAs(doc, id, addedSet(setEntries(into.molecules, into.holds as Holds3D), into.holds as Holds3D, o, number), key, w);
   }
   if (!input) return fail("Nothing comes into it");
   // (frames of molecules with frames: read from the molecules themselves - a set takes a path as its last frame alone)
   if (step.kind === "take-frames") {
-    const o = optionsOf(kindInfo(step.kind).options ?? [], step.options);
+    const o = values;
     return ranAs(doc, id, takeFrames(input.molecules, (o.which as Which) ?? "highest", Number(o.either), keptNames(String(o.keep ?? ""))), key, w);
   }
   // (Mode on atoms: its atoms typed, or from the table wired into Atoms)
   if (step.kind === "mode-on-atoms") {
-    const o = optionsOf(kindInfo(step.kind).options ?? [], step.options);
+    const o = values;
     const r = modeRead(o);
     if ("why" in r) return ranAs(doc, id, { ok: false, said: r.why }, key, w);
     const entries = setEntries(input.molecules, input.holds as Holds3D);
@@ -130,7 +139,7 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   // (Measure's atoms from a table wired into Atoms, where its card says so - and, typed, a table wired in said not read, never passed over unsaid;
   //  what comes in is molecules: it takes nothing else)
   if (step.kind === "measure") {
-    const o = optionsOf(kindInfo(step.kind).options ?? [], step.options);
+    const o = values;
     const entries = setEntries(input.molecules, input.holds as Holds3D);
     if (o.from === "table") return ranAs(doc, id, measuredSet(entries, input.holds as Holds3D, "", { table: tableInto(doc, id, "atoms"), rows: String(o.rows ?? "") }), key, w);
     const typed = measuredSet(entries, input.holds as Holds3D, String(o.measurements ?? ""));
@@ -139,8 +148,8 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   }
   const outcome =
     input.holds === "structures"
-      ? runMenoDrawn(step.kind, inputEntries(doc.model, input), step.options, doc.style)
-      : runMeno(step.kind, setEntries(input.molecules, input.holds), input.holds, step.options, energiesBy(input.molecules), energyLevels(input.molecules));
+      ? runMenoDrawn(step.kind, inputEntries(doc.model, input), values, doc.style)
+      : runMeno(step.kind, setEntries(input.molecules, input.holds), input.holds, values, energiesBy(input.molecules), energyLevels(input.molecules));
   return ranAs(doc, id, outcome, key, w);
 }
 
@@ -297,6 +306,8 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
       ? sourcesInto(doc, step.id, first?.id).reduce<string | null>((why, { set }) => why ?? (set.made ? null : plainAmong(setMolecules(doc, set))), null)
       : null;
   if (mixed) return mixed;
+  // (restraints wired into a step given structures drawn: they are held on molecules in 3D, each by its ID - none drawn has one)
+  if (holds === "structures" && wiresInto(doc, step.id, RESTRAINTS_INPUT.id).length) return "Restraints are held on molecules in 3D: make the structures 3D first, then wire them in";
   if (first && !takenBy(first.takes, holds)) return `${first.name} takes ${first.takes.map((s) => SET_NAMES[s]).join(" or ")}`;
   if (!first && !takesBy(step.kind, by, holds)) return `Takes ${kindInfo(step.kind).takes.filter((s) => takesBy(step.kind, by, s)).map((s) => SET_NAMES[s]).join(" or ")}`;
   if (!by) return "Nothing added does this step";
@@ -305,6 +316,10 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
   const plugin = by !== MENO.id ? pluginById(by) : undefined;
   if (plugin && MENO_ONLY.includes(step.kind)) return `${kindInfo(step.kind).name} is Meno's own step: add it again`;
   if (plugin && !plugin.steps.some((d) => d.kind === step.kind)) return `${doerName(plugin)} does not do ${kindInfo(step.kind).name}`;
+  // (a step of a page saved when it gave a set at an exit its kind no longer has - Torsion restraints' Trans already: said, never run
+  //  with that set left standing as if it were still given)
+  const gone = (doc.sets ?? []).find((b) => b.made?.step === step.id && !exitsOf(step.kind).some((x) => x.id === b.made!.exit));
+  if (gone) return `It was saved giving a set it no longer gives${gone.name ? ` (${gone.name})` : ""}: delete that set${step.kind === "torsion-restraints" ? " - Compare torsions and a Filter split what is trans already" : ""}`;
   // (a step of a page saved when it held what its molecules carried, asked on its card: no longer so - what it holds is wired in, and
   //  it is never run now holding nothing unsaid)
   if (step.options?.[HOLD_WAS] === "fixed" && !wiresInto(doc, step.id, RESTRAINTS_INPUT.id).length)
