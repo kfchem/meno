@@ -24,7 +24,7 @@ Choose *Open…*, or drop files on the window: each goes where it belongs.
 - Structures in MOL, SD, RXN, XYZ and PDB files, and cube files, are read by Meno itself and put on the page - where they are dropped, or near the middle of the view with *Open…*.
 - PDFs, and pictures in PNG or JPEG, are put on the page too.
 - Texts - .txt, .csv, .tsv, .json, .log and the like - open in the column of texts on the right. A CSV or TSV table can go on the page with *Put on the page as a table*, on its right-click menu.
-- A calculation's output - ORCA's, Gaussian's, xTB's and others' - is read by a plugin, cclib among them, added in Settings, *Plugins*. Where none added reads it, Meno names the plugin that would, with a button to add it.
+- A calculation's output - ORCA's, Gaussian's, xTB's and others' - is read by a plugin, cclib among them, added in Settings, *Plugins*. Where none added reads it, Meno says so in the corner, with *List the plugins online*; once the list is here, the same notice names the plugin that would read it, with a button to add it.
 - A file that cannot be read is named, with why.
 
 ## Writing other formats {#export}
@@ -43,5 +43,5 @@ Settings, *Files*, has a table of the kinds of file Meno opens: what reads each,
 
 Settings, *Files*, under *Opening files*, lists the formats Meno can be the app for - .mol, .sdf, .rxn, .xyz, .pdb, .cube and .pdf - and which app opens each now. A .meno opens with Meno from the start.
 
-- On a Mac, *Use Meno* makes Meno the app for that format; the system may ask first. The app it replaced can have it back with the button named after it, as *Use Preview again*.
+- On a Mac, where Meno runs as an installed app on macOS 12 or later, *Use Meno* makes Meno the app for that format; the system may ask first. Otherwise choose it in the Finder: *Get Info* on a file, *Open with*, then *Change All*. The app it replaced can have it back with the button named after it, as *Use Preview again*.
 - On Windows, only Windows' own Settings can choose a default. *Use Meno* offers Meno for that format and opens Settings, where you choose it. Until you have, the row has *Choose in Settings*, to open Settings there again, and *Stop offering Meno*, to take the offer back.

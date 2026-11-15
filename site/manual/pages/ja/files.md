@@ -24,7 +24,7 @@ Meno が作業を一つのファイルに保つしくみと、ほかのファイ
 - MOL、SD、RXN、XYZ、PDB ファイルの構造と cube ファイルは、Meno が自分で読んでページに置きます。ドロップしたところに、「Open…」なら見えている範囲の中ほどに置かれます。
 - PDF と、PNG か JPEG の画像も、ページに置かれます。
 - テキスト（.txt、.csv、.tsv、.json、.log など）は、右のテキストの欄に開きます。CSV や TSV の表は、右クリックメニューの「Put on the page as a table」でページに置けます。
-- 計算の出力（ORCA、Gaussian、xTB などのもの）は、設定の「Plugins」で加えるプラグイン（cclib など）が読みます。どの加えたプラグインも読まないときは、読めるプラグインの名前と、それを加えるボタンが出ます。
+- 計算の出力（ORCA、Gaussian、xTB などのもの）は、設定の「Plugins」で加えるプラグイン（cclib など）が読みます。どの加えたプラグインも読まないときは、そのことが画面の隅に出て、「List the plugins online」のボタンが付きます。一覧が届いたあとは、同じお知らせが読めるプラグインの名前と、それを加えるボタンを示します。
 - 読めないファイルは、名前と理由が示されます。
 
 ## ほかの形式で書き出す {#export}
@@ -43,5 +43,5 @@ Meno が作業を一つのファイルに保つしくみと、ほかのファイ
 
 設定の「Files」の「Opening files」に、Meno で開くようにできる形式（.mol、.sdf、.rxn、.xyz、.pdb、.cube、.pdf）と、いまそれぞれを開くアプリが並びます。.meno は最初から Meno で開きます。
 
-- Mac では、「Use Meno」でその形式を Meno で開くようになります。システムが先に尋ねることがあります。前のアプリに戻すには、そのアプリの名前の付いたボタン（「Use Preview again」のように）を押します。
+- Mac では、Meno がインストールしたアプリとして macOS 12 以降で動いているとき、「Use Meno」でその形式を Meno で開くようになります。そうでないときは Finder で、ファイルの「Get Info」、「Open with」、「Change All」の順に選びます。システムが先に尋ねることがあります。前のアプリに戻すには、そのアプリの名前の付いたボタン（「Use Preview again」のように）を押します。
 - Windows では、既定のアプリを選べるのは Windows の設定だけです。「Use Meno」で、その形式について Meno を候補に加えて Windows の設定を開くので、そこで選びます。選ぶまでは、行に「Choose in Settings」（設定をもう一度開きます）と「Stop offering Meno」（候補から外します）が出ます。
