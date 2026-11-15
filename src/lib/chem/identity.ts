@@ -498,12 +498,11 @@ function pairingsOf(donors: readonly number[]): (readonly [number, number])[][] 
  * donor in a ring of five or six that does not hold the metal, B and its two neighbours in that ring trigonal, and from each
  * of those two a path of trigonal atoms - B's neighbour and one or two more, a chelate ring of five or six with the metal -
  * to one donor: those two donors are across. A porphyrin's opposite N, terpyridine's outer two, a pincer's whose arms are
- * trigonal. A path of CH2 - cyclam, dien, salen - holds nothing flat. Trigonal: an atom with a double or aromatic bond, or a
- * ring N whose two ring neighbours each have one (a pyrrole's).
+ * trigonal. A path of CH2 - cyclam, dien, salen - holds nothing flat. Trigonal: an atom with a double or aromatic bond, or an
+ * N in a ring of five or six whose two neighbours in that ring each have one (a pyrrole's).
  */
 function heldFlat(m: number, donors: readonly number[], around: readonly number[][], order: (p: number, q: number) => number, element: (i: number) => string): [number, number][] {
   const doubled = (i: number) => around[i].some((j) => order(i, j) === 2 || order(i, j) === AROMATIC);
-  const trigonal = (i: number) => doubled(i) || (element(i) === "N" && around[i].filter((j) => j !== m && doubled(j)).length >= 2);
   // (a ring of five or six through B and its two neighbours x and y, not through the metal: x to y in three or four bonds)
   const ringed = (b: number, x: number, y: number) => {
     let at = [x];
@@ -520,6 +519,14 @@ function heldFlat(m: number, donors: readonly number[], around: readonly number[
       at = next;
     }
     return false;
+  };
+  // (trigonal: a double or aromatic bond of its own; or an N in a ring of five or six whose two neighbours in that ring each have
+  //  one - a pyrrole's. An NH linking two rings by single bonds is not held flat for sure: never counted so)
+  const trigonal = (i: number) => {
+    if (doubled(i)) return true;
+    if (element(i) !== "N") return false;
+    const near = around[i].filter((j) => j !== m && doubled(j));
+    return near.some((j, k) => near.slice(k + 1).some((l) => ringed(i, j, l)));
   };
   // (the one donor reached from x - B's neighbour - by trigonal atoms, x and one or two more between B and it; none, or two, and null)
   const donorBy = (b: number, x: number): number | null => {

@@ -311,6 +311,8 @@ describe("a metal's donors across, in identity", () => {
       ["Ru(bpy)2Cl2", complex("Ru", [[bpy, n], [bpy, n]], ["Cl", "Cl"])],
       ["a PNP pincer's with CH2 arms, Cl3", complex("Co", [["CP(C)Cc1cccc(CP(C)C)n1", nOrP]], ["Cl", "Cl", "Cl"])],
       ["[Fe(salen)Cl2]-", complex("Fe", [["[O-]c1ccccc1C=NCCN=Cc1ccccc1[O-]", nOrMinusO]], ["Cl", "Cl"])],
+      // (an NH between the rings on each arm: a link of single bonds, not held flat for sure - fac or mer)
+      ["a 2,6-bis(2-pyridylamino)pyridine's CoCl3", complex("Co", [["c1ccc(Nc2cccc(Nc3ccccn3)n2)nc1", (g, i) => g.atoms[i].el === "N" && !g.atoms[i].hs]], ["Cl", "Cl", "Cl"])],
     ];
     for (const [name, open] of left) expect([name, open]).toEqual([name, true]);
   });
