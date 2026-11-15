@@ -2000,7 +2000,10 @@ lipids each have their own way of being drawn, which it should know.
      run it shows otherwise is marked with a wavy bond. Where Meno's own
      reader does not take the text, no run is given, and every odd run is
      so drawn open. An allene's run (two double
-     bonds, or four) has an axis instead, which nothing draws open.
+     bonds, or four) has an axis instead, which nothing draws open: a
+     bond of it marked either is drawn as a double bond of no run, so no
+     wavy bond goes on an end's groups for it. An odd run's bond marked
+     either - any of its bonds - goes to the run's two far ends.
    - **Centres by a lone pair** (the maintainer, 2026-11-04 and 11-05).
      An atom of three neighbours and a lone pair is a pyramid that its
      lone pair can turn into its mirror image, through the plane of the

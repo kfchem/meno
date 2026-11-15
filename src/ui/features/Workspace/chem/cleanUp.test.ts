@@ -747,6 +747,15 @@ describe("cleanUp", () => {
       expect(readStereo(d.atoms, d.bonds).cumulated).toEqual([]);
     });
 
+    it("keeps a double bond the SMILES gives E or Z bent as given where the drawing is laid out as new too (a plugin's block, a step's): its odd runs are opened there, never its double bonds", async () => {
+      for (const s of ["C/C=C/C", "C/C=C\\C", "C/C=C/C=C=C=CC", "C/C=C\\C=C=C=CC"]) {
+        const open = openDoubleBonds(fromSmiles(s));
+        const laid = await laidOut(arrived(s), MENO, undefined, open, true);
+        // (the given double bond is read as one; the run, which the text leaves open, is not)
+        expect(drawingCisTrans(laid), s).toBe(1);
+      }
+    });
+
     it("keeps a double bond the SMILES gives E or Z bent as given", async () => {
       for (const s of ["C/C=C/C", "C/C=C\\C"]) {
         const open = openDoubleBonds(fromSmiles(s));
