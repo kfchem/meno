@@ -1,3 +1,4 @@
+import { readMolfile } from "../../../../lib/chem/ctfile";
 import { describe, expect, it, vi } from "vitest";
 import { STYLE_3D } from "../../../../lib/chem/style3d";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
@@ -649,6 +650,51 @@ describe("conformers made for the page", () => {
     // (run once)
     await growth.rest(() => grown.push(answer));
     expect(grown[grown.length - 1]).toBe(last);
+  });
+
+  it("growing, of several parts: a water drawn as its one O is searched as a water, its hydrogens kept (found in the chemistry check)", async () => {
+    // (acetic acid with a water beside it, drawn as one structure: the O alone is H2O, no bare atom)
+    const wet = {
+      atoms: [
+        { id: 1, x: 0, y: 0, r: 0.9, el: "C", joined: 1 },
+        { id: 2, x: 1.3, y: 0.75, r: 0.9, el: "C", joined: 1 },
+        { id: 3, x: 1.3, y: 2.25, r: 0.9, el: "O", joined: 1 },
+        { id: 4, x: 2.6, y: 0, r: 0.9, el: "O", joined: 1 },
+        { id: 5, x: 5, y: 0, r: 0.9, el: "O", joined: 1 },
+      ],
+      bonds: [
+        { id: 1, a: 1, b: 2, order: 1 },
+        { id: 2, a: 2, b: 3, order: 2 },
+        { id: 3, a: 2, b: 4, order: 1 },
+      ],
+    } as Model;
+    const acid: Conformers = {
+      atoms: ["C", "C", "O", "O", "H", "H", "H", "H"].map((el) => ({ el, charge: 0 })),
+      bonds: [[0, 1, 1], [1, 2, 2], [1, 3, 1], [0, 4, 1], [0, 5, 1], [0, 6, 1], [3, 7, 1]].map(([a1, a2, order]) => ({ a1, a2, order: order as 1 | 2 })),
+      frames: [[0, 0, 0, 1.5, 0, 0, 2.1, 1.1, 0, 2.1, -1.1, 0, -0.4, 1, 0, -0.4, -0.5, -0.9, -0.4, -0.5, 0.9, 3, -1.2, 0]],
+      energies: [-0.05],
+      field: "MMFF94",
+      cip: { atoms: {}, bonds: {} },
+      chosen: { atoms: {}, bonds: {} },
+      smiles: "CC(=O)O",
+    };
+    const water: Conformers = { ...acid, atoms: ["O", "H", "H"].map((el) => ({ el, charge: 0 })), bonds: [{ a1: 0, a2: 1, order: 1 }, { a1: 0, a2: 2, order: 1 }], frames: [[0, 0, 0, 0.96, 0, 0, -0.24, 0.93, 0]], energies: [-0.01], smiles: "O" };
+    const asked: number[] = [];
+    const chem = {
+      request: async (_op: string, args: Record<string, unknown>) => {
+        const n = readMolfile(String(args.molblock))!.atoms.length;
+        asked.push(n);
+        return { isomers: [n === 1 ? water : acid] };
+      },
+    } as unknown as ChemClient;
+    const stereo = { request: async (op: string) => (op === "stereo_elements" ? { read: true, elements: [] } : Promise.reject(new Error(`no ${op} here`))) } as unknown as ChemClient;
+    const [block] = blocksOf(wet, [1]);
+    const growth = await conformersGrowing(chem, stereo, block, "one", {}, { calculations: {} }, { window: 5, first: 10, most: MOST_CONFORMERS }, () => false);
+    const [first] = growth.first;
+    expect(asked).toContain(1);
+    expect(first.atoms.filter((a) => a.el === "H")).toHaveLength(6);
+    expect(first.how?.find((r) => r.label === "Part 2")).toBeUndefined();
+    await growth.rest(() => {});
   });
 
   it("growing, of several parts: each part searched alone - a one-atom part not at all - the whole put together of them, no shares of it", async () => {

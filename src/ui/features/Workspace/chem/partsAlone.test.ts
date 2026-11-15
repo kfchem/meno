@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { Conformers } from "../../../../lib/roles/client";
 import type { Model } from "../store/types";
 import { blocksOf } from "./make3d";
-import { configurationIn, lone, partsAlone, SUMMED, wholeOf, type PartAlone } from "./partsAlone";
+import { chargeWritten, configurationIn, lone, partsAlone, SUMMED, takesNoSearch, wholeOf, type PartAlone } from "./partsAlone";
+import { drawnFromSmiles } from "../utils/smilesDrawn";
 
 /** A structure of several parts, each searched alone (chem/partsAlone): what each part is, and the whole put together of them. */
 
@@ -50,6 +51,24 @@ const answer = (atoms: string[], bonds: [number, number][], frames: number[][], 
 });
 const at = (n: number, k: number) => Array.from({ length: 3 * n }, (_, i) => i + 100 * k);
 
+/** Drawings put down as one structure of several parts (`Atom.joined`), each moved right of the one before, their ids apart. */
+const together = (...drawn: Model[]): Model => {
+  const atoms: Model["atoms"] = [];
+  const bonds: Model["bonds"] = [];
+  drawn.forEach((m, k) => {
+    const id = (n: number) => n + 1000 * (k + 1);
+    for (const a of m.atoms) atoms.push({ ...a, id: id(a.id), x: a.x + 10 * k, joined: 1 });
+    for (const b of m.bonds) bonds.push({ ...b, id: id(b.id), a: id(b.a), b: id(b.b) });
+  });
+  return { atoms, bonds } as Model;
+};
+/** A drawing seen in a mirror: its places turned over left to right, its wedges as they were - the other enantiomer, written atom for atom alike. */
+const mirrored = (m: Model): Model => ({ ...m, atoms: m.atoms.map((a) => ({ ...a, x: -a.x })) });
+const alikeOf = (m: Model) => {
+  const [block] = blocksOf(m, [m.atoms[0].id]);
+  return partsAlone(block.part, block)!.map((p) => p.alike);
+};
+
 describe("a structure's parts, each searched alone", () => {
   it("are its fragments, largest first, each written as the plugin is asked about it, its atoms and bonds by their places in the whole", () => {
     const [block] = blocksOf(acetate, [1]);
@@ -66,6 +85,22 @@ describe("a structure's parts, each searched alone", () => {
   it("are alike where they are written alike, atom for atom: searched once", () => {
     const [block] = blocksOf(methanols, [1]);
     expect(partsAlone(block.part, block)!.map((p) => p.alike)).toEqual([undefined, 0]);
+  });
+
+  it("are alike only where they are one compound as drawn: (R)- and (S)-butan-2-ol, (E)- and (Z)-but-2-ene each searched alone", () => {
+    const r = drawnFromSmiles("C[C@@H](O)CC");
+    // (the mirror drawing writes the same table, atom for atom and wedge for wedge: only its places tell it from R)
+    expect(alikeOf(together(r, mirrored(r)))).toEqual([undefined, undefined]);
+    expect(alikeOf(together(r, r))).toEqual([undefined, 0]);
+    expect(alikeOf(together(drawnFromSmiles("C/C=C/C"), drawnFromSmiles("C/C=C\\C")))).toEqual([undefined, undefined]);
+    expect(alikeOf(together(drawnFromSmiles("C/C=C/C"), drawnFromSmiles("C/C=C/C")))).toEqual([undefined, 0]);
+  });
+
+  it("take no search only where a part is one bare atom: Na+, Ca2+, Cl-; a water or a methane drawn as its one atom, or a label, is searched", () => {
+    const one = (el: string, charge = 0, abbrev?: string) => ({ block: { part: { atoms: [{ id: 1, x: 0, y: 0, r: 0.9, el, ...(charge ? { charge } : {}), ...(abbrev ? { abbrev } : {}) }], bonds: [] } as unknown as Model } }) as Pick<PartAlone, "block">;
+    for (const [el, q] of [["Na", 1], ["Ca", 2], ["Cl", -1]] as const) expect(takesNoSearch(one(el, q)), el).toBe(true);
+    for (const el of ["O", "C", "N", "THF"]) expect(takesNoSearch(one(el)), el).toBe(false);
+    expect([1, 2, -1, -3, 0].map(chargeWritten)).toEqual(["+", "2+", "-", "3-", ""]);
   });
 
   it("each take the whole's configuration of what is theirs, by their own places", () => {

@@ -14,7 +14,8 @@ import type { Conformers } from "../../../../lib/roles/client";
 import type { Configuration } from "../../../../lib/chem/stereoOpen";
 import type { Model } from "../store/types";
 import { fragmentsHolding, partOf } from "./cleanUp";
-import { blockOf, type Block } from "./make3d";
+import { blockOf, standsForMolecule, type Block } from "./make3d";
+import { identityOfDrawn, labelsDrawnOut } from "./identityOf";
 
 /** A part of a structure, as the plugin is asked about it alone: its block, and where its atoms and bonds stand in the whole's. */
 export type PartAlone = {
@@ -25,6 +26,19 @@ export type PartAlone = {
   bonds: number[];
   /** The first part before it that is alike to it - the same atoms and bonds, in the same order, configured the same - by its place among the parts: searched once, for both. */
   alike?: number;
+};
+
+/** Whether a part takes no search: one bare atom with no hydrogens - Na+, Ca2+, Cl-, a lone metal (`standsForMolecule`); a water or a methane drawn as its one atom, or a label, is searched. */
+export const takesNoSearch = (part: Pick<PartAlone, "block">) => !standsForMolecule(part.block.part);
+
+/**
+ * A part's configuration as its drawing gives it: its identity (chem/identityOf), which reads the wedges and the places - (R)- and
+ * (S)-butan-2-ol, (E)- and (Z)-but-2-ene drawn side by side write the same table but are two compounds. None where identity cannot
+ * say it in full: such a part is alike to no other (found in the chemistry check).
+ */
+const drawnAs = (part: PartAlone): string | null => {
+  const { text, complete, unread } = identityOfDrawn(labelsDrawnOut(part.block.part));
+  return complete && !unread.length ? text : null;
 };
 
 /** A part's table of atoms and bonds as its file writes it, its places left out: two parts that write the same are alike, atom for atom. */
@@ -50,8 +64,11 @@ export function partsAlone(model: Model, block: Block): PartAlone[] | null {
   // (each bond of the whole in one part, and each atom: else it is not as it was drawn - searched whole)
   if (parts.reduce((n, p) => n + p.atoms.length, 0) !== block.atoms.length || parts.some((p) => p.atoms.some((i) => i == null) || p.bonds.some((i) => i == null))) return null;
   const tables = parts.map((p) => tableOf(p.block.molblock));
+  // (alike: written alike atom for atom, and the same compound as the drawing configures it - worked out only where the tables agree)
+  const drawn = new Map<number, string | null>();
+  const as = (k: number) => (drawn.has(k) ? drawn.get(k)! : (drawn.set(k, drawnAs(parts[k])), drawn.get(k)!));
   return parts.map((p, k) => {
-    const alike = tables.findIndex((t, j) => j < k && t === tables[k]);
+    const alike = tables.findIndex((t, j) => j < k && t === tables[k] && as(j) != null && as(j) === as(k));
     return alike >= 0 ? { ...p, alike } : p;
   });
 }
@@ -68,7 +85,7 @@ export function configurationIn(c: Configuration, part: Pick<PartAlone, "atoms" 
   };
 }
 
-/** Whether two configurations of alike parts are one: the same, centre for centre and bond for bond. */
+/** Whether two configurations of alike parts are one - those the page chose for what their drawing leaves open: the same, centre for centre and bond for bond. */
 export const sameConfiguration = (a: Configuration, b: Configuration) => JSON.stringify(a) === JSON.stringify(b);
 
 /** A one-atom part's one conformer, which takes no search: the atom where it is, and nothing else. */
@@ -76,6 +93,9 @@ export function lone(part: Pick<PartAlone, "block">): Conformers {
   const a = part.block.part.atoms[0];
   return { atoms: [{ el: a.el, charge: a.charge ?? 0 }], bonds: [], frames: [[0, 0, 0]], energies: [0], field: "none", cip: { atoms: {}, bonds: {} }, chosen: { atoms: {}, bonds: {} }, smiles: "" };
 }
+
+/** A charge as an ion's formula writes it: "+", "2+", "-", "3-"; none, nothing. */
+export const chargeWritten = (q: number) => (q ? `${Math.abs(q) > 1 ? Math.abs(q) : ""}${q > 0 ? "+" : "-"}` : "");
 
 /** A row of how the whole was made, saying what its energies are: each part's own, summed. */
 export const SUMMED = { label: "Energies", text: "each part's own, summed; nothing between parts is counted" };
@@ -128,7 +148,7 @@ export function wholeOf(block: Block, parts: readonly { part: PartAlone; c: Conf
     ...parts.flatMap(({ part, c }, k) => {
       const name = `Part ${k + 1}`;
       if (part.alike != null) return [{ label: name, text: `as part ${part.alike + 1}: alike, searched once` }];
-      if (c.field === "none" && c.atoms.length === 1) return [{ label: name, text: `${c.atoms[0].el}${c.atoms[0].charge ? (c.atoms[0].charge > 0 ? "+" : "-") : ""}: one atom, no search` }];
+      if (c.field === "none" && c.atoms.length === 1) return [{ label: name, text: `${c.atoms[0].el}${chargeWritten(c.atoms[0].charge)}: one atom, no search` }];
       return (c.how ?? []).map((r) => ({ label: `${name}: ${r.label}`, text: r.text }));
     }),
     SUMMED,

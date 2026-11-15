@@ -16,7 +16,7 @@ import type { OptionValues } from "../../../../lib/options";
 import { conformersSoughtOf, MOST_CONFORMERS, RING_CONFORMERS, roundsAsked, soughtNumber } from "../../../../lib/chem/conformersSought";
 import { inRounds, roundsSaid, RoundsSearch, SEARCH_BUDGET_MS } from "./conformerRounds";
 import { growingJudge, type GrowingJudge, type ShownWith } from "./growing";
-import { configurationIn, lone, partsAlone, sameConfiguration, wholeOf } from "./partsAlone";
+import { configurationIn, lone, partsAlone, sameConfiguration, takesNoSearch, wholeOf } from "./partsAlone";
 import { roundsJudge } from "./roundsJudge";
 import { WITHIN_3D, type CalculationSettings, type ChemistrySettings } from "../../../../lib/settings/appSettings";
 import { pageThreadsOf } from "../../../../lib/jobs";
@@ -812,7 +812,7 @@ export async function conformersGrowing(
         const configs = parts.map((p) => configurationIn(iso, p));
         for (const [k, p] of parts.entries()) {
           if (p.alike != null && sameConfiguration(configs[k], configs[p.alike])) each.push(p.alike);
-          else if (p.block.part.atoms.length === 1) each.push(lone(p));
+          else if (takesNoSearch(p)) each.push(lone(p));
           else {
             const own = metalHoldsOf(p.block.molblock);
             each.push(await start(p.block.molblock, configs[k], false, { open: NONE, checks: madeChecksOf(p.block.molblock, own), eta: own }));

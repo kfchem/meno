@@ -589,8 +589,12 @@ Taken on 2026-10-13:
   one definition of the same conformer - for nothing between parts is
   modelled, and a search of the whole found each embedding's parts at a
   place of their own, every one new, to its most. A part alike to one
-  before it - written alike, atom for atom, configured alike - is searched
-  once; a one-atom part (Na+) not at all.
+  before it - written alike, atom for atom, and the same compound as
+  drawn, its wedges and places read by identity, and configured alike
+  where its drawing leaves anything open - is searched once: (R)- and
+  (S)-butan-2-ol, or (E)- and (Z)-but-2-ene, drawn side by side are each
+  searched. A bare atom with no hydrogens (Na+, Ca2+, Cl-) is not searched
+  at all; a water or a methane drawn as its one O or C is.
   - Its conformers are put together of its parts': the first every part at
     its lowest; then, part by part, each other conformer of a part not
     alike to one before, the rest at their lowest - never every
@@ -605,7 +609,7 @@ Taken on 2026-10-13:
     (`Molecule3D.partsAlone`, kept in its file and through the steps it
     passes).
   - Its rows say how each part was searched (*Part 1: Rounds*, *Part 2*:
-    "Na+: one atom, no search").
+    "Na+: one atom, no search"; "Ca2+: ...").
   - Searched whole, as before: a structure of several parts one of which
     holds a ring bound to a metal through all its atoms; one made with a
     number of conformers of the chemist's own, not in rounds; and a
