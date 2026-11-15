@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { acceptOptions, rememberable, valuesOf, type Option, shownOptions } from "./options";
+import { readdirSync, readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { acceptOptions, defaultsFrom, firstUnset, givenOnly, noDefault, rememberable, valuesOf, type Option, shownOptions } from "./options";
 
 const OPTIONS: Option[] = [
   { id: "version", label: "Version", type: "choice", choices: [{ value: "auto", label: "Auto" }, { value: "V3000", label: "V3000" }], default: "auto" },
@@ -17,6 +19,24 @@ describe("a role's options", () => {
     expect(valuesOf(OPTIONS, { version: "V3000", scale: 2, title: "run 3", hydrogens: true })).toEqual({ version: "V3000", scale: 2, title: "run 3", hydrogens: true });
     // (a choice no longer offered, a number out of range, a value of the wrong sort: the default)
     expect(valuesOf(OPTIONS, { version: "V9000", scale: 40, title: 3, hydrogens: "yes", gone: 1 })).toEqual({ version: "auto", scale: 1, title: "", hydrogens: false });
+  });
+});
+
+describe("options whose defaults are those remembered", () => {
+  it("take each remembered value that still fits as its default, and keep their own where none does", () => {
+    const got = defaultsFrom(OPTIONS, { version: "V3000", scale: 40, title: 3, gone: 1 });
+    expect(got.map((o) => o.default)).toEqual(["V3000", 1, "", false]);
+    // (what has no value of its own takes them: the remembered, where one fits; else its own)
+    expect(valuesOf(got)).toEqual({ version: "V3000", scale: 1, title: "", hydrogens: false });
+    expect(defaultsFrom(OPTIONS, undefined)).toEqual(OPTIONS);
+  });
+
+  it("never give one that starts from what is written a remembered default", () => {
+    const WRITE: Option[] = [
+      { id: "charge", label: "Charge", type: "number", default: 0, from: "charge" },
+      { id: "method", label: "Method", type: "text", default: "B3LYP" },
+    ];
+    expect(defaultsFrom(WRITE, { charge: 2, method: "M062X" }).map((o) => o.default)).toEqual([0, "M062X"]);
   });
 });
 
@@ -62,6 +82,21 @@ describe("options a plugin declares", () => {
     ]);
     expect(acceptOptions("not a list")).toEqual([]);
   });
+
+  it("read a whole number alone where the plugin says so - only by true - and hold what is remembered to it", () => {
+    const read = acceptOptions([
+      { id: "count", label: "How many", type: "number", default: 200, min: 1, max: 5000, step: 1, whole: true },
+      { id: "t", label: "Temperature", type: "number", default: 298.15, min: 1, step: 1, whole: "yes" },
+      // (none: its default is no whole number)
+      { id: "bad", label: "Bad", type: "number", default: 2.5, whole: true },
+    ]);
+    expect(read).toEqual([
+      { id: "count", label: "How many", type: "number", default: 200, min: 1, max: 5000, step: 1, whole: true },
+      { id: "t", label: "Temperature", type: "number", default: 298.15, min: 1, step: 1 },
+    ]);
+    expect(valuesOf(read, { count: 12.5, t: 300.5 })).toEqual({ count: 200, t: 300.5 });
+    expect(valuesOf(read, { count: 600 })).toEqual({ count: 600, t: 298.15 });
+  });
 });
 
 describe("options that apply to one choice only, and choices that fill in others' values", () => {
@@ -99,5 +134,85 @@ describe("options that apply to one choice only, and choices that fill in others
     expect(look.choices[0].sets).toEqual({ band: 0.4 });
     expect(read[1]).toMatchObject({ when: { id: "look", in: ["a", 3] }, group: "Adjust" });
     expect(read[2].when).toBeUndefined();
+  });
+});
+
+describe("a number with no default", () => {
+  const window: Option = { id: "window", label: "Within", type: "number", default: Number.NaN, min: 0, unit: "kcal/mol" };
+  const within: Option = { id: "within", label: "Of", type: "choice", choices: [{ value: "a", label: "A" }], default: "a" };
+
+  it("is none until given: never held, nor remembered, as a number that is none", () => {
+    expect([noDefault(window), noDefault(within), noDefault({ ...window, default: 3 })]).toEqual([true, false, false]);
+    const values = valuesOf([window, within]);
+    expect(Number.isNaN(values.window)).toBe(true);
+    expect(givenOnly(values)).toEqual({ within: "a" });
+    expect(givenOnly({ a: Number.POSITIVE_INFINITY, b: 0, c: "", d: false })).toEqual({ b: 0, c: "", d: false });
+    expect(rememberable([window, within], values)).toEqual({ within: "a" });
+    // (the chemist's own, once given: remembered, and what each new one starts with)
+    expect(rememberable([window, within], { ...values, window: 2 })).toEqual({ window: 2, within: "a" });
+    expect(valuesOf([window, within], { window: 2 }).window).toBe(2);
+  });
+});
+
+describe("a number that sets nothing", () => {
+  it("is read from a plugin's manifest where it is one, and not otherwise", () => {
+    const [memory, other] = acceptOptions([
+      { id: "maxcore", label: "Memory for each core", type: "number", default: 0, unset: 0, min: 0 },
+      { id: "cores", label: "Cores", type: "number", default: 4, unset: "none" },
+    ]);
+    expect(memory).toMatchObject({ id: "maxcore", type: "number", unset: 0 });
+    expect(other).not.toHaveProperty("unset");
+  });
+});
+
+describe("options the plugins declare", () => {
+  // (every list of options in its manifest - a role's, a step's, a kind it writes, a look's - read as Meno reads it)
+  const lists = (x: unknown, out: unknown[][] = []): unknown[][] => {
+    if (Array.isArray(x)) x.forEach((y) => lists(y, out));
+    else if (x && typeof x === "object")
+      for (const [k, v] of Object.entries(x as Record<string, unknown>)) {
+        if (k === "options" && Array.isArray(v)) out.push(v);
+        lists(v, out);
+      }
+    return out;
+  };
+  // (Meno's made-up test plugins; the plugins' own repository runs this on its plugins, MENO_PLUGINS_DIR)
+  const root = process.env.MENO_PLUGINS_DIR ? resolve(process.env.MENO_PLUGINS_DIR) : join(__dirname, "../test/plugins");
+
+  it("are each read as declared - none left out as no option, a whole number's step a whole number", () => {
+    for (const id of readdirSync(root)) {
+      let manifest: unknown;
+      try {
+        manifest = JSON.parse(readFileSync(join(root, id, "manifest.json"), "utf8"));
+      } catch {
+        continue;
+      }
+      for (const declared of lists(manifest)) {
+        const read = acceptOptions(declared).map((o) => o.id);
+        const ids = (declared as { id?: unknown }[]).map((o) => o.id);
+        // (named, where one is left out: the plugin and the option)
+        expect(ids.filter((x) => !read.includes(x as string)).map((x) => `${id}: ${String(x)}`)).toEqual([]);
+      }
+    }
+  });
+
+  it("leave out a whole number whose step is no whole one, as its arrows would step onto numbers it refuses", () => {
+    expect(acceptOptions([{ id: "n", label: "N", type: "number", default: 2, step: 0.5, whole: true }])).toEqual([]);
+    expect(acceptOptions([{ id: "n", label: "N", type: "number", default: 2, step: 2, whole: true }])).toEqual([{ id: "n", label: "N", type: "number", default: 2, step: 2, whole: true }]);
+  });
+});
+
+describe("the option a card opened to ask focuses", () => {
+  const ASKS: Option[] = [
+    { id: "mode", label: "Mode", type: "choice", choices: [{ value: "a", label: "A" }], default: "a" },
+    { id: "count", label: "Count", type: "number", default: 3 },
+    { id: "window", label: "Within", type: "number", default: Number.NaN, min: 0 },
+    { id: "other", label: "Other", type: "number", default: Number.NaN },
+  ];
+  it("is the first number shown that holds no value - none where each holds one", () => {
+    expect(firstUnset(ASKS, {})).toBe("window");
+    expect(firstUnset(ASKS, { window: 2.5 })).toBe("other");
+    expect(firstUnset(ASKS, { window: 2.5, other: 1 })).toBeUndefined();
+    expect(firstUnset(ASKS.slice(0, 2), {})).toBeUndefined();
   });
 });

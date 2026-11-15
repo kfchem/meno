@@ -11,6 +11,7 @@ import type {
 import { Workspace } from "../../ui/features/Workspace";
 import { useAppSettings } from "../../lib/settings/appSettings";
 import { workspace3dOf } from "../../lib/chem/workspaceStyle3d";
+import { extentIn } from "../features/Workspace/style3d";
 import {
   createWorkspaceDocument,
   type WorkspaceDocument,
@@ -58,7 +59,7 @@ export const viewRegistry: Record<TabKind, ViewEntry> = {
   workspace: {
     kind: "workspace",
     // (in Settings' style as it is made, and kept: Settings' is for new workspaces only)
-    createDocument: (data) => createWorkspaceDocument(data, useAppSettings.getState().drawingStyle, workspace3dOf(useAppSettings.getState().style3d)),
+    createDocument: (data) => createWorkspaceDocument(data, useAppSettings.getState().drawingStyle, workspace3dOf(useAppSettings.getState().style3d), extentIn),
     Component: ({ tabId, content, active, document, renameTab }) => (
       <Workspace
         tabId={tabId}

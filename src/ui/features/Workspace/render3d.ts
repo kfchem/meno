@@ -233,7 +233,7 @@ export function rendered3d(
       // (the numbers shown on its atoms, as the canvas draws them - utils/atomNumbers - each in the part of its ball seen from above;
       // Sticks, where the sticks meet: utils/jointNumbers)
       if (m.atomNumbers && drawn.atoms === "sticks") {
-        const nums = atomNumbersOf(molecule, m.atomNumbers.kind);
+        const nums = atomNumbersOf(molecule, m.atomNumbers.kind, frameOf(solid, m.frame));
         const on = numbersShownOn(molecule);
         const joints = jointNumbersMesh(m.atoms.length);
         const inks = new Float32Array(3 * m.atoms.length);
@@ -254,7 +254,7 @@ export function rendered3d(
         made.push(joints.geometry, joints.material as THREE.Material);
         group.add(joints);
       } else if (m.atomNumbers) {
-        const nums = atomNumbersOf(molecule, m.atomNumbers.kind);
+        const nums = atomNumbersOf(molecule, m.atomNumbers.kind, frameOf(solid, m.frame));
         const on = numbersShownOn(molecule);
         const digits = Uint8Array.from(nums, (v, i) => (on[i] ? digitsOf(v) : 0));
         group.updateMatrixWorld(true);

@@ -10,13 +10,12 @@ import pyramid from "./fixtures/nh3-pyramid-read.json";
 
 /**
  * A program's verdict on imaginary frequencies, from its output to a step
- * after it - read (the cclib plugin's answers, as it gave them for ORCA
- * 6.1.1's outputs), put together (`combine`), worked (`workedOf`), the
- * molecule a step's entry becomes, and the entries the next step reads of
- * it (`setEntries`). Ammonia at GFN2-xTB, ORCA's own (NATIVE-XTB2 NumFreq):
- * planar - "* xyz 0 1", N at the origin, three H 1.0 Å from it in its plane
- * at 120° - one imaginary frequency, -927.98 cm-1, the umbrella's; and its
- * pyramid, optimised, none.
+ * after it - read (a reader's answers, written by hand in Meno's form), put
+ * together (`combine`), worked (`workedOf`), the molecule a step's entry
+ * becomes, and the entries the next step reads of it (`setEntries`).
+ * Ammonia: planar - N at the origin, three H 1.0 Å from it in its plane at
+ * 120° - with one imaginary frequency, -912.34 cm-1, the umbrella's; and
+ * its pyramid, optimised, with none. The numbers are made up.
  */
 const entryOf = (number: number, out: ReaderOutput): SetEntry =>
   ({ compound: 0, number, atoms: out.atoms.map((el) => ({ el })), bonds: [1, 2, 3].map((k) => ({ a1: 0, a2: k, order: 1 })), xyz: out.frames[out.frames.length - 1] }) as unknown as SetEntry;
@@ -45,7 +44,7 @@ describe("a program's verdict on imaginary frequencies, from its output to the s
   const minimum = through(2, pyramid as unknown as ReaderOutput);
 
   it("reaches the entry - the saddle point's one, and none of the minimum's - and not computed where none judged", () => {
-    expect(imaginaryOf(saddle)).toEqual([-927.98]);
+    expect(imaginaryOf(saddle)).toEqual([-912.34]);
     expect(imaginaryOf(minimum)).toEqual([]);
     // (none judged, with no vibrations read beside it: still none, never "not computed")
     expect(imaginaryOf(through(2, verdictAlone(pyramid as unknown as ReaderOutput)))).toEqual([]);
@@ -55,7 +54,7 @@ describe("a program's verdict on imaginary frequencies, from its output to the s
   });
 
   it("is refused by Populations and Duplicates, as a saddle point among conformers is", () => {
-    const said = "a #1 has 1 imaginary frequency, 928.0i cm-1: it is no minimum - take it out first";
+    const said = "a #1 has 1 imaginary frequency, 912.3i cm⁻¹: it is no minimum - take it out first";
     expect(runMeno("populations", [minimum, saddle], "molecules", {})).toEqual({ ok: false, said });
     expect(runMeno("duplicates", [minimum, saddle], "molecules", {})).toEqual({ ok: false, said });
   });
@@ -65,8 +64,7 @@ describe("a program's verdict on imaginary frequencies, from its output to the s
     expect(kept.ok && kept.kept.map((e) => e.number)).toEqual([1]);
   });
 
-  // (enabled once Energy window refuses a saddle point among its conformers, and a Filter reads none judged as 0: #682, #684)
-  it.skip("is refused by Energy window; and a Filter on none keeps the minimum, with its vibrations read or not", () => {
+  it("is refused by Energy window; and a Filter on none keeps the minimum, with its vibrations read or not", () => {
     const conformers = [minimum, saddle].map((e) => ({ ...e, compound: 0 }));
     expect(runMeno("energy-window", conformers, "conformers", { window: 10 })).toMatchObject({ ok: false });
     for (const m of [minimum, through(2, verdictAlone(pyramid as unknown as ReaderOutput))]) {

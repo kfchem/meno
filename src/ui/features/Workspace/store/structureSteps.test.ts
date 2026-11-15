@@ -1,11 +1,14 @@
 /**
- * A plugin's steps on structures drawn, done at once in its worker - *Check
- * structures* and *Stereoisomers*, RDKit's (docs/PLUGINS.md, *Steps on
- * structures drawn*): each structure given as its MOL blocks; what the
- * plugin says of each taken in, in their order - kept as drawn, made anew
- * (each drawing read as a SMILES's is), or set aside, its record saying
- * why; each made one with the record of the one it was made of; nothing
- * taken in part.
+ * Steps on structures drawn: a plugin's at once in its worker - *Descriptors*,
+ * Sketchkit's (docs/PLUGINS.md, *Steps on structures drawn*) - *Check structures*,
+ * Meno's on the facts the plugin that does the checks gives
+ * (workflow/checkStructures), and *Stereoisomers*, Meno's on what the plugin
+ * that finds stereoisomers perceives and makes, one at a time
+ * (workflow/stereoisomers, its answers scripted here): each
+ * structure given as its MOL blocks; what is said of each taken in, in their
+ * order - kept as drawn, made anew (each drawing read as a SMILES's is), or
+ * set aside, its record saying why; each made one with the record of the one
+ * it was made of; nothing taken in part.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Atom, DrawnRecord, Model } from "./types";
@@ -20,6 +23,33 @@ vi.mock("../../../../lib/calc/workers", async (actual) => ({
     run: async (step: string, entries: { molblocks: string[] }[], options: Record<string, unknown>, holds: string, ms?: number) => {
       asked.push({ step, entries, options, holds, ms });
       return answer(entries);
+    },
+  }),
+}));
+
+/** What the plugin that does the checks makes of each structure, by the test: by default, one carbon with nothing wrong. */
+let facts: (structures: { molblocks: string[] }[]) => unknown[] = (structures) => structures.map(() => FINE);
+const FINE = { read: true, atoms: [{ el: "C", z: 6, charge: 0, valence: 4, most: 4, radicals: 0, part: 0 }] };
+
+/** What Meno's *Stereoisomers* was asked of each structure - its blocks, the step's options, the toolkit - and what it says, by the test (`answer`'s, in turn). */
+const stereoAsked: { molblocks: readonly string[]; options: Record<string, unknown>; program: string }[] = [];
+vi.mock("../workflow/stereoisomers", async (actual) => ({
+  ...(await actual<typeof import("../workflow/stereoisomers")>()),
+  stereoisomersAnswer: async (_chem: unknown, molblocks: readonly string[], options: Record<string, unknown>, program: string) => {
+    stereoAsked.push({ molblocks, options, program });
+    return (answer([]) as { structures: unknown[] }).structures[stereoAsked.length - 1];
+  },
+}));
+
+vi.mock("../../../../lib/roles/worker", async (actual) => ({
+  ...(await actual<typeof import("../../../../lib/roles/worker")>()),
+  rolePlugin: () => ({ id: "sketchkit", name: "Sketchkit", version: "0.3.0", uses: [{ name: "Sketchkit", version: "1" }] }),
+  chemAtHand: async () => true,
+  chemWorker: async () => ({
+    request: async (op: string, args: { structures: { molblocks: string[] }[] }, ms?: number) => {
+      if (op !== "structure_facts") throw new Error(`no ${op} here`);
+      asked.push({ step: "check-structures", entries: args.structures, options: {}, holds: "structures", ms });
+      return { structures: facts(args.structures) };
     },
   }),
 }));
@@ -44,6 +74,8 @@ import { setMembers, drawnHash, TAKEN_AT_THE_EDIT } from "../workflow/entries";
 import { resultOf } from "../workflow/flow";
 import { drawnSaid, readDrawnAnswers } from "../workflow/programs";
 import { drawnFromSmiles } from "../chem/testdata/identityCases";
+import { useAppSettings } from "../../../../lib/settings/appSettings";
+import { stepRole } from "../workflow/doers";
 
 useReaders.setState({ state: Object.fromEntries(PLUGINS.map((p) => [p.id, "added" as const])), problem: {} });
 
@@ -65,8 +97,8 @@ function drawn() {
   return doc;
 }
 
-/** A step of `kind` by RDKit on the three, its set's members given `records` where any; run. */
-async function ran(kind: "stereoisomers" | "check-structures" | "descriptors", records: (DrawnRecord | undefined)[] = []) {
+/** A step of `kind` on the three - Sketchkit's, or Meno's Check structures - its set's members given `records` where any; run. */
+async function ran(kind: "stereoisomers" | "check-structures" | "descriptors", records: (DrawnRecord | undefined)[] = [], bare = false) {
   const doc = drawn();
   const store = createEditorStore(doc);
   connectStoreToDocument(store, doc);
@@ -78,17 +110,22 @@ async function ran(kind: "stereoisomers" | "check-structures" | "descriptors", r
       sets: d.sets!.map((b) => (b.id === set ? { ...b, members: b.members!.map((m, i) => ("structure" in m && records[i] ? { ...m, record: records[i] } : m)) } : b)),
     }));
   }
-  const step = st().addStep(kind, "rdkit", 0, 0);
+  // (Check structures and Stereoisomers Meno's, on the plugins' facts; Descriptors Sketchkit's)
+  stereoAsked.length = 0;
+  const step = st().addStep(kind, kind === "descriptors" ? "sketchkit" : "meno", 0, 0);
+  // (one put down otherwise than on the canvas - a template's: no options of its own)
+  if (bare) doc.edit("bare", (d) => ({ ...d, steps: d.steps!.map((x) => (x.id === step ? { ...x, options: undefined } : x)) }));
   st().connect({ set }, step);
   await st().runStep(step);
   const d = doc.getState();
-  // (each record as compared: without what it is of - each one placed is of its own structure, which its key says)
+  // (each record as compared: without what it is of - each one placed is of its own structure, which its key says - nor its lasting id, each one
+  //  given one: workflow/lasting.test)
   const exit = (id: string) => {
     const b = resultOf(d, step, id);
     if (!b) return null;
     const held = setMembers(d, b);
-    for (const [i, r] of held.records.entries()) if (r) expect(r.of).toBe(drawnHash(d.model, held.structures[i]));
-    return { ...held, records: held.records.map((r) => r && (({ of: _of, ...rest }) => rest)(r)) };
+    for (const [i, r] of held.records.entries()) if (r) expect([r.of, typeof r.id]).toEqual([drawnHash(d.model, held.structures[i]), "string"]);
+    return { ...held, records: held.records.map((r) => r && (({ of: _of, id: _id, ...rest }) => (Object.keys(rest).length ? rest : undefined))(r)) };
   };
   return { step: d.steps!.find((s) => s.id === step)!, out: exit("out"), rest: exit("rest"), model: d.model };
 }
@@ -99,6 +136,7 @@ describe("a plugin's step on structures drawn", () => {
   beforeEach(() => {
     asked.length = 0;
     answer = () => ({});
+    facts = (structures) => structures.map(() => FINE);
   });
 
   it("takes all the structures a large result set holds - those on the page, then those held off it - each given as its blocks, and keeps all it keeps so too", async () => {
@@ -121,8 +159,7 @@ describe("a plugin's step on structures drawn", () => {
     // (as many as the page shows on it - look DRAWN_ON_PAGE - the rest held in the set after them: all 51 the set's)
     const shown = setMembers(doc.getState(), held).structures.length;
     expect([shown > 0, held.drawnCollection!.length > 0, shown + held.drawnCollection!.length]).toEqual([true, true, 51]);
-    answer = (entries) => ({ structures: entries.map(() => ({ as: "drawn" })) });
-    const check = st().addStep("check-structures", "rdkit", 200, 0);
+    const check = st().addStep("check-structures", "meno", 200, 0);
     st().connect({ set: held.id }, check);
     await st().runStep(check);
     expect(asked).toHaveLength(1);
@@ -140,10 +177,11 @@ describe("a plugin's step on structures drawn", () => {
   it("gives each structure as its blocks, with the step's options - and takes in what it says of each, in their order", async () => {
     answer = () => ({ structures: [{ as: "drawn" }, { made: ["iso-1", "iso-2"] }, { aside: "an allene's axis left open", kind: "axis" }] });
     const { step, out, rest, model } = await ran("stereoisomers");
-    expect(asked).toHaveLength(1);
-    expect(asked[0]).toMatchObject({ step: "stereoisomers", holds: "structures", options: { open: "every" }, ms: 120_000 });
-    expect(asked[0].entries.map((e) => e.molblocks.length)).toEqual([1, 1, 1]);
-    expect(asked[0].entries[1].molblocks[0]).toMatch(/V3000|V2000/);
+    expect(asked).toHaveLength(0);
+    expect(stereoAsked.map((a) => a.molblocks.length)).toEqual([1, 1, 1]);
+    expect(stereoAsked[1].molblocks[0]).toMatch(/V3000|V2000/);
+    // (Meno's options, at their defaults; the toolkit the plugin runs, named where it alone failed)
+    expect(stereoAsked[0]).toMatchObject({ options: { open: "every", most: 32, within: 30 }, program: "Sketchkit" });
     expect(step.ran).toMatchObject({ ok: true, said: "3 in · 3 out · 2 made from 1 · 1 set aside (1: axis)" });
     // (ethanol as drawn, then 2-butanol's two drawings in its place; propanol in the second exit's set)
     const labels = (ids: number[]) => ids.map((id) => model.atoms.find((a) => a.id === id)! as { label?: string; el: string }).map((a) => a.label ?? a.el);
@@ -157,7 +195,7 @@ describe("a plugin's step on structures drawn", () => {
     const old: DrawnRecord = { ...NLL, status: { aside: "an earlier step's word" } };
     const parent: DrawnRecord = { from: ["seed-1"], properties: { ...NLL.properties, smiles: { value: "CC(O)CC", unit: "none", status: "computed" } } };
     const { out, rest } = await ran("stereoisomers", [NLL, parent, old]);
-    const by = { plugin: "rdkit", version: expect.any(String), program: expect.any(String), method: "Stereoisomers: 2 made of one" };
+    const by = { plugin: "sketchkit", version: "0.3.0", program: "Sketchkit 1", method: "Stereoisomers: 2 made of one" };
     const own = (k: string, smiles: string) => ({
       from: ["seed-1"],
       properties: {
@@ -172,10 +210,10 @@ describe("a plugin's step on structures drawn", () => {
     expect(out!.records).toEqual([NLL, own("1 of 2", "C[C@H](O)CC"), own("2 of 2", "C[C@@H](O)CC")]);
     // (made again of one made: what that one carried as it was, one level, its own values over them - its SMILES -
     //  and which of how many it was left out)
-    answer = () => ({ structures: [{ made: ["iso-3"], smiles: ["C[C@H](O)CC"] }, { as: "drawn" }, { as: "drawn" }] });
+    answer = () => ({ structures: [{ made: ["iso-3", "iso-4"], smiles: ["C[C@H](O)CC", "C[C@@H](O)CC"] }, { as: "drawn" }, { as: "drawn" }] });
     const again = await ran("stereoisomers", [out!.records[1]!, NLL, NLL]);
     expect(again.out!.records[0]!.properties).toEqual({
-      made: expect.objectContaining({ value: "1 of 1" }),
+      made: expect.objectContaining({ value: "1 of 2" }),
       smiles: expect.objectContaining({ value: "C[C@H](O)CC" }),
       "made_from.nll": NLL.properties!.nll,
       "made_from.smiles": { value: "C[C@H](O)CC", unit: "none", status: "computed", by },
@@ -190,7 +228,7 @@ describe("a plugin's step on structures drawn", () => {
       structures: [{ as: "drawn", properties: { stereo_not_enumerated: note } }, { made: ["iso-1", "iso-2"], properties: { stereo_not_enumerated: note } }, { as: "drawn" }],
     });
     const { out } = await ran("stereoisomers", [undefined, NLL]);
-    const said = { value: note.value, unit: "none", status: "computed", by: { plugin: "rdkit", version: expect.any(String), program: expect.any(String), method: note.method } };
+    const said = { value: note.value, unit: "none", status: "computed", by: { plugin: "sketchkit", version: "0.3.0", program: "Sketchkit 1", method: note.method } };
     expect(out!.records[0]).toEqual({ properties: { stereo_not_enumerated: said } });
     for (const k of [1, 2]) {
       expect(out!.records[k]!.properties).toEqual({
@@ -209,12 +247,40 @@ describe("a plugin's step on structures drawn", () => {
     expect(step.ran?.said).toContain("1 set aside (1: drawing)");
   });
 
-  it("is given the options the plugin declares for Check structures, every finding set aside unless kept", async () => {
-    answer = (entries) => ({ structures: entries.map(() => ({ as: "drawn" })) });
+  it("checks each structure by Meno's rules on what the plugin makes of it, every finding set aside unless kept", async () => {
     const { step, rest } = await ran("check-structures");
-    expect(asked[0].options).toEqual({ parts: "aside", valence: "aside", electrons: "aside", radicals: "aside" });
     expect(step.ran).toMatchObject({ ok: true, said: "3 of 3 kept" });
     expect(rest!.structures).toEqual([]);
+    // (one a radical, one with a carbon of five bonds: set aside, saying why in Meno's words)
+    const radical = { read: true, atoms: [{ el: "C", z: 6, charge: 0, valence: 3, most: 4, radicals: 1, part: 0 }] };
+    const five = { read: true, atoms: [{ el: "C", z: 6, charge: 0, valence: 5, most: 4, radicals: 0, part: 0 }], problem: "SANITIZE_PROPERTIES" };
+    facts = () => [FINE, radical, five];
+    const found = await ran("check-structures");
+    expect(found.step.ran).toMatchObject({ ok: true, said: "1 of 3 kept \u00b7 2 set aside (1: radical; 1: valence)" });
+    expect(found.rest!.records).toEqual([{ status: { aside: "a radical: unpaired electrons on C" } }, { status: { aside: "an atom with more bonds than it can have (C)" } }]);
+    // (one the toolkit could not read at all: said in its name)
+    facts = () => [FINE, FINE, { read: false }];
+    expect((await ran("check-structures")).rest!.records).toEqual([{ status: { aside: "Sketchkit could not read it" } }]);
+  });
+
+  it("holding no options of its own - a template's - runs with those Settings, Calculations, keeps for its kind: Check structures, Stereoisomers", async () => {
+    try {
+      // (a radical kept, as Settings says, though the option's own default sets it aside)
+      useAppSettings.setState((s) => ({ ...s, options: { [stepRole("check-structures", "meno")]: { radicals: "keep" } } }));
+      const radical = { read: true, atoms: [{ el: "C", z: 6, charge: 0, valence: 3, most: 4, radicals: 1, part: 0 }] };
+      facts = () => [FINE, radical, FINE];
+      const checked = await ran("check-structures", [], true);
+      expect(checked.step.options).toBeUndefined();
+      expect(checked.step.ran).toMatchObject({ ok: true, said: "3 of 3 kept" });
+      // (Stereoisomers asked with Settings' number at most, not the option's own)
+      useAppSettings.setState((s) => ({ ...s, options: { [stepRole("stereoisomers", "meno")]: { most: 7 } } }));
+      answer = () => ({ structures: [{ kept: true }, { kept: true }, { kept: true }] });
+      await ran("stereoisomers", [], true);
+      expect(stereoAsked[0].options).toMatchObject({ most: 7 });
+    } finally {
+      useAppSettings.setState((s) => ({ ...s, options: {} }));
+      facts = (structures) => structures.map(() => FINE);
+    }
   });
 
   it("keeps what a step worked out of each structure on its record, beside what it had, saying what worked it out", async () => {
@@ -222,12 +288,12 @@ describe("a plugin's step on structures drawn", () => {
       structures: [
         { as: "drawn", properties: { mw: { value: 46.069, unit: "g/mol", method: "average molecular weight" }, hbd: { value: 1, unit: "none" } } },
         { as: "drawn", properties: { mw: { value: 74.123, unit: "g/mol" } } },
-        { aside: "RDKit cannot make sense of it", kind: "valence" },
+        { aside: "Sketchkit cannot make sense of it", kind: "valence" },
       ],
     });
     const { step, out, rest } = await ran("descriptors", [NLL]);
     expect(step.ran).toMatchObject({ ok: true, said: "2 of 3 kept · 1 set aside (1: valence)" });
-    const by = { plugin: "rdkit", version: expect.any(String), program: expect.stringMatching(/^RDKit /) };
+    const by = { plugin: "sketchkit", version: expect.any(String), program: expect.stringMatching(/^Sketchkit /) };
     expect(out!.records[0]).toEqual({
       from: ["seed-1"],
       properties: {
@@ -237,7 +303,7 @@ describe("a plugin's step on structures drawn", () => {
       },
     });
     expect(out!.records[1]).toEqual({ properties: { mw: { value: 74.123, unit: "g/mol", status: "computed", by } } });
-    expect(rest!.records).toEqual([{ status: { aside: "RDKit cannot make sense of it" } }]);
+    expect(rest!.records).toEqual([{ status: { aside: "Sketchkit cannot make sense of it" } }]);
     // (a value in a unit Meno does not know: none of it taken)
     answer = () => ({ structures: [{ as: "drawn", properties: { mw: { value: 1, unit: "Da" } } }, { as: "drawn" }, { as: "drawn" }] });
     expect((await ran("descriptors")).step.ran).toMatchObject({ ok: false, said: "It said nothing Meno can take" });
@@ -259,7 +325,6 @@ describe("a plugin's step on structures drawn", () => {
     answer = () => ({ structures: [{ as: "drawn", properties: {} }, { as: "drawn", properties: {} }, { as: "drawn" }] });
     expect((await ran("descriptors", [aside, stale])).out!.records[1]?.stale).toBe(stale.stale);
     // (kept with nothing worked out - Check structures: not set aside any more, and still said stale)
-    answer = () => ({ structures: [{ as: "drawn" }, { as: "drawn" }, { as: "drawn" }] });
     const checked = await ran("check-structures", [aside, stale]);
     expect(checked.out!.records.map((r) => [r?.status, r?.stale])).toEqual([
       [undefined, undefined],
@@ -289,8 +354,7 @@ describe("a plugin's step on structures drawn", () => {
     connectStoreToDocument(store, doc);
     const st = () => store.getState();
     const set = st().addSet({ x0: -500, y0: -50, x1: -10, y1: 50 });
-    answer = (entries) => ({ structures: entries.map(() => ({ as: "drawn" })) });
-    const step = st().addStep("check-structures", "rdkit", 0, 0);
+    const step = st().addStep("check-structures", "meno", 0, 0);
     st().connect({ set }, step);
     await st().runStep(step);
     expect(asked).toHaveLength(1);
@@ -303,7 +367,7 @@ describe("a plugin's step on structures drawn", () => {
 
   it("takes in nothing where the plugin says nothing Meno can take, saying so", async () => {
     answer = () => ({ structures: [{ as: "drawn" }] });
-    const { step, out } = await ran("stereoisomers");
+    const { step, out } = await ran("descriptors");
     expect(step.ran).toMatchObject({ ok: false, said: "It said nothing Meno can take" });
     expect(out?.structures ?? []).toEqual([]);
   });

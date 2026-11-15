@@ -8,3 +8,11 @@
  */
 export const GUIDE_LAYER = 90;
 export const ABOVE_GUIDE_LAYER = 95;
+
+/**
+ * A question asked over the whole window - may it use the network
+ * (ui/network/ConsentDialog) - in a layer of the window's own, above what
+ * is opened over a canvas: Quick Add, open behind a question asked from it,
+ * lies under the question's dimming, never over its words.
+ */
+export const QUESTION_LAYER = 110;

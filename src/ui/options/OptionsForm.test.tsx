@@ -15,4 +15,41 @@ describe("a role's options in a card", () => {
     expect(html).toContain('class="block w-fit min-w-[min(12rem,100%)] max-w-full"');
     expect(html).not.toContain("min-w-[12rem]");
   });
+
+  it("has a box of lines whose focus ring shows whole: room for it all round inside the scroll that holds it", () => {
+    const options: Option[] = [{ id: "lists", label: "R groups", type: "lines", default: "" }];
+    const html = renderToString(<OptionsForm options={options} values={{ lists: "R1: Me" }} onChange={() => {}} />);
+    expect(html).toMatch(/<span class="-m-0\.5 [^"]*overflow-y-auto p-0\.5"/);
+    expect(html).toMatch(/<textarea[^>]*class="[^"]*outline-none focus:border-accel-base focus:ring-2 focus:ring-accel-lightbase"/);
+  });
+
+  it("says a choice with only one to have as text, with no control, its note beneath", () => {
+    const options: Option[] = [
+      { id: "engine", label: "Renderer", type: "choice", default: "cycles", choices: [{ value: "cycles", label: "Cycles: light traced" }], note: "This motion is made with light traced" },
+    ];
+    const html = renderToString(<OptionsForm options={options} values={{ engine: "cycles" }} onChange={() => {}} />);
+    expect(html).toContain("Renderer");
+    expect(html).toContain("Cycles: light traced");
+    expect(html).toContain("This motion is made with light traced");
+    expect(html).not.toContain('role="radiogroup"');
+    expect(html).not.toContain('type="radio"');
+  });
+});
+
+describe("a card's options opened to ask for what it needs", () => {
+  const options: Option[] = [
+    { id: "within", label: "Within", type: "number", default: Number.NaN, min: 0, unit: "kcal/mol" },
+    { id: "other", label: "Other", type: "number", default: Number.NaN },
+    { id: "count", label: "Count", type: "number", default: 3 },
+  ];
+  /** The labels of the fields marked as asked for, in order. */
+  const asked = (html: string) => [...html.matchAll(/<label class="block"><span[^>]*>([^<]+)<\/span><span[^>]*><input[^>]*data-asked="true"/g)].map((m) => m[1]);
+  it("takes the first number that holds none - only it", () => {
+    expect(asked(renderToString(<OptionsForm options={options} values={{}} onChange={() => {}} asks />))).toEqual(["Within"]);
+    expect(asked(renderToString(<OptionsForm options={options} values={{ within: 2.5 }} onChange={() => {}} asks />))).toEqual(["Other"]);
+    expect(renderToString(<OptionsForm options={options} values={{ within: 2.5, other: 1 }} onChange={() => {}} asks />)).not.toContain("data-asked");
+  });
+  it("takes none where it is not opened to ask", () => {
+    expect(renderToString(<OptionsForm options={options} values={{}} onChange={() => {}} />)).not.toContain("data-asked");
+  });
 });

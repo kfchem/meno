@@ -84,12 +84,12 @@ before building, and a build on a computer of one's own needs it once.
    job waits for the Windows one: each reads `latest.json`, adds its own
    and puts it back whole. Each job then checks that its update's
    signature names the version it is released as (see below).
-4. If the run passed: try the draft's installers, write the release notes
-   on the release page if you like, and publish it. The Menos installed
-   find it the next time they look - as they start, and every few hours.
-   Never publish the draft of a run that failed. (Editing the notes does
-   not change `latest.json`, whose `notes` were written as the workflow
-   ran; Meno does not show them for now.)
+4. If the run passed: try the draft's installers, write the release notes on
+   the release page if you like, and publish it. The Menos installed find it
+   the next time they look - shortly after they start, and once a day while
+   they run. Never publish the draft of a run that failed. (Editing the
+   notes does not change `latest.json`, whose `notes` were written as the
+   workflow ran; Meno does not show them for now.)
 5. Publishing also rebuilds the website (`.github/workflows/pages.yml`):
    its download buttons, the version and the files' sizes come from the
    release just published. If the release's files are ever named
@@ -108,7 +108,16 @@ Meno carries the licences of the software by others it is built with, in
 `src-tauri/resources/licenses/`, and shows them in Settings (General,
 *Licences*). Most are files of their own, written by hand: PDFium's and
 those of what it is built with (`PDFium-*`, docs/PDF.md), pdfium-render's,
-the typefaces' (IBM Plex, Arimo) and ACCeL's. The rest are in one file,
+the typefaces' (IBM Plex, Arimo) and ACCeL's. Every licence that comes
+with PDFium's archive must be among the `PDFium-*` files, saying the same:
+`scripts/fetch-pdfium.mjs` stops where one is missing there or says
+otherwise, on each system it fetches the archive for (the CI's and the
+release's, Windows among them). Where one system's archive words a licence
+otherwise than the others', that system's copy is carried as well,
+`PDFium-<name>-<system>`: the macOS archive's PDFium licence has its lines
+marked as comments (`//`) and the Windows and Linux archives' has not, so
+`PDFium-pdfium-macos.txt` is the macOS archive's and `PDFium-pdfium.txt`
+the others'. The rest are in one file,
 `THIRD-PARTY-NOTICES.txt`, which `npm run notices`
 (`scripts/licenses/notices.mjs`) writes - offline, from what is on this
 computer:
@@ -125,9 +134,7 @@ computer:
   Intel, and 64-bit Windows) - `cargo tree --offline -e normal --target`,
   Meno's normal dependencies and theirs, proc-macros among them, not build
   scripts' or tests', with features unified as a build unifies them - and
-  the systems taken together. (Not `cargo metadata`'s graph: it turns on
-  every feature any user of a crate asks for, build scripts' and tests'
-  among them, and so names crates no build links.)
+  the systems taken together.
 
 For each: its name, version and licence as its manifest gives them, where
 its source is kept, and every licence and notice file at the top of its
@@ -138,17 +145,24 @@ cssparser, selectors and others) also says where: its repository, and its
 version on crates.io. A crate with no licence file of its own is given its
 licence's standard text only where it comes with another crate here and
 names no one (the Apache License 2.0's, the MPL 2.0's), and says where it
-was taken from. One under a licence whose text carries its authors' own
-copyright line (MIT, BSD) is given the text its repository holds, read
-from its published page at the commit its version was published from (the
-crate's `.cargo_vcs_info.json`) - a text read as documentation is, never a
-package or archive fetched - kept in `scripts/licenses/upstream/` and named,
-with where and when it was read, in `scripts/licenses/upstream.json`; so is
-the licence of what such a crate carries without its licence (Microsoft's
-WebView2 SDK, whose loader webview2-com-sys links in on Windows). The
-script lists what it gave as it runs, with every licence that asks more
-than a notice; the test fails while any crate has no text, or a text read
-is for a version no longer built in.
+was taken from. A crate or an npm package with no licence file, under a
+licence whose text carries its authors' own copyright line (MIT, BSD), is
+given the text its repository holds, read from its published page at the
+commit its version was published from (a crate's `.cargo_vcs_info.json`,
+an npm package's `gitHead` in its registry entry) - a text read as
+documentation is, never a package or archive fetched - kept in
+`scripts/licenses/upstream/` and named, with where and when it was read, in
+`scripts/licenses/upstream.json`; so is the licence of what such a crate
+carries without its licence (Microsoft's WebView2 SDK, whose loader
+webview2-com-sys links in on Windows), and, under `carried`, the licence of
+others' code that an npm package carries in its own files without it, read
+from where that code is kept (troika-three-text's builds of Typr.ts,
+woff2otf, fflate and @unicode-font-resolver/client; motion-utils' easing,
+modified from bezier-easing). The script lists what it gave as it runs,
+with every licence that asks more than a notice; the test fails while any
+crate or npm package has no text, a text read is for a version no longer
+built in, or a plugin whose own code has a licence of its own (a `LICENSE`
+in its folder) is not named in the notices' head.
 
 Run it when a dependency changes, and before each release. Beside the
 notices it writes `scripts/licenses/bundled.json` - each package's name,
@@ -168,8 +182,9 @@ features or of systems brings into the program or takes out of it, with
 the lock unchanged (Cargo's graph is not worked out in the test, as the
 frontend job has neither Cargo nor the crates' sources); and code by others
 copied into Meno's own sources or carried in a package's files without its
-own licence file, which the notices' head and `NOTES` in the script give
-by hand.
+own licence file, which the notices' head and `NOTES` in the script name
+by hand - each found by reading the package's files that go into the
+window - with their texts in `upstream.json`.
 
 ## The Windows installer
 
@@ -217,9 +232,9 @@ so an Intel build would need only its own runner.
 It is signed **ad hoc** (`signingIdentity: "-"`, in the job's arguments),
 the whole bundle, and not with Apple's Developer ID, which the project has
 not taken up. Without that the bundle would carry only the linker's
-signature on its executable, which macOS takes for a damaged app: a Meno
-downloaded that way cannot be opened at all ("“Meno” is damaged and can't
-be opened"), short of clearing its quarantine in a terminal.
+signature on its executable, and macOS would not open a Meno downloaded
+that way at all ("“Meno” is damaged and can't be opened"), short of
+clearing its quarantine in a terminal.
 
 Signed ad hoc, as seen on macOS 26 (with a local update standing in for
 a release's):

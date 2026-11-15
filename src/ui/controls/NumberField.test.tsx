@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
 import type { Option } from "../../lib/options";
-import OptionRows from "../options/OptionRows";
+import OptionRows, { numberFieldOf } from "../options/OptionRows";
 import OptionsForm from "../options/OptionsForm";
-import { numberDraft, numberField, rangeSaid, setAsItGoes, typedNumber, type NumberDraft, type NumberEvent, type NumberRange } from "./number";
+import NumberField from "./NumberField";
+import { askedFocus, escapeTakes, numberDraft, numberField, rangeOf, rangeSaid, setAsItGoes, shown, typedNumber, type NumberDraft, type NumberEvent, type NumberRange } from "./number";
 
 // Vitest runs in Node, with no page to mount on: the field's keys as the
 // steps they make (number.ts), and the forms as the server's renderer writes them.
@@ -12,6 +13,59 @@ import { numberDraft, numberField, rangeSaid, setAsItGoes, typedNumber, type Num
 function after(value: number, events: NumberEvent[], range: NumberRange = { min: 1, max: 100 }): NumberDraft {
   return events.reduce((d, e) => numberField(d, e, range), numberDraft(value));
 }
+
+describe("a number that may be left unset", () => {
+  const range = { min: 1, max: 16, whole: true, unsettable: true };
+  it("is unset by emptying the field: no number, not the last good one", () => {
+    const d = after(4, [{ kind: "typed", text: "" }, { kind: "commit" }], range);
+    expect(d.text).toBe("");
+    expect(Number.isNaN(d.value)).toBe(true);
+    expect(d.refused).toBe(false);
+  });
+  it("is set by typing a number over the empty field, and otherwise keeps to its range", () => {
+    expect(after(NaN, [{ kind: "typed", text: "8" }, { kind: "commit" }], range)).toEqual({ text: "8", value: 8, refused: false });
+    expect(after(NaN, [{ kind: "typed", text: "99" }, { kind: "commit" }], range).refused).toBe(true);
+  });
+  it("is set by an arrow key from empty, from its least", () => {
+    expect(after(NaN, [{ kind: "step", by: 1 }], range).value).toBe(2);
+  });
+  it("is told to the card as it goes while being emptied", () => {
+    expect(Number.isNaN(setAsItGoes({ text: "", value: 4, refused: false }, true, range)!)).toBe(true);
+  });
+  it("goes back to the last good number for a field that may not be unset", () => {
+    expect(after(4, [{ kind: "typed", text: "" }, { kind: "commit" }], { min: 1, max: 16, whole: true })).toEqual({ text: "4", value: 4, refused: true });
+  });
+});
+
+describe("a number's row, as its field is given it", () => {
+  const o = { id: "cores", label: "Cores", type: "number", default: 6 } as Extract<Option, { type: "number" }>;
+  it("passes on that it may be unset, and what an empty field shows, only for the ids given", () => {
+    expect(numberFieldOf(o, { cores: NaN }, ["cores"])).toMatchObject({ unsettable: true, placeholder: "6" });
+    expect(Number.isNaN(numberFieldOf(o, { cores: NaN }, ["cores"]).value)).toBe(true);
+    expect(numberFieldOf(o, { cores: 4 }, ["cores"]).value).toBe(4);
+    expect(numberFieldOf(o, {}, [])).toEqual({ value: 6, unsettable: false, placeholder: undefined });
+  });
+});
+
+describe("an unset number's field", () => {
+  it("leaves Escape to close what the field is in while it shows nothing, and takes back what was typed over it", () => {
+    // (the field shows nothing of NaN: no text differs from it)
+    expect(shown(NaN)).toBe("");
+    expect(escapeTakes("", NaN)).toBe(false);
+    expect(escapeTakes("8", NaN)).toBe(true);
+    // (a set number: as before)
+    expect(escapeTakes("4", 4)).toBe(false);
+    expect(escapeTakes("", 4)).toBe(true);
+    expect(escapeTakes("5", 4)).toBe(true);
+  });
+  it("is handed its range whole by the field, the flag too", () => {
+    expect(rangeOf({ min: 1, max: 9, step: 1, whole: true, unsettable: true })).toEqual({ min: 1, max: 9, step: 1, whole: true, unsettable: true });
+    expect(rangeOf({}).unsettable).toBeUndefined();
+  });
+  it("takes a field of spaces alone as emptied", () => {
+    expect(Number.isNaN(after(4, [{ kind: "typed", text: "   " }, { kind: "commit" }], { min: 1, unsettable: true }).value)).toBe(true);
+  });
+});
 
 describe("Meno's own number field", () => {
   it("holds what is typed, nothing too: the first digit of 25 taken out and 3 typed gives 35", () => {
@@ -78,6 +132,44 @@ describe("Meno's own number field", () => {
     expect(rangeSaid({ min: 1, max: 100 })).toBe("From 1 to 100");
     expect(rangeSaid({ min: 0 })).toBe("At least 0");
     expect(rangeSaid({})).toBe("");
+    expect(rangeSaid({ min: 1, max: 5000, whole: true })).toBe("A whole number from 1 to 5000");
+    expect(rangeSaid({ min: 0, whole: true })).toBe("A whole number, at least 0");
+    expect(rangeSaid({ max: 5, whole: true })).toBe("A whole number, at most 5");
+    expect(rangeSaid({ whole: true })).toBe("A whole number");
+  });
+
+  it("leaves a number that is not whole as it was: Settings' memory jobs may use, in half gigabytes", () => {
+    // (as JobSettings gives it: from 0.5 GB, in steps of 0.5, not whole)
+    const memory: NumberRange = { min: 0.5, max: 16, step: 0.5 };
+    expect(after(12, [{ kind: "typed", text: "2.5" }, { kind: "commit" }], memory)).toEqual({ text: "2.5", value: 2.5, refused: false });
+    expect(after(2.5, [{ kind: "step", by: 1 }], memory).value).toBe(3);
+    expect(after(12, [{ kind: "typed", text: "2.75" }, { kind: "step", by: 1 }], memory).value).toBe(3.25);
+    expect(rangeSaid(memory)).toBe("From 0.5 to 16");
+  });
+
+  it("takes a whole number alone where it is one, refusing one with a fraction as one out of range - never cutting it", () => {
+    const whole: NumberRange = { min: 1, max: 5000, step: 1, whole: true };
+    for (const text of ["12.5", "0.5", "12,5"]) expect(after(200, [{ kind: "typed", text }, { kind: "commit" }], whole)).toEqual({ text: "200", value: 200, refused: true });
+    expect(after(200, [{ kind: "typed", text: "12" }, { kind: "commit" }], whole).value).toBe(12);
+    expect(after(200, [{ kind: "typed", text: "1e3" }, { kind: "commit" }], whole).value).toBe(1000);
+    // (nothing set as it goes from one it does not take)
+    expect(setAsItGoes({ text: "12.5", value: 200, refused: false }, true, whole)).toBeNull();
+    // (an arrow from one typed with a fraction: the whole number on its side)
+    expect(after(200, [{ kind: "typed", text: "12.5" }, { kind: "step", by: 1 }], whole).value).toBe(13);
+    expect(after(200, [{ kind: "typed", text: "12.5" }, { kind: "step", by: -1 }], whole).value).toBe(12);
+    expect(after(2000, [{ kind: "step", by: 1 }], { min: 10, max: 100000, step: 10, whole: true }).value).toBe(2010);
+    // (onto its grid - its least, and each step from it - from one typed off it)
+    const steps10: NumberRange = { min: 10, max: 100000, step: 10, whole: true };
+    expect(after(2000, [{ kind: "typed", text: "2005.5" }, { kind: "step", by: 1 }], steps10).value).toBe(2010);
+    expect(after(2000, [{ kind: "typed", text: "2005.5" }, { kind: "step", by: -1 }], steps10).value).toBe(2000);
+    expect(after(2000, [{ kind: "typed", text: "2005" }, { kind: "step", by: 1 }], steps10).value).toBe(2010);
+    // (a grid from its least, not from nought: 5, 15, 25 ...)
+    const from5: NumberRange = { min: 5, max: 100, step: 10, whole: true };
+    expect(after(25, [{ kind: "typed", text: "12.5" }, { kind: "step", by: 1 }], from5).value).toBe(15);
+    expect(after(25, [{ kind: "typed", text: "12.5" }, { kind: "step", by: -1 }], from5).value).toBe(5);
+    expect(after(2000, [{ kind: "typed", text: "2000" }, { kind: "step", by: -1 }], steps10).value).toBe(1990);
+    // (a field that takes fractions keeps them: a temperature)
+    expect(after(298, [{ kind: "typed", text: "298.15" }, { kind: "commit" }], { min: 1, step: 1 }).value).toBe(298.15);
   });
 });
 
@@ -91,5 +183,26 @@ describe("a number among a role's options", () => {
       expect(html).toContain('value="25"');
       expect(html).toContain('title="At least 0"');
     }
+  });
+
+  it("says a whole number where its option takes one alone", () => {
+    const count: Option[] = [{ id: "count", label: "How many", type: "number", default: 200, min: 1, max: 5000, step: 1, whole: true }];
+    for (const html of [renderToString(<OptionsForm options={count} values={{ count: 600 }} onChange={() => {}} />), renderToString(<OptionRows options={count} values={{ count: 600 }} onChange={() => {}} />)]) {
+      expect(html).toContain('title="A whole number from 1 to 5000"');
+      expect(html).toContain('value="600"');
+    }
+  });
+});
+
+describe("a number asked for at once", () => {
+  it("is marked as the field asked for, and only it", () => {
+    expect(renderToString(<NumberField value={Number.NaN} unsettable autoFocus onChange={() => {}} />)).toContain('data-asked="true"');
+    expect(renderToString(<NumberField value={Number.NaN} unsettable onChange={() => {}} />)).not.toContain("data-asked");
+  });
+  it("is taken with nothing scrolled to it: the card it is in opens as it grows, never jumped in", () => {
+    const asked: (FocusOptions | undefined)[] = [];
+    askedFocus({ focus: (o) => void asked.push(o) });
+    expect(asked).toEqual([{ preventScroll: true }]);
+    expect(() => askedFocus(null)).not.toThrow();
   });
 });

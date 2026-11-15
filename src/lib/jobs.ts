@@ -30,7 +30,29 @@ export type Job = {
   why?: string;
   /** Its key, as Meno asked for it with one (lib/jobKeys). */
   key?: string;
+  /** When its program last wrote anything - its log, or a file of its work folder - in ms: a running job's alone (src-tauri jobs.rs `last_written`). */
+  lastWritten?: number;
 };
+
+/**
+ * How many whole minutes a running job has written nothing - no line of its
+ * log, no file of its work folder - where that is `afterMin` minutes or
+ * more; none else, and none for a job not running or that never said.
+ * Said only: Meno never ends a job for it (docs/WORKFLOWS.md, *A job that
+ * writes nothing*).
+ */
+export function quietFor(job: { state: string; lastWritten?: number } | undefined, now: number, afterMin: number): number | null {
+  if (job?.state !== "running" || job.lastWritten == null) return null;
+  const min = Math.floor((now - job.lastWritten) / 60_000);
+  return min >= afterMin ? min : null;
+}
+
+/** How long, said: "47 min", or "2 h 5 min" from two hours. */
+const minutesSaid = (min: number) => (min < 120 ? `${min} min` : `${Math.floor(min / 60)} h ${min % 60} min`);
+/** A job quiet so long, said on its step's line: "no output for 47 min". */
+export const quietSaid = (min: number) => `no output for ${minutesSaid(min)}`;
+/** And in a job's place in a list, where there is less room - for a job running, in place of "running": "quiet 47 min". */
+export const quietShort = (min: number) => `quiet ${minutesSaid(min)}`;
 
 /** A file written into a job's folder before it starts, by its path there. */
 export type JobFile = { name: string; text: string };
@@ -59,6 +81,8 @@ export type JobAsk = {
   reads?: string[];
   /** Other plugins whose programs it needs, by id - each its plugin's manifest declares (`needs`): found as their own jobs would find them, and named in its folder. */
   needs?: string[];
+  /** Preset plugins whose files it is handed, by id - each a plugin that uses its plugin through an interface that one declares (docs/PLUGINS.md, *Presets*): copied unread into its folder, `presets/<id>/`, never kept. */
+  presets?: string[];
 };
 
 /** Whether a job is over - and will say nothing more. */
@@ -102,6 +126,14 @@ export const writeJobBack = (id: string, name: string, sha256: string, source: {
     : invoke<WrittenBack>("job_write_back", source.bytes, { headers: { job: id, name, sha256 } });
 /** Asks a job to stop: its program, and everything it started - or, waiting, it never starts. */
 export const stopJob = (id: string) => runnerOf(id).stop(id);
+/** Asks a job alone to stop - as `stopJob`, but recorded failed, "stopped by you" (`STOPPED_ALONE`): its step goes on, bringing in what its other jobs gave. */
+export const stopJobAlone = (id: string) => runnerOf(id).stopAlone(id);
+/** Why a job stopped alone is recorded failed (src-tauri jobs.rs `STOPPED_ALONE`). */
+export const STOPPED_ALONE = "stopped by you";
+/** What a save's job folders came to (src-tauri keptjobs.rs `job_clear_saved`): the jobs whose folders went to the Trash; those left, and why - `quiet` where nothing is amiss, a job not finished; and the saved file as it was read back, none where it could not be. */
+export type ClearedSaved = { gone: string[]; left: { job: string; why: string; quiet: boolean }[]; at: { size: number; mtime: number | null } | null };
+/** After a save to `path`: the folders of `jobs` moved to the system's Trash, each only where the file there, read back, holds every file of its record whole (src-tauri keptjobs.rs `job_clear_saved`). This computer's runner's: the only one there is yet. */
+export const clearSavedFolders = (path: string, jobs: { job: string; files: { name: string; sha256: string; size: number }[] }[]) => invoke<ClearedSaved>("job_clear_saved", { path, jobs });
 /** A finished job's folder taken away. */
 export const removeJob = (id: string) => runnerOf(id).remove(id);
 /** Every finished job's folder taken away: how many. */
@@ -130,8 +162,12 @@ export const jobsFolder = () => invoke<JobsFolder>("jobs_folder");
 /** Jobs made in a working folder chosen - or in Meno's own again (null): refused, saying why, while any job waits or runs. */
 export const chooseJobsFolder = (path: string | null) => invoke<JobsFolder>("jobs_folder_choose", { path });
 
-/** This computer's cores, and its memory in MiB (nought where it could not be told), as its system says. */
-export const computerResources = () => invoke<{ cores: number; memory: number }>("computer_resources");
+/**
+ * This computer's cores - each a thread it runs at once, two to a physical
+ * core where it runs two on each - its physical cores, and its memory in MiB
+ * (nought where it could not be told), as its system says.
+ */
+export const computerResources = () => invoke<{ cores: number; physical: number; memory: number }>("computer_resources");
 
 /** A plugin's jobs that wait or run: those taking it away would stop. */
 export async function liveJobsOf(plugin: string, list: () => Promise<Job[]> = listJobs): Promise<Job[]> {
@@ -161,13 +197,76 @@ export async function stopJobsAndWait(
 export const computerCores = () => Math.max(1, (typeof navigator !== "undefined" && navigator.hardwareConcurrency) || 1);
 
 /**
- * How many cores a job takes, as Settings, *Calculations*, has it: unset,
- * all those jobs may use - one at a time - never more than they may use,
- * nor than the computer has.
+ * How many cores each of a step's `jobs` takes, as Settings, *Calculations*,
+ * has it: set, that many; unset, those jobs may use shared among them - all
+ * of them for one job, one each for as many jobs as there are cores - so
+ * that a step of many small jobs runs them side by side, not one after
+ * another each with every core (the maintainer, 2026-11-06). Never more
+ * than they may use, nor than the computer has, and at least one.
  */
-export function runningOf(c: Pick<CalculationSettings, "cores" | "coresAll">, cores = computerCores()): { cores: number } {
+export function runningOf(c: Pick<CalculationSettings, "cores" | "coresAll">, cores = computerCores(), jobs = 1): { cores: number } {
   const all = Math.min(c.coresAll ?? cores, cores);
-  return { cores: Math.max(1, Math.min(c.cores ?? all, all)) };
+  const shared = Math.floor(all / Math.max(1, Math.min(jobs, all)));
+  return { cores: Math.max(1, Math.min(c.cores ?? shared, all)) };
+}
+
+/** The most threads a search may be told it can use: what the plugins that take the number accept. */
+export const MOST_THREADS = 1024;
+
+/**
+ * How many threads one conformer search may use, as Settings, *Calculations*,
+ * has its cores (`runningOf`): the cores a job may take, a search being one -
+ * or, where `searches` run side by side, those shared among them - sent to the
+ * plugin with the request, which uses every core where it is told none. Never
+ * more than `MOST_THREADS`.
+ */
+export function threadsOf(c: Pick<CalculationSettings, "cores" | "coresAll">, cores = computerCores(), searches = 1): number {
+  return Math.min(MOST_THREADS, runningOf(c, cores, searches).cores);
+}
+
+/**
+ * How many threads a search made on the page may use - a 3D structure made
+ * from a drawing, an atom map's: the cores Settings, *Calculations*, gives
+ * a job, where the chemist set them; where not - every core, Settings' own -
+ * all but one of them, at least one, so that the page is drawn on the one
+ * left while it searches: a search on every core starved the page of its
+ * frames (docs/WORKSPACE.md, *Conformers tried*). A workflow's steps take
+ * theirs as ever (`threadsOf`).
+ */
+export function pageThreadsOf(c: Pick<CalculationSettings, "cores" | "coresAll">, cores = computerCores()): number {
+  const threads = threadsOf(c, cores);
+  return c.cores != null ? threads : Math.max(1, threads - 1);
+}
+
+/**
+ * How Settings' cores are counted, in plain words, where it matters: on a
+ * computer that runs more than one thread on each physical core, as its
+ * threads - and a program running as processes takes one physical core,
+ * that many of them, for each process (lib/jobs `processesOf`; the queue's
+ * `taken`). None where each core runs one thread, or its physical cores
+ * cannot be told.
+ */
+export function coresCountedSaid(c: { cores: number; physical?: number }): string | null {
+  if (!c.physical || c.physical < 1 || c.cores <= c.physical) return null;
+  // (what a process takes, as the queue counts it - jobs.rs `taken`: rounded up - and its threads said as even only where they are)
+  const per = Math.ceil(c.cores / c.physical);
+  const has = c.cores === per * c.physical ? `${c.physical} physical cores with ${per} threads each, ${c.cores} in all` : `${c.physical} physical cores and ${c.cores} threads`;
+  return `Cores here are logical: this computer has ${has}. A program that runs as separate processes uses ${per} of them for each process.`;
+}
+
+/**
+ * How many processes a job of a program running as processes takes (a
+ * manifest's `installed[].parallel`: MPI), of the cores Settings gives it:
+ * each process a whole physical core - the threads the computer runs on
+ * one, as the queue counts it (jobs.rs `taken`) - so as many as fit in
+ * those cores, and never more than its physical cores. At least one, which
+ * takes a whole core however few it is given. Where its physical cores
+ * cannot be told, one process to each core.
+ */
+export function processesOf(cores: number, here: { cores: number; physical?: number }): number {
+  const physical = here.physical && here.physical >= 1 ? here.physical : here.cores;
+  const perProcess = Math.max(1, Math.ceil(here.cores / physical));
+  return Math.max(1, Math.min(Math.floor(cores / perProcess), physical));
 }
 
 /**
@@ -199,7 +298,7 @@ export function overLimits(jobs: readonly { memory?: number }[], limits: { memor
 }
 
 /** What jobs may use, told to this computer's runner: every job waiting takes it up at once. */
-export const writeJobLimits = (limits: { cores: number; memory: number }) => invoke<void>("jobs_limits", limits);
+export const writeJobLimits = (limits: { cores: number; memory: number; awake: boolean }) => invoke<void>("jobs_limits", limits);
 
 /** How often a job followed is looked at. */
 const FOLLOW_MS = 500;

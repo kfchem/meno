@@ -1,6 +1,5 @@
-import PageHtml from "./PageHtml";
 import { useFrame, useThree } from "@react-three/fiber";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import {
   labelBox,
@@ -29,15 +28,14 @@ import { usePresence } from "../../../theme/presence";
 import { MarkHold } from "./MarkHold2D";
 import MarkBoxes2D from "./MarkBoxes2D";
 import { Texts2D } from "./Labels2D";
-import { usePageHtmlLayer } from "./coverLayer";
-import { TIP_GAP_PX, tipPlace, tipUnder, type ScreenBox } from "./markTip";
+import PageTip from "./PageTip";
 
 /** Nothing worked out, for a drawing with nothing to mark. */
 const NO_ATOMS = new Map<number, LAtom>();
 const NO_MODEL: Model = { atoms: [], bonds: [] };
 
 /** A mark's words sit over the drawing, and under the canvas's buttons and cards. */
-const Z_RANGE = [20, 10];
+const Z_RANGE: [number, number] = [20, 10];
 /** R, S, E and Z over the drawing's bonds and labels, under the marks' boxes. */
 const STEREO_ORDER = 35;
 
@@ -45,9 +43,11 @@ const STEREO_ORDER = 35;
 
 
 /**
- * The plugin's marks on the structure: a ring round each atom with more bonds
- * than it can have - saying what is wrong while the pointer is on it - and
- * R, S, E and Z beside stereocentres and double bonds, each placed clear of
+ * The marks on the structure: a ring round each atom with more bonds than it
+ * can have - saying what is wrong while the pointer is on it - and R, S, E
+ * and Z beside stereocentres and double bonds (one asked for with none
+ * saying why while the pointer is on it, and a Z or E that turns in the
+ * mirror image saying so), each placed clear of
  * the bonds and labels, and written as the drawing's labels are - in its
  * typeface and its colour, in italics, in parentheses if its style says
  * so. They are the editor's, drawn by WebGL with the page - never lagging
@@ -71,14 +71,6 @@ export default function ChemMarks2D({
   const model = useEditor((s) => s.model);
   const hoveredAtom = useEditor((s) => s.hovered.atomId);
   const hoveredBond = useEditor((s) => s.hovered.bondId);
-  // (what can be seen of the canvas, the column over its right side left out: where what a mark says is kept - markTip)
-  const gl = useThree((s) => s.gl);
-  const layer = usePageHtmlLayer();
-  const cover = useEditor((s) => s.cover);
-  const room = useCallback((): ScreenBox => {
-    const r = (layer?.current ?? gl.domElement).getBoundingClientRect();
-    return { left: r.left, top: r.top, right: r.right - cover, bottom: r.bottom };
-  }, [layer, gl, cover]);
   const invalidate = useThree((s) => s.invalidate);
   useEffect(() => invalidate(), [marks, invalidate]);
 
@@ -86,7 +78,7 @@ export default function ChemMarks2D({
   // every frame of a drag over a large drawing - and R, S, E and Z only
   // where there are any)
   const stereoWanted = !!marks && (marks.centres.size > 0 || marks.doubleBonds.size > 0);
-  const wanted = stereoWanted || !!marks?.valence.size || !!unsure?.atoms.size || !!unsure?.bonds.size || !!read?.atoms.size || !!read?.bonds.size;
+  const wanted = stereoWanted || !!marks?.said?.size || !!marks?.valence.size || !!unsure?.atoms.size || !!unsure?.bonds.size || !!read?.atoms.size || !!read?.bonds.size;
   // (the view's zoom, where there is anything to mark: with nothing, a zoom
   // draws nothing here again - and marks fading out keep the size they had)
   const zoomWanted = useRef(1);
@@ -126,9 +118,11 @@ export default function ChemMarks2D({
   const z = Math.max(zoom, 1e-6);
   const labelFont = opts.units === "px" ? opts.fontPx / z : opts.fontPx;
   const fontPx = Math.max(MARK_MIN_PX, labelFont * MARK_SCALE * z);
-  // (and, the view far out, whether they are still seen: switched past their least size, not faded with the zoom - marksReadAt)
-  const marksRead = useRef(true);
-  marksRead.current = marksReadAt(marksRead.current, labelFont * MARK_SCALE * z);
+  // (and, the view far out, whether they are still seen: switched past their least size, not faded with the zoom - marksReadAt;
+  // kept as state, set again as it renders where it switched - not a ref written in render)
+  const [marksWere, setMarksWere] = useState(true);
+  const marksRead = marksReadAt(marksWere, labelFont * MARK_SCALE * z);
+  if (marksRead !== marksWere) setMarksWere(marksRead);
   // (R, S, E and Z as the drawing's style writes them)
   const parentheses = !!opts.stereoParentheses;
   const gap = opts.stereoGap ?? STEREO_GAP;
@@ -285,16 +279,30 @@ export default function ChemMarks2D({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- stereoKeys: as stereoShown
   }, [stereoShown, stereoLeaving]);
   // (and, switched there, faded in or out over a short time: utils/zoomSwitch)
-  const seen = useRef<SwitchFade>(switchFade(marksRead.current));
+  const seen = useRef<SwitchFade>(switchFade(marksRead));
   const stereoSeen = useRef(seen.current.v);
   useFrame((_, dt) => {
-    if (switchStep(seen.current, marksRead.current, Math.min(dt, 1 / 20))) invalidate();
+    if (switchStep(seen.current, marksRead, Math.min(dt, 1 / 20))) invalidate();
     stereoSeen.current = seen.current.v;
   });
   const boxesLeaving = useMemo(() => new Set(valenceShown.filter((s) => s.leaving).map((s) => s.key)), [valenceShown]);
   const boxesNow = useMemo(() => valenceShown.map(({ item }) => item), [valenceShown]);
   const pointed = valenceShown.find(({ item: m, leaving }) => !leaving && (m.bond ? hoveredBond === m.id : hoveredAtom === m.id))?.item;
-  if (!valenceShown.length && !stereoShown.length) return null;
+  // (a stereocentre or double bond asked for, pointed at, with words of its own - why it has no R or S, E or Z, or that its Z or E
+  //  turns in the mirror image: said under it as a box's words are, with no box)
+  const saidPointed = (() => {
+    if (pointed || !marks?.said?.size || !marksRead) return null;
+    const atom = hoveredAtom != null ? model.atoms.find((a) => a.id === hoveredAtom && a.stereoShown) : undefined;
+    const bond = !atom && hoveredBond != null ? model.bonds.find((b) => b.id === hoveredBond && b.stereoShown) : undefined;
+    const key = atom ? `centre-${atom.id}` : bond ? `bond-${bond.id}` : null;
+    const text = key && marks.said.get(key);
+    if (!text) return null;
+    const p = atom ? at.get(atom.id) : bond ? at.get(bond.a) : undefined;
+    const q = bond ? at.get(bond.b) : p;
+    if (!p || !q) return null;
+    return { key, text, x: (p.x + q.x) / 2, y: (p.y + q.y) / 2, size: 0.6 * labelFont };
+  })();
+  if (!valenceShown.length && !stereoShown.length && !saidPointed) return null;
 
   return (
     <group>
@@ -302,7 +310,7 @@ export default function ChemMarks2D({
       {stereoShown.map(({ key, item: m, leaving }) => {
         const base = from.get(key);
         // (none to take hold of where they are switched off with the zoom)
-        if (leaving || !base || !marksRead.current) return null;
+        if (leaving || !base || !marksRead) return null;
         const id = Number(key.slice(key.indexOf("-") + 1));
         return (
           <MarkHold
@@ -318,13 +326,8 @@ export default function ChemMarks2D({
       })}
       {boxesNow.length > 0 && <MarkBoxes2D boxes={boxesNow} leaving={boxesLeaving} zoom={z} />}
       {/* what the box pointed at says, under it: words over the page, while it is pointed at */}
-      {pointed && (
-        <PageHtml key={`tip-${pointed.key}`} position={[pointed.x, pointed.y, 0]} center zIndexRange={Z_RANGE} style={{ pointerEvents: "none" }}>
-          <div role="img" aria-label={pointed.message} className="relative" style={{ width: pointed.w * z, height: pointed.h * z }}>
-            <MarkTip text={pointed.message} room={room} />
-          </div>
-        </PageHtml>
-      )}
+      {pointed && <PageTip tipKey={pointed.key} x={pointed.x} y={pointed.y} w={pointed.w} h={pointed.h} zoom={z} text={pointed.message} zIndexRange={Z_RANGE} />}
+      {saidPointed && <PageTip tipKey={`said-${saidPointed.key}`} x={saidPointed.x} y={saidPointed.y} w={saidPointed.size} h={saidPointed.size} zoom={z} text={saidPointed.text} zIndexRange={Z_RANGE} />}
       {stereoTexts.length > 0 && (
         <Texts2D
           texts={stereoTexts}
@@ -337,30 +340,5 @@ export default function ChemMarks2D({
         />
       )}
     </group>
-  );
-}
-
-/** What a mark says, under it - moved along, or put over it, to lie where it can be seen (markTip). */
-function MarkTip({ text, room }: { text: string; room: () => ScreenBox }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [place, setPlace] = useState<{ dx: number; above: boolean } | null>(null);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    const mark = el?.parentElement?.getBoundingClientRect();
-    if (!el || !mark) return;
-    setPlace(tipPlace(tipUnder(mark, el.offsetWidth, el.offsetHeight), mark, room()));
-  }, [text, room]);
-  return (
-    <div
-      ref={ref}
-      className={"meno-fade-in absolute left-1/2 w-max max-w-[22rem] rounded-md border border-gh-line bg-white px-2 py-1 text-[11px] text-gh-black shadow-sm " + (place?.above ? "bottom-full" : "top-full")}
-      style={{
-        [place?.above ? "marginBottom" : "marginTop"]: TIP_GAP_PX,
-        transform: `translateX(calc(-50% + ${place?.dx ?? 0}px))`,
-        visibility: place ? undefined : "hidden",
-      }}
-    >
-      {text}
-    </div>
   );
 }

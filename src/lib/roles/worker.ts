@@ -26,20 +26,50 @@ export type ChemState =
 
 export const useChem = create<ChemState>(() => ({ state: "idle" }));
 
+/** A role asked of and no plugin here filling it: what Meno offers then, from the plugins online (lib/plugins/roleOffer). */
+export class NoPlugin extends Error {
+  constructor(readonly role: RoleId) {
+    super(noPluginSaid(role));
+  }
+}
+
+/** What is said where a role is asked of and no plugin here fills it: what is needed, and that none here does it. */
+export const noPluginSaid = (role: RoleId) => `Needs a plugin: ${ROLES[role].name}.`;
+
+/** The role last asked of that no plugin here fills: what the canvas offers plugins for, until it is let go. */
+export const useRoleOffer = create<{ role: RoleId | null }>(() => ({ role: null }));
+
 /**
  * The plugin that fills a role: the one chosen, where it fills it - unless
  * the chemist took it away and another that fills it is added (the
- * maintainer, 2026-10-12); else the first added that does - the one the
- * chemist added, of two that read pictures; else the first that does.
+ * maintainer, 2026-10-12); else the one added that does - the one the
+ * chemist added, of two that read pictures; else the one that does. None,
+ * where several are added, or none is and several could be, and nothing says
+ * which (`roleUndecided`): the chemist chooses, in Settings, never the first
+ * by its name (the maintainer, 2026-11-02).
  */
 export function rolePlugin(role: RoleId): PythonPlugin | undefined {
   const can = pluginsFilling(role);
   const { roles, removed } = useAppSettings.getState().plugins;
-  const state = useReaders.getState().state;
   const picked = can.find((p) => p.id === roles[role]);
-  const added = can.find((p) => state[p.id] === "added" && !removed.includes(p.id));
-  if (picked && removed.includes(picked.id) && added) return added;
-  return picked ?? added ?? can[0];
+  const added = addedFilling(role);
+  if (picked && removed.includes(picked.id) && added.length === 1) return added[0];
+  return picked ?? (added.length ? (added.length === 1 ? added[0] : undefined) : can.length === 1 ? can[0] : undefined);
+}
+
+/** The plugins that could fill a role where nothing says which does (`rolePlugin` none): those added, or, none added, all that fill it. None, where it is decided or nothing fills it. */
+export function roleUndecided(role: RoleId): PythonPlugin[] {
+  if (rolePlugin(role)) return [];
+  const can = pluginsFilling(role);
+  const added = addedFilling(role);
+  return added.length > 1 ? added : can.length > 1 ? can : [];
+}
+
+/** The plugins added that fill a role, none the chemist took away: what fills it where none is chosen. */
+function addedFilling(role: RoleId): PythonPlugin[] {
+  const { removed } = useAppSettings.getState().plugins;
+  const state = useReaders.getState().state;
+  return pluginsFilling(role).filter((p) => state[p.id] === "added" && !removed.includes(p.id));
 }
 
 /** A role asked of a plugin the chemist took away: not a failure of it - it says to add it. */
@@ -61,7 +91,12 @@ onWorkerStopped((id) => {
 /** The worker of the plugin that fills `role`, started the first time it is asked for. */
 export function chemWorker(role: RoleId = "checks"): Promise<ChemClient> {
   const plugin = rolePlugin(role);
-  if (!plugin) return Promise.reject(new Error(`No plugin Meno knows of does this: ${ROLES[role].name}.`));
+  const undecided = plugin ? [] : roleUndecided(role);
+  if (undecided.length) return Promise.reject(new Error(`${undecided.map((p) => p.name).join(" and ")} each do this: ${ROLES[role].name} - choose which in Settings.`));
+  if (!plugin) {
+    useRoleOffer.setState({ role });
+    return Promise.reject(new NoPlugin(role));
+  }
   return pluginWorker(plugin);
 }
 
@@ -96,6 +131,23 @@ export async function chemAtHand(role: RoleId = "checks"): Promise<boolean> {
   const plugin = rolePlugin(role);
   if (!plugin) return false;
   return workerRunning(plugin.id) || (await pyEnvReady(plugin.profile));
+}
+
+/**
+ * The worker of what fills `role` started before it is asked anything, where
+ * a question of it may soon come: Quick Add opened, where a SMILES may be
+ * typed, so that the first one read waits for no start. Only where it can be
+ * had without asking anything (`chemAtHand`) and was not taken away: nothing
+ * is set up, offered or chosen from here. A start that fails is said as any
+ * start's failure is, and met again by the question itself.
+ */
+export async function startAhead(role: RoleId): Promise<void> {
+  const plugin = rolePlugin(role);
+  if (!plugin || takenAway(plugin) || !(await chemAtHand(role).catch(() => false))) return;
+  await pluginWorker(plugin).then(
+    () => undefined,
+    () => undefined,
+  );
 }
 
 async function start(plugin: PythonPlugin): Promise<ChemClient> {

@@ -1,7 +1,7 @@
 import { useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
-import Frames3D from "./Frames3D";
+import PlacedFramesChip from "./PlacedFramesChip";
 import { useEditor, useEditorStore } from "../store";
 import type { Model } from "../store/types";
 import { drawnBox } from "../../../../utils/importers";
@@ -39,7 +39,7 @@ export default function StackChips2D() {
 /**
  * A stack of drawings' chip, just below the record it shows: which of how
  * many, and the record's title (*3 / 60  aspirin*) - and, clicked, a
- * slider through them (Frames3D), as a stack of molecules'
+ * slider through them (useFramesChip), as a stack of molecules'
  * chip has. The stack's own, not its records': it stays as they go over
  * one to the next, a drag along its slider going on through them.
  */
@@ -60,6 +60,7 @@ function StackChip2D({ model, stack, records, index, title, atoms }: { model: Mo
   }, [model, atoms]);
   const group = useRef<THREE.Group>(null!);
   const at = useRef<{ x: number; y: number } | null>(null);
+  const facts = useMemo(() => ({ count: records.length, frame: index, title }), [records.length, index, title]);
   useFrame((_, dt) => {
     const k = Math.min(dt, 1 / 20);
     const was = at.current;
@@ -69,7 +70,7 @@ function StackChip2D({ model, stack, records, index, title, atoms }: { model: Mo
   });
   return (
     <group ref={group}>
-      <Frames3D count={records.length} frame={index} open={open} onFrame={(k) => store.getState().showRecord(stack, records[k])} title={title} />
+      <PlacedFramesChip chipKey={`stack2d:${stack}`} id={null} facts={facts} frame={index} open={open} onFrame={(k) => store.getState().showRecord(stack, records[k])} />
     </group>
   );
 }

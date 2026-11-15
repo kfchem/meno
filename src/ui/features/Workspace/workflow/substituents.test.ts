@@ -41,7 +41,7 @@ describe("a substituent swap's groups and positions, read", () => {
       ["CH3", false],
       [expect.stringMatching(/^OTBS · /), false],
       ["", false],
-      ['"Qqx" is not an element, a group Meno knows, or a SMILES with a "*"', true],
+      ['"Qqx" is not a group, an element or a SMILES with "*"', true],
     ]);
     expect(readGroups("Me\n\nCl").groups).toHaveLength(2);
     expect(readGroups("").problems).toEqual(["No groups yet: type one to a line"]);
@@ -155,7 +155,7 @@ describe("what stops a substituent swap before it runs, each said", () => {
   });
 
   it("a group that does not read, and H one position at a time", () => {
-    expect(problems(substituted(benzene(), [1], "Qqx", "one"))).toEqual(['Group 1 ("Qqx"): "Qqx" is not an element, a group Meno knows, or a SMILES with a "*"']);
+    expect(problems(substituted(benzene(), [1], "Qqx", "one"))).toEqual(['Group 1 ("Qqx"): "Qqx" is not a group, an element or a SMILES with "*"']);
     expect(problems(substituted(benzene(), [1], "H\nMe", "one"))).toEqual(["H, one position at a time, only remakes the drawing: take it out, or combine the positions together"]);
   });
 

@@ -686,7 +686,7 @@ describe("a workspace's history, held to about 100 MB (the maintainer, 2026-10-1
   });
 });
 
-describe("a haptic bond's endpoints, held to the ring it binds (the command centre's document fuzzer, 2026-10-13)", () => {
+describe("a haptic bond's endpoints, held to the ring it binds (a document fuzzer, 2026-10-13)", () => {
   /** FeCp2 written out on a carbon: its metal, its stars and their haptic bonds to the Cp rings. */
   const ferrocene = () => {
     const ed = editor();
@@ -706,7 +706,9 @@ describe("a haptic bond's endpoints, held to the ring it binds (the command cent
     expect(bond(deleted.doc, deleted.hap.id)).toBeUndefined();
     expect(deleted.doc.getState().model.atoms.some((x) => x.id === deleted.hap.b)).toBe(false);
     const merged = ferrocene();
-    merged.state().replaceDraggedAtomWith(merged.hap.endpoints![0], merged.hap.endpoints![2]);
+    // (a ring's atom onto one of the other ring: the two in one ring are neighbours or share one, which a merge would lose a bond by)
+    const otherRing = merged.doc.getState().model.bonds.find((b) => b.endpoints?.length && b.id !== merged.hap.id)!;
+    merged.state().replaceDraggedAtomWith(merged.hap.endpoints![0], otherRing.endpoints![0]);
     const ids = new Set(merged.doc.getState().model.atoms.map((x) => x.id));
     for (const b of merged.doc.getState().model.bonds) for (const e of b.endpoints ?? []) expect(ids.has(e)).toBe(true);
     expect(ids.has(merged.hap.b)).toBe(false);
@@ -756,7 +758,7 @@ describe("a haptic bond's endpoints, held to the ring it binds (the command cent
   });
 });
 
-describe("a complex written out inside a workflow set (the command centre's document fuzzer, 2026-10-13)", () => {
+describe("a complex written out inside a workflow set (a document fuzzer, 2026-10-13)", () => {
   it("leaves the set's frame finite, and a part without its ring measurable - a NaN frame was dropped with its set on saving", async () => {
     const { drawnBox } = await import("../../../../utils/importers");
     const { structuresOf } = await import("../workflow/entries");
@@ -783,34 +785,40 @@ describe("a complex written out inside a workflow set (the command centre's docu
   });
 });
 
-describe("electron-pushing arrows over a merge (the command centre's document fuzzer, 2026-10-13)", () => {
-  it("go with the atom dragged onto another, and those on a bond that collapsed go - none left on what is gone", () => {
+describe("electron-pushing arrows over a merge (a document fuzzer, 2026-10-13)", () => {
+  it("go with the atom dragged onto another, and those that come to point at where they leave go - none left on what is gone", () => {
     const { doc, state } = editor();
     const a = state().addAtom(0, 0, "C");
     const b = state().addAtom(1.5, 0, "O");
     const c = state().addAtom(3, 0, "C");
+    const e = state().addAtom(0, 4, "N");
     const ab = state().connectAtoms(a, b, 1)!;
     state().connectAtoms(b, c, 1);
     state().addPush({ bond: ab }, { atom: b }, false);
     state().addPush({ atom: a }, { atom: c }, false);
-    // a dragged onto b: the bond a-b collapses, a goes
-    state().replaceDraggedAtomWith(a, b);
+    state().addPush({ atom: a }, { atom: e }, false);
+    // a dragged onto e (neither bonded to the other, nor sharing a neighbour): a goes, its bond to b is e's now
+    state().replaceDraggedAtomWith(a, e);
     const d = doc.getState();
     const ids = new Set(d.model.atoms.map((x) => x.id));
     const bonds = new Set(d.model.bonds.map((x) => x.id));
+    expect(ids.has(a)).toBe(false);
     for (const p of d.pushes ?? [])
-      for (const e of [p.from, p.to]) {
-        if ("atom" in e) expect(ids.has(e.atom)).toBe(true);
-        if ("bond" in e) expect(bonds.has(e.bond)).toBe(true);
+      for (const end of [p.from, p.to]) {
+        if ("atom" in end) expect(ids.has(end.atom)).toBe(true);
+        if ("bond" in end) expect(bonds.has(end.bond)).toBe(true);
       }
-    // the arrow from a now leaves b, where a was dropped
-    expect((d.pushes ?? []).some((p) => "atom" in p.from && p.from.atom === b && "atom" in p.to && p.to.atom === c)).toBe(true);
-    // and the one on the collapsed bond is gone
-    expect((d.pushes ?? []).some((p) => "bond" in p.from && p.from.bond === ab)).toBe(false);
+    // the arrow from a now leaves e, where a was dropped
+    expect((d.pushes ?? []).some((p) => "atom" in p.from && p.from.atom === e && "atom" in p.to && p.to.atom === c)).toBe(true);
+    // the one on the bond a-b stays, on that bond rewired to e
+    expect((d.pushes ?? []).some((p) => "bond" in p.from && p.from.bond === ab)).toBe(true);
+    // and the one from a to e, now from e to e, is gone
+    expect((d.pushes ?? []).some((p) => "atom" in p.from && "atom" in p.to && p.from.atom === p.to.atom)).toBe(false);
+    expect(d.pushes).toHaveLength(2);
   });
 });
 
-describe("a charge's mark dragged far from its atom (the command centre's document fuzzer, 2026-10-13)", () => {
+describe("a charge's mark dragged far from its atom (a document fuzzer, 2026-10-13)", () => {
   it("goes no farther than a mark is read back from a file or a copy, so it is not put back on reopening", async () => {
     const { MARK_REACH } = await import("../document");
     const { doc, state } = editor();
@@ -827,7 +835,7 @@ describe("a charge's mark dragged far from its atom (the command centre's docume
   });
 });
 
-describe("a bond's stereo and its order (the command centre's document fuzzer, 2026-10-13)", () => {
+describe("a bond's stereo and its order (a document fuzzer, 2026-10-13)", () => {
   it("lets a double or triple bond carry no wedge, hashes or wavy line, made so or given one", () => {
     const { doc, state } = editor();
     const a = state().addAtom(0, 0, "C");

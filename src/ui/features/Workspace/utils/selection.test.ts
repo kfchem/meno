@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Model } from "../store/types";
-import { inBox, inLasso, insidePolygon, middleOf, pathBetween, turned, turnedArrows, turnedOver, turnedOverArrows, wordsIn } from "./selection";
+import { inBox, inLasso, insidePolygon, middleOf, pathBetween, turned, turnedArrows, turnedOver, turnedOverArrows, turnSnapped, wordsIn } from "./selection";
 
 const atom = (id: number, x: number, y: number) => ({ id, x, y, r: 0.9, el: "C" });
 
@@ -99,5 +99,13 @@ describe("turned and turnedOver", () => {
     expect(ud).toMatchObject({ x: 3, y: -1, angle: -0.3, corners: [{ along: 0.5, across: -2 }] });
     // (one with no corners has none after)
     expect(turnedOverArrows([{ id: 2, x: 0, y: 0, angle: 0 }], { x: 1, y: 0 }, "vertical")[0]).not.toHaveProperty("corners");
+  });
+
+  it("snaps a drawing's turn to steps of 15 degrees until it is let go of them", () => {
+    const deg = (d: number) => (d * Math.PI) / 180;
+    expect(turnSnapped(deg(7), false)).toBeCloseTo(0);
+    expect(turnSnapped(deg(8), false)).toBeCloseTo(deg(15));
+    expect(turnSnapped(deg(-38), false)).toBeCloseTo(deg(-45));
+    expect(turnSnapped(deg(8), true)).toBe(deg(8));
   });
 });

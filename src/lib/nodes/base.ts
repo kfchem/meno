@@ -8,7 +8,7 @@
  * Nothing a node keeps, drops, merges or filters is silent: an entry that
  * does not go on goes out of another exit, counted, saying why.
  */
-import type { Entry, Property } from "../entry";
+import type { Entry, Property, PropertyPart } from "../entry";
 import { convert, sameDimension, UNITS, type Unit } from "../units";
 
 /**
@@ -150,15 +150,43 @@ export function workedOutAs(p: Property): [string, string][] {
   ];
 }
 
-/** Where entries' `name` were not all worked out the same way (`workedOutAs`), how two differ - "differ in method: M (a) and N (b)" - else nothing. Entries without it are passed over. */
+/**
+ * Whether two values of one part of how a value was worked out
+ * (`workedOutAs`) are the same. A method and a basis are the same whatever
+ * their case: inputs name them in either ("B3LYP", "b3lyp"), and a program
+ * prints each as its input named it. Each is shown as read. Nothing else is
+ * taken as the same: "6-31G*" and "6-31G(d)" are two names.
+ */
+export function alikeIn(part: string, a: string, b: string): boolean {
+  return part === "method" || part === "basis" ? a.toLowerCase() === b.toLowerCase() : a === b;
+}
+
+/** A sum's part as a value of its own, so that how it was worked out reads as a value's does (`workedOutAs`). */
+export const partValue = (p: PropertyPart): Property => ({ value: p.value, unit: p.unit, ...(p.at ? { at: p.at } : {}), ...(p.by ? { by: p.by } : {}), status: "computed" });
+
+/**
+ * Where two values were not worked out alike (`workedOutAs`, `alikeIn`), the
+ * first part they differ in, with each one's - else nothing. Two sums are
+ * alike in treatment where they are of the same parts, each worked out alike:
+ * their treatments, which say their parts, then differ in case at most.
+ */
+export function workedOutDiffer(a: Property, b: Property): [part: string, a: string, b: string] | null {
+  const x = workedOutAs(a);
+  const y = workedOutAs(b);
+  const sums = (u: string, v: string) =>
+    !!a.parts && !!b.parts && a.parts.length === b.parts.length && u.toLowerCase() === v.toLowerCase() &&
+    a.parts.every((q, i) => q.property === b.parts![i].property && !workedOutDiffer(partValue(q), partValue(b.parts![i])));
+  const k = x.findIndex(([part, u], i) => !alikeIn(part, u, y[i][1]) && !(part === "thermal treatment" && sums(u, y[i][1])));
+  return k < 0 ? null : [x[k][0], x[k][1], y[k][1]];
+}
+
+/** Where entries' `name` were not all worked out the same way (`workedOutDiffer`), how two differ - "differ in method: M (a) and N (b)" - else nothing. Entries without it are passed over. */
 export function workedOutUnlike(es: readonly Entry[], name: string): string | null {
   const having = es.filter((e) => e.properties[name]);
   if (having.length < 2) return null;
-  const first = workedOutAs(having[0].properties[name]);
   for (const e of having.slice(1)) {
-    const these = workedOutAs(e.properties[name]);
-    const k = these.findIndex(([, v], i) => v !== first[i][1]);
-    if (k >= 0) return `differ in ${first[k][0]}: ${first[k][1]} (${having[0].id}) and ${these[k][1]} (${e.id})`;
+    const d = workedOutDiffer(having[0].properties[name], e.properties[name]);
+    if (d) return `differ in ${d[0]}: ${d[1]} (${having[0].id}) and ${d[2]} (${e.id})`;
   }
   return null;
 }

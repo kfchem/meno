@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CUBE_MARK, cubeGrid, readCube } from "./cube";
+import { ISO_DENSITY, ISO_ORBITAL, isoOf } from "./grids";
 import { kindOf } from "../io/kinds";
 import { floatsOf, readGrid, readResults } from "./results";
 import { BOHR_ANGSTROM as BOHR } from "../units";
@@ -65,7 +66,8 @@ describe("a cube file", () => {
     expect(g.axes[2][2]).toBeCloseTo(1.5 * BOHR, 6);
     expect(Array.from(floatsOf(g.values)).map((v) => +v.toFixed(3))).toEqual([-0.1, -0.2, -0.3, 0.4, 0.5, 0.6, -0.07, -0.08, -0.09, 0.01, 0.02, 0.03]);
     expect(g.signed).toBe(true);
-    expect(g.iso).toBe(0.05);
+    expect(g.quantity).toBe("orbital");
+    expect(isoOf(g)).toBe(ISO_ORBITAL);
     expect(() => cubeGrid("h2.cube", twoOrbitals, "grid:2")).toThrow(/no grid:2/);
   });
 
@@ -76,7 +78,8 @@ describe("a cube file", () => {
     const g = readGrid(cubeGrid("rho.cube", density, "grid:0"))!;
     expect(g.axes[0][0]).toBe(0.5);
     expect(g.signed).toBeUndefined();
-    expect(g.iso).toBe(0.002);
+    expect(g.iso).toBeUndefined();
+    expect(isoOf(g)).toBe(ISO_DENSITY);
   });
 
   it("says when it is no cube, or ends before its grid does", () => {

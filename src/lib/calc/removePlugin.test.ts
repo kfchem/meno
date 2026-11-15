@@ -20,16 +20,16 @@ describe("taking a plugin away while its jobs run", () => {
   beforeEach(() => {
     done.length = 0;
   });
-  const xtb = PLUGINS.find((p) => p.id === "xtb")!;
+  const tightbind = PLUGINS.find((p) => p.id === "tightbind")!;
 
   it("stops the jobs it was told it may, and waits for them, before its worker and its environment go", async () => {
-    await removePlugin(xtb, ["j1", "j2"]);
-    expect(done).toEqual(["jobs j1,j2", "worker xtb", "environment plugin-xtb"]);
-    expect(useReaders.getState().state.xtb).toBe("absent");
+    await removePlugin(tightbind, ["j1", "j2"]);
+    expect(done).toEqual(["jobs j1,j2", "worker tightbind", "environment plugin-tightbind"]);
+    expect(useReaders.getState().state.tightbind).toBe("absent");
   });
 
   it("stops none where none was named", async () => {
-    await removePlugin(xtb);
-    expect(done).toEqual(["worker xtb", "environment plugin-xtb"]);
+    await removePlugin(tightbind);
+    expect(done).toEqual(["worker tightbind", "environment plugin-tightbind"]);
   });
 });

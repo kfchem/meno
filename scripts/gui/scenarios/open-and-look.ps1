@@ -20,6 +20,6 @@ Save-Step "fitted"
 # app is judged on are invisible at a fit-to-content size. (About the middle
 # of the window, which the fit no longer needed the size of.)
 $c = Get-ClientSize
-Invoke-MenoWheel -X ([int]($c.Width / 2)) -Y ([int]($c.Height / 2)) -Notches 5
+Invoke-MenoZoom -X ([int]($c.Width / 2)) -Y ([int]($c.Height / 2)) -Notches 5
 Wait-MenoSettled | Out-Null
 Save-Step "zoomed"

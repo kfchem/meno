@@ -1,8 +1,8 @@
 import clsx from "clsx";
-import { PAGE_SIZED } from "../utils/pageScale";
+import { longPressMs } from "../longPress";
 import PageHtml from "./PageHtml";
 import { useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
 import { COLORS } from "../../../theme/colors";
 import { DURATION, TAU } from "../../../theme/motion";
@@ -11,15 +11,16 @@ import { buttonHeld } from "./buttonHeld";
 import { atomColour, ballCircles, bondRadiusOf, linedBall, lineWidth, LINE_LEAST_PX, type Style3D } from "../../../../lib/chem/style3d";
 import type { Look3D, Measure3D, Molecule3D, Rising3D, Turn3D } from "../store/types";
 import { menoShader } from "../utils/menoShader";
-import { NOTES_SCALE, pageScale } from "../utils/pageScale";
+import { notesSized, pagePx, pageScale, pageSized } from "../utils/pageScale";
 import { bentStickGeometry, stickBends, withStickBend } from "../utils/stickBend";
-import { withCentres, fadeStep, bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, plainNoteOf, frameOf, framesChipAt, labelSpot, linesOf, magnifiedOf, seenShare, sharesOf, sharesWithheld, solidOf, spotFollowed, valueSpots, widestWay, WORLD_PER_ANGSTROM, type BondLine, type DrawnBond, type LabelBox, type LabelFade, type SpotAbout, type Stick, type ValueAt } from "../utils/molecule3d";
-import { MARK_MIN_PX, MARK_SCALE, marksReadAt, stereoTextEms } from "../chem/marks";
+import { FRAMES_CHIP_GAP, imaginaryShown, withCentres, fadeStep, bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, plainNoteOf, frameOf, framesChipAt, linesOf, magnifiedOf, seenShare, sharesOf, sharesWithheld, solidOf, spotFollowed, stereoMarks3d, stereoSpotsShown, valueSpots, WORLD_PER_ANGSTROM, type BondLine, type DrawnBond, type LabelBox, type LabelFade, type SpotAbout, type StereoMark3D, type Stick, type ValueAt } from "../utils/molecule3d";
+import { MARK_MIN_PX, marksReadAt } from "../chem/marks";
 import { switchFade, switchStep } from "../utils/zoomSwitch";
-import { LONG_PRESS_MS, LONG_PRESS_SHOW_MS } from "../constants";
+import { LONG_PRESS_SHOW_MS } from "../constants";
 import { kindOf, MEASURE_FAN_OPACITY, MEASURE_RADIUS, measureMarks, measureText, measureValue, piecesOf } from "../utils/measure3d";
 import { eyeOf, FRAME_ORDER, seenAt } from "../utils/page";
-import Frames3D from "./Frames3D";
+import { useFramesChip } from "./useFramesChip";
+import { PORTS_Z } from "../workflow/look";
 import { STACK_SWAP_MS } from "../utils/stacks";
 import Overlay3D from "./Overlay3D";
 import StereoInk3D, { type StereoInk } from "./StereoInk3D";
@@ -36,14 +37,20 @@ import { JOINT_NUMBER_A, jointNumbersMesh, jointShare, jointUniforms, setJointAt
 import { atomNumbersOf, digitsOf, NUMBER_HEIGHT_MOST_A, numberHeight, numberPlaces, numbersShownOn, setBallNumberPlaces, setBallNumbers, type AtomNumberKind, type AtomNumbersShown } from "../utils/atomNumbers";
 import { outlineMaterial } from "../utils/outlineMaterial";
 import type { Grid } from "../../../../lib/calc/results";
+import { ISO_ORBITAL, isoOf } from "../../../../lib/calc/grids";
 import { dollyAt, dollyMatrix, RISE_ACROSS_FROM, RISE_END, RISE_GROW, RISE_UP } from "../utils/rise";
 import { chainRuns } from "../../../../lib/chem/biopolymer";
 import { residueOnRay, ribbonMesh, ribbonSpheres, type RibbonSpheres } from "../utils/ribbon";
-import { BALLS_NEAR, BALLS_SETTLE_MS, ballSegmentsFor, largeOn } from "../utils/largeDrawing";
+import { sameMoleculeProps } from "../utils/moleculeHandlers";
+import { BALLS_NEAR, ballSegmentsFor, ballSegmentsNext, carriedInstanced, carriedSphere, outlineSegments, pxPerWorld, stickSegmentsFor } from "../utils/largeDrawing";
 import { typedValue } from "../utils/typedValue";
 import { raycastCylinders, raycastSpheres } from "./raycast3d";
 import { commitInstanceMatrices } from "./instances";
 import { named3d } from "../workflow/selectionSet";
+import { usePlaced } from "../pageGl/PagePlaced";
+import { CHIP_HTML } from "../pageGl/chips";
+import type { ChipFacts } from "../utils/chipSaid";
+import { refinedFrame } from "../workflow/takeFrames";
 import MagnifiedMark from "./MagnifiedMark";
 
 /**
@@ -94,13 +101,20 @@ const LOOK_TAU = 0.08;
 /**
  * The line round the balls (utils/outlineMaterial) is a ball drawn again,
  * as smooth as the balls up to LINES_FINE_MOST atoms, and of LINES_COARSE
- * segments past them: measured on 10 648 atoms and 30 492 bonds, a frame
+ * segments past them, never more than the balls have (utils/largeDrawing
+ * `outlineSegments`): measured on 10 648 atoms and 30 492 bonds, a frame
  * took 14.0 ms with no line, 19.7 ms with lines as smooth as the balls (32
  * segments) and 16.4 ms with 16 - its rim strays from a circle by under a
  * pixel up to balls 40 pixels across.
  */
 const LINES_FINE_MOST = 2000;
 const LINES_COARSE = 16;
+/** Where what goes under an opened frames chip lies among the page's HTML: over the workflow's ports, as the chip is over them (Workflow2D hides those under it). */
+const CHIP_RAISED_Z: [number, number] = [PORTS_Z + 3, PORTS_Z + 1];
+/** A chip as large as the page draws it, hung from its middle - a measure's value - or from its top - what it says of its 3D structure, below it; and its notes, hung from their foot (utils/pageScale `pageSized`, `notesSized`). */
+const SIZED_MIDDLE = pageSized("middle");
+const SIZED_TOP = pageSized("top");
+const NOTES_SIZED = notesSized("foot");
 /** How gently the frames' chip follows the molecule's lowest point as it turns, in seconds. */
 const PILL_TAU = 0.12;
 /** How quickly a stereo label goes round its atom to the way it stands best, as the molecule turns, in seconds: as `TAU.move`. */
@@ -125,8 +139,6 @@ const NUMBERS_TAU = 0.08;
 const NUMBERS_PLACED_MOST = 600;
 /** Every atom's number in its ball's middle, at its full size, not shown: x, y, share, shown, for each. */
 const restingPlaces = (n: number) => Float32Array.from({ length: 4 * n }, (_, k) => (k % 4 === 2 ? 1 : 0));
-/** How far apart two stereo labels keep at the least, in ems of their size. */
-const STEREO_APART = 0.6;
 const easeOutCubic = (u: number) => 1 - (1 - Math.min(Math.max(u, 0), 1)) ** 3;
 const easeInOutCubic = (u: number) => {
   const t = Math.min(Math.max(u, 0), 1);
@@ -181,6 +193,11 @@ export type Molecule3DViewProps = {
   look: Look3D;
   frame: number;
   turn: Turn3D | undefined;
+  /**
+   * How it is turned, read as each frame is drawn, in place of `turn`: a turn that changes all the time, changed
+   * without anything drawn again but the frame (StyleEditor/Preview3D's samples).
+   */
+  turning?: { readonly current: THREE.Quaternion };
   /** How lit its outline is: 0 not at all, 1 hovered or turning, 2 moving. */
   lit: number;
   selected: boolean;
@@ -191,12 +208,14 @@ export type Molecule3DViewProps = {
   holding: { from: number; start: number } | null;
   /** Being moved by the pointer: where it stands is where it is put, at once. */
   following: boolean;
-  /** It is pointed at or selected: a single geometry's chip is seen then (Frames3D, which a click opens). */
+  /** It is pointed at or selected: a single geometry's chip is seen then (useFramesChip; a click opens it). */
   framesOpen: boolean;
   /** One of a set's: its notes kept short, within its room under the set's name (`NoteMark`). */
   inSet?: boolean;
   /** The foot of the set it is in, on the page: its frames chip, opened, goes down clear of it - never over the set's other molecules and their chips. */
   setFoot?: number;
+  /** Its frames chip hangs this far lower (page units): a stack chip hangs where it would (workflow/heldView). */
+  chipDrop?: number;
   onFrame: (frame: number) => void;
   /** Its measurement under the pointer, by id; null, none. */
   hoveredMeasure: number | null;
@@ -204,6 +223,8 @@ export type Molecule3DViewProps = {
   leaving?: () => void;
   /** Rising out of its drawing: where it started, over the drawing, and when; and what is told once it has risen. */
   rising?: Rising3D;
+  /** Its search goes on (store `growing3d`): its chip says so, its conformers growing as they come. */
+  searching?: boolean;
   /** Splitting off the molecule it is a copy of, a value set on it (`Split3D`): over it at first, as it is, gliding out to its own place as its value goes over to the new one; or, `back`, undone, the other way, and gone. */
   split?: Split3D;
   /** Its atom whose drawing's atom is under the pointer: lit as if it were. */
@@ -263,10 +284,8 @@ export type Molecule3DViewProps = {
  * another look, its place on an undo, its coming and going.
  */
 /** The imaginary frequencies each of a molecule's `n` frames was judged to have: a conformer set's, frame by frame; a single geometry's, its calculation's, of its last. */
-const imaginaryShown = (m: Pick<Molecule3D, "imaginary" | "calc">, n: number): (number[] | null)[] | undefined =>
-  m.imaginary?.length === n ? m.imaginary : m.calc?.imaginary ? [...new Array<null>(n - 1).fill(null), m.calc.imaginary] : undefined;
 
-export default function Molecule3DView(props: Molecule3DViewProps) {
+function Molecule3DView(props: Molecule3DViewProps) {
   const { m, style, look, frame, turn, lit, selected, chosen, chosenBonds, holding, following, leaving } = props;
   const solid = solidOf(m, style);
   const n = m.atoms.length;
@@ -332,7 +351,12 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   const pieces = useRef<THREE.InstancedMesh>(null!);
   const fans = useRef<THREE.Mesh>(null!);
   const pill = useRef<THREE.Group>(null!);
-  // (its frames chip opened by a click: Frames3D says so - and kept over the rest until it is back where it hangs shut)
+  // (its chip's anchor there once it is mounted: drawn again then, so that the chip is placed - pageGl/PagePlaced)
+  const [pillThere, setPillThere] = useState(false);
+  useEffect(() => {
+    if (!pillThere && pill.current) setPillThere(true);
+  });
+  // (its frames chip opened by a click: useFramesChip says so - and kept over the rest until it is back where it hangs shut)
   const framesOpened = useRef(false);
   const [chipRaised, setChipRaised] = useState(false);
   const chipRaisedNow = useRef(false);
@@ -391,16 +415,26 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   });
   // how far over to the secondary look it is drawn: 0 the primary, 1 the secondary
   const fill = useRef(look === "secondary" ? 1 : 0);
-  // the segments round its balls: as the style has them - or, on a canvas
-  // drawn lighter, as many as their size on the screen wants
-  // (utils/largeDrawing `ballSegmentsFor`): more at once as they grow, fewer
-  // once the zoom has settled
+  // the segments round its balls: as many as their size on the screen wants,
+  // never more than the style has them (utils/largeDrawing
+  // `ballSegmentsFor`): more at once as they grow, fewer once the zoom has
+  // settled
   const [segments, setSegments] = useState(style.ballSegments);
+  // (its balls' sphere, made again at another number of segments with what
+  // each ball carries - its number, whether it is lined - moved over, the
+  // old one disposed with none of it: utils/largeDrawing `carriedSphere`)
+  const ballGeo = useRef<THREE.SphereGeometry | null>(null);
+  const ballGeometry = useMemo(() => (ballGeo.current = carriedSphere(segments, ballGeo.current)), [segments]);
+  useEffect(() => () => ballGeometry.dispose(), [ballGeometry]);
+  // the segments round its sticks, by their size on the screen as its balls' are (utils/largeDrawing `stickSegmentsFor`)
+  const [stickSegments, setStickSegments] = useState(Math.min(style.bondSegments, 8));
   // (by a loop: spread over a hundred thousand atoms, Math.max overruns the stack)
   const biggest = useMemo(() => {
     const most = (r: Float32Array) => r.reduce((a, b) => Math.max(a, b), 0);
     return { primary: most(solid.radii.primary), secondary: most(solid.radii.secondary) };
   }, [solid]);
+  // (its widest stick's radius, in the scene's units: in either look)
+  const widestStick = Math.max(bondRadiusOf(style.primary), bondRadiusOf(style.secondary)) * WORLD_PER_ANGSTROM;
   const ballSizing = useRef({ zoom: 0, since: 0, timer: 0 });
   useEffect(() => () => void (ballSizing.current.timer && window.clearTimeout(ballSizing.current.timer)), []);
   const atomsMat = useRef<THREE.MeshStandardMaterial>(null!);
@@ -464,8 +498,27 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   const lineBond = useMemo(() => drawn.bonds.flatMap((b, i) => Array.from({ length: linesOf(b.order) }, () => i)), [drawn.bonds]);
   const bent = useMemo(() => bentLinesOf(drawn, solid), [drawn, solid]);
   const isBent = useMemo(() => (bent ? Uint8Array.from({ length: lineCount }, (_, k) => (bent.includes(k) ? 1 : 0)) : null), [bent, lineCount]);
-  const bentGeometry = useMemo(() => (bent ? bentStickGeometry(style.bondSegments) : null), [bent, style.bondSegments]);
-  const bentHullGeometry = useMemo(() => (bent ? bentStickGeometry(style.bondSegments) : null), [bent, style.bondSegments]);
+  // (made again at another number of segments with what each stick carries - its bend, its colours - moved over: `carriedInstanced`;
+  //  not where the lines that bend are others. Once for each geometry it carries from: a render that runs a memo twice, as React's
+  //  development builds do, keeps its first result, and a second carry would take the attributes from it)
+  const bentMade = useRef<{ bent: unknown; segments: number; stick: THREE.BufferGeometry | null; hull: THREE.BufferGeometry | null }>({ bent: null, segments: 0, stick: null, hull: null });
+  const bentGeometries = useMemo(() => {
+    const made = bentMade.current;
+    if (!bent) {
+      made.stick = made.hull = null;
+      made.bent = null;
+      return { stick: null, hull: null };
+    }
+    // (asked again of the same, no new carrying: what the first asking made)
+    if (made.bent === bent && made.segments === stickSegments && made.stick && made.hull) return { stick: made.stick, hull: made.hull };
+    const was = made.bent === bent ? { stick: made.stick, hull: made.hull } : { stick: null, hull: null };
+    const stick = carriedInstanced(bentStickGeometry(stickSegments), was.stick);
+    const hull = carriedInstanced(bentStickGeometry(stickSegments), was.hull);
+    Object.assign(made, { bent, segments: stickSegments, stick, hull });
+    return { stick, hull };
+  }, [bent, stickSegments]);
+  const bentGeometry = bentGeometries.stick;
+  const bentHullGeometry = bentGeometries.hull;
   const bentHullMat = useMemo(() => {
     return menoShader(new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, toneMapped: false }), "bent-hull", (shader) => withStickBend(shader));
   }, []);
@@ -514,24 +567,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   const shownFrame = frameOf(solid, frame);
   const centre = useMemo(() => frameCentre({ atoms: m.atoms, frames: m.frames }, shownFrame), [m.atoms, m.frames, shownFrame]);
   // its stereocentres' and double bonds' labels: all, or those its drawing left open
-  const stereoMarks = useMemo(() => {
-    const st = m.stereo;
-    const only = props.stereoShown;
-    if (!st || !only) return [];
-    // (with the atoms whose ways out it keeps clear of: a centre's
-    // neighbours, a double bond's two and theirs)
-    const near = (i: number) => m.bonds.flatMap((b) => (b.a1 === i ? [b.a2] : b.a2 === i ? [b.a1] : []));
-    const out: { key: string; atoms: number[]; around: number[]; text: string }[] = [];
-    for (const [i, text] of Object.entries(st.atoms)) {
-      if (only.atoms.includes(Number(i))) out.push({ key: `a${i}`, atoms: [Number(i)], around: near(Number(i)), text });
-    }
-    for (const [i, text] of Object.entries(st.bonds)) {
-      const b = m.bonds[Number(i)];
-      if (b && only.bonds.includes(Number(i)))
-        out.push({ key: `b${i}`, atoms: [b.a1, b.a2], around: [...new Set([...near(b.a1), ...near(b.a2)])], text });
-    }
-    return out;
-  }, [m.stereo, m.bonds, props.stereoShown]);
+  const stereoMarks = useMemo(() => stereoMarks3d({ stereo: m.stereo, bonds: m.bonds }, props.stereoShown), [m.stereo, m.bonds, props.stereoShown]);
   // (and each hidden kept a while as it fades out - longer than its fade,
   // which counts the frames drawn rather than the time)
   const stereoPresent = usePresence(stereoMarks, (mark) => mark.key, 2 * STEREO_FADE * 1000);
@@ -593,6 +629,18 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     dirty.current = true;
     invalidate();
   }, [m, n, target, style, atomGoals, invalidate, props.atomNumbers]);
+
+  // (atom-map numbers by the frame shown: a conformer may put alike atoms in each other's places - chem/structureMaps)
+  useEffect(() => {
+    if (!atoms.current || numbersKind.current !== "map" || !m.mapFrames) return;
+    const nums = atomNumbersOf(m, "map", frame);
+    numbersNow.current = nums;
+    setBallNumbers(atoms.current.geometry, nums);
+    numberDigits.current = Uint8Array.from(nums, digitsOf);
+    numbersPlaced.current = false;
+    dirty.current = true;
+    invalidate();
+  }, [m, frame, invalidate]);
 
   // measurements come and go, fading
   useEffect(() => {
@@ -713,26 +761,31 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   useFrame((_, dt) => {
     const step = Math.min(dt, 1 / 30);
     let moving = false;
-    // (its balls' segments, by their size on the screen where the canvas is drawn lighter; as the style has them otherwise, at once)
+    // (its balls' segments, by their size on the screen, never more than the style's - pixels a unit spans at the
+    // molecule, for either camera: a perspective one's zoom, always 1, made every ball in Settings' previews a pixel)
     {
-      const lighter = largeOn(gl).lighter;
-      const zoom = (camera as THREE.OrthographicCamera).zoom || 1;
+      const zoom = pxPerWorld(camera, size.height, -placed.current.getWorldPosition(fadeCentre).applyMatrix4(camera.matrixWorldInverse).z);
       const bs = ballSizing.current;
-      if (!bs.zoom || Math.abs(Math.log(zoom / bs.zoom)) >= BALLS_NEAR) {
+      // (on its first frame, as many as it wants at once: nothing has been drawn to change)
+      const first = !bs.zoom;
+      if (first || Math.abs(Math.log(zoom / bs.zoom)) >= BALLS_NEAR) {
         bs.zoom = zoom;
         bs.since = performance.now();
       }
-      const want = lighter ? ballSegmentsFor(2 * biggest[look] * zoom * gl.getPixelRatio(), style.ballSegments) : style.ballSegments;
-      // (more at once, as balls grow on the screen - fewer only once the zoom has settled)
-      if (want !== segments) {
-        const left = lighter && want < segments ? BALLS_SETTLE_MS - (performance.now() - bs.since) : 0;
-        if (left <= 0) setSegments(want);
-        else if (!bs.timer) {
-          bs.timer = window.setTimeout(() => {
-            bs.timer = 0;
-            invalidate();
-          }, left + 5);
-        }
+      const want = ballSegmentsFor(2 * biggest[look] * zoom * gl.getPixelRatio(), style.ballSegments);
+      const settled = first ? Infinity : performance.now() - bs.since;
+      const next = ballSegmentsNext(want, segments, settled);
+      // (its sticks likewise, by how wide the widest is on the screen)
+      const wantSticks = lineCount > 0 ? stickSegmentsFor(2 * widestStick * zoom * gl.getPixelRatio(), style.bondSegments, lineCount) : stickSegments;
+      const nextSticks = ballSegmentsNext(wantSticks, stickSegments, settled);
+      if (next && "now" in next) setSegments(next.now);
+      if (nextSticks && "now" in nextSticks) setStickSegments(nextSticks.now);
+      const waitMs = Math.min(...[next, nextSticks].map((x) => (x && "waitMs" in x ? x.waitMs : Infinity)));
+      if (Number.isFinite(waitMs) && !bs.timer) {
+        bs.timer = window.setTimeout(() => {
+          bs.timer = 0;
+          invalidate();
+        }, waitMs + 5);
       }
     }
     // another frame: its atoms go there
@@ -875,10 +928,11 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     if (seen) dolly.current.matrix.copy(seen);
     else dolly.current.matrix.identity();
     dolly.current.matrixWorldNeedsUpdate = true;
-    if (!shownTurn.current || shownTurn.current.angleTo(quaternion) < TURN_FOLLOWED) {
-      shownTurn.current = quaternion.clone();
+    const turnTo = props.turning?.current ?? quaternion;
+    if (!shownTurn.current || shownTurn.current.angleTo(turnTo) < TURN_FOLLOWED) {
+      shownTurn.current = turnTo.clone();
     } else {
-      shownTurn.current.slerp(quaternion, 1 - Math.exp(-step / PLACE_TAU));
+      shownTurn.current.slerp(turnTo, 1 - Math.exp(-step / PLACE_TAU));
       moving = true;
     }
     turned.current.quaternion.copy(shownTurn.current);
@@ -997,13 +1051,10 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           }
         }
       }
-      const zoom = (camera as THREE.OrthographicCamera).zoom || 1;
       // (where the molecule's front and back stand in the camera's depth: what fades between)
       const centre = placed.current.getWorldPosition(fadeCentre).applyMatrix4(camera.matrixWorldInverse).z;
-      // (a screen pixel in the camera's space at the molecule: an orthographic camera's - the canvas's - its zoom's;
-      // a perspective one's - Settings' preview - as far off as the molecule stands)
-      const pc = camera as THREE.PerspectiveCamera;
-      const perPx = pc.isPerspectiveCamera ? (2 * Math.max(-centre, 1e-6) * Math.tan((pc.fov * Math.PI) / 360)) / Math.max(size.height, 1) : 1 / zoom;
+      // (a screen pixel in the camera's space at the molecule, for either camera: utils/largeDrawing `pxPerWorld`)
+      const perPx = 1 / pxPerWorld(camera, size.height, -centre);
       const reach = (solid.reach.primary + (solid.reach.secondary - solid.reach.primary) * ff) * placed.current.scale.x * magShown.current;
       const fades = [fadeOf(atomsMat.current, "atoms"), ...(bondsMat.current ? [fadeOf(bondsMat.current, "bonds")] : []), outlines.atoms.fade, outlines.bonds.fade, outlines.bent.fade];
       for (const u of fades) {
@@ -1057,7 +1108,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     let holdTo = 0;
     if (holding && spread) {
       const t = performance.now() - holding.start;
-      const u = Math.min(1, Math.max(0, (t - LONG_PRESS_SHOW_MS) / (LONG_PRESS_MS - LONG_PRESS_SHOW_MS)));
+      const u = Math.min(1, Math.max(0, (t - LONG_PRESS_SHOW_MS) / (longPressMs() - LONG_PRESS_SHOW_MS)));
       for (let i = 0; i < n; i++) h[i] = Math.min(1, Math.max(0, u * (spread.deepest + 1) - spread.level[i]));
       holdTo = 1;
       moving = true;
@@ -1188,6 +1239,8 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       bn.shown.value = any ? 1 - share : 0;
       const ju = jointUniforms(jointMesh);
       ju.shown.value = any ? share : 0;
+      // (not drawn at all while it shows no number: a draw call a molecule saved)
+      jointMesh.visible = ju.shown.value > 0;
       if (any && share > 0) {
         ju.pxPer.value = 1 / px;
         ju.height.value = JOINT_NUMBER_A * WORLD_PER_ANGSTROM * risen.current;
@@ -1455,11 +1508,6 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
         parent.localToWorld(v.set(x, y, z)).project(camera);
         return { x: ((v.x + 1) / 2) * size.width, y: ((1 - v.y) / 2) * size.height };
       };
-      const placedLabels: LabelBox[] = [];
-      // (every atom's ball on the screen, once for all the labels; and every
-      // bond as drawn - none when space-filling)
-      let balls: { x: number; y: number; r: number }[] | null = null;
-      const sticks: Stick[] = [];
       // (those shown together fade in together, the molecule moving or not:
       // none starts before every one of them is there to be seen - each
       // label's element is made a frame or so after the label is asked for)
@@ -1470,6 +1518,16 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       if (allThere) stereoWaited.current = 0;
       else if (stereoWaited.current++ < STEREO_WAIT_FRAMES) moving = true;
       const goIn = allThere || stereoWaited.current > STEREO_WAIT_FRAMES;
+      // where each is placed: as a picture of the molecule places it (utils/molecule3d `stereoSpotsAmong`, shared with
+      // `stereoPictureSpots3d`) - the balls and bonds as at rest, no atom swelling under the pointer, in the order a picture takes
+      // them, at the drawing's own letters rather than the least size they are drawn at - so that a copy made now has each where the
+      // canvas has it; those going, placed after, clear of those shown, and no obstacle to them
+      const entries: { mark: StereoMark3D; leaving: boolean; anchor: THREE.Object3D; ink: NonNullable<ReturnType<typeof stereoAnchors.current.get>>["ink"]; o: { x: number; y: number }; own: number }[] = [];
+      let balls: { x: number; y: number; r: number }[] | null = null;
+      const sticks: Stick[] = [];
+      // (an atom's ball at rest: the look it is going over to, as large as drawn, not swollen under the pointer, risen)
+      const atRest = (i: number) => solid.radii.primary[i] + (solid.radii.secondary[i] - solid.radii.primary[i]) * fill.current;
+      const restBondR = (fromR + (bondRadiusOf(style.secondary) - fromR) * fill.current) * WORLD_PER_ANGSTROM;
       for (const { item: mark, leaving } of stereoNow.current) {
         const l = stereoAnchors.current.get(mark.key);
         if (!l?.anchor) continue;
@@ -1477,46 +1535,38 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
         for (const i of mark.atoms) at.add(v.set(p[3 * i], p[3 * i + 1], p[3 * i + 2]));
         at.divideScalar(mark.atoms.length);
         const parent = l.anchor.parent;
-        const ink = l.ink;
-        if (!ink || !parent) continue;
-        // (faded in, or out - in the same time either way, eased)
-        let fade = stereoFades.current.get(mark.key);
-        if (!fade) stereoFades.current.set(mark.key, (fade = { v: 0, from: 0, to: 0, t: 0 }));
-        if (fadeStep(fade, leaving ? 0 : 1, goIn, step, STEREO_FADE)) moving = true;
-        const opacity = risen.current * fade.v * seenAtZoom;
+        if (!l.ink || !parent) continue;
         parent.updateWorldMatrix(true, false);
         if (!balls) {
           balls = [];
-          for (let i = 0; i < n; i++) balls.push({ ...onScreen(parent, p[3 * i], p[3 * i + 1], p[3 * i + 2]), r: (radius(i) * g) / pxIn });
-          if (bondsShown) {
+          for (let i = 0; i < n; i++) balls.push({ ...onScreen(parent, p[3 * i], p[3 * i + 1], p[3 * i + 2]), r: (atRest(i) * g) / pxIn });
+          if (restBondR > 1e-6) {
             const shownBonds = fb ? drawn.bonds.filter((_, i) => there.current[i] > 0.5) : m.bonds;
-            for (const b of shownBonds) if (balls[b.a1]?.r && balls[b.a2]?.r) sticks.push({ a: balls[b.a1], b: balls[b.a2], r: (bondR * g) / pxIn });
+            for (const b of shownBonds) if (balls[b.a1]?.r && balls[b.a2]?.r) sticks.push({ a: balls[b.a1], b: balls[b.a2], r: (restBondR * g) / pxIn });
           }
-          // (the measurements' values, where they are written now: placed above)
-          placedLabels.push(...valuesPlaced);
         }
-        const o = onScreen(parent, at.x, at.y, at.z);
-        const way = widestWay(mark.around.map((i) => Math.atan2(balls![i].y - o.y, balls![i].x - o.x)));
-        // (out past the ball - or the bond - as far as the drawing's style
-        // sets its R and S off its atoms, of its labels' size; the letters'
-        // box a capital's height, and a little for the halo)
-        const reach = ((mark.atoms.length === 1 ? radius(mark.atoms[0]) : bondR) * g) / pxIn + (props.stereoFont.gap * font) / MARK_SCALE;
-        const half = { x: font * (stereoTextEms(mark.text, props.stereoFont.parentheses) / 2 + 0.1), y: font * 0.45 };
-        // (every atom near it but its own - a double bond's two among them)
-        const own = mark.atoms.length === 1 ? mark.atoms[0] : -1;
-        const others = balls.filter((b, i) => i !== own && b.r > 0 && Math.hypot(b.x - o.x, b.y - o.y) < reach + 4 * half.x + b.r);
-        const best = labelSpot(o, reach, half, way, others, placedLabels, sticks);
+        // (out past the ball - or the bond - as far as the drawing's style sets its R and S off its atoms)
+        const own = ((mark.atoms.length === 1 ? atRest(mark.atoms[0]) : restBondR) * g) / pxIn;
+        entries.push({ mark, leaving, anchor: l.anchor, ink: l.ink, o: onScreen(parent, at.x, at.y, at.z), own });
+      }
+      const spots = balls ? stereoSpotsShown(entries, stereoMarks, balls, sticks, valuesPlaced, natural, props.stereoFont.gap, props.stereoFont.parentheses) : new Map<string, LabelBox>();
+      for (const e of entries) {
+        const best = spots.get(e.mark.key);
+        if (!best || !e.ink) continue;
+        // (faded in, or out - in the same time either way, eased)
+        let fade = stereoFades.current.get(e.mark.key);
+        if (!fade) stereoFades.current.set(e.mark.key, (fade = { v: 0, from: 0, to: 0, t: 0 }));
+        if (fadeStep(fade, e.leaving ? 0 : 1, goIn, step, STEREO_FADE)) moving = true;
+        const opacity = risen.current * fade.v * seenAtZoom;
         // (not there at once where its best way changes as the molecule turns: glided round the atom to it, as everything moves)
+        const o = e.o;
         const goal = { a: Math.atan2(best.y - o.y, best.x - o.x), r: Math.hypot(best.x - o.x, best.y - o.y) };
-        const was = stereoSpots.current.get(mark.key);
+        const was = stereoSpots.current.get(e.mark.key);
         const about = was ? spotFollowed(was, goal, step, STEREO_TAU) : goal;
-        stereoSpots.current.set(mark.key, about);
+        stereoSpots.current.set(e.mark.key, about);
         if (about.a !== goal.a || about.r !== goal.r) moving = true;
         const spot = { ...best, x: o.x + about.r * Math.cos(about.a), y: o.y + about.r * Math.sin(about.a) };
-        // (the next keeps a little way off it, not just clear: two side by
-        // side read as one, and as either atom's)
-        placedLabels.push({ ...spot, hx: spot.hx + STEREO_APART * font, hy: spot.hy + STEREO_APART * font });
-        ink.place(spot, font, opacity);
+        e.ink.place(spot, font, opacity);
       }
     }
     // (the fades of those gone, forgotten)
@@ -1586,7 +1636,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
         low = Math.min(low, seen.y - r * mag * seen.k);
       }
       // (opened, clear of its set: from the set's foot down - followed there, and back up as it shuts)
-      const below = framesChipAt(low, framesOpened.current ? props.setFoot : undefined) - at.y;
+      const below = framesChipAt(low, framesOpened.current ? props.setFoot : undefined) - at.y - (props.chipDrop ?? 0);
       pillAt.current = pillAt.current == null || reshaped ? below : follow(pillAt.current, below, step, PILL_TAU);
       if (Math.abs(pillAt.current - below) > 1e-3) moving = true;
       // (shut and back where it hangs: no longer over the rest)
@@ -1662,6 +1712,54 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     });
   };
 
+  // its frames chip, drawn by WebGL with every other one (pageGl/PagePlaced) - shut, pointed at and opened, as
+  // components/useFramesChip has it: where it has frames to go through, or was read from a calculation, or is named, or failed
+  // (one of a stack: its stack's chip says which, not its own - StackChip3D)
+  const count = solid.frames.length;
+  const chipThere = (count > 1 || !!m.conformerSet || !!m.calc || named3d(m) || !!m.failed?.some(Boolean)) && !props.stacked && !props.rising;
+  const chipKey = `chip:${m.id}`;
+  const facts = useMemo<ChipFacts>(
+    () => ({
+      count,
+      frame: 0,
+      energies: m.energies?.length === count ? m.energies : undefined,
+      numbers: m.numbers?.length === count ? m.numbers : undefined,
+      title: named3d(m) ? m.title : undefined,
+      populations: shares,
+      failed: m.failed?.length === count ? m.failed : undefined,
+      marksUnread: m.marksUnread,
+      warnings: m.calc?.warnings?.length ? m.calc.warnings : undefined,
+      imaginary: imaginaryShown(m, count) || undefined,
+      fromStart: refinedFrame(m) != null,
+      about: m.calc ? calcLine(m.calc) : undefined,
+      results: m.calc?.results,
+      unread: m.calc?.unread,
+      made: m.made,
+      said: m.said,
+      noShares: m.conformerSet ? sharesWithheld(m) || undefined : undefined,
+      conformers: m.conformerSet,
+      ...(props.searching ? { searching: true } : {}),
+    }),
+    [m, count, shares, props.searching],
+  );
+  const chipOpened = useCallback(
+    (o: boolean) => {
+      framesOpened.current = o;
+      if (o && !chipRaisedNow.current) {
+        chipRaisedNow.current = true;
+        setChipRaised(true);
+      }
+      invalidate();
+    },
+    [invalidate],
+  );
+  const chip = useFramesChip({ chipKey, id: m.id, facts, frame: frameOf(solid, frame), open: !!props.framesOpen, onFrame: props.onFrame, onOpened: chipOpened, raised: chipRaised });
+  usePlaced(
+    chipThere && chip.drawn && pillThere && pill.current
+      ? { key: chipKey, anchor: pill.current, words: true, control: true, raised: chip.raised, zoomed: chip.zoomed, draw: chip.draw, on: chip.on }
+      : null,
+  );
+
   return (
     <group ref={dolly} matrixAutoUpdate={false}>
     <group ref={placed}>
@@ -1682,14 +1780,14 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           }}
           onPointerOut={() => setHoverAtom(null)}
         >
-          <sphereGeometry args={[1, segments, segments]} />
+          <primitive object={ballGeometry} attach="geometry" dispose={null} />
           <meshStandardMaterial ref={atomsMat} transparent opacity={1} />
         </instancedMesh>
         {/* atom numbers where the sticks meet, where there are no balls to carry them (utils/jointNumbers) */}
         <primitive object={jointMesh} renderOrder={OVER_PAGE + 1} />
         {/* the style's line round every ball (utils/outlineMaterial) */}
         <instancedMesh ref={atomLines} args={[undefined, outlines.atoms.material, n]} renderOrder={OVER_PAGE} frustumCulled={false} visible={false} raycast={() => {}}>
-          <sphereGeometry args={[1, n > LINES_FINE_MOST ? LINES_COARSE : style.ballSegments, n > LINES_FINE_MOST ? LINES_COARSE / 2 : style.ballSegments]} />
+          <sphereGeometry args={[1, ...outlineSegments(segments, n, LINES_FINE_MOST, LINES_COARSE)]} />
         </instancedMesh>
         {lineCount > 0 && (
           <instancedMesh
@@ -1714,14 +1812,14 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
             }
             onPointerOut={pairResults.length ? () => setHoverBond(null) : undefined}
           >
-            <cylinderGeometry args={[1, 1, 1, style.bondSegments]} />
+            <cylinderGeometry args={[1, 1, 1, stickSegments]} />
             <meshStandardMaterial ref={bondsMat} transparent opacity={1} />
           </instancedMesh>
         )}
         {lineCount > 0 && (
           // (and round every stick)
           <instancedMesh ref={bondLines3d} args={[undefined, outlines.bonds.material, lineCount]} renderOrder={OVER_PAGE} frustumCulled={false} visible={false} raycast={() => {}}>
-            <cylinderGeometry args={[1, 1, 1, style.bondSegments]} />
+            <cylinderGeometry args={[1, 1, 1, stickSegments]} />
           </instancedMesh>
         )}
         {bent && bentGeometry && (
@@ -1819,7 +1917,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
             visible={false}
             raycast={() => {}}
           >
-            <cylinderGeometry args={[1, 1, 1, style.bondSegments]} />
+            <cylinderGeometry args={[1, 1, 1, stickSegments]} />
             <meshBasicMaterial transparent opacity={1} depthWrite={false} toneMapped={false} />
           </instancedMesh>
         )}
@@ -1869,7 +1967,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
             visible={false}
             raycast={() => {}}
           >
-            <cylinderGeometry args={[1, 1, 1, style.bondSegments]} />
+            <cylinderGeometry args={[1, 1, 1, stickSegments]} />
             <meshBasicMaterial color={blue(CHOSEN_BLUE)} transparent opacity={1} depthWrite={false} toneMapped={false} />
           </instancedMesh>
         )}
@@ -1911,7 +2009,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
                 Delete key) */}
             <PageHtml center zIndexRange={[30, 20]} style={{ pointerEvents: "none" }}>
               {/* (as large as the page draws it: a chip on the page) */}
-              <div className="meno-page-chip" style={PAGE_SIZED}>
+              <div className="meno-page-chip" style={SIZED_MIDDLE}>
                 <div
                   ref={(el) => {
                     const l = labels.current.get(x.id) ?? { anchor: null, el: null };
@@ -1952,7 +2050,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
         <Surface3D
           grid={props.surface ?? null}
           centre={centre}
-          iso={props.surfaceIso ?? props.surface?.iso ?? 0.05}
+          iso={props.surfaceIso ?? (props.surface ? isoOf(props.surface) : ISO_ORBITAL)}
           plus={style.surfacePlus}
           minus={style.surfaceMinus}
           colour={props.surfaceColour ?? null}
@@ -1987,52 +2085,28 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       {(solid.frames.length > 1 || m.conformerSet || props.onRemake || m.calc || m.edited || named3d(m)) && !props.rising && (
         <group ref={pill}>
           {/* (one of a stack: its stack's chip says which, not its own - StackChip3D; one called by a name of its own says it) */}
-          {(solid.frames.length > 1 || m.conformerSet || m.calc || named3d(m) || m.failed?.some(Boolean)) && !props.stacked ? (
-            <Frames3D
-              onOpened={(o) => {
-                framesOpened.current = o;
-                if (o && !chipRaisedNow.current) {
-                  chipRaisedNow.current = true;
-                  setChipRaised(true);
-                }
-                invalidate();
-              }}
-              raised={chipRaised}
-              count={solid.frames.length}
-              frame={frameOf(solid, frame)}
-              energies={m.energies?.length === solid.frames.length ? m.energies : undefined}
-              open={props.framesOpen}
-              onFrame={props.onFrame}
-              below={
-                (props.onRemake || props.list) && (
-                  <>
-                    {props.onRemake && <Changed onRemake={props.onRemake} />}
-                    {props.list}
-                  </>
-                )
-              }
-              populations={shares}
-              {...(m.conformerSet && sharesWithheld(m) ? { noShares: sharesWithheld(m)! } : {})}
-              numbers={m.numbers?.length === solid.frames.length ? m.numbers : undefined}
-              about={m.calc ? calcLine(m.calc) : undefined}
-              results={m.calc?.results}
-              unread={m.calc?.unread}
-              made={m.made}
-              conformers={m.conformerSet}
-              said={m.said}
-              {...(named3d(m) ? { title: m.title } : {})}
-              {...(m.failed?.length === solid.frames.length ? { failed: m.failed } : {})}
-              {...(m.marksUnread ? { marksUnread: true } : {})}
-              {...(m.calc?.warnings?.length ? { warnings: m.calc.warnings } : {})}
-              {...(imaginaryShown(m, solid.frames.length) ? { imaginary: imaginaryShown(m, solid.frames.length) } : {})}
-            />
+          {chipThere ? (
+            <>
+              {/* (what goes under the chip - Make again, a list of results - in HTML of its own, below the chip WebGL draws, as far
+                  down as it is tall now: its controls not yet drawn by WebGL) */}
+              {(props.onRemake || props.list) && (
+                <PageHtml zIndexRange={chip.raised ? CHIP_RAISED_Z : [30, 20]}>
+                  <div className="meno-control-chip flex flex-col items-center" style={{ transform: `translate(-50%, ${pagePx(FRAMES_CHIP_GAP + chip.heightPx)})` }}>
+                    <div className="flex flex-col items-center" style={{ ...SIZED_TOP, pointerEvents: "auto" }}>
+                      {props.onRemake && <Changed onRemake={props.onRemake} />}
+                      {props.list}
+                    </div>
+                  </div>
+                </PageHtml>
+              )}
+            </>
           ) : (
             <PageHtml zIndexRange={[30, 20]}>
               <div
                 className="meno-page-chip meno-control-chip flex flex-col items-center"
-                style={{ transform: "translate(-50%, calc(10px * var(--page, 1)))" }}
+                style={{ transform: `translate(-50%, ${pagePx(10)})` }}
               >
-                <div className="flex flex-col items-center" style={PAGE_SIZED}>
+                <div className="flex flex-col items-center" style={SIZED_TOP}>
                   {m.edited && <Edited from={m.edited.from} />}
                   {props.onRemake && <Changed onRemake={props.onRemake} />}
                 </div>
@@ -2067,7 +2141,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
               data-fit-notes={MARK_GAP_PX}
               style={{ transform: `translate(-50%, calc(-100% - ${MARK_GAP_PX}px))` }}
             >
-              <div className="flex flex-col items-center" style={{ zoom: `clamp(${NOTES_SCALE.least}, var(--page, 1), ${NOTES_SCALE.most})` }}>
+              <div className="flex flex-col items-center" style={NOTES_SIZED}>
               {notesEver.map((text) => (
                 <NoteMark
                   key={text}
@@ -2207,7 +2281,7 @@ function NoteMark({ text, title, on, plain, short }: { text: string; title?: str
 /** Made by editing a result: what from, said quietly under it - an edited result is no longer that result. */
 function Edited({ from }: { from: string }) {
   return (
-    <div className="mt-1.5 w-max whitespace-nowrap rounded-full border border-gh-line bg-white/90 px-2 text-[11px] leading-[20px] text-gh-gray shadow-sm">
+    <div className={`mt-1.5 ${CHIP_HTML}`}>
       Edited from {from}
     </div>
   );
@@ -2257,7 +2331,7 @@ function MeasureField({ text, onSet, onDone }: { text: string; onSet: (value: nu
 function Changed({ onRemake }: { onRemake: () => void }) {
   return (
     <div
-      className="mt-1.5 whitespace-nowrap rounded-full border border-gh-line bg-white/90 px-2 text-[11px] leading-[20px] text-gh-gray shadow-sm"
+      className={`mt-1.5 ${CHIP_HTML}`}
       onPointerDown={(e) => e.stopPropagation()}
     >
       Its drawing has changed ·{" "}
@@ -2267,3 +2341,12 @@ function Changed({ onRemake }: { onRemake: () => void }) {
     </div>
   );
 }
+
+/**
+ * Drawn again only where its own props have changed (utils/moleculeHandlers
+ * `sameMoleculeProps`): the set of molecules drawn again for one of them -
+ * a frame chosen, a set laid out - leaves the rest as they are. Its
+ * handlers are kept the same for it (`moleculeHandlers`) so that they do
+ * not count as a change.
+ */
+export default memo(Molecule3DView, sameMoleculeProps);

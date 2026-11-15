@@ -13,9 +13,9 @@ const propenal: Model = {
     { id: 4, x: 3.9, y: 0.75, r: 0.9, el: "O" },
   ],
   bonds: [
-    { id: 5, a: 1, b: 2, order: 2, stereo: "none", stereoOrient: "principle" },
-    { id: 6, a: 2, b: 3, order: 1, stereo: "none", stereoOrient: "principle" },
-    { id: 7, a: 3, b: 4, order: 2, stereo: "none", stereoOrient: "principle" },
+    { id: 5, a: 1, b: 2, order: 2, stereo: "none" },
+    { id: 6, a: 2, b: 3, order: 1, stereo: "none" },
+    { id: 7, a: 3, b: 4, order: 2, stereo: "none" },
   ],
 };
 

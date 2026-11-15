@@ -8,6 +8,7 @@
  * - where the selected atoms go when the selection is turned about its
  *   middle, or turned over.
  */
+import { turnedOverCrossings } from "../chem/crossings";
 import type { Bond, MarkAt, Model, Sel } from "../store/types";
 import type { MarksAt } from "../document";
 import { arrowPoints } from "../../../../lib/chem/reactionScheme";
@@ -159,6 +160,35 @@ export const turnedBy = (angle: number) => (p: MarkAt): MarkAt => ({
   y: p.x * Math.sin(angle) + p.y * Math.cos(angle),
 });
 
+/** A drawing's turn snaps to steps of this many degrees, until a pause lets it go (FREE_MS, as a bond's angle does). */
+export const TURN_STEP = 15;
+
+/**
+ * The turn a drawing is given for the angle the pointer has gone round: to
+ * the steps of `TURN_STEP`, or as it is once let go of them. The steps are
+ * the drawing's own: those of the direction `from` (radians) it lies in now,
+ * a bond's, so that a drawing laid out on Meno's 30-degree grid lands back on
+ * it, and one a little off it lands on it at the first step. With no
+ * direction to go by (`from` 0) they are the turn's own, from where it began.
+ */
+export const turnSnapped = (angle: number, free: boolean, from = 0) => {
+  if (free) return angle;
+  const step = (TURN_STEP * Math.PI) / 180;
+  return Math.round((from + angle) / step) * step - from;
+};
+
+/** The direction, in radians, of the first bond lying wholly in the selected atoms: what a drawing's steps are measured from (0 where there is none). */
+export function turnReference(model: { atoms: readonly { id: number; x: number; y: number }[]; bonds: readonly { a: number; b: number }[] }, selected: ReadonlySet<number>): number {
+  const at = new Map(model.atoms.map((a) => [a.id, a] as const));
+  for (const bond of model.bonds) {
+    if (!selected.has(bond.a) || !selected.has(bond.b)) continue;
+    const a = at.get(bond.a);
+    const b = at.get(bond.b);
+    if (a && b) return Math.atan2(b.y - a.y, b.x - a.x);
+  }
+  return 0;
+}
+
 /** Where the selected atoms go, the selection turned by `angle` (radians, anticlockwise) about `about`. */
 export function turned(
   atoms: readonly { id: number; x: number; y: number }[],
@@ -216,7 +246,7 @@ export function turnedOver(
   atoms: ReadonlySet<number>,
   axis: "vertical" | "horizontal",
   about?: Pt,
-): { atoms: { id: number; x: number; y: number; z?: number }[]; bonds: Pick<Bond, "id" | "stereo">[] } {
+): { atoms: { id: number; x: number; y: number; z?: number }[]; bonds: (Pick<Bond, "id"> & Partial<Pick<Bond, "stereo" | "behind">>)[] } {
   const mid = about ?? middleOf(model, atoms);
   if (!mid) return { atoms: [], bonds: [] };
   const moved = model.atoms
@@ -227,8 +257,12 @@ export function turnedOver(
       y: axis === "horizontal" ? 2 * mid.y - a.y : a.y,
       ...(a.z != null ? { z: -a.z } : {}),
     }));
-  const bonds = model.bonds
+  const wedges = model.bonds
     .filter((b) => atoms.has(b.a) && atoms.has(b.b) && (b.stereo === "up" || b.stereo === "down"))
     .map((b) => ({ id: b.id, stereo: b.stereo === "up" ? ("down" as const) : ("up" as const) }));
-  return { atoms: moved, bonds };
+  // (and where two of them cross, the one said to be behind is in front now, as a depth would turn: chem/crossings)
+  const exchanged = turnedOverCrossings(model, atoms);
+  const byId = new Map<number, Pick<Bond, "id"> & Partial<Pick<Bond, "stereo" | "behind">>>(wedges.map((b) => [b.id, b]));
+  for (const c of exchanged) byId.set(c.id, { ...(byId.get(c.id) ?? { id: c.id }), behind: c.behind });
+  return { atoms: moved, bonds: [...byId.values()] };
 }

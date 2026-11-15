@@ -1,10 +1,11 @@
 import clsx from "clsx";
 import { useEffect, useRef, useState } from "react";
 import { DURATION, EASE } from "../theme/motion";
-import { numberDraft, numberField, rangeSaid, setAsItGoes, type NumberEvent } from "./number";
+import { askedFocus, escapeTakes, numberDraft, numberField, rangeOf, rangeSaid, setAsItGoes, type NumberEvent } from "./number";
 
 /** How long a refused number's field is marked, the number it went back to fading in. */
 const REFUSED_MS = 1600;
+
 
 /**
  * A number to type (docs/LOOK.md, Controls). While it is typed in it holds
@@ -23,7 +24,11 @@ export default function NumberField({
   min,
   max,
   step,
+  whole,
+  unsettable,
+  placeholder,
   className,
+  autoFocus = false,
 }: {
   value: number;
   onChange: (n: number) => void;
@@ -31,12 +36,25 @@ export default function NumberField({
   min?: number;
   max?: number;
   step?: number;
+  /** A whole number alone, one with a fraction refused as one out of range is. */
+  whole?: boolean;
+  /** The number may be left unset: emptying the field says so (`onChange` is given NaN), and `value` NaN shows it empty. */
+  unsettable?: boolean;
+  /** What an empty field shows, dimmed: what unset comes to. */
+  placeholder?: string;
   className?: string;
+  /** Focused as it is first shown: where what it holds is asked for at once (a step's card opened to ask for it). */
+  autoFocus?: boolean;
 }) {
-  const range = { min, max, step };
+  const range = rangeOf({ min, max, step, whole, unsettable });
   const [draft, setDraft] = useState(() => numberDraft(value));
   const typing = useRef(false);
   const field = useRef<HTMLInputElement>(null);
+  // (asked for at once: the field taken as it is first shown - the page left where it is)
+  useEffect(() => {
+    if (autoFocus) askedFocus(field.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- (as it is first shown only)
+  }, []);
   // (the number set from outside shown, except over what is being typed)
   useEffect(() => {
     if (!typing.current) setDraft(numberDraft(value));
@@ -71,8 +89,10 @@ export default function NumberField({
       inputMode="decimal"
       aria-label={label}
       aria-invalid={draft.refused || undefined}
+      data-asked={autoFocus || undefined}
       title={rangeSaid(range) || undefined}
       value={draft.text}
+      placeholder={draft.text === "" ? placeholder : undefined}
       spellCheck={false}
       autoComplete="off"
       onFocus={() => (typing.current = true)}
@@ -86,7 +106,7 @@ export default function NumberField({
         else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
           e.preventDefault();
           go({ kind: "step", by: e.key === "ArrowUp" ? 1 : -1 });
-        } else if (e.key === "Escape" && draft.text !== String(value)) {
+        } else if (e.key === "Escape" && escapeTakes(draft.text, value)) {
           // (what was typed taken back; the card it is in stays open)
           e.preventDefault();
           e.stopPropagation();

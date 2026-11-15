@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { longPressMs } from "../longPress";
 import { pageAt } from "../utils/page";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
@@ -7,10 +8,11 @@ import { COLORS } from "../../../theme/colors";
 import { sheetMiddle, sheetOfText } from "../utils/textSheets";
 import { pdfBounds, pointOf } from "../../../../lib/pdf/layout";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { DOUBLE_CLICK_MS, FREE_MS, LONG_PRESS_MS, MOV_PX } from "../constants";
+import { DOUBLE_CLICK_MS, FREE_MS, MOV_PX } from "../constants";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { pressOnEmpty } from "../utils/clickCount";
-import { arrowsIn, cornersOf, inBox, inLasso, marksAtOf, middleOf, molecules3dIn, turned, turnedArrows, turnedBy, wordsIn } from "../utils/selection";
+import { arrowsIn, cornersOf, inBox, inLasso, marksAtOf, middleOf, molecules3dIn, turnReference, turned, turnedArrows, turnedBy, wordsIn } from "../utils/selection";
+import { turnBegun, turnCancelled, turnDropped, turnFrame, turnFreed, turnMoved } from "../utils/turnGesture";
 import { flowIn } from "../workflow/parts";
 import { middleOf as shapeMiddle, turned as turnedShape } from "../../../../lib/chem/shapes";
 import { shapePlace } from "../document";
@@ -39,8 +41,6 @@ const NO_MODEL: Model = { atoms: [], bonds: [] };
 /** The handle's radius on the screen, in px, and how far off it a press still takes it. */
 const HANDLE_PX = 6;
 const HANDLE_HIT = 2;
-/** Turning snaps to steps of this many degrees, until a pause lets it go. */
-const TURN_STEP = 15;
 
 /** A molecule in 3D as a turn takes it, turned as it is now. */
 const turningOf =
@@ -104,10 +104,11 @@ function selectionExtent(
  *   a lasso rather than a box;
  * - a handle above the selection that turns it about its middle, in steps
  *   of 15 degrees, or freely after a pause. Molecules in 3D it turns in the
- *   page's plane, about the line of sight, as it turns the drawing: alone,
- *   several as one body about their common middle, one about its own
- *   centre; selected with the drawing, carried round with it. With Shift,
- *   each molecule turns about its own centre instead, and the drawing stays.
+ *   page's plane, about the line of sight, as it turns the drawing: by
+ *   themselves, freely and never in steps - several as one body about their
+ *   common middle, one about its own centre; selected with the drawing,
+ *   carried round with it, in its steps. With Shift, each molecule turns
+ *   about its own centre instead, freely, and the drawing stays.
  */
 export default function Selection2D() {
   const { model, sel, boxSelect } = useEditor();
@@ -282,7 +283,7 @@ export default function Selection2D() {
         lastEmpty = none;
         // (no box where the view has moved under the press: viewGoal)
         if (!pressMovedUnder(camera)) box(e, sx, sy, kind, false);
-      }, LONG_PRESS_MS);
+      }, longPressMs());
       const onFirstMove = (ev: PointerEvent) => {
         if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < MOV_PX) return;
         // (a pan is no first click)
@@ -372,20 +373,20 @@ export default function Selection2D() {
     const p0 = toWorld(e.clientX, e.clientY);
     const a0 = Math.atan2(p0.y - about.y, p0.x - about.x);
     const gesture = `turn-${performance.now()}`;
-    let free = false;
+    // (the steps are the drawing's own: from the direction of a bond of it)
+    const reference = turnReference(st.model, st.sel.atoms);
     let pause: number | null = null;
     let frame: number | null = null;
     let last = p0;
+    // (what the pointer has turned it; where that snaps to, what is shown on its way there, and when it is let go - turnGesture's)
+    const pointed = () => Math.atan2(last.y - about.y, last.x - about.x) - a0;
+    let g = turnBegun(performance.now());
     st.beginPanHold(e.pointerId);
     st.suppressDoubleClick(DOUBLE_CLICK_MS);
     selectionMoving.active = true;
     // (the angle last put: a frame at the same angle - a step held - puts nothing, the drawing as it is)
     let put = 0;
-    const apply = () => {
-      frame = null;
-      const a = Math.atan2(last.y - about.y, last.x - about.x) - a0;
-      const step = (TURN_STEP * Math.PI) / 180;
-      const angle = free ? a : Math.round(a / step) * step;
+    const lay = (angle: number) => {
       if (angle === put) return;
       put = angle;
       // (molecules with the drawing: carried round in its plane, and turned with it)
@@ -407,14 +408,23 @@ export default function Selection2D() {
       if (carried.length) store.getState().turnMolecules3d(turnedInPlane(carried, about, angle), gesture, turned(from, about, angle), marks);
       else store.getState().moveAtoms(turned(from, about, angle), gesture, marks);
     };
+    // (one turn a frame, every turn laying the drawing out again: the angle shown springs to its step - as a bond's does - or, let go of the steps, eases to the pointer's; frames go on while it is on its way)
+    const frameAt = (now: number) => {
+      frame = null;
+      const next = turnFrame(g, pointed(), reference, now);
+      g = next.gesture;
+      lay(g.shown);
+      if (next.onItsWay) frame = window.requestAnimationFrame(frameAt);
+    };
     const onMove = (ev: PointerEvent) => {
       last = toWorld(ev.clientX, ev.clientY);
-      // (one turn a frame: every turn lays the drawing out again)
-      if (frame == null) frame = window.requestAnimationFrame(apply);
+      g = turnMoved(g, performance.now());
+      if (frame == null) frame = window.requestAnimationFrame(frameAt);
+      // (a pause of FREE_MS since the last move - the bond's rule - lets it go of the steps)
       if (pause != null) window.clearTimeout(pause);
       pause = window.setTimeout(() => {
-        free = true;
-        apply();
+        g = turnFreed(g);
+        if (frame == null) frame = window.requestAnimationFrame(frameAt);
       }, FREE_MS);
     };
     // Escape lets it go: all of it back as it was, the molecules turned as they were (the maintainer, 2026-10-12)
@@ -425,6 +435,8 @@ export default function Selection2D() {
       if (pause != null) window.clearTimeout(pause);
       if (frame != null) window.cancelAnimationFrame(frame);
       pause = frame = null;
+      // (the button's coming up after it puts nothing back)
+      g = turnCancelled(g);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("keydown", onKey, true);
       selectionMoving.active = false;
@@ -434,15 +446,18 @@ export default function Selection2D() {
     };
     const onUp = (ev: PointerEvent) => {
       if (pause != null) window.clearTimeout(pause);
-      if (frame != null) {
-        window.cancelAnimationFrame(frame);
-        apply();
-      }
+      if (frame != null) window.cancelAnimationFrame(frame);
+      frame = null;
+      // (dropped where it is heading, the step - or the pointer's angle, once let go of them - never an angle the spring is passing through)
+      const drop = turnDropped(g, pointed(), reference);
+      if (drop != null) lay(drop);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp, true);
       window.removeEventListener("keydown", onKey, true);
       selectionMoving.active = false;
       const s = store.getState();
+      // (a mark between two bonds the turn has left apart taken away, in its own step - chem/crossings)
+      if (!carried.length) s.settleMove(gesture, from.map((a) => a.id));
       s.endPanHold(ev.pointerId);
       // (and its end is no click on nothing, which would let it go)
       s.suppressDoubleClick(DOUBLE_CLICK_MS);
@@ -454,8 +469,8 @@ export default function Selection2D() {
 
   /**
    * Molecules in 3D turned by the handle in the page's plane - about the
-   * line of sight, as it turns a drawing - in steps of 15 degrees, or
-   * freely after a pause: several as one body about their common middle,
+   * line of sight, as it turns a drawing - freely, never in steps (a
+   * molecule in 3D has no grid to keep to): several as one body about their common middle,
    * which carries them round; one, or each with Shift, about its own
    * centre, where it stands. Either is one undo step, and Escape puts them
    * back. (Turned out of the plane, by a drag on a molecule itself, they
@@ -475,17 +490,13 @@ export default function Selection2D() {
     const p0 = toWorld(e.clientX, e.clientY);
     const a0 = Math.atan2(p0.y - about.y, p0.x - about.x);
     let last = p0;
-    let free = false;
-    let pause: number | null = null;
     let frame: number | null = null;
     st.beginPanHold(e.pointerId);
     st.suppressDoubleClick(DOUBLE_CLICK_MS);
     let put = 0;
     const apply = () => {
       frame = null;
-      const a = Math.atan2(last.y - about.y, last.x - about.x) - a0;
-      const step = (TURN_STEP * Math.PI) / 180;
-      const angle = free ? a : Math.round(a / step) * step;
+      const angle = Math.atan2(last.y - about.y, last.x - about.x) - a0;
       if (angle === put) return;
       put = angle;
       went = true;
@@ -502,16 +513,10 @@ export default function Selection2D() {
     const onMove = (ev: PointerEvent) => {
       last = toWorld(ev.clientX, ev.clientY);
       if (frame == null) frame = window.requestAnimationFrame(apply);
-      if (pause != null) window.clearTimeout(pause);
-      pause = window.setTimeout(() => {
-        free = true;
-        apply();
-      }, FREE_MS);
     };
     const done = () => {
-      if (pause != null) window.clearTimeout(pause);
       if (frame != null) window.cancelAnimationFrame(frame);
-      pause = frame = null;
+      frame = null;
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp, true);
       window.removeEventListener("keydown", onKey, true);

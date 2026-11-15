@@ -13,13 +13,15 @@ import {
 } from "./lib/core";
 import { Deck, viewRegistry, type ViewEntry } from "./ui/views";
 import DocumentBridge from "./ui/views/DocumentBridge";
-import { openable, openedAs, openedTexts, stylesOfFile, textsOf, workspaceOfFile, type Opened, type OpenedStyles } from "./ui/views/openFile";
+import { openable, openedAs, openedTexts, sayNoneTold, stylesOfFile, textsOf, unreadWorkspaceSaid, workspaceOfFile, type Opened, type OpenedStyles } from "./ui/views/openFile";
+import { keptOnline } from "./lib/plugins/online";
 import StyleFileAsk from "./ui/features/StyleEditor/StyleFileAsk";
+import QuestionLayer from "./ui/layouts/QuestionLayer";
 import { afterAnswer, withAsked } from "./ui/features/StyleEditor/styleAsks";
 import { ownChoice, withOwnStyle2d } from "./lib/chem/styleFields";
 import { withOwn3d, withRole } from "./lib/chem/style3d";
 import { forgetFiles, giveFiles, type OpenedFile } from "./ui/views/files";
-import { pdfTakerOf, type OpenedPdf } from "./ui/views/pdfs";
+import { openedPdfs, pdfsDestination, pdfTakerOf, type OpenedPdf } from "./ui/views/pdfs";
 import { pictureTakerOf } from "./ui/views/pictures";
 import { holdPdfPath } from "./lib/pdf/reader";
 import { isPictureName } from "./lib/picture/image";
@@ -28,7 +30,8 @@ import type { PictureToAdd } from "./ui/features/Workspace/store/types";
 import { textTakerOf, type OpenedText } from "./ui/views/texts";
 import type { Action, State, TabInstance } from "./lib/core";
 import type { DocumentStore } from "./lib/doc";
-import { keepClipboard, keepPageUnselected, keepSystemMenuShut, openIntent, undoIntent } from "./lib/doc/shortcuts";
+import { IS_MAC, keepClipboard, keepPageUnselected, keepSystemMenuShut, openIntent, undoIntent } from "./lib/doc/shortcuts";
+import { editFromMenu, editMenuState, tellEditMenu, watchEditMenu } from "./lib/doc/editMenu";
 import { openEachOnce, saverOf, setTabsListed } from "./lib/doc/savers";
 import { useFilesAsked, useOpenAsked } from "./ui/layouts/commands";
 import { isBlankDocument, type WorkspaceDocument } from "./ui/features/Workspace/document";
@@ -42,7 +45,7 @@ import { textOf } from "./lib/io/text";
 import { kindOfFile } from "./lib/calc/probe";
 import { addedReaders } from "./lib/calc/workers";
 import { ALL_PLUGINS, READERS } from "./lib/calc/catalog";
-import { useGuide } from "./lib/plugins/guides";
+import { useGuide } from "./lib/guide/guide";
 import GuideCard from "./ui/guide/GuideCard";
 import { computerResources, fileNow, limitsOf, stopJob, writeJobLimits } from "./lib/jobs";
 import { jobsUnderWay } from "./ui/features/Workspace/workflow/flow";
@@ -57,7 +60,8 @@ import {
   startNetwork,
   useNetwork,
 } from "./lib/net/network";
-import { sayFailedSetUps } from "./ui/setUpSaid";
+import { sayFailedSetUps, sayUsedBefore } from "./ui/setUpSaid";
+import { getUsedBefore } from "./lib/plugins/usedBefore";
 import ConsentDialog from "./ui/network/ConsentDialog";
 import NetworkToasts from "./ui/network/NetworkToasts";
 import UpdateNotice from "./ui/network/UpdateNotice";
@@ -122,6 +126,8 @@ export default function App() {
   // step they fill offered in Quick Add.
   useEffect(() => {
     if (isTauri()) void addedReaders([...READERS, ...ALL_PLUGINS.filter((p) => !READERS.some((r) => r.id === p.id))]).catch(() => {});
+    // (and the plugins online, as the list kept from before has them - nothing fetched - their kinds of file told too)
+    if (isTauri()) void keptOnline();
   }, []);
 
   // A plugin's set-up that ends without its being added, said wherever the chemist is, until dismissed (ui/setUpSaid).
@@ -129,12 +135,14 @@ export default function App() {
 
   // What this computer's jobs may use, as Settings says, told to its runner
   // as Meno starts and whenever Settings changes it: those waiting take it
-  // up at once (lib/jobs `limitsOf`).
+  // up at once (lib/jobs `limitsOf`) - and whether it keeps the computer
+  // awake while their programs run (src-tauri/src/awake.rs).
   useEffect(() => {
     if (!isTauri()) return;
     let computer: { cores: number; memory: number } | null = null;
     const tell = () => {
-      if (computer) void writeJobLimits(limitsOf(useAppSettings.getState().calculations, computer)).catch(() => {});
+      const calculations = useAppSettings.getState().calculations;
+      if (computer) void writeJobLimits({ ...limitsOf(calculations, computer), awake: !calculations.sleepWhileJobsRun }).catch(() => {});
     };
     computerResources().then((c) => {
       computer = c;
@@ -145,18 +153,22 @@ export default function App() {
     });
   }, []);
 
-  // The application's settings - the drawing style among them - read once,
-  // and the network brought into line with them: offline or not, and what
-  // has been allowed. From then on, a change to either is saved.
+  // The application's settings - the drawing style among them - read once
+  // (main.tsx has done it before anything is drawn; here it is the same,
+  // and not behind the network), and the network brought into line with
+  // them: offline or not, and what has been allowed. From then on, a
+  // change to either is saved.
   useEffect(() => {
     let stopUpdates: (() => void) | undefined;
     let gone = false;
     void (async () => {
-      await startNetwork();
       await loadAppSettings();
+      await startNetwork();
       await applyNetworkSettings(useAppSettings.getState().network);
       // keeping Meno up to date, as the network now allows (lib/update)
       if (!gone) stopUpdates = startUpdates();
+      // the plugins set up here before they came online, asked about once (lib/plugins/usedBefore)
+      if (!gone && isTauri()) void getUsedBefore(sayUsedBefore);
     })();
     const unwatch = useNetwork.subscribe((s, prev) => {
       if (!useAppSettings.getState().loaded) return;
@@ -207,6 +219,38 @@ export default function App() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
+
+  // The app menu's Edit > Undo and Redo (macOS) do what the keys do (lib/doc/editMenu), and are greyed where the active
+  // tab has none to do - the focus in a field of the browser's own undo leaves both on.
+  useEffect(() => {
+    if (!isTauri() || !IS_MAC) return;
+    return watchEditMenu((command) => {
+      const id = activeIdRef.current;
+      const doc = id ? documentsRef.current.get(id)?.doc : undefined;
+      editFromMenu(command, { active: document.activeElement, doc, field: (c) => document.execCommand(c) });
+    });
+  }, []);
+  useEffect(() => {
+    if (!isTauri() || !IS_MAC) return;
+    const doc = state.activeId ? documentsRef.current.get(state.activeId)?.doc : undefined;
+    let told = "";
+    const tell = () => {
+      const now = editMenuState(doc ? doc.history() : null, document.activeElement);
+      const key = `${now.undo}|${now.redo}`;
+      if (key === told) return;
+      told = key;
+      tellEditMenu(now);
+    };
+    tell();
+    const stop = doc?.subscribe(tell);
+    window.addEventListener("focusin", tell);
+    window.addEventListener("focusout", tell);
+    return () => {
+      stop?.();
+      window.removeEventListener("focusin", tell);
+      window.removeEventListener("focusout", tell);
+    };
+  }, [state.activeId]);
 
   // Ctrl/Cmd+A never selects the app's own words, and Ctrl/Cmd+C with
   // nothing to copy leaves the clipboard alone: see keepPageUnselected and
@@ -318,10 +362,18 @@ export default function App() {
   // PDFs opened, likewise: on the page of the workspace in front, or on a canvas of their own (ui/views/pdfs)
   const openPdfs = (pdfs: OpenedPdf[], into: string | null): boolean => {
     const take = into ? pdfTakerOf(into) : undefined;
-    if (!take) return openTab({ kind: "workspace", label: pdfs[0].name, data: { pdfs, filename: pdfs[0].name } });
+    if (!take) return openTab(openedPdfs(pdfs));
     take(pdfs);
     return true;
   };
+  // PDFs opened from outside Meno (a double-click, Open With): each in a canvas of its own - in place of a blank one in front - read
+  // in the column, which fills the workspace, the workspace kept behind it; one a tab holds already brings that tab forward
+  const pdfsOfTabs = () =>
+    Object.values(stateRef.current.tabsById).map((t) => {
+      const held = documentsRef.current.get(t.meta.id);
+      const own = held?.kind === "workspace" ? (held.doc as DocumentStore<WorkspaceDocument>).getState().pdfs : (t.content.data as { pdfs?: OpenedPdf[] } | undefined)?.pdfs;
+      return { id: t.meta.id, pdfs: own };
+    });
   // and pictures (ui/views/pictures)
   const openPictures = (pictures: PictureToAdd[], into: string | null): boolean => {
     const take = into ? pictureTakerOf(into) : undefined;
@@ -389,14 +441,14 @@ export default function App() {
   // outside Meno (a workspace file double-clicked: src-tauri/src/opened.rs)
   // - by what each is.
   // (a file opened is the user's first action, where nothing came before it - once it is open: lib/firstAction)
-  const openPaths = async (paths: readonly string[]) => {
+  const openPaths = async (paths: readonly string[], outside = false) => {
     try {
-      await openPathsAlone(paths);
+      await openPathsAlone(paths, outside);
     } finally {
       if (paths.length) firstActionDone();
     }
   };
-  const openPathsAlone = async (paths: readonly string[]) => {
+  const openPathsAlone = async (paths: readonly string[], outside = false) => {
     // (where what is not a workspace file goes: the workspace in front as
     // Open was pressed - not the tab of a workspace file opened with it,
     // which opens as it was saved, untouched: the maintainer, 2026-10-13)
@@ -404,6 +456,7 @@ export default function App() {
     const workspaces: { name: string; workspace: string; path: string }[] = [];
     const texts: OpenedText[] = [];
     const structures: OpenedFile[] = [];
+    const untold: OpenedFile[] = [];
     const pdfs: OpenedPdf[] = [];
     const pictures: PictureToAdd[] = [];
     for (const path of paths) {
@@ -446,10 +499,19 @@ export default function App() {
         }
         const text = textOf(bytes);
         // (what it is: told by what it holds - or, where nothing tells it, by a plugin asked)
-        const opened = openedAs(name, text, path, await kindOfFile(name, text));
+        const kind = await kindOfFile(name, text);
+        // (told to be a workspace but none that reads - not a Meno file, cut short: said, not dropped unseen)
+        const unread = unreadWorkspaceSaid(name, text, kind);
+        if (unread) {
+          console.warn("a workspace file could not be read");
+          setNotice(unread);
+          continue;
+        }
+        const opened = openedAs(name, text, path, kind);
         const asText = textsOf(opened);
         if (asText) texts.push(...asText);
         else structures.push({ name, bytes, path });
+        if (asText && !kind) untold.push({ name, bytes, path });
       } catch (e) {
         setNotice(`${name} could not be read: ${e instanceof Error ? e.message : String(e)}`);
       }
@@ -468,10 +530,28 @@ export default function App() {
     );
     if (rest && workspaces.length && front && stateRef.current.tabsById[front]) act({ type: "SELECT_TAB", id: front });
     if (texts.length) openTexts(texts, front);
-    if (pdfs.length) openPdfs(pdfs, front);
+    if (pdfs.length) {
+      const { forward, fresh, intoFront } = pdfsDestination(outside, pdfs, pdfsOfTabs());
+      for (const id of forward) act({ type: "SELECT_TAB", id });
+      if (fresh.length) openTab(openedPdfs(fresh, true));
+      if (intoFront.length) openPdfs(intoFront, front);
+    }
     if (pictures.length) openPictures(pictures, front);
     if (structures.length) openStructureFiles(structures, front);
+    sayUntold(untold);
   };
+  // Texts nothing told, opened as texts while the plugins online are not
+  // listed: said, with the button that lists them - and those a plugin on
+  // offer then tells read as what they are, as any file opened is (ui/views/openFile `sayNoneTold`).
+  const sayUntold = (untold: OpenedFile[]) =>
+    sayNoneTold(
+      untold.map((u) => u.name),
+      (told) => openStructureFiles(untold.filter((u) => told.includes(u.name)), stateRef.current.activeId),
+      async (name) => {
+        const u = untold.find((x) => x.name === name);
+        return u ? kindOfFile(name, textOf(u.bytes)) : null;
+      },
+    );
   // Closing with unsaved changes: the tabs that hold them, and whether
   // each can be saved (lib/doc/savers).
   const unsavedOf = (p: { kind: "tab"; id: string } | { kind: "window" }): string[] =>
@@ -512,6 +592,7 @@ export default function App() {
   const openFilesAlone = async (files: File[]) => {
     const texts: OpenedText[] = [];
     const structures: OpenedFile[] = [];
+    const untold: OpenedFile[] = [];
     for (const f of files) {
       try {
         const bytes = new Uint8Array(await f.arrayBuffer());
@@ -527,10 +608,19 @@ export default function App() {
         }
         const text = textOf(bytes);
         // (told as Open through the dialog tells it: a catalogue's kind too)
-        const opened = openedAs(f.name, text, undefined, await kindOfFile(f.name, text));
+        const kind = await kindOfFile(f.name, text);
+        // (told to be a workspace but none that reads - not a Meno file, cut short: said, not dropped unseen)
+        const unread = unreadWorkspaceSaid(f.name, text, kind);
+        if (unread) {
+          console.warn("a workspace file could not be read");
+          setNotice(unread);
+          continue;
+        }
+        const opened = openedAs(f.name, text, undefined, kind);
         const asText = textsOf(opened);
         if (asText) texts.push(...asText);
         else structures.push({ name: f.name, bytes });
+        if (asText && !kind) untold.push({ name: f.name, bytes });
       } catch (e) {
         // (as Open through the dialog says it: a file that does not read - a workspace cut short - said so, not dropped unseen)
         setNotice(`${f.name} could not be read: ${e instanceof Error ? e.message : String(e)}`);
@@ -540,6 +630,7 @@ export default function App() {
     const front = stateRef.current.activeId;
     if (texts.length) openTexts(texts, front);
     if (structures.length) openStructureFiles(structures, front);
+    sayUntold(untold);
   };
   // A workspace file's workspace in a tab of its own - where it opens: one
   // that does not - saved by a newer Meno, say - is said so, and leaves no
@@ -664,7 +755,7 @@ export default function App() {
   openPathsNow.current = openPaths;
   useEffect(() => {
     if (!isTauri()) return;
-    return watchOpenedFiles((paths) => void openPathsNow.current(paths));
+    return watchOpenedFiles((paths) => void openPathsNow.current(paths, true));
   }, []);
 
   const ctl: TabsController = {
@@ -737,13 +828,13 @@ export default function App() {
   const openFilesRef = useRef(openFiles);
   openFilesRef.current = openFiles;
   useEffect(() => useFilesAsked.subscribe((s, prev) => s.asked !== prev.asked && void openFilesRef.current([...s.files])), []);
-  // (a guide shown with no workspace in front - from Settings, Plugins - brought to one: what it points at is a workspace's)
+  // (the first steps shown with no workspace in front - from Settings, General - brought to one: what they point at is a workspace's)
   const stateNow = useRef(state);
   stateNow.current = state;
   useEffect(
     () =>
       useGuide.subscribe((g, prev) => {
-        if (!g.open || prev.open) return;
+        if (g.open == null || prev.open != null) return;
         const s = stateNow.current;
         if (s.activeId && s.tabsById[s.activeId]?.content.kind === "workspace") return;
         const workspace = [...s.tabOrder].reverse().find((id) => s.tabsById[id]?.content.kind === "workspace");
@@ -869,8 +960,9 @@ export default function App() {
         />
       )}
       {pendingClose && (
+        // (a question about the whole window: asked in the window's own layer, over all else - layouts/QuestionLayer)
+        <QuestionLayer key="confirm-discard">
         <ConfirmDiscard
-          key="confirm-discard"
           title={
             pendingClose.kind === "tab"
               ? `Close "${state.tabsById[pendingClose.id]?.meta.label ?? "this tab"}"?`
@@ -893,6 +985,7 @@ export default function App() {
           }}
           onSave={savable(pendingClose) ? () => void saveThenClose(pendingClose) : undefined}
         />
+        </QuestionLayer>
       )}
       </AnimatePresence>
       {state.mountOrder.map((id) => {

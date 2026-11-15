@@ -16,56 +16,14 @@ import { angleOf, centroid, drawnVolume, insidePolygon, segmentsCross, splitOuts
 import { hydrogenSpot, hydrogenWritten } from "./metrics";
 import { key, type Molecule } from "./perceive";
 import { atomDepth, isName, namesLaid } from "./names";
+import { drawnAxisSense, torsionSense } from "../chem/perception/stereo/senses";
+import type { Axial, Cumulated, Tetrahedral } from "../chem/perception/stereo/types";
 
-export { drawnVolume };
+// (the reading of a drawn volume and of an axis, and the types, are the core's: lib/chem/perception/stereo)
+export { drawnAxisSense, drawnVolume, torsionSense };
+export type { Axial, Cumulated, Tetrahedral };
 
-export type Tetrahedral = {
-  /** Neighbours in order; -1 for an implicit H, last. */
-  neighbours: readonly number[];
-  /** The sign of the volume the first three span, seen from the centre. */
-  volume: 1 | -1;
-};
 
-/**
- * An axis of chirality: the single bond between `atoms`, each end with two
- * other neighbours (a biaryl's - BINAP's C1-C1'), and how the two `refs`,
- * one bonded to each end, are turned about it: the sign of the torsion
- * refs[0]-atoms[0]-atoms[1]-refs[1] (IUPAC's: + where, looking along the
- * axis, the near one turns clockwise onto the far one). Drawn flat, it is
- * shown by a wedge on a bond out of an end of it, narrow there, to the
- * neighbour that stands out of the page, the other end's neighbours in it -
- * as an atropisomer's wedge is read.
- */
-export type Axial = { atoms: readonly [number, number]; refs: readonly [number, number]; sense: 1 | -1 };
-
-/** The sign of the torsion p-q-r-s, IUPAC's: + where, looking from q to r, p turns clockwise onto s. */
-export function torsionSense(p: readonly number[], q: readonly number[], r: readonly number[], s: readonly number[]): 1 | -1 | 0 {
-  const b1 = [q[0] - p[0], q[1] - p[1], q[2] - p[2]];
-  const b2 = [r[0] - q[0], r[1] - q[1], r[2] - q[2]];
-  const b3 = [s[0] - r[0], s[1] - r[1], s[2] - r[2]];
-  const c = [b2[1] * b3[2] - b2[2] * b3[1], b2[2] * b3[0] - b2[0] * b3[2], b2[0] * b3[1] - b2[1] * b3[0]];
-  const v = b1[0] * c[0] + b1[1] * c[1] + b1[2] * c[2];
-  return Math.abs(v) < 1e-9 ? 0 : v > 0 ? 1 : -1;
-}
-
-/**
- * How an axis drawn flat - `pos` - turns, where `lifted`, a neighbour of
- * its first end, stands `up` (+1) or down (-1) out of the page and the
- * rest are in it: its sense, as `Axial` has it, or 0.
- */
-export function drawnAxisSense(
-  pos: (a: number) => Point,
-  axis: Omit<Axial, "sense">,
-  lifted: number,
-  up: 1 | -1,
-): 1 | -1 | 0 {
-  const [i, j] = axis.atoms;
-  const [a, b] = axis.refs;
-  // (the end's other neighbour stands the other way: the ring turned about the axis)
-  const z = lifted === a ? up : -up;
-  const at = (k: number, depth = 0) => [pos(k).x, pos(k).y, depth];
-  return torsionSense(at(a, z), at(i), at(j), at(b));
-}
 
 /**
  * The wedge that shows an axis drawn flat: out of an end, narrow there, on
@@ -160,6 +118,54 @@ export function placeStereo(
     .filter(([a, b]) => pos.has(a) && pos.has(b))
     .map(([a, b]) => [a, b, pos.get(a)!, pos.get(b)!] as const);
 
+  // Which two of a centre's four bonds may carry a solid and a hashed
+  // wedge side by side, best first: at a centre in no ring, two drawn
+  // closer together than the two opposite them, those under 180 degrees
+  // apart (ST-1.1.1, as the layout draws such a centre: Brecher 2008,
+  // GR-4.1.3); at a spiro atom, the two bonds of one of its rings - the
+  // smaller ring, or of rings alike the one drawn narrower there (ST-1.3.4).
+  // Never a pair with a bond taken, or one that would join two centres: the
+  // centre is then shown another way.
+  const wedgePairs = (c: number): [number, number][] => {
+    const nb = mol.neighbours[c];
+    const at = pos.get(c)!;
+    if (nb.length !== 4 || nb.some((n) => !pos.has(n))) return [];
+    // (and never a double bond: a phosphine oxide's P=O stays plain - ST-1.5)
+    const single = (n: number) => (mol.bonds[mol.bondIndex.get(key(c, n)) ?? -1]?.order ?? 1) === 1;
+    const free = (n: number) => !used.has(key(c, n)) && !tetra.has(n) && single(n);
+    const toward = (n: number) => angleOf(sub(pos.get(n)!, at));
+    const ccw = (u: number, v: number) => (((toward(v) - toward(u)) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+    let pairs: { pair: [number, number]; size: number; gap: number }[] = [];
+    if (mol.systemOf[c] < 0) {
+      const round = [...nb].sort((u, v) => toward(u) - toward(v));
+      for (let i = 0; i < 4; i++) {
+        const [w0, w1, p0, p1] = [0, 1, 2, 3].map((k) => round[(i + k) % 4]);
+        const gap = ccw(w0, w1);
+        const plain = ccw(p0, p1);
+        if (plain < Math.PI - PAIR_IN_LINE && gap < plain - 1e-6) pairs.push({ pair: [w0, w1], size: 0, gap });
+      }
+    } else {
+      // (a spiro atom: every ring through it runs through two of its bonds
+      // that no ring through the other two does)
+      if (nb.some((n) => !ringBond(c, n))) return [];
+      const rings = mol.ringsOf[c].map((r) => ({ size: mol.rings[r].length, own: nb.filter((n) => mol.rings[r].includes(n)) }));
+      const first = rings[0]?.own;
+      if (!first || first.length !== 2) return [];
+      const other = nb.filter((n) => !first.includes(n));
+      const sides = [first, other] as [number, number][];
+      if (!rings.every((r) => r.own.length === 2 && sides.some((s) => s.every((n) => r.own.includes(n))))) return [];
+      pairs = sides.map((s) => ({
+        pair: s,
+        size: Math.min(...rings.filter((r) => s.every((n) => r.own.includes(n))).map((r) => r.size)),
+        gap: Math.min(ccw(s[0], s[1]), ccw(s[1], s[0])),
+      }));
+    }
+    return pairs
+      .filter((p) => p.pair.every(free))
+      .sort((p, q) => p.size - q.size || p.gap - q.gap)
+      .map((p) => p.pair);
+  };
+
   // centres with fewest ways to show them first, so they get theirs
   const options = (c: number) => mol.neighbours[c].filter((n) => !ringBond(c, n)).length;
 
@@ -177,13 +183,18 @@ export function placeStereo(
     // oxygen - are nothing of the kind)
     const touches = (a: number, b: number) =>
       (wideEnds.has(a) ? 10 : 0) + (narrowEnds.has(b) ? 10 : 0);
+    // (a ring bond only where there is no other: with no H to draw and
+    // every bond out of the rings to another centre, a wedge on a ring bond
+    // rather than one between two centres - Brecher 2006, ST-0.2, ST-0.5)
+    const outs = mol.neighbours[c].filter((n) => !ringBond(c, n));
+    const ringFirst = !hasH && outs.length > 0 && outs.every((n) => tetra.has(n));
     for (const n of mol.neighbours[c]) {
       if (used.has(key(c, n))) continue;
       const inRing = ringBond(c, n);
       const end = mol.neighbours[n].length === 1;
       const centre = tetra.has(n);
       const rank =
-        (inRing ? 100 : 0) +
+        (inRing ? (ringFirst ? 1 : 100) : 0) +
         (end ? 0 : 2) +
         (centre ? 4 : 0) +
         (mol.el[n] === "H" ? -1 : 0) +
@@ -308,7 +319,7 @@ export function placeStereo(
     // A wedge that says the configuration only as the bonds round it fall
     // exactly - two of them in a line, or all of them on one side of the
     // centre (a bridgehead drawn flat, ibogaine's) - reads by luck: a
-    // reader, RDKit among them, may take it the other way. So each choice
+    // reader may take it the other way. So each choice
     // is first taken only where it reads the same with any one of the bonds
     // in the page turned a little either way; failing every one of them,
     // as it reads.
@@ -329,8 +340,26 @@ export function placeStereo(
         !p || lift[i] !== 0 ||
         [-TURN_TEST, TURN_TEST].every((d) => reads(drawn.map((q, j) => (j === i && q ? turnAbout(q, at, d) : q)), lift)),
       );
-    let pick: { choice: Choice; stereo: "up" | "down"; strict: boolean } | null = null;
-    for (const strict of [true, false]) {
+    let pick: { choice: Choice; stereo: "up" | "down"; strict: boolean; also?: number } | null = null;
+    // Two bonds that are to carry a solid and a hashed wedge, side by side:
+    // an acyclic centre's, drawn as the layout draws one (ST-1.1.1), and a
+    // spiro atom's two bonds of one ring (ST-1.3.4) - each way round, as
+    // its configuration reads.
+    for (const pair of hasH ? [] : wedgePairs(c)) {
+      for (const strict of [true, false]) {
+        for (const stereo of ["up", "down"] as const) {
+          const lift = t.neighbours.map((n) => (n === pair[0] ? (stereo === "up" ? 1 : -1) : n === pair[1] ? (stereo === "up" ? -1 : 1) : 0));
+          const drawn = t.neighbours.map((n) => pos.get(n) ?? null);
+          if (strict ? surely(drawn, lift) : reads(drawn, lift)) {
+            pick = { choice: { to: pair[0], rank: 0 }, stereo, strict, also: pair[1] };
+            break;
+          }
+        }
+        if (pick) break;
+      }
+      if (pick) break;
+    }
+    for (const strict of pick ? [] : [true, false]) {
       for (const choice of choices) {
         const place = (n: number) => (n === -1 ? hPos : pos.get(n) ?? null);
         for (const stereo of ["up", "down"] as const) {
@@ -359,6 +388,13 @@ export function placeStereo(
           else {
             used.add(key(c, choice.to));
             wideEnds.add(choice.to);
+          }
+          // (and the other of a pair, the other way)
+          const also = pick!.also;
+          if (also != null) {
+            wedges.push({ from: c, to: also, stereo: stereo === "up" ? "down" : "up" });
+            used.add(key(c, also));
+            wideEnds.add(also);
           }
           // A ring atom's two groups - erythromycin's OH and methyl on one
           // carbon - each show which face they are on: the one in front on
@@ -473,6 +509,9 @@ function inkGap(h: Point, p: Point, letters: number): number {
   const x1 = p.x + 0.25 + 0.4 * (letters - 1);
   return Math.max(x0 - (h.x + 0.25), h.x - 0.25 - x1, Math.abs(h.y - p.y) - 0.5);
 }
+
+/** How near 180 degrees two bonds in the page may be and still not be one line, for a pair of wedges opposite them (the reader's own). */
+const PAIR_IN_LINE = (10 * Math.PI) / 180;
 
 /** How far each bond in the page round a centre is turned, either way, to ask whether a wedge reads the same. */
 const TURN_TEST = (12 * Math.PI) / 180;

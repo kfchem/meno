@@ -1,7 +1,7 @@
 import type { TabKind } from "../../lib/core";
-import { cataloguedKinds, kindOf, kinds, MARK_REACH, textKinds, type Kind } from "../../lib/io/kinds";
+import { cataloguedKinds, kindOf, kinds, MARK_REACH, MENO_KINDS, textKinds, type Kind } from "../../lib/io/kinds";
 import { opensAsText } from "../features/Workspace/utils/io";
-import { keptNamedIn } from "../features/Workspace/utils/workspace";
+import { keptNamedIn, workspaceProblem } from "../features/Workspace/utils/workspace";
 import { holdOutputsOf } from "../../lib/calc/asks";
 import { holdPdfsOf } from "../../lib/pdf/reader";
 import { holdPicturesOf } from "../../lib/picture/held";
@@ -9,6 +9,11 @@ import { holdJobFilesOf, type OpenedFrom } from "../features/Workspace/workflow/
 import { isMenoFile, menoKindOf, NotMenoFile, readMenoFile, readStyleFile } from "../../lib/doc/menoFile";
 import { readStyleFileText, type StyleFile } from "../../lib/chem/styleFile";
 import { useNotices } from "../notices";
+import { listOnline, onlineEntry, useOnline } from "../../lib/plugins/online";
+import type { CatalogueEntry } from "../../lib/plugins/catalogue";
+import { anyPluginById, type Plugin } from "../../lib/calc/catalog";
+import { addPlugin } from "../../lib/calc/workers";
+import { addOnline } from "../../lib/calc/addOnline";
 import type { OpenedText } from "./texts";
 
 /** What a file opens as: a tab of `kind`, named for the file, holding `data`. */
@@ -20,10 +25,84 @@ const EXT_TEXT = new Set([
 ]);
 
 /**
+ * Files nothing told, opened as texts while the plugins online are not
+ * listed (lib/plugins/online): one of them may read them. Said in the
+ * corner, once for those opened together, with the button that lists them
+ * - nothing fetched without it. Once they are listed, the same notice says,
+ * in its place, what each now told is and which plugin reads it, with Add:
+ * the plugin added - got first, where it is on offer online - and the file
+ * read again as what it is (`again`). A text of a plain kind - a note, a
+ * table, code - is not said; a log is.
+ */
+export function sayNoneTold(names: readonly string[], again: (told: string[]) => void, tell: (name: string) => Promise<Kind | null>): void {
+  const said = names.filter((n) => !EXT_TEXT.has(n.split(".").pop()?.toLowerCase() ?? "") || /\.log$/i.test(n));
+  if (!said.length || useOnline.getState().state === "listed") return;
+  const notices = useNotices.getState();
+  const id = "none-told";
+  const title = "Opened as text";
+  notices.show({
+    id,
+    title,
+    text: `No plugin added reads ${said.join(", ")}.`,
+    stays: true,
+    action: {
+      label: "List the plugins online",
+      keeps: true,
+      run: () => {
+        notices.show({ id, title, text: "Listing the plugins online…", stays: true });
+        void listOnline(true).then(async () => {
+          const s = useOnline.getState();
+          if (s.state !== "listed") return notices.show({ id, title, text: s.problem ?? `No plugin added reads ${said.join(", ")}.` });
+          const offers = (await Promise.all(said.map(async (name) => ({ name, kind: await tell(name) })))).flatMap(({ name, kind }) => {
+            const by = kind ? whoWouldRead(kind) : null;
+            return kind && by ? [{ name, kind, by }] : [];
+          });
+          if (!offers.length) return notices.show({ id, title, text: `No plugin online reads ${said.join(", ")}.` });
+          // (each file told with the plugin that reads it: the first in the notice's place, the others beside it)
+          offers.forEach(({ name, kind, by }, k) => {
+            const its = k === 0 ? id : `${id} ${name}`;
+            notices.show({
+              id: its,
+              title,
+              text: `${name} is ${kind.name}: the ${by.name} plugin reads it.`,
+              stays: true,
+              action: {
+                label: `Add ${by.name}`,
+                keeps: true,
+                run: () => {
+                  notices.show({ id: its, title, text: `Adding ${by.name}…`, stays: true });
+                  (by.plugin ? addPlugin(by.plugin) : addOnline(by.entry!)).then(
+                    () => {
+                      notices.dismiss(its);
+                      again([name]);
+                    },
+                    (e: unknown) => notices.show({ id: its, title, text: e instanceof Error ? e.message : String(e) }),
+                  );
+                },
+              },
+            });
+          });
+        });
+      },
+    },
+  });
+}
+
+/** The plugin that reads a kind only plugins not added read: the first it names (lib/io/kinds `offeredKinds`) - here, or on offer online. */
+function whoWouldRead(kind: Kind): { name: string; plugin?: Plugin; entry?: CatalogueEntry } | null {
+  for (const id of kind.suggest ?? []) {
+    const plugin = anyPluginById(id);
+    if (plugin) return { name: plugin.name, plugin };
+    const entry = onlineEntry(id);
+    if (entry) return { name: entry.name, entry };
+  }
+  return null;
+}
+
+/**
  * The files Open offers, as it is asked: every kind Meno takes in
- * (lib/io/kinds) - its own, those the plugins added bring, and those the
- * catalogues of the plugins added name, so that a plugin not added can be
- * suggested - and text: what the plugins added know besides - a
+ * (lib/io/kinds) - its own, those the plugins added bring, and those only
+ * plugins not added read, so that one of them can be suggested - and text: what the plugins added know besides - a
  * calculation's input they write, or colour - to be read and changed in a
  * workspace's column.
  */
@@ -57,6 +136,19 @@ export function stylesOfFile(bytes: Uint8Array): OpenedStyles | null {
   const styles = readStyleFileText(file.styles);
   if (!styles) throw new NotMenoFile("It is a style file whose styles do not read.");
   return { styles, picture: file.picture };
+}
+
+/**
+ * Why a file told to be a Meno workspace - by its name, or what it holds -
+ * is not opened: none where it reads, or `bytes` were no zip but a text
+ * that is the workspace's JSON. Said as "<name> could not be read: ...",
+ * so that a `.meno` that is none (cut short, not a Meno file at all, saved
+ * by a newer Meno) is never dropped without a word.
+ */
+export function unreadWorkspaceSaid(name: string, text: string, kind: Kind | null): string | null {
+  if (kind?.id !== MENO_KINDS.workspace.id) return null;
+  const problem = workspaceProblem(text);
+  return problem ? `${name} could not be read: ${problem}.` : null;
 }
 
 /**

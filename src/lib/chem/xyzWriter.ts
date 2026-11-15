@@ -18,11 +18,13 @@ export type XyzFrame = { atoms: readonly { el: string; x: number; y: number; z: 
  */
 export const MENO_XYZ_ENERGY = { id: "meno", pattern: "\\bE = (-?\\d+(?:\\.\\d+)?(?:[eE][-+]?\\d+)?) Eh\\b", unit: "hartree" as const };
 
-/** The comment a frame gets: its name, then - where there are several frames - which it is of how many, then its energy in hartrees, where it is known; on one line. */
-export function xyzComment(name: string, frame?: { i: number; of: number }, energy?: number): string {
+/** The comment a frame gets: its name, then - where there are several frames - which it is of how many, then its energy in hartrees, where it is known, then why it did not finish, where it did not; on one line. */
+export function xyzComment(name: string, frame?: { i: number; of: number }, energy?: number, failed?: string | null): string {
   const parts = [name.replace(/[\r\n]+/g, " ").trim()];
   if (frame && frame.of > 1) parts.push(`frame ${frame.i + 1}/${frame.of}`);
   if (energy != null && Number.isFinite(energy)) parts.push(`E = ${energy.toFixed(10)} Eh`);
+  // (where the frame did not finish, why - on its one line, so that no reader takes its energy for a result)
+  if (failed) parts.push(`failed: ${failed.replace(/\s+/g, " ").trim().slice(0, 200)}`);
   return parts.filter(Boolean).join(" ");
 }
 
@@ -45,8 +47,7 @@ export function writeXyz(frames: readonly XyzFrame[]): string {
  * words: it holds each atom's element and position only, so their charges,
  * radicals, isotopes and bonds are not written - each said, with how many,
  * where there are any; null where there is nothing it leaves out. The
- * format's own limit, said rather than kept silent (the command centre,
- * 2026-10-22).
+ * format's own limit, said rather than kept silent (2026-10-22).
  */
 export function xyzLeavesOut(molecules: readonly { atoms: readonly { charge?: number; radical?: unknown; isotope?: number }[]; bonds: readonly unknown[] }[]): string | null {
   const atoms = molecules.flatMap((m) => m.atoms);

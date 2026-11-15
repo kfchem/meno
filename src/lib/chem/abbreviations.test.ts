@@ -3,6 +3,7 @@ import {
   ABBREVIATIONS,
   abbreviationOf,
   abbreviationStructure,
+  smilesGroup,
   labelRuns,
   labelUnitNames,
   labelUnits,
@@ -16,6 +17,8 @@ import { substitutedAryl } from "./substitutedAryl";
 import { writeSmiles } from "./smiles";
 import { implicitHydrogens } from "./molecule";
 import { readSmiles } from "./smiles";
+import { LIGANDS } from "./ligands";
+import { REAGENTS } from "./reagents";
 
 describe("SMILES, read", () => {
   it("reads branches, ring closures and aromatic bonds", () => {
@@ -309,6 +312,9 @@ describe("abbreviations of the user's own", () => {
   it("are given a structure with one * bonded to the atom they are attached by", () => {
     expect(structureProblem(npe.smiles)).toBeNull();
     expect(structureProblem("CC")).toMatch(/one "\*"/);
+    // (an aromatic ring that cannot be given single and double bonds as written: refused, said - never an H nobody wrote)
+    expect(structureProblem("*c1ccnc1")).toBe("The SMILES cannot be read: its aromatic ring of 5 atoms (2, 3, 4, 5 and 6) cannot have alternating double bonds: is a charge or an H missing?");
+    expect(structureProblem("*c1cc[nH]c1")).toBeNull();
     expect(structureProblem("*C*")).toMatch(/one "\*"/);
     expect(structureProblem("C(*)(*)")).toMatch(/one "\*"/);
     expect(structureProblem("*")).toMatch(/at least one atom/);
@@ -485,3 +491,35 @@ describe("a long label", () => {
   });
 });
 
+describe("a group's double bond, cis or trans", () => {
+  it("is kept as its SMILES says: a ref on the * moved to its end's other atom, the sense turned - or, with none there, the atom outside", () => {
+    // (*/C=C/C: the * below C1, the methyl above C2 - trans; C1 has no other atom, so the atom outside it is attached to, -1)
+    expect(smilesGroup("*/C=C/C").bonds.find((b) => b.cisTrans)?.cisTrans).toEqual({ refs: [-1, 2], cis: false });
+    // (*/C(F)=C/F: the * trans to the far F, so the F on C1 cis to it)
+    expect(smilesGroup("*/C(F)=C/F").bonds.find((b) => b.cisTrans)?.cisTrans).toEqual({ refs: [1, 3], cis: true });
+  });
+
+  it("is kept by an abbreviation of the user's own, and by one put together from it by rule", () => {
+    try {
+      setCustomAbbreviations([{ label: "Pro", name: "(E)-prop-1-enyl", smiles: "*/C=C/C" }]);
+      expect(abbreviationStructure("Pro")!.bonds.find((b) => b.cisTrans)?.cisTrans).toEqual({ refs: [-1, 2], cis: false });
+      // (OPro, *O/C=C/C: the O between, its ref the O itself, the sense kept)
+      expect(abbreviationStructure("OPro")!.bonds.find((b) => b.cisTrans)?.cisTrans).toEqual({ refs: [0, 3], cis: false });
+    } finally {
+      setCustomAbbreviations([]);
+    }
+  });
+
+  it("is kept by every group, reagent and ligand Meno has: each structure says what its SMILES says", () => {
+    const said = (smiles: string) => readSmiles(smiles).bonds.filter((b) => b.cisTrans).length;
+    for (const a of ABBREVIATIONS) {
+      const s = abbreviationStructure(a.label);
+      if (s) expect(s.bonds.filter((b) => b.cisTrans).length, a.label).toBe(said(a.smiles));
+    }
+    for (const r of [...REAGENTS, ...LIGANDS]) {
+      if (!r.smiles) continue;
+      const s = abbreviationStructure(r.label);
+      if (s) expect(s.bonds.filter((b) => b.cisTrans).length, r.label).toBe(said(r.smiles.replace(/\[(\w+):\d+\]/g, "[$1]")));
+    }
+  });
+});

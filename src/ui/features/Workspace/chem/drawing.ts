@@ -10,7 +10,7 @@
  * (and H) that say it.
  */
 import { wedgeNarrowAtom } from "../../../../lib/chem/layout2d";
-import { implicitHydrogens, valenceOrder } from "../../../../lib/chem/molecule";
+import { implicitHydrogens, setValenceOrder, valenceOrder } from "../../../../lib/chem/molecule";
 import type { WriterModel } from "../../../../lib/chem/molWriter";
 import { unsureStereo, wedgesForFlat, type DrawnAtom, type DrawnBond } from "../../../../lib/layout/drawn";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
@@ -28,30 +28,55 @@ export function degrees(bonds: readonly Pick<Bond, "a" | "b">[]): Map<number, nu
   return degree;
 }
 
-/** Which end of a wedged bond is narrow: its stereocentre. */
-export function narrowEnd(b: Bond, degree: Map<number, number>): number {
-  return wedgeNarrowAtom({ a1: b.a, a2: b.b, order: b.order, stereoOrient: b.stereoOrient }, degree);
+/** Which end of a wedged bond is narrow: its stereocentre (`Bond.narrow`; none given, the end with more bonds by `degree`). */
+export function narrowEnd(b: Pick<Bond, "a" | "b" | "narrow">, degree: Map<number, number>): number {
+  return wedgeNarrowAtom({ a1: b.a, a2: b.b, narrow: b.narrow }, degree);
 }
 
-/** Which way round a wedge narrow at `narrow` is held, the drawing counting bonds as `degree` does. */
-export function orientFor(
-  b: Pick<Bond, "a" | "b" | "order">,
-  narrow: number,
-  degree: Map<number, number>,
-): NonNullable<Bond["stereoOrient"]> {
-  const usual = wedgeNarrowAtom({ a1: b.a, a2: b.b, order: b.order, stereoOrient: "principle" }, degree);
-  return usual === narrow ? "principle" : "reverse";
+/** Whether a bond is drawn narrow at one end: a wedge or hashed wedge, or a ring's bond in perspective toward the viewer. */
+export function isWedge(b: Pick<Bond, "stereo" | "display">): boolean {
+  return b.stereo === "up" || b.stereo === "down" || b.display === "wedge";
+}
+
+/**
+ * The model with every wedge's narrow end given by atom (`Bond.narrow`), so
+ * that a bond added or taken away beside a wedge does not move it to the
+ * other end, as the end with more bonds, counted again after each edit,
+ * did. A wedge whose narrow end is one of its atoms keeps it. Any other -
+ * one the edit made, or whose narrow atom the edit took from it - is narrow
+ * where the drawing had it before the edit (`before`, the bond by id) while
+ * that is still one of its ends, and otherwise at its end with more bonds.
+ */
+export function wedgesHeld(model: Model, before?: Model): Model {
+  // (no bond changed: none counted otherwise, so none read otherwise - an atom dragged)
+  if (model.bonds === before?.bonds) return model;
+  const loose = (b: Bond) => isWedge(b) && b.narrow !== b.a && b.narrow !== b.b;
+  if (!model.bonds.some(loose)) return model;
+  const now = degrees(model.bonds);
+  const was = before ? degrees(before.bonds) : now;
+  const old = new Map((before?.bonds ?? []).map((b) => [b.id, b]));
+  const bonds = model.bonds.map((b) => {
+    if (!loose(b)) return b;
+    const p = old.get(b.id);
+    const kept = p && isWedge(p) ? narrowEnd(p, was) : undefined;
+    return { ...b, narrow: kept === b.a || kept === b.b ? kept : narrowEnd(b, now) };
+  });
+  return { ...model, bonds };
 }
 
 /** The H an atom carries and the drawing does not show: by its valence, for an element; none for a label. */
 export function undrawnHydrogens(model: Model): Map<number, number> {
   const sum = new Map<number, number>();
+  // (and toward a valence a file sets: a metal's coordination bonds counted, as the file counts them - lib/chem/molecule `setValenceOrder`)
+  const setSum = new Map<number, number>();
   const el = new Map(model.atoms.map((a) => [a.id, a.el]));
   for (const b of model.bonds) {
     // (a dative bond lends a pair, and takes no H from either end - but a
     // carbon lending it; nor does a coordination or a hydrogen bond)
     sum.set(b.a, (sum.get(b.a) ?? 0) + valenceOrder(b, el.get(b.a)));
     sum.set(b.b, (sum.get(b.b) ?? 0) + valenceOrder(b, el.get(b.b)));
+    setSum.set(b.a, (setSum.get(b.a) ?? 0) + setValenceOrder(b, el.get(b.a)));
+    setSum.set(b.b, (setSum.get(b.b) ?? 0) + setValenceOrder(b, el.get(b.b)));
   }
   return new Map(
     model.atoms.map((a) => [
@@ -60,7 +85,7 @@ export function undrawnHydrogens(model: Model): Map<number, number> {
         ? 0
         : a.valence != null
           ? // (a valence a file sets: what the bonds leave of it)
-            Math.max(0, a.valence - (sum.get(a.id) ?? 0))
+            Math.max(0, a.valence - (setSum.get(a.id) ?? 0))
           : implicitHydrogens(a.el, sum.get(a.id) ?? 0, a.charge ?? 0, a.radical),
     ]),
   );
@@ -76,6 +101,7 @@ export function drawingOf(model: Model): { atoms: DrawnAtom[]; bonds: DrawnBond[
     y: a.y,
     el: a.el,
     hs: hs.get(a.id) ?? 0,
+    ...(a.charge ? { charge: a.charge } : {}),
     ...(a.z != null ? { z: a.z } : {}),
     ...(a.stereoCentre ? { centre: true } : {}),
   }));
@@ -90,7 +116,9 @@ export function drawingOf(model: Model): { atoms: DrawnAtom[]; bonds: DrawnBond[
         b: c,
         order: b.order,
         ...(wedged ? { wedge: { narrow: index.get(narrowEnd(b, degree))!, stereo: b.stereo as "up" | "down" } } : {}),
-        ...(b.stereo === "wavy" ? { either: true } : {}),
+        // (either configuration: a wavy bond's at its ends, and a double bond's own - a MOL file's crossed one, V2000's 3, V3000's
+        //  CFG=2 - whose cis or trans is not known, however its ends happen to lie)
+        ...(b.stereo === "wavy" || (b.order === 2 && b.stereo === "either") ? { either: true } : {}),
       },
     ];
   });
@@ -111,7 +139,8 @@ export function forFlatReaders(model: Model): WriterModel {
   const ids = model.atoms.map((a) => a.id);
   let next = Math.max(0, greatest(ids), greatest(model.bonds.map((b) => b.id))) + 1;
   const outAtoms = [...model.atoms];
-  const outBonds: Bond[] = [...model.bonds];
+  // (each wedge there is held where it is narrow, before an H is added beside it)
+  const outBonds: Bond[] = [...wedgesHeld(model).bonds];
   const hydrogen = new Map<number, number>();
   for (const h of flat.hydrogens) {
     const id = next++;
@@ -119,14 +148,13 @@ export function forFlatReaders(model: Model): WriterModel {
     outBonds.push({ id: next++, a: ids[h.on], b: id, order: 1 });
     hydrogen.set(h.on, id);
   }
-  const degree = degrees(outBonds);
   for (const w of flat.wedges) {
     const from = ids[w.from];
     const to = w.to === -1 ? hydrogen.get(w.from)! : ids[w.to];
     const k = outBonds.findIndex((b) => (b.a === from && b.b === to) || (b.a === to && b.b === from));
     if (k < 0) continue;
     const b = outBonds[k];
-    outBonds[k] = { ...b, stereo: w.stereo, stereoOrient: orientFor(b, from, degree) };
+    outBonds[k] = { ...b, stereo: w.stereo, narrow: from };
   }
   return { atoms: outAtoms, bonds: outBonds };
 }

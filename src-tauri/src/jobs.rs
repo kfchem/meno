@@ -33,7 +33,7 @@
 use crate::pixienv;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fs::{self, File, OpenOptions, TryLockError};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Component, Path, PathBuf};
@@ -108,15 +108,20 @@ pub struct JobSpec {
     pub name: String,
     pub program: String,
     pub args: Vec<String>,
-    /// A file in its folder that it reads as its input (its standard input) -
-    /// Gaussian's, run as `g16 <input`; none, it reads nothing.
+    /// A file in its folder that it reads as its input (its standard input:
+    /// `program <input`); none, it reads nothing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stdin: Option<String>,
     /// What it is given beside the environment its runner was started in.
     pub env: BTreeMap<String, String>,
-    /// The cores it takes - its plugin given them, its program told (`THREADS`) - as the queue counts it.
+    /// The cores it takes - its plugin given them, its program told (`THREADS`) - as the queue counts it. A program
+    /// that runs as processes (`processes`) is given them as its processes, each told one thread.
     #[serde(default = "one_core")]
     pub cores: u32,
+    /// Whether its program runs in parallel as processes - one to a core, each a thread (MPI) - as its
+    /// plugin declares it (`installed[].parallel`): each counted by the queue as a whole core, not one of its threads.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub processes: bool,
     /// The memory it takes, in MiB, where its plugin declared it; none declared, nought: counted by its cores alone.
     #[serde(default)]
     pub memory: u64,
@@ -129,7 +134,7 @@ pub struct JobSpec {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub key: Option<String>,
     /// Programs installed beside its own, run after it in turn where it ended
-    /// well - ORCA's orca_2mkl, writing its orbitals as a Molden file - each
+    /// well - ORCA's orca_2aim, writing its orbitals as a WFX file - each
     /// in its work folder, given what it was given, what they say kept apart.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub then: Vec<Then>,
@@ -137,6 +142,10 @@ pub struct JobSpec {
     /// runner works out again from the plugins themselves (`needs_given`), never from here.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub needs: Vec<String>,
+    /// Preset plugins whose files it was handed, by id (`presets_given`): copied into its work folder, each in
+    /// `presets/<id>/`, never listed among its files - what each is, its runner works out again from the plugins.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub presets: Vec<String>,
     /// The files it was given, by their paths in its work folder (`make_job` writes them): what is kept of it where what
     /// its program made is taken out (`trim_made`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -212,31 +221,58 @@ fn one_core() -> u32 {
     1
 }
 
+fn is_false(b: &bool) -> bool {
+    !*b
+}
+
 /// What this computer's jobs may use at once (docs/WORKFLOWS-FOUNDATION.md,
-/// *This computer's runner knows its resources*): cores, and memory in MiB.
+/// *This computer's runner knows its resources*): cores, and memory in MiB;
+/// and whether the computer is kept awake while a job's program runs
+/// (awake.rs) - so unless Settings turned it off, as where nothing says.
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Limits {
     pub cores: u32,
     pub memory: u64,
+    #[serde(default = "kept_awake")]
+    pub awake: bool,
 }
 
-/// What this computer has: its cores, and its memory in MiB (nought where it could not be told).
+/// The computer kept awake while jobs run, unless Settings says otherwise.
+fn kept_awake() -> bool {
+    true
+}
+
+/// What this computer has: its cores - each a thread its system runs at once, two to a physical core where it
+/// runs two on each - its physical cores (`physical`), and its memory in MiB (nought where it could not be told).
 #[derive(Serialize, Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Resources {
     pub cores: u32,
+    pub physical: u32,
     pub memory: u64,
 }
 
-/// This computer's cores and memory.
+/// This computer's cores, physical cores and memory: its physical cores never more than its cores, and at least one -
+/// its cores where the system could not say.
 pub fn computer() -> Resources {
     let cores = std::thread::available_parallelism().map(|n| n.get() as u32).unwrap_or(1);
-    Resources { cores, memory: total_memory() / (1024 * 1024) }
+    let physical = physical_cores().filter(|&p| p >= 1).map_or(cores, |p| p.min(cores));
+    Resources { cores, physical, memory: total_memory() / (1024 * 1024) }
+}
+
+/// How many of the queue's cores a job takes: its cores - or, a program running as processes (`JobSpec::processes`),
+/// each process a whole physical core: its processes times the threads the computer runs on each (`here`).
+fn taken(spec: &JobSpec, here: Resources) -> u32 {
+    let cores = spec.cores.max(1);
+    if !spec.processes {
+        return cores;
+    }
+    cores.saturating_mul(here.cores.max(1).div_ceil(here.physical.max(1)))
 }
 
 /// What jobs may use, Settings unsaid: all the cores, and three quarters of the memory.
 fn default_limits() -> Limits {
     let here = computer();
-    Limits { cores: here.cores.max(1), memory: here.memory / 4 * 3 }
+    Limits { cores: here.cores.max(1), memory: here.memory / 4 * 3, awake: true }
 }
 
 /// What the jobs in `root` may use at once, as last written there; the defaults where nothing is.
@@ -270,7 +306,7 @@ pub fn beyond(here: Resources, cores: u32, memory: u64) -> Option<String> {
 
 /// How many jobs of `spec`'s size run at once within `limits`: what a waiting one's pace is reckoned by.
 fn slots_for(limits: Limits, spec: &JobSpec) -> u32 {
-    (limits.cores / spec.cores.max(1)).max(1)
+    (limits.cores / taken(spec, computer())).max(1)
 }
 
 /// This computer's memory, in bytes: what the system says it has; nought where it could not be asked.
@@ -301,8 +337,68 @@ fn total_memory() -> u64 {
     if unsafe { GlobalMemoryStatusEx(&mut status) } != 0 { status.ullTotalPhys } else { 0 }
 }
 
+/// This computer's physical cores, as its system says: none where it could not be asked.
+#[cfg(target_os = "macos")]
+fn physical_cores() -> Option<u32> {
+    let mut n: i32 = 0;
+    let mut size = std::mem::size_of::<i32>();
+    let name = c"hw.physicalcpu";
+    let ok = unsafe { libc::sysctlbyname(name.as_ptr(), (&mut n as *mut i32).cast(), &mut size, std::ptr::null_mut(), 0) };
+    (ok == 0 && n > 0).then_some(n as u32)
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn physical_cores() -> Option<u32> {
+    // (each logical CPU's package and core, as the kernel's topology gives them: the distinct pairs are the physical cores)
+    let mut cores = std::collections::BTreeSet::new();
+    for cpu in fs::read_dir("/sys/devices/system/cpu").ok()?.flatten() {
+        let name = cpu.file_name();
+        let name = name.to_string_lossy();
+        if !name.strip_prefix("cpu").is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())) {
+            continue;
+        }
+        let read = |f: &str| fs::read_to_string(cpu.path().join("topology").join(f)).ok().map(|t| t.trim().to_string());
+        if let (Some(package), Some(core)) = (read("physical_package_id"), read("core_id")) {
+            cores.insert((package, core));
+        }
+    }
+    (!cores.is_empty()).then_some(cores.len() as u32)
+}
+
+#[cfg(windows)]
+fn physical_cores() -> Option<u32> {
+    use windows_sys::Win32::System::SystemInformation::{GetLogicalProcessorInformationEx, RelationProcessorCore};
+    // (a record for each processor core - asked for those alone - each beginning with its kind and its size, in bytes:
+    //  asked once for the size of them all, then for them, and counted by their sizes)
+    let mut len: u32 = 0;
+    unsafe { GetLogicalProcessorInformationEx(RelationProcessorCore, std::ptr::null_mut(), &mut len) };
+    if len == 0 {
+        return None;
+    }
+    let mut buf = vec![0u8; len as usize];
+    if unsafe { GetLogicalProcessorInformationEx(RelationProcessorCore, buf.as_mut_ptr().cast(), &mut len) } == 0 {
+        return None;
+    }
+    let (mut at, mut n) = (0usize, 0u32);
+    while at + 8 <= (len as usize).min(buf.len()) {
+        let size = u32::from_ne_bytes(buf[at + 4..at + 8].try_into().ok()?) as usize;
+        if size == 0 {
+            break;
+        }
+        n += 1;
+        at += size;
+    }
+    (n > 0).then_some(n)
+}
+
 fn read_spec(dir: &Path) -> Option<JobSpec> {
     serde_json::from_str(&fs::read_to_string(dir.join(SPEC)).ok()?).ok()
+}
+
+/// The folders in a job's work folder that hold what preset plugins handed it (`presets_given`), one for each its spec
+/// names (`presets/<id>/`): never its own files - never kept, nor saved in a workspace.
+pub fn handed_folders(dir: &Path) -> Vec<String> {
+    read_spec(dir).map(|spec| spec.presets.iter().map(|p| format!("{PRESET_DIR}/{p}/")).collect()).unwrap_or_default()
 }
 
 /// Whether a job's runner is there: it holds its lock for as long as it is,
@@ -348,6 +444,25 @@ pub fn current_record(dir: &Path) -> Option<JobRecord> {
 /// Whether the job is to stop: asked to (its `stop` file), or its runner asked to go.
 fn stop_asked(dir: &Path) -> bool {
     GOING.load(Ordering::SeqCst) || dir.join(STOP).exists()
+}
+
+/// What its `stop` file says where the job alone is stopped, not its step (`ask_stop_alone`).
+const ALONE: &str = "alone";
+/// Why a job stopped alone is recorded failed (lib's `STOPPED_ALONE`).
+const STOPPED_ALONE: &str = "stopped by you";
+
+/// Whether the stop asked of a job was of it alone - its step to go on without it - and not of Meno going.
+fn stopped_alone(dir: &Path) -> bool {
+    !GOING.load(Ordering::SeqCst) && fs::read_to_string(dir.join(STOP)).is_ok_and(|t| t.trim() == ALONE)
+}
+
+/// How a job stopped ends: failed, saying why, where it alone was stopped - its step bringing in the rest - else stopped.
+fn stopped_as(dir: &Path) -> (JobState, Option<String>) {
+    if stopped_alone(dir) {
+        (JobState::Failed, Some(STOPPED_ALONE.into()))
+    } else {
+        (JobState::Stopped, None)
+    }
 }
 
 /// Set once the runner is asked to go (macOS, Linux: SIGTERM, SIGINT or
@@ -400,6 +515,17 @@ pub fn ask_stop(dir: &Path) -> std::io::Result<()> {
     fs::write(dir.join(STOP), b"")
 }
 
+/// Ask a job alone to stop, as `ask_stop` - recorded failed, "stopped by you" (`STOPPED_ALONE`), so that its step
+/// brings in what its other jobs gave. A stop of its step asked after it is a stop as ever.
+pub fn ask_stop_alone(dir: &Path) -> std::io::Result<()> {
+    // (its step's stop asked already - an empty stop file - stays a stop of its step, never made one of it alone: the
+    //  step would otherwise bring in the rest of what it was stopped from)
+    if fs::read(dir.join(STOP)).is_ok_and(|b| b.is_empty()) {
+        return Ok(());
+    }
+    fs::write(dir.join(STOP), ALONE)
+}
+
 /// Meno's executable started as a job's runner (`--job <folder>`): the job
 /// run, and what the runner ends with. None where it was started as Meno.
 /// A folder that is not a job of Meno's is not run, and nothing is written.
@@ -431,7 +557,7 @@ pub fn run_as_runner(dir: &Path) -> i32 {
 fn runner(data: &Path, plugins: &Path, dir: &Path) -> i32 {
     let Ok(dir) = runner_folder(data, dir) else { return 1 };
     // (checked before its program runs: its work folder holds what was written for it, and nothing else yet)
-    run_job(&dir, &|spec| spec_allowed(data, plugins, spec, &work_files(&dir)).and_then(|()| needs_linked(&dir, data, plugins, spec)))
+    run_job(&dir, &|spec| spec_allowed(data, plugins, spec, &work_files(&dir), &crate::keptjobs::reads_of(&dir)).and_then(|()| needs_linked(&dir, data, plugins, spec)))
 }
 
 /// Run the job in `dir`: wait for its turn, run its program, and write down
@@ -475,18 +601,23 @@ pub fn run_job(dir: &Path, allowed: &dyn Fn(&JobSpec) -> Result<(), String>) -> 
     let mut at_head: Option<Instant> = None;
     let slots = dir.parent().map(|root| slots_for(limits_in(root), &spec)).unwrap_or(1);
     let mut unsure = 0;
+    // (the jobs this runner has seen finished: passed over on each look after)
+    let mut finished = HashSet::new();
     loop {
         if stop_asked(dir) {
-            end(JobState::Stopped, None, None, None);
+            let (state, why) = stopped_as(dir);
+            end(state, None, None, why);
             return 0;
         }
         // (its folder taken away, or its record ended by another - written gone, say: no turn to wait for)
         if waits_no_more(&mut unsure, dir.join(SPEC).is_file(), read_record(dir).as_ref()) {
             return 1;
         }
-        match take_turn(dir, &spec, &base) {
+        match take_turn(dir, &spec, &base, slots, &mut finished) {
             Ok(Turn::Taken) => break,
             Ok(Turn::Next) => sleep_watching(dir, step_at(at_head.get_or_insert_with(Instant::now).elapsed(), WAIT_STEP)),
+            // (its stop seen as it waited for the queue's lock: ended as the loop begins again)
+            Ok(Turn::Asked) => {}
             Ok(Turn::Behind(ahead)) => {
                 // (how long it has been near the head, not how long it has waited: one that came there from far back is new to it)
                 let near = if near_head(ahead, slots) {
@@ -504,6 +635,8 @@ pub fn run_job(dir: &Path, allowed: &dyn Fn(&JobSpec) -> Result<(), String>) -> 
         }
     }
     let started = Some(now_ms());
+    // (the computer kept awake from now until it and those after it have ended, unless Settings says not: awake.rs)
+    let _awake = dir.parent().filter(|root| limits_in(root).awake).map(|_| crate::awake::hold());
 
     // its program, in its work folder, what it says going into its log
     let input = spec.stdin.as_deref();
@@ -517,7 +650,8 @@ pub fn run_job(dir: &Path, allowed: &dyn Fn(&JobSpec) -> Result<(), String>) -> 
     let (status, stopped) = wait_program(dir, &mut program);
     let code = status.and_then(|s| s.code());
     if stopped {
-        end(JobState::Stopped, started, code, None);
+        let (state, why) = stopped_as(dir);
+        end(state, started, code, why);
     } else if !status.is_some_and(|s| s.success()) {
         end(JobState::Failed, started, code, None);
     } else {
@@ -533,7 +667,8 @@ pub fn run_job(dir: &Path, allowed: &dyn Fn(&JobSpec) -> Result<(), String>) -> 
                 }
             };
             if wait_program(dir, &mut after).1 {
-                end(JobState::Stopped, started, code, None);
+                let (state, why) = stopped_as(dir);
+                end(state, started, code, why);
                 drop(lock);
                 return 0;
             }
@@ -597,6 +732,35 @@ enum Turn {
     Taken,
     Next,
     Behind(u32),
+    /// Asked to stop while it waited for the queue's lock: none taken.
+    Asked,
+}
+
+/// How often a runner tries again for the queue's lock while another holds it: only those near the head try, so
+/// it may be often - the head takes the lock within moments of its being let go, as it did waiting on it.
+const LOCK_STEP: Duration = Duration::from_millis(10);
+
+/// The queue's lock taken for the job `dir` - or, asked to stop while
+/// another holds it, none (false): tried again every `LOCK_STEP`, its stop
+/// looked for between, never waited on blind. A runner waiting on the lock
+/// itself saw no stop until the lock came to it, and each before it looked
+/// at every job's folder under it: on a computer whose files open slowly,
+/// a step's Stop left hundreds of runners waiting their turn at the lock
+/// for many minutes, only to stop as each came to it.
+fn lock_watching(dir: &Path, queue: &File) -> std::io::Result<bool> {
+    loop {
+        match queue.try_lock() {
+            Ok(()) => return Ok(true),
+            Err(TryLockError::WouldBlock) => {}
+            // (one given on a system that does, after a signal heard: tried again)
+            Err(TryLockError::Error(e)) if e.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(TryLockError::Error(e)) => return Err(e),
+        }
+        if stop_asked(dir) {
+            return Ok(false);
+        }
+        std::thread::sleep(LOCK_STEP);
+    }
 }
 
 /// Whether a job `ahead` places back in a queue running `slots` at once is
@@ -637,62 +801,113 @@ const NEAR_MORE: u32 = 4;
 const BEHIND_MOST: Duration = Duration::from_secs(10);
 const PLACE_STEP: Duration = Duration::from_millis(300);
 
-/// Whether it is this job's turn - the first waiting, and fitting beside
-/// those running within what jobs may use (`fits`): a job never starts
-/// ahead of one asked for before it, however small - and, where it is, the
-/// job recorded running. Asked by one runner at a time.
-fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord) -> std::io::Result<Turn> {
-    let root = dir.parent().ok_or_else(|| std::io::Error::other("a job's folder has no parent"))?;
-    let queue = OpenOptions::new().create(true).truncate(false).write(true).open(root.join(QUEUE_LOCK))?;
-    // (a runner asked to go takes its wait up again of itself - its signals
-    // are heard with SA_RESTART, `listen_for_going` - so Unix gives no
-    // Interrupted here; one given, on a system that does, is waited again)
-    while let Err(e) = queue.lock() {
-        if e.kind() != std::io::ErrorKind::Interrupted {
-            return Err(e);
-        }
-    }
-    let mut running = 0u32;
-    let mut used = (0u32, 0u64);
-    let mut first: Option<(u64, PathBuf)> = None;
+/// What a look at the queue saw: the jobs running and the cores and memory they take, the first waiting, and how many
+/// wait before this one.
+struct Seen {
+    running: u32,
+    used: (u32, u64),
+    first: Option<(u64, PathBuf)>,
+    ahead: u32,
+}
+
+/// The queue in `root` as it is, from the job `dir`'s place in it (`base`): each job's folder looked at but those
+/// `finished` names - jobs this runner saw finished before, which never wait or run again - and those it finds finished
+/// added to them, so that a long queue's runners do not read every finished job's record on every look.
+fn look(root: &Path, dir: &Path, base: &JobRecord, here: Resources, finished: &mut HashSet<std::ffi::OsString>) -> std::io::Result<Seen> {
+    let mut seen = Seen { running: 0, used: (0, 0), first: None, ahead: 0 };
     // (those waiting before it: asked for before it, or at once and by name)
     let mine_key = (base.created, dir.to_path_buf());
-    let mut ahead = 0u32;
     for entry in fs::read_dir(root)?.flatten() {
-        let other = entry.path();
-        // (one being taken away is none of the queue's, whatever is left of it)
-        if !other.is_dir() || entry.file_name().to_string_lossy().starts_with(TAKEN) {
+        let name = entry.file_name();
+        if finished.contains(&name) {
             continue;
         }
-        // (a finished job - most, after a few runs - as its own record says: nothing more read of it)
+        let other = entry.path();
+        // (one being taken away is none of the queue's, whatever is left of it)
+        if !other.is_dir() || name.to_string_lossy().starts_with(TAKEN) {
+            continue;
+        }
+        // (a finished job - most, after a few runs - as its own record says: nothing more read of it, now or again)
         if read_record(&other).is_some_and(|r| r.state.finished()) {
+            finished.insert(name);
             continue;
         }
         let Some(record) = current_record(&other) else { continue };
         match record.state {
             JobState::Running => {
-                running += 1;
+                seen.running += 1;
                 // (one whose spec cannot be read counted as a core: what any job takes at least)
-                let (cores, memory) = read_spec(&other).map(|s| (s.cores.max(1), s.memory)).unwrap_or((1, 0));
-                used = (used.0 + cores, used.1 + memory);
+                let (cores, memory) = read_spec(&other).map(|s| (taken(&s, here), s.memory)).unwrap_or((1, 0));
+                seen.used = (seen.used.0 + cores, seen.used.1 + memory);
             }
             JobState::Waiting => {
                 let key = (record.created, other);
                 if key < mine_key && key.1.file_name() != dir.file_name() {
-                    ahead += 1;
+                    seen.ahead += 1;
                 }
-                if first.as_ref().is_none_or(|f| key < *f) {
-                    first = Some(key);
+                if seen.first.as_ref().is_none_or(|f| key < *f) {
+                    seen.first = Some(key);
                 }
             }
             _ => {}
         }
     }
+    Ok(seen)
+}
+
+/// Where the job `dir` stands among those waiting in `root`, seen from their records alone - none written, nothing but
+/// a record read of each - for a runner far back to know it is far back: how many wait before it. A job with no record
+/// yet (its runner starting) is not counted: it is looked at again under the lock, if near. Nor is one whose runner is
+/// gone (`runner_there`: tried, never waited on) - a queue left by a Meno that was ended: so a live job is never held
+/// back for ever behind dead ones far ahead of it; near the head, the look under the lock (`current_record`) records
+/// them gone.
+fn glance(root: &Path, dir: &Path, base: &JobRecord, finished: &mut HashSet<std::ffi::OsString>) -> std::io::Result<u32> {
+    let mine_key = (base.created, dir.to_path_buf());
+    let mut ahead = 0u32;
+    for entry in fs::read_dir(root)?.flatten() {
+        let name = entry.file_name();
+        if finished.contains(&name) || name.to_string_lossy().starts_with(TAKEN) || name == dir.file_name().unwrap_or_default() {
+            continue;
+        }
+        let Some(record) = read_record(&entry.path()) else { continue };
+        if record.state.finished() {
+            finished.insert(name);
+        } else if record.state == JobState::Waiting && (record.created, entry.path()) < mine_key && runner_there(&entry.path()) {
+            ahead += 1;
+        }
+    }
+    Ok(ahead)
+}
+
+/// Whether it is this job's turn - the first waiting, and fitting beside
+/// those running within what jobs may use (`fits`): a job never starts
+/// ahead of one asked for before it, however small - and, where it is, the
+/// job recorded running. Where it stands is looked at first without the
+/// queue's lock: one far back (not `near_head`, its queue running `slots`
+/// at once) is told so and waits on no lock - only those near the head
+/// look again under it, one at a time, and only the head takes its turn.
+/// So the head of a queue of hundreds never waits behind them all for the
+/// lock as one ends: on a computer whose files open slowly, each look at
+/// hundreds of folders under the one lock held it most of the time, and
+/// the next job started seconds after one ended.
+fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord, slots: u32, finished: &mut HashSet<std::ffi::OsString>) -> std::io::Result<Turn> {
+    let root = dir.parent().ok_or_else(|| std::io::Error::other("a job's folder has no parent"))?;
+    // (this computer's cores and physical cores, asked once: what a job running as processes is counted by)
+    let here = computer();
+    let behind = glance(root, dir, base, finished)?;
+    if !near_head(behind, slots) {
+        return Ok(Turn::Behind(behind));
+    }
+    let queue = OpenOptions::new().create(true).truncate(false).write(true).open(root.join(QUEUE_LOCK))?;
+    if !lock_watching(dir, &queue)? {
+        return Ok(Turn::Asked);
+    }
+    let Seen { running, used, first, ahead } = look(root, dir, base, here, finished)?;
     let mine = first.is_some_and(|(_, p)| p.file_name() == dir.file_name());
     if !mine {
         return Ok(Turn::Behind(ahead));
     }
-    if !fits(limits_in(root), used, running, spec.cores, spec.memory) {
+    if !fits(limits_in(root), used, running, taken(spec, here), spec.memory) {
         return Ok(Turn::Next);
     }
     write_record(dir, &JobRecord { state: JobState::Running, started: Some(now_ms()), ..base.clone() })?;
@@ -886,10 +1101,16 @@ pub fn inside_name(name: &str) -> bool {
 
 /// Whether the arguments `args` of a program installed separately - or of
 /// one beside it - name no file but those written for its job (`written`),
-/// or one of them by its name without its extension, as ORCA's orca_2mkl
-/// takes `input` for `input.gbw`. Besides those, an argument may be an
-/// option (`-nt`, `--silent`) or a number (`4`, `-1`, `0.5`), and nothing else.
-pub fn names_only_written(args: &[String], written: &[String]) -> Result<(), String> {
+/// or one of them by its name without its extension - the stem a program
+/// takes for files it writes itself beside them, as ORCA's orca_2aim takes
+/// `input` for `input.gbw` (any program alike, and only a file of its job) -
+/// or one its plugin reads back of it once it is done (`reads`, by its name
+/// exactly): a program that takes the file it writes by name, as Gaussian 16W
+/// takes `input.log` after `input.gjf`. Each a name inside its work folder
+/// (`inside_name`): never a path above it, nor one from its root. Besides
+/// those, an argument may be an option (`-nt`, `--silent`) or a number (`4`,
+/// `-1`, `0.5`), and nothing else.
+pub fn names_only_written(args: &[String], written: &[String], reads: &[String]) -> Result<(), String> {
     let option = |a: &str| {
         let name = a.strip_prefix("--").or_else(|| a.strip_prefix('-')).unwrap_or_default();
         name.starts_with(|c: char| c.is_ascii_alphabetic()) && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
@@ -899,9 +1120,9 @@ pub fn names_only_written(args: &[String], written: &[String]) -> Result<(), Str
         let (whole, part) = digits.split_once('.').unwrap_or((digits, "0"));
         !whole.is_empty() && !part.is_empty() && whole.chars().chain(part.chars()).all(|c| c.is_ascii_digit())
     };
-    let file = |a: &str| inside_name(a) && written.iter().any(|w| w == a || Path::new(w).with_extension("") == Path::new(a));
+    let file = |a: &str| inside_name(a) && (written.iter().any(|w| w == a || Path::new(w).with_extension("") == Path::new(a)) || reads.iter().any(|r| r == a));
     match args.iter().find(|a| !(option(a) || number(a) || file(a))) {
-        Some(a) => Err(format!("{a} is not a file written for it")),
+        Some(a) => Err(format!("{a} is not a file written for it, nor one read back of it")),
         None => Ok(()),
     }
 }
@@ -929,14 +1150,16 @@ pub struct Found {
     pub env: Vec<(String, String)>,
     /// Programs installed beside it that a job may run after it, by name: where each would be (`Installed::beside`).
     pub beside: Vec<(String, PathBuf)>,
+    /// Whether it runs in parallel as processes, each a thread (`Installed::processes`).
+    pub processes: bool,
 }
 
 /// The program `name` of plugin `id` (its folder `plugin_dir`), from the
 /// plugin's environment in Meno's data folder `data`: one its manifest
 /// names, never a shell, found in its environment's own folders - and, where
 /// it is Python, running a script of the plugin's. Or, where its manifest
-/// says Meno fetches it as the plugin is set up (`downloads[].provides`:
-/// Blender), Meno's own copy of it, in the plugin's files.
+/// says Meno fetches it as the plugin is set up (`downloads[].provides`),
+/// Meno's own copy of it, in the plugin's files.
 pub fn plugin_program(data: &Path, plugin_dir: &Path, id: &str, name: &str, args: &[String]) -> Result<Found, String> {
     if !plugin_id(id) {
         return Err(format!("not a plugin: {id}"));
@@ -954,7 +1177,7 @@ pub fn plugin_program(data: &Path, plugin_dir: &Path, id: &str, name: &str, args
     }
     // (Meno's own copy, fetched as the plugin was set up)
     if let Some(program) = crate::plugfiles::provided(data, &manifest, id, name)? {
-        return Ok(Found { program, activation: None, env: Vec::new(), beside: Vec::new() });
+        return Ok(Found { program, activation: None, env: Vec::new(), beside: Vec::new(), processes: false });
     }
 
     // its environment: pixi's, activated, or uv's
@@ -987,7 +1210,7 @@ pub fn plugin_program(data: &Path, plugin_dir: &Path, id: &str, name: &str, args
         let scripts = plugin_dir.canonicalize().map_err(|e| format!("{id}'s folder: {e}"))?;
         crate::validate_sidecar(&program, args, &root, &[scripts])?;
     }
-    Ok(Found { program, activation, env: Vec::new(), beside: Vec::new() })
+    Ok(Found { program, activation, env: Vec::new(), beside: Vec::new(), processes: false })
 }
 
 // --- a program installed separately ------------------------------------------
@@ -1032,8 +1255,11 @@ pub struct Installed {
     pub version: Option<VersionRule>,
     /// Programs installed with it, in its folder, that a job may run after it
     /// (`beside`): each by its name and its file on this system - ORCA's
-    /// orca_2mkl.
+    /// orca_2aim.
     pub beside: Vec<(String, String)>,
+    /// Whether it runs in parallel as processes (`parallel`: "processes" - MPI), each process a core
+    /// and a thread; else, "threads" or unsaid, as threads of one process.
+    pub processes: bool,
 }
 
 /// How a program installed separately says its version (`installed[].version`):
@@ -1349,7 +1575,13 @@ pub fn installed_named(manifest: &serde_json::Value, name: &str, system: &str) -
             }
         }
     }
-    Ok(Some(Installed { name: name.to_string(), file: file.to_string(), path, env, places: usual, label, version, beside }))
+    let processes = match decl.get("parallel") {
+        None => false,
+        Some(serde_json::Value::String(p)) if p == "threads" => false,
+        Some(serde_json::Value::String(p)) if p == "processes" => true,
+        Some(p) => return Err(format!("not a way {name} runs in parallel: {p}")),
+    };
+    Ok(Some(Installed { name: name.to_string(), file: file.to_string(), path, env, places: usual, label, version, beside, processes }))
 }
 
 /// Whether `file` is a program's file a job may run: a name alone, in its
@@ -1394,7 +1626,7 @@ fn runnable(p: &Path) -> bool {
 
 /// Every copy of a program installed separately there is, in order: where
 /// the chemist located it, where that is still a program of its file's name -
-/// or a macOS app that holds it (`Blender.app`: its `Contents/MacOS`) - that
+/// or a macOS app that holds it (`Name.app`: its `Contents/MacOS`) - that
 /// alone, `exact`; then each of its file's name where the system finds
 /// programs (`path_var`: PATH, as Meno was given it); then in the folders it
 /// is usually installed in, the newest first.
@@ -1550,7 +1782,7 @@ fn installed_at(decl: &Installed, program: PathBuf, path_var: Option<&std::ffi::
     let env = installed_env(decl, &program, path_var)?;
     let folder = program.parent().map(Path::to_path_buf).unwrap_or_default();
     let beside = decl.beside.iter().map(|(n, f)| (n.clone(), folder.join(f))).collect();
-    Ok(Found { program, activation: None, env, beside })
+    Ok(Found { program, activation: None, env, beside, processes: decl.processes })
 }
 
 // --- a job's folder ----------------------------------------------------------
@@ -1610,16 +1842,31 @@ pub fn link_needed(dir: &Path, needed: &[(String, PathBuf)]) -> Result<(), Strin
     Ok(())
 }
 
-/// A job made (`make_job`) and given each program it needs (`link_needed`) -
-/// or, where one cannot be given it, no job at all: its folder taken away
-/// again, never left as one to run without what it needs.
-pub fn make_needing_job(root: &Path, spec: &JobSpec, files: &[JobFile], needed: &[(String, PathBuf)]) -> Result<(String, PathBuf), String> {
+/// A job made (`make_job`), given each program it needs (`link_needed`)
+/// and each file a preset plugin hands it, copied into its work folder where
+/// it goes (`presets_given`) - or, where one cannot be given it, no job at
+/// all: its folder taken away again, never left as one to run without what
+/// it needs.
+pub fn make_handed_job(root: &Path, spec: &JobSpec, files: &[JobFile], needed: &[(String, PathBuf)], handed: &[(String, PathBuf)]) -> Result<(String, PathBuf), String> {
     let (id, dir) = make_job(root, spec, files)?;
-    if let Err(e) = link_needed(&dir, needed) {
+    let given = link_needed(&dir, needed).and_then(|()| copy_handed(&dir, handed));
+    if let Err(e) = given {
         let _ = fs::remove_dir_all(&dir);
         return Err(e);
     }
     Ok((id, dir))
+}
+
+/// Each file a preset plugin hands a job (`presets_given`) copied into its work folder, where it goes.
+fn copy_handed(dir: &Path, handed: &[(String, PathBuf)]) -> Result<(), String> {
+    for (rel, from) in handed {
+        let to = dir.join(WORK).join(rel);
+        if let Some(parent) = to.parent() {
+            fs::create_dir_all(parent).map_err(|e| format!("{rel}: {e}"))?;
+        }
+        fs::copy(from, &to).map_err(|e| format!("{rel} could not be given to the job: {e}"))?;
+    }
+    Ok(())
 }
 
 /// What a job's log says from byte `from` on - at most `most` bytes, never
@@ -1771,7 +2018,8 @@ fn start_runner(exe: &Path, dir: &Path) -> std::io::Result<()> {
 /// What a job's program is given: its environment's activation - or,
 /// installed separately, its folders and variables - a network that refuses
 /// it (the proxy on `port`, with no task's: while Meno is open, it says so),
-/// and the cores it may use.
+/// and the cores it may use: as threads, or - a program running as processes
+/// (`Found::processes`), each a core - one thread each.
 fn given_env(found: &Found, port: u16, cores: Option<u32>) -> BTreeMap<String, String> {
     let mut given = Command::new(&found.program);
     if let Some(activation) = &found.activation {
@@ -1780,8 +2028,9 @@ fn given_env(found: &Found, port: u16, cores: Option<u32>) -> BTreeMap<String, S
     given.envs(found.env.iter().map(|(k, v)| (k, v)));
     crate::net::route_nowhere_at(&mut given, port);
     if let Some(cores) = cores {
+        let threads = if found.processes { 1 } else { cores.clamp(1, 1024) };
         for key in THREADS {
-            given.env(key, cores.clamp(1, 1024).to_string());
+            given.env(key, threads.to_string());
         }
     }
     given
@@ -1822,31 +2071,38 @@ fn found_again(data: &Path, plugin_dir: &Path, spec: &JobSpec) -> Result<Found, 
 /// its plugin names, from the plugin's environment or installed separately,
 /// those beside it it declares, and given what `job_start` gives, nothing
 /// else; one installed separately, and those beside it, naming no file but
-/// those in its work folder as it was made (`written`) - Meno's data folder
-/// `data`, and the plugins it carries in `plugins`.
-pub fn spec_allowed(data: &Path, plugins: &Path, spec: &JobSpec, written: &[String]) -> Result<(), String> {
+/// those in its work folder as it was made (`written`), and those its plugin
+/// reads back of it (`reads`, kept.json) - Meno's data folder `data`, and the
+/// plugins in place in `plugins` (installed.rs), each of its version in use.
+pub fn spec_allowed(data: &Path, plugins: &Path, spec: &JobSpec, written: &[String], reads: &[String]) -> Result<(), String> {
     if !plugin_id(&spec.plugin) {
         return Err(format!("not a plugin: {}", spec.plugin));
     }
-    let plugin_dir = plugins.join(&spec.plugin);
+    let plugin_dir = crate::installed::dir(plugins, &spec.plugin)?;
     let found = found_again(data, &plugin_dir, spec)?;
     if installed_decl(&plugin_dir, &spec.plugin, &spec.name)?.is_some() {
-        names_only_written(&spec.args, written)?;
-        spec.then.iter().try_for_each(|t| names_only_written(&t.args, written))?;
+        names_only_written(&spec.args, written, reads)?;
+        spec.then.iter().try_for_each(|t| names_only_written(&t.args, written, reads))?;
     }
     let asked: Vec<ThenAsk> = spec.then.iter().map(|t| ThenAsk { program: t.name.clone(), args: t.args.clone() }).collect();
     if then_of(&found, &spec.name, &asked)? != spec.then {
         return Err(format!("not the programs beside {}", spec.name));
     }
     let port = proxy_port_of(&spec.env).ok_or("not pointed at Meno's network")?;
-    let cores = spec.env.get(THREADS[0]).and_then(|c| c.parse().ok());
+    // (its cores, where it was told any: as threads, they must be what it was told - as processes, it was told one thread)
+    if spec.processes != found.processes {
+        return Err(format!("not how {} runs in parallel", spec.name));
+    }
+    let cores = spec.env.contains_key(THREADS[0]).then_some(spec.cores);
     // (and, where it needs another plugin's program, what Meno gives it for that - worked out again here, from the plugins
     //  themselves: a value taken from the spec would let whatever wrote it choose the program run)
-    let (needed_env, needed) = needs_given(data, &manifest_of(&plugin_dir, &spec.plugin)?, &spec.plugin, &spec.needs, &|p| Ok(plugins.join(p)))?;
+    let (needed_env, needed) = needs_given(data, &manifest_of(&plugin_dir, &spec.plugin)?, &spec.plugin, &spec.needs, &|p| crate::installed::dir(plugins, p))?;
     if given_env(&found, port, cores).into_iter().chain(needed_env).collect::<BTreeMap<_, _>>() != spec.env {
         return Err(format!("{} given what Meno does not give it", spec.name));
     }
     let _ = needed;
+    // (and, where preset plugins handed it files, those plugins as they must be - worked out again here, from the plugins)
+    presets_given(&manifest_of(&plugin_dir, &spec.plugin)?, &spec.plugin, &spec.presets, &|p| crate::installed::dir(plugins, p))?;
     Ok(())
 }
 
@@ -1857,7 +2113,9 @@ pub fn needs_linked(dir: &Path, data: &Path, plugins: &Path, spec: &JobSpec) -> 
     if spec.needs.is_empty() || cfg!(not(unix)) {
         return Ok(());
     }
-    let (_, needed) = needs_given(data, &manifest_of(&plugins.join(&spec.plugin), &spec.plugin)?, &spec.plugin, &spec.needs, &|p| Ok(plugins.join(p)))?;
+    let (_, needed) = needs_given(data, &manifest_of(&crate::installed::dir(plugins, &spec.plugin)?, &spec.plugin)?, &spec.plugin, &spec.needs, &|p| {
+        crate::installed::dir(plugins, p)
+    })?;
     for (name, program) in &needed {
         if fs::read_link(dir.join(WORK).join(name)).ok().as_deref() != Some(program.as_path()) {
             return Err(format!("{name} in its folder is not the program it needs"));
@@ -1908,17 +2166,17 @@ fn data_dir_here() -> Option<PathBuf> {
     crate::folders::local_data_dir()
 }
 
-/// The plugins Meno carries, where Tauri finds its resources - for a job's runner, as for its data folder.
+/// The plugins in place, in Meno's local data folder (installed.rs) - for a job's runner, as for its data folder.
 fn plugins_here() -> Option<PathBuf> {
-    let info = tauri::PackageInfo {
-        name: "Meno".into(),
-        version: env!("CARGO_PKG_VERSION").parse().ok()?,
-        authors: env!("CARGO_PKG_AUTHORS"),
-        description: env!("CARGO_PKG_DESCRIPTION"),
-        crate_name: env!("CARGO_PKG_NAME"),
-    };
-    let resources = tauri::utils::platform::resource_dir(&info, &tauri::Env::default()).ok()?;
-    Some(resources.join("resources").join("plugins"))
+    data_dir_here().map(|d| crate::installed::root(&d))
+}
+
+/// Whether a job of plugin `id` is waiting or running, in any of the jobs' folders of Meno's local data folder `data`.
+pub fn plugin_running(data: &Path, id: &str) -> bool {
+    jobs_roots(data).iter().filter_map(|r| fs::read_dir(r).ok()).flatten().flatten().any(|e| {
+        let dir = e.path();
+        read_spec(&dir).is_some_and(|s| s.plugin == id) && current_record(&dir).is_some_and(|r| !r.state.finished())
+    })
 }
 
 // --- Meno's commands ---------------------------------------------------------
@@ -2136,42 +2394,102 @@ pub struct JobAsk {
     /// Other plugins whose programs it needs, by id: each one its plugin's manifest declares (`needs`).
     #[serde(default)]
     pub needs: Vec<String>,
+    /// Preset plugins whose files it is handed, by id (`JobSpec::presets`).
+    #[serde(default)]
+    pub presets: Vec<String>,
 }
 
 /// A program of another plugin a plugin's jobs may need, as its manifest
-/// declares it (`needs`): that plugin, its program by the name its manifest
-/// gives it, and the variable the job is told where it is in.
+/// declares it (`depends`, docs/PLUGINS.md *Depends*): that plugin, the
+/// versions of it it works with, its program by the name that plugin's
+/// manifest gives it, and the variable the job is told where it is in.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Need {
     pub plugin: String,
+    pub versions: String,
     pub program: String,
     pub env: String,
 }
 
-/// What a manifest declares its jobs may need of other plugins' programs - all as they must be, or none.
+/// A version as numbers - "0.1.4", [0, 1, 4]; none, where it is not one (as lib/plugins/depends `versionParts`).
+fn version_parts(v: &str) -> Option<Vec<u64>> {
+    let parts: Vec<&str> = v.split('.').collect();
+    if parts.is_empty() || parts.len() > 4 || parts.iter().any(|p| p.is_empty() || p.len() > 6 || !p.bytes().all(|b| b.is_ascii_digit())) {
+        return None;
+    }
+    Some(parts.iter().map(|p| p.parse().unwrap_or(0)).collect())
+}
+
+/// Which of two versions comes first ("1.2" is "1.2.0").
+fn version_order(a: &[u64], b: &[u64]) -> std::cmp::Ordering {
+    (0..a.len().max(b.len())).map(|i| a.get(i).unwrap_or(&0).cmp(b.get(i).unwrap_or(&0))).find(|o| o.is_ne()).unwrap_or(std::cmp::Ordering::Equal)
+}
+
+/// Versions as a manifest writes them - `>=A`, or `>=A <B`, each of three numbers, B after A - read (as lib/plugins/depends `rangeOf`).
+fn range_of(text: &str) -> Option<(Vec<u64>, Option<Vec<u64>>)> {
+    let semver = |v: &str| version_parts(v).filter(|p| p.len() == 3);
+    let rest = text.trim().strip_prefix(">=")?;
+    let mut words = rest.split(' ');
+    let from = semver(words.next()?)?;
+    let before = match words.next() {
+        None => None,
+        Some(w) => Some(semver(w.strip_prefix('<')?)?),
+    };
+    if words.next().is_some() || before.as_ref().is_some_and(|b| version_order(&from, b).is_ge()) {
+        return None;
+    }
+    Some((from, before))
+}
+
+/// Whether versions as a manifest writes them are bounded above (`>=A <B`), as every range a manifest gives must be.
+fn bounded(versions: &str) -> bool {
+    range_of(versions).is_some_and(|(_, before)| before.is_some())
+}
+
+/// Whether a plugin of `version` is one a range of versions takes; one that is no version is in none.
+pub fn in_versions(version: &str, versions: &str) -> bool {
+    let (Some(v), Some((from, before))) = (version_parts(version), range_of(versions)) else { return false };
+    version_order(&v, &from).is_ge() && before.is_none_or(|b| version_order(&v, &b).is_lt())
+}
+
+/// What a manifest declares its jobs may need of other plugins' programs, from the plugins it uses (`depends`) - all as they must be, or none.
 pub fn needs_declared(manifest: &serde_json::Value, id: &str) -> Result<Vec<Need>, String> {
-    let Some(list) = manifest.get("needs") else { return Ok(Vec::new()) };
-    let list = list.as_array().ok_or_else(|| format!("{id}'s needs are not a list"))?;
+    let Some(list) = manifest.get("depends") else { return Ok(Vec::new()) };
+    let list = list.as_array().ok_or_else(|| format!("{id}'s plugins it uses are not a list"))?;
     let mut out: Vec<Need> = Vec::new();
-    for n in list {
-        let field = |k: &str| n.get(k).and_then(|v| v.as_str()).unwrap_or_default().to_string();
-        let need = Need { plugin: field("plugin"), program: field("program"), env: field("env") };
-        let single = Path::new(&need.program).file_name().and_then(|f| f.to_str()) == Some(need.program.as_str());
-        if !plugin_id(&need.plugin) || need.plugin == id || !single || !inside_name(&need.program) || NEVER.contains(&need.program.to_ascii_lowercase().as_str()) || !env_name_ok(&need.env) || out.iter().any(|o| o.plugin == need.plugin) {
-            return Err(format!("{id} declares a need Meno cannot give: {n}"));
+    let mut plugins: Vec<String> = Vec::new();
+    for d in list {
+        let field = |v: &serde_json::Value, k: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or_default().to_string();
+        let (plugin, versions) = (field(d, "plugin"), field(d, "versions"));
+        let optional_ok = d.get("optional").is_none_or(|o| o.is_boolean());
+        // (versions bounded above, always, as lib/plugins/manifest `dependOf` reads them)
+        if !plugin_id(&plugin) || plugin == id || !bounded(&versions) || plugins.contains(&plugin) || !optional_ok {
+            return Err(format!("{id} declares a plugin it uses that Meno cannot give: {d}"));
         }
-        out.push(need);
+        plugins.push(plugin.clone());
+        let programs = match d.get("programs") {
+            None => Vec::new(),
+            Some(p) => p.as_array().ok_or_else(|| format!("{id} declares a plugin it uses that Meno cannot give: {d}"))?.clone(),
+        };
+        for p in programs {
+            let need = Need { plugin: plugin.clone(), versions: versions.clone(), program: field(&p, "program"), env: field(&p, "env") };
+            let single = Path::new(&need.program).file_name().and_then(|f| f.to_str()) == Some(need.program.as_str());
+            if !single || !inside_name(&need.program) || NEVER.contains(&need.program.to_ascii_lowercase().as_str()) || !env_name_ok(&need.env) || out.iter().any(|o| o.env == need.env) {
+                return Err(format!("{id} declares a plugin it uses that Meno cannot give: {d}"));
+            }
+            out.push(need);
+        }
     }
     Ok(out)
 }
 
 /// What a job's variable for a program it needs (`Need`) is set to, the
 /// program found at `found`: on macOS and Linux, a link to it put in the
-/// job's work folder - where the job runs - by its own name (`./xtb`), for a
-/// path with a space in it is never given, and a program may take one as two
-/// words (ORCA 6.1.1 on macOS takes "~/Library/Application Support/..." as
-/// no file); on Windows, where no link is made, its path, refused where it
-/// has a space, never quoted.
+/// job's work folder - where the job runs - by its own name (`./tool`), for
+/// a path with a space in it is never given: a program may take it as two
+/// words, and Meno's data folder has one on macOS ("Application Support");
+/// on Windows, where no link is made, its path, refused where it has a
+/// space, never quoted.
 pub fn need_value(found: &Path, windows: bool) -> Result<String, String> {
     if windows {
         // (one separator throughout: an environment's folders may be given with "/", as pixi's activation gives Library/bin)
@@ -2204,18 +2522,128 @@ pub fn needs_given(data: &Path, manifest: &serde_json::Value, id: &str, needs: &
     }
     let declared = needs_declared(manifest, id)?;
     for other in needs {
-        let need = declared.iter().find(|n| &n.plugin == other).ok_or_else(|| format!("{id} declares no need of {other}"))?;
+        let of: Vec<&Need> = declared.iter().filter(|n| &n.plugin == other).collect();
+        if of.is_empty() {
+            return Err(format!("{id} declares no program of {other} that it uses"));
+        }
         if needs.iter().filter(|n| *n == other).count() > 1 {
             return Err(format!("{id} needs {other} twice"));
         }
-        let other_dir = dir_of(&need.plugin)?;
-        let name = manifest_of(&other_dir, &need.plugin).ok().and_then(|m| m.get("name").and_then(|v| v.as_str()).map(str::to_string)).unwrap_or_else(|| need.plugin.clone());
-        let found = plugin_program(data, &other_dir, &need.plugin, &need.program, &[]).map_err(|_| format!("The {name} plugin is needed for this: add it in Settings, Plugins"))?;
-        let file = found.program.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_string();
-        env.insert(need.env.clone(), need_value(&found.program, cfg!(windows))?);
-        links.push((file, found.program));
+        let other_dir = dir_of(other)?;
+        let other_manifest = manifest_of(&other_dir, other).ok();
+        let name = other_manifest.as_ref().and_then(|m| m.get("name").and_then(|v| v.as_str()).map(str::to_string)).unwrap_or_else(|| other.clone());
+        // (of a version it works with, as its manifest says - read from that plugin's own folder, never from the spec)
+        let version = other_manifest.as_ref().and_then(|m| m.get("version").and_then(|v| v.as_str()).map(str::to_string)).unwrap_or_default();
+        if !in_versions(&version, &of[0].versions) {
+            return Err(format!("{id} needs {name} {}; {} is here", of[0].versions, if version.is_empty() { "no version of it" } else { &version }));
+        }
+        for need in of {
+            let found = plugin_program(data, &other_dir, &need.plugin, &need.program, &[]).map_err(|_| format!("The {name} plugin is needed for this: add it in Settings, Plugins"))?;
+            let file = found.program.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_string();
+            env.insert(need.env.clone(), need_value(&found.program, cfg!(windows))?);
+            links.push((file, found.program));
+        }
     }
     Ok((env, links))
+}
+
+/// The folder in a job's work folder the files preset plugins hand it go in, each plugin's in one of its own (`presets/<id>/`).
+pub const PRESET_DIR: &str = "presets";
+/// The most files preset plugins may hand a job, all told, and the most bytes.
+const PRESET_FILES_MOST: usize = 64;
+const PRESET_BYTES_MOST: u64 = 16 * 1024 * 1024;
+
+/// Whether a job's own files are clear of the folder preset plugins' files go in, where it names any (`presets`): none
+/// of them in `presets/`, whatever is handed - else what it is given there is hidden as theirs (`handed_folders`).
+pub fn clear_of_presets(files: &[JobFile], presets: &[String]) -> Result<(), String> {
+    if presets.is_empty() {
+        return Ok(());
+    }
+    match files.iter().find(|f| Path::new(&f.name).components().next().is_some_and(|c| c.as_os_str() == PRESET_DIR)) {
+        Some(f) => Err(format!("a job's file is in {PRESET_DIR}, where the presets it is handed go: {}", f.name)),
+        None => Ok(()),
+    }
+}
+
+/// Whether `f` is a file a preset may name (docs/PLUGINS.md, *Presets*): a file's name in its plugin's folder - plain, no
+/// folder, as Meno carries only the files of a plugin's folder itself - and neither the manifest nor the worker Meno reads
+/// (as lib/plugins/manifest `presetFileOk`).
+pub fn preset_file_ok(f: &str) -> bool {
+    let b = f.as_bytes();
+    let plain = !b.is_empty() && b.len() <= 64 && b[0].is_ascii_alphanumeric() && b.iter().all(|c| c.is_ascii_alphanumeric() || b"._-".contains(c));
+    // (in any case: on a system whose files' names take none, `Manifest.json` is the manifest)
+    let lower = f.to_ascii_lowercase();
+    plain && lower != "manifest.json" && lower != "worker.py"
+}
+
+/// The files a job of plugin `id` (its manifest `manifest`) is handed by the preset plugins `presets`, by their ids
+/// (docs/PLUGINS.md, *Presets*): each one a plugin that uses `id` through an interface `id` declares, and brings its
+/// presets through it - `id` and that interface of versions it works with, each read from its own folder (`dir_of`),
+/// never from a job's spec; every file its presets name, a file in its folder and by no link, with where it goes in the
+/// job's work folder (`presets/<its id>/<file>`). Worked out the same way as the job is made and as its runner checks it.
+/// One not so, why.
+pub fn presets_given(manifest: &serde_json::Value, id: &str, presets: &[String], dir_of: &dyn Fn(&str) -> Result<PathBuf, String>) -> Result<Vec<(String, PathBuf)>, String> {
+    let text = |v: &serde_json::Value, k: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or_default().to_string();
+    let listed = |v: &serde_json::Value, k: &str| v.get(k).and_then(|x| x.as_array()).cloned().unwrap_or_default();
+    let version = text(manifest, "version");
+    let mut out: Vec<(String, PathBuf)> = Vec::new();
+    let mut bytes = 0u64;
+    for (i, from) in presets.iter().enumerate() {
+        if !plugin_id(from) || from == id || presets[..i].contains(from) {
+            return Err(format!("not a plugin that brings {id} presets: {from}"));
+        }
+        let dir = dir_of(from)?;
+        let theirs = manifest_of(&dir, from)?;
+        let name = theirs.get("name").and_then(|v| v.as_str()).unwrap_or(from).to_string();
+        let presets_decl = theirs.get("presets").filter(|p| p.is_object()).ok_or_else(|| format!("{name} brings no presets"))?;
+        let interface = text(presets_decl, "interface");
+        // (of `id`, through an interface it declares - each of a version the preset plugin works with)
+        let uses = listed(&theirs, "depends").into_iter().find(|d| text(d, "plugin") == id).ok_or_else(|| format!("{name} does not use {id}"))?;
+        if !bounded(&text(&uses, "versions")) {
+            return Err(format!("{name} gives no bound above to the versions of {id} it works with"));
+        }
+        if !in_versions(&version, &text(&uses, "versions")) {
+            return Err(format!("{name} works with {id} {}; {} is here", text(&uses, "versions"), if version.is_empty() { "no version of it" } else { &version }));
+        }
+        let wanted = listed(&uses, "interfaces").into_iter().find(|x| text(x, "id") == interface).ok_or_else(|| format!("{name} does not use {id}'s {interface} interface"))?;
+        if !bounded(&text(&wanted, "versions")) {
+            return Err(format!("{name} gives no bound above to the versions of {id}'s {interface} interface it works with"));
+        }
+        let has = listed(manifest, "interfaces").into_iter().find(|x| text(x, "id") == interface).map(|x| text(&x, "version"));
+        match has {
+            Some(v) if in_versions(&v, &text(&wanted, "versions")) => {}
+            Some(v) => return Err(format!("{name} works with {id}'s {interface} interface {}; {v} is here", text(&wanted, "versions"))),
+            None => return Err(format!("{id} declares no {interface} interface")),
+        }
+        // (every file its presets name, once: each a path inside its folder, by no link, a file)
+        let mut files: Vec<String> = ["looks", "studios", "motions"].iter().flat_map(|k| listed(presets_decl, k)).map(|x| text(&x, "file")).collect();
+        files.extend(listed(presets_decl, "files").iter().map(|f| f.as_str().unwrap_or_default().to_string()));
+        files.sort();
+        files.dedup();
+        for f in files {
+            if !preset_file_ok(&f) {
+                return Err(format!("{name} names a file it cannot hand over: {f}"));
+            }
+            let mut at = dir.clone();
+            for part in f.split('/') {
+                at.push(part);
+                let meta = fs::symlink_metadata(&at).map_err(|_| format!("{f} of {name} is not there"))?;
+                if meta.file_type().is_symlink() {
+                    return Err(format!("{f} of {name} is a link, which it cannot hand over"));
+                }
+            }
+            let meta = fs::metadata(&at).map_err(|e| format!("{f} of {name}: {e}"))?;
+            if !meta.is_file() {
+                return Err(format!("{f} of {name} is not a file"));
+            }
+            bytes += meta.len();
+            out.push((format!("{PRESET_DIR}/{from}/{f}"), at));
+        }
+    }
+    if out.len() > PRESET_FILES_MOST || bytes > PRESET_BYTES_MOST {
+        return Err(format!("the presets hand over more than a job takes: {} files, {} MB", out.len(), bytes.div_ceil(1 << 20)));
+    }
+    Ok(out)
 }
 
 /// A program installed beside a job's own, asked to run after it: by its name, with its arguments.
@@ -2236,7 +2664,10 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
     if let Some(name) = payload.stdin.as_deref().filter(|n| !payload.files.iter().any(|f| f.name == *n)) {
         return Err(format!("a job reads only a file written for it: {name}"));
     }
-    let plugin_dir = crate::resource_path(&app, &Path::new("resources/plugins").join(&payload.plugin))?;
+    let plugins = crate::installed::root(&data);
+    let plugin_dir = crate::installed::dir(&plugins, &payload.plugin)?;
+    // (the files its plugin reads back of it once it is done, each inside its work folder: a program may be given one by name)
+    let reads: Vec<String> = payload.reads.iter().filter(|n| inside_name(n)).cloned().collect();
     // (looked for off the commands' threads: a program installed separately is asked its version, which may take seconds)
     let installed = {
         let (dir, plugin, program, path) = (plugin_dir.clone(), payload.plugin.clone(), payload.program.clone(), payload.path.clone());
@@ -2248,8 +2679,8 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
         Some(found) => {
             // (a program installed separately, and those beside it, given the job's own files alone - none of the chemist's elsewhere)
             let written: Vec<String> = payload.files.iter().map(|f| f.name.clone()).collect();
-            names_only_written(&payload.args, &written)?;
-            payload.then.iter().try_for_each(|t| names_only_written(&t.args, &written))?;
+            names_only_written(&payload.args, &written, &reads)?;
+            payload.then.iter().try_for_each(|t| names_only_written(&t.args, &written, &reads))?;
             found
         }
         None => plugin_program(&data, &plugin_dir, &payload.plugin, &payload.program, &payload.args)?,
@@ -2257,12 +2688,14 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
     let then = then_of(&found, &payload.program, &payload.then)?;
     // (another plugin's program it needs: one its manifest declares, found as that plugin's own jobs find it - that plugin
     //  not set up, nothing is made, saying so - and named in the job's work folder, never as a path with a space in it)
-    let (needed_env, needed) = needs_given(&data, &manifest_of(&plugin_dir, &payload.plugin)?, &payload.plugin, &payload.needs, &|p| {
-        crate::resource_path(&app, &Path::new("resources/plugins").join(p))
-    })?;
+    let (needed_env, needed) = needs_given(&data, &manifest_of(&plugin_dir, &payload.plugin)?, &payload.plugin, &payload.needs, &|p| crate::installed::dir(&plugins, p))?;
     if let Some((name, _)) = needed.iter().find(|(name, _)| payload.files.iter().any(|f| &f.name == name)) {
         return Err(format!("a job's file is named {name}, as the program it needs is"));
     }
+    // (the files preset plugins hand it: each of a plugin that uses it through an interface it declares, copied into its
+    //  work folder unread - in a folder of their own, which none of its own files may be in)
+    let handed = presets_given(&manifest_of(&plugin_dir, &payload.plugin)?, &payload.plugin, &payload.presets, &|p| crate::installed::dir(&plugins, p))?;
+    clear_of_presets(&payload.files, &payload.presets)?;
     // (one asking for more than the computer has never starts: refused, saying so)
     if let Some(why) = beyond(computer(), payload.cores.unwrap_or(1), payload.memory.unwrap_or(0)) {
         return Err(format!("It cannot run on this computer: {why}"));
@@ -2276,19 +2709,20 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
         stdin: payload.stdin,
         env: given_env(&found, net.proxy_port(), payload.cores).into_iter().chain(needed_env).collect(),
         cores: payload.cores.unwrap_or(1).clamp(1, 1024),
+        processes: found.processes,
         memory: payload.memory.unwrap_or(0).min(MEMORY_MOST),
         created: now_ms(),
         label: payload.label.map(|l| l.chars().take(200).collect()),
         key: payload.key.filter(|k| k.len() == 64 && k.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())),
         then,
         needs: payload.needs.clone(),
+        presets: payload.presets.clone(),
         given: vec![],
     };
     // (each program it needs, linked in its work folder: a link there is never listed, kept or saved - keptjobs `kept_files`)
-    let (id, dir) = make_needing_job(&jobs_root(&app)?, &spec, &payload.files, &needed)?;
+    let (id, dir) = make_handed_job(&jobs_root(&app)?, &spec, &payload.files, &needed, &handed)?;
     // (what it was given and what is read back of it, for a workspace that keeps no raw outputs of it: without it, every file is taken as raw)
     let inputs = payload.files.iter().map(|f| f.name.clone()).collect();
-    let reads = payload.reads.into_iter().filter(|n| inside_name(n)).collect();
     if let Err(e) = crate::keptjobs::write_roles(&dir, inputs, reads) {
         crate::logfile::line("meno", &format!("a job's kept.json could not be written: {e}"));
     }
@@ -2311,7 +2745,7 @@ pub async fn program_where(app: AppHandle, plugin: String, name: String, located
     if !plugin_id(&plugin) {
         return Err(format!("not a plugin: {plugin}"));
     }
-    let plugin_dir = crate::resource_path(&app, &Path::new("resources/plugins").join(&plugin))?;
+    let plugin_dir = crate::installed::dir(&crate::installed::root(&crate::local_data_dir(&app)?), &plugin)?;
     let decl = installed_named(&manifest_of(&plugin_dir, &plugin)?, &name, system())?.ok_or_else(|| format!("{plugin} declares no program {name}"))?;
     // (a program asked its version runs a moment: not on the async runtime's own threads)
     tauri::async_runtime::spawn_blocking(move || {
@@ -2333,11 +2767,58 @@ pub struct JobListed {
     pub key: Option<String>,
     #[serde(flatten)]
     pub record: JobRecord,
+    /// When its program last wrote anything - its log, or a file of its work folder - in ms since 1970: a running
+    /// job's alone, for the page to say one that has written nothing for long (`lastWritten`).
+    #[serde(rename = "lastWritten", skip_serializing_if = "Option::is_none")]
+    pub last_written: Option<u64>,
 }
 
 fn listed(id: &str, dir: &Path) -> Option<JobListed> {
     let spec = read_spec(dir)?;
-    Some(JobListed { id: id.to_string(), plugin: spec.plugin, program: spec.name, key: spec.key, record: current_record(dir)? })
+    let record = current_record(dir)?;
+    let last_written = (record.state == JobState::Running).then(|| last_written(dir)).flatten();
+    Some(JobListed { id: id.to_string(), plugin: spec.plugin, program: spec.name, key: spec.key, record, last_written })
+}
+
+/// How many entries of a work folder `last_written` looks at, at most: past them it says nothing, never a time older
+/// than a write it did not reach.
+const WRITTEN_MOST: usize = 5000;
+/// A log written this recently is taken as when its job last wrote anything, its work folder not walked: the quiet a
+/// page says is counted in minutes, so a minute is never missed for it - and a job writing to its log costs one look.
+const WRITTEN_RECENTLY: u64 = 60_000;
+
+/// When the job in `dir` last wrote anything: its log, what ran after it, or any file or folder of its work folder,
+/// the newest, in ms since 1970 - a folder's own time counted, which a file made or removed in it changes. None where
+/// none can be read, or where its work folder holds more than `WRITTEN_MOST` entries.
+fn last_written(dir: &Path) -> Option<u64> {
+    let ms = |p: &Path| fs::metadata(p).ok()?.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok().map(|d| d.as_millis() as u64);
+    let logged = [LOG, AFTER_LOG].iter().filter_map(|l| ms(&dir.join(l))).max();
+    if logged.is_some_and(|t| now_ms().saturating_sub(t) < WRITTEN_RECENTLY) {
+        return logged;
+    }
+    let mut newest = logged.max(ms(&dir.join(WORK)));
+    let mut todo = vec![dir.join(WORK)];
+    let mut seen = 0;
+    while let Some(d) = todo.pop() {
+        let Ok(entries) = fs::read_dir(&d) else { continue };
+        for e in entries.flatten() {
+            seen += 1;
+            if seen > WRITTEN_MOST {
+                return None;
+            }
+            let p = e.path();
+            // (never followed out of the folder: a link is taken as itself)
+            match e.file_type() {
+                Ok(t) if t.is_dir() => {
+                    newest = newest.max(ms(&p));
+                    todo.push(p);
+                }
+                Ok(t) if t.is_file() => newest = newest.max(ms(&p)),
+                _ => {}
+            }
+        }
+    }
+    newest
 }
 
 #[tauri::command]
@@ -2481,6 +2962,12 @@ pub async fn job_stop(app: AppHandle, id: String) -> Result<(), String> {
     ask_stop(&job_dir(&app, &id)?).map_err(|e| e.to_string())
 }
 
+/// A job alone stopped, its step going on without it (`ask_stop_alone`).
+#[tauri::command]
+pub async fn job_stop_alone(app: AppHandle, id: String) -> Result<(), String> {
+    ask_stop_alone(&job_dir(&app, &id)?).map_err(|e| e.to_string())
+}
+
 /// What a job's folder taken away is named first: no job's id.
 const TAKEN: &str = ".taken-";
 
@@ -2542,9 +3029,38 @@ pub fn computer_resources() -> Resources {
 /// runner reads it as it looks for its turn - those waiting take it up at once. At least a core; memory within what
 /// the computer has, nought counting none.
 #[tauri::command]
-pub fn jobs_limits(app: AppHandle, cores: u32, memory: u64) -> Result<(), String> {
+pub fn jobs_limits(app: AppHandle, cores: u32, memory: u64, awake: Option<bool>) -> Result<(), String> {
     let root = jobs_root(&app)?;
-    write_limits(&root, Limits { cores: cores.clamp(1, 1024), memory: memory.min(MEMORY_MOST) }).map_err(|e| e.to_string())
+    write_limits(&root, Limits { cores: cores.clamp(1, 1024), memory: memory.min(MEMORY_MOST), awake: awake.unwrap_or(true) }).map_err(|e| e.to_string())
+}
+
+/// The computer kept awake while a plugin's worker works on what it was asked (lib/plugins/awake), as while a job
+/// runs - unless Settings says not, as the jobs' limits say it: held from the first ask to the last let go.
+#[derive(Default)]
+pub struct WorkerAwake(std::sync::Mutex<Option<crate::awake::Awake>>);
+
+/// Hold the computer awake for a plugin's worker at work (`held`), or let it go. Held already, or let go already, it
+/// is left as it is.
+#[tauri::command]
+pub fn worker_awake(app: AppHandle, state: tauri::State<'_, WorkerAwake>, held: bool) -> Result<(), String> {
+    let root = jobs_root(&app)?;
+    hold_for_worker(&state.0, held, || limits_in(&root).awake);
+    Ok(())
+}
+
+/// The hold for workers let go, whatever held it: the page that took it is gone (lib.rs, a page loaded anew).
+pub fn worker_let_go(state: &WorkerAwake) {
+    hold_for_worker(&state.0, false, || false);
+}
+
+/// The hold `kept` taken where `held` and Settings let it (`allowed`, asked only then), else let go.
+fn hold_for_worker(kept: &std::sync::Mutex<Option<crate::awake::Awake>>, held: bool, allowed: impl Fn() -> bool) {
+    let mut kept = kept.lock().unwrap_or_else(|e| e.into_inner());
+    if !held {
+        *kept = None;
+    } else if kept.is_none() && allowed() {
+        *kept = Some(crate::awake::hold());
+    }
 }
 
 /// Limits written whole: a runner never reads half of them.
@@ -2647,7 +3163,7 @@ mod tests {
     /// A job running a script of the system's shell, of a core, in a queue whose jobs may use `slots` cores in all:
     /// so many at once.
     fn shell(root: &Path, script: &str, slots: u32) -> PathBuf {
-        write_limits(root, Limits { cores: slots, memory: 0 }).unwrap();
+        write_limits(root, Limits { cores: slots, memory: 0, awake: true }).unwrap();
         sized(root, script, 1, 0)
     }
 
@@ -2665,12 +3181,14 @@ mod tests {
             stdin: None,
             env: BTreeMap::from([("MENO_JOB_SAYS".into(), "hello".into())]),
             cores,
+            processes: false,
             memory,
             created: now_ms(),
             label: None,
             key: None,
             then: vec![],
             needs: vec![],
+            presets: vec![],
             given: vec![],
         };
         make_job(root, &spec, &[JobFile { name: "input.txt".into(), text: "input".into() }]).unwrap().1
@@ -2703,14 +3221,144 @@ mod tests {
         write_record(&head, &base(&head)).unwrap();
         write_record(&after, &base(&after)).unwrap();
         // (the one slot taken: the head of the queue next, the other behind it)
-        assert_eq!(take_turn(&head, &read_spec(&head).unwrap(), &base(&head)).unwrap(), Turn::Next);
-        assert_eq!(take_turn(&after, &read_spec(&after).unwrap(), &base(&after)).unwrap(), Turn::Behind(1));
+        assert_eq!(take_turn(&head, &read_spec(&head).unwrap(), &base(&head), 1, &mut HashSet::new()).unwrap(), Turn::Next);
+        assert_eq!(take_turn(&after, &read_spec(&after).unwrap(), &base(&after), 1, &mut HashSet::new()).unwrap(), Turn::Behind(1));
         // (the slot free: the head's turn taken, and it recorded running)
         write_record(&running, &JobRecord { state: JobState::Done, ..base(&running) }).unwrap();
-        assert_eq!(take_turn(&head, &read_spec(&head).unwrap(), &base(&head)).unwrap(), Turn::Taken);
+        assert_eq!(take_turn(&head, &read_spec(&head).unwrap(), &base(&head), 1, &mut HashSet::new()).unwrap(), Turn::Taken);
         assert_eq!(current_record(&head).unwrap().state, JobState::Running);
-        assert_eq!(take_turn(&after, &read_spec(&after).unwrap(), &base(&after)).unwrap(), Turn::Next);
+        assert_eq!(take_turn(&after, &read_spec(&after).unwrap(), &base(&after), 1, &mut HashSet::new()).unwrap(), Turn::Next);
         drop(held);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_job_far_back_in_the_queue_is_told_so_without_waiting_on_its_lock_and_reads_a_finished_one_once() {
+        let root = temp();
+        let mk = || {
+            std::thread::sleep(Duration::from_millis(3));
+            shell(&root, "true", 1)
+        };
+        let done = mk();
+        let waiting: Vec<PathBuf> = (0..4).map(|_| mk()).collect();
+        let base = |dir: &Path| JobRecord::new(JobState::Waiting, read_spec(dir).unwrap().created);
+        write_record(&done, &JobRecord { state: JobState::Done, ..base(&done) }).unwrap();
+        // (each with its runner there, holding its lock)
+        let runners: Vec<_> = waiting
+            .iter()
+            .map(|w| {
+                write_record(w, &base(w)).unwrap();
+                let lock = OpenOptions::new().create(true).truncate(false).write(true).open(w.join(RUNNER_LOCK)).unwrap();
+                lock.lock().unwrap();
+                lock
+            })
+            .collect();
+        // (the queue's lock held - by the head, say, as it takes its turn)
+        let lock = OpenOptions::new().create(true).truncate(false).write(true).open(root.join(QUEUE_LOCK)).unwrap();
+        lock.lock().unwrap();
+        // (one slot: the last of four waiting is 3 places back, past the head's 2 - told so at once, the lock still held)
+        let last = &waiting[3];
+        let mut finished = HashSet::new();
+        let (tx, rx) = std::sync::mpsc::channel();
+        {
+            let (last, spec, record) = (last.clone(), read_spec(last).unwrap(), base(last));
+            std::thread::spawn(move || {
+                let mut seen = HashSet::new();
+                let _ = tx.send((take_turn(&last, &spec, &record, 1, &mut seen).unwrap(), seen));
+            });
+        }
+        let (turn, seen) = rx.recv_timeout(Duration::from_secs(5)).expect("a job far back waited on the queue's lock");
+        assert_eq!(turn, Turn::Behind(3));
+        // (the finished one remembered, and not read again: its record gone now, it is still passed over)
+        assert!(seen.contains(done.file_name().unwrap()));
+        finished.extend(seen);
+        fs::remove_file(done.join(RECORD)).unwrap();
+        assert_eq!(glance(&root, last, &base(last), &mut finished).unwrap(), 3);
+        // (its record back: a folder with none is a job starting, to a look that has not seen it finished)
+        write_record(&done, &JobRecord { state: JobState::Done, ..base(&done) }).unwrap();
+        // (one near the head waits on the lock: it looks again under it)
+        let (tx, rx) = std::sync::mpsc::channel();
+        {
+            let (near, spec, record) = (waiting[1].clone(), read_spec(&waiting[1]).unwrap(), base(&waiting[1]));
+            std::thread::spawn(move || {
+                let _ = tx.send(take_turn(&near, &spec, &record, 1, &mut HashSet::new()).unwrap());
+            });
+        }
+        assert!(rx.recv_timeout(Duration::from_millis(300)).is_err());
+        drop(lock);
+        assert_eq!(rx.recv_timeout(Duration::from_secs(5)).unwrap(), Turn::Behind(1));
+        drop(runners);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_worker_at_work_holds_the_computer_awake_once_where_settings_let_it_and_lets_go() {
+        let kept = std::sync::Mutex::new(None);
+        // (Settings saying to let it sleep: nothing held)
+        hold_for_worker(&kept, true, || false);
+        assert!(kept.lock().unwrap().is_none());
+        hold_for_worker(&kept, true, || true);
+        assert!(kept.lock().unwrap().is_some());
+        // (held already: kept as it is, Settings not asked again)
+        hold_for_worker(&kept, true, || unreachable!("asked again while held"));
+        assert!(kept.lock().unwrap().is_some());
+        hold_for_worker(&kept, false, || unreachable!("asked as it lets go"));
+        assert!(kept.lock().unwrap().is_none());
+        hold_for_worker(&kept, false, || true);
+        assert!(kept.lock().unwrap().is_none());
+        // (the page loaded anew: whatever was held let go, Settings not asked)
+        let state = WorkerAwake::default();
+        hold_for_worker(&state.0, true, || true);
+        worker_let_go(&state);
+        assert!(state.0.lock().unwrap().is_none());
+    }
+
+    #[test]
+    fn a_waiting_job_asked_to_stop_ends_while_another_holds_the_queues_lock() {
+        let root = temp();
+        let dir = shell(&root, ECHO, 1);
+        // (the queue's lock held, as by a look at hundreds of folders on a disk that opens them slowly)
+        let lock = OpenOptions::new().create(true).truncate(false).write(true).open(root.join(QUEUE_LOCK)).unwrap();
+        lock.lock().unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        {
+            let d = dir.clone();
+            std::thread::spawn(move || {
+                let _ = tx.send(run_job(&d));
+            });
+        }
+        // (the head of the queue, at the lock: waiting, and still so a while on)
+        wait_for(|| current_record(&dir).is_some_and(|r| r.state == JobState::Waiting));
+        assert!(rx.recv_timeout(Duration::from_millis(300)).is_err());
+        // (its step stopped: it ends, the lock still held by the other, and runs nothing)
+        ask_stop(&dir).unwrap();
+        assert_eq!(rx.recv_timeout(Duration::from_secs(5)).expect("a stop went unseen while it waited for the queue's lock"), 0);
+        let record = current_record(&dir).unwrap();
+        assert_eq!((record.state, record.started), (JobState::Stopped, None));
+        drop(lock);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_live_job_behind_waiting_ones_whose_runners_are_gone_takes_its_turn() {
+        let root = temp();
+        let mk = || {
+            std::thread::sleep(Duration::from_millis(3));
+            shell(&root, "true", 1)
+        };
+        // (five said waiting, asked for first - their runners gone with a Meno that was ended - and one live behind them)
+        let dead: Vec<PathBuf> = (0..5).map(|_| mk()).collect();
+        let live = mk();
+        let base = |dir: &Path| JobRecord::new(JobState::Waiting, read_spec(dir).unwrap().created);
+        for d in dead.iter().chain([&live]) {
+            write_record(d, &base(d)).unwrap();
+        }
+        let runner = OpenOptions::new().create(true).truncate(false).write(true).open(live.join(RUNNER_LOCK)).unwrap();
+        runner.lock().unwrap();
+        // (not told it is 5 back: its turn taken, the dead ones recorded gone as it looked under the lock)
+        assert_eq!(take_turn(&live, &read_spec(&live).unwrap(), &base(&live), 1, &mut HashSet::new()).unwrap(), Turn::Taken);
+        assert!(dead.iter().all(|d| current_record(d).unwrap().state == JobState::Gone));
+        drop(runner);
         let _ = fs::remove_dir_all(&root);
     }
 
@@ -2861,14 +3509,14 @@ mod tests {
     fn runs_after_its_own_only_a_program_declared_beside_it_and_there() {
         let root = temp();
         let (program, _) = shell_program();
-        let found = |beside: Vec<(String, PathBuf)>| Found { program: PathBuf::from(&program), activation: None, env: vec![], beside };
-        let ask = |name: &str| ThenAsk { program: name.into(), args: vec!["input".into(), "-molden".into()] };
-        let there = found(vec![("orca_2mkl".into(), PathBuf::from(&program))]);
-        assert_eq!(then_of(&there, "orca", &[ask("orca_2mkl")]).unwrap(), vec![Then { name: "orca_2mkl".into(), program: program.clone(), args: vec!["input".into(), "-molden".into()] }]);
-        assert!(then_of(&there, "orca", &[ask("orca_2aim")]).unwrap_err().contains("no orca_2aim beside it"));
-        let gone = found(vec![("orca_2mkl".into(), root.join("orca_2mkl"))]);
-        assert!(then_of(&gone, "orca", &[ask("orca_2mkl")]).unwrap_err().contains("not found beside orca"));
-        assert!(then_of(&there, "orca", &vec![ask("orca_2mkl"); 5]).is_err());
+        let found = |beside: Vec<(String, PathBuf)>| Found { program: PathBuf::from(&program), activation: None, env: vec![], beside, processes: false };
+        let ask = |name: &str| ThenAsk { program: name.into(), args: vec!["input".into()] };
+        let there = found(vec![("orca_2aim".into(), PathBuf::from(&program))]);
+        assert_eq!(then_of(&there, "orca", &[ask("orca_2aim")]).unwrap(), vec![Then { name: "orca_2aim".into(), program: program.clone(), args: vec!["input".into()] }]);
+        assert!(then_of(&there, "orca", &[ask("orca_2mkl")]).unwrap_err().contains("no orca_2mkl beside it"));
+        let gone = found(vec![("orca_2aim".into(), root.join("orca_2aim"))]);
+        assert!(then_of(&gone, "orca", &[ask("orca_2aim")]).unwrap_err().contains("not found beside orca"));
+        assert!(then_of(&there, "orca", &vec![ask("orca_2aim"); 5]).is_err());
         assert_eq!(then_of(&there, "orca", &[]).unwrap(), vec![]);
         let _ = fs::remove_dir_all(root);
     }
@@ -2876,10 +3524,10 @@ mod tests {
     #[test]
     fn reads_the_programs_installed_beside_one_for_this_system() {
         let m = |beside: serde_json::Value| serde_json::json!({"installed": [{"name": "orca", "files": {"macos": "orca", "windows": "orca.exe"}, "beside": beside}]});
-        let orca = installed_named(&m(serde_json::json!({"orca_2mkl": {"macos": "orca_2mkl", "windows": "orca_2mkl.exe"}})), "orca", "windows").unwrap().unwrap();
-        assert_eq!(orca.beside, vec![("orca_2mkl".to_string(), "orca_2mkl.exe".to_string())]);
+        let orca = installed_named(&m(serde_json::json!({"orca_2aim": {"macos": "orca_2aim", "windows": "orca_2aim.exe"}})), "orca", "windows").unwrap().unwrap();
+        assert_eq!(orca.beside, vec![("orca_2aim".to_string(), "orca_2aim.exe".to_string())]);
         // (one not made for this system: none here)
-        assert_eq!(installed_named(&m(serde_json::json!({"orca_2mkl": {"windows": "orca_2mkl.exe"}})), "orca", "macos").unwrap().unwrap().beside, vec![]);
+        assert_eq!(installed_named(&m(serde_json::json!({"orca_2aim": {"windows": "orca_2aim.exe"}})), "orca", "macos").unwrap().unwrap().beside, vec![]);
         // (never a path, a shell, or a name that is not one)
         for bad in [serde_json::json!({"x": {"macos": "../x"}}), serde_json::json!({"x": {"macos": "sh"}}), serde_json::json!({"../x": {"macos": "x"}}), serde_json::json!(["x"]), serde_json::json!({"x": "x"})] {
             assert!(installed_named(&m(bad.clone()), "orca", "macos").is_err(), "{bad}");
@@ -2939,6 +3587,30 @@ mod tests {
     const PAUSE: &str = "sleep 1";
     #[cfg(windows)]
     const PAUSE: &str = "ping -n 2 127.0.0.1 > nul";
+
+    // (a long queue's gaps - run by hand, `--ignored`: MENO_QUEUE_N jobs (300) of a pause each, one at a time, every
+    //  runner waiting at once as a step's are; says the mean and largest gap from one's end to the next one's start)
+    #[test]
+    #[ignore]
+    fn a_long_queue_starts_the_next_job_as_one_ends() {
+        let n: usize = std::env::var("MENO_QUEUE_N").ok().and_then(|v| v.parse().ok()).unwrap_or(300);
+        let root = temp();
+        #[cfg(unix)]
+        let pause = "sleep 0.3";
+        #[cfg(windows)]
+        let pause = "ping -n 1 127.0.0.1 > nul";
+        let dirs: Vec<PathBuf> = (0..n).map(|_| shell(&root, pause, 1)).collect();
+        let runs: Vec<_> = dirs.iter().cloned().map(|d| std::thread::spawn(move || run_job(&d))).collect();
+        for r in runs {
+            r.join().unwrap();
+        }
+        let mut spans: Vec<(u64, u64)> = dirs.iter().map(|d| current_record(d).unwrap()).map(|r| (r.started.unwrap(), r.ended.unwrap())).collect();
+        spans.sort();
+        let gaps: Vec<u64> = spans.windows(2).map(|w| w[1].0.saturating_sub(w[0].1)).collect();
+        let mean = gaps.iter().sum::<u64>() as f64 / gaps.len().max(1) as f64;
+        println!("QUEUE {n} jobs: gap mean {mean:.0} ms, largest {} ms", gaps.iter().max().unwrap_or(&0));
+        let _ = fs::remove_dir_all(root);
+    }
 
     #[test]
     fn waits_its_turn_in_the_order_jobs_were_asked_for() {
@@ -3034,7 +3706,7 @@ mod tests {
 
     #[test]
     fn starts_a_job_where_its_cores_and_memory_fit_beside_those_running_and_never_one_ahead_of_its_turn() {
-        let l = Limits { cores: 8, memory: 16_000 };
+        let l = Limits { cores: 8, memory: 16_000, awake: true };
         // (nothing running: any job, a larger one than the limits included, runs alone)
         assert!(fits(l, (0, 0), 0, 32, 64_000));
         assert!(fits(l, (4, 8_000), 1, 4, 8_000));
@@ -3043,18 +3715,18 @@ mod tests {
         // (a job that declares no memory is counted by its cores alone; and limits with none - the computer's memory
         //  not told - count none)
         assert!(fits(l, (4, 16_000), 1, 4, 0));
-        assert!(fits(Limits { cores: 8, memory: 0 }, (4, 16_000), 1, 4, 8_000));
+        assert!(fits(Limits { cores: 8, memory: 0, awake: true }, (4, 16_000), 1, 4, 8_000));
         // (more than the computer has: refused, in plain words; within it, though over the limits, not)
-        let here = Resources { cores: 10, memory: 32 * 1024 };
+        let here = Resources { cores: 10, physical: 10, memory: 32 * 1024 };
         assert_eq!(beyond(here, 12, 0).as_deref(), Some("it asks for 12 cores, and this computer has 10"));
         assert_eq!(beyond(here, 4, 40 * 1024).as_deref(), Some("it asks for 40.0 GB of memory, and this computer has 32.0 GB"));
         assert_eq!(beyond(here, 10, 32 * 1024), None);
-        assert_eq!(beyond(Resources { cores: 10, memory: 0 }, 4, 40 * 1024), None);
+        assert_eq!(beyond(Resources { cores: 10, physical: 10, memory: 0 }, 4, 40 * 1024), None);
         assert_eq!(slots_for(l, &JobSpec { cores: 3, ..read_spec(&sized(&temp(), "x", 3, 0)).unwrap() }), 2);
 
         // in the queue: two of 4 cores in 6 - the second waits, though a core-sized job behind it would fit
         let root = temp();
-        write_limits(&root, Limits { cores: 6, memory: 0 }).unwrap();
+        write_limits(&root, Limits { cores: 6, memory: 0, awake: true }).unwrap();
         let first = sized(&root, PAUSE, 4, 0);
         std::thread::sleep(Duration::from_millis(5));
         let second = sized(&root, PAUSE, 4, 0);
@@ -3109,7 +3781,7 @@ mod tests {
         let data = temp();
         let scratch = temp();
         assert_eq!(jobs_roots(&data), vec![jobs_in(&data)]);
-        write_limits(&jobs_in(&data), Limits { cores: 3, memory: 4096 }).unwrap();
+        write_limits(&jobs_in(&data), Limits { cores: 3, memory: 4096, awake: true }).unwrap();
         // (one made in Meno's own before)
         let before = sized(&jobs_in(&data), ECHO, 1, 0);
         write_record(&before, &JobRecord { ended: Some(now_ms()), ..JobRecord::new(JobState::Done, now_ms()) }).unwrap();
@@ -3117,7 +3789,7 @@ mod tests {
         let chosen = scratch.join(IN_CHOSEN);
         assert_eq!(jobs_roots(&data), vec![chosen.clone(), jobs_in(&data)]);
         // (what jobs may use goes with it)
-        assert_eq!(limits_in(&chosen), Limits { cores: 3, memory: 4096 });
+        assert_eq!(limits_in(&chosen), Limits { cores: 3, memory: 4096, awake: true });
         // (a job made there: its runner takes it, as one in Meno's own; one elsewhere, never)
         let (_, dir) = make_job(&chosen, &read_spec(&before).unwrap(), &[]).unwrap();
         assert!(runner_folder(&data, &dir).is_ok());
@@ -3178,8 +3850,14 @@ mod tests {
         let root = temp();
         assert_eq!(limits_in(&root), default_limits());
         assert!(default_limits().cores >= 1);
-        write_limits(&root, Limits { cores: 3, memory: 2048 }).unwrap();
-        assert_eq!(limits_in(&root), Limits { cores: 3, memory: 2048 });
+        write_limits(&root, Limits { cores: 3, memory: 2048, awake: true }).unwrap();
+        assert_eq!(limits_in(&root), Limits { cores: 3, memory: 2048, awake: true });
+        // (the computer kept awake unless Settings turned it off - and so where limits written before it say nothing of it)
+        assert!(default_limits().awake);
+        write_limits(&root, Limits { cores: 3, memory: 2048, awake: false }).unwrap();
+        assert!(!limits_in(&root).awake);
+        fs::write(root.join(LIMITS), r#"{"cores": 2, "memory": 1024}"#).unwrap();
+        assert_eq!(limits_in(&root), Limits { cores: 2, memory: 1024, awake: true });
         // (the computer's memory told: three quarters of it, by default)
         let here = computer();
         assert!(here.memory > 0, "{here:?}");
@@ -3273,6 +3951,121 @@ mod tests {
         let r = current_record(&dir).unwrap();
         assert_eq!((r.state, r.started), (JobState::Stopped, None));
         assert!(!dir.join(WORK).join("result.txt").exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_job_stopped_alone_ends_failed_saying_so_running_or_waiting_and_a_stop_of_its_step_after_is_a_stop() {
+        let root = temp();
+        // (running: its program stopped, and it recorded failed, "stopped by you")
+        let dir = shell(&root, LONG, 1);
+        let runner = {
+            let d = dir.clone();
+            std::thread::spawn(move || run_job(&d))
+        };
+        wait_for(|| current_record(&dir).is_some_and(|r| r.state == JobState::Running));
+        let t = Instant::now();
+        ask_stop_alone(&dir).unwrap();
+        runner.join().unwrap();
+        let r = current_record(&dir).unwrap();
+        assert_eq!((r.state, r.why.as_deref()), (JobState::Failed, Some(STOPPED_ALONE)));
+        assert!(r.started.is_some() && t.elapsed() < Duration::from_secs(10));
+        // (waiting: never started, failed so too)
+        let waiting = shell(&root, ECHO, 1);
+        ask_stop_alone(&waiting).unwrap();
+        run_job(&waiting);
+        let r = current_record(&waiting).unwrap();
+        assert_eq!((r.state, r.started, r.why.as_deref()), (JobState::Failed, None, Some(STOPPED_ALONE)));
+        // (its step stopped after: stopped, as ever)
+        let both = shell(&root, ECHO, 1);
+        ask_stop_alone(&both).unwrap();
+        ask_stop(&both).unwrap();
+        run_job(&both);
+        assert_eq!(current_record(&both).unwrap().state, JobState::Stopped);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    /// A file's write time set back `ago` ms, as `touch -t` would.
+    fn written_ago(p: &Path, ago: u64) {
+        let at = std::time::SystemTime::now() - Duration::from_millis(ago);
+        File::options().write(true).open(p).unwrap().set_modified(at).unwrap();
+    }
+
+    #[test]
+    fn a_running_job_says_when_it_last_wrote_anything_and_a_finished_one_does_not() {
+        let root = temp();
+        let dir = shell(&root, ECHO, 1);
+        let id = dir.file_name().unwrap().to_string_lossy().into_owned();
+        let runner = OpenOptions::new().create(true).truncate(false).write(true).open(dir.join(RUNNER_LOCK)).unwrap();
+        runner.lock().unwrap();
+        write_record(&dir, &JobRecord { state: JobState::Running, started: Some(1), ..JobRecord::new(JobState::Waiting, 1) }).unwrap();
+        // (its log and a file at the top of its work folder written an hour ago; a file deep in it, written last: that one -
+        //  its folders made before it, their times no later than its)
+        fs::write(dir.join(LOG), "ran\n").unwrap();
+        written_ago(&dir.join(LOG), 3_600_000);
+        written_ago(&dir.join(WORK).join("input.txt"), 3_600_000);
+        fs::create_dir_all(dir.join(WORK).join("a/b")).unwrap();
+        std::thread::sleep(Duration::from_millis(20));
+        fs::write(dir.join(WORK).join("a/b/step.tmp"), "x").unwrap();
+        let deep = fs::metadata(dir.join(WORK).join("a/b/step.tmp")).unwrap().modified().unwrap().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
+        assert_eq!(listed(&id, &dir).unwrap().last_written, Some(deep));
+        // (said to the page as lastWritten)
+        assert!(serde_json::to_string(&listed(&id, &dir).unwrap()).unwrap().contains("\"lastWritten\":"));
+        // (a folder made since, empty: its own time counts)
+        std::thread::sleep(Duration::from_millis(20));
+        fs::create_dir_all(dir.join(WORK).join("c")).unwrap();
+        assert!(last_written(&dir).unwrap() > deep);
+        // (its log written just now: that, the folder not walked)
+        std::thread::sleep(Duration::from_millis(20));
+        fs::write(dir.join(LOG), "more\n").unwrap();
+        let log = fs::metadata(dir.join(LOG)).unwrap().modified().unwrap().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
+        assert_eq!(last_written(&dir), Some(log));
+        // (more entries than it looks at: nothing said, never an older time)
+        written_ago(&dir.join(LOG), 3_600_000);
+        let many = dir.join(WORK).join("many");
+        fs::create_dir_all(&many).unwrap();
+        for k in 0..=WRITTEN_MOST {
+            fs::write(many.join(k.to_string()), "").unwrap();
+        }
+        assert_eq!(last_written(&dir), None);
+        // (finished: none)
+        write_record(&dir, &JobRecord { state: JobState::Done, ended: Some(2), ..JobRecord::new(JobState::Done, 1) }).unwrap();
+        assert_eq!(listed(&id, &dir).unwrap().last_written, None);
+        drop(runner);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_stop_of_its_step_asked_first_stays_a_stop_though_the_job_is_then_stopped_alone() {
+        let root = temp();
+        let dir = shell(&root, ECHO, 1);
+        ask_stop(&dir).unwrap();
+        ask_stop_alone(&dir).unwrap();
+        assert_eq!(fs::read(dir.join(STOP)).unwrap(), b"");
+        run_job(&dir);
+        assert_eq!(current_record(&dir).unwrap().state, JobState::Stopped);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    /// A job stopped alone while a program it runs after its own runs: failed, saying so, as while its own runs.
+    #[cfg(unix)]
+    #[test]
+    fn a_job_stopped_alone_while_a_program_after_its_own_runs_ends_failed_saying_so() {
+        let root = temp();
+        let dir = shell(&root, ECHO, 1);
+        let mut spec = read_spec(&dir).unwrap();
+        spec.then = vec![Then { name: "sh".into(), program: "/bin/sh".into(), args: vec!["-c".into(), LONG.into()] }];
+        fs::write(dir.join(SPEC), serde_json::to_string(&spec).unwrap()).unwrap();
+        let runner = {
+            let d = dir.clone();
+            std::thread::spawn(move || run_job(&d))
+        };
+        wait_for(|| read_work_file(&dir, "child.pid").is_ok_and(|s| s.ends_with('\n')));
+        ask_stop_alone(&dir).unwrap();
+        runner.join().unwrap();
+        let r = current_record(&dir).unwrap();
+        assert_eq!((r.state, r.why.as_deref()), (JobState::Failed, Some(STOPPED_ALONE)));
+        assert!(r.started.is_some());
         let _ = fs::remove_dir_all(root);
     }
 
@@ -3543,16 +4336,16 @@ mod tests {
         let _ = fs::remove_file(taken.join(RECORD));
         assert_eq!(current_record(&taken).map(|r| r.state), Some(JobState::Waiting));
         let spec = read_spec(&mine).unwrap();
-        assert!(matches!(take_turn(&mine, &spec, &JobRecord::new(JobState::Waiting, spec.created)).unwrap(), Turn::Taken));
+        assert!(matches!(take_turn(&mine, &spec, &JobRecord::new(JobState::Waiting, spec.created), 1, &mut HashSet::new()).unwrap(), Turn::Taken));
         let _ = fs::remove_dir_all(root);
     }
 
     /// A plugin's folder naming `programs`, and Meno's data folder with its uv environment holding `files`.
     fn plugin(programs: &str, files: &[&str]) -> (PathBuf, PathBuf) {
         let base = temp();
-        let plugin = base.join("plugins").join("demo");
-        fs::create_dir_all(&plugin).unwrap();
-        fs::write(plugin.join("manifest.json"), format!(r#"{{"id": "demo", "steps": [{{"kinds": ["optimise"], "programs": {programs}}}]}}"#)).unwrap();
+        // (in place as Meno has its plugins: its version in use, named by `current`)
+        let manifest = format!(r#"{{"id": "demo", "steps": [{{"kinds": ["optimise"], "programs": {programs}}}]}}"#);
+        let plugin = crate::installed::tests::in_place(&base.join("plugins"), "demo", "1.0.0", &manifest);
         fs::write(plugin.join("worker.py"), "").unwrap();
         let data = base.join("data");
         let bin = data.join("uv").join("plugin-demo").join("venv").join(if cfg!(windows) { "Scripts" } else { "bin" });
@@ -3596,13 +4389,15 @@ mod tests {
             args: args.iter().map(|a| a.to_string()).collect(),
             stdin: None,
             env: given_env(found, 4567, Some(2)),
-            cores: 1,
+            cores: 2,
+            processes: found.processes,
             memory: 0,
             created: now_ms(),
             label: None,
             key: None,
             then: vec![],
             needs: vec![],
+            presets: vec![],
             given: vec![],
         }
     }
@@ -3652,18 +4447,18 @@ mod tests {
     fn a_runner_runs_only_what_job_start_would_have_it_run() {
         let exe = |n: &str| if cfg!(windows) { format!("{n}.exe") } else { n.to_string() };
         let (data, dir) = plugin(r#"["xtb"]"#, &[&exe("xtb"), &exe("other")]);
-        let plugins = dir.parent().unwrap().to_path_buf();
+        let plugins = dir.parent().and_then(Path::parent).unwrap().to_path_buf();
         let found = plugin_program(&data, &dir, "demo", "xtb", &[]).unwrap();
         let good = spec_for("demo", "xtb", &found, &["in.xyz"]);
-        assert_eq!(spec_allowed(&data, &plugins, &good, &[]), Ok(()));
+        assert_eq!(spec_allowed(&data, &plugins, &good, &[], &[]), Ok(()));
         // a program its plugin does not name; another file under a name it names; another plugin's
         let other = Found { program: found.program.with_file_name(exe("other")), ..plugin_program(&data, &dir, "demo", "xtb", &[]).unwrap() };
-        assert!(spec_allowed(&data, &plugins, &spec_for("demo", "other", &other, &[]), &[]).unwrap_err().contains("names no program other"));
+        assert!(spec_allowed(&data, &plugins, &spec_for("demo", "other", &other, &[]), &[], &[]).unwrap_err().contains("names no program other"));
         let (program, _) = shell_program();
         let elsewhere = JobSpec { program, ..good.clone() };
-        assert!(spec_allowed(&data, &plugins, &elsewhere, &[]).is_err());
+        assert!(spec_allowed(&data, &plugins, &elsewhere, &[], &[]).is_err());
         for plugin in ["../demo", "absent"] {
-            assert!(spec_allowed(&data, &plugins, &JobSpec { plugin: plugin.into(), ..good.clone() }, &[]).is_err(), "{plugin}");
+            assert!(spec_allowed(&data, &plugins, &JobSpec { plugin: plugin.into(), ..good.clone() }, &[], &[]).is_err(), "{plugin}");
         }
         // given what Meno does not give: code loaded into it, a network of its own, no proxy, programs after it
         let with = |k: &str, v: &str| {
@@ -3672,12 +4467,12 @@ mod tests {
             JobSpec { env, ..good.clone() }
         };
         for (k, v) in [("DYLD_INSERT_LIBRARIES", "/tmp/x.dylib"), ("LD_PRELOAD", "/tmp/x.so"), ("PYTHONPATH", "/tmp"), ("HTTPS_PROXY", "http://example.org:8080"), ("OMP_NUM_THREADS", "lots")] {
-            assert!(spec_allowed(&data, &plugins, &with(k, v), &[]).is_err(), "{k}");
+            assert!(spec_allowed(&data, &plugins, &with(k, v), &[], &[]).is_err(), "{k}");
         }
         let unrouted = JobSpec { env: BTreeMap::new(), ..good.clone() };
-        assert!(spec_allowed(&data, &plugins, &unrouted, &[]).unwrap_err().contains("not pointed at Meno's network"));
+        assert!(spec_allowed(&data, &plugins, &unrouted, &[], &[]).unwrap_err().contains("not pointed at Meno's network"));
         let then = JobSpec { then: vec![Then { name: "sh".into(), program: shell_program().0, args: vec![] }], ..good.clone() };
-        assert!(spec_allowed(&data, &plugins, &then, &[]).is_err());
+        assert!(spec_allowed(&data, &plugins, &then, &[], &[]).is_err());
 
         // and run by the runner: refused, failing, saying why, nothing run; allowed, run
         let jobs = data.join("jobs");
@@ -3703,9 +4498,10 @@ mod tests {
     #[test]
     fn a_program_installed_separately_is_given_its_job_s_files_options_and_numbers_alone() {
         let written = ["input.inp".to_string(), "wavefunction.molden".to_string(), "nci.txt".to_string()];
-        let ok = |args: &[&str]| names_only_written(&args.iter().map(|a| a.to_string()).collect::<Vec<_>>(), &written);
-        // ORCA, orca_2mkl, Multiwfn, Gaussian, as their plugins ask
+        let ok = |args: &[&str]| names_only_written(&args.iter().map(|a| a.to_string()).collect::<Vec<_>>(), &written, &[]);
+        // ORCA, orca_2aim, Multiwfn, Gaussian, as their plugins ask
         assert_eq!(ok(&["input.inp"]), Ok(()));
+        assert_eq!(ok(&["input"]), Ok(()));
         assert_eq!(ok(&["input", "-molden"]), Ok(()));
         assert_eq!(ok(&["wavefunction.molden", "-nt", "4", "-silent"]), Ok(()));
         assert_eq!(ok(&[]), Ok(()));
@@ -3716,45 +4512,69 @@ mod tests {
     }
 
     #[test]
+    fn a_program_may_be_given_by_name_a_file_its_plugin_reads_back_of_its_job_and_nothing_wider() {
+        // Gaussian 16W on Windows, as its plugin asks: its input, and the output it is to write by name - one its plugin reads back
+        let written = ["input.gjf".to_string()];
+        let reads = ["input.log".to_string(), "input.fchk".to_string()];
+        let ok = |args: &[&str], reads: &[String]| names_only_written(&args.iter().map(|a| a.to_string()).collect::<Vec<_>>(), &written, reads);
+        assert_eq!(ok(&["input.gjf", "input.log"], &reads), Ok(()));
+        // (not read back, not written: refused, as before - and so is the output where nothing says it is read back)
+        assert!(ok(&["input.gjf", "input.log"], &[]).unwrap_err().contains("input.log is not a file written for it"));
+        assert!(ok(&["input.gjf", "other.log"], &reads).is_err());
+        // (by its name exactly: no stem of a file read back, nothing above the work folder or from its root, even where declared)
+        assert!(ok(&["input.gjf", "input"], &["input.log".to_string()]).is_ok(), "the stem of the file written for it, as before");
+        assert!(ok(&["output"], &["output.log".to_string()]).is_err());
+        for bad in ["../input.log", "/tmp/input.log", "./input.log", "sub/../input.log"] {
+            assert!(ok(&["input.gjf", bad], &[bad.to_string()]).is_err(), "{bad:?}");
+        }
+        if cfg!(windows) {
+            assert!(ok(&["input.gjf", r"C:\input.log"], &[r"C:\input.log".to_string()]).is_err());
+        }
+    }
+
+    #[test]
     fn a_runner_runs_a_program_installed_separately_only_as_its_plugin_declares_it() {
         let base = temp();
         let plugins = base.join("plugins");
-        let plugin = plugins.join("demo");
-        fs::create_dir_all(&plugin).unwrap();
+        let plugin = crate::installed::tests::in_place(&plugins, "demo", "1.0.0", "{}");
         let exe = |n: &str| if cfg!(windows) { format!("{n}.exe") } else { n.to_string() };
         let manifest = serde_json::json!({
             "id": "demo",
-            "installed": [{"name": "orca", "files": {system(): exe("orca")}, "path": ["{folder}"], "beside": {"orca_2mkl": {system(): exe("orca_2mkl")}}}],
+            "installed": [{"name": "orca", "files": {system(): exe("orca")}, "path": ["{folder}"], "beside": {"orca_2aim": {system(): exe("orca_2aim")}}}],
             "steps": [{"kinds": ["energy"], "programs": ["orca"]}]
         });
         fs::write(plugin.join("manifest.json"), manifest.to_string()).unwrap();
         let orca = program_file(&base.join("orca_6"), &exe("orca"));
-        program_file(&base.join("orca_6"), &exe("orca_2mkl"));
+        program_file(&base.join("orca_6"), &exe("orca_2aim"));
         let found = installed_program(&plugin, "demo", "orca", orca.to_str()).unwrap().unwrap();
         let mut good = spec_for("demo", "orca", &found, &["input.inp"]);
-        good.then = then_of(&found, "orca", &[ThenAsk { program: "orca_2mkl".into(), args: vec!["input".into()] }]).unwrap();
+        good.then = then_of(&found, "orca", &[ThenAsk { program: "orca_2aim".into(), args: vec!["input".into()] }]).unwrap();
         let data = base.join("data");
         let written = vec!["input.inp".to_string()];
-        assert_eq!(spec_allowed(&data, &plugins, &good, &written), Ok(()));
+        assert_eq!(spec_allowed(&data, &plugins, &good, &written, &[]), Ok(()));
+        // (given by name a file its plugin reads back of it - checked again by its runner, from its kept roles - and nothing else)
+        let named = JobSpec { args: vec!["input.inp".into(), "input.out".into()], ..good.clone() };
+        assert_eq!(spec_allowed(&data, &plugins, &named, &written, &["input.out".to_string()]), Ok(()));
+        assert!(spec_allowed(&data, &plugins, &named, &written, &[]).is_err());
         // a file of another name where it was located; one beside it it does not declare
         let other = program_file(&base.join("orca_6"), &exe("orcb"));
-        assert!(spec_allowed(&data, &plugins, &JobSpec { program: other.to_string_lossy().into_owned(), ..good.clone() }, &written).is_err());
+        assert!(spec_allowed(&data, &plugins, &JobSpec { program: other.to_string_lossy().into_owned(), ..good.clone() }, &written, &[]).is_err());
         let mut beside = good.clone();
         beside.then[0].program = other.to_string_lossy().into_owned();
-        assert!(spec_allowed(&data, &plugins, &beside, &written).is_err());
+        assert!(spec_allowed(&data, &plugins, &beside, &written, &[]).is_err());
         // what its declaration does not give it
         let mut env = good.env.clone();
         env.insert("GAUSS_EXEDIR".into(), base.to_string_lossy().into_owned());
-        assert!(spec_allowed(&data, &plugins, &JobSpec { env, ..good.clone() }, &written).is_err());
+        assert!(spec_allowed(&data, &plugins, &JobSpec { env, ..good.clone() }, &written, &[]).is_err());
         // a file not written for it, by its arguments or those of one beside it
         for arg in ["/etc/hosts", "../other/input.inp", "other.inp", "--input=/etc/hosts", "-o/etc/hosts", "C:\\x.inp"] {
             let args = JobSpec { args: vec![arg.into()], ..good.clone() };
-            assert!(spec_allowed(&data, &plugins, &args, &written).unwrap_err().contains("is not a file written for it"), "{arg}");
+            assert!(spec_allowed(&data, &plugins, &args, &written, &[]).unwrap_err().contains("is not a file written for it"), "{arg}");
             let mut then = good.clone();
             then.then[0].args = vec![arg.into()];
-            assert!(spec_allowed(&data, &plugins, &then, &written).is_err(), "{arg}");
+            assert!(spec_allowed(&data, &plugins, &then, &written, &[]).is_err(), "{arg}");
         }
-        assert!(spec_allowed(&data, &plugins, &good, &[]).is_err());
+        assert!(spec_allowed(&data, &plugins, &good, &[], &[]).is_err());
         let _ = fs::remove_dir_all(base);
     }
 
@@ -3787,7 +4607,8 @@ mod tests {
         assert_eq!(data_dir_here(), crate::folders::local_data_dir());
         let local = if cfg!(windows) { Path::new("Meno").join("data") } else { PathBuf::from("Meno") };
         assert!(data_dir_here().is_some_and(|d| d.is_absolute() && d.ends_with(&local)));
-        assert!(plugins_here().is_some_and(|p| p.ends_with(Path::new("resources").join("plugins"))));
+        // (and the plugins in place, in that folder: installed.rs)
+        assert_eq!(plugins_here(), data_dir_here().map(|d| d.join("plugins")));
     }
 
     #[test]
@@ -3897,7 +4718,7 @@ mod tests {
     #[test]
     fn finds_a_program_installed_separately_where_it_was_located_or_where_programs_are() {
         let base = temp();
-        let decl = Installed { name: "orca".into(), file: "orca".into(), path: vec!["{folder}".into()], env: vec![("ORCA_HOME".into(), vec!["{parent}".into()])], places: vec![], label: "ORCA".into(), version: None, beside: vec![] };
+        let decl = Installed { name: "orca".into(), file: "orca".into(), path: vec!["{folder}".into()], env: vec![("ORCA_HOME".into(), vec!["{parent}".into()])], places: vec![], label: "ORCA".into(), version: None, beside: vec![], processes: false };
         let none = Bases::default();
         let installed = program_file(&base.join("apps").join("orca_6"), "orca");
         let on_path = program_file(&base.join("bin"), "orca");
@@ -3923,7 +4744,7 @@ mod tests {
     #[test]
     fn a_program_installed_separately_is_found_only_where_it_can_be_run() {
         let base = temp();
-        let decl = Installed { name: "g16".into(), file: "g16".into(), path: vec![], env: vec![], places: vec![], label: "x".into(), version: None, beside: vec![] };
+        let decl = Installed { name: "g16".into(), file: "g16".into(), path: vec![], env: vec![], places: vec![], label: "x".into(), version: None, beside: vec![], processes: false };
         let p = base.join("g16");
         fs::create_dir_all(&base).unwrap();
         fs::write(&p, "").unwrap();
@@ -3991,7 +4812,7 @@ mod tests {
         let file = if cfg!(windows) { "blender.exe" } else { "blender" };
         let older = program_file(&base.join("Blender Foundation").join("Blender 4.5"), file);
         let newer = program_file(&base.join("Blender Foundation").join("Blender 10.0"), file);
-        let place = |t: &str| Installed { name: "blender".into(), file: file.into(), path: vec![], env: vec![], places: vec![t.into()], label: "x".into(), version: None, beside: vec![] };
+        let place = |t: &str| Installed { name: "blender".into(), file: file.into(), path: vec![], env: vec![], places: vec![t.into()], label: "x".into(), version: None, beside: vec![], processes: false };
         let bases = Bases { home: Some(base.clone()), programs: Some(base.clone()) };
         assert_eq!(installed_where(&place("{programs}/Blender Foundation/Blender *"), None, None, &bases), Some(newer.clone()));
         assert_eq!(installed_where(&place("{home}/Blender Foundation/Blender 4.5"), None, None, &bases), Some(older));
@@ -4006,7 +4827,7 @@ mod tests {
         let base = temp();
         let app = base.join("Blender.app");
         let inside = program_file(&app.join("Contents").join("MacOS"), "Blender");
-        let decl = Installed { name: "blender".into(), file: "Blender".into(), path: vec![], env: vec![], places: vec![], label: "x".into(), version: None, beside: vec![] };
+        let decl = Installed { name: "blender".into(), file: "Blender".into(), path: vec![], env: vec![], places: vec![], label: "x".into(), version: None, beside: vec![], processes: false };
         assert_eq!(installed_where(&decl, app.to_str(), None, &Bases::default()), Some(inside));
         // an app that holds no such program
         let other = base.join("Other.app");
@@ -4067,6 +4888,7 @@ mod tests {
             label: "Blender".into(),
             version: Some(VersionRule { args: vec!["--version".into()], after: "Blender ".into(), least: "5.0".into() }),
             beside: vec![],
+            processes: false,
         };
         let bases = Bases { home: None, programs: Some(base.clone()) };
         let everywhere = decl(vec!["{programs}/Blender Foundation/Blender *".into()]);
@@ -4163,22 +4985,47 @@ mod tests {
 
     #[test]
     fn reads_what_a_plugin_declares_its_jobs_need_of_another_plugins_program_and_refuses_what_cannot_be_given() {
-        // (ORCA's, as Meno carries it: the xTB plugin's xtb, told in XTBEXE)
-        let orca: serde_json::Value = serde_json::from_str(&fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/plugins/orca/manifest.json")).unwrap()).unwrap();
-        assert_eq!(needs_declared(&orca, "orca").unwrap(), vec![Need { plugin: "xtb".into(), program: "xtb".into(), env: "XTBEXE".into() }]);
-        assert_eq!(needs_declared(&serde_json::json!({}), "orca").unwrap(), vec![]);
-        // (its own program, a shell, a path, a variable that finds or loads programs, one plugin twice: none of them)
+        // (another plugin's program, told in a variable: the tightbind plugin's tightbind, in TBEXE)
+        let quanta = serde_json::json!({"depends": [{"plugin": "tightbind", "versions": ">=0.1.4 <0.2.0", "programs": [{"program": "tightbind", "env": "TBEXE"}]}]});
+        assert_eq!(needs_declared(&quanta, "quanta").unwrap(), vec![Need { plugin: "tightbind".into(), versions: ">=0.1.4 <0.2.0".into(), program: "tightbind".into(), env: "TBEXE".into() }]);
+        assert_eq!(needs_declared(&serde_json::json!({}), "quanta").unwrap(), vec![]);
+        // (one used only for some of its work: its programs needed by the jobs that say so, as any)
+        assert_eq!(needs_declared(&serde_json::json!({"depends": [{"plugin": "tightbind", "versions": ">=1.0.0 <2.0.0", "optional": true, "programs": [{"program": "tightbind", "env": "X"}]}]}), "quanta").unwrap().len(), 1);
+        // (a plugin used for no program: none of its programs needed)
+        assert_eq!(needs_declared(&serde_json::json!({"depends": [{"plugin": "tightbind", "versions": ">=1.0.0 <2.0.0"}]}), "quanta").unwrap(), vec![]);
+        let uses = |program: &str, env: &str| serde_json::json!({"plugin": "tightbind", "versions": ">=0.1.0 <0.2.0", "programs": [{"program": program, "env": env}]});
+        // (itself, versions not as they must be, a shell, a path, a variable that finds or loads programs, one plugin twice, one variable twice: none of them)
         for bad in [
-            serde_json::json!([{"plugin": "orca", "program": "orca", "env": "X"}]),
-            serde_json::json!([{"plugin": "xtb", "program": "sh", "env": "X"}]),
-            serde_json::json!([{"plugin": "xtb", "program": "bin/xtb", "env": "X"}]),
-            serde_json::json!([{"plugin": "xtb", "program": "xtb", "env": "PATH"}]),
-            serde_json::json!([{"plugin": "xtb", "program": "xtb", "env": "DYLD_INSERT_LIBRARIES"}]),
-            serde_json::json!([{"plugin": "xtb", "program": "xtb", "env": "A"}, {"plugin": "xtb", "program": "xtb", "env": "B"}]),
-            serde_json::json!({"plugin": "xtb"}),
+            serde_json::json!([{"plugin": "quanta", "versions": ">=0.1.0", "programs": [{"program": "quanta", "env": "X"}]}]),
+            serde_json::json!([{"plugin": "tightbind", "versions": "^0.1.0", "programs": [{"program": "tightbind", "env": "X"}]}]),
+            serde_json::json!([{"plugin": "tightbind", "versions": ">=0.2.0 <0.1.0", "programs": [{"program": "tightbind", "env": "X"}]}]),
+            serde_json::json!([{"plugin": "tightbind", "programs": [{"program": "tightbind", "env": "X"}]}]),
+            serde_json::json!([uses("sh", "X")]),
+            serde_json::json!([uses("bin/tightbind", "X")]),
+            serde_json::json!([uses("tightbind", "PATH")]),
+            serde_json::json!([uses("tightbind", "DYLD_INSERT_LIBRARIES")]),
+            serde_json::json!([uses("tightbind", "A"), uses("tightbind", "B")]),
+            serde_json::json!([{"plugin": "tightbind", "versions": ">=0.1.0", "programs": [{"program": "tightbind", "env": "A"}, {"program": "other", "env": "A"}]}]),
+            serde_json::json!([{"plugin": "tightbind", "versions": ">=0.1.0", "optional": "yes"}]),
+            serde_json::json!({"plugin": "tightbind"}),
+            // (versions with no bound above)
+            serde_json::json!([{"plugin": "tightbind", "versions": ">=1.0.0"}]),
         ] {
-            assert!(needs_declared(&serde_json::json!({ "needs": bad }), "orca").is_err(), "{bad}");
+            assert!(needs_declared(&serde_json::json!({ "depends": bad }), "quanta").is_err(), "{bad}");
         }
+    }
+
+    #[test]
+    fn takes_a_plugins_version_only_within_the_versions_a_plugin_that_uses_it_works_with() {
+        assert!(in_versions("0.1.4", ">=0.1.4 <0.2.0"));
+        assert!(in_versions("0.1.10", ">=0.1.4 <0.2.0"));
+        assert!(!in_versions("0.2.0", ">=0.1.4 <0.2.0"));
+        assert!(!in_versions("0.1.3", ">=0.1.4 <0.2.0"));
+        assert!(in_versions("3.0.0", ">=0.1.4"));
+        assert!(in_versions("1.2", ">=1.2.0 <1.3.0"));
+        assert!(!in_versions("", ">=0.1.0"));
+        assert!(!in_versions("one", ">=0.1.0"));
+        assert!(!in_versions("0.1.5", ">=0.1"));
     }
 
     #[test]
@@ -4202,7 +5049,7 @@ mod tests {
         let tool = away.join("tool");
         fs::write(&tool, "#!/bin/sh\necho needed program ran\n").unwrap();
         fs::set_permissions(&tool, fs::Permissions::from_mode(0o755)).unwrap();
-        write_limits(&root, Limits { cores: 1, memory: 0 }).unwrap();
+        write_limits(&root, Limits { cores: 1, memory: 0, awake: true }).unwrap();
         let spec = JobSpec {
             plugin: "test".into(),
             name: "shell".into(),
@@ -4211,12 +5058,14 @@ mod tests {
             stdin: None,
             env: BTreeMap::from([("NEEDED".into(), need_value(&tool, false).unwrap())]),
             cores: 1,
+            processes: false,
             memory: 0,
             created: now_ms(),
             label: None,
             key: None,
             then: vec![],
             needs: vec![],
+            presets: vec![],
             given: vec![],
         };
         let (_, dir) = make_job(&root, &spec, &[JobFile { name: "input.txt".into(), text: "input".into() }]).unwrap();
@@ -4242,20 +5091,22 @@ mod tests {
             stdin: None,
             env: BTreeMap::new(),
             cores: 1,
+            processes: false,
             memory: 0,
             created: now_ms(),
             label: None,
             key: None,
             then: vec![],
             needs: vec![],
+            presets: vec![],
             given: vec![],
         };
         // (a file of its own under the needed program's name: the link cannot be made)
-        let err = make_needing_job(&root, &spec, &[JobFile { name: "tool".into(), text: "mine".into() }], &[("tool".into(), "/bin/sh".into())]).unwrap_err();
+        let err = make_handed_job(&root, &spec, &[JobFile { name: "tool".into(), text: "mine".into() }], &[("tool".into(), "/bin/sh".into())], &[]).unwrap_err();
         assert!(err.contains("tool could not be given to the job"), "{err}");
         assert_eq!(fs::read_dir(&root).unwrap().count(), 0);
         // (where it can be, a job, with its link)
-        let (_, dir) = make_needing_job(&root, &spec, &[], &[("tool".into(), "/bin/sh".into())]).unwrap();
+        let (_, dir) = make_handed_job(&root, &spec, &[], &[("tool".into(), "/bin/sh".into())], &[]).unwrap();
         assert!(fs::symlink_metadata(dir.join(WORK).join("tool")).unwrap().file_type().is_symlink());
         let _ = fs::remove_dir_all(&root);
     }
@@ -4274,14 +5125,14 @@ mod tests {
             fs::write(at, text).unwrap();
             fs::set_permissions(at, fs::Permissions::from_mode(0o755)).unwrap();
         };
-        fs::create_dir_all(plugins.join("asker")).unwrap();
-        fs::write(
-            plugins.join("asker").join("manifest.json"),
-            r#"{"id": "asker", "steps": [{"kinds": ["optimise"], "programs": ["main"]}], "needs": [{"plugin": "helper", "program": "tool", "env": "TOOLEXE"}]}"#,
-        )
-        .unwrap();
-        fs::create_dir_all(plugins.join("helper")).unwrap();
-        fs::write(plugins.join("helper").join("manifest.json"), r#"{"id": "helper", "name": "Helper", "steps": [{"kinds": ["energy"], "programs": ["tool"]}]}"#).unwrap();
+        // (each in place as Meno has its plugins: its version in use, named by `current` - installed.rs)
+        crate::installed::tests::in_place(
+            &plugins,
+            "asker",
+            "1.0.0",
+            r#"{"id": "asker", "steps": [{"kinds": ["optimise"], "programs": ["main"]}], "depends": [{"plugin": "helper", "versions": ">=1.0.0 <2.0.0", "programs": [{"program": "tool", "env": "TOOLEXE"}]}]}"#,
+        );
+        crate::installed::tests::in_place(&plugins, "helper", "1.2.0", r#"{"id": "helper", "name": "Helper", "version": "1.2.0", "steps": [{"kinds": ["energy"], "programs": ["tool"]}]}"#);
         script(&data.join("uv/plugin-asker/venv/bin/main"), "#!/bin/sh\necho main ran\n\"$TOOLEXE\"\n");
         if helper_set_up {
             script(&data.join("uv/plugin-helper/venv/bin/tool"), "#!/bin/sh\necho the tool ran\n");
@@ -4291,10 +5142,22 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    fn gives_no_program_of_a_plugin_of_a_version_the_plugin_that_uses_it_does_not_work_with() {
+        let (base, data, plugins) = needing(true);
+        let asker = manifest_of(&crate::installed::dir(&plugins, "asker").unwrap(), "asker").unwrap();
+        assert!(needs_given(&data, &asker, "asker", &["helper".to_string()], &|p| crate::installed::dir(&plugins, p)).is_ok());
+        fs::write(crate::installed::dir(&plugins, "helper").unwrap().join("manifest.json"), r#"{"id": "helper", "name": "Helper", "version": "2.0.0", "steps": [{"kinds": ["energy"], "programs": ["tool"]}]}"#).unwrap();
+        let err = needs_given(&data, &asker, "asker", &["helper".to_string()], &|p| crate::installed::dir(&plugins, p)).unwrap_err();
+        assert_eq!(err, "asker needs Helper >=1.0.0 <2.0.0; 2.0.0 is here");
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn a_runner_gives_a_program_another_plugins_only_as_it_works_it_out_again_never_as_its_spec_says() {
         let (base, data, plugins) = needing(true);
-        let found = plugin_program(&data, &plugins.join("asker"), "asker", "main", &[]).unwrap();
-        let tool = plugin_program(&data, &plugins.join("helper"), "helper", "tool", &[]).unwrap().program;
+        let found = plugin_program(&data, &crate::installed::dir(&plugins, "asker").unwrap(), "asker", "main", &[]).unwrap();
+        let tool = plugin_program(&data, &crate::installed::dir(&plugins, "helper").unwrap(), "helper", "tool", &[]).unwrap().program;
         let with = |needs: &[&str], extra: &[(&str, &str)]| {
             let mut spec = spec_for("asker", "main", &found, &[]);
             spec.needs = needs.iter().map(|n| n.to_string()).collect();
@@ -4302,7 +5165,7 @@ mod tests {
             spec
         };
         // (the need, given as Meno gives it: taken)
-        assert_eq!(spec_allowed(&data, &plugins, &with(&["helper"], &[("TOOLEXE", "./tool")]), &[]), Ok(()));
+        assert_eq!(spec_allowed(&data, &plugins, &with(&["helper"], &[("TOOLEXE", "./tool")]), &[], &[]), Ok(()));
         // (another value - a program of the writer's choosing - or the variable missing, or one more besides: refused)
         for bad in [
             with(&["helper"], &[("TOOLEXE", "/bin/sh")]),
@@ -4311,18 +5174,18 @@ mod tests {
             with(&["helper"], &[("TOOLEXE", "./tool"), ("OTHER", "x")]),
             with(&[], &[("TOOLEXE", "./tool")]),
         ] {
-            assert!(spec_allowed(&data, &plugins, &bad, &[]).unwrap_err().contains("given what Meno does not give it"), "{:?}", bad.env);
+            assert!(spec_allowed(&data, &plugins, &bad, &[], &[]).unwrap_err().contains("given what Meno does not give it"), "{:?}", bad.env);
         }
         // (a need its plugin does not declare, or twice)
-        assert!(spec_allowed(&data, &plugins, &with(&["other"], &[("TOOLEXE", "./tool")]), &[]).unwrap_err().contains("declares no need of other"));
-        assert!(spec_allowed(&data, &plugins, &with(&["helper", "helper"], &[("TOOLEXE", "./tool")]), &[]).is_err());
+        assert!(spec_allowed(&data, &plugins, &with(&["other"], &[("TOOLEXE", "./tool")]), &[], &[]).unwrap_err().contains("declares no program of other that it uses"));
+        assert!(spec_allowed(&data, &plugins, &with(&["helper", "helper"], &[("TOOLEXE", "./tool")]), &[], &[]).is_err());
         // (the needed plugin not set up: refused, saying so)
         let (gone, gone_data, gone_plugins) = needing(false);
-        let found_gone = plugin_program(&gone_data, &gone_plugins.join("asker"), "asker", "main", &[]).unwrap();
+        let found_gone = plugin_program(&gone_data, &crate::installed::dir(&gone_plugins, "asker").unwrap(), "asker", "main", &[]).unwrap();
         let mut spec = spec_for("asker", "main", &found_gone, &[]);
         spec.needs = vec!["helper".into()];
         spec.env.insert("TOOLEXE".into(), "./tool".into());
-        assert_eq!(spec_allowed(&gone_data, &gone_plugins, &spec, &[]), Err("The Helper plugin is needed for this: add it in Settings, Plugins".into()));
+        assert_eq!(spec_allowed(&gone_data, &gone_plugins, &spec, &[], &[]), Err("The Helper plugin is needed for this: add it in Settings, Plugins".into()));
         let _ = fs::remove_dir_all(gone);
         let _ = fs::remove_dir_all(base);
     }
@@ -4332,9 +5195,9 @@ mod tests {
     fn a_runner_runs_a_job_needing_another_plugins_program_linked_in_its_folder_and_no_other_link() {
         let (base, data, plugins) = needing(true);
         let jobs = data.join("jobs");
-        write_limits(&jobs, Limits { cores: 1, memory: 0 }).unwrap();
-        let found = plugin_program(&data, &plugins.join("asker"), "asker", "main", &[]).unwrap();
-        let (env, needed) = needs_given(&data, &manifest_of(&plugins.join("asker"), "asker").unwrap(), "asker", &["helper".into()], &|p| Ok(plugins.join(p))).unwrap();
+        write_limits(&jobs, Limits { cores: 1, memory: 0, awake: true }).unwrap();
+        let found = plugin_program(&data, &crate::installed::dir(&plugins, "asker").unwrap(), "asker", "main", &[]).unwrap();
+        let (env, needed) = needs_given(&data, &manifest_of(&crate::installed::dir(&plugins, "asker").unwrap(), "asker").unwrap(), "asker", &["helper".into()], &|p| crate::installed::dir(&plugins, p)).unwrap();
         assert_eq!(env, BTreeMap::from([("TOOLEXE".to_string(), "./tool".to_string())]));
         let mut spec = spec_for("asker", "main", &found, &[]);
         spec.needs = vec!["helper".into()];
@@ -4355,8 +5218,249 @@ mod tests {
     }
 
     #[test]
+    fn a_program_running_as_processes_is_told_one_thread_each_and_taken_by_the_queue_as_whole_cores() {
+        // (a program installed separately, running as processes - as ORCA does. On unix it needs another plugin's program
+        //  too, as ORCA needs xtb, given as job_start gives it; the helper plugin's program is a script made runnable,
+        //  which Windows has no way to be, so there it needs none)
+        #[cfg(unix)]
+        let (base, data, plugins) = needing(true);
+        #[cfg(not(unix))]
+        let (base, data, plugins) = {
+            let base = temp();
+            (base.clone(), base.join("data"), base.join("plugins"))
+        };
+        let needs: Vec<String> = if cfg!(unix) { vec!["helper".into()] } else { vec![] };
+        let exe = |n: &str| if cfg!(windows) { format!("{n}.exe") } else { n.to_string() };
+        let ranked = crate::installed::tests::in_place(&plugins, "ranked", "1.0.0", "{}");
+        let declare = |parallel: &str| {
+            let needed = if needs.is_empty() { serde_json::json!([]) } else { serde_json::json!([{"plugin": "helper", "versions": ">=1.0.0 <2.0.0", "programs": [{"program": "tool", "env": "TOOLEXE"}]}]) };
+            let manifest = serde_json::json!({
+                "id": "ranked",
+                "installed": [{"name": "orca", "files": {system(): exe("orca")}, "path": ["{folder}"], "parallel": parallel}],
+                "depends": needed,
+                "steps": [{"kinds": ["energy"], "programs": ["orca"]}]
+            });
+            fs::write(ranked.join("manifest.json"), manifest.to_string()).unwrap();
+        };
+        let orca = program_file(&base.join("orca_6"), &exe("orca"));
+        let written = vec!["input.inp".to_string()];
+        // (a job of 16 cores, made as job_start makes it: what Meno gives it, and what it gives for the program it needs)
+        let job = |found: &Found| {
+            let (needed, _) = needs_given(&data, &manifest_of(&ranked, "ranked").unwrap(), "ranked", &needs, &|p| crate::installed::dir(&plugins, p)).unwrap();
+            let mut spec = JobSpec { env: given_env(found, 4567, Some(16)), cores: 16, ..spec_for("ranked", "orca", found, &["input.inp"]) };
+            spec.needs = needs.clone();
+            spec.env.extend(needed);
+            spec
+        };
+        declare("processes");
+        let found = installed_program(&ranked, "ranked", "orca", orca.to_str()).unwrap().unwrap();
+        let spec = job(&found);
+        // (16 processes, each told one thread - and taken by its runner so)
+        assert!(spec.processes);
+        for key in THREADS {
+            assert_eq!(spec.env.get(*key).map(String::as_str), Some("1"), "{key}");
+        }
+        assert_eq!(spec_allowed(&data, &plugins, &spec, &written, &[]), Ok(()));
+        // (each process told the 16 as its threads, or the program taken for one of threads: refused)
+        let mut threads = spec.clone();
+        for key in THREADS {
+            threads.env.insert(key.to_string(), "16".into());
+        }
+        assert!(spec_allowed(&data, &plugins, &threads, &written, &[]).unwrap_err().contains("given what Meno does not give it"));
+        assert_eq!(spec_allowed(&data, &plugins, &JobSpec { processes: false, ..spec.clone() }, &written, &[]), Err("not how orca runs in parallel".into()));
+        // (the queue: each process a whole physical core - two of its cores, where the computer runs two threads on each)
+        assert_eq!(taken(&spec, Resources { cores: 32, physical: 16, memory: 0 }), 32);
+        assert_eq!(taken(&spec, Resources { cores: 10, physical: 10, memory: 0 }), 16);
+        // (one process - ORCA with no MPI to run more, its plugin asking one core: one physical core, ten such side by side)
+        assert_eq!(taken(&JobSpec { cores: 1, ..spec.clone() }, Resources { cores: 10, physical: 10, memory: 0 }), 1);
+        assert_eq!(taken(&JobSpec { cores: 1, ..spec.clone() }, Resources { cores: 32, physical: 16, memory: 0 }), 2);
+        assert_eq!(taken(&JobSpec { processes: false, ..spec.clone() }, Resources { cores: 32, physical: 16, memory: 0 }), 16);
+
+        // the same program declared to run as threads: told its 16 cores, and counted as told
+        declare("threads");
+        let found = installed_program(&ranked, "ranked", "orca", orca.to_str()).unwrap().unwrap();
+        let spec = job(&found);
+        assert!(!spec.processes);
+        for key in THREADS {
+            assert_eq!(spec.env.get(*key).map(String::as_str), Some("16"), "{key}");
+        }
+        assert_eq!(spec_allowed(&data, &plugins, &spec, &written, &[]), Ok(()));
+        assert!(spec_allowed(&data, &plugins, &JobSpec { cores: 8, ..spec.clone() }, &written, &[]).unwrap_err().contains("given what Meno does not give it"));
+        assert_eq!(spec_allowed(&data, &plugins, &JobSpec { processes: true, ..spec.clone() }, &written, &[]), Err("not how orca runs in parallel".into()));
+        // (a way of running in parallel Meno does not know: the program not taken)
+        declare("mpi");
+        assert!(installed_program(&ranked, "ranked", "orca", orca.to_str()).unwrap_err().contains("not a way orca runs in parallel"));
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn counts_this_computer_s_physical_cores_never_more_than_its_cores() {
+        let here = computer();
+        assert!(here.physical >= 1 && here.physical <= here.cores, "{here:?}");
+        // (macOS and Linux each say it themselves: asked here as the runner asks)
+        #[cfg(any(target_os = "macos", target_os = "linux", windows))]
+        assert!(physical_cores().is_some_and(|p| p >= 1));
+    }
+
+    #[test]
     fn gives_a_needed_programs_path_on_windows_with_one_separator() {
         assert_eq!(need_value(Path::new(r"C:\Meno\pixi\plugin-xtb\.pixi\envs\default\Library/bin\xtb.exe"), true).unwrap(), r"C:\Meno\pixi\plugin-xtb\.pixi\envs\default\Library\bin\xtb.exe");
     }
 
+    /// A renderer, `render` 0.7.0, declaring its `preset` interface 1.0.0, and a preset plugin, `looks`, that uses it through
+    /// that interface and brings a look, a motion and a file they share - each a file in its folder: in a plugins' folder.
+    fn presetting(render: serde_json::Value, looks: serde_json::Value) -> PathBuf {
+        let plugins = temp();
+        for (id, m) in [("render", render), ("looks", looks)] {
+            fs::create_dir_all(plugins.join(id)).unwrap();
+            fs::write(plugins.join(id).join("manifest.json"), m.to_string()).unwrap();
+        }
+        for f in ["gold.py", "spin.py", "shared.py"] {
+            fs::write(plugins.join("looks").join(f), format!("# {f}\n")).unwrap();
+        }
+        plugins
+    }
+
+    fn renderer() -> serde_json::Value {
+        serde_json::json!({"id": "render", "name": "Render", "version": "0.7.0", "interfaces": [{"id": "preset", "version": "1.0.0"}]})
+    }
+
+    fn preset_plugin() -> serde_json::Value {
+        serde_json::json!({
+            "id": "looks", "name": "Looks", "version": "1.0.0",
+            "depends": [{"plugin": "render", "versions": ">=0.7.0 <0.8.0", "interfaces": [{"id": "preset", "versions": ">=1.0.0 <2.0.0"}]}],
+            "presets": {"interface": "preset", "looks": [{"id": "gold", "label": "Gold", "file": "gold.py"}], "motions": [{"id": "spin", "label": "Spin", "file": "spin.py"}], "files": ["shared.py"]}
+        })
+    }
+
+    #[test]
+    fn hands_a_job_every_file_a_preset_plugin_names_copied_into_a_folder_of_its_own_and_never_keeps_one() {
+        let plugins = presetting(renderer(), preset_plugin());
+        let dir_of = |p: &str| Ok(plugins.join(p));
+        let handed = presets_given(&renderer(), "render", &["looks".into()], &dir_of).unwrap();
+        assert_eq!(handed.iter().map(|(rel, _)| rel.as_str()).collect::<Vec<_>>(), ["presets/looks/gold.py", "presets/looks/shared.py", "presets/looks/spin.py"]);
+        // (none handed, none asked for)
+        assert!(presets_given(&renderer(), "render", &[], &dir_of).unwrap().is_empty());
+        // (copied into its work folder, unread; listed nowhere it keeps)
+        let root = temp();
+        let spec = JobSpec {
+            plugin: "render".into(),
+            name: "shell".into(),
+            program: "/bin/sh".into(),
+            args: vec![],
+            stdin: None,
+            env: BTreeMap::new(),
+            cores: 1,
+            processes: false,
+            memory: 0,
+            created: now_ms(),
+            label: None,
+            key: None,
+            then: vec![],
+            needs: vec![],
+            presets: vec!["looks".into()],
+            given: vec![],
+        };
+        let (_, dir) = make_handed_job(&root, &spec, &[JobFile { name: "input.txt".into(), text: "input".into() }], &[], &handed).unwrap();
+        assert_eq!(fs::read_to_string(dir.join(WORK).join("presets/looks/gold.py")).unwrap(), "# gold.py\n");
+        let kept: Vec<String> = crate::keptjobs::kept_files(&dir).into_iter().map(|f| f.name).collect();
+        assert_eq!(kept, ["work/input.txt"]);
+        // (one that cannot be copied - gone since - leaves no folder)
+        let away = temp();
+        let gone = vec![("presets/looks/none.py".to_string(), plugins.join("looks").join("none.py"))];
+        assert!(make_handed_job(&away, &spec, &[], &[], &gone).unwrap_err().contains("could not be given to the job"));
+        assert_eq!(fs::read_dir(&away).unwrap().count(), 0);
+        for d in [plugins, root, away] {
+            let _ = fs::remove_dir_all(d);
+        }
+    }
+
+    #[test]
+    fn hands_over_nothing_of_a_plugin_that_is_not_a_preset_plugin_of_the_job_s_as_it_must_be() {
+        let refused = |render: serde_json::Value, looks: serde_json::Value, asked: &[&str], why: &str| {
+            let plugins = presetting(render.clone(), looks);
+            let asked: Vec<String> = asked.iter().map(|a| a.to_string()).collect();
+            let err = presets_given(&render, "render", &asked, &|p: &str| Ok(plugins.join(p))).unwrap_err();
+            assert!(err.contains(why), "{err} - {why}");
+            let _ = fs::remove_dir_all(plugins);
+        };
+        let with = |k: &str, v: serde_json::Value| {
+            let mut m = preset_plugin();
+            m[k] = v;
+            m
+        };
+        let presets = |k: &str, v: serde_json::Value| {
+            let mut m = preset_plugin();
+            m["presets"][k] = v;
+            m
+        };
+        // (the renderer of a version it does not work with, its interface of another, or none)
+        refused(serde_json::json!({"id": "render", "version": "0.8.0", "interfaces": [{"id": "preset", "version": "1.0.0"}]}), preset_plugin(), &["looks"], "works with render >=0.7.0 <0.8.0; 0.8.0 is here");
+        refused(serde_json::json!({"id": "render", "version": "0.7.1", "interfaces": [{"id": "preset", "version": "2.0.0"}]}), preset_plugin(), &["looks"], "preset interface >=1.0.0 <2.0.0; 2.0.0 is here");
+        refused(serde_json::json!({"id": "render", "version": "0.7.0"}), preset_plugin(), &["looks"], "render declares no preset interface");
+        // (one that does not use it, or not through that interface, or brings none)
+        refused(renderer(), with("depends", serde_json::json!([])), &["looks"], "Looks does not use render");
+        refused(renderer(), presets("interface", serde_json::json!("other")), &["looks"], "does not use render's other interface");
+        refused(renderer(), with("presets", serde_json::json!(null)), &["looks"], "Looks brings no presets");
+        // (versions with no bound above: of the plugin, or of its interface)
+        let open = |plugin: &str, interface: &str| with("depends", serde_json::json!([{"plugin": "render", "versions": plugin, "interfaces": [{"id": "preset", "versions": interface}]}]));
+        refused(renderer(), open(">=0.7.0", ">=1.0.0 <2.0.0"), &["looks"], "no bound above to the versions of render it works with");
+        refused(renderer(), open(">=0.7.0 <0.8.0", ">=1.0.0"), &["looks"], "no bound above to the versions of render's preset interface");
+        // (a file not inside its folder, the manifest, one not there, a folder - asked for twice, or itself, or no plugin)
+        refused(renderer(), presets("files", serde_json::json!(["../render/manifest.json"])), &["looks"], "names a file it cannot hand over");
+        refused(renderer(), presets("files", serde_json::json!(["manifest.json"])), &["looks"], "names a file it cannot hand over");
+        refused(renderer(), presets("files", serde_json::json!(["/etc/hosts"])), &["looks"], "names a file it cannot hand over");
+        refused(renderer(), presets("files", serde_json::json!(["none.py"])), &["looks"], "none.py of Looks is not there");
+        refused(renderer(), presets("files", serde_json::json!(["sub/shared.py"])), &["looks"], "names a file it cannot hand over");
+        refused(renderer(), preset_plugin(), &["looks", "looks"], "not a plugin that brings render presets");
+        refused(renderer(), preset_plugin(), &["render"], "not a plugin that brings render presets");
+        refused(renderer(), preset_plugin(), &["../looks"], "not a plugin that brings render presets");
+        // (a folder by a file's name)
+        let plugins = presetting(renderer(), presets("files", serde_json::json!(["folder.py"])));
+        fs::create_dir(plugins.join("looks").join("folder.py")).unwrap();
+        let err = presets_given(&renderer(), "render", &["looks".into()], &|p: &str| Ok(plugins.join(p))).unwrap_err();
+        assert!(err.contains("folder.py of Looks is not a file"), "{err}");
+        let _ = fs::remove_dir_all(plugins);
+        // (too many files, all told)
+        let many: Vec<String> = (0..70).map(|i| format!("f{i}.py")).collect();
+        let plugins = presetting(renderer(), presets("files", serde_json::json!(many)));
+        for f in &many {
+            fs::write(plugins.join("looks").join(f), "").unwrap();
+        }
+        let err = presets_given(&renderer(), "render", &["looks".into()], &|p: &str| Ok(plugins.join(p))).unwrap_err();
+        assert!(err.contains("more than a job takes"), "{err}");
+        let _ = fs::remove_dir_all(plugins);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn hands_over_no_file_a_preset_plugin_names_by_a_link() {
+        let plugins = presetting(renderer(), preset_plugin());
+        fs::remove_file(plugins.join("looks").join("shared.py")).unwrap();
+        std::os::unix::fs::symlink("/etc/hosts", plugins.join("looks").join("shared.py")).unwrap();
+        let err = presets_given(&renderer(), "render", &["looks".into()], &|p: &str| Ok(plugins.join(p))).unwrap_err();
+        assert!(err.contains("is a link"), "{err}");
+        let _ = fs::remove_dir_all(plugins);
+    }
+
+    #[test]
+    fn keeps_a_job_s_own_files_out_of_the_presets_folder_where_it_names_any_preset_plugin() {
+        let file = |name: &str| JobFile { name: name.into(), text: String::new() };
+        let looks = ["looks".to_string()];
+        assert!(clear_of_presets(&[file("render.json"), file("presetsfile.txt")], &looks).is_ok());
+        assert!(clear_of_presets(&[file("presets/looks/mine.py")], &looks).unwrap_err().contains("presets/looks/mine.py"));
+        assert!(clear_of_presets(&[file("presets/other.py")], &looks).is_err());
+        // (one that names none: its files as they are)
+        assert!(clear_of_presets(&[file("presets/other.py")], &[]).is_ok());
+    }
+
+    #[test]
+    fn takes_a_file_a_preset_names_only_as_a_plain_path_inside_its_folder() {
+        for good in ["a.py", "look_gold.py", "Studio_1.blend"] {
+            assert!(preset_file_ok(good), "{good}");
+        }
+        for bad in ["", "../a.py", "./a.py", "a/../b", "/a.py", "a//b", ".hidden", "a/b/c/d/e", "looks/gold.py", "manifest.json", "worker.py", "Manifest.json", "WORKER.PY", "a b.py", "a\\b.py", &"x".repeat(65)] {
+            assert!(!preset_file_ok(bad), "{bad}");
+        }
+    }
 }

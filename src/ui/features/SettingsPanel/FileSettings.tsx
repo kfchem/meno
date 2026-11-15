@@ -57,6 +57,7 @@ export default function FileSettings() {
               <Select
                 label={`Who reads ${k.name}`}
                 value={reader?.id ?? null}
+                placeholder="Choose which"
                 options={can.map((p) => ({ value: p.id, label: p.name }))}
                 onChange={(v) => setFiles({ ...files, read: { ...files.read, [k.id]: v } })}
                 className="w-fit"

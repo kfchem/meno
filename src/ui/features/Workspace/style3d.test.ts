@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { STYLE_3D } from "../../../lib/chem/style3d";
 import { workspace3dOf } from "../../../lib/chem/workspaceStyle3d";
 import { useAppSettings } from "../../../lib/settings/appSettings";
-import { style3dOf } from "./style3d";
+import { style3dOf, styleGoesOver } from "./style3d";
 
 describe("the 3D style a workspace's molecules are drawn in", () => {
   it("is the workspace's own - its looks and light - with how a drag turns them Settings'", () => {
@@ -22,5 +22,22 @@ describe("the 3D style a workspace's molecules are drawn in", () => {
     useAppSettings.setState({ style3d: was });
     // (a page that is no workspace's: Meno's own)
     expect(style3dOf({})).toEqual(STYLE_3D);
+  });
+});
+
+describe("a style that comes for the one a canvas draws", () => {
+  const other = { ...STYLE_3D, keyLight: STYLE_3D.keyLight / 2 };
+
+  it("is gone over to, eased, where molecules were drawn in 3D before it came", () => {
+    expect(styleGoesOver(other, STYLE_3D, true)).toBe("eased");
+  });
+
+  it("is taken at once where none was: a workspace opened, its style coming with its molecules", () => {
+    expect(styleGoesOver(other, STYLE_3D, false)).toBe("at once");
+  });
+
+  it("changes nothing where it is the same", () => {
+    expect(styleGoesOver(STYLE_3D, STYLE_3D, true)).toBe("same");
+    expect(styleGoesOver(STYLE_3D, STYLE_3D, false)).toBe("same");
   });
 });

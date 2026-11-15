@@ -35,7 +35,8 @@ Settings, *Network*, keeps the record: what has been allowed, each with *Withdra
 
 ## The plugins Meno offers {#offered}
 
-- **Getting started**: the first steps in Meno, and plugins to add. It comes with Meno, with nothing to download.
+The list is Meno's list of plugins online, fetched once Meno is allowed to ask for it (Settings, *Network*); it can grow between releases. At the time of writing:
+
 - **RDKit**: makes sense of a structure as it is drawn - hydrogens, valence, aromatic rings, R and S, E and Z - reads and writes SMILES, and makes structures in 3D and their conformers.
 - **MolScribe**, **MolNexTR**: read structures from pictures - a figure a PDF holds as a picture, a screenshot.
 - **Blender**: renders pictures and films of molecules in 3D.

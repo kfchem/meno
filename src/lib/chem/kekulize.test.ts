@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AROMATIC_BOND, kekuleOrders, kekulized, type KekuleBond } from "./kekulize";
+import { AROMATIC_BOND, kekuleOrders, kekulized, valenceOrders, type KekuleBond } from "./kekulize";
 import { readSmiles } from "./smiles";
 import { implicitHydrogens } from "./molecule";
 
@@ -164,6 +164,15 @@ describe("kekuleOrders", () => {
     expect([1, 2, 3, 5, 6, 7, 8, 9, 10, 11].map((i) => n[i])).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
   });
 
+  it("gives porphine written with no H on its nitrogens two N-H: 26 pi electrons over its ring system whole, not 24", () => {
+    // (how many N carry an H is counted over the ring system whole. By the rule's rings and pairs (lib/chem/aromaticity),
+    //  all four N double-bonded would pass too: each pyrrole with the inner ring makes 18 - two hydrogens fewer)
+    const s = readSmiles("c1cc2cc3ccc(cc4ccc(cc5ccc(cc1n2)n5)n4)n3");
+    const { orders, hChosen } = kekulized(s.atoms, s.bonds);
+    expect(orders.filter((o) => o === 2)).toHaveLength(11);
+    expect(hChosen.map((i) => s.atoms[i].el)).toEqual(["N", "N"]);
+  });
+
   it("leaves benzotriazole one N-H, its benzene ring whole", () => {
     // (c1ccc2[nH]nnc2c1, no hydrogen stated: carbons 0-3, 7, 8; nitrogens 4-6)
     const m = mol("C C C C N N N C C", [[0, 1, A], [1, 2, A], [2, 3, A], [3, 4, A], [4, 5, A], [5, 6, A], [6, 7, A], [7, 3, A], [7, 8, A], [8, 0, A]]);
@@ -249,5 +258,36 @@ describe("which atom carries an H the input did not place (kekulized hChosen)", 
     expect(chosen("c1ccncc1")).toEqual([]); // pyridine
     expect(chosen("c1cnccn1")).toEqual([]); // pyrazine
     expect(chosen("c1c[nH]cn1")).toEqual([]); // imidazole, its H stated
+  });
+});
+
+describe("the orders an atom's hydrogens are counted from (valenceOrders)", () => {
+  const ring = (els: string[]) => ({ atoms: els.map((el) => ({ el })), bonds: els.map((_, i) => ({ a: i, b: (i + 1) % els.length, order: AROMATIC_BOND })) });
+  const hydrogens = (m: ReturnType<typeof ring>) => {
+    const orders = valenceOrders(m.atoms, m.bonds);
+    return m.atoms.map((a, i) => implicitHydrogens(a.el, m.bonds.reduce((n, b, k) => n + (b.a === i || b.b === i ? orders[k] : 0), 0), 0));
+  };
+
+  it("gives a pyrrole's N, its bonds aromatic and no H stated, its hydrogen - and a pyridine's none", () => {
+    expect(hydrogens(ring(["N", "C", "C", "C", "C"]))).toEqual([1, 1, 1, 1, 1]);
+    expect(hydrogens(ring(["N", "C", "C", "C", "C", "C"]))).toEqual([0, 1, 1, 1, 1, 1]);
+    expect(hydrogens(ring(["O", "C", "C", "C", "C"]))).toEqual([0, 1, 1, 1, 1]);
+  });
+
+  it("leaves an aromatic bond no Kekulé structure makes double single - a hydrogen more, never fewer", () => {
+    // (a ring of five carbons, its bonds aromatic: two doubles at most, one carbon left with none)
+    const orders = valenceOrders(ring(["C", "C", "C", "C", "C"]).atoms, ring(["C", "C", "C", "C", "C"]).bonds);
+    expect(orders.every((o) => o === 1 || o === 2)).toBe(true);
+    expect(orders.filter((o) => o === 2)).toHaveLength(2);
+    expect(hydrogens(ring(["C", "C", "C", "C", "C"])).sort()).toEqual([1, 1, 1, 1, 2]);
+  });
+
+  it("leaves bonds not aromatic as they are, and a molecule with none untouched", () => {
+    const bonds = [
+      { a: 0, b: 1, order: 2 },
+      { a: 1, b: 2, order: 1 },
+      { a: 2, b: 3, order: 3 },
+    ];
+    expect(valenceOrders(["C", "C", "C", "N"].map((el) => ({ el })), bonds)).toEqual([2, 1, 3]);
   });
 });

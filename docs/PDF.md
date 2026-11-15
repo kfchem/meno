@@ -19,11 +19,9 @@ stops being part of the work.
 
 ## Decided by the maintainer (2026-10-09)
 
-1. **PDFium, not pdf.js.** PDFium is the engine Chrome reads PDFs with.
-   The maintainer chose it for how fast and how faithfully it draws;
-   viewers built on pdf.js, as some publishers' have been, left a poor
-   impression. No way of changing engines is to be kept: Meno is built
-   on PDFium, for the best it can give.
+1. **PDFium.** Meno reads and draws PDFs with PDFium, the engine Chrome
+   reads PDFs with: the maintainer's choice. No way of changing engines is
+   to be kept: Meno is built on PDFium.
 2. **The best of what drawing with WebGL allows, joined to the
    workspace.** A PDF's pages are drawn on the canvas, not beside it.
    - Zoomed into, what a page holds comes up out of its preview.
@@ -67,9 +65,8 @@ stops being part of the work.
    - **What is on the page is drawn as its labels are, in signed-distance
      type (troika)**, sharp at every zoom: atoms' labels and words on the
      page, as now, and a text's sheet. **What is in the column is drawn
-     by the system's own type**, made into pictures line by line, as sharp
-     as any editor's: the column is zoomed into only as a thing opens or
-     closes.
+     by the system's own type**, made into pictures line by line: the
+     column is zoomed into only as a thing opens or closes.
 
 ## What a thing on the page is
 
@@ -164,7 +161,18 @@ stops being part of the work.
   one), the way it is going first; one that has left the view a moment
   before its turn is dropped. A zoom still waits for the view to stop,
   the level changing. Tiles that come are shown one a frame, each put on
-  the graphics card as it is, so that none waits on several at once.
+  the graphics card as it is, so that none waits on several at once: one
+  picture a frame however many views draw (the column and the page both ask
+  each frame; a 1024 px picture is some milliseconds on the card), and a
+  page's small picture waits its turn with them - put on the card there,
+  not all together inside the frame's draw.
+- **A page a fast scroll comes to is never white.** While the column is
+  still, the small pictures of the twelve pages either side of the one in
+  view are drawn ahead, nearest first, two at a time and behind every tile
+  of what is seen; a scroll stops them. A page the column then comes to
+  shows its small picture at once, and sharpens as its tiles come (before,
+  a page far from where the column rested was an empty frame until they
+  did).
 - **Light on the graphics card** (found on Windows, 2026-10-16: a PDF
   scrolled in the column kept the graphics card full).
   - A picture of a page come and faded in is drawn opaque, and its tiles
@@ -190,7 +198,7 @@ stops being part of the work.
     tiles have come and faded in, at twice it, faded in over them. The
     levels lie on a grid a sixteenth of a doubling apart, so a view
     stopped a hair from where it was keeps the tiles it has.
-  - Why twice: PDFium's small letters drawn at the screen's own scale come
+  - Why twice: a page's small letters drawn at the screen's own scale come
     out lighter than drawn finer and shrunk to it. At 1 to 1.41 times, a
     paper's text was a tenth to a third lighter than 0.1.12's 1 to 2
     times (found on Windows, 2026-10-16); at twice, it is as dark at every
@@ -328,6 +336,50 @@ PDFs there - one step, which an undo takes back. It is held as any other
   it*) is the workspace's, over its pages, not the PDF's - it stays with the
   PDF it was written on.
 
+## Printing
+
+- **Where**: *Print…* on a PDF's right-click menu (beside *Save as PDF…*), the
+  printer button in the column's header while the column shows a PDF, and
+  Ctrl/Cmd+P while it does.
+- **How it is printed**: each page is drawn by PDFium at 300 dots an inch
+  (the reader's `render`, the page whole), one picture a page, and laid out
+  in a document of its own that only the printer sees - the rest of Meno is
+  hidden from it - which the window's own print operation gives to the
+  system's dialog (Tauri's `WebviewWindow::print`, as WebKit's `window.print()`
+  shows no dialog in the app: macOS's print panel, WebView2's and GTK's
+  dialogs). The print document's `html` and `body` are let grow to hold every
+  picture (the app's own are the window's height with the rest cut off, which
+  printed one page), and each page's own size is given as a named CSS page. Chromium
+  (WebView2, on Windows) takes the paper from it, so letter stays letter; WebKit's
+  dialog on a Mac does not (the named page is not honoured there): it prints on
+  the paper the dialog has chosen, the Mac's default, A4 or letter, and each
+  picture is fitted to it whole.
+  On a Mac the first print raises the system's "find devices on your local
+  network" prompt (printer discovery); printing to a PDF file works whichever
+  answer is given. The print document stays in the window, out of sight, until the
+  window says it has printed or the next print replaces it, as the dialog is
+  not waited on.
+  Where to print, how many copies and which pages are that dialog's, as a
+  file dialog is the system's, not a control of Meno's. A page so large that
+  300 dots an inch would be more than 8191 dots along a side is drawn at the
+  most that fits.
+- **Memory**: the pages are drawn one at a time and held as pictures only
+  until the dialog is done with them (see above); their addresses are let go
+  of whether it printed or was cancelled, or a page could not be drawn.
+- **What its author allows**: the PDF's permissions are read from the PDF
+  (`FPDF_GetDocPermissions`, with its security handler's revision: ISO 32000-1,
+  table 22, bits 3 and 12). Where printing is not allowed, the command is
+  shown, cannot be pressed, and says why - in its tip, and as the notice
+  of Ctrl/Cmd+P and the menu: "Its author does not allow printing." Where it
+  is allowed only in a quality from which a faithful copy could not be made (bit 3 set, bit 12 clear), the pages are drawn at 150 dots
+  an inch. A PDF whose permissions cannot be read is taken as not allowing
+  it. Never worked around. A PDF with no security handler, or with an owner
+  password alone that leaves printing on, prints.
+- **Not done**: a page is made to fit the paper, whole, as it lies: a
+  landscape page on portrait paper is printed small, until the dialog is
+  told *Landscape*. Pages are printed as pictures, so printed words cannot be
+  selected from the paper's PDF.
+
 ## A picture
 
 - **From anywhere**: a figure taken out of a PDF, an image file (PNG,
@@ -361,8 +413,7 @@ PDFs there - one step, which an undo takes back. It is held as any other
     set in, signed-distance glyphs made as they are needed (troika),
     sharp at every zoom.
   - **In the column**, each line is drawn by the system's own type into a
-    picture, and the pictures are textures: as sharp as an editor's, and
-    any letter Meno's own fonts lack is taken from the system's, as a
+    picture, and the pictures are textures; any letter Meno's own fonts lack is taken from the system's, as a
     browser takes it.
   - **Between the two**, a text rising from the page into the column
     moves in the page's type, and once it has settled its lines come up
@@ -507,10 +558,9 @@ together, in short eased transitions.
 - **In a process of its own**, as calculations' jobs are (`Meno --job`).
   Meno starts itself as a PDF reader, `Meno --pdf`, when a workspace
   first shows a PDF, and talks to it by its standard input and output.
-- **A PDF that breaks PDFium breaks that process only.** The PDF says
+- **A PDF that breaks the reader breaks that process only.** The PDF says
   so on the page and in the column, with *Open again*; Meno, and the
-  work not yet saved, go on. Chrome keeps PDFium apart for the same
-  reason.
+  work not yet saved, go on.
 - **It answers one request at a time**, on one thread, in the order they
   come. Parts to draw wait in the window, nearest first, three at most
   sent at a time; one no longer wanted before it is sent is dropped.
@@ -518,7 +568,41 @@ together, in short eased transitions.
   PDFium's pixels, in the order a WebGL texture takes them
   (`FPDF_REVERSE_BYTE_ORDER`), packed by the reader, a page being mostly
   white. They go to the window as bytes, not as text (Tauri's binary
-  response), and are unpacked off its main thread.
+  response), and are unpacked off its main thread: decoded whole in a
+  worker before they come back, so that putting one on the graphics card
+  is a copy and not a decode as well (the Mac's WebKit otherwise decodes a
+  picture at its first use, inside the frame that shows it).
+
+### Never in the way of a frame (2026-11-12)
+
+Drawing and input come first, always. What a PDF is read for besides being
+shown - its letters, its figures, its structures, its index of compounds'
+numbers - is background work, and it never stalls a frame:
+- **Off the drawing's thread.** A figure's structures are read in a worker
+  (`utils/structuresRead`, `structuresWorker`, `structuresOff`), two of them:
+  one for the figure the pointer is on, which is never kept waiting behind
+  the other, the one that reads a whole PDF's figures ahead, one after
+  another. A figure taking seconds - a large scheme drawn with thousands of
+  paths can - holds nothing up. Its drawn lines come from the reader as
+  bytes (`pdf_figure_raw`) and are unpacked in the worker, so that even
+  the parsing of megabytes of them is not done on the drawing's thread.
+  What is left there - handing a figure's page over, taking its structures
+  back - is milliseconds.
+- **It waits for the hands to rest** (`lib/core/calm`). Nothing read ahead
+  starts while a wheel turns (scroll, a touchpad's pinch), a button is
+  down on a drag or a pan, or a touch moves, and for 200 ms after the last
+  of it: the window's idle callback, where macOS' has none, was a fixed wait
+  that scrolling did not stop. The pointer coming to a figure begins its
+  reading at once, as it did - one still waiting for the hands is begun then;
+  a figure already begun in the background is not hurried: it goes on in its
+  own worker, which the pointer's never waits behind.
+- **The reader is not held up by a page's words.** Listing what a page is
+  made of (`pdf_objects`) asked each text object for its words, each
+  loading the page's text again, so that a page of a thousand words kept
+  the one reader that answers everything but pages' pictures busy for
+  seconds; the page's text is loaded once.
+- **Results land in small pieces:** a figure at a time, the page's own
+  letters and objects having come before it.
 
 ### One canvas
 
@@ -609,9 +693,19 @@ A PDF is a file from anywhere, and is treated as such.
   web link opens in the system's browser only when it is ⌘-clicked
   (Ctrl+clicked on Windows).
 - **PDFium runs apart** (*Where it runs*, above), so a PDF made to break
-  it takes nothing else with it.
+  the reader takes nothing else with it.
 - **Its text and pictures go no further than the page, the column and
   the clipboard**, as the chemist moves them.
+
+### Locked with a password (2026-11-11)
+
+A PDF that asks for a password to be opened is held, and put on the page, like any other - locked.
+
+- **What it is.** It lies as one sheet, an A4 page with a padlock on it, until it is opened with its password; its real pages are not known before. Nothing of it is drawn, read, searched or linked meanwhile, and nothing is asked of the reader for it.
+- **Asking for the password.** Read in the column (a double-click on it), the PDF's place there is a card: *Locked with a password*, its name, a password field of Meno's own and *Open*. Enter or *Open* tries the word typed. A wrong one is said so in words (*That is not its password*), and may be tried again as often as there is need. Right, the PDF draws as any other, and each of its items on the page has its pages' real sizes, kept at the next save.
+- **Where the password lives.** The word typed goes to Meno's reader and is kept there, in memory, for this session and this PDF - so that its pages are drawn, its words read and a new PDF made from its pages. It is never written to the disk, a log, a workspace's file, the settings or an event, and never said back in a message; the copy Meno keeps is wiped from memory as it is let go, and so is each request line once it is sent (the copies PDFium's loader and the app's own plumbing make while a request is under way are not). Saved, the workspace keeps the PDF's own bytes, locked, as it was put in: opened again, the PDF is locked again, and asks again.
+- **A PDF made from pages of one opened with its password** has none of its lock: it is a new PDF, the chemist's own.
+- **What is not asked.** A PDF locked another way - a certificate, a handler PDFium cannot open - is refused, with *it is locked in a way Meno cannot open*, and not worked round. A PDF with only an owner password (open to all, print or copy restricted) opens as any other.
 
 ### Platforms
 
@@ -667,11 +761,10 @@ page in the column in 10.6 ms (27 ms); searches in 0.5-19 ms; frames at
 made for the trial, and still far less than carrying the pictures.
 
 What it showed:
-- **PDFium draws far faster than anything waits for it**: a tile in a
-  millisecond or two, a dense page of paths in 3.
+- **Drawing is not where the time goes**: a tile takes a millisecond or
+  two, a dense page of paths 3.
 - **The time is in carrying the pictures to the window**, most of all
-  on Windows: a megabyte takes some 20-30 ms there, as WebView2 passes
-  bytes. Step 1 carries them smaller - compressed without loss in the
+  on Windows: a megabyte takes some 20-30 ms there. Step 1 carries them smaller - compressed without loss in the
   reader, a page being mostly white, and unpacked off the main thread -
   or through WebView2's shared buffers, whichever measures better on
   Windows; a tile is to reach the window within 5 ms of PDFium.
@@ -679,11 +772,11 @@ What it showed:
   zoom stops** (on Windows: soft at 0.38 s, the first sharp tiles at
   0.52 s, all of them at 0.63 s). Step 1 asks for the tiles sooner:
   when the zoom slows, at the level it is going to.
-- **PDFium's own search does not find a word broken by a hyphen at a
-  line's end** (the article's *computa-tional* among them): it gives the hyphen as U+0002 and the line's end as
-  `\r\n`. Meno searches the page's text itself, a line's end read as a
-  space and a broken word read whole, each letter pointing back to its
-  box - found and marked on both lines.
+- **Meno searches the page's text itself.** PDFium gives a hyphen at a
+  line's end as U+0002 and the line's end as `\r\n`; Meno reads a line's
+  end as a space and a broken word whole (the article's *computa-tional*
+  among them), each letter pointing back to its box - found and marked on
+  both lines.
 - **One canvas draws both views** at the display's own rate, a page
   rising from one into the other.
 - **The Mac app needs the entitlement** above.
@@ -698,11 +791,13 @@ What it showed:
 Built:
 - **Putting a PDF on the page.**
   - A PDF opened (*Open…*) goes onto the page of the workspace in front, at the middle of the view, or onto a canvas of its own where none is in front.
+    - That canvas is made for the PDFs, and they are where its document starts: it is not changed, so it is not marked unsaved and closing it asks nothing, until anything on it is changed. Save suggests the first PDF's name with `.meno`. A PDF added to a workspace that is open is a change, as anything put on its page is.
+    - A PDF opened from outside Meno - double-clicked, or opened with Meno from the system - always takes a canvas of its own (in place of a blank one in front), never the page of a workspace in front. The PDF is placed on its page, and read in the column, which fills the workspace (*Fill the workspace*). The workspace is hidden by it, not gone: *Back beside the canvas*, or its key, shows the canvas with the PDF beside it, and *Fill the workspace* hides the canvas again. One a tab holds already (the same PDF, by its bytes) brings that tab forward, in the view it was left in. A PDF opened with *Open…* or dropped still goes onto the page of the workspace in front.
   - A PDF dropped goes where it is dropped.
   - The view eases to take it in where it was not all in view.
 - **Holding and saving it.**
   - It is held in Meno's cache by its SHA-256.
-  - It is refused, and the reason said, where it is larger than 1 GiB, the most a workspace's file keeps of any one file (*it is too large*); where it does not begin as a PDF does, `%PDF-` in its first kilobyte (*it is not a PDF*); or where PDFium cannot open it: one that asks for a password, Meno giving none (*it is locked with a password*), one locked another way (*it is locked in a way Meno cannot open*), one damaged past mending - cut short, or no PDF inside (*it is damaged, or is not a PDF*) - or, where PDFium gives another reason, *Meno could not open it*, the reason to the log. A PDF whose cross-reference table is wrong, but whose objects are all there, is mended as it is opened and read. One refused is not kept in Meno's cache. Opened (*Open…*, or from outside Meno), a notice at the window's top says so, after the file's name; dropped or pasted, the canvas's alert names each refused and says why, and the rest dropped with it are put down. Kept in a workspace's file and refused as the workspace opens - or not held whole by the file - a notice in the window's corner names it and says why: drawn, it would be blank.
+  - It is refused, and the reason said, where it is larger than 1 GiB, the most a workspace's file keeps of any one file (*it is too large*); where it does not begin as a PDF does, `%PDF-` in its first kilobyte (*it is not a PDF*); or where it cannot be opened: one locked with a password is not refused but held, locked (*Locked with a password*, below), one locked another way (*it is locked in a way Meno cannot open*), one damaged past mending - cut short, or no PDF inside (*it is damaged, or is not a PDF*) - or, where PDFium gives another reason, *Meno could not open it*, the reason to the log. A PDF whose cross-reference table is wrong, but whose objects are all there, is mended as it is opened and read. One refused is not kept in Meno's cache. Opened (*Open…*, or from outside Meno), a notice at the window's top says so, after the file's name; dropped or pasted, the canvas's alert names each refused and says why, and the rest dropped with it are put down. Kept in a workspace's file and refused as the workspace opens - or not held whole by the file - a notice in the window's corner names it and says why: drawn, it would be blank.
   - It is kept in the workspace's file, and is held again when the file is opened.
   - Its place, the page on top and whether it is spread are saved with it.
 - **The stack.**
@@ -740,6 +835,7 @@ Built:
   - the view moves by half as much, eased, so that what was in the middle of what could be seen stays there;
   - fitting, pasting and bringing a PDF into view use the part it does not cover;
   - what is on the page in HTML (a step's card, words being written) is cut off where the column begins.
+  - that HTML is laid in a layer clipped to the canvas, not hidden past it (`overflow: clip`): no box that can be scrolled, so a focus or a selection never moves what it holds off where the page has it. A frames chip's card opened past the canvas's foot stays where it hangs, below its molecule, and runs past the edge (2026-10-29).
 - **Reading a PDF there.** A double-click on its stack, or *Read* in its menu, opens it in the column. Its page rises from the stack, growing to the column's width as the column opens. Closed by its ×, or the column hidden, the page lifts from where it is and goes back down to the stack.
   - A PDF is read in three quarters of the canvas, a page being for reading; a text keeps the column's narrower width. Each keeps its own width once dragged, up to 85 % of the canvas.
   - The column hidden on a PDF and shown again (*Show texts*) opens on it, its page rising again.
@@ -786,7 +882,7 @@ Not yet, and where it comes:
 ### Step 3: text and search (2026-10-09)
 
 Built:
-- **Each page's letters, as PDFium reads them** (`pdf_text`). Each comes with its box, in points from the page's top left as it is drawn; the letters PDFium adds itself (a space, a line's end) have none. `lib/pdf/text` keeps them a page at a time and works out:
+- **Each page's letters, as PDFium reads them** (`pdf_text`). Each comes with its box, in points from the page's top left as it is drawn; the letters PDFium adds itself (a space, a line's end) have none. Each says too whether it is set bold (2026-11-04, for a compound's number, which most journals set bold) - as its font says of itself, nothing measured from the glyphs: its font's weight 600 or more, as the font says it, or its font's name saying Bold, Black or Heavy (Semibold and Demibold among them) after a subset's tag - the name for a font whose weight is not given, or not given right, as pdfium-render warns of built-in fonts (`set_bold`). `lib/pdf/text` keeps them a page at a time and works out:
   - the place between letters nearest the pointer;
   - a word, and a line;
   - the boxes that mark a selection;
@@ -862,6 +958,7 @@ Built:
 - **Where a page's figures lie** (`pdf_objects`, `lib/pdf/figures`). PDFium lists what a page is made of - its words, paths, pictures, shadings and forms - each with its box, in points from the page's top left as it is drawn. From them:
   - A figure is where pictures and paths lie within 8 points of one another. It is at least 24 points one way and 4 the other (a chain drawn flat is a figure, a word's underline none), or it holds a picture. A smaller one is a figure where it is a small structure: at least 8 points one way and 4 the other, of three lines or more, its own labels taking it to 18 points - an acetate or a cisplatin drawn small - and not set in a line of running words, as an icon or an arrow in a sentence is. One line with an atom's label at an end of it, along it - CH3NH3+ - is one too, however thin: the label read as a structure's labels are (NH3+, OMe, CH3 - never a number nor a word), the line a bond and a half long at most (a bond drawn as long as its label's letters are tall and half again). A word's underline, its word over it, is none, nor a rule with a word or a number at its end ("Date ____", "____ 12", a leader).
   - A rule (at most 1.5 points thick and at least 150 long) is no part of one, nor is anything over most of the page, such as its frame, nor a filled shape across nearly all of the page's width - a panel's ground, behind an abstract's words and its figure.
+  - Nor is page furniture (2026-11-13): a banner or a button - one shape round words, the words a quarter of its area or more ("Read Online") - or anything no taller than 40 points in the page's header or footer band (the top or bottom twentieth of a page as high as a page of text, 400 points), a journal's logo; and a picture in a frame - its pictures half of what the figure spans, the little else drawn level and upright lines - a cover's thumbnail, is no drawing: its frame's lines are no structure (`framedPicture`).
   - Nor is a page scanned after all: a figure over most of the page, most of it picture, with the page's words within it - its picture in strips further apart than a scan is told by, the words read over them widening it (2026-10-14). A figure drawn with lines as large, on a page cut close round it - a scheme exported as a PDF of its own - is still one.
   - A reaction scheme is one figure (2026-10-13). An arrow is a long, thin part holding a straight line at least 25 points long, level or upright; it joins what lies beyond its ends, level with it, within 36 points. A "+" set alone (`pdf_objects` tells it from other words) joins what lies either side of it, level with it. A "+" drawn with lines - one filled cross, or a stroke each way - square, at least 2.5 points across and at most 14, by no word (a charge drawn with lines is as small, but by its label), joins them as a written one does; and a "+" written is never a line beside a structure (*Structures picked from a PDF*).
   - Words over a figure or within 6 points of it, each narrower than six tenths of it, are its labels, and its box takes them in. A short word under a figure or over it, such as a compound's number, can be up to 14 points off. The words over and under an arrow, its conditions, can be up to 24 points off, a line or two of them. A counter-ion - a short word with its charge drawn by it, a "+" or "-" in a ring or set high, as Na+ or Br- beside a structure - can be up to 30 points off, or as far from the ion before it in a row of them (three K+); a short word with no charge by it is not taken so far. Its caption is not a label, nor is a column's line beside it: no line wider than three tenths of the page (and than 150 points) is ever one.
@@ -899,9 +996,9 @@ Step 5 comes in parts: the trial of typing alone, shown first; the column's text
 - **A text in the column drawn by Meno** with WebGL: each line a picture drawn by the system's own type - Meno's monospaced first, any letter it lacks from the system's - only the lines in view, numbered; the caret, what is selected and what the IME is composing drawn over them. As sharp as the textarea it took the place of, at 100% and at 175%; a log of 5000 lines scrolls as a short file does.
 - **Typing through a field kept out of sight**, where the IME's candidates show at the caret, holding the caret's line and two either side, and what is selected, so that a word already written can be converted again.
   - **On a Mac** (WebKit), a textarea, lying just where the drawn lines lie. Composing, its clauses, committing, Escape, and converting again (the kana key twice) were tried with Apple's Japanese input in the built app.
-  - **On Windows** (WebView2), an EditContext on the text's own element. A textarea there tells the page neither the IME's clauses - every clause was underlined alike - nor, converting again a word the caret is in, what it replaces; through the EditContext, the clause being converted is underlined thick, and the candidates follow it. Converting again from within a word, Microsoft's IME may first take away the part before the caret, then put the whole word in again at the caret: Meno takes that as one change of the word (lib/text/field `composingIn`, `withTakenAway`), undone at once, or none where it comes back as it was.
+  - **On Windows** (WebView2), an EditContext on the text's own element: through it, the clause being converted is underlined thick, and the candidates follow it. Converting again from within a word, Microsoft's IME may first take away the part before the caret, then put the whole word in again at the caret: Meno takes that as one change of the word (lib/text/field `composingIn`, `withTakenAway`), undone at once, or none where it comes back as it was.
 - **The keys are each system's** (lib/text/keys): on a Mac, Option by words, Command to the ends, Control's keys (A, E, B, F, P, N, H, D, K), Home, End and a page moving the view, with Option the caret; on Windows, Ctrl by words, Home and End a line's ends, Ctrl with Home or End the text's, Ctrl with an arrow up or down the view a line. A page on moves the view a page with the caret.
-- **As quick to show as the textarea**: an EditContext's change comes in an event React does not know, and was drawn a frame late, 30-40 ms after the textarea's; it is now drawn in the frame after it, whatever event it came in (measured on Windows, 5-23 ms from the key to the frame).
+- **As quick to show as the textarea**: an EditContext's change comes in an event outside React's, and was drawn a frame late, 30-40 ms after the textarea's; it is now drawn in the frame after it, whatever event it came in (measured on Windows, 5-23 ms from the key to the frame).
 - **What the IME composes kept in view**, its caret where it says, as typing keeps the caret in view: begun scrolled away from the caret, or at the end of a long line.
 
 **5a: the column's text on the canvas.** A text read in the column is drawn by the workspace's one canvas, in the column's pass, as a PDF read there is (*One canvas*): on a white sheet of its own, cut off where the column is, sliding with it. Its HTML half over it is see-through: it takes the pointer - a click puts the caret, two clicks a word, three a line, a drag selects on - the wheel, and holds the field it is typed through. Each text keeps where it was read, and what was selected, while the workspace is open.
@@ -928,12 +1025,12 @@ Step 5 comes in parts: the trial of typing alone, shown first; the column's text
   - A *value*, as a grammar's tones say, Meno colours as a number where it is one (a sign, a point, an exponent, a Fortran D's) and leaves as it is where it is not: 6-31G, def2-SVP.
   - Which grammar: a kind a plugin brings is told by what the text holds, as a file is (lib/io/kinds); a kind it writes, or knows besides, by the text's name and, where it says, what one of its first lines begins with (an ORCA input's `!`, `%` or `*`). Of two plugins that bring a kind, the first's grammar. A plugin not added colours nothing.
 - **What does not read as its grammar says is marked**: underlined in Meno's attention colour (#cd4560, `COLORS.attention`) - a part read wrongly, or where something is missing, a letter's width. Not on the line the caret is on while the text is typed in, until it is left. An output's grammar takes any text, so nothing in an output is marked.
-- **The grammars the plugins Meno carries bring**, each from the program's own words - its manual, or what it printed in runs made with Meno:
+- **The grammars the plugins Meno knows of bring**, each from the program's own words - its manual, or what it printed in runs made with Meno:
   - **ORCA's input** (the ORCA interface, `.inp`): simple keyword lines, blocks with their options and values and sub-blocks with their own `end`, `%maxcore` with its one value, the geometry and its atoms, a geometry read from a file, comments (ORCA's manual, *General Structure of the Input File* and *Input of Coordinates*). Marked: a block left open - at the next block or geometry - and a geometry with no closing `*`.
   - **Gaussian's input** (the Gaussian interface, `.gjf`, `.com`): Link 0 commands, the route section and its lines on, the title, the charge and multiplicity, the atoms (Cartesian or a Z-matrix), further sections, `--Link1--`, comments (Gaussian's *Input* page). Marked: no route section, and a molecule with no charge and multiplicity line.
-  - **Gaussian's output** (cclib, PySCF): *SCF Done:*, the energies with thermal corrections, *Optimization completed.*, *Converged?* as what a reader looks for; *Stationary point found.*, *Normal termination of Gaussian* and a criterion's *YES* as a run gone well; a line from *Warning* on as a warning - as Gaussian 16 printed them.
-  - **ORCA's output** (cclib, PySCF): *FINAL SINGLE POINT ENERGY*, *SCF CONVERGED AFTER*, the geometry's convergence, the free energy and enthalpy, the frequencies; *THE OPTIMIZATION HAS CONVERGED* and *ORCA TERMINATED NORMALLY* as a run gone well - as ORCA 6.1 printed them; *ORCA finished by error termination* as an error (ORCA's manual, *Troubleshooting*).
-  - **xTB's output** (cclib): *TOTAL ENERGY*, *TOTAL FREE ENERGY*, *HOMO-LUMO GAP*, *SCC energy*; *GEOMETRY OPTIMIZATION CONVERGED* and *normal termination of xtb*; *[WARNING]* lines as warnings; *ERROR STOP* and *Error termination* as errors - as xTB 6.7 printed them.
+  - **Gaussian's output** (the Gaussian interface): *SCF Done:*, the energies with thermal corrections, *Optimization completed.*, *Converged?* as what a reader looks for; *Stationary point found.*, *Normal termination of Gaussian* and a criterion's *YES* as a run gone well; a line from *Warning* on as a warning - as Gaussian 16 printed them.
+  - **ORCA's output** (the ORCA interface): *FINAL SINGLE POINT ENERGY*, *SCF CONVERGED AFTER*, the geometry's convergence, the free energy and enthalpy, the frequencies; *THE OPTIMIZATION HAS CONVERGED* and *ORCA TERMINATED NORMALLY* as a run gone well - as ORCA 6.1 printed them; *ORCA finished by error termination* as an error (ORCA's manual, *Troubleshooting*).
+  - **xTB's output** (the xTB plugin): *TOTAL ENERGY*, *TOTAL FREE ENERGY*, *HOMO-LUMO GAP*, *SCC energy*; *GEOMETRY OPTIMIZATION CONVERGED* and *normal termination of xtb*; *[WARNING]* lines as warnings; *ERROR STOP* and *Error termination* as errors - as xTB 6.7 printed them.
   - Rules of dashes, equals signs, stars or dots in outputs are grey.
 - **Drawn in the column**: each line's parts in their tones, the line drawn whole in each colour and kept to its parts, so that its letters lie just where they would in one. What the IME is composing is drawn uncoloured, as it is. The colours are from the palette the column's look is taken from: red keywords, dark blue strings, blue numbers, options and keys, grey comments, purple definitions and what an output's reader looks for, green XML names and atoms, a deeper green for a run gone well, amber warnings, and Meno's attention colour (#cd4560) for errors.
 
@@ -941,13 +1038,13 @@ Step 5 comes in parts: the trial of typing alone, shown first; the column's text
 - **Drawn by Meno as they will be kept**: set as the drawing sets its labels (a formula's counts low, a prefix in italics), in its typeface at its size, broken into lines as wide as they were made where they were given a width, laid as they will lie - so that what is written is what is kept, its lines broken as they will be. Lit round while they are written.
 - **The caret, what is selected and what the IME composes** are drawn over them, in the drawing's units: the caret blinking, the selection in Meno's light, what is composed underlined clause by clause. Where each place lies comes from how the words are set (lib/chem/captions `captionPlaces`): before each letter, a formula's count no wider than it is set, each space between words its own place, and spaces at a line's ends hanging off it, a space apart.
 - **Typed through the column's field** (TextEditor/typingField, now typing into any text Meno draws, `FieldHost`): an EditContext on Windows, a textarea on a Mac, laid with its caret on the drawn one, in the words' type at the size they are seen, so that the IME's candidates show at the caret.
-  - **Drawn in the frame after a change**, as the column's text is: a change through the EditContext came in an event React does not know and was drawn a frame late - 10 ms at 100 Hz, 33 ms over Remote Desktop. Drawn at once, a conversion shows before the clauses the IME gives just after it: those it gave before are kept to what it has now (lib/text/field `clausesWithin`), where the conversion made it shorter.
+  - **Drawn in the frame after a change**, as the column's text is: a change through the EditContext came in an event outside React's and was drawn a frame late - 10 ms at 100 Hz, 33 ms over Remote Desktop. Drawn at once, a conversion shows before the clauses the IME gives just after it: those it gave before are kept to what it has now (lib/text/field `clausesWithin`), where the conversion made it shorter.
   - **Checked on Windows** with Microsoft's IME (2026-10-10): composing, its clauses, Enter, Escape, converting again a word selected, the candidates at the caret after the view is zoomed or moved. Shown, the candidates stay where they are while the view moves under them, as the IME keeps them, and come to the caret again as they are next shown.
 - **The keys**: an editor's, as in the column - up and down by the lines as they are set, Home and End (Command with the arrows on a Mac) to a set line's ends. Enter keeps the words, Shift+Enter starts another line, Escape lets them go; their own undo while they are written (a run of typing one step), one step for the document once kept.
 - **The pointer**: a click among them puts the caret, two select a word, three a line, a drag selects on; the press is theirs - no box begun, no view moved. A press elsewhere keeps them, as before, and does what it does there.
 
 Decided while building it, for the maintainer to confirm:
-- **On a Mac the textarea, on Windows the EditContext**: each the one its system's webview takes the IME through best. WebKit has no EditContext.
+- **On a Mac the textarea, on Windows the EditContext**: each the one Meno takes the IME through in its system's webview.
 - **A Mac's Home, End and Page keys move the view**, the caret staying, as in the Mac's own texts; with Option, a page moves the caret too. Tab moves the keys on, as the textarea did.
 - **A sheet's size** (above), and its top left where it lies, so that a text growing at its end grows down.
 - **A text's icon is its sheet made small**, not a page's shape: its longer side as long as a PDF's icon is tall, so that a few lines make a wide, low icon and a long log a tall one, as their sheets are.
@@ -956,8 +1053,8 @@ Decided while building it, for the maintainer to confirm:
 - **A plugin's grammar, not patterns** (the maintainer, 2026-10-10, from a sketch of an ORCA input and a Gaussian output coloured part by part): a grammar is data that Meno makes into tables, which no text can hold up as a pattern could, and it reads an input's structure - so that what does not read as it should can be marked (the maintainer: very good). Regular expressions are still taken from no plugin (docs/FILE-IO.md, *Marks are data*).
 - **Errors and landmarks only where a program's own words say them.** Gaussian's error line was found neither in Gaussian's own pages nor in what it printed here, so Gaussian's output marks its warnings, not its errors, for now.
 - **The colours**, from the palette the column's look is taken from, as GitHub colours code, with purple for what an output's reader looks for and green for a run gone well (the maintainer agreed to both).
-- **A letter no typeface of Meno's has - an emoji - is a white square on the page** (labels, words on the page, sheets, names), measured as one, the rest of its text drawn as ever. The canvas's text renderer looked for it on the network, which the window may not reach, and left the whole text it was in undrawn: a word typed in place with an emoji in it showed its first letters alone, and the IME's underline ran under nothing. The column draws it in the system's type, as it is. Drawing it on the page will come with a typeface fetched with leave (the maintainer, 2026-10-10: later): a purpose of its own asked about once, as Python's download is, the app fetching the typeface and keeping it, the window drawing from it - the window itself reaching nothing still (docs/ARCHITECTURE.md, *The network*). One letter at a time in one colour, as troika draws. Arabic and Hebrew letters are white squares on the page too: no typeface for them is planned (the maintainer, 2026-10-13); only emoji is to come with the typeface fetched with leave.
-- **troika changed where it is installed** (`scripts/patch-troika.mjs`, after every install; the maintainer chose it, and no report to troika): it applied every GPOS lookup whatever its feature, so IBM Plex Sans JP's half-width and proportional forms closed up its ideographic comma and the letters after it lay over it (found on Windows); and it took each letter from the font the one before came from, so the Latin after a Japanese letter came from IBM Plex Sans JP, a degree sign a full em wide. Now, as a browser does: kerning and marks alone, and each letter from the first font that has it.
+- **A letter no typeface of Meno's has - an emoji - is a white square on the page** (labels, words on the page, sheets, names), measured as one, the rest of its text drawn as ever. The window reaches no network, so the page has no typeface for it. The column draws it in the system's type, as it is. Drawing it on the page will come with a typeface fetched with leave (the maintainer, 2026-10-10: later): a purpose of its own asked about once, as Python's download is, the app fetching the typeface and keeping it, the window drawing from it - the window itself reaching nothing still (docs/ARCHITECTURE.md, *The network*). One letter at a time in one colour, as troika draws. Arabic and Hebrew letters are white squares on the page too: no typeface for them is planned (the maintainer, 2026-10-13); only emoji is to come with the typeface fetched with leave.
+- **troika changed where it is installed** (`scripts/patch-troika.mjs`, after every install; the maintainer chose it): it applies kerning and marks alone, and takes each letter from the first font that has it, as a browser does.
 - **Lenient grammars.** A text written as its program reads it should never be marked: an ORCA block's `end` closes the block on the line it opens, and a sub-block's on its own line; a value block (`%maxcore`) is told by its name; Gaussian's route may go on over lines. What a grammar cannot tell without a program's list of keywords is not marked: a missing blank line after Gaussian's route section reads as more of the route.
 
 Not yet, and where it comes:
@@ -967,7 +1064,7 @@ Not yet, and where it comes:
 
 ### Markdown read formatted (2026-10-10)
 
-Built (lane L9), as *Markdown*, above, says:
+Built, as *Markdown*, above, says:
 - **Read**: `lib/text/markdown.ts` reads a text into blocks and runs, each rule citing its section of CommonMark 0.31.2 or GFM 0.29; `TextEditor/markdownLayout.ts` lays them out at a width, in rows, each a line of words and what is drawn under and round it; `TextEditor/markdownReader.ts` holds where it is read and what is selected, in its words read as one text.
 - **In the column**: `components/MarkdownText.tsx` draws each row in view as a picture drawn by the canvas in IBM Plex (`TextEditor/markdownPictures.ts`), its HTML half `TextEditor/MarkdownBody.tsx` taking the wheel, the pointer and the keys.
 - **On the page**: a Markdown text's sheet (`utils/textSheets`) shows its first rows laid out as a sheet is wide (`components/MarkdownRows.tsx`), in troika's type: IBM Plex Sans and Mono, a strong part thickened by an outline of its own colour and an emphasised one slanted, each stretched to the width its own face sets it at - the page's type has one face of each. Far off, its words are grey strokes, as a sheet's lines are.
@@ -986,12 +1083,12 @@ Not yet, and where it comes:
 - **Editing in the formatted text** (the maintainer chose read formatted, written in the source).
 - **Pictures in a Markdown text**, and links to other texts: Meno does not keep where a text was opened from, and reaches no network.
 - **A letter no typeface of Meno's has on a sheet** - a superscript minus, as in mol⁻¹ - is a white square there, as on any sheet; the column draws it in the system's type.
-- **Math** (`$...$`), footnotes and other extensions GitHub draws but GFM 0.29 does not specify are shown as written.
+- **Math** (`$...$`), footnotes and other extensions GitHub draws, outside GFM 0.29, are shown as written.
 - **Searching a text** (Cmd/Ctrl+F looks in PDFs).
 
 ### With the rest of the page (2026-10-11)
 
-Built (lane L9, the maintainer's choice of the *Not yet* items):
+Built (the maintainer's choice of the *Not yet* items):
 - **A PDF is selected as a picture is.** A click on it selects it alone - on a link too; ⌘-click (Ctrl+click on Windows) on a link follows it; Ctrl/Cmd and a click adds it to the selection or takes it out; a box or a lasso takes it by the middle of what it covers; *Select all* takes it. A PDF spread is selected whole, its pages with it; a page is still moved alone by a long press on its rim. Selected, it is framed in the selection's colour, round each of its pages where they are spread.
 - **Selected, it goes with the rest.** A drag on it moves the whole selection - the view no longer - and a press held still on it does what it does on any PDF (words selected, a box drawn, a page or the stack taken hold of). Delete, Cut, Copy and Paste take it with the rest, each as one step. The selection's handle carries it round, upright, by its place. Selecting words in a PDF, or drawing a box on one, lets the PDFs selected go, and selecting a PDF lets them go: one selection.
 - **Copied**, a PDF goes in Meno's record by its file's SHA-256, as it lies - full size or an icon, spread, its pages' own places - but not where it was read; it is pasted from Meno's cache, where every PDF opened is kept, in any tab. Export is not offered for PDFs and texts' sheets alone, which it does not write.
@@ -1010,7 +1107,7 @@ Not yet, and where it comes:
 
 ### Pages placed one by one (2026-10-10)
 
-Built (lane L9):
+Built:
 - **A page spread is moved alone.** Held still a moment on its rim - or anywhere on it, where its words are too small to read - a page spread is taken hold of, the selection's shade spreading over it alone from the pointer, and the drag moves it to a place of its own, as one step. It then lies over the other pages; of those put in places of their own, the last put there lies on top. Held so on its name, the PDF is taken hold of whole, and all its pages move together.
 - **Where each lies is kept from the PDF's place** (`placed` in `workspace.json`'s `pdfs`: each page's middle from where the PDF lies, in the order they were put there), so the pages go with the PDF wherever it is moved. A page in a place of its own leaves its place in its row empty; the others keep theirs.
 - **Gathered, they go back to the stack's own place**, as before, and their places are kept: spread again, each page goes back to where it was put. *Put pages in rows*, in the PDF's menu while some lie in places of their own, puts them all back in their rows, as one step.
@@ -1165,9 +1262,19 @@ it where it lies out of view.
   short of.
 - **Bonds**:
   - a line stroked, or a thin box filled, is a single bond, and a line
-    much thicker than the rest a bold one - but not one more than two and
-    a half bonds long that meets others only square, or none: a frame's
-    side, a graph's axis, a page's rule;
+    much thicker than the rest - at least 1.8 times: a perspective drawing's
+    near edge is a little over twice - a bold one - but not one more than two
+    and a half bonds long that meets others only square, or none: a frame's
+    side, a graph's axis, a page's rule. A bold line is a bond drawn thick,
+    toward the viewer (2026-11-13): single, or double where a thin line,
+    shorter than it (under 0.85 of its length), runs inside it within the
+    usual double-bond spacing - the double bond kept bold; never one line of
+    three, and never joined by a thin line as long as it, whatever its spacing,
+    as a chair's back bond beside its front one is not. A line lying along
+    another - the same middle line, within a sixteenth of a bond, within its
+    stretch: the hairline a program draws along a bold bar - is that line, never
+    a second line of a multiple bond. (Read as a triple bond, a near edge's double
+    bond was an alkene lost to a carbon with five bonds.);
   - lines side by side - the second may be short, from three twentieths
     of a bond, where it lies alongside the first within its stretch - a fifth of a bond or so apart and alongside each
     other for most of the shorter (seven tenths: a cube's parallel edges,
@@ -1189,6 +1296,26 @@ it where it lies out of view.
     and one cut back so far it is wider than long - three corners, two
     sides from its tip as long, its wide end longer - narrow at that tip,
     or, its three sides near as long, at the one corner a line ends at;
+  - a chain or a ring of bonds drawn as ONE filled outline - the thin polygon
+    a program leaves where it draws a chain's lines joined, its corners mitred
+    or rounded, a ring as its outer outline and its inner one the other way
+    round - is read as the bars it is made of (`barsOfOutline`, lib/figure/drawn):
+    each bond's two long edges, a line's width apart (a tenth of their length at
+    the most), running opposite ways and over each other for most of the
+    shorter, are one bar, its ends where it meets the next bar's line (a
+    mitred corner's two points brought back to the one corner). A polygon is a
+    chain only of two bars or more that meet at corners, one fewer than they are
+    (a ring as many), and whose bars fill it; which chains are the drawing's
+    bonds is then told by the drawing's own bond (that of the lines it has
+    besides or that of its bars, whichever has the more of that length: a
+    drawing's bonds are most of what it is drawn with - `barBond`,
+    `outlineChains`, lib/figure/read; the scheme reader tells them before it
+    reads anything of them, and the figure's own bond, for all else, is that of
+    what is drawn besides its chains, whether they are kept or not): a chain 1.3 bonds across at the least (two bonds at a right angle are 1.4), every bar
+    from 0.45 to 1.9 bonds long. A chart's line (bars several bonds long), a
+    speck, a letter's stems (under 1.3 bonds across), a frame, an arrow
+    of one polygon, a big letter's stems (they meet at no corner) are none, and
+    the polygon is read as it was before;
   - short strokes side by side across a line, evenly spaced - a
     twenty-fifth of a bond apart or more, or two and a half of their
     widths where a long bond's many lines are set close - are a bond
@@ -1197,7 +1324,10 @@ it where it lies out of view.
     of its own lines may be a dot: a small filled shape, or a line next to
     nothing long whose round ends make it one, as Meno's own style draws
     it) - one of them at least a line of some width: dots alone are a
-    joint's. Its
+    joint's. A line drawn as a filled round-capped mark, a stadium, or a dot
+    drawn so is one too, where it is thin (under 0.16 of a bond across) and
+    shorter than 0.3 of a bond (2026-11-13: a label's hashed bond of three such
+    marks was not read, and the label with it). Its
     lines all go one way, so two hashes meeting at an atom, joined there
     through its joints' dots, are two; and a hash's narrow end set off
     from its atom, its first line taken as a joint's or stopping short,
@@ -1301,7 +1431,25 @@ it where it lies out of view.
   drawn flat - more than twice as wide as tall - a minus: a hyphen as
   WebKit prints one), and digits set high before the element its isotope's mass
   number (13C, 18F, 2H); a count set low before any letter - the H of an
-  H3N left outside the box - is no one's. A charge drawn in a small circle - a "+" or a "-" in a ring,
+  H3N left outside the box - is no one's. A number set smaller than the
+  label's letters, after the first of them, is an atom's number - the small
+  atom numbers a drawing sets by its atoms ("Me" and its 7) - and no part of
+  the label (2026-11-13), by these rules: an atom's number stands at the END of its label - a small digit with a letter of the label after it is never one (inside a label it is a count, or the mass number of the letter after it: CO2Me, NH4Cl, O13CH3), each run judged on its own, primes after it no letters. (1) After the name of a point of
+  variability the number stays, high or level: the name is the unit just
+  before the digit, not the whole label (R1, X1, Ar1, Het1, OR2, NR1R2,
+  CO2R1, OAr1; the names are `VARIABLE_NAMES`, lib/chem/abbreviations, after
+  Brecher 2008, GR-9.1 and 9.2, with Meno's own class symbols; B and P stay
+  elements, so B1 and P1 lose their number - a stated limit). (2) A digit
+  set clearly high - a quarter of the letter size or more - with no charge's
+  sign after it, is an atom's number: a count is never set high. (3) A digit
+  set about level or a little low cannot be told by its place, for a
+  subscript is drawn so by many papers: it is left out only where the label
+  reads as nothing with it and reads without it (Meno's label reader decides:
+  O14, Me7, C7, N1 and H3 lose theirs; CH2Cl2, K2CO3, Et3N, N3 and CO2Me
+  keep theirs), and the atom says so - a level number's place cannot tell a count
+  from an atom's number - while one clearly high needs no mark. A level number
+  that also reads as a count stays (N3, O3, Me2: a stated limit; CH3 and a
+  level 7 after it are one run, CH37). A label that is a variable's name and an element's symbol too is read by Meno's own rule (docs/CTFILE.md): an Ar with a bond is an aryl group's, the atom unmarked and written to a MOL file as a star atom with its alias, never as argon; a Y with one bond is a variable's, as X and Z are, and the atom says it was taken so and not as yttrium (a label cannot tell them); a Y with two bonds or more, or a charge, is yttrium. A charge drawn in a small circle - a "+" or a "-" in a ring,
   as Meno draws one and as many papers do - is the charge of the atom it is
   by, however the page is turned and where a box drawn across it cuts some
   of its ring off; never a bond, nor a scheme's "+". A lone H at no
@@ -1324,6 +1472,53 @@ it where it lies out of view.
   bond it is set.
 - **Marked as unsure**, rather than guessed silently:
   - a label nothing reads ("Xq" was not read as an element or a group);
+  - **a repeat unit in brackets, counted** (2026-11-05), where it is not
+    read: a pair of brackets drawn across bonds - square, a line and its
+    ticks, or round, a curve - with a count at the foot of one: digits, as
+    (CH2)6 drawn out, or a small letter, a polymer's n. Its brackets are
+    read as no bonds and its count as no word (lib/figure/read
+    `repeatBrackets`). A bracket is a line or a curve half a bond to two
+    and a half long that crosses a line of the figure square enough, away
+    from both their ends - or a wedge, hashes or a wavy line, across the
+    line its bond lies along (2026-11-06) - its own ends free - at no other line's end but
+    its ticks', and into no label - with its count by its lower end (a
+    count in reach of two brackets' lower ends is the nearer's); its
+    partner is the nearest other such line or curve, uncounted. A line
+    that crosses brackets alone is none: a double bond's second line, a
+    bracket drawn over it. A line across a bond with no count is read as
+    before, and a number by no bracket - a compound's - is left as it
+    was. A label written as one word, (CH2)6, is not read either (above).
+    A picture read by a model (part B) comes with no brackets nor counts:
+    there, nothing tells one.
+    - **A whole count is read** (2026-11-06; `repeatsRead`, then
+      lib/figure/structure). Where each bracket crosses one bond (a double
+      bond's two lines one bond), the two bonds are other bonds of one
+      order, and what lies between them is joined to the rest by those two
+      alone, the unit is read that many times: (CH2)6 as six CH2. Its
+      copies follow it head to tail, each joined to the next by the second
+      bracket's bond, the last to what that bond joined. The structure is
+      the molecule drawn out in full, its formula and identity the same.
+      The copies are set on from it back and forth, as a chain is drawn,
+      and what lies past them is moved on with them; in a ring it is left
+      where it is. An odd number of atoms put in leaves one bend straight
+      where they meet what lies past: turning it would draw its mirror
+      image. Each copy is tied to where the figure draws the unit. It is
+      kept a multiple group (CTfile MUL: its count, its first unit the
+      paradigm), so a file written of it says so. Counted 1, the unit is
+      read once, as drawn.
+    - **Not read, saying why**, where it cannot be, the atoms of each bond
+      a bracket crosses marked: a count that is a letter, a polymer's n
+      ("A repeat unit in brackets, counted n, is not read: it is drawn
+      here once."); or a whole count whose shape breaks a rule above - one
+      bracket with no partner, a bracket across more than one bond or
+      across a line that is no bond, both across one bond, the two bonds
+      of two orders (or a ring's drawn with its circle), what lies between
+      not cut off by them, a count of 0, a unit within another or holding
+      one, two units whose brackets cross one bond, a bracket across a
+      wedged, hashed or wavy bond (which way each copy's would face is not
+      drawn) - each saying which ("A repeat
+      unit in brackets, counted 6, is not read: its two brackets cross the
+      same bond. It is drawn here once.");
   - a label that writes more or fewer hydrogens than its atom's bonds leave
     it;
   - hashes as wide at both ends, where both ends could be a stereocentre or
@@ -1340,8 +1535,15 @@ it where it lies out of view.
     a halogen, O nor C - PhICl2 and Ph3I take theirs; one more for each
     positive charge: a diaryliodonium's iodine); a charge past four
     either way - marks the atom or
-    label drawn, so that nothing whose valence is broken is put down
-    looking sure;
+    label drawn. Where an atom has more bonds than it takes, written out as
+    a file has it - not a charge alone - that structure is not taken
+    (2026-11-13: not put down, even marked unsure): a structure picked from a
+    page gives none and says why ("As read, more bonds meet at a carbon than it
+    takes: none of it is taken."); a figure read whole leaves out each such
+    structure on its own - the rest placed - and says how many it left out. A
+    drawing can itself show five bonds, a transition state's forming bond: the
+    words say "as read". A picture read by the plugin that reads pictures is
+    that plugin's, and is not refused so;
   - a radical's dots by an atom whose bonds leave it no unpaired electron:
     no radical is read - a speck, or a letter's round shape, lies there
     as often ("A dot by it, but its bonds leave it no unpaired electron:
@@ -1576,7 +1778,7 @@ words are: by itself, not by a box drawn round it.
 - **Never in a picture**: a picture of the drawing - copied as one, exported or printed - has no note, as R and S marks are Meno's.
 
 **In the column, as built** (`TextColumn`, `utils/pdfStructures`, `components/structureDrag`, `components/StructureFlight`):
-- a page's letters and figures, for a press on them, are read once it is shown - the column still, its tiles come - in idle time, one page at a time, and its figures worked out in idle time once its parts have come (`lib/core/idle`): never with its turn. A figure under the pointer, pressed, or looked for is asked for at once and worked out at once - one read ahead and waiting for idle time is hurried - and a page whose reading failed, or a PDF gone from the column and come back, is read again;
+- a page's letters and figures, for a press on them, are read once it is shown - the column still, its tiles come - once the hands rest, one page at a time, and its figures worked out once its parts have come (`lib/core/calm`; *Never in the way of a frame*): never with its turn, and never while it is scrolled. A figure under the pointer, pressed, or looked for is asked for at once and worked out at once - one read ahead and waiting for idle time is hurried - and a page whose reading failed, or a PDF gone from the column and come back, is read again;
 - a figure is read the first time the pointer comes over it (`pdf_figure`, as *Read as structure* reads it), with all of its page that does not reach into it beside it, and kept - but lines whose box holds all of a structure (a page's background, a frame round it, a coloured panel behind it and its neighbours) are no lines beside it; lines crossing into it are;
 - the structure under the pointer is lit along its bonds and over its labels, the cursor a hand; one picked is lit stronger;
 - a press within half a bond of a structure takes it, before any words about it (a scheme's conditions set close by);
@@ -1620,6 +1822,95 @@ words are: by itself, not by a box drawn round it.
 - the pointer takes the nearest within a third of a bond of one of its
   bonds or labels, and none where an arrow, a "+" or words lie nearer.
 
+### A compound's number (2026-11-04, under way)
+
+The pointer on a compound's number in a PDF's text - "12", "3a", "compound
+12" - is to bring up that compound's structure, read from the figure it is
+numbered in, wherever in the PDF that is: the compound-number lens, built in
+three parts - which number names which structure, and each PDF's index of
+them; each letter's weight (*Each page's letters*); and the words that
+mention a number, and the card.
+
+- **A structure's number** (`utils/pageStructures` `compoundLabelsOf`): a
+  word of a figure - drawn in it, or the page's own words within it - of a
+  compound number's shape (12, 3a, 12b, 7', in parentheses or not:
+  `COMPOUND_NUMBER`), lying within a bond of a structure - of the box
+  round all of it, as a number is set under a structure as a whole, however
+  its lowest bonds lie - under or over it (its middle within the
+  structure's breadth) or beside it (within its height); where two
+  structures' boxes are as near - the word within both, a ring's within a
+  macrocycle's - the one whose bonds or labels are nearer. The page's own
+  words in the figure are joined where a PDF sets each glyph apart: on one
+  line (their middles within 0.3 of a glyph's height), left to right, no
+  more than 0.2 of a glyph's height between them; the figure's drawn words
+  first. It is the nearest structure's, and none where an arrow or a
+  "+" lies nearer it: a scheme's conditions ("2"), a step's number. A word
+  much shorter than the figure's other words (under 0.7 of their usual
+  height: a superscript, a footnote's mark) is none, and a structure not
+  read takes none. Written as Meno writes it: its parentheses and spaces
+  set aside, a prime as ' (`labelText`). "12 h", "Table 2", "1.5" are none.
+- **Each PDF's index** (`utils/compoundIndex`): each number, and every
+  structure it is set by - its page, its figure and its key there - in the
+  order of the pages, so that a compound drawn again in a later scheme keeps
+  each place. Kept as figures are read, by the pointer on one or through the
+  whole PDF once the hands rest (`indexPdf`): a page, then the next moment
+  they rest, then the next, each page's figures read as the column reads them
+  (`pdfPageLabels`), never holding up what is shown; a page that could not
+  be read is gone through again the next time. It starts the first time
+  the pointer moves over the PDF's words, in the column or on the page
+  (`utils/compoundLens` `indexOnce`). Once the pointer rests on a number
+  the index has not placed yet, it is hurried (`hurryIndex`): someone is
+  waiting, so it no longer waits for idle moments - on Windows, whose
+  webview is seldom idle while the pointer moves, a page could wait half a
+  second - but still reads one page at a time, the window's next turn
+  between them, so a long PDF never holds the pointer up.
+- **A number mentioned** (`utils/compoundMentions`): the word under the
+  pointer, of a compound number's shape, set as a compound's number is -
+  bold, as most journals set one in their text, or after a word that names
+  a compound ("compound 12", "products 3, 4 and 5": compound, product,
+  intermediate, substrate, adduct, derivative, past other numbers and "and",
+  "or", "to"). A plain "12" - hours, a year, a table, a reference - is none;
+  with ⌥ (Alt) held, every number of that shape is.
+- **The card** (`components/CompoundCard`): the pointer resting on a number
+  mentioned (350 ms) whose structure the PDF's figures number, a calm card
+  by its word - over its line, covering only what has been read, its left
+  edge on the word's and a little gap above the letters; under the line
+  only where there is no room above - holds the PDF's own picture of the
+  region of its page where the compound is drawn, its number, its page, and
+  the pages it is drawn on again ("12  p. 1 · also on p. 4"). It never shows
+  the structure Meno read from there (the maintainer, 2026-11-13: where the
+  reading is wrong, the chemist would be shown a wrong structure): that
+  appears only once the compound is on the canvas, where it can be checked
+  and edited. The picture is the structure's own box in its figure - the
+  tightest the reader knows, not the whole scheme - drawn again from the
+  PDF by PDFium at the size the card shows it, a point a pixel and a little
+  enlarged where small, at the screen's own resolution, so it is crisp
+  (`utils/lensPicture`); PDFium draws it in its own process, so the window
+  is never held up, and the card is there at once with the picture's place
+  held, the picture fading in. Pictures are kept, the oldest let go
+  past 48. It fades in and out (`DURATION.base`), lingering a moment so the
+  pointer can come onto it. While the PDF is still being gone through for
+  numbers, or the number's figure is still being read, it says so ("12
+  Reading this PDF's figures…") and grows into the picture once it comes,
+  its size and place eased, never a jump (`cardHolds`); gone through whole
+  and the number drawn nowhere in it, it says so in words ("No drawing of
+  this compound was found in this PDF."), never a guess. The picture
+  dragged onto the canvas puts the structure there as one dragged out of its
+  figure is (*Structures picked from a PDF*: the same reading, its note and
+  unsure marks) - where it was read whole; a structure not read whole is
+  shown by its picture and not carried. Its page clicked shows the figure in
+  the column, the structure marked a moment. A number no structure is set
+  by has the card's words above.
+- **In the column and on the page alike** (`utils/compoundLens`
+  `mentionUnder`, read the same in both). On the page (`components/Pdfs2D`),
+  a PDF's words bring a card where they can be read - at the size a long
+  press there selects them (`READABLE_PX_PER_PT`), not as an icon or seen
+  too small - its word's box taken through the view to the window. Not on a
+  structure of a figure, which is the structure's own, as in the column. As
+  the view moves, the card goes - its word is no longer where it stood -
+  and comes again by the word's new place once the pointer rests there. ⌥
+  pressed or let go over a number reads it again, in both.
+
 ### A picture read (part B, built 2026-10-11)
 
 *Read as structure* reads, by the plugin chosen for the role *Structures
@@ -1642,27 +1933,45 @@ pinned by the archive's hash, and its trained model fetched by Meno:
 Each about 1.5 GB to download, about 2.2 GB kept; for macOS and Windows
 (their locks leave out torch's GPU libraries for Linux).
 
-**How a picture is read** (the plugins' workers; `lib/figure/picture.ts`):
+**How a picture is read**: the plugin's model reads it, and Meno lays
+what it read on the picture - the same for any plugin that fills the role
+(`lib/figure/inkFit.ts`, then `lib/figure/picture.ts`):
 - the picture goes to the worker as a PNG or a JPEG - a PDF's box drawn by
   PDFium at 200 dpi, a picture on the page as it is shown - and the model
-  reads its atoms and bonds;
-- **where its atoms lie**: the models give them across the picture as
-  they cropped it, or across the structure itself, each way - they learnt
-  from both - so the worker stretches and moves them, each way, until the
-  bonds lie on the picture's lines and the atoms on what is drawn;
-- **wedges**: the models say only which end of a wedge or a hash lies
-  nearer - a wedge narrow at one end is a hash narrow at the other - so
-  the worker looks at the picture for which end its ink draws narrow;
-  where it cannot tell, Meno draws it narrow at the end that can be a
-  stereocentre. An end with no other bond (a methyl, an H, a group's
+  reads its atoms and bonds. The worker gives them as the model does: each
+  atom's place, its symbol, each bond, and the model's confidence in each;
+- **where its atoms lie** (Meno): the models give them across the picture
+  as they cropped it, or across the structure itself, each way - they
+  learnt from both - so Meno stretches and moves them, each way, until the
+  bonds lie on the picture's lines and the atoms on what is drawn. A
+  pixel is drawn where its red, green and blue come to less than three
+  times 160; how far from the ink each bond's middle (from three tenths of
+  it to seven) and each atom lies is counted up to 20 pixels; the
+  structure's extent is tried over the ink's, and 4 % and 8 % in from its
+  edges, as is the model's crop with its white; then each way's scale and
+  place are stepped by 4 % of the scale, halving, for 80 rounds or until a
+  step is under 0.05 pixel;
+- **wedges** (Meno): the models say only which end of a wedge or a hash
+  lies nearer - a wedge narrow at one end is a hash narrow at the other -
+  so Meno looks at the picture for which end its ink draws narrow: how far
+  the ink (any pixel under three times 210) reaches to each side of the
+  bond, up to 15 % of its length, between a quarter and nearly half of
+  the way in from each end; a wedge under 6 pixels long, or whose wider end is under
+  1.5 pixels wide, or whose ends differ by less than a quarter, is not
+  told. Where it cannot tell, Meno draws it narrow at the end that can be
+  a stereocentre. An end with no other bond (a methyl, an H, a group's
   label) is never a stereocentre, so a wedge seen narrow there, its other
   end bonded on, is taken as one whose narrow end could not be told: a
   label, or a wide end drawn short of it, misleads what is measured;
 - **atoms**: an element as the model reads it, with its charge (its
   notation's hydrogens and stereo marks are not a label); a group's name
-  read as a typed label is; an isotope, seldom drawn, is unsure;
+  read as a typed label is; an atom the model gives no symbol, a carbon;
 - the rest as a figure's lines are: the structure in Meno's units, beside
   the PDF or the picture, selected, as one step.
+
+These numbers were set on pictures made for the purpose, and are kept as
+they were when the workers worked them out; their basis is still to be
+stated.
 
 **Tied to the picture**: an atom read from a PDF's box keeps its place on
 the page, as part A's do; one read from a picture on the page keeps its
@@ -1671,9 +1980,12 @@ as it is in the drawing, and lit from there.
 
 **Marked as unsure** (the same dashed ring as part A's, going once the
 part is changed): an atom or a bond its model reports less confidence in
-than the plugin sets for that model (its worker's `UNSURE_BELOW`), and an
-isotope. A model can misread a picture: what it reports low confidence in
-is marked, so that a mark is a hint, not a check.
+than its plugin declares for that model (the role's `unsure` in its
+manifest, with what it was set on: PLUGINS.md), an isotope - seldom drawn,
+so likely misread - and an atom the model gives no symbol. Each model's
+confidence is its own, not on one scale with another's, so each plugin
+declares its own. What a model reports low confidence in is marked, so
+that a mark is a hint, not a check.
 
 **How long**: a picture takes well under a second on a Mac's processor
 once its model is loaded, which the first picture waits for - a few
@@ -1686,9 +1998,7 @@ one process; what a model prints as it reads goes to stderr, stdout being
 Meno's answers; and a package reading never loads, pyonmttok, is left out
 of MolNexTR's lock. Each takes the atoms and bonds its model predicts and
 leaves the model's own step of writing them as SMILES and a molfile
-undone (`graphs_unwritten`): Meno does not use what it writes, and
-writing a graph predicted from a picture that is no structure can run
-without end or crash the worker's process.
+undone (`graphs_unwritten`): Meno does not use what it writes.
 
 Not yet: a picture with several structures, or a scheme, read as more
 than one structure; Linux.
@@ -1702,7 +2012,7 @@ than one structure; Linux.
      fast pictures go from the process to the window;
    - one canvas drawing the workspace and the column, a page going from
      one to the other;
-   - whether PDFium's search finds a word broken across a line's end.
+   - how a word broken across a line's end is found.
 1. **A PDF on the page** (built, 2026-10-09; *As built*, above): opened,
    dropped or pasted, held and saved; its stack, coming up as it is zoomed
    into, its pages turned and spread.
@@ -1738,6 +2048,10 @@ drawn beside its figure and tied to it.
 - **Annotating a PDF** (highlights, notes on its pages). Notes go on the
   page beside it instead.
 - **Opening a PDF from the web**, by its address or its DOI.
+- **A repeat unit's count read** (2026-11-05): a unit in brackets,
+  counted, is marked as not read (*A figure read*, *Marked as unsure*),
+  never expanded. Reading it - the unit written out as many times as its
+  count says, or a polymer's held as one - comes after.
 
 ## Questions
 

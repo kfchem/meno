@@ -59,6 +59,10 @@ export type ConsentRequest = {
   hosts: readonly string[];
   /** Asked even where the purpose is allowed already: what it fetches is more than the user was told of when they allowed it. */
   again?: boolean;
+  /** The purposes a yes allows, where it is more than its own: several asked in one question (`askToConnectAll`). */
+  grants?: readonly string[];
+  /** Each one's own words, where several are asked in one question: what it fetches, and from where, under its name. */
+  parts?: readonly { name: string; detail: string; sources: readonly string[] }[];
 };
 
 type NetworkState = {
@@ -95,6 +99,9 @@ export function purposeName(purpose: string): string {
   if (plugin) return `Setting up ${plugin.name}`;
   if (purpose.startsWith("python-env:"))
     return `Setting up Python (${purpose.slice("python-env:".length)})`;
+  // (a model's plugin, by the hosts it was allowed for: conversation/modelConnection `modelPurpose`)
+  const model = /^model:([^@]+)@(.+)$/.exec(purpose);
+  if (model) return `Conversations through ${model[1]}, to ${model[2].split(",").join(", ")}`;
   return purpose;
 }
 
@@ -248,10 +255,36 @@ function askNow(request: ConsentRequest): Promise<boolean> {
       if (answered) return;
       answered = true;
       useNetwork.setState({ asking: null });
-      if (yes) void grant(request.purpose);
-      resolve(yes);
+      if (!yes) return resolve(false);
+      // (a yes counts once its purposes are allowed - the app's side, then the page's: what was asked for, used at once, is not asked of again - "Look them up?" answered, then "List the plugins online?" too, as Meno was upgraded. A grant the app refused is said by what it then fetches, as one allowed before is)
+      void Promise.allSettled((request.grants ?? [request.purpose]).map(grant)).then(() => resolve(true));
     };
     useNetwork.setState({ asking: { ...request, answer } });
+  });
+}
+
+/**
+ * Whether several purposes may use the network, asked in one question:
+ * a plugin and those it uses, set up together. Yes where each was allowed
+ * before and is not to be asked again; no offline; else one question - its
+ * own words (`title`, `detail`), then each one's, under its name - whose yes
+ * allows them all. One alone is asked as itself.
+ */
+export function askToConnectAll(title: string, detail: string, asks: readonly { name: string; request: ConsentRequest }[]): Promise<boolean> {
+  const s = useNetwork.getState();
+  if (s.offline) return Promise.resolve(false);
+  const open = asks.filter((a) => a.request.again || !s.granted.includes(a.request.purpose));
+  if (!open.length) return Promise.resolve(true);
+  if (open.length === 1) return askToConnect(open[0].request);
+  return askToConnect({
+    purpose: open[open.length - 1].request.purpose,
+    title,
+    detail,
+    sources: [],
+    hosts: [...new Set(open.flatMap((a) => a.request.hosts))],
+    again: true,
+    grants: [...new Set(open.map((a) => a.request.purpose))],
+    parts: open.map((a) => ({ name: a.name, detail: a.request.detail, sources: a.request.sources })),
   });
 }
 

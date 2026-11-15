@@ -238,6 +238,14 @@ they hang from.
   group of its own: huperzine A's three-atom bridge laid round its
   ethylidene carbon left the ethylidene on the bridge; laid across the
   face of the ring, it leaves it room.
+- **A macrocycle bridged across a small ring** - a tetrahydropyran bridged
+  2,5 by a long chain, a paracyclophane: the small ring regular, the
+  macrocycle round it taking the strain (GR-3.3.4). Where its shape, placed
+  as it is, crowds or stretches it, it is laid out again from each of its
+  rings in turn, each eased, and the one that reads best kept, so long as
+  it keeps the macrocycle's double bonds as given. Placed as it was, a
+  2,5-bridged tetrahydropyran's chain lay on the ring's O, its bond over
+  C2-O, and the wedge went onto that hidden bond (2026-10-29).
 - **Cages**: a system whose rings are all bridged, each sharing three atoms
   or more with another (norbornane, camphor, tropane, quinuclidine,
   adamantane), or a polyhedron (cubane), is drawn in perspective, as the
@@ -287,7 +295,21 @@ they hang from.
   ring, seen nearly edge on, came out with its C=N a zigzag. Adamantane is then a chair with its three axial bonds
   rising to the fourth bridgehead; bicyclo[2.2.2]octane a boat with its
   third bridge rising from both bridgeheads. A bond passing behind another
-  is drawn broken there - a group's bond too: the first atom of a group off
+  is drawn broken there: the gap is a band along the bond in front, with the
+  same clear space either side of it at every angle - two line widths from
+  the edge of what is drawn there, square to the bond in front, to the cut
+  end of the bond behind, which runs parallel to the bond in front, flat
+  and with no cap (a
+  plain line its width, a bold bond or a wedge the width it has where they
+  cross, a double or triple bond the whole of it in one break, a hashed
+  bond the stroke nearest; Brecher 2006, ST-3.1: the front-to-back order of
+  crossing bonds is shown by a small discontinuity in the backmost bond, at
+  least twice a single bond's width). Every line, hash and shape of the
+  bond behind is cut by the same band, the pieces left have nothing
+  between them in the page, the SVG and the EMF alike, and a piece left
+  shorter than the clear space is not drawn; on a page of pixels the clear
+  space is never under three device pixels, and bonds crossing at under ten
+  degrees are not cut - a group's bond too: the first atom of a group off
   the solid is as near as the atom of the solid it leaves (the mean of
   theirs, where it leaves more than one), so a bond out of the front of
   the cage that crosses one at its back is drawn whole, the one behind
@@ -323,6 +345,28 @@ they hang from.
   from too. A bond axial to any chair or boat of the solid is drawn along
   that ring's upright as laid - straight up or down where the ring stands
   as the template does - up or down as the solid has it.
+- **A closed surface**: a ring system of more than twenty atoms that
+  closes on itself as a polyhedron does - C60, C70, a larger fullerene -
+  is drawn as its Schlegel diagram (`schlegel.ts`): seen through one face,
+  that face round the outside and every other inside it, no bond crossing
+  another. Its faces are its smallest rings and the one they leave out: on
+  a closed surface every bond lies in two faces, so the bonds in only one
+  ring go round that last face, no bond in three; and every atom has three
+  bonds or more in it, a polyhedron's corner - so no flat system, whose
+  edge round its rings has atoms of two, is one. (Euler's count, a
+  sphere's, then follows: a system's smallest rings are one fewer than its
+  faces.) The largest face is set as a
+  regular polygon and every other atom at the mean of its neighbours
+  (W. T. Tutte, *How to draw a graph*, Proc. London Math. Soc. 13, 743
+  (1963)), which for a polyhedron's graph crosses no bond; then, Tutte's
+  drawing crowding the faces deep inside into its middle, each atom's
+  distance from the middle r is taken to r^p, its order round the middle
+  and out from it kept, for the evenest bonds of those powers that cross
+  none and put no atom on a bond. Such a system is not laid flat with each
+  of its smallest sets of rings to choose among (`ringSets.ts`): seen
+  through a face, they are alike. Before, C60 came out tangled - fifteen
+  bonds crossing - after seconds. One of twenty atoms or fewer (cubane,
+  dodecahedrane) is laid out as before, a cage or flat.
 - **A system that will not lie flat** (2026-10-11, from natural products
   outside the benchmark): where every flat drawing of it has a fault - an
   atom on another or on a bond, a bond crossing one not behind it, or an
@@ -426,9 +470,109 @@ they hang from.
   four at 90. A tert-butyl is drawn as it always is: its three methyls
   fanned 60 degrees apart about the line of the bond into it, 120 from
   that bond - and so is any such trident, a carbon, silicon or nitrogen
-  with three like ends and a fourth bond: a trimethylsilyl, a
-  trimethylammonium (choline's), a CF3, a CCl3. Neopentane's middle
-  carbon, four methyls, stays a cross, as CF4 does. The fan is compact,
+  with three like ends and a fourth bond to an atom that goes on - a
+  group on a skeleton: a trimethylsilyl, a trimethylammonium (choline's),
+  a CF3, a CCl3. Neopentane's middle
+  carbon, four methyls, stays a cross, as CF4 does - and any atom of four
+  like groups (each the same element with as many bonds, in no ring) that
+  is no stereocentre and no metal is an upright cross, its bonds level and
+  upright, never an X turned 45 degrees to the page (GR-4.1.3):
+  tetramethylammonium, tetramethylsilane, CCl4, BF4-, tetraethylammonium;
+  and so are four ends not alike (CF2Cl2) - three alike and one other
+  among them, a molecule of four ends being no group on a skeleton
+  (tert-butanol, CFCl3, chlorotrimethylsilane, tert-butyl chloride,
+  tert-butylamine, trimethylamine oxide: GR-4.1.3's first case, none of
+  the four bonded to anything else) - and four groups that go on alike
+  through rings (tetraphenylborate, tetraphenylmethane). A trident keeps
+  its fan where its fourth bond goes on, as the maintainer has it.
+- **A metal with four bonds** (in no chelate's ring, bound to no pi
+  system's centre and to no other metal) is the X only where it is surely
+  square planar: Pt(II), Pd(II), Au(III), Rh(I) or Ir(I), its oxidation
+  state counted plainly from the drawing - a donor whose valence is full
+  without its bond to the metal counts nought, one the bond completes one,
+  the metal's own charge added (an NH3 counts nought; an N drawn with two
+  H's is an amido and counts one; a carbonyl's or an isocyanide's C -
+  triple-bonded to an O, or to an N that goes on - lends its pair and
+  counts nought, as drawn its bonds would have it count one; a cyanide's,
+  its N bare, counts one). Every other such metal, an ambiguous
+  one too (Ni(II), a state not counted plainly), is the upright cross: the
+  text's form for four groups, which states no geometry, where the X
+  states square planar (TiCl4, ZnCl4 2-, FeCl4-, NiCl4 2-, Ni(CO)4,
+  Pd(PPh3)4; Cu(II) and Co(II) are ambiguous as Ni(II) is). A main-group
+  centre with four single bonds and two lone pairs - its valence electrons
+  by its group, less its charge, less the four bonds, leaving four - is
+  square planar too, and the X: XeF4 (GR-4.1.3's own figure), ICl4-,
+  BrF4-; SF4, one lone pair, is upright. The X is held where the four
+  donors are ends and can lie round the centre one way only (PtCl4 2-,
+  PdCl4 2-, AuCl4-, and three alike and one other: PtCl3(NH3)-,
+  AuCl3Br-), grown so and never turned off it to bring its bonds onto the
+  page's lattice (`squareXAt`). Where they can lie more ways - two and two, two and
+  one and one, four different, told apart as ligands (`donorKinds`) - and the
+  input gives none (cisplatin from a SMILES, PdCl2(PPh3)2), drawing either
+  would say cis or trans, an isomer nobody gave: the centre is the upright
+  cross, and the editor marks it as it marks what it is unsure of - the
+  dashed ring, "Which donors are next to each other is not given." -
+  while its donors lie round it as they were laid out (`arrangementAs`):
+  moved round by the chemist, the arrangement is theirs and the mark goes;
+  a Clean-up that keeps the cross keeps the mark. A chemist's own X or
+  cross carries none. (A SMILES's square-planar marks, @SP1 to @SP3, are
+  not read: Meno's reader refuses them, saying so.) Where they go on - a
+  phosphine's phenyls, set on the lattice their own way - the centre is
+  left as it grows (PdCl2(PPh3)2 upright, RhCl(PPh3)3 as before), held to
+  the X there its angles would bend between the two. Clean-up keeps a
+  four-bond metal in the form it was drawn in, the cross or the X,
+  whichever its bonds lie nearer to, for every metal (`LayoutAtom.fourForm`):
+  drawn upright, it is held upright; drawn as an X, it is never turned
+  upright, held to the X only where it would be anyway and otherwise left
+  as drawn. A drawing nobody made - the plugin's for a typed SMILES or a
+  step's structure, a molecule in 3D drawn as a formula - is laid out as
+  new: its metal by the rule above, not in whichever form its coordinates
+  happen to have, nor with its donors opposite each other as they happen
+  to lie there (`laidOut`'s `asNew`) - but at a metal whose arrangement
+  the SMILES gives, a mark at the metal's own atom (@SP1 to @SP3 on four
+  neighbours, @OH1 to @OH30 on six; a bare @ or any other mark states no
+  pairs, and the metal is not given), the
+  plugin's drawing carries it, and its places and its form are kept: the
+  isomer typed, no mark (`metalsArrangedIn`) - save a metal two of whose
+  donors are joined other than through it, a chelate or a bridge: there the
+  plugin's picture was found not to carry the pairs the mark states
+  (trans-[Co(en)2Cl2]+ drawn cis, mer-Co(gly)3 drawn fac). So the pairs
+  are read from the mark itself (`metalPairsIn`: the OpenSMILES shapes and
+  table, by the neighbours' written order), and a marked metal - chelated
+  or not - is taken as given only where the finished drawing has those
+  pairs; where it has others, it is marked as not given (`marksKept`),
+  never an isomer the input did not write. Where Meno cannot read the
+  mark (an H written in the metal's bracket, a mark that would put a
+  small chelate's two ends across), a chelated metal is laid out as new
+  and marked as not given
+  where its donors could lie more ways than one, as above - two metals
+  held by bridges among them, as in [Pt2Cl4(NH3)2], whose cis and trans
+  dimers differ only together, each marked alike (a bridge's charge
+  shared between its metals, each Pt(II)). And where it cannot be laid
+  out and is kept as it came, its square-planar centres whose arrangement
+  is not given are marked all the same (`arrangementsMarked`). A metal of
+  six donors in such a drawing is marked so too where its donors could be
+  set round it with other pairs across - [CoCl2(NH3)4]+ cis or trans,
+  CoCl3(NH3)3 fac or mer, [Co(en)2Cl2]+, Co(gly)3, the two of a chelate
+  never across - and not where every way sets the same pairs across (MA6,
+  MA5B, M(en)3: its hands are no pairs across) (`octahedralOpen`). Only
+  the two donors of a two-donor chelate are held not across: a ligand whose
+  own rigid shape fixes its donors round the metal - a porphyrin's ring of
+  four with two axial donors, two terpyridines - is marked all the same,
+  though only one arrangement can be; the mark makes no structure wrong.
+  How its spokes are laid out is section 7's. Donors are told apart, here and for
+  four, as ligands - all each carries, not only the atom on the metal:
+  [Pt(NH2Me)2(NH2Et)2]2+ is two and two, [Co(NH2Me)4(NH2Et)2]3+ four and
+  two (`donorKinds`). A four-bond metal drawn in one form - the X or the
+  upright cross, by the chemist, or by the plugin for an arrangement its
+  input gave - that the layout would set in the other is refused, saying
+  so, its donors left as drawn: the other form would say another thing of
+  its arrangement. A chemist's X whose donors go on - a phosphine's, a
+  pyridine's - is laid out as the X: the piece is turned so that the
+  metal's four bonds lie on the diagonals, its ligands set off them as
+  they come, a ring of theirs off the page's lattice where it must be. A chelate's metal (two of its donors joined other than through
+  it) goes by its own rules.
+  The fan is compact,
   and once the rest of the drawing is set it is turned about its bond,
   five degrees at a time, to where the drawing reads best, its bonds kept
   clear of the whole letter of an H beside it (ginkgolide B's OH).
@@ -437,7 +581,30 @@ they hang from.
   double-bonded O above it, as IUPAC puts double-bonded substituents on a
   chain. The O between two crosses runs straight on, so that ATP's
   triphosphate is one line; the bond joining a cross to a zigzag gives way,
-  to 150 degrees.
+  to 150 degrees. One that is a stereocentre is drawn as one (below), not
+  as a cross.
+- **A stereocentre with four bonds, in no ring** (CH3-CFClBr's carbon, a
+  quaternary carbon in a chain, a phosphine oxide's P, a sulfoximine's S):
+  two of its bonds in the page a third of a
+  turn apart, and opposite them the two that carry a solid and a hashed
+  wedge, a sixth of a turn apart, a quarter turn between each and the
+  bond beside it (IUPAC 2006 ST-1.1.1; IUPAC 2008 GR-4.1.3) - never a
+  cross, which with one wedge is the form ST-1.1.4 rules out for four
+  acyclic groups. A double bond is never wedged: a P=O, an S=O and an S=N
+  are among the two in the page (ST-1.5). The wedged two are the smaller
+  groups: an end before a
+  group that goes on, a heteroatom end before a carbon one, then the one
+  written smaller; the chain runs on through the two in the page, and the
+  bond to another centre is one of them. Of the two ways round, the one
+  that keeps all four bonds off the page's axes, where the drawing could
+  be taken for a Fischer projection (`assemble.ts` `isFourCentre`,
+  `centreRoles`; scored so in `metrics.ts`, and its bonds not turned to
+  make room for labels).
+- **Straight through, as asked**: an atom given `linear` (`perceive.ts`;
+  Clean-up gives it to the end of a double bond drawn straight, its
+  configuration not given - IUPAC 2006 ST-4.4) is drawn straight through,
+  as an allene's middle is, its two bonds in one line, and scored so
+  (`straightThrough`; `Geometry.straight` in `metrics.ts`).
 - **At a ring atom**: one bond out goes straight out, along the bisector;
   two (a gem-dimethyl) go close together, 60 degrees apart about it; more
   split the room evenly. A substituent never takes the 120-degree side of
@@ -474,6 +641,12 @@ lie level either way round, and for a frame of five- and seven-membered
 rings, which lies on the lattice no way round and is set on it only by
 its bonds out (proline's carboxyl level, its ring symmetric about it) -
 the drawing takes the one that reads best (section 4).
+
+A molecule with no ring that can lie square is then turned the little way
+that brings its bonds out nearest the lattice. One drawn as its own mirror
+image is square by that mirror instead: N-bromosuccinimide is set with its
+N-Br upright and its two C=O alike either side. It is never tilted to bring
+one C=O onto the lattice at the other's cost.
 
 ## 4. Reading order
 
@@ -668,7 +841,20 @@ quarter of a bond: with less, taxol's AcO sat on its OBz.
   narrow end at the stereocentre: an end atom first, then a chain - but
   never a run of wedges sharing atoms, nor a wedge on the bond between two
   stereocentres: there the main chain stays plain and the centre's H is
-  drawn to carry the stereo.
+  drawn to carry the stereo. A ring bond carries one only where there is
+  no other: at a ring atom with no H to draw whose every bond out of the
+  rings goes to another centre, a ring bond rather than the bond between
+  the two centres (IUPAC 2006 ST-0.2, ST-0.5), and at a spiro atom (below).
+- A stereocentre with four bonds in no ring, drawn as above: a solid and
+  a hashed wedge on the two bonds that lie a sixth of a turn apart, the
+  other two plain (ST-1.1.1). Two such centres side by side: the bond
+  between them plain, each with its own pair (ST-0.5).
+- A spiro atom that is a stereocentre: one ring's two bonds plain, the
+  other's a solid and a hashed wedge - the smaller ring's, or of two rings
+  alike the one drawn narrower at the atom (ST-1.3.4); never a wedge to
+  another centre, the other ring's two then taking them, or failing both,
+  one wedge as before. An atom at a spiro and an ordinary fusion at once
+  is shown as before.
 - A stereocentre at a ring fusion with no bond out of the rings gets an
   explicit H, drawn straight up on a wedge or straight down on hashes, as
   a steroid's are - so the page shows the sense as well as the wedge.
@@ -708,16 +894,45 @@ quarter of a bond: with less, taxol's AcO sat on its OBz.
   bridgehead often has them so), read from the angles two of them and the
   wedge would say one thing and the other two the opposite
   (`drawnVolume`). With three drawn and the H left out, the angles are read.
+- And where the layout leaves two of a centre's three bonds in one line,
+  within 10 degrees, and its wedge on one of them - doxorubicin's and
+  ouabain's sugar C1, ginkgolide B's C23, bilobalide's C10, vinblastine's
+  C5 - a form the text grades not acceptable (Brecher 2006, ST-1.2.4)
+  however a reader reads it: such a centre with an H has the H drawn in
+  the widest gap round it and wedged instead (ST-1.1.4's form), the way
+  Meno's reader reads as given (`hydrogensWhereUnread`, as a cage's
+  wedges for a flat reader are); with no H, or where that reads no
+  surer, it is left as placed. The H stands clear of every other atom -
+  three quarters of a bond - and every bond - 0.4 of one - at the gap's
+  middle where that is clear, else turned within the gap, up to 25
+  degrees short of its bonds, where it is clearest (GR-2.1.6: a label
+  clear of all else; an H on another label reads as that label's). It is
+  always a bond long, as every H Meno draws: drawn shorter, its wedge, the
+  H label's room taken off, reads as a speck - worse than an H near
+  another atom. ST-1.2.4 grades so every wedge 180
+  degrees or more from one of its plain neighbours; the layout catches
+  the ones in line, within 10 degrees: those are the ones it leaves.
 - An axis of chirality - a biaryl's bond, BINAP's C1-C1' - is shown by
   one wedge out of an end of it, narrow there, on the single bond to the
   neighbour that stands out of the page for the sense the axis has (or on
   hashes, behind it), both rings drawn flat: the only wedge that goes on a
   ring bond, as it must (`axisWedge`). Read back, a wedge narrow at an atom
-  with three groups at the end of a single bond in no ring (a ring through
-  a metal aside) is such an axis's (`readStereo`) - but for an S, Se, Te,
-  P, As or Sb, its fourth group a lone pair (a sulfoxide's S, a
-  phosphine's P): that is a stereocentre, which Clean-up leaves as drawn,
-  since the engine lays out none with a lone pair.
+  with three groups at the end of a single bond in no ring, or in none
+  smaller than seven atoms, is such an axis's (`readStereo`) - a
+  2,2'-bridged biphenyl's, a BINOL phosphoric acid's C1-C1' in its
+  seven-membered ring through O-P-O, BINAP's in its chelate ring of seven
+  through a metal, a metal counted as any atom of the ring. In a ring of
+  five or six the two rings are held all but flat, or turn over fast
+  (fluorene, 9,10-dihydrophenanthrene, 2,2'-bipyridine on a metal), and no
+  axis is read. An atom with three
+  groups and a wedge is a stereocentre instead for an S, Se, Te, P, As or
+  Sb, its fourth group a lone pair (a sulfoxide's S, a phosphine's P).
+- A stereocentre whose fourth group is a lone pair - a sulfoxide's or a
+  sulfonium's S, a phosphine's P, an arsine's As - is drawn as one with its
+  H left out: one wedge, the lone pair the fourth, undrawn group, and read
+  back from it so (`readStereo`). A selenoxide's Se, a telluride's Te or a
+  stibine's Sb is not read from its wedge, so Clean-up leaves such a
+  drawing as it is (2026-10-29).
 - A cage drawn in perspective shows its stereochemistry by the drawing
   itself, with no wedges; what it shows is read back from the solid the
   cage is drawn from, fitted to where its atoms are and how deep, and the
@@ -893,7 +1108,14 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
    section 2 and choosing among free placements by section 5.
 4. Try the frame's orientations and keep the one that reads best by
    section 4, its free choices tried the other way and its parts
-   untangled (section 5).
+   untangled (section 5). Where finished drawings are chosen between - a
+   macrocycle's shapes, a cage's views, a piece's best few at the end -
+   the one with the fewest faults (an atom on another, bonds crossing, an
+   atom on a bond) always wins, whatever else it costs, and those with as
+   many are chosen between by how they read (GR-4.3; the maintainer,
+   2026-10-29). Only there: inside the search a drawing part made has
+   clashes the passes after it clear, and weighed above everything they
+   steer it off.
 5. Last, turn a macrolide's sugars to their face and make room for the
    H's of labels and the letters of names, each by a small local move
    (sections 4 and 5); and turn

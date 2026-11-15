@@ -10,9 +10,9 @@ import type { JobSeen, WorkflowStep } from "../store/types";
 import { finished } from "../../../../lib/jobs";
 import type { StepState } from "./flow";
 import { StepGlyph } from "./icons";
-import type { KindInfo, StepKind } from "./kinds";
-import { CARD_H, CARD_W, PORT_STEP, portDown, portSize, PX } from "./look";
-import { clock } from "./programs";
+import { cardHighOf, type KindInfo, type StepKind } from "./kinds";
+import { CARD_W, PORT_STEP, portDown, portSize, PX } from "./look";
+import { cardState } from "./cardState";
 import { COPYABLE } from "../hooks/useKeepUnselected";
 
 /**
@@ -23,7 +23,23 @@ export type PortLook = "plain" | "lit";
 
 /** A hairline on the screen, whatever the zoom: the page's layer of HTML sets it (Workflow2D). */
 export const HAIR = "var(--hair, 1px)";
-/** A port, centred where it stands in its parent: a small ring, a hair thick. `of`: its set's or card's height, on the page, in px. */
+/**
+ * A box's line a hair thick, just inside its edge, in the colour of an
+ * `inset-ring-*` class: drawn as a shadow, not a border. Chromium (Windows'
+ * WebView2) draws a border thinner than a pixel of the page's layer a whole
+ * one of them wide, and zoomed in the layer magnifies it - six pixels on
+ * the screen at six times (found 2026-10-31); a shadow it draws as thin as
+ * it is. The room the border took is kept as padding (`HAIR`), so that
+ * nothing inside moves.
+ */
+export const HAIR_LINE = "inset-ring-[length:var(--hair,1px)]";
+/**
+ * A port, centred where it stands in its parent: a small ring, a pixel
+ * thick. `of`: its set's or card's height, on the page, in px. HTML, not
+ * drawn by WebGL as the page's placed objects are: the step cards are HTML
+ * over the page's canvas, and a port half on a card must be drawn, and
+ * taken hold of, over it.
+ */
 export function Port({
   look,
   style,
@@ -31,6 +47,8 @@ export function Port({
   data,
   label,
   of,
+  onContextMenu,
+  onHover,
 }: {
   look: PortLook;
   style: CSSProperties;
@@ -38,6 +56,10 @@ export function Port({
   data: Record<string, string>;
   label: string;
   of?: number;
+  /** Its menu, where it has one: an exit's port, its set's (a set held off the page has no frame to right-click). */
+  onContextMenu?: (e: ReactMouseEvent) => void;
+  /** The pointer come onto it, or gone off it: what an exit's port says of its set (`exitPortHovered`). */
+  onHover?: (on: boolean) => void;
 }) {
   const size = portSize(of);
   return (
@@ -46,9 +68,11 @@ export function Port({
       role="button"
       aria-label={label}
       onPointerDown={onPointerDown}
+      onContextMenu={onContextMenu}
+      {...(onHover ? { onPointerEnter: () => onHover(true), onPointerLeave: () => onHover(false) } : {})}
       className={clsx(
         // (a press on it begins no selection of the page's text: one left over turns a later drag on the drawing into the system's own drag-and-drop, Workspace.tsx)
-        // (taken hold of over at least 12 hairs, however small it is drawn: meno-port)
+        // (taken hold of over at least 12 px about its middle, however small it is drawn: meno-port)
         "meno-port absolute rounded-full select-none transition-colors duration-150 ease-meno",
         look === "lit" ? "bg-accel-base border-accel-base" : "bg-white border-gh-gray hover:bg-accel-lightbase hover:border-accel-base",
       )}
@@ -56,9 +80,12 @@ export function Port({
         ["--port" as string]: size,
         width: size,
         height: size,
-        marginLeft: `calc(${size} / -2)`,
-        marginTop: `calc(${size} / -2)`,
-        borderWidth: `min(${HAIR}, calc(${size} / 5))`,
+        // (laid out in the screen's pixels, the layer's scale undone on it, and centred by the same transform: laid out in the layer's,
+        //  Chromium rounds its width, its height, its edges and its ring each to a whole one of them, and zoomed in the layer magnifies
+        //  that - ovals, rings as thick as dots, and out of place, on Windows; in the screen's, each is rounded to a pixel there)
+        transformOrigin: "0 0",
+        transform: "scale(calc(1 / var(--scale, 1))) translate(-50%, -50%)",
+        borderWidth: `min(1px, calc(${size} / 5))`,
         borderStyle: "solid",
         pointerEvents: "auto",
         cursor: "crosshair",
@@ -73,7 +100,7 @@ export function Port({
  * their place among those waiting; where they run, since when, how many of
  * how many have ended, and what the log says last.
  */
-export type RunView = { place?: number; since?: number; ended: number; total: number; line?: string; share?: number };
+export type RunView = { place?: number; since?: number; ended: number; total: number; line?: string; share?: number; /** How many minutes the quietest of its running jobs has written nothing, where past what Settings says (lib/jobs `quietFor`). */ quiet?: number };
 
 /**
  * How far a run's jobs are, as a share - where a running one says how far
@@ -91,42 +118,15 @@ export function shareOf(seen: readonly (Pick<JobSeen, "state" | "progress"> | un
 /** A run as its card lists it: when, named apart from the step's other runs (workflow/earlierRuns `namesOf`); what it said; how it was set; whether it is shown, and kept. */
 export type RunRow = { at: number; name: string; said: string; how: string; shown: boolean; keep: boolean };
 
-/** A place in the queue, as it is said: 1st, 2nd, 3rd, 4th... */
-const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
+/** Each of a card's state icons by name (cardState), as Heroicons' outline set draws them. */
+const STATE_ICONS = { waiting: ClockIcon, running: ArrowPathIcon, stopped: StopCircleIcon, done: CheckCircleIcon, failed: ExclamationCircleIcon } as const;
+/** Each tone's words' colour (Meno's palette). */
+const TONE_CLASS = { quiet: "text-gh-gray", base: "text-accel-base", attention: "text-accel-accent" } as const;
 
-/** What a state says, with its icon and its words' colour (Meno's palette: the accent for done and running, the attention colour for failed). */
-function stateLine(
-  state: StepState,
-  said: string | undefined,
-  run: RunView | undefined,
-  now: number,
-  missing?: string,
-): { Icon?: typeof CheckCircleIcon; text: string; tone: string; turning?: true } {
-  // (a program installed separately that is found nowhere, or too old, or what its options still need: said where Ready would be)
-  if (missing && (state === "ready" || state === "changed")) return { Icon: ExclamationCircleIcon, text: missing, tone: "text-gh-gray" };
-  switch (state) {
-    case "no-input":
-      return { text: "No input", tone: "text-gh-gray" };
-    case "ready":
-      return { text: "Ready", tone: "text-gh-gray" };
-    case "waiting":
-      return { Icon: ClockIcon, text: run?.place ? `Waiting \u00b7 ${ordinal(run.place)}` : "Waiting", tone: "text-gh-gray" };
-    case "running":
-      return {
-        Icon: ArrowPathIcon,
-        turning: true,
-        text: run && run.total > 1 ? `Running \u00b7 ${run.ended} of ${run.total}` : `Running ${clock(run?.since != null ? now - run.since : 0)}`,
-        tone: "text-accel-base",
-      };
-    case "stopped":
-      return { Icon: StopCircleIcon, text: said ?? "Stopped", tone: "text-gh-gray" };
-    case "done":
-      return { Icon: CheckCircleIcon, text: said ?? "Done", tone: "text-accel-base" };
-    case "failed":
-      return { Icon: ExclamationCircleIcon, text: `Failed${said ? ` · ${said}` : ""}`, tone: "text-accel-accent" };
-    case "changed":
-      return { Icon: ArrowPathIcon, text: "Changed · run again", tone: "text-gh-gray" };
-  }
+/** What a state says, with its icon and its words' colour (cardState). */
+export function stateLine(...args: Parameters<typeof cardState>): { Icon?: typeof CheckCircleIcon; text: string; tone: string; turning?: true } {
+  const c = cardState(...args);
+  return { ...(c.icon ? { Icon: STATE_ICONS[c.icon] } : {}), text: c.text, tone: TONE_CLASS[c.tone], ...(c.turning ? { turning: true as const } : {}) };
 }
 
 export type StepCardProps = {
@@ -144,7 +144,7 @@ export type StepCardProps = {
   open: boolean;
   /** Its options shut: by its Close, or Escape - as by a double-click on it; never by themselves, while the page is worked on. */
   onClose: () => void;
-  /** Its inputs, in the kind's order: named beside their ports down its left side, where there is more than one (the ports themselves are on the workflow's ports layer, Workflow2D). What it gives is its exits' sets, beside it - it has no port of its own for that. */
+  /** Its inputs, in the kind's order: named beside their ports down its left side, where there is more than one (the ports themselves are on the workflow's ports layer, Workflow2D). What it gives is its exits' sets, beside it, each from a port of its own down its right side, its set's (on the same layer). */
   inputs: readonly { id: string; name: string; look: PortLook }[];
   /** How its jobs are getting on, where it runs any. */
   run?: RunView;
@@ -165,6 +165,8 @@ export type StepCardProps = {
   /** Its atoms option being chosen on the drawing, by id; and choosing begun or ended (OptionsForm `onChoose`). */
   choosing?: string | null;
   onChoose?: (id: string | null) => void;
+  /** It still needs a value of its options (doers `optionsNeed`): opened, its first number that holds none is focused, to be given at once. */
+  asks?: boolean;
   onKind: (kind: StepKind) => void;
   onShowRun: (index: number) => void;
   /** A run kept, or no longer: the one shown at -1, an earlier one by its place among them. */
@@ -184,13 +186,15 @@ export type StepCardProps = {
  * does it fills - and its options.
  */
 export default function StepCard(p: StepCardProps) {
-  const line = p.refused ? { Icon: ExclamationCircleIcon, text: p.refused, tone: "text-accel-accent" } : stateLine(p.state, p.step.ran?.said, p.run, Date.now(), p.missing);
+  const line = p.refused ? { Icon: ExclamationCircleIcon, text: p.refused, tone: TONE_CLASS.attention } : stateLine(p.state, p.step.ran?.said, p.run, Date.now(), p.missing);
   // (what it does and how, under its name - its kind alone where its state line says the same: what it still needs, said once)
   const summary = [p.info.name, p.how && p.how !== line.text ? p.how : ""].filter(Boolean).join(" \u00b7 ");
   const said = p.state === "running" && p.run?.line ? p.run.line : undefined;
   // (how far a run is, as a share: of several jobs, how many have ended - and how far each running one says it is)
   const progress = p.state === "running" && p.run && (p.run.share != null || p.run.total > 1) ? (p.run.share ?? p.run.ended / p.run.total) : undefined;
   const w = CARD_W / PX;
+  // (at least as tall as its kind's ports make it: one port's step taller for each past three - look `cardHigh`)
+  const high = cardHighOf(p.step.kind) / PX;
   return (
     <div
       className="meno-fade-in relative select-none"
@@ -203,18 +207,18 @@ export default function StepCard(p: StepCardProps) {
         role="group"
         aria-label={`Step: ${p.who}, ${p.info.name}`}
         onPointerDown={p.onCardDown}
-        className={`rounded-xl bg-white shadow-sm ${p.selected ? "border-accel-base" : "border-gh-line"}`}
-        style={{ borderWidth: HAIR, borderStyle: "solid", cursor: "default" }}
+        className={clsx("rounded-xl bg-white shadow-sm", HAIR_LINE, p.selected ? "inset-ring-accel-base" : "inset-ring-gh-line")}
+        style={{ padding: HAIR, cursor: "default" }}
       >
         {/* (its words, and its icons alone large where they are too small to read: one over the other, switched past a threshold - utils/pageScale
             `wordsReadAt` - the words fading out as the icons fade in, over a short time: never one put for the other at once, nor both half there at a zoom) */}
         <div className="grid">
-          <div className="meno-words-gone pointer-events-none flex items-center justify-center gap-3 text-gh-black" style={{ gridArea: "1 / 1", height: CARD_H / PX }} aria-hidden={!p.compact}>
+          <div className="meno-words-gone pointer-events-none flex items-center justify-center gap-3 text-gh-black" style={{ gridArea: "1 / 1", height: high }} aria-hidden={!p.compact}>
             <StepGlyph icon={p.info.icon} size={28} />
             {line.Icon && <line.Icon className={clsx("h-6 w-6 transition-colors duration-200 ease-meno", line.tone, line.turning && "animate-spin motion-reduce:animate-none [animation-duration:2s]")} aria-hidden />}
           </div>
           {/* (two columns: the icons - what it does, and its state - and the words beside them; its first line level with its ports) */}
-          <div className="meno-words grid items-start gap-x-2 px-3 pt-2 pb-2.5" style={{ gridArea: "1 / 1", gridTemplateColumns: "16px minmax(0, 1fr)", minHeight: CARD_H / PX }} aria-hidden={p.compact}>
+          <div className="meno-words grid items-start gap-x-2 px-3 pt-2 pb-2.5" style={{ gridArea: "1 / 1", gridTemplateColumns: "16px minmax(0, 1fr)", minHeight: high }} aria-hidden={p.compact}>
             <span className="flex h-5 items-center text-gh-gray">
               <StepGlyph icon={p.info.icon} />
             </span>
@@ -265,7 +269,7 @@ export default function StepCard(p: StepCardProps) {
             style={{ overflow: "hidden" }}
           >
           {/* (zoomed out where its words are too small to read: each line of them a grey bar, as a text's words are - nothing to press there) */}
-          <TextBars on={p.compact} className="border-gh-line px-3 py-2.5" style={{ borderTopWidth: HAIR, borderTopStyle: "solid" }} onPointerDown={(e) => e.stopPropagation()}>
+          <TextBars on={p.compact} className="px-3 py-2.5" style={{ paddingTop: `calc(0.625rem + ${HAIR})`, boxShadow: `inset 0 ${HAIR} var(--color-gh-line)` }} onPointerDown={(e) => e.stopPropagation()}>
             {p.kinds.length > 1 && (
               <div className="mb-3">
                 <OptionsForm
@@ -276,7 +280,7 @@ export default function StepCard(p: StepCardProps) {
               </div>
             )}
             {p.optionList.length ? (
-              <OptionsForm options={p.optionList} values={p.options} onChange={p.onOptions} choosing={p.choosing} onChoose={p.onChoose} />
+              <OptionsForm options={p.optionList} values={p.options} onChange={p.onOptions} choosing={p.choosing} onChoose={p.onChoose} asks={p.asks} />
             ) : (
               <div className="text-xs text-gh-gray">No options</div>
             )}

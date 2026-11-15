@@ -23,9 +23,13 @@ import { centroid, segmentsCross, splitOutside, type Point } from "./geometry";
 import { ringShape } from "./conformation";
 import { isMetal, orderOf, type Molecule, type RingSystem } from "./perceive";
 import { byStructure } from "./ranks";
+import { freeCorners } from "../chem/perception/stereo/senses";
 import { ringsAlike } from "./rings";
 
 export type Vec3 = [number, number, number];
+
+// (a tetrahedron's free corners are the core's: lib/chem/perception/stereo/senses)
+export { freeCorners };
 
 /** Graph distances between the system's atoms, through its own bonds. */
 function hops(mol: Molecule, atoms: number[]): number[][] {
@@ -345,7 +349,7 @@ function look(
  */
 function bondAngle(mol: Molecule, a: number): number {
   const orders = mol.neighbours[a].map((b) => orderOf(mol, a, b));
-  if (orders.includes(3) || orders.filter((o) => o === 2).length >= 2) return Math.PI;
+  if (orders.includes(3) || orders.filter((o) => o === 2).length >= 2 || mol.straight.has(a)) return Math.PI;
   if (orders.includes(2)) return (2 * Math.PI) / 3;
   const lonePair = (mol.el[a] === "N" || mol.el[a] === "O") && mol.neighbours[a].length <= 3;
   if (lonePair && mol.neighbours[a].some((b) => mol.neighbours[b].some((c) => orderOf(mol, b, c) === 2))) return (2 * Math.PI) / 3;
@@ -497,13 +501,13 @@ const solids = new Map<string, Map<number, Vec3>>();
 /** How many solids are kept (`solids`). */
 const KEPT_SOLIDS = 64;
 
-/** Everything a solid is found from, as a key: each atom's element, each bond and its order, each centre's configuration. */
+/** Everything a solid is found from, as a key: each atom's element, each bond and its order, each centre's configuration, the atoms asked to be straight. */
 function contentOf(mol: Molecule): string {
   let content = contents.get(mol);
   if (content == null) {
     const bond = (b: Molecule["bonds"][number]) => `${b.a}-${b.b}:${b.order}${b.stereo ? `:${b.stereo.refs.join(".")}${b.stereo.cis ? "c" : "t"}` : ""}`;
     const centre = ([a, t]: [number, { neighbours: readonly number[]; volume: number }]) => `${a}:${t.neighbours.join(".")}:${t.volume}`;
-    content = [mol.el.join(","), mol.bonds.map(bond).join(","), [...mol.tetra].map(centre).join(",")].join("|");
+    content = [mol.el.join(","), mol.bonds.map(bond).join(","), [...mol.tetra].map(centre).join(","), [...mol.straight].join(",")].join("|");
     contents.set(mol, content);
   }
   return content;
@@ -1780,22 +1784,6 @@ export function axialOut(mol: Molecule, sys: RingSystem, ring: readonly number[]
   return found;
 }
 
-/**
- * Where the bonds of a tetrahedral atom that are not among `us` (its bonds
- * given, as unit vectors) point: with three given, the one corner left;
- * with two, the two either side of their plane.
- */
-export function freeCorners(us: readonly Vec3[]): Vec3[] {
-  const away = awayFrom(us);
-  if (us.length !== 2) return [away];
-  const across = normalise(crossV(us[0], us[1]));
-  const k = Math.cos((54.75 * Math.PI) / 180);
-  const j = Math.sin((54.75 * Math.PI) / 180);
-  return [
-    [0, 1, 2].map((c) => away[c] * k + across[c] * j) as Vec3,
-    [0, 1, 2].map((c) => away[c] * k - across[c] * j) as Vec3,
-  ];
-}
 
 /**
  * The directions, in the solid, of an atom's bonds out of the cage: the

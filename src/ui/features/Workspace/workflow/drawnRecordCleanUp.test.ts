@@ -85,7 +85,8 @@ async function cleanedUp(doc: WorkspaceDocument): Promise<WorkspaceDocument> {
 }
 
 const records = (doc: WorkspaceDocument) => setMembers(doc, resultOf(doc, doc.steps![0].id)!).records;
-const bare = (r: DrawnRecord | undefined) => r && (({ of: _of, ...rest }) => rest)(r);
+/** A record as compared: without what it is of, nor its lasting id (workflow/lasting.test). */
+const bare = (r: DrawnRecord | undefined) => r && (({ of: _of, id: _id, ...rest }) => rest)(r);
 
 describe("a structure drawn's record, through Clean-up", () => {
   it("is kept: Clean-up draws the same structure afresh - its wedges where it puts them, its groups by their labels - so the record's properties stand", async () => {
@@ -128,7 +129,7 @@ describe("a structure drawn's record, through Clean-up", () => {
     const before = given([{ ...drawn, record: sampled }]);
     const ids = setMembers(before, resultOf(before, before.steps![0].id)!).structures[0];
     const of = (el: string) => before.model.atoms.find((a) => ids.includes(a.id) && a.el === el)!;
-    const edited = (model: Model) => records(membersSettled({ ...before, model }, before))[0];
+    const edited = (model: Model) => bare(records(membersSettled({ ...before, model }, before))[0]);
     const atoms = (f: (a: Model["atoms"][number]) => Model["atoms"][number]) => ({ ...before.model, atoms: before.model.atoms.map(f) });
     const stale = { from: ["seed-1"], stale: BEFORE_THE_EDIT };
     expect(edited(atoms((a) => (a.id === of("Br").id ? { ...a, el: "I" } : a)))).toEqual(stale);
@@ -149,8 +150,9 @@ describe("a structure drawn's record, through Clean-up", () => {
     const labelled = given([{ ...drawn, atoms: drawn.atoms.map((a) => (a.el === "Br" ? { ...a, el: "OAc" } : a)), record: sampled }]);
     const oac = labelled.model.atoms.find((a) => a.el === "OAc")!;
     const relabelled = (f: (a: Model["atoms"][number]) => Model["atoms"][number]) => records(membersSettled({ ...labelled, model: { ...labelled.model, atoms: labelled.model.atoms.map((a) => (a.id === oac.id ? f(a) : a)) } }, labelled))[0];
-    expect(relabelled((a) => ({ ...a, el: "OBz" }))).toEqual(stale);
-    expect(relabelled((a) => ({ ...a, abbrev: placedAbbreviation("OMe", null, NOMINAL_BOND_LENGTH)! }))).toEqual(stale);
+    const relabelledBare = (f: Parameters<typeof relabelled>[0]) => bare(relabelled(f));
+    expect(relabelledBare((a) => ({ ...a, el: "OBz" }))).toEqual(stale);
+    expect(relabelledBare((a) => ({ ...a, abbrev: placedAbbreviation("OMe", null, NOMINAL_BOND_LENGTH)! }))).toEqual(stale);
     // (what OAc stands for, held: the same group)
     expect(bare(relabelled((a) => ({ ...a, abbrev: placedAbbreviation("OAc", null, NOMINAL_BOND_LENGTH)! })))).toEqual(sampled);
   });
@@ -174,7 +176,7 @@ describe("a structure drawn's record, through Clean-up", () => {
     };
     const before = given([{ ...crossed, record: sampled }]);
     const ids = setMembers(before, resultOf(before, before.steps![0].id)!).structures[0];
-    const edited = (model: Model) => records(membersSettled({ ...before, model }, before))[0];
+    const edited = (model: Model) => bare(records(membersSettled({ ...before, model }, before))[0]);
     // (two wedges turned over: identity reads no configuration either way, but the drawing says another)
     const turned = new Set(before.model.bonds.filter((b) => ids.includes(b.a) && (b.stereo === "up" || b.stereo === "down")).slice(0, 2).map((b) => b.id));
     expect(edited({ ...before.model, bonds: before.model.bonds.map((b) => (turned.has(b.id) ? { ...b, stereo: b.stereo === "up" ? ("down" as const) : ("up" as const) } : b)) })).toEqual({ from: ["seed-1"], stale: BEFORE_THE_EDIT });

@@ -27,11 +27,11 @@ describe("a plugin's worker, asked for the first time", () => {
   });
 
   it("is starting at once where its plugin is set up already - not said to be setting up, a moment, first", async () => {
-    expect(await statesStarting("rdkit")).toEqual(["starting", "ready"]);
+    expect(await statesStarting("sketchkit")).toEqual(["starting", "ready"]);
   });
 
   it("is setting up first where its plugin is not set up yet", async () => {
     ready = false;
-    expect(await statesStarting("xtb")).toEqual(["setting-up", "starting", "ready"]);
+    expect(await statesStarting("tightbind")).toEqual(["setting-up", "starting", "ready"]);
   });
 });

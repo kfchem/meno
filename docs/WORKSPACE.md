@@ -53,8 +53,8 @@ hold both.
 - **3D coordinates.** Nothing makes them from a drawing: the chemistry
   worker gives 2D coordinates only. A MOL or SDF file's z is dropped as it
   opens in 2D, and only XYZ files reach the 3D viewer.
-- **Graphics contexts.** Every canvas is one, and only about 16 can be
-  live (`lib/core/limits.ts`). A workspace is one canvas.
+- **Graphics contexts.** Every canvas is one, and Meno keeps 16 live at
+  most (`lib/core/limits.ts`). A workspace is one canvas.
 
 The 3D viewer is simple enough that the canvas gets its own 3D layers,
 built the way the 2D layers are, rather than the viewer moved in as it is.
@@ -109,10 +109,11 @@ built the way the 2D layers are, rather than the viewer moved in as it is.
 | 1. 3D in the canvas | 3D molecules on the canvas, with everything the 3D viewer does, in the document and saved; the 3D tab retired. | 0, in part |
 | 2. 2D and 3D joined | A drawing to 3D (RDKit's ETKDG and MMFF, the drawn stereochemistry kept); the 3D structure rising out of the drawing where it is, turned to match it, and back; hover and choice shared; a 3D structure drawn as a formula by Meno's engine; conformer sets (overlaid, by energy, Boltzmann weights). | 1 |
 | 3. Calculation output | Geometries, optimisation paths, energies, vibrations (modes animated) and charges read from ORCA, Gaussian, xTB and CREST, attached to their molecule; later orbitals and densities (cube files) as surfaces. Each program's reader a plugin, added and removed online. | 2 |
-| 4. Text and PDF | Notes on the page; a PDF on the page (pdf.js): its pages, its text searched, its figures cut out. Notes built (#172, #177); PDFs, pictures and texts as things on the page specified in [PDF.md](PDF.md) (2026-10-09). | can run beside 3 |
+| 4. Text and PDF | Notes on the page; a PDF on the page (PDFium): its pages, its text searched, its figures cut out. Notes built (#172, #177); PDFs, pictures and texts as things on the page specified in [PDF.md](PDF.md) (2026-10-09). | can run beside 3 |
 | 5. Structures from PDFs | Figures read as structures, drawn beside the figure they came from and tied to it atom by atom, for the chemist to check and correct: a figure drawn with lines and letters read from PDFium's paths and letters, in Meno itself (part A, built 2026-10-11); a figure that is a picture, or any picture, read by a model, as a plugin - MolScribe or MolNexTR, as the chemist chooses - its trained model fetched with consent (part B, built 2026-10-11). Specified in [PDF.md](PDF.md), *Stage 5*. | 4 |
 | 6. Workflows that run | Workflow steps as items on the page, tied to molecules: RDKit conformers, xTB, CREST, and ORCA or Gaussian where installed. Jobs started, stopped and logged by the app. Procedures saved and shared with their results. Specified in [WORKFLOWS.md](WORKFLOWS.md) (2026-10-08): the workspace is the node editor. | 2, 3 |
 | 7. Depth | Analogue series, conformers and reaction steps arranged in depth; detail that changes with zoom. Tried as prototypes and shown before anything is settled. | 1 on |
+| 8. Conversations | A conversation with a language model as an object on the page: a card in a frame, its frame what it may see, its changes one undo step for the person to keep or discard, running left to the person. Designed in [CONVERSATIONS.md](CONVERSATIONS.md) (2026-11-04). | 6 |
 
 ## Stage 1, in order
 
@@ -154,8 +155,7 @@ for each topic (one pull request per dependent chain).
   centre, a bitmap at the resolution copied pictures are made at (Settings,
   Files; 600 dpi unless changed) - drawn in tiles of at most 2048 pixels a
   side, each its part of the view, so that a picture is as sharp as asked
-  however large (a GPU's canvas has its limits, and quietly draws a smaller
-  picture past them; until lane L11, 2026-10-11, the bitmap was held to
+  however large (until 2026-10-11, the bitmap was held to
   1600 pixels across for each 300 dpi). Only past 48 million pixels, as a
   copied picture is, is it made at a lower resolution. Its balls are as
   smooth as they are large in it - at 1200 dpi a ball can be hundreds of
@@ -229,7 +229,7 @@ Taken on 2026-10-03:
     the pointer swells a little on a spring. No frame: the maintainer
     asked for a highlight along the outline, in a modern way, rather than
     a rectangle round it.
-  - **Held still, a press selects the molecule** (0.32 s, as in 2D), the
+  - **Held still, a press selects the molecule** (a long press, as in 2D), the
     selection's outline spreading out from the atom pressed on as it is
     held; a drag from there moves it. A molecule selected moves when
     dragged, with all that is selected; one not selected turns. (Agreed
@@ -243,8 +243,11 @@ Taken on 2026-10-03:
   - **The selection's handle turns molecules in 3D** (agreed 2026-10-03;
     in the page's plane since 2026-10-24, the maintainer: the handle turns
     round, so it turns them round, as it does a drawing):
-    - selected alone, in the page's plane about the line of sight, in
-      steps of 15 degrees or freely after a pause, as a drawing turns:
+    - selected alone, in the page's plane about the line of sight, freely
+      and never in steps (the maintainer, 2026-11-11: a molecule in 3D has
+      no grid to keep to), the same with Shift, each about its own centre,
+      even with a drawing selected; selected with a drawing, they are
+      carried round with it, in its steps of 15 degrees:
       several as one body about their common middle - so that molecules
       placed together, a complex say, stay as they are to one another -
       which moves them; one about its own centre, where it stands. Either
@@ -487,10 +490,98 @@ Taken on 2026-10-13:
   drawn without a configuration is ringed on the drawing while Meno asks
   what to make: every stereoisomer it gives, one, or none for now. Each is
   made as a conformer set (RDKit's ETKDG, then MMFF94, MMFF94s or UFF as
-  chosen - UFF where MMFF has no parameters for the molecule) and comes
-  onto the page as a molecule in 3D, its frames the conformers, lowest
-  first. Of two enantiomers, one is made as the other's mirror image, so
-  the two have the same conformers and shares.
+  chosen - where MMFF has no parameters for the molecule, UFF in its place,
+  said in how it was made, or the molecule refused, as Settings' *Where
+  MMFF has no parameters* says: UFF unless chosen otherwise) and comes
+  onto the page as a molecule in 3D, its frames the conformers, each once,
+  lowest first (*The page's conformers*, below). Of two enantiomers, one is
+  made as the other's mirror image, so the two have the same conformers and
+  shares: the one whose identity with its configuration comes first is
+  made (lib/chem/identity) - a choice either way would be as right, this
+  one fixed so that a pair is always made alike - and the other's
+  conformers are its
+  reflections, each checked to have the configuration drawn - one whose
+  drawing Meno cannot read whole (a wedge it does not read, a label
+  written out, a ring bound to a metal through a star) made itself.
+- **The page's conformers** (the plugin boundary, 2026-10-31). The plugin
+  gives every conformer it made, as it made them (PLUGINS.md); the page
+  makes them its own (`chem/pageConformers`), in a worker of its own so
+  that the page goes on meanwhile (`chem/shownConformers`: 5000 conformers
+  of butyl octanoate kept as 3027 in 0.37 s there, no frame of the page
+  more than 40 ms apart, in the app on an Apple M4, 2026-11-01):
+  - **lowest first**, by their energies - or, where the molecule's are not
+    given, by those of the model they were optimised in (a lighter metal
+    standing in, η rings held), as the line that says how they were made
+    says ("ordered by the model's energies") - else in the order they came;
+  - **each once**, by Meno's one definition (WORKFLOWS.md, *The same
+    conformer*), each against those kept before it, how many set aside and
+    within what said with how they were made (*The same*, *The same
+    within*);
+  - **laid over the first** by their heavy atoms, turned and moved, never
+    reflected;
+  - **equivalent atoms in the first's places** (2026-10-15;
+    `chem/settle`): an embedding does not say which of a CH2's two
+    hydrogens, or of an isopropyl's two methyls, is which, so each
+    equivalent group - neighbours of one atom of the same symmetry class,
+    each the root of a branch joined to the rest through it, and a pendant
+    ring symmetric about its bond - is laid as it is in the first, by whole
+    branches: which way round they go first, then the fit in the parent's
+    frame. Where three bonds lie in a plane (an =CH2's), they go no way
+    round - a triple product under 0.05 Å³, where a tetrahedral centre's
+    are some 0.9 - and the fit alone decides. No heavy atom moves but as a
+    whole equivalent branch, and no whole-molecule symmetry is searched.
+
+  A workflow's entries are never so moved: its *Conformers* step gives
+  every one, as made, and its *Duplicates* and *Rank* steps keep each once
+  and order them, where asked.
+- **Conformers tried.** As many as the molecule needs - by the bonds in
+  it that turn, more where a ring of it can flip, ten where nothing turns
+  (PLUGINS.md, *How many conformers are tried is Meno's to say*) - or a
+  number of the chemist's own, up to 5000: *Conformers sought*, in
+  Settings, *Chemistry*, under *3D*, shown where the plugin chosen there
+  takes a number of tries. A workflow's *Conformers* step says its own,
+  this choice its default. Where the plugin's search takes draws, as many
+  as the molecule needs are asked in rounds, until a round brings no new
+  conformer within the chemist's window of the lowest, the most tried, or
+  ten minutes (PLUGINS.md, *As many as the molecule needs, in rounds*):
+  the window, *New conformers within*, Meno's 5 kcal/mol until the
+  chemist gives one (the maintainer's choice, 2026-11-08: a 3D structure
+  is made from fresh Settings with nothing asked first); its first round
+  and most tried are there too. How the rounds ended is said with how it
+  was made.
+- **As its search goes on** (2026-11-13, the maintainer's ruling). Asked
+  in rounds, the 3D structure is put on the page as soon as each
+  stereoisomer has had its first round, and its search goes on after:
+  each round's conformers join it as they come - each once, lowest first,
+  laid over what it first showed, so that it never turns as a lower one
+  is found - and its chip says *searching*, the line under *3D* says
+  *Searching for more conformers*, until the search ends as above (or at
+  the ten minutes its rounds may take, all of them together: the time
+  they ran, not the time they waited). Everything a round brings is
+  judged and made the page's off the page's thread (`chem/growing`):
+  the page never waits on it.
+  - The conformer shown stays shown as more come: where a lower one is
+    found before it, the chip moves on with it.
+  - What the search brings is the view's until it ends, then written
+    into the document once - as one step with the 3D structure's making,
+    where nothing was done between; else as a step of its own. Undo takes
+    back what it brought, then the structure.
+  - *Stop* ends it there, what came kept. Asking for another 3D structure
+    ends it as its round in hand finishes. A round that fails ends it,
+    what came kept, its *Rounds* line saying it failed - never taken for
+    *Stop* - and its error in Meno's log. An undo that takes the structure away, the
+    structure made again, or an edit of it meanwhile - an atom moved, a
+    conformer taken away - ends it,
+    nothing written: the edit is kept, never written over.
+  - The document holds its first round as soon as it is shown, its
+    *Rounds* line saying it was cut short - what it is, should the search
+    end with nothing more written - and the page shows it searching on.
+    Saved while it searches, the file holds what came so far, said cut
+    short; opened again, the search is not taken up again.
+  - Each stereoisomer's search is judged in a worker of its own, kept
+    until its search ends: at most one for each stereoisomer asked for.
+  - An atom map's 3D structures are made as before: their search is asked
+    to its end, the map waiting on it.
 - **Conformers kept** (2026-10-26). Those within 30 kcal/mol of the
   lowest are kept; those above are set aside. The window is set in
   Settings, *Chemistry*, under *3D*, and is said with how they were made
@@ -510,8 +601,8 @@ Taken on 2026-10-13:
   has no type for the metal - Ru, Os, Rh, Ir, W, Zr, Hf, Y - a lighter
   metal of its group stands in for its shape while its bonds are held at
   their own lengths, and no energies are given: the chip says so, and the
-  conformers are not weighted. They are ordered by the stand-in's energies,
-  as the line that says how they were made says. Before, UFF without terms for a
+  conformers are not weighted. The page orders them by the stand-in's
+  energies, as the line that says how they were made says. Before, UFF without terms for a
   metal pushed it 8 to 25 Å off its ring, or stopped.
 - **A ring bound to a metal through all its atoms** (η; 2026-10-17) is
   asked about as the CTfile's multi-centre bond - a bond from the metal to a
@@ -554,7 +645,22 @@ Taken on 2026-10-13:
   have. How it was made is said in one line with it, in the plugin's
   words (`method`: "ETKDG v3 + UFF; restrained: eta rings: metal-ring
   atom distances, rings ≥ 2.9 Å apart"), first under *How it was made*
-  where it is pointed at, and kept with it in a workspace. An eta complex's
+  where it is pointed at, and kept with it in a workspace. Shut, *How it
+  was made* takes no room: the card it is on is as wide as what it shows,
+  no wider (the maintainer, 2026-10-28). Opened, the card first grows to
+  it, wider and taller together in 160 ms, and only then do its lines fade
+  in, in 120 ms, as gently at first as at the end; shut, they fade out
+  first, the same way, and the card then shrinks back. It widens both
+  ways about its middle as *How it was made* opens, and back, as it does
+  opening at all (the maintainer, 2026-11-06; until then it widened to the
+  right only, the toggle at its left kept under the pointer). Its toggle
+  is a chevron alone, in the middle (the maintainer, 2026-11-06): pointing
+  down, turned up as it opens, it stays under the pointer as the card
+  widens about it; its name, *How it was made*, is said in the page's tip
+  as it is pointed at, shut.
+  A frames chip opens to its details the same way. Opened or shut again
+  part way, it goes back from where it is (the maintainer, 2026-10-29;
+  `theme/opening`). An eta complex's
   shape most of all is held, not modelled: a real geometry comes from
   optimising it - an xTB or DFT step of a workflow.
 - **A bond to a ring's centre is one stick** (eta; 2026-10-17): a molecule
@@ -603,7 +709,31 @@ Taken on 2026-10-13:
   value or on a bond in some frames as the molecule turned). As the
   molecule turns and the best way changes, a label glides round its atom
   to it, the shorter way, on a 70 ms time constant - never across the
-  atom, never in a jump (the maintainer, 2026-10-15).
+  atom, never in a jump (the maintainer, 2026-10-15). A picture of the
+  molecule - copied, saved as SVG, or with the drawing it is on - has
+  the same labels where the canvas puts them, kept clear in the same way
+  of the balls, the bonds, the measurements' values and each other
+  (`utils/molecule3d`, `stereoSpot`, which the canvas and the picture
+  share), as large as the drawing's in print. The canvas places them as
+  the picture does, by the one placing both share (`stereoSpotsAmong`):
+  at the drawing's own letter size, though it draws the letters no
+  smaller than its least size; in the order a picture takes them (a
+  molecule's atoms', then its double bonds'), not the order they came to
+  be shown in; with every ball as at rest, none swollen under the
+  pointer; and those going counted after those shown, clear of them and
+  of what is written over the molecule, but no obstacle to them or to
+  each other, so a label going stands where it would alone
+  (`stereoSpotsShown`). What counts as clear of the balls and bonds
+  is a share of the label's own size (a hundredth of its half height),
+  not a fixed length: a fixed 0.05 was nothing in the canvas's pixels and
+  much of a letter in the page's units, and a picture took another way
+  than the canvas. So a picture made now has each label where the canvas
+  has it, at any zoom. In SVG, and the PNG drawn
+  from it, they stand on a white halo as on the canvas; in an EMF the
+  letters are written without one. As in a picture of the drawing, a view
+  zoomed so far out that the canvas leaves them out does not leave them
+  out of the picture (the maintainer, 2026-10-21: in every picture, as
+  the canvas shows them).
 - **Measurements' values keep apart.** Each value stands on its point
   while that is clear of the values before it; where another is in its
   way it moves off - square to a distance's line, out from an angle's
@@ -619,7 +749,8 @@ Taken on 2026-10-13:
   Drawn otherwise since - atoms, bonds or wedges, not where they are - the
   molecule stays as it is and says so under its frames, with *Make
   again*, made where it stood. What the drawing leaves open is made as
-  the molecule had it (so an (S) stays (S)), and Meno asks only about
+  the molecule had it (so an (S) stays (S), and an (E) (E): 2026-11-04,
+  before which a double bond came back as the first way it could go), and Meno asks only about
   stereo that is new. An undo brings the molecule back as it was turned.
   *Turn like the drawing* is in its menu.
   Pasted with its drawing, it is tied to the pasted drawing.
@@ -659,16 +790,19 @@ read and attached to its molecule. Agreed with the maintainer on
   no reader added reads says which would. Which readers there are is
   Meno's own list for now. A list fetched online needs a way to trust it
   (signing), and comes later.
-- **The first reader is cclib** (BSD-3), which reads ORCA, Gaussian, xTB
-  and others. It is installed into its plugin's environment as a
-  library. Meno does not copy its code, and a reader Meno writes itself is
-  written from the programs' outputs and documentation, not from cclib's
-  parsers.
-- **Readers are alike, and several can read one output.** Every reader
-  installed that reads a kind of output reads it, and what they find is
-  put together: an NBO plugin, say, adds NBO's analysis to what cclib read
-  from the same Gaussian output. No reader is set above another (the
-  maintainer, 2026-10-05).
+- **Each program's output is read by that program's own plugin**
+  (2026-10-31): the ORCA interface ORCA's, the Gaussian interface
+  Gaussian's, the xTB plugin xtb's, each written from its program's
+  outputs and documentation.
+  cclib (BSD-3) is a plugin of its own, installed into its environment as
+  a library, giving its reading of an output where the chemist chooses
+  it; Meno copies none of its code.
+- **Readers are alike, and several can read one output.** The reader of
+  a kind and each chosen to read it as well read it, and what they find is
+  put together: cclib's reading, say, beside what the Gaussian interface
+  read from the same output. No reader's results are set above another's
+  (the maintainer, 2026-10-05); the program's own plugin is the one
+  chosen, by default, to give the geometries and what the calculation was.
 - **Each reader's results are its own.** A result belongs to the reader
   that gave it, and its name is that reader's own: names are never
   matched across readers, and two readers' results of the same name are
@@ -678,7 +812,9 @@ read and attached to its molecule. Agreed with the maintainer on
 - **Where readers overlap, the chemist chooses** what Meno keeps one of:
   Settings lists, for each kind of output, the installed readers that read
   it, and the one chosen gives the geometries and what the calculation
-  was, its results coming first - or else the first in Meno's order. What
+  was, its results coming first - or else the plugin whose own program
+  wrote it (PLUGINS.md, *Several plugins, one role*), or else the first in
+  Meno's order. What
   a reader finds of atoms is kept only where its atoms are those of the
   geometries, in the same order.
 
@@ -723,17 +859,35 @@ Each result says what it belongs to, and Meno puts it there:
 - **A value says what quantity it is,** in Meno's unit for it - an energy
   in hartrees, a charge in e, a spin population in e (signed, as a charge
   is), a wavenumber in cm⁻¹ (an imaginary one
-  negative), a length in ångströms, a dipole in debye, a number, a text -
-  and Meno writes it, the same way whichever plugin gave it. Any other
-  gives its unit, and is written with it.
+  negative), a length in ångströms, a dipole in debye, a number, a text,
+  a symmetry - and Meno writes it, the same way whichever plugin gave it.
+  Any other gives its unit, and is written with it.
+- **A symmetry is in standard notation** (2026-10-31): a point group
+  (C2v, D3h, C∞v, D∞h) or a Mulliken symbol (A1, Bu, B1g, A', E'', Σg,
+  Πu) - a value of a symmetry, a list's column of them, and the
+  thermochemistry's point group. A reader writes its program's own
+  spellings in it (a word for a Greek letter, a letter for ∞); Meno puts
+  the case right whatever it was printed in - the first letter upper, the
+  rest lower: "c2v", "C2V" and "C2v" are one - for display and for every
+  comparison, a barrier's of its two sides' point groups among them.
 - **A charged molecule's dipole is taken about its centre of mass**
   (2026-10-14). An ion's dipole depends on the point it is taken about -
   H3O+ moved 6 Å from the origin its program took it about reads 28.9 D
   there, 2.1 D about itself - and programs take it about different points
   (the origin of the coordinates, the centre of nuclear charge, the centre
-  of mass). So the plugin takes it again about the centre of mass of the
-  geometry it is of, and calls it *Dipole moment about the centre of
-  mass* wherever it is shown. A neutral molecule's is the program's own.
+  of mass). Its reader gives it as the program printed it, with its
+  components (`vector`, in debye) and the point it was taken about
+  (`origin`, in ångströms), and the centre of mass where the program
+  printed one (`centre`); and the output gives each atom's mass where the
+  program printed them (`masses`, daltons). Meno takes it again about the
+  centre of mass (2026-10-31: Meno's rule, once kept by each reader) - the
+  one printed, else the one those masses give at the output's last
+  geometry, else the one the elements' standard atomic weights give
+  (NIST's, lib/chem/isotopes: an interval's midpoint, an element with no
+  stable nuclide its listed nuclide's mass) - and calls it *Dipole moment about the centre of mass*
+  wherever it is shown, its origin then that centre, so that a workspace
+  read again takes it nowhere else. A neutral molecule's is the program's
+  own; so is a charged one's where there is no centre to take it about.
 - **A list's row can point at atoms, a frame or a motion.** Pointed at,
   its atoms are marked; chosen, its frame is shown, or the molecule moves
   in it. Vibrations are a list whose rows move the molecule - no arrows
@@ -741,6 +895,53 @@ Each result says what it belongs to, and Meno puts it there:
   masses, IR intensities and Raman activities where it gives them, and
   no empty column where it does not (2026-10-14). These are what Meno can do with a row, and more come
   as Meno learns them: a surface, for an orbital's row.
+- **A list that opens on a row keeps the rows about it** (2026-10-31):
+  the ten up to that one, it among them, and the ten after - an orbitals'
+  list, given in full and opening on the LUMO, keeps the ten virtual
+  orbitals from it and the ten occupied below - and says so where it
+  shows them: "rows 22–41 of 50". Read again, it is kept as it was.
+- **Orbitals are listed by Meno** (2026-11-01; `lib/calc/orbitals.ts`). A
+  reader gives each orbital as its program does - its spin (of both, a
+  restricted calculation's, or alpha or beta), its energy in hartrees,
+  its occupation, its symmetry as printed, and where it can, its surface
+  as a promise - all of them, in the program's order; or, where the
+  program printed only those about the frontier and left the rest out
+  between them (xtb), those alone, each with its number as the program
+  counts them (2026-11-02). Meno makes the lists:
+  - one for each spin, from the highest down - by energy, where every
+    energy is given, as a program may write them otherwise (a Molden file
+    by symmetry block) - its energies in electronvolts and its symmetries
+    where any is given;
+  - the HOMO the highest orbital with an electron in it, named only where
+    every occupation is whole and every energy is given; the others named
+    from it ("HOMO−1", "LUMO+2") - by their numbers where they have them,
+    so that one printed past those left out is named as it is, never by
+    its place among those given, and none left out is made up - the list
+    opening on the LUMO, or on the HOMO where no virtual orbital is given;
+  - where no HOMO can be named - natural orbitals, fractional and with no
+    energies - each by its number, with its occupation;
+  - the HOMO-LUMO gap of a restricted calculation with a LUMO - the one
+    after the HOMO, by number where they are numbered.
+  A list a reader still gives itself, under the same name, is shown as it
+  gave it. Of a job with excited states, the orbitals a reader gives are
+  the SCF's - the ground state's - and so is the gap, labelled as any
+  other's: nothing on it says "ground state".
+- **Surfaces: one place for their grids and values** (2026-11-01;
+  `lib/calc/grids.ts`). A grid Meno has a reader work out lies 4 Å past
+  the atoms each way, its points 0.2 Å apart - farther apart, alike each
+  way, only where it would have more than 729,000 points, as many as the
+  readers' own grids had before at 90 to a side, so that a surface takes
+  no longer to work out and send (`GRID_LAID_MOST`).
+  Meno lays it about the atoms of the row's frame and gives it to the
+  reader as it asks for the promise (`grid` in `ask`); the reader works
+  its values out there. A surface is drawn first at 0.05 a.u. for an
+  orbital - chosen, so that its lobes show apart - and at 0.002 a.u. for an
+  electron density - a value in common use for the contour taken as a
+  molecule's outer surface (such contours: Bader, Carroll, Cheeseman and
+  Chang, "Properties of atoms in molecules: atomic volumes", J. Am. Chem.
+  Soc. 1987, 109, 7968-7979); the chemist moves it on each. A grid says
+  which it is (`quantity`), else its signs do. A value a program was run
+  with (NCIPLOT's RDG) is the program's, and kept.
 - **What the chip's line says:** a plugin ranks which of a molecule's
   results it says; Meno fits as many as the line holds, in that order,
   after what the calculation was and its energy. One ranked 0 - how the
@@ -752,15 +953,17 @@ Each result says what it belongs to, and Meno puts it there:
   energies not read" where an excited state was optimised, whose energies
   at each geometry are not the ground state's that the output also gives
   (2026-10-14).
-- **Of a job with excited states, a dipole, charges and the HOMO-LUMO gap
-  say which state they are of** (2026-10-22): "Dipole moment, ground
+- **Of a job with excited states, a dipole and charges say which state
+  they are of** (2026-10-22): "Dipole moment, ground
   state", "Mulliken, excited state 1" - as the output says which density
   they were worked out from (Gaussian's "Population analysis using the SCF
   Density"; ORCA's dipole block's Method and State, and the root heading its
   relaxed density's population analysis). Before, the same words stood for
   either: Gaussian's TD optimisation gave the ground state's at the excited
   state's geometry, ORCA's its root's. Where the output does not say, they
-  are left out. The orbitals are always the ground state's.
+  are left out. The orbitals are always the ground state's (the SCF's), and
+  so is the HOMO-LUMO gap Meno works out from them: since Meno lists the
+  orbitals itself (2026-11-02), the gap no longer says "ground state".
 - **No colouring.** Results are seen by pointing at them; the look stays
   as it is.
 - **Grouped and named by the plugin:** "Partial charges", "NBO".
@@ -776,14 +979,8 @@ given with where its output was, to be asked for from there.
 
 ### Tests
 
-No program's output is committed (the maintainer, 2026-10-05). Gaussian's
-carry Gaussian's own copyright notice, and the rest are kept out the same
-way. Sample outputs - small ones from cclib's repository, ORCA's, xTB's
-and Gaussian's - are kept on the developer's machine, in a folder git
-ignores. The tests that read them run where they are there and are
-skipped where they are not, as in CI. What a reader hands back is Meno's
-own plain data, so CI tests Meno's side of it - opening, saving, showing -
-with that data written by hand.
+No program's output is committed (the maintainer, 2026-10-05); CI tests
+Meno's side with data written by hand.
 
 ### In order
 
@@ -805,13 +1002,15 @@ with that data written by hand.
 Stages 3a to 3c, built in #143 and checked on a Mac and on Windows on
 2026-10-05.
 
-- **Readers.** cclib (1.9rc1) is the first. Settings, *Calculation
-  readers* (now *Plugins*, the choice where readers overlap in *Files*),
-  adds it - asking first for the network - and takes it away again, its
-  environment and its record with it. A kind of output is told by what its
-  file starts with. Where readers overlap, every one added reads the
-  output and each one's results are kept, its own; the one chosen for that
-  kind gives the geometries and what the calculation was.
+- **Readers.** A program's output is read by that program's own plugin;
+  cclib (1.9rc1) gives a reading of its own where it is chosen. Settings,
+  *Plugins*, adds a reader - asking first for the network - and takes it
+  away again, its environment and its record with it; *Files* holds the
+  choice where readers overlap. A kind of output is told by what its file
+  starts with. The one chosen for that kind - the program's own plugin, by
+  default - reads the output and gives the geometries and what the
+  calculation was; each chosen to read it as well does, and each one's
+  results are kept, its own.
 - **Opening an output.** It opens on a canvas tab of its own, its last
   geometry shown, an optimisation's steps as its frames. With no reader
   added that reads it, Meno says which to add; an output with no geometry
@@ -820,7 +1019,7 @@ Stages 3a to 3c, built in #143 and checked on a Mac and on Windows on
   geometries, each one's energy, what the calculation was - has a form of
   its own; everything else is a result belonging to the molecule, each
   frame, each atom, pairs of atoms or a list, its values quantities Meno
-  writes or values with their own unit. cclib gives partial charges and
+  writes or values with their own unit. A reader gives partial charges and
   spin populations, thermochemistry, the dipole moment, the HOMO-LUMO gap,
   each step's RMS gradient, the vibrations and the orbitals about the
   frontier.
@@ -855,13 +1054,13 @@ Orbitals and densities drawn as surfaces. Agreed with the maintainer on
 - **Fetched when first needed, both of them.** uv and pixi are each
   downloaded the first time an environment needs it, the version and its
   hash pinned in Meno, under the network's consent for that environment.
-  Neither is bundled: either alone does nothing without the network, and
+  Neither is bundled: either alone needs the network, and
   bundled, every update of Meno carried it again (uv was 37 MB of a 54 MB
   app).
 - **uv** makes the environments PyPI fills, as now: the chemistry worker's
   and cclib's.
-- **pixi** makes those that need conda-forge, which has builds PyPI has
-  not - PySCF for Windows among them - from conda.anaconda.org (free of
+- **pixi** makes those that need conda-forge's builds - PySCF for
+  Windows among them - from conda.anaconda.org (free of
   Anaconda's terms, which cover its own channels). A conda environment
   is started with its activation, as Windows needs for its libraries.
 
@@ -875,7 +1074,7 @@ Orbitals and densities drawn as surfaces. Agreed with the maintainer on
   cubes, worked out off the main thread), going over to another as the
   value changes. An orbital's two phases in two colours, a density's in
   one, seen through - a lobe behind another, of either phase, showing
-  through it as it lies (since lane L11, 2026-10-11: before, the positive
+  through it as it lies (since 2026-10-11: before, the positive
   phase was laid over the negative wherever they crossed on the screen).
   A picture made of the molecule - copied or exported - shows the surface
   as the canvas does, and is as large as its lobes reach (before, pictures
@@ -897,10 +1096,17 @@ Orbitals and densities drawn as surfaces. Agreed with the maintainer on
   download - under the same contract as the plugins, and as easily taken
   out. A cube's molecule comes with its grids as a list of surfaces.
 - **The PySCF plugin** (Apache-2.0), in a pixi environment: orbitals and
-  densities worked out on a grid from a molden file, or from an output
-  that holds the basis set and the orbitals' coefficients - read by cclib,
-  written as molden by cclib, worked out by PySCF - each grid a promise.
+  densities worked out on a grid from a Molden file, read and worked out
+  by PySCF - each grid a promise.
   No GPL library (iodata, gbasis).
+- **WFX files**, read by Meno itself: each orbital worked out from the
+  file's own primitives (`lib/calc/wfx.ts`).
+- **Gaussian formatted checkpoints**: the Gaussian interface gives the
+  file's basis and orbitals whole, in Meno's form of a wavefunction, and
+  Meno works out each orbital on its grid itself - once it has found the
+  orbitals a list offers orthonormal over that basis, which catches a
+  basis converted wrong in a molecule, though not every such mistake
+  (docs/PLUGINS.md, *Gives a wavefunction whole*).
 
 ### In order
 
@@ -931,9 +1137,9 @@ Orbitals and densities drawn as surfaces. Agreed with the maintainer on
   styles in 3D*).
 
 Planned on 2026-10-14 from the maintainer's decision, to be built in one
-pull request (`agent/style-one-per-workspace`): L8 the change of style and
-what it converts, hunter C the style's place and its card, hunter A the
-molecules in 3D.
+pull request (`agent/style-one-per-workspace`): the change of style and
+what it converts, the style's place and its card, and the molecules in
+3D.
 
 - **One style to a workspace.** The page's unit is the bond. A bond is 1.8
   units (`NOMINAL_BOND_LENGTH`) in every style, and the style says how long
@@ -972,6 +1178,13 @@ molecules in 3D.
   to undo, eased. A workspace opened in another style is offered it too:
   the card is opened to change its styles (`settingsDiffer`,
   `DocumentStylePanel`).
+- **Opened, drawn in its own style at once** (2026-11-05). A workspace's
+  3D styles come with its molecules as it opens: with nothing drawn in 3D
+  before they came, there is nothing to go over from, and its molecules
+  are made in them at once - not made in the style the canvas had and
+  eased over, each made again at every step and its hollows worked out
+  twice (Workspace/style3d `styleGoesOver`). A change of style on a
+  canvas with molecules on it is eased as before.
 - **A change of style is one command,** from the canvas's Drawing style
   card. It sets the style and converts the page with it, so that every
   object on the page keeps its printed size and its place, and only the
@@ -990,7 +1203,7 @@ molecules in 3D.
   | A shape | x0, y0, x1, y1 | times k; its corners' radius and its line's width in pt are kept - a line as wide as the bonds' as wide as the new style's |
   | Ink | its strokes' points | x and y times k (not the pressure); its width in pt is kept |
   | A workflow step | x, y | times k |
-  | A workflow set | its frame | fitted round what it holds once that has moved (`fitSets`) |
+  | A workflow set | its frame | fitted round what it holds once that has moved (`framesFitted`) |
   | A print frame (later) | its frame | times k |
 
   What is given in points - words' sizes, shapes' weights, ink widths, a
@@ -1054,7 +1267,7 @@ molecules in 3D.
   after `solidOf` in 3D that never enters the document's units, Å readouts
   or writers. A change of style keeps each object's magnification: the
   conversion moves an object's middle and leaves its factor alone.
-- **The functions.** `restyle.ts` (L8): `bondPtOf(style: StyleChoice)`, and
+- **The functions.** `restyle.ts`: `bondPtOf(style: StyleChoice)`, and
   `restyled(parts, k, about = { x: 0, y: 0 })`, which converts whatever
   page parts it is given - a whole document or a copy's parts, the fields
   of `WorkspaceDocument` that are there - and gives them back unchanged
@@ -1074,11 +1287,11 @@ molecules in 3D.
 ## Magnified display
 
 Planned on 2026-10-16 (agreed by the maintainer on 2026-10-14 as a special
-state, for 2D and 3D alike; the command centre's defaults), and approved
-with its three choices as proposed on 2026-10-16: the magnifications
-below, a 3D molecule made from a magnified drawing taking its
-magnification, and a selection's objects each about its own centre.
-Molecules in 3D built first (`utils/magnified`), then structures in 2D.
+state, for 2D and 3D alike), and approved with its three choices as
+proposed on 2026-10-16: the magnifications below, a 3D molecule made from
+a magnified drawing taking its magnification, and a selection's objects
+each about its own centre. Molecules in 3D built first
+(`utils/magnified`), then structures in 2D.
 
 **What it is.** A structure in 2D, or a molecule in 3D, may be *shown* larger
 or smaller than it is - 100 % being its true size - without changing the
@@ -1095,10 +1308,10 @@ object is shown.
     workspace's style with every length k times over (layoutStructures
     `magnifiedOptions`): lines, labels, wedges, marks and the gaps between
     them all scale together, as a zoomed copy of it would. (Planned at
-    first as true places drawn through a transform; held as shown instead,
-    with the command centre's agreement on 2026-10-16, so that the pointer,
-    the selection, snapping and the page's boxes, which read where atoms
-    are, need nothing new.) **All chemistry reads it at its true size**
+    first as true places drawn through a transform; held as shown instead
+    on 2026-10-16, so that the pointer, the selection, snapping and the
+    page's boxes, which read where atoms are, need nothing new.)
+    **All chemistry reads it at its true size**
     (lib/chem/magnified2d `atTrueSize`, in `writeMolfile`): MOL, SD and
     RXN files, a copy for another program, what a plugin or a job is
     given and so a workflow's inputs, the drawing a 3D structure rises
@@ -1192,9 +1405,145 @@ pointer's reach are in the screen's own units and do not change. Pictures
 made of the drawing - exported, copied, rendered, a talk's - are drawn at
 their own sizes, whichever is chosen.
 
+## Drawn by WebGL
+
+What is placed on the page is drawn by WebGL, with the page, rather than
+laid over it in HTML (LOOK.md, rule 7): a page of 283 molecules in 3D held
+some 14 700 elements in their chips alone, and laying them out again at
+each frame of a zoom held it to a frame every 0.6 s (2026-11-05). What draws
+it, in `features/Workspace/pageGl/`:
+- **Its lengths** (`units`): in page pixels - a screen pixel at the zoom a
+  canvas opens at (utils/pageScale `PAGE_PX`) - so all of it grows and
+  shrinks with the page, its lines too, never thinner than one device
+  pixel. A control - a port - is its page pixels too, no more than its
+  share of what it belongs to, and never under its least on the screen
+  where the page is far (`Control`; 2026-11-11, the maintainer: a port's
+  dots were far too small zoomed in).
+- **Boxes and rings** (`PageShapes`): one instanced quad each, its shape
+  worked out from its distance to its edge in the fragment shader -
+  rounded corners, a line inside the edge as a CSS inset ring is, solid or
+  dashed - so that thousands are one draw call, smooth at any zoom; the
+  zoom told to the shader each frame, nothing packed again for it. They
+  are packed into the arrays they had while those have room; where more
+  come than those hold, the geometry is disposed before its new arrays
+  are put in, so that every shape is drawn, not only as many as it was
+  first drawn with (`fillShapesGeometry`).
+- **Words** (`PageTexts`): in IBM Plex Sans, the files the app's HTML is set
+  in - Regular from its TrueType file and Medium from IBM's WOFF of it, the
+  forms troika reads - in batches (components/textBatch); each placed by
+  its anchor and cut with an ellipsis past its width, how wide measured as
+  the app's text is measured (`textWidth`), so that what holds it is sized
+  in the same render it is drawn.
+- **Icons** (`PageIcons`): the steps' kinds and states and a warning, drawn
+  once into an atlas as the page's HTML draws them (workflow/icons,
+  Heroicons) and tinted as each is drawn; a part with icons of its own
+  adds them (`addPageIcon`).
+- **What the pointer is over** (`PageHits`, `usePageHits`, `useHitAt`): each
+  part names the places that take the pointer - a rectangle, a circle at
+  the size a hand takes it, a band of screen pixels along a frame's edge -
+  and they are asked before anything else on the canvas, the topmost
+  first, as the page's HTML was over the molecules and the drawing: a press
+  or a move on one is its own. Among circles that both reach the pointer,
+  the nearest; a frame's corner over the sides it joins. A drop asks the
+  same (`useHitAt`) where HTML asked `elementFromPoint`.
+- **Filled shapes** (`PagePolys`): a few polygons - a chip's energy
+  profile through many frames - triangulated again as they change.
+- **What is placed by what moves** (`PagePlaced`, `usePlaced`): a
+  molecule's or a stack's frames chip, hanging below what it is of as that
+  turns - every one drawn at once, each where its anchor is at each frame,
+  drawn again only where one moved, came or went. Its words go with the
+  page's below the size they are read at; one that works the page goes
+  while a talk is given (docs/PRESENTING.md); one opened is drawn over all
+  the rest of the page's WebGL - its neighbours' words, R and S beside
+  their molecules - as its HTML was laid over the rest.
+- **The frames chip** (`liveChip`, components/useFramesChip): shut, pointed
+  at and opened - a set's bars, on whole device pixels, or one profile
+  through a long run of frames; its slider; what its calculation was and
+  found; how it was made, folded under a chevron - laid out as its HTML
+  was, in page pixels, and opened the same way (theme/opening). A press on
+  its bars or its slider shows the frame under it, a drag goes through
+  them. Its words are copied from its menu (Copy, Copy energies), as no
+  words on the page are selected; opened, the workflow's ports under it
+  are not drawn. What goes under it - Make again, a list of results - is
+  HTML still, a control, as far down as the chip is tall.
+- **A conversation's card** (`conversationCard`, `conversationCardParts`,
+  drawn by `conversation/ConversationFrames`): what was said laid in
+  lines at the card's width, by the same rules as the other words on the
+  page - a question in a light ground against the right, a reply's
+  paragraphs, lists and `inline code` (Plex Mono), a tool call on one quiet
+  line, and, last, the changes waiting with their Keep and Discard chips -
+  its total height, and the part of it a scroll offset shows. The card lies
+  against its frame's right edge, 432 page pixels wide (9 bonds), the
+  frame's height less its padding; the ask field at its foot (`askField`,
+  typed into a real field unseen: `PageAsk`) takes 44 page pixels at
+  least, growing to four lines, and the history the rest. A line, a ground or a
+  chip at an edge that more lies past fades over one line as it nears it,
+  never cut in two; its words fade with the page's, and too small to read
+  it says its turns and state alone. It is scrolled by a track, *Earlier*
+  and *Latest* chips and keys (`conversationScroll`), never by the wheel:
+  no region of the page hears one, so a wheel over the card zooms. The
+  frame always holds the card (`framedForCard`: at least `FRAME_LEAST`, its
+  top and right edges kept, as it is put down, sized and opened, drawn
+  eased to it as a set's frame is - `useShownFrames`); the card's room is
+  never scope (`inScope`), what a conversation puts down goes left of it
+  (`placingFrameOf`), and a structure, molecule in 3D or picture let go
+  with its middle on it is eased off, to the left, in the gesture's step
+  (`workflow/fitFrames` `cardsCleared`, part of `framesSettled`).
+- **A workflow** (components/Workflow2D): its steps' cards shut
+  (`cardFace`) - who does it, what and how, its state in words and an icon
+  turning while it runs, a log's last line in Plex Mono and a bar of how
+  far its jobs are; zoomed out where its words are too small to read, in
+  two more bands (`pageGl/cardBands`: by the page's scale, a screen pixel
+  to a page pixel): from three quarters down to a quarter it is *named* -
+  its box at the page's size, its kind's icon and its name on one line
+  (the name 11 screen pixels high at any zoom, cut inside its box, clear
+  of its mark), a mark of its state at its top right (running
+  turns, in Meno's colour; done is filled, in the quiet ink; waiting is
+  hollow; failed is in the alert tone with how many of its entries failed,
+  where it counts them) - and none of its summary, state words, log line,
+  bar or port names; under a quarter it is *marked*: its box tinted by
+  its state, the mark, and its name only where it fits whole inside its
+  box and clear of the mark at both sides - never cut short, never over its
+  box's edge or its mark.
+  Where two names would overlap, the later in reading order fades out
+  (the earlier staying) and the page's tip says it as its card is
+  pointed at. The bands switch with a little hysteresis (5 % each way) and
+  fade over Meno's quick time. A set's tab follows the same rule: its name,
+  11 screen pixels high, stands in for its words (cut inside its frame's
+  width, a tab's inset from each side, and raised over its frame's top where
+  it, and a gap of three screen pixels under it, is higher than its tab's
+  band - wholly above it, far off - never down over, nor touching, what
+  the frame holds, and left out where it would lie over another
+  frame or a card) - laid out as their HTML was, and drawn on under a card
+  opened (HTML still, the one HTML on the page), which alone fades in over
+  it and out off it, so the card is never paler as it opens or shuts; what
+  its card says that a chemist copies - a failure, a program's line -
+  copied from its menu. Its sets' frames and tabs (`FrameTabs`): the tab
+  drags it (its frame is its members' room, never sized by hand), two presses on a chemist's
+  set's tab write its name anew where it stands (`PageField`): drawn in
+  its own size and weight, in a white box, with its caret, what is
+  selected and what an input method is composing underlined; typed into a
+  real field laid unseen at the caret, so that keys, the input method's
+  candidates beside the words, pasting, undoing and a screen reader are
+  the system's own - Enter or a press away keeps it, Escape leaves it as
+  it was; its name, 11 screen pixels high, stands in for its words where
+  they are too small to read (a conversation's tab: its icon); a tab's words start as far from the frame's left edge
+  as its icon stands from its top, a conversation's and a set's alike
+  (`TAB_INSET`); what a set holds (a summary, a table, a chart) is
+  HTML still, inside its frame. Its ports (`ports`): rings that grow with the
+  page, never under 5 screen pixels, lit where a wire being drawn may join them, a wire let
+  go on one found by its shape. And its small marks (`workflowMarks`):
+  what just joined a set or left it, an Enumerate step's positions, a
+  structure's number with how it was made in the tip. Frames under cards
+  under chips under ports, all over the molecules, as their HTML lay.
+- **The hover tip** (components/PageTip): not placed on the page, it may be
+  HTML (LOOK.md, rule 7) - one for all of the page's WebGL: what a mark
+  says, why a chip's bar did not finish, under what it is about or over
+  it, kept where it can be seen.
+
 ## Styles in 3D
 
-Built in lane L5 on 2026-10-10. The maintainer's ruling: a molecule in 3D
+Built on 2026-10-10. The maintainer's ruling: a molecule in 3D
 has two looks, a thin one and a thick one, and goes from one to the other
 in a single step - seeing a molecule as ball and stick and as
 space-filling side by side is better science than either alone.
@@ -1329,8 +1678,8 @@ space-filling side by side is better science than either alone.
 - **Settings' page** (the maintainer, 2026-10-15). At the top, two slots,
   Primary and Secondary, each with its molecule drawn live and turnable;
   below them every other style, built in and the user's own, each with a
-  still picture (drawn once, a frame apart, all with one renderer - a
-  context for each took the live ones' away). A style dragged onto a slot
+  still picture (drawn once, a frame apart, all with one renderer). A
+  style dragged onto a slot
   takes it, the one there going back to the list; one slot's dragged onto
   the other, the two change places - the card following the pointer, and
   each card going to its new place eased, not jumping. A slot's molecule
@@ -1340,9 +1689,13 @@ space-filling side by side is better science than either alone.
   molecule, and only its name moved it). A slot's molecule turns by itself
   all the time, slowly - a turn in about half a minute, about the screen's
   upright - but while it is turned by hand or coasting from it, taking up
-  its own turn again eased after; nothing is drawn for it while the page is
-  out of sight. A card carried has the hand's pointer all the way, over the
-  other slot's molecule too. A press, or Enter,
+  its own turn again eased after; its own turn is drawn 30 times a second,
+  on every other of the screen's frames at 60 Hz, every slot in the same
+  frame, and turning it - by hand or by itself - draws only the frame,
+  nothing round it; nothing is drawn for it while the page is out of sight,
+  and with no slot seen, nothing keeps time for it either. A card carried has the hand's pointer all the way,
+  over the other slot's molecule too; the window left, or Escape, puts it
+  back where it came from. A press, or Enter,
   sets a style below; a right-click, or the menu key, offers Use as
   primary, Use as secondary, Duplicate, Export style… - and, for the user's
   own, Rename and Delete. A built-in style's changes are kept apart,
@@ -1402,13 +1755,36 @@ space-filling side by side is better science than either alone.
   sticks' colouring, as the look or a setting changes.
 - **A shader that does not compile.** Meno's own shaders - lines on the
   balls, the line round them, sticks that bend - each name themselves
-  (utils/menoShader). One that a graphics card will not compile is said in
+  (utils/menoShader). One that does not compile on a graphics card is said in
   Meno's log, with its name and the card's own words for what was wrong
   (nothing of the document), and from then on is drawn as its plain
   three.js material: a molecule loses a line or a shade, never its atoms.
   A test reads each of them for a word GLSL keeps back - the one that
   once made every ball vanish was `half` - and for brackets that do not
   close.
+- **Shaders made ready.** The shaders a molecule in 3D is drawn with are
+  made as the page starts, once it is idle, not when the first molecule is
+  put on it (components/WarmShaders3D): a molecule of no account, unseen
+  and far off the page, drawn in the workspace's style, is compiled in the
+  background once its colours are given, and again as the style changes.
+  It stands under the page's own lights, which are there with no molecule
+  in 3D on the page as well, and is compiled once a frame of the page's
+  has run with it: a shader is made for the lights it is lit by and for
+  whether the key light casts shadows, so one made without them would
+  not be the one the first molecule is drawn with.
+  It is kept, so its shaders are kept: the first 3D structure made never
+  waits a frame on a shader being made for it. Being kept, it does at each
+  frame what a molecule on the page does at each frame (it is never drawn):
+  the work of a molecule of nine atoms.
+  A drawing's are made ready so too (components/WarmShaders2D): its bonds
+  and their caps have their colours from the start, white until a drawing
+  gives them its own (components/instances `whiteInstances`) - a shader is
+  made for whether an instanced mesh has colours of its own, and they came
+  only with the first drawing - and what comes only with a drawing, a
+  label and a plain disc, is made unseen and far off the page once the page
+  is idle: the label set as the page's labels are, in its typeface, and
+  compiled once its letters are set, again as the typeface changes. Its
+  typeface is read then too, before any label asks for it.
 - **Pictures as the canvas.** A copied or exported picture of a molecule
   in 3D draws its style's colours, lines and depth fade as the canvas
   does - its lines in proportion to the molecule at any size, being in
@@ -1435,7 +1811,7 @@ space-filling side by side is better science than either alone.
 
 ## Depth in 3D
 
-Built in lane L11 on 2026-10-11, the maintainer choosing each way from
+Built on 2026-10-11, the maintainer choosing each way from
 pictures of it beside the others: a molecule's shape should read at a
 glance, in the canvas where chemists look at molecules all day, without
 slowing it - and in the pictures made of it.
@@ -1467,7 +1843,7 @@ slowing it - and in the pictures made of it.
   molecule moves, turns or changes - fitted round every molecule, so
   that panning and zooming leave it, until that would make it coarser
   than the screen's pixels, when it is fitted round what is in view.
-- **Shade worked out on the screen** (lane L11, 2026-10-11, the
+- **Shade worked out on the screen** (2026-10-11, the
   maintainer finding it the prettier of the two): each style's *Shade in
   hollows* is *None*, *Per atom* (the first) or *Screen-space* - *None*
   the one way to have no shade, *How deep* beside it greyed out while it
@@ -1478,9 +1854,9 @@ slowing it - and in the pictures made of it.
   canvas's resolution, over the molecules alone - their balls, sticks and
   ribbons drawn once more into a pass of their own - and laid over them
   by a sheet multiplying what is under it, one where no molecule is, so
-  the page is drawn exactly as it was. A molecule shaded per atom still
-  hides what is behind it in that pass, its own weight none. It shows a
-  faint grain close up, as screen-space shading does. Going over to it,
+  the page is drawn exactly as it was; close up, this shade is finely
+  grained. A molecule shaded per atom still
+  hides what is behind it in that pass, its own weight none. Going over to it,
   or from it, the one shade gives way to the other.
 - **Very large drawings** (the maintainer's choice, 2026-10-11): past
   twenty thousand atoms on the canvas, drawn lighter - no shadows, and
@@ -1494,13 +1870,34 @@ slowing it - and in the pictures made of it.
   ribbons stand for (the maintainer's choice, 2026-10-13), so a large
   protein in ribbons is drawn lighter as it would be as atoms; those a
   look leaves out otherwise (hydrogens on carbon, water) are not.
-  Its balls are drawn with as many segments as their size on the screen
-  wants (the maintainer, 2026-10-13): the style's 32 from about 40 pixels
-  across, down to 8 under about 8 - within about 0.3 of a pixel of a
-  circle at each, so that the change is not seen; more at once as balls
-  grow, fewer once the zoom has settled (`utils/largeDrawing`
-  `ballSegmentsFor`). A box of 33 000 waters (100 000 atoms) turned at
-  183 ms a frame with 32, and turns at 33 ms.
+- **Balls as fine as their size on the screen needs**, on every canvas,
+  not only a very large drawing (the maintainer, 2026-10-13, for very
+  large drawings; every canvas since 2026-11-05): a molecule's balls are
+  drawn with as many segments as its largest ball's size on the screen
+  wants - the style's 32 from about 40 pixels across, down to 8 under
+  about 8, never more than the style's own - within about 0.3 of a pixel
+  of a circle at each, so that the change is not seen; more at once as
+  balls grow, fewer once the zoom has settled (`utils/largeDrawing`
+  `ballSegmentsFor`). The line round them follows them. What each ball
+  carries - its number, whether it is lined - goes with it to the new
+  number, moved, not shared: the old sphere, let go once the new one is
+  drawn, keeps none of it, so that letting it go takes nothing the new
+  balls draw with (`carriedSphere`; shared, the balls were lost after a
+  change of segments). Its size on the screen is the pixels a unit spans
+  at the molecule for either camera (`pxPerWorld`): the canvas's zoom, or
+  a perspective preview's - Settings' - by how far off the molecule stands. A box of 33 000 waters (100 000 atoms) turned
+  at 183 ms a frame with 32, and turns at 33 ms; a large workflow page,
+  283 molecules in 3D, drew about 17.8 million triangles a frame at Fit,
+  and draws 1.3 million.
+- **Sticks the same.** A molecule's sticks are given as many segments as
+  the widest stick's width on the screen wants - from 8 where thin, up to
+  the style's 32 close up - the fewest that keep its rim within 0.3 of a
+  pixel of a circle, so that a stick close up is round where it enters a
+  ball, not faceted. More at once as they grow, fewer once the zoom has
+  settled; never more than would pass a million triangles between a
+  molecule's sticks, and never under 8 (`utils/largeDrawing`
+  `stickSegmentsFor`). What a bent stick carries - its bend, its colours -
+  goes with it to the new number (`carriedInstanced`).
 - **In pictures too.** A picture of molecules in 3D shades their hollows
   and casts their shadows as the canvas does, with every ball and stick,
   in a finer shadow map, however many atoms; shaded on the screen, at the
@@ -1521,7 +1918,7 @@ slowing it - and in the pictures made of it.
 
 ## Editing in 3D
 
-Built in lane L5 on 2026-10-10, as proposed to the maintainer and agreed:
+Built on 2026-10-10, as proposed to the maintainer and agreed:
 a molecule in 3D is edited as a quantum-chemistry program's builder edits
 one, by setting a distance, an angle or a torsion angle to a value. Only
 its shape changes; what it is made of stays the drawing's business (draw
@@ -1635,7 +2032,7 @@ as R and S are, cannot be told from its neighbours'.
 
 ## Ribbons
 
-Built in lane L5 on 2026-10-10, as proposed to the maintainer and agreed:
+Built on 2026-10-10, as proposed to the maintainer and agreed:
 a protein's or a nucleic acid's chains drawn as ribbons, from what the PDB
 entry itself says - written from the wwPDB's format (v3.3), as every PDB
 reading in Meno is.
@@ -1768,9 +2165,38 @@ same way.
   is that record alone, and one whose record shown is deleted shows its
   first. The record shown moved whole, every atom alike, takes its stack
   with it.
-- **Going over.** As a stack of molecules goes over: the record let go of
-  grows a little as it fades, the next comes up from smaller into view,
-  0.42 s, eased (`StackSwap2D`). Each is drawn on a layer of its own in the
+- **Lined up as it is opened** (`alignedRecords`; the maintainer,
+  2026-11-04). Each record that shares a core with the one before it is
+  turned about the middle of what they share to lie as nearly as it can on
+  that one - moved, never reshaped:
+  - the same structure, atom for atom (`lib/layout/morph` `sameAtoms`: the
+    same elements, charges and labels bonded alike, two Kekulé structures
+    one);
+  - or analogues, on the largest core they share (`commonAtoms`): connected,
+    its atoms alike and bonded alike in both, no hydrogen in it, holding at
+    least 60 % of the smaller record's other atoms. It is searched as
+    McGregor's backtracking does, a bounded number of steps (20,000 for two
+    records; 50,000 for a whole stack as it opens, shared out among its
+    records), the largest found by then taken.
+
+  It is mirrored where that lies nearer, only where it has no mark a mirror
+  would change: a wedge, a hash, a bold or dashed line, a double bond drawn
+  to one side, a mark put by hand. A record sharing too little keeps the
+  file's orientation, and those after it line up on it. Of the ways a
+  symmetric core lies, the one that lies best, with what is outside it
+  nearest what is outside the other's, then the one that moves its atoms
+  least, so a ring turns the least it can.
+- **Going over** (`StackSwap2D`, 0.42 s, eased). Where the record let go of
+  and the next share a core, each atom of it goes from where it stood to
+  where it stands in the next, the drawing turned as one the shorter way
+  round and what that leaves of each atom's way taken in a straight line;
+  what either has outside the core rides with it, turned as one with it.
+  The next comes in over the first half while the one let go of stays, and
+  that one fades over the second, so what the two share stays solid all the
+  way, and what differs grows in or fades where it rides. Records sharing
+  too little - or past 300 atoms, or 120 for a core - cross where they
+  stand, never growing or shrinking. Steps through a stack faster than one
+  can follow fade alone. Each record is drawn on a layer of its own in the
   drawing's style, and the drawing draws the next once it is there. The
   record shown is kept ready on that layer, out of sight, so its labels are
   set when it goes.
@@ -1786,7 +2212,7 @@ same way.
 
 ## Hydrogens and bond orders
 
-Built in lane L5 on 2026-10-11, as the maintainer asked: a file of
+Built on 2026-10-11, as the maintainer asked: a file of
 coordinates - XYZ, PDB, a calculation's output - gives no bond orders, and
 an X-ray entry no hydrogens. A molecule drawn as if they were known
 misleads as one with its hydrogens hidden does, so a molecule says what is
@@ -1819,14 +2245,11 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   set up because a file was opened. What is found is learnt of the
   molecule, with no undo step of its own; the 3D view draws it. A PDB
   entry's ligands are each sought alone; its chains are not.
-- **Only with its hydrogens.** RDKit's `DetermineBondOrders` works from
-  a molecule's full set of atoms, hydrogens included (tried with RDKit
-  2026.03): given biotin from entry 1STP with its hydrogens, it finds its
-  orders; without them, it finds none, and given benzoic acid without
-  them, it does not find benzoic acid's. So Meno does not seek the orders
-  of a molecule, or a ligand, without hydrogens, and says they are
-  unknown; nor of one of more than 400 atoms. Such a molecule's orders
-  can be estimated from its distances, asked for (below).
+- **Only with its hydrogens.** Meno asks for a molecule's orders, or a
+  ligand's, from its shape only where it has its full set of atoms,
+  hydrogens included, and no more than 400 of them; otherwise it says
+  they are unknown. Such a molecule's orders can be estimated from its
+  distances, asked for (below).
 - **Estimated from distances** (asked for by the maintainer, 2026-10-11:
   from the menu, worded as an estimate, and no mark once made). *Estimate
   bond orders from distances* on a ligand, or a molecule, works without
@@ -2090,3 +2513,13 @@ middle of what can be seen - never in. What is seen whole already leaves
 the view as it is. Opened onto an empty page, it is fitted, as a canvas
 opens. Quick Add and a paste put what they make where the pointer is, in
 view already (the maintainer, 2026-10-18).
+
+## First steps
+
+Meno's first steps (`lib/guide`, `ui/guide/GuideCard.tsx`): steps of plain text shown one at a time, in a card in Meno's own look, beside the part of the window a step points at, with a ring round that part. Nothing else is dimmed or held: the chemist does what a step says on the page itself. They are Meno's own, and name no plugin (PLUGINS.md, *A plugin to suggest for a file*; until 2026-10-31 a plugin, Getting started, brought them).
+
+- **The steps:** double-click on empty space for Quick Add; Chain and SMILES there; press and hold to select a structure; a right-click menu and its row of icons; Save, with Settings beside it; plugins, added in Settings, *Plugins*, each set up only when added, after Meno asks.
+- **Where a step points** (`at`) is a part Meno names, never how the window is built: `page`, `quick-add` (once open), `structure` (the one selected, else the last drawn), `menu` (a right-click menu, once open), `save`, `settings`. None, or a part not there now, and the card sits low in the middle of the page. A step that points at a part, while neither it nor any page is seen (Settings the tab in front), waits out of sight until a workspace is in front again.
+- **What a step waits for** (`until`), Meno names too: `quick-add` opened, a structure `selected`, a `menu` opened. A moment after the chemist does it, the guide goes on by itself; Next does as well.
+- **Only when asked:** from Settings, *General*, *First steps* (*Show*), with a workspace brought to the front - never of itself: not on Meno's first start (2026-10-24). They close when gone through or skipped - Skip, or Escape where nothing else takes it (the maintainer, 2026-10-13).
+- **Meno's question about keeping itself up to date** waits until they are closed (it comes after the user's first action: `lib/firstAction.ts`).

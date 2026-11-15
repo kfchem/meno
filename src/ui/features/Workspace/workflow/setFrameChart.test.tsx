@@ -7,7 +7,7 @@ import SetFrame from "./SetFrame";
 
 const none = () => {};
 const frame = (set: WorkflowSet, compact: boolean) =>
-  renderToString(<SetFrame set={set} name="Chart" count="3 points" hovered={false} chosen={false} compact={compact} onTabDown={none} onEdgeDown={none} onContextMenu={none} onHover={none} />);
+  renderToString(<SetFrame set={set} name="Chart" compact={compact} onContextMenu={none} />);
 
 const chart: ChartValue = {
   kind: "points",

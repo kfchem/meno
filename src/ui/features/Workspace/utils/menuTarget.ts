@@ -62,6 +62,9 @@ export function menuTargetGone(target: MenuTarget, s: Parts): boolean {
       return !has(s.cycles, id);
     case "molecule3d":
       return !has(s.molecules3d, id);
+    case "chip":
+      // (a molecule's, gone with it; a stack of drawings' is no molecule's)
+      return id != null && !has(s.molecules3d, id);
     case "measure3d": {
       const m = s.molecules3d.find((x) => x.id === id);
       return !m || (target.measure != null && !(m.measures ?? []).some((x) => x.id === target.measure));

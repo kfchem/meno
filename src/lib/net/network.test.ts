@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { askToConnect, useNetwork } from "./network";
+import { askToConnect, purposeName, useNetwork } from "./network";
 
 const ask = (purpose: string) => askToConnect({ purpose, title: `Set up ${purpose}?`, detail: "", sources: [], hosts: [] });
 const settle = () => new Promise((go) => setTimeout(go, 0));
@@ -37,5 +37,12 @@ describe("asking to use the network", () => {
     useNetwork.setState({ offline: false, granted: ["python-env:plugin-rdkit"] });
     expect(await ask("python-env:plugin-rdkit")).toBe(true);
     expect(useNetwork.getState().asking).toBeNull();
+  });
+});
+
+describe("a purpose, as Settings, Network names it", () => {
+  it("names a model's plugin by the hosts it was allowed for", () => {
+    expect(purposeName("model:talker@api.example.com,files.example.com")).toBe("Conversations through talker, to api.example.com, files.example.com");
+    expect(purposeName("model:talker")).toBe("model:talker");
   });
 });

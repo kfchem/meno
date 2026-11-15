@@ -63,12 +63,12 @@ export function removeProcedure(id: string): void {
 
 /** A procedure's steps in the order their wires lead, each from those before it - those first that nothing comes into from a step's exit. */
 function inOrder(parts: FlowParts) {
-  // (the step whose exit each step's first input is wired from, where one is)
+  // (the steps whose exits each step's inputs are wired from - several wires into one input, each - and its place past the furthest of them)
   const madeBy = new Map(parts.sets.flatMap((b) => (b.made ? [[b.id, b.made.step] as const] : [])));
-  const before = new Map(parts.steps.map((s) => [s.id, madeBy.get(parts.wires.find((w) => w.to.step === s.id)?.from.set ?? -1)]));
+  const before = new Map(parts.steps.map((s) => [s.id, parts.wires.flatMap((w) => (w.to.step === s.id && madeBy.has(w.from.set) ? [madeBy.get(w.from.set)!] : []))]));
   const depth = (id: number, seen = new Set<number>()): number => {
-    const from = before.get(id);
-    return from != null && !seen.has(id) ? 1 + depth(from, new Set([...seen, id])) : 0;
+    const from = seen.has(id) ? [] : (before.get(id) ?? []);
+    return from.length ? 1 + Math.max(...from.map((f) => depth(f, new Set([...seen, id])))) : 0;
   };
   // (then from the top of the page down, and left to right)
   return [...parts.steps].sort((p, q) => depth(p.id) - depth(q.id) || q.y - p.y || p.x - q.x);

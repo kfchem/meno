@@ -8,7 +8,7 @@ import { key, perceive, type LayoutInput } from "../../../../lib/layout/perceive
 import type { Tetrahedral } from "../../../../lib/layout/stereo";
 import { fromSmiles } from "../../../../lib/layout/testdata/fromSmiles";
 import type { Bond, Model } from "../store/types";
-import { degrees, drawingOf, forFlatReaders, orientFor } from "./drawing";
+import { drawingOf, forFlatReaders } from "./drawing";
 import { layoutJob } from "./engineLayout";
 
 /**
@@ -45,7 +45,7 @@ function flatMolfile(smiles: string): string {
   for (const w of out.wedges) {
     const to = w.to === -1 ? hOf.get(w.from)! : w.to + 1;
     const i = bonds.findIndex((b) => (b.a === w.from + 1 && b.b === to) || (b.a === to && b.b === w.from + 1));
-    bonds[i] = { ...bonds[i], stereo: w.stereo, stereoOrient: orientFor(bonds[i], w.from + 1, degrees(bonds)) };
+    bonds[i] = { ...bonds[i], stereo: w.stereo, narrow: w.from + 1 };
   }
   // (a cage the engine draws in perspective, said with wedges: a file is flat)
   const drawn: Model = {

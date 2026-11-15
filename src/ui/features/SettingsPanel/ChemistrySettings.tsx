@@ -7,7 +7,10 @@ import {
   WINDOW_3D_MOST,
   type ChemistrySettings as Settings,
 } from "../../../lib/settings/appSettings";
-import type { Option, OptionValues } from "../../../lib/options";
+import { Fragment } from "react";
+import { notedParts, shownOptions, type Option, type OptionValues } from "../../../lib/options";
+import { clearOf } from "./CalculationSettings";
+import { pageSoughtOptions, soughtChosen, soughtValues } from "./soughtSettings";
 import OptionRows from "../../options/OptionRows";
 import Switch from "../../controls/Switch";
 
@@ -102,8 +105,45 @@ export default function ChemistrySettings() {
       {/* (who makes molecules in 3D: done on a structure drawn, at once, as the rest here) */}
       <div className="mt-6">
         <RoleChoices where="molecules3d" heading="3D" />
+        <Sought3D chemistry={chemistry} setChemistry={setChemistry} />
         <Window3D chemistry={chemistry} setChemistry={setChemistry} />
       </div>
+    </div>
+  );
+}
+
+/**
+ * How many conformers a structure's 3D structure tries on the page - Meno's
+ * choice, the same for any plugin whose search takes a number of tries
+ * (lib/chem/conformersSought): shown only where the one chosen does.
+ */
+function Sought3D({ chemistry, setChemistry }: { chemistry: Settings; setChemistry: (c: Settings) => void }) {
+  const plugin = rolePlugin("conformers");
+  if (!plugin?.roleTries.includes("conformers")) return null;
+  // (as many as the molecule needs, in rounds, where its search takes draws: their window - the chemist's own, none until given - first round and most)
+  const rounds = plugin.roleDraws.includes("conformers");
+  const values = soughtValues(chemistry, rounds);
+  const change = (v: OptionValues) => setChemistry(soughtChosen(chemistry, v));
+  const shown = shownOptions(pageSoughtOptions(rounds), values);
+  return (
+    <div className="mt-2 rounded-lg border border-gh-line bg-white">
+      {/* (each option's note right under its row, as one row with it - the window's guide, with Clear just before its field, as
+           Settings, Calculations has it; the first round's, what 0 is) */}
+      {notedParts(shown).map((part, k) => {
+        const note = part[part.length - 1].note;
+        const rows = <OptionRows options={part} values={values} onChange={change} before={(o) => clearOf(o, { within: values.within }, () => change({ ...values, within: Number.NaN }))} />;
+        return note ? (
+          <div key={k}>
+            {rows}
+            <p className="pr-3 pb-2.5 pl-3 max-w-2xl text-xs leading-snug text-gh-gray">{note}</p>
+          </div>
+        ) : (
+          <Fragment key={k}>{rows}</Fragment>
+        );
+      })}
+      <p className="px-3 pb-2.5 text-xs leading-snug text-gh-gray max-w-2xl">
+        How many conformers are tried of a structure made in 3D here. A workflow's Conformers step says its own, starting from this.
+      </p>
     </div>
   );
 }

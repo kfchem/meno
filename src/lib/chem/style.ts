@@ -101,6 +101,14 @@ export type DrawingStyle = {
    * without it is "spaced".
    */
   shortHashes?: "spaced" | "three";
+  /**
+   * A hashed wedge's widest hash: reaching the atom at its wide end ("atom"),
+   * or stopping short of it by a hash's clear gap ("short"), the bonds on
+   * from the atom starting there on their own. "short" in every style (the
+   * maintainer, 2026-10-29 for Meno's own; 2026-11-11 for all); unset,
+   * "short", as every style has it: the journals' specifications say nothing of it.
+   */
+  hashedWedgeEnd?: "atom" | "short";
   /** A dashed bond's dashes, and the least gap between two of them. */
   dashLength: Length;
   dashGap: Length;
@@ -212,6 +220,11 @@ export type DrawingStyle = {
  */
 const RULES = {
   bondColor: "#000000",
+  // (a short hashed bond at the spacing: none of the journals' specifications
+  // below says otherwise; Meno's own style changes it - and a hashed wedge's
+  // widest hash short of the atom, in every style: the maintainer, 2026-11-11)
+  shortHashes: "spaced",
+  hashedWedgeEnd: "short",
   labelColor: "#000000",
   doubleSideThreshold: 0.06,
   doubleCrowdingAngle: 45,
@@ -375,6 +388,8 @@ export const MENO: DrawingStyle = {
   fontFamily: "IBM Plex Sans",
   stereoDescriptors: "plain",
   stereoDescriptorGap: 0.15,
+  // (a reaction arrow's head a little barbed, nearer an arrowhead than a bare triangle: the maintainer, 2026-11-11)
+  reactionArrowHeadInset: 0.2,
 };
 
 /** A style that can be picked by name. */
@@ -526,6 +541,7 @@ export function layoutOptionsFor(
     hashSpacingPx: at(style.hashInterval),
     hashFirstGapPx: at(style.hashStartOffset ?? style.hashInterval),
     ...(style.shortHashes === "three" ? { fewestHashes: FEWEST_HASHES } : {}),
+    ...(style.hashedWedgeEnd !== "atom" ? { hashedWedgeShort: true } : {}),
     boldWidthPx: at(style.boldThickness),
     dashLengthPx: at(style.dashLength),
     dashGapPx: at(style.dashGap),

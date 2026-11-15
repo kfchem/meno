@@ -290,3 +290,76 @@ function counted<T>(xs: T[]): { list: T[]; reads: () => number } {
   });
   return { list, reads: () => n };
 }
+
+/** The fewest atoms in a ring through bond `x`-`y`: the shortest way from one to the other but by it (breadth first), and the bond. */
+function shortestRingThrough(n: number, edges: readonly Edge[], x: number, y: number): number {
+  const adj: number[][] = Array.from({ length: n }, () => []);
+  for (const [a, b] of edges) {
+    adj[a].push(b);
+    adj[b].push(a);
+  }
+  const dist = new Map<number, number>([[x, 0]]);
+  const q = [x];
+  for (let h = 0; h < q.length; h++) {
+    const v = q[h];
+    for (const u of adj[v]) {
+      if (v === x && u === y) continue;
+      if (!dist.has(u)) {
+        dist.set(u, dist.get(v)! + 1);
+        q.push(u);
+      }
+    }
+  }
+  return dist.has(y) ? dist.get(y)! + 1 : Infinity;
+}
+
+/** The fewest atoms among the rings kept (`smallestRings`) that hold bond `x`-`y`. */
+function keptRingThrough(rings: readonly number[][], x: number, y: number): number {
+  const holds = (r: readonly number[]) => r.some((a, i) => (a === x && r[(i + 1) % r.length] === y) || (a === y && r[(i + 1) % r.length] === x));
+  return Math.min(Infinity, ...rings.filter(holds).map((r) => r.length));
+}
+
+describe("the smallest rings and each bond's own smallest ring", () => {
+  // (a minimum cycle basis holds, for every bond, a ring as small as the smallest through it: a ring through the bond is the sum of
+  //  rings kept no larger than it, and one of those holds the bond. So a check of "a ring of at most 7 through this bond" may read the
+  //  rings kept - readBack's turnedDoubleBonds does - even where rings as small tie and the one kept is not the one a search through
+  //  that bond would find first)
+  it("hold, for every bond in a ring, a ring as small as the smallest through it - where rings tie too", () => {
+    const tied: Record<string, { n: number; edges: Edge[] }> = {
+      // (barrelene: three six-membered rings, two kept; cubane: six four-membered, five kept; a [2.2.2]propellane: three four-membered, two kept)
+      barrelene: { n: 8, edges: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 0], [2, 6], [6, 7], [7, 5]] },
+      cubane: { n: 8, edges: [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]] },
+      propellane: { n: 8, edges: [[0, 1], [0, 2], [2, 3], [3, 1], [0, 4], [4, 5], [5, 1], [0, 6], [6, 7], [7, 1]] },
+    };
+    // (and a hundred made up at random: a ring of 6 to 14, with 2 to 6 bonds more across it, as cages are)
+    let seed = 7;
+    const rand = (k: number) => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed % k;
+    };
+    for (let t = 0; t < 100; t++) {
+      const n = 6 + rand(9);
+      const edges: Edge[] = Array.from({ length: n }, (_, i) => [i, (i + 1) % n] as const);
+      const have = new Set(edges.map(([a, b]) => `${Math.min(a, b)},${Math.max(a, b)}`));
+      for (let k = 2 + rand(5); k > 0; k--) {
+        const [a, b] = [rand(n), rand(n)];
+        const key = `${Math.min(a, b)},${Math.max(a, b)}`;
+        if (a === b || have.has(key)) continue;
+        have.add(key);
+        edges.push([a, b]);
+      }
+      tied[`random ${t}`] = { n, edges };
+    }
+    // (and the cages the layout is held to)
+    for (const [name, c] of Object.entries(cages as Record<string, { atoms: unknown[]; bonds: { a: number; b: number }[] }>)) {
+      tied[name] = { n: c.atoms.length, edges: c.bonds.map((b) => [b.a, b.b] as const) };
+    }
+    for (const [name, { n, edges }] of Object.entries(tied)) {
+      const rings = smallestRings(n, edges);
+      for (const [x, y] of edges) {
+        const smallest = shortestRingThrough(n, edges, x, y);
+        expect(keptRingThrough(rings, x, y), `${name}: ${x}-${y}`).toBe(smallest);
+      }
+    }
+  });
+});

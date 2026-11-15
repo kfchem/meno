@@ -70,7 +70,7 @@ maintainer's own library:
 > 'has this been done' judgement, and where jobs run.
 
 - **Atom mapping is Meno's own**, a basic feature of drawing reaction
-  schemes, used by the *Reaction* node as by the 2D canvas. The nodes ACCeL
+  schemes, used by the *Atom map* node as by the 2D canvas. The nodes ACCeL
   might have filled are each decided (*Atom mapping, and what Meno does
   itself*): all are Meno's, and no ACCeL plugin is part of this plan.
 - **Five mechanisms of ACCeL's second version are adopted, as Meno's own**:
@@ -244,6 +244,7 @@ Property
   by          the step and run that gave it; the plugin and version; the
               program, method and basis, or the model and its version;
               for a thermal quantity, the treatment of its vibrations
+              and the symmetry it took (point group, symmetry number)
   status      computed, failed (why), or not applicable (why)
 ```
 
@@ -262,8 +263,16 @@ reading's own id, the one name every plugin that reads it gives it:
   (`thermo.pressure`, atm) the program said it used - none where it said
   none, never one assumed - and in its solvation; by what worked it out,
   with the treatment of its vibrations as the program said it
-  (`thermo.treatment`). A reading that is not an energy in hartrees is
-  not taken;
+  (`thermo.treatment`), and the symmetry it took as the program printed
+  it: `by.pointGroup` and `by.symmetryNumber`, the rotational symmetry
+  number its rotational entropy counts (`thermo.point-group`,
+  `thermo.symmetry-number`; 2026-10-30). A G is worked out with its own
+  sigma, so its sigma is on it: wherever the value goes - carried by a
+  later step, copied as a part of a sum - its symmetry goes with it, one
+  source. None printed, none said, never one assumed. Being the
+  molecule's, not a way of working out, it never keeps two values apart
+  as program or treatment do: two molecules' differ by right. A reading
+  that is not an energy in hartrees is not taken;
 - `vibrations`, a table of each vibration's frequency (`FREQUENCY`, cm-1,
   an imaginary one negative) in the program's order, from the list whose
   column is a wavenumber; and `modes`, in the same order, where every
@@ -274,6 +283,15 @@ reading's own id, the one name every plugin that reads it gives it:
 Populations reads `thermo.free-energy`, and groups only values worked out
 alike: the same temperature, solvent and pressure, by the same program,
 method, basis and treatment.
+
+**A method and a basis, whatever their case** (2026-11-01; lib/nodes
+`alikeIn`). Wherever values are compared for how they were worked out -
+*Rank*, *Relative*, *Ensemble energy*, *Populations*, *Duplicates*,
+*Barrier*, and sums made by *Add* - a method or a basis named in another
+case is the same one: inputs name them either way ("B3LYP", "b3lyp"), and
+a program prints each as its input named it. Each is shown as read. Case
+is all that is passed over: "6-31G*" and "6-31G(d)" are two names, and
+are told apart.
 
 **Shapes a value takes** (`src/lib/entry.ts`, `valueFault` holds each to
 its entry):
@@ -287,10 +305,12 @@ its entry):
   as the programs print it;
 - **modes** are as the program gave them, in the vibrations table's row
   order; no step relies on how they are scaled;
-- **a restraint** is a distance between two atoms (Å), a dihedral of four
-  (°), or atoms fixed; atoms by their number from 0, as a bond's; a
-  strength relative to 1, which each plugin turns into its own force
-  constant and states in PLUGINS.md;
+- **a restraint** is a distance between two atoms (Å), held by
+  E = k d²/2 with k in kcal mol⁻¹ Å⁻²; a dihedral of four (°), held by
+  E = k φ²/2, φ in radians the shorter way round, with k in
+  kcal mol⁻¹ rad⁻²; or atoms fixed, with neither value nor strength. Atoms are by their number from 0, as a
+  bond's. Every plugin that takes restraints holds them by these energies,
+  or refuses them in words (PLUGINS.md);
 - **a coordination bond** is marked so, from a drawing or a reader that
   knows it, so that a restraint keeps it as one.
 
@@ -304,13 +324,18 @@ its entry):
 
 **The numbering is fixed.** An entry's atoms are numbered once, when its
 structure is first made (drawn, read, generated), and no step renumbers
-them.
+them but *Atom map*, which gives an entry in a reference's numbering, and
+says so.
 - **A program that reorders atoms has them mapped back** by its plugin
-  before entries are given. The conformer searches already keep the order,
-  and #374 settles equivalent atoms onto one numbering across conformers.
-- **The reaction node gives the products in the reactants' numbering.** From
-  there, "atom 7" means the same atom in every conformer, path,
-  transition state and IRC end of the reaction.
+  before entries are given. The conformer searches keep the order. Meno's
+  own page lays a structure's equivalent atoms across its conformers as its
+  first has them (WORKSPACE.md, *The page's conformers*); a workflow's
+  entries are never so moved.
+- **The *Atom map* node gives the products in the reactants' numbering**,
+  and a species' conformers in its numbering, each equivalent atom (a
+  methylene's hydrogens) where the species' own 3D has it. From there,
+  "atom 7" means the same atom, on the same side, in every conformer,
+  path, transition state and IRC end of the reaction.
 - **Per-atom properties are aligned by number**, with no matching.
 - **A measured table keyed by the drawing's atom numbers joins on**, through
   the drawn atom each 3D atom came from (`drawnFrom`).
@@ -343,19 +368,23 @@ What it compares (`src/lib/chem/identity.ts`, 2026-10-21):
 The texts are compared, not their keys. `identity` also says whether the
 canonical search was complete: where it ran out of steps (`settleBudget`),
 one structure may be written two ways, so a duplicate can be missed, but two
-different structures are never written the same. A drawing's structures are
+different structures are never written the same - save those that differ only
+by the hand of an octahedral centre, which is not yet told (*Duplicates,
+and what judges them*). A drawing's structures are
 read for it by `chem/identityOf.ts`, which also names any atom whose wedges
 it could not read. The rule is checked against RDKit's canonical isomeric
 SMILES of the molfiles Meno writes (`chem/testdata/identity.rdkit.json`,
 made by `scripts/identity/rdkit.py`, with RDKit's version and the commands
 that made it). The fixture holds each molfile by its SHA-256: the test
 writes the molfiles again and checks them against it. The bond-shift
-isomers, which RDKit keeps apart, are listed by name.
+isomers, which Meno's rule takes as one structure, are listed by name.
 
 **Lineage.** `from` lists the entry or entries an entry was made from. An
 optimised conformer has one parent; an entry made by *Re-bond* has two: the
 one whose geometry it took and the one whose bonding it took. Lineage is a
-record, for provenance. No node matches entries by it.
+record, for provenance. No node matches entries by it. A step's entry in 3D
+keeps it as `madeOf`; its `from` is the molecule it is a frame of, which
+is not lineage (WORKFLOWS.md, *Lineage in 3D*).
 
 **Properties ride along.** An entry made from another keeps its properties,
 each still saying the geometry it was worked out at. That is how an ID
@@ -392,13 +421,22 @@ alone. The ideal is that taking the .meno out takes everything out."
   says so, names the largest steps, and offers *Don't keep raw outputs* on
   them. It never drops anything by itself.
 
-**What a set shows** depends on its size:
-- **up to 50 entries, on the page**, as today (question 15, answered). An
-  entry with frames shows its frames chip;
-- **more, as a summary in its frame**: its count with nouns, a grid of a
-  sample of its structures (drawn in 2D by Meno's own layout where they have
-  no drawing), and histograms of the properties chosen. It also opens as a
-  table in the column, and any entries can be put on the page from there.
+**What a set shows** depends on its size - and on whether its exit is
+wired on: a step's result set wired on to another step is held, shown
+nowhere, what it holds kept as a large set keeps it (WORKFLOWS.md,
+*Held results*, 2026-11-05). An exit for what its step sets aside, wired
+on to none, shows nothing while it holds nothing: its port alone
+(WORKFLOWS.md, *Exits that set aside*). Otherwise, by its size:
+- **up to 50 molecules, on the page**, as today (question 15, answered):
+  one for each molecule or conformer set, never counted by its frames (3
+  compounds of 200 conformers are 3 molecules). An entry with frames shows
+  its frames chip;
+- **more, one at a time in its frame** (2026-11-11): its tab says the count
+  with nouns, and its frame shows one of them with a stack chip to go
+  through them - a view of the set, not a molecule of the page. It also
+  opens as a table in the column, and any entries can be put on the page
+  from there. (Superseded 2026-11-11: a summary in its frame - a grid of a
+  sample of its structures and histograms of the properties chosen.)
 
 **Members are explicit** (question 2, answered; refining decision 5):
 - a set's members are a list in order: its collection's;
@@ -437,7 +475,8 @@ pairing based on those IDs"):
 
 **Every exit is a result set** (question 1, answered; refining decision 9),
 made with the step, empty until it runs, to the right of the card. The
-card's own give port goes.
+card's own give port goes. (Each exit came to have a port of its own on
+the card, its set's, 2026-11-05: WORKFLOWS.md, *Exit ports*.)
 
 **Second exits.** A node that can fail entries, or set entries aside, has a
 second exit for them (revisiting question 19, question B below):
@@ -534,6 +573,15 @@ cores and memory fit what is free, and keeps the order they were asked
 for: a job never jumps ahead of an earlier one. A job's cores and memory
 are what its plugin declares; what the runner may use is capped in
 Settings, all cores and three quarters of the memory by default.
+It keeps the computer from sleeping for want of use while a job's
+program runs, so that a calculation left overnight is not cut short:
+each job's runner holds it from when its program starts until it and the
+programs after it end, whether Meno is open or not (macOS: the system's
+`caffeinate`; Windows: the runner's thread saying the system is needed;
+elsewhere nothing). The display may still turn off, and a lid closed or
+a sleep asked for is the person's. Settings, *Calculations*, can turn it
+off ("Keep the computer awake while calculations run";
+`src-tauri/src/awake.rs`).
 
 **Cluster jobs are submit-and-return.** Meno submits, keeps the job's record
 (scheduler, its job id, the key), and returns. It takes the job up again
@@ -575,19 +623,25 @@ some kinds of option are Meno's, so that every plugin shows them the same
 way:
 - **solvent**: a name from Meno's list of solvents with their usual aliases
   (*chloroform*, *CHCl3*, *CDCl3*), or none. Each plugin maps the name to
-  its program's model and keyword, and says when its model does not know
-  that solvent;
+  its program's model and keyword, and says when there is none for that
+  solvent;
 - **temperature** and **pressure**, with units.
 
 Charge and multiplicity are each entry's *species*, not options. A *Species*
 node sets them where the atoms do not say it.
 
-**Restraints are a table**, made by the *Restraints* node, wired into the
-steps whose plugins apply them. Each row is one restraint:
-- distance, angle, torsion, or fixed atom;
+**Restraints are a table** (2026-11-11, v0.1.26; until then a property
+riding with each entry), made by the *Restraints* and *Torsion restraints*
+nodes and wired into the *Restraints* input of the steps whose plugins
+apply them, each row for its entry by an ID a node wrote (question A; see
+WORKFLOWS.md, *Restraints wired in*). Each row is one restraint:
+- distance, torsion, or fixed atoms;
 - the atoms, in the entry's numbering;
 - the target, with its unit;
-- the force constant.
+- the force constant, with its unit.
+
+A label, not a value of a geometry: it names none, and rides through
+*Re-bond* from the bonding entry (docs/STRUCTURE-STEPS.md).
 
 ### Meno's own nodes
 
@@ -629,11 +683,12 @@ of highest weight stands for it, carrying the results.
 | **Species** | molecules | the same, charge and multiplicity set |
 | **Combine** | molecules | one entry holding them all, numbered in order: a complex |
 | **Re-bond** | *geometry* (molecules, 3D) and *bonding* (molecules, same atoms) | each with each, or matched on a property: the first's geometry with the second's bonds and charges, its group *a → b*, with both entries' properties (the geometry's where both have one) |
-| **Compare bonding** | molecules, 3D, and *reference* (molecules) | *same* and *different*: bonds read from the geometry, and R or S and E or Z where asked, compared with the reference matched on a property; or with each reference, naming the one it matches. Coordination bonds, and atoms, elements or bonds the chemist lists, are passed over |
-| **Number like** | molecules, and *reference* | the same, equivalent atoms (a methylene's hydrogens) renumbered to match the reference matched on a property, or one reference for all. Only atoms of one symmetry class are swapped, so the numbering keeps its meaning |
-| **Mode on atoms** | molecules with vibrations, and a table of atoms (from *bond changes*) | *kept* and *rest*: whether the imaginary vibration moves those atoms most, within a tolerance |
-| **Reaction** | *reactants* (one entry, 3D, every hydrogen present; a complex is made first by *Combine*) and *products* (3D, every hydrogen present) | *mapped products*: each product a complete 3D structure in the reactants' numbering, every atom mapped one to one, hydrogens included (the first map, or every map); *bond changes*: a table of each bond formed, broken or changed in order, with its atoms and orders before and after |
-| **Restraints** | molecules (the reference), and a table of atoms where wanted | a table of restraints: listed atoms or coordination bonds kept at a distance; double bonds' cis or trans kept as in the reference; listed atoms fixed |
+| **Compare bonding** | molecules, 3D, and *reference* (molecules) | *same* and *different*: bonds read from the geometry, and R or S, E or Z and every centre by its atoms' numbers where asked, compared with the reference matched on a property; or with each reference, naming the one it matches. Coordination bonds, and atoms, elements or bonds the chemist lists, are passed over |
+| **Mode on atoms** | molecules with vibrations, and a table of atoms (from *bond changes*), or atoms typed | every entry, each with where its imaginary vibration ranks those atoms - the window, each one's rank, how many fall outside - for a *Filter* to keep on (built 2026-11-02, STRUCTURE-STEPS.md) |
+| **Atom map** | *molecules* and a *reference* (3D, every hydrogen present), each input's entries each a side of its own or one side together; matched on a property, or one reference for all; whether bonds may change (a reaction) or stay the same (conformers of the reference) | *mapped*: each side a complete 3D structure in the reference's numbering, every atom mapped one to one, hydrogens included (the first map, or every map) - a reaction's products in its reactants' numbering, or a species' conformers with their equivalent atoms (a methylene's hydrogens) where the species has them; *bond changes*: a table of each bond formed, broken or changed in order, with its atoms and orders before and after |
+| **Restraints** | molecules | a table of restraints, each from its entry: coordination bonds kept at a factor of the van der Waals distance, listed pairs kept at their distance, listed atoms fixed |
+| **Torsion restraints** | molecules, 3D, and *reference* where wanted (molecules) | a table of torsion restraints: typed, or each torsion unlike the reference's, at 180° where trans or at its own angle, by a strength or exactly |
+| **Compare torsions** | molecules, 3D, and *reference* (molecules) | the same, each with how many torsions are trans in the reference and cis here, and which |
 | **Measure** | molecules | the same, with distances, angles or dihedrals between numbered atoms, listed or from a table |
 | **Take frames** | molecules with frames | molecules, 3D, one frame each: the highest or lowest by a property, the first, the last, by number, or *k* frames before or after the highest |
 | **Displace** | molecules with vibrations | the same, the geometry moved along a vibration (the imaginary one, or a chosen one) by an amplitude |
@@ -648,8 +703,8 @@ of highest weight stands for it, carrying the results.
 | **Energy diagram** | molecules with an energy, and what each connects | a chart |
 | **Chart** | a table | a chart: one column against another |
 
-That is 31 nodes, each doing one thing, and *Enumerate* (below) makes
-32.
+That is 30 nodes, each doing one thing (*Atom map* does what *Number
+like* was to), and *Enumerate* (below) makes 31.
 
 **What happens to today's five**
 - ***Energy window*** becomes *Relative* (to the lowest in its group) then
@@ -732,7 +787,10 @@ Each option is read in one of three ways:
 - **an element's symbol** is that atom: `Cl`, `F`, `H`;
 - **a line with a `*` is SMILES**, read as a chemist's own abbreviation is
   (`structureProblem`): exactly one `*`, bonded by one single bond to the
-  atom the group is attached by.
+  atom the group is attached by. A double bond's cis or trans written in it
+  (`/` and `\`, `*/C=C/C` for (E)-prop-1-enyl) is kept in each product, its
+  side against the `*` taken as the atom it is attached to (`smilesGroup`):
+  so are a centre's `@` and `@@`.
 
 A line without a `*` is never read as SMILES, so `CO` is a label, and its
 reading is shown. Beside each line the step shows what it was read as: the
@@ -817,13 +875,92 @@ which is the same in every product.
   `src/lib/chem/identity.ts`);
 - the canonical text of the structure's aromatic form;
 - with each stereocentre's and each double bond's configuration as drawn,
-  and each axis of chirality.
+  and each axis of chirality;
+- and, for a square-planar or an octahedral metal, which of its donors are
+  across from each other (`src/lib/chem/arrangement.ts`).
 
 The texts are compared, not their hashed keys. The set states the method:
 *Duplicates judged by Meno's identity: constitution and configurations as
 drawn, aromatic rings as one form.* What that means, plainly:
 - **a chiral product and its mirror image are two structures.** So are two
   diastereomers, and E and Z;
+- **a configuration that sets nothing is the same drawn or not.** That is
+  a wedge on a centre two of whose groups are alike (an isopropyl's CH),
+  or a double bond drawn bent whose one end carries two alike groups (a
+  prenyl's C=C(CH3)2). Identity never takes a configuration out: where
+  one could stand and none is drawn, it fills one in wherever both
+  senses write the same text, since such a place sets nothing
+  (`filledIn`). That joins mirror writings of one ring
+  compound: the cis,trans 1,2,3-trimethylcyclopropane drawn in full, and
+  drawn with its trans pair and its third centre plain, are one
+  structure. A place whose two senses write two texts is open and stays
+  so: the same compound with its cis pair drawn and the third plain
+  stands for two compounds, and is neither of them. "Alike" counts every
+  other configuration in the structure: the two ring arms at each centre
+  of 1,4-dimethylcyclohexane are alike only until the other centre is
+  counted, so its cis and trans stay two structures, a pseudoasymmetric
+  centre keeps its r or s, and the two enantiomers of a spirane such as
+  2,6-dimethylspiro[3.3]heptane are two structures. Places are filled one
+  at a time, the lowest in the canonical order first, then asked again.
+  The order matters, so it is always that one - but a centre or double
+  bond two of whose groups are alike (two methyls, PPh3's three phenyls:
+  each group hanging from the place alone, with no place or configuration
+  in it) sets nothing whatever else is given: it carries no configuration
+  in the identity, one drawn on it taken off, and is asked no more, with
+  no search of the whole structure. So its identity never turns on which
+  way it was filled in, as it could where a search runs out of steps
+  (Pd(PPh3)4). The filled form is
+  identity's own: the drawing keeps its wedges as drawn, and nothing filled
+  in is shown, drawn or saved;
+- **a metal's isomers by which donors are across are two structures:**
+  cisplatin and transplatin, fac and mer, the cis and trans forms of
+  [Co(en)2Cl2]+ (Brecher 2006, ST-2.6 and ST-2.11). A drawing states
+  them for a metal of six donors however drawn, and for a metal of four
+  drawn as the X or in ST-2.6's wedge form, or as the upright cross where
+  it is surely square planar (Pt(II), Pd(II), Au(III), Rh(I), Ir(I)) and
+  not marked "Which donors are next to each other is not given", as Meno
+  marks one it laid out with nothing given. Any other upright cross states
+  no geometry and is read as none, and so is any metal, of four donors or
+  six, that still carries that mark. A drawing nearer the diagonals is the
+  X, one nearer the page's axes the cross. A surely square-planar metal held
+  to another by bridges - [Pt2Cl4(NH3)2]'s, its donors joined only through
+  the other metal - states its pairs however its bonds lie, unless it is
+  marked: Clean-up sets such a pair out as a diamond that is neither the X
+  nor the cross, and cis and trans stay what they were. In 3D the places decide, for any metal
+  of four or six donors. Two donors are across where the angle between
+  them at the metal is at least 150 degrees (four donors) or 135 (six:
+  a terpyridine holds its outer donors short of a line), with no other
+  donor within 15 degrees of that angle. A flattened tetrahedron and a
+  trigonal prism have none. As for a centre, an arrangement that sets
+  nothing is filled in: PtCl4 2-, PtCl3(NH3)-, [Co(NH3)6]3+, Pt(en)Cl2
+  and [Co(en)3]3+ are one structure each, given or not. A metal all of
+  whose donors, or all but one, are groups alike as wholes (each hanging
+  from the metal alone: PtCl3Br 2-, RhCl(PPh3)3, Pd(PPh3)4) carries no
+  arrangement, one given taken off, with no search of the whole
+  structure, as such a centre carries no sense. A chelate's two
+  ends, joined by a ring of seven atoms or fewer with the metal, are
+  never taken as across. A complex whose arrangement can be more than
+  one and is not given (cisplatin from a SMILES) is a third structure,
+  matching neither isomer until it is given. Two metals held by bridges,
+  whose cis and trans dimers differ only together ([Pt2Cl4(NH3)2]), are
+  each taken as not given alike, not only the one the canonical order
+  fills last (`arrangementOpen`). The hand of an octahedral
+  centre is not yet told: the two enantiomers of [Co(en)3]3+ are one
+  structure. With two such centres, or one beside another place that is
+  set, structures that differ by a hand are joined though they are not
+  mirror images: two metals of six donors sharing an edge, their axial
+  donors on one side of the bridges' plane or on opposite sides, are one
+  structure where they are two compounds;
+- **a limit, on the safe side:** some writings that leave the same thing
+  unsaid in different ways get two identities. (4-Methylcyclohexylidene)
+  acetic acid drawn with its double bond bent and its centre plain, and
+  drawn with its centre wedged and its double bond straight, each mean
+  "either enantiomer", yet are two structures. Its centre alone sets
+  nothing, and its double bond alone, but once either is given the other
+  decides. Alike structures can be told apart this way; unlike ones are
+  never joined by it (the hand of an octahedral centre, above, is the one
+  case that joins), and only writings that state no single compound are
+  affected;
 - **two Kekulé structures of one ring are one structure.** So are
   bond-shift isomers such as a 1,2-disubstituted cyclooctatetraene (the
   `aromaticForm` rule, as it is written there);
@@ -880,11 +1017,35 @@ known answers are (#507):
 - the test checks that each product is the compound written for it, and
   that Meno's identity splits the products into the same groups as RDKit's
   canonical SMILES do;
-- where the two rules differ by design (bond-shift isomers, which RDKit's
-  aromaticity does not join), the fixture lists the case, and the test
-  holds Meno to its own rule there.
+- where Meno's rule takes two forms as one (bond-shift isomers), the
+  fixture lists the case, and the test holds Meno to its own rule there.
 
 RDKit is in the script and the fixture only, never in core.
+
+#### Whether one structure holds another (2026-11-04)
+
+Meno's own substructure search (`src/lib/chem/substructure.ts`,
+`holdsSubstructure`), for a conversation's search of the page and, later,
+for queries written as SMARTS. It finds each atom of the structure asked
+for (the query) among the atoms of the other (the target), one to one,
+with every bond between query atoms a bond between their matches. A
+target's further atoms and bonds are no matter: it is not an induced match.
+
+Its rules are identity's where the two meet:
+- an atom matches one of its element, its charge, its mass number where it
+  says one, and its unpaired electrons;
+- a bond matches one of its order, with aromatic rings in one form
+  (`aromaticForm`, above), however either structure was drawn of its Kekulé
+  structures - a phenyl drawn one way is found in a toluene drawn the
+  other, and never in a cyclohexene;
+- a query's hydrogens are no condition, but for a hydrogen drawn as an
+  atom: that asks for a hydrogen on its atom's match, drawn there or not. A
+  methyl drawn as "C" is found in any carbon, a quaternary one too;
+- configurations are not compared: a query is a constitution.
+
+It says where it found it: each query atom, other than a hydrogen drawn,
+with its match. A search that has tried a million placements stops and
+says it did not finish, never a "not found" it did not show.
 
 #### Valence, and stereocentres left open
 
@@ -978,9 +1139,10 @@ space: the group goes where the hydrogen was.
   the configuration it had. A wedge with three bonds in the page reads
   otherwise than a wedge with the hydrogen left out, so the old wedge alone
   would invert it.
-- **Every wedge keeps its narrow end.** A bond added to an atom changes how
-  the drawing counts its bonds, and with them which end of a wedge reads as
-  narrow, so a wedge would move to the next atom.
+- **Every wedge keeps its narrow end.** A wedge is narrow at an atom, kept
+  by id (EDITOR-2D, *A wedge's narrow end is kept by atom*), so the group's
+  bond added to an atom does not move a wedge to the next atom; a product's
+  wedge without one is given the template's.
 - **A stereocentre the group makes** (one of a CH2's two hydrogens) is left
   open, with no configuration made up. *Stereoisomers* can enumerate it.
 - **The guard behind them.** Every product is read back as the canvas reads
@@ -1069,6 +1231,16 @@ tests: *Optimise*, *Conformers* or *Frequencies* of a lone atom gives its
 energy where it is, as the plugins do today. A chemist who wants it
 otherwise draws a *Filter* on the number of atoms.
 
+**One atom, where a program is given none** (2026-11-01, the plugin boundary).
+A plugin runs its own program and no other. CREST's plugin had run xtb for a
+lone atom, in CREST's place; it no longer does. Its manifest says its program
+is given no lone atom (`noLoneAtom`, on *Conformers* and *Optimise*), and
+Meno does not send it one: the atom passes through the step as it came - a
+lone atom has no conformers and nothing to optimise - with no energy, said
+so on it and on the step's line. This is not routing: nothing is sent
+anywhere else, and its energy is an *Energy* step's, drawn. Where a plugin
+runs its program on one (xTB, ORCA, Gaussian), it is sent as before.
+
 ### Atom mapping, and what Meno does itself
 
 **Meno is the base** (the maintainer, 2026-10-16). Meno owns the store (the
@@ -1077,12 +1249,12 @@ done, and where jobs run.
 
 **Atom mapping is a basic Meno feature.** Drawing a reaction scheme calls
 for an atom map, so mapping lives in core (`src/lib/chem`), for the 2D
-canvas and for the *Reaction* node alike. Its first version ports the mapper
+canvas and for the *Atom map* node alike. Its first version ports the mapper
 of ACCeL, the maintainer's own library (kfchem/accel, MIT), with the
 maintainer's explicit permission and its notice kept. It is built in its own
 PR, by another lane; this plan only uses it as a core API.
 
-**The *Reaction* node's contract.** A map is only usable for quantum
+**The *Atom map* node's contract.** A map is only usable for quantum
 chemistry if it covers every atom in 3D, one to one, so that a product's
 geometry comes out in the reactants' numbering for a path search, a
 three-structure saddle-point search and matching IRC ends. So:
@@ -1101,16 +1273,17 @@ read for it.
 
 | Node | Why Meno's own |
 |---|---|
-| **Reaction**: the atom map | Mapping is part of drawing reactions, so it belongs in core. A Diels-Alder already defeats the fewest bond changes, so the port of a working mapper is the starting point |
-| **Reaction**: the bond changes | Once the products are in the reactants' numbering, the bond changes are the bonds whose order differs between the two: a comparison under one numbering |
+| **Atom map**: a reaction | Mapping is part of drawing reactions, so it belongs in core. A Diels-Alder already defeats the fewest bond changes, so the port of a working mapper is the starting point |
+| **Atom map**: the bond changes | Once the products are in the reactants' numbering, the bond changes are the bonds whose order differs between the two: a comparison under one numbering |
 | **Compare bonding** | Meno already reads bonds and their orders from distances (#230, from Pyykkö's covalent radii) and perceives R or S and E or Z. With the numbering fixed, comparing with a reference is comparing two lists of bonds, and of stereo labels, atom by atom |
 | **Duplicates** with symmetry | Meno's canonical numbering (#319, #350) gives each atom's symmetry class. The RMSD with symmetry is the lowest RMSD over the graph's automorphisms, each laid over by the quaternion fit Meno's *Duplicates* uses today (Horn 1987; Coutsias, Seok and Dill 2004), as described by Meli and Biggin (J. Cheminform. 12, 49 (2020)). A cap on the automorphisms tried (tert-butyl groups multiply them) is said when it is met |
-| **Number like** | The same automorphisms: the one with the lowest RMSD to the reference is applied as the new numbering, so only equivalent atoms swap |
+| **Atom map**: conformers onto their species | The same full map, its bonds to stay the same: ACCeL pairs like atoms as it extends a map - a methylene's hydrogens by their handedness, an =CH2's by E or Z, a methyl's by the torsion - so only equivalent atoms take each other's numbers |
 | **Mode on atoms** | A vibration is a displacement per atom, which the program plugins already read. Whether the listed atoms move most is their share of the displacement against the rest: arithmetic on Meno's own data |
 
-**Plugins may still fill these.** Decision 16 lets a plugin fill a kind
-Meno fills, so a plugin, ACCeL's among them, may later offer its own
-*Reaction* or its readers beside Meno's. None is needed for F or G.
+**Meno's alone.** These are Meno's judgements, so no plugin fills them
+(the plugin boundary, 2026-10-31: WORKFLOWS.md, *Who does a step*). A
+program plugin reads its program's output into Meno's general form, a
+vibration's displacements among it, and *Mode on atoms* works on that.
 
 ## Changed and kept under the principle
 
@@ -1119,7 +1292,7 @@ abstract*:
 
 | Part | Now | Why |
 |---|---|---|
-| Reaction as a value (sides, map, contacts) | **Changed**: a *Reaction* node (Meno's) with *mapped products* and *bond changes* out; *Combine* for a complex; *Restraints* for contacts | a node with plain inputs and outputs, as the maintainer described |
+| Reaction as a value (sides, map, contacts) | **Changed**: an *Atom map* node (Meno's) with *mapped* and *bond changes* out, a side of several structures taken together; *Restraints* for contacts | a node with plain inputs and outputs, as the maintainer described |
 | Meno's "fewest bond changes" mapping | **Changed**: Meno's own atom mapping in core, first ported from ACCeL's mapper with the maintainer's permission, used in 2D too | the maintainer: even a Diels-Alder would fail; a reaction scheme calls for a map |
 | Paired entries (*start*, *end*, *guess*) | **Changed**: plain inputs matched on an ID that *Tag* wrote | the maintainer (question A): IDs embedded and matched, no implicit rules; the same works for every node with two inputs |
 | Grouped type | **Changed**: *group* is a property | a type that only marks a property was abstraction |
@@ -1129,7 +1302,7 @@ abstract*:
 | *Barriers* (lowest or ensemble, differences, ratio, diagram) | **Changed**: *Rank* or *Ensemble energy*, *Relative*, *Populations* (the ratio between competing paths), *Energy diagram* | four roles were bundled |
 | *Free energy* | **Changed**: *Add*, with a *Number* for the standard-state term | a sum is a sum |
 | *Check bonding*, *Match end points*, *Check the vibration* | **Changed**: *Compare bonding* and *Mode on atoms* (Meno), with *Take frames*, *Join* and *Filter* | the match was four roles in one |
-| An ACCeL plugin | **Changed**: none in this plan; *Reaction*, *Compare bonding*, *Duplicates* with symmetry, *Number like* and *Mode on atoms* are Meno's | the maintainer: mapping is basic to Meno, and the rest is easy in-house |
+| An ACCeL plugin | **Changed**: none in this plan; *Atom map*, *Compare bonding*, *Duplicates* with symmetry and *Mode on atoms* are Meno's | the maintainer: mapping is basic to Meno, and the rest is easy in-house |
 | *Boltzmann average*, *Scale*, *Spectrum*, *Compare* | **Changed**: *Average*, *Linear*, *Broaden*, *Errors*, *Curve similarity* | general names for single roles; *Linear* with *a* = −1 mirrors a curve |
 | Filter's "relative to its group" | **Changed**: *Relative* before *Filter* | one role a node |
 | Energy window, Choose one, As conformers | **Changed**: cases of *Relative* + *Filter*, *Rank*, *Group*; dropped from saved workspaces | the maintainer asked for a clean set (question 16) |
@@ -1203,23 +1376,29 @@ the showcase's first example. The reactant *a* and two products *b* and *c*
 drawn side by side, in chloroform. Which product forms faster, and by how
 much?
 
-**On the page:** set **R** holds the reactant drawn (two reactants are made
-one complex by *Combine*); set **P** holds the products drawn.
+**On the page:** set **R** holds the reactants drawn (two reactants are one
+side together, on the *Atom map* card); set **P** holds the products drawn.
 
 **F1. The reaction** (step 0)
-1. **Reaction** (Meno): *reactants* R, *products* P, each given its 3D
-   structure first (decision 18), every hydrogen present. It gives *mapped
-   products* P′, which are *b* and *c* in *a*'s numbering [003, 004], and
+1. **Atom map** (Meno): *molecules* P, *reference* R, each given its 3D
+   structure first (decision 18), every hydrogen present; P's entries each
+   their own, R's one side together, bonds that may change. It gives
+   *mapped* P′, which are *b* and *c* in *a*'s numbering [003, 004], and
    *bond changes* BC [ConfoTS's reacting bonds and atoms].
 
 **F2. Conformers of each species** (step 1, first part)
 2. **Merge** (Meno): R and P′ into S (*a*, *b*, *c*). **Tag** (Meno): S's
    entries with *species*, which their conformers carry from here.
-3. **Restraints** (Meno): from S, coordination bonds kept at 0.9 of the van
-   der Waals distance, giving T1 [`lewis_distance_scaling`].
+3. **Restraints** (Meno): on S, coordination bonds kept at 0.9 of the van
+   der Waals distance at a strength the workflow sets, giving T1
+   [`lewis_distance_scaling`, `lewis_force_constant`].
 4. **Conformers** (a plugin) on S, with T1 where the plugin takes
    restraints. Each conformer's group is its species [100; ConfoTS uses a
-   force-field search of 10,000 steps].
+   force-field search of 10,000 steps]. Then **Atom map** (Meno): the
+   conformers onto S, matched on *species*, bonds that stay the same, each
+   input's entries each their own: every conformer in its species'
+   numbering, its equivalent atoms where S has them, as ConfoTS's
+   [`map_numbers`] renumbers its conformers after the search.
 5. **Relative** then **Filter** (Meno): within 10 kcal/mol of the lowest in
    each group [`energy_limit_to_empopt`].
 6. **Optimise** (xTB, GFN2), *done* [110].
@@ -1238,19 +1417,33 @@ one complex by *Combine*); set **P** holds the products drawn.
     second *Re-bond* (*geometry* PC, *bonding* R) and the same chain after
     it, merged before F4. ConfoTS chooses the direction from the conformer
     counts [`path_flag`]; here it is wired.
-12. **Restraints** (Meno): from P′, coordination bonds and the double bonds'
-    cis or trans, giving T2.
-13. **Minimise with restraints** (a force-field plugin): E with T2.
-14. **Compare bonding** (Meno) against P′, matched on *product*, E or Z only.
-    *same* goes on.
-15. **Its *different*, again, drawn:** **Restraints** with the torsions 50
-    units stronger, **Minimise with restraints**, **Compare bonding**, and a
-    **Merge** with 14's *same*. Pasted once more for each further attempt
-    [`max_cycle_of_force_mini`; the showcase used three rounds,
+12. **Restraints** (Meno): on P′, its coordination bonds as in step 3, each
+    row for its entry by its *start* (Tag). The ID rides through *Re-bond*
+    onto E, so E takes P′'s rows (v0.1.26: a table, wired in; until then
+    the restraints rode on the entries).
+13. **Minimise with restraints** (a force-field plugin): E, 12's table
+    wired into its *Restraints*, its coordination bonds held, no torsions
+    yet. Its result records where its restraints were first held.
+14. **Compare torsions** (Meno) against P′, matched on *product*: how many
+    torsions are trans across P′'s double bonds (hydrogens' included) and
+    cis after the minimisation; a **Filter** on `torsions unlike reference
+    = 0` splits those done from those to go again [ConfoTS's trans-torsion
+    check].
+15. **Again, drawn:** **Torsion restraints** from the reference, 180° where
+    trans, at the strength typed for this round; **Minimise with
+    restraints** from the geometry the first minimisation started from
+    (*Start from: where its restraints were first held*), every earlier
+    round's table wired in beside this one's, so a torsion held once stays
+    held (the later round's row held where two hold one torsion); then
+    **Compare torsions** and a **Filter** again. Pasted once more for each
+    further attempt, each round's strength typed (50, 100, 150: one value a
+    round for every torsion it holds, where ConfoTS adds to each torsion's
+    own as it fails); the last attempt's goes on too, as ConfoTS passes it
+    on [`max_cycle_of_force_mini`, 10; the showcase used three rounds,
     120_recalc0-2].
 16. **Optimise** (xTB) [122].
-17. **Compare bonding** (Meno) against P′, on *product*, with R or S and E or Z:
-    *same* [`check_chirality`].
+17. **Compare bonding** (Meno) against P′, on *product*, with R or S, E or Z
+    and every centre by its atoms' numbers: *same* [`check_chirality`].
 
 **F4. Paths and saddle points at the semiempirical level**
 18. **Path search** (ORCA plugin: NEB with GFN2-xTB, 8 images). *start* is RC
@@ -1265,7 +1458,8 @@ one complex by *Combine*); set **P** holds the products drawn.
 24. **Follow the reaction path** (ORCA plugin, IRC with xTB) [125_F, 125_B].
 25. **Take frames** twice (Meno): the first, and the last.
 26. **Compare bonding** twice (Meno): each end against S, naming the
-    species it matches (*a*, *b*, *c* or none) [128].
+    species it matches (*a*, *b*, *c* or none), with every centre by its
+    atoms' numbers [128; `check_irc_chirality`].
 27. **Join** (Meno) on *path*: both names put back on the saddle points as
     *first end* and *last end*.
 28. **Filter** (Meno): one end is *a* and the other the product the saddle
@@ -1329,7 +1523,7 @@ one complex by *Combine*); set **P** holds the products drawn.
     joins the species it claims.
 
 **The nodes F uses:**
-- **Meno's** (20): Reaction, Merge, Tag, Restraints, Relative, Filter, Rank,
+- **Meno's** (21): Atom map, Merge, Tag, Restraints, Torsion restraints, Relative, Filter, Rank,
   Re-bond, Take frames, Measure, Join, Displace, Number, Add, Populations,
   Ensemble energy, Energy diagram, Duplicates, Compare bonding, Mode on atoms.
 - **Program plugins'** (8): Conformers, Optimise, Minimise with restraints,
@@ -1360,7 +1554,7 @@ can be saved and put down again (question C).
   already run to the end.
 
 **F9. Against the ten points asked for, last round:**
-1. **Reactions and their numbering**: the *Reaction* node, the fixed
+1. **Reactions and their numbering**: the *Atom map* node, the fixed
    numbering.
 2. **Pairs**: *Tag* and *Re-bond*, inputs matched on the IDs *Tag* wrote.
 3. **Paths**: entries with frames, and *Take frames*.
@@ -1375,10 +1569,10 @@ can be saved and put down again (question C).
    up again.
 9. **Templates**: the program plugins' options.
 10. **Bond changes and restrained minimisation**:
-    - *Reaction*, with Meno's atom mapping, and *Compare bonding* are
+    - *Atom map*, with Meno's atom mapping, and *Compare bonding* are
       Meno's;
     - *Minimise with restraints* is a force-field plugin's;
-    - *Restraints* and *Re-bond* are Meno's.
+    - *Restraints*, *Torsion restraints* and *Re-bond* are Meno's.
 
 ### G. A conformer ensemble to NMR and ECD
 
@@ -1573,9 +1767,9 @@ open, one plugin to a PR.
     *Chart* and *Energy diagram*.
 11. **Meno's nodes for structures and spectra**: *Species*, *Combine*,
     *Re-bond*, *Restraints*, *Measure*, *Take frames*, *Displace*,
-    *Compare bonding*, *Number like*, *Mode on atoms*, *Equivalent atoms*,
+    *Compare bonding*, *Mode on atoms*, *Equivalent atoms*,
     *Broaden*, *Errors*, *Curve similarity*.
-12. **The *Reaction* node**, on Meno's atom mapping (a core API, built
+12. **The *Atom map* node**, on Meno's atom mapping (a core API, built
     first in its own PR by another lane) and Meno's bond changes.
 13. **The computational-chemistry kinds opened**: *Minimise with restraints*,
     *Path search*, *Optimise to a saddle point*, *Follow the reaction path*,
@@ -1633,12 +1827,12 @@ scheduler or model by name:**
   - the runner seam, and this computer's runner, knowing its resources;
 - **on the page**: summaries, tables, charts, and the words on the page with
   their rule;
-- **Meno's 32 nodes** (*Meno's own nodes*, and *Enumerate*): arithmetic,
+- **Meno's 31 nodes** (*Meno's own nodes*, and *Enumerate*): arithmetic,
   geometry, data handling and structures made by rule, on Meno's own data,
   each written from a published algorithm or Meno's own rule.
 
 **Atom mapping is core's**, in `src/lib/chem`, for the canvas and the
-*Reaction* node. Its first version is a port of ACCeL's mapper, with the
+*Atom map* node. Its first version is a port of ACCeL's mapper, with the
 maintainer's permission and its MIT notice kept; no other ACCeL code is in
 core. What it gives a calculation is a complete map in 3D, every atom one to
 one, hydrogens by geometry; a heavy-atom-only map is for display only.
@@ -1656,7 +1850,9 @@ jobs elsewhere. In their manifests they declare:
 - the model formats they read.
 
 **The guards.** The boundary guard (`src/lib/plugins/boundary.test.ts`)
-keeps program, scheduler and model names out of core. Property and failure
+keeps program, scheduler and model names out of core - its literals, its
+regular expressions and its pages' text (PLUGINS.md, *The boundary, kept by
+a test*). Property and failure
 names given by plugins are data, never literals in core. Core names only the
 quantities its own nodes compute or use: *energy*, *thermal correction*,
 *share*, *degeneracy*, *vibrations*, *group*, *shielding*, *excited
@@ -1715,7 +1911,7 @@ None open. Every question raised in the five rounds is answered below.
   *Adopt* is per job, recorded with when, and the adopted result is marked
   wherever it is shown.
 - **P:** until #319 and #350 are merged, *Duplicates* compares atoms in
-  their own order; symmetry, *Number like* and the automorphisms come with
+  their own order; symmetry and the automorphisms come with
   PR 2.
 - **Q:** a save past 500 MB says the workspace is large; the threshold is a
   setting (Settings, General).
@@ -1726,7 +1922,7 @@ None open. Every question raised in the five rounds is answered below.
 **On the fifth draft, before M to S:**
 - **Atom mapping is a basic Meno feature**, in core, since drawing a
   reaction scheme calls for a map. ACCeL's mapper, the maintainer's own MIT
-  code, may be ported; another lane builds it. The *Reaction* node is
+  code, may be ported; another lane builds it. The *Atom map* node is
   Meno's, and the ACCeL plugin leaves this plan.
 - **R:** the working folder is set in Meno's Settings, Meno's own folder by
   default, and cleaned on its own once the files are in the `.meno`, with a

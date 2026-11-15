@@ -71,7 +71,7 @@ describe("a wedge as the canvas draws it", () => {
     { id: 4, x: -1.3, y: -0.75, el: "C" },
   ];
   const bonds: Bond[] = [
-    { a1: 0, a2: 1, order: 1, stereo: "up", stereoOrient: "reverse" },
+    { a1: 0, a2: 1, order: 1, stereo: "up", narrow: 0 },
     { a1: 1, a2: 2, order: 1, stereo: "none" },
     { a1: 1, a2: 3, order: 1, stereo: "none" },
   ];

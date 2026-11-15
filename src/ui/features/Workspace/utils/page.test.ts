@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { eyeOf, pageAt, seenAt } from "./page";
+import { eyeOf, middleAfterPan, pageAt, seenAt } from "./page";
 
 describe("what a camera sees of the page", () => {
   const ortho = () => {
@@ -39,5 +39,44 @@ describe("what a camera sees of the page", () => {
       expect(p.y).toBeCloseTo(5, 6);
       expect(p.z).toBeCloseTo(0, 6);
     }
+  });
+});
+
+describe("the view's middle after the page slides on the screen", () => {
+  const size = { width: 1000, height: 600 };
+  const camera = () => {
+    const c = new THREE.OrthographicCamera(-50, 50, 30, -30, 0.1, 2000);
+    c.position.set(10, 5, 1000);
+    c.zoom = 2.5;
+    c.updateProjectionMatrix();
+    c.updateMatrixWorld();
+    return c;
+  };
+  // (where a point on the page is on the screen, in px from the canvas's top left corner)
+  const screenOf = (c: THREE.OrthographicCamera, p: { x: number; y: number }) => {
+    const v = new THREE.Vector3(p.x, p.y, 0).project(c);
+    return { x: ((v.x + 1) / 2) * size.width, y: ((1 - v.y) / 2) * size.height };
+  };
+
+  it.each([
+    [40, 0],
+    [-40, 0],
+    [0, 25],
+    [0, -25],
+    [-37, 18],
+  ])("puts every point of the page %d px right and %d px down of where it was", (dx, dy) => {
+    const c = camera();
+    const p = { x: 3, y: -4 };
+    const before = screenOf(c, p);
+    const to = middleAfterPan(c, size, dx, dy);
+    c.position.set(to.x, to.y, c.position.z);
+    c.updateMatrixWorld();
+    const after = screenOf(c, p);
+    expect(after.x - before.x).toBeCloseTo(dx, 6);
+    expect(after.y - before.y).toBeCloseTo(dy, 6);
+  });
+
+  it("leaves the middle where it is for no slide", () => {
+    expect(middleAfterPan(camera(), size, 0, 0)).toEqual({ x: 10, y: 5 });
   });
 });

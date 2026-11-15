@@ -14,6 +14,7 @@ import PointerSettings from "./PointerSettings";
 import CanvasSettings from "./CanvasSettings";
 import ColourSettings from "./ColourSettings";
 import WorkspaceSizeSettings from "./WorkspaceSizeSettings";
+import FirstStepsSettings from "./FirstStepsSettings";
 import LogSettings from "./LogSettings";
 import LicenceSettings from "./LicenceSettings";
 import LabelSettings from "./LabelSettings";
@@ -23,6 +24,7 @@ import JobSettings from "./JobSettings";
 import ProcedureSettings from "./ProcedureSettings";
 import PluginSettings from "./PluginSettings";
 import { useSettingsSection, type SettingsSection } from "./section";
+import ConversationSettings from "./ConversationSettings";
 import { COLUMN_WIDTH, SECTION_WIDTH } from "./widths";
 
 const SECTIONS: { id: SettingsSection; name: string }[] = [
@@ -33,6 +35,7 @@ const SECTIONS: { id: SettingsSection; name: string }[] = [
   { id: "chemistry", name: "Chemistry" },
   { id: "files", name: "Files" },
   { id: "calculations", name: "Calculations" },
+  { id: "conversations", name: "Conversations" },
   { id: "plugins", name: "Plugins" },
   { id: "abbreviations", name: "Dictionary" },
   { id: "network", name: "Network" },
@@ -104,6 +107,7 @@ export default function SettingsPanel() {
           <section className={SECTION}>
             <h2 className="text-base font-semibold text-gh-black">General</h2>
             <p className="mt-1 mb-4 text-sm text-gh-gray">How Meno works as a whole. Changes are saved as you make them.</p>
+            <FirstStepsSettings />
             <PointerSettings />
             <CanvasSettings />
             <LabelSettings />
@@ -157,6 +161,16 @@ export default function SettingsPanel() {
             </p>
             <ChemistrySettings />
           </section>
+        ) : section === "conversations" ? (
+          <section className={SECTION}>
+            <h2 className="text-base font-semibold text-gh-black">Conversations</h2>
+            <p className="mt-1 mb-4 text-sm text-gh-gray">
+              Who talks with a model for a conversation on the page, its options, and the key for its service. Nothing
+              is sent until a plugin that does it is added, and Meno asks before a conversation first goes to its
+              service.
+            </p>
+            <ConversationSettings />
+          </section>
         ) : section === "files" ? (
           <section className={SECTION}>
             <h2 className="text-base font-semibold text-gh-black">Files</h2>
@@ -188,7 +202,7 @@ export default function SettingsPanel() {
             <h3 className="mt-6 text-sm font-semibold text-gh-black">Jobs</h3>
             <p className="mt-1 mb-3 text-sm text-gh-gray">
               The programs steps run, on this computer. They go on when Meno closes, and those waiting start in turn, as many at once as fit. A job counts the memory its
-              plugin declares - ORCA's %maxcore, Gaussian's %Mem; one that declares none counts by its cores alone.
+              plugin declares for it; one that declares none counts by its cores alone.
             </p>
             <JobSettings />
             <h3 className="mt-6 text-sm font-semibold text-gh-black">Procedures</h3>

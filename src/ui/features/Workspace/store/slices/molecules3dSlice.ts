@@ -1,9 +1,10 @@
 import type { StoreApi } from "zustand";
+import { setsOnPage } from "../../workflow/onPage";
 import type { DocumentStore } from "../../../../../lib/doc";
 import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
-import type { EditorState, Look3D, Model, Molecule3D, Rising3D, Turn3D } from "../types";
-import { chosenPath, lookOf, reachOf, solidOf, bondsAt, reachOverFrames, withLooks } from "../../utils/molecule3d";
+import type { EditorState, Growing3D, Grown3D, Look3D, Model, Molecule3D, Rising3D, Turn3D } from "../types";
+import { chosenPath, lookOf, reachOf, solidOf, bondsAt, reachOverFrames, withGrowth, withLooks } from "../../utils/molecule3d";
 import { editedCopy, isResult, movingAtoms, placesOf, stereoAfter, withValue } from "../../utils/edit3d";
 import { kindOf } from "../../utils/measure3d";
 import { style3dOf } from "../../style3d";
@@ -14,12 +15,36 @@ import { signatureOf } from "../../utils/drawnLink";
 import { resultKey } from "../../../../../lib/calc/results";
 import { gridPlaces, middleOf, shownOf, stackMembers } from "../../utils/stacks";
 import { fitResultSets } from "../../workflow/run";
+import { heldViewId, shownIn } from "../../workflow/heldView";
+import { whileMoving } from "../../chem/crossings";
 
 type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
 
 /** The most atoms a measurement takes: four, for a torsion angle; and the most bonds, three. */
 const MOST_CHOSEN = 4;
+
+/** How long after a 3D structure is made what its search goes on to bring joins that step, where nothing came between, in ms: past the time a search takes at most (chem/conformerRounds `SEARCH_BUDGET_MS`), and its waiting. */
+const GROWN_JOINS_MS = 60 * 60_000;
+
+/** A molecule's frame `f`, as its places: its own geometry first, then its frames. */
+const placesAt = (m: Pick<Molecule3D, "atoms" | "frames">, f: number): number[] =>
+  f === 0 ? m.atoms.flatMap((a) => [a.x, a.y, a.z]) : [...(m.frames?.[f - 1] ?? [])];
+
+/** Which of `grown`'s frames is nearest `xyz`, atom by atom: the conformer shown, where it is still among them. */
+function nearestFrame(grown: Grown3D, xyz: readonly number[]): number {
+  const n = 1 + (grown.frames?.length ?? 0);
+  let best = 0;
+  let least = Infinity;
+  for (let f = 0; f < n; f++) {
+    const p = placesAt(grown, f);
+    if (p.length !== xyz.length) continue;
+    let d = 0;
+    for (let i = 0; i < p.length && d < least; i++) d += (p[i] - xyz[i]) ** 2;
+    if (d < least) [best, least] = [f, d];
+  }
+  return best;
+}
 const MOST_BONDS = 3;
 
 /** Molecules made in 3D together rise one after another, this far apart. */
@@ -55,7 +80,7 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
       ),
     setTurn3d: (id: number, turn: Turn3D) =>
       set((prev) => ({ ...prev, turns3d: { ...prev.turns3d, [id]: turn } })),
-    riseMolecules3d: (made: ({ m: Omit<Molecule3D, "id">; turn: Turn3D } & Omit<Rising3D, "start">)[], replacing: number[] = []) => {
+    riseMolecules3d: (made: ({ m: Omit<Molecule3D, "id">; turn: Turn3D } & Omit<Rising3D, "start">)[], replacing: number[] = [], key?: string) => {
       if (!made.length) return [];
       const first = doc.getState().nextMolecule3dId ?? 1;
       const label = replacing.length ? "3D structure made again" : made.length > 1 ? "3D structures" : "3D structure";
@@ -66,7 +91,8 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
       const was = get().turns3d;
       const turnsBefore: Record<number, Turn3D | undefined> = Object.fromEntries(replacing.map((id) => [id, was[id]]));
       const turnsAfter: Record<number, Turn3D> = Object.fromEntries(made.map(({ turn }, i) => [ids[i], turn]));
-      doc.edit(label, (d) => made.reduce((x, { m }) => ops.addMolecule3d(x, m), replacing.length ? ops.removeMolecules3d(d, replacing) : d));
+      // (made with a key, what their search goes on to bring joins this step, where nothing came between: settleGrown3d)
+      doc.edit(label, (d) => made.reduce((x, { m }) => ops.addMolecule3d(x, m), replacing.length ? ops.removeMolecules3d(d, replacing) : d), key ? { coalesceKey: key, coalesceWithinMs: GROWN_JOINS_MS } : undefined);
       // (several - a structure's stereoisomers - come out one after another)
       const start = performance.now();
       set((prev) => ({
@@ -157,6 +183,19 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
         const sel3d = was != null && prev.sel3d.has(was) ? new Set([...prev.sel3d].filter((x) => x !== was).concat(id)) : prev.sel3d;
         return { ...prev, stacksShown: { ...prev.stacksShown, [stack]: id }, turns3d, sel3d };
       }),
+    showHeld: (setId: number, index: number) =>
+      set((prev) => {
+        const b = prev.sets.find((x) => x.id === setId);
+        if (!b?.collection || !Number.isInteger(index) || index < 0 || index >= b.collection.length) return prev;
+        const was = shownIn(b, prev.heldShown);
+        if (index === was) return prev;
+        // (turned as the one it showed was, so that each is seen against the last as it was)
+        const turn = prev.turns3d[heldViewId(setId, was)];
+        const turns3d = { ...prev.turns3d };
+        if (turn) turns3d[heldViewId(setId, index)] = turn;
+        else delete turns3d[heldViewId(setId, index)];
+        return { ...prev, heldShown: { ...prev.heldShown, [setId]: index }, turns3d };
+      }),
     spreadStack: (stack: number) => {
       const members = stackMembers(get().molecules3d, stack);
       if (members.length < 2 || members[0].stack?.spread) return;
@@ -205,7 +244,7 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
       // whole step, and with nothing less)
       const meta = { coalesceKey: gesture, coalesceWithinMs: Infinity };
       if (drawing?.length || marks)
-        doc.edit("turn selection", (d) => ops.placeMarks(ops.placeAtoms(d, drawing ?? []), { ...marks, molecules3d: places }), meta);
+        whileMoving(() => doc.edit("turn selection", (d) => ops.placeMarks(ops.placeAtoms(d, drawing ?? []), { ...marks, molecules3d: places }), meta));
       else doc.edit("turn molecules", (d) => ops.moveMolecules3d(d, places), meta);
       const turnsAfter: Record<number, Turn3D> = {};
       for (const m of moves) turnsAfter[m.id] = m.turn;
@@ -291,10 +330,58 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
         const other = shown === "primary" ? "secondary" : "primary";
         if (other === lookOf(m)) delete talkLooks[id];
         else talkLooks[id] = other;
-        return { ...prev, talkLooks, molecules3d: withLooks(kept, talkLooks) };
+        return { ...prev, talkLooks, molecules3d: withGrowth(withLooks(kept, talkLooks), prev.growing3d) };
       }),
     endTalkLooks: () =>
-      set((prev) => (Object.keys(prev.talkLooks).length ? { ...prev, talkLooks: {}, molecules3d: doc.getState().molecules3d ?? [] } : prev)),
+      set((prev) => (Object.keys(prev.talkLooks).length ? { ...prev, talkLooks: {}, molecules3d: withGrowth(doc.getState().molecules3d ?? [], prev.growing3d) } : prev)),
+    startGrowing3d: (id: number, grown: Grown3D, key: string) =>
+      set((prev) => {
+        const kept = doc.getState().molecules3d ?? [];
+        const there = kept.find((m) => m.id === id);
+        if (!there) return prev;
+        const growing: Record<number, Growing3D> = { ...prev.growing3d, [id]: { grown, key, base: { atoms: there.atoms, frames: there.frames } } };
+        return { ...prev, growing3d: growing, molecules3d: withGrowth(withLooks(kept, prev.talkLooks), growing) };
+      }),
+    grow3d: (id: number, grown: Grown3D | null) =>
+      set((prev) => {
+        const kept = doc.getState().molecules3d ?? [];
+        const going = prev.growing3d[id];
+        // (its search ended - its molecule gone, made again, edited: nothing to grow, never begun again; a change of its frames
+        //  alone lets it go as the document changes, store `growingHeld`)
+        const there = kept.find((m) => m.id === id);
+        if (!going || there?.atoms !== going.base.atoms) return prev;
+        const growing: Record<number, Growing3D> = { ...prev.growing3d };
+        if (grown) growing[id] = { ...going, grown };
+        else delete growing[id];
+        // (the conformer shown kept shown: the one nearest it among those it has now - a lower one found puts the rest after it)
+        const was = prev.molecules3d.find((m) => m.id === id);
+        const shown = prev.frames3d[id] ?? 0;
+        const now = grown && was ? nearestFrame(grown, placesAt(was, shown)) : shown;
+        const frames3d = now === shown ? prev.frames3d : { ...prev.frames3d, [id]: now };
+        return { ...prev, growing3d: growing, frames3d, molecules3d: withGrowth(withLooks(kept, prev.talkLooks), growing) };
+      }),
+    settleGrown3d: (id: number) => {
+      const g = get().growing3d[id];
+      // (none going on: ended already - written, or its molecule gone or edited since it began, which lets it go as the document
+      //  changes (store `growingHeld`): the edit kept, nothing written over it)
+      if (!g) return;
+      // (written once, as its search ends: one step with its making where nothing came between, else one of its own)
+      doc.edit(
+        "3D structure",
+        (d) =>
+          ops.changeMolecule3d(d, id, (m) => {
+            const { frames: _frames, ...rest } = m;
+            return { ...rest, ...g.grown };
+          }),
+        { coalesceKey: g.key, coalesceWithinMs: GROWN_JOINS_MS },
+      );
+      set((prev) => {
+        if (!prev.growing3d[id]) return prev;
+        const growing: Record<number, Growing3D> = { ...prev.growing3d };
+        delete growing[id];
+        return { ...prev, growing3d: growing, molecules3d: withGrowth(withLooks(doc.getState().molecules3d ?? [], prev.talkLooks), growing) };
+      });
+    },
     switchLook3d: (id: number) => {
       const { molecules3d, sel3d } = get();
       const m = molecules3d.find((x) => x.id === id);
@@ -342,7 +429,8 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
       const own = reach({ ...copy, id: 0 });
       const y = m.at.y;
       let left = m.at.x + reach(m) + NOMINAL_BOND_LENGTH + own;
-      for (const b of doc.getState().sets ?? []) if (left >= b.x0 && left <= b.x1 && y >= b.y0 && y <= b.y1) left = b.x1 + NOMINAL_BOND_LENGTH + own;
+      // (a set drawn nowhere lies nowhere: workflow/held)
+      for (const b of setsOnPage(doc.getState(), doc.getState().sets ?? [])) if (left >= b.x0 && left <= b.x1 && y >= b.y0 && y <= b.y1) left = b.x1 + NOMINAL_BOND_LENGTH + own;
       const newId = doc.getState().nextMolecule3dId ?? 1;
       doc.edit(label, (d) => ops.addMolecule3d(d, { ...copy, at: { x: left, y } }), meta);
       const turn = get().turns3d[id];

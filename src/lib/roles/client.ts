@@ -1,6 +1,6 @@
 /**
  * Asking the worker of a plugin that fills the chemistry roles (lib/plugins/
- * roles; RDKit's, for now: resources/plugins/rdkit/worker.py): one JSON
+ * roles): one JSON
  * object a line each way, answers matched to questions by id. The worker
  * answers a fixed set of requests - these, the roles' contract - and runs
  * nothing else. Molecules go to it, and come back, as MOL blocks.
@@ -9,23 +9,61 @@
  * worker runs (a sidecar, here; anything that carries lines, in tests).
  */
 import type { OptionValues } from "../options";
+import type { SmilesRead } from "../chem/smilesWhy";
+import type { Configuration, IsomersMade, StereoElement } from "../chem/stereoOpen";
+import type { MetalHolds } from "../chem/metalHolds";
 import { counter, type Watch } from "../calc/client";
 
 /** The requests the worker answers, and what each answers with. */
 export type ChemRequests = {
+  /**
+   * The language-model role's (docs/CONVERSATIONS.md, *Connections*): what
+   * Meno tells the model, what has been said, the tools it may call and the
+   * plugin's options - the person's key added on the way, by the backend
+   * alone (src-tauri/src/model.rs). Its answer is read by the caller, as
+   * whatever the plugin gave (conversation/modelConnection `replyOf`).
+   */
+  converse: { args: { told: string; said: readonly unknown[]; tools: readonly { name: string; does: string }[]; options: OptionValues }; result: unknown };
   to_smiles: { args: { molblock: string }; result: { smiles: string } };
   /** A reaction, as an RXN file holds it, as a reaction SMILES: "reactants>agents>products". */
   rxn_to_smiles: { args: { rxnblock: string }; result: { smiles: string } };
   from_smiles: { args: { smiles: string }; result: { molblock: string } };
+  /** What the toolkit makes of a SMILES, as facts - whether it reads, whether it parses at all, the problems its own check finds (lib/chem/smilesWhy): Meno says why in words. */
+  smiles_read: { args: { smiles: string }; result: SmilesRead };
   /** Hydrogens, valence, aromaticity and stereo labels, per atom and bond. */
   analyse: { args: { molblock: string }; result: Analysis };
+  /** What the toolkit makes of each structure drawn, its parts as MOL blocks, as facts (`StructureFacts`) for Meno's *Check structures* to decide on. */
+  structure_facts: { args: { structures: { molblocks: string[] }[] }; result: { structures: StructureFacts[] } };
   /**
-   * The stereocentres and double bonds left open, by index, and how many
-   * stereoisomers they make - but for those `like` gives a configuration.
+   * Every element of a structure that could be stereogenic, as the toolkit
+   * perceives it - its parts' atoms and bonds in their order, one after
+   * another - and how each is drawn (lib/chem/stereoOpen `StereoElement`):
+   * what is left open is Meno's to say. One it cannot read: `read` false;
+   * one it cannot make sense of: its `problem`, in its words.
    */
-  open_stereo: { args: { molblock: string; like?: Like }; result: OpenStereo };
-  /** Only which stereocentres and double bonds are left open, by index - none of `open_stereo`'s trying each stereoisomer in 3D. */
-  stereo_left_open: { args: { molblock: string }; result: { atoms: number[]; bonds: number[]; cumulated?: number[][] } };
+  stereo_elements: { args: { molblocks: string[] }; result: { read: boolean; problem?: string; elements?: StereoElement[] } };
+  /**
+   * A structure's stereoisomers as Meno asks for them (Workspace/chem/
+   * openStereo `stereoisomersOf`): `configured` made first, the rest of what
+   * is unassigned given each configuration - tried in 3D where `inThreeD` -
+   * the C=N bonds `notEnumerated` passed by; at most `most`, refused whole
+   * past it where `whole`; within `withinMs`. Each made: its configuration of
+   * the `open` elements, its SMILES, and with `drawings` a drawing of it.
+   */
+  stereoisomers: {
+    args: {
+      molblocks: string[];
+      open: { atoms: number[]; bonds: number[] };
+      configured?: Configuration;
+      notEnumerated: number[];
+      most: number;
+      whole?: boolean;
+      withinMs?: number;
+      inThreeD: boolean;
+      drawings?: boolean;
+    };
+    result: IsomersMade;
+  };
   /**
    * Which stereoisomer each molecule in 3D is, read from its own geometry:
    * its elements that could be stereogenic and a key that two molecules
@@ -34,15 +72,25 @@ export type ChemRequests = {
    */
   configurations: { args: { molblocks: string[] }; result: { molecules: Configured[] } };
   /**
-   * Conformers of a structure, made in 3D (ETKDG, then MMFF94): of the first
-   * of its stereoisomers, or of each, where some of its stereo is left open
-   * - and `like` does not give it. Of two enantiomers, one is made as the
-   * other's mirror image.
+   * Conformers of a structure, made in 3D (ETKDG, then MMFF94): of each
+   * stereoisomer `isomers` names - its configuration of what the drawing
+   * leaves open, which Meno chose (Workspace/chem/openStereo) - or, none
+   * named, of the structure as drawn; a molecule with metals held as `holds`
+   * says (lib/chem/metalHolds). Of two enantiomers, which one the page asks
+   * for and gives the other as its mirror image is Meno's
+   * (Workspace/chem/pageMirror): the plugin makes each as it is asked.
    */
   conformers: {
-    /** `options`: those the plugin declares for the role (its manifest's roleOptions), as chosen in Settings. */
-    args: { molblock: string; isomers?: "one" | "all"; count?: number; like?: Like; options?: OptionValues };
-    result: { isomers: Conformers[] };
+    /**
+     * `options`: those the plugin declares for the role (its manifest's
+     * roleOptions), as chosen in Settings. `draw`: which set of `count`
+     * tries, where the search is asked in rounds (chem/conformerRounds) -
+     * each draw another set, the same draw and options the same set; sent
+     * only to a plugin whose role says it takes draws (lib/plugins/manifest
+     * `draws`).
+     */
+    args: { molblock: string; isomers?: Configuration[]; count?: number; draw?: number; holds?: MetalHolds; options?: OptionValues };
+    result: { isomers: Omit<Conformers, "chosen">[] };
   };
   /**
    * A molecule in 3D as a formula to draw: its heavy atoms in their order,
@@ -53,7 +101,7 @@ export type ChemRequests = {
   drawing_of: { args: { molblock: string; perceive?: boolean }; result: { molblock: string; perceived?: boolean } };
   /**
    * A molecule in 3D whose file gives no bond orders given them from a
-   * SMILES of the same molecule (RDKit's AssignBondOrdersFromTemplate): its
+   * SMILES of the same molecule: its
    * atoms in their order, its bonds' orders and charges the SMILES's.
    */
   orders_from_smiles: { args: { molblock: string; smiles: string }; result: { molblock: string } };
@@ -62,24 +110,27 @@ export type ChemRequests = {
    * it (docs/PDF.md, *Stage 5*): see `PictureRead`.
    */
   read_picture: { args: { picture: string }; result: PictureRead };
-  /** A molecule in 3D, its bond orders known, given the hydrogens its file leaves out (RDKit's AddHs, placed by geometry): its atoms in their order, the hydrogens after. */
+  /** A molecule in 3D, its bond orders known, given the hydrogens its file leaves out (placed by geometry): its atoms in their order, the hydrogens after. */
   add_hydrogens: { args: { molblock: string; hydrogens?: number[] }; result: { molblock: string } };
 };
 
 /**
  * The structure drawn in a picture, as the plugin that reads pictures reads
- * it: its atoms where the picture has them, in its pixels from its top
- * left - each an element, with its charge, or a label as it is drawn (a
- * group's: OTBS); its bonds, by index; and what the plugin is unsure of, by
- * no number. A wedge or a hash says which end lies nearer - `up`, `b`
- * nearer than `a`; `down`, farther - and, where the plugin can tell, which
- * end the picture draws narrow (`narrow`): a picture's reader may know
- * only the first, a wedge narrow at one end being a hash narrow at the
- * other. No structure found: no atoms.
+ * it - its model's reading, as the model gives it: its atoms' places, as
+ * the model gives them, across the picture as it cropped it - `pad`, the
+ * white it keeps round what is drawn, in pixels - or across the structure
+ * itself; each atom an element, with its charge and, where the model gives
+ * one, its isotope's mass number, or a label as it is drawn (a group's:
+ * OTBS) - neither, where the model gives no symbol; its bonds, by index -
+ * a wedge or a hash saying which end lies nearer (`up`, `b` nearer than
+ * `a`; `down`, farther), which is all a model tells; and the model's
+ * confidence in each, from 0 to 1, where it gives one. No structure found:
+ * no atoms. Meno lays it on the picture (lib/figure/inkFit).
  */
 export type PictureRead = {
-  atoms: { x: number; y: number; el?: string; charge?: number; label?: string; unsure?: true }[];
-  bonds: { a: number; b: number; order: 1 | 2 | 3; aromatic?: true; stereo?: "up" | "down"; narrow?: "a" | "b"; unsure?: true }[];
+  atoms: { x: number; y: number; el?: string; charge?: number; isotope?: number; label?: string; confidence?: number }[];
+  bonds: { a: number; b: number; order: 1 | 2 | 3; aromatic?: true; stereo?: "up" | "down"; confidence?: number }[];
+  pad?: number;
 };
 
 /**
@@ -90,7 +141,6 @@ export type PictureRead = {
  * not counted); and whether none of its stereoisomers embeds with its
  * stereo held - made then as the embedding places it.
  */
-export type OpenStereo = { atoms: number[]; bonds: number[]; isomers: number; cumulenes?: number[]; cumulated?: number[][]; free?: boolean };
 
 /** One molecule's configuration, as the plugin answers it: its elements and key, or why it has none. */
 export type Configured = { elements: { kind: "centre" | "double" | "axis" | "cumulene" | "other"; atoms: number[]; specified: boolean }[]; key: string } | { error: string };
@@ -104,19 +154,27 @@ export type Like = Record<number, [number, number, number]>;
 
 /**
  * One stereoisomer's conformers: its atoms - those of the block in their
- * order, then the hydrogens made for them - its bonds by index, each
- * conformer's coordinates in angstroms, laid over the first, and its energy
- * in hartrees, lowest first - none where no force field had parameters for a
- * metal in it, and the conformers are not ranked; the force field's name
- * ("none" where none was used); and the CIP label of
- * every stereocentre and double bond, and of those that were left open and
- * chosen, by the block's atom and bond index.
+ * order, then the hydrogens made for them - its bonds by index, and every
+ * conformer the search made, in the order it made them: its coordinates in
+ * angstroms and its energy in hartrees - none where no force field had
+ * parameters for a metal in it, and then those of the model it was optimised
+ * in, where it gives them (`modelEnergies`); the force field's name ("none"
+ * where none was used); and the CIP label of every stereocentre and double
+ * bond, and of those that were left open and chosen, by the block's atom and
+ * bond index. The page keeps each conformer once and lays them over each
+ * other (Workspace/chem/pageConformers).
  */
 export type Conformers = {
   atoms: { el: string; charge: number }[];
   bonds: { a1: number; a2: number; order: 1 | 2 | 3 }[];
   frames: number[][];
   energies?: number[];
+  /**
+   * The energies of the model the conformers were optimised in, in hartrees,
+   * where that is not the molecule - a lighter metal of its group standing
+   * in, eta rings held - and `energies` are not given: for their order alone.
+   */
+  modelEnergies?: number[];
   /** The stars at the centres of the rings or chains bound to a metal through all their atoms (V3000 ENDPTS), by atom: placed at each one's centre, and no atoms of the molecule. */
   stars?: number[];
   field: string;
@@ -124,10 +182,22 @@ export type Conformers = {
   how?: { label: string; text: string }[];
   /** How they were made, in one line - embedding, force field, and what was held that is no term of it: shown with them, kept with them. */
   method?: string;
+  /** The CIP labels, by atom and bond index: Meno's own, read from the places (Workspace/chem/openStereo `withOwnCip`) - what the plugin sends here is never read. */
   cip: { atoms: Record<string, string>; bonds: Record<string, string> };
   chosen: { atoms: Record<string, string>; bonds: Record<string, string> };
   smiles: string;
 };
+
+/**
+ * One atom of a structure drawn as the toolkit makes it: its element, atomic
+ * number and charge; the valence it gives it, and the most it could be where
+ * the toolkit knows (`most`: by the element's valences, or a charged atom's
+ * by those of the element it then has the electrons of); its unpaired
+ * electrons; and which part of the structure it is in, by number.
+ */
+export type FactAtom = { el: string; z: number; charge: number; valence: number; most?: number; radicals: number; part: number };
+/** A structure drawn as the toolkit makes it: each atom (`FactAtom`), and what it could not make sense of, in its words (`problem`) - or not read at all. */
+export type StructureFacts = { read: false } | { read: true; atoms: FactAtom[]; problem?: string };
 
 export type ChemOp = keyof ChemRequests;
 
@@ -140,16 +210,22 @@ export type Analysis = {
      * be, when that is known.
      */
     valenceError?: { valence: number; most?: number };
+    /** Its R or S as the plugin says - never read: Meno's own are (Workspace/chem/cipMarks). */
     cip?: "R" | "S" | "r" | "s";
     aromatic?: boolean;
   }[];
-  /** A bond's CIP descriptor: E or Z, or an axis of chirality's M or P. */
-  bonds: { index: number; aromatic?: boolean; cip?: "E" | "Z" | "M" | "P" }[];
+  /**
+   * Its bonds, and a descriptor on each as the plugin says (E or Z, an
+   * axis's M or P) - never read, Meno's own being the page's (docs/CIP.md);
+   * a plugin may send them or not, and any it sends are passed over.
+   */
+  bonds?: { index: number; aromatic?: boolean; cip?: string }[];
 };
 
 /** What carries lines to the worker and back. */
 export type ChemTransport = {
-  send(line: string): void;
+  /** Sends a line; where the sending can fail in words (a converse request: no key kept), the promise of it. */
+  send(line: string): unknown;
   /** Calls `onLine` for every line the worker writes; returns the unsubscribe. */
   listen(onLine: (line: string) => void): () => void;
 };
@@ -256,7 +332,16 @@ export class ChemClient {
         timer,
       });
       this.watch?.sent(id);
-      this.transport.send(JSON.stringify({ id, op, ...args }));
+      // (a sending refused - a converse with no key kept - fails the question at once, in the backend's words)
+      const sent = this.transport.send(JSON.stringify({ id, op, ...args }));
+      if (sent instanceof Promise) sent.catch((e: unknown) => {
+        const p = this.pending.get(id);
+        if (!p) return;
+        clearTimeout(p.timer);
+        this.pending.delete(id);
+        this.watch?.settled(id);
+        reject(new ChemError(e instanceof Error ? e.message : String(e)));
+      });
     });
   }
 

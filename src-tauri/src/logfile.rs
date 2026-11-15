@@ -185,7 +185,7 @@ fn stamped(source: &str, text: &str) -> String {
 /// Seconds since 1970-01-01 00:00 UTC as a date and time in the Gregorian
 /// calendar: the days counted in eras of 400 years (146 097 days), each
 /// era's years begun on 1 March, so that a leap day falls at a year's end.
-fn utc(secs: u64) -> String {
+pub(crate) fn utc(secs: u64) -> String {
     let days = (secs / 86_400) as i64;
     let s = secs % 86_400;
     let z = days + 719_468; // (days from 0000-03-01)

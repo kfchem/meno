@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { ACS_1996, STYLE_PRESETS, WILEY } from "../../../lib/chem/style";
-import { editorLayoutOptions, maxFitZoom, startingZoom } from "./layoutOptions";
+import { editorLayoutOptions, maxFitZoom, setDrawnRatio, startingZoom } from "./layoutOptions";
 
 describe("startingZoom", () => {
   it("shows a bond two and a half times as long as it prints", () => {
@@ -25,5 +25,14 @@ describe("the layout's options of the style alone", () => {
       expect([own.fontFamily, own.bondColor, own.pointPx]).toEqual([drawn.fontFamily, drawn.bondColor, drawn.pointPx]);
       expect(own.pointPx).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("the thinnest a bond is drawn", () => {
+  it("is one of the canvas's device pixels, in CSS pixels", () => {
+    setDrawnRatio(2);
+    expect(editorLayoutOptions(ACS_1996).minLinePx).toBe(0.5);
+    setDrawnRatio(1);
+    expect(editorLayoutOptions(ACS_1996).minLinePx).toBe(1);
   });
 });

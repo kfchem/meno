@@ -1,6 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { openable, openedAs, openedTexts, textsOf } from "./openFile";
-import { registerKinds } from "../../lib/io/kinds";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { openable, openedAs, openedTexts, sayNoneTold, textsOf, unreadWorkspaceSaid, workspaceOfFile } from "./openFile";
+import { useNotices } from "../notices";
+import { useOnline } from "../../lib/plugins/online";
+import type { CatalogueEntry } from "../../lib/plugins/catalogue";
+import { kindOf, MENO_KINDS, registerKinds } from "../../lib/io/kinds";
+import { connectStoreToDocument, createEditorStore } from "../features/Workspace/store";
+import { createWorkspaceDocument } from "../features/Workspace/document";
+import { workspaceFile } from "../features/Workspace/utils/workspace";
 import { MANIFESTS } from "../../lib/plugins/known";
 
 const MOL = `ethanol
@@ -58,18 +64,19 @@ describe("openedAs", () => {
     expect(openedTexts([{ name: "", text: "" }])).toEqual({ kind: "workspace", label: "Untitled.txt", data: { texts: [{ name: "", text: "" }] } });
   });
 
-  it("offers chemical files, calculations' output - of the plugins added, and those their catalogues name - and text to Open, and no kind nothing reads", () => {
+  it("offers chemical files, calculations' output - of the plugins added, and those only plugins not added read - and text to Open, and no kind nothing reads", () => {
     registerKinds([]);
     for (const ext of [".meno", ".mol", ".sdf", ".rxn", ".xyz", ".pdb", ".cube", ".log", ".txt", ".py"]) expect(openable()).toContain(ext);
-    // (nothing added that reads, writes or names them: no calculation's files)
+    // (nothing added or offered that reads or writes them: no calculation's files)
     expect(openable()).not.toContain(".out");
-    expect(openable()).not.toContain(".gjf");
-    registerKinds(MANIFESTS.filter((m) => m.id === "getting-started"));
-    expect(openable()).toEqual(expect.arrayContaining([".out", ".fchk", ".molden"]));
+    expect(openable()).not.toContain(".orb");
+    // (none added, all offered: what they read, to name one to add)
+    registerKinds([], MANIFESTS);
+    expect(openable()).toEqual(expect.arrayContaining([".out", ".ock", ".molden"]));
     // (what a plugin added writes, a calculation's input, as text to change)
-    registerKinds(MANIFESTS.filter((m) => m.id === "gaussian"));
-    expect(openable()).toEqual(expect.arrayContaining([".gjf", ".com"]));
-    expect(textsOf(openedAs("job.gjf", "# B3LYP/6-31G(d) Opt\n"))).toHaveLength(1);
+    registerKinds(MANIFESTS.filter((m) => m.id === "orbitron"));
+    expect(openable()).toEqual(expect.arrayContaining([".orb"]));
+    expect(textsOf(openedAs("job.orb", "> M2/B-mid opt\n"))).toHaveLength(1);
     registerKinds(MANIFESTS);
     expect(openable()).not.toContain(".ket");
     // (each once)
@@ -81,13 +88,95 @@ describe("openedAs", () => {
     afterEach(() => registerKinds([]));
 
     it("opens a calculation's output on a workspace, a log of something else as text", () => {
-      expect(openedAs("job.out", "\n                                 * O   R   C   A *\n")).toMatchObject({ kind: "workspace", label: "job.out" });
-      expect(openedAs("run.log", " Entering Gaussian System, Link 0=g16\n")).toMatchObject({ kind: "workspace" });
+      expect(openedAs("job.out", "\n                                 ~ Q   U   A   N   T   A ~\n")).toMatchObject({ kind: "workspace", label: "job.out" });
+      expect(openedAs("run.log", "Orbitron run begins, stage 0=orb26\n")).toMatchObject({ kind: "workspace" });
       expect(textsOf(openedAs("build.log", "compiled in 3 s\n"))).toHaveLength(1);
     });
   });
 
   it("opens a calculation's output as text where no plugin added reads it: Meno knows no program", () => {
-    expect(textsOf(openedAs("run.log", " Entering Gaussian System, Link 0=g16\n"))).toHaveLength(1);
+    expect(textsOf(openedAs("run.log", "Orbitron run begins, stage 0=orb26\n"))).toHaveLength(1);
+  });
+});
+
+describe("texts nothing told, opened while the plugins online are not listed", () => {
+  afterEach(() => {
+    useNotices.setState({ notices: [] });
+    useOnline.setState({ state: "unlisted", catalogue: undefined });
+    vi.restoreAllMocks();
+  });
+  const none = async () => null;
+
+  it("are said once, with the button that lists them - a plain text not - and nothing at all once they are listed", () => {
+    sayNoneTold(["water.out", "notes.txt", "run.log"], () => {}, none);
+    const [n] = useNotices.getState().notices;
+    expect([n.title, n.text, n.action?.label, n.stays]).toEqual(["Opened as text", "No plugin added reads water.out, run.log.", "List the plugins online", true]);
+    useNotices.setState({ notices: [] });
+    sayNoneTold(["notes.txt", "table.csv"], () => {}, none);
+    expect(useNotices.getState().notices).toEqual([]);
+    useOnline.setState({ state: "listed", catalogue: { schema: 1, issued: "", plugins: [] } });
+    sayNoneTold(["water.out"], () => {}, none);
+    expect(useNotices.getState().notices).toEqual([]);
+  });
+
+  it("listed, say in the notice's place what each is and the plugin that reads it, with Add - added, the file read again", async () => {
+    const online = await import("../../lib/plugins/online");
+    const workers = await import("../../lib/calc/addOnline");
+    const far = { id: "far", name: "Far" } as CatalogueEntry;
+    vi.spyOn(online, "listOnline").mockImplementation(async () => void useOnline.setState({ state: "listed", catalogue: { schema: 1, issued: "", plugins: [far] } }));
+    const added = vi.spyOn(workers, "addOnline").mockResolvedValue();
+    const again = vi.fn();
+    const kind = { id: "far-out", name: "Far output", extensions: [".far"], suggest: ["far"] };
+    useNotices.getState().show({ id: "other", title: "Other", text: "Before it." });
+    sayNoneTold(["water.out", "other.out"], again, async (name) => (name === "water.out" ? kind : null));
+    useNotices.getState().notices[1].action!.run();
+    await vi.waitFor(() => expect(useNotices.getState().notices[1].action?.label).toBe("Add Far"));
+    // (in its place: after the one before it)
+    expect(useNotices.getState().notices.map((n) => [n.id, n.text])).toEqual([
+      ["other", "Before it."],
+      ["none-told", "water.out is Far output: the Far plugin reads it."],
+    ]);
+    useNotices.getState().notices[1].action!.run();
+    await vi.waitFor(() => expect(again).toHaveBeenCalledWith(["water.out"]));
+    expect(added).toHaveBeenCalledWith(far);
+    expect(useNotices.getState().notices.map((n) => n.id)).toEqual(["other"]);
+  });
+
+  it("listed, say so where none of them is read by a plugin online - or why the list is not here", async () => {
+    const online = await import("../../lib/plugins/online");
+    const listing = vi.spyOn(online, "listOnline").mockImplementation(async () => void useOnline.setState({ state: "listed", catalogue: { schema: 1, issued: "", plugins: [] } }));
+    sayNoneTold(["water.out"], () => {}, none);
+    useNotices.getState().notices[0].action!.run();
+    await vi.waitFor(() => expect(useNotices.getState().notices[0].text).toBe("No plugin online reads water.out."));
+    listing.mockImplementation(async () => void useOnline.setState({ state: "failed", problem: "Listing them needs the network." }));
+    useOnline.setState({ state: "unlisted", catalogue: undefined });
+    useNotices.setState({ notices: [] });
+    sayNoneTold(["water.out"], () => {}, none);
+    useNotices.getState().notices[0].action!.run();
+    await vi.waitFor(() => expect(useNotices.getState().notices[0].text).toBe("Listing them needs the network."));
+  });
+});
+
+describe("a file told to be a workspace that does not read", () => {
+  const told = (name: string, text: string) => kindOf(name, text);
+
+  it("is said, by its name, and why: not a Meno file at all, cut short, saved by a newer Meno", () => {
+    // (a .meno of plain text: no zip, no workspace JSON - once dropped without a word)
+    expect(told("notes.meno", "hello, this is not a zip")?.id).toBe(MENO_KINDS.workspace.id);
+    expect(unreadWorkspaceSaid("notes.meno", "hello, this is not a zip", told("notes.meno", "hello, this is not a zip"))).toBe("notes.meno could not be read: it is not a workspace Meno reads.");
+    const newer = JSON.stringify({ format: "meno-workspace", version: 999 });
+    expect(unreadWorkspaceSaid("new.meno", newer, told("new.meno", newer))).toBe("new.meno could not be read: it was saved by a newer Meno - update Meno to open it.");
+    expect(unreadWorkspaceSaid("empty.meno", "", told("empty.meno", ""))).toContain("empty.meno could not be read");
+  });
+
+  it("is nothing to say of a file of another kind, nor of a workspace's own JSON", async () => {
+    expect(unreadWorkspaceSaid("ethanol.mol", MOL, kindOf("ethanol.mol", MOL))).toBeNull();
+    expect(unreadWorkspaceSaid("notes.txt", "line one", null)).toBeNull();
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const { bytes } = await workspaceFile(store.getState());
+    const json = workspaceOfFile(bytes)!;
+    expect(unreadWorkspaceSaid("mine.meno", json, kindOf("mine.meno", json))).toBeNull();
   });
 });

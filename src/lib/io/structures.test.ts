@@ -9,7 +9,7 @@ import samplePdb from "../../samples/cholesterol.pdb?raw";
 const WATER = "3\nwater\nO 0 0 0\nH 0.76 0.59 0\nH -0.76 0.59 0\n";
 
 // (XYZ energies are read by the patterns of the plugins added: those of the programs that write them)
-beforeAll(() => registerKinds(MANIFESTS.filter((m) => ["xtb", "crest", "orca"].includes(m.id))));
+beforeAll(() => registerKinds(MANIFESTS.filter((m) => ["tightbind", "confsweep", "quanta"].includes(m.id))));
 afterAll(() => registerKinds([]));
 
 describe("a structure's file, as Meno's own reader gives it", () => {
@@ -21,8 +21,8 @@ describe("a structure's file, as Meno's own reader gives it", () => {
   });
 
   it("opens a trajectory the file ends in the middle of with its whole frames, each with its energy", () => {
-    const frame = (e: number, z: number) => `3\n energy: ${e} gnorm: 0.01 xtb: 6.7.1\nO 0 0 ${z}\nH 0.76 0.59 0\nH -0.76 0.59 0\n`;
-    const read = readStructures("xyz", "md.xyz", frame(-5.07, 0) + frame(-5.08, 0.01) + "3\n energy: -5.09 gnorm: 0.01\nO 0 0 0.02\n");
+    const frame = (e: number, z: number) => `3\n energy: ${e} gradient: 0.01 tightbind: 1.0.0\nO 0 0 ${z}\nH 0.76 0.59 0\nH -0.76 0.59 0\n`;
+    const read = readStructures("xyz", "md.xyz", frame(-5.07, 0) + frame(-5.08, 0.01) + "3\n energy: -5.09 gradient: 0.01\nO 0 0 0.02\n");
     expect(checkedStructures(read, "md.xyz")).toBe(read);
     expect(read.molecules3d![0]).toMatchObject({ frames: [[0, 0, 0.01, 0.76, 0.59, 0, -0.76, 0.59, 0]], energies: [-5.07, -5.08], framesLeftOut: 1 });
   });
@@ -376,6 +376,19 @@ describe("a file with no coordinates, damaged (reader fuzzing, 2026-10-13)", () 
     const t = performance.now();
     expect(laidOutWhereUnplaced([cut])[0]).toBe(cut);
     expect(performance.now() - t).toBeLessThan(200);
+  });
+
+  it("draws a double bond a file with no places leaves open as open: but-2-ene straight on, 3-methylpent-2-ene with its code 3 (Brecher 2006, ST-4.4)", async () => {
+    const { laidOutWhereUnplaced } = await import("./unplaced");
+    const { readStereo } = await import("../layout/drawn");
+    const at = (el: string) => ({ el, x: 0, y: 0, z: 0 });
+    const butene = { atoms: ["C", "C", "C", "C"].map(at), bonds: [{ a1: 0, a2: 1, order: 1 }, { a1: 1, a2: 2, order: 2 }, { a1: 2, a2: 3, order: 1 }] } as never;
+    const [b] = laidOutWhereUnplaced([butene]) as { atoms: { el: string; x: number; y: number }[]; bonds: { a1: number; a2: number; order: number; stereoCode?: number }[] }[];
+    const read = readStereo(b.atoms.map((a) => ({ el: a.el, x: a.x, y: a.y, hs: 0 })) as never, b.bonds.map((x) => ({ a: x.a1, b: x.a2, order: x.order })));
+    expect(read.cisTrans.size).toBe(0);
+    const pentene = { atoms: ["C", "C", "C", "C", "C", "C"].map(at), bonds: [{ a1: 0, a2: 1, order: 1 }, { a1: 1, a2: 2, order: 2 }, { a1: 2, a2: 3, order: 1 }, { a1: 2, a2: 4, order: 1 }, { a1: 4, a2: 5, order: 1 }] } as never;
+    const [p] = laidOutWhereUnplaced([pentene]) as { bonds: { order: number; stereoCode?: number }[] }[];
+    expect(p.bonds.find((x) => x.order === 2)?.stereoCode).toBe(3);
   });
 
   it("costs a file whose records all have coordinates nothing: the records come back as they were read", async () => {

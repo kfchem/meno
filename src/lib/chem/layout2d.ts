@@ -6,14 +6,16 @@ import { ringSidesOf } from "./aromaticSides";
 import {
   chargeText,
   implicitHydrogens,
+  setValenceOrder,
   valenceOrder,
   type AtomChem,
   type BondChem,
   type SgroupMark,
   type StereoGroup,
 } from "./molecule";
-import { italicUnits, labelRuns, labelUnits, namesRingFirst, reversedLabel, unitRuns } from "./abbreviations";
+import { italicUnits, labelRuns, labelUnits, namesRingFirst, readsAsNothing, reversedLabel, unitRuns } from "./abbreviations";
 import { ELEMENTS } from "./elements";
+import { notMetal } from "./perception/elements";
 import { greatest, least, pushAll } from "./lists";
 import { clearRowSide, namesLaid, rowClearer } from "../layout/names";
 
@@ -71,8 +73,12 @@ export type Bond = BondChem & {
   stereo?: "up" | "down" | "wavy" | "either" | "none";
   // Double-bond offset layout modes
   doubleMode?: "auto" | "center" | "left" | "right";
-  // Wedge orientation principle vs. reverse principle
-  stereoOrient?: "principle" | "reverse";
+  /**
+   * The atom (`a1` or `a2`) a wedge is narrow at: a stereo wedge's centre, a
+   * perspective wedge's far end. None given, the end with more bonds (`a1`
+   * on a tie).
+   */
+  narrow?: number;
   /**
    * How a single bond with no stereo is drawn: as a plain line (the
    * default), as a bold bar, as hashes across it, or dashed along it.
@@ -84,13 +90,25 @@ export type Bond = BondChem & {
   color?: string;
   /** The colour it is highlighted in, behind the drawing (`Atom.highlight`). */
   highlight?: string;
+  /** Its id in the drawing, where the drawing gives one: what another bond's `behind` names it by. */
+  id?: number;
+  /**
+   * The bonds (by `id`) it passes behind where they cross, said by the chemist: it is drawn broken there where the four atoms of the two do not
+   * all carry a depth (`brokenBehind`). A look.
+   */
+  behind?: number[];
+  /**
+   * How far open each of those gaps is, 0 to 1, by the front bond's `id`, where one is opening or closing (the page eases it, never at once);
+   * fully open where not given.
+   */
+  behindShare?: Record<number, number>;
 };
 export type Vec2 = { x: number; y: number };
 
 /**
  * How a bond is drawn where it says nothing of stereochemistry. "wedge" is
  * a ring's bond in perspective running toward the viewer, narrow at its far
- * end (as a stereo wedge is narrow at its centre: `stereoOrient`); on a
+ * end (as a stereo wedge is narrow at its centre: `narrow`); on a
  * double bond it, or "bold", takes the place of the line the second one is
  * drawn beside.
  */
@@ -127,6 +145,8 @@ export type LayoutOptions = {
   hashSpacingPx: number;
   /** The fewest hashes a short hashed bond or wedge is drawn with, room allowing (`FEWEST_HASHES`, where the style asks); unset, as the spacing gives. */
   fewestHashes?: number;
+  /** A hashed wedge's widest hash stops short of a bare atom at its wide end, by a hash's clear gap; unset, it reaches the atom. */
+  hashedWedgeShort?: boolean;
   /**
    * A bold bond's width, and the length of a hashed bond's hashes. Left
    * unset, two thirds of a wedge's broad end.
@@ -385,6 +405,13 @@ export type TextItem = {
   beside?: boolean;
   /** Set beside: the atom, by index, whose charge it is. */
   markOf?: number;
+  /**
+   * Two electrons of its atom's own, and where they go round its symbol: a triplet's two unpaired electrons on two opposite sides, well
+   * apart - above and below, or left and right where a bond or its H are in the way (Brecher 2008, GR-5.3: two dots next to each other stand
+   * for a lone pair); a singlet's pair - a lone pair in GR-5.2's sense - two dots together on one side, square above, below, left or right of
+   * the symbol and parallel to that side. The sides are those its bonds, its H and a charge set beside it leave free.
+   */
+  twoElectrons?: { kind: "triplet" | "singlet"; sides: readonly ("up" | "down" | "left" | "right")[] };
   /** Its colour, where it is not the labels' (as CSS). */
   color?: string;
   /**
@@ -397,6 +424,11 @@ export type TextItem = {
    * labels': words on the page given one (docs/EDITOR-2D.md, *Text*).
    */
   family?: string;
+  /**
+   * A ground of this colour round its letters, as the canvas sets R and S on
+   * a molecule in 3D against the balls under them (StereoInk3D's halo).
+   */
+  halo?: string;
 };
 
 /** Whether two sets of texts are drawn alike: the same letters, set the same way, in the same places. */
@@ -486,18 +518,28 @@ export function hapticRings(atoms: readonly Atom[], bonds: readonly Bond[]): num
 /**
  * The atoms, a carbon between two double bonds with its symbol drawn: the
  * middle of an allene, a ketene, CO2 or a carbodiimide, which its bonds run
- * straight through, hidden in a line as it would be (O=C=O read as O=O).
+ * straight through, hidden in a line as it would be (O=C=O read as O=O) -
+ * and the C of a carbonyl, a cyanide or an isocyanide on a metal, M-C≡O,
+ * M-C≡N, M-C≡N-R, its two bonds in one line as well: shown, the ligand
+ * reads as the CO, CN or CNR it is, its atoms atoms still. (A carbon
+ * bonded to no metal - an acylium's, a nitrile's - and one with a third
+ * bond - a bridging carbonyl's - as ever.)
  */
 export function cumulatedShown(atoms: Atom[], bonds: readonly Bond[]): Atom[] {
   const doubles = atoms.map(() => 0);
   const all = atoms.map(() => 0);
+  const tripleToON = atoms.map(() => false);
+  const toMetal = atoms.map(() => false);
+  const metal = (el: string | undefined) => !!el && ELEMENTS.some((e) => e.symbol === el) && !notMetal.has(el);
   for (const b of bonds) {
-    for (const e of [b.a1, b.a2]) {
+    for (const [e, o] of [[b.a1, b.a2], [b.a2, b.a1]]) {
       all[e]++;
       if (b.order === 2) doubles[e]++;
+      if (b.order === 3 && (atoms[o]?.el === "O" || atoms[o]?.el === "N")) tripleToON[e] = true;
+      if (metal(atoms[o]?.el)) toMetal[e] = true;
     }
   }
-  return atoms.map((a, i) => (a.el === "C" && doubles[i] === 2 && all[i] === 2 ? { ...a, shown: true } : a));
+  return atoms.map((a, i) => (a.el === "C" && all[i] === 2 && (doubles[i] === 2 || (tripleToON[i] && toMetal[i])) ? { ...a, shown: true } : a));
 }
 
 function chargesAsDrawn(atoms: Atom[], bonds: readonly Bond[]): Atom[] {
@@ -611,6 +653,8 @@ export type Layout = {
   solidsImage?: { href: string; bounds: { min: Vec2; max: Vec2 } };
   /** Measurements on the molecules in 3D, drawn over them. */
   measures?: MeasureMark[];
+  /** R, S, E and Z on the molecules in 3D, written over them as the canvas writes them. */
+  solidsTexts?: TextItem[];
   bounds: { min: Vec2; max: Vec2 };
   /**
    * Pixels per coordinate unit this layout was built for. Sizes the layout
@@ -888,6 +932,43 @@ export function markCircle(run: PlacedRun): { c: Vec2; r: number } {
 }
 
 /**
+ * Where a label's two electrons of its atom's own are drawn (`TextItem.twoElectrons`), in the label's own places, each with how large it is:
+ * a triplet's two on two opposite sides of its symbol, one each; a singlet's pair both on its one side, together, side by side along it. Each
+ * a dot's width clear of the letters, at the symbol's middle. A charge set beside the symbol is kept off their sides where it is placed.
+ */
+export function unpairedDots(t: TextItem, fontSize: number, set: LabelSet, lineWorld: number): { c: Vec2; r: number }[] {
+  const two = t.twoElectrons;
+  if (!two) return [];
+  const run = placeLabel(t, fontSize, set)[t.anchorRun ?? 0];
+  if (!run || run.mark) return [];
+  const font = labelFont(set.fontFamily);
+  let pen = run.x;
+  const xs: number[] = [];
+  const ys: number[] = [];
+  for (const ch of run.text) {
+    for (const p of font.hull(ch)) {
+      xs.push(pen + p.x * run.size);
+      ys.push(run.y + p.y * run.size);
+    }
+    pen += font.advance(ch) * run.size;
+  }
+  if (!xs.length) return [];
+  const r = Math.max(lineWorld * 1.25, fontSize * set.subscriptSize * 0.075);
+  const [left, right, bottom, top] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+  const [cx, cy] = [(left + right) / 2, (bottom + top) / 2];
+  const at = (side: "up" | "down" | "left" | "right") =>
+    side === "up" ? { x: cx, y: top + 3 * r } : side === "down" ? { x: cx, y: bottom - 3 * r } : side === "left" ? { x: left - 3 * r, y: cy } : { x: right + 3 * r, y: cy };
+  const dots: { c: Vec2; r: number }[] = [];
+  for (const side of two.sides) {
+    const base = at(side);
+    const along = side === "up" || side === "down" ? { x: 1, y: 0 } : { x: 0, y: 1 };
+    // (a singlet's pair side by side along its side, a triplet's one on each side)
+    for (const k of two.kind === "singlet" ? [-1.1, 1.1] : [0]) dots.push({ c: { x: base.x + along.x * k * r, y: base.y + along.y * k * r }, r });
+  }
+  return dots;
+}
+
+/**
  * The marks of the labels, drawn: a charge of one as its sign in a circle,
  * a radical as a dot, or two for a carbene's pair - in lines, shapes and
  * filled circles, as the rest of the drawing is, a little lighter than a
@@ -905,6 +986,8 @@ function labelMarks(
   const fills: Circle[] = [];
   const w = lineWorld * 0.8;
   for (const t of texts) {
+    // (two electrons of the atom's own: a triplet's apart, a singlet's pair together)
+    for (const dot of unpairedDots(t, fontSize, set, lineWorld)) fills.push({ ...dot, ...(t.color ? { color: t.color } : {}) });
     for (const run of placeLabel(t, fontSize, set)) {
       if (!run.mark) continue;
       const { c, r } = markCircle(run);
@@ -973,6 +1056,12 @@ export function labelHulls(
       }));
       if (hull.length > 0) out.push(hull);
       pen += font.advance(ch) * run.size;
+    }
+  }
+  // (two electrons of the atom's own round its symbol, as a charge's circle is: a bond is kept clear of them by where they are put)
+  if (tail) {
+    for (const { c, r } of unpairedDots(t, fontSize, set, 0)) {
+      out.push(Array.from({ length: 12 }, (_, k) => ({ x: c.x - t.x + r * Math.cos((k * Math.PI) / 6), y: c.y - t.y + r * Math.sin((k * Math.PI) / 6) })));
     }
   }
   return out;
@@ -1172,8 +1261,11 @@ function buildTripleLines(
 /**
  * A line as a point and a direction; the cut the wide end of a wedge follows.
  * `reach` is how far a corner may travel to land on it - see WEDGE_MITRE_REACH.
+ * `square` says it is no bond's edge but the cut straight across the end, made
+ * for a bond that runs straight on: a corner on it is as free as a square
+ * end's, and may be rounded.
  */
-type Cut = { on: Vec2; dir: Vec2; key: number; reach: number };
+type Cut = { on: Vec2; dir: Vec2; key: number; reach: number; square?: boolean };
 
 /**
  * A bond carrying on from the wide end of a wedge: which way it goes, how far
@@ -1271,13 +1363,18 @@ function baseCut(
   // draw the end out into a spike. Square across the wedge is what carries
   // such a bond out of it, and the other side still follows its own bond.
   if (Math.abs(vcross(dir, axis)) < rule.minSin) {
+    // (past the atom by the bond's own line's half width, so that its butt end is under the cut: never by its outer lines' spread -
+    // a triple bond's, a nitrile's - which drove the wedge's end into the bond, a spike between its outer lines)
+    const lines = neighbours[key].lines;
+    const own = half - Math.max(0, ...lines.map((o) => Math.abs(o)));
     return {
-      on: vadd(atom, vscale(axis, -half)),
+      on: vadd(atom, vscale(axis, -own)),
       dir: vperp(axis),
       key,
       // square across the axis: the corner only has to come back as far as
       // the cut itself, whatever the bond does
       reach: half * 4,
+      square: true,
     };
   }
   const off = vperp(dir);
@@ -1767,8 +1864,9 @@ function broadEnd(
   const baseR = mitredR ?? vadd(squareR, back);
   const points = [baseL];
   // A corner cut along a bond carries on into that bond, so it is not a free
-  // corner and must stay as it is; the rest may be softened.
-  const soften = [!mitredL];
+  // corner and must stay as it is; the rest may be softened - a corner on a
+  // cut straight across the end, for a bond running straight on, as well.
+  const soften = [!mitredL || !!cutL?.square];
   const close =
     mitredL && mitredR && cutL && cutR && cutL.key !== cutR.key
       ? centredClose(p, neighbours, cutL.key, cutR.key)
@@ -1803,7 +1901,7 @@ function broadEnd(
     }
   }
   points.push(baseR);
-  soften.push(!mitredR);
+  soften.push(!mitredR || !!cutR?.square);
   return { points, soften };
 }
 
@@ -2172,7 +2270,10 @@ export function showsLabel(
     !!a.isotope ||
     // (a carbon of other than four bonds' valence says so: its hydrogens with it)
     (a.valence != null && a.valence !== 4) ||
-    (!!opts.showChargedCarbons && (!!a.charge || !!a.radical))
+    (!!opts.showChargedCarbons && (!!a.charge || !!a.radical)) ||
+    // (two electrons of its own, paired or not, sit round a symbol: Brecher 2008, GR-5.3 finds the C preferable, and its carbenes all have it)
+    a.radical === "singlet" ||
+    a.radical === "triplet"
   );
 }
 
@@ -2200,7 +2301,10 @@ function specialLabel(a: Atom, fromRight: boolean): { runs: TextRun[]; anchor: n
   // (a ring's substituents named before it - 2,6-diMeBz - are not read
   // outward: on the right of its bond, the label starts at the bond)
   const ringFirst = namesRingFirst(a.el);
-  const units = labelUnits(fromRight && !ringFirst ? reversedLabel(a.el) : a.el);
+  // (words Meno does not read - CH2CH2, xyz - are drawn in the order typed, never turned round: one piece, its last letter on the
+  // atom where its bond comes in from the right, its counts as they were typed - asked only where a label would be turned round)
+  const turned = fromRight && !ringFirst && !readsAsNothing(a.el);
+  const units = fromRight && !ringFirst && !turned ? [a.el] : labelUnits(turned ? reversedLabel(a.el) : a.el);
   if (units.length < 2) {
     const runs = labelRuns(a.el);
     // one unit read outward from a bond coming in from the right - TMS on
@@ -2320,6 +2424,33 @@ function besideAt(a: Atom, at: Vec2, runs: TextRun[], opts: Pick<LayoutOptions, 
   };
 }
 
+/**
+ * Where an atom's two electrons of its own go round its label `t` (`TextItem.twoElectrons`): on the sides its bonds (`ways`, as angles in
+ * radians) and what the label writes beside its symbol leave free - its H on the row before or after it, a line of H above or below it, a
+ * charge after it above the line. A triplet's two on the clearer pair of opposite sides, above and below where that is as clear (GR-5.3's
+ * figure); a singlet's pair on the clearest side, above where that is as clear. None for any other atom.
+ */
+function twoElectronsAt(a: Atom, t: TextItem, ways: readonly number[]): TextItem["twoElectrons"] {
+  if (a.radical !== "triplet" && a.radical !== "singlet") return undefined;
+  const taken = [...ways];
+  const runs = t.runs ?? [];
+  const anchor = t.anchorRun ?? 0;
+  const tailFrom = runs.findIndex((_, k) => k > anchor && isTail(runs, k, anchor));
+  if (runs.some((r, k) => k < anchor && !r.sup)) taken.push(Math.PI);
+  if (runs.some((r, k) => k > anchor && (tailFrom < 0 || k < tailFrom) && !r.mark)) taken.push(t.stack === "above" ? Math.PI / 2 : t.stack === "below" ? -Math.PI / 2 : 0);
+  // (a charge after the symbol, above its line: up and to the right)
+  if (tailFrom >= 0) taken.push(Math.PI / 4);
+  const angle = { up: Math.PI / 2, down: -Math.PI / 2, left: Math.PI, right: 0 } as const;
+  const clear = (side: keyof typeof angle) => Math.min(Math.PI, ...taken.map((u) => Math.abs(Math.atan2(Math.sin(u - angle[side]), Math.cos(u - angle[side])))));
+  if (a.radical === "triplet") {
+    const upright = Math.min(clear("up"), clear("down"));
+    const across = Math.min(clear("left"), clear("right"));
+    return { kind: "triplet", sides: across > upright + 1e-6 ? ["left", "right"] : ["up", "down"] };
+  }
+  const order = ["up", "down", "right", "left"] as const;
+  return { kind: "singlet", sides: [order.reduce((best, side) => (clear(side) > clear(best) + 1e-6 ? side : best), order[0] as (typeof order)[number])] };
+}
+
 /** What a label writes after its symbol, on the symbol's line: its charge, then its radical's dots. */
 function tailRuns(a: Atom, opts: Pick<LayoutOptions, "circleCharges">): TextRun[] {
   const out: TextRun[] = [];
@@ -2331,7 +2462,9 @@ function tailRuns(a: Atom, opts: Pick<LayoutOptions, "circleCharges">): TextRun[
         : { text: chargeText(q), sup: true },
     );
   }
-  if (a.radical) out.push({ text: a.radical === "doublet" ? "\u2022" : "\u2022\u2022", mark: "radical" });
+  // (one unpaired electron a dot, after the symbol; two of the atom's own - a triplet's, a singlet's pair - round the symbol, not here:
+  // `TextItem.twoElectrons`)
+  if (a.radical === "doublet") out.push({ text: "\u2022", mark: "radical" });
   return out;
 }
 
@@ -2360,6 +2493,8 @@ export function buildTextLabels(
   const band = Math.sin(((opts.hydrogenBandDeg ?? 10) * Math.PI) / 180);
   const sideways = Math.cos(((opts.symbolCentringDeg ?? 25) * Math.PI) / 180);
   const orderSum = new Map<number, number>();
+  // (toward a valence a file sets: a metal's coordination bonds counted, as the file counts them - molecule `setValenceOrder`)
+  const setSum = new Map<number, number>();
   const away = new Map<number, Vec2>();
   const bonded = new Set<number>();
   // which sides of each atom its bonds leave from, outside the vertical band
@@ -2395,6 +2530,8 @@ export function buildTextLabels(
     const order = valenceOrder(kind);
     note(b.a1, b.a2, order, valenceOrder(kind, atoms[b.a1]?.el));
     note(b.a2, b.a1, order, valenceOrder(kind, atoms[b.a2]?.el));
+    setSum.set(b.a1, (setSum.get(b.a1) ?? 0) + setValenceOrder(kind, atoms[b.a1]?.el));
+    setSum.set(b.a2, (setSum.get(b.a2) ?? 0) + setValenceOrder(kind, atoms[b.a2]?.el));
   }
 
   const hapticCentres = new Set<number>();
@@ -2410,6 +2547,13 @@ export function buildTextLabels(
     .map((b) => Math.hypot(atoms[b.a1].x - atoms[b.a2].x, atoms[b.a1].y - atoms[b.a2].y))
     .filter((d) => d > 1e-9)
     .sort((p, q) => p - q);
+  // (each atom's H as its label writes it: by a valence the file sets, what its bonds leave of it - else by its own valence)
+  const hydrogensAt = (a: Atom, i: number) =>
+    opts.showImplicitHydrogens === false
+      ? 0
+      : a.valence != null
+        ? Math.max(0, a.valence - (setSum.get(i) ?? 0))
+        : implicitHydrogens(a.el, orderSum.get(i) ?? 0, a.charge ?? 0, a.radical);
   const names = namesLaid(
     {
       x: atoms.map((a) => a.x),
@@ -2417,13 +2561,7 @@ export function buildTextLabels(
       edges: bonds.filter((b) => atoms[b.a1] && atoms[b.a2]).map((b) => [b.a1, b.a2] as const),
       elements: atoms.map((a) => a.el),
       // (each label's H, counted as the label writes it below)
-      hydrogens: atoms.map((a, i) =>
-        opts.showImplicitHydrogens === false
-          ? 0
-          : a.valence != null
-            ? Math.max(0, a.valence - (orderSum.get(i) ?? 0))
-            : implicitHydrogens(a.el, orderSum.get(i) ?? 0, a.charge ?? 0, a.radical),
-      ),
+      hydrogens: atoms.map(hydrogensAt),
     },
     lengths.length ? lengths[lengths.length >> 1] : 1,
   );
@@ -2446,7 +2584,10 @@ export function buildTextLabels(
     // leave most room.
     // (put by hand: where it was put, whatever the drawing would do)
     const nudged = tail.length > 0 && a.chargeAt ? a.chargeAt : null;
-    const push = (item: TextItem) => {
+    const push = (given: TextItem) => {
+      // (its two electrons of its own, a triplet's or a singlet's pair: their sides chosen first, so that a charge set beside keeps clear of them)
+      const two = twoElectronsAt(a, given, (ways.get(i) ?? []).map((w) => Math.atan2(w.dir.y, w.dir.x)));
+      const item = two ? { ...given, twoElectrons: two } : given;
       const clash = tail.length > 0 && (!!nudged || tailClashes(item, tail, ways.get(i) ?? [], a, opts));
       if (!clash) {
         out.push(item);
@@ -2467,8 +2608,11 @@ export function buildTextLabels(
       // on its N; out by that much more across)
       const wide = tail.reduce((w, r) => w + (r.mark ? MARK_WIDTH : 0.6 * r.text.length), 0) * size;
       const more = Math.max(0, wide / 2 - (MARK_WIDTH / 2) * size);
+      // (the sides its two electrons of its own take, as bonds would: the charge kept off them)
+      const unit = { up: { x: 0, y: 1 }, down: { x: 0, y: -1 }, left: { x: -1, y: 0 }, right: { x: 1, y: 0 } } as const;
+      const occupied = [...(ways.get(i) ?? []), ...(two?.sides ?? []).map((side) => ({ dir: unit[side], len: ways.get(i)?.[0]?.len ?? 1 }))];
       out.push({
-        ...besideVertex(a, ways.get(i) ?? [], tail, opts, (dir) => {
+        ...besideVertex(a, occupied, tail, opts, (dir) => {
           let far = 0;
           for (const hull of labelHulls(bare, opts.fontPx, set, false)) {
             for (const p of hull) far = Math.max(far, p.x * dir.x + p.y * dir.y);
@@ -2506,13 +2650,7 @@ export function buildTextLabels(
       });
       continue;
     }
-    const h =
-      opts.showImplicitHydrogens === false
-        ? 0
-        : a.valence != null
-          ? // (a valence the file sets: what the bonds leave of it)
-            Math.max(0, a.valence - (orderSum.get(i) ?? 0))
-          : implicitHydrogens(a.el, orderSum.get(i) ?? 0, a.charge ?? 0, a.radical);
+    const h = hydrogensAt(a, i);
     const centreSymbol =
       straightLeft.has(i) && straightRight.has(i) ? { centreSymbol: true } : {};
     if (h <= 0) {
@@ -2596,16 +2734,12 @@ export function buildTextLabels(
 }
 
 /**
- * Which end of a wedge carries the wide base. By the usual principle the thin
- * end points at the stereocentre, i.e. the atom of higher degree; the reverse
- * orientation swaps the ends.
+ * Which end of a wedge carries the wide base: the end it is not narrow at
+ * (`Bond.narrow`). None given, the thin end points at the stereocentre by the
+ * usual principle, the atom of higher degree.
  */
 function wedgeBaseAtom(bond: Bond, deg?: Map<number, number>): number {
-  const degA = deg?.get(bond.a1) || 0;
-  const degB = deg?.get(bond.a2) || 0;
-  const thinAtA = degA >= degB; // tie: thin end at a1
-  const baseAtA = bond.stereoOrient === "reverse" ? thinAtA : !thinAtA;
-  return baseAtA ? bond.a1 : bond.a2;
+  return wedgeNarrowAtom(bond, deg) === bond.a1 ? bond.a2 : bond.a1;
 }
 
 /**
@@ -2613,10 +2747,13 @@ function wedgeBaseAtom(bond: Bond, deg?: Map<number, number>): number {
  * lists first.
  */
 export function wedgeNarrowAtom(
-  bond: Bond,
+  bond: Pick<Bond, "a1" | "a2" | "narrow">,
   deg?: Map<number, number>,
 ): number {
-  return wedgeBaseAtom(bond, deg) === bond.a1 ? bond.a2 : bond.a1;
+  if (bond.narrow === bond.a1 || bond.narrow === bond.a2) return bond.narrow;
+  const degA = deg?.get(bond.a1) || 0;
+  const degB = deg?.get(bond.a2) || 0;
+  return degA >= degB ? bond.a1 : bond.a2; // tie: thin end at a1
 }
 
 function degreeMap(bonds: Bond[]): Map<number, number> {
@@ -2994,21 +3131,40 @@ export function buildBondPrimitives(
     } else {
       // The hashes start where a label at the narrow atom leaves off, or one
       // hash spacing out from a bare atom, and run to the wide end or the
-      // label there.
+      // label there - or, where the style asks (`hashedWedgeShort`), stop
+      // short of a bare atom there by a hash's own clear gap, the bonds on
+      // from it starting at the atom on their own. Only where bonds go on
+      // from it: at a bare end with none, the widest hash is the bond's
+      // end, or the wedge would have none and look short (the maintainer,
+      // 2026-11-05).
       const spacing = toWorld(opts.hashSpacingPx, zoom, units);
-      const hashes = buildHashes(
-        narrowO,
-        vnorm(vsub(wideO, narrowO)),
-        trimNarrow > 0 ? trimNarrow : firstGap,
-        L0 - trimWide,
-        pxToWorld(lwPx, zoom) / 2,
-        baseHalf,
-        spacing,
-        pxToWorld(lwPx, zoom),
-        (opts.joinStyle ?? "round") === "round",
-        opts.fewestHashes,
-        trimNarrow > 0 ? trimNarrow : 0,
-      );
+      const lw = pxToWorld(lwPx, zoom);
+      const hashesTo = (end: number) =>
+        buildHashes(
+          narrowO,
+          vnorm(vsub(wideO, narrowO)),
+          trimNarrow > 0 ? trimNarrow : firstGap,
+          end,
+          lw / 2,
+          baseHalf,
+          spacing,
+          lw,
+          (opts.joinStyle ?? "round") === "round",
+          opts.fewestHashes,
+          trimNarrow > 0 ? trimNarrow : 0,
+        );
+      const reaching = hashesTo(L0 - trimWide);
+      // (never below what the style asks for: where stopping short would leave fewer than its three - or than
+      // reaching the atom gives, if that is fewer - or none at all on the very shortest, the hashes reach the atom)
+      const wideIdx = baseAtP1 ? bond.a1 : bond.a2;
+      const bondsAtWide = deg?.get(wideIdx) ?? adjBonds?.get(wideIdx)?.length;
+      // (not known - no bonds told - as bonds going on, as it was)
+      const goesOn = bondsAtWide == null || bondsAtWide > 1;
+      const shortBy = opts.hashedWedgeShort && goesOn && !(trimWide > 0) ? Math.max(lw, spacing - lw) : 0;
+      const stopped = shortBy > 0 ? hashesTo(L0 - trimWide - shortBy) : reaching;
+      const count = (h: { lines: unknown[]; polys: unknown[] }) => h.lines.length + h.polys.length;
+      const least = Math.max(1, Math.min(count(reaching), opts.fewestHashes ?? 1));
+      const hashes = count(stopped) >= least ? stopped : reaching;
       for (const l of hashes.lines) l.widthPx = lwPx;
       lines.push(...hashes.lines);
       polys.push(...hashes.polys);
@@ -3782,6 +3938,7 @@ export function buildAllPrimitives(
   const bends: (Bend & { color?: string })[] = [];
   const reach: BondReach[] = [];
   const crowded: Crowded[] = [];
+  const drawn = new Map<Bond, ReturnType<typeof buildBondPrimitives>>();
   for (const b of bonds) {
     const u = atoms[b.a1].id,
       v = atoms[b.a2].id;
@@ -3830,10 +3987,16 @@ export function buildAllPrimitives(
       }
       r.bends = [...(r.bends ?? []), ...arc.bends];
     }
-    const behind = brokenBehind(atoms, bonds, b, r.lines, rWorld);
+    drawn.set(b, r);
+  }
+  // (every bond is built before any is broken: a bond behind is cut by the width of what is drawn in front of it)
+  const breakWith = { zoom, round: roundJoins, raster: (opts.minLinePx ?? 1) > 0 };
+  for (const b of bonds) {
+    const r = drawn.get(b)!;
+    const behind = brokenBehind(atoms, bonds, b, r, drawn, rWorld, breakWith);
     const tint = <T extends object>(x: T): T & { color?: string } => (b.color ? { ...x, color: b.color } : x);
     lines.push(...behind.lines.map(tint));
-    polys.push(...r.polys.map(tint));
+    polys.push(...behind.polys.map(tint));
     meets.push(...(r.meets ?? []).map(tint));
     freeEnds.push(...[...(r.ends ?? []), ...behind.ends].map(tint));
     bends.push(...(r.bends ?? []).map(tint));
@@ -3941,34 +4104,177 @@ function perspectiveCorners(atoms: Atom[], bonds: Bond[], opts: LayoutOptions, z
 }
 
 /**
- * A bond's lines, broken where the bond passes behind another - both drawn
- * in perspective, their atoms' `z` saying which is nearer where they cross.
- * The gap is wide enough to read as the one bond going under the other.
- * Returns the lines, and the ends the breaks make.
+ * The clear space kept each side of a bond in front where a bond behind passes under it, in line widths: from the front bond's edge, square to
+ * it, to the cut end of the bond behind, which runs PARALLEL to the front bond - the gap is a band of one width along the bond in front. Brecher
+ * 2006, ST-3.1: "the front-to-back ordering of crossing bonds must be indicated. That ordering is depicted with a small discontinuity in the
+ * backmost bond"; for print the discontinuity is "at least twice as wide as the width of a single bond". Two line widths of clear space each side
+ * is 4 widths with a plain front bond's own, never under that. By eye, a matter of look: a plain bond crossing a plain one at a right angle is
+ * cut where it always was (5 half widths each side of the crossing).
+ */
+export const CROSSING_CLEAR = 2;
+/** The least width of the break itself, square to the bond in front, in line widths (Brecher 2006, ST-3.1: at least twice a single bond's): the band holds it by itself. */
+export const CROSSING_LEAST_BREAK = 2;
+/**
+ * Bonds crossing at less than this angle (degrees) are all but along each other: nothing is cut, as nothing is for bonds exactly parallel.
+ * By eye, a matter of look: the clear space is constant, so a shallower crossing cuts the bond behind over a longer way.
+ */
+export const CROSSING_LEAST_ANGLE_DEG = 10;
+/** The clear space is never under this many device pixels on a page or in a picture of pixels (a floor, as a line's one device pixel is); a vector writer has none. */
+export const CROSSING_CLEAR_FLOOR_PX = 3;
+
+type Built = ReturnType<typeof buildBondPrimitives>;
+
+/**
+ * Across a bond in front: the span, either side of the line through its atoms, that what is drawn there fills at `along` from its first atom -
+ * a plain line its width, a bold bond or a wedge the width it has there, a double or triple bond from the outer edge of one outer line to the
+ * outer edge of the other, a hashed bond the length of the stroke nearest. Signed as `vcross(dir, point - origin)`.
+ */
+function acrossSpan(front: Built, origin: Vec2, dir: Vec2, along: number, halfWidthOf: (l: LineSeg) => number): { lo: number; hi: number } | null {
+  const spans: [number, number][] = [];
+  let stroke: { gap: number; span: [number, number] } | null = null;
+  for (const l of front.lines) {
+    const p = { x: l.x1, y: l.y1 };
+    const q = { x: l.x2, y: l.y2 };
+    const len = vlen(vsub(q, p));
+    if (len < 1e-12) continue;
+    const half = halfWidthOf(l);
+    const a1 = vdot(vsub(p, origin), dir);
+    const a2 = vdot(vsub(q, origin), dir);
+    const across = (pt: Vec2) => vcross(dir, vsub(pt, origin));
+    if (Math.abs(a2 - a1) >= 0.7 * len) {
+      // a line along the bond
+      if (along < Math.min(a1, a2) - half || along > Math.max(a1, a2) + half) continue;
+      const t = Math.min(1, Math.max(0, (along - a1) / (a2 - a1)));
+      const c = across({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t });
+      spans.push([c - half, c + half]);
+    } else {
+      // a stroke across it (a hashed bond's): the nearest one's whole length
+      const gap = along < Math.min(a1, a2) ? Math.min(a1, a2) - along : along > Math.max(a1, a2) ? along - Math.max(a1, a2) : 0;
+      const [c1, c2] = [across(p), across(q)];
+      const span: [number, number] = [Math.min(c1, c2) - half, Math.max(c1, c2) + half];
+      if (!stroke || gap < stroke.gap) stroke = { gap, span };
+    }
+  }
+  for (const poly of front.polys) {
+    const hits: number[] = [];
+    const pts = poly.points;
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i];
+      const q = pts[(i + 1) % pts.length];
+      const ap = vdot(vsub(p, origin), dir) - along;
+      const aq = vdot(vsub(q, origin), dir) - along;
+      if (ap * aq > 0 || ap === aq) continue;
+      const t = ap / (ap - aq);
+      hits.push(vcross(dir, vsub({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t }, origin)));
+    }
+    if (hits.length) spans.push([Math.min(...hits), Math.max(...hits)]);
+    else {
+      // (the crossing falls between a hashed bond's strokes: the nearest stroke's whole width)
+      const alongs = pts.map((q) => vdot(vsub(q, origin), dir));
+      const gap = along < Math.min(...alongs) ? Math.min(...alongs) - along : along - Math.max(...alongs);
+      const acrosses = pts.map((q) => vcross(dir, vsub(q, origin)));
+      if (!stroke || gap < stroke.gap) stroke = { gap, span: [Math.min(...acrosses), Math.max(...acrosses)] };
+    }
+  }
+  if (stroke) spans.push(stroke.span);
+  if (!spans.length) return null;
+  return { lo: Math.min(...spans.map((x) => x[0])), hi: Math.max(...spans.map((x) => x[1])) };
+}
+
+/** A polygon clipped to the side of the line `vdot(p - at, dir) = 0` that `keep` (1 or -1) names. */
+function clipPoly(points: Vec2[], at: Vec2, dir: Vec2, keep: 1 | -1): Vec2[] {
+  const side = (p: Vec2) => keep * vdot(vsub(p, at), dir);
+  const out: Vec2[] = [];
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
+    const q = points[(i + 1) % points.length];
+    const [sp, sq] = [side(p), side(q)];
+    if (sp >= 0) out.push(p);
+    if ((sp > 0 && sq < 0) || (sp < 0 && sq > 0)) {
+      const t = sp / (sp - sq);
+      out.push({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t });
+    }
+  }
+  return out;
+}
+
+/** A band across the page along a bond in front: where `vdot(p - origin, normal)` lies between `lo` and `hi`. */
+type Band = { origin: Vec2; normal: Vec2; lo: number; hi: number };
+
+/** A line of a bond as the shape it fills: its width across it, flat at both ends. */
+function lineShape(l: LineSeg, half: number): Vec2[] {
+  const d = vnorm({ x: l.x2 - l.x1, y: l.y2 - l.y1 });
+  const n = { x: -d.y * half, y: d.x * half };
+  return [
+    { x: l.x1 + n.x, y: l.y1 + n.y },
+    { x: l.x2 + n.x, y: l.y2 + n.y },
+    { x: l.x2 - n.x, y: l.y2 - n.y },
+    { x: l.x1 - n.x, y: l.y1 - n.y },
+  ];
+}
+
+/**
+ * Whether `bond` (from `a` to `c`) passes behind `o` (from `e` to `f`) where they cross, at `t` along the one and `u` along the other - in one
+ * place, three sources in turn: where all four atoms carry a depth, the depth says it (a ring drawn in perspective, a cage as Clean-up draws
+ * it); else the chemist's mark, where `bond` names `o` among those it is behind (`Bond.behind`); else neither is behind - a crossing drawn by
+ * hand is drawn whole until it is said.
+ */
+export function passesBehind(bond: Bond, a: Atom, c: Atom, o: Bond, e: Atom, f: Atom, t: number, u: number): boolean {
+  if (a.z != null && c.z != null && e.z != null && f.z != null) {
+    const mine = a.z + (c.z - a.z) * t;
+    const theirs = e.z + (f.z - e.z) * u;
+    return mine < theirs - 1e-6;
+  }
+  return o.id != null && !!bond.behind?.includes(o.id);
+}
+
+/**
+ * A bond's lines and shapes, broken where the bond passes behind another - both drawn in perspective, their atoms' `z` saying which is
+ * nearer where they cross. The gap is a band along the bond in front, of one width at every angle: the front bond's own width there and
+ * `CROSSING_CLEAR` line widths each side of it (never under `CROSSING_CLEAR_FLOOR_PX` device pixels where pixels are drawn). What the front bond
+ * fills is what is drawn: a plain line, a bold bond, a wedge at the crossing, a double or triple bond from its outer edge to its outer edge - one
+ * break across all of it, no stub of the back bond left between its lines - a hashed bond the stroke nearest. Every line of the back bond (a
+ * double bond's two, a hashed bond's strokes) and every shape of it (a bold bond, a wedge) is cut along the band's edges: each cut end runs
+ * PARALLEL to the bond in front, flat, with no cap; ends away from a cut keep the style's. A line that is cut is drawn as the shape it fills.
+ * The break is a true gap - the pieces with nothing between - for every writer. A piece left shorter than the clear space is not drawn; bonds
+ * all but along each other (`CROSSING_LEAST_ANGLE_DEG`) are not cut. The band runs the whole line of the bond in front, past its atoms: where
+ * a back bond crosses near the front bond's end, it is cut there as it would be at the middle. Returns the lines and shapes, and the ends the
+ * breaks make (none: a cut end is finished flat by the cut).
  */
 function brokenBehind(
   atoms: Atom[],
   bonds: Bond[],
   bond: Bond,
-  lines: LineSeg[],
+  built: Built,
+  drawn: Map<Bond, Built>,
   halfWidth: number,
-): { lines: LineSeg[]; ends: Vec2[] } {
+  how: { zoom: number; round: boolean; raster: boolean },
+): { lines: LineSeg[]; polys: Poly[]; ends: Vec2[] } {
+  const { lines, polys } = built;
   const a = atoms[bond.a1];
   const c = atoms[bond.a2];
   // (a bond to a pi system's centre goes into its ring, not over or under
   // its edges: neither is broken for the other)
-  if (a?.z == null || c?.z == null || bond.endpoints?.length) return { lines, ends: [] };
-  const gap = halfWidth * 5;
-  // where the bond crosses the ones in front of it, as fractions along it
-  const cuts: number[] = [];
+  if (!a || !c || bond.endpoints?.length) return { lines, polys, ends: [] };
+  // (nothing can put it behind: no depth at its ends, and nothing said of it)
+  if ((a.z == null || c.z == null) && !bond.behind?.length) return { lines, polys, ends: [] };
+  const lineWidth = 2 * halfWidth;
+  const halfWidthOf = (l: LineSeg) => pxToWorld(l.widthPx, how.zoom) / 2;
+  const clear = Math.max(CROSSING_CLEAR * lineWidth, how.raster ? pxToWorld(CROSSING_CLEAR_FLOOR_PX, how.zoom) : 0);
   const p = { x: a.x, y: a.y };
   const d = { x: c.x - a.x, y: c.y - a.y };
+  const length = vlen(d);
+  if (length < 1e-9) return { lines, polys, ends: [] };
+  const dir = { x: d.x / length, y: d.y / length };
+  const sinLeast = Math.sin((CROSSING_LEAST_ANGLE_DEG * Math.PI) / 180);
+  // where the bond crosses the ones in front of it: a band along each, to leave clear
+  const bands: Band[] = [];
   for (const o of bonds) {
     if (o === bond || o.endpoints?.length) continue;
     if (o.a1 === bond.a1 || o.a1 === bond.a2 || o.a2 === bond.a1 || o.a2 === bond.a2) continue;
     const e = atoms[o.a1];
     const f = atoms[o.a2];
-    if (e?.z == null || f?.z == null) continue;
+    if (!e || !f) continue;
     const q = { x: e.x, y: e.y };
     const g = { x: f.x - e.x, y: f.y - e.y };
     const den = vcross(d, g);
@@ -3976,44 +4282,66 @@ function brokenBehind(
     const t = vcross(vsub(q, p), g) / den;
     const u = vcross(vsub(q, p), d) / den;
     if (t <= 0 || t >= 1 || u <= 0 || u >= 1) continue;
-    const mine = a.z + (c.z - a.z) * t;
-    const theirs = e.z + (f.z - e.z) * u;
-    if (mine < theirs - 1e-6) cuts.push(t);
+    if (!passesBehind(bond, a, c, o, e, f, t, u)) continue;
+    const frontLength = vlen(g);
+    const fd = { x: g.x / frontLength, y: g.y / frontLength };
+    // (the angle between the two bonds: all but along each other, nothing is cut)
+    if (Math.abs(vcross(fd, dir)) < sinLeast) continue;
+    const span = acrossSpan(drawn.get(o)!, q, fd, u * frontLength, halfWidthOf) ?? { lo: -halfWidth, hi: halfWidth };
+    // (a gap said by the chemist on its way open or closed: as wide as it has come, about its middle)
+    const deep = a.z != null && c.z != null && e.z != null && f.z != null;
+    const share = deep || o.id == null ? 1 : Math.min(1, Math.max(0, bond.behindShare?.[o.id] ?? 1));
+    if (share <= 0) continue;
+    const [lo, hi] = [span.lo - clear, span.hi + clear];
+    const [middle, half] = [(lo + hi) / 2, ((hi - lo) / 2) * share];
+    // (across the front bond as `vcross(fd, point - q)` measures it: the normal (-fd.y, fd.x))
+    bands.push({ origin: q, normal: { x: -fd.y, y: fd.x }, lo: middle - half, hi: middle + half });
   }
-  if (!cuts.length) return { lines, ends: [] };
-  const out: LineSeg[] = [];
-  const ends: Vec2[] = [];
+  if (!bands.length) return { lines, polys, ends: [] };
+  const alongOf = (pt: Vec2) => vdot(vsub(pt, p), dir);
+  const acrossOf = (band: Band, pt: Vec2) => vdot(vsub(pt, band.origin), band.normal);
+  /** The bands a shape reaches into. */
+  const reaching = (pts: readonly Vec2[]) =>
+    bands.filter((band) => {
+      const across = pts.map((pt) => acrossOf(band, pt));
+      return Math.max(...across) > band.lo && Math.min(...across) < band.hi;
+    });
+  /** A shape with every band it reaches taken out of it: the pieces left either side, each cut along the band's edge; crumbs left out. */
+  const cut = (pts: Vec2[], reached: readonly Band[]): Vec2[][] => {
+    let pieces: Vec2[][] = [pts];
+    for (const band of reached) {
+      const [below, above] = [
+        { x: band.origin.x + band.normal.x * band.lo, y: band.origin.y + band.normal.y * band.lo },
+        { x: band.origin.x + band.normal.x * band.hi, y: band.origin.y + band.normal.y * band.hi },
+      ];
+      pieces = pieces.flatMap((piece) => [clipPoly(piece, below, band.normal, -1), clipPoly(piece, above, band.normal, 1)]).filter((piece) => piece.length >= 3);
+    }
+    // (a piece left shorter than the clear space, along the bond, is a crumb: not drawn)
+    return pieces.filter((piece) => {
+      const along = piece.map(alongOf);
+      return Math.max(...along) - Math.min(...along) >= clear;
+    });
+  };
+  const outLines: LineSeg[] = [];
+  const outPolys: Poly[] = [];
   for (const l of lines) {
-    // each line of the bond, cut where the crossing falls along it
-    const ld = { x: l.x2 - l.x1, y: l.y2 - l.y1 };
-    const ll = vlen(ld);
+    const ll = Math.hypot(l.x2 - l.x1, l.y2 - l.y1);
     if (ll < 1e-9) {
-      out.push(l);
+      outLines.push(l);
       continue;
     }
-    let pieces: [number, number][] = [[0, 1]];
-    for (const t0 of cuts) {
-      const cross = { x: p.x + d.x * t0, y: p.y + d.y * t0 };
-      const t = vdot(vsub(cross, { x: l.x1, y: l.y1 }), ld) / (ll * ll);
-      const half = gap / ll;
-      pieces = pieces.flatMap(([s0, s1]): [number, number][] => {
-        if (t + half <= s0 || t - half >= s1) return [[s0, s1]];
-        const kept: [number, number][] = [];
-        if (t - half > s0) kept.push([s0, t - half]);
-        if (t + half < s1) kept.push([t + half, s1]);
-        return kept;
-      });
-    }
-    const at = (s: number) => ({ x: l.x1 + (l.x2 - l.x1) * s, y: l.y1 + (l.y2 - l.y1) * s });
-    for (const [s0, s1] of pieces) {
-      const from = at(s0);
-      const to = at(s1);
-      out.push({ ...l, x1: from.x, y1: from.y, x2: to.x, y2: to.y });
-      if (s0 > 0) ends.push(from);
-      if (s1 < 1) ends.push(to);
-    }
+    const shape = lineShape(l, halfWidthOf(l));
+    const reached = reaching(shape);
+    // (a line no band reaches, whole; one cut, the shape it fills, cut)
+    if (!reached.length) outLines.push(l);
+    else for (const piece of cut(shape, reached)) outPolys.push({ points: piece, ...(l.color ? { color: l.color } : {}) });
   }
-  return { lines: out, ends };
+  for (const poly of polys) {
+    const reached = reaching(poly.points);
+    if (!reached.length) outPolys.push(poly);
+    else for (const piece of cut(poly.points, reached)) outPolys.push({ ...poly, points: piece });
+  }
+  return { lines: outLines, polys: outPolys, ends: [] };
 }
 
 /**
@@ -4095,9 +4423,12 @@ export function unspecifiedDoubles(atoms: Atom[], bonds: Bond[]): Bond[] {
       return { subs, straight, free };
     });
     if (ends.some((e) => e.subs.length === 0 || e.straight)) return;
+    // (on the group of an end that has one; else on both groups of an end, where neither leads to a stereocentre; else on the group of an
+    //  end of two that does not, the bond to the centre kept plain - Brecher 2006, ST-4.4)
     const single = ends.find((e) => e.subs.length === 1 && e.free(e.subs[0]));
     const both = ends.find((e) => e.subs.length === 2 && e.subs.every(e.free));
-    for (const k of single ? single.subs : (both?.subs ?? [])) out[k] = { ...out[k], stereo: "wavy" };
+    const one = ends.find((e) => e.subs.length === 2 && e.subs.some(e.free));
+    for (const k of single ? single.subs : both ? both.subs : (one?.subs.filter(one.free) ?? [])) out[k] = { ...out[k], stereo: "wavy" };
   });
   return out;
 }
@@ -4767,6 +5098,9 @@ export function fontStack(family: string): string {
 }
 
 /** A label as the canvas draws it: set by `placeLabel`, run by run. */
+/** How far a text's halo reaches out round its letters, in ems of them: as the canvas's (StereoInk3D, its outline's width). */
+export const HALO_EMS = 0.12;
+
 function svgLabel(
   t: TextItem,
   fontSize: number,
@@ -4775,14 +5109,16 @@ function svgLabel(
 ): string {
   const fontFamily = xmlAttr(fontStack(set.fontFamily ?? "Arial"));
   let out = "";
-  for (const run of placeLabel(t, fontSize, set)) {
-    // (a mark is drawn with the lines and shapes)
-    if (run.mark) continue;
-    out +=
-      `<text x="${run.x}" y="${-run.y}" font-family="${fontFamily}"` +
-      ` font-size="${run.size}"${run.italic ? ' font-style="italic"' : ""}${run.bold ? ' font-weight="bold"' : ""} fill="${xmlAttr(svgColor(run.color, fill))}" stroke="none"` +
-      ` text-anchor="start">${escapeXml(run.text)}</text>`;
-  }
+  const runs = placeLabel(t, fontSize, set).filter((run) => !run.mark);
+  const text = (run: (typeof runs)[number], paint: string) =>
+    `<text x="${run.x}" y="${-run.y}" font-family="${fontFamily}"` +
+    ` font-size="${run.size}"${run.italic ? ' font-style="italic"' : ""}${run.bold ? ' font-weight="bold"' : ""} ${paint}` +
+    ` text-anchor="start">${escapeXml(run.text)}</text>`;
+  // (a halo: a stroke round the letters, as far out round them as the canvas's outline - HALO_EMS of their size - every run's
+  // first, then every run's letters, so that no halo lies over the letters of the run before it: one outline, as the canvas sets it)
+  if (t.halo) for (const run of runs) out += text(run, `fill="none" stroke="${xmlAttr(svgColor(t.halo, "white"))}" stroke-width="${HALO_EMS * 2 * run.size}" stroke-linejoin="round"`);
+  // (a mark is drawn with the lines and shapes)
+  for (const run of runs) out += text(run, `fill="${xmlAttr(svgColor(run.color, fill))}" stroke="none"`);
   return out;
 }
 
@@ -4828,11 +5164,34 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
   for (const u of layout.under ?? []) {
     s += `<path d="${toSvgPath(u)}" fill="${xmlAttr(svgColor(u.color))}" stroke="none" />`;
   }
+  // (a line with a round cap at each end - a hash, a dash, a short bond - drawn as one line with round ends rather
+  // than a line and two discs: a disc anti-aliased apart from its line shows as a seam at a small size, a hash as
+  // a little x on a screen at its own pixels - the same shape either way)
+  const capKey = (x: number, y: number) => `${Math.round(x * 1e6)},${Math.round(y * 1e6)}`;
+  const caps = new Map<string, number[]>();
+  (layout.fills || []).forEach((c, i) => {
+    const k = capKey(c.c.x, c.c.y);
+    caps.set(k, [...(caps.get(k) ?? []), i]);
+  });
+  const capAt = (x: number, y: number, r: number, color: string | undefined) =>
+    (caps.get(capKey(x, y)) ?? []).find((i) => Math.abs(layout.fills![i].r - r) < 1e-9 * Math.max(1, r) && layout.fills![i].color === color);
+  const used = new Set<number>();
+  const rounded = new Set<number>();
+  layout.lines.forEach((l, i) => {
+    const r = toCoord(l.widthPx > 0 ? l.widthPx : 1) / 2;
+    const a = capAt(l.x1, l.y1, r, l.color);
+    const z = capAt(l.x2, l.y2, r, l.color);
+    if (a == null || z == null || a === z) return;
+    rounded.add(i);
+    used.add(a);
+    used.add(z);
+  });
   // filled join caps
-  for (const c of layout.fills || []) {
+  (layout.fills || []).forEach((c, i) => {
+    if (used.has(i)) return;
     s += `<circle cx="${c.c.x}" cy="${-c.c
       .y}" r="${c.r}" fill="${xmlAttr(svgColor(c.color, stroke))}" stroke="none" />`;
-  }
+  });
   for (const p of layout.polys) {
     s += `<path d="${toSvgPath(p)}" fill="${xmlAttr(svgColor(p.color, stroke))}" stroke="none" />`;
   }
@@ -4854,12 +5213,12 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
           ` fill="none" stroke="${xmlAttr(svgColor(c.color, stroke))}" stroke-width="${strokeWidth}" />`
         : `<circle cx="${c.c.x}" cy="${-c.c.y}" r="${c.r}" fill="none" stroke="${xmlAttr(svgColor(c.color, stroke))}" stroke-width="${strokeWidth}" />`;
   }
-  for (const l of layout.lines) {
+  layout.lines.forEach((l, i) => {
     const w = toCoord(l.widthPx > 0 ? l.widthPx : 1);
     s += `<line x1="${l.x1}" y1="${-l.y1}" x2="${l.x2}" y2="${-l.y2}"` +
-      ` stroke="${xmlAttr(svgColor(l.color, stroke))}" stroke-width="${w}" stroke-linecap="butt"` +
+      ` stroke="${xmlAttr(svgColor(l.color, stroke))}" stroke-width="${w}" stroke-linecap="${rounded.has(i) ? "round" : "butt"}"` +
       ` stroke-linejoin="miter" stroke-miterlimit="2" />`;
-  }
+  });
   for (const t of layout.texts) {
     s += svgLabel(t, t.ownSize ? toWorld(t.fontPx, zoom, opts.units) : fontSize, t.family ? { ...set, fontFamily: t.family } : set, svgColor(t.color, fill));
   }
@@ -4868,6 +5227,10 @@ export function createSVG(layout: Layout, opts: LayoutOptions): string {
     ? `<image href="${xmlAttr(img.href)}" x="${img.bounds.min.x}" y="${-img.bounds.max.y}"` +
       ` width="${img.bounds.max.x - img.bounds.min.x}" height="${img.bounds.max.y - img.bounds.min.y}" preserveAspectRatio="none" />`
     : svgSolids(layout.solids ?? []);
+  // (R, S, E and Z on them, over them)
+  for (const t of layout.solidsTexts ?? []) {
+    s += svgLabel(t, t.ownSize ? toWorld(t.fontPx, zoom, opts.units) : fontSize, t.family ? { ...set, fontFamily: t.family } : set, svgColor(t.color, fill));
+  }
   // (with the molecules an image, their measurements' lines and fans are in
   // it, in depth among the atoms: only the values are written over it)
   for (const m of layout.measures ?? []) s += svgMeasure(m, set.fontFamily, !img);

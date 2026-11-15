@@ -1,7 +1,7 @@
 # How Meno looks
 
-Meno is judged by how it looks as much as by what it does: a control drawn
-by the browser, a colour picked by eye, a highlight that is not the
+Meno is judged by how it looks as much as by what it does: a control not
+Meno's own, a colour picked by eye, a highlight that is not the
 canvas's own, each says the tool was not made with care (the maintainer,
 2026-10-23). This is the standard every screen is held to. Its values are
 taken from what Meno already uses; where two things differed, the one used
@@ -49,6 +49,17 @@ shots, and is checked against this page (*The look check*, below).
    while it is pointed at. The valence and "either way" boxes and R/S, in
    2D and beside a molecule in 3D, are drawn so (`MarkBoxes2D`, `Texts2D`,
    `StereoInk3D`); the rest of the page's HTML moves over in turn.
+   Since 2026-11-05 (the maintainer) every object PLACED on the page is
+   WebGL first - its chips, notes, frames, ports, wires and cards - and
+   HTML only where WebGL truly cannot draw it or would badly harm what a
+   person does with it, its pull request saying why; an opened step card
+   is the one so kept. Words typed on a placed object are drawn as the
+   page's text is, keys going through a field kept out of sight at the
+   caret (CaptionTyping2D). What is not placed - a right-click menu, the
+   hover tip, the PDF lens card, a dialog - comes and goes over the page
+   and may be HTML. The look check flags a new placed object in HTML
+   without its reason. What it is drawn with: WORKSPACE.md, *Drawn by
+   WebGL*.
 
 ## Colours
 
@@ -171,7 +182,9 @@ From `src/ui/theme/motion.ts` (`--ease-meno`, `--ease-meno-leave` in CSS):
   px-2 text-xs` with a chevron in `gh-gray`, opening a menu as the
   canvas's menus are drawn (`rounded-md border border-gh-line bg-white
   py-1 shadow-lg`, rows `h-8 px-3`, `hover:bg-gh-base`, the chosen one
-  ticked), by keyboard as well as pointer.
+  ticked), by keyboard as well as pointer. The menu shows nine rows whole
+  at most, so a list of nine is never cut by its own padding. A longer
+  one shows half the tenth, so that it can be seen to go on (`LIST_ROWS`).
 - **Segmented choice** (few short choices, all shown): `rounded-md border
   border-gh-line`, segments `h-7 px-2.5 text-xs` parted by `border-l
   border-gh-line`, the chosen one `bg-accel-base text-white`, the others
@@ -208,8 +221,8 @@ Each is reachable by keyboard and shows focus with an `accel-base` border.
 - **Each its own.** No two actions share an icon: Energy window and Check
   structures, Populations and Descriptors, As conformers and Enumerate each
   have their own; sparkles are Generate's alone, a funnel is Filter's.
-- **Drawn as Quick Add's are**, where Heroicons' outline set has nothing
-  that is the thing itself: a 20-unit square, lines 1.8 wide (as heavy as a
+- **Drawn as Quick Add's are**, where the thing itself has no icon in
+  Heroicons' outline set: a 20-unit square, lines 1.8 wide (as heavy as a
   Heroicon at 2.1 on its 24), ends and corners round; solid where a solid
   reads better at 20 px (the balls of a ball-and-stick, a space-filling
   model). `menuIcons.tsx`, `workflow/icons.tsx`.

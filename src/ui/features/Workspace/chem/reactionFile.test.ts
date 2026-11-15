@@ -81,15 +81,32 @@ describe("a drawn reaction, saved as an RXN file", () => {
     expect(readRxnfile(reactionFileText(near)).reactants.length).toBe(1);
   });
 
-  it("is written by the arrow that shows a reaction, whatever its kind: an arrow alone, on a slide, shows none", () => {
+  it("is written by the arrow that shows a reaction: an arrow alone, on a slide, shows none", () => {
     const { drawn } = opened(sample);
     const lone = { ...drawn.arrows![0], id: 9, x: drawn.arrows![0].x, y: drawn.arrows![0].y + 40 * L };
     const two = { ...drawn, arrows: [...drawn.arrows!, lone] };
     expect(reactionArrows(two).map((a) => a.id)).toEqual([drawn.arrows![0].id]);
     expect(notOneReaction(two)).toBeNull();
-    const kinded = { ...drawn, arrows: [{ ...drawn.arrows![0], kind: "retrosynthetic" as const }] };
-    expect(readRxnfile(reactionFileText(kinded)).reactants.length).toBe(readRxnfile(reactionFileText(drawn)).reactants.length);
+    // (an equilibrium is written as drawn, its tail side the reactants - two-headed or not)
+    for (const arrow of [{ kind: "equilibrium" as const }, { kind: "equilibrium" as const, heads: 2 as const }]) {
+      const kinded = { ...drawn, arrows: [{ ...drawn.arrows![0], ...arrow }] };
+      expect(readRxnfile(reactionFileText(kinded)).reactants.length).toBe(readRxnfile(reactionFileText(drawn)).reactants.length);
+    }
     expect(notOneReaction({ ...drawn, atoms: [], bonds: [], arrows: [lone] })).toMatch(/arrow/);
+  });
+
+  it("is refused for an arrow that means no reaction - crossed out, retrosynthetic, headless, two-headed - with the reason; the same arrow with a head is written", () => {
+    const { drawn } = opened(sample);
+    const arrow = drawn.arrows![0];
+    const refused = (form: object) => notOneReaction({ ...drawn, arrows: [{ ...arrow, ...form }] });
+    expect(refused({ kind: "noReaction" })).toBe("No RXN file for this arrow: a crossed-out arrow: no reaction.");
+    expect(refused({ kind: "retrosynthetic" })).toBe("No RXN file for this arrow: a retrosynthetic arrow: draw the reaction forward to export it.");
+    expect(refused({ heads: 2 })).toBe("No RXN file for this arrow: a two-headed arrow joins resonance forms, not a reaction.");
+    expect(refused({ heads: 0 })).toBe("No RXN file for this arrow: a line with no head: draw its head to say which way the reaction goes.");
+    expect(() => reactionFileText({ ...drawn, arrows: [{ ...arrow, kind: "noReaction" }] })).toThrow(/crossed-out arrow/);
+    // (headed, it is the reaction it was)
+    expect(refused({ heads: 1 })).toBeNull();
+    expect(readRxnfile(reactionFileText({ ...drawn, arrows: [{ ...arrow, heads: undefined }] })).reactants.length).toBeGreaterThan(0);
   });
 
   it("says why where the drawing is not one reaction", () => {

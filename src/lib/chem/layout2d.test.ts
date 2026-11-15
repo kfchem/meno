@@ -14,6 +14,7 @@ import {
   labelSetOf,
   layoutMolecule,
   markExtent,
+  markCircle,
   mitreJoinPolys,
   placeLabel,
   roundPolyCorners,
@@ -102,6 +103,34 @@ describe("implicitHydrogens", () => {
 });
 
 describe("buildTextLabels", () => {
+  it("writes no H on a metal whose valence its file sets where coordination bonds take it - cisplatin's Pt, not PtH2", () => {
+    const L = NOMINAL_BOND_LENGTH;
+    const atoms: Atom[] = [
+      { id: 1, x: 0, y: 0, el: "Pt", valence: 4 },
+      { id: 2, x: L, y: 0, el: "N" },
+      { id: 3, x: -L, y: 0, el: "N" },
+      { id: 4, x: 0, y: L, el: "Cl" },
+      { id: 5, x: 0, y: -L, el: "Cl" },
+    ];
+    const labels = buildTextLabels(atoms, opts(), [
+      { a1: 1, a2: 0, order: 1, coordination: true },
+      { a1: 2, a2: 0, order: 1, coordination: true },
+      { a1: 0, a2: 3, order: 1 },
+      { a1: 0, a2: 4, order: 1 },
+    ]);
+    expect(labels.find((l) => l.atom === 0)?.text).toBe("Pt");
+    // (each NH3: three H, as ever - the pair it lends takes none)
+    for (const n of [1, 2]) expect(labels.find((l) => l.atom === n)?.text).toMatch(/^(NH3|H3N)$/);
+    // (the same with the metal listed first in each coordination bond: its end counted alike)
+    const first = buildTextLabels(atoms, opts(), [
+      { a1: 0, a2: 1, order: 1, coordination: true },
+      { a1: 0, a2: 2, order: 1, coordination: true },
+      { a1: 0, a2: 3, order: 1 },
+      { a1: 0, a2: 4, order: 1 },
+    ]);
+    expect(first.find((l) => l.atom === 0)?.text).toBe("Pt");
+  });
+
   it("writes the hydrogens below when bonds rise on both sides, above when they fall", () => {
     const L = NOMINAL_BOND_LENGTH;
     const v = (deg: number) => ({ x: L * Math.cos((deg * Math.PI) / 180), y: L * Math.sin((deg * Math.PI) / 180) });
@@ -566,7 +595,7 @@ describe("joinStyle", () => {
     { id: 5, x: 2.6, y: 0, el: "C" },
   ];
   const bonds: Bond[] = [
-    { a1: 0, a2: 1, order: 1, stereo: "up", stereoOrient: "reverse" },
+    { a1: 0, a2: 1, order: 1, stereo: "up", narrow: 0 },
     { a1: 1, a2: 2, order: 1, stereo: "none" },
     { a1: 1, a2: 3, order: 1, stereo: "none" },
     { a1: 2, a2: 4, order: 1, stereo: "none" },
@@ -790,7 +819,7 @@ describe("a wedge and a bond of more than one line", () => {
     { id: 4, x: -1.3, y: -0.75, el: "C" },
   ];
   const bonds: Bond[] = [
-    { a1: 0, a2: 1, order: 1, stereo: "up", stereoOrient: "reverse" },
+    { a1: 0, a2: 1, order: 1, stereo: "up", narrow: 0 },
     { a1: 1, a2: 2, order: 2, stereo: "none" },
     { a1: 1, a2: 3, order: 1, stereo: "none" },
   ];
@@ -826,7 +855,7 @@ describe("a wedge and a bond of more than one line", () => {
     // the wedge's wide end on atom 1, where only a double bond carries on,
     // its second line on the side of the wedge's narrow end (+y)
     const alone: Bond[] = [
-      { a1: 0, a2: 1, order: 1, stereo: "up", stereoOrient: "reverse" },
+      { a1: 0, a2: 1, order: 1, stereo: "up", narrow: 0 },
       { a1: 1, a2: 2, order: 2, stereo: "none", doubleMode: "left" },
     ];
     const o = opts();
@@ -974,6 +1003,82 @@ describe("a label must not change how a bond is drawn", () => {
     // (with no room for three so, as many as there is room for)
     const tight = opts({ fewestHashes: FEWEST_HASHES, lineWidthPx: o.hashSpacingPx * 0.9 });
     expect(hashesOf(buildBondPrimitives(pair("O"), bond, tight, ZOOM, deg).polys).length).toBeLessThan(3);
+  });
+
+  it("stops a hashed wedge's widest hash short of a bare atom at its wide end that bonds go on from, where the style asks", () => {
+    const bond: Bond = { a1: 0, a2: 1, order: 1, stereo: "down" };
+    // (the widest hash reaching the atom: what no style asks for now, but one saved before the setting is drawn so)
+    const o = opts({ hashedWedgeShort: undefined });
+    // (its wide end a chain's or a ring's atom: two more bonds go on from it)
+    const onward = new Map([
+      [0, 3],
+      [1, 3],
+    ]);
+    const at = hashesOf(buildBondPrimitives(pair("C"), bond, o, ZOOM, onward).polys);
+    const short = hashesOf(buildBondPrimitives(pair("C"), bond, opts({ hashedWedgeShort: true }), ZOOM, onward).polys);
+    const far = (h: { far: number }[]) => Math.max(...h.map((x) => x.far));
+    // (reaching the atom, as ever; short of it by a hash's clear gap - the widest hash as wide)
+    expect(far(at)).toBeCloseTo(pair("C")[1].x, 9);
+    expect(far(at) - far(short)).toBeCloseTo(o.hashSpacingPx - o.lineWidthPx, 9);
+    const widest = (h: { farWidth: number; far: number }[]) => h.reduce((p, q) => (q.far > p.far ? q : p)).farWidth;
+    expect(widest(short)).toBeCloseTo(widest(at), 9);
+    // (at a label it stops at the label, as ever)
+    expect(hashesOf(buildBondPrimitives(pair("O"), bond, opts({ hashedWedgeShort: true }), ZOOM, onward).polys)).toEqual(hashesOf(buildBondPrimitives(pair("O"), bond, o, ZOOM, onward).polys));
+  });
+
+  it("stops short at a wide end that one bond goes on from - a chain's carbon - as at one with more", () => {
+    const bond: Bond = { a1: 0, a2: 1, order: 1, stereo: "down" };
+    const two = new Map([
+      [0, 3],
+      [1, 2],
+    ]);
+    const far = (h: { far: number }[]) => Math.max(...h.map((x) => x.far));
+    const o = opts({ hashedWedgeShort: undefined });
+    const at = hashesOf(buildBondPrimitives(pair("C"), bond, o, ZOOM, two).polys);
+    const short = hashesOf(buildBondPrimitives(pair("C"), bond, opts({ hashedWedgeShort: true }), ZOOM, two).polys);
+    expect(far(at) - far(short)).toBeCloseTo(o.hashSpacingPx - o.lineWidthPx, 9);
+  });
+
+  it("counts the wide end's bonds from those bonded at each atom where no count is given, and stops short where neither is", () => {
+    const bond: Bond = { a1: 0, a2: 1, order: 1, stereo: "down" };
+    const on: Bond = { a1: 1, a2: 2, order: 1 };
+    const short = opts({ hashedWedgeShort: true });
+    const far = (h: { far: number }[]) => Math.max(...h.map((x) => x.far));
+    const drawn = (adj?: Map<number, Bond[]>) => far(hashesOf(buildBondPrimitives(pair("C"), bond, short, ZOOM, undefined, undefined, undefined, adj).polys));
+    // (no count given - the wide end the second atom, as the first is the narrow one on a tie: its bonds, this one alone, then one more)
+    expect(drawn(new Map([[1, [bond]]]))).toBeCloseTo(pair("C")[1].x, 9);
+    expect(drawn(new Map([[1, [bond, on]]]))).toBeLessThan(pair("C")[1].x - 1e-6);
+    // (nothing known of the wide end's bonds: as bonds going on, as it was drawn before)
+    expect(drawn()).toBeCloseTo(drawn(new Map([[1, [bond, on]]])), 9);
+  });
+
+  it("reaches a bare wide end that no bond goes on from, whatever the style asks: the widest hash is the bond's end", () => {
+    const bond: Bond = { a1: 0, a2: 1, order: 1, stereo: "down" };
+    const far = (h: { far: number }[]) => Math.max(...h.map((x) => x.far));
+    // (its wide end bonded to nothing else: `deg` has it at one bond)
+    for (const fewest of [undefined, FEWEST_HASHES]) {
+      const at = hashesOf(buildBondPrimitives(pair("C"), bond, opts({ fewestHashes: fewest }), ZOOM, deg).polys);
+      const asked = hashesOf(buildBondPrimitives(pair("C"), bond, opts({ fewestHashes: fewest, hashedWedgeShort: true }), ZOOM, deg).polys);
+      expect(asked).toEqual(at);
+      expect(far(asked)).toBeCloseTo(pair("C")[1].x, 9);
+    }
+  });
+
+  it("never stops short below what the style asks: three where it asks for three (or as many as reaching gives), and never none", () => {
+    const bond: Bond = { a1: 0, a2: 1, order: 1, stereo: "down" };
+    for (let k = 10; k <= 100; k += 5) {
+      const d = (1.5 * k) / 100;
+      const atoms: Atom[] = [
+        { id: 1, x: 0, y: 0, el: "C" },
+        { id: 2, x: d, y: 0, el: "C" },
+      ];
+      for (const fewest of [undefined, FEWEST_HASHES]) {
+        const reach = hashesOf(buildBondPrimitives(atoms, bond, opts({ fewestHashes: fewest }), ZOOM, deg).polys);
+        const short = hashesOf(buildBondPrimitives(atoms, bond, opts({ fewestHashes: fewest, hashedWedgeShort: true }), ZOOM, deg).polys);
+        expect(short.length, `${k}% ${fewest ?? ""}`).toBeGreaterThanOrEqual(Math.min(reach.length, fewest ?? 1));
+        expect(short.length, `${k}%`).toBeGreaterThan(0);
+      }
+    }
   });
 
   it("draws a short hashed wedge from a label as many hashes as before, flush with it, and from a bare atom never fewer, at any length", () => {
@@ -1324,7 +1429,7 @@ describe("a wedge with a bond carrying straight on", () => {
     { id: 4, x: 2.2, y: -1.3, el: "C" },
   ];
   const bonds: Bond[] = [
-    { a1: 0, a2: 1, order: 1, stereo: "up", stereoOrient: "reverse" },
+    { a1: 0, a2: 1, order: 1, stereo: "up", narrow: 0 },
     { a1: 1, a2: 2, order: 1, stereo: "none" },
     { a1: 1, a2: 3, order: 1, stereo: "none" },
   ];
@@ -1340,6 +1445,71 @@ describe("a wedge with a bond carrying straight on", () => {
     expect(end.length).toBe(3);
     // and the end reaches past the atom, so the bond comes out of it
     expect(Math.max(...end.map((p) => p.x))).toBeGreaterThan(1.5);
+  });
+});
+
+describe("a wedge's wide end where one bond carries straight on", () => {
+  const ZOOM = 40;
+  const atoms: Atom[] = [
+    { id: 1, x: 0, y: 0, el: "C" },
+    { id: 2, x: 1.5, y: 0, el: "C" },
+    { id: 3, x: 3, y: 0, el: "C" },
+  ];
+  const bonds: Bond[] = [
+    { a1: 0, a2: 1, order: 1, stereo: "up", narrow: 0 },
+    { a1: 1, a2: 2, order: 1, stereo: "none" },
+  ];
+  const wideEnd = (joinStyle: "round" | "sharp") => {
+    const { polys } = buildAllPrimitives(atoms, bonds, opts({ joinStyle }), ZOOM);
+    const wedge = polys.reduce((big, p) => (polyArea(p.points) > polyArea(big.points) ? p : big));
+    return wedge.points.filter((p) => p.x > 0.75);
+  };
+  // the corner a square end has: furthest out along the wedge and across it
+  const hasSharpCorner = (end: Vec2[]) => {
+    const far = Math.max(...end.map((p) => p.x));
+    const wide = Math.max(...end.map((p) => Math.abs(p.y)));
+    return end.some((p) => Math.abs(p.x - far) < 1e-9 && Math.abs(Math.abs(p.y) - wide) < 1e-9);
+  };
+
+  it("leaves the corners as they are cut when joins are sharp", () => {
+    expect(hasSharpCorner(wideEnd("sharp"))).toBe(true);
+  });
+
+  it("rounds both corners when joins are round", () => {
+    const end = wideEnd("round");
+    expect(end.length).toBeGreaterThan(wideEnd("sharp").length);
+    expect(hasSharpCorner(end)).toBe(false);
+  });
+
+  it("rounds only the corner that no bond's edge carries on, where a side bond leaves too", () => {
+    const withSide = [...atoms, { id: 4, x: 2.2, y: -1.3, el: "C" } as Atom];
+    const withSideBonds = [...bonds, { a1: 1, a2: 3, order: 1, stereo: "none" } as Bond];
+    const endOf = (joinStyle: "round" | "sharp") => {
+      const { polys } = buildAllPrimitives(withSide, withSideBonds, opts({ joinStyle }), ZOOM);
+      const wedge = polys.reduce((big, p) => (polyArea(p.points) > polyArea(big.points) ? p : big));
+      return wedge.points.filter((p) => p.x > 0.75);
+    };
+    const sharp = endOf("sharp");
+    const round = endOf("round");
+    const at = (pts: Vec2[], q: Vec2) => pts.some((p) => Math.hypot(p.x - q.x, p.y - q.y) < 1e-9);
+    // the corner on the side bond's edge (the side bond leaves downwards) stays where it was cut,
+    // the one on the square cut across the straight-on bond is gone
+    const down = sharp.reduce((m, p) => (p.y < m.y ? p : m));
+    const up = sharp.reduce((m, p) => (p.y > m.y ? p : m));
+    expect(at(round, down)).toBe(true);
+    expect(at(round, up)).toBe(false);
+    expect(round.length).toBeGreaterThan(sharp.length);
+  });
+
+  it("rounds a bold bar's end likewise", () => {
+    const bar = bonds.map((b, i) => (i === 0 ? { ...b, stereo: "none" as const, display: "bold" as const } : b));
+    const endOf = (joinStyle: "round" | "sharp") => {
+      const { polys } = buildAllPrimitives(atoms, bar, opts({ joinStyle }), ZOOM);
+      const shape = polys.reduce((big, p) => (polyArea(p.points) > polyArea(big.points) ? p : big));
+      return shape.points.filter((p) => p.x > 0.75);
+    };
+    expect(hasSharpCorner(endOf("sharp"))).toBe(true);
+    expect(hasSharpCorner(endOf("round"))).toBe(false);
   });
 });
 
@@ -1425,7 +1595,7 @@ describe("bold, hashed, dashed and dative bonds", () => {
     expect(bondKind(one({ display: "plain" }))).toBe("lines");
   });
 
-  it("draws a ring's bond toward the viewer as a wedge, narrow where stereoOrient says, saying no configuration", () => {
+  it("draws a ring's bond toward the viewer as a wedge, narrow where it is said to be, saying no configuration", () => {
     expect(bondKind(one({ display: "wedge" }))).toBe("wedge");
     const { lines, polys } = buildBondPrimitives(pair, one({ display: "wedge" }), opts(), ZOOM, deg);
     expect(lines).toHaveLength(0);
@@ -1651,13 +1821,9 @@ describe("a ring's bonds in perspective", () => {
       { id: 2, x: L, y: 0, el: "C" },
       { id: 3, x: -0.5 * L, y: 0.8 * L, el: "C" },
     ];
-    const deg = new Map([[0, 2], [1, 1], [2, 1]]);
-    const wedge: Bond = { a1: 2, a2: 0, order: 1, display: "wedge" };
-    // (narrow at 2: as stereoOrient puts it)
-    const narrow = wedgeNarrowAtom({ ...wedge, stereoOrient: "principle" }, deg);
     const bonds: Bond[] = [
       { a1: 0, a2: 1, order: 1, display: "bold" },
-      narrow === 2 ? wedge : { ...wedge, stereoOrient: "reverse" },
+      { a1: 2, a2: 0, order: 1, display: "wedge", narrow: 2 },
     ];
     const { polys } = buildAllPrimitives(atoms, bonds, opts(), 40);
     // the corner: four points, the first the atom itself, the third out past both shapes
@@ -1726,6 +1892,101 @@ describe("a carbon between two double bonds", () => {
     // (no second line off to one side: each pair straddles the axis, y = 0)
     const level = layout.lines.filter((l) => Math.abs(l.y1 - l.y2) < 1e-9 && Math.abs(l.y1) > 1e-9);
     expect(level.some((l) => l.y1 > 0) && level.some((l) => l.y1 < 0)).toBe(true);
+  });
+
+  it("writes a metal carbonyl's C, its bonds to the metal and the O in one line - and an alkyne's or a nitrile's as ever, bare", () => {
+    const L = NOMINAL_BOND_LENGTH;
+    const ZOOM = 40;
+    // Ni-C≡O, and an acetylide's C-C≡C and a nitrile's C-C≡N beside it
+    const atoms: Atom[] = [
+      { id: 1, x: 0, y: 0, el: "Ni" },
+      { id: 2, x: L, y: 0, el: "C" },
+      { id: 3, x: 2 * L, y: 0, el: "O" },
+      { id: 4, x: 0, y: 3 * L, el: "C" },
+      { id: 5, x: L, y: 3 * L, el: "C" },
+      { id: 6, x: 2 * L, y: 3 * L, el: "C" },
+      { id: 7, x: 0, y: 6 * L, el: "C" },
+      { id: 8, x: L, y: 6 * L, el: "C" },
+      { id: 9, x: 2 * L, y: 6 * L, el: "N" },
+    ];
+    const bonds: Bond[] = [
+      { a1: 0, a2: 1, order: 1 },
+      { a1: 1, a2: 2, order: 3 },
+      { a1: 3, a2: 4, order: 1 },
+      { a1: 4, a2: 5, order: 3 },
+      { a1: 6, a2: 7, order: 1 },
+      { a1: 7, a2: 8, order: 3 },
+    ];
+    expect(cumulatedShown(atoms, bonds).map((a) => !!a.shown)).toEqual([false, true, false, false, false, false, false, false, false]);
+    const layout = layoutMolecule(atoms, bonds, opts(), ZOOM);
+    expect(layout.texts.filter((t) => t.text === "C")).toHaveLength(1);
+  });
+
+  it("writes a cyanide's and an isocyanide's C on a metal - and leaves an acylium's, a bridging carbonyl's and an acetylide's bare", () => {
+    const L = NOMINAL_BOND_LENGTH;
+    const atoms: Atom[] = [
+      // Fe-C≡N, the C written
+      { id: 1, x: 0, y: 0, el: "Fe" },
+      { id: 2, x: L, y: 0, el: "C" },
+      { id: 3, x: 2 * L, y: 0, el: "N" },
+      // Ni-C≡N-CH3, the isocyanide's C written
+      { id: 4, x: 0, y: 3 * L, el: "Ni" },
+      { id: 5, x: L, y: 3 * L, el: "C" },
+      { id: 6, x: 2 * L, y: 3 * L, el: "N" },
+      { id: 7, x: 3 * L, y: 3 * L, el: "C" },
+      // CH3-C≡O+, an acylium: no metal, bare
+      { id: 8, x: 0, y: 6 * L, el: "C" },
+      { id: 9, x: L, y: 6 * L, el: "C" },
+      { id: 10, x: 2 * L, y: 6 * L, el: "O", charge: 1 },
+      // Fe(mu-CO)Fe: a third bond, bare
+      { id: 11, x: 0, y: 9 * L, el: "Fe" },
+      { id: 12, x: L, y: 9.5 * L, el: "C" },
+      { id: 13, x: 2 * L, y: 9 * L, el: "Fe" },
+      { id: 14, x: L, y: 10.5 * L, el: "O" },
+      // Fe(mu-C≡O)Fe, drawn with a triple bond: a third bond, bare
+      { id: 15, x: 0, y: 12 * L, el: "Fe" },
+      { id: 16, x: L, y: 12.5 * L, el: "C" },
+      { id: 17, x: 2 * L, y: 12 * L, el: "Fe" },
+      { id: 18, x: L, y: 13.5 * L, el: "O" },
+      // Cu-C≡C-CH3, an acetylide: bare
+      { id: 19, x: 0, y: 15 * L, el: "Cu" },
+      { id: 20, x: L, y: 15 * L, el: "C" },
+      { id: 21, x: 2 * L, y: 15 * L, el: "C" },
+      { id: 22, x: 3 * L, y: 15 * L, el: "C" },
+      // Fe-CH=O, a formyl: its double bond no triple, bare
+      { id: 23, x: 0, y: 18 * L, el: "Fe" },
+      { id: 24, x: L, y: 18 * L, el: "C" },
+      { id: 25, x: 1.5 * L, y: 18.866 * L, el: "O" },
+    ];
+    const bonds: Bond[] = [
+      { a1: 0, a2: 1, order: 1 },
+      { a1: 1, a2: 2, order: 3 },
+      { a1: 3, a2: 4, order: 1 },
+      { a1: 4, a2: 5, order: 3 },
+      { a1: 5, a2: 6, order: 1 },
+      { a1: 7, a2: 8, order: 1 },
+      { a1: 8, a2: 9, order: 3 },
+      { a1: 10, a2: 11, order: 1 },
+      { a1: 11, a2: 12, order: 1 },
+      { a1: 11, a2: 13, order: 2 },
+      { a1: 14, a2: 15, order: 1 },
+      { a1: 15, a2: 16, order: 1 },
+      { a1: 15, a2: 17, order: 3 },
+      { a1: 18, a2: 19, order: 1 },
+      { a1: 19, a2: 20, order: 3 },
+      { a1: 20, a2: 21, order: 1 },
+      { a1: 22, a2: 23, order: 1 },
+      { a1: 23, a2: 24, order: 2 },
+    ];
+    const shown = cumulatedShown(atoms, bonds).map((a) => !!a.shown);
+    expect(shown[1], "Fe-C≡N").toBe(true);
+    expect(shown[4], "Ni-C≡N-CH3").toBe(true);
+    expect(shown[8], "CH3-C≡O+").toBe(false);
+    expect(shown[11], "Fe(mu-CO)Fe").toBe(false);
+    expect(shown[15], "Fe(mu-C≡O)Fe").toBe(false);
+    expect(shown[19], "Cu-C≡C-CH3").toBe(false);
+    expect(shown[23], "Fe-CH=O").toBe(false);
+    expect(shown.filter(Boolean)).toHaveLength(2);
   });
 });
 
@@ -1974,7 +2235,7 @@ describe("angles and lines that reach an atom", () => {
       { id: 4, x: 1.5, y: -1.5, el: "C" },
     ];
     const bonds: Bond[] = [
-      { a1: 0, a2: 1, order: 1, stereo: "up", stereoOrient: "reverse" },
+      { a1: 0, a2: 1, order: 1, stereo: "up", narrow: 0 },
       { a1: 1, a2: 2, order: 1, stereo: "none" },
       { a1: 1, a2: 3, order: 1, stereo: "none" },
     ];
@@ -2290,14 +2551,13 @@ describe("a cage in perspective", () => {
   ];
 
   it("breaks the bond behind where it passes under the one in front", () => {
-    const { lines } = buildAllPrimitives(atoms(true), bonds, opts(), 40);
-    // the back bond in two pieces, neither reaching the middle; the front whole
-    const back = lines.filter((l) => Math.sign(l.x2 - l.x1) === Math.sign(l.y2 - l.y1));
-    const front = lines.filter((l) => Math.sign(l.x2 - l.x1) !== Math.sign(l.y2 - l.y1));
-    expect(back).toHaveLength(2);
-    expect(front).toHaveLength(1);
-    for (const l of back) {
-      const nearest = Math.min(Math.hypot(l.x1, l.y1), Math.hypot(l.x2, l.y2));
+    const { lines, polys } = buildAllPrimitives(atoms(true), bonds, opts(), 40);
+    // the back bond in two pieces (each cut along the front bond: drawn as the shape it fills), neither reaching the middle; the front whole
+    expect(lines).toHaveLength(1);
+    expect(Math.sign(lines[0].x2 - lines[0].x1)).not.toBe(Math.sign(lines[0].y2 - lines[0].y1));
+    expect(polys).toHaveLength(2);
+    for (const p of polys) {
+      const nearest = Math.min(...p.points.map((q) => Math.hypot(q.x, q.y)));
       expect(nearest).toBeGreaterThan(0.05);
     }
   });
@@ -2438,6 +2698,190 @@ describe("charges, radicals and isotopes", () => {
     const withDot = layoutMolecule(radical, [single(0, 1), single(0, 2)], opts(), 30);
     const without = layoutMolecule(radical.map((a) => ({ ...a, radical: undefined })), [single(0, 1), single(0, 2)], opts(), 30);
     expect(withDot.fills.length - without.fills.length).toBe(1);
+  });
+
+  describe("two electrons of an atom's own (Brecher 2008, GR-5.3; GR-5.2)", () => {
+    /** The dots drawn, by layout: the fills of `atoms` less those of the same atoms with no radical. */
+    const dotsOf = (atoms: Atom[], bonds: Bond[]) => {
+      const a = layoutMolecule(atoms, bonds, opts(), 30).fills;
+      const b = layoutMolecule(atoms.map((x) => ({ ...x, radical: undefined })), bonds, opts(), 30).fills;
+      const seen = new Set(b.map((f) => `${f.c.x.toFixed(6)},${f.c.y.toFixed(6)}`));
+      return a.filter((f) => !seen.has(`${f.c.x.toFixed(6)},${f.c.y.toFixed(6)}`));
+    };
+    /** Where a dot is from its atom at (0, 0): "up", "down", "left" or "right". */
+    const sideOf = (c: { x: number; y: number }) => (Math.abs(c.y) > Math.abs(c.x) ? (c.y > 0 ? "up" : "down") : c.x > 0 ? "right" : "left");
+    /** A dot on a bond from (0, 0) toward `to`: within a dot's reach of the bond's line, and along it. */
+    const onBond = (c: { x: number; y: number }, r: number, to: { x: number; y: number }) => {
+      const len = Math.hypot(to.x, to.y);
+      const along = (c.x * to.x + c.y * to.y) / len;
+      const across = Math.abs(c.x * to.y - c.y * to.x) / len;
+      return along > 0 && across < 2 * r;
+    };
+
+    it("draws a triplet's two unpaired electrons one dot above its symbol and one below, well apart - triplet methylene, CH2", () => {
+      const methylene = [atom(0, 0, 0, "C", { radical: "triplet" })];
+      const t = labelOf(methylene, [], 0);
+      expect(t.twoElectrons).toEqual({ kind: "triplet", sides: ["up", "down"] });
+      // (nothing after the symbol for them: GR-5.3 takes two dots side by side for a lone pair)
+      expect(t.runs!.some((r) => r.mark === "radical")).toBe(false);
+      const dots = dotsOf(methylene, []);
+      expect(dots.map((d) => sideOf(d.c)).sort()).toEqual(["down", "up"]);
+      expect(dots[0].c.x).toBeCloseTo(dots[1].c.x, 9);
+      expect(Math.abs(dots[0].c.y - dots[1].c.y)).toBeGreaterThan(0.7 * opts().fontPx);
+    });
+
+    it("draws a nitrene's two on the pair of opposite sides its one bond leaves free: above and below with the bond to a side, left and right with it up or down - never on the bond", () => {
+      for (const [to, want] of [
+        [{ x: -L, y: 0 }, ["down", "up"]],
+        [{ x: L, y: 0 }, ["down", "up"]],
+        [{ x: 0, y: L }, ["left", "right"]],
+        [{ x: 0, y: -L }, ["left", "right"]],
+      ] as const) {
+        const nitrene = [atom(0, 0, 0, "N", { radical: "triplet" }), atom(1, to.x, to.y, "C")];
+        const dots = dotsOf(nitrene, [single(0, 1)]);
+        expect(dots.map((d) => sideOf(d.c)).sort(), JSON.stringify(to)).toEqual(want);
+        for (const d of dots) expect(onBond(d.c, d.r, to), JSON.stringify(to)).toBe(false);
+      }
+    });
+
+    it("draws an upright dihalocarbene's two, a triplet's, left and right of the C: its bonds up and down", () => {
+      const carbene = [atom(0, 0, 0, "C", { radical: "triplet" }), atom(1, 0, L, "Cl"), atom(2, 0, -L, "Cl")];
+      const dots = dotsOf(carbene, [single(0, 1), single(0, 2)]);
+      expect(dots.map((d) => sideOf(d.c)).sort()).toEqual(["left", "right"]);
+      for (const d of dots) for (const to of [{ x: 0, y: L }, { x: 0, y: -L }]) expect(onBond(d.c, d.r, to)).toBe(false);
+    });
+
+    it("keeps a triplet cation's dots clear of its charge's circle: a nitrenium ion, its bonds to both sides - bent, and straight across", () => {
+      for (const y of [-L / 2, 0]) {
+      const x = y ? L * 0.866 : L;
+      const nitrenium = [atom(0, 0, 0, "N", { radical: "triplet", charge: 1 }), atom(1, -x, y, "C"), atom(2, x, y, "C")];
+      const bonds = [single(0, 1), single(0, 2)];
+      const t = labelOf(nitrenium, bonds, 0);
+      const placed = placeLabel(t, opts().fontPx, labelSetOf(opts()));
+      const charge = placed.find((r) => r.mark === "charge");
+      const circles = charge ? [markCircle(charge)] : buildTextLabels(nitrenium, opts(), bonds).filter((x) => x.beside).flatMap((x) => placeLabel(x, opts().fontPx, labelSetOf(opts())).filter((r) => r.mark === "charge").map(markCircle));
+      expect(circles).toHaveLength(1);
+      const dots = dotsOf(nitrenium, bonds).filter((d) => d.r < 0.5 * circles[0].r);
+      expect(dots).toHaveLength(2);
+      for (const d of dots) expect(Math.hypot(d.c.x - circles[0].c.x, d.c.y - circles[0].c.y), `${y}`).toBeGreaterThanOrEqual(circles[0].r + 2 * d.r - 1e-9);
+      }
+    });
+
+    it("draws a singlet's pair - a lone pair in GR-5.2's sense - square above the symbol, two dots together side by side: singlet dichlorocarbene", () => {
+      const carbene = [atom(0, 0, 0, "C", { radical: "singlet" }), atom(1, -L * 0.866, -L / 2, "Cl"), atom(2, L * 0.866, -L / 2, "Cl")];
+      const t = labelOf(carbene, [single(0, 1), single(0, 2)], 0);
+      expect(t.twoElectrons).toEqual({ kind: "singlet", sides: ["up"] });
+      expect(t.runs!.some((r) => r.mark === "radical")).toBe(false);
+      const dots = dotsOf(carbene, [single(0, 1), single(0, 2)]);
+      expect(dots).toHaveLength(2);
+      // (together, at one height, above the C and about its middle)
+      expect(dots[0].c.y).toBeCloseTo(dots[1].c.y, 9);
+      expect(dots[0].c.y).toBeGreaterThan(0);
+      expect(Math.abs(dots[0].c.x - dots[1].c.x)).toBeLessThan(0.4 * opts().fontPx);
+      const mid = (dots[0].c.x + dots[1].c.x) / 2;
+      expect(Math.abs(mid)).toBeLessThan(0.15 * opts().fontPx);
+    });
+
+    it("sets a singlet's pair on another side where a bond is in the way above: below, then the sides, the two dots along that side", () => {
+      const up = [atom(0, 0, 0, "N", { radical: "singlet" }), atom(1, 0, L, "C")];
+      const dots = dotsOf(up, [single(0, 1)]);
+      expect(dots.map((d) => sideOf(d.c))).toEqual(["down", "down"]);
+      const upDown = [atom(0, 0, 0, "C", { radical: "singlet" }), atom(1, 0, L, "Cl"), atom(2, 0, -L, "Cl")];
+      const side = dotsOf(upDown, [single(0, 1), single(0, 2)]);
+      expect(new Set(side.map((d) => sideOf(d.c))).size).toBe(1);
+      expect(["left", "right"]).toContain(sideOf(side[0].c));
+      // (upright along the side)
+      expect(side[0].c.x).toBeCloseTo(side[1].c.x, 9);
+    });
+
+    /** The middle of a label's symbol's ink, across: the symbol alone, where it sits. */
+    const symbolMiddle = (t: ReturnType<typeof labelOf>) => {
+      const alone = { ...t, runs: [t.runs![t.anchorRun ?? 0]], anchorRun: 0, twoElectrons: undefined };
+      const xs = labelHulls(alone, opts().fontPx, labelSetOf(opts())).flat().map((p) => p.x + t.x);
+      return (Math.min(...xs) + Math.max(...xs)) / 2;
+    };
+
+    it("centres a triplet's two dots on the symbol's own ink - a C, an N, a Cl - and on the symbol where its H come first: HC with its bond to the right", () => {
+      for (const el of ["C", "N", "Cl"]) {
+        const lone = [atom(0, 0, 0, el, { radical: "triplet" })];
+        const t = labelOf(lone, [], 0);
+        for (const d of dotsOf(lone, [])) expect(d.c.x, el).toBeCloseTo(symbolMiddle(t), 9);
+      }
+      // (a carbene's C with its bond to the right: its H written first, HC, the C not the first run)
+      const hc = [atom(0, 5, 7, "C", { radical: "triplet" }), atom(1, 5 + L, 7, "C")];
+      const t = labelOf(hc, [single(0, 1)], 0);
+      expect(t.runs!.map((r) => r.text)).toEqual(["H", "C"]);
+      expect(t.anchorRun).toBe(1);
+      for (const d of dotsOf(hc, [single(0, 1)])) expect(d.c.x).toBeCloseTo(symbolMiddle(t), 9);
+    });
+
+    /** The ink of a label's symbol, alone where it sits: its left, right, bottom and top. */
+    const symbolInk = (t: ReturnType<typeof labelOf>) => {
+      const alone = { ...t, runs: [t.runs![t.anchorRun ?? 0]], anchorRun: 0, twoElectrons: undefined };
+      const pts = labelHulls(alone, opts().fontPx, labelSetOf(opts())).flat().map((p) => ({ x: p.x + t.x, y: p.y + t.y }));
+      return { left: Math.min(...pts.map((p) => p.x)), right: Math.max(...pts.map((p) => p.x)), bottom: Math.min(...pts.map((p) => p.y)), top: Math.max(...pts.map((p) => p.y)) };
+    };
+
+    it("sets the left and right dots at the symbol's mid-height, three dot radii clear of its letters either side - a triplet nitrene with its bond up", () => {
+      const nitrene = [atom(0, 0, 0, "N", { radical: "triplet" }), atom(1, 0, L, "C")];
+      const t = labelOf(nitrene, [single(0, 1)], 0);
+      const ink = symbolInk(t);
+      const dots = dotsOf(nitrene, [single(0, 1)]);
+      const [left, right] = [...dots].sort((p, q) => p.c.x - q.c.x);
+      for (const d of dots) expect(d.c.y).toBeCloseTo((ink.bottom + ink.top) / 2, 9);
+      expect(left.c.x).toBeCloseTo(ink.left - 3 * left.r, 9);
+      expect(right.c.x).toBeCloseTo(ink.right + 3 * right.r, 9);
+    });
+
+    it("draws a singlet's pair as two distinct dots a little over a dot's width apart - above, and upright at a side", () => {
+      const above = [atom(0, 0, 0, "C", { radical: "singlet" }), atom(1, -L * 0.866, -L / 2, "Cl"), atom(2, L * 0.866, -L / 2, "Cl")];
+      const side = [atom(0, 0, 0, "C", { radical: "singlet" }), atom(1, 0, L, "Cl"), atom(2, 0, -L, "Cl")];
+      for (const atoms of [above, side]) {
+        const [p, q] = dotsOf(atoms, [single(0, 1), single(0, 2)]);
+        const apart = Math.hypot(p.c.x - q.c.x, p.c.y - q.c.y);
+        expect(apart).toBeGreaterThanOrEqual(2 * p.r);
+        expect(apart).toBeCloseTo(2.2 * p.r, 9);
+      }
+    });
+
+    it("keeps a charged singlet's pair off the charge after its symbol: a C+ with its bond to the left has the pair below", () => {
+      const cation = [atom(0, 0, 0, "C", { radical: "singlet", charge: 1 }), atom(1, -L, 0, "C")];
+      const t = labelOf(cation, [single(0, 1)], 0);
+      expect(t.twoElectrons).toEqual({ kind: "singlet", sides: ["down"] });
+    });
+
+    it("draws the dots in the label's colour, as a doublet's dot is", () => {
+      const coloured = [atom(0, 0, 0, "N", { radical: "triplet", color: "#2050c0" }), atom(1, -L, 0, "C")];
+      const dots = dotsOf(coloured, [single(0, 1)]);
+      expect(dots).toHaveLength(2);
+      for (const d of dots) expect(d.color).toBe("#2050c0");
+    });
+
+    it("keeps the dots in the label's reach where its atom is off the origin: the hulls in the label's own places", () => {
+      const away = [atom(0, 5, 7, "C", { radical: "triplet" })];
+      const t = labelOf(away, [], 0);
+      for (const p of labelHulls(t, opts().fontPx, labelSetOf(opts())).flat()) expect(Math.hypot(p.x, p.y)).toBeLessThan(3 * opts().fontPx);
+    });
+
+    it("shows the C of a carbon with two electrons of its own, whatever the style says of a charged carbon; one unpaired electron as before", () => {
+      const triplet = [atom(0, 0, 0, "C", { radical: "triplet" }), atom(1, L, 0, "C"), atom(2, -L, 0, "C")];
+      const singlet = triplet.map((a, i) => (i === 0 ? { ...a, radical: "singlet" as const } : a));
+      const doublet = triplet.map((a, i) => (i === 0 ? { ...a, radical: "doublet" as const } : a));
+      const bonds = [single(0, 1), single(0, 2)];
+      for (const atoms of [triplet, singlet]) expect(labelOf(atoms, bonds, 0, { showChargedCarbons: false })?.runs?.[0]?.text).toBe("C");
+      expect(labelOf(doublet, bonds, 0, { showChargedCarbons: false })).toBeUndefined();
+      expect(dotsOf(doublet, bonds)).toHaveLength(1);
+    });
+
+    it("keeps the dots inside the label's reach, and not where a bond stops short of a label", () => {
+      const methylene = [atom(0, 0, 0, "C", { radical: "triplet" })];
+      const t = labelOf(methylene, [], 0);
+      const top = (x: typeof t) => Math.max(...labelHulls(x, opts().fontPx, labelSetOf(opts())).flat().map((p) => p.y));
+      const bottom = (x: typeof t) => Math.min(...labelHulls(x, opts().fontPx, labelSetOf(opts())).flat().map((p) => p.y));
+      expect(top(t)).toBeGreaterThan(top({ ...t, twoElectrons: undefined }) + 0.1 * opts().fontPx);
+      expect(bottom(t)).toBeLessThanOrEqual(bottom({ ...t, twoElectrons: undefined }));
+      expect(labelHulls(t, opts().fontPx, labelSetOf(opts()), false).length).toBe(labelHulls({ ...t, twoElectrons: undefined }, opts().fontPx, labelSetOf(opts()), false).length);
+    });
   });
 
   it("counts the H a charge leaves: NH3+ on a methyl, none on O-", () => {
