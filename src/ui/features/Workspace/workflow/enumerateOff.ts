@@ -56,6 +56,20 @@ function started(): Worker {
   return w;
 }
 
+/** What a stop says: the worker ended, its products not made. */
+export const ENUMERATE_STOPPED = "Enumerate was stopped";
+
+/**
+ * The worker ended now, whatever it was making - a Stop ends the work, rather than waiting for products it would only
+ * throw away: what it was asked fails, said stopped (`ENUMERATE_STOPPED`). Made again the next time it is asked.
+ */
+export function enumerateStopped(): void {
+  worker?.terminate();
+  worker = null;
+  for (const w8 of waiting.values()) w8.fail(new Error(ENUMERATE_STOPPED));
+  waiting.clear();
+}
+
 /** Enumerate's products for `asked`: made in the worker, or here where there are no workers. */
 export function enumeratedOff(asked: EnumerateAsked): Promise<Enumerated> {
   if (!make || typeof Worker === "undefined")

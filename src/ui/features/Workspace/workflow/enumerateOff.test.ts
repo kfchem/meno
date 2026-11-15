@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { drawnFromSmiles } from "../chem/testdata/identityCases";
 import { runMenoDrawn } from "./meno";
-import { runMenoDrawnOff } from "./enumerateOff";
+import { ENUMERATE_STOPPED, enumeratedOff, enumerateStopped, enumerateWorkerMade, runMenoDrawnOff } from "./enumerateOff";
 
 // Enumerate's products made off the drawing thread (./enumerateOff): the same outcome as made in place - here, with no workers,
 // made in place behind a promise, the step's caller waiting on it as it waits on the worker.
@@ -22,3 +22,29 @@ describe("Enumerate off the drawing thread", () => {
     expect(await runMenoDrawnOff("duplicates", [])).toEqual({ ok: false, said: "Nothing came in" });
   });
 });
+
+describe("Enumerate stopped while its worker makes its products", () => {
+  it("ends the worker at once, and what was asked fails, said stopped", async () => {
+    // (a worker that never answers, and says when it is ended)
+    let ended = 0;
+    class Silent {
+      onmessage = null;
+      onerror = null;
+      postMessage() {}
+      terminate() {
+        ended++;
+      }
+    }
+    (globalThis as { Worker?: unknown }).Worker = Silent;
+    enumerateWorkerMade(() => new Silent() as unknown as Worker);
+    try {
+      const asked = enumeratedOff({ way: "lists", template: drawnFromSmiles(XYLENE), text: "R1: Me" });
+      enumerateStopped();
+      await expect(asked).rejects.toThrow(ENUMERATE_STOPPED);
+      expect(ended).toBe(1);
+    } finally {
+      delete (globalThis as { Worker?: unknown }).Worker;
+    }
+  });
+});
+
