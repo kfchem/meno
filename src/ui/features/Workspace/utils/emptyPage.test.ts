@@ -28,7 +28,7 @@ describe("a page that holds nothing at all", () => {
   it("counts every kind of thing a page can hold", () => {
     const { st } = page();
     const base = st();
-    for (const key of ["molecules3d", "captions", "arrows", "pluses", "pictures", "pdfs", "texts", "slides", "shapes", "inks", "cycles", "steps", "sets", "renderFrames"] as const) {
+    for (const key of ["molecules3d", "captions", "arrows", "pluses", "pictures", "pdfs", "texts", "slides", "shapes", "inks", "cycles", "conversations", "textsLost", "steps", "sets", "renderFrames"] as const) {
       expect(pageHoldsNothing({ ...base, [key]: [{}] } as never), key).toBe(false);
     }
   });

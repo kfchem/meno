@@ -1,16 +1,13 @@
 /**
- * Whether a page holds nothing at all - nothing drawn, in 3D, written, read, placed, run or being made on it - where its one quiet line
+ * Whether a page holds nothing at all - nothing drawn, in 3D, written, read, placed, talked over, run or being made on it - where its one quiet line
  * shows (components/EmptyPageLine; docs/WORKSPACE.md, *First steps*). Pure.
  */
+import { isBlankDocument, type PageHeld } from "../document";
 import type { EditorState } from "../store/types";
 
-type Held = Pick<
-  EditorState,
-  "model" | "molecules3d" | "captions" | "arrows" | "pluses" | "pictures" | "pdfs" | "texts" | "slides" | "shapes" | "inks" | "cycles" | "steps" | "sets" | "renderFrames"
->;
-
-export function pageHoldsNothing(st: Held): boolean {
-  return [st.model.atoms, st.molecules3d, st.captions, st.arrows, st.pluses, st.pictures, st.pdfs, st.texts, st.slides, st.shapes, st.inks, st.cycles, st.steps, st.sets, st.renderFrames].every((list) => !list?.length);
+export function pageHoldsNothing(st: PageHeld & Pick<EditorState, "renderFrames">): boolean {
+  // (what a document holds, as everywhere - and a render being made on it)
+  return isBlankDocument(st) && !st.renderFrames.length;
 }
 
 /**
