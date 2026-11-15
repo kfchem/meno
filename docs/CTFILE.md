@@ -118,7 +118,12 @@ by side, both of them where only one is selected, and a counter-ion it alone
 holds - a chloride to an ammonium's N-H - is told of as left out, as one
 drawn apart is; one inside a molecule - an enol's own - is left out of it, so
 the H is placed by the molecule's own bonds. *Check structures* counts such
-a pair two parts. Until 2026-11-15 the hydrogen bond went to the plugin as
+a pair two parts, and a set round it holds two entries, each with its own
+identity; a structure's own hydrogen bond is not in its identity. Moved out
+of a frame's way, the pair moves together, as it is drawn. To take such a
+pair as one entry - a complex, a salt - select both and *Make one
+structure* (EDITOR-2D.md, *One structure of several parts*): it is then one
+structure of two parts, one identity. Until 2026-11-15 the hydrogen bond went to the plugin as
 a bond, and the embedding made it a covalent one: the H bonded to both
 atoms. A hydrogen bond drawn or taken away after a molecule is made in 3D
 leaves it its drawing's.
