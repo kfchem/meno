@@ -900,7 +900,11 @@ drawn, aromatic rings as one form.* What that means, plainly:
   centre keeps its r or s, and the two enantiomers of a spirane such as
   2,6-dimethylspiro[3.3]heptane are two structures. Places are filled one
   at a time, the lowest in the canonical order first, then asked again.
-  The order matters, so it is always that one. The filled form is
+  The order matters, so it is always that one - but a place two of whose
+  groups are alike as wholes (two methyls, PPh3's three phenyls: each
+  group hanging from the place alone, with no place or configuration in
+  it) sets nothing whatever else is given, and is filled first, with no
+  search of the whole structure. The filled form is
   identity's own: the drawing keeps its wedges as drawn, and nothing filled
   in is shown, drawn or saved;
 - **a metal's isomers by which donors are across are two structures:**

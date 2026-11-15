@@ -17,7 +17,7 @@
  * plain hydrogen atom as one of its neighbour's hydrogens
  * (`hydrogensFolded`).
  */
-import { canonicalRanks, canonicalWritten, symmetryClasses, symmetryOrbits as orbitsAsDrawn } from "../layout/canonical";
+import { canonicalSearched, canonicalWritten, symmetryClasses, symmetryOrbits as orbitsAsDrawn } from "../layout/canonical";
 import { lonePairCentres } from "./lonePairCentres";
 import { isMetal, type Arranged, type LayoutAtom, type LayoutBond, type LayoutInput } from "../layout/perceive";
 import type { Axial, Cumulated, Tetrahedral } from "../layout/stereo";
@@ -269,8 +269,10 @@ function foldedOf(input: IdentityInput): boolean[] {
  * can be (a tripod's).
  */
 export function arrangementOpen(input: IdentityInput, m: number): boolean {
-  // (asked again and again of one structure as a layout is measured: worked out once)
-  const key = `${m}|${JSON.stringify(input)}`;
+  // (asked again and again of one structure as a layout is measured - by its metrics and by its assembly, each building the
+  //  structure its own way: worked out once, the key the same wherever the content is - fields in one order, none absent
+  //  and none at its default told apart, the bonds in one order)
+  const key = `${m}|${openKey(input)}`;
   const known = openKnown.get(key);
   if (known != null) return known;
   if (openKnown.size >= OPEN_KEPT) openKnown.clear();
@@ -279,6 +281,15 @@ export function arrangementOpen(input: IdentityInput, m: number): boolean {
   return open;
 }
 const openKnown = new Map<string, boolean>();
+/** `input` written so that two inputs of one content write one text (`arrangementOpen`'s cache). */
+function openKey(input: IdentityInput): string {
+  const tidy = (o: object) =>
+    Object.entries(o)
+      .filter(([k, v]) => v !== undefined && !((k === "charge" || k === "hs") && v === 0))
+      .sort(([p], [q]) => (p < q ? -1 : p > q ? 1 : 0));
+  const bonds = input.bonds.map((b) => JSON.stringify(tidy(b))).sort();
+  return JSON.stringify([input.atoms.map(tidy), bonds, input.axes ?? [], input.cumulated ?? [], input.arrangements ?? []]);
+}
 const OPEN_KEPT = 1024;
 
 function openNow(input: IdentityInput, m: number): boolean {
@@ -549,9 +560,12 @@ function unconfigured(g: LayoutInput): LayoutInput {
  * structure, whether the search finished or not; where it ran out of steps
  * and wrote two, that place is left as it is, and `complete` says so.
  */
-export function filledIn(input: LayoutInput): { input: LayoutInput; complete: boolean; text?: string } {
+export function filledIn(input: LayoutInput): { input: LayoutInput; complete: boolean; text?: string; searches: number } {
   let g = input;
   let complete = true;
+  // (how many canonical searches the fill made - its cost, the same for the same structure whatever its atoms' order)
+  let searches = 0;
+  const written = (h: LayoutInput) => (searches++, canonicalWritten(h));
   // (the text of the structure as it now is, where the last fill wrote it: `identity` asks for no search again)
   let text: string | undefined;
   // (a place two of whose groups are end atoms alike - a gem-dimethyl's, an isopropyl's, a tert-butyl's, a prenyl's
@@ -559,29 +573,65 @@ export function filledIn(input: LayoutInput): { input: LayoutInput; complete: bo
   //  with no search; and as it sets nothing in every completion, it changes no other place's two senses)
   const ends = endsAlike(g);
   for (const b of blanksOf(g)) if (b.kind !== "biaryl" && b.kind !== "metal" && b.sides.some((side) => ends(side))) g = given(g, b, true);
+  // (and one two of whose groups are alike as wholes - PPh3's P, its three phenyls - likewise: `groupsAlike`. Each group's
+  //  writing is small; the structure's own search, the costly part, is left for the places these do not settle)
+  const start = blanksOf(g);
+  const constitution = symmetryClasses(unconfigured(input));
+  const own = new Set(start.flatMap((b) => b.own));
+  const alike = groupsAlike(g, own, constitution);
+  const settled = start.filter((b) => b.kind !== "biaryl" && b.kind !== "metal" && b.sides.some((side, k) => alike(b.own[k] ?? b.own[0], side)));
+  // (a metal all of whose donors are groups alike as wholes - Pd(PPh3)4, [Co(NH3)6]3+: every pairing one structure, so any
+  //  sets nothing; filled with its first. A place inside those groups that sets nothing whatever else is given - each
+  //  PPh3's P - is no place for this: however it is filled, the groups stay alike)
+  const loose = groupsAlike(g, new Set([...own].filter((a) => !settled.some((b) => b.own.includes(a)))), constitution);
+  const metals = start.filter((b) => b.kind === "metal" && loose.all(b.at, b.sides[0]));
+  for (const b of settled) g = given(g, b as Exclude<Blank, { kind: "metal" }>, true);
+  for (const b of metals) g = valuesOf(g, b)[0];
   // (the classes of the constitution alone, coarser than every orbit of the structure with any configuration given)
   let classes: number[] | null = null;
-  for (;;) {
+  // (each fill gives one place or takes out one drawn axis, so there are never more rounds than places at the start: a round
+  //  past that is a fault, and ends with what is filled so far, said incomplete, rather than running on)
+  const most = blanksOf(g).length;
+  for (let round = 0; ; round++) {
     const blanks = blanksOf(g);
-    if (!blanks.length) return { input: g, complete, text };
+    if (!blanks.length) return { input: g, complete, text, searches };
+    if (round > most) return { input: g, complete: false, text: undefined, searches };
     classes ??= symmetryClasses(unconfigured(input));
     const cs = classes;
     const tried = blanks.filter((b) => b.sides.some((side) => new Set(side.map((m) => cs[m])).size < side.length));
-    if (!tried.length) return { input: g, complete, text };
-    const rank = tried.length > 1 ? canonicalRanks(g) : [];
-    const place = (b: Blank) => b.own.map((a) => rank[a]).sort((x, y) => x - y);
-    tried.sort((p, q) => {
-      const [x, y] = [place(p), place(q)];
-      return x[0] - y[0] || (x[1] ?? -1) - (y[1] ?? -1);
-    });
+    if (!tried.length) return { input: g, complete, text, searches };
+    // (one search of the structure as it is, where it is needed: the canonical order of its places, and its symmetries)
+    let now: ReturnType<typeof canonicalSearched> | null = null;
+    const searched = () => (now ??= (searches++, canonicalSearched(g)));
+    if (tried.length > 1) {
+      const rank = searched().ranks;
+      const place = (b: Blank) => b.own.map((a) => rank[a]).sort((x, y) => x - y);
+      tried.sort((p, q) => {
+        const [x, y] = [place(p), place(q)];
+        return x[0] - y[0] || (x[1] ?? -1) - (y[1] ?? -1);
+      });
+    }
     let next: LayoutInput | null = null;
     for (const b of tried) {
+      // (a symmetry of the structure that keeps the place and turns it over - two of a centre's groups swapped, or the two
+      //  on one end of a double bond: its two senses are one structure, so it sets nothing, with no writing)
+      if (b.kind !== "biaryl" && b.kind !== "metal" && turnedOver(b, searched().automorphisms)) {
+        next = given(g, b, true);
+        text = undefined;
+        break;
+      }
+      // (a metal two of whose pairings pair its donors' classes differently: two structures surely - a symmetry keeps every
+      //  class - so it sets something, with no writing: PdCl2(PPh3)2's Cl across Cl, or across P)
+      if (b.kind === "metal") {
+        const byClass = b.pairings.map((pairs) => pairs.map(([x, y]) => [cs[x], cs[y]].sort((m, n) => m - n).join(",")).sort().join(" "));
+        if (new Set(byClass).size > 1) continue;
+      }
       const values = valuesOf(g, b);
-      const u = canonicalWritten(values[0]);
+      const u = written(values[0]);
       // (the first value that writes another text, if any: a metal's fifteen pairings are not all written where two differ)
       let d: ReturnType<typeof canonicalWritten> | null = null;
       for (const v of values.slice(1)) {
-        const w = canonicalWritten(v);
+        const w = written(v);
         if (w.text === u.text) continue;
         d = w;
         break;
@@ -594,9 +644,109 @@ export function filledIn(input: LayoutInput): { input: LayoutInput; complete: bo
       }
       if (!u.complete || !d.complete) complete = false;
     }
-    if (!next) return { input: g, complete, text: undefined };
+    if (!next) return { input: g, complete, text: undefined, searches };
     g = next;
   }
+}
+
+/**
+ * Whether one of `automorphisms` (each atom to atom) keeps place `b` and turns it over: keeps a centre and moves its groups
+ * by an odd permutation, or keeps both ends of a double bond, an axis or a cumulene and swaps the two groups on one end only.
+ * Then the place's two senses are one structure. False where none found does - the search's symmetries are those it met,
+ * so this may miss one, never find one that is not.
+ */
+function turnedOver(b: Exclude<Blank, { kind: "biaryl" | "metal" }>, automorphisms: readonly (readonly number[])[]): boolean {
+  return automorphisms.some((s) => {
+    if (b.kind === "centre") {
+      if (s[b.at] !== b.at) return false;
+      const moved = b.neighbours.map((x) => b.neighbours.indexOf(x < 0 ? x : s[x]));
+      if (moved.some((k) => k < 0)) return false;
+      // (odd: as many cycles as there are groups, less an odd number)
+      const seen = new Set<number>();
+      let cycles = 0;
+      for (let k = 0; k < moved.length; k++) {
+        if (seen.has(k)) continue;
+        cycles++;
+        for (let j = k; !seen.has(j); j = moved[j]) seen.add(j);
+      }
+      return (moved.length - cycles) % 2 === 1;
+    }
+    const [e, f] = b.own;
+    if (s[e] !== e || s[f] !== f) return false;
+    const swapped = (side: readonly number[]) => side.length === 2 && s[side[0]] === side[1];
+    return swapped(b.sides[0]) !== swapped(b.sides[1]);
+  });
+}
+
+/** The most atoms a group may have for `groupsAlike` to write it: a larger one is left to the search. */
+const GROUP_MOST = 64;
+
+/**
+ * Whether two of the groups `side` on atom `at` are alike as wholes: each hanging from `at` alone - cut from it, with no way
+ * back to the rest - with no place in it (`places`) and no configuration, of one constitution class (`classes`), and the two
+ * written the same as molecules of their own, the atom on `at` marked so and by the order of its bond to it. Swapping them is
+ * a symmetry of the structure whatever else is given, so a place they are groups of sets nothing (`endsAlike`, for groups of
+ * one atom, asks no writing).
+ */
+function groupsAlike(
+  g: LayoutInput,
+  places: ReadonlySet<number>,
+  classes: readonly number[],
+): ((at: number, side: readonly number[]) => boolean) & { all: (at: number, side: readonly number[]) => boolean } {
+  const around: number[][] = g.atoms.map(() => []);
+  const order = new Map<string, number>();
+  const key = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
+  for (const b of g.bonds) {
+    around[b.a].push(b.b);
+    around[b.b].push(b.a);
+    order.set(key(b.a, b.b), b.order);
+  }
+  const configured = new Set<number>();
+  g.atoms.forEach((a, i) => a.tetra && configured.add(i));
+  for (const b of g.bonds) if (b.stereo) [b.a, b.b].forEach((i) => configured.add(i));
+  for (const x of [...(g.axes ?? []), ...(g.cumulated ?? [])]) x.atoms.forEach((i) => configured.add(i));
+  const texts = new Map<string, string | null>();
+  const textOf = (at: number, root: number): string | null => {
+    const k = `${at}>${root}`;
+    if (texts.has(k)) return texts.get(k)!;
+    let text: string | null = null;
+    const group = [root];
+    const seen = new Set([at, root]);
+    let fits = !places.has(root) && !configured.has(root);
+    for (let i = 0; fits && i < group.length; i++)
+      for (const y of around[group[i]]) {
+        // (a way back to `at` but by the group's own bond: a ring through it, no group of its own)
+        if (y === at && group[i] !== root) fits = false;
+        if (seen.has(y)) continue;
+        if (places.has(y) || configured.has(y) || group.length >= GROUP_MOST) fits = false;
+        seen.add(y);
+        group.push(y);
+      }
+    if (fits) {
+      const index = new Map(group.map((a, i) => [a, i]));
+      const atoms = group.map((a, i) => ({ ...g.atoms[a], el: i === 0 ? `${g.atoms[a].el}^on${order.get(key(at, root))}` : g.atoms[a].el }));
+      const bonds = g.bonds.filter((b) => index.has(b.a) && index.has(b.b)).map((b) => ({ a: index.get(b.a)!, b: index.get(b.b)!, order: b.order }));
+      text = canonicalWritten({ atoms, bonds }).text;
+    }
+    texts.set(k, text);
+    return text;
+  };
+  const two = (at: number, side: readonly number[]) => {
+    for (let p = 0; p < side.length; p++)
+      for (let q = p + 1; q < side.length; q++) {
+        if (classes[side[p]] !== classes[side[q]]) continue;
+        const t = textOf(at, side[p]);
+        if (t != null && t === textOf(at, side[q])) return true;
+      }
+    return false;
+  };
+  // (every group of `side` alike as a whole with the first)
+  const all = (at: number, side: readonly number[]) => {
+    if (side.length < 2 || side.some((x) => classes[x] !== classes[side[0]])) return false;
+    const t = textOf(at, side[0]);
+    return t != null && side.every((x) => textOf(at, x) === t);
+  };
+  return Object.assign(two, { all });
 }
 
 /**

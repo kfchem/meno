@@ -13,11 +13,12 @@ import { identity, identityText } from "./identity";
 const real = await vi.importActual<typeof import("../layout/canonical")>("../layout/canonical");
 vi.mock("../layout/canonical", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../layout/canonical")>();
-  return { ...actual, symmetryClasses: vi.fn(actual.symmetryClasses), canonicalWritten: vi.fn(actual.canonicalWritten) };
+  return { ...actual, symmetryClasses: vi.fn(actual.symmetryClasses), canonicalWritten: vi.fn(actual.canonicalWritten), canonicalSearched: vi.fn(actual.canonicalSearched) };
 });
 afterEach(() => {
   vi.mocked(canonical.symmetryClasses).mockImplementation(real.symmetryClasses);
   vi.mocked(canonical.canonicalWritten).mockImplementation(real.canonicalWritten);
+  vi.mocked(canonical.canonicalSearched).mockImplementation(real.canonicalSearched);
 });
 
 describe("the places that could carry a configuration, tried without the prefilter", () => {
@@ -78,9 +79,11 @@ describe("a place whose two senses' searches ran out of steps", () => {
     vi.mocked(canonical.canonicalWritten).mockImplementation((g) =>
       g.atoms.some((a) => a.tetra) ? { text: `${real.canonicalWritten(g).text}|${g.atoms.map((a) => a.tetra?.volume ?? 0).join(",")}`, complete: false } : real.canonicalWritten(g),
     );
-    // (pentan-3-ol: its alike groups no end atoms, so its centre is searched)
-    const found = identity(fromSmiles("CCC(CC)O"));
+    // (cyclohexanol: its alike groups are the ring's two ways round, no groups of their own, so its centre is searched - its
+    //  symmetry, which would fill it with no writing, not found)
+    vi.mocked(canonical.canonicalSearched).mockImplementation((g) => ({ ...real.canonicalSearched(g), automorphisms: [] }));
+    const found = identity(fromSmiles("OC1CCCCC1"));
     expect(found.complete).toBe(false);
-    expect(found.text).toBe(real.canonicalWritten(fromSmiles("CCC(CC)O")).text);
+    expect(found.text).toBe(real.canonicalWritten(fromSmiles("OC1CCCCC1")).text);
   });
 });

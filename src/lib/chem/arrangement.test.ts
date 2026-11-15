@@ -10,7 +10,7 @@ import type { LayoutInput } from "../layout/perceive";
 import { fromSmiles } from "../layout/testdata/fromSmiles";
 import { SHUFFLE_SEEDS, shuffled } from "../layout/testdata/shuffled";
 import { ACROSS_FOUR, arrangementKey, arrangementsIn3d, pairingDrawn, pairingIn3d } from "./arrangement";
-import { arrangementOpen, constitutionKey, identityText } from "./identity";
+import { arrangementOpen, constitutionKey, filledIn, identityText } from "./identity";
 import { symmetryClasses } from "../layout/canonical";
 
 /** The structure's one metal, and its donors in the order of its bonds. */
@@ -212,6 +212,18 @@ describe("a metal's donors across, in identity", () => {
     ])
       expect([smiles, at(smiles)]).toEqual([smiles, [true, true]]);
     for (const smiles of ["Cl[Pt-]1(Cl)Cl[Pt-](Cl)(Cl)Cl1", "N[Pt+]1(N)Cl[Pt-](Cl)(Cl)Cl1"]) expect([smiles, at(smiles)]).toEqual([smiles, [false, false]]);
+  });
+
+  it("a metal is settled with no search of the whole structure where its donors' classes or groups decide it: PdCl2(PPh3)2, Pd(PPh3)4", () => {
+    // (PdCl2(PPh3)2: Cl across Cl or across P, two pairings by class - open; Pd(PPh3)4: four PPh3 alike as wholes - one structure)
+    const ph3 = "P(c1ccccc1)(c1ccccc1)c1ccccc1";
+    const pdcl2 = fromSmiles(`Cl[Pd](Cl)(${ph3})${ph3}`);
+    const pd4 = fromSmiles(`[Pd](${ph3})(${ph3})(${ph3})${ph3}`);
+    expect([filledIn(pdcl2).searches, filledIn(pd4).searches]).toEqual([0, 0]);
+    expect([arrangementOpen(pdcl2, metalOf(pdcl2).m), arrangementOpen(pd4, metalOf(pd4).m)]).toEqual([true, false]);
+    // (and the two isomers of PdCl2(PPh3)2 drawn stay two structures)
+    const pairs = (p: [number, number][]) => ({ ...pdcl2, arrangements: [{ metal: metalOf(pdcl2).m, pairs: p.map(([a, b]) => [metalOf(pdcl2).donors[a], metalOf(pdcl2).donors[b]] as const) }] });
+    expect(identityText(pairs([[0, 1], [2, 3]]))).not.toBe(identityText(pairs([[0, 2], [1, 3]])));
   });
 
   it("a structure with no metal of four or six donors is written as it always was", () => {
