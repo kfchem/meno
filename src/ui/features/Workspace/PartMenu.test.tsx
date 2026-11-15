@@ -211,6 +211,9 @@ describe("the right-click menu", () => {
     const { html } = menu(target({ kind: "pdf", id: 1 }), { pdf });
     expect(html).toMatch(/aria-label="Previous page"[^>]*disabled=""/);
     expect(html).not.toMatch(/aria-label="Next page"[^>]*disabled=""/);
+    // (named from round it, as a disabled button is not sent the pointer in every engine; the one to be pressed, from itself)
+    expect(html).toMatch(/<span data-tip="Previous page \(←\)"[^>]*><button[^>]*aria-label="Previous page"(?![^>]*data-tip)[^>]*disabled=""/);
+    expect(html).toMatch(/<button[^>]*aria-label="Next page"[^>]*data-tip="Next page \(→\)"/);
   });
 
   it("offers a PDF's pages spread, some in places of their own, put back in their rows", () => {

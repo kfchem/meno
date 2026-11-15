@@ -1171,13 +1171,15 @@ export default function PartMenu({
       {/* the frequent, as icons - named as the pointer rests on one - and Delete at the right end */}
       {row.length > 0 && (
         <div role="group" aria-label="Frequent" className={`flex items-center gap-0.5 px-1 ${list.length ? "pb-1 mb-1 border-b border-gh-line" : ""}`}>
-          {row.map((item) => (
+          {row.map((item) => {
+            const tip = item.keys ? `${item.name} (${item.keys})` : item.name;
+            const button = (
             <button
               key={item.name}
               role="menuitem"
               aria-label={item.name}
               aria-pressed={item.checked}
-              data-tip={item.keys ? `${item.name} (${item.keys})` : item.name}
+              data-tip={item.disabled ? undefined : tip}
               // (its keys said to a screen reader too, as the system's tooltip said them)
               aria-description={item.keys ? `${item.name} (${item.keys})` : undefined}
               disabled={item.disabled}
@@ -1194,12 +1196,21 @@ export default function PartMenu({
                     }
                   : undefined
               }
-              className={`${item.del ? "ml-auto " : ""}meno-press shrink-0 rounded-md flex items-center justify-center outline-none transition-colors duration-150 ease-meno disabled:text-gh-line disabled:hover:bg-transparent ${item.checked ? "bg-gh-base text-gh-black" : "text-gh-black hover:bg-gh-base focus:bg-gh-base"}`}
+              className={`${item.del && !item.disabled ? "ml-auto " : ""}meno-press shrink-0 rounded-md flex items-center justify-center outline-none transition-colors duration-150 ease-meno disabled:pointer-events-none disabled:text-gh-line disabled:hover:bg-transparent ${item.checked ? "bg-gh-base text-gh-black" : "text-gh-black hover:bg-gh-base focus:bg-gh-base"}`}
               style={{ width: ROW, height: ROW }}
             >
               {item.icon}
             </button>
-          ))}
+            );
+            // (one not to be pressed is named from round it: a disabled button is not sent the pointer in every engine)
+            return item.disabled ? (
+              <span key={item.name} data-tip={tip} className={`${item.del ? "ml-auto " : ""}shrink-0 flex`}>
+                {button}
+              </span>
+            ) : (
+              button
+            );
+          })}
         </div>
       )}
       {font && (
