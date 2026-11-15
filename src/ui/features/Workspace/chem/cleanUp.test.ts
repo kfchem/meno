@@ -678,6 +678,20 @@ describe("cleanUp", () => {
       expect(runsAsCame(allene, undefined)).toBe(allene);
     });
 
+    it("marks the run of a drawing read from a MOL block, as a plugin's comes: its bonds carry no mark, 'none'", () => {
+      const came = arrived("CC=C=C=CC");
+      const s = { ...emptyWorkspaceDocument(), model: came, nextId: 100 };
+      const text = structureFileText(drawnOf(s as never), "came.mol");
+      const read = editorModelOf(moleculesToEditorModel(readMoleculesFromText(text, "mol")).model);
+      expect(read.bonds.some((b) => b.stereo === "none")).toBe(true);
+      const d0 = drawingOf(read);
+      expect(readStereo(d0.atoms, d0.bonds).cumulated).toHaveLength(1);
+      const marked = runsAsCame(read, undefined);
+      expect(marked.bonds.filter((b) => b.stereo === "either")).toHaveLength(1);
+      const d = drawingOf(marked);
+      expect(readStereo(d.atoms, d.bonds).cumulated).toEqual([]);
+    });
+
     it("gives 2-methylhepta-2,3,4-triene from a SMILES with no marks a wavy bond: its run's double bond 'either', read as no cis or trans", async () => {
       const s = "CC=C=C=C(C)CC";
       const laid = await laidOut(arrived(s), undefined, undefined, openDoubleBonds(fromSmiles(s)));

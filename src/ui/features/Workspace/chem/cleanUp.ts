@@ -523,6 +523,7 @@ export function runsAsCame(model: Model, given: Pick<Given, "cumulated"> | undef
   // (the run's own double bond at that end: an end of a run has no other)
   return {
     ...model,
-    bonds: model.bonds.map((b) => ((ends.has(b.a) || ends.has(b.b)) && b.order === 2 && !b.stereo ? { ...b, stereo: "either" as const } : b)),
+    // (a bond read from a block carries "none" for no mark)
+    bonds: model.bonds.map((b) => ((ends.has(b.a) || ends.has(b.b)) && b.order === 2 && (b.stereo ?? "none") === "none" ? { ...b, stereo: "either" as const } : b)),
   };
 }
