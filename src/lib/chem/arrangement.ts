@@ -22,6 +22,22 @@ import { isMetal, type Arranged } from "../layout/perceive";
 
 /** How near, in degrees, the next pairing's pairs may each come to the straightest's before a drawing says neither (`pairingDrawn`). */
 export const DRAWN_TIE = 20;
+/**
+ * How near, in degrees, two donors must be drawn to a straight line through the metal to stand plainly across: a line of the
+ * earlier picture (`earlierPicture`), as Clean-up's layout reads its own lines (ui chem/engineLayout `oppositesKept`).
+ */
+export const ACROSS_DRAWN = 30;
+/** Whether two donors `off` radians off a straight line stand plainly across: less than ACROSS_DRAWN - one at it exactly, as the earlier picture's two side by side lie from the corners across from them, does not. */
+const acrossDrawn = (off: number) => off < (ACROSS_DRAWN * Math.PI) / 180 - 1e-6;
+/**
+ * Whether a pair of a pairing drawn (`pairingDrawn`) says its two are across: less than a right angle off straight, as Clean-up
+ * reads it (ui chem/engineLayout `oppositesKept`: a transplatin put down bent is trans still). Two of six drawn a right angle or
+ * more off straight - side by side - say they are not (found in the chemistry check).
+ */
+export function pairsDrawnAcross(angle: readonly number[], partner: readonly number[]): boolean {
+  const off = (i: number, j: number) => Math.abs(Math.PI - Math.abs(Math.atan2(Math.sin(angle[i] - angle[j]), Math.cos(angle[i] - angle[j]))));
+  return partner.every((j, i) => off(i, j) < Math.PI / 2);
+}
 /** The least angle at the metal, in degrees, between two of four donors across in 3D: lower would take a flattened tetrahedron's (found in the chemistry check). */
 export const ACROSS_FOUR = 150;
 /** The least angle at the metal, in degrees, between two of six donors across in 3D: a terpyridine's outer donors are held short of 180 (found in the chemistry check). */
@@ -64,6 +80,35 @@ export function pairingDrawn(angle: readonly number[]): number[] | null {
   all.sort((p, q) => before(p.offs, q.offs));
   const told = all[0].offs.some((v, k) => all[1].offs[k] - v > (DRAWN_TIE * Math.PI) / 180);
   return told ? all[0].partner : null;
+}
+
+/**
+ * Six donors at `angle` (radians, round the metal) drawn as Meno's layout drew a six-donor metal before its three lines: four as an
+ * X - two lines across, each within ACROSS_DRAWN of straight - and two side by side, less than a right angle apart. Read as
+ * drawn so: one of the two lines truly across, the other's two ends each across one of the two side by side. Each such way
+ * (`partner`, as `pairingDrawn` gives one): which line is across, and which end goes with which. None for any other drawing.
+ */
+export function earlierPicture(angle: readonly number[]): number[][] | null {
+  if (angle.length !== 6) return null;
+  const off = (i: number, j: number) => Math.abs(Math.PI - Math.abs(Math.atan2(Math.sin(angle[i] - angle[j]), Math.cos(angle[i] - angle[j]))));
+  const straight: [number, number][] = [];
+  for (let i = 0; i < 6; i++) for (let j = i + 1; j < 6; j++) if (acrossDrawn(off(i, j))) straight.push([i, j]);
+  // (two lines, apart, and the two left side by side)
+  if (straight.length !== 2 || straight[0].some((i) => straight[1].includes(i))) return null;
+  const side = [0, 1, 2, 3, 4, 5].filter((i) => !straight.flat().includes(i));
+  if (Math.PI - off(side[0], side[1]) >= Math.PI / 2) return null;
+  const ways: number[][] = [];
+  for (const [across, other] of [straight, [...straight].reverse()]) {
+    for (const [s0, s1] of [side, [...side].reverse()]) {
+      const partner = angle.map(() => -1);
+      const join = (p: number, q: number) => ((partner[p] = q), (partner[q] = p));
+      join(across[0], across[1]);
+      join(other[0], s0);
+      join(other[1], s1);
+      ways.push(partner);
+    }
+  }
+  return ways;
 }
 
 /**

@@ -6,8 +6,8 @@
  * (lib/layout/drawn `readStereo`). No hydrogen is folded in here: identity
  * does that, by its own rule (`hydrogensFolded`).
  */
-import { identity, type IdentityInput } from "../../../../lib/chem/identity";
-import { pairingDrawn, pairsOf } from "../../../../lib/chem/arrangement";
+import { identity, identityText, type IdentityInput } from "../../../../lib/chem/identity";
+import { earlierPicture, pairingDrawn, pairsDrawnAcross, pairsOf } from "../../../../lib/chem/arrangement";
 import { isMetal, squarePlanarMetal, type Arranged } from "../../../../lib/layout/perceive";
 import { valencesAt } from "../../../../lib/chem/molecule";
 import { ARRANGED, arrangementAs } from "../utils/arrangement";
@@ -51,7 +51,13 @@ export function identityInputOf(part: Model): { input: IdentityInput; unread: nu
     ...(stereo.axes.length ? { axes: stereo.axes.map((x) => ({ atoms: x.atoms, refs: x.refs, sense: x.sense })) } : {}),
     ...(stereo.cumulated.length ? { cumulated: stereo.cumulated.map((x) => ({ atoms: x.atoms, refs: x.refs, cis: x.cis })) } : {}),
   };
-  const arrangements = arrangementsDrawn(drawing, part);
+  // (a metal drawn in the earlier picture - two lines and two side by side: read where every way of reading it is one structure)
+  const oneOf = (metal: number, ways: readonly Arranged["pairs"][]): Arranged["pairs"] | null => {
+    const others = arrangementsDrawn(drawing, part).filter((x) => x.metal !== metal);
+    const texts = new Set(ways.map((pairs) => identityText({ ...input, arrangements: [...others, { metal, pairs }] })));
+    return texts.size === 1 ? ways[0] : null;
+  };
+  const arrangements = arrangementsDrawn(drawing, part, oneOf);
   return { input: arrangements.length ? { ...input, arrangements } : input, unread: unreadWedges(drawing, stereo).map((i) => part.atoms[i].id) };
 }
 
@@ -118,7 +124,11 @@ const X_SLACK = 22.5;
  * that mark, of four donors or six. None where the drawing does not say
  * which pairing.
  */
-export function arrangementsDrawn(drawing: ReturnType<typeof drawingOf>, part?: Model): Arranged[] {
+export function arrangementsDrawn(
+  drawing: ReturnType<typeof drawingOf>,
+  part?: Model,
+  oneOf?: (metal: number, ways: readonly Arranged["pairs"][]) => Arranged["pairs"] | null,
+): Arranged[] {
   const around: number[][] = drawing.atoms.map(() => []);
   for (const b of drawing.bonds) {
     around[b.a].push(b.b);
@@ -133,8 +143,13 @@ export function arrangementsDrawn(drawing: ReturnType<typeof drawingOf>, part?: 
     // (one Meno laid out with nothing given, still marked so: none, however drawn - four donors or six)
     if (part && marked(part, m)) return;
     if (donors.length === 4 && !squarePlanarDrawn(drawing, m, angle) && !(part && crossDrawn(angle) && surelySquare(drawing, m, around))) return;
+    // (a pairing whose every pair is drawn across - none of six side by side - as Clean-up reads it)
     const partner = pairingDrawn(angle);
-    if (partner) out.push({ metal: m, pairs: pairsOf(donors, partner) });
+    if (partner && pairsDrawnAcross(angle, partner)) return void out.push({ metal: m, pairs: pairsOf(donors, partner) });
+    // (six donors in the earlier picture: one structure however it is read, or none - `oneOf`, where the whole structure is at hand)
+    const ways = donors.length === 6 && oneOf ? earlierPicture(angle) : null;
+    const chosen = ways && oneOf!(m, ways.map((w) => pairsOf(donors, w)));
+    if (chosen) out.push({ metal: m, pairs: chosen });
   });
   return out;
 }

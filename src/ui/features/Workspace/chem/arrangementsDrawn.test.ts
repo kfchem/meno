@@ -5,6 +5,8 @@ import { identity } from "../../../../lib/chem/identity";
 import { drawingOf } from "./drawing";
 import { drawnStereo } from "../workflow/structuresTable";
 import { ARRANGEMENT_SAID, arrangementAs } from "../utils/arrangement";
+import { laidOut } from "./cleanUp";
+import { MENO } from "../../../../lib/chem/style";
 
 // Which of a metal's donors a drawing has across from each other, as identity reads it (chem/identityOf `arrangementsDrawn`):
 // a six-donor metal however drawn (ST-2.11), a four-donor one where the drawing states it square planar - the X, or ST-2.6's
@@ -71,7 +73,8 @@ describe("a metal's donors across, read from a drawing", () => {
     const metal = laid.atoms[0];
     const marked: Model = { ...laid, atoms: [{ ...metal, unsure: { said: [ARRANGEMENT_SAID], as: arrangementAs(metal, laid.atoms, laid.bonds) } }, ...laid.atoms.slice(1)] };
     expect(arrangementsDrawn(drawingOf(marked), marked)).toEqual([]);
-    const moved: Model = { ...marked, atoms: marked.atoms.map((a) => (a.id === 3 ? { ...a, x: 0, y: -1.5 } : a.id === 4 ? { ...a, x: -1.5, y: 0 } : a)) };
+    // (its second Cl and first N swapped round: Cl across Cl, the cross kept)
+    const moved: Model = { ...marked, atoms: marked.atoms.map((a) => (a.id === 3 ? { ...a, x: -1.5, y: 0 } : a.id === 4 ? { ...a, x: 0, y: 1.5 } : a)) };
     expect(arrangementsDrawn(drawingOf(moved), moved)).toHaveLength(1);
   });
 
@@ -132,6 +135,40 @@ describe("a metal's donors across, read from a drawing", () => {
     };
     expect(identityOfDrawn(unsure(transEn)).text).toBe(identityOfDrawn(unsure(cisEn)).text);
     expect(identityOfDrawn(unsure(fac)).text).toBe(identityOfDrawn(unsure(mer)).text);
+  });
+
+  it("the earlier picture - four donors an X, two side by side - read where every reading is one structure, and Clean-up keeps the isomer", { timeout: 120000 }, async () => {
+    // (spokes at `at` degrees: the X at 45, 135, 225 and 315, the two side by side at 75 and 105; each chelate's ends joined by two C)
+    const picture = (els: string[], at: number[], chelates: [number, number][]): Model => {
+      const m = drawn("Co", els.map((el, k) => ({ el, at: at[k], ...(el === "N" ? { valence: 3 } : {}) })));
+      let id = 200;
+      for (const [p, q] of chelates) {
+        const [a, b] = [m.atoms[1 + p], m.atoms[1 + q]];
+        const c1 = ++id;
+        const c2 = ++id;
+        m.atoms.push({ id: c1, x: a.x * 1.8, y: a.y * 1.8, r: 0.9, el: "C" } as Model["atoms"][number], { id: c2, x: b.x * 1.8, y: b.y * 1.8, r: 0.9, el: "C" } as Model["atoms"][number]);
+        m.bonds.push({ id: 3000 + c1, a: a.id, b: c1, order: 1, stereo: "none" } as Model["bonds"][number], { id: 3001 + c1, a: c1, b: c2, order: 1, stereo: "none" } as Model["bonds"][number], { id: 3002 + c1, a: c2, b: b.id, order: 1, stereo: "none" } as Model["bonds"][number]);
+      }
+      return m;
+    };
+    const byEl = (m: Model) => {
+      const d = drawingOf(m);
+      const read = identityInputOf(m).input.arrangements ?? [];
+      return read.flatMap((x) => x.pairs.map(([p, q]) => [d.atoms[p].el, d.atoms[q].el].sort().join("-"))).sort();
+    };
+    const X = [45, 135, 225, 315, 75, 105];
+    // ([Co(en)2Cl2]+ in it: each en across the X's corners next to each other - cis, as its maker meant)
+    const enPicture = picture(["N", "N", "N", "N", "Cl", "Cl"], X, [[0, 1], [2, 3]]);
+    expect(byEl(enPicture)).toEqual(["Cl-N", "Cl-N", "N-N"]);
+    // (Co(gly)2Cl2-, its lines N-O and O-N: one answer; its lines N-N and O-O: two, so none)
+    expect(byEl(picture(["N", "O", "O", "N", "Cl", "Cl"], X, [[0, 1], [2, 3]]))).toEqual(["Cl-N", "Cl-O", "N-O"]);
+    expect(byEl(picture(["N", "O", "N", "O", "Cl", "Cl"], X, [[0, 1], [2, 3]]))).toEqual([]);
+    // (two donors side by side are never a pair across: no reading of six spokes leaves them so)
+    const cisSpokes = sixWith(["Cl", "Cl", "N", "N", "N", "N"], [[2, 3, ["C", "C"]], [4, 5, ["C", "C"]]]);
+    expect(identityOfDrawn(enPicture).text).toBe(identityOfDrawn(cisSpokes).text);
+    // (Clean-up of the cis drawn by hand: the same structure after, whatever picture it draws)
+    const after = await laidOut(cisSpokes, MENO);
+    expect(identityOfDrawn(after).text).toBe(identityOfDrawn(cisSpokes).text);
   });
 
   it("the upright cross on a metal not surely square planar states no geometry: cis and trans drawn so are one structure, matching neither X", () => {
