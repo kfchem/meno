@@ -12,7 +12,9 @@ import type { CalcInfo } from "../../../../lib/calc/output";
 import { FREQUENCY, geometryKey, propertyIn, type At, type By, type Entry, type EntryAtom, type EntryStatus, type EntryStereo, type Property } from "../../../../lib/entry";
 import { leftOut, readEach } from "../utils/readNotes";
 import { pageIndex, signatureOf } from "../utils/drawnLink";
-import { identityOfDrawn, labelsDrawnOut } from "../chem/identityOf";
+import { identityInputOf, labelsDrawnOut } from "../chem/identityOf";
+import { identitiesAsked, identityKnown } from "../chem/identityOff";
+import { identity } from "../../../../lib/chem/identity";
 import { partOf } from "../chem/cleanUp";
 import { stereoKnown } from "./configurations";
 import { speciesOf } from "../../../../lib/io/writers";
@@ -220,20 +222,51 @@ export function membersOf(found: {
  * charge, bond, or configuration - its mirror image - does not. Where its
  * wedges cannot be read, or its identity not worked out in full, the
  * drawing itself is in the key too: any change to it is taken for one.
+ *
+ * Its identity is worked out off the drawing thread (chem/identityOff): not
+ * yet answered, and too large to work out here, it is pending - undefined -
+ * until the answer lands; a caller that may wait asks first
+ * (`drawnHashesAsked`).
  */
-export function drawnHash(model: Model, ids: readonly number[]): string {
+export function drawnHash(model: Model, ids: readonly number[]): string | undefined {
   // (worked out once for each structure as drawn: an edit elsewhere on the page leaves its drawing's key, and so this, as it was)
   const drawn = drawingKey(model, ids);
-  let key = identities.get(drawn);
-  if (key == null) {
-    // (wedges identity cannot read - crossed, or at an atom of three bonds that keeps no configuration, lib/chem/lonePairCentres - or a search it could not finish: its configuration
-    // not in the identity, so the drawing itself is, and any change to it - Clean-up's too - is taken for a change of structure)
-    const { text, complete, unread } = identityOfDrawn(labelsDrawnOut(partOf(model, new Set(ids))));
-    key = hash(complete && !unread.length ? text : `${text}|as drawn|${drawn}`).toString(36);
-    if (identities.size >= IDENTITIES_KEPT) identities.clear();
-    identities.set(drawn, key);
-  }
+  const had = identities.get(drawn);
+  if (had != null) return had;
+  // (wedges identity cannot read - crossed, or at an atom of three bonds that keeps no configuration, lib/chem/lonePairCentres - or a search it could not finish: its configuration
+  // not in the identity, so the drawing itself is, and any change to it - Clean-up's too - is taken for a change of structure)
+  const { input, unread } = identityInputOf(labelsDrawnOut(partOf(model, new Set(ids))));
+  const found = identityKnown(input);
+  if (!found) return undefined;
+  const key = hash(found.complete && !unread.length ? found.text : `${found.text}|as drawn|${drawn}`).toString(36);
+  if (identities.size >= IDENTITIES_KEPT) identities.clear();
+  identities.set(drawn, key);
   return key;
+}
+
+/** `drawnHash`, worked out here where it is pending: only where a caller could not ask first (`drawnHashesAsked`). */
+function drawnHashNow(model: Model, ids: readonly number[]): string {
+  const { input, unread } = identityInputOf(labelsDrawnOut(partOf(model, new Set(ids))));
+  const found = identity(input);
+  const key = hash(found.complete && !unread.length ? found.text : `${found.text}|as drawn|${drawingKey(model, ids)}`).toString(36);
+  identities.set(drawingKey(model, ids), key);
+  return key;
+}
+
+/**
+ * `go`, once the identity of each of `models` - the drawings a step gives, each with its record - is known (`drawnHash`,
+ * `placedRecord`): at once where each is, or is small enough to work out here; else once the worker has answered, so that the
+ * drawing thread never works one out. Asked and failed, `go` all the same.
+ */
+export function whenDrawnKnown(models: readonly Model[], go: () => void): void {
+  const inputs = models.map((m) => identityInputOf(labelsDrawnOut(m)).input);
+  if (inputs.every((input) => identityKnown(input))) return go();
+  void identitiesAsked(inputs).then(go, go);
+}
+
+/** Each structure's identity (`drawnHash`) asked of the worker and answered: for a caller that may wait before it reads them. */
+export async function drawnHashesAsked(model: Model, structures: readonly (readonly number[])[]): Promise<void> {
+  await identitiesAsked(structures.map((ids) => identityInputOf(labelsDrawnOut(partOf(model, new Set(ids)))).input));
 }
 const identities = new Map<string, string>();
 const IDENTITIES_KEPT = 4096;
@@ -250,8 +283,11 @@ export const BEFORE_THE_EDIT = "its properties were for the structure before the
 /** What a stale record says once a step has worked new values out of the structure as it is: those it had before the edit are gone still. */
 export const TAKEN_AT_THE_EDIT = "the properties it had before the edit were taken away; those it has are of it as it is";
 
-/** A record put on a structure as it is drawn now: of that structure (`of`). */
-export const recordOn = (record: DrawnRecord, model: Model, ids: readonly number[]): DrawnRecord => ({ ...record, of: drawnHash(model, ids) });
+/** A record put on a structure as it is drawn now: of that structure (`of`) - as it was, while its identity is pending. */
+export const recordOn = (record: DrawnRecord, model: Model, ids: readonly number[]): DrawnRecord => {
+  const of = drawnHash(model, ids);
+  return of == null ? record : { ...record, of };
+};
 
 /**
  * The record of a structure edited since it was given, or of two joined
@@ -268,7 +304,10 @@ function joined(a: DrawnRecord | undefined, b: DrawnRecord): DrawnRecord | undef
 
 /** A record as its structure stands now: as it is, where that is the structure it was given for (or it does not say); else its properties and status taken away (`joined`) - and its lasting id, the structure being another. */
 export function recordNow(record: DrawnRecord | undefined, model: Model, ids: readonly number[]): DrawnRecord | undefined {
-  if (!record?.of || record.of === drawnHash(model, ids)) return record;
+  if (!record?.of) return record;
+  // (its identity pending: kept as it stands - not known to be another is never taken for one)
+  const now = drawnHash(model, ids);
+  if (now == null || record.of === now) return record;
   return joined(undefined, record);
 }
 
@@ -312,7 +351,9 @@ export function memberRecord(record: DrawnRecord | undefined, model: Model, ids:
  * (`structureIdAt`, at the step's exit and its place).
  */
 export function placedRecord(record: DrawnRecord, model: Model, ids: readonly number[], given: (now: string) => string): DrawnRecord {
-  const now = drawnHash(model, ids);
+  // (asked before the step puts its structures down - workflow/run `madePut`'s caller - so known here; worked out in place only
+  //  where it was not)
+  const now = drawnHash(model, ids) ?? drawnHashNow(model, ids);
   const id = record.id && (!record.of || record.of === now) ? record.id : given(now);
   return { ...record, id, of: now };
 }

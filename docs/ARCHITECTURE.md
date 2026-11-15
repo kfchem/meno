@@ -539,7 +539,16 @@ What is left before the editor counts as finished, and in what order, is in
   `ChemMarks2D` (see the chemistry worker below); clean-up and a SMILES's
   layout by Meno's own engine (`src/lib/layout`), run in a web worker
   (`chem/layoutWorker.ts`), what it is given read out of the drawing
-  (`chem/engineLayout.ts`, `lib/layout/drawn.ts`).
+  (`chem/engineLayout.ts`, `lib/layout/drawn.ts`). A structure's identity
+  (`lib/chem/identity`) is worked out in a web worker of its own
+  (`chem/identityWorker.ts`, asked through `chem/identityOff.ts`), each
+  answer kept by the structure's content: on the drawing thread a structure
+  not yet answered is worked out in place only where it is small, and is
+  otherwise pending - a record kept as it stands, a table's cell said to be
+  still worked out, re-made as the answer lands - while a step putting its
+  structures down, a file being written, a 3D make and a conversation's
+  search ask first and wait. Enumerate, and the constitution keys a step's
+  grouping uses, still work theirs out on the drawing thread.
 - **Frame loop**: the canvas runs `frameloop="demand"` at a fixed `CANVAS_DPR`
   (2x). React commits (store changes) request a frame automatically; anything
   that animates or mutates the scene imperatively must call `invalidate()`

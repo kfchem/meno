@@ -370,7 +370,11 @@ export function identityText(input: IdentityInput): string {
  * whether the search was complete; `identity` does.
  */
 export function identityKey(input: IdentityInput): string {
-  const text = identityText(input);
+  return identityKeyOf(identityText(input));
+}
+
+/** `identityKey` of an identity text already worked out - by a worker, say (ui chem/identityOff). */
+export function identityKeyOf(text: string): string {
   let a = 0x811c9dc5;
   let b = 0x01000193;
   for (let i = 0; i < text.length; i++) {

@@ -29,7 +29,9 @@ import { editorLayoutOptions, layoutBonds } from "./layoutOptions";
 import { useEditorStore } from "./store";
 import type { Carried3D, Drawn, DrawnRecord, EditorState, Model } from "./store/types";
 import type { Property } from "../../../lib/entry";
-import { imaginaryOf, recordNow, recordNumber } from "./workflow/entries";
+import { drawnHashesAsked, imaginaryOf, recordNow, recordNumber } from "./workflow/entries";
+import { identitiesAsked } from "./chem/identityOff";
+import { identityInputOf, labelsDrawnOut } from "./chem/identityOf";
 import { partsOf } from "./workflow/parts";
 import { useNotices } from "../../notices";
 import { carriedOf, isWorkspaceFile, notKeptSaid, workspaceFile } from "./utils/workspace";
@@ -327,6 +329,19 @@ function setRecordsOf(drawn: Drawn, drawing: Model): ({ ids: number[]; record: D
       return [{ ids: c.structure, record: recordNow(c.record, drawing, c.structure) ?? {} }];
     }),
     ...(drawn.held?.[set.id] ?? []).map(({ record, ...model }) => ({ model, record: recordNow(record, model, model.atoms.map((a) => a.id)) ?? {} })),
+  ]);
+}
+
+/**
+ * The identities what is written reads (`setRecordsOf`: each record's structure as it stands now), asked of the worker and
+ * answered first - so that writing works none out on the drawing thread; the file is saving meanwhile, the page free.
+ */
+export async function setRecordsAsked(drawn: Drawn): Promise<void> {
+  const { loose } = recordDrawings(drawn);
+  const sets = drawn.flow?.sets ?? [];
+  await Promise.all([
+    drawnHashesAsked(loose, sets.flatMap((set) => (set.carried ?? []).filter((c) => c.record?.of && c.structure.length).map((c) => c.structure))),
+    identitiesAsked(sets.flatMap((set) => (drawn.held?.[set.id] ?? []).filter((m) => m.record?.of).map(({ record: _record, ...model }) => identityInputOf(labelsDrawnOut(model)).input))),
   ]);
 }
 
@@ -1007,6 +1022,7 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
         }
         // (and of each set - those selected, or every one on the canvas - what it holds off the page too: every structure it holds is written)
         const drawn = exportedDrawn(state, part);
+        await setRecordsAsked(drawn);
         await writeDocument(path, structureFileText(drawn, path, options, style3dOf(state)));
         // (a MOL or RXN file - one molfile - cannot hold a set's records: what it holds off the page, said not written)
         const notWritten = kind === "mol" || kind === "rxn" ? heldNotWritten(drawn) : null;

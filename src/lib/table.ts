@@ -9,7 +9,7 @@
  * counted and said, cell by cell - never left out unsaid.
  */
 import { geometryKey, stereoIdentity, type At, type By, type Entry, type Property } from "./entry";
-import { identityKey } from "./chem/identity";
+import { identityKey, type IdentityInput } from "./chem/identity";
 import { isUnit, type Unit } from "./units";
 
 /**
@@ -281,7 +281,16 @@ export function variantNames(name: string, ways: readonly Property[]): string[] 
  * that is no number, text or true or false is left, and said; one with no
  * value, or not worked out, is missing in its row, and counted.
  */
-export function moleculesAsTable(entries: readonly Entry[]): Table {
+/**
+ * What a table writes in its constitution column: the structure's `identityKey` - or, where it is worked out elsewhere and not
+ * yet answered, the words that say so (`NOT_YET`).
+ */
+export type ConstitutionOf = (input: IdentityInput) => string;
+
+/** A cell whose value is being worked out, off the drawing thread: not given yet, and last in a sort (`noValue`). */
+export const NOT_YET = "not worked out: still being worked out";
+
+export function moleculesAsTable(entries: readonly Entry[], constitutionOf: ConstitutionOf = identityKey): Table {
   const columns: TableColumn[] = [
     { name: "id", kind: "entry" },
     { name: "constitution", kind: "text" },
@@ -339,7 +348,7 @@ export function moleculesAsTable(entries: readonly Entry[]): Table {
   }
   const rows = entries.map((e): Cell[] => [
     e.id,
-    identityKey({ atoms: e.structure.atoms.map((a) => ({ el: a.el, ...(a.charge ? { charge: a.charge } : {}) })), bonds: e.structure.bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })) }),
+    constitutionOf({ atoms: e.structure.atoms.map((a) => ({ el: a.el, ...(a.charge ? { charge: a.charge } : {}) })), bonds: e.structure.bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })) }),
     stereoIdentity(e.stereo) ?? "not known",
     ...keys.map(({ name, variant }) => {
       const given = e.properties[name];

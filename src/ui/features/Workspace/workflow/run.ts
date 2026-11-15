@@ -37,7 +37,7 @@ import { rmsd } from "./rmsd";
 import { recordsWithRoles } from "./schemeRoles";
 import { notFinishedRows, structuresAsTable } from "./structuresTable";
 import { diagramNeeds } from "./diagramOptions";
-import type { NumberValue, Table } from "../../../../lib/table";
+import type { ConstitutionOf, NumberValue, Table } from "../../../../lib/table";
 import { addedSet, numberOf } from "./addStep";
 
 /**
@@ -523,8 +523,8 @@ export function setStructures(doc: Pick<WorkspaceDocument, "model" | "molecules3
 }
 
 /** A set of structures drawn as a table (structuresTable): every structure it holds (`setStructures`), each row's id the set's and its place. */
-export function setStructuresTable(doc: Pick<WorkspaceDocument, "model" | "molecules3d" | "pictures"> & Partial<Pick<WorkspaceDocument, "arrows" | "pluses">>, set: WorkflowSet): Table {
-  return structuresAsTable(setStructures(doc, set), (k) => `structure:${set.id}#${k}`);
+export function setStructuresTable(doc: Pick<WorkspaceDocument, "model" | "molecules3d" | "pictures"> & Partial<Pick<WorkspaceDocument, "arrows" | "pluses">>, set: WorkflowSet, constitutionOf?: ConstitutionOf): Table {
+  return structuresAsTable(setStructures(doc, set), (k) => `structure:${set.id}#${k}`, constitutionOf);
 }
 
 /** What a step's result set holds now, as a run kept keeps it; none, where it has made none - or made pictures, which a run kept does not keep. */
