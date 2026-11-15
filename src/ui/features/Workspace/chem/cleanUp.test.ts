@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { readStereo, sameConfiguration, wedgesForFlat } from "../../../../lib/layout/drawn";
+import { openDoubleBonds, readStereo, sameConfiguration, wedgesForFlat } from "../../../../lib/layout/drawn";
 import { layout2D, type LayoutInput } from "../../../../lib/layout/engine";
 import { layoutMetrics } from "../../../../lib/layout/metrics";
 import cages from "../../../../lib/layout/testdata/cages.json";
@@ -18,6 +18,7 @@ import { MENO } from "../../../../lib/chem/style";
 import { moleculesToEditorModel, readMoleculesFromText } from "../../../../utils/importers";
 import { drawingLayout, drawnOf, structureFileText } from "../fileActions";
 import { editorModelOf } from "../utils/io";
+import { identityOfDrawn } from "./identityOf";
 import { blocksOf } from "./make3d";
 import messyTaxol from "../../../../../scripts/gui/fixtures/messy-taxol.mol?raw";
 import { measured } from "../../../../testing/timeouts";
@@ -117,6 +118,12 @@ const centroid = (m: Model, ids: Set<number>) => {
  * engine, and a cage it draws in perspective given the wedges that say its
  * stereochemistry instead.
  */
+/** How many double bonds a drawing states cis or trans of, as the reader reads it. */
+function drawingCisTrans(m: Model): number {
+  const d = drawingOf(m);
+  return readStereo(d.atoms, d.bonds).cisTrans.size;
+}
+
 function flatDrawing(input: LayoutInput): Model {
   const out = layout2D(input);
   const k = NOMINAL_BOND_LENGTH;
@@ -204,6 +211,51 @@ describe("fragmentOf and partOf", () => {
     // 9.7 to 11.3 with eight copies running at a load average of 50 - and
     // the time did not, which Vitest's 5 s cut short)
   }, measured(1_200));
+});
+
+describe("cleanUp, a silyl group whose file set its Si's valence", () => {
+  // (a file's VAL=4 on Si - its element's own, as a typed SMILES's block has it: a hand-made drawing, not a program's)
+  const silyl = (valence: number | undefined, oxygen: boolean): Model => {
+    const at = (id: number, x: number, y: number, el = "C", more: object = {}) => ({ ...atom(id, x, y, el), ...more });
+    const atoms = [
+      at(1, 0, 0),
+      at(2, 1, 0.5),
+      at(3, 2, 0, oxygen ? "O" : "C"),
+      at(4, 3, 0.5, "Si", valence == null ? {} : { valence }),
+      at(5, 3, 1.5),
+      at(6, 4, 0.5),
+      at(7, 3, -0.5),
+    ];
+    const bonds: Bond[] = [
+      { id: 101, a: 1, b: 2, order: 2 },
+      { id: 102, a: 2, b: 3, order: 1 },
+      { id: 103, a: 3, b: 4, order: 1 },
+      { id: 104, a: 4, b: 5, order: 1 },
+      { id: 105, a: 4, b: 6, order: 1 },
+      { id: 106, a: 4, b: 7, order: 1 },
+    ];
+    // (TBS: one of the three a tert-butyl)
+    if (oxygen) {
+      atoms.push(at(8, 4, -0.5), at(9, 5, 0), at(10, 4, -1.5));
+      bonds.push({ id: 107, a: 7, b: 8, order: 1 }, { id: 108, a: 7, b: 9, order: 1 }, { id: 109, a: 7, b: 10, order: 1 });
+    }
+    return { atoms, bonds };
+  };
+  const labels = async (m: Model) => {
+    const { store } = canvas(m);
+    await cleanUp(store);
+    return store.getState().model.atoms.filter((a) => !["C", "O", "Si", "H"].includes(a.el)).map((a) => a.el);
+  };
+
+  it("writes it by name where the valence is its element's own: TMS, OTBS - as with none set", async () => {
+    expect(await labels(silyl(4, false))).toEqual(["TMS"]);
+    expect(await labels(silyl(undefined, false))).toEqual(["TMS"]);
+    expect(await labels(silyl(4, true))).toEqual(["OTBS"]);
+  });
+
+  it("leaves it drawn out where the valence says more than its name would", async () => {
+    expect(await labels(silyl(5, false))).toEqual([]);
+  });
 });
 
 describe("cleanUp", () => {
@@ -487,6 +539,82 @@ describe("cleanUp", () => {
     expect(laid.atoms.some((a) => a.z != null)).toBe(true);
     const [s0, s1] = [stereo(flat), stereo(laid)];
     for (const [c, t] of s0) expect(sameConfiguration(t, s1.get(c)!), `${c}`).toBe(true);
+  });
+
+  describe("a double bond its text leaves open, drawn open (Brecher 2006, ST-4.4)", () => {
+    /** A plugin's drawing of a SMILES as it may come - laid out flat by the engine, its open double bond bent one way (no end kept straight). */
+    const arrived = (smiles: string) => {
+      const input = fromSmiles(smiles);
+      return flatDrawing({ ...input, atoms: input.atoms.map(({ linear: _l, ...a }) => a) });
+    };
+    const dbl = (m: Model) => m.bonds.find((b) => b.order === 2)!;
+    const angleAt = (m: Model, end: number, other: number, group: number) => {
+      const at = (id: number) => m.atoms.find((a) => a.id === id)!;
+      const [e, o, g] = [at(end), at(other), at(group)];
+      const u = Math.atan2(g.y - e.y, g.x - e.x);
+      const v = Math.atan2(e.y - o.y, e.x - o.x);
+      return (Math.abs(Math.atan2(Math.sin(u - v), Math.cos(u - v))) * 180) / Math.PI;
+    };
+
+    it("lays out but-2-ene from CC=CC with each end straight on, read as no configuration", async () => {
+      const m = arrived("CC=CC");
+      // (as it came: bent, read as one of them)
+      expect(drawingCisTrans(m)).toBe(1);
+      const laid = await laidOut(m, undefined, undefined, openDoubleBonds(fromSmiles("CC=CC")));
+      const b = dbl(laid);
+      expect(drawingCisTrans(laid)).toBe(0);
+      expect(angleAt(laid, b.a, b.b, b.a === 2 ? 1 : 4)).toBeLessThan(10);
+      expect(angleAt(laid, b.b, b.a, b.b === 3 ? 4 : 1)).toBeLessThan(10);
+    });
+
+    it("gives 3-methylpent-2-ene from a SMILES with no marks a wavy bond: its double bond 'either', read as no configuration", async () => {
+      const m = arrived("CC=C(C)CC");
+      const laid = await laidOut(m, undefined, undefined, openDoubleBonds(fromSmiles("CC=C(C)CC")));
+      expect(dbl(laid).stereo).toBe("either");
+      expect(drawingCisTrans(laid)).toBe(0);
+    });
+
+    it("keeps the straight form through Clean-up, once and twice, where the plugin's drawing marks the bond 'either' too: but-2-ene, hexa-2,4-diene, stilbene", async () => {
+      for (const s of ["CC=CC", "CC=CC=CC", "c1ccccc1C=Cc1ccccc1"]) {
+        // (as the plugin's drawing comes: bent, and each open double bond marked either configuration)
+        const came = arrived(s);
+        const open = openDoubleBonds(fromSmiles(s));
+        expect(open.straight.length, s).toBeGreaterThan(0);
+        const ends = new Set(open.straight.map((i) => came.atoms[i].id));
+        const m = { ...came, bonds: came.bonds.map((x) => (x.order === 2 && ends.has(x.a) && ends.has(x.b) ? { ...x, stereo: "either" as const } : x)) };
+        expect(m.bonds.filter((x) => x.stereo === "either").length, s).toBe(s === "CC=CC=CC" ? 2 : 1);
+        const laid = await laidOut(m, undefined, undefined, open);
+        const straightOn = (d: Model) =>
+          open.straight.every((i) => {
+            const id = came.atoms[i].id;
+            const bond = d.bonds.find((x) => x.order === 2 && (x.a === id || x.b === id) && open.straight.some((j) => came.atoms[j].id === (x.a === id ? x.b : x.a)))!;
+            const other = bond.a === id ? bond.b : bond.a;
+            const group = d.bonds.find((x) => x !== bond && (x.a === id || x.b === id))!;
+            return angleAt(d, id, other, group.a === id ? group.b : group.a) < 10;
+          });
+        expect(straightOn(laid), s).toBe(true);
+        expect(laid.bonds.some((x) => x.stereo === "either"), s).toBe(false);
+        const was = identityOfDrawn(laid).text;
+        const { store } = canvas(laid);
+        for (const time of [1, 2]) {
+          await cleanUp(store);
+          const now = store.getState().model;
+          expect(straightOn(now), `${s} ${time}`).toBe(true);
+          expect(now.bonds.some((x) => x.stereo === "either"), `${s} ${time}`).toBe(false);
+          expect(drawingCisTrans(now), `${s} ${time}`).toBe(0);
+          expect(identityOfDrawn(now).text, `${s} ${time}`).toBe(was);
+        }
+      }
+    }, 120000);
+
+    it("keeps a double bond the SMILES gives E or Z bent as given", async () => {
+      for (const s of ["C/C=C/C", "C/C=C\\C"]) {
+        const open = openDoubleBonds(fromSmiles(s));
+        expect(open).toEqual({ straight: [], either: [] });
+        const laid = await laidOut(arrived(s), undefined, undefined, open);
+        expect(drawingCisTrans(laid), s).toBe(1);
+      }
+    });
   });
 
   it("lays out phenyl azide that has just arrived with its azide bent: no cis or trans to keep there", async () => {
