@@ -3,6 +3,7 @@
  * what it finds there - pure, over the editor's model (the clipboard
  * itself is lib/clipboard).
  */
+import { crossingsHeld } from "../chem/crossings";
 import { ATOM_NUMBER_KINDS, type AtomNumberKind } from "./atomNumbers";
 import { readBiopolymer } from "../../../../lib/chem/biopolymer";
 import { propertiesIn } from "../../../../lib/entry";
@@ -458,6 +459,14 @@ export function readDrawn(data: unknown, pointPx = POINT): Drawn | null {
     else out.magnified = magnificationWithin(x.magnified);
     return out;
   };
+  // (the bonds each is said to pass behind where they cross: ids of the record's own bonds only, each once - chem/crossings, which then keeps it one way)
+  const withBehindRead = <T extends { id?: unknown; behind?: unknown }>(x: T): T => {
+    const out = { ...x };
+    const said = Array.isArray(x.behind) ? [...new Set(x.behind.filter((id): id is number => Number.isInteger(id) && bondIds.has(id as number) && id !== x.id))] : [];
+    if (said.length) out.behind = said;
+    else delete out.behind;
+    return out;
+  };
   // (a ring's fill where its key and its colour read)
   const ringFills = Object.fromEntries(
     Object.entries(r.ringFills && typeof r.ringFills === "object" ? (r.ringFills as Record<string, unknown>) : {}).filter(
@@ -466,7 +475,7 @@ export function readDrawn(data: unknown, pointPx = POINT): Drawn | null {
   ) as Record<string, string>;
   return {
     atoms: atoms.map((a) => withMagnified(withStack(withRead(withColours(withMarks({ r: 0.9, ...a }, ["chargeAt", "stereoAt"]))))) as Atom),
-    bonds: bonds.map((b) => withRead(withColours(withMarks(b, ["stereoAt"])))) as Bond[],
+    bonds: crossingsHeld({ atoms: [], bonds: bonds.map((b) => withBehindRead(withRead(withColours(withMarks(b, ["stereoAt"]))))) as Bond[] }).bonds,
     ...(pushes.length ? { pushes } : {}),
     ...(Object.keys(ringFills).length ? { ringFills } : {}),
     ...(arrows.length ? { arrows } : {}),

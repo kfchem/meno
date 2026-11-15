@@ -93,3 +93,47 @@ describe("a double bond's cis or trans, read from SMILES", () => {
   });
 });
 
+
+describe("an allene's axis and an odd cumulene's cis or trans, read from SMILES", () => {
+  it("reads an @ or @@ on an allene's middle atom as its axis, the run collapsed into one centre (OpenSMILES, Tetrahedral Allene-like Systems)", () => {
+    // (the specification's own example: N and Br on one end, O and the methyl on the other)
+    expect(readSmiles("NC(Br)=[C@]=C(O)C").axes).toEqual([{ atoms: [1, 4], refs: [0, 5], sense: 1 }]);
+    expect(readSmiles("NC(Br)=[C@@]=C(O)C").axes).toEqual([{ atoms: [1, 4], refs: [0, 5], sense: -1 }]);
+    // (the same allene written from its other end: its four neighbours, collapsed, an even turn of the first's - the same
+    // @ - and its torsion, from the methyl to the Br, the first's turned twice over; the other @, its mirror image)
+    expect(readSmiles("CC(O)=[C@]=C(Br)N").axes).toEqual([{ atoms: [1, 4], refs: [0, 5], sense: 1 }]);
+    expect(readSmiles("CC(O)=[C@@]=C(Br)N").axes).toEqual([{ atoms: [1, 4], refs: [0, 5], sense: -1 }]);
+    // (each end's H where a bracket atom's would be; an even run of four double bonds marked at its middle atom)
+    expect(readSmiles("CC=[C@]=CC").axes).toEqual([{ atoms: [1, 3], refs: [0, 4], sense: -1 }]);
+    expect(readSmiles("CC=C=[C@@]=C=CC").axes).toEqual([{ atoms: [1, 5], refs: [0, 6], sense: 1 }]);
+  });
+
+  it("reads an odd cumulene's cis or trans from the directional bonds at its ends (OpenSMILES, Cis/Trans configuration of double bonds)", () => {
+    expect(readSmiles("F/C=C=C=C/F").cumulated).toEqual([{ atoms: [1, 4], refs: [0, 5], cis: false }]);
+    expect(readSmiles("F/C=C=C=C\\F").cumulated).toEqual([{ atoms: [1, 4], refs: [0, 5], cis: true }]);
+    expect(readSmiles("C(/F)=C=C=C/F").cumulated).toEqual([{ atoms: [0, 4], refs: [1, 5], cis: true }]);
+    // (none on an allene's ends: they are not in one plane)
+    expect(readSmiles("F/C=C=C/F").cumulated).toBeUndefined();
+    expect(readSmiles("F/C=C=C=C/F").bonds.every((b) => !b.cisTrans)).toBe(true);
+  });
+
+  it("gives no axis to a sulfur between two double bonds, bent as C=S=C is: only a carbon or an N+ is an allene's middle", () => {
+    expect(readSmiles("CC(O)=[C@]=C(C)Cl").axes).toHaveLength(1);
+    expect(readSmiles("CC(O)=[N@+]=C(C)Cl").axes).toHaveLength(1);
+    // (a mark on a sulfur of two neighbours is read as no axis: refused, or read as a centre - never an axis)
+    let read: ReturnType<typeof readSmiles> | null = null;
+    try {
+      read = readSmiles("CC(O)=[S@]=C(C)Cl");
+    } catch {
+      read = null;
+    }
+    expect(read?.axes).toBeUndefined();
+    // (and a run through a sulfur is no run: a butatriene's S in the middle gives no cis or trans)
+    expect(readSmiles("C/C=C=S=C/C").cumulated).toBeUndefined();
+  });
+
+  it("refuses an @ it cannot read as an allene's: not on the middle of its run, or at an end with two hydrogens", () => {
+    expect(() => readSmiles("CC=[C@]=C=C=CC")).toThrow(/not the middle atom/);
+    expect(() => readSmiles("C=[C@]=CC")).toThrow(/two neighbours besides it/);
+  });
+});

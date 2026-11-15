@@ -42,7 +42,7 @@ const butene: Model = {
 };
 
 describe("marksOf", () => {
-  it("puts RDKit's answer on the atoms and bonds it is about, by id", () => {
+  it("puts RDKit's valence warnings on the atoms they are about, by id - its R, S, E and Z and an axis's M or P never: Meno's own are", () => {
     const marks = marksOf(butene, {
       atoms: [
         { index: 0, hydrogens: 3 },
@@ -50,11 +50,26 @@ describe("marksOf", () => {
         { index: 2, hydrogens: 0, valenceError: { valence: 5, most: 4 } },
         { index: 3, hydrogens: 3 },
       ],
-      bonds: [{ index: 1, cip: "E" }],
+      bonds: [
+        { index: 1, cip: "E" },
+        { index: 2, cip: "M" },
+      ],
     });
-    expect([...marks.centres]).toEqual([[11, "R"]]);
+    expect([...marks.centres]).toEqual([]);
     expect([...marks.valence]).toEqual([[12, { valence: 5, most: 4 }]]);
-    expect([...marks.doubleBonds]).toEqual([[21, "E"]]);
+    expect([...marks.doubleBonds]).toEqual([]);
+  });
+
+  it("reads the same marks whatever stereo a plugin sends - an axis's M or P, an unknown descriptor, or no bonds at all", () => {
+    // (a plugin from before Meno named axes sends them; one after sends none: either gives the valence warning, and nothing more)
+    const valence = { index: 2, hydrogens: 0, valenceError: { valence: 5, most: 4 } };
+    const before = marksOf(butene, { atoms: [valence], bonds: [{ index: 0, cip: "M" }, { index: 1, cip: "Ra" }] });
+    const after = marksOf(butene, { atoms: [valence] });
+    for (const marks of [before, after]) {
+      expect([...marks.valence]).toEqual([[12, { valence: 5, most: 4 }]]);
+      expect([...marks.doubleBonds]).toEqual([]);
+      expect([...marks.centres]).toEqual([]);
+    }
   });
 
   it("leaves a halogen bridging metals unmarked - μ-Cl in [Pd(allyl)Cl]2 drawn with plain bonds - and marks a real overload", () => {
@@ -105,12 +120,6 @@ describe("marksOf", () => {
     expect([...marksOf(adduct([bond(2, 2, 3)]), at(5)).valence]).toEqual([[2, { valence: 5, most: 3 }]]);
     const outOf: Model = { ...adduct(), bonds: [{ ...bond(1, 2, 1), dative: true }] };
     expect([...marksOf(outOf, at(4)).valence]).toEqual([[2, { valence: 4, most: 3 }]]);
-  });
-
-  it("says an axis of chirality's M or P as Ra or Sa, as a label says (R)-BINAP", () => {
-    const axis = (cip: "M" | "P") => marksOf(butene, { atoms: [], bonds: [{ index: 0, cip }] }).doubleBonds.get(20);
-    expect(axis("M")).toBe("Ra");
-    expect(axis("P")).toBe("Sa");
   });
 });
 

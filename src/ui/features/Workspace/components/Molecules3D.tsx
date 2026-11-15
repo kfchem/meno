@@ -7,6 +7,7 @@ import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { bondRadiusOf, STYLE_3D, type Style3D } from "../../../../lib/chem/style3d";
 import KeyLight3D from "./KeyLight3D";
 import ScreenShade3D from "./ScreenShade3D";
+import WarmShaders3D from "./WarmShaders3D";
 import { MOV_PX } from "../constants";
 import { useEditor, useEditorStore } from "../store";
 import type { EditorState, Molecule3D, Turn3D } from "../store/types";
@@ -591,7 +592,11 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
       } catch {}
       gesture.current = null;
       store.getState().endPanHold(e.pointerId);
-      if (g.kind === "move") g.guide.end();
+      if (g.kind === "move") {
+        g.guide.end();
+        // (a mark between two bonds the move has left apart taken away, in its own step - of the drawing it carried, if any - chem/crossings)
+        if (g.drawn.atoms.length) store.getState().settleMove(g.key, g.drawn.atoms.map((a) => a.id));
+      }
       setActive(null);
       setHold(null);
       const st = store.getState();
@@ -761,7 +766,8 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
     invalidate();
   };
 
-  if (!molecules.length && !leaving.length && !receding.length && !heldAny) return null;
+  // (with no molecule in 3D on the page as well: its lights, and the shaders made ready under them - WarmShaders3D -
+  //  so that the first one made is drawn as the page already stands, never waiting a frame on a shader)
   const litOf = (id: number): number => {
     if (active) return active.group.includes(id) ? (active.kind === "move" ? 2 : 1) : 0;
     return hovered?.id === id || freshCopy === id ? 1 : 0;
@@ -776,6 +782,8 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
         screen={style.primary.occlusionBy === "screen" || style.secondary.occlusionBy === "screen"}
       />
       <ScreenShade3D />
+      {/* the shaders a molecule is drawn with, made ready as the page starts: the first one made never waits a frame on them */}
+      <WarmShaders3D style={style} stereoFont={stereoFont} />
       {heldAny && <HeldViews3D style={style} hover={heldHover} onHover={setHeldHover} onTurning={setHeldTurning} stereoFont={stereoFont} />}
       {molecules.map((m) => {
         if (hiddenStacked.has(m.id)) return null;

@@ -3,27 +3,16 @@
  * anything: who is bonded to whom, the rings, and the ring systems - rings
  * sharing an atom or more, laid out together as one piece.
  */
-import { smallestRings } from "./rings";
-import type { Axial, Tetrahedral } from "./stereo";
+import type { Cumulated, Tetrahedral } from "./stereo";
+import { bridgesToMetal, drawnRoundMetal } from "../chem/perception/elements";
+import type { ChemAtom, ChemBond, ChemGraph } from "../chem/perception/graph";
+import { factsOf } from "../chem/perception/facts";
+import { smallestRings } from "../chem/perception/rings";
 
-export type CisTrans = {
-  /** An atom on each end of the double bond, each bonded to its end. */
-  refs: readonly [number, number];
-  /** Whether those two are on the same side. */
-  cis: boolean;
-};
+export type { CisTrans } from "../chem/perception/stereo/types";
 
-export type LayoutAtom = {
-  el: string;
-  charge?: number;
-  hs?: number;
-  /** Its configuration, where it is a stereocentre. */
-  tetra?: Tetrahedral;
-  /**
-   * For a star ("*") at the centre of a pi system bound to a metal through
-   * all its atoms (a haptic bond): the system's atoms.
-   */
-  pi?: readonly number[];
+/** An atom as the layout reads it: the core's atom, and what is an instruction to the layout. */
+export type LayoutAtom = ChemAtom & {
   /**
    * Drawn straight through, its two bonds in one line: an end of a double
    * bond whose configuration is not given, its one group kept straight on
@@ -32,14 +21,34 @@ export type LayoutAtom = {
    * only by an atom with two bonds.
    */
   linear?: boolean;
+  /**
+   * A metal with four bonds as the chemist drew it - an upright cross or an X - where Clean-up keeps it so (docs/LAYOUT-2D.md,
+   * *At an atom in no ring*): taken over the form Meno would choose.
+   */
+  fourForm?: "x" | "cross";
+  /**
+   * An atom standing for the structure a group goes on into - a group laid out alone, the carbon for its bond out: not an end,
+   * though bonded to nothing else (a CF3 on it is a group on a skeleton, its trident fanned).
+   */
+  onward?: true;
 };
-export type LayoutBond = { a: number; b: number; order: number; stereo?: CisTrans };
-export type LayoutInput = {
+export type LayoutBond = ChemBond;
+export type LayoutInput = Omit<ChemGraph, "atoms"> & {
   atoms: readonly LayoutAtom[];
-  bonds: readonly LayoutBond[];
-  /** Its axes of chirality (BINAP's), each shown by a wedge (stereo.ts). */
-  axes?: readonly Axial[];
+  /** Its odd runs of cumulated double bonds set cis or trans (a butatriene's: stereo.ts). */
+  cumulated?: readonly Cumulated[];
+  /** Which of a metal's donors are across from each other, where that is given (`Arranged`): identity's, not the layout's. */
+  arrangements?: readonly Arranged[];
 };
+
+/**
+ * Which of a metal's four or six donors are across from each other - a
+ * square-planar centre's two pairs, an octahedral centre's three - as read
+ * from a drawing or from places in 3D (lib/chem/arrangement): cisplatin and
+ * transplatin, fac and mer, are told apart by it (Brecher 2006, ST-2.6,
+ * ST-2.11). Each pair by its two donors' atoms; every donor in one pair.
+ */
+export type Arranged = { metal: number; pairs: readonly (readonly [number, number])[] };
 
 export type RingSystem = {
   /** Its atoms, in no particular order. */
@@ -69,8 +78,14 @@ export type Molecule = {
   pieces: number[][];
   /** Each stereocentre's configuration, as given. */
   tetra: Map<number, Tetrahedral>;
+  /** Each odd cumulene's cis or trans, as given (`LayoutInput.cumulated`). */
+  cumulated?: readonly Cumulated[];
   /** The atoms asked to be drawn straight through (`LayoutAtom.linear`), each with two bonds. */
   straight: Set<number>;
+  /** The four-bond metals asked to be drawn as an upright cross or an X (`LayoutAtom.fourForm`). */
+  fourForm: Map<number, "x" | "cross">;
+  /** The atoms that stand for the structure a group goes on into (`LayoutAtom.onward`). */
+  onward: Set<number>;
   /**
    * The rings bound face-on to a metal through all their atoms (η⁵-Cp,
    * η⁶-arene): each one's star - at its centre, a member of its ring
@@ -195,30 +210,16 @@ export function perceive(input: LayoutInput): Molecule {
       join(star, first, bonds.length - 1);
     }
   });
-  const edges = [...bondIndex.keys()].map((k) => k.split(",").map(Number) as [number, number]);
-  const rings = smallestRings(n, edges);
-  const ringsOf: number[][] = Array.from({ length: n }, () => []);
-  rings.forEach((r, i) => r.forEach((a) => ringsOf[a].push(i)));
+  // (the rings, and the systems they make, are the core's: lib/chem/perception - this graph being the drawing's own bonds and the star bonds just added)
+  const facts = factsOf({ atoms: input.atoms, bonds });
+  const rings = facts.rings.map((r) => [...r]);
+  const ringsOf = facts.ringsAt.map((r) => [...r]);
   const ringBonds = new Set<string>();
   for (const r of rings) r.forEach((a, i) => ringBonds.add(key(a, r[(i + 1) % r.length])));
 
   // ring systems: rings sharing an atom, merged
   const systemOf = new Array<number>(n).fill(-1);
-  const groupOf = rings.map((_, i) => i);
-  const find = (i: number): number => (groupOf[i] === i ? i : (groupOf[i] = find(groupOf[i])));
-  for (let a = 0; a < n; a++) {
-    const rs = ringsOf[a];
-    for (let i = 1; i < rs.length; i++) groupOf[find(rs[i])] = find(rs[0]);
-  }
-  const byGroup = new Map<number, RingSystem>();
-  rings.forEach((r, i) => {
-    const g = find(i);
-    const sys = byGroup.get(g) ?? { atoms: [], rings: [] };
-    sys.rings.push(i);
-    for (const a of r) if (!sys.atoms.includes(a)) sys.atoms.push(a);
-    byGroup.set(g, sys);
-  });
-  const systems = [...byGroup.values()];
+  const systems: RingSystem[] = facts.ringSystems.map((sys) => ({ atoms: [...sys.atoms], rings: [...sys.rings] }));
   systems.forEach((s, i) => s.atoms.forEach((a) => (systemOf[a] = i)));
   // each ring bound face-on joined by its star, at its centre
   const eta: EtaRing[] = [];
@@ -250,7 +251,7 @@ export function perceive(input: LayoutInput): Molecule {
     const r = rings[sys.rings[0]];
     // (a main-group metal bridged to one - the Tebbe reagent's aluminium -
     // as much as a second of them)
-    const metal = (a: number) => isMetal(input.atoms[a].el) || BRIDGED_TO.has(input.atoms[a].el);
+    const metal = (a: number) => isMetal(input.atoms[a].el) || bridgesToMetal.has(input.atoms[a].el);
     const k = metal(r[0]) && metal(r[2]) ? 0 : 1;
     if (!metal(r[k]) || !metal(r[k + 2]) || metal(r[k + 1]) || metal(r[(k + 3) % 4])) return;
     if (!isMetal(input.atoms[r[k]].el) && !isMetal(input.atoms[r[k + 2]].el)) return;
@@ -361,6 +362,9 @@ export function perceive(input: LayoutInput): Molecule {
       input.atoms.flatMap((a, i): [number, Tetrahedral][] => (a.tetra ? [[i, a.tetra]] : [])),
     ),
     straight: new Set(input.atoms.flatMap((a, i) => (a.linear && neighbours[i].length === 2 ? [i] : []))),
+    fourForm: new Map(input.atoms.flatMap((a, i): [number, "x" | "cross"][] => (a.fourForm && neighbours[i].length === 4 ? [[i, a.fourForm]] : []))),
+    onward: new Set(input.atoms.flatMap((a, i) => (a.onward ? [i] : []))),
+    ...(input.cumulated?.length ? { cumulated: input.cumulated } : {}),
     eta,
     units,
     dienes,
@@ -382,18 +386,6 @@ export function perceive(input: LayoutInput): Molecule {
  */
 export const METAL_BOND = 1.4;
 
-/**
- * The metals: the d block and the lanthanides, as a complex's formula has
- * them (chem/ligands) - Pr aside, being propyl's label as well.
- */
-const METALS = new Set(
-  "Sc Ti V Cr Mn Fe Co Ni Cu Zn Y Zr Nb Mo Tc Ru Rh Pd Ag Cd Hf Ta W Re Os Ir Pt Au Hg La Ce Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu".split(" "),
-);
-
-/** Main-group metals bridged to a transition metal by two atoms as a second one is (Cp2Ti(μ-Cl)(μ-CH2)AlMe2). */
-const BRIDGED_TO = new Set(["Li", "Na", "K", "Mg", "Ca", "Zn", "Al", "Ga", "In"]);
-
-/** Whether an atom is a metal's: one ligands are drawn round (docs/LAYOUT-2D.md, section 7). */
 /**
  * The rings a drawing binds to a metal atom by atom - a bond from the
  * metal to each of the ring's atoms, as ferrocene or bis(benzene)chromium
@@ -506,8 +498,12 @@ export function etaBondedAtomByAtom(input: LayoutInput): { metal: number; ring: 
   return out;
 }
 
+/**
+ * Whether an atom is a metal's: one ligands are drawn round (docs/LAYOUT-2D.md, section 7) - the core's `drawnRoundMetal`, under the name its
+ * importers use.
+ */
 export function isMetal(el: string): boolean {
-  return METALS.has(el);
+  return drawnRoundMetal.has(el);
 }
 
 /**
@@ -579,4 +575,172 @@ export function straightThrough(mol: Molecule, a: number): boolean {
 export function orderOf(mol: Molecule, a: number, b: number): number {
   const i = mol.bondIndex.get(key(a, b));
   return i == null ? 0 : mol.bonds[i].order;
+}
+
+/** A main-group element's valence electrons, by its group: a square-planar centre's two lone pairs are counted from them. */
+const MAIN_GROUP_ELECTRONS: Record<string, number> = {
+  B: 3, Al: 3, C: 4, Si: 4, Ge: 4, Sn: 4, N: 5, P: 5, As: 5, Sb: 5, O: 6, S: 6, Se: 6, Te: 6,
+  F: 7, Cl: 7, Br: 7, I: 7, At: 7, Kr: 8, Xe: 8, Rn: 8,
+};
+
+/**
+ * Whether a main-group atom of `el` at `charge` with four single bonds keeps two lone pairs - its valence electrons by its group,
+ * less its charge, less the four bonds, leave four: XeF4, ICl4-, BrF4-, square planar (GR-4.1.3 draws XeF4 as the X). SF4's
+ * one lone pair, or CCl4's none, is not.
+ */
+export function twoLonePairsOnFour(el: string, charge: number): boolean {
+  const electrons = MAIN_GROUP_ELECTRONS[el];
+  return electrons != null && electrons - charge - 4 === 4;
+}
+
+/** What a square-planar test reads of a structure, atom by atom (`squarePlanarMetal`): by index. */
+export type FourView = {
+  el: (i: number) => string;
+  charge: (i: number) => number;
+  hs: (i: number) => number;
+  neighbours: (i: number) => readonly number[];
+  order: (a: number, b: number) => number;
+};
+
+/**
+ * What each of metal `a`'s donors is, as a ligand - not only the atom bonded to the metal but all it carries, reached not through
+ * the metal: MeNH2 and EtNH2 told apart, two ends of one chelate alike where the chelate is. Each atom's element, charge, H's and
+ * bonds refined round its neighbours until the kinds no longer split (as a canonical ranking does), the bond to the metal said.
+ */
+export function donorKinds(v: FourView, a: number): string[] {
+  const nb = v.neighbours(a);
+  const atoms = new Set<number>();
+  for (const todo = [...nb]; todo.length; ) {
+    const u = todo.pop()!;
+    if (atoms.has(u)) continue;
+    atoms.add(u);
+    for (const w of v.neighbours(u)) if (w !== a && !atoms.has(w)) todo.push(w);
+  }
+  const list = [...atoms];
+  const round = (u: number) => v.neighbours(u).filter((w) => w !== a);
+  let label = new Map(list.map((u) => [u, `${v.el(u)}|${v.charge(u)}|${v.hs(u)}|${v.neighbours(u).length}|${nb.includes(u) ? v.order(a, u) : 0}`]));
+  let kinds = new Set(label.values()).size;
+  for (let k = 0; k < list.length; k++) {
+    const next = new Map(list.map((u) => [u, `${label.get(u)}(${round(u).map((w) => `${v.order(u, w)}${label.get(w)}`).sort().join(",")})`]));
+    // (each kind a short name again, by the order of the long ones: the same name for the same kind in every donor)
+    const names = new Map([...new Set(next.values())].sort().map((t, i) => [t, `k${i}`]));
+    label = new Map(list.map((u) => [u, names.get(next.get(u)!)!]));
+    const now = new Set(label.values()).size;
+    if (now === kinds) break;
+    kinds = now;
+  }
+  return nb.map((d) => label.get(d)!);
+}
+
+/** The metals, and the oxidation state in which, a four-coordinate centre is surely square planar (GR-4.1.3). */
+const SQUARE_PLANAR: Record<string, number> = { Pt: 2, Pd: 2, Au: 3, Rh: 1, Ir: 1 };
+
+/**
+ * A metal with four bonds - bound to no pi system's centre and to no other metal, and no chelate's (two of its donors joined other
+ * than through it) - as the drawing makes it: whether it is surely square planar (Pt(II), Pd(II), Au(III), Rh(I), Ir(I), the state
+ * counted plainly: a donor whose valence is full without its bond to the metal counts nought, one the bond completes one, the
+ * metal's own charge added; a state not counted plainly is not sure); whether its four donors are ends; and whether they can be
+ * arranged round it in more than one way (two and two, two and one and one, four different - told apart as ligands, `donorKinds`).
+ * Null for any other atom.
+ */
+export function squarePlanarMetal(v: FourView, a: number, valence: (el: string, charge: number) => number | undefined, chelated = false): { sure: boolean; ends: boolean; open: boolean } | null {
+  const el = v.el(a);
+  const nb = v.neighbours(a);
+  if (!isMetal(el) || nb.length !== 4) return null;
+  if (nb.some((d) => v.el(d) === "*" || isMetal(v.el(d)))) return null;
+  const reached = new Set([nb[0]]);
+  for (const todo = [nb[0]]; todo.length; ) {
+    const u = todo.pop()!;
+    for (const w of v.neighbours(u)) {
+      if (w === a || reached.has(w)) continue;
+      reached.add(w);
+      todo.push(w);
+    }
+  }
+  // (a chelate's: none, but where it is asked whether one is surely square planar - its mark, `chelated`)
+  if (!chelated && nb.slice(1).some((d) => reached.has(d))) return null;
+  const ends = nb.every((d) => v.neighbours(d).length === 1);
+  // (the donors told apart as ligands: [Pt(NH2Me)2(NH2Et)2]2+ is two and two, not four alike)
+  const kinds = new Map<string, number>();
+  for (const k of donorKinds(v, a)) kinds.set(k, (kinds.get(k) ?? 0) + 1);
+  const counts = [...kinds.values()].sort((p, q) => q - p);
+  const open = !(counts[0] === 4 || (counts[0] === 3 && counts[1] === 1));
+  let state = v.charge(a);
+  for (const d of nb) {
+    // (a carbonyl's C, or an isocyanide's - triple-bonded to an O, or to an N that goes on: a neutral donor, its pair lent, counts
+    // nought, though drawn its bonds would have the metal's complete it; a cyanide's, its N bare, counts as drawn)
+    const lends = v.el(d) === "C" && v.neighbours(d).some((e) => e !== a && v.order(d, e) === 3 && (v.el(e) === "O" || (v.el(e) === "N" && v.neighbours(e).length > 1)));
+    if (lends) continue;
+    const full = valence(v.el(d), v.charge(d));
+    if (full == null) return { sure: false, ends, open };
+    // (a donor that bridges metals - a halide between two - its bonds but the metals' its own: what it lacks shared among them,
+    //  each [Pt2Cl4(NH3)2]'s Pt given a half of each of its two Cl bridges, Pt(II))
+    const metals = v.neighbours(d).filter((e) => e !== a && isMetal(v.el(e)));
+    const others = v.neighbours(d).filter((e) => e !== a && !metals.includes(e)).reduce((s, e) => s + v.order(d, e), 0) + v.hs(d);
+    if (metals.length) {
+      if (others < full) state += (full - others) / (metals.length + 1);
+      continue;
+    }
+    if (others >= full) continue;
+    if (others + 1 === full) state++;
+    else return { sure: false, ends, open };
+  }
+  return { sure: SQUARE_PLANAR[el] === state, ends, open };
+}
+
+/**
+ * A metal with six bonds - bound to no pi system's centre and to no other metal - whose donors can be set round an octahedron with
+ * other pairs across from each other: [CoCl2(NH3)4]+ cis or trans, CoCl3(NH3)3 fac or mer, [Co(en)2Cl2]+, Co(gly)3. Donors told
+ * apart as ligands (`donorKinds`); two of one chelate (joined other than through the metal) never across. Of each way, the
+ * pairs across by kind: more than one set of them, and which donors are across is a choice the drawing would state. False where
+ * every way gives one set (MA6, MA5B, M(en)3 - its hands are no pairs across), and for any other atom.
+ */
+export function octahedralOpen(v: FourView, a: number): boolean {
+  const nb = v.neighbours(a);
+  if (!isMetal(v.el(a)) || nb.length !== 6) return false;
+  if (nb.some((d) => v.el(d) === "*" || isMetal(v.el(d)))) return false;
+  const kind = donorKinds(v, a);
+  // (two donors of one chelate: joined other than through the metal, and only those two of its donors in that unit)
+  const unit = nb.map(() => -1);
+  nb.forEach((d, i) => {
+    if (unit[i] >= 0) return;
+    unit[i] = i;
+    const seen = new Set([d]);
+    for (const todo = [d]; todo.length; ) {
+      for (const w of v.neighbours(todo.pop()!)) {
+        if (w === a || seen.has(w)) continue;
+        seen.add(w);
+        todo.push(w);
+      }
+    }
+    nb.forEach((e, j) => {
+      if (j !== i && seen.has(e)) unit[j] = i;
+    });
+  });
+  const size = (u: number) => unit.filter((x) => x === u).length;
+  const twoOf = (i: number, j: number) => unit[i] === unit[j] && size(unit[i]) === 2;
+  // (the octahedron's places 0..5, across: 0-1, 2-3, 4-5)
+  const across = [1, 0, 3, 2, 5, 4];
+  const seen = new Set<string>();
+  const place = new Array<number>(6).fill(-1);
+  const used = new Array<boolean>(6).fill(false);
+  const go = (p: number): void => {
+    if (seen.size > 1) return;
+    if (p === 6) {
+      const pairs = [0, 2, 4].map((q) => [kind[place[q]], kind[place[across[q]]]].sort().join("~")).sort().join(",");
+      seen.add(pairs);
+      return;
+    }
+    for (let i = 0; i < 6; i++) {
+      if (used[i]) continue;
+      // (a chelate's two never across)
+      if (p % 2 === 1 && twoOf(i, place[p - 1])) continue;
+      used[i] = true;
+      place[p] = i;
+      go(p + 1);
+      used[i] = false;
+    }
+  };
+  go(0);
+  return seen.size > 1;
 }

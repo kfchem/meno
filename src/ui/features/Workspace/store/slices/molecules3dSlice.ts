@@ -16,6 +16,7 @@ import { resultKey } from "../../../../../lib/calc/results";
 import { gridPlaces, middleOf, shownOf, stackMembers } from "../../utils/stacks";
 import { fitResultSets } from "../../workflow/run";
 import { heldViewId, shownIn } from "../../workflow/heldView";
+import { whileMoving } from "../../chem/crossings";
 
 type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
@@ -243,7 +244,7 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
       // whole step, and with nothing less)
       const meta = { coalesceKey: gesture, coalesceWithinMs: Infinity };
       if (drawing?.length || marks)
-        doc.edit("turn selection", (d) => ops.placeMarks(ops.placeAtoms(d, drawing ?? []), { ...marks, molecules3d: places }), meta);
+        whileMoving(() => doc.edit("turn selection", (d) => ops.placeMarks(ops.placeAtoms(d, drawing ?? []), { ...marks, molecules3d: places }), meta));
       else doc.edit("turn molecules", (d) => ops.moveMolecules3d(d, places), meta);
       const turnsAfter: Record<number, Turn3D> = {};
       for (const m of moves) turnsAfter[m.id] = m.turn;
@@ -345,9 +346,10 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
       set((prev) => {
         const kept = doc.getState().molecules3d ?? [];
         const going = prev.growing3d[id];
-        // (its search ended - its molecule gone, made again, edited: nothing to grow, never begun again)
+        // (its search ended - its molecule gone, made again, edited: nothing to grow, never begun again; a change of its frames
+        //  alone lets it go as the document changes, store `growingHeld`)
         const there = kept.find((m) => m.id === id);
-        if (!going || there?.atoms !== going.base.atoms || there?.frames !== going.base.frames) return prev;
+        if (!going || there?.atoms !== going.base.atoms) return prev;
         const growing: Record<number, Growing3D> = { ...prev.growing3d };
         if (grown) growing[id] = { ...going, grown };
         else delete growing[id];

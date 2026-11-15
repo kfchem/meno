@@ -38,14 +38,20 @@ export type Page = {
 /** Whether `p` is inside a frame. */
 export const inside = (b: Frame, p: Pt) => p.x >= b.x0 && p.x <= b.x1 && p.y >= b.y0 && p.y <= b.y1;
 
-/** The structures drawn on the page, each its atoms' ids, as their bonds join them - and a structure of several parts (`Atom.joined`) as one, as Combine makes one entry of its parts. */
-export function structuresOf(model: Model): number[][] {
+/**
+ * The structures drawn on the page, each its atoms' ids, as their bonds join them - and a structure of several parts (`Atom.joined`) as
+ * one, as Combine makes one entry of its parts. A hydrogen bond is no bond of a structure: what it alone joins - an enol and a water, a
+ * salt's ion - is two structures, two entries (chem/make3d `blocksOf` likewise, CTFILE.md *Bonds*). `asDrawn`, it joins them, as the
+ * pieces of ink they are: what moves a structure, or keeps clear of one, takes them together.
+ */
+export function structuresOf(model: Model, asDrawn = false): number[][] {
   const around = new Map<number, number[]>();
   const join = (p: number, q: number) => {
     around.set(p, [...(around.get(p) ?? []), q]);
     around.set(q, [...(around.get(q) ?? []), p]);
   };
   for (const b of model.bonds) {
+    if (b.hydrogen && !asDrawn) continue;
     join(b.a, b.b);
     // (a haptic bond's ring with its metal and star, as fragmentOf has them:
     // walked by its bonds alone, the metal and the star were a structure
@@ -228,7 +234,9 @@ export function drawnHash(model: Model, ids: readonly number[]): string {
   if (key == null) {
     // (wedges identity cannot read - crossed, or at an atom of three bonds that keeps no configuration, lib/chem/lonePairCentres - or a search it could not finish: its configuration
     // not in the identity, so the drawing itself is, and any change to it - Clean-up's too - is taken for a change of structure)
-    const { text, complete, unread } = identityOfDrawn(labelsDrawnOut(partOf(model, new Set(ids))));
+    // (a hydrogen bond in it - an enol's own - no bond of the structure, nor of its identity)
+    const part = partOf(model, new Set(ids));
+    const { text, complete, unread } = identityOfDrawn(labelsDrawnOut({ ...part, bonds: part.bonds.filter((b) => !b.hydrogen) }));
     key = hash(complete && !unread.length ? text : `${text}|as drawn|${drawn}`).toString(36);
     if (identities.size >= IDENTITIES_KEPT) identities.clear();
     identities.set(drawn, key);

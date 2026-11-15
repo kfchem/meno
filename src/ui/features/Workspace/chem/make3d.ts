@@ -19,7 +19,7 @@ import { growingJudge, type GrowingJudge, type ShownWith } from "./growing";
 import { configurationIn, lone, partsAlone, sameConfiguration, wholeOf } from "./partsAlone";
 import { roundsJudge } from "./roundsJudge";
 import { WITHIN_3D, type CalculationSettings, type ChemistrySettings } from "../../../../lib/settings/appSettings";
-import { threadsOf } from "../../../../lib/jobs";
+import { pageThreadsOf } from "../../../../lib/jobs";
 import { chemMolblock, isElementSymbol, molIndex } from "../../../../lib/roles/molblock";
 import { readMolfile } from "../../../../lib/chem/ctfile";
 import { COORDINATION_BOND } from "../../../../lib/chem/molecule";
@@ -34,13 +34,14 @@ import { signatureOf } from "../utils/drawnLink";
 import { groupShape } from "../utils/groupShape";
 import { bondsAt, lookOf, solidOf } from "../utils/molecule3d";
 import { fragmentsHolding, laidOut, partOf } from "./cleanUp";
+import { arrangementsMarked } from "./arrangementsMarked";
 import { forFlatReaders, undrawnHydrogens } from "./drawing";
 import { greatest, least } from "../../../../lib/chem/lists";
 import { drawnBox } from "../../../../utils/importers";
 import { etaBound } from "./etaBound";
 import { factor } from "../../../../lib/units";
 import { shownConformers } from "./shownConformers";
-import { isomersToMake, withChosen, type OpenStereo } from "./openStereo";
+import { isomersToMake, withChosen, withOwnCip, type OpenStereo } from "./openStereo";
 import { hasConfiguration, madeAs, mirroredConfiguration, mirroredPart, reflectedConformers } from "./pageMirror";
 import type { Configuration } from "../../../../lib/chem/stereoOpen";
 import { keptMade, madeChecksOf, metalHoldsOf } from "../../../../lib/chem/metalHolds";
@@ -85,7 +86,9 @@ export type Block = {
  * redoing. Edits elsewhere on the page do not count.
  */
 export function blocksStill(blocks: readonly Block[], model: Model): boolean {
-  return blocks.every((b) => groupShape(b.part, b.atoms) === groupShape(model, b.atoms));
+  // (a hydrogen bond drawn or taken away meanwhile changes no structure: no block holds one, `blocksOf`)
+  const structure = { ...model, bonds: model.bonds.filter((b) => !b.hydrogen) };
+  return blocks.every((b) => groupShape(b.part, b.atoms) === groupShape(structure, b.atoms));
 }
 
 /**
@@ -104,10 +107,22 @@ export function standsForMolecule(part: Model): boolean {
   return (undrawnHydrogens(part).get(a.id) ?? 0) > 0;
 }
 
-/** The bare atoms among the structures that hold these atoms: left out of a 3D structure, one atom alone having none. */
-export function bareAtomsOf(model: Model, atoms: Iterable<number>): Model["atoms"] {
+/**
+ * The structures that hold these atoms, each as a part of the drawing. A hydrogen bond is no bond of a structure: the drawing's
+ * pieces that hold these atoms are taken by every bond drawn - a water a hydrogen bond holds comes with them - and each is then
+ * split by the structure's bonds, so what a hydrogen bond alone joins - an enol and a water, an acid's dimer, a salt's ion - is
+ * two structures, and neither holds it (CTFILE.md, *Bonds*).
+ */
+function structuresIn(model: Model, atoms: Iterable<number>): Model[] {
+  const structure = { ...model, bonds: model.bonds.filter((b) => !b.hydrogen) };
   return fragmentsHolding(model, atoms)
-    .map((ids) => partOf(model, ids))
+    .flatMap((ids) => fragmentsHolding(structure, ids))
+    .map((ids) => partOf(structure, ids));
+}
+
+/** The bare atoms among the structures that hold these atoms (`structuresIn`): left out of a 3D structure, one atom alone having none. */
+export function bareAtomsOf(model: Model, atoms: Iterable<number>): Model["atoms"] {
+  return structuresIn(model, atoms)
     .filter((part) => !standsForMolecule(part))
     .map((part) => part.atoms[0]);
 }
@@ -148,10 +163,13 @@ export function asDrawn(part: Model): boolean {
   return part.atoms.length === 1 && !a.abbrev && isElementSymbol(a.el);
 }
 
-/** The structures that hold these atoms, each as the plugin is asked about it; a bare atom's none (`standsForMolecule`). */
+/**
+ * The structures that hold these atoms (`structuresIn`), each as the plugin is asked about it; a bare atom's none (`standsForMolecule`).
+ * What a hydrogen bond alone joins is two structures, each asked about alone and made in 3D side by side, and it is in neither, so no
+ * embedding takes it for a bond.
+ */
 export function blocksOf(model: Model, atoms: Iterable<number>, keep: (part: Model) => boolean = standsForMolecule): Block[] {
-  return fragmentsHolding(model, atoms)
-    .map((ids) => partOf(model, ids))
+  return structuresIn(model, atoms)
     .filter(keep)
     .map(blockOf);
 }
@@ -544,7 +562,7 @@ export function pageCount(block: Pick<Block, "molblock">, chosen: Pick<Chemistry
 /**
  * A block's conformers as the page asks for them, from Settings: how many to
  * try (Chemistry, `pageCount`) and the threads the search may use
- * (Calculations, `threadsOf`) - the one place the page's own searches (the 3D
+ * (Calculations, `pageThreadsOf`) - the one place the page's own searches (the 3D
  * structure made from a drawing, the atom map's) take both, so that neither
  * can be asked without them.
  */
@@ -557,7 +575,7 @@ export function conformersOnPage(
   settings: { chemistry: ChemistrySettings; calculations: Pick<CalculationSettings, "cores" | "coresAll"> },
   rounds: PageRounds | null = null,
 ): Promise<Conformers[]> {
-  return conformersOf(chem, stereo, block, which, options, pageCount(block, settings.chemistry), rounds, threadsOf(settings.calculations));
+  return conformersOf(chem, stereo, block, which, options, pageCount(block, settings.chemistry), rounds, pageThreadsOf(settings.calculations));
 }
 
 /** How the page's search is asked in rounds (chem/conformerRounds): its window (kcal/mol), its first round and the most it tries. */
@@ -666,7 +684,7 @@ export async function conformersOf(
   //  more than one part, its parts side by side - chem/partsApart)
   const holds = held(block.molblock);
   const checks = madeChecksOf(block.molblock, holds);
-  return shownConformers(got.map((c) => partsSideBySide(keptMade(withChosen(c, made.open), checks), partsOf(c.atoms, c.bonds, holds?.eta))));
+  return shownConformers(got.map((c) => partsSideBySide(keptMade(withChosen(withOwnCip(c), made.open), checks), partsOf(c.atoms, c.bonds, holds?.eta))));
 }
 
 /** What a 3D structure's search that goes on gives at once, and what is left of it (`conformersGrowing`). */
@@ -733,7 +751,8 @@ export async function conformersGrowing(
   judgeOf: typeof growingJudge = growingJudge,
 ): Promise<Growth> {
   const made = await isomersToMake(stereo, block.molblock, block.like, which, CONFORMERS_MS);
-  const sent = { ...options, threads: threadsOf(settings.calculations) };
+  // (the page's own: one core left to the page where Settings sets none - lib/jobs `pageThreadsOf`, as conformersOnPage asks)
+  const sent = { ...options, threads: pageThreadsOf(settings.calculations) };
   const holds = metalHoldsOf(block.molblock);
   const checks = madeChecksOf(block.molblock, holds);
   // (a structure of several parts: each part searched alone - chem/partsAlone)
@@ -777,7 +796,7 @@ export async function conformersGrowing(
     if (shown) return shown;
     const { made: raw } = l.search.result();
     const c = { ...(l.reflect ? reflectedConformers(raw) : raw), how: [...(raw.how ?? []), ...more] };
-    return (await shownConformers([partsSideBySide(keptMade(withChosen(c, l.w.open), l.w.checks), partsOf(c.atoms, c.bonds, l.w.eta?.eta))]))[0];
+    return (await shownConformers([partsSideBySide(keptMade(withChosen(withOwnCip(c), l.w.open), l.w.checks), partsOf(c.atoms, c.bonds, l.w.eta?.eta))]))[0];
   };
   const said = (l: Live) => (l.search.ended ? { label: "Rounds", text: roundsSaid(l.search.result().run, { ...rounds, budget: SEARCH_BUDGET_MS }) } : searchingRow(l.search));
   // (each stereoisomer: its searches - one; or, of several parts, one for each part not alike to one before and not one atom - each
@@ -805,7 +824,7 @@ export async function conformersGrowing(
           whole: () => {
             const of = (x: Live | Conformers | number): Conformers => (typeof x === "number" ? of(each[x]) : "search" in x ? unit.shown.get(x)! : x);
             const whole = wholeOf(block, parts.map((p, k) => ({ part: typeof each[k] === "number" ? { ...p } : { ...p, alike: undefined }, c: of(each[k]) })));
-            const side = partsSideBySide(withChosen(whole, made.open), partsOf(whole.atoms, whole.bonds));
+            const side = partsSideBySide(withChosen(withOwnCip(whole), made.open), partsOf(whole.atoms, whole.bonds));
             return { ...side, partsAlone: true as const };
           },
         };
@@ -923,7 +942,8 @@ export function likeOf(block: Block, before: Pick<Molecule3D, "atoms" | "drawnFr
  */
 export async function formulaOf(chem: ChemClient, m: Molecule3D, frame: number, style?: DrawingStyle): Promise<{ model: Model; link: (number | null)[]; ordersUnknown: boolean }> {
   const { drawn, ordersUnknown } = await drawnOf(chem, m, frame);
-  const model = await laidOut(drawn, style).catch(() => drawn);
+  // (its coordinates nobody's drawing: laid out as new - or, where it cannot be, kept as it came, its square-planar centres marked as a layout would mark them)
+  const model = await laidOut(drawn, style, undefined, undefined, true).catch(() => arrangementsMarked(drawn));
   // (its heavy atoms came back in their order)
   let k = 0;
   const link = m.atoms.map((a) => (a.el === "H" ? null : (drawn.atoms[k++]?.id ?? null)));
