@@ -104,4 +104,10 @@ describe.each([
   it("takes a kind from nothing it does not have", () => {
     for (const r of recipe) expect(() => kindInfo(r.kind)).not.toThrow();
   });
+
+  it("checks each end, and each end of a path, by R/S and E/Z and not by its atoms' numbers - which hydrogen of a CH2 is which, Atom map does not choose", () => {
+    const ends = recipe.filter((r) => r.kind === "compare-bonding" && r.options?.rs);
+    expect(ends.map((r) => r.key).sort()).toEqual(["backward/ends-ok", "backward/first-end", "backward/last-end", "forward/ends-ok", "forward/first-end", "forward/last-end"]);
+    for (const r of ends) expect([r.key, r.options?.rs, r.options?.ez, r.options?.numbered]).toEqual([r.key, true, true, false]);
+  });
 });
