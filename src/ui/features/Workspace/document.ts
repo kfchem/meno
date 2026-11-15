@@ -15,6 +15,7 @@ import { isElementSymbol } from "../../../lib/roles/molblock";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { DEFAULT_STYLE_CHOICE, styleOf, type StyleChoice } from "../../../lib/chem/style";
 import { groupTurn } from "./utils/expandPlace";
+import { ARRANGEMENT_SAID, arrangementAs } from "./utils/arrangement";
 import { mayBecome } from "./utils/dropMerge";
 import { magnificationWithin } from "./utils/magnified";
 import { magnifiedTo, oneMagnificationEach } from "../../../lib/chem/magnified2d";
@@ -26,6 +27,7 @@ import { numbers3d, sideMolecules, type StructureMap } from "./chem/structureMap
 import { joinedAdded, joinedStructures, joinsSettled, separatedStructures } from "./utils/joinedParts";
 import { etaHeld } from "./chem/eta";
 import { wedgesHeld } from "./chem/drawing";
+import { behindRemapped, crossingsHeld, orderedCrossing } from "./chem/crossings";
 import type { Arrow, ArrowAtomMap, ArrowFormPatch, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Ink, InkLook, Shape, ShapePatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText, LostText } from "./store/types";
 import { sha256Hex } from "../../../lib/binary/sha256";
 import { ringKeyOf, ringThere } from "./utils/rings";
@@ -287,7 +289,8 @@ export function withRecordsSettled(doc: WorkspaceDocument, before?: WorkspaceDoc
   if (before && doc.model === before.model) return doc;
   // (a haptic bond held to its ring, its star at the ring's centre: chem/eta;
   // and each wedge held narrow at the atom it was: chem/drawing)
-  const model = wedgesHeld(etaHeld(settledRecords(doc.model, before?.model), before?.model), before?.model);
+  // (and which bond is in front where two cross, said by the chemist, kept whole: chem/crossings)
+  const model = crossingsHeld(wedgesHeld(etaHeld(settledRecords(doc.model, before?.model), before?.model), before?.model), before?.model);
   return model === doc.model ? doc : { ...doc, model };
 }
 
@@ -468,7 +471,7 @@ export function moveAtom(
 export function placeAtoms(
   doc: WorkspaceDocument,
   moves: readonly { id: number; x: number; y: number; z?: number }[],
-  stereo: readonly Pick<Bond, "id" | "stereo">[] = [],
+  stereo: readonly (Pick<Bond, "id"> & Partial<Pick<Bond, "stereo" | "behind">>)[] = [],
 ): WorkspaceDocument {
   const to = new Map(moves.map((m) => [m.id, m]));
   let changed = false;
@@ -478,12 +481,19 @@ export function placeAtoms(
     changed = true;
     return { ...a, x: m.x, y: m.y, ...(m.z !== undefined ? { z: m.z } : {}) };
   });
-  const flip = new Map(stereo.map((b) => [b.id, b.stereo]));
+  const flip = new Map(stereo.map((b) => [b.id, b]));
   const bonds = doc.model.bonds.map((b) => {
-    const s = flip.get(b.id);
-    if (s === undefined || s === b.stereo) return b;
-    changed = true;
-    return { ...b, stereo: s };
+    const p = flip.get(b.id);
+    if (!p) return b;
+    let out = b;
+    if (p.stereo !== undefined && p.stereo !== b.stereo) out = { ...out, stereo: p.stereo };
+    // (which bonds it passes behind, where a turn over exchanged them: chem/crossings)
+    if (p.behind !== undefined) {
+      const { behind: _was, ...rest } = out;
+      out = p.behind.length ? { ...rest, behind: [...p.behind] } : rest;
+    }
+    if (out !== b) changed = true;
+    return out;
   });
   return changed ? { ...doc, model: { atoms, bonds } } : doc;
 }
@@ -593,7 +603,7 @@ export function withoutAtoms(doc: WorkspaceDocument, ids: Iterable<number>): Wor
  * taken away with their bonds where no longer drawn.
  */
 export type Relayout = {
-  atoms: { id: number; x: number; y: number; z?: number; stereoCentre?: boolean }[];
+  atoms: { id: number; x: number; y: number; z?: number; stereoCentre?: boolean; arrangementOpen?: boolean }[];
   bonds: (Pick<Bond, "id" | "stereo" | "narrow"> & { display?: Bond["display"] })[];
   /** H atoms to add, each bonded to `on`, the bond wedged as given. */
   added?: {
@@ -629,7 +639,7 @@ export function relayout(doc: WorkspaceDocument, change: Relayout): WorkspaceDoc
     if (gone.has(a.id)) return [];
     const p = to.get(a.id);
     if (!p) return [a];
-    if (p.x === a.x && p.y === a.y && p.z === a.z && !!p.stereoCentre === !!a.stereoCentre && !a.chargeAt && !a.stereoAt) return [a];
+    if (p.x === a.x && p.y === a.y && p.z === a.z && !!p.stereoCentre === !!a.stereoCentre && !a.chargeAt && !a.stereoAt && !p.arrangementOpen) return [a];
     changed = true;
     const { z: _z, stereoCentre: _c, chargeAt: _q, stereoAt: _s, ...rest } = a;
     return [
@@ -663,6 +673,12 @@ export function relayout(doc: WorkspaceDocument, change: Relayout): WorkspaceDoc
     return [{ ...rest, stereo, ...(narrow != null ? { narrow } : {}), ...(display ? { display } : {}) }];
   });
   if (!changed) return doc;
+  // (a square-planar centre laid out with no arrangement given: marked "which donors are next to each other is not given", while
+  // its neighbours lie round it as they do now - docs/LAYOUT-2D.md, *A metal with four bonds*)
+  for (const [i, a] of atoms.entries()) {
+    if (!to.get(a.id)?.arrangementOpen) continue;
+    atoms[i] = { ...a, unsure: { said: [ARRANGEMENT_SAID], as: arrangementAs(a, atoms, bonds) } };
+  }
   let nextId = doc.nextId;
   for (const h of change.added ?? []) {
     const id = nextId++;
@@ -916,6 +932,7 @@ export function setAtomChemistry(
     valence: _v,
     hCount: _h,
     abbrev: _a,
+    shown: _s,
     chargeAt,
     typed: _t,
     ...rest
@@ -925,6 +942,15 @@ export function setAtomChemistry(
   const marked = (chem.charge ?? 0) !== 0 || !!chem.radical;
   next[index] = { ...rest, el: chem.el, ...chemistry(chem), ...(marked && chargeAt ? { chargeAt } : {}), ...(typed != null ? { typed } : {}) };
   return { ...doc, model: { atoms: next, bonds: doc.model.bonds } };
+}
+
+/**
+ * `doc` with bond `bondId` said to be in front of bond `otherId`, or behind it, where the two cross - said again where it holds, taken away
+ * (chem/crossings `orderedCrossing`): a look, the bond behind drawn with a gap there.
+ */
+export function orderCrossing(doc: WorkspaceDocument, bondId: number, otherId: number, how: "front" | "behind"): WorkspaceDocument {
+  const model = orderedCrossing(doc.model, bondId, otherId, how);
+  return model === doc.model ? doc : { ...doc, model };
 }
 
 export function updateBond(
@@ -1105,6 +1131,11 @@ export function appendModel(
         ...(whole ? { endpoints: endpoints!.map((e) => idMap.get(e)!), ...(attach ? { attach } : {}) } : {}),
       },
     ];
+  }).map((b) => {
+    // (the bonds each is said to pass behind, on their new ids: one whose bond did not come with it dropped - chem/crossings)
+    if (!b.behind) return b;
+    const { behind, ...rest } = b;
+    return { ...rest, ...behindRemapped(behind, (id) => bondMap.get(id)) };
   });
   // (its electron-pushing arrows with it, on its atoms' and bonds' new ids)
   const moved = (e: PushEnd): PushEnd | null => {

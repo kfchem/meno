@@ -114,9 +114,16 @@ atoms at its ends, as a dative bond does not: an ammine stays NH3.
 Nor is a hydrogen bond given to the plugin as a bond of a structure, on any
 way to 3D (*Make 3D*, a step's conformers, the atom maps): what it alone
 joins - an enol and a water, an acid's dimer - is two structures, made side
-by side, and one inside a molecule - an enol's own - is left out of it, so
+by side, both of them where only one is selected, and a counter-ion it alone
+holds - a chloride to an ammonium's N-H - is told of as left out, as one
+drawn apart is; one inside a molecule - an enol's own - is left out of it, so
 the H is placed by the molecule's own bonds. *Check structures* counts such
-a pair two parts. Until 2026-11-15 the hydrogen bond went to the plugin as
+a pair two parts, and a set round it holds two entries, each with its own
+identity; a structure's own hydrogen bond is not in its identity. Moved out
+of a frame's way, the pair moves together, as it is drawn. To take such a
+pair as one entry - a complex, a salt - select both and *Make one
+structure* (EDITOR-2D.md, *One structure of several parts*): it is then one
+structure of two parts, one identity. Until 2026-11-15 the hydrogen bond went to the plugin as
 a bond, and the embedding made it a covalent one: the H bonded to both
 atoms. A hydrogen bond drawn or taken away after a molecule is made in 3D
 leaves it its drawing's.
@@ -130,7 +137,7 @@ leaves it its drawing's.
 | An alias (A line) | The atom is drawn as - and taken to be - its alias, its letters' case as written: CO is carbon monoxide, Co cobalt, HO a hydroxy. One in small letters only is read as an element's symbol where it is one (co is Co), as a label typed so is. | |
 | A contracted abbreviation (SUP not expanded, or the old G line) | One atom, labelled, where the group's first attachment is, holding the atoms and bonds it stands for (`abbrev`); its bonds out leave from it. *Expand abbreviation*, in its menu, draws them out, turned with its bond. | |
 | An expanded abbreviation | Its atoms. | |
-| Any other label - an abbreviation, a class (Nu, Alk), a reserved type (A, Q, X, M, R, *) | Its counts subscript (CO2Me), a sign at its end its charge; read outward from its bond when that comes in from the right - or from its bonds, all of them from the right and none to the left, as a ring's atom on its left side has them: TBSO, MeO2C, BocHN, F3C - a symbol for a kind of group (PG, LG, EWG, EDG, Nu, E, Hal, Het: docs/EDITOR-2D.md) as the name it is, PGO, and a word read as nothing else whole, a capital and its small letters, AlkO. No hydrogens of its own. | GR-2.3.3; reversed when bonded on its right, GR-2.1.6. |
+| Any other label - an abbreviation, a class (Nu, Alk), a reserved type (A, Q, X, M, R, *) | Its counts subscript (CO2Me), a sign at its end its charge; read outward from its bond when that comes in from the right - or from its bonds, all of them from the right and none to the left, as a ring's atom on its left side has them: TBSO, MeO2C, BocHN, F3C - a symbol for a kind of group (PG, LG, EWG, EDG, Nu, E, Hal, Het: docs/EDITOR-2D.md) as the name it is, PGO, and a word read as nothing else whole, a capital and its small letters, AlkO. A label that reads as nothing at all (CH2CH2, xyz) is never turned round: drawn in the order typed on either side. No hydrogens of its own. | GR-2.3.3; reversed when bonded on its right, GR-2.1.6. |
 | The prefixes n-, s-, t-, sec-, tert-, i- (hyphenated) and o-, m-, p- | In italics: *t*-Bu, *s*-Bu, *p*-Ts; iPr and iBu upright, unhyphenated. The canvas leans the label's own letters; an SVG or EMF asks for the typeface's italic. | Table II sets them so, and prefers it (upright is acceptable); the names have them so (isopropyl, *tert*-butyl). |
 | A substituted aryl group named ring last (2,6-diMeBz, 4-MeOC6H4) | As written on either side of its bond - it is not read outward - the ring's group, or a formula's C6, at the bond when that comes in from the right. Positions are no counts: not subscript. | Meno's own: such labels name the ring last. |
 | A valence the file sets (V2000's vvv, V3000's VAL) | Hydrogens counted to it; a carbon of other than four shows its label, CH2. At a metal, its coordination and dative bonds count toward it, as the file's own valence counts them: cisplatin written with Pt VAL=4 - two bonds to Cl, two coordination bonds from NH3 - has no H on its Pt (until 2026-11-13 they counted as nothing there, and the Pt was given two H nobody wrote: PtH2, and [Pt(NH3)4]2+ PtH4). | |
@@ -414,9 +421,14 @@ as the one given (tested). A cage's, shown by its perspective with no
 wedge, is written to a MOL or SD file - and copied, and sent to RDKit,
 for its R/S and its SMILES and to be made in 3D (`chem/make3d.ts#blocksOf`) -
 with a wedge that says it, as any cage Clean-up draws is: on a bond out of
-the centre, or - where it has none to take one - on an explicit H atom
-added to the file for it, after every atom there is
-(`chem/drawing.ts#forFlatReaders`; docs/EDITOR-2D.md). The depth itself is
+the centre, or - where it has none to take one, or where a wedge on one
+would not say it read flat, two of the centre's bonds lying in one line
+as the projection left them (epibatidine's C2, its pyridyl straight on
+from a bridgehead) - on an explicit H atom added to the file for it, in
+the widest gap round the centre, after every atom there is
+(`chem/drawing.ts#forFlatReaders`, lib/layout/drawn `wedgesForFlat`;
+docs/EDITOR-2D.md). Each such wedge is checked by Meno's own reader to say
+the configuration the drawing shows. The depth itself is
 not written, so the cage opens again flat, its configuration wedged.
 
 **Hydrogens drawn as said.** Where a structure says an atom has more H

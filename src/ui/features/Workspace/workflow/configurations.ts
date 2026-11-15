@@ -8,8 +8,11 @@
  * never saved with it. A centre of three bonds, a lone pair its fourth
  * group, that the plugin leaves unspecified - its toolkit fixes no
  * phosphine's P from a geometry - is read by Meno from where its atoms are
- * (lib/chem/lonePairsIn3d).
+ * (lib/chem/lonePairsIn3d). Which of a metal's donors are across from
+ * each other - cisplatin or transplatin - is read by Meno too
+ * (lib/chem/arrangement): the plugin's key does not hold it.
  */
+import { arrangementKey } from "../../../../lib/chem/arrangement";
 import { lonePairsIn3d } from "../../../../lib/chem/lonePairsIn3d";
 import { geometryKey, type EntryStereo, type StereoElement } from "../../../../lib/entry";
 import { writeMolfile3d } from "../../../../lib/chem/molWriter";
@@ -69,6 +72,18 @@ export function withLonePairs(e: Geometry, answer: { elements: StereoElement[]; 
 }
 
 /**
+ * What the plugin answered of an entry, with Meno's key of its metals'
+ * donors across from each other (lib/chem/arrangement `arrangementKey`)
+ * after the plugin's, where it has a metal of four or six donors: so that
+ * cis and trans isomers of a square-planar or an octahedral complex are
+ * two stereoisomers, and the conformers of one are one.
+ */
+export function withArrangements(e: Geometry, answer: { elements: StereoElement[]; key: string }): { elements: StereoElement[]; key: string } {
+  const key = arrangementKey(e.atoms, e.bonds, e.xyz);
+  return key == null ? answer : { ...answer, key: `${answer.key}|m${key}` };
+}
+
+/**
  * Those of `entries` not yet known asked, all at once, and what each is
  * kept: the plugin's elements and key, with the plugin and its version; or
  * not perceived, and why - nothing added to ask, or the plugin could not
@@ -97,7 +112,7 @@ export async function perceiveStereo(entries: readonly Geometry[], asker: Asker)
     again.delete(keyOf(e));
     known.set(
       keyOf(e),
-      !a ? { perceived: false, why: "It gave no answer for this molecule" } : "error" in a ? { perceived: false, why: a.error } : { perceived: true, ...withLonePairs(e, a), by },
+      !a ? { perceived: false, why: "It gave no answer for this molecule" } : "error" in a ? { perceived: false, why: a.error } : { perceived: true, ...withArrangements(e, withLonePairs(e, a)), by },
     );
   });
 }

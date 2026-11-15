@@ -33,6 +33,7 @@ import { signatureOf } from "../utils/drawnLink";
 import { groupShape } from "../utils/groupShape";
 import { bondsAt, lookOf, solidOf } from "../utils/molecule3d";
 import { fragmentsHolding, laidOut, partOf } from "./cleanUp";
+import { arrangementsMarked } from "./arrangementsMarked";
 import { forFlatReaders, undrawnHydrogens } from "./drawing";
 import { greatest, least } from "../../../../lib/chem/lists";
 import { drawnBox } from "../../../../utils/importers";
@@ -105,10 +106,22 @@ export function standsForMolecule(part: Model): boolean {
   return (undrawnHydrogens(part).get(a.id) ?? 0) > 0;
 }
 
-/** The bare atoms among the structures that hold these atoms: left out of a 3D structure, one atom alone having none. */
-export function bareAtomsOf(model: Model, atoms: Iterable<number>): Model["atoms"] {
+/**
+ * The structures that hold these atoms, each as a part of the drawing. A hydrogen bond is no bond of a structure: the drawing's
+ * pieces that hold these atoms are taken by every bond drawn - a water a hydrogen bond holds comes with them - and each is then
+ * split by the structure's bonds, so what a hydrogen bond alone joins - an enol and a water, an acid's dimer, a salt's ion - is
+ * two structures, and neither holds it (CTFILE.md, *Bonds*).
+ */
+function structuresIn(model: Model, atoms: Iterable<number>): Model[] {
+  const structure = { ...model, bonds: model.bonds.filter((b) => !b.hydrogen) };
   return fragmentsHolding(model, atoms)
-    .map((ids) => partOf(model, ids))
+    .flatMap((ids) => fragmentsHolding(structure, ids))
+    .map((ids) => partOf(structure, ids));
+}
+
+/** The bare atoms among the structures that hold these atoms (`structuresIn`): left out of a 3D structure, one atom alone having none. */
+export function bareAtomsOf(model: Model, atoms: Iterable<number>): Model["atoms"] {
+  return structuresIn(model, atoms)
     .filter((part) => !standsForMolecule(part))
     .map((part) => part.atoms[0]);
 }
@@ -150,16 +163,12 @@ export function asDrawn(part: Model): boolean {
 }
 
 /**
- * The structures that hold these atoms, each as the plugin is asked about it; a bare atom's none (`standsForMolecule`). A hydrogen bond
- * is no bond of a structure: what it alone joins - an enol and a water, an acid's dimer - is two structures, each asked about alone and
- * made in 3D side by side, and it is in neither, so no embedding takes it for a bond (CTFILE.md, *Bonds*).
+ * The structures that hold these atoms (`structuresIn`), each as the plugin is asked about it; a bare atom's none (`standsForMolecule`).
+ * What a hydrogen bond alone joins is two structures, each asked about alone and made in 3D side by side, and it is in neither, so no
+ * embedding takes it for a bond.
  */
 export function blocksOf(model: Model, atoms: Iterable<number>, keep: (part: Model) => boolean = standsForMolecule): Block[] {
-  const structure = { ...model, bonds: model.bonds.filter((b) => !b.hydrogen) };
-  // (the drawing's pieces that hold these atoms, by every bond drawn - a water a hydrogen bond holds comes with them - each then split)
-  return fragmentsHolding(model, atoms)
-    .flatMap((ids) => fragmentsHolding(structure, ids))
-    .map((ids) => partOf(structure, ids))
+  return structuresIn(model, atoms)
     .filter(keep)
     .map((part) => {
       // (a ring or chain bound to a metal through all its atoms, as one multi-centre bond: etaBound. A bare atom - Na+, a
@@ -648,7 +657,7 @@ export async function conformersOf(
   };
   // (of two enantiomers, the one whose identity comes first made, the other its mirror image's reflection; one
   //  whose reflection does not have its configuration after all made itself - chem/pageMirror)
-  const as = made.isomers.map((iso) => madeAs(block.part, iso));
+  const as = await Promise.all(made.isomers.map((iso) => madeAs(block.part, iso)));
   const mine = made.isomers.filter((_, i) => as[i] === "itself");
   const twins = made.isomers.filter((_, i) => as[i] === "mirror");
   const own = await ask(block.molblock, mine);
@@ -771,7 +780,7 @@ export async function conformersGrowing(
     }
     return { search, judge: () => judge, let: () => judge?.end(), reflect };
   };
-  const as = made.isomers.map((iso) => madeAs(block.part, iso));
+  const as = await Promise.all(made.isomers.map((iso) => madeAs(block.part, iso)));
   const mirrorBlock = as.includes("mirror") ? chemMolblock(etaBound(mirroredPart(block.part))) : "";
   try {
     for (const [i, iso] of made.isomers.entries()) {
@@ -883,7 +892,8 @@ export function likeOf(block: Block, before: Pick<Molecule3D, "atoms" | "drawnFr
  */
 export async function formulaOf(chem: ChemClient, m: Molecule3D, frame: number, style?: DrawingStyle): Promise<{ model: Model; link: (number | null)[]; ordersUnknown: boolean }> {
   const { drawn, ordersUnknown } = await drawnOf(chem, m, frame);
-  const model = await laidOut(drawn, style).catch(() => drawn);
+  // (its coordinates nobody's drawing: laid out as new - or, where it cannot be, kept as it came, its square-planar centres marked as a layout would mark them)
+  const model = await laidOut(drawn, style, undefined, undefined, true).catch(() => arrangementsMarked(drawn));
   // (its heavy atoms came back in their order)
   let k = 0;
   const link = m.atoms.map((a) => (a.el === "H" ? null : (drawn.atoms[k++]?.id ?? null)));
