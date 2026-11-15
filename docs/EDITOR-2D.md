@@ -1239,11 +1239,10 @@ All hover-based, as above.
     next to which - takes the mark away; one the chemist drew carries none.
     A metal of six donors from such an input is marked the same where its
     donors could be set round it with other pairs across (cis or trans, fac
-    or mer); one whose SMILES marks its arrangement at the metal (@SP1,
-    @OH1) is drawn as given, unmarked - unless two of its donors are joined
-    other than through it (a chelate), whose pairs the mark's picture was
-    found not to carry: that one is taken as not given, and marked as
-    above where its donors could lie more ways than one.
+    or mer); one whose SMILES marks its arrangement at the metal (@SP1 to
+    @SP3, @OH1 to @OH30) is drawn as given, unmarked, where the drawing has
+    the pairs the mark states - and marked as above where it has others,
+    or where the mark cannot be read and a chelate joins its donors.
   - **Stereochemistry drawn by luck** (the maintainer, 2026-10-11): a
     stereocentre whose wedge says its configuration only as its bonds
     happen to fall - two of them in a line, or all of them in one half of
