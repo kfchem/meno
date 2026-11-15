@@ -578,7 +578,7 @@ describe("conformers made for the page", () => {
     expect(pageRounds(block, {}, true)).toEqual({ window: WITHIN_3D, first: 50, most: MOST_CONFORMERS });
     // (ethanol's first round its own fifty - lib/chem/conformersSought - or the chemist's)
     expect(pageRounds(block, { within3d: 2.5 }, true)).toEqual({ window: 2.5, first: 50, most: MOST_CONFORMERS });
-    expect(pageRounds(block, { within3d: 2.5, first3d: 120, most3d: 1000 }, true)).toEqual({ window: 2.5, first: 120, most: 1000 });
+    expect(pageRounds(block, { within3d: 2.5, first3d: 120, most3d: 1000 }, true)).toEqual({ window: 2.5, first: 120, most: 1000, firstChosen: true });
   });
 
   it("makes a 3D structure from fresh Settings, in rounds, no window asked - Meno's window for new conformers its own", async () => {

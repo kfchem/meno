@@ -585,7 +585,9 @@ Taken on 2026-10-13:
 - **A structure of several parts** (2026-11-13; the chemistry check's ruling, the
   maintainer's idea) - a salt, a mixture, drawn as one structure: each
   part's conformers are searched as the part alone, in rounds of its own
-  (`chem/partsAlone`) - its own charge and electrons, its own lowest, Meno's
+  (`chem/partsAlone`) - its own first round, as the part drawn alone would
+  be asked (a first round set in Settings is kept as set: `partRounds`),
+  its own charge and electrons, its own lowest, Meno's
   one definition of the same conformer - for nothing between parts is
   modelled, and a search of the whole found each embedding's parts at a
   place of their own, every one new, to its most. A part alike to one

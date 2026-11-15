@@ -578,8 +578,11 @@ export function conformersOnPage(
   return conformersOf(chem, stereo, block, which, options, pageCount(block, settings.chemistry), rounds, pageThreadsOf(settings.calculations));
 }
 
-/** How the page's search is asked in rounds (chem/conformerRounds): its window (kcal/mol), its first round and the most it tries. */
-export type PageRounds = { window: number; first: number; most: number };
+/**
+ * How the page's search is asked in rounds (chem/conformerRounds): its window (kcal/mol), its first round and the most it tries -
+ * the first the chemist's own where `firstChosen`, else the molecule's (`partRounds`).
+ */
+export type PageRounds = { window: number; first: number; most: number; firstChosen?: boolean };
 
 /**
  * The rounds the page asks a block's conformers in, as Settings has it:
@@ -595,7 +598,20 @@ export function pageRounds(block: Pick<Block, "molblock">, chosen: Pick<Chemistr
   if (!draws) return null;
   const values = { sought: chosen.sought3d ?? "needed", within: chosen.within3d ?? WITHIN_3D, first: chosen.first3d ?? 0, most: chosen.most3d ?? MOST_CONFORMERS };
   const asked = roundsAsked(values, () => conformersSoughtOf(block.molblock));
-  return asked && "needs" in asked ? { needs: `${asked.needs}, in Settings, Chemistry` } : asked;
+  if (asked && "needs" in asked) return { needs: `${asked.needs}, in Settings, Chemistry` };
+  // (a first round of the chemist's own: as roundsAsked takes one)
+  return asked && Number.isFinite(values.first) && values.first >= 1 ? { ...asked, firstChosen: true } : asked;
+}
+
+/**
+ * The rounds a part of a structure is searched in (chem/partsAlone): the whole's, but for a first round the chemist has not chosen,
+ * which is the part's own - as the page asks it of the part drawn alone (`pageRounds`) - so a small ion beside a large one is not
+ * searched with the large one's first round. Found in the chemistry check.
+ */
+export function partRounds(rounds: PageRounds, part: Pick<Block, "molblock">): PageRounds {
+  if (rounds.firstChosen) return rounds;
+  const own = roundsAsked({ sought: "needed", within: rounds.window, first: 0, most: rounds.most }, () => conformersSoughtOf(part.molblock));
+  return own && !("needs" in own) ? { ...rounds, first: own.first } : rounds;
 }
 
 /**
@@ -758,11 +774,11 @@ export async function conformersGrowing(
   // (a structure of several parts: each part searched alone - chem/partsAlone)
   const parts = partsAlone(block.part, block);
   // (each search, and its judge, which makes what the page shows of it)
-  type Live = { search: RoundsSearch; judge: () => GrowingJudge | null; let: () => void; reflect: boolean; w: Omit<ShownWith, "parts" | "reflect"> & { eta?: ReturnType<typeof metalHoldsOf> } };
+  type Live = { search: RoundsSearch; rounds: PageRounds; judge: () => GrowingJudge | null; let: () => void; reflect: boolean; w: Omit<ShownWith, "parts" | "reflect"> & { eta?: ReturnType<typeof metalHoldsOf> } };
   const live: Live[] = [];
   // (the time they have run, all together: each takes what the others have left of the most)
   const spent = () => live.reduce((t, l) => t + l.search.spent, 0);
-  const start = async (molblock: string, iso: Configuration, reflect: boolean, own?: Live["w"]): Promise<Live> => {
+  const start = async (molblock: string, iso: Configuration, reflect: boolean, own?: Live["w"], r: PageRounds = rounds): Promise<Live> => {
     const asked = metalHoldsOf(molblock);
     const ask = async (n: number, draw: number) => {
       const [c] = (await chem.request("conformers", { molblock, isomers: [iso], count: n, draw, ...(asked ? { holds: asked } : {}), options: sent }, CONFORMERS_MS)).isomers;
@@ -773,12 +789,12 @@ export async function conformersGrowing(
     const self: { search?: RoundsSearch } = {};
     const w = own ?? { open: made.open, checks, eta: holds };
     // (its judge kept past the search's end, to make what it found the page's: let go here, once that is done)
-    const search = new RoundsSearch(ask, { ...rounds, draws: true, stopped, budget: () => SEARCH_BUDGET_MS - (spent() - (self.search?.spent ?? 0)) }, (first) => {
-      judge = judgeOf(first, rounds.window, { open: w.open, checks: w.checks, parts: partsOf(first.atoms, first.bonds, w.eta?.eta), reflect });
+    const search = new RoundsSearch(ask, { ...r, draws: true, stopped, budget: () => SEARCH_BUDGET_MS - (spent() - (self.search?.spent ?? 0)) }, (first) => {
+      judge = judgeOf(first, r.window, { open: w.open, checks: w.checks, parts: partsOf(first.atoms, first.bonds, w.eta?.eta), reflect });
       return { add: judge.add, end: () => {} };
     });
     self.search = search;
-    const l: Live = { search, judge: () => judge, let: () => judge?.end(), reflect, w };
+    const l: Live = { search, rounds: r, judge: () => judge, let: () => judge?.end(), reflect, w };
     try {
       await search.next();
     } catch (e) {
@@ -798,7 +814,7 @@ export async function conformersGrowing(
     const c = { ...(l.reflect ? reflectedConformers(raw) : raw), how: [...(raw.how ?? []), ...more] };
     return (await shownConformers([partsSideBySide(keptMade(withChosen(withOwnCip(c), l.w.open), l.w.checks), partsOf(c.atoms, c.bonds, l.w.eta?.eta))]))[0];
   };
-  const said = (l: Live) => (l.search.ended ? { label: "Rounds", text: roundsSaid(l.search.result().run, { ...rounds, budget: SEARCH_BUDGET_MS }) } : searchingRow(l.search));
+  const said = (l: Live) => (l.search.ended ? { label: "Rounds", text: roundsSaid(l.search.result().run, { ...l.rounds, budget: SEARCH_BUDGET_MS }) } : searchingRow(l.search));
   // (each stereoisomer: its searches - one; or, of several parts, one for each part not alike to one before and not one atom - each
   //  shown as it stands (`shown`), and put together as the page shows the whole)
   type Unit = { searches: Live[]; shown: Map<Live, Conformers>; whole: () => Conformers };
@@ -815,7 +831,8 @@ export async function conformersGrowing(
           else if (takesNoSearch(p)) each.push(lone(p));
           else {
             const own = metalHoldsOf(p.block.molblock);
-            each.push(await start(p.block.molblock, configs[k], false, { open: NONE, checks: madeChecksOf(p.block.molblock, own), eta: own }));
+            // (in rounds of its own: its first round the part's, not the whole's - partRounds)
+            each.push(await start(p.block.molblock, configs[k], false, { open: NONE, checks: madeChecksOf(p.block.molblock, own), eta: own }, partRounds(rounds, p.block)));
           }
         }
         const unit: Unit = {
