@@ -1,8 +1,8 @@
 /**
  * Which bond is in front where two bonds of a drawing cross, said by the chemist (docs/EDITOR-2D.md, *A bond in front of another*): a look, as a
  * bond's wedge or colour is. The bond said to be behind keeps the ids of the bonds it passes behind (`Bond.behind`) and is drawn with a gap there
- * (lib/chem/layout2d `brokenBehind`; Brecher 2006, ST-3.1: "the front-to-back ordering of crossing bonds must be indicated ... with a small
- * discontinuity in the backmost bond"). Where all four atoms of the two bonds carry a depth, the depth says it and nothing is asked: a cage as
+ * (lib/chem/layout2d `brokenBehind`; Brecher 2006, ST-3.1: which of two crossing bonds is in front is shown by a small break in the one
+ * behind). Where all four atoms of the two bonds carry a depth, the depth says it and nothing is asked: a cage as
  * Clean-up draws it, a tool's projection.
  *
  * Kept by bond id, so it holds while the atoms move. Nothing silent ever says it again where nobody said it: an edit that takes the two from
