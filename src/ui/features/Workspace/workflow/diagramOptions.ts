@@ -11,6 +11,8 @@ import { diagramQuantities, levelNamer, levelsTyped, propertiesTyped, referenceN
 import type { LineRead, Option, OptionValues } from "../../../../lib/options";
 import { moleculesSeen } from "./flow";
 import type { WorkflowStep } from "../store/types";
+// (the constitution column the diagram never reads: from the identity worker, never worked out here while the card is drawn)
+import { constitutionKnown } from "../chem/identityOff";
 
 type Seen = Parameters<typeof moleculesSeen>[0];
 
@@ -70,14 +72,14 @@ export function diagramKept(values: OptionValues, shown: OptionValues, own: Opti
  * refused on it; nothing, where nothing comes in yet.
  */
 export function diagramNeeds(flow: Seen, step: Pick<WorkflowStep, "id" | "options">): string | undefined {
-  const seen = moleculesSeen(flow, step.id, "levels");
+  const seen = moleculesSeen(flow, step.id, "levels", constitutionKnown);
   if (!seen) return undefined;
   const o = step.options ?? {};
   return referenceNeed(seen.table.rows.map(levelNamer(seen.table, propertiesTyped(String(o.levelsBy ?? "")))), String(o.levels ?? ""), typeof o.reference === "string" ? o.reference : undefined);
 }
 
 function listed(flow: Seen, id: number, levels: string, by: string, declared: readonly Option[]): Option[] {
-  const seen = moleculesSeen(flow, id, "levels");
+  const seen = moleculesSeen(flow, id, "levels", constitutionKnown);
   if (!seen) return [...declared];
   const nameOf = levelNamer(seen.table, propertiesTyped(by));
   const names = [...new Set(seen.table.rows.map(nameOf))];

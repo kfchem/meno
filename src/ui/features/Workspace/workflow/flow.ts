@@ -8,7 +8,7 @@ import type { DrawnModel, DrawnRecord, Molecule3D, Wire, WireEnd, WorkflowSet, W
 import { recordsWithRoles } from "./schemeRoles";
 import { conformersOfOne, drawnKey, entryOfSet, framesOf, hash, holdsOf, plainAmong, readingOrder, recordKey, setEntries, setMembers, setMolecules, type SetEntry } from "./entries";
 import type { Property } from "../../../../lib/entry";
-import { moleculesAsTable, WHAT_COLUMN, type Table } from "../../../../lib/table";
+import { moleculesAsTable, WHAT_COLUMN, type ConstitutionOf, type Table } from "../../../../lib/table";
 import { levelOf } from "../../../../lib/calc/output";
 import { exitOf, ONE_INPUT, readsAsTable, RESTRAINTS_INPUT, severalInputs, takenBy, takesNothing, type SetHolds, type SetKind, type ValueKind, isSetKind } from "./kinds";
 import { byOf, doerStamp, inputsFor, presetsStamp, setName, stepValues, takesBy, takesNothingBy } from "./doers";
@@ -282,7 +282,7 @@ export function tableInto(doc: Flow, step: number, port?: string): Table | null 
  * imaginary frequencies. None where what comes in is a table, structures
  * drawn, or nothing.
  */
-export function moleculesSeen(doc: Flow, step: number, port?: string): { table: Table; entries: SetEntry[] } | null {
+export function moleculesSeen(doc: Flow, step: number, port?: string, constitutionOf?: ConstitutionOf): { table: Table; entries: SetEntry[] } | null {
   if (tableWired(doc, step, port)) return null;
   const input = inputOf(doc, step, port);
   if (!input || input.holds === "structures") return null;
@@ -308,6 +308,7 @@ export function moleculesSeen(doc: Flow, step: number, port?: string): { table: 
       const how = e.from != null ? by.get(e.from) : undefined;
       return energy && how ? { ...entry, properties: { ...entry.properties, energy: { ...energy, by: how } } } : entry;
     }),
+    constitutionOf,
   );
   // (said after the row's id)
   return { table: { ...seen, columns: [seen.columns[0], { name: WHAT_COLUMN, kind: "text" }, ...seen.columns.slice(1)], rows: seen.rows.map((r, i) => [r[0], what[i], ...r.slice(1)]) }, entries };

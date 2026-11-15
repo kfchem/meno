@@ -17,7 +17,7 @@ import { CHANGE_TOOLS, changeTool, type PageCalls } from "./change";
 import { addSaid } from "./ops";
 import { READ_TOOLS, callTool, listed } from "./tools";
 import { inScope, SEEN_KINDS, seenId, type Scope } from "./scope";
-import { search } from "./search";
+import { search, searchAsked } from "./search";
 import type { Conversation, Said, Sent, ToolCall } from "./types";
 
 /** What is sent to a model, a turn's each go: what Meno tells it, all that was said, and its tools. */
@@ -204,6 +204,9 @@ export async function runTurn(o: {
         calls++;
         const now_ = conversation();
         if (!now_) return { sent: true, stopped: "gone", ...(madeAny ? { changed: key } : {}) };
+        // (a search's identities asked of the worker first: answering it then works none out on the drawing thread)
+        if (call.tool === "search" && typeof call.args?.smiles === "string" && (call.args?.how === "same" || call.args?.how === "holds"))
+          await searchAsked(doc.getState(), inScope(doc.getState(), scopeOf(now_)), call.args.smiles, call.args.how);
         const a = answer(() => doc.getState(), now_, call, o.calls, act);
         gave.push(...a.gave);
         keep([{ by: "tool", tool: call.tool.slice(0, 40), answer: a.answer, ok: a.ok, ...(a.gave.length ? { things: [...new Set(a.gave.map((g) => g.id))] } : {}), at: now() }]);
