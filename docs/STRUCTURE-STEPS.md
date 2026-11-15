@@ -217,6 +217,10 @@ references, the first it is bonded as (`matchingReference`).
   its one reference, or "bonded as none of the 3 references"), or why it
   was not compared (another numbering, frames, nothing to pair with). Its
   line counts them apart: "12 same · 3 different · 1 not compared".
+  Matched on a property with more than one reference, it says too how
+  many came out the same for each, and a reference none did as none: "2
+  same · 4 different · 2 for product x, none for product y" - ends made
+  for two products, of which the second kept none.
   *Pass over atoms* are typed from 1 on the card.
 
 - **Bonds read from the geometry** as Meno reads any geometry given no bonds

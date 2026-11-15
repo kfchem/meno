@@ -299,16 +299,29 @@ export function comparedSet(entries: readonly SetEntry[], references: readonly S
     notCompared++;
     different(e, `not compared: ${why}`);
   };
+  // (paired on a property, with more than one reference: how many came out the same for each - a reference none did said as none)
+  let each: string | null = null;
   if (o.reference === "property") {
-    const matched = matchedOn(es, rs, o.property.trim(), "Reference");
+    const name = o.property.trim();
+    const matched = matchedOn(es, rs, name, "Reference");
+    const sameFor = rs.map(() => 0);
     entries.forEach((e, i) => {
       const m = matched[i];
       if ("why" in m) return unpaired(e, m.why);
       const r = comparedBonding(es[i], rs[m.index], options);
       if ("failed" in r) return unpaired(e, r.failed);
-      if (r.same) kept.push(e);
-      else different(e, `different: ${r.differences.join(" ")}`);
+      if (r.same) {
+        kept.push(e);
+        sameFor[m.index]++;
+      } else different(e, `different: ${r.differences.join(" ")}`);
     });
+    if (rs.length > 1) {
+      const valueOf = (k: number) => {
+        const p = rs[k].properties[name];
+        return p && p.status === "computed" && (typeof p.value === "string" || typeof p.value === "number") ? `${name} ${p.value}` : `reference ${k + 1}`;
+      };
+      each = rs.map((_, k) => `${sameFor[k] || "none"} for ${valueOf(k)}`).join(", ");
+    }
   } else {
     const writes = o.writes.trim();
     const from = o.from.trim();
@@ -326,7 +339,7 @@ export function comparedSet(entries: readonly SetEntry[], references: readonly S
       different(withSaid(e, writes, "none"), one && !one.same ? `different: ${one.differences.join(" ")}` : `bonded as none of the ${rs.length} references`);
     });
   }
-  const line = [`${kept.length} same`, `${aside.length - notCompared} different`, ...(notCompared ? [`${notCompared} not compared`] : [])];
+  const line = [`${kept.length} same`, `${aside.length - notCompared} different`, ...(notCompared ? [`${notCompared} not compared`] : []), ...(each ? [each] : [])];
   return { ok: true, holds, kept, aside, said: line.join(" \u00b7 ") };
 }
 

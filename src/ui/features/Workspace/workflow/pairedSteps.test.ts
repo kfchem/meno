@@ -150,6 +150,19 @@ describe("Compare bonding, as a step", () => {
     );
     expect(paired.kept).toHaveLength(1);
     expect(text(paired.aside[0], "bonding")).toBe("not compared: no entry of Reference has its id, y");
+    // (one reference: its line as ever)
+    expect(paired.said).toBe("1 same · 0 different · 1 not compared");
+  });
+
+  it("says, paired on a property with more than one reference, how many came out the same for each - one none did, plainly", () => {
+    // (ends made for two products: x's two ends both its own; y's one end bonded otherwise; z, a reference none came for)
+    const refs = [tagged(water(1), "product", "x"), tagged(water(1), "product", "y"), tagged(water(1), "product", "z")];
+    const ends = [tagged(water(1), "product", "x"), tagged(water(2), "product", "x"), tagged(water(1, 0, 2.5), "product", "y")];
+    const o = ok(runMenoPair("compare-bonding", { entries: ends, holds: "molecules" }, { entries: refs, holds: "molecules" }, { reference: "property", property: "product" }));
+    expect(o.said).toBe("2 same · 1 different · 2 for product x, none for product y, none for product z");
+    // (a reference with no value of it is named by its place)
+    const unnamed = ok(runMenoPair("compare-bonding", { entries: [tagged(water(1), "product", "x")], holds: "molecules" }, { entries: [tagged(water(1), "product", "x"), water(1)], holds: "molecules" }, { reference: "property", property: "product" }));
+    expect(unnamed.said).toBe("1 same · 0 different · 1 for product x, none for reference 2");
   });
 
   it("passes over atoms counted from 1, and refuses ones that are not", () => {
