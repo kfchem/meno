@@ -142,7 +142,7 @@ export function arrangementsDrawn(
     const angle = donors.map((d) => Math.atan2(drawing.atoms[d].y - a.y, drawing.atoms[d].x - a.x));
     // (one Meno laid out with nothing given, still marked so: none, however drawn - four donors or six)
     if (part && marked(part, m)) return;
-    if (donors.length === 4 && !squarePlanarDrawn(drawing, m, angle) && !(part && crossDrawn(angle) && surelySquare(drawing, m, around))) return;
+    if (donors.length === 4 && !squarePlanarDrawn(drawing, m, angle) && !(part && crossDrawn(angle) && surelySquare(drawing, m, around)) && !(part && bridgedSquare(drawing, m, around))) return;
     // (a pairing whose every pair is drawn across - none of six side by side - as Clean-up reads it)
     const partner = pairingDrawn(angle);
     if (partner && pairsDrawnAcross(angle, partner)) return void out.push({ metal: m, pairs: pairsOf(donors, partner) });
@@ -173,8 +173,32 @@ function crossDrawn(angle: readonly number[]): boolean {
   });
 }
 
-/** Whether metal `m` is surely square planar as the drawing makes it (lib/layout/perceive `squarePlanarMetal`). */
-function surelySquare(drawing: ReturnType<typeof drawingOf>, m: number, around: readonly number[][]): boolean {
+/**
+ * Whether four-donor metal `m` is held to another metal by bridges - its donors joined only through that other metal, none a
+ * chelate's - and is surely square planar: [Pt2Cl4(NH3)2]'s Pt. The layout sets such a pair out as a diamond whose bonds lie
+ * neither on the X nor on the upright cross; its pairs are read as drawn all the same (`pairingDrawn` - none where tied), so that
+ * Clean-up leaves cis and trans what they were (found in the chemistry check).
+ */
+function bridgedSquare(drawing: ReturnType<typeof drawingOf>, m: number, around: readonly number[][]): boolean {
+  const donors = around[m];
+  const isM = (j: number) => isMetal(drawing.atoms[j].el ?? "");
+  // (from each donor, through any atom but this metal: reaching another donor only by way of another metal is a bridge; otherwise a chelate)
+  const joined = (through: boolean) => {
+    const reached = new Set([donors[0]]);
+    for (const todo = [donors[0]]; todo.length; ) {
+      for (const w of around[todo.pop()!]) {
+        if (w === m || reached.has(w) || (!through && isM(w))) continue;
+        reached.add(w);
+        todo.push(w);
+      }
+    }
+    return donors.slice(1).some((d) => reached.has(d));
+  };
+  return joined(true) && !joined(false) && surelySquare(drawing, m, around, true);
+}
+
+/** Whether metal `m` is surely square planar as the drawing makes it (lib/layout/perceive `squarePlanarMetal`); `bridged`, asked of a metal whose donors are joined through another. */
+function surelySquare(drawing: ReturnType<typeof drawingOf>, m: number, around: readonly number[][], bridged = false): boolean {
   const order = new Map(drawing.bonds.map((b) => [b.a < b.b ? `${b.a},${b.b}` : `${b.b},${b.a}`, b.order]));
   const sq = squarePlanarMetal(
     {
@@ -186,6 +210,7 @@ function surelySquare(drawing: ReturnType<typeof drawingOf>, m: number, around: 
     },
     m,
     (el, charge) => valencesAt(el, charge)[0],
+    bridged,
   );
   return !!sq?.sure;
 }
