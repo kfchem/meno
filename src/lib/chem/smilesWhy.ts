@@ -6,6 +6,7 @@
  * Nothing here is any program's.
  */
 import { elementOf } from "./elements";
+import { ionic } from "./perception/elements";
 
 /** One problem the toolkit's own check finds in a SMILES it parses but cannot make sense of, as it names it. */
 export type SmilesProblem = {
@@ -30,11 +31,6 @@ const AROMATIC_IN_BRACKETS = new Set(["b", "c", "n", "o", "p", "s", "se", "as", 
 /** A text written as a formula - SnCl4, C6H6, H2O: element symbols, each once, a count after one of them at least. */
 const FORMULA = /^(?:[A-Z][a-z]?\d*)+$/;
 const HALOGENS = new Set(["F", "Cl", "Br", "I"]);
-/** The charges of groups 1 and 2's ions: their halides salts, written as ions. */
-const IONIC = new Map<string, number>([
-  ...["Li", "Na", "K", "Rb", "Cs", "Fr"].map((e) => [e, 1] as const),
-  ...["Be", "Mg", "Ca", "Sr", "Ba", "Ra"].map((e) => [e, 2] as const),
-]);
 
 /** One of the 118 elements, by its symbol as written (case and all). */
 const isElement = (symbol: string): boolean => elementOf(symbol) != null;
@@ -74,7 +70,7 @@ async function formulaSaid(parts: [string, number][], read: (smiles: string) => 
   if (parts.length === 2 && parts[0][1] === 1 && parts[0][0] !== "H" && HALOGENS.has(parts[1][0])) {
     const [[centre], [x, n]] = parts;
     let smiles: string | null;
-    const charge = IONIC.get(centre);
+    const charge = ionic.get(centre);
     if (charge != null) smiles = n === charge ? `[${centre}+${charge > 1 ? charge : ""}]` + `.[${x}-]`.repeat(n) : null;
     else {
       const atom = ORGANIC.has(centre) ? centre : `[${centre}]`;
