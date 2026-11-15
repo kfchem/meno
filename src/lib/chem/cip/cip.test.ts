@@ -140,6 +140,23 @@ describe("an allene's axis and an odd cumulene's cis or trans", () => {
   });
 });
 
+describe("a double bond in a ring: E or Z only in a ring of eight atoms or more, and in none", () => {
+  it("labels one in no ring, as (E)-but-2-ene's, and one in a ring of eight, as (E)-cyclooctene's; none in a ring of six, as cyclohexene's", () => {
+    expect(cipOf("C/C=C/C")).toEqual(["C1=C2:E"]);
+    expect(cipOf(String.raw`C/C=C\C`)).toEqual(["C1=C2:Z"]);
+    expect(cipOf("C1CCC/C=C/CC1")).toEqual(["C4=C5:E"]);
+    expect(cipOf("C1CCC=CC1")).toEqual([]);
+  });
+
+  it("tells a centre's (Z)-cyclooct-1-enyl from its (E)-cyclooct-1-enyl by rule 3: their double bonds, in rings of eight, each a unit", () => {
+    expect(cipOf(String.raw`O[C@H](/C1=C\CCCCCC1)/C1=C/CCCCCC1`)).toEqual(["C1:S", "C2=C3:Z", "C10=C11:E"]);
+  });
+
+  it("tells none apart at a centre whose two cyclohept-1-enyls are written one each way: in rings of seven, their double bonds are no units", () => {
+    expect(cipOf(String.raw`O[C@H](/C1=C\CCCCC1)/C1=C/CCCCC1`)[0]).toBe("C1:alike");
+  });
+});
+
 describe("what gives no label, and why", () => {
   it("says a ligand's double bond left open in the drawing, by its bond", () => {
     const input = cipInput("CC=C[C@H](O)/C=C/C");

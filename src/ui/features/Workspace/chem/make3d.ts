@@ -33,6 +33,7 @@ import { signatureOf } from "../utils/drawnLink";
 import { groupShape } from "../utils/groupShape";
 import { bondsAt, lookOf, solidOf } from "../utils/molecule3d";
 import { fragmentsHolding, laidOut, partOf } from "./cleanUp";
+import { arrangementsMarked } from "./arrangementsMarked";
 import { forFlatReaders, undrawnHydrogens } from "./drawing";
 import { greatest, least } from "../../../../lib/chem/lists";
 import { drawnBox } from "../../../../utils/importers";
@@ -656,7 +657,7 @@ export async function conformersOf(
   };
   // (of two enantiomers, the one whose identity comes first made, the other its mirror image's reflection; one
   //  whose reflection does not have its configuration after all made itself - chem/pageMirror)
-  const as = made.isomers.map((iso) => madeAs(block.part, iso));
+  const as = await Promise.all(made.isomers.map((iso) => madeAs(block.part, iso)));
   const mine = made.isomers.filter((_, i) => as[i] === "itself");
   const twins = made.isomers.filter((_, i) => as[i] === "mirror");
   const own = await ask(block.molblock, mine);
@@ -779,7 +780,7 @@ export async function conformersGrowing(
     }
     return { search, judge: () => judge, let: () => judge?.end(), reflect };
   };
-  const as = made.isomers.map((iso) => madeAs(block.part, iso));
+  const as = await Promise.all(made.isomers.map((iso) => madeAs(block.part, iso)));
   const mirrorBlock = as.includes("mirror") ? chemMolblock(etaBound(mirroredPart(block.part))) : "";
   try {
     for (const [i, iso] of made.isomers.entries()) {
@@ -891,7 +892,8 @@ export function likeOf(block: Block, before: Pick<Molecule3D, "atoms" | "drawnFr
  */
 export async function formulaOf(chem: ChemClient, m: Molecule3D, frame: number, style?: DrawingStyle): Promise<{ model: Model; link: (number | null)[]; ordersUnknown: boolean }> {
   const { drawn, ordersUnknown } = await drawnOf(chem, m, frame);
-  const model = await laidOut(drawn, style).catch(() => drawn);
+  // (its coordinates nobody's drawing: laid out as new - or, where it cannot be, kept as it came, its square-planar centres marked as a layout would mark them)
+  const model = await laidOut(drawn, style, undefined, undefined, true).catch(() => arrangementsMarked(drawn));
   // (its heavy atoms came back in their order)
   let k = 0;
   const link = m.atoms.map((a) => (a.el === "H" ? null : (drawn.atoms[k++]?.id ?? null)));
