@@ -255,3 +255,35 @@ describe("a four-bond metal drawn as an upright cross, where the layout would ma
     expect(() => relayoutFrom(m, m, job, laid)).toThrow(/Pt drawn as an upright cross could not be laid out as one/);
   });
 });
+
+describe("the metals a SMILES gives the arrangement of (`metalsArrangedIn`)", () => {
+  /** A MOL block (V2000) of `els` in that order, its atoms on a line, joined by `bonds` (1-based, single). */
+  const block = (els: string[], bonds: [number, number][]) =>
+    ["", "  test", "", `${String(els.length).padStart(3)}${String(bonds.length).padStart(3)}  0  0  0  0  0  0  0  0999 V2000`,
+      ...els.map((el, k) => `${(1.5 * k).toFixed(4).padStart(10)}${(0).toFixed(4).padStart(10)}${(0).toFixed(4).padStart(10)} ${el.padEnd(3)} 0  0  0  0  0  0  0  0  0  0  0  0`),
+      ...bonds.map(([a, b]) => `${String(a).padStart(3)}${String(b).padStart(3)}  1  0`), "M  END", ""].join("\n");
+  // (Cl, M, Cl, N, N: a metal with two chlorides and two ammines, atoms 1 to 5 from `at`)
+  const four = (at: number): [number, number][] => [[at + 1, at], [at + 1, at + 2], [at + 1, at + 3], [at + 1, at + 4]];
+
+  it("are only the metals marked at their own atom: of two metals, the one with @SP1, not the other", () => {
+    const b = block(["Cl", "Pt", "Cl", "N", "N", "Cl", "Pd", "Cl", "N", "N"], [...four(1), ...four(6)]);
+    expect(metalsArrangedIn("Cl[Pt@SP1](Cl)(N)N.Cl[Pd](Cl)(N)N", b)).toEqual([1]);
+    expect(metalsArrangedIn("Cl[Pt](Cl)(N)N.Cl[Pd@SP1](Cl)(N)N", b)).toEqual([6]);
+  });
+
+  it("are none where only an organic centre is marked: a [C@H] beside a metal gives the metal nothing", () => {
+    const b = block(["Cl", "Pt", "Cl", "N", "N", "C", "C", "F", "Cl"], [...four(1), [6, 7], [7, 8], [7, 9]]);
+    expect(metalsArrangedIn("Cl[Pt](Cl)(N)N.C[C@H](F)Cl", b)).toEqual([]);
+  });
+
+  it("are the metal alone where both a metal and an organic centre are marked", () => {
+    const b = block(["C", "C", "F", "Cl", "Cl", "Pt", "Cl", "N", "N"], [[1, 2], [2, 3], [2, 4], ...four(5)]);
+    expect(metalsArrangedIn("C[C@H](F)Cl.Cl[Pt@SP1](Cl)(N)N", b)).toEqual([5]);
+  });
+
+  it("are none where the block has atoms the SMILES has not, though the SMILES's atoms come first in it", () => {
+    const b = block(["Cl", "Pt", "Cl", "N", "N", "Na"], four(1));
+    expect(metalsArrangedIn("Cl[Pt@SP1](Cl)(N)N", b)).toEqual([]);
+    expect(metalsArrangedIn("Cl[Pt@SP1](Cl)(N)N", block(["Cl", "Pt", "Cl", "N", "N"], four(1)))).toEqual([1]);
+  });
+});
