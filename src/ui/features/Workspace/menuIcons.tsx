@@ -49,6 +49,18 @@ export const BOND_ICONS = {
   more: own(<path d="M4.5 10 h.01 M10 10 h.01 M15.5 10 h.01" strokeWidth={3} />),
 };
 
+/**
+ * A bond kind's icon drawn as the bond it stands for lies (PartMenu, the bond's own kind): a wedge or a hashed wedge narrow at
+ * the icon's right end where the bond is narrow at its right (or lower) atom - turned end for end; a double bond with its
+ * second line shorter, on the side it is drawn on, where it is drawn to one side. Any other kind, as it always is.
+ */
+export function bondIconAsLying(kind: keyof typeof BOND_ICONS, lie: { narrowLeft: boolean; side: "upper" | "lower" | "center" }): ReactNode {
+  if ((kind === "wedge" || kind === "hashed-wedge") && !lie.narrowLeft) return own(<g transform="rotate(180 10 10)">{BOND_ICONS[kind].props.children}</g>);
+  if (kind === "double" && lie.side === "upper") return own(<path d="M6.5 17.2 L17.2 6.5 M4.6 11.7 L11.7 4.6" />);
+  if (kind === "double" && lie.side === "lower") return own(<path d="M2.8 13.5 L13.5 2.8 M8.3 15.4 L15.4 8.3" />);
+  return BOND_ICONS[kind];
+}
+
 export const MENU_ICONS = {
   cut: hero(ScissorsIcon),
   copy: hero(DocumentDuplicateIcon),
