@@ -6,7 +6,7 @@ import * as THREE from "three";
 import { pageAt } from "../utils/page";
 import { useEffect, useRef, useState } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { takeOpening, useEditorStore } from "../store";
+import { holdOpening, openingOf, takeOpening, useEditorStore } from "../store";
 import { ATOM_HOVER_RING_RADIUS_RATIO, DOUBLE_CLICK_MS } from "../constants";
 import { endsDrag, movePress, startPress, type Press } from "../utils/press";
 import { editorModelOf, openedPlace, opensAsText, processFileContent, type ProcessedFileResult } from "../utils/io";
@@ -68,6 +68,8 @@ export function useStructureEvents(
   const [dropping, setDropping] = useState<{ x: number; y: number; key: number } | null>(null);
   // (something dragged over the drawing, until it leaves or is dropped: the empty page's line steps aside for it)
   const [draggedOver, setDraggedOver] = useState(false);
+  // (whether what the tab was opened with is in, or has failed: until then its page is not empty, only waiting for it)
+  const [opened, setOpened] = useState(!initialPayload);
   const reportImportError = (what: string, err: unknown, again?: () => void) => {
     console.warn(`${what} import failed`, err);
     const text = err instanceof Error ? err.message : String(err);
@@ -140,12 +142,19 @@ export function useStructureEvents(
 
   // Effect: Initial Payload
   useEffect(() => {
-    (async () => {
-      // One import per store: this effect runs twice under StrictMode, and
-      // again when the canvas is made again after it failed (ui/layouts/
-      // ErrorBoundary) - importing twice would leave two undo steps for a
-      // single file, or put the file back over everything done since.
-      if (!takeOpening(store)) return;
+    const done = () => setOpened(true);
+    // One import per store: this effect runs twice under StrictMode, and
+    // again when the canvas is made again after it failed (ui/layouts/
+    // ErrorBoundary) - importing twice would leave two undo steps for a
+    // single file, or put the file back over everything done since. Made
+    // again, the canvas waits for the one taking it, if that is still at it.
+    if (!takeOpening(store)) {
+      const taking = openingOf(store);
+      if (taking) void taking.then(done, done);
+      else done();
+      return;
+    }
+    const taking = (async () => {
       if (!initialPayload) {
         // (a canvas opened for a text: Save suggests its name, beside it)
         if (openedFile && initialFilename) store.getState().markOpenedOver(initialPath ?? initialFilename);
@@ -178,6 +187,8 @@ export function useStructureEvents(
       }
       await openPayload(kind);
     })();
+    holdOpening(store, taking);
+    void taking.then(done, done);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -581,6 +592,7 @@ export function useStructureEvents(
     dropZone,
     dropping,
     draggedOver,
+    opened,
     openFilesAt,
     importError,
     dismissImportError,
