@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { constitutionKey, identity } from "../../../../lib/chem/identity";
 import { NOT_YET } from "../../../../lib/table";
 import { drawnFromSmiles } from "../utils/smilesDrawn";
+import type { Bond } from "../store/types";
 import { drawnHash, recordNow, whenDrawnKnown } from "../workflow/entries";
 import { identityInputOf, labelsDrawnOut } from "./identityOf";
 import { ANSWER_MOST_MS, constitutionKnown, forgetIdentities, identitiesAsked, identityKnown, IN_PLACE_MOST, useIdentitiesAnswered } from "./identityOff";
@@ -35,6 +36,8 @@ const answered = () => new Promise((done) => setTimeout(done, 5));
 const PPH3 = "P(c1ccccc1)(c1ccccc1)c1ccccc1";
 // (another, for a test that leaves its drawing's key kept: workflow/entries keeps keys by drawing)
 const TOLYL = "P(c1ccc(C)cc1)(c1ccc(C)cc1)c1ccc(C)cc1";
+// (an enol's O-H and a C=O beside it, which a hydrogen bond drawn between them holds: large enough to be asked of the worker)
+const ENOL = "OC(=CC(=O)c1ccccc1)c1ccccc1-c1ccccc1";
 
 describe("a structure's identity, off the drawing thread", () => {
   it("is pending on the drawing thread where it is large and not yet answered, asked of the worker once, and known once answered", async () => {
@@ -63,6 +66,17 @@ describe("a structure's identity, off the drawing thread", () => {
     await identitiesAsked([identityInputOf(m).input]);
     const moved = { ...m, atoms: m.atoms.map((a) => ({ ...a, x: a.x + 3, y: a.y - 2 })) };
     expect(identityKnown(identityInputOf(moved).input)).toBeDefined();
+    expect(asked).toBe(1);
+  });
+  it("is asked as it is read: a structure with its own hydrogen bond drawn (an enol's) known once a step has waited on it", async () => {
+    withWorker();
+    const plain = drawnFromSmiles(ENOL);
+    expect(plain.atoms.length).toBeGreaterThan(IN_PLACE_MOST);
+    const [oh, co] = plain.atoms.filter((a) => a.el === "O").map((a) => a.id);
+    const own = { id: Math.max(...plain.bonds.map((b) => b.id)) + 1, a: oh, b: co, order: 1, hydrogen: true } as Bond;
+    const m = { ...plain, bonds: [...plain.bonds, own] };
+    await new Promise<void>((go) => whenDrawnKnown([m], go));
+    expect(drawnHash(m, m.atoms.map((a) => a.id))).toBeDefined();
     expect(asked).toBe(1);
   });
 });

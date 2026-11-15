@@ -40,14 +40,20 @@ export type Page = {
 /** Whether `p` is inside a frame. */
 export const inside = (b: Frame, p: Pt) => p.x >= b.x0 && p.x <= b.x1 && p.y >= b.y0 && p.y <= b.y1;
 
-/** The structures drawn on the page, each its atoms' ids, as their bonds join them - and a structure of several parts (`Atom.joined`) as one, as Combine makes one entry of its parts. */
-export function structuresOf(model: Model): number[][] {
+/**
+ * The structures drawn on the page, each its atoms' ids, as their bonds join them - and a structure of several parts (`Atom.joined`) as
+ * one, as Combine makes one entry of its parts. A hydrogen bond is no bond of a structure: what it alone joins - an enol and a water, a
+ * salt's ion - is two structures, two entries (chem/make3d `blocksOf` likewise, CTFILE.md *Bonds*). `asDrawn`, it joins them, as the
+ * pieces of ink they are: what moves a structure, or keeps clear of one, takes them together.
+ */
+export function structuresOf(model: Model, asDrawn = false): number[][] {
   const around = new Map<number, number[]>();
   const join = (p: number, q: number) => {
     around.set(p, [...(around.get(p) ?? []), q]);
     around.set(q, [...(around.get(q) ?? []), p]);
   };
   for (const b of model.bonds) {
+    if (b.hydrogen && !asDrawn) continue;
     join(b.a, b.b);
     // (a haptic bond's ring with its metal and star, as fragmentOf has them:
     // walked by its bonds alone, the metal and the star were a structure
@@ -235,7 +241,8 @@ export function drawnHash(model: Model, ids: readonly number[]): string | undefi
   if (had != null) return had;
   // (wedges identity cannot read - crossed, or at an atom of three bonds that keeps no configuration, lib/chem/lonePairCentres - or a search it could not finish: its configuration
   // not in the identity, so the drawing itself is, and any change to it - Clean-up's too - is taken for a change of structure)
-  const { input, unread } = identityInputOf(labelsDrawnOut(partOf(model, new Set(ids))));
+  // (a hydrogen bond in it - an enol's own - no bond of the structure, nor of its identity: `structureInputOf`)
+  const { input, unread } = structureInputOf(partOf(model, new Set(ids)));
   const found = identityKnown(input);
   if (!found) return undefined;
   const key = hash(found.complete && !unread.length ? found.text : `${found.text}|as drawn|${drawn}`).toString(36);
@@ -246,7 +253,7 @@ export function drawnHash(model: Model, ids: readonly number[]): string | undefi
 
 /** `drawnHash`, worked out here where it is pending: only where a caller could not ask first (`drawnHashesAsked`). */
 function drawnHashNow(model: Model, ids: readonly number[]): string {
-  const { input, unread } = identityInputOf(labelsDrawnOut(partOf(model, new Set(ids))));
+  const { input, unread } = structureInputOf(partOf(model, new Set(ids)));
   const found = identity(input);
   const key = hash(found.complete && !unread.length ? found.text : `${found.text}|as drawn|${drawingKey(model, ids)}`).toString(36);
   identities.set(drawingKey(model, ids), key);
@@ -259,14 +266,23 @@ function drawnHashNow(model: Model, ids: readonly number[]): string {
  * drawing thread never works one out. Asked and failed, `go` all the same.
  */
 export function whenDrawnKnown(models: readonly Model[], go: () => void): void {
-  const inputs = models.map((m) => identityInputOf(labelsDrawnOut(m)).input);
+  const inputs = models.map((m) => structureInputOf(m).input);
   if (inputs.every((input) => identityKnown(input))) return go();
   void identitiesAsked(inputs).then(go, go);
 }
 
 /** Each structure's identity (`drawnHash`) asked of the worker and answered: for a caller that may wait before it reads them. */
 export async function drawnHashesAsked(model: Model, structures: readonly (readonly number[])[]): Promise<void> {
-  await identitiesAsked(structures.map((ids) => identityInputOf(labelsDrawnOut(partOf(model, new Set(ids)))).input));
+  await identitiesAsked(structures.map((ids) => structureInputOf(partOf(model, new Set(ids))).input));
+}
+
+/**
+ * What a structure drawn, `part`, asks of identity (chem/identityOf `identityInputOf`, its labels drawn out): a hydrogen bond in it - an
+ * enol's own - no bond of the structure, nor of its identity (`structuresOf`). Each ask and each reading of a structure's identity
+ * (`drawnHash`) goes through it, so that what is asked is what is read.
+ */
+export function structureInputOf(part: Model): ReturnType<typeof identityInputOf> {
+  return identityInputOf(labelsDrawnOut(part.bonds.some((b) => b.hydrogen) ? { ...part, bonds: part.bonds.filter((b) => !b.hydrogen) } : part));
 }
 const identities = new Map<string, string>();
 const IDENTITIES_KEPT = 4096;

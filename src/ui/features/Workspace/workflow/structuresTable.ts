@@ -13,6 +13,7 @@ import { isElementSymbol } from "../../../../lib/roles/molblock";
 import type { Model } from "../store/types";
 import { undrawnHydrogens } from "../chem/drawing";
 import { identityInputOf } from "../chem/identityOf";
+import { identityText } from "../../../../lib/chem/identity";
 import { BEFORE_THE_EDIT, drawnAsEntry, FINISHED, recordNumber, recordWhy, STATE_FINISHED, type DrawnEntry } from "./entries";
 import type { Property } from "../../../../lib/entry";
 
@@ -60,12 +61,18 @@ export function drawnSmiles(drawn: Model): string {
  * Whether a structure's drawing carries stereo - a centre wedged, a double
  * bond's cis or trans, an axis - or wedges that do not read: what Meno
  * reads of it (`identityInputOf`), which its SMILES from the drawing does
- * not write.
+ * not write. A metal's donors across from each other count where they
+ * tell one isomer from another (cisplatin's), not where every pairing is
+ * the same compound (PtCl4 2-'s).
  */
 export function drawnStereo(drawn: Model): boolean {
   if (!drawn.atoms.length) return false;
   const { input, unread } = identityInputOf(drawn);
-  return unread.length > 0 || input.atoms.some((a) => a.tetra) || input.bonds.some((b) => b.stereo) || !!input.axes?.length;
+  if (unread.length > 0 || input.atoms.some((a) => a.tetra) || input.bonds.some((b) => b.stereo) || !!input.axes?.length) return true;
+  // (a metal's donors across from each other, where they say something: cisplatin's, not PtCl4 2-'s, which every pairing writes alike)
+  if (!input.arrangements?.length) return false;
+  const { arrangements: _said, ...plain } = input;
+  return identityText(input) !== identityText(plain);
 }
 
 /** Whether a cell holds no value: none at all, or a value not worked out or not applicable (`notGiven`) - last in a sort, either way. */

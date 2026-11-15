@@ -29,9 +29,8 @@ import { editorLayoutOptions, layoutBonds } from "./layoutOptions";
 import { useEditorStore } from "./store";
 import type { Carried3D, Drawn, DrawnRecord, EditorState, Model } from "./store/types";
 import type { Property } from "../../../lib/entry";
-import { drawnHashesAsked, imaginaryOf, recordNow, recordNumber } from "./workflow/entries";
+import { drawnHashesAsked, imaginaryOf, recordNow, recordNumber, structureInputOf } from "./workflow/entries";
 import { identitiesAsked } from "./chem/identityOff";
-import { identityInputOf, labelsDrawnOut } from "./chem/identityOf";
 import { partsOf } from "./workflow/parts";
 import { useNotices } from "../../notices";
 import { carriedOf, isWorkspaceFile, notKeptSaid, workspaceFile } from "./utils/workspace";
@@ -341,7 +340,7 @@ export async function setRecordsAsked(drawn: Drawn): Promise<void> {
   const sets = drawn.flow?.sets ?? [];
   await Promise.all([
     drawnHashesAsked(loose, sets.flatMap((set) => (set.carried ?? []).filter((c) => c.record?.of && c.structure.length).map((c) => c.structure))),
-    identitiesAsked(sets.flatMap((set) => (drawn.held?.[set.id] ?? []).filter((m) => m.record?.of).map(({ record: _record, ...model }) => identityInputOf(labelsDrawnOut(model)).input))),
+    identitiesAsked(sets.flatMap((set) => (drawn.held?.[set.id] ?? []).filter((m) => m.record?.of).map(({ record: _record, ...model }) => structureInputOf(model).input))),
   ]);
 }
 

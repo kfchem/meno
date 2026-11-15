@@ -25,15 +25,13 @@
  * is Meno's own.)
  */
 import { elementOf } from "./elements";
+import { inValenceSumsFromGeometry } from "./perception/elements";
 
 export type GeoAtom = { el: string; x: number; y: number; z: number };
 export type GeoBond = { a1: number; a2: number };
 
 /** Each bond's order (one to three) and each atom's formal charge; `decided`, whether every atom was given what its shape asks. */
 export type GeometryOrders = { orders: number[]; charges: number[]; decided: boolean };
-
-/** Elements whose bonds are counted: a metal's are dative, kept single and out of the reckoning. */
-const COUNTED = new Set(["H", "B", "C", "N", "O", "F", "Si", "P", "S", "Cl", "Ge", "As", "Se", "Br", "Te", "I"]);
 
 /*
  * The angles, flatness and costs below are a heuristic's weights: no
@@ -206,7 +204,7 @@ export const work = { steps: 0 };
  * conjugated part where the estimate is not decided.
  */
 export function ordersFromGeometry(atoms: readonly GeoAtom[], bonds: readonly GeoBond[]): GeometryOrders {
-  const counted = (i: number) => COUNTED.has(atoms[i].el);
+  const counted = (i: number) => inValenceSumsFromGeometry.has(atoms[i].el);
   const hydrogens = atoms.some((a) => a.el === "H");
   const near: number[][] = atoms.map(() => []);
   bonds.forEach((b) => {
