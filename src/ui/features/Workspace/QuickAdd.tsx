@@ -20,7 +20,7 @@ import type { CoordinateStructure } from "../../../lib/io/coordinates";
 import { pastedAs } from "./quickAddPaste";
 import { afterAdded, chemistryLine, readSmiles } from "./quickAddSmiles";
 import { useDownloads } from "../../../lib/pyEnv";
-import { toggledPanel, type QuickPanel } from "./quickAddPanel";
+import { calcMadeWith, toggledPanel, type QuickPanel } from "./quickAddPanel";
 import { resolve, sameFormula, type Reading } from "./chem/resolve";
 import { FormulaText } from "../../abbreviations/FormulaText";
 
@@ -239,6 +239,11 @@ export default function QuickAdd({
 }) {
   const [open, setOpen] = useState<QuickPanel>(wired ? "calculations" : "none");
   const calcOpen = open === "calculations";
+  // (the Calculations rows made the first time they are opened - not as Quick Add opens, where they are shut and would
+  //  only add to its first frame - and kept from then on, so that they ease shut whole)
+  const [madeBefore, setCalcMade] = useState(calcOpen);
+  const calcMade = calcMadeWith(open, madeBefore);
+  if (calcMade !== madeBefore) setCalcMade(calcMade);
   const ref = useRef<HTMLDivElement>(null);
   // (going, chosen from or closed: it does nothing more as it fades - theme/leaving)
   const { leaving, held } = useLeaving();
@@ -283,7 +288,11 @@ export default function QuickAdd({
   }, [leaving, wired, open]);
   // (a row for each who does steps, its steps under it - and one for the procedures, after them: as wide as their names need, whatever the row above holds)
   const offered = wired ? [] : procedures;
-  const calcWidth = useMemo(() => listWidth([...steps.flatMap((g) => [g.name, ...g.steps.map((k) => k.name)]), ...(wired ? [] : procedures).map((p) => p.name)]), [steps, procedures, wired]);
+  // (measured only once its rows are made: a font's measure as Quick Add opens would only add to its first frame)
+  const calcWidth = useMemo(
+    () => (wired || calcMade ? listWidth([...steps.flatMap((g) => [g.name, ...g.steps.map((k) => k.name)]), ...(wired ? [] : procedures).map((p) => p.name)]) : 0),
+    [steps, procedures, wired, calcMade],
+  );
   // (its icons, the Calculations one among them, the gaps between them, the divider before Calculations, the card's padding: the rules and the field below span it whole)
   const rowWidth = (ROW.length + 1) * (SIZE + GAP) + 8 + 9;
   // (a wire's: as wide as its rows, or the words saying there are none)
@@ -383,7 +392,7 @@ export default function QuickAdd({
       <div className="grid transition-[grid-template-rows,opacity] duration-200 ease-meno" style={{ gridTemplateRows: calcOpen ? "1fr" : "0fr", opacity: calcOpen ? 1 : 0 }}>
         <div className="overflow-hidden">
           <div className={wired ? "" : "mt-1 pt-1 border-t border-gh-line"} style={{ width: width - 8 }}>
-            {steps.length || offered.length ? (
+            {!calcMade ? null : steps.length || offered.length ? (
               <QuickAddCalculations steps={steps} procedures={offered} width={width - 8} shown={calcOpen} onStep={onStep} onProcedure={onProcedure} />
             ) : (
               <div className="px-2 text-xs leading-9 text-gh-gray whitespace-nowrap">No step added takes this</div>
