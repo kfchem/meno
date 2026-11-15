@@ -58,6 +58,12 @@ pub fn write_roles(dir: &Path, inputs: Vec<String>, reads: Vec<String>) -> io::R
     fs::write(dir.join(ROLES), text)
 }
 
+/// The files a job's plugin reads back of it once it is done, as it was made (`write_roles`): each a name inside its work
+/// folder (jobs `inside_name`) - none, where nothing says.
+pub fn reads_of(dir: &Path) -> Vec<String> {
+    read_roles(dir).map(|r| r.reads.into_iter().filter(|n| crate::jobs::inside_name(n)).collect()).unwrap_or_default()
+}
+
 fn read_roles(dir: &Path) -> Option<Roles> {
     serde_json::from_str(&fs::read_to_string(dir.join(ROLES)).ok()?).ok()
 }
@@ -677,6 +683,15 @@ mod tests {
         let d = std::env::temp_dir().join(format!("meno-keptjobs-{name}-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&d).unwrap();
         d
+    }
+
+    #[test]
+    fn the_files_read_back_of_a_job_are_those_its_roles_name_each_inside_its_work_folder() {
+        let dir = temp("reads");
+        assert!(reads_of(&dir).is_empty());
+        write_roles(&dir, vec!["input.gjf".into()], vec!["input.log".into(), "../elsewhere.log".into(), "/tmp/x.log".into(), "sub/out.fchk".into()]).unwrap();
+        assert_eq!(reads_of(&dir), vec!["input.log".to_string(), "sub/out.fchk".to_string()]);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     const ID: &str = "0b6f5c1e-0000-4000-8000-000000000001";

@@ -10,7 +10,7 @@ import { looksOffered, renderOptions } from "../render/renderOptions";
 import { chosenFrom, presetOffer } from "../render/presets";
 import { anyPluginById, pluginById, PLUGINS, presetsFor } from "../../../../lib/calc/catalog";
 import { addedNow, useReaders } from "../../../../lib/calc/workers";
-import { valuesOf, type Option, type OptionValues } from "../../../../lib/options";
+import { defaultsFrom, valuesOf, type Option, type OptionValues } from "../../../../lib/options";
 import { RING_CONFORMERS, roundsAsked, roundsChosen, soughtOptions } from "../../../../lib/chem/conformersSought";
 import { isRole, roleOptionsRole } from "../../../../lib/plugins/roles";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
@@ -158,8 +158,22 @@ export function presetsStamp(kind: StepKind, by: string, values: OptionValues): 
   return [...new Set(from)].map((id) => `|${id}@${anyPluginById(id)?.version ?? ""}`).join("");
 }
 
-/** The options a step takes, as who does it declares them. */
-export const stepOptions = (step: Pick<WorkflowStep, "kind" | "by">) => optionsFor(step.kind, byOf(step));
+/** Where Settings, Calculations, keeps the default options of a kind of step done by `by` (decided: 17, docs/WORKFLOWS.md). */
+export const stepRole = (kind: StepKind, by: string) => `step:${by}:${kind}`;
+
+/**
+ * The options a step takes, as who does it declares them (`optionsFor`) -
+ * `by`, unless another is named - each one's default the one Settings,
+ * Calculations, keeps for its kind done by them (`stepRole`), where it keeps
+ * one: what a step that holds no value of its own for an option runs with,
+ * shows and is judged ready by - one put down otherwise than on the canvas,
+ * a template's, a file's - as a step put down there starts with it. A
+ * step's own values stay its own (decided: 17).
+ */
+export const stepOptions = (step: Pick<WorkflowStep, "kind" | "by">, by = byOf(step)) => defaultsFrom(optionsFor(step.kind, by), useAppSettings.getState().options[stepRole(step.kind, by)]);
+
+/** A step's option values: its own, else Settings' for its kind (`stepOptions`), else each option's default. */
+export const stepValues = (step: Pick<WorkflowStep, "kind" | "by" | "options">, by = byOf(step)) => optionsOf(stepOptions(step, by), step.options);
 
 /**
  * A set's name, as its frame says it: a step's first exit's, as the kind
@@ -191,10 +205,17 @@ export function missingFor(step: Pick<WorkflowStep, "kind" | "by">): string | un
   return d && `${d.label} ${tooOld(by, d.name) ? "too old" : "not found"}`;
 }
 
-/** What step `s`'s card says where it would say *Ready*, where it cannot run: a program it runs found nowhere or too old (`missingFor`), else what it still needs of its options (kinds `needsOf`, `roundsNeed`). */
+/** What step `s`'s card says where it would say *Ready*, where it cannot run: a program it runs found nowhere or too old (`missingFor`), else what it still needs of its options (`optionsNeed`). */
 export function notReadyFor(s: Pick<WorkflowStep, "kind" | "by" | "options">): string | undefined {
+  return missingFor(s) ?? optionsNeed(s);
+}
+
+/** What step `s` still needs of its options before it can run, in its card's words: a value the chemist gives (kinds `needsOf`) - an Energy window's window, a Conformers step's window for new conformers (`roundsNeed`). */
+export function optionsNeed(s: Pick<WorkflowStep, "kind" | "by" | "options">): string | undefined {
   const by = byOf(s);
-  return missingFor(s) ?? needsOf(s) ?? roundsNeed(s.kind, !!pluginById(by)?.roleDraws.includes("conformers"), optionsOf(optionsFor(s.kind, by), s.options));
+  // (its values: its own, else Settings' for its kind, else each option's default - `stepValues`)
+  const values = stepValues(s);
+  return needsOf({ ...s, options: values }) ?? roundsNeed(s.kind, !!pluginById(by)?.roleDraws.includes("conformers"), values);
 }
 
 /**

@@ -14,10 +14,11 @@ import type { DrawingStyle } from "../../../../lib/chem/style";
 import type { ChemClient, Conformers, Like } from "../../../../lib/roles/client";
 import type { OptionValues } from "../../../../lib/options";
 import { conformersSoughtOf, MOST_CONFORMERS, RING_CONFORMERS, roundsAsked, soughtNumber } from "../../../../lib/chem/conformersSought";
-import { inRounds, roundsSaid, SEARCH_BUDGET_MS } from "./conformerRounds";
+import { inRounds, roundsSaid, RoundsSearch, SEARCH_BUDGET_MS } from "./conformerRounds";
+import { growingJudge, type GrowingJudge, type ShownWith } from "./growing";
 import { roundsJudge } from "./roundsJudge";
 import { WITHIN_3D, type CalculationSettings, type ChemistrySettings } from "../../../../lib/settings/appSettings";
-import { threadsOf } from "../../../../lib/jobs";
+import { pageThreadsOf } from "../../../../lib/jobs";
 import { chemMolblock, isElementSymbol, molIndex } from "../../../../lib/roles/molblock";
 import { readMolfile } from "../../../../lib/chem/ctfile";
 import { COORDINATION_BOND } from "../../../../lib/chem/molecule";
@@ -26,19 +27,20 @@ import { writeMolfile3d } from "../../../../lib/chem/molWriter";
 import { skeletonWhy } from "../../../../lib/chem/skeleton";
 import { isSkeleton } from "../utils/completeness";
 import { editorModelOf, processFileContent } from "../utils/io";
-import type { Arrow, Model, Molecule3D, Plus, Turn3D } from "../store/types";
+import type { Arrow, Grown3D, Model, Molecule3D, Plus, Turn3D } from "../store/types";
 import { turnOnto } from "../utils/align3d";
 import { signatureOf } from "../utils/drawnLink";
 import { groupShape } from "../utils/groupShape";
 import { bondsAt, lookOf, solidOf } from "../utils/molecule3d";
 import { fragmentsHolding, laidOut, partOf } from "./cleanUp";
+import { arrangementsMarked } from "./arrangementsMarked";
 import { forFlatReaders, undrawnHydrogens } from "./drawing";
 import { greatest, least } from "../../../../lib/chem/lists";
 import { drawnBox } from "../../../../utils/importers";
 import { etaBound } from "./etaBound";
 import { factor } from "../../../../lib/units";
 import { shownConformers } from "./shownConformers";
-import { isomersToMake, withChosen, type OpenStereo } from "./openStereo";
+import { isomersToMake, withChosen, withOwnCip, type OpenStereo } from "./openStereo";
 import { hasConfiguration, madeAs, mirroredConfiguration, mirroredPart, reflectedConformers } from "./pageMirror";
 import type { Configuration } from "../../../../lib/chem/stereoOpen";
 import { keptMade, madeChecksOf, metalHoldsOf } from "../../../../lib/chem/metalHolds";
@@ -83,7 +85,9 @@ export type Block = {
  * redoing. Edits elsewhere on the page do not count.
  */
 export function blocksStill(blocks: readonly Block[], model: Model): boolean {
-  return blocks.every((b) => groupShape(b.part, b.atoms) === groupShape(model, b.atoms));
+  // (a hydrogen bond drawn or taken away meanwhile changes no structure: no block holds one, `blocksOf`)
+  const structure = { ...model, bonds: model.bonds.filter((b) => !b.hydrogen) };
+  return blocks.every((b) => groupShape(b.part, b.atoms) === groupShape(structure, b.atoms));
 }
 
 /**
@@ -102,10 +106,22 @@ export function standsForMolecule(part: Model): boolean {
   return (undrawnHydrogens(part).get(a.id) ?? 0) > 0;
 }
 
-/** The bare atoms among the structures that hold these atoms: left out of a 3D structure, one atom alone having none. */
-export function bareAtomsOf(model: Model, atoms: Iterable<number>): Model["atoms"] {
+/**
+ * The structures that hold these atoms, each as a part of the drawing. A hydrogen bond is no bond of a structure: the drawing's
+ * pieces that hold these atoms are taken by every bond drawn - a water a hydrogen bond holds comes with them - and each is then
+ * split by the structure's bonds, so what a hydrogen bond alone joins - an enol and a water, an acid's dimer, a salt's ion - is
+ * two structures, and neither holds it (CTFILE.md, *Bonds*).
+ */
+function structuresIn(model: Model, atoms: Iterable<number>): Model[] {
+  const structure = { ...model, bonds: model.bonds.filter((b) => !b.hydrogen) };
   return fragmentsHolding(model, atoms)
-    .map((ids) => partOf(model, ids))
+    .flatMap((ids) => fragmentsHolding(structure, ids))
+    .map((ids) => partOf(structure, ids));
+}
+
+/** The bare atoms among the structures that hold these atoms (`structuresIn`): left out of a 3D structure, one atom alone having none. */
+export function bareAtomsOf(model: Model, atoms: Iterable<number>): Model["atoms"] {
+  return structuresIn(model, atoms)
     .filter((part) => !standsForMolecule(part))
     .map((part) => part.atoms[0]);
 }
@@ -146,10 +162,13 @@ export function asDrawn(part: Model): boolean {
   return part.atoms.length === 1 && !a.abbrev && isElementSymbol(a.el);
 }
 
-/** The structures that hold these atoms, each as the plugin is asked about it; a bare atom's none (`standsForMolecule`). */
+/**
+ * The structures that hold these atoms (`structuresIn`), each as the plugin is asked about it; a bare atom's none (`standsForMolecule`).
+ * What a hydrogen bond alone joins is two structures, each asked about alone and made in 3D side by side, and it is in neither, so no
+ * embedding takes it for a bond.
+ */
 export function blocksOf(model: Model, atoms: Iterable<number>, keep: (part: Model) => boolean = standsForMolecule): Block[] {
-  return fragmentsHolding(model, atoms)
-    .map((ids) => partOf(model, ids))
+  return structuresIn(model, atoms)
     .filter(keep)
     .map((part) => {
       // (a ring or chain bound to a metal through all its atoms, as one multi-centre bond: etaBound. A bare atom - Na+, a
@@ -537,7 +556,7 @@ export function pageCount(block: Pick<Block, "molblock">, chosen: Pick<Chemistry
 /**
  * A block's conformers as the page asks for them, from Settings: how many to
  * try (Chemistry, `pageCount`) and the threads the search may use
- * (Calculations, `threadsOf`) - the one place the page's own searches (the 3D
+ * (Calculations, `pageThreadsOf`) - the one place the page's own searches (the 3D
  * structure made from a drawing, the atom map's) take both, so that neither
  * can be asked without them.
  */
@@ -550,7 +569,7 @@ export function conformersOnPage(
   settings: { chemistry: ChemistrySettings; calculations: Pick<CalculationSettings, "cores" | "coresAll"> },
   rounds: PageRounds | null = null,
 ): Promise<Conformers[]> {
-  return conformersOf(chem, stereo, block, which, options, pageCount(block, settings.chemistry), rounds, threadsOf(settings.calculations));
+  return conformersOf(chem, stereo, block, which, options, pageCount(block, settings.chemistry), rounds, pageThreadsOf(settings.calculations));
 }
 
 /** How the page's search is asked in rounds (chem/conformerRounds): its window (kcal/mol), its first round and the most it tries. */
@@ -659,7 +678,164 @@ export async function conformersOf(
   //  more than one part, its parts side by side - chem/partsApart)
   const holds = held(block.molblock);
   const checks = madeChecksOf(block.molblock, holds);
-  return shownConformers(got.map((c) => partsSideBySide(keptMade(withChosen(c, made.open), checks), partsOf(c.atoms, c.bonds, holds?.eta))));
+  return shownConformers(got.map((c) => partsSideBySide(keptMade(withChosen(withOwnCip(c), made.open), checks), partsOf(c.atoms, c.bonds, holds?.eta))));
+}
+
+/** What a 3D structure's search that goes on gives at once, and what is left of it (`conformersGrowing`). */
+export type Growth = {
+  /** Each stereoisomer asked for, its conformers of the first round, as the page shows them: what is put on the page at once. */
+  first: Conformers[];
+  /** The rest of the search, each stereoisomer's in turn: each told as it grows (`grown`), by its place among `first`, how far it has got said - ending with what it found, how it ended said. Run once. */
+  rest: (grown: (k: number, c: Conformers) => void) => Promise<void>;
+  /** Every search let go, its worker with it, where the rest is not to be run - what came put on the page nowhere. */
+  drop: () => void;
+};
+
+/**
+ * Each search that goes on (`growths`, each its `Growth` and the molecules
+ * on the page its stereoisomers are, by id), run in turn: what each brings
+ * shown as it lands (`grow`, as `shownAs` makes it the page's), and each
+ * written once as it ends (`settle`) - every one of them, however the
+ * searches ended, one failing among them: none left shown as searching.
+ */
+export async function growOn(
+  growths: readonly { growth: Pick<Growth, "rest">; ids: readonly number[]; shownAs: (c: Conformers) => Grown3D }[],
+  to: { grow: (id: number, grown: Grown3D) => void; settle: (id: number) => void },
+): Promise<void> {
+  try {
+    for (const g of growths) {
+      try {
+        await g.growth.rest((k, c) => to.grow(g.ids[k], g.shownAs(c)));
+      } finally {
+        g.ids.forEach(to.settle);
+      }
+    }
+  } finally {
+    for (const g of growths) g.ids.forEach(to.settle);
+  }
+}
+
+/** A row of how they were made: how far a search that goes on has got. */
+const searchingRow = (s: RoundsSearch) => ({ label: "Rounds", text: `${s.rounds} round${s.rounds === 1 ? "" : "s"}, ${s.tried.toLocaleString("en")} tried so far: searching on` });
+
+/**
+ * A 3D structure made from a drawing, its search going on after its first
+ * round (docs/WORKSPACE.md, *As its search goes on*): as `conformersOf`
+ * makes it in rounds - each stereoisomer asked for, the one of two
+ * enantiomers made as the other's mirror image - but answering once each
+ * has had its first round (`Growth.first`), the rest run after, in turn,
+ * each round judged and made the page's off the page's thread
+ * (chem/growing), each told as it lands. All of them within the time a
+ * search takes at most (`SEARCH_BUDGET_MS`), the time they ran, not that
+ * they waited; `stopped`, asked before each round after the first, ends
+ * them, what came kept. Each stereoisomer's judge is a worker of its own
+ * (`judgeOf`: chem/growing `growingJudge`), kept until its search has
+ * ended - at most one for each stereoisomer asked for - and let go then,
+ * or where the rest is not run (`Growth.drop`).
+ */
+export async function conformersGrowing(
+  chem: ChemClient,
+  stereo: ChemClient,
+  block: Block,
+  which: "one" | "all",
+  options: OptionValues,
+  settings: { calculations: Pick<CalculationSettings, "cores" | "coresAll"> },
+  rounds: PageRounds,
+  stopped: () => boolean,
+  judgeOf: typeof growingJudge = growingJudge,
+): Promise<Growth> {
+  const made = await isomersToMake(stereo, block.molblock, block.like, which, CONFORMERS_MS);
+  // (the page's own: one core left to the page where Settings sets none - lib/jobs `pageThreadsOf`, as conformersOnPage asks)
+  const sent = { ...options, threads: pageThreadsOf(settings.calculations) };
+  const holds = metalHoldsOf(block.molblock);
+  const checks = madeChecksOf(block.molblock, holds);
+  // (each stereoisomer's search, and its judge, which makes what the page shows of it; those let go - a twin's reflection
+  //  that turned out not to have its configuration - none)
+  type Live = { search: RoundsSearch; judge: () => GrowingJudge | null; let: () => void; reflect: boolean };
+  const live: (Live | null)[] = [];
+  // (the time they have run, all together: each takes what the others have left of the most)
+  const spent = () => live.reduce((t, l) => t + (l?.search.spent ?? 0), 0);
+  const start = async (molblock: string, iso: Configuration, reflect: boolean): Promise<Live> => {
+    const asked = metalHoldsOf(molblock);
+    const ask = async (n: number, draw: number) => {
+      const [c] = (await chem.request("conformers", { molblock, isomers: [iso], count: n, draw, ...(asked ? { holds: asked } : {}), options: sent }, CONFORMERS_MS)).isomers;
+      if (!c) throw new Error("the search gave nothing for a round");
+      return c as Conformers;
+    };
+    let judge: GrowingJudge | null = null;
+    const self: { search?: RoundsSearch } = {};
+    const w = (c: Conformers): ShownWith => ({ open: made.open, checks, parts: partsOf(c.atoms, c.bonds, holds?.eta), reflect });
+    // (its judge kept past the search's end, to make what it found the page's: let go here, once that is done)
+    const search = new RoundsSearch(ask, { ...rounds, draws: true, stopped, budget: () => SEARCH_BUDGET_MS - (spent() - (self.search?.spent ?? 0)) }, (first) => {
+      judge = judgeOf(first, rounds.window, w(first));
+      return { add: judge.add, end: () => {} };
+    });
+    self.search = search;
+    try {
+      await search.next();
+    } catch (e) {
+      // (its first round failed: its judge, where one was made, let go with it)
+      (judge as GrowingJudge | null)?.end();
+      throw e;
+    }
+    return { search, judge: () => judge, let: () => judge?.end(), reflect };
+  };
+  const as = made.isomers.map((iso) => madeAs(block.part, iso));
+  const mirrorBlock = as.includes("mirror") ? chemMolblock(etaBound(mirroredPart(block.part))) : "";
+  try {
+    for (const [i, iso] of made.isomers.entries()) {
+      if (as[i] === "itself") live.push(await start(block.molblock, iso, false));
+      else {
+        // (of two enantiomers, the other's mirror image - made itself where its reflection has not its configuration after all)
+        const twin = await start(mirrorBlock, mirroredConfiguration(iso), true);
+        if (twin.search.made && hasConfiguration(reflectedConformers(twin.search.made), block.part, iso)) live.push(twin);
+        else {
+          twin.let();
+          live.push(await start(block.molblock, iso, false));
+        }
+      }
+    }
+  } catch (e) {
+    // (one whose first round failed: those begun let go, their workers with them)
+    live.forEach((l) => l?.let());
+    throw e;
+  }
+  // (what the page shows of each: its judge's - or, a search with no energies to judge by, made here as conformersOf makes it)
+  const shownOf = async (l: Live, more: { label: string; text: string }[]): Promise<Conformers> => {
+    const judge = l.judge();
+    const shown = judge ? await judge.shown(more) : null;
+    if (shown) return shown;
+    const { made: raw } = l.search.result();
+    const c = { ...(l.reflect ? reflectedConformers(raw) : raw), how: [...(raw.how ?? []), ...more] };
+    const w = { open: made.open, checks, parts: partsOf(c.atoms, c.bonds, holds?.eta) };
+    return (await shownConformers([partsSideBySide(keptMade(withChosen(withOwnCip(c), w.open), w.checks), w.parts)]))[0];
+  };
+  const said = (l: Live) => (l.search.ended ? { label: "Rounds", text: roundsSaid(l.search.result().run, { ...rounds, budget: SEARCH_BUDGET_MS }) } : searchingRow(l.search));
+  const first = await Promise.all(live.map((l) => shownOf(l!, [said(l!)])));
+  let ran = false;
+  const rest = async (grown: (k: number, c: Conformers) => void) => {
+    if (ran) return;
+    ran = true;
+    for (const [k, l] of live.entries()) {
+      if (!l) continue;
+      try {
+        if (!l.search.ended) {
+          try {
+            while (await l.search.next()) grown(k, await shownOf(l, [searchingRow(l.search)]));
+          } catch (e) {
+            // (a round that failed ends it there, what came kept: stopped, where it was asked to stop - its plugin stopped with
+            //  it - else failed: said so, why logged, as Meno's log keeps an error - its name and where, never what it quotes)
+            l.search.failed();
+            if (l.search.ended === "failed") console.warn("Meno: a 3D structure's search ended: a round failed.", e);
+          }
+          grown(k, await shownOf(l, [said(l)]));
+        }
+      } finally {
+        l.let();
+      }
+    }
+  };
+  return { first, rest, drop: () => live.forEach((l) => l?.let()) };
 }
 
 const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");
@@ -716,7 +892,8 @@ export function likeOf(block: Block, before: Pick<Molecule3D, "atoms" | "drawnFr
  */
 export async function formulaOf(chem: ChemClient, m: Molecule3D, frame: number, style?: DrawingStyle): Promise<{ model: Model; link: (number | null)[]; ordersUnknown: boolean }> {
   const { drawn, ordersUnknown } = await drawnOf(chem, m, frame);
-  const model = await laidOut(drawn, style).catch(() => drawn);
+  // (its coordinates nobody's drawing: laid out as new - or, where it cannot be, kept as it came, its square-planar centres marked as a layout would mark them)
+  const model = await laidOut(drawn, style, undefined, undefined, true).catch(() => arrangementsMarked(drawn));
   // (its heavy atoms came back in their order)
   let k = 0;
   const link = m.atoms.map((a) => (a.el === "H" ? null : (drawn.atoms[k++]?.id ?? null)));

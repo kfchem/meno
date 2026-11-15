@@ -53,6 +53,15 @@ const endSet = (adj: ReturnType<typeof adjacency>, r: readonly number[], at: num
   return Math.sign(r[other] - r[ref]) || 0;
 };
 
+/**
+ * The atom an axis's or a cumulene's end runs on through to its other end:
+ * that end, a biaryl's, bonded to it; else its cumulated double bond's
+ * other atom, an allene's or a butatriene's - so that its own groups are
+ * the rest of its neighbours.
+ */
+const across = (adj: ReturnType<typeof adjacency>, end: number, other: number): number =>
+  adj[end].some((e) => e.to === other) ? other : (adj[end].find((e) => e.order >= 2)?.to ?? other);
+
 /** Each star's pi system and each atom's stars (`LayoutAtom.pi`), both ways: what tells a haptic ring's atoms from others. */
 const piLinks = (input: LayoutInput) => {
   const links: number[][] = input.atoms.map(() => []);
@@ -77,7 +86,7 @@ type Classed = { rank: number[]; first: string[]; withStereo: (r: number[]) => n
 /**
  * `classed` worked out once for each input, as it is (inputs are not
  * changed in place): identity asks for a structure's classes before its
- * order (lib/chem/identity `stereoUnitsOnly`), and both come from them.
+ * ranks and texts (lib/chem/identity `filledIn`), and all come from them.
  */
 const classedOnce = new WeakMap<LayoutInput, Classed>();
 
@@ -87,16 +96,21 @@ function classedNow(input: LayoutInput): Classed {
   // (which atoms are an axis of chirality's, and which its ends' other
   // neighbours - each of them, not only the one taken for its reference:
   // which that was is no part of what the atoms are)
+  // (an odd cumulene's ends and theirs likewise, set apart from an axis's)
   const onAxis = input.atoms.map(() => "");
-  for (const x of input.axes ?? []) {
-    for (const a of x.atoms) onAxis[a] += "a";
-    const [u, v] = x.atoms;
-    for (const [end, across] of [
-      [u, v],
-      [v, u],
-    ])
-      for (const e of adj[end]) if (e.to !== across) onAxis[e.to] += "r";
-  }
+  for (const [mark, units] of [
+    ["a", input.axes ?? []],
+    ["c", input.cumulated ?? []],
+  ] as const)
+    for (const x of units) {
+      for (const a of x.atoms) onAxis[a] += mark;
+      const [u, v] = x.atoms;
+      for (const [end, far] of [
+        [u, v],
+        [v, u],
+      ])
+        for (const e of adj[end]) if (e.to !== across(adj, end, far)) onAxis[e.to] += "r";
+    }
   // what each atom is: everything the layout reads of it - its element (or
   // the label it stands for), charge, H count, bonds and their orders, a
   // star's pi system, a part in an axis of chirality - and nothing else
@@ -122,9 +136,16 @@ function classedNow(input: LayoutInput): Classed {
     stereoAt[b.a].push(b);
     stereoAt[b.b].push(b);
   }
+  // (each donor of a metal whose arrangement is given, and the donor across from it: `Arranged`)
+  const partnerOf = new Map<number, number[]>();
+  for (const x of input.arrangements ?? [])
+    for (const [p, q] of x.pairs) {
+      partnerOf.set(p, [...(partnerOf.get(p) ?? []), q]);
+      partnerOf.set(q, [...(partnerOf.get(q) ?? []), p]);
+    }
   const stereoKeys = (r: number[]): string[] =>
     input.atoms.map((a, i) => {
-      const parts: number[] = [];
+      const parts: (number | string)[] = [];
       if (a.tetra) {
         const ns = a.tetra.neighbours.map((m) => (m < 0 ? -1 : r[m]));
         parts.push(new Set(ns).size === ns.length ? a.tetra.volume * parity(ns) : 0);
@@ -139,8 +160,19 @@ function classedNow(input: LayoutInput): Classed {
         if (!x.atoms.includes(i)) continue;
         const [p, q] = x.refs;
         const [u, v] = x.atoms;
-        parts.push(x.sense * endSet(adj, r, u, v, p) * endSet(adj, r, v, u, q));
+        parts.push(x.sense * endSet(adj, r, u, across(adj, u, v), p) * endSet(adj, r, v, across(adj, v, u), q));
       }
+      // (and an odd cumulene's cis or trans, as a double bond's, at its ends)
+      for (const x of input.cumulated ?? []) {
+        if (!x.atoms.includes(i)) continue;
+        const [p, q] = x.refs;
+        const [u, v] = x.atoms;
+        parts.push((x.cis ? 1 : -1) * endSet(adj, r, u, across(adj, u, v), p) * endSet(adj, r, v, across(adj, v, u), q));
+      }
+      // (and a metal's donor, by the rank of the donor across from it: PtCl2Br(NH3)-'s Cl across Br is not its Cl across N. A
+      //  bridge is a donor of two metals, across one donor at each: those ranks in order, not in the order the input lists the
+      //  metals - else the bridges of a dimer ranked by the order of its atoms, two texts for one structure: found in the chemistry check)
+      for (const v of (partnerOf.get(i) ?? []).map((q) => r[q]).sort((p, q) => p - q)) parts.push(`x${v}`);
       return parts.join(",");
     });
   const withStereo = (r: number[]): number[] => {
@@ -234,6 +266,17 @@ export function canonicalWritten(input: LayoutInput): { text: string; complete: 
   const { rank, first, withStereo } = classed(input);
   const found = search(rank, input.atoms.length, withStereo, (r) => written(input, first, r));
   return { text: written(input, first, found.r), complete: !found.cut };
+}
+
+/**
+ * One search of the molecule, as `canonicalWritten` makes it, and all it finds at once: the text, the order that writes it
+ * (each atom's place, a canonical numbering of its atoms - which of two atoms alike in every way comes first may follow
+ * the input's order), the symmetries met on the way (`symmetryOrbits`'), and whether the search was complete.
+ */
+export function canonicalSearched(input: LayoutInput): { text: string; ranks: number[]; automorphisms: number[][]; complete: boolean } {
+  const { rank, first, withStereo } = classed(input);
+  const found = search(rank, input.atoms.length, withStereo, (r) => written(input, first, r));
+  return { text: written(input, first, found.r), ranks: found.r, automorphisms: found.symmetries, complete: !found.cut };
 }
 
 /** The molecule's own order `way` (old index to new) from its ranks (`canonicalRanks`). */
@@ -372,10 +415,24 @@ function written(input: LayoutInput, what: readonly string[], r: readonly number
     .map((x) => {
       const [u, v] = x.atoms;
       const [a, b] = r[u] < r[v] ? [u, v] : [v, u];
-      return `${pad(r[a])}${pad(r[b])}:${x.sense * endSet(adj, r, u, v, x.refs[0]) * endSet(adj, r, v, u, x.refs[1])}`;
+      return `${pad(r[a])}${pad(r[b])}:${x.sense * endSet(adj, r, u, across(adj, u, v), x.refs[0]) * endSet(adj, r, v, across(adj, v, u), x.refs[1])}`;
     })
     .sort();
-  return `${atoms.join(";")}|${bonds.join(" ")}|${pis}|${axes.join(" ")}`;
+  // (an odd cumulene's cis or trans likewise, by its ends)
+  const cumulated = (input.cumulated ?? [])
+    .map((x) => {
+      const [u, v] = x.atoms;
+      const [a, b] = r[u] < r[v] ? [u, v] : [v, u];
+      const set = (x.cis ? 1 : -1) * endSet(adj, r, u, across(adj, u, v), x.refs[0]) * endSet(adj, r, v, across(adj, v, u), x.refs[1]);
+      return `${pad(r[a])}${pad(r[b])}:${set > 0 ? "c" : "t"}`;
+    })
+    .sort();
+  // (a metal's donors across from each other, each pair by its places, lower first: written only where given, so a
+  //  structure with none is written as it always was)
+  const arranged = (input.arrangements ?? [])
+    .map((x) => `${pad(r[x.metal])}:${x.pairs.map(([p, q]) => (r[p] < r[q] ? pad(r[p]) + pad(r[q]) : pad(r[q]) + pad(r[p]))).sort().join(".")}`)
+    .sort();
+  return `${atoms.join(";")}|${bonds.join(" ")}|${pis}|${axes.join(" ")}${cumulated.length ? `|${cumulated.join(" ")}` : ""}${arranged.length ? `|m${arranged.join(" ")}` : ""}`;
 }
 
 /** The input with its atoms in the given order (old index to new), its bonds sorted by their atoms there. */
@@ -400,7 +457,9 @@ export function reordered(input: LayoutInput, to: readonly number[]): LayoutInpu
     })
     .sort((p, q) => p.a - q.a || p.b - q.b);
   const axes = input.axes?.map((x) => ({ ...x, atoms: [to[x.atoms[0]], to[x.atoms[1]]] as const, refs: [to[x.refs[0]], to[x.refs[1]]] as const }));
-  return { atoms, bonds, ...(axes ? { axes } : {}) };
+  const cumulated = input.cumulated?.map((x) => ({ ...x, atoms: [to[x.atoms[0]], to[x.atoms[1]]] as const, refs: [to[x.refs[0]], to[x.refs[1]]] as const }));
+  const arrangements = input.arrangements?.map((x) => ({ metal: to[x.metal], pairs: x.pairs.map(([p, q]) => [to[p], to[q]] as const) }));
+  return { atoms, bonds, ...(axes ? { axes } : {}), ...(cumulated ? { cumulated } : {}), ...(arrangements ? { arrangements } : {}) };
 }
 
 /** A drawing of the reordered input handed back in the order of the input itself (`to`: old index to new). */

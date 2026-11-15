@@ -7,6 +7,7 @@ import { clock, conformersWorked, doneSaid, entryFiles, hartrees, isFailure, job
 import { runMeno } from "./meno";
 import type { SetEntry } from "./entries";
 import { resultsOf, type Worked } from "./run";
+import { convergedAt } from "./converged";
 import { covalentLength, holdsGraphOf3d, madeChecks, metalHolds } from "../../../../lib/chem/metalHolds";
 import { COORDINATION_BOND } from "../../../../lib/chem/molecule";
 
@@ -519,6 +520,19 @@ describe("what a step that ran jobs says", () => {
     expect(hartrees(-0.0000001)).toBe("0.000000 Eh");
     expect(doneSaid([{ ...WATER, energy: -5.07054 }], 1, 12_000)).toBe("0:12 · E −5.070540 Eh");
     expect(doneSaid([WATER, WATER], 3, 65_000)).toBe("1:05 · 2 of 3");
+  });
+
+  it("says where it held anything as it converged - restraints held exactly before atoms held alone, as the entries' converged says it", () => {
+    const row = { kind: "dihedral" as const, atoms: [2, 0, 1, 3], value: -60, exact: true as const };
+    const free = { ...WATER, energy: -5.07, converged: convergedAt("optimisation", WATER.xyz) };
+    const atoms = { ...WATER, energy: -5.07, converged: convergedAt("optimisation with atoms held", WATER.xyz, [0]) };
+    const rows = { ...WATER, energy: -5.07, converged: convergedAt("saddle point optimisation with restraints held", WATER.xyz, [], [row]) };
+    expect(doneSaid([rows] as Worked[], 1, 12_000)).toBe("0:12 · E −5.070000 Eh · with restraints held");
+    expect(doneSaid([atoms] as Worked[], 1, 12_000)).toBe("0:12 · E −5.070000 Eh · with atoms held");
+    expect(doneSaid([free] as Worked[], 1, 12_000)).toBe("0:12 · E −5.070000 Eh");
+    // (of several: restraints where any held them, else atoms where any held them)
+    expect(doneSaid([free, atoms, rows] as Worked[], 3, 65_000)).toBe("1:05 · 3 of 3 · with restraints held");
+    expect(doneSaid([free, atoms] as Worked[], 3, 65_000)).toBe("1:05 · 2 of 3 · with atoms held");
   });
 });
 

@@ -86,23 +86,18 @@ function turned(input: IdentityInput): IdentityInput {
   };
 }
 
-/** A CIP label seen in a mirror: R and S, M and P turned; r, s, m, p and E and Z as they are. */
-const TURNED: Record<string, string> = { R: "S", S: "R", M: "P", P: "M" };
-
 /** A SMILES seen in a mirror: each @ and @@ turned (a SMILES of the mirror image, not written as any toolkit would write it). */
 const turnedSmiles = (s: string) => s.replace(/@@|@/g, (m) => (m === "@@" ? "@" : "@@"));
 
 /**
  * Conformers made of a stereoisomer's mirror image, given as the
- * stereoisomer's own: each frame reflected through the plane x = 0, each
- * centre's R or S and each axis's M or P turned.
+ * stereoisomer's own: each frame reflected through the plane x = 0 - their
+ * R and S read from it after (chem/openStereo `withOwnCip`).
  */
 export function reflectedConformers<C extends Omit<Conformers, "chosen">>(c: C): C {
-  const flip = (labels: Record<string, string>) => Object.fromEntries(Object.entries(labels).map(([k, v]) => [k, TURNED[v] ?? v]));
   return {
     ...c,
     frames: c.frames.map((f) => f.map((v, k) => (k % 3 === 0 ? -v : v))),
-    cip: { atoms: flip(c.cip.atoms), bonds: c.cip.bonds },
     smiles: turnedSmiles(c.smiles),
   };
 }

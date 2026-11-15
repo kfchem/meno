@@ -6,6 +6,7 @@
  * over the next and only one label to be seen.
  */
 import { layout2D } from "../layout/engine";
+import { openDoubleBonds } from "../layout/drawn";
 import type { LayoutInput } from "../layout/perceive";
 import { ELEMENTS } from "../chem/elements";
 import { kekuleOrders } from "../chem/kekulize";
@@ -99,10 +100,17 @@ function laidOut(m: Molecule, length: number | null): Molecule {
     })),
     bonds: m.bonds.map((b, i) => ({ a: b.a1, b: b.a2, order: orders[i] })),
   };
-  const laid = layout2D(input);
+  // (a double bond that could have a cis or trans and is given none - no file without places gives one - drawn as stating none: straight on
+  //  from each end with one group, else a wavy bond on a group - Brecher 2006, ST-4.4)
+  const open = openDoubleBonds(input);
+  const straight = new Set(open.straight);
+  const either = new Set(open.either);
+  const laid = layout2D(straight.size ? { ...input, atoms: input.atoms.map((a, i) => (straight.has(i) ? { ...a, linear: true } : a)) } : input);
   const placed = m.atoms.map((a, i) => ({ ...a, x: laid.x[i], y: laid.y[i], z: 0 }));
+  // (a double bond's CTfile code 3: cis or trans, not known - drawn as a wavy bond on a group)
+  const bonds = either.size ? m.bonds.map((b, i) => (either.has(i) && b.order === 2 && !b.stereoCode ? { ...b, stereoCode: 3 } : b)) : m.bonds;
   // (at the others' bond length, where there are others)
   const own = middleBond([{ ...m, atoms: placed }]);
   const k = length && own ? length / own : 1;
-  return { ...m, atoms: placed.map((a) => ({ ...a, x: a.x * k, y: a.y * k })) };
+  return { ...m, atoms: placed.map((a) => ({ ...a, x: a.x * k, y: a.y * k })), bonds };
 }

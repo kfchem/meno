@@ -747,6 +747,73 @@ describe("a repeat unit in brackets, counted, read that many times (docs/PDF.md,
   });
 });
 
+describe("a figure's Ar and Y: a variable's name that is an element's symbol too", () => {
+  const chainTo = (label: string, bonds = 1): Model => {
+    // (a chain of three bonds, the last to a label at its end - and, for two bonds, the label's other side also drawn to a carbon)
+    const a: P = [100, 200];
+    const b = step(a, 30);
+    const c = step(b, -30);
+    const o = step(c, 30);
+    const paths = [stroke(a, b, c), stroke(c, [c[0] + (o[0] - c[0]) * 0.55, c[1] + (o[1] - c[1]) * 0.55])];
+    if (bonds === 2) {
+      const far = step(o, -30);
+      paths.push(stroke(far, [o[0] + (far[0] - o[0]) * 0.55, o[1] + (far[1] - o[1]) * 0.55]));
+    }
+    return structureFrom({ paths, letters: letters(label, o), pictures: [] }, SHA, 1) as Model;
+  };
+  /** The atom symbols a MOL file's atom block writes, in order. */
+  const symbolsOf = (m: Model) =>
+    [...structureFileText({ atoms: m.atoms, bonds: m.bonds }, "x.mol").matchAll(/^\s*-?\d+\.\d+\s+-?\d+\.\d+\s+-?\d+\.\d+ (\S+)/gm)].map((x) => x[1]);
+
+  it("holds an Ar with a bond as an aryl group's name, unmarked, and writes it to a MOL file as a star atom with its alias - no argon atom", () => {
+    const m = chainTo("Ar");
+    expect(m.atoms.find((x) => x.el === "Ar")?.unsure).toBeUndefined();
+    const symbols = symbolsOf(m);
+    expect(symbols).not.toContain("Ar");
+    expect(symbols).toContain("*");
+    expect(structureFileText({ atoms: m.atoms, bonds: m.bonds }, "x.mol")).toMatch(/Ar/);
+  });
+
+  it("marks a Y with one bond - taken as a variable and not as yttrium, written as a star atom - and leaves a Y with two bonds yttrium, as Meno's rule has it", () => {
+    const one = chainTo("Y");
+    expect(one.atoms.find((x) => x.el === "Y")?.unsure?.said).toEqual(["Taken as a variable, as X and Z are, not as yttrium: a Y with one bond stands for a group."]);
+    expect(symbolsOf(one)).not.toContain("Y");
+    expect(symbolsOf(one)).toContain("*");
+    // (a charge says it is the ion: Y+ with its one bond is yttrium's)
+    const charged = chainTo("Y+").atoms.find((x) => x.el === "Y");
+    expect(charged?.charge).toBe(1);
+    expect(charged?.unsure?.said.some((t) => t.startsWith("Taken as a variable")) ?? false).toBe(false);
+    expect(symbolsOf(chainTo("Y+"))).toContain("Y");
+    // (a charge drawn as Meno draws one, a "+" in a ring of small pieces by the label: the same, the charge read from the ring)
+    const ring = (cx: number, cy: number): FigurePath[] => [
+      ...Array.from({ length: 40 }, (_, k): FigurePath => {
+        const t = (k / 40) * 2 * Math.PI;
+        const [x, y] = [cx + 2.5 * Math.cos(t), cy + 2.5 * Math.sin(t)];
+        return { fill: "#000000ff", stroke: null, width: 0, d: [["M", x - 0.25, y - 0.25], ["L", x + 0.25, y - 0.25], ["L", x + 0.25, y + 0.25], ["L", x - 0.25, y + 0.25], ["Z"]] };
+      }),
+      stroke([cx - 1.5, cy], [cx + 1.5, cy]),
+      stroke([cx, cy - 1.5], [cx, cy + 1.5]),
+    ];
+    const bond = chainTo("Y");
+    const yPlace = bond.atoms.find((x) => x.el === "Y")!;
+    expect(yPlace).toBeDefined();
+    {
+      const a: P = [100, 200];
+      const b = step(a, 30);
+      const c = step(b, -30);
+      const o = step(c, 30);
+      const ringed = structureFrom({ paths: [stroke(a, b, c), stroke(c, [c[0] + (o[0] - c[0]) * 0.55, c[1] + (o[1] - c[1]) * 0.55]), ...ring(o[0] + 6, o[1] - 7)], letters: letters("Y", o), pictures: [] }, SHA, 1) as Model;
+      const ion = ringed.atoms.find((x) => x.el === "Y");
+      expect(ion?.charge).toBe(1);
+      expect(ion?.unsure).toBeUndefined();
+      expect(symbolsOf(ringed)).toContain("Y");
+    }
+    const two = chainTo("Y", 2);
+    expect(two.atoms.find((x) => x.el === "Y")?.unsure).toBeUndefined();
+    expect(symbolsOf(two)).toContain("Y");
+  });
+});
+
 describe("a picture in a frame - a journal's cover thumbnail - is no structure", () => {
   const frame = (x0: number, y0: number, x1: number, y1: number): FigurePath => stroke([x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]);
 

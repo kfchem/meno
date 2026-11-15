@@ -22,9 +22,11 @@ import { anionStructure, condensedStructure } from "./condensed";
 import { chainGroup } from "./chain";
 import { complexStructure, forgetComplexReadings, LIGAND_UNITS, ligandStructure, namedLigand, type GroupStructure } from "./ligands";
 import { precatalystPicture, precatalystStructure, REAGENT_UNITS, reagentOf, reagentStructure } from "./reagents";
-import { kekuleOrders } from "./kekulize";
+import { aromaticRefusal, kekuleOrders } from "./kekulize";
+import { typedRingRefused } from "./smilesWhy";
 import type { TextRun } from "./layout2d";
-import { ELEMENTS as TABLE, NOT_METALS } from "./elements";
+import { ELEMENTS as TABLE } from "./elements";
+import { notMetal } from "./perception/elements";
 import { VALENCE } from "./formula";
 import { movedBond } from "./structureBonds";
 
@@ -546,7 +548,7 @@ function prefixedGroupOf(label: string): Abbreviation | undefined {
 function carriesOf(el: string): number | null {
   const v = VALENCE[el];
   const e = TABLE.find((x) => x.symbol === el);
-  if (v == null || v < 3 || !e || !NOT_METALS.has(el)) return null;
+  if (v == null || v < 3 || !e || !notMetal.has(el)) return null;
   return v - 2;
 }
 
@@ -641,6 +643,7 @@ export function setCustomAbbreviations(list: readonly CustomAbbreviation[]): voi
   }
   COMPOSED_SEEN.clear();
   GROUP_SEEN.clear();
+  NOTHING_SEEN.clear();
   forgetComplexReadings();
   GROUP_LABELS_SORTED = null;
   setUnits();
@@ -677,7 +680,9 @@ export function labelProblem(label: string, except?: CustomAbbreviation): string
 
 /**
  * Why a structure cannot be an abbreviation's, or null if it can: SMILES
- * Meno reads, with one "*" - where it is attached - bonded to one atom.
+ * Meno reads, with one "*" - where it is attached - bonded to one atom; and
+ * its aromatic rings given single and double bonds as written, never by an
+ * H nobody wrote (lib/chem/kekulize `aromaticRefusal`).
  */
 export function structureProblem(smiles: string): string | null {
   let read: Smiles;
@@ -686,6 +691,8 @@ export function structureProblem(smiles: string): string | null {
   } catch (e) {
     return `The SMILES cannot be read: ${e instanceof Error ? e.message : String(e)}`;
   }
+  const refused = aromaticRefusal(read.atoms, read.bonds);
+  if (refused) return `The SMILES cannot be read: ${typedRingRefused(refused)}`;
   const stars = read.atoms.flatMap((a, i) => (a.el === "*" ? [i] : []));
   if (stars.length !== 1) return 'Mark where it is attached with one "*".';
   if (read.atoms.length < 2) return "Give it at least one atom besides the *.";
@@ -850,6 +857,28 @@ function setUnits(): void {
   }
 }
 setUnits();
+
+/**
+ * Whether a label reads as nothing - no element, no group, ligand, reagent or complex Meno knows (the dictionary, the label
+ * grammar, the user's own), no Rgroup, no symbol for a kind of group or a point of variability: words, kept as typed and drawn
+ * in the order typed (docs/EDITOR-2D.md, *Labels read as they are meant*, rule 5).
+ */
+export function readsAsNothing(label: string): boolean {
+  const seen = NOTHING_SEEN.get(label);
+  if (seen != null) return seen;
+  const nothing =
+    !TABLE.some((e) => e.symbol === label) &&
+    label !== "R#" &&
+    !/^R\d+$/.test(label) &&
+    !GENERIC_SYMBOLS.has(label) &&
+    !VARIABLE_NAMES.has(label) &&
+    // (a name the dictionary does not have reads as nothing at once; one it has is asked for its structure)
+    (abbreviationOf(label) == null || abbreviationStructure(label) == null);
+  NOTHING_SEEN.set(label, nothing);
+  return nothing;
+}
+/** What `readsAsNothing` has answered, by label: asked again as a drawing is laid out, and forgotten as the user's own change. */
+const NOTHING_SEEN = new Map<string, boolean>();
 
 /** The names labels are read into - the groups', the user's own among them, ligands', reagents' and the symbols for a kind of group - as they are written. */
 export function labelUnitNames(): readonly string[] {

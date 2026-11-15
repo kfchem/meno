@@ -557,7 +557,7 @@ pub fn run_as_runner(dir: &Path) -> i32 {
 fn runner(data: &Path, plugins: &Path, dir: &Path) -> i32 {
     let Ok(dir) = runner_folder(data, dir) else { return 1 };
     // (checked before its program runs: its work folder holds what was written for it, and nothing else yet)
-    run_job(&dir, &|spec| spec_allowed(data, plugins, spec, &work_files(&dir)).and_then(|()| needs_linked(&dir, data, plugins, spec)))
+    run_job(&dir, &|spec| spec_allowed(data, plugins, spec, &work_files(&dir), &crate::keptjobs::reads_of(&dir)).and_then(|()| needs_linked(&dir, data, plugins, spec)))
 }
 
 /// Run the job in `dir`: wait for its turn, run its program, and write down
@@ -1103,9 +1103,14 @@ pub fn inside_name(name: &str) -> bool {
 /// one beside it - name no file but those written for its job (`written`),
 /// or one of them by its name without its extension - the stem a program
 /// takes for files it writes itself beside them, as ORCA's orca_2aim takes
-/// `input` for `input.gbw` (any program alike, and only a file of its job). Besides those, an argument may be an
-/// option (`-nt`, `--silent`) or a number (`4`, `-1`, `0.5`), and nothing else.
-pub fn names_only_written(args: &[String], written: &[String]) -> Result<(), String> {
+/// `input` for `input.gbw` (any program alike, and only a file of its job) -
+/// or one its plugin reads back of it once it is done (`reads`, by its name
+/// exactly): a program that takes the file it writes by name, as Gaussian 16W
+/// takes `input.log` after `input.gjf`. Each a name inside its work folder
+/// (`inside_name`): never a path above it, nor one from its root. Besides
+/// those, an argument may be an option (`-nt`, `--silent`) or a number (`4`,
+/// `-1`, `0.5`), and nothing else.
+pub fn names_only_written(args: &[String], written: &[String], reads: &[String]) -> Result<(), String> {
     let option = |a: &str| {
         let name = a.strip_prefix("--").or_else(|| a.strip_prefix('-')).unwrap_or_default();
         name.starts_with(|c: char| c.is_ascii_alphabetic()) && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
@@ -1115,9 +1120,9 @@ pub fn names_only_written(args: &[String], written: &[String]) -> Result<(), Str
         let (whole, part) = digits.split_once('.').unwrap_or((digits, "0"));
         !whole.is_empty() && !part.is_empty() && whole.chars().chain(part.chars()).all(|c| c.is_ascii_digit())
     };
-    let file = |a: &str| inside_name(a) && written.iter().any(|w| w == a || Path::new(w).with_extension("") == Path::new(a));
+    let file = |a: &str| inside_name(a) && (written.iter().any(|w| w == a || Path::new(w).with_extension("") == Path::new(a)) || reads.iter().any(|r| r == a));
     match args.iter().find(|a| !(option(a) || number(a) || file(a))) {
-        Some(a) => Err(format!("{a} is not a file written for it")),
+        Some(a) => Err(format!("{a} is not a file written for it, nor one read back of it")),
         None => Ok(()),
     }
 }
@@ -2066,17 +2071,18 @@ fn found_again(data: &Path, plugin_dir: &Path, spec: &JobSpec) -> Result<Found, 
 /// its plugin names, from the plugin's environment or installed separately,
 /// those beside it it declares, and given what `job_start` gives, nothing
 /// else; one installed separately, and those beside it, naming no file but
-/// those in its work folder as it was made (`written`) - Meno's data folder
-/// `data`, and the plugins in place in `plugins` (installed.rs), each of its version in use.
-pub fn spec_allowed(data: &Path, plugins: &Path, spec: &JobSpec, written: &[String]) -> Result<(), String> {
+/// those in its work folder as it was made (`written`), and those its plugin
+/// reads back of it (`reads`, kept.json) - Meno's data folder `data`, and the
+/// plugins in place in `plugins` (installed.rs), each of its version in use.
+pub fn spec_allowed(data: &Path, plugins: &Path, spec: &JobSpec, written: &[String], reads: &[String]) -> Result<(), String> {
     if !plugin_id(&spec.plugin) {
         return Err(format!("not a plugin: {}", spec.plugin));
     }
     let plugin_dir = crate::installed::dir(plugins, &spec.plugin)?;
     let found = found_again(data, &plugin_dir, spec)?;
     if installed_decl(&plugin_dir, &spec.plugin, &spec.name)?.is_some() {
-        names_only_written(&spec.args, written)?;
-        spec.then.iter().try_for_each(|t| names_only_written(&t.args, written))?;
+        names_only_written(&spec.args, written, reads)?;
+        spec.then.iter().try_for_each(|t| names_only_written(&t.args, written, reads))?;
     }
     let asked: Vec<ThenAsk> = spec.then.iter().map(|t| ThenAsk { program: t.name.clone(), args: t.args.clone() }).collect();
     if then_of(&found, &spec.name, &asked)? != spec.then {
@@ -2660,6 +2666,8 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
     }
     let plugins = crate::installed::root(&data);
     let plugin_dir = crate::installed::dir(&plugins, &payload.plugin)?;
+    // (the files its plugin reads back of it once it is done, each inside its work folder: a program may be given one by name)
+    let reads: Vec<String> = payload.reads.iter().filter(|n| inside_name(n)).cloned().collect();
     // (looked for off the commands' threads: a program installed separately is asked its version, which may take seconds)
     let installed = {
         let (dir, plugin, program, path) = (plugin_dir.clone(), payload.plugin.clone(), payload.program.clone(), payload.path.clone());
@@ -2671,8 +2679,8 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
         Some(found) => {
             // (a program installed separately, and those beside it, given the job's own files alone - none of the chemist's elsewhere)
             let written: Vec<String> = payload.files.iter().map(|f| f.name.clone()).collect();
-            names_only_written(&payload.args, &written)?;
-            payload.then.iter().try_for_each(|t| names_only_written(&t.args, &written))?;
+            names_only_written(&payload.args, &written, &reads)?;
+            payload.then.iter().try_for_each(|t| names_only_written(&t.args, &written, &reads))?;
             found
         }
         None => plugin_program(&data, &plugin_dir, &payload.plugin, &payload.program, &payload.args)?,
@@ -2715,7 +2723,6 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
     let (id, dir) = make_handed_job(&jobs_root(&app)?, &spec, &payload.files, &needed, &handed)?;
     // (what it was given and what is read back of it, for a workspace that keeps no raw outputs of it: without it, every file is taken as raw)
     let inputs = payload.files.iter().map(|f| f.name.clone()).collect();
-    let reads = payload.reads.into_iter().filter(|n| inside_name(n)).collect();
     if let Err(e) = crate::keptjobs::write_roles(&dir, inputs, reads) {
         crate::logfile::line("meno", &format!("a job's kept.json could not be written: {e}"));
     }
@@ -4443,15 +4450,15 @@ mod tests {
         let plugins = dir.parent().and_then(Path::parent).unwrap().to_path_buf();
         let found = plugin_program(&data, &dir, "demo", "xtb", &[]).unwrap();
         let good = spec_for("demo", "xtb", &found, &["in.xyz"]);
-        assert_eq!(spec_allowed(&data, &plugins, &good, &[]), Ok(()));
+        assert_eq!(spec_allowed(&data, &plugins, &good, &[], &[]), Ok(()));
         // a program its plugin does not name; another file under a name it names; another plugin's
         let other = Found { program: found.program.with_file_name(exe("other")), ..plugin_program(&data, &dir, "demo", "xtb", &[]).unwrap() };
-        assert!(spec_allowed(&data, &plugins, &spec_for("demo", "other", &other, &[]), &[]).unwrap_err().contains("names no program other"));
+        assert!(spec_allowed(&data, &plugins, &spec_for("demo", "other", &other, &[]), &[], &[]).unwrap_err().contains("names no program other"));
         let (program, _) = shell_program();
         let elsewhere = JobSpec { program, ..good.clone() };
-        assert!(spec_allowed(&data, &plugins, &elsewhere, &[]).is_err());
+        assert!(spec_allowed(&data, &plugins, &elsewhere, &[], &[]).is_err());
         for plugin in ["../demo", "absent"] {
-            assert!(spec_allowed(&data, &plugins, &JobSpec { plugin: plugin.into(), ..good.clone() }, &[]).is_err(), "{plugin}");
+            assert!(spec_allowed(&data, &plugins, &JobSpec { plugin: plugin.into(), ..good.clone() }, &[], &[]).is_err(), "{plugin}");
         }
         // given what Meno does not give: code loaded into it, a network of its own, no proxy, programs after it
         let with = |k: &str, v: &str| {
@@ -4460,12 +4467,12 @@ mod tests {
             JobSpec { env, ..good.clone() }
         };
         for (k, v) in [("DYLD_INSERT_LIBRARIES", "/tmp/x.dylib"), ("LD_PRELOAD", "/tmp/x.so"), ("PYTHONPATH", "/tmp"), ("HTTPS_PROXY", "http://example.org:8080"), ("OMP_NUM_THREADS", "lots")] {
-            assert!(spec_allowed(&data, &plugins, &with(k, v), &[]).is_err(), "{k}");
+            assert!(spec_allowed(&data, &plugins, &with(k, v), &[], &[]).is_err(), "{k}");
         }
         let unrouted = JobSpec { env: BTreeMap::new(), ..good.clone() };
-        assert!(spec_allowed(&data, &plugins, &unrouted, &[]).unwrap_err().contains("not pointed at Meno's network"));
+        assert!(spec_allowed(&data, &plugins, &unrouted, &[], &[]).unwrap_err().contains("not pointed at Meno's network"));
         let then = JobSpec { then: vec![Then { name: "sh".into(), program: shell_program().0, args: vec![] }], ..good.clone() };
-        assert!(spec_allowed(&data, &plugins, &then, &[]).is_err());
+        assert!(spec_allowed(&data, &plugins, &then, &[], &[]).is_err());
 
         // and run by the runner: refused, failing, saying why, nothing run; allowed, run
         let jobs = data.join("jobs");
@@ -4491,7 +4498,7 @@ mod tests {
     #[test]
     fn a_program_installed_separately_is_given_its_job_s_files_options_and_numbers_alone() {
         let written = ["input.inp".to_string(), "wavefunction.molden".to_string(), "nci.txt".to_string()];
-        let ok = |args: &[&str]| names_only_written(&args.iter().map(|a| a.to_string()).collect::<Vec<_>>(), &written);
+        let ok = |args: &[&str]| names_only_written(&args.iter().map(|a| a.to_string()).collect::<Vec<_>>(), &written, &[]);
         // ORCA, orca_2aim, Multiwfn, Gaussian, as their plugins ask
         assert_eq!(ok(&["input.inp"]), Ok(()));
         assert_eq!(ok(&["input"]), Ok(()));
@@ -4501,6 +4508,27 @@ mod tests {
         assert_eq!(ok(&["--chrg", "-1", "0.5"]), Ok(()));
         for bad in ["/etc/hosts", "../input.inp", "./input.inp", "other.inp", "molden", "--in=input.inp", "-", "--", "-1x", ".5", "1.", ""] {
             assert!(ok(&[bad]).is_err(), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn a_program_may_be_given_by_name_a_file_its_plugin_reads_back_of_its_job_and_nothing_wider() {
+        // Gaussian 16W on Windows, as its plugin asks: its input, and the output it is to write by name - one its plugin reads back
+        let written = ["input.gjf".to_string()];
+        let reads = ["input.log".to_string(), "input.fchk".to_string()];
+        let ok = |args: &[&str], reads: &[String]| names_only_written(&args.iter().map(|a| a.to_string()).collect::<Vec<_>>(), &written, reads);
+        assert_eq!(ok(&["input.gjf", "input.log"], &reads), Ok(()));
+        // (not read back, not written: refused, as before - and so is the output where nothing says it is read back)
+        assert!(ok(&["input.gjf", "input.log"], &[]).unwrap_err().contains("input.log is not a file written for it"));
+        assert!(ok(&["input.gjf", "other.log"], &reads).is_err());
+        // (by its name exactly: no stem of a file read back, nothing above the work folder or from its root, even where declared)
+        assert!(ok(&["input.gjf", "input"], &["input.log".to_string()]).is_ok(), "the stem of the file written for it, as before");
+        assert!(ok(&["output"], &["output.log".to_string()]).is_err());
+        for bad in ["../input.log", "/tmp/input.log", "./input.log", "sub/../input.log"] {
+            assert!(ok(&["input.gjf", bad], &[bad.to_string()]).is_err(), "{bad:?}");
+        }
+        if cfg!(windows) {
+            assert!(ok(&["input.gjf", r"C:\input.log"], &[r"C:\input.log".to_string()]).is_err());
         }
     }
 
@@ -4523,26 +4551,30 @@ mod tests {
         good.then = then_of(&found, "orca", &[ThenAsk { program: "orca_2aim".into(), args: vec!["input".into()] }]).unwrap();
         let data = base.join("data");
         let written = vec!["input.inp".to_string()];
-        assert_eq!(spec_allowed(&data, &plugins, &good, &written), Ok(()));
+        assert_eq!(spec_allowed(&data, &plugins, &good, &written, &[]), Ok(()));
+        // (given by name a file its plugin reads back of it - checked again by its runner, from its kept roles - and nothing else)
+        let named = JobSpec { args: vec!["input.inp".into(), "input.out".into()], ..good.clone() };
+        assert_eq!(spec_allowed(&data, &plugins, &named, &written, &["input.out".to_string()]), Ok(()));
+        assert!(spec_allowed(&data, &plugins, &named, &written, &[]).is_err());
         // a file of another name where it was located; one beside it it does not declare
         let other = program_file(&base.join("orca_6"), &exe("orcb"));
-        assert!(spec_allowed(&data, &plugins, &JobSpec { program: other.to_string_lossy().into_owned(), ..good.clone() }, &written).is_err());
+        assert!(spec_allowed(&data, &plugins, &JobSpec { program: other.to_string_lossy().into_owned(), ..good.clone() }, &written, &[]).is_err());
         let mut beside = good.clone();
         beside.then[0].program = other.to_string_lossy().into_owned();
-        assert!(spec_allowed(&data, &plugins, &beside, &written).is_err());
+        assert!(spec_allowed(&data, &plugins, &beside, &written, &[]).is_err());
         // what its declaration does not give it
         let mut env = good.env.clone();
         env.insert("GAUSS_EXEDIR".into(), base.to_string_lossy().into_owned());
-        assert!(spec_allowed(&data, &plugins, &JobSpec { env, ..good.clone() }, &written).is_err());
+        assert!(spec_allowed(&data, &plugins, &JobSpec { env, ..good.clone() }, &written, &[]).is_err());
         // a file not written for it, by its arguments or those of one beside it
         for arg in ["/etc/hosts", "../other/input.inp", "other.inp", "--input=/etc/hosts", "-o/etc/hosts", "C:\\x.inp"] {
             let args = JobSpec { args: vec![arg.into()], ..good.clone() };
-            assert!(spec_allowed(&data, &plugins, &args, &written).unwrap_err().contains("is not a file written for it"), "{arg}");
+            assert!(spec_allowed(&data, &plugins, &args, &written, &[]).unwrap_err().contains("is not a file written for it"), "{arg}");
             let mut then = good.clone();
             then.then[0].args = vec![arg.into()];
-            assert!(spec_allowed(&data, &plugins, &then, &written).is_err(), "{arg}");
+            assert!(spec_allowed(&data, &plugins, &then, &written, &[]).is_err(), "{arg}");
         }
-        assert!(spec_allowed(&data, &plugins, &good, &[]).is_err());
+        assert!(spec_allowed(&data, &plugins, &good, &[], &[]).is_err());
         let _ = fs::remove_dir_all(base);
     }
 
@@ -5133,7 +5165,7 @@ mod tests {
             spec
         };
         // (the need, given as Meno gives it: taken)
-        assert_eq!(spec_allowed(&data, &plugins, &with(&["helper"], &[("TOOLEXE", "./tool")]), &[]), Ok(()));
+        assert_eq!(spec_allowed(&data, &plugins, &with(&["helper"], &[("TOOLEXE", "./tool")]), &[], &[]), Ok(()));
         // (another value - a program of the writer's choosing - or the variable missing, or one more besides: refused)
         for bad in [
             with(&["helper"], &[("TOOLEXE", "/bin/sh")]),
@@ -5142,18 +5174,18 @@ mod tests {
             with(&["helper"], &[("TOOLEXE", "./tool"), ("OTHER", "x")]),
             with(&[], &[("TOOLEXE", "./tool")]),
         ] {
-            assert!(spec_allowed(&data, &plugins, &bad, &[]).unwrap_err().contains("given what Meno does not give it"), "{:?}", bad.env);
+            assert!(spec_allowed(&data, &plugins, &bad, &[], &[]).unwrap_err().contains("given what Meno does not give it"), "{:?}", bad.env);
         }
         // (a need its plugin does not declare, or twice)
-        assert!(spec_allowed(&data, &plugins, &with(&["other"], &[("TOOLEXE", "./tool")]), &[]).unwrap_err().contains("declares no program of other that it uses"));
-        assert!(spec_allowed(&data, &plugins, &with(&["helper", "helper"], &[("TOOLEXE", "./tool")]), &[]).is_err());
+        assert!(spec_allowed(&data, &plugins, &with(&["other"], &[("TOOLEXE", "./tool")]), &[], &[]).unwrap_err().contains("declares no program of other that it uses"));
+        assert!(spec_allowed(&data, &plugins, &with(&["helper", "helper"], &[("TOOLEXE", "./tool")]), &[], &[]).is_err());
         // (the needed plugin not set up: refused, saying so)
         let (gone, gone_data, gone_plugins) = needing(false);
         let found_gone = plugin_program(&gone_data, &crate::installed::dir(&gone_plugins, "asker").unwrap(), "asker", "main", &[]).unwrap();
         let mut spec = spec_for("asker", "main", &found_gone, &[]);
         spec.needs = vec!["helper".into()];
         spec.env.insert("TOOLEXE".into(), "./tool".into());
-        assert_eq!(spec_allowed(&gone_data, &gone_plugins, &spec, &[]), Err("The Helper plugin is needed for this: add it in Settings, Plugins".into()));
+        assert_eq!(spec_allowed(&gone_data, &gone_plugins, &spec, &[], &[]), Err("The Helper plugin is needed for this: add it in Settings, Plugins".into()));
         let _ = fs::remove_dir_all(gone);
         let _ = fs::remove_dir_all(base);
     }
@@ -5228,14 +5260,14 @@ mod tests {
         for key in THREADS {
             assert_eq!(spec.env.get(*key).map(String::as_str), Some("1"), "{key}");
         }
-        assert_eq!(spec_allowed(&data, &plugins, &spec, &written), Ok(()));
+        assert_eq!(spec_allowed(&data, &plugins, &spec, &written, &[]), Ok(()));
         // (each process told the 16 as its threads, or the program taken for one of threads: refused)
         let mut threads = spec.clone();
         for key in THREADS {
             threads.env.insert(key.to_string(), "16".into());
         }
-        assert!(spec_allowed(&data, &plugins, &threads, &written).unwrap_err().contains("given what Meno does not give it"));
-        assert_eq!(spec_allowed(&data, &plugins, &JobSpec { processes: false, ..spec.clone() }, &written), Err("not how orca runs in parallel".into()));
+        assert!(spec_allowed(&data, &plugins, &threads, &written, &[]).unwrap_err().contains("given what Meno does not give it"));
+        assert_eq!(spec_allowed(&data, &plugins, &JobSpec { processes: false, ..spec.clone() }, &written, &[]), Err("not how orca runs in parallel".into()));
         // (the queue: each process a whole physical core - two of its cores, where the computer runs two threads on each)
         assert_eq!(taken(&spec, Resources { cores: 32, physical: 16, memory: 0 }), 32);
         assert_eq!(taken(&spec, Resources { cores: 10, physical: 10, memory: 0 }), 16);
@@ -5252,9 +5284,9 @@ mod tests {
         for key in THREADS {
             assert_eq!(spec.env.get(*key).map(String::as_str), Some("16"), "{key}");
         }
-        assert_eq!(spec_allowed(&data, &plugins, &spec, &written), Ok(()));
-        assert!(spec_allowed(&data, &plugins, &JobSpec { cores: 8, ..spec.clone() }, &written).unwrap_err().contains("given what Meno does not give it"));
-        assert_eq!(spec_allowed(&data, &plugins, &JobSpec { processes: true, ..spec.clone() }, &written), Err("not how orca runs in parallel".into()));
+        assert_eq!(spec_allowed(&data, &plugins, &spec, &written, &[]), Ok(()));
+        assert!(spec_allowed(&data, &plugins, &JobSpec { cores: 8, ..spec.clone() }, &written, &[]).unwrap_err().contains("given what Meno does not give it"));
+        assert_eq!(spec_allowed(&data, &plugins, &JobSpec { processes: true, ..spec.clone() }, &written, &[]), Err("not how orca runs in parallel".into()));
         // (a way of running in parallel Meno does not know: the program not taken)
         declare("mpi");
         assert!(installed_program(&ranked, "ranked", "orca", orca.to_str()).unwrap_err().contains("not a way orca runs in parallel"));

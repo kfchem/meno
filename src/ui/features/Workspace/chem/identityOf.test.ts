@@ -112,6 +112,13 @@ describe("a structure drawn, as identity reads it", () => {
     expect(new Set([crotyl("up"), crotyl("down"), crotyl("straight")]).size).toBe(3);
   });
 
+  it("ignores an allene drawn wedged where one end's two groups are alike, and keeps one where they are not", () => {
+    const text = (smiles: string) => identityOfDrawn(drawnFromSmiles(smiles)).text;
+    expect(text("CC(C)=[C@]=CF")).toBe(text("CC(C)=C=CF"));
+    expect(text("CC=[C@]=CF")).not.toBe(text("CC=C=CF"));
+    expect(text("CC=[C@]=CF")).not.toBe(text("CC=[C@@]=CF"));
+  });
+
   it("splits the structures into the groups each was drawn to be in", () => {
     const meno = new Map(written.map((c) => [c.name, identityOfDrawn(c.drawn).text]));
     const same = new Map(written.map((c) => [c.name, c.same]));
