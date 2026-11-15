@@ -529,9 +529,26 @@ they hang from.
   new: its metal by the rule above, not in whichever form its coordinates
   happen to have, nor with its donors opposite each other as they happen
   to lie there (`laidOut`'s `asNew`) - but at a metal whose arrangement
-  the SMILES gives, a mark at the metal's own atom (@SP1, @OH1), the
+  the SMILES gives, a mark at the metal's own atom (@SP1 to @SP3 on four
+  neighbours, @OH1 to @OH30 on six; a bare @ or any other mark states no
+  pairs, and the metal is not given), the
   plugin's drawing carries it, and its places and its form are kept: the
-  isomer typed, no mark (`metalsArrangedIn`); and where it cannot be laid
+  isomer typed, no mark (`metalsArrangedIn`) - save a metal two of whose
+  donors are joined other than through it, a chelate or a bridge: there the
+  plugin's picture was found not to carry the pairs the mark states
+  (trans-[Co(en)2Cl2]+ drawn cis, mer-Co(gly)3 drawn fac). So the pairs
+  are read from the mark itself (`metalPairsIn`: the OpenSMILES shapes and
+  table, by the neighbours' written order), and a marked metal - chelated
+  or not - is taken as given only where the finished drawing has those
+  pairs; where it has others, it is marked as not given (`marksKept`),
+  never an isomer the input did not write. Where Meno cannot read the
+  mark (an H written in the metal's bracket, a mark that would put a
+  small chelate's two ends across), a chelated metal is laid out as new
+  and marked as not given
+  where its donors could lie more ways than one, as above - two metals
+  held by bridges among them, as in [Pt2Cl4(NH3)2], whose cis and trans
+  dimers differ only together, each marked alike (a bridge's charge
+  shared between its metals, each Pt(II)). And where it cannot be laid
   out and is kept as it came, its square-planar centres whose arrangement
   is not given are marked all the same (`arrangementsMarked`). A metal of
   six donors in such a drawing is marked so too where its donors could be
@@ -877,6 +894,24 @@ quarter of a bond: with less, taxol's AcO sat on its OBz.
   bridgehead often has them so), read from the angles two of them and the
   wedge would say one thing and the other two the opposite
   (`drawnVolume`). With three drawn and the H left out, the angles are read.
+- And where the layout leaves two of a centre's three bonds in one line,
+  within 10 degrees, and its wedge on one of them - doxorubicin's and
+  ouabain's sugar C1, ginkgolide B's C23, bilobalide's C10, vinblastine's
+  C5 - a form the text grades not acceptable (Brecher 2006, ST-1.2.4)
+  however a reader reads it: such a centre with an H has the H drawn in
+  the widest gap round it and wedged instead (ST-1.1.4's form), the way
+  Meno's reader reads as given (`hydrogensWhereUnread`, as a cage's
+  wedges for a flat reader are); with no H, or where that reads no
+  surer, it is left as placed. The H stands clear of every other atom -
+  three quarters of a bond - and every bond - 0.4 of one - at the gap's
+  middle where that is clear, else turned within the gap, up to 25
+  degrees short of its bonds, where it is clearest (GR-2.1.6: a label
+  clear of all else; an H on another label reads as that label's). It is
+  always a bond long, as every H Meno draws: drawn shorter, its wedge, the
+  H label's room taken off, reads as a speck - worse than an H near
+  another atom. ST-1.2.4 grades so every wedge 180
+  degrees or more from one of its plain neighbours; the layout catches
+  the ones in line, within 10 degrees: those are the ones it leaves.
 - An axis of chirality - a biaryl's bond, BINAP's C1-C1' - is shown by
   one wedge out of an end of it, narrow there, on the single bond to the
   neighbour that stands out of the page for the sense the axis has (or on
