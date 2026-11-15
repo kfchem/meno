@@ -300,7 +300,10 @@ function openNow(input: IdentityInput, m: number): boolean {
   const g = compared(others);
   const blanks = blanksOf(g);
   if (!blanks.some((b) => b.kind === "metal" && b.at === at)) return false;
-  const leftOpen = (h: LayoutInput) => !(filledIn(h).input.arrangements ?? []).some((x) => x.metal === at);
+  const leftOpen = (h: LayoutInput) => {
+    const filled = filledIn(h);
+    return !(filled.input.arrangements ?? []).some((x) => x.metal === at) && !filled.settledMetals.includes(at);
+  };
   if (leftOpen(g)) return true;
   // (two metals that set something only together - [Pd2Cl4(PMe3)2]'s cis and trans dimers - are filled in canonical order:
   //  the first alone sets nothing and is filled, the second is then left open. Each is asked alike: with another metal not
@@ -517,7 +520,10 @@ function unconfigured(g: LayoutInput): LayoutInput {
 /**
  * The structure with every configuration that sets nothing filled in, so
  * that it is one structure whether that configuration is drawn or not
- * (a rule of the chemistry check): nothing drawn is ever taken out. A
+ * (a rule of the chemistry check): nothing drawn is ever taken out, but
+ * at a centre or double bond two of whose groups are alike - two ends, or
+ * two whole groups (`groupsAlike`) - which sets nothing however the rest is
+ * given: there no configuration is written, drawn or not. A
  * place that could carry a configuration and carries none (`blanksOf`) is
  * given one where both senses write the same text: such a place sets
  * nothing, so writing it changes no compound - an isopropyl's CH, a
@@ -560,7 +566,7 @@ function unconfigured(g: LayoutInput): LayoutInput {
  * structure, whether the search finished or not; where it ran out of steps
  * and wrote two, that place is left as it is, and `complete` says so.
  */
-export function filledIn(input: LayoutInput): { input: LayoutInput; complete: boolean; text?: string; searches: number } {
+export function filledIn(input: LayoutInput): { input: LayoutInput; complete: boolean; text?: string; searches: number; settledMetals: number[] } {
   let g = input;
   let complete = true;
   // (how many canonical searches the fill made - its cost, the same for the same structure whatever its atoms' order)
@@ -572,34 +578,44 @@ export function filledIn(input: LayoutInput): { input: LayoutInput; complete: bo
   //  C=C(CH3)2 - sets nothing whatever else is given: swapping the two turns it over and leaves all else. Filled first,
   //  with no search; and as it sets nothing in every completion, it changes no other place's two senses)
   const ends = endsAlike(g);
-  for (const b of blanksOf(g)) if (b.kind !== "biaryl" && b.kind !== "metal" && b.sides.some((side) => ends(side))) g = given(g, b, true);
   // (and one two of whose groups are alike as wholes - PPh3's P, its three phenyls - likewise: `groupsAlike`. Each group's
-  //  writing is small; the structure's own search, the costly part, is left for the places these do not settle)
-  const start = blanksOf(g);
+  //  writing is small; the structure's own search, the costly part, is left for the places these do not settle. Such a
+  //  centre or double bond sets nothing however the rest is given, so it carries no configuration at all - one drawn on it
+  //  taken off, none filled in, it is offered no more: written so, its text never turns on which way it was filled in, as a
+  //  sense picked by the order the atoms came in would where a search runs out of steps - Pd(PPh3)4, found in review)
+  const every = blanksOf(unconfigured(g));
   const constitution = symmetryClasses(unconfigured(input));
-  const own = new Set(start.flatMap((b) => b.own));
+  const own = new Set(every.flatMap((b) => b.own));
   const alike = groupsAlike(g, own, constitution);
-  const settled = start.filter((b) => b.kind !== "biaryl" && b.kind !== "metal" && b.sides.some((side, k) => alike(b.own[k] ?? b.own[0], side)));
-  // (a metal all of whose donors are groups alike as wholes - Pd(PPh3)4, [Co(NH3)6]3+: every pairing one structure, so any
-  //  sets nothing; filled with its first. A place inside those groups that sets nothing whatever else is given - each
-  //  PPh3's P - is no place for this: however it is filled, the groups stay alike)
-  const loose = groupsAlike(g, new Set([...own].filter((a) => !settled.some((b) => b.own.includes(a)))), constitution);
-  const metals = start.filter((b) => b.kind === "metal" && loose.all(b.at, b.sides[0]));
-  for (const b of settled) g = given(g, b as Exclude<Blank, { kind: "metal" }>, true);
-  for (const b of metals) g = valuesOf(g, b)[0];
+  const settled = every.filter((b) => (b.kind === "centre" || b.kind === "bond") && b.sides.some((side, k) => ends(side) || alike(b.own[k] ?? b.own[0], side)));
+  const plainAt = new Set(settled.flatMap((b) => (b.kind === "centre" ? [b.at] : [])));
+  const plainBond = new Set(settled.flatMap((b) => (b.kind === "bond" ? [b.at] : [])));
+  g = { ...g, atoms: g.atoms.map(({ tetra, ...a }, i) => (plainAt.has(i) || !tetra ? a : { ...a, tetra })), bonds: g.bonds.map(({ stereo, ...b }, k) => (plainBond.has(k) || !stereo ? b : { ...b, stereo })) };
+  // (a metal all of whose donors are groups alike as wholes - Pd(PPh3)4, [Co(NH3)6]3+: every pairing one structure, so it
+  //  carries none, as such a centre carries no sense: one given taken off, none filled in. A place inside those groups that
+  //  sets nothing whatever else is given - each PPh3's P - is no place for this: however it is, the groups stay alike)
+  const loose = groupsAlike(g, new Set([...own].filter((x) => !settled.some((b) => b.own.includes(x)))), constitution);
+  const plainMetal = new Set(every.flatMap((b) => (b.kind === "metal" && loose.all(b.at, b.sides[0]) ? [b.at] : [])));
+  if (plainMetal.size) g = { ...g, arrangements: (g.arrangements ?? []).filter((x) => !plainMetal.has(x.metal)) };
+  // (said to whoever asks whether a metal is open - `arrangementOpen`: settled so, it is not)
+  const settledMetals = [...plainMetal];
+  // (the places left: those not settled so)
+  const open = (b: Blank) => !(b.kind === "centre" && plainAt.has(b.at)) && !(b.kind === "bond" && plainBond.has(b.at)) && !(b.kind === "metal" && plainMetal.has(b.at));
+  // (an axis or a cumulene of alike end atoms: filled, as before)
+  for (const b of blanksOf(g)) if ((b.kind === "axis" || b.kind === "cumulated") && b.sides.some((side) => ends(side))) g = given(g, b, true);
   // (the classes of the constitution alone, coarser than every orbit of the structure with any configuration given)
   let classes: number[] | null = null;
   // (each fill gives one place or takes out one drawn axis, so there are never more rounds than places at the start: a round
   //  past that is a fault, and ends with what is filled so far, said incomplete, rather than running on)
-  const most = blanksOf(g).length;
+  const most = blanksOf(g).filter(open).length;
   for (let round = 0; ; round++) {
-    const blanks = blanksOf(g);
-    if (!blanks.length) return { input: g, complete, text, searches };
-    if (round > most) return { input: g, complete: false, text: undefined, searches };
+    const blanks = blanksOf(g).filter(open);
+    if (!blanks.length) return { input: g, complete, text, searches, settledMetals };
+    if (round > most) return { input: g, complete: false, text: undefined, searches, settledMetals };
     classes ??= symmetryClasses(unconfigured(input));
     const cs = classes;
     const tried = blanks.filter((b) => b.sides.some((side) => new Set(side.map((m) => cs[m])).size < side.length));
-    if (!tried.length) return { input: g, complete, text, searches };
+    if (!tried.length) return { input: g, complete, text, searches, settledMetals };
     // (one search of the structure as it is, where it is needed: the canonical order of its places, and its symmetries)
     let now: ReturnType<typeof canonicalSearched> | null = null;
     const searched = () => (now ??= (searches++, canonicalSearched(g)));
@@ -644,7 +660,7 @@ export function filledIn(input: LayoutInput): { input: LayoutInput; complete: bo
       }
       if (!u.complete || !d.complete) complete = false;
     }
-    if (!next) return { input: g, complete, text: undefined, searches };
+    if (!next) return { input: g, complete, text: undefined, searches, settledMetals };
     g = next;
   }
 }

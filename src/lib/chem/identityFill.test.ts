@@ -211,9 +211,10 @@ describe("a constitution's key", () => {
     expect(constitutionKey(bare("CC(C)O"))).toBe("67fcfad66e6e6c8e");
     expect(constitutionKey(bare("CC(C)Cc1ccc(cc1)C(C)C(=O)O"))).toBe("ba27f66b9b1619e3");
     expect(constitutionKey(bare("OC1C(O)C(O)C(O)C(O)C1O"))).toBe("b28395fd12924b6f");
-    // (whatever configuration it is given, and though identity itself now fills propan-2-ol's centre in)
+    // (whatever configuration it is given; and propan-2-ol's centre, which sets nothing, carries none in its identity either)
     expect(constitutionKey(fromSmiles("C[C@H](C)O"))).toBe("67fcfad66e6e6c8e");
-    expect(identityKey(bare("CC(C)O"))).not.toBe("67fcfad66e6e6c8e");
+    expect(identityKey(bare("CC(C)O"))).toBe("67fcfad66e6e6c8e");
+    expect(identityKey(fromSmiles("C[C@H](C)O"))).toBe("67fcfad66e6e6c8e");
   });
 });
 
