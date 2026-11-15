@@ -84,7 +84,9 @@ export type Block = {
  * redoing. Edits elsewhere on the page do not count.
  */
 export function blocksStill(blocks: readonly Block[], model: Model): boolean {
-  return blocks.every((b) => groupShape(b.part, b.atoms) === groupShape(model, b.atoms));
+  // (a hydrogen bond drawn or taken away meanwhile changes no structure: no block holds one, `blocksOf`)
+  const structure = { ...model, bonds: model.bonds.filter((b) => !b.hydrogen) };
+  return blocks.every((b) => groupShape(b.part, b.atoms) === groupShape(structure, b.atoms));
 }
 
 /**
@@ -103,10 +105,22 @@ export function standsForMolecule(part: Model): boolean {
   return (undrawnHydrogens(part).get(a.id) ?? 0) > 0;
 }
 
-/** The bare atoms among the structures that hold these atoms: left out of a 3D structure, one atom alone having none. */
-export function bareAtomsOf(model: Model, atoms: Iterable<number>): Model["atoms"] {
+/**
+ * The structures that hold these atoms, each as a part of the drawing. A hydrogen bond is no bond of a structure: the drawing's
+ * pieces that hold these atoms are taken by every bond drawn - a water a hydrogen bond holds comes with them - and each is then
+ * split by the structure's bonds, so what a hydrogen bond alone joins - an enol and a water, an acid's dimer, a salt's ion - is
+ * two structures, and neither holds it (CTFILE.md, *Bonds*).
+ */
+function structuresIn(model: Model, atoms: Iterable<number>): Model[] {
+  const structure = { ...model, bonds: model.bonds.filter((b) => !b.hydrogen) };
   return fragmentsHolding(model, atoms)
-    .map((ids) => partOf(model, ids))
+    .flatMap((ids) => fragmentsHolding(structure, ids))
+    .map((ids) => partOf(structure, ids));
+}
+
+/** The bare atoms among the structures that hold these atoms (`structuresIn`): left out of a 3D structure, one atom alone having none. */
+export function bareAtomsOf(model: Model, atoms: Iterable<number>): Model["atoms"] {
+  return structuresIn(model, atoms)
     .filter((part) => !standsForMolecule(part))
     .map((part) => part.atoms[0]);
 }
@@ -147,10 +161,13 @@ export function asDrawn(part: Model): boolean {
   return part.atoms.length === 1 && !a.abbrev && isElementSymbol(a.el);
 }
 
-/** The structures that hold these atoms, each as the plugin is asked about it; a bare atom's none (`standsForMolecule`). */
+/**
+ * The structures that hold these atoms (`structuresIn`), each as the plugin is asked about it; a bare atom's none (`standsForMolecule`).
+ * What a hydrogen bond alone joins is two structures, each asked about alone and made in 3D side by side, and it is in neither, so no
+ * embedding takes it for a bond.
+ */
 export function blocksOf(model: Model, atoms: Iterable<number>, keep: (part: Model) => boolean = standsForMolecule): Block[] {
-  return fragmentsHolding(model, atoms)
-    .map((ids) => partOf(model, ids))
+  return structuresIn(model, atoms)
     .filter(keep)
     .map((part) => {
       // (a ring or chain bound to a metal through all its atoms, as one multi-centre bond: etaBound. A bare atom - Na+, a

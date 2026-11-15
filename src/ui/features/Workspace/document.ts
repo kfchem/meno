@@ -917,6 +917,7 @@ export function setAtomChemistry(
     valence: _v,
     hCount: _h,
     abbrev: _a,
+    shown: _s,
     chargeAt,
     typed: _t,
     ...rest
