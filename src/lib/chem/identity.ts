@@ -357,11 +357,17 @@ function blanksOf(g: LayoutInput): Blank[] {
   //  are never across, a porphyrin's opposite N may be. Bonds through the metal are not the ligand's: `ligandNear` from a
   //  donor walks no further than the metal)
   const arranged = new Set((g.arrangements ?? []).map((x) => x.metal));
+  const orderAt = new Map(g.bonds.map((b) => [b.a < b.b ? `${b.a},${b.b}` : `${b.b},${b.a}`, b.order]));
   for (let m = 0; m < n; m++) {
     const donors = around[m];
     if (!isMetal(element(m)) || arranged.has(m) || hs(m) || (donors.length !== 4 && donors.length !== 6)) continue;
     const joined = (p: number, q: number) => ligandNear(around, m, p, q, CHELATE_RING - 2);
-    const pairings = pairingsOf(donors).filter((pairing) => pairing.every(([p, q]) => !joined(p, q)));
+    const unjoined = pairingsOf(donors).filter((pairing) => pairing.every(([p, q]) => !joined(p, q)));
+    // (and two donors a third holds flat across from each other in every pairing: a porphyrin's opposite N, terpyridine's
+    //  outer two - `heldFlat`. Pairs that cannot all be had together leave the pairings as they were: never closed by a fault)
+    const held = donors.length === 6 ? heldFlat(m, donors, around, (p, q) => orderAt.get(p < q ? `${p},${q}` : `${q},${p}`) ?? 1, element) : [];
+    const across = unjoined.filter((pairing) => held.every(([p, q]) => pairing.some(([x, y]) => (x === p && y === q) || (x === q && y === p))));
+    const pairings = across.length ? across : unjoined;
     if (pairings.length) out.push({ kind: "metal", at: m, pairings, own: [m], sides: [donors] });
   }
   // (a biaryl's axis drawn: no place of its own when blank - only a drawing states one - so where it sets nothing, its
@@ -396,6 +402,67 @@ function pairingsOf(donors: readonly number[]): (readonly [number, number])[][] 
   if (!donors.length) return [[]];
   const [first, ...rest] = donors;
   return rest.flatMap((q) => pairingsOf(rest.filter((r) => r !== q)).map((more) => [[Math.min(first, q), Math.max(first, q)] as const, ...more]));
+}
+
+/**
+ * The pairs of a six-donor metal `m`'s donors a third holds flat across from each other (found in the chemistry check): B, a
+ * donor in a ring of five or six that does not hold the metal, B and its two neighbours in that ring trigonal, and from each
+ * of those two a path of trigonal atoms - B's neighbour and one or two more, a chelate ring of five or six with the metal -
+ * to one donor: those two donors are across. A porphyrin's opposite N, terpyridine's outer two, a pincer's whose arms are
+ * trigonal. A path of CH2 - cyclam, dien, salen - holds nothing flat. Trigonal: an atom with a double or aromatic bond, or an
+ * N in a ring of five or six whose two neighbours in that ring each have one (a pyrrole's).
+ */
+function heldFlat(m: number, donors: readonly number[], around: readonly number[][], order: (p: number, q: number) => number, element: (i: number) => string): [number, number][] {
+  const doubled = (i: number) => around[i].some((j) => order(i, j) === 2 || order(i, j) === AROMATIC);
+  // (a ring of five or six through B and its two neighbours x and y, not through the metal: x to y in three or four bonds)
+  const ringed = (b: number, x: number, y: number) => {
+    let at = [x];
+    const seen = new Set([b, m, x]);
+    for (let d = 1; d <= 4 && at.length; d++) {
+      const next: number[] = [];
+      for (const u of at)
+        for (const v of around[u]) {
+          if (v === y && d >= 3) return true;
+          if (seen.has(v)) continue;
+          seen.add(v);
+          next.push(v);
+        }
+      at = next;
+    }
+    return false;
+  };
+  // (trigonal: a double or aromatic bond of its own; or an N in a ring of five or six whose two neighbours in that ring each have
+  //  one - a pyrrole's. An NH linking two rings by single bonds is not held flat for sure: never counted so)
+  const trigonal = (i: number) => {
+    if (doubled(i)) return true;
+    if (element(i) !== "N") return false;
+    const near = around[i].filter((j) => j !== m && doubled(j));
+    return near.some((j, k) => near.slice(k + 1).some((l) => ringed(i, j, l)));
+  };
+  // (the one donor reached from x - B's neighbour - by trigonal atoms, x and one or two more between B and it; none, or two, and null)
+  const donorBy = (b: number, x: number): number | null => {
+    const found = new Set<number>();
+    const walk = (path: number[]) => {
+      const last = path[path.length - 1];
+      if (path.length >= 2) for (const d of around[last]) if (d !== b && d !== m && donors.includes(d) && !path.includes(d)) found.add(d);
+      if (path.length === 3) return;
+      for (const v of around[last]) if (v !== b && v !== m && !path.includes(v) && !donors.includes(v) && trigonal(v)) walk([...path, v]);
+    };
+    walk([x]);
+    return found.size === 1 ? [...found][0] : null;
+  };
+  const out: [number, number][] = [];
+  for (const b of donors) {
+    if (!trigonal(b)) continue;
+    const near = around[b].filter((x) => x !== m && trigonal(x));
+    for (let i = 0; i < near.length; i++)
+      for (let j = i + 1; j < near.length; j++) {
+        if (!ringed(b, near[i], near[j])) continue;
+        const [a, c] = [donorBy(b, near[i]), donorBy(b, near[j])];
+        if (a != null && c != null && a !== c && !out.some(([p, q]) => (p === a && q === c) || (p === c && q === a))) out.push([a, c]);
+      }
+  }
+  return out;
 }
 
 /** Whether two donors `p` and `q` of metal `m` are joined, not through the metal, within `most` bonds. */

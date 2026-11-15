@@ -1282,6 +1282,7 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>, search = false):
         ...(e.degeneracy != null && e.degeneracy !== 1 ? { degeneracies: [...(path ?? []).map(() => 1), e.degeneracy, ...after.map(() => 1)] } : {}),
         ...(e.mirror ? { mirrors: [...(path ?? []).map(() => null), [...e.mirror], ...after.map(() => null)] } : {}),
         ...(e.partOf ? { partOf: true as const } : {}),
+        ...(e.partsAlone ? { partsAlone: true as const } : {}),
         ...(e.madeOf?.length ? { madeOf: [...e.madeOf] } : {}),
         // (why a program step could not do it, where one could not: its Failed exit's - and its other marks - of its
         //  last frame, a path's own frames before it none)
@@ -1329,6 +1330,7 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>, search = false):
       conformerSet: true,
       // (a part of a search's conformers where any of them was - As conformers grouping one with others too: its shares not shown unless a Populations step worked them out)
       ...(g.some((e) => e.partOf) ? { partOf: true as const } : {}),
+      ...(g.some((e) => e.partsAlone) ? { partsAlone: true as const } : {}),
       ...(first.name ? { name: first.name } : {}),
       ...(madeOf ? { madeOf: [...madeOf] } : {}),
       ...keptKnown(first),
