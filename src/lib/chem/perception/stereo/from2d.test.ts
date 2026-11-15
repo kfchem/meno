@@ -314,6 +314,14 @@ describe("what a drawing says of its stereochemistry only by luck", () => {
     expect(unsureStereo(pts(5), bonds).bonds).toEqual([0]);
     expect(unsureStereo(pts(0), bonds).bonds).toEqual([]);
     expect(unsureStereo(pts(60), bonds).bonds).toEqual([]);
+    // (the two groups joined round a ring: of seven, the bond has no cis or trans to leave to luck; of eight, it has)
+    const closed = (k: number) => {
+      const atoms = [...pts(5), ...Array.from({ length: k }, (_, i) => ({ x: -1 + i, y: 3, hs: 2 }))];
+      const chain = Array.from({ length: k + 1 }, (_, i) => ({ a: i === 0 ? 2 : 3 + i, b: i === k ? 3 : 4 + i, order: 1 }));
+      return unsureStereo(atoms, [...bonds, ...chain]).bonds;
+    };
+    expect(closed(3)).toEqual([]);
+    expect(closed(4)).toEqual([0]);
   });
 });
 
@@ -829,6 +837,26 @@ describe("an allene's axis and an odd cumulene's cis or trans, drawn", () => {
   });
 });
 
+describe("a double bond's cis or trans, drawn: in no ring, or in a ring of eight atoms or more; none in a ring of seven or fewer", () => {
+  /** The SMILES drawn by the engine: each double bond read cis or trans, by its atoms. */
+  const read = (smiles: string) => {
+    const g = fromSmiles(smiles);
+    const { atoms, bonds } = drawing(g);
+    return [...readStereo(atoms, bonds).cisTrans].map(([i, c]) => ({ atoms: [bonds[i].a, bonds[i].b].sort((p, q) => p - q), cis: c.cis }));
+  };
+
+  it("reads (E)-but-2-ene's and (Z)-but-2-ene's, in no ring", () => {
+    expect(read("C/C=C/C")).toEqual([{ atoms: [1, 2], cis: false }]);
+    expect(read(String.raw`C/C=C\C`)).toEqual([{ atoms: [1, 2], cis: true }]);
+  });
+
+  it("reads (E)-cyclooctene's, in a ring of eight, and none in cyclohexene's or cycloheptene's", () => {
+    expect(read("C1CCC/C=C/CC1")).toEqual([{ atoms: [4, 5], cis: false }]);
+    expect(read("C1CCC=CC1")).toEqual([]);
+    expect(read("C1CCCC=CC1")).toEqual([]);
+  });
+});
+
 describe("a wedge out of an allene's end, read once: the allene's axis, and no axis about the end's single bond", () => {
   /**
    * A run straight through from end E (0) to its far end F, `doubles` double bonds long, F's two groups in the page: at E a methyl (1)
@@ -997,6 +1025,12 @@ describe("an axis inside a ring, drawn", () => {
     expect(read[0].sense).toBe(given.sense);
     // (2,2'-bipyridine-PdCl2, its N bound to Pd written as N+, Pd as 2-, so that its rings are aromatic as drawn)
     expect(readBack("Cl[Pd-2]1(Cl)[n+]2ccccc2-c2cccc[n+]21", [8, 9]).read).toEqual([]);
+  });
+
+  it("reads one on a biaryl bond in no ring: 2,2',6,6'-tetramethylbiphenyl's", () => {
+    const { given, read } = readBack("Cc1cccc(C)c1-c1c(C)cccc1C", [7, 8]);
+    expect(read).toHaveLength(1);
+    expect(read[0].sense).toBe(given.sense);
   });
 
   it("reads none in a ring of five or six: fluorene and 9,10-dihydrophenanthrene are held all but flat, or turn over fast", () => {
