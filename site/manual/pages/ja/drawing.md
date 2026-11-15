@@ -20,8 +20,9 @@
 - ダブルクリックしてそのままドラッグすると、結合を好きな向きへ引けます。よく使う角度に吸い付きます。ドラッグの途中で止まると、ポインターのちょうどその位置に置かれます。
 - 原子をドラッグすると動きます。ほかの原子の上で離すと、その原子と一つになります。
 - すでにある原子まで結合を引くと、環が閉じます。
-- 単結合をクリックするとくさびに、もう一度で破線くさびに、さらにもう一度で普通の線に戻ります。次のくさびは、細い端が反対側の原子に来ます。波線、太線、太い破線、破線、配位結合はクリックで普通の線に、二重結合は単結合に、三重結合は二重結合になります。
+- 結合にポインターを載せて 1、2、3 を押すと、単結合、二重結合、三重結合になります。単結合で 1 をもう一度押すとくさびに、もう一度で破線くさびに、さらにもう一度で普通の線に戻ります。次のくさびは、細い端が反対側の原子に来ます。二重結合で 2 をもう一度押すと、2 本目の線が移ります。キーで変わるのはポインターの下の結合だけです。
 - 結合をダブルクリックすると二重結合に、トリプルクリックすると三重結合になります。
+- 結合をクリックすると、その結合が選ばれるだけで、結合は変わりません。
 
 ## 鎖と環 {#chains}
 
@@ -40,11 +41,11 @@
 原子や結合を右クリックすると、できることが出ます。上にアイコンの列、その下に一覧が並びます。アイコンは、ポインターを載せると名前が出ます。
 
 - 原子：アイコンは「Charge one up」「Charge one down」「Clean up this structure」「3D structure」「Electron-pushing arrow」「Fishhook arrow」「Colour…」「Delete atom」です。一覧には「Edit label」「Chain from here」「Unpaired electron」「Select this structure」「Magnification」があります。
-- 結合：アイコンは結合の種類の「Single bond」「Double bond」「Triple bond」「Wedge」「Hashed wedge」、次に「More kinds of bond」、そして「Delete bond」です。「More kinds of bond」を押すと 2 段目が開き、「Wavy bond」「Bold bond」「Bold dashed bond」「Dashed bond」「Dative bond」が並びます。一覧には「Clean up this structure」「3D structure」、そこから出す矢印、「Colour…」「Select this structure」などがあります。
+- 結合：アイコンは結合の種類の「Single bond」「Double bond」「Triple bond」「Wedge」「Hashed wedge」、次に「More kinds of bond」、そして「Delete bond」です。結合のいまの種類のアイコンは、結合の向きどおりに描かれます。もう一度押すと、くさびの細い端が反対側の原子に移り、二重結合は 2 本目の線が移ります。結合をいくつか選んでいるときは、選んだ結合すべてがその種類になります。「More kinds of bond」を押すと 2 段目が開き、「Wavy bond」「Bold bond」「Bold dashed bond」「Dashed bond」「Dative bond」が並びます。一覧には「Clean up this structure」「3D structure」、そこから出す矢印、「Colour…」「Select this structure」などがあります。
 
 ## 作業するものを選ぶ {#selecting}
 
-- 原子をクリックすると、その原子だけが選ばれます。⌘（Windows では Ctrl）を押しながらクリックすると、原子や結合を足したり外したりできます。Shift を押しながらクリックすると、最後に選んだ原子からその原子までの、結合でつながったものがすべて選ばれます。
+- 原子か結合をクリックすると、それだけが選ばれます。⌘（Windows では Ctrl）を押しながらクリックすると、原子や結合を足したり外したりできます。Shift を押しながらクリックすると、最後に選んだ原子からその原子までの、結合でつながったものがすべて選ばれます。
 - 原子か結合を長押しすると、その構造全体が選ばれます。そのままドラッグすると動かせます。
 - 何もないところを長押ししてからドラッグすると、四角で囲んだものが選ばれます。Option（Windows では Alt）を押しながらだと、投げ縄で囲んだものが選ばれます。
 - ⌘A（Ctrl+A）ですべてを選び、何もないところをクリックするか Escape を押すと、何も選ばれていない状態に戻ります。
