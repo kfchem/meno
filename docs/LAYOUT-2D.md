@@ -890,7 +890,9 @@ quarter of a bond: with less, taxol's AcO sat on its OBz.
   middle where that is clear, else turned within the gap, up to 25
   degrees short of its bonds, and drawn as short as 0.6 of a bond, where
   it is clearest (GR-2.1.6: a label clear of all else; an H on another
-  label reads as that label's).
+  label reads as that label's). ST-1.2.4 grades so every wedge 180
+  degrees or more from one of its plain neighbours; the layout catches
+  the ones in line, within 10 degrees: those are the ones it leaves.
 - An axis of chirality - a biaryl's bond, BINAP's C1-C1' - is shown by
   one wedge out of an end of it, narrow there, on the single bond to the
   neighbour that stands out of the page for the sense the axis has (or on
