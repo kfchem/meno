@@ -50,7 +50,8 @@ import { stoppedAt, clock, conformersWorked, doneSaid, PAIRED, drawnSaid, readDr
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { emptyIn, energiesBy, energyLevels, inputEntries, keepRun, keptOf, keptRun, laidOver, LAID_OVER, ranAs, ranEmpty, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
-import { runMenoDrawn, runMenoInTurns } from "../../workflow/meno";
+import { runMenoInTurns } from "../../workflow/meno";
+import { runMenoDrawnOff } from "../../workflow/enumerateOff";
 import { atomMapPlan, atomMapSet, moleculeOfEntry, type EntriesMapped } from "../../workflow/structureSteps";
 import { checked, CHECKS, type Checked } from "../../workflow/checkStructures";
 import { mapOntoOff } from "../../chem/mapProducts";
@@ -408,9 +409,12 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const now = doc.getState();
     if (!stepOf(now, id)) return;
     // (made from the lists as they were checked: typed on meanwhile, they are what the card then says has changed)
-    const made = runMenoDrawn("enumerate", entries, own, now.style, [checked]);
+    // (its products made off the drawing thread - laid out and told apart, a long list takes seconds: workflow/enumerateOff)
+    const made = await runMenoDrawnOff("enumerate", entries, own, now.style, [checked]);
+    // (stopped while they were made: nothing put in, and said so as below; the step taken away: nothing at all)
+    const stopped = menoStops.has(id);
     menoStops.delete(id);
-    const open = made.ok ? await leftOpen(id, at, made.kept) : "";
+    const open = stopped ? null : made.ok ? await leftOpen(id, at, made.kept) : "";
     // (stopped while its products were asked about: nothing put in, and the step says so, as Meno's say it)
     if (open == null) {
       menoStops.delete(id);

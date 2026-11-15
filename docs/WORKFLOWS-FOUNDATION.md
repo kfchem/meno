@@ -727,7 +727,10 @@ Agreed 2026-10-21. Specified here before it is built (*In order: the PRs*,
 *Enumerate*).
 
 **Enumerate is Meno's own.** It edits Meno's own graph by a rule written
-here, and runs no program. *Generate* stays a kind that plugins fill
+here, and runs no program. Its products are made off the thread the page
+draws on (`workflow/enumerateOff`, a worker of its own): each laid out and
+told from the others by its identity, a long list takes seconds, and the
+step shows its running state meanwhile; stopped then, nothing is put in. *Generate* stays a kind that plugins fill
 (*Kinds filled by plugins*). The two are told apart by what decides the
 structures:
 

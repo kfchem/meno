@@ -21,6 +21,10 @@ vi.mock("../workflow/meno", async (actual) => {
     runMenoInTurns: (...a: Parameters<typeof meno.runMenoInTurns>) => (given.push({ kind: a[0], own: a[3] }), meno.runMenoInTurns(a[0], a[1], a[2], a[3], a[4], { ...a[5], slice: 0, tell: 0 }, a[6])),
   };
 });
+vi.mock("../workflow/enumerateOff", async (actual) => {
+  const off = await actual<typeof import("../workflow/enumerateOff")>();
+  return { ...off, runMenoDrawnOff: (...a: Parameters<typeof off.runMenoDrawnOff>) => (given.push({ kind: a[0], own: a[2] }), off.runMenoDrawnOff(...a)) };
+});
 vi.mock("../workflow/configurations", async (actual) => ({
   ...(await actual<typeof import("../workflow/configurations")>()),
   perceiveStereo: async (entries: readonly unknown[]) => void perceived.push(entries.length),
