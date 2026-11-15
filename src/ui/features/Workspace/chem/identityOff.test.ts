@@ -32,6 +32,8 @@ afterEach(() => {
 const answered = () => new Promise((done) => setTimeout(done, 5));
 
 const PPH3 = "P(c1ccccc1)(c1ccccc1)c1ccccc1";
+// (another, for a test that leaves its drawing's key kept: workflow/entries keeps keys by drawing)
+const TOLYL = "P(c1ccc(C)cc1)(c1ccc(C)cc1)c1ccc(C)cc1";
 
 describe("a structure's identity, off the drawing thread", () => {
   it("is pending on the drawing thread where it is large and not yet answered, asked of the worker once, and known once answered", async () => {
@@ -61,6 +63,39 @@ describe("a structure's identity, off the drawing thread", () => {
     const moved = { ...m, atoms: m.atoms.map((a) => ({ ...a, x: a.x + 3, y: a.y - 2 })) };
     expect(identityKnown(identityInputOf(moved).input)).toBeDefined();
     expect(asked).toBe(1);
+  });
+});
+
+describe("a worker that cannot answer", () => {
+  it("is never left pending: the identity is worked out here instead, late, and a record of another structure is then taken off", async () => {
+    class FailingWorker {
+      onmessage: ((e: MessageEvent) => void) | null = null;
+      onerror: ((e: ErrorEvent) => void) | null = null;
+      postMessage(m: { id: number }) {
+        setTimeout(() => this.onmessage?.({ data: { id: m.id, ok: false, error: "it could not" } } as MessageEvent), 0);
+      }
+      terminate() {}
+    }
+    (globalThis as { Worker?: unknown }).Worker = FailingWorker;
+    forgetIdentities();
+    const m = drawnFromSmiles(TOLYL);
+    const ids = m.atoms.map((a) => a.id);
+    const record = { of: "not this structure", properties: { x: { value: 1, unit: "none" as const, status: "computed" as const } } };
+    expect(drawnHash(m, ids)).toBeUndefined();
+    await answered();
+    expect(identityKnown(identityInputOf(m).input)).toEqual(identity(identityInputOf(m).input));
+    expect(recordNow(record, m, ids)?.properties).toBeUndefined();
+  });
+
+  it("nor where it cannot be made at all", async () => {
+    (globalThis as { Worker?: unknown }).Worker = class {
+      constructor() {
+        throw new Error("no workers here");
+      }
+    };
+    forgetIdentities();
+    const input = identityInputOf(drawnFromSmiles(TOLYL)).input;
+    expect(await identitiesAsked([input])).toEqual([identity(input)]);
   });
 });
 

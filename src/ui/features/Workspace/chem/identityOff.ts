@@ -71,14 +71,22 @@ export function identityAsked(input: IdentityInput): Promise<Found> {
   if (had) return Promise.resolve(had);
   const going = asking.get(key);
   if (going) return going;
+  // (where the worker cannot answer - not made, stopped, or failing on it - worked out here instead, after the task at hand:
+  //  late, never left pending with no end, nor a record of another structure kept as this one's)
+  const here = () => new Promise<Found>((done) => setTimeout(() => done(identity(input)), 0));
   const answer =
     typeof Worker === "undefined"
       ? Promise.resolve().then(() => identity(input))
       : new Promise<Found>((done, fail) => {
           const id = ++asked;
           waiting.set(id, { done, fail });
-          started().postMessage({ id, input });
-        });
+          try {
+            started().postMessage({ id, input });
+          } catch (e) {
+            waiting.delete(id);
+            fail(e instanceof Error ? e : new Error(String(e)));
+          }
+        }).catch(here);
   const settled = answer
     .then((found) => {
       keep(key, found);
