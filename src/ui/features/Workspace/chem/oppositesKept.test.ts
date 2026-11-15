@@ -807,6 +807,29 @@ describe("two metals bridged, drawn by hand, and Clean-up", () => {
 
 });
 
+describe("two metals bridged, alike bridges, the metals told apart", () => {
+  it("are one structure whatever the order of their atoms: trans and cis [PtPdCl4(NH3)2], and [Pt2Cl4(NH3)(PMe3)]'s N on one Pt", () => {
+    // (each order a turn of the atoms' list and of the bonds', one way or reversed: the bridges' ranks were taken in the order
+    //  the input listed the metals - found in the chemistry check)
+    const orders = (m: Model): Model[] =>
+      Array.from({ length: 12 }, (_, k) => {
+        const turn = <T,>(xs: readonly T[]) => [...xs.slice(k % xs.length), ...xs.slice(0, k % xs.length)];
+        const atoms = turn(m.atoms);
+        const bonds = turn(m.bonds);
+        return { ...m, atoms: k % 2 ? atoms.reverse() : atoms, bonds: k % 3 ? bonds.map((b) => ({ ...b, a: b.b, b: b.a })) : bonds } as Model;
+      });
+    const pd = (m: Model) => ({ ...m, atoms: m.atoms.map((a, i) => (a.el === "Pt" && i === m.atoms.findIndex((x) => x.el === "Pt") ? { ...a, el: "Pd" } : a)) }) as Model;
+    const texts = (m: Model) => new Set(orders(m).map((o) => identityOfDrawn(o).text));
+    const trans = texts(pd(bridged("Pt", ["Cl", "Cl"], ["NH3", "Cl"], ["Cl", "NH3"])));
+    const cis = texts(pd(bridged("Pt", ["Cl", "Cl"], ["NH3", "Cl"], ["NH3", "Cl"])));
+    expect([trans.size, cis.size]).toEqual([1, 1]);
+    expect([...trans][0]).not.toBe([...cis][0]);
+    const mixed = bridged("Pt", ["Cl", "Cl"], ["NH3", "Cl"], ["Cl", "NH3"]);
+    const p = { ...mixed, atoms: mixed.atoms.map((a) => (a.el === "N" && a.x > 0 ? { ...a, el: "P", valence: undefined } : a)) } as Model;
+    expect(texts(p).size).toBe(1);
+  });
+});
+
 /**
  * Three metals in a chain, each two joined by two bridges of `br`, drawn by hand: the middle one at the centre, all its bonds bridges;
  * the left one's other donors `left` at 135 and 225 degrees, the right one's `right` at 45 and 315 - all turned by `turn` degrees.

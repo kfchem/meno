@@ -169,8 +169,10 @@ function classedNow(input: LayoutInput): Classed {
         const [u, v] = x.atoms;
         parts.push((x.cis ? 1 : -1) * endSet(adj, r, u, across(adj, u, v), p) * endSet(adj, r, v, across(adj, v, u), q));
       }
-      // (and a metal's donor, by the rank of the donor across from it: PtCl2Br(NH3)-'s Cl across Br is not its Cl across N)
-      for (const q of partnerOf.get(i) ?? []) parts.push(`x${r[q]}`);
+      // (and a metal's donor, by the rank of the donor across from it: PtCl2Br(NH3)-'s Cl across Br is not its Cl across N. A
+      //  bridge is a donor of two metals, across one donor at each: those ranks in order, not in the order the input lists the
+      //  metals - else the bridges of a dimer ranked by the order of its atoms, two texts for one structure: found in the chemistry check)
+      for (const v of (partnerOf.get(i) ?? []).map((q) => r[q]).sort((p, q) => p - q)) parts.push(`x${v}`);
       return parts.join(",");
     });
   const withStereo = (r: number[]): number[] => {
