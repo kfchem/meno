@@ -253,13 +253,13 @@
   },
   {
    "name": "substituents: a drawn H #1",
-   "molfile": "2752d4ed8952b763a23ee69a49c58aa894dcb6a8e7de55aa83051c3985818c57",
+   "molfile": "4afbe393839a3b7543fce077ebac53e91040231d121260396a06f0bbca11a000",
    "smiles": "C[C@@](F)(Cl)Br",
    "expected": "C[C@@](F)(Cl)Br"
   },
   {
    "name": "substituents: a drawn H #2",
-   "molfile": "1ffe17fecfdfefdc405a4d428898cc77b252156f8ae81351c5ffd4103aa71d19",
+   "molfile": "6bef236fc066e7d0adb4be5b1e208d247119e1bfb1af970c9fd382d255cd8dc6",
    "smiles": "CO[C@@](F)(Cl)Br",
    "expected": "CO[C@@](F)(Cl)Br"
   },

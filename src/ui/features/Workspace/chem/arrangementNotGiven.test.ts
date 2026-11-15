@@ -84,7 +84,7 @@ describe("a square-planar centre nobody gave the arrangement of", () => {
     const block = molblock("Pt", -2, ["Br", "Br", "Cl", "Cl"], [30, 110, 200, 290], amine);
     const said = metalsArrangedIn("[Pt@SP1-2](Br)(Br)(Cl)Cl.N(C)(C)CC", block);
     expect(said).toEqual([0]);
-    const keptGiven = await drawingOf(block, MENO, undefined, said);
+    const keptGiven = await drawingOf(block, MENO, undefined, undefined, said);
     expect(keptGiven.asCame).toBeDefined();
     expect(metalMarked(keptGiven, "Pt")).toBeUndefined();
   });
@@ -114,7 +114,7 @@ describe("a square-planar centre nobody gave the arrangement of", () => {
     expect(metalsArrangedIn("Cl[Pt-2](Br)(Cl)Br", block)).toEqual([]);
     // (a block whose atoms are not the SMILES's, element by element: nothing taken as given)
     expect(metalsArrangedIn("Br[Pt@SP1-2](Cl)(Cl)Br", block)).toEqual([]);
-    const given = await drawingOf(block, MENO, undefined, metalsArrangedIn("Cl[Pt@SP1-2](Br)(Cl)Br", block));
+    const given = await drawingOf(block, MENO, undefined, undefined, metalsArrangedIn("Cl[Pt@SP1-2](Br)(Cl)Br", block));
     expect(round(given, "Pt")).toBe("Br,Cl,Br,Cl");
     expect(metalMarked(given, "Pt")).toBeUndefined();
     // (the X it came as, kept: the bonds on the diagonals)
@@ -125,7 +125,7 @@ describe("a square-planar centre nobody gave the arrangement of", () => {
       expect(Math.abs(((t % 90) + 90) % 90 - 45)).toBeLessThan(1);
     }
     // (the same block from a SMILES with no mark: the engine's own way, marked)
-    const open = await drawingOf(block, MENO, undefined, metalsArrangedIn("Cl[Pt-2](Br)(Cl)Br", block));
+    const open = await drawingOf(block, MENO, undefined, undefined, metalsArrangedIn("Cl[Pt-2](Br)(Cl)Br", block));
     expect(metalMarked(open, "Pt")).toBe(ARRANGEMENT_SAID);
   });
 });
@@ -188,7 +188,7 @@ describe("a metal of six donors nobody gave the arrangement of", () => {
       ...m.atoms.map((a) => `${a.x.toFixed(4).padStart(10)}${a.y.toFixed(4).padStart(10)}${(0).toFixed(4).padStart(10)} ${a.el.padEnd(3)} 0  0  0  0  0  0  0  0  0  0  0  0`),
       ...m.bonds.map((b) => `${String(b.a).padStart(3)}${String(b.b).padStart(3)}  1  0`), "M  CHG  1   1   1", "M  END", ""].join("\n");
     expect(metalMarked(await drawingOf(block, MENO), "Co")).toBe(ARRANGEMENT_SAID);
-    expect(metalMarked(await drawingOf(block, MENO, undefined, [0]), "Co")).toBeUndefined();
+    expect(metalMarked(await drawingOf(block, MENO, undefined, undefined, [0]), "Co")).toBeUndefined();
     const chemist = await laidOut(editorModelOf((await processFileContent("drawn.mol", block)).model), MENO);
     expect(metalMarked(chemist, "Co")).toBeUndefined();
   });
@@ -266,7 +266,7 @@ describe("a metal its SMILES marks, with a chelate", () => {
     forgetLaidOut();
     const smiles = "[Co@OH1+]123456.Cl1.[NH2]2CC[NH2]3.[NH2]4CC[NH2]5.Cl6";
     const b = enCl([1, 10], [2, 6]);
-    expect(metalMarked(await drawingOf(b, MENO, undefined, metalsArrangedIn(smiles, b)), "Co")).toBe(ARRANGEMENT_SAID);
+    expect(metalMarked(await drawingOf(b, MENO, undefined, undefined, metalsArrangedIn(smiles, b)), "Co")).toBe(ARRANGEMENT_SAID);
   });
 });
 
@@ -293,13 +293,14 @@ describe("two square-planar metals held by two bridges", () => {
   });
 });
 
-describe("a four-bond metal drawn as an X, where the layout would make it a cross", () => {
-  it("is refused, saying so, and left as drawn - nickel with phosphines (laid out as the X: backlog 118)", { timeout: 120000 }, async () => {
+describe("a four-bond metal drawn as an X, its donors going on", () => {
+  it("is cleaned up as the X, its pairs across kept - nickel with phosphines, cis or trans, turned or not; platinum", { timeout: 120000 }, async () => {
+    for (const [metal, els, turn] of [["Ni", ["Cl", "P", "Cl", "P"], 0], ["Ni", ["Cl", "Cl", "P", "P"], 0], ["Ni", ["Br", "P", "Br", "P"], 10], ["Pt", ["Cl", "Cl", "P", "P"], 0]] as const) {
     forgetLaidOut();
-    const atoms: Model["atoms"] = [{ id: 1, x: 0, y: 0, r: 0.9, el: "Ni" }];
+    const atoms: Model["atoms"] = [{ id: 1, x: 0, y: 0, r: 0.9, el: metal }];
     const bonds: Model["bonds"] = [];
-    ["Cl", "P", "Cl", "P"].forEach((el, k) => {
-      const t = ((45 + 90 * k) * Math.PI) / 180;
+    els.forEach((el, k) => {
+      const t = ((45 + 90 * k + turn) * Math.PI) / 180;
       const d = atoms.length + 1;
       atoms.push({ id: d, x: 1.5 * Math.cos(t), y: 1.5 * Math.sin(t), r: 0.9, el });
       bonds.push({ id: 100 + bonds.length, a: 1, b: d, order: 1 });
@@ -310,7 +311,16 @@ describe("a four-bond metal drawn as an X, where the layout would make it a cros
         bonds.push({ id: 100 + bonds.length, a: d, b: atoms.length, order: 1 });
       }
     });
-    await expect(laidOut({ atoms, bonds } as Model, MENO)).rejects.toThrow(/Ni drawn as an X could not be laid out as one/);
+    const drawnModel = { atoms, bonds } as Model;
+    const after = await laidOut(drawnModel, MENO);
+    const m = after.atoms.find((a) => a.id === 1)!;
+    for (const b of after.bonds.filter((x) => x.a === 1 || x.b === 1)) {
+      const o = after.atoms.find((a) => a.id === (b.a === 1 ? b.b : b.a))!;
+      const t = (Math.atan2(o.y - m.y, o.x - m.x) * 180) / Math.PI;
+      expect(Math.abs((((t % 90) + 90) % 90) - 45), `${metal} ${els.join(",")}`).toBeLessThan(1);
+    }
+    expect(round(after, metal), `${metal} ${els.join(",")}`).toBe(round(drawnModel, metal));
+    }
   });
 });
 
@@ -343,5 +353,37 @@ describe("a four-bond metal drawn as an upright cross, where the layout would ma
     const xs = [{ x: 0, y: 0 }, at(45), at(135), at(225), at(315)].map((p) => ({ x: p.x / 1.5, y: p.y / 1.5 }));
     const laid = { x: xs.map((p) => p.x), y: xs.map((p) => p.y), depth: xs.map(() => null), solid: xs.map(() => false), bold: [], toward: [], dashed: [], wedges: [], hydrogens: [] } as unknown as Layout2D;
     expect(() => relayoutFrom(m, m, job, laid)).toThrow(/Pt drawn as an upright cross could not be laid out as one/);
+  });
+});
+
+describe("the metals a SMILES gives the arrangement of (`metalsArrangedIn`)", () => {
+  /** A MOL block (V2000) of `els` in that order, its atoms on a line, joined by `bonds` (1-based, single). */
+  const block = (els: string[], bonds: [number, number][]) =>
+    ["", "  test", "", `${String(els.length).padStart(3)}${String(bonds.length).padStart(3)}  0  0  0  0  0  0  0  0999 V2000`,
+      ...els.map((el, k) => `${(1.5 * k).toFixed(4).padStart(10)}${(0).toFixed(4).padStart(10)}${(0).toFixed(4).padStart(10)} ${el.padEnd(3)} 0  0  0  0  0  0  0  0  0  0  0  0`),
+      ...bonds.map(([a, b]) => `${String(a).padStart(3)}${String(b).padStart(3)}  1  0`), "M  END", ""].join("\n");
+  // (Cl, M, Cl, N, N: a metal with two chlorides and two ammines, atoms 1 to 5 from `at`)
+  const four = (at: number): [number, number][] => [[at + 1, at], [at + 1, at + 2], [at + 1, at + 3], [at + 1, at + 4]];
+
+  it("are only the metals marked at their own atom: of two metals, the one with @SP1, not the other", () => {
+    const b = block(["Cl", "Pt", "Cl", "N", "N", "Cl", "Pd", "Cl", "N", "N"], [...four(1), ...four(6)]);
+    expect(metalsArrangedIn("Cl[Pt@SP1](Cl)(N)N.Cl[Pd](Cl)(N)N", b)).toEqual([1]);
+    expect(metalsArrangedIn("Cl[Pt](Cl)(N)N.Cl[Pd@SP1](Cl)(N)N", b)).toEqual([6]);
+  });
+
+  it("are none where only an organic centre is marked: a [C@H] beside a metal gives the metal nothing", () => {
+    const b = block(["Cl", "Pt", "Cl", "N", "N", "C", "C", "F", "Cl"], [...four(1), [6, 7], [7, 8], [7, 9]]);
+    expect(metalsArrangedIn("Cl[Pt](Cl)(N)N.C[C@H](F)Cl", b)).toEqual([]);
+  });
+
+  it("are the metal alone where both a metal and an organic centre are marked", () => {
+    const b = block(["C", "C", "F", "Cl", "Cl", "Pt", "Cl", "N", "N"], [[1, 2], [2, 3], [2, 4], ...four(5)]);
+    expect(metalsArrangedIn("C[C@H](F)Cl.Cl[Pt@SP1](Cl)(N)N", b)).toEqual([5]);
+  });
+
+  it("are none where the block has atoms the SMILES has not, though the SMILES's atoms come first in it", () => {
+    const b = block(["Cl", "Pt", "Cl", "N", "N", "Na"], four(1));
+    expect(metalsArrangedIn("Cl[Pt@SP1](Cl)(N)N", b)).toEqual([]);
+    expect(metalsArrangedIn("Cl[Pt@SP1](Cl)(N)N", block(["Cl", "Pt", "Cl", "N", "N"], four(1)))).toEqual([1]);
   });
 });

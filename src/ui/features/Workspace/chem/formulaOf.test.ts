@@ -15,9 +15,9 @@ describe("a molecule in 3D drawn as a formula", () => {
     const ethane = { id: 1, at: { x: 0, y: 0 }, atoms: [{ el: "C", x: 0, y: 0, z: 0 }, { el: "C", x: 1.5, y: 0, z: 0 }], bonds: [{ a1: 0, a2: 1, order: 2 }], wholeWithoutH: true as const };
     const { model } = await formulaOf(chem, ethane, 0, WILEY);
     expect(model.atoms.map((a) => a.el)).toEqual(["C", "C"]);
-    expect(laidOut).toHaveBeenLastCalledWith(expect.objectContaining({ atoms: expect.any(Array) }), WILEY, undefined, true);
+    expect(laidOut).toHaveBeenLastCalledWith(expect.objectContaining({ atoms: expect.any(Array) }), WILEY, undefined, undefined, true);
     // (none given: the layout's own default, the app's style)
     await formulaOf(chem, ethane, 0);
-    expect(laidOut).toHaveBeenLastCalledWith(expect.objectContaining({ atoms: expect.any(Array) }), undefined, undefined, true);
+    expect(laidOut).toHaveBeenLastCalledWith(expect.objectContaining({ atoms: expect.any(Array) }), undefined, undefined, undefined, true);
   });
 });

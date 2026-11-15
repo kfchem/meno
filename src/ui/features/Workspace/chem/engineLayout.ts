@@ -47,6 +47,11 @@ export type LayoutJob = {
   folded: Map<number, number[]>;
   /** The axes and cumulenes of `input` are the structure's own text's, given in place of what its drawing says (`laidOut`): the drawing's reading of them is not to be kept. */
   given?: true;
+  /**
+   * The double bonds the structure's own text leaves without a configuration, drawn straight on so that they state none (`laidOut`), by their
+   * atoms' ids ("a,b", the smaller first): what a plugin's drawing of them said is not to be kept.
+   */
+  opened?: readonly string[];
 };
 
 /**
@@ -104,6 +109,9 @@ export function piSystems(part: Model, drawing: ReturnType<typeof drawingOf>): M
   return pi;
 }
 
+/** An H that is only an H: no mass number, charge or anything more a centre's count of its H's would lose. */
+const plainH = (a: Model["atoms"][number]) => a.el === "H" && !Object.keys(chemistry(a)).length;
+
 export function layoutJob(part: Model): LayoutJob {
   const drawing = drawingOf(part);
   const stereo = readStereo(drawing.atoms, drawing.bonds);
@@ -149,11 +157,12 @@ export function layoutJob(part: Model): LayoutJob {
         `(${unreadWhy(drawing.atoms, drawing.bonds, unread[0])}), so nothing was moved`,
     );
   }
-  // an H on a stereocentre, bonded to nothing else: the centre's own
+  // an H on a stereocentre, bonded to nothing else: the centre's own - but an H that is more than an H (a 2H, a 3H), which folded
+  // into its centre's count would be lost, and would leave the centre two H's alike where its groups differ only by isotope
   const foldedInto = new Map<number, number>();
   part.atoms.forEach((a, h) => {
     const mine = bondsOf.get(h) ?? [];
-    if (a.el !== "H" || mine.length !== 1) return;
+    if (!plainH(a) || mine.length !== 1) return;
     const b = drawing.bonds[mine[0]];
     const c = b.a === h ? b.b : b.a;
     if (b.order === 1 && part.atoms[c].el !== "H" && tetra.has(c)) foldedInto.set(h, c);
@@ -743,7 +752,7 @@ function stereoDiffers(part: Model, change: Relayout, job: LayoutJob): "changed"
       doubles: new Set([...job.input.bonds.flatMap((b) => (b.stereo ? [pair(job.ids[b.a], job.ids[b.b])] : [])), ...cumulated]),
       axes,
     },
-    job.given ? { doubles: cumulated, axes } : undefined,
+    job.given || job.opened?.length ? { doubles: new Set([...(job.given ? cumulated : []), ...(job.opened ?? [])]), axes: job.given ? axes : new Set<string>() } : undefined,
   );
 }
 
@@ -800,7 +809,8 @@ function stereoOf(m: Model) {
   const ids = m.atoms.map((a) => a.id);
   const { tetra, cisTrans, axes: drawnAxes, cumulated } = readStereo(d.atoms, d.bonds);
   const degree = degrees(m.bonds);
-  const asId = (n: number) => (n === -1 || (m.atoms[n].el === "H" && degree.get(ids[n]) === 1) ? -1 : ids[n]);
+  // (an H that is more than an H - a 2H, a 3H - is an atom of its own here too: two on one centre told apart)
+  const asId = (n: number) => (n === -1 || (plainH(m.atoms[n]) && degree.get(ids[n]) === 1) ? -1 : ids[n]);
   const centres = new Map<number, Tetrahedral>(
     [...tetra].map(([c, t]) => [ids[c], { neighbours: t.neighbours.map(asId), volume: t.volume }]),
   );
@@ -862,8 +872,10 @@ export function nextFree(model: Model): number {
  * six none drawn side by side; or six spokes drawn, laid out as two lines
  * and two side by side, where that picture reads only as the isomer drawn
  * (cis-[Co(en)2Cl2]+). Refused, saying so, where no move keeps it. Not at
- * a metal drawn in perspective, nor by mirroring a chelate drawn so, nor
- * where a change would need a donor of a larger chelate to move.
+ * a metal drawn in perspective - save by its two bridges to another metal,
+ * which stay, the metal's other donors changing places round it (cis- and
+ * trans-[Pt2Cl4(NH3)2]) - nor by mirroring a chelate drawn so, nor where a
+ * change would need a donor of a larger chelate to move.
  */
 /** How near, in bonds, two atoms of a metal's different donors may lie before the one's groups are turned clear (`oppositesKept`). */
 const CROWDED = 0.75;
@@ -885,7 +897,7 @@ export function oppositesKept(was: readonly { x: number; y: number }[], input: L
   for (let m = 0; m < was.length; m++) {
     const donors = near[m];
     const n = donors.length;
-    if (!isMetal(input.atoms[m].el) || (n !== 4 && n !== 6) || laid.depth[m] != null || donors.some((d) => d >= was.length) || (only && !only.has(m))) continue;
+    if (!isMetal(input.atoms[m].el) || (n !== 4 && n !== 6) || donors.some((d) => d >= was.length) || (only && !only.has(m))) continue;
     // (each donor's unit: what it carries, reached not through the metal - a chelate's, its donors' together)
     const reach = donors.map((d) => {
       const seen = new Set([d]);
@@ -902,6 +914,14 @@ export function oppositesKept(was: readonly { x: number; y: number }[], input: L
     // (a unit drawn in perspective - a phosphine's phenyls turned - is turned about the metal as any is; mirrored, it would show
     // its other face, so a chelate drawn so is not)
     const inDepth = (i: number) => [...reach[i]].some((a) => laid.depth[a] != null);
+    // (a unit that holds another metal - two metals' bridges, with all the other metal carries - drawn in perspective, their ring seen
+    // a little from above, stays where it is: turned, it would carry the other metal round with its ring's depth; the metal's own
+    // donors change places round it instead. Laid flat - a chain of three metals' middle one - it is turned or mirrored as any
+    // unit is, the other metal's donors with it, their pairs as they were)
+    const holdsMetal = (i: number) => [...reach[i]].some((a) => a !== donors[i] && isMetal(input.atoms[a].el));
+    // (a metal drawn in perspective is not - save one in perspective only by its bridges to another metal, their ring seen a little
+    // from above (placePair): its donors lie round it as drawn, in the page's plane, and its bridges stay)
+    if (laid.depth[m] != null && (donors.some((_, i) => inDepth(i) && !holdsMetal(i)) || !donors.some((_, i) => inDepth(i)))) continue;
     // (which stands opposite which, by the angles round the metal: lib/chem/arrangement `pairingDrawn`, the one reading
     // identity asks too. A tie - none said - leaves the layout's pairing: an isomer nobody gave)
     const pairing = (px: readonly number[], py: readonly number[]): number[] | null => {
@@ -990,9 +1010,10 @@ export function oppositesKept(was: readonly { x: number; y: number }[], input: L
         return;
       }
       const members = groups[g];
+      const stays = holdsMetal(members[0]) && inDepth(members[0]);
       const mirrors = members.length === 2 && !inDepth(members[0]) ? [false, true] : [false];
       for (const mirror of mirrors) {
-        for (let turn = 0; turn < n; turn++) {
+        for (let turn = 0; turn < (stays ? 1 : n); turn++) {
           const slots = members.map((i, k) => ((mirror ? slotOf[members[1 - k]] : slotOf[i]) + turn) % n);
           if (slots.some((t) => taken.has(t))) continue;
           const next = [...at];
