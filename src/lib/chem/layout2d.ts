@@ -16,6 +16,7 @@ import {
 import { italicUnits, labelRuns, labelUnits, namesRingFirst, readsAsNothing, reversedLabel, unitRuns } from "./abbreviations";
 import { ELEMENTS } from "./elements";
 import { notMetal } from "./perception/elements";
+import { runsOf } from "./perception/stereo/runs";
 import { greatest, least, pushAll } from "./lists";
 import { clearRowSide, namesLaid, rowClearer } from "../layout/names";
 
@@ -4402,24 +4403,13 @@ export function unspecifiedDoubles(atoms: Atom[], bonds: Bond[]): Bond[] {
     !b.query &&
     (b.display ?? "plain") === "plain";
   const otherEnd = (k: number, x: number) => (bonds[k].a1 === x ? bonds[k].a2 : bonds[k].a1);
-  // (a carbon, or an N+, between two double bonds and bonded to nothing else: a cumulene's run goes on through it, as the reader takes a
-  //  run - a sulfur's C=S=C is bent, no run)
-  const through = (x: number) => {
-    const here = at.get(x) ?? [];
-    const linear = atoms[x].el === "C" || (atoms[x].el === "N" && (atoms[x].charge ?? 0) === 1);
-    return linear && here.length === 2 && here.every((k) => bonds[k].order === 2 && bonds[k].a1 !== bonds[k].a2);
-  };
+  // (its runs of cumulated double bonds, as the reader takes them: perception/stereo/runs - a carbon, or an N+, between two double bonds
+  //  and bonded to nothing else, a run goes on through; a sulfur's C=S=C is bent, no run)
+  const runs = runsOf({ atoms, bonds: bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })) });
   /** The run of cumulated double bonds from `from` on through `to`, to its end: that end, the atom before it, and the double bonds walked past `from`-`to`. */
   const runEnd = (from: number, to: number): [number, number, number] => {
-    let [prev, end] = [from, to];
-    let more = 0;
-    for (let steps = 0; through(end) && steps <= atoms.length; steps++) {
-      const next = at.get(end)!.map((k) => otherEnd(k, end)).find((x) => x !== prev);
-      if (next == null) break;
-      [prev, end] = [end, next];
-      more++;
-    }
-    return [end, prev, more];
+    const run = runs.from(from, to);
+    return [run[run.length - 1], run[run.length - 2], run.length - 2];
   };
   bonds.forEach((d, i) => {
     if (d.order !== 2 || d.stereo !== "either") return;

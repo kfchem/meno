@@ -20,6 +20,7 @@ import { symmetryOrbits } from "./canonical";
 import { huckelBonds } from "../chem/huckel";
 import { movingCN } from "../chem/stereoOpen";
 import { factsOf, OPEN_RING } from "../chem/perception/facts";
+import { runsOf } from "../chem/perception/stereo/runs";
 import { placeStereo, type Stereo, type Wedge } from "./stereo";
 import type { Point } from "./geometry";
 import { IN_LINE, sameConfiguration, unsureStereo } from "../chem/perception/stereo/from2d";
@@ -263,7 +264,8 @@ function openOf(input: LayoutInput, doubles: boolean): { straight: number[]; eit
   // (its rings the core's, as the reader takes them: perception/facts)
   const facts = factsOf({ atoms: input.atoms.map((a) => ({ el: a.el })), bonds: once });
   const bondOf = (a: number, b: number) => facts.bondBetween(a, b);
-  const cumulated = (end: number, other: number) => neighbours[end].some((m) => m !== other && (order.get(key(end, m)) ?? 0) >= 2);
+  // (its runs of cumulated double bonds: perception/stereo/runs, the reader's rule of what a run goes on through)
+  const runs = runsOf({ atoms: input.atoms, bonds: once });
   let orbits: number[] | null = null;
   let huckel: Set<string> | null = null;
   let moving: Map<number, unknown> | null = null;
@@ -275,7 +277,7 @@ function openOf(input: LayoutInput, doubles: boolean): { straight: number[]; eit
     const groups = (end: number, other: number) => neighbours[end].filter((m) => m !== other);
     const [ga, gb] = [groups(b.a, b.b), groups(b.b, b.a)];
     if (!ga.length || !gb.length || ga.length > 2 || gb.length > 2) return;
-    if (facts.inRingSmallerThan(bondOf(b.a, b.b), OPEN_RING) || cumulated(b.a, b.b) || cumulated(b.b, b.a)) return;
+    if (facts.inRingSmallerThan(bondOf(b.a, b.b), OPEN_RING) || runs.cumulatedAt(b.a, b.b) || runs.cumulatedAt(b.b, b.a)) return;
     // (a bond of a Hückel ring - an aromatic macrocycle's, a porphyrin's - has no cis or trans: its Kekulé form is only one way of writing it)
     if ((huckel ??= huckelBonds(n, input.bonds)).has(key(b.a, b.b))) return;
     if ((moving ??= movingCN(input.atoms, input.bonds)).has(i)) return;
@@ -288,18 +290,13 @@ function openOf(input: LayoutInput, doubles: boolean): { straight: number[]; eit
   // an odd cumulene's (a butatriene's: an odd number of double bonds end to end, its run drawn straight through) cis or trans across its
   // two ends, as the reader takes it (`readStereo`), open as a double bond's is where nothing gives it (`LayoutInput.cumulated`): each end
   // with one group kept straight on, or a wavy bond on a group of an end (`either`, on that end's double bond)
-  const middle = (x: number) => {
-    const el = input.atoms[x].el ?? "C";
-    const linear = el === "C" || (el === "N" && (input.atoms[x].charge ?? 0) === 1);
-    return linear && neighbours[x].length === 2 && neighbours[x].every((m) => order.get(key(x, m)) === 2);
-  };
+  const { middle } = runs;
   const given = new Set((input.cumulated ?? []).map((c) => key(c.atoms[0], c.atoms[1])));
   for (let i = 0; i < n; i++) {
     if (middle(i)) continue;
     for (const m of neighbours[i]) {
       if (order.get(key(i, m)) !== 2 || !middle(m)) continue;
-      const run = [i, m];
-      while (middle(run[run.length - 1]) && run.length <= n) run.push(neighbours[run[run.length - 1]].find((x) => x !== run[run.length - 2])!);
+      const run = runs.from(i, m);
       const j = run[run.length - 1];
       // (once for each run, from its lower end; an even run of double bonds - an allene's - has an axis, not a cis or trans)
       if (j <= i || run.length % 2 === 1 || given.has(key(i, j))) continue;

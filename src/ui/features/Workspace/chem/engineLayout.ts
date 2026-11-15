@@ -32,6 +32,7 @@ import type { Bond, Model } from "../store/types";
 import { degrees, drawingOf } from "./drawing";
 import { editorLayoutOptions, layoutBonds } from "../layoutOptions";
 import { greatest } from "../../../../lib/chem/lists";
+import { runsThrough } from "../../../../lib/chem/perception/stereo/runs";
 
 export type LayoutJob = {
   input: LayoutInput;
@@ -828,12 +829,8 @@ function stereoOf(m: Model) {
     doubles.set(a < z ? `${a},${z}` : `${z},${a}`, { refs, cis: x.cis });
   }
   // (an end's other neighbours: but the other end, a biaryl's, or the cumulated double bond it runs on through, an allene's)
-  const bonded = (x: number, y: number) => d.bonds.some((b) => (b.a === x && b.b === y) || (b.a === y && b.b === x));
-  const through = (x: number, end: number) => {
-    if (bonded(x, end)) return end;
-    const run = d.bonds.find((b) => b.order >= 2 && (b.a === x || b.b === x));
-    return run ? (run.a === x ? run.b : run.a) : end;
-  };
+  // (perception/stereo/runs `runsThrough`, of the atom's bonds in their order; the other end where it has neither)
+  const through = (x: number, end: number) => runsThrough(d.bonds.flatMap((b) => (b.a === x ? [{ to: b.b, order: b.order }] : b.b === x ? [{ to: b.a, order: b.order }] : [])), end) ?? end;
   const others = (x: number, end: number) => {
     const skip = through(x, end);
     return d.bonds.flatMap((b) => (b.a === x && b.b !== skip ? [b.b] : b.b === x && b.a !== skip ? [b.a] : []));

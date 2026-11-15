@@ -18,6 +18,7 @@ import { lonePairCentres } from "./lonePairCentres";
 import { implicitHydrogens } from "./molecule";
 import { isMetal } from "../layout/perceive";
 import { CHELATE_RING } from "./chelateRing";
+import { runsOf, type Runs } from "./perception/stereo/runs";
 
 export type SmilesAtom = {
   el: string;
@@ -242,6 +243,8 @@ export function readSmiles(text: string, { metalMarks = false }: { metalMarks?: 
     : () => false;
   const orderOf = new Map(bonds.map((b) => [b.a1 < b.a2 ? `${b.a1},${b.a2}` : `${b.a2},${b.a1}`, b.order]));
   const order = (a: number, b: number) => orderOf.get(a < b ? `${a},${b}` : `${b},${a}`) ?? 0;
+  // (its runs of cumulated double bonds: perception/stereo/runs, the reader's rule of what a run goes on through)
+  const runs = runsOf({ atoms, bonds: bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })) });
   const axes: Axial[] = [];
   const arrangements: MarkedArrangement[] = [];
   for (const [at, written] of chiral) {
@@ -285,9 +288,8 @@ export function readSmiles(text: string, { metalMarks = false }: { metalMarks?: 
       continue;
     }
     // (an @ between two double bonds: an allene's middle atom - a carbon or an N+, not a sulfur's: C=S=C is bent)
-    const next = around[at].filter((n) => n >= 0);
-    if (linearMiddle(atoms[at]) && next.length === 2 && next.every((n) => order(at, n) === 2)) {
-      axes.push(alleneAxis(at, mark, atoms, around, order, text));
+    if (runs.middle(at)) {
+      axes.push(alleneAxis(at, mark, atoms, around, order, text, runs));
       continue;
     }
     const double = bonds.some((b) => b.order === 2 && (b.a1 === at || b.a2 === at));
@@ -311,9 +313,8 @@ export function readSmiles(text: string, { metalMarks = false }: { metalMarks?: 
   // and an odd cumulene's, likewise, at its two ends (OpenSMILES, *Cis/Trans
   // configuration of double bonds*: F/C=C=C=C/F trans, F/C=C=C=C\F cis)
   const cumulated: Cumulated[] = [];
-  for (const run of cumulatedRuns(atoms, around, order)) {
-    // (an odd number of double bonds: an even number of atoms)
-    if (run.length % 2 === 1) continue;
+  for (const { atoms: run, odd } of runs.all) {
+    if (!odd) continue;
     const [t1, c1] = [run[0], run[1]];
     const [t2, c2] = [run[run.length - 1], run[run.length - 2]];
     const [p, q] = [side(t1, c1), side(t2, c2)];
@@ -358,32 +359,6 @@ export function pairsMarked(mark: string, neighbours: readonly number[]): [numbe
   return [[neighbours[0], neighbours[across]], ...pick(neighbours.filter((_, k) => k !== 0 && k !== across), shape)];
 }
 
-/** Whether an atom between two double bonds is drawn straight through: a carbon, or an N+ - a sulfur's C=S=C is bent, and has no axis (the rule the restraints' linear-by-bonds has). */
-const linearMiddle = (a: SmilesAtom) => a.el === "C" || (a.el === "N" && a.charge === 1);
-
-/**
- * Each run of cumulated double bonds, by its atoms end to end (an
- * allene's three, a butatriene's four), its first end the one whose atom
- * comes first; a run is two or more double bonds, each atom between its
- * ends with no other neighbour.
- */
-function cumulatedRuns(atoms: readonly SmilesAtom[], around: readonly number[][], order: (a: number, b: number) => number): number[][] {
-  const n = atoms.length;
-  const near = (a: number) => (around[a] ?? []).filter((m) => m >= 0);
-  const middle = (a: number) => linearMiddle(atoms[a]) && near(a).length === 2 && near(a).every((m) => order(a, m) === 2);
-  const runs: number[][] = [];
-  for (let a = 0; a < n; a++) {
-    if (middle(a)) continue;
-    for (const m of near(a)) {
-      if (order(a, m) !== 2 || !middle(m)) continue;
-      const run = [a, m];
-      while (middle(run[run.length - 1])) run.push(near(run[run.length - 1]).find((x) => x !== run[run.length - 2])!);
-      if (run[0] < run[run.length - 1]) runs.push(run);
-    }
-  }
-  return runs;
-}
-
 /**
  * An allene's axis from the @ or @@ on its middle atom (OpenSMILES,
  * *Tetrahedral Allene-like Systems*): the run of cumulated double bonds
@@ -397,18 +372,14 @@ function cumulatedRuns(atoms: readonly SmilesAtom[], around: readonly number[][]
  * turns nothing. A mark not on the middle of an even run, or an end
  * without two neighbours besides the run (a CH2), is refused.
  */
-function alleneAxis(at: number, mark: string, atoms: readonly SmilesAtom[], around: readonly number[][], order: (a: number, b: number) => number, text: string): Axial {
+function alleneAxis(at: number, mark: string, atoms: readonly SmilesAtom[], around: readonly number[][], order: (a: number, b: number) => number, text: string, runs: Runs): Axial {
   const why = (reason: string) => new Error(`Cannot read the configuration at [${atoms[at].el}${mark}] in ${text}: ${reason}`);
   if (mark !== "@" && mark !== "@@") throw why("only @ and @@ are read");
   const near = (a: number) => around[a].filter((m) => m >= 0);
   // (each way along the run to its end: the end, and the atom before it)
   const end = (from: number) => {
-    let [prev, x, steps] = [at, from, 1];
-    while (linearMiddle(atoms[x]) && near(x).length === 2 && near(x).every((m) => order(x, m) === 2)) {
-      [prev, x] = [x, near(x).find((m) => m !== prev)!];
-      steps++;
-    }
-    return { end: x, before: prev, steps };
+    const run = runs.from(at, from);
+    return { end: run[run.length - 1], before: run[run.length - 2], steps: run.length - 1 };
   };
   const [first, last] = near(at).map(end);
   if (first.steps !== last.steps) throw why("it is not the middle atom of its run of cumulated double bonds");
