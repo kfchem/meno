@@ -3,12 +3,12 @@
  * each number set by a structure in its figures (./pageStructures
  * `compoundLabelsOf`), and where each structure so numbered lies - its page,
  * its figure and its key there. Kept as its figures are read: by the pointer
- * on one, and through the whole PDF in idle time (`indexPdf`), a page at a
+ * on one, and through the whole PDF once the hands rest (`indexPdf`, lib/core/calm), a page at a
  * time, never holding up what is shown. A number set by more than one
  * structure - a compound drawn again in a later scheme - keeps each, in the
  * order of the pages.
  */
-import { whenIdle } from "../../../../lib/core/idle";
+import { whenCalm } from "../../../../lib/core/calm";
 import type { Box } from "../../../../lib/pdf/figures";
 import type { CompoundLabel } from "./pageStructures";
 
@@ -76,8 +76,8 @@ export function hurryIndex(sha256: string): void {
 }
 
 /**
- * Every page of a PDF gone through for its compounds' numbers, in idle time:
- * one page, then the window's next idle moment, then the next - each page's
+ * Every page of a PDF gone through for its compounds' numbers, once the hands
+ * rest (lib/core/calm): one page, then the next moment they rest, then the next - each page's
  * figures read as the column reads them (`readPage`), kept in the index. Once
  * for a PDF: asked again while it goes, the same; a page that could not be
  * read is left, and gone through again the next time it is asked. Hurried
@@ -88,7 +88,7 @@ export function indexPdf(
   sha256: string,
   pages: number,
   readPage: PageLabels,
-  idle: (go: () => void) => void = whenIdle,
+  idle: (go: () => void) => void = whenCalm,
   next: (go: () => void) => void = (go) => setTimeout(go, 0),
 ): Promise<void> {
   const ix = indexOf(sha256);
@@ -98,7 +98,7 @@ export function indexPdf(
   const run = (async () => {
     for (let p = 0; p < pages; p++) {
       if (ix.pages.has(p)) continue;
-      // (waiting for an idle moment, or - hurried, now or while it waits - only for the window's next turn)
+      // (waiting for the hands to rest, or - hurried, now or while it waits - only for the window's next turn)
       await new Promise<void>((go) => {
         if (hurried.has(sha256)) return next(go);
         waking.set(sha256, () => next(go));

@@ -105,6 +105,16 @@ function textureOf(d: DrawnPart, mip: boolean): THREE.Texture {
   return tex;
 }
 
+/** How many pages either way of the one in view have their previews drawn ahead while the view is still. */
+export const PREVIEWS_AHEAD = 12;
+/** How many previews ahead are asked of the reader at once: the rest wait, so that a tile asked meanwhile comes first. */
+const AHEAD_AT_ONCE = 2;
+
+/** How long, in ms, after a picture is put on the graphics card the next waits: a frame's worth, so that two views - or two PDFs' - asking in one frame put one. */
+const UPLOAD_GAP_MS = 8;
+/** When the last picture was put on the graphics card, by any `Pictures` - each PDF on the page keeps its own, and they draw in the same frames (ms). */
+let uploadedAt = -Infinity;
+
 /** How many levels a page is drawn at to each doubling: a sixteenth of one apart. */
 export const LEVELS_PER_DOUBLING = 16;
 /**
@@ -162,7 +172,11 @@ export class Pictures {
    * putting them on the graphics card is spread over frames, not all in one
    * as the view moves.
    */
-  private arriving: { key: string; d: DrawnPart }[] = [];
+  private arriving: { key: string; d: DrawnPart; preview?: true }[] = [];
+  /** The previews asked ahead (`previewsAround`) not yet come. */
+  private aheadAsked = new Set<string>();
+  /** The previews asked ahead whose reading failed (none drawn, or an error): not asked ahead again. */
+  private aheadFailed = new Set<string>();
   /** The part of each page last asked for as seen, by PDF and page: its level, and its pixels at it. */
   seen = new Map<string, { level: number; x0: number; y0: number; x1: number; y1: number }>();
   private listeners = new Set<() => void>();
@@ -181,18 +195,48 @@ export class Pictures {
     const key = `${p.sha256}:${page}`;
     const had = this.previews.get(key);
     if (had && had !== "asked") return had;
-    if (!had && p.pages[page] && !isLocked(p.sha256)) {
-      this.previews.set(key, "asked");
-      const [w] = p.pages[page];
-      void drawPart({ sha256: p.sha256, page, scale: PREVIEW_PX / w }, () => -1)
-        .then((d) => {
-          if (!d) return void this.previews.delete(key);
-          this.previews.set(key, { tex: textureOf(d, true), born: performance.now() });
-          this.came();
-        })
-        .catch(() => this.previews.delete(key));
-    }
+    if (!had && p.pages[page] && !isLocked(p.sha256)) this.askPreview(p, page, -1);
     return null;
+  }
+
+  /** A page's preview asked of the reader, `nearness` its place in the reader's queue (smaller first); `done` told once it is had (true) or not. */
+  private askPreview(p: { sha256: string; pages: readonly (readonly [number, number])[] }, page: number, nearness: number, done?: (had: boolean) => void): void {
+    const key = `${p.sha256}:${page}`;
+    this.previews.set(key, "asked");
+    const [w] = p.pages[page];
+    void drawPart({ sha256: p.sha256, page, scale: PREVIEW_PX / w }, () => nearness)
+      .then((d) => {
+        done?.(!!d);
+        if (!d) return void this.previews.delete(key);
+        // (put on the graphics card as the tiles are, a frame at a time - not all in the frame they come in, nor inside the draw)
+        this.arriving.push({ key, d, preview: true });
+        this.came();
+      })
+      .catch(() => {
+        done?.(false);
+        this.previews.delete(key);
+      });
+  }
+
+  /**
+   * The previews of the pages either side of `page`, nearest first, asked a couple at a time while the view is still - after every tile
+   * of what is seen in the reader's queue - so that a page a fast scroll comes to is drawn small at once, not left white while its tiles come.
+   */
+  previewsAround(p: { sha256: string; pages: readonly (readonly [number, number])[] }, page: number, reach = PREVIEWS_AHEAD): void {
+    if (isLocked(p.sha256)) return;
+    for (let d = 1; d <= reach && this.aheadAsked.size < AHEAD_AT_ONCE; d++) {
+      for (const i of [page + d, page - d]) {
+        if (i < 0 || i >= p.pages.length || this.aheadAsked.size >= AHEAD_AT_ONCE) continue;
+        const key = `${p.sha256}:${i}`;
+        // (one whose reading failed is not asked ahead again: only when it is seen - else a page that always fails is asked each frame)
+        if (this.previews.has(key) || this.aheadFailed.has(key)) continue;
+        this.aheadAsked.add(key);
+        this.askPreview(p, i, 1 + d, (had) => {
+          this.aheadAsked.delete(key);
+          if (!had) this.aheadFailed.add(key);
+        });
+      }
+    }
   }
 
   /** The tiles of a page's part asked for where they are not had, each marked as wanted now; whether any was asked for. */
@@ -292,12 +336,15 @@ export class Pictures {
   reveal(most = 1, upload?: (tex: THREE.Texture) => void): boolean {
     let shown = 0;
     while (shown < most && this.arriving.length) {
-      const { key, d } = this.arriving.shift()!;
+      // (a frame's worth: both the column and the page ask each frame, and a 1024 px tile is several ms to put on the graphics card - one is put, the rest wait for the next frame)
+      if (Number.isFinite(most) && performance.now() - uploadedAt < UPLOAD_GAP_MS) break;
+      const { key, d, preview } = this.arriving.shift()!;
       // (asked for still: one dropped meanwhile is not shown)
-      if (this.tiles.get(key) !== "asked") continue;
-      const tex = textureOf(d, false);
+      if ((preview ? this.previews : this.tiles).get(key) !== "asked") continue;
+      const tex = textureOf(d, !!preview);
       upload?.(tex);
-      this.tiles.set(key, { tex, born: performance.now() });
+      (preview ? this.previews : this.tiles).set(key, { tex, born: performance.now() });
+      uploadedAt = performance.now();
       shown++;
     }
     if (shown) this.came();

@@ -17,9 +17,11 @@ import { COORDINATION_BOND } from "../../../../lib/chem/molecule";
 import { skeletonWhy } from "../../../../lib/chem/skeleton";
 import { calcOf, OUTPUT_SCHEMA, type CalcInfo, type CalcSource, type ReaderOutput } from "../../../../lib/calc/output";
 import { REFINED_SAID } from "../../../../lib/calc/paths";
+import { angle, dihedral, distance } from "../../../../lib/steps/measure";
+import { LINE_WITHIN, restraintSaid } from "../../../../lib/steps/restraints";
 import type { JobFile } from "../../../../lib/jobs";
 import { CALC_CARRIED, calcProperties, setEntries, withoutCarried, type SetEntry } from "./entries";
-import { convergedAt, convergedOf } from "./converged";
+import { convergedAt, convergedOf, heldSaid } from "./converged";
 import { inputOf, type Flow } from "./flow";
 import { levelKey, levelSaid, matchesOf, mostOf, pairEntries, PATH_PAIR, sideUnlike, type PairAs } from "./pairs";
 import type { OptionValues } from "../../../../lib/options";
@@ -77,8 +79,7 @@ export async function entryFiles(
 
 /**
  * An entry as a plugin is given it - with `wired`, the restraints its step
- * holds for it (workflow/heldRows), in place of any it carries; none given,
- * those it carries (Torsion restraints'), as they ride.
+ * holds for it (workflow/heldRows), and where they were first held.
  */
 export function pluginEntry(e: SetEntry, wired?: readonly Restraint[]): PluginEntry {
   const molecule: WrittenMolecule = {
@@ -105,7 +106,7 @@ export function pluginEntry(e: SetEntry, wired?: readonly Restraint[]): PluginEn
   // (a skeleton is refused before anything is sent - stepRuns, `skeletonsRefused` - so none comes here)
   if (!species) throw new Error(skeletonWhy());
   const { charge, multiplicity } = species;
-  // (its restraints, as Restraints and Torsion restraints left them: what a plugin that minimises with them holds - and where they were first held)
+  // (where the restraints wired in for it were first held, where a minimisation has held them)
   const held = e.properties?.restraints;
   const restraints = held?.status === "computed" && typeof held.value === "object" && held.value !== null && "restraints" in held.value ? held.value : undefined;
   return {
@@ -119,7 +120,7 @@ export function pluginEntry(e: SetEntry, wired?: readonly Restraint[]): PluginEn
     ...(e.end ? { end: pluginEntry(e.end) } : {}),
     // (its sides, where it is a guess paired with them: each given as it is - Optimise to a saddle point's)
     ...(e.sides ? { sides: { reactant: pluginEntry(e.sides.reactant), product: pluginEntry(e.sides.product) } } : {}),
-    ...(wired ? { restraints: wired.map((r) => ({ ...r, atoms: [...r.atoms] })) } : restraints?.restraints.length ? { restraints: restraints.restraints.map((r) => ({ ...r, atoms: [...r.atoms] })) } : {}),
+    ...(wired?.length ? { restraints: wired.map((r) => ({ ...r, atoms: [...r.atoms] })) } : {}),
     ...(restraints?.start ? { start: [...restraints.start] } : {}),
   };
 }
@@ -439,7 +440,7 @@ function keptAnew(entry: SetEntry, xyz: readonly number[], charge?: number | nul
  * geometry, as far as it came, is the entry of the step's Failed exit -
  * never passed on as a minimum (until 2026-10-22 it was).
  */
-export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, readers: readonly string[], source?: CalcSource, held: readonly number[] = [], restrained = false): Worked | Failure {
+export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, readers: readonly string[], source?: CalcSource, held: readonly number[] = [], restrained = false, exact: readonly Restraint[] = []): Worked | Failure {
   const n = entry.atoms.length;
   if (out.atoms.length !== n || out.atoms.some((el, i) => el !== entry.atoms[i].el)) return { kind: "wrong-molecule", why: "What came back is not the molecule that went" };
   const frames = out.frames.filter((f) => f.length === 3 * n && f.every(Number.isFinite));
@@ -457,6 +458,12 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
   //  fails the entry, never passed on as held)
   const moved = holding?.find((a) => Math.hypot(last[3 * a] - entry.xyz[3 * a], last[3 * a + 1] - entry.xyz[3 * a + 1], last[3 * a + 2] - entry.xyz[3 * a + 2]) > HELD_MOVED_MOST);
   if (moved != null) return { kind: "failed", why: `Atom ${moved + 1} moved though held` };
+  // (each distance and dihedral held exactly, where a run said converged ended: one not at its value - its program, or its
+  //  optimiser, not holding it - fails the entry, saying where it ended, never passed on as held. A run not converged is
+  //  said so, below, as one that held none is: it may have stopped short of a value it was making for)
+  const rows = (kind === "optimise" || kind === "saddle-point") && exact.length ? exact : undefined;
+  const missed = out.optimised === true ? rows?.map((r) => exactMissed(r, last)).find((w) => w) : undefined;
+  if (missed) return { kind: "failed", why: missed };
   if (kind === "path-search") return pathWorked(entry, out, frames, energies, calc);
   if (kind === "energy") return singlePointWorked(entry, last, energies, calc);
   if (kind === "reaction-path") return reactionPathWorked(entry, out, frames, energies, calc);
@@ -473,15 +480,19 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
   const converged = failed
     ? undefined
     : kind === "optimise" && out.optimised === true
-      ? holding
-        ? convergedAt("optimisation with atoms held", last, holding)
-        : convergedAt("optimisation", last)
+      ? rows
+        ? convergedAt("optimisation with restraints held", last, holding, rows)
+        : holding
+          ? convergedAt("optimisation with atoms held", last, holding)
+          : convergedAt("optimisation", last)
       : kind === "saddle-point" && out.optimised === true
-        ? holding
-          ? convergedAt("saddle point optimisation with atoms held", last, holding)
-          : convergedAt("saddle point optimisation", last)
+        ? rows
+          ? convergedAt("saddle point optimisation with restraints held", last, holding, rows)
+          : holding
+            ? convergedAt("saddle point optimisation with atoms held", last, holding)
+            : convergedAt("saddle point optimisation", last)
         : kind === "frequencies" && was && sameShape(entry.xyz, last)
-          ? convergedAt(was.how, last, was.held)
+          ? convergedAt(was.how, last, was.held, was.rows)
           : undefined;
   return {
     // (a failed run's entry taken as a start geometry alone: nothing of it a result - its energy, calculation and mark dropped)
@@ -519,20 +530,19 @@ export function stoppedAt(kind: StepKind, entry: SetEntry, out: ReaderOutput, re
 }
 
 /**
- * An entry's restraints once a minimisation has held them - those it
- * carries, or those wired in for it (`restrained`) - saying where they were
- * first held (`start`): where they already say, as they say; else where
- * the entry stood as it came - so that a later minimisation, asked to,
- * starts again from there, as case F's rounds each start from the geometry
- * before the first (docs/WORKFLOWS-FOUNDATION.md, F15). Rows wired in are
- * not carried on: the next step holds what is wired into it. Nothing where
- * it held none.
+ * Where an entry's restraints - those wired in for it (`restrained`) -
+ * were first held, once a minimisation has held them (`start`): where it
+ * already says, as it says; else where the entry stood as it came - so
+ * that a later minimisation, asked to, starts again from there, as case F's
+ * rounds each start from the geometry before the first
+ * (docs/WORKFLOWS-FOUNDATION.md, F15). The rows are not carried on: the next
+ * step holds what is wired into it. Nothing where it held none.
  */
 function firstHeld(entry: SetEntry, restrained: boolean): Pick<SetEntry, "properties"> | Record<string, never> {
   const held = entry.properties?.restraints;
   const was = held?.status === "computed" && typeof held.value === "object" && held.value !== null && "restraints" in held.value ? held.value : undefined;
-  if (was?.start || (!was?.restraints.length && !restrained)) return {};
-  return { properties: { ...anew(entry).properties, restraints: { value: { restraints: was?.restraints ?? [], start: [...entry.xyz] }, unit: "none", status: "computed" } } };
+  if (was?.start || !restrained) return {};
+  return { properties: { ...anew(entry).properties, restraints: { value: { restraints: [], start: [...entry.xyz] }, unit: "none", status: "computed" } } };
 }
 
 /** How far, in Å, a distance between two atoms may differ in what a single point printed back - its program's rounding - before an atom is taken to have moved. */
@@ -716,6 +726,48 @@ const HELD_MOVED_MOST = 1e-4;
 
 /** The atoms `rows` fix where they stand, from 0, each once and in order: none where they fix none. */
 export const fixedAtoms = (rows: readonly Restraint[]): number[] => [...new Set(rows.flatMap((r) => (r.kind === "fixed" ? r.atoms : [])))].sort((a, b) => a - b);
+
+/** The rows of `rows` held exactly - a distance or a dihedral at its value (lib/entry `Restraint`, `exact`) - in their order: none where they hold none. */
+export const exactRows = (rows: readonly Restraint[]): Restraint[] => rows.filter((r) => r.kind !== "fixed" && r.exact === true);
+
+/** A point of `xyz`, atom `i` from 0. */
+const pointOf = (xyz: readonly number[], i: number): [number, number, number] => [xyz[3 * i], xyz[3 * i + 1], xyz[3 * i + 2]];
+
+/**
+ * Whether a row held exactly ended at its value at the places `xyz`: none
+ * where it did; where it did not, why, saying where it ended and its value
+ * ("Torsion 1-2-3-4 ended at 59.980°, held at 60°"). On the one basis of
+ * atoms held, `HELD_MOVED_MOST`, so that no second number is needed:
+ * - a distance within `HELD_MOVED_MOST` Å of its value;
+ * - a dihedral within the angle through which an end atom moved
+ *   `HELD_MOVED_MOST` turns it - `HELD_MOVED_MOST / (r sin θ)` radians, r
+ *   its end bond and θ the angle at the inner atom, the nearer of its two
+ *   ends (the smaller lever), at the places it ended - its angle and its
+ *   value compared the shorter way round, so that 179.999° and -179.999°
+ *   are 0.002° apart. Three of its atoms ended in a line - a bond angle
+ *   within `LINE_WITHIN` of 180° or of 0°, the guard a torsion is refused by
+ *   as it is made - and it has no angle to hold: missed, said so, as it is
+ *   where an end atom ended within `HELD_MOVED_MOST` of its neighbour's
+ *   axis. The same 1° bounds a torsion going in and coming out: within it,
+ *   the lever is so short that nearly any angle would pass.
+ */
+export function exactMissed(r: Restraint, xyz: readonly number[]): string | null {
+  const p = r.atoms.map((a) => pointOf(xyz, a));
+  const said = restraintSaid(r);
+  const Said = said.charAt(0).toUpperCase() + said.slice(1);
+  const value = r.value ?? NaN;
+  if (r.kind === "distance") {
+    const d = distance(p[0], p[1]);
+    return Math.abs(d - value) <= HELD_MOVED_MOST ? null : `${Said} ended at ${d.toFixed(5)} \u00c5, held at ${value} \u00c5`;
+  }
+  const bends = [angle(p[0], p[1], p[2]), angle(p[1], p[2], p[3])];
+  if (bends.some((t) => !(t >= LINE_WITHIN && t <= 180 - LINE_WITHIN))) return `${Said} ended with three of its atoms in a line, within ${LINE_WITHIN}\u00b0: no torsion to hold at ${value}\u00b0`;
+  const lever = Math.min(distance(p[0], p[1]) * Math.sin((bends[0] * Math.PI) / 180), distance(p[2], p[3]) * Math.sin((bends[1] * Math.PI) / 180));
+  if (!(lever > HELD_MOVED_MOST)) return `${Said} ended with an end atom within ${HELD_MOVED_MOST} \u00c5 of its neighbour's axis: no torsion to hold at ${value}\u00b0`;
+  const phi = dihedral(p[0], p[1], p[2], p[3]);
+  const off = Math.abs(((((phi - value) % 360) + 540) % 360) - 180);
+  return off <= (HELD_MOVED_MOST / lever) * (180 / Math.PI) ? null : `${Said} ended at ${phi.toFixed(3)}\u00b0, held at ${value}\u00b0`;
+}
 
 /**
  * The solvation a step's options ask for, in the words its program says
@@ -1126,10 +1178,11 @@ export function clock(ms: number): string {
 /** An energy in hartrees as a card says it, as everywhere Meno writes one: −42.108710 Eh. */
 export const hartrees = (e: number) => valueText(e, { quantity: "energy" });
 
-/** What a step that ran jobs says it did: how long, and the number it is for - its entry's energy, said to be its electronic energy (E), or how many came out of how many. */
+/** What a step that ran jobs says it did: how long, and the number it is for - its entry's energy, said to be its electronic energy (E), or how many came out of how many - and, where any converged holding atoms or restraints, so (converged `heldSaid`). */
 export function doneSaid(worked: readonly Worked[], total: number, took: number): string {
-  if (total === 1 && worked.length === 1 && worked[0].energy != null) return `${clock(took)} · E ${hartrees(worked[0].energy)}`;
-  return `${clock(took)} · ${worked.length} of ${total}`;
+  const held = heldSaid(worked);
+  const said = total === 1 && worked.length === 1 && worked[0].energy != null ? `${clock(took)} · E ${hartrees(worked[0].energy)}` : `${clock(took)} · ${worked.length} of ${total}`;
+  return held ? `${said} · ${held}` : said;
 }
 
 /** Whether what a job gave for an entry is why it failed, not what it made. */

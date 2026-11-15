@@ -1,4 +1,4 @@
-import { MANY_CHOICES, shownOptions, type LinesOption, type Option, type OptionValues } from "../../lib/options";
+import { firstUnset, MANY_CHOICES, shownOptions, type LinesOption, type Option, type OptionValues } from "../../lib/options";
 import Checkbox from "../controls/Checkbox";
 import NumberField from "../controls/NumberField";
 import RadioGroup from "../controls/Radio";
@@ -59,6 +59,7 @@ export default function OptionsForm({
   context,
   choosing,
   onChoose,
+  asks = false,
 }: {
   options: readonly Option[];
   values: OptionValues;
@@ -69,6 +70,8 @@ export default function OptionsForm({
   choosing?: string | null;
   /** Choosing an atoms option's atoms on the drawing begun (its id), or ended (null). Without it, an atoms option is only counted. */
   onChoose?: (id: string | null) => void;
+  /** Shown to ask for what it still needs: its first number shown that holds none - a window, the chemist's own - focused as it is shown. */
+  asks?: boolean;
 }) {
   const set = (id: string, v: string | number | boolean) => {
     // (a choice that fills in others - a preset's parts - sets them with it)
@@ -77,6 +80,8 @@ export default function OptionsForm({
     onChange({ ...values, ...(sets ?? {}), [id]: v });
   };
   const shown = shownOptions(options, values, context);
+  // (asked for: the first number shown that holds none yet)
+  const asked = asks ? firstUnset(shown, values) : undefined;
   // (those of one group folded together where the first of them is, under its name)
   const first = new Set(shown.filter((o, i) => o.group && shown.findIndex((x) => x.group === o.group) === i).map((o) => o.id));
   const field = (o: Option) => (
@@ -124,7 +129,7 @@ export default function OptionsForm({
               {/* (a number and its unit both within the card: the field narrows to leave the unit room) */}
               <span className="flex items-center gap-1.5">
                 {o.type === "number" ? (
-                  <NumberField value={Number(values[o.id] ?? o.default)} min={o.min} max={o.max} step={o.step} whole={o.whole} onChange={(n) => set(o.id, n)} className="min-w-0 max-w-[12rem] flex-1 text-sm" />
+                  <NumberField value={Number(values[o.id] ?? o.default)} min={o.min} max={o.max} step={o.step} whole={o.whole} onChange={(n) => set(o.id, n)} autoFocus={o.id === asked} className="min-w-0 max-w-[12rem] flex-1 text-sm" />
                 ) : (
                   <input
                     type="text"

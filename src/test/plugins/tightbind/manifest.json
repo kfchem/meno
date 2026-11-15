@@ -77,7 +77,8 @@
         "tightbind"
       ],
       "restraints": [
-        "fixed"
+        "fixed",
+        "distance-exact"
       ],
       "options": [
         {

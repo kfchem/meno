@@ -29,7 +29,7 @@ import { stereoisomersAnswer } from "../../workflow/stereoisomers";
 import { EXAMINE_MS } from "../../../../../lib/chem/stereoOpen";
 import { holdsGraphOf3d, keptMade, madeChecks, madeChecksOf, metalHolds, metalHoldsOf } from "../../../../../lib/chem/metalHolds";
 import { COORDINATION_BOND } from "../../../../../lib/chem/molecule";
-import { byOf, doerName, installedFor, optionsFor, programsFor, renderPresets, takesNothingBy } from "../../workflow/doers";
+import { byOf, doerName, installedFor, optionsFor, programsFor, renderPresets, roundsNeed, stepValues, takesNothingBy } from "../../workflow/doers";
 import { heldBy, heldRows, type HeldRows } from "../../workflow/heldRows";
 import { HOLDS_RESTRAINTS } from "../../../../../lib/plugins/steps";
 import type { Restraint } from "../../../../../lib/entry";
@@ -44,9 +44,9 @@ import { inRounds, roundsSaid } from "../../chem/conformerRounds";
 import { roundsJudge } from "../../chem/roundsJudge";
 import { allToRun, allWiresInto, chainTo, findSet, inputKey, inputOf, stepOf, stepsAfter, type Flow } from "../../workflow/flow";
 import { kindInfo, optionsOf, takesNothing, type Holds3D, type SetKind, type StepKind, isSetKind } from "../../workflow/kinds";
-import { failuresSaid, type Failure, type FailureKind } from "../../workflow/failures";
+import { failuresLine, folded, type Failure, type FailureKind } from "../../workflow/failures";
 import { setRan, setRunning } from "../../workflow/model";
-import { stoppedAt, clock, conformersWorked, doneSaid, PAIRED, drawnSaid, readDrawnAnswers, type DrawnAnswer, type DrawnValue, isFailure, entryFiles, notFound, pluginEntry, programEntries, readCollected, readGenerated, notReadSaid, seedsSaid, unreadWhy, readKept, readNote, readPrepared, readRefused, workedOf, notReadNamed, NAMED_KEPT, passesAsLone, passedAsLone, passedSaid, notAsAsked, solvationAsked, fixedAtoms, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
+import { stoppedAt, clock, conformersWorked, doneSaid, PAIRED, drawnSaid, readDrawnAnswers, type DrawnAnswer, type DrawnValue, isFailure, entryFiles, notFound, pluginEntry, programEntries, readCollected, readGenerated, notReadSaid, seedsSaid, unreadWhy, readKept, readNote, readPrepared, readRefused, workedOf, notReadNamed, NAMED_KEPT, passesAsLone, passedAsLone, passedSaid, notAsAsked, solvationAsked, fixedAtoms, exactRows, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { emptyIn, energiesBy, energyLevels, inputEntries, keepRun, keptOf, keptRun, laidOver, LAID_OVER, ranAs, ranEmpty, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
@@ -251,7 +251,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (none) return void doc.edit("run", (x) => ranEmpty(x, id, none, key, { ...w, byOf, now: at }));
     // (which stereoisomer each entry is, where the kind needs it known: asked first, every entry its own)
     const kind = kindInfo(step.kind);
-    if (by === "meno" && kind.perceives === "configurations" && (kind.perceivesWith?.(optionsOf(kind.options ?? [], step.options)) ?? true)) {
+    if (by === "meno" && kind.perceives === "configurations" && (kind.perceivesWith?.(stepValues(step)) ?? true)) {
       const input = inputOf(d, id);
       if (input && input.holds !== "structures") await perceiveStereo(setEntries(input.molecules, input.holds), askerFor());
     }
@@ -292,7 +292,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (!entries.length) return void fail(id, "Nothing came in", at, key);
     const by = rolePlugin("checks");
     if (!by || !(await chemAtHand("checks"))) return void fail(id, "No plugin does the checks", at, key);
-    const own = optionsOf(kindInfo("check-structures").options ?? [], step.options);
+    const own = stepValues(step);
     const keep = new Set(CHECKS.filter((k) => own[k] === "keep"));
     const program = by.uses?.[0]?.name ?? by.name;
     let answers: Checked[];
@@ -338,7 +338,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (!entries.length) return void fail(id, "Nothing came in", at, key);
     const by = rolePlugin("stereoisomers");
     if (!by || !(await chemAtHand("stereoisomers"))) return void fail(id, "No plugin finds stereoisomers", at, key);
-    const own = optionsOf(kindInfo("stereoisomers").options ?? [], step.options);
+    const own = stepValues(step);
     const program = by.uses?.[0]?.name ?? by.name;
     const working = (patch: { done: number } | null) =>
       set((prev) => {
@@ -389,7 +389,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (input.holds !== "structures") return void fail(id, ON_DRAWN, at, key);
     // (what came in when it was asked to run: checked and run on that, as Meno's steps in turns are)
     const entries = inputEntries(d.model, input);
-    const own = optionsOf(kindInfo("enumerate").options ?? [], step.options);
+    const own = stepValues(step);
     const way = own.way === "substituents" ? "substituents" : "rgroups";
     const lists = String((way === "substituents" ? own.groups : own.lists) ?? "");
     let checked: string;
@@ -408,7 +408,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const now = doc.getState();
     if (!stepOf(now, id)) return;
     // (made from the lists as they were checked: typed on meanwhile, they are what the card then says has changed)
-    const made = runMenoDrawn("enumerate", entries, step.options, now.style, [checked]);
+    const made = runMenoDrawn("enumerate", entries, own, now.style, [checked]);
     menoStops.delete(id);
     const open = made.ok ? await leftOpen(id, at, made.kept) : "";
     // (stopped while its products were asked about: nothing put in, and the step says so, as Meno's say it)
@@ -451,6 +451,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const chem = await chemWorker("stereoisomers");
       for (const [k, e] of kept.entries()) {
         if (menoStops.has(id)) return null;
+        // (an entry is one structure, so one block: its first is all of it - workflow/hydrogenBondEntries.test pins that)
         const block = blocksOf(e.drawn, e.drawn.atoms.map((a) => a.id))[0];
         if (block) {
           if (anyOpen((await openStereo(chem, [block.molblock])).left)) open.push(recordNumber(e.record) ?? k + 1);
@@ -502,7 +503,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     working({ done: 0 });
     let outcome;
     try {
-      outcome = await runMenoInTurns(step.kind, entries, holds, step.options, energiesBy(input.molecules), { onDone: (done) => working({ done }), stopped: () => menoStops.has(id) }, energyLevels(input.molecules));
+      outcome = await runMenoInTurns(step.kind, entries, holds, stepValues(step), energiesBy(input.molecules), { onDone: (done) => working({ done }), stopped: () => menoStops.has(id) }, energyLevels(input.molecules));
     } finally {
       working(null);
       menoStops.delete(id);
@@ -536,7 +537,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const [m, r] = [inputOf(d, id, "molecules")!, inputOf(d, id, "reference")!];
     const entries = setEntries(m.molecules, m.holds as Holds3D);
     const references = setEntries(r.molecules, r.holds as Holds3D);
-    const v = optionsOf(kindInfo("atom-map").options ?? [], step.options);
+    const v = stepValues(step);
     const plan = atomMapPlan(entries, references, v);
     if ("refused" in plan) return void fail(id, plan.refused, at, key);
     const total = plan.groups.reduce((n, g) => n + g.sides.length, 0);
@@ -752,7 +753,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     working: (patch: { done: number }) => void,
   ): Promise<void> {
     const d = doc.getState();
-    const options = optionsOf(optionsFor(step.kind, plugin.id), step.options);
+    const options = stepValues(step, plugin.id);
     const worked: Worked[] = [];
     let compounds = 0;
     // (those that could not be made, by their places among the structures: the others made all the same)
@@ -767,6 +768,10 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const partly: string[] = [];
     // (each structure drawn not made, as it came, with why: in the step's Failed exit, to be followed and wired on - into Stereoisomers, one left open)
     const notMadeDrawn: DrawnEntry[] = [];
+    // (asked for as many as each needs, in rounds, with no window to end them by: refused at once, in its card's words - nothing asked
+    //  of the plugin, no structure set aside for it)
+    const need = roundsNeed(step.kind, plugin.roleDraws.includes("conformers"), options);
+    if (need) return void fail(id, need, at, key);
     try {
       let chem = await pluginWorker(plugin);
       // (what each leaves open, and which stereoisomer is made: Meno's, on what the plugin that finds stereoisomers perceives - chem/openStereo)
@@ -781,6 +786,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         working({ done: place });
         const blocks = blocksOf(model, atoms);
         const bare = bareAtomsOf(model, atoms);
+        // (one structure, one block: workflow/hydrogenBondEntries.test)
         const block = blocks[0];
                 // (failed - no result to stand on: a table says so, a chart refuses it, "state = finished" leaves it - what it was set aside for before kept beside why)
         const asideAs = (why: string) => {
@@ -813,12 +819,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           // (as many as the molecule needs, in rounds, where the plugin's search takes draws: until a round brings no conformer new within
           //  the step's window - chem/conformerRounds; a workflow's search has no time it must end in)
           const rounds = plugin.roleDraws.includes("conformers") ? roundsAsked(options, () => conformersSoughtOf(block.molblock)) : null;
-          // (its window not given - a step not ready, run all the same: each said so in Meno's words, never taken for what could not be made)
-          if (rounds && "needs" in rounds) {
-            failed.push(place + 1);
-            asideAs(rounds.needs);
-            continue;
-          }
+          // (its window not given: refused before any was asked, above)
+          if (rounds && "needs" in rounds) throw new Error(rounds.needs);
           // (a metal's holds, Meno's - and which of what was made stand: lib/chem/metalHolds)
           const holds = metalHoldsOf(block.molblock);
           const ask = async (count: number | null, draw?: number) =>
@@ -935,7 +937,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     // (those on the page, or those a large result set holds off it)
     const entries = inputEntries(d.model, input);
     if (!entries.length) return void fail(id, "Nothing came in", at, key);
-    const options: OptionValues = optionsOf(optionsFor(step.kind, plugin.id), step.options);
+    const options: OptionValues = stepValues(step, plugin.id);
     let answers;
     try {
       const client = await pluginClient(plugin);
@@ -1062,7 +1064,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const d = doc.getState();
     const step = stepOf(d, id)!;
     const key = inputKey(d, step, plugin.id);
-    const options: OptionValues = optionsOf(optionsFor(step.kind, plugin.id), step.options);
+    const options: OptionValues = stepValues(step, plugin.id);
     // (made from seeds, where its plugin says so: the structures wired in, each given as its blocks - those a large
     //  result set holds off the page too)
     const seeded = !takesNothingBy(step.kind, plugin.id);
@@ -1167,7 +1169,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     // (skeletons, their hydrogens not there, refused before anything is sent: lib/chem/skeleton)
     const refused = skeletonsRefused(step.kind, entries);
     if (refused) return void fail(id, refused, at, key);
-    const options: OptionValues = optionsOf(optionsFor(step.kind, plugin.id), step.options);
+    const options: OptionValues = stepValues(step, plugin.id);
     let kept;
     try {
       const client = await pluginClient(plugin);
@@ -1194,7 +1196,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const step = stepOf(d, id)!;
     const key = inputKey(d, step, plugin.id);
     const input = inputOf(d, id)!;
-    const options: OptionValues = optionsOf(optionsFor(step.kind, plugin.id), step.options);
+    const options: OptionValues = stepValues(step, plugin.id);
     // (what it takes: what came in - or, a kind of two inputs, each start paired with an end, those that cannot be worked out refused with why)
     const taking = programEntries(d, id, step.kind, options);
     if (taking && "why" in taking) return void fail(id, taking.why, at, key);
@@ -1411,7 +1413,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const input = inputOf(d, id)!;
     const entries = input.holds === "structures" ? [] : setEntries(input.molecules, input.holds);
     if (!entries.length) return void fail(id, "Nothing came in", at, key);
-    const options: OptionValues = optionsOf(optionsFor(step.kind, plugin.id), step.options);
+    const options: OptionValues = stepValues(step, plugin.id);
     // (a look or studio set that no plugin added brings now is refused before anything runs: never the first in its place, unsaid)
     const { offered, offer } = renderPresets(plugin.id);
     const refused = stepRefused(step.options ?? {}, new Set(looksOffered([...(plugin.roleLooks.render ?? []), ...offer.looks]).map((l) => l.id)), new Set(offer.studios.map((x) => x.id)));
@@ -1804,7 +1806,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
               continue;
             }
             const made =
-              kind === "conformers" ? conformersWorked(mine[i], read.output, read.readers, read.source) : workedOf(kind, mine[i], read.output, read.readers, read.source, heldOf(mine[i]), !!rowsOf(mine[i]));
+              kind === "conformers" ? conformersWorked(mine[i], read.output, read.readers, read.source) : workedOf(kind, mine[i], read.output, read.readers, read.source, heldOf(mine[i]), !!rowsOf(mine[i]), exactRows(rowsOf(mine[i]) ?? []));
             if (isFailure(made)) {
               fails([mine[i]], made.kind, made.why);
               continue;
@@ -1828,7 +1830,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
               fails([mine[i]], "failed", out);
               continue;
             }
-            gave(mine[i], workedOf(kind, mine[i], out, [`${plugin.id} ${client.version || plugin.version}`], log ? source : undefined, heldOf(mine[i]), !!rowsOf(mine[i])));
+            gave(mine[i], workedOf(kind, mine[i], out, [`${plugin.id} ${client.version || plugin.version}`], log ? source : undefined, heldOf(mine[i]), !!rowsOf(mine[i]), exactRows(rowsOf(mine[i]) ?? [])));
           }
           continue;
         }
@@ -1847,7 +1849,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           const readers = [`${plugin.id} ${client.version || plugin.version}`];
           // (a search Meno tells how many to try: which of what it made stand, Meno's checks - lib/chem/metalHolds)
           const checks = plugin.roleTries.includes("conformers") ? entryChecks(mine[i]) : undefined;
-          gave(mine[i], kind === "conformers" ? conformersWorked(mine[i], out, readers, log ? source : undefined, checks) : workedOf(kind, mine[i], out, readers, log ? source : undefined, heldOf(mine[i]), !!rowsOf(mine[i])));
+          gave(mine[i], kind === "conformers" ? conformersWorked(mine[i], out, readers, log ? source : undefined, checks) : workedOf(kind, mine[i], out, readers, log ? source : undefined, heldOf(mine[i]), !!rowsOf(mine[i]), exactRows(rowsOf(mine[i]) ?? [])));
         }
       }
       passOn(Infinity);
@@ -1879,11 +1881,11 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const took_up = run.adopted ? Object.keys(run.adopted).length : 0;
       // (the lone atoms passed through as they came, said in what they are: "one atom: its only conformer")
       const passedLine = passedSaid(kind, passed);
-      // (one that came in and failed: its why alone; what Settings kept off said after, as it was)
+      // (one that came in and failed: its why alone, on one line; what Settings kept off said after, as it was)
       const said = `${
         !ok && failures.length && total === 1
-          ? failures[0].why
-          : [...(ok ? [found] : []), ...(passedLine ? [passedLine] : []), ...(failures.length ? [failuresSaid(failures, total)] : []), ...(!ok && failures.length ? [failures[0].why] : []), ...(warned ? [`${warned} with warnings`] : []), ...(restarted ? [`${restarted === total ? (total === 1 ? "started" : "each started") : `${restarted} started`} from a failed run's geometry`] : [])].join(" \u00b7 ")
+          ? folded(failures[0].why)
+          : [...(ok ? [found] : []), ...(passedLine ? [passedLine] : []), ...failuresLine(failures, total, !ok), ...(warned ? [`${warned} with warnings`] : []), ...(restarted ? [`${restarted === total ? (total === 1 ? "started" : "each started") : `${restarted} started`} from a failed run's geometry`] : [])].join(" \u00b7 ")
       }${again ? ` \u00b7 ${again === run.jobs.length ? "Reused" : `${again} reused`}` : ""}${took_up ? ` \u00b7 ${took_up} adopted` : ""}${run.note && ok ? ` \u00b7 ${run.note}` : ""}${run.paired && ok ? ` \u00b7 ${run.paired}` : ""}${carried > 0 ? ` \u00b7 the ${PAIRED} ${carried === 1 ? "a pair" : `${carried} pairs`} carried replaced` : ""}${run.over ? ` \u00b7 ${run.over}` : ""}`;
       const keys = run.jobs.every((j) => j.key) ? { keys: run.jobs.map((j) => j.key!), gave: digests } : {};
       // (jobs adopted: taken as its result, with when - said, so that what came of them is never taken for checked)

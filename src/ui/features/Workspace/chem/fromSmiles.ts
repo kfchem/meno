@@ -3,10 +3,14 @@ import type { ChemClient } from "../../../../lib/roles/client";
 import { NOT_READ, notReadSaid } from "../../../../lib/chem/smilesWhy";
 import type { Model } from "../store/types";
 import { editorModelOf, processFileContent } from "../utils/io";
-import { laidOut, type GivenRuns } from "./cleanUp";
+import { laidOut, type GivenRuns, type OpenDoubles } from "./cleanUp";
+import { arrangementsMarked } from "./arrangementsMarked";
+import { smilesInput } from "../../../../lib/layout/smilesInput";
+import { openDoubleBonds } from "../../../../lib/layout/drawn";
 import { readSmiles } from "../../../../lib/chem/smiles";
 import { leftOver, stereoGraphOf } from "../../../../lib/chem/stereoOpen";
 import { openStereo } from "./openStereo";
+import { isMetal } from "../../../../lib/layout/perceive";
 import type { DrawingStyle } from "../../../../lib/chem/style";
 
 /**
@@ -23,7 +27,11 @@ export async function structureFromSmiles(smiles: string, style?: DrawingStyle):
   //  drawn: none said where it cannot be asked, or does not answer in time - the structure comes all the same)
   // (an allene's axis and an odd cumulene's cis or trans, which the SMILES says and a MOL block cannot: Meno's own reading of the text, where it is of the same atoms)
   const given = givenRunsOf(smiles, molblock);
-  const [open, drawn] = await Promise.all([withinTime(openStereo(c, [molblock]).then((o) => o.left), STEREO_ASK_MS).catch(() => null), drawingOf(molblock, style, given?.runs)]);
+  // (and the double bonds it leaves open drawn as open: straight on, or a wavy bond on a group - Brecher 2006, ST-4.4)
+  const opened = openDoublesOf(smiles, molblock);
+  // (a metal the SMILES gives the arrangement of - its mark, @SP or @OH, at the metal, and no chelate: the plugin's drawing carries it, and it is kept)
+  const arranged = metalsArrangedIn(smiles, molblock);
+  const [open, drawn] = await Promise.all([withinTime(openStereo(c, [molblock]).then((o) => o.left), STEREO_ASK_MS).catch(() => null), drawingOf(molblock, style, given?.runs, opened ?? undefined, arranged)]);
   const stereoOpen = stereoOpenOf(open && given ? specified(open, given.bonds, molblock) : open);
   return stereoOpen ? { ...drawn, stereoOpen } : drawn;
 }
@@ -100,16 +108,20 @@ export function withoutStereoOpen<T extends { stereoOpen?: StereoOpen; asCame?: 
  * stereo wedged - as Meno draws it: read as a file is, and laid out by
  * Meno's own engine in `style`, or as the plugin laid it out, should the
  * engine fail. One way for every such drawing: a SMILES's, and the
- * structures a step makes.
+ * structures a step makes - laid out as new, not kept in forms the
+ * plugin's coordinates happen to have (`laidOut`'s `asNew`).
  */
-export async function drawingOf(molblock: string, style?: DrawingStyle, given?: GivenRuns): Promise<Model & { asCame?: string }> {
+export async function drawingOf(molblock: string, style?: DrawingStyle, given?: GivenRuns, open?: OpenDoubles, arrangedAt: readonly number[] = []): Promise<Model & { asCame?: string }> {
   const result = await processFileContent("drawing.mol", molblock);
   const drawn = editorModelOf(result.model);
-  // (as it came, said why: put down, it is said - asCameSaid)
-  return laidOut(drawn, style, given).catch((e: unknown) => {
+  // (the metals whose arrangement the input gave, by the block's atoms: their ids)
+  const arranged = new Set(arrangedAt.flatMap((i) => (drawn.atoms[i] ? [drawn.atoms[i].id] : [])));
+  // (as it came, said why: put down, it is said - asCameSaid; its coordinates the plugin's, nobody's drawing: laid out as new)
+  return laidOut(drawn, style, given, open, true, arranged).catch((e: unknown) => {
     // (kept for whoever looks: what the sentence said plainly leaves out)
     console.warn("the structure is drawn as the plugin laid it out", e);
-    return { ...drawn, asCame: e instanceof Error ? e.message : String(e) };
+    // (a square-planar centre nobody gave the arrangement of marked so, as it would be laid out: the plugin's drawing says none)
+    return { ...arrangementsMarked(drawn, arranged), asCame: e instanceof Error ? e.message : String(e) };
   });
 }
 
@@ -163,6 +175,97 @@ export function givenRunsOf(smiles: string, molblock: string): { runs: GivenRuns
     bonds.push(...(along(i, j, [i]) ?? []));
   }
   return { runs, bonds };
+}
+
+/**
+ * The metals a SMILES gives the arrangement of - a square-planar mark (@SP1-3) at a metal of four neighbours, an octahedral one
+ * (@OH1-30) at a metal of six - by the atoms of the MOL block the plugin read it to, which keep the SMILES's order. Any other mark at
+ * a metal - a bare @ or @@, a tetrahedral one, one on the wrong count - states no pairs. None where the block's atoms are not the
+ * SMILES's, element by element: then nothing it gives is taken as given. None with a chelate (`chelatedAt`).
+ */
+export function metalsArrangedIn(smiles: string, molblock: string): number[] {
+  // (the SMILES's atoms in order: each bracket atom, with whether it carries a mark of configuration; each one of the organic subset)
+  const atoms: { el: string; marked: "SP" | "OH" | false }[] = [];
+  for (const t of smiles.matchAll(/\[([^\]]*)\]|Cl|Br|[BCNOPSFI]|[bcnops]|\*/g)) {
+    if (t[1] == null) {
+      atoms.push({ el: t[0].length === 1 && t[0] === t[0].toLowerCase() && t[0] !== "*" ? t[0].toUpperCase() : t[0], marked: false });
+      continue;
+    }
+    const head = /^\d*([A-Z][a-z]?|[a-z]{1,2}|\*)(@(?:SP\d+|OH\d+)?)?/.exec(t[1]);
+    const el = head?.[1] ?? "";
+    atoms.push({ el: el.length && el === el.toLowerCase() && el !== "*" ? el[0].toUpperCase() + el.slice(1) : el, marked: arrangementMark(head?.[2] ?? "") });
+  }
+  if (!atoms.some((a) => a.marked && isMetal(a.el))) return [];
+  const graph = stereoGraphOf([molblock]);
+  if (!graph || graph.atoms.length !== atoms.length || graph.atoms.some((a, i) => a.el !== atoms[i].el)) return [];
+  const degree = graph.atoms.map(() => 0);
+  for (const { a, b } of graph.bonds) {
+    degree[a]++;
+    degree[b]++;
+  }
+  // (a square-planar mark on four neighbours, an octahedral one on six: any other mark at a metal - a bare @, a tetrahedral one,
+  //  one on the wrong count - says no pairs, and the metal is not given)
+  return atoms.flatMap((a, i) => (a.marked && isMetal(a.el) && degree[i] === (a.marked === "SP" ? 4 : 6) && !chelatedAt(i, graph.bonds) ? [i] : []));
+}
+
+/** Which kind of arrangement a SMILES's mark at an atom states: square planar (@SP1-3), octahedral (@OH1-30), or none. */
+function arrangementMark(mark: string): "SP" | "OH" | false {
+  const m = /^@(SP|OH)(\d+)$/.exec(mark);
+  if (!m) return false;
+  const n = Number.parseInt(m[2], 10);
+  return m[1] === "SP" ? (n >= 1 && n <= 3 ? "SP" : false) : n >= 1 && n <= 30 ? "OH" : false;
+}
+
+/**
+ * Whether two of the metal `m`'s donors are joined other than through it - a chelate's ring, or a bridge. Such a metal is not
+ * taken as given by its SMILES's mark: where donors sit in chelate rings the plugin's picture was found not to carry the mark's
+ * pairs, and nothing yet reads them from the mark itself (found in the chemistry check). It is laid out and marked as one
+ * nobody gave the arrangement of: never an isomer the input did not write.
+ */
+function chelatedAt(m: number, bonds: readonly { a: number; b: number }[]): boolean {
+  const around = new Map<number, number[]>();
+  for (const { a, b } of bonds) {
+    around.set(a, [...(around.get(a) ?? []), b]);
+    around.set(b, [...(around.get(b) ?? []), a]);
+  }
+  const donors = around.get(m) ?? [];
+  // (from each donor, through any atom but the metal: reaching another donor is a ring with the metal in it)
+  for (const d of donors) {
+    const seen = new Set([m, d]);
+    const queue = [d];
+    while (queue.length) {
+      const at = queue.shift()!;
+      for (const next of around.get(at) ?? []) {
+        if (seen.has(next)) continue;
+        if (donors.includes(next)) return true;
+        seen.add(next);
+        queue.push(next);
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * The double bonds a SMILES leaves without a configuration that could have one (layout/drawn `openDoubleBonds`), by the MOL block the plugin
+ * read it to - its atoms and bonds the SMILES's, or none: each end to keep straight on, by atom; each bond to give a wavy bond, by bond.
+ * None where nothing is open, or the block is not the SMILES's atoms and bonds (then it is drawn as the plugin's drawing says).
+ */
+export function openDoublesOf(smiles: string, molblock: string): OpenDoubles | null {
+  let input;
+  try {
+    input = smilesInput(smiles);
+  } catch {
+    return null;
+  }
+  const open = openDoubleBonds(input);
+  if (!open.straight.length && !open.either.length) return null;
+  const graph = stereoGraphOf([molblock]);
+  if (!graph || graph.atoms.length !== input.atoms.length || graph.atoms.some((a, i) => a.el !== input.atoms[i].el)) return null;
+  const pair = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
+  const blockBond = new Map(graph.bonds.map((b, k) => [pair(b.a, b.b), k]));
+  if (blockBond.size !== input.bonds.length || input.bonds.some((b) => !blockBond.has(pair(b.a, b.b)))) return null;
+  return { straight: open.straight, either: open.either.map((i) => blockBond.get(pair(input.bonds[i].a, input.bonds[i].b))!) };
 }
 
 /** What the plugin leaves open, less the double bonds of the runs the SMILES configures (`givenRunsOf`). */
