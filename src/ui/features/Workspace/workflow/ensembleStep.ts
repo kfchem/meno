@@ -8,7 +8,7 @@
  */
 import type { Entry } from "../../../../lib/entry";
 import { ensemble } from "../../../../lib/nodes/ensemble";
-import { compoundLetter, entryOfSet, entryState, FINISHED, type SetEntry } from "./entries";
+import { compoundLetter, entryOfSet, entryState, FINISHED, PARTS_ALONE_REFUSED, type SetEntry } from "./entries";
 import type { Holds3D } from "./kinds";
 import type { Outcome3D } from "./meno";
 import { SET_ASIDE } from "./structureSteps";
@@ -41,6 +41,8 @@ export function ensembleHow(v: Values): string {
 export function ensembleSet(entries: readonly SetEntry[], holds: Holds3D, v: Values): Outcome3D {
   const needs = ensembleNeeds(v);
   if (needs) return { ok: false, said: needs };
+  // (a structure of several parts, each searched alone: its frames weighed as one compound's would be shares of nothing)
+  if (entries.some((e) => e.partsAlone)) return { ok: false, said: PARTS_ALONE_REFUSED };
   const groupBy = String(v.groupBy ?? "").trim();
   const unfinished = new Map<number, string>();
   entries.forEach((e, i) => {

@@ -135,8 +135,14 @@ export type WorkspaceDocument = {
   nextConversationId?: number;
 };
 
-/** Whether it holds nothing: no structure, arrow, "+" sign or words drawn, no molecule in 3D, no text, no workflow. */
-export function isBlankDocument(doc: WorkspaceDocument): boolean {
+/** What `isBlankDocument` looks at: every kind of thing a page holds. */
+export type PageHeld = Pick<
+  WorkspaceDocument,
+  "model" | "arrows" | "pluses" | "captions" | "molecules3d" | "texts" | "textsLost" | "pdfs" | "pictures" | "slides" | "shapes" | "inks" | "cycles" | "conversations" | "sets" | "steps"
+>;
+
+/** Whether it holds nothing: no structure, arrow, "+" sign or words drawn, no molecule in 3D, no text, no conversation, no workflow. */
+export function isBlankDocument(doc: PageHeld): boolean {
   return (
     !doc.model.atoms.length &&
     !doc.arrows.length &&

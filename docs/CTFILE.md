@@ -120,7 +120,11 @@ drawn apart is; one inside a molecule - an enol's own - is left out of it, so
 the H is placed by the molecule's own bonds. *Check structures* counts such
 a pair two parts, and a set round it holds two entries, each with its own
 identity; a structure's own hydrogen bond is not in its identity. Moved out
-of a frame's way, the pair moves together, as it is drawn. To take such a
+of a frame's way, the pair moves together, as it is drawn; and the frame
+round the two entries holds each one's labels as the page draws them,
+toward the hydrogen bond (a water's OH2 with its H2 away from it), and
+what is written of each beside its atoms (a stereo group's note, a
+bracket's label) where the structure alone would have it. To take such a
 pair as one entry - a complex, a salt - select both and *Make one
 structure* (EDITOR-2D.md, *One structure of several parts*): it is then one
 structure of two parts, one identity. Until 2026-11-15 the hydrogen bond went to the plugin as
