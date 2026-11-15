@@ -9,6 +9,7 @@ import { arrangementsMarked } from "./arrangementsMarked";
 import { layoutJob, relayoutFrom } from "./engineLayout";
 import type { Layout2D } from "../../../../lib/layout/engine";
 import { drawingOf, metalsArrangedIn } from "./fromSmiles";
+import { drawnFromSmiles } from "../utils/smilesDrawn";
 import { editorModelOf, processFileContent } from "../utils/io";
 
 // A drawing nobody made - a plugin's of a typed SMILES or a step's structure - says nothing of which donors of a square-planar centre
@@ -149,7 +150,7 @@ describe("a metal of six donors nobody gave the arrangement of", () => {
   const open = (m: Model) => readMarks(arrangementsMarked(m)).atoms.has(1);
 
   it("is marked where its donors could be set round it with other pairs across: cis or trans, fac or mer, a chelate's", () => {
-    // (CHEM's five)
+    // (the chemistry check's five)
     expect(open(six(["Cl", "Cl", "N", "N", "N", "N"]))).toBe(true);
     expect(open(six(["Cl", "Cl", "Cl", "N", "N", "N"]))).toBe(true);
     expect(open(six(["Cl", "Cl", "Br", "Br", "N", "N"]))).toBe(true);
@@ -190,6 +191,105 @@ describe("a metal of six donors nobody gave the arrangement of", () => {
     expect(metalMarked(await drawingOf(block, MENO, undefined, undefined, [0]), "Co")).toBeUndefined();
     const chemist = await laidOut(editorModelOf((await processFileContent("drawn.mol", block)).model), MENO);
     expect(metalMarked(chemist, "Co")).toBeUndefined();
+  });
+});
+
+describe("a metal its SMILES marks, with a chelate", () => {
+  /** A MOL block of `els` in the SMILES's order, round a circle, and `bonds` between them (0-based; order 1 unless given). */
+  function block(els: string[], bonds: [number, number, number?][]): string {
+    const f = (v: number) => v.toFixed(4).padStart(10);
+    const atoms = els.map((el, k) => `${f(Math.cos((2 * Math.PI * k) / els.length))}${f(Math.sin((2 * Math.PI * k) / els.length))}${f(0)} ${el.padEnd(3)} 0  0  0  0  0  0  0  0  0  0  0  0`);
+    const lines = bonds.map(([a, b, o]) => `${String(a + 1).padStart(3)}${String(b + 1).padStart(3)}${String(o ?? 1).padStart(3)}  0`);
+    return ["", "  test", "", `${String(atoms.length).padStart(3)}${String(lines.length).padStart(3)}  0  0  0  0  0  0  0  0999 V2000`, ...atoms, ...lines, "M  END", ""].join("\n");
+  }
+  // ([Co(en)2Cl2]+ with its atoms in the SMILES's order - Co, Cl, en, en, Cl or Co, Cl, Cl, en, en - and Co(gly)3, each ring N-C-C(=O)-O)
+  const en = (n: number): [number, number][] => [[n, n + 1], [n + 1, n + 2], [n + 2, n + 3]];
+  const enCl = (cl: number[], ens: number[]) => block(["Co", ...Array.from({ length: 10 }, (_, k) => (cl.includes(k + 1) ? "Cl" : ens.some((e) => k + 1 === e + 1 || k + 1 === e + 2) ? "C" : "N"))], [
+    ...cl.map((c): [number, number] => [0, c]),
+    ...ens.flatMap((e) => [[0, e] as [number, number], ...en(e), [e + 3, 0] as [number, number]]),
+  ]);
+  const gly = (rings: ("NO" | "ON")[]) => {
+    const els = ["Co"];
+    const bonds: [number, number, number?][] = [];
+    for (const r of rings) {
+      const at = els.length;
+      // (N-CH2-C(=O)-O written from the N, or O-C(=O)-CH2-N from the O)
+      if (r === "NO") els.push("N", "C", "C", "O", "O");
+      else els.push("O", "C", "O", "C", "N");
+      bonds.push([0, at], [0, at + 4]);
+      if (r === "NO") bonds.push([at, at + 1], [at + 1, at + 2], [at + 2, at + 3, 2], [at + 2, at + 4]);
+      else bonds.push([at, at + 1], [at + 1, at + 2, 2], [at + 1, at + 3], [at + 3, at + 4]);
+    }
+    return block(els, bonds);
+  };
+
+  it("is not taken as given by its mark: trans and cis [Co(en)2Cl2]+, fac and mer Co(gly)3 - the plugin's picture was found not to carry the pairs", () => {
+    const rows: [string, string][] = [
+      ["[Co@OH1+]123456.Cl1.[NH2]2CC[NH2]3.[NH2]4CC[NH2]5.Cl6", enCl([1, 10], [2, 6])],
+      ["[Co@OH1+]123456.Cl1.Cl2.[NH2]3CC[NH2]4.[NH2]5CC[NH2]6", enCl([1, 2], [3, 7])],
+      ["[Co@OH1]123456.[NH2]1CC(=O)O2.O3C(=O)C[NH2]4.[NH2]5CC(=O)O6", gly(["NO", "ON", "NO"])],
+      ["[Co@OH1]123456.[NH2]1CC(=O)O2.O3C(=O)C[NH2]6.O4C(=O)C[NH2]5", gly(["NO", "ON", "ON"])],
+    ];
+    for (const [smiles, b] of rows) expect([smiles, metalsArrangedIn(smiles, b)]).toEqual([smiles, []]);
+    // (with single donors only, as before: the mark taken as given)
+    const single = block(["Cl", "Co", "N", "N", "Cl", "N", "N"], [[1, 0], [1, 2], [1, 3], [1, 4], [1, 5], [1, 6]]);
+    expect(metalsArrangedIn("Cl[Co@OH1+](N)(N)(Cl)(N)N", single)).toEqual([1]);
+    // (a donor's own ring away from the metal is no chelate: [Co(py)2Cl4]-, two pyridines)
+    const py = (at: number): [number, number, number?][] => [[at, at + 1, 2], [at + 1, at + 2], [at + 2, at + 3, 2], [at + 3, at + 4], [at + 4, at + 5, 2], [at + 5, at]];
+    const pys = block(["Co", "Cl", "Cl", "Cl", "Cl", "N", "C", "C", "C", "C", "C", "N", "C", "C", "C", "C", "C"], [[0, 1], [0, 2], [0, 3], [0, 4], [0, 5], [0, 11], ...py(5), ...py(11)]);
+    expect(metalsArrangedIn("[Co@OH1-](Cl)(Cl)(Cl)(Cl)(n1ccccc1)n1ccccc1", pys)).toEqual([0]);
+  });
+
+  it("is given only by a square-planar mark on four neighbours or an octahedral one on six: a bare @, a tetrahedral one, one on the wrong count, none", () => {
+    // ([CoCl2(NH3)4]+ and [Co(NH3)(OH2)FClBrI]3-, six neighbours; cisplatin, four - each block's atoms in its SMILES's order)
+    const spokes = (els: string[], metal: number) => block(els, els.flatMap((_, k): [number, number][] => (k === metal ? [] : [[metal, k]])));
+    const co = spokes(["Cl", "Co", "N", "N", "N", "N", "Cl"], 1);
+    const six = spokes(["F", "Co", "Cl", "Br", "I", "N", "O"], 1);
+    const pt = spokes(["N", "Pt", "Cl", "N", "Cl"], 1);
+    expect(metalsArrangedIn("Cl[Co@OH1+]([NH3])([NH3])([NH3])([NH3])Cl", co)).toEqual([1]);
+    expect(metalsArrangedIn("[NH3][Pt@SP1](Cl)([NH3])Cl", pt)).toEqual([1]);
+    for (const [smiles, b] of [
+      ["Cl[Co@+]([NH3])([NH3])([NH3])([NH3])Cl", co],
+      ["F[Co@-3](Cl)(Br)(I)([NH3])[OH2]", six],
+      ["Cl[Co@TB1+]([NH3])([NH3])([NH3])([NH3])Cl", co],
+      ["Cl[Co@SP1+]([NH3])([NH3])([NH3])([NH3])Cl", co],
+      ["Cl[Co@OH31+]([NH3])([NH3])([NH3])([NH3])Cl", co],
+      ["[NH3][Pt@](Cl)([NH3])Cl", pt],
+      ["[NH3][Pt@TH1](Cl)([NH3])Cl", pt],
+      ["[NH3][Pt@SP4](Cl)([NH3])Cl", pt],
+      ["[NH3][Pt@OH1](Cl)([NH3])Cl", pt],
+    ] as const)
+      expect([smiles, metalsArrangedIn(smiles, b)]).toEqual([smiles, []]);
+  });
+
+  it("is laid out and marked as one nobody gave the arrangement of", { timeout: 120000 }, async () => {
+    forgetLaidOut();
+    const smiles = "[Co@OH1+]123456.Cl1.[NH2]2CC[NH2]3.[NH2]4CC[NH2]5.Cl6";
+    const b = enCl([1, 10], [2, 6]);
+    expect(metalMarked(await drawingOf(b, MENO, undefined, undefined, metalsArrangedIn(smiles, b)), "Co")).toBe(ARRANGEMENT_SAID);
+  });
+});
+
+describe("two square-planar metals held by two bridges", () => {
+  it("are each surely Pt(II) or Pd(II), a bridge's charge shared, and marked where their dimers could be cis or trans", { timeout: 120000 }, async () => {
+    forgetLaidOut();
+    const marks = (m: Model) => [...readMarks(m).atoms.values()].filter((said) => said === ARRANGEMENT_SAID).length;
+    // (kept as they came: [Pt2Cl4(NH3)2] and [Pd2Cl4(PMe3)2] marked at both metals; [Pt2Cl6]2- and [(NH3)2Pt(Cl)2PtCl2] at neither)
+    for (const [smiles, n] of [
+      ["[NH3][Pt]1(Cl)[Cl][Pt]([NH3])(Cl)[Cl]1", 2],
+      ["C[P](C)(C)[Pd]1(Cl)[Cl][Pd]([P](C)(C)C)(Cl)[Cl]1", 2],
+      ["Cl[Pt-]1(Cl)[Cl][Pt-](Cl)(Cl)[Cl]1", 0],
+      ["[NH3][Pt+]1([NH3])[Cl][Pt-](Cl)(Cl)[Cl]1", 0],
+    ] as const)
+      expect([smiles, marks(arrangementsMarked(drawnFromSmiles(smiles)))]).toEqual([smiles, n]);
+    // (laid out as new, as a typed SMILES's drawing is: the Pd dimer marked at both)
+    const pd = drawnFromSmiles("C[P](C)(C)[Pd]1(Cl)[Cl][Pd]([P](C)(C)C)(Cl)[Cl]1");
+    const f = (v: number) => v.toFixed(4).padStart(10);
+    const index = new Map(pd.atoms.map((a, i) => [a.id, i + 1]));
+    const block = ["", "  test", "", `${String(pd.atoms.length).padStart(3)}${String(pd.bonds.length).padStart(3)}  0  0  0  0  0  0  0  0999 V2000`,
+      ...pd.atoms.map((a) => `${f(a.x)}${f(-a.y)}${f(0)} ${a.el.padEnd(3)} 0  0  0  0  0  0  0  0  0  0  0  0`),
+      ...pd.bonds.map((b) => `${String(index.get(b.a)).padStart(3)}${String(index.get(b.b)).padStart(3)}${String(b.order).padStart(3)}  0`), "M  END", ""].join("\n");
+    expect(marks(await drawingOf(block, MENO))).toBe(2);
   });
 });
 

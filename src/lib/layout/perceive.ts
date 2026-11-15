@@ -37,7 +37,18 @@ export type LayoutInput = Omit<ChemGraph, "atoms"> & {
   atoms: readonly LayoutAtom[];
   /** Its odd runs of cumulated double bonds set cis or trans (a butatriene's: stereo.ts). */
   cumulated?: readonly Cumulated[];
+  /** Which of a metal's donors are across from each other, where that is given (`Arranged`): identity's, not the layout's. */
+  arrangements?: readonly Arranged[];
 };
+
+/**
+ * Which of a metal's four or six donors are across from each other - a
+ * square-planar centre's two pairs, an octahedral centre's three - as read
+ * from a drawing or from places in 3D (lib/chem/arrangement): cisplatin and
+ * transplatin, fac and mer, are told apart by it (Brecher 2006, ST-2.6,
+ * ST-2.11). Each pair by its two donors' atoms; every donor in one pair.
+ */
+export type Arranged = { metal: number; pairs: readonly (readonly [number, number])[] };
 
 export type RingSystem = {
   /** Its atoms, in no particular order. */
@@ -632,7 +643,7 @@ const SQUARE_PLANAR: Record<string, number> = { Pt: 2, Pd: 2, Au: 3, Rh: 1, Ir: 
  * arranged round it in more than one way (two and two, two and one and one, four different - told apart as ligands, `donorKinds`).
  * Null for any other atom.
  */
-export function squarePlanarMetal(v: FourView, a: number, valence: (el: string, charge: number) => number | undefined): { sure: boolean; ends: boolean; open: boolean } | null {
+export function squarePlanarMetal(v: FourView, a: number, valence: (el: string, charge: number) => number | undefined, chelated = false): { sure: boolean; ends: boolean; open: boolean } | null {
   const el = v.el(a);
   const nb = v.neighbours(a);
   if (!isMetal(el) || nb.length !== 4) return null;
@@ -646,7 +657,8 @@ export function squarePlanarMetal(v: FourView, a: number, valence: (el: string, 
       todo.push(w);
     }
   }
-  if (nb.slice(1).some((d) => reached.has(d))) return null;
+  // (a chelate's: none, but where it is asked whether one is surely square planar - its mark, `chelated`)
+  if (!chelated && nb.slice(1).some((d) => reached.has(d))) return null;
   const ends = nb.every((d) => v.neighbours(d).length === 1);
   // (the donors told apart as ligands: [Pt(NH2Me)2(NH2Et)2]2+ is two and two, not four alike)
   const kinds = new Map<string, number>();
@@ -661,7 +673,14 @@ export function squarePlanarMetal(v: FourView, a: number, valence: (el: string, 
     if (lends) continue;
     const full = valence(v.el(d), v.charge(d));
     if (full == null) return { sure: false, ends, open };
-    const others = v.neighbours(d).filter((e) => e !== a).reduce((s, e) => s + v.order(d, e), 0) + v.hs(d);
+    // (a donor that bridges metals - a halide between two - its bonds but the metals' its own: what it lacks shared among them,
+    //  each [Pt2Cl4(NH3)2]'s Pt given a half of each of its two Cl bridges, Pt(II))
+    const metals = v.neighbours(d).filter((e) => e !== a && isMetal(v.el(e)));
+    const others = v.neighbours(d).filter((e) => e !== a && !metals.includes(e)).reduce((s, e) => s + v.order(d, e), 0) + v.hs(d);
+    if (metals.length) {
+      if (others < full) state += (full - others) / (metals.length + 1);
+      continue;
+    }
     if (others >= full) continue;
     if (others + 1 === full) state++;
     else return { sure: false, ends, open };
