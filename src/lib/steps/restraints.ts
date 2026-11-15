@@ -148,7 +148,7 @@ export const NUMBERING = "numbering";
 export const OWN_NUMBERING = "its own";
 
 /** The key of the numbering a label says its atoms are in now: the one in brackets at the end of it - of the last map's references, or of the entry's own atoms and bonds; none where it says none. */
-function keyNow(label: string): string | null {
+export function keyNow(label: string): string | null {
   const now = label.split(", then ").pop()!;
   return /\(([0-9a-z]+)\)$/.exec(now)?.[1] ?? null;
 }

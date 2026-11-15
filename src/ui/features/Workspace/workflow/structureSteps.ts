@@ -18,7 +18,7 @@ import { atomsFromOne, comparedBonding, matchingReference, type CompareOptions }
 import { combined } from "../../../../lib/steps/combine";
 import { measured, measurementName, measurementsTyped } from "../../../../lib/steps/measure";
 import { speciesNeeds, speciesTyped, withSpecies } from "../../../../lib/steps/species";
-import { NONE_FOUND, NUMBERING, restraintRows, restraintsTable, torsionRowsFromReference, torsionRowsTyped, torsionsUnlike, torsionUnlikeText, type NothingRow, type RestraintRow } from "../../../../lib/steps/restraints";
+import { keyNow, NONE_FOUND, NUMBERING, restraintRows, restraintsTable, torsionRowsFromReference, torsionRowsTyped, torsionsUnlike, torsionUnlikeText, type NothingRow, type RestraintRow } from "../../../../lib/steps/restraints";
 import type { OptionValues } from "../../../../lib/options";
 import { atomMapNeeds, compareTorsionsNeeds, ONE_EXIT, restraintsTyped, torsionsRead } from "./kinds";
 import { bondChangesTable, CHANGE, CHANGE_WORDS, MAPPED_ENTRY, renumberedEntry } from "../../../../lib/steps/reaction";
@@ -738,14 +738,19 @@ export function atomMapSet(entries: readonly SetEntry[], references: readonly Se
 /**
  * `e`, numbered anew by Atom map in `references`' numbering, with its
  * numbering said (lib/steps `NUMBERING`): the one it had (`was`'s) and,
- * after it, this one - the references by name and by what their atoms and
- * bonds are, so that two references of one compound number alike, and two
- * of different compounds never do. A label: it rides on as an ID does.
+ * after it, this one - the references by name and by the key of the
+ * numbering they are in, so that two references of one compound number
+ * alike, and two of different compounds never do. One reference's key is
+ * the one its own numbering says now: numbered as a reference itself in a
+ * reactant's numbering - a product's conformer as that product - an entry
+ * is in the reactant's numbering too, atom for atom. Several together, the
+ * key of their atoms and bonds. A label: it rides on as an ID does.
  */
 function numberedAnew(e: SetEntry, was: SetEntry, references: readonly SetEntry[]): SetEntry {
   const n = was.properties?.[NUMBERING];
   const before = n?.status === "computed" && typeof n.value === "string" ? n.value : null;
-  const now = `as ${references.map((r) => r.name ?? named(r)).join(" + ")} (${numberingKey(references)})`;
+  const key = (references.length === 1 ? keyNow(numberingOf(references[0])) : null) ?? numberingKey(references);
+  const now = `as ${references.map((r) => r.name ?? named(r)).join(" + ")} (${key})`;
   return { ...e, properties: { ...e.properties, [NUMBERING]: { value: before ? `${before}, then ${now}` : now, unit: "none", status: "computed", label: true } } };
 }
 

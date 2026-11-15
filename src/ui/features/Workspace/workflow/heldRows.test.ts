@@ -171,6 +171,12 @@ describe("the restraints a step holds, wired in", () => {
     const product2 = asEntry(da.product, "cyclohexene");
     expect(heldRows(d, 40, [molecule("p1", `as cyclohexene (${numberingKey([product2])})`)], RDKIT, "RDKit")).toEqual({ each: [{ why: RENUMBERED_WHY }], said: [] });
     expect(heldRows(d, 40, [molecule("p1", `as reactant (${numberingKey([reactant])}), then as cyclohexene (${numberingKey([product2])})`)], RDKIT, "RDKit")).toEqual({ each: [{ why: RENUMBERED_WHY }], said: [] });
+    // (a conformer of the product, its atoms in the product's own order, numbered as the product - itself in the reactant's numbering: in
+    //  the reactant's numbering too, atom for atom, and held - the backward ends' case)
+    const m = runMenoPair("atom-map", { entries: [asEntry(da.product, "conformer")], holds: "molecules" }, { entries: [product], holds: "molecules" }, { moleculesAre: "each", referenceIs: "each", bonds: "same" });
+    if (!m.ok) throw new Error(m.said);
+    expect(m.kept[0].properties?.[NUMBERING]?.value).toMatch(new RegExp(`^as [^,]+ \\(${numberingKey([reactant])}\\)$`));
+    expect(heldRows(d, 40, m.kept, RDKIT, "RDKit")).toEqual({ each: [{ rows: [{ kind: "fixed", atoms: [0] }] }], said: [] });
     // (a row of a table read from a file that says its own, bare: held on a molecule never mapped, as ever, and refused on one mapped)
     const bare = page([[10, "restraints"], [40, "minimise"]], [{ id: 11, by: 10, rows: [row({ kind: "fixed", atoms: [0] })] }], [[11, 40, RESTRAINTS_INPUT.id]]);
     expect(heldRows(bare, 40, [molecule("p1")], RDKIT, "RDKit")).toMatchObject({ each: [{ rows: [{ kind: "fixed" }] }] });
