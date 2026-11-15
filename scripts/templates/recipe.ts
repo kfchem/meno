@@ -111,13 +111,13 @@ type Sides = {
   /** The ID each of the bonding entries is given: a Tag of it, unless the source carries it already (`tagged`). */
   bondingTag: string;
   tagged?: true;
-  /** Forward, the product's species is put on each end (matched on the product's ID), so that the path's end can be told to be the one it was made for. */
+  /** Forward, the product's species is put on each end (matched on the ID of the path to the product), so that the path's end can be told to be the one it was made for. */
   target?: Source;
   /** Backward, the product each conformer is of is put on it (matched on its species), so that both directions' saddle points name their path alike. */
   product?: Source;
   /** What names an entry's species, the ends of a path are read against. */
   reference: Source;
-  /** The saddle points' property that groups the paths: the product, for both. */
+  /** The saddle points' property that groups the paths: the path's ID each product was given, for both. */
   pathsBy: string;
 };
 
@@ -136,7 +136,7 @@ function direction(d: "forward" | "backward", sides: Sides): RecipeStep[] {
   const geometryIn = sides.product ? k("geometry-of") : sides.geometry;
   const out: RecipeStep[] = [];
   if (sides.product) {
-    out.push(step({ key: k("geometry-of"), stage: pairs, kind: "join", options: { on: "species", carry: "product" }, in: { onto: sides.geometry, from: sides.product }, note: "Each conformer given the product it is of" }));
+    out.push(step({ key: k("geometry-of"), stage: pairs, kind: "join", options: { on: "species", carry: "path" }, in: { onto: sides.geometry, from: sides.product }, note: "Each conformer given the ID of the path to the product it is of" }));
   }
   out.push(
     step({ key: k("geometry"), stage: pairs, kind: "tag", options: { name: sides.geometryTag }, in: { in: geometryIn } }),
@@ -144,7 +144,7 @@ function direction(d: "forward" | "backward", sides: Sides): RecipeStep[] {
     step({ key: k("rebonded"), stage: pairs, kind: "rebond", options: { pairs: "each" }, in: { geometry: k("geometry"), bonding: bond }, note: "Ends: one side's conformers with the other's bonding" }),
   );
   if (sides.target) {
-    out.push(step({ key: k("ends"), stage: pairs, kind: "join", options: { on: "product", carry: "species as target" }, in: { onto: k("rebonded"), from: sides.target }, note: "Each end given the species of the product it was made for" }));
+    out.push(step({ key: k("ends"), stage: pairs, kind: "join", options: { on: "path", carry: "species as target" }, in: { onto: k("rebonded"), from: sides.target }, note: "Each end given the species of the product it was made for" }));
   }
   const ends = sides.target ? k("ends") : k("rebonded");
   out.push(
@@ -200,7 +200,7 @@ function direction(d: "forward" | "backward", sides: Sides): RecipeStep[] {
     }),
   );
   // (the paths: from each end to its own conformer, matched on the ID the conformer carries; each path is its end's entry, so it carries the end's properties)
-  const keep = `path-${d}\nspecies\n${sides.geometryTag}\n${sides.bondingTag}\nproduct`;
+  const keep = `path-${d}\nspecies\n${sides.geometryTag}\n${sides.bondingTag}${sides.bondingTag === "path" ? "" : "\npath"}`;
   out.push(
     step({ key: k("path"), stage: paths, kind: "path-search", by: "orca", options: { ...NEB, pairs: "property", property: sides.geometryTag }, in: { start: k("ends-ok"), end: k("geometry") }, note: "Paths" }),
     step({ key: k("guesses"), stage: paths, kind: "duplicates", in: { in: k("path") } }),
@@ -313,7 +313,7 @@ function dft(): RecipeStep[] {
       key: "dft-diagram",
       stage,
       kind: "energy-diagram",
-      options: { quantity: "G-DFT", levels: "", reference: "species-1", levelsBy: "product\nspecies", joinedBy: "reactant end\nproduct end", conformers: "every" },
+      options: { quantity: "G-DFT", levels: "", reference: "species-1", levelsBy: "path\nspecies", joinedBy: "reactant end\nproduct end", conformers: "every" },
       in: { levels: "dft-levels" },
     }),
     step({ key: "dft-lowest", stage, kind: "rank", options: { property: "G-DFT", order: "lowest first", keep: 1, within: "each value", groupBy: "species" }, in: { in: "dft-min-distinct" } }),
@@ -380,13 +380,13 @@ function body(): RecipeStep[] {
     step({ key: "sides", stage: STAGES.conformers, kind: "filter", options: { conditions: "species = species-1", match: "all" }, in: { in: "most-64" }, note: "Reactant conformers" }),
     // (the species by their IDs, apart: the reactant, and the products each given the ID of the path to it)
     step({ key: "reactant-species", stage: STAGES.conformers, kind: "filter", options: { conditions: "species = species-1", match: "all" }, in: { in: "species" }, note: "The reactant, with its species ID" }),
-    step({ key: "product-species", stage: STAGES.conformers, kind: "tag", options: { name: "product" }, in: { in: "reactant-species.rest" }, note: "The products, each with its species ID and its own product ID" }),
-    ...direction("forward", { geometry: "sides", geometryTag: "start", bonding: "product-species", bondingTag: "product", tagged: true, target: "product-species", reference: "species", pathsBy: "product" }),
-    ...direction("backward", { geometry: "sides.rest", geometryTag: "pc", bonding: "reactant-species", bondingTag: "reactant", product: "product-species", reference: "species", pathsBy: "product" }),
+    step({ key: "product-species", stage: STAGES.conformers, kind: "tag", options: { name: "path" }, in: { in: "reactant-species.rest" }, note: "The products, each with its species ID and the ID of the path to it" }),
+    ...direction("forward", { geometry: "sides", geometryTag: "start", bonding: "product-species", bondingTag: "path", tagged: true, target: "product-species", reference: "species", pathsBy: "path" }),
+    ...direction("backward", { geometry: "sides.rest", geometryTag: "pc", bonding: "reactant-species", bondingTag: "reactant", product: "product-species", reference: "species", pathsBy: "path" }),
     // The diagram at the xTB level
     step({ key: "saddles", stage: STAGES.diagram, kind: "merge", options: { keep: "all", property: "" }, in: { first: "forward/ranked", second: "backward/ranked" }, note: "Validated saddle points of both directions" }),
     // (ConfoTS's 16 is for the path: the two directions together are capped at the lowest 16 of each path)
-    step({ key: "saddles-16", stage: STAGES.diagram, kind: "rank", options: { property: "energy", order: "lowest first", keep: 16, within: "each value", groupBy: "product" }, in: { in: "saddles" }, note: "At most 16 saddle points of each path, from both directions" }),
+    step({ key: "saddles-16", stage: STAGES.diagram, kind: "rank", options: { property: "energy", order: "lowest first", keep: 16, within: "each value", groupBy: "path" }, in: { in: "saddles" }, note: "At most 16 saddle points of each path, from both directions" }),
     step({ key: "minima-5", stage: STAGES.diagram, kind: "energy-window", options: { window: 5 }, in: { in: "bonded" } }),
     step({ key: "minima-16", stage: STAGES.diagram, kind: "rank", options: { property: "energy", order: "lowest first", keep: 16, within: "each group", groupBy: "" }, in: { in: "minima-5" } }),
     step({ key: "minima-freq", stage: STAGES.diagram, kind: "frequencies", by: "orca", options: XTB, in: { in: "minima-16" } }),
@@ -395,7 +395,7 @@ function body(): RecipeStep[] {
       key: "diagram",
       stage: STAGES.diagram,
       kind: "energy-diagram",
-      options: { quantity: "thermo.free-energy", levels: "", reference: "species-1", levelsBy: "product\nspecies", joinedBy: "reactant end\nproduct end", conformers: "every" },
+      options: { quantity: "thermo.free-energy", levels: "", reference: "species-1", levelsBy: "path\nspecies", joinedBy: "reactant end\nproduct end", conformers: "every" },
       in: { levels: "levels" },
       note: "Energy diagram",
     }),

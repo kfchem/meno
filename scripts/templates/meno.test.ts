@@ -162,18 +162,18 @@ describe("the forward ends given the species of the product they were made for",
     const b = builder();
     // (two reactant conformers each re-bonded as both products: four ends, each carrying its product and the reactant's species)
     const ends = b.set(
-      ["product-1", "product-2"].flatMap((p) => [1, 2].map((c) => entry(`${p}/${c}`, 0, [-76.4], [{ species: "species-1", product: p, start: `start-${c}` }]))),
+      ["path-1", "path-2"].flatMap((p) => [1, 2].map((c) => entry(`${p}/${c}`, 0, [-76.4], [{ species: "species-1", path: p, start: `start-${c}` }]))),
     );
-    // (the products, each with its species ID and its product ID)
-    const products = b.set([entry("p1", 0, [-76.4], [{ species: "species-2", product: "product-1" }]), entry("p2", 0, [-76.4], [{ species: "species-3", product: "product-2" }])]);
+    // (the products, each with its species ID and the ID of the path to it)
+    const products = b.set([entry("p1", 0, [-76.4], [{ species: "species-2", path: "path-1" }]), entry("p2", 0, [-76.4], [{ species: "species-3", path: "path-2" }])]);
     const joined = b.run("forward/ends", { onto: { set: ends }, from: { set: products } });
     const set = resultOf(b.doc, joined)!;
     const got = setMembers(b.doc, set).molecules.map((m) => {
       const props = b.doc.molecules3d!.find((x) => x.id === m)!.properties ?? [];
       const get = (n: string) => String(props.map((q) => q[n]).find(Boolean)?.value);
-      return `${get("product")}>${get("target")}`;
+      return `${get("path")}>${get("target")}`;
     });
-    expect(got.sort()).toEqual(["product-1>species-2", "product-1>species-2", "product-2>species-3", "product-2>species-3"]);
+    expect(got.sort()).toEqual(["path-1>species-2", "path-1>species-2", "path-2>species-3", "path-2>species-3"]);
   });
 });
 
@@ -184,26 +184,26 @@ describe("the energy diagram's levels, run on made saddle points of two paths an
   it("draws a level for each species and one for each path - the path's saddle points its thin lines - the reactant in its column, the saddle points in the next, the products in the last", () => {
     const b = builder();
     // (the reactant a and two products b and c, each of two conformers; the paths a>b and a>c each of three saddle points, as the paths' steps leave them: carrying their
-    //  product, their start's species, and their two ends by role)
+    //  path, their start's species, and their two ends by role)
     const set = b.set([
       conformers("a", [-76.4, -76.39], { species: "species-1" }),
       conformers("b", [-76.42, -76.41], { species: "species-2" }),
       conformers("c", [-76.41, -76.4], { species: "species-3" }),
-      conformers("TS b", [-76.375, -76.37, -76.36], { product: "product-1", species: "species-1", "reactant end": "species-1", "product end": "species-2" }),
-      conformers("TS c", [-76.38, -76.372, -76.365], { product: "product-2", species: "species-1", "reactant end": "species-1", "product end": "species-3" }),
+      conformers("TS b", [-76.375, -76.37, -76.36], { path: "path-1", species: "species-1", "reactant end": "species-1", "product end": "species-2" }),
+      conformers("TS c", [-76.38, -76.372, -76.365], { path: "path-2", species: "species-1", "reactant end": "species-1", "product end": "species-3" }),
     ]);
     const diagram = recipe("diagram");
     const step = b.run("diagram", { levels: { set } }, { quantity: "energy" });
     const ran = b.doc.steps!.find((x) => x.id === step)!;
-    expect([diagram.options!.levelsBy, diagram.options!.joinedBy, diagram.options!.conformers, diagram.options!.reference]).toEqual(["product\nspecies", "reactant end\nproduct end", "every", "species-1"]);
+    expect([diagram.options!.levelsBy, diagram.options!.joinedBy, diagram.options!.conformers, diagram.options!.reference]).toEqual(["path\nspecies", "reactant end\nproduct end", "every", "species-1"]);
     expect(ran.ran?.ok).toBe(true);
     const d = resultOf(b.doc, step)!.chart as { levels: { name: string; column?: number; lowestOf: number; others?: unknown[] }[]; links: number[][] };
     expect(d.levels.map((l) => [l.name, l.column, l.lowestOf])).toEqual([
       ["species-1", 0, 2],
       ["species-2", 2, 2],
       ["species-3", 2, 2],
-      ["product-1", 1, 3],
-      ["product-2", 1, 3],
+      ["path-1", 1, 3],
+      ["path-2", 1, 3],
     ]);
     // (each saddle point's other conformers thin lines under its bar)
     expect(d.levels.map((l) => l.others?.length ?? 0)).toEqual([1, 1, 1, 2, 2]);
@@ -216,15 +216,15 @@ describe("the backward paths, run on made results", () => {
   it("gives each product conformer the product it is of - the product's ID matched on its species - and keeps the paths whose ends are the reactant and its own species", () => {
     const b = builder();
     const conformers = b.set([entry("c1", 0, [-76.4], [{ species: "species-2" }]), entry("c2", 0, [-76.4], [{ species: "species-3" }])]);
-    const products = b.set([entry("p1", 0, [-76.4], [{ species: "species-2", product: "product-1" }]), entry("p2", 0, [-76.4], [{ species: "species-3", product: "product-2" }])]);
+    const products = b.set([entry("p1", 0, [-76.4], [{ species: "species-2", path: "path-1" }]), entry("p2", 0, [-76.4], [{ species: "species-3", path: "path-2" }])]);
     const of = b.run("backward/geometry-of", { onto: { set: conformers }, from: { set: products } });
     const set = resultOf(b.doc, of)!;
     const got = setMembers(b.doc, set).molecules.map((m) => {
       const props = b.doc.molecules3d!.find((x) => x.id === m)!.properties ?? [];
       const get = (n: string) => String(props.map((q) => q[n]).find(Boolean)?.value);
-      return `${get("species")}>${get("product")}`;
+      return `${get("species")}>${get("path")}`;
     });
-    expect(got.sort()).toEqual(["species-2>product-1", "species-3>product-2"]);
+    expect(got.sort()).toEqual(["species-2>path-1", "species-3>path-2"]);
     // (a backward saddle point's species is the product's, its start's: its path ends at the reactant and at that species, in either order)
     const paths = b.set([
       saddle("right", "species-2", "species-1", "species-2"),
@@ -238,13 +238,13 @@ describe("the backward paths, run on made results", () => {
 });
 
 describe("the cap after the two directions are merged, and the split back by direction", () => {
-  const found = (name: string, dir: "forward" | "backward", product: string, energy: number) => entry(name, 0, [energy], [{ [`path-${dir}`]: name, product, "path-name": name }]);
+  const found = (name: string, dir: "forward" | "backward", path: string, energy: number) => entry(name, 0, [energy], [{ [`path-${dir}`]: name, path, "path-name": name }]);
 
   it("keeps the lowest 16 of each path whichever direction they came from, and splits what is kept by the path tag it carries", () => {
     const b = builder();
-    // (18 saddle points of path product-1: 9 from each direction, energies rising; 2 of path product-2)
-    const many = Array.from({ length: 18 }, (_, i) => found(`s${String(i).padStart(2, "0")}`, i % 2 ? "forward" : "backward", "product-1", -76.4 + 0.001 * i));
-    const set = b.set([...many, found("t0", "forward", "product-2", -76.39), found("t1", "backward", "product-2", -76.38)]);
+    // (18 saddle points of path path-1: 9 from each direction, energies rising; 2 of path path-2)
+    const many = Array.from({ length: 18 }, (_, i) => found(`s${String(i).padStart(2, "0")}`, i % 2 ? "forward" : "backward", "path-1", -76.4 + 0.001 * i));
+    const set = b.set([...many, found("t0", "forward", "path-2", -76.39), found("t1", "backward", "path-2", -76.38)]);
     const capped = b.run("saddles-16", { in: { set } });
     const kept = b.titles(capped, "out", "path-name");
     expect(kept).toHaveLength(18);
@@ -263,8 +263,8 @@ describe("the barriers' pairing, run on made saddle points of two paths and the 
     const minimum = (title: string, energy: number, species: string) => entry(title, 0, [energy], [{ species }]);
     const minima = b.set([minimum("a", -76.4, "species-1"), minimum("b", -76.45, "species-2"), minimum("c", -76.5, "species-3")]);
     const ts = (path: string, product: string, i: number) =>
-      entry(`${path}-${i}`, 0, [-76.37 - 0.0001 * i], [{ product: path, species: "species-1", "reactant end": "species-1", "product end": product }]);
-    const saddles = b.set([...Array.from({ length: 16 }, (_, i) => ts("product-1", "species-2", i)), ...Array.from({ length: 16 }, (_, i) => ts("product-2", "species-3", i))]);
+      entry(`${path}-${i}`, 0, [-76.37 - 0.0001 * i], [{ path, species: "species-1", "reactant end": "species-1", "product end": product }]);
+    const saddles = b.set([...Array.from({ length: 16 }, (_, i) => ts("path-1", "species-2", i)), ...Array.from({ length: 16 }, (_, i) => ts("path-2", "species-3", i))]);
     // (the lowest of each species - by E, as the made entries have no free energy - each named as a reactant end, both by the recipe's own steps)
     const lowest = b.run("lowest", { in: { set: minima } }, { property: "energy" });
     const named = b.run("lowest-named", { onto: { set: resultOf(b.doc, lowest)!.id }, from: { set: resultOf(b.doc, lowest)!.id } });
