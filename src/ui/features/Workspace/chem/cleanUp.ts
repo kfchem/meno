@@ -16,7 +16,7 @@ import { drawingOf } from "./drawing";
 import { layoutJob, nextFree, relayoutFrom, type LayoutJob } from "./engineLayout";
 import { layOut } from "./layOut";
 import type { Axial, Cumulated } from "../../../../lib/layout/stereo";
-import { readStereo } from "../../../../lib/layout/drawn";
+import { openRuns, readStereo } from "../../../../lib/layout/drawn";
 import { atTrueSize } from "../../../../lib/chem/magnified2d";
 import { formulaOf } from "../../../../lib/io/coordinates";
 
@@ -319,6 +319,9 @@ export async function laidOut(
   arranged: ReadonlySet<number> = new Set(),
 ): Promise<Model> {
   if (!model.bonds.length) return model;
+  // (an odd cumulene's cis or trans in a drawing nobody made that Meno's own reading of the text did not give - a MOL block cannot say one,
+  //  and a text Meno's reader does not take gives none: open, as one the text leaves open is; its picture shows one only by chance)
+  if (asNew) open = joined(open, runsOpenOf(model, given));
   // (a double bond the structure's own text leaves open, with an end of two groups: a wavy bond on a group - Brecher 2006, ST-4.4)
   const either = new Set(open?.either ?? []);
   // (one left open with one group at each end, its ends kept straight on below: the plugin's own mark of either configuration taken off it,
@@ -388,6 +391,35 @@ export async function laidOut(
  * `openDoubleBonds`): the ends to keep straight on, by atom, and the bonds to give a wavy bond, by bond.
  */
 export type OpenDoubles = { straight: readonly number[]; either: readonly number[] };
+
+/**
+ * The odd cumulenes (a butatriene's) of a drawing nobody made that `given` - Meno's own reading of the structure's text - does not give,
+ * open (layout/drawn `openRuns`), by the drawing's indices: none where there are none.
+ */
+function runsOpenOf(model: Model, given: GivenRuns | undefined): OpenDoubles | null {
+  const d = drawingOf(model);
+  const o = openRuns({
+    atoms: d.atoms.map((a) => ({ el: a.el ?? "C", hs: a.hs, ...(a.charge ? { charge: a.charge } : {}) })),
+    bonds: d.bonds.map(({ a, b, order }) => ({ a, b, order })),
+    ...(given?.cumulated.length ? { cumulated: given.cumulated } : {}),
+  });
+  if (!o.straight.length && !o.either.length) return null;
+  // (the bonds by the model's own, by their atoms)
+  const ids = model.atoms.map((a) => a.id);
+  const either = o.either.flatMap((k) => {
+    const [p, q] = [ids[d.bonds[k].a], ids[d.bonds[k].b]];
+    const i = model.bonds.findIndex((b) => (b.a === p && b.b === q) || (b.a === q && b.b === p));
+    return i >= 0 ? [i] : [];
+  });
+  return { straight: o.straight, either };
+}
+
+/** Two sets of open double bonds as one. */
+function joined(p: OpenDoubles | null | undefined, q: OpenDoubles | null | undefined): OpenDoubles | undefined {
+  if (!p) return q ?? undefined;
+  if (!q) return p;
+  return { straight: [...new Set([...p.straight, ...q.straight])], either: [...new Set([...p.either, ...q.either])] };
+}
 
 /**
  * A plugin's drawing kept as it came - not laid out (`laidOut` refused) - with each odd cumulene's cis or trans (a butatriene's) it shows
