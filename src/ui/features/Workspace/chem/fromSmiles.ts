@@ -133,6 +133,22 @@ export async function drawingOf(molblock: string, style?: DrawingStyle, given?: 
   });
 }
 
+/**
+ * The structures a step's plugin made (a `DrawnAnswer`'s `made`), each drawn as Meno draws a SMILES's: laid out from the configuration it
+ * was made with, the `k`th's its own, where the plugin sends them.
+ */
+export function madeDrawn(answer: { made: readonly string[]; configurations?: readonly (Configuration | undefined)[] }, style?: DrawingStyle): Promise<(Model & { asCame?: string; notShown?: NotShown })[]> {
+  return Promise.all(answer.made.map((block, k) => drawingOf(block, style, givenOf(undefined, answer.configurations?.[k]))));
+}
+
+/**
+ * A structure a step made as a SMILES, drawn as a SMILES typed is: laid out from what the plugin read of it beside its block
+ * (`molblockOfSmiles`), and the text's own axes and odd cumulenes.
+ */
+export function smilesMadeDrawn(smiles: string, read: { molblock: string; configuration?: Configuration }, style?: DrawingStyle): Promise<Model & { asCame?: string; notShown?: NotShown }> {
+  return drawingOf(read.molblock, style, givenOf(givenRunsOf(smiles, read.molblock)?.runs, read.configuration));
+}
+
 /** What a drawing kept as it came does not show of what its source gave (`notShownOf`): of its stereocentres, its double bonds' cis or trans and its axes, how many are not shown, of how many. */
 export type NotShown = { centres: [number, number]; doubles: [number, number]; axes: [number, number] };
 

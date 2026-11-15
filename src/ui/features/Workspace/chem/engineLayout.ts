@@ -837,7 +837,7 @@ export function statedOf(job: LayoutJob, part: Model): StereoShown {
 }
 
 /** How the stereochemistry `now` shows differs from `stated`, each unit by atom id: "changed" where one is lost or turned, "gained" where `now` shows one not stated. */
-function stereoAgainst(stated: StereoShown, now: StereoShown): "changed" | "gained" | null {
+export function stereoAgainst(stated: StereoShown, now: StereoShown): "changed" | "gained" | null {
   for (const [c, t] of stated.centres) {
     const u = now.centres.get(c);
     if (!u || !sameConfiguration(t, u)) return "changed";

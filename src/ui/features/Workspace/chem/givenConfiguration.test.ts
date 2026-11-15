@@ -10,6 +10,7 @@ import { identityOfDrawn } from "./identityOf";
 import { drawnFromSmiles } from "../utils/smilesDrawn";
 import { asCameSaid } from "./fromSmiles";
 import { cisTransOfGiven } from "./givenConfiguration";
+import { centreFrom, configurationOf, plainPicture, polygon } from "./testdata/givenPictures";
 
 /**
  * A structure laid out from the configuration its source gives beside its drawing (backlog 106 B; chem/givenConfiguration): the plugin's
@@ -17,27 +18,7 @@ import { cisTransOfGiven } from "./givenConfiguration";
  * bond numbers - not what the picture's wedges say.
  */
 
-type V = [number, number, number];
-const sub = (p: V, q: V): V => [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
-const det = (u: V, v: V, w: V) => u[0] * (v[1] * w[2] - v[2] * w[1]) - u[1] * (v[0] * w[2] - v[2] * w[0]) + u[2] * (v[0] * w[1] - v[1] * w[0]);
 
-/**
- * A centre as the plugin gives one (`sense` +1 where det(n1 - c, n2 - c, n3 - c) is positive in a right-handed frame, the neighbours in the
- * order given): worked out here from a solid made by hand - the H (or the lowest group) pointing away from the viewer, down -z, and the three
- * named at the angles given, seen from +z - so that the known answer does not rest on Meno's own conversion.
- */
-function centreFrom(atom: number, named: { at: number; deg: number }[]): ConfiguredCentre {
-  const c: V = [0, 0, 0];
-  const p = (deg: number): V => [Math.cos((deg * Math.PI) / 180), Math.sin((deg * Math.PI) / 180), 1 / 3];
-  const [u, v, w] = named.map((n) => sub(p(n.deg), c));
-  return { atom, neighbours: named.map((n) => n.at), sense: det(u, v, w) > 0 ? 1 : -1 };
-}
-
-/** The plugin's picture of a structure: its atoms and bonds in the SMILES's order, as the engine lays them out, with no wedge - stating no configuration. */
-function plainPicture(smiles: string): Model {
-  const m = drawnFromSmiles(smiles.replace(/@+/g, ""));
-  return { ...m, bonds: m.bonds.map(({ stereo: _s, narrow: _n, display: _d, ...b }) => b) as Model["bonds"] };
-}
 
 /** R or S at the atom at `index`, read by Meno's own CIP on what was laid out. */
 async function labelOf(smiles: string, configuration: Configuration, index: number): Promise<string | undefined> {
@@ -84,41 +65,7 @@ describe("a centre given beside the plugin's drawing: its sense, by hand", () =>
   });
 });
 
-/** The plugin's picture of a macrocycle: a regular polygon, its groups straight out of it, no wedge (as the plugin lays out a ring of 36 or more: its centres state nothing). */
-function polygon(smiles: string): Model {
-  const m = plainPicture(smiles);
-  const input = smilesInput(smiles.replace(/@+/g, ""));
-  // (the ring: the longest cycle through the atoms of degree two or more, found as the atoms left when the ones of degree one are taken off)
-  const degree = new Map<number, number>();
-  for (const b of input.bonds) [b.a, b.b].forEach((x) => degree.set(x, (degree.get(x) ?? 0) + 1));
-  const ring = [...degree.keys()].filter((x) => (degree.get(x) ?? 0) > 1).sort((p, q) => p - q);
-  const at = new Map<number, { x: number; y: number }>();
-  const r = ring.length / (2 * Math.PI);
-  ring.forEach((x, k) => at.set(x, { x: r * Math.cos((2 * Math.PI * k) / ring.length), y: r * Math.sin((2 * Math.PI * k) / ring.length) }));
-  for (const b of input.bonds) {
-    for (const [inner, outer] of [[b.a, b.b], [b.b, b.a]]) {
-      if (at.has(inner) && !at.has(outer)) {
-        const p = at.get(inner)!;
-        const len = Math.hypot(p.x, p.y);
-        at.set(outer, { x: p.x * (1 + 1 / len), y: p.y * (1 + 1 / len) });
-      }
-    }
-  }
-  return { ...m, atoms: m.atoms.map((a, i) => ({ ...a, ...(at.get(i) ?? {}) })) };
-}
 
-/** The configuration the SMILES states, as the plugin would send it: Meno's own reading of the text, in the field's terms (each centre's named neighbours and its sense). */
-function configurationOf(smiles: string): Configuration {
-  const input = smilesInput(smiles);
-  return {
-    centres: input.atoms.flatMap((a, i) => {
-      if (!a.tetra) return [];
-      const named = a.tetra.neighbours.filter((n) => n !== -1);
-      return [{ atom: i, neighbours: named, sense: a.tetra.volume }];
-    }),
-    doubles: [],
-  };
-}
 
 describe("a macrocycle given beside the plugin's polygon", () => {
   const lactone36 = "C[C@@H]1CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC(=O)O1";
