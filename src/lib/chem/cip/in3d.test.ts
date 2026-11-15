@@ -44,6 +44,14 @@ describe("R and S, E and Z of a molecule in 3D, read from its places", () => {
     // (a ring of four closed through the two Cl, as a cyclobutene's: none)
     const ring = dichloroethene(true);
     expect(cipIn3d({ ...ring, bonds: [...ring.bonds, { a1: 0, a2: 3, order: 1 }] }).bonds).toEqual({});
+    // (its Cl made C and closed through a chain of carbons: a ring of seven, none; of eight, its Z)
+    const closed = (k: number) => ({
+      atoms: [{ el: "C" }, ...ring.atoms.slice(1, 3), { el: "C" }, ...ring.atoms.slice(4), ...Array.from({ length: k }, () => ({ el: "C" }))],
+      bonds: [...ring.bonds, ...Array.from({ length: k + 1 }, (_, i) => ({ a1: i === 0 ? 0 : 5 + i, a2: i === k ? 3 : 6 + i, order: 1 }))],
+      xyz: [...ring.xyz, ...Array.from({ length: k }, (_, i) => [i - 1, 4, 0]).flat()],
+    });
+    expect(cipIn3d(closed(3)).bonds).toEqual({});
+    expect(cipIn3d(closed(4)).bonds).toEqual({ "1": "Z" });
   });
 
   it("gives a protonated amine's N none, its H coming and going: four groups round it all different", () => {

@@ -337,7 +337,7 @@ export function pushedOut(doc: WorkspaceDocument, down: WorkspaceDocument, exten
     const m = easedOut(box, most);
     return m.dx || m.dy ? m : null;
   };
-  for (const ids of structuresOf(doc.model)) {
+  for (const ids of structuresOf(doc.model, true)) {
     if (ids.some((id) => held.atoms.has(id))) continue;
     const changed = ids.some((id) => wasAtom.get(id) !== nowAtom.get(id));
     const m = ease(on.structure(ids), changed);

@@ -452,6 +452,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const chem = await chemWorker("stereoisomers");
       for (const [k, e] of kept.entries()) {
         if (menoStops.has(id)) return null;
+        // (an entry is one structure, so one block: its first is all of it - workflow/hydrogenBondEntries.test pins that)
         const block = blocksOf(e.drawn, e.drawn.atoms.map((a) => a.id))[0];
         if (block) {
           if (anyOpen((await openStereo(chem, [block.molblock])).left)) open.push(recordNumber(e.record) ?? k + 1);
@@ -786,6 +787,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         working({ done: place });
         const blocks = blocksOf(model, atoms);
         const bare = bareAtomsOf(model, atoms);
+        // (one structure, one block: workflow/hydrogenBondEntries.test)
         const block = blocks[0];
                 // (failed - no result to stand on: a table says so, a chart refuses it, "state = finished" leaves it - what it was set aside for before kept beside why)
         const asideAs = (why: string) => {
