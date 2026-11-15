@@ -257,6 +257,17 @@ export function canonicalWritten(input: LayoutInput): { text: string; complete: 
   return { text: written(input, first, found.r), complete: !found.cut };
 }
 
+/**
+ * One search of the molecule, as `canonicalWritten` makes it, and all it finds at once: the text, the order that writes it
+ * (each atom's place, a canonical numbering of its atoms - which of two atoms alike in every way comes first may follow
+ * the input's order), the symmetries met on the way (`symmetryOrbits`'), and whether the search was complete.
+ */
+export function canonicalSearched(input: LayoutInput): { text: string; ranks: number[]; automorphisms: number[][]; complete: boolean } {
+  const { rank, first, withStereo } = classed(input);
+  const found = search(rank, input.atoms.length, withStereo, (r) => written(input, first, r));
+  return { text: written(input, first, found.r), ranks: found.r, automorphisms: found.symmetries, complete: !found.cut };
+}
+
 /** The molecule's own order `way` (old index to new) from its ranks (`canonicalRanks`). */
 export function walkOrder(input: LayoutInput, rank: readonly number[], way = 0): number[] {
   const n = input.atoms.length;

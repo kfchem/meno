@@ -1,6 +1,6 @@
 /**
  * Identity's fill (`filledIn`) tried on every writing of
- * fourteen structures - each place that can carry a configuration written one
+ * fifteen structures - each place that can carry a configuration written one
  * way, the other way or left blank - against what each writing stands for:
  * the compounds among its completions. The chemistry check's three tests:
  * never one identity for two meanings; a writing that stands for one
@@ -15,7 +15,7 @@ import type { LayoutInput } from "../layout/perceive";
 import { fromSmiles } from "../layout/testdata/fromSmiles";
 import { SHUFFLE_SEEDS, shuffled } from "../layout/testdata/shuffled";
 import { measured } from "../../testing/timeouts";
-import { constitutionKey, identity, identityKey, identityText } from "./identity";
+import { constitutionKey, filledIn, identity, identityKey, identityText } from "./identity";
 
 /** Each place written up (1), down (-1) or left blank (0). */
 type Writing = (1 | -1 | 0)[];
@@ -92,9 +92,10 @@ const STRUCTURES: [string, string][] = [
   ["decalin", "C1CCC2CCCCC2C1"],
   ["1,2,3,4,5-pentamethylcyclopentane", "CC1C(C)C(C)C(C)C1C"],
   ["inositol", "OC1C(O)C(O)C(O)C(O)C1O"],
+  ["3,5-dimethylheptan-4-ol", "CCC(C)C(O)C(C)CC"],
 ];
 
-describe("identity filled in, over every writing of fourteen structures", () => {
+describe("identity filled in, over every writing of fifteen structures", () => {
   it(
     "never gives two meanings one identity, and gives a writing of one compound that compound's identity",
     () => {
@@ -111,7 +112,7 @@ describe("identity filled in, over every writing of fourteen structures", () => 
         }
         for (const [, means] of meanings) expect(means.size, name).toBe(1);
       }
-      expect(writings).toBe(1218);
+      expect(writings).toBe(1245);
     },
     measured(20_000),
   );
@@ -250,6 +251,20 @@ describe("identity filled in: which groups are alike, and which atoms are places
       const g = fromSmiles(smiles);
       expect([smiles, identityKey(g)]).toEqual([smiles, constitutionKey(g)]);
     }
+  });
+
+  it("two groups alike as wholes - hanging from the place alone, no place or configuration in them - fill it with no search of the structure", () => {
+    // (PPh3's P, and each P of PdCl2(PPh3)2 and Pd(PPh3)4: three phenyls)
+    const ph3 = "P(c1ccccc1)(c1ccccc1)c1ccccc1";
+    for (const smiles of [ph3, `Cl[Pd](Cl)(${ph3})${ph3}`, `[Pd](${ph3})(${ph3})(${ph3})${ph3}`]) expect([smiles.length, filledIn(fromSmiles(smiles)).searches]).toEqual([smiles.length, 0]);
+    // (pentan-3-ol's ethyls: one structure however written)
+    expect(identities(ways("CC[C@H](CC)O").map((s) => fromSmiles(s)))).toBe(1);
+  });
+
+  it("two groups alike as molecules but on the place by different atoms, or in a ring through it, are not alike as wholes", () => {
+    // (a methoxy and a hydroxymethyl, each C and O: three structures; cyclohexanol's ring searched, one)
+    expect(identities(ways("CO[C@H](F)CO").map((s) => fromSmiles(s)))).toBe(3);
+    expect(identities(ways("O[C@H]1CCCCC1").map((s) => fromSmiles(s)))).toBe(1);
   });
 
   it("the fill ends, complete: a place filled is never offered again, nor a double bond drawn with its configuration", () => {
