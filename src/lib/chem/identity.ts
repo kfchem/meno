@@ -354,7 +354,7 @@ const SMALL_RING = 7;
  * across: a chelate's five- or six-membered ring cannot span the metal (found in the chemistry check). Larger rings may - a porphyrin's
  * opposite N, joined only by a ring of ten - so a filled arrangement may put those across; one read stands as read.
  */
-const CHELATE_RING = 7;
+export const CHELATE_RING = 7;
 
 /**
  * A place that could carry a configuration and carries none: a centre (its

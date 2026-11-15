@@ -7,11 +7,14 @@ import { laidOut, type GivenRuns, type OpenDoubles } from "./cleanUp";
 import { arrangementsMarked } from "./arrangementsMarked";
 import { smilesInput } from "../../../../lib/layout/smilesInput";
 import { openDoubleBonds } from "../../../../lib/layout/drawn";
-import { readSmiles } from "../../../../lib/chem/smiles";
+import { readSmiles, type MarkedArrangement } from "../../../../lib/chem/smiles";
+import { drawingOf as drawingOfModel } from "./drawing";
+import { identityInputOf } from "./identityOf";
 import { leftOver, stereoGraphOf } from "../../../../lib/chem/stereoOpen";
 import { openStereo } from "./openStereo";
 import { isMetal } from "../../../../lib/layout/perceive";
 import type { DrawingStyle } from "../../../../lib/chem/style";
+import { identityText } from "../../../../lib/chem/identity";
 
 /**
  * The structure a SMILES says, read by the plugin that fills that role and
@@ -27,11 +30,14 @@ export async function structureFromSmiles(smiles: string, style?: DrawingStyle):
   //  drawn: none said where it cannot be asked, or does not answer in time - the structure comes all the same)
   // (an allene's axis and an odd cumulene's cis or trans, which the SMILES says and a MOL block cannot: Meno's own reading of the text, where it is of the same atoms)
   const given = givenRunsOf(smiles, molblock);
+  // (a metal the SMILES gives the arrangement of - its mark, @SP or @OH, at the metal: the pairs the mark states, where Meno reads
+  //  them (`metalPairsIn`), kept only where the drawing has them; where it does not read them, one with no chelate, whose drawing
+  //  the plugin's picture carries)
+  const marks = metalPairsIn(smiles, molblock);
+  const arranged = [...new Set([...metalsArrangedIn(smiles, molblock), ...marks.map((m) => m.metal)])];
   // (and the double bonds it leaves open drawn as open: straight on, or a wavy bond on a group - Brecher 2006, ST-4.4)
   const opened = openDoublesOf(smiles, molblock);
-  // (a metal the SMILES gives the arrangement of - its mark, @SP or @OH, at the metal, and no chelate: the plugin's drawing carries it, and it is kept)
-  const arranged = metalsArrangedIn(smiles, molblock);
-  const [open, drawn] = await Promise.all([withinTime(openStereo(c, [molblock]).then((o) => o.left), STEREO_ASK_MS).catch(() => null), drawingOf(molblock, style, given?.runs, opened ?? undefined, arranged)]);
+  const [open, drawn] = await Promise.all([withinTime(openStereo(c, [molblock]).then((o) => o.left), STEREO_ASK_MS).catch(() => null), drawingOf(molblock, style, given?.runs, opened ?? undefined, arranged, marks)]);
   const stereoOpen = stereoOpenOf(open && given ? specified(open, given.bonds, molblock) : open);
   return stereoOpen ? { ...drawn, stereoOpen } : drawn;
 }
@@ -111,18 +117,83 @@ export function withoutStereoOpen<T extends { stereoOpen?: StereoOpen; asCame?: 
  * structures a step makes - laid out as new, not kept in forms the
  * plugin's coordinates happen to have (`laidOut`'s `asNew`).
  */
-export async function drawingOf(molblock: string, style?: DrawingStyle, given?: GivenRuns, open?: OpenDoubles, arrangedAt: readonly number[] = []): Promise<Model & { asCame?: string }> {
+export async function drawingOf(
+  molblock: string,
+  style?: DrawingStyle,
+  given?: GivenRuns,
+  open?: OpenDoubles,
+  arrangedAt: readonly number[] = [],
+  marks: readonly MarkedArrangement[] = [],
+): Promise<Model & { asCame?: string }> {
   const result = await processFileContent("drawing.mol", molblock);
   const drawn = editorModelOf(result.model);
   // (the metals whose arrangement the input gave, by the block's atoms: their ids)
-  const arranged = new Set(arrangedAt.flatMap((i) => (drawn.atoms[i] ? [drawn.atoms[i].id] : [])));
+  const idOf = (i: number) => drawn.atoms[i]?.id;
+  const arranged = new Set(arrangedAt.flatMap((i) => (idOf(i) != null ? [idOf(i)!] : [])));
+  const byIds = marks.flatMap((m) => (idOf(m.metal) != null && m.pairs.every(([p, q]) => idOf(p) != null && idOf(q) != null) ? [{ metal: idOf(m.metal)!, pairs: m.pairs.map(([p, q]) => [idOf(p)!, idOf(q)!] as [number, number]) }] : []));
   // (as it came, said why: put down, it is said - asCameSaid; its coordinates the plugin's, nobody's drawing: laid out as new)
-  return laidOut(drawn, style, given, open, true, arranged).catch((e: unknown) => {
+  const laid = await laidOut(drawn, style, given, open, true, arranged).catch((e: unknown) => {
     // (kept for whoever looks: what the sentence said plainly leaves out)
     console.warn("the structure is drawn as the plugin laid it out", e);
     // (a square-planar centre nobody gave the arrangement of marked so, as it would be laid out: the plugin's drawing says none)
     return { ...arrangementsMarked(drawn, arranged), asCame: e instanceof Error ? e.message : String(e) };
   });
+  return marksKept(laid, byIds);
+}
+
+/**
+ * `model` with each metal whose SMILES's mark states its pairs (`marks`, by id) checked against the drawing: where the pairs drawn
+ * are not the mark's - a chelate laid out as another isomer, or one the plugin drew so - the metal is marked as one nobody gave the
+ * arrangement of, wherever its donors could lie more ways than one (`arrangementsMarked`): never an isomer the input did not write.
+ */
+function marksKept<M extends Model>(model: M, marks: readonly { metal: number; pairs: readonly (readonly [number, number])[] }[]): M {
+  if (!marks.length) return model;
+  const drawing = drawingOfModel(model);
+  const at = (id: number) => drawing.index.get(id);
+  const key = (pairs: readonly (readonly [number, number])[]) => pairs.map(([p, q]) => (p < q ? `${p},${q}` : `${q},${p}`)).sort().join(" ");
+  // (the pairs as identity reads them - the earlier picture's too, where it is one structure: chem/identityOf `identityInputOf`)
+  const { input } = identityInputOf(model);
+  const read = new Map((input.arrangements ?? []).map((x) => [x.metal, x.pairs]));
+  // (the mark's pairs, or pairs that make the same structure with them - the earlier picture read by one of its alike readings)
+  const same = (i: number, pairs: readonly (readonly [number, number])[]) => {
+    const drawn = read.get(i);
+    if (!drawn) return false;
+    if (key(drawn) === key(pairs)) return true;
+    const marked = { ...input, arrangements: (input.arrangements ?? []).map((x) => (x.metal === i ? { metal: i, pairs } : x)) };
+    return identityText(marked) === identityText(input);
+  };
+  const wrong = new Set(
+    marks.flatMap((m) => {
+      const i = at(m.metal);
+      const pairs = m.pairs.flatMap(([p, q]) => (at(p) != null && at(q) != null ? [[at(p)!, at(q)!] as const] : []));
+      return i == null || pairs.length !== m.pairs.length || !same(i, pairs) ? [m.metal] : [];
+    }),
+  );
+  if (!wrong.size) return model;
+  // (only the metals found wrong asked: every other atom set aside as given)
+  return { ...model, ...arrangementsMarked(model, new Set(model.atoms.map((a) => a.id).filter((id) => !wrong.has(id)))) };
+}
+
+/**
+ * The pairs across each marked metal's mark states (lib/chem/smiles `pairsMarked`: @SP1-3, @OH1-30), by the atoms of the MOL
+ * block the plugin read the SMILES to - the same atoms in the same order, joined by the same bonds - or none: where Meno's reader
+ * refuses the SMILES or the mark, or the block is not of its atoms, nothing is read and `metalsArrangedIn` stands alone.
+ */
+export function metalPairsIn(smiles: string, molblock: string): MarkedArrangement[] {
+  let own;
+  try {
+    own = readSmiles(smiles, { metalMarks: true });
+  } catch {
+    return [];
+  }
+  if (!own.arrangements?.length) return [];
+  const graph = stereoGraphOf([molblock]);
+  if (!graph || graph.atoms.length !== own.atoms.length || graph.atoms.some((a, i) => a.el !== own.atoms[i].el)) return [];
+  const pair = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
+  const wanted = own.bonds.map((b) => pair(b.a1, b.a2)).sort();
+  const had = graph.bonds.map((b) => pair(b.a, b.b)).sort();
+  if (wanted.length !== had.length || wanted.some((k, i) => k !== had[i])) return [];
+  return own.arrangements;
 }
 
 /**

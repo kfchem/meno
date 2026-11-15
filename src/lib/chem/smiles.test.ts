@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readSmiles } from "./smiles";
+import { pairsMarked, readSmiles } from "./smiles";
 
 describe("a double bond's cis or trans, read from SMILES", () => {
   // (OpenSMILES: a neighbour written before its end with "/" lies below it,
@@ -135,5 +135,88 @@ describe("an allene's axis and an odd cumulene's cis or trans, read from SMILES"
   it("refuses an @ it cannot read as an allene's: not on the middle of its run, or at an end with two hydrogens", () => {
     expect(() => readSmiles("CC=[C@]=C=C=CC")).toThrow(/not the middle atom/);
     expect(() => readSmiles("C=[C@]=CC")).toThrow(/two neighbours besides it/);
+  });
+});
+
+describe("a metal's square-planar or octahedral mark, read as which neighbours are across (OpenSMILES)", () => {
+  /** The pairs across at the one marked metal, each by its two elements, sorted. */
+  const across = (smiles: string) => {
+    const s = readSmiles(smiles, { metalMarks: true });
+    expect(s.arrangements).toHaveLength(1);
+    return s.arrangements![0].pairs.map(([p, q]) => [s.atoms[p].el, s.atoms[q].el].sort().join("-")).sort();
+  };
+
+  it("reads the spec's own equivalent writings of one octahedral centre as one set of pairs: C-S, Br-F, Cl-I", () => {
+    for (const smiles of [
+      "S[Co@OH5](F)(I)(Cl)(C)Br",
+      "Br[Co@OH9](C)(S)(Cl)(F)I",
+      "Br[Co@OH12](Cl)(I)(F)(S)C",
+      "Cl[Co@OH15](C)(Br)(F)(I)S",
+      "Cl[Co@OH19](C)(I)(F)(S)Br",
+      "I[Co@OH27](Cl)(Br)(F)(S)C",
+    ])
+      expect([smiles, across(smiles)]).toEqual([smiles, ["Br-F", "C-S", "Cl-I"]]);
+  });
+
+  it("OH1 and OH2: the first across the last, the second across the fourth, the third across the fifth - the hand not kept", () => {
+    expect(across("C[Co@OH1](F)(Cl)(Br)(I)S")).toEqual(["Br-F", "C-S", "Cl-I"]);
+    expect(across("C[Co@OH2](F)(Cl)(Br)(I)S")).toEqual(["Br-F", "C-S", "Cl-I"]);
+    // (a bare @ or @@ on six neighbours is OH1 or OH2 - the spec's own first two writings)
+    expect(across("C[Co@](F)(Cl)(Br)(I)S")).toEqual(["Br-F", "C-S", "Cl-I"]);
+    expect(across("F[Co@@](S)(I)(C)(Cl)Br")).toEqual(["Br-F", "C-S", "Cl-I"]);
+  });
+
+  it("a bare @ at a metal of four neighbours is never read as square planar: refused, as a tetrahedral mark at a metal", () => {
+    expect(() => readSmiles("[NH3][Pt@](Cl)([NH3])Cl", { metalMarks: true })).toThrow();
+    expect(() => readSmiles("[NH3][Pt@@](Cl)([NH3])Cl", { metalMarks: true })).toThrow();
+  });
+
+  it("every one of the thirty: an axis from the first and a shape for the other four, three pairs of the six", () => {
+    const six = [0, 1, 2, 3, 4, 5];
+    for (let n = 1; n <= 30; n++) {
+      const pairs = pairsMarked(`OH${n}`, six)!;
+      expect([n, pairs.flat().sort()]).toEqual([n, six]);
+      expect(pairs[0][0]).toBe(0);
+    }
+    // (each axis five ways, each with every shape: 30 marks, 15 pairings, each pairing twice - one hand and the other)
+    const key = (n: number) => JSON.stringify(pairsMarked(`OH${n}`, six)!.map((p) => [...p].sort()).sort());
+    const counts = new Map<string, number>();
+    for (let n = 1; n <= 30; n++) counts.set(key(n), (counts.get(key(n)) ?? 0) + 1);
+    expect([counts.size, [...new Set(counts.values())]]).toEqual([15, [2]]);
+  });
+
+  it("reads the ring closures in the order of their digits: trans- and cis-[Co(en)2Cl2]+, fac- and mer-Co(gly)3", () => {
+    expect(across("[Co@OH1+]123456.Cl1.[NH2]2CC[NH2]3.[NH2]4CC[NH2]5.Cl6")).toEqual(["Cl-Cl", "N-N", "N-N"]);
+    expect(across("[Co@OH1+]123456.Cl1.Cl2.[NH2]3CC[NH2]4.[NH2]5CC[NH2]6")).toEqual(["Cl-N", "Cl-N", "N-N"]);
+    expect(across("[Co@OH1]123456.[NH2]1CC(=O)O2.O3C(=O)C[NH2]4.[NH2]5CC(=O)O6")).toEqual(["N-O", "N-O", "N-O"]);
+    expect(across("[Co@OH1]123456.[NH2]1CC(=O)O2.O3C(=O)C[NH2]6.O4C(=O)C[NH2]5")).toEqual(["N-N", "N-O", "O-O"]);
+  });
+
+  it("square planar: SP1 the U, SP2 the 4, SP3 the Z", () => {
+    // (Cl, Cl, N, N in that order: the U puts the first across the third - cis; the 4 the first across the second - trans)
+    expect(across("Cl[Pt@SP1](Cl)(N)N")).toEqual(["Cl-N", "Cl-N"]);
+    expect(across("Cl[Pt@SP2](Cl)(N)N")).toEqual(["Cl-Cl", "N-N"]);
+    expect(across("Cl[Pt@SP3](Cl)(N)N")).toEqual(["Cl-N", "Cl-N"]);
+    expect(across("Cl[Pt@SP3](N)(N)Cl")).toEqual(["Cl-Cl", "N-N"]);
+  });
+
+  it("is refused where it cannot be read - not a metal, an H among the neighbours, the wrong count - and without metalMarks, as before", () => {
+    expect(() => readSmiles("F[S@OH1](F)(F)(F)(F)F", { metalMarks: true })).toThrow(/only a metal's/);
+    expect(() => readSmiles("Cl[Pt@SP1H](Cl)N", { metalMarks: true })).toThrow(/own H/);
+    expect(() => readSmiles("Cl[Pt@SP1](Cl)(N)(N)N", { metalMarks: true })).toThrow(/four neighbours are needed/);
+    expect(() => readSmiles("Cl[Pt@SP1](Cl)(N)N")).toThrow(/only @ and @@ are read/);
+    expect(pairsMarked("TB1", [0, 1, 2, 3, 4])).toBeNull();
+    // (a mark OpenSMILES has none of)
+    for (const smiles of ["Cl[Pt@SP4](Cl)(N)N", "Cl[Pt@SP0](Cl)(N)N", "C[Co@OH31](F)(Cl)(Br)(I)S", "C[Co@OH0](F)(Cl)(Br)(I)S"])
+      expect(() => readSmiles(smiles, { metalMarks: true }), smiles).toThrow(/is not a mark OpenSMILES has/);
+  });
+
+  it("refuses a mark that puts a five- or six-membered chelate's two ends across; a larger ring's may be", () => {
+    // (ethylenediamine's two N across: its ring of five with the metal cannot span it)
+    expect(() => readSmiles("[Co@OH1+]123456.[NH2]1CC[NH2]6.Cl2.Cl3.[NH3]4.[NH3]5", { metalMarks: true })).toThrow(/two ends of one chelate across/);
+    // (the same ligand cis, as the mark has it with the N's second and third: read)
+    expect(across("[Co@OH1+]123456.Cl1.[NH2]2CC[NH2]3.[NH3]4.[NH3]5.Cl6")).toEqual(["Cl-Cl", "N-N", "N-N"]);
+    // (two N joined only by a chain of eight atoms - a ring of ten with the metal, as a porphyrin's opposite N - may be across)
+    expect(across("[Co@OH1+]123456.[NH2]1CCCCCCCC[NH2]6.Cl2.Cl3.[NH3]4.[NH3]5")).toEqual(["Cl-N", "Cl-N", "N-N"]);
   });
 });

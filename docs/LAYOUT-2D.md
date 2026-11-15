@@ -536,9 +536,15 @@ they hang from.
   isomer typed, no mark (`metalsArrangedIn`) - save a metal two of whose
   donors are joined other than through it, a chelate or a bridge: there the
   plugin's picture was found not to carry the pairs the mark states
-  (trans-[Co(en)2Cl2]+ drawn cis, mer-Co(gly)3 drawn fac), and until the
-  pairs are read from the mark itself it is laid out as new, never an
-  isomer the input did not write: a chelated metal marked as not given
+  (trans-[Co(en)2Cl2]+ drawn cis, mer-Co(gly)3 drawn fac). So the pairs
+  are read from the mark itself (`metalPairsIn`: the OpenSMILES shapes and
+  table, by the neighbours' written order), and a marked metal - chelated
+  or not - is taken as given only where the finished drawing has those
+  pairs; where it has others, it is marked as not given (`marksKept`),
+  never an isomer the input did not write. Where Meno cannot read the
+  mark (an H written in the metal's bracket, a mark that would put a
+  small chelate's two ends across), a chelated metal is laid out as new
+  and marked as not given
   where its donors could lie more ways than one, as above - two metals
   held by bridges among them, as in [Pt2Cl4(NH3)2], whose cis and trans
   dimers differ only together, each marked alike (a bridge's charge
