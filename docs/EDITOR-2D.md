@@ -1880,7 +1880,18 @@ lipids each have their own way of being drawn, which it should know.
        drawn as a chair (a cis-fused ring rising up the page says nothing),
        all of them agreeing, else unread. Rings that share one atom only,
        or more than a bond, and a system with a ring drawn flat, are
-       unread. Bridged systems and cages are not yet recognised.
+       unread. A bridged system or a cage (norbornane, camphor) drawn with
+       no depth is fitted to the ways Meno itself draws it in perspective -
+       its textbook views, each also mirrored in the page - by a turn, a
+       scale and a shift; not to a view of its solid, since Meno draws a
+       cage the way textbooks do, and for the larger cages that is further
+       from any true view than some flat drawings are. Its near and far go
+       by a mark only: a bold ring bond is the nearer edge. With no mark it
+       is unread, and the words ask for the near bonds drawn bold: the
+       texts' convention is for ring systems in general, but Meno does not
+       apply it to a bridged system yet, since which of its rings is the
+       mostly-horizontal one is not always clear. A bridged system drawn
+       another way, or flat, is read as ever.
        Where a centre's R or S is shown, its tip says how it was read:
        "Read from the ring as drawn in perspective.", or "Read as a Haworth
        ring."; a centre of a ring the reading took for one in perspective

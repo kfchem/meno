@@ -1,10 +1,12 @@
 /**
  * A drawing's rings in perspective that it gives no depth to, their depth worked out (lib/chem/perception/projection/recognise) so that
  * `readStereo` reads them as it reads a drawing with depth. A ring system of six-rings drawn as chairs - one ring, or chairs fused on bonds -
- * or a ring of five or six drawn as a Haworth ring; no atom of it with a depth already, no wedge at any of its atoms (a wedge reads as it
+ * a ring of five or six drawn as a Haworth ring, or a bridged system or a cage drawn as a view of the engine's solid for it, a bold bond its
+ * near edge; no atom of it with a depth already, no wedge at any of its atoms (a wedge reads as it
  * always did); anything else is as drawn. The drawing is not changed: its atoms come back with a depth, and as stereocentres, for the reading.
  */
-import { READ_AS_HAWORTH, READ_IN_PERSPECTIVE, recogniseChairs, recogniseHaworth, type Recognised } from "../chem/perception/projection/recognise";
+import { READ_AS_HAWORTH, READ_IN_PERSPECTIVE, recogniseChairs, recogniseHaworth, recogniseByViews, type Recognised } from "../chem/perception/projection/recognise";
+import { isCage, projectCage, tiedViews, type CageView } from "./cage";
 import { key, perceive } from "./perceive";
 import type { DrawnAtom, DrawnBond } from "./drawn";
 
@@ -63,6 +65,19 @@ function recognise(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): Re
     const bold = sys.atoms.flatMap((i) =>
       mol.neighbours[i].filter((n) => n > i && local.has(n) && bondOf.get(key(i, n))?.bold).map((n): [number, number] => [local.get(i)!, local.get(n)!]),
     );
+    // (a bridged system or a cage: the ways Meno draws it in perspective, fitted - read by a mark only)
+    const bridgedOrCage = isCage(mol, sys) || rings.some((r, i) => rings.some((q, j) => j > i && r.filter((a) => q.includes(a)).length >= 3));
+    if (bridgedOrCage) {
+      const got = recogniseByViews(places, viewsOf(mol, sys), bold);
+      if (got.kind === "unread") for (const i of sys.atoms) said.set(i, got.why);
+      if (got.kind !== "depth") continue;
+      out ??= atoms.map((a) => a);
+      sys.atoms.forEach((i, k) => {
+        out![i] = { ...atoms[i], z: got.z[k], centre: true };
+        said.set(i, READ_IN_PERSPECTIVE);
+      });
+      continue;
+    }
     // (chairs first - one, or fused; then a lone ring of five or six as a Haworth ring, with the page directions of the groups out of it)
     let haworthRing = false;
     let got: Recognised = rings.every((r) => r.length === 6) ? recogniseChairs(places, rings.map((r) => r.map((i) => local.get(i)!)), bold) : { kind: "flat" };
@@ -90,4 +105,17 @@ function recognise(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): Re
     });
   }
   return { atoms: out ?? atoms, said };
+}
+
+/** The ways Meno draws a bridged system or a cage in perspective (lib/layout/cage): its best view, the same from the other side, those tied with it, and the next few - each its atoms' places and depths in the system's order. */
+function viewsOf(mol: Parameters<typeof projectCage>[0], sys: Parameters<typeof projectCage>[1]): { x: number; y: number; z: number }[][] {
+  const views: Omit<CageView, "other">[] = [];
+  const add = (v: CageView | null) => {
+    if (!v) return;
+    views.push(v);
+    if (v.other) views.push(v.other);
+  };
+  for (let rank = 0; rank < 4; rank++) add(rank ? projectCage(mol, sys, rank) : projectCage(mol, sys));
+  for (const v of tiedViews(mol, sys)) add(v);
+  return views.filter((v) => sys.atoms.every((i) => v.pos.has(i) && v.depth.has(i))).map((v) => sys.atoms.map((i) => ({ ...v.pos.get(i)!, z: v.depth.get(i)! })));
 }

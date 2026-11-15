@@ -74,35 +74,92 @@ type Fit = { z: number[]; miss: number };
 /** The best linear map from a chair's atoms (three dimensions) to the drawn places (two), each way round and from each atom: its fit, with the depth it gives (sign not yet chosen). */
 function fits(ring: readonly Pt[]): Fit[] {
   const solid = chair().atoms;
-  const q = ring.map((p) => [p.x, p.y] as const);
-  const mean2 = [0, 1].map((k) => q.reduce((s, p) => s + p[k], 0) / 6);
   const out: Fit[] = [];
   for (const dir of [1, -1]) {
     for (let o = 0; o < 6; o++) {
-      const p = ring.map((_, i): V3 => solid[(((o + dir * i) % 6) + 6) % 6]);
-      const mean3 = [0, 1, 2].map((k) => p.reduce((s, v) => s + v[k], 0) / 6) as unknown as V3;
-      const P = p.map((v) => sub(v, mean3));
-      const Q = q.map((v) => [v[0] - mean2[0], v[1] - mean2[1]]);
-      // A = Q^T P (P^T P)^-1: the rows of A, two vectors of three
-      const PtP = [0, 1, 2].map((r) => [0, 1, 2].map((c) => P.reduce((s, v) => s + v[r] * v[c], 0)));
-      const inv = invert3(PtP);
-      if (!inv) continue;
-      const QtP = [0, 1].map((r) => [0, 1, 2].map((c) => P.reduce((s, v, i) => s + Q[i][r] * v[c], 0)));
-      const A = QtP.map((row) => [0, 1, 2].map((c) => row[0] * inv[0][c] + row[1] * inv[1][c] + row[2] * inv[2][c]) as unknown as V3);
-      const [r1, r2] = A;
-      const [l1, l2] = [length(r1), length(r2)];
-      if (l1 < 1e-9 || l2 < 1e-9) continue;
-      const scale = (l1 + l2) / 2;
-      if (Math.abs(l1 - l2) / scale > MOST_UNEQUAL) continue;
-      if (Math.abs(Math.acos(dot(r1, r2) / (l1 * l2)) - Math.PI / 2) > MOST_SKEW) continue;
-      const miss = P.reduce((s, v, i) => s + (dot(r1, v) - Q[i][0]) ** 2 + (dot(r2, v) - Q[i][1]) ** 2, 0) / 6 / (scale * scale);
-      const n = cross(r1, r2);
-      const nl = length(n);
-      const depth = P.map((v) => (dot(n, v) / nl) * scale);
-      out.push({ z: depth, miss });
+      const fit = viewOf(ring.map((_, i): V3 => solid[(((o + dir * i) % 6) + 6) % 6]), ring);
+      if (fit) out.push(fit);
     }
   }
   return out;
+}
+
+/**
+ * The best linear map from a solid's atoms (three dimensions, bond length 1) to their drawn places (two), least squares, closed form: its
+ * fit, with the depth it gives each atom (about their middle, in the drawing's units; sign not yet chosen) - or null where the map is no
+ * view of the solid, its two rows unequal by more than `MOST_UNEQUAL` or off a right angle by more than `MOST_SKEW`.
+ */
+function viewOf(p: readonly V3[], ring: readonly Pt[]): Fit | null {
+  const n = p.length;
+  const q = ring.map((v) => [v.x, v.y] as const);
+  const mean2 = [0, 1].map((k) => q.reduce((s, v) => s + v[k], 0) / n);
+  const mean3 = [0, 1, 2].map((k) => p.reduce((s, v) => s + v[k], 0) / n) as unknown as V3;
+  const P = p.map((v) => sub(v, mean3));
+  const Q = q.map((v) => [v[0] - mean2[0], v[1] - mean2[1]]);
+  // A = Q^T P (P^T P)^-1: the rows of A, two vectors of three
+  const PtP = [0, 1, 2].map((r) => [0, 1, 2].map((c) => P.reduce((s, v) => s + v[r] * v[c], 0)));
+  const inv = invert3(PtP);
+  if (!inv) return null;
+  const QtP = [0, 1].map((r) => [0, 1, 2].map((c) => P.reduce((s, v, i) => s + Q[i][r] * v[c], 0)));
+  const A = QtP.map((row) => [0, 1, 2].map((c) => row[0] * inv[0][c] + row[1] * inv[1][c] + row[2] * inv[2][c]) as unknown as V3);
+  const [r1, r2] = A;
+  const [l1, l2] = [length(r1), length(r2)];
+  if (l1 < 1e-9 || l2 < 1e-9) return null;
+  const scale = (l1 + l2) / 2;
+  if (Math.abs(l1 - l2) / scale > MOST_UNEQUAL) return null;
+  if (Math.abs(Math.acos(dot(r1, r2) / (l1 * l2)) - Math.PI / 2) > MOST_SKEW) return null;
+  const miss = P.reduce((s, v, i) => s + (dot(r1, v) - Q[i][0]) ** 2 + (dot(r2, v) - Q[i][1]) ** 2, 0) / n / (scale * scale);
+  const normal = cross(r1, r2);
+  const nl = length(normal);
+  return { z: P.map((v) => (dot(normal, v) / nl) * scale), miss };
+}
+
+/**
+ * A bridged ring system or a cage drawn with no depth (norbornane, camphor, adamantane), against the ways Meno itself draws it in perspective
+ * (`views`: each its atoms' places and depths, in the order of `places` - the layout's textbook views of the engine's solid, lib/layout/cage):
+ * recognised as one of them, or unread - or flat, where none fits. A cage is fitted to Meno's drawing of it, not to a view of its solid: the
+ * engine draws a cage the way textbooks do, and its own drawings of the larger cages are further from any true view than a flat drawing of
+ * some is, so "a view of the solid" tells neither from the other. Each view, and its mirror in the page, is laid on the drawn places by the best
+ * turn, scale and shift (`MOST_MISS`; another that fits nearly as well and reads otherwise leaves it unread, `MARGIN`). Near and far by a
+ * mark only: a bold ring bond (`bold`, pairs of indices) is the nearer edge (Brecher 2006, ST-3.1, ST-3.3). With no mark it is unread: the
+ * convention of ST-3.1 is for ring systems in general, bridged ones among them, but Meno does not apply it to a bridged system or a cage yet,
+ * since which of its rings is the mostly-horizontal one is not always clear - so the words ask for the near bonds drawn bold.
+ */
+export function recogniseByViews(
+  places: readonly Pt[],
+  views: readonly (readonly { x: number; y: number; z: number }[])[],
+  bold: readonly (readonly [number, number])[] = [],
+): Recognised {
+  if (places.length < 4) return { kind: "flat" };
+  const all: Fit[] = [];
+  for (const view of views) {
+    if (view.length !== places.length) continue;
+    for (const mirror of [1, -1]) {
+      const pts = view.map((p) => ({ x: mirror * p.x, y: p.y }));
+      const fit = similarity(pts, places);
+      if (fit) all.push({ z: view.map((p) => p.z * fit.scale), miss: fit.miss });
+    }
+  }
+  all.sort((p, q) => p.miss - q.miss);
+  const best = all[0];
+  if (!best || best.miss > MOST_MISS) return { kind: "flat" };
+  const mean = best.z.reduce((m, v) => m + v, 0) / best.z.length;
+  const z = best.z.map((v) => v - mean);
+  const tol = 0.05 * Math.max(1, ...z.map(Math.abs));
+  const centred = (f: Fit) => {
+    const m = f.z.reduce((s, v) => s + v, 0) / f.z.length;
+    return f.z.map((v) => v - m);
+  };
+  const other = all.find((f) => f.miss <= MOST_MISS && !sameShape(centred(f), z, tol));
+  if (other && other.miss < MARGIN * Math.max(best.miss, 1e-6)) return { kind: "unread", why: NOT_ONE_SHAPE };
+  if (!bold.length) return { kind: "unread", why: NOT_MARKED };
+  const unit = Math.max(1e-9, ...z.map(Math.abs));
+  const says = bold.map(([i, j]) => {
+    const sum = z[i] + z[j];
+    return Math.abs(sum) < 0.2 * unit ? 0 : Math.sign(sum);
+  });
+  if (!says.every((v) => v !== 0 && v === says[0])) return { kind: "unread", why: NOT_MARKED };
+  return { kind: "depth", z: z.map((v) => says[0] * v), by: "mark" };
 }
 
 /** The best turn, scale and shift of the chair as drawn (each way round, from each atom, in either textbook form) onto the drawn places: its fit, with the depth it gives (sign not yet chosen), in the drawing's units. */

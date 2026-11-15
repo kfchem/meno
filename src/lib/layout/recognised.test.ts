@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { identity, type IdentityInput } from "../chem/identity";
 import { readStereo, type DrawnAtom, type DrawnBond } from "./drawn";
 import { layout2D } from "./engine";
-import { withRecognisedDepth } from "./recognised";
+import { recognisedSaid, withRecognisedDepth } from "./recognised";
+import { NOT_MARKED } from "../chem/perception/projection/recognise";
 import { fromSmiles } from "./testdata/fromSmiles";
 import { chair, haworth, rad } from "./testdata/projections";
 import { chair as solidChair, fused, type Solid } from "../chem/perception/projection/solids";
@@ -245,6 +246,74 @@ describe("chairs fused, drawn bond by bond, read as the compound they show", () 
   });
 });
 
+describe("a bridged system drawn bond by bond, a bold bond its near edge (norbornan-2-ol)", () => {
+  // (as the engine draws it in perspective, then its depth taken away: drawn bond by bond)
+  const engineDrawn = (smi: string) => {
+    const input = fromSmiles(smi);
+    const out = layout2D(input);
+    const atoms: DrawnAtom[] = input.atoms.map((a, i) => ({ x: out.x[i], y: out.y[i], hs: a.hs ?? 0, el: a.el, ...(out.depth[i] != null ? { z: out.depth[i]!, centre: true } : {}) }));
+    return { atoms, bonds: input.bonds.map(({ a, b, order }): DrawnBond => ({ a, b, order })) };
+  };
+  /** The ring bond nearest the viewer, by the depth drawn: the one a chemist draws bold. */
+  const nearest = (d: { atoms: DrawnAtom[]; bonds: DrawnBond[] }) =>
+    d.bonds
+      .map((b, k) => ({ k, z: (d.atoms[b.a].z ?? -Infinity) + (d.atoms[b.b].z ?? -Infinity), ring: d.atoms[b.a].el === "C" && d.atoms[b.b].el === "C" }))
+      .filter((b) => b.ring)
+      .sort((p, q) => q.z - p.z)[0].k;
+  const marked = (d: { atoms: DrawnAtom[]; bonds: DrawnBond[] }, k: number) => ({ atoms: d.atoms, bonds: d.bonds.map((b, j) => (j === k ? { ...b, bold: true } : b)) });
+  const exo = "O[C@@H]1C[C@@H]2CC[C@H]1C2";
+  const endo = "O[C@H]1C[C@@H]2CC[C@H]1C2";
+
+  it("reads exo and endo as two compounds, each the one drawn with depth, by a near bond drawn bold", () => {
+    const got = [exo, endo].map((smi) => {
+      const d = engineDrawn(smi);
+      const read = identityOfDrawing(marked(stripped(d), nearest(d)));
+      expect(read, smi).toBe(identityOfDrawing(d));
+      expect(read, smi).toBe(smiles(smi));
+      return read;
+    });
+    expect(got[0]).not.toBe(got[1]);
+  });
+
+  it("reads the mirror picture, marked the same, as the mirror compound", () => {
+    const d = engineDrawn(exo);
+    const mirror = { atoms: d.atoms.map((a) => ({ ...a, x: -a.x })), bonds: d.bonds };
+    expect(identityOfDrawing(marked(stripped(mirror), nearest(d)))).toBe(smiles("O[C@H]1C[C@H]2CC[C@@H]1C2"));
+  });
+
+  it("reads every cage and bridged system of the fixtures, as the engine draws it, marked: as the depth drawn reads, or not at all", () => {
+    const smis = [...Object.values(cages).map((c) => (c as { smiles?: string }).smiles).filter((x): x is string => !!x), ...diastereomers.molecules.map((m) => m.smiles)];
+    let [read, all] = [0, 0];
+    for (const smi of smis) {
+      let d;
+      try {
+        d = engineDrawn(smi);
+      } catch {
+        continue;
+      }
+      if (!d.atoms.some((a) => a.z != null)) continue;
+      all++;
+      const withDepth = identityOfDrawing(d);
+      const bare = stripped(d);
+      const got = identityOfDrawing(marked(bare, nearest(d)));
+      if (got === withDepth) read++;
+      // (else unread: no configuration from the depth, as the drawing with no depth and no mark has)
+      else expect(got, smi).toBe(identityOfDrawing(bare));
+      // (with no mark: never a configuration the depth gave)
+      const unmarked = withRecognisedDepth(bare.atoms, bare.bonds);
+      expect(unmarked.every((a) => a.z == null), smi).toBe(true);
+    }
+    expect(all).toBeGreaterThan(20);
+    expect(read).toBeGreaterThan(0);
+  }, measured(60_000));
+
+  it("reads no configuration with no mark: the hydroxyl carbon gets none, and the words ask for the near bonds bold", () => {
+    const d = stripped(engineDrawn(exo));
+    expect(readStereo(d.atoms, d.bonds).tetra.size).toBe(0);
+    expect(recognisedSaid(d.atoms, d.bonds).get(1)).toBe(NOT_MARKED);
+  });
+});
+
 describe("no drawing the engine makes in the plane is taken for a chair", () => {
   it("leaves every flat ring of the layout fixtures as drawn: nothing is given a depth but what the engine itself drew in perspective", () => {
     const smis = [
@@ -266,8 +335,10 @@ describe("no drawing the engine makes in the plane is taken for a chair", () => 
       const bonds: DrawnBond[] = input.bonds.map(({ a, b, order }) => ({ a, b, order }));
       const read = withRecognisedDepth(atoms, bonds);
       rings += 1;
-      // (nothing given a depth that had none)
+      // (nothing given a depth that had none, and nothing said of a ring drawn flat: no words, read or unread)
       expect(read.every((a, i) => a.z === atoms[i].z), smi).toBe(true);
+      const flatAtoms = atoms.filter((a) => a.z == null).length === atoms.length;
+      if (flatAtoms) expect(recognisedSaid(atoms, bonds).size, smi).toBe(0);
     }
     expect(rings).toBeGreaterThan(20);
   }, measured(20_000));
