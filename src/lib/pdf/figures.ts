@@ -12,7 +12,7 @@
  * across a column, or the page's own frame, is no figure.
  */
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { whenIdle } from "../core/idle";
+import { whenCalm } from "../core/calm";
 import { textOf, type PageText } from "./text";
 
 /** A box on a page, in points from its top left: left, top, right, bottom. */
@@ -60,7 +60,7 @@ const hurry = new Map<string, () => void>();
 
 /**
  * A page's figures, worked out once and kept - read `ahead` of being asked
- * for (the column's, once a page is shown), worked out in idle time, unless
+ * for (the column's, once a page is shown), worked out once the hands rest (lib/core/calm), unless
  * they are asked for meanwhile (a press, the pointer on a figure): never
  * kept waiting then.
  */
@@ -71,11 +71,11 @@ export async function figuresOn(sha256: string, page: number, ahead = false): Pr
   const objects = isTauri() ? pageObjectsOf(await invoke<ArrayBuffer>("pdf_objects", { sha: sha256, page })) : [];
   // (its words, for the one thing told by what words say: a one-bond structure's label)
   const text = isTauri() ? await textOf(sha256, page).catch(() => null) : null;
-  // (read ahead, worked out once the window is idle: a page turned to is drawn first, never held up by this)
+  // (read ahead, worked out once the hands rest - not while it is scrolled, zoomed or dragged: a page turned to is drawn first, never held up by this)
   if (ahead && isTauri())
     await new Promise<void>((done) => {
       hurry.set(key, done);
-      whenIdle(done);
+      whenCalm(done);
     }).finally(() => hurry.delete(key));
   const figures = figuresOf(objects, text ? (b) => wordsIn(text, b) : undefined);
   objectsKept.set(key, objects);

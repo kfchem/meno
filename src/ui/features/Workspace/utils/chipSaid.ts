@@ -7,7 +7,7 @@ import { aboveText, chipLine, isMarked, resultsOn, unitsHeld, valueText, type Re
 import { imaginaryWords } from "../../../../lib/calc/output";
 import { cardGroupsOf, readerNameOf } from "../../../../lib/calc/sources";
 import { barsAbove, NO_LOWEST, NOT_FINISHED } from "./barsAbove";
-import { FAILURE_WORDS, WARNING_WORDS, type Failure, type Warning } from "../workflow/failures";
+import { FAILURE_WORDS, failureSaid, WARNING_WORDS, WHY_SHUT, type Failure, type Warning } from "../workflow/failures";
 import type { CardGroups } from "../components/PointedCard3D";
 
 /** A conformer's share of its set, as it is written: "62%", "<1%" - and ">99%" where others share the rest. */
@@ -31,13 +31,15 @@ export type SetChip = {
   warnings?: readonly Warning[];
   imaginary?: readonly (readonly number[] | null)[];
   fromStart?: boolean;
+  /** Its search goes on: more of its conformers may come (docs/WORKSPACE.md, *As its search goes on*). */
+  searching?: boolean;
 };
 
 /** The marks said on the frame told: why it failed, its imaginary frequencies, how many warnings - as the chip says them. */
 export function chipMarks(c: Pick<SetChip, "failed" | "imaginary" | "warnings">, told: number): string {
   const failure = c.failed?.[told] ?? undefined;
   const saddle = c.imaginary?.[told];
-  return [failure ? FAILURE_WORDS[failure.kind] : "", saddle?.length ? imaginaryWords(saddle) : "", c.warnings?.length ? `${c.warnings.length} warning${c.warnings.length === 1 ? "" : "s"}` : ""]
+  return [failure ? failureSaid(failure, WHY_SHUT) : "", saddle?.length ? imaginaryWords(saddle) : "", c.warnings?.length ? `${c.warnings.length} warning${c.warnings.length === 1 ? "" : "s"}` : ""]
     .filter(Boolean)
     .join(" · ");
 }
@@ -55,7 +57,7 @@ export function setChipRuns(c: SetChip): SaidRun[] {
   const marks = chipMarks(c, told);
   const runs: SaidRun[] = [];
   if (c.numbers?.[told] != null && c.numbers.some((k, i) => k !== i + 1)) runs.push({ text: `#${c.numbers[told]} · `, tone: "ink" });
-  runs.push({ text: `${told + 1} / ${c.count}`, tone: "quiet" });
+  runs.push({ text: `${told + 1} / ${c.count}${c.searching ? " · searching" : ""}`, tone: "quiet" });
   if (c.title) runs.push({ text: c.title, tone: "ink", gapPx: 8, mostPx: 224 });
   if (above) {
     const at = above[told];

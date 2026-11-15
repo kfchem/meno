@@ -6,7 +6,7 @@ one thing, works on Meno's entry record (`src/lib/entry.ts`) and lives in
 `src/lib/steps`, pure, with no page and no plugin. *Tag*, *Species*,
 *Combine*, *Measure* and *Restraints* are steps of a workflow, and so are the
 steps of two inputs, *Merge*, *Re-bond*, *Compare bonding*, *Torsion
-restraints* and *Atom map* (docs/WORKFLOWS.md, *Kinds of step*; `workflow/structureSteps.ts`): each runs on a set's entries read as
+restraints*, *Compare torsions* and *Atom map* (docs/WORKFLOWS.md, *Kinds of step*; `workflow/structureSteps.ts`): each runs on a set's entries read as
 entry records, and gives each back as a step's entry - all it held kept
 where it is that entry still, what was worked out at another structure,
 places or state never carried (`setEntryOfEntry`). The rest follow. Each is tested against answers known by construction,
@@ -367,6 +367,11 @@ restraints takes the table in its *Restraints* input (WORKFLOWS.md,
   bonds held". Coordination bonds asked and none marked are said ("no
   coordination bonds"), not passed over, and so are entries it made no row
   for ("2 entries with none to hold").
+- **Nothing to hold, said in the table**: each entry it looked at and
+  found nothing to hold for has a row of its own, "nothing to hold", for
+  it by its ID as a row is. A step its table is wired into tells it so
+  from one this step refused, or never saw (WORKFLOWS.md, *Nothing to
+  hold*). *Torsion restraints* does the same.
 
 Checked: H3N→BH3's B–N coordination bond kept at 0.9 × (1.91 + 1.66) Å,
 and Cu–N at 0.9 × (2.38 + 1.66) = 3.636 Å, from Alvarez's published radii; a 3-4-5 triangle's 5 Å; an atom the entry
@@ -374,53 +379,100 @@ lacks, an element with no radius, and no strength each refused in words.
 
 ## Torsion restraints
 
-Each entry against a reference, the product it is to become, in one
-numbering (`torsionsRestrained`): the torsions across the reference's
-double bonds that are trans there, held trans here - case F's restrained
-minimisation (docs/WORKFLOWS-FOUNDATION.md), its numbers the chemist's.
+A table of torsion restraints, a row for each, as *Restraints* gives one
+(*Restraints*, above): each row for its entry by the ID named, in the
+numbering it has, held by a step's *Restraints* input (WORKFLOWS.md,
+*Restraints wired in*). It makes rows and judges nothing: which torsions
+are unlike a reference is *Compare torsions*' to count, and a Filter's to
+split on.
 
-- **Which torsions** (`transTorsions`): each bond of order 2 in the
-  reference that is not aromatic, as Meno reads aromaticity (a bond on an
-  alternating cycle, `aromaticForm`), with at least one other neighbour at
-  each end; each pair of the ends' neighbours by single bonds, hydrogens
-  among them, whose dihedral in the reference is over 90° either way. A
-  cis one is never taken: a ring's own torsion across its double bond is
-  cis, and its exocyclic ones are trans.
-- **Held**: each such torsion that is not trans in the entry (90° or under)
-  is held at 180°, by E = k φ²/2 (φ in radians, the shorter way round,
-  k in kcal mol⁻¹ rad⁻²).
-- **Trans, and 180°.** A torsion over 90° either way is trans (anti), at or
-  under 90° cis (syn): Klyne and Prelog's division of a torsion angle (W.
-  Klyne and V. Prelog, Experientia 1960, 16, 521), the boundary Compare
-  bonding's E or Z uses too. The target, 180°, is the torsion of a trans
-  pair across a planar double bond.
-- **Stronger each time.** Its strength is the step typed more than the entry
-  held it at, or the step where it held it at none. A torsion held once
-  stays held at the strength it reached, even when it is trans now. What
-  else the entry holds rides along.
-- **Exits.** Entries with a torsion not trans go out of *Restrained*, the
-  rest out of *Trans already*, as they came. Its line counts them, an
-  entry whose reference has no trans torsion at all apart: "5 restrained ·
-  6 trans already · 1 with no trans torsion in its reference · 7 torsions
-  newly held".
-- **Against** the one reference, or the reference with the same value of a
-  property. Where any entry cannot be set against a reference (none to pair
-  with, another numbering, no 3D places), nothing is done and the step
-  names each such entry with why. Its only other exit is *Trans already*,
-  and no entry goes on as trans that was never looked at.
-- **The step's default, measured**: 50 kcal mol⁻¹ rad⁻² unless set
+- **Typed** (`torsionRowsTyped`): torsions four atoms to a line, from 1,
+  each four different atoms, held at the angle typed (°, taken into
+  (−180°, 180°]: −180 is written 180). The angle has no default: it is the
+  chemist's. A torsion with no angle to hold refuses the entry: one whose
+  second or third atom is linear by its bonds - a triple bond on it (an
+  alkyne's, a nitrile's carbon), or two double bonds and no other neighbour
+  at a carbon or an N⁺ (a cumulene's centre, CO2's C, an azide's central N;
+  not a sulfone's S nor SO2's, which are not linear): sp, linear by VSEPR -
+  however little bent it
+  stands (the torsion is the angle between planes 1-2-3 and 2-3-4, Moss
+  1996); and, Meno's numerical guard for anything else, three of its atoms
+  within 1° of a straight line (`LINE_WITHIN`: an end atom moved 0.01 Å at
+  1.5 Å and 1° turns the torsion by about 22°, no plane worth holding).
+- **From the reference** (`torsionRowsFromReference`), its optional
+  *Reference* input wired - against the one reference, or the one with the
+  same value of a property: rows only for the torsions unlike here, as
+  *Compare torsions* counts them -
+  - *180° where trans*: each torsion trans in the reference and cis here,
+    held at 180°, the torsion of a trans pair across a planar double bond.
+    A double bond with no trans torsion in its reference ((Z)-azobenzene's
+    N=N) cannot be held so: the line counts the entries with one, "choose
+    Held at: the reference's own angle";
+  - *the reference's own angle*: each torsion unlike here, held at the
+    reference's angle.
+- **Held** by a strength, by E = k φ²/2 (φ in radians, the shorter way
+  round, k in kcal mol⁻¹ rad⁻²) - one value for every row; or exactly, said
+  in the row ("exact"), for a program that constrains. Rounds of stronger
+  strengths are drawn rounds, each its own strength typed: every round's
+  table wired into the round after's *Minimise*, so a torsion once held
+  stays held - the later round's row held where two hold one torsion.
+- **The strength's default, measured**: 50 kcal mol⁻¹ rad⁻² unless set
   (`TORSION_STEP`). On six Z isomers held towards their E isomers
   (but-2-ene, pent-2-ene, stilbene, methyl crotonate, hexa-2,4-diene E,Z
   to E,E, crotononitrile; the RDKit plugin's minimisation, each round from
-  the original start), a step of 10 took up to four rounds and 25 up to
-  two. At 50 each was right in one round and held within 1.5°
-  (`scripts/calc/measure_restraint_strengths.py` measures it again).
+  the original start), 10 took up to four rounds and 25 up to two. At 50
+  each was right in one round and held within 1.5°
+  (`scripts/calc/measure_restraint_strengths.py` measures it again). It is
+  Meno's own number, with its own basis.
+- **Refused** (out of *Failed*, saying why): an entry without the ID, or
+  whose ID another has too; one with no reference to pair with, of another
+  numbering, or with no 3D places; three atoms on a line. A step whose
+  torsions are typed with a reference wired, or from the reference with
+  none wired, is refused as a whole.
 
-Checked: (E)- and (Z)-but-2-ene, with their hydrogens: methyl to methyl and
-H to H are the E isomer's trans torsions, methyl to H the Z's. Flat
-cyclobutene's two exocyclic torsions are taken and its ring torsion is not.
-Benzene's Kekulé double bonds give none. Z against E: two torsions held at
-the step, then at twice it; a torsion held and trans now keeps its strength.
+Checked: four atoms at 180° by 50 give one row, exactly an exact row, and
+−180° is written 180°; but-2-yne's C1-C2≡C3-C4 is refused, bent to 178.5°
+too, and propyne's H-C1-C2≡C3; (Z)- against
+(E)-but-2-ene at 180° where trans gives rows for its two unlike torsions
+alone, and (E)-azobenzene against (Z) none, said, but one at the reference's
+own angle.
+
+## Compare torsions
+
+Each entry against its reference, in one numbering - the one of
+*Reference*, or the one with the same value of a property - its torsions
+across the reference's double bonds that are unlike here (`torsionsUnlike`),
+written on it: `torsions unlike reference`, how many, and `torsions unlike`,
+which ("C1-C2=C3-C4: 3.2° (reference 179.8°)", or "none"), for a *Filter*
+to split on (the maintainer, 2026-10-27: Meno writes the count, the chemist
+filters). Every entry passes on; one it cannot set against a reference out
+of *Failed*, saying why.
+
+- **Which** (`doubleBonds`): each bond of order 2 that is not aromatic as
+  Meno reads aromaticity (`aromaticForm`); its torsions each pair of the
+  ends' neighbours by single bonds, hydrogens among them - an end of one
+  neighbour (an imine's N-H, an oxime's N-O) too.
+- **Unlike**: each torsion trans in the reference and cis here - the
+  protocol's own count (ConfoTS, step 1). A double bond with no trans
+  torsion in the reference (each end one neighbour, cis: (Z)-azobenzene) is
+  checked by its cis torsion instead - unlike where it is trans here -
+  never passed over, and the line says how many entries were.
+- **Trans and cis**: a torsion more than 90° either way is trans (anti), at
+  90° and within cis (syn), φ in (−180°, 180°]: Klyne and Prelog's division
+  (W. Klyne, V. Prelog, Experientia 1960, 16, 521; G. P. Moss, Pure Appl.
+  Chem. 1996, 68, 2193), the boundary Compare bonding's E or Z uses too. It
+  judges the side alone: 95° against 180° is alike. Each torsion of a
+  planar double bond flips with the others, so counting every torsion on
+  the other side of 90° would count one bond up to four times: it is not
+  done.
+
+Checked: (E)- and (Z)-but-2-ene, with their hydrogens: Me-Me and H-H are
+the E isomer's trans torsions, the two Me-H torsions the Z's; Z against E
+counts 2. Flat cyclobutene's two ring C-C=C-H torsions are trans, its ring's
+own and its H-C=C-H cis. Benzene's bonds are aromatic: none. 90.0° is cis,
+90.1° and −179.9° trans; 95° against 180° counts 0; (E)- against
+(Z)-azobenzene counts 1.
+
 ## Atom map
 
 Each entry mapped onto a reference, atom for atom and every hydrogen too,
