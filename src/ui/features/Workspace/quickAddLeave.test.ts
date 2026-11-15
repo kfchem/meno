@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { askKeys } from "../../layouts/asking";
-import { quickAddLeaves } from "./quickAddLeave";
-import { afterAdded, readSmiles } from "./quickAddSmiles";
+import { quickAddLeaves, typedIntoQuickAdd } from "./quickAddLeave";
+import { afterAdded, chemistryLine, chemistryStep, readSmiles } from "./quickAddSmiles";
 import { addOffered } from "./offerSteps";
 import { NoPlugin } from "../../../lib/roles/worker";
 import type { CatalogueEntry } from "../../../lib/plugins/catalogue";
@@ -100,5 +100,65 @@ describe("a SMILES typed in Quick Add that no plugin here reads", () => {
     afterAdded("  ", false, read, letGo);
     expect(read).toHaveBeenCalledTimes(1);
     expect(letGo).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("a key typed in Quick Add with none of its icons chosen", () => {
+  const key = (k: Partial<KeyboardEvent> & { key: string }) => ({ ctrlKey: false, metaKey: false, altKey: false, repeat: false, isComposing: false, keyCode: 0, target: null, ...k });
+  it("goes to the SMILES field: its letter, a digit, a bracket - the field opening with it", () => {
+    for (const k of ["C", "c", "1", "[", "=", "#"]) expect(typedIntoQuickAdd(key({ key: k }), false), k).toEqual({ seed: k });
+  });
+  it("from an input method, opens the field for it to compose in, its letter not taken", () => {
+    expect(typedIntoQuickAdd(key({ key: "Process", keyCode: 229 }), false)).toEqual({ focus: true });
+    // (each sign on its own: the key named "Process", and the key code 229 with a letter's key)
+    expect(typedIntoQuickAdd(key({ key: "Process", keyCode: 0 }), false)).toEqual({ focus: true });
+    expect(typedIntoQuickAdd(key({ key: "a", keyCode: 229 }), false)).toEqual({ focus: true });
+    expect(typedIntoQuickAdd(key({ key: "k", isComposing: true }), false)).toEqual({ focus: true });
+  });
+  it("is left alone with a row or field open, a chord, a key held, a key that writes nothing, or one typed into a field", () => {
+    expect(typedIntoQuickAdd(key({ key: "C" }), true)).toBeNull();
+    for (const k of [{ key: "c", metaKey: true }, { key: "c", ctrlKey: true }, { key: "c", altKey: true }, { key: "c", repeat: true }, { key: "Escape" }, { key: "Enter" }, { key: "ArrowDown" }, { key: " " }]) {
+      expect(typedIntoQuickAdd(key(k), false), JSON.stringify(k)).toBeNull();
+    }
+    expect(typedIntoQuickAdd(key({ key: "C", target: { tagName: "INPUT", isContentEditable: false } as unknown as EventTarget }), false)).toBeNull();
+    expect(typedIntoQuickAdd(key({ key: "C", target: { tagName: "TEXTAREA", isContentEditable: false } as unknown as EventTarget }), false)).toBeNull();
+    expect(typedIntoQuickAdd(key({ key: "C", target: { tagName: "DIV", isContentEditable: true } as unknown as EventTarget }), false)).toBeNull();
+    // (a key on the page itself is taken)
+    expect(typedIntoQuickAdd(key({ key: "C", target: { tagName: "DIV", isContentEditable: false } as unknown as EventTarget }), false)).toEqual({ seed: "C" });
+  });
+});
+
+describe("where chemistry stands, one phrase for the workspace's chip and the line under the field", () => {
+  it("is the set-up's step - its share rounded and held to 0 to 100 - or its start; none where it is ready, idle or failed", () => {
+    const setting = { state: "setting-up" as const, plugin: "P", id: "p" };
+    expect(chemistryStep(setting, 0.424)).toBe("Setting up chemistry: downloading P (42%)");
+    expect(chemistryStep(setting, 0.426)).toBe("Setting up chemistry: downloading P (43%)");
+    expect(chemistryStep(setting, 0)).toBe("Setting up chemistry: downloading P (0%)");
+    expect(chemistryStep(setting, -0.2)).toBe("Setting up chemistry: downloading P (0%)");
+    expect(chemistryStep(setting, undefined)).toBe("Setting up chemistry: setting up P's environment");
+    expect(chemistryStep({ state: "starting", plugin: "P" }, undefined)).toBe("Starting P");
+    expect(chemistryStep({ state: "ready", plugin: "P", version: "1" }, 0.5)).toBeNull();
+    expect(chemistryStep({ state: "idle" }, undefined)).toBeNull();
+    expect(chemistryStep({ state: "failed", message: "x" }, undefined)).toBeNull();
+  });
+});
+
+describe("the line under the SMILES field", () => {
+  it("says where chemistry stands while it is set up - the step, how far where reported, and that a SMILES waiting is drawn when it is ready - or started", () => {
+    const setting = { state: "setting-up" as const, plugin: "P", id: "p" };
+    // (the plugin's files coming, their share reported; its environment, which reports none)
+    expect(chemistryLine(setting, 0.424, false)).toBe("Setting up chemistry: downloading P (42%).");
+    expect(chemistryLine(setting, 0.426, false)).toBe("Setting up chemistry: downloading P (43%).");
+    expect(chemistryLine(setting, 1.2, false)).toBe("Setting up chemistry: downloading P (100%).");
+    expect(chemistryLine(setting, 0.424, true)).toBe("Setting up chemistry: downloading P (42%). This is drawn when it is ready.");
+    expect(chemistryLine(setting, undefined, false)).toBe("Setting up chemistry: setting up P's environment.");
+    expect(chemistryLine(setting, undefined, true)).toBe("Setting up chemistry: setting up P's environment. This is drawn when it is ready.");
+    expect(chemistryLine({ state: "starting", plugin: "P" }, undefined, true)).toBe("Starting P. The first one takes a moment.");
+    expect(chemistryLine({ state: "starting", plugin: "P" }, undefined, false)).toBe("Starting P. The first one takes a moment.");
+  });
+  it("says nothing where chemistry is ready, not yet asked for, or failed (said as before)", () => {
+    expect(chemistryLine({ state: "ready", plugin: "P", version: "1" }, undefined, true)).toBeNull();
+    expect(chemistryLine({ state: "idle" }, undefined, false)).toBeNull();
+    expect(chemistryLine({ state: "failed", message: "x" }, undefined, true)).toBeNull();
   });
 });

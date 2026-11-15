@@ -34,7 +34,7 @@ import { heldBy, heldRows, type HeldRows } from "../../workflow/heldRows";
 import { HOLDS_RESTRAINTS } from "../../../../../lib/plugins/steps";
 import type { Restraint } from "../../../../../lib/entry";
 import { partOf } from "../../chem/cleanUp";
-import { compoundLetter, frameXyz, framesOf, madeFrom, recordNumber, setEntries, structureLineage, TAKEN_AT_THE_EDIT, skeletonEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
+import { compoundLetter, frameXyz, framesOf, madeFrom, recordNumber, setEntries, structureLineage, TAKEN_AT_THE_EDIT, skeletonEntries, skeletonsRefused, whenDrawnKnown, type DrawnEntry, type SetEntry } from "../../workflow/entries";
 import { convergedOf, heldWhy } from "../../workflow/converged";
 import { runTook } from "../../workflow/runTime";
 import { skeletonWhy } from "../../../../../lib/chem/skeleton";
@@ -44,7 +44,7 @@ import { inRounds, roundsSaid } from "../../chem/conformerRounds";
 import { roundsJudge } from "../../chem/roundsJudge";
 import { allToRun, allWiresInto, chainTo, findSet, inputKey, inputOf, stepOf, stepsAfter, type Flow } from "../../workflow/flow";
 import { kindInfo, optionsOf, takesNothing, type Holds3D, type SetKind, type StepKind, isSetKind } from "../../workflow/kinds";
-import { failuresSaid, type Failure, type FailureKind } from "../../workflow/failures";
+import { failuresLine, folded, type Failure, type FailureKind } from "../../workflow/failures";
 import { setRan, setRunning } from "../../workflow/model";
 import { stoppedAt, clock, conformersWorked, doneSaid, PAIRED, drawnSaid, readDrawnAnswers, type DrawnAnswer, type DrawnValue, isFailure, entryFiles, notFound, pluginEntry, programEntries, readCollected, readGenerated, notReadSaid, seedsSaid, unreadWhy, readKept, readNote, readPrepared, readRefused, workedOf, notReadNamed, NAMED_KEPT, passesAsLone, passedAsLone, passedSaid, notAsAsked, solvationAsked, fixedAtoms, exactRows, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
@@ -57,7 +57,7 @@ import { mapOntoOff } from "../../chem/mapProducts";
 import { valenceFlagged } from "../../workflow/enumerateChecks";
 import { perceiveStereo } from "../../workflow/configurations";
 import { askerFor } from "../../workflow/configurationsAsker";
-import type { DrawnRecord, EditorState, JobSeen, Model, StepJob, StepRan, StepRunning, Turn3D, WorkflowStep } from "../types";
+import type { DrawnModel, DrawnRecord, EditorState, JobSeen, Model, StepJob, StepRan, StepRunning, Turn3D, WorkflowStep } from "../types";
 import { askOf, CANVAS_LOOK, finishEntry, looksOffered } from "../../render/renderOptions";
 import { handOff, stepRefused, withPresets } from "../../render/presets";
 import { progressOf, SCENE } from "../../render/renders";
@@ -451,6 +451,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const chem = await chemWorker("stereoisomers");
       for (const [k, e] of kept.entries()) {
         if (menoStops.has(id)) return null;
+        // (an entry is one structure, so one block: its first is all of it - workflow/hydrogenBondEntries.test pins that)
         const block = blocksOf(e.drawn, e.drawn.atoms.map((a) => a.id))[0];
         if (block) {
           if (anyOpen((await openStereo(chem, [block.molblock])).left)) open.push(recordNumber(e.record) ?? k + 1);
@@ -608,11 +609,21 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     //  for a run again to start from)
     if (!worked.length && !aside.length && !asideDrawn.length) return void doc.edit("run", (x) => setRan(keepRun(x, stepOf(x, id)!), id, ran));
     const outcome = { ok: true as const, holds, kept: worked, aside, said: ran.said, ...(asideDrawn.length ? { asideDrawn } : {}) };
-    const turns = turnsFor(d, id, ran.kind ?? step.kind, resultsOf(outcome, ran.kind ?? step.kind));
-    doc.edit("results", (x) => setRan(withResults(keepRun(x, stepOf(x, id)!), step, outcome, w, turns), id, ran));
-    atTheirEnds(before);
-    turnNew(before, turns);
-    listsShown(before);
+    const results = resultsOf(outcome, ran.kind ?? step.kind);
+    const turns = turnsFor(d, id, ran.kind ?? step.kind, results);
+    // (the structures it draws, their identities known first - off the drawing thread, workflow/entries `whenDrawnKnown` - so
+    //  that putting them down works none out)
+    whenDrawnKnown(recorded(results), () => {
+      doc.edit("results", (x) => setRan(withResults(keepRun(x, stepOf(x, id)!), step, outcome, w, turns), id, ran));
+      atTheirEnds(before);
+      turnNew(before, turns);
+      listsShown(before);
+    });
+  }
+
+  /** The drawings a step's results give that carry a record (workflow/entries `placedRecord`): what is to be known before they are put down. */
+  function recorded(results: ReturnType<typeof resultsOf>): DrawnModel[] {
+    return [...(results.drawn?.made ?? []), ...(results.drawn?.rest ?? [])].filter((m) => m.record);
   }
 
   /** Molecules new on the page with a list to be opened at once - NCI's surfaces - shown with it open, its row chosen. */
@@ -785,6 +796,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         working({ done: place });
         const blocks = blocksOf(model, atoms);
         const bare = bareAtomsOf(model, atoms);
+        // (one structure, one block: workflow/hydrogenBondEntries.test)
         const block = blocks[0];
                 // (failed - no result to stand on: a table says so, a chart refuses it, "state = finished" leaves it - what it was set aside for before kept beside why)
         const asideAs = (why: string) => {
@@ -1879,11 +1891,11 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const took_up = run.adopted ? Object.keys(run.adopted).length : 0;
       // (the lone atoms passed through as they came, said in what they are: "one atom: its only conformer")
       const passedLine = passedSaid(kind, passed);
-      // (one that came in and failed: its why alone; what Settings kept off said after, as it was)
+      // (one that came in and failed: its why alone, on one line; what Settings kept off said after, as it was)
       const said = `${
         !ok && failures.length && total === 1
-          ? failures[0].why
-          : [...(ok ? [found] : []), ...(passedLine ? [passedLine] : []), ...(failures.length ? [failuresSaid(failures, total)] : []), ...(!ok && failures.length ? [failures[0].why] : []), ...(warned ? [`${warned} with warnings`] : []), ...(restarted ? [`${restarted === total ? (total === 1 ? "started" : "each started") : `${restarted} started`} from a failed run's geometry`] : [])].join(" \u00b7 ")
+          ? folded(failures[0].why)
+          : [...(ok ? [found] : []), ...(passedLine ? [passedLine] : []), ...failuresLine(failures, total, !ok), ...(warned ? [`${warned} with warnings`] : []), ...(restarted ? [`${restarted === total ? (total === 1 ? "started" : "each started") : `${restarted} started`} from a failed run's geometry`] : [])].join(" \u00b7 ")
       }${again ? ` \u00b7 ${again === run.jobs.length ? "Reused" : `${again} reused`}` : ""}${took_up ? ` \u00b7 ${took_up} adopted` : ""}${run.note && ok ? ` \u00b7 ${run.note}` : ""}${run.paired && ok ? ` \u00b7 ${run.paired}` : ""}${carried > 0 ? ` \u00b7 the ${PAIRED} ${carried === 1 ? "a pair" : `${carried} pairs`} carried replaced` : ""}${run.over ? ` \u00b7 ${run.over}` : ""}`;
       const keys = run.jobs.every((j) => j.key) ? { keys: run.jobs.map((j) => j.key!), gave: digests } : {};
       // (jobs adopted: taken as its result, with when - said, so that what came of them is never taken for checked)
@@ -2026,11 +2038,14 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     },
     keepRunOf: (id: number, index: number, keep: boolean) => doc.edit(keep ? "keep run" : "keep run no longer", (x) => keptRun(x, id, index, keep)),
     showRun: (id: number, index: number) => {
-      const was = new Set((doc.getState().molecules3d ?? []).map((m) => m.id));
-      let turns: (Turn3D | undefined)[] | undefined;
-      doc.edit("show run", (x) => showRun(x, id, index, w, (results, kind) => (turns = turnsFor(x, id, kind, results))));
-      atTheirEnds(was);
-      turnNew(was, turns);
+      const shown = stepOf(doc.getState(), id)?.runs?.[index]?.results;
+      whenDrawnKnown(shown ? recorded(shown) : [], () => {
+        const was = new Set((doc.getState().molecules3d ?? []).map((m) => m.id));
+        let turns: (Turn3D | undefined)[] | undefined;
+        doc.edit("show run", (x) => showRun(x, id, index, w, (results, kind) => (turns = turnsFor(x, id, kind, results))));
+        atTheirEnds(was);
+        turnNew(was, turns);
+      });
     },
     showStepLog: async (id: number) => {
       const step = stepOf(doc.getState(), id);
