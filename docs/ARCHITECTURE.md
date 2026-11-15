@@ -62,7 +62,7 @@ src/
   lib/chem/cip/           R/S and E/Z by Meno's own reading of the CIP rules: prepare.ts (the 1966 conventions), digraph.ts,
                           rank.ts (rules 1a to 5), in3d.ts (a molecule in 3D's) - docs/CIP.md; on the drawing by Workspace/chem/cipMarks (cipWorker.ts)
   lib/chem/perception/    the core of what the chemistry reads of a structure (one definition per concept): graph.ts (the graph the core
-                          reads), facts.ts (a graph's neighbours, bonds, pieces and rings, worked out once per graph object), rings.ts (the smallest set of smallest rings, and what two rings share: spiro, fused, bridged), elements.ts (what kind of element: the metals, the elements that are none, and each set a reader takes, under its name), stereo/types.ts (the
+                          reads), facts.ts (a graph's neighbours, bonds, pieces and rings, worked out once per graph object), rings.ts (the smallest set of smallest rings, and what two rings share: spiro, fused, bridged), aromatic.ts (Meno's rule for an aromatic ring: an atom's pi electrons, counted 4n + 2 by ring and by pair of rings fused at a bond), elements.ts (what kind of element: the metals, the elements that are none, and each set a reader takes, under its name), stereo/types.ts (the
                           types for a centre, a double bond, an axis and an odd cumulene), stereo/from2d.ts (the reader of a drawing's
                           configuration: wedges, depth, the lines that say none; a cage's solid fitted to the drawing is the layout's, handed
                           in by lib/layout/drawn, which keeps every name it had), stereo/senses.ts (a volume and an axis's turn as drawn, a
