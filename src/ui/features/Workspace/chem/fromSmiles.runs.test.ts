@@ -7,6 +7,7 @@ import type { Model } from "../store/types";
 import { laidOut } from "./cleanUp";
 import { drawingOf } from "./drawing";
 import { givenRunsOf, specified } from "./fromSmiles";
+import { identityOfDrawn } from "./identityOf";
 import { stereoGraphOf } from "../../../../lib/chem/stereoOpen";
 
 /**
@@ -105,5 +106,52 @@ describe("what the plugin leaves open of a run the SMILES gives", () => {
     expect(left.bonds).toEqual([]);
     expect(left.cumulated).toEqual([]);
     expect(graph.bonds).toHaveLength(6);
+  });
+});
+
+describe("an aryl allene's axis, through a plugin's drawing: a wedge at its end is the allene's alone", () => {
+  // (in one handedness of each, the engine wedges the end's other group, not its bond to the aryl or the carboxyl carbon)
+  const typed = [
+    "c1ccccc1C(C)=[C@]=C(CC)C(=O)O",
+    "CC(c1ccccc1)=[C@]=C(C(=O)O)CC",
+    "c1ccccc1C(C)=[C@]=C(C)C(=O)O",
+    "c1ccccc1C=[C@]=C(CC)C(=O)O",
+    "c1ccc2ccccc2c1C(C)=[C@]=CCO",
+    "Cc1ccccc1C(C)=[C@]=C(CC)C(=O)O",
+  ];
+  const twins = (smi: string) => [smi, smi.replace("[C@]", "[C@@]")];
+  const axesOf = (m: Model) => {
+    const d = drawingOf(m);
+    return readStereo(d.atoms, d.bonds).axes;
+  };
+
+  it("is laid out in each handedness, and read with the one axis the SMILES gives: each handedness its own identity", async () => {
+    for (const smi of typed) {
+      for (const s of twins(smi)) {
+        const model = await laidOut(pluginDrawing(s), MENO, given(s));
+        const read = axesOf(model);
+        expect(read, s).toHaveLength(1);
+        expect(identityOfDrawn(model).complete, s).toBe(true);
+      }
+      expect(identityOfDrawn(await laidOut(pluginDrawing(twins(smi)[0]), MENO, given(twins(smi)[0]))).text).not.toBe(identityOfDrawn(await laidOut(pluginDrawing(twins(smi)[1]), MENO, given(twins(smi)[1]))).text);
+    }
+  });
+
+  it("drawn by hand with its one wedge or hashes on any bond out of either end, is one of the two handednesses: one axis read, two identities in all", async () => {
+    for (const smi of typed) {
+      const laid = await Promise.all(twins(smi).map((s) => laidOut(pluginDrawing(s), MENO, given(s))));
+      const both = new Set(laid.map((m) => identityOfDrawn(m).text));
+      expect(both.size, smi).toBe(2);
+      const plain = laid[0].bonds.map((b) => ({ ...b, stereo: undefined, narrow: undefined }));
+      const g = own(smi);
+      const [e, f] = g.axes![0].atoms.map((i) => laid[0].atoms[i].id);
+      for (const end of [e, f])
+        for (const b of plain.filter((x) => x.order === 1 && (x.a === end || x.b === end)))
+          for (const stereo of ["up", "down"] as const) {
+            const hand: Model = { ...laid[0], bonds: plain.map((x) => (x.id === b.id ? { ...x, stereo, narrow: end } : x)) } as Model;
+            expect(axesOf(hand), `${smi} ${b.a}-${b.b} ${stereo}`).toHaveLength(1);
+            expect(both.has(identityOfDrawn(hand).text), `${smi} ${b.a}-${b.b} ${stereo}`).toBe(true);
+          }
+    }
   });
 });
