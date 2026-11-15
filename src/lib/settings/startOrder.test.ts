@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { measured } from "../../testing/timeouts";
 
 // What Meno starts a workspace in: Settings' style as it is made, so Settings
 // are read before the first one is (main.tsx). The store holds the defaults
@@ -32,7 +33,9 @@ describe("the first workspace", () => {
     const { s, doc } = await started(true);
     expect(s.loaded).toBe(true);
     expect(doc.getState().style).toEqual({ preset: "rsc", changes: {} });
-  });
+    // (the first to import the settings and the workspace's document fresh, so it pays for loading them: well under a second in the whole
+    //  suite on CI, the larger of two runs; on a busy machine several times that, past Vitest's own 5 s)
+  }, measured(800));
 
   it("is made after Settings are read, whatever the plugins do: Meno draws nothing before", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);

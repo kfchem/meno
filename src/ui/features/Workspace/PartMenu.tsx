@@ -5,7 +5,7 @@ import { RISE } from "../../theme/motion";
 import { useLeaving } from "../../theme/leaving";
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { CheckIcon } from "@heroicons/react/24/outline";
-import { BOND_ICONS, MENU_ICONS } from "./menuIcons";
+import { BOND_ICONS, bondIconAsLying, MENU_ICONS } from "./menuIcons";
 import { withRules } from "./menuRules";
 import { BOND_KIND_KEYS, BOND_KIND_NAMES, COMMON_BOND_KINDS, OTHER_BOND_KINDS, type BondKindName } from "./utils/bondKinds";
 import { swallowPress } from "./utils/press";
@@ -274,7 +274,14 @@ export default function PartMenu({
   onMake3d: () => void;
   onSelectStructure: () => void;
   /** The kind of the bond right-clicked - or of the bonds selected, where it is one of them - and a kind chosen for it (utils/bondKinds); `current` is null where the bond is none of them. */
-  bondKind?: { current: BondKindName | null; choose: (kind: BondKindName) => void };
+  bondKind?: {
+    current: BondKindName | null;
+    choose: (kind: BondKindName) => void;
+    /** How the right-clicked bond lies: its kind's icon drawn so (utils/bondKinds `bondLie`). */
+    lie?: { narrowLeft: boolean; side: "upper" | "lower" | "center" };
+    /** Whether the menu acts on that one bond alone: only then is each kind's key shown beside it - a key changes one bond. */
+    one?: boolean;
+  };
   /** The selection turned over, left to right or top to bottom. */
   onTurnOver: (axis: "vertical" | "horizontal") => void;
   /** An atom's charge one up or one down. */
@@ -1031,7 +1038,15 @@ export default function PartMenu({
           ...(target.kind === "bond" && bondKind
             ? [
                 // a bond's kinds first, as icons; the other ways it is drawn as a compact row under them
-                ...COMMON_BOND_KINDS.map((k): Item => ({ name: BOND_KIND_NAMES[k], keys: BOND_KIND_KEYS[k] ?? "", run: () => bondKind.choose(k), icon: BOND_ICONS[k], checked: bondKind.current === k })),
+                // (the bond's own kind drawn as the bond lies - a wedge narrow where it is, a double bond's second line on its side -
+                //  pressed again, one step on in its round; each kind's key beside it only where the menu acts on that one bond)
+                ...COMMON_BOND_KINDS.map((k): Item => ({
+                  name: BOND_KIND_NAMES[k],
+                  keys: bondKind.one === false ? "" : (BOND_KIND_KEYS[k] ?? ""),
+                  run: () => bondKind.choose(k),
+                  icon: bondKind.current === k && bondKind.lie ? bondIconAsLying(k, bondKind.lie) : BOND_ICONS[k],
+                  checked: bondKind.current === k,
+                })),
                 { name: "More kinds of bond", keys: "", run: () => setMore((m) => !m), icon: BOND_ICONS.more, checked: more, keep: true },
                 ...OTHER_BOND_KINDS.map((k): Item => ({ name: BOND_KIND_NAMES[k], keys: "", run: () => bondKind.choose(k), icon: BOND_ICONS[k], checked: bondKind.current === k, compact: true })),
               ]
