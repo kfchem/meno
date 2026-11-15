@@ -1154,7 +1154,17 @@ All hover-based, as above.
     trans-[Co(en)2Cl2]+, which the layout has no two places across for
     its Cl; a cis-M(gly)2Cl2 with N across N or O across O, which its
     picture could not tell apart; a chelate's two donors drawn opposite -
-    Clean-up lays nothing out and says so: never another isomer.
+    Clean-up lays nothing out and says so: never another isomer. Two
+    metals joined by two bridges (cis- and trans-[Pt2Cl4(NH3)2], the
+    three isomers of a dimer with a Cl and a Br bridge) keep, at each
+    metal, which bridge each of its other donors stands across: the
+    bridges, which carry the other metal, stay where the layout put them,
+    their ring seen a little from above, and each metal's other donors
+    change places round it. In a chain of three, the middle metal's
+    bridges - laid flat - turn or mirror round it with the end metals and
+    all they carry, whose own pairs stay as they were. Two square-planar
+    metals joined by one bridge, each drawn as an upright cross, are
+    refused, saying so.
 - Valence warnings, and R/S shown on request (RDKit). (PR #53: a ring round
   an atom with too many bonds, saying what is wrong under the pointer; R/S
   and E/Z from a button on the canvas, later shown on what they are asked
@@ -1173,6 +1183,18 @@ All hover-based, as above.
     drawn as a plain line counts alike, from the atom it was drawn from.
     One with too many bonds besides is marked still (chem/marks
     `takesArrows`).
+  - **An arrangement not given**: a square-planar centre (Pt(II), Pd(II),
+    Au(III), Rh(I), Ir(I)) whose donors can lie round it more than one way,
+    laid out by Meno from an input that gives none - a SMILES, a label
+    written out, a Clean-up of one Meno laid out so - is drawn as the
+    upright cross and marked with the dashed ring, "Which donors are next
+    to each other is not given." (`arrangementAs`, docs/LAYOUT-2D.md, *A
+    metal with four bonds*). Moving its donors round - setting which lie
+    next to which - takes the mark away; one the chemist drew carries none.
+    A metal of six donors from such an input is marked the same where its
+    donors could be set round it with other pairs across (cis or trans, fac
+    or mer); one whose SMILES marks its arrangement at the metal (@SP1,
+    @OH1) is drawn as given, unmarked.
   - **Stereochemistry drawn by luck** (the maintainer, 2026-10-11): a
     stereocentre whose wedge says its configuration only as its bonds
     happen to fall - two of them in a line, or all of them in one half of
