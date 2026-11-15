@@ -17,13 +17,10 @@ import { lonePairsIn3d } from "../lonePairsIn3d";
 import { torsionSense, type Axial, type Cumulated } from "../../layout/stereo";
 import { configuredFrom, type Place } from "../stereoOpen";
 import { cipLabels } from "./index";
-import { factsOf } from "../perception/facts";
+import { factsOf, OPEN_RING } from "../perception/facts";
 
 /** The elements of the third period on whose double bonds convention (b) takes as single (prepare.ts). */
 const D_ORBITAL: ReadonlySet<string> = new Set(["P", "As", "Sb", "Bi", "S", "Se", "Te"]);
-
-/** The smallest ring a double bond in which has a cis or trans of its own: eight atoms (rank.ts `OPEN_RING`). */
-const OPEN_RING = 8;
 
 /** A molecule in 3D as this reads it: its atoms, its bonds by their atoms' numbers from 0, and its places (x, y, z for each atom, in its order). */
 export type In3d = { atoms: readonly { el: string; charge?: number; isotope?: number }[]; bonds: readonly { a1: number; a2: number; order: number }[]; xyz: readonly number[] };

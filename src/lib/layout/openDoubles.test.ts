@@ -128,8 +128,121 @@ describe("a double bond in a ring of eight atoms or more, and the end of two gro
     expect(read.cisTrans.size).toBe(0);
   });
 
+  it("asks the ring of each double bond itself, not the structure's first bond: 1-methylcycloheptene's none, 1-methylcyclooctene's a wavy bond", () => {
+    // (each written with its chain bond first, the C=C later)
+    expect(open("CC1=CCCCCC1")).toEqual({ straight: [], either: [] });
+    expect(open("CC1=CCCCCCC1").either).toHaveLength(1);
+  });
+
   it("leaves a C=N whose E/Z is none of its own as it is: CC(N)=NC, an amidine", () => {
     expect(open("CC(N)=NC")).toEqual({ straight: [], either: [] });
+  });
+});
+
+describe("an odd cumulene its text leaves open: cis or trans across its run's ends, open as a double bond's is", () => {
+  /** Laid out by the engine, its open bonds marked "either" and drawn as the SVG writer draws them; what the reader takes of the drawing. */
+  const drawn = (smiles: string, keepStraight = true) => {
+    const given = smilesInput(smiles);
+    const input = keepStraight ? given : { ...given, atoms: given.atoms.map(({ linear: _l, ...a }) => a) };
+    const laid = layout2D(input);
+    const o = openDoubleBonds(given);
+    const atoms: Atom[] = input.atoms.map((a, i) => ({ id: i, x: laid.x[i], y: laid.y[i], el: a.el }));
+    const bonds: Bond[] = input.bonds.map((b, i) => ({ a1: b.a, a2: b.b, order: b.order as 1 | 2 | 3, ...(o.either.includes(i) ? { stereo: "either" as const } : {}) }));
+    const wavy = unspecifiedDoubles(atoms, bonds).flatMap((b, k) => (b.stereo === "wavy" ? [k] : []));
+    const read = readStereo(
+      input.atoms.map((a, i) => ({ el: a.el, x: laid.x[i], y: laid.y[i], hs: a.hs ?? 0 })) as never,
+      input.bonds.map((b, k) => ({ a: b.a, b: b.b, order: b.order, ...(wavy.includes(k) || o.either.includes(k) ? { either: true } : {}) })),
+    );
+    return { input, o, wavy, read };
+  };
+
+  it("keeps hexa-2,3,4-triene's ends straight on, from CC=C=C=CC with no marks, so that the drawing states neither cis nor trans", () => {
+    const { o, read } = drawn("CC=C=C=CC");
+    expect(o.straight.sort()).toEqual([1, 4]);
+    expect(o.either).toEqual([]);
+    expect(read.cumulated).toEqual([]);
+    // (as drawn without it: bent, and read as one of them)
+    expect(drawn("CC=C=C=CC", false).read.cumulated).toHaveLength(1);
+  });
+
+  it("does the same for a run of five double bonds, CC=C=C=C=C=CC", () => {
+    const { o, read } = drawn("CC=C=C=C=C=CC");
+    expect(o.straight.sort((p, q) => p - q)).toEqual([1, 6]);
+    expect(read.cumulated).toEqual([]);
+  });
+
+  it("gives 2-methylhepta-2,3,4-triene's run, with no marks, a wavy bond on the group of its end of one group (C5's methyl), read as none", () => {
+    // (C0 C1=C2=C3=C4(C5)C6 C7: C1 has one group, C4 two, unlike)
+    const { input, o, wavy, read } = drawn("CC=C=C=C(C)CC");
+    expect(o.straight).toEqual([]);
+    expect(o.either).toHaveLength(1);
+    const d = input.bonds[o.either[0]];
+    expect([d.a, d.b].sort()).toEqual([1, 2]);
+    expect(wavy).toHaveLength(1);
+    const w = input.bonds[wavy[0]];
+    expect([w.a, w.b].sort()).toEqual([0, 1]);
+    expect(read.cumulated).toEqual([]);
+  });
+
+  it("puts the wavy bond on the far end's group where the end listed first has two: CCC(C)=C=C=CC, on C6's methyl", () => {
+    // (C0 C1 C2(C3)=C4=C5=C6 C7: C2 has two groups, C6 one)
+    const { input, o, wavy, read } = drawn("CCC(C)=C=C=CC");
+    const d = input.bonds[o.either[0]];
+    expect([d.a, d.b].sort()).toEqual([5, 6]);
+    expect(wavy.map((k) => [input.bonds[k].a, input.bonds[k].b].sort((p, q) => p - q))).toEqual([[6, 7]]);
+    expect(read.cumulated).toEqual([]);
+  });
+
+  it("puts wavy bonds on both groups of an end where each end has two: CCC(C)=C=C=C(C)CC", () => {
+    const { input, o, wavy, read } = drawn("CCC(C)=C=C=C(C)CC");
+    expect(o.either).toHaveLength(1);
+    const d = input.bonds[o.either[0]];
+    const end = [d.a, d.b].find((x) => input.bonds.filter((b) => b.a === x || b.b === x).length === 3)!;
+    expect(wavy).toHaveLength(2);
+    expect(wavy.every((k) => input.bonds[k].a === end || input.bonds[k].b === end)).toBe(true);
+    expect(read.cumulated).toEqual([]);
+  });
+
+  it("gives a run in a ring of nine a wavy bond, its ring atoms not kept straight on, and leaves one in a ring of seven as it is", () => {
+    const nine = open("C1=C=C=CCCCCC1");
+    expect(nine.straight).toEqual([]);
+    expect(nine.either).toHaveLength(1);
+    expect(open("C1=C=C=CCCC1")).toEqual({ straight: [], either: [] });
+  });
+
+  it("leaves as they are the runs that have no cis or trans, or have it given: an end of two alike groups, an end with none, an allene's, a pentatetraene's (an axis), and C/C=C=C=C/C", () => {
+    for (const s of ["CC=C=C=C(C)C", "C=C=C=CC", "CC=C=C=C", "CC=C=CC", "CC=C=C=C=CC", "C/C=C=C=C/C", "C/C=C=C=C\\C"]) expect(open(s), s).toEqual({ straight: [], either: [] });
+  });
+});
+
+describe("the wavy bond of an odd cumulene's double bond: the run's far end taken as the bond's other end", () => {
+  /** Hexa-2,3,4-triene's run C1=C2=C3=C4 along x, C1 with two groups, C4's groups as given; C1=C2 marked either. */
+  const triene = (far: [number, number][], middle = "C") => {
+    const atoms: Atom[] = [
+      [0, 0], [1, 0], [2, 0], [3, 0], [-0.7, 1.1], [-0.7, -1.1], ...far,
+    ].map(([x, y], i) => ({ id: i, x, y, el: i === 1 ? middle : "C" }));
+    const bonds: Bond[] = [
+      { a1: 0, a2: 1, order: 2, stereo: "either" },
+      { a1: 1, a2: 2, order: 2 },
+      { a1: 2, a2: 3, order: 2 },
+      { a1: 0, a2: 4, order: 1 },
+      { a1: 0, a2: 5, order: 1 },
+      ...far.map((_, k): Bond => ({ a1: 3, a2: 6 + k, order: 1 })),
+    ];
+    return unspecifiedDoubles(atoms, bonds).flatMap((b, k) => (b.stereo === "wavy" ? [k] : []));
+  };
+
+  it("puts none where the far end's one group is straight on from the run, or the far end has none: the drawing states no cis or trans", () => {
+    expect(triene([[4, 0]])).toEqual([]);
+    expect(triene([])).toEqual([]);
+  });
+
+  it("puts it on the far end's one group where that is bent off the run", () => {
+    expect(triene([[3.7, 1.1]])).toEqual([5]);
+  });
+
+  it("takes no run through a sulfur - a C=S=C is bent, no cumulene: the bond's other end the S itself", () => {
+    expect(triene([[3.7, 1.1]], "S")).toEqual([]);
   });
 });
 

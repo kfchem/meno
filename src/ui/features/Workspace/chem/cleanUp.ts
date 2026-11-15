@@ -346,20 +346,33 @@ export async function laidOut(
     : job0;
   // (an allene's axis and an odd cumulene's cis or trans the structure's own text says, which a plugin's drawing of it cannot: a MOL block has no way to say them - by atom, in the drawing's order)
   let job: LayoutJob = given && givenFits(read, m) ? { ...read, given: true as const, input: { ...read.input, ...(given.axes.length ? { axes: given.axes } : {}), ...(given.cumulated.length ? { cumulated: given.cumulated } : {}) } } : read;
+  // (a run so given is drawn as given, not kept straight at its ends as the plugin's drawing of it may have them - a drawing of the
+  //  structure with nothing given, which leaves an odd cumulene open: layout/drawn `openDoubleBonds`)
+  if (job !== read && given?.cumulated.length) {
+    const ends = new Set(given.cumulated.flatMap((c) => c.atoms));
+    job = { ...job, input: { ...job.input, atoms: job.input.atoms.map(({ linear, ...a }, k) => (linear && !ends.has(k) ? { ...a, linear } : a)) } };
+  }
   // (and one left open with one group at each end: each end kept straight on from it, so that it states neither cis nor trans - ST-4.4 -
   //  whatever the plugin's drawing of it said)
   if (straight.size) {
-    const opened = model.bonds.filter(straightOn).map((b) => (b.a < b.b ? `${b.a},${b.b}` : `${b.b},${b.a}`));
+    const pair = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
     const linear = new Set(job.ids.flatMap((id, k) => (straight.has(id) ? [k] : [])));
+    // (an odd cumulene's the same, by its run's two ends: the cis or trans the plugin's drawing of it read, its ends now kept straight on)
+    const runOpen = (c: Cumulated) => linear.has(c.atoms[0]) && linear.has(c.atoms[1]);
+    const runs = job.input.cumulated ?? [];
+    const opened = [...model.bonds.filter(straightOn).map((b) => pair(b.a, b.b)), ...runs.filter(runOpen).map((c) => pair(job.ids[c.atoms[0]], job.ids[c.atoms[1]]))];
+    const { cumulated: _c, ...input } = job.input;
+    const kept = runs.filter((c) => !runOpen(c));
     job = {
       ...job,
       opened,
       input: {
-        ...job.input,
+        ...input,
         atoms: job.input.atoms.map((a, k) => (linear.has(k) ? { ...a, linear: true } : a)),
         // (nor asked of the engine to lay out the cis or trans the plugin's drawing read: with its ends straight on it could show none, and
         //  `opened` keeps it from being taken as the drawing's - so this keeps the engine's input to what the text says, not a case of its own)
         bonds: job.input.bonds.map((b) => (b.stereo && b.order === 2 && linear.has(b.a) && linear.has(b.b) ? { a: b.a, b: b.b, order: b.order } : b)),
+        ...(kept.length ? { cumulated: kept } : {}),
       },
     };
   }

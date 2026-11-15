@@ -607,6 +607,41 @@ describe("cleanUp", () => {
       }
     }, 120000);
 
+    it("lays out hexa-2,3,4-triene from CC=C=C=CC with its run's ends straight on, read as no cis or trans, and keeps it so through Clean-up", async () => {
+      const s = "CC=C=C=CC";
+      const cumulated = (m: Model) => {
+        const d = drawingOf(m);
+        return readStereo(d.atoms, d.bonds).cumulated.length;
+      };
+      const m = arrived(s);
+      // (as it came: bent, read as one of them)
+      expect(cumulated(m)).toBe(1);
+      const open = openDoubleBonds(fromSmiles(s));
+      const laid = await laidOut(m, undefined, undefined, open);
+      expect(cumulated(laid)).toBe(0);
+      // (each end's methyl straight on from the run: C1 from C2, C4 from C3)
+      const id = (i: number) => m.atoms[i].id;
+      expect(angleAt(laid, id(1), id(2), id(0))).toBeLessThan(10);
+      expect(angleAt(laid, id(4), id(3), id(5))).toBeLessThan(10);
+      const was = identityOfDrawn(laid).text;
+      expect(was).not.toBe(identityOfDrawn(m).text);
+      const { store } = canvas(laid);
+      for (const time of [1, 2]) {
+        await cleanUp(store);
+        const now = store.getState().model;
+        expect(cumulated(now), `${time}`).toBe(0);
+        expect(identityOfDrawn(now).text, `${time}`).toBe(was);
+      }
+    }, 60000);
+
+    it("gives 2-methylhepta-2,3,4-triene from a SMILES with no marks a wavy bond: its run's double bond 'either', read as no cis or trans", async () => {
+      const s = "CC=C=C=C(C)CC";
+      const laid = await laidOut(arrived(s), undefined, undefined, openDoubleBonds(fromSmiles(s)));
+      expect(laid.bonds.filter((b) => b.stereo === "either")).toHaveLength(1);
+      const d = drawingOf(laid);
+      expect(readStereo(d.atoms, d.bonds).cumulated).toEqual([]);
+    });
+
     it("keeps a double bond the SMILES gives E or Z bent as given", async () => {
       for (const s of ["C/C=C/C", "C/C=C\\C"]) {
         const open = openDoubleBonds(fromSmiles(s));
