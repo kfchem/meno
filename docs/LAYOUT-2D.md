@@ -888,6 +888,24 @@ quarter of a bond: with less, taxol's AcO sat on its OBz.
   bridgehead often has them so), read from the angles two of them and the
   wedge would say one thing and the other two the opposite
   (`drawnVolume`). With three drawn and the H left out, the angles are read.
+- And where the layout leaves two of a centre's three bonds in one line,
+  within 10 degrees, and its wedge on one of them - doxorubicin's and
+  ouabain's sugar C1, ginkgolide B's C23, bilobalide's C10, vinblastine's
+  C5 - a form the text grades not acceptable (Brecher 2006, ST-1.2.4)
+  however a reader reads it: such a centre with an H has the H drawn in
+  the widest gap round it and wedged instead (ST-1.1.4's form), the way
+  Meno's reader reads as given (`hydrogensWhereUnread`, as a cage's
+  wedges for a flat reader are); with no H, or where that reads no
+  surer, it is left as placed. The H stands clear of every other atom -
+  three quarters of a bond - and every bond - 0.4 of one - at the gap's
+  middle where that is clear, else turned within the gap, up to 25
+  degrees short of its bonds, where it is clearest (GR-2.1.6: a label
+  clear of all else; an H on another label reads as that label's). It is
+  always a bond long, as every H Meno draws: drawn shorter, its wedge, the
+  H label's room taken off, reads as a speck - worse than an H near
+  another atom. ST-1.2.4 grades so every wedge 180
+  degrees or more from one of its plain neighbours; the layout catches
+  the ones in line, within 10 degrees: those are the ones it leaves.
 - An axis of chirality - a biaryl's bond, BINAP's C1-C1' - is shown by
   one wedge out of an end of it, narrow there, on the single bond to the
   neighbour that stands out of the page for the sense the axis has (or on
