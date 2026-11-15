@@ -1875,10 +1875,16 @@ lipids each have their own way of being drawn, which it should know.
        assumed. A cis-fused ring may be drawn nearly edge on, its outline
        convex: it is taken where it is fused to a ring drawn as a chair,
        and the fit of the whole reads or refuses it. Near and far go by the
-       same order, for the whole system: a bold ring bond on any ring, else
-       the lower atoms nearer in each ring that lies mostly level and is
-       drawn as a chair (a cis-fused ring rising up the page says nothing),
-       all of them agreeing, else unread. Rings that share one atom only,
+       same order, for the whole system. First a mark: a bold bond is the
+       near edge of its own ring (ST-3.1, ST-3.3), so it is judged against
+       that ring's middle - a bond two rings share says something only
+       where it says the same in both - and every mark that says must say
+       the same. Else the convention: the lower atoms nearer in each ring
+       that lies mostly level and is drawn as a chair (a cis-fused ring
+       rising up the page says nothing), all of them agreeing - and only
+       while the whole system stands within 30 degrees of the textbook
+       form it was fitted to: stood on its side, it is unread. Else
+       unread. Rings that share one atom only,
        or more than a bond, and a system with a ring drawn flat, are
        unread. A bridged system or a cage (norbornane, camphor) drawn with
        no depth is fitted to the ways Meno itself draws it in perspective -
@@ -1899,7 +1905,19 @@ lipids each have their own way of being drawn, which it should know.
        draw: "No R or S: the ring is drawn in perspective, but its near and
        far are not marked: draw its near bonds bold." (or "... but not
        clearly as one shape."). Which atoms are centres is the CIP's, so an
-       atom that is no centre is told nothing.
+       atom that is no centre is told nothing; in a bridged system, an atom
+       whose two arms are alike (quinuclidine's N) is made no centre. And
+       such a ring, not read, is never silent: each of its atoms that
+       carries a group has the unread mark a crossed wedge has, unasked,
+       its words the same.
+     - **Meno's moves keep the compound:** a ring read this way follows
+       the page - its lower atoms the nearer - so before Meno turns it on
+       the page, or turns it over, the depth the reading worked out is
+       stored on its atoms, in the same step, and the move carries it as
+       it carries any depth drawn: turned half round, or turned over left
+       for right, it is the same compound, not its mirror image. Undone,
+       the drawing is as it was. A drawing that arrives turned (pasted,
+       opened) has only the convention to go by.
      - **Clean-up keeps a projection** (the maintainer, 2026-11-13): a ring
        system the drawing shows with a depth that the engine would lay flat -
        a chair, a Haworth ring - is left where it is, its atoms' places,
@@ -1913,7 +1931,9 @@ lipids each have their own way of being drawn, which it should know.
        (`chem/projectionKept`). A ring in perspective drawn with no depth
        and recognised as one is kept so too, by the depth the reading
        works out for it; no depth is stored for it, so the document is as
-       the chemist drew it. 3D and a file are told its configuration by
+       the chemist drew it. One taken for a ring in perspective but not
+       read is kept where it is as well, not laid flat: its words ask the
+       chemist to mark it. 3D and a file are told its configuration by
        wedges, as for a projection drawn with depth: the configuration
        read, never the shape drawn.
    - The new drawing is read back before anything moves: if it would not

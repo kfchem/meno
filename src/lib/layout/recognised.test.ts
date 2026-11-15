@@ -263,6 +263,76 @@ describe("chairs fused, drawn bond by bond, read as the compound they show", () 
     expect(read / all).toBeGreaterThan(0.95);
   }, measured(60_000));
 
+  /** The rings of a drawn system in order round each, and for each ring bond whether, by the depth drawn, it is its ring's near edge (in every ring it lies in), its far edge, or neither. */
+  function edges(d: { atoms: DrawnAtom[]; bonds: DrawnBond[] }, ringAtoms: number) {
+    const ring = d.bonds.flatMap((b, k) => (b.a < ringAtoms && b.b < ringAtoms ? [k] : []));
+    const adj = new Map<number, number[]>();
+    for (const k of ring) for (const [x, y] of [[d.bonds[k].a, d.bonds[k].b], [d.bonds[k].b, d.bonds[k].a]]) adj.set(x, [...(adj.get(x) ?? []), y]);
+    // (each six-ring through a bond: the shortest way round from one end to the other, not by the bond)
+    const sixes: number[][] = [];
+    const seen = new Set<string>();
+    for (const k of ring) {
+      const [a, b] = [d.bonds[k].a, d.bonds[k].b];
+      const walk = (path: number[]) => {
+        if (path.length === 6) {
+          if (adj.get(path[5])!.includes(a)) {
+            const key = [...path].sort((p, q) => p - q).join();
+            if (!seen.has(key)) {
+              seen.add(key);
+              sixes.push(path);
+            }
+          }
+          return;
+        }
+        for (const n of adj.get(path[path.length - 1]) ?? []) if (!path.includes(n) && !(path.length === 1 && n === b)) walk([...path, n]);
+      };
+      walk([a, b]);
+    }
+    const z = (i: number) => d.atoms[i].z!;
+    return ring.map((k) => {
+      const [a, b] = [d.bonds[k].a, d.bonds[k].b];
+      const in6 = sixes.filter((r) => r.includes(a) && r.includes(b));
+      const says = in6.map((r) => Math.sign(z(a) + z(b) - (2 * r.reduce((m, i) => m + z(i), 0)) / r.length));
+      return { k, near: says.length > 0 && says.every((v) => v > 0), far: says.length > 0 && says.every((v) => v < 0) };
+    });
+  }
+
+  it("reads a bold bond as the near edge of its own ring: a near edge bold, alone or every one at once, is never the mirror", () => {
+    for (const [name, s] of systems) {
+      for (const form of [0, 1]) {
+        const free = drawing(s, form, -1).free;
+        for (const at of [-1, Math.floor(free / 3), Math.floor((2 * free) / 3)]) {
+          const d = drawing(s, form, at);
+          const want = identityOfDrawing(d);
+          const bare = stripped(d);
+          const all = edges(d, s.atoms.length);
+          for (const e of all.filter((x) => x.near)) {
+            const got = identityOfDrawing({ atoms: bare.atoms, bonds: bare.bonds.map((b, k) => (k === e.k ? { ...b, bold: true } : b)) });
+            if (got !== want) expect(got, `${name} ${form} ${at}: near edge ${e.k} bold`).toBe(unreadOf(bare));
+          }
+          // (every near edge of every ring bold, as a chemist marks a fused system: the compound)
+          const near = new Set(all.filter((x) => x.near).map((x) => x.k));
+          const every = identityOfDrawing({ atoms: bare.atoms, bonds: bare.bonds.map((b, k) => (near.has(k) ? { ...b, bold: true } : b)) });
+          expect(every, `${name} ${form} ${at}: every near edge bold`).toBe(want);
+        }
+      }
+    }
+  }, measured(60_000));
+
+  it("reads nothing by the convention in a system stood on its side - turned a right angle - and never the mirror", () => {
+    for (const [name, s] of systems) {
+      for (const form of [0, 1]) {
+        const d = drawing(s, form, 0);
+        for (const turn of [90, -90]) {
+          const given = stripped(moved(d, turn, 0, 1, () => 0.5));
+          const got = identityOfDrawing(given);
+          expect([identityOfDrawing(d), unreadOf(given)], `${name} ${form} turned ${turn}`).toContain(got);
+          expect(got, `${name} ${form} turned ${turn}`).toBe(unreadOf(given));
+        }
+      }
+    }
+  });
+
   it("tells cis-decalin from trans-decalin with no depth stored, and reads the mirror picture of each as its mirror", () => {
     const transD = identityOfDrawing(stripped(drawing(decalin, 0, -1)));
     const cisD = identityOfDrawing(stripped(drawing(systems[1][1], 0, -1)));
@@ -331,6 +401,14 @@ describe("a bridged system drawn bond by bond, a bold bond its near edge (norbor
     expect(all).toBeGreaterThan(20);
     expect(read).toBeGreaterThan(0);
   }, measured(60_000));
+
+  it("makes no centre of a bridgehead whose two arms are alike: quinuclidin-3-ol read by a mark is the one compound, its typed identity", () => {
+    for (const smi of ["O[C@@H]1CN2CCC1CC2", "O[C@H]1CN2CCC1CC2"]) {
+      const d = engineDrawn(smi);
+      // (against the typed SMILES: the engine's drawing as this test takes it flags every atom with a depth a centre, the bridgeheads too)
+      expect(identityOfDrawing(marked(stripped(d), nearest(d))), smi).toBe(smiles(smi));
+    }
+  });
 
   it("reads no configuration with no mark: the hydroxyl carbon gets none, and the words ask for the near bonds bold", () => {
     const d = stripped(engineDrawn(exo));

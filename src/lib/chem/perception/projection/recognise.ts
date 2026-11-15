@@ -69,7 +69,8 @@ export const NOT_ONE_SHAPE = "the ring is drawn in perspective, but not clearly 
 /** The words for a centre read from a ring in perspective that the drawing gives no depth (a chair, or chairs fused). */
 export const READ_IN_PERSPECTIVE = "read from the ring as drawn in perspective";
 
-type Fit = { z: number[]; miss: number };
+/** A fit: the depth it gives each atom, how far it misses, and - for a fit by turn, scale and shift - how far it is turned from the form it fits (radians). */
+type Fit = { z: number[]; miss: number; turn?: number };
 
 /** The best linear map from a chair's atoms (three dimensions) to the drawn places (two), each way round and from each atom: its fit, with the depth it gives (sign not yet chosen). */
 function fits(ring: readonly Pt[]): Fit[] {
@@ -200,7 +201,7 @@ function conventionFits(ring: readonly Pt[]): Fit[] {
 }
 
 /** The best turn, scale and shift in the page of `p` onto `q` (least squares, closed form): the scale, and the miss - the mean square, in units of the scaled `p`. */
-function similarity(p: readonly Pt[], q: readonly Pt[]): { scale: number; miss: number } | null {
+function similarity(p: readonly Pt[], q: readonly Pt[]): { scale: number; miss: number; turn: number } | null {
   const n = p.length;
   const [px, py, qx, qy] = [p.reduce((m, v) => m + v.x, 0) / n, p.reduce((m, v) => m + v.y, 0) / n, q.reduce((m, v) => m + v.x, 0) / n, q.reduce((m, v) => m + v.y, 0) / n];
   // (the turn and the scale as one complex number a = sum conj(p) q / sum |p|^2)
@@ -219,7 +220,7 @@ function similarity(p: readonly Pt[], q: readonly Pt[]): { scale: number; miss: 
     const [ux, uy] = [v.x - px, v.y - py];
     return m + (ar * ux - ai * uy - (q[i].x - qx)) ** 2 + (ai * ux + ar * uy - (q[i].y - qy)) ** 2;
   }, 0);
-  return { scale, miss: miss / n / (scale * scale) };
+  return { scale, miss: miss / n / (scale * scale), turn: Math.atan2(ai, ar) };
 }
 
 const FUSIONS: ("trans" | { cis: 1 | -1 })[] = ["trans", { cis: 1 }, { cis: -1 }];
@@ -309,7 +310,7 @@ function fusedFits(places: readonly Pt[], rings: readonly (readonly number[])[])
             if (!d) continue;
             const ofDrawing = places.map((_, i) => d.atoms[map.get(i)!]);
             const fit = similarity(ofDrawing, places);
-            if (fit) out.push({ z: ofDrawing.map((p) => p.z * fit.scale), miss: fit.miss });
+            if (fit) out.push({ z: ofDrawing.map((p) => p.z * fit.scale), miss: fit.miss, turn: fit.turn });
           }
         }
       }
@@ -378,6 +379,7 @@ export function recogniseChairs(places: readonly Pt[], rings: readonly (readonly
   // whole system then reads or refuses)
   if (!rings.every((r, k) => asChair[k] || (rings.length > 1 && oppositeParallel(r.map((i) => places[i]))))) return { kind: "unread", why: NOT_ONE_SHAPE };
   let z: (number | undefined)[];
+  let fittedTurn: number | undefined;
   if (rings.length === 1) {
     const one = chairShape(rings[0].map((i) => places[i]));
     if ("kind" in one) return one;
@@ -393,21 +395,44 @@ export function recogniseChairs(places: readonly Pt[], rings: readonly (readonly
     const other = all.find((f) => f.miss <= MOST_MISS && !sameShape(f.z, best.z, tol));
     if (other && other.miss < MARGIN * Math.max(best.miss, 1e-6)) return { kind: "unread", why: NOT_ONE_SHAPE };
     z = best.z;
+    // (how far it is turned from its textbook form: the least turn among the fits as good that read it the same - a chair's picture, a
+    //  trans-decalin's, is the same picture turned half round, its atoms named otherwise)
+    const wrap = (t: number) => Math.abs(Math.atan2(Math.sin(t), Math.cos(t)));
+    fittedTurn = all
+      .filter((f) => f.turn != null && f.miss <= best.miss * (1 + 1e-6) + 1e-9 && sameShape(f.z, best.z, tol))
+      .reduce((least, f) => Math.min(least, wrap(f.turn!)), Infinity);
   }
   const inSystem = places.map((_, i) => i).filter((i) => z[i] != null);
   const middle = inSystem.reduce((m, i) => m + z[i]!, 0) / inSystem.length;
   const depth = places.map((_, i) => (z[i] == null ? 0 : z[i]! - middle));
   // (near and far: a mark first, then the convention)
   if (bold.length) {
-    // (each marked edge nearer than the system's middle: its atoms' depths, taken together, on one side - a mark that leaves an edge level with the middle says nothing)
+    // (a marked edge is the nearer edge OF ITS RING - Brecher 2006, ST-3.1, ST-3.3 - so it is judged against its own ring's middle, in
+    //  each ring it lies in: a bond two rings share says something only where it says the same in both. A mark that leaves its edge level
+    //  with its ring's middle, or says one thing in one ring and the other in the other, says nothing and is passed by; those that say must
+    //  all say the same, and one at least must)
     const unit = Math.max(1e-9, ...inSystem.map((i) => Math.abs(depth[i])));
+    const adjacent = (r: readonly number[], i: number, j: number) => {
+      const [p, q] = [r.indexOf(i), r.indexOf(j)];
+      return p >= 0 && q >= 0 && (Math.abs(p - q) === 1 || Math.abs(p - q) === r.length - 1);
+    };
     const says = bold.map(([i, j]) => {
-      const sum = depth[i] + depth[j];
-      return Math.abs(sum) < 0.2 * unit ? 0 : Math.sign(sum);
+      const each = rings
+        .filter((r) => adjacent(r, i, j))
+        .map((r) => {
+          const middle = r.reduce((m, k) => m + depth[k], 0) / r.length;
+          const sum = depth[i] + depth[j] - 2 * middle;
+          return Math.abs(sum) < 0.2 * unit ? 0 : Math.sign(sum);
+        });
+      return each.length && each.every((v) => v !== 0 && v === each[0]) ? each[0] : 0;
     });
-    if (!says.every((v) => v !== 0 && v === says[0])) return { kind: "unread", why: NOT_MARKED };
-    return { kind: "depth", z: depth.map((v) => says[0] * v), by: "mark" };
+    const said = says.filter((v) => v !== 0);
+    if (!said.length || said.some((v) => v !== said[0])) return { kind: "unread", why: NOT_MARKED };
+    return { kind: "depth", z: depth.map((v) => said[0] * v), by: "mark" };
   }
+  // (the convention speaks only for a system that stands within LEVEL_ANGLE of the textbook form it was fitted to: turned further, the
+  //  lower atoms of a ring are no longer its front - a cis-fused ring that rose up the page would lie level and speak alone)
+  if (fittedTurn != null && Math.abs(Math.atan2(Math.sin(fittedTurn), Math.cos(fittedTurn))) > LEVEL_ANGLE) return { kind: "unread", why: NOT_MARKED };
   // (the lower atoms nearer, ring by ring (ST-3.1: of a mostly-horizontal ring): each ring whose long axis lies within LEVEL_ANGLE of level
   // says which way round the system is; a ring standing steeper says nothing - a cis-fused ring may rise up the page, its upper atoms the
   // nearer; and a ring fused on seen nearly edge on, its outline convex, says nothing either: it is read by the fit. Every ring that says must

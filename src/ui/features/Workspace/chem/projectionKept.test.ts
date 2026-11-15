@@ -159,6 +159,16 @@ describe("Clean-up of a ring in perspective drawn with no depth, recognised as o
     }
   });
 
+  it("leaves a ring taken for one in perspective but not read where it is too - stood on its side, no mark - storing no depth", async () => {
+    const drawn = bare(drawings["a chair of cis-1,2-dimethylcyclohexane"].model);
+    const side: Model = { ...drawn, atoms: drawn.atoms.map((a) => ({ ...a, x: -a.y, y: a.x })) };
+    const laid = await laidOut(side, MENO);
+    for (const id of [1, 2, 3, 4, 5, 6]) {
+      const [was, now] = [side.atoms.find((a) => a.id === id)!, laid.atoms.find((a) => a.id === id)!];
+      expect([now.x, now.y, now.z], `atom ${id}`).toEqual([was.x, was.y, undefined]);
+    }
+  });
+
   it("lays a ring drawn flat out as ever: a regular hexagon is no projection", async () => {
     const hexagon: Model = {
       atoms: [...[...Array(6)].map((_, k) => ({ id: k + 1, el: "C", x: Math.cos((k * Math.PI) / 3) + 0.2 * (k % 2), y: Math.sin((k * Math.PI) / 3), r: 0.9 })), { id: 7, el: "O", x: 2.3, y: 0, r: 0.9 }],

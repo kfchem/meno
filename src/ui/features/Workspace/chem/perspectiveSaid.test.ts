@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Model } from "../store/types";
 import { cipMarksOf, cipSaid } from "./cipMarks";
+import { unsureOf } from "./drawing";
 import { chair, haworth } from "../../../../lib/layout/testdata/projections";
 import type { DrawnAtom, DrawnBond } from "../../../../lib/layout/drawn";
 import { NOT_MARKED } from "../../../../lib/chem/perception/projection/recognise";
@@ -52,3 +53,24 @@ describe("a centre of a ring drawn in perspective with no depth, its R or S aske
     expect(m.said.get("centre-1")).toBe(cipSaid("undrawn", "centre"));
   });
 });
+
+describe("a ring taken for one drawn in perspective but not read, nothing asked", () => {
+  const twoMethyls = flat(chair({ 0: "equatorial", 1: "equatorial" }));
+  const onItsSide = { atoms: twoMethyls.atoms.map((a) => ({ ...a, x: -a.y, y: a.x })), bonds: twoMethyls.bonds };
+
+  it("shows the unread mark on each of its atoms that carries a group, its words saying what to draw - and none on its bare CH2s", () => {
+    const u = unsureOf(modelOf(onItsSide, []));
+    expect([...u.atoms].sort((p, q) => p - q)).toEqual([1, 2]);
+    expect(u.said.get(1)).toBe(`${NOT_MARKED[0].toUpperCase()}${NOT_MARKED.slice(1)}.`);
+  });
+
+  it("shows nothing where the ring is read, nor on a ring drawn flat", () => {
+    expect(unsureOf(modelOf(twoMethyls, [])).atoms.size).toBe(0);
+    const hexagon: { atoms: DrawnAtom[]; bonds: DrawnBond[] } = {
+      atoms: [...[...Array(6)].map((_, k) => ({ x: Math.cos((k * Math.PI) / 3), y: Math.sin((k * Math.PI) / 3), hs: k < 2 ? 1 : 2 })), { x: 2, y: 0, hs: 3 }, { x: 1, y: 1.73, hs: 3 }],
+      bonds: [...[...Array(6)].map((_, k) => ({ a: k, b: (k + 1) % 6, order: 1 as const })), { a: 0, b: 6, order: 1 }, { a: 1, b: 7, order: 1 }],
+    };
+    expect(unsureOf(modelOf(hexagon, [])).atoms.size).toBe(0);
+  });
+});
+

@@ -13,6 +13,8 @@ import { wedgeNarrowAtom } from "../../../../lib/chem/layout2d";
 import { implicitHydrogens, setValenceOrder, valenceOrder } from "../../../../lib/chem/molecule";
 import type { WriterModel } from "../../../../lib/chem/molWriter";
 import { unsureStereo, wedgesForFlat, type DrawnAtom, type DrawnBond } from "../../../../lib/layout/drawn";
+import { recognisedSaid } from "../../../../lib/layout/recognised";
+import { READ_AS_HAWORTH, READ_IN_PERSPECTIVE } from "../../../../lib/chem/perception/projection/recognise";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
 import type { Bond, Model } from "../store/types";
 import { byStructure, type StructureValues } from "../utils/byStructure";
@@ -192,21 +194,35 @@ export function forFlatReaders(model: Model, recognised = true): WriterModel {
  * problem is, so that none is shown as if it were certain (the maintainer,
  * 2026-10-11).
  */
-export function unsureOf(model: Model, kept?: StructureValues<Unsure>): { atoms: Set<number>; bonds: Set<number> } {
+export function unsureOf(model: Model, kept?: StructureValues<Unsure>): { atoms: Set<number>; bonds: Set<number>; said: Map<number, string> } {
   // (a structure at a time, what was found in each kept while it is the same - see byStructure)
   const found = kept ? byStructure(model, kept, unsureIn) : [unsureIn(model)];
-  return { atoms: new Set(found.flatMap((f) => f.atoms)), bonds: new Set(found.flatMap((f) => f.bonds)) };
+  return { atoms: new Set(found.flatMap((f) => f.atoms)), bonds: new Set(found.flatMap((f) => f.bonds)), said: new Map(found.flatMap((f) => f.said ?? [])) };
 }
 
-/** The stereocentres and double bonds a drawing shows only by luck, by id; see `unsureOf`. */
-export type Unsure = { atoms: number[]; bonds: number[] };
+/**
+ * The stereocentres and double bonds a drawing shows only by luck, by id; see `unsureOf` - and, for an atom of a ring drawn in perspective
+ * that is not read (lib/layout/recognised), what its mark says: why, and what to draw.
+ */
+export type Unsure = { atoms: number[]; bonds: number[]; said?: [number, string][] };
 
 function unsureIn(model: Model): Unsure {
-  if (!model.bonds.some((b) => b.stereo === "up" || b.stereo === "down" || b.order === 2)) return { atoms: [], bonds: [] };
+  const wedged = model.bonds.some((b) => b.stereo === "up" || b.stereo === "down" || b.order === 2);
+  if (!wedged && !holdsRing(model)) return { atoms: [], bonds: [] };
   const { atoms, bonds } = drawingOf(model);
-  const found = unsureStereo(atoms, bonds);
+  const found = wedged ? unsureStereo(atoms, bonds) : { atoms: [], bonds: [] };
   // (the bonds as drawingOf takes them: those between atoms there are)
   const ids = new Set(model.atoms.map((a) => a.id));
   const kept = model.bonds.filter((b) => ids.has(b.a) && ids.has(b.b));
-  return { atoms: found.atoms.map((i) => model.atoms[i].id), bonds: found.bonds.map((i) => kept[i].id) };
+  // (a ring taken for one drawn in perspective but not read: the unread mark on each of its atoms that carries a group and could be a
+  //  centre, its words on it - as a crossed wedge's is; nothing is silent)
+  const unread = new Map([...recognisedSaid(atoms, bonds)].filter(([, words]) => words !== READ_IN_PERSPECTIVE && words !== READ_AS_HAWORTH));
+  const around = (i: number) => bonds.flatMap((b) => (b.a === i ? [b.b] : b.b === i ? [b.a] : []));
+  const marked = [...unread.keys()].filter((i) => atoms[i].hs <= 1 && around(i).some((n) => !unread.has(n)) && !found.atoms.includes(i));
+  const sentence = (words: string) => `${words[0].toUpperCase()}${words.slice(1)}.`;
+  return {
+    atoms: [...found.atoms, ...marked].map((i) => model.atoms[i].id),
+    bonds: found.bonds.map((i) => kept[i].id),
+    ...(marked.length ? { said: marked.map((i): [number, string] => [model.atoms[i].id, sentence(unread.get(i)!)]) } : {}),
+  };
 }

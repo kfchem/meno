@@ -31,7 +31,8 @@ import { ofTheStructure } from "../../../../lib/chem/perception/graph";
 import { editorLayoutOptions, layoutBonds } from "../layoutOptions";
 import { greatest } from "../../../../lib/chem/lists";
 import { projectionsKept } from "./projectionKept";
-import { withRecognisedDepth } from "../../../../lib/layout/recognised";
+import { recognisedSaid, withRecognisedDepth } from "../../../../lib/layout/recognised";
+import { READ_AS_HAWORTH, READ_IN_PERSPECTIVE } from "../../../../lib/chem/perception/projection/recognise";
 
 export type LayoutJob = {
   input: LayoutInput;
@@ -200,7 +201,13 @@ export function layoutJob(part: Model): LayoutJob {
   const ids = kept.map((i) => part.atoms[i].id);
   // (a ring in perspective with no depth drawn: the depth the reading worked out, for Clean-up to keep it by)
   const seen = withRecognisedDepth(drawing.atoms, drawing.bonds);
-  const recognisedAt = new Map(kept.flatMap((i, k) => (drawing.atoms[i].z == null && seen[i].z != null ? [[k, seen[i].z!] as const] : [])));
+  // (and one taken for a ring in perspective but not read - its near and far not marked: kept where it is drawn too, since the words ask
+  //  the chemist to mark it, by no depth of its own)
+  const said = recognisedSaid(drawing.atoms, drawing.bonds);
+  const unreadRing = (i: number) => said.has(i) && said.get(i) !== READ_IN_PERSPECTIVE && said.get(i) !== READ_AS_HAWORTH;
+  const recognisedAt = new Map(
+    kept.flatMap((i, k) => (drawing.atoms[i].z != null ? [] : seen[i].z != null ? [[k, seen[i].z!] as const] : unreadRing(i) ? [[k, 0] as const] : [])),
+  );
   const recognised = recognisedAt.size ? { recognised: recognisedAt } : {};
   // A ring bound to a metal atom by atom - ferrocene drawn by hand, a bond
   // from the iron to each carbon - or a chain of three or more (an allyl)
