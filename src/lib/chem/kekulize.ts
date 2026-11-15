@@ -29,7 +29,7 @@
  */
 
 import { piElectrons } from "./aromaticity";
-import { NOT_METALS } from "./elements";
+import { notMetal } from "./perception/elements";
 
 /** MDL bond type 4: aromatic. */
 export const AROMATIC_BOND = 4;
@@ -102,10 +102,10 @@ export function kekulized(atoms: readonly KekuleAtom[], bonds: readonly KekuleBo
   return { orders, hChosen, left: left.sort((p, q) => p - q) };
 }
 
-/** A metal, by its symbol: an element not among the nonmetals and metalloids (`NOT_METALS`). */
+/** A metal, by its symbol: an element not among the nonmetals and metalloids (perception/elements `notMetal`). */
 function isMetalEl(el: string | undefined): boolean {
   const s = canonical(el ?? "");
-  return /^[A-Z][a-z]?$/.test(s) && !NOT_METALS.has(s) && !QUERY_ATOMS.has(s);
+  return /^[A-Z][a-z]?$/.test(s) && !notMetal.has(s) && !QUERY_ATOMS.has(s);
 }
 
 /** The aromatic bonds by ring system: those joined at their atoms, by bond index. */

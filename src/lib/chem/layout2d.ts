@@ -14,7 +14,8 @@ import {
   type StereoGroup,
 } from "./molecule";
 import { italicUnits, labelRuns, labelUnits, namesRingFirst, readsAsNothing, reversedLabel, unitRuns } from "./abbreviations";
-import { ELEMENTS, NOT_METALS } from "./elements";
+import { ELEMENTS } from "./elements";
+import { notMetal } from "./perception/elements";
 import { greatest, least, pushAll } from "./lists";
 import { clearRowSide, namesLaid, rowClearer } from "../layout/names";
 
@@ -517,7 +518,7 @@ export function cumulatedShown(atoms: Atom[], bonds: readonly Bond[]): Atom[] {
   const all = atoms.map(() => 0);
   const tripleToON = atoms.map(() => false);
   const toMetal = atoms.map(() => false);
-  const metal = (el: string | undefined) => !!el && ELEMENTS.some((e) => e.symbol === el) && !NOT_METALS.has(el);
+  const metal = (el: string | undefined) => !!el && ELEMENTS.some((e) => e.symbol === el) && !notMetal.has(el);
   for (const b of bonds) {
     for (const [e, o] of [[b.a1, b.a2], [b.a2, b.a1]]) {
       all[e]++;
