@@ -23,9 +23,12 @@
  * - An axis of chirality - a single bond in no ring, each end with two
  *   other neighbours (a biaryl's) - shows how it turns by a wedge out of an
  *   end, narrow there: that neighbour out of the page (or behind it, on
- *   hashes), the other end's neighbours in it.
+ *   hashes), the other end's neighbours in it. Not a wedge out of an
+ *   allene's end: that states the allene's axis (ST-1.6) and nothing else,
+ *   so a single bond from there is read only from wedges at its other end
+ *   (ST-1.7's form, by analogy).
  *
- * The rules it follows (IUPAC 2006, Brecher, Pure Appl. Chem. 78, 1897):
+ * The rules it follows (Brecher 2006, by rule number):
  * - ST-0.3: a wedge is narrow at its stereocentre, and is read there only
  *   (`lift`); a bond's bold or hashed look with no wedge states no centre.
  * - ST-0.1, ST-1.2.12: two plain bonds in line with one wedge are a T, not a
@@ -116,12 +119,11 @@ const HAIR = 0.2;
 
 /**
  * How near two bonds' directions are taken to be one line, either way - in
- * line, or on top of each other: 10 degrees. IUPAC 2006 (Brecher, Pure Appl.
- * Chem. 78, 1897), ST-0.1: "linear" is "forming an angle between 170° and
- * 190°", and "two bonds that look nearly collinear should be treated as
- * exactly collinear". Drawn so, a centre's bonds state no configuration -
- * two of three in line are a T (ST-1.2.12: "T-shaped configurations rather
- * than tetrahedral ones"), two on top of each other cannot be told apart -
+ * line, or on top of each other: 10 degrees. Brecher 2006, ST-0.1: two bonds
+ * between 170 and 190 degrees apart are in line, and two that look nearly in
+ * line are taken as exactly in line. Drawn so, a centre's bonds state no
+ * configuration - two of three in line are a T, not a tetrahedral centre
+ * (ST-1.2.12), two on top of each other cannot be told apart -
  * and a double bond's group straight on from it states neither cis nor
  * trans (ST-4.4, the linear depiction of a double bond of unspecified
  * configuration).
@@ -380,6 +382,20 @@ export function readStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBon
     cisTrans.set(i, { refs: [ra, rb], cis: sa === sb });
   });
 
+  // a run of cumulated double bonds: a carbon, or an N+, between two double bonds (a sulfur's C=S=C is bent, no axis - the rule
+  // the restraints' linear-by-bonds has)
+  const linearMiddle = (x: number) => (atoms[x].el ?? "C") === "C" || ((atoms[x].el ?? "C") === "N" && (atoms[x].charge ?? 0) === 1);
+  const middle = (x: number) => linearMiddle(x) && neighbours[x].length === 2 && neighbours[x].every((n) => bondOf.get(key(x, n))!.order === 2);
+  /** The atoms along the run from end `i` through its double bond to `m`, to the run's other end. */
+  const runFrom = (i: number, m: number) => {
+    const run = [i, m];
+    while (middle(run[run.length - 1]) && run.length <= atoms.length) run.push(neighbours[run[run.length - 1]].find((x) => x !== run[run.length - 2])!);
+    return run;
+  };
+  // (an end of a run of an even number of double bonds - an allene's, a ketenimine's: a wedge out of it is the run's)
+  const endsAnAllene = (i: number) =>
+    !middle(i) && neighbours[i].some((m) => bondOf.get(key(i, m))!.order === 2 && middle(m) && runFrom(i, m).length % 2 === 1);
+
   const axes: Axial[] = [];
   bonds.forEach((bond) => {
     if (bond.order !== 1 || bondOf.get(key(bond.a, bond.b)) !== bond) return;
@@ -391,6 +407,10 @@ export function readStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBon
       const near = neighbours[i].filter((n) => n !== j);
       const far = neighbours[j].filter((n) => n !== i);
       if (near.length !== 2 || far.length !== 2 || atoms[i].hs || atoms[j].hs || tetra.has(i)) continue;
+      // (a wedge out of an allene's end states the allene's axis and nothing else - ST-1.6: with the far end in the page,
+      // it has the double bond in the page, which the single bond's axis would need behind it. The single bond's own axis
+      // is still read from its other end's wedges, as a hindered biaryl's is - ST-1.7, by analogy)
+      if (endsAnAllene(i)) continue;
       // (read as an axis's, the wedge from a sulfoxide's S to its methyl
       // turned the S over: laid out, the axis was kept and the centre not.
       // A wedge at a pyramid of three is about the pyramid, whether or not
@@ -413,15 +433,11 @@ export function readStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBon
   // an allene's axis and an odd cumulene's cis or trans: each run of
   // cumulated double bonds, end to end, drawn straight through
   const odd: Cumulated[] = [];
-  // (a carbon, or an N+, between two double bonds: a sulfur's C=S=C is bent, no axis - the rule the restraints' linear-by-bonds has)
-  const linearMiddle = (x: number) => (atoms[x].el ?? "C") === "C" || ((atoms[x].el ?? "C") === "N" && (atoms[x].charge ?? 0) === 1);
-  const middle = (x: number) => linearMiddle(x) && neighbours[x].length === 2 && neighbours[x].every((n) => bondOf.get(key(x, n))!.order === 2);
   atoms.forEach((_, i) => {
     if (middle(i)) return;
     for (const m of neighbours[i]) {
       if (bondOf.get(key(i, m))!.order !== 2 || !middle(m)) continue;
-      const run = [i, m];
-      while (middle(run[run.length - 1]) && run.length <= atoms.length) run.push(neighbours[run[run.length - 1]].find((x) => x !== run[run.length - 2])!);
+      const run = runFrom(i, m);
       const j = run[run.length - 1];
       if (j < i) continue;
       const [ti, tj] = [run[1], run[run.length - 2]];
@@ -499,7 +515,22 @@ export function unreadWhy(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond
   // (an allene's end: its wedge says how the allene turns - or, wedged at both ends, the two say opposite ways)
   const doubles = (x: number) => bonds.filter((b) => b.order === 2 && (b.a === x || b.b === x));
   const run = doubles(c).map((b) => (b.a === c ? b.b : b.a)).find((m) => doubles(m).length === 2);
-  if (run != null) return "the wedges at the allene's two ends say it turns opposite ways, or its groups are in line with it";
+  if (run != null) {
+    // (its other end with one group - a ketenimine's N: the run has no axis, so the wedge has none to state)
+    const path = [c, run];
+    while (doubles(path[path.length - 1]).length === 2 && path.length <= atoms.length) {
+      const [prev, at] = [path[path.length - 2], path[path.length - 1]];
+      const next = doubles(at).map((b) => (b.a === at ? b.b : b.a)).find((x) => x !== prev);
+      if (next == null) break;
+      path.push(next);
+    }
+    const end = path[path.length - 1];
+    const onEnd = bonds.filter((b) => b.a !== b.b && (b.a === end || b.b === end) && b.a !== path[path.length - 2] && b.b !== path[path.length - 2]).map((b) => (b.a === end ? b.b : b.a));
+    const hs = atoms[end].hs + onEnd.filter((n) => atoms[n].el === "H").length;
+    // (a ketene's O, with no group; a ketenimine's N, with one; a terminal allene's CH2, with two H: no axis for the wedge to state)
+    if (onEnd.length + atoms[end].hs < 2 || hs >= 2) return "the other end of these double bonds does not carry two different groups, so there is no axis for a wedge to state";
+    return "the wedges at the allene's two ends say it turns opposite ways, or its groups are in line with it";
+  }
   const groups = around.length + atom.hs;
   if (groups > 4) return `it has ${groups} groups round it, more than the four of a tetrahedral centre`;
   if (around.length === 3 && atom.hs === 0 && !lonePairCentres(atoms, bonds)(c)) return "it has three bonds and keeps no configuration of its own, so a wedge at it states none";

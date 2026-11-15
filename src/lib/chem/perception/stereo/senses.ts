@@ -33,8 +33,8 @@ const unit = (a: Vec3): Vec3 => {
  * drawn are read: the two bonds in the page, the shorter way round - but
  * where those two lie straight across the centre from each other, a T, it
  * says nothing: two plain bonds 180 degrees apart with a wedge between
- * them depict a T-shaped configuration, not a tetrahedral one (IUPAC 2006,
- * Brecher, Pure Appl. Chem. 78, 1897, ST-1.2.12), as the reader of a
+ * them depict a T-shaped configuration, not a tetrahedral one (Brecher
+ * 2006, ST-1.2.12), as the reader of a
  * drawing (./from2d) reads one.
  */
 export function drawnVolume(

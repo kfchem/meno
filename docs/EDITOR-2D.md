@@ -960,6 +960,31 @@ All hover-based, as above.
     input method on Windows gives every key, "Process" with the key
     pressed in its code, nothing being composed (pageField `enterKey`) -
     and one that confirms what an input method composes is not.
+  - **A carbon written out.** C typed over a carbon - alone, or with its
+    hydrogens, CH2, CH3, CH, H2C, H3C, in any case - writes that carbon
+    out, labelled with its hydrogens (`AtomChem.shown`). The compound
+    stays the same. A carbon is left unlabelled by default, and writing
+    one out is the chemist's choice (Brecher 2008, GR-2.1.2). The label
+    is drawn by GR-2.1.5 to GR-2.1.7: the C on the vertex. At a chain's
+    end it reads CH3, or H3C where the bond comes in from the right, on
+    one line. Between bonds it is the C, with its H stacked above it at a
+    peak or below it in a valley; in a ring, its H outside. A carbon of
+    three bonds, one of them upright, has its H on the side away from
+    that bond. C typed alone is written CH2, CH3 or CH as its bonds give
+    it: a bare C would say it has no hydrogens (GR-2.1.1). The hydrogens
+    drawn are always the bonds' own. Where those typed are not -
+    CH2 on a carbon of three bonds, CH on a chain's inner carbon - it is
+    drawn with the bonds' count, and Meno says so in words ("CH2 was
+    typed on a carbon whose bonds leave it one H: it is drawn CH, as its
+    bonds have it"). A label's H count states what the atom has, so a
+    label never changes the compound. A carbon written out keeps its
+    charge and its mass number, as it keeps an unpaired electron: CH
+    typed over the 2-propyl cation's carbon is that cation's CH+, its
+    count right; CH3 over a 13C methyl stays 13C. Another is given by
+    typing it: CH+, CH2-, 13CH3. Anything else typed over a written
+    carbon - N, OMe - makes it that again, and Undo makes it plain. The
+    C that *Edit label* opens with on a corner carbon, left as it is
+    with nothing typed, leaves the carbon unlabelled.
   - The drawing's labels are drawn each by its atom (`Labels2D` `keyOf`):
     a label added or taken away sets no other label's letters again. A
     label taken away - undone, redone away, deleted with its atom, its
@@ -1012,7 +1037,15 @@ All hover-based, as above.
      element's symbol or a name as it is written: SnBu3, Me4tBuXPhos and
      FmBoc stay. iPr stays upright. A reagent's name sets its prefix in
      italics as a group does: m-CPBA, p-TSA, n-hexane.
-  5. What reads as nothing stays exactly as typed - no capital made.
+  5. What reads as nothing stays exactly as typed - no capital made - and
+     is drawn in the order typed at either end of a bond, never turned
+     round as a group on a bond's left is (CH2CH2 is CH2CH2 there, not
+     H2CH2C), its counts set as subscripts as they were typed. Typed
+     over an atom that was an element or a group, it takes that atom out
+     of the structure, and Meno says so: "CH2CH2 is not an element or a
+     group Meno reads, so it is kept as words, and this atom is no longer
+     a carbon. Undo brings the carbon back." Over an atom that was words
+     already, nothing is said.
   6. A reagent's or a ligand's name comes before a metal's formula (the
      maintainer, 2026-10-13), however many letters it makes capitals. No
      metal's symbol is read from letters typed small across the name of a
@@ -1168,8 +1201,18 @@ All hover-based, as above.
     R/S*, of a double bond *Show E/Z*, of a structure's selection or a
     molecule in 3D *Show R/S and E/Z* - *Hide* where all of it is shown
     already (named for what they show, the maintainer, 2026-10-13). On a
-    molecule in 3D, the atom under the pointer where it has a label, else
-    what is chosen in it, else all of it. Kept in the document - each
+    molecule in 3D (the maintainer's right-click rule, 2026-11-14: the menu's
+    thing, reaching the selection when the thing is in it): the molecule
+    right-clicked, all of it, wherever on it - right-clicked on an atom or
+    a bond chosen in it, what is chosen there, its count said (*Hide R/S
+    of 2 atoms*); right-clicked within the selection, the selection - and
+    *Hide* where any of it is shown, so that one press clears what shows,
+    else *Show*. The words name only the kinds it has: *R/S*, *E/Z* or
+    both. Never the atom under the pointer alone: before, an atom with a
+    label was taken alone, so the item's reach changed from atom to atom
+    of one molecule. The item is worked out once, as the menu opens, so
+    what it says is what it does, whatever changes while it is open.
+    Kept in the document - each
     atom's and bond's own, `stereoShown`, on a drawing; a molecule in 3D's
     `stereo.shown` - as one undo step, in the workspace's file and in a
     copy; a drawing and the molecule in 3D made from it each keep their
@@ -1198,7 +1241,7 @@ All hover-based, as above.
     a selection copied or exported - has its atoms' and bonds' descriptors
     in the molecule as drawn, not worked out again for the part on its own:
     an atom that is R in the molecule is R in the picture, though the part
-    alone might make it another or none. On a molecule in 3D, not yet.
+    alone might make it another or none. A molecule in 3D's: docs/WORKSPACE.md.
   - **Gone at a far zoom** (the maintainer, 2026-10-21: they stayed as large
     and floated round a structure a few pixels across). Their letters keep
     to 9 px at the least; past that they go once 9 px would be a third
@@ -1893,7 +1936,15 @@ lipids each have their own way of being drawn, which it should know.
      pyramid of three that keeps none - an O+ - is read as no axis's end
      either: Clean-up refuses it rather than lose it. An N's wedge may
      still be an axis's, where its lone pair lies in a ring or a carbonyl
-     beside it (an N-aryl pyrrole, an anilide).
+     beside it (an N-aryl pyrrole, an anilide). A wedge out of an
+     allene's end - narrow there, on either of its groups - states the
+     allene's axis (IUPAC 2006 ST-1.6) and nothing else, so it is read as
+     no axis's end about the end's bond to an aryl or a carbonyl: that
+     bond's axis is read from wedges at its other end, as a hindered
+     biaryl's is (ST-1.7's form, by analogy). An aryl allene drawn with its
+     wedge on either group of an end is then one structure, as its SMILES
+     is. The end of a butatriene, or an alkene's carbon, is read as before:
+     its double bonds lie in the page.
    - A SMILES is still read by RDKit, whose drawing says what it means;
      the engine then draws it (RDKit's drawing stands, should the engine
      fail).
