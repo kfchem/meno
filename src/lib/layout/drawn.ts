@@ -158,27 +158,24 @@ export function hydrogensWhereUnread(
   };
   // (where in the gap round `c` - about its middle `mid`, `gap` wide - its H stands clearest of every other atom, H and bond: the middle at
   // a bond's length where that is clear, else the place the farthest from them, turned within the gap up to 25 degrees short of its
-  // bonds and drawn as short as 0.6 of a bond - an H laid on another label, or on a bond, reads as another's: GR-2.1.6, GR-4.3)
+  // bonds - an H laid on another label, or on a bond, reads as another's: GR-2.1.6, GR-4.3. Always a bond long: a shorter H's wedge,
+  // its label's room taken off, reads as a speck)
   const clearestIn = (c: number, mid: number, gap: number): Point => {
     const at = atoms[c];
     const others = [...atoms.flatMap((a, i) => (i === c ? [] : [a])), ...hydrogens.map((q) => q.at)];
     const segs = bonds.filter(({ a, b }) => a !== c && b !== c).map(({ a, b }) => [atoms[a], atoms[b]] as const);
     const room = (p: Point) => Math.min(...others.map((o) => Math.hypot(o.x - p.x, o.y - p.y) / (H_CLEAR_ATOM * k)), ...segs.map(([u, v]) => toSegment(p, u, v) / (H_CLEAR_BOND * k)));
-    const spot = (turn: number, len: number) => ({ x: at.x + len * k * Math.cos(mid + turn), y: at.y + len * k * Math.sin(mid + turn) });
-    let best = { p: spot(0, 1), r: room(spot(0, 1)) };
+    const spot = (turn: number) => ({ x: at.x + k * Math.cos(mid + turn), y: at.y + k * Math.sin(mid + turn) });
+    let best = { p: spot(0), r: room(spot(0)) };
     if (best.r >= 1) return best.p;
     const most = Math.max(0, gap / 2 - (25 * Math.PI) / 180);
-    for (const len of [1, 0.85, 0.7, 0.6]) {
-      for (let deg = 0; deg <= 90; deg += 5) {
-        const turn = (deg * Math.PI) / 180;
-        if (turn > most + 1e-9) break;
-        for (const t of deg ? [turn, -turn] : [0]) {
-          const p = spot(t, len);
-          const r = room(p);
-          if (r > best.r + 1e-9) best = { p, r };
-        }
+    for (let deg = 5; deg <= 90; deg += 5) {
+      const turn = (deg * Math.PI) / 180;
+      if (turn > most + 1e-9) break;
+      for (const t of [turn, -turn]) {
+        const r = room(spot(t));
+        if (r > best.r + 1e-9) best = { p: spot(t), r };
       }
-      if (best.r >= 1) break;
     }
     return best.p;
   };

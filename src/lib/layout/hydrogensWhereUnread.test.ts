@@ -112,17 +112,16 @@ describe("hydrogensWhereUnread: a centre of three bonds whose wedge is in line w
     expect(Math.hypot(h.x - 0, h.y + 1.1)).toBeGreaterThanOrEqual(0.75);
   });
 
-  it("stands the H clear of a bond across its gap, its atoms far off: 0.4 of a bond from it", () => {
+  it("turns the H off a bond across its gap, its atoms far off: never laid on it", () => {
     const c = centre(180, "bond");
     const h = hydrogensWhereUnread(c.atoms, c.bonds, c.shown, c.placed, 1).hydrogens[0].at;
-    expect(Math.abs(h.y + 1)).toBeGreaterThanOrEqual(0.4 - 1e-9);
+    expect(Math.abs(h.y + 1)).toBeGreaterThan(0.3);
   });
 
-  it("draws the H shorter where only a shorter one is clear: three quarters of a bond from atoms all round its gap", () => {
+  it("draws the H a bond long however crowded its gap: never shorter, its wedge then a speck - atoms all round the gap", () => {
     const c = centre(180, "arc");
     const h = hydrogensWhereUnread(c.atoms, c.bonds, c.shown, c.placed, 1).hydrogens[0].at;
-    expect(Math.hypot(h.x, h.y)).toBeLessThan(1);
-    for (const a of c.atoms.slice(4)) expect(Math.hypot(a.x - h.x, a.y - h.y)).toBeGreaterThanOrEqual(0.75 - 1e-9);
+    expect(Math.hypot(h.x, h.y)).toBeCloseTo(1, 9);
   });
 });
 
@@ -137,24 +136,28 @@ describe("hydrogensWhereUnread: where in the gap the H stands, each rule's own c
     return [Math.round((Math.atan2(h.y, h.x) * 180) / Math.PI), +Math.hypot(h.x, h.y).toFixed(3)];
   };
 
-  it("keeps a bond's length where turning finds it clear - three quarters of a bond from an atom in the gap - and draws it shorter only where no turn does", () => {
-    // (an atom 1.6 bonds below the centre: at a bond's length the H is clear of it turned 35 degrees; never shortened then)
-    expect(placedH([{ x: 0, y: -1.6 }])).toEqual([-55, 1]);
-    // (atoms all round the gap 1.7 bonds out: no turn is clear at a bond's length, and it is drawn 0.85 of one)
-    const arc: { x: number; y: number }[] = [];
-    for (let d = -170; d <= -10; d += 10) arc.push(at(d, 1.7));
-    expect(placedH(arc)).toEqual([-85, 0.85]);
+  it("stands at the gap's middle where that is clear, though a turn would give it more room: an atom off to one side, clear of the middle", () => {
+    expect(placedH([{ x: 0.6, y: -1.7 }])).toEqual([-90, 1]);
   });
 
-  it("keeps 0.4 of a bond from another's bond across its gap: shorter and turned where the bond is near", () => {
-    expect(placedH([{ x: -3, y: -0.9 }, { x: 3, y: -0.9 }], [[4, 5]])).toEqual([-50, 0.6]);
+  it("turns from the gap's middle as far as an atom there needs - three quarters of a bond from it - and no further", () => {
+    // (an atom 1.6 bonds below the centre: turned 35 degrees, the H is clear of it)
+    expect(placedH([{ x: 0, y: -1.6 }])).toEqual([-55, 1]);
+    // (atoms all round the gap 1.7 bonds out: no turn is clear, and the H stands where it is clearest, a bond long)
+    const arc: { x: number; y: number }[] = [];
+    for (let d = -170; d <= -10; d += 10) arc.push(at(d, 1.7));
+    expect(placedH(arc)).toEqual([-85, 1]);
+  });
+
+  it("weighs another's bond across its gap at 0.4 of a bond, an atom at three quarters: turned to where both leave it most room", () => {
+    expect(placedH([{ x: -3, y: -0.9 }, { x: 3, y: -0.9 }], [[4, 5]])).toEqual([-35, 1]);
   });
 
   it("turns, where the gap's middle is crowded, no nearer than 25 degrees to its own bonds", () => {
     // (atoms 1 bond out from -140 to -40 degrees: the H goes as far as it may towards the bond at 0 degrees, and stops 25 short)
     const block: { x: number; y: number }[] = [];
     for (let d = -140; d <= -40; d += 10) block.push(at(d));
-    expect(placedH(block)).toEqual([-25, 0.6]);
+    expect(placedH(block)).toEqual([-25, 1]);
   });
 
   it("stands clear of the other atoms and bonds, its own centre's bonds not among them: they do not push it off", () => {
