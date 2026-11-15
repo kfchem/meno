@@ -376,7 +376,7 @@ function fusedSystems(): { two: [string, Solid][]; three: [string, Solid][]; bot
         }
       });
     }
-  // (and CHEM's 81: both further rings on the first chair, on each of the nine pairs of its bonds that share no atom - six one bond apart, three
+  // (and the 81 found in review: both further rings on the first chair, on each of the nine pairs of its bonds that share no atom - six one bond apart, three
   //  opposite - each fused each way; the middle ring is the first chair, where above it is a ring fused on)
   const both: [string, Solid][] = [];
   for (let b1 = 0; b1 < 6; b1++)
@@ -450,7 +450,7 @@ describe("known answer 12: chairs fused, as F9 draws them, read through readSter
   });
 
   // (measured at 17 s, the machine busy)
-  it("reads every group of CHEM's 81 three-ring systems, both further rings on the first chair, as the solid has it", { timeout: measured(17000) }, () => {
+  it("reads every group of the 81 three-ring systems found in review, both further rings on the first chair, as the solid has it", { timeout: measured(17000) }, () => {
     const { both } = fusedSystems();
     expect(both).toHaveLength(81);
     const { tried, wrong } = readAll(both);
@@ -657,7 +657,7 @@ describe("known answer 13: the crossings of chairs fused, every position filled"
         expect(zAt(p, along(p, q)), `${name}: bond ${c.behind} under ${c.front}`).toBeLessThan(zAt(q, along(q, p)));
       }
     }
-    // (CHEM, 11-13, calculated on the convention: 74)
+    // (found in review, calculated on the convention: 74)
     expect(crossed, "crossings over the 18").toBe(74);
   });
 });

@@ -52,7 +52,7 @@ export const MOST_SKEW = 20 * DEG;
 export const MOST_MISS = 0.02;
 /** How much better the best reading must fit than any other that reads the ring otherwise: the other's miss must be at least this times the best's, or the ring is unread. */
 export const MARGIN = 3;
-/** How near level a chair's long axis as drawn must lie for "the lower atoms are nearer" to apply (CHEM, 2026-11-13: by convention, no text gives an angle). */
+/** How near level a chair's long axis as drawn must lie for "the lower atoms are nearer" to apply (found in review: by convention, no text gives an angle). */
 export const LEVEL_ANGLE = 30 * DEG;
 
 
@@ -458,7 +458,7 @@ export const LEVEL_EDGE = 10 * DEG;
 export const ABOVE = 0.1;
 /**
  * How tall a ring may be drawn, against the regular ring of its level bond standing on that edge, to be read as a Haworth ring by its groups:
- * at most this share (ARCH, 11-13: the regular ring seen from 60 degrees up or lower; 1.5 level bonds for a six-ring, 1.34 for a five-ring;
+ * at most this share (the design: the regular ring seen from 60 degrees up or lower; 1.5 level bonds for a six-ring, 1.34 for a five-ring;
  * Brecher 2006's ring is 1.155, McNaught 1996's pyranose about 1.4). A regular ring is a flat drawing that happens to lie so, and its groups
  * drawn vertical state no configuration (ST-1.9; nothing is guessed). A bold near edge reads at any height: a mark, not a guess (ST-3.3).
  */
@@ -466,7 +466,7 @@ export const HAWORTH_HEIGHT = 0.87;
 /** How far from vertical a group's bond may be drawn for a group to be "drawn up or down" of a Haworth ring. */
 export const VERTICAL = Math.sin(15 * DEG);
 /**
- * The eye's height over a Haworth ring's plane, as its sine (rule (H), ARCH 11-13, from Brecher 2006's figure: a regular ring seen so is 1.155
+ * The eye's height over a Haworth ring's plane, as its sine (rule (H) of the design, from Brecher 2006's figure: a regular ring seen so is 1.155
  * level bonds tall): the depth a ring drawn by hand is given from its height on the page. F9's own constant when its view is changed to it.
  */
 export const HAWORTH_SIN = 2 / 3;
@@ -476,7 +476,7 @@ export const READ_AS_HAWORTH = "read as a Haworth ring";
 
 /**
  * A ring of five or six, its atoms in order round it, drawn as a Haworth ring: found by what the texts' own figures share, not by fitting a
- * regular ring (McNaught 1996's furanose is 2.5 level bonds wide, no regular pentagon; its pyranose taller than Brecher 2006's - CHEM, 11-13):
+ * regular ring (McNaught 1996's furanose is 2.5 level bonds wide, no regular pentagon; its pyranose taller than Brecher 2006's - found in review):
  * - its lowest ring bond level (within `LEVEL_EDGE`): the front edge, and so the nearer (Brecher 2006, ST-3.1; McNaught 2-Carb-5.4);
  * - every other ring atom above that edge;
  * - every group out of the ring drawn straight up or straight down (within `VERTICAL`), at any length - or a bold ring bond, a near edge.
