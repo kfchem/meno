@@ -48,7 +48,7 @@ export const drawnRoundMetal: ReadonlySet<string> = ((seventhRow) =>
   new Set([...transitionMetal].filter((el) => !labelNotElement.has(el) && !seventhRow.has(el))))(byNumber([89, 112]));
 
 /**
- * The metals of groups 1, 2, 12 and 13 bridged to a transition metal by two atoms as a second transition metal is - the Tebbe reagent's
+ * Nine metals of groups 1, 2, 12 and 13 bridged to a transition metal by two atoms as a second transition metal is - the Tebbe reagent's
  * aluminium, Cp2Ti(μ-Cl)(μ-CH2)AlMe2 - so that the ring the two bridges close is drawn as such a ring is (lib/layout/perceive). Zn is among
  * them and in `transitionMetal` too: this set is of the bridge's partner, not a kind of element.
  */
