@@ -12,7 +12,8 @@
  * conformer reflected through a plane - every x turned - and its R and S
  * turned.
  */
-import { identityText, type IdentityInput } from "../../../../lib/chem/identity";
+import type { IdentityInput } from "../../../../lib/chem/identity";
+import { identitiesAsked } from "./identityOff";
 import type { Configuration } from "../../../../lib/chem/stereoOpen";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
 import type { Conformers } from "../../../../lib/roles/client";
@@ -43,14 +44,14 @@ export function mirroredConfiguration(c: Configuration): Configuration {
  * not read, a label written out, a ring bound to a metal through a star -
  * so that nothing is taken for a mirror image that is not one.
  */
-export function madeAs(part: Model, isomer: Configuration): "itself" | "mirror" {
+export async function madeAs(part: Model, isomer: Configuration): Promise<"itself" | "mirror"> {
   if (part.atoms.some((a) => !isElementSymbol(a.el) || a.abbrev) || part.bonds.some((b) => b.endpoints?.length)) return "itself";
   const { input, unread } = identityInputOf(part);
   if (unread.length) return "itself";
   const own = withConfiguration(input, isomer);
   if (!own) return "itself";
-  const text = identityText(own);
-  const mirror = identityText(turned(own));
+  // (the two identities worked out off the drawing thread - chem/identityOff)
+  const [text, mirror] = (await identitiesAsked([own, turned(own)])).map((f) => f.text);
   return mirror < text ? "mirror" : "itself";
 }
 

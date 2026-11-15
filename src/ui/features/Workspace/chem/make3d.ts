@@ -658,7 +658,7 @@ export async function conformersOf(
   };
   // (of two enantiomers, the one whose identity comes first made, the other its mirror image's reflection; one
   //  whose reflection does not have its configuration after all made itself - chem/pageMirror)
-  const as = made.isomers.map((iso) => madeAs(block.part, iso));
+  const as = await Promise.all(made.isomers.map((iso) => madeAs(block.part, iso)));
   const mine = made.isomers.filter((_, i) => as[i] === "itself");
   const twins = made.isomers.filter((_, i) => as[i] === "mirror");
   const own = await ask(block.molblock, mine);
@@ -781,7 +781,7 @@ export async function conformersGrowing(
     }
     return { search, judge: () => judge, let: () => judge?.end(), reflect };
   };
-  const as = made.isomers.map((iso) => madeAs(block.part, iso));
+  const as = await Promise.all(made.isomers.map((iso) => madeAs(block.part, iso)));
   const mirrorBlock = as.includes("mirror") ? chemMolblock(etaBound(mirroredPart(block.part))) : "";
   try {
     for (const [i, iso] of made.isomers.entries()) {
