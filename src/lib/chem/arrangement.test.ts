@@ -224,6 +224,46 @@ describe("a metal's donors across, in identity", () => {
     // (and the two isomers of PdCl2(PPh3)2 drawn stay two structures)
     const pairs = (p: [number, number][]) => ({ ...pdcl2, arrangements: [{ metal: metalOf(pdcl2).m, pairs: p.map(([a, b]) => [metalOf(pdcl2).donors[a], metalOf(pdcl2).donors[b]] as const) }] });
     expect(identityText(pairs([[0, 1], [2, 3]]))).not.toBe(identityText(pairs([[0, 2], [1, 3]])));
+    // (all donors but one alike as wholes - RhCl(PPh3)3, PtCl3Br 2-, [CoCl5Br]3-: the odd one across any of the others, every
+    //  pairing one structure, settled likewise; a pairing given is taken off)
+    for (const smiles of [`Cl[Rh](${ph3})(${ph3})${ph3}`, "Cl[Pt-2](Cl)(Cl)Br", "Cl[Co-3](Cl)(Cl)(Cl)(Cl)Br"]) {
+      const g = fromSmiles(smiles);
+      const { m, donors } = metalOf(g);
+      expect([smiles, filledIn(g).searches, filledIn(g).settledMetals, arrangementOpen(g, m)]).toEqual([smiles, 0, [m], false]);
+      const given = { ...g, arrangements: [{ metal: m, pairs: pairings(donors.length)[0].map(([p, q]) => [donors[p], donors[q]] as const) }] };
+      expect(identityText(given)).toBe(identityText(g));
+    }
+  });
+
+  it("each metal of a structure is asked on its own: an open one and one not, whichever is asked first", () => {
+    // (a hexaammine Co, never open, beside a Pt(NH3)2Cl2 with none given, open: in either order of the parts, and of asking)
+    for (const smiles of ["N[Co+3](N)(N)(N)(N)N.Cl[Pt](Cl)(N)N", "Cl[Pt](Cl)(N)N.N[Co+3](N)(N)(N)(N)N"]) {
+      const g = fromSmiles(smiles);
+      const co = g.atoms.findIndex((a) => a.el === "Co");
+      const pt = g.atoms.findIndex((a) => a.el === "Pt");
+      expect([smiles, arrangementOpen(g, pt), arrangementOpen(g, co)]).toEqual([smiles, true, false]);
+      const again = fromSmiles(smiles);
+      expect([smiles, arrangementOpen(again, co), arrangementOpen(again, pt)]).toEqual([smiles, false, true]);
+    }
+  });
+
+  it("hydrogens written as atoms before the metal: cisplatin and transplatin are the structures they are with none written", () => {
+    // (each pair given by the atoms' places in the drawing as it is, the hydrogens among them: folded in, the pairs follow)
+    const across = (smiles: string, cis: boolean) => {
+      const g = fromSmiles(smiles);
+      const { m, donors } = metalOf(g);
+      const cl = donors.filter((d) => g.atoms[d].el === "Cl");
+      const n = donors.filter((d) => g.atoms[d].el === "N");
+      const pairs: (readonly [number, number])[] = cis ? [[cl[0], n[0]], [cl[1], n[1]]] : [[cl[0], cl[1]], [n[0], n[1]]];
+      return identityText({ ...g, arrangements: [{ metal: m, pairs }] });
+    };
+    const written = "[H]N([H])([H])[Pt](Cl)(Cl)N([H])([H])[H]";
+    expect(fromSmiles(written).atoms.findIndex((a) => a.el === "Pt")).toBe(4);
+    // (the same with the ammines' hydrogens counted on their N)
+    const plain = "Cl[Pt](Cl)([NH3])[NH3]";
+    expect(across(written, true)).toBe(across(plain, true));
+    expect(across(written, false)).toBe(across(plain, false));
+    expect(across(written, true)).not.toBe(across(written, false));
   });
 
   it("a structure with no metal of four or six donors is written as it always was", () => {
@@ -299,6 +339,21 @@ describe("which donors are across, read", () => {
   it("in 3D: a terpyridine's outer donors held at 145 degrees are across still", () => {
     const bent = octahedron.map((p, i) => (i < 2 ? turnedXY(p, i === 0 ? deg(17.5) : deg(-17.5)) : p));
     expect(pairingIn3d([0, 0, 0], bent)).toEqual([1, 0, 3, 2, 5, 4]);
+  });
+
+  it("in 3D: fac and mer Co(NH3)3Cl3 keyed apart, fac turned anyhow the same", () => {
+    const atoms = [{ el: "Co" }, { el: "Cl" }, { el: "Cl" }, { el: "Cl" }, { el: "N" }, { el: "N" }, { el: "N" }];
+    const bonds = [1, 2, 3, 4, 5, 6].map((d) => ({ a1: 0, a2: d, order: 1 }));
+    const at = (places: number[][]) => [0, 0, 0, ...places.flat().map((x) => x * 2.0)];
+    // (fac: the three Cl on +x, +y, +z, each across an N; mer: two Cl across each other)
+    const fac = [octahedron[0], octahedron[2], octahedron[4], octahedron[1], octahedron[3], octahedron[5]];
+    const mer = [octahedron[0], octahedron[1], octahedron[2], octahedron[3], octahedron[4], octahedron[5]];
+    expect(arrangementsIn3d(atoms, bonds, at(fac))).toEqual([{ metal: 0, pairs: [[1, 4], [2, 5], [3, 6]] }]);
+    expect(arrangementsIn3d(atoms, bonds, at(mer))).toHaveLength(1);
+    expect(arrangementKey(atoms, bonds, at(fac))).not.toBe(arrangementKey(atoms, bonds, at(mer)));
+    const turnedYZ = (p: number[], t: number) => [p[0], p[1] * Math.cos(t) - p[2] * Math.sin(t), p[1] * Math.sin(t) + p[2] * Math.cos(t)];
+    const turned = fac.map((p) => turnedYZ(turnedXY(p, deg(30)), deg(40)));
+    expect(arrangementKey(atoms, bonds, at(turned))).toBe(arrangementKey(atoms, bonds, at(fac)));
   });
 
   it("in 3D: cisplatin and transplatin keyed apart, each the same in another atom order; NiCl4 2- planar and tetrahedral one", () => {

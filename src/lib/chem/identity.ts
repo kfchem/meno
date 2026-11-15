@@ -593,11 +593,13 @@ export function filledIn(input: LayoutInput): { input: LayoutInput; complete: bo
   const plainAt = new Set(settled.flatMap((b) => (b.kind === "centre" ? [b.at] : [])));
   const plainBond = new Set(settled.flatMap((b) => (b.kind === "bond" ? [b.at] : [])));
   g = { ...g, atoms: g.atoms.map(({ tetra, ...a }, i) => (plainAt.has(i) || !tetra ? a : { ...a, tetra })), bonds: g.bonds.map(({ stereo, ...b }, k) => (plainBond.has(k) || !stereo ? b : { ...b, stereo })) };
-  // (a metal all of whose donors are groups alike as wholes - Pd(PPh3)4, [Co(NH3)6]3+: every pairing one structure, so it
-  //  carries none, as such a centre carries no sense: one given taken off, none filled in. A place inside those groups that
+  // (a metal all of whose donors, or all but one, are groups alike as wholes - Pd(PPh3)4, [Co(NH3)6]3+, RhCl(PPh3)3,
+  //  PtCl3Br 2-: the odd one across any of the others, every pairing one structure, so it carries none, as such a centre
+  //  carries no sense: one given taken off, none filled in, and no search - RhCl(PPh3)3's ran out of steps, found in review.
+  //  A place inside those groups that
   //  sets nothing whatever else is given - each PPh3's P - is no place for this: however it is, the groups stay alike)
   const loose = groupsAlike(g, new Set([...own].filter((x) => !settled.some((b) => b.own.includes(x)))), constitution);
-  const plainMetal = new Set(every.flatMap((b) => (b.kind === "metal" && loose.all(b.at, b.sides[0]) ? [b.at] : [])));
+  const plainMetal = new Set(every.flatMap((b) => (b.kind === "metal" && loose.allButOne(b.at, b.sides[0]) ? [b.at] : [])));
   if (plainMetal.size) g = { ...g, arrangements: (g.arrangements ?? []).filter((x) => !plainMetal.has(x.metal)) };
   // (said to whoever asks whether a metal is open - `arrangementOpen`: settled so, it is not)
   const settledMetals = [...plainMetal];
@@ -710,7 +712,7 @@ function groupsAlike(
   g: LayoutInput,
   places: ReadonlySet<number>,
   classes: readonly number[],
-): ((at: number, side: readonly number[]) => boolean) & { all: (at: number, side: readonly number[]) => boolean } {
+): ((at: number, side: readonly number[]) => boolean) & { all: (at: number, side: readonly number[]) => boolean; allButOne: (at: number, side: readonly number[]) => boolean } {
   const around: number[][] = g.atoms.map(() => []);
   const order = new Map<string, number>();
   const key = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
@@ -764,7 +766,10 @@ function groupsAlike(
     const t = textOf(at, side[0]);
     return t != null && side.every((x) => textOf(at, x) === t);
   };
-  return Object.assign(two, { all });
+  // (every group of `side` but one alike as a whole with the others: swapping those is a symmetry whatever else is given, and
+  //  for a metal every pairing of them and the odd one is one of these swaps from every other)
+  const allButOne = (at: number, side: readonly number[]) => side.length >= 3 && side.some((_, k) => all(at, side.filter((_, j) => j !== k)));
+  return Object.assign(two, { all, allButOne });
 }
 
 /**

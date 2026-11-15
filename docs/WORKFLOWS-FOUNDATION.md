@@ -933,7 +933,11 @@ drawn, aromatic rings as one form.* What that means, plainly:
   donor within 15 degrees of that angle. A flattened tetrahedron and a
   trigonal prism have none. As for a centre, an arrangement that sets
   nothing is filled in: PtCl4 2-, PtCl3(NH3)-, [Co(NH3)6]3+, Pt(en)Cl2
-  and [Co(en)3]3+ are one structure each, given or not. A chelate's two
+  and [Co(en)3]3+ are one structure each, given or not. A metal all of
+  whose donors, or all but one, are groups alike as wholes (each hanging
+  from the metal alone: PtCl3Br 2-, RhCl(PPh3)3, Pd(PPh3)4) carries no
+  arrangement, one given taken off, with no search of the whole
+  structure, as such a centre carries no sense. A chelate's two
   ends, joined by a ring of seven atoms or fewer with the metal, are
   never taken as across. A complex whose arrangement can be more than
   one and is not given (cisplatin from a SMILES) is a third structure,
