@@ -31,6 +31,7 @@ import { ofTheStructure } from "../../../../lib/chem/perception/graph";
 import { editorLayoutOptions, layoutBonds } from "../layoutOptions";
 import { greatest } from "../../../../lib/chem/lists";
 import { projectionsKept } from "./projectionKept";
+import { withRecognisedDepth } from "../../../../lib/layout/recognised";
 
 export type LayoutJob = {
   input: LayoutInput;
@@ -40,6 +41,11 @@ export type LayoutJob = {
   bound?: { metal: number; atoms: number[] }[];
   /** The H atoms taken as their centre's own H, by the centre's input index. */
   folded: Map<number, number[]>;
+  /**
+   * A ring in perspective the drawing gives no depth, its depth worked out (lib/layout/recognised): each such atom's depth, by its input
+   * index - so that Clean-up keeps it as drawn, as it keeps one drawn with depth, and stores no depth for it.
+   */
+  recognised?: Map<number, number>;
   /** The axes and cumulenes of `input` are the structure's own text's, given in place of what its drawing says (`laidOut`): the drawing's reading of them is not to be kept. */
   given?: true;
   /**
@@ -192,6 +198,10 @@ export function layoutJob(part: Model): LayoutJob {
       : {}),
   };
   const ids = kept.map((i) => part.atoms[i].id);
+  // (a ring in perspective with no depth drawn: the depth the reading worked out, for Clean-up to keep it by)
+  const seen = withRecognisedDepth(drawing.atoms, drawing.bonds);
+  const recognisedAt = new Map(kept.flatMap((i, k) => (drawing.atoms[i].z == null && seen[i].z != null ? [[k, seen[i].z!] as const] : [])));
+  const recognised = recognisedAt.size ? { recognised: recognisedAt } : {};
   // A ring bound to a metal atom by atom - ferrocene drawn by hand, a bond
   // from the iron to each carbon - or a chain of three or more (an allyl)
   // is given to the engine as a haptic bond's is, a star at its centre
@@ -199,7 +209,7 @@ export function layoutJob(part: Model): LayoutJob {
   // laid out, the bonds to its atoms become that one bond (chem/eta, the
   // maintainer, 2026-10-17).
   const bound = etaBondedAtomByAtom(input);
-  if (!bound.length) return { input, ids, folded };
+  if (!bound.length) return { input, ids, folded, ...recognised };
   const dropped = new Set(bound.flatMap((r) => r.bonds));
   const atoms = [...input.atoms];
   const bonds = input.bonds.filter((_, i) => !dropped.has(i));
@@ -208,7 +218,7 @@ export function layoutJob(part: Model): LayoutJob {
     bonds.push({ a: atoms.length - 1, b: r.metal, order: 1 });
   }
   const systems = bound.map((r) => ({ metal: ids[r.metal], atoms: r.ring.map((a) => ids[a]) }));
-  return { input: { ...input, atoms, bonds }, ids, folded, bound: systems };
+  return { input: { ...input, atoms, bonds }, ids, folded, bound: systems, ...recognised };
 }
 
 const pairKey = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
@@ -252,14 +262,24 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
   }));
   // a ring system the drawing shows in perspective, that the engine lays flat - a chair, a Haworth ring - kept where it is, depth and
   // all, and what is flat on it laid out onto it (chem/projectionKept; the maintainer, 2026-11-13)
+  // - and a ring in perspective drawn with no depth, recognised as one (lib/layout/recognised), kept so too, by the depth worked out for it:
+  // the recognition changes nothing in the document, so no depth is stored for it, and its centres stay as the reading finds them
+  const recognised = job.recognised ?? new Map<number, number>();
   const kept = projectionsKept(
     input,
-    was.map((a, i) => (i < n ? { x: a.x, y: a.y, ...(a.z != null ? { z: a.z } : {}), ...(a.stereoCentre ? { stereoCentre: true } : {}) } : undefined)),
+    was.map((a, i) => {
+      if (i >= n) return undefined;
+      const z = a.z ?? recognised.get(i);
+      return { x: a.x, y: a.y, ...(z != null ? { z } : {}), ...(a.stereoCentre ? { stereoCentre: true } : {}) };
+    }),
     (i) => laid.depth[i] == null,
     (i) => place(laid.x[i], laid.y[i]),
     k,
   );
-  for (const [i, spot] of kept.places) atoms[i] = { id: ids[i], x: spot.x, y: spot.y, ...(spot.z != null ? { z: spot.z } : {}), ...(spot.stereoCentre ? { stereoCentre: true } : {}) };
+  for (const [i, spot] of kept.places) {
+    const stored = !recognised.has(i);
+    atoms[i] = { id: ids[i], x: spot.x, y: spot.y, ...(stored && spot.z != null ? { z: spot.z } : {}), ...(stored && spot.stereoCentre ? { stereoCentre: true } : {}) };
+  }
   // each star at its pi system's centre, as a written-out label's: cod's
   // C=C, as well as a ring
   input.atoms.forEach((a, i) => {

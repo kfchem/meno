@@ -99,12 +99,16 @@ function bridged(rings: readonly (readonly number[])[], of: readonly number[]): 
  * another program: a wedge on a bond out of each centre the perspective
  * shows (and an H, where the centre has no other bond to put it on, drawn
  * where the engine would), read as flat. A centre with a wedge of its own
- * says it already. The drawing is left as it is.
+ * says it already. A ring in perspective drawn with no depth, recognised as
+ * one (`withRecognisedDepth`), shows its centres as one drawn with depth
+ * does: 3D and a file take the configuration read, never the shape drawn.
+ * The drawing is left as it is.
  */
 export function wedgesForFlat(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): Stereo {
   const { tetra } = readStereo(atoms, bonds);
+  const seen = withRecognisedDepth(atoms, bonds);
   const wedged = new Set(bonds.flatMap((b) => (b.wedge ? [b.wedge.narrow] : [])));
-  const shown = new Map([...tetra].filter(([c]) => atoms[c].z != null && !wedged.has(c)));
+  const shown = new Map([...tetra].filter(([c]) => seen[c].z != null && !wedged.has(c)));
   if (!shown.size) return { wedges: [], hydrogens: [] };
   const mol = perceive({
     atoms: atoms.map((a) => ({ el: a.el ?? "C", hs: a.hs })),

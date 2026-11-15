@@ -6,6 +6,7 @@ import type { DrawnAtom, DrawnBond } from "../../../../lib/layout/drawn";
 import type { Model } from "../store/types";
 import { laidOut } from "./cleanUp";
 import { identityOfDrawn } from "./identityOf";
+import { forFlatReaders } from "./drawing";
 import { projectionsKept } from "./projectionKept";
 
 /**
@@ -120,5 +121,52 @@ describe("what is kept of a projection", () => {
     const d = newman({ methyl: 90, bromine: 210 }, { methyl: 270, bromine: 150 });
     const input = { atoms: d.atoms.map((a) => ({ el: a.el ?? "C", hs: a.hs })), bonds: d.bonds.map(({ a, b, order }) => ({ a, b, order })) };
     expect(projectionsKept(input, d.atoms, () => true, (i) => ({ x: i, y: 0 }), 1).projected.size).toBe(0);
+  });
+});
+
+describe("Clean-up of a ring in perspective drawn with no depth, recognised as one (docs/EDITOR-2D.md, *Drawn in perspective*)", () => {
+  // (the drawings above with their depth taken away, drawn bond by bond: a chair, and a Haworth ring with its groups vertical)
+  const bare = (m: Model): Model => ({ ...m, atoms: m.atoms.map(({ z: _z, stereoCentre: _c, ...a }) => a) });
+
+  it("leaves the ring where it is, stores no depth for it, and the structure is the same compound - with its configuration read", async () => {
+    for (const [name, { model, ring }] of Object.entries(drawings)) {
+      const drawn = bare(model);
+      const laid = await laidOut(drawn, MENO);
+      for (const id of ring) {
+        const [was, now] = [drawn.atoms.find((a) => a.id === id)!, laid.atoms.find((a) => a.id === id)!];
+        expect([now.x, now.y, now.z, !!now.stereoCentre], `${name} atom ${id}`).toEqual([was.x, was.y, undefined, false]);
+      }
+      expect(identityOfDrawn(laid).text, name).toBe(identityOfDrawn(drawn).text);
+      // (and that is the compound drawn with depth, read as the convention has it - the lower atoms nearer; the test chairs are drawn seen
+      // from below, so their depth reversed: the configuration read, not lost)
+      const fromAbove: Model = name.includes("chair") ? { ...model, atoms: model.atoms.map((a) => (a.z != null ? { ...a, z: -a.z } : a)) } : model;
+      expect(identityOfDrawn(laid).text, name).toBe(identityOfDrawn(fromAbove).text);
+      expect(identityOfDrawn(laid).text, name).toContain("@");
+      expect(laid.bonds.filter((b) => b.stereo === "up" || b.stereo === "down"), name).toEqual([]);
+    }
+  });
+
+  it("tells 3D and a file the configuration read, with wedges, never the shape drawn: a reader of wedges alone reads the same compound", () => {
+    for (const [name, { model }] of Object.entries(drawings)) {
+      const drawn = bare(model);
+      const told = forFlatReaders(drawn);
+      expect(told.bonds.some((b) => b.stereo === "up" || b.stereo === "down"), name).toBe(true);
+      // (as a reader that knows only wedges takes it: no depth, the places flat)
+      // (the drawing had no depth: nothing to take away)
+      const wedgesOnly: Model = { atoms: told.atoms.map((a) => ({ r: 0.9, ...a })) as Model["atoms"], bonds: told.bonds as Model["bonds"] };
+      expect(wedgesOnly.atoms.every((a) => a.z == null), name).toBe(true);
+      expect(identityOfDrawn(wedgesOnly).text, name).toBe(identityOfDrawn(drawn).text);
+    }
+  });
+
+  it("lays a ring drawn flat out as ever: a regular hexagon is no projection", async () => {
+    const hexagon: Model = {
+      atoms: [...[...Array(6)].map((_, k) => ({ id: k + 1, el: "C", x: Math.cos((k * Math.PI) / 3) + 0.2 * (k % 2), y: Math.sin((k * Math.PI) / 3), r: 0.9 })), { id: 7, el: "O", x: 2.3, y: 0, r: 0.9 }],
+      bonds: [...[...Array(6)].map((_, k) => ({ id: 100 + k, a: k + 1, b: ((k + 1) % 6) + 1, order: 1 as const })), { id: 106, a: 1, b: 7, order: 1 as const }],
+    };
+    const laid = await laidOut(hexagon, MENO);
+    // (laid out by the engine: its bonds the style's length, which the drawing's were not)
+    const [a, b] = [laid.atoms.find((x) => x.id === 1)!, laid.atoms.find((x) => x.id === 2)!];
+    expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeCloseTo(NOMINAL_BOND_LENGTH, 3);
   });
 });

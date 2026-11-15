@@ -1899,7 +1899,12 @@ lipids each have their own way of being drawn, which it should know.
        perspective says them, and a wedge or an H already drawn there stays.
        A piece joined to projections by more than one bond is kept as
        drawn. The new drawing is read back as always: the same compound
-       (`chem/projectionKept`).
+       (`chem/projectionKept`). A ring in perspective drawn with no depth
+       and recognised as one is kept so too, by the depth the reading
+       works out for it; no depth is stored for it, so the document is as
+       the chemist drew it. 3D and a file are told its configuration by
+       wedges, as for a projection drawn with depth: the configuration
+       read, never the shape drawn.
    - The new drawing is read back before anything moves: if it would not
      say the stereochemistry the old one said, Clean-up refuses. So it does
      for a wedge it cannot carry - wedge and hashes drawn opposite each

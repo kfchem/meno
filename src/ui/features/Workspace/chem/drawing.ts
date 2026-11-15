@@ -129,14 +129,37 @@ export function drawingOf(model: Model): { atoms: DrawnAtom[]; bonds: DrawnBond[
   return { atoms, bonds, index };
 }
 
+/** Whether any bond of the drawing closes a ring (a union-find over its bonds: one pass, no ring perceived). */
+function holdsRing(model: Model): boolean {
+  const up = new Map<number, number>();
+  const root = (x: number): number => {
+    let r = x;
+    while (up.has(r) && up.get(r) !== r) r = up.get(r)!;
+    up.set(x, r);
+    return r;
+  };
+  for (const b of model.bonds) {
+    if (b.a === b.b) continue;
+    const [p, q] = [root(b.a), root(b.b)];
+    if (p === q) return true;
+    up.set(p, q);
+  }
+  return false;
+}
+
 /**
  * The structure for a reader that knows only wedges: as it is, and for each
  * centre a perspective drawing shows, a wedge that says it - on a bond out
  * of it, or on an H added for the purpose (after every atom there is, so
- * the atoms there are keep their places in a MOL file).
+ * the atoms there are keep their places in a MOL file). A ring drawn in
+ * perspective with no depth, recognised as one (lib/layout/recognised), is
+ * such a drawing too: a drawing with no depth and no ring is passed on as
+ * it is, unread. `recognised` false leaves those out, for a reader that
+ * asks nothing of stereochemistry (the valence marks): reading every ring
+ * of a page is not done on the page's own thread for nothing.
  */
-export function forFlatReaders(model: Model): WriterModel {
-  if (!model.atoms.some((a) => a.z != null)) return model;
+export function forFlatReaders(model: Model, recognised = true): WriterModel {
+  if (!model.atoms.some((a) => a.z != null) && !(recognised && holdsRing(model))) return model;
   const { atoms, bonds } = drawingOf(model);
   const flat = wedgesForFlat(atoms, bonds);
   if (!flat.wedges.length) return model;
