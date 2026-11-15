@@ -17,7 +17,7 @@ import { torsionSense, type Axial, type Cumulated } from "../layout/stereo";
 import { lonePairCentres } from "./lonePairCentres";
 import { implicitHydrogens } from "./molecule";
 import { isMetal } from "../layout/perceive";
-import { CHELATE_RING } from "./identity";
+import { CHELATE_RING } from "./chelateRing";
 
 export type SmilesAtom = {
   el: string;
