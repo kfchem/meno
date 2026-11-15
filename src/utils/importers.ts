@@ -15,6 +15,8 @@ import {
   labelSetOf,
   layoutMolecule,
   pxToWorld,
+  type LabelSet,
+  type TextItem,
   type Atom as LayoutAtom,
   type Bond as LayoutBond,
 } from "../lib/chem/layout2d";
@@ -325,9 +327,17 @@ export function drawnBox(model: EditorModel, own?: ReadonlySet<number>): { minX:
       box.minY = Math.min(box.minY, y - r);
       box.maxY = Math.max(box.maxY, y + r);
     };
+    const takeText = (t: TextItem, fontSize: number, set: LabelSet) => {
+      const { left, right, top, bottom } = labelBox(t, fontSize, set);
+      box.minX = Math.min(box.minX, t.x - left);
+      box.maxX = Math.max(box.maxX, t.x + right);
+      box.minY = Math.min(box.minY, t.y - bottom);
+      box.maxY = Math.max(box.maxY, t.y + top);
+    };
     const atoms = model.atoms.filter((a) => own.has(a.id));
     for (const a of atoms) take(a.x, a.y);
-    const alone = layoutOf({ atoms, bonds: model.bonds.filter((b) => own.has(b.a) && own.has(b.b)) }).layout;
+    const aloneOf = layoutOf({ atoms, bonds: model.bonds.filter((b) => own.has(b.a) && own.has(b.b)) });
+    const alone = aloneOf.layout;
     for (const l of alone.lines) {
       const half = pxToWorld(l.widthPx, alone.zoom) / 2;
       take(l.x1, l.y1, half);
@@ -335,15 +345,11 @@ export function drawnBox(model: EditorModel, own?: ReadonlySet<number>): { minX:
     }
     for (const p of alone.polys) for (const q of p.points) take(q.x, q.y);
     for (const c of [...alone.circles, ...alone.fills]) take(c.c.x, c.c.y, c.r);
+    // (what is written of the structure rather than of one atom - a stereo group's note, a bracket's label, a bond's tag - is put by its
+    //  own atoms and bonds: as the structure alone has it)
+    for (const t of alone.texts) if (t.atom == null) takeText(t, aloneOf.fontSize, aloneOf.set);
     const { layout, fontSize, set } = layoutOf(model);
-    for (const t of layout.texts) {
-      if (t.atom == null || !own.has(model.atoms[t.atom]?.id)) continue;
-      const { left, right, top, bottom } = labelBox(t, fontSize, set);
-      box.minX = Math.min(box.minX, t.x - left);
-      box.maxX = Math.max(box.maxX, t.x + right);
-      box.minY = Math.min(box.minY, t.y - bottom);
-      box.maxY = Math.max(box.maxY, t.y + top);
-    }
+    for (const t of layout.texts) if (t.atom != null && own.has(model.atoms[t.atom]?.id)) takeText(t, fontSize, set);
     return box;
   }
   const { bounds } = layoutOf(model).layout;
