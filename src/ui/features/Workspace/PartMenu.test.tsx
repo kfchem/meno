@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
 import PartMenu, { type MenuTarget } from "./PartMenu";
+import { BOND_ICONS, bondIconAsLying } from "./menuIcons";
 
 // Vitest runs in Node, with no page to mount on: the server's renderer
 // draws the menu, and what it lists is read off that.
@@ -66,6 +67,34 @@ describe("a bond's menu", () => {
     // (the current kind marked)
     expect(m.html).toMatch(/aria-label="Double bond" aria-pressed="true"/);
     expect(m.html).toMatch(/aria-label="Single bond" aria-pressed="false"/);
+  });
+});
+
+describe("a bond's kinds in its menu", () => {
+  const drawn = (icon: unknown) => renderToString(<>{icon}</>);
+  it("draw the bond's own kind as it lies: a wedge narrow at the right turned end for end, a double bond's second line above or below", () => {
+    for (const kind of ["wedge", "hashed-wedge"] as const) {
+      expect(drawn(bondIconAsLying(kind, { narrowLeft: false, side: "center" })), kind).toContain('transform="rotate(180 10 10)"');
+      expect(drawn(bondIconAsLying(kind, { narrowLeft: false, side: "center" }))).toContain(drawn(BOND_ICONS[kind]).match(/<path[^>]*>/)![0]);
+      expect(bondIconAsLying(kind, { narrowLeft: true, side: "center" }), kind).toBe(BOND_ICONS[kind]);
+    }
+    expect(drawn(bondIconAsLying("double", { narrowLeft: true, side: "upper" }))).toContain('d="M6.5 17.2 L17.2 6.5 M4.6 11.7 L11.7 4.6"');
+    expect(drawn(bondIconAsLying("double", { narrowLeft: true, side: "lower" }))).toContain('d="M2.8 13.5 L13.5 2.8 M8.3 15.4 L15.4 8.3"');
+    expect(bondIconAsLying("double", { narrowLeft: true, side: "center" })).toBe(BOND_ICONS.double);
+    expect(bondIconAsLying("single", { narrowLeft: false, side: "upper" })).toBe(BOND_ICONS.single);
+  });
+
+  it("show each kind's key only where the menu acts on the one bond, and the bond's own kind drawn as it lies", () => {
+    const keys = (html: string) => [...html.matchAll(/aria-label="(Single bond|Double bond|Triple bond)"[^>]*title="([^"]+)"/g)].map((m) => m[2]);
+    const lie = { narrowLeft: false, side: "center" as const };
+    const one = menu(target({ kind: "bond", id: 2 }), { bondKind: { current: "wedge", lie, one: true, choose: none } }).html;
+    expect(keys(one)).toEqual(["Single bond (1)", "Double bond (2)", "Triple bond (3)"]);
+    const several = menu(target({ kind: "bond", id: 2 }), { bondKind: { current: "wedge", lie, one: false, choose: none } }).html;
+    expect(keys(several)).toEqual(["Single bond", "Double bond", "Triple bond"]);
+    const wedge = (html: string) => html.match(/aria-label="Wedge"[^>]*>(.*?)<\/button>/)?.[1] ?? "";
+    expect(wedge(one)).toContain("rotate(180 10 10)");
+    // (a kind not the bond's own, as it always is)
+    expect(menu(target({ kind: "bond", id: 2 }), { bondKind: { current: "single", lie, one: true, choose: none } }).html.match(/aria-label="Wedge"[^>]*>(.*?)<\/button>/)?.[1]).not.toContain("rotate");
   });
 });
 
