@@ -8,6 +8,7 @@
 import { holdsSubstructure } from "../../../../lib/chem/substructure";
 import type { WorkspaceDocument } from "../document";
 import { identityInputOf, identityOfDrawn, labelsDrawnOut } from "../chem/identityOf";
+import { identitiesAsked, identityKnown } from "../chem/identityOff";
 import type { Model } from "../store/types";
 import { drawnFromSmiles } from "../utils/smilesDrawn";
 import { seenId, type InScope, type SeenId } from "./scope";
@@ -21,6 +22,25 @@ export type Found = { found: SeenId[]; couldNotTell?: SeenId[]; notLookedAt?: nu
 function structureOf(d: WorkspaceDocument, ids: readonly number[]): Model {
   const mine = new Set(ids);
   return { atoms: d.model.atoms.filter((a) => mine.has(a.id)), bonds: d.model.bonds.filter((b) => mine.has(b.a) && mine.has(b.b)) };
+}
+
+/** What a structure is, as "same" compares it: its identity, as the worker answered it where it has (`searchAsked`). */
+const sameAs = (m: Model): string => identityKnown(identityInputOf(m).input)?.text ?? identityOfDrawn(m).text;
+
+/**
+ * The identities a "same" search reads - the SMILES's and each structure's in scope - asked of the worker first
+ * (chem/identityOff), so that the search (`search`) works none out on the drawing thread.
+ */
+export async function searchAsked(d: WorkspaceDocument, s: InScope, smiles: string, how: "same" | "holds"): Promise<void> {
+  if (how !== "same") return;
+  let query: Model;
+  try {
+    query = labelsDrawnOut(drawnFromSmiles(smiles));
+  } catch {
+    return;
+  }
+  const looked = s.structure.slice(0, SEARCH_MOST).map((id) => labelsDrawnOut(structureOf(d, s.structureAtoms.get(id)!)));
+  await identitiesAsked([query, ...looked].map((m) => identityInputOf(m).input));
 }
 
 /**
@@ -37,11 +57,11 @@ export function search(d: WorkspaceDocument, s: InScope, smiles: string, how: "s
   const looked = s.structure.slice(0, SEARCH_MOST);
   const found: SeenId[] = [];
   const couldNotTell: SeenId[] = [];
-  const asked = how === "same" ? identityOfDrawn(query).text : identityInputOf(query).input;
+  const asked = how === "same" ? sameAs(query) : identityInputOf(query).input;
   for (const id of looked) {
     const target = labelsDrawnOut(structureOf(d, s.structureAtoms.get(id)!));
     if (how === "same") {
-      if (identityOfDrawn(target).text === asked) found.push(seenId("structure", id));
+      if (sameAs(target) === asked) found.push(seenId("structure", id));
       continue;
     }
     const held = holdsSubstructure(asked as ReturnType<typeof identityInputOf>["input"], identityInputOf(target).input);
