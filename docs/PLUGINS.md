@@ -1686,12 +1686,12 @@ comes in its own pull request.
   - the kinds of file it reads that marks tell (`fileKinds`), as its manifest says them - each one's id, name, file names and marks, and, where its own program writes it, that program (`writtenBy`) - so that a file only it would read is told before it is got (*A plugin to suggest for a file*). None said, none. Read as strictly as the rest: a mark with any key but its text, `at` (`line-start`) and `anyCase` (true), or one a manifest's mark could not be, refuses the whole;
   - the tables of atoms its program prints, as papers quote them (`quotedTables`), as its manifest keeps them - four at most, each one a manifest's could be, exactly - so that such a table is said to be its to read before it is got (FILE-IO.md, *Coordinates in a text*). None said, none;
   - its files: one archive, where it is - on https, at the hosts the plugins' releases are at, and nowhere else - its fingerprint (SHA-256) and size; and its manifest's fingerprint;
-  - where it brings presets for another plugin, that one's id (`presetsFor`, its manifest's `presets.for`): offered with it where that one is got again (*Plugins used before*).
+  - where it brings presets for another plugin, that one's id (`presetsFor`, its manifest's `presets.for`): offered with it where that one is added again (*Plugins used before*).
 
   Beside its plugins, the list may name those no longer offered
   (`retired`), each by its id, its name (at most 60 letters) and why, in
   words, at most 160 ("Meno reads these files itself now"), so that one
-  set up before is said not to be got again, and why. None on offer may be
+  set up before is said not to be added again, and why. None on offer may be
   among them: a plugin is said either not made for here or no longer
   offered, never both.
 - **Read strictly, whole.** The backend checks the signature before
@@ -1771,7 +1771,7 @@ comes in its own pull request.
   added uses - has *Remove its files*, asking first: the version in use
   unnamed, then its folder, as the plugins in place are read (`installed.rs`,
   the backend's one rule for where they are); then they are read again,
-  and it is gone at once. It can be got again from the list.
+  and it is gone at once. It can be added again from the list.
 - **Offered where it is needed** (2026-11-05). Where a role is asked of -
   a SMILES drawn, a structure made in 3D - and no plugin here fills it,
   the line that says so ("Needs a plugin: Structures from SMILES, and
@@ -1807,7 +1807,7 @@ starts with none in place. As it first starts, it offers to get those again
     window, and asked again as Meno next starts, unless the chemist chooses
     *Don't ask again* there.
   - With the list fetched: whether to get them, each by its name and the
-    size of its files. Those not got again are said in it, each with why:
+    size of its files. Those not added again are said in it, each with why:
     another system's or a newer Meno's, no longer offered as the list says
     (`retired`), or not on it at all; where none is got, that is said
     once. With them is offered what the list says brings presets for one
