@@ -153,7 +153,8 @@ export function listsReadAs(text: string): LineRead[] {
 export type Lists = { lists: Map<number, (OptionRead | OptionProblem)[]>; problems: string[] };
 
 /**
- * A template's R atoms, by number, each number's atoms by id in the
+ * A template's R atoms, by number - an R drawn numbered, or an R or a star
+ * typed with its number ([*:1]) - each number's atoms by id in the
  * template's order - and what about the template stops the step: an R with
  * no number or more than one, an R atom bonded by anything but one single
  * bond, a wedge whose narrow end is at an R atom, and wedges that cannot be
@@ -164,12 +165,15 @@ export function templateRs(template: Model): { rs: Map<number, number[]>; proble
   const problems: string[] = [];
   const degree = degrees(template.bonds);
   for (const a of template.atoms) {
-    if (a.el === "R") {
+    // (an R or a star typed with a number - [*:1], a SMILES's atom class, which a toolkit gives as the atom's map number and
+    //  the page draws beside it - is that R: R1)
+    const typed = (a.el === "R" || a.el === "*") && a.map ? [a.map] : null;
+    if (a.el === "R" && !typed) {
       problems.push("An R has no number: number each, as R1, R2");
       continue;
     }
-    if (a.el !== "R#") continue;
-    const ns = a.rgroups ?? [];
+    if (a.el !== "R#" && !typed) continue;
+    const ns = typed ?? a.rgroups ?? [];
     if (ns.length !== 1) {
       problems.push(ns.length ? `R${ns.join(",")} has more than one number: draw one R for each` : "An R has no number: number each, as R1, R2");
       continue;
