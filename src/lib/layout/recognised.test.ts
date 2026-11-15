@@ -169,6 +169,31 @@ describe("a Haworth ring drawn bond by bond, with no depth stored", () => {
 
 });
 
+describe("a chair or a Haworth ring drawn bond by bond, one centre left open", () => {
+  it("leaves a centre unread whose group is drawn half way between its two places, and reads its other centres", () => {
+    const d = chair({ 0: "axial", 1: "equatorial" });
+    const eq = chair({ 0: "equatorial", 1: "equatorial" });
+    const at = d.atoms[0];
+    const [a, e] = [d.atoms[6], eq.atoms[6]].map((g) => Math.atan2(g.y - at.y, g.x - at.x));
+    const mid = Math.atan2(Math.sin(a) + Math.sin(e), Math.cos(a) + Math.cos(e));
+    const half = { atoms: d.atoms.map((p, i) => (i === 6 ? { ...p, x: at.x + 1.5 * Math.cos(mid), y: at.y + 1.5 * Math.sin(mid) } : p)), bonds: d.bonds };
+    const read = readStereo(stripped(half).atoms, half.bonds).tetra;
+    expect([read.has(0), read.has(1)]).toEqual([false, true]);
+  });
+
+  it("leaves a centre on a wavy bond open, and reads its other centres", () => {
+    const d = stripped(chair({ 0: "equatorial", 1: "equatorial" }));
+    const wavy = { atoms: d.atoms, bonds: d.bonds.map((b) => (b.a === 0 && b.b === 6 ? { ...b, either: true } : b)) };
+    const read = readStereo(wavy.atoms, wavy.bonds).tetra;
+    expect([read.has(0), read.has(1)]).toEqual([false, true]);
+    // (a Haworth glucopyranose with a wavy bond at C1: C1 open, C2 to C5 read)
+    const h = stripped(haworth([true, false, true, false, true]));
+    const hw = { atoms: h.atoms, bonds: h.bonds.map((b) => (b.a === 1 && b.b === 6 ? { ...b, either: true } : b)) };
+    const got = readStereo(hw.atoms, hw.bonds).tetra;
+    expect([1, 2, 3, 4, 5].map((i) => got.has(i))).toEqual([false, true, true, true, true]);
+  });
+});
+
 describe("chairs fused, drawn bond by bond, read as the compound they show", () => {
   // (the corpus: every system of chairs F9 fuses - trans-decalin, cis-decalin on either face and on other bonds, perhydrophenanthrene
   // trans-anti-trans, perhydroanthracene trans-syn-trans, a trans-cis-cis tricycle - in both textbook forms, with no group or one methyl on a
