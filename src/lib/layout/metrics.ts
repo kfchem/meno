@@ -13,6 +13,8 @@ import { atomDepth, boxesDepth, hydrogenSpot, isName, namesLaid, segmentMeetsBox
 export { hydrogenSpot } from "./names";
 import { isMetal, METAL_BOND, squarePlanarMetal, twoLonePairsOnFour } from "./perceive";
 import { valencesAt } from "../chem/molecule";
+import { arrangementOpen } from "../chem/identity";
+import type { Tetrahedral } from "./stereo";
 import { ringsAlike, smallestRings, type Edge } from "./rings";
 
 export type Geometry = {
@@ -731,7 +733,20 @@ function readStructure(g: Geometry): Structure {
     // where they can lie more ways and the input gave none, the upright cross - an arrangement nobody gave is not drawn, and
     // Meno marks the centre (chem/engineLayout); where they go on, a phosphine's phenyls set on the lattice their own way, left
     // as it grows: held to the X there, its angles bent between the two)
-    const chosen = !sq.sure || sq.open ? "cross" : sq.ends ? "x" : null;
+    // (whether it can be arranged more than one way: identity's own test of the whole structure, lib/chem/identity
+    //  `arrangementOpen` - two donors alike next to the metal can be different ligands further out)
+    // (with its drawn centres, as the assembly asks it: one structure, one answer)
+    const centre = (i: number) => g.tetra?.[i];
+    const open =
+      sq.sure &&
+      arrangementOpen(
+        {
+          atoms: Array.from({ length: n }, (_, i) => ({ el: g.elements?.[i] ?? "", charge: g.charges?.[i] ?? 0, hs: g.hydrogens?.[i] ?? 0, ...(centre(i) ? { tetra: centre(i) as Tetrahedral } : {}) })),
+          bonds: edges.map(([p, q]) => ({ a: p, b: q, order: orderOf.get(pair(p, q)) ?? 1 })),
+        },
+        a,
+      );
+    const chosen = !sq.sure || open ? "cross" : sq.ends ? "x" : null;
     // (as the chemist drew it, where Clean-up keeps that, for any metal: drawn upright, held upright; drawn as an X, never turned
     // upright - held to the X only where it would be anyway, left as it was drawn otherwise)
     const drawn = g.fourForm?.[a];
