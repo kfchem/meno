@@ -456,13 +456,25 @@ export function filledIn(input: LayoutInput): { input: LayoutInput; complete: bo
   //  taken off, none filled in, it is offered no more: written so, its text never turns on which way it was filled in, as a
   //  sense picked by the order the atoms came in would where a search runs out of steps - Pd(PPh3)4, found in review)
   const every = blanksOf(unconfigured(g));
-  const alike = groupsAlike(g, new Set(every.flatMap((b) => b.own)), symmetryClasses(unconfigured(input)));
-  const settled = every.filter((b) => (b.kind === "centre" || b.kind === "bond") && b.sides.some((side, k) => ends(side) || alike(b.own[k] ?? b.own[0], side)));
-  const plainAt = new Set(settled.flatMap((b) => (b.kind === "centre" ? [b.at] : [])));
-  const plainBond = new Set(settled.flatMap((b) => (b.kind === "bond" ? [b.at] : [])));
-  g = { ...g, atoms: g.atoms.map(({ tetra, ...a }, i) => (plainAt.has(i) || !tetra ? a : { ...a, tetra })), bonds: g.bonds.map(({ stereo, ...b }, k) => (plainBond.has(k) || !stereo ? b : { ...b, stereo })) };
+  const constitution = symmetryClasses(unconfigured(input));
+  const plainAt = new Set<number>();
+  const plainBond = new Set<number>();
+  const settledHere = (b: Blank) => (b.kind === "centre" && plainAt.has(b.at)) || (b.kind === "bond" && plainBond.has(b.at));
+  // (asked again until nothing more settles: a place settled is no place for the groups that hold it - each sense of it one
+  //  structure, so two groups alike but for it are alike - and three tert-butyls on one carbon settle it, their own centres
+  //  settled first: tri-tert-butylmethanol)
+  for (;;) {
+    const alike = groupsAlike(g, new Set(every.filter((b) => !settledHere(b)).flatMap((b) => b.own)), constitution);
+    const more = every.filter((b) => !settledHere(b) && (b.kind === "centre" || b.kind === "bond") && b.sides.some((side, k) => ends(side) || alike(b.own[k] ?? b.own[0], side)));
+    if (!more.length) break;
+    for (const b of more) {
+      if (b.kind === "centre") plainAt.add(b.at);
+      else if (b.kind === "bond") plainBond.add(b.at);
+    }
+    g = { ...g, atoms: g.atoms.map(({ tetra, ...a }, i) => (plainAt.has(i) || !tetra ? a : { ...a, tetra })), bonds: g.bonds.map(({ stereo, ...b }, k) => (plainBond.has(k) || !stereo ? b : { ...b, stereo })) };
+  }
   // (the places left: those not settled so)
-  const open = (b: Blank) => !(b.kind === "centre" && plainAt.has(b.at)) && !(b.kind === "bond" && plainBond.has(b.at));
+  const open = (b: Blank) => !settledHere(b);
   // (an axis or a cumulene of alike end atoms: filled, as before)
   for (const b of blanksOf(g)) if ((b.kind === "axis" || b.kind === "cumulated") && b.sides.some((side) => ends(side))) g = given(g, b, true);
   // (the classes of the constitution alone, coarser than every orbit of the structure with any configuration given)

@@ -4,7 +4,7 @@ import { fromSmiles } from "../layout/testdata/fromSmiles";
 import { SHUFFLE_SEEDS, shuffled, tiedCages } from "../layout/testdata/shuffled";
 import type { LayoutAtom, LayoutBond, LayoutInput } from "../layout/perceive";
 import type { Axial } from "../layout/stereo";
-import { aromaticForm, automorphismGroup, hydrogensFolded, identity, identityKey, identityText, symmetryOrbits, type IdentityAtom, type IdentityInput } from "./identity";
+import { aromaticForm, automorphismGroup, filledIn, hydrogensFolded, identity, identityKey, identityText, symmetryOrbits, type IdentityAtom, type IdentityInput } from "./identity";
 import { measured } from "../../testing/timeouts";
 
 /** How many distinct values a list has. */
@@ -449,6 +449,19 @@ describe("a configuration that makes no stereo unit, in a structure's identity",
   it("is looked for again after each one taken out: 2,4-dimethylpentan-3-ol's C3 has alike groups only once both isopropyls' CH are", () => {
     const plain = identityText(fromSmiles("CC(C)C(O)C(C)C"));
     for (const a of ["@", "@@"]) for (const b of ["@", "@@"]) for (const c of ["@", "@@"]) expect(identityText(fromSmiles(`C[C${a}H](C)[C${b}H](O)[C${c}H](C)C`)), a + b + c).toBe(plain);
+  });
+
+  it("settles a place whose groups are alike but for places of their own that settle first: tri-tert-butylmethanol, with no search", () => {
+    // (each tert-butyl's centre settled by its methyls; then the carbinol's three tert-butyls are alike as wholes - the
+    //  fill complete, and no configuration of it written; the writing's own search of so symmetric a structure may still run
+    //  out of steps: lib/layout/canonical)
+    const g = fromSmiles("CC(C)(C)C(O)(C(C)(C)C)C(C)(C)C");
+    const filled = filledIn(g);
+    expect([filled.complete, filled.searches, filled.input.atoms.filter((a) => a.tetra).length]).toEqual([true, 0, 0]);
+    for (const seed of SHUFFLE_SEEDS.slice(0, 3)) expect(identityText(shuffled(g, seed))).toBe(identityText(g));
+    // (and two such groups unlike - a tert-butyl and a 1,1-dimethylpropyl - leave it to the search, a centre still)
+    const h = fromSmiles("CC(C)(C)[C@@H](O)C(C)(C)CC");
+    expect(identityText(h)).not.toBe(identityText(fromSmiles("CC(C)(C)[C@H](O)C(C)(C)CC")));
   });
 
   it("is the same whatever order a large symmetric structure's atoms come in, where its search runs out of steps: Pd(PPh3)4, PdCl2(PPh3)2", { timeout: measured(10_000) }, () => {
