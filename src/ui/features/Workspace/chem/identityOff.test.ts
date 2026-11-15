@@ -106,6 +106,43 @@ describe("a worker that cannot answer", () => {
     }
   });
 
+  it("nor a step that waits on it: its structures put down once worked out here", async () => {
+    (globalThis as { Worker?: unknown }).Worker = class {
+      onmessage: ((e: MessageEvent) => void) | null = null;
+      onerror: ((e: ErrorEvent) => void) | null = null;
+      postMessage(m: { id: number }) {
+        setTimeout(() => this.onmessage?.({ data: { id: m.id, ok: false, error: "it could not" } } as MessageEvent), 0);
+      }
+      terminate() {}
+    };
+    forgetIdentities();
+    let ran = 0;
+    whenDrawnKnown([drawnFromSmiles(TOLYL)], () => ran++);
+    expect(ran).toBe(0);
+    await answered();
+    expect(ran).toBe(1);
+  });
+
+  it("nor one that stops: what waits on it worked out here, and the next ask made of a new worker", async () => {
+    const made: { onerror: ((e: ErrorEvent) => void) | null }[] = [];
+    (globalThis as { Worker?: unknown }).Worker = class {
+      onmessage = null;
+      onerror: ((e: ErrorEvent) => void) | null = null;
+      constructor() {
+        made.push(this);
+      }
+      postMessage() {}
+      terminate() {}
+    };
+    forgetIdentities();
+    const input = identityInputOf(drawnFromSmiles(TOLYL)).input;
+    const asked = identitiesAsked([input]);
+    made[0].onerror?.({ message: "stopped" } as ErrorEvent);
+    expect(await asked).toEqual([identity(input)]);
+    void identitiesAsked([identityInputOf(drawnFromSmiles(PPH3)).input]);
+    expect(made).toHaveLength(2);
+  });
+
   it("nor where it cannot be made at all", async () => {
     (globalThis as { Worker?: unknown }).Worker = class {
       constructor() {
@@ -115,6 +152,44 @@ describe("a worker that cannot answer", () => {
     forgetIdentities();
     const input = identityInputOf(drawnFromSmiles(TOLYL)).input;
     expect(await identitiesAsked([input])).toEqual([identity(input)]);
+  });
+});
+
+describe("a worker still answering", () => {
+  it("is never taken for stopped: structures asked together wait behind each other, the bound counted from its last answer", async () => {
+    vi.useFakeTimers();
+    try {
+      // (one at a time, each answered most of the bound after the one before: the last answered well past the bound from its ask)
+      const step = Math.round(ANSWER_MOST_MS * 0.7);
+      let queue = Promise.resolve();
+      let here = 0;
+      (globalThis as { Worker?: unknown }).Worker = class {
+        onmessage: ((e: MessageEvent) => void) | null = null;
+        onerror = null;
+        postMessage(m: { id: number; input: Parameters<typeof identity>[0] }) {
+          queue = queue.then(
+            () =>
+              new Promise<void>((done) =>
+                setTimeout(() => {
+                  this.onmessage?.({ data: { id: m.id, ok: true, found: { text: `from the worker ${m.id}`, complete: true } } } as MessageEvent);
+                  done();
+                }, step),
+              ),
+          );
+        }
+        terminate() {}
+      };
+      forgetIdentities();
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => here++);
+      const inputs = [PPH3, TOLYL, "P(c1ccc(F)cc1)(c1ccc(F)cc1)c1ccc(F)cc1"].map((s) => identityInputOf(drawnFromSmiles(s)).input);
+      const all = identitiesAsked(inputs);
+      await vi.advanceTimersByTimeAsync(step * inputs.length + 1);
+      expect((await all).map((f) => f.text.startsWith("from the worker"))).toEqual([true, true, true]);
+      expect(here).toBe(0);
+      warn.mockRestore();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

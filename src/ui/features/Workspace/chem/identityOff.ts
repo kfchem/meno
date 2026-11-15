@@ -22,8 +22,11 @@ export type Found = { text: string; complete: boolean };
 export const IN_PLACE_MOST = 16;
 
 /**
- * How long the worker is waited on for one answer before it is taken for none and the identity worked out in place: well past
- * what the largest structures asked of it take (Pd(PPh3)4, a few seconds), so that it is only a worker that has stopped.
+ * How long the worker may say nothing, while anything waits on it, before it is taken for stopped: every structure waiting is
+ * then worked out in place, and the worker let go. Counted from its last answer - or from the ask, where nothing was waiting
+ * - not from each structure's own ask: it answers one at a time, so structures asked together wait behind each other, and
+ * none is taken from a worker still answering. Well past what the largest structures asked of it take (Pd(PPh3)4, a few
+ * seconds), so that it is only a worker that has stopped.
  */
 export const ANSWER_MOST_MS = 60_000;
 
@@ -48,23 +51,42 @@ type Answer = { id: number; ok: true; found: Found } | { id: number; ok: false; 
 let worker: Worker | null = null;
 let asked = 0;
 const waiting = new Map<number, { done: (f: Found) => void; fail: (e: Error) => void }>();
+/** The bound on the worker's silence while anything waits (`ANSWER_MOST_MS`); none while nothing does. */
+let silence: ReturnType<typeof setTimeout> | null = null;
+
+/** The worker's silence counted again from now, where anything waits on it; else not counted. */
+function heard(): void {
+  if (silence) clearTimeout(silence);
+  silence = waiting.size ? setTimeout(() => letGo(new Error(`no answer in ${ANSWER_MOST_MS / 1000} s`)), ANSWER_MOST_MS) : null;
+}
+
+/** The worker let go: everything waiting on it failed with `why` - so worked out in place - and a new one made at the next ask. */
+function letGo(why: Error): void {
+  if (silence) clearTimeout(silence);
+  silence = null;
+  const failed = [...waiting.values()];
+  waiting.clear();
+  worker?.terminate();
+  worker = null;
+  for (const w8 of failed) w8.fail(why);
+}
 
 function started(): Worker {
   if (worker) return worker;
   const w = new Worker(new URL("./identityWorker.ts", import.meta.url), { type: "module" });
   w.onmessage = (e: MessageEvent<Answer>) => {
+    if (w !== worker) return;
     const a = e.data;
     const w8 = waiting.get(a.id);
     if (!w8) return;
     waiting.delete(a.id);
+    heard();
     if (a.ok) w8.done(a.found);
     else w8.fail(new Error(a.error));
   };
+  // (a worker that fails to run fails everything it was asked; another is made next time)
   w.onerror = (e) => {
-    // (a worker that fails to run fails everything it was asked; it is started again next time)
-    for (const w8 of waiting.values()) w8.fail(new Error(e.message || "the identity worker stopped"));
-    waiting.clear();
-    worker = null;
+    if (w === worker) letGo(new Error(e.message || "the identity worker stopped"));
   };
   worker = w;
   return w;
@@ -89,18 +111,15 @@ export function identityAsked(input: IdentityInput): Promise<Found> {
       ? Promise.resolve().then(() => identity(input))
       : new Promise<Found>((done, fail) => {
           const id = ++asked;
-          // (no answer within ANSWER_MOST_MS: taken for none)
-          const late = setTimeout(() => {
-            waiting.delete(id);
-            fail(new Error(`no answer in ${ANSWER_MOST_MS / 1000} s`));
-          }, ANSWER_MOST_MS);
-          const settle = <T>(f: (v: T) => void) => (v: T) => (clearTimeout(late), f(v));
-          waiting.set(id, { done: settle(done), fail: settle(fail) });
           try {
-            started().postMessage({ id, input });
+            const w = started();
+            waiting.set(id, { done, fail });
+            // (the silence counted from this ask only where nothing else was waiting: else from the last answer)
+            if (!silence) heard();
+            w.postMessage({ id, input });
           } catch (e) {
             waiting.delete(id);
-            clearTimeout(late);
+            if (!waiting.size) heard();
             fail(e instanceof Error ? e : new Error(String(e)));
           }
         }).catch(here);
@@ -134,8 +153,17 @@ export function identityKnown(input: IdentityInput): Found | undefined {
   return undefined;
 }
 
-/** Every answer let go (tests). */
+/**
+ * Every answer let go, and the worker with what waits on it, never to land (tests): the next ask makes a worker as it then
+ * is.
+ */
 export function forgetIdentities(): void {
+  if (silence) clearTimeout(silence);
+  silence = null;
+  waiting.clear();
+  worker?.terminate();
+  worker = null;
+  asking.clear();
   known.clear();
 }
 
