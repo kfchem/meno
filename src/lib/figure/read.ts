@@ -238,7 +238,7 @@ export function outlineChains(shapes: Shapes, bond: number): Shapes {
     for (const [id, ss] of bars) {
       const xs = ss.flatMap((t) => [t.a.x, t.b.x]);
       const ys = ss.flatMap((t) => [t.a.y, t.b.y]);
-      // (a chain is a bond and a half across at the least - a letter's stems, a speck, are not: the drawing's own bond, not points)
+      // (a chain is 1.3 bonds across at the least - two bonds at a right angle are 1.4 - and a letter's stems, a speck, are not: the drawing's own bond, not points)
       const across = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
       if (across >= CHAIN_ACROSS * bond && ss.every((t) => len(t) >= CHAIN_LEAST * bond && len(t) <= CHAIN_MOST * bond)) kept.add(id);
     }

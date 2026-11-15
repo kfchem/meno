@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { shapesOf, type FigureDrawn, type FigurePath, type PathStep, type Point } from "./drawn";
-import { readFigure } from "./read";
+import { barBond, readFigure, sizedOutlines } from "./read";
+import { readScheme } from "./scheme";
 
 // Made samples: the thin filled polygon a drawing program leaves where it draws a chain's lines joined (corners mitred or rounded; a ring as its outer
 // and its inner outline), and the thin polygons that are none: letters, a frame, an arrow, a bracket.
@@ -148,6 +149,16 @@ describe("a thin polygon that is no chain of bonds is left as it was", () => {
     expect(strokes.every((s) => s.w > 20)).toBe(true);
   });
 
+  it("is a chain's outline with a lobe of its own in the same shape - a box beside it - no bars: the bars must fill the shape, neither much less nor much more", () => {
+    const chain = thick(zig(3), W, "mitre");
+    const box: PathStep[] = [["M", 160, 180], ["L", 164.5, 180], ["L", 164.5, 184.5], ["L", 160, 184.5], ["Z"]];
+    expect(shapesOf(figure(chain)).strokes.filter((s) => s.bar)).toHaveLength(3);
+    // (a small box drawn one way round, its area taken from the chain's - the bars then more than the shape; a larger one the other way,
+    //  added - the bars then much less)
+    const other: PathStep[] = [["M", 160, 180], ["L", 160, 188], ["L", 168, 188], ["L", 168, 180], ["Z"]];
+    for (const lobe of [box, other]) expect(shapesOf(figure({ ...chain, d: [...chain.d, ...lobe] })).strokes.filter((s) => s.bar)).toHaveLength(0);
+  });
+
   it("is an arrow drawn as one polygon, its shaft and its head: no bond of it", () => {
     const arrow = polygon([[100, 100], [160, 100], [160, 96], [172, 101], [160, 106], [160, 102], [100, 102]]);
     expect(shapesOf(figure(arrow)).strokes).toHaveLength(0);
@@ -206,12 +217,12 @@ describe("which chains of bars are bonds: told by the drawing's own bond, not by
     expect(keep(20)).toBe(11);
     expect(keep(5, 6)).toBe(11 + 6);
     expect(keep(4, 8)).toBe(11);
-    // (and a chain under a bond and a half across - three bars of half a bond - is no chain)
+    // (and a chain under 1.3 bonds across - three bars of half a bond - is no chain)
     expect(keep(5)).toBe(11);
   });
 
   it("gives up the thin stems of a letter set beside a structure of ten-point bonds, a seven-point W or M drawn as one outline: the polygon stays a shape, the label can be read", () => {
-    // (stems 5 long and 0.4 across: bars all the same, joined at corners, filling the polygon - a chain but for its size: a bond and a half across at the least)
+    // (stems 5 long and 0.4 across: bars all the same, joined at corners, filling the polygon - a chain but for its size: 1.3 bonds across at the least)
     const wLetter = thick([[300, 300], [302.5, 305], [305, 300], [307.5, 305], [310, 300]], 0.4, "mitre");
     const mLetter = thick([[320, 305], [320, 300], [323, 304], [326, 300], [326, 305]], 0.4, "mitre");
     for (const letter of [wLetter, mLetter]) {
@@ -219,6 +230,49 @@ describe("which chains of bars are bonds: told by the drawing's own bond, not by
       expect(shapesOf(drawn).strokes.filter((s) => s.bar).length).toBeGreaterThan(1);
       expect(readFigure(drawn).bonds).toHaveLength(11);
     }
+  });
+
+  it("keeps a chain 1.3 bonds across at the least - two bars at a right angle, 1.4 across - and gives up a thin V 1.2 bonds tall, its bars a bond long", () => {
+    // (two bars a bond long at a right angle, lying across: 1.41 bonds across)
+    const corner = thick([[200, 200], [207.07, 207.07], [214.14, 200]], 0.7, "mitre");
+    expect(readFigure(figure(...structure(10), corner)).bonds).toHaveLength(11 + 2);
+    // (a V of two strokes 1.24 bonds long, 1.2 bonds tall and 0.6 wide: a large letter, under 1.3 across)
+    const v = thick([[300, 300], [303, 312], [306, 300]], 1, "mitre");
+    expect(shapesOf(figure(v)).strokes.filter((s) => s.bar)).toHaveLength(2);
+    expect(readFigure(figure(...structure(10), v)).bonds).toHaveLength(11);
+  });
+
+  it("judges every bar of a chain: one bar two bonds long among bars a bond long gives the chain up", () => {
+    const chart = thick([[200, 200], [208.66, 205], [217.32, 200], [237.32, 200]], 0.8, "mitre");
+    expect(shapesOf(figure(chart)).strokes.filter((s) => s.bar)).toHaveLength(3);
+    expect(readFigure(figure(...structure(10), chart)).bonds).toHaveLength(11);
+  });
+
+  it("leaves out, of a chain kept, what its polygon was read as before: its bars alone stand for it", () => {
+    const chain = thick(zig(3, [200, 200], 10), 0.8, "mitre");
+    const kept = sizedOutlines(shapesOf(figure(...structure(10), chain)));
+    expect([kept.strokes.length, kept.blobs.length, kept.wedges.length]).toEqual([11 + 3, 0, 0]);
+  });
+
+  it("takes the figure's bond from what is drawn besides its chains: a structure's lines, not a chart line given up beside them; the bars, where they are most of it, for telling its chains", () => {
+    const chart = thick([[40, 300], [75, 300], [90, 350], [120, 350], [135, 270], [170, 270], [185, 330]], 0.8, "mitre");
+    expect(Math.round(readFigure(figure(...structure(10), chart)).bond)).toBe(10);
+    // (a ring and a chain drawn as outlines, bonds of 10, and two stray lines of 30)
+    const stray = [stroked([[400, 400], [430, 400]]), stroked([[400, 420], [430, 420]])];
+    expect(Math.round(barBond(shapesOf(figure(ring([200, 200], "mitre", 10, 0.8), thick(zig(3, [50, 50], 10), 0.8, "mitre"), ...stray))))).toBe(10);
+  });
+
+  it("takes the figure's bond from what is drawn besides its chains even where chains kept are more: four rings of 13-point bonds as outlines beside a structure of 10", () => {
+    const rings = [0, 1, 2, 3].map((i) => ring([400 + 50 * i, 400], "mitre", 13, 0.9));
+    const read = readFigure(figure(...structure(10), ...rings));
+    expect(read.bonds).toHaveLength(11 + 24);
+    expect(Math.round(read.bond)).toBe(10);
+  });
+
+  it("is read the same way in a scheme: a chart line drawn as one outline beside a structure stays no bonds", () => {
+    const chart = thick([[40, 300], [75, 300], [90, 350], [120, 350], [135, 270], [170, 270], [185, 330]], 0.8, "mitre");
+    expect(readScheme(figure(...structure(10), chart)).figure.bonds).toHaveLength(11);
+    expect(readScheme(figure(...structure(10), thick(zig(3, [200, 200], 10), 0.8, "mitre"))).figure.bonds).toHaveLength(11 + 3);
   });
 
   it("gives up a level-slope-level polyline whose bars are four to six bonds long - an energy profile's line", () => {
