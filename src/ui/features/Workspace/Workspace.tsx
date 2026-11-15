@@ -2,6 +2,7 @@ import RoleOffer from "./RoleOffer";
 import { noPluginSaid, useRoleOffer } from "../../../lib/roles/worker";
 import { canvasAlerts } from "./utils/alerts";
 import { bondKindMenu } from "./utils/bondKinds";
+import { crossingMenu } from "./chem/crossings";
 import type { ArrowKind, ArrowWeight } from "../../../lib/chem/reactionArrow";
 import { canTakeBond, valenceOrder } from "../../../lib/chem/molecule";
 import { usePresentingWindow } from "../../presenting";
@@ -141,6 +142,7 @@ import {
 import { chemWorker, rolePlugin, useChem } from "../../../lib/roles/worker";
 import { stopWorker } from "../../../lib/plugins/process";
 import { useCheckingFiles, useDownloads } from "../../../lib/pyEnv";
+import { chemistryStep } from "./quickAddSmiles";
 import { roleOptionsRole } from "../../../lib/plugins/roles";
 import { valuesOf } from "../../../lib/options";
 import { useAppSettings, WINDOW_3D } from "../../../lib/settings/appSettings";
@@ -1832,11 +1834,10 @@ function WorkspaceContent({
           >
             <AnimatePresence mode="wait" initial={false}>
               <motion.span key={chem.state === "setting-up" || chem.state === "starting" ? chem.state : working3d ? "working" : "checking"} {...FADE} className="block">
-                {chem.state === "setting-up"
-                  ? `Setting up ${chem.plugin}…${chemShare != null ? ` ${Math.floor(chemShare * 100)}%` : ""}`
-                  : chem.state === "starting"
-                    ? `Starting ${chem.plugin}…`
-                    : working3d || `Checking ${checkingFiles}'s files…`}
+                {/* (where chemistry stands said as the line under Quick Add's SMILES field says it: one phrase, ./quickAddSmiles) */}
+                {chem.state === "setting-up" || chem.state === "starting"
+                  ? `${chemistryStep(chem, chemShare)}…`
+                  : working3d || `Checking ${checkingFiles}'s files…`}
               </motion.span>
             </AnimatePresence>
             {/* (making in 3D: how long, and stopped as the atom map is) */}
@@ -2662,6 +2663,8 @@ function WorkspaceContent({
           })()}
           // (a bond's kind: the bonds selected, where the one right-clicked is among them - one step for all)
           bondKind={menu.kind === "bond" && menu.id != null ? bondKindMenu(store.getState(), menu.id) : undefined}
+          // (which of two crossing bonds is in front, where no depth says it: at the crossing nearest the pointer - chem/crossings)
+          crossing={menu.kind === "bond" && menu.id != null ? crossingMenu(store.getState().model, menu.id, menu.at, store.getState().orderCrossing) : undefined}
           canvas={canvasCommands(menu.at)}
           // (Export writes what is drawn: a selection of PDFs and texts' sheets alone has nothing for it)
           onExport={menu.selection === "here" && selectedOf({ ...store.getState(), selPdfs: new Set(), selTexts: new Set() }).any ? () => {
