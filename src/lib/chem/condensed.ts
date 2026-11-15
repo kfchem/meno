@@ -1,6 +1,7 @@
 import { anionOf, partsOf, VALENCE, type Part } from "./formula";
 import { structureFormula, type GroupStructure, type StructureBond } from "./ligands";
 import type { SmilesAtom } from "./smiles";
+import { alwaysIonic } from "./perception/elements";
 import { movedBond } from "./structureBonds";
 
 /**
@@ -24,9 +25,6 @@ import { movedBond } from "./structureBonds";
  * of as many charges, as ./formula reads one - NaBH4, LiAlH4, NaBH(OAc)3,
  * NaIO4, NaClO2, K2CO3, NaHCO3, K3PO4.
  */
-
-/** Bound as ions: these always, lithium to anything but carbon. */
-const IONIC = new Set(["Na", "K", "Rb", "Cs"]);
 
 /**
  * A simple formula as the molecule it is, and its molecular formula as its
@@ -81,7 +79,8 @@ function moleculeOf(parts: Part[]): (GroupStructure & { name: string }) | null {
     return p.s.attach[0] + at;
   };
   const isH = (p: Part) => p.kind === "element" && p.el === "H";
-  const isMetal = (p: Part) => p.kind === "element" && (IONIC.has(p.el) || p.el === "Li");
+  // (a metal bound as an ion: one of `alwaysIonic` to anything, lithium to anything but carbon)
+  const isMetal = (p: Part) => p.kind === "element" && (alwaysIonic.has(p.el) || p.el === "Li");
   // the hub: the centre, or of two, the one that is not H (H2 and a hydride's H stay atoms)
   const [hub, ...rest] =
     centres.length === 1 ? [centres[0], ...others] : isH(others[0]) && !isMetal(others[1]) ? [others[1], others[0]] : others;
@@ -95,7 +94,7 @@ function moleculeOf(parts: Part[]): (GroupStructure & { name: string }) | null {
     const to = add(p);
     // an ion pair: the metal's charge and its partner's
     const [metal, other] = isMetal(p) ? [to, at] : isMetal(hub) ? [at, to] : [-1, -1];
-    if (metal >= 0 && (IONIC.has(atoms[metal].el) || atoms[other].el !== "C")) {
+    if (metal >= 0 && (alwaysIonic.has(atoms[metal].el) || atoms[other].el !== "C")) {
       atoms[metal].charge = (atoms[metal].charge ?? 0) + 1;
       atoms[other].charge = (atoms[other].charge ?? 0) - 1;
     } else bonds.push({ a1: at, a2: to, order: 1 });
@@ -106,7 +105,7 @@ function moleculeOf(parts: Part[]): (GroupStructure & { name: string }) | null {
 
 /** Parts as a salt: its alkali metals, and the anion the rest makes. */
 function saltOf(parts: Part[]): (GroupStructure & { name: string }) | null {
-  const isMetal = (p: Part): p is Extract<Part, { kind: "element" }> => p.kind === "element" && (IONIC.has(p.el) || p.el === "Li");
+  const isMetal = (p: Part): p is Extract<Part, { kind: "element" }> => p.kind === "element" && (alwaysIonic.has(p.el) || p.el === "Li");
   const metals = parts.filter(isMetal);
   const ion = metals.length ? anionOf(parts.filter((p) => !isMetal(p)), metals.length) : null;
   if (!ion) return null;
