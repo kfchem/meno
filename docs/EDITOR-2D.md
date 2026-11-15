@@ -789,6 +789,40 @@ Both go together, because both touch every layer.
   on keeps it. The key 1 on a single bond runs plain, wedge, hashes, and
   plain again with the other end narrow next time round; the wedge's icon
   in its menu, pressed again, turns its narrow end to the other atom.
+- **A bond in front of another.** Where two bonds of one structure drawn
+  by hand cross, the chemist says which is in front: a right-click on
+  either bond, near the crossing, offers *In front* and *Behind*, said of
+  the bond clicked. The bond behind is drawn with a gap where it passes
+  the other (IUPAC 2006 ST-3.1: the front-to-back order of crossing bonds
+  shown by a small discontinuity in the one behind), the gap easing open
+  and closed as the page's changes do. The item that holds is shown as
+  chosen, said of the bond clicked: on the bond behind, *Behind*; on the
+  one in front, *In front* (`chem/crossings.ts` `crossingMenu`). Choosing
+  it again takes the mark away, and the other item turns it round. Each is one step, undone and done again ("Bond in front",
+  "Bond behind").
+  - It is kept on the bond behind, by the other bond's id
+    (`Bond.behind`), never both ways round, and nothing silent ever says
+    it again where nobody said it. While a move goes on it is kept: the
+    bonds dragged apart are drawn whole, and dragged back across, the gap
+    is there again. A move that ENDS with the two no longer crossing takes
+    it away, in the move's own step (undone, both come back), and so does
+    any other edit that takes them from crossing to not crossing - an atom
+    moved by Clean-up or a command, an end given another atom - in its own
+    step. Deleting
+    either bond takes it away. Copied and pasted, it follows the bonds'
+    new ids; a mark whose other bond was not copied is dropped. Turning a
+    structure over exchanges front and behind, as a depth would.
+  - Where all four atoms of the two bonds carry a depth (a cage as
+    Clean-up draws it, a tool's projection), the depth says which bond is
+    behind, and neither item is offered. An edit that gives all four a
+    depth takes the mark away in its own step, and it does not come back
+    if the depth goes. Where only some of the four carry a depth, the
+    mark says it, and the items are offered (`chem/crossings.ts`; the
+    order in `lib/chem/layout2d.ts` `brokenBehind`: the depth, then the
+    mark, else neither broken).
+  - It is a look: the drawing says no configuration by it alone.
+  - One crossing at a time: the items act on the bond clicked, not on a
+    selection.
 - **Rounding is all or nothing.** When ends and joins are round, every end is
   round - double and triple bonds included, which today are not. When they
   are square, every one is square.
@@ -1142,21 +1176,29 @@ All hover-based, as above.
     drawing where each pair drawn across (more than a right angle apart)
     stands plainly across in it, within 30 degrees of a line, and - with
     six - no two drawn side by side do. Six donors are laid out as three
-    lines through the metal (LAYOUT-2D.md, section 7), so each pairing
-    has its own picture: trans- and cis-[Co(en)2Cl2]+, and each of
-    M(gly)2Cl2's five arrangements, are kept as drawn. A drawing in the
-    earlier picture - its N an X, its Cl side by side - is read for the
-    pairs it says and laid out in the three lines; a cis-M(gly)2Cl2 drawn
-    so with N across N or O across O, which that picture could not tell
-    apart, is refused. **An octahedron drawn with wedges** in one of the
-    text's forms (Brecher 2006, ST-2.11: the first, third and fourth) is
-    read for its pairs and kept as drawn - every donor on its spoke,
-    straightened onto the form's angles, every bond its kind, so its
-    hand is as drawn (`wedgeOctahedron`, `octahedraKept`); a trigonal
-    prism (ST-2.12), and a chelate drawn in a wedge form, are refused.
-    Where no move gives a picture that keeps the drawing - a chelate's
-    two donors drawn opposite -
-    Clean-up lays nothing out and says so: never another isomer.
+    lines through the metal (LAYOUT-2D.md, section 7), so each pairing has
+    its own picture: trans- and cis-[Co(en)2Cl2]+, and each of M(gly)2Cl2's
+    five arrangements, are kept as drawn. A drawing in the earlier picture -
+    its N an X, its Cl side by side - is read for the pairs it says and laid
+    out in the three lines; a cis-M(gly)2Cl2 drawn so with N across N or O
+    across O, which that picture could not tell apart, is refused. **An
+    octahedron drawn with wedges** in one of the text's forms (Brecher 2006,
+    ST-2.11: the first, third and fourth) is read for its pairs and kept as
+    drawn - every donor on its spoke, straightened onto the form's angles,
+    every bond its kind, so its hand is as drawn (`wedgeOctahedron`,
+    `octahedraKept`); a trigonal prism (ST-2.12), and a chelate drawn in a
+    wedge form, are refused. Where no move gives a picture that keeps the
+    drawing - a chelate's two donors drawn opposite - Clean-up lays nothing
+    out and says so: never another isomer. Two metals joined by two bridges
+    (cis- and trans-[Pt2Cl4(NH3)2], the three isomers of a dimer with a Cl
+    and a Br bridge) keep, at each metal, which bridge each of its other
+    donors stands across: the bridges, which carry the other metal, stay
+    where the layout put them, their ring seen a little from above, and each
+    metal's other donors change places round it. In a chain of three, the
+    middle metal's bridges - laid flat - turn or mirror round it with the
+    end metals and all they carry, whose own pairs stay as they were. Two
+    square-planar metals joined by one bridge, each drawn as an upright
+    cross, are refused, saying so.
 - Valence warnings, and R/S shown on request (RDKit). (PR #53: a ring round
   an atom with too many bonds, saying what is wrong under the pointer; R/S
   and E/Z from a button on the canvas, later shown on what they are asked

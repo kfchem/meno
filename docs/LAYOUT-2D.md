@@ -538,8 +538,12 @@ they hang from.
   set round it with other pairs across - [CoCl2(NH3)4]+ cis or trans,
   CoCl3(NH3)3 fac or mer, [Co(en)2Cl2]+, Co(gly)3, the two of a chelate
   never across - and not where every way sets the same pairs across (MA6,
-  MA5B, M(en)3: its hands are no pairs across) (`octahedralOpen`); how its
-  spokes are laid out is section 7's. Donors are told apart, here and for
+  MA5B, M(en)3: its hands are no pairs across) (`octahedralOpen`). Only
+  the two donors of a two-donor chelate are held not across: a ligand whose
+  own rigid shape fixes its donors round the metal - a porphyrin's ring of
+  four with two axial donors, two terpyridines - is marked all the same,
+  though only one arrangement can be; the mark makes no structure wrong.
+  How its spokes are laid out is section 7's. Donors are told apart, here and for
   four, as ligands - all each carries, not only the atom on the metal:
   [Pt(NH2Me)2(NH2Et)2]2+ is two and two, [Co(NH2Me)4(NH2Et)2]3+ four and
   two (`donorKinds`). A four-bond metal drawn in one form - the X or the

@@ -86,7 +86,7 @@ type Classed = { rank: number[]; first: string[]; withStereo: (r: number[]) => n
 /**
  * `classed` worked out once for each input, as it is (inputs are not
  * changed in place): identity asks for a structure's classes before its
- * order (lib/chem/identity `stereoUnitsOnly`), and both come from them.
+ * ranks and texts (lib/chem/identity `filledIn`), and all come from them.
  */
 const classedOnce = new WeakMap<LayoutInput, Classed>();
 
@@ -255,6 +255,17 @@ export function canonicalWritten(input: LayoutInput): { text: string; complete: 
   const { rank, first, withStereo } = classed(input);
   const found = search(rank, input.atoms.length, withStereo, (r) => written(input, first, r));
   return { text: written(input, first, found.r), complete: !found.cut };
+}
+
+/**
+ * One search of the molecule, as `canonicalWritten` makes it, and all it finds at once: the text, the order that writes it
+ * (each atom's place, a canonical numbering of its atoms - which of two atoms alike in every way comes first may follow
+ * the input's order), the symmetries met on the way (`symmetryOrbits`'), and whether the search was complete.
+ */
+export function canonicalSearched(input: LayoutInput): { text: string; ranks: number[]; automorphisms: number[][]; complete: boolean } {
+  const { rank, first, withStereo } = classed(input);
+  const found = search(rank, input.atoms.length, withStereo, (r) => written(input, first, r));
+  return { text: written(input, first, found.r), ranks: found.r, automorphisms: found.symmetries, complete: !found.cut };
 }
 
 /** The molecule's own order `way` (old index to new) from its ranks (`canonicalRanks`). */

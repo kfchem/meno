@@ -908,8 +908,10 @@ export function nextFree(model: Model): number {
  * six none drawn side by side; or six spokes drawn, laid out as two lines
  * and two side by side, where that picture reads only as the isomer drawn
  * (cis-[Co(en)2Cl2]+). Refused, saying so, where no move keeps it. Not at
- * a metal drawn in perspective, nor by mirroring a chelate drawn so, nor
- * where a change would need a donor of a larger chelate to move.
+ * a metal drawn in perspective - save by its two bridges to another metal,
+ * which stay, the metal's other donors changing places round it (cis- and
+ * trans-[Pt2Cl4(NH3)2]) - nor by mirroring a chelate drawn so, nor where a
+ * change would need a donor of a larger chelate to move.
  */
 /** How near, in bonds, two atoms of a metal's different donors may lie before the one's groups are turned clear (`oppositesKept`). */
 const CROWDED = 0.75;
@@ -931,7 +933,7 @@ export function oppositesKept(was: readonly { x: number; y: number }[], input: L
   for (let m = 0; m < was.length; m++) {
     const donors = near[m];
     const n = donors.length;
-    if (!isMetal(input.atoms[m].el) || (n !== 4 && n !== 6) || laid.depth[m] != null || donors.some((d) => d >= was.length) || (only && !only.has(m))) continue;
+    if (!isMetal(input.atoms[m].el) || (n !== 4 && n !== 6) || donors.some((d) => d >= was.length) || (only && !only.has(m))) continue;
     // (each donor's unit: what it carries, reached not through the metal - a chelate's, its donors' together)
     const reach = donors.map((d) => {
       const seen = new Set([d]);
@@ -948,6 +950,14 @@ export function oppositesKept(was: readonly { x: number; y: number }[], input: L
     // (a unit drawn in perspective - a phosphine's phenyls turned - is turned about the metal as any is; mirrored, it would show
     // its other face, so a chelate drawn so is not)
     const inDepth = (i: number) => [...reach[i]].some((a) => laid.depth[a] != null);
+    // (a unit that holds another metal - two metals' bridges, with all the other metal carries - drawn in perspective, their ring seen
+    // a little from above, stays where it is: turned, it would carry the other metal round with its ring's depth; the metal's own
+    // donors change places round it instead. Laid flat - a chain of three metals' middle one - it is turned or mirrored as any
+    // unit is, the other metal's donors with it, their pairs as they were)
+    const holdsMetal = (i: number) => [...reach[i]].some((a) => a !== donors[i] && isMetal(input.atoms[a].el));
+    // (a metal drawn in perspective is not - save one in perspective only by its bridges to another metal, their ring seen a little
+    // from above (placePair): its donors lie round it as drawn, in the page's plane, and its bridges stay)
+    if (laid.depth[m] != null && (donors.some((_, i) => inDepth(i) && !holdsMetal(i)) || !donors.some((_, i) => inDepth(i)))) continue;
     // (which stands opposite which, by the angles round the metal: each donor's partner in the pairing whose straightest pair is
     // straightest - then its next, and with six its last; none where another pairing is about as straight, pair by pair)
     const pairing = (px: readonly number[], py: readonly number[]): number[] | null => {
@@ -1081,9 +1091,10 @@ export function oppositesKept(was: readonly { x: number; y: number }[], input: L
         return;
       }
       const members = groups[g];
+      const stays = holdsMetal(members[0]) && inDepth(members[0]);
       const mirrors = members.length === 2 && !inDepth(members[0]) ? [false, true] : [false];
       for (const mirror of mirrors) {
-        for (let turn = 0; turn < n; turn++) {
+        for (let turn = 0; turn < (stays ? 1 : n); turn++) {
           const slots = members.map((i, k) => ((mirror ? slotOf[members[1 - k]] : slotOf[i]) + turn) % n);
           if (slots.some((t) => taken.has(t))) continue;
           const next = [...at];
