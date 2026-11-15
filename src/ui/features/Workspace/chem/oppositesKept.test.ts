@@ -8,6 +8,8 @@ import { drawingOf } from "./drawing";
 import { readStereo, sameConfiguration } from "../../../../lib/layout/drawn";
 import { drawnFromSmiles } from "../utils/smilesDrawn";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
+import { identityOfDrawn } from "./identityOf";
+import { drawingOf as drawingFromBlock } from "./fromSmiles";
 
 // Clean-up keeps a four-bond metal's donors opposite each other as they were drawn: transplatin cleaned up is transplatin, not
 // cisplatin - a different compound - whatever order its atoms were drawn in, as an X or upright (chem/engineLayout `oppositesKept`).
@@ -754,6 +756,64 @@ describe("two metals bridged, drawn by hand", () => {
       const drawnSo = acrossBridges(m, metal, el);
       expect(acrossBridges(await laidOut(m, MENO), metal, el), name).toEqual(drawnSo);
     }
+  });
+});
+
+describe("two metals bridged, drawn by hand, and Clean-up", () => {
+  it("leaves each the structure it was: cis and trans [Pt2Cl4(NH3)2] two structures before and after, each its own after as before", { timeout: 180000 }, async () => {
+    forgetLaidOut();
+    const cases: [string, Model][] = [
+      ["trans-[Pt2Cl4(NH3)2]", bridged("Pt", ["Cl", "Cl"], ["NH3", "Cl"], ["Cl", "NH3"])],
+      ["cis-[Pt2Cl4(NH3)2]", bridged("Pt", ["Cl", "Cl"], ["NH3", "Cl"], ["NH3", "Cl"])],
+      ["cis-[Pt2Cl4(NH3)2], turned 37", bridged("Pt", ["Cl", "Cl"], ["NH3", "Cl"], ["NH3", "Cl"], 37)],
+      ["trans-[Rh2Cl2(CO)2(NH3)2]", bridged("Rh", ["Cl", "Cl"], ["NH3", "CO"], ["CO", "NH3"])],
+      ["cis-[Rh2Cl2(CO)2(NH3)2]", bridged("Rh", ["Cl", "Cl"], ["NH3", "CO"], ["NH3", "CO"])],
+    ];
+    const before: string[] = [];
+    for (const [name, m] of cases) {
+      const was = identityOfDrawn(m).text;
+      before.push(was);
+      expect([name, identityOfDrawn(await laidOut(m, MENO)).text], name).toEqual([name, was]);
+    }
+    // (cis and trans: two structures, turned or not)
+    expect(before[0]).not.toBe(before[1]);
+    expect(before[2]).toBe(before[1]);
+    expect(before[3]).not.toBe(before[4]);
+    // (and typed with nothing given - laid out as a SMILES's drawing is, marked at both metals - it is neither)
+    const typed = drawnFromSmiles("[NH3][Pt]1(Cl)[Cl][Pt]([NH3])(Cl)[Cl]1");
+    const f = (v: number) => v.toFixed(4).padStart(10);
+    const index = new Map(typed.atoms.map((a, i) => [a.id, i + 1]));
+    const block = ["", "  test", "", `${String(typed.atoms.length).padStart(3)}${String(typed.bonds.length).padStart(3)}  0  0  0  0  0  0  0  0999 V2000`,
+      // (an ammine's N written with its valence of four - the block's vvv field - as the hand drawing has it)
+      ...typed.atoms.map((a) => `${f(a.x)}${f(-a.y)}${f(0)} ${a.el.padEnd(3)} 0  0  0  0  0${String(a.el === "N" ? 4 : 0).padStart(3)}  0  0  0  0  0  0`),
+      ...typed.bonds.map((b) => `${String(index.get(b.a)).padStart(3)}${String(index.get(b.b)).padStart(3)}${String(b.order).padStart(3)}  0`), "M  END", ""].join("\n");
+    const given = identityOfDrawn(await drawingFromBlock(block, MENO)).text;
+    expect(given.split("||")[0]).toBe(before[0].split("||")[0]);
+    expect([given === before[0], given === before[1]]).toEqual([false, false]);
+  });
+
+});
+
+describe("two metals bridged, alike bridges, the metals told apart", () => {
+  it("are one structure whatever the order of their atoms: trans and cis [PtPdCl4(NH3)2], and [Pt2Cl4(NH3)(PMe3)]'s N on one Pt", () => {
+    // (each order a turn of the atoms' list and of the bonds', one way or reversed: the bridges' ranks were taken in the order
+    //  the input listed the metals - found in the chemistry check)
+    const orders = (m: Model): Model[] =>
+      Array.from({ length: 12 }, (_, k) => {
+        const turn = <T,>(xs: readonly T[]) => [...xs.slice(k % xs.length), ...xs.slice(0, k % xs.length)];
+        const atoms = turn(m.atoms);
+        const bonds = turn(m.bonds);
+        return { ...m, atoms: k % 2 ? atoms.reverse() : atoms, bonds: k % 3 ? bonds.map((b) => ({ ...b, a: b.b, b: b.a })) : bonds } as Model;
+      });
+    const pd = (m: Model) => ({ ...m, atoms: m.atoms.map((a, i) => (a.el === "Pt" && i === m.atoms.findIndex((x) => x.el === "Pt") ? { ...a, el: "Pd" } : a)) }) as Model;
+    const texts = (m: Model) => new Set(orders(m).map((o) => identityOfDrawn(o).text));
+    const trans = texts(pd(bridged("Pt", ["Cl", "Cl"], ["NH3", "Cl"], ["Cl", "NH3"])));
+    const cis = texts(pd(bridged("Pt", ["Cl", "Cl"], ["NH3", "Cl"], ["NH3", "Cl"])));
+    expect([trans.size, cis.size]).toEqual([1, 1]);
+    expect([...trans][0]).not.toBe([...cis][0]);
+    const mixed = bridged("Pt", ["Cl", "Cl"], ["NH3", "Cl"], ["Cl", "NH3"]);
+    const p = { ...mixed, atoms: mixed.atoms.map((a) => (a.el === "N" && a.x > 0 ? { ...a, el: "P", valence: undefined } : a)) } as Model;
+    expect(texts(p).size).toBe(1);
   });
 });
 

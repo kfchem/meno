@@ -134,6 +134,21 @@ describe("rings, by hand", () => {
     expect(f.rings.map((r) => r.length)).toEqual([6, 6]);
   });
 
+  it("asks whether a bond is in a ring smaller than a size: a bond in no ring never is, whatever the size", () => {
+    // (biphenyl's linking bond: its size is 0, which is no ring - so not "in a ring smaller than 8", as a double bond's cis or trans asks)
+    const biphenyl = graph(12, [...cycle([0, 1, 2, 3, 4, 5]), ...cycle([6, 7, 8, 9, 10, 11]), [0, 6]]);
+    const f = factsOf(biphenyl);
+    for (const n of [1, 7, 8, 100, Infinity]) expect(f.inRingSmallerThan(12, n)).toBe(false);
+    // (a ring bond: in one smaller than 7 and than 8, not than 6 - its smallest ring is of 6)
+    expect([6, 7, 8].map((n) => f.inRingSmallerThan(0, n))).toEqual([false, true, true]);
+    // (an eight-ring's bond: not in one smaller than 8, as (E)-cyclooctene's double bond is not)
+    const eight = factsOf(graph(8, cycle([0, 1, 2, 3, 4, 5, 6, 7])));
+    expect([8, 9].map((n) => eight.inRingSmallerThan(0, n))).toEqual([false, true]);
+    // (a bond the graph does not have: none)
+    expect(f.inRingSmallerThan(-1, 8)).toBe(false);
+    expect(f.inRingSmallerThan(99, 8)).toBe(false);
+  });
+
   it("a macrocycle of 14 with a fused benzene: the shared bond 6, the others 14", () => {
     const macro = cycle(Array.from({ length: 14 }, (_, i) => i));
     const g = graph(18, [...macro, [1, 14], [14, 15], [15, 16], [16, 17], [17, 0]]);

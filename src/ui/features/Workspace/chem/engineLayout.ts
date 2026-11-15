@@ -18,6 +18,7 @@ import { labelTrims, layoutMolecule, showsLabel } from "../../../../lib/chem/lay
 import { chemistry } from "../../../../lib/chem/molecule";
 import type { DrawingStyle } from "../../../../lib/chem/style";
 import { readStereo, sameConfiguration, straightEnds, unreadWhy } from "../../../../lib/layout/drawn";
+import { pairingDrawn } from "../../../../lib/chem/arrangement";
 import { lonePairCentres } from "../../../../lib/chem/lonePairCentres";
 import type { Layout2D, LayoutInput } from "../../../../lib/layout/engine";
 import { etaBondedAtomByAtom, isMetal, type CisTrans } from "../../../../lib/layout/perceive";
@@ -358,18 +359,29 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, given: L
     const marked = !!was?.unsure && was.unsure.as.startsWith(ARRANGED) && was.unsure.as === arrangementAs(was, model.atoms, model.bonds);
     // (a metal as the chemist drew it - four donors in their form, six on a chemist's spokes - or whose arrangement the input gave:
     // never marked, but where it was marked already and is still as it was)
-    const drawnSo = nbOf[i].length === 6 ? !job.asNew : !!input.atoms[i].fourForm;
+    // (a chelated square-planar centre has no form of its own to keep: drawn so where it was not laid out anew, as six donors are)
+    const view = {
+      el: (j: number) => input.atoms[j].el,
+      charge: (j: number) => input.atoms[j].charge ?? 0,
+      hs: (j: number) => input.atoms[j].hs ?? 0,
+      neighbours: (j: number) => nbOf[j],
+      order: (p: number, q: number) => orders.get(pairKey(p, q)) ?? 1,
+    };
+    const chelated = nbOf[i].length === 4 && nbOf[i].some((d) => {
+      // (any two of its donors joined other than through it)
+      const seen = new Set([d, i]);
+      for (const todo = [d]; todo.length; )
+        for (const w of nbOf[todo.pop()!]) {
+          if (seen.has(w)) continue;
+          if (nbOf[i].includes(w)) return true;
+          seen.add(w);
+          todo.push(w);
+        }
+      return false;
+    });
+    const drawnSo = nbOf[i].length === 6 || chelated ? !job.asNew : !!input.atoms[i].fourForm;
     if ((drawnSo && !marked) || job.arranged?.has(ids[i])) return false;
-    return arrangementNotGiven(
-      {
-        el: (j) => input.atoms[j].el,
-        charge: (j) => input.atoms[j].charge ?? 0,
-        hs: (j) => input.atoms[j].hs ?? 0,
-        neighbours: (j) => nbOf[j],
-        order: (p, q) => orders.get(pairKey(p, q)) ?? 1,
-      },
-      i,
-    );
+    return arrangementNotGiven(input, view, i);
   };
   const atoms: Relayout["atoms"] = ids.map((id, i) => ({
     id,
@@ -958,41 +970,11 @@ export function oppositesKept(was: readonly { x: number; y: number }[], input: L
     // (a metal drawn in perspective is not - save one in perspective only by its bridges to another metal, their ring seen a little
     // from above (placePair): its donors lie round it as drawn, in the page's plane, and its bridges stay)
     if (laid.depth[m] != null && (donors.some((_, i) => inDepth(i) && !holdsMetal(i)) || !donors.some((_, i) => inDepth(i)))) continue;
-    // (which stands opposite which, by the angles round the metal: each donor's partner in the pairing whose straightest pair is
-    // straightest - then its next, and with six its last; none where another pairing is about as straight, pair by pair)
+    // (which stands opposite which, by the angles round the metal: lib/chem/arrangement `pairingDrawn`, the one reading
+    // identity asks too. A tie - none said - leaves the layout's pairing: an isomer nobody gave)
     const pairing = (px: readonly number[], py: readonly number[]): number[] | null => {
       if (donors.some((d) => Math.hypot(px[d] - px[m], py[d] - py[m]) < 1e-6)) return null;
-      const angle = donors.map((d) => Math.atan2(py[d] - py[m], px[d] - px[m]));
-      const off = (i: number, j: number) => Math.abs(Math.PI - Math.abs(Math.atan2(Math.sin(angle[i] - angle[j]), Math.cos(angle[i] - angle[j]))));
-      const all: { partner: number[]; offs: number[] }[] = [];
-      const pair = (left: number[], partner: number[], offs: number[]) => {
-        if (!left.length) return void all.push({ partner: [...partner], offs: [...offs].sort((p, q) => p - q) });
-        const [i, ...rest] = left;
-        for (const j of rest) {
-          partner[i] = j;
-          partner[j] = i;
-          pair(
-            rest.filter((k) => k !== j),
-            partner,
-            [...offs, off(i, j)],
-          );
-        }
-      };
-      pair(
-        donors.map((_, i) => i),
-        donors.map(() => -1),
-        [],
-      );
-      const before = (p: number[], q: number[]) => {
-        for (let k = 0; k < p.length; k++) if (p[k] !== q[k]) return p[k] - q[k];
-        return 0;
-      };
-      all.sort((p, q) => before(p.offs, q.offs));
-      // (a tie - every pair of the next pairing within 20 degrees as straight as the best's - leaves the layout's pairing, saying
-      // nothing: an isomer nobody gave, where the centre is surely square planar; there it is to be the cross marked "Which donors are
-      // next to each other is not given", as a centre laid out with none given is)
-      const told = all[0].offs.some((v, k) => all[1].offs[k] - v > (20 * Math.PI) / 180);
-      return told ? all[0].partner : null;
+      return pairingDrawn(donors.map((d) => Math.atan2(py[d] - py[m], px[d] - px[m])));
     };
     const drawn = pairing(
       was.map((a) => a.x),

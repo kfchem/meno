@@ -6,6 +6,7 @@ import { readMarks } from "../utils/figures";
 import { ARRANGEMENT_SAID } from "../utils/arrangement";
 import { drawnFromSmiles } from "../utils/smilesDrawn";
 import { layoutJob, relayoutFrom } from "./engineLayout";
+import { arrangementsMarked } from "./arrangementsMarked";
 
 // A square-planar centre whose donors can lie round it more than one way, made from an input that gives none of them - cisplatin
 // from a SMILES - is drawn as the upright cross and marked: which donors are next to each other is not given (docs/LAYOUT-2D.md).
@@ -72,4 +73,33 @@ describe("a square-planar centre with no arrangement given", () => {
     expect(readMarks(after).atoms.size).toBe(0);
     expect(directions(after)).toEqual([-135, -45, 45, 135]);
   });
+
+  it("is marked by identity's own test of the whole structure: four N alike next to the metal, two ligands further out - [Pt(NH2Me)2(NH2Et)2]2+", { timeout: 120000 }, () => {
+    forgetLaidOut();
+    const m = drawnFromSmiles("C[NH2][Pt+2]([NH2]C)([NH2]CC)[NH2]CC");
+    expect(readMarks(m).atoms.get(metalOf(m).id)).toBe(ARRANGEMENT_SAID);
+    // (and its donors laid out square round it, as the mark's centre is)
+    const d = directions(m);
+    expect(d.map((x, k) => (k ? x - d[k - 1] : 90))).toEqual([90, 90, 90, 90]);
+  });
+
+  it("reaches a chelated square-planar centre: Pt(gly)2 and Pt(gly)(NH3)Cl typed with none given are marked; Pt(en)Cl2, settled by its chelate, is not", { timeout: 120000 }, () => {
+    forgetLaidOut();
+    for (const [smiles, marked] of [
+      ["[Pt]12([NH2]CC(=O)O1)[NH2]CC(=O)O2", true],
+      ["Cl[Pt]1([NH3])[NH2]CC(=O)O1", true],
+      ["Cl[Pt]1(Cl)[NH2]CC[NH2]1", false],
+    ] as const) {
+      // (kept as it came, and laid out anew, as a typed SMILES is: lib chem/fromSmiles)
+      const came = arrangementsMarked(drawnFromSmiles(smiles));
+      expect([smiles, readMarks(came).atoms.get(metalOf(came).id) === ARRANGEMENT_SAID]).toEqual([smiles, marked]);
+      const m = drawnFromSmiles(smiles);
+      const job = { ...layoutJob(m), asNew: true as const };
+      const anew = relayout({ ...emptyWorkspaceDocument(), model: m, nextId: 3000 }, relayoutFrom(m, m, job, layout2D(job.input))).model;
+      expect([smiles, readMarks(anew).atoms.get(metalOf(anew).id) === ARRANGEMENT_SAID]).toEqual([smiles, marked]);
+      // (cleaned up where the chemist drew it - not laid out anew: a chelate has no form of its own to keep, and is never marked so)
+      expect([smiles, readMarks(m).atoms.has(metalOf(m).id)]).toEqual([smiles, false]);
+    }
+  });
 });
+
