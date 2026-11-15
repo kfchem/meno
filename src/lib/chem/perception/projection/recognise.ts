@@ -62,9 +62,12 @@ export type Recognised =
   | { kind: "depth"; /** Each ring atom's depth, in the drawing's units (nearer larger), in the order given. */ z: number[]; by: "mark" | "convention" }
   | { kind: "unread"; why: string };
 
-/** The words for a ring in perspective whose near and far are not marked. */
-export const NOT_MARKED = "its near and far are not marked: draw its near bonds bold";
+/** The words for a ring in perspective whose near and far are not marked: what to draw. */
+export const NOT_MARKED = "the ring is drawn in perspective, but its near and far are not marked: draw its near bonds bold";
+/** The words for a ring in perspective that no one solid fits clearly. */
 export const NOT_ONE_SHAPE = "the ring is drawn in perspective, but not clearly as one shape";
+/** The words for a centre read from a ring in perspective that the drawing gives no depth (a chair, or chairs fused). */
+export const READ_IN_PERSPECTIVE = "read from the ring as drawn in perspective";
 
 type Fit = { z: number[]; miss: number };
 

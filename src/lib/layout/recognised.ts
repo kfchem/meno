@@ -4,12 +4,40 @@
  * or a ring of five or six drawn as a Haworth ring; no atom of it with a depth already, no wedge at any of its atoms (a wedge reads as it
  * always did); anything else is as drawn. The drawing is not changed: its atoms come back with a depth, and as stereocentres, for the reading.
  */
-import { recogniseChairs, recogniseHaworth, type Recognised } from "../chem/perception/projection/recognise";
+import { READ_AS_HAWORTH, READ_IN_PERSPECTIVE, recogniseChairs, recogniseHaworth, type Recognised } from "../chem/perception/projection/recognise";
 import { key, perceive } from "./perceive";
 import type { DrawnAtom, DrawnBond } from "./drawn";
 
 export function withRecognisedDepth(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): readonly DrawnAtom[] {
-  if (atoms.length < 5 || !bonds.length) return atoms;
+  return recognition(atoms, bonds).atoms;
+}
+
+/**
+ * What the recognition says of each atom of a ring system it took for a projection, by its index: "read from the ring as drawn in
+ * perspective", "read as a Haworth ring", or - unread - why, and what to draw (docs/EDITOR-2D.md, *Drawn in perspective*). Where a centre's
+ * R or S is shown, its tip says it.
+ */
+export function recognisedSaid(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): ReadonlyMap<number, string> {
+  return recognition(atoms, bonds).said;
+}
+
+type Recognition = { atoms: readonly DrawnAtom[]; said: Map<number, string> };
+/** The last recognitions, by the drawing's atoms and bonds as given: one drawing is read for its identity, its R and S and its marks in turn. */
+const kept = new WeakMap<readonly DrawnAtom[], { bonds: readonly DrawnBond[]; places: string; got: Recognition }>();
+
+function recognition(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): Recognition {
+  // (the places, depths and bonds as they are now: an array changed in place is read again)
+  const places = atoms.map((a) => `${a.x} ${a.y} ${a.z ?? ""}`).join(";") + "|" + bonds.map((b) => `${b.a} ${b.b} ${b.order} ${b.bold ? 1 : 0} ${b.wedge ? 1 : 0}`).join(";");
+  const before = kept.get(atoms);
+  if (before && before.bonds === bonds && before.places === places) return before.got;
+  const got = recognise(atoms, bonds);
+  kept.set(atoms, { bonds, places, got });
+  return got;
+}
+
+function recognise(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): Recognition {
+  const said = new Map<number, string>();
+  if (atoms.length < 5 || !bonds.length) return { atoms, said };
   const mol = perceive({ atoms: atoms.map((a) => ({ el: a.el ?? "C", hs: a.hs })), bonds: bonds.map(({ a, b, order }) => ({ a, b, order })) });
   let out: DrawnAtom[] | null = null;
   const bondOf = new Map(bonds.map((b) => [key(b.a, b.b), b]));
@@ -36,6 +64,7 @@ export function withRecognisedDepth(atoms: readonly DrawnAtom[], bonds: readonly
       mol.neighbours[i].filter((n) => n > i && local.has(n) && bondOf.get(key(i, n))?.bold).map((n): [number, number] => [local.get(i)!, local.get(n)!]),
     );
     // (chairs first - one, or fused; then a lone ring of five or six as a Haworth ring, with the page directions of the groups out of it)
+    let haworthRing = false;
     let got: Recognised = rings.every((r) => r.length === 6) ? recogniseChairs(places, rings.map((r) => r.map((i) => local.get(i)!)), bold) : { kind: "flat" };
     if (got.kind === "flat" && rings.length === 1) {
       const order = rings[0];
@@ -45,11 +74,20 @@ export function withRecognisedDepth(atoms: readonly DrawnAtom[], bonds: readonly
       const haworth = recogniseHaworth(order.map((i) => places[local.get(i)!]), groups, edges);
       if (haworth.kind === "depth") got = { ...haworth, z: sys.atoms.map((i) => haworth.z[order.indexOf(i)]) };
       else got = haworth;
+      haworthRing = haworth.kind === "depth";
+    }
+    if (got.kind === "unread") {
+      for (const i of sys.atoms) said.set(i, got.why);
+      continue;
     }
     if (got.kind !== "depth") continue;
     const z = got.z;
+    const words = haworthRing ? READ_AS_HAWORTH : READ_IN_PERSPECTIVE;
     out ??= atoms.map((a) => a);
-    sys.atoms.forEach((i, k) => (out![i] = { ...atoms[i], z: z[k], centre: true }));
+    sys.atoms.forEach((i, k) => {
+      out![i] = { ...atoms[i], z: z[k], centre: true };
+      said.set(i, words);
+    });
   }
-  return out ?? atoms;
+  return { atoms: out ?? atoms, said };
 }

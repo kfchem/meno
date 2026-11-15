@@ -1881,6 +1881,14 @@ lipids each have their own way of being drawn, which it should know.
        all of them agreeing, else unread. Rings that share one atom only,
        or more than a bond, and a system with a ring drawn flat, are
        unread. Bridged systems and cages are not yet recognised.
+       Where a centre's R or S is shown, its tip says how it was read:
+       "Read from the ring as drawn in perspective.", or "Read as a Haworth
+       ring."; a centre of a ring the reading took for one in perspective
+       but could not read has no R or S, and its tip says why and what to
+       draw: "No R or S: the ring is drawn in perspective, but its near and
+       far are not marked: draw its near bonds bold." (or "... but not
+       clearly as one shape."). Which atoms are centres is the CIP's, so an
+       atom that is no centre is told nothing.
      - **Clean-up keeps a projection** (the maintainer, 2026-11-13): a ring
        system the drawing shows with a depth that the engine would lay flat -
        a chair, a Haworth ring - is left where it is, its atoms' places,

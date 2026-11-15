@@ -8,6 +8,7 @@
  */
 import { identity, type IdentityInput } from "../../../../lib/chem/identity";
 import { readStereo } from "../../../../lib/layout/drawn";
+import { recognisedSaid } from "../../../../lib/layout/recognised";
 import type { Model } from "../store/types";
 import { drawingOf } from "./drawing";
 import { ofTheStructure } from "../../../../lib/chem/perception/graph";
@@ -22,9 +23,12 @@ import { isElementSymbol } from "../../../../lib/roles/molblock";
  * atom of three bonds that keeps no configuration of its own,
  * lib/chem/lonePairCentres), so whose configuration the input does not
  * hold - and, for each of the drawing's bonds by its place, its place among
- * the input's bonds: -1 for a hydrogen bond, which the input leaves out.
+ * the input's bonds: -1 for a hydrogen bond, which the input leaves out -
+ * and, by the atom's place, what the reading of a ring drawn in
+ * perspective with no depth says of it (lib/layout/recognised
+ * `recognisedSaid`): read from the ring, read as a Haworth ring, or why not.
  */
-export function identityInputOf(part: Model): { input: IdentityInput; unread: number[]; bondAt: number[] } {
+export function identityInputOf(part: Model): { input: IdentityInput; unread: number[]; bondAt: number[]; perspective: ReadonlyMap<number, string> } {
   const drawing = drawingOf(part);
   const stereo = readStereo(drawing.atoms, drawing.bonds);
   const pi = piSystems(part, drawing);
@@ -54,7 +58,7 @@ export function identityInputOf(part: Model): { input: IdentityInput; unread: nu
   };
   let kept = 0;
   const bondAt = drawing.bonds.map((b) => (ofTheStructure(b) ? kept++ : -1));
-  return { input, unread: unreadWedges(drawing, stereo).map((i) => part.atoms[i].id), bondAt };
+  return { input, unread: unreadWedges(drawing, stereo).map((i) => part.atoms[i].id), bondAt, perspective: recognisedSaid(drawing.atoms, drawing.bonds) };
 }
 
 /** A structure drawn's identity (lib/chem `identity`), and the atoms whose wedges it could not read (`identityInputOf`). */
