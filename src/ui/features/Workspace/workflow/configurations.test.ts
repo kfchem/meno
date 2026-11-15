@@ -4,7 +4,7 @@ import { geometryKey, type Entry } from "../../../../lib/entry";
 import { convert } from "../../../../lib/units";
 import { PROPERTY } from "../../../../lib/nodes/base";
 import { populations } from "../../../../lib/nodes/populations";
-import { forgetStereo, perceiveStereo, stereoKnown, withLonePairs, type Asker } from "./configurations";
+import { forgetStereo, perceiveStereo, stereoKnown, withArrangements, withLonePairs, type Asker } from "./configurations";
 import { entryOfSet, setEntries } from "./entries";
 import type { Molecule3D } from "../store/types";
 
@@ -223,5 +223,43 @@ describe("a centre of three bonds the plugin leaves unspecified", () => {
     const both = populations([entryOf(invertomers[0], "n0", 0, "a"), entryOf(invertomers[1], "n1", 0.5, "a")], { kelvin: 298.15 });
     if (!both.ok) throw new Error(both.said);
     expect(both.exits.done.map((e) => e.id)).toEqual(["n0", "n1"]);
+  });
+
+  it("tells cisplatin from transplatin in 3D, which the plugin's key does not: Meno's key of the donors across after it, the same for every conformer of one", async () => {
+    const platin = (places: number[][]) => ({
+      atoms: [{ el: "Pt" }, { el: "Cl" }, { el: "Cl" }, { el: "N" }, { el: "N" }].map((a) => ({ ...a, x: 0, y: 0, z: 0 })),
+      bonds: [1, 2, 3, 4].map((d) => ({ a1: 0, a2: d, order: 1 })),
+      xyz: [0, 0, 0, ...places.flat()],
+    });
+    const cis = platin([
+      [2.3, 0, 0],
+      [0, 2.3, 0],
+      [-2.05, 0.1, 0],
+      [0, -2.05, 0.1],
+    ]);
+    const cisAgain = platin([
+      [2.25, 0, 0.1],
+      [0, 2.3, 0],
+      [-2.05, 0, 0],
+      [0, -2.05, 0],
+    ]);
+    const trans = platin([
+      [2.3, 0, 0],
+      [-2.3, 0, 0],
+      [0, 2.05, 0],
+      [0, -2.05, 0],
+    ]);
+    // (the plugin answers all three alike: one key)
+    await perceiveStereo([cis, cisAgain, trans], plugin(() => ({ elements: [], key: "N.N.[Cl][Pt][Cl]" })).asker);
+    const key = (g: typeof cis) => {
+      const known = stereoKnown(g);
+      if (!known?.perceived) throw new Error("not perceived");
+      return known.key;
+    };
+    expect(key(cis)).toBe(key(cisAgain));
+    expect(key(cis)).not.toBe(key(trans));
+    expect(key(cis).startsWith("N.N.[Cl][Pt][Cl]|m")).toBe(true);
+    // (no metal: the plugin's key as it was)
+    expect(withArrangements(geometry(0), { elements: [], key: "O" })).toEqual({ elements: [], key: "O" });
   });
 });

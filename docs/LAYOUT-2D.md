@@ -532,9 +532,20 @@ they hang from.
   new: its metal by the rule above, not in whichever form its coordinates
   happen to have, nor with its donors opposite each other as they happen
   to lie there (`laidOut`'s `asNew`) - but at a metal whose arrangement
-  the SMILES gives, a mark at the metal's own atom (@SP1, @OH1), the
+  the SMILES gives, a mark at the metal's own atom (@SP1 to @SP3 on four
+  neighbours, @OH1 to @OH30 on six; a bare @ or any other mark states no
+  pairs, and the metal is not given), the
   plugin's drawing carries it, and its places and its form are kept: the
-  isomer typed, no mark (`metalsArrangedIn`); and where it cannot be laid
+  isomer typed, no mark (`metalsArrangedIn`) - save a metal two of whose
+  donors are joined other than through it, a chelate or a bridge: there the
+  plugin's picture was found not to carry the pairs the mark states
+  (trans-[Co(en)2Cl2]+ drawn cis, mer-Co(gly)3 drawn fac), and until the
+  pairs are read from the mark itself it is laid out as new, never an
+  isomer the input did not write: a chelated metal marked as not given
+  where its donors could lie more ways than one, as above - two metals
+  held by bridges among them, as in [Pt2Cl4(NH3)2], whose cis and trans
+  dimers differ only together, each marked alike (a bridge's charge
+  shared between its metals, each Pt(II)). And where it cannot be laid
   out and is kept as it came, its square-planar centres whose arrangement
   is not given are marked all the same (`arrangementsMarked`). A metal of
   six donors in such a drawing is marked so too where its donors could be

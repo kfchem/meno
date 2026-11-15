@@ -14,6 +14,7 @@
  */
 import { readMolfile } from "./ctfile";
 import { elementOf, vdwRadius } from "./elements";
+import { transitionMetal } from "./perception/elements";
 import { implicitHydrogens, valencesAt, type Radical } from "./molecule";
 
 /** An atom as the holds read it: its element, charge and unpaired electrons - and the hydrogens a file gives it that are not drawn as atoms (`hydrogens`: a metal's VAL past its bonds, a hydride). */
@@ -140,12 +141,6 @@ export const TETRAHEDRAL_D = 10;
 /** The d count four ligands round a metal lie square planar at: Pd(II), Pt(II), Ni(II), Au(III) (d8). */
 export const SQUARE_PLANAR_D = 8;
 
-/** A d- or f-block element. */
-export function isMetal(el: string): boolean {
-  const z = elementOf(el)?.number ?? 0;
-  return (z >= 21 && z <= 30) || (z >= 39 && z <= 48) || (z >= 57 && z <= 80) || (z >= 89 && z <= 112);
-}
-
 /** A d-block element's group (3-12), or null. */
 export function groupOf(el: string): number | null {
   const z = elementOf(el)?.number ?? 0;
@@ -171,7 +166,7 @@ export function etaSystems(atoms: readonly HoldsAtom[], bonds: readonly HoldsBon
   for (const b of bonds) {
     if (!b.endpoints) continue;
     const [star, metal] = atoms[b.b]?.el === "*" ? [b.b, b.a] : [b.a, b.b];
-    if (atoms[star]?.el !== "*" || !isMetal(atoms[metal]?.el ?? "")) continue;
+    if (atoms[star]?.el !== "*" || !transitionMetal.has(atoms[metal]?.el ?? "")) continue;
     if (b.endpoints.length >= 2 && b.endpoints.every((i) => i >= 0 && i < atoms.length)) out.push({ metal, star, atoms: [...b.endpoints] });
   }
   return out;
@@ -196,7 +191,7 @@ function neighboursOf(n: number, bonds: readonly HoldsBond[]): number[][] {
  */
 export function floorPairs(atoms: readonly HoldsAtom[], bonds: readonly HoldsBond[]): { metal: number; j: number; k: number; angle: number }[] {
   const around = neighboursOf(atoms.length, bonds);
-  const metals = atoms.flatMap((a, i) => (isMetal(a.el) && around[i].length ? [i] : []));
+  const metals = atoms.flatMap((a, i) => (transitionMetal.has(a.el) && around[i].length ? [i] : []));
   if (!metals.length) return [];
   const metal = new Set(metals);
   // (the parts the molecule falls into with its metals' bonds left out)
@@ -296,7 +291,7 @@ export type MetalGeometry = { metal: number; as: "square planar" | "tetrahedral"
 export function metalGeometries(atoms: readonly HoldsAtom[], bonds: readonly HoldsBond[]): MetalGeometry[] {
   const around = neighboursOf(atoms.length, bonds);
   return atoms.flatMap((a, m): MetalGeometry[] => {
-    if (!isMetal(a.el) || around[m].length !== 4) return [];
+    if (!transitionMetal.has(a.el) || around[m].length !== 4) return [];
     const d = dElectrons(atoms, bonds, m);
     return d === SQUARE_PLANAR_D ? [{ metal: m, as: "square planar" as const, d }] : d === TETRAHEDRAL_D ? [{ metal: m, as: "tetrahedral" as const, d }] : [];
   });
@@ -335,21 +330,21 @@ const HALOGENS = new Set(["F", "Cl", "Br", "I"]);
 /** The holds of a structure with metals (`MetalHolds`), or null. */
 export function metalHolds(atoms: readonly HoldsAtom[], bonds: readonly HoldsBond[]): MetalHolds | null {
   const around = neighboursOf(atoms.length, bonds);
-  if (!atoms.some((a, i) => isMetal(a.el) && (around[i].length || a.hydrogens))) return null;
+  if (!atoms.some((a, i) => transitionMetal.has(a.el) && (around[i].length || a.hydrogens))) return null;
   const eta = etaSystems(atoms, bonds);
   const metalBonds = bonds.flatMap((b) => {
     if (b.endpoints) return [];
     const [x, y] = [atoms[b.a].el, atoms[b.b].el];
-    if (!isMetal(x) && !isMetal(y)) return [];
+    if (!transitionMetal.has(x) && !transitionMetal.has(y)) return [];
     const length = covalentLength(x, y, b.dative ? 1 : b.order);
     return length == null ? [] : [{ i: b.a, j: b.b, length }];
   });
   const bridges = atoms.flatMap((a, x) => {
     if (!HALOGENS.has(a.el)) return [];
-    const ms = around[x].filter((m) => isMetal(atoms[m].el));
+    const ms = around[x].filter((m) => transitionMetal.has(atoms[m].el));
     return ms.flatMap((i, n) => ms.slice(n + 1).map((j) => ({ halogen: x, metals: [i, j] as [number, number] })));
   });
-  const els = new Set(atoms.filter((a, i) => isMetal(a.el) && around[i].length).map((a) => a.el));
+  const els = new Set(atoms.filter((a, i) => transitionMetal.has(a.el) && around[i].length).map((a) => a.el));
   return {
     slack: METAL_BOND_SLACK,
     bonds: metalBonds,
@@ -363,7 +358,7 @@ export function metalHolds(atoms: readonly HoldsAtom[], bonds: readonly HoldsBon
     geometry: metalGeometries(atoms, bonds),
     planar: { trans: TRANS_AT_METAL, cis: CIS_AT_METAL },
     hydrides: atoms.flatMap((a, m) => {
-      const length = isMetal(a.el) && a.hydrogens ? covalentLength(a.el, "H", 1) : null;
+      const length = transitionMetal.has(a.el) && a.hydrogens ? covalentLength(a.el, "H", 1) : null;
       return length == null ? [] : [{ metal: m, count: a.hydrogens!, length }];
     }),
     bridges,
@@ -521,7 +516,7 @@ export function madeChecks(atoms: readonly HoldsAtom[], bonds: readonly HoldsBon
     }
   // (a metal's point donors: those bonded to it alone of their ligands - none bound side on, nor a star)
   const held = (holds?.bonds ?? []).flatMap((b) => {
-    const [metal, atom] = isMetal(atoms[b.i].el) ? [b.i, b.j] : [b.j, b.i];
+    const [metal, atom] = transitionMetal.has(atoms[b.i].el) ? [b.i, b.j] : [b.j, b.i];
     const near = around[metal];
     const sideOn = atoms[atom].el === "*" || near.some((y) => y !== atom && around[atom].includes(y));
     return sideOn ? [] : [{ metal, atom, length: b.length }];
