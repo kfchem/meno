@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SetEntry } from "./entries";
+import { wireRefusal } from "./flow";
 import { kindInfo } from "./kinds";
 import { runMenoPair } from "./meno";
 import { addMolecule3d, emptyWorkspaceDocument } from "../document";
@@ -385,7 +386,7 @@ describe("Compare bonding's reach", () => {
 });
 
 describe("Merge of two kinds of set", () => {
-  it("is refused, saying what each input holds: a conformer set and molecules are not made one", () => {
+  it("is refused, saying what each input holds: a conformer set and molecules are not made one - as the wire is drawn, and before it runs", () => {
     const W: RunWith = { extentOf: () => ({ x0: -1, x1: 1, y0: -1, y1: 1 }), byOf: () => "meno", now: 1000 };
     const water3d = (x: number, conformers: boolean): Omit<Molecule3D, "id"> => ({
       at: { x, y: 0 },
@@ -408,7 +409,11 @@ describe("Merge of two kinds of set", () => {
     doc = addSet(doc, { x0: 17, y0: -3, x1: 23, y1: 3 });
     const step = doc.nextWorkflowId!;
     doc = addStep(doc, "merge", 40, 0);
-    doc = connect(connect(doc, { set: a }, step, "first"), { set: b }, step, "second");
+    doc = connect(doc, { set: a }, step, "first");
+    expect(wireRefusal(doc, { set: b }, step, "second")).toBe("It gives molecules in 3D, and First a conformer set: Merge makes one set of two of one kind");
+    expect(connect(doc, { set: b }, step, "second")).toBe(doc);
+    // (wired so all the same - as a set may come to hold another kind after it is wired)
+    doc = { ...doc, wires: [...doc.wires!, { id: 999, from: { set: b }, to: { step, port: "second" } }] };
     const s = doc.steps!.find((x) => x.id === step)!;
     expect(whyNot(doc, s, "meno")).toBe("First holds conformer sets and Second molecules in 3D: Merge makes one set of two of one kind");
     expect(runStep(doc, step, W).steps!.find((x) => x.id === step)!.ran).toMatchObject({ ok: false, said: "First holds conformer sets and Second molecules in 3D: Merge makes one set of two of one kind" });

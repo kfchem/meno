@@ -372,7 +372,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Combine | two lines coming into one (drawn) | molecules in 3D | **one molecule**: the entries, in the set's order, as one complex, each part where it stands; none of a part's properties carried, each named (STRUCTURE-STEPS.md, *Combine*) |
 | Measure | a distance between two marks (drawn) | molecules in 3D, or a conformer set; and, where wanted, *Atoms*: a table | each the same, with each distance, angle or dihedral asked for as a property - its atoms typed counted from 1, as the card and the 3D view show them, or each row's of the table wired into *Atoms*, its columns saying how they count them (STRUCTURE-STEPS.md, *Measure*) |
 | Mode on atoms | two atoms moving, a third still (drawn) | molecules in 3D with vibrations, or a conformer set; and, where wanted, *Atoms*: a table | **the same kind of set**, every entry kept: where its lowest, imaginary vibration ranks the reacting atoms - a table's bonds formed or broken, or atoms typed - written on it (`mode.window`, `mode.ranks`, `mode.outside`) for a Filter to choose on (STRUCTURE-STEPS.md, *Mode on atoms*) |
-| Merge | two lists made one (drawn) | *First* and *Second*: molecules in 3D, or conformer sets - both of one kind | **the same kind of set**: First's entries, then Second's - all, or one of each value of a property - a conformer set's compounds kept apart; those set aside out of *The rest*, each naming the one kept (STRUCTURE-STEPS.md, *Merge*) |
+| Merge | two lists made one (drawn) | *First* and *Second*: molecules in 3D, or conformer sets - both of one kind: a wire of the other kind is refused as it is drawn | **the same kind of set**: First's entries, then Second's - all, or one of each value of a property - a conformer set's compounds kept apart; those set aside out of *The rest*, each naming the one kept (STRUCTURE-STEPS.md, *Merge*) |
 | Re-bond | atoms, then the same atoms bonded (drawn) | *Geometry* and *Bonding*: molecules in 3D, or conformer sets | each geometry with a bonding entry's bonds and charges - each with each, or matched on a property - grouped by the two; one of other atoms, or with none to pair with, out of *Not re-bonded*, saying why (STRUCTURE-STEPS.md, *Re-bond*) |
 | Restraints | atoms held to a wall (drawn) | molecules in 3D, or conformer sets | **a table of restraints**, a row for each, made of each entry from itself - coordination bonds at a factor of their van der Waals radii together (Alvarez 2013), pairs kept at their distance, atoms fixed - each row for its entry by an ID a step wrote on it; the entries are not passed on. One it cannot make rows for out of *Failed*, saying why (STRUCTURE-STEPS.md, *Restraints*) |
 | Torsion restraints | four atoms anti, held (drawn) | *Molecules*: molecules in 3D, or conformer sets; *Reference*, where wanted | **a table of torsion restraints**: torsions typed, at the angle typed; or, from the reference, each unlike here at 180° where trans or at the reference's own angle - by a strength or exactly, each row for its entry by an ID; one it cannot make rows for out of *Failed* (STRUCTURE-STEPS.md, *Torsion restraints*) |
@@ -787,7 +787,11 @@ one of the kinds of calculation it does (decided: 16):
 - **One kind**: the sets wired into one input hold one kind, as one set's
   entries do. A wire that gives another kind than the one there is
   refused, and a set that has come to hold another kind since is said
-  before the step runs. An input that takes a number takes one.
+  before the step runs. An input that reads what comes in as a table -
+  an *Energy diagram*'s *Levels* - takes molecules in 3D and conformer
+  sets together, each molecule as it is, as it takes one set that mixes
+  them: the minima, conformer sets, and the saddle points, molecules,
+  each wired in. An input that takes a number takes one.
 - **Tables** wired into one input are read as one: the first's columns,
   then each column a later one adds, by name. A row with no cell in a
   column is empty there.
@@ -4158,7 +4162,10 @@ and *Connects*, a table, where wanted (an optional input). It gives a chart in a
 of its own. *Levels* reads what comes in as a table, each molecule as it
 is, so it takes a set that mixes a saddle point's conformer set with
 molecules of one geometry - which a step that works on entries refuses
-(*A wire let go on an input that does not take it*).
+(*A wire let go on an input that does not take it*) - and, wired in side
+by side, a conformer set and molecules (*Several wires into one input*):
+the minima and the saddle points come in so, not made one by a *Merge*,
+which takes one kind.
 - **A level** is the molecules of one name - a molecule's title, else its
   file's name without its extension ("R.out" is R), else its group - and
   stands at its lowest; a level of

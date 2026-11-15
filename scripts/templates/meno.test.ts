@@ -63,11 +63,16 @@ function builder() {
       return id;
     },
     /** The recipe's step `key` (its kind, plugin and options as the recipe has them, `options` laid over them), wired from `inputs`, and run: its id. */
-    run(key: string, inputs: Record<string, { set: number }>, options: Record<string, string | number | boolean> = {}): number {
+    run(key: string, inputs: Record<string, { set: number } | { set: number }[]>, options: Record<string, string | number | boolean> = {}): number {
       const r = recipe(key);
       const id = doc.nextWorkflowId ?? 1;
       doc = addStep(doc, r.kind, 200 + 20 * id, 0, { ...r.options, ...options }, r.by);
-      for (const [port, from] of Object.entries(inputs)) doc = connect(doc, from, id, port);
+      for (const [port, from] of Object.entries(inputs))
+        for (const one of Array.isArray(from) ? from : [from]) {
+          const next = connect(doc, one, id, port);
+          if (next === doc) throw new Error(`${key}: set ${one.set} cannot be wired into ${port}`);
+          doc = next;
+        }
       doc = runStep(doc, id, W);
       return id;
     },
@@ -183,17 +188,22 @@ describe("the energy diagram's levels, run on made saddle points of two paths an
 
   it("draws a level for each species and one for each path - the path's saddle points its thin lines - the reactant in its column, the saddle points in the next, the products in the last", () => {
     const b = builder();
-    // (the reactant a and two products b and c, each of two conformers; the paths a>b and a>c each of three saddle points, as the paths' steps leave them: carrying their
-    //  path, their start's species, and their two ends by role)
-    const set = b.set([
+    // (the reactant a and two products b and c, each of two conformers - conformer sets, as the minima's steps leave them; the paths a>b and a>c each of three
+    //  saddle points - molecules in 3D, each of one geometry, as the paths' steps leave them: carrying their path, their start's species, and their two ends by
+    //  role. Wired as the recipe wires them: each set into Levels, read as a table, not made one by a Merge, which takes one kind)
+    const minima = b.set([
       conformers("a", [-76.4, -76.39], { species: "species-1" }),
       conformers("b", [-76.42, -76.41], { species: "species-2" }),
       conformers("c", [-76.41, -76.4], { species: "species-3" }),
-      conformers("TS b", [-76.375, -76.37, -76.36], { path: "path-1", species: "species-1", "reactant end": "species-1", "product end": "species-2" }),
-      conformers("TS c", [-76.38, -76.372, -76.365], { path: "path-2", species: "species-1", "reactant end": "species-1", "product end": "species-3" }),
+    ]);
+    const ts = (title: string, energy: number, path: string, product: string) => entry(title, 0, [energy], [{ path, species: "species-1", "reactant end": "species-1", "product end": product }]);
+    const saddles = b.set([
+      ...[-76.375, -76.37, -76.36].map((e) => ts("TS b", e, "path-1", "species-2")),
+      ...[-76.38, -76.372, -76.365].map((e) => ts("TS c", e, "path-2", "species-3")),
     ]);
     const diagram = recipe("diagram");
-    const step = b.run("diagram", { levels: { set } }, { quantity: "energy" });
+    expect(diagram.in.levels).toEqual(["minima-freq", "saddles-16"]);
+    const step = b.run("diagram", { levels: [{ set: minima }, { set: saddles }] }, { quantity: "energy" });
     const ran = b.doc.steps!.find((x) => x.id === step)!;
     expect([diagram.options!.levelsBy, diagram.options!.joinedBy, diagram.options!.conformers, diagram.options!.reference]).toEqual(["path\nspecies", "reactant end\nproduct end", "every", "species-1"]);
     expect(ran.ran?.ok).toBe(true);
