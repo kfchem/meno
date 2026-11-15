@@ -78,7 +78,9 @@ export function cipIn3d(m: In3d): { atoms: Record<string, string>; bonds: Record
 /**
  * How near flat an allene in 3D is taken to have no hand: its two ends' groups turned about the run by less than this sine of the angle
  * from one plane - within a sixth of a half turn of none or of half a turn - as an odd run turned within the same of a quarter turn has no
- * cis or trans (`runsIn3d`).
+ * cis or trans (`runsIn3d`). The hand changes where the two ends' planes are one, so there the sign of a torsion is noise; an open-chain
+ * allene is square, and an allene bent and twisted by a small ring stays well clear of the bound, while a geometry this near flat lies far
+ * up the allene's own barrier to turning into its mirror image: what is found there is a bad geometry, not either hand.
  */
 const FLAT_ALLENE = 0.5;
 
