@@ -25,7 +25,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { aromaticIn } from "../../../../lib/chem/aromaticity";
 import { implicitHydrogens } from "../../../../lib/chem/molecule";
 import { smallestRings } from "../../../../lib/layout/rings";
-import { stereoUnitsOnly } from "../../../../lib/chem/identity";
+import { identityText } from "../../../../lib/chem/identity";
 import { canonicalRanks } from "../../../../lib/layout/canonical";
 import type { Tetrahedral } from "../../../../lib/layout/stereo";
 import { identityInputOf } from "../chem/identityOf";
@@ -152,12 +152,16 @@ function centresOf(part: Model, ring: readonly number[]): { given: Map<number, T
     trial.set(i, { neighbours: [...n, ...(hs ? [-1] : [])], volume: 1 });
   }
   const asked = { ...input, atoms: input.atoms.map((a, i) => (trial.has(i) ? { ...a, tetra: trial.get(i)! } : a)) };
-  const kept = stereoUnitsOnly(asked).input;
+  // (a configuration sets something where, turned over with every other one held, the structure's identity changes - one whose two
+  //  senses write the same text sets nothing, as identity's own fill reads it. A drawn one is asked of the drawing as it is: a wedge
+  //  on 4-methylcyclohexanol's OH alone sets nothing; one tried is asked with every candidate given one)
+  const setsSomething = (g: typeof input, i: number) =>
+    identityText({ ...g, atoms: g.atoms.map((a, k) => (k === i ? { ...a, tetra: { ...a.tetra!, volume: -a.tetra!.volume } } : a)) }) !== identityText(g);
   const given = new Map<number, Tetrahedral>();
   const open = new Set<number>();
   for (const id of ring) {
     const i = index.get(id)!;
-    if (!kept.atoms[i].tetra) continue;
+    if (!asked.atoms[i].tetra || !setsSomething(asked, i)) continue;
     if (trial.has(i)) open.add(id);
     else {
       // (its neighbours by atom id, an implicit H -1, as the drawing's ids go)

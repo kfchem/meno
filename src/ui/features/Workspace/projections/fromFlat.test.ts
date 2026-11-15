@@ -106,9 +106,13 @@ describe("a flat six-ring drawn as a chair (Draw as chair)", () => {
     const methyl = plain.atoms.find((a) => a.el === "C" && plain.bonds.filter((b) => b.a === a.id || b.b === a.id).length === 1)!;
     const wavy = chair.bonds.filter((b) => b.stereo === "wavy");
     expect(wavy.map((b) => (b.a === methyl.id ? b.a : b.b === methyl.id ? b.b : -1))).toEqual([methyl.id]);
-    const nothing = identityOfDrawn(plain).text;
-    expect(identityOfDrawn(flat).text).toBe(nothing);
+    // (the wedge sets nothing: drawn up or down, one structure; and the chair is that structure, whichever way the wedge went - the
+    //  plain drawing is another writing of the same thing unsaid, which identity may write apart: lib/chem/identity `filledIn`)
+    const down: Model = { ...plain, bonds: plain.bonds.map((b) => (b === co ? { ...b, stereo: "down" as const, narrow: c } : b)) };
+    const nothing = identityOfDrawn(flat).text;
+    expect(identityOfDrawn(down).text).toBe(nothing);
     expect(identityOfDrawn(chair).text).toBe(nothing);
+    expect(identityOfDrawn(asChair(down, c)).text).toBe(nothing);
   }, measured(1000));
 
   it("is not offered where the ring's centres have no configuration drawn, and says why; nor on a ring it does not draw", () => {
