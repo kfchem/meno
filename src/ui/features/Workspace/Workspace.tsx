@@ -142,6 +142,7 @@ import {
 import { chemWorker, rolePlugin, useChem } from "../../../lib/roles/worker";
 import { stopWorker } from "../../../lib/plugins/process";
 import { useCheckingFiles, useDownloads } from "../../../lib/pyEnv";
+import { chemistryStep } from "./quickAddSmiles";
 import { roleOptionsRole } from "../../../lib/plugins/roles";
 import { valuesOf } from "../../../lib/options";
 import { useAppSettings, WINDOW_3D } from "../../../lib/settings/appSettings";
@@ -1832,11 +1833,10 @@ function WorkspaceContent({
           >
             <AnimatePresence mode="wait" initial={false}>
               <motion.span key={chem.state === "setting-up" || chem.state === "starting" ? chem.state : working3d ? "working" : "checking"} {...FADE} className="block">
-                {chem.state === "setting-up"
-                  ? `Setting up ${chem.plugin}…${chemShare != null ? ` ${Math.floor(chemShare * 100)}%` : ""}`
-                  : chem.state === "starting"
-                    ? `Starting ${chem.plugin}…`
-                    : working3d || `Checking ${checkingFiles}'s files…`}
+                {/* (where chemistry stands said as the line under Quick Add's SMILES field says it: one phrase, ./quickAddSmiles) */}
+                {chem.state === "setting-up" || chem.state === "starting"
+                  ? `${chemistryStep(chem, chemShare)}…`
+                  : working3d || `Checking ${checkingFiles}'s files…`}
               </motion.span>
             </AnimatePresence>
             {/* (making in 3D: how long, and stopped as the atom map is) */}
