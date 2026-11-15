@@ -7,7 +7,7 @@
  * structures, as a step after it takes them, are run's (`setStructures`,
  * `setStructuresTable`).
  */
-import { moleculesAsTable, WHAT_COLUMN, type Cell, type Table, type TableColumn } from "../../../../lib/table";
+import { moleculesAsTable, WHAT_COLUMN, type Cell, type ConstitutionOf, type Table, type TableColumn } from "../../../../lib/table";
 import { writeSmiles, type SmilesAtomOut } from "../../../../lib/chem/smiles";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
 import type { Model } from "../store/types";
@@ -126,7 +126,7 @@ export const STRUCTURE_COLUMN = "structure";
  * as no result). A property no column can hold, or one with no value, is
  * said in `left`, as for molecules (lib/table `moleculesAsTable`).
  */
-export function structuresAsTable(entries: readonly DrawnEntry[], idOf: (k: number) => string = (k) => `structure:${k + 1}`): Table {
+export function structuresAsTable(entries: readonly DrawnEntry[], idOf: (k: number) => string = (k) => `structure:${k + 1}`, constitutionOf?: ConstitutionOf): Table {
   const n = entries.length;
   const read = entries.map((e, k) => drawnAsEntry(e, idOf(k)));
   const seen = moleculesAsTable(
@@ -135,6 +135,7 @@ export function structuresAsTable(entries: readonly DrawnEntry[], idOf: (k: numb
       const { [SMILES_PROPERTY]: _smiles, [STATE_COLUMN]: _state, ...properties } = entry.properties;
       return { ...entry, properties };
     }),
+    constitutionOf,
   );
   // (moleculesAsTable's own first three - id, constitution, configuration - are of a molecule's atoms, which an entry read
   //  by its record has none of: its id kept, its SMILES and state in their place)
