@@ -334,14 +334,14 @@ const placed = (m: object, id = 1): Molecule3D => ({ ...(m as Omit<Molecule3D, "
 // ---------------------------------------------------------------------------
 // The readers.
 
-/** An XYZ file of `made`: each frame's count and comment line - its energy, as xtb, ORCA or CREST write it, or none - and its atoms. */
+/** An XYZ file of `made`: each frame's count and comment line - its energy, as the made-up Tightbind, Quanta or Confsweep write it, or none - and its atoms. */
 function xyzText(r: Rand, made: Made): string {
   const label = (j: number) => {
     const e = made.energies?.[j];
     if (e === undefined) return `frame ${j + 1}`;
     return r.pick([
-      () => ` energy: ${e.toFixed(8)} gnorm: 0.00012345 xtb: 6.7.1 (edcfbbe)`,
-      () => `Coordinates from ORCA-job opt E ${e.toFixed(6)}`,
+      () => ` energy: ${e.toFixed(8)} gradient: 0.00012345 tightbind 1.0`,
+      () => `Quanta step opt E ${e.toFixed(6)}`,
       () => `  ${e.toFixed(8)}`,
     ])();
   };
@@ -374,7 +374,7 @@ function pdbText(made: Made): string {
 }
 
 // (XYZ energies are read by the patterns of the plugins added: those of the programs that write them)
-beforeAll(() => registerKinds(MANIFESTS.filter((m) => ["xtb", "crest", "orca"].includes(m.id))));
+beforeAll(() => registerKinds(MANIFESTS.filter((m) => ["tightbind", "confsweep", "quanta"].includes(m.id))));
 afterAll(() => registerKinds([]));
 
 describe("a molecule's frames and what belongs to each stay together, whatever reads it", () => {

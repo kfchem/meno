@@ -9,15 +9,30 @@
  * counted and said, cell by cell - never left out unsaid.
  */
 import { geometryKey, stereoIdentity, type At, type By, type Entry, type Property } from "./entry";
-import { identityKey } from "./chem/identity";
+import { constitutionKey, type IdentityInput } from "./chem/identity";
 import { isUnit, type Unit } from "./units";
 
-/** A column: a number's, with its unit ("none": a count, a share) and what worked it out and where, where known; a text's; true or false; or an entry's id. */
-export type TableColumn =
-  | { name: string; kind: "number"; unit: Unit | "none"; by?: By; at?: At }
+/**
+ * A column: a number's, with its unit ("none": a count, a share) and what
+ * worked it out and where, where known - and, where its numbers are atoms
+ * of an entry, how they are counted (`atoms`: from 1, as a card and the 3D
+ * view count them), said on the column so that no step that takes atoms
+ * from it assumes it (`atomsOfRows`); a text's; true or false; or an
+ * entry's id.
+ */
+export type TableColumn = (
+  | { name: string; kind: "number"; unit: Unit | "none"; by?: By; at?: At; atoms?: typeof ATOMS_FROM_1 }
   | { name: string; kind: "text" }
   | { name: string; kind: "bool" }
-  | { name: string; kind: "entry" };
+  | { name: string; kind: "entry" }
+) & {
+  /**
+   * What its head says, where that is other than its name ("Product" for
+   * "map.entry"): its name stays its key - what rows are matched
+   * on, what a condition names - and is never changed for its look.
+   */
+  label?: string;
+};
 
 /** A cell: as its column's kind is - or none, where it has no value. */
 export type Cell = number | string | boolean | null;
@@ -255,9 +270,18 @@ export function variantNames(name: string, ways: readonly Property[]): string[] 
 }
 
 /**
+ * What a table writes in its constitution column: the structure's `constitutionKey` - or, where it is worked out elsewhere and not
+ * yet answered, the words that say so (`NOT_YET`).
+ */
+export type ConstitutionOf = (input: IdentityInput) => string;
+
+/** A cell whose value is being worked out, off the drawing thread: not given yet, and last in a sort (`noValue`). */
+export const NOT_YET = "not worked out: still being worked out";
+
+/**
  * Molecules seen as a table (FOUNDATION: "molecules into a port that takes
  * a table, as a view"): one row per entry, in order - its id; its
- * constitution (`identityKey` of its atoms, charges and bonds; isotopes
+ * constitution (`constitutionKey` of its atoms, charges and bonds; isotopes
  * are not part of it); its configuration (`stereoIdentity`; "not known"
  * where not perceived, or an element left unspecified); and each property
  * a column. A property whose values were worked out in more than one way -
@@ -266,7 +290,7 @@ export function variantNames(name: string, ways: readonly Property[]): string[] 
  * that is no number, text or true or false is left, and said; one with no
  * value, or not worked out, is missing in its row, and counted.
  */
-export function moleculesAsTable(entries: readonly Entry[]): Table {
+export function moleculesAsTable(entries: readonly Entry[], constitutionOf: ConstitutionOf = constitutionKey): Table {
   const columns: TableColumn[] = [
     { name: "id", kind: "entry" },
     { name: "constitution", kind: "text" },
@@ -324,7 +348,7 @@ export function moleculesAsTable(entries: readonly Entry[]): Table {
   }
   const rows = entries.map((e): Cell[] => [
     e.id,
-    identityKey({ atoms: e.structure.atoms.map((a) => ({ el: a.el, ...(a.charge ? { charge: a.charge } : {}) })), bonds: e.structure.bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })) }),
+    constitutionOf({ atoms: e.structure.atoms.map((a) => ({ el: a.el, ...(a.charge ? { charge: a.charge } : {}) })), bonds: e.structure.bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })) }),
     stereoIdentity(e.stereo) ?? "not known",
     ...keys.map(({ name, variant }) => {
       const given = e.properties[name];
@@ -350,7 +374,7 @@ export const WHAT_COLUMN = "what";
 // ---- kept in a file ----
 
 /** A number, as a value: with its unit (or none), and what worked it out and where, where known. */
-export type NumberValue = { value: number; unit: Unit | "none"; by?: By; at?: At };
+export type NumberValue = { value: number; unit: Unit | "none"; by?: By; at?: At; /** The temperature it is of, where it is of one and of no geometry: a standard-state term's. */ kelvin?: number };
 
 const isText = (v: unknown): v is string => typeof v === "string";
 
@@ -376,15 +400,18 @@ export function fieldsIn<T extends object>(v: unknown, numbers: readonly string[
 }
 
 /** A column as a file keeps it, read back; none where its name, kind or unit does not read. */
-function columnIn(c: { name?: unknown; kind?: unknown; unit?: unknown; by?: unknown; at?: unknown } | null, lost: Lost): TableColumn | undefined {
+function columnIn(c: { name?: unknown; kind?: unknown; unit?: unknown; by?: unknown; at?: unknown; atoms?: unknown; label?: unknown } | null, lost: Lost): TableColumn | undefined {
   if (!c || !isText(c.name)) return undefined;
+  // (its head's words, where given: a label that does not read is left, the column kept under its name)
+  if (c.label != null && !(isText(c.label) && c.label)) lost("valueField");
+  const label = isText(c.label) && c.label ? { label: c.label } : {};
   if (c.kind === "number") {
     if (!(c.unit === "none" || (isText(c.unit) && isUnit(c.unit)))) return undefined;
     const by = fieldsIn<By>(c.by, [], lost);
     const at = fieldsIn<At>(c.at, ["kelvin", "atm"], lost);
-    return { name: c.name, kind: "number", unit: c.unit as Unit | "none", ...(by ? { by } : {}), ...(at ? { at } : {}) };
+    return { name: c.name, kind: "number", unit: c.unit as Unit | "none", ...(by ? { by } : {}), ...(at ? { at } : {}), ...(c.atoms === ATOMS_FROM_1 ? { atoms: ATOMS_FROM_1 } : {}), ...label };
   }
-  return c.kind === "text" || c.kind === "bool" || c.kind === "entry" ? { name: c.name, kind: c.kind } : undefined;
+  return c.kind === "text" || c.kind === "bool" || c.kind === "entry" ? { name: c.name, kind: c.kind, ...label } : undefined;
 }
 
 /**
@@ -445,7 +472,9 @@ export function numberIn(v: unknown, lost: Lost = NO_COUNT): NumberValue | undef
   }
   const by = fieldsIn<By>(n.by, [], lost);
   const at = fieldsIn<At>(n.at, ["kelvin", "atm"], lost);
-  return { value: n.value, unit: n.unit as Unit | "none", ...(by ? { by } : {}), ...(at ? { at } : {}) };
+  const kelvin = (v as { kelvin?: unknown }).kelvin;
+  if (kelvin != null && !(typeof kelvin === "number" && Number.isFinite(kelvin) && kelvin > 0)) lost("valueField");
+  return { value: n.value, unit: n.unit as Unit | "none", ...(by ? { by } : {}), ...(at ? { at } : {}), ...(typeof kelvin === "number" && Number.isFinite(kelvin) && kelvin > 0 ? { kelvin } : {}) };
 }
 
 /**
@@ -459,4 +488,32 @@ export function tableOfText(name: string, text: string): Table | null {
   if (!t.columns.length || !t.rows.length) return null;
   if (/\.(csv|tsv)$/i.test(name)) return t;
   return t.columns.length >= 2 && !t.unread.some((u) => u.why.endsWith("columns")) ? t : null;
+}
+
+// ---- atoms a table names ----
+
+/** How a column of atoms counts them (`TableColumn.atoms`): from 1, as a card and the 3D view count an entry's atoms. */
+export const ATOMS_FROM_1 = "from 1";
+
+/**
+ * The atoms each row of `table` names, as an entry numbers them (from 0):
+ * the cells of its columns that say they are atoms, in the columns' order -
+ * each counted as its column says. Why not, where no column says it holds
+ * atoms (a table read from a file never does: how it counts them is not
+ * known), or a row's cell is not a whole number from 1 - never guessed.
+ */
+export function atomsOfRows(table: Table): { columns: string[]; rows: number[][] } | { why: string } {
+  const at = table.columns.flatMap((c, k) => (c.kind === "number" && c.atoms === ATOMS_FROM_1 ? [k] : []));
+  if (!at.length) return { why: "No column of the table says it holds atoms, and how it counts them" };
+  const rows: number[][] = [];
+  for (const [r, row] of table.rows.entries()) {
+    const atoms: number[] = [];
+    for (const k of at) {
+      const v = row[k];
+      if (typeof v !== "number" || !Number.isInteger(v) || v < 1) return { why: `Row ${r + 1}'s ${table.columns[k].name} is not an atom counted from 1` };
+      atoms.push(v - 1);
+    }
+    rows.push(atoms);
+  }
+  return { columns: at.map((k) => table.columns[k].name), rows };
 }

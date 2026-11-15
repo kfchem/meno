@@ -35,11 +35,17 @@ const KNOWN: readonly (readonly [RegExp, (m: RegExpExecArray) => string])[] = [
   [/^Meno: the tab "[\s\S]*" stopped working\.$/, () => 'Meno: the tab "…" stopped working.'],
   // (hooks/useStructureEvents, clipboardActions, useOfficeLink, chem/fromSmiles)
   [/^(initial payload|append) import failed$/, (m) => m[0]],
+  // (App: a workspace file that does not read, said on the page - its name left out)
+  [/^a workspace file could not be read$/, (m) => m[0]],
   [/^the structure is copied without its pictures$/, (m) => m[0]],
   [/^the document did not take the structure$/, (m) => m[0]],
   [/^the SMILES is drawn as the plugin laid it out$/, (m) => m[0]],
   // (render3d withSolidsImage: how many atom numbers a picture left out, a count only)
   [/^Meno: a picture of molecules in 3D left out \d+ of their atom numbers, too small to read in it or with no room on their balls\.$/, (m) => m[0]],
+  // (main.tsx: the plugins in place not read as Meno starts)
+  [/^Meno: the plugins in place could not be read\.$/, (m) => m[0]],
+  // (chem/make3d conformersGrowing: a round of a 3D structure's search going on that failed - its error after it, kept as an error is)
+  [/^Meno: a 3D structure's search ended: a round failed\.$/, (m) => m[0]],
   // (installLog's own)
   [/^not caught(, in a promise)?:$/, (m) => m[0]],
   // (where in React's tree a part stopped: components' names, a line each)

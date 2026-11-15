@@ -193,7 +193,9 @@ function closed(r: Read, i: number, more = 0): boolean {
  * where the H put before it would be - or null where it reads as none.
  */
 export function chainGroup(label: string, groups: GroupsAt): string | null {
-  if (!/^[A-Z]/.test(label) || /[+\-−·\s]/.test(label)) return null;
+  // (no charge, no hydrate's dot, no space - but a group's own hyphen, between a letter and the
+  // rest of its name: the t-Bu of N(t-Bu)2, the i-Pr of N(i-Pr)2)
+  if (!/^[A-Z]/.test(label) || /[+−·\s]/.test(label) || /(?<![A-Za-z])-|-(?![A-Za-z(])/.test(label)) return null;
   const items = itemsOf(label, groups);
   if (!items?.length || items[0].kind !== "element" || items[0].el === "H") return null;
   // (at least two atoms or groups besides the H: a lone element is read as an element is)

@@ -1,30 +1,35 @@
+import RoleOffer from "./RoleOffer";
+import type { RoleId } from "../../../lib/plugins/roles";
 import { motion } from "motion/react";
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { RISE } from "../../theme/motion";
 import { useLeaving } from "../../theme/leaving";
-import { CalculationsGlyph, ProcedureGlyph, StepGlyph } from "./workflow/icons";
-import { placeQuickAdd } from "./quickAddPlace";
-import { guideNotice } from "../../../lib/plugins/guides";
+import { CalculationsGlyph } from "./workflow/icons";
+import { MENU_MARGIN, MENU_OFF } from "./menuAt";
+import { useMenuAt, type MenuAnchor } from "./useMenuAt";
+import { listWidth } from "./quickAddLabel";
+import QuickAddCalculations from "./QuickAddCalculations";
+import { guideNotice } from "../../../lib/guide/guide";
+import { startAhead, useChem } from "../../../lib/roles/worker";
 import type { StepKind } from "./workflow/kinds";
 import type { QuickGroup } from "./workflow/offered";
 import { SHAPE_KINDS, SHAPE_NAMES, type ShapeKind } from "../../../lib/chem/shapes";
-import { swallowPress, togglesOn } from "./utils/press";
-import { readCoordinates, type CoordinateStructure } from "../../../lib/io/coordinates";
+import { togglesOn } from "./utils/press";
+import { quickAddLeaves, typedIntoQuickAdd } from "./quickAddLeave";
+import type { CoordinateStructure } from "../../../lib/io/coordinates";
+import { pastedAs } from "./quickAddPaste";
+import { afterAdded, chemistryLine, readSmiles } from "./quickAddSmiles";
+import { useDownloads } from "../../../lib/pyEnv";
+import { calcMadeWith, toggledPanel, type QuickPanel } from "./quickAddPanel";
+import { resolve, sameFormula, type Reading } from "./chem/resolve";
+import { FormulaText } from "../../abbreviations/FormulaText";
 
 /** What Quick Add puts down where it was opened. */
-export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "cycle" | "slide" | "pen";
+export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "cycle" | "slide" | "pen" | "conversation";
 
-/** What opens below Quick Add's row: nothing, the calculations, the field a SMILES is typed in, or the shapes. */
-type QuickPanel = "none" | "calculations" | "smiles" | "shapes";
-const QUICK_PANELS: readonly QuickPanel[] = ["none", "calculations", "smiles", "shapes"];
-
-/** Each icon's size, in px. */
+/** Each icon's size, in px; and the gap between two in a row (gap-0.5). */
 const SIZE = 36;
-/** How wide the name of who does a row of steps stands, beside its kinds: "Gaussian 16" and "Procedures" whole. */
-const LABEL_W = 84;
-/** How tall the SMILES field stands below the row, its rule above it, in px; and the row of shapes. */
-const SMILES_H = 32 + 9;
-const SHAPES_H = 36 + 9;
+const GAP = 2;
 
 /** Each shape's icon, drawn as Quick Add's are, on a 20-unit square (lib/chem/shapes). An arrow is not one: the row's own *Arrow* draws it. */
 const SHAPE_ICONS: Record<ShapeKind, ReactNode> = {
@@ -35,13 +40,14 @@ const SHAPE_ICONS: Record<ShapeKind, ReactNode> = {
 
 /**
  * The row's icons, in order: what draws a structure - a bond, a chain, a
- * SMILES - then what a reaction scheme has besides - words, an arrow, a "+"
- * - and an electron-pushing arrow, begun at the first atom or bond pressed;
- * then a slide of what is seen (docs/PRESENTING.md), the pen - its card
- * opened, to write by hand - and the shapes, which open a row of their own
- * below it.
+ * SMILES - then a scheme's words and its arrow; then two that open a row of
+ * their own below it (the maintainer, 2026-10-29, layout A): *Scheme* - a
+ * "+", an electron-pushing arrow, begun at the first atom or bond pressed,
+ * a catalytic cycle and a slide of what is seen (docs/PRESENTING.md) - and
+ * *Marks on the page* - the shapes and the pen, which draw on the page and
+ * say nothing chemical.
  */
-const ROW: { id: QuickAddChoice | "chain" | "smiles" | "shapes"; name: string; icon: ReactNode }[] = [
+const ROW: { id: QuickAddChoice | "chain" | "smiles" | "scheme" | "marks"; name: string; icon: ReactNode }[] = [
   {
     id: "bond",
     name: "Bond",
@@ -78,6 +84,39 @@ const ROW: { id: QuickAddChoice | "chain" | "smiles" | "shapes"; name: string; i
       </>
     ),
   },
+  {
+    id: "scheme",
+    name: "Scheme",
+    // (a "+" and a curved arrow: what a scheme has besides its structures and words)
+    icon: (
+      <>
+        <path d="M5 3 V9 M2 6 H8" />
+        <path d="M7.5 16.5 C8 11.5, 13 10, 15.6 13.2" />
+        <path d="M12.9 12.1 L16.4 15.3 L17.2 10.9 Z" fill="currentColor" />
+      </>
+    ),
+  },
+  {
+    id: "marks",
+    name: "Marks on the page",
+    // (a square and a circle, one over the other)
+    icon: (
+      <>
+        <rect x="2.5" y="7.5" width="9" height="9" rx="1" />
+        <circle cx="13" cy="7.5" r="4.5" />
+      </>
+    ),
+  },
+  {
+    id: "conversation",
+    name: "Conversation",
+    // (a word balloon: what is said, in a frame of its own)
+    icon: <path d="M3.5 5 H16.5 V13 H9.5 L6 16 V13 H3.5 Z" />,
+  },
+];
+
+/** What *Scheme* opens below the row, in order. */
+const SCHEME: typeof ROW = [
   {
     id: "plus",
     name: "Plus",
@@ -118,24 +157,19 @@ const ROW: { id: QuickAddChoice | "chain" | "smiles" | "shapes"; name: string; i
       </>
     ),
   },
-  {
-    id: "pen",
-    name: "Pen",
-    // (a pen, writing)
-    icon: <path d="M4 16 L5 12 L13.5 3.5 L16.5 6.5 L8 15 Z M11.5 5.5 L14.5 8.5" />,
-  },
-  {
-    id: "shapes",
-    name: "Shapes",
-    // (a square and a circle, one over the other)
-    icon: (
-      <>
-        <rect x="2.5" y="7.5" width="9" height="9" rx="1" />
-        <circle cx="13" cy="7.5" r="4.5" />
-      </>
-    ),
-  },
 ];
+
+/** The pen, among the marks on the page after the shapes: its card opened, to write by hand. */
+const PEN = {
+  id: "pen" as const,
+  name: "Pen",
+  // (a pen, writing)
+  icon: <path d="M4 16 L5 12 L13.5 3.5 L16.5 6.5 L8 15 Z M11.5 5.5 L14.5 8.5" />,
+};
+
+/** Each that opens a row below the row (or a field): its id. */
+const OPENS = ["smiles", "scheme", "marks"] as const;
+const opens = (id: string): id is (typeof OPENS)[number] => (OPENS as readonly string[]).includes(id);
 
 /**
  * What a double-click on empty space opens there: a bond, a chain, a
@@ -165,11 +199,16 @@ export default function QuickAdd({
   onArrow,
   onShape,
   onSmiles,
+  onNamed,
   onCoordinates,
+  onOutput,
   onStep,
   onProcedure,
   onClose,
+  anchor,
 }: {
+  /** The canvas, for it to stand at its point on the page and the view to ease along for it (useMenuAt). */
+  anchor?: MenuAnchor;
   x: number;
   y: number;
   within: { width: number; height: number };
@@ -188,33 +227,36 @@ export default function QuickAdd({
   onShape?: (kind: ShapeKind, press: React.PointerEvent) => void;
   /** A SMILES drawn where Quick Add was opened: done, or failing with what to say. */
   onSmiles: (smiles: string) => Promise<void>;
+  /** A molecule the dictionary has, typed in the SMILES field and drawn as the dictionary's (chem/resolve): by its label. */
+  onNamed?: (label: string) => void;
   /** Coordinates pasted in the SMILES field - a paper's, copied from a PDF: the structures they hold, shown before they are placed (lib/io/coordinates). */
   onCoordinates?: (structures: CoordinateStructure[]) => void;
+  /** A calculation's output pasted whole in the SMILES field (lib/calc/probe `outputKindIn`): read as one opened is, put down where Quick Add was opened. */
+  onOutput?: (text: string) => void;
   onStep: (kind: StepKind, by: string) => void;
   onProcedure?: (id: string) => void;
   onClose: () => void;
 }) {
   const [open, setOpen] = useState<QuickPanel>(wired ? "calculations" : "none");
   const calcOpen = open === "calculations";
+  // (the Calculations rows made the first time they are opened - not as Quick Add opens, where they are shut and would
+  //  only add to its first frame - and kept from then on, so that they ease shut whole)
+  const [madeBefore, setCalcMade] = useState(calcOpen);
+  const calcMade = calcMadeWith(open, madeBefore);
+  if (calcMade !== madeBefore) setCalcMade(calcMade);
   const ref = useRef<HTMLDivElement>(null);
   // (going, chosen from or closed: it does nothing more as it fades - theme/leaving)
   const { leaving, held } = useLeaving();
   // (opened: a guide's step waiting for it goes on)
   useEffect(() => guideNotice("quick-add"), []);
+  // (and what reads a SMILES started, should it be at hand, so that the first one typed waits for no start - not for a wire's calculations, which have no field)
+  useEffect(() => {
+    if (!wired) void startAhead("smiles");
+  }, [wired]);
   useEffect(() => {
     if (leaving) return;
-    // (a press elsewhere only closes it - utils/press#swallowPress; a turn of the wheel closes it and zooms)
-    const outside = (e: Event) => {
-      if (ref.current?.contains(e.target as Node)) return;
-      if (e.type === "pointerdown") swallowPress(e);
-      onClose();
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      e.stopPropagation();
-      onClose();
-    };
+    // (a press elsewhere only closes it; a turn of the wheel closes it and zooms; Escape closes it - none while a question is asked: ./quickAddLeave)
+    const { outside, key: onKey } = quickAddLeaves((t) => !!ref.current?.contains(t as Node), onClose);
     window.addEventListener("pointerdown", outside, true);
     window.addEventListener("wheel", outside, true);
     window.addEventListener("keydown", onKey, true);
@@ -224,52 +266,38 @@ export default function QuickAdd({
       window.removeEventListener("keydown", onKey, true);
     };
   }, [onClose, leaving]);
-  // (a row for each who does steps: its name, then its kinds - and one for the procedures, after them)
-  const offered = wired ? [] : procedures;
-  const most = Math.max(1, ...steps.map((g) => g.steps.length), offered.length);
-  const calcWidth = LABEL_W + most * SIZE + 8;
-  const rowWidth = (ROW.length + 1) * SIZE + 8 + 9;
-  // (a wire's: as wide as its rows, or the words saying there are none)
-  const width = wired ? (steps.length ? calcWidth : 200) : calcOpen ? Math.max(rowWidth, calcWidth) : rowWidth;
-  const rows = Math.max(1, steps.length) + (offered.length ? 1 : 0);
-  // (its size with each panel open below its row - a wire's, its calculations alone - and where it stands, chosen once, as it opens)
-  const sizeOf = (panel: QuickPanel): { width: number; height: number } => {
-    if (wired) return { width, height: Math.max(1, steps.length) * SIZE + 8 };
-    switch (panel) {
-      case "none":
-        return { width: rowWidth, height: SIZE + 8 };
-      case "calculations":
-        return { width: Math.max(rowWidth, calcWidth), height: SIZE + 8 + rows * SIZE + 9 };
-      case "smiles":
-        return { width: rowWidth, height: SIZE + 8 + SMILES_H };
-      case "shapes":
-        return { width: rowWidth, height: SIZE + 8 + SHAPES_H };
-    }
-  };
-  const [place] = useState(() => placeQuickAdd(x, y, within, sizeOf(wired ? "calculations" : "none"), QUICK_PANELS.map(sizeOf)));
-  // (as it is laid out - not as it was reckoned: a row wider than its sum, at a display scale, reaches past the canvas - it is eased back within it)
-  const [back, setBack] = useState({ dx: 0, dy: 0 });
-  useLayoutEffect(() => {
-    const el = ref.current;
-    const parent = el?.offsetParent;
-    if (!el || !parent) return;
-    const fit = () => {
-      const a = el.getBoundingClientRect();
-      const b = parent.getBoundingClientRect();
-      const dx = a.right > b.right - 4 ? Math.min(0, b.right - 4 - a.right) : 0;
-      const dy = a.bottom > b.bottom - 4 ? Math.min(0, b.bottom - 4 - a.bottom) : 0;
-      const l = a.left + dx < b.left + 4 ? b.left + 4 - (a.left + dx) : 0;
-      const t = a.top + dy < b.top + 4 ? b.top + 4 - (a.top + dy) : 0;
-      setBack((was) => {
-        const next = { dx: was.dx + dx + l, dy: was.dy + dy + t };
-        return next.dx === was.dx && next.dy === was.dy ? was : next;
-      });
+  // (a key typed with no icon chosen: the SMILES field opens with it - typing is what a first-time chemist tries - an input
+  //  method's composing there: ./quickAddLeave `typedIntoQuickAdd`)
+  const [seed, setSeed] = useState<{ text: string; n: number } | null>(null);
+  useEffect(() => {
+    if (leaving || wired) return;
+    const onType = (e: KeyboardEvent) => {
+      const what = typedIntoQuickAdd(e, open !== "none");
+      if (!what) return;
+      e.stopPropagation();
+      if ("seed" in what) {
+        e.preventDefault();
+        setSeed((s) => ({ text: what.seed, n: (s?.n ?? 0) + 1 }));
+      }
+      // (the field takes the focus as it opens: SmilesField's own effect - it is inert until then)
+      setOpen("smiles");
     };
-    fit();
-    const ro = new ResizeObserver(fit);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+    window.addEventListener("keydown", onType, true);
+    return () => window.removeEventListener("keydown", onType, true);
+  }, [leaving, wired, open]);
+  // (a row for each who does steps, its steps under it - and one for the procedures, after them: as wide as their names need, whatever the row above holds)
+  const offered = wired ? [] : procedures;
+  // (measured only once its rows are made: a font's measure as Quick Add opens would only add to its first frame)
+  const calcWidth = useMemo(
+    () => (wired || calcMade ? listWidth([...steps.flatMap((g) => [g.name, ...g.steps.map((k) => k.name)]), ...(wired ? [] : procedures).map((p) => p.name)]) : 0),
+    [steps, procedures, wired, calcMade],
+  );
+  // (its icons, the Calculations one among them, the gaps between them, the divider before Calculations, the card's padding: the rules and the field below span it whole)
+  const rowWidth = (ROW.length + 1) * (SIZE + GAP) + 8 + 9;
+  // (a wire's: as wide as its rows, or the words saying there are none)
+  const width = wired ? (steps.length ? calcWidth + 8 : 200) : calcOpen ? Math.max(rowWidth, calcWidth + 8) : rowWidth;
+  // opened at its point on the page, up and to the right, whatever its size; the view eases along where it would lie past the canvas (useMenuAt)
+  useMenuAt(ref, { x, y }, anchor);
   return (
     <motion.div
       ref={ref}
@@ -279,7 +307,7 @@ export default function QuickAdd({
       aria-label="Add"
       data-guide="quick-add"
       className="absolute z-50 rounded-lg border border-gh-line bg-white p-1 shadow-lg"
-      style={{ left: place.left + back.dx, top: place.top + back.dy, transformOrigin: place.origin, transition: "left 150ms ease-out, top 150ms ease-out" }}
+      style={{ left: x + MENU_OFF, top: y - MENU_OFF, transformOrigin: "top left", maxHeight: within.height - 2 * MENU_MARGIN, overflowY: "auto" }}
     >
       {!wired && (
         <div className="flex items-center gap-0.5">
@@ -288,21 +316,27 @@ export default function QuickAdd({
               key={c.id}
               aria-label={c.name}
               title={c.name}
-              aria-expanded={c.id === "smiles" || c.id === "shapes" ? open === c.id : undefined}
+              aria-expanded={opens(c.id) ? open === c.id : undefined}
               onPointerDown={c.id === "chain" ? (e) => e.button === 0 && onChain(e) : c.id === "arrow" && onArrow ? (e) => e.button === 0 && onArrow(e) : undefined}
               onClick={
                 c.id === "chain" || (c.id === "arrow" && onArrow)
                   ? undefined
-                  : c.id === "smiles" || c.id === "shapes"
-                    ? (e) => togglesOn(e.detail) && setOpen((o) => (o === c.id ? "none" : (c.id as QuickPanel)))
+                  : opens(c.id)
+                    ? (e) => togglesOn(e.detail) && setOpen((o) => toggledPanel(o, c.id as QuickPanel))
                     : () => onChoose(c.id as QuickAddChoice)
               }
-              className={`rounded-md flex items-center justify-center text-gh-black transition-colors duration-150 ease-meno ${(c.id === "smiles" || c.id === "shapes") && open === c.id ? "bg-gh-base" : "hover:bg-gh-base"}`}
+              className={`meno-press relative rounded-md flex items-center justify-center text-gh-black transition-colors duration-150 ease-meno ${opens(c.id) && open === c.id ? "bg-gh-base" : "hover:bg-gh-base"}`}
               style={{ width: SIZE, height: SIZE }}
             >
               <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 {c.icon}
               </svg>
+              {/* (a group's corner mark: it opens a row of its own) */}
+              {(c.id === "scheme" || c.id === "marks") && (
+                <svg viewBox="0 0 6 4" width={6} height={4} aria-hidden className="absolute right-1 bottom-1 text-gh-gray">
+                  <path d="M0 0 H6 L3 4 Z" fill="currentColor" />
+                </svg>
+              )}
             </button>
           ))}
           <div className="mx-1 h-6 border-l border-gh-line" role="separator" />
@@ -311,7 +345,7 @@ export default function QuickAdd({
             aria-expanded={calcOpen}
             title="Calculations"
             onClick={(e) => togglesOn(e.detail) && setOpen((o) => (o === "calculations" ? "none" : "calculations"))}
-            className={`rounded-md flex items-center justify-center text-gh-black transition-colors duration-150 ease-meno ${calcOpen ? "bg-gh-base" : "hover:bg-gh-base"}`}
+            className={`meno-press rounded-md flex items-center justify-center text-gh-black transition-colors duration-150 ease-meno ${calcOpen ? "bg-gh-base" : "hover:bg-gh-base"}`}
             style={{ width: SIZE, height: SIZE }}
           >
             {/* (as heavy as the glyphs beside it, drawn on a 20-unit square) */}
@@ -322,30 +356,33 @@ export default function QuickAdd({
       {/* (the SMILES field, likewise) */}
       {!wired && (
         <div className="grid transition-[grid-template-rows,opacity] duration-200 ease-meno" style={{ gridTemplateRows: open === "smiles" ? "1fr" : "0fr", opacity: open === "smiles" ? 1 : 0 }}>
-          <div className="overflow-hidden" inert={open !== "smiles"}>
-            <SmilesField width={width - 8} open={open === "smiles"} onSmiles={onSmiles} onCoordinates={onCoordinates} />
+          {/* (clipped for the ease - but over the card's padding, so the field's focus ring shows whole) */}
+          <div className="-mx-1 px-1 overflow-hidden" inert={open !== "smiles"}>
+            <SmilesField width={width - 8} open={open === "smiles"} seed={seed} onSmiles={onSmiles} onNamed={onNamed} onCoordinates={onCoordinates} onOutput={onOutput} />
           </div>
         </div>
       )}
-      {/* (the shapes, likewise: each drawn from where Quick Add was opened, by a drag from its icon or traced with the button up) */}
+      {/* (a scheme's row, likewise: each put down where Quick Add was opened, as the row's own are) */}
       {!wired && (
-        <div className="grid transition-[grid-template-rows,opacity] duration-200 ease-meno" style={{ gridTemplateRows: open === "shapes" ? "1fr" : "0fr", opacity: open === "shapes" ? 1 : 0 }}>
-          <div className="overflow-hidden" inert={open !== "shapes"}>
-            <div role="group" aria-label="Shapes" className="mt-1 pt-1 border-t border-gh-line flex items-center gap-0.5" style={{ width: width - 8 }}>
-              {SHAPE_KINDS.map((k) => (
-                <button
-                  key={k}
-                  aria-label={SHAPE_NAMES[k]}
-                  title={SHAPE_NAMES[k]}
-                  onPointerDown={(e) => e.button === 0 && onShape?.(k, e)}
-                  className="rounded-md flex items-center justify-center text-gh-black hover:bg-gh-base transition-colors duration-150 ease-meno"
-                  style={{ width: SIZE, height: SIZE }}
-                >
-                  <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                    {SHAPE_ICONS[k]}
-                  </svg>
-                </button>
+        <div className="grid transition-[grid-template-rows,opacity] duration-200 ease-meno" style={{ gridTemplateRows: open === "scheme" ? "1fr" : "0fr", opacity: open === "scheme" ? 1 : 0 }}>
+          <div className="overflow-hidden" inert={open !== "scheme"}>
+            <div role="group" aria-label="Scheme" className="mt-1 pt-1 border-t border-gh-line flex items-center gap-0.5" style={{ width: width - 8 }}>
+              {SCHEME.map((c) => (
+                <RowIcon key={c.id} name={c.name} icon={c.icon} onClick={() => onChoose(c.id as QuickAddChoice)} />
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* (the marks on the page, likewise: each shape drawn from where Quick Add was opened, by a drag from its icon or traced with the button up; the pen, its card opened) */}
+      {!wired && (
+        <div className="grid transition-[grid-template-rows,opacity] duration-200 ease-meno" style={{ gridTemplateRows: open === "marks" ? "1fr" : "0fr", opacity: open === "marks" ? 1 : 0 }}>
+          <div className="overflow-hidden" inert={open !== "marks"}>
+            <div role="group" aria-label="Marks on the page" className="mt-1 pt-1 border-t border-gh-line flex items-center gap-0.5" style={{ width: width - 8 }}>
+              {SHAPE_KINDS.map((k) => (
+                <RowIcon key={k} name={SHAPE_NAMES[k]} icon={SHAPE_ICONS[k]} onPointerDown={(e) => e.button === 0 && onShape?.(k, e)} />
+              ))}
+              <RowIcon name={PEN.name} icon={PEN.icon} onClick={() => onChoose(PEN.id)} />
             </div>
           </div>
         </div>
@@ -353,49 +390,11 @@ export default function QuickAdd({
       {/* (opening below the row in a short ease, not at once) */}
       <div className="grid transition-[grid-template-rows,opacity] duration-200 ease-meno" style={{ gridTemplateRows: calcOpen ? "1fr" : "0fr", opacity: calcOpen ? 1 : 0 }}>
         <div className="overflow-hidden">
-          <div role="group" aria-label="Calculations" className={wired ? "" : "mt-1 pt-1 border-t border-gh-line"} style={{ width: wired ? undefined : width - 8 }}>
-            {steps.length ? (
-              steps.map((g) => (
-                <div key={g.by} role="group" aria-label={g.name} className="flex items-center">
-                  <span className="shrink-0 truncate px-1.5 text-xs text-gh-gray" style={{ width: LABEL_W }}>
-                    {g.name}
-                  </span>
-                  {g.steps.map((k) => (
-                    <button
-                      key={k.kind}
-                      aria-label={`${k.name} \u00b7 ${g.name}`}
-                      title={k.name}
-                      onClick={() => onStep(k.kind, g.by)}
-                      className="rounded-md flex items-center justify-center text-gh-black hover:bg-gh-base"
-                      style={{ width: SIZE, height: SIZE }}
-                    >
-                      <StepGlyph icon={k.icon} size={20} stroke={2.1} />
-                    </button>
-                  ))}
-                </div>
-              ))
+          <div className={wired ? "" : "mt-1 pt-1 border-t border-gh-line"} style={{ width: width - 8 }}>
+            {!calcMade ? null : steps.length || offered.length ? (
+              <QuickAddCalculations steps={steps} procedures={offered} width={width - 8} shown={calcOpen} onStep={onStep} onProcedure={onProcedure} />
             ) : (
               <div className="px-2 text-xs leading-9 text-gh-gray whitespace-nowrap">No step added takes this</div>
-            )}
-            {offered.length > 0 && (
-              <div role="group" aria-label="Procedures" className="flex items-center">
-                <span className="shrink-0 truncate px-1.5 text-xs text-gh-gray" style={{ width: LABEL_W }}>
-                  Procedures
-                </span>
-                {offered.map((p) => (
-                  <button
-                    key={p.id}
-                    aria-label={`Procedure: ${p.name}`}
-                    title={p.needs.length ? `${p.name} - needs ${p.needs.join(" and ")}` : p.name}
-                    disabled={p.needs.length > 0}
-                    onClick={() => onProcedure?.(p.id)}
-                    className="rounded-md flex items-center justify-center text-gh-black hover:bg-gh-base disabled:opacity-35 disabled:hover:bg-transparent"
-                    style={{ width: SIZE, height: SIZE }}
-                  >
-                    <ProcedureGlyph size={20} stroke={2.1} />
-                  </button>
-                ))}
-              </div>
             )}
           </div>
         </div>
@@ -409,44 +408,88 @@ export default function QuickAdd({
  * first time, once the plugin that reads SMILES is set up - and what went
  * wrong, if anything, is said under it. Coordinates pasted in it are read
  * whole, their lines' ends and all, which the field itself would drop.
+ * A molecule the dictionary has - DMF, Et3N, THF - is drawn from the
+ * dictionary, its name and formula said under the field as it is typed;
+ * where the text is that and a SMILES too (NBS), each is offered there, the
+ * SMILES first, and Enter draws the one chosen - by a click, or the up and
+ * down arrows (chem/resolve).
  */
 function SmilesField({
   width,
   open,
+  seed,
   onSmiles,
+  onNamed,
   onCoordinates,
+  onOutput,
 }: {
   width: number;
   open: boolean;
+  /** A key typed in Quick Add with no icon chosen: the field begun with it (each its own `n`). */
+  seed?: { text: string; n: number } | null;
   onSmiles: (smiles: string) => Promise<void>;
+  onNamed?: (label: string) => void;
   onCoordinates?: (structures: CoordinateStructure[]) => void;
+  onOutput?: (text: string) => void;
 }) {
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // (a SMILES no plugin here reads: the plugins online that do, each to add - RoleOffer)
+  const [needs, setNeeds] = useState<RoleId | null>(null);
   const [busy, setBusy] = useState(false);
+  // (where chemistry stands while it is got ready or started: one line under the field - a SMILES typed meanwhile waits, and is drawn)
+  const chem = useChem();
+  const share = useDownloads((d) => (chem.state === "setting-up" ? d[chem.id] : undefined));
+  // (what the text reads as - offered only where the dictionary has it: a SMILES alone is drawn as it was - and which is chosen)
+  const named = onNamed != null;
+  const readings = useMemo(() => (named ? resolve(text, "molecule").readings : []), [text, named]);
+  const offered = readings.some((r) => r.as === "label") ? readings : [];
+  const [choice, setChoice] = useState(0);
+  const chosen: Reading | undefined = offered[Math.min(choice, offered.length - 1)];
   // (a SMILES being read: a second Enter as quick as the first finds it so, though React has not drawn the first's yet)
   const reading = useRef(false);
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (open) input.current?.focus();
   }, [open]);
+  // (begun with the key typed in Quick Add: what is there now, as typed, the caret after it)
+  useEffect(() => {
+    if (!seed) return;
+    setText(seed.text);
+    setChoice(0);
+    setError(null);
+    setNeeds(null);
+  }, [seed]);
+  /** The SMILES read and drawn; or why not, and the plugins online that read it (./quickAddSmiles). */
+  const read = (smiles: string) => {
+    reading.current = true;
+    setBusy(true);
+    setError(null);
+    setNeeds(null);
+    void readSmiles(smiles, onSmiles)
+      .then((r) => {
+        if (!r) return;
+        setError(r.error);
+        setNeeds(r.needs);
+      })
+      .finally(() => {
+        reading.current = false;
+        setBusy(false);
+      });
+  };
   return (
     <form
-      className="mt-1 pt-1 border-t border-gh-line"
+      className="mt-1 pt-1 pb-0.5 border-t border-gh-line"
       style={{ width }}
       onSubmit={(e) => {
         e.preventDefault();
         const smiles = text.trim();
         if (!smiles || busy || reading.current) return;
-        reading.current = true;
-        setBusy(true);
-        setError(null);
-        onSmiles(smiles)
-          .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
-          .finally(() => {
-            reading.current = false;
-            setBusy(false);
-          });
+        if (chosen?.as === "label") {
+          onNamed!(chosen.label);
+          return;
+        }
+        read(smiles);
       }}
     >
       <input
@@ -454,15 +497,22 @@ function SmilesField({
         value={text}
         onChange={(e) => {
           setText(e.target.value);
+          setChoice(0);
           setError(null);
+          setNeeds(null);
+        }}
+        onKeyDown={(e) => {
+          if (offered.length < 2 || (e.key !== "ArrowDown" && e.key !== "ArrowUp")) return;
+          e.preventDefault();
+          const at = Math.min(choice, offered.length - 1);
+          setChoice((at + (e.key === "ArrowDown" ? 1 : offered.length - 1)) % offered.length);
         }}
         onPaste={(e) => {
-          const pasted = e.clipboardData.getData("text/plain");
-          // (no SMILES reads as coordinates: an atom is an element and three numbers with decimal points)
-          const structures = onCoordinates ? readCoordinates(pasted) : [];
-          if (!structures.length) return;
+          const as = pastedAs(e.clipboardData.getData("text/plain"), { output: !!onOutput, coordinates: !!onCoordinates });
+          if (!as) return;
           e.preventDefault();
-          onCoordinates!(structures);
+          if ("output" in as) onOutput!(as.output);
+          else onCoordinates!(as.structures);
         }}
         placeholder={onCoordinates ? "SMILES or coordinates" : "SMILES"}
         aria-label="SMILES"
@@ -472,7 +522,80 @@ function SmilesField({
         autoComplete="off"
         className="w-full h-8 rounded-md border border-gh-line px-2 font-mono text-xs outline-none focus:border-accel-base focus:ring-2 focus:ring-accel-lightbase"
       />
+      {offered.length > 0 && <DrawAs offered={offered} chosen={chosen} onChoose={setChoice} />}
+      {/* (where chemistry stands, while it is got ready or started - many seconds on a first start: said here, where it is typed) */}
+      {!error && !needs && chemistryLine(chem, share, busy) && (
+        <div role="status" className="meno-fade-in px-0.5 pt-1 text-[11px] leading-snug text-gh-gray">
+          {chemistryLine(chem, share, busy)}
+        </div>
+      )}
       {error && <div className="px-0.5 pt-1 text-[11px] leading-snug text-accel-accent break-words">{error}</div>}
+      {needs && (
+        <div className="flex flex-wrap items-center gap-1.5 px-0.5 pt-1 text-[11px]">
+          <RoleOffer
+            role={needs}
+            // (added: what was typed is read again, and drawn - not typed again)
+            done={() =>
+              afterAdded(text, reading.current, read, () => {
+                setError(null);
+                setNeeds(null);
+              })
+            }
+          />
+        </div>
+      )}
     </form>
+  );
+}
+
+/**
+ * What the SMILES field's text will be drawn as, under it: each reading -
+ * the SMILES, the dictionary's molecule by its name (or its label) - with
+ * its formula (once, where the label is the formula), the one chosen in
+ * Meno's colour; a click chooses another.
+ */
+export function DrawAs({ offered, chosen, onChoose }: { offered: readonly Reading[]; chosen: Reading | undefined; onChoose: (i: number) => void }) {
+  return (
+    <div role="radiogroup" aria-label="Draw as" className="flex flex-wrap gap-1 pt-1">
+      {offered.map((r, i) => (
+        <button
+          key={i}
+          type="button"
+          role="radio"
+          aria-checked={r === chosen}
+          // (the field keeps the keys: Enter still draws)
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => onChoose(i)}
+          className={`h-6 max-w-full truncate rounded-full border px-2 text-[11px] leading-6 transition-colors duration-150 ease-meno ${r === chosen ? "border-accel-base bg-accel-lightbase text-gh-black" : "border-gh-line text-gh-gray hover:bg-gh-base"}`}
+        >
+          {r.as === "smiles" ? "SMILES" : r.as === "label" && r.name ? r.name : <FormulaText text={r.as === "label" ? r.label : r.formula} />}
+          {/* (a label that is its formula, PdCl2, is said once) */}
+          {!(r.as === "label" && !r.name && sameFormula(r.label, r.formula)) && (
+            <>
+              {" \u00b7 "}
+              <FormulaText text={r.formula} />
+            </>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** An icon of a row Quick Add opens below its own: as the row's icons are, named as the pointer rests on it. */
+function RowIcon({ name, icon, onClick, onPointerDown }: { name: string; icon: ReactNode; onClick?: () => void; onPointerDown?: (e: React.PointerEvent) => void }) {
+  return (
+    <button
+      aria-label={name}
+      title={name}
+      onClick={onClick}
+      onPointerDown={onPointerDown}
+      className="meno-press rounded-md flex items-center justify-center text-gh-black hover:bg-gh-base transition-colors duration-150 ease-meno"
+      style={{ width: SIZE, height: SIZE }}
+    >
+      <svg viewBox="0 0 20 20" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        {icon}
+      </svg>
+    </button>
   );
 }

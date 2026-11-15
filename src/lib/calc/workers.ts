@@ -1,13 +1,18 @@
 import { create } from "zustand";
-import { ensurePyEnv, pyEnvReady, removePyEnv } from "../pyEnv";
-import { anyPluginById, manifestOf, READERS, runs, type Plugin, type PythonPlugin, type ReaderPlugin } from "./catalog";
+import { ensurePyEnv, pyEnvReady, removePyEnv, setUpQuestions } from "../pyEnv";
+import { ALL_PLUGINS, anyPluginById, DEPENDS_REFUSED, manifestOf, pluginName, pluginsUsedBy, pluginsUsing, READERS, runs, type Plugin, type PythonPlugin, type ReaderPlugin } from "./catalog";
+import { askToConnectAll, type ConsentRequest } from "../net/network";
 import { registerKinds } from "../io/kinds";
 import type { Manifest } from "../plugins/manifest";
 import type { ReaderClient, Reader } from "./client";
 import { menoReader } from "./builtin";
 import { stopWorker, workerOf } from "../plugins/process";
 import { useAppSettings } from "../settings/appSettings";
-import { forThisSystem } from "../plugins/here";
+import { forThisSystem, systemHere } from "../plugins/here";
+import { inRange, rangeSaid } from "../plugins/depends";
+import { offersOf } from "../plugins/catalogue";
+import { getPlugin, onlineEntry, useOnline } from "../plugins/online";
+import { onPluginsChanged } from "../plugins/known";
 import { stopJobsAndWait } from "../jobs";
 
 /**
@@ -35,15 +40,32 @@ const setState = (id: string, state: ReaderState, problem?: string) => {
     state: { ...s.state, [id]: state },
     problem: problem ? { ...s.problem, [id]: problem } : Object.fromEntries(Object.entries(s.problem).filter(([k]) => k !== id)),
   }));
-  // (the kinds of the plugins added - until one is taken away - registered with Meno's own)
+  registerAll();
+};
+
+/**
+ * The kinds of the plugins added - until one is taken away - registered with
+ * Meno's own; and those only plugins not added read, to name them for a file
+ * nothing added reads: those here, and those on offer online, none of them
+ * here, made for this system and this Meno.
+ */
+function registerAll(): void {
   const now = useReaders.getState().state;
+  const catalogue = useOnline.getState().catalogue;
+  const here = new Map(ALL_PLUGINS.map((p) => [p.id, p.version]));
   registerKinds(
     Object.keys(now)
       .filter((p) => now[p] === "added" || now[p] === "removing")
       .map(manifestOf)
       .filter((m): m is Manifest => m != null),
+    ALL_PLUGINS.map((p) => manifestOf(p.id)).filter((m): m is Manifest => m != null),
+    catalogue ? offersOf(catalogue, here, systemHere()).flatMap((o) => (o.offer === "add" ? [o.entry] : [])) : [],
   );
-};
+}
+
+// (and again as the plugins online are listed, or the list is let go of - and as one is put in place or taken away: lib/plugins/known)
+useOnline.subscribe((s, was) => s.catalogue !== was.catalogue && registerAll());
+onPluginsChanged(registerAll);
 
 let meno: Reader | null = null;
 
@@ -84,15 +106,115 @@ let setUps: Promise<unknown> = Promise.resolve();
 const asked = new Map<string, number>();
 let lastAsked = 0;
 
+/** The plugins added now, by id. */
+export function addedNow(): Set<string> {
+  const now = useReaders.getState().state;
+  return new Set(Object.keys(now).filter((id) => now[id] === "added"));
+}
+
+/** A list in words: "a", "a and b", "a, b and c". */
+const listSaid = (names: readonly string[]) => (names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`);
+
 /**
- * Adds a plugin: sets its environment up, asking first whether it may
- * download - after any set-up asked for before it (`setUps`); one that runs
- * nothing, at once. Asked again while it waits or is being set up, nothing
- * more. Where it is not added, why is said on it (`problem`) until it is
- * asked for again.
+ * Adds a plugin, and first the plugins it uses that are not added, each
+ * before any that uses it (docs/PLUGINS.md, *Depends*) - all asked of the
+ * network in one question; no, and none is set up. Where one of those it
+ * uses is not set up, neither is it, saying why.
  */
 export async function addPlugin(p: Plugin): Promise<void> {
   if (!forThisSystem(p)) throw new Error(`${p.name} is not made for this system.`);
+  // (a plugin it needs that is not got yet - one the list of plugins online offers: got first, as Settings gets one, of a
+  //  version it works with; the plugins in place then read again, so that it is set up with it below - and so on, for
+  //  those that one needs in turn)
+  const needed = (id: string) => (manifestOf(id)?.depends ?? []).filter((d) => !d.optional && !anyPluginById(d.plugin));
+  const toGet = needed(p.id);
+  // (each got once in this add, whatever the chain: plugins that need each other in a circle are refused once got, and
+  //  would otherwise be asked for again, and got again, for ever)
+  const got = new Set<string>();
+  for (let d = toGet.shift(); d; d = toGet.shift()) {
+    if (anyPluginById(d.plugin) || got.has(d.plugin)) continue;
+    got.add(d.plugin);
+    const entry = onlineEntry(d.plugin);
+    const why = !entry
+      ? `${p.name} was not added: it needs ${pluginName(d.plugin)}, which is neither here nor among the plugins online.`
+      : !inRange(entry.version, d.range)
+        ? `${p.name} was not added: it needs ${entry.name} ${rangeSaid(d.range)}, and the plugins online offer ${entry.version}.`
+        : null;
+    if (why) {
+      setState(p.id, "absent", why);
+      throw new Error(why);
+    }
+    try {
+      await getPlugin(entry!);
+    } catch (e) {
+      const said = `${p.name} was not added: ${e instanceof Error ? e.message : String(e)}`;
+      setState(p.id, "absent", said);
+      throw e;
+    }
+    toGet.push(...needed(d.plugin));
+  }
+  // (one it needs still not one Meno takes, got though it is - refused, as plugins in a circle are: not added, saying why)
+  const unread = got.size ? (manifestOf(p.id)?.depends ?? []).find((d) => !d.optional && !anyPluginById(d.plugin)) : undefined;
+  if (unread) {
+    const why = `${p.name} was not added: it needs ${pluginName(unread.plugin)}, which Meno does not take: ${DEPENDS_REFUSED.get(unread.plugin) ?? "it could not be read"}.`;
+    setState(p.id, "absent", why);
+    throw new Error(why);
+  }
+  // (one that runs nothing uses others too: a preset plugin, the plugin that runs its files)
+  const first = pluginsUsedBy(p.id).filter((q) => useReaders.getState().state[q.id] !== "added");
+  if (!first.length) return addOne(p);
+  const missing = first.find((q) => !forThisSystem(q));
+  if (missing) {
+    const why = `${p.name} was not added: it uses ${missing.name}, which is not made for this system.`;
+    setState(p.id, "absent", why);
+    throw new Error(why);
+  }
+  // (one question for all of them: each one's own words under its name)
+  // (only those that run something are set up, and asked of: one that runs nothing is added at once)
+  const all = [...first, p].filter(runs);
+  let asks: { name: string; request: Awaited<ReturnType<typeof setUpQuestions>>[number] }[];
+  try {
+    asks = (await Promise.all(all.map(async (q) => (await setUpQuestions(q.profile)).map((request) => ({ name: q.name, request }))))).flat();
+  } catch (e) {
+    const why = `${p.name} was not added: ${e instanceof Error ? e.message : String(e)}`;
+    setState(p.id, "absent", why);
+    throw e;
+  }
+  // (an interface to a program installed separately is set up, never that program downloaded: "the ORCA interface", as its own question says it)
+  const named = (q: Plugin) => (runs(q) && q.installed.length ? `the ${q.name}` : q.name);
+  const them = listSaid(first.map(named));
+  // (none to ask of where none of them fetches anything)
+  const allowed = !asks.length || (await askToConnectAll(
+    `${!runs(p) ? "Add" : p.installed.length ? "Set up" : "Download"} ${named(p)}, with ${them}?`,
+    `It uses ${them}, which ${first.length === 1 ? "is" : "are"} set up first.`,
+    asks,
+  ));
+  if (!allowed) {
+    const why = `${p.name} was not added: it needs the network, and was not allowed it (Meno is offline, or the download was declined).`;
+    setState(p.id, "absent", why);
+    throw new Error(why);
+  }
+  const askedOf = (q: Plugin) => asks.filter((a) => a.name === q.name).map((a) => a.request);
+  for (const q of first) {
+    try {
+      await addOne(q, askedOf(q));
+    } catch (e) {
+      const why = `${p.name} was not added: ${q.name}, which it uses, could not be set up.`;
+      setState(p.id, "absent", why);
+      throw e;
+    }
+  }
+  return addOne(p, askedOf(p));
+}
+
+/**
+ * Adds one plugin: sets its environment up, asking first whether it may
+ * download - unless that was asked already, with others - after
+ * any set-up asked for before it (`setUps`); one that runs nothing, at once.
+ * Asked again while it waits or is being set up, nothing more. Where it is
+ * not added, why is said on it (`problem`) until it is asked for again.
+ */
+async function addOne(p: Plugin, askedWithOthers?: readonly ConsentRequest[]): Promise<void> {
   if (!runs(p)) {
     markTakenAway(p, false);
     setState(p.id, "added");
@@ -110,7 +232,7 @@ export async function addPlugin(p: Plugin): Promise<void> {
     skips.delete(p.id);
     setState(p.id, "adding");
     try {
-      await ensurePyEnv(p.profile);
+      await ensurePyEnv(p.profile, askedWithOthers ? { asked: askedWithOthers } : undefined);
       markTakenAway(p, false);
       setState(p.id, "added");
     } catch (e) {
@@ -163,13 +285,33 @@ export function waitingSaid(now: Record<string, ReaderState>): string {
   return name ? `Waiting for ${name}'s set-up…` : "Waiting…";
 }
 
+/** The plugins added that use a plugin, and those that use them in turn, in the order they are taken away: what taking it away takes away too. */
+export function addedUsing(id: string): Plugin[] {
+  const added = addedNow();
+  return pluginsUsing(id).filter((q) => added.has(q.id));
+}
+
 /**
- * Takes a plugin away: the jobs of its named (`stopping`) stopped and
- * ended first - the chemist having said they may be - its worker stopped,
- * its environment removed - and, where it fills a role, not set up again of
- * itself; one that runs nothing, at once.
+ * Takes a plugin away, and first the plugins added that use it, each before
+ * the one it uses (docs/PLUGINS.md, *Depends*) - those only where the
+ * chemist said they may go too (`withUsing`: Settings, *Plugins*, asks),
+ * else nothing is taken away, saying why: never one alone that another
+ * added uses, nor one taken away unasked. The jobs named (`stopping`) are stopped and ended first - the
+ * chemist having said they may be.
  */
-export async function removePlugin(p: Plugin, stopping: readonly string[] = []): Promise<void> {
+export async function removePlugin(p: Plugin, stopping: readonly string[] = [], withUsing = false): Promise<void> {
+  const using = addedUsing(p.id);
+  if (using.length && !withUsing) throw new Error(`${p.name} was not removed: ${listSaid(using.map((q) => q.name))} ${using.length === 1 ? "uses" : "use"} it.`);
+  for (const q of using) await removeOne(q, stopping);
+  return removeOne(p, stopping);
+}
+
+/**
+ * Takes one plugin away: the jobs named (`stopping`) stopped and ended
+ * first, its worker stopped, its environment removed - and, where it fills
+ * a role, not set up again of itself; one that runs nothing, at once.
+ */
+async function removeOne(p: Plugin, stopping: readonly string[] = []): Promise<void> {
   if (!runs(p)) {
     markTakenAway(p, true);
     setState(p.id, "absent");

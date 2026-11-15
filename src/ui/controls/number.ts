@@ -1,5 +1,5 @@
-/** The numbers a field takes: from `min` to `max`, each where given; `step` what an arrow key adds or takes away. */
-export type NumberRange = { min?: number; max?: number; step?: number };
+/** The numbers a field takes: from `min` to `max`, each where given, whole ones alone where `whole`; `step` what an arrow key adds or takes away. `unsettable`: the field may be left empty, which is no number (NaN), and says it is unset. */
+export type NumberRange = { min?: number; max?: number; step?: number; whole?: boolean; unsettable?: boolean };
 
 /**
  * A number field as it is (NumberField): the text in it, the last good
@@ -17,8 +17,20 @@ export type NumberEvent =
   | { kind: "set"; value: number };
 
 /** What a number field shows of `value`: nothing, where there is none. */
-function shown(value: number): string {
+export function shown(value: number): string {
   return Number.isFinite(value) ? String(value) : "";
+}
+
+/**
+ * Whether Escape, in a field with `text` in it standing for `value`, takes
+ * back what was typed: where the text is other than the field shows of the
+ * value - nothing, for none. Else it is left to close what the field is in.
+ */
+export const escapeTakes = (text: string, value: number): boolean => text !== shown(value);
+
+/** The range a number field takes, from what it is given: its bounds, step, whole, and whether it may be left unset. */
+export function rangeOf(r: NumberRange): NumberRange {
+  return { min: r.min, max: r.max, step: r.step, whole: r.whole, unsettable: r.unsettable };
 }
 
 /** A number field showing `value`. */
@@ -48,16 +60,15 @@ function placesOf(n: number): number {
 }
 
 /** Whether `n` is a number `range` takes. */
-function inRange(n: number, { min, max }: NumberRange): boolean {
-  return Number.isFinite(n) && (min == null || n >= min) && (max == null || n <= max);
+function inRange(n: number, { min, max, whole }: NumberRange): boolean {
+  return Number.isFinite(n) && (min == null || n >= min) && (max == null || n <= max) && (!whole || Number.isInteger(n));
 }
 
-/** The numbers `range` takes, said: "From 1 to 100", "At least 0", "At most 5" - or nothing, where any is. */
-export function rangeSaid({ min, max }: NumberRange): string {
-  if (min != null && max != null) return `From ${min} to ${max}`;
-  if (min != null) return `At least ${min}`;
-  if (max != null) return `At most ${max}`;
-  return "";
+/** The numbers `range` takes, said: "From 1 to 100", "At least 0", "At most 5", "A whole number from 1 to 100" - or nothing, where any is. */
+export function rangeSaid({ min, max, whole }: NumberRange): string {
+  const bounds = min != null && max != null ? `from ${min} to ${max}` : min != null ? `at least ${min}` : max != null ? `at most ${max}` : "";
+  if (whole) return `A whole number${min != null && max != null ? " " : bounds ? ", " : ""}${bounds}`;
+  return bounds && bounds[0].toUpperCase() + bounds.slice(1);
 }
 
 /**
@@ -77,6 +88,8 @@ export function numberField(d: NumberDraft, e: NumberEvent, range: NumberRange =
     case "escape":
       return numberDraft(d.value);
     case "commit": {
+      // (an empty field of a number that may be unset: it is - none, not the last good number)
+      if (range.unsettable && d.text.trim() === "") return numberDraft(NaN);
       const n = typedNumber(d.text);
       if (inRange(n, range)) return numberDraft(n);
       return { ...numberDraft(d.value), refused: d.text !== shown(d.value) };
@@ -84,7 +97,11 @@ export function numberField(d: NumberDraft, e: NumberEvent, range: NumberRange =
     case "step": {
       const step = range.step ?? 1;
       const typed = typedNumber(d.text);
-      const from = Number.isFinite(typed) ? typed : Number.isFinite(d.value) ? d.value : (range.min ?? 0);
+      const was = Number.isFinite(typed) ? typed : Number.isFinite(d.value) ? d.value : (range.min ?? 0);
+      // (a whole number's field steps to the next number of its grid - its least, and each step from it - on the
+      // arrow's side, from one typed off it: with a step of 10 from 10, 2005.5 goes up to 2010 and down to 2000)
+      const base = range.min ?? 0;
+      const from = range.whole ? base + (e.by > 0 ? Math.floor((was - base) / step) : Math.ceil((was - base) / step)) * step : was;
       const n = from + e.by * step;
       // (to as many places as the step or the number has, the more: 0.1 and 0.2 add to 0.3, and 0.25 and 1 to 1.25)
       const places = Math.max(placesOf(step), placesOf(from));
@@ -104,4 +121,9 @@ export function setAsItGoes(d: NumberDraft, typing: boolean, range: NumberRange 
   if (!typing) return null;
   const next = numberField(d, { kind: "commit" }, range);
   return Object.is(next.value, d.value) ? null : next.value;
+}
+
+/** A field asked for at once (`autoFocus`) taken: focused, with nothing scrolled to it - a card opening as it grows, never jumped in. */
+export function askedFocus(field: { focus: (o?: FocusOptions) => void } | null): void {
+  field?.focus({ preventScroll: true });
 }

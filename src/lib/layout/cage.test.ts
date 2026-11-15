@@ -358,3 +358,19 @@ describe("a cage eased onto its template", () => {
     }
   });
 });
+
+describe("a ring system's solid, an atom in it asked to be straight", () => {
+  it("keeps its two bonds in a line, found anew rather than as the same system's solid without it", () => {
+    // (cyclooctane, and the same ring with atom 0 asked to be straight: the solid without it found first)
+    const angleAt0 = (linear: boolean) => {
+      const mol = perceive({ atoms: Array.from({ length: 8 }, (_, i) => ({ el: "C", ...(i === 0 && linear ? { linear: true } : {}) })), bonds: Array.from({ length: 8 }, (_, i) => ({ a: i, b: (i + 1) % 8, order: 1 })) });
+      const s = solidOf(mol, mol.systems[0]);
+      const [o, p, q] = [s.get(0)!, s.get(1)!, s.get(7)!];
+      const u = p.map((v, k) => v - o[k]);
+      const w = q.map((v, k) => v - o[k]);
+      return (Math.acos(u.reduce((a, v, k) => a + v * w[k], 0) / Math.hypot(...u) / Math.hypot(...w)) * 180) / Math.PI;
+    };
+    expect(angleAt0(false)).toBeLessThan(120);
+    expect(angleAt0(true)).toBeGreaterThan(165);
+  });
+});

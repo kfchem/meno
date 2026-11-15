@@ -1,0 +1,51 @@
+{
+  "id": "molgen",
+  "name": "Molgen",
+  "version": "0.1.0",
+  "description": "Generates molecules from a made-up prior.",
+  "licence": "Apache-2.0",
+  "homepage": "https://example.org/molgen",
+  "environment": "uv",
+  "systems": [
+    "macos",
+    "linux"
+  ],
+  "setUpBytes": 900000000,
+  "steps": [
+    {
+      "kinds": [
+        "generate"
+      ],
+      "options": [
+        {
+          "id": "count",
+          "label": "How many",
+          "type": "number",
+          "default": 20,
+          "min": 1,
+          "max": 1000,
+          "step": 1
+        },
+        {
+          "id": "seed",
+          "label": "Random seed",
+          "type": "number",
+          "default": 7,
+          "min": 0,
+          "max": 2147483647,
+          "step": 1
+        }
+      ]
+    }
+  ],
+  "downloads": [
+    {
+      "file": "molgen.prior",
+      "name": "Molgen's prior",
+      "licence": "Apache-2.0",
+      "url": "https://downloads.example.org/molgen/molgen.prior",
+      "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "bytes": 30000000
+    }
+  ]
+}

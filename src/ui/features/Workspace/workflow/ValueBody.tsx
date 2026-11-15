@@ -1,20 +1,35 @@
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { NumberValue, Table, TableColumn } from "../../../../lib/table";
-import { numberText } from "../../../../lib/calc/results";
+import { ABOVE_DECIMALS, numberText } from "../../../../lib/calc/results";
 import { axisLabel, chartSaid, howOf, ticksOf, type Axis, type ChartLeft, type ChartPoint, type ChartValue } from "../../../../lib/chart";
-import { diagramHow, diagramSaid, frequenciesSaid, type DiagramLevel, type DiagramValue } from "../../../../lib/energyDiagram";
-import { CHART_PX } from "./look";
+import { diagramHow, diagramSaid, pointedSaid, relative, type DiagramLevel, type DiagramOther, type DiagramValue } from "../../../../lib/energyDiagram";
+import { usePresence } from "../../../theme/presence";
+import { CHART_PX, TABLE_COLUMN_GAP_PX, TABLE_FOOT_PX, TABLE_GAP_PX, TABLE_HEAD_PX, TABLE_ROW_PX, TABLE_SHOWN_ROWS } from "./look";
 
 /** How many of a table's rows its frame shows. */
-const SHOWN_ROWS = 6;
+const SHOWN_ROWS = TABLE_SHOWN_ROWS;
 /** How many of its columns. */
 const SHOWN_COLUMNS = 4;
 
-/** A column's head as its frame shows it: its name, and a number's unit. */
-const headOf = (c: TableColumn) => (c.kind === "number" && c.unit !== "none" ? `${c.name} (${c.unit})` : c.name);
+/** A column's head as its frame shows it: its label - else its name - and a number's unit. */
+const headOf = (c: TableColumn) => {
+  const shown = c.label ?? c.name;
+  return c.kind === "number" && c.unit !== "none" ? `${shown} (${c.unit})` : shown;
+};
+/** What a column's head says on hover: its head, and the name it is matched on where a label stands for it ("Product · map.entry"). */
+const headTitle = (c: TableColumn) => (c.label && c.label !== c.name ? `${headOf(c)} \u00b7 ${c.name}` : headOf(c));
 
 /** A cell as its frame shows it: a number as Meno writes numbers, true or false, text as it is, none as a dash. */
-const cellText = (v: string | number | boolean | null) => (v == null ? "–" : typeof v === "number" ? numberText(v) : typeof v === "boolean" ? (v ? "true" : "false") : v);
+const cellText = (v: string | number | boolean | null, decimals?: number) => (v == null ? "–" : typeof v === "number" ? numberText(v, decimals) : typeof v === "boolean" ? (v ? "true" : "false") : v);
+/**
+ * How many decimals a number column's numbers are written with, one count
+ * for the column, so that their points line up - "0.00" over "0.37": an
+ * energy in kcal/mol as a molecule's chip writes one under ten (calc/results
+ * `aboveText`, two), so that the same value reads the same in both; any
+ * other as many as the one of those shown that needs most (`numberText`).
+ */
+const decimalsOf = (c: TableColumn, values: readonly (string | number | boolean | null)[]) =>
+  c.kind === "number" && c.unit === "kcal/mol" ? ABOVE_DECIMALS : Math.max(0, ...values.map((v) => (typeof v === "number" ? (numberText(v).split(".")[1]?.length ?? 0) : 0)));
 
 /**
  * A set holding a table, inside its frame (docs/WORKFLOWS.md, *Tables*):
@@ -25,6 +40,7 @@ const cellText = (v: string | number | boolean | null) => (v == null ? "–" : t
 export function TableBody({ table }: { table: Table }) {
   const columns = table.columns.slice(0, SHOWN_COLUMNS);
   const rows = table.rows.slice(0, SHOWN_ROWS);
+  const decimals = columns.map((c, j) => (c.kind === "number" ? decimalsOf(c, rows.map((r) => r[j])) : undefined));
   const said = [
     `${table.rows.length.toLocaleString("en-US")} ${table.rows.length === 1 ? "row" : "rows"} · ${table.columns.length} ${table.columns.length === 1 ? "column" : "columns"}`,
     ...(table.columns.length > SHOWN_COLUMNS ? [`the first ${SHOWN_COLUMNS} shown`] : []),
@@ -32,12 +48,14 @@ export function TableBody({ table }: { table: Table }) {
     ...(table.left.length ? [`${table.left.length} left`] : []),
   ].join(" · ");
   return (
-    <div className="flex flex-col gap-1.5 w-full text-[11px] leading-4" data-set-table="">
+    // (each height set as the set's frame counts it - look TABLE_*_PX - never left to its text)
+    <div className="flex flex-col w-full text-[11px] leading-4" style={{ gap: TABLE_GAP_PX }} data-set-table="">
       <table className="w-full table-fixed border-collapse tabular-nums">
         <thead>
-          <tr>
-            {columns.map((c) => (
-              <th key={c.name} className="truncate text-left font-medium text-gh-gray border-b border-gh-line pb-0.5 pr-2" title={headOf(c)}>
+          <tr style={{ height: TABLE_HEAD_PX }}>
+            {columns.map((c, j) => (
+              // (a number's head over its numbers, at the right as they are; any other at the left)
+              <th key={c.name} className={`truncate font-medium text-gh-gray border-b border-gh-line p-0 ${c.kind === "number" ? "text-right" : "text-left"}`} style={{ paddingLeft: j ? TABLE_COLUMN_GAP_PX : 0 }} title={headTitle(c)}>
                 {headOf(c)}
               </th>
             ))}
@@ -45,17 +63,17 @@ export function TableBody({ table }: { table: Table }) {
         </thead>
         <tbody>
           {rows.map((r, i) => (
-            <tr key={i}>
+            <tr key={i} style={{ height: TABLE_ROW_PX }}>
               {columns.map((c, j) => (
-                <td key={c.name} className={`truncate pr-2 text-gh-black ${c.kind === "number" ? "text-right" : ""}`}>
-                  {cellText(r[j])}
+                <td key={c.name} className={`truncate p-0 text-gh-black ${c.kind === "number" ? "text-right" : ""}`} style={{ paddingLeft: j ? TABLE_COLUMN_GAP_PX : 0 }}>
+                  {cellText(r[j], decimals[j])}
                 </td>
               ))}
             </tr>
           ))}
         </tbody>
       </table>
-      <div className="text-[10px] text-gh-gray" title={[...table.unread.map((u) => `${u.column ? `${u.column}, ` : ""}row ${u.row}: ${u.why}`), ...table.left.map((l) => `${l.column}: ${l.why}`)].join("\n") || undefined}>
+      <div className="text-[10px] text-gh-gray" style={{ height: TABLE_FOOT_PX, lineHeight: `${TABLE_FOOT_PX}px` }} title={[...table.unread.map((u) => `${u.column ? `${u.column}, ` : ""}row ${u.row}: ${u.why}`), ...table.left.map((l) => `${l.column}: ${l.why}`)].join("\n") || undefined}>
         {said}
       </div>
     </div>
@@ -219,23 +237,26 @@ export function ChartBody({
   );
 }
 
-/** A value relative to the reference as a level says it: to a tenth of a kcal/mol, signed. */
-const relative = (v: number) => {
-  const t = numberText(v, 1);
-  return t === "0.0" ? t : v > 0 ? `+${t}` : t;
-};
+/** How far above the line a level's name stands, in px: its words' box ends on that line - a bar's, or the highest thin line's (`nameTop`). */
+export const NAME_RISE = 14;
+
+/** Where the name of a level stands, from its top: above the highest of the lines its bar and its thin lines make, at `ys` from the plot's top - so that no line strikes through it. */
+export const nameTop = (ys: readonly number[]): number => Math.min(...ys) - NAME_RISE;
 
 /**
  * A set holding an energy diagram, inside its frame (docs/WORKFLOWS.md,
  * *Energy diagrams*): each level a bar at its energy relative to the
  * reference, its name above and its value below, the lines between levels
- * dashed; the axis its quantity, unit and what worked it out. A level
- * pointed at says its value and, where it stands for several, of how many
- * it is the lowest and which; pressed, its lowest is shown (`onLevel`).
+ * dashed - in the column its place along the lines gives it, levels of one
+ * column side by side; where a level's other entries are asked for, each a
+ * thin line at its own value, on the bar's column - the name above the
+ * highest of them, never struck through by one. The axis its quantity, unit and
+ * what worked it out. A level or a thin line pointed at says its value
+ * (`pointedSaid`); pressed, the entry it stands at is shown (`onLevel`).
  * How many levels, relative to which, and what was left, never hidden.
  */
 export function DiagramBody({ diagram, onLevel }: { diagram: DiagramValue; onLevel?: (l: DiagramLevel) => void }) {
-  const [pointed, setPointed] = useState<DiagramLevel | null>(null);
+  const [pointed, setPointed] = useState<{ level: DiagramLevel; other?: DiagramOther } | null>(null);
   const values = diagram.levels.map((l) => l.value);
   const ty = ticksOf(Math.min(0, ...values), Math.max(0, ...values));
   const left = PLOT.label + Math.ceil(DIGIT * Math.max(...ty.ticks.map((t) => numberText(t).length))) + 8;
@@ -244,19 +265,24 @@ export function DiagramBody({ diagram, onLevel }: { diagram: DiagramValue; onLev
   const w = CHART_PX.w - left - PLOT.right;
   // (room below for the lowest's value, and two lines saying what it is)
   const h = CHART_PX.h - top - 46;
-  const slot = w / Math.max(1, diagram.levels.length);
-  const bar = Math.min(48, slot * 0.6);
-  const cx = (k: number) => slot * (k + 0.5);
+  // (a column each, as the lines give them - else each level its own: the levels of one column share its slot, in their order)
+  const columns = diagram.levels.map((l, k) => l.column ?? k);
+  const count = Math.max(1, ...columns.map((c) => c + 1));
+  const slot = w / count;
+  const sharing = columns.map((c) => columns.flatMap((x, k) => (x === c ? [k] : [])));
+  const room = (k: number) => slot / sharing[k].length;
+  const bar = (k: number) => Math.min(48, room(k) * 0.6);
+  const cx = (k: number) => slot * columns[k] + room(k) * (sharing[k].indexOf(k) + 0.5);
   const py = (v: number) => h - ((v - ty.from) / (ty.to - ty.from)) * h;
   const rowsLeft = diagram.left.reduce((n, l) => n + l.count, 0);
   const said = pointed
-    ? [
-        `${pointed.name} \u00b7 ${relative(pointed.value)} kcal/mol`,
-        ...(pointed.lowestOf > 1 ? [`lowest of ${pointed.lowestOf}${pointed.lowest.number != null ? `: #${pointed.lowest.number}` : ""}`] : []),
-        // (its imaginary frequencies, as the entry it stands at has them - said, whatever it should be)
-        ...(pointed.lowest.imaginary == null ? [] : [frequenciesSaid(pointed.lowest.imaginary)]),
-      ].join(" \u00b7 ")
+    ? pointedSaid(pointed.level, pointed.other)
     : [diagramSaid({ ...diagram, left: [] }), diagramHow(diagram.axis), rowsLeft ? `${rowsLeft} left (${diagram.left.map((l) => `${l.count} ${l.why}`).join(", ")})` : ""].filter(Boolean).join(" \u00b7 ");
+  // (the thin lines as they are drawn, each where it stands: one gone is kept as it last was while it fades out - nothing pops)
+  const thinNow = diagram.levels.flatMap((l, k) =>
+    (l.others ?? []).map((o) => ({ key: `${l.name}|${o.entry ?? o.row}`, level: l, other: o, x1: cx(k) - bar(k) / 2, x2: cx(k) + bar(k) / 2, y: py(o.value) })),
+  );
+  const thin = usePresence(thinNow, (t) => t.key);
   return (
     <div className={wordsOf()} style={{ width: CHART_PX.w, height: CHART_PX.h }} data-set-diagram="">
       <svg className="absolute overflow-visible" style={{ left, top, pointerEvents: "auto" }} width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
@@ -265,20 +291,37 @@ export function DiagramBody({ diagram, onLevel }: { diagram: DiagramValue; onLev
           <line key={t} x1={-4} x2={0} y1={py(t)} y2={py(t)} {...AXIS} />
         ))}
         {diagram.links.map(([a, b], i) => {
-          const [p, q] = a < b ? [a, b] : [b, a];
-          return <line key={i} x1={cx(p) + bar / 2} x2={cx(q) - bar / 2} y1={py(diagram.levels[p].value)} y2={py(diagram.levels[q].value)} className="stroke-gh-gray" strokeWidth={1} strokeDasharray="3 3" />;
+          // (from the right end of the one standing further left to the left end of the other)
+          const [p, q] = cx(a) <= cx(b) ? [a, b] : [b, a];
+          return <line key={i} x1={cx(p) + bar(p) / 2} x2={cx(q) - bar(q) / 2} y1={py(diagram.levels[p].value)} y2={py(diagram.levels[q].value)} className="stroke-gh-gray" strokeWidth={1} strokeDasharray="3 3" />;
         })}
+        {/* (a level's other entries: thin, under the bar) */}
+        {thin.map(({ key, item: t, leaving }) => (
+          <g
+            key={key}
+            className={leaving ? "meno-fade-out" : "meno-fade-in"}
+            data-thin=""
+            style={{ cursor: onLevel && !leaving ? "pointer" : undefined, pointerEvents: leaving ? "none" : undefined }}
+            onPointerEnter={() => setPointed({ level: t.level, other: t.other })}
+            onPointerLeave={() => setPointed((q) => (q?.other === t.other ? null : q))}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={() => onLevel?.({ ...t.level, lowest: { ...t.level.lowest, row: t.other.row, entry: t.other.entry, number: t.other.number, imaginary: t.other.imaginary } })}
+          >
+            <rect x={t.x1} y={t.y - 4} width={t.x2 - t.x1} height={8} fill="transparent" />
+            <line x1={t.x1} x2={t.x2} y1={t.y} y2={t.y} className={pointed?.other === t.other ? "stroke-accel-base" : "stroke-gh-gray"} strokeWidth={1} />
+          </g>
+        ))}
         {diagram.levels.map((l, k) => (
-          <g key={k} style={{ cursor: onLevel ? "pointer" : undefined }} onPointerEnter={() => setPointed(l)} onPointerLeave={() => setPointed((q) => (q === l ? null : q))} onPointerDown={(e) => e.stopPropagation()} onClick={() => onLevel?.(l)}>
+          <g key={k} style={{ cursor: onLevel ? "pointer" : undefined }} onPointerEnter={() => setPointed({ level: l })} onPointerLeave={() => setPointed((q) => (q?.level === l && !q.other ? null : q))} onPointerDown={(e) => e.stopPropagation()} onClick={() => onLevel?.(l)}>
             {/* (a band wider than the bar, so that it is easy to point at) */}
-            <rect x={cx(k) - slot / 2} y={py(l.value) - 8} width={slot} height={16} fill="transparent" />
-            <line x1={cx(k) - bar / 2} x2={cx(k) + bar / 2} y1={py(l.value)} y2={py(l.value)} className={pointed === l ? "stroke-accel-base" : "stroke-gh-black"} strokeWidth={pointed === l ? 3 : 2} />
+            <rect x={cx(k) - room(k) / 2} y={py(l.value) - 8} width={room(k)} height={16} fill="transparent" />
+            <line x1={cx(k) - bar(k) / 2} x2={cx(k) + bar(k) / 2} y1={py(l.value)} y2={py(l.value)} className={pointed?.level === l && !pointed.other ? "stroke-accel-base" : "stroke-gh-black"} strokeWidth={pointed?.level === l && !pointed.other ? 3 : 2} />
           </g>
         ))}
       </svg>
       {/* (names, values, the axis's numbers and label in HTML: SVG text is not drawn on the page's layer) */}
       {diagram.levels.map((l, k) => (
-        <span key={`n${k}`} className="absolute -translate-x-1/2 truncate text-center text-gh-black" style={{ left: left + cx(k), top: top + py(l.value) - 14, maxWidth: slot }}>
+        <span key={`n${k}`} className="absolute -translate-x-1/2 truncate text-center text-gh-black" style={{ left: left + cx(k), top: top + nameTop([py(l.value), ...(l.others ?? []).map((o) => py(o.value))]), maxWidth: room(k) }}>
           {l.name}
         </span>
       ))}

@@ -68,7 +68,7 @@ export function placePictures(doc: WorkspaceDocument, step: WorkflowStep, made: 
 
   const was = resultOf(doc, step.id);
   if (was) doc = removePictures(doc, setMembers(doc, was).pictures);
-  const frame = was ? placeAgain(doc, step, was, width, height) : placeFor(doc, step, width, height);
+  const frame = was ? placeAgain(doc, step, was, width, height) : placeFor(doc, step, ONE_EXIT, width, height);
   const there = new Set((doc.pictures ?? []).map((p) => p.id));
   made.forEach(({ picture, size }, i) => {
     doc = addPicture(doc, { ...picture, x: frame.x0 + SET_PAD + middle + places[i].x, y: frame.y1 - SET_TOP + places[i].y, w: size[0], h: size[1] });

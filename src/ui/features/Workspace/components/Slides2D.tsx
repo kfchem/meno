@@ -20,6 +20,7 @@
  *   proportions kept and the opposite corner where it was.
  * - Lit while the pointer is on its edge or its number.
  */
+import { longPressMs } from "../longPress";
 import * as THREE from "three";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
@@ -33,7 +34,7 @@ import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { pageAt } from "../utils/page";
 import { guideScale } from "../utils/guiding";
 import { dragSelection } from "../utils/dragSelection";
-import { DOUBLE_CLICK_MS, LONG_PRESS_MS } from "../constants";
+import { DOUBLE_CLICK_MS } from "../constants";
 import { HeldLight } from "./HeldLight";
 import { heldShows, type Held } from "./held";
 import { useStyleOptions } from "../useDrawingStyle";
@@ -353,7 +354,7 @@ function SlideFrame({
       s2.selectSlides([s.id]);
       setHeld((h) => (h ? { ...h, done: true } : h));
       move();
-    }, LONG_PRESS_MS);
+    }, longPressMs());
     const onMove = (m: PointerEvent) => {
       if (panned || Math.hypot(m.clientX - from.x, m.clientY - from.y) < PAN_PX) return;
       panned = true;

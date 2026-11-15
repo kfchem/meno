@@ -7,13 +7,14 @@
  * structures, as a step after it takes them, are run's (`setStructures`,
  * `setStructuresTable`).
  */
-import { moleculesAsTable, WHAT_COLUMN, type Cell, type Table, type TableColumn } from "../../../../lib/table";
+import { moleculesAsTable, WHAT_COLUMN, type Cell, type ConstitutionOf, type Table, type TableColumn } from "../../../../lib/table";
 import { writeSmiles, type SmilesAtomOut } from "../../../../lib/chem/smiles";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
 import type { Model } from "../store/types";
 import { undrawnHydrogens } from "../chem/drawing";
 import { identityInputOf } from "../chem/identityOf";
-import { BEFORE_THE_EDIT, drawnAsEntry, FINISHED, recordWhy, STATE_FINISHED, type DrawnEntry } from "./entries";
+import { identityText } from "../../../../lib/chem/identity";
+import { BEFORE_THE_EDIT, drawnAsEntry, FINISHED, recordNumber, recordWhy, STATE_FINISHED, type DrawnEntry } from "./entries";
 import type { Property } from "../../../../lib/entry";
 
 /** The column of each structure's SMILES as the step that made it gave it, its stereo with it - none where none did. */
@@ -60,12 +61,18 @@ export function drawnSmiles(drawn: Model): string {
  * Whether a structure's drawing carries stereo - a centre wedged, a double
  * bond's cis or trans, an axis - or wedges that do not read: what Meno
  * reads of it (`identityInputOf`), which its SMILES from the drawing does
- * not write.
+ * not write. A metal's donors across from each other count where they
+ * tell one isomer from another (cisplatin's), not where every pairing is
+ * the same compound (PtCl4 2-'s).
  */
 export function drawnStereo(drawn: Model): boolean {
   if (!drawn.atoms.length) return false;
   const { input, unread } = identityInputOf(drawn);
-  return unread.length > 0 || input.atoms.some((a) => a.tetra) || input.bonds.some((b) => b.stereo) || !!input.axes?.length;
+  if (unread.length > 0 || input.atoms.some((a) => a.tetra) || input.bonds.some((b) => b.stereo) || !!input.axes?.length) return true;
+  // (a metal's donors across from each other, where they say something: cisplatin's, not PtCl4 2-'s, which every pairing writes alike)
+  if (!input.arrangements?.length) return false;
+  const { arrangements: _said, ...plain } = input;
+  return identityText(input) !== identityText(plain);
 }
 
 /** Whether a cell holds no value: none at all, or a value not worked out or not applicable (`notGiven`) - last in a sort, either way. */
@@ -96,6 +103,9 @@ function notGiven(p: Property | undefined): string | null {
   return "failed" in st ? `not worked out: ${st.failed}` : `not applicable: ${st.notApplicable}`;
 }
 
+/** The column that says which structure a row is, as a number (`structuresAsTable`): what a chart takes across, by default, to plot a value for each structure. */
+export const STRUCTURE_COLUMN = "structure";
+
 /**
  * Structures drawn as a table - Chart's too, where it takes them: a row
  * for each, in their order. Its columns: the row's id (`idOf`); what it is
@@ -116,7 +126,7 @@ function notGiven(p: Property | undefined): string | null {
  * as no result). A property no column can hold, or one with no value, is
  * said in `left`, as for molecules (lib/table `moleculesAsTable`).
  */
-export function structuresAsTable(entries: readonly DrawnEntry[], idOf: (k: number) => string = (k) => `structure:${k + 1}`): Table {
+export function structuresAsTable(entries: readonly DrawnEntry[], idOf: (k: number) => string = (k) => `structure:${k + 1}`, constitutionOf?: ConstitutionOf): Table {
   const n = entries.length;
   const read = entries.map((e, k) => drawnAsEntry(e, idOf(k)));
   const seen = moleculesAsTable(
@@ -125,10 +135,12 @@ export function structuresAsTable(entries: readonly DrawnEntry[], idOf: (k: numb
       const { [SMILES_PROPERTY]: _smiles, [STATE_COLUMN]: _state, ...properties } = entry.properties;
       return { ...entry, properties };
     }),
+    constitutionOf,
   );
   // (moleculesAsTable's own first three - id, constitution, configuration - are of a molecule's atoms, which an entry read
   //  by its record has none of: its id kept, its SMILES and state in their place)
-  const own = seen.columns.slice(3);
+  // (a value its record holds by the name of Meno's own column, `structure`, said apart: "structure (record)", as the SMILES are)
+  const own = seen.columns.slice(3).map((c) => (c.name === STRUCTURE_COLUMN ? { ...c, name: `${STRUCTURE_COLUMN} (record)` } : c));
   const ownRows = seen.rows.map((r) => r.slice(3));
   // (a value not worked out, in its cell: in its column, the first of its ways where it has several, or one of its own)
   const notWorked = new Map<string, (string | null)[]>();
@@ -160,8 +172,12 @@ export function structuresAsTable(entries: readonly DrawnEntry[], idOf: (k: numb
   const anyStereo = stereo.some(Boolean);
   const anyRecorded = recorded.some((s) => s != null);
   const anyAside = aside.some((w) => w != null);
+  // (which structure each row is, as a number a chart can take across: the number its record carries where every one
+  //  carries one - an Enumerate's - else its place from 1; never a place beside numbers)
+  const numbered = entries.length > 0 && entries.every((e) => recordNumber(e.record) != null);
   const columns: TableColumn[] = [
     seen.columns[0],
+    { name: STRUCTURE_COLUMN, kind: "number", unit: "none" },
     { name: WHAT_COLUMN, kind: "text" },
     ...(anyRecorded ? [{ name: SMILES_RECORD_COLUMN, kind: "text" } as const] : []),
     { name: SMILES_DRAWING_COLUMN, kind: "text" },
@@ -173,6 +189,7 @@ export function structuresAsTable(entries: readonly DrawnEntry[], idOf: (k: numb
   ];
   const rows = entries.map((e, k): Cell[] => [
     seen.rows[k][0],
+    numbered ? recordNumber(e.record)! : k + 1,
     `structure ${k + 1} of ${n}`,
     ...(anyRecorded ? [recorded[k]] : []),
     drawnSmiles(e.drawn),

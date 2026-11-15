@@ -1,8 +1,13 @@
+import type { Conversation } from "../conversation/types";
+import type { ConversationPatch } from "../conversation/ops";
+import type { Talking } from "./slices/conversationsSlice";
 import type { Failure, FailureKind } from "../workflow/failures";
+import type { Converged } from "../workflow/converged";
 import type { LeftOut } from "../utils/readNotes";
 import type { ShowBox } from "../utils/viewShow";
 import type { ChemMarks } from "../chem/marks";
 import type { AtomNumberKind, AtomNumbersShown } from "../utils/atomNumbers";
+import type { StructureMap } from "../chem/structureMaps";
 import type { CyclePatch, ImportedScheme, MarkOf, MarkPlaces, Relayout, WorkspaceDocument, WrittenAsLabel } from "../document";
 import type { SetHolds, SetKind, StepKind } from "../workflow/kinds";
 import type { OptionValues } from "../../../../lib/options";
@@ -65,6 +70,12 @@ export type Atom = EditorAtom & {
   /** The stack of drawings it is in, with the record it is of (utils/stacks). */
   stack?: AtomStack;
   /**
+   * The structure of several parts it is in, by number (docs/EDITOR-2D.md,
+   * *One structure of several parts*): the atoms that share it are one
+   * structure, bonded or not - a salt, a complex, the side of a map.
+   */
+  joined?: number;
+  /**
    * How large its structure is shown (docs/WORKSPACE.md, *Magnified
    * display*): every atom of a structure says the same; held where it is
    * shown, so many times as far apart about its centre, and read at its
@@ -114,16 +125,28 @@ export type Bond = BondChem & {
   /** A single bond's wedge, hash or wave; a double bond's "either": cis or trans not known. */
   stereo?: "up" | "down" | "wavy" | "either" | "none";
   doubleMode?: "auto" | "center" | "left" | "right";
-  stereoOrient?: "principle" | "reverse";
+  /**
+   * The atom (by id, `a` or `b`) a wedge is narrow at: a stereo wedge's
+   * centre, a perspective wedge's far end. Kept by atom, so a bond added or
+   * taken away beside it does not move it; every wedge in a document has
+   * one (document `wedgesHeld`). None given, the end with more bonds (`a`
+   * on a tie).
+   */
+  narrow?: number;
   /**
    * How a single bond with no stereo is drawn; plain when unset. "wedge" is
-   * a ring's bond in perspective toward the viewer, narrow where
-   * `stereoOrient` says; on a double bond it, or "bold", is the line the
-   * second one is drawn beside.
+   * a ring's bond in perspective toward the viewer, narrow at `narrow`; on
+   * a double bond it, or "bold", is the line the second one is drawn
+   * beside.
    */
   display?: "plain" | "bold" | "hashed" | "dashed" | "wedge";
   /** A dative bond, drawn as an arrow from `a`, the donor, to `b`. */
   dative?: boolean;
+  /**
+   * The bonds (by id) it passes behind where they cross on the page, said by the chemist: drawn with a gap there (chem/crossings). A look; kept
+   * on the bond behind, never both ways, and only where the two bonds' atoms do not all carry a depth, which says it then.
+   */
+  behind?: number[];
   /** Where its E or Z - an axis's Ra or Sa - was put by hand, from the bond's middle (`MarkAt`). */
   stereoAt?: MarkAt;
   /** Its E or Z shown, where it has one, as an atom's R or S (`Atom.stereoShown`). */
@@ -183,6 +206,18 @@ export type ArrowAtomMap = {
   complete: boolean;
   chosen: number;
   shown: boolean;
+  /**
+   * Before's atoms' numbers, by its atom (chem/atomMap `beforeNumbers`), where
+   * they were renumbered (*Renumber atoms*); else its heavy atoms in its
+   * order, then its hydrogens.
+   */
+  numbers?: number[];
+  /**
+   * The conformers paired (*Pair conformers*, chem/structureMaps): Before's
+   * frames and After's, each with each - frame 0 a molecule's own - to be
+   * written a pair of records each.
+   */
+  pairs?: { before: number[]; after: number[] };
 };
 /** A change to an arrow's form and colour: each said is set - its kind, its heads (1 or 2), an equilibrium's full heads, dashes, weight, corners (none: straight) and colour - null or "regular" taking what it set away. */
 export type ArrowFormPatch = {
@@ -403,6 +438,19 @@ export type PictureToAdd = { name: string; sha256: string; media: PictureMedia; 
 export type PdfReading = { at: number; zoom: number };
 /** Which of the 3D style's two looks a molecule is drawn in (lib/chem/style3d). */
 export type Look3D = Role3D;
+
+/** What a 3D structure's search going on has brought so far (docs/WORKSPACE.md, *As its search goes on*): its conformers, shown over what the document holds of it until the search ends. */
+export type Grown3D = Pick<Molecule3D, "atoms" | "frames" | "energies" | "made">;
+
+/**
+ * A 3D structure whose search goes on: what it has brought so far; the key
+ * its making was recorded with - for what the search brings to join that
+ * step where nothing came between; and its atoms and frames as the
+ * document holds them as it began (`base`): an edit that changes either -
+ * an atom moved, a conformer taken away - ends the search, the edit kept:
+ * what it brings is never written over one.
+ */
+export type Growing3D = { grown: Grown3D; key: string; base: Pick<Molecule3D, "atoms" | "frames"> };
 /**
  * A measurement on a molecule in 3D, between its atoms by index, in the
  * order they were chosen: two, a distance; three, the angle at the middle
@@ -435,6 +483,12 @@ export type Molecule3D = {
    * it, its chip saying it in plain words.
    */
   failed?: (Failure | null)[];
+  /**
+   * Where a run ended converged, frame by frame (workflow/converged; null,
+   * a frame none did): an optimisation, a saddle point's, a path's highest
+   * point refined - each of its frame's geometry, by its key.
+   */
+  converged?: (Converged | null)[];
   /**
    * A conformer set's: the imaginary frequencies each conformer's
    * calculation judged it has (lib/calc/output `CalcInfo.imaginary`), frame
@@ -540,6 +594,14 @@ export type Molecule3D = {
    * name, as it said it.
    */
   made?: { method?: string; how: { label: string; text: string }[]; energies?: string };
+  /**
+   * The entries it was made from, by id: its lineage, as each of its
+   * frames' entries gives it (workflow/entries `SetEntry.madeOf`) - where
+   * a *Conformers* step made it of a structure drawn whose record says
+   * what that was made from (`DrawnRecord.from`), the same: the one
+   * structure, in 3D. Not the molecule a step's entry is a frame of.
+   */
+  madeOf?: string[];
   /** What the text it was read from says of it - its charge and multiplicity, its energies - where it was read from coordinates in a text (lib/io/coordinates), as rows to show. */
   said?: { label: string; text: string }[];
   /**
@@ -564,6 +626,13 @@ export type Molecule3D = {
   stereo?: { atoms: Record<number, string>; bonds: Record<number, string>; chosen?: { atoms: number[]; bonds: number[] }; shown?: { atoms: number[]; bonds: number[] } };
   /** The numbers shown on its atoms (utils/atomNumbers): of what kind, and on which of them - all, given none; unset, none. */
   atomNumbers?: AtomNumbersShown;
+  /**
+   * Each of its frames after the first, as an atom map on the page numbers
+   * it (chem/structureMaps): its atoms' map numbers in that frame - a
+   * conformer may put two alike atoms each in the other's place - or null
+   * where its numbering could not be resolved, and it shows none.
+   */
+  mapFrames?: (number[] | null)[];
   /** What the calculation it was read from says of it, besides its geometries and energies (lib/calc). */
   calc?: CalcInfo;
   /**
@@ -574,7 +643,7 @@ export type Molecule3D = {
   numbers?: number[];
   /** Each frame's share of its compound, as a *Populations* step worked it out; unset, by Boltzmann at room temperature where it is a conformer set. */
   shares?: number[];
-  /** Each frame's degeneracy - how many forms of it its conformer search found alike (CREST's rotamers) - where it said: a Boltzmann weight counts each. */
+  /** Each frame's degeneracy - how many forms of it its conformer search found alike (its rotamers) - where it said: a Boltzmann weight counts each. */
   degeneracies?: number[];
   /**
    * Each frame's properties by name, as lib/entry has them - each with its
@@ -626,6 +695,13 @@ export type WordPlace = { page: number; at: number };
 /** Words selected in a PDF (docs/PDF.md, *Text*): from where the selection was begun to where it has been drawn to - either way round. */
 /** A structure of a PDF's figure (utils/pageStructures): which PDF, which page, which figure there by its box, and its key among the page's structures. */
 export type PdfStructurePick = { id: number; page: number; figure: [number, number, number, number]; key: string };
+/**
+ * A compound's number in a PDF's text under the pointer (docs/PDF.md, *A
+ * compound's number*): which PDF, what the number says, and where its word
+ * lies in the window - its card shown by it, once the pointer has rested
+ * there (`since`).
+ */
+export type PdfLens = { id: number; sha256: string; label: string; word: { left: number; top: number; right: number; bottom: number }; since: number };
 /**
  * A structure carried out of a PDF (docs/PDF.md, *Structures picked from a
  * PDF*): Meno's drawing of it (SVG, its size in the drawing's units), where
@@ -761,6 +837,28 @@ export type WorkflowSet = {
    * on no page. The steps after it take them from here.
    */
   drawnCollection?: DrawnModel[];
+  /**
+   * A step's result set whose exit is wired on, opened by the chemist to
+   * be seen on the page (docs/WORKFLOWS.md, *Held results*): laid out as
+   * one not wired on is, until they close it. Not opened, such a set is
+   * held - what it holds kept in the set itself, off the page, its frame
+   * drawn nowhere (workflow/onPage `heldSets`).
+   */
+  opened?: true;
+  /**
+   * A held set's molecules in 3D: the ids they had on the page, by their
+   * place in its collection (workflow/held) - given back as it is laid out
+   * again, so that what names them (a text shown from one, a chart's
+   * point) finds them again. This session's only: never in a file.
+   */
+  heldIds?: number[];
+  /**
+   * A large result set that shows its molecules one at a time
+   * (workflow/heldView): which of its collection its view showed when
+   * the workspace was saved. Only a file carries it - while the workspace is
+   * open the view's is `EditorState.heldShown`, which is not an undo step.
+   */
+  shown?: number;
   /** A result set opened from a file, or an earlier run's shown again: how many of its molecules or structures did not read, and were left out - said with its count until the step runs again. */
   unread?: number;
   /** A table it holds (lib/table, docs/WORKFLOWS.md *Tables*): read from a file and put on the page, or a step's; no members then. */
@@ -784,8 +882,15 @@ export type WorkflowSet = {
  * of how it is drawn (workflow/entries `drawnHash`): edited since, the
  * structure is another, and its properties and status are taken away,
  * `stale` saying why.
+ *
+ * `id` is the structure's lasting id, which what is made of it names it by
+ * (its conformers in 3D: workflow/entries `SetEntry.madeOf`): given as it
+ * is first put in a set - a structure the chemist drew as much as one a step
+ * gave - and kept however it moves, is saved and opened; edited into
+ * another structure, it is another's (workflow/entries `memberRecord`,
+ * `placedRecord`).
  */
-export type DrawnRecord = { from?: string[]; properties?: Record<string, Property>; status?: EntryStatus; of?: string; stale?: string };
+export type DrawnRecord = { id?: string; from?: string[]; properties?: Record<string, Property>; status?: EntryStatus; of?: string; stale?: string };
 /** A structure drawn as a step gave it: the drawing, and its record where it has one. */
 export type DrawnModel = Model & { record?: DrawnRecord };
 /** One of a set's members: a structure drawn, by its atoms' ids, with its record, where a step gave it one; a molecule in 3D, or a picture, by id. */
@@ -840,7 +945,7 @@ export type StepRan = {
   kept?: KeptJob[];
   /** A run the chemist keeps (docs/WORKFLOWS.md, *Earlier runs*): never dropped while kept. */
   keep?: true;
-  /** Every seed its line counts but does not name - made none, or not read, with why (workflow/programs `seedsSaid`): shown where the line is pointed at. */
+  /** Every seed its line counts but does not name - made none, or not read, with why (workflow/programs `seedsSaid`) - and every SMILES it could not read, as given, with why (`notReadNamed`): shown where the line is pointed at. */
   named?: string;
 };
 /** A job's file a workspace's file keeps (docs/FILE-IO.md, *A step's jobs*): its name in the job's folder, SHA-256, size, and what it is to the job. */
@@ -870,6 +975,8 @@ export type RunKeptResults = {
   unread?: number;
   restUnread?: number;
   drawn?: { made: DrawnModel[]; rest: DrawnModel[]; core?: SeriesCore };
+  /** The tables its later exits hold, by exit (an Atom map's bond changes). */
+  tables?: Record<string, Table>;
 };
 /**
  * A job a step's run started (lib/jobs): its id; the entries it is for, by
@@ -905,8 +1012,14 @@ export type StepRunning = {
   adopted?: Record<string, number>;
   /** Where some of its jobs ask for more than Settings lets jobs use, though no more than the computer has: said, in plain words: nothing else that declares memory runs beside one. */
   over?: string;
+  /** What its plugin says of how it prepared its jobs, in plain words (programs `readNote`): said on its line when it ends. */
+  note?: string;
+  /** How a step of two inputs paired them, where it is said on its line: "paired in order, by place", two conformer sets paired by their places (programs `programEntries`). */
+  paired?: string;
   /** The entries its plugin refused as it prepared the others' jobs: each by its place among those that came in, and why - out of its Failed exit when it ends. */
   refused?: { entry: number; kind: FailureKind; why: string }[];
+  /** The lone atoms it passed through as they came, its plugin's program taking none (workflow/programs `passesAsLone`): each by its place among those that came in - out of its Done exit when it ends, never sent. */
+  passed?: number[];
 };
 /** A step on the page: its kind, where its card's top left stands, who does it - Meno, or a plugin, by id - its options, what it last did - and its run, while its jobs wait or run. */
 export type WorkflowStep = {
@@ -923,20 +1036,26 @@ export type WorkflowStep = {
   /** *Don't keep raw outputs*: its jobs' files kept in the workspace's file are only what they were given, what was read back of them, and their logs. */
   keepRaw?: false;
 };
-/** Where a wire starts: a set - a step's exits are sets of their own, so a step has no give port of its own. */
+/** Where a wire starts: a set - a step's exits are sets of their own, and each exit's port on its card is its set's (look `stepGives`). */
 export type WireEnd = { set: number };
 /** Where a wire ends: a step, and which of its inputs. */
 export type WireTo = { step: number; port: string };
 /** A wire, from the set that gives to the input that takes it. */
 export type Wire = { id: number; from: WireEnd; to: WireTo };
 /** What of a workflow is the view's, not the document's. */
-export type WorkflowView = "hoveredSet" | "chosenSet" | "hoveredStep" | "hoveredWire" | "openStep" | "choosingAtoms" | "wireDrag" | "wireRefused" | "workflowMenu" | "askDeleteStep" | "askDeleteSet";
+/** What a frames chip's Copy items put on the clipboard: all it says of the frame shown, and each frame's energy as a table, where it has energies (utils/chipSaid). */
+export type ChipCopy = { all: string; energies: string | null };
+
+/** A line a card says that its menu copies - a step's failure, its program's last line - by the item's name (Workflow2D). */
+export type CopyLine = { name: string; text: string };
+
+export type WorkflowView = "hoveredSet" | "hoveredExit" | "chosenSet" | "hoveredStep" | "hoveredWire" | "openStep" | "choosingAtoms" | "wireDrag" | "wireRefused" | "workflowMenu" | "chipOver" | "askDeleteStep" | "askDeleteSet";
 /**
  * A job of a step's, as last looked at (lib/jobs): where it is, when it
  * was asked for, started and ended; its place among those waiting, where it
  * waits; and the last line of its log, where it runs.
  */
-export type JobSeen = { state: JobState; created: number; started?: number; ended?: number; place?: number; line?: string; progress?: { done: number; total: number } };
+export type JobSeen = { state: JobState; created: number; started?: number; ended?: number; place?: number; line?: string; progress?: { done: number; total: number }; lastWritten?: number };
 /** A turn, as a quaternion's x, y, z and w. */
 export type Turn3D = [number, number, number, number];
 /** A molecule in 3D rising out of its drawing (EditorState `rising3d`). */
@@ -1095,6 +1214,9 @@ export type EditorState = {
   /** The structure of a PDF's figure under the pointer, lit whole (docs/PDF.md, *Structures picked from a PDF*). */
   pdfStructureLit: PdfStructurePick | null;
   setPdfStructureLit: (pick: PdfStructurePick | null) => void;
+  /** A compound's number in a PDF's text under the pointer, its structure's card by it (components/CompoundCard). */
+  pdfLens: PdfLens | null;
+  setPdfLens: (lens: PdfLens | null) => void;
   /** Structures picked in a PDF, Shift adding more - one selection in a PDF at a time, with its words' and its box's. */
   pdfStructures: { id: number; picks: PdfStructurePick[] } | null;
   setPdfStructures: (picked: { id: number; picks: PdfStructurePick[] } | null) => void;
@@ -1166,6 +1288,10 @@ export type EditorState = {
   stacksShown: Record<number, number>;
   /** A stack shows another of its molecules - turned as the one it showed was. */
   showInStack: (stack: number, id: number) => void;
+  /** Which molecule each large result set that shows them one at a time shows, by the set's id: its place in its collection; the first if absent (workflow/heldView). */
+  heldShown: Record<number, number>;
+  /** A large result set's view shows another of its molecules - turned as the one it showed was; not an undo step. */
+  showHeld: (setId: number, index: number) => void;
   /** A stack's molecules laid out as a grid where it stands, each shown: one undo step. */
   spreadStack: (stack: number) => void;
   /** A stack's molecules, laid out as a grid, stacked again in its middle, `shown` the one it shows: one undo step. */
@@ -1179,6 +1305,20 @@ export type EditorState = {
    * undo, nothing unsaved.
    */
   talkLooks: Readonly<Record<number, Look3D>>;
+  /**
+   * 3D structures whose search goes on (docs/WORKSPACE.md, *As its search
+   * goes on*), by id: what each has brought so far, shown over what the
+   * document holds of it - the view's alone until the search ends, when it
+   * is written into the document once (`settleGrown3d`). Gone where its
+   * molecule is: an undo that took it away, a 3D structure made again.
+   */
+  growing3d: Readonly<Record<number, Growing3D>>;
+  /** A 3D structure's search going on from now (`growing3d`): what it has brought so far shown, its making's `key`, its atoms as the document holds them now its `base`. */
+  startGrowing3d: (id: number, grown: Grown3D, key: string) => void;
+  /** What a 3D structure's search going on has brought since shown (`growing3d`): the conformer shown kept shown, where it is still among them. None, to let it go. Nothing where its search has ended - its molecule gone or edited: never begun again. */
+  grow3d: (id: number, grown: Grown3D | null) => void;
+  /** What a 3D structure's search brought written into the document and let go: one step with its making, where nothing came between (its `key`). */
+  settleGrown3d: (id: number) => void;
   /** A molecule in 3D shown in its other look for the talk being given. */
   switchTalkLook3d: (id: number) => void;
   /** The looks a talk switched let go: each molecule as the document has it. */
@@ -1272,7 +1412,7 @@ export type EditorState = {
    * to rest, turned as `turn` says, rising out of the drawing from `from` -
    * in place of the molecules `replacing`, made from it before it changed.
    */
-  riseMolecules3d: (made: ({ m: Omit<Molecule3D, "id">; turn: Turn3D } & Omit<Rising3D, "start">)[], replacing?: number[]) => number[];
+  riseMolecules3d: (made: ({ m: Omit<Molecule3D, "id">; turn: Turn3D } & Omit<Rising3D, "start">)[], replacing?: number[], key?: string) => number[];
   /** A molecule in 3D has risen. */
   risen3d: (id: number) => void;
   /**
@@ -1342,6 +1482,8 @@ export type EditorState = {
   removeMeasure3d: (id: number, measure: number) => void;
   /** The electron-pushing arrows. */
   pushes: PushArrow[];
+  /** Atom maps between structures on the page, not on an arrow (chem/structureMaps). */
+  structureMaps: StructureMap[];
   /** The electron-pushing arrow under the pointer: its menu is the one a right-click opens. */
   hoveredPush: number | null;
   setHoveredPush: (id: number | null) => void;
@@ -1370,6 +1512,8 @@ export type EditorState = {
   pdfs: PdfItem[];
   /** PDFs held put on the page, as one step: the first where `at` is, the others beside it in a row. */
   addPdfs: (pdfs: { name: string; sha256: string; pages: [number, number][] }[], at: { x: number; y: number }) => void;
+  /** A PDF locked with a password opened with it: each of its items has its pages' real sizes (kept at the next save, no step to undo). */
+  setPdfPages: (sha256: string, pages: [number, number][]) => void;
   /** A PDF moved, its top page's middle to (x, y): one step for a drag (`gesture`). */
   movePdf: (id: number, x: number, y: number, gesture?: string) => void;
   /** Another page on top of a PDF's stack. */
@@ -1434,6 +1578,26 @@ export type EditorState = {
   selShapes: Set<number>;
   hoveredShape: number | null;
   shapeDraft: ShapeDraft | null;
+  /** The conversations on the page, each in its frame (conversation/types); which is under the pointer, which is read in the column, and each one's turn - the view's. */
+  conversations: Conversation[];
+  hoveredConversation: number | null;
+  conversationShown: number | null;
+  talking: Record<number, Talking>;
+  setHoveredConversation: (id: number | null) => void;
+  addConversation: (frame: { x0: number; y0: number; x1: number; y1: number }) => number | null;
+  moveConversation: (id: number, dx: number, dy: number, gesture?: string) => void;
+  resizeConversation: (id: number, frame: { x0: number; y0: number; x1: number; y1: number }, gesture?: string) => void;
+  updateConversation: (id: number, patch: ConversationPatch) => void;
+  removeConversation: (id: number) => void;
+  readConversation: (id: number) => void;
+  stopReadingConversation: () => void;
+  clearConversation: (id: number) => void;
+  /** A conversation's card left scrolled to `offset` page px from the top of its history, or at its latest (null): the view's, no step of the history. */
+  scrollConversation: (id: number, offset: number | null) => void;
+  sendToConversation: (id: number, words: string) => Promise<void>;
+  stopConversation: (id: number) => void;
+  keepConversationChanges: (id: number) => void;
+  discardConversationChanges: (id: number) => "dropped" | "running" | "since" | "none";
   /** The catalytic cycles on the page (lib/chem/cycle); which are selected, which is under the pointer - the view's. */
   cycles: Cycle[];
   selCycles: Set<number>;
@@ -1600,14 +1764,22 @@ export type EditorState = {
   wires: Wire[];
   /** The set whose tab is under the pointer; the set chosen (its tab clicked); the step and the wire under the pointer; the step open to its options. */
   hoveredSet: number | null;
+  /** The step's result set whose exit's port is under the pointer (`exitPortHovered`): what it holds said beside the port, where it is held off the page. */
+  hoveredExit: number | null;
   chosenSet: number | null;
   hoveredStep: number | null;
   hoveredWire: number | null;
   openStep: number | null;
   /** A step's atoms being chosen on the drawing - Enumerate's positions: a click on an atom takes it into the step's option, or out of it (`AtomsOption`). */
   choosingAtoms: { step: number; option: string } | null;
-  /** A set's tab or a step's card right-clicked: its menu asked for, there (Workspace opens it). */
-  workflowMenu: { kind: "set" | "step"; id: number; clientX: number; clientY: number } | null;
+  /**
+   * A set's tab or a step's card right-clicked, or a molecule's frames chip
+   * (its molecule's id, and what its Copy items put on the clipboard): its
+   * menu asked for, there (Workspace opens it).
+   */
+  workflowMenu: { kind: "set" | "step" | "chip"; id: number | null; clientX: number; clientY: number; copy?: ChipCopy; lines?: CopyLine[] } | null;
+  /** Where a molecule's frames chip lies opened, in the page's units: the workflow's ports under it not drawn, as under an opened card - it is over them (components/useFramesChip). */
+  chipOver: { x0: number; y0: number; x1: number; y1: number } | null;
   /**
    * A wire being drawn, to where the pointer is: from what gives, or back
    * from a step that takes (`to`); picked up off the step it went into,
@@ -1642,15 +1814,31 @@ export type EditorState = {
   placeTable: (table: Table, at: { x: number; y: number }, name?: string) => number;
   /** A procedure saved, put down with its middle at (x, y), as one step - selected. */
   putDownProcedure: (id: string, x: number, y: number) => void;
-  /** A set's frame sized anew, or the set moved with all it holds: a run of either in one gesture one step. */
-  resizeSet: (id: number, frame: { x0: number; y0: number; x1: number; y1: number }, gesture?: string) => void;
+  /** A set moved with all it holds: a run of it in one gesture one step. */
   moveSet: (id: number, dx: number, dy: number, gesture?: string) => void;
+  /**
+   * Every frame its members' room, and what no set holds eased out of the
+   * frames it lies over (workflow/fitFrames `framesSettled`), as the pointer
+   * is let go: `down`, the document as it was when it was pressed. One edit that
+   * joins the gesture's step to undo, never a step of its own after one.
+   */
+  settleFrames: (down: WorkspaceDocument) => void;
+  /** Settles frames (`settleFrames`) as each pointer is let go; the call that stops it. */
+  watchFrames: () => () => void;
   /** A set deleted, or several in one step - one that holds its molecules itself, on no page, which go with it, only once asked about (`askDeleteSet`), `asked`. */
   removeSet: (id: number | readonly number[], asked?: boolean) => void;
   /** Sets that hold their molecules themselves asked to be deleted - by a key, or a selection that held them: the question asked (Workspace). */
   askDeleteSet: number[] | null;
-  /** A step of `kind`, done by `by` - Meno, or a plugin - put down, its card's top left at (x, y), with the defaults Settings has for its kind done by it; its id. */
-  addStep: (kind: StepKind, by: string, x: number, y: number) => number;
+  /**
+   * A step of `kind`, done by `by` - Meno, or a plugin - put down, its
+   * card's top left at (x, y), with the defaults Settings has for its kind
+   * done by it; its id. Brought by a wire drawn out of a set (`from`), let
+   * go at (x, y): wired from it in the same edit, and put close by the card
+   * it is wired from, where the set is a step's exit's.
+   */
+  addStep: (kind: StepKind, by: string, x: number, y: number, from?: WireEnd) => number;
+  /** A step put down from Quick Add (`addStep`): and, where it cannot run until a value of its options is given (doers `optionsNeed`), its card opened at once to ask for it. */
+  putDownStep: (kind: StepKind, by: string, x: number, y: number, from?: WireEnd) => number;
   moveStep: (id: number, x: number, y: number, gesture?: string) => void;
   /** A step's options changed - its own, the defaults left as they are - or its kind, to another who does it fills. */
   updateStep: (id: number, patch: { options?: OptionValues; kind?: StepKind }) => void;
@@ -1673,6 +1861,14 @@ export type EditorState = {
   /** A wire from a set into a step's input - the first that takes it, where none is named - where it may go (workflow/flow `canWire`); whether it went. */
   connect: (from: WireEnd, to: number, port?: string) => boolean;
   removeWire: (id: number) => void;
+  /** A step's result set held off the page opened to be seen on it, or closed again: an edit. */
+  openHeld: (id: number, open: boolean) => void;
+  /** A click on a step's exit's port, no wire drawn from it: its result set, wired on, shown on the page or held off it again (`openHeld`); nothing where its exit is wired on to none. */
+  exitPortClicked: (set: number) => void;
+  /** The pointer come onto a step's exit's port, or gone off it (`on`): its result set's, `set` - whatever draws the port. */
+  exitPortHovered: (set: number, on: boolean) => void;
+  /** A step's atoms chosen on the drawing from `option`, or no longer (null): what comes into it held off the page opened first. */
+  chooseAtomsFor: (step: number, option: string | null) => void;
   /**
    * A step run, and first the steps before it that need it - each step's
    * results coming in one step to undo. A step that runs a program waits
@@ -1685,6 +1881,8 @@ export type EditorState = {
   runAll: () => Promise<void>;
   /** A step's jobs asked to stop: those waiting never start, those running are stopped with what they started. */
   stopStep: (id: number) => void;
+  /** One of a running step's jobs asked to stop alone (*Stop this job*): recorded failed, its entries said stopped - its step goes on, bringing in what its other jobs gave. */
+  stopJobAlone: (job: string) => void;
   /** Every step's jobs asked to stop. */
   stopAll: () => void;
   /** A step's run kept, or no longer (docs/WORKFLOWS.md, *Earlier runs*): the one it shows at -1, an earlier one by its place among them - one step to undo. */
@@ -1720,6 +1918,9 @@ export type EditorState = {
   showRequest: { box: ShowBox; n: number } | null;
   /** The view to show `box`, as what was just put down is shown (`showRequest`). */
   requestShow: (box: ShowBox) => void;
+  /** The page slid on the screen by so many px, right and down where positive: a menu opened past the canvas's edge (menuAt). */
+  panRequest: { dx: number; dy: number; n: number } | null;
+  requestPan: (dx: number, dy: number) => void;
   autoFitSuspended: boolean;
   aromaticEnabled: boolean; // legacy/global
   aromaticRings: Record<string, boolean>; // per-ring enabled flags by ringKey
@@ -1831,6 +2032,11 @@ export type EditorState = {
     order?: Bond["order"],
   ) => void;
   connectAtoms: (a: number, b: number, order?: Bond["order"]) => number | null;
+  /**
+   * One bond out of atom `id`, where there is room (utils/geometry `newBondFrom`, `toward` the pointer), as one undo step:
+   * to the atom its end falls on, where it falls on one, else to a new carbon; single, or of `order`. The atom it ends at; null where none.
+   */
+  bondOut: (id: number, toward: { x: number; y: number }, order?: Bond["order"]) => number | null;
   replaceDraggedAtomWith: (movingId: number, targetId: number) => void;
   moveAtom: (id: number, x: number, y: number) => void;
   /**
@@ -1858,17 +2064,25 @@ export type EditorState = {
    */
   justExpanded: () => ReadonlySet<number>;
   updateBond: (id: number, patch: Partial<Bond>) => void;
-  /** Each of the bonds made of `kind` (utils/bondKinds), as one step. */
-  setBondsKind: (ids: readonly number[], kind: import("../utils/bondKinds").BondKindName) => void;
+  /** Bonds given a kind from a bond's menu, one step - with `stepOn`, each already of that kind one step on in its round instead; false where nothing changed. */
+  setBondsKind: (ids: readonly number[], kind: import("../utils/bondKinds").BondKindName, stepOn?: boolean) => boolean;
+  /** Bond `bondId` said to be in front of bond `otherId`, or behind it, where they cross; said again, taken away (chem/crossings). One step. */
+  orderCrossing: (bondId: number, otherId: number, how: "front" | "behind") => void;
+  /**
+   * A bond key (utils/bondKinds `bondKeyPatch`) with the pointer on bond `id`: what it makes of that bond, made of it alone,
+   * selected or not, as one step. False where it would change nothing.
+   */
+  bondKey: (id: number, key: import("../utils/bondKinds").BondKey) => boolean;
+  /**
+   * Clicks on bond `id`, `clicks` of them in a row (components/BondsPick2D): the first selects it alone (`clickSelectBond`) and
+   * changes nothing; the second makes it double, or a double's second line its next side; the third, a triple.
+   */
+  bondClicked: (id: number, clicks: number) => void;
   setBondOrder: (id: number, order: Bond["order"]) => void;
   setBondStereo: (id: number, stereo: NonNullable<Bond["stereo"]>) => void;
   setBondDoubleMode: (
     id: number,
     mode: NonNullable<Bond["doubleMode"]>,
-  ) => void;
-  setBondStereoOrient: (
-    id: number,
-    orient: NonNullable<Bond["stereoOrient"]>,
   ) => void;
   setSel: (sel: Sel, anchor?: number | null) => void;
   /**
@@ -1877,6 +2091,8 @@ export type EditorState = {
    * selection as it was, its shade drawn back in (`clickTakeBack`).
    */
   clickSelectAtom: (id: number) => void;
+  /** A click on a bond: it selected, alone, with its atoms (docs/EDITOR-2D.md, *How it is worked*). */
+  clickSelectBond: (id: number) => void;
   /** The click on `id` taken back by a double-click's second (`clickSelectAtom`): false where nothing was. */
   clickTakeBack: (id: number) => boolean;
   /**
@@ -1899,6 +2115,8 @@ export type EditorState = {
    * - all of one gesture one step.
    */
   moveAtoms: (moves: { id: number; x: number; y: number }[], gesture: string, marks?: MarkPlaces) => void;
+  /** A move's end: a mark between two bonds it has left apart - one with an atom among `atoms`, those it moved - taken away, in the move's own step (chem/crossings `crossingsApart`). */
+  settleMove: (gesture: string, atoms: Iterable<number>) => void;
   /** A move or a turn made with moveAtoms (`gesture`) let go of by Escape: taken back, nothing left to redo. */
   dropMoveAtoms: (gesture: string) => void;
   /** The selection turned over, left to right or top to bottom (utils/selection). */
@@ -2056,6 +2274,22 @@ export type EditorState = {
   setArrowForm: (ids: readonly number[], patch: ArrowFormPatch, gesture?: string) => void;
   /** An arrow given its reaction's atom map, or its map taken away (null), what it shows on the drawing with it - one step (chem/atomMap). */
   setAtomMap: (arrowId: number, map: ArrowAtomMap | null) => void;
+  /** Maps between structures on the page added (chem/structureMaps), what they show put on the drawing and its molecules in 3D: one undo step. */
+  addStructureMaps: (maps: readonly ArrowAtomMap[], replacing?: readonly number[]) => void;
+  /** The structures holding these atoms made one structure of several parts (utils/joinedParts): one undo step, nothing moved. */
+  joinStructures: (ids: Iterable<number>) => void;
+  /** The structures of several parts holding these atoms taken apart: one undo step. */
+  separateStructures: (ids: Iterable<number>) => void;
+  /** The maps between structures given, by id, shown or hidden: one step. */
+  showStructureMaps: (ids: readonly number[], shown: boolean) => void;
+  /** Each map between structures given, by id, showing its next map: one step. */
+  otherStructureMaps: (ids: readonly number[]) => void;
+  /** Each complete map between structures given, by id, its Before's atoms numbered by the drawing's order (chem/atomMap `renumbered`): one step. */
+  renumberStructureMaps: (ids: readonly number[]) => void;
+  /** An arrow's complete atom map renumbered likewise: one step. */
+  renumberAtomMap: (arrowId: number) => void;
+  /** A map between structures given its conformers paired (chem/structureMaps `conformerPairs`), Before's frames and After's: one step. */
+  pairStructureMap: (id: number, pairs: { before: number[]; after: number[] }) => void;
   /** An arrow's atom map shown on the drawing - its numbers and reacting centres - or taken off it, kept: one step. */
   showAtomMap: (arrowId: number, shown: boolean) => void;
   /** An arrow's next map, of those its reaction has, shown and used instead: one step. */

@@ -15,7 +15,7 @@ import type { KeptRole } from "../../../../lib/jobs";
 import { KINDS, type SetHolds, type SetKind, type StepKind } from "./kinds";
 import { SET_KINDS } from "../../../../lib/plugins/steps";
 import { readDrawnRecord, structureMember } from "./entries";
-import { readRefused } from "./programs";
+import { NAMED_KEPT, readRefused } from "./programs";
 import { leftOut, readEach } from "../utils/readNotes";
 import { isJobKey } from "../../../../lib/jobKeys";
 
@@ -61,7 +61,7 @@ function readSet(v: unknown): WorkflowSet | null {
   if (!b || !isId(b.id) || !isNum(b.x0) || !isNum(b.y0) || !isNum(b.x1) || !isNum(b.y1)) return null;
   const made = b.made as { step?: unknown; exit?: unknown; holds?: unknown } | undefined;
   const madeRead =
-    made && isId(made.step) && isName(made.exit) && (made.holds == null || SETS.includes(made.holds as SetKind) || made.holds === "pictures" || made.holds === "chart")
+    made && isId(made.step) && isName(made.exit) && (made.holds == null || SETS.includes(made.holds as SetKind) || ["pictures", "chart", "table", "number"].includes(made.holds as string))
       ? { step: made.step, exit: made.exit, ...(made.holds != null ? { holds: made.holds as SetHolds } : {}) }
       : undefined;
   // (one that says it was made by a step, but not by which as it reads: a set like any other - and said)
@@ -122,6 +122,10 @@ function readSet(v: unknown): WorkflowSet | null {
     })(),
     // (a result set kept out of its file, and what it held when it was saved)
     ...(b.keep === false && made ? { keep: false as const } : {}),
+    // (which of its molecules a large set showed, one at a time: its place in its collection - what the view is kept in range by)
+    ...(Array.isArray(b.collection) && Number.isInteger(b.shown) && (b.shown as number) > 0 ? { shown: b.shown as number } : {}),
+    // (a result set wired on that the chemist opened, to be seen on the page: workflow/held)
+    ...(b.opened === true && made ? { opened: true as const } : {}),
     ...(() => {
       const n = b.notKept as { count?: unknown; hash?: unknown } | undefined;
       return n && Number.isInteger(n.count) && (n.count as number) >= 0 && typeof n.hash === "string" ? { notKept: { count: n.count as number, hash: n.hash } } : {};
@@ -176,8 +180,8 @@ function readRan(v: unknown): StepRan | undefined {
     ...(Object.keys(options).length ? { options } : {}),
     // (a run the chemist keeps: never dropped while kept)
     ...(r.keep === true ? { keep: true as const } : {}),
-    // (every seed its line counts but does not name)
-    ...(typeof (r as { named?: unknown }).named === "string" && (r as { named: string }).named ? { named: (r as { named: string }).named.slice(0, 4000) } : {}),
+    // (every seed its line counts but does not name, and each SMILES it could not read)
+    ...(typeof (r as { named?: unknown }).named === "string" && (r as { named: string }).named ? { named: (r as { named: string }).named.slice(0, NAMED_KEPT) } : {}),
     ...(() => {
       const kept = readKeptJobs(r.kept, new Set(jobs));
       return kept.length ? { kept } : {};
@@ -309,9 +313,14 @@ function readRunning(v: unknown): StepRunning | undefined {
   }, "job");
   const kind = (r as { kind?: unknown }).kind;
   const over = (r as { over?: unknown }).over;
+  const note = (r as { note?: unknown }).note;
+  const paired = (r as { paired?: unknown }).paired;
   const adopted = adoptedIn((r as { adopted?: unknown }).adopted);
   // (those its plugin refused as it prepared the others' jobs: kept to be said failed when it ends)
   const refused = readRefused({ refused: (r as { refused?: unknown }).refused }, Number.MAX_SAFE_INTEGER);
+  // (the lone atoms it passed through as they came: kept to be brought in when it ends)
+  const passedIn = (r as { passed?: unknown }).passed;
+  const passed = Array.isArray(passedIn) ? [...new Set(passedIn.filter((i): i is number => Number.isInteger(i) && i >= 0))] : [];
   return jobs.length
     ? {
         at: r.at,
@@ -320,7 +329,10 @@ function readRunning(v: unknown): StepRunning | undefined {
         jobs,
         ...(KINDS.some((k) => k.kind === kind) ? { kind: kind as StepKind } : {}),
         ...(typeof over === "string" && over ? { over: over.slice(0, 300) } : {}),
+        ...(typeof note === "string" && note ? { note: note.slice(0, 300) } : {}),
+        ...(typeof paired === "string" && paired ? { paired: paired.slice(0, 300) } : {}),
         ...(refused.length ? { refused } : {}),
+        ...(passed.length ? { passed } : {}),
         ...(adopted ? { adopted } : {}),
       }
     : undefined;

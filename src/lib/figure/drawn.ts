@@ -23,16 +23,16 @@ export type FigureDrawn = { paths: FigurePath[]; letters: FigureLetter[]; pictur
 export type Point = { x: number; y: number };
 
 /** A straight stroke - a line stroked, or a bar filled - from `a` to `b`, `w` thick; a bar's own outline kept, as a letter's stem may be one; its colour (#rrggbbaa), and whether it is stroked dashed. */
-export type Stroke = { a: Point; b: Point; w: number; outline?: Point[]; ink?: string; dash?: true };
+export type Stroke = { a: Point; b: Point; w: number; outline?: Point[]; ink?: string; dash?: true; chain?: number; bar?: true };
 
 /** A filled wedge: its narrow end, the middle of its wide end, and how wide that is; its outline, and its colour. */
-export type Wedge = { tip: Point; base: Point; w: number; outline?: Point[]; ink?: string };
+export type Wedge = { tip: Point; base: Point; w: number; outline?: Point[]; ink?: string; chain?: number };
 
 /** A curve stroked, as points along it: a wavy bond, a ring's circle, an arrow's arc; its colour. */
 export type Curve = { pts: Point[]; closed: boolean; w: number; ink?: string };
 
 /** A filled shape that is none of the above - a letter drawn as its outline, a dot, an arrow's head: its outlines, each closed, a hole within another where the path has one; its colour. */
-export type Blob = { pts: Point[]; parts: Point[][]; box: Box; curved: boolean; ink?: string };
+export type Blob = { pts: Point[]; parts: Point[][]; box: Box; curved: boolean; ink?: string; chain?: number };
 
 /** What a figure's paths make: strokes, wedges, curves and other shapes. */
 export type Shapes = { strokes: Stroke[]; wedges: Wedge[]; curves: Curve[]; blobs: Blob[] };
@@ -249,17 +249,135 @@ function flatTipped(given: Point[]): Wedge | null {
   return { tip, base, w: across(wide), outline: given };
 }
 
+/**
+ * How thin a bar is at the most, against the polygon's longest straight run, to be a bond's line drawn as a filled outline: a line's width is a tenth of a
+ * bond or less (a letter's stroke, a fifth and more, is not); a bar cut short at a label is as thin as the bond it is the end of.
+ */
+const BAR_THIN = 0.1;
+
+/**
+ * A chain or a ring of bonds drawn as ONE filled outline - the thin polygon a drawing program leaves where it draws a chain's lines joined, its corners
+ * mitred or rounded, a ring as its outer and its inner outline - read as the bars it is made of: each bond's two long edges, a line's width apart,
+ * running opposite ways and over each other for most of their length, are one bar from end to end (its ends where it meets the next bar's line, a
+ * mitred corner's two points brought back to the one corner). Only a polygon of two bars or more is a chain; one whose bars do not meet at corners
+ * is a letter's stems, one whose bars do not fill it is a shape of its own - a frame, an arrow, a bracket's drawn tick: none. Its bars as strokes, or none.
+ * What a chain of bars is - a drawing's bonds, or a chart's line, a speck, a letter - is told by the drawing's own bond (`outlineChains`, ./read), not here.
+ */
+export function barsOfOutline(parts: readonly { pts: Point[]; straight: boolean[]; closed: boolean }[]): Stroke[] | null {
+  // (each straight run of each part: a curve's steps - a rounded corner, a rounded end - are no run, and runs along one line are one)
+  type Run = { a: Point; b: Point; len: number; u: Point };
+  const runs: Run[] = [];
+  for (const part of parts) {
+    const n = part.pts.length;
+    const steps = part.closed || dist(part.pts[0], part.pts[n - 1]) < 1e-3 ? n : n - 1;
+    let cur: Run | null = null;
+    for (let i = 0; i < steps; i++) {
+      const [p, q] = [part.pts[i], part.pts[(i + 1) % n]];
+      const len = dist(p, q);
+      const straight = i < part.straight.length ? part.straight[i] : true;
+      if (len < 1e-3 || !straight) {
+        if (cur) runs.push(cur);
+        cur = null;
+        continue;
+      }
+      const u = { x: (q.x - p.x) / len, y: (q.y - p.y) / len };
+      if (cur && Math.abs(cur.u.x * u.y - cur.u.y * u.x) < Math.sin((1.5 * Math.PI) / 180) && cur.u.x * u.x + cur.u.y * u.y > 0) {
+        cur = { a: cur.a, b: q, len: dist(cur.a, q), u };
+      } else {
+        if (cur) runs.push(cur);
+        cur = { a: p, b: q, len, u };
+      }
+    }
+    if (cur) runs.push(cur);
+  }
+  const longest = Math.max(0, ...runs.map((r) => r.len));
+  const long = runs.filter((r) => r.len >= 0.25 * longest);
+  // (the pairs: two runs running opposite ways, a line's width apart, over each other for most of the shorter)
+  const across = (r: Run, p: Point) => (p.x - r.a.x) * -r.u.y + (p.y - r.a.y) * r.u.x;
+  const along = (r: Run, p: Point) => (p.x - r.a.x) * r.u.x + (p.y - r.a.y) * r.u.y;
+  const partner = new Map<Run, { run: Run; gap: number }>();
+  for (const r of long) {
+    for (const t of long) {
+      if (t === r || r.u.x * t.u.x + r.u.y * t.u.y > -0.99) continue;
+      const gap = Math.abs(across(r, t.a) + across(r, t.b)) / 2;
+      const spread = Math.abs(across(r, t.a) - across(r, t.b));
+      if (gap < 1e-3 || gap > BAR_THIN * longest || spread > 0.25 * gap + 0.05) continue;
+      const [lo, hi] = [Math.max(0, Math.min(along(r, t.a), along(r, t.b))), Math.min(r.len, Math.max(along(r, t.a), along(r, t.b)))];
+      if (hi - lo < 0.7 * Math.min(r.len, t.len)) continue;
+      if (!partner.has(r) || gap < partner.get(r)!.gap) partner.set(r, { run: t, gap });
+    }
+  }
+  const bars: { a: Point; b: Point; w: number }[] = [];
+  const taken = new Set<Run>();
+  for (const [r, { run: t, gap }] of partner) {
+    if (taken.has(r) || partner.get(t)?.run !== r) continue;
+    taken.add(r).add(t);
+    // (the line between them, over the length they share)
+    const [lo, hi] = [Math.max(0, Math.min(along(r, t.a), along(r, t.b))), Math.min(r.len, Math.max(along(r, t.a), along(r, t.b)))];
+    const side = (across(r, t.a) + across(r, t.b)) / 4;
+    const at = (x: number): Point => ({ x: r.a.x + r.u.x * x + -r.u.y * side, y: r.a.y + r.u.y * x + r.u.x * side });
+    bars.push({ a: at(lo), b: at(hi), w: gap });
+  }
+  if (bars.length < 2) return null;
+  // (a chain's corners: where two bars' lines cross near their ends, the one point - a mitred corner's two points brought back to it)
+  const dir = (b: { a: Point; b: Point }) => ({ x: (b.b.x - b.a.x) / dist(b.a, b.b), y: (b.b.y - b.a.y) / dist(b.a, b.b) });
+  let corners = 0;
+  for (let i = 0; i < bars.length; i++) {
+    for (let j = i + 1; j < bars.length; j++) {
+      const [p, q] = [bars[i], bars[j]];
+      const [u, v] = [dir(p), dir(q)];
+      const den = u.x * v.y - u.y * v.x;
+      if (Math.abs(den) < Math.sin((12 * Math.PI) / 180)) continue;
+      const t = ((q.a.x - p.a.x) * v.y - (q.a.y - p.a.y) * v.x) / den;
+      const hit = { x: p.a.x + u.x * t, y: p.a.y + u.y * t };
+      const reach = 2 * Math.max(p.w, q.w) + 0.5;
+      const endP = dist(hit, p.a) < dist(hit, p.b) ? "a" : "b";
+      const endQ = dist(hit, q.a) < dist(hit, q.b) ? "a" : "b";
+      if (dist(hit, p[endP]) > reach || dist(hit, q[endQ]) > reach) continue;
+      p[endP] = hit;
+      q[endQ] = hit;
+      corners++;
+    }
+  }
+  // (a chain: its bars meet at corners, one fewer than they are - or as many, a ring; two stems of a big letter meet at none)
+  if (corners < bars.length - 1) return null;
+  // (the bars fill the polygon: their areas the polygon's, its corners and ends besides - else it is a shape of its own)
+  const polygon = Math.abs(parts.reduce((t, p) => t + area(p.pts), 0));
+  const barred = bars.reduce((t, b) => t + dist(b.a, b.b) * b.w, 0);
+  if (polygon <= 0 || barred < 0.6 * polygon || barred > 1.25 * polygon) return null;
+  return bars.map((b) => ({ a: b.a, b: b.b, w: b.w }));
+}
+
 /** The shapes a figure's paths make: what is drawn in paper's colour left out. */
 export function shapesOf(drawn: FigureDrawn): Shapes {
   const out: Shapes = { strokes: [], wedges: [], curves: [], blobs: [] };
   // (each filled shape read as a line or as a shape of no kind, and its corners)
   const cornersOf = new Map<object, Point[]>();
+  // (what a chain's polygon makes besides its bars - the shapes it was read as before - carries the chain's number, so that the reader can have
+  // either the bars or those, as the chain proves to be bonds or not: `outlineChains`)
+  let chains = 0;
+  let open: { id: number; s: number; b: number; w: number } | null = null;
+  const close = () => {
+    if (!open) return;
+    for (const s of out.strokes.slice(open.s)) if (!s.bar) s.chain = open.id;
+    for (const b of out.blobs.slice(open.b)) b.chain = open.id;
+    for (const w of out.wedges.slice(open.w)) w.chain = open.id;
+    open = null;
+  };
   for (const path of drawn.paths) {
+    close();
     const parts = partsOf(path.d);
     const filled = !blank(path.fill);
     const stroked = !blank(path.stroke) && path.width >= 0;
     if (filled) {
       const ink = path.fill!;
+      // (a chain or a ring of bonds drawn as one filled outline: the bars it is made of, each a line)
+      const bars = barsOfOutline(parts);
+      if (bars) {
+        const id = ++chains;
+        for (const b of bars) out.strokes.push({ ...b, ink, chain: id, bar: true });
+        open = { id, s: out.strokes.length, b: out.blobs.length, w: out.wedges.length };
+      }
       // (a letter drawn as its outline - several parts in one path, curved, a hole in some - is a blob whole)
       const curved = parts.some((p) => p.straight.some((s) => !s));
       if (parts.length > 1 && curved) {
@@ -299,11 +417,12 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
       }
     }
   }
-  // (a line drawn again over a longer one - a joint drawn as short pieces along the bonds that meet there, as RDKit draws
-  // one - is that line's, not a line of its own)
+  close();
+  // (a line drawn again over a longer one - a joint drawn as short pieces along the bonds that meet there, as some drawings
+  // have one - is that line's, not a line of its own)
   out.strokes = withoutDrawnOver(out.strokes);
-  // (a wedge drawn in two colours - black from its stereocentre to its middle, its wide half on in its atom's colour, as RDKit
-  // draws one by default - is one wedge: a filled four-cornered shape of another colour, its narrow end at the wedge's wide one,
+  // (a wedge drawn in two colours - black from its stereocentre to its middle, its wide half on in its atom's colour, as a
+  // drawing in element colours has one - is one wedge: a filled four-cornered shape of another colour, its narrow end at the wedge's wide one,
   // widening on the same way)
   out.wedges = out.wedges.map((w) => {
     const l = dist(w.tip, w.base);
@@ -345,7 +464,7 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
     out.wedges.push({ tip: at[0], base: { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 }, w: dist(p, q), outline: b.pts, ...(b.ink ? { ink: b.ink } : {}) });
     return false;
   });
-  // (a wedge's edges stroked round it - filled, then outlined, as RDKit draws one - its own, no lines: each end at a corner of it)
+  // (a wedge's edges stroked round it - filled, then outlined, as some drawings have one - its own, no lines: each end at a corner of it)
   const atCorner = (p: Point, w: Wedge, d: number) => (w.outline ?? []).some((q) => dist(p, q) <= d);
   out.strokes = out.strokes.filter((s) => !out.wedges.some((w) => atCorner(s.a, w, Math.max(0.5, 2 * s.w)) && atCorner(s.b, w, Math.max(0.5, 2 * s.w))));
   // (and a line drawn down a wedge, within it - its middle line, under the fill or over it, as some programs draw one - its own: else
@@ -361,8 +480,8 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
   out.strokes = out.strokes.filter(
     (s) => !out.wedges.some((w) => dist(w.tip, w.base) > 0 && dist(s.a, s.b) > 0.5 * dist(w.tip, w.base) && inWedge(s.a, w, Math.max(0.5, 2 * s.w)) && inWedge(s.b, w, Math.max(0.5, 2 * s.w))),
   );
-  // (a line drawn in two colours - a bond to an atom drawn in that atom's colour from its middle on, as RDKit draws one by
-  // default - is one line: two lines of different colours, end to end along one way, nothing else ending where they meet)
+  // (a line drawn in two colours - a bond to an atom drawn in that atom's colour from its middle on, as a drawing in element
+  // colours has one - is one line: two lines of different colours, end to end along one way, nothing else ending where they meet)
   // (once: a line so joined is a bond whole - an sp carbon's single bond going straight on into its triple bond's middle line is
   // another)
   const twoTone = new Set<Stroke>();

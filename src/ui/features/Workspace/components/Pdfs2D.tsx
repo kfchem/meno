@@ -23,6 +23,7 @@
  * the viewer and goes under; spread or gathered, the pages lift off one
  * after another and settle in their places.
  */
+import { longPressMs } from "../longPress";
 import { shownUnbroken } from "../../../../lib/pdf/make";
 import * as THREE from "three";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -31,7 +32,7 @@ import { Text } from "@react-three/drei";
 import { pageAt } from "../utils/page";
 import { setViewGoal } from "./viewGoal";
 import { useEditor, useEditorStore } from "../store";
-import type { PdfItem } from "../store/types";
+import type { PdfItem, PdfLens } from "../store/types";
 import {
   ICON_NAME_WIDTH,
   iconScale,
@@ -64,7 +65,10 @@ import { placeBefore, selects } from "../utils/pdfSelection";
 import { dragWords, onSelected, type OnScreen } from "./wordsDrag";
 import { dragBox, inBox } from "./boxDrag";
 import { figureAt, figuresHad } from "../../../../lib/pdf/figures";
-import { DOUBLE_CLICK_MS, LONG_PRESS_MS, MOV_PX } from "../constants";
+import { boxOnSheet, indexOnce, mentionUnder } from "../utils/compoundLens";
+import { figureStructuresHad } from "../utils/pdfStructures";
+import { structureAt } from "../utils/pageStructures";
+import { DOUBLE_CLICK_MS, MOV_PX } from "../constants";
 import { HeldLight } from "./HeldLight";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { dragSelection, selectionMoving } from "../utils/dragSelection";
@@ -75,6 +79,7 @@ import { spotMoving } from "./figureTie";
 import { atomAtSpot } from "../utils/figures";
 import { inkOnPage } from "../utils/pdfInk";
 import { hoverKeeper } from "./keptHover";
+import { useLocked } from "../../../../lib/doc/locked";
 import { useNotHad } from "../../../../lib/doc/notHad";
 
 /** Eased in and out, cubic: what is lifted rises and settles. */
@@ -124,6 +129,8 @@ export default function Pdfs2D() {
   const pdfs = useEditor((s) => s.pdfs);
   // (those that could not be had: each page crossed, until it is had again or taken away)
   const notHad = useNotHad((s) => s.shas);
+  // (those locked with a password not given: a padlock on each page, nothing drawn until it is opened)
+  const locked = useLocked((s) => s.shas);
   const hoveredPdf = useEditor((s) => s.hoveredPdf);
   const litPdf = useEditor((s) => s.litPdf);
   // (words selected, and places found, marked on the pages)
@@ -258,6 +265,11 @@ export default function Pdfs2D() {
       v.zoom = cam.zoom;
       v.x = cam.position.x;
       v.y = cam.position.y;
+      // (the view moved: a card the canvas showed stood by a word that is elsewhere now - let go)
+      if (lensHere.current) {
+        lensHere.current = false;
+        store.getState().setPdfLens(null);
+      }
     }
     if (moving) {
       v.still = now;
@@ -432,14 +444,18 @@ export default function Pdfs2D() {
    * only with the key held (followsLink; its words are selected by a long
    * press, not the text cursor's drag) - again as the key is pressed or let go.
    */
-  const keys = useRef({ metaKey: false, ctrlKey: false });
+  const keys = useRef({ metaKey: false, ctrlKey: false, altKey: false });
   const hovering = useRef<{ p: PdfItem | null; q?: { x: number; y: number } }>({ p: null });
+  /** Whether the compound's card is the canvas's: let go as the view moves, its word moving away under it. */
+  const lensHere = useRef(false);
   const hoverNow = useRef<(p: PdfItem | null, q?: { x: number; y: number }) => void>(() => {});
   useEffect(() => {
     const note = (e: KeyboardEvent | PointerEvent) => {
       const was = followsLink(keys.current);
-      keys.current = { metaKey: e.metaKey, ctrlKey: e.ctrlKey };
-      if (followsLink(keys.current) !== was && hovering.current.p) hoverNow.current(hovering.current.p, hovering.current.q);
+      const alt = keys.current.altKey;
+      keys.current = { metaKey: e.metaKey, ctrlKey: e.ctrlKey, altKey: e.altKey };
+      // (and the compound's card: ⌥ widens it to any number in the index)
+      if ((followsLink(keys.current) !== was || e.altKey !== alt) && hovering.current.p) hoverNow.current(hovering.current.p, hovering.current.q);
     };
     window.addEventListener("keydown", note, true);
     window.addEventListener("keyup", note, true);
@@ -463,6 +479,39 @@ export default function Pdfs2D() {
     const hit = p && q ? sheetUnder(p, q) : null;
     const st = store.getState();
     st.setFigureLit(p && q && hit ? atomAtSpot(st.model, p.sha256, hit.page, (q.x - (hit.s.x - hit.s.w / 2)) / pointOf(p), (hit.s.y + hit.s.h / 2 - q.y) / pointOf(p)) : null);
+    // (over a compound's number in its text: its structure's card - as in the column; one the column set is left to it)
+    const lens = p && q ? lensOn(p, q) : null;
+    if (lens || lensHere.current) {
+      lensHere.current = !!lens;
+      st.setPdfLens(lens);
+    }
+  };
+
+  /** A point of the page on the screen, in the window's pixels. */
+  const toScreen = (x: number, y: number) => {
+    const rect = (gl.domElement as HTMLCanvasElement).getBoundingClientRect();
+    const v = new THREE.Vector3(x, y, 0).project(camera);
+    return { x: rect.left + ((v.x + 1) / 2) * rect.width, y: rect.top + ((1 - v.y) / 2) * rect.height };
+  };
+  /**
+   * The compound's number under a point of a PDF (utils/compoundLens), at a size its words can be read - not on a structure of
+   * a figure, which is the structure's own: its card's lens, its word where it lies on the screen. Its PDF's numbers are read
+   * through in idle time from the first time its words are under the pointer.
+   */
+  const lensOn = (p: PdfItem, q: { x: number; y: number }): PdfLens | null => {
+    const w = wordsOn(p, q);
+    if (!w) return null;
+    indexOnce(p.sha256, p.pages.length);
+    const figs = figuresHad(p.sha256, w.page, invalidate);
+    const k = figs ? figs.findIndex((b) => w.x >= b[0] && w.x <= b[2] && w.y >= b[1] && w.y <= b[3]) : -1;
+    const read = figs && k >= 0 ? figureStructuresHad(p.sha256, w.page, figs, k, invalidate) : null;
+    if (read && structureAt(read.structures, w.x, w.y, read.marks)) return null;
+    const m = mentionUnder(w.t, w.x, w.y, keys.current.altKey);
+    if (!m) return null;
+    const on = boxOnSheet(m.box, w.sheet, pointOf(p));
+    const a = toScreen(on.x0, on.y0);
+    const b = toScreen(on.x1, on.y1);
+    return { id: p.id, sha256: p.sha256, label: m.label, word: { left: a.x, top: a.y, right: b.x, bottom: b.y }, since: performance.now() };
   };
 
   /** Whether a point of a PDF is on its rim: not well inside a page of it - by its edges, on the pages under it, or its name. */
@@ -570,7 +619,7 @@ export default function Pdfs2D() {
         selectAlone();
         const m = motion.current.get(p.id);
         if (m?.held) holdPdf(p.id, { ...m.held, done: true });
-      }, LONG_PRESS_MS);
+      }, longPressMs());
     } else if (boxes && spot) {
       st.setPressHold({ at: q, start: performance.now() });
       hold = window.setTimeout(() => {
@@ -581,7 +630,7 @@ export default function Pdfs2D() {
         // (the page's figures, if they have come since the press)
         const f = fig ?? figureAt(figuresHad(p.sha256, spot.page) ?? [], spot.x, spot.y);
         if (f) store.getState().setPdfBox({ id: p.id, page: spot.page, box: f });
-      }, LONG_PRESS_MS);
+      }, longPressMs());
     } else if (w && letter != null) {
       st.setPressHold({ at: q, start: performance.now() });
       hold = window.setTimeout(() => {
@@ -592,7 +641,7 @@ export default function Pdfs2D() {
         const [a, b] = wordAt(w.t, letter, w.x);
         selecting = { first: [{ page: w.page, at: a }, { page: w.page, at: b }] };
         store.getState().setPdfSel({ id: p.id, anchor: selecting.first[0], focus: selecting.first[1] });
-      }, LONG_PRESS_MS);
+      }, longPressMs());
     }
     const letLightGo = () => {
       const m = motion.current.get(p.id);
@@ -702,6 +751,7 @@ export default function Pdfs2D() {
           hovered={hoveredPdf === p.id}
           selected={selPdfs.has(p.id)}
           notHad={notHad.has(p.sha256)}
+          locked={locked.has(p.sha256)}
           motion={motion.current.get(p.id)}
           previewOf={(page) => pics.preview(p, page)}
           tilesOf={(page) => pics.tilesOf(p.sha256, page, view.current.level.get(p.id * 100000 + page) ?? 0)}
@@ -733,6 +783,8 @@ function PdfStack(props: {
   selected: boolean;
   /** It could not be had (lib/doc/notHad): its pages crossed. */
   notHad: boolean;
+  /** It is locked with a password it was not opened with (lib/doc/locked): a padlock on each page. */
+  locked: boolean;
   motion?: Motion;
   previewOf: (page: number) => Pic | null;
   tilesOf: (page: number) => Tile[];
@@ -848,7 +900,7 @@ function PdfStack(props: {
         {(g ? g.order : spreadOrder(p)).map((i, n) => {
           const { k, s } = sheets[i];
           const lift = Math.sin(Math.PI * k);
-          return <Page key={i} s={s} pt={p.pages[i]} lift={lift} z={0.02 * n + 0.2 * lift} now={now} px={px} preview={props.previewOf(i)} tiles={props.tilesOf(i)} marks={props.marksOf(i)} ink={inkOnPage(p, i)} notHad={props.notHad} />;
+          return <Page key={i} s={s} pt={p.pages[i]} lift={lift} z={0.02 * n + 0.2 * lift} now={now} px={px} preview={props.previewOf(i)} tiles={props.tilesOf(i)} marks={props.marksOf(i)} ink={inkOnPage(p, i)} notHad={props.notHad} locked={props.locked} />;
         })}
         {/* (lit round each page, not round all of them: they may lie far apart) */}
         {lit > 0.001 &&
@@ -900,7 +952,7 @@ function PdfStack(props: {
           {under.map((s, i) => (
             <BlankSheet key={i} s={s} z={0.01 * i} />
           ))}
-          <Page s={top} pt={p.pages[p.page]} lift={0} z={0.06} now={now} px={inPx} preview={props.previewOf(p.page)} tiles={props.tilesOf(p.page)} marks={k === 1 ? props.marksOf(p.page) : undefined} ink={inkOnPage(p, p.page)} notHad={props.notHad} />
+          <Page s={top} pt={p.pages[p.page]} lift={0} z={0.06} now={now} px={inPx} preview={props.previewOf(p.page)} tiles={props.tilesOf(p.page)} marks={k === 1 ? props.marksOf(p.page) : undefined} ink={inkOnPage(p, p.page)} notHad={props.notHad} locked={props.locked} />
       {going != null && (
         <Page
           pt={p.pages[going]}

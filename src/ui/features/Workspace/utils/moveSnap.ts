@@ -1,5 +1,6 @@
 import type { Model } from "../store";
 import { bondLengthFrom } from "./magnified";
+import { DROP_REACH, SNAP_CLEAR } from "./dropMerge";
 
 export type Point = { x: number; y: number };
 export type MoveSnapResult = { px: number; py: number; center: Point | null };
@@ -7,6 +8,37 @@ export type MoveSnapResult = { px: number; py: number; center: Point | null };
 const TAU = Math.PI * 2;
 const STEP = Math.PI / 6; // 30°
 const norm = (a: number) => ((a % TAU) + TAU) % TAU;
+
+/**
+ * Whether `at` is on another atom than the one moving - a place a drag must
+ * not put it: dropped there, it would merge the two or all but (utils/dropMerge).
+ * `clear` is how near, in bond lengths, counts as on.
+ */
+export function onAnotherAtom(model: Model, movingId: number, at: Point, L: number, clear: number = DROP_REACH): boolean {
+  const reach = L * clear;
+  return model.atoms.some((a) => a.id !== movingId && Math.hypot(at.x - a.x, at.y - a.y) <= reach);
+}
+
+/**
+ * The angle (a multiple of 30 degrees) an atom with one bond snaps to about
+ * its neighbour `nb`: the one nearest the pointer's direction where no atom
+ * stands, or that nearest one where every place is taken.
+ */
+export function snapAngleAbout(model: Model, movingId: number, nb: Point, pointer: Point, L: number): number {
+  const at = Math.atan2(pointer.y - nb.y, pointer.x - nb.x) / STEP;
+  const near = Math.round(at);
+  // (the nearest first, then outwards alternately: the side the pointer is on first)
+  const side = at >= near ? 1 : -1;
+  // (the places clear of every atom first, then those not on one)
+  for (const clear of [SNAP_CLEAR, DROP_REACH]) {
+    for (let k = 0; k <= 12; k++) {
+      const turn = k === 0 ? 0 : (k % 2 ? side : -side) * Math.ceil(k / 2);
+      const ang = (near + turn) * STEP;
+      if (!onAnotherAtom(model, movingId, { x: nb.x + L * Math.cos(ang), y: nb.y + L * Math.sin(ang) }, L, clear)) return ang;
+    }
+  }
+  return near * STEP;
+}
 
 export function computeMoveSnap(
   model: Model,
@@ -29,8 +61,7 @@ export function computeMoveSnap(
   if (deg === 1) {
     const nb = model.atoms.find((a) => a.id === nbrIds[0]);
     if (!nb) return { px: pointer.x, py: pointer.y, center: null };
-    const ang = Math.atan2(pointer.y - nb.y, pointer.x - nb.x);
-    const snap = Math.round(ang / STEP) * STEP;
+    const snap = snapAngleAbout(model, movingId, nb, pointer, L);
     return {
       px: nb.x + L * Math.cos(snap),
       py: nb.y + L * Math.sin(snap),
@@ -156,6 +187,14 @@ export function computeMoveSnap(
           }
         }
       }
+    }
+  }
+  // no place on another atom, or all but: dropped there, the drag would merge the two (the places clear of every atom first)
+  for (const clear of [SNAP_CLEAR, DROP_REACH]) {
+    const free = cands.filter((cd) => !onAnotherAtom(model, movingId, { x: cd.px, y: cd.py }, L, clear));
+    if (free.length > 0) {
+      cands.splice(0, cands.length, ...free);
+      break;
     }
   }
   // optional filter: length parity to neighbors

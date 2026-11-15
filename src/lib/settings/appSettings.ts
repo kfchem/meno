@@ -11,6 +11,7 @@ import { DEFAULT_STYLE_CHOICE, type OwnStyle2D, type StyleChoice } from "../chem
 import { acceptOwnStyles2d, acceptStyleChoice } from "../chem/styleFields";
 import { acceptStyle3dChoice, DEFAULT_STYLE_3D_CHOICE, type Style3DChoice } from "../chem/style3d";
 import { acceptColours, DEFAULT_COLOURS, type ColourSettings } from "../chem/palette";
+import { MOST_CONFORMERS } from "../chem/conformersSought";
 import { setCustomAbbreviations, structureProblem, type CustomAbbreviation } from "../chem/abbreviations";
 import type { OptionValues } from "../options";
 import { isRole } from "../plugins/roles";
@@ -75,7 +76,25 @@ export type CalculationSettings = {
   memoryAll?: number;
   /** The size, in MB, a save past which says the workspace is large (Settings, General; workflow/keptJobs); unset, 500. */
   largeWorkspaceMB?: number;
+  /** Whether the computer may sleep while a job's program runs: unset, it is kept awake (src-tauri/src/awake.rs). */
+  sleepWhileJobsRun?: true;
+  /** Whether a finished job's folder is kept once a workspace's file holds all of it, as Settings was set; unset, as `JOB_FOLDERS_KEPT` says (`keepsJobFolders`). */
+  keepJobFolders?: boolean;
+  /** After how many minutes with nothing written a running job is said to be quiet (lib/jobs `quietFor`); unset, `QUIET_AFTER_MIN`. */
+  quietAfterMin?: number;
 };
+
+/**
+ * Whether a finished job's folder is kept once a workspace's file holds all
+ * of it, where Settings has not been set (workflow/keptJobs
+ * `clearSavedJobs`): not kept - moved to the Trash once the file saved
+ * reads back holding it whole - the maintainer's choice (2026-11-06;
+ * docs/WORKFLOWS.md, *A job's folder*).
+ */
+export const JOB_FOLDERS_KEPT = false;
+
+/** Whether a finished job's folder is kept once a workspace's file holds all of it: as Settings says, else `JOB_FOLDERS_KEPT`. */
+export const keepsJobFolders = (c: CalculationSettings): boolean => c.keepJobFolders ?? JOB_FOLDERS_KEPT;
 
 /** The most cores, and memory in MiB, Settings takes. */
 export const CORES_MOST = 1024;
@@ -84,6 +103,23 @@ export const MEMORY_MOST = 64 * 1024 * 1024;
 export const LARGE_WORKSPACE_MOST = MOST_WORKSPACE_FILE / 2 ** 20;
 /** The energy window a structure's 3D conformers are kept within, made on the canvas, in kcal/mol, unless Settings says otherwise; and the widest Settings takes. */
 export const WINDOW_3D = 30;
+/**
+ * The window for new conformers a structure made in 3D on the canvas is
+ * searched in rounds with, in kcal/mol, unless Settings says otherwise:
+ * the maintainer's choice (2026-11-08), so that a 3D structure is made from
+ * fresh Settings with nothing asked first - no measured basis claimed. A
+ * workflow's *Conformers* step still asks for its own.
+ */
+export const WITHIN_3D = 5;
+/**
+ * After how many minutes with nothing written - no line of its log, no file
+ * of its work folder - a running job is said to be quiet, unless Settings
+ * says otherwise; and the most Settings takes (a day). Said only: Meno never
+ * ends a job for it (docs/WORKFLOWS.md, *A job that writes nothing*). Thirty
+ * minutes is the maintainer's choice (2026-11-06), to be changed here alone.
+ */
+export const QUIET_AFTER_MIN = 30;
+export const QUIET_AFTER_MOST = 24 * 60;
 export const WINDOW_3D_MOST = 1000;
 
 /**
@@ -94,11 +130,16 @@ export const WINDOW_3D_MOST = 1000;
  */
 export type CanvasSettings = { resolution: 2 | "display" | 1 };
 
-/** How the mouse and the trackpad work the canvas: which way a turn of the wheel zooms. */
+/** How the mouse and the trackpad work the canvas: which way a turn of the wheel zooms, and how long a press is held to be a long press. */
 export type PointerSettings = {
   /** A turn of the wheel upwards zooms in (as maps do), or out. */
   wheelUp: "in" | "out";
+  /** How long a press held still takes to be a long press (Workspace/constants `LONG_PRESSES`); unset, normal. */
+  longPress?: LongPress;
 };
+
+/** How long a long press is: shorter, normal or longer (Workspace/constants `LONG_PRESSES`). */
+export type LongPress = "shorter" | "normal" | "longer";
 
 /** How an atom's label is read as it is typed (Workspace/LabelTyping2D; lib/chem/smartLabel). */
 export type LabelSettings = {
@@ -127,12 +168,15 @@ export type PictureSettings = { dpi: (typeof PICTURE_DPIS)[number] };
  * which are not set up again of themselves when a role they fill is
  * needed; who fills each role, where the chemist chose (lib/plugins/roles);
  * where the chemist located each program installed separately that a
- * plugin's steps run, by "plugin:program" (lib/plugins/installed).
+ * plugin's steps run, by "plugin:program" (lib/plugins/installed); and
+ * whether the plugins set up here before they came online were asked about,
+ * and answered (lib/plugins/usedBefore).
  */
 export type PluginSettings = {
   removed: string[];
   roles: Record<string, string>;
   programs: Record<string, string>;
+  usedBeforeAsked?: true;
 };
 
 /** Who reads each kind of file, by the kind's id: its reader - unset, Meno where Meno reads it, or else the first added that reads it - and the readers that read it as well. */
@@ -160,6 +204,21 @@ export type ChemistrySettings = {
   valenceWarnings: boolean;
   /** The energy window a structure's 3D conformers are kept within, made on the canvas, in kcal/mol - unset, `WINDOW_3D`. A workflow's conformer step keeps every one. */
   window3d?: number;
+  /** How many conformers the page's 3D structure tries (*Conformers sought*, lib/chem/conformersSought): a number of the chemist's own ("fixed"), else - unset - as many as the molecule needs. */
+  sought3d?: "fixed";
+  /** The number tried where `sought3d` is "fixed": 1 to `MOST_CONFORMERS` - unset, `RING_CONFORMERS`. */
+  count3d?: number;
+  /**
+   * As many as the molecule needs, asked in rounds where the search takes
+   * draws (lib/chem/conformersSought `RoundsChosen`) - the page's, and a
+   * Conformers step's to start from: the window for new conformers, in
+   * kcal/mol, the chemist's own - unset, Meno's `WITHIN_3D` on the page,
+   * and none for a step, which asks for one; the first round - unset, the molecule's own count; the most tried
+   * - unset, `MOST_CONFORMERS`.
+   */
+  within3d?: number;
+  first3d?: number;
+  most3d?: number;
 };
 
 export type NetworkSettings = {
@@ -221,13 +280,22 @@ export function acceptAppSettings(raw: unknown): AppSettings {
 
 /** How a workflow's jobs run, as the file holds it: the cores each takes, and the cores and memory they may use in all - whole numbers within reason. */
 function acceptCalculations(raw: unknown): CalculationSettings {
-  const r = raw as { cores?: unknown; coresAll?: unknown; memoryAll?: unknown; largeWorkspaceMB?: unknown } | null;
+  const r = raw as { cores?: unknown; coresAll?: unknown; memoryAll?: unknown; largeWorkspaceMB?: unknown; sleepWhileJobsRun?: unknown; keepJobFolders?: unknown; quietAfterMin?: unknown } | null;
   const whole = (v: unknown, most: number) => (typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= most ? v : undefined);
   const cores = whole(r?.cores, CORES_MOST);
   const coresAll = whole(r?.coresAll, CORES_MOST);
   const memoryAll = whole(r?.memoryAll, MEMORY_MOST);
   const largeWorkspaceMB = whole(r?.largeWorkspaceMB, LARGE_WORKSPACE_MOST);
-  return { ...(cores ? { cores } : {}), ...(coresAll ? { coresAll } : {}), ...(memoryAll ? { memoryAll } : {}), ...(largeWorkspaceMB ? { largeWorkspaceMB } : {}) };
+  const quietAfterMin = whole(r?.quietAfterMin, QUIET_AFTER_MOST);
+  return {
+    ...(cores ? { cores } : {}),
+    ...(coresAll ? { coresAll } : {}),
+    ...(memoryAll ? { memoryAll } : {}),
+    ...(largeWorkspaceMB ? { largeWorkspaceMB } : {}),
+    ...(r?.sleepWhileJobsRun === true ? { sleepWhileJobsRun: true as const } : {}),
+    ...(typeof r?.keepJobFolders === "boolean" ? { keepJobFolders: r.keepJobFolders } : {}),
+    ...(quietAfterMin ? { quietAfterMin } : {}),
+  };
 }
 
 /** The procedures saved, as the file holds them: each with an id, a name and its flow's parts as lists - read further as they are used. */
@@ -259,8 +327,9 @@ function acceptCanvas(raw: unknown): CanvasSettings {
 
 /** How the pointer works, as the file holds it; what does not read, as it is by default. */
 function acceptPointer(raw: unknown): PointerSettings {
-  const r = (raw ?? {}) as { wheelUp?: unknown };
-  return { wheelUp: r.wheelUp === "out" ? "out" : "in" };
+  const r = (raw ?? {}) as { wheelUp?: unknown; longPress?: unknown };
+  const longPress = r.longPress === "shorter" || r.longPress === "longer" ? r.longPress : undefined;
+  return { wheelUp: r.wheelUp === "out" ? "out" : "in", ...(longPress ? { longPress } : {}) };
 }
 
 function acceptPictures(raw: unknown): PictureSettings {
@@ -302,7 +371,7 @@ function acceptFiles(raw: unknown, before: unknown): FileSettings {
 
 /** The plugins taken away, the roles' choices and the programs located, that read: ids only. */
 function acceptPlugins(raw: unknown): PluginSettings {
-  const r = (raw ?? {}) as { removed?: unknown; roles?: unknown; programs?: unknown };
+  const r = (raw ?? {}) as { removed?: unknown; roles?: unknown; programs?: unknown; usedBeforeAsked?: unknown };
   const id = (v: unknown): v is string => typeof v === "string" && /^[a-z0-9][a-z0-9-]{0,39}$/.test(v);
   const removed = Array.isArray(r.removed) ? [...new Set(r.removed.filter(id))] : [];
   const roles: Record<string, string> = {};
@@ -318,7 +387,7 @@ function acceptPlugins(raw: unknown): PluginSettings {
       if (id(plugin) && /^[A-Za-z0-9][A-Za-z0-9._+-]{0,39}$/.test(program ?? "") && typeof path === "string" && path.length <= 1024 && /^(\/|[A-Za-z]:[\\/]|\\\\[^\\/])/.test(path)) programs[key] = path;
     }
   }
-  return { removed, roles, programs };
+  return { removed, roles, programs, ...(r.usedBeforeAsked === true ? { usedBeforeAsked: true as const } : {}) };
 }
 
 /** The options remembered that read: by a role's name, each a value that is a string, a number or a switch. Whether each still fits its option is asked when it is drawn (lib/options `valuesOf`). */
@@ -363,11 +432,17 @@ function acceptUpdates(raw: unknown): UpdateSettings {
 function acceptChemistry(raw: unknown): ChemistrySettings {
   const d = DEFAULT_APP_SETTINGS.chemistry;
   if (typeof raw !== "object" || raw === null) return d;
-  const { valenceWarnings, window3d } = raw as Record<string, unknown>;
+  const { valenceWarnings, window3d, sought3d, count3d, within3d, first3d, most3d } = raw as Record<string, unknown>;
+  const conformers = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n) && n >= 1 && n <= MOST_CONFORMERS;
   return {
     valenceWarnings:
       typeof valenceWarnings === "boolean" ? valenceWarnings : d.valenceWarnings,
     ...(typeof window3d === "number" && Number.isFinite(window3d) && window3d >= 0 && window3d <= WINDOW_3D_MOST ? { window3d } : {}),
+    ...(sought3d === "fixed" ? { sought3d } : {}),
+    ...(conformers(count3d) ? { count3d } : {}),
+    ...(typeof within3d === "number" && Number.isFinite(within3d) && within3d >= 0 ? { within3d } : {}),
+    ...(conformers(first3d) ? { first3d } : {}),
+    ...(conformers(most3d) ? { most3d } : {}),
   };
 }
 

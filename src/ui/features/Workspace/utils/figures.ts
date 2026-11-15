@@ -16,24 +16,28 @@ import { cornerAt } from "../../../../lib/chem/reactionArrow";
 import { arrowPoints } from "../../../../lib/chem/reactionScheme";
 import type { ImportedScheme } from "../document";
 import { pictureFigure, scaledFigure } from "../../../../lib/figure/picture";
+import { fitToPicture } from "../../../../lib/figure/inkFit";
 import { boxPicture } from "../../../../lib/pdf/reader";
 import { setAtomLabel } from "../../../../lib/pdf/figures";
-import { chemWorker } from "../../../../lib/roles/worker";
+import { chemWorker, rolePlugin } from "../../../../lib/roles/worker";
 import { ChemTimeout, type ChemClient } from "../../../../lib/roles/client";
 import { toBase64 } from "../../../../lib/clipboard";
-import { drawnBond, readDrawnLabel, structureOf, type LabelReader } from "../../../../lib/figure/structure";
+import { drawnBond, readDrawnLabel, saysChargeTooMuch, structureOf, type LabelReader } from "../../../../lib/figure/structure";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { regularised } from "../../../../lib/layout/regularise";
 import { sameStereo } from "../chem/engineLayout";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
 import { implicitHydrogens } from "../../../../lib/chem/molecule";
+import { atomAs } from "./atomAs";
+import { ARRANGED, arrangementAs } from "./arrangement";
 import { overBonded } from "../../../../lib/chem/molWriter";
+import { structuresOf } from "../../../../lib/chem/magnified2d";
 import { ELEMENTS } from "../../../../lib/chem/elements";
 import { labelReading, readLabel } from "./labelTyping";
 import { systemGlyphs } from "./glyphShapes";
 import { shapeLetters, sureEnough, type GlyphShape } from "../../../../lib/figure/glyphs";
 import type { Atom, Bond, FigureSpot, Model, PictureItem } from "../store/types";
-import { picturePng } from "./pictures";
+import { picturePng, pngPixels } from "./pictures";
 import { labelBoxes, labelledPart } from "./freePlace";
 import { captionBox } from "./extent";
 import { editorLayoutOptions } from "../layoutOptions";
@@ -67,24 +71,23 @@ export const figureLabels: LabelReader = (label) => {
 // (a page's figures take a one-bond structure by its label, read as these read one: lib/pdf/figures)
 setAtomLabel((text) => !/^[+\-−]*$/.test(text) && readDrawnLabel(text, figureLabels).read);
 
-/** What a part is now, as far as being right goes: an atom's element, charge and bonds; a bond's order and stereo. Its mark stays while this does. */
-export function atomAs(a: Pick<Atom, "id" | "el" | "charge">, bonds: readonly Bond[]): string {
-  const round = bonds
-    .filter((b) => b.a === a.id || b.b === a.id)
-    .map((b) => `${b.order}${b.stereo ?? ""}${b.stereo && b.stereo !== "none" ? (b.a === a.id ? "<" : ">") : ""}`)
-    .sort()
-    .join(",");
-  return `${a.el}|${a.charge ?? 0}|${round}`;
-}
-export function bondAs(b: Pick<Bond, "order" | "stereo" | "stereoOrient" | "display">): string {
-  return `${b.order}|${b.stereo ?? "none"}|${b.stereoOrient ?? ""}|${b.display ?? ""}`;
+export { atomAs } from "./atomAs";
+export function bondAs(b: Pick<Bond, "a" | "b" | "order" | "stereo" | "narrow" | "display">): string {
+  // (its narrow end by which end it is, not by id: a bond pasted is still as it was read)
+  const narrow = b.narrow === b.a ? "a" : b.narrow === b.b ? "b" : "";
+  return `${b.order}|${b.stereo ?? "none"}|${narrow}|${b.display ?? ""}`;
 }
 
 /** What Meno said is unsure of the parts read from figures that are still as they were read: by atom id and bond id, what to say. */
 export function readMarks(model: Model): { atoms: Map<number, string>; bonds: Map<number, string> } {
   const atoms = new Map<number, string>();
   const bonds = new Map<number, string>();
-  for (const a of model.atoms) if (a.unsure && a.unsure.as === atomAs(a, model.bonds)) atoms.set(a.id, a.unsure.said.join(" "));
+  // (an arrangement's mark - a square-planar centre's, "which donors are next to each other is not given" - while its neighbours lie as they did)
+  for (const a of model.atoms) {
+    if (!a.unsure) continue;
+    const now = a.unsure.as.startsWith(ARRANGED) ? arrangementAs(a, model.atoms, model.bonds) : atomAs(a, model.bonds);
+    if (a.unsure.as === now) atoms.set(a.id, a.unsure.said.join(" "));
+  }
   for (const b of model.bonds) if (b.unsure && b.unsure.as === bondAs(b)) bonds.set(b.id, b.unsure.said.join(" "));
   return { atoms, bonds };
 }
@@ -119,7 +122,7 @@ export function lettersAsShapes(drawn: FigureDrawn): boolean {
 export type Unread = { none: string };
 
 /** What a figure gives: its structure, and - a scheme - its arrows, "+" signs and words, in Meno's units, where they stand to it as the figure has them. */
-export type FigureResult = { model: Model; scheme?: ImportedScheme };
+export type FigureResult = { model: Model; scheme?: ImportedScheme; /** Where structures of the figure were left out - an atom with more bonds than it takes - what to say of them. */ left?: string };
 
 /**
  * A figure within a box of a PDF's page, read as a structure: its atoms
@@ -152,13 +155,14 @@ export const READ_MS = 90_000;
 /** The workers that have read a picture: their model loaded. One started afresh is another, and loads its model again. */
 const loaded = new WeakSet<ChemClient>();
 
-/** A picture read by the plugin that reads structures from pictures: what it read, in the picture's pixels; or why nothing came of it. */
+/** A picture read by the plugin that reads structures from pictures, laid on the picture: what it read, in the picture's pixels; or why nothing came of it. */
 async function readByPlugin(bytes: Uint8Array): Promise<FigureRead | Unread> {
   const worker = await chemWorker("pictures");
   try {
     const answer = await worker.request("read_picture", { picture: toBase64(bytes) }, loaded.has(worker) ? READ_MS : FIRST_READ_MS);
     loaded.add(worker);
-    return pictureFigure(answer) ?? { none: "No structure was found in the picture." };
+    const fitted = fitToPicture(answer, await pngPixels(bytes), rolePlugin("pictures")?.roleUnsure.pictures);
+    return pictureFigure(fitted) ?? { none: "No structure was found in the picture." };
   } catch (e) {
     if (e instanceof ChemTimeout) return { none: "Reading the picture took too long, so nothing was read from it." };
     throw e;
@@ -200,6 +204,31 @@ export function schemeDrawn(given: FigureDrawn, known?: readonly GlyphShape[]): 
   return { drawn, back, read: readScheme(drawn, (l) => readDrawnLabel(l, figureLabels).read, glyphs, wholeLabel) };
 }
 
+/** The most paths a picture's frame is: its sides, or a rule under it. */
+const FRAME_PATHS = 8;
+/** How much of a figure's extent its pictures cover, at the least, for the lines about them to be their frame. */
+const FRAME_COVER = 0.5;
+
+/**
+ * Whether a figure is a picture in a frame: its pictures cover half of what it spans, and the little else drawn is straight
+ * lines, level and upright - a rectangle round it, a rule - never a structure's bonds round a picture.
+ */
+export function framedPicture(drawn: FigureDrawn): boolean {
+  if (!drawn.pictures.length || drawn.letters.length || drawn.paths.length > FRAME_PATHS) return false;
+  const pts = drawn.paths.flatMap((p) => p.d.flatMap((st): [number, number][] => (st[0] === "Z" ? [] : [[st[1], st[2]]])));
+  if (drawn.paths.some((p) => p.d.some((st) => st[0] === "C"))) return false;
+  const level = drawn.paths.every((p) => {
+    const q = p.d.flatMap((st): [number, number][] => (st[0] === "Z" ? [] : [[st[1], st[2]]]));
+    return q.every((v, i) => i === 0 || Math.abs(v[0] - q[i - 1][0]) < 0.01 || Math.abs(v[1] - q[i - 1][1]) < 0.01);
+  });
+  if (!level) return false;
+  const xs = [...pts.map((v) => v[0]), ...drawn.pictures.flatMap((b) => [b[0], b[2]])];
+  const ys = [...pts.map((v) => v[1]), ...drawn.pictures.flatMap((b) => [b[1], b[3]])];
+  const span = (Math.max(...xs) - Math.min(...xs)) * (Math.max(...ys) - Math.min(...ys));
+  const covered = drawn.pictures.reduce((t, b) => t + Math.max(0, b[2] - b[0]) * Math.max(0, b[3] - b[1]), 0);
+  return span > 0 && covered >= FRAME_COVER * span;
+}
+
 /**
  * What a figure as drawn reads as, tied to its PDF's page (`readBox`): its
  * structures, and - a scheme - its arrows, "+" signs and words (lib/figure/
@@ -209,6 +238,8 @@ export function schemeDrawn(given: FigureDrawn, known?: readonly GlyphShape[]): 
  * layout).
  */
 export function figureFrom(given: FigureDrawn, sha256: string, page: number, known?: readonly GlyphShape[]): FigureResult | Unread {
+  // (a picture in its frame - a journal's cover thumbnail: the frame's four lines are no cyclobutane)
+  if (framedPicture(given)) return { none: "This figure is a picture in a frame, not a drawing: there are no lines to read." };
   const { drawn, back, read } = schemeDrawn(given, known);
   if (read.tooMany) return { none: "This looks like a chart or a spectrum: too much is drawn there to read it as a structure." };
   const structure = read.figure.atoms.length > 0 && read.figure.bonds.length > 0;
@@ -219,8 +250,12 @@ export function figureFrom(given: FigureDrawn, sha256: string, page: number, kno
   const box = schemeBox(structure ? read : { ...read, figure: { ...read.figure, atoms: [] } })!;
   const about = { x: (box[0] + box[2]) / 2, y: (box[1] + box[3]) / 2 };
   const model = structure ? modelOf(read.figure, (x, y) => ({ sha256, page, ...back({ x, y }), bond: read.figure.bond }), about) : { atoms: [], bonds: [] };
+  // (a structure with an atom with more bonds than it takes is left out, each on its own - the rest of the figure is read - and said)
+  const { kept, left } = structure ? withoutOverBonded(model) : { kept: model, left: 0 };
+  if (structure && !kept.atoms.length) return { none: overBondedWhy(model)! };
   const scheme = schemeOf(read, about);
-  return { model, ...(scheme ? { scheme } : {}) };
+  const said = left ? `${left === 1 ? "A structure of this figure was" : `${left} structures of this figure were`} left out: as read, ${left === 1 ? "an atom has" : "atoms have"} more bonds than ${left === 1 ? "it takes" : "they take"}.` : null;
+  return { model: kept, ...(scheme ? { scheme } : {}), ...(said ? { left: said } : {}) };
 }
 
 /**
@@ -262,8 +297,6 @@ export function schemeOf(read: SchemeRead, about: { x: number; y: number }): Imp
 /** A figure read made a structure in Meno's units, each atom tied to its place in the figure (`spot`) - its middle at naught, or `about`. */
 export function modelOf(read: FigureRead, spot: (x: number, y: number) => FigureSpot, about?: { x: number; y: number }): Model {
   const s = structureOf(read, figureLabels, about);
-  const degree = new Map<number, number>();
-  for (const b of s.bonds) for (const e of [b.a, b.b]) degree.set(e, (degree.get(e) ?? 0) + 1);
   const atoms: Atom[] = s.atoms.map((a, i) => ({
     id: i + 1,
     x: a.x,
@@ -273,16 +306,24 @@ export function modelOf(read: FigureRead, spot: (x: number, y: number) => Figure
     ...(a.charge ? { charge: a.charge } : {}),
     ...(a.isotope ? { isotope: a.isotope } : {}),
     ...(a.radical ? { radical: a.radical } : {}),
-    seen: spot(read.atoms[i].x, read.atoms[i].y),
+    // (a repeat unit's copy where the figure draws the unit it copies)
+    seen: spot(read.atoms[a.of ?? i].x, read.atoms[a.of ?? i].y),
   }));
+  // (a repeat unit read so many times kept a multiple group: its count, its first unit the paradigm - written so to a file)
+  const groups = [...new Set(s.atoms.flatMap((a) => (a.multiple ? [a.multiple.group] : [])))];
+  s.atoms.forEach((a, i) => {
+    if (!a.multiple) return;
+    const id = s.atoms.length + s.bonds.length + groups.indexOf(a.multiple.group) + 1;
+    atoms[i].sgroups = [{ id, type: "MUL", multiplier: a.multiple.n, ...(a.multiple.paradigm ? { paradigm: true } : {}) }];
+  });
   const bonds: Bond[] = s.bonds.map((b, i) => ({
     id: atoms.length + i + 1,
     a: b.a + 1,
     b: b.b + 1,
     order: b.order,
     ...(b.stereo ? { stereo: b.stereo } : {}),
-    // (a wedge narrow where the figure has it: Meno draws it narrow at the end with more bonds, else told)
-    ...(b.stereo === "up" || b.stereo === "down" ? ((degree.get(b.a) ?? 0) < (degree.get(b.b) ?? 0) ? { stereoOrient: "reverse" as const } : {}) : {}),
+    // (a wedge narrow where the figure has it, at its first atom)
+    ...(b.stereo === "up" || b.stereo === "down" ? { narrow: b.a + 1 } : {}),
     ...(b.bold ? { display: "bold" as const } : {}),
   }));
   // (made regular, its arrangement kept - its rings and chains where and as they go, at the style's bond and angles: lib/layout/
@@ -315,6 +356,53 @@ export function modelOf(read: FigureRead, spot: (x: number, y: number) => Figure
 }
 
 const ELEMENT_NAMES = new Map(ELEMENTS.map((e) => [e.symbol, e.name]));
+
+/** The atoms of a structure read that have more bonds than they take, written out as a file has it - not a charge alone: an atom's charge no atom carries is said by the atom, and is no valence (a page's "S188−" taken for a sulfur). */
+function overBondedAtoms(model: Model): Set<number> {
+  return new Set([...overBonded(model)].filter((id) => !model.atoms.find((x) => x.id === id)?.unsure?.said.some(saysChargeTooMuch)));
+}
+
+/**
+ * Why a structure read is not taken: it has an atom with more bonds than it takes - a bold double bond of a perspective drawing read as a
+ * triple bond, a line twice (the maintainer, 2026-11-13: a read that breaks valence is refused, and says why, never put down). None where
+ * no atom has. As read: a drawing can itself show five bonds (a transition state's forming bond), which Meno does not take as one.
+ */
+export function overBondedWhy(model: Model): string | null {
+  const over = overBondedAtoms(model);
+  if (!over.size) return null;
+  const a = model.atoms.find((x) => over.has(x.id))!;
+  const name = a.el === "C" ? "a carbon" : (ELEMENT_NAMES.get(a.el) ?? `"${a.el}"`);
+  return `As read, more bonds meet at ${name} than it takes${over.size > 1 ? `, and at ${over.size - 1} more` : ""}: none of it is taken.`;
+}
+
+/** A figure's atoms and bonds without its structures that have an atom with more bonds than it takes, each structure on its own, and how many it left out. */
+export function withoutOverBonded(model: Model): { kept: Model; left: number } {
+  const over = overBondedAtoms(model);
+  if (!over.size) return { kept: model, left: 0 };
+  const groups = structuresOf(model.atoms, model.bonds);
+  const bad = groups.filter((g) => g.some((i) => over.has(model.atoms[i].id)));
+  const drop = new Set(bad.flat().map((i) => model.atoms[i].id));
+  const atoms = model.atoms.filter((a) => !drop.has(a.id));
+  const bonds = model.bonds.filter((b) => !drop.has(b.a) && !drop.has(b.b));
+  // (numbered again, from 1: atoms, then bonds, then the multiple groups' ids, as `modelOf` numbers them)
+  const to = new Map(atoms.map((a, i) => [a.id, i + 1]));
+  const groupIds = [...new Set(atoms.flatMap((a) => (a.sgroups ?? []).map((g) => g.id)))].sort((p, q) => p - q);
+  const groupId = (id: number) => atoms.length + bonds.length + groupIds.indexOf(id) + 1;
+  const kept: Model = {
+    ...model,
+    atoms: atoms.map((a, i) => ({ ...a, id: i + 1, ...(a.sgroups ? { sgroups: a.sgroups.map((g) => ({ ...g, id: groupId(g.id), ...(g.parent != null && groupIds.includes(g.parent) ? { parent: groupId(g.parent) } : {}) })) } : {}) })),
+    bonds: bonds.map((b, i) => ({
+      ...b,
+      id: atoms.length + i + 1,
+      a: to.get(b.a)!,
+      b: to.get(b.b)!,
+      ...(b.narrow ? { narrow: to.get(b.narrow) } : {}),
+      // (a haptic bond's atoms, by id)
+      ...(b.endpoints ? { endpoints: b.endpoints.flatMap((e) => (to.has(e) ? [to.get(e)!] : [])) } : {}),
+    })),
+  };
+  return { kept, left: bad.length };
+}
 
 type Region = { x0: number; y0: number; x1: number; y1: number };
 const overlaps = (a: Region, b: Region) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;

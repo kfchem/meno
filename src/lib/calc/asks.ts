@@ -20,6 +20,9 @@ import { readerById, readerIdOfLine, type ReaderPlugin } from "./catalog";
 import { kindOf } from "../io/kinds";
 import { textOf } from "../io/text";
 import type { Reader } from "./client";
+import type { GridPlace } from "./grids";
+import { drawOrbital } from "./builtin";
+import { expansionOf } from "./expansion";
 import type { CalcInfo, CalcSource } from "./output";
 import { isAsk, resultKey, resultsOn, type ListResult } from "./results";
 import { readerClient } from "./workers";
@@ -183,11 +186,15 @@ export function askFor(
   readerOf: (p: ReaderPlugin) => Promise<Reader> = readerClient,
   /** How an output is read again where it was (tests hand in their own). */
   read: ReadAt = readAt,
+  /** The grid Meno lays the molecule's values on, where the promise may be some (./grids `gridAbout`). */
+  grid?: GridPlace,
+  /** The orbitals the list offers, by their places in the reader's wavefunction (`expansion:<k>`): checked orthonormal before any is drawn. */
+  block?: number[],
 ): Promise<unknown> {
   const k = askKey(calc.source, from, key);
   if (given.has(k)) return Promise.resolve(given.get(k));
   // (asked for twice while it is worked out: worked out once)
-  if (!underWay.has(k)) underWay.set(k, ask(calc, from, key, k, readerOf, read).finally(() => underWay.delete(k)));
+  if (!underWay.has(k)) underWay.set(k, ask(calc, from, key, k, readerOf, read, grid, block).finally(() => underWay.delete(k)));
   return underWay.get(k)!;
 }
 
@@ -198,7 +205,25 @@ async function ask(
   k: string,
   readerOf: (p: ReaderPlugin) => Promise<Reader>,
   read: ReadAt,
+  grid: GridPlace | undefined,
+  block: number[] | undefined,
 ): Promise<unknown> {
+  // (an orbital of a wavefunction its reader gives whole, `expansion`: asked for once, then drawn by Meno - docs/PLUGINS.md)
+  const orbital = /^expansion:(\d+)$/.exec(key);
+  if (orbital) {
+    setState(k, "asking");
+    try {
+      const whole = await askFor(calc, from, "expansion", readerOf, read);
+      if (!expansionOf(whole)) throw new Error("The reader gave a wavefunction that is not as Meno's form says.");
+      const value = await drawOrbital((whole as { expansion: unknown }).expansion, Number(orbital[1]), block ?? [], grid);
+      given.set(k, value);
+      setState(k, "given");
+      return value;
+    } catch (e) {
+      setState(k, { error: e instanceof Error ? e.message : String(e) });
+      throw e;
+    }
+  }
   const output = calc.source ? await outputOf(calc.source, read) : undefined;
   if (!calc.source || !output) {
     const error = `Open ${calc.source?.name ?? "the calculation's output"} again to show this.`;
@@ -216,7 +241,7 @@ async function ask(
   }
   setState(k, "asking");
   try {
-    const value = await (await readerOf(plugin)).ask(kind, key, output.name, output.text);
+    const value = await (await readerOf(plugin)).ask(kind, key, output.name, output.text, grid);
     given.set(k, value);
     setState(k, "given");
     return value;

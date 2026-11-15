@@ -6,42 +6,67 @@
  * it.
  */
 import { FAILURE_WORDS, type Failure } from "./failures";
-import type { ParsedAtom, ParsedBond } from "../../../../lib/chem/molecule";
+import { convergedOf, type Converged } from "./converged";
+import { COORDINATION_BOND, type ParsedAtom, type ParsedBond } from "../../../../lib/chem/molecule";
 import type { CalcInfo } from "../../../../lib/calc/output";
 import { FREQUENCY, geometryKey, propertyIn, type At, type By, type Entry, type EntryAtom, type EntryStatus, type EntryStereo, type Property } from "../../../../lib/entry";
 import { leftOut, readEach } from "../utils/readNotes";
-import { signatureOf } from "../utils/drawnLink";
-import { identityOfDrawn, labelsDrawnOut } from "../chem/identityOf";
+import { pageIndex, signatureOf } from "../utils/drawnLink";
+import { identityInputOf, labelsDrawnOut } from "../chem/identityOf";
+import { identitiesAsked, identityKnown } from "../chem/identityOff";
+import { identity } from "../../../../lib/chem/identity";
 import { partOf } from "../chem/cleanUp";
 import { stereoKnown } from "./configurations";
 import { speciesOf } from "../../../../lib/io/writers";
 import { isSkeleton } from "../utils/completeness";
 import { groupLetter } from "../../../../lib/nodes/base";
-import { numberText } from "../../../../lib/calc/results";
-import type { DrawnRecord, Member, Model, Molecule3D, PictureItem, WorkflowSet } from "../store/types";
+import { aboveText, numberText, resultsRenumbered } from "../../../../lib/calc/results";
+import type { Arrow, DrawnRecord, Member, Model, Molecule3D, PictureItem, Plus, WorkflowSet } from "../store/types";
 import { kindInfo, type SetHolds, type StepKind } from "./kinds";
 import { skeletonWhy } from "../../../../lib/chem/skeleton";
+import { PATH_FRAME, REFINED_SAID, STARTED_SAID } from "../../../../lib/calc/paths";
 
 type Pt = { x: number; y: number };
 export type Frame = Pick<WorkflowSet, "x0" | "y0" | "x1" | "y1">;
-export type Page = { model: Model; molecules3d?: readonly Molecule3D[]; pictures?: readonly Pick<PictureItem, "id" | "x" | "y">[] };
+export type Page = {
+  model: Model;
+  molecules3d?: readonly Molecule3D[];
+  pictures?: readonly Pick<PictureItem, "id" | "x" | "y">[];
+  /** The arrows and pluses drawn: what a set around a drawn reaction reads its structures' roles from (workflow/schemeRoles). */
+  arrows?: readonly Arrow[];
+  pluses?: readonly Plus[];
+};
 
 /** Whether `p` is inside a frame. */
 export const inside = (b: Frame, p: Pt) => p.x >= b.x0 && p.x <= b.x1 && p.y >= b.y0 && p.y <= b.y1;
 
-/** The structures drawn on the page, each its atoms' ids, as their bonds join them. */
-export function structuresOf(model: Model): number[][] {
+/**
+ * The structures drawn on the page, each its atoms' ids, as their bonds join them - and a structure of several parts (`Atom.joined`) as
+ * one, as Combine makes one entry of its parts. A hydrogen bond is no bond of a structure: what it alone joins - an enol and a water, a
+ * salt's ion - is two structures, two entries (chem/make3d `blocksOf` likewise, CTFILE.md *Bonds*). `asDrawn`, it joins them, as the
+ * pieces of ink they are: what moves a structure, or keeps clear of one, takes them together.
+ */
+export function structuresOf(model: Model, asDrawn = false): number[][] {
   const around = new Map<number, number[]>();
   const join = (p: number, q: number) => {
     around.set(p, [...(around.get(p) ?? []), q]);
     around.set(q, [...(around.get(q) ?? []), p]);
   };
   for (const b of model.bonds) {
+    if (b.hydrogen && !asDrawn) continue;
     join(b.a, b.b);
     // (a haptic bond's ring with its metal and star, as fragmentOf has them:
     // walked by its bonds alone, the metal and the star were a structure
     // without the ring)
     for (const e of b.endpoints ?? []) join(b.a, e);
+  }
+  // (a structure of several parts: each of its atoms joined to the first of them - chem/cleanUp `neighboursIn` likewise)
+  const first = new Map<number, number>();
+  for (const a of model.atoms) {
+    if (a.joined == null) continue;
+    const f = first.get(a.joined);
+    if (f == null) first.set(a.joined, a.id);
+    else join(f, a.id);
   }
   const seen = new Set<number>();
   const out: number[][] = [];
@@ -84,7 +109,7 @@ export function middleOfAtoms(byId: ReadonlyMap<number, Pt>, ids: readonly numbe
  * each structure).
  */
 const drawnAt = new WeakMap<Model, { ids: number[]; at: Pt }[]>();
-function drawnIn(model: Model): { ids: number[]; at: Pt }[] {
+export function drawnIn(model: Model): { ids: number[]; at: Pt }[] {
   let found = drawnAt.get(model);
   if (!found) {
     const byId = new Map(model.atoms.map((a) => [a.id, a]));
@@ -203,32 +228,82 @@ export function membersOf(found: {
  * charge, bond, or configuration - its mirror image - does not. Where its
  * wedges cannot be read, or its identity not worked out in full, the
  * drawing itself is in the key too: any change to it is taken for one.
+ *
+ * Its identity is worked out off the drawing thread (chem/identityOff): not
+ * yet answered, and too large to work out here, it is pending - undefined -
+ * until the answer lands; a caller that may wait asks first
+ * (`drawnHashesAsked`).
  */
-export function drawnHash(model: Model, ids: readonly number[]): string {
+export function drawnHash(model: Model, ids: readonly number[]): string | undefined {
   // (worked out once for each structure as drawn: an edit elsewhere on the page leaves its drawing's key, and so this, as it was)
-  const labels = model.atoms.filter((a) => a.abbrev && ids.includes(a.id)).map((a) => `${a.id}:${JSON.stringify(a.abbrev)}`);
-  const drawn = `${drawnKey(model, ids)}|${labels.join(";")}`;
-  let key = identities.get(drawn);
-  if (key == null) {
-    // (wedges identity cannot read - crossed, or on an atom with a lone pair - or a search it could not finish: its configuration
-    // not in the identity, so the drawing itself is, and any change to it - Clean-up's too - is taken for a change of structure)
-    const { text, complete, unread } = identityOfDrawn(labelsDrawnOut(partOf(model, new Set(ids))));
-    key = hash(complete && !unread.length ? text : `${text}|as drawn|${drawn}`).toString(36);
-    if (identities.size >= IDENTITIES_KEPT) identities.clear();
-    identities.set(drawn, key);
-  }
+  const drawn = drawingKey(model, ids);
+  const had = identities.get(drawn);
+  if (had != null) return had;
+  // (wedges identity cannot read - crossed, or at an atom of three bonds that keeps no configuration, lib/chem/lonePairCentres - or a search it could not finish: its configuration
+  // not in the identity, so the drawing itself is, and any change to it - Clean-up's too - is taken for a change of structure)
+  // (a hydrogen bond in it - an enol's own - no bond of the structure, nor of its identity: `structureInputOf`)
+  const { input, unread } = structureInputOf(partOf(model, new Set(ids)));
+  const found = identityKnown(input);
+  if (!found) return undefined;
+  const key = hash(found.complete && !unread.length ? found.text : `${found.text}|as drawn|${drawn}`).toString(36);
+  if (identities.size >= IDENTITIES_KEPT) identities.clear();
+  identities.set(drawn, key);
   return key;
+}
+
+/** `drawnHash`, worked out here where it is pending: only where a caller could not ask first (`drawnHashesAsked`). */
+function drawnHashNow(model: Model, ids: readonly number[]): string {
+  const { input, unread } = structureInputOf(partOf(model, new Set(ids)));
+  const found = identity(input);
+  const key = hash(found.complete && !unread.length ? found.text : `${found.text}|as drawn|${drawingKey(model, ids)}`).toString(36);
+  identities.set(drawingKey(model, ids), key);
+  return key;
+}
+
+/**
+ * `go`, once the identity of each of `models` - the drawings a step gives, each with its record - is known (`drawnHash`,
+ * `placedRecord`): at once where each is, or is small enough to work out here; else once the worker has answered, so that the
+ * drawing thread never works one out. Asked and failed, `go` all the same.
+ */
+export function whenDrawnKnown(models: readonly Model[], go: () => void): void {
+  const inputs = models.map((m) => structureInputOf(m).input);
+  if (inputs.every((input) => identityKnown(input))) return go();
+  void identitiesAsked(inputs).then(go, go);
+}
+
+/** Each structure's identity (`drawnHash`) asked of the worker and answered: for a caller that may wait before it reads them. */
+export async function drawnHashesAsked(model: Model, structures: readonly (readonly number[])[]): Promise<void> {
+  await identitiesAsked(structures.map((ids) => structureInputOf(partOf(model, new Set(ids))).input));
+}
+
+/**
+ * What a structure drawn, `part`, asks of identity (chem/identityOf `identityInputOf`, its labels drawn out): a hydrogen bond in it - an
+ * enol's own - no bond of the structure, nor of its identity (`structuresOf`). Each ask and each reading of a structure's identity
+ * (`drawnHash`) goes through it, so that what is asked is what is read.
+ */
+export function structureInputOf(part: Model): ReturnType<typeof identityInputOf> {
+  return identityInputOf(labelsDrawnOut(part.bonds.some((b) => b.hydrogen) ? { ...part, bonds: part.bonds.filter((b) => !b.hydrogen) } : part));
 }
 const identities = new Map<string, string>();
 const IDENTITIES_KEPT = 4096;
+
+/** A structure's drawing as one key (`drawnKey`), with what each of its labels holds: what its identity is kept by (`drawnHash`), and worked out at a fraction of its cost. */
+export function drawingKey(model: Model, ids: readonly number[]): string {
+  const { byId } = pageIndex(model);
+  const labels = ids.flatMap((id) => (byId.get(id)?.abbrev ? [byId.get(id)!] : [])).map((a) => `${a.id}:${JSON.stringify(a.abbrev)}`);
+  return `${drawnKey(model, ids)}|${labels.join(";")}`;
+}
 
 /** What a record says once the structure it was given for has been edited: its properties and status taken away. */
 export const BEFORE_THE_EDIT = "its properties were for the structure before the edit";
 /** What a stale record says once a step has worked new values out of the structure as it is: those it had before the edit are gone still. */
 export const TAKEN_AT_THE_EDIT = "the properties it had before the edit were taken away; those it has are of it as it is";
 
-/** A record put on a structure as it is drawn now: of that structure (`of`). */
-export const recordOn = (record: DrawnRecord, model: Model, ids: readonly number[]): DrawnRecord => ({ ...record, of: drawnHash(model, ids) });
+/** A record put on a structure as it is drawn now: of that structure (`of`) - as it was, while its identity is pending. */
+export const recordOn = (record: DrawnRecord, model: Model, ids: readonly number[]): DrawnRecord => {
+  const of = drawnHash(model, ids);
+  return of == null ? record : { ...record, of };
+};
 
 /**
  * The record of a structure edited since it was given, or of two joined
@@ -243,10 +318,60 @@ function joined(a: DrawnRecord | undefined, b: DrawnRecord): DrawnRecord | undef
   return Object.keys(out).length ? out : undefined;
 }
 
-/** A record as its structure stands now: as it is, where that is the structure it was given for (or it does not say); else its properties and status taken away (`joined`). */
+/** A record as its structure stands now: as it is, where that is the structure it was given for (or it does not say); else its properties and status taken away (`joined`) - and its lasting id, the structure being another. */
 export function recordNow(record: DrawnRecord | undefined, model: Model, ids: readonly number[]): DrawnRecord | undefined {
-  if (!record?.of || record.of === drawnHash(model, ids)) return record;
+  if (!record?.of) return record;
+  // (its identity pending: kept as it stands - not known to be another is never taken for one)
+  const now = drawnHash(model, ids);
+  if (now == null || record.of === now) return record;
   return joined(undefined, record);
+}
+
+/** How what is made of a structure drawn names it in its lineage (`SetEntry.madeOf`): by its lasting id (`DrawnRecord.id`). */
+export const structureLineage = (id: string): string => `structure:${id}`;
+
+/**
+ * A lasting id for a structure (`DrawnRecord.id`) given where it is put -
+ * `where`, a step's exit or a set, and `at`, its place there or its first
+ * atom - as it is drawn (`drawing`: `drawingKey`, or its identity's key):
+ * two hashes, wide enough that no two of a workspace's structures share one,
+ * and the same each time it is worked out, so that a step run again on what
+ * it ran on before gives its structures the ids it gave them then.
+ */
+export function structureIdAt(where: string, at: number, drawing: string): string {
+  const text = `${where}|${at}|${drawing}`;
+  return `${hash(text).toString(36)}-${hash(text, 0x01000193).toString(36)}`;
+}
+
+/**
+ * A set's member's record with its lasting id (`DrawnRecord.id`), as set
+ * `set` holds the structure drawn now:
+ * - one a step gave - its record says what it is of (`of`) - keeps the id it
+ *   has: edited into another, `recordNow` has taken that away with its
+ *   properties, and it is given one as the chemist's are;
+ * - one the chemist drew - its record says nothing of what it is of - is
+ *   given its id afresh each time, from the set, its first atom and its
+ *   drawing (`drawingKey`): the same while it is drawn the same, moved or
+ *   turned whole, another once it is drawn as another - its identity, which
+ *   costs far more, never worked out for it.
+ */
+export function memberRecord(record: DrawnRecord | undefined, model: Model, ids: readonly number[], set: number): DrawnRecord {
+  if (record?.of && record.id) return record;
+  return { ...record, id: structureIdAt(`set ${set}`, ids[0], drawingKey(model, ids)) };
+}
+
+/**
+ * The record of a structure a step gave, as it is put on the page
+ * (`recordOn`): of it as drawn there, its lasting id kept where it is still
+ * the structure the record was of, else `given`'s for what it is
+ * (`structureIdAt`, at the step's exit and its place).
+ */
+export function placedRecord(record: DrawnRecord, model: Model, ids: readonly number[], given: (now: string) => string): DrawnRecord {
+  // (asked before the step puts its structures down - workflow/run `madePut`'s caller - so known here; worked out in place only
+  //  where it was not)
+  const now = drawnHash(model, ids) ?? drawnHashNow(model, ids);
+  const id = record.id && (!record.of || record.of === now) ? record.id : given(now);
+  return { ...record, id, of: now };
 }
 
 /** What a record adds to a step's key (flow `inputKey`): all it says, but not what it is of - the structure's own key says that. */
@@ -315,10 +440,11 @@ export function drawnKey(model: Model, ids: readonly number[]): string {
   const name = ids.join(",");
   const had = known.get(name);
   if (had != null) return had;
-  const of = new Set(ids);
-  const at = new Map(model.atoms.filter((a) => of.has(a.id)).map((a) => [a.id, a]));
+  // (through the drawing's index: the structure's own atoms and bonds alone, however many others the page holds)
+  const { byId, bondsOf } = pageIndex(model);
+  const at = new Map(ids.flatMap((id) => (byId.has(id) ? [[id, byId.get(id)!] as const] : [])));
   const near = new Map<number, number[]>();
-  const bonds = model.bonds.filter((b) => at.has(b.a) && at.has(b.b));
+  const bonds = [...new Set(ids.flatMap((id) => bondsOf.get(id) ?? []))].filter((b) => at.has(b.a) && at.has(b.b));
   for (const b of bonds) {
     near.set(b.a, [...(near.get(b.a) ?? []), b.b]);
     near.set(b.b, [...(near.get(b.b) ?? []), b.a]);
@@ -373,7 +499,7 @@ function statusIn(v: unknown): EntryStatus | undefined {
  * nothing of it reads.
  */
 export function readDrawnRecord(v: unknown): DrawnRecord | undefined {
-  const r = v as { from?: unknown; properties?: unknown; status?: unknown; of?: unknown; stale?: unknown } | null;
+  const r = v as { id?: unknown; from?: unknown; properties?: unknown; status?: unknown; of?: unknown; stale?: unknown } | null;
   if (!r || typeof r !== "object") return undefined;
   const from = readEach(r.from, (id) => (isText(id) ? id : null), "madeFrom");
   const properties: Record<string, Property> = {};
@@ -386,6 +512,7 @@ export function readDrawnRecord(v: unknown): DrawnRecord | undefined {
   }
   const status = statusIn(r.status);
   const record: DrawnRecord = {
+    ...(isText(r.id) && r.id ? { id: r.id } : {}),
     ...(from.length ? { from } : {}),
     ...(Object.keys(properties).length ? { properties } : {}),
     ...(status ? { status } : {}),
@@ -406,18 +533,22 @@ export function placesOf(page: Page): { structures: { ids: number[]; at: Pt }[];
 
 export { before as readingOrder };
 
-/** What lies inside a frame: the structures drawn (each its atoms' ids), the molecules in 3D and the pictures (by id) whose middles are inside it, each in the order they lie. */
-export function lyingIn(page: Page, set: Frame): { structures: number[][]; molecules: number[]; pictures: number[] } {
+/**
+ * What lies inside a frame: the structures drawn (each its atoms' ids), the molecules in 3D and the pictures (by id) whose middles are inside it, each in the order they lie
+ * - but for those whose middles lie in `apart`, where one is given (a conversation's card: its room is never what it sees).
+ */
+export function lyingIn(page: Page, set: Frame, apart?: Frame): { structures: number[][]; molecules: number[]; pictures: number[] } {
+  const within = (p: Pt) => inside(set, p) && !(apart && inside(apart, p));
   const structures = drawnIn(page.model)
-    .filter((s) => inside(set, s.at))
+    .filter((s) => within(s.at))
     .sort((p, q) => before(p.at, q.at))
     .map((s) => s.ids);
   const molecules = (page.molecules3d ?? [])
-    .filter((m) => inside(set, m.at))
+    .filter((m) => within(m.at))
     .sort((p, q) => before(p.at, q.at))
     .map((m) => m.id);
   const pictures = (page.pictures ?? [])
-    .filter((p) => inside(set, p))
+    .filter((p) => within(p))
     .sort((p, q) => before(p, q))
     .map((p) => p.id);
   return { structures, molecules, pictures };
@@ -492,8 +623,14 @@ export function countOf(page: Page, set: WorkflowSet): { holds: SetHolds; entrie
   return { holds, entries, compounds: holds === "conformers" ? molecules.length : entries };
 }
 
+/** A number as Meno writes one: an energy in kcal/mol as the chips write it ("1.89 kcal/mol"), else with all its digits and its unit. */
+export function numberShown(n: { value: number; unit: string }): string {
+  if (n.unit === "kcal/mol") return aboveText(n.value);
+  return `${numberText(n.value)}${n.unit !== "none" ? ` ${n.unit}` : ""}`;
+}
+
 /** A set's count line, as its frame says it: how many of what it holds - and, of structures drawn more than the page shows (look `DRAWN_ON_PAGE`), how many it shows of how many - or that it is empty, not run yet, or not kept. */
-export function countSaid(b: Pick<WorkflowSet, "notKept" | "made" | "number" | "chart" | "drawnCollection">, count: ReturnType<typeof countOf>): string {
+export function countSaid(b: Pick<WorkflowSet, "notKept" | "made" | "number" | "chart" | "drawnCollection">, count: ReturnType<typeof countOf>, scheme: readonly string[] = []): string {
   // (a result set the file did not keep: how many it held; one kept out of the file from now on, said so;
   // a step's exit not run yet, so - not empty, which would say it ran and gave nothing)
   return b.notKept && !count.entries
@@ -505,7 +642,7 @@ export function countSaid(b: Pick<WorkflowSet, "notKept" | "made" | "number" | "
     : count.holds === "table"
       ? plural(count.entries, "row")
     : count.holds === "number" && b.number
-      ? `${numberText(b.number.value)}${b.number.unit !== "none" ? ` ${b.number.unit}` : ""}`
+      ? numberShown(b.number)
     : count.holds === "chart"
       ? plural(count.entries, b.chart?.kind === "diagram" ? "level" : "point")
     : count.holds === "pictures"
@@ -514,13 +651,15 @@ export function countSaid(b: Pick<WorkflowSet, "notKept" | "made" | "number" | "
         ? // (more than the page shows - look DRAWN_ON_PAGE - how many it shows of how many it holds)
           b.drawnCollection?.length && count.entries > b.drawnCollection.length
           ? `${(count.entries - b.drawnCollection.length).toLocaleString("en-US")} of ${plural(count.entries, "structure")} shown`
-          : plural(count.entries, "structure")
+          : // (and what a drawn reaction in its frame says of them: schemeRoles)
+            [plural(count.entries, "structure"), ...scheme].join(" \u00b7 ")
         : count.holds === "molecules"
           ? plural(count.compounds, "compound")
-          : `${plural(count.compounds, "compound")} · ${count.entries}`;
+          : // (a conformer set: as its exit's chip and its step's line say it - "1,800 conformers of 3 compounds")
+            `${plural(count.entries, "conformer", "conformers", true)} of ${plural(count.compounds, "compound")}`;
 }
 
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const plural = (n: number, one: string, many = `${one}s`, grouped = false) => `${grouped ? n.toLocaleString("en-US") : n} ${n === 1 ? one : many}`;
 
 /** How many frames a molecule in 3D has: its own geometry, and the rest. */
 export const framesOf = (m: Pick<Molecule3D, "frames">) => 1 + (m.frames?.length ?? 0);
@@ -579,7 +718,7 @@ export type SetEntry = {
    */
   charge?: number;
   multiplicity?: number;
-  /** How many forms of it a conformer search found alike - its rotamers - where it said (CREST's degeneracy): its Boltzmann weight counts each. */
+  /** How many forms of it a conformer search found alike - its rotamers - where it said: its Boltzmann weight counts each. */
   degeneracy?: number;
   /**
    * Where its mirror image was counted in (Duplicates, its degeneracy
@@ -592,6 +731,8 @@ export type SetEntry = {
   stereo?: EntryStereo;
   /** Why a program step could not do it, where one could not (workflow/failures): an entry of a step's Failed exit. */
   failed?: Failure;
+  /** That a run ended converged at its geometry, and how (workflow/converged): of that geometry alone - a record of another counts for none (`convergedOf`). */
+  converged?: Converged;
   /** The imaginary frequencies its calculation judged it has, in cm-1 (lib/calc/output `CalcInfo.imaginary`): a mark that it is no minimum. */
   imaginary?: number[];
   /** Its molecule's marks of which frames failed, or are no minimum, did not read (`Molecule3D.marksUnread`): whether it is a minimum is not known. */
@@ -616,7 +757,21 @@ export type SetEntry = {
    */
   calc?: CalcInfo;
   keep?: Kept;
-  /** The molecule in 3D it is a frame of, by id; which frame, and whether it is that molecule's last. */
+  /** The end it is paired with, where it is the start of a pair a step of two inputs works out (workflow/pairs: Path search's). */
+  end?: SetEntry;
+  /** Its sides, where it is a guess an *Optimise to a saddle point* step pairs with a reactant side and a product side (workflow/pairs `sideUnlike`). */
+  sides?: { reactant: SetEntry; product: SetEntry };
+  /** How it was paired with its end, in words (workflow/pairs): "in order, by place: start a #2 with end b #2", "each with each", "matched on pc". */
+  paired?: string;
+  /**
+   * The entries it was made from, by id: its lineage, which its entry
+   * record gives as its own (`entryOfSet`, lib/entry `Entry.from`). A
+   * *Conformers* step gives each conformer its structure drawn's
+   * (`DrawnRecord.from`), the one structure in 3D; its molecule keeps it
+   * (`Molecule3D.madeOf`). Not `from`.
+   */
+  madeOf?: string[];
+  /** The molecule in 3D it is a frame of, by id - not its lineage (`madeOf`); which frame, and whether it is that molecule's last. */
   from?: number;
   frame?: number;
   last?: boolean;
@@ -678,6 +833,59 @@ export function keptOf(m: Kept): Kept {
   };
 }
 
+/**
+ * What an entry keeps of its calculation, its atoms renumbered (`order`:
+ * the atom each place now has): what the calculation was - the readers,
+ * program, version, method, basis, solvation, charge and spin, its
+ * imaginary frequencies - and the atoms it held, as numbered now; so that
+ * its energy is still one of that calculation, alike with its compound's
+ * others not renumbered (`unlikeMade`). Its results as numbered now, but
+ * those that cannot be (lib/calc/results `resultsRenumbered`); not the
+ * output and the wavefunction it was read from, which number its atoms as
+ * they were. `leftBehind`: whether any of it was left so.
+ */
+export function calcRenumbered(c: CalcInfo, order: readonly number[]): { calc: CalcInfo; leftBehind: boolean } {
+  const now = new Array<number>(order.length);
+  order.forEach((j, at) => (now[j] = at));
+  const { results, source, wavefunction, held, ...level } = c;
+  const r = results?.length ? resultsRenumbered(results, order) : { results: [], dropped: 0 };
+  return {
+    calc: { ...level, ...(r.results.length ? { results: r.results } : {}), ...(held ? { held: held.map((a) => now[a]) } : {}) },
+    leftBehind: r.dropped > 0 || !!source || !!wavefunction,
+  };
+}
+
+/**
+ * What an entry keeps besides (`Kept`), its atoms renumbered (`order`: the
+ * atom each place now has; `now`, each atom's new place) and its bonds with
+ * them (`bondNow`: each bond's new place, -1 where it has none): how it was
+ * made and what its drawing was, as they were; the drawing's atom each of
+ * its atoms is, its CIP labels and which are chosen and shown, and its bonds
+ * to ring centres, as numbered now - its compound's others alike with it
+ * still (`unlikeMade`, `keptAlike`).
+ */
+export function keptRenumbered(k: Kept, order: readonly number[], now: readonly number[], bondNow: readonly number[]): Kept {
+  const atoms = (as: readonly number[]) => as.map((a) => now[a]);
+  const bonds = (bs: readonly number[]) => bs.map((b) => bondNow[b] ?? -1).filter((b) => b >= 0);
+  const st = k.stereo;
+  return {
+    drawnFrom: k.drawnFrom?.length === order.length ? order.map((j) => k.drawnFrom![j]) : undefined,
+    drawnAs: k.drawnAs,
+    ...(st
+      ? {
+          stereo: {
+            atoms: Object.fromEntries(Object.entries(st.atoms).map(([a, l]) => [now[Number(a)], l])),
+            bonds: Object.fromEntries(Object.entries(st.bonds).flatMap(([b, l]) => ((bondNow[Number(b)] ?? -1) >= 0 ? [[bondNow[Number(b)], l]] : []))),
+            ...(st.chosen ? { chosen: { atoms: atoms(st.chosen.atoms), bonds: bonds(st.chosen.bonds) } } : {}),
+            ...(st.shown ? { shown: { atoms: atoms(st.shown.atoms), bonds: bonds(st.shown.bonds) } } : {}),
+          },
+        }
+      : {}),
+    ...(k.made ? { made: k.made } : {}),
+    ...(k.centres?.length ? { centres: k.centres.map((c) => ({ metal: now[c.metal], atoms: atoms(c.atoms) })) } : {}),
+  };
+}
+
 /** `v` as JSON with every object's keys in order: two values equal as data give the one text. */
 function stableJson(v: unknown): string {
   if (Array.isArray(v)) return `[${v.map(stableJson).join(",")}]`;
@@ -693,14 +901,14 @@ function stableJson(v: unknown): string {
 }
 
 /** What a calculation was, without what is each entry's own: its results, its output, its job among several, its wavefunction, the readers that could not read it. */
-function calcLevel(c: CalcInfo | undefined): string {
+export function calcLevel(c: CalcInfo | undefined): string {
   if (!c) return "";
   const { results: _results, source: _source, job: _job, wavefunction: _wavefunction, unread: _unread, ...level } = c;
   return stableJson(level);
 }
 
 /** A calculation, or a way of making, in a few words: its program, method and basis, or what its energies are from. */
-function madeWords(e: SetEntry): string {
+export function madeWords(e: SetEntry): string {
   const c = e.calc;
   return c ? [c.program, c.method, c.basis].filter(Boolean).join(" ") || "a calculation" : e.keep?.made?.energies ?? "no calculation";
 }
@@ -768,11 +976,40 @@ export const frameMarks = (m: Pick<Molecule3D, "failed" | "imaginary" | "marksUn
 /** What is said of an entry whose file's marks of failed frames did not read (`SetEntry.marksUnread`). */
 export const MARKS_UNREAD = "its frames' marks could not be read, so whether it is a minimum is not known";
 
-/** The imaginary frequencies frame `f` of `n` was judged to have: a conformer's own, else - its last - its calculation's. */
-const imaginaryAt = (m: Molecule3D, f: number, n: number): number[] | undefined =>
-  (m.imaginary?.length === n ? m.imaginary[f] : f === n - 1 ? m.calc?.imaginary : undefined) ?? undefined;
+export { PATH_FRAME, REFINED_SAID, STARTED_SAID };
 
-export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" | "conformers"): SetEntry[] {
+/** The one frame of a molecule its frames say is `what`; none where none is, or more than one. */
+function frameSaid(m: Pick<Molecule3D, "calc">, what: string): number | null {
+  const said = m.calc?.results?.find((r) => r.id === PATH_FRAME && r.on === "frames");
+  if (!said || said.on !== "frames") return null;
+  const k = said.values.indexOf(what);
+  return k >= 0 && said.values.lastIndexOf(what) === k ? k : null;
+}
+
+/** Of a path search's molecule, the frame that is the point it refined, as its frames say; none for any other molecule. */
+export const refinedFrame = (m: Pick<Molecule3D, "calc">): number | null => frameSaid(m, REFINED_SAID);
+
+/** Of a reaction path's molecule, the frame it started from, as its frames say; none for any other molecule. */
+export const startedFrame = (m: Pick<Molecule3D, "calc">): number | null => frameSaid(m, STARTED_SAID);
+
+/** The frame of `n` a molecule's calculation is of: its last - or, a path search's, the point it refined, a reaction path's, the point it started from, its path going on past it. */
+export const calcFrame = (m: Molecule3D, n: number): number => refinedFrame(m) ?? startedFrame(m) ?? n - 1;
+
+/**
+ * A molecule's calculation as frame `f` of its `n` carries it alone, where
+ * it is the frame the calculation is of: whole, but what it says of each
+ * frame (a path search's `PATH_FRAME`) that frame's alone - so that a
+ * molecule of that one frame holds it as one of one frame, read back as
+ * such, and its frames still say which it is.
+ */
+const calcOfFrame = (calc: CalcInfo, f: number, n: number): CalcInfo =>
+  n > 1 && calc.results?.some((r) => r.on === "frames") ? { ...calc, results: calc.results.map((r) => (r.on === "frames" ? { ...r, values: [r.values[f] ?? null] } : r)) } : calc;
+
+/** The imaginary frequencies frame `f` of `n` was judged to have: a conformer's own, else - the frame its calculation is of - its calculation's. */
+const imaginaryAt = (m: Molecule3D, f: number, n: number): number[] | undefined =>
+  (m.imaginary?.length === n ? m.imaginary[f] : f === calcFrame(m, n) ? m.calc?.imaginary : undefined) ?? undefined;
+
+export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" | "conformers", frames?: (m: Molecule3D) => readonly number[]): SetEntry[] {
   const out: SetEntry[] = [];
   molecules.forEach((m, i) => {
     const n = framesOf(m);
@@ -793,8 +1030,8 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
     const keep = keptOf(m);
     // (what its calculation read is of one geometry - its last: an earlier frame carries the calculation without it)
     const calcBefore = m.calc ? (({ results: _r, imaginary: _i, ...rest }) => rest)(m.calc) : undefined;
-    // (a path: its last frame alone; an opened optimisation or scan, the frames it converged on)
-    const taken = m.path ? [n - 1] : (m.entryFrames ?? Array.from({ length: n }, (_, k) => k));
+    // (those asked for - Take frames' - else a path's last frame alone; an opened optimisation or scan, the frames it converged on)
+    const taken = frames ? frames(m) : m.path ? [n - 1] : (m.entryFrames ?? Array.from({ length: n }, (_, k) => k));
     for (const f of taken) {
       const xyz = frameXyz(m, f);
       const stereo = stereoKnown({ atoms: m.atoms, bonds: m.bonds, xyz });
@@ -814,11 +1051,13 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
         ...(m.name ? { name: m.name } : {}),
         ...(properties && Object.keys(properties[f]).length ? { properties: properties[f] } : {}),
         ...(m.partOf ? { partOf: true as const } : {}),
-        ...(m.calc ? { calc: f === n - 1 ? m.calc : calcBefore } : {}),
+        ...(m.calc ? { calc: f === calcFrame(m, n) ? calcOfFrame(m.calc, f, n) : calcBefore } : {}),
         ...(m.failed?.[f] ? { failed: m.failed[f]! } : {}),
+        ...(m.converged?.length === n && m.converged[f] ? { converged: m.converged[f]! } : {}),
         // (a conformer's own, frame by frame; a single geometry's, its calculation's - of its last geometry)
         ...(imaginaryAt(m, f, n) ? { imaginary: imaginaryAt(m, f, n) } : {}),
         ...(m.marksUnread ? { marksUnread: true as const } : {}),
+        ...(m.madeOf?.length ? { madeOf: [...m.madeOf] } : {}),
         keep,
         from: m.id,
         frame: f,
@@ -845,9 +1084,10 @@ export const THERMO_PROPERTIES = ["thermo.free-energy", "thermo.enthalpy", "ther
 /**
  * What an entry's calculation was, for its properties (lib/entry `By`): the
  * plugin that read it, the program, method and basis - and, for a thermal
- * quantity, the treatment of its vibrations as the program said it.
+ * quantity, the treatment of its vibrations and the symmetry it took (its
+ * point group, its rotational symmetry number), as the program said them.
  */
-function byOf(calc: SetEntry["calc"], treatment?: string): By | undefined {
+function byOf(calc: SetEntry["calc"], thermal?: Pick<By, "treatment" | "pointGroup" | "symmetryNumber">): By | undefined {
   if (!calc) return undefined;
   const plugin = calc.readers[0]?.split(" ")[0];
   const by: By = {
@@ -855,7 +1095,9 @@ function byOf(calc: SetEntry["calc"], treatment?: string): By | undefined {
     ...(calc.program ? { program: calc.program } : {}),
     ...(calc.method ? { method: calc.method } : {}),
     ...(calc.basis ? { basis: calc.basis } : {}),
-    ...(treatment ? { treatment } : {}),
+    ...(thermal?.treatment ? { treatment: thermal.treatment } : {}),
+    ...(thermal?.pointGroup ? { pointGroup: thermal.pointGroup } : {}),
+    ...(thermal?.symmetryNumber != null ? { symmetryNumber: thermal.symmetryNumber } : {}),
   };
   return Object.keys(by).length ? by : undefined;
 }
@@ -879,13 +1121,20 @@ function thermoOf(e: SetEntry, geometry: string): Partial<Record<(typeof THERMO_
   const kelvin = readingOf(calc, "thermo.temperature");
   const atm = readingOf(calc, "thermo.pressure");
   const treatment = readingOf(calc, "thermo.treatment");
+  const pointGroup = readingOf(calc, "thermo.point-group");
+  const sigma = readingOf(calc, "thermo.symmetry-number");
   const at: At = {
     geometry,
     ...(typeof kelvin === "number" ? { kelvin } : {}),
     ...(typeof atm === "number" ? { atm } : {}),
     ...(calc.solvation ? { solvent: calc.solvation } : {}),
   };
-  const by = byOf(calc, typeof treatment === "string" ? treatment : undefined);
+  // (each carries the symmetry it was worked out with, as the program printed it: a G with its own sigma, wherever it goes)
+  const by = byOf(calc, {
+    ...(typeof treatment === "string" ? { treatment } : {}),
+    ...(typeof pointGroup === "string" ? { pointGroup } : {}),
+    ...(typeof sigma === "number" && Number.isInteger(sigma) && sigma >= 1 ? { symmetryNumber: sigma } : {}),
+  });
   const out: Partial<Record<(typeof THERMO_PROPERTIES)[number], Property>> = {};
   for (const id of THERMO_PROPERTIES) {
     const r = calc.results.find((x) => x.on === "molecule" && x.id === id);
@@ -984,10 +1233,10 @@ export function imaginaryOf(e: Pick<SetEntry, "imaginary" | "calc" | "properties
 }
 
 /** The names Meno gives what it has found of an entry (`menoProperties`), each a field of a step's entry - its compound, its energy, its vibrations, its state - never one of its own properties. */
-const MENO_NAMES = ["group", "number", "energy", ...THERMO_PROPERTIES, "vibrations", "modes", "degeneracy", "mirror", "imaginary", "name", "state"] as const;
+const MENO_NAMES = ["group", "number", "energy", ...THERMO_PROPERTIES, "vibrations", "modes", "degeneracy", "mirror", "imaginary", "imaginary.first", "imaginary.second", "name", "state", "failure", "converged"] as const;
 export const MENO_OWN: ReadonlySet<string> = new Set(MENO_NAMES);
 
-/** What Meno has found of an entry, as properties by its own names (`MENO_NAMES`, which its type holds it to): its compound as its group, its number, its energy (in hartrees, at its geometry - in the solvation its calculation said - by what worked it out), its calculation's thermochemistry and vibrations, its degeneracy, its mirror image's atoms where one was counted in, how many imaginary frequencies it has, its name, its state. */
+/** What Meno has found of an entry, as properties by its own names (`MENO_NAMES`, which its type holds it to): its compound as its group, its number, its energy (in hartrees, at its geometry - in the solvation its calculation said - by what worked it out), its calculation's thermochemistry and vibrations, its degeneracy, its mirror image's atoms where one was counted in, how many imaginary frequencies it has and the two largest, its name, its state, and why it failed, where it did. */
 function menoProperties(e: SetEntry): Partial<Record<(typeof MENO_NAMES)[number], Property>> {
   const at: At = { geometry: geometryKey(e.xyz), ...(e.calc?.solvation ? { solvent: e.calc.solvation } : {}) };
   const by = byOf(e.calc);
@@ -1002,11 +1251,41 @@ function menoProperties(e: SetEntry): Partial<Record<(typeof MENO_NAMES)[number]
     ...vibrationsOf(e, at),
     ...(e.degeneracy != null ? { degeneracy: { value: e.degeneracy, unit: "none" as const, status: "computed" as const } } : {}),
     ...(e.mirror ? { mirror: { value: { list: [...e.mirror], per: "atom" as const }, unit: "none" as const, status: "computed" as const } } : {}),
-    // (how many imaginary frequencies its calculation judged it has, where it judged any: no minimum)
-    ...(e.imaginary?.length ? { imaginary: { value: e.imaginary.length, unit: "none" as const, at, status: "computed" as const } } : {}),
+    ...imaginaryProperties(e, at),
     ...(e.name ? { name: { value: e.name, unit: "none" as const, status: "computed" as const } } : {}),
     // (whether it is a result to stand on: finished - converged, not failed, its marks read - or why not, in a step's line's words)
     state: { value: entryState(e), unit: "none", status: "computed" },
+    // (why it failed, where it did, in its program's own words: for a Filter to send each kind of failure its own way - Runs again)
+    ...(e.failed ? { failure: { value: e.failed.why, unit: "none" as const, status: "computed" as const } } : {}),
+    // (where a run ended converged at its geometry, how: "optimisation", "saddle point optimisation", "highest point refined" - none where none did)
+    ...convergedProperty(e),
+  };
+}
+
+/** That a run ended converged at an entry's geometry, as a property (workflow/converged): how, at that geometry; none where none did. */
+function convergedProperty(e: SetEntry): Partial<Record<"converged", Property>> {
+  const c = convergedOf(e);
+  return c ? { converged: { value: c.how, unit: "none", at: { geometry: c.geometry }, status: "computed" } } : {};
+}
+
+/**
+ * An entry's imaginary frequencies as properties, for a chemist to select on
+ * with Filter ("imaginary = 1", "imaginary.second < 50 cm-1"): how many its
+ * calculation judged it has - 0 where its vibrations were worked out and
+ * none is, none at all where they were not (`imaginaryOf`) - and the largest
+ * and the next, each as its size in cm-1 (120.5 for 120.5i), where it has
+ * them. Meno judges nothing by them: whether one is a minimum, or a saddle
+ * point, is the chemist's to say.
+ */
+function imaginaryProperties(e: SetEntry, at: At): Partial<Record<"imaginary" | "imaginary.first" | "imaginary.second", Property>> {
+  const found = imaginaryOf(e);
+  if (found === "not computed") return {};
+  const sizes = found.map(Math.abs).sort((p, q) => q - p);
+  const of = (value: number, unit: "none" | "cm-1"): Property => ({ value, unit, at, status: "computed" });
+  return {
+    imaginary: of(sizes.length, "none"),
+    ...(sizes.length > 0 ? { "imaginary.first": of(sizes[0], "cm-1") } : {}),
+    ...(sizes.length > 1 ? { "imaginary.second": of(sizes[1], "cm-1") } : {}),
   };
 }
 
@@ -1064,8 +1343,11 @@ export function entryState(e: Pick<SetEntry, "failed" | "marksUnread">): string 
 export function shadowedIn(e: SetEntry): string[] {
   if (!e.properties) return [];
   const own = menoProperties(e);
-  return Object.keys(e.properties).filter((k) => k in own);
+  return Object.keys(e.properties).filter((k) => k in own || ALWAYS_MENO.includes(k));
 }
+
+/** Meno's names an entry's own property never stands under, where Meno has none to give: that a run converged is a run's record alone (workflow/converged), never a value an entry carries. */
+const ALWAYS_MENO: readonly string[] = ["converged"];
 
 /**
  * A step's entry read as Meno's entry record (lib/entry, PR 1 of
@@ -1073,8 +1355,9 @@ export function shadowedIn(e: SetEntry): string[] {
  * its geometry, its species by Meno's one rule, and what has been found of
  * it as properties - its energy (in hartrees, at its geometry, by what
  * worked it out), its calculation's thermochemistry and vibrations, its
- * degeneracy, its compound as its group, its number, its name - and the
- * molecule it was a frame of as its lineage.
+ * degeneracy, its compound as its group, its number, its name - and as
+ * its lineage the entries it was made from (`madeOf`), else the molecule
+ * it was a frame of.
  */
 export function entryOfSet(e: SetEntry, id: string): Entry {
   const atoms: EntryAtom[] = e.atoms.map((a) => ({
@@ -1084,12 +1367,13 @@ export function entryOfSet(e: SetEntry, id: string): Entry {
     ...(a.radical ? { radical: a.radical } : {}),
   }));
   // (its own properties - a model's, a descriptor's - as they came; Meno's names after them, its own: `shadowedIn` names those it gave under them)
-  const properties: Record<string, Property> = { ...e.properties, ...menoProperties(e) };
+  const properties: Record<string, Property> = { ...Object.fromEntries(Object.entries(e.properties ?? {}).filter(([k]) => !ALWAYS_MENO.includes(k))), ...menoProperties(e) };
   const written = { atoms: atoms.map((a, i) => ({ ...a, x: e.xyz[3 * i], y: e.xyz[3 * i + 1], z: e.xyz[3 * i + 2] })), bonds: [], ...(e.skeleton ? { skeleton: true } : {}) };
   return {
     id,
-    from: e.from != null ? [`molecule:${e.from}${e.frame != null ? `#${e.frame}` : ""}`] : [],
-    structure: { atoms, bonds: e.bonds.map((b) => ({ a1: b.a1, a2: b.a2, order: b.order as 1 | 2 | 3 })) },
+    from: e.madeOf?.length ? [...e.madeOf] : e.from != null ? [`molecule:${e.from}${e.frame != null ? `#${e.frame}` : ""}`] : [],
+    // (a coordination bond - the CTfile's type, as a molecule in 3D holds it - as the record marks one: single, so marked)
+    structure: { atoms, bonds: e.bonds.map((b) => (b.order === COORDINATION_BOND ? { a1: b.a1, a2: b.a2, order: 1 as const, coordination: true as const } : { a1: b.a1, a2: b.a2, order: b.order as 1 | 2 | 3 })) },
     geometry: { kind: "3d", xyz: [...e.xyz] },
     species: speciesOf(written, e),
     properties,
@@ -1111,8 +1395,9 @@ export function entryOfSet(e: SetEntry, id: string): Entry {
  * old ones goes - its calculation, its energy, its marks of failed or not
  * a minimum, its degeneracy, mirror image and stereo - never carried onto
  * another structure or geometry; the molecule it is a frame of (`from`,
- * `frame`) stays. None where it has no single 3D geometry: a step's entry
- * is one frame in 3D.
+ * `frame`) stays, and so does what that entry was made from (`madeOf`), as
+ * a program step's entry keeps it: its lineage, at a remove. None where it
+ * has no single 3D geometry: a step's entry is one frame in 3D.
  */
 export function setEntryOfEntry(e: Entry, place: { compound: number; number: number }, was?: SetEntry): SetEntry | null {
   if (e.geometry.kind !== "3d") return null;
@@ -1127,9 +1412,10 @@ export function setEntryOfEntry(e: Entry, place: { compound: number; number: num
     y: xyz[3 * i + 1],
     z: xyz[3 * i + 2],
   }));
-  const bonds: ParsedBond[] = e.structure.bonds.map((b) => ({ a1: b.a1, a2: b.a2, order: b.order }));
+  const bonds: ParsedBond[] = e.structure.bonds.map((b) => ({ a1: b.a1, a2: b.a2, order: b.coordination ? COORDINATION_BOND : b.order }));
   const own = Object.fromEntries(Object.entries(e.properties).filter(([k]) => !MENO_OWN.has(k)));
-  const name = e.properties.name?.value;
+  // (its name where it stands - not one a step marked as of another structure)
+  const name = e.properties.name?.status === "computed" ? e.properties.name.value : undefined;
   const made: SetEntry = {
     compound: place.compound,
     number: place.number,
@@ -1145,6 +1431,7 @@ export function setEntryOfEntry(e: Entry, place: { compound: number; number: num
     ...(was?.from != null ? { from: was.from } : {}),
     ...(was?.frame != null ? { frame: was.frame } : {}),
     ...(was?.last != null ? { last: was.last } : {}),
+    ...(was?.madeOf?.length ? { madeOf: [...was.madeOf] } : {}),
   };
   if (!was || !sameAs(was, made)) return made;
   // (that entry still: all it held, its properties as the step left them - and its charge and spin given, where the step gave the ones it had)

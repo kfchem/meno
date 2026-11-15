@@ -42,6 +42,17 @@ export function colorInstances(mesh: InstancedMesh, colors: readonly (string | u
 }
 
 /**
+ * White for each of `n` instances, as an instanced mesh's own colours from
+ * the start (`<instancedBufferAttribute attach="instanceColor" …/>`): a
+ * mesh whose instances `colorInstances` colours. Its shader is then the
+ * one it is drawn with once a colour comes, made as the page starts - not
+ * made again in the frame the first drawing is drawn in, as it was where
+ * the colours came only with it. White tints nothing, its material's colour
+ * as it was.
+ */
+export const whiteInstances = (n: number): Float32Array => new Float32Array(3 * n).fill(1);
+
+/**
  * A plain material for instances drawn across a line - a bond's plane, `y`
  * - or round, a cap's disc, `xy`, whose width is made wider or narrower
  * than laid out on the graphics card: `width.value` times, for nothing on

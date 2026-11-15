@@ -27,6 +27,8 @@ export type Runner = {
   /** Where a job's files are, where the chemist can open them. */
   folder(id: string): Promise<string>;
   stop(id: string): Promise<void>;
+  /** A job alone stopped, recorded failed - "stopped by you" - so that its step brings in the rest. */
+  stopAlone(id: string): Promise<void>;
   remove(id: string): Promise<void>;
   /** Every finished job's folder taken away: how many. */
   clearFinished(): Promise<number>;
@@ -45,6 +47,7 @@ export const THIS_COMPUTER: Runner = {
   digest: (id) => invoke<string>("job_digest", { id }),
   folder: (id) => invoke<string>("job_folder", { id }),
   stop: (id) => invoke<void>("job_stop", { id }),
+  stopAlone: (id) => invoke<void>("job_stop_alone", { id }),
   remove: (id) => invoke<void>("job_remove", { id }),
   clearFinished: () => invoke<number>("jobs_clear_finished"),
 };

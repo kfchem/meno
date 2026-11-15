@@ -10,6 +10,7 @@
  * it out. Selected, its strokes are lit. What the drawing has under the
  * pointer is pressed, not the writing.
  */
+import { longPressMs } from "../longPress";
 import * as THREE from "three";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useThree } from "@react-three/fiber";
@@ -25,7 +26,7 @@ import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { strokesGeometry } from "./inkGeometry";
 import { pageAt } from "../utils/page";
 import { dragSelection } from "../utils/dragSelection";
-import { DOUBLE_CLICK_MS, LONG_PRESS_MS } from "../constants";
+import { DOUBLE_CLICK_MS } from "../constants";
 import { HeldGlow } from "./HeldLight";
 import { type Held } from "./held";
 import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
@@ -184,7 +185,7 @@ const InkItem = memo(function InkItem({ k, z, pointPx, ink, selected, hovered, t
       s2.selectInks([k.id]);
       setHeld((h) => (h ? { ...h, done: true } : h));
       move();
-    }, LONG_PRESS_MS);
+    }, longPressMs());
     const onMoveDrag = (mv: PointerEvent) => {
       if (panned || Math.hypot(mv.clientX - from.x, mv.clientY - from.y) < PAN_PX) return;
       panned = true;

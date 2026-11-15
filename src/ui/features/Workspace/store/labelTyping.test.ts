@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { connectStoreToDocument, createEditorStore } from ".";
-import { createWorkspaceDocument } from "../document";
+import { createWorkspaceDocument, setAtomChemistry } from "../document";
 import { acsWorldOptions, NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { labelSetOf } from "../../../../lib/chem/layout2d";
 import { clickSpread, DRAW_BACK_MS, SPREAD_MS } from "../components/selectionShade";
@@ -16,7 +16,7 @@ function editor() {
   const c = st().addAtom(0, 0, "C");
   const x = st().addAtom(NOMINAL_BOND_LENGTH, 0, "C");
   st().addBond(c, x, 1);
-  return { st, c, x };
+  return { doc, st, c, x };
 }
 
 describe("a click on an atom (docs/EDITOR-2D.md, How it is worked)", () => {
@@ -146,5 +146,75 @@ describe("a short motion's clock, counted by the frames drawn", () => {
     // (a 120 Hz display's frames as they come)
     c.tick(1 / 120);
     expect(c.now()).toBeCloseTo(2000 / 60 + 1000 / 120, 9);
+  });
+});
+
+describe("a label typed over an atom that is selected with others (docs/EDITOR-2D.md, Labels typed in place)", () => {
+  it("is written on every atom selected, in one undo step - atoms alone", () => {
+    const { doc, st, c, x } = editor();
+    const before = st().model.bonds.length;
+    const depth = doc.history().undoDepth;
+    st().setSel({ atoms: new Set([c, x]), bonds: new Set([st().model.bonds[0].id]) }, c);
+    st().beginLabelEdit(c, "N");
+    st().setLabelEditValue("N");
+    st().commitLabelEdit();
+    expect(st().model.atoms.map((a) => a.el)).toEqual(["N", "N"]);
+    // (the bond selected with them is as it was)
+    expect(st().model.bonds).toHaveLength(before);
+    expect(doc.history().undoDepth).toBe(depth + 1);
+    doc.undo();
+    expect(st().model.atoms.map((a) => a.el)).toEqual(["C", "C"]);
+  });
+
+  it("is that atom's alone where it is not selected, where it is selected alone, or where it was begun from a menu", () => {
+    const { doc, st, c, x } = editor();
+    const write = (atom: number, begin: () => void) => {
+      begin();
+      st().setLabelEditValue("O");
+      st().commitLabelEdit();
+      expect(st().model.atoms.find((a) => a.id === atom)!.el).toBe("O");
+    };
+    // (the other atom selected, this one not)
+    st().setSel({ atoms: new Set([x]), bonds: new Set() }, x);
+    write(c, () => st().beginLabelEdit(c, "O"));
+    expect(st().model.atoms.find((a) => a.id === x)!.el).toBe("C");
+    // (selected alone)
+    st().setSel({ atoms: new Set([x]), bonds: new Set() }, x);
+    write(x, () => st().beginLabelEdit(x, "O"));
+    expect(st().model.atoms.find((a) => a.id === c)!.el).toBe("O");
+    doc.undo();
+    doc.undo();
+    // (both selected, but begun from a menu: no letter typed)
+    st().setSel({ atoms: new Set([c, x]), bonds: new Set() }, c);
+    write(c, () => st().beginLabelEdit(c, "", { select: true }));
+    expect(st().model.atoms.find((a) => a.id === x)!.el).toBe("C");
+  });
+
+  it("leaves an atom that is not selected alone, with two others selected - and puts it back in one undo step", () => {
+    const { doc, st, c, x } = editor();
+    const y = st().addAtom(2 * NOMINAL_BOND_LENGTH, 0, "C");
+    st().setSel({ atoms: new Set([c, x]), bonds: new Set() }, c);
+    const depth = doc.history().undoDepth;
+    // (a letter typed over y, which is not among the two selected)
+    st().beginLabelEdit(y, "N");
+    st().setLabelEditValue("N");
+    st().commitLabelEdit();
+    const el = (id: number) => st().model.atoms.find((a) => a.id === id)!.el;
+    expect([el(c), el(x), el(y)]).toEqual(["C", "C", "N"]);
+    expect(doc.history().undoDepth).toBe(depth + 1);
+    doc.undo();
+    expect([el(c), el(x), el(y)]).toEqual(["C", "C", "C"]);
+  });
+
+  it("keeps each atom's own element and radical, where only a charge is typed", () => {
+    const { doc, st, c, x } = editor();
+    doc.edit("set", (d) => setAtomChemistry(d, c, { el: "N", radical: "doublet" }));
+    st().setSel({ atoms: new Set([c, x]), bonds: new Set() }, c);
+    st().beginLabelEdit(c, "+");
+    st().setLabelEditValue("+");
+    st().commitLabelEdit();
+    const [n, carbon] = [c, x].map((id) => st().model.atoms.find((a) => a.id === id)!);
+    expect([n.el, n.charge, n.radical]).toEqual(["N", 1, "doublet"]);
+    expect([carbon.el, carbon.charge, carbon.radical]).toEqual(["C", 1, undefined]);
   });
 });

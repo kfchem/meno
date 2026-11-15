@@ -7,7 +7,7 @@
  */
 import { readClipboard } from "../../../../lib/clipboard";
 import { rgbaOfDib } from "../../../../lib/binary/dib";
-import { withDpi } from "../../../../lib/binary/png";
+import { withDpi, withoutColour } from "../../../../lib/binary/png";
 import { holdPicture, pictureBytes } from "../../../../lib/picture/held";
 import { isFilm, type PictureMedia } from "../../../../lib/picture/image";
 import type { PictureItem, PictureToAdd } from "../store/types";
@@ -53,6 +53,32 @@ export async function picturePng(p: Pick<PictureItem, "sha256" | "media">): Prom
   canvas.getContext("2d")?.drawImage(bitmap, 0, 0);
   bitmap.close();
   return new Uint8Array(await (await canvas.convertToBlob({ type: "image/png" })).arrayBuffer());
+}
+
+/**
+ * A PNG's pixels as its samples are - no gamma or colour profile applied,
+ * which a window may apply even when asked not to, so its colour chunks
+ * are taken out first - laid on white where it is see-through: what a
+ * picture's reading is laid on (lib/figure/inkFit), as its plugin's model
+ * was given them.
+ */
+export async function pngPixels(png: Uint8Array): Promise<ImageData> {
+  const plain = withoutColour(png);
+  const bitmap = await createImageBitmap(new Blob([plain as Uint8Array<ArrayBuffer>], { type: "image/png" }), { colorSpaceConversion: "none", premultiplyAlpha: "none" });
+  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("no canvas to draw the picture on");
+  ctx.drawImage(bitmap, 0, 0);
+  bitmap.close();
+  const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  // (each pixel laid on white as far as it is see-through)
+  const d = pixels.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const a = d[i + 3] / 255;
+    for (let k = 0; k < 3; k++) d[i + k] = Math.round(d[i + k] * a + 255 * (1 - a));
+    d[i + 3] = 255;
+  }
+  return pixels;
 }
 
 /** A picture on the clipboard: a PNG - a screenshot, say - or a JPEG as a browser copies a photograph, as they are; on Windows, a bitmap (CF_DIB) made a PNG; none, where there is none. */

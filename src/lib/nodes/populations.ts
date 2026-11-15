@@ -50,18 +50,31 @@ function ownProblem(e: Entry, kelvin: number): string | null {
   const imaginary = e.properties[PROPERTY.imaginary];
   if (imaginary && typeof imaginary.value === "number" && imaginary.value > 0)
     return `it has ${imaginary.value} imaginary frequenc${imaginary.value === 1 ? "y" : "ies"}: it is no minimum - take it out first`;
-  const unknown = configurationUnknown(e.stereo);
+  const unknown = configurationUnknown(e);
   if (unknown) return unknown;
   const d = e.properties[PROPERTY.degeneracy];
   if (d && (d.status !== "computed" || typeof d.value !== "number" || !(d.value > 0))) return "its degeneracy is not a number above 0";
   return null;
 }
 
-/** Why an entry's configuration is not known - not perceived, or an element left unspecified - else nothing. */
-function configurationUnknown(stereo: EntryStereo | undefined): string | null {
+/**
+ * Why an entry's configuration is not known - not perceived, or an element
+ * left unspecified, naming the centres too close to flat to have one where
+ * those are all it leaves (lib/chem/lonePairsIn3d) - else nothing.
+ */
+function configurationUnknown(e: Entry): string | null {
+  const stereo: EntryStereo | undefined = e.stereo;
   if (!stereo) return "its configuration (R/S, E/Z) was not perceived, so stereoisomers could not be told apart";
   if (!stereo.perceived) return `its configuration (R/S, E/Z) was not perceived (${stereo.why}), so stereoisomers could not be told apart`;
-  if (stereoIdentity(stereo) == null) return "a configuration of it (R/S, E/Z) is left unspecified";
+  if (stereoIdentity(stereo) == null) {
+    const open = stereo.elements.filter((el) => !el.specified);
+    if (open.length && open.every((el) => el.flat != null)) {
+      const names = open.map(({ atoms: [at] }) => (e.structure.atoms[at] ? `${e.structure.atoms[at].el} (atom ${at + 1})` : `atom ${at + 1}`));
+      const list = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
+      return `${list} ${names.length > 1 ? "are" : "is"} too close to flat to have a configuration`;
+    }
+    return "a configuration of it (R/S, E/Z) is left unspecified";
+  }
   return null;
 }
 

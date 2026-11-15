@@ -22,6 +22,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use tauri::Manager;
+use zeroize::{Zeroize, Zeroizing};
 
 pub const PDF_FLAG: &str = "--pdf";
 
@@ -42,6 +43,27 @@ pub(crate) fn library_dir() -> PathBuf {
         }
     }
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("pdfium").join(system)
+}
+
+/// Whether a letter is set in a bold face: its font's weight 600 or more
+/// (semibold and heavier), as the font says it - or, where it says none, or
+/// may say it wrong (pdfium-render's note, of built-in fonts), its font's
+/// name saying so, after a subset's six-letter tag ("ABCDEF+Arial-BoldMT",
+/// "Helvetica-Bold", "MinionPro-Semibold").
+fn set_bold(c: &PdfPageTextChar) -> bool {
+    let heavy = match c.font_weight() {
+        Some(PdfFontWeight::Weight600 | PdfFontWeight::Weight700Bold | PdfFontWeight::Weight800 | PdfFontWeight::Weight900) => true,
+        Some(PdfFontWeight::Custom(w)) => (600..=1000).contains(&w),
+        _ => false,
+    };
+    heavy || bold_named(&c.font_name())
+}
+
+/// Whether a font's name says it is bold: Bold, Semibold, Demibold, Black, Heavy - in any case, after its subset's tag; a
+/// Blackletter face (an Old English one, its name a style, not a weight) none.
+fn bold_named(name: &str) -> bool {
+    let face = name.rsplit('+').next().unwrap_or(name).to_lowercase().replace("blackletter", "");
+    ["bold", "black", "heavy"].iter().any(|w| face.contains(w))
 }
 
 /// Meno started as the PDF reader: that, and nothing else.
@@ -215,13 +237,26 @@ impl Drawn {
 }
 
 /// A request answered: its JSON, and its bytes.
+/// What a PDF locked with a password, opened without it or with a wrong one, is said to be.
+const LOCKED: &str = "it is locked with a password";
+
+/// The password asked of the reader for `sha` with a request, if it came with one (`attach_passwords`).
+fn password_of<'a>(ask: &'a Value, sha: &str) -> Option<&'a str> {
+    ask["passwords"][sha].as_str()
+}
+
+/// A PDF of the cache opened, with the password the request brings for it, if any.
+fn open_pdf(pdfium: &'static Pdfium, cache: &Path, ask: &Value, sha: &str) -> Result<PdfDocument<'static>, String> {
+    pdfium.load_pdf_from_file(&cache.join(format!("{sha}.pdf")), password_of(ask, sha)).map_err(unreadable)
+}
+
 /// Why PDFium could not open a PDF, in words: one locked with a password
-/// said so plainly, as Meno asks for none, one locked another way, and one
+/// said so plainly (it is asked for one, `pdf_unlock`), one locked another way, and one
 /// damaged past mending - cut short, or no PDF at all. Anything else is said
 /// plainly too, its error to the log, not to the person.
 fn unreadable(e: PdfiumError) -> String {
     match e {
-        PdfiumError::PdfiumLibraryInternalError(PdfiumInternalError::PasswordError) => "it is locked with a password".into(),
+        PdfiumError::PdfiumLibraryInternalError(PdfiumInternalError::PasswordError) => LOCKED.into(),
         PdfiumError::PdfiumLibraryInternalError(PdfiumInternalError::SecurityError) => "it is locked in a way Meno cannot open".into(),
         PdfiumError::PdfiumLibraryInternalError(PdfiumInternalError::FormatError) => "it is damaged, or is not a PDF".into(),
         e => {
@@ -231,21 +266,44 @@ fn unreadable(e: PdfiumError) -> String {
     }
 }
 
+/// What a PDF's author allows of printing: "full" - it may be printed in any quality - "low" - printed, but not in a quality
+/// from which a faithful copy could be made - or "no" (ISO 32000-1, table 22, bits 3 and 12). A PDF with no security handler
+/// allows all.
+fn printing_of(high: bool, low: bool) -> &'static str {
+    if high {
+        "full"
+    } else if low {
+        "low"
+    } else {
+        "no"
+    }
+}
+
 fn answer(docs: &mut HashMap<String, PdfDocument<'static>>, pdfium: &'static Pdfium, cache: &Path, ask: &Value) -> Result<(Value, Vec<u8>), String> {
     let t = Instant::now();
     let sha = ask["sha"].as_str().unwrap_or("").to_string();
     if !is_sha(&sha) {
         return Err("no such PDF".into());
     }
+    // (a password tried is tried afresh, never answered by a PDF opened before it)
+    if ask["op"] == "unlock" {
+        docs.remove(&sha);
+    }
     if !docs.contains_key(&sha) {
-        let doc = pdfium.load_pdf_from_file(&cache.join(format!("{sha}.pdf")), None).map_err(unreadable)?;
+        let doc = open_pdf(pdfium, cache, ask, &sha)?;
         docs.insert(sha.clone(), doc);
     }
     let doc = &docs[&sha];
     match ask["op"].as_str().unwrap_or("") {
-        "pages" => {
+        "pages" | "unlock" => {
             let sizes: Vec<[f32; 2]> = doc.pages().iter().map(|p| [p.width().value, p.height().value]).collect();
             Ok((json!({"pages": sizes, "ms": ms(t)}), vec![]))
+        }
+        "printing" => {
+            let permissions = doc.permissions();
+            // (a handler whose permissions PDFium cannot read is taken as forbidding: never printed on a guess)
+            let printing = printing_of(permissions.can_print_high_quality().unwrap_or(false), permissions.can_print_only_low_quality().unwrap_or(false));
+            Ok((json!({"printing": printing, "ms": ms(t)}), vec![]))
         }
         "render" => {
             let page = doc.pages().get(ask["page"].as_i64().unwrap_or(0) as i32).map_err(|_| "no such page".to_string())?;
@@ -307,7 +365,7 @@ fn answer(docs: &mut HashMap<String, PdfDocument<'static>>, pdfium: &'static Pdf
             let text = page.text().map_err(|e| e.to_string())?;
             let at = page_space(&page).ok_or("the page could not be measured")?;
             let chars = text.chars();
-            let mut bytes = Vec::with_capacity(chars.len() * 20);
+            let mut bytes = Vec::with_capacity(chars.len() * 24);
             for c in chars.iter() {
                 // (a letter PDFium put there itself - a space, a line's end - has no box of its own)
                 let b = c
@@ -320,8 +378,11 @@ fn answer(docs: &mut HashMap<String, PdfDocument<'static>>, pdfium: &'static Pdf
                 for v in b {
                     bytes.extend_from_slice(&v.to_le_bytes());
                 }
+                // (what it is set in: bold, bit 0 - none for a letter PDFium put there itself)
+                let generated = c.is_generated().unwrap_or(false);
+                bytes.extend_from_slice(&u32::from(!generated && set_bold(&c)).to_le_bytes());
             }
-            Ok((json!({"n": bytes.len() / 20, "ms": ms(t)}), bytes))
+            Ok((json!({"n": bytes.len() / 24, "ms": ms(t)}), bytes))
         }
         // what the page is made of, each thing where it lies - 20 bytes each:
         // what it is (1 text, 2 a path, 3 a picture, 4 a shading, 5 a form
@@ -331,9 +392,15 @@ fn answer(docs: &mut HashMap<String, PdfDocument<'static>>, pdfium: &'static Pdf
             let page = doc.pages().get(ask["page"].as_i64().unwrap_or(0) as i32).map_err(|_| "no such page".to_string())?;
             let at = page_space(&page).ok_or("the page could not be measured")?;
             let mut bytes = Vec::new();
+            // (the page's text loaded once, for every object's words: an object's own `text()` loads it again each time - a page of a thousand words took seconds, the reader held up for all that while)
+            let page_text = page.text().ok();
+            let said = |t: &PdfPageTextObject| match &page_text {
+                Some(p) => p.for_object(t),
+                None => t.text(),
+            };
             for obj in page.objects().iter() {
                 let kind: u32 = match obj.object_type() {
-                    PdfPageObjectType::Text if obj.as_text_object().map(|t| t.text().trim() == "+").unwrap_or(false) => 6,
+                    PdfPageObjectType::Text if obj.as_text_object().map(|t| said(t).trim() == "+").unwrap_or(false) => 6,
                     PdfPageObjectType::Text => 1,
                     PdfPageObjectType::Path => 2,
                     PdfPageObjectType::Image => 3,
@@ -403,7 +470,7 @@ fn make(docs: &mut HashMap<String, PdfDocument<'static>>, pdfium: &'static Pdfiu
             return Err("no such PDF".into());
         }
         if !docs.contains_key(&take.sha) {
-            let doc = pdfium.load_pdf_from_file(&cache.join(format!("{}.pdf", take.sha)), None).map_err(unreadable)?;
+            let doc = open_pdf(pdfium, cache, ask, &take.sha)?;
             docs.insert(take.sha.clone(), doc);
         }
     }
@@ -550,7 +617,10 @@ impl Reader {
         let mut line = serde_json::to_vec(&req).map_err(|e| e.to_string())?;
         line.push(b'\n');
         let mut stdin = self.stdin.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        stdin.write_all(&line).and_then(|_| stdin.flush()).map_err(|e| format!("the PDF reader is gone: {e}"))?;
+        let written = stdin.write_all(&line).and_then(|_| stdin.flush()).map_err(|e| format!("the PDF reader is gone: {e}"));
+        // (a request may carry a password: wiped once written)
+        line.zeroize();
+        written?;
         Ok(rx)
     }
 }
@@ -563,11 +633,29 @@ impl Reader {
 pub struct PdfState {
     readers: Mutex<Vec<Option<Arc<Reader>>>>,
     turn: AtomicU64,
+    /// The passwords of the PDFs locked with one that were opened with it, by SHA-256, this session: in memory alone -
+    /// never written to the disk, a log, a workspace's file, the settings or an event. The map's strings are wiped as they are let go, and the request line is wiped once written; the copies PDFium's loader, Tauri's argument and the reader's parsed request make while a request is under way are not.
+    passwords: Mutex<HashMap<String, Zeroizing<String>>>,
 }
 
 impl Default for PdfState {
     fn default() -> Self {
-        PdfState { readers: Mutex::new(vec![None; drawers()]), turn: AtomicU64::new(0) }
+        PdfState { readers: Mutex::new(vec![None; drawers()]), turn: AtomicU64::new(0), passwords: Mutex::new(HashMap::new()) }
+    }
+}
+
+/// `req` with the password of each PDF it names - `sha`, or the PDFs of a `plan`'s pages - that was opened with one (`passwords`).
+fn attach_passwords(passwords: &HashMap<String, Zeroizing<String>>, req: &mut Value) {
+    let mut named: Vec<String> = req["sha"].as_str().map(String::from).into_iter().collect();
+    named.extend(req["plan"]["pages"].as_array().into_iter().flatten().filter_map(|p| p["sha"].as_str().map(String::from)));
+    for sha in named {
+        // (one the request carries already, a password being tried, is the one it asks with)
+        if req["passwords"][&sha].is_string() {
+            continue;
+        }
+        if let Some(pw) = passwords.get(&sha) {
+            req["passwords"][&sha] = json!(pw.as_str());
+        }
     }
 }
 
@@ -604,7 +692,8 @@ fn drawing_slot(turn: usize, n: usize) -> usize {
 }
 
 /// `req` asked of reader `slot`: started the first time, and again where it has gone or has not answered in time.
-async fn ask_on(app: &tauri::AppHandle, slot: usize, req: Value) -> Result<(Value, Vec<u8>), String> {
+async fn ask_on(app: &tauri::AppHandle, slot: usize, mut req: Value) -> Result<(Value, Vec<u8>), String> {
+    attach_passwords(&app.state::<PdfState>().passwords.lock().unwrap_or_else(std::sync::PoisonError::into_inner), &mut req);
     // (started, and asked, off the commands' threads: a start waits for the
     // reader's first word, and a write for room in its pipe - held, they
     // held a command thread each, and every other PDF request with them)
@@ -659,11 +748,13 @@ async fn ask_on(app: &tauri::AppHandle, slot: usize, req: Value) -> Result<(Valu
 }
 
 /// A PDF held: what it is known by, its size, and each page's width and height, in points.
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct Held {
     sha256: String,
     size: u64,
     pages: Vec<[f32; 2]>,
+    /// Locked with a password it has not been opened with: held, its pages not known (`pdf_unlock`).
+    locked: bool,
 }
 
 /// Whether `bytes` begin as a PDF does (some carry a little before it).
@@ -688,18 +779,46 @@ async fn hold(app: &tauri::AppHandle, bytes: &[u8]) -> Result<Held, String> {
         std::fs::write(&part, bytes).map_err(|e| e.to_string())?;
         std::fs::rename(&part, &path).map_err(|e| e.to_string())?;
     }
+    let held = held_from(ask(app, json!({"op": "pages", "sha": sha})).await.map(|(head, _)| head), &sha, bytes.len() as u64);
     // (one PDFium cannot open is not kept: taken in just now, it goes again)
-    let (head, _) = match ask(app, json!({"op": "pages", "sha": sha})).await {
-        Ok(answer) => answer,
-        Err(e) => {
-            if fresh {
-                let _ = std::fs::remove_file(&path);
-            }
-            return Err(e);
-        }
+    if held.is_err() && fresh {
+        let _ = std::fs::remove_file(&path);
+    }
+    held
+}
+
+/// What a PDF taken in comes to, by what the reader said of it: its pages; or - locked with a password, which is asked for where
+/// it lies (`pdf_unlock`) - held as it is, its pages not known (`locked`); or the reason it is refused.
+fn held_from(asked: Result<Value, String>, sha: &str, size: u64) -> Result<Held, String> {
+    match asked {
+        Ok(head) => Ok(Held { sha256: sha.into(), size, pages: serde_json::from_value(head["pages"].clone()).unwrap_or_default(), locked: false }),
+        Err(e) if e == LOCKED => Ok(Held { sha256: sha.into(), size, pages: vec![], locked: true }),
+        Err(e) => Err(e),
+    }
+}
+
+/// What a PDF opened with a password tried says, in words: of one it is locked with, that it is not its password.
+fn not_its_password(why: String) -> String {
+    if why == LOCKED { "That is not its password".into() } else { why }
+}
+
+/// A PDF locked with a password, opened with the one given: its pages, as any PDF held has them. Its password is kept, in memory, for
+/// as long as Meno runs (`PdfState`); a wrong one is said so, and kept no more than any other word typed.
+#[tauri::command]
+pub async fn pdf_unlock(app: tauri::AppHandle, sha: String, password: String) -> Result<Held, String> {
+    if !is_sha(&sha) {
+        return Err("no such PDF".into());
+    }
+    let password = Zeroizing::new(password);
+    let size = std::fs::metadata(cache_dir(&app)?.join(format!("{sha}.pdf"))).map_err(|_| "it is no longer held".to_string())?.len();
+    let tried = json!({"op": "unlock", "sha": sha, "passwords": {&sha: password.as_str()}});
+    let head = match ask(&app, tried).await {
+        Ok((head, _)) => head,
+        Err(e) => return Err(not_its_password(e)),
     };
     let pages: Vec<[f32; 2]> = serde_json::from_value(head["pages"].clone()).unwrap_or_default();
-    Ok(Held { sha256: sha, size: bytes.len() as u64, pages })
+    app.state::<PdfState>().passwords.lock().unwrap_or_else(std::sync::PoisonError::into_inner).insert(sha.clone(), password);
+    Ok(Held { sha256: sha, size, pages, locked: false })
 }
 
 /// A new PDF made from pages of PDFs held (pdfmake.rs `Plan`: which pages,
@@ -781,6 +900,22 @@ pub async fn pdf_render(
     Ok(tauri::ipc::Response::new(out))
 }
 
+/// What the PDF's author allows of printing it, as the PDF says (`printing_of`): "full", "low" or "no". Asked before it is printed,
+/// and never worked around.
+#[tauri::command]
+pub async fn pdf_printing(app: tauri::AppHandle, sha: String) -> Result<String, String> {
+    let (head, _) = ask(&app, json!({"op": "printing", "sha": sha})).await?;
+    Ok(head["printing"].as_str().unwrap_or("no").to_string())
+}
+
+/// The system's own print dialog for the window that asked, over what the window shows. WebKit's `window.print()` shows
+/// nothing in the app, so the pages the reader laid out for the printer (src/lib/pdf/print.ts) are printed by the window's
+/// own print operation: macOS's print panel, the GTK print dialog, WebView2's print dialog.
+#[tauri::command]
+pub async fn pdf_print_window(window: tauri::WebviewWindow) -> Result<(), String> {
+    window.print().map_err(|e| e.to_string())
+}
+
 /// The links on a page: where each lies, in points from the page's top
 /// left, and where it goes - a page, and how far down it, in points; or a
 /// web page, by its address.
@@ -790,10 +925,11 @@ pub async fn pdf_links(app: tauri::AppHandle, sha: String, page: u32) -> Result<
     Ok(head["links"].clone())
 }
 
-/// A page's letters, as PDFium reads them: for each, 20 bytes - its
-/// character (u32), and its box (four f32s: left, top, right, bottom, in
+/// A page's letters, as PDFium reads them: for each, 24 bytes - its
+/// character (u32); its box (four f32s: left, top, right, bottom, in
 /// points from the page's top left as it is drawn; all naught for one
-/// PDFium put there itself, a space or a line's end).
+/// PDFium put there itself, a space or a line's end); and how it is set
+/// (u32: bit 0, bold - `set_bold`).
 #[tauri::command]
 pub async fn pdf_text(app: tauri::AppHandle, sha: String, page: u32) -> Result<tauri::ipc::Response, String> {
     let (_, bytes) = ask(&app, json!({"op": "text", "sha": sha, "page": page})).await?;
@@ -817,11 +953,18 @@ pub async fn pdf_figure(app: tauri::AppHandle, sha: String, page: u32, r#box: [f
     Ok(head)
 }
 
+/// A figure as `pdf_figure` gives it, as its JSON in bytes: for the figures read ahead in the background, which a worker unpacks - a figure holding thousands of paths is megabytes, and parsed on the thread the drawing runs on it would hold up a frame (`pdf_figure`'s answer is parsed there).
+#[tauri::command]
+pub async fn pdf_figure_raw(app: tauri::AppHandle, sha: String, page: u32, r#box: [f32; 4]) -> Result<tauri::ipc::Response, String> {
+    let (head, _) = ask(&app, json!({"op": "figure", "sha": sha, "page": page, "box": r#box})).await?;
+    Ok(tauri::ipc::Response::new(serde_json::to_vec(&head).map_err(|e| e.to_string())?))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // (L8's review of #318: a write waiting for room in the pipe of a reader
+    // (the review of #318: a write waiting for room in the pipe of a reader
     // that had stopped reading held Meno's hold on the reader, which its stop
     // needed - PDFs were dead until Meno was started again)
     #[cfg(unix)]
@@ -858,6 +1001,41 @@ mod tests {
         // (no error's name for the person: a PDF cut short reads as damaged, anything else as not opened)
         let other = unreadable(PdfiumError::PdfiumLibraryInternalError(PdfiumInternalError::FileError));
         assert_eq!(other, "Meno could not open it");
+    }
+
+    #[test]
+    fn printing_is_what_the_pdfs_author_allows() {
+        assert_eq!(printing_of(true, false), "full");
+        assert_eq!(printing_of(false, true), "low");
+        assert_eq!(printing_of(false, false), "no");
+        // (PDFium as the build fetched it: scripts/fetch-pdfium.mjs)
+        let Ok(bindings) = Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path(&library_dir())) else {
+            eprintln!("PDFium is not here: node scripts/fetch-pdfium.mjs");
+            return;
+        };
+        let pdfium: &'static Pdfium = Box::leak(Box::new(Pdfium::new(bindings)));
+        let cache = std::env::temp_dir().join(format!("meno-pdf-printing-{}", std::process::id()));
+        std::fs::create_dir_all(&cache).unwrap();
+        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+        // (made up, by tests/fixtures/make_print_fixtures.py: encrypted with no password to open, each with its own permissions;
+        //  and one that is not encrypted, which says nothing against printing)
+        let held = [
+            ("a", std::fs::read(fixtures.join("printing-allowed.pdf")).unwrap(), "full"),
+            ("b", std::fs::read(fixtures.join("printing-low.pdf")).unwrap(), "low"),
+            ("c", std::fs::read(fixtures.join("printing-forbidden.pdf")).unwrap(), "no"),
+            ("d", linked_pdf(), "full"),
+        ];
+        let mut docs = HashMap::new();
+        for (letter, bytes, want) in held {
+            let sha = letter.repeat(64);
+            std::fs::write(cache.join(format!("{sha}.pdf")), bytes).unwrap();
+            let (head, _) = answer(&mut docs, pdfium, &cache, &json!({"op": "printing", "sha": sha})).unwrap();
+            assert_eq!(head["printing"], json!(want), "{letter}");
+        }
+        // (each still opens and draws: the permissions are asked of a PDF that is read as any)
+        let (pages, _) = answer(&mut docs, pdfium, &cache, &json!({"op": "pages", "sha": "c".repeat(64)})).unwrap();
+        assert_eq!(pages["pages"], json!([[595.0, 842.0]]));
+        let _ = std::fs::remove_dir_all(&cache);
     }
 
     #[test]
@@ -934,6 +1112,50 @@ mod tests {
     }
 
     #[test]
+    fn a_fonts_name_says_bold_after_its_subsets_tag() {
+        for name in ["Helvetica-Bold", "ABCDEF+Arial-BoldMT", "MinionPro-Semibold", "TimesNewRomanPS-BoldItalicMT", "Myriad-Black", "QWERTY+Gotham-Heavy"] {
+            assert!(bold_named(name), "{name}");
+        }
+        for name in ["Helvetica", "ABCDEF+Arial-ItalicMT", "BOLDXY+Times-Roman", "Symbol", "", "UnifrakturBlackletter-Regular"] {
+            assert!(!bold_named(name), "{name}");
+        }
+    }
+
+    #[test]
+    fn a_letter_set_bold_is_said_so() {
+        let Ok(bindings) = Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path(&library_dir())) else {
+            eprintln!("PDFium is not here: node scripts/fetch-pdfium.mjs");
+            return;
+        };
+        let pdfium: &'static Pdfium = Box::leak(Box::new(Pdfium::new(bindings)));
+        let cache = std::env::temp_dir().join(format!("meno-pdf-bold-{}", std::process::id()));
+        std::fs::create_dir_all(&cache).unwrap();
+        // "see 12 here": "12" in Helvetica-Bold, the rest in Helvetica
+        let c = "BT /F1 12 Tf 72 700 Td (see ) Tj /F2 12 Tf (12) Tj /F1 12 Tf ( here) Tj ET";
+        let pdf = pdf_of(vec![
+            (1, "<< /Type /Catalog /Pages 2 0 R >>".into()),
+            (2, "<< /Type /Pages /Kids [10 0 R] /Count 1 >>".into()),
+            (3, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".into()),
+            (4, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>".into()),
+            (10, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 20 0 R >>".into()),
+            (20, format!("<< /Length {} >>\nstream\n{c}\nendstream", c.len())),
+        ]);
+        let sha = "d".repeat(64);
+        std::fs::write(cache.join(format!("{sha}.pdf")), pdf).unwrap();
+        let mut docs = HashMap::new();
+        let (head, bytes) = answer(&mut docs, pdfium, &cache, &json!({"op": "text", "sha": sha, "page": 0})).unwrap();
+        let n = head["n"].as_u64().unwrap() as usize;
+        let code = |i: usize| char::from_u32(u32::from_le_bytes(bytes[i * 24..i * 24 + 4].try_into().unwrap())).unwrap();
+        let bold = |i: usize| u32::from_le_bytes(bytes[i * 24 + 20..i * 24 + 24].try_into().unwrap()) & 1 == 1;
+        let text: String = (0..n).map(code).collect();
+        let bold_text: String = (0..n).filter(|&i| bold(i)).map(code).collect();
+        assert_eq!(text.trim(), "see 12 here");
+        assert_eq!(bold_text, "12");
+        drop(docs);
+        let _ = std::fs::remove_dir_all(&cache);
+    }
+
+    #[test]
     fn a_pages_links_are_read_where_they_lie_and_where_they_go() {
         // (PDFium as the build fetched it: scripts/fetch-pdfium.mjs)
         let Ok(bindings) = Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path(&library_dir())) else {
@@ -962,15 +1184,17 @@ mod tests {
         // its letters, each where it lies: "To page three", in Helvetica at 14 points from (72, 700)
         let (head, bytes) = answer(&mut docs, pdfium, &cache, &json!({"op": "text", "sha": sha, "page": 0})).unwrap();
         let n = head["n"].as_u64().unwrap() as usize;
-        assert_eq!(bytes.len(), n * 20);
+        assert_eq!(bytes.len(), n * 24);
         let letter = |i: usize| {
-            let f = |k: usize| f32::from_le_bytes(bytes[i * 20 + 4 + k * 4..i * 20 + 8 + k * 4].try_into().unwrap());
-            (char::from_u32(u32::from_le_bytes(bytes[i * 20..i * 20 + 4].try_into().unwrap())).unwrap(), [f(0), f(1), f(2), f(3)])
+            let f = |k: usize| f32::from_le_bytes(bytes[i * 24 + 4 + k * 4..i * 24 + 8 + k * 4].try_into().unwrap());
+            (char::from_u32(u32::from_le_bytes(bytes[i * 24..i * 24 + 4].try_into().unwrap())).unwrap(), [f(0), f(1), f(2), f(3)])
         };
         let text: String = (0..n).map(|i| letter(i).0).collect();
         assert_eq!(text, "To page three");
         let (t, b) = letter(0);
         assert_eq!(t, 'T');
+        // (set in Helvetica: none of it bold)
+        assert!((0..n).all(|i| u32::from_le_bytes(bytes[i * 24 + 20..i * 24 + 24].try_into().unwrap()) == 0));
         assert!((b[0] - 72.0).abs() < 1.0, "{b:?}");
         // (its baseline 142 points from the top: the box above it, and a little below)
         assert!(b[1] < 842.0 - 700.0 && b[3] > 842.0 - 700.0, "{b:?}");
@@ -1091,6 +1315,48 @@ mod tests {
         let _ = std::fs::remove_dir_all(&cache);
     }
 
+    // (a page of a thousand words and more was held up for seconds: each word's own text loaded the page's text again - the reader, which draws and reads for everything asked of it, waited on that)
+    #[test]
+    fn a_page_of_many_words_has_its_things_listed_at_once_and_its_plus_found() {
+        let Ok(bindings) = Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path(&library_dir())) else {
+            eprintln!("PDFium is not here: node scripts/fetch-pdfium.mjs");
+            return;
+        };
+        let pdfium: &'static Pdfium = Box::leak(Box::new(Pdfium::new(bindings)));
+        let cache = std::env::temp_dir().join(format!("meno-pdf-many-{}", std::process::id()));
+        std::fs::create_dir_all(&cache).unwrap();
+        let sha = "f".repeat(64);
+        // (1500 words, each a text object of its own in a grid; one "+" among them, and one longer word holding one)
+        let mut c = String::new();
+        for i in 0..1500 {
+            c.push_str(&format!("BT /F1 6 Tf {} {} Td (w{}) Tj ET\n", 20 + (i % 30) * 18, 800 - (i / 30) * 8, i));
+        }
+        c.push_str("BT /F1 10 Tf 300 20 Td (+) Tj ET\nBT /F1 10 Tf 400 20 Td (a+b) Tj ET\n");
+        let pdf = pdf_of(vec![
+            (1, "<< /Type /Catalog /Pages 2 0 R >>".into()),
+            (2, "<< /Type /Pages /Kids [10 0 R] /Count 1 >>".into()),
+            (3, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".into()),
+            (10, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 20 0 R >>".into()),
+            (20, format!("<< /Length {} >>\nstream\n{c}\nendstream", c.len())),
+        ]);
+        std::fs::write(cache.join(format!("{sha}.pdf")), pdf).unwrap();
+        let mut docs = HashMap::new();
+        let started = Instant::now();
+        let (head, bytes) = answer(&mut docs, pdfium, &cache, &json!({"op": "objects", "sha": sha, "page": 0})).unwrap();
+        let took = started.elapsed();
+        let n = head["n"].as_u64().unwrap() as usize;
+        let kinds: Vec<u32> = (0..n).map(|i| u32::from_le_bytes(bytes[i * 20..i * 20 + 4].try_into().unwrap())).collect();
+        assert_eq!(n, 1502);
+        // (the "+" alone is one, "a+b" is a word)
+        assert_eq!(kinds.iter().filter(|k| **k == 6).count(), 1);
+        assert_eq!(kinds[1500], 6);
+        assert_eq!(kinds[1501], 1);
+        // (the page's text loaded once: far inside what loading it for each of the 1500 took)
+        assert!(took < std::time::Duration::from_secs(2), "{took:?}");
+        drop(docs);
+        let _ = std::fs::remove_dir_all(&cache);
+    }
+
     #[test]
     fn a_turned_pages_letters_read_down_it() {
         let Ok(bindings) = Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path(&library_dir())) else {
@@ -1159,6 +1425,130 @@ mod tests {
         let mut open: Vec<_> = docs.keys().cloned().collect();
         open.sort();
         assert_eq!(open, ["a", "d"]);
+    }
+
+    /// A one-page PDF with made-up content, locked with the user password "meno-test" (tests/fixtures/make_locked.py).
+    const LOCKED_PDF: &[u8] = include_bytes!("../tests/fixtures/locked.pdf");
+
+    /// A reader's cache holding the locked PDF, under a SHA-256 of its own, and PDFium bound, if it is here.
+    fn locked_cache(tag: &str) -> Option<(&'static Pdfium, PathBuf, String)> {
+        let Ok(bindings) = Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path(&library_dir())) else {
+            eprintln!("PDFium is not here: node scripts/fetch-pdfium.mjs");
+            return None;
+        };
+        let pdfium: &'static Pdfium = Box::leak(Box::new(Pdfium::new(bindings)));
+        let cache = std::env::temp_dir().join(format!("meno-pdf-locked-{tag}-{}", std::process::id()));
+        std::fs::create_dir_all(&cache).unwrap();
+        let sha = format!("{:x}", Sha256::digest(LOCKED_PDF));
+        std::fs::write(cache.join(format!("{sha}.pdf")), LOCKED_PDF).unwrap();
+        Some((pdfium, cache, sha))
+    }
+
+    #[test]
+    fn a_pdf_locked_with_a_password_is_refused_without_it_and_with_a_wrong_one() {
+        let Some((pdfium, cache, sha)) = locked_cache("refused") else { return };
+        let mut docs = HashMap::new();
+        let none = answer(&mut docs, pdfium, &cache, &json!({"op": "pages", "sha": sha})).unwrap_err();
+        assert_eq!(none, LOCKED);
+        let wrong = answer(&mut docs, pdfium, &cache, &json!({"op": "unlock", "sha": sha, "passwords": {&sha: "not-it"}})).unwrap_err();
+        assert_eq!(wrong, LOCKED);
+        // (said to the person as it is said of a password tried; never with the word tried in it)
+        assert_eq!(not_its_password(wrong), "That is not its password");
+        assert!(!not_its_password(none).contains("not-it"));
+        // (another trouble is not made one of the password)
+        assert_eq!(not_its_password("it is damaged, or is not a PDF".into()), "it is damaged, or is not a PDF");
+        assert!(docs.is_empty());
+        let _ = std::fs::remove_dir_all(&cache);
+    }
+
+    #[test]
+    fn a_pdf_locked_with_a_password_is_drawn_and_read_with_it() {
+        let Some((pdfium, cache, sha)) = locked_cache("opened") else { return };
+        let mut docs = HashMap::new();
+        let with = |op: &str, extra: Value| {
+            let mut ask = json!({"op": op, "sha": sha, "page": 0, "passwords": {&sha: "meno-test"}});
+            ask.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+            ask
+        };
+        let (head, _) = answer(&mut docs, pdfium, &cache, &with("unlock", json!({}))).unwrap();
+        assert_eq!(head["pages"], json!([[300.0, 400.0]]));
+        // (opened, it stays open for what is asked of it next: the password goes with each request all the same)
+        let (head, bytes) = answer(&mut docs, pdfium, &cache, &with("text", json!({}))).unwrap();
+        let n = head["n"].as_u64().unwrap() as usize;
+        let text: String = (0..n).map(|i| char::from_u32(u32::from_le_bytes(bytes[i * 24..i * 24 + 4].try_into().unwrap())).unwrap()).collect();
+        assert_eq!(text.trim(), "Made-up locked page");
+        let (head, _) = answer(&mut docs, pdfium, &cache, &with("render", json!({"scale": 0.5, "packed": true}))).unwrap();
+        assert_eq!((head["w"].as_i64(), head["h"].as_i64()), (Some(150), Some(200)));
+        // (a password tried is tried afresh: a wrong one is not answered by the PDF open already)
+        let wrong = answer(&mut docs, pdfium, &cache, &json!({"op": "unlock", "sha": sha, "passwords": {&sha: "not-it"}})).unwrap_err();
+        assert_eq!(wrong, LOCKED);
+        drop(docs);
+        let _ = std::fs::remove_dir_all(&cache);
+    }
+
+    #[test]
+    fn a_pdfs_password_goes_with_the_requests_that_name_it_and_no_others() {
+        let mut kept: HashMap<String, Zeroizing<String>> = HashMap::new();
+        kept.insert("a".repeat(64), Zeroizing::new("word".into()));
+        let (a, b) = ("a".repeat(64), "b".repeat(64));
+        let mut ask = json!({"op": "render", "sha": a});
+        attach_passwords(&kept, &mut ask);
+        assert_eq!(ask["passwords"], json!({&a: "word"}));
+        // (a PDF made from pages of others: the password of each it takes pages of that has one)
+        let mut make = json!({"op": "make", "plan": {"pages": [{"sha": b}, {"sha": a}]}});
+        attach_passwords(&kept, &mut make);
+        assert_eq!(make["passwords"], json!({&a: "word"}));
+        let mut other = json!({"op": "render", "sha": b});
+        attach_passwords(&kept, &mut other);
+        assert!(other["passwords"].is_null());
+        // (a password being tried is the one asked with, not the one kept)
+        let mut tried = json!({"op": "unlock", "sha": a, "passwords": {&a: "tried"}});
+        attach_passwords(&kept, &mut tried);
+        assert_eq!(tried["passwords"], json!({&a: "tried"}));
+    }
+
+    #[test]
+    fn a_pdfs_password_is_kept_in_memory_alone() {
+        // (a tripwire, by single lines: a multi-line macro would escape it - the logging lines were read; by construction the state holds it in a map of wiped strings, and the one place that writes what a request says to
+        // anywhere but the reader's pipe, the log of a PDF not opened, writes PDFium's error and never a request)
+        let state = PdfState::default();
+        assert!(state.passwords.lock().unwrap().is_empty());
+        let source = include_str!("pdf.rs");
+        let production = &source[..source.find("#[cfg(test)]").unwrap()];
+        for line in production.lines().filter(|l| l.contains("eprintln!") || l.contains("println!") || l.contains("std::fs::write") || l.contains("log::")) {
+            assert!(!line.contains("password") && !line.contains("ask") && !line.contains("req"), "{line}");
+        }
+    }
+
+    #[test]
+    fn a_pdf_taken_in_is_held_as_the_reader_says_of_it() {
+        let sha = "a".repeat(64);
+        let held = held_from(Ok(json!({"pages": [[300.0, 400.0]]})), &sha, 9).unwrap();
+        assert_eq!((held.pages.len(), held.locked, held.size), (1, false, 9));
+        // (one locked with a password is kept, not refused: held locked, its pages not known - the way in to asking for the word)
+        let locked = held_from(Err(LOCKED.into()), &sha, 9).unwrap();
+        assert!(locked.locked && locked.pages.is_empty());
+        assert_eq!(locked.sha256, sha);
+        // (any other trouble refuses it, in the reader's words)
+        assert_eq!(held_from(Err("it is damaged, or is not a PDF".into()), &sha, 9).unwrap_err(), "it is damaged, or is not a PDF");
+        assert_eq!(held_from(Err("it is locked in a way Meno cannot open".into()), &sha, 9).unwrap_err(), "it is locked in a way Meno cannot open");
+    }
+
+    #[test]
+    fn a_pdf_made_from_pages_of_a_locked_one_opens_it_with_its_password() {
+        let Some((pdfium, cache, sha)) = locked_cache("made") else { return };
+        let mut docs = HashMap::new();
+        let plan = json!({"pages": [{"sha": sha, "page": 0}]});
+        let without = make(&mut docs, pdfium, &cache, &json!({"op": "make", "plan": plan})).unwrap_err();
+        assert_eq!(without, LOCKED);
+        let (_, bytes) = make(&mut docs, pdfium, &cache, &json!({"op": "make", "plan": plan, "passwords": {&sha: "meno-test"}})).unwrap();
+        // (a new PDF of its own: it opens without the word, with its one page)
+        assert!(looks_like_pdf(&bytes));
+        let made = pdfium.load_pdf_from_byte_vec(bytes, None).unwrap();
+        assert_eq!(made.pages().len(), 1);
+        drop(made);
+        drop(docs);
+        let _ = std::fs::remove_dir_all(&cache);
     }
 
     #[test]

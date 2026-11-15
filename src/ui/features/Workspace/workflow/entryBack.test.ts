@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { convergedAt } from "./converged";
 import { geometryKey, type Entry } from "../../../../lib/entry";
 import { structureKey } from "../../../../lib/steps/restructure";
 import { rebonded } from "../../../../lib/steps/rebond";
@@ -28,13 +29,13 @@ const held = (extra: Partial<SetEntry> = {}): SetEntry =>
     ...extra,
   }) as SetEntry;
 
-const tagged = (e: Entry): Entry => ({ ...e, properties: { ...e.properties, start: { value: "start-1", unit: "none", status: "computed" } } });
+const tagged = (e: Entry): Entry => ({ ...e, properties: { ...e.properties, start: { value: "start-1", unit: "none", label: true, status: "computed" } } });
 
 describe("an entry record as a step's entry again", () => {
   it("keeps all a step's entry held where it is that entry still - only a label added, as a Tag adds one", () => {
     const was = held();
     const back = setEntryOfEntry(tagged(entryOfSet(was, "x")), { compound: 0, number: 1 }, was)!;
-    expect(back).toEqual({ ...was, properties: { start: { value: "start-1", unit: "none", status: "computed" } } });
+    expect(back).toEqual({ ...was, properties: { start: { value: "start-1", unit: "none", label: true, status: "computed" } } });
   });
 
   it("drops what was worked out at the old structure - calculation, energy, marks - and keeps its molecule; its properties as the step left them", () => {
@@ -53,7 +54,7 @@ describe("an entry record as a step's entry again", () => {
     expect([back.from, back.frame, back.compound]).toEqual([7, 1, 3]);
     // (a value of a geometry naming it; a label; a value of the structure before, marked - and none of Meno's own carried as properties)
     expect(back.properties?.dipole.at?.geometry).toBe(geometryKey(was.xyz));
-    expect(back.properties?.start.value).toBe("start-1");
+    expect(back.properties?.start).toEqual({ value: "start-1", unit: "none", label: true, status: "computed" });
     expect(back.properties?.mw.status).toEqual({ notApplicable: "worked out on the structure before Re-bond" });
     expect(Object.keys(back.properties ?? {}).sort()).toEqual(["dipole", "mw", "start"]);
   });
@@ -80,14 +81,18 @@ describe("an entry record as a step's entry again", () => {
   });
 
   it("carries none of the properties Meno reads of an entry as its own, every one it gives held to that list", () => {
-    // (an entry holding all Meno reads of one: energy, thermochemistry, vibrations and modes, degeneracy, mirror image, imaginary frequencies, name - and its group, number and state)
+    // (an entry holding all Meno reads of one: energy, thermochemistry, vibrations and modes, degeneracy, mirror image, imaginary frequencies, name, where a run converged - and its group, number and state, and why it failed)
     const reading = (id: string, value: number) => ({ id, on: "molecule", group: "Thermochemistry", label: id, value, quantity: "energy" });
     const vibrations = { id: "vibrations", on: "list", group: "Vibrations", label: "Vibrations", columns: [{ label: "Frequency", quantity: "wavenumber" }], rows: [{ cells: [-120], move: Array(9).fill(0.1) }] };
     const calc = { readers: ["a-plugin 1.0"], results: [...["thermo.free-energy", "thermo.enthalpy", "thermo.zpve", "thermo.g-correction"].map((id) => reading(id, -76)), vibrations] };
-    const full = held({ calc: calc as never, mirror: [0, 1, 2] });
-    const record = entryOfSet(full, "x");
-    expect(Object.keys(record.properties).sort()).toEqual([...MENO_OWN].sort());
-    expect(setEntryOfEntry(record, { compound: 0, number: 1 }, full)!.properties).toBeUndefined();
+    // (and that a run ended converged at it - or, out of a Failed exit, why it failed: one entry never both, a failed one
+    //  standing on no converged run - so the two together give every name)
+    const converged = held({ calc: calc as never, mirror: [0, 1, 2], imaginary: [-120, -35], converged: convergedAt("optimisation", held().xyz) });
+    const failed = held({ calc: calc as never, mirror: [0, 1, 2], imaginary: [-120, -35], failed: { kind: "failed", why: "SCF has not converged" }, converged: convergedAt("optimisation", held().xyz) });
+    const records = [converged, failed].map((e) => entryOfSet(e, "x"));
+    expect(Object.keys(records[1].properties)).not.toContain("converged");
+    expect([...new Set(records.flatMap((r) => Object.keys(r.properties)))].sort()).toEqual([...MENO_OWN].sort());
+    records.forEach((r, i) => expect(setEntryOfEntry(r, { compound: 0, number: 1 }, [converged, failed][i])!.properties).toBeUndefined());
   });
 
   it("gives none of an entry without one geometry in 3D", () => {

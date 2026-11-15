@@ -52,8 +52,17 @@ export function numbersWith(m: Pick<Molecule3D, "atoms" | "atomNumbers">, atoms:
   return shown.length === on.length ? { kind: k } : { kind: k, atoms: shown };
 }
 
-/** Each atom's number of the kind given, 0 where it has none; all 0 for a kind not known. */
-export function atomNumbersOf(m: Pick<Molecule3D, "atoms">, kind: AtomNumberKind): Float32Array {
+/**
+ * Each atom's number of the kind given, in the frame shown, 0 where it has
+ * none; all 0 for a kind not known. Atom-map numbers can differ frame by
+ * frame (`mapFrames`: a conformer's alike atoms in each other's places); the
+ * rest are the atoms' own.
+ */
+export function atomNumbersOf(m: Pick<Molecule3D, "atoms" | "mapFrames">, kind: AtomNumberKind, frame = 0): Float32Array {
+  if (kind === "map" && frame > 0 && m.mapFrames) {
+    const f = m.mapFrames[frame - 1];
+    return f && f.length === m.atoms.length ? Float32Array.from(f) : new Float32Array(m.atoms.length);
+  }
   return ATOM_NUMBER_KINDS.find((k) => k.kind === kind)?.of(m) ?? new Float32Array(m.atoms.length);
 }
 

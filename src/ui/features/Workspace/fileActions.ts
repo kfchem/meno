@@ -5,40 +5,44 @@ import { pushShapes } from "./utils/pushes";
 import { exists } from "@tauri-apps/plugin-fs";
 import { fileNow } from "../../../lib/jobs";
 import { writeDocument, type Appended } from "../../../lib/io/writeDocument";
-import { jobsToKeep, LARGE_WORKSPACE_MB, sizeAsk, type SizeAsk } from "./workflow/keptJobs";
+import { clearSavedJobs, jobsToKeep, LARGE_WORKSPACE_MB, sizeAsk, type SizeAsk } from "./workflow/keptJobs";
 import { MOST_FILE } from "../../../lib/doc/menoFile";
 import { truePath } from "../../../lib/io/truePath";
 import { turnsOf } from "../../../lib/doc/saveTurns";
 import { heldElsewhere } from "../../../lib/doc/savers";
-import { mapStanding, mappedPairSdf } from "./chem/atomMap";
+import { exportOf, mappedPairSdf } from "./chem/atomMap";
+import { pairedSdf } from "./chem/structureMaps";
 import { useCallback, useRef, useState } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { asBonds, bondLinePtOf, fillOutline, flattenedCurve, lineWidthOf, outlineCurve, shapeBounds, strokePieces } from "../../../lib/chem/shapes";
 import { inkColour, inkWidth, markerColour, MARKER_OPACITY, strokeOutline, strokesBounds } from "../../../lib/chem/ink";
 import { setInUse } from "../../../lib/chem/palette";
-import { createSVG, labelBox, labelSetOf, measureLabelBox, type Layout, type LayoutOptions } from "../../../lib/chem/layout2d";
+import { createSVG, HALO_EMS, labelBox, labelSetOf, measureLabelBox, type Layout, type LayoutOptions } from "../../../lib/chem/layout2d";
 import { arrowsWithWords, wordsSet } from "../../../lib/chem/captions";
 import { arrowsOfCycles, cycleThings } from "./utils/cycles";
-import { writeMolfile, writeMolfile3d, writeSdf, type Atom3D } from "../../../lib/chem/molWriter";
+import { withRingStars, writeMolfile, writeMolfile3d, writeSdf, type Atom3D } from "../../../lib/chem/molWriter";
 import { forFlatReaders } from "./chem/drawing";
 import { reactionArrows, reactionFileText } from "./chem/reactionFile";
 import { styleOf, type DrawingStyle } from "../../../lib/chem/style";
-import { useAppSettings } from "../../../lib/settings/appSettings";
+import { keepsJobFolders, useAppSettings } from "../../../lib/settings/appSettings";
 import { editorLayoutOptions, layoutBonds } from "./layoutOptions";
 import { useEditorStore } from "./store";
 import type { Carried3D, Drawn, DrawnRecord, EditorState, Model } from "./store/types";
 import type { Property } from "../../../lib/entry";
-import { imaginaryOf, recordNow, recordNumber } from "./workflow/entries";
+import { drawnHashesAsked, imaginaryOf, recordNow, recordNumber, structureInputOf } from "./workflow/entries";
+import { identitiesAsked } from "./chem/identityOff";
 import { partsOf } from "./workflow/parts";
 import { useNotices } from "../../notices";
 import { carriedOf, isWorkspaceFile, notKeptSaid, workspaceFile } from "./utils/workspace";
 import { leftOutSavedSaid } from "./utils/readNotes";
-import { bondsAt, notePictureMarks, pictureMarks } from "./utils/molecule3d";
+import { bondsAt, notePictureMarks, pictureMarks, stereoPictureSpots3d } from "./utils/molecule3d";
 import { isSkeleton } from "./utils/completeness";
 import { FAILURE_WORDS } from "./workflow/failures";
 import { skeletonWhy } from "../../../lib/chem/skeleton";
 import { measurePictureMarks } from "./utils/measure3d";
-import { MARK_SCALE, stereoPictureItems } from "./chem/marks";
+import { MARK_SCALE, STEREO_GAP, stereoPictureItems, stereoTextItem } from "./chem/marks";
+import { stereoShownOf } from "./document";
+import { COLORS } from "../../theme/colors";
 import { style3dOf } from "./style3d";
 import { withSolidsImage } from "./render3d";
 import { pictureSurface } from "./utils/surfaceMesh";
@@ -224,7 +228,7 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
     const skeleton = isSkeleton(m);
     const data = (i: number) => {
       const energy = m.energies?.[i];
-      const failed = m.marksUnread ? "its marks of which frames failed could not be read" : m.failed?.length === n && m.failed[i] ? `${FAILURE_WORDS[m.failed[i]!.kind]}: ${m.failed[i]!.why}` : null;
+      const failed = failedSaid(m, i);
       return (
         (energy != null && Number.isFinite(energy) ? `> <Energy (Eh)>\n${energy}\n\n` : "") +
         (failed ? `> <Failed>\n${failed.replace(/\s+/g, " ").slice(0, 200)}\n\n` : "") +
@@ -235,11 +239,17 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
       );
     };
     const atomsOf = (i: number | undefined) => (skeleton ? frameAtoms(m, i).map((a) => ({ ...a, noImplicitH: true })) : frameAtoms(m, i));
-    if (options.frames !== "all") return [writeMolfile3d(atomsOf(m.frame), bondsAt(m, m.frame), { title: name, version }) + data(m.frame ?? 0) + "$$$$\n"];
+    // (each ring bound to a metal through all its atoms as a file holds one: a star at its centre, a bond to its atoms - lib/chem/molWriter)
+    const written = (i: number | undefined) => withRingStars(atomsOf(i), bondsAt(m, i), m.centres ?? []);
+    if (options.frames !== "all") {
+      const w = written(m.frame);
+      return [writeMolfile3d(w.atoms, w.bonds, { title: name, version }) + data(m.frame ?? 0) + "$$$$\n"];
+    }
     const frames = 1 + (m.frames ?? []).filter((f) => f.length === 3 * m.atoms.length).length;
     return Array.from({ length: frames }, (_, i) => {
       // (each frame with the bonds it has, where they go frame by frame)
-      return writeMolfile3d(atomsOf(i), bondsAt(m, i), { title: `${name} ${i + 1}`, version }) + data(i) + "$$$$\n";
+      const w = written(i);
+      return writeMolfile3d(w.atoms, w.bonds, { title: `${name} ${i + 1}`, version }) + data(i) + "$$$$\n";
     });
   });
   const { loose, stacked } = recordDrawings(drawn);
@@ -318,6 +328,19 @@ function setRecordsOf(drawn: Drawn, drawing: Model): ({ ids: number[]; record: D
       return [{ ids: c.structure, record: recordNow(c.record, drawing, c.structure) ?? {} }];
     }),
     ...(drawn.held?.[set.id] ?? []).map(({ record, ...model }) => ({ model, record: recordNow(record, model, model.atoms.map((a) => a.id)) ?? {} })),
+  ]);
+}
+
+/**
+ * The identities what is written reads (`setRecordsOf`: each record's structure as it stands now), asked of the worker and
+ * answered first - so that writing works none out on the drawing thread; the file is saving meanwhile, the page free.
+ */
+export async function setRecordsAsked(drawn: Drawn): Promise<void> {
+  const { loose } = recordDrawings(drawn);
+  const sets = drawn.flow?.sets ?? [];
+  await Promise.all([
+    drawnHashesAsked(loose, sets.flatMap((set) => (set.carried ?? []).filter((c) => c.record?.of && c.structure.length).map((c) => c.structure))),
+    identitiesAsked(sets.flatMap((set) => (drawn.held?.[set.id] ?? []).filter((m) => m.record?.of).map(({ record: _record, ...model }) => structureInputOf(model).input))),
   ]);
 }
 
@@ -488,10 +511,21 @@ export function propertiesSaid(drawn: Drawn): string[] {
 }
 
 /**
+ * Why a molecule in 3D's frame `i` did not finish - it failed, or its file's
+ * marks of which frames failed did not read - in words; none where it did.
+ */
+function failedSaid(m: Carried3D, i: number): string | null {
+  const n = 1 + (m.frames?.length ?? 0);
+  if (m.marksUnread) return "its marks of which frames failed could not be read";
+  return m.failed?.length === n && m.failed[i] ? `${FAILURE_WORDS[m.failed[i]!.kind]}: ${m.failed[i]!.why}` : null;
+}
+
+/**
  * Molecules in 3D as an XYZ file holds them (lib/chem/xyzWriter): the atoms of
  * each in the order it has them, in the frame it shows or - every frame - in
  * each frame it has, a block for each, the energy of each frame on its
- * comment line where it is known. Several molecules one after another, each
+ * comment line where it is known, and why it did not finish where it did not
+ * (`failedSaid`), as an SD file's *Failed* says. Several molecules one after another, each
  * as SDF export writes them: their blocks in turn, not placed as one system.
  * Throws where there are none.
  */
@@ -504,7 +538,7 @@ export function xyzFileText(molecules: readonly Carried3D[], title: string, opti
     const which = shown ? [Math.min(Math.max(0, m.frame ?? 0), have - 1)] : Array.from({ length: have }, (_, i) => i);
     return which.map((i) => ({
       atoms: frameAtoms(m, i),
-      comment: xyzComment(name, shown ? undefined : { i, of: have }, m.energies?.[i]),
+      comment: xyzComment(name, shown ? undefined : { i, of: have }, m.energies?.[i], failedSaid(m, i)),
     }));
   });
   return writeXyz(frames);
@@ -763,6 +797,39 @@ export function drawingLayout(
     }
     take(xs, ys);
   }
+  // and their R, S, E and Z, over them, as the canvas writes them: where it
+  // puts them, clear of the balls, the bonds, the measurements' values and
+  // each other (utils/molecule3d stereoPictureSpots3d), as large as the
+  // drawing's (without the canvas's least size, which has no meaning at a
+  // picture's size in print), in its blue on a white halo
+  const values = measures.map((m) => {
+    const box = measureLabelBox(m, family);
+    return { x: (box.min.x + box.max.x) / 2, y: (box.min.y + box.max.y) / 2, hx: (box.max.x - box.min.x) / 2, hy: (box.max.y - box.min.y) / 2 };
+  });
+  const parentheses = !!opts.stereoParentheses;
+  const gap = opts.stereoGap ?? STEREO_GAP;
+  const stereo = (model.molecules3d ?? []).flatMap((m) =>
+    stereoPictureSpots3d(m, style3dOf(aromatic), stereoShownOf(m), markSize, gap, parentheses, values).map((p) => ({
+      ...stereoTextItem(p, markSize, opts),
+      // (its size as the layout's texts give theirs: in pixels, where the layout's units are)
+      fontPx: opts.units === "px" ? markSize * layout.zoom : markSize,
+      color: COLORS.stereo3d,
+      halo: COLORS.background,
+    })),
+  );
+  if (stereo.length) {
+    layout.solidsTexts = stereo;
+    const xs: number[] = [];
+    const ys: number[] = [];
+    for (const t of stereo) {
+      const box = labelBox(t, markSize, labelSetOf(opts));
+      // (with its halo)
+      const h = HALO_EMS * markSize;
+      xs.push(t.x - box.left - h, t.x + box.right + h);
+      ys.push(t.y - box.bottom - h, t.y + box.top + h);
+    }
+    take(xs, ys);
+  }
   return { layout, opts };
 }
 
@@ -869,6 +936,11 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
       );
       store.getState().markSavedAs(kept, at.written);
       store.getState().markLeftKept();
+      // (its jobs' folders, every file of them held by the file just written as it reads back: moved to the Trash where
+      //  Settings does not keep them - not kept, by default - and, where any stayed though finished, said once:
+      //  docs/WORKFLOWS.md, *A job's folder*)
+      if (!keepsJobFolders(useAppSettings.getState().calculations))
+        void clearSavedJobs(kept, at.jobs).then(({ said }) => said && setError((e) => (e ? `${e} ${said}` : said)));
       naming.current?.(fileNameOf(kept));
       // (saved - new work is not lost for a file it could not keep - and each such file named, where Save's failures are, till dismissed; and, each time, what was left out as it opened)
       const keptAs = old && fileNameOf(old);
@@ -949,6 +1021,7 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
         }
         // (and of each set - those selected, or every one on the canvas - what it holds off the page too: every structure it holds is written)
         const drawn = exportedDrawn(state, part);
+        await setRecordsAsked(drawn);
         await writeDocument(path, structureFileText(drawn, path, options, style3dOf(state)));
         // (a MOL or RXN file - one molfile - cannot hold a set's records: what it holds off the page, said not written)
         const notWritten = kind === "mol" || kind === "rxn" ? heldNotWritten(drawn) : null;
@@ -962,19 +1035,24 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
 
   /**
    * A drawn reaction written in 3D, where its arrow's atom map is ready
-   * (chem/atomMap `mappedPairSdf`): an SD file of two records, the
-   * reactants and the product in the reactants' numbering, where the
-   * chemist says.
+   * (chem/atomMap `mappedPairSdf`) - or a map between structures on the
+   * page (chem/structureMaps), Before as the reactants, After as the
+   * product: an SD file of two records, the reactants and the product in
+   * the reactants' numbering, where the chemist says.
    */
   const exportReaction3d = useCallback(
-    (arrowId: number) =>
+    (of: { arrow: number } | { structureMap: number }) =>
       attempt("Export", async () => {
         const state = store.getState();
-        const map = state.arrows.find((a) => a.id === arrowId)?.atomMap;
-        if (!map || mapStanding({ atomMap: map }, state.model) !== "ready") throw new Error("The reaction has no atom map of it as it is drawn.");
+        const found = exportOf(state, of);
+        if ("refused" in found) throw new Error(found.refused);
+        const { map } = found;
         const from = state.savedPath ?? state.openedName;
         const base = from ? withExtension(from, "sdf").replace(/\.sdf$/i, "") : "reaction";
         const name = fileNameOf(base);
+        // (a map's conformers paired: each pair written, as the map's own two are - else the map's own two)
+        const paired = map.pairs ? pairedSdf(map, state.molecules3d, state.model, name) : null;
+        if (map.pairs && paired == null) throw new Error("The conformers paired have changed since they were paired: pair them again.");
         const picked = await saveDialog({
           title: "Export reaction in 3D",
           defaultPath: from ? `${base}-reaction.sdf` : "reaction.sdf",
@@ -982,7 +1060,7 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
         });
         if (!picked) return;
         const path = picked.toLowerCase().endsWith(".sdf") ? picked : `${picked}.sdf`;
-        await writeDocument(path, mappedPairSdf(map, name));
+        await writeDocument(path, paired ?? mappedPairSdf(map, name));
       }),
     [attempt, store],
   );

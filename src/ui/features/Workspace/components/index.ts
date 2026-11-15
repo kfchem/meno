@@ -12,6 +12,7 @@ export { default as LabelTyping2D } from "./LabelTyping2D";
 export { default as JoinCaps2D } from "./JoinCaps2D";
 export { default as HoverOverlay2D } from "./HoverOverlay2D";
 export { default as ExtendPreview2D } from "./ExtendPreview2D";
+export { default as ClickBondPreview2D } from "./ClickBondPreview2D";
 export { default as BondsPick2D } from "./BondsPick2D";
 export { default as AtomsHoverRings2D } from "./AtomsHoverRings2D";
 export { default as MovePreview2D } from "./MovePreview2D";

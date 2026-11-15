@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   acceptAppSettings,
   DEFAULT_APP_SETTINGS,
+  JOB_FOLDERS_KEPT,
+  keepsJobFolders,
+  QUIET_AFTER_MIN,
+  QUIET_AFTER_MOST,
   loadAppSettings,
   settingsFileText,
   useAppSettings,
@@ -67,11 +71,18 @@ describe("the settings file", () => {
     expect(acceptAppSettings({ chemistry: { valenceWarnings: true, window3d: 45 } }).chemistry).toEqual({ valenceWarnings: true, window3d: 45 });
     for (const window3d of [-1, "30", 1e9, Number.NaN, null])
       expect(acceptAppSettings({ chemistry: { valenceWarnings: true, window3d } }).chemistry).toEqual({ valenceWarnings: true });
+    // how many conformers the page tries: a number of the chemist's own, 1 to 5000 - else as many as the molecule needs (unset)
+    expect(acceptAppSettings({ chemistry: { valenceWarnings: true, sought3d: "fixed", count3d: 40 } }).chemistry).toEqual({ valenceWarnings: true, sought3d: "fixed", count3d: 40 });
+    for (const [sought3d, count3d] of [["needed", 0], ["fixed?", 5001], [true, 2.5], [null, "40"]])
+      expect(acceptAppSettings({ chemistry: { valenceWarnings: true, sought3d, count3d } }).chemistry).toEqual({ valenceWarnings: true });
     // a file from before readers were chosen: none chosen; one from before Files, its readers chosen as they were;
     // a choice that is not an id, left out
     expect(acceptAppSettings({}).files).toEqual({ read: {}, also: {} });
     // which way the wheel zooms: in, upwards, unless the file says out
     expect(acceptAppSettings({ pointer: { wheelUp: "sideways" } }).pointer).toEqual({ wheelUp: "in" });
+    // how long a long press is: shorter or longer as the file says, else normal (none kept)
+    expect(acceptAppSettings({ pointer: { wheelUp: "in", longPress: "longer" } }).pointer).toEqual({ wheelUp: "in", longPress: "longer" });
+    expect(acceptAppSettings({ pointer: { wheelUp: "in", longPress: 900 } }).pointer).toEqual({ wheelUp: "in" });
     // cores for each, and the cores and memory jobs may use: whole numbers, at least one, within reason
     expect(acceptAppSettings({ calculations: { cores: 2.5, coresAll: 0, memoryAll: -1 } }).calculations).toEqual({});
     expect(acceptAppSettings({ calculations: { cores: "8", coresAll: 1025 } }).calculations).toEqual({});
@@ -80,6 +91,19 @@ describe("the settings file", () => {
     expect(acceptAppSettings({ calculations: { largeWorkspaceMB: 1024 } }).calculations).toEqual({ largeWorkspaceMB: 1024 });
     // (past the most a workspace's file may come to at all: not taken)
     expect(acceptAppSettings({ calculations: { largeWorkspaceMB: 2048 } }).calculations).toEqual({});
+    // (after how many minutes a running job is said quiet: a whole number up to a day, else Meno's default)
+    expect(acceptAppSettings({ calculations: { quietAfterMin: 45 } }).calculations).toEqual({ quietAfterMin: 45 });
+    for (const v of [0, 1441, 2.5, "30"]) expect(acceptAppSettings({ calculations: { quietAfterMin: v } }).calculations).toEqual({});
+    expect([QUIET_AFTER_MIN, QUIET_AFTER_MOST]).toEqual([30, 1440]);
+    // (the computer kept awake while calculations run unless turned off: only the off kept)
+    expect(acceptAppSettings({ calculations: { sleepWhileJobsRun: true } }).calculations).toEqual({ sleepWhileJobsRun: true });
+    for (const v of [false, "yes", 1]) expect(acceptAppSettings({ calculations: { sleepWhileJobsRun: v } }).calculations).toEqual({});
+    // (job folders kept once saved, or not, as set; else as Meno's default - not kept, the maintainer's choice)
+    expect(acceptAppSettings({ calculations: { keepJobFolders: true } }).calculations).toEqual({ keepJobFolders: true });
+    expect(acceptAppSettings({ calculations: { keepJobFolders: false } }).calculations).toEqual({ keepJobFolders: false });
+    expect(acceptAppSettings({ calculations: { keepJobFolders: "yes" } }).calculations).toEqual({});
+    expect(JOB_FOLDERS_KEPT).toBe(false);
+    expect([keepsJobFolders({}), keepsJobFolders({ keepJobFolders: false }), keepsJobFolders({ keepJobFolders: true })]).toEqual([false, false, true]);
     expect(acceptAppSettings({ calcReaders: { chosen: { orca: "cclib", gaussian: 3, "x y": "cclib" } } }).files).toEqual({ read: { orca: "cclib" }, also: {} });
     expect(
       acceptAppSettings({ calcReaders: { chosen: { orca: "cclib" } }, files: { read: { orca: "pyscf" }, also: { orca: ["cclib", "cclib", 4], xtb: [] } } }).files,
@@ -102,6 +126,9 @@ describe("the settings file", () => {
       programs: {},
     });
     expect(acceptAppSettings({}).plugins).toEqual({ removed: [], roles: {}, programs: {} });
+    // whether the plugins set up before were asked about: kept only as answered, anything else not
+    expect(acceptAppSettings({ plugins: { usedBeforeAsked: true } }).plugins.usedBeforeAsked).toBe(true);
+    for (const v of [false, "yes", 1]) expect(acceptAppSettings({ plugins: { usedBeforeAsked: v } }).plugins).not.toHaveProperty("usedBeforeAsked");
     // the programs installed separately located: by plugin and program, each a full path
     const programs = { "orca:orca": "/opt/orca/orca", "gaussian:g16": "C:\\G16W\\g16.exe", "orca:../x": "/x", "Bad:p": "/x", "orca:x": "orca", "orca:y": 3 };
     expect(acceptAppSettings({ plugins: { programs } }).plugins.programs).toEqual({ "orca:orca": "/opt/orca/orca", "gaussian:g16": "C:\\G16W\\g16.exe" });

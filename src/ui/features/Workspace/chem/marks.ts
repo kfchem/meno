@@ -1,7 +1,8 @@
 /**
- * What the plugin that does the checks says about a structure, as marks on
- * it: atoms with more bonds than they can have, R and S at stereocentres, E
- * and Z at double bonds, Ra and Sa at axes of chirality (BINAP's).
+ * Marks on a structure: atoms with more bonds than they can have, as the
+ * plugin that does the checks says; R and S at stereocentres, E and Z at
+ * double bonds and odd cumulenes, and Ra and Sa at axes of chirality
+ * (BINAP's, an allene's), Meno's own (chem/cipMarks).
  * A ring round an atom with too many bonds is the editor's, never in a
  * picture of the drawing. R, S, E and Z are shown in pictures as the canvas
  * shows them - copied, saved and exported (`stereoPictureItems`): the
@@ -59,7 +60,9 @@ export type ChemMarks = {
   /** Stereocentres, by atom id: R or S (r or s when pseudo-asymmetric). */
   centres: Map<number, "R" | "S" | "r" | "s">;
   /** Stereogenic double bonds, and axes of chirality, by bond id. */
-  doubleBonds: Map<number, "E" | "Z" | "Ra" | "Sa">;
+  doubleBonds: Map<number, "E" | "Z" | "Ra" | "Sa" | "ra" | "sa">;
+  /** What a stereocentre or double bond asked for says while the pointer is on it - why it has no descriptor, or that its Z or E turns in the mirror image - by `centre-<id>` or `bond-<id>` (chem/cipMarks). */
+  said?: Map<string, string>;
 };
 
 export const NO_MARKS: ChemMarks = {
@@ -68,9 +71,13 @@ export const NO_MARKS: ChemMarks = {
   doubleBonds: new Map(),
 };
 
-/** The plugin's answer about `model`, by the ids of its atoms and bonds. */
+/**
+ * The plugin's answer about `model`, by the ids of its atoms and bonds: its
+ * valence warnings - its stereo descriptors never read, Meno's own being
+ * the page's (chem/cipMarks).
+ */
 export function marksOf(model: Model, analysis: Analysis): ChemMarks {
-  const { atoms, bonds } = molIndex(model);
+  const { atoms } = molIndex(model);
   const marks: ChemMarks = {
     valence: new Map(),
     centres: new Map(),
@@ -79,14 +86,8 @@ export function marksOf(model: Model, analysis: Analysis): ChemMarks {
   for (const a of analysis.atoms) {
     const atom = atoms[a.index];
     if (!atom) continue;
-    if (a.valenceError && !bridgesMetals(model, atom, a.valenceError)) marks.valence.set(atom.id, a.valenceError);
-    if (a.cip) marks.centres.set(atom.id, a.cip);
-  }
-  for (const b of analysis.bonds) {
-    const bond = bonds[b.index];
-    // (an axis's helicity said as the descriptor its labels have, (R)-BINAP:
-    // M is Ra and P is Sa, both read from the groups CIP ranks first)
-    if (bond && b.cip) marks.doubleBonds.set(bond.id, b.cip === "M" ? "Ra" : b.cip === "P" ? "Sa" : b.cip);
+    if (a.valenceError && !bridgesMetals(model, atom, a.valenceError) && !takesArrows(model, atom, a.valenceError))
+      marks.valence.set(atom.id, a.valenceError);
   }
   return marks;
 }
@@ -148,6 +149,22 @@ function bridgesMetals(model: Model, atom: Model["atoms"][number], p: ValencePro
     if (o && isMetal(o.el)) toMetals += b.order;
   }
   return toMetals > 0 && p.valence - toMetals <= (p.most ?? 1);
+}
+
+/**
+ * An atom a dative bond is drawn into - BH3 in H3N→BH3, AlCl3 taking an
+ * ether's O - has no more bonds than it can have for that: the pair is the
+ * donor's, so the bond takes none of its valence (`valenceOrder`), as it
+ * takes none of the donor's. The checks plugin counts a dative bond on the
+ * atom it points to, and so is checked here by its bonds to the rest; a
+ * coordination bond drawn as a plain line is written as one from `a` to
+ * `b`, and counted alike. An atom with too many bonds besides is marked
+ * still.
+ */
+function takesArrows(model: Model, atom: Model["atoms"][number], p: ValenceProblem): boolean {
+  if (p.most == null) return false;
+  const into = model.bonds.filter((b) => b.b === atom.id && b.a !== atom.id && (b.dative || b.coordination) && b.order === 1).length;
+  return into > 0 && p.valence - into <= p.most;
 }
 
 const NAMES = new Map(ELEMENTS.map((e) => [e.symbol, e.name]));

@@ -7,10 +7,12 @@
  * and which one the rest are relative to - so that none is typed blind. As
  * the kind declares them where nothing comes in.
  */
-import { diagramQuantities, levelNamer, levelsTyped, referenceNeed, type LevelLine } from "../../../../lib/energyDiagram";
+import { diagramQuantities, levelNamer, levelsTyped, propertiesTyped, referenceNeed, type LevelLine } from "../../../../lib/energyDiagram";
 import type { LineRead, Option, OptionValues } from "../../../../lib/options";
 import { moleculesSeen } from "./flow";
 import type { WorkflowStep } from "../store/types";
+// (the constitution column the diagram never reads: from the identity worker, never worked out here while the card is drawn)
+import { constitutionKnown } from "../chem/identityOff";
 
 type Seen = Parameters<typeof moleculesSeen>[0];
 
@@ -22,11 +24,12 @@ export function diagramOptions(flow: Seen, step: Pick<WorkflowStep, "id" | "opti
   const mine = made.get(flow) ?? new Map<string, readonly Option[]>();
   made.set(flow, mine);
   const levels = String(step.options?.levels ?? "");
-  // (again where its Levels changed: the reference's list follows them)
-  const key = `${step.id}\n${levels}`;
+  const by = String(step.options?.levelsBy ?? "");
+  // (again where its Levels changed, or the property its levels are named by: the reference's list follows them)
+  const key = `${step.id}\n${levels}\n${by}`;
   const had = mine.get(key);
   if (had) return had;
-  const out = listed(flow, step.id, levels, declared);
+  const out = listed(flow, step.id, levels, by, declared);
   mine.set(key, out);
   return out;
 }
@@ -69,16 +72,16 @@ export function diagramKept(values: OptionValues, shown: OptionValues, own: Opti
  * refused on it; nothing, where nothing comes in yet.
  */
 export function diagramNeeds(flow: Seen, step: Pick<WorkflowStep, "id" | "options">): string | undefined {
-  const seen = moleculesSeen(flow, step.id, "levels");
+  const seen = moleculesSeen(flow, step.id, "levels", constitutionKnown);
   if (!seen) return undefined;
   const o = step.options ?? {};
-  return referenceNeed(seen.table.rows.map(levelNamer(seen.table)), String(o.levels ?? ""), typeof o.reference === "string" ? o.reference : undefined);
+  return referenceNeed(seen.table.rows.map(levelNamer(seen.table, propertiesTyped(String(o.levelsBy ?? "")))), String(o.levels ?? ""), typeof o.reference === "string" ? o.reference : undefined);
 }
 
-function listed(flow: Seen, id: number, levels: string, declared: readonly Option[]): Option[] {
-  const seen = moleculesSeen(flow, id, "levels");
+function listed(flow: Seen, id: number, levels: string, by: string, declared: readonly Option[]): Option[] {
+  const seen = moleculesSeen(flow, id, "levels", constitutionKnown);
   if (!seen) return [...declared];
-  const nameOf = levelNamer(seen.table);
+  const nameOf = levelNamer(seen.table, propertiesTyped(by));
   const names = [...new Set(seen.table.rows.map(nameOf))];
   const energies = diagramQuantities(seen.table);
   // (in the order Levels lists them, each by the name it gives - the rest after, as they come)

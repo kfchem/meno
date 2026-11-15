@@ -1,12 +1,15 @@
 import { useContext, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { PageHtmlLayer } from "./coverLayer";
-import { pageScale, wordsReadAt, WORDS_LEAST } from "../utils/pageScale";
+import { pageLayerStep, type PageLayerState } from "../utils/pageScale";
 
 /**
  * The page's scale, told to what is drawn on it in HTML (utils/pageScale):
  * `--page` on the layer it is drawn in, how many screen pixels a page pixel
- * is - which chips grow and shrink by (`.meno-page-chip`) - `--words`,
+ * is - which chips are laid out at (`.meno-page-chip`), written once the
+ * zoom stands still - and while it moves, how far it has gone from there,
+ * `--page-k` for chips and `--notes-k` for notes, which they are scaled by
+ * (`pageTold`, `pageSized`) - `--words`,
  * 1 while their words are read and 0 once they are too small, and
  * `--stand-in` the other way (`wordsReadAt`: switched past a threshold,
  * faded over a short time by CSS), and `data-words-small` while their words
@@ -15,19 +18,22 @@ import { pageScale, wordsReadAt, WORDS_LEAST } from "../utils/pageScale";
 export default function PageScale() {
   const layer = useContext(PageHtmlLayer);
   const camera = useThree((s) => s.camera);
-  const told = useRef<{ layer: HTMLElement | null; zoom: number }>({ layer: null, zoom: NaN });
-  // (whether the words are read now: switched past their threshold, as the zoom goes)
-  const read = useRef(pageScale(camera.zoom || 1) >= WORDS_LEAST);
+  const invalidate = useThree((s) => s.invalidate);
+  // (what the layer was last told, and which layer: utils/pageScale `pageLayerStep`)
+  const told = useRef<{ layer: HTMLElement | null; state: PageLayerState | null }>({ layer: null, state: null });
+  // (the zoom the frame before: standing as it was, its chips are laid out at it)
+  const before = useRef(NaN);
   useFrame(() => {
     if (!layer) return;
     const zoom = camera.zoom || 1;
-    if (told.current.layer === layer && told.current.zoom === zoom) return;
-    told.current = { layer, zoom };
-    layer.style.setProperty("--page", pageScale(zoom).toFixed(4));
-    read.current = wordsReadAt(zoom, read.current);
-    layer.style.setProperty("--words", read.current ? "1" : "0");
-    layer.style.setProperty("--stand-in", read.current ? "0" : "1");
-    layer.toggleAttribute("data-words-small", !read.current);
+    const still = zoom === before.current;
+    before.current = zoom;
+    const step = pageLayerStep(told.current.layer === layer ? told.current.state : null, zoom, still);
+    for (const [name, value] of step.writes) layer.style.setProperty(name, value);
+    if (step.wordsSmall != null) layer.toggleAttribute("data-words-small", step.wordsSmall);
+    told.current = { layer, state: step.now };
+    // (a frame more asked for while they are scaled: the canvas draws only when asked, and standing still they are then laid out as it is)
+    if (step.again) invalidate();
   });
   return null;
 }

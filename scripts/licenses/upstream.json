@@ -1,5 +1,5 @@
 {
-  "about": "Licence texts read from their published pages for crates that ship none: each at the commit the crate's version was published from (its .cargo_vcs_info.json), read on the date given. scripts/licenses/notices.mjs gives them in the notices.",
+  "about": "Licence texts read from their published pages, for crates and npm packages that ship none: each at the commit its version was published from (a crate's .cargo_vcs_info.json, an npm package's gitHead in its registry entry), read on the date given - the top one where an entry gives none; and, under `carried`, the licences of code by others that an npm package carries in its own files without them. scripts/licenses/notices.mjs gives them in the notices.",
   "read": "2026-10-21",
   "texts": [
     {
@@ -92,6 +92,55 @@
           "what": "The licence of Microsoft's WebView2 SDK 1.0.3800.47, whose loader (WebView2LoaderStatic.lib) this crate links into Meno's program on Windows: the SDK version its repository's update-bindings tool names at the commit it was published from (crates/update-bindings/src/main.rs, WEBVIEW2_VERSION), read from the licence page of that SDK version."
         }
       ]
+    },
+    {
+      "for": "@react-three/fiber",
+      "kind": "npm",
+      "version": "9.8.1",
+      "read": "2026-11-04",
+      "file": "react-three-fiber-9.8.1.LICENSE",
+      "source": "https://raw.githubusercontent.com/pmndrs/react-three-fiber/53ec672ac4a7189711766b87ece18889abbb32d4/LICENSE",
+      "commit": "53ec672ac4a7189711766b87ece18889abbb32d4"
+    }
+  ],
+  "carried": [
+    {
+      "in": "troika-three-text",
+      "version": "0.52.5",
+      "read": "2026-11-04",
+      "file": "lojjic-typr-0.3.8-lojjic1.LICENSE",
+      "source": "https://raw.githubusercontent.com/fredli74/Typr.ts/a6d43bacc0cc1fce913023f9ccb8622c2ceb1c00/LICENSE",
+      "what": "Typr.ts's licence, as its repository holds it at the commit @lojjic/typr 0.3.8-lojjic1 was published from (a6d43bacc0cc1fce913023f9ccb8622c2ceb1c00): the build of Typr.ts its package.json names for libs/typr.factory.js."
+    },
+    {
+      "in": "troika-three-text",
+      "version": "0.52.5",
+      "standard": "Apache-2.0",
+      "what": "woff2otf's licence, the Apache License 2.0, as the opening comment of its source in this package (src/woff2otf.js) gives it: copyright 2012 Steffen Hanikel, modified by Artemy Tregubenko (2014) and by Jason Johnston (2019)."
+    },
+    {
+      "in": "troika-three-text",
+      "version": "0.52.5",
+      "read": "2026-11-04",
+      "file": "fflate-0.7.0.LICENSE",
+      "source": "https://raw.githubusercontent.com/101arrowz/fflate/20795bce8a87db5ac377fde7e4753bcb14f85f4a/LICENSE",
+      "what": "fflate's licence, as its repository holds it at v0.7.0 (20795bce8a87db5ac377fde7e4753bcb14f85f4a): libs/woff2otf.factory.js was last built on 2021-06-02, from fflate ^0.7.0, and the text is the same at every 0.7 release."
+    },
+    {
+      "in": "troika-three-text",
+      "version": "0.52.5",
+      "read": "2026-11-04",
+      "file": "unicode-font-resolver-client-1.0.2.LICENSE",
+      "source": "https://raw.githubusercontent.com/lojjic/unicode-font-resolver/974383af089e544f4ac4b0ba96b5f98891688e17/packages/client/LICENSE",
+      "what": "@unicode-font-resolver/client's licence, as its repository holds it at the commit 1.0.2 was published from (974383af089e544f4ac4b0ba96b5f98891688e17)."
+    },
+    {
+      "in": "motion-utils",
+      "version": "14.0.0",
+      "read": "2026-11-04",
+      "file": "bezier-easing.LICENSE",
+      "source": "https://raw.githubusercontent.com/gre/bezier-easing/b2ef4763387f54f4108506772f09a5ed6833b496/LICENSE",
+      "what": "bezier-easing's licence, the file its comment links to, as its repository holds it (b2ef4763387f54f4108506772f09a5ed6833b496; the text unchanged since 2014)."
     }
   ]
 }

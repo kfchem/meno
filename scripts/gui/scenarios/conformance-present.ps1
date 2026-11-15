@@ -1,6 +1,6 @@
 # The maintainer's rulings on slides, talks, text boxes, shapes, guides and
 # writing by hand (docs/PRESENTING.md), each turned into a step and a shot -
-# to run again on every release candidate (lane L8, 2026-10-13; the 2D
+# to run again on every release candidate (2026-10-13; the 2D
 # drawing's are conformance-2d.ps1, the window's conformance-chrome.ps1).
 # Run it once from no settings.json - a fresh profile - put back after: the
 # page is made from nothing but Quick Add, the menus and one sample file.
@@ -186,7 +186,7 @@ Send-MenoShortcut 1
 Start-Sleep -Milliseconds 1200
 Invoke-MenoQuickAdd -X 2450 -Y 200 -Item Slide -Pen:$HasPen
 Start-Sleep -Milliseconds 800
-Invoke-MenoWheel -X 660 -Y 1385 -Notches 2
+Invoke-MenoZoom -X 660 -Y 1385 -Notches 2
 Start-Sleep -Milliseconds 1200
 Invoke-MenoQuickAdd -X 2450 -Y 200 -Item Slide -Pen:$HasPen
 Start-Sleep -Milliseconds 800

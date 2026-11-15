@@ -25,13 +25,13 @@ const value = (v: number, unit: Property["unit"] = "none"): Property => ({ value
 const done = (mw: number, logp: number): DrawnRecord => ({ properties: { mw: value(mw, "g/mol"), logp: value(logp) }, status: "done" });
 
 /** A step's result set holding `made`, wired into a Chart of logp against mw, run. */
-function charted(made: DrawnRecord[], unread?: number): WorkspaceDocument {
+function charted(made: DrawnRecord[], unread?: number, axes: { x?: string; y?: string } = { x: "mw", y: "logp" }): WorkspaceDocument {
   // (a step that made them from nothing, run and up to date: the chart runs on what it gave)
   let doc = addStep(emptyWorkspaceDocument(), "generate", 0, 0);
   const made0 = doc.steps![0];
   doc = placeResults(doc, made0, { molecules: [], rest: [], holds: "structures", drawn: { made: made.map(ethane), rest: [] }, ...(unread ? { unread } : {}) }, W);
   doc = setRan(doc, made0.id, { at: 1, ok: true, said: "made", input: inputKey(doc, made0, "meno"), kind: made0.kind });
-  doc = addStep(doc, "chart", 40, 0, { x: "mw", y: "logp" });
+  doc = addStep(doc, "chart", 40, 0, axes);
   const chart = doc.steps![1];
   doc = connect(doc, { set: resultOf(doc, doc.steps![0].id, "out")!.id }, chart.id);
   return runStep(doc, chart.id, W);
@@ -114,5 +114,37 @@ describe("Chart, taking structures drawn", () => {
   it("says how many structures did not read from its step's files, and are not charted", () => {
     const doc = charted([done(46, -0.3), done(60, 0.2)], 3);
     expect(ran(doc)).toMatchObject({ ok: true, said: "2 points \u00b7 3 structures could not be read and are not charted" });
+  });
+});
+
+describe("a chart of structures drawn, by structure", () => {
+  const numbered = (n: number, mw: number, logp: number): DrawnRecord => ({ ...done(mw, logp), properties: { ...done(mw, logp).properties, number: value(n) } });
+
+  it("takes which structure each row is across, by default, and the first of their values up: one point for each structure", () => {
+    const chart = chartOf(charted([done(30, 1), done(44, 2), done(58, 3)], undefined, {}));
+    expect(chart?.kind).toBe("points");
+    if (chart?.kind !== "points") return;
+    expect([chart.x.name, chart.y.name]).toEqual(["structure", "mw"]);
+    expect(chart.points.map((p) => [p.x, p.y])).toEqual([
+      [1, 30],
+      [2, 44],
+      [3, 58],
+    ]);
+  });
+
+  it("numbers them as their records do, where every one carries a number; else by place - never the two mixed", () => {
+    const byNumber = chartOf(charted([numbered(4, 30, 1), numbered(7, 44, 2)], undefined, { x: "structure", y: "logp" }));
+    expect(byNumber?.kind === "points" && byNumber.points.map((p) => p.x)).toEqual([4, 7]);
+    const mixed = chartOf(charted([numbered(4, 30, 1), done(44, 2)], undefined, { x: "structure", y: "logp" }));
+    expect(mixed?.kind === "points" && mixed.points.map((p) => p.x)).toEqual([1, 2]);
+  });
+
+  it("says a value a record holds by the name structure apart from which structure the row is", () => {
+    const own: DrawnRecord = { ...done(30, 1), properties: { ...done(30, 1).properties, structure: value(9) } };
+    const chart = chartOf(charted([own, own], undefined, { x: "structure", y: "structure (record)" }));
+    expect(chart?.kind === "points" && chart.points.map((p) => [p.x, p.y])).toEqual([
+      [1, 9],
+      [2, 9],
+    ]);
   });
 });

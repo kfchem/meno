@@ -1,4 +1,4 @@
-import { arrowMeasures, arrowPath, arrowPieces, type ArrowForm, type ArrowLook } from "./reactionArrow";
+import { arrowMeasures, arrowPath, arrowPieces, type ArrowForm, type ArrowKind, type ArrowLook } from "./reactionArrow";
 import { bondFraction, resolveStyle, type DrawingStyle } from "./style";
 import { greatest, least } from "./lists";
 
@@ -47,6 +47,28 @@ export function plusOutline(at: P, m: PlusMeasures): P[] {
     [-h, t], [-h, -t], [-t, -t], [-t, -h], [t, -h], [t, -t],
   ];
   return corners.map(([x, y]) => ({ x: at.x + x, y: at.y + y }));
+}
+
+/**
+ * Whether an arrow means a reaction - what is drawn before its tail the
+ * reactants and what is past its point the products - or, as `{ why }`,
+ * what it means instead. A plain, dashed or bent arrow does, and an
+ * equilibrium, read as drawn, its tail side the reactants. A crossed-out
+ * arrow says the reaction does not happen; a retrosynthetic one has its
+ * target at the tail and its precursors at the point, the sides the other
+ * way round; a line with no head does not say which way the reaction goes
+ * (a connector, not a reaction); a two-headed one, not an equilibrium, joins
+ * resonance forms of one species. One rule for everything that reads a drawn
+ * reaction: an atom map, an RXN file, a set's roles. `use` is what it is read
+ * for, said in the words of the reason ("map it", "export it").
+ */
+export function reactionMeant(arrow: { kind?: ArrowKind | null; heads?: 0 | 1 | 2 }, use: "map" | "export" = "map"): true | { why: string } {
+  if (arrow.kind === "noReaction") return { why: "a crossed-out arrow: no reaction" };
+  if (arrow.kind === "retrosynthetic") return { why: `a retrosynthetic arrow: draw the reaction forward to ${use} it` };
+  if (arrow.kind === "equilibrium") return true;
+  if (arrow.heads === 0) return { why: "a line with no head: draw its head to say which way the reaction goes" };
+  if (arrow.heads === 2) return { why: "a two-headed arrow joins resonance forms, not a reaction" };
+  return true;
 }
 
 /** An arrow's tail and point. */

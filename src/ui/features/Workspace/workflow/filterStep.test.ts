@@ -1,3 +1,4 @@
+import { acceptOptions } from "../../../../lib/options";
 import { describe, expect, it } from "vitest";
 import type { Property } from "../../../../lib/entry";
 import { addMolecule3d, emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
@@ -80,7 +81,7 @@ describe("a Filter step", () => {
   it("keeps the conformers that meet its conditions, the rest out of its second exit - both counted, and why each of the rest was, one with no value for the property said", () => {
     // (a conformer set of four: NLL 12, 40, none, 25)
     const doc = runStep(filtering([water([{ nll: nll(12) }, { nll: nll(40) }, {}, { nll: nll(25) }], { conformerSet: true })], "nll < 30"), 2, W);
-    expect(ran(doc)).toMatchObject({ ok: true, said: "2 of 4 entries kept \u00b7 rest 2 (1: not nll < 30 (40); 1: it has no nll)" });
+    expect(ran(doc)).toMatchObject({ ok: true, said: "2 of 4 entries kept \u00b7 rest 2 (1: not nll < 30; 1: it has no nll)" });
     const [kept] = out(doc);
     const [rest] = out(doc, "rest");
     // (each as it came: its number, its energy, its properties)
@@ -94,14 +95,14 @@ describe("a Filter step", () => {
     const b = water([{ nll: nll(10), gap: { value: 0.5, unit: "eV", status: "computed" } }]);
     // (1 eV is 23.060548 kcal/mol, from the SI values of e and N_A and the thermochemical calorie: 2 eV is 46.12 kcal/mol, above 40; 0.5 eV is 11.530274)
     const all = runStep(filtering([a, b], "gap > 40 kcal/mol"), 2, W);
-    expect([ran(all)?.said, out(all).length]).toEqual(["1 of 2 entries kept \u00b7 rest 1 (1: not gap > 40 kcal/mol (11.530274 kcal/mol))", 1]);
+    expect([ran(all)?.said, out(all).length]).toEqual(["1 of 2 entries kept \u00b7 rest 1 (1: not gap > 40 kcal/mol)", 1]);
     const any = runStep(filtering([a, b], "gap > 40 kcal/mol; nll < 20", "any"), 2, W);
     expect([ran(any)?.said, out(any).length]).toEqual(["2 of 2 entries kept", 2]);
   });
 
   it("reads Meno's own properties of an entry as well: its energy, its number, its group", () => {
     const doc = runStep(filtering([water([{}, {}, {}], { conformerSet: true })], "energy <= -76.399 Eh; number != 1"), 2, W);
-    expect([ran(doc)?.said, out(doc)[0].numbers]).toEqual(["1 of 3 entries kept \u00b7 rest 2 (1: not number \u2260 1 (1); 1: not energy \u2264 -76.399 Eh (-76.398 Eh))", [2]]);
+    expect([ran(doc)?.said, out(doc)[0].numbers]).toEqual(["1 of 3 entries kept \u00b7 rest 2 (1: not number \u2260 1; 1: not energy \u2264 -76.399 Eh)", [2]]);
   });
 
   it("says why, and makes nothing, where its conditions do not read, or there are none", () => {
@@ -118,7 +119,24 @@ describe("a Filter step", () => {
     expect(ran(doc)).toMatchObject({ ok: false, said: '"energy" is Meno\'s own, and 1 entry carries one of its own by that name too: which is meant cannot be told' });
     // (a condition on another: the entry, and its own energy, go on as they came)
     const other = runStep(filtering(given, "nll < 30"), 2, W);
-    expect([ran(other)?.said, out(other)[0].properties?.[0].energy]).toEqual(["1 of 2 entries kept \u00b7 rest 1 (1: not nll < 30 (50))", own(-1)]);
+    expect([ran(other)?.said, out(other)[0].properties?.[0].energy]).toEqual(["1 of 2 entries kept \u00b7 rest 1 (1: not nll < 30)", own(-1)]);
+  });
+
+  it("compares a property with another of the same entry (\"its\"): kept where they agree, the rest saying why - one missing either never kept; Meno's own name on either side read as on one", () => {
+    const word = (value: string): Property => ({ value, unit: "none", status: "computed" });
+    const saddles = [
+      water([{ "last end": word("b"), product: word("b") }]),
+      water([{ "last end": word("c"), product: word("b") }], { at: { x: 2, y: 0 } }),
+      water([{ product: word("b") }], { at: { x: -2, y: 0 } }),
+    ];
+    const doc = runStep(filtering(saddles, "last end = its product"), 2, W);
+    expect(ran(doc)).toMatchObject({ ok: true, said: "1 of 3 entries kept \u00b7 rest 2 (1: it has no last end; 1: not last end = its product (c and b))" });
+    expect(out(doc).map((m) => m.properties?.[0]["last end"])).toEqual([word("b")]);
+    // (a name that is Meno's own and an entry's too, on the right as on the left: refused, never read as either)
+    const own = (v: number): Property => ({ value: v, unit: "Eh", by: { plugin: "gen" }, status: "computed" });
+    const shadowed = runStep(filtering([water([{ energy: own(-1), e2: own(-1) }])], "e2 = its energy"), 2, W);
+    expect(ran(shadowed)).toMatchObject({ ok: false, said: '"energy" is Meno\'s own, and 1 entry carries one of its own by that name too: which is meant cannot be told' });
+    expect(filterHow("last end = its product", "all")).toBe("last end = its product");
   });
 
   it("says how it filters on its card: its conditions as read, all or any", () => {
@@ -127,6 +145,49 @@ describe("a Filter step", () => {
     expect(filterHow("nll < 30; mw <= 500", "any")).toBe("nll < 30 or mw \u2264 500");
     expect(filterHow("", "all")).toBe("No conditions yet");
     expect(filterHow("nll 30", "all")).toMatch(/compares nothing/);
+  });
+
+  it("says of a plugin's step only the options that apply - none that sets nothing", () => {
+    const options = acceptOptions([
+      { id: "method", label: "Method", type: "text", default: "B3LYP" },
+      { id: "solvation", label: "Solvation", type: "choice", choices: [{ value: "none", label: "None" }, { value: "SMD", label: "SMD" }], default: "none" },
+      { id: "solvent", label: "Solvent", type: "choice", when: { id: "solvation", in: ["SMD"] }, choices: [{ value: "water", label: "Water" }], default: "water" },
+      { id: "maxcore", label: "Memory for each core", type: "number", default: 0, unset: 0, unit: "MB" },
+    ]);
+    expect(howOf(options, { method: "NATIVE-XTB2" })).toBe("NATIVE-XTB2");
+    expect(howOf(options, { method: "B3LYP", solvation: "SMD", maxcore: 3000 })).toBe("B3LYP \u00b7 Solvation: SMD \u00b7 Solvent: Water \u00b7 3000 MB");
+    // (a switch on is its own label, as before - never "name: on"; off, nothing)
+    const switched = acceptOptions([{ id: "tight", label: "Tight convergence", type: "switch", default: false }]);
+    expect(howOf(switched, { tight: true })).toBe("Tight convergence");
+    expect(howOf(switched, { tight: false })).toBe("");
+  });
+
+  it("takes a brief of forty letters at most from a manifest - a longer one is not read, the label said instead", () => {
+    const of = (brief: string) => acceptOptions([{ id: "o", label: "Radicals (one unpaired electron or more)", brief, type: "choice", choices: [{ value: "keep", label: "Keep" }], default: "keep" }]);
+    expect(of("x".repeat(40))[0].brief).toBe("x".repeat(40));
+    expect(of("x".repeat(41))[0].brief).toBeUndefined();
+    expect(howOf(of("x".repeat(41)), {})).toBe("Radicals: Keep");
+  });
+
+  it("says each choice by its name and what is chosen - and several choices with one value once, the options after it", () => {
+    const four = acceptOptions(
+      ["Radicals", "More than one part (a salt, a mixture)", "An atom with more bonds than it can have", "SMILES left open"].map((label, i) => ({
+        id: `o${i}`,
+        label,
+        ...(i === 2 ? { brief: "Too many bonds" } : {}),
+        type: "choice",
+        choices: [
+          { value: "aside", label: "Set aside" },
+          { value: "keep", label: "Keep" },
+        ],
+        default: "aside",
+      })),
+    );
+    // (never "Set aside" four times over: once, the options after it - each by its brief, or its label without what it says in brackets)
+    expect(howOf(four, {})).toBe("Set aside: radicals, more than one part, too many bonds, SMILES left open");
+    expect(howOf(four, { o0: "keep" })).toBe("Radicals: Keep \u00b7 Set aside: more than one part, too many bonds, SMILES left open");
+    // (the one that differs read first, wherever it stands among them: a card cuts its line short)
+    expect(howOf(four, { o3: "keep" })).toBe("SMILES left open: Keep \u00b7 Set aside: radicals, more than one part, too many bonds");
   });
 
   it("is run again when the properties of what comes in change", () => {

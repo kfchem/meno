@@ -736,6 +736,18 @@ pub fn net_set_offline(net: tauri::State<'_, Net>, offline: bool) {
     net.0.offline.store(offline, Ordering::SeqCst);
 }
 
+/// For other modules' tests: a purpose allowed, and the tasks not yet ended.
+#[cfg(test)]
+impl Net {
+    pub fn allow(&self, purpose: &str) {
+        self.0.granted.lock().unwrap().insert(purpose.into());
+    }
+
+    pub fn running(&self) -> usize {
+        self.0.tasks.lock().unwrap().len()
+    }
+}
+
 #[tauri::command]
 pub fn net_grant(net: tauri::State<'_, Net>, purpose: String) {
     net.0.granted.lock().unwrap().insert(purpose);

@@ -1,0 +1,99 @@
+{
+  "id": "manyread",
+  "name": "Manyread",
+  "version": "0.3.0",
+  "description": "Reads the outputs of many made-up programs.",
+  "licence": "BSD-3-Clause",
+  "homepage": "https://example.org/manyread",
+  "environment": "uv",
+  "kinds": [
+    {
+      "id": "quanta",
+      "name": "Quanta output",
+      "extensions": [
+        ".out",
+        ".log"
+      ],
+      "marks": [
+        {
+          "text": "~ Q U A N T A ~"
+        }
+      ]
+    },
+    {
+      "id": "orbitron",
+      "name": "Orbitron output",
+      "extensions": [
+        ".log",
+        ".out"
+      ],
+      "marks": [
+        {
+          "text": "Orbitron run begins, stage 0=",
+          "at": "line-start"
+        }
+      ]
+    },
+    {
+      "id": "orbitron-checkpoint",
+      "name": "Orbitron checkpoint, as text",
+      "extensions": [
+        ".ock"
+      ],
+      "marks": [
+        {
+          "text": "Atom count       I",
+          "at": "line-start"
+        }
+      ]
+    },
+    {
+      "id": "tightbind",
+      "name": "Tightbind output",
+      "extensions": [
+        ".out",
+        ".log"
+      ],
+      "marks": [
+        {
+          "text": "== T I G H T B I N D =="
+        }
+      ]
+    },
+    {
+      "id": "alphachem",
+      "name": "Alphachem output",
+      "extensions": [
+        ".out",
+        ".log"
+      ],
+      "marks": [
+        {
+          "text": "ALPHACHEM energy program",
+          "anyCase": true
+        }
+      ]
+    },
+    {
+      "id": "betawave",
+      "name": "Betawave output",
+      "extensions": [
+        ".out",
+        ".bwo"
+      ],
+      "marks": [
+        {
+          "text": "Betawave: wavefunctions by the book"
+        }
+      ]
+    }
+  ],
+  "reads": [
+    "quanta",
+    "orbitron",
+    "orbitron-checkpoint",
+    "tightbind",
+    "alphachem",
+    "betawave"
+  ]
+}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { NOMINAL_BOND_LENGTH } from "./acs";
-import { arrowEnds, arrowPoints, plusMeasures, plusOutline, reactionRoles, reshapedArrow, schemeOutlines, schemePieces, wordsLine } from "./reactionScheme";
+import { arrowEnds, arrowPoints, plusMeasures, plusOutline, reactionMeant, reactionRoles, reshapedArrow, schemeOutlines, schemePieces, wordsLine } from "./reactionScheme";
 import { ACS_1996, bondFraction } from "./style";
 
 const L = NOMINAL_BOND_LENGTH;
@@ -167,5 +167,34 @@ describe("a scheme's arrows in a picture", () => {
     const pieces = schemePieces({ arrows: [{ x: 0, y: 0, angle: 0, length: 3, color: "#c44848", kind: "equilibrium" }, { x: 0, y: 5, angle: 0, length: 3 }] }, ACS_1996, L);
     expect(pieces.filter((p) => p.color === "#c44848")).toHaveLength(4);
     expect(pieces.filter((p) => !p.color)).toHaveLength(1);
+  });
+});
+
+describe("whether an arrow means a reaction", () => {
+  it("does for a plain, dashed, bent or equilibrium arrow, an equilibrium's own heads too: read as drawn", () => {
+    expect(reactionMeant({})).toBe(true);
+    expect(reactionMeant({ kind: null, heads: 1 })).toBe(true);
+    // (dashed and bent are looks: they are the arrow's form, not its kind or heads)
+    expect(reactionMeant({ kind: undefined })).toBe(true);
+    expect(reactionMeant({ kind: "equilibrium" })).toBe(true);
+    expect(reactionMeant({ kind: "equilibrium", heads: 2 })).toBe(true);
+    expect(reactionMeant({ kind: "equilibrium", heads: 0 })).toBe(true);
+  });
+  it("does not for a line with no head - it says no way the reaction goes - and does where it has one", () => {
+    expect(reactionMeant({ heads: 0 })).toEqual({ why: "a line with no head: draw its head to say which way the reaction goes" });
+    expect(reactionMeant({ heads: 1 })).toBe(true);
+  });
+  it("says what it is read for in a retrosynthetic arrow's reason: map it, or export it", () => {
+    expect(reactionMeant({ kind: "retrosynthetic" }, "export")).toEqual({ why: "a retrosynthetic arrow: draw the reaction forward to export it" });
+    expect(reactionMeant({ kind: "retrosynthetic" }, "map")).toEqual({ why: "a retrosynthetic arrow: draw the reaction forward to map it" });
+  });
+  it("does not for a crossed-out arrow, a retrosynthetic one, or a two-headed one that is no equilibrium - and says why", () => {
+    expect(reactionMeant({ kind: "noReaction" })).toEqual({ why: "a crossed-out arrow: no reaction" });
+    expect(reactionMeant({ kind: "retrosynthetic" })).toEqual({ why: "a retrosynthetic arrow: draw the reaction forward to map it" });
+    expect(reactionMeant({ heads: 2 })).toEqual({ why: "a two-headed arrow joins resonance forms, not a reaction" });
+    expect(reactionMeant({ kind: null, heads: 2 })).toEqual({ why: "a two-headed arrow joins resonance forms, not a reaction" });
+    // (a crossed-out or retrosynthetic arrow is said so, two-headed or not)
+    expect(reactionMeant({ kind: "noReaction", heads: 2 })).toEqual({ why: "a crossed-out arrow: no reaction" });
+    expect(reactionMeant({ kind: "retrosynthetic", heads: 2 })).toEqual({ why: "a retrosynthetic arrow: draw the reaction forward to map it" });
   });
 });

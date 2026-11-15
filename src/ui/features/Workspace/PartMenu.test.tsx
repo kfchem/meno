@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
 import PartMenu, { type MenuTarget } from "./PartMenu";
+import { BOND_ICONS, bondIconAsLying } from "./menuIcons";
 
 // Vitest runs in Node, with no page to mount on: the server's renderer
 // draws the menu, and what it lists is read off that.
@@ -48,6 +49,17 @@ function menu(t: MenuTarget, extra: Partial<Parameters<typeof PartMenu>[0]> = {}
 }
 
 describe("a bond's menu", () => {
+  it("marks which of two crossing bonds is in front as it holds: the held item shown as chosen, the other not", () => {
+    const chosen = (front: boolean, behind: boolean) => {
+      const html = menu(target({ kind: "bond", id: 2 }), { crossing: { front, behind, onFront: none, onBehind: none } }).html;
+      const mark = (name: string) => new RegExp(`<span>${name}</span><svg[^>]*aria-label="Chosen"`).test(html);
+      return [mark("In front"), mark("Behind")];
+    };
+    expect(chosen(false, true)).toEqual([false, true]);
+    expect(chosen(true, false)).toEqual([true, false]);
+    expect(chosen(false, false)).toEqual([false, false]);
+  });
+
   it("chooses its kind in the first row, the rest of its kinds under it, Delete last, and lists what else it does", () => {
     const m = menu(target({ kind: "bond", id: 2 }), { bondKind: { current: "double", choose: none } });
     expect(m.icons).toEqual(["Single bond", "Double bond", "Triple bond", "Wedge", "Hashed wedge", "More kinds of bond", "Delete bond"]);
@@ -57,10 +69,43 @@ describe("a bond's menu", () => {
     const other = open.match(/aria-label="Other kinds"[^>]*>(.*?)<\/div>/)?.[1] ?? "";
     expect([...other.matchAll(/aria-label="([^"]+)"/g)].map((x) => x[1])).toEqual(["Wavy bond", "Bold bond", "Bold dashed bond", "Dashed bond", "Dative bond"]);
     expect(open).toMatch(/aria-label="Dashed bond" aria-pressed="true"/);
+    // (each as large as the first row's, its icon as large: the same square, nothing scaled down)
+    const size = (html: string, name: string) => html.match(new RegExp(`aria-label="${name}"[^>]*style="([^"]+)"`))?.[1];
+    expect(size(open, "Dashed bond")).toBe(size(open, "Single bond"));
+    expect(size(open, "Wavy bond")).toBe("width:36px;height:36px");
+    expect(other).not.toContain("scale-90");
     expect(m.listed).toEqual(["Clean up this structure", "3D structure", "Select this structure"]);
     // (the current kind marked)
     expect(m.html).toMatch(/aria-label="Double bond" aria-pressed="true"/);
     expect(m.html).toMatch(/aria-label="Single bond" aria-pressed="false"/);
+  });
+});
+
+describe("a bond's kinds in its menu", () => {
+  const drawn = (icon: unknown) => renderToString(<>{icon}</>);
+  it("draw the bond's own kind as it lies: a wedge narrow at the right turned end for end, a double bond's second line above or below", () => {
+    for (const kind of ["wedge", "hashed-wedge"] as const) {
+      expect(drawn(bondIconAsLying(kind, { narrowLeft: false, side: "center" })), kind).toContain('transform="rotate(180 10 10)"');
+      expect(drawn(bondIconAsLying(kind, { narrowLeft: false, side: "center" }))).toContain(drawn(BOND_ICONS[kind]).match(/<path[^>]*>/)![0]);
+      expect(bondIconAsLying(kind, { narrowLeft: true, side: "center" }), kind).toBe(BOND_ICONS[kind]);
+    }
+    expect(drawn(bondIconAsLying("double", { narrowLeft: true, side: "upper" }))).toContain('d="M6.5 17.2 L17.2 6.5 M4.6 11.7 L11.7 4.6"');
+    expect(drawn(bondIconAsLying("double", { narrowLeft: true, side: "lower" }))).toContain('d="M2.8 13.5 L13.5 2.8 M8.3 15.4 L15.4 8.3"');
+    expect(bondIconAsLying("double", { narrowLeft: true, side: "center" })).toBe(BOND_ICONS.double);
+    expect(bondIconAsLying("single", { narrowLeft: false, side: "upper" })).toBe(BOND_ICONS.single);
+  });
+
+  it("show each kind's key only where the menu acts on the one bond, and the bond's own kind drawn as it lies", () => {
+    const keys = (html: string) => [...html.matchAll(/aria-label="(Single bond|Double bond|Triple bond)"[^>]*title="([^"]+)"/g)].map((m) => m[2]);
+    const lie = { narrowLeft: false, side: "center" as const };
+    const one = menu(target({ kind: "bond", id: 2 }), { bondKind: { current: "wedge", lie, one: true, choose: none } }).html;
+    expect(keys(one)).toEqual(["Single bond (1)", "Double bond (2)", "Triple bond (3)"]);
+    const several = menu(target({ kind: "bond", id: 2 }), { bondKind: { current: "wedge", lie, one: false, choose: none } }).html;
+    expect(keys(several)).toEqual(["Single bond", "Double bond", "Triple bond"]);
+    const wedge = (html: string) => html.match(/aria-label="Wedge"[^>]*>(.*?)<\/button>/)?.[1] ?? "";
+    expect(wedge(one)).toContain("rotate(180 10 10)");
+    // (a kind not the bond's own, as it always is)
+    expect(menu(target({ kind: "bond", id: 2 }), { bondKind: { current: "single", lie, one: true, choose: none } }).html.match(/aria-label="Wedge"[^>]*>(.*?)<\/button>/)?.[1]).not.toContain("rotate");
   });
 });
 
@@ -108,6 +153,47 @@ describe("the right-click menu", () => {
     expect(menu({ ...here, kind: "atom", id: 1 }).icons).not.toContain("Paste");
   });
 
+  it("offers an atom map between the structures selected on the one right-clicked - and, on a structure in maps, what they do", () => {
+    const here = { ...target({ selection: "here", drawing: true }), kind: "atom" as const, id: 1 };
+    expect(menu(here, { pageMap: { onMake: none } }).listed).toEqual(["Atom map", "Copy as SMILES", "Turn over left to right", "Turn over top to bottom", "Save as abbreviation…"]);
+    const held = { standing: "ready" as const, shown: true, maps: 3, chosen: 0, onShow: none, onOther: none, onExport: none };
+    expect(menu(target({ kind: "atom", id: 1 }), { pageMap: { held } }).listed).toEqual(["Unpaired electron", "Hide atom map", "Other map", "Export reaction in 3D…", "Select this structure"]);
+    expect(menu(target({ kind: "atom", id: 1 }), { pageMap: { held: { ...held, shown: false, maps: 1 } } }).listed).toEqual(["Unpaired electron", "Show atom map", "Export reaction in 3D…", "Select this structure"]);
+    // (partial: shown, the atoms not paired named, its export said to need them all; of a structure edited since: said, and made again)
+    expect(menu(target({ kind: "bond", id: 2 }), { pageMap: { held: { ...held, standing: "incomplete", maps: 1, unpaired: "Not mapped: O of Before" } } }).listed).toEqual([
+      "Hide atom map",
+      "Not mapped: O of Before",
+      "Export reaction in 3D… (needs every atom mapped)",
+      "Select this structure",
+    ]);
+    expect(menu(target({ kind: "bond", id: 2 }), { pageMap: { held: { ...held, standing: "changed", onAgain: none } } }).listed).toEqual(["Atom map of the structure before its edit", "Map again", "Select this structure"]);
+  });
+
+  it("offers a map's conformers paired, the line saying how many", () => {
+    const held = { standing: "ready" as const, shown: true, maps: 1, chosen: 0, onShow: none, onOther: none, onExport: none, conformers: ["Conformers: 6 × 3 = 18 pairs"], pair: { name: "Pair conformers: 6 × 3 = 18 pairs", run: none } };
+    expect(menu(target({ kind: "atom", id: 1 }), { pageMap: { held } }).listed).toEqual(["Unpaired electron", "Hide atom map", "Export reaction in 3D…", "Conformers: 6 × 3 = 18 pairs", "Pair conformers: 6 × 3 = 18 pairs", "Select this structure"]);
+    // (paired: its export says how many it writes, and no pairing offered again)
+    const { pair: _pair, ...paired } = { ...held, paired: 18 };
+    expect(menu(target({ kind: "atom", id: 1 }), { pageMap: { held: paired } }).listed).toEqual(["Unpaired electron", "Hide atom map", "Export reaction in 3D… (18 pairs of conformers)", "Conformers: 6 × 3 = 18 pairs", "Select this structure"]);
+  });
+
+  it("offers a complete map renumbered, and says a partial one needs every atom mapped", () => {
+    const held = { standing: "ready" as const, shown: true, maps: 1, chosen: 0, onShow: none, onOther: none, onRenumber: none, onExport: none };
+    expect(menu(target({ kind: "atom", id: 1 }), { pageMap: { held } }).listed).toEqual(["Unpaired electron", "Hide atom map", "Renumber atoms", "Export reaction in 3D…", "Select this structure"]);
+    expect(menu(target({ kind: "atom", id: 1 }), { pageMap: { held: { ...held, standing: "incomplete" } } }).listed).toContain("Renumber atoms (needs every atom mapped)");
+  });
+
+  it("says on a mapped structure how many conformer pairs its sides make, and those not numbered", () => {
+    const held = { standing: "ready" as const, shown: true, maps: 1, chosen: 0, onShow: none, onOther: none, onExport: none, conformers: ["Conformers: 6 × 3 = 18 pairs", "Not numbered: 1 of 6 conformers of Before"] };
+    expect(menu(target({ kind: "atom", id: 1 }), { pageMap: { held } }).listed).toEqual(["Unpaired electron", "Hide atom map", "Export reaction in 3D…", "Conformers: 6 × 3 = 18 pairs", "Not numbered: 1 of 6 conformers of Before", "Select this structure"]);
+  });
+
+  it("offers the structures selected made one, and one of several parts taken apart", () => {
+    const here = { ...target({ selection: "here", drawing: true }), kind: "atom" as const, id: 1 };
+    expect(menu(here, { parts: { onJoin: none } }).listed[0]).toBe("Make one structure");
+    expect(menu(target({ kind: "atom", id: 1 }), { parts: { onSeparate: none } }).listed).toEqual(["Unpaired electron", "Separate", "Select this structure"]);
+  });
+
   it("offers a record of a stack of drawings its stack laid out as a grid - or, laid out, stacked again", () => {
     expect(menu(target({ kind: "atom", id: 1 }), { records: { spread: false, run: none } }).listed).toEqual(["Unpaired electron", "Select this structure", "Lay out as a grid"]);
     expect(menu(target({ kind: "bond", id: 2 }), { records: { spread: true, run: none } }).listed).toEqual(["Select this structure", "Stack again"]);
@@ -133,6 +219,16 @@ describe("the right-click menu", () => {
     expect(menu(target({ kind: "pdf", id: 1 }), { pdf: { ...spread, onRows: none } }).listed).toEqual(expect.arrayContaining(["Gather pages", "Put pages in rows"]));
   });
 
+  it("offers to print a PDF - and where its author does not allow it, says so beside the command, which cannot be pressed", () => {
+    const pdf = { spread: false, icon: false, onSpread: none, onIcon: none, onRead: none, onNumbers: none, onPages: none, onSave: none, onPrint: none };
+    const allowed = menu(target({ kind: "pdf", id: 1 }), { pdf });
+    expect(allowed.listed.slice(allowed.listed.indexOf("Save as PDF…"))).toEqual(["Save as PDF…", "Print…"]);
+    expect(allowed.html).not.toMatch(/<button[^>]*disabled=""[^>]*><span>Print…/);
+    const refused = menu(target({ kind: "pdf", id: 1 }), { pdf: { ...pdf, printNot: true } });
+    expect(refused.listed).toContain("Print… (its author does not allow printing)");
+    expect(refused.html).toMatch(/<button[^>]*disabled=""[^>]*><span>Print… \(its author does not allow printing\)/);
+  });
+
   it("offers a new PDF from a PDF - its pages numbered, or arranged - and it written to a file; several selected, made one", () => {
     const pdf = { spread: false, icon: false, onSpread: none, onIcon: none, onRead: none, onNumbers: none, onPages: none, onSave: none };
     const one = menu(target({ kind: "pdf", id: 1 }), { pdf });
@@ -142,12 +238,19 @@ describe("the right-click menu", () => {
     expect(one.html).toMatch(/role="separator"[^>]*><\/div><button[^>]*><span>Page numbers…/);
     const two = menu(target({ kind: "pdf", id: 1 }), { pdf, onCombinePdfs: none });
     expect(two.listed.slice(two.listed.indexOf("Page numbers…"))).toEqual(["Page numbers…", "Pages…", "Combine into one PDF", "Save as PDF…"]);
+    // (printing is offered where the PDF's pages can be printed)
+    expect(one.listed).not.toContain("Print…");
   });
 
-  it("offers words' size, bold, italic and a list among their icons - ticked as they are - and how their lines lie listed", () => {
-    const words = { onFont: none, bold: true, italic: false, list: false, onBold: none, onItalic: none, onList: none, onSup: none, onSub: none };
+  it("offers words' bold, italic and a list among their icons - ticked as they are - their size, line spacing and typeface under them, and how their lines lie listed", () => {
+    const font = <div aria-label="Font rows">rows</div>;
+    const words = { font, bold: true, italic: false, list: false, onBold: none, onItalic: none, onList: none, onSup: none, onSub: none };
     const { icons, listed, html } = menu(target({ kind: "caption", id: 1 }), { captionAlign: { now: "right", set: none }, words, onColour: none });
-    expect(icons).toEqual(["Edit text", "Font…", "Bold", "Italic", "Bullets", "Colour…", "Delete text"]);
+    expect(icons).toEqual(["Edit text", "Bold", "Italic", "Bullets", "Colour…", "Delete text"]);
+    // (the font in the menu itself, under the icons and above the list: no card to open first)
+    const at = (s: string) => html.indexOf(s);
+    expect(at('aria-label="Font rows"')).toBeGreaterThan(at('aria-label="Frequent"'));
+    expect(at('aria-label="Font rows"')).toBeLessThan(at("Align left"));
     expect(listed).toEqual(["Align left", "Align centre", "Align right", "Justify", "Superscript", "Subscript"]);
     // (their keys named by what they give - + and = - not where they lie, which a keyboard decides)
     expect(html).toMatch(/Superscript<\/span>[\s\S]*?<kbd[^>]*>(Ctrl\+\+|⌘\+)<\/kbd>/);
@@ -271,6 +374,20 @@ describe("a set's menu", () => {
     expect(menu(set, { keepInFile: { kept: true, set: none } }).listed).not.toContain("Open as a table");
   });
 
+  it("offers a result set wired on - held off the page, or shown - to be shown on the page, first; and no other set", () => {
+    const set = target({ kind: "set", id: 4 });
+    expect(menu(set, { shownOnPage: { shown: false, set: none }, onOpenAsTable: none }).listed.slice(0, 2)).toEqual(["Show on the page", "Open as a table"]);
+    expect(menu(set).listed).not.toContain("Show on the page");
+  });
+
+  it("offers on a wire from a result set held off the page to show its results, and Delete wire still", () => {
+    const wire = target({ kind: "wire", id: 9 });
+    const held = menu(wire, { shownOnPage: { shown: false, set: none } });
+    expect([...held.listed, ...held.icons]).toEqual(expect.arrayContaining(["Show its results on the page", "Delete wire"]));
+    const plain = menu(wire);
+    expect([...plain.listed, ...plain.icons]).not.toContain("Show its results on the page");
+  });
+
   it("says what goes with a set that holds its molecules itself, before it is deleted", () => {
     const set = target({ kind: "set", id: 7 });
     // (in words, listed - not an icon whose name shows only on hover)
@@ -278,5 +395,40 @@ describe("a set's menu", () => {
     expect([own.icons, own.listed[own.listed.length - 1]]).toEqual([[], "Delete set and the 118 molecules it holds"]);
     const plain = menu(set);
     expect([plain.icons, plain.listed.some((n) => n.includes("it holds"))]).toEqual([["Delete set"], false]);
+  });
+});
+
+describe("an arrow's menu and its atom map", () => {
+  const arrowMenu = (atomMap?: object) =>
+    menu(target({ kind: "arrow", id: 1 }), {
+      arrow: {
+        kind: null,
+        setKind: none,
+        heads: 1,
+        setHeads: none,
+        full: false,
+        setFull: none,
+        dash: false,
+        setDash: none,
+        weight: "regular",
+        setWeight: none,
+        ...(atomMap ? { atomMap } : {}),
+      } as never,
+    });
+  const map = (over: object = {}) => ({ standing: "none", shown: false, maps: 0, chosen: 0, onMake: none, onShow: none, onOther: none, onExport: none, ...over });
+
+  it("makes the map of an arrow that means a reaction, and has none for one that does not", () => {
+    expect(arrowMenu(map()).listed).toContain("Atom map");
+    // (an arrow that means none is given no map at all: its menu has no such row - nothing disabled to teach a rule)
+    expect(arrowMenu().listed).not.toContain("Atom map");
+  });
+
+  it("says a map from before is not a reaction's now, and takes it off - nothing else of it", () => {
+    const listed = arrowMenu(map({ standing: "refused", onRemove: none })).listed;
+    expect(listed).toContain("Not a reaction now");
+    expect(listed).toContain("Remove map");
+    expect(listed).not.toContain("Atom map");
+    expect(listed).not.toContain("Hide atom map");
+    expect(listed).not.toContain("Show atom map");
   });
 });

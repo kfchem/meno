@@ -58,6 +58,7 @@ vi.mock("../../../../lib/calc/workers", async (actual) => ({
 vi.mock("../../../../lib/roles/worker", async (actual) => ({
   ...(await actual<typeof import("../../../../lib/roles/worker")>()),
   pluginWorker: async () => chem,
+  chemWorker: async () => chem,
 }));
 
 import { connectStoreToDocument, createEditorStore } from ".";
@@ -72,6 +73,7 @@ import { readMolfile } from "../../../../lib/chem/ctfile";
 import { setEntries, setMembers, type SetEntry } from "../workflow/entries";
 import { resultOf } from "../workflow/flow";
 import { KINDS, MENO_DOES, kindInfo, takesNothing, type SetKind, type StepKind, isSetKind } from "../workflow/kinds";
+import { PAIRED } from "../workflow/meno";
 import { takesBy } from "../workflow/doers";
 import { pluginEntry, type PluginEntry } from "../workflow/programs";
 import { measured } from "../../../../testing/timeouts";
@@ -308,6 +310,8 @@ function readPrinted(_name: string, text: string) {
       atoms: atoms.map((a) => a[0]),
       frames: [atoms.flatMap((a) => a.slice(1).map(Number))],
       energies: [Number(lines[lines.length - 1].split(" ")[1])],
+      // (a stand-in's run ended where it should: an optimisation's said converged, as a reader of one finished says)
+      optimised: true,
       ...(saying ? { charge, multiplicity } : {}),
     },
     readers: ["stand-in 1"],
@@ -316,15 +320,15 @@ function readPrinted(_name: string, text: string) {
 
 const jobEntry = (e: PluginEntry): JobEntry => ({ elements: e.atoms.map((a) => a.el), xyz: e.atoms.flatMap((a) => [a.x, a.y, a.z]), charge: e.charge, multiplicity: e.multiplicity });
 
-/** How a plugin's collect answers, as its worker does: its own outputs (xtb's, CREST's, RDKit's), an output for Meno's readers (ORCA's, Gaussian's), or surfaces in cube files (NCI's). */
-const ANSWERS: Record<string, "outputs" | "read" | "surfaces"> = { xtb: "outputs", crest: "outputs", rdkit: "outputs", orca: "read", gaussian: "read", nciplot: "surfaces", multiwfn: "surfaces" };
+/** How a plugin's collect answers, as its worker does: its own outputs (Tightbind's, Confsweep's, Sketchkit's), an output for Meno's readers (Quanta's, Orbitron's), or surfaces in cube files (the NCI programs'). */
+const ANSWERS: Record<string, "outputs" | "read" | "surfaces"> = { tightbind: "outputs", confsweep: "outputs", sketchkit: "outputs", quanta: "read", orbitron: "read", ncigrid: "surfaces", densitool: "surfaces" };
 
 /**
  * A plugin's worker, as a stand-in that keeps its contract: one job for each
- * entry - but CREST's optimisation, one for the entries of each molecule
+ * entry - but Confsweep's optimisation, one for the entries of each molecule
  * (the same atoms, charge and multiplicity) - its input the entries as it
  * was given them; read back, its outputs say the charge and multiplicity of
- * the entries it is given (as xTB's and CREST's do; RDKit's never do).
+ * the entries it is given (as Tightbind's and Confsweep's do; Sketchkit's never do).
  */
 function worker(plugin: string) {
   const programOf = (step: string) => pluginById(plugin)!.steps.find((s) => s.kind === step)!.programs[0];
@@ -333,7 +337,7 @@ function worker(plugin: string) {
     prepare: async (step: string, entries: PluginEntry[]) => {
       asked.prepared.push({ plugin, step, entries });
       const groups: number[][] = [];
-      if (plugin === "crest" && step === "optimise") {
+      if (plugin === "confsweep" && step === "optimise") {
         const by = new Map<string, number[]>();
         entries.forEach((e, i) => {
           const key = `${e.atoms.map((a) => a.el).join(" ")}|${e.charge}|${e.multiplicity}`;
@@ -347,7 +351,7 @@ function worker(plugin: string) {
           program: programOf(step),
           args: [],
           files: [{ name: INPUT, text: JSON.stringify({ step, entries: g.map((i) => jobEntry(entries[i])) }) }],
-          ...(plugin === "gaussian" ? { stdin: INPUT } : {}),
+          ...(plugin === "orbitron" ? { stdin: INPUT } : {}),
           reads: [OUTPUT],
         })),
       };
@@ -367,7 +371,8 @@ function worker(plugin: string) {
           atoms: e.atoms.map((a) => a.el),
           frames: made[i].frames,
           energies: made[i].energies,
-          ...(saying && plugin !== "rdkit" ? { charge: e.charge, multiplicity: e.multiplicity } : {}),
+          optimised: true,
+          ...(saying && plugin !== "sketchkit" ? { charge: e.charge, multiplicity: e.multiplicity } : {}),
         })),
       };
     },
@@ -383,16 +388,16 @@ function worker(plugin: string) {
 /** The molblocks a conformer search on structures drawn was given. */
 const drawnAsked: string[] = [];
 /**
- * RDKit's worker, as a stand-in for its `conformers` role: the structure's
- * atoms, in the order they came, each its element and charge - as RDKit's
+ * Sketchkit's worker, as a stand-in for its `conformers` role: the structure's
+ * atoms, in the order they came, each its element and charge - as Sketchkit's
  * answer has them - its bonds, and two conformers with their energies; for
  * its `configurations` role, each molecule one with no stereo; and for its
- * `open_stereo`, each structure one that leaves none open.
+ * `stereo_elements`, each structure one with none that could be stereogenic.
  */
 const chem = {
   request: async (op: string, payload: { molblock: string; molblocks?: string[] }) => {
     if (op === "configurations") return { molecules: (payload.molblocks ?? []).map(() => ({ elements: [], key: "none" })) };
-    if (op === "open_stereo") return { atoms: [], bonds: [], isomers: 1 };
+    if (op === "stereo_elements") return { read: true, elements: [] };
     if (op !== "conformers") throw new Error(`no ${op} here`);
     drawnAsked.push(payload.molblock);
     const mol = readMolfile(payload.molblock)!;
@@ -404,7 +409,7 @@ const chem = {
           bonds: mol.bonds.map((b) => ({ a1: b.a1, a2: b.a2, order: b.type })),
           frames: [moved(xyz, 1), moved(xyz, 2)],
           energies: [-0.01, -0.009],
-          field: "MMFF94",
+          field: "KF1",
           cip: { atoms: {}, bonds: {} },
           chosen: { atoms: {}, bonds: {} },
           smiles: "",
@@ -418,15 +423,20 @@ const chem = {
 
 /**
  * Each kind of step and who fills it that takes molecules in 3D: every plugin the catalogue says fills it, and Meno.
- * Render gives pictures, and Chart and Energy diagram charts, which have no charge; a kind that takes nothing in (Generate) is given no
+ * Render gives pictures, Chart and Energy diagram charts, and Restraints a table of restraints, which have no charge; a kind that takes nothing in (Generate) is given no
  * entry to keep one of - the charges it gives are its own (stepRuns.test, *Generate*); Enumerate takes structures drawn
  * alone. Species sets them, as it is asked, and Combine makes the parts one complex, its charge and multiplicity theirs
- * together: each against its own known answers (lib/steps structures.test, workflow/structureSteps.test).
+ * together: each against its own known answers (lib/steps structures.test, workflow/structureSteps.test). Merge, Re-bond,
+ * Compare bonding and Torsion restraints take two inputs, which this wires one of: each against its own
+ * (workflow/pairedSteps.test) - Merge, Compare bonding and Torsion restraints give back the entries that came in, Re-bond its
+ * bonding entry's charge and multiplicity. Path search takes two too, each pair of one charge and spin or refused
+ * (workflow/pathSearch.test). Follow the reaction path reads back a path, never one geometry: its
+ * entry keeps the charge and multiplicity that came in (workflow/reactionPath.test).
  */
 const DOERS: readonly [StepKind, string][] = [
   ...PLUGINS.flatMap((p) => p.steps.map((s): [StepKind, string] => [s.kind, p.id])),
   ...MENO_DOES.map((k): [StepKind, string] => [k, "meno"]),
-].filter(([kind]) => kindInfo(kind).gives !== "pictures" && kindInfo(kind).gives !== "chart" && !takesNothing(kind) && kindInfo(kind).takes.some((h) => h !== "structures") && kind !== "species" && kind !== "combine");
+].filter(([kind]) => kindInfo(kind).gives !== "pictures" && kindInfo(kind).gives !== "chart" && kindInfo(kind).gives !== "table" && !takesNothing(kind) && kindInfo(kind).takes.some((h) => h !== "structures") && kind !== "species" && kind !== "mode-on-atoms" && kind !== "displace" && kind !== "combine" && !PAIRED.includes(kind) && kind !== "onto-structures" && kind !== "path-search" && kind !== "reaction-path" && kind !== "add" && kind !== "ensemble");
 
 /** The kind of set a step gives, for what it took. */
 const givesFor = (kind: StepKind, holds: SetKind): SetKind => {
@@ -498,6 +508,8 @@ async function trip(input: Input, chain: readonly [StepKind, string][], seed: nu
     // (a Tag named, and a Measure asked a distance every entry has: neither runs without)
     if (kind === "tag") st().updateStep(id, { options: { name: `t${i}` } });
     if (kind === "measure") st().updateStep(id, { options: { measurements: "1-2" } });
+    // (an Energy window given its window: it has no default to run with)
+    if (kind === "energy-window") st().updateStep(id, { options: { window: 3 } });
     st().connect(i ? { set: resultOf(st(), steps[i - 1])!.id } : { set }, id);
     steps.push(id);
   });
@@ -510,9 +522,9 @@ const SEEDS = 12;
 
 describe("a step keeps each entry's charge and multiplicity", () => {
   it("for every kind of step the catalogue has, and every plugin that fills one - and Meno's own", () => {
-    // (each kind Meno defines filled by something - left out here Render, Chart and Energy diagram, which give pictures and charts, Generate, given nothing, and those that take structures drawn alone, whose atoms are as drawn; Species and Combine change them by design, each tested on its own)
+    // (each kind Meno defines filled by something - left out here Render, Chart and Energy diagram, which give pictures and charts, Restraints, which gives a table of restraints, Generate, given nothing, and those that take structures drawn alone, whose atoms are as drawn; Species and Combine change them by design, each tested on its own; the kinds of two inputs - Merge, Re-bond, Compare bonding, Join, 3D results onto structures, Barrier - by their own tests; Number, given nothing; Add and Ensemble energy, which need values named, by their own tests, and change no atom; Reaction, which takes a reaction's two ends, tested on its own too; Displace, which needs vibrations, tested on its own too)
     const kinds = new Set(DOERS.map(([k]) => k));
-    expect(KINDS.filter((k) => !kinds.has(k.kind)).map((k) => k.kind)).toEqual(["generate", "render", "check-structures", "stereoisomers", "descriptors", "enumerate", "chart", "energy-diagram", "species", "combine"]);
+    expect(KINDS.filter((k) => !kinds.has(k.kind)).map((k) => k.kind)).toEqual(["generate", "path-search", "reaction-path", "render", "check-structures", "stereoisomers", "descriptors", "enumerate", "chart", "energy-diagram", "species", "combine", "mode-on-atoms", "merge", "rebond", "compare-bonding", "join", "onto-structures", "barrier", "restraints", "torsion-restraints", "compare-torsions", "number", "add", "atom-map", "displace", "ensemble"]);
     expect(DOERS.length).toBeGreaterThanOrEqual(19);
   });
 
@@ -534,7 +546,7 @@ describe("a step keeps each entry's charge and multiplicity", () => {
     expect(problems).toEqual([]);
     // (the plugin asked, with entries - and what said their charge and multiplicity back looked at)
     if (by !== "meno") expect(asked.prepared.length + asked.ran.length).toBeGreaterThan(was.prepared + was.ran);
-    if (["xtb", "crest", "orca", "gaussian"].includes(by)) expect(calcsSaid).toBeGreaterThan(was.calcs);
+    if (["tightbind", "confsweep", "quanta", "orbitron"].includes(by)) expect(calcsSaid).toBeGreaterThan(was.calcs);
   });
 
   it("through chains of steps, whoever does each", async () => {
@@ -571,7 +583,7 @@ function drawn(s: Species, x: number, y: number, id: number): { atoms: Atom[]; b
 }
 
 describe("a conformer search on structures drawn keeps each one's charge and multiplicity", () => {
-  it("in what RDKit is given, and in the conformers it gives", async () => {
+  it("in what Sketchkit is given, and in the conformers it gives", async () => {
     const problems: string[] = [];
     const cases = [...HARD, ...Array.from({ length: SEEDS }, (_, k) => {
       const rng = random(31 * (k + 1));
@@ -593,7 +605,7 @@ describe("a conformer search on structures drawn keeps each one's charge and mul
       });
       const { st } = storeOf(doc);
       const set = st().addSet({ x0: -500, y0: -50, x1: -10, y1: 50 });
-      const step = st().addStep("conformers", "rdkit", 0, 0);
+      const step = st().addStep("conformers", "sketchkit", 0, 0);
       st().connect({ set }, step);
       await st().runStep(step);
       const tag = `[${names.join(", ")}]`;
@@ -601,14 +613,14 @@ describe("a conformer search on structures drawn keeps each one's charge and mul
       if (!ran?.ok) problems.push(`it did not run: ${ran?.said} ${tag}`);
       // what it was given: each structure's atoms in its molblock, their charges and radicals the drawing's - so its charge and multiplicity
       const marks = (atoms: readonly { el: string; charge?: number; radical?: Radical }[]) => atoms.map((a) => `${a.el}${a.charge ?? 0}${a.radical ?? ""}`).join(" ");
-      if (drawnAsked.length !== names.length) problems.push(`RDKit was asked about ${drawnAsked.length} of ${names.length} structures ${tag}`);
+      if (drawnAsked.length !== names.length) problems.push(`Sketchkit was asked about ${drawnAsked.length} of ${names.length} structures ${tag}`);
       for (const block of drawnAsked) {
         const mol = readMolfile(block)!;
         const atoms = mol.atoms.map((a) => ({ el: a.symbol, x: a.x, y: a.y, z: a.z, ...(a.charge ? { charge: a.charge } : {}), ...(a.radical ? { radical: a.radical } : {}) }));
         const s = names.map(species).find((x) => marks(x.atoms) === marks(atoms));
         const known = knownOf({ atoms, bonds: [] });
-        if (!s) problems.push(`RDKit was given a structure unlike any drawn: ${marks(atoms)} ${tag}`);
-        else if (known.charge !== s.charge || known.multiplicity !== s.multiplicity) problems.push(`RDKit was given ${s.name} with charge ${known.charge}, multiplicity ${known.multiplicity} ${tag}`);
+        if (!s) problems.push(`Sketchkit was given a structure unlike any drawn: ${marks(atoms)} ${tag}`);
+        else if (known.charge !== s.charge || known.multiplicity !== s.multiplicity) problems.push(`Sketchkit was given ${s.name} with charge ${known.charge}, multiplicity ${known.multiplicity} ${tag}`);
       }
       // what it gave: each structure's conformers, a molecule in 3D of the drawing it was made from
       const made = resultOf(st(), step);

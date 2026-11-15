@@ -1,12 +1,13 @@
-import { singleClickPatch } from "../utils/bondKinds";
+import { bondKeyOf } from "../utils/bondKinds";
+import { longPressMs } from "../longPress";
 import * as THREE from "three";
 import { pageAt } from "../utils/page";
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { useThree } from "@react-three/fiber";
 import { pressMovedUnder } from "./viewGoal";
 import { useEditor, useEditorStore } from "../store";
-import { DOUBLE_CLICK_MS, LONG_PRESS_MS, MOV_PX } from "../constants";
+import { DOUBLE_CLICK_MS, MOV_PX } from "../constants";
 import { pressOnBond, type BondPress } from "../utils/clickCount";
 import { dragSelection } from "../utils/dragSelection";
 import { onChord } from "../utils/press";
@@ -18,19 +19,62 @@ import { bondLengthFrom } from "../utils/magnified";
 export default function BondsPick2D() {
   const { camera, gl } = useThree();
   const store = useEditorStore();
-  const toWorld = (cx: number, cy: number) => {
-    const rect = gl.domElement.getBoundingClientRect();
-    const v = new THREE.Vector3(((cx - rect.left) / rect.width) * 2 - 1, -(((cy - rect.top) / rect.height) * 2 - 1), 0);
-    const p = pageAt(v.x, v.y, camera);
-    return { x: p.x, y: p.y };
-  };
+  const toWorld = useCallback(
+    (cx: number, cy: number) => {
+      const rect = gl.domElement.getBoundingClientRect();
+      const v = new THREE.Vector3(((cx - rect.left) / rect.width) * 2 - 1, -(((cy - rect.top) / rect.height) * 2 - 1), 0);
+      const p = pageAt(v.x, v.y, camera);
+      return { x: p.x, y: p.y };
+    },
+    [camera, gl],
+  );
+  // a bond key with the pointer on a bond (docs/EDITOR-2D.md, *Bond keys*): 1, 2, 3 - not while a label or any field is typed
+  // in, nor while a button is held (a drag going on: the bond under it is the gesture's); with the pointer on an atom, on no bond,
+  // the key goes on a chain from it: one bond of that order out of the atom (`bondOut`, as a click with Option held), the new
+  // atom the one the next key goes on from
+  const at = useRef({ x: 0, y: 0 });
+  useEffect(() => {
+    let held = 0;
+    const onDown = () => void held++;
+    const onUp = () => void (held = 0);
+    const onMove = (e: PointerEvent) => void (at.current = { x: e.clientX, y: e.clientY });
+    const onKeyDown = (e: KeyboardEvent) => {
+      const key = bondKeyOf(e);
+      if (key == null || held) return;
+      const s = store.getState();
+      const id = s.hovered.bondId;
+      const atom = s.hovered.atomId;
+      if ((id == null && atom == null) || s.labelEdit.active) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable || t.dataset.textField != null)) return;
+      e.preventDefault();
+      if (id != null) {
+        s.bondKey(id, key);
+        return;
+      }
+      const end = s.bondOut(atom!, toWorld(at.current.x, at.current.y), key);
+      if (end != null) s.setHoveredFromId(end);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("pointermove", onMove, true);
+    window.addEventListener("pointerdown", onDown, true);
+    window.addEventListener("pointerup", onUp, true);
+    window.addEventListener("pointercancel", onUp, true);
+    window.addEventListener("blur", onUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("pointermove", onMove, true);
+      window.removeEventListener("pointerdown", onDown, true);
+      window.removeEventListener("pointerup", onUp, true);
+      window.removeEventListener("pointercancel", onUp, true);
+      window.removeEventListener("blur", onUp);
+    };
+  }, [store, toWorld]);
   const {
     model,
     setHoveredFromId,
     clearBondHover,
     moveDrag,
-    updateBond,
-    setBondDoubleMode,
     beginPanHold,
     endPanHold,
     suppressDoubleClick,
@@ -74,118 +118,6 @@ export default function BondsPick2D() {
   const CLICK_MS = 350;
   const SINGLE_DELAY_MS = 200;
   const TRIPLE_GRACE_MS = 180;
-
-  function applySingleCycle(b: (typeof model.bonds)[number]) {
-    if (b.order === 3) {
-      updateBond(b.id, { order: 2 as any, doubleMode: "auto" });
-      return;
-    }
-    if (b.order === 2) {
-      updateBond(b.id, {
-        order: 1 as any,
-        stereo: (b.stereo ?? "none") as any,
-      });
-      return;
-    }
-    updateBond(b.id, singleClickPatch(b));
-  }
-  function applyDoubleCycle(b: (typeof model.bonds)[number]) {
-    if (b.order !== 2) {
-      updateBond(b.id, {
-        order: 2 as any,
-        doubleMode: "auto",
-        stereo: "none" as any,
-      });
-      return;
-    }
-    type DM = "auto" | "left" | "center" | "right";
-    const dm = ((b as any).doubleMode ?? "auto") as DM;
-    const effAuto = (() => {
-      const a1 = model.atoms.find((a) => a.id === b.a);
-      const a2 = model.atoms.find((a) => a.id === b.b);
-      if (!a1 || !a2) return "center" as const;
-      const dx = a2.x - a1.x,
-        dy = a2.y - a1.y;
-      const L0 = Math.hypot(dx, dy);
-      const dirx = L0 > 1e-9 ? dx / L0 : 1;
-      const diry = L0 > 1e-9 ? dy / L0 : 0;
-      const nx = -diry,
-        ny = dirx;
-      const EPS = Math.max(1e-4, L0 * 0.06);
-      let plus = 0,
-        minus = 0;
-      for (const bb of model.bonds) {
-        if (bb.id === b.id) continue;
-        if (bb.a === a1.id || bb.b === a1.id) {
-          const other = bb.a === a1.id ? bb.b : bb.a;
-          if (other === a2.id) continue;
-          const pa = model.atoms.find((x) => x.id === other);
-          if (!pa) continue;
-          const sx = pa.x - a1.x,
-            sy = pa.y - a1.y;
-          const s = sx * nx + sy * ny;
-          if (s > EPS) plus++;
-          else if (s < -EPS) minus++;
-        }
-        if (bb.a === a2.id || bb.b === a2.id) {
-          const other = bb.a === a2.id ? bb.b : bb.a;
-          if (other === a1.id) continue;
-          const pb = model.atoms.find((x) => x.id === other);
-          if (!pb) continue;
-          const sx = pb.x - a2.x,
-            sy = pb.y - a2.y;
-          const s = sx * nx + sy * ny;
-          if (s > EPS) plus++;
-          else if (s < -EPS) minus++;
-        }
-      }
-      if (plus === minus) return "center" as const;
-      return plus > minus ? ("left" as const) : ("right" as const);
-    })();
-
-    const currentEff = dm === "auto" ? effAuto : dm;
-    let cands: DM[] = [];
-    if (effAuto === "left") {
-      if (dm === "auto")
-        cands = ["center", "right", "left"]; // auto->center->right->...
-      else if (dm === "left")
-        cands = ["center", "right", "auto"]; // left->center
-      else if (dm === "center")
-        cands = ["right", "auto", "left"]; // center->right
-      else if (dm === "right") cands = ["auto", "left", "center"]; // right->auto
-    } else if (effAuto === "right") {
-      if (dm === "auto")
-        cands = ["center", "left", "right"]; // auto->center->left->...
-      else if (dm === "right")
-        cands = ["center", "left", "auto"]; // right->center
-      else if (dm === "center")
-        cands = ["left", "auto", "right"]; // center->left
-      else if (dm === "left") cands = ["auto", "right", "center"]; // left->auto
-    } else {
-      // effAuto === "center"
-      if (dm === "auto")
-        cands = ["left", "right", "center"]; // auto->left(or right)
-      else if (dm === "center")
-        cands = ["right", "left", "auto"]; // prefer center->right
-      else if (dm === "left")
-        cands = ["right", "auto", "center"]; // left->right
-      else if (dm === "right") cands = ["left", "auto", "center"]; // right->left
-    }
-    for (const cand of cands) {
-      const candEff = cand === "auto" ? effAuto : cand;
-      if (candEff !== currentEff) {
-        setBondDoubleMode(b.id, cand as any);
-        return;
-      }
-    }
-    setBondDoubleMode(
-      b.id,
-      dm === "right" ? ("left" as any) : ("right" as any)
-    );
-  }
-  function applyTriple(b: (typeof model.bonds)[number]) {
-    updateBond(b.id, { order: 3 as any, stereo: "none" });
-  }
 
   const { atoms, bonds } = model;
   // (what each hit area was placed from: a bond whose bond and atoms are the
@@ -343,7 +275,7 @@ export default function BondsPick2D() {
               store.getState().suppressDoubleClick(DOUBLE_CLICK_MS);
               endPanHold(ev.pointerId ?? pid);
             });
-          }, LONG_PRESS_MS);
+          }, longPressMs());
           // (another button pressed with it: no press at all, nor a click of the bond's - utils/press#onChord)
           const offChord = onChord(1, () => {
             letGo();
@@ -425,10 +357,11 @@ export default function BondsPick2D() {
           st.timer = null;
         }
         if (st.count === 1) {
+          // A click: the bond selected, alone, at once - it never changes the compound (the maintainer, 2026-11-14); a
+          // double-click's second click then makes it double, the bond staying selected (docs/EDITOR-2D.md, *How it is worked*)
+          store.getState().bondClicked(b.id, 1);
           const delay1 = SINGLE_DELAY_MS;
           st.timer = window.setTimeout(() => {
-            const bond = model.bonds.find((x) => x.id === st.bondId!);
-            if (bond) applySingleCycle(bond);
             try {
               if (st.pointerId != null) endPanHold(st.pointerId);
               else endPanHold(null);
@@ -443,8 +376,7 @@ export default function BondsPick2D() {
             st.graceUntil = null;
           }, delay1) as unknown as number;
         } else if (st.count === 2) {
-          const bond = model.bonds.find((x) => x.id === st.bondId!);
-          if (bond) applyDoubleCycle(bond);
+          store.getState().bondClicked(st.bondId!, 2);
           st.graceUntil = now + TRIPLE_GRACE_MS;
           if (st.graceTimer != null) {
             window.clearTimeout(st.graceTimer);
@@ -465,8 +397,7 @@ export default function BondsPick2D() {
             st.graceTimer = null;
           }, TRIPLE_GRACE_MS) as unknown as number;
         } else if (st.count >= 3) {
-          const bond = model.bonds.find((x) => x.id === st.bondId!);
-          if (bond) applyTriple(bond);
+          store.getState().bondClicked(st.bondId!, 3);
           if (st.graceTimer != null) {
             window.clearTimeout(st.graceTimer);
             st.graceTimer = null;
