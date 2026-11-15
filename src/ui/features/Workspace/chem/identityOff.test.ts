@@ -1,10 +1,10 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { identity, identityKeyOf } from "../../../../lib/chem/identity";
 import { NOT_YET } from "../../../../lib/table";
 import { drawnFromSmiles } from "../utils/smilesDrawn";
 import { drawnHash, recordNow, whenDrawnKnown } from "../workflow/entries";
 import { identityInputOf, labelsDrawnOut } from "./identityOf";
-import { constitutionKnown, forgetIdentities, identitiesAsked, identityKnown, IN_PLACE_MOST, useIdentitiesAnswered } from "./identityOff";
+import { ANSWER_MOST_MS, constitutionKnown, forgetIdentities, identitiesAsked, identityKnown, IN_PLACE_MOST, useIdentitiesAnswered } from "./identityOff";
 
 // Identities worked out off the drawing thread (./identityOff): a worker stood in for by one that answers later, on a timer, as a
 // real one answers after the drawing thread has gone on - what the drawing thread does in the meantime is what is tested.
@@ -85,6 +85,25 @@ describe("a worker that cannot answer", () => {
     await answered();
     expect(identityKnown(identityInputOf(m).input)).toEqual(identity(identityInputOf(m).input));
     expect(recordNow(record, m, ids)?.properties).toBeUndefined();
+  });
+
+  it("nor where it never answers: past the bound, worked out here", async () => {
+    vi.useFakeTimers();
+    try {
+      (globalThis as { Worker?: unknown }).Worker = class {
+        onmessage = null;
+        onerror = null;
+        postMessage() {}
+        terminate() {}
+      };
+      forgetIdentities();
+      const input = identityInputOf(drawnFromSmiles(TOLYL)).input;
+      const asked = identitiesAsked([input]);
+      await vi.advanceTimersByTimeAsync(ANSWER_MOST_MS + 1);
+      expect(await asked).toEqual([identity(input)]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("nor where it cannot be made at all", async () => {

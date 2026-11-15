@@ -21,6 +21,12 @@ export type Found = { text: string; complete: boolean };
  */
 export const IN_PLACE_MOST = 16;
 
+/**
+ * How long the worker is waited on for one answer before it is taken for none and the identity worked out in place: well past
+ * what the largest structures asked of it take (Pd(PPh3)4, a few seconds), so that it is only a worker that has stopped.
+ */
+export const ANSWER_MOST_MS = 60_000;
+
 /** How many answers are kept; past them, all are let go and asked again as needed. */
 const KEPT = 4096;
 
@@ -73,17 +79,28 @@ export function identityAsked(input: IdentityInput): Promise<Found> {
   if (going) return going;
   // (where the worker cannot answer - not made, stopped, or failing on it - worked out here instead, after the task at hand:
   //  late, never left pending with no end, nor a record of another structure kept as this one's)
-  const here = () => new Promise<Found>((done) => setTimeout(() => done(identity(input)), 0));
+  const here = (why: unknown) => {
+    // (kept for whoever looks: why the drawing thread worked one out)
+    console.warn("an identity worked out in place: the identity worker did not answer -", why instanceof Error ? why.message : String(why));
+    return new Promise<Found>((done) => setTimeout(() => done(identity(input)), 0));
+  };
   const answer =
     typeof Worker === "undefined"
       ? Promise.resolve().then(() => identity(input))
       : new Promise<Found>((done, fail) => {
           const id = ++asked;
-          waiting.set(id, { done, fail });
+          // (no answer within ANSWER_MOST_MS: taken for none)
+          const late = setTimeout(() => {
+            waiting.delete(id);
+            fail(new Error(`no answer in ${ANSWER_MOST_MS / 1000} s`));
+          }, ANSWER_MOST_MS);
+          const settle = <T>(f: (v: T) => void) => (v: T) => (clearTimeout(late), f(v));
+          waiting.set(id, { done: settle(done), fail: settle(fail) });
           try {
             started().postMessage({ id, input });
           } catch (e) {
             waiting.delete(id);
+            clearTimeout(late);
             fail(e instanceof Error ? e : new Error(String(e)));
           }
         }).catch(here);
