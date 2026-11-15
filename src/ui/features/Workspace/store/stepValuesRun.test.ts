@@ -121,6 +121,15 @@ describe("a step with no options of its own, run", () => {
     expect(given.find((g) => g.kind === "enumerate")?.own).toMatchObject({ way: "rgroups", lists: "R1: C" });
   });
 
+  it("Enumerate: said to be running from the moment it starts, its products made in their worker, and no longer once done", async () => {
+    settings("enumerate", { way: "rgroups", lists: "R1: C" });
+    const { st, step } = page("enumerate", { drawn: true });
+    const running = st().runStep(step);
+    expect(st().menoWorking[step]).toMatchObject({ total: 0, done: 0 });
+    await running;
+    expect(st().menoWorking[step]).toBeUndefined();
+  });
+
   it("Atom map: planned with Settings' values", async () => {
     settings("atom-map", { reference: "property", property: "tag" });
     const { st, step } = page("atom-map", { second: "reference" });

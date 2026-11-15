@@ -383,6 +383,21 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
    * its valence was checked and by what - never claiming a check not made.
    */
   async function enumerateChecked(id: number, at: number): Promise<void> {
+    // (said to be running at once - its valence checked, its products made in their worker - so that Stop is seen to be
+    //  offered from the first moment: a clock until its products are counted, `leftOpen`'s count after)
+    set((prev) => ({ ...prev, menoWorking: { ...prev.menoWorking, [id]: { since: at, total: 0, done: 0 } } }));
+    try {
+      await enumerateMade(id, at);
+    } finally {
+      set((prev) => {
+        const rest = { ...prev.menoWorking };
+        delete rest[id];
+        return { ...prev, menoWorking: rest };
+      });
+    }
+  }
+
+  async function enumerateMade(id: number, at: number): Promise<void> {
     const d = doc.getState();
     const step = stepOf(d, id)!;
     const key = inputKey(d, step, "meno");
