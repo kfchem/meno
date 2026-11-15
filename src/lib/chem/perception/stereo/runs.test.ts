@@ -70,12 +70,40 @@ describe("what a run goes on through", () => {
     expect(shown(g, "twoDoubles")).toEqual([{ atoms: [0, 1, 2], doubles: 2, odd: false }]);
   });
 
+  it("an atom of three double bonds is no middle by any rule: a run goes on through two", () => {
+    // (C=S(=C)=O, a sulfur with three double bonds)
+    const g: RunGraph = { atoms: [{ el: "C" }, { el: "S" }, { el: "C" }, { el: "O" }], bonds: [{ a: 0, b: 1, order: 2 }, { a: 1, b: 2, order: 2 }, { a: 1, b: 3, order: 2 }] };
+    expect(shown(g, "bondedByTwo")).toEqual([]);
+    expect(shown(g, "twoDoubles")).toEqual([]);
+  });
+
+  it("a run starts at a double bond only, not at a single bond into its middle (the CIP marks' rule, whose middle may have one)", () => {
+    // (a methyl, atom 0, on the middle of the allene 1=2=3)
+    const g: RunGraph = { atoms: [{ el: "C" }, { el: "C" }, { el: "C" }, { el: "C" }], bonds: [{ a: 1, b: 2, order: 2 }, { a: 2, b: 3, order: 2 }, { a: 0, b: 2, order: 1 }] };
+    expect(shown(g, "twoDoubles")).toEqual([{ atoms: [1, 2, 3], doubles: 2, odd: false }]);
+  });
+
+  it("a bond listed twice is one bond", () => {
+    const once = chain(["C", "C", "C", "C", "C"], [1, 2, 2, 1]);
+    const twice = { ...once, bonds: [...once.bonds, { a: 2, b: 1, order: 2 }] };
+    expect(shown(twice)).toEqual(shown(once));
+  });
+
   it("the run a double bond is in, from whichever of its bonds: a butatriene's middle bond gives the whole run", () => {
     const runs = runsOf(chain(["C", "C", "C", "C", "C", "C"], [1, 2, 2, 2, 1]));
     for (const [a, b] of [[1, 2], [2, 3], [3, 2], [4, 3]]) expect(runs.of(a, b).atoms).toEqual([1, 2, 3, 4]);
     expect(runs.of(2, 3).odd).toBe(true);
     // (a plain double bond's run is itself)
     expect(runsOf(chain(["C", "C", "C"], [1, 2])).of(2, 1)).toEqual({ atoms: [1, 2], doubles: 1, odd: true });
+  });
+
+  it("an end with a second bond of order two or more besides the double bond: a double's, or a triple's (an azide's middle N)", () => {
+    // (C=C=C: the middle's other double bond; C=N=N with its N=N as a triple; a lone C=C has none)
+    expect(runsOf(chain(["C", "C", "C"], [2, 2])).cumulatedAt(1, 0)).toBe(true);
+    expect(runsOf(chain(["C", "N", "N"], [2, 3])).cumulatedAt(1, 0)).toBe(true);
+    const lone = runsOf(chain(["C", "C", "C", "C"], [1, 2, 1]));
+    expect(lone.cumulatedAt(1, 2)).toBe(false);
+    expect(lone.cumulatedAt(2, 1)).toBe(false);
   });
 
   it("from an end on: the atoms through the run to its far end", () => {
