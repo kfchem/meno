@@ -268,7 +268,6 @@ export default function QuickAdd({
   }, [onClose, leaving]);
   // (a key typed with no icon chosen: the SMILES field opens with it - typing is what a first-time chemist tries - an input
   //  method's composing there: ./quickAddLeave `typedIntoQuickAdd`)
-  const field = useRef<HTMLInputElement>(null);
   const [seed, setSeed] = useState<{ text: string; n: number } | null>(null);
   useEffect(() => {
     if (leaving || wired) return;
@@ -280,8 +279,8 @@ export default function QuickAdd({
         e.preventDefault();
         setSeed((s) => ({ text: what.seed, n: (s?.n ?? 0) + 1 }));
       }
+      // (the field takes the focus as it opens: SmilesField's own effect - it is inert until then)
       setOpen("smiles");
-      field.current?.focus();
     };
     window.addEventListener("keydown", onType, true);
     return () => window.removeEventListener("keydown", onType, true);
@@ -359,7 +358,7 @@ export default function QuickAdd({
         <div className="grid transition-[grid-template-rows,opacity] duration-200 ease-meno" style={{ gridTemplateRows: open === "smiles" ? "1fr" : "0fr", opacity: open === "smiles" ? 1 : 0 }}>
           {/* (clipped for the ease - but over the card's padding, so the field's focus ring shows whole) */}
           <div className="-mx-1 px-1 overflow-hidden" inert={open !== "smiles"}>
-            <SmilesField width={width - 8} open={open === "smiles"} field={field} seed={seed} onSmiles={onSmiles} onNamed={onNamed} onCoordinates={onCoordinates} onOutput={onOutput} />
+            <SmilesField width={width - 8} open={open === "smiles"} seed={seed} onSmiles={onSmiles} onNamed={onNamed} onCoordinates={onCoordinates} onOutput={onOutput} />
           </div>
         </div>
       )}
@@ -418,7 +417,6 @@ export default function QuickAdd({
 function SmilesField({
   width,
   open,
-  field,
   seed,
   onSmiles,
   onNamed,
@@ -427,8 +425,6 @@ function SmilesField({
 }: {
   width: number;
   open: boolean;
-  /** The field itself, for Quick Add to give it the focus as a key is typed. */
-  field?: React.RefObject<HTMLInputElement | null>;
   /** A key typed in Quick Add with no icon chosen: the field begun with it (each its own `n`). */
   seed?: { text: string; n: number } | null;
   onSmiles: (smiles: string) => Promise<void>;
@@ -452,11 +448,10 @@ function SmilesField({
   const chosen: Reading | undefined = offered[Math.min(choice, offered.length - 1)];
   // (a SMILES being read: a second Enter as quick as the first finds it so, though React has not drawn the first's yet)
   const reading = useRef(false);
-  const own = useRef<HTMLInputElement>(null);
-  const input = field ?? own;
+  const input = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (open) input.current?.focus();
-  }, [open, input]);
+  }, [open]);
   // (begun with the key typed in Quick Add: what is there now, as typed, the caret after it)
   useEffect(() => {
     if (!seed) return;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NOT_READ, notReadSaid, ordinal, whyNotRead, type SmilesRead } from "./smilesWhy";
+import { NOT_READ, endedOnce, notReadSaid, ordinal, whyNotRead, type SmilesRead } from "./smilesWhy";
 
 /**
  * What the plugin that fills the SMILES role answers `smiles_read` with, for the SMILES these tests ask about - as the
@@ -70,6 +70,13 @@ describe("why a SMILES cannot be read, in Meno's words", () => {
     expect(await said("hello")).toContain("h is not an element");
     expect(await said("Fe")).toContain("Fe is written in brackets: [Fe]");
     expect(await said("[1]")).toContain("[1] names no element");
+  });
+
+  it("ends each sentence on one mark: a full stop added only where none ends it", () => {
+    expect(endedOnce("a ring is left open")).toBe("a ring is left open.");
+    expect(endedOnce("is a charge or an H missing?")).toBe("is a charge or an H missing?");
+    expect(endedOnce("it ends so.")).toBe("it ends so.");
+    expect(endedOnce("it ends so!")).toBe("it ends so!");
   });
 
   it("says an aromatic ring cannot alternate, ending on its question's own mark - no full stop after it", async () => {

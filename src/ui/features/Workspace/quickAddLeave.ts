@@ -31,7 +31,7 @@ export function quickAddLeaves(inside: (target: EventTarget | null) => boolean, 
 /**
  * A key typed while Quick Add is open with none of its icons chosen (no row or field open), and nothing typed into elsewhere:
  * what it does - its letter put in the SMILES field, the field opening (`seed`); or, from an input method, only the field opened
- * and given the focus, so that what it composes is composed there (`focus`); or nothing (null): a key with Ctrl, ⌘ or Alt, a key
+ * and given the focus, so that what it composes is composed there (`focus`); or nothing (null): a key with Ctrl, Cmd or Alt, a key
  * that writes no letter (Escape, Enter, an arrow), one held down and coming again, or one typed into a field.
  */
 export function typedIntoQuickAdd(

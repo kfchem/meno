@@ -467,13 +467,14 @@ with none of them chosen opens the SMILES field with it (2026-11-14: a
 first-time chemist types, and nothing happened): its letter is the field's
 first, the caret after it; from an input method the field opens for it to
 compose in. Under the field, one line says where chemistry stands while it
-is not ready: the step its set-up is at, in the first start's card's
-words - "Setting up chemistry: downloading <plugin> (42%)." as its files
-come, how far where that is reported, "Setting up chemistry: setting up
-<plugin>'s environment." as that is set up - and, where a SMILES typed
-waits for it, "This is drawn when it is ready."; and
-"Starting chemistry. The first one takes a moment." as it starts; a
-SMILES no plugin here reads says what does, as before. The icons: a bond
+is not ready, in the words the chip at the workspace's corner says it in
+(one phrase for both, `chemistryStep` in Workspace/quickAddSmiles): the
+step its set-up is at - "Setting up chemistry: downloading <plugin> (42%)."
+as its files come, how far where that is reported, rounded, "Setting up
+chemistry: setting up <plugin>'s environment." as that is set up - and,
+where a SMILES typed waits for it, "This is drawn when it is ready."; and
+"Starting <plugin>. The first one takes a moment." as it starts; a SMILES
+no plugin here reads says what does, as before. The icons: a bond
 (across at 30 degrees, as a chain from empty space begins), a chain, a
 SMILES, text and an arrow (*Arrows* below); then two groups, each with a
 small mark at its corner, each opening a row of its own below the first,
