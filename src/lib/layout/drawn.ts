@@ -6,7 +6,7 @@
  */
 import {
   fitLinear,
-  inSmallRing,
+  OPEN_RING,
   readStereo as readFrom2d,
   type CageFit,
   type DrawnAtom,
@@ -20,6 +20,7 @@ import { key, perceive, type LayoutInput } from "./perceive";
 import { symmetryOrbits } from "./canonical";
 import { huckelBonds } from "../chem/huckel";
 import { movingCN } from "../chem/stereoOpen";
+import { factsOf } from "../chem/perception/facts";
 import { placeStereo, type Stereo } from "./stereo";
 
 export { IN_LINE, sameConfiguration, straightEnds, unreadWhy, unsureStereo } from "../chem/perception/stereo/from2d";
@@ -114,12 +115,17 @@ export function openDoubleBonds(input: LayoutInput): { straight: number[]; eithe
   const n = input.atoms.length;
   const neighbours: number[][] = Array.from({ length: n }, () => []);
   const order = new Map<string, number>();
+  const once: { a: number; b: number; order: number }[] = [];
   for (const b of input.bonds) {
     if (b.a === b.b || order.has(key(b.a, b.b))) continue;
     neighbours[b.a].push(b.b);
     neighbours[b.b].push(b.a);
     order.set(key(b.a, b.b), b.order);
+    once.push({ a: b.a, b: b.b, order: b.order });
   }
+  // (its rings the core's, as the reader takes them: perception/facts)
+  const facts = factsOf({ atoms: input.atoms.map((a) => ({ el: a.el })), bonds: once });
+  const bondOf = (a: number, b: number) => facts.bondBetween(a, b);
   const cumulated = (end: number, other: number) => neighbours[end].some((m) => m !== other && (order.get(key(end, m)) ?? 0) >= 2);
   let orbits: number[] | null = null;
   let huckel: Set<string> | null = null;
@@ -132,31 +138,15 @@ export function openDoubleBonds(input: LayoutInput): { straight: number[]; eithe
     const groups = (end: number, other: number) => neighbours[end].filter((m) => m !== other);
     const [ga, gb] = [groups(b.a, b.b), groups(b.b, b.a)];
     if (!ga.length || !gb.length || ga.length > 2 || gb.length > 2) return;
-    if (inSmallRing(neighbours, b.a, b.b) || cumulated(b.a, b.b) || cumulated(b.b, b.a)) return;
+    if (facts.inRingSmallerThan(bondOf(b.a, b.b), OPEN_RING) || cumulated(b.a, b.b) || cumulated(b.b, b.a)) return;
     // (a bond of a Hückel ring - an aromatic macrocycle's, a porphyrin's - has no cis or trans: its Kekulé form is only one way of writing it)
     if ((huckel ??= huckelBonds(n, input.bonds)).has(key(b.a, b.b))) return;
     if ((moving ??= movingCN(input.atoms, input.bonds)).has(i)) return;
     if ((ga.length === 2 && alike(ga[0], ga[1])) || (gb.length === 2 && alike(gb[0], gb[1]))) return;
-    if (ga.length === 1 && gb.length === 1 && !inRing(neighbours, b.a, b.b)) {
+    if (ga.length === 1 && gb.length === 1 && !facts.inRing[bondOf(b.a, b.b)]) {
       straight.add(b.a);
       straight.add(b.b);
     } else either.push(i);
   });
   return { straight: [...straight], either };
-}
-
-/** Whether the bond i-j is in a ring: j reached from i some other way. */
-function inRing(neighbours: readonly number[][], i: number, j: number): boolean {
-  const seen = new Set([i]);
-  const queue = neighbours[i].filter((n) => n !== j);
-  queue.forEach((n) => seen.add(n));
-  for (let h = 0; h < queue.length; h++) {
-    if (queue[h] === j) return true;
-    for (const m of neighbours[queue[h]]) {
-      if (seen.has(m)) continue;
-      seen.add(m);
-      queue.push(m);
-    }
-  }
-  return false;
 }

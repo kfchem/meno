@@ -23,6 +23,7 @@ import {
 import { metalSlots } from "./hapto";
 import { isMetal, key, METAL_BOND, orderOf, squarePlanarMetal, straightThrough, twoLonePairsOnFour, type Molecule } from "./perceive";
 import { valencesAt } from "../chem/molecule";
+import { arrangementOpen } from "../chem/identity";
 import { MACROCYCLE } from "./ringSystem";
 import { byStructure, ringKey, ringRank } from "./ranks";
 
@@ -785,14 +786,15 @@ function mainGroupSquare(mol: Molecule, a: number): boolean {
   return mol.neighbours[a].length === 4 && mol.neighbours[a].every((v) => orderOf(mol, a, v) === 1) && twoLonePairsOnFour(mol.el[a], mol.charge[a]);
 }
 
-/** A metal surely square planar whose four end donors lie round it one way only - PtCl4 2-, PtCl3(NH3)-: drawn as the X (metrics `metalFour`). */
+/** A metal surely square planar whose four end donors lie round it one way only - PtCl4 2-, PtCl3(NH3)-, as identity's own test has it (lib/chem/identity `arrangementOpen`): drawn as the X (metrics `metalFour`). */
 function metalSquareX(mol: Molecule, a: number): boolean {
   const sq = squarePlanarMetal(
     { el: (i) => mol.el[i], charge: (i) => mol.charge[i], hs: (i) => mol.hs[i], neighbours: (i) => mol.neighbours[i], order: (p, q) => orderOf(mol, p, q) },
     a,
     (el, charge) => valencesAt(el, charge)[0],
   );
-  return !!sq && sq.sure && sq.ends && !sq.open;
+  if (!sq || !sq.sure || !sq.ends) return false;
+  return !arrangementOpen({ atoms: mol.el.map((el, i) => ({ el, charge: mol.charge[i], hs: mol.hs[i], ...(mol.tetra.has(i) ? { tetra: mol.tetra.get(i)! } : {}) })), bonds: mol.bonds }, a);
 }
 
 /**
