@@ -1320,10 +1320,14 @@ taller than the rest, its inputs a plain list down its left edge, each named
   the other, or two of one table: the molecule is refused. Where a table
   lies on the page decides nothing.
 - **In the numbering they were made in**: each row says the numbering its
-  molecule was in (*its own*, or the maps *Atom map* numbered it anew by). A
-  molecule numbered anew since is refused - "its restraints were made
-  before Atom map numbered it anew" - never held on what are now other
-  atoms.
+  molecule was in (*its own*, or the maps *Atom map* numbered it anew by),
+  with a key in brackets: the key of the last map's references, or of the
+  molecule's own atoms and bonds. A molecule numbered anew since is
+  refused - "its restraints were made before Atom map numbered it anew" -
+  never held on what are now other atoms. One numbered as the molecule the
+  rows were made for is in that molecule's numbering, and is held: rows
+  made on a reaction's reactant hold on a product *Atom map* wrote in the
+  reactant's numbering, as both keys say.
 - **Nothing silent**: a molecule no row is for is refused ("no restraints
   made for it"), and so is one a row names an atom it has not; rows for no
   molecule that came in are counted on the line.

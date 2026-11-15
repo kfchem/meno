@@ -140,8 +140,31 @@ export const NONE_FOUND = "none found to hold";
 
 /** The property *Atom map* writes on each entry it numbers anew, a label naming the map: a restraint's atoms are in one numbering. */
 export const NUMBERING = "numbering";
-/** The numbering of an entry no Atom map has numbered anew: its own. */
+/**
+ * The numbering of an entry no Atom map has numbered anew: its own - said
+ * with the key Atom map would give the entry as its reference, in brackets
+ * after it (a table read from a file may say it bare).
+ */
 export const OWN_NUMBERING = "its own";
+
+/** The key of the numbering a label says its atoms are in now: the one in brackets at the end of it - of the last map's references, or of the entry's own atoms and bonds; none where it says none. */
+function keyNow(label: string): string | null {
+  const now = label.split(", then ").pop()!;
+  return /\(([0-9a-z]+)\)$/.exec(now)?.[1] ?? null;
+}
+
+/**
+ * Whether two numbering labels say one numbering: the same label; both an
+ * entry's own, as ever; or the same key now - an entry Atom map numbered
+ * as another's, and that other in its own numbering, are one numbering
+ * (the products of a reaction mapped onto its reactant, and the reactant).
+ */
+export function oneNumbering(a: string, b: string): boolean {
+  if (a === b) return true;
+  if (a.startsWith(OWN_NUMBERING) && b.startsWith(OWN_NUMBERING)) return true;
+  const [p, q] = [keyNow(a), keyNow(b)];
+  return p != null && p === q;
+}
 
 /** A restraint's kind as its table says it. */
 const KIND_WORDS: Record<Restraint["kind"], string> = { distance: "distance", dihedral: "torsion", fixed: "atoms fixed" };

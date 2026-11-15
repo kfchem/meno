@@ -15,6 +15,7 @@ import { pageIndex, signatureOf } from "../utils/drawnLink";
 import { identityOfDrawn, labelsDrawnOut } from "../chem/identityOf";
 import { partOf } from "../chem/cleanUp";
 import { stereoKnown } from "./configurations";
+import { NUMBERING, OWN_NUMBERING } from "../../../../lib/steps/restraints";
 import { speciesOf } from "../../../../lib/io/writers";
 import { isSkeleton } from "../utils/completeness";
 import { groupLetter } from "../../../../lib/nodes/base";
@@ -355,6 +356,23 @@ export function recordHow(r: DrawnRecord | undefined): string | undefined {
 export function recordWhy(r: DrawnRecord | undefined): string | undefined {
   const s = r?.status;
   return s && typeof s === "object" && "aside" in s ? s.aside : undefined;
+}
+
+/**
+ * The key of a numbering (lib/steps `NUMBERING`): of the atoms and bonds of
+ * what entries are numbered as - Atom map's references, or an entry itself -
+ * so that two of one compound number alike, and two of different compounds
+ * never do.
+ */
+export function numberingKey(references: readonly Pick<SetEntry, "atoms" | "bonds">[]): string {
+  const graph = references.map((r) => `${r.atoms.map((a) => a.el).join(",")}|${r.bonds.map((b) => `${b.a1}-${b.a2}:${b.order}`).join(",")}`).join(" + ");
+  return hash(graph).toString(36);
+}
+
+/** The numbering an entry is in now (lib/steps `NUMBERING`): the label Atom map wrote on it - or, never mapped, its own, with the key Atom map would give it as its reference. */
+export function numberingOf(e: SetEntry): string {
+  const n = e.properties?.[NUMBERING];
+  return n?.status === "computed" && typeof n.value === "string" ? n.value : `${OWN_NUMBERING} (${numberingKey([e])})`;
 }
 
 /** FNV-1a over a string: a short key - for what came into a step, and for the structure a record is of. */

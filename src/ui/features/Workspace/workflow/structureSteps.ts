@@ -18,7 +18,7 @@ import { atomsFromOne, comparedBonding, matchingReference, type CompareOptions }
 import { combined } from "../../../../lib/steps/combine";
 import { measured, measurementName, measurementsTyped } from "../../../../lib/steps/measure";
 import { speciesNeeds, speciesTyped, withSpecies } from "../../../../lib/steps/species";
-import { NONE_FOUND, NUMBERING, OWN_NUMBERING, restraintRows, restraintsTable, torsionRowsFromReference, torsionRowsTyped, torsionsUnlike, torsionUnlikeText, type NothingRow, type RestraintRow } from "../../../../lib/steps/restraints";
+import { NONE_FOUND, NUMBERING, restraintRows, restraintsTable, torsionRowsFromReference, torsionRowsTyped, torsionsUnlike, torsionUnlikeText, type NothingRow, type RestraintRow } from "../../../../lib/steps/restraints";
 import type { OptionValues } from "../../../../lib/options";
 import { atomMapNeeds, compareTorsionsNeeds, ONE_EXIT, restraintsTyped, torsionsRead } from "./kinds";
 import { bondChangesTable, CHANGE, CHANGE_WORDS, MAPPED_ENTRY, renumberedEntry } from "../../../../lib/steps/reaction";
@@ -27,7 +27,7 @@ import { mapOnto, type BondChangeRow } from "../../../../lib/chem/reactionMap";
 import type { Molecule } from "../../../../lib/chem/molecule";
 import { atomsOfRows, type Table } from "../../../../lib/table";
 import { displacedEntry } from "../../../../lib/steps/vibrations";
-import { CALC_CARRIED, calcRenumbered, compoundLetter, entryOfSet, entryState, FINISHED, hash, keptRenumbered, setEntryOfEntry, type SetEntry } from "./entries";
+import { CALC_CARRIED, calcRenumbered, compoundLetter, entryOfSet, entryState, FINISHED, keptRenumbered, numberingKey, numberingOf, setEntryOfEntry, type SetEntry } from "./entries";
 import { convergedOf } from "./converged";
 import { ATOM_MAP_PAIR, matchesOf } from "./pairs";
 import type { Holds3D } from "./kinds";
@@ -335,10 +335,6 @@ export function comparedSet(entries: readonly SetEntry[], references: readonly S
 function rowIdOf(e: SetEntry, on: string): string | null {
   const p = e.properties?.[on];
   return p?.status === "computed" && (typeof p.value === "string" || typeof p.value === "number") ? String(p.value) : null;
-}
-function numberingOf(e: SetEntry): string {
-  const n = e.properties?.[NUMBERING];
-  return n?.status === "computed" && typeof n.value === "string" ? n.value : OWN_NUMBERING;
 }
 
 /**
@@ -736,8 +732,7 @@ export function atomMapSet(entries: readonly SetEntry[], references: readonly Se
 function numberedAnew(e: SetEntry, was: SetEntry, references: readonly SetEntry[]): SetEntry {
   const n = was.properties?.[NUMBERING];
   const before = n?.status === "computed" && typeof n.value === "string" ? n.value : null;
-  const graph = references.map((r) => `${r.atoms.map((a) => a.el).join(",")}|${r.bonds.map((b) => `${b.a1}-${b.a2}:${b.order}`).join(",")}`).join(" + ");
-  const now = `as ${references.map((r) => r.name ?? named(r)).join(" + ")} (${hash(graph).toString(36)})`;
+  const now = `as ${references.map((r) => r.name ?? named(r)).join(" + ")} (${numberingKey(references)})`;
   return { ...e, properties: { ...e.properties, [NUMBERING]: { value: before ? `${before}, then ${now}` : now, unit: "none", status: "computed", label: true } } };
 }
 
