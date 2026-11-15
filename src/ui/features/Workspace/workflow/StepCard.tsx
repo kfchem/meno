@@ -10,8 +10,8 @@ import type { JobSeen, WorkflowStep } from "../store/types";
 import { finished } from "../../../../lib/jobs";
 import type { StepState } from "./flow";
 import { StepGlyph } from "./icons";
-import type { KindInfo, StepKind } from "./kinds";
-import { CARD_H, CARD_W, PORT_STEP, portDown, portSize, PX } from "./look";
+import { cardHighOf, type KindInfo, type StepKind } from "./kinds";
+import { CARD_W, PORT_STEP, portDown, portSize, PX } from "./look";
 import { cardState } from "./cardState";
 import { COPYABLE } from "../hooks/useKeepUnselected";
 
@@ -191,6 +191,8 @@ export default function StepCard(p: StepCardProps) {
   // (how far a run is, as a share: of several jobs, how many have ended - and how far each running one says it is)
   const progress = p.state === "running" && p.run && (p.run.share != null || p.run.total > 1) ? (p.run.share ?? p.run.ended / p.run.total) : undefined;
   const w = CARD_W / PX;
+  // (at least as tall as its kind's ports make it: one port's step taller for each past three - look `cardHigh`)
+  const high = cardHighOf(p.step.kind) / PX;
   return (
     <div
       className="meno-fade-in relative select-none"
@@ -209,12 +211,12 @@ export default function StepCard(p: StepCardProps) {
         {/* (its words, and its icons alone large where they are too small to read: one over the other, switched past a threshold - utils/pageScale
             `wordsReadAt` - the words fading out as the icons fade in, over a short time: never one put for the other at once, nor both half there at a zoom) */}
         <div className="grid">
-          <div className="meno-words-gone pointer-events-none flex items-center justify-center gap-3 text-gh-black" style={{ gridArea: "1 / 1", height: CARD_H / PX }} aria-hidden={!p.compact}>
+          <div className="meno-words-gone pointer-events-none flex items-center justify-center gap-3 text-gh-black" style={{ gridArea: "1 / 1", height: high }} aria-hidden={!p.compact}>
             <StepGlyph icon={p.info.icon} size={28} />
             {line.Icon && <line.Icon className={clsx("h-6 w-6 transition-colors duration-200 ease-meno", line.tone, line.turning && "animate-spin motion-reduce:animate-none [animation-duration:2s]")} aria-hidden />}
           </div>
           {/* (two columns: the icons - what it does, and its state - and the words beside them; its first line level with its ports) */}
-          <div className="meno-words grid items-start gap-x-2 px-3 pt-2 pb-2.5" style={{ gridArea: "1 / 1", gridTemplateColumns: "16px minmax(0, 1fr)", minHeight: CARD_H / PX }} aria-hidden={p.compact}>
+          <div className="meno-words grid items-start gap-x-2 px-3 pt-2 pb-2.5" style={{ gridArea: "1 / 1", gridTemplateColumns: "16px minmax(0, 1fr)", minHeight: high }} aria-hidden={p.compact}>
             <span className="flex h-5 items-center text-gh-gray">
               <StepGlyph icon={p.info.icon} />
             </span>

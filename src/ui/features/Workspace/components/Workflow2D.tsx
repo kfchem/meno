@@ -35,8 +35,8 @@ import { DURATION, EASE, eased } from "../../../theme/motion";
 import { canWire, entryOnPage, givesOf, newestWire, sourcesInto, stateOf, stepsRun, wiresInto, wireRefusal } from "../workflow/flow";
 import { addHow } from "../workflow/addStep";
 import { droppedBy, namesOf } from "../workflow/earlierRuns";
-import { exitsOf, howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
-import { exitStart } from "../workflow/place";
+import { cardHighOf, exitsOf, howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
+import { cardFrameOf, exitStart } from "../workflow/place";
 import { useReaders } from "../../../../lib/calc/workers";
 import { QUIET_AFTER_MIN, useAppSettings } from "../../../../lib/settings/appSettings";
 import { finished, quietFor } from "../../../../lib/jobs";
@@ -49,7 +49,7 @@ import { dragSelection } from "../utils/dragSelection";
 import PageField from "../pageGl/PageField";
 import PageLayer from "../pageGl/PageLayer";
 import { FRAME_PX, tabStart } from "../pageGl/frameParts";
-import { CARD, cardFace, nameBoxOf, nameFits, TONE, type CardFaceOf } from "../pageGl/cardFace";
+import { cardBoxOf, cardFace, nameBoxOf, nameFits, TONE, type CardFaceOf } from "../pageGl/cardFace";
 import { bandAt, inReadingOrder, namesKept, type Band } from "../pageGl/cardBands";
 import { dropOn, portCount, portOfKey, portParts, sourcesSaid, type PortAt } from "../pageGl/ports";
 import { PAGE_GL_ORDER } from "../pageGl/PageShapes";
@@ -1206,6 +1206,7 @@ export default function Workflow2D() {
           named,
           ...(failedOf(s.id) ? { failed: failedOf(s.id) } : {}),
           inputs: inputs.length > 1 && !under ? inputs.map((p) => p.name) : [],
+          high: cardHighOf(s.kind) / PX,
         });
       }
       if (openStep !== s.id && shutting !== s.id) return [];
@@ -1506,7 +1507,7 @@ export default function Workflow2D() {
   };
 
   // the wires: each drawn, and each step's to the set it made - each going round what it leaves and comes into, where it comes back (a step's card as it stands shut: where wires join it, look `wireCurve`)
-  const cardFrame = (s: WorkflowStep): Frame => ({ x0: s.x, x1: s.x + CARD_W, y0: s.y - CARD_H, y1: s.y });
+  const cardFrame = (s: WorkflowStep): Frame => cardFrameOf(s);
   const around = [...onPage.map(shownOf), ...steps.map(cardFrame)];
 
   // (each wire with the sets and cards near it, which it may go round, and those as one number: worked out again only where it or they moved - look `nearWire`, `wireKey`)
@@ -1572,7 +1573,7 @@ export default function Workflow2D() {
       {/* the marks of what joined a set or left it, positions numbered, structures numbered: by WebGL, under the frames (MARKS_ORDER) */}
       <PageLayer shapes={marks.shapes} texts={marks.texts} regions={marks.regions} on={onMarks} tip={marks.tip} order={MARKS_ORDER} />
       {/* the sets' frames and tabs, by WebGL: under the cards (FrameTabs `FRAMES_ORDER`) */}
-      <FrameTabs items={tabsShown} on={onSetTabs} clear={faceList.map((f) => ({ x0: f.x, x1: f.x + CARD.w * PX, y0: f.y - CARD.h * PX, y1: f.y }))} />
+      <FrameTabs items={tabsShown} on={onSetTabs} clear={faceList.map(cardBoxOf)} />
       {/* the steps' cards, shut, by WebGL: over the wires and the drawing, under the molecules' chips (CARDS_ORDER) */}
       <PageLayer shapes={cards.shapes} texts={cards.texts} icons={cards.icons} regions={cards.regions} on={onCard} tip={cards.tip} order={CARDS_ORDER} />
       {/* Sets and steps drawn in HTML on one layer laid on the page at its

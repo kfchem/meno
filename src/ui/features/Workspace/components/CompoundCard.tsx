@@ -1,25 +1,27 @@
 /**
- * A compound's structure by its number in a PDF's text (docs/PDF.md, *A
+ * A compound's place by its number in a PDF's text (docs/PDF.md, *A
  * compound's number*): the pointer resting on a number mentioned as a
- * compound's (utils/compoundMentions), a calm card by its word holds Meno's
- * own drawing of the structure it numbers in the PDF's figures
- * (utils/compoundIndex) - the first, its page said, and the pages it is
- * drawn on again. Its drawing dragged onto the canvas puts the structure
- * there, as one dragged out of its figure is; its page clicked shows the
- * figure, the structure marked there a moment. It fades in once the pointer
- * has rested on the number, and out once the pointer has left both; never
- * over the word itself. While its PDF's figures are still being read for
- * their numbers, it says so - and they are read on at once (`hurryIndex`) -
- * then grows into the drawing, its size eased, never a jump.
+ * compound's (utils/compoundMentions), a calm card by its word holds the
+ * PDF's own picture of the region where the compound is drawn
+ * (utils/compoundIndex, utils/lensPicture) - the first, its page said, and
+ * the pages it is drawn on again. It never shows the structure Meno read
+ * from there: that comes once the compound is on the canvas, where it can be
+ * checked and edited - the picture dragged onto it puts the structure there,
+ * as one dragged out of its figure is; its page clicked shows the figure,
+ * the structure marked there a moment. It fades in once the pointer has
+ * rested on the number, and out once the pointer has left both; never over
+ * the word itself. While its PDF's figures are still being read for their
+ * numbers, it says so - and they are read on at once (`hurryIndex`) - then
+ * grows into the picture, its size eased, never a jump; where the number is
+ * drawn nowhere in the PDF, it says that in words.
  */
 import { useEffect, useRef, useState } from "react";
-import { styleOf } from "../../../../lib/chem/style";
 import { DURATION } from "../../../theme/motion";
 import { useEditor, useEditorStore } from "../store";
 import type { PdfLens } from "../store/types";
-import { drawingSvg } from "../fileActions";
 import { hurryIndex, indexWhole, labelPlaces } from "../utils/compoundIndex";
 import { pickedStructure } from "../utils/pdfStructures";
+import { lensDpi, lensPictureOf, lensSize } from "../utils/lensPicture";
 import type { PageStructure } from "../utils/pageStructures";
 import { dragStructure } from "./structureDrag";
 import { readerOf } from "./pdfColumnReader";
@@ -29,18 +31,12 @@ import { cardHolds, cardPlace, restLeft } from "./compoundCardPlace";
 const LINGER_MS = 250;
 /** How far the pointer moves before a press on the drawing carries the structure out, in pixels: as in the column. */
 const CARRY_PX = 4;
-/** The drawing's most, in pixels. */
-const MOST_W = 220;
-const MOST_H = 150;
 /** How often a card waiting on its PDF's figures looks again, in ms: they are read in idle time. */
 const AGAIN_MS = 400;
 
 export default function CompoundCard() {
   const store = useEditorStore();
   const lens = useEditor((s) => s.pdfLens);
-  const docStyle = useEditor((s) => s.docStyle);
-  const aromaticEnabled = useEditor((s) => s.aromaticEnabled);
-  const aromaticRings = useEditor((s) => s.aromaticRings);
   // (the card shown: the lens it is of, kept while it fades out and while the pointer is on it)
   const [held, setHeld] = useState<PdfLens | null>(null);
   const [shown, setShown] = useState(false);
@@ -79,7 +75,7 @@ export default function CompoundCard() {
   const s: PageStructure | null = held && first ? pickedStructure(held.sha256, { page: first.page, figure: first.figure, key: first.key }) : null;
   // (its PDF's figures still being read, or its figure: looked at again shortly)
   const model = s && "model" in s.read ? s.read.model : null;
-  const holds = held ? cardHolds({ placed: !!first, read: !!s, drawn: !!model, whole: indexWhole(held.sha256) }) : null;
+  const holds = held ? cardHolds({ placed: !!first, read: !!s, whole: indexWhole(held.sha256) }) : null;
   const waiting = holds === "reading";
   useEffect(() => {
     if (!waiting) return;
@@ -87,15 +83,14 @@ export default function CompoundCard() {
     return () => window.clearInterval(t);
   }, [waiting]);
 
-  const svg = model ? drawingSvg(model, { aromaticEnabled, aromaticRings }, styleOf(docStyle)) : null;
-  const w0 = svg ? Number(/width="([\d.e+-]+)"/.exec(svg)?.[1] ?? 0) : 0;
-  const h0 = svg ? Number(/height="([\d.e+-]+)"/.exec(svg)?.[1] ?? 0) : 0;
-  const k = w0 > 0 && h0 > 0 ? Math.min(1, MOST_W / w0, MOST_H / h0) : 1;
+  // (the region's own picture, drawn again from the PDF at the size shown: its place held until it comes)
+  const shownBox = s && holds === "picture" ? lensSize(s.box) : null;
+  const url = s && first && shownBox ? lensPictureOf(held!.sha256, first.page, s.box, lensDpi(s.box, shownBox, window.devicePixelRatio), () => again((n) => n + 1)) : null;
   // (waiting on its PDF's figures, or its figure's structures: said so, until they come)
   useEffect(() => {
     const el = inner.current;
     if (el) setSize({ width: el.offsetWidth, height: el.offsetHeight });
-  }, [svg, held?.label, holds]);
+  }, [url, shownBox?.width, held?.label, holds]);
   // (its drawing come after its words: the drawing and its pages faded in, the words kept a moment to fade out under the
   // card's easing width - never cut mid-letter)
   const before = useRef<typeof holds>(null);
@@ -104,7 +99,7 @@ export default function CompoundCard() {
   useEffect(() => {
     const was = before.current;
     before.current = holds;
-    if (was !== "reading" || holds !== "drawing") return;
+    if (was !== "reading" || holds !== "picture") return;
     setFresh(true);
     setLeaving(true);
     let next = 0;
@@ -186,18 +181,23 @@ export default function CompoundCard() {
       }}
     >
       <div ref={inner} className="w-max shrink-0 px-2.5 py-2">
-        {holds === "drawing" && first && svg && s ? (
+        {holds === "picture" && first && s && shownBox ? (
           <>
-            <img
-              alt={`Compound ${held.label}, as Meno draws it`}
-              src={`data:image/svg+xml;utf8,${encodeURIComponent(svg)}`}
-              draggable={false}
-              width={w0 * k}
-              height={h0 * k}
-              className="block cursor-grab ease-meno"
-              style={fade(!fresh)}
-              onPointerDown={onPress}
-            />
+            {url ? (
+              <img
+                alt={`Compound ${held.label}, where the PDF draws it`}
+                src={url}
+                draggable={false}
+                width={shownBox.width}
+                height={shownBox.height}
+                className={`block ease-meno ${model ? "cursor-grab" : ""}`}
+                style={fade(!fresh)}
+                onPointerDown={model ? onPress : undefined}
+              />
+            ) : (
+              // (the picture not come: its place held, the card there at once)
+              <div aria-hidden style={{ width: shownBox.width, height: shownBox.height }} className="rounded bg-gh-line/20" />
+            )}
             <div className="mt-1 flex items-baseline gap-1.5 text-gh-gray">
               <span className="font-semibold text-gh-black">{held.label}</span>
               <span className="relative flex items-baseline gap-1.5">
@@ -218,7 +218,7 @@ export default function CompoundCard() {
         ) : (
           <div className="flex items-baseline gap-1.5 whitespace-nowrap text-gh-gray">
             <span className="font-semibold text-gh-black">{held.label}</span>
-            <span>Reading this PDF&rsquo;s figures&hellip;</span>
+            <span>{holds === "none" ? "No drawing of this compound was found in this PDF." : "Reading this PDF\u2019s figures\u2026"}</span>
           </div>
         )}
       </div>

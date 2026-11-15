@@ -1313,7 +1313,18 @@ All hover-based, as above.
   panel *Save as abbreviation* opens is about the group as it was: it
   closes when the group changes under it - an undo taking an atom of it
   away, a bond among them, a charge (until 2026-10-13, Save then showed
-  the label on what was left: a "tBu" holding an isopropyl).
+  the label on what was left: a "tBu" holding an isopropyl). An
+  abbreviation's structure has no stereo: where the group's bonds, or
+  its one bond out, show any - a wedge or hash, a wavy bond, a double
+  bond drawn crossed, or a double bond's cis or trans as it is drawn
+  (read as Meno reads a drawing's stereo: a group off the bond's line at
+  each end, outside a ring of up to seven) - or it is drawn in
+  perspective (a cage in depth, a chair, a Haworth ring: an atom in
+  depth, or a centre such a drawing shows), the panel says so ("Its
+  wedges are not kept: an abbreviation has no stereo."; "Its
+  perspective drawing, and any configuration it shows, is not kept: …"),
+  never passing it over. A cage with no configuration of its own -
+  adamantyl - is told so too: on the safe side.
 - Reaction arrows, "+" and text: create, move, edit, delete. (An arrow or
   a "+" is added from Quick Add, where it was opened: the arrow pointing right, two and two-thirds of a bond long.
   Either is moved by dragging it and deleted by Delete or Backspace under

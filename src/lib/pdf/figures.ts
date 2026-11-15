@@ -12,7 +12,7 @@
  * across a column, or the page's own frame, is no figure.
  */
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { whenIdle } from "../core/idle";
+import { whenCalm } from "../core/calm";
 import { textOf, type PageText } from "./text";
 
 /** A box on a page, in points from its top left: left, top, right, bottom. */
@@ -60,7 +60,7 @@ const hurry = new Map<string, () => void>();
 
 /**
  * A page's figures, worked out once and kept - read `ahead` of being asked
- * for (the column's, once a page is shown), worked out in idle time, unless
+ * for (the column's, once a page is shown), worked out once the hands rest (lib/core/calm), unless
  * they are asked for meanwhile (a press, the pointer on a figure): never
  * kept waiting then.
  */
@@ -71,11 +71,11 @@ export async function figuresOn(sha256: string, page: number, ahead = false): Pr
   const objects = isTauri() ? pageObjectsOf(await invoke<ArrayBuffer>("pdf_objects", { sha: sha256, page })) : [];
   // (its words, for the one thing told by what words say: a one-bond structure's label)
   const text = isTauri() ? await textOf(sha256, page).catch(() => null) : null;
-  // (read ahead, worked out once the window is idle: a page turned to is drawn first, never held up by this)
+  // (read ahead, worked out once the hands rest - not while it is scrolled, zoomed or dragged: a page turned to is drawn first, never held up by this)
   if (ahead && isTauri())
     await new Promise<void>((done) => {
       hurry.set(key, done);
-      whenIdle(done);
+      whenCalm(done);
     }).finally(() => hurry.delete(key));
   const figures = figuresOf(objects, text ? (b) => wordsIn(text, b) : undefined);
   objectsKept.set(key, objects);
@@ -161,6 +161,17 @@ const ION_PT = 30;
 const COLUMN_LINE = 0.3;
 const COLUMN_LINE_PT = 150;
 
+/**
+ * Page furniture, which is no figure: a banner or a button - one shape round words, the words most of what lies in it ("Read
+ * Online", "Metrics & More") - and anything within the page's header or footer band, no taller than a logo is: a journal's logo, its
+ * cover thumbnail. The band is this share of the page's height, at the top and at the bottom - on a page holding as much as a page of
+ * text does, at least FURNITURE_PAGE_PT high.
+ */
+const BANNER_WORDS = 0.25;
+const FURNITURE_BAND = 0.05;
+const FURNITURE_HIGH_PT = 40;
+const FURNITURE_PAGE_PT = 400;
+
 const grow = (b: Box, d: number): Box => [b[0] - d, b[1] - d, b[2] + d, b[3] + d];
 const meet = (a: Box, b: Box) => a[0] <= b[2] && b[0] <= a[2] && a[1] <= b[3] && b[1] <= a[3];
 const within = (a: Box, b: Box) => a[0] >= b[0] && a[1] >= b[1] && a[2] <= b[2] && a[3] <= b[3];
@@ -215,8 +226,15 @@ export function figuresOf(objects: readonly PageObject[], wordsIn?: (box: Box) =
   // (a page scanned in pieces - strips, or tiles - is no more a figure than a page scanned whole)
   const images = objects.filter((o) => o.kind === "image").map((o) => o.box);
   const scans = joined(images, SCAN_GAP_PT).filter((g) => images.filter((b) => within(b, g)).reduce((sum, b) => sum + area(b), 0) >= MOST_OF_PAGE * pageArea);
+  // (a banner or a button: one shape round words - they are most of what lies in it)
+  const texts = objects.filter((o) => o.kind === "text").map((o) => o.box);
+  const banner = (o: PageObject) => {
+    const inside = texts.filter((t) => within(t, grow(o.box, 0.5)));
+    return o.kind === "path" && inside.length > 0 && inside.reduce((sum, t) => sum + area(t), 0) >= BANNER_WORDS * area(o.box);
+  };
   const drawn = objects.filter((o) => {
     if (o.kind === "text" || o.kind === "plus") return false;
+    if (banner(o)) return false;
     if (o.kind === "image" && scans.some((g) => within(o.box, g))) return false;
     const [x0, y0, x1, y1] = o.box;
     const w = x1 - x0;
@@ -313,7 +331,11 @@ export function figuresOf(objects: readonly PageObject[], wordsIn?: (box: Box) =
     area(f) >= MOST_OF_PAGE * pageArea &&
     images.reduce((sum, b) => sum + area(overlap(b, f)), 0) >= MOST_OF_PAGE * area(f) &&
     inText.filter((w) => within(w, f)).length >= MOST_OF_PAGE * inText.length;
-  return joined(withIons(labelled, labels, charges), 0).filter((f) => !scanned(f));
+  // (and none in the header or footer band, as small as a logo)
+  const [pageTop, pageHigh] = [page[1], page[3] - page[1]];
+  const furniture = (f: Box) =>
+    pageHigh >= FURNITURE_PAGE_PT && f[3] - f[1] <= FURNITURE_HIGH_PT && (f[3] <= pageTop + FURNITURE_BAND * pageHigh || f[1] >= pageTop + (1 - FURNITURE_BAND) * pageHigh);
+  return joined(withIons(labelled, labels, charges), 0).filter((f) => !scanned(f) && !furniture(f));
 }
 
 /**
