@@ -1,0 +1,245 @@
+{
+  "id": "lumen",
+  "name": "Lumen",
+  "version": "0.5.0",
+  "description": "Renders pictures and films of molecules with Lumen, a made-up renderer it fetches.",
+  "licence": "GPL-3.0-or-later",
+  "homepage": "https://example.org/lumen",
+  "environment": "uv",
+  "systems": [
+    "macos",
+    "windows"
+  ],
+  "downloads": [
+    {
+      "file": "lumen-4.1-macos-arm64.dmg",
+      "name": "Lumen 4.1",
+      "licence": "MIT",
+      "url": "https://downloads.example.org/lumen/4.1/lumen-4.1-macos-arm64.dmg",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "bytes": 300000000,
+      "system": "macos",
+      "arch": "aarch64",
+      "unpack": "dmg",
+      "program": "Lumen.app/Contents/MacOS/Lumen",
+      "provides": "lumen"
+    },
+    {
+      "file": "lumen-4.1-windows-x64.zip",
+      "name": "Lumen 4.1",
+      "licence": "MIT",
+      "url": "https://downloads.example.org/lumen/4.1/lumen-4.1-windows-x64.zip",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "bytes": 350000000,
+      "system": "windows",
+      "arch": "x86_64",
+      "unpack": "zip",
+      "program": "*/lumen.exe",
+      "provides": "lumen"
+    },
+    {
+      "file": "lumen-4.1-windows-arm64.zip",
+      "name": "Lumen 4.1",
+      "licence": "MIT",
+      "url": "https://downloads.example.org/lumen/4.1/lumen-4.1-windows-arm64.zip",
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "bytes": 250000000,
+      "system": "windows",
+      "arch": "aarch64",
+      "unpack": "zip",
+      "program": "*/lumen.exe",
+      "provides": "lumen"
+    }
+  ],
+  "steps": [
+    {
+      "kinds": [
+        "render"
+      ],
+      "programs": [
+        "lumen"
+      ]
+    }
+  ],
+  "interfaces": [
+    {
+      "id": "preset",
+      "version": "1.0.0"
+    }
+  ],
+  "roles": [
+    {
+      "role": "render",
+      "programs": [
+        "lumen"
+      ],
+      "options": [
+        {
+          "id": "engine",
+          "label": "Way of lighting",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "traced",
+              "label": "Light traced"
+            },
+            {
+              "value": "fast",
+              "label": "Drawn in real time"
+            }
+          ],
+          "default": "traced",
+          "section": "render",
+          "when": {
+            "id": "shading",
+            "in": [
+              "lit"
+            ]
+          }
+        },
+        {
+          "id": "samples",
+          "label": "Rays for each dot",
+          "type": "number",
+          "default": 128,
+          "min": 1,
+          "max": 4096,
+          "step": 1,
+          "section": "render"
+        },
+        {
+          "id": "denoise",
+          "label": "Smooth the grain",
+          "type": "switch",
+          "default": true,
+          "section": "render",
+          "when": {
+            "id": "shading",
+            "in": [
+              "lit"
+            ]
+          }
+        },
+        {
+          "id": "device",
+          "label": "Run on",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "auto",
+              "label": "Automatic"
+            },
+            {
+              "value": "gpu",
+              "label": "Graphics card"
+            },
+            {
+              "value": "cpu",
+              "label": "Main chip"
+            }
+          ],
+          "default": "auto",
+          "section": "render"
+        },
+        {
+          "id": "background",
+          "label": "Backdrop",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "transparent",
+              "label": "Clear"
+            },
+            {
+              "value": "white",
+              "label": "Snow"
+            },
+            {
+              "value": "black",
+              "label": "Ink"
+            },
+            {
+              "value": "grey",
+              "label": "Slate"
+            }
+          ],
+          "default": "transparent",
+          "section": "scene"
+        },
+        {
+          "id": "colours",
+          "label": "Tones",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "neutral",
+              "label": "True to the style"
+            },
+            {
+              "value": "filmic",
+              "label": "Film-like"
+            }
+          ],
+          "default": "neutral",
+          "section": "render"
+        },
+        {
+          "id": "key",
+          "label": "Main lamp, times the page's",
+          "type": "number",
+          "default": 1,
+          "min": 0,
+          "max": 10,
+          "step": 0.1,
+          "unit": "×",
+          "section": "scene"
+        },
+        {
+          "id": "ambient",
+          "label": "Fill lamp, times the page's",
+          "type": "number",
+          "default": 1,
+          "min": 0,
+          "max": 10,
+          "step": 0.1,
+          "unit": "×",
+          "section": "scene"
+        },
+        {
+          "id": "softness",
+          "label": "Shadow blur",
+          "type": "number",
+          "default": 10,
+          "min": 0,
+          "max": 90,
+          "step": 1,
+          "unit": "°",
+          "section": "scene"
+        },
+        {
+          "id": "quality",
+          "label": "Quality",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "high",
+              "label": "Full"
+            },
+            {
+              "value": "medium",
+              "label": "Reduced: a lighter file"
+            }
+          ],
+          "default": "high",
+          "section": "render",
+          "when": {
+            "id": "kind",
+            "in": [
+              "film"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

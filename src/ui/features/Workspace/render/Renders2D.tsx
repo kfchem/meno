@@ -7,6 +7,7 @@ import PageHtml from "../components/PageHtml";
 import { setViewGoal } from "../components/viewGoal";
 import { pageAt } from "../utils/page";
 import { HTML_DISTANCE, PX } from "../workflow/look";
+import { carryFrame } from "./carry";
 import { frameWords } from "./frameWords";
 import { moveRender, rendersOf, stopRender, withWords, type Rendering } from "./renders";
 
@@ -75,26 +76,11 @@ export function said(r: Rendering): string {
 }
 
 function Placeholder({ r, onStop, onMove, perPx }: { r: Rendering; onStop: () => void; onMove: (x: number, y: number) => void; perPx: () => number }) {
-  // a drag on it moves it: its middle as far as the pointer goes, in the page's units - the page up where the screen is down
+  // a drag on it moves it (carry): not one on its button
   const press = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0 || (e.target as HTMLElement).closest("button")) return;
     e.stopPropagation();
-    const el = e.currentTarget;
-    el.setPointerCapture(e.pointerId);
-    const from = { cx: e.clientX, cy: e.clientY, x: r.at.x, y: r.at.y };
-    const k = perPx();
-    const move = (m: PointerEvent) => onMove(from.x + (m.clientX - from.cx) * k, from.y - (m.clientY - from.cy) * k);
-    // (the closed hand while it is carried)
-    el.style.cursor = "grabbing";
-    const end = () => {
-      el.style.cursor = "grab";
-      el.removeEventListener("pointermove", move);
-      el.removeEventListener("pointerup", end);
-      el.removeEventListener("pointercancel", end);
-    };
-    el.addEventListener("pointermove", move);
-    el.addEventListener("pointerup", end);
-    el.addEventListener("pointercancel", end);
+    carryFrame(e.currentTarget, e, r.at, perPx(), onMove);
   };
   const w = r.at.w / PX;
   const h = r.at.h / PX;

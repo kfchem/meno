@@ -22,10 +22,13 @@ import { anionStructure, condensedStructure } from "./condensed";
 import { chainGroup } from "./chain";
 import { complexStructure, forgetComplexReadings, LIGAND_UNITS, ligandStructure, namedLigand, type GroupStructure } from "./ligands";
 import { precatalystPicture, precatalystStructure, REAGENT_UNITS, reagentOf, reagentStructure } from "./reagents";
-import { kekuleOrders } from "./kekulize";
+import { aromaticRefusal, kekuleOrders } from "./kekulize";
+import { typedRingRefused } from "./smilesWhy";
 import type { TextRun } from "./layout2d";
-import { ELEMENTS as TABLE, NOT_METALS } from "./elements";
+import { ELEMENTS as TABLE } from "./elements";
+import { notMetal } from "./perception/elements";
 import { VALENCE } from "./formula";
+import { movedBond } from "./structureBonds";
 
 export type Abbreviation = {
   /** How it is written when its bond comes in from the left: OTBS, CO2Me. */
@@ -275,6 +278,21 @@ function madeStructure(label: string): (GroupStructure & { name: string }) | nul
 }
 
 /**
+ * A label's parts as an adduct's: split at a middle dot (BF3·OEt2) - or,
+ * written with none, at a full stop typed in its place between two parts
+ * of a formula (Na2SO4.10H2O, BF3.OEt2): after a letter, a count or a
+ * bracket and before a count, a capital or a bracket. A number's decimal
+ * point (0.5) is none: nothing but digits before it.
+ */
+function adductPieces(label: string): string[] {
+  const dotted = label.split(/[·•∙]/);
+  if (dotted.length > 1 || !label.includes(".")) return dotted;
+  const parts = label.split(".");
+  const joins = parts.slice(1).every((p, k) => /[A-Za-z)\]]\d*$/.test(parts[k]) && /[A-Za-z]/.test(parts[k]) && /^[\d(A-Z]/.test(p));
+  return joins ? parts : [label];
+}
+
+/**
  * A whole molecule a label stands for by rule alone - what the reagent
  * dictionary need not hold: a Buchwald precatalyst (XPhos Pd G3,
  * ./reagents), an adduct of known parts joined by a middle dot (BF3·OEt2,
@@ -284,7 +302,7 @@ function madeStructure(label: string): (GroupStructure & { name: string }) | nul
 export function byRule(label: string): (GroupStructure & { name: string }) | null {
   const precatalyst = precatalystStructure(label, groupStructure);
   if (precatalyst) return precatalyst;
-  const pieces = label.split(/[·•∙]/);
+  const pieces = adductPieces(label);
   if (pieces.length > 1) {
     const atoms: GroupStructure["atoms"] = [];
     const bonds: GroupStructure["bonds"] = [];
@@ -297,7 +315,7 @@ export function byRule(label: string): (GroupStructure & { name: string }) | nul
       for (let k = 0; k < (m[1] ? Number(m[1]) : 1); k++) {
         const at = atoms.length;
         atoms.push(...s.atoms.map((a) => (a.tetra ? { ...a, tetra: { ...a.tetra, neighbours: a.tetra.neighbours.map((n) => (n < 0 ? n : n + at)) } } : { ...a })));
-        bonds.push(...s.bonds.map((b) => ({ ...b, a1: b.a1 + at, a2: b.a2 + at, ...(b.endpoints ? { endpoints: b.endpoints.map((e) => e + at) } : {}) })));
+        bonds.push(...s.bonds.map((b) => movedBond(b, (i) => i + at)));
         for (const ax of s.axes ?? []) {
           axes.push({ atoms: [ax.atoms[0] + at, ax.atoms[1] + at], refs: [ax.refs[0] + at, ax.refs[1] + at], sense: ax.sense });
         }
@@ -328,7 +346,7 @@ function ionStructure(label: string): (GroupStructure & { name: string }) | null
     for (let k = 0; k < n; k++) {
       const at = atoms.length;
       atoms.push(...one.atoms.map((a) => ({ ...a })));
-      bonds.push(...one.bonds.map((b) => ({ ...b, a1: b.a1 + at, a2: b.a2 + at })));
+      bonds.push(...one.bonds.map((b) => movedBond(b, (i) => i + at)));
     }
     return { atoms, bonds, attach: [], name: `${n} ${counted[1]}` };
   }
@@ -530,7 +548,7 @@ function prefixedGroupOf(label: string): Abbreviation | undefined {
 function carriesOf(el: string): number | null {
   const v = VALENCE[el];
   const e = TABLE.find((x) => x.symbol === el);
-  if (v == null || v < 3 || !e || !NOT_METALS.has(el)) return null;
+  if (v == null || v < 3 || !e || !notMetal.has(el)) return null;
   return v - 2;
 }
 
@@ -598,7 +616,9 @@ const COMPOSED_SEEN = new Map<string, Abbreviation | undefined>();
  * other.
  */
 export function abbreviationOf(label: string): Abbreviation | undefined {
-  const l = label.trim();
+  // (a full stop typed for a middle dot read as one: Na2SO4.10H2O, NaBO3.4H2O - `adductPieces`)
+  const pieces = adductPieces(label.trim());
+  const l = pieces.join("·");
   const listed = BY_LABEL.get(l) ?? custom.get(l);
   if (listed) return listed;
   if (!COMPOSED_SEEN.has(l)) COMPOSED_SEEN.set(l, composedOf(l));
@@ -623,6 +643,7 @@ export function setCustomAbbreviations(list: readonly CustomAbbreviation[]): voi
   }
   COMPOSED_SEEN.clear();
   GROUP_SEEN.clear();
+  NOTHING_SEEN.clear();
   forgetComplexReadings();
   GROUP_LABELS_SORTED = null;
   setUnits();
@@ -659,7 +680,9 @@ export function labelProblem(label: string, except?: CustomAbbreviation): string
 
 /**
  * Why a structure cannot be an abbreviation's, or null if it can: SMILES
- * Meno reads, with one "*" - where it is attached - bonded to one atom.
+ * Meno reads, with one "*" - where it is attached - bonded to one atom; and
+ * its aromatic rings given single and double bonds as written, never by an
+ * H nobody wrote (lib/chem/kekulize `aromaticRefusal`).
  */
 export function structureProblem(smiles: string): string | null {
   let read: Smiles;
@@ -668,6 +691,8 @@ export function structureProblem(smiles: string): string | null {
   } catch (e) {
     return `The SMILES cannot be read: ${e instanceof Error ? e.message : String(e)}`;
   }
+  const refused = aromaticRefusal(read.atoms, read.bonds);
+  if (refused) return `The SMILES cannot be read: ${typedRingRefused(refused)}`;
   const stars = read.atoms.flatMap((a, i) => (a.el === "*" ? [i] : []));
   if (stars.length !== 1) return 'Mark where it is attached with one "*".';
   if (read.atoms.length < 2) return "Give it at least one atom besides the *.";
@@ -743,12 +768,32 @@ export function smilesGroup(smiles: string): GroupStructure {
   const index = new Map(keep.map((old, i) => [old, i]));
   let attach = 0;
   const bonds: Smiles["bonds"] = [];
+  const around = read.atoms.map(() => [] as number[]);
+  for (const b of read.bonds) {
+    around[b.a1].push(b.a2);
+    around[b.a2].push(b.a1);
+  }
   read.bonds.forEach((b, i) => {
     if (b.a1 === star || b.a2 === star) {
       attach = index.get(b.a1 === star ? b.a2 : b.a1) ?? 0;
       return;
     }
-    bonds.push({ a1: index.get(b.a1)!, a2: index.get(b.a2)!, order: orders[i] });
+    // (a double bond's cis or trans kept: a ref on the "*" moved to its end's other neighbour, the sense turned - or, where
+    //  the end has none, -1, the atom outside it is attached to)
+    let cisTrans: Smiles["bonds"][number]["cisTrans"];
+    if (b.cisTrans) {
+      let cis = b.cisTrans.cis;
+      const refs = b.cisTrans.refs.map((r, k) => {
+        if (r !== star) return index.get(r)!;
+        const end = k === 0 ? b.a1 : b.a2;
+        const other = around[end].find((n) => n !== star && n !== (k === 0 ? b.a2 : b.a1));
+        if (other == null) return -1;
+        cis = !cis;
+        return index.get(other)!;
+      });
+      cisTrans = { refs: [refs[0], refs[1]], cis };
+    }
+    bonds.push({ a1: index.get(b.a1)!, a2: index.get(b.a2)!, order: orders[i], ...(cisTrans ? { cisTrans } : {}) });
   });
   return {
     atoms: keep.map((i) => {
@@ -781,6 +826,16 @@ export const GENERIC_SYMBOLS: ReadonlyMap<string, string> = new Map([
   ["Het", "a heteroatom"],
 ]);
 /**
+ * The names of a point of variability, as a drawing writes one (Brecher 2008, GR-9.1 and GR-9.2 with Table GR-9.1): a number set after one is part
+ * of the name - X1 and X2 are two variables, as R1 and R2 are - never an atom's number. R (with its primes), X, Z and G are GR-9.1's, Alk, Alkyl,
+ * Ar, Aryl, E, EWG, M, Nu and Q Table GR-9.1's; PG, LG, EDG, Hal and Het are Meno's own class symbols; Y, A, L and HetAr are a judgement (common
+ * use: no text read names them). The figure reader asks of a label only its LAST capital with its small letters (the Ar of OAr, the G of EWG, the Ar
+ * of HetAr), so the compound names - EWG, EDG, PG, LG, HetAr - are listed for the record: it is their last capital that decides. B and P are left out: they stay elements (a nucleobase B1, a protecting group P1 are read as boron and
+ * phosphorus - a stated limit).
+ */
+export const VARIABLE_NAMES: ReadonlySet<string> = new Set(["R", "X", "Y", "Z", "G", "A", "L", "M", "Q", "E", "Ar", "Aryl", "Alk", "Alkyl", "Nu", "EWG", "EDG", "PG", "LG", "Hal", "Het", "HetAr"]);
+
+/**
  * What a label is read into: the groups the abbreviations name, longest
  * first - and "pin", for pinacolato - before element symbols.
  */
@@ -802,6 +857,28 @@ function setUnits(): void {
   }
 }
 setUnits();
+
+/**
+ * Whether a label reads as nothing - no element, no group, ligand, reagent or complex Meno knows (the dictionary, the label
+ * grammar, the user's own), no Rgroup, no symbol for a kind of group or a point of variability: words, kept as typed and drawn
+ * in the order typed (docs/EDITOR-2D.md, *Labels read as they are meant*, rule 5).
+ */
+export function readsAsNothing(label: string): boolean {
+  const seen = NOTHING_SEEN.get(label);
+  if (seen != null) return seen;
+  const nothing =
+    !TABLE.some((e) => e.symbol === label) &&
+    label !== "R#" &&
+    !/^R\d+$/.test(label) &&
+    !GENERIC_SYMBOLS.has(label) &&
+    !VARIABLE_NAMES.has(label) &&
+    // (a name the dictionary does not have reads as nothing at once; one it has is asked for its structure)
+    (abbreviationOf(label) == null || abbreviationStructure(label) == null);
+  NOTHING_SEEN.set(label, nothing);
+  return nothing;
+}
+/** What `readsAsNothing` has answered, by label: asked again as a drawing is laid out, and forgotten as the user's own change. */
+const NOTHING_SEEN = new Map<string, boolean>();
 
 /** The names labels are read into - the groups', the user's own among them, ligands', reagents' and the symbols for a kind of group - as they are written. */
 export function labelUnitNames(): readonly string[] {

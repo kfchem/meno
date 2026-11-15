@@ -41,8 +41,8 @@ Meno の設定がどこにあり、それぞれの部分に何があるかを説
 
 ## Calculations {#calculations}
 
-- 計算のステップの種類ごとの、最初の指定です。それを走らせるもの（加えた各プラグインと Meno）ごとに並びます。ページに置いたステップはこの指定で始まり、ステップの中で変えた指定はそのステップだけのものです。
-- 「Jobs」：「Cores for each job」「Cores jobs may use」「Memory jobs may use」、「Where jobs run」（「Choose…」でフォルダーを選ぶか「Meno's own」）、そして「Clear」の付いた「Finished jobs' files」。
+- 計算のステップの種類ごとの、最初の指定です。それを走らせるもの（加えた各プラグインと Meno）ごとに並びます。ページに置いたステップはこの指定で始まり、ステップの中で変えた指定はそのステップだけのものです。値のない指定（たとえば「Energy window」の幅）は、下に説明が出て、ここで決めた値が使われます。値がないまま置いたステップは、その値を尋ねます。
+- 「Jobs」：「Cores for each job」「Cores jobs may use」「Memory jobs may use」、「Where jobs run」（「Choose…」でフォルダーを選ぶか「Meno's own」）、「Clear」の付いた「Finished jobs' files」、そして初期値でオンの「Keep the computer awake while calculations run」。
 - 「Procedures」：ページから「Save as procedure…」で保存したもので、「Rename」「Save as file…」「Remove」があります。
 
 ## Plugins {#plugins}

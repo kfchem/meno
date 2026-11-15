@@ -20,6 +20,7 @@ import { DURATION, EASE } from "../../theme/motion";
 import CardMenu from "./CardMenu";
 import { styleMenuItems3d } from "./styleMenus";
 import Preview3D from "./Preview3D";
+import { carryEnds } from "./carryEnds";
 import { turnsSample } from "./sampleTurn";
 import { exportStyles } from "./exportStyle";
 import { keptPicture3d, useStylePicture3d } from "./stylePicture3d";
@@ -110,13 +111,25 @@ export default function StylePicker3D({
       setDrag(null);
       setOver(null);
     };
+    // (the window left, its pointer's let-go lost, or Escape: a card carried goes back to where it came from, and a
+    // press not yet a drag is let go - opening nothing; the card never left stuck to the pointer, nor its hand)
+    const putBack = () => {
+      const p = pressed.current;
+      pressed.current = null;
+      if (!p || !drag) return;
+      flip.capture({ id: drag.id, box: new DOMRect(drag.x - drag.dx, drag.y - drag.dy, drag.w, drag.h) });
+      setDrag(null);
+      setOver(null);
+    };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", up);
+    const ends = carryEnds(window, () => pressed.current != null, putBack);
     return () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", up);
+      ends();
     };
   });
 

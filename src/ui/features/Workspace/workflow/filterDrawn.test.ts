@@ -75,7 +75,7 @@ describe("a Filter step on structures drawn", () => {
     const doc = runStep(doc0, FILTER(doc0), W);
     expect(ran(doc)).toMatchObject({
       ok: true,
-      said: "1 of 4 entries kept · rest 3 (1: not mw < 500 g/mol (612.4 g/mol); 1: not tpsa < 90 Å² (120 Å²); 1: it has no nll)",
+      said: "1 of 4 entries kept · rest 3 (1: not mw < 500 g/mol; 1: not tpsa < 90 Å²; 1: it has no nll)",
     });
     expect(resultOf(doc, FILTER(doc), "out")!.made?.holds).toBe("structures");
     // (each as it came, its properties as given)
@@ -93,7 +93,7 @@ describe("a Filter step on structures drawn", () => {
   it("keeps where any is met, saying a condition not asked of one kept - its property not there", () => {
     let doc = filtering([chloroethane({ tpsa: tpsa(50) }), chloroethane({ tpsa: tpsa(100), nll: nll(10) })], "tpsa < 60 Å2\nnll < 5", "any");
     doc = runStep(doc, FILTER(doc), W);
-    expect(ran(doc)?.said).toBe("1 of 2 entries kept \u00b7 1 of them with a condition not asked (1: it has no nll) \u00b7 rest 1 (1: not tpsa < 60 Å² (100 Å²); not nll < 5 (10))");
+    expect(ran(doc)?.said).toBe("1 of 2 entries kept \u00b7 1 of them with a condition not asked (1: it has no nll) \u00b7 rest 1 (1: not tpsa < 60 Å²; not nll < 5)");
     expect(held(doc, "out", ["tpsa"])).toEqual([[50]]);
   });
 
@@ -114,7 +114,7 @@ describe("a Filter step on structures drawn", () => {
     const aside = (p: Record<string, Property>, why: string): DrawnModel => ({ ...chloroethane(p), record: { properties: p, status: { aside: why } } });
     const doc0 = filtering([aside({ mw: mw(64.51) }, "Same as 1"), aside({ mw: mw(612.4) }, "Same as 2"), chloroethane({ mw: mw(70) })], "mw < 500 g/mol");
     const doc = runStep(doc0, FILTER(doc0), W);
-    expect(ran(doc)?.said).toBe("2 of 3 entries kept · rest 1 (1: not mw < 500 g/mol (612.4 g/mol))");
+    expect(ran(doc)?.said).toBe("2 of 3 entries kept · rest 1 (1: not mw < 500 g/mol)");
     const kept = setMembers(doc, resultOf(doc, FILTER(doc), "out")!).records;
     expect(kept.map((r) => [r?.properties?.mw?.value, r?.status])).toEqual([
       [64.51, undefined],
@@ -136,7 +136,7 @@ describe("a Filter step on structures drawn", () => {
     // (on a value: the one that failed set aside though its mw would pass, named; the one set aside before kept, its status cleared)
     const v0 = filtering(made, "mw < 500 g/mol");
     const v = runStep(v0, FILTER(v0), W);
-    expect(ran(v)?.said).toBe("2 of 4 entries kept · rest 2 (1: structure 2 failed: no conformer could be made; 1: not mw < 500 g/mol (612.4 g/mol))");
+    expect(ran(v)?.said).toBe("2 of 4 entries kept · rest 2 (1: structure 2 failed: no conformer could be made; 1: not mw < 500 g/mol)");
     expect(status(v, "out")).toEqual([
       [64.51, undefined],
       [80, undefined],
@@ -157,7 +157,7 @@ describe("a Filter step on structures drawn", () => {
     const doc0 = filtering(many, "nll < 6");
     const doc = runStep(doc0, FILTER(doc0), W);
     // (k % 7 is 6 for 8 of the 60)
-    expect(ran(doc)?.said).toBe(`${LARGE_SET + 2} of ${LARGE_SET + 10} entries kept · rest 8 (8: not nll < 6 (6))`);
+    expect(ran(doc)?.said).toBe(`${LARGE_SET + 2} of ${LARGE_SET + 10} entries kept · rest 8 (8: not nll < 6)`);
     const out = resultOf(doc, FILTER(doc), "out")!;
     expect(setMembers(doc, out).structures.length + out.drawnCollection!.length).toBe(LARGE_SET + 2);
     expect(held(doc, "out", ["mw"]).slice(0, 7)).toEqual([[100], [101], [102], [103], [104], [105], [107]]);

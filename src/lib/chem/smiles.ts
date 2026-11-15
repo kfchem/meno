@@ -5,15 +5,19 @@
  * atom of any kind - enough for the groups Meno's abbreviations stand for
  * (./abbreviations), written by hand. A tetrahedral centre's @ or @@ is
  * kept, as the configuration Meno's layout engine takes - a carbon's, a
- * quaternary N+'s, and a sulfur's, selenium's, phosphorus's or arsenic's
- * with three neighbours and its lone pair (a sulfoxide, a sulfinamide, a
- * phosphine) -
- * and a double bond's cis or trans, as its neighbours' directional bonds
+ * quaternary N+'s, and that of an atom of three neighbours whose lone pair
+ * keeps one (./lonePairCentres: a sulfoxide's S, a phosphine's P, an
+ * aziridine's N) - and a double bond's cis or trans, as its neighbours' directional bonds
  * (/ and \) say it. Any other stereo mark (@@@, @TH, @SP and the rest), or
  * an @ on an atom it cannot be read of, is refused with the reason: a
  * configuration is never dropped without a word. An atom class is kept: a
  * ligand's (./ligands) marks the atoms that bind a metal.
  */
+import { torsionSense, type Axial, type Cumulated } from "../layout/stereo";
+import { lonePairCentres } from "./lonePairCentres";
+import { implicitHydrogens } from "./molecule";
+import { isMetal } from "../layout/perceive";
+import { CHELATE_RING } from "./chelateRing";
 
 export type SmilesAtom = {
   el: string;
@@ -40,14 +44,70 @@ export type Configuration = { neighbours: number[]; volume: 1 | -1 };
  * on the same side.
  */
 export type SmilesBond = { a1: number; a2: number; order: number; cisTrans?: { refs: [number, number]; cis: boolean } };
-export type Smiles = { atoms: SmilesAtom[]; bonds: SmilesBond[] };
+/**
+ * The atoms and bonds, and the configurations that are not an atom's or a
+ * bond's: an allene's axis, from an @ or @@ on its middle atom (`axes`),
+ * and an odd cumulene's cis or trans, from the directional bonds at its
+ * ends (`cumulated`) - each by atom index, as lib/layout/stereo has them.
+ */
+export type Smiles = { atoms: SmilesAtom[]; bonds: SmilesBond[]; axes?: Axial[]; cumulated?: Cumulated[]; arrangements?: MarkedArrangement[] };
+/** A metal whose square-planar or octahedral mark (@SP1-3, @OH1-30) says which of its neighbours are across from each other: by atom index. */
+export type MarkedArrangement = { metal: number; pairs: [number, number][] };
 
 const ORGANIC = ["Cl", "Br", "B", "C", "N", "O", "P", "S", "F", "I"];
 const AROMATIC = ["b", "c", "n", "o", "p", "s"];
 const BOND_ORDER: Record<string, number> = { "-": 1, "=": 2, "#": 3, $: 4, ":": 4, "/": 1, "\\": 1 };
 
-/** A SMILES string's atoms and bonds; throws on what it cannot read. */
-export function readSmiles(text: string): Smiles {
+/**
+ * The aromatic bonds (order 4) that lie in no ring of aromatic bonds - each a
+ * bridge of the graph of aromatic bonds alone - found in one walk over it,
+ * as long as the molecule is large (Tarjan's bridges: a bond is one where no
+ * path back reaches above it).
+ */
+function aromaticBridges(atoms: number, bonds: readonly SmilesBond[]): Set<number> {
+  const near: { to: number; bond: number }[][] = Array.from({ length: atoms }, () => []);
+  bonds.forEach((b, k) => {
+    if (b.order !== 4) return;
+    near[b.a1].push({ to: b.a2, bond: k });
+    near[b.a2].push({ to: b.a1, bond: k });
+  });
+  const order = new Array<number>(atoms).fill(-1);
+  const low = new Array<number>(atoms).fill(0);
+  const bridges = new Set<number>();
+  let count = 0;
+  for (let root = 0; root < atoms; root++) {
+    if (order[root] >= 0 || !near[root].length) continue;
+    // (each step: an atom, the bond it was reached by, and how far through its neighbours the walk is)
+    const stack: { at: number; via: number; next: number }[] = [{ at: root, via: -1, next: 0 }];
+    order[root] = low[root] = count++;
+    while (stack.length) {
+      const top = stack[stack.length - 1];
+      if (top.next < near[top.at].length) {
+        const { to, bond } = near[top.at][top.next++];
+        if (bond === top.via) continue;
+        if (order[to] >= 0) low[top.at] = Math.min(low[top.at], order[to]);
+        else {
+          order[to] = low[to] = count++;
+          stack.push({ at: to, via: bond, next: 0 });
+        }
+        continue;
+      }
+      stack.pop();
+      const up = stack[stack.length - 1];
+      if (!up) continue;
+      low[up.at] = Math.min(low[up.at], low[top.at]);
+      if (low[top.at] > order[up.at]) bridges.add(top.via);
+    }
+  }
+  return bridges;
+}
+
+/**
+ * A SMILES string's atoms and bonds; throws on what it cannot read. With `metalMarks`, a metal's square-planar or octahedral
+ * mark (@SP1-3, @OH1-30) is read as which of its neighbours are across (`arrangements`, `pairsMarked`); without, it is refused
+ * as any other mark is - a caller that does not take the pairs never drops them without a word.
+ */
+export function readSmiles(text: string, { metalMarks = false }: { metalMarks?: boolean } = {}): Smiles {
   const atoms: SmilesAtom[] = [];
   const bonds: SmilesBond[] = [];
   const stack: number[] = [];
@@ -67,6 +127,8 @@ export function readSmiles(text: string): Smiles {
   // (the atoms written first, with no atom before them: their H, or lone pair, is the one looked from; and those
   // that carry a ring-closure digit themselves)
   const first = new Set<number>();
+  // (the bonds written with no symbol between two aromatic atoms, taken as aromatic for now: one in no ring is single, below)
+  const unwritten = new Set<number>();
   const closes = new Set<number>();
   const connect = (a: number, mark = "") => {
     if (prev < 0) first.add(a);
@@ -75,6 +137,7 @@ export function readSmiles(text: string): Smiles {
     if (atoms[a].hs === 1) around[a].push(-1);
     if (prev >= 0) {
       const both = atoms[prev].aromatic && atoms[a].aromatic;
+      if (pending == null && both) unwritten.add(bonds.length);
       bonds.push({ a1: prev, a2: a, order: pending ?? (both ? 4 : 1) });
       around[prev].push(a);
       if (pendingDir) directed.push({ from: prev, to: a, up: pendingDir === "/" });
@@ -114,6 +177,7 @@ export function readSmiles(text: string): Smiles {
       const open = rings.get(n);
       if (open) {
         const both = atoms[open.atom].aromatic && atoms[prev].aromatic;
+        if (pending == null && open.order == null && both) unwritten.add(bonds.length);
         bonds.push({ a1: open.atom, a2: prev, order: pending ?? open.order ?? (both ? 4 : 1) });
         around[open.atom][open.slot] = prev;
         around[prev].push(open.atom);
@@ -161,9 +225,73 @@ export function readSmiles(text: string): Smiles {
     throw new Error(`Cannot read "${c}" at ${i} in ${text}`);
   }
   if (rings.size) throw new Error(`Unclosed ring in ${text}`);
-  for (const [at, mark] of chiral) {
+  // An unwritten bond between two aromatic atoms is aromatic only where it is
+  // in a ring of them (OpenSMILES, *Aromaticity*): one that joins two rings
+  // - a biaryl written c1ccccc1c1ccccc1, 2,2'-bipyridine as
+  // c1ccc(nc1)c1ccccn1, or that bipyridine chelating a metal, its two rings
+  // in a ring through the metal - is single, and each ring is its own system
+  // (read as aromatic, the two were one system of twelve atoms, and two of
+  // its N were read with an H nobody wrote)
+  const bridges = unwritten.size ? aromaticBridges(atoms.length, bonds) : new Set<number>();
+  for (const k of unwritten) if (bridges.has(k)) bonds[k] = { ...bonds[k], order: 1 };
+  const keepsPyramid = chiral.size
+    ? lonePairCentres(
+        atoms.map((a) => ({ el: a.el, charge: a.charge, hs: a.hs ?? 0 })),
+        bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })),
+      )
+    : () => false;
+  const orderOf = new Map(bonds.map((b) => [b.a1 < b.a2 ? `${b.a1},${b.a2}` : `${b.a2},${b.a1}`, b.order]));
+  const order = (a: number, b: number) => orderOf.get(a < b ? `${a},${b}` : `${b},${a}`) ?? 0;
+  const axes: Axial[] = [];
+  const arrangements: MarkedArrangement[] = [];
+  for (const [at, written] of chiral) {
+    let mark = written;
+    // (a bare @ or @@ at a metal of six neighbours: the octahedral class's first two, @OH1 and @OH2 - the default class for six
+    //  connections (Daylight; OpenSMILES's own table writes [Co@] so). At four it stays a tetrahedral mark, refused below: never
+    //  read as square planar)
+    if (metalMarks && (mark === "@" || mark === "@@") && isMetal(atoms[at].el)) {
+      if (around[at].length !== 6) throw new Error(`Cannot read the arrangement at [${atoms[at].el}${mark}] in ${text}: a bare ${mark} at a metal of ${around[at].length} neighbours states none`);
+      mark = mark === "@" ? "@OH1" : "@OH2";
+    }
+    // (a metal's @SP or @OH: its neighbours across, from the order they are written in - none of them its own H)
+    if (metalMarks && /^@(SP|OH)\d/.test(mark)) {
+      const why = (reason: string) => new Error(`Cannot read the arrangement at [${atoms[at].el}${mark}] in ${text}: ${reason}`);
+      if (!isMetal(atoms[at].el)) throw why("only a metal's is read");
+      if (around[at].includes(-1)) throw why("a neighbour written as the metal's own H is not read");
+      const n = Number.parseInt(mark.slice(3), 10);
+      if (mark.startsWith("@SP") ? n < 1 || n > 3 : n < 1 || n > 30) throw why(`${mark.slice(1)} is not a mark OpenSMILES has`);
+      const pairs = pairsMarked(mark.slice(1), around[at]);
+      if (!pairs) throw why(`${mark.startsWith("@SP") ? "four" : "six"} neighbours are needed, and it has ${around[at].length}`);
+      // (two ends of one chelate across - joined, not through the metal, by a ring of CHELATE_RING atoms or fewer, which cannot
+      //  span it: a mark that cannot be, refused, as identity's own fill never puts them so)
+      const joined = (p: number, q: number) => {
+        let ring = [p];
+        const seen = new Set([p, at]);
+        for (let d = 1; d <= CHELATE_RING - 2 && ring.length; d++) {
+          const next: number[] = [];
+          for (const x of ring)
+            for (const y of around[x] ?? []) {
+              if (y === q) return true;
+              if (y < 0 || seen.has(y)) continue;
+              seen.add(y);
+              next.push(y);
+            }
+          ring = next;
+        }
+        return false;
+      };
+      if (pairs.some(([p, q]) => joined(p, q))) throw why(`it puts two ends of one chelate across, which a ring of ${CHELATE_RING} atoms or fewer cannot span`);
+      arrangements.push({ metal: at, pairs });
+      continue;
+    }
+    // (an @ between two double bonds: an allene's middle atom - a carbon or an N+, not a sulfur's: C=S=C is bent)
+    const next = around[at].filter((n) => n >= 0);
+    if (linearMiddle(atoms[at]) && next.length === 2 && next.every((n) => order(at, n) === 2)) {
+      axes.push(alleneAxis(at, mark, atoms, around, order, text));
+      continue;
+    }
     const double = bonds.some((b) => b.order === 2 && (b.a1 === at || b.a2 === at));
-    atoms[at].tetra = configuration(atoms[at], around[at], mark, { first: first.has(at), closes: closes.has(at), double }, text);
+    atoms[at].tetra = configuration(atoms[at], around[at], mark, { first: first.has(at), closes: closes.has(at), double, lonePair: keepsPyramid(at) }, text);
   }
   // A double bond's cis or trans (OpenSMILES): a directional bond on each
   // end; a neighbour written before its end with "/" lies below it, one
@@ -180,17 +308,137 @@ export function readSmiles(text: string): Smiles {
     const [p, q] = [side(b.a1, b.a2), side(b.a2, b.a1)];
     if (p && q) b.cisTrans = { refs: [p.n, q.n], cis: p.above === q.above };
   }
-  return { atoms, bonds };
+  // and an odd cumulene's, likewise, at its two ends (OpenSMILES, *Cis/Trans
+  // configuration of double bonds*: F/C=C=C=C/F trans, F/C=C=C=C\F cis)
+  const cumulated: Cumulated[] = [];
+  for (const run of cumulatedRuns(atoms, around, order)) {
+    // (an odd number of double bonds: an even number of atoms)
+    if (run.length % 2 === 1) continue;
+    const [t1, c1] = [run[0], run[1]];
+    const [t2, c2] = [run[run.length - 1], run[run.length - 2]];
+    const [p, q] = [side(t1, c1), side(t2, c2)];
+    if (p && q) cumulated.push({ atoms: [t1, t2], refs: [p.n, q.n], cis: p.above === q.above });
+  }
+  return { atoms, bonds, ...(axes.length ? { axes } : {}), ...(cumulated.length ? { cumulated } : {}), ...(arrangements.length ? { arrangements } : {}) };
 }
 
 /**
- * The elements whose atom, with three neighbours and no H, is a centre by
- * its lone pair: a sulfoxide's or a sulfinamide's S, a phosphine's P. Not a
- * nitrogen: an amine's turns over at room temperature but in a cage or a
- * small ring, and no reading of one could be checked here (RDKit keeps no
- * such centre through 3D) - refused, said why.
+ * The shape each square-planar mark draws through its four neighbours in their written order (OpenSMILES specification,
+ * version 1.0, 2016-05-15, *Square Planar Centers*: SP1 the U, SP2 the 4, SP3 the Z; the octahedral table below is its
+ * *Octahedral Centers*), as which of the four lie across: the U goes round, so the first and third and the second and fourth;
+ * the Z starts and ends across, so the first and fourth and the second and third (its start and end
+ * "never adjacent"); the 4, the one left, the first and second and the third and fourth.
  */
-const LONE_PAIR_CENTRES = new Set(["S", "Se", "P", "As"]);
+const SHAPE_PAIRS: Record<"U" | "Z" | "4", [number, number][]> = { U: [[0, 2], [1, 3]], Z: [[0, 3], [1, 2]], "4": [[0, 1], [2, 3]] };
+const SQUARE_SHAPE: Record<number, "U" | "Z" | "4"> = { 1: "U", 2: "4", 3: "Z" };
+/**
+ * Each octahedral mark's axis - the first neighbour and the one across from it, by its place among the six (b to f: 1 to 5) -
+ * and the shape the other four are drawn in, in their written order (OpenSMILES, *Octahedral Centers*, its table; the order,
+ * @ or @@, a hand, says nothing of which are across and is not kept).
+ */
+const OCTAHEDRAL: Record<number, [number, "U" | "Z" | "4"]> = {
+  1: [5, "U"], 2: [5, "U"], 3: [4, "U"], 16: [4, "U"], 6: [3, "U"], 18: [3, "U"], 19: [2, "U"], 24: [2, "U"], 25: [1, "U"], 30: [1, "U"],
+  4: [5, "Z"], 14: [5, "Z"], 5: [4, "Z"], 15: [4, "Z"], 7: [3, "Z"], 17: [3, "Z"], 20: [2, "Z"], 23: [2, "Z"], 26: [1, "Z"], 29: [1, "Z"],
+  10: [5, "4"], 8: [5, "4"], 11: [4, "4"], 9: [4, "4"], 13: [3, "4"], 12: [3, "4"], 22: [2, "4"], 21: [2, "4"], 28: [1, "4"], 27: [1, "4"],
+};
+
+/**
+ * The pairs of `neighbours` across from each other that a square-planar mark (SP1-SP3) or an octahedral one (OH1-OH30) states,
+ * the neighbours in OpenSMILES's order (the atom before, then ring closures as their digits come, then the atoms after). Null
+ * for any other mark, or where the neighbours are not four for SP, six for OH.
+ */
+export function pairsMarked(mark: string, neighbours: readonly number[]): [number, number][] | null {
+  const m = /^(SP|OH)(\d{1,2})$/.exec(mark);
+  if (!m) return null;
+  const n = Number.parseInt(m[2], 10);
+  const pick = (four: readonly number[], shape: "U" | "Z" | "4") => SHAPE_PAIRS[shape].map(([p, q]): [number, number] => [four[p], four[q]]);
+  if (m[1] === "SP") return neighbours.length === 4 && SQUARE_SHAPE[n] ? pick(neighbours, SQUARE_SHAPE[n]) : null;
+  if (neighbours.length !== 6 || !OCTAHEDRAL[n]) return null;
+  const [across, shape] = OCTAHEDRAL[n];
+  return [[neighbours[0], neighbours[across]], ...pick(neighbours.filter((_, k) => k !== 0 && k !== across), shape)];
+}
+
+/** Whether an atom between two double bonds is drawn straight through: a carbon, or an N+ - a sulfur's C=S=C is bent, and has no axis (the rule the restraints' linear-by-bonds has). */
+const linearMiddle = (a: SmilesAtom) => a.el === "C" || (a.el === "N" && a.charge === 1);
+
+/**
+ * Each run of cumulated double bonds, by its atoms end to end (an
+ * allene's three, a butatriene's four), its first end the one whose atom
+ * comes first; a run is two or more double bonds, each atom between its
+ * ends with no other neighbour.
+ */
+function cumulatedRuns(atoms: readonly SmilesAtom[], around: readonly number[][], order: (a: number, b: number) => number): number[][] {
+  const n = atoms.length;
+  const near = (a: number) => (around[a] ?? []).filter((m) => m >= 0);
+  const middle = (a: number) => linearMiddle(atoms[a]) && near(a).length === 2 && near(a).every((m) => order(a, m) === 2);
+  const runs: number[][] = [];
+  for (let a = 0; a < n; a++) {
+    if (middle(a)) continue;
+    for (const m of near(a)) {
+      if (order(a, m) !== 2 || !middle(m)) continue;
+      const run = [a, m];
+      while (middle(run[run.length - 1])) run.push(near(run[run.length - 1]).find((x) => x !== run[run.length - 2])!);
+      if (run[0] < run[run.length - 1]) runs.push(run);
+    }
+  }
+  return runs;
+}
+
+/**
+ * An allene's axis from the @ or @@ on its middle atom (OpenSMILES,
+ * *Tetrahedral Allene-like Systems*): the run of cumulated double bonds
+ * "collapsed" into one tetrahedral centre, its neighbours the two ends'
+ * other neighbours - the end the middle atom is written from first, each
+ * end's in the order a centre's are read (the atom before it, its H, its
+ * ring closures, the atoms after it) - and the @ or @@ read of those four
+ * as of a centre's (*Tetrahedral Centers*). Put as an axis: the ends, a
+ * neighbour of each, and the sign of the torsion between them, the
+ * collapsed centre's turn kept, since pressing the run flat along its axis
+ * turns nothing. A mark not on the middle of an even run, or an end
+ * without two neighbours besides the run (a CH2), is refused.
+ */
+function alleneAxis(at: number, mark: string, atoms: readonly SmilesAtom[], around: readonly number[][], order: (a: number, b: number) => number, text: string): Axial {
+  const why = (reason: string) => new Error(`Cannot read the configuration at [${atoms[at].el}${mark}] in ${text}: ${reason}`);
+  if (mark !== "@" && mark !== "@@") throw why("only @ and @@ are read");
+  const near = (a: number) => around[a].filter((m) => m >= 0);
+  // (each way along the run to its end: the end, and the atom before it)
+  const end = (from: number) => {
+    let [prev, x, steps] = [at, from, 1];
+    while (linearMiddle(atoms[x]) && near(x).length === 2 && near(x).every((m) => order(x, m) === 2)) {
+      [prev, x] = [x, near(x).find((m) => m !== prev)!];
+      steps++;
+    }
+    return { end: x, before: prev, steps };
+  };
+  const [first, last] = near(at).map(end);
+  if (first.steps !== last.steps) throw why("it is not the middle atom of its run of cumulated double bonds");
+  // (an end's neighbours but the run, in the order a centre's are read: its H where a bracket's would be, after the atom before it)
+  const others = ({ end: e, before }: { end: number; before: number }): number[] => {
+    const a = atoms[e];
+    const sum = near(e).reduce((t, m) => t + order(e, m), 0);
+    const hs = a.hs ?? (a.aromatic ? 0 : implicitHydrogens(a.el, sum, a.charge ?? 0));
+    const listed = around[e].includes(-1) ? [...around[e]] : around[e].length && around[e][0] >= 0 && e > around[e][0] ? [around[e][0], ...Array(hs).fill(-1), ...around[e].slice(1)] : [...Array(hs).fill(-1), ...around[e]];
+    return listed.filter((m) => m !== before);
+  };
+  const ends = [first, last];
+  const four = ends.flatMap(others);
+  if (ends.some((x) => others(x).length !== 2) || ends.some((x) => others(x).every((m) => m < 0))) throw why("each end of an allene needs two neighbours besides it, not both hydrogens");
+  // (the collapsed centre's four corners: the first three span a positive volume for @, as a centre's do (`configuration`))
+  const corner = [
+    [1, 1, 1],
+    [1, -1, -1],
+    [-1, 1, -1],
+    [-1, -1, 1],
+  ];
+  if (mark === "@@") [corner[1], corner[2]] = [corner[2], corner[1]];
+  const mid = (u: number[], v: number[]) => u.map((x, k) => (x + v[k]) / 2);
+  const [near0, near1] = [mid(corner[0], corner[1]), mid(corner[2], corner[3])];
+  // (each end's reference: its first neighbour that is an atom)
+  const p = four[0] >= 0 ? 0 : 1;
+  const q = four[2] >= 0 ? 2 : 3;
+  const sense = torsionSense(corner[p], near0, near1, corner[q]);
+  return { atoms: [first.end, last.end], refs: [four[p], four[q]], sense: sense as 1 | -1 };
+}
 
 /**
  * A centre's configuration from its neighbours in SMILES order and its
@@ -198,8 +446,9 @@ const LONE_PAIR_CENTRES = new Set(["S", "Se", "P", "As"]);
  * @@, clockwise (OpenSMILES, *Tetrahedral Centers*). Its implicit H is
  * where the Daylight SMILES theory manual (3.3.3) puts it: the "from" atom
  * where the centre is written first, else the first of the three that
- * follow. A centre with three neighbours and a lone pair - S, Se, P or As,
- * with no H - has its lone pair taken in the H's place: neither text says
+ * follow. A centre with three neighbours and a lone pair that keeps its
+ * configuration (`lonePair`, ./lonePairCentres) has its lone pair taken in
+ * the H's place: neither text says
  * where a lone pair goes, and that is where the H's rule puts it, as RDKit
  * reads it (measured on its 3D embeddings: the first of the three that
  * follow, or the last, which is the same configuration). Written first,
@@ -209,14 +458,20 @@ const LONE_PAIR_CENTRES = new Set(["S", "Se", "P", "As"]);
  * it moves; a lone pair, not an atom, left out. Any other mark, or a centre
  * that is none of these, is refused, never read past.
  */
-function configuration(atom: SmilesAtom, neighbours: readonly number[], mark: string, at: { first: boolean; closes: boolean; double: boolean }, text: string): Configuration {
+function configuration(
+  atom: SmilesAtom,
+  neighbours: readonly number[],
+  mark: string,
+  at: { first: boolean; closes: boolean; double: boolean; lonePair: boolean },
+  text: string,
+): Configuration {
   const why = (reason: string) => new Error(`Cannot read the configuration at [${atom.el}${mark}] in ${text}: ${reason}`);
   if (mark !== "@" && mark !== "@@") throw why(`only @ and @@ are read`);
   let around = [...neighbours];
   const three = around.length === 3 && !around.includes(-1) && !(atom.hs ?? 0);
-  if (three && !LONE_PAIR_CENTRES.has(atom.el) && atom.el !== "C" && atom.el !== "Si")
-    throw why(`a ${atom.el} centre of three neighbours and a lone pair is not read here: no reading of one could be checked against another reader`);
-  const lonePair = three && LONE_PAIR_CENTRES.has(atom.el);
+  if (three && !at.lonePair && atom.el !== "C" && atom.el !== "Si")
+    throw why(`a ${atom.el} of three neighbours keeps no configuration of its own: its lone pair turns it over at room temperature, or it has none`);
+  const lonePair = three && at.lonePair;
   // (written first, where the H's rule would look from its lone pair and the reading libraries do not - RDKit takes
   // it as the last of four - the configuration is not read: refused. Else first of the three that follow, as an H)
   if (lonePair && at.first) throw why("a centre with a lone pair written first is read differently by different readers - write an atom before it");
@@ -235,7 +490,7 @@ function configuration(atom: SmilesAtom, neighbours: readonly number[], mark: st
 
 /** What is inside a bracket: [isotope] symbol [chirality] [H count] [charge] [:class]. */
 function bracketAtom(body: string): { atom: SmilesAtom; mark: string } {
-  const m = /^(\d+)?(\*|[A-Z][a-z]?|[a-z][a-z]?)(@*)(H\d*)?([+-]\d*|\+\+|--)?(?::(\d+))?$/.exec(body);
+  const m = /^(\d+)?(\*|[A-Z][a-z]?|[a-z][a-z]?)(@(?:SP\d|OH\d{1,2}|TB\d{1,2}|TH\d|AL\d)|@*)(H\d*)?([+-]\d*|\+\+|--)?(?::(\d+))?$/.exec(body);
   if (!m) throw new Error(`Cannot read [${body}]`);
   const [, iso, sym, mark, h, q, cls] = m;
   const aromatic = /^[a-z]/.test(sym);

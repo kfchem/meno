@@ -41,8 +41,8 @@ The drawing style and the 3D styles in Settings are the ones new workspaces star
 
 ## Calculations {#calculations}
 
-- The options each kind of calculation step starts with, by what runs it: each plugin added, and Meno. A step put on the page starts with these; options changed in a step are that step's alone.
-- *Jobs*: *Cores for each job*, *Cores jobs may use*, *Memory jobs may use*; *Where jobs run* - *Choose…* a folder, or *Meno's own*; and *Finished jobs' files*, with *Clear*.
+- The options each kind of calculation step starts with, by what runs it: each plugin added, and Meno. A step put on the page starts with these; options changed in a step are that step's alone. An option with no value of its own - an *Energy window*'s window, say - shows its guide under it and takes the value set here; a step put down without one asks for it.
+- *Jobs*: *Cores for each job*, *Cores jobs may use*, *Memory jobs may use*; *Where jobs run* - *Choose…* a folder, or *Meno's own*; and *Finished jobs' files*, with *Clear*; and *Keep the computer awake while calculations run*, on by default.
 - *Procedures*: the ones you saved from the page with *Save as procedure…*, with *Rename*, *Save as file…* and *Remove*.
 
 ## Plugins {#plugins}

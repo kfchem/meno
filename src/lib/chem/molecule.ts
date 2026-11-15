@@ -1,4 +1,6 @@
 import type { CtMolecule } from "./ctfile";
+import { elementOf } from "./elements";
+import { notMetal } from "./perception/elements";
 
 /**
  * What an atom is, chemically - the one place it is said, for every kind of
@@ -34,11 +36,11 @@ export type AbbreviationStructure = {
     a2: number;
     order: 1 | 2 | 3;
     stereo?: "up" | "down" | "wavy" | "either" | "none";
-    /** Which end of a wedge is narrow, as a drawn bond's `stereoOrient` says. */
-    stereoOrient?: "principle" | "reverse";
+    /** The atom (`a1` or `a2`) a wedge is narrow at, as a drawn bond's `narrow` says. */
+    narrow?: number;
     /**
      * A ring's bond in perspective: a near edge, bold; one toward the viewer,
-     * a wedge (narrow as `stereoOrient` says). Two metals of a cluster in
+     * a wedge (narrow at `narrow`). Two metals of a cluster in
      * contact, dashed.
      */
     display?: "bold" | "wedge" | "dashed";
@@ -99,6 +101,12 @@ export type AtomChem = {
   stereoGroup?: StereoGroup;
   /** The Sgroups it is in. */
   sgroups?: SgroupMark[];
+  /**
+   * A carbon written out, with its hydrogens - CH2, H2C on a bond's left -
+   * where the chemist typed it so: drawn labelled, not as a bare vertex. The
+   * hydrogens are its bonds' to give, as for any atom.
+   */
+  shown?: true;
 };
 
 /**
@@ -199,6 +207,19 @@ export function valenceOrder(b: BondChem & { order: number; dative?: boolean }, 
 }
 
 /**
+ * How much of a valence a file sets on an atom of `el` (CTfile VAL) a bond
+ * takes: as `valenceOrder` - but a dative or a coordination bond at a metal
+ * counts its order, as the file's own valence counts it: cisplatin's Pt is
+ * written VAL=4, two bonds to Cl and two to its NH3, and has no H. (Counted
+ * as nothing there, the valence it set was left two short, and Pt was given
+ * two H nobody wrote.)
+ */
+export function setValenceOrder(b: BondChem & { order: number; dative?: boolean }, el?: string): number {
+  if ((b.dative || b.coordination) && el && elementOf(el) && !notMetal.has(el)) return b.order || 1;
+  return valenceOrder(b, el);
+}
+
+/**
  * An atom as a file gives it: where it is, in the file's own units; and
  * `alias` where its `el` is the text a file shows for it (a V2000 "A"
  * line), not an element's symbol - its letters' case as written.
@@ -207,9 +228,15 @@ export type ParsedAtom = AtomChem & { x: number; y: number; z: number; alias?: t
 /**
  * A bond as a file gives it, between atoms by index: its CTfile bond type
  * (1 to 10) as `order`, and its stereo as V2000 codes - a single bond's 1
- * up, 4 either, 6 down; a double bond's 3, cis or trans not known.
+ * up, 4 either, 6 down; a double bond's 3, cis or trans not known. A
+ * coordination bond is type 9 (`COORDINATION_BOND`), `a1` the atom that
+ * lends its pair - as a molecule in 3D holds one made from a drawing's
+ * dative arrow or coordination bond, too: one way for both.
  */
 export type ParsedBond = { a1: number; a2: number; order: number; stereoCode?: number };
+
+/** The CTfile's bond type for a coordination (dative) bond ("CTfile Formats", the bond block). */
+export const COORDINATION_BOND = 9;
 /**
  * A molecule as a file gives it. A CTfile's carries all the file said
  * besides (lib/chem/ctfile), its atoms and bonds in the same order.
@@ -257,6 +284,19 @@ export function implicitHydrogens(
   const v = VALENCE[el];
   if (!v) return 0;
   return Math.max(0, valenceAs(v, v.valence, charge, radical) - bondOrderSum);
+}
+
+/**
+ * The valences an atom of `el` takes at its charge, as `implicitHydrogens`
+ * counts them - its element's own and, below the second row, its highest
+ * (`HIGHEST`) - or none where Meno has no valence for the element.
+ */
+export function valencesAt(el: string, charge = 0, radical?: Radical): number[] {
+  const v = VALENCE[el];
+  if (!v) return [];
+  const own = valenceAs(v, v.valence, charge, radical);
+  const most = HIGHEST[el] != null ? valenceAs(v, HIGHEST[el], charge, radical) : null;
+  return most != null && most !== own ? [own, most] : [own];
 }
 
 /** A valence as a charge and an unpaired electron leave it, as `implicitHydrogens` counts them. */
@@ -325,5 +365,6 @@ export function chemistry(a: AtomChem): Omit<AtomChem, "el"> {
     ...(a.exactChange ? { exactChange: true } : {}),
     ...(a.stereoGroup ? { stereoGroup: a.stereoGroup } : {}),
     ...(a.sgroups?.length ? { sgroups: a.sgroups } : {}),
+    ...(a.shown ? { shown: true } : {}),
   };
 }

@@ -128,6 +128,8 @@ export type MenoFile = {
   data(sha256: string): Uint8Array | null;
   /** Whether it has a file by that SHA-256 in it at all - whole, or damaged (`data` none): something of it may still be had from this file. */
   holds(sha256: string): boolean;
+  /** A file kept, by its SHA-256: how much it comes to in this file, as it is packed; none where it keeps none such. */
+  packed(sha256: string): number | null;
 };
 
 /** What a file not one Meno reads as a workspace is said to be. */
@@ -284,6 +286,7 @@ export function readMenoFile(bytes: Uint8Array, named?: (workspace: string) => r
       return data && sha256Hex(data) === sha256 ? data : null;
     },
     holds: (sha256) => held.has(sha256),
+    packed: (sha256) => held.get(sha256)?.packed.length ?? null,
   };
 }
 

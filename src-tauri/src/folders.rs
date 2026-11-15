@@ -459,7 +459,7 @@ mod tests {
             assert!(nsi.contains(line), "{line}");
         }
         assert!(!nsi.contains(r#"RmDir /r "$LOCALAPPDATA\${PRODUCTNAME}""#) && !nsi.contains(r#"RmDir /r "$INSTDIR""#));
-        let installed = ["L/Meno/Meno.exe", "L/Meno/pdfium.dll", "L/Meno/uninstall.exe", "L/Meno/resources/plugins/rdkit/worker.py", "L/Meno/resources/plugins/rdkit/manifest.json"];
+        let installed = ["L/Meno/Meno.exe", "L/Meno/pdfium.dll", "L/Meno/uninstall.exe", "L/Meno/resources/licenses/THIRD-PARTY-NOTICES.txt"];
         // (Meno's folders as Windows has them: tauri.windows.conf.json over tauri.conf.json)
         let (conf, win) = (json("tauri.conf.json"), json("tauri.windows.conf.json"));
         let over = |key: &str| win["app"]["appDirectoriesOverride"][key].as_str().or(conf["app"]["appDirectoriesOverride"][key].as_str()).unwrap().to_string();

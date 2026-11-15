@@ -44,11 +44,11 @@ describe("drawnVolume", () => {
     expect(new Set(reads).size).toBe(1);
   });
 
-  it("reads a T as RDKit does, the H in the widest gap", () => {
-    // F, Cl and Br (on a wedge) at 0, 180 and 90 degrees: RDKit reads R,
-    // which with the H last is a volume of +1; the wedge on F instead, S
-    expect(drawnVolume({ x: 0, y: 0 }, [at(0), at(180), at(90), null], [0, 0, 1, 0])).toBe(1);
-    expect(drawnVolume({ x: 0, y: 0 }, [at(0), at(180), at(90), null], [1, 0, 0, 0])).toBe(-1);
+  it("reads no configuration from a T: two plain bonds straight across the centre and a wedge, a T-shaped configuration's depiction (IUPAC 2006, ST-1.2.12)", () => {
+    // (F and Cl plain at 0 and 180 degrees, Br on a wedge at 90; the H left out)
+    expect(drawnVolume({ x: 0, y: 0 }, [at(0), at(180), at(90), null], [0, 0, 1, 0])).toBe(0);
+    // (with the wedge on one of the two in line, the other two plain at 180 and 90: the shorter way round, read)
+    expect(drawnVolume({ x: 0, y: 0 }, [at(0), at(180), at(90), null], [1, 0, 0, 0])).not.toBe(0);
   });
 
   it("reads a centre drawn with a wedge and hashes side by side", () => {

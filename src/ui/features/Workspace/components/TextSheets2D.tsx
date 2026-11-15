@@ -11,6 +11,7 @@
  * or takes it out; selected, a drag moves the whole selection. Two clicks
  * read it in the column (hooks/useStructureEvents).
  */
+import { longPressMs } from "../longPress";
 import * as THREE from "three";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Text } from "@react-three/drei";
@@ -20,7 +21,7 @@ import type { WorkspaceText } from "../store/types";
 import { COLORS } from "../../../theme/colors";
 import { ICON_NAME_WIDTH, pointOf, scaleOf } from "../../../../lib/pdf/layout";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
-import { DOUBLE_CLICK_MS, LONG_PRESS_MS } from "../constants";
+import { DOUBLE_CLICK_MS } from "../constants";
 import { iconScaleOf, SHEET_LETTER, SHEET_LINE_PT, SHEET_PAD_PT, SHEET_TYPE_PT, sheetBoxAt, sheetOfText } from "../utils/textSheets";
 import { dragSelection } from "../utils/dragSelection";
 import { follow, TAU } from "../../../theme/motion";
@@ -206,7 +207,7 @@ function Sheet({
       s2.selectTexts([t.id]);
       setHeld((h) => (h ? { ...h, done: true } : h));
       move();
-    }, LONG_PRESS_MS);
+    }, longPressMs());
     const onMove = (m: PointerEvent) => {
       if (panned || Math.hypot(m.clientX - from.x, m.clientY - from.y) < PAN_PX) return;
       panned = true;

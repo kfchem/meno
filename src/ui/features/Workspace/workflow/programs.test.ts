@@ -3,10 +3,13 @@ import { addMolecule3d, emptyWorkspaceDocument } from "../document";
 import type { Molecule3D } from "../store/types";
 import { countOf, setEntries } from "./entries";
 import { addSet } from "./model";
-import { clock, conformersWorked, doneSaid, entryFiles, hartrees, isFailure, jobEntries, pluginEntry, readCollected, readKept, readPrepared, readRefused, sameCompound, UNLINKED_WHY, workedOf } from "./programs";
+import { clock, conformersWorked, doneSaid, entryFiles, hartrees, isFailure, jobEntries, notAsAsked, passedAsLone, passedSaid, passesAsLone, pluginEntry, readCollected, readKept, readNote, readPrepared, readRefused, sameCompound, solvationAsked, UNLINKED_WHY, workedOf } from "./programs";
 import { runMeno } from "./meno";
 import type { SetEntry } from "./entries";
 import { resultsOf, type Worked } from "./run";
+import { convergedAt } from "./converged";
+import { covalentLength, holdsGraphOf3d, madeChecks, metalHolds } from "../../../../lib/chem/metalHolds";
+import { COORDINATION_BOND } from "../../../../lib/chem/molecule";
 
 const WATER: SetEntry = {
   compound: 0,
@@ -59,6 +62,23 @@ describe("what a plugin is given of an entry", () => {
     expect(heavy.atoms[2].mass).toBeUndefined();
     expect(heavy.atoms[0].mass).toBeUndefined();
   });
+
+  it("gives the molecules its bonds make of its atoms, its fragments - one where all are joined - with the entry's version", () => {
+    expect(pluginEntry(WATER).fragments).toEqual([[0, 1, 2]]);
+    expect(pluginEntry(WATER).schema).toBe(2);
+    // (two waters in one entry, the second's oxygen bonded last)
+    const plain = WATER.atoms.map(({ el, x, y, z }) => ({ el, x, y, z }));
+    const dimer = {
+      ...WATER,
+      atoms: [...plain, ...plain],
+      bonds: [{ a1: 0, a2: 1, order: 1 }, { a1: 3, a2: 4, order: 1 }, { a1: 0, a2: 2, order: 1 }, { a1: 3, a2: 5, order: 1 }],
+      xyz: [...WATER.xyz, ...WATER.xyz.map((v, i) => (i % 3 === 0 ? v + 3 : v))],
+    } as SetEntry;
+    expect(pluginEntry(dimer).fragments).toEqual([
+      [0, 1, 2],
+      [3, 4, 5],
+    ]);
+  });
 });
 
 describe("the jobs a plugin prepares", () => {
@@ -76,6 +96,9 @@ describe("the jobs a plugin prepares", () => {
     // (the memory its plugin declares, in MiB, for the queue to count: a whole number within reason, else none said)
     expect(readPrepared({ jobs: [{ ...job, memory: 12000 }] }, 1)).toEqual([{ ...job, memory: 12000 }]);
     for (const memory of [0, -5, 1.5, "8GB", 2 ** 40]) expect(readPrepared({ jobs: [{ ...job, memory }] }, 1)).toEqual([job]);
+    // (the cores it takes, where its plugin says so - ORCA with no MPI, one: a whole number, at least one, else none said)
+    expect(readPrepared({ jobs: [{ ...job, cores: 1 }] }, 1)).toEqual([{ ...job, cores: 1 }]);
+    for (const cores of [0, -1, 1.5, "1"]) expect(readPrepared({ jobs: [{ ...job, cores }] }, 1)).toEqual([job]);
   });
 
   it("are refused where they cannot", () => {
@@ -116,6 +139,12 @@ describe("the jobs a plugin prepares", () => {
       expect(readPrepared({ ...raw, refused: bad }, 3)).toBe("It prepared no job for some of what came in");
     }
   });
+
+  it("say what the plugin says of how it prepared them, in a line of plain words - none where it says none", () => {
+    expect(readNote({ jobs: [job], note: "  frequencies computed\n numerically " })).toBe("frequencies computed numerically");
+    for (const raw of [{ jobs: [job] }, { jobs: [job], note: " " }, { jobs: [job], note: 3 }, null]) expect(readNote(raw)).toBeUndefined();
+    expect(readNote({ jobs: [job], note: "x".repeat(400) })?.length).toBe(300);
+  });
 });
 
 describe("what a plugin reads back of a job", () => {
@@ -124,6 +153,9 @@ describe("what a plugin reads back of a job", () => {
   it("is an output for each entry - or why the job gave none", () => {
     expect(readCollected({ outputs: [out] }, 1)).toEqual([out]);
     expect(readCollected({ why: "  Some atoms are very close  " }, 1)).toEqual({ why: "Some atoms are very close", kind: "program-error" });
+    // (of the kind its plugin says, one of core's - an optimisation that did not converge - else, a kind core has not, failed)
+    expect(readCollected({ why: "The optimisation did not converge in 50 cycles", kind: "not-converged" }, 1)).toEqual({ why: "The optimisation did not converge in 50 cycles", kind: "not-converged" });
+    expect(readCollected({ why: "It stopped", kind: "exploded" }, 1)).toEqual({ why: "It stopped", kind: "failed" });
     expect(readCollected({ outputs: [] }, 1)).toEqual({ why: "It read back nothing for it" });
     // (an output Meno cannot take fails its entry alone, the job's others taken)
     expect(readCollected({ outputs: [{ ...out, schema: 2 }, out] }, 2)).toEqual([{ kind: "failed", why: "It read it back in a form this Meno does not read" }, out]);
@@ -159,6 +191,13 @@ describe("what a plugin reads back of a job", () => {
     }
   });
 
+  it("gives the entry worked out back with what it was made from - its lineage - at the geometry it came to, and at its own", () => {
+    const made = { ...WATER, madeOf: ["a#1"] };
+    const optimised = workedOf("optimise", made, out, ["xtb 6.7.1"]);
+    const energy = workedOf("energy", made, { ...out, frames: [WATER.xyz as number[]], energies: [-5.07] }, ["xtb 6.7.1"]);
+    expect([optimised, energy].map((w) => (isFailure(w) ? w.why : w.madeOf))).toEqual([["a#1"], ["a#1"]]);
+  });
+
   it("makes the entry worked out: its last geometry and energy; an optimisation's path before it; what the calculation was", () => {
     const w = workedOf("optimise", WATER, out, ["xtb 6.7.1"]);
     if (isFailure(w)) throw new Error(w.why);
@@ -172,6 +211,20 @@ describe("what a plugin reads back of a job", () => {
     expect(!isFailure(energy) && energy.path).toBeFalsy();
     expect(workedOf("energy", WATER, { ...out, atoms: ["O", "H", "C"] }, ["xtb 6.7.1"])).toEqual({ kind: "wrong-molecule", why: "What came back is not the molecule that went" });
     expect(workedOf("energy", WATER, { ...out, frames: [[1, 2]] }, ["xtb 6.7.1"])).toEqual({ kind: "no-geometry", why: "It read back no geometry" });
+  });
+
+  it("starts a failed run's entry from its geometry alone: no energy, calculation or mark of it carried on, where the program reads none", () => {
+    // (a run that stopped, its entry out of Failed - with an energy on it, as a stale one would be - worked out again by a program that read no energy)
+    const stopped: SetEntry = { ...WATER, energy: -76.1, calc: { readers: [], program: "ORCA", method: "B3LYP" }, failed: { kind: "program-error", why: "ORCA finished by error termination in SCF" } };
+    const unread = { ...out, energies: undefined };
+    const w = workedOf("optimise", stopped, unread, ["xtb 6.7.1"]);
+    if (isFailure(w)) throw new Error(w.why);
+    expect(w.energy).toBeUndefined();
+    expect(w.failed).toBeUndefined();
+    expect(w.calc).toMatchObject({ program: "xtb" });
+    // (and where it reads one, that one alone)
+    const read = workedOf("optimise", stopped, out, ["xtb 6.7.1"]);
+    expect(!isFailure(read) && read.energy).toBe(-5.0705);
   });
 
   it("gives back none of what the entry came with that is not so of what the program worked out: how it was made, what its energies were from, its stereo labels", () => {
@@ -208,9 +261,9 @@ describe("what a plugin reads back of a job", () => {
     const formed = workedOf("optimise", drawn, { ...out, frames: [[0, 0, 0, 0, 0.76, 0.59, 0, 0.1, 0.9]] }, ["xtb 6.7.1"]);
     expect(!isFailure(formed) && formed.keep?.drawnFrom).toBeFalsy();
     // (its own charge, -1 on the oxygen, the calculation said 0: another species)
-    const other = workedOf("energy", drawn, { ...out, frames: [WATER.xyz as number[]], charge: 0 }, ["xtb 6.7.1"]);
+    const other = workedOf("energy", drawn, { ...out, frames: [WATER.xyz as number[]], energies: [-5], charge: 0 }, ["xtb 6.7.1"]);
     expect(!isFailure(other) && other.keep?.drawnFrom).toBeFalsy();
-    const same = workedOf("energy", drawn, { ...out, frames: [WATER.xyz as number[]], charge: -1 }, ["xtb 6.7.1"]);
+    const same = workedOf("energy", drawn, { ...out, frames: [WATER.xyz as number[]], energies: [-5], charge: -1 }, ["xtb 6.7.1"]);
     expect(!isFailure(same) && same.keep).toEqual({ drawnFrom: [11, 12, 13], drawnAs: "drawn" });
     expect(sameCompound(WATER, out.frames[1])).toBe(true);
   });
@@ -313,6 +366,41 @@ describe("a conformer search", () => {
     expect(resultsOf({ ok: true, holds: "conformers", kept: made, aside: [], said: "" }, "frequencies").molecules[0].calc?.results).toBeUndefined();
   });
 
+  it("sets aside what Meno's checks find, saying so in how each one kept was made - its degeneracy kept, no populations of fewer", () => {
+    // (Pd at the origin, its Cl and P each at its covalent length; the second conformer with its P at 1.3 of its own: a bond lost)
+    const [pdCl, pdP] = [covalentLength("Pd", "Cl", 1)!, covalentLength("Pd", "P", 1)!];
+    const at = (p: number, z = 0) => [pdCl, 0, z, 0, 0, 0, 0, p * pdP, 0];
+    const pd: SetEntry = {
+      compound: 0,
+      number: 1,
+      atoms: [
+        { el: "Cl", x: pdCl, y: 0, z: 0 },
+        { el: "Pd", x: 0, y: 0, z: 0 },
+        { el: "P", x: 0, y: pdP, z: 0 },
+      ],
+      bonds: [
+        { a1: 0, a2: 1, order: 1 },
+        { a1: 1, a2: 2, order: 1 },
+      ],
+      xyz: at(1),
+    };
+    const g = holdsGraphOf3d(pd.atoms, pd.bonds, COORDINATION_BOND);
+    const checks = madeChecks(g.atoms, g.bonds, metalHolds(g.atoms, g.bonds));
+    const out = { schema: 1, program: "RDKit", atoms: ["Cl", "Pd", "P"], frames: [at(1), at(1.3), at(1, 0.1)], energies: [-1, -0.9, -0.95], populations: [0.5, 0.2, 0.3], degeneracies: [1, 2, 3] };
+    const made = conformersWorked(pd, out, ["rdkit 2026.03.6"], undefined, checks);
+    if (isFailure(made)) throw new Error(made.why);
+    expect(made.map((w) => [w.number, w.energy, w.degeneracy, w.share])).toEqual([
+      [1, -1, 1, undefined],
+      [2, -0.95, 3, undefined],
+    ]);
+    for (const w of made) expect(w.keep?.made?.how).toEqual([{ label: "Set aside", text: expect.stringMatching(/^1 of 3: a bond to a metal far from its length \(the worst: Pd-P at /) }]);
+    // (none set aside: as it came, its populations with it)
+    const whole = conformersWorked(pd, { ...out, frames: [at(1), at(1, 0.2), at(1, 0.1)] }, [], undefined, checks);
+    if (isFailure(whole)) throw new Error(whole.why);
+    expect(whole.map((w) => w.share)).toEqual([0.5, 0.2, 0.3]);
+    expect(whole[0].keep).toBeUndefined();
+  });
+
   it("keeps the program's own populations, where it gives one for each conformer", () => {
     const out = { schema: 1, program: "CREST", atoms: ["O", "H", "H"], frames: [WATER.xyz as number[], [0, 0, 0.1, 0, 0.7, 0.6, 0, -0.7, 0.6]], energies: [-1, -0.99], populations: [0.7, 0.3] };
     const made = conformersWorked(WATER, out, []);
@@ -339,14 +427,14 @@ describe("a conformer search", () => {
     // (CREST's conformers, then each one's frequencies by xtb: the second a saddle point)
     const conformers: SetEntry[] = [WATER, { ...WATER, number: 2 }];
     const out = (imaginary: number[]) => ({ schema: 1, program: "xtb", atoms: ["O", "H", "H"], frames: [WATER.xyz as number[]], energies: [-1], imaginary });
-    const done = conformers.map((e, i) => workedOf("frequencies", e, out(i === 1 ? [-382.63] : []), ["xtb 6.7.1"]));
+    const done = conformers.map((e, i) => workedOf("frequencies", e, out(i === 1 ? [-391.27] : []), ["xtb 6.7.1"]));
     if (done.some(isFailure)) throw new Error("not done");
     const [m] = resultsOf({ ok: true, holds: "conformers", kept: done as Worked[], aside: [], said: "" }, "frequencies").molecules;
     // (the first judged none: none, apart from not judged)
-    expect(m.imaginary).toEqual([[], [-382.63]]);
+    expect(m.imaginary).toEqual([[], [-391.27]]);
     expect(m.calc?.imaginary).toBeUndefined();
     // (taken on: the second named as no minimum)
-    expect(setEntries([{ ...m, id: 2, at: { x: 0, y: 0 } }], "conformers").map((e) => e.imaginary)).toEqual([[], [-382.63]]);
+    expect(setEntries([{ ...m, id: 2, at: { x: 0, y: 0 } }], "conformers").map((e) => e.imaginary)).toEqual([[], [-391.27]]);
     expect(setEntries([{ ...m, id: 2, at: { x: 0, y: 0 } }], "conformers").map((e) => e.calc?.imaginary)).toEqual([undefined, undefined]);
   });
 
@@ -354,6 +442,72 @@ describe("a conformer search", () => {
     expect(readKept({ kept: [2, 0, 2] }, 3)).toEqual([0, 2]);
     expect(readKept({ kept: [3] }, 3)).toBe("It said nothing Meno can take");
     expect(readKept({}, 3)).toBe("It said nothing Meno can take");
+  });
+});
+
+describe("a lone atom its plugin's program takes none of", () => {
+  const SODIUM: SetEntry = { compound: 2, number: 3, atoms: [{ el: "Na", x: 1, y: 2, z: 3, charge: 1 }], bonds: [], xyz: [1, 2, 3], charge: 1, multiplicity: 1, energy: -0.2, partOf: true, calc: { program: "xtb", method: "GFN2-xTB" } as SetEntry["calc"] };
+
+  it("passes through Conformers and Optimise alone, where the plugin says so - never a molecule of more atoms", () => {
+    expect(passesAsLone("conformers", true, SODIUM)).toBe(true);
+    expect(passesAsLone("optimise", true, SODIUM)).toBe(true);
+    expect(passesAsLone("energy", true, SODIUM)).toBe(false);
+    expect(passesAsLone("optimise", undefined, SODIUM)).toBe(false);
+    expect(passesAsLone("optimise", true, WATER)).toBe(false);
+  });
+
+  it("comes as it was - its charge and spin kept, no energy or calculation, none having been run - said so on it", () => {
+    const optimised = passedAsLone("optimise", SODIUM);
+    expect(optimised).toMatchObject({ compound: 2, number: 3, xyz: [1, 2, 3], charge: 1, multiplicity: 1, partOf: true });
+    expect(optimised.energy).toBeUndefined();
+    expect(optimised.calc).toBeUndefined();
+    expect(optimised.keep?.made?.how).toEqual([{ label: "Optimise", text: "one atom: nothing to optimise, no energy" }]);
+    // (through Conformers: its compound's only conformer, whole)
+    const found = passedAsLone("conformers", SODIUM);
+    expect(found).toMatchObject({ compound: 2, number: 1 });
+    expect(found.partOf).toBeUndefined();
+    expect(found.keep?.made?.how).toEqual([{ label: "Conformers", text: "one atom: its only conformer" }]);
+  });
+
+  it("is said on the step's line in what it is", () => {
+    expect(passedSaid("conformers", 1)).toBe("one atom: its only conformer");
+    expect(passedSaid("conformers", 2)).toBe("2 lone atoms: each its only conformer");
+    expect(passedSaid("optimise", 3)).toBe("3 lone atoms: nothing to optimise, no energy");
+    expect(passedSaid("optimise", 0)).toBeNull();
+    expect(passedSaid("energy", 1)).toBeNull();
+  });
+});
+
+describe("the solvation a step asked for", () => {
+  const ALPB = { says: "ALPB({solvent})", none: { id: "solvent", is: "none" } };
+
+  it("is its manifest's words, each option's value put in - none where they ask for none, unsaid where it says no solvation", () => {
+    expect(solvationAsked(ALPB, { method: "gfn2", solvent: "water" })).toBe("ALPB(water)");
+    expect(solvationAsked(ALPB, { solvent: "none" })).toBe("none");
+    expect(solvationAsked({ says: "{solvation}({solvent})", none: { id: "solvation", is: "none" } }, { solvation: "SMD", solvent: "chloroform" })).toBe("SMD(chloroform)");
+    expect(solvationAsked(undefined, { solvent: "water" })).toBeUndefined();
+    // (an option it names with no value: nothing asked, never "ALPB()")
+    expect(solvationAsked(ALPB, { method: "gfn2" })).toBeUndefined();
+    expect(solvationAsked({ says: "{solvation}({solvent})", none: { id: "solvation", is: "none" } }, { solvation: "SMD" })).toBeUndefined();
+  });
+
+  it("holds what an output says it ran in to it: the same words in any case, or those with more after a comma - else refused, saying both", () => {
+    expect(notAsAsked("ALPB(water)", "ALPB(water)")).toBeNull();
+    expect(notAsAsked("ALPB(water)", "alpb(Water)")).toBeNull();
+    expect(notAsAsked("ALPB(water)", "ALPB(water), reference state gsolv [1 M gas/solution]")).toBeNull();
+    expect(notAsAsked("none", "none")).toBeNull();
+    expect(notAsAsked("ALPB(water)", "ALPB(acetone)")).toEqual({ kind: "refused", why: "It ran in ALPB(acetone), not in ALPB(water) as asked" });
+    expect(notAsAsked("ALPB(water)", "none")).toEqual({ kind: "refused", why: "It ran in the gas phase, not in ALPB(water) as asked" });
+    expect(notAsAsked("none", "ALPB(thf)")).toEqual({ kind: "refused", why: "It ran in ALPB(thf), not in the gas phase as asked" });
+    // (more words without a comma: another name going on, not as asked; the gas phase takes nothing after it)
+    expect(notAsAsked("ALPB(water)", "ALPB(water) reference")?.kind).toBe("refused");
+    expect(notAsAsked("ALPB(water)", "ALPB(water)x")?.kind).toBe("refused");
+    expect(notAsAsked("none", "none, something")?.kind).toBe("refused");
+    // (another model, the same solvent: not as asked)
+    expect(notAsAsked("ALPB(water)", "GBSA(water)")?.kind).toBe("refused");
+    // (not said: not held to it - nor where the step asks nothing)
+    expect(notAsAsked("ALPB(water)", undefined)).toBeNull();
+    expect(notAsAsked(undefined, "ALPB(water)")).toBeNull();
   });
 });
 
@@ -366,6 +520,19 @@ describe("what a step that ran jobs says", () => {
     expect(hartrees(-0.0000001)).toBe("0.000000 Eh");
     expect(doneSaid([{ ...WATER, energy: -5.07054 }], 1, 12_000)).toBe("0:12 · E −5.070540 Eh");
     expect(doneSaid([WATER, WATER], 3, 65_000)).toBe("1:05 · 2 of 3");
+  });
+
+  it("says where it held anything as it converged - restraints held exactly before atoms held alone, as the entries' converged says it", () => {
+    const row = { kind: "dihedral" as const, atoms: [2, 0, 1, 3], value: -60, exact: true as const };
+    const free = { ...WATER, energy: -5.07, converged: convergedAt("optimisation", WATER.xyz) };
+    const atoms = { ...WATER, energy: -5.07, converged: convergedAt("optimisation with atoms held", WATER.xyz, [0]) };
+    const rows = { ...WATER, energy: -5.07, converged: convergedAt("saddle point optimisation with restraints held", WATER.xyz, [], [row]) };
+    expect(doneSaid([rows] as Worked[], 1, 12_000)).toBe("0:12 · E −5.070000 Eh · with restraints held");
+    expect(doneSaid([atoms] as Worked[], 1, 12_000)).toBe("0:12 · E −5.070000 Eh · with atoms held");
+    expect(doneSaid([free] as Worked[], 1, 12_000)).toBe("0:12 · E −5.070000 Eh");
+    // (of several: restraints where any held them, else atoms where any held them)
+    expect(doneSaid([free, atoms, rows] as Worked[], 3, 65_000)).toBe("1:05 · 3 of 3 · with restraints held");
+    expect(doneSaid([free, atoms] as Worked[], 3, 65_000)).toBe("1:05 · 2 of 3 · with atoms held");
   });
 });
 

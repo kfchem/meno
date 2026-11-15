@@ -1,14 +1,22 @@
+import RoleOffer from "./RoleOffer";
+import { noPluginSaid, useRoleOffer } from "../../../lib/roles/worker";
 import { canvasAlerts } from "./utils/alerts";
-import { bondKindOf, type BondKindName } from "./utils/bondKinds";
+import { bondKindMenu } from "./utils/bondKinds";
+import { crossingMenu } from "./chem/crossings";
 import type { ArrowKind, ArrowWeight } from "../../../lib/chem/reactionArrow";
 import { canTakeBond, valenceOrder } from "../../../lib/chem/molecule";
 import { usePresentingWindow } from "../../presenting";
 import { typefaceRead } from "../../fonts/typefaces";
 import { Canvas } from "@react-three/fiber";
+import { Vector3 } from "three";
+import type { MenuAnchor } from "./useMenuAt";
 import { useEditor, useEditorStore, EditorProvider } from "./store";
 import { selectedOf, selectionIsAtom } from "./store/slices/selectionSlice";
 import { useStructureEvents } from "./hooks/useStructureEvents";
 import { useCanvasSetup } from "./hooks/useCanvasSetup";
+import PageHits from "./pageGl/PageHits";
+import PagePlaced from "./pageGl/PagePlaced";
+import ConversationFrames from "./conversation/ConversationFrames";
 import {
   Atoms2D,
   Bonds2D,
@@ -18,6 +26,7 @@ import {
   BondsPick2D,
   AtomsHoverRings2D,
   ExtendPreview2D,
+  ClickBondPreview2D,
   HoldProgress2D,
   ChainGuide2D,
   MovePreview2D,
@@ -38,9 +47,11 @@ import {
 import { ArrowPathIcon, ExclamationTriangleIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { chordedPress } from "./utils/press";
+import WarmShaders2D from "./components/WarmShaders2D";
 import { labelReachOf } from "./utils/labelHits";
 import { AnimatePresence, motion } from "motion/react";
 import { CANVAS_RESIZE, DURATION, EASE_SLIDE, FADE, LEAVE, RISE } from "../../theme/motion";
+import { pageEvents } from "./utils/pageEvents";
 import DocumentStylePanel from "./DocumentStylePanel";
 import ArrowStylePanel from "./ArrowStylePanel";
 import SaveAbbreviationPanel from "./SaveAbbreviationPanel";
@@ -72,8 +83,11 @@ import { procedureNeeds, proceduresSaved, saveProcedure, suggestedName } from ".
 import { pluginWriters, WRITERS, type Writer } from "../../../lib/io/writers";
 import { anyPluginById, WRITER_PLUGINS } from "../../../lib/calc/catalog";
 import { addPlugin, useReaders } from "../../../lib/calc/workers";
+import { addOnline } from "../../../lib/calc/addOnline";
+import { useOnline } from "../../../lib/plugins/online";
 import { knownOfMolecules } from "./utils/written";
-import { carriedOf } from "./utils/workspace";
+import { carriedOf, cutShort } from "./utils/workspace";
+import type { Conformers } from "../../../lib/roles/client";
 import { runAllNote, runNote } from "./workflow/earlierRuns";
 import PartMenu, { type CanvasCommand, type MenuMolecule3D, type MenuTarget } from "./PartMenu";
 import { deleteFromMenu } from "./menuDelete";
@@ -82,14 +96,15 @@ import { hasLonePair, tailOf } from "./utils/pushes";
 import { unsureOf, type Unsure } from "./chem/drawing";
 import { structureValues } from "./utils/byStructure";
 import ColourCard, { type ColourTarget } from "./ColourCard";
-import WordsCard from "./WordsCard";
-import { cardBeside, WORDS_CARD } from "./utils/cardBeside";
 import CornersCard from "./CornersCard";
 import SettingsStyleAsk from "./SettingsStyleAsk";
 import LargeWorkspaceAsk from "./LargeWorkspaceAsk";
 import { PdfNumbersCard, PdfPagesCard } from "./PdfMakeCards";
 import { combined, putBeside, savePdfFile } from "./pdfMake";
+import { printed, printingKnown } from "../../../lib/pdf/print";
+import { usePrinting } from "./hooks/usePrinting";
 import { listItem, stylesOf, wordsSet } from "../../../lib/chem/captions";
+import WordsFont from "./WordsFont";
 import { WordsEditor } from "./utils/wordsEditor";
 import { ringAt, ringsAmong, ringsOf } from "./utils/rings";
 import { style3dOf, useEasedStyle3D, useStyle3D, useStyleNames3D } from "./style3d";
@@ -116,7 +131,7 @@ import {
   isDeleteKey,
   isFitKey,
   isDeselectKey,
-  isFillKey, isFindKey,
+  isFillKey, isFindKey, isPrintKey,
   isSelectAllKey,
   IS_MAC,
   presentIntent,
@@ -127,6 +142,7 @@ import {
 import { chemWorker, rolePlugin, useChem } from "../../../lib/roles/worker";
 import { stopWorker } from "../../../lib/plugins/process";
 import { useCheckingFiles, useDownloads } from "../../../lib/pyEnv";
+import { chemistryStep } from "./quickAddSmiles";
 import { roleOptionsRole } from "../../../lib/plugins/roles";
 import { valuesOf } from "../../../lib/options";
 import { useAppSettings, WINDOW_3D } from "../../../lib/settings/appSettings";
@@ -138,7 +154,7 @@ import { exportKindOf, exportKinds, holdsOfDrawn, useFileActions, type FileActio
 import { setSavedPathOf, setSaver } from "../../../lib/doc/savers";
 import { useReadings } from "../../../lib/calc/readings";
 import { useCanvasRatio } from "./canvasRatio";
-import { editorLayoutOptions, startingZoom } from "./layoutOptions";
+import { editorLayoutOptions, startingZoom, setDrawnRatio } from "./layoutOptions";
 import { labelSetOf } from "../../../lib/chem/layout2d";
 import { useDrawingStyle } from "./useDrawingStyle";
 import { DrawnLayoutProvider } from "./components/DrawnLayout";
@@ -172,7 +188,7 @@ import { marksBetween, textOf } from "../../../lib/pdf/text";
 import { pdfRoom } from "../../../lib/pdf/layout";
 import { copying, readClipboard, writeClipboard } from "../../../lib/clipboard";
 import { PdfPictures } from "./components/pdfPictures";
-import { FollowCover, PageHtmlLayer, pageHtmlLayerStyle } from "./components/coverLayer";
+import { FollowCover, PAGE_HTML_LAYER, PageHtmlLayer, pageHtmlLayerStyle } from "./components/coverLayer";
 import { useKeepUnselected } from "./hooks/useKeepUnselected";
 import { FollowStyle } from "./components/FollowStyle";
 import { pointOfStyle } from "./restyle";
@@ -181,7 +197,7 @@ import { ChargeHolds2D } from "./components/MarkHold2D";
 import Workflow2D from "./components/Workflow2D";
 import PageScale from "./components/PageScale";
 import GuideStructure from "./components/GuideStructure";
-import { guideNotice } from "../../../lib/plugins/guides";
+import { guideNotice } from "../../../lib/guide/guide";
 import { selectionFrame } from "./workflow/selectionSet";
 import { offeredSteps } from "./workflow/offered";
 import { GAP, PORT_DOWN } from "./workflow/look";
@@ -191,29 +207,40 @@ import Ask3D from "./Ask3D";
 import Cycles2D from "./components/Cycles2D";
 import { cyclePointed, cycleThings, endsAt, turnCycle } from "./utils/cycles";
 import { branchPath, CYCLE_RADIUS, MARGIN as CYCLE_MARGIN } from "../../../lib/chem/cycle";
+import { CONVERSATION_FRAME } from "./conversation/ops";
 import { inRow } from "./components/structureDrag";
 import { pickedStructure } from "./utils/pdfStructures";
 import StructureFlight from "./components/StructureFlight";
+import CompoundCard from "./components/CompoundCard";
 import { setStructureSay } from "./components/structureDrag";
 import CoordinatesCard from "./CoordinatesCard";
 import { readCoordinates, textOfPages, type CoordinateStructure, type PlacedPage } from "../../../lib/io/coordinates";
+import { quotedTables } from "../../../lib/io/kinds";
 import { useTextMenu } from "../TextEditor/textMenu";
 import { coordinateMolecules } from "./utils/coordinates";
 import { pictureRegion, readStructure } from "./components/readStructure";
 import { isFilm } from "../../../lib/picture/image";
 import { placedBeside, readMarks } from "./utils/figures";
 import { useNotices } from "../../notices";
-import { bareAtomsOf, bareWords, blocksOf, blocksStill, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, placeRow, rowFrom, takenOnPage, turnedOver, withinWindow, type Block, type Box, type Open } from "./chem/make3d";
+import { bareAtomsOf, bareWords, blocksOf, blocksStill, boxOf, conformersGrowing, conformersOnPage, formulaOf, growOn, type Growth, formulaPlace, likeOf, linkOf, moleculeOf, openIn, pageRounds, placeRow, rowFrom, takenOnPage, turnedOver, withinWindow, type Block, type Box, type Open } from "./chem/make3d";
+import { isomersToMake } from "./chem/openStereo";
 import { centredAt, clipItems } from "./utils/copyPaste";
-import { putDownSmiles } from "./utils/quickAddSmiles";
+import { structureInOutput } from "./chem/fromClipboard";
+import { leftOutSaid } from "./utils/readNotes";
+import { outputKindIn } from "../../../lib/calc/probe";
+import { NotRead } from "../../../lib/calc/read";
+import { namedDrawn, putDownSmiles } from "./utils/quickAddSmiles";
 import { addedBox } from "./store/slices/modelSlice";
 import { viewPanning } from "./components/viewGoal";
 import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gesture";
 import { Remake3D } from "./components/remake3d";
-import { mapStanding, reactionOf } from "./chem/atomMap";
+import { mapAtoms, mapOffered, mapStanding, reactionOf, unpairedSaid } from "./chem/atomMap";
+import { structuresOf } from "./workflow/entries";
+import { conformerPairs, conformersSaid } from "./chem/structureMaps";
+import { partsOffered } from "./utils/joinedParts";
 import { useAtomMaps } from "./chem/useAtomMaps";
 import { turnOnto } from "./utils/align3d";
-import type { ArrowFormPatch, Caption, Drawn, Molecule3D, PictureFrom, WordsFrom } from "./store/types";
+import type { ArrowFormPatch, Caption, Drawn, Grown3D, Molecule3D, PictureFrom, WordsFrom } from "./store/types";
 import { resultKey, resultsOn } from "../../../lib/calc/results";
 import { titled } from "../../../lib/calc/sources";
 import { byOf, MENO, missingFor } from "./workflow/doers";
@@ -281,7 +308,7 @@ function WorkspaceContent({
   /** A reaction arrow's own style, in the panel beside the canvas. */
   openArrowStyle: (id: number) => void;
   /** The selected group saved as an abbreviation, in the panel beside the canvas. */
-  openSaveAbbreviation: (ids: number[], smiles: string) => void;
+  openSaveAbbreviation: (ids: number[], smiles: string, notKept?: string) => void;
   /** Whether it fades into view: made again after it failed (CanvasBoundary). */
   fadeIn?: boolean;
 }) {
@@ -344,8 +371,12 @@ function WorkspaceContent({
   const store = useEditorStore();
   // (how finely the canvas is drawn, as Settings has it: a change shows at once)
   const canvasRatio = useCanvasRatio();
+  // (bonds never thinner than one of the canvas's device pixels: layoutOptions `minLinePx`)
+  setDrawnRatio(canvasRatio);
   // (no menu over a talk)
   const talking = useEditor((s) => s.presenting != null);
+  // (each frame its members' room, and what was let go over one eased out of it: as each pointer is let go - workflow/fitFrames)
+  useEffect(() => store.getState().watchFrames(), [store]);
   // (a structure selected: a guide's step waiting for it goes on)
   useEffect(() => store.subscribe((s, prev) => void (s.sel.atoms.size && !prev.sel.atoms.size && guideNotice("selected"))), [store]);
   // (a tab's own, unless it is a document's, holds texts opened while it is in front: ui/views/texts)
@@ -403,6 +434,8 @@ function WorkspaceContent({
   // (a plugin's kept files read through for their fingerprints, where that takes more than a moment: a model's weights - said, as setting up is)
   const checkingFiles = useCheckingFiles((s) => Object.values(s)[0]);
   const [chemError, setChemError] = useState<string | null>(null);
+  // (the role a chemistry asked of that no plugin here fills: what the line of its error offers plugins for)
+  const offerRole = useRoleOffer((s) => s.role);
   const cleaningNow = useRef(false); // one clean-up at a time, keys included
   const runCleanUp = useCallback(
     (aroundAtom: number | Iterable<number> | null) => {
@@ -456,6 +489,12 @@ function WorkspaceContent({
   // (structures being made in 3D: since when, and how to stop it - the plugin's worker stopped, nothing added)
   const [making3d, setMaking3d] = useState<number | null>(null);
   const stop3d = useRef<(() => void) | null>(null);
+  // (how many 3D structures were made this session: each one's key - what its search goes on to bring joins its step)
+  const madeCount = useRef(0);
+  // (how many have been asked: the latest says how it is getting on)
+  const builds3d = useRef(0);
+  // (how a search going on, its 3D structure on the page, is stopped: by the next one asked, as by Stop)
+  const searching3d = useRef<(() => void) | null>(null);
   // A drawn reaction's atom map, made off the drawing's thread - said
   // meanwhile, and stoppable - and kept on its arrow (chem/useAtomMaps)
   const atomMaps = useAtomMaps(store, setChemError);
@@ -492,18 +531,30 @@ function WorkspaceContent({
   );
   const build3d = useCallback(
     async (blocks: Block[], isomers: "one" | "all", replacing?: Molecule3D) => {
+      // (a search going on from one made before: stopped, what it brought kept, before this one asks the same plugin)
+      searching3d.current?.();
       setWorking3d("Making the 3D structure…");
       setChemError(null);
-      // (stopped: the worker making them stopped - started afresh when next asked - and nothing added)
+      // (stopped: the worker making them stopped - started afresh when next asked - and nothing added; or, once they are on
+      //  the page and their search goes on, the search ended there, what it brought kept)
       let stopped = false;
       const plugin = rolePlugin("conformers");
+      // (this one the latest asked: only it says how it is getting on, and only it is stopped by Stop)
+      const mine = ++builds3d.current;
       stop3d.current = () => {
         stopped = true;
         if (plugin) void stopWorker(plugin.id, `${plugin.name} was stopped while it made a 3D structure`);
       };
+      // (each block's search that goes on after its first round, and where its stereoisomers stand among those made)
+      const growths: { growth: Growth; block: Block; several: boolean; from: number; window3d: number }[] = [];
+      // (a search goes on while its molecules are on the page: an undo that took them away, or a 3D structure made again, ends it)
+      let gone = () => false;
+      // (on the page: what fails after is its search's, not its making's)
+      let on3d = false;
       setMaking3d(Date.now());
       try {
         const chem = await chemWorker("conformers");
+        const stereo = await chemWorker("stereoisomers");
         // (the options the plugin takes for the role, as chosen in Settings, Chemistry, on its 3D card)
         const declared = rolePlugin("conformers")?.roleOptions.conformers ?? [];
         const options = valuesOf(declared, useAppSettings.getState().options[roleOptionsRole("conformers")]);
@@ -522,7 +573,14 @@ function WorkspaceContent({
           if (stopped) return;
           // (within the window Settings gives: a workflow's conformer step keeps every one - make3d withinWindow)
           const window3d = useAppSettings.getState().chemistry.window3d ?? WINDOW_3D;
-          const isomersMade = (await conformersOf(chem, block, isomers, options)).map((c) => withinWindow(c, window3d));
+          // (as many as the molecule needs, in rounds, where its plugin's search takes draws: given a window first - make3d pageRounds)
+          const chosen = useAppSettings.getState().chemistry;
+          const rounds = pageRounds(block, chosen, !!plugin?.roleDraws.includes("conformers"));
+          if (rounds && "needs" in rounds) throw new Error(rounds.needs);
+          // (in rounds: shown once each has had its first, the rest going on after - docs/WORKSPACE.md, *As its search goes on*)
+          const growth = rounds ? await conformersGrowing(chem, stereo, block, isomers, options, useAppSettings.getState(), rounds, () => stopped || gone()) : null;
+          if (growth) growths.push({ growth, block, several: growth.first.length > 1, from: made.length, window3d });
+          const isomersMade = (growth ? growth.first : await conformersOnPage(chem, stereo, block, isomers, options, useAppSettings.getState(), rounds)).map((c) => withinWindow(c, window3d));
           // (several stereoisomers: their R and S shown, to tell them apart)
           const ms = isomersMade.map((c) => moleculeOf(c, block, isomersMade.length > 1));
           const model = store.getState().model;
@@ -549,15 +607,50 @@ function WorkspaceContent({
           setChemError("The drawing changed while its 3D structure was being made, so none was added.");
           return;
         }
-        store.getState().riseMolecules3d(made, replacing ? [replacing.id] : []);
+        // (made with a key where a search goes on, so that what it brings joins this step where nothing came between)
+        const key = `made3d:${++madeCount.current}`;
+        // (where a search goes on, the document holds its first round said cut short - what it is, should the search end with
+        //  nothing written: an undo, an edit, a failure - and the page shows it searching on: workspace `cutShort`)
+        const growing = new Set(growths.flatMap((g) => g.growth.first.map((_, k) => g.from + k)));
+        const ids = store.getState().riseMolecules3d(
+          made.map((x, i) => (growing.has(i) && x.m.made ? { ...x, m: { ...x.m, made: cutShort(x.m.made) } } : x)),
+          replacing ? [replacing.id] : [],
+          growths.length ? key : undefined,
+        );
         // (with no room for them in view, the view goes to them - along, or out as little as needed)
         if (!allInView && made3d) store.getState().requestShow(made3d);
+        if (!growths.length) return;
+        // (each stereoisomer's search goes on, in turn: what it brings shown as it lands, over what the page holds - the view's
+        //  until it ends, then written into the document once - docs/WORKSPACE.md, *As its search goes on*)
+        const idsOf = (g: (typeof growths)[number]) => g.growth.first.map((_, k) => ids[g.from + k]);
+        const grownOf = (m: Omit<Molecule3D, "id" | "at">): Grown3D => ({ atoms: m.atoms, frames: m.frames, energies: m.energies, made: m.made });
+        for (const g of growths) idsOf(g).forEach((id, k) => store.getState().startGrowing3d(id, grownOf(made[g.from + k].m), key));
+        gone = () => growths.every((g) => idsOf(g).every((id) => !store.getState().growing3d[id]));
+        setWorking3d("Searching for more conformers…");
+        // (stopped by the next asked as it gets to its next round, what it brought kept: the plugin it asks is left to them both)
+        searching3d.current = () => {
+          stopped = true;
+        };
+        on3d = true;
+        await growOn(
+          growths.map((g) => ({ growth: g.growth, ids: idsOf(g), shownAs: (c: Conformers) => grownOf(moleculeOf(withinWindow(c, g.window3d), g.block, g.several)) })),
+          {
+            grow: (id, grown) => store.getState().grow3d(id, grown),
+            settle: (id) => store.getState().settleGrown3d(id),
+          },
+        );
       } catch (e: unknown) {
-        if (!stopped) setChemError(`No 3D structure could be made: ${e instanceof Error ? e.message : String(e)}`);
+        const why = e instanceof Error ? e.message : String(e);
+        if (!stopped) setChemError(on3d ? `The search for more conformers stopped: ${why}` : `No 3D structure could be made: ${why}`);
       } finally {
-        stop3d.current = null;
-        setMaking3d(null);
-        setWorking3d(null);
+        // (every search let go, its worker with it: ended, or never on the page - stopped, the drawing changed, a failure)
+        for (const g of growths) g.growth.drop();
+        if (builds3d.current === mine) {
+          searching3d.current = null;
+          stop3d.current = null;
+          setMaking3d(null);
+          setWorking3d(null);
+        }
       }
     },
     [store, viewBox, camRef],
@@ -581,7 +674,7 @@ function WorkspaceContent({
         const chem = await chemWorker("stereoisomers");
         const open = await Promise.all(
           blocks.map(async (b) =>
-            openIn(b, await chem.request("open_stereo", { molblock: b.molblock, ...(b.like ? { like: b.like } : {}) })),
+            openIn(b, await isomersToMake(chem, b.molblock, b.like, "all")),
           ),
         );
         // (stereo drawn without a configuration: asked what to make first)
@@ -684,12 +777,16 @@ function WorkspaceContent({
     [store],
   );
   const [menu, setMenu] = useState<MenuTarget | null>(null);
+  // (R/S and E/Z: what the menu's item acts on and its words, worked out once as the menu opens - so the words read are what is done, whatever
+  //  changes while it is open: utils/stereoShown)
+  const stereoAtMenu = useMemo(() => (menu ? stereoItemFor(store.getState(), menu) : null), [menu, store]);
+  // (what the author of the PDF its menu is of allows of printing: found as the menu opens)
+  usePrinting(menu?.kind === "pdf" ? store.getState().pdfs.find((x) => x.id === menu.id)?.sha256 : undefined);
   // a colour card opened from a menu, where the menu was (ColourCard)
   // (a card for a new PDF made from one held: its pages numbered, or put in order - docs/PDF.md, *A new PDF from pages*)
   const [pdfCard, setPdfCard] = useState<{ kind: "numbers" | "pages"; id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
   const [colourCard, setColourCard] = useState<{ target: ColourTarget; x: number; y: number; within: { width: number; height: number } } | null>(null);
   // the card of sizes for words on the page, where their menu was (docs/EDITOR-2D.md, *Text*)
-  const [wordsCard, setWordsCard] = useState<{ id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
   // the card of a rectangle's corners, where its menu was (docs/PRESENTING.md, *Shapes*)
   const [cornersCard, setCornersCard] = useState<{ id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
   // the field to look for words in the PDFs, opened at the column's top on
@@ -789,16 +886,40 @@ function WorkspaceContent({
   // Copy, cut and paste, by the keys and from the menu
   /** The structures coordinates on a PDF's pages hold - read where each word lies - shown before they are placed; none, said so. */
   const structuresFrom = async (pages: Promise<PlacedPage[]>, source: string, from: number, to: number, at: { x: number; y: number }) => {
-    const structures = readCoordinates(textOfPages(await pages));
+    const structures = readCoordinates(textOfPages(await pages), quotedTables());
     const named = `${source}, ${from === to ? `p. ${from + 1}` : `pp. ${from + 1}\u2013${to + 1}`}`;
     if (structures.length) setCoords({ structures, at, source, named });
     else setChemError("There are no coordinates in what is selected.");
+  };
+  /**
+   * A calculation's output in a text - pasted whole in Quick Add, or a
+   * text's chosen from its menu - read as one opened is, by its reader
+   * (chem/fromClipboard `structureInOutput`), and put down at `at`, as a
+   * paste of it is; what a plugin not added reads said so, naming it.
+   */
+  const putOutput = async (text: string, source: string, at: { x: number; y: number }) => {
+    const kind = outputKindIn(text);
+    if (!kind) return;
+    try {
+      const found = await structureInOutput(text, kind, source);
+      if (!found || (!found.atoms.length && !found.molecules3d?.length)) return void setChemError(`Nothing in ${source} reads as a structure.`);
+      store.getState().pasteModel(centredAt(found, at));
+      const said = leftOutSaid(found.leftOut, "copy");
+      if (said) setChemError(said);
+    } catch (e) {
+      // (what a plugin not added reads: said as Open says it, which names it already - "Pasted text (ORCA output): ... would read it.")
+      setChemError(e instanceof NotRead ? e.message : `${source} could not be read: ${e instanceof Error ? e.message : String(e)}`);
+    }
   };
   // (3D structures, from the menu on a text in the column: shown here, while this workspace is in front)
   useEffect(() => {
     if (!active) return;
     useTextMenu.getState().takeStructures((structures, source) => setCoords({ structures, at: viewMiddle(), source, named: source }));
-    return () => useTextMenu.getState().takeStructures(null);
+    useTextMenu.getState().takeOutput((text, source) => void putOutput(text, source, viewMiddle()));
+    return () => {
+      useTextMenu.getState().takeStructures(null);
+      useTextMenu.getState().takeOutput(null);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
   const clip = useClipboardActions(store, setChemError, openFilesAt, (structures, at) =>
@@ -860,6 +981,10 @@ function WorkspaceContent({
       } else if (isDeleteKey(e) && kind && id != null) {
         e.preventDefault();
         deletePart(kind, id);
+      } else if (isDeleteKey(e) && !busy && st.hoveredConversation != null) {
+        // (a conversation's tab under the pointer: it and what was said with it - not while it talks)
+        e.preventDefault();
+        st.removeConversation(st.hoveredConversation);
       } else if (isDeleteKey(e) && !busy && st.hoveredPush != null && st.pushes.some((p) => p.id === st.hoveredPush)) {
         e.preventDefault();
         st.removePush(st.hoveredPush);
@@ -944,6 +1069,11 @@ function WorkspaceContent({
         // the PDF or text in the column filling the workspace, or back beside the canvas
         e.preventDefault();
         st.setColumnFilled(!st.columnFilled);
+      } else if (isPrintKey(e) && st.textsOpen && st.pdfShown != null && st.pdfs.some((p) => p.id === st.pdfShown)) {
+        // the PDF in the column printed (docs/PDF.md, *Printing*)
+        e.preventDefault();
+        const p = st.pdfs.find((x) => x.id === st.pdfShown)!;
+        void printed(p.sha256, p.pages).then((said) => said && setChemError(said));
       } else if (isFindKey(e) && st.pdfs.length) {
         // looking for words in the PDFs (docs/PDF.md, *Search*)
         e.preventDefault();
@@ -973,7 +1103,6 @@ function WorkspaceContent({
     if (!talking) return;
     setMenu(null);
     setColourCard(null);
-    setWordsCard(null);
     setCornersCard(null);
     setNaming(null);
     setGivingOrders(null);
@@ -1030,13 +1159,40 @@ function WorkspaceContent({
     };
   }, [active, store]);
   const closeQuickAdd = useCallback(() => store.getState().setQuickAdd(null), [store]);
+  // the canvas, for a menu to stand at its point on the page, and the view to ease along for it (useMenuAt)
+  const menuAnchor = useMemo<MenuAnchor>(
+    () => ({
+      project: (at) => {
+        const cam = camRef.current;
+        const r = domRef.current?.getBoundingClientRect();
+        if (!cam || !r) return null;
+        // (the camera as it is now, not as it was last drawn: the menu goes with the page frame by frame)
+        cam.updateMatrixWorld();
+        const v = new Vector3(at.x, at.y, 0).project(cam);
+        return { x: ((v.x + 1) / 2) * r.width, y: ((1 - v.y) / 2) * r.height };
+      },
+      world: (px) => {
+        const r = domRef.current?.getBoundingClientRect();
+        // (it reads the camera and the canvas as they are when asked: the one this render has is as good as any)
+        const p = r && clientToWorld(r.left + px.x, r.top + px.y);
+        return p ?? null;
+      },
+      room: () => {
+        const r = domRef.current?.getBoundingClientRect();
+        return r ? { width: r.width, height: r.height, cover: store.getState().cover } : null;
+      },
+      pan: (dx, dy) => store.getState().requestPan(dx, dy),
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [store],
+  );
   // a molecule in 3D right-clicked: what its menu does to it
   const molecules3d = useEditor((s) => s.molecules3d);
   const chosen3d = useEditor((s) => s.chosen3d);
-  // (its molecules going over to a change of the workspace's styles in 3D, not jumping - at once in a very large drawing)
+  // (its molecules going over to a change of the workspace's styles in 3D, not jumping - at once in a very large drawing, or where none was drawn before it came)
   const target3d = useStyle3D();
   const atoms3d = useEditor((s) => s.molecules3d.reduce((n, m) => n + m.atoms.length, 0));
-  const style3d = useEasedStyle3D(target3d, atoms3d > LARGE_ATOMS);
+  const style3d = useEasedStyle3D(target3d, atoms3d > LARGE_ATOMS, atoms3d > 0);
   const styleNames3d = useStyleNames3D();
   const menuMolecule = menu?.kind === "molecule3d" ? molecules3d.find((m) => m.id === menu.id) : undefined;
   // a molecule's output shown in the column of texts, held in the
@@ -1195,6 +1351,8 @@ function WorkspaceContent({
     setMenu({
       kind: workflowMenu.kind,
       id: workflowMenu.id,
+      ...(workflowMenu.copy ? { copy: workflowMenu.copy } : {}),
+      ...(workflowMenu.lines ? { lines: workflowMenu.lines } : {}),
       selection: "none",
       at: clientToWorld(workflowMenu.clientX, workflowMenu.clientY) ?? pasteTarget(),
       x: workflowMenu.clientX - box.left,
@@ -1459,7 +1617,13 @@ function WorkspaceContent({
   const alerts = canvasAlerts({
     import: importError ? { text: importError.text, dismiss: dismissImportError } : null,
     files: { text: files.error, dismiss: files.dismissError },
-    chem: { text: chemError, dismiss: () => setChemError(null) },
+    chem: {
+      text: chemError,
+      dismiss: () => {
+        setChemError(null);
+        useRoleOffer.setState({ role: null });
+      },
+    },
   });
   // Where the view starts, before there is anything to fit
   const style = useDrawingStyle();
@@ -1476,17 +1640,6 @@ function WorkspaceContent({
     const st = store.getState();
     const c = st.captions.find((x) => x.id === id);
     if (c) st.updateCaption(id, { size: pt, ...keepTop(c, { size: pt ?? undefined }) });
-  };
-  // (the card of how words are set put beside them, clear of them, as they are seen on the canvas - from where the menu was, by the view's scale - so that what it changes is seen changing)
-  const wordsCardPlace = (c: Caption, menu: { x: number; y: number; at: { x: number; y: number }; within: { width: number; height: number } }) => {
-    const a = clientToWorld(0, 0);
-    const b = clientToWorld(100, 100);
-    if (!a || !b || b.x === a.x || b.y === a.y) return { x: menu.x, y: menu.y };
-    const kx = 100 / (b.x - a.x);
-    const ky = 100 / (a.y - b.y);
-    const w = wordsSet(c, layoutOpts, labelSetOf(layoutOpts));
-    const target = { left: menu.x + (c.x - w.halfW - menu.at.x) * kx, top: menu.y - (c.y + w.halfH - menu.at.y) * ky, width: 2 * w.halfW * kx, height: 2 * w.halfH * ky };
-    return cardBeside(target, WORDS_CARD, menu.within);
   };
   // (their lines as far apart as asked - single, none of their own)
   const spaceWords = (id: number, lines: number | null) => {
@@ -1628,6 +1781,16 @@ function WorkspaceContent({
           <ExclamationTriangleIcon className="h-4 w-4 shrink-0 text-accel-accent" />
           <span className="break-words">{a.text}</span>
           {a.key === "import" && importError?.suggest && importError.again && <AddToRead suggest={importError.suggest} again={importError.again} />}
+          {/* (a role no plugin here fills: the plugins online that fill it, each to add) */}
+          {a.key === "chem" && offerRole && chemError?.includes(noPluginSaid(offerRole)) && (
+            <RoleOffer
+              role={offerRole}
+              done={() => {
+                setChemError(null);
+                useRoleOffer.setState({ role: null });
+              }}
+            />
+          )}
           <button
             aria-label="Dismiss"
             title="Dismiss"
@@ -1670,11 +1833,10 @@ function WorkspaceContent({
           >
             <AnimatePresence mode="wait" initial={false}>
               <motion.span key={chem.state === "setting-up" || chem.state === "starting" ? chem.state : working3d ? "working" : "checking"} {...FADE} className="block">
-                {chem.state === "setting-up"
-                  ? `Setting up ${chem.plugin}…${chemShare != null ? ` ${Math.floor(chemShare * 100)}%` : ""}`
-                  : chem.state === "starting"
-                    ? `Starting ${chem.plugin}…`
-                    : working3d || `Checking ${checkingFiles}'s files…`}
+                {/* (where chemistry stands said as the line under Quick Add's SMILES field says it: one phrase, ./quickAddSmiles) */}
+                {chem.state === "setting-up" || chem.state === "starting"
+                  ? `${chemistryStep(chem, chemShare)}…`
+                  : working3d || `Checking ${checkingFiles}'s files…`}
               </motion.span>
             </AnimatePresence>
             {/* (making in 3D: how long, and stopped as the atom map is) */}
@@ -1703,7 +1865,7 @@ function WorkspaceContent({
           >
             <AnimatePresence mode="wait" initial={false}>
               <motion.span key={atomMaps.mapping.phase} {...FADE} className="block">
-                {atomMaps.mapping.phase === "3d" ? "Making the reaction's 3D structures…" : "Mapping the reaction's atoms…"}
+                {atomMaps.mapping.arrowId < 0 ? (atomMaps.mapping.phase === "3d" ? "Making the structures' 3D structures…" : "Mapping the structures' atoms…") : atomMaps.mapping.phase === "3d" ? "Making the reaction's 3D structures…" : "Mapping the reaction's atoms…"}
               </motion.span>
             </AnimatePresence>
             <Elapsed since={atomMaps.mapping.since} />
@@ -1718,6 +1880,8 @@ function WorkspaceContent({
       </AnimatePresence>
       {/* (a structure carried out of a PDF, over everything: components/StructureFlight) */}
       <StructureFlight />
+      {/* (a compound's structure by its number in a PDF's text: components/CompoundCard) */}
+      <CompoundCard />
       {/* (what the chemist opens over the canvas - its questions, cards and menus - above the first-run guide: ui/guide/layers) */}
       <AboveGuide over={dropRef} shown={active} measureKey={`${styleOpen}:${textsOpen}`}>
       <AnimatePresence>
@@ -1814,6 +1978,7 @@ function WorkspaceContent({
             plugin={renderer()!}
             motions={rendering.motions}
             surfaces={rendering.surfaces}
+            molecules={rendering.ids.length}
             onCancel={() => setRendering(null)}
             onRender={(ask, options) => {
               const ids = rendering.ids;
@@ -1863,9 +2028,10 @@ function WorkspaceContent({
               const st = store.getState();
               const { at, wire } = quickAdd;
               st.setQuickAdd(null);
-              // (its port that takes where Quick Add was opened - where the wire was let go)
-              const id = st.addStep(kind, by, at.x, at.y + PORT_DOWN);
-              if (wire) st.connect(wire, id);
+              // (its port that takes where Quick Add was opened - where the wire was let go; brought from an exit's port, close
+              //  by that step's card instead, and wired in the same edit: model `addStepFrom`)
+              // (its card opened where it still needs a value of its options: store `putDownStep`)
+              const id = st.putDownStep(kind, by, at.x, at.y + PORT_DOWN, wire);
               // (and brought into view, with the sets it will give, where they are not: put down near the window's edge, or moved lower)
               const now = store.getState();
               const box = partsBounds({ sets: now.sets.filter((b) => b.made?.step === id), steps: now.steps.filter((s) => s.id === id), wires: [] });
@@ -1879,6 +2045,7 @@ function WorkspaceContent({
               st.putDownProcedure(id, at.x, at.y);
             }}
             onClose={closeQuickAdd}
+            anchor={menuAnchor}
             onChain={(press) => {
               const { at } = quickAdd;
               store.getState().setQuickAdd(null);
@@ -1902,10 +2069,19 @@ function WorkspaceContent({
               const said = [stereoOpenSaid(read.stereoOpen), asCameSaid(read)].filter(Boolean).join(" ");
               if (putDownSmiles(store, quickAdd, withoutStereoOpen(read)) && said) setChemError(said);
             }}
+            onNamed={(label) => {
+              // (a molecule the dictionary has, drawn from it - no plugin asked - and put down as a SMILES read is: chem/resolve)
+              putDownSmiles(store, quickAdd, namedDrawn(label));
+            }}
             onCoordinates={(structures) => {
               const { at } = quickAdd;
               store.getState().setQuickAdd(null);
               setCoords({ structures, at, source: "Pasted text", named: "Pasted structures" });
+            }}
+            onOutput={(text) => {
+              const { at } = quickAdd;
+              store.getState().setQuickAdd(null);
+              void putOutput(text, "Pasted text", at);
             }}
             onChoose={(what) => {
               const st = store.getState();
@@ -1934,6 +2110,13 @@ function WorkspaceContent({
               else if (what === "slide") {
                 const seen = viewBox();
                 if (seen) st.addSlide(slideOfView(seen, WIDE));
+              }
+              // (a conversation's frame about where Quick Add was opened, read in the column: what lies inside it is what it sees)
+              else if (what === "conversation") {
+                const w = CONVERSATION_FRAME.w * NOMINAL_BOND_LENGTH;
+                const h = CONVERSATION_FRAME.h * NOMINAL_BOND_LENGTH;
+                const id = st.addConversation({ x0: at.x - w / 2, y0: at.y - h / 2, x1: at.x + w / 2, y1: at.y + h / 2 });
+                if (id != null) st.readConversation(id);
               }
               else st.addPlus(at.x, at.y);
             }}
@@ -1994,23 +2177,6 @@ function WorkspaceContent({
       </AnimatePresence>
       <AnimatePresence>{inkMode && <PenCard mode={inkMode} onMode={(m) => store.getState().setInkMode(m)} onDone={endInk} />}</AnimatePresence>
       <AnimatePresence>
-        {wordsCard && (
-          <WordsCard
-            key={`${wordsCard.x},${wordsCard.y}`}
-            id={wordsCard.id}
-            label={layoutOpts.pointPx ? layoutOpts.fontPx / layoutOpts.pointPx : 10}
-            drawing={style.fontFamily}
-            onSize={(pt) => sizeWords(wordsCard.id, pt)}
-            onLines={(lines) => spaceWords(wordsCard.id, lines)}
-            onFont={(font) => faceWords(wordsCard.id, font)}
-            x={wordsCard.x}
-            y={wordsCard.y}
-            within={wordsCard.within}
-            onClose={() => setWordsCard(null)}
-          />
-        )}
-      </AnimatePresence>
-      <AnimatePresence>
         {cornersCard &&
           (() => {
             const sh = store.getState().shapes.find((x) => x.id === cornersCard.id);
@@ -2058,6 +2224,7 @@ function WorkspaceContent({
         <PartMenu
           key={`${menu.x},${menu.y}`}
           target={menu}
+          anchor={menuAnchor}
           onClose={closeMenu}
           onDelete={() => deleteFromMenu(store.getState(), menu, deletePart)}
           molecule3d={menu3d}
@@ -2071,7 +2238,7 @@ function WorkspaceContent({
             const { model: m, sel } = store.getState();
             const made = abbreviationFromSelection(m, sel.atoms);
             if ("problem" in made) setChemError(`This selection cannot be saved as an abbreviation. ${made.problem}`);
-            else openSaveAbbreviation([...sel.atoms], made.smiles);
+            else openSaveAbbreviation([...sel.atoms], made.smiles, made.notKept);
           }}
           onRunStep={() => {
             if (menu.kind !== "step" || menu.id == null) return;
@@ -2122,6 +2289,15 @@ function WorkspaceContent({
             const set = st.sets.find((b) => b.id === menu.id);
             return set && holdsOwn(set) ? heldOwn(st, set) : undefined;
           })()}
+          shownOnPage={(() => {
+            // (a step's result set whose exit is wired on - right-clicked, or the one the wire right-clicked comes from: held off the page, or opened)
+            if ((menu.kind !== "set" && menu.kind !== "wire") || menu.id == null) return undefined;
+            const st = store.getState();
+            const id = menu.kind === "set" ? menu.id : st.wires.find((w) => w.id === menu.id)?.from.set;
+            const set = st.sets.find((b) => b.id === id);
+            if (!set?.made || !st.wires.some((w) => w.from.set === set.id)) return undefined;
+            return { shown: !!set.opened, set: (show: boolean) => store.getState().openHeld(set.id, show) };
+          })()}
           keepInFile={(() => {
             if (menu.kind !== "set" || menu.id == null) return undefined;
             const set = store.getState().sets.find((b) => b.id === menu.id);
@@ -2169,7 +2345,16 @@ function WorkspaceContent({
             const styles = stylesOf(c.text.length, c.marks).filter((_, i) => /\S/.test(c.text[i]));
             const st = store.getState();
             return {
-              onFont: () => setWordsCard({ id: c.id, ...wordsCardPlace(c, menu), within: menu.within }),
+              font: (
+                <WordsFont
+                  id={c.id}
+                  label={layoutOpts.pointPx ? layoutOpts.fontPx / layoutOpts.pointPx : 10}
+                  drawing={style.fontFamily}
+                  onSize={(pt) => sizeWords(c.id, pt)}
+                  onLines={(lines) => spaceWords(c.id, lines)}
+                  onFont={(font) => faceWords(c.id, font)}
+                />
+              ),
               bold: styles.length > 0 && styles.every((x) => x?.bold),
               italic: styles.length > 0 && styles.every((x) => x?.italic),
               list: c.text.split("\n").every((l) => !l.trim() || listItem(l)),
@@ -2315,12 +2500,14 @@ function WorkspaceContent({
           text={(() => {
             const t = menu.kind === "text" && menu.id != null ? store.getState().texts.find((x) => x.id === menu.id) : undefined;
             if (!t) return undefined;
-            const found = readCoordinates(t.text);
+            // (a calculation's output: read as one opened is, by its reader - never in part as coordinates)
+            const output = outputKindIn(t.text) != null;
+            const found = output ? [] : readCoordinates(t.text, quotedTables());
             return {
               icon: !!t.icon,
               onRead: () => store.getState().readText(t.id),
               onIcon: () => store.getState().setTextIcon(t.id, !t.icon),
-              ...(found.length ? { onStructures: () => setCoords({ structures: found, at: pasteTarget(), source: t.name, named: t.name }) } : {}),
+              ...(output ? { onStructures: () => void putOutput(t.text, t.name, pasteTarget()) } : found.length ? { onStructures: () => setCoords({ structures: found, at: pasteTarget(), source: t.name, named: t.name }) } : {}),
               ...(() => {
                 const table = tableOfText(t.name, t.text);
                 // (beside the text, to its right, level with it - where it has a sheet on the page)
@@ -2347,6 +2534,8 @@ function WorkspaceContent({
               onNumbers: () => setPdfCard({ kind: "numbers", id: p.id, x: menu.x, y: menu.y, within: menu.within }),
               onPages: () => setPdfCard({ kind: "pages", id: p.id, x: menu.x, y: menu.y, within: menu.within }),
               onSave: () => void savePdfFile(p).catch((e: unknown) => setChemError(`Save failed: ${e instanceof Error ? e.message : String(e)}`)),
+              onPrint: () => void printed(p.sha256, p.pages).then((said) => said && setChemError(said)),
+              ...(printingKnown(p.sha256) === "no" ? { printNot: true } : {}),
               ...(selects(st.pdfSel) && st.pdfSel.id === p.id ? { onCopy: () => void copyWords() } : {}),
               // (the coordinates in the words selected, or in the box drawn: the structures they hold, shown before they are placed)
               ...(selects(st.pdfSel) && st.pdfSel.id === p.id
@@ -2418,11 +2607,7 @@ function WorkspaceContent({
             const from = st.pdfs.find((p) => p.sha256 === note.sha256)?.name ?? st.pictures.find((p) => p.sha256 === note.sha256)?.name ?? "the figure";
             return { from: figureNoteSource(from, note.page), ...(note.checked ? {} : { run: () => st.setFigureChecked([...atoms], true) }) };
           })()}
-          stereo={(() => {
-            const st = store.getState();
-            const item = stereoItemFor(st, menu);
-            return item ? { name: item.name, run: () => showStereo(item) } : undefined;
-          })()}
+          stereo={stereoAtMenu ? { name: stereoAtMenu.name, run: () => showStereo(stereoAtMenu) } : undefined}
           numbers={(() => {
             const st = store.getState();
             const got = numbersItemsFor(st, menu);
@@ -2467,13 +2652,9 @@ function WorkspaceContent({
             return a?.typed && a.typed !== a.el ? { typed: a.typed, run: () => store.getState().labelAsTyped(a.id) } : undefined;
           })()}
           // (a bond's kind: the bonds selected, where the one right-clicked is among them - one step for all)
-          bondKind={(() => {
-            if (menu.kind !== "bond" || menu.id == null) return undefined;
-            const st = store.getState();
-            const ids = st.sel.bonds.has(menu.id) ? [...st.sel.bonds] : [menu.id];
-            const bond = st.model.bonds.find((b) => b.id === menu.id);
-            return bond ? { current: bondKindOf(bond), choose: (kind: BondKindName) => st.setBondsKind(ids, kind) } : undefined;
-          })()}
+          bondKind={menu.kind === "bond" && menu.id != null ? bondKindMenu(store.getState(), menu.id) : undefined}
+          // (which of two crossing bonds is in front, where no depth says it: at the crossing nearest the pointer - chem/crossings)
+          crossing={menu.kind === "bond" && menu.id != null ? crossingMenu(store.getState().model, menu.id, menu.at, store.getState().orderCrossing) : undefined}
           canvas={canvasCommands(menu.at)}
           // (Export writes what is drawn: a selection of PDFs and texts' sheets alone has nothing for it)
           onExport={menu.selection === "here" && selectedOf({ ...store.getState(), selPdfs: new Set(), selTexts: new Set() }).any ? () => {
@@ -2503,23 +2684,103 @@ function WorkspaceContent({
               weight: a.weight ?? "regular",
               setWeight: (weight: ArrowWeight | "regular") => set({ weight }),
               ...(a.corners?.length ? { onStraighten: () => set({ corners: null }) } : {}),
-              // (an arrow with a reaction drawn on either side: its atom map)
+              // (an arrow that means a reaction, with one drawn on either side: its atom map - and one made before it came to mean none, said so and taken off)
               ...((() => {
                 const sides = reactionOf(st.model, a, st.pluses);
-                if (!sides.reactants.length || !sides.products.length) return {};
+                if (!mapOffered(a, sides)) return {};
                 return {
                   atomMap: {
                     standing: mapStanding(a, st.model),
+                    onRemove: () => store.getState().setAtomMap(a.id, null),
                     shown: !!a.atomMap?.shown,
                     maps: a.atomMap?.maps.length ?? 0,
                     chosen: a.atomMap?.chosen ?? 0,
                     onMake: () => void atomMaps.makeAtomMap(a.id),
                     onShow: (shown: boolean) => store.getState().showAtomMap(a.id, shown),
                     onOther: () => store.getState().otherAtomMap(a.id),
-                    onExport: () => void files.exportReaction3d(a.id),
+                    onRenumber: () => store.getState().renumberAtomMap(a.id),
+                    onExport: () => void files.exportReaction3d({ arrow: a.id }),
+                    ...(a.atomMap ? { unpaired: unpairedSaid(a.atomMap, ["the reactants", "the products"]) ?? undefined } : {}),
                   },
                 };
               })()),
+            };
+          })()}
+          parts={(() => {
+            // (one structure of several parts: the structures selected made one; the one right-clicked, of several parts, taken apart - utils/joinedParts)
+            const st = store.getState();
+            const at = menu.kind === "atom" || menu.kind === "bond" ? structureAt(menu.kind, menu.id) : null;
+            const picked = menu.selection === "here" ? st.sel.atoms : new Set<number>();
+            const { join: joinable, separate: joined } = partsOffered(st.model, picked, at);
+            if (!joinable && !joined) return undefined;
+            return {
+              ...(joinable ? { onJoin: () => store.getState().joinStructures(picked) } : {}),
+              ...(joined ? { onSeparate: () => store.getState().separateStructures([at!]) } : {}),
+            };
+          })()}
+          pageMap={(() => {
+            // (atom maps between structures on the page: made from the structures selected, the one right-clicked Before -
+            // chem/structureMaps; and those the structure right-clicked is in)
+            const st = store.getState();
+            const of3d = menu.kind === "molecule3d" ? st.molecules3d.find((m) => m.id === menu.id) : undefined;
+            const at = menu.kind === "atom" || menu.kind === "bond" ? structureAt(menu.kind, menu.id) : of3d && linkOf(of3d, st.model) === "live" ? of3d.drawnFrom!.find((id) => id != null) ?? null : null;
+            if (at == null) return undefined;
+            const before = fragmentOf(st.model, at);
+            // (the structures selected: drawn, or a molecule in 3D still its drawing's)
+            const picked = new Set<number>(st.sel.atoms);
+            for (const m of st.molecules3d) if (st.sel3d.has(m.id) && linkOf(m, st.model) === "live") for (const id of m.drawnFrom!) if (id != null) picked.add(id);
+            const structures = structuresOf(st.model).filter((s) => s.some((id) => picked.has(id)));
+            const afters = structures.filter((s) => !s.some((id) => before.has(id)));
+            const makes = menu.selection === "here" && picked.has(at) && afters.length > 0;
+            const maps = st.structureMaps.filter((m) => [...mapAtoms(m.map)].some((id) => before.has(id)));
+            const first = maps[0];
+            // (a map between structures has no arrow: never refused)
+            const standing = first ? (mapStanding({ atomMap: first.map }, st.model) as Exclude<ReturnType<typeof mapStanding>, "refused">) : "none";
+            if (!makes && (!first || standing === "none")) return undefined;
+            const ids = maps.map((m) => m.id);
+            return {
+              ...(makes ? { onMake: () => void atomMaps.makeStructureMaps([...before], afters, (atoms) => build3d(blocksOf(store.getState().model, atoms), "one")) } : {}),
+              ...(first && standing !== "none"
+                ? {
+                    held: {
+                      standing,
+                      shown: maps.some((m) => m.map.shown),
+                      maps: first.map.maps.length,
+                      chosen: first.map.chosen,
+                      onShow: (shown: boolean) => store.getState().showStructureMaps(ids, shown),
+                      onOther: () => store.getState().otherStructureMaps(ids),
+                      onRenumber: () => store.getState().renumberStructureMaps(ids),
+                      onExport: () => void files.exportReaction3d({ structureMap: first.id }),
+                      unpaired: unpairedSaid(first.map, ["Before", "After"]) ?? undefined,
+                      conformers: conformersSaid(first.map, st.molecules3d, st.model),
+                      ...(first.map.pairs ? { paired: first.map.pairs.before.length * first.map.pairs.after.length } : {}),
+                      pair: (() => {
+                        const p = conformerPairs(first.map, st.molecules3d, st.model);
+                        // (none to make, or those paired already)
+                        const same = (x: readonly number[], y: readonly number[] | undefined) => !!y && x.length === y.length && x.every((v, i) => v === y[i]);
+                        if (!p || (same(p.before, first.map.pairs?.before) && same(p.after, first.map.pairs?.after))) return undefined;
+                        const [k, l] = [p.before.length, p.after.length];
+                        const all = k === p.of[0] && l === p.of[1];
+                        return {
+                          name: all ? `Pair conformers: ${k} × ${l} = ${k * l} pairs` : `Pair the lowest-energy conformers: ${k} × ${l} = ${k * l} pairs`,
+                          run: () => store.getState().pairStructureMap(first.id, { before: p.before, after: p.after }),
+                        };
+                      })(),
+                      // (of the structures before an edit: made again between them as they are now, the old ones' place taken)
+                      onAgain: () => {
+                        const now = store.getState().model;
+                        const present = new Set(now.atoms.map((a) => a.id));
+                        const otherSide = (m: (typeof maps)[number]) => {
+                          const inBefore = m.map.reactant.drawnFrom.some((id) => id != null && before.has(id));
+                          const id = (inBefore ? m.map.product : m.map.reactant).drawnFrom.find((x) => x != null && present.has(x));
+                          return id == null ? null : [...fragmentOf(now, id)];
+                        };
+                        const afters = maps.map(otherSide).filter((s): s is number[] => !!s && !s.some((id) => before.has(id)));
+                        void atomMaps.makeStructureMaps([...fragmentOf(now, at)], afters, (atoms) => build3d(blocksOf(store.getState().model, atoms), "one"), ids);
+                      },
+                    },
+                  }
+                : {}),
             };
           })()}
           push={(() => {
@@ -2599,6 +2860,8 @@ function WorkspaceContent({
         // (following its box as the panel beside it slides)
         resize={CANVAS_RESIZE}
         dpr={canvasRatio}
+        // (where the pointer is, from the screen: the same for a move of no distance Meno makes as for the system's - utils/pageEvents)
+        events={pageEvents}
         onDoubleClick={handleDoubleClick}
         gl={{
           antialias: true,
@@ -2610,7 +2873,13 @@ function WorkspaceContent({
         onCreated={onCreated}
       >
         <color attach="background" args={["#ffffff"]} />
+        {/* What WebGL draws on the page takes the pointer before anything else on the canvas, as the page's HTML did (pageGl/PageHits) */}
+        <PageHits>
+        {/* ... and what is placed on it by what moves - the molecules' and stacks' frames chips - drawn with it at once (pageGl/PagePlaced) */}
+        <PagePlaced>
         <FitToContent2D trigger={fitNonce} />
+        {/* Conversations' frames, drawn as sets' are (docs/CONVERSATIONS.md) */}
+        <ConversationFrames />
         {/* The drawing, laid out once for every layer below to draw from */}
         <DrawnLayoutProvider>
           {/* PDFs, under the drawing - an icon's name in its type - and one read in the column over the canvas's right side (docs/PDF.md) */}
@@ -2657,6 +2926,8 @@ function WorkspaceContent({
           <Suspense fallback={null}>
             <Labels2D />
           </Suspense>
+          {/* the shaders a drawing is drawn with, made ready as the page starts: the first one drawn never waits a frame on them */}
+          <WarmShaders2D />
           {/* the plugin's marks: valence problems, R/S and E/Z */}
           <ChemMarks2D marks={marks} unsure={unsure} read={readUnsure} />
           {/* charges, each taken hold of on its own ink and moved by hand */}
@@ -2671,6 +2942,7 @@ function WorkspaceContent({
           <CaptionTyping2D />
           {/* Hover overlay */}
           <ExtendPreview2D />
+          <ClickBondPreview2D />
           {/* The 120-degree arc while a bond snaps to it */}
           <SnapArc2D />
           {/* Move preview */}
@@ -2698,7 +2970,7 @@ function WorkspaceContent({
         </DrawnLayoutProvider>
         {/* the page's scale, for chips drawn on it in HTML */}
         <PageScale />
-        {/* where a guide's step points at a structure (lib/plugins/guide) */}
+        {/* where a guide's step points at a structure (lib/guide) */}
         <GuideStructure place={guideStructure} />
         {/* Molecules in 3D standing on the page (before PanZoom2D: a press on one is theirs) */}
         <Molecules3D style={style3d} />
@@ -2708,10 +2980,12 @@ function WorkspaceContent({
         {/* (the view following the column over the canvas's right side) */}
         <FollowCover />
         <FollowStyle />
+        </PagePlaced>
+        </PageHits>
       </Canvas>
       </PageHtmlLayer.Provider>
       {/* the page's HTML, cut off where the column begins (coverLayer) */}
-      <div ref={setHtmlLayer} data-presenting={talking || undefined} className="absolute inset-0 pointer-events-none" style={pageHtmlLayerStyle(cover)} />
+      <div ref={setHtmlLayer} data-presenting={talking || undefined} className={`absolute inset-0 pointer-events-none ${PAGE_HTML_LAYER}`} style={pageHtmlLayerStyle(cover)} />
       {/* where a guide's step points at a structure: kept over it (GuideStructure) */}
       <div ref={guideStructure} data-guide="structure" className="absolute left-0 top-0 pointer-events-none" style={{ display: "none" }} />
       {/* what a talk is given on: over everything while it is (docs/PRESENTING.md) */}
@@ -2884,7 +3158,7 @@ export default function Workspace({
   // panel beside the canvas rather than over it, so the drawing stays in
   // view while it changes. One panel at a time.
   const [panel, setPanel] = useState<
-    "style" | { arrow: number } | { abbreviation: { ids: number[]; smiles: string } } | null
+    "style" | { arrow: number } | { abbreviation: { ids: number[]; smiles: string; notKept?: string } } | null
   >(null);
   const styleOpen = panel === "style";
   // (a talk begun shuts the panel: the talk has the whole of the window, not what is left beside it)
@@ -2915,7 +3189,7 @@ export default function Workspace({
                   styleOpen={styleOpen}
                   toggleStyle={() => setPanel((p) => (p === "style" ? null : "style"))}
                   openArrowStyle={(id) => setPanel({ arrow: id })}
-                  openSaveAbbreviation={(ids, smiles) => setPanel({ abbreviation: { ids, smiles } })}
+                  openSaveAbbreviation={(ids, smiles, notKept) => setPanel({ abbreviation: { ids, smiles, notKept } })}
                   fadeIn={reloaded}
                 />
               )}
@@ -2948,6 +3222,7 @@ export default function Workspace({
                   key={panel.abbreviation.ids.join(",")}
                   ids={panel.abbreviation.ids}
                   smiles={panel.abbreviation.smiles}
+                  notKept={panel.abbreviation.notKept}
                   onClose={() => setPanel(null)}
                 />
               )}
@@ -2983,28 +3258,46 @@ function Elapsed({ since }: { since: number }) {
   );
 }
 
+/**
+ * What the import alert offers where no plugin added reads a file: each
+ * plugin that would - one here, added as any plugin is; one on offer
+ * online, got first, asking first (lib/calc/workers `addOnline`) - and the
+ * file read again once one is.
+ */
 function AddToRead({ suggest, again }: { suggest: readonly string[]; again: () => void }) {
   const states = useReaders((s) => s.state);
+  const catalogue = useOnline((s) => s.catalogue);
+  const [getting, setGetting] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
   return (
     <>
       {suggest.map((id) => {
         const p = anyPluginById(id);
-        if (!p) return null;
-        const adding = states[id] === "adding" || states[id] === "waiting";
+        const entry = p ? undefined : catalogue?.plugins.find((e) => e.id === id);
+        const name = p?.name ?? entry?.name;
+        if (!name) return null;
+        const adding = getting === id || states[id] === "adding" || states[id] === "waiting";
         return (
           <button
             key={id}
             disabled={adding}
             onClick={(e) => {
               e.stopPropagation();
-              void addPlugin(p).then(again, () => undefined);
+              if (p) return void addPlugin(p).then(again, () => undefined);
+              if (!entry) return;
+              setGetting(id);
+              setProblem(null);
+              void addOnline(entry)
+                .then(again, (err: unknown) => setProblem(err instanceof Error ? err.message : String(err)))
+                .finally(() => setGetting(null));
             }}
             className="shrink-0 rounded-md border border-gh-line px-2 py-0.5 transition-colors duration-150 ease-meno hover:bg-gh-base disabled:opacity-60"
           >
-            {adding ? `Adding ${p.name}…` : `Add ${p.name}`}
+            {adding ? `Adding ${name}…` : `Add ${name}`}
           </button>
         );
       })}
+      {problem && <span className="text-accel-accent">{problem}</span>}
     </>
   );
 }

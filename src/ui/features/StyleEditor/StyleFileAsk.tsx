@@ -1,4 +1,5 @@
 import { motion } from "motion/react";
+import QuestionLayer from "../../layouts/QuestionLayer";
 import { useEffect, useId, useMemo, useRef } from "react";
 import { styleFileName, type StyleFile } from "../../../lib/chem/styleFile";
 import { useAskedKeys } from "../../layouts/asking";
@@ -37,10 +38,12 @@ export default function StyleFileAsk({
   const count = file.drawing.length + file.molecules3d.length;
   const where = [file.drawing.length ? "drawing" : null, file.molecules3d.length ? "3D" : null].filter(Boolean).join(" and ");
   return (
+    // (a question about the whole window: asked in the window's own layer, over all else - layouts/QuestionLayer)
+    <QuestionLayer>
     <motion.div
       {...FADE}
       {...held}
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30"
+      className="absolute inset-0 flex items-center justify-center bg-black/30"
       onPointerDown={(e) => {
         if (e.target === e.currentTarget) onCancel();
       }}
@@ -76,5 +79,6 @@ export default function StyleFileAsk({
         </div>
       </motion.div>
     </motion.div>
+    </QuestionLayer>
   );
 }

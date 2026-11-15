@@ -1,0 +1,13 @@
+{
+  "id": "wavecalc",
+  "name": "Wavecalc",
+  "version": "0.2.0",
+  "description": "Reads wavefunctions in the Molden form.",
+  "licence": "Apache-2.0",
+  "homepage": "https://example.org/wavecalc",
+  "environment": "pixi",
+  "kinds": [],
+  "reads": [
+    "molden"
+  ]
+}

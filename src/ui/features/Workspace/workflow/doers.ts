@@ -6,17 +6,19 @@
  * the plugins added are offered. Who does a step says what options it
  * takes.
  */
-import { renderOptions } from "../render/renderOptions";
-import { pluginById, PLUGINS } from "../../../../lib/calc/catalog";
-import { useReaders } from "../../../../lib/calc/workers";
-import { valuesOf, type Option } from "../../../../lib/options";
+import { looksOffered, renderOptions } from "../render/renderOptions";
+import { chosenFrom, presetOffer } from "../render/presets";
+import { anyPluginById, pluginById, PLUGINS, presetsFor } from "../../../../lib/calc/catalog";
+import { addedNow, useReaders } from "../../../../lib/calc/workers";
+import { defaultsFrom, valuesOf, type Option, type OptionValues } from "../../../../lib/options";
+import { RING_CONFORMERS, roundsAsked, roundsChosen, soughtOptions } from "../../../../lib/chem/conformersSought";
 import { isRole, roleOptionsRole } from "../../../../lib/plugins/roles";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import type { InstalledDecl } from "../../../../lib/plugins/manifest";
 import { tooOld, whereIs } from "../../../../lib/plugins/installed";
 import { systemHere } from "../../../../lib/plugins/here";
 import type { WorkflowSet, WorkflowStep } from "../store/types";
-import { exitOf, inputsOf, KINDS, kindInfo, madeName, MENO_DOES, needsOf, takenBy, takes, type StepKind, type StepPort, type ValueKind } from "./kinds";
+import { exitOf, exitsOf, inputsOf, KINDS, kindInfo, madeName, MENO_DOES, needsOf, optionsOf, takenBy, takes, type StepKind, type StepPort, type ValueKind } from "./kinds";
 
 export type Doer = { id: string; name: string };
 
@@ -40,8 +42,8 @@ export function kindsOf(by: string): StepKind[] {
 /**
  * Whether a step of `kind` done by `by` takes a set that holds `holds`:
  * the kind takes it, and - done by a plugin - its manifest does not leave
- * it out (`takes`: CREST's conformer search starts from molecules in 3D,
- * not from structures drawn).
+ * it out (`takes`: a step that starts from molecules in 3D, not from
+ * structures drawn).
  */
 export function takesBy(kind: StepKind, by: string, holds: ValueKind): boolean {
   // (a kind that takes nothing in, made from seeds by this one: the seeds' input's own)
@@ -126,13 +128,52 @@ export function optionsFor(kind: StepKind, by: string): readonly Option[] {
   const role = decl?.roleOptions && isRole(kind) ? kind : undefined;
   const chosen: Record<string, unknown> = role ? valuesOf(own, useAppSettings.getState().options[roleOptionsRole(role)]) : {};
   // (Meno's own choices for the kind, whoever does it - Render's - then the plugin's)
-  // (Render's: its looks are the plugin's, declared in its manifest)
-  const meno = kind === "render" && plugin?.roleLooks.render ? renderOptions("picture", [], true, plugin.roleLooks.render) : (kindInfo(kind).own ?? []);
+  // (Render's: its looks are the plugin's, declared in its manifest, and those the plugins added bring it, with their studios)
+  const brought = kind === "render" && plugin ? renderPresets(plugin.id).offer : undefined;
+  // (Conformers': how many are sought, where the plugin's search takes a number of tries - starting from Settings' choice for the page)
+  const settled = useAppSettings.getState().chemistry;
+  const meno = brought
+    ? renderOptions("picture", [], true, [...(plugin!.roleLooks.render ?? []), ...brought.looks], undefined, undefined, brought.studios)
+    : kind === "conformers" && plugin?.roleTries.includes("conformers")
+      ? soughtOptions(settled.sought3d ?? "needed", settled.count3d ?? RING_CONFORMERS, plugin.roleDraws.includes("conformers") ? roundsChosen(settled) : undefined)
+      : (kindInfo(kind).own ?? []);
   return [...meno, ...own.map((o) => (o.id in chosen ? ({ ...o, default: chosen[o.id] } as Option) : o))];
 }
 
-/** The options a step takes, as who does it declares them. */
-export const stepOptions = (step: Pick<WorkflowStep, "kind" | "by">) => optionsFor(step.kind, byOf(step));
+/** What the plugins added bring the renderer `by` through its interface (render/presets): who brings what, and what is offered of it. */
+export function renderPresets(by: string) {
+  const plugin = pluginById(by);
+  const offered = plugin ? presetsFor(plugin, addedNow()) : [];
+  return { offered, offer: presetOffer(offered, looksOffered(plugin?.roleLooks.render).map((l) => l.id)) };
+}
+
+/**
+ * Of a Render step's choices (`values`), what of the plugins added its look and studio hang on: each plugin they are of, by id
+ * and version - another version is another run. Of any other kind, nothing.
+ */
+export function presetsStamp(kind: StepKind, by: string, values: OptionValues): string {
+  if (kind !== "render") return "";
+  const { offer } = renderPresets(by);
+  const from = Object.values(chosenFrom(offer, { look: String(values.look), studio: String(values.studio) })).map((x) => x.from);
+  return [...new Set(from)].map((id) => `|${id}@${anyPluginById(id)?.version ?? ""}`).join("");
+}
+
+/** Where Settings, Calculations, keeps the default options of a kind of step done by `by` (decided: 17, docs/WORKFLOWS.md). */
+export const stepRole = (kind: StepKind, by: string) => `step:${by}:${kind}`;
+
+/**
+ * The options a step takes, as who does it declares them (`optionsFor`) -
+ * `by`, unless another is named - each one's default the one Settings,
+ * Calculations, keeps for its kind done by them (`stepRole`), where it keeps
+ * one: what a step that holds no value of its own for an option runs with,
+ * shows and is judged ready by - one put down otherwise than on the canvas,
+ * a template's, a file's - as a step put down there starts with it. A
+ * step's own values stay its own (decided: 17).
+ */
+export const stepOptions = (step: Pick<WorkflowStep, "kind" | "by">, by = byOf(step)) => defaultsFrom(optionsFor(step.kind, by), useAppSettings.getState().options[stepRole(step.kind, by)]);
+
+/** A step's option values: its own, else Settings' for its kind (`stepOptions`), else each option's default. */
+export const stepValues = (step: Pick<WorkflowStep, "kind" | "by" | "options">, by = byOf(step)) => optionsOf(stepOptions(step, by), step.options);
 
 /**
  * A set's name, as its frame says it: a step's first exit's, as the kind
@@ -142,7 +183,8 @@ export const stepOptions = (step: Pick<WorkflowStep, "kind" | "by">) => optionsF
 export function setName(set: Pick<WorkflowSet, "made" | "name">, steps: readonly WorkflowStep[]): string {
   const made = set.made ? steps.find((s) => s.id === set.made!.step) : undefined;
   const exit = made && set.made ? exitOf(made.kind, set.made.exit) : undefined;
-  return made && exit ? (exit.of ? exit.name : madeName(made.kind, stepOptions(made), made.options)) : (set.name ?? "Input");
+  // (any exit but the first by its own name: an Atom map's Bond changes, as much as what a step set aside)
+  return made && exit ? (exit.id !== exitsOf(made.kind)[0].id ? exit.name : madeName(made.kind, stepOptions(made), made.options)) : (set.name ?? "Input");
 }
 
 /** The programs a plugin runs for a kind of step; none, where it does the step in its worker - or Meno does it. */
@@ -163,7 +205,27 @@ export function missingFor(step: Pick<WorkflowStep, "kind" | "by">): string | un
   return d && `${d.label} ${tooOld(by, d.name) ? "too old" : "not found"}`;
 }
 
-/** What step `s`'s card says where it would say *Ready*, where it cannot run: a program it runs found nowhere or too old (`missingFor`), else what it still needs of its options (kinds `needsOf`). */
+/** What step `s`'s card says where it would say *Ready*, where it cannot run: a program it runs found nowhere or too old (`missingFor`), else what it still needs of its options (`optionsNeed`). */
 export function notReadyFor(s: Pick<WorkflowStep, "kind" | "by" | "options">): string | undefined {
-  return missingFor(s) ?? needsOf(s);
+  return missingFor(s) ?? optionsNeed(s);
+}
+
+/** What step `s` still needs of its options before it can run, in its card's words: a value the chemist gives (kinds `needsOf`) - an Energy window's window, a Conformers step's window for new conformers (`roundsNeed`). */
+export function optionsNeed(s: Pick<WorkflowStep, "kind" | "by" | "options">): string | undefined {
+  const by = byOf(s);
+  // (its values: its own, else Settings' for its kind, else each option's default - `stepValues`)
+  const values = stepValues(s);
+  return needsOf({ ...s, options: values }) ?? roundsNeed(s.kind, !!pluginById(by)?.roleDraws.includes("conformers"), values);
+}
+
+/**
+ * What a *Conformers* step asked for as many as the molecule needs still
+ * needs, where its plugin's search takes draws and so is asked in rounds
+ * (lib/chem/conformersSought `roundsAsked`): its window for new conformers,
+ * the chemist's own - its own, else Settings' - none until given.
+ */
+export function roundsNeed(kind: StepKind, draws: boolean, values: OptionValues): string | undefined {
+  if (kind !== "conformers" || !draws) return undefined;
+  const asked = roundsAsked(values, () => 1);
+  return asked && "needs" in asked ? asked.needs : undefined;
 }

@@ -1,11 +1,12 @@
 import { PlusIcon, Cog6ToothIcon } from "@heroicons/react/24/outline";
 import clsx from "clsx";
-import type { MouseEvent } from "react";
+import { useRef, type MouseEvent } from "react";
 import { TabKind } from "../../lib/core";
 import { IS_MAC, shortcutLabel } from "../../lib/doc/shortcuts";
 import OfflineToggle from "../network/OfflineToggle";
 import SaveIcon from "./SaveIcon";
 import { TabStrip, type TabMeta } from "./Tabs";
+import { useMovedAlong } from "./tabMotion";
 import WindowButtons, { SystemButtonsRoom } from "./WindowButtons";
 
 export type TabsController = {
@@ -39,6 +40,9 @@ const stop = (e: MouseEvent) => e.stopPropagation();
  */
 export default function TopBar({ ctl, mac = IS_MAC }: { ctl: TabsController; mac?: boolean }) {
   const { tabOrder, tabsById, activeId, reorder, select, close, add, openByKind, save } = ctl;
+  // ("+": moved along by the room a tab takes at once, eased there)
+  const plus = useRef<HTMLButtonElement>(null);
+  useMovedAlong(plus, tabOrder.length);
   return (
     <div
       data-tauri-drag-region
@@ -60,6 +64,7 @@ export default function TopBar({ ctl, mac = IS_MAC }: { ctl: TabsController; mac
         <div data-tauri-drag-region className="shrink-0 h-full flex items-center pr-1">
           {/* (moved along by the tabs before it, as they open and close their room) */}
           <button
+            ref={plus}
             aria-label="New workspace"
             title="New workspace"
             onClick={add}

@@ -9,6 +9,9 @@ import {
   useTypefaces,
 } from "../../fonts/typefaces";
 
+/** How tall the open list is at most, its search field with it, in pixels. */
+const LIST_ROOM = 340;
+
 /**
  * Picks the typeface labels are set in: those that come with Meno and those
  * the journals' styles use first, then every one on this computer, each
@@ -27,6 +30,8 @@ export default function TypefacePicker({
   onChange: (family: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  // (opened upward where the window has more room above it than the list needs below: a menu low on the canvas)
+  const [up, setUp] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const system = useSystemTypefaces();
@@ -76,7 +81,12 @@ export default function TypefacePicker({
         aria-label={label}
         aria-haspopup="listbox"
         aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          const r = box.current?.getBoundingClientRect();
+          const below = r ? window.innerHeight - r.bottom : Infinity;
+          setUp(!!r && below < LIST_ROOM && r.top > below);
+          setOpen((v) => !v);
+        }}
         className="h-7 min-w-[11rem] max-w-[16rem] rounded-md border border-gh-line bg-white pl-2 pr-1 text-sm text-gh-black flex items-center justify-between gap-2"
       >
         <span className="truncate" style={{ fontFamily: `'${value}'` }}>
@@ -92,7 +102,7 @@ export default function TypefacePicker({
         </span>
       )}
       {open && (
-        <div className="absolute right-0 top-8 z-30 w-72 rounded-lg border border-gh-line bg-white shadow-lg">
+        <div className={`absolute right-0 ${up ? "bottom-8" : "top-8"} z-30 w-72 rounded-lg border border-gh-line bg-white shadow-lg`}>
           <div className="p-2 border-b border-gh-line">
             <input
               autoFocus

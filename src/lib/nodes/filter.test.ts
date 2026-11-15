@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { conditionsIn, filter } from "./filter";
+import { conditionsIn, conditionText, filter } from "./filter";
+import type { Property } from "../entry";
 import { entry, quantity } from "./testEntries";
 
 const rel = (kcal: number) => quantity(kcal, "kcal/mol");
@@ -21,7 +22,51 @@ describe("Filter", () => {
       ["d", { aside: "it has no relative energy" }],
     ]);
     expect(out.exits.kept.length + out.exits.rest.length).toBe(set.length);
-    expect(out.said).toBe("2 of 4 entries kept · rest 2 (1: not relative energy ≤ 3 kcal/mol (4 kcal/mol); 1: it has no relative energy)");
+    expect(out.said).toBe("2 of 4 entries kept · rest 2 (1: not relative energy ≤ 3 kcal/mol; 1: it has no relative energy)");
+  });
+
+  it("counts those set aside on its line by the condition they did not meet, each value said on its own entry", () => {
+    const g = (nll: number, mw: number) => ({ nll: quantity(nll, "none"), mw: quantity(mw, "g/mol") });
+    const many = [entry("a", g(30, 300)), entry("b", g(45, 300)), entry("c", g(56, 310)), entry("d", g(49, 552)), entry("e", g(62, 628)), entry("f", g(20, 725)), entry("g", g(44, 320))];
+    const out = filter(many, {
+      conditions: [
+        { property: "nll", compare: "<", value: 40 },
+        { property: "mw", compare: "≤", value: 500, unit: "g/mol" },
+      ],
+      match: "all",
+    });
+    if (!out.ok) throw new Error(out.said);
+    // (one group for each set of conditions not met - most first - not one for each value)
+    expect(out.said).toBe("1 of 7 entries kept · rest 6 (3: not nll < 40; 2: not nll < 40; not mw ≤ 500 g/mol; 1: not mw ≤ 500 g/mol)");
+    expect(out.exits.rest.map((e) => [e.id, e.status])).toEqual([
+      ["b", { aside: "not nll < 40 (45)" }],
+      ["c", { aside: "not nll < 40 (56)" }],
+      ["d", { aside: "not nll < 40 (49); not mw ≤ 500 g/mol (552 g/mol)" }],
+      ["e", { aside: "not nll < 40 (62); not mw ≤ 500 g/mol (628 g/mol)" }],
+      ["f", { aside: "not mw ≤ 500 g/mol (725 g/mol)" }],
+      ["g", { aside: "not nll < 40 (44)" }],
+    ]);
+  });
+
+  it("counts those set aside by a property against another of their own by the condition, the two values on each entry", () => {
+    const ab = (a: number, b: number) => ({ a: quantity(a, "none"), b: quantity(b, "none") });
+    const pairs = [entry("p", ab(1, 2)), entry("q", ab(3, 2)), entry("r", ab(5, 4)), entry("s", ab(9, 1))];
+    const out = filter(pairs, { conditions: [{ property: "a", compare: "<", its: "b" }], match: "all" });
+    if (!out.ok) throw new Error(out.said);
+    expect(out.said).toBe("1 of 4 entries kept · rest 3 (3: not a < its b)");
+    expect(out.exits.rest.map((e) => [e.id, e.status])).toEqual([
+      ["q", { aside: "not a < its b (3 and 2)" }],
+      ["r", { aside: "not a < its b (5 and 4)" }],
+      ["s", { aside: "not a < its b (9 and 1)" }],
+    ]);
+  });
+
+  it("counts those set aside by a text as it is, its value with it: a text is a kind, not an entry's own number", () => {
+    const text = (v: string): Property => ({ ...quantity(0, "none"), value: v });
+    const kinds = [entry("a", { route: text("found") }), entry("b", { route: text("lost") }), entry("c", { route: text("lost") }), entry("d", { route: text("open") })];
+    const out = filter(kinds, { conditions: [{ property: "route", compare: "=", value: "found" }], match: "all" });
+    if (!out.ok) throw new Error(out.said);
+    expect(out.said).toBe("1 of 4 entries kept · rest 3 (2: not route = found (lost); 1: not route = found (open))");
   });
 
   it("compares in the condition's unit: 1 kcal/mol is 4.184 kJ/mol exactly (the thermochemical calorie)", () => {
@@ -137,10 +182,64 @@ describe("Filter, on what cannot be compared", () => {
     if (!out.ok) throw new Error(out.said);
     expect(ids(out.exits.kept)).toEqual(["a", "b"]);
     expect(out.said).toBe(
-      "2 of 3 entries kept · 2 of them with a condition not asked (1: its gap is in eV, which does not convert to K; 1: it has no gap) · rest 1 (1: not nll < 20 (50); it has no gap)",
+      "2 of 3 entries kept · 2 of them with a condition not asked (1: its gap is in eV, which does not convert to K; 1: it has no gap) · rest 1 (1: not nll < 20; it has no gap)",
     );
     // (all met, nothing more to say)
     const met = filter(two.slice(0, 2), { conditions: [{ property: "nll", compare: "<", value: 20, unit: "none" }], match: "any" });
     expect(met.ok && met.said).toBe("2 of 2 entries kept");
+  });
+});
+
+describe("Filter, a property against another of the same entry", () => {
+  const word = (value: string): Property => ({ value, unit: "none", status: "computed" });
+  // (saddle points, each made for a product, and where its path came down: F28 keeps one whose last end is the product it was made for)
+  const saddles = [
+    entry("s1", { "last end": word("b"), product: word("b") }),
+    entry("s2", { "last end": word("c"), product: word("b") }),
+    entry("s3", { product: word("b") }),
+    entry("s4", { "last end": word("b") }),
+  ];
+
+  it("reads \"its\" and a property as that property of the same entry; a quoted \"its …\" or a bare word stays a text", () => {
+    expect(conditionsIn("last end = its product")).toEqual({ conditions: [{ property: "last end", compare: "=", its: "product" }] });
+    expect(conditionsIn('last end = "its product"')).toEqual({ conditions: [{ property: "last end", compare: "=", value: "its product" }] });
+    expect(conditionsIn("state = finished")).toEqual({ conditions: [{ property: "state", compare: "=", value: "finished" }] });
+    expect(conditionText({ property: "last end", compare: "≠", its: "product" })).toBe("last end ≠ its product");
+  });
+
+  it("keeps the saddle whose last end is the product it was made for - not one that came down elsewhere, nor one with either missing, each saying which", () => {
+    const out = filter(saddles, { conditions: [{ property: "last end", compare: "=", its: "product" }], match: "all" });
+    if (!out.ok) throw new Error(out.said);
+    expect(ids(out.exits.kept)).toEqual(["s1"]);
+    expect(out.exits.rest.map((e) => [e.id, e.status])).toEqual([
+      ["s2", { aside: "not last end = its product (c and b)" }],
+      ["s3", { aside: "it has no last end" }],
+      ["s4", { aside: "it has no product" }],
+    ]);
+    const other = filter(saddles, { conditions: [{ property: "last end", compare: "≠", its: "product" }], match: "all" });
+    expect(other.ok && ids(other.exits.kept)).toEqual(["s2"]);
+  });
+
+  it("compares numbers in the first one's unit, the other converted - equal within a part in 10¹² - and never across dimensions", () => {
+    const es = [
+      entry("eq", { a: quantity(1, "kcal/mol"), b: quantity(4.184, "kJ/mol") }),
+      entry("lt", { a: quantity(1, "kcal/mol"), b: quantity(4.2, "kJ/mol") }),
+      entry("dim", { a: quantity(1, "kcal/mol"), b: quantity(1, "Å") }),
+    ];
+    const at = (compare: "=" | "<") => filter(es, { conditions: [{ property: "a", compare, its: "b" }], match: "all" });
+    const eq = at("=");
+    if (!eq.ok) throw new Error(eq.said);
+    expect(ids(eq.exits.kept)).toEqual(["eq"]);
+    expect(eq.exits.rest.map((e) => e.status)).toEqual([{ aside: "not a = its b (1 kcal/mol and 4.2 kJ/mol)" }, { aside: "its b is in Å, which does not convert to kcal/mol" }]);
+    const lt = at("<");
+    expect(lt.ok && ids(lt.exits.kept)).toEqual(["lt"]);
+  });
+
+  it("compares a text with a text only, and by = and ≠ alone", () => {
+    const es = [entry("x", { a: word("b"), n: quantity(2, "none") })];
+    const kind = filter(es, { conditions: [{ property: "a", compare: "=", its: "n" }], match: "all" });
+    expect(kind.ok && kind.exits.rest[0].status).toEqual({ aside: "its a is a text and its n a number" });
+    const order = filter(es, { conditions: [{ property: "a", compare: "<", its: "a" }], match: "all" });
+    expect(order.ok && order.exits.rest[0].status).toEqual({ aside: "a < its a: a text or true/false is compared by = or ≠ alone" });
   });
 });

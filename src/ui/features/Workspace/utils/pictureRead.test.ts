@@ -4,9 +4,9 @@ import type { Watch } from "../../../../lib/calc/client";
 
 // (in the app, with a picture's bytes and the worker of the plugin that reads pictures played by the test)
 vi.mock("@tauri-apps/api/core", () => ({ isTauri: () => true, invoke: () => Promise.reject(new Error("no app in tests")) }));
-vi.mock("./pictures", () => ({ picturePng: () => Promise.resolve(new Uint8Array([137, 80, 78, 71])) }));
+vi.mock("./pictures", () => ({ picturePng: () => Promise.resolve(new Uint8Array([137, 80, 78, 71])), pngPixels: () => Promise.resolve({ width: 1, height: 1, data: [255, 255, 255, 255] }) }));
 const worker = vi.hoisted(() => ({ current: null as ChemClient | null }));
-vi.mock("../../../../lib/roles/worker", () => ({ chemWorker: () => Promise.resolve(worker.current) }));
+vi.mock("../../../../lib/roles/worker", () => ({ chemWorker: () => Promise.resolve(worker.current), rolePlugin: () => undefined }));
 
 import { FIRST_READ_MS, READ_MS, readPicture } from "./figures";
 

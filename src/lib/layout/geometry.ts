@@ -2,6 +2,9 @@
 
 export type Point = { x: number; y: number };
 
+// (the sign of a volume as drawn is the core's: lib/chem/perception/stereo/senses)
+export { drawnVolume } from "../chem/perception/stereo/senses";
+
 export const pt = (x: number, y: number): Point => ({ x, y });
 export const add = (a: Point, b: Point): Point => ({ x: a.x + b.x, y: a.y + b.y });
 export const sub = (a: Point, b: Point): Point => ({ x: a.x - b.x, y: a.y - b.y });
@@ -53,6 +56,68 @@ export function centroid(points: readonly Point[]): Point {
   }
   const n = Math.max(points.length, 1);
   return { x: x / n, y: y / n };
+}
+
+/**
+ * How near, in bond lengths, an atom's mirror image must land on its partner
+ * for a drawing to be its own mirror image: a drawing laid out symmetric is,
+ * one with an atom a tenth of a bond off it is not.
+ */
+export const MIRROR_TOL = 0.05;
+
+/**
+ * The lines a drawing is its own mirror image in, as their directions in
+ * radians (0 to pi): every point reflected lands within `tol` of a point of
+ * the same kind, and every edge on an edge of the same kind. Such a line
+ * passes through the points' centroid, and either the first point lies on
+ * it or its partner lies across it: its partners give every line there can
+ * be.
+ */
+export function mirrorLines(
+  points: readonly Point[],
+  kinds: readonly string[],
+  edges: readonly (readonly [number, number, string])[],
+  tol: number,
+): number[] {
+  const n = points.length;
+  if (n < 2) return [];
+  const c = centroid(points);
+  const edgeKind = new Map<string, string>();
+  for (const [a, b, k] of edges) edgeKind.set(a < b ? `${a},${b}` : `${b},${a}`, k);
+  const r0 = dist(points[0], c);
+  const lines: number[] = [];
+  for (let j = 0; j < n; j++) {
+    if (kinds[j] !== kinds[0] || Math.abs(dist(points[j], c) - r0) > tol) continue;
+    // (the line through the first point, where it is its own partner; the
+    // perpendicular bisector of the two otherwise)
+    let t: number;
+    if (j === 0) {
+      if (r0 <= tol) continue;
+      t = angleOf(sub(points[0], c));
+    } else {
+      const d = sub(points[j], points[0]);
+      if (len(d) <= tol) continue;
+      t = angleOf(d) + Math.PI / 2;
+    }
+    t = ((t % Math.PI) + Math.PI) % Math.PI;
+    if (lines.some((u) => Math.abs(wrap(2 * (u - t))) < 1e-6)) continue;
+    const far = add(c, dir(t));
+    const image: number[] = [];
+    for (let a = 0; a < n; a++) {
+      const m = mirror(points[a], c, far);
+      const b = points.findIndex((q, i) => kinds[i] === kinds[a] && dist(q, m) <= tol);
+      if (b < 0) break;
+      image.push(b);
+    }
+    if (image.length < n) continue;
+    const kept = edges.every(([a, b, k]) => {
+      const p = image[a];
+      const q = image[b];
+      return edgeKind.get(p < q ? `${p},${q}` : `${q},${p}`) === k;
+    });
+    if (kept) lines.push(t);
+  }
+  return lines;
 }
 
 /** Whether p lies inside the polygon (even-odd). */
@@ -136,64 +201,3 @@ export function splitWidestGap(taken: readonly number[], count: number, start = 
   return Array.from({ length: count }, (_, i) => from + (gap * (i + 1)) / (count + 1));
 }
 
-type V3 = [number, number, number];
-const det = (a: V3, b: V3, c: V3) =>
-  a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0]) + a[2] * (b[0] * c[1] - b[1] * c[0]);
-
-/**
- * The sign of the volume a centre's first three neighbours span as drawn,
- * or 0 where the drawing does not say. With the first three all in the
- * page, the fourth, on its wedge, says it: it stands opposite them.
- *
- * All four bonds drawn, what is read is the way they run round the centre
- * and which of them stand out of the page, as a reader reads it (and
- * RDKit): each is taken as a direction, spread evenly round the centre in
- * the order it is drawn in - a wedge out of the page, hashes behind it, and
- * the bonds in the page leaning a little the other way, as a tetrahedral
- * centre's do. Read from the angles as drawn, three bonds in the page that
- * all lie within 180 degrees of each other - a drawing can come to that -
- * could say one thing with two of them and the wedge, and the opposite
- * with the other two. With three drawn and the H left out, the angles as
- * drawn are read: the two bonds in the page, the shorter way round - and
- * where those two lie straight across the centre from each other, a T,
- * the H is read as a bond in the page in the widest gap, as RDKit reads it.
- */
-export function drawnVolume(
-  at: Point,
-  neighbours: readonly (Point | null)[],
-  lift: readonly number[],
-): number {
-  const drawn = neighbours.flatMap((p, i) => (p ? [{ i, angle: Math.atan2(p.y - at.y, p.x - at.x) }] : []));
-  const lean = -drawn.reduce((s, { i }) => s + lift[i], 0) / 3;
-  drawn.sort((p, q) => p.angle - q.angle);
-  const round = new Map(drawn.map(({ i, angle }, k) => [i, drawn.length >= 4 ? (2 * Math.PI * k) / drawn.length : angle]));
-  const v = neighbours.map((p, i): V3 | null => {
-    if (!p) return null;
-    const a = round.get(i)!;
-    return [Math.cos(a), Math.sin(a), lift[i] || (drawn.length >= 4 ? lean : 0)];
-  });
-  if (v[0] && v[1] && v[2]) {
-    const d = det(v[0], v[1], v[2]);
-    if (Math.abs(d) > 1e-6) return Math.sign(d);
-  }
-  if (v[0] && v[1] && v[3]) {
-    const d = -det(v[0], v[1], v[3]);
-    if (Math.abs(d) > 1e-6) return Math.sign(d);
-  }
-  const h = neighbours.indexOf(null);
-  if (drawn.length === 3 && neighbours.length === 4 && h >= 0) {
-    // (a T: the H in the widest gap, in the page)
-    let widest = 0;
-    let across = 0;
-    drawn.forEach((p, k) => {
-      const next = k + 1 < drawn.length ? drawn[k + 1].angle : drawn[0].angle + 2 * Math.PI;
-      if (next - p.angle > widest) {
-        widest = next - p.angle;
-        across = p.angle + widest / 2;
-      }
-    });
-    const withH = neighbours.map((p, i) => (i === h ? { x: at.x + Math.cos(across), y: at.y + Math.sin(across) } : p));
-    return drawnVolume(at, withH, lift);
-  }
-  return 0;
-}

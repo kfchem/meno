@@ -23,7 +23,7 @@ describe("Re-bond", () => {
   const reactant = da.reactants[0];
   const mapped = mapReaction({ reactants: [reactant], products: [da.product] });
   if ("error" in mapped) throw new Error(mapped.message);
-  // the product in the reactants' numbering, as the Reaction step gives it
+  // the product in the reactants' numbering, as the Atom map step gives it
   const product = mapped.productsInReactantNumbering[0];
 
   it("gives the reactant's geometry the product's bonds - the known Diels-Alder ring - in the reactants' numbering", () => {
@@ -45,11 +45,12 @@ describe("Re-bond", () => {
     g.properties.energy = { value: -234.1, unit: "Eh", at: { geometry: "aaaa0001" }, status: "computed" };
     const b = entryOf(product, "p1");
     b.properties.energy = { value: -234.2, unit: "Eh", at: { geometry: "bbbb0002" }, status: "computed" };
-    b.properties.product = { value: "p-1", unit: "none", status: "computed" };
+    // (a Tag's ID: a label)
+    b.properties.product = { value: "p-1", unit: "none", label: true, status: "computed" };
     const r = rebonded(g, b, "e1");
     if ("failed" in r) throw new Error(r.failed);
     expect(r.entry.properties.energy.at?.geometry).toBe("aaaa0001");
-    expect(r.entry.properties.product.value).toBe("p-1");
+    expect(r.entry.properties.product).toEqual(b.properties.product);
     expect(r.entry.properties.group.value).toBe("rc1 → p1");
   });
 
@@ -58,8 +59,10 @@ describe("Re-bond", () => {
     const b = entryOf(product, "p1");
     // (a value of a geometry; labels - a Tag's ID, restraints; values of each structure, as a descriptor writes them)
     g.properties.energy = { value: -234.1, unit: "Eh", at: { geometry: "aaaa0001" }, status: "computed" };
-    g.properties.start = { value: "start-1", unit: "none", status: "computed" };
-    b.properties.restraints = { value: { restraints: [{ kind: "distance", atoms: [0, 10], value: 1.6, strength: 1 }] }, unit: "none", status: "computed" };
+    g.properties.start = { value: "start-1", unit: "none", label: true, status: "computed" };
+    // (and one that says none of these - neither the geometry nor the structure it was worked out on, nor that it is a label)
+    g.properties.note = { value: "from the paper", unit: "none", status: "computed" };
+    b.properties.restraints = { value: { restraints: [{ kind: "distance", atoms: [0, 10], value: 1.6, strength: 1000 }] }, unit: "none", status: "computed" };
     g.properties.mw = { value: 136.24, unit: "g/mol", of: structureKey(g), status: "computed" };
     b.properties.tpsa = { value: 0, unit: "none", of: structureKey(b), status: "computed" };
     g.properties.logp = { value: 3.1, unit: "none", of: structureKey(g), status: { failed: "not worked out" } };
@@ -77,7 +80,35 @@ describe("Re-bond", () => {
     expect(structureKey(r.entry)).toBe(structureKey(b));
     // (one that never was worked out keeps its own reason)
     expect(r.entry.properties.logp.status).toEqual({ failed: "not worked out" });
-    expect(r.said).toEqual(["mw, logp were worked out on another structure, so they are marked not applicable."]);
+    // (one not known to be of the entry's structure: kept, marked, never shown as standing)
+    expect(r.entry.properties.note).toEqual({
+      ...g.properties.note,
+      status: { notApplicable: "not known to be of the structure after Re-bond" },
+    });
+    // (the group Re-bond gives, a label of its own: as it is)
+    expect(r.entry.properties.group.status).toBe("computed");
+    expect(r.said).toEqual([
+      "mw, logp were worked out on another structure, so they are marked not applicable.",
+      "note is not known to be of the structure after Re-bond, so it is marked not applicable.",
+    ]);
+  });
+
+  it("takes the bonding entry's restraints, never the geometry's - they hold the bonds the geometry no longer has - and says it dropped them", () => {
+    const g = entryOf(reactant, "rc1");
+    const b = entryOf(product, "p1");
+    // (a reactant conformer's own restraints, from its search; the product's, for the minimisation towards it)
+    g.properties.restraints = { value: { restraints: [{ kind: "distance", atoms: [0, 1], value: 3.2, strength: 1000 }] }, unit: "none", status: "computed" };
+    b.properties.restraints = { value: { restraints: [{ kind: "dihedral", atoms: [0, 1, 2, 3], value: 180, strength: 50 }] }, unit: "none", status: "computed" };
+    const r = rebonded(g, b, "e1");
+    if ("failed" in r) throw new Error(r.failed);
+    expect(r.entry.properties.restraints).toEqual(b.properties.restraints);
+    expect(r.said).toEqual(["The geometry's restraints were dropped: restraints hold a bonding's bonds, and the entry takes the bonding's."]);
+    // (a bonding with none: the entry has none, and that is said too)
+    delete b.properties.restraints;
+    const none = rebonded(g, b, "e2");
+    if ("failed" in none) throw new Error(none.failed);
+    expect(none.entry.properties.restraints).toBeUndefined();
+    expect(none.said).toEqual(["The geometry's restraints were dropped: restraints hold a bonding's bonds, and the entry takes the bonding's, which has none."]);
   });
 
   it("knows a structure by its atoms and bonds, however numbered, and not by where its atoms are", () => {

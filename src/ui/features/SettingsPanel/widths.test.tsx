@@ -23,6 +23,7 @@ const NAMES: Record<SettingsSection, string> = {
   chemistry: "Chemistry",
   files: "Files",
   calculations: "Calculations",
+  conversations: "Conversations",
   plugins: "Plugins",
   abbreviations: "Dictionary",
   network: "Network",
@@ -86,7 +87,7 @@ describe("Settings' widths", () => {
   it("name each tab in one word", () => {
     const html = drawn("general");
     const tabs = [...html.matchAll(/role="tab"[^>]*>([^<]+)</g)].map((m) => m[1]);
-    expect(tabs).toEqual(["General", "Drawing", "3D", "Chemistry", "Files", "Calculations", "Plugins", "Dictionary", "Network"]);
+    expect(tabs).toEqual(["General", "Drawing", "3D", "Chemistry", "Files", "Calculations", "Conversations", "Plugins", "Dictionary", "Network"]);
     for (const t of tabs) expect(t, t).toMatch(/^\S+$/);
   });
 

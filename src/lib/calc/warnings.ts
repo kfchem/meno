@@ -8,7 +8,14 @@
 /** How long a failure's or a warning's own words may be, in characters. */
 export const WORDS_MOST = 300;
 
-/** What a calculation may warn of, by kind - each said in plain words (`WARNING_WORDS`): none moves its entry. */
+/**
+ * What a calculation may warn of, by kind - each said in plain words
+ * (`WARNING_WORDS`), none moving its entry (docs/PLUGINS.md, *The
+ * contract*). A kind is what the warning says, whichever program says it:
+ * `hessian-not-stationary`, frequencies worked out at a geometry its
+ * program says is not a stationary point - given by any plugin whose
+ * program says so, beside its own words; `other`, any else.
+ */
 export const WARNING_KINDS = ["hessian-not-stationary", "other"] as const;
 export type WarningKind = (typeof WARNING_KINDS)[number];
 

@@ -87,6 +87,41 @@ recording dot, the pointer - no larger than 64x64 pt, are no such window. The tw
 of their own, run by hand on a Mac with no app started:
 `pwsh -NoProfile -File scripts/gui/tests/guard.tests.ps1`.
 
+A question Meno asks before it uses the network - "Download RDKit?", "Keep
+Meno up to date?" (`src/ui/network/ConsentDialog.tsx`) - is answered by the
+person at the computer, never by a run, on either desktop. Every such
+question has one yes, *Allow and download*. A click or a drag whose press
+or release would land on it, or a key, a shortcut or typing sent while it
+has the focus, stops the run before anything is sent; Escape, which answers
+no, always goes. The platform module reads the part at the point, or the
+one with the focus, and what it sits in (`[MacGui]::ChainAt` and
+`FocusedChain`, from the same hit test as `PidAt`, some 12 ms; UI Automation
+on Windows), and `MenoConsent.psm1` decides: a button named `Allow...`.
+On Windows a press is told by the buttons themselves: Tauri lays a pane
+for its resize borders over the whole page, which lets the mouse through
+but stops UI Automation, so what is at any point reads as that pane. Every
+button of Meno's windows is read instead (`FindAll`, some 40 ms), with its
+bounds, and a press inside one named `Allow...` is stopped. A reading
+is trusted once it holds the page's parts - the page itself (a Document)
+with something in it, whatever it shows, during a talk too; never its
+buttons, as the window frame's are named in the system's language - read
+again for up to 5 s until it does, as the web view builds what it shows UI
+Automation only once asked; one that fails, never holds them, or holds
+the yes with no bounds stops the press. So does a point whose window is
+not Meno's own or one of its own processes' (its web view's) - another
+copy's, another app's - and a point read as that pane counts as unread.
+What could not be read is never taken for "not the yes": a lookup that
+fails - an error, or nothing given - stops the input as the yes does, and
+only "nothing has the keys" (`kAXErrorNoValue` for the focus) lets a key
+go. On a Mac the web view builds its page's parts for Accessibility only
+once asked, so a run's first press or key waits, up to 5 s, until the hit
+test at the window's middle reaches one; a hit test landing on the page
+itself said nothing of what is on it.
+`MENO_GUI_ANSWER_NETWORK_YES=1`, set by hand for one run, lets such input
+through, saying so; nothing in the repository sets it, and
+`tests/consent.tests.ps1` checks that, with what is taken for the yes:
+`pwsh -NoProfile -File scripts/gui/tests/consent.tests.ps1`.
+
 macOS will not let a process capture another app's window or post input until
 it has **Screen & System Audio Recording** and **Accessibility**, both in
 System Settings > Privacy & Security. They are granted not to `pwsh` but to
@@ -114,10 +149,12 @@ available:
 | `Invoke-MenoDrag -FromX -FromY -ToX -ToY [-Steps] [-PressMs] [-Count] [-AtStep] [-Right] [-Hold] [-Via]` | press, travel, release; `-PressMs 600` holds the button still first - a long press; `-Count 2` after an `Invoke-MenoClick` there is a double-click that drags, `-Count 3` after an `Invoke-MenoClick -Count 2` a triple; `-Right` with the other button; `-Hold` as for a click; `-Via @(@(x, y), ...)` passes through those points on the way - a lasso |
 | `Move-MenoPointer -X -Y` | hover |
 | `Move-MenoPointerAlong -Path @(@(x, y), ...) [-StepMs] [-AtStep]` | the pointer led through points with no button down - a chain traced with the button up |
-| `Invoke-MenoWheel -X -Y -Notches` | zoom; positive is away from you, in - out where Settings has the wheel turned the other way, as the settings the run starts from may |
+| `Invoke-MenoWheel -X -Y -Notches` | the wheel turned over a point: positive upwards, as a page reads a turn (deltaY below 0), the same on every machine - which way that zooms is Meno's setting's to say; over what takes the wheel itself, a frames chip |
+| `Invoke-MenoZoom -X -Y -Notches` | zoom the page with the wheel: positive in, negative out, on every machine - the wheel turned the way the Meno under test's Settings (General, The wheel turned upwards) have it zoom as meant, read from its `settings.json` |
 | `Invoke-MenoSwipe -X -Y [-DX] [-DY] [-Steps] [-Held]` | two fingers on a trackpad: moves the view; positive DY scrolls down; `-Held` swipes where the pointer is without moving it there first - in a drag's `-AtStep`, with the button down |
 | `Send-MenoText`, `Send-MenoKey` | typing (`Send-MenoKey Enter -Shift` for Shift+Enter) |
 | `Send-MenoShortcut -Key [-Shift]` | Ctrl (Windows) or Cmd (Mac) with a key: `Z` is undo, `1` fits the drawing to the view |
+| `Set-MenoHeldKeys -Hold [-Up]` | presses `Shortcut`, `Shift` or `Alt` and keeps it down - what the pointer shows with a key held, Option over an atom - until `-Up` lets it go; a scenario lets it go before it ends |
 | `Close-MenoQuestion [-TimeoutSec]` | a question Meno asks as it starts (keeping it up to date, from an emptied `settings.json` that is not set offline) waited for in shots, however late it comes, and answered "Not now" with Escape; true where there was one |
 | `Get-ClientSize`, `Wait-MenoSettled` | |
 
@@ -156,6 +193,7 @@ Besides the verbs above that come from it, `run.ps1` asks the module for:
 | | |
 |---|---|
 | `Get-MenoBuild` | where `npm run tauri build` leaves the app on this platform |
+| `Get-MenoProfile` | the folder of the Meno under test's settings (`settings.json`), for what a run reads of them - the wheel's way, `MenoSettings.psm1` |
 | `Start-MenoProcess -Path` | start a build |
 | `Close-MenoProcess -Process` | ask a running copy to quit, and put it down if it will not |
 | `Get-MenoWindow`, `Set-MenoWindow` | find the main window; put it at a known size, in front |

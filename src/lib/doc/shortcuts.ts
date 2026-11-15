@@ -57,6 +57,11 @@ export function isFillKey(event: KeyLike & { altKey?: boolean }): boolean {
   return (event.ctrlKey || event.metaKey) === true && event.shiftKey === true && !event.altKey && (event.key || "").toLowerCase() === "f" && !isTextTarget(event.target);
 }
 
+/** Ctrl/Cmd+P prints the PDF in the column - not while a text field has the keys. */
+export function isPrintKey(event: KeyLike & { altKey?: boolean }): boolean {
+  return (event.ctrlKey || event.metaKey) === true && !event.shiftKey && !event.altKey && (event.key || "").toLowerCase() === "p" && !isTextTarget(event.target);
+}
+
 /** Ctrl/Cmd+F looks for words, in the PDFs - not while a text field has the keys. */
 export function isFindKey(event: KeyLike & { altKey?: boolean }): boolean {
   return (event.ctrlKey || event.metaKey) === true && !event.shiftKey && !event.altKey && (event.key || "").toLowerCase() === "f" && !isTextTarget(event.target);

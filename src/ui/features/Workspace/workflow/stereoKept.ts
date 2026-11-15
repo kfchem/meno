@@ -9,7 +9,7 @@
  */
 import { readStereo } from "../../../../lib/layout/drawn";
 import type { Bond, Model } from "../store/types";
-import { degrees, drawingOf, narrowEnd, orientFor } from "../chem/drawing";
+import { degrees, drawingOf, narrowEnd } from "../chem/drawing";
 
 /** A centre's neighbours by atom id ("H" for its undrawn hydrogen), in the order read, and the sign of the volume they span. */
 type Centre = { around: (number | "H")[]; volume: 1 | -1 };
@@ -86,21 +86,6 @@ export function changedAt(template: Model, product: Model, took: ReadonlyMap<num
 }
 
 /**
- * `product` with each of the template's wedges narrow at the end it was
- * narrow at in `template`: a bond added to an atom changes how the drawing
- * counts its bonds, and with them which end of a wedge it reads as narrow
- * (`narrowEnd`) - so a wedge would move to the other atom, losing one
- * configuration and making up another.
- */
-export function wedgesHeld(template: Model, product: Model): Model {
-  const was = degrees(template.bonds);
-  const now = degrees(product.bonds);
-  const narrow = new Map(template.bonds.filter((b) => b.stereo === "up" || b.stereo === "down").map((b) => [b.id, narrowEnd(b, was)]));
-  if (!narrow.size) return product;
-  return { ...product, bonds: product.bonds.map((b) => (narrow.has(b.id) && (b.stereo === "up" || b.stereo === "down") ? { ...b, stereoOrient: orientFor(b, narrow.get(b.id)!, now) } : b)) };
-}
-
-/**
  * `product` with the centre `c` - a template centre whose undrawn hydrogen
  * a group took - wedged anew so that it says the configuration it had: its
  * own wedges taken off, and one put on a bond out of it, the group's first,
@@ -116,7 +101,7 @@ export function rewedged(template: Model, product: Model, c: number, took: Reado
     if (!(b.a === c || b.b === c) || (b.stereo !== "up" && b.stereo !== "down")) return b;
     // (a wedge narrow at the other end is that atom's: kept)
     if (narrowEnd(b, degree) !== c) return b;
-    const { stereo: _s, stereoOrient: _o, ...rest } = b;
+    const { stereo: _s, narrow: _o, ...rest } = b;
     void _s;
     void _o;
     return rest as Bond;
@@ -126,7 +111,7 @@ export function rewedged(template: Model, product: Model, c: number, took: Reado
     // (not on a bond whose other end is a centre: the wedge would say something of it too)
     if (saidOf(template).centres.has(other)) continue;
     for (const stereo of ["up", "down"] as const) {
-      const tried: Model = { ...product, bonds: plain.map((x) => (x.id === b.id ? { ...x, stereo, stereoOrient: orientFor(x, c, degree) } : x)) };
+      const tried: Model = { ...product, bonds: plain.map((x) => (x.id === b.id ? { ...x, stereo, narrow: c } : x)) };
       if (!changedAt(template, tried, took).includes(c)) return tried;
     }
   }

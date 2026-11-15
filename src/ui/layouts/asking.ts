@@ -75,6 +75,16 @@ export function askKeys(inside: (target: EventTarget | null) => boolean, no: () 
   };
 }
 
+/**
+ * Whether a question is asked over the window, in the tab in front: the
+ * window is the question's while it is - a press, a turn of the wheel and
+ * the keys go to it, and nothing behind it closes or acts on one (Quick
+ * Add, open behind "Download RDKit?", stays open for the answer).
+ */
+export function questionAsked(): boolean {
+  return asked.some((q) => q.inFront());
+}
+
 /** A question's keys, while it is shown (`on`) and its tab is in front: `box`, the question; `no`, what Escape answers. */
 export function useAskedKeys(box: RefObject<HTMLElement | null>, no: () => void, on = true): void {
   // (the answer as last given: asked once, however often the question is drawn)

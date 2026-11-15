@@ -30,14 +30,17 @@ const conformers = (n: number): Omit<Molecule3D, "id" | "at"> => ({
   made: { how: [], energies: "Field X" },
 });
 
-/** A workspace holding a step's large result set of `n` conformers of one compound, its store, and the set. */
+/** Compounds of one geometry each after the first: with it, more molecules than a result set lays out on the page (`LARGE_SET` counts molecules, never frames). */
+const FILL = 50;
+
+/** A workspace holding a step's large result set of one compound of `n` conformers and `FILL` of one geometry (`FILL + 1` molecules), its store, and the set. */
 function large(n: number) {
   const doc = createWorkspaceDocument();
   const store = storeOf(doc);
   connectStoreToDocument(store, doc);
   doc.edit("run", (d) => {
     const s = addStep(d, "conformers", 0, 0, {}, "rdkit");
-    return placeResults(s, s.steps![0], { molecules: [conformers(n)], rest: [], holds: "conformers" }, { extentOf });
+    return placeResults(s, s.steps![0], { molecules: [conformers(n), ...Array.from({ length: FILL }, () => conformers(1))], rest: [], holds: "conformers" }, { extentOf });
   });
   return { doc, store, set: store.getState().sets[0] };
 }
@@ -54,7 +57,7 @@ describe("a set's table in the column", () => {
     expect(names).toEqual(["#", "Compound", "Conformer", "E (Eh)", "ΔE (kcal/mol)", "From"]);
     // (each energy says what worked it out; nothing chosen, nothing to put on the page)
     expect(html).toContain("Field X");
-    expect(html).toContain("60 conformers");
+    expect(html).toContain(`${60 + FILL} conformers`);
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Put on the page/);
   });
 
@@ -69,7 +72,7 @@ describe("a set's table in the column", () => {
     const drawn = html.match(/role="row" aria-rowindex/g) ?? [];
     expect(drawn.length).toBeGreaterThan(0);
     expect(drawn.length).toBeLessThan(20);
-    expect(html).toContain(`aria-rowcount="1001"`);
+    expect(html).toContain(`aria-rowcount="${1000 + FILL + 1}"`);
   });
 
   it("puts rows chosen on the page as a set of their own, named for the set they are from", () => {

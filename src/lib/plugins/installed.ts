@@ -83,7 +83,7 @@ export async function lookForAll(plugins: readonly { id: string; installed: read
 
 /**
  * Locates a program installed separately: the chemist picks its file - or,
- * on macOS, the app that holds it (Blender.app) - which is kept where it is
+ * on macOS, the app that holds it (its `.app`) - which is kept where it is
  * that program: its file's name, and one that can be run - and, where its
  * plugin says how to ask, of a version Meno takes. Where it was taken - the
  * program, inside an app picked; null where nothing was picked; throws,

@@ -1,7 +1,7 @@
 import type { Model } from "../store/types";
 
 /**
- * The atoms of the structure a guide's step points at (lib/plugins/guide,
+ * The atoms of the structure a guide's step points at (lib/guide,
  * `structure`): those selected, where any are; else the structure drawn
  * last - the one holding the atom added last.
  */

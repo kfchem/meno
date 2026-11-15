@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createDocument, DEFAULT_COALESCE_MS, DEFAULT_HISTORY_LIMIT, gestureStep } from "./document";
+import { changeSet, goneOn, createDocument, DEFAULT_COALESCE_MS, DEFAULT_HISTORY_LIMIT, gestureStep } from "./document";
 
 type Doc = { atoms: string[]; title: string };
 
@@ -128,6 +128,268 @@ describe("createDocument", () => {
     doc.undo();
     doc.undo();
     expect(doc.getState().title).toBe("untitled");
+  });
+
+  it("joins an edit that follows a gesture to the gesture's step: one undo for both, whatever the gesture's key or how long ago", () => {
+    const { doc, tick } = withClock();
+    doc.edit("drag", (d) => ({ ...d, title: "a" }), gestureStep("drag:1"));
+    doc.edit("drag", (d) => ({ ...d, title: "b" }), gestureStep("drag:1"));
+    tick(100 * DEFAULT_COALESCE_MS);
+    expect(doc.edit("fit", (d) => ({ ...d, atoms: ["C"] }), { joinTop: true })).toBe(true);
+    expect(doc.history()).toMatchObject({ undoDepth: 1, undoLabel: "drag" });
+    expect(doc.getState()).toEqual({ atoms: ["C"], title: "b" });
+    doc.undo();
+    expect(doc.getState()).toBe(initial);
+    expect(doc.history()).toMatchObject({ undoDepth: 0, redoDepth: 1 });
+    doc.redo();
+    expect(doc.getState()).toEqual({ atoms: ["C"], title: "b" });
+  });
+
+  it("makes a step of its own of an edit that joins nothing: no gesture on top, or one by another maker", () => {
+    const { doc } = withClock();
+    // (nothing yet: a step of its own)
+    doc.edit("fit", (d) => ({ ...d, title: "a" }), { joinTop: true });
+    expect(doc.history().undoDepth).toBe(1);
+    // (a plain step on top, no key: not a gesture)
+    doc.edit("type", (d) => ({ ...d, title: "b" }));
+    doc.edit("fit", (d) => ({ ...d, title: "c" }), { joinTop: true });
+    expect(doc.history()).toMatchObject({ undoDepth: 3, undoLabel: "fit" });
+    // (a gesture made by another)
+    doc.edit("drag", (d) => ({ ...d, title: "d" }), { ...gestureStep("drag:1"), by: "a conversation" });
+    doc.edit("fit", (d) => ({ ...d, title: "e" }), { joinTop: true });
+    expect(doc.history()).toMatchObject({ undoDepth: 5, undoLabel: "fit" });
+    expect(doc.history().undoBy).toBeUndefined();
+  });
+
+  it("leaves no step where the joining edit changes nothing", () => {
+    const { doc } = withClock();
+    doc.edit("drag", (d) => ({ ...d, title: "a" }), gestureStep("drag:1"));
+    const before = doc.getState();
+    expect(doc.edit("fit", (d) => d, { joinTop: true })).toBe(false);
+    expect(doc.getState()).toBe(before);
+    expect(doc.history().undoDepth).toBe(1);
+  });
+
+  it("a joining edit is settled like any, and clears what was to redo", () => {
+    const doc = createDocument<Doc>(initial, { settle: (next) => ({ ...next, title: next.title.toUpperCase() }) });
+    doc.edit("one", (d) => ({ ...d, title: "a" }), gestureStep("g"));
+    doc.edit("two", (d) => ({ ...d, title: "b" }), gestureStep("g2"));
+    doc.undo();
+    expect(doc.history().redoDepth).toBe(1);
+    doc.edit("fit", (d) => ({ ...d, atoms: ["C"] }), { joinTop: true });
+    expect(doc.getState()).toEqual({ atoms: ["C"], title: "A" });
+    expect(doc.history()).toMatchObject({ undoDepth: 1, redoDepth: 0 });
+  });
+
+  it("keeps the joined step the gesture's: its label, key, maker and time - a further edit of the gesture's own key within its window still joins it", () => {
+    const { doc, tick } = withClock();
+    doc.edit("drag", (d) => ({ ...d, title: "a" }), { coalesceKey: "drag:1", by: "a conversation" });
+    tick(DEFAULT_COALESCE_MS - 100);
+    doc.edit("fit", (d) => ({ ...d, atoms: ["C"] }), { joinTop: true, by: "a conversation" });
+    // (the step is the gesture's still: its label, its maker)
+    expect(doc.history()).toMatchObject({ undoDepth: 1, undoLabel: "drag", undoBy: "a conversation" });
+    // (its time is the gesture's, not the join's: 200 ms on, past the window from the gesture's last edit, though inside it from the join)
+    tick(200);
+    doc.edit("drag", (d) => ({ ...d, title: "b" }), { coalesceKey: "drag:1", by: "a conversation" });
+    expect(doc.history().undoDepth).toBe(2);
+    // (and within the window of the gesture's time, with its key, one that does coalesce)
+    const other = withClock();
+    other.doc.edit("drag", (d) => ({ ...d, title: "a" }), { coalesceKey: "drag:1" });
+    other.tick(100);
+    other.doc.edit("fit", (d) => ({ ...d, atoms: ["C"] }), { joinTop: true });
+    other.tick(100);
+    other.doc.edit("drag", (d) => ({ ...d, title: "b" }), { coalesceKey: "drag:1" });
+    expect(other.doc.history()).toMatchObject({ undoDepth: 1, undoLabel: "drag" });
+    expect(other.doc.getState()).toEqual({ atoms: ["C"], title: "b" });
+  });
+
+  it("never joins a change set's first edit to the step on top; and one that follows an unkeyed edit is a step of its own", () => {
+    const { doc } = withClock();
+    doc.edit("drag", (d) => ({ ...d, title: "a" }), gestureStep("drag:1"));
+    expect(doc.history().undoDepth).toBe(1);
+    // (a change set's first edit: a step of its own, whatever it asks)
+    doc.actAs("turn", changeSet("turn:1", "a conversation"), () => {
+      doc.edit("fit", (d) => ({ ...d, atoms: ["C"] }), { joinTop: true });
+      return undefined;
+    });
+    expect(doc.history()).toMatchObject({ undoDepth: 2, undoLabel: "turn", undoBy: "a conversation" });
+    doc.undo();
+    expect(doc.getState()).toEqual({ atoms: [], title: "a" });
+    // (a gesture that ended in a plain edit: the join does not reach under it - two steps to undo)
+    const plain = withClock();
+    plain.doc.edit("drag", (d) => ({ ...d, title: "a" }), gestureStep("drag:1"));
+    plain.doc.edit("type", (d) => ({ ...d, title: "b" }));
+    plain.doc.edit("fit", (d) => ({ ...d, atoms: ["C"] }), { joinTop: true });
+    expect(plain.doc.history().undoDepth).toBe(3);
+    plain.doc.undo();
+    expect(plain.doc.getState()).toEqual({ atoms: [], title: "b" });
+  });
+
+  it("joins nothing where nothing is under the step on top: a step that was taken back to the start is not joined, and the edit is a step of its own", () => {
+    const doc = createDocument<Doc>(initial);
+    doc.edit("drag", (d) => ({ ...d, title: "a" }), gestureStep("drag:1"));
+    // (a press let go of as a pinch: taken back to the start, the step on top the gesture's still, with nothing under it)
+    expect(doc.takeBackTo(0, initial)).toBe(true);
+    expect(doc.history().undoDepth).toBe(0);
+    doc.edit("fit", (d) => ({ ...d, atoms: ["C"] }), { joinTop: true });
+    expect(doc.history().undoDepth).toBe(1);
+    expect(doc.history().undoLabel).toBe("fit");
+    doc.undo();
+    expect(doc.getState()).toBe(initial);
+  });
+
+  it("counts what a joined step costs as it is now, not as it was: the history's budget is held to", () => {
+    // (a step costs 10 where it changes the atoms, else nothing; 15 may be held: the first state costs 10)
+    const doc = createDocument<Doc>(initial, { cost: (s, b) => (s.atoms === b?.atoms ? 0 : 10), budget: 15 });
+    doc.edit("a", (d) => ({ ...d, title: "a" }));
+    doc.edit("drag", (d) => ({ ...d, title: "b" }), gestureStep("drag:1"));
+    expect(doc.history().undoDepth).toBe(2);
+    // (joined, it changes the atoms: it costs 10 now, and the oldest step goes)
+    doc.edit("fit", (d) => ({ ...d, atoms: ["C"] }), { joinTop: true });
+    expect(doc.history().undoDepth).toBe(1);
+    expect(doc.getState()).toEqual({ atoms: ["C"], title: "b" });
+  });
+
+  it("keeps who made a step, where not the person, and never merges it with another's - whatever its key", () => {
+    const { doc } = withClock();
+    doc.edit("drag", (d) => ({ ...d, title: "a" }), gestureStep("drag:1"));
+    // (the same key, made by another: a step of its own)
+    doc.edit("drag", (d) => ({ ...d, title: "b" }), { ...gestureStep("drag:1"), by: "a conversation" });
+    doc.edit("drag", (d) => ({ ...d, title: "c" }), { ...gestureStep("drag:1"), by: "a conversation" });
+    // (and the person's after it, the same key again: of their own)
+    doc.edit("drag", (d) => ({ ...d, title: "d" }), gestureStep("drag:1"));
+    expect(doc.history()).toMatchObject({ undoDepth: 3, undoLabel: "drag" });
+    expect(doc.history().undoBy).toBeUndefined();
+    doc.undo();
+    expect(doc.getState().title).toBe("c");
+    expect(doc.history()).toMatchObject({ undoBy: "a conversation", redoDepth: 1 });
+    expect(doc.history().redoBy).toBeUndefined();
+    doc.undo();
+    expect(doc.getState().title).toBe("a");
+    expect(doc.history().redoBy).toBe("a conversation");
+    expect(doc.history().undoBy).toBeUndefined();
+  });
+
+  it("takes every edit a change set makes as one step, by its label and who made it - whatever each was made with", () => {
+    const { doc, tick } = withClock();
+    doc.edit("add C", addAtom("C"), gestureStep("turn:1"));
+    const made = doc.actAs("conversation", changeSet("turn:1", "a conversation, by a test model"), () => {
+      doc.edit("add N", addAtom("N"));
+      tick(10 * DEFAULT_COALESCE_MS);
+      doc.edit("add O", addAtom("O"), gestureStep("drag:7"));
+      // (one within it: part of it)
+      expect(doc.actAs("inner", changeSet("turn:2", "another"), () => void doc.edit("title", (d) => ({ ...d, title: "x" })))).toBe(true);
+      // (one that changes nothing makes nothing)
+      doc.edit("nothing", (d) => d);
+    });
+    expect(made).toBe(true);
+    expect(doc.getState()).toEqual({ atoms: ["C", "N", "O"], title: "x" });
+    // (one step - never merged into the person's on top, its key alike as it is)
+    expect(doc.history()).toMatchObject({ undoDepth: 2, undoLabel: "conversation", undoBy: "a conversation, by a test model" });
+    // (the person's next edit, however soon and whatever its key, a step of its own)
+    doc.edit("add S", addAtom("S"), gestureStep("turn:1"));
+    expect(doc.history().undoDepth).toBe(3);
+    doc.undo();
+    doc.undo();
+    expect(doc.getState()).toEqual({ atoms: ["C"], title: "untitled" });
+    // (nothing made: no step, and false)
+    expect(doc.actAs("conversation", changeSet("turn:3", "a conversation"), () => void doc.edit("nothing", (d) => d))).toBe(false);
+    expect(doc.history().undoDepth).toBe(1);
+  });
+
+  it("leaves what a change set made before it threw as one step, for its caller to take back", () => {
+    const { doc } = withClock();
+    expect(() =>
+      doc.actAs("conversation", changeSet("turn:1", "a conversation"), () => {
+        doc.edit("add N", addAtom("N"));
+        doc.edit("add O", addAtom("O"));
+        throw new Error("refused");
+      }),
+    ).toThrow("refused");
+    expect(doc.history()).toMatchObject({ undoDepth: 1, undoBy: "a conversation" });
+    expect(doc.drop("turn:1")).toBe(true);
+    expect(doc.getState().atoms).toEqual([]);
+    // (and edits after it are the person's again)
+    doc.edit("add C", addAtom("C"));
+    expect(doc.history().undoBy).toBeUndefined();
+  });
+
+  it("keeps two change sets apart, the same maker's with the same key one after the other: one turn, one undo", () => {
+    const { doc } = withClock();
+    doc.actAs("conversation", changeSet("turn:1", "a conversation"), () => void doc.edit("add N", addAtom("N")));
+    doc.actAs("conversation", changeSet("turn:1", "a conversation"), () => void doc.edit("add O", addAtom("O")));
+    expect(doc.history().undoDepth).toBe(2);
+  });
+
+  it("holds a change set's edits as one step however far apart - its own key's, never a window its caller gave", () => {
+    const { doc, tick } = withClock();
+    doc.actAs("conversation", { ...changeSet("turn:1", "a conversation"), coalesceWithinMs: 10 }, () => {
+      doc.edit("add N", addAtom("N"));
+      tick(1000);
+      doc.edit("add O", addAtom("O"));
+      return undefined;
+    });
+    expect(doc.history().undoDepth).toBe(1);
+  });
+
+  it("refuses a change set that waits, as soon as it returns - what it made before it waited one step, to drop", async () => {
+    const { doc } = withClock();
+    // (refused by its type)
+    // @ts-expect-error - a change set does its work at once
+    const waits: Parameters<typeof doc.actAs>[2] = async () => {
+      doc.edit("add N", addAtom("N"));
+      await Promise.resolve();
+    };
+    // (and as it runs, whatever its type said)
+    expect(() => doc.actAs("conversation", changeSet("turn:1", "a conversation"), waits)).toThrow("A change set does its work at once");
+    expect(doc.history()).toMatchObject({ undoDepth: 1, undoBy: "a conversation" });
+    expect(doc.drop("turn:1")).toBe(true);
+    expect(doc.getState().atoms).toEqual([]);
+    await Promise.resolve();
+  });
+
+  it("refuses a change set that gives any thenable, not only a promise", () => {
+    const { doc } = withClock();
+    const waits = () => {
+      doc.edit("add N", addAtom("N"));
+      return { then() {} };
+    };
+    expect(() => doc.actAs("conversation", changeSet("turn:1", "a conversation"), waits as never)).toThrow("A change set does its work at once");
+    expect(doc.history()).toMatchObject({ undoDepth: 1, undoBy: "a conversation" });
+  });
+
+  it("goes on with a change set across goes - one step - where the step on top is its own, and never after another", () => {
+    const { doc } = withClock();
+    doc.edit("add C", addAtom("C"));
+    const meta = changeSet("turn:1", "a conversation");
+    doc.actAs("conversation", meta, () => (doc.edit("add N", addAtom("N")), undefined));
+    doc.actAs("conversation", goneOn(meta), () => (doc.edit("add O", addAtom("O")), undefined));
+    expect(doc.history()).toMatchObject({ undoDepth: 2, undoBy: "a conversation" });
+    // (the person's step between: the change set's next go a step of its own)
+    doc.edit("add S", addAtom("S"));
+    doc.actAs("conversation", goneOn(meta), () => (doc.edit("add P", addAtom("P")), undefined));
+    expect(doc.history().undoDepth).toBe(4);
+    // (and gone on with by another maker: its own step)
+    doc.actAs("conversation", goneOn(changeSet("turn:1", "another")), () => (doc.edit("add B", addAtom("B")), undefined));
+    expect(doc.history().undoDepth).toBe(5);
+  });
+
+  it("lets nothing of the history be gone back on while a change set runs", () => {
+    const { doc } = withClock();
+    doc.edit("add C", addAtom("C"));
+    doc.edit("add S", addAtom("S"));
+    doc.undo();
+    for (const travel of [() => doc.undo(), () => doc.redo(), () => doc.drop("x"), () => doc.takeBackTo(0, doc.getState()), () => doc.reset(doc.getState())]) {
+      expect(() =>
+        doc.actAs("conversation", changeSet("turn:1", "a conversation"), () => {
+          travel();
+          return undefined;
+        }),
+      ).toThrow("Nothing of the history is gone back on");
+    }
+    // (the person's steps as they were: one to undo, one to redo)
+    expect(doc.history()).toMatchObject({ undoDepth: 1, redoDepth: 1, undoLabel: "add C", redoLabel: "add S" });
+    expect(doc.getState().atoms).toEqual(["C"]);
   });
 
   it("takes back a gesture's step when it is let go of, leaving nothing to redo", () => {

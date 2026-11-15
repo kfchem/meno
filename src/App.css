@@ -20,7 +20,10 @@ body {
  * the app carries in its resources). Bold text is set in the semibold.
  * Plex Sans in italics too - R and S, the t of t-Bu, as IUPAC sets them -
  * so that the browser need not slant the upright letters. The files are
- * IBM's own, from the @ibm/plex-sans 1.1.0 release (font version 3.005).
+ * unchanged: Plex Sans's from IBM's @ibm/plex-sans 1.1.0 release (font
+ * version 3.005), Plex Mono's from @ibm/plex-mono 2.5.0 (2.005), and Plex
+ * Sans JP's Regular from Google Fonts (github.com/google/fonts,
+ * ofl/ibmplexsansjp, version 1.001).
  */
 @font-face {
   font-family: "IBM Plex Sans";
@@ -161,6 +164,37 @@ body {
   animation: meno-fade-out 120ms var(--ease-meno-leave) both;
 }
 
+/* A step's result set folding into its exit's port as it is held off the
+   page, and growing out of it as it is shown again, about that port - its
+   transform-origin (components/Workflow2D; docs/WORKFLOWS.md, *Held
+   results*): DURATION.base, Meno's ease. */
+@keyframes meno-fold-out {
+  from {
+    transform: scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: scale(0);
+    opacity: 0;
+  }
+}
+@keyframes meno-fold-in {
+  from {
+    transform: scale(0);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.meno-fold-out {
+  animation: meno-fold-out 160ms var(--ease-meno) both;
+}
+.meno-fold-in {
+  animation: meno-fold-in 160ms var(--ease-meno) both;
+}
+
 /* What has just joined a workflow's set, or left it: marked a moment, coming
    and going (components/useMemberMarks, MARK_MS). */
 @keyframes meno-member-mark {
@@ -183,6 +217,14 @@ body {
    held by a large one's reading, the browser's own animation going on (Workspace's drop mark). */
 .meno-drop-mark {
   animation: meno-fade-in 160ms var(--ease-meno) 220ms both;
+}
+
+/* The layer the page's HTML goes in (Workspace/components/coverLayer): clipped, so that it is no box that can be
+   scrolled - by a focus, a scrollIntoView, a selection - and what is in it stays where the canvas places it. Hidden
+   first, for a WebView without clip; Meno's own (macOS 13 and later, WebView2) all have it. */
+.meno-page-html-layer {
+  overflow: hidden;
+  overflow: clip;
 }
 
 /* A chip on the page - a molecule's frames chip, a measurement's value -
@@ -220,11 +262,11 @@ body {
 .meno-barred ::placeholder {
   color: transparent !important;
 }
-/* A workflow's port, however small it is drawn - zoomed out, with the page (workflow/look `portSize`) - taken hold of over at least 12 hairlines about its middle. */
+/* A workflow's port, however small it is drawn - zoomed out, with the page (workflow/look `portSize`) - taken hold of over at least 12 px about its middle (it is laid out in the screen's pixels). */
 .meno-port::after {
   content: "";
   position: absolute;
-  inset: min(0px, calc((var(--port) - var(--hair, 1px) * 12) / 2));
+  inset: min(0px, calc((var(--port) - 12px) / 2));
   border-radius: 9999px;
 }
 /* A style's card carried (StyleEditor/StylePicker3D): the hand's pointer all the way, over whatever it passes. */
@@ -255,6 +297,21 @@ input[type="range"]::-moz-range-thumb {
   background-color: rgb(49, 118, 137);
   border-radius: 9999px;
   border: 1px solid rgb(209, 217, 224);
+}
+
+/* The shadow of a chip the page's HTML draws, as the chip WebGL draws has it (pageGl/chips `CHIP.shadow`: 2 px blur, 1 px down, alpha 0.05). */
+.meno-chip-shadow {
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+}
+
+/* A button of icons - a right-click menu's, Quick Add's - gives under the press: darker than it is hovered, a little smaller,
+   eased in as it is pressed and out as it is let go. Not one that cannot be pressed. */
+.meno-press {
+  transition-property: color, background-color, border-color, box-shadow, transform;
+}
+.meno-press:active:not(:disabled) {
+  background-color: var(--color-gh-line);
+  transform: scale(0.96);
 }
 
 @layer base {

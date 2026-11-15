@@ -20,6 +20,10 @@ describe("a line of the page's for Meno's log (lib/log)", () => {
     // (how many atom numbers a picture left out: a count, kept)
     const left = "Meno: a picture of molecules in 3D left out 12 of their atom numbers, too small to read in it or with no room on their balls.";
     expect(logText([left])).toBe(left);
+    // (the plugins not read as Meno starts: said, and the backend's reason, which may name a folder, left out)
+    expect(logText(["Meno: the plugins in place could not be read.", "no such folder: /Users/x/Library"])).toBe(
+      "Meno: the plugins in place could not be read. [text]",
+    );
   });
 
   it("never what a document holds, nor a file's name - a SMILES and a file's name in a message are left out", () => {
@@ -45,6 +49,11 @@ describe("a line of the page's for Meno's log (lib/log)", () => {
     expect(text).toContain("Error\nat readFile (app.js:3:1)");
     expect(text).toContain('TypeError: "…" cannot be parsed as a URL.');
     expect(text).toContain('[text] Meno: the tab "…" stopped working. [text] [Object] [Map] [Array]');
+  });
+
+  it("keeps the words said of a workspace file that does not read - and none of a name that goes with them", () => {
+    expect(logText(["a workspace file could not be read"])).toContain("a workspace file could not be read");
+    expect(logText([`${FILE} could not be read: it is not a workspace Meno reads.`])).not.toContain(FILE);
   });
 
   it("of a code error's message, what it quotes in single quotes left out too - an apostrophe in a word kept", () => {

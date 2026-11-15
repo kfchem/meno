@@ -1,0 +1,145 @@
+{
+  "id": "sketchkit",
+  "name": "Sketchkit",
+  "version": "0.3.0",
+  "uses": [
+    {
+      "name": "Sketchkit",
+      "version": "2.1"
+    }
+  ],
+  "description": "Makes structures from SMILES and drawings, checks them, and makes their conformers.",
+  "licence": "Apache-2.0",
+  "homepage": "https://example.org/sketchkit",
+  "environment": "uv",
+  "roles": [
+    {
+      "role": "smiles"
+    },
+    {
+      "role": "checks"
+    },
+    {
+      "role": "stereoisomers"
+    },
+    {
+      "role": "configurations"
+    },
+    {
+      "role": "conformers",
+      "tries": true,
+      "options": [
+        {
+          "id": "field",
+          "label": "Force field",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "KF1",
+              "label": "KF1"
+            },
+            {
+              "value": "KF2",
+              "label": "KF2"
+            },
+            {
+              "value": "KF3",
+              "label": "KF3"
+            }
+          ],
+          "default": "KF1"
+        },
+        {
+          "id": "iters",
+          "label": "Optimisation steps, at most",
+          "type": "number",
+          "default": 2000,
+          "min": 10,
+          "max": 100000,
+          "step": 10
+        },
+        {
+          "id": "seed",
+          "label": "Random seed",
+          "type": "number",
+          "default": 4242,
+          "min": 0,
+          "max": 2147483647,
+          "step": 1
+        }
+      ]
+    },
+    {
+      "role": "drawing"
+    }
+  ],
+  "steps": [
+    {
+      "kinds": [
+        "conformers"
+      ],
+      "programs": [
+        "python"
+      ]
+    },
+    {
+      "kinds": [
+        "minimise"
+      ],
+      "programs": [
+        "python"
+      ],
+      "options": [
+        {
+          "id": "field",
+          "label": "Force field",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "KF1",
+              "label": "KF1"
+            },
+            {
+              "value": "KF2",
+              "label": "KF2"
+            },
+            {
+              "value": "KF3",
+              "label": "KF3"
+            }
+          ],
+          "default": "KF1"
+        },
+        {
+          "id": "steps",
+          "label": "Steps at most",
+          "type": "number",
+          "default": 2000,
+          "min": 1,
+          "max": 100000
+        },
+        {
+          "id": "start",
+          "label": "Start from",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "as-it-comes",
+              "label": "As it comes"
+            },
+            {
+              "value": "fresh",
+              "label": "Made afresh"
+            }
+          ],
+          "default": "as-it-comes"
+        }
+      ]
+    },
+    {
+      "kinds": [
+        "descriptors"
+      ]
+    }
+  ]
+}

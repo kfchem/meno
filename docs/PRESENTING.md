@@ -1,6 +1,6 @@
 # Research talks from the workspace
 
-A specification of what lane L8 adds to the workspace so that a research
+A specification of what is added to the workspace so that a research
 talk can be given from it: slides on the page and a talk given from them,
 text boxes strong enough for a talk's words, basic shapes, guides that
 line things up as they are moved, and handwriting - on the page and on a
@@ -54,7 +54,7 @@ page; a talk is a way through it.
   being dragged onto another slide is at its own size.
 - **Made** round what is selected (the selection's menu, *Slide around
   these*: as wide as it needs, a little room about it), or from Quick Add
-  (*Slide*: a slide of what is seen, a little in from its edges); last in
+  (*Scheme*, *Slide*: a slide of what is seen, a little in from its edges); last in
   the talk.
 - **Only its edge and its number are the slide's.** A press inside it is
   on the page. A press on its edge is as on empty space - a drag moves the
@@ -151,10 +151,10 @@ Built on the words already on the page (`Caption`): typed in place, smart
 words, a width they break into lines at, and how their lines lie.
 
 - **A size of their own**, in points as the drawing's labels are (a bond is
-  14.4 points in ACS 1996's style): *Label 10*, *Text 14*, *Heading 20*,
-  *Title 28* and any number typed; Ctrl/Cmd+Shift+> and < a step up or
-  down. Unset, the drawing's labels' size, as reaction conditions are now.
-- **Line spacing and a typeface of their own**, on the same card (*Font…*):
+  14.4 points in ACS 1996's style): 8, 10, 12, 14, 18 or 24 and any number
+  typed, in the words' menu under its icons; Ctrl/Cmd+Shift+> and < a step
+  up or down. Unset, the drawing's labels' size, as reaction conditions are now.
+- **Line spacing and a typeface of their own**, in the same menu:
   1, 1.15, 1.5 or 2 times single spacing, or any typed; and any typeface,
   over the drawing style's. Unset, single and the drawing's labels'
   typeface.
@@ -194,7 +194,7 @@ words, a width they break into lines at, and how their lines lie.
   following the drawing's style as it changes) or 1 or 2 points of its
   own (kept whatever the style); dashed - **and their fill**, from the
   palette and its light tints.
-- **From Quick Add**: *Shapes* opens a second row, as *Calculations* does;
+- **From Quick Add**: *Marks on the page* opens a second row, as *Calculations* does - the shapes, then the pen;
   a shape is drawn from where Quick Add was opened by a drag, or by moving
   the pointer and clicking, as a chain is traced; Shift makes a square or a
   circle, and keeps a line to steps of 15 degrees. The selection's menu has
@@ -237,7 +237,7 @@ words, a width they break into lines at, and how their lines lie.
 
 - **A pen writes, always**, wherever it touches; its eraser end, or its
   button, erases. A mouse and fingers do as ever.
-- **With a mouse or a trackpad**, *Pen* in Quick Add - or *Write on it* in
+- **With a mouse or a trackpad**, *Pen* in Quick Add's *Marks on the page* - or *Write on it* in
   a PDF's menu - begins writing, and a pen's card opens: pen, marker,
   eraser, the palette's colours, three widths, Done. Escape or Done ends
   it; a right drag and the wheel still move and zoom the view. A pen
@@ -246,8 +246,8 @@ words, a width they break into lines at, and how their lines lie.
   other widths, 1.5 and 3 points, are kept whatever the style.
 - **Smoothed as it is written**, so that nothing jumps when the pen is
   lifted; as thick as the pen is pressed where the system says, else even,
-  its ends tapered - a pen that tells no pressure (the same throughout)
-  written as the mouse writes.
+  its ends tapered - a pen without pressure, or one whose pressure reads
+  the same throughout, writes as the mouse does.
 - **A stroke is kept whole**: it ends where the pen was lifted. The page
   takes no pan or zoom gesture of the system's own from a pen or a touch,
   which would take a stroke back as it is written. A pressure read as 0
@@ -282,7 +282,7 @@ words, a width they break into lines at, and how their lines lie.
 
 ## As built
 
-### Slides and talks (lane L8, first part, 2026-10-11)
+### Slides and talks (first part, 2026-10-11)
 
 - `store/types.ts` `Slide` and `Presenting`; `document.ts` `addSlide`,
   `updateSlide`, `orderSlide`, `removeSlides`, and `MarkPlaces.slides`
@@ -310,9 +310,8 @@ words, a width they break into lines at, and how their lines lie.
   view - wry's, the one WKWebView in it - into a borderless window of the
   talk's own (`MenoTalkWindow`, one that can take the keys) over the whole
   screen, and back as the talk ends: the main window's look is never
-  touched, since taking a window's title bar away and giving it back (as
-  macOS's simple full screen does) left the page deaf to the pointer's
-  moves until it had left the window and come back. It tells the talk the
+  touched, so the page follows the pointer from the talk's first moment
+  to its last. It tells the talk the
   screen's top inset (the notch's band), which the slide is laid below
   (`slideFit`). Molecules switched to their other look in a talk are the
   view's (`talkLooks`), let go as it ends.
@@ -324,13 +323,13 @@ words, a width they break into lines at, and how their lines lie.
   cards of what ran during it, `ui/notices.ts` holds notices given
   meanwhile, ConsentDialog and UpdateNotice wait.
 
-### Text boxes (lane L8, second part, 2026-10-11)
+### Text boxes (second part, 2026-10-11)
 
 As built, in docs/EDITOR-2D.md, *Text*: a size of their own, letters
 marked, lists and a box's top. A list's next item is started by
 Shift+Enter, since Enter keeps the words, as it did before.
 
-### Shapes (lane L8, third part, 2026-10-11)
+### Shapes (third part, 2026-10-11)
 
 - `lib/chem/shapes.ts`, the same for the canvas, SVG and EMF: the line a
   shape follows (a rounded box's corners at most 9 points round, a callout's
@@ -359,7 +358,7 @@ Shift+Enter, since Enter keeps the words, as it did before.
   it began, is not the click that ends it (`traceEndedBy`, utils/press;
   before, it ended the shape at once, too small to be kept, and nothing
   was drawn).
-- Quick Add's *Shapes* opens a row of the five; the shape's menu
+- Quick Add's *Marks on the page* opens a row of the shapes and the pen; the shape's menu
   (`PartMenu` kind `shape`): *Edit text*, *Colour…*, *Delete shape*; thin,
   regular or thick line, dashed, *Bring to front*, *Send to back*. The
   selection's menu has *Box around these*: a rounded rectangle a third of
@@ -409,7 +408,7 @@ Shift+Enter, since Enter keeps the words, as it did before.
   points), regular as the bonds'. A pen's thin width (0.75 points) opens
   as the bonds'; its others as they were.
 
-### Guides (lane L8, fourth part, 2026-10-11)
+### Guides (fourth part, 2026-10-11)
 
 - `presenting/guides.ts`: where something moved by so much goes as it
   lines up - its left, middle or right with another's, its top, middle or
@@ -444,7 +443,7 @@ Shift+Enter, since Enter keeps the words, as it did before.
   colour (#cd4560, `COLORS.attention`), one
   pixel on the screen at any zoom, coming and going in a short ease.
 
-### Handwriting on the page (lane L8, fifth part, first half, 2026-10-12)
+### Handwriting on the page (fifth part, first half, 2026-10-12)
 
 - `lib/chem/ink.ts`, the same for the canvas, SVG and EMF: a stroke's
   outline - as thick as the pen was pressed (from 0.35 to 1.65 of its
@@ -476,10 +475,11 @@ Shift+Enter, since Enter keeps the words, as it did before.
   points as the pointer gives them, kept whole (*A stroke is kept whole*).
 - `PenCard.tsx`: the pen's card, at the top of the canvas - pen, marker,
   eraser, the colours of the set in use and the pen's own (a marker's own
-  being the set's first, shown once), three widths - a pen's first as
+  being the set's first, shown once; a colour for fills alone, Okabe and
+  Ito's yellow, the marker's only, struck through for the pen), three widths - a pen's first as
   wide as the drawing's bonds, following its style, then 1.5 and 3
   points (`lib/chem/ink` `INK_WIDTHS_PT`) - Done (or Escape).
-  Quick Add's *Pen* opens it; the pointer is a cross while it is open.
+  Quick Add's *Pen*, among the marks on the page, opens it; the pointer is a cross while it is open.
   Writing's menu: *Colour…* - whose card, for a marker's writing alone,
   shows the marker's own colour (the set's first) in place of *None*, as
   the pen's card does - and *Delete writing*.
@@ -487,14 +487,14 @@ Shift+Enter, since Enter keeps the words, as it did before.
   SVG and EMF+ (and as far toward white as it shows for GDI), a pen's over
   everything.
 
-### Handwriting on PDFs and in a talk (lane L8, fifth part, second half, 2026-10-12)
+### Handwriting on PDFs and in a talk (fifth part, second half, 2026-10-12)
 
 - A stroke begun on a PDF's page - the top one of a stack, or one spread,
   not an icon - is that page's (`utils/pdfInk.ts` `pageUnder`): kept with
   the PDF (`PdfItem.inks`, each piece on its page, its points the page's,
   from its top left), and drawn with the page (`pdfPictures` `Page`, at
   0.00245 - over its pictures, under the marks a search or a box puts on it
-  and a ring round an atom read from a figure, as agreed with lane L12) -
+  and a ring round an atom read from a figure, as agreed for PDFs) -
   so it goes wherever the page goes: stacked, spread, put in a place of its
   own, made an icon and back, and read in the column. A stroke joins a
   piece on the same page only. The eraser rubs out what is written on the

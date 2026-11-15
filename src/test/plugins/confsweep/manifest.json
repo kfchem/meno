@@ -1,0 +1,183 @@
+{
+  "id": "confsweep",
+  "name": "Confsweep",
+  "version": "0.2.0",
+  "description": "Searches a molecule's conformers with a made-up tight-binding method, and optimises them.",
+  "licence": "MIT",
+  "homepage": "https://example.org/confsweep",
+  "systems": [
+    "macos",
+    "linux"
+  ],
+  "environment": "pixi",
+  "xyzEnergies": [
+    {
+      "id": "confsweep",
+      "pattern": "^\\s*(-?\\d+\\.\\d+(?:[eE][-+]?\\d+)?)(?:\\s|$)",
+      "unit": "hartree"
+    }
+  ],
+  "steps": [
+    {
+      "kinds": [
+        "conformers"
+      ],
+      "takes": [
+        "molecules",
+        "conformers"
+      ],
+      "noLoneAtom": true,
+      "programs": [
+        "confsweep"
+      ],
+      "options": [
+        {
+          "id": "method",
+          "label": "Method",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "tb2",
+              "label": "TB-2"
+            },
+            {
+              "value": "tb1",
+              "label": "TB-1"
+            },
+            {
+              "value": "tbff",
+              "label": "TB force field"
+            }
+          ],
+          "default": "tb2"
+        },
+        {
+          "id": "solvent",
+          "label": "Solvent",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "none",
+              "label": "None"
+            },
+            {
+              "value": "water",
+              "label": "Water"
+            },
+            {
+              "value": "methanol",
+              "label": "Methanol"
+            },
+            {
+              "value": "toluene",
+              "label": "Toluene"
+            },
+            {
+              "value": "thf",
+              "label": "THF"
+            }
+          ],
+          "default": "none"
+        },
+        {
+          "id": "search",
+          "label": "Search",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "full",
+              "label": "Full"
+            },
+            {
+              "value": "quick",
+              "label": "Quick"
+            }
+          ],
+          "default": "full"
+        },
+        {
+          "id": "ewin",
+          "label": "Energy window",
+          "type": "number",
+          "default": 6,
+          "min": 0.1,
+          "step": 0.5,
+          "unit": "kcal/mol"
+        }
+      ],
+      "solvation": {
+        "says": "CONT({solvent})",
+        "none": {
+          "id": "solvent",
+          "is": "none"
+        }
+      }
+    },
+    {
+      "kinds": [
+        "optimise"
+      ],
+      "noLoneAtom": true,
+      "programs": [
+        "confsweep"
+      ],
+      "options": [
+        {
+          "id": "method",
+          "label": "Method",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "tb2",
+              "label": "TB-2"
+            },
+            {
+              "value": "tb1",
+              "label": "TB-1"
+            },
+            {
+              "value": "tbff",
+              "label": "TB force field"
+            }
+          ],
+          "default": "tb2"
+        },
+        {
+          "id": "solvent",
+          "label": "Solvent",
+          "type": "choice",
+          "choices": [
+            {
+              "value": "none",
+              "label": "None"
+            },
+            {
+              "value": "water",
+              "label": "Water"
+            },
+            {
+              "value": "methanol",
+              "label": "Methanol"
+            },
+            {
+              "value": "toluene",
+              "label": "Toluene"
+            },
+            {
+              "value": "thf",
+              "label": "THF"
+            }
+          ],
+          "default": "none"
+        }
+      ],
+      "solvation": {
+        "says": "CONT({solvent})",
+        "none": {
+          "id": "solvent",
+          "is": "none"
+        }
+      }
+    }
+  ]
+}

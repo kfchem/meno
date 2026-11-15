@@ -22,10 +22,21 @@ export const PageHtmlLayer = createContext<HTMLElement | null>(null);
  * beside or over the page - the panel beside the canvas, the cards, the
  * menus - and never seen past the canvas's edge, as an atom turned out of
  * view under the panel had its R or S shown over the panel.
+ *
+ * Clipped, not hidden (`PAGE_HTML_LAYER`, App.css): what is in it is placed
+ * by the canvas, where the page has it, and the layer is never scrolled. A
+ * box whose overflow is hidden is still one that can be scrolled - by a
+ * focus, a scrollIntoView, a selection dragged past its edge - and all it
+ * holds would be moved off where the page has it, over what it hangs from
+ * (a frames chip's card, opened past the canvas's foot, seen over its own
+ * molecule, 2026-10-29). Clipped, it is no box that scrolls at all.
  */
-export function pageHtmlLayerStyle(cover: number): { isolation: "isolate"; overflow: "hidden"; clipPath?: string } {
-  return { isolation: "isolate", overflow: "hidden", ...(cover > 0 ? { clipPath: `inset(0 ${cover}px 0 0)` } : {}) };
+export function pageHtmlLayerStyle(cover: number): { isolation: "isolate"; clipPath?: string } {
+  return { isolation: "isolate", ...(cover > 0 ? { clipPath: `inset(0 ${cover}px 0 0)` } : {}) };
 }
+
+/** The layer's class: its overflow clipped (App.css). */
+export const PAGE_HTML_LAYER = "meno-page-html-layer";
 
 /** The layer, as drei's Html takes a place to go in. */
 export function usePageHtmlLayer(): RefObject<HTMLElement> | null {

@@ -15,13 +15,19 @@ import { isElementSymbol } from "../../../lib/roles/molblock";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { DEFAULT_STYLE_CHOICE, styleOf, type StyleChoice } from "../../../lib/chem/style";
 import { groupTurn } from "./utils/expandPlace";
+import { ARRANGEMENT_SAID, arrangementAs } from "./utils/arrangement";
+import { mayBecome } from "./utils/dropMerge";
 import { magnificationWithin } from "./utils/magnified";
 import { magnifiedTo, oneMagnificationEach } from "../../../lib/chem/magnified2d";
 import { DEFAULT_WORKSPACE_3D, type Workspace3D } from "../../../lib/chem/workspaceStyle3d";
 import { pathLength, pointAlong, type ArrowLook } from "../../../lib/chem/reactionArrow";
-import { arrowPoints } from "../../../lib/chem/reactionScheme";
-import { mapAtoms, mapMarks, mapStanding } from "./chem/atomMap";
+import { arrowPoints, reactionMeant } from "../../../lib/chem/reactionScheme";
+import { mapAtoms, mapMarks, mapShows, mapStanding } from "./chem/atomMap";
+import { numbers3d, sideMolecules, type StructureMap } from "./chem/structureMaps";
+import { joinedAdded, joinedStructures, joinsSettled, separatedStructures } from "./utils/joinedParts";
 import { etaHeld } from "./chem/eta";
+import { wedgesHeld } from "./chem/drawing";
+import { behindRemapped, crossingsHeld, orderedCrossing } from "./chem/crossings";
 import type { Arrow, ArrowAtomMap, ArrowFormPatch, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Ink, InkLook, Shape, ShapePatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText, LostText } from "./store/types";
 import { sha256Hex } from "../../../lib/binary/sha256";
 import { ringKeyOf, ringThere } from "./utils/rings";
@@ -35,9 +41,13 @@ import { sheetOf, sheetRoom } from "./utils/textSheets";
 import { PICTURE_MEDIA, printedSize } from "../../../lib/picture/image";
 import { readerLine, sameAtoms, type Found, type Unread } from "../../../lib/calc/read";
 import { readResults } from "../../../lib/calc/results";
-import type { CalcInfo } from "../../../lib/calc/output";
+import { inMenosForm, type CalcInfo } from "../../../lib/calc/output";
 import { newTextName } from "./utils/texts";
-import { fitSets, membersSettled } from "./workflow/model";
+import { membersSettled } from "./workflow/model";
+import { framesFitted } from "./workflow/fitFrames";
+import { heldSettled } from "./workflow/held";
+import type { RunWith } from "./workflow/run";
+import type { Conversation } from "./conversation/types";
 
 export type WorkspaceDocument = {
   model: Model;
@@ -116,7 +126,13 @@ export type WorkspaceDocument = {
   nextInkId?: number;
   /** Catalytic cycles on the page (lib/chem/cycle; docs/EDITOR-2D.md, *Catalytic cycles*). */
   cycles?: Cycle[];
+  /** Atom maps between structures on the page, not on an arrow (chem/structureMaps), numbered from `nextStructureMapId`. */
+  structureMaps?: StructureMap[];
+  nextStructureMapId?: number;
   nextCycleId?: number;
+  /** Conversations on the page, each in its frame (conversation/types; docs/CONVERSATIONS.md). */
+  conversations?: Conversation[];
+  nextConversationId?: number;
 };
 
 /** Whether it holds nothing: no structure, arrow, "+" sign or words drawn, no molecule in 3D, no text, no workflow. */
@@ -135,6 +151,7 @@ export function isBlankDocument(doc: WorkspaceDocument): boolean {
     !doc.shapes?.length &&
     !doc.inks?.length &&
     !doc.cycles?.length &&
+    !doc.conversations?.length &&
     !doc.sets?.length &&
     !doc.steps?.length
   );
@@ -167,9 +184,26 @@ export function emptyWorkspaceDocument(style: StyleChoice = DEFAULT_STYLE_CHOICE
  * Settings' as it is made, given by whoever makes it (views/registry):
  * this module reads no settings. The tab's data may carry a file to import (`payload`), which
  * the view parses and applies, so the document starts empty here - or
- * files opened as text (`texts`), which it starts holding.
+ * files opened as text (`texts`), which it starts holding. `extentIn`:
+ * how far a molecule in 3D reaches on the page in a document's styles in
+ * 3D, with Settings' - what a set held off the page needs to be laid out
+ * on it again (workflow/held); none, its molecules stay held.
  */
-export function createWorkspaceDocument(data?: unknown, style: StyleChoice = DEFAULT_STYLE_CHOICE, style3d: Workspace3D = DEFAULT_WORKSPACE_3D): DocumentStore<WorkspaceDocument> {
+/**
+ * The documents of canvases opened for PDFs from outside Meno (`data.readFilled`, App): their first PDF is read in the column, which
+ * fills the workspace (store `columnFilled`) - what the canvas shows as it opens, not part of its document.
+ */
+const opensFilled = new WeakSet<object>();
+
+/** Whether `doc` was made for a PDF opened from outside Meno, to show it filling the workspace. */
+export const opensReadingFilled = (doc: object): boolean => opensFilled.has(doc);
+
+export function createWorkspaceDocument(
+  data?: unknown,
+  style: StyleChoice = DEFAULT_STYLE_CHOICE,
+  style3d: Workspace3D = DEFAULT_WORKSPACE_3D,
+  extentIn?: (doc: WorkspaceDocument) => RunWith["extentOf"],
+): DocumentStore<WorkspaceDocument> {
   const opened = (data as { texts?: unknown } | null | undefined)?.texts;
   const texts = (Array.isArray(opened) ? (opened as Partial<WorkspaceText>[]) : []).flatMap((t) =>
     typeof t?.name === "string" && typeof t.text === "string"
@@ -180,14 +214,30 @@ export function createWorkspaceDocument(data?: unknown, style: StyleChoice = DEF
   const held = (data as { pdfs?: unknown } | null | undefined)?.pdfs;
   let doc = addTexts(emptyWorkspaceDocument(style, style3d), texts).doc;
   for (const p of pdfsInRow(Array.isArray(held) ? held : [], { x: 0, y: 0 })) doc = addPdf(doc, p);
+  // (a canvas made for a PDF opened from outside: the first is read in the column - where the document starts, as its pages are)
+  const readFilled = !!(data as { readFilled?: unknown } | null | undefined)?.readFilled && !!doc.pdfs?.length;
+  if (readFilled) doc = { ...doc, pdfs: doc.pdfs!.map((p, i) => (i ? p : { ...p, reading: { at: p.page, zoom: 1 } })) };
   const pictures = (data as { pictures?: unknown } | null | undefined)?.pictures;
   for (const p of picturesInRow(Array.isArray(pictures) ? (pictures as PictureToAdd[]) : [], { x: 0, y: 0 })) doc = addPicture(doc, p);
-  // (each edit's sets grown to keep what is drawn on in them inside them, as
-  // part of it - and its stacks of drawings kept whole: utils/stacks)
+  // (each edit's sets fitted to their members, as
+  // part of it - and its stacks of drawings kept whole: utils/stacks; its
+  // result sets held off the page or laid out on it as it wires them,
+  // workflow/held, in the same step)
   // (its history held to about 100 MB: what a step costs is the atoms and
   // bonds it copies - the lists a drawing's edit makes anew, not those it
   // shares with the step before; the maintainer, 2026-10-13)
-  return createDocument<WorkspaceDocument>(doc, { settle: (next, before) => withRecordsSettled(membersSettled(fitSets(withOneMagnification(next, before), before), before), before), cost: stepCost });
+  const made = createDocument<WorkspaceDocument>(doc, {
+    settle: (next, before) => {
+      const extentOf = extentIn?.(next);
+      const held = heldSettled(next, before, extentOf);
+      // (members as the edit leaves them, then each frame its members' room - where none is being dragged: workflow/fitFrames)
+      const members = membersSettled(withOneMagnification(held, before), before);
+      return framesFitted(mapsSettled(joinsDocSettled(withRecordsSettled(members, before)), before), before, extentOf);
+    },
+    cost: stepCost,
+  });
+  if (readFilled) opensFilled.add(made);
+  return made;
 }
 
 /** What keeping a workspace's state in its history costs beyond the one before it: the atom and bond lists it does not share with it. */
@@ -237,8 +287,10 @@ export function setFigureChecked(doc: WorkspaceDocument, ids: readonly number[],
 /** `doc` with its stacks of drawings kept whole as an edit leaves them (utils/stacks `settledRecords`). */
 export function withRecordsSettled(doc: WorkspaceDocument, before?: WorkspaceDocument): WorkspaceDocument {
   if (before && doc.model === before.model) return doc;
-  // (a haptic bond held to its ring, its star at the ring's centre: chem/eta)
-  const model = etaHeld(settledRecords(doc.model, before?.model), before?.model);
+  // (a haptic bond held to its ring, its star at the ring's centre: chem/eta;
+  // and each wedge held narrow at the atom it was: chem/drawing)
+  // (and which bond is in front where two cross, said by the chemist, kept whole: chem/crossings)
+  const model = crossingsHeld(wedgesHeld(etaHeld(settledRecords(doc.model, before?.model), before?.model), before?.model), before?.model);
   return model === doc.model ? doc : { ...doc, model };
 }
 
@@ -247,7 +299,7 @@ export function withRecordsSettled(doc: WorkspaceDocument, before?: WorkspaceDoc
  * endpoints are not all atoms of the part, the bond binds no ring and keeps
  * none (a plain bond to its star). Left as they were, endpoints named atoms
  * gone, drawn from nowhere, and a set round the complex took a frame of
- * NaN (the command centre's document fuzzer, 2026-10-13). An edit to the
+ * NaN (a document fuzzer, 2026-10-13). An edit to the
  * drawing takes such a bond away with its star instead (chem/eta `etaHeld`).
  */
 export function endpointsHeld(model: Model): Model {
@@ -275,7 +327,7 @@ export function bindRing(doc: WorkspaceDocument, metal: number, ring: readonly n
   const star = doc.nextId;
   const x = ring.reduce((s, id) => s + at.get(id)!.x, 0) / ring.length;
   const y = ring.reduce((s, id) => s + at.get(id)!.y, 0) / ring.length;
-  const bond: Bond = { id: star + 1, a: metal, b: star, order: 1, coordination: true, endpoints: [...ring], attach: "all", stereo: "none", stereoOrient: "principle" };
+  const bond: Bond = { id: star + 1, a: metal, b: star, order: 1, coordination: true, endpoints: [...ring], attach: "all", stereo: "none" };
   return {
     ...doc,
     nextId: star + 2,
@@ -343,7 +395,6 @@ export function addBond(
     b,
     order,
     stereo: "none",
-    stereoOrient: "principle",
   };
   return {
     ...doc,
@@ -420,7 +471,7 @@ export function moveAtom(
 export function placeAtoms(
   doc: WorkspaceDocument,
   moves: readonly { id: number; x: number; y: number; z?: number }[],
-  stereo: readonly Pick<Bond, "id" | "stereo">[] = [],
+  stereo: readonly (Pick<Bond, "id"> & Partial<Pick<Bond, "stereo" | "behind">>)[] = [],
 ): WorkspaceDocument {
   const to = new Map(moves.map((m) => [m.id, m]));
   let changed = false;
@@ -430,12 +481,19 @@ export function placeAtoms(
     changed = true;
     return { ...a, x: m.x, y: m.y, ...(m.z !== undefined ? { z: m.z } : {}) };
   });
-  const flip = new Map(stereo.map((b) => [b.id, b.stereo]));
+  const flip = new Map(stereo.map((b) => [b.id, b]));
   const bonds = doc.model.bonds.map((b) => {
-    const s = flip.get(b.id);
-    if (s === undefined || s === b.stereo) return b;
-    changed = true;
-    return { ...b, stereo: s };
+    const p = flip.get(b.id);
+    if (!p) return b;
+    let out = b;
+    if (p.stereo !== undefined && p.stereo !== b.stereo) out = { ...out, stereo: p.stereo };
+    // (which bonds it passes behind, where a turn over exchanged them: chem/crossings)
+    if (p.behind !== undefined) {
+      const { behind: _was, ...rest } = out;
+      out = p.behind.length ? { ...rest, behind: [...p.behind] } : rest;
+    }
+    if (out !== b) changed = true;
+    return out;
   });
   return changed ? { ...doc, model: { atoms, bonds } } : doc;
 }
@@ -545,15 +603,16 @@ export function withoutAtoms(doc: WorkspaceDocument, ids: Iterable<number>): Wor
  * taken away with their bonds where no longer drawn.
  */
 export type Relayout = {
-  atoms: { id: number; x: number; y: number; z?: number; stereoCentre?: boolean }[];
-  bonds: (Pick<Bond, "id" | "stereo" | "stereoOrient"> & { display?: Bond["display"] })[];
+  atoms: { id: number; x: number; y: number; z?: number; stereoCentre?: boolean; arrangementOpen?: boolean }[];
+  bonds: (Pick<Bond, "id" | "stereo" | "narrow"> & { display?: Bond["display"] })[];
   /** H atoms to add, each bonded to `on`, the bond wedged as given. */
   added?: {
     x: number;
     y: number;
     on: number;
     stereo: NonNullable<Bond["stereo"]>;
-    stereoOrient: NonNullable<Bond["stereoOrient"]>;
+    /** The atom its wedge is narrow at: `on`, or none for the H. */
+    narrow?: number;
   }[];
   /** Atoms to take away, with their bonds. */
   removed?: number[];
@@ -580,7 +639,7 @@ export function relayout(doc: WorkspaceDocument, change: Relayout): WorkspaceDoc
     if (gone.has(a.id)) return [];
     const p = to.get(a.id);
     if (!p) return [a];
-    if (p.x === a.x && p.y === a.y && p.z === a.z && !!p.stereoCentre === !!a.stereoCentre && !a.chargeAt && !a.stereoAt) return [a];
+    if (p.x === a.x && p.y === a.y && p.z === a.z && !!p.stereoCentre === !!a.stereoCentre && !a.chargeAt && !a.stereoAt && !p.arrangementOpen) return [a];
     changed = true;
     const { z: _z, stereoCentre: _c, chargeAt: _q, stereoAt: _s, ...rest } = a;
     return [
@@ -599,30 +658,37 @@ export function relayout(doc: WorkspaceDocument, change: Relayout): WorkspaceDoc
     const p = patch.get(b.id);
     const display = p && "display" in p ? p.display : b.display;
     const laid = to.has(b.a) && to.has(b.b);
-    if (laid && b.stereoAt && (!p || (p.stereo === b.stereo && p.stereoOrient === b.stereoOrient && display === b.display))) {
+    if (laid && b.stereoAt && (!p || (p.stereo === b.stereo && p.narrow === b.narrow && display === b.display))) {
       changed = true;
       const { stereoAt: _at, ...kept } = b;
       return [kept];
     }
-    if (!p || (p.stereo === b.stereo && p.stereoOrient === b.stereoOrient && display === b.display)) return [b];
+    if (!p || (p.stereo === b.stereo && p.narrow === b.narrow && display === b.display)) return [b];
     changed = true;
-    const { display: _display, stereoAt: _at, ...rest } = b;
+    const { display: _display, stereoAt: _at, narrow: _narrow, ...rest } = b;
     // (up, down and wavy on a single bond only: a double or triple bond keeps its own)
     const wedge = p.stereo === "up" || p.stereo === "down" || p.stereo === "wavy";
     const stereo = wedge && b.order !== 1 ? b.stereo : p.stereo;
-    return [{ ...rest, stereo, stereoOrient: stereo === p.stereo ? p.stereoOrient : b.stereoOrient, ...(display ? { display } : {}) }];
+    const narrow = stereo === p.stereo ? p.narrow : b.narrow;
+    return [{ ...rest, stereo, ...(narrow != null ? { narrow } : {}), ...(display ? { display } : {}) }];
   });
   if (!changed) return doc;
+  // (a square-planar centre laid out with no arrangement given: marked "which donors are next to each other is not given", while
+  // its neighbours lie round it as they do now - docs/LAYOUT-2D.md, *A metal with four bonds*)
+  for (const [i, a] of atoms.entries()) {
+    if (!to.get(a.id)?.arrangementOpen) continue;
+    atoms[i] = { ...a, unsure: { said: [ARRANGEMENT_SAID], as: arrangementAs(a, atoms, bonds) } };
+  }
   let nextId = doc.nextId;
   for (const h of change.added ?? []) {
     const id = nextId++;
     atoms.push({ id, x: h.x, y: h.y, r: 0.9, el: "H" });
-    bonds.push({ id: nextId++, a: h.on, b: id, order: 1, stereo: h.stereo, stereoOrient: h.stereoOrient });
+    bonds.push({ id: nextId++, a: h.on, b: id, order: 1, stereo: h.stereo, ...(h.narrow != null ? { narrow: h.narrow } : {}) });
   }
   for (const e of change.eta ?? []) {
     const star = nextId++;
     atoms.push({ id: star, x: e.x, y: e.y, r: 0.9, el: "*" });
-    bonds.push({ id: nextId++, a: e.metal, b: star, order: 1, coordination: true, endpoints: [...e.atoms], attach: "all", stereo: "none", stereoOrient: "principle" });
+    bonds.push({ id: nextId++, a: e.metal, b: star, order: 1, coordination: true, endpoints: [...e.atoms], attach: "all", stereo: "none" });
   }
   // (electron-pushing arrows on what was laid out bent as Meno bends them again, as marks are put back)
   const pushes = (doc.pushes ?? []).map((p) => {
@@ -716,7 +782,7 @@ export function expandAbbreviation(doc: WorkspaceDocument, id: number, group?: G
     if (k == null) return b;
     const at = s.attach[k] ?? head;
     const to = ids[at];
-    const moved = b.a === id ? { ...b, a: to } : { ...b, b: to };
+    const moved = { ...(b.a === id ? { ...b, a: to } : { ...b, b: to }), ...(b.narrow === id ? { narrow: to } : {}) };
     // to a pi system's star: a haptic bond, to all its atoms; to a donor
     // that lends its pair, a coordination bond (drawn as it was)
     const pi = s.haptic?.find((h) => h.star === at);
@@ -730,7 +796,7 @@ export function expandAbbreviation(doc: WorkspaceDocument, id: number, group?: G
       b: ids[b.a2],
       order: b.order,
       stereo: b.stereo ?? "none",
-      ...(b.stereoOrient ? { stereoOrient: b.stereoOrient } : {}),
+      ...(b.narrow != null ? { narrow: ids[b.narrow] } : {}),
       ...(b.display ? { display: b.display } : {}),
       ...bondChem(b),
       ...(b.endpoints ? { endpoints: b.endpoints.map((e) => ids[e]) } : {}),
@@ -805,6 +871,7 @@ export function contractToAbbreviation(
       a2: index.get(b.b)!,
       order: b.order,
       ...(b.stereo && b.stereo !== "none" ? { stereo: b.stereo } : {}),
+      ...(b.narrow != null && index.has(b.narrow) ? { narrow: index.get(b.narrow)! } : {}),
       ...bondChem(b),
       // (a haptic bond's ends by index, as an abbreviation keeps them)
       ...(b.endpoints ? { endpoints: b.endpoints.map((e) => index.get(e)!).filter((e) => e != null) } : {}),
@@ -865,6 +932,7 @@ export function setAtomChemistry(
     valence: _v,
     hCount: _h,
     abbrev: _a,
+    shown: _s,
     chargeAt,
     typed: _t,
     ...rest
@@ -874,6 +942,15 @@ export function setAtomChemistry(
   const marked = (chem.charge ?? 0) !== 0 || !!chem.radical;
   next[index] = { ...rest, el: chem.el, ...chemistry(chem), ...(marked && chargeAt ? { chargeAt } : {}), ...(typed != null ? { typed } : {}) };
   return { ...doc, model: { atoms: next, bonds: doc.model.bonds } };
+}
+
+/**
+ * `doc` with bond `bondId` said to be in front of bond `otherId`, or behind it, where the two cross - said again where it holds, taken away
+ * (chem/crossings `orderedCrossing`): a look, the bond behind drawn with a gap there.
+ */
+export function orderCrossing(doc: WorkspaceDocument, bondId: number, otherId: number, how: "front" | "behind"): WorkspaceDocument {
+  const model = orderedCrossing(doc.model, bondId, otherId, how);
+  return model === doc.model ? doc : { ...doc, model };
 }
 
 export function updateBond(
@@ -910,32 +987,22 @@ export function updateBond(
 }
 
 /**
- * Drops the dragged atom onto another one: bonds that pointed at it are
- * rewired to the target, skipping duplicates and self-bonds.
+ * Drops the dragged atom onto another one: the bonds that pointed at it are
+ * rewired to the target. Only where no bond is lost by it (`mayBecome`): an
+ * atom it is bonded to, or shares a neighbour with, is left as it is.
  */
 export function replaceDraggedAtomWith(
   doc: WorkspaceDocument,
   movingId: number,
   targetId: number,
 ): WorkspaceDocument {
-  if (movingId === targetId) return doc;
-  const bonds: Bond[] = [];
-  for (const b of doc.model.bonds) {
-    const other = b.a === movingId ? b.b : b.b === movingId ? b.a : null;
-    if (other == null) {
-      bonds.push(b);
-      continue;
-    }
-    if (other === targetId) continue; // collapses onto the target
-    const exists = bonds.some(
-      (kept) =>
-        (kept.a === targetId && kept.b === other) ||
-        (kept.b === targetId && kept.a === other),
-    );
-    const alreadyInModel = hasBond(doc, targetId, other);
-    if (exists || alreadyInModel) continue;
-    bonds.push(b.a === movingId ? { ...b, a: targetId } : { ...b, b: targetId });
-  }
+  if (!mayBecome(doc.model, movingId, targetId)) return doc;
+  const bonds = doc.model.bonds.map((b) =>
+    b.a !== movingId && b.b !== movingId
+      ? b
+      : // (a wedge narrow at the atom dragged, narrow at the one it was dropped on)
+        { ...(b.a === movingId ? { ...b, a: targetId } : { ...b, b: targetId }), ...(b.narrow === movingId ? { narrow: targetId } : {}) },
+  );
   const atoms = doc.model.atoms.filter((a) => a.id !== movingId);
   // (its electron-pushing arrows with it: an end on the atom dragged now on
   // the one it was dropped on, and those on a bond that collapsed, or come
@@ -962,7 +1029,8 @@ export function replaceModel(
   return {
     ...doc,
     // (which record each stack of drawings shows is the view's, not the document's)
-    model: { atoms: unmarked(next.atoms), bonds: next.bonds.slice() },
+    // (a structure of several parts whose number holds one piece only - read so from a file - is that piece alone: utils/joinedParts)
+    model: joinsSettled({ atoms: unmarked(next.atoms), bonds: next.bonds.slice() }),
     arrows: [],
     nextArrowId: 1,
     pluses: [],
@@ -974,6 +1042,8 @@ export function replaceModel(
     nextShapeId: 1,
     molecules3d: [],
     nextMolecule3dId: 1,
+    structureMaps: [],
+    nextStructureMapId: 1,
     sets: [],
     steps: [],
     wires: [],
@@ -985,23 +1055,44 @@ export function replaceModel(
   };
 }
 
-/** Adds another structure alongside the current one, renumbering its ids. */
+/** Every id a drawing's atoms, their Sgroups (each once, however many atoms share it) and its bonds are known by. */
+function idsOf(m: Model): number[] {
+  const groups = new Set(m.atoms.flatMap((a) => (a.sgroups ?? []).map((g) => g.id)));
+  return [...m.atoms.map((a) => a.id), ...groups, ...m.bonds.map((b) => b.id)];
+}
+
+/** Whether none of `next`'s ids is one of `model`'s already, and none twice in it: it may be added on them. */
+function ownIdsFree(model: Model, next: Model): boolean {
+  const used = new Set(idsOf(model));
+  const mine = idsOf(next);
+  return new Set(mine).size === mine.length && mine.every((id) => !used.has(id));
+}
+
+/**
+ * Adds another structure alongside the current one, renumbering its ids -
+ * or, `keep`, on its own ids where none of them is the document's already
+ * (a structure held off the page laid out again, workflow/held: what was
+ * worked out from it names its atoms by them), renumbered where any is.
+ */
 export function appendModel(
   doc: WorkspaceDocument,
   next: Model & { pushes?: readonly PushArrow[]; ringFills?: RingFills },
+  keep = false,
 ): WorkspaceDocument {
   if (next.atoms.length === 0 && next.bonds.length === 0) return doc;
+  const own = keep && ownIdsFree(doc.model, next);
   const idMap = new Map<number, number>();
   let cursor = doc.nextId;
-  for (const a of next.atoms) idMap.set(a.id, cursor++);
+  for (const a of next.atoms) idMap.set(a.id, own ? a.id : cursor++);
   // its Sgroups made its own, apart from any of the same id already here
   const groups = new Map<number, number>();
   const groupId = (g: number) => {
-    if (!groups.has(g)) groups.set(g, cursor++);
+    if (!groups.has(g)) groups.set(g, own ? g : cursor++);
     return groups.get(g)!;
   };
   // (a stack of drawings it brings numbered after the document's own; one record copied out of its stack, that record alone)
-  const atoms = addedStacks(next.atoms, freshRecordsId(doc.model.atoms)).map((a) => ({
+  // (and a structure of several parts it brings given a number of its own, joining nothing here - utils/joinedParts)
+  const atoms = joinedAdded(addedStacks(next.atoms, freshRecordsId(doc.model.atoms)), doc.model.atoms).map((a) => ({
     ...a,
     id: idMap.get(a.id)!,
     ...(a.sgroups
@@ -1028,7 +1119,7 @@ export function appendModel(
     const a = idMap.get(b.a) ?? b.a;
     const z = idMap.get(b.b) ?? b.b;
     if (starless.has(a) || starless.has(z)) return [];
-    const id = cursor++;
+    const id = own ? b.id : cursor++;
     bondMap.set(b.id, id);
     return [
       {
@@ -1036,9 +1127,15 @@ export function appendModel(
         id,
         a,
         b: z,
+        ...(b.narrow != null ? { narrow: idMap.get(b.narrow) ?? b.narrow } : {}),
         ...(whole ? { endpoints: endpoints!.map((e) => idMap.get(e)!), ...(attach ? { attach } : {}) } : {}),
       },
     ];
+  }).map((b) => {
+    // (the bonds each is said to pass behind, on their new ids: one whose bond did not come with it dropped - chem/crossings)
+    if (!b.behind) return b;
+    const { behind, ...rest } = b;
+    return { ...rest, ...behindRemapped(behind, (id) => bondMap.get(id)) };
   });
   // (its electron-pushing arrows with it, on its atoms' and bonds' new ids)
   const moved = (e: PushEnd): PushEnd | null => {
@@ -1059,7 +1156,7 @@ export function appendModel(
   });
   return {
     ...doc,
-    nextId: cursor,
+    nextId: own ? Math.max(cursor, 1 + Math.max(0, ...idsOf(next))) : cursor,
     model: {
       atoms: [...doc.model.atoms, ...(starless.size ? atoms.filter((a) => !starless.has(a.id)) : atoms)],
       bonds: [...doc.model.bonds, ...bonds],
@@ -1186,7 +1283,7 @@ export function withReadings(doc: WorkspaceDocument, bySource: Readonly<Record<s
       } else {
         const frames = 1 + (m.frames?.length ?? 0);
         const read = (r.output.frames ?? []).filter((f) => Array.isArray(f) && f.length === 3 * atoms.length).length;
-        const results = readResults(r.output.results, atoms.length, read === frames ? frames : 0, r.from);
+        const results = inMenosForm(readResults(r.output.results, atoms.length, read === frames ? frames : 0, r.from), r.output);
         calc = { ...calc, readers: [...calc.readers, readerLine(r)], results: [...(calc.results ?? []), ...results] };
       }
     }
@@ -1455,7 +1552,7 @@ export function setAtomMap(doc: WorkspaceDocument, arrowId: number, map: ArrowAt
   if (!arrow) return doc;
   const before = arrow.atomMap;
   const inside = new Set<number>([...(before ? mapAtoms(before) : []), ...(map ? mapAtoms(map) : [])]);
-  const marks = map && map.shown && mapStanding({ atomMap: map }, doc.model) === "ready" ? mapMarks(map, doc.model) : null;
+  const marks = map && map.shown && mapShows(mapStanding({ atomMap: map, kind: arrow.kind, heads: arrow.heads }, doc.model)) ? mapMarks(map, doc.model) : null;
   const atoms = doc.model.atoms.map((a) => {
     if (!inside.has(a.id)) return a;
     const n = marks?.numbers.get(a.id);
@@ -1476,6 +1573,128 @@ export function setAtomMap(doc: WorkspaceDocument, arrowId: number, map: ArrowAt
     return map ? { ...rest, atomMap: map } : rest;
   });
   return { ...doc, arrows, model: { ...doc.model, atoms, bonds } };
+}
+
+/**
+ * The page's maps between structures (chem/structureMaps) set to `maps`,
+ * with what they show put on the drawing and on their molecules in 3D, and
+ * taken off what the maps before showed it on: on the drawing, each heavy
+ * atom's map number and the reacting centres of the bonds a map makes,
+ * breaks or changes in order, as an arrow's map puts them (`setAtomMap`);
+ * on a side's molecules in 3D, every atom's number - its hydrogens' too -
+ * shown as their atom-map numbers. Only ready maps shown show anything; one
+ * step.
+ */
+export function setStructureMaps(doc: WorkspaceDocument, maps: readonly StructureMap[]): WorkspaceDocument {
+  const before = doc.structureMaps ?? [];
+  const inside = new Set<number>([...before, ...maps].flatMap((m) => [...mapAtoms(m.map)]));
+  const numbers = new Map<number, number>();
+  const centres = new Map<number, number>();
+  for (const { map } of maps) {
+    if (!map.shown || !mapShows(mapStanding({ atomMap: map }, doc.model))) continue;
+    const marks = mapMarks(map, doc.model);
+    for (const [id, n] of marks.numbers) numbers.set(id, n);
+    for (const [id, c] of marks.centres) centres.set(id, c);
+  }
+  const atoms = doc.model.atoms.map((a) => {
+    if (!inside.has(a.id)) return a;
+    const n = numbers.get(a.id);
+    if (n === a.map) return a;
+    const { map: _m, ...rest } = a;
+    return n ? { ...rest, map: n } : rest;
+  });
+  const bonds = doc.model.bonds.map((b) => {
+    if (!inside.has(b.a) || !inside.has(b.b)) return b;
+    const c = centres.get(b.id);
+    if (c === b.reactingCentre) return b;
+    const { reactingCentre: _c, ...rest } = b;
+    return c ? { ...rest, reactingCentre: c } : rest;
+  });
+  // (on the sides' molecules in 3D: every atom's number, shown as its map number - and off those the maps before showed them on)
+  const molecules = doc.molecules3d ?? [];
+  const now = numbers3d(maps, molecules, doc.model);
+  const touched = new Set([...numbers3d(before, molecules, doc.model).touched, ...now.touched]);
+  const molecules3d = molecules.map((m) => {
+    if (!touched.has(m.id)) return m;
+    const n = now.numbers.get(m.id);
+    const atoms3d = m.atoms.map((a, i) => {
+      const k = n?.first[i] ?? 0;
+      if (k === (a.map ?? 0)) return a;
+      const { map: _m, ...rest } = a;
+      return k ? { ...rest, map: k } : rest;
+    });
+    const { atomNumbers: shownBefore, mapFrames: _f, ...rest } = m;
+    const atomNumbers = n ? { kind: "map" as const } : shownBefore?.kind === "map" ? undefined : shownBefore;
+    // (each frame after the first numbered as its own: chem/structureMaps `framesNumbered`)
+    return { ...rest, atoms: atoms3d, ...(atomNumbers ? { atomNumbers } : {}), ...(n?.rest.length ? { mapFrames: n.rest } : {}) };
+  });
+  const { structureMaps: _s, ...restDoc } = doc;
+  return {
+    ...restDoc,
+    ...(maps.length ? { structureMaps: [...maps] } : {}),
+    ...(doc.molecules3d ? { molecules3d } : {}),
+    model: { ...doc.model, atoms, bonds },
+  };
+}
+
+/** `doc` with maps between structures added - in the place of those `replacing`, by id - each numbered on from `nextStructureMapId`: their ids, in order. */
+export function addStructureMaps(doc: WorkspaceDocument, made: readonly StructureMap["map"][], replacing: readonly number[] = []): { doc: WorkspaceDocument; ids: number[] } {
+  let id = doc.nextStructureMapId ?? 1;
+  const added = made.map((map) => ({ id: id++, map }));
+  const kept = (doc.structureMaps ?? []).filter((m) => !replacing.includes(m.id));
+  return { doc: { ...setStructureMaps(doc, [...kept, ...added]), nextStructureMapId: id }, ids: added.map((m) => m.id) };
+}
+
+/** Whether a map's side has a molecule in 3D now that it had not before, or one whose frames are not as they were. */
+function molecules3dTurned(maps: readonly StructureMap[], next: WorkspaceDocument, before: WorkspaceDocument): boolean {
+  const was = new Map((before.molecules3d ?? []).map((m) => [m.id, m]));
+  return maps.some(({ map }) =>
+    [map.reactant, map.product].some((side) =>
+      [...sideMolecules(side, next.molecules3d ?? [], next.model).keys()].some((id) => {
+        const m = next.molecules3d!.find((x) => x.id === id)!;
+        const old = was.get(id);
+        return !old || old.frames !== m.frames || old.atoms !== m.atoms;
+      }),
+    ),
+  );
+}
+
+/** A structure of several parts kept to two pieces or more after an edit: a number left on one piece - the others deleted - taken off (utils/joinedParts). */
+function joinsDocSettled(next: WorkspaceDocument): WorkspaceDocument {
+  const model = joinsSettled(next.model);
+  return model === next.model ? next : { ...next, model };
+}
+
+/** The structures holding `ids` made one structure of several parts (utils/joinedParts): nothing moves. */
+export function joinStructures(doc: WorkspaceDocument, ids: Iterable<number>): WorkspaceDocument {
+  const model = joinedStructures(doc.model, ids);
+  return model === doc.model ? doc : { ...doc, model };
+}
+
+/** The structures of several parts holding `ids` taken apart, each piece its own structure again. */
+export function separateStructures(doc: WorkspaceDocument, ids: Iterable<number>): WorkspaceDocument {
+  const model = separatedStructures(doc.model, ids);
+  return model === doc.model ? doc : { ...doc, model };
+}
+
+/**
+ * Atom maps kept true to the drawing after an edit (fail closed): a map -
+ * between structures, or an arrow's - whose drawing the edit changed shows
+ * nothing more, its numbers and reacting centres taken off the drawing and
+ * its molecules in 3D in the same step; undo of the edit gives them back. Its
+ * menu then says it is of the structure before, and offers it made again.
+ */
+function mapsSettled(next: WorkspaceDocument, before: WorkspaceDocument): WorkspaceDocument {
+  const maps = next.structureMaps ?? [];
+  // (a side's molecule in 3D made again or given other conformers - *3D structure* on a mapped structure: each of its frames
+  //  numbered onto the map's own geometry, chem/structureMaps)
+  const remade = maps.length > 0 && next.molecules3d !== before.molecules3d && molecules3dTurned(maps, next, before);
+  if (next.model === before.model && !remade) return next;
+  const turned = (map: ArrowAtomMap) => mapStanding({ atomMap: map }, next.model) !== mapStanding({ atomMap: map }, before.model);
+  let out = next;
+  if (remade || maps.some((m) => turned(m.map))) out = setStructureMaps(out, maps);
+  for (const a of next.arrows) if (a.atomMap && turned(a.atomMap)) out = setAtomMap(out, a.id, a.atomMap);
+  return out;
 }
 
 /** A measurement's atoms put in another order - the same measurement, the same value: which side setting it moves. */
@@ -1637,7 +1856,12 @@ export function setArrowForm(doc: WorkspaceDocument, ids: readonly number[], pat
   if (!changed) return doc;
   // (straightened, or given corners: the words by it go with its line)
   const bent = arrows.flatMap((next, i) => (JSON.stringify(next.corners) !== JSON.stringify(doc.arrows[i].corners) ? [[doc.arrows[i], next] as const] : []));
-  return withWordsAlong({ ...doc, arrows }, bent);
+  let out = withWordsAlong({ ...doc, arrows }, bent);
+  // (an arrow with a map that came to mean no reaction, or came to mean one again: what its map shows on the drawing taken off, or put back)
+  arrows.forEach((next, i) => {
+    if (next.atomMap && (reactionMeant(next) === true) !== (reactionMeant(doc.arrows[i]) === true)) out = setAtomMap(out, next.id, next.atomMap);
+  });
+  return out;
 }
 
 /** `doc` with the arrow setting `look` for itself, in place of what it set. */
@@ -2021,6 +2245,23 @@ export function updateCaption(
 export function addPdf(doc: WorkspaceDocument, pdf: Omit<PdfItem, "id">): WorkspaceDocument {
   const id = doc.nextPdfId ?? 1;
   return { ...doc, pdfs: [...(doc.pdfs ?? []), { ...pdf, id }], nextPdfId: id + 1 };
+}
+
+/**
+ * `doc` with every PDF of one file given the sizes of its pages: a PDF put down locked, its pages unknown, and opened with its
+ * password. The page on top stays on top where it is still a page; pages laid out each in a place of its own (`placed`) go back in
+ * rows, for those places were made for pages that were not these.
+ */
+export function setPdfPages(doc: WorkspaceDocument, sha256: string, pages: [number, number][]): WorkspaceDocument {
+  if (!doc.pdfs?.some((p) => p.sha256 === sha256)) return doc;
+  return {
+    ...doc,
+    pdfs: doc.pdfs.map((p) => {
+      if (p.sha256 !== sha256) return p;
+      const { placed: _placed, ...rest } = p;
+      return { ...rest, pages, page: Math.min(p.page, Math.max(0, pages.length - 1)) };
+    }),
+  };
 }
 
 /** `doc` with a PDF moved, turned to another page, spread, its pages put back in their rows (`placed: null`), or made an icon - unchanged where it has no such PDF, or the page is none of its. */

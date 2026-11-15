@@ -5,6 +5,9 @@ import { useAppSettings } from "../../../lib/settings/appSettings";
 import { DURATION } from "../../theme/motion";
 import { useEditor } from "./store";
 import type { EditorState } from "./store/types";
+import type { WorkspaceDocument } from "./document";
+import type { RunWith } from "./workflow/run";
+import { reachOverFrames } from "./utils/molecule3d";
 
 /**
  * How a workspace's molecules in 3D look and turn: its styles in 3D (its
@@ -15,6 +18,28 @@ export function style3dOf(st: Partial<Pick<EditorState, "docStyle3d">>): Style3D
   // (a page that is no workspace's - an abbreviation's picture: Meno's own)
   return style3dIn(st.docStyle3d ?? DEFAULT_WORKSPACE_3D, useAppSettings.getState().style3d);
 }
+
+/**
+ * How far a molecule in 3D reaches on the page about its middle, in a
+ * document's styles in 3D with Settings' (utils/molecule3d
+ * `reachOverFrames`): what a set held off the page needs to be laid out on
+ * it again (document `createWorkspaceDocument`, workflow/held).
+ */
+export const extentIn = (doc: Pick<WorkspaceDocument, "style3d">): RunWith["extentOf"] => {
+  const style = style3dOf({ docStyle3d: doc.style3d });
+  // (a molecule's reach, turned as it is made - none: worked out once for each molecule and style, as every edit asks of every set's)
+  let reach = reachedIn.get(style);
+  if (!reach) reachedIn.set(style, (reach = new WeakMap()));
+  return (m, turn) => {
+    if (turn) return reachOverFrames({ ...m, id: 0 }, style, turn);
+    let found = reach!.get(m);
+    if (!found) reach!.set(m, (found = reachOverFrames({ ...m, id: 0 }, style, turn)));
+    return found;
+  };
+};
+
+/** How far each molecule reaches, by the style in 3D it was worked out in (`extentIn`). */
+const reachedIn = new WeakMap<Style3D, WeakMap<object, { x0: number; x1: number; y0: number; y1: number }>>();
 
 /** The same, for a component: it draws again as the workspace's styles, or Settings', change. */
 export function useStyle3D(): Style3D {
@@ -34,11 +59,18 @@ export function useStyleNames3D(): Record<Role3D, string> {
  * to - each number and colour of its looks and its light eased from what
  * it was to what it is (the rest at once), as a change of the drawing
  * style eases its bond (docs/WORKSPACE.md, *Styles in 3D*); `atOnce`, a
- * very large drawing's, without easing.
+ * very large drawing's, without easing; and, where nothing was `drawn` in
+ * 3D before it came - a workspace opened, its style coming with its
+ * molecules - at once, in the very render it comes in (`styleGoesOver`):
+ * there is nothing to go over from, and each step would make every
+ * molecule again.
  */
-export function useEasedStyle3D(style: Style3D, atOnce = false): Style3D {
+export function useEasedStyle3D(style: Style3D, atOnce = false, drawn = true): Style3D {
   const [shown, setShown] = useState(style);
   const now = useRef(style);
+  const drawnBefore = useRef(drawn);
+  if (styleGoesOver(style, now.current, drawnBefore.current) === "at once") now.current = style;
+  drawnBefore.current = drawn;
   useEffect(() => {
     if (style === now.current) return;
     // (a very large drawing: at once - each step would make every molecule again)
@@ -62,4 +94,14 @@ export function useEasedStyle3D(style: Style3D, atOnce = false): Style3D {
     return () => cancelAnimationFrame(frame);
   }, [style, atOnce]);
   return style === now.current ? style : shown;
+}
+
+/**
+ * How a canvas takes a style that has come (`style`) for the one it draws
+ * (`was`): not at all, the same; at once, where nothing was drawn in 3D
+ * before it came; else eased (`useEasedStyle3D`).
+ */
+export function styleGoesOver(style: Style3D, was: Style3D, drawnBefore: boolean): "same" | "at once" | "eased" {
+  if (style === was) return "same";
+  return drawnBefore ? "eased" : "at once";
 }

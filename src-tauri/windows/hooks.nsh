@@ -12,6 +12,12 @@
 
 !macro NSIS_HOOK_POSTINSTALL
   ExecWait '"$INSTDIR\${MAINBINARYNAME}.exe" --register-ole'
+  ; The fonts a copied picture's labels are set in (IBM Plex Sans, OFL;
+  ; resources\fonts): put in this user's fonts, so that Word and PowerPoint
+  ; draw the labels in them. Meno puts in only the faces not there yet and
+  ; keeps which it put, in its own key, to take out exactly those
+  ; (src/labelfonts.rs).
+  ExecWait '"$INSTDIR\${MAINBINARYNAME}.exe" --install-label-fonts'
   ; A workspace file's own icon (icons\document, docs/FILE-IO.md): the
   ; installer associates .meno with Meno (tauri.windows.conf.json,
   ; fileAssociations) under the ProgID Meno.Workspace, with Meno's own icon;
@@ -43,10 +49,98 @@
   Delete "$INSTDIR\resources\py\requirements.console.lock"
   Delete "$INSTDIR\resources\py\requirements.node.lock"
   RMDir "$INSTDIR\resources\py"
+  ; The plugins, no longer carried - each is got online and kept in Meno's
+  ; data folder (docs/PLUGINS.md, *Plugins online*): the files the releases
+  ; up to 0.1.21 carried go, each by name, and each plugin's folder, then
+  ; theirs, once empty.
+  Delete "$INSTDIR\resources\plugins\blender\LICENSE"
+  Delete "$INSTDIR\resources\plugins\blender\change.py"
+  Delete "$INSTDIR\resources\plugins\blender\looks.py"
+  Delete "$INSTDIR\resources\plugins\blender\manifest.json"
+  Delete "$INSTDIR\resources\plugins\blender\motion_assemble.py"
+  Delete "$INSTDIR\resources\plugins\blender\motion_change_liquid.py"
+  Delete "$INSTDIR\resources\plugins\blender\motion_change_ring.py"
+  Delete "$INSTDIR\resources\plugins\blender\motion_change_scan.py"
+  Delete "$INSTDIR\resources\plugins\blender\motion_change_shatter.py"
+  Delete "$INSTDIR\resources\plugins\blender\motion_dissolve.py"
+  Delete "$INSTDIR\resources\plugins\blender\motion_pulse.py"
+  Delete "$INSTDIR\resources\plugins\blender\motion_reveal.py"
+  Delete "$INSTDIR\resources\plugins\blender\motion_scan.py"
+  Delete "$INSTDIR\resources\plugins\blender\render.py"
+  Delete "$INSTDIR\resources\plugins\blender\requirements.lock"
+  Delete "$INSTDIR\resources\plugins\blender\studio.py"
+  Delete "$INSTDIR\resources\plugins\blender\worker.py"
+  Delete "$INSTDIR\resources\plugins\cclib\manifest.json"
+  Delete "$INSTDIR\resources\plugins\cclib\requirements.lock"
+  Delete "$INSTDIR\resources\plugins\cclib\worker.py"
+  Delete "$INSTDIR\resources\plugins\crem\manifest.json"
+  Delete "$INSTDIR\resources\plugins\crem\requirements.lock"
+  Delete "$INSTDIR\resources\plugins\crem\worker.py"
+  Delete "$INSTDIR\resources\plugins\crest\manifest.json"
+  Delete "$INSTDIR\resources\plugins\crest\pixi.lock"
+  Delete "$INSTDIR\resources\plugins\crest\pixi.toml"
+  Delete "$INSTDIR\resources\plugins\crest\worker.py"
+  Delete "$INSTDIR\resources\plugins\gaussian\manifest.json"
+  Delete "$INSTDIR\resources\plugins\gaussian\requirements.lock"
+  Delete "$INSTDIR\resources\plugins\gaussian\worker.py"
+  Delete "$INSTDIR\resources\plugins\getting-started\manifest.json"
+  Delete "$INSTDIR\resources\plugins\molnextr\manifest.json"
+  Delete "$INSTDIR\resources\plugins\molnextr\requirements.lock"
+  Delete "$INSTDIR\resources\plugins\molnextr\worker.py"
+  Delete "$INSTDIR\resources\plugins\molscribe\manifest.json"
+  Delete "$INSTDIR\resources\plugins\molscribe\requirements.lock"
+  Delete "$INSTDIR\resources\plugins\molscribe\worker.py"
+  Delete "$INSTDIR\resources\plugins\multiwfn\manifest.json"
+  Delete "$INSTDIR\resources\plugins\multiwfn\requirements.lock"
+  Delete "$INSTDIR\resources\plugins\multiwfn\worker.py"
+  Delete "$INSTDIR\resources\plugins\nciplot\manifest.json"
+  Delete "$INSTDIR\resources\plugins\nciplot\requirements.lock"
+  Delete "$INSTDIR\resources\plugins\nciplot\worker.py"
+  Delete "$INSTDIR\resources\plugins\orca\manifest.json"
+  Delete "$INSTDIR\resources\plugins\orca\requirements.lock"
+  Delete "$INSTDIR\resources\plugins\orca\worker.py"
+  Delete "$INSTDIR\resources\plugins\pyscf\manifest.json"
+  Delete "$INSTDIR\resources\plugins\pyscf\pixi.lock"
+  Delete "$INSTDIR\resources\plugins\pyscf\pixi.toml"
+  Delete "$INSTDIR\resources\plugins\pyscf\worker.py"
+  Delete "$INSTDIR\resources\plugins\rdkit\conformers_job.py"
+  Delete "$INSTDIR\resources\plugins\rdkit\manifest.json"
+  Delete "$INSTDIR\resources\plugins\rdkit\requirements.lock"
+  Delete "$INSTDIR\resources\plugins\rdkit\worker.py"
+  Delete "$INSTDIR\resources\plugins\reinvent\manifest.json"
+  Delete "$INSTDIR\resources\plugins\reinvent\requirements.lock"
+  Delete "$INSTDIR\resources\plugins\reinvent\worker.py"
+  Delete "$INSTDIR\resources\plugins\wfx\manifest.json"
+  Delete "$INSTDIR\resources\plugins\wfx\requirements.lock"
+  Delete "$INSTDIR\resources\plugins\wfx\worker.py"
+  Delete "$INSTDIR\resources\plugins\xtb\manifest.json"
+  Delete "$INSTDIR\resources\plugins\xtb\pixi.lock"
+  Delete "$INSTDIR\resources\plugins\xtb\pixi.toml"
+  Delete "$INSTDIR\resources\plugins\xtb\worker.py"
+  RMDir "$INSTDIR\resources\plugins\blender"
+  RMDir "$INSTDIR\resources\plugins\cclib"
+  RMDir "$INSTDIR\resources\plugins\crem"
+  RMDir "$INSTDIR\resources\plugins\crest"
+  RMDir "$INSTDIR\resources\plugins\gaussian"
+  RMDir "$INSTDIR\resources\plugins\getting-started"
+  RMDir "$INSTDIR\resources\plugins\molnextr"
+  RMDir "$INSTDIR\resources\plugins\molscribe"
+  RMDir "$INSTDIR\resources\plugins\multiwfn"
+  RMDir "$INSTDIR\resources\plugins\nciplot"
+  RMDir "$INSTDIR\resources\plugins\orca"
+  RMDir "$INSTDIR\resources\plugins\pyscf"
+  RMDir "$INSTDIR\resources\plugins\rdkit"
+  RMDir "$INSTDIR\resources\plugins\reinvent"
+  RMDir "$INSTDIR\resources\plugins\wfx"
+  RMDir "$INSTDIR\resources\plugins\xtb"
+  RMDir "$INSTDIR\resources\plugins"
 !macroend
 
 !macro NSIS_HOOK_PREUNINSTALL
   ExecWait '"$INSTDIR\${MAINBINARYNAME}.exe" --unregister-ole'
+  ; The label fonts Meno put in this user's fonts, and only those, taken out;
+  ; before the line below, which takes Meno's own key away once it is empty.
+  ExecWait '"$INSTDIR\${MAINBINARYNAME}.exe" --remove-label-fonts'
   ; Meno's listing in Default apps, for the formats the user had it offered
   ; for in Settings (src/defaults.rs): Meno takes out exactly what it wrote,
   ; its one value in the shared RegisteredApplications key and its own keys

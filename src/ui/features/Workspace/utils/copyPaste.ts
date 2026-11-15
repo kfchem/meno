@@ -3,6 +3,7 @@
  * what it finds there - pure, over the editor's model (the clipboard
  * itself is lib/clipboard).
  */
+import { crossingsHeld } from "../chem/crossings";
 import { ATOM_NUMBER_KINDS, type AtomNumberKind } from "./atomNumbers";
 import { readBiopolymer } from "../../../../lib/chem/biopolymer";
 import { propertiesIn } from "../../../../lib/entry";
@@ -11,7 +12,7 @@ import { MARK_REACH, pushAtoms } from "../document";
 import { fillsAmong } from "./rings";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { PICTURE_MEDIA, type PictureMedia } from "../../../../lib/picture/image";
-import { writeMolfile, writeMolfile3d } from "../../../../lib/chem/molWriter";
+import { withRingStars, writeMolfile, writeMolfile3d } from "../../../../lib/chem/molWriter";
 import { arrowPoints } from "../../../../lib/chem/reactionScheme";
 import { ARROW_KINDS, ARROW_SETTINGS, WEIGHT_SHARE, type ArrowLook } from "../../../../lib/chem/reactionArrow";
 import { acceptValue, fieldOf, isTypefaceName } from "../../../../lib/chem/styleFields";
@@ -37,6 +38,7 @@ import { magnificationWithin } from "./magnified";
 import { isSkeleton } from "./completeness";
 import type { Style3D } from "../../../../lib/chem/style3d";
 import { failureKindOf, WORDS_MOST, type Failure } from "../workflow/failures";
+import { convergedIn, type Converged } from "../workflow/converged";
 import { anyLeftOut, leftOut, noting, readEach } from "./readNotes";
 
 type Pt = { x: number; y: number };
@@ -143,16 +145,19 @@ export function clipItems(part: Drawn): ClipItem[] {
     if (!ms.length) return hasFlow(part) || part.pictures?.length || part.captions?.length || part.pdfs?.length || part.sheets?.length || part.slides?.length || part.shapes?.length || part.inks?.length || part.cycles?.length ? [{ flavor: "meno", text: recordText(part) }] : [];
     const placed = ms.length > 1;
     // (a skeleton - its hydrogens not there - written as one: its atoms' valences set, so that no reader adds any)
-    const seen = ms.map((m) => (isSkeleton(m) ? asSeen(m, m.turn, m.frame, placed).map((a) => ({ ...a, noImplicitH: true })) : asSeen(m, m.turn, m.frame, placed)));
-    const offsets = seen.map((_, i) => seen.slice(0, i).reduce((n, a) => n + a.length, 0));
+    // (each with the bonds the frame it shows has, and each ring bound to a metal through all its atoms as a file holds one - lib/chem/molWriter)
+    const written = ms.map((m) => {
+      const atoms = isSkeleton(m) ? asSeen(m, m.turn, m.frame, placed).map((a) => ({ ...a, noImplicitH: true })) : asSeen(m, m.turn, m.frame, placed);
+      return withRingStars(atoms, bondsAt(m, m.frame), m.centres ?? []);
+    });
+    const offsets = written.map((_, i) => written.slice(0, i).reduce((n, w) => n + w.atoms.length, 0));
     return [
       { flavor: "meno", text: recordText(part) },
       {
         flavor: "mol",
         text: writeMolfile3d(
-          seen.flat(),
-          // (each with the bonds the frame it shows has)
-          ms.flatMap((m, i) => bondsAt(m, m.frame).map((b) => ({ a1: b.a1 + offsets[i], a2: b.a2 + offsets[i], order: b.order }))),
+          written.flatMap((w) => w.atoms),
+          written.flatMap((w, i) => w.bonds.map((b) => ({ ...b, a1: b.a1 + offsets[i], a2: b.a2 + offsets[i], ...(b.endpoints ? { endpoints: b.endpoints.map((e) => e + offsets[i]) } : {}) }))),
           { title: ms.length === 1 ? ms[0].name?.replace(/\.[^.]*$/, "") : undefined },
         ),
       },
@@ -454,6 +459,14 @@ export function readDrawn(data: unknown, pointPx = POINT): Drawn | null {
     else out.magnified = magnificationWithin(x.magnified);
     return out;
   };
+  // (the bonds each is said to pass behind where they cross: ids of the record's own bonds only, each once - chem/crossings, which then keeps it one way)
+  const withBehindRead = <T extends { id?: unknown; behind?: unknown }>(x: T): T => {
+    const out = { ...x };
+    const said = Array.isArray(x.behind) ? [...new Set(x.behind.filter((id): id is number => Number.isInteger(id) && bondIds.has(id as number) && id !== x.id))] : [];
+    if (said.length) out.behind = said;
+    else delete out.behind;
+    return out;
+  };
   // (a ring's fill where its key and its colour read)
   const ringFills = Object.fromEntries(
     Object.entries(r.ringFills && typeof r.ringFills === "object" ? (r.ringFills as Record<string, unknown>) : {}).filter(
@@ -462,7 +475,7 @@ export function readDrawn(data: unknown, pointPx = POINT): Drawn | null {
   ) as Record<string, string>;
   return {
     atoms: atoms.map((a) => withMagnified(withStack(withRead(withColours(withMarks({ r: 0.9, ...a }, ["chargeAt", "stereoAt"]))))) as Atom),
-    bonds: bonds.map((b) => withRead(withColours(withMarks(b, ["stereoAt"])))) as Bond[],
+    bonds: crossingsHeld({ atoms: [], bonds: bonds.map((b) => withBehindRead(withRead(withColours(withMarks(b, ["stereoAt"]))))) as Bond[] }).bonds,
     ...(pushes.length ? { pushes } : {}),
     ...(Object.keys(ringFills).length ? { ringFills } : {}),
     ...(arrows.length ? { arrows } : {}),
@@ -598,7 +611,7 @@ function pictureFromOf(v: unknown): PictureItem["from"] | null {
 }
 
 /** How a molecule was made, as a file carries it: rows of text, each read as data; otherwise none. */
-function madeOf(v: unknown): Carried3D["made"] {
+function howMade(v: unknown): Carried3D["made"] {
   const how = (v as { how?: unknown } | null | undefined)?.how;
   const method = (v as { method?: unknown } | null | undefined)?.method;
   const rows = (Array.isArray(how) ? how : [])
@@ -813,7 +826,12 @@ export function readCarried3D(given: unknown): Carried3D | null {
     })(),
     ...(Number.isInteger(m.together) && (m.together as number) > 0 ? { together: m.together as number } : {}),
     ...(Number.isInteger(m.atomsLeftOut) && (m.atomsLeftOut as number) > 0 ? { atomsLeftOut: m.atomsLeftOut as number } : {}),
-    ...(madeOf(m.made) ? { made: madeOf(m.made) } : {}),
+    ...(howMade(m.made) ? { made: howMade(m.made) } : {}),
+    // (what it was made from, by id: each that is no text left out, and counted)
+    ...(() => {
+      const madeOf = readEach(m.madeOf, (id) => (typeof id === "string" ? id : null), "madeFrom");
+      return madeOf.length ? { madeOf } : {};
+    })(),
     ...(() => {
       const said = saidOf(m.said);
       return said ? { said } : {};
@@ -833,6 +851,12 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(imaginary ? { imaginary } : {}),
     ...(marksUnread ? { marksUnread: true as const } : {}),
     ...(() => {
+      // (where a run ended converged, frame by frame: a record that does not read is none - said - never one assumed)
+      const read = convergedFrames(m.converged, keep);
+      if (read === null) leftOut("frameMarks");
+      return read ? { converged: read } : {};
+    })(),
+    ...(() => {
       const mirrors = mirrorsOf(m.mirrors, keep, n);
       return mirrors ? { mirrors } : {};
     })(),
@@ -840,6 +864,16 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(numbers ? { atomNumbers: numbers } : {}),
     ...(calc ? { calc } : {}),
   };
+}
+
+/** Where a run ended converged, frame by frame (workflow/converged): of the frames kept, those left out with theirs; none where none is marked; null where the records do not read - not one for each frame, or one that is neither a record nor null. */
+function convergedFrames(given: unknown, keep: boolean[]): (Converged | null)[] | null | undefined {
+  if (given === undefined) return undefined;
+  if (!Array.isArray(given) || given.length !== keep.length) return null;
+  const read = given.map((c) => (c === null ? null : (convergedIn(c) ?? undefined)));
+  if (read.some((c) => c === undefined)) return null;
+  const out = (read as (Converged | null)[]).filter((_, i) => keep[i]);
+  return out.some(Boolean) ? out : undefined;
 }
 
 /** A conformer set's mirror images counted in, frame by frame: each a permutation of its `atoms` atoms, or null; of the frames kept, those left out with theirs. */

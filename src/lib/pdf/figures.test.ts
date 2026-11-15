@@ -44,7 +44,7 @@ describe("a PDF page's figures", () => {
   });
 
   it("are each their own where they lie apart; a picture, however small, is one", () => {
-    const figures = figuresOf([...structureAt(100, 300), ...structureAt(100, 500), { kind: "image", box: [300, 100, 316, 112] }]);
+    const figures = figuresOf([...structureAt(100, 300), ...structureAt(100, 500), { kind: "image", box: [300, 400, 316, 412] }]);
     expect(figures).toHaveLength(3);
     expect(figureAt(figures, 120, 510)).toEqual(figures.find((f) => f[1] === 500));
     expect(figureAt(figures, 10, 10)).toBeNull();
@@ -202,6 +202,66 @@ describe("a PDF page's figures", () => {
     const figures = figuresOf([...structureAt(60, 300), ...arrow, ...structureAt(238, 300), ...lines, text([0, 0, 595, 10])]);
     expect(figures).toHaveLength(1);
     expect(figures[0][1]).toBe(300);
+  });
+});
+
+
+describe("page furniture is no figure: a journal's logo, its banner, its cover thumbnail", () => {
+  /** The words of a page of running text, from its top margin to its foot: what makes it as high as a page is. */
+  const body = (): PageObject[] => Array.from({ length: 30 }, (_, i) => text([60, 90 + i * 22, 540, 100 + i * 22]));
+  const frame = (box: Box): PageObject[] => [path(box)];
+
+  it("is none where a shape lies round words, the words most of what lies in it - a banner, a button", () => {
+    const banner: PageObject[] = [...frame([400, 300, 520, 328]), text([420, 308, 470, 320]), text([476, 308, 505, 320])];
+    expect(figuresOf([...body(), ...banner, ...structureAt(100, 300)])).toEqual([[91, 300, 180, 328]]);
+    // (a frame round a structure, its labels a few of what lies in it, is still a figure)
+    const boxed = figuresOf([...body(), path([85, 290, 190, 340]), ...structureAt(100, 300)]);
+    expect(boxed).toHaveLength(1);
+  });
+
+  it("is none within the header or footer band, as small as a logo - a picture or drawn - but a figure of the page's body is", () => {
+    const logo: PageObject = { kind: "image", box: [60, 24, 140, 56] };
+    const drawnLogo = [path([60, 30, 90, 50]), path([92, 30, 120, 50]), path([60, 52, 120, 56])];
+    const foot: PageObject = { kind: "image", box: [60, 790, 120, 810] };
+    const page = [...body(), ...structureAt(100, 300)];
+    expect(figuresOf([logo, foot, ...drawnLogo, ...page])).toEqual([[91, 300, 180, 328]]);
+    // (a tall thing at the top is the page's own: no logo)
+    expect(figuresOf([{ kind: "image", box: [60, 24, 300, 200] }, ...page])).toHaveLength(2);
+    // (a page of little: the band is none to speak of)
+    expect(figuresOf([logo, ...structureAt(100, 200)])).toHaveLength(2);
+  });
+
+  // (the thresholds, each one just over and one just under: a page `high` points high, made so by two short words at its corners, far from the figures)
+  const pageOf = (high: number, ...things: PageObject[]): PageObject[] => [text([580, 0, 590, 8]), text([580, high - 8, 590, high]), ...things];
+
+  it("is a logo of 40 points high or less, no more - 41 is a figure", () => {
+    expect(figuresOf(pageOf(1000, { kind: "image", box: [60, 5, 140, 45] }))).toEqual([]);
+    expect(figuresOf(pageOf(1000, { kind: "image", box: [60, 5, 140, 46] }))).toEqual([[60, 5, 140, 46]]);
+    // (the same at the foot)
+    expect(figuresOf(pageOf(1000, { kind: "image", box: [60, 955, 140, 995] }))).toEqual([]);
+    expect(figuresOf(pageOf(1000, { kind: "image", box: [60, 954, 140, 995] }))).toEqual([[60, 954, 140, 995]]);
+  });
+
+  it("is in the band of a twentieth of the page at the top or the foot: a little lower in, it is the page's own", () => {
+    // (the band 50 of 1000: a logo ending at 50 is in it, one ending at 51 is not)
+    expect(figuresOf(pageOf(1000, { kind: "image", box: [60, 10, 140, 50] }))).toEqual([]);
+    expect(figuresOf(pageOf(1000, { kind: "image", box: [60, 11, 140, 51] }))).toEqual([[60, 11, 140, 51]]);
+    expect(figuresOf(pageOf(1000, { kind: "image", box: [60, 950, 140, 985] }))).toEqual([]);
+    expect(figuresOf(pageOf(1000, { kind: "image", box: [60, 949, 140, 984] }))).toEqual([[60, 949, 140, 984]]);
+  });
+
+  it("is a page of 400 points high or more that has a band: a page of 399 has none", () => {
+    // (the band 20 of 400: a logo ending at 18)
+    expect(figuresOf(pageOf(400, { kind: "image", box: [60, 2, 140, 18] }))).toEqual([]);
+    expect(figuresOf(pageOf(399, { kind: "image", box: [60, 2, 140, 18] }))).toEqual([[60, 2, 140, 18]]);
+  });
+
+  it("is a banner only as a path - an image round words is a picture - and where the words are a quarter of it, at the least", () => {
+    // (a path 120 by 28 = 3360; its words 70 by 12 = 840, exactly a quarter, are a banner; 69 by 12, a hair less, is a figure)
+    const banner = (wide: number, kind: "path" | "image"): PageObject[] => pageOf(800, { kind, box: [400, 300, 520, 328] }, text([410, 308, 410 + wide, 320]));
+    expect(figuresOf(banner(70, "path"))).toEqual([]);
+    expect(figuresOf(banner(69, "path"))).toHaveLength(1);
+    expect(figuresOf(banner(70, "image"))).toHaveLength(1);
   });
 });
 

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/24/outline";
 import { numberText } from "../../../../lib/calc/results";
-import type { Cell, TableColumn } from "../../../../lib/table";
+import { WHAT_COLUMN, type Cell, type TableColumn } from "../../../../lib/table";
 import { useEditor, useEditorStore } from "../store";
 import type { WorkflowSet } from "../store/types";
 import { setName } from "./doers";
@@ -10,6 +10,7 @@ import { SMILES_DRAWING_COLUMN, SMILES_RECORD_COLUMN, sortedRows } from "./struc
 import { setStructuresTable } from "./run";
 import { ROW_PX } from "./SetTableBody";
 import { DURATION } from "../../../theme/motion";
+import { constitutionKnown, useIdentitiesAnswered } from "../chem/identityOff";
 
 /** How many rows are drawn beyond those in view, each way: none blank as it scrolls. */
 const BEYOND = 8;
@@ -38,9 +39,12 @@ export default function StructuresTableBody({ set }: { set: WorkflowSet }) {
   const steps = useEditor((s) => s.steps);
   const model = useEditor((s) => s.model);
   // (worked out again as the set changes, or the drawing it reads)
-  const table = useMemo(() => setStructuresTable({ ...store.getState(), model }, set), [store, model, set]);
-  // (its id and what it is are for a chart's points: the place said once, as #)
-  const shown = useMemo(() => table.columns.map((c, i) => ({ c, i })).slice(2), [table]);
+  // (a structure's record read as it stands now, its identity worked out off the drawing thread: the table made again as each answer lands)
+  const answered = useIdentitiesAnswered((s) => s.answered);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `answered` is what makes it again
+  const table = useMemo(() => setStructuresTable({ ...store.getState(), model }, set, constitutionKnown), [store, model, set, answered]);
+  // (its id and what it is, said by # and on pointing: not columns of their own; which structure it is, a number a chart takes, is)
+  const shown = useMemo(() => table.columns.map((c, i) => ({ c, i })).filter(({ c }) => c.kind !== "entry" && c.name !== WHAT_COLUMN), [table]);
   const [sort, setSort] = useState<{ at: number; down: boolean } | null>(null);
   // (those with no value - none, or not worked out - last whichever way it is sorted)
   const order = useMemo(() => (sort ? sortedRows(table, sort.at, sort.down) : table.rows.map((_, k) => k)).map((k) => ({ r: table.rows[k], k })), [table, sort]);

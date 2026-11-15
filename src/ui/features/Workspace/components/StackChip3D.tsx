@@ -1,7 +1,7 @@
-import { useRef } from "react";
 import * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
-import Frames3D from "./Frames3D";
+import { useMemo, useRef } from "react";
+import PlacedFramesChip from "./PlacedFramesChip";
 import { calcLine } from "../../../../lib/calc/output";
 import type { Result } from "../../../../lib/calc/results";
 import type { Molecule3D, Turn3D } from "../store/types";
@@ -31,7 +31,7 @@ export function stackedResults(shown: Pick<Molecule3D, "calc">, frame: number): 
 /**
  * A stack's chip, just below the molecule it shows (utils/stacks): which of
  * how many, and its record's title (*3 / 60  aspirin*) - and, clicked, a
- * slider through them (Frames3D),
+ * slider through them (useFramesChip),
  * as a molecule's frames have. The stack's own, not its molecules': it
  * stays as they go over one to the next, a drag along its slider going on
  * through them.
@@ -59,6 +59,10 @@ export default function StackChip3D({
   const { camera, invalidate } = useThree();
   const group = useRef<THREE.Group>(null!);
   const low = useRef<number | null>(null);
+  const facts = useMemo(
+    () => ({ count, frame: index, title: shown.title, about: shown.calc ? calcLine(shown.calc) : undefined, results: stackedResults(shown, frame), unread: shown.calc?.unread, made: shown.made }),
+    [count, index, shown, frame],
+  );
   useFrame((_, dt) => {
     const b = seenBounds(poseOf(shown, solidOf(shown, style), lookOf(shown), turn, frame), eyeOf(camera));
     if (!Number.isFinite(b.minY)) return;
@@ -69,17 +73,7 @@ export default function StackChip3D({
   });
   return (
     <group ref={group}>
-      <Frames3D
-        count={count}
-        frame={index}
-        open={open}
-        onFrame={onShow}
-        title={shown.title}
-        about={shown.calc ? calcLine(shown.calc) : undefined}
-        results={stackedResults(shown, frame)}
-        unread={shown.calc?.unread}
-        made={shown.made}
-      />
+      <PlacedFramesChip chipKey={`stack:${shown.id}`} id={shown.id} facts={facts} frame={index} open={open} onFrame={onShow} />
     </group>
   );
 }

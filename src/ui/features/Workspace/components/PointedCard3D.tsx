@@ -1,6 +1,7 @@
 import { ChevronRightIcon } from "@heroicons/react/24/outline";
 import { forwardRef, useState } from "react";
 import { EASED } from "../../../theme/motion";
+import { useOpening } from "../../../theme/opening";
 
 /**
  * A card's rows, group by group: each row its name and its value, written;
@@ -30,9 +31,16 @@ function Rows({ rows }: { rows: CardGroups[number]["rows"] }) {
   );
 }
 
-/** A group shut under its name, opened and shut by it - eased, its chevron turning - never by the card it is on. */
-function FoldedGroup({ group, rows }: { group: string; rows: CardGroups[number]["rows"] }) {
+/**
+ * A group shut under its name, opened and shut by it - its chevron turning -
+ * never by the card it is on. Shut, its rows take no room either way.
+ * Opened, the card grows to them, wide and tall together, and then they
+ * fade in; shut, they fade out, and then the card shrinks back (the
+ * maintainer, 2026-10-29).
+ */
+function FoldedGroup({ group, rows, most }: { group: string; rows: CardGroups[number]["rows"]; most: string }) {
   const [open, setOpen] = useState(false);
+  const { grown, shown } = useOpening(open);
   return (
     <>
       <button
@@ -47,24 +55,32 @@ function FoldedGroup({ group, rows }: { group: string; rows: CardGroups[number][
         <ChevronRightIcon className={`h-2.5 w-2.5 transition-transform ${open ? "rotate-90" : ""}`} style={EASED} strokeWidth={2.5} />
         {group}
       </button>
-      <div className="grid transition-[grid-template-rows,opacity]" style={{ ...EASED, gridTemplateRows: open ? "1fr" : "0fr", opacity: open ? 1 : 0 }}>
-        <div className="overflow-hidden">
-          <Rows rows={rows} />
+      <div className="grid" style={{ gridTemplateRows: `${grown}fr`, gridTemplateColumns: `minmax(0, ${grown}fr)`, opacity: shown }}>
+        <div className="overflow-hidden min-w-0">
+          {/* (laid out at its own width as it opens, and cut on the right until the card has widened to it - never squeezed, its words a letter a line) */}
+          <div className="w-max" style={{ maxWidth: most }}>
+            <Rows rows={rows} />
+          </div>
         </div>
       </div>
     </>
   );
 }
 
-/** Results said group by group - under each reader's name, where there are two - each group's name, then its rows, each its name and value; a group `folded`, shut under its name. */
-export function ResultGroups({ groups }: { groups: CardGroups }) {
+/**
+ * Results said group by group - under each reader's name, where there are
+ * two - each group's name, then its rows, each its name and value; a group
+ * `folded`, shut under its name, and no wider than `most`: the room inside
+ * the card it is on.
+ */
+export function ResultGroups({ groups, most }: { groups: CardGroups; most: string }) {
   return (
     <>
       {groups.map((g, k) => (
         <div key={`${k}:${g.group}`} className="mt-1">
           {g.source && <div className="mt-1.5 text-[10px] font-medium text-gh-black">{g.source}</div>}
           {g.folded ? (
-            <FoldedGroup group={g.group} rows={g.rows} />
+            <FoldedGroup group={g.group} rows={g.rows} most={most} />
           ) : (
             <>
               <div className="text-[10px] text-gh-gray">{g.group}</div>
@@ -92,7 +108,8 @@ const PointedCard3D = forwardRef<HTMLDivElement, { title: string; groups: CardGr
       style={{ opacity: 0 }}
     >
       <div className="text-gh-black font-medium">{title}</div>
-      <ResultGroups groups={groups} />
+      {/* (the card's most, 18rem, less its sides: px-2.5 and its border, the card being border-box) */}
+      <ResultGroups groups={groups} most="16.625rem" />
     </div>
   );
 });

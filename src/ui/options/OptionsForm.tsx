@@ -1,4 +1,4 @@
-import { MANY_CHOICES, shownOptions, type LinesOption, type Option, type OptionValues } from "../../lib/options";
+import { firstUnset, MANY_CHOICES, shownOptions, type LinesOption, type Option, type OptionValues } from "../../lib/options";
 import Checkbox from "../controls/Checkbox";
 import NumberField from "../controls/NumberField";
 import RadioGroup from "../controls/Radio";
@@ -18,15 +18,16 @@ function LinesField({ option, value, onChange }: { option: LinesOption; value: s
   return (
     <label className="block">
       <span className="block text-xs text-gh-gray mb-1">{option.label}</span>
-      {/* (20 px a line, as leading-5, and the box's own padding) */}
-      <span className="flex gap-2 overflow-y-auto" style={{ maxHeight: MOST_ROWS * 20 + 10 }}>
+      {/* (20 px a line, as leading-5, and the box's own padding - and room all round for its focus ring, which the scroll would clip) */}
+      <span className="-m-0.5 flex gap-2 overflow-y-auto p-0.5" style={{ maxHeight: MOST_ROWS * 20 + 10 + 4 }}>
         <textarea
+          data-native-undo=""
           value={value}
           rows={rows}
           wrap="off"
           spellCheck={false}
           onChange={(e) => onChange(e.target.value)}
-          className="w-28 shrink-0 resize-none overflow-x-auto overflow-y-hidden rounded-md border border-gh-line bg-white px-2 py-1 font-mono text-xs leading-5 text-gh-black"
+          className="w-28 shrink-0 resize-none overflow-x-auto overflow-y-hidden rounded-md border border-gh-line bg-white px-2 py-1 font-mono text-xs leading-5 text-gh-black outline-none focus:border-accel-base focus:ring-2 focus:ring-accel-lightbase"
         />
         {read.length > 0 && (
           <span aria-label="Read as" className="min-w-0 flex-1 py-1 text-xs leading-5">
@@ -38,14 +39,14 @@ function LinesField({ option, value, onChange }: { option: LinesOption; value: s
           </span>
         )}
       </span>
-      {option.note && <span className="mt-1 block text-xs text-gh-gray">{option.note}</span>}
     </label>
   );
 }
 
 /**
  * A role's options, drawn from their general form (lib/options): a choice
- * as its choices, each to pick - or, of many, a list to pick from; a number
+ * as its choices, each to pick - or, of many, a list to pick from; of one,
+ * said as text; a number
  * with its unit; a text; a switch; lines of text, each with what it was
  * read as beside it, where the kind says.
  * Whoever fills the role declares them - Meno, or a plugin - and this draws
@@ -58,6 +59,7 @@ export default function OptionsForm({
   context,
   choosing,
   onChoose,
+  asks = false,
 }: {
   options: readonly Option[];
   values: OptionValues;
@@ -68,6 +70,8 @@ export default function OptionsForm({
   choosing?: string | null;
   /** Choosing an atoms option's atoms on the drawing begun (its id), or ended (null). Without it, an atoms option is only counted. */
   onChoose?: (id: string | null) => void;
+  /** Shown to ask for what it still needs: its first number shown that holds none - a window, the chemist's own - focused as it is shown. */
+  asks?: boolean;
 }) {
   const set = (id: string, v: string | number | boolean) => {
     // (a choice that fills in others - a preset's parts - sets them with it)
@@ -76,6 +80,8 @@ export default function OptionsForm({
     onChange({ ...values, ...(sets ?? {}), [id]: v });
   };
   const shown = shownOptions(options, values, context);
+  // (asked for: the first number shown that holds none yet)
+  const asked = asks ? firstUnset(shown, values) : undefined;
   // (those of one group folded together where the first of them is, under its name)
   const first = new Set(shown.filter((o, i) => o.group && shown.findIndex((x) => x.group === o.group) === i).map((o) => o.id));
   const field = (o: Option) => (
@@ -87,6 +93,12 @@ export default function OptionsForm({
               <span className="block text-xs text-gh-gray mb-1">{o.label}</span>
               <Select label={o.label} value={String(values[o.id] ?? "")} options={o.choices} onChange={(v) => set(o.id, v)} size="sm" className="w-full" />
             </label>
+          ) : o.type === "choice" && o.choices.length === 1 ? (
+            // (a choice with only one to have - a motion's fixed renderer - said, not offered as a control with nothing to pick)
+            <div>
+              <span className="mb-1 block text-xs text-gh-gray">{o.label}</span>
+              <span className="block text-sm text-gh-black">{o.choices[0].label}</span>
+            </div>
           ) : o.type === "choice" ? (
             <RadioGroup label={o.label} value={String(values[o.id] ?? "")} options={o.choices} onChange={(v) => set(o.id, v)} />
           ) : o.type === "atoms" ? (
@@ -117,7 +129,7 @@ export default function OptionsForm({
               {/* (a number and its unit both within the card: the field narrows to leave the unit room) */}
               <span className="flex items-center gap-1.5">
                 {o.type === "number" ? (
-                  <NumberField value={Number(values[o.id] ?? o.default)} min={o.min} max={o.max} step={o.step} onChange={(n) => set(o.id, n)} className="min-w-0 max-w-[12rem] flex-1 text-sm" />
+                  <NumberField value={Number(values[o.id] ?? o.default)} min={o.min} max={o.max} step={o.step} whole={o.whole} onChange={(n) => set(o.id, n)} autoFocus={o.id === asked} className="min-w-0 max-w-[12rem] flex-1 text-sm" />
                 ) : (
                   <input
                     type="text"
@@ -130,6 +142,7 @@ export default function OptionsForm({
               </span>
             </label>
           )}
+          {o.note && <span className="mt-1 block text-xs text-gh-gray">{o.note}</span>}
         </div>
   );
   return (

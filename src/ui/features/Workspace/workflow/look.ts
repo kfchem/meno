@@ -66,39 +66,59 @@ export function shuttingCard(onShutting: (id: number | null) => void, ms: number
 /** A step's card: how wide, and how tall closed, about. */
 export const CARD_W = 208 * PX;
 export const CARD_H = 76 * PX;
+/**
+ * How tall a step's card is drawn closed at the most (StepCard): its hair
+ * line, its padding, its name, what it does on two lines, its state on two,
+ * what its program said, and its bar - 2 + 8 + 20 + 32 + 6 + 32 + 16 + 9 +
+ * 10. What placing keeps clear of a card and gives a card put down (place):
+ * its words can draw it taller than `CARD_H`, never than this. Its ports,
+ * its wires and fitting the page keep to `CARD_H` (`cardHigh`, for a card of
+ * more ports).
+ */
+export const CARD_TALL = 135 * PX;
 /** How far below its top a step's ports stand: wires join where they always did as its card opens. */
 export const PORT_DOWN = 28 * PX;
 /** How far apart a card's inputs are, where it takes more than one: each under the one before. */
 export const PORT_STEP = 20 * PX;
 /** How far down a card's top its `k`th input is (from 0). */
 export const portDown = (k: number) => PORT_DOWN + k * PORT_STEP;
+/** How many ports down either edge a card `CARD_H` tall has room for. */
+export const CARD_PORTS = 3;
+/**
+ * How tall a step's card is closed, about, with `ports` ports down an edge
+ * (workflow/kinds `cardHighOf`): `CARD_H`, one port's step taller for each
+ * past `CARD_PORTS` - its ports a plain list down its edge, the last as
+ * far above its foot as a third is on a card `CARD_H` tall (2026-11-11).
+ * Its ports, its wires and fitting the page keep to it as to `CARD_H`.
+ */
+export const cardHigh = (ports: number) => CARD_H + Math.max(0, ports - CARD_PORTS) * PORT_STEP;
 /**
  * How far to the left of its input a wire comes in level, where the card
  * names its inputs (more than one, StepCard): past the name - 10 px
  * letters, 6 px each at most, 8 px out from the card - and 4 px more.
  */
 export const inputLead = (name: string) => (8 + 6 * name.length + 4) * PX;
-/** A port's diameter. */
-export const PORT = 11 * PX;
-
-/** How large a port is on the screen, in hairlines, where the page is near. */
-const PORT_HAIRS = 9;
+/** How large a port is on the page, in page pixels. */
+export const PORT_PAGE_PX = 9;
+/** The least a port is drawn at, in the screen's pixels, where the page is far. */
+export const PORT_LEAST_SCREEN_PX = 5;
 /** The most a port may be, as a share of its set's or its card's height, on the page. */
 export const PORT_SHARE = 1 / 6;
 
 /**
- * How large a port is, in the page's pixels on its layer: as large on the
- * screen as `PORT_HAIRS` hairlines while the page is near; zoomed out, never
- * more than the port's own size on the page (look `PORT`, 11 px) - it
- * shrinks with the page from there - nor than `PORT_SHARE` of its set's or
- * card's height (`of`, page px). The same at every zoom otherwise: round, a
- * ring a hair thick - or a fifth of it across, where it is that small - or
- * filled, as its state says (the maintainer, 2026-10-28: zoomed out, ports
- * were far too big for their sets).
+ * How large a port is, in the screen's pixels - it is laid out in them,
+ * the page's layer's scale (`--scale`, Workflow2D) undone on it (Port): its
+ * size on the page (`PORT_PAGE_PX`), so it grows and shrinks with the page,
+ * but no more than `PORT_SHARE` of its set's or card's height (`of`, page
+ * px) - and never under `PORT_LEAST_SCREEN_PX` where the page is far. The
+ * same at every zoom otherwise: round, a ring a pixel thick - or a fifth of
+ * it across, where it is that small - or filled, as its state says (the
+ * maintainer, 2026-10-28: zoomed out, ports were far too big for their
+ * sets; 2026-11-11: zoomed in, far too small).
  */
 export function portSize(of?: number): string {
-  const most = Math.min(PORT / PX, of != null && of > 0 ? of * PORT_SHARE : Infinity);
-  return `min(calc(var(--hair, 1px) * ${PORT_HAIRS}), ${most.toFixed(2)}px)`;
+  const onPage = Math.min(PORT_PAGE_PX, of != null && of > 0 ? of * PORT_SHARE : Infinity);
+  return `max(${PORT_LEAST_SCREEN_PX}px, calc(var(--scale, 1) * ${onPage.toFixed(2)}px))`;
 }
 
 /**
@@ -110,11 +130,31 @@ export const SET_PAD = NOMINAL_BOND_LENGTH / 2;
 export const SET_TOP = 36 * PX;
 /** A set holding a table, inside its frame, in px (TableBody): its first rows, and what it is. */
 export const TABLE_PX = { w: 400, h: 196 };
+/** How many of a table's rows its frame shows (ValueBody `TableBody`; model `tableSetSize`). */
+export const TABLE_SHOWN_ROWS = 6;
+/**
+ * A table's body (ValueBody `TableBody`), in its own pixels, each height set
+ * on it as it is drawn - never left to its text: its heads' line, the gap
+ * under it, each row's line, and the line saying what it is - as tall as
+ * its text, so that the set's frame stands as far below its last letters as
+ * beside its first (`SET_PAD`); and the room
+ * before each column after the first, so that a number column's last digit
+ * and the next column's first letter do not run together.
+ */
+export const TABLE_HEAD_PX = 19;
+export const TABLE_GAP_PX = 6;
+export const TABLE_ROW_PX = 16;
+export const TABLE_FOOT_PX = 12;
+export const TABLE_COLUMN_GAP_PX = 16;
+/** How tall a table's body draws, showing up to `TABLE_SHOWN_ROWS` of `rows`: a table's set is made as tall (model `tableSetSize`), and its frame scales it to that (SetFrame). */
+export const tableBodyPx = (rows: number) => TABLE_HEAD_PX + TABLE_GAP_PX + TABLE_ROW_PX * Math.min(rows, TABLE_SHOWN_ROWS) + TABLE_FOOT_PX;
 /** How large a chart is drawn inside its set's frame, in px at the page's own size: its axes, labels and points. */
 export const CHART_PX = { w: 360, h: 260 };
-/** A large result set's summary inside its frame, in px (SummaryBody): what it holds - that it is on no page, and *Open as a table* - a grid of four by three structures, and a chart. */
-export const SUMMARY_PX = { w: 480, h: 448 };
+/** What a large result set of structures drawn says inside its frame, in px: how many, and that they are on no page. */
+export const SUMMARY_PX = { w: 240, h: 64 };
 export const NAME_DOWN = 18 * PX;
+/** How far a frame's tab's words start from its left edge: as far as its icon - 14 px, its middle NAME_DOWN down - stands from its top (pageGl/frameParts; a set's name typed anew, SetFrame). */
+export const TAB_INSET = 11 * PX;
 /** A result set's distance from its step, and between molecules in it: between their ink, half a bond (docs/LOOK.md, *Room*). */
 export const GAP = 64 * PX;
 export const BETWEEN = 24 * PX;
@@ -131,9 +171,14 @@ type Side = { x0: number; x1: number; y0: number; y1: number };
 /** Where a set gives - its right side, half way down; where a result set takes - its left. */
 export const setGives = (b: Side): Pt => ({ x: b.x1, y: (b.y0 + b.y1) / 2 });
 export const setTakes = (b: Side): Pt => ({ x: b.x0, y: (b.y0 + b.y1) / 2 });
-/** Where a step's `k`th input takes, from 0; and where its card meets the lines to its exits' sets. */
+/**
+ * Where a step's `k`th input takes, from 0; and where its `k`th exit gives
+ * (kinds `exitPlace`): each exit a port of its own down the card's right
+ * side, as its inputs are down its left - the line to that exit's set
+ * leaves from it.
+ */
 export const stepTakes = (s: { x: number; y: number }, k: number): Pt => ({ x: s.x, y: s.y - portDown(k) });
-export const stepGives = (s: { x: number; y: number }): Pt => ({ x: s.x + CARD_W, y: s.y - PORT_DOWN });
+export const stepGives = (s: { x: number; y: number }, k = 0): Pt => ({ x: s.x + CARD_W, y: s.y - portDown(k) });
 
 /**
  * The least run across - from where a wire leaves to its input, to the
@@ -206,6 +251,29 @@ export type WireRouted = { pts: Pt[]; way: WireWay; corners?: Pt[] };
  * back (the drawing's; placement goes the one way, as it is now).
  */
 export function wireRoute(p: Pt, q: Pt, ends?: { from?: Side; to?: Side; lead?: number }, around: readonly Side[] = [], was?: WireWay): WireRouted {
+  // (the same wire among the same frames goes the same way: worked out once - a page of sixty steps placed each result set
+  //  routing every wire on it again, each time, the same; and a drag draws each frame the wires it did not move)
+  const key = routeKey(p, q, ends, around, was);
+  const kept = ROUTES.get(key);
+  if (kept) return kept;
+  const routed = routeOf(p, q, ends, around, was);
+  if (ROUTES.size >= ROUTES_MOST) ROUTES.clear();
+  ROUTES.set(key, routed);
+  return routed;
+}
+
+/** Routes worked out (`wireRoute`), by all they depend on; cleared whole once this many are kept. */
+const ROUTES = new Map<string, WireRouted>();
+const ROUTES_MOST = 20_000;
+
+/** All a wire's way depends on, as a key: its ends, the frames it leaves and comes into, its lead, what it goes round, the way it went before. */
+function routeKey(p: Pt, q: Pt, ends: { from?: Side; to?: Side; lead?: number } | undefined, around: readonly Side[], was?: WireWay): string {
+  const side = (f?: Side) => (f ? `${f.x0},${f.x1},${f.y0},${f.y1}` : "-");
+  return `${p.x},${p.y};${q.x},${q.y};${side(ends?.from)};${side(ends?.to)};${ends?.lead ?? "-"};${was ?? "-"};${ends ? "e" : "-"};${around.map(side).join("|")}`;
+}
+
+/** A wire's way, worked out (`wireRoute`, which keeps each). */
+function routeOf(p: Pt, q: Pt, ends?: { from?: Side; to?: Side; lead?: number }, around: readonly Side[] = [], was?: WireWay): WireRouted {
   // (into an input named beside it: level for as long as its name - under it, never through it - the rest as any wire to where that begins)
   if (ends?.lead) {
     const at = { x: q.x - ends.lead, y: q.y };

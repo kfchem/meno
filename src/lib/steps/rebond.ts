@@ -3,7 +3,7 @@
  * one entry's geometry with another's bonds and charges - a conformer of the
  * reactant given the product's bonding, as the start of a restrained
  * minimisation towards the product. The two must hold the same atoms in one
- * numbering (a *Reaction* step writes its products in the reactants'), atom
+ * numbering (an *Atom map* step writes its products in the reactants'), atom
  * by atom; where they do not, nothing is made, and the first atom that
  * differs is said.
  *
@@ -15,6 +15,10 @@
  *   of a name, each still saying the geometry it was worked out at. A
  *   value of a structure (a descriptor's) that is no longer the entry's is
  *   marked not applicable, and said (./restructure).
+ * - **Restraints** (`restraints`, ./restraints) are the bonding entry's
+ *   alone: they hold its bonds - its coordination bonds, the torsions
+ *   across its double bonds - and the entry is bonded as it is. The
+ *   geometry entry's, of the bonding it had, are dropped, and said.
  * - **Group**: *a → b*, the geometry entry's group and the bonding entry's
  *   (each its own id where it has none).
  * - **Lineage**: both entries.
@@ -40,7 +44,7 @@ export function rebonded(geometry: Entry, bonding: Entry, id: string): Rebonded 
   const i = ga.findIndex((a, k) => a.el !== ba[k].el);
   if (i >= 0)
     return {
-      failed: `Atom ${i + 1} is ${ga[i].el} in the geometry and ${ba[i].el} in the bonding: both must hold the same atoms in one numbering (a Reaction step writes its products in the reactants').`,
+      failed: `Atom ${i + 1} is ${ga[i].el} in the geometry and ${ba[i].el} in the bonding: both must hold the same atoms in one numbering (an Atom map step writes its products in the reactants').`,
     };
   // (the bonding a skeleton, its hydrogens not there: no charge or spin to give the entry, as Combine says of a part)
   const said = bonding.species ? [] : ["The bonding has no hydrogens, so the entry's charge and spin are not known either."];
@@ -53,13 +57,20 @@ export function rebonded(geometry: Entry, bonding: Entry, id: string): Rebonded 
     species: bonding.species ? { ...bonding.species, from: { ...bonding.species.from } } : null,
     properties: {
       ...Object.fromEntries(Object.entries(bonding.properties).map(([k, p]) => [k, { ...p }])),
-      ...Object.fromEntries(Object.entries(geometry.properties).map(([k, p]) => [k, { ...p }])),
-      group: { value: `${groupOf(geometry)} → ${groupOf(bonding)}`, unit: "none", status: "computed" },
+      ...Object.fromEntries(Object.entries(geometry.properties).flatMap(([k, p]) => (k === "restraints" ? [] : [[k, { ...p }]]))),
+      ...(bonding.properties.restraints ? { restraints: { ...bonding.properties.restraints } } : {}),
+      group: { value: `${groupOf(geometry)} → ${groupOf(bonding)}`, unit: "none", label: true, status: "computed" },
     },
     status: "done",
   };
+  // (restraints of the bonding the geometry had: not the entry's bonds now)
+  if (geometry.properties.restraints)
+    said.push(`The geometry's restraints were dropped: restraints hold a bonding's bonds, and the entry takes ${bonding.properties.restraints ? "the bonding's" : "the bonding's, which has none"}.`);
   // (values of the structure either was, now another: kept, marked, and said - never shown as current)
-  const { entry, stale } = restructured(made, "Re-bond");
+  const { entry, stale, unknown } = restructured(made, "Re-bond");
   if (stale.length) said.push(`${stale.join(", ")} ${stale.length === 1 ? "was" : "were"} worked out on another structure, so ${stale.length === 1 ? "it is" : "they are"} marked not applicable.`);
+  // (and those not known to be of the entry's structure now: not shown as standing)
+  if (unknown.length)
+    said.push(`${unknown.join(", ")} ${unknown.length === 1 ? "is" : "are"} not known to be of the structure after Re-bond, so ${unknown.length === 1 ? "it is" : "they are"} marked not applicable.`);
   return { entry, said };
 }

@@ -34,6 +34,6 @@ Wait-MenoSettled | Out-Null
 Save-Step "swiped"
 
 # The wheel, two notches in: bigger.
-Invoke-MenoWheel -X 1280 -Y 860 -Notches 2
+Invoke-MenoZoom -X 1280 -Y 860 -Notches 2
 Wait-MenoSettled | Out-Null
 Save-Step "wheeled"

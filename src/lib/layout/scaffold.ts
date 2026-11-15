@@ -84,9 +84,12 @@ export function matchedByRank(a: LayoutInput, b: LayoutInput): number[] | null {
  * every bond between core atoms there between their atoms, of the same
  * order (each in its aromatic form) and no other. The structure's atoms may
  * carry more bonds, out to what is not the core: its groups. Searched atom
- * by atom along the core's bonds, the most bonded first.
+ * by atom along the core's bonds, the most bonded first. Where `alike` is
+ * given, a core atom is matched only to an atom it says is alike too
+ * (`alike(coreAtom, atom)`), within the search - so the `most` found are
+ * all ways that pass it.
  */
-export function coreMatches(core: LayoutInput, input: LayoutInput, most = 24): number[][] {
+export function coreMatches(core: LayoutInput, input: LayoutInput, most = 24, alike?: (v: number, u: number) => boolean): number[][] {
   const c = bareGraph(core, [...core.atoms.keys()]);
   const m = bareGraph(input, [...input.atoms.keys()]);
   const nc = c.atoms.length;
@@ -124,6 +127,9 @@ export function coreMatches(core: LayoutInput, input: LayoutInput, most = 24): n
   const found: number[][] = [];
   const to = new Array<number>(nc).fill(-1);
   const used = new Array<boolean>(nm).fill(false);
+  // (which core atom each atom of the structure is, where it is one: so an atom tried is checked against its own neighbours
+  //  only - every bond between core atoms there between their atoms, and no other - not against every atom placed)
+  const from = new Array<number>(nm).fill(-1);
   const step = (k: number) => {
     if (found.length >= most) return;
     if (k === nc) {
@@ -135,20 +141,18 @@ export function coreMatches(core: LayoutInput, input: LayoutInput, most = 24): n
     const anchor = C.near[v].find((w) => to[w] >= 0);
     const tries = anchor != null ? M.near[to[anchor]] : [...Array(nm).keys()];
     for (const u of tries) {
-      if (used[u] || m.atoms[u].el !== c.atoms[v].el || M.near[u].length < C.near[v].length) continue;
+      if (used[u] || m.atoms[u].el !== c.atoms[v].el || M.near[u].length < C.near[v].length || (alike && !alike(v, u))) continue;
       let ok = true;
-      for (let j = 0; j < k && ok; j++) {
-        const w = seq[j];
-        const want = C.bond(v, w);
-        const have = M.bond(u, to[w]);
-        if (want !== have) ok = false;
-      }
+      for (const w of C.near[v]) if (to[w] >= 0 && M.bond(u, to[w]) !== C.bond(v, w)) ok = false;
+      for (const x of M.near[u]) if (ok && from[x] >= 0 && C.bond(v, from[x]) === undefined) ok = false;
       if (!ok) continue;
       to[v] = u;
       used[u] = true;
+      from[u] = v;
       step(k + 1);
       to[v] = -1;
       used[u] = false;
+      from[u] = -1;
       if (found.length >= most) return;
     }
   };

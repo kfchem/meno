@@ -178,7 +178,7 @@ describe("configurations", () => {
     const degree = new Map<number, number>();
     for (const b of proline.bonds) for (const at of [b.a1, b.a2]) degree.set(at, (degree.get(at) ?? 0) + 1);
     // (the centre is atom 3: OC(=O)[C@@H]1CCCN1)
-    expect(wedgeNarrowAtom({ ...wedges[0], stereoOrient: wedges[0].stereoOrient ?? "principle" }, degree)).toBe(3);
+    expect(wedgeNarrowAtom(wedges[0], degree)).toBe(3);
     // a centre at a ring fusion gets its H drawn, the wedge on it
     const cbs = placedAbbreviation("(S)-CBS", null, L)!;
     expect(cbs.atoms.filter((a) => a.el === "H")).toHaveLength(1);
@@ -267,6 +267,15 @@ describe("simple formulas, read by rule", () => {
     expect(formula("EDC·HCl")).toBe("C8H18ClN3");
     expect(formula("BH3·THF")).toBe("C4H11BO");
     expect(abbreviationOf("BF3·Foo")).toBeUndefined();
+  });
+
+  it("read a full stop typed for the middle dot as one, between two parts of a formula - but not a number's point, nor a SMILES's dot", () => {
+    expect(formula("Na2SO4.10H2O")).toBe(formula("Na2SO4·10H2O"));
+    expect(formula("BF3.OEt2")).toBe(formula("BF3·OEt2"));
+    expect(formula("CeCl3.7H2O")).toBe(formula("CeCl3·7H2O"));
+    // (a dictionary's own, listed with the middle dot)
+    expect(abbreviationOf("NaBO3.4H2O")?.name).toBe(abbreviationOf("NaBO3·4H2O")?.name);
+    for (const no of ["2.5", "CC.O", "O.O", "[Na+].[Cl-]", "c1ccccc1.O", "Na.Cl"]) expect(abbreviationOf(no), no).toBeUndefined();
   });
 
   it("make a Buchwald precatalyst of its phosphine and its generation", () => {

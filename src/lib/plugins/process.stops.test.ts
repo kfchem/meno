@@ -41,7 +41,7 @@ vi.mock("@tauri-apps/api/core", () => ({
     return undefined;
   },
 }));
-vi.mock("@tauri-apps/api/path", () => ({ resolveResource: async (p: string) => `/resources/${p}` }));
+vi.mock("@tauri-apps/api/path", () => ({ appLocalDataDir: async () => "/data", join: async (...parts: string[]) => parts.join("/") }));
 vi.mock("../pyEnv", () => ({
   pyEnvReady: async () => true,
   ensurePyEnv: async () => "/data/uv/plugin-demo/venv/bin/python",
@@ -50,7 +50,7 @@ vi.mock("../pyEnv", () => ({
 
 const { workerOf, stopWorker, workerRunning } = await import("./process");
 
-const demo = { id: "demo", name: "Demo", profile: "plugin-demo", worker: "resources/plugins/demo/worker.py" } as unknown as PythonPlugin;
+const demo = { id: "demo", name: "Demo", profile: "plugin-demo", worker: "plugins/demo/1.0.0/worker.py" } as unknown as PythonPlugin;
 
 /** Lets the page's promises run on (no timer moves). */
 const ticks = async (n = 200) => {

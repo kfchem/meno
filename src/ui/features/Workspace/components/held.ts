@@ -1,4 +1,5 @@
-import { LONG_PRESS_MS, LONG_PRESS_SHOW_MS } from "../constants";
+import { LONG_PRESS_SHOW_MS } from "../constants";
+import { longPressMs } from "../longPress";
 
 /** How quickly the light of a thing let go goes, in ms (HeldLight). */
 export const HELD_FADE_MS = 140;
@@ -18,5 +19,5 @@ export const heldShows = (held: Held, now: number) => held.let == null || now - 
  */
 export function holdProgress(start: number, now: number, letAt?: number): number {
   const t = Math.min(now, letAt ?? now) - start;
-  return Math.min(1, Math.max(0, (t - LONG_PRESS_SHOW_MS) / (LONG_PRESS_MS - LONG_PRESS_SHOW_MS)));
+  return Math.min(1, Math.max(0, (t - LONG_PRESS_SHOW_MS) / (longPressMs() - LONG_PRESS_SHOW_MS)));
 }

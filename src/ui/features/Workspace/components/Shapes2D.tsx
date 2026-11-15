@@ -20,6 +20,7 @@
  * it has a width of its own. What is drawn over it - atoms, bonds, words, arrows - is
  * pressed, not it. Lit along its line while the pointer is on it.
  */
+import { longPressMs } from "../longPress";
 import * as THREE from "three";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useThree } from "@react-three/fiber";
@@ -52,7 +53,7 @@ import {
 import { pageAt } from "../utils/page";
 import { guideScale, guideSides } from "../utils/guiding";
 import { dragSelection } from "../utils/dragSelection";
-import { DOUBLE_CLICK_MS, LONG_PRESS_MS } from "../constants";
+import { DOUBLE_CLICK_MS } from "../constants";
 import { HeldGlow } from "./HeldLight";
 import { type Held } from "./held";
 import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
@@ -328,7 +329,7 @@ const ShapeItem = memo(function ShapeItem({
       s2.selectShapes([s.id]);
       setHeld((h) => (h ? { ...h, done: true } : h));
       move();
-    }, LONG_PRESS_MS);
+    }, longPressMs());
     const onMoveDrag = (mv: PointerEvent) => {
       if (panned || Math.hypot(mv.clientX - from.x, mv.clientY - from.y) < PAN_PX) return;
       panned = true;

@@ -137,6 +137,12 @@ describe("Populations", () => {
     expect(why(null)).toBe("its configuration (R/S, E/Z) was not perceived, so stereoisomers could not be told apart");
     expect(why({ perceived: false, why: "no plugin perceives it" })).toBe("its configuration (R/S, E/Z) was not perceived (no plugin perceives it), so stereoisomers could not be told apart");
     expect(why(perceived("k", [{ kind: "double", atoms: [1, 2], specified: false }]))).toBe("a configuration of it (R/S, E/Z) is left unspecified");
+    // (centres too close to flat to have a configuration, lib/chem/lonePairsIn3d - the test structure's atoms by number, whatever
+    // they are - named where they are all it leaves unspecified; else as any element left so)
+    const flat = (at: number) => ({ kind: "centre" as const, atoms: [at], specified: false, flat: 359 });
+    expect(why(perceived("k", [flat(0)]))).toBe("O (atom 1) is too close to flat to have a configuration");
+    expect(why(perceived("k", [flat(0), flat(1), flat(2)]))).toBe("O (atom 1), H (atom 2) and H (atom 3) are too close to flat to have a configuration");
+    expect(why(perceived("k", [flat(0), { kind: "double", atoms: [1, 2], specified: false }]))).toBe("a configuration of it (R/S, E/Z) is left unspecified");
     // (one perceived with no stereogenic element - methylcyclohexane - weighs as any other)
     expect(why(perceived())).toBeUndefined();
   });

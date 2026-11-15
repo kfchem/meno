@@ -1,18 +1,35 @@
 /**
  * Meno's steps on structures, as a workflow's steps run them
- * (docs/STRUCTURE-STEPS.md): *Tag*, *Species*, *Combine* and *Measure*, each
+ * (docs/STRUCTURE-STEPS.md): *Tag*, *Species*, *Combine*, *Measure* and
+ * *Restraints*, and those of two inputs, *Merge*, *Re-bond*, *Compare
+ * bonding*, *Torsion restraints* and *Atom map* - each
  * a set's entries read as Meno's entry record (`entryOfSet`), the step's own
  * function done on them (lib/nodes, lib/steps), and each entry given back as
  * a step's entry (`setEntryOfEntry`) - all it held kept where it is that
  * entry still, what was worked out at another structure or state never
  * carried. Each says what it did; nothing it does not pass on goes unsaid.
  */
-import type { Entry } from "../../../../lib/entry";
+import { geometryKey, type Entry } from "../../../../lib/entry";
 import { tag } from "../../../../lib/nodes/tag";
+import { merge } from "../../../../lib/nodes/merge";
+import { matchedOn, valuesOn } from "../../../../lib/nodes/match";
+import { rebonded } from "../../../../lib/steps/rebond";
+import { atomsFromOne, comparedBonding, matchingReference, type CompareOptions } from "../../../../lib/steps/compareBonding";
 import { combined } from "../../../../lib/steps/combine";
 import { measured, measurementName, measurementsTyped } from "../../../../lib/steps/measure";
 import { speciesNeeds, speciesTyped, withSpecies } from "../../../../lib/steps/species";
-import { CALC_CARRIED, entryOfSet, setEntryOfEntry, type SetEntry } from "./entries";
+import { NONE_FOUND, NUMBERING, OWN_NUMBERING, restraintRows, restraintsTable, torsionRowsFromReference, torsionRowsTyped, torsionsUnlike, torsionUnlikeText, type NothingRow, type RestraintRow } from "../../../../lib/steps/restraints";
+import type { OptionValues } from "../../../../lib/options";
+import { atomMapNeeds, compareTorsionsNeeds, ONE_EXIT, restraintsTyped, torsionsRead } from "./kinds";
+import { bondChangesTable, CHANGE, CHANGE_WORDS, MAPPED_ENTRY, renumberedEntry } from "../../../../lib/steps/reaction";
+import { MODE_NAMES, modeOnAtomsEntry } from "../../../../lib/steps/modeOnAtoms";
+import { mapOnto, type BondChangeRow } from "../../../../lib/chem/reactionMap";
+import type { Molecule } from "../../../../lib/chem/molecule";
+import { atomsOfRows, type Table } from "../../../../lib/table";
+import { displacedEntry } from "../../../../lib/steps/vibrations";
+import { CALC_CARRIED, calcRenumbered, compoundLetter, entryOfSet, entryState, FINISHED, hash, keptRenumbered, setEntryOfEntry, type SetEntry } from "./entries";
+import { convergedOf } from "./converged";
+import { ATOM_MAP_PAIR, matchesOf } from "./pairs";
 import type { Holds3D } from "./kinds";
 import type { Outcome3D } from "./meno";
 
@@ -112,18 +129,715 @@ export function combinedSet(entries: readonly SetEntry[]): Outcome3D {
 }
 
 /** *Measure* (lib/steps `measured`): each entry with its measurements as properties; one that does not apply to it says why on itself. */
-export function measuredSet(entries: readonly SetEntry[], holds: Holds3D, text: string): Outcome3D {
-  const typed = measurementsTyped(text);
-  if ("why" in typed) return { ok: false, said: typed.why };
-  const made = entries.map((e, i) => measured(entryOfSet(e, String(i)), typed.atoms));
+export function measuredSet(entries: readonly SetEntry[], holds: Holds3D, text: string, fromTable?: { table: Table | null; rows: string }): Outcome3D {
+  // (the atoms of each entry: typed, the same for all; or each row's of the table - every row on every entry, or those whose
+  //  value in the column named is the entry's value of the property of that name - read as the table's columns say they count them)
+  let each: (e: SetEntry) => number[][];
+  if (fromTable) {
+    if (!fromTable.table) return { ok: false, said: "Nothing comes into Atoms" };
+    const read = atomsOfRows(fromTable.table);
+    if ("why" in read) return { ok: false, said: read.why };
+    const name = fromTable.rows.trim();
+    const column = name ? fromTable.table.columns.findIndex((c) => c.name === name) : -1;
+    if (name && column < 0) return { ok: false, said: `The table has no column ${name}` };
+    const cells = fromTable.table.rows.map((r) => (column >= 0 ? r[column] : null));
+    each = (e) => {
+      const value = e.properties?.[name]?.value;
+      return read.rows.filter((_, k) => !name || (value != null && String(cells[k]) === String(value)));
+    };
+  } else {
+    const typed = measurementsTyped(text);
+    if ("why" in typed) return { ok: false, said: typed.why };
+    each = () => typed.atoms;
+  }
+  const atoms = entries.map(each);
+  const made = entries.map((e, i) => measured(entryOfSet(e, String(i)), atoms[i]));
   // (each measurement this step made that does not apply, or failed: said on the entry, counted here)
-  const names = typed.atoms.map(measurementName);
-  const notDone = made.reduce((n, e) => n + names.filter((k) => e.properties[k] && e.properties[k].status !== "computed").length, 0);
+  const asked = atoms.reduce((n, a) => n + a.length, 0);
+  const notDone = made.reduce((n, e, i) => n + atoms[i].map(measurementName).filter((k) => e.properties[k] && e.properties[k].status !== "computed").length, 0);
+  const none = atoms.filter((a) => !a.length).length;
   return {
     ok: true,
     holds,
     kept: backEach(entries, made),
     aside: [],
-    said: `${plural(typed.atoms.length, "measurement")} on ${plural(entries.length, "entry", "entries")}${notDone ? `, ${notDone} not measured` : ""}`,
+    said: `${plural(asked, "measurement")} on ${plural(entries.length, "entry", "entries")}${notDone ? `, ${notDone} not measured` : ""}${none ? `, ${none} with no row of the table` : ""}`,
   };
+}
+
+/** A property written on an entry by a step: a text, of no unit - why it was set aside, how it is bonded, what it matches. */
+const said = (value: string) => ({ value, unit: "none" as const, status: "computed" as const });
+/** An entry with a text property of a step's written on it. */
+export const withSaid = (e: SetEntry, name: string, value: string): SetEntry => ({ ...e, properties: { ...e.properties, [name]: said(value) } });
+/** An entry as a step's line names it: its compound's letter and its number, "b #2". */
+const named = (e: SetEntry) => `${compoundLetter(e.compound)} #${e.number}`;
+/** Why an entry was set aside, as the steps of two inputs write it on it (`set_aside`): to read in its set's table, and to filter on. */
+export const SET_ASIDE = "set_aside";
+/** How an entry is bonded against its reference, as *Compare bonding* writes it on one that is not the same: its differences, or why it was not compared. */
+export const BONDING = "bonding";
+
+/**
+ * *Merge* (lib/nodes `merge`): two sets of one kind made one, *First*'s
+ * entries then *Second*'s - all of them, or one for each value of a
+ * property - those set aside each saying which it gave way to. A conformer
+ * set's compounds stay apart: *Second*'s are numbered on after *First*'s.
+ */
+export function mergedSet(first: readonly SetEntry[], second: readonly SetEntry[], holds: Holds3D, keep: "all" | "one", property: string): Outcome3D {
+  const name = property.trim();
+  if (keep === "one" && !name) return { ok: false, said: "Name the property to keep one of each" };
+  const past = first.reduce((n, e) => Math.max(n, e.compound + 1), 0);
+  const all = [...first, ...second.map((e) => ({ ...e, compound: e.compound + past }))];
+  const asEntry = (i: number) => entryOfSet(all[i], String(i));
+  const out = merge(
+    [first.map((_, i) => asEntry(i)), second.map((_, k) => asEntry(first.length + k))],
+    { keep: keep === "one" ? { onePer: name } : "all" },
+  );
+  if (!out.ok) return out;
+  const asideWhy = (e: { status: unknown }) => (typeof e.status === "object" && e.status && "aside" in e.status ? String(e.status.aside) : "");
+  // (each as it came - a step's entry, never made again - its why written on it, naming the one it gave way to)
+  const back = (id: string) => all[Number(id)];
+  const keptBy = new Map(out.exits.done.map((e) => [e.id, back(e.id)]));
+  const aside = out.exits.rest.map((e) => withSaid(back(e.id), SET_ASIDE, asideWhy(e).replace(/as (\d+), which was kept/, (_, id) => `as ${named(keptBy.get(id) ?? back(id))}, which was kept`)));
+  return { ok: true, holds, kept: out.exits.done.map((e) => back(e.id)), aside, said: out.said };
+}
+
+/**
+ * *Re-bond* (lib/steps `rebonded`): each entry of *Geometry* given the
+ * bonds and charges of an entry of *Bonding* - each with each, or the one
+ * that has the same value of a property - as one entry of its own; where
+ * the two do not hold the same atoms in one numbering, or *Geometry*'s holds
+ * frames, the geometry entry set aside with why, naming the bonding entry.
+ * Re-bonded entries are grouped by the geometry's compound and the bonding
+ * entry, each group a compound of its own.
+ */
+export function rebondedSet(geometry: readonly SetEntry[], bonding: readonly SetEntry[], holds: Holds3D, pairs: "each" | "property", property: string): Outcome3D {
+  const name = property.trim();
+  if (pairs === "property" && !name) return { ok: false, said: "Name the property to pair them on" };
+  const gs = geometry.map((e, i) => entryOfSet(e, String(i)));
+  const bs = bonding.map((e, i) => entryOfSet(e, String(i)));
+  // (each re-bonded without where it stood and how it ended - its number, state, failure - which are of the set it came from,
+  //  and which Meno gives the re-bonded entry anew: none of them a value of a structure to mark. Its group names the new one)
+  const bare = (e: Entry): Entry => {
+    const { number: _n, state: _s, failure: _f, ...properties } = e.properties;
+    return { ...e, properties };
+  };
+  // (the pairs: each with each, or each geometry with the one bonding entry of its value)
+  const matched = pairs === "property" ? matchedOn(gs, bs, name, "Bonding") : null;
+  const kept: SetEntry[] = [];
+  const aside: SetEntry[] = [];
+  const notes = new Set<string>();
+  const groups = new Map<string, { compound: number; count: number }>();
+  geometry.forEach((g, i) => {
+    const onto = matched ? ("index" in matched[i] ? [matched[i].index] : []) : bonding.map((_, k) => k);
+    if (matched && "why" in matched[i]) {
+      aside.push(withSaid(g, SET_ASIDE, `not paired: ${matched[i].why}`));
+      return;
+    }
+    for (const k of onto) {
+      const r = rebonded(bare(gs[i]), bare(bs[k]), `${i}:${k}`);
+      if ("failed" in r) {
+        aside.push(withSaid(g, SET_ASIDE, `onto ${named(bonding[k])}: ${r.failed}`));
+        continue;
+      }
+      r.said.forEach((n) => notes.add(n));
+      const key = `${g.compound}|${k}`;
+      const group = groups.get(key) ?? { compound: groups.size, count: 0 };
+      group.count += 1;
+      groups.set(key, group);
+      const made = setEntryOfEntry(r.entry, { compound: group.compound, number: group.count });
+      if (made) kept.push(made);
+    }
+  });
+  const line = [`${plural(kept.length, "entry", "entries")} re-bonded${pairs === "property" ? `, paired on ${name}` : ", each with each"}`];
+  if (aside.length) line.push(`${aside.length} not re-bonded`);
+  return { ok: true, holds, kept, aside, said: [line.join(" \u00b7 "), ...notes].join(". ") };
+}
+
+/** *Compare bonding*'s options as its card gives them: against which reference, what it writes of the match, what it compares, and what it passes over. */
+export type CompareStep = {
+  reference: "each" | "property";
+  property: string;
+  writes: string;
+  from: string;
+  rs: boolean;
+  ez: boolean;
+  /** Every centre by its atoms' numbers, as ConfoTS's check reads them (lib/steps/compareBonding `numberedCentres`). */
+  numbered: boolean;
+  atoms: string;
+  elements: string;
+  /** How far, times their covalent radii together, two atoms may stand and be bonded - and at least how far over them, in Å. */
+  reach: number;
+  floor: number;
+};
+
+/**
+ * *Compare bonding* (lib/steps `comparedBonding`): whether each entry's
+ * geometry is bonded as its reference is - the one of *Reference* with the
+ * same value of a property, or each reference in turn, the first it is
+ * bonded as named on it (`writes`: its number, from 1, or its value of
+ * `from`; "none" where it is none). The same, out of *Same*; otherwise out
+ * of *Different*, its differences written on it - or why it could not be
+ * compared (another numbering, frames, no reference to pair with), counted
+ * apart.
+ */
+export function comparedSet(entries: readonly SetEntry[], references: readonly SetEntry[], holds: Holds3D, o: CompareStep): Outcome3D {
+  const atoms = atomsFromOne(o.atoms);
+  if ("why" in atoms) return { ok: false, said: atoms.why };
+  const elements = o.elements.split(/[\s,]+/).filter(Boolean);
+  if (o.reference === "property" && !o.property.trim()) return { ok: false, said: "Name the property to pair them on" };
+  if (o.reference === "each" && !o.writes.trim()) return { ok: false, said: "Name the property the match is written as" };
+  if (!(o.reach >= 1 && o.reach <= 2)) return { ok: false, said: "Bonded within must be from 1 to 2 times the sum of the covalent radii" };
+  if (!(o.floor >= 0 && o.floor <= 1)) return { ok: false, said: "At least over the sum must be from 0 to 1 Å" };
+  const options: CompareOptions = { rs: o.rs, ez: o.ez, numbered: o.numbered, passOver: { atoms, elements }, reach: o.reach, floor: o.floor };
+  const es = entries.map((e, i) => entryOfSet(e, String(i)));
+  const rs = references.map((e, i) => entryOfSet(e, String(i)));
+  const kept: SetEntry[] = [];
+  const aside: SetEntry[] = [];
+  let notCompared = 0;
+  const different = (e: SetEntry, why: string) => aside.push(withSaid(e, BONDING, why));
+  const unpaired = (e: SetEntry, why: string) => {
+    notCompared++;
+    different(e, `not compared: ${why}`);
+  };
+  if (o.reference === "property") {
+    const matched = matchedOn(es, rs, o.property.trim(), "Reference");
+    entries.forEach((e, i) => {
+      const m = matched[i];
+      if ("why" in m) return unpaired(e, m.why);
+      const r = comparedBonding(es[i], rs[m.index], options);
+      if ("failed" in r) return unpaired(e, r.failed);
+      if (r.same) kept.push(e);
+      else different(e, `different: ${r.differences.join(" ")}`);
+    });
+  } else {
+    const writes = o.writes.trim();
+    const from = o.from.trim();
+    // (what is written of the reference it is bonded as: its value of `from` where one is chosen - else its number among them, from 1)
+    const of = (k: number) => {
+      const p = rs[k].properties[from];
+      return from ? (p && p.status === "computed" && (typeof p.value === "string" || typeof p.value === "number") ? String(p.value) : `none of its own (${from})`) : `reference ${k + 1}`;
+    };
+    entries.forEach((e, i) => {
+      const k = matchingReference(es[i], rs, options);
+      if (k != null) return kept.push(withSaid(e, writes, of(k)));
+      // (with one reference, what differs from it; with several, that it is none of them - each one's differences are its own)
+      const one = rs.length === 1 ? comparedBonding(es[i], rs[0], options) : null;
+      if (one && "failed" in one) return unpaired(withSaid(e, writes, "none"), one.failed);
+      different(withSaid(e, writes, "none"), one && !one.same ? `different: ${one.differences.join(" ")}` : `bonded as none of the ${rs.length} references`);
+    });
+  }
+  const line = [`${kept.length} same`, `${aside.length - notCompared} different`, ...(notCompared ? [`${notCompared} not compared`] : [])];
+  return { ok: true, holds, kept, aside, said: line.join(" \u00b7 ") };
+}
+
+
+/** The ID of an entry its rows are made for (`on`), and the numbering it is in (lib/steps `NUMBERING`): none where it has no such ID. */
+function rowIdOf(e: SetEntry, on: string): string | null {
+  const p = e.properties?.[on];
+  return p?.status === "computed" && (typeof p.value === "string" || typeof p.value === "number") ? String(p.value) : null;
+}
+function numberingOf(e: SetEntry): string {
+  const n = e.properties?.[NUMBERING];
+  return n?.status === "computed" && typeof n.value === "string" ? n.value : OWN_NUMBERING;
+}
+
+/**
+ * *Restraints* (lib/steps `restraintRows`): a table of restraints, a row for
+ * each, made of each entry from itself - its coordination bonds at the
+ * factor given, the pairs typed at their distance, the atoms typed fixed -
+ * each row for that entry by the value of the property named (an ID a step
+ * wrote: question A), and in the numbering it has now (`NUMBERING`). The
+ * entries are not passed on: a step that holds restraints takes them in its
+ * *Restraints* input. One it cannot make rows for - no such ID, an ID
+ * another entry has too, an atom it has not - out of *Failed*, saying why.
+ */
+export function restrainedSet(entries: readonly SetEntry[], holds: Holds3D, v: OptionValues): Outcome3D {
+  const typed = restraintsTyped(v);
+  if ("why" in typed) return { ok: false, said: typed.why };
+  const { on } = typed;
+  const aside: SetEntry[] = [];
+  const rows: RestraintRow[] = [];
+  const total = { coordination: 0, distances: 0, fixed: 0, none: 0 };
+  const nothing: NothingRow[] = [];
+  // (each entry's ID - a text, a number, as it says it - and those two or more entries share: a row for one would be the other's too)
+  const ids = entries.map((e) => rowIdOf(e, on));
+  const shared = new Set(ids.filter((id, i) => id != null && ids.indexOf(id) !== i));
+  entries.forEach((was, i) => {
+    const refuse = (why: string) => aside.push({ ...was, failed: { kind: "refused", why } });
+    const id = ids[i];
+    if (id == null) return refuse(`It has no ${on} to make its rows for: give it one (Tag)`);
+    if (shared.has(id)) return refuse(`Its ${on}, ${id}, is another entry's here too: rows made for it would be both's`);
+    const r = restraintRows(entryOfSet(was, String(i)), typed.asked);
+    if ("failed" in r) return refuse(r.failed);
+    for (const row of r.rows) {
+      rows.push({ ...row, for: id, on, numbering: numberingOf(was) });
+      if (row.restraint.kind === "fixed") total.fixed += row.restraint.atoms.length;
+      else if (row.why.startsWith("coordination")) total.coordination++;
+      else total.distances++;
+    }
+    if (!r.rows.length) {
+      total.none++;
+      nothing.push({ for: id, on, numbering: numberingOf(was), why: NONE_FOUND });
+    }
+  });
+  const made = entries.length - aside.length;
+  const said = [`${plural(rows.length, "row")} for ${plural(made, "entry", "entries")}`];
+  if (typed.asked.coordination != null) said.push(total.coordination ? `${plural(total.coordination, "coordination bond")} held` : "no coordination bonds");
+  if (total.distances) said.push(`${plural(total.distances, "pair")} at their distance`);
+  if (total.fixed) said.push(`${plural(total.fixed, "atom")} fixed`);
+  // (an entry it made no row for: said - a step holding these takes none for it, and refuses it)
+  if (total.none) said.push(`${plural(total.none, "entry", "entries")} with none to hold`);
+  if (aside.length) said.push(`${aside.length} failed`);
+  return { ok: true, holds, kept: [], aside, said: said.join(" \u00b7 "), tables: { [ONE_EXIT]: restraintsTable(rows, nothing) } };
+}
+
+/** Each entry's reference among `references`, as the step's *Against* says: the one there is, or the one with the same value of a property - or why not. */
+function referencesOf(es: readonly Entry[], rs: readonly Entry[], property?: string): ({ index: number } | { why: string })[] | { why: string } {
+  // (a match's why as a why of its own, as Failed says it: begun with a capital)
+  if (property) return matchedOn(es, rs, property, "Reference").map((m) => ("why" in m ? { why: m.why.charAt(0).toUpperCase() + m.why.slice(1) } : m));
+  if (rs.length !== 1) return { why: `Against the one reference, but ${rs.length} came into Reference: match them on a property` };
+  return es.map(() => ({ index: 0 }));
+}
+
+/**
+ * *Torsion restraints*: a table of torsion restraints (lib/steps
+ * `torsionRowsTyped`, `torsionRowsFromReference`), a row for each, each for
+ * its entry by the ID named, in the numbering it has: the torsions typed,
+ * each at the angle typed; or, `references` wired, each torsion across its
+ * reference's double bonds unlike here - at 180° where trans there, or at
+ * the reference's own angle. Each held by its strength, or exactly. One it
+ * cannot make rows for - no ID, an ID another has too, no reference, three
+ * atoms on a line - out of *Failed*, saying why.
+ */
+export function torsionsSet(entries: readonly SetEntry[], references: readonly SetEntry[] | null, holds: Holds3D, v: OptionValues): Outcome3D {
+  const r = torsionsRead(v);
+  if ("why" in r) return { ok: false, said: r.why };
+  if ("from" in r && !references) return { ok: false, said: "Nothing comes into Reference: wire the reference, or type the torsions" };
+  if ("typed" in r && references) return { ok: false, said: "A reference is wired, and the torsions are typed: choose From the reference, or take its wire away" };
+  const es = entries.map((e, i) => entryOfSet(e, String(i)));
+  const rs = (references ?? []).map((e, i) => entryOfSet(e, String(i)));
+  const matched = "from" in r ? referencesOf(es, rs, r.property) : es.map(() => ({ index: -1 }));
+  if (!Array.isArray(matched)) return { ok: false, said: matched.why };
+  const ids = entries.map((e) => rowIdOf(e, r.on));
+  const shared = new Set(ids.filter((id, i) => id != null && ids.indexOf(id) !== i));
+  const aside: SetEntry[] = [];
+  const rows: RestraintRow[] = [];
+  let none = 0;
+  let notHeld = 0;
+  const nothing: NothingRow[] = [];
+  entries.forEach((e, i) => {
+    const refuse = (why: string) => aside.push({ ...e, failed: { kind: "refused", why } });
+    const id = ids[i];
+    if (id == null) return refuse(`It has no ${r.on} to make its rows for: give it one (Tag)`);
+    if (shared.has(id)) return refuse(`Its ${r.on}, ${id}, is another entry's here too: rows made for it would be both's`);
+    const m = matched[i];
+    if ("why" in m) return refuse(m.why);
+    const made = "typed" in r ? torsionRowsTyped(es[i], r.typed, r.target, r.hold) : torsionRowsFromReference(es[i], rs[m.index], r.from, r.hold);
+    if ("failed" in made) return refuse(made.failed);
+    if ("notHeld" in made && made.notHeld) notHeld++;
+    // (none to hold - not one with something found that cannot be held here: that one is no "nothing to hold", and is refused)
+    else if (!made.rows.length) {
+      none++;
+      nothing.push({ for: id, on: r.on, numbering: numberingOf(e), why: NONE_FOUND });
+    }
+    for (const x of made.rows) rows.push({ ...x, for: id, on: r.on, numbering: numberingOf(e) });
+  });
+  const made = entries.length - aside.length;
+  const said = [`${plural(rows.length, "row")} for ${plural(made, "entry", "entries")}`];
+  // (one given no row - its torsions all as the reference's, or, at 180°, unlike only across a double bond cis there, not held:
+  //  none to hold - said; a step holding these refuses it, as one no row is for)
+  if (none) said.push(`${plural(none, "entry", "entries")} with none to hold`);
+  // (a double bond with no trans torsion in its reference, unlike here: 180° where trans cannot hold it - said, with what can)
+  if (notHeld) said.push(`${plural(notHeld, "entry", "entries")} with a double bond cis in the reference not held: choose Held at: the reference's own angle`);
+  if (aside.length) said.push(`${aside.length} failed`);
+  return { ok: true, holds, kept: [], aside, said: said.join(" \u00b7 "), tables: { [ONE_EXIT]: restraintsTable(rows, nothing) } };
+}
+
+/** The properties *Compare torsions* writes on each entry: how many torsions are unlike its reference's, and which. */
+export const TORSIONS_UNLIKE_COUNT = "torsions unlike reference";
+export const TORSIONS_UNLIKE = "torsions unlike";
+
+/**
+ * *Compare torsions* (lib/steps `torsionsUnlike`): each entry against its
+ * reference - the one of *Reference*, or the one with the same value of a
+ * property - its torsions across the reference's double bonds unlike here,
+ * counted and named on it, for a *Filter* to split on (the maintainer,
+ * 2026-10-27: Meno writes the count, the chemist filters). Every entry
+ * passes on; one it cannot set against a reference out of *Failed*.
+ */
+export function comparedTorsionsSet(entries: readonly SetEntry[], references: readonly SetEntry[], holds: Holds3D, v: OptionValues): Outcome3D {
+  const needs = compareTorsionsNeeds(v);
+  if (needs) return { ok: false, said: needs };
+  const es = entries.map((e, i) => entryOfSet(e, String(i)));
+  const rs = references.map((e, i) => entryOfSet(e, String(i)));
+  const matched = referencesOf(es, rs, v.reference === "property" ? String(v.property).trim() : undefined);
+  if (!Array.isArray(matched)) return { ok: false, said: matched.why };
+  const kept: SetEntry[] = [];
+  const aside: SetEntry[] = [];
+  let unlike = 0;
+  let cisOnly = 0;
+  entries.forEach((e, i) => {
+    const m = matched[i];
+    const u = "why" in m ? { failed: m.why } : torsionsUnlike(es[i], rs[m.index]);
+    if ("failed" in u) return aside.push({ ...e, failed: { kind: "refused", why: u.failed } });
+    if (u.unlike.length) unlike++;
+    if (u.cisOnly) cisOnly++;
+    const text = u.unlike.map((x) => torsionUnlikeText(es[i], x)).join("; ");
+    kept.push({ ...e, properties: { ...e.properties, [TORSIONS_UNLIKE_COUNT]: { value: u.unlike.length, unit: "none", status: "computed" }, [TORSIONS_UNLIKE]: said(text || "none") } });
+  });
+  const line = [`${plural(kept.length, "entry", "entries")} compared`, `${unlike} with torsions unlike the reference's`];
+  // (a reference's double bond with no trans torsion, checked by its cis ones: said, never passed over)
+  if (cisOnly) line.push(`${plural(cisOnly, "entry", "entries")} checked by a cis torsion where the reference has no trans one`);
+  if (aside.length) line.push(`${aside.length} failed`);
+  return { ok: true, holds, kept, aside, said: line.join(" \u00b7 ") };
+}
+
+/** A step's entry as the atom mapper reads a structure: its atoms where its places are, its bonds. */
+export const moleculeOfEntry = (e: SetEntry): Molecule => ({
+  atoms: e.atoms.map((a, i) => ({ ...a, x: e.xyz[3 * i], y: e.xyz[3 * i + 1], z: e.xyz[3 * i + 2] })),
+  bonds: e.bonds.map((b) => ({ ...b })),
+});
+
+/** What the atom mapper made of an Atom map's entries (lib/chem/reactionMap `mapOnto`), worked out here or in a worker: of each reference, the sides matched with it. */
+export type EntriesMapped = ReturnType<typeof mapOnto>;
+
+/** An Atom map's mapping, one reference at a time: the reference's side (its entries, by place in *Reference*), and each side mapped onto it (each its entries, by place in *Molecules*). */
+export type AtomMapGroup = { reference: number[]; sides: number[][] };
+
+/** An entry's formal charge as it is in use - given, or as its atoms say it - a bare skeleton's none, counted 0 (an Atom map refuses it first). */
+const chargeIn = (e: SetEntry): number => entryOfSet(e, "").species?.charge ?? 0;
+
+/**
+ * What an Atom map maps onto what (`AtomMapGroup`): each input's entries
+ * each a side of its own, or all one side together - or, matched on a
+ * property, one side together for each value of it - finished, and with
+ * their hydrogens - or why it cannot map at all: options it still needs,
+ * not one reference where it is against the one, or the sides in order not
+ * as many on the two inputs. A side it does not map, with why, is in
+ * `aside`: each of its entries. `sides` is how many sides *Molecules* made,
+ * mapped or not. A side whose total charge is not its reference side's is
+ * not mapped: its reference is what it is mapped onto, one system to one.
+ */
+export function atomMapPlan(entries: readonly SetEntry[], references: readonly SetEntry[], v: OptionValues): { groups: AtomMapGroup[]; aside: { entry: number; why: string }[]; sides: number } | { refused: string } {
+  const needs = atomMapNeeds(v);
+  if (needs) return { refused: needs };
+  const together = { entries: v.moleculesAre === "together", reference: v.referenceIs === "together" };
+  const by = v.reference === "order" ? "order" : v.reference === "property" ? "property" : "one";
+  if (by === "one" && !together.reference && references.length !== 1)
+    return { refused: `Against the one reference, but ${references.length} came into Reference: match them on a property, or take the reference as one side` };
+  // (a reference taken as one side, none come into it: a side with nothing to map onto)
+  if (by === "one" && together.reference && !references.length) return { refused: "Nothing comes into Reference" };
+  const eachOf = (n: number) => Array.from({ length: n }, (_, i) => [i]);
+  const allOf = (n: number) => (n ? [Array.from({ length: n }, (_, i) => i)] : []);
+  // (a side: its entries, by place in *Molecules*, and the reference side it goes onto - by place in the reference's sides - or why it goes onto none)
+  type Side = { entries: number[]; to: { ref: number } | { why: string } };
+  let refSides: number[][];
+  let sides: Side[];
+  if (by === "property") {
+    const name = String(v.property).trim();
+    const valuesE = valuesOn(entries.map((e, i) => entryOfSet(e, String(i))), name);
+    const valuesR = valuesOn(references.map((e, i) => entryOfSet(e, String(i))), name);
+    // (the entries that have a value, each value's together - or each its own, the value still the one it is matched on)
+    const sidesOn = (values: typeof valuesE, apart: boolean) => {
+      const out: { entries: number[]; key?: string; said?: string; why?: string }[] = [];
+      const at = new Map<string, number>();
+      values.forEach((x, i) => {
+        if ("why" in x) return void out.push({ entries: [i], why: x.why });
+        const k = at.get(x.key);
+        if (apart || k == null) {
+          if (!apart) at.set(x.key, out.length);
+          out.push({ entries: [i], key: x.key, said: x.said });
+        } else out[k].entries.push(i);
+      });
+      return out;
+    };
+    const refs = sidesOn(valuesR, !together.reference).filter((x) => x.key != null);
+    refSides = refs.map((x) => x.entries);
+    sides = sidesOn(valuesE, !together.entries).map((x) => {
+      if (x.key == null) return { entries: x.entries, to: { why: `not paired: ${x.why}` } };
+      const found = refs.flatMap((r, k) => (r.key === x.key ? [k] : []));
+      if (found.length === 1) return { entries: x.entries, to: { ref: found[0] } };
+      const plain = !together.entries && !together.reference;
+      const why = found.length ? `${found.length} entries of Reference have its ${name}, ${x.said}` : plain ? `no entry of Reference has its ${name}, ${x.said}` : `no reference with ${name} = ${x.said}`;
+      return { entries: x.entries, to: { why: `not paired: ${why}` } };
+    });
+  } else {
+    refSides = together.reference ? allOf(references.length) : eachOf(references.length);
+    const own = (together.entries ? allOf(entries.length) : eachOf(entries.length)).map((side) => ({ entries: side }));
+    if (by === "order") {
+      // (the k-th side onto the k-th: Path search's pairing, and its words)
+      const m = matchesOf(own.map((x) => entries[x.entries[0]]), refSides.map((r) => references[r[0]]), "order", "", ATOM_MAP_PAIR);
+      if ("ends" in m === false) return { refused: (m as { why: string }).why };
+      sides = own.map((x, k) => ({ entries: x.entries, to: { ref: k } }));
+    } else {
+      if (refSides[0]?.some((i) => references[i].skeleton)) return { refused: "The reference has no hydrogens: every atom must map, hydrogens included" };
+      sides = own.map((x) => ({ entries: x.entries, to: { ref: 0 } }));
+    }
+  }
+  const groups = new Map<number, number[][]>();
+  const aside: { entry: number; why: string }[] = [];
+  for (const { entries: side, to } of sides) {
+    const said = (why: string) => side.forEach((entry) => aside.push({ entry, why }));
+    const unfinished = side.find((i) => entryState(entries[i]) !== FINISHED);
+    if (unfinished != null) {
+      said(`not finished: ${side.length > 1 ? `${named(entries[unfinished])} is ` : ""}${entryState(entries[unfinished])}`);
+      continue;
+    }
+    const bare = side.find((i) => entries[i].skeleton);
+    if (bare != null) {
+      said(`${side.length > 1 ? `${named(entries[bare])} has` : "it has"} no hydrogens: every atom must map, hydrogens included`);
+      continue;
+    }
+    if ("why" in to) {
+      said(to.why);
+      continue;
+    }
+    if (refSides[to.ref].some((i) => references[i].skeleton)) {
+      said("its reference has no hydrogens: every atom must map, hydrogens included");
+      continue;
+    }
+    // (one system onto one system: the charge it has is the charge its reference has - the calculations after take one charge each)
+    const here = side.reduce((n, i) => n + chargeIn(entries[i]), 0);
+    const there = refSides[to.ref].reduce((n, i) => n + chargeIn(references[i]), 0);
+    if (here !== there) {
+      said(`charge ${here} here, ${there} in the reference`);
+      continue;
+    }
+    groups.set(to.ref, [...(groups.get(to.ref) ?? []), side]);
+  }
+  return { groups: [...groups].map(([k, ss]) => ({ reference: refSides[k], sides: ss })), aside, sides: sides.length };
+}
+
+/**
+ * *Atom map* (lib/chem/reactionMap `mapOnto`, lib/steps/reaction): each
+ * side - an entry of *Molecules*, or all of them together - mapped onto its
+ * reference - the one of *Reference*, all of them together, or the one with
+ * the same value of a property - atom for atom and hydrogens too, and
+ * written in its numbering, by its first map or by every map: a reaction's
+ * products onto its reactants, a species' conformers onto it. The bonds
+ * each map forms, breaks or changes go into *Bond changes*, a table; where
+ * bonds are to stay the same, a side whose map changes any is not mapped. A
+ * side not finished, with no hydrogens, with no reference to pair with, or
+ * that does not map one to one, is set aside with why - never passed on as
+ * mapped. A mapped entry keeps its energy and its imaginary frequencies, of
+ * its geometry however it is numbered, and one numbered as it was keeps all
+ * it held. A renumbered one keeps what its energy is of - its calculation's
+ * program and level, how it was made - so that a compound's conformers,
+ * some renumbered and some not, stay one calculation's, their energies in
+ * one list; its calculation's results follow it, renumbered, but those
+ * that cannot be and the files they were read from, numbered as it was,
+ * and the line says so. Several entries mapped as one side come out as
+ * one, in the places the map set them in, carrying none of their own
+ * values.
+ * `mapped`, where the mapping was worked out already (in a worker): for each
+ * of `atomMapPlan`'s groups, its sides mapped, in order.
+ */
+export function atomMapSet(entries: readonly SetEntry[], references: readonly SetEntry[], holds: Holds3D, v: OptionValues, mapped?: readonly EntriesMapped[]): Outcome3D {
+  const plan = atomMapPlan(entries, references, v);
+  if ("refused" in plan) return { ok: false, said: plan.refused };
+  const every = v.maps === "every";
+  const bonds = v.bonds === "same" ? "same" : "change";
+  // (a mapped side as its rows and it name it: its entries' names or places - and its map, where every map is given; two of one name told apart by their places)
+  const base = entries.map((e) => e.name ?? named(e));
+  const nameOf = (i: number) => (base.filter((b) => b === base[i]).length > 1 ? `${base[i]} (${named(entries[i])})` : base[i]);
+  const sideKey = (side: readonly number[], map: number) => `${side.map(nameOf).join(" + ")}${every ? `, map ${map + 1}` : ""}`;
+  const kept: SetEntry[] = [];
+  const asideWhy = new Map<number, string[]>();
+  const why = (side: readonly number[], said: string) => side.forEach((i) => asideWhy.set(i, [...(asideWhy.get(i) ?? []), said]));
+  plan.aside.forEach((a) => why([a.entry], a.why));
+  const done: { map: number; changes: BondChangeRow[]; side: number[] }[] = [];
+  const mappedSides = new Set<number[]>();
+  let replaced = 0;
+  let calc = 0;
+  let partsOwn = 0;
+  plan.groups.forEach((g, k) => {
+    const out = mapped?.[k] ?? mapOnto(g.reference.map((i) => moleculeOfEntry(references[i])), g.sides.map((side) => side.map((i) => moleculeOfEntry(entries[i]))), { bonds, every });
+    for (const n of out.notMapped) why(g.sides[n.product], n.map != null && every ? `map ${n.map + 1}: ${n.reason}` : n.reason);
+    const maps = new Map<number[], number>();
+    for (const m of out.mapped) {
+      const side = g.sides[m.product];
+      const first = entries[side[0]];
+      // (one entry, as it was; several, as one entry - its parts' own values none of its)
+      const whole = side.length === 1 ? entryOfSet(first, String(side[0])) : combinedOf(side.map((i) => entries[i]));
+      if ("failed" in whole) {
+        why(side, whole.failed);
+        continue;
+      }
+      const r = renumberedEntry(whole, m.order, `${side.join("+")}:${m.map}`);
+      if ("failed" in r) {
+        why(side, `${every ? `map ${m.map + 1}: ` : ""}${r.failed}`);
+        continue;
+      }
+      // (several entries as one: in the places the map set them in, side by side)
+      const placed = side.length === 1 ? r : { ...r, geometry: { kind: "3d" as const, xyz: m.molecule.atoms.flatMap((a) => [a.x, a.y, a.z]) } };
+      // (its own place - every map of it, where every one is given, numbered on in its compound)
+      const number = every ? (maps.get(side) ?? 0) + 1 : first.number;
+      const e = setEntryOfEntry(placed, { compound: every ? side[0] : first.compound, number }, side.length === 1 ? first : undefined);
+      if (!e) continue;
+      maps.set(side, number);
+      mappedSides.add(side);
+      done.push({ map: m.map, changes: m.changes, side });
+      const moved = m.order.some((j, at) => j !== at);
+      let held = e;
+      if (side.length === 1 && moved) {
+        // (renumbered, its energy and imaginary frequencies its geometry's, whatever its numbering: carried, and its thermochemistry
+        //  and vibrations as its own properties, renumbered with it; and what its energy is of - its calculation's program and
+        //  level, how it was made - with what else it keeps, renumbered: alike with its compound's conformers not renumbered, as
+        //  one molecule writes them, its energy in their list; its calculation's results renumbered, but those that cannot be and
+        //  the files they were read from. Where a run ended converged at its geometry, that too: the same places, renumbered - the
+        //  atoms it held with them)
+        const carried = Object.fromEntries(CALC_CARRIED.flatMap((key) => (r.properties[key] ? [[key, r.properties[key]]] : [])));
+        const now = new Array<number>(m.order.length);
+        m.order.forEach((j, at) => (now[j] = at));
+        const converged = convergedOf(first);
+        const ran = first.calc ? calcRenumbered(first.calc, m.order) : undefined;
+        const bondAt = new Map(e.bonds.map((b, i) => [`${Math.min(b.a1, b.a2)}-${Math.max(b.a1, b.a2)}`, i]));
+        const bondNow = first.bonds.map((b) => bondAt.get(`${Math.min(now[b.a1], now[b.a2])}-${Math.max(now[b.a1], now[b.a2])}`) ?? -1);
+        held = {
+          ...e,
+          properties: { ...e.properties, ...carried },
+          ...(first.energy != null ? { energy: first.energy } : {}),
+          ...(first.imaginary ? { imaginary: [...first.imaginary] } : {}),
+          ...(ran ? { calc: ran.calc } : {}),
+          ...(first.keep ? { keep: keptRenumbered(first.keep, m.order, now, bondNow) } : {}),
+          ...(converged ? { converged: { ...converged, geometry: geometryKey(e.xyz), ...(converged.held ? { held: converged.held.map((a) => now[a]) } : {}) } } : {}),
+        };
+        if (ran?.leftBehind) calc++;
+      }
+      if (side.length > 1 && side.some((i) => entries[i].energy != null || entries[i].calc || Object.keys(entries[i].properties ?? {}).length)) partsOwn++;
+      if (side.length === 1 && first.properties?.[MAPPED_ENTRY]) replaced++;
+      // (numbered anew - its atoms in another order, or several made one: said in a label that rides on, each such map after the
+      //  last, so that a restraint made in the numbering it had is never held on what are now other atoms - lib/steps NUMBERING)
+      if (moved || side.length > 1) held = numberedAnew(held, first, g.reference.map((i) => references[i]));
+      kept.push(withSaid(held, MAPPED_ENTRY, sideKey(side, m.map)));
+    }
+  });
+  // (a side of which no map went through, aside with why - each map's that did not, said on it - each entry of it as it came)
+  const allSides = plan.groups.flatMap((g) => g.sides);
+  const unmapped = allSides.filter((side) => !mappedSides.has(side)).flat();
+  const asideEntries = [...new Set([...plan.aside.map((a) => a.entry), ...unmapped])].sort((p, q) => p - q);
+  const aside = asideEntries.map((i) => withSaid(entries[i], SET_ASIDE, (asideWhy.get(i) ?? []).join(" ")));
+  const changes = bondChangesTable(done, (d) => sideKey(d.side, d.map));
+  const line = [`${mappedSides.size} of ${plan.sides} mapped`];
+  if (plan.sides > mappedSides.size) line.push(`${plan.sides - mappedSides.size} not mapped`);
+  if (calc) line.push(`part of ${calc === 1 ? "its calculation" : "their calculations"} not carried`);
+  if (partsOwn) line.push("the parts' own values not carried");
+  if (replaced) line.push(`the ${MAPPED_ENTRY} ${replaced === 1 ? "an entry" : `${replaced} entries`} carried replaced`);
+  return { ok: true, holds, kept, aside, said: line.join(", "), tables: { changes } };
+}
+
+/**
+ * `e`, numbered anew by Atom map in `references`' numbering, with its
+ * numbering said (lib/steps `NUMBERING`): the one it had (`was`'s) and,
+ * after it, this one - the references by name and by what their atoms and
+ * bonds are, so that two references of one compound number alike, and two
+ * of different compounds never do. A label: it rides on as an ID does.
+ */
+function numberedAnew(e: SetEntry, was: SetEntry, references: readonly SetEntry[]): SetEntry {
+  const n = was.properties?.[NUMBERING];
+  const before = n?.status === "computed" && typeof n.value === "string" ? n.value : null;
+  const graph = references.map((r) => `${r.atoms.map((a) => a.el).join(",")}|${r.bonds.map((b) => `${b.a1}-${b.a2}:${b.order}`).join(",")}`).join(" + ");
+  const now = `as ${references.map((r) => r.name ?? named(r)).join(" + ")} (${hash(graph).toString(36)})`;
+  return { ...e, properties: { ...e.properties, [NUMBERING]: { value: before ? `${before}, then ${now}` : now, unit: "none", status: "computed", label: true } } };
+}
+
+/** Several step's entries as one entry record, their atoms one after another (lib/steps `combined`), or why not. */
+function combinedOf(parts: readonly SetEntry[]): Entry | { failed: string } {
+  const out = combined(
+    parts.map((e, i) => {
+      const { group: _g, number: _n, state: _s, ...properties } = entryOfSet(e, String(i)).properties;
+      return { ...entryOfSet(e, String(i)), properties };
+    }),
+    "side",
+  );
+  return "failed" in out ? out : out.entry;
+}
+
+/**
+ * *Displace* (lib/steps `displacedEntry`): each entry's geometry moved
+ * along its imaginary vibration - the most negative of several, said - or
+ * the one chosen, by the amplitude: the atom moving most by exactly that,
+ * the rest in proportion. What it carried rides along, each value saying
+ * the geometry it was worked out at; its energy and calculation, of that
+ * geometry, are not its own any more. One not finished - its calculation
+ * failed, or did not converge - is set aside as not finished: its
+ * vibrations are no ground to move it on. One with no vibrations to move
+ * along, no imaginary one, or no such vibration, is set aside with why. A
+ * conformer set's are counted as frames.
+ */
+export function displacedSet(entries: readonly SetEntry[], holds: Holds3D, o: { amplitude: number; vibration: "imaginary" | number }): Outcome3D {
+  const kept: SetEntry[] = [];
+  const aside: SetEntry[] = [];
+  const notes = new Set<string>();
+  entries.forEach((e, i) => {
+    if (entryState(e) !== FINISHED) {
+      aside.push(withSaid(e, SET_ASIDE, `not finished: ${entryState(e)}`));
+      return;
+    }
+    const r = displacedEntry(entryOfSet(e, String(i)), o, String(i));
+    if ("failed" in r) {
+      aside.push(withSaid(e, SET_ASIDE, r.failed));
+      return;
+    }
+    if (r.said) notes.add(r.said);
+    const made = setEntryOfEntry(r.entry, { compound: e.compound, number: e.number }, e);
+    if (made) kept.push(made);
+  });
+  const line = [`${holds === "conformers" ? plural(kept.length, "frame") : plural(kept.length, "entry", "entries")} displaced`];
+  if (aside.length) line.push(`${aside.length} not displaced`);
+  return { ok: true, holds, kept, aside, said: [line.join(" \u00b7 "), ...notes].join(". ") };
+}
+
+/**
+ * *Mode on atoms* (lib/steps `modeOnAtomsEntry`): on each entry, where its
+ * lowest vibration ranks the reacting atoms - the window, each one's rank,
+ * and how many fall outside it - for a Filter to choose on; every entry
+ * kept. The atoms typed, the same for all; or from the table wired into
+ * Atoms, read as its columns count them (`atomsOfRows`) - the rows of bonds
+ * formed or broken (an Atom map's *Change*), or every row - on every entry,
+ * or those whose value in the column named is the entry's value of the
+ * property of that name. Mode on atoms' own names an entry carried
+ * already are replaced, and said.
+ */
+export function modeOnAtomsSet(
+  entries: readonly SetEntry[],
+  holds: Holds3D,
+  o: { reach: number; atoms?: number[]; table?: Table | null; which?: "made" | "every"; rows?: string },
+): Outcome3D {
+  let each: (e: SetEntry) => number[];
+  if (o.atoms) each = () => o.atoms!;
+  else {
+    if (!o.table) return { ok: false, said: "Nothing comes into Atoms" };
+    const read = atomsOfRows(o.table);
+    if ("why" in read) return { ok: false, said: read.why };
+    const change = o.table.columns.findIndex((c) => c.name === CHANGE);
+    if (o.which !== "every" && change < 0) return { ok: false, said: `The table has no column ${CHANGE} to tell bonds formed or broken by` };
+    const made = new Set([CHANGE_WORDS.formed, CHANGE_WORDS.broken]);
+    const name = (o.rows ?? "").trim();
+    const column = name ? o.table.columns.findIndex((c) => c.name === name) : -1;
+    if (name && column < 0) return { ok: false, said: `The table has no column ${name}` };
+    const rows = o.table.rows;
+    each = (e) => {
+      const value = e.properties?.[name]?.value;
+      return read.rows.flatMap((atoms, k) =>
+        (o.which === "every" || made.has(String(rows[k][change]))) && (!name || (value != null && String(rows[k][column]) === String(value))) ? atoms : [],
+      );
+    };
+  }
+  const notes = new Set<string>();
+  let replaced = 0;
+  let outside = 0;
+  let notWorked = 0;
+  const made = entries.map((e, i) => {
+    if (MODE_NAMES.some((k) => e.properties?.[k])) replaced++;
+    const r = modeOnAtomsEntry(entryOfSet(e, String(i)), each(e), o.reach);
+    if (r.said) notes.add(r.said);
+    if (r.outside?.length) outside++;
+    if (!r.outside) notWorked++;
+    return r.entry;
+  });
+  const line = [`${plural(entries.length, "entry", "entries")}, ${outside} with reacting atoms outside the window`];
+  if (notWorked) line.push(`${notWorked} not worked out`);
+  if (replaced) line.push(`the mode's values ${replaced === 1 ? "an entry" : `${replaced} entries`} carried replaced`);
+  return { ok: true, holds, kept: backEach(entries, made), aside: [], said: [line.join(" · "), ...notes].join(". ") };
 }

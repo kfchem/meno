@@ -6,6 +6,8 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     environment: "node",
+    // (plugins as if put in place, from their manifests in src/test/plugins: src/test/pluginsInPlace)
+    setupFiles: ["src/test/pluginsInPlace.ts"],
     include: ["src/**/*.test.{ts,tsx}", "scripts/site/**/*.test.mjs", "scripts/licenses/**/*.test.mjs"],
   },
 });

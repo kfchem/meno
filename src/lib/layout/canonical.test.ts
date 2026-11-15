@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canonicalOrder, reordered } from "./canonical";
+import { canonicalOrder, canonicalText, reordered, symmetryClasses } from "./canonical";
 import type { LayoutAtom, LayoutBond } from "./perceive";
 import type { LayoutInput } from "./perceive";
 import { shuffled } from "./testdata/shuffled";
@@ -105,5 +105,16 @@ describe("canonicalOrder", () => {
       const g: LayoutInput = { atoms: carbons(8, (i) => (i % 4 === 0 || i % 4 === 3 ? 3 : 2)), bonds: [...chain(4), ...chain(4, 4)], axes: [{ atoms: [1, 2], refs: [0, 3], sense: 1 }] };
       expect(keepsItsPlace(g, 1, [2])).toBe(true);
     });
+  });
+});
+
+describe("symmetryClasses, worked out once for each input", () => {
+  it("gives each caller its own copy: one changed changes nothing asked again", () => {
+    const g = fromSmiles("C[C@H](C)C(O)C(C)C");
+    const before = symmetryClasses(g);
+    const text = canonicalText(g);
+    symmetryClasses(g).fill(7);
+    expect(symmetryClasses(g)).toEqual(before);
+    expect(canonicalText(g)).toBe(text);
   });
 });

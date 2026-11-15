@@ -31,7 +31,7 @@ Meno は Windows 10 と 11（64 ビット）と、Apple シリコン（M1 以降
 
 ## 最初の質問 {#first-question}
 
-Meno で初めて何かをしたとき（構造を置く、ファイルを開く、Settings を開くなど）、Meno は「Keep Meno up to date?」と尋ねます。「Allow and download」を選ぶと、起動したときと数時間ごとに GitHub で新しいバージョンを探し、バックグラウンドでダウンロードして、終了するときにインストールします。「Not now」を選ぶと、どれもしません。あとからいつでも、Settings の「Network」にある「Keep Meno up to date」で変えられます。
+Meno で初めて何かをしたとき（構造を置く、ファイルを開く、Settings を開くなど）、Meno は「Keep Meno up to date?」と尋ねます。「Allow and download」を選ぶと、起動してまもなくと、起動している間は一日に一度 GitHub で新しいバージョンを探し、バックグラウンドでダウンロードして、終了するときにインストールします。「Not now」を選ぶと、どれもしません。あとからいつでも、Settings の「Network」にある「Keep Meno up to date」で変えられます。
 
 ## 更新 {#updates}
 
