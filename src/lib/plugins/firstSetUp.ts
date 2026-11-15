@@ -79,16 +79,20 @@ export const useFirstSetUp = create<FirstSetUpCard>(() => ({ phase: "none" }));
 export type SetUpStep = "list" | "files" | "environment";
 
 /**
- * The line that says where a set-up of chemistry stands, the same on the card and under Quick Add's SMILES field (ui
- * quickAddSmiles `chemistryLine`): its step, with the plugin, and a share where Meno's backend reports one (a plugin's files
- * as they download, lib/pyEnv `useDownloads`; none for uv's set-up).
+ * Where a set-up of chemistry stands, in one phrase said the same in each place that says it - the card (`firstSetUpSaid`), the
+ * chip at the workspace's corner and the line under Quick Add's SMILES field (ui quickAddSmiles `chemistryStep`): its step, with
+ * the plugin, and a share where Meno's backend reports one (a plugin's files as they download, lib/pyEnv `useDownloads`; none
+ * for uv's set-up).
  */
-export function firstSetUpSaid(step: SetUpStep, plugin?: string, share?: number): string {
+export function firstSetUpStep(step: SetUpStep, plugin?: string, share?: number): string {
   const done = share != null && Number.isFinite(share) ? ` (${Math.round(Math.min(1, Math.max(0, share)) * 100)}%)` : "";
-  if (step === "list" || !plugin) return "Setting up chemistry: listing the plugins online.";
-  if (step === "files") return `Setting up chemistry: downloading ${plugin}${done}.`;
-  return `Setting up chemistry: setting up ${plugin}'s environment${done}.`;
+  if (step === "list" || !plugin) return "Setting up chemistry: listing the plugins online";
+  if (step === "files") return `Setting up chemistry: downloading ${plugin}${done}`;
+  return `Setting up chemistry: setting up ${plugin}'s environment${done}`;
 }
+
+/** The card's line: `firstSetUpStep` as a sentence. */
+export const firstSetUpSaid = (step: SetUpStep, plugin?: string, share?: number): string => `${firstSetUpStep(step, plugin, share)}.`;
 
 /** What the plugin got needs to be set up, as its own questions say it (lib/pyEnv `setUpQuestions`). */
 export type SetUpPlan = {

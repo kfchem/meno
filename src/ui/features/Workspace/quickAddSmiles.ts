@@ -1,6 +1,7 @@
 /** A SMILES read from Quick Add's field (./QuickAdd), plain, to be tested without a page. */
 import { NoPlugin, type ChemState } from "../../../lib/roles/worker";
 import type { RoleId } from "../../../lib/plugins/roles";
+import { firstSetUpStep } from "../../../lib/plugins/firstSetUp";
 
 /** What came of it: drawn (null), or why not - and, where no plugin here reads it, the role the plugins online are offered for (./RoleOffer). */
 export type SmilesRead = null | { error: string; needs: RoleId | null };
@@ -38,10 +39,8 @@ export function afterAdded(typed: string, reading: boolean, read: (smiles: strin
  * is said of a plugin missing, or offline, is said as before).
  */
 export function chemistryStep(chem: ChemState, share: number | undefined): string | null {
-  if (chem.state === "setting-up") {
-    const step = share != null ? `downloading ${chem.plugin} (${Math.round(Math.min(1, Math.max(0, share)) * 100)}%)` : `setting up ${chem.plugin}'s environment`;
-    return `Setting up chemistry: ${step}`;
-  }
+  // (the card's phrase: lib/plugins/firstSetUp `firstSetUpStep`)
+  if (chem.state === "setting-up") return firstSetUpStep(share != null ? "files" : "environment", chem.plugin, share);
   if (chem.state === "starting") return `Starting ${chem.plugin}`;
   return null;
 }

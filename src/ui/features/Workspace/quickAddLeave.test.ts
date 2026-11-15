@@ -4,6 +4,7 @@ import { quickAddLeaves, typedIntoQuickAdd } from "./quickAddLeave";
 import { afterAdded, chemistryLine, chemistryStep, readSmiles } from "./quickAddSmiles";
 import { addOffered } from "./offerSteps";
 import { NoPlugin } from "../../../lib/roles/worker";
+import { firstSetUpSaid } from "../../../lib/plugins/firstSetUp";
 import type { CatalogueEntry } from "../../../lib/plugins/catalogue";
 
 /** An event as the window hands it on: its type, where it came from, and whether it was stopped. */
@@ -160,5 +161,13 @@ describe("the line under the SMILES field", () => {
     expect(chemistryLine({ state: "ready", plugin: "P", version: "1" }, undefined, true)).toBeNull();
     expect(chemistryLine({ state: "idle" }, undefined, false)).toBeNull();
     expect(chemistryLine({ state: "failed", message: "x" }, undefined, true)).toBeNull();
+  });
+});
+
+describe("one phrase for where chemistry's set-up stands", () => {
+  it("the corner chip and the Quick Add line say the card's words, step for step", () => {
+    const setting = { state: "setting-up" as const, plugin: "P", id: "p" };
+    expect(`${chemistryStep(setting, 0.42)}.`).toBe(firstSetUpSaid("files", "P", 0.42));
+    expect(`${chemistryStep(setting, undefined)}.`).toBe(firstSetUpSaid("environment", "P"));
   });
 });
