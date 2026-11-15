@@ -4,6 +4,12 @@ import { blocksOf, drawnBlocksOf } from "../chem/make3d";
 import type { Atom, Bond, Model } from "../store/types";
 import { drawnHash, setMembers, structuresOf } from "./entries";
 import { runMenoDrawn } from "./meno";
+import { clearOf } from "./place";
+import { framesSettled } from "./fitFrames";
+import { addMolecule3d, createWorkspaceDocument, emptyWorkspaceDocument } from "../document";
+import { addSet } from "./model";
+import { cycleThings } from "../utils/cycles";
+import { MENO } from "../../../../lib/chem/style";
 import { drawnEntries } from "./run";
 
 /**
@@ -84,3 +90,45 @@ describe("a hydrogen bond drawn, as a set's entries have it", () => {
     }
   });
 });
+
+describe("a hydrogen-bonded pair as ink: one piece, as it is drawn (fitFrames, place, cycles)", () => {
+  /** The page with the water drawn where it is, but its hydrogen bond to the enol taken away: two pieces of ink. */
+  const apart = (): Model => ({ ...page(), bonds: page().bonds.filter((b) => b.id !== 19) });
+  const enolAndWater = (m: Model) => ({ ...m, atoms: m.atoms.filter((a) => a.id <= 9), bonds: m.bonds.filter((b) => b.a <= 9 && b.b <= 9) });
+
+  it("keeps a frame placed between them clear of the pair's ink as one: a place the two apart would leave free", () => {
+    const f = { x0: -2.5 * L, y0: 2.5 * L, x1: -2.2 * L, y1: 2.8 * L };
+    const far = (m: Model): Model => ({ ...m, atoms: m.atoms.map((a) => (a.id === 9 ? { ...a, y: a.y + 0.6 * L } : a)) });
+    expect(clearOf({ ...emptyWorkspaceDocument(), model: far(enolAndWater(apart())) }, f)).toBe(true);
+    expect(clearOf({ ...emptyWorkspaceDocument(), model: far(enolAndWater(page())) }, f)).toBe(false);
+  });
+
+  it("moves the pair together out of a frame's way: the water goes as far as the enol", () => {
+    const R = 1.2;
+    const reach = () => ({ x0: -R, x1: R, y0: -R, y1: R });
+    const doc = createWorkspaceDocument();
+    doc.edit("place", (d) => addMolecule3d(d, { at: { x: 0, y: 0 }, atoms: [{ el: "O", x: 0, y: 0, z: 0 }], bonds: [] } as never));
+    doc.edit("set", (d) => addSet(d, { x0: -3, y0: -3, x1: 3, y1: 3 }));
+    doc.edit("fit", (d) => framesSettled(d, d, reach));
+    const before = doc.getState();
+    const frame = before.sets![0];
+    // (the pair laid over the frame's right edge, the enol's middle outside it, the water below it - outside the frame)
+    const m = enolAndWater(page());
+    const dx = frame.x1 + 1.2 * L;
+    doc.edit("structure", (d) => ({ ...d, model: { ...m, atoms: m.atoms.map((a) => ({ ...a, x: a.x + dx })) }, nextId: 100 }));
+    const state = doc.getState();
+    const settled = framesSettled(state, before, reach);
+    const moved = (id: number) => settled.model.atoms.find((a) => a.id === id)!.x - state.model.atoms.find((a) => a.id === id)!.x;
+    expect(moved(1)).toBeGreaterThan(0);
+    expect(moved(9)).toBeCloseTo(moved(1), 9);
+  });
+
+  it("is one thing for a catalytic cycle's lines to keep clear of, the water with the enol", () => {
+    const things = cycleThings(enolAndWater(page()), [], MENO);
+    const enol = things.find((t) => t.atoms?.includes(1));
+    expect(enol?.atoms).toContain(9);
+    const parts = cycleThings(enolAndWater(apart()), [], MENO);
+    expect(parts.find((t) => t.atoms?.includes(1))?.atoms).not.toContain(9);
+  });
+});
+
