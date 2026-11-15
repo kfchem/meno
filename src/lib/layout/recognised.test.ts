@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { identity, type IdentityInput } from "../chem/identity";
-import { readStereo, type DrawnAtom, type DrawnBond } from "./drawn";
+import { readStereo, sameConfiguration, type DrawnAtom, type DrawnBond } from "./drawn";
 import { layout2D } from "./engine";
 import { recognisedSaid, withRecognisedDepth } from "./recognised";
 import { NOT_MARKED } from "../chem/perception/projection/recognise";
@@ -402,11 +402,25 @@ describe("a bridged system drawn bond by bond, a bold bond its near edge (norbor
     expect(read).toBeGreaterThan(0);
   }, measured(60_000));
 
-  it("makes no centre of a bridgehead whose two arms are alike: quinuclidin-3-ol read by a mark is the one compound, its typed identity", () => {
+  it("reads tropine and pseudotropine by a mark as the two compounds they are, each the engine's drawing - C3's two alike arms ending at centres: pseudo-asymmetric", () => {
+    const got = ["CN1[C@@H]2CC[C@H]1C[C@@H](O)C2", "CN1[C@@H]2CC[C@H]1C[C@H](O)C2", "O[C@H]1C[C@H]2CC[C@@H](C1)C2", "O[C@@H]1C[C@H]2CC[C@@H](C1)C2"].map((smi) => {
+      const d = engineDrawn(smi);
+      const read = identityOfDrawing(marked(stripped(d), nearest(d)));
+      expect(read, smi).toBe(identityOfDrawing(d));
+      return read;
+    });
+    expect(got[0]).not.toBe(got[1]);
+    expect(got[2]).not.toBe(got[3]);
+  });
+
+  it("reads quinuclidin-3-ol's C3 by a mark as drawn - and, a known limit, gives its bridgeheads a sense identity keeps (identity's to drop)", () => {
     for (const smi of ["O[C@@H]1CN2CCC1CC2", "O[C@H]1CN2CCC1CC2"]) {
       const d = engineDrawn(smi);
-      // (against the typed SMILES: the engine's drawing as this test takes it flags every atom with a depth a centre, the bridgeheads too)
-      expect(identityOfDrawing(marked(stripped(d), nearest(d))), smi).toBe(smiles(smi));
+      const read = marked(stripped(d), nearest(d));
+      // (C3 read the way the engine drew it)
+      const want = readStereo(d.atoms.map((a, i) => (i === 1 ? a : { ...a, centre: undefined })), d.bonds).tetra.get(1);
+      const t = readStereo(withRecognisedDepth(read.atoms, read.bonds), read.bonds).tetra.get(1);
+      expect(t && want && sameConfiguration(t, want), smi).toBe(true);
     }
   });
 

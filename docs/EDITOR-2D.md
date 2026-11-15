@@ -1905,8 +1905,13 @@ lipids each have their own way of being drawn, which it should know.
        draw: "No R or S: the ring is drawn in perspective, but its near and
        far are not marked: draw its near bonds bold." (or "... but not
        clearly as one shape."). Which atoms are centres is the CIP's, so an
-       atom that is no centre is told nothing; in a bridged system, an atom
-       whose two arms are alike (quinuclidine's N) is made no centre. And
+       atom that is no centre is told nothing. (A limit: a bridged system
+       read by a mark makes every atom of it a centre, as a tool's
+       projection does; quinuclidin-3-ol's N and other bridgehead, whose
+       alike arms run between the same two atoms, then carry a sense that
+       says nothing, and its identity is not yet the typed one's - which
+       sense says nothing is identity's to tell. Tropine and pseudotropine,
+       whose C3 is pseudo-asymmetric, are two compounds, as they are.) And
        such a ring, not read, is never silent: each of its atoms that
        carries a group has the unread mark a crossed wedge has, unasked,
        its words the same.

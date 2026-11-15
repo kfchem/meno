@@ -8,7 +8,6 @@
 import { READ_AS_HAWORTH, READ_IN_PERSPECTIVE, recogniseChairs, recogniseHaworth, recogniseByViews, type Recognised } from "../chem/perception/projection/recognise";
 import { isCage, projectCage, tiedViews, type CageView } from "./cage";
 import { key, perceive } from "./perceive";
-import { symmetryOrbits } from "./canonical";
 import type { DrawnAtom, DrawnBond } from "./drawn";
 
 export function withRecognisedDepth(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): readonly DrawnAtom[] {
@@ -43,7 +42,6 @@ function recognise(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): Re
   if (atoms.length < 5 || !bonds.length) return { atoms, said };
   const mol = perceive({ atoms: atoms.map((a) => ({ el: a.el ?? "C", hs: a.hs })), bonds: bonds.map(({ a, b, order }) => ({ a, b, order })) });
   let out: DrawnAtom[] | null = null;
-  let orbit: number[] | undefined;
   const bondOf = new Map(bonds.map((b) => [key(b.a, b.b), b]));
   for (const sys of mol.systems) {
     if (sys.atoms.some((i) => atoms[i].z != null)) continue;
@@ -73,13 +71,11 @@ function recognise(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): Re
       const got = recogniseByViews(places, viewsOf(mol, sys), bold);
       if (got.kind === "unread") for (const i of sys.atoms) said.set(i, got.why);
       if (got.kind !== "depth") continue;
-      // (a centre only where an atom can be one: a bridgehead whose two arms are alike - quinuclidine's N - is none, though it is drawn in
-      //  perspective; by the structure's own symmetry, its configurations aside)
-      orbit ??= symmetryOrbits({ atoms: atoms.map((a) => ({ el: a.el ?? "C", hs: a.hs })), bonds: bonds.map(({ a, b, order }) => ({ a, b, order })) }).orbit;
-      const alike = (i: number) => atoms[i].hs > 1 || mol.neighbours[i].some((p, k) => mol.neighbours[i].some((q, j) => j > k && orbit![p] === orbit![q]));
+      // (every atom of it a centre, as a tool's projection makes them: whether a centre's sense says anything - quinuclidine's N, whose two
+      //  alike arms run between the same two atoms, says none - is identity's to tell, not the reader's)
       out ??= atoms.map((a) => a);
       sys.atoms.forEach((i, k) => {
-        out![i] = { ...atoms[i], z: got.z[k], ...(alike(i) ? {} : { centre: true }) };
+        out![i] = { ...atoms[i], z: got.z[k], centre: true };
         said.set(i, READ_IN_PERSPECTIVE);
       });
       continue;
