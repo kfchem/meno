@@ -188,7 +188,11 @@ export function useStructureEvents(
       await openPayload(kind);
     })();
     holdOpening(store, taking);
-    void taking.then(done, done);
+    // (a throw in the opening is said, as any file that could not be read is - and logged)
+    void taking.then(done, (e) => {
+      reportImportError("initial payload", e);
+      done();
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
