@@ -25,8 +25,12 @@ const ORIGIN = { x: -46, y: -10 };
 
 export type Built = { doc: WorkspaceDocument; steps: Map<string, number>; reaction: number; stages: string[] };
 
-/** A template's entries are all stamped with this, so that it is made again byte for byte. */
-export const STAMP = new Date("2026-01-01T00:00:00Z");
+/**
+ * A template's entries are all stamped with this, so that it is made again byte for byte. A zip writes an
+ * entry's time as the clock of the machine shows it, so the stamp is given as that clock's 1 January 2026,
+ * 00:00: the same bytes in every time zone.
+ */
+export const STAMP = new Date(2026, 0, 1, 0, 0, 0);
 
 const REACTION_NAME = "The reaction: draw over it";
 
