@@ -19,6 +19,7 @@
  */
 import { canonicalSearched, canonicalWritten, symmetryClasses, symmetryOrbits as orbitsAsDrawn } from "../layout/canonical";
 import { lonePairCentres } from "./lonePairCentres";
+import { CHELATE_RING } from "./chelateRing";
 import { isMetal, type Arranged, type LayoutAtom, type LayoutBond, type LayoutInput } from "../layout/perceive";
 import type { Axial, Cumulated, Tetrahedral } from "../layout/stereo";
 import type { Radical } from "./molecule";
@@ -348,13 +349,6 @@ const CENTRES = new Set(["B", "C", "Si", "Ge", "Sn", "Pb", "N", "P", "As", "Sb",
 
 /** A double bond in a ring of this many atoms or fewer states no cis or trans (the reader's and the CIP's number). */
 const SMALL_RING = 7;
-
-/**
- * Two donors of one metal that its ligand joins by a ring of this many atoms or fewer, the metal counted, are never
- * across: a chelate's five- or six-membered ring cannot span the metal (found in the chemistry check). Larger rings may - a porphyrin's
- * opposite N, joined only by a ring of ten - so a filled arrangement may put those across; one read stands as read.
- */
-const CHELATE_RING = 7;
 
 /**
  * A place that could carry a configuration and carries none: a centre (its

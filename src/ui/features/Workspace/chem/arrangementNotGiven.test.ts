@@ -8,7 +8,7 @@ import { laidOut } from "./cleanUp";
 import { arrangementsMarked } from "./arrangementsMarked";
 import { layoutJob, relayoutFrom } from "./engineLayout";
 import type { Layout2D } from "../../../../lib/layout/engine";
-import { drawingOf, metalsArrangedIn } from "./fromSmiles";
+import { drawingOf, metalPairsIn, metalsArrangedIn } from "./fromSmiles";
 import { drawnFromSmiles } from "../utils/smilesDrawn";
 import { editorModelOf, processFileContent } from "../utils/io";
 
@@ -267,6 +267,61 @@ describe("a metal its SMILES marks, with a chelate", () => {
     const smiles = "[Co@OH1+]123456.Cl1.[NH2]2CC[NH2]3.[NH2]4CC[NH2]5.Cl6";
     const b = enCl([1, 10], [2, 6]);
     expect(metalMarked(await drawingOf(b, MENO, undefined, undefined, metalsArrangedIn(smiles, b)), "Co")).toBe(ARRANGEMENT_SAID);
+  });
+});
+
+describe("a metal whose SMILES's mark states its pairs", () => {
+  /** A MOL block of `spokes` round a metal at the origin - each an element at an angle, in degrees - in the SMILES's order; the metal at `metal`. */
+  function spokeBlock(spokes: ([string, number] | "metal")[], metal: string, charge = 0): string {
+    const f = (v: number) => v.toFixed(4).padStart(10);
+    const at = spokes.findIndex((s) => s === "metal");
+    const atoms = spokes.map((s) => (s === "metal" ? `${f(0)}${f(0)}${f(0)} ${metal.padEnd(3)} 0  0  0  0  0  0  0  0  0  0  0  0` : `${f(1.5 * Math.cos((s[1] * Math.PI) / 180))}${f(1.5 * Math.sin((s[1] * Math.PI) / 180))}${f(0)} ${s[0].padEnd(3)} 0  0  0  0  0  0  0  0  0  0  0  0`));
+    const bonds = spokes.flatMap((s, k) => (s === "metal" ? [] : [`${String(at + 1).padStart(3)}${String(k + 1).padStart(3)}  1  0`]));
+    return ["", "  test", "", `${String(atoms.length).padStart(3)}${String(bonds.length).padStart(3)}  0  0  0  0  0  0  0  0999 V2000`, ...atoms, ...bonds, ...(charge ? [`M  CHG  1 ${String(at + 1).padStart(3)}${String(charge).padStart(4)}`] : []), "M  END", ""].join("\n");
+  }
+
+  it("reads the pairs by the block's atoms, where the block is the SMILES's own atoms and bonds", () => {
+    const b = spokeBlock([["Cl", 180], "metal", ["N", 60], ["N", 120], ["N", 240], ["N", 300], ["Cl", 0]], "Co", 1);
+    expect(metalPairsIn("Cl[Co@OH1+]([NH3])([NH3])([NH3])([NH3])Cl", b)).toEqual([{ metal: 1, pairs: [[0, 6], [2, 4], [3, 5]] }]);
+    // (a mark it does not read, or a block of other atoms: none)
+    expect(metalPairsIn("Cl[Co@TB1+]([NH3])([NH3])([NH3])([NH3])Cl", b)).toEqual([]);
+    // (a bare @ on six neighbours: OH1)
+    expect(metalPairsIn("Cl[Co@+]([NH3])([NH3])([NH3])([NH3])Cl", b)).toEqual([{ metal: 1, pairs: [[0, 6], [2, 4], [3, 5]] }]);
+    expect(metalPairsIn("Br[Co@OH1+]([NH3])([NH3])([NH3])([NH3])Cl", b)).toEqual([]);
+  });
+
+  it("is kept unmarked where the drawing has the mark's pairs, and marked not given where it has others", { timeout: 120000 }, async () => {
+    forgetLaidOut();
+    // (trans-[CoCl2(NH3)4]+ drawn trans: the Cl at 0 and 180 degrees)
+    const trans = "Cl[Co@OH1+]([NH3])([NH3])([NH3])([NH3])Cl";
+    const transBlock = spokeBlock([["Cl", 180], "metal", ["N", 60], ["N", 120], ["N", 240], ["N", 300], ["Cl", 0]], "Co", 1);
+    const kept = await drawingOf(transBlock, MENO, undefined, undefined, [1], metalPairsIn(trans, transBlock));
+    expect(metalMarked(kept, "Co")).toBeUndefined();
+    // (a SMILES marked cis - its first Cl across an N - on a picture with the Cl across each other)
+    const cis = "Cl[Co@OH1+](Cl)([NH3])([NH3])([NH3])[NH3]";
+    const cisBlock = spokeBlock([["Cl", 180], "metal", ["Cl", 0], ["N", 60], ["N", 120], ["N", 240], ["N", 300]], "Co", 1);
+    expect(metalPairsIn(cis, cisBlock)).toHaveLength(1);
+    const wrong = await drawingOf(cisBlock, MENO, undefined, undefined, [1], metalPairsIn(cis, cisBlock));
+    expect(metalMarked(wrong, "Co")).toBe(ARRANGEMENT_SAID);
+  });
+
+  it("is kept where the drawing is the earlier picture of the isomer the mark states: cis-[Co(en)2Cl2]+, the N an X and the Cl side by side", { timeout: 120000 }, async () => {
+    forgetLaidOut();
+    // (atoms in the SMILES's order - Co, Cl, Cl, N C C N, N C C N - each en on two corners of the X next to each other)
+    const cis = "[Co@OH1+]123456.Cl1.Cl2.[NH2]3CC[NH2]4.[NH2]5CC[NH2]6";
+    const f = (v: number) => v.toFixed(4).padStart(10);
+    const at = (deg: number, r = 1.5) => [r * Math.cos((deg * Math.PI) / 180), r * Math.sin((deg * Math.PI) / 180)];
+    const places = [[0, 0], at(75), at(105), at(45), at(25, 2.6), at(335, 2.6), at(315), at(135), at(155, 2.6), at(205, 2.6), at(225)];
+    const els = ["Co", "Cl", "Cl", "N", "C", "C", "N", "N", "C", "C", "N"];
+    const bonds = [[0, 1], [0, 2], [0, 3], [3, 4], [4, 5], [5, 6], [0, 6], [0, 7], [7, 8], [8, 9], [9, 10], [0, 10]];
+    const block = ["", "  test", "", `${String(els.length).padStart(3)}${String(bonds.length).padStart(3)}  0  0  0  0  0  0  0  0999 V2000`,
+      ...els.map((el, k) => `${f(places[k][0])}${f(places[k][1])}${f(0)} ${el.padEnd(3)} 0  0  0  0  0  0  0  0  0  0  0  0`),
+      ...bonds.map(([a, b]) => `${String(a + 1).padStart(3)}${String(b + 1).padStart(3)}  1  0`), "M  CHG  1   1   1", "M  END", ""].join("\n");
+    const marks = metalPairsIn(cis, block);
+    expect(marks).toHaveLength(1);
+    // (kept as it came - the picture is not laid out anew here - and read as the cis the mark states)
+    const kept = await drawingOf(block, MENO, undefined, undefined, [0], marks);
+    expect(metalMarked(kept, "Co")).toBeUndefined();
   });
 });
 

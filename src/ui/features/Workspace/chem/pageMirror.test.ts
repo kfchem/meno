@@ -91,39 +91,39 @@ const stereo = {
 } as unknown as ChemClient;
 
 describe("the page's mirror images", () => {
-  it("makes one of two enantiomers itself and the other as its mirror image, by which identity comes first", () => {
-    const as = (["up", "down"] as const).map((s) => madeAs(butanol(s), none));
+  it("makes one of two enantiomers itself and the other as its mirror image, by which identity comes first", async () => {
+    const as = await Promise.all((["up", "down"] as const).map((s) => madeAs(butanol(s), none)));
     expect([...as].sort()).toEqual(["itself", "mirror"]);
   });
 
-  it("makes itself a structure with no stereo, a meso form, one with a label written out, or a wedge it cannot read", () => {
+  it("makes itself a structure with no stereo, a meso form, one with a label written out, or a wedge it cannot read", async () => {
     const ethanol: Model = { atoms: butanol("up").atoms.slice(0, 3), bonds: butanol("up").bonds.slice(0, 2) };
-    expect(madeAs(ethanol, none)).toBe("itself");
+    expect(await madeAs(ethanol, none)).toBe("itself");
     // (meso-butane-2,3-diol drawn as a zigzag, its two O across the chain from each other: one on a wedge, the other
     //  on hashes - R and S. Both on wedges is the R,R or S,S form, chiral)
     const meso: Model = {
       atoms: [...butanol("up").atoms, { id: 6, x: 2.6, y: -1.5, r: 0.9, el: "O" }],
       bonds: [...butanol("up").bonds, { id: 15, a: 3, b: 6, order: 1, stereo: "down" }],
     };
-    expect(madeAs(meso, none)).toBe("itself");
-    expect(madeAs(mirroredPart(meso), none)).toBe("itself");
+    expect(await madeAs(meso, none)).toBe("itself");
+    expect(await madeAs(mirroredPart(meso), none)).toBe("itself");
     const rr: Model = { ...meso, bonds: meso.bonds.map((x) => (x.id === 15 ? { ...x, stereo: "up" as const } : x)) };
-    expect([madeAs(rr, none), madeAs(mirroredPart(rr), none)].sort()).toEqual(["itself", "mirror"]);
+    expect((await Promise.all([madeAs(rr, none), madeAs(mirroredPart(rr), none)])).sort()).toEqual(["itself", "mirror"]);
     const labelled: Model = { ...butanol("up"), atoms: butanol("up").atoms.map((a) => (a.id === 4 ? { ...a, el: "Ph" } : a)) };
-    expect(madeAs(labelled, none)).toBe("itself");
+    expect(await madeAs(labelled, none)).toBe("itself");
   });
 
-  it("takes neither of a chiral pair for the other's mirror image where it cannot read the drawing whole: a label, a wedge it does not read, a ring through a star", () => {
+  it("takes neither of a chiral pair for the other's mirror image where it cannot read the drawing whole: a label, a wedge it does not read, a ring through a star", async () => {
     // (each a pair of butan-2-ols, its O up and down, with something more drawn on it alike)
-    const pair = (more: (m: Model) => Model) => (["up", "down"] as const).map((s) => madeAs(more(butanol(s)), none));
+    const pair = (more: (m: Model) => Model) => Promise.all((["up", "down"] as const).map((s) => madeAs(more(butanol(s)), none)));
     // (a label written out: phenyl for the methyl)
-    expect(pair((m) => ({ ...m, atoms: m.atoms.map((a) => (a.id === 4 ? { ...a, el: "Ph" } : a)) }))).toEqual(["itself", "itself"]);
+    expect(await pair((m) => ({ ...m, atoms: m.atoms.map((a) => (a.id === 4 ? { ...a, el: "Ph" } : a)) }))).toEqual(["itself", "itself"]);
     // (an N of three bonds on the methyl, its own wedge drawn - a wedge at such an N is not read)
     const amine = (m: Model): Model => ({
       atoms: [...m.atoms, { id: 30, x: 3.9, y: 2.25, r: 0.9, el: "N" }, { id: 31, x: 5.2, y: 3, r: 0.9, el: "C" }, { id: 32, x: 2.6, y: 3, r: 0.9, el: "C" }],
       bonds: [...m.bonds, { id: 40, a: 4, b: 30, order: 1 }, { id: 41, a: 30, b: 31, order: 1, stereo: "up" }, { id: 42, a: 30, b: 32, order: 1 }],
     });
-    expect(pair(amine)).toEqual(["itself", "itself"]);
+    expect(await pair(amine)).toEqual(["itself", "itself"]);
     // (an allyl bound to an Fe through a star at its centre, apart from the alcohol)
     const star = (m: Model): Model => ({
       atoms: [
@@ -134,7 +134,7 @@ describe("the page's mirror images", () => {
       ],
       bonds: [...m.bonds, { id: 60, a: 50, b: 51, order: 1 }, { id: 61, a: 51, b: 52, order: 1 }, { id: 62, a: 53, b: 54, order: 1, endpoints: [50, 51, 52] }],
     });
-    expect(pair(star)).toEqual(["itself", "itself"]);
+    expect(await pair(star)).toEqual(["itself", "itself"]);
   });
 
   it("turns a drawing over: each wedge up for down, each depth a perspective drawing gives turned", () => {
@@ -186,7 +186,7 @@ describe("the page's mirror images", () => {
 
   it("makes one itself where the reflection of its mirror image has not its configuration after all", async () => {
     // (the drawing made as a mirror image: the one that is)
-    const twin = (["up", "down"] as const).find((s) => madeAs(butanol(s), none) === "mirror")!;
+    const twin = (await Promise.all((["up", "down"] as const).map(async (s) => [s, await madeAs(butanol(s), none)] as const))).find(([, as]) => as === "mirror")![0];
     const { chem, asked } = plugin(true);
     const [block] = blocksOf(butanol(twin), [1]);
     const [c] = await conformersOf(chem, stereo, block, "one");
@@ -427,7 +427,7 @@ describe("the page's mirror images", () => {
   });
 
   it("growing, makes one itself where the reflection of its mirror image has not its configuration after all", async () => {
-    const twin = (["up", "down"] as const).find((s) => madeAs(butanol(s), none) === "mirror")!;
+    const twin = (await Promise.all((["up", "down"] as const).map(async (s) => [s, await madeAs(butanol(s), none)] as const))).find(([, as]) => as === "mirror")![0];
     const { chem, asked } = plugin(true);
     const [block] = blocksOf(butanol(twin), [1]);
     const growth = await conformersGrowing(chem, stereo, block, "one", {}, { calculations: {} }, { window: 3, first: 10, most: 5000 }, () => false);
