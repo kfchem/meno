@@ -547,8 +547,9 @@ What is left before the editor counts as finished, and in what order, is in
   otherwise pending - a record kept as it stands, a table's cell said to be
   still worked out, re-made as the answer lands - while a step putting its
   structures down, a file being written, a 3D make and a conversation's
-  search ask first and wait. Enumerate, and the constitution keys a step's
-  grouping uses, still work theirs out on the drawing thread.
+  search ask first and wait. Enumerate and Substituents, for each product
+  they make, and the constitution keys a step's grouping uses, still work
+  theirs out on the drawing thread.
 - **Frame loop**: the canvas runs `frameloop="demand"` at a fixed `CANVAS_DPR`
   (2x). React commits (store changes) request a frame automatically; anything
   that animates or mutates the scene imperatively must call `invalidate()`
