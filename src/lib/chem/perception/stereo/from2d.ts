@@ -47,6 +47,7 @@
 import { lonePairCentres, pyramidal } from "../../lonePairCentres";
 import { drawnAxisSense, drawnVolume, freeCorners } from "./senses";
 import type { Axial, CisTrans, Cumulated, Tetrahedral } from "./types";
+import { factsOf, OPEN_RING } from "../facts";
 
 /** A pair of atoms as one key, the lower first. */
 const key = (a: number, b: number): string => (a < b ? `${a},${b}` : `${b},${a}`);
@@ -246,8 +247,10 @@ function threeBondsSayNothing(at: { x: number; y: number }, around: readonly { x
  * by atom index. Not a double bond with nothing on an end, in a ring of
  * seven atoms or fewer, cumulated, or with a wavy bond at an end - none of
  * those has a cis or trans to leave unsaid - nor an end with two groups,
- * whose other group states it. Clean-up keeps these ends straight
- * (`LayoutAtom.linear`), so that what it lays out leaves the bond unsaid too.
+ * whose other group states it. And the ends of an odd cumulene's run so
+ * drawn (a butatriene's), by the same tests. Clean-up keeps these ends
+ * straight (`LayoutAtom.linear`), so that what it lays out leaves the bond
+ * unsaid too.
  */
 export function straightEnds(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): Set<number> {
   const neighbours: number[][] = atoms.map(() => []);
@@ -258,6 +261,7 @@ export function straightEnds(atoms: readonly DrawnAtom[], bonds: readonly DrawnB
     neighbours[b.b].push(b.a);
     bondOf.set(key(b.a, b.b), b);
   });
+  const inRingUnder = ringsOfDrawing(atoms, bonds);
   const out = new Set<number>();
   const cumulated = (end: number, other: number) => neighbours[end].some((n) => n !== other && bondOf.get(key(end, n))!.order >= 2);
   const straightOn = (end: number, other: number, n: number) =>
@@ -266,7 +270,7 @@ export function straightEnds(atoms: readonly DrawnAtom[], bonds: readonly DrawnB
     if (bond.order !== 2 || bondOf.get(key(bond.a, bond.b)) !== bond) continue;
     const { a, b } = bond;
     const groups = (end: number, other: number) => neighbours[end].filter((n) => n !== other);
-    if (!groups(a, b).length || !groups(b, a).length || inSmallRing(neighbours, a, b) || cumulated(a, b) || cumulated(b, a)) continue;
+    if (!groups(a, b).length || !groups(b, a).length || inRingUnder(a, b, OPEN_RING) || cumulated(a, b) || cumulated(b, a)) continue;
     if ([a, b].some((x) => neighbours[x].some((n) => bondOf.get(key(x, n))!.either))) continue;
     for (const [end, other] of [
       [a, b],
@@ -276,6 +280,30 @@ export function straightEnds(atoms: readonly DrawnAtom[], bonds: readonly DrawnB
       if (g.length === 1 && straightOn(end, other, g[0])) out.add(end);
     }
   }
+  // (and the ends of an odd cumulene's run - a butatriene's: its cis or trans across the run, read from its ends' groups as a double
+  //  bond's are - by the same tests, an end's group straight on from the run)
+  const { middle, runFrom } = runsOfDrawing(atoms, neighbours, bondOf);
+  atoms.forEach((_, i) => {
+    if (middle(i)) return;
+    for (const m of neighbours[i]) {
+      if (bondOf.get(key(i, m))!.order !== 2 || !middle(m)) continue;
+      const run = runFrom(i, m);
+      const j = run[run.length - 1];
+      if (j <= i || run.length % 2 === 1) continue;
+      const ends = [
+        [i, m],
+        [j, run[run.length - 2]],
+      ];
+      const groups = (end: number, other: number) => neighbours[end].filter((n) => n !== other);
+      // (each end with two groups, an H among them at most, as the run is read)
+      if (ends.some(([e, t]) => !groups(e, t).length || groups(e, t).length + atoms[e].hs !== 2) || inRingUnder(i, m, OPEN_RING)) continue;
+      if (ends.some(([e]) => neighbours[e].some((n) => bondOf.get(key(e, n))!.either))) continue;
+      for (const [e, t] of ends) {
+        const g = groups(e, t);
+        if (g.length === 1 && straightOn(e, t, g[0])) out.add(e);
+      }
+    }
+  });
   return out;
 }
 
@@ -293,6 +321,7 @@ export function readStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBon
     neighbours[b.b].push(b.a);
     bondOf.set(key(b.a, b.b), b);
   });
+  const inRingUnder = ringsOfDrawing(atoms, bonds);
   // how a bond out of a centre stands: +1 on a wedge, -1 on hashes, 0 in
   // the page (a wedge narrow at the other end says nothing about this one)
   const lift = (c: number, n: number) => {
@@ -363,7 +392,7 @@ export function readStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBon
       apart(Math.atan2(atoms[n].y - atoms[end].y, atoms[n].x - atoms[end].x), Math.atan2(atoms[end].y - atoms[other].y, atoms[end].x - atoms[other].x)) < IN_LINE;
     const ra = neighbours[a].find((n) => n !== b && !straightOn(a, b, n));
     const rb = neighbours[b].find((n) => n !== a && !straightOn(b, a, n));
-    if (ra == null || rb == null || inSmallRing(neighbours, a, b)) return;
+    if (ra == null || rb == null || inRingUnder(a, b, OPEN_RING)) return;
     // (an end with a second double bond, or a triple one - an azide's
     // middle N, an allene's middle C - is straight through, and the bond
     // has no cis or trans of its own, however the drawing bends it)
@@ -382,16 +411,8 @@ export function readStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBon
     cisTrans.set(i, { refs: [ra, rb], cis: sa === sb });
   });
 
-  // a run of cumulated double bonds: a carbon, or an N+, between two double bonds (a sulfur's C=S=C is bent, no axis - the rule
-  // the restraints' linear-by-bonds has)
-  const linearMiddle = (x: number) => (atoms[x].el ?? "C") === "C" || ((atoms[x].el ?? "C") === "N" && (atoms[x].charge ?? 0) === 1);
-  const middle = (x: number) => linearMiddle(x) && neighbours[x].length === 2 && neighbours[x].every((n) => bondOf.get(key(x, n))!.order === 2);
-  /** The atoms along the run from end `i` through its double bond to `m`, to the run's other end. */
-  const runFrom = (i: number, m: number) => {
-    const run = [i, m];
-    while (middle(run[run.length - 1]) && run.length <= atoms.length) run.push(neighbours[run[run.length - 1]].find((x) => x !== run[run.length - 2])!);
-    return run;
-  };
+  // a run of cumulated double bonds (`runsOfDrawing`)
+  const { middle, runFrom } = runsOfDrawing(atoms, neighbours, bondOf);
   // (an end of a run of an even number of double bonds - an allene's, a ketenimine's: a wedge out of it is the run's)
   const endsAnAllene = (i: number) =>
     !middle(i) && neighbours[i].some((m) => bondOf.get(key(i, m))!.order === 2 && middle(m) && runFrom(i, m).length % 2 === 1);
@@ -422,7 +443,7 @@ export function readStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnBon
       // acid's: in five or six the rings are held all but flat, or turn over fast - fluorene, 9,10-dihydrophenanthrene)
       // (a metal counted as any ring atom: BINAP's chelate ring through its axis is of seven, read; a 2,2'-bipyridine's on a
       // metal, of five, held flat)
-      if (lifted == null || ringThrough(neighbours, i, j) < AXIS_RING) continue;
+      if (lifted == null || inRingUnder(i, j, AXIS_RING)) continue;
       const refs: [number, number] = [Math.min(...near), Math.min(...far)];
       const sense = drawnAxisSense((k) => atoms[k], { atoms: [i, j], refs }, lifted, lift(i, lifted) as 1 | -1);
       if (sense) axes.push({ atoms: [i, j], refs, sense });
@@ -569,6 +590,7 @@ export function unsureStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnB
     neighbours[b.b].push(b.a);
     bondOf.set(key(b.a, b.b), b);
   });
+  const inRingUnder = ringsOfDrawing(atoms, bonds);
   const lift = (c: number, n: number) => {
     const w = bondOf.get(key(c, n))?.wedge;
     return w && w.narrow === c ? (w.stereo === "up" ? 1 : -1) : 0;
@@ -599,7 +621,7 @@ export function unsureStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnB
   bonds.forEach((bond, i) => {
     if (bond.order !== 2 || bondOf.get(key(bond.a, bond.b)) !== bond) return;
     const { a, b } = bond;
-    if (atoms[a].z != null || atoms[b].z != null || inSmallRing(neighbours, a, b)) return;
+    if (atoms[a].z != null || atoms[b].z != null || inRingUnder(a, b, OPEN_RING)) return;
     if ([a, b].some((x) => neighbours[x].some((n) => bondOf.get(key(x, n))!.either))) return;
     // (a group on either end within the turn of the bond's own line: cis and trans told apart by luck)
     // (a group exactly in line says nothing, as an allene's middle does; one
@@ -792,40 +814,30 @@ export function sameConfiguration(
   return (swaps % 2 === 0) === (p.volume === q.volume);
 }
 
-/** Whether the bond i-j is in a ring of seven atoms or fewer: j reached from i some other way within six bonds. */
-export function inSmallRing(neighbours: readonly number[][], i: number, j: number): boolean {
-  let level = neighbours[i].filter((n) => n !== j);
-  const seen = new Set([i, ...level]);
-  for (let step = 1; step < 6 && level.length; step++) {
-    if (level.includes(j)) return true;
-    const next: number[] = [];
-    for (const u of level) {
-      for (const v of neighbours[u]) {
-        if (seen.has(v)) continue;
-        seen.add(v);
-        next.push(v);
-      }
-    }
-    level = next;
-  }
-  return level.includes(j);
-}
-
 /** The smallest ring a drawn axis may be in: seven atoms. */
 const AXIS_RING = 7;
 
-/** The size of the smallest ring through the bond i-j, in atoms - j reached from i some other way - or Infinity where it is in none. */
-function ringThrough(neighbours: readonly number[][], i: number, j: number): number {
-  const far = new Map<number, number>([[i, 0]]);
-  const queue = [i];
-  while (queue.length) {
-    const u = queue.shift()!;
-    for (const v of neighbours[u]) {
-      if ((u === i && v === j) || far.has(v)) continue;
-      far.set(v, far.get(u)! + 1);
-      if (v === j) return far.get(v)! + 1;
-      queue.push(v);
-    }
-  }
-  return Infinity;
+/**
+ * Whether the bond a-b of a drawing is in a ring of fewer than `n` atoms (perception/facts `inRingSmallerThan`): the rings of every drawn
+ * bond, as the reader takes them, a metal's too; false for a bond in no ring.
+ */
+function ringsOfDrawing(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): (a: number, b: number, n: number) => boolean {
+  const facts = factsOf({ atoms: atoms.map((x) => ({ el: x.el ?? "C" })), bonds: bonds.map(({ a, b, order }) => ({ a, b, order })) });
+  return (a, b, n) => facts.inRingSmallerThan(facts.bondBetween(a, b), n);
+}
+
+/**
+ * A drawing's runs of cumulated double bonds: `middle`, whether an atom is one a run goes on through - a carbon, or an N+, between two
+ * double bonds (a sulfur's C=S=C is bent, no axis - the rule the restraints' linear-by-bonds has); `runFrom`, the atoms along the run from
+ * end `i` through its double bond to `m`, to the run's other end.
+ */
+function runsOfDrawing(atoms: readonly DrawnAtom[], neighbours: readonly number[][], bondOf: ReadonlyMap<string, DrawnBond>) {
+  const linearMiddle = (x: number) => (atoms[x].el ?? "C") === "C" || ((atoms[x].el ?? "C") === "N" && (atoms[x].charge ?? 0) === 1);
+  const middle = (x: number) => linearMiddle(x) && neighbours[x].length === 2 && neighbours[x].every((n) => bondOf.get(key(x, n))!.order === 2);
+  const runFrom = (i: number, m: number) => {
+    const run = [i, m];
+    while (middle(run[run.length - 1]) && run.length <= atoms.length) run.push(neighbours[run[run.length - 1]].find((x) => x !== run[run.length - 2])!);
+    return run;
+  };
+  return { middle, runFrom };
 }

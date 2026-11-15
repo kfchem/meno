@@ -17,12 +17,10 @@ import { lonePairsIn3d } from "../lonePairsIn3d";
 import { torsionSense, type Axial, type Cumulated } from "../../layout/stereo";
 import { configuredFrom, type Place } from "../stereoOpen";
 import { cipLabels } from "./index";
+import { factsOf, OPEN_RING } from "../perception/facts";
 
 /** The elements of the third period on whose double bonds convention (b) takes as single (prepare.ts). */
 const D_ORBITAL: ReadonlySet<string> = new Set(["P", "As", "Sb", "Bi", "S", "Se", "Te"]);
-
-/** The smallest ring a double bond in which has a cis or trans of its own: eight atoms (rank.ts `OPEN_RING`). */
-const OPEN_RING = 8;
 
 /** A molecule in 3D as this reads it: its atoms, its bonds by their atoms' numbers from 0, and its places (x, y, z for each atom, in its order). */
 export type In3d = { atoms: readonly { el: string; charge?: number; isotope?: number }[]; bonds: readonly { a1: number; a2: number; order: number }[]; xyz: readonly number[] };
@@ -51,8 +49,9 @@ export function cipIn3d(m: In3d): { atoms: Record<string, string>; bonds: Record
   // (a cumulated double bond, an allene's or a butatriene's, is no unit of its own: its run's, `runsIn3d`. The other tests already keep one
   //  from getting a label, so this guard has no case where it shows - it says what a unit here is)
   const doublesAt = m.atoms.map((_, i) => m.bonds.filter((b) => b.order === 2 && (b.a1 === i || b.a2 === i)).length);
+  const ringed = factsOf({ atoms: m.atoms, bonds });
   const doubles = m.bonds.flatMap((b, i) =>
-    b.order === 2 && around[b.a1].length > 1 && around[b.a2].length > 1 && doublesAt[b.a1] === 1 && doublesAt[b.a2] === 1 && ringThrough(around, b.a1, b.a2) >= OPEN_RING ? [i] : [],
+    b.order === 2 && around[b.a1].length > 1 && around[b.a2].length > 1 && doublesAt[b.a1] === 1 && doublesAt[b.a2] === 1 && !ringed.inRingSmallerThan(i, OPEN_RING) ? [i] : [],
   );
   const read = configuredFrom(bonds, places, four, doubles);
   const pyramids = lonePairsIn3d(m.atoms, m.bonds, m.xyz, three).read;
@@ -139,18 +138,3 @@ function runsIn3d(
   return out;
 }
 
-/** The size of the smallest ring through the bond a-b, up to `OPEN_RING`; Infinity past it or in none. */
-function ringThrough(around: readonly number[][], a: number, b: number): number {
-  const far = new Map<number, number>([[a, 0]]);
-  const queue = [a];
-  while (queue.length) {
-    const x = queue.shift()!;
-    for (const y of around[x]) {
-      if ((x === a && y === b) || far.has(y)) continue;
-      far.set(y, far.get(x)! + 1);
-      if (y === b) return far.get(y)! + 1;
-      if (far.get(y)! < OPEN_RING) queue.push(y);
-    }
-  }
-  return Infinity;
-}

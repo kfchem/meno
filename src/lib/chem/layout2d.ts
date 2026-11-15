@@ -4400,13 +4400,32 @@ export function unspecifiedDoubles(atoms: Atom[], bonds: Bond[]): Bond[] {
     !b.coordination &&
     !b.query &&
     (b.display ?? "plain") === "plain";
+  const otherEnd = (k: number, x: number) => (bonds[k].a1 === x ? bonds[k].a2 : bonds[k].a1);
+  // (a carbon, or an N+, between two double bonds and bonded to nothing else: a cumulene's run goes on through it, as the reader takes a
+  //  run - a sulfur's C=S=C is bent, no run)
+  const through = (x: number) => {
+    const here = at.get(x) ?? [];
+    const linear = atoms[x].el === "C" || (atoms[x].el === "N" && (atoms[x].charge ?? 0) === 1);
+    return linear && here.length === 2 && here.every((k) => bonds[k].order === 2 && bonds[k].a1 !== bonds[k].a2);
+  };
+  /** The run of cumulated double bonds from `from` on through `to`, to its end: that end and the atom before it (`to` and `from` where it goes no further). */
+  const runEnd = (from: number, to: number): [number, number] => {
+    let [prev, end] = [from, to];
+    for (let steps = 0; through(end) && steps <= atoms.length; steps++) {
+      const next = at.get(end)!.map((k) => otherEnd(k, end)).find((x) => x !== prev);
+      if (next == null) break;
+      [prev, end] = [end, next];
+    }
+    return [end, prev];
+  };
   bonds.forEach((d, i) => {
     if (d.order !== 2 || d.stereo !== "either") return;
+    // (an odd cumulene's either is across its run - a butatriene's: the bond's end in the run is the run's far end)
     const ends = [
       [d.a1, d.a2],
       [d.a2, d.a1],
-    ].map(([end, other]) => {
-      const subs = (at.get(end) ?? []).filter((k) => k !== i);
+    ].map(([end, other]) => (through(end) ? runEnd(other, end) : [end, other])).map(([end, other]) => {
+      const subs = (at.get(end) ?? []).filter((k) => k !== i && !(otherEnd(k, end) === other && bonds[k].order === 2));
       const far = (k: number) => (bonds[k].a1 === end ? bonds[k].a2 : bonds[k].a1);
       // straight on from the double bond: within ten degrees of it
       const straight =

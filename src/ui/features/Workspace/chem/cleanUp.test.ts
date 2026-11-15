@@ -10,7 +10,7 @@ import { fromSmiles } from "../../../../lib/layout/testdata/fromSmiles";
 import { createWorkspaceDocument, emptyWorkspaceDocument, expandAbbreviation } from "../document";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import type { Bond, Model } from "../store/types";
-import { cleanUp, CleanUpRefused, fragmentOf, fragmentsHolding, fragmentsOf, laidOut, partFormula, partOf } from "./cleanUp";
+import { cleanUp, CleanUpRefused, fragmentOf, fragmentsHolding, fragmentsOf, laidOut, partFormula, partOf, runsAsCame } from "./cleanUp";
 import { overlapsMade, sameStereo } from "./engineLayout";
 import { degrees, drawingOf, forFlatReaders } from "./drawing";
 import { labelBox, labelSetOf } from "../../../../lib/chem/layout2d";
@@ -606,6 +606,85 @@ describe("cleanUp", () => {
         }
       }
     }, 120000);
+
+    it("lays out hexa-2,3,4-triene from CC=C=C=CC with its run's ends straight on, read as no cis or trans, and keeps it so through Clean-up", async () => {
+      const s = "CC=C=C=CC";
+      const cumulated = (m: Model) => {
+        const d = drawingOf(m);
+        return readStereo(d.atoms, d.bonds).cumulated.length;
+      };
+      const m = arrived(s);
+      // (as it came: bent, read as one of them)
+      expect(cumulated(m)).toBe(1);
+      const open = openDoubleBonds(fromSmiles(s));
+      const laid = await laidOut(m, undefined, undefined, open);
+      expect(cumulated(laid)).toBe(0);
+      // (each end's methyl straight on from the run: C1 from C2, C4 from C3)
+      const id = (i: number) => m.atoms[i].id;
+      expect(angleAt(laid, id(1), id(2), id(0))).toBeLessThan(10);
+      expect(angleAt(laid, id(4), id(3), id(5))).toBeLessThan(10);
+      const was = identityOfDrawn(laid).text;
+      expect(was).not.toBe(identityOfDrawn(m).text);
+      const { store } = canvas(laid);
+      for (const time of [1, 2]) {
+        await cleanUp(store);
+        const now = store.getState().model;
+        expect(cumulated(now), `${time}`).toBe(0);
+        expect(identityOfDrawn(now).text, `${time}`).toBe(was);
+      }
+    }, 60000);
+
+    it("lays out a run the SMILES writes beside a run it leaves open: the written one as written, the open one open", async () => {
+      for (const [s, cis] of [
+        ["C/C=C=C=C/CC=C=C=CC", false],
+        ["C/C=C=C=C/CCCC=C=C=CC", false],
+        ["C/C=C=C=C/[C@H](F)C=C=C=CC", false],
+        [String.raw`C/C=C=C=C\CC=C=C=CC`, true],
+      ] as const) {
+        const own = readSmiles(s);
+        const given = { axes: own.axes ?? [], cumulated: own.cumulated ?? [] };
+        expect(given.cumulated, s).toHaveLength(1);
+        // (the plugin's drawing as it may come: both runs bent, the written one either way - a MOL block cannot say it)
+        const came = arrived(s.replace(/[/\\]/g, ""));
+        const laid = await laidOut(came, undefined, given, openDoubleBonds(fromSmiles(s)));
+        const d = drawingOf(laid);
+        const read = readStereo(d.atoms, d.bonds).cumulated;
+        expect(read.map((r) => [[...r.atoms].sort((p, q) => p - q), r.cis]), s).toEqual([[[1, 4], cis]]);
+      }
+    }, 60000);
+
+    it("marks unsaid a run a drawing kept as it came shows other than its text gives: none given, or the other isomer; one shown as given stays", () => {
+      const came = arrived("CC=C=C=CC");
+      const shownOf = (m: Model) => {
+        const d = drawingOf(m);
+        return readStereo(d.atoms, d.bonds).cumulated;
+      };
+      const [shown] = shownOf(came);
+      expect(shown).toBeDefined();
+      const run = (cis: boolean) => ({ axes: [], cumulated: [{ atoms: [1, 4] as const, refs: [0, 5] as const, cis }] });
+      for (const given of [undefined, run(!shown.cis)]) {
+        const marked = runsAsCame(came, given);
+        const either = marked.bonds.filter((b) => b.stereo === "either");
+        expect(either, `${given?.cumulated[0].cis}`).toHaveLength(1);
+        expect(either[0].order).toBe(2);
+        // (the run's own double bond, at an end: C1=C2 or C3=C4)
+        const ids = [either[0].a, either[0].b].map((id) => came.atoms.findIndex((a) => a.id === id)).sort();
+        expect([[1, 2], [3, 4]]).toContainEqual(ids);
+        expect(shownOf(marked)).toEqual([]);
+      }
+      expect(runsAsCame(came, run(shown.cis))).toBe(came);
+      // (an allene's run, and a drawing that shows no run, as they are)
+      const allene = arrived("CC=C=CC");
+      expect(runsAsCame(allene, undefined)).toBe(allene);
+    });
+
+    it("gives 2-methylhepta-2,3,4-triene from a SMILES with no marks a wavy bond: its run's double bond 'either', read as no cis or trans", async () => {
+      const s = "CC=C=C=C(C)CC";
+      const laid = await laidOut(arrived(s), undefined, undefined, openDoubleBonds(fromSmiles(s)));
+      expect(laid.bonds.filter((b) => b.stereo === "either")).toHaveLength(1);
+      const d = drawingOf(laid);
+      expect(readStereo(d.atoms, d.bonds).cumulated).toEqual([]);
+    });
 
     it("keeps a double bond the SMILES gives E or Z bent as given", async () => {
       for (const s of ["C/C=C/C", "C/C=C\\C"]) {
