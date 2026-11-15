@@ -3,7 +3,7 @@ import { renderToString } from "react-dom/server";
 import QuickAdd, { DrawAs } from "./QuickAdd";
 import { CALC_MOST, CALC_ROW, LIST_LEAST, LIST_MOST, listWidth, stepsMost } from "./quickAddLabel";
 import { pastedAs } from "./quickAddPaste";
-import { toggledPanel } from "./quickAddPanel";
+import { calcMadeWith, toggledPanel } from "./quickAddPanel";
 import { registerKinds } from "../../../lib/io/kinds";
 import { MANIFESTS } from "../../../lib/plugins/known";
 import { resolve } from "./chem/resolve";
@@ -145,5 +145,44 @@ describe("how the calculations' list stands", () => {
   it("shows never fewer than six of the steps of the one open, however many rows there are", () => {
     expect(stepsMost(40)).toBe(6 * CALC_ROW);
     expect(stepsMost(2)).toBe(CALC_MOST - 2 * CALC_ROW);
+  });
+});
+
+describe("Quick Add's Calculations rows", () => {
+  const STEPS = [
+    { by: "tight", name: "Tight", steps: [{ kind: "optimise" as const, name: "Optimise", icon: "curve" as const }] },
+    { by: "meno", name: "Meno", steps: [{ kind: "energy" as const, name: "Energy", icon: "level" as const }] },
+  ];
+  const html = (wired: boolean, steps = STEPS) =>
+    renderToString(
+      <QuickAdd x={10} y={10} within={{ width: 800, height: 600 }} wired={wired} steps={steps} onChoose={none} onChain={none} onArrow={none} onShape={none} onSmiles={async () => {}} onStep={none} onClose={none} />,
+    );
+
+  it("are not made as Quick Add opens shut on them: its first frame holds only what shows", () => {
+    expect(html(false)).not.toContain(">Optimise<");
+    expect(html(false)).not.toContain("No step added takes this");
+  });
+
+  it("are made at once where Quick Add opens on them, from a wire: the steps, or the words that there are none", () => {
+    expect(html(true)).toContain(">Optimise<");
+    expect(html(true, [])).toContain("No step added takes this");
+  });
+
+  it("are made the first time Calculations is opened, and kept once it is shut again - and only then", () => {
+    // (shut, never opened: none; opened: made; shut again, or another row opened: kept)
+    expect(calcMadeWith("none", false)).toBe(false);
+    expect(calcMadeWith("scheme", false)).toBe(false);
+    expect(calcMadeWith("calculations", false)).toBe(true);
+    expect(calcMadeWith("none", true)).toBe(true);
+    expect(calcMadeWith("smiles", true)).toBe(true);
+    // (pressed open, pressed shut: a chemist's two presses, the rule asked after each)
+    const afterOpen = calcMadeWith(toggledPanel("none", "calculations"), false);
+    expect(calcMadeWith(toggledPanel("calculations", "calculations"), afterOpen)).toBe(true);
+  });
+
+  it("from a wire, Quick Add is as wide as its widest step's name and what stands about it, measured with its rows", () => {
+    // (the rows' box: the list's width of the names above - the card's own, less its 8 px)
+    const width = listWidth(STEPS.flatMap((g) => [g.name, ...g.steps.map((k) => k.name)]));
+    expect(html(true)).toContain(`style="width:${width}px"`);
   });
 });
