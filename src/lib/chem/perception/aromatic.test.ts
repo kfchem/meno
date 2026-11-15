@@ -142,6 +142,14 @@ describe("the two aromatic forms: identity's (every alternating cycle) and geome
     expect(huckelForm(butadiene)).toBe(butadiene);
   });
 
+  it("join no ring through an atom with a triple bond beside its double, as a drawing over an atom's valence can have", () => {
+    const ring: ChemGraph = { atoms: Array.from({ length: 6 }, () => ({ el: "C" })), bonds: [0, 1, 2, 3, 4, 5].map((k) => ({ a: k, b: (k + 1) % 6, order: k % 2 ? 1 : 2 })) };
+    const g: ChemGraph = { atoms: [...ring.atoms, { el: "N" }], bonds: [...ring.bonds, { a: 0, b: 6, order: 3 }] };
+    expect(aromaticForm(g)).toBe(g);
+    expect(huckelForm(g)).toBe(g);
+    expect(huckelBonds(g.atoms.length, g.bonds).size).toBe(0);
+  });
+
   it("keep what else the graph carries, and drop a side said on a bond made aromatic", () => {
     const g = { ...kekule("C1=CC=CC=CC=C1"), extra: "kept" };
     g.bonds = g.bonds.map((b) => (b.order === 2 ? { ...b, stereo: { refs: [b.a, b.b] as [number, number], cis: true } } : b));
