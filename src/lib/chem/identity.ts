@@ -591,6 +591,24 @@ function bridgesAlike(g: LayoutInput, places: ReadonlySet<number>, classes: read
       }
     return out;
   };
+  /** How many atoms a bridge has along it: from its atom on `at`'s side (`from`) to the nearest of its atoms on `far`. */
+  const bridgeLength = (group: readonly number[], from: number, far: number): number => {
+    const inGroup = new Set(group);
+    let at = [from];
+    const seen = new Set([from]);
+    for (let d = 1; at.length; d++) {
+      if (at.some((a) => around[a].includes(far))) return d;
+      const next: number[] = [];
+      for (const u of at)
+        for (const v of around[u]) {
+          if (!inGroup.has(v) || seen.has(v)) continue;
+          seen.add(v);
+          next.push(v);
+        }
+      at = next;
+    }
+    return Infinity;
+  };
   const text = (group: readonly number[], at: number, far: number): string | null => {
     if (group.some((a) => places.has(a) || configured.has(a))) return null;
     const index = new Map(group.map((a, i) => [a, i]));
@@ -611,6 +629,9 @@ function bridgesAlike(g: LayoutInput, places: ReadonlySet<number>, classes: read
       // (each its own part, apart from the others, and each meeting the far bridgehead)
       if (own.some((_, k) => own.some((r, l) => l !== k && r.includes(side[k])))) continue;
       if (!own.every((q) => q.some((a) => around[a].includes(far)))) continue;
+      // (every bridge of BRIDGE_MOST atoms or fewer between the two bridgeheads, along it: a longer one lets the bridgeheads
+      //  stand in or out - in,out-bicyclo[4.4.1]undecane - and their senses to each other say which)
+      if (own.some((q, k) => bridgeLength(q, side[k], far) > BRIDGE_MOST)) continue;
       for (let p = 0; p < side.length; p++)
         for (let q = p + 1; q < side.length; q++) {
           if (classes[side[p]] !== classes[side[q]]) continue;
@@ -622,6 +643,14 @@ function bridgesAlike(g: LayoutInput, places: ReadonlySet<number>, classes: read
     return false;
   };
 }
+
+/**
+ * The most atoms a cage's bridge may have, along it, for its bridgeheads to stand only one way to each other (`bridgesAlike`):
+ * with four, in,out isomers begin (bicyclo[4.4.1]undecane's, found in the chemistry check). That none is known with every
+ * bridge of three or fewer is the chemistry check's memory, not a source read: a bound on the safe side - a cage past it is
+ * left to the search, never two compounds joined.
+ */
+const BRIDGE_MOST = 3;
 
 /** The most atoms a group may have for `groupsAlike` to write it: a larger one is left to the search. */
 const GROUP_MOST = 64;

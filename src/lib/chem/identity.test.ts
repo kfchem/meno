@@ -460,6 +460,13 @@ describe("a configuration that makes no stereo unit, in a structure's identity",
     // (quinuclidin-3-ol likewise at its C4, the N between the same bridges; its C3 a centre, two)
     expect(new Set(["O[C@H]1CN2CC[C@@H]1CC2", "O[C@H]1CN2CC[C@H]1CC2", "O[C@H]1CN2CCC1CC2"].map((s) => identityText(fromSmiles(s)))).size).toBe(1);
     expect(identityText(fromSmiles("O[C@H]1CN2CCC1CC2"))).not.toBe(identityText(fromSmiles("O[C@@H]1CN2CCC1CC2")));
+    // (a cage with a bridge of four atoms or more lets its bridgeheads stand in or out: in,out- and out,out-bicyclo[4.4.1]undecane
+    //  and bicyclo[4.4.4]tetradecane, two structures each - the bridgeheads' senses to each other written, not settled)
+    for (const [inOut, outOut] of [
+      ["C1CC[C@H]2CCCC[C@@H](C1)C2", "C1CC[C@H]2CCCC[C@H](C1)C2"],
+      ["C1CCC[C@H]2CCCC[C@@H](C1)CCCC2", "C1CCC[C@H]2CCCC[C@H](C1)CCCC2"],
+    ])
+      expect([inOut, identityText(fromSmiles(inOut)) === identityText(fromSmiles(outOut))]).toEqual([inOut, false]);
     // (tropine and pseudotropine: C3 between C2 to C1 and C4 to C5, bridges to different atoms - two structures)
     expect(identityText(fromSmiles("CN1[C@@H]2CC[C@H]1C[C@@H](O)C2"))).not.toBe(identityText(fromSmiles("CN1[C@@H]2CC[C@H]1C[C@H](O)C2")));
   });

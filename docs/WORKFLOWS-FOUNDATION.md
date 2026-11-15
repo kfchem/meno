@@ -903,9 +903,11 @@ drawn, aromatic rings as one form.* What that means, plainly:
   each group hanging from the place alone, with no place or configuration
   in it) sets nothing whatever else is given: it carries no configuration
   in the identity, one drawn on it taken off, and is asked no more, with
-  no search of the whole structure - so too a bridgehead of a cage two of
-  whose bridges to the other bridgehead are alike (bicyclo[2.2.2]octane's,
-  quinuclidine's), the cage standing only one way; and, asked again until
+  no search of the whole structure - so too a bridgehead of a small cage
+  two of whose bridges to the other bridgehead are alike
+  (bicyclo[2.2.2]octane's, quinuclidine's), the cage standing only one way:
+  every bridge of three atoms or fewer, a bound on the safe side, since
+  with four in,out isomers begin (bicyclo[4.4.1]undecane's); and, asked again until
   nothing more settles, a place whose groups are alike but for places of
   their own that settled first (tri-tert-butylmethanol). Two arms of a
   ring are no cage (cis- and trans-1,4-dimethylcyclohexane), nor are
