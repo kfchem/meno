@@ -185,6 +185,36 @@ describe("a metal's square-planar or octahedral mark, read as which neighbours a
     expect([counts.size, [...new Set(counts.values())]]).toEqual([15, [2]]);
   });
 
+  it("each of the thirty by value, against a transcription of the specification's table made apart from the code's (found in review)", () => {
+    // ([M@OHn](a)(b)(c)(d)(e)f: the three pairs across, as the chemistry check read them from OpenSMILES 1.0, *Octahedral Centers*)
+    const TABLE = `
+      OH1: a-f b-d c-e   OH11: a-e b-c d-f   OH21: a-c b-d e-f
+      OH2: a-f b-d c-e   OH12: a-d b-c e-f   OH22: a-c b-d e-f
+      OH3: a-e b-d c-f   OH13: a-d b-c e-f   OH23: a-c b-f d-e
+      OH4: a-f b-e c-d   OH14: a-f b-e c-d   OH24: a-c b-e d-f
+      OH5: a-e b-f c-d   OH15: a-e b-f c-d   OH25: a-b c-e d-f
+      OH6: a-d b-e c-f   OH16: a-e b-d c-f   OH26: a-b c-f d-e
+      OH7: a-d b-f c-e   OH17: a-d b-f c-e   OH27: a-b c-d e-f
+      OH8: a-f b-c d-e   OH18: a-d b-e c-f   OH28: a-b c-d e-f
+      OH9: a-e b-c d-f   OH19: a-c b-e d-f   OH29: a-b c-f d-e
+      OH10: a-f b-c d-e  OH20: a-c b-f d-e   OH30: a-b c-e d-f`;
+    const rows = [...TABLE.matchAll(/OH(\d+): ([a-f]-[a-f]) ([a-f]-[a-f]) ([a-f]-[a-f])/g)];
+    expect(rows).toHaveLength(30);
+    const six = [0, 1, 2, 3, 4, 5];
+    const letter = (i: number) => "abcdef"[i];
+    for (const [, n, ...pairs] of rows) {
+      const read = pairsMarked(`OH${n}`, six)!.map((p) => p.map(letter).sort().join("-")).sort();
+      expect([n, read]).toEqual([n, [...pairs].sort()]);
+    }
+  });
+
+  it("square planar by value, against the same transcription: SP1 a-c b-d, SP2 a-b c-d, SP3 a-d b-c", () => {
+    const four = [0, 1, 2, 3];
+    const letter = (i: number) => "abcd"[i];
+    const read = (n: number) => pairsMarked(`SP${n}`, four)!.map((p) => p.map(letter).sort().join("-")).sort();
+    expect([read(1), read(2), read(3)]).toEqual([["a-c", "b-d"], ["a-b", "c-d"], ["a-d", "b-c"]]);
+  });
+
   it("reads the ring closures in the order of their digits: trans- and cis-[Co(en)2Cl2]+, fac- and mer-Co(gly)3", () => {
     expect(across("[Co@OH1+]123456.Cl1.[NH2]2CC[NH2]3.[NH2]4CC[NH2]5.Cl6")).toEqual(["Cl-Cl", "N-N", "N-N"]);
     expect(across("[Co@OH1+]123456.Cl1.Cl2.[NH2]3CC[NH2]4.[NH2]5CC[NH2]6")).toEqual(["Cl-N", "Cl-N", "N-N"]);

@@ -323,9 +323,10 @@ export function readSmiles(text: string, { metalMarks = false }: { metalMarks?: 
 }
 
 /**
- * The shape each square-planar mark draws through its four neighbours in their written order (OpenSMILES, *Square Planar
- * Centers*: SP1 the U, SP2 the 4, SP3 the Z), as which of the four lie across: the U goes round, so the first and third and the
- * second and fourth; the Z starts and ends across, so the first and fourth and the second and third (its start and end
+ * The shape each square-planar mark draws through its four neighbours in their written order (OpenSMILES specification,
+ * version 1.0, 2016-05-15, *Square Planar Centers*: SP1 the U, SP2 the 4, SP3 the Z; the octahedral table below is its
+ * *Octahedral Centers*), as which of the four lie across: the U goes round, so the first and third and the second and fourth;
+ * the Z starts and ends across, so the first and fourth and the second and third (its start and end
  * "never adjacent"); the 4, the one left, the first and second and the third and fourth.
  */
 const SHAPE_PAIRS: Record<"U" | "Z" | "4", [number, number][]> = { U: [[0, 2], [1, 3]], Z: [[0, 3], [1, 2]], "4": [[0, 1], [2, 3]] };
