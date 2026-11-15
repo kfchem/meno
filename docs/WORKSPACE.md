@@ -611,6 +611,9 @@ Taken on 2026-10-13:
     passes).
   - Its rows say how each part was searched (*Part 1: Rounds*, *Part 2*:
     "Na+: one atom, no search"; "Ca2+: ...").
+  - Each stereoisomer of the whole the page makes has its parts searched
+    for it: a part configured alike in two of them (the anion of a salt
+    of a chiral cation) is searched once for each.
   - Searched whole, as before: a structure of several parts one of which
     holds a ring bound to a metal through all its atoms; one made with a
     number of conformers of the chemist's own, not in rounds; and a
