@@ -61,6 +61,48 @@ describe("a flat six-ring drawn as a chair (Draw as chair)", () => {
     expect(drawn("C[C@@H]1CC[C@H](C)CC1", 2)).toMatchObject({ axial: 1, equatorial: 1 });
   }, measured(1000));
 
+  /** Every writing of a ring SMILES whose `n` marks `{}` each take @ or @@. */
+  const writings = (smiles: string, n: number) =>
+    Array.from({ length: 2 ** n }, (_, k) => {
+      let j = 0;
+      return smiles.replace(/\{\}/g, () => ((k >> j++) & 1 ? "@@" : "@"));
+    });
+  /** The writings grouped by the compound the flat drawing is, each group's chairs' axial and equatorial groups. */
+  const byCompound = (all: string[]) => {
+    const groups = new Map<string, { axial: number; equatorial: number }[]>();
+    for (const w of all) {
+      const d = drawn(w, 2);
+      const key = identityOfDrawn(d.flat).text;
+      groups.set(key, [...(groups.get(key) ?? []), { axial: d.axial, equatorial: d.equatorial }]);
+    }
+    return [...groups.values()].sort((p, q) => p.length - q.length);
+  };
+
+  it("draws every writing of 1,3,5-trimethylcyclohexane as the compound it is: all-cis all equatorial, cis,trans one axial", () => {
+    const [allCis, cisTrans] = byCompound(writings("C[C{}H]1C[C{}H](C)C[C{}H](C)C1", 3));
+    expect(allCis).toEqual(Array(2).fill({ axial: 0, equatorial: 3 }));
+    expect(cisTrans).toEqual(Array(6).fill({ axial: 1, equatorial: 2 }));
+  }, measured(4000));
+
+  it("draws every writing of 1,3,5-cyclohexanetriol likewise: all-cis's three OH equatorial, cis,trans one axial", () => {
+    const [allCis, cisTrans] = byCompound(writings("O[C{}H]1C[C{}H](O)C[C{}H](O)C1", 3));
+    expect(allCis).toEqual(Array(2).fill({ axial: 0, equatorial: 3 }));
+    expect(cisTrans).toEqual(Array(6).fill({ axial: 1, equatorial: 2 }));
+  }, measured(4000));
+
+  it("draws every writing of 1,2,4,5-tetramethylcyclohexane as the compound drawn", () => {
+    const groups = byCompound(writings("C[C{}H]1C[C{}H](C)[C{}H](C)C[C{}H]1C", 4));
+    expect(groups.flat()).toHaveLength(16);
+  }, measured(8000));
+
+  it("draws every writing of the inositols as the compound drawn: the nine stereoisomers, scyllo's six OH equatorial", () => {
+    const groups = byCompound(writings("O[C{}H]1[C{}H](O)[C{}H](O)[C{}H](O)[C{}H](O)[C{}H]1O", 6));
+    expect(groups).toHaveLength(9);
+    expect(groups.flat()).toHaveLength(64);
+    // (scyllo: every OH trans to its neighbours - all six equatorial in its chair)
+    expect(groups.flat().filter((g) => g.axial === 0 && g.equatorial === 6).length).toBeGreaterThan(0);
+  }, measured(30000));
+
   it("draws (-)-menthol with its three groups equatorial, the same compound", () => {
     expect(drawn("CC(C)[C@@H]1CC[C@@H](C)C[C@H]1O", 4)).toMatchObject({ axial: 0, equatorial: 3 });
   }, measured(1000));

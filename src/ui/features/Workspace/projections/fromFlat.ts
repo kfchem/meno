@@ -28,7 +28,7 @@ import { smallestRings } from "../../../../lib/layout/rings";
 import { identityText } from "../../../../lib/chem/identity";
 import { canonicalRanks } from "../../../../lib/layout/canonical";
 import type { Tetrahedral } from "../../../../lib/layout/stereo";
-import { identityInputOf } from "../chem/identityOf";
+import { identityInputOf, identityOfDrawn } from "../chem/identityOf";
 import type { Atom, Bond, Model } from "../store/types";
 import { chairDrawing, FIRST_FORM, ringAlone, seenPlaces, type ChairDrawing } from "./chair";
 
@@ -152,16 +152,24 @@ function centresOf(part: Model, ring: readonly number[]): { given: Map<number, T
     trial.set(i, { neighbours: [...n, ...(hs ? [-1] : [])], volume: 1 });
   }
   const asked = { ...input, atoms: input.atoms.map((a, i) => (trial.has(i) ? { ...a, tetra: trial.get(i)! } : a)) };
-  // (a configuration sets something where, turned over with every other one held, the structure's identity changes - one whose two
-  //  senses write the same text sets nothing, as identity's own fill reads it. A drawn one is asked of the drawing as it is: a wedge
-  //  on 4-methylcyclohexanol's OH alone sets nothing; one tried is asked with every candidate given one)
+  // (the ring's centres: every configuration, drawn or tried, kept but one that sets nothing - turned over, the rest held, the
+  //  structure's identity the same, as identity's own fill reads it - taken out ONE at a time, in canonical order, and the rest asked
+  //  again: in cis,trans-1,3,5-trimethylcyclohexane either carbon of the two alike may be turned alone, not both)
+  const rank = canonicalRanks(input);
   const setsSomething = (g: typeof input, i: number) =>
-    identityText({ ...g, atoms: g.atoms.map((a, k) => (k === i ? { ...a, tetra: { ...a.tetra!, volume: -a.tetra!.volume } } : a)) }) !== identityText(g);
+    identityText({ ...g, atoms: g.atoms.map((a, k) => (k === i ? { ...a, tetra: { ...a.tetra!, volume: a.tetra!.volume === 1 ? -1 : 1 } } : a)) }) !== identityText(g);
+  const order = ring.map((id) => index.get(id)!).sort((p, q) => rank[p] - rank[q] || p - q);
+  let kept: typeof input = asked;
+  for (;;) {
+    const idle = order.find((i) => kept.atoms[i].tetra && !setsSomething(kept, i));
+    if (idle == null) break;
+    kept = { ...kept, atoms: kept.atoms.map(({ tetra, ...a }, k) => (k === idle || !tetra ? a : { ...a, tetra })) };
+  }
   const given = new Map<number, Tetrahedral>();
   const open = new Set<number>();
   for (const id of ring) {
     const i = index.get(id)!;
-    if (!asked.atoms[i].tetra || !setsSomething(asked, i)) continue;
+    if (!kept.atoms[i].tetra) continue;
     if (trial.has(i)) open.add(id);
     else {
       // (its neighbours by atom id, an implicit H -1, as the drawing's ids go)
@@ -169,7 +177,6 @@ function centresOf(part: Model, ring: readonly number[]): { given: Map<number, T
       given.set(id, { ...t, neighbours: t.neighbours.map((n) => (n < 0 ? n : part.atoms[n].id)) });
     }
   }
-  const rank = canonicalRanks(input);
   return { given, open, ranks: new Map(part.atoms.map((a, i) => [a.id, rank[i]])) };
 }
 
@@ -353,5 +360,8 @@ export function chairFromFlat(part: Model, id: number): FromFlat | { refused: st
     const next: Bond = wavy ? { ...rest, stereo: "wavy" } : rest;
     if (next.stereo !== b.stereo || b.narrow != null) bonds.push(next);
   }
-  return { atoms: [...atoms.values()], bonds };
+  // (the last check: the chair is the compound the flat drawing is, or nothing is drawn and the fault is said)
+  const made = { atoms: [...atoms.values()], bonds };
+  if (identityOfDrawn(withChair(part, made)).text !== identityOfDrawn(part).text) return { refused: CHAIR_CHANGED };
+  return made;
 }
