@@ -34,6 +34,7 @@ import { groupShape } from "../utils/groupShape";
 import { bondsAt, lookOf, solidOf } from "../utils/molecule3d";
 import { fragmentsHolding, laidOut, partOf } from "./cleanUp";
 import { givenOf } from "./givenConfiguration";
+import { arrangementsMarked } from "./arrangementsMarked";
 import { forFlatReaders, undrawnHydrogens } from "./drawing";
 import { greatest, least } from "../../../../lib/chem/lists";
 import { drawnBox } from "../../../../utils/importers";
@@ -892,8 +893,9 @@ export function likeOf(block: Block, before: Pick<Molecule3D, "atoms" | "drawnFr
  */
 export async function formulaOf(chem: ChemClient, m: Molecule3D, frame: number, style?: DrawingStyle): Promise<{ model: Model; link: (number | null)[]; ordersUnknown: boolean }> {
   const { drawn, ordersUnknown, configuration } = await drawnOf(chem, m, frame);
-  // (laid out from the configuration the plugin read of it in 3D, where it sends it, not from its drawing's wedges)
-  const model = await laidOut(drawn, style, givenOf(undefined, configuration)).catch(() => drawn);
+  // (its coordinates nobody's drawing: laid out as new, from the configuration the plugin read of it in 3D where it sends it - not from
+  //  its drawing's wedges - or, where it cannot be, kept as it came, its square-planar centres marked as a layout would mark them)
+  const model = await laidOut(drawn, style, givenOf(undefined, configuration), undefined, true).catch(() => arrangementsMarked(drawn));
   // (its heavy atoms came back in their order)
   let k = 0;
   const link = m.atoms.map((a) => (a.el === "H" ? null : (drawn.atoms[k++]?.id ?? null)));

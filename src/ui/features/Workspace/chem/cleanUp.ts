@@ -356,7 +356,13 @@ function withGiven(job: LayoutJob, model: Model, given: Given): LayoutJob {
  * `model` laid out afresh by the engine as a whole - a salt's ions set out
  * together - for a structure that has only just arrived, before it is
  * added: a plugin's drawing of a SMILES. In `style` - the app's, unless
- * given - as Clean-up lays one out.
+ * given - as Clean-up lays one out. `open`: the double bonds its text leaves
+ * open (`OpenDoubles`). `asNew`: a drawing nobody made - a
+ * plugin's coordinates - whose forms are not kept as a chemist's are (a
+ * four-bond metal's cross or X: docs/LAYOUT-2D.md, *A metal with four
+ * bonds*), but laid out as from a SMILES; `arranged`, of such a drawing, the
+ * metals (by id) whose arrangement its input gave: their donors kept
+ * opposite each other as it has them, and not marked as not given.
  */
 /**
  * How much of what a structure's source gives (`Given`) its drawing `model` does not show, read by the one reader: of its stereocentres, its
@@ -377,7 +383,14 @@ export function notShownOf(model: Model, given: Given): { centres: [number, numb
   return { centres: [centres, stated.centres.size], doubles: [doubles, stated.doubles.size], axes: [axes, stated.axes.size] };
 }
 
-export async function laidOut(model: Model, style: DrawingStyle = styleOf(useAppSettings.getState().drawingStyle), given?: Given, open?: OpenDoubles): Promise<Model> {
+export async function laidOut(
+  model: Model,
+  style: DrawingStyle = styleOf(useAppSettings.getState().drawingStyle),
+  given?: Given,
+  open?: OpenDoubles,
+  asNew = false,
+  arranged: ReadonlySet<number> = new Set(),
+): Promise<Model> {
   if (!model.bonds.length) return model;
   // (a double bond the structure's own text leaves open, with an end of two groups: a wavy bond on a group - Brecher 2006, ST-4.4)
   const either = new Set(open?.either ?? []);
@@ -400,7 +413,11 @@ export async function laidOut(model: Model, style: DrawingStyle = styleOf(useApp
           }),
         }
       : model;
-  const read = layoutJob(m, new Set(given?.configuration?.centres.map((c) => c.atom) ?? []));
+  const job0 = layoutJob(m, new Set(given?.configuration?.centres.map((c) => c.atom) ?? []));
+  // (a drawing nobody made keeps no metal's form - but one whose arrangement its input gave keeps the form it carries, the X of a square-planar centre so arranged)
+  const read = asNew
+    ? { ...job0, asNew: true as const, ...(arranged.size ? { arranged } : {}), input: { ...job0.input, atoms: job0.input.atoms.map(({ fourForm, ...a }, i) => (fourForm && arranged.has(job0.ids[i]) ? { ...a, fourForm } : a)) } }
+    : job0;
   // (an allene's axis and an odd cumulene's cis or trans the structure's own text says, which a plugin's drawing of it cannot: a MOL block
   //  has no way to say them - and the centres and double bonds the plugin read, which its drawing may not state: a ring of 36 or more - by
   //  atom, in the drawing's order)
