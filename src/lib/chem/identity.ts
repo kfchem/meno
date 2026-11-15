@@ -464,8 +464,12 @@ export function filledIn(input: LayoutInput): { input: LayoutInput; complete: bo
   //  structure, so two groups alike but for it are alike - and three tert-butyls on one carbon settle it, their own centres
   //  settled first: tri-tert-butylmethanol)
   for (;;) {
-    const alike = groupsAlike(g, new Set(every.filter((b) => !settledHere(b)).flatMap((b) => b.own)), constitution);
-    const more = every.filter((b) => !settledHere(b) && (b.kind === "centre" || b.kind === "bond") && b.sides.some((side, k) => ends(side) || alike(b.own[k] ?? b.own[0], side)));
+    const places = new Set(every.filter((b) => !settledHere(b)).flatMap((b) => b.own));
+    const alike = groupsAlike(g, places, constitution);
+    const bridges = bridgesAlike(g, places, constitution);
+    const more = every.filter(
+      (b) => !settledHere(b) && (b.kind === "centre" || b.kind === "bond") && b.sides.some((side, k) => ends(side) || alike(b.own[k] ?? b.own[0], side) || bridges(b.own[k] ?? b.own[0], side)),
+    );
     if (!more.length) break;
     for (const b of more) {
       if (b.kind === "centre") plainAt.add(b.at);
@@ -551,6 +555,72 @@ function turnedOver(b: Exclude<Blank, { kind: "biaryl" }>, automorphisms: readon
     const swapped = (side: readonly number[]) => side.length === 2 && s[side[0]] === side[1];
     return swapped(b.sides[0]) !== swapped(b.sides[1]);
   });
+}
+
+/**
+ * Whether `at` is a bridgehead of a cage two of whose bridges are alike: every group of `side` a bridge to one other atom -
+ * cut from `at` and that atom, each its own part - as quinuclidine's three to its N; and two of them alike as wholes, with no
+ * place in them (`places`) and no configuration, written the same with the atoms on each bridgehead marked. Exchanging the
+ * two turns both bridgeheads over and moves nothing else, and a cage's bridgeheads stand only one way to each other, so the
+ * sense at `at` says nothing. Two arms of a ring are no cage (1,4-dimethylcyclohexane's cis and trans), nor are bridges to
+ * different atoms (tropine's C3): a centre still (found in the chemistry check).
+ */
+function bridgesAlike(g: LayoutInput, places: ReadonlySet<number>, classes: readonly number[]): (at: number, side: readonly number[]) => boolean {
+  const around: number[][] = g.atoms.map(() => []);
+  const order = new Map<string, number>();
+  const key = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
+  for (const b of g.bonds) {
+    around[b.a].push(b.b);
+    around[b.b].push(b.a);
+    order.set(key(b.a, b.b), b.order);
+  }
+  const configured = new Set<number>();
+  g.atoms.forEach((a, i) => a.tetra && configured.add(i));
+  for (const b of g.bonds) if (b.stereo) [b.a, b.b].forEach((i) => configured.add(i));
+  for (const x of [...(g.axes ?? []), ...(g.cumulated ?? [])]) x.atoms.forEach((i) => configured.add(i));
+  /** The part reached from `from`, never through `at` or `far`; null past GROUP_MOST atoms. */
+  const part = (from: number, at: number, far: number): number[] | null => {
+    const seen = new Set([at, far, from]);
+    const out = [from];
+    for (let k = 0; k < out.length; k++)
+      for (const y of around[out[k]]) {
+        if (seen.has(y)) continue;
+        if (out.length >= GROUP_MOST) return null;
+        seen.add(y);
+        out.push(y);
+      }
+    return out;
+  };
+  const text = (group: readonly number[], at: number, far: number): string | null => {
+    if (group.some((a) => places.has(a) || configured.has(a))) return null;
+    const index = new Map(group.map((a, i) => [a, i]));
+    const mark = (a: number) => [at, far].map((e, k) => (around[a].includes(e) ? `^${k ? "far" : "on"}${order.get(key(a, e))}` : "")).join("");
+    const atoms = group.map((a) => ({ ...g.atoms[a], el: `${g.atoms[a].el}${mark(a)}` }));
+    const bonds = g.bonds.filter((b) => index.has(b.a) && index.has(b.b)).map((b) => ({ a: index.get(b.a)!, b: index.get(b.b)!, order: b.order }));
+    return canonicalWritten({ atoms, bonds }).text;
+  };
+  return (at, side) => {
+    if (side.length < 3) return false;
+    // (the other bridgehead: an atom of the first bridge every group of `at` reaches it by, each by its own part)
+    const first = part(side[0], at, -1);
+    if (!first) return false;
+    for (const far of first) {
+      const parts = side.map((n) => (n === far ? null : part(n, at, far)));
+      if (parts.some((q) => !q)) continue;
+      const own = parts as number[][];
+      // (each its own part, apart from the others, and each meeting the far bridgehead)
+      if (own.some((_, k) => own.some((r, l) => l !== k && r.includes(side[k])))) continue;
+      if (!own.every((q) => q.some((a) => around[a].includes(far)))) continue;
+      for (let p = 0; p < side.length; p++)
+        for (let q = p + 1; q < side.length; q++) {
+          if (classes[side[p]] !== classes[side[q]]) continue;
+          const t = text(own[p], at, far);
+          if (t != null && t === text(own[q], at, far)) return true;
+        }
+      return false;
+    }
+    return false;
+  };
 }
 
 /** The most atoms a group may have for `groupsAlike` to write it: a larger one is left to the search. */

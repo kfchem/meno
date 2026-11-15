@@ -451,6 +451,19 @@ describe("a configuration that makes no stereo unit, in a structure's identity",
     for (const a of ["@", "@@"]) for (const b of ["@", "@@"]) for (const c of ["@", "@@"]) expect(identityText(fromSmiles(`C[C${a}H](C)[C${b}H](O)[C${c}H](C)C`)), a + b + c).toBe(plain);
   });
 
+  it("settles a bridgehead two of whose bridges are alike and end at the same atom; one between bridges to different atoms stays a centre", () => {
+    // (bicyclo[2.2.2]octan-2-ol, its two bridgeheads written - each with two CH2CH2 alike to the other: however they are
+    //  written, or not at all, one structure; its C2 a centre, two)
+    const bicyclooctanol = ["O[C@H]1C[C@@H]2CC[C@H]1CC2", "O[C@H]1C[C@H]2CC[C@@H]1CC2", "O[C@H]1C[C@@H]2CC[C@@H]1CC2", "O[C@H]1C[C@H]2CC[C@H]1CC2", "O[C@H]1CC2CCC1CC2"];
+    expect(new Set(bicyclooctanol.map((s) => identityText(fromSmiles(s)))).size).toBe(1);
+    expect(identityText(fromSmiles("O[C@H]1CC2CCC1CC2"))).not.toBe(identityText(fromSmiles("O[C@@H]1CC2CCC1CC2")));
+    // (quinuclidin-3-ol likewise at its C4, the N between the same bridges; its C3 a centre, two)
+    expect(new Set(["O[C@H]1CN2CC[C@@H]1CC2", "O[C@H]1CN2CC[C@H]1CC2", "O[C@H]1CN2CCC1CC2"].map((s) => identityText(fromSmiles(s)))).size).toBe(1);
+    expect(identityText(fromSmiles("O[C@H]1CN2CCC1CC2"))).not.toBe(identityText(fromSmiles("O[C@@H]1CN2CCC1CC2")));
+    // (tropine and pseudotropine: C3 between C2 to C1 and C4 to C5, bridges to different atoms - two structures)
+    expect(identityText(fromSmiles("CN1[C@@H]2CC[C@H]1C[C@@H](O)C2"))).not.toBe(identityText(fromSmiles("CN1[C@@H]2CC[C@H]1C[C@H](O)C2")));
+  });
+
   it("settles a place whose groups are alike but for places of their own that settle first: tri-tert-butylmethanol, with no search", () => {
     // (each tert-butyl's centre settled by its methyls; then the carbinol's three tert-butyls are alike as wholes - the
     //  fill complete, and no configuration of it written; the writing's own search of so symmetric a structure may still run

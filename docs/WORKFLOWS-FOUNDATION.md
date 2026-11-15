@@ -903,7 +903,13 @@ drawn, aromatic rings as one form.* What that means, plainly:
   each group hanging from the place alone, with no place or configuration
   in it) sets nothing whatever else is given: it carries no configuration
   in the identity, one drawn on it taken off, and is asked no more, with
-  no search of the whole structure. So its identity never turns on which
+  no search of the whole structure - so too a bridgehead of a cage two of
+  whose bridges to the other bridgehead are alike (bicyclo[2.2.2]octane's,
+  quinuclidine's), the cage standing only one way; and, asked again until
+  nothing more settles, a place whose groups are alike but for places of
+  their own that settled first (tri-tert-butylmethanol). Two arms of a
+  ring are no cage (cis- and trans-1,4-dimethylcyclohexane), nor are
+  bridges to different atoms (tropine and pseudotropine). So its identity never turns on which
   way it was filled in, as it could where a search runs out of steps
   (Pd(PPh3)4). The filled form is
   identity's own: the drawing keeps its wedges as drawn, and nothing filled
