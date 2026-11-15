@@ -90,6 +90,16 @@ describe("a flat six-ring drawn as a chair (Draw as chair)", () => {
     expect(cisTrans).toEqual(Array(6).fill({ axial: 1, equatorial: 2 }));
   }, measured(4000));
 
+  it("draws 1,3,5-cyclohexanetriol with one centre open as the compound drawn, however it is written: the configurations that set nothing taken out lowest rank first", () => {
+    // (an OH centre left open: which of the two given ones then sets nothing depends on the order they are asked in)
+    for (const w of ["C1[C@H](O)C[C@@H](O)C[CH](O)1", "[C@@H]1(O)C[C@@H](O)C[CH](O)C1", "C1[C@@H](O)C[C@H](O)C[CH](O)1"]) drawn(w, 1);
+  }, measured(2000));
+
+  it("refuses, and draws nothing, where the chair would read as another compound: a 1,3,5-ring with a tert-butyl and two OH, one OH open", () => {
+    // (the given OH's meaning hangs on the open one: Meno does not draw this chair yet, and says so)
+    expect(chairFromFlat(drawnFromSmiles("C1[CH](O)C[C@H](C(C)(C)C)C[C@@H](O)1"), 1)).toEqual({ refused: CHAIR_CHANGED });
+  }, measured(1000));
+
   it("draws every writing of 1,2,4,5-tetramethylcyclohexane as the compound drawn", () => {
     const groups = byCompound(writings("C[C{}H]1C[C{}H](C)[C{}H](C)C[C{}H]1C", 4));
     expect(groups.flat()).toHaveLength(16);
