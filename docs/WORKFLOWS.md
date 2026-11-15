@@ -1327,7 +1327,12 @@ taller than the rest, its inputs a plain list down its left edge, each named
   never held on what are now other atoms. One numbered as the molecule the
   rows were made for is in that molecule's numbering, and is held: rows
   made on a reaction's reactant hold on a product *Atom map* wrote in the
-  reactant's numbering, as both keys say.
+  reactant's numbering, as both keys say. A molecule numbered as one
+  reference takes the key of the numbering that reference is in: a
+  product's conformer numbered as the product, itself in the reactant's
+  numbering, is in the reactant's numbering too, and the reactant's rows
+  hold on it. Numbered as several references together, the key is of
+  their atoms and bonds.
 - **Nothing silent**: a molecule no row is for is refused ("no restraints
   made for it"), and so is one a row names an atom it has not; rows for no
   molecule that came in are counted on the line.
@@ -4190,7 +4195,9 @@ molecules of one geometry - which a step that works on entries refuses
   shown by - none picked the first; in kcal/mol, written to a tenth,
   signed. One naming no level that comes in, by either name, is said where
   its card would say *Ready* ("No level is called "Zed"") and refuses its
-  run. A table into *Connects* names levels by either name.
+  run; while no level has come in - the steps before it not yet run -
+  nothing is said, as there is nothing yet it could name. A table into
+  *Connects* names levels by either name.
 - **Which energy** is a list on its card of those its levels carry, each by
   its symbol and what worked it out and where ("ΔG · Gibbs free energy ·
   ORCA · r2SCAN-3c · 298.15 K"); the thermochemistry's corrections are no
