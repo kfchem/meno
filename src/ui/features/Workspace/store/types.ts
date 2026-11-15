@@ -142,6 +142,11 @@ export type Bond = BondChem & {
   display?: "plain" | "bold" | "hashed" | "dashed" | "wedge";
   /** A dative bond, drawn as an arrow from `a`, the donor, to `b`. */
   dative?: boolean;
+  /**
+   * The bonds (by id) it passes behind where they cross on the page, said by the chemist: drawn with a gap there (chem/crossings). A look; kept
+   * on the bond behind, never both ways, and only where the two bonds' atoms do not all carry a depth, which says it then.
+   */
+  behind?: number[];
   /** Where its E or Z - an axis's Ra or Sa - was put by hand, from the bond's middle (`MarkAt`). */
   stereoAt?: MarkAt;
   /** Its E or Z shown, where it has one, as an atom's R or S (`Atom.stereoShown`). */
@@ -2061,6 +2066,8 @@ export type EditorState = {
   updateBond: (id: number, patch: Partial<Bond>) => void;
   /** Bonds given a kind from a bond's menu, one step - with `stepOn`, each already of that kind one step on in its round instead; false where nothing changed. */
   setBondsKind: (ids: readonly number[], kind: import("../utils/bondKinds").BondKindName, stepOn?: boolean) => boolean;
+  /** Bond `bondId` said to be in front of bond `otherId`, or behind it, where they cross; said again, taken away (chem/crossings). One step. */
+  orderCrossing: (bondId: number, otherId: number, how: "front" | "behind") => void;
   /**
    * A bond key (utils/bondKinds `bondKeyPatch`) with the pointer on bond `id`: what it makes of that bond, made of it alone,
    * selected or not, as one step. False where it would change nothing.
@@ -2108,6 +2115,8 @@ export type EditorState = {
    * - all of one gesture one step.
    */
   moveAtoms: (moves: { id: number; x: number; y: number }[], gesture: string, marks?: MarkPlaces) => void;
+  /** A move's end: a mark between two bonds it has left apart - one with an atom among `atoms`, those it moved - taken away, in the move's own step (chem/crossings `crossingsApart`). */
+  settleMove: (gesture: string, atoms: Iterable<number>) => void;
   /** A move or a turn made with moveAtoms (`gesture`) let go of by Escape: taken back, nothing left to redo. */
   dropMoveAtoms: (gesture: string) => void;
   /** The selection turned over, left to right or top to bottom (utils/selection). */

@@ -9,10 +9,12 @@
  * the answer lands (`useIdentitiesAnswered`). A caller that may wait asks first (`identitiesAsked`) and then reads.
  */
 import { create } from "zustand";
-import { identity, identityKeyOf, type IdentityInput } from "../../../../lib/chem/identity";
+import { constitutionKey, identity, type IdentityInput } from "../../../../lib/chem/identity";
 import { NOT_YET } from "../../../../lib/table";
 
 export type Found = { text: string; complete: boolean };
+/** What is asked of a structure: its identity, or its constitution's key (lib/chem/identity `constitutionKey`) as the text. */
+export type Asked = "identity" | "constitution";
 
 /**
  * The most atoms a structure not yet answered may have to be worked out on the drawing thread. Not by its cost, which
@@ -39,7 +41,9 @@ const asking = new Map<string, Promise<Found>>();
 /** How many answers have landed since the app started: what shows an answer reads it, and renders again when it moves. */
 export const useIdentitiesAnswered = create<{ answered: number }>(() => ({ answered: 0 }));
 
-const keyOf = (input: IdentityInput) => JSON.stringify(input);
+const keyOf = (input: IdentityInput, kind: Asked) => `${kind}|${JSON.stringify(input)}`;
+/** What is asked, worked out here. */
+const hereNow = (input: IdentityInput, kind: Asked): Found => (kind === "constitution" ? { text: constitutionKey(input), complete: true } : identity(input));
 
 function keep(key: string, found: Found): Found {
   if (known.size >= KEPT) known.clear();
@@ -92,9 +96,9 @@ function started(): Worker {
   return w;
 }
 
-/** `input`'s identity, from what is kept, or worked out in the worker - in place where there are no workers. */
-export function identityAsked(input: IdentityInput): Promise<Found> {
-  const key = keyOf(input);
+/** `input`'s identity (or what else `kind` asks), from what is kept, or worked out in the worker - in place where there are no workers. */
+export function identityAsked(input: IdentityInput, kind: Asked = "identity"): Promise<Found> {
+  const key = keyOf(input, kind);
   const had = known.get(key);
   if (had) return Promise.resolve(had);
   const going = asking.get(key);
@@ -104,11 +108,11 @@ export function identityAsked(input: IdentityInput): Promise<Found> {
   const here = (why: unknown) => {
     // (kept for whoever looks: why the drawing thread worked one out)
     console.warn("an identity worked out in place: the identity worker did not answer -", why instanceof Error ? why.message : String(why));
-    return new Promise<Found>((done) => setTimeout(() => done(identity(input)), 0));
+    return new Promise<Found>((done) => setTimeout(() => done(hereNow(input, kind)), 0));
   };
   const answer =
     typeof Worker === "undefined"
-      ? Promise.resolve().then(() => identity(input))
+      ? Promise.resolve().then(() => hereNow(input, kind))
       : new Promise<Found>((done, fail) => {
           const id = ++asked;
           try {
@@ -116,7 +120,7 @@ export function identityAsked(input: IdentityInput): Promise<Found> {
             waiting.set(id, { done, fail });
             // (the silence counted from this ask only where nothing else was waiting: else from the last answer)
             if (!silence) heard();
-            w.postMessage({ id, input });
+            w.postMessage({ id, input, ...(kind === "identity" ? {} : { kind }) });
           } catch (e) {
             waiting.delete(id);
             if (!waiting.size) heard();
@@ -136,20 +140,20 @@ export function identityAsked(input: IdentityInput): Promise<Found> {
 
 /** Each of `inputs` answered (`identityAsked`): for a caller that may wait before it reads them (`identityKnown`). */
 export function identitiesAsked(inputs: readonly IdentityInput[]): Promise<Found[]> {
-  return Promise.all(inputs.map(identityAsked));
+  return Promise.all(inputs.map((input) => identityAsked(input)));
 }
 
 /**
  * `input`'s identity where it is known, or small enough to work out here (`IN_PLACE_MOST`); else undefined - pending - and
  * asked of the worker, so that it is known once its answer lands.
  */
-export function identityKnown(input: IdentityInput): Found | undefined {
-  const key = keyOf(input);
+export function identityKnown(input: IdentityInput, kind: Asked = "identity"): Found | undefined {
+  const key = keyOf(input, kind);
   const had = known.get(key);
   if (had) return had;
   // (with no workers - tests - there is no drawing thread to keep free: worked out here, as before)
-  if (input.atoms.length <= IN_PLACE_MOST || typeof Worker === "undefined") return keep(key, identity(input));
-  void identityAsked(input).catch(() => {});
+  if (input.atoms.length <= IN_PLACE_MOST || typeof Worker === "undefined") return keep(key, hereNow(input, kind));
+  void identityAsked(input, kind).catch(() => {});
   return undefined;
 }
 
@@ -168,10 +172,10 @@ export function forgetIdentities(): void {
 }
 
 /**
- * A table's constitution cell (lib/table `moleculesAsTable`) as the drawing thread may write it: the key where the identity is
- * known, or small enough to work out here; else the words that say it is still being worked out, the worker asked.
+ * A table's constitution cell (lib/table `moleculesAsTable`) as the drawing thread may write it: the structure's
+ * `constitutionKey` where it is known, or small enough to work out here; else the words that say it is still being worked
+ * out, the worker asked.
  */
 export function constitutionKnown(input: IdentityInput): string {
-  const found = identityKnown(input);
-  return found ? identityKeyOf(found.text) : NOT_YET;
+  return identityKnown(input, "constitution")?.text ?? NOT_YET;
 }

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { identity, identityKeyOf } from "../../../../lib/chem/identity";
+import { constitutionKey, identity } from "../../../../lib/chem/identity";
 import { NOT_YET } from "../../../../lib/table";
 import { drawnFromSmiles } from "../utils/smilesDrawn";
 import { drawnHash, recordNow, whenDrawnKnown } from "../workflow/entries";
@@ -14,9 +14,10 @@ let asked = 0;
 class LaterWorker {
   onmessage: ((e: MessageEvent) => void) | null = null;
   onerror: ((e: ErrorEvent) => void) | null = null;
-  postMessage(m: { id: number; input: Parameters<typeof identity>[0] }) {
+  postMessage(m: { id: number; input: Parameters<typeof identity>[0]; kind?: "constitution" }) {
     asked++;
-    setTimeout(() => this.onmessage?.({ data: { id: m.id, ok: true, found: identity(m.input) } } as MessageEvent), 0);
+    const found = m.kind === "constitution" ? { text: constitutionKey(m.input), complete: true } : identity(m.input);
+    setTimeout(() => this.onmessage?.({ data: { id: m.id, ok: true, found } } as MessageEvent), 0);
   }
   terminate() {}
 }
@@ -221,6 +222,6 @@ describe("what waits on an identity", () => {
     const input = identityInputOf(labelsDrawnOut(drawnFromSmiles(PPH3))).input;
     expect(constitutionKnown(input)).toBe(NOT_YET);
     await answered();
-    expect(constitutionKnown(input)).toBe(identityKeyOf(identity(input).text));
+    expect(constitutionKnown(input)).toBe(constitutionKey(input));
   });
 });
