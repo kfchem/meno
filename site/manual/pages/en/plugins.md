@@ -41,8 +41,7 @@ The list is Meno's list of plugins online, fetched once Meno is allowed to ask f
 - **MolScribe**, **MolNexTR**: read structures from pictures - a figure a PDF holds as a picture, a screenshot.
 - **Blender**: renders pictures and films of molecules in 3D.
 - **cclib**: reads the outputs of many calculation programs.
-- **WFX reader**: reads wavefunction files (WFX).
-- **PySCF**: works out orbitals and densities on a grid, from a calculation's output.
+- **PySCF**: works out orbitals and densities on a grid, from a Molden file.
 - **xTB**: optimises molecules in 3D and works out their energies and vibrations.
 - **CREST**: searches for a molecule's conformers in 3D.
 - **ORCA interface**, **Gaussian interface**: optimise molecules in 3D and work out their energies and vibrations, with ORCA or Gaussian 16 installed separately.
