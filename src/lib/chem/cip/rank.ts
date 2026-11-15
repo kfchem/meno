@@ -63,6 +63,7 @@
  */
 import { HYDROGEN, PHANTOM, rootwardOf, TooLarge, type Budget, type CipNode } from "./digraph";
 import type { Prepared } from "./prepare";
+import { parity } from "../perception/stereo/geometry";
 
 /** The rules in their order: 1a, 1b, 2, 3, 4a, 4b, 4c, 5, and the proposed 6. */
 export const RULES = ["1a", "1b", "2", "3", "4a", "4b", "4c", "5", "6"] as const;
@@ -109,21 +110,8 @@ type Sorted = { kids: CipNode[]; ambiguous: Map<CipNode, Unknown> } | Unknown;
 /** A padding phantom, for a set compared with a longer one. */
 const padding = (parent: CipNode): CipNode => ({ atom: PHANTOM, z: 0, mass: 0, dup: false, sphere: parent.sphere + 1, distance: parent.sphere + 1, parent, graph: parent.graph });
 
-/** The parity of a permutation of 0..n-1: 1 even, -1 odd. */
-export function parity(perm: readonly number[]): 1 | -1 {
-  const seen = perm.map(() => false);
-  let sign = 1;
-  for (let i = 0; i < perm.length; i++) {
-    if (seen[i]) continue;
-    let len = 0;
-    for (let j = i; !seen[j]; j = perm[j]) {
-      seen[j] = true;
-      len++;
-    }
-    if (len % 2 === 0) sign = -sign;
-  }
-  return sign as 1 | -1;
-}
+/** The parity of a permutation of 0..n-1: 1 even, -1 odd - the one parity (perception/stereo/geometry), as the CIP's callers ask it here. */
+export { parity };
 
 export class Ranker {
   readonly p: Prepared;

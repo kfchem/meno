@@ -40,6 +40,7 @@ import type { Entry } from "../entry";
 import { BOND_REACH, bondRadii, bondedPairs, bondingDistance, REACH_FLOOR } from "../../utils/structureParsers";
 import { aromaticForm, symmetryOrbits } from "../chem/identity";
 import { AROMATIC_BOND } from "../chem/kekulize";
+import { EXACT, volumeSign } from "../chem/perception/stereo/geometry";
 
 export type PassOver = { atoms?: readonly number[]; elements?: readonly string[]; bonds?: readonly (readonly [number, number])[] };
 /** What to compare: R or S, E or Z; what to pass over; and how far, times their covalent radii together, two atoms may stand and be bonded (`BOND_REACH` unless given). */
@@ -53,11 +54,8 @@ const dot = (a: V, b: V) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const cross = (a: V, b: V): V => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const key = (p: number, q: number) => (p < q ? `${p}-${q}` : `${q}-${p}`);
 
-/** The sign of the volume a centre's first three neighbours make about it. */
-function handedness(xyz: readonly number[], c: number, n: readonly number[]): number {
-  const o = at(xyz, c);
-  return Math.sign(dot(cross(sub(at(xyz, n[0]), o), sub(at(xyz, n[1]), o)), sub(at(xyz, n[2]), o)));
-}
+/** The sign of the volume a centre's first three neighbours make about it, exactly (perception/stereo/geometry `volumeSign`). */
+const wayRound = (xyz: readonly number[], c: number, n: readonly number[]) => volumeSign(at(xyz, n[0]), at(xyz, n[1]), at(xyz, n[2]), at(xyz, c), EXACT);
 
 /** Whether the first neighbours of a double bond's two ends stand cis: the dihedral between them under 90 degrees. */
 function cis(xyz: readonly number[], a: number, p: number, q: number, b: number): boolean {
@@ -116,8 +114,7 @@ export function numberedCentres(structure: Entry["structure"]): { tetrahedral: {
 
 /** "nS" at an atom of four, as ConfoTS reads it: the volume of its three highest-numbered neighbours about its lowest-numbered (`a`, `b`, `c` about `d`) positive. */
 function numberedS(xyz: readonly number[], [a, b, c, d]: readonly number[]): boolean {
-  const o = at(xyz, d);
-  return dot(sub(at(xyz, a), o), cross(sub(at(xyz, b), o), sub(at(xyz, c), o))) > 0;
+  return volumeSign(at(xyz, a), at(xyz, b), at(xyz, c), at(xyz, d), EXACT) > 0;
 }
 
 /** "nE" at a double bond's end, as ConfoTS reads it: the dihedral a-b=c-d past 90 degrees either way. */
@@ -201,8 +198,8 @@ export function comparedBonding(e: Entry, reference: Entry, o: CompareOptions = 
     if (o.rs) {
       for (const { atom: c, neighbours: n } of units.centres) {
         if (skipAtom.has(c) || skipEl.has(els[c])) continue;
-        const h = handedness(xyz, c, n);
-        const r = handedness(rxyz, c, n);
+        const h = wayRound(xyz, c, n);
+        const r = wayRound(rxyz, c, n);
         if (h !== r) differences.push(`${els[c]}${c + 1} has ${h === 0 ? "its neighbours in a plane" : "the other configuration"} from the reference's.`);
       }
     }

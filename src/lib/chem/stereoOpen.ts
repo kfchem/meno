@@ -11,6 +11,7 @@ import { valenceOrders } from "./kekulize";
 import { readMolfile } from "./ctfile";
 import { lonePairCentres, lonePairOfThree } from "./lonePairCentres";
 import { implicitHydrogens } from "./molecule";
+import { FLAT_VOLUME_3D, parity, sideOfLine, signedVolume } from "./perception/stereo/geometry";
 
 /** An atom as the rules read it: its element and charge, and its hydrogens where they are given (else by its valence). */
 export type StereoAtom = { el: string; charge?: number; hs?: number };
@@ -165,15 +166,11 @@ export function configuredFrom(
     around.set(b.b, [...(around.get(b.b) ?? []), b.a]);
   }
   const placed = (x: number) => x in places && (around.get(x) ?? []).every((n) => n in places);
-  const minus = (p: Place, q: Place): Place => [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
-  const cross = (p: Place, q: Place): Place => [p[1] * q[2] - p[2] * q[1], p[2] * q[0] - p[0] * q[2], p[0] * q[1] - p[1] * q[0]];
-  const dot = (p: Place, q: Place) => p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
   const centres = openAtoms.flatMap((c) => {
     const ns = around.get(c) ?? [];
     if (ns.length < 3 || !placed(c)) return [];
-    const [u, v, w] = ns.slice(0, 3).map((n) => minus(places[n], places[c]));
-    const volume = dot(u, cross(v, w));
-    return Math.abs(volume) < 1e-6 ? [] : [{ atom: c, neighbours: ns, sense: (volume > 0 ? 1 : -1) as 1 | -1 }];
+    const volume = signedVolume(places[ns[0]], places[ns[1]], places[ns[2]], places[c]);
+    return Math.abs(volume) < FLAT_VOLUME_3D ? [] : [{ atom: c, neighbours: ns, sense: (volume > 0 ? 1 : -1) as 1 | -1 }];
   });
   const doubles = openBonds.flatMap((i) => {
     const { a, b } = bonds[i];
@@ -181,9 +178,8 @@ export function configuredFrom(
     const na = (around.get(a) ?? []).find((n) => n !== b);
     const nb = (around.get(b) ?? []).find((n) => n !== a);
     if (na == null || nb == null) return [];
-    const axis = minus(places[b], places[a]);
-    const side = dot(cross(axis, minus(places[na], places[a])), cross(axis, minus(places[nb], places[b])));
-    return Math.abs(side) < 1e-6 ? [] : [{ bond: i, ends: [na, nb] as [number, number], cis: side > 0 }];
+    const side = sideOfLine(places[a], places[b], places[na], places[nb]);
+    return Math.abs(side) < FLAT_VOLUME_3D ? [] : [{ bond: i, ends: [na, nb] as [number, number], cis: side > 0 }];
   });
   return { centres, doubles };
 }
@@ -226,9 +222,8 @@ export function configurationKey(c: Configuration): string {
     .sort((p, q) => p.atom - q.atom)
     .map((x) => {
       const sorted = [...x.neighbours].sort((p, q) => p - q);
-      // (the swaps that put the neighbours in order, counted as inversions)
-      let odd = false;
-      for (let i = 0; i < x.neighbours.length; i++) for (let j = i + 1; j < x.neighbours.length; j++) if (x.neighbours[i] > x.neighbours[j]) odd = !odd;
+      // (the swaps that put the neighbours in order)
+      const odd = parity(x.neighbours) === -1;
       return [x.atom, sorted, odd ? -x.sense : x.sense];
     });
   const doubles = [...c.doubles].sort((p, q) => p.bond - q.bond).map((x) => [x.bond, [...x.ends].sort((p, q) => p - q), x.cis]);

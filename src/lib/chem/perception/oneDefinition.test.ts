@@ -76,14 +76,6 @@ export const STILL_APART: Copy[] = [
   { concept: "valence", file: "lib/chem/smiles.ts", name: "NORMAL_VALENCES", part: 12 },
   { concept: "valence", file: "lib/figure/read.ts", name: "BONDS_LEFT", part: 12 },
   { concept: "valence", file: "lib/chem/abbreviations.ts", name: "CARRIERS", part: 12 },
-  // permutation parity and signed volume from places
-  { concept: "parity", file: "lib/layout/canonical.ts", name: "parity", part: 4 },
-  { concept: "parity", file: "lib/layout/ranks.ts", name: "parity", part: 4 },
-  { concept: "parity", file: "lib/chem/cip/rank.ts", name: "parity", part: 4 },
-  { concept: "parity", file: "ui/features/Workspace/workflow/stereoKept.ts", name: "parity", part: 4 },
-  { concept: "volume", file: "lib/chem/referenceNumbering.ts", name: "volumeSign", part: 4 },
-  { concept: "volume", file: "lib/layout/cage.ts", name: "handedness", part: 4 },
-  { concept: "volume", file: "lib/steps/compareBonding.ts", name: "handedness", part: 4 },
   // the types for a centre, a double bond, an axis, a whole configuration
   { concept: "stereo types", file: "lib/chem/stereoOpen.ts", name: "ConfiguredCentre", part: 14 },
   { concept: "stereo types", file: "lib/chem/stereoOpen.ts", name: "ConfiguredDouble", part: 14 },
