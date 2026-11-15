@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FigureDrawn, FigureLetter, FigurePath, PathStep } from "./drawn";
-import { arrowsOf, MOST_LINES, readScheme, WRITTEN_AS_WORDS, type SchemeRead } from "./scheme";
+import { arrowsOf, endingNear, MOST_LINES, readScheme, WRITTEN_AS_WORDS, type SchemeRead } from "./scheme";
 import { shapesOf } from "./drawn";
 import { measured } from "../../testing/timeouts";
 import aldol from "./fixtures/aldol-rdkitrxn.json";
@@ -616,6 +616,35 @@ describe("a scheme's arrows, found by what is near each line's end and each head
     expect(retro[0].tail.y).toBeCloseTo(95, 6);
   });
 
+  it("reads an arrow turning a corner where its second line starts a little off the first's end, from the first's far end", () => {
+    // (the second line starts 1 off the first's end: under the 1.2 two lines' ends may stand apart and still meet)
+    const s = read(scheme([stroke([[60, 95], [100, 95]]), stroke([[101, 95], [101, 125]]), head([101, 131], [0, 1])]));
+    expect(s.arrows).toHaveLength(1);
+    expect(near(s.arrows[0].tail, [60, 95])).toBe(true);
+    expect(s.arrows[0].corners).toHaveLength(1);
+  });
+
+  it("reads no arrow where another line ends a little off a line's end under a head: an atom's bonds", () => {
+    const s = read(scheme([stroke([[60, 95], [120, 95]]), head([126, 95], [1, 0]), stroke([[120.6, 95.8], [125, 105]])]));
+    expect(s.arrows).toHaveLength(0);
+  });
+
+  it("reads no half head in a short stroke at a line's end that goes on across a gap, as a bond broken where another passes in front of it", () => {
+    // (the stroke 7 long at 30 degrees, as the half head above, but another stroke goes on along it 3 past its far end)
+    const from: P = [121.1, 95];
+    const u: P = [-Math.cos(Math.PI / 6), -Math.sin(Math.PI / 6)];
+    const at = (t: number): P => [from[0] + u[0] * t, from[1] + u[1] * t];
+    const s = read(scheme([stroke([[60, 95], [120, 95]]), stroke([from, at(7)]), stroke([at(10), at(17)])]));
+    expect(s.arrows).toHaveLength(0);
+  });
+
+  it("reads an open head of two thick strokes whose points stand a little apart, its point the first stroke's", () => {
+    // (strokes 1.2 wide, their points 1.4 apart: under one and a half of their width)
+    const s = read(scheme([stroke([[60, 95], [120, 95]]), stroke([[126, 94.3], [120, 91]], 1.2), stroke([[126, 95.7], [120, 99]], 1.2)]));
+    expect(s.arrows).toHaveLength(1);
+    expect(near(s.arrows[0].point, [126, 94.3])).toBe(true);
+  });
+
   // (measured at 0.8 s alone on a quiet Mac: asked of every line's end and every head against all the page, it took over a minute)
   it("finds the arrows of a page of many schemes - thousands of lines, a retrosynthesis's arrow in each - each one", { timeout: measured(800) }, () => {
     // (forty rows of five schemes: a chain either side of a retrosynthesis's arrow, and rings of six about each)
@@ -634,3 +663,53 @@ describe("a scheme's arrows, found by what is near each line's end and each head
 
 });
 
+describe("the lines that may end by a point", () => {
+  type Seg = { a: { x: number; y: number }; b: { x: number; y: number } };
+  const ends = (l: Seg) => [l.a, l.b];
+  // (a little random, the same each run)
+  const random = (seed: number) => () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+
+  it("gives every line with an end nearer than the distance asked, in the lines' own order, wherever the point is", () => {
+    const next = random(7);
+    const at = () => ({ x: (next() - 0.5) * 400, y: (next() - 0.5) * 400 });
+    for (const r of [0.6, 3, 14.4]) {
+      const lines: Seg[] = Array.from({ length: 600 }, () => {
+        const a = at();
+        return { a, b: { x: a.x + (next() - 0.5) * 30, y: a.y + (next() - 0.5) * 30 } };
+      });
+      const near = endingNear(lines, ends, r);
+      // (points anywhere, and points a hair under the distance from an end - along x, along y and aslant - so either side of a square's edge)
+      const d = r * (1 - 1e-12);
+      const points = [
+        ...Array.from({ length: 400 }, at),
+        ...lines.slice(0, 100).flatMap((l, i) => [
+          { x: l.a.x + d, y: l.a.y },
+          { x: l.b.x, y: l.b.y - d },
+          { x: l.a.x + d * Math.cos(i), y: l.a.y + d * Math.sin(i) },
+        ]),
+      ];
+      for (const p of points) {
+        const got = near(p);
+        const nearer = lines.filter((l) => ends(l).some((e) => Math.hypot(e.x - p.x, e.y - p.y) < r));
+        expect(nearer.every((l) => got.includes(l)), `${r} at ${p.x} ${p.y}`).toBe(true);
+        const order = got.map((l) => lines.indexOf(l));
+        expect(order).toEqual([...order].sort((i, j) => i - j));
+        expect(new Set(got).size).toBe(got.length);
+      }
+    }
+  });
+
+  it("gives a line once though both its ends are by the point, and none whose ends are far", () => {
+    const short: Seg = { a: { x: 10, y: 10 }, b: { x: 10.5, y: 10 } };
+    const far: Seg = { a: { x: 100, y: 100 }, b: { x: 140, y: 100 } };
+    expect(endingNear([far, short], ends, 1)({ x: 10.2, y: 10.1 })).toEqual([short]);
+  });
+
+  it("gives every line where the distance makes no grid: none, or one that cannot be measured", () => {
+    const lines: Seg[] = [
+      { a: { x: 0, y: 0 }, b: { x: 1, y: 0 } },
+      { a: { x: 500, y: 0 }, b: { x: 501, y: 0 } },
+    ];
+    for (const r of [0, -1, NaN, Infinity]) expect(endingNear(lines, ends, r)({ x: 0, y: 0 })).toBe(lines);
+  });
+});
