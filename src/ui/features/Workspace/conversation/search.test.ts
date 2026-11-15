@@ -9,6 +9,8 @@ import { SEEN_KINDS, seenId, type InScope } from "./scope";
 import { search, searchAsked } from "./search";
 
 const ENOL = "OC(=CC(=O)c1ccccc1)c1ccccc1-c1ccccc1";
+/** The same compound written from the other end: its drawing's atoms in another order, so another input. */
+const ENOL_FROM_THE_OTHER_END = "O=C(C=C(O)c1ccccc1-c1ccccc1)c1ccccc1";
 /** The enol drawn with its own hydrogen bond, O-H...O=C. */
 const enolBonded = (): Model => {
   const plain = drawnFromSmiles(ENOL);
@@ -68,5 +70,17 @@ describe("a conversation's search reads a structure as a record's key does: its 
     expect(identityKnown(structureInputOf(m).input)).toBeDefined();
     expect(search(d, s, ENOL, "same")).toEqual({ found: [seenId("structure", 1)] });
     expect(asked).toBe(after);
+  });
+  it("what searchAsked asks is the structure as the search reads it, and the SMILES: both known once awaited, written differently (found in review)", async () => {
+    (globalThis as { Worker?: unknown }).Worker = LaterWorker;
+    forgetIdentities();
+    const m = enolBonded();
+    // (one compound, two inputs: asking the one does not answer the other)
+    expect(JSON.stringify(structureInputOf(drawnFromSmiles(ENOL_FROM_THE_OTHER_END)).input)).not.toBe(JSON.stringify(structureInputOf(m).input));
+    const { d, s } = pageOf(m);
+    await searchAsked(d, s, ENOL_FROM_THE_OTHER_END, "same");
+    expect(identityKnown(structureInputOf(m).input)).toBeDefined();
+    expect(identityKnown(structureInputOf(drawnFromSmiles(ENOL_FROM_THE_OTHER_END)).input)).toBeDefined();
+    expect(search(d, s, ENOL_FROM_THE_OTHER_END, "same")).toEqual({ found: [seenId("structure", 1)] });
   });
 });
