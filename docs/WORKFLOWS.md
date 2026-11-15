@@ -2171,6 +2171,15 @@ Decided while building it, for the maintainer to confirm:
   applies to every program, and those that need no launcher still take
   it. The failure above stays for a launcher found that ORCA's job then
   cannot run.
+  A Hessian ORCA computes numerically at its own xTB - *Frequencies*, and
+  a saddle point's first Hessian, *Computed* - takes one core on every
+  computer, MPI or not, whatever *Cores for each* says (ORCA plugin
+  0.5.9): no `%pal`, one core asked, as many side by side as there are
+  cores. Run in parallel, a job one of whose displaced geometries' SCF
+  did not converge was seen never to end; run serially, ORCA ends it
+  with its own error, and that entry fails with ORCA's words. The
+  numbers are the same either way; only the time differs. The line says
+  only that it is computed numerically.
 - **The options** are the method and basis set as text - as *Export*'s
   are - the dispersion, the solvation and its solvent, more keywords, the
   memory, and whether to keep the wavefunction (on unless turned off); the
