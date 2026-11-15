@@ -9,7 +9,7 @@
  * counted and said, cell by cell - never left out unsaid.
  */
 import { geometryKey, stereoIdentity, type At, type By, type Entry, type Property } from "./entry";
-import { identityKey } from "./chem/identity";
+import { constitutionKey } from "./chem/identity";
 import { isUnit, type Unit } from "./units";
 
 /**
@@ -272,7 +272,7 @@ export function variantNames(name: string, ways: readonly Property[]): string[] 
 /**
  * Molecules seen as a table (FOUNDATION: "molecules into a port that takes
  * a table, as a view"): one row per entry, in order - its id; its
- * constitution (`identityKey` of its atoms, charges and bonds; isotopes
+ * constitution (`constitutionKey` of its atoms, charges and bonds; isotopes
  * are not part of it); its configuration (`stereoIdentity`; "not known"
  * where not perceived, or an element left unspecified); and each property
  * a column. A property whose values were worked out in more than one way -
@@ -339,7 +339,7 @@ export function moleculesAsTable(entries: readonly Entry[]): Table {
   }
   const rows = entries.map((e): Cell[] => [
     e.id,
-    identityKey({ atoms: e.structure.atoms.map((a) => ({ el: a.el, ...(a.charge ? { charge: a.charge } : {}) })), bonds: e.structure.bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })) }),
+    constitutionKey({ atoms: e.structure.atoms.map((a) => ({ el: a.el, ...(a.charge ? { charge: a.charge } : {}) })), bonds: e.structure.bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })) }),
     stereoIdentity(e.stereo) ?? "not known",
     ...keys.map(({ name, variant }) => {
       const given = e.properties[name];
