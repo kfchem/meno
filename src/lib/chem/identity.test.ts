@@ -5,6 +5,7 @@ import { SHUFFLE_SEEDS, shuffled, tiedCages } from "../layout/testdata/shuffled"
 import type { LayoutAtom, LayoutBond, LayoutInput } from "../layout/perceive";
 import type { Axial } from "../layout/stereo";
 import { aromaticForm, automorphismGroup, hydrogensFolded, identity, identityKey, identityText, symmetryOrbits, type IdentityAtom, type IdentityInput } from "./identity";
+import { measured } from "../../testing/timeouts";
 
 /** How many distinct values a list has. */
 const distinct = (xs: readonly number[]) => new Set(xs).size;
@@ -450,13 +451,25 @@ describe("a configuration that makes no stereo unit, in a structure's identity",
     for (const a of ["@", "@@"]) for (const b of ["@", "@@"]) for (const c of ["@", "@@"]) expect(identityText(fromSmiles(`C[C${a}H](C)[C${b}H](O)[C${c}H](C)C`)), a + b + c).toBe(plain);
   });
 
-  it("is kept, and the identity says it may not be the only one, where the search for alike groups ran out of steps before it found them", () => {
-    // (forty methanes beside pentan-3-ol: the search cannot finish, and the ethyls' swap is not among what it found. Its
-    // groups are no end atoms, so it is searched: two alike end atoms - an isopropanol's methyls - need no search)
+  it("is the same whatever order a large symmetric structure's atoms come in, where its search runs out of steps: Pd(PPh3)4, PdCl2(PPh3)2", { timeout: measured(10_000) }, () => {
+    // (each P's three phenyls alike as wholes: it carries no configuration, so no sense picked by the atoms' order is written)
+    const ph3 = "P(c1ccccc1)(c1ccccc1)c1ccccc1";
+    for (const smiles of [`[Pd](${ph3})(${ph3})(${ph3})${ph3}`, `Cl[Pd](Cl)(${ph3})${ph3}`]) {
+      const g = fromSmiles(smiles);
+      const text = identityText(g);
+      for (const seed of SHUFFLE_SEEDS.slice(0, 3)) expect([smiles.length, seed, identityText(shuffled(g, seed)) === text]).toEqual([smiles.length, seed, true]);
+    }
+  });
+
+  it("is kept, and the identity says it may not be the only one, where the search for alike groups ran out of steps before it found them", { timeout: measured(5_000) }, () => {
+    // (forty methanes beside cyclohexanol: the search cannot finish, and the ring's turn is not among what it found. Its
+    // alike groups are the ring's two ways round, no groups of their own, so it is searched: two alike end atoms - an
+    // isopropanol's methyls - or groups alike as wholes - pentan-3-ol's ethyls - need no search)
     const methanes = Array(40).fill("C").join(".");
-    const found = identity(fromSmiles(`${methanes}.CC[C@H](CC)O`));
+    const found = identity(fromSmiles(`${methanes}.O[C@H]1CCCCC1`));
     expect(found.complete).toBe(false);
-    expect(found.text).not.toBe(identity(fromSmiles(`${methanes}.CCC(CC)O`)).text);
+    expect(found.text).not.toBe(identity(fromSmiles(`${methanes}.OC1CCCCC1`)).text);
+    expect(identity(fromSmiles(`${methanes}.CC[C@H](CC)O`)).text).toBe(identity(fromSmiles(`${methanes}.CCC(CC)O`)).text);
     // (and with two alike end atoms, nothing is searched: the isopropanol is one structure, and complete as far as that goes)
     expect(identity(fromSmiles(`${methanes}.C[C@H](C)O`)).text).toBe(identity(fromSmiles(`${methanes}.CC(C)O`)).text);
   });
