@@ -978,6 +978,28 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
   atoms (a ring's is there already; a C=C's, cod's, is not), so a complex
   expanded and then cleaned up does not move.
 
+## A structure from a plugin
+
+A structure a plugin hands Meno - a SMILES it read, a stereoisomer it
+made, a molecule in 3D it drew - comes as a drawing block and, where the
+plugin sends it, the configuration it read beside it (PLUGINS.md, *A
+drawing's configuration beside it*). Meno's engine lays it out from that
+configuration, not from the block's wedges: the block is only places, and
+a lossy carrier (a ring of 36 or more comes as a regular polygon, its
+centres stating nothing). So a large ring comes out as Meno draws large
+rings - its re-entrant angles, a group at a re-entrant atom inward, never
+round (Brecher 2008, GR-3.3.2; Brecher 2006, ST-1.4) - with every centre
+and double bond given, a ring double bond as given (ST-4.3).
+
+The drawing laid out is read back by the one reader, and must state every
+centre, double bond, axis and odd cumulene given, each as given, and none
+more; else it is refused, and the drawing is kept as it came. Where a
+drawing kept as it came states less than was given, what it leaves out is
+said with the count: "Drawn as it came: it could not be laid out. 4 of its
+12 stereocentres are not shown by this drawing." A centre whose fourth
+place is a lone pair is given only where Meno's own rules hold one there.
+A plugin that sends no configuration is read as before.
+
 ## How the engine goes about it
 
 1. Find the rings (smallest set of smallest rings) and the ring systems -
