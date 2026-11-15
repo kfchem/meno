@@ -5,6 +5,7 @@
  * cited) - the rule lib/chem/kekulize and lib/chem/conformersSought take.
  */
 import { aromaticAtoms, piElectrons } from "./perception/aromatic";
+import { fusedSetsOf } from "./perception/rings";
 
 export { aromaticAtoms, MOST_PI, piElectrons, type PiState } from "./perception/aromatic";
 
@@ -16,19 +17,11 @@ export { aromaticAtoms, MOST_PI, piElectrons, type PiState } from "./perception/
 export function ringSystems(n: number, rings: readonly (readonly number[])[]): { system: Int32Array; ringBonds: Set<string> } {
   const system = new Int32Array(n).fill(-1);
   const ringBonds = new Set<string>();
-  const edges = rings.map((r) => r.map((x, k) => pairKey(x, r[(k + 1) % r.length])));
-  for (const e of edges) e.forEach((k) => ringBonds.add(k));
-  const parent = rings.map((_, i) => i);
-  const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])));
-  const owner = new Map<string, number>();
-  edges.forEach((es, i) =>
-    es.forEach((k) => {
-      const j = owner.get(k);
-      if (j == null) owner.set(k, i);
-      else parent[find(i)] = find(j);
-    }),
-  );
-  rings.forEach((r, i) => r.forEach((a) => (system[a] = find(i))));
+  for (const r of rings) r.forEach((x, k) => ringBonds.add(pairKey(x, r[(k + 1) % r.length])));
+  // (the rings that share a bond are the core's fused sets; an atom in two systems - a spiro atom - is the last ring's, as it was)
+  const setOf: number[] = [];
+  fusedSetsOf(rings).forEach((set, s) => set.forEach((i) => (setOf[i] = s)));
+  rings.forEach((r, i) => r.forEach((a) => (system[a] = setOf[i])));
   return { system, ringBonds };
 }
 
