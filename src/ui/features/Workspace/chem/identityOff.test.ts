@@ -83,9 +83,10 @@ describe("a worker that cannot answer", () => {
     const ids = m.atoms.map((a) => a.id);
     const record = { of: "not this structure", properties: { x: { value: 1, unit: "none" as const, status: "computed" as const } } };
     expect(drawnHash(m, ids)).toBeUndefined();
-    await answered();
-    expect(identityKnown(identityInputOf(m).input)).toEqual(identity(identityInputOf(m).input));
+    // (waited on until it is done, not for a time: the fallback runs after its own timer, late on a busy machine)
+    await vi.waitFor(() => expect(drawnHash(m, ids)).toBeDefined());
     expect(recordNow(record, m, ids)?.properties).toBeUndefined();
+    expect(await identitiesAsked([identityInputOf(m).input])).toEqual([identity(identityInputOf(m).input)]);
   });
 
   it("nor where it never answers: past the bound, worked out here", async () => {
@@ -118,9 +119,9 @@ describe("a worker that cannot answer", () => {
     };
     forgetIdentities();
     let ran = 0;
-    whenDrawnKnown([drawnFromSmiles(TOLYL)], () => ran++);
+    const down = new Promise<void>((go) => whenDrawnKnown([drawnFromSmiles(TOLYL)], () => (ran++, go())));
     expect(ran).toBe(0);
-    await answered();
+    await down;
     expect(ran).toBe(1);
   });
 
@@ -189,6 +190,107 @@ describe("a worker still answering", () => {
       expect(here).toBe(0);
       warn.mockRestore();
     } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("the worker's silence", () => {
+  /** A stand-in worker that answers only when the test says, and says whether it was let go. */
+  const standIn = () => {
+    const made: { posted: { id: number; input: Parameters<typeof identity>[0] }[]; ended: boolean; answer: (k: number) => void }[] = [];
+    (globalThis as { Worker?: unknown }).Worker = class {
+      onmessage: ((e: MessageEvent) => void) | null = null;
+      onerror = null;
+      posted: { id: number; input: Parameters<typeof identity>[0] }[] = [];
+      ended = false;
+      constructor() {
+        made.push(this);
+      }
+      postMessage(m: { id: number; input: Parameters<typeof identity>[0] }) {
+        this.posted.push(m);
+      }
+      answer(k: number) {
+        const m = this.posted[k];
+        this.onmessage?.({ data: { id: m.id, ok: true, found: { text: "from the worker", complete: true } } } as MessageEvent);
+      }
+      terminate() {
+        this.ended = true;
+      }
+    };
+    forgetIdentities();
+    return made;
+  };
+  const inputs = () => [PPH3, TOLYL].map((s) => identityInputOf(drawnFromSmiles(s)).input);
+
+  it("is counted from the first ask while nothing answers, not again at each: a worker that never answers is let go a minute after", async () => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const made = standIn();
+      const [a, b] = inputs();
+      const first = identitiesAsked([a]);
+      await vi.advanceTimersByTimeAsync(ANSWER_MOST_MS * 0.7);
+      void identitiesAsked([b]);
+      await vi.advanceTimersByTimeAsync(ANSWER_MOST_MS * 0.3 + 1);
+      expect(await first).toEqual([identity(a)]);
+      expect(made[0].ended).toBe(true);
+      // (and nothing of what waited on the worker let go is left waiting: the next one, once it has answered, is kept)
+      const next = identitiesAsked([identityInputOf(drawnFromSmiles("P(c1ccc(F)cc1)(c1ccc(F)cc1)c1ccc(F)cc1")).input]);
+      made[1].answer(0);
+      expect((await next)[0].text).toBe("from the worker");
+      await vi.advanceTimersByTimeAsync(ANSWER_MOST_MS * 2);
+      expect(made[1].ended).toBe(false);
+    } finally {
+      warn.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it("is not counted while nothing waits: a worker that has answered everything is kept, however long it is idle", async () => {
+    vi.useFakeTimers();
+    try {
+      const made = standIn();
+      const [a] = inputs();
+      const asked = identitiesAsked([a]);
+      made[0].answer(0);
+      expect((await asked)[0].text).toBe("from the worker");
+      await vi.advanceTimersByTimeAsync(ANSWER_MOST_MS * 2);
+      expect(made[0].ended).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("is not counted for an ask the worker could not take: worked out here, and the worker kept", async () => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const made: { ended: boolean }[] = [];
+      (globalThis as { Worker?: unknown }).Worker = class {
+        onmessage = null;
+        onerror = null;
+        ended = false;
+        constructor() {
+          made.push(this);
+        }
+        postMessage() {
+          throw new Error("could not take it");
+        }
+        terminate() {
+          this.ended = true;
+        }
+      };
+      forgetIdentities();
+      const [a] = inputs();
+      const asked = identitiesAsked([a]);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(await asked).toEqual([identity(a)]);
+      await vi.advanceTimersByTimeAsync(ANSWER_MOST_MS * 2);
+      expect(made).toHaveLength(1);
+      expect(made[0].ended).toBe(false);
+    } finally {
+      warn.mockRestore();
       vi.useRealTimers();
     }
   });
