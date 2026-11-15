@@ -20,7 +20,7 @@ import { perceive, type LayoutInput } from "./perceive";
  * The smallest rings (`perceive`, a minimum cycle basis) hold, for every
  * bond, a ring as small as the smallest through it - where rings tie, and
  * the one kept is another - so a ring of seven or fewer through a double
- * bond is never missed here (rings.test.ts holds it, ties included).
+ * bond is never missed here (perception/rings.ts says why; its tests hold it, ties included).
  */
 export function turnedDoubleBonds(input: LayoutInput, out: { x: readonly number[]; y: readonly number[] }): string[] {
   const side = (a: number, b: number, n: number) =>
