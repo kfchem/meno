@@ -122,3 +122,8 @@ export function setAsItGoes(d: NumberDraft, typing: boolean, range: NumberRange 
   const next = numberField(d, { kind: "commit" }, range);
   return Object.is(next.value, d.value) ? null : next.value;
 }
+
+/** A field asked for at once (`autoFocus`) taken: focused, with nothing scrolled to it - a card opening as it grows, never jumped in. */
+export function askedFocus(field: { focus: (o?: FocusOptions) => void } | null): void {
+  field?.focus({ preventScroll: true });
+}

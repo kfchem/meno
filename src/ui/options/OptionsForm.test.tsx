@@ -35,3 +35,21 @@ describe("a role's options in a card", () => {
     expect(html).not.toContain('type="radio"');
   });
 });
+
+describe("a card's options opened to ask for what it needs", () => {
+  const options: Option[] = [
+    { id: "within", label: "Within", type: "number", default: Number.NaN, min: 0, unit: "kcal/mol" },
+    { id: "other", label: "Other", type: "number", default: Number.NaN },
+    { id: "count", label: "Count", type: "number", default: 3 },
+  ];
+  /** The labels of the fields marked as asked for, in order. */
+  const asked = (html: string) => [...html.matchAll(/<label class="block"><span[^>]*>([^<]+)<\/span><span[^>]*><input[^>]*data-asked="true"/g)].map((m) => m[1]);
+  it("takes the first number that holds none - only it", () => {
+    expect(asked(renderToString(<OptionsForm options={options} values={{}} onChange={() => {}} asks />))).toEqual(["Within"]);
+    expect(asked(renderToString(<OptionsForm options={options} values={{ within: 2.5 }} onChange={() => {}} asks />))).toEqual(["Other"]);
+    expect(renderToString(<OptionsForm options={options} values={{ within: 2.5, other: 1 }} onChange={() => {}} asks />)).not.toContain("data-asked");
+  });
+  it("takes none where it is not opened to ask", () => {
+    expect(renderToString(<OptionsForm options={options} values={{}} onChange={() => {}} />)).not.toContain("data-asked");
+  });
+});

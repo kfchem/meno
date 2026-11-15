@@ -709,7 +709,31 @@ Taken on 2026-10-13:
   value or on a bond in some frames as the molecule turned). As the
   molecule turns and the best way changes, a label glides round its atom
   to it, the shorter way, on a 70 ms time constant - never across the
-  atom, never in a jump (the maintainer, 2026-10-15).
+  atom, never in a jump (the maintainer, 2026-10-15). A picture of the
+  molecule - copied, saved as SVG, or with the drawing it is on - has
+  the same labels where the canvas puts them, kept clear in the same way
+  of the balls, the bonds, the measurements' values and each other
+  (`utils/molecule3d`, `stereoSpot`, which the canvas and the picture
+  share), as large as the drawing's in print. The canvas places them as
+  the picture does, by the one placing both share (`stereoSpotsAmong`):
+  at the drawing's own letter size, though it draws the letters no
+  smaller than its least size; in the order a picture takes them (a
+  molecule's atoms', then its double bonds'), not the order they came to
+  be shown in; with every ball as at rest, none swollen under the
+  pointer; and those going counted after those shown, clear of them and
+  of what is written over the molecule, but no obstacle to them or to
+  each other, so a label going stands where it would alone
+  (`stereoSpotsShown`). What counts as clear of the balls and bonds
+  is a share of the label's own size (a hundredth of its half height),
+  not a fixed length: a fixed 0.05 was nothing in the canvas's pixels and
+  much of a letter in the page's units, and a picture took another way
+  than the canvas. So a picture made now has each label where the canvas
+  has it, at any zoom. In SVG, and the PNG drawn
+  from it, they stand on a white halo as on the canvas; in an EMF the
+  letters are written without one. As in a picture of the drawing, a view
+  zoomed so far out that the canvas leaves them out does not leave them
+  out of the picture (the maintainer, 2026-10-21: in every picture, as
+  the canvas shows them).
 - **Measurements' values keep apart.** Each value stands on its point
   while that is clear of the values before it; where another is in its
   way it moves off - square to a distance's line, out from an angle's
@@ -1752,6 +1776,15 @@ space-filling side by side is better science than either alone.
   waits a frame on a shader being made for it. Being kept, it does at each
   frame what a molecule on the page does at each frame (it is never drawn):
   the work of a molecule of nine atoms.
+  A drawing's are made ready so too (components/WarmShaders2D): its bonds
+  and their caps have their colours from the start, white until a drawing
+  gives them its own (components/instances `whiteInstances`) - a shader is
+  made for whether an instanced mesh has colours of its own, and they came
+  only with the first drawing - and what comes only with a drawing, a
+  label and a plain disc, is made unseen and far off the page once the page
+  is idle: the label set as the page's labels are, in its typeface, and
+  compiled once its letters are set, again as the typeface changes. Its
+  typeface is read then too, before any label asks for it.
 - **Pictures as the canvas.** A copied or exported picture of a molecule
   in 3D draws its style's colours, lines and depth fade as the canvas
   does - its lines in proportion to the molecule at any size, being in

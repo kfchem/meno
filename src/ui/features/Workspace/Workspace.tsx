@@ -1,7 +1,8 @@
 import RoleOffer from "./RoleOffer";
 import { noPluginSaid, useRoleOffer } from "../../../lib/roles/worker";
 import { canvasAlerts } from "./utils/alerts";
-import { bondKindOf, type BondKindName } from "./utils/bondKinds";
+import { bondKindMenu } from "./utils/bondKinds";
+import { crossingMenu } from "./chem/crossings";
 import type { ArrowKind, ArrowWeight } from "../../../lib/chem/reactionArrow";
 import { canTakeBond, valenceOrder } from "../../../lib/chem/molecule";
 import { usePresentingWindow } from "../../presenting";
@@ -46,6 +47,7 @@ import {
 import { ArrowPathIcon, ExclamationTriangleIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { chordedPress } from "./utils/press";
+import WarmShaders2D from "./components/WarmShaders2D";
 import { labelReachOf } from "./utils/labelHits";
 import { AnimatePresence, motion } from "motion/react";
 import { CANVAS_RESIZE, DURATION, EASE_SLIDE, FADE, LEAVE, RISE } from "../../theme/motion";
@@ -774,6 +776,9 @@ function WorkspaceContent({
     [store],
   );
   const [menu, setMenu] = useState<MenuTarget | null>(null);
+  // (R/S and E/Z: what the menu's item acts on and its words, worked out once as the menu opens - so the words read are what is done, whatever
+  //  changes while it is open: utils/stereoShown)
+  const stereoAtMenu = useMemo(() => (menu ? stereoItemFor(store.getState(), menu) : null), [menu, store]);
   // (what the author of the PDF its menu is of allows of printing: found as the menu opens)
   usePrinting(menu?.kind === "pdf" ? store.getState().pdfs.find((x) => x.id === menu.id)?.sha256 : undefined);
   // a colour card opened from a menu, where the menu was (ColourCard)
@@ -2025,7 +2030,8 @@ function WorkspaceContent({
               st.setQuickAdd(null);
               // (its port that takes where Quick Add was opened - where the wire was let go; brought from an exit's port, close
               //  by that step's card instead, and wired in the same edit: model `addStepFrom`)
-              const id = st.addStep(kind, by, at.x, at.y + PORT_DOWN, wire);
+              // (its card opened where it still needs a value of its options: store `putDownStep`)
+              const id = st.putDownStep(kind, by, at.x, at.y + PORT_DOWN, wire);
               // (and brought into view, with the sets it will give, where they are not: put down near the window's edge, or moved lower)
               const now = store.getState();
               const box = partsBounds({ sets: now.sets.filter((b) => b.made?.step === id), steps: now.steps.filter((s) => s.id === id), wires: [] });
@@ -2601,11 +2607,7 @@ function WorkspaceContent({
             const from = st.pdfs.find((p) => p.sha256 === note.sha256)?.name ?? st.pictures.find((p) => p.sha256 === note.sha256)?.name ?? "the figure";
             return { from: figureNoteSource(from, note.page), ...(note.checked ? {} : { run: () => st.setFigureChecked([...atoms], true) }) };
           })()}
-          stereo={(() => {
-            const st = store.getState();
-            const item = stereoItemFor(st, menu);
-            return item ? { name: item.name, run: () => showStereo(item) } : undefined;
-          })()}
+          stereo={stereoAtMenu ? { name: stereoAtMenu.name, run: () => showStereo(stereoAtMenu) } : undefined}
           numbers={(() => {
             const st = store.getState();
             const got = numbersItemsFor(st, menu);
@@ -2650,13 +2652,9 @@ function WorkspaceContent({
             return a?.typed && a.typed !== a.el ? { typed: a.typed, run: () => store.getState().labelAsTyped(a.id) } : undefined;
           })()}
           // (a bond's kind: the bonds selected, where the one right-clicked is among them - one step for all)
-          bondKind={(() => {
-            if (menu.kind !== "bond" || menu.id == null) return undefined;
-            const st = store.getState();
-            const ids = st.sel.bonds.has(menu.id) ? [...st.sel.bonds] : [menu.id];
-            const bond = st.model.bonds.find((b) => b.id === menu.id);
-            return bond ? { current: bondKindOf(bond), choose: (kind: BondKindName) => st.setBondsKind(ids, kind) } : undefined;
-          })()}
+          bondKind={menu.kind === "bond" && menu.id != null ? bondKindMenu(store.getState(), menu.id) : undefined}
+          // (which of two crossing bonds is in front, where no depth says it: at the crossing nearest the pointer - chem/crossings)
+          crossing={menu.kind === "bond" && menu.id != null ? crossingMenu(store.getState().model, menu.id, menu.at, store.getState().orderCrossing) : undefined}
           canvas={canvasCommands(menu.at)}
           // (Export writes what is drawn: a selection of PDFs and texts' sheets alone has nothing for it)
           onExport={menu.selection === "here" && selectedOf({ ...store.getState(), selPdfs: new Set(), selTexts: new Set() }).any ? () => {
@@ -2928,6 +2926,8 @@ function WorkspaceContent({
           <Suspense fallback={null}>
             <Labels2D />
           </Suspense>
+          {/* the shaders a drawing is drawn with, made ready as the page starts: the first one drawn never waits a frame on them */}
+          <WarmShaders2D />
           {/* the plugin's marks: valence problems, R/S and E/Z */}
           <ChemMarks2D marks={marks} unsure={unsure} read={readUnsure} />
           {/* charges, each taken hold of on its own ink and moved by hand */}

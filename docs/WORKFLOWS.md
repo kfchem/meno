@@ -82,7 +82,13 @@ each is merged, this file describes what is built.
 17. **Settings holds the defaults; a step customises them** (the
     maintainer, 2026-10-08): Settings, *Calculations*, sets each kind's
     default options, by plugin; a step starts with them, and its options
-    changed are its own - never written back as the defaults.
+    changed are its own - never written back as the defaults. A step that
+    holds no value of its own for an option - one put down otherwise than
+    on the canvas, a template's, a file's - takes Settings' for its kind
+    as it stands, else the option's own default: on its card, when it is
+    judged ready, and when it runs (`stepOptions`, workflow/doers). A
+    change in Settings changes what such a step would run with, so its
+    card then says it has changed since its run.
 18. **No single 3D structure is made in a workflow** (the maintainer,
     2026-10-10): one geometry made of a drawing is one of its
     conformations taken at random, which a calculation on it cannot
@@ -1051,7 +1057,12 @@ beside its edge - being drawn over all of it.
 - **The window is the chemist's** (2026-11-05): *Energy window* sets
   none. Its field is empty until the chemist gives one, and until then
   the card says what it needs ("Give the window, in kcal/mol") and the
-  step does not run; run without one, its line says the same. No window
+  step does not run; run without one, its line says the same. Put down
+  from Quick Add with none, its card opens at once with that field
+  focused, so that the ask is seen as it is put down - as does any step
+  that still needs a value of its options (a Conformers step's window for
+  new conformers: PLUGINS.md); opened later, its card focuses the field
+  too. No window
   has a basis that holds for every set of energies, so none stands as a
   default. The field gives a guide, not a default: at 298.15 K a
   conformer ΔE above the lowest weighs exp(-ΔE/RT) as much, 1/100 at
@@ -1062,7 +1073,10 @@ beside its edge - being drawn over all of it.
     until given, with the same guide under it. Each new Energy window
     step starts with it, as each step starts with the options set there;
     a step's own window is then its own, and changing Settings later
-    changes no step put down before. *Clear*, beside it, empties it
+    changes no step put down before with one. A step that holds none of
+    its own - put down while Settings had none, or a template's - takes
+    the one Settings keeps when it is next shown or run (decided: 17).
+    *Clear*, beside it, empties it
     again: each new step then asks. It is the chemist's value, never
     Meno's.
   - A new step holds no window until one is given: an option with no
@@ -2840,6 +2854,14 @@ them again*; the maintainer's rulings of 2026-10-22):
   finished, the program stopped with an error, refused, another molecule
   came back, no geometry came back, not converged - and *failed* for any
   other. A plugin names one of them; its own words are always kept beside.
+  Where the program stopped with an error, its words are said with it on
+  the step's line, the chip and its tip: *1 of 1 failed (1: the program
+  stopped with an error: <why>)*, on one line however the program broke
+  them over lines, a chip's cut at 80 characters with an ellipsis, whole
+  in its tip and its record; the line says them once, where every such
+  failure gave the same words. A conformer table's cell and Filter's
+  states say the kind alone. The other kinds say what happened already:
+  their words are in the record.
 - **An optimisation that did not converge is not done** (until
   2026-10-22 it was passed on as a minimum): its path and the last
   geometry it reached go out of *Failed*, the failure on that geometry,

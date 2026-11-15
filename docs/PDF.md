@@ -166,6 +166,13 @@ stops being part of the work.
   each frame; a 1024 px picture is some milliseconds on the card), and a
   page's small picture waits its turn with them - put on the card there,
   not all together inside the frame's draw.
+- **A page a fast scroll comes to is never white.** While the column is
+  still, the small pictures of the twelve pages either side of the one in
+  view are drawn ahead, nearest first, two at a time and behind every tile
+  of what is seen; a scroll stops them. A page the column then comes to
+  shows its small picture at once, and sharpens as its tiles come (before,
+  a page far from where the column rested was an empty frame until they
+  did).
 - **Light on the graphics card** (found on Windows, 2026-10-16: a PDF
   scrolled in the column kept the graphics card full).
   - A picture of a page come and faded in is drawn opaque, and its tiles
