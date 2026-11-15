@@ -82,6 +82,26 @@ describe("a structure's parts, each searched alone", () => {
     expect(partsAlone(single.part, single)).toBeNull();
   });
 
+  it("are largest first however drawn: Na+ typed before the acetate is the second part, its row after the acetate's", () => {
+    const typed = drawnFromSmiles("[Na+].CC(=O)[O-]");
+    const m = { ...typed, atoms: typed.atoms.map((a) => ({ ...a, joined: 1 })) } as Model;
+    expect(m.atoms[0].el).toBe("Na");
+    const [block] = blocksOf(m, [m.atoms[0].id]);
+    const parts = partsAlone(block.part, block)!;
+    expect(parts.map((p) => p.block.part.atoms.map((a) => a.el).join(""))).toEqual(["CCOO", "Na"]);
+    expect(parts.map((p) => p.atoms)).toEqual([[1, 2, 3, 4], [0]]);
+    const searched: Conformers = { ...lone(parts[1]), atoms: parts[0].block.part.atoms.map((a) => ({ el: a.el, charge: a.charge ?? 0 })), frames: [new Array(12).fill(0)], field: "MMFF94", how: [{ label: "Rounds", text: "searched" }] };
+    const whole = wholeOf(block, [{ part: parts[0], c: searched }, { part: parts[1], c: lone(parts[1]) }]);
+    expect(whole.atoms.map((a) => a.el)).toEqual(["Na", "C", "C", "O", "O"]);
+    expect(whole.how!.filter((r) => r.label.startsWith("Part")).map((r) => `${r.label} | ${r.text}`)).toEqual(["Part 1: Rounds | searched", "Part 2 | Na+: one atom, no search"]);
+  });
+  it("of one size are as the drawing has them", () => {
+    const [block] = blocksOf(methanols, [1]);
+    const at = (id: number) => block.part.atoms.findIndex((a) => a.id === id);
+    const firsts = partsAlone(block.part, block)!.map((p) => at(p.block.atoms[0]));
+    expect(firsts).toEqual([...firsts].sort((x, y) => x - y));
+  });
+
   it("are alike where they are written alike, atom for atom: searched once", () => {
     const [block] = blocksOf(methanols, [1]);
     expect(partsAlone(block.part, block)!.map((p) => p.alike)).toEqual([undefined, 0]);

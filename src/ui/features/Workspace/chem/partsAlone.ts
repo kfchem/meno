@@ -56,7 +56,8 @@ const tableOf = (molblock: string) => molblock.replace(/-?\d+\.\d+/g, "#").split
  */
 export function partsAlone(model: Model, block: Block): PartAlone[] | null {
   if (block.centres?.length) return null;
-  const pieces = fragmentsHolding(model, block.atoms, false);
+  // (largest first - a salt's ion of one atom after the rest - parts of one size as the drawing has them)
+  const pieces = fragmentsHolding(model, block.atoms, false).sort((p, q) => q.size - p.size);
   if (pieces.length < 2) return null;
   const atomAt = new Map(block.atoms.map((id, i) => [id, i]));
   const bondAt = new Map(block.bonds.map((id, i) => [id, i]));
