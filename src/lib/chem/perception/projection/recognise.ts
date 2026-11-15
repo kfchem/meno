@@ -10,8 +10,8 @@
  * The numbers below were set on the corpus of the tests (every chair view of the solid, turned and jittered; every flat drawing the engine
  * makes of a six-ring), so that each generated chair is read or refused and no flat one is read: no basis from a text is claimed for them.
  */
-import { chair, cross, dot, length, sub, type V3 } from "./solids";
-import { drawn } from "./views";
+import { chair, cross, dot, flipped, fused, length, sub, type Solid, type V3 } from "./solids";
+import { drawn, type Drawn } from "./views";
 
 type Pt = { x: number; y: number };
 
@@ -25,13 +25,25 @@ const PARALLEL = Math.sin(12 * DEG);
  * its three pairs of opposite bonds parallel, its outline not convex (a flat hexagon's opposite sides are parallel too).
  */
 export function drawnAsChair(ring: readonly Pt[]): boolean {
+  return oppositeParallel(ring) && notConvex(ring);
+}
+
+/** Whether a ring of six, its atoms in order round it, has each of its three pairs of opposite bonds parallel (as a chair's are, and a flat hexagon's). */
+function oppositeParallel(ring: readonly Pt[]): boolean {
   if (ring.length !== 6) return false;
   const e = ring.map((p, i) => ({ x: ring[(i + 1) % 6].x - p.x, y: ring[(i + 1) % 6].y - p.y }));
-  const cross2 = (u: Pt, v: Pt) => u.x * v.y - u.y * v.x;
-  const parallel = [0, 1, 2].every((i) => Math.abs(cross2(e[i], e[i + 3])) <= PARALLEL * Math.hypot(e[i].x, e[i].y) * Math.hypot(e[i + 3].x, e[i + 3].y));
-  const turns = e.map((u, i) => Math.sign(cross2(u, e[(i + 1) % 6])));
-  return parallel && turns.some((t) => t > 0) && turns.some((t) => t < 0);
+  return [0, 1, 2].every((i) => Math.abs(cross2(e[i], e[i + 3])) <= PARALLEL * Math.hypot(e[i].x, e[i].y) * Math.hypot(e[i + 3].x, e[i + 3].y));
 }
+
+/** Whether a ring's outline as drawn turns both ways. */
+function notConvex(ring: readonly Pt[]): boolean {
+  const n = ring.length;
+  const e = ring.map((p, i) => ({ x: ring[(i + 1) % n].x - p.x, y: ring[(i + 1) % n].y - p.y }));
+  const turns = e.map((u, i) => Math.sign(cross2(u, e[(i + 1) % n])));
+  return turns.some((t) => t > 0) && turns.some((t) => t < 0);
+}
+
+const cross2 = (u: Pt, v: Pt) => u.x * v.y - u.y * v.x;
 
 /** How far the two rows of the fitted map may differ in length, as a ratio, and in angle from a right angle: a textbook chair is "drawn the way textbooks do, not exactly as it is seen", so generous. */
 export const MOST_UNEQUAL = 0.25;
@@ -127,6 +139,125 @@ function conventionFits(ring: readonly Pt[]): Fit[] {
   return out;
 }
 
+/** The best turn, scale and shift in the page of `p` onto `q` (least squares, closed form): the scale, and the miss - the mean square, in units of the scaled `p`. */
+function similarity(p: readonly Pt[], q: readonly Pt[]): { scale: number; miss: number } | null {
+  const n = p.length;
+  const [px, py, qx, qy] = [p.reduce((m, v) => m + v.x, 0) / n, p.reduce((m, v) => m + v.y, 0) / n, q.reduce((m, v) => m + v.x, 0) / n, q.reduce((m, v) => m + v.y, 0) / n];
+  // (the turn and the scale as one complex number a = sum conj(p) q / sum |p|^2)
+  let [re, im, norm] = [0, 0, 0];
+  p.forEach((v, i) => {
+    const [ux, uy, wx, wy] = [v.x - px, v.y - py, q[i].x - qx, q[i].y - qy];
+    re += ux * wx + uy * wy;
+    im += ux * wy - uy * wx;
+    norm += ux * ux + uy * uy;
+  });
+  if (norm < 1e-12) return null;
+  const scale = Math.hypot(re, im) / norm;
+  if (scale < 1e-9) return null;
+  const [ar, ai] = [re / norm, im / norm];
+  const miss = p.reduce((m, v, i) => {
+    const [ux, uy] = [v.x - px, v.y - py];
+    return m + (ar * ux - ai * uy - (q[i].x - qx)) ** 2 + (ai * ux + ar * uy - (q[i].y - qy)) ** 2;
+  }, 0);
+  return { scale, miss: miss / n / (scale * scale) };
+}
+
+const FUSIONS: ("trans" | { cis: 1 | -1 })[] = ["trans", { cis: 1 }, { cis: -1 }];
+
+/** A solid of chairs fused, and its two textbook drawings (`drawn`, forms 0 and 1). */
+type Built = { solid: Solid; drawn: (Drawn | null)[] };
+/** The solids of chairs fused, kept: they depend only on how they are built - the first chair or its flip, then each bond fused on and how - never on a drawing. */
+const builtSolids = new Map<string, Built | null>();
+const withDrawings = (solid: Solid): Built => ({ solid, drawn: [drawn(solid, 0), drawn(solid, 1)] });
+function baseSolid(base: number): Built {
+  const key = `${base}`;
+  if (!builtSolids.has(key)) builtSolids.set(key, withDrawings(base ? flipped(chair()) : chair()));
+  return builtSolids.get(key)!;
+}
+function fusedOn(key: string, solid: Solid, bond: number, how: (typeof FUSIONS)[number]): Built | null {
+  if (!builtSolids.has(key)) {
+    let made: Built | null = null;
+    try {
+      made = withDrawings(fused(solid, bond, "chair", how));
+    } catch {
+      made = null;
+    }
+    builtSolids.set(key, made);
+  }
+  return builtSolids.get(key)!;
+}
+
+/**
+ * Chairs fused on bonds, fitted as one: every way F9 fuses chairs on the drawing's bonds - each fusion trans, or cis on either face - drawn as
+ * the textbook draws them (`drawn`, both forms), each laid on the drawn places from each atom of the first ring and both ways round, by the best
+ * turn, scale and shift of the whole system. So a trans or a cis fusion is read from the drawing, never assumed. Null where the rings are not
+ * fused one to the next on a bond each (a spiro join, a bridge, a ring apart).
+ */
+function fusedFits(places: readonly Pt[], rings: readonly (readonly number[])[]): Fit[] | null {
+  const steps: { ring: number; s: number; t: number }[] = [];
+  const reached = new Set(rings[0]);
+  const done = new Set([0]);
+  while (done.size < rings.length) {
+    let found = false;
+    for (let r = 0; r < rings.length && !found; r++) {
+      if (done.has(r)) continue;
+      const shared = rings[r].filter((i) => reached.has(i));
+      if (!shared.length) continue;
+      if (shared.length !== 2) return null;
+      const [ks, kt] = shared.map((i) => rings[r].indexOf(i));
+      if (Math.abs(ks - kt) !== 1 && Math.abs(ks - kt) !== 5) return null;
+      steps.push({ ring: r, s: shared[0], t: shared[1] });
+      rings[r].forEach((i) => reached.add(i));
+      done.add(r);
+      found = true;
+    }
+    if (!found) return null;
+  }
+  if (reached.size !== places.length) return null;
+  const out: Fit[] = [];
+  const kinds = (k: number): (typeof FUSIONS)[] => (k ? kinds(k - 1).flatMap((rest) => FUSIONS.map((f) => [...rest, f])) : [[]]);
+  for (const base of [0, 1]) {
+    for (const dir of [1, -1]) {
+      for (let o = 0; o < 6; o++) {
+        for (const how of kinds(steps.length)) {
+          // (the drawing's atoms as the solid's, built ring by ring)
+          const map = new Map<number, number>(rings[0].map((d, k) => [d, (((o + dir * k) % 6) + 6) % 6]));
+          let built: Built | null = baseSolid(base);
+          let key = `${base}`;
+          for (let k = 0; k < steps.length && built; k++) {
+            const { ring, s, t } = steps[k];
+            const [ms, mt] = [map.get(s)!, map.get(t)!];
+            const solid: Solid = built.solid;
+            const bond = solid.bonds.findIndex(([a, b]) => (a === ms && b === mt) || (a === mt && b === ms));
+            if (bond < 0) {
+              built = null;
+              break;
+            }
+            const [di, dj] = solid.bonds[bond][0] === ms ? [s, t] : [t, s];
+            key += `|${bond}:${typeof how[k] === "string" ? "t" : (how[k] as { cis: number }).cis}`;
+            built = fusedOn(key, solid, bond, how[k]);
+            if (!built) break;
+            // (the new ring's atoms: on from the bond's second atom j, round to its first i - j, x2, y, z, x1, i)
+            const n = built.solid.atoms.length - 4;
+            const rr = rings[ring];
+            const at = rr.indexOf(dj);
+            const step = rr[(at + 1) % 6] === di ? -1 : 1;
+            [n + 1, n + 2, n + 3, n].forEach((m, q) => map.set(rr[(((at + step * (q + 1)) % 6) + 6) % 6], m));
+          }
+          if (!built) continue;
+          for (const d of built.drawn) {
+            if (!d) continue;
+            const ofDrawing = places.map((_, i) => d.atoms[map.get(i)!]);
+            const fit = similarity(ofDrawing, places);
+            if (fit) out.push({ z: ofDrawing.map((p) => p.z * fit.scale), miss: fit.miss });
+          }
+        }
+      }
+    }
+  }
+  return out;
+}
+
 function invert3(m: number[][]): number[][] | null {
   const [[a, b, c], [d, e, f], [g, h, i]] = m;
   const det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
@@ -148,6 +279,16 @@ const sameShape = (u: number[], v: number[], tol: number) => u.every((x, i) => M
  * emphasise perspective).
  */
 export function recogniseChair(ring: readonly Pt[], bold: readonly number[] = []): Recognised {
+  if (ring.length !== 6) return { kind: "flat" };
+  return recogniseChairs(
+    ring,
+    [[0, 1, 2, 3, 4, 5]],
+    bold.map((k) => [k % 6, (k + 1) % 6]),
+  );
+}
+
+/** One ring drawn as a chair: its depths (their sign not yet chosen, about the ring's middle), or why not. */
+function chairShape(ring: readonly Pt[]): { z: number[] } | { kind: "flat" } | { kind: "unread"; why: string } {
   if (!drawnAsChair(ring)) return { kind: "flat" };
   const all = [...conventionFits(ring), ...fits(ring)].sort((p, q) => p.miss - q.miss);
   const best = all[0];
@@ -156,24 +297,74 @@ export function recogniseChair(ring: readonly Pt[], bold: readonly number[] = []
   const tol = 0.05 * Math.max(1, ...best.z.map(Math.abs));
   const other = all.find((f) => f.miss <= MOST_MISS && !sameShape(f.z, best.z, tol));
   if (other && other.miss < MARGIN * Math.max(best.miss, 1e-6)) return { kind: "unread", why: NOT_ONE_SHAPE };
+  return { z: best.z };
+}
+
+/**
+ * A ring system of six-rings drawn as chairs and fused on bonds (one ring, a decalin, a perhydrophenanthrene, a steroid's chairs), with no
+ * depth: recognised as one solid in perspective, or flat, or unread. `places` the system's atoms (y up the page); `rings` each ring's atoms
+ * in order round it, as indices into `places`; `bold` the ring bonds drawn bold or as a near edge, as pairs of indices.
+ *
+ * One ring is fitted alone (`chairShape`); chairs fused are fitted as one (`fusedFits`), by the same bounds. Rings that share one atom only,
+ * or more than a bond, are not read here (unread). Then near and far, for the whole system at once: a mark first, then the convention (the lower atoms nearer, the system's long axis within `LEVEL_ANGLE` of level).
+ * The depth answered is in the order of `places`.
+ */
+export function recogniseChairs(places: readonly Pt[], rings: readonly (readonly number[])[], bold: readonly (readonly [number, number])[] = []): Recognised {
+  if (!rings.length || rings.some((r) => r.length !== 6)) return { kind: "flat" };
+  const asChair = rings.map((r) => drawnAsChair(r.map((i) => places[i])));
+  if (!asChair.some(Boolean)) return { kind: "flat" };
+  // (some rings of the system drawn as chairs and some not: in perspective, but not as one shape read here - but for a ring fused to a chair
+  // whose opposite bonds are parallel with its outline convex: a chair seen nearly edge on, as a cis fusion draws one, which the fit of the
+  // whole system then reads or refuses)
+  if (!rings.every((r, k) => asChair[k] || (rings.length > 1 && oppositeParallel(r.map((i) => places[i]))))) return { kind: "unread", why: NOT_ONE_SHAPE };
+  let z: (number | undefined)[];
+  if (rings.length === 1) {
+    const one = chairShape(rings[0].map((i) => places[i]));
+    if ("kind" in one) return one;
+    z = places.map(() => undefined);
+    rings[0].forEach((i, k) => (z[i] = one.z[k]));
+  } else {
+    const all = fusedFits(places, rings);
+    if (!all) return { kind: "unread", why: NOT_ONE_SHAPE };
+    all.sort((p, q) => p.miss - q.miss);
+    const best = all[0];
+    if (!best || best.miss > MOST_MISS) return { kind: "unread", why: NOT_ONE_SHAPE };
+    const tol = 0.05 * Math.max(1, ...best.z.map(Math.abs));
+    const other = all.find((f) => f.miss <= MOST_MISS && !sameShape(f.z, best.z, tol));
+    if (other && other.miss < MARGIN * Math.max(best.miss, 1e-6)) return { kind: "unread", why: NOT_ONE_SHAPE };
+    z = best.z;
+  }
+  const inSystem = places.map((_, i) => i).filter((i) => z[i] != null);
+  const middle = inSystem.reduce((m, i) => m + z[i]!, 0) / inSystem.length;
+  const depth = places.map((_, i) => (z[i] == null ? 0 : z[i]! - middle));
   // (near and far: a mark first, then the convention)
   if (bold.length) {
-    // (each marked edge nearer than the ring's middle: its atoms' depths, taken together, on one side - a mark that leaves an edge level with the middle says nothing)
-    const unit = Math.max(1e-9, ...best.z.map(Math.abs));
-    const says = bold.map((k) => {
-      const sum = best.z[k % 6] + best.z[(k + 1) % 6];
+    // (each marked edge nearer than the system's middle: its atoms' depths, taken together, on one side - a mark that leaves an edge level with the middle says nothing)
+    const unit = Math.max(1e-9, ...inSystem.map((i) => Math.abs(depth[i])));
+    const says = bold.map(([i, j]) => {
+      const sum = depth[i] + depth[j];
       return Math.abs(sum) < 0.2 * unit ? 0 : Math.sign(sum);
     });
     if (!says.every((v) => v !== 0 && v === says[0])) return { kind: "unread", why: NOT_MARKED };
-    return { kind: "depth", z: best.z.map((v) => says[0] * v), by: "mark" };
+    return { kind: "depth", z: depth.map((v) => says[0] * v), by: "mark" };
   }
-  // (the lower atoms nearer, for a ring whose long axis lies within LEVEL_ANGLE of level)
-  const mid = [0, 1].map((k) => ring.reduce((s, p) => s + (k ? p.y : p.x), 0) / 6);
-  const [sxx, syy, sxy] = ring.reduce((s, p) => [s[0] + (p.x - mid[0]) ** 2, s[1] + (p.y - mid[1]) ** 2, s[2] + (p.x - mid[0]) * (p.y - mid[1])], [0, 0, 0]);
-  const axis = 0.5 * Math.atan2(2 * sxy, sxx - syy);
-  if (Math.abs(axis) > LEVEL_ANGLE) return { kind: "unread", why: NOT_MARKED };
-  const lowerNearer = best.z.reduce((s, v, i) => s + v * (ring[i].y - mid[1]), 0) < 0 ? 1 : -1;
-  return { kind: "depth", z: best.z.map((v) => lowerNearer * v), by: "convention" };
+  // (the lower atoms nearer, ring by ring (ST-3.1: of a mostly-horizontal ring): each ring whose long axis lies within LEVEL_ANGLE of level
+  // says which way round the system is; a ring standing steeper says nothing - a cis-fused ring may rise up the page, its upper atoms the
+  // nearer; and a ring fused on seen nearly edge on, its outline convex, says nothing either: it is read by the fit. Every ring that says must
+  // say the same, and one at least must)
+  const votes = rings.flatMap((ring, k) => {
+    if (!asChair[k]) return [];
+    const mid = [0, 1].map((k) => ring.reduce((s, i) => s + (k ? places[i].y : places[i].x), 0) / ring.length);
+    const [sxx, syy, sxy] = ring.reduce(
+      (s, i) => [s[0] + (places[i].x - mid[0]) ** 2, s[1] + (places[i].y - mid[1]) ** 2, s[2] + (places[i].x - mid[0]) * (places[i].y - mid[1])],
+      [0, 0, 0],
+    );
+    if (Math.abs(0.5 * Math.atan2(2 * sxy, sxx - syy)) > LEVEL_ANGLE) return [];
+    const ringMiddle = ring.reduce((m, i) => m + depth[i], 0) / ring.length;
+    return [ring.reduce((s, i) => s + (depth[i] - ringMiddle) * (places[i].y - mid[1]), 0) < 0 ? 1 : -1];
+  });
+  if (!votes.length || votes.some((v) => v !== votes[0])) return { kind: "unread", why: NOT_MARKED };
+  return { kind: "depth", z: depth.map((v) => votes[0] * v), by: "convention" };
 }
 
 /** How far from level a Haworth ring's front edge may be drawn, either way (by convention, as IN_LINE: no text gives an angle). */

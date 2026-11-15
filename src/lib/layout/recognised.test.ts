@@ -4,7 +4,9 @@ import { readStereo, type DrawnAtom, type DrawnBond } from "./drawn";
 import { layout2D } from "./engine";
 import { withRecognisedDepth } from "./recognised";
 import { fromSmiles } from "./testdata/fromSmiles";
-import { chair, haworth } from "./testdata/projections";
+import { chair, haworth, rad } from "./testdata/projections";
+import { chair as solidChair, fused, type Solid } from "../chem/perception/projection/solids";
+import { drawn as drawnByRule } from "../chem/perception/projection/views";
 import diastereomers from "./testdata/diastereomers.json";
 import cages from "./testdata/cages.json";
 import { measured } from "../../testing/timeouts";
@@ -166,12 +168,90 @@ describe("a Haworth ring drawn bond by bond, with no depth stored", () => {
 
 });
 
+describe("chairs fused, drawn bond by bond, read as the compound they show", () => {
+  // (the corpus: every system of chairs F9 fuses - trans-decalin, cis-decalin on either face and on other bonds, perhydrophenanthrene
+  // trans-anti-trans, perhydroanthracene trans-syn-trans, a trans-cis-cis tricycle - in both textbook forms, with no group or one methyl on a
+  // free place, as F9 draws it with depth; then that drawing with its depth taken away, as drawn, turned in the page and moved a little, and
+  // mirrored. The depth worked out must read as the depth drawn did, or not at all: never another compound)
+  const bondIndex = (s: Solid, a: number, b: number) => s.bonds.findIndex(([x, y]) => x === a && y === b);
+  const c = solidChair();
+  const decalin = fused(c, 0, "chair", "trans");
+  const systems: [string, Solid][] = [
+    ["trans-decalin", decalin],
+    ["cis-decalin, face 1", fused(c, 0, "chair", { cis: 1 })],
+    ["cis-decalin, face -1", fused(c, 0, "chair", { cis: -1 })],
+    ["cis-decalin on another bond", fused(c, 3, "chair", { cis: 1 })],
+    ["cis-decalin as a textbook draws it", fused(c, 2, "chair", { cis: -1 })],
+    ["perhydrophenanthrene", fused(decalin, bondIndex(decalin, 7, 8), "chair", "trans")],
+    ["perhydroanthracene", fused(decalin, bondIndex(decalin, 8, 9), "chair", "trans")],
+    ["trans, cis, cis", fused(decalin, bondIndex(decalin, 7, 8), "chair", { cis: -1 })],
+  ];
+  const BOND = 1.5;
+  /** The system as F9 draws it, `form` 0 or 1, with a methyl on free place `at` (none for -1): every ring atom with its depth, the methyl with none. */
+  function drawing(s: Solid, form: number, at: number) {
+    const d = drawnByRule(s, form)!;
+    const atoms: DrawnAtom[] = d.atoms.map((p) => ({ x: BOND * p.x, y: BOND * p.y, z: BOND * p.z, centre: true, hs: 0 }));
+    const bonds: DrawnBond[] = s.bonds.map(([a, b]) => ({ a, b, order: 1 }));
+    if (at >= 0) {
+      const f = d.free[at];
+      atoms.push({ x: atoms[f.free.at].x + BOND * f.x, y: atoms[f.free.at].y + BOND * f.y, hs: 3 });
+      bonds.push({ a: f.free.at, b: atoms.length - 1, order: 1 });
+    }
+    d.atoms.forEach((_, i) => (atoms[i].hs = 4 - bonds.filter((b) => b.a === i || b.b === i).length));
+    return { atoms, bonds, free: d.free.length };
+  }
+  const moved = (d: { atoms: DrawnAtom[]; bonds: DrawnBond[] }, turn: number, jitter: number, scale: number, rand: () => number) => {
+    const [cs, sn] = [Math.cos(rad(turn)), Math.sin(rad(turn))];
+    return {
+      atoms: d.atoms.map((a) => ({ ...a, x: scale * (cs * a.x - sn * a.y + jitter * BOND * (2 * rand() - 1)), y: scale * (sn * a.x + cs * a.y + jitter * BOND * (2 * rand() - 1)) })),
+      bonds: d.bonds,
+    };
+  };
+  const mirrored = (d: { atoms: DrawnAtom[]; bonds: DrawnBond[] }) => ({ atoms: d.atoms.map((a) => ({ ...a, x: -a.x })), bonds: d.bonds });
+  const unreadOf = (d: { atoms: DrawnAtom[]; bonds: DrawnBond[] }) =>
+    identity({ atoms: d.atoms.map((a) => ({ el: a.el ?? "C", hs: a.hs })), bonds: d.bonds.map((b) => ({ a: b.a, b: b.b, order: b.order })) }).text;
+
+  it("is never another compound than the depth drawn shows, over the whole corpus - and reads nearly all of it", () => {
+    let seed = 5;
+    const rand = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 2 ** 32);
+    let [read, all] = [0, 0];
+    for (const [name, s] of systems) {
+      for (const form of [0, 1]) {
+        const free = drawing(s, form, -1).free;
+        // (no group, and a methyl on six free places taken at random)
+        for (const at of [-1, ...[...Array(6)].map(() => Math.floor(rand() * free))]) {
+          const d = drawing(s, form, at);
+          for (const [how, want, given] of [
+            ["as drawn", d, stripped(d)],
+            ["turned and moved", d, stripped(moved(d, 30 * rand() - 15, 0.03, 0.5 + rand(), rand))],
+            ["mirrored", mirrored(d), stripped(mirrored(d))],
+          ] as const) {
+            const got = identityOfDrawing(given);
+            all++;
+            if (got === identityOfDrawing(want)) read++;
+            else expect(got, `${name}, form ${form}, methyl ${at}, ${how}`).toBe(unreadOf(given));
+          }
+        }
+      }
+    }
+    expect(read / all).toBeGreaterThan(0.95);
+  }, measured(60_000));
+
+  it("tells cis-decalin from trans-decalin with no depth stored, and reads the mirror picture of each as its mirror", () => {
+    const transD = identityOfDrawing(stripped(drawing(decalin, 0, -1)));
+    const cisD = identityOfDrawing(stripped(drawing(systems[1][1], 0, -1)));
+    expect(transD).toBe(smiles("C1CC[C@H]2CCCC[C@@H]2C1"));
+    expect(cisD).toBe(smiles("C1CC[C@H]2CCCC[C@H]2C1"));
+  });
+});
+
 describe("no drawing the engine makes in the plane is taken for a chair", () => {
   it("leaves every flat ring of the layout fixtures as drawn: nothing is given a depth but what the engine itself drew in perspective", () => {
     const smis = [
       ...diastereomers.molecules.filter((_, i) => i % 4 === 0).map((m) => m.smiles),
       ...Object.values(cages).map((c) => (c as { smiles?: string }).smiles).filter((s): s is string => !!s),
       "C1CCCCC1", "CC1CCC(C)CC1", "OC1CCCCC1O", "C1CCC2CCCCC2C1", "C1CCC2(CC1)CCCCC2", "c1ccccc1C", "C1CCCC(C1)C1CCCCC1", "OC[C@H]1OC(O)[C@H](O)[C@@H](O)[C@@H]1O", "C1CC2CCC1C2", "C[C@H]1CC[C@@H](C)CC1",
+      "C1CCC2C(C1)CCC1CCCCC12", "C1CCC2CC3CCCCC3CC2C1", "c1ccc2ccccc2c1", "C[C@]12CC[C@H]3[C@@H](CCC4=CC(=O)CC[C@@]34C)[C@@H]1CC[C@@H]2O", "C[C@@H]1CC[C@H]2C[C@@H](O)CC[C@@H]2C1",
     ];
     let rings = 0;
     for (const smi of smis) {

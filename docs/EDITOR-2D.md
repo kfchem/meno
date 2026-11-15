@@ -1867,7 +1867,20 @@ lipids each have their own way of being drawn, which it should know.
        ambiguous). No ring O at the back is needed: each of the
        twelve representations 2-Carb-5.4 names, the ring turned and turned
        over, reads as the same compound.
-       Fused systems, bridged systems and cages are not yet recognised.
+       Chairs fused on bonds (a decalin, a perhydrophenanthrene, a
+       steroid's three chairs) are recognised as one solid: the whole
+       system is fitted at once to every way the chairs fuse on its bonds -
+       each fusion trans, or cis on either face - as the textbook draws
+       them, so a trans or a cis fusion is read from the drawing, never
+       assumed. A cis-fused ring may be drawn nearly edge on, its outline
+       convex: it is taken where it is fused to a ring drawn as a chair,
+       and the fit of the whole reads or refuses it. Near and far go by the
+       same order, for the whole system: a bold ring bond on any ring, else
+       the lower atoms nearer in each ring that lies mostly level and is
+       drawn as a chair (a cis-fused ring rising up the page says nothing),
+       all of them agreeing, else unread. Rings that share one atom only,
+       or more than a bond, and a system with a ring drawn flat, are
+       unread. Bridged systems and cages are not yet recognised.
      - **Clean-up keeps a projection** (the maintainer, 2026-11-13): a ring
        system the drawing shows with a depth that the engine would lay flat -
        a chair, a Haworth ring - is left where it is, its atoms' places,

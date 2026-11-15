@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { chair } from "./solids";
+import { chair, fused, type Solid } from "./solids";
 import { fromAbove, project, seen, standardView } from "./views";
-import { recogniseChair, recogniseHaworth, NOT_MARKED, type Recognised } from "./recognise";
+import { recogniseChair, recogniseChairs, recogniseHaworth, NOT_MARKED, NOT_ONE_SHAPE, type Recognised } from "./recognise";
 import { drawn as drawnByRule } from "./views";
 import { haworth } from "./solids";
 
@@ -171,6 +171,95 @@ describe("a chair recognised where the drawing gives no depth", () => {
       expect(got.z[lowest]).toBeGreaterThan(0);
     }
     expect(project(standardView(chair()), chair().atoms[0]).z).toBeDefined();
+  });
+});
+
+describe("chairs fused, recognised as one solid", () => {
+  const bondIndex = (s: Solid, a: number, b: number) => s.bonds.findIndex(([x, y]) => x === a && y === b);
+  /** A solid of chairs as F9 draws it: its places, the depths it had, and its rings in order round each (the first chair, then each ring fused on). */
+  function system(s: Solid, form = 0) {
+    const d = drawnByRule(s, form)!;
+    const rings: number[][] = [[0, 1, 2, 3, 4, 5]];
+    // (each ring fused on: its bond's first atom, its second, then the four the fusion adds - x2, y, z, x1 - as solids.fused builds them)
+    for (let n = 6; n < s.atoms.length; n += 4) {
+      // (solids.fused adds the bonds j - x2, x2 - y, y - z, z - x1, x1 - i, with x1 = n, x2 = n + 1, y = n + 2, z = n + 3)
+      const i = s.bonds.find(([a, b]) => a === n && b < n)![1];
+      const j = s.bonds.find(([a, b]) => b === n + 1 && a < n)![0];
+      rings.push([i, j, n + 1, n + 2, n + 3, n]);
+    }
+    // (the depths about their middle, as the recognition gives them)
+    const middle = d.atoms.reduce((m, p) => m + p.z, 0) / d.atoms.length;
+    return { places: d.atoms.map((p) => ({ x: 40 * p.x, y: 40 * p.y })), z: d.atoms.map((p) => 40 * (p.z - middle)), rings };
+  }
+  const c = chair();
+  const decalin = fused(c, 0, "chair", "trans");
+
+  it("reads trans- and cis-decalin and the tricycles as the solids they draw, in both forms", () => {
+    for (const [name, s] of [
+      ["trans-decalin", decalin],
+      ["cis-decalin", fused(c, 0, "chair", { cis: 1 })],
+      ["cis-decalin, the other face", fused(c, 0, "chair", { cis: -1 })],
+      ["perhydrophenanthrene", fused(decalin, bondIndex(decalin, 7, 8), "chair", "trans")],
+      ["perhydroanthracene", fused(decalin, bondIndex(decalin, 8, 9), "chair", "trans")],
+    ] as const) {
+      for (const form of [0, 1]) {
+        const d = system(s, form);
+        const got = recogniseChairs(d.places, d.rings);
+        expect(got.kind, `${name} ${form}`).toBe("depth");
+        if (got.kind === "depth") expect(agrees(got.z, d.z), `${name} ${form}`).toBe(true);
+      }
+    }
+  });
+
+  it("reads a drawing between trans- and cis-decalin as the nearer of the two, or not at all: never as the farther", () => {
+    const trans = system(decalin);
+    for (const face of [1, -1] as const) {
+      const cis = system(fused(c, 0, "chair", { cis: face }));
+      for (let w = 0; w <= 1.0001; w += 0.05) {
+        const places = trans.places.map((p, i) => ({ x: (1 - w) * p.x + w * cis.places[i].x, y: (1 - w) * p.y + w * cis.places[i].y }));
+        const got = recogniseChairs(places, trans.rings);
+        if (got.kind !== "depth") continue;
+        // (each drawn by the same rule from the same first ring: the nearer is the one whose depths it reads)
+        expect(agrees(got.z, (w < 0.5 ? trans : cis).z), `face ${face}, ${w.toFixed(2)} of the way`).toBe(true);
+      }
+      expect(recogniseChairs(trans.places, trans.rings).kind).toBe("depth");
+      expect(recogniseChairs(cis.places, trans.rings).kind).toBe("depth");
+    }
+  });
+
+  it("is unread where a ring of the system is drawn flat, or rings share one atom only", () => {
+    const d = system(decalin);
+    // (the second ring redrawn as a regular hexagon on the shared bond: a chair fused to a flat ring)
+    const [p, q] = [d.places[d.rings[1][0]], d.places[d.rings[1][1]]];
+    const [mx, my, ux, uy] = [(p.x + q.x) / 2, (p.y + q.y) / 2, q.x - p.x, q.y - p.y];
+    const away = Math.sign((mx - d.places[2].x) * -uy + (my - d.places[2].y) * ux) || 1;
+    const centre = { x: mx - (away * uy * Math.sqrt(3)) / 2, y: my + (away * ux * Math.sqrt(3)) / 2 };
+    const flat = d.places.slice();
+    d.rings[1].forEach((i, k) => {
+      if (k < 2) return;
+      const a = Math.atan2(p.y - centre.y, p.x - centre.x) + ((Math.PI / 3) * k * (Math.sign((q.x - centre.x) * (p.y - centre.y) - (q.y - centre.y) * (p.x - centre.x)) || 1));
+      flat[i] = { x: centre.x + Math.hypot(ux, uy) * Math.cos(a), y: centre.y + Math.hypot(ux, uy) * Math.sin(a) };
+    });
+    expect(recogniseChairs(flat, d.rings).kind).not.toBe("depth");
+    // (two chairs on one atom: a spiro join is not read here)
+    const one = drawnByRule(c, 0)!.atoms.map((p) => ({ x: 40 * p.x, y: 40 * p.y }));
+    const other = one.map((p) => ({ x: 2 * one[0].x - p.x, y: 2 * one[0].y - p.y }));
+    const spiro = [...one, ...other.slice(1)];
+    expect(recogniseChairs(spiro, [[0, 1, 2, 3, 4, 5], [0, 6, 7, 8, 9, 10]])).toEqual({ kind: "unread", why: NOT_ONE_SHAPE });
+  });
+
+  it("is unread where the rings that are level disagree on near and far, and read by a bold bond on either ring", () => {
+    const d = system(decalin);
+    const byConvention = recogniseChairs(d.places, d.rings);
+    // (a bold bond on the second ring's upper edge: the mark wins, for the whole system)
+    const r = d.rings[1];
+    const k = [0, 1, 2, 3, 4, 5].reduce((best, j) => (d.places[r[j]].y + d.places[r[(j + 1) % 6]].y > d.places[r[best]].y + d.places[r[(best + 1) % 6]].y ? j : best), 0);
+    const marked = recogniseChairs(d.places, d.rings, [[r[k], r[(k + 1) % 6]]]);
+    expect(marked.kind).toBe("depth");
+    if (marked.kind === "depth" && byConvention.kind === "depth") {
+      expect(marked.by).toBe("mark");
+      expect(agrees(marked.z, byConvention.z.map((v) => -v))).toBe(true);
+    }
   });
 });
 
