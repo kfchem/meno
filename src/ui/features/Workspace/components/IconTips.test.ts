@@ -16,6 +16,17 @@ describe("an icon's name", () => {
     expect(iconTipPlace({ left: 0, top: 10, right: 20, bottom: 30 }, 120, 20, win).left).toBe(TIP_GAP_PX);
     expect(iconTipPlace({ left: 780, top: 10, right: 800, bottom: 30 }, 120, 20, win).left).toBe(800 - TIP_GAP_PX - 120);
   });
+  it("goes under the icon wherever it fits there with its gap, and never off the window's top", () => {
+    // (fits under only with the gap below it left out: over it)
+    const h = 20;
+    const bottom = 600 - TIP_GAP_PX - h - TIP_GAP_PX + 1;
+    expect(iconTipPlace({ left: 100, top: bottom - 30, right: 132, bottom }, 60, h, win).top).toBe(bottom - 30 - TIP_GAP_PX - h);
+    // (just fits under with its gap: under)
+    const fits = 600 - TIP_GAP_PX - h - TIP_GAP_PX;
+    expect(iconTipPlace({ left: 100, top: fits - 30, right: 132, bottom: fits }, 60, h, win).top).toBe(fits + TIP_GAP_PX);
+    // (a window too short for it under the icon, the icon at its top: held at the top)
+    expect(iconTipPlace({ left: 100, top: 2, right: 132, bottom: 30 }, 60, h, { width: 800, height: 40 }).top).toBe(TIP_GAP_PX);
+  });
   it("waits for a rest, so that passing over a row of icons shows none", () => {
     expect(ICON_TIP_REST_MS).toBeGreaterThanOrEqual(300);
   });

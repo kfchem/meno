@@ -4,6 +4,8 @@ import { TIP_GAP_PX } from "./markTip";
 
 /** How long the pointer rests on an icon before its name is shown, in ms: long enough that passing over a row of icons shows none. */
 export const ICON_TIP_REST_MS = 450;
+/** How often, while a name is up, Meno looks whether its icon is still there, in ms. */
+const ICON_TIP_GONE_MS = 200;
 
 /**
  * Where an icon's name goes, on the screen: under the icon, centred on it - over it where there is no room under it - and moved
@@ -72,6 +74,17 @@ export default function IconTips() {
       window.removeEventListener("blur", hide);
     };
   }, []);
+  // (an icon taken away under a resting pointer sends no pointerout: its name goes with it, looked for while it is up)
+  useEffect(() => {
+    if (!tip) return;
+    const look = window.setInterval(() => {
+      if (!over.current?.isConnected) {
+        over.current = null;
+        setTip(null);
+      }
+    }, ICON_TIP_GONE_MS);
+    return () => window.clearInterval(look);
+  }, [tip]);
   if (!tip || typeof document === "undefined") return null;
   return createPortal(<Name key={`${tip.text}:${tip.box.left},${tip.box.top}`} text={tip.text} box={tip.box} />, document.body);
 }

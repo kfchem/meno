@@ -1178,6 +1178,8 @@ export default function PartMenu({
               aria-label={item.name}
               aria-pressed={item.checked}
               data-tip={item.keys ? `${item.name} (${item.keys})` : item.name}
+              // (its keys said to a screen reader too, as the system's tooltip said them)
+              aria-description={item.keys ? `${item.name} (${item.keys})` : undefined}
               disabled={item.disabled}
               // (one begun by its press is not begun again by its click - but by a key, it is)
               onClick={item.press ? (e) => e.detail === 0 && run(item)() : run(item)}
