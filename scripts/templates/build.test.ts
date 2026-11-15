@@ -6,6 +6,7 @@ import { readWorkspace } from "../../src/ui/features/Workspace/utils/workspace";
 import { lyingIn, type Frame } from "../../src/ui/features/Workspace/workflow/entries";
 import { cardFrameOf } from "../../src/ui/features/Workspace/workflow/place";
 import { inputsOf, kindInfo, needsOf } from "../../src/ui/features/Workspace/workflow/kinds";
+import { diagramNeeds } from "../../src/ui/features/Workspace/workflow/diagramOptions";
 import { schemeRoles } from "../../src/ui/features/Workspace/workflow/schemeRoles";
 import { buildPage, STAMP, templateFile } from "./build";
 import { dftRecipe, PLUGIN_OPTIONS, xtbRecipe } from "./recipe";
@@ -37,8 +38,11 @@ describe.each([
     for (const set of doc.sets!.filter((b) => b.made)) expect(set.members?.length ?? 0).toBe(0);
   });
 
-  it("asks nothing of the chemist on any card: every step's own check of its options is satisfied", () => {
+  it("asks nothing of the chemist on any card: every step's own check of its options is satisfied, and a diagram's reference too, before anything has run", () => {
     for (const s of doc.steps!) expect([s.kind, needsOf(s)]).toEqual([s.kind, undefined]);
+    const diagrams = doc.steps!.filter((s) => s.kind === "energy-diagram");
+    expect(diagrams.length).toBeGreaterThan(0);
+    for (const s of diagrams) expect(diagramNeeds(doc, s)).toBeUndefined();
   });
 
   it("wires every input a step needs, and every wire goes where the store's own check lets it (no wire into a port that does not take what comes)", () => {
