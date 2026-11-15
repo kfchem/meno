@@ -308,6 +308,9 @@ export function joined(template: Model, choices: readonly (readonly [number, rea
   let doc = { ...emptyWorkspaceDocument(style), model: template, nextId: Math.max(0, ...template.atoms.map((a) => a.id), ...template.bonds.map((b) => b.id)) + 1 };
   for (const [, atoms, option] of choices) {
     for (const id of atoms) {
+      // (an R typed with its number carries it as its map number: what is put in its place carries none - an H mapped is no
+      //  hydrogen of its neighbour's, and toluene made so would be another structure; a map on the template's own atoms stays)
+      doc = { ...doc, model: { ...doc.model, atoms: doc.model.atoms.map((a) => (a.id === id && a.map != null ? (({ map: _map, ...rest }) => rest)(a) : a)) } };
       doc =
         option.as === "element"
           ? setAtomChemistry(doc, id, { el: option.el, ...(option.charge ? { charge: option.charge } : {}), ...(option.isotope ? { isotope: option.isotope } : {}) })

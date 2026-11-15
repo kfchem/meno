@@ -268,12 +268,21 @@ describe("Enumerate as a step", () => {
     let k = 0;
     const typed: Model = { ...drawnR, atoms: drawnR.atoms.map((a) => (a.el === "R#" ? { ...a, el: "*", rgroups: undefined, map: ++k } : a)) };
     expect(templateRs(typed)).toEqual(templateRs(drawnR));
-    const lists = "R1: Me\nCl\nOMe\nR2: Me\nCl";
+    const lists = "R1: Me\nCl\nH\nOMe\nR2: Me\nCl\nH";
     const made = (m: Model) => {
       const r = enumerated(m, lists);
       return r.ok ? { made: r.made.map((x) => [x.number, x.how, identityText(identityInputOf(x.drawn).input)]), aside: r.aside.map((x) => [x.number, x.why]) } : r;
     };
     expect(made(typed)).toEqual(made(drawnR));
+    // (nothing put in a typed R's place keeps its number as a map: toluene made as R1 = Me, R2 = H is Meno's toluene)
+    const products = enumerated(typed, lists);
+    expect(products.ok && products.made.every((x) => x.drawn.atoms.every((a) => a.map == null))).toBe(true);
+    const toluene = products.ok ? products.made.find((x) => x.how === "R1 = Me, R2 = H") : undefined;
+    expect(toluene && identityText(identityInputOf(toluene.drawn).input)).toBe(identityText(identityInputOf(drawnFromSmiles("Cc1ccccc1")).input));
+    // (a map on one of the template's own atoms stays)
+    const mapped: Model = { ...typed, atoms: typed.atoms.map((a, i) => (i === 1 ? { ...a, map: 7 } : a)) };
+    const kept = enumerated(mapped, lists);
+    expect(kept.ok && kept.made.every((x) => x.drawn.atoms.some((a) => a.map === 7))).toBe(true);
     // (and an R typed as "R" with its number, as some toolkits write it)
     const asR: Model = { ...typed, atoms: typed.atoms.map((a) => (a.el === "*" ? { ...a, el: "R" } : a)) };
     expect(made(asR)).toEqual(made(drawnR));
